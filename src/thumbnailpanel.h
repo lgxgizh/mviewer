@@ -10,6 +10,9 @@
 #include <QHash>
 
 class ThumbnailWorker;
+class QPushButton;
+class QContextMenuEvent;
+class QResizeEvent;
 
 // Right-side gallery: shows ALL images in the current directory as a
 // scrollable list/grid of thumbnails. Emitting itemClicked(path) means the
@@ -31,19 +34,29 @@ public:
     void setDirectory(const QString &path);
     void setSortMode(SortMode mode);
 
+    QStringList selectedPaths() const;
+
 signals:
     void itemClicked(const QString &path);
     void itemDoubleClicked(const QString &path);
+    void compareRequested(const QStringList &paths);
 
 private:
     void startWorker();
     void stopWorker();
+    void onCompareClicked();
+    void renameSelected();
+    void moveToTrashSelected();
+
+    void contextMenuEvent(QContextMenuEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
     ThumbnailWorker *m_worker = nullptr;
     QThread m_thread;
     QString m_currentDir;
     SortMode m_sortMode = SortName;
     QHash<QString, QListWidgetItem *> m_itemById;
+    QPushButton *m_compareBtn = nullptr;
 };
 
 // Background worker: reads each image at thumbnail resolution (fast, no

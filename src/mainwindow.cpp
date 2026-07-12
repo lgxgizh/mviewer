@@ -4,6 +4,7 @@
 #include <QComboBox>
 #include <QDialog>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QImage>
 #include <QLabel>
 #include <QMenuBar>
@@ -113,24 +114,41 @@ void MainWindow::setupUi()
     connect(m_directoryTree, &DirectoryTree::directoryChanged,
             m_thumbnailPanel, &ThumbnailPanel::setDirectory);
     connect(m_directoryTree, &DirectoryTree::directoryChanged, this,
-            [this](const QString &path) { m_currentDir = path; });
+            [this](const QString &path) {
+                m_currentDir = path;
+                const int n = FileSystem::listImages(path).size();
+                statusBar()->showMessage(
+                    QString("目录: %1, 图片数: %2").arg(path).arg(n));
+            });
 
     connect(m_thumbnailPanel, &ThumbnailPanel::itemClicked, this,
             [this](const QString &path) {
                 m_previewPanel->setImage(path);
-                m_analysisPanel->setImage(QImage(path));
+                QImage img(path);
+                m_analysisPanel->setImage(img);
+                statusBar()->showMessage(
+                    QString("当前: %1, 尺寸: %2x%3")
+                        .arg(QFileInfo(path).fileName())
+                        .arg(img.width()).arg(img.height()));
             });
     connect(m_thumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
             [this](const QString &path) {
                 m_previewPanel->setImage(path);
                 m_imageViewer->setImage(path);
-                m_analysisPanel->setImage(QImage(path));
+                QImage img(path);
+                m_analysisPanel->setImage(img);
                 m_currentImagePath = path;
+                statusBar()->showMessage(
+                    QString("当前: %1, 尺寸: %2x%3")
+                        .arg(QFileInfo(path).fileName())
+                        .arg(img.width()).arg(img.height()));
                 if (m_imageViewer->isHidden())
                     m_imageViewer->show();
                 m_imageViewer->raise();
                 m_imageViewer->activateWindow();
             });
+    connect(m_thumbnailPanel, &ThumbnailPanel::compareRequested, this,
+            &MainWindow::openCompare);
 
     connect(m_imageViewer, &ImageViewer::regionStats,
             m_analysisPanel, &AnalysisPanel::setRegionStats);
@@ -155,7 +173,12 @@ void MainWindow::setupUi()
         }
     });
     connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
-    connect(m_actCompare, &QAction::triggered, this, &MainWindow::openCompare);
+    connect(m_actCompare, &QAction::triggered, this, [this]() {
+        QStringList imgs = FileSystem::listImages(m_currentDir);
+        if (imgs.size() > 8)
+            imgs = imgs.mid(0, 8);
+        openCompare(imgs);
+    });
     connect(m_actToggleAnalysis, &QAction::triggered,
             m_analysisPanel, &QWidget::setVisible);
     connect(m_actAbout, &QAction::triggered, this, [this]() {
@@ -166,15 +189,15 @@ void MainWindow::setupUi()
     statusBar()->showMessage("就绪");
 }
 
-void MainWindow::openCompare()
+void MainWindow::openCompare(const QStringList &images)
 {
-    if (m_currentDir.isEmpty())
-        return;
-
-    QStringList images = FileSystem::listImages(m_currentDir);
-    if (images.size() > 2)
-        images = images.mid(0, 2);
-    if (images.isEmpty())
+    QStringList imgs = images;
+    if (imgs.isEmpty()) {
+        if (m_currentDir.isEmpty())
+            return;
+        imgs = FileSystem::listImages(m_currentDir);
+    }
+    if (imgs.isEmpty())
         return;
 
     auto *dlg = new QDialog(this);
@@ -184,7 +207,7 @@ void MainWindow::openCompare()
     auto *layout = new QVBoxLayout(dlg);
     m_compareView = new CompareWorkspace(dlg);
     layout->addWidget(m_compareView);
-    m_compareView->setImages(images);
+    m_compareView->setImages(imgs);
 
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();

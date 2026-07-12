@@ -3,10 +3,16 @@
 #include <algorithm>
 
 #include <QApplication>
+#include <QContextMenuEvent>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
+#include <QInputDialog>
+#include <QMenu>
+#include <QMessageBox>
 #include <QPainter>
+#include <QPushButton>
 
 #include "thumbnailcache.h"
 
@@ -173,9 +179,14 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent)
     setGridSize(QSize(kThumbSize + 16, kThumbSize + 30));
     setSpacing(8);
     setUniformItemSizes(true);
-    setSelectionMode(QAbstractItemView::SingleSelection);
+    setSelectionMode(QAbstractItemView::MultiSelection);
 
     startWorker();
+
+    m_compareBtn = new QPushButton("比较(&C)", this);
+    m_compareBtn->setVisible(true);
+    connect(m_compareBtn, &QPushButton::clicked, this,
+            &ThumbnailPanel::onCompareClicked);
 
     connect(this, &QListWidget::itemClicked, this,
             [this](QListWidgetItem *item) {
@@ -259,5 +270,110 @@ void ThumbnailPanel::setDirectory(const QString &path)
 
         ThumbnailWorker::Request req{filePath, kThumbSize, id};
         m_worker->enqueue(req);
+    }
+}
+
+QStringList ThumbnailPanel::selectedPaths() const
+{
+    QStringList result;
+    for (QListWidgetItem *item : selectedItems())
+        result.append(item->data(Qt::UserRole).toString());
+    return result;
+}
+
+void ThumbnailPanel::onCompareClicked()
+{
+    const QStringList sel = selectedPaths();
+    if (sel.size() < 2 || sel.size() > 8) {
+        QMessageBox::warning(this, "比较模式", "请选择 2~8 张图片");
+        return;
+    }
+    emit compareRequested(sel);
+}
+
+void ThumbnailPanel::renameSelected()
+{
+    const QList<QListWidgetItem *> items = selectedItems();
+    if (items.isEmpty())
+        return;
+
+    const QString oldPath = items.first()->data(Qt::UserRole).toString();
+    const QFileInfo fi(oldPath);
+    const QString newName =
+        QInputDialog::getText(this, "重命名",
+                              "请输入新的文件名：", QLineEdit::Normal,
+                              fi.fileName());
+    if (newName.isEmpty() || newName == fi.fileName())
+        return;
+    // 不接受带路径分隔符的输入(只改文件名)
+    if (newName.contains('/') || newName.contains('\\')) {
+        QMessageBox::warning(this, "重命名", "文件名不能包含路径分隔符");
+        return;
+    }
+
+    const QString newPath = fi.absolutePath() + "/" + newName;
+    if (QFile::rename(oldPath, newPath))
+        setDirectory(m_currentDir);
+    else
+        QMessageBox::warning(this, "重命名", "重命名失败");
+}
+
+void ThumbnailPanel::moveToTrashSelected()
+{
+    const QStringList sel = selectedPaths();
+    if (sel.isEmpty())
+        return;
+
+    const QString msg =
+        sel.size() == 1
+            ? QString("确定将 \"%1\" 移入回收站吗？")
+                  .arg(QFileInfo(sel.first()).fileName())
+            : QString("确定将 %1 个文件移入回收站吗？").arg(sel.size());
+    if (QMessageBox::question(this, "删除到回收站", msg,
+                              QMessageBox::Yes | QMessageBox::No)
+        != QMessageBox::Yes)
+        return;
+
+    bool allOk = true;
+    for (const QString &path : sel) {
+        if (!QFile::moveToTrash(path))
+            allOk = false;
+    }
+    if (allOk)
+        setDirectory(m_currentDir);
+    else
+        QMessageBox::warning(this, "删除到回收站", "部分文件删除失败");
+}
+
+void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
+{
+    QListWidgetItem *item = itemAt(event->pos());
+    if (!item)
+        return;
+
+    // 确保右键项被选中,便于后续操作
+    if (!item->isSelected())
+        setCurrentItem(item, QItemSelectionModel::Select);
+
+    QMenu menu(this);
+    QAction *actRename = menu.addAction("重命名(&R)");
+    QAction *actTrash = menu.addAction("删除到回收站(&D)");
+    connect(actRename, &QAction::triggered, this,
+            &ThumbnailPanel::renameSelected);
+    connect(actTrash, &QAction::triggered, this,
+            &ThumbnailPanel::moveToTrashSelected);
+    menu.exec(event->globalPos());
+}
+
+void ThumbnailPanel::resizeEvent(QResizeEvent *event)
+{
+    QListWidget::resizeEvent(event);
+    if (m_compareBtn) {
+        const int bw = 90;
+        const int bh = 28;
+        const int margin = 6;
+        m_compareBtn->setGeometry(width() - bw - margin,
+                                  height() - bh - margin, bw, bh);
+        m_compareBtn->raise();
     }
 }

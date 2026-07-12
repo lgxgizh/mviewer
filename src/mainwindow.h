@@ -20,7 +20,7 @@ public:
 
 private:
     void setupUi();
-    void openCompare();
+    void openCompare(const QStringList &images = {});
     void navigate(int delta);
 
     ImageViewer *m_imageViewer = nullptr;

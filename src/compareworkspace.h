@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/CompareEngine.h"
+#include "core/AnalysisEngine.h"
 
 #include <QWidget>
 #include <QLabel>
@@ -9,6 +10,7 @@
 #include <QPixmap>
 #include <QPointF>
 #include <QHash>
+#include <QMouseEvent>
 
 // CompareWorkspace：多图同步比较工作区
 class CompareWorkspace : public QWidget
@@ -36,12 +38,20 @@ protected:
 private:
     void rebuildCells();
     void fitAll();
+    void drawCellHistogram(QPainter &p, const QSize &cell, int index);
 
     CompareEngine m_engine;
-    QCheckBox *m_syncChk = nullptr;
+    QCheckBox *m_syncZoomChk = nullptr;
+    QCheckBox *m_syncDragChk = nullptr;
+    bool m_syncZoom = true;
+    bool m_syncDrag = true;
     QWidget *m_grid = nullptr;
     QGridLayout *m_layout = nullptr;
     QList<QLabel*> m_cells;
     QHash<int, double> m_imageScale;
     QHash<int, QPointF> m_imageOffset;
+    QHash<int, ImageStats> m_stats;
+    bool m_dragging = false;
+    QPoint m_lastMouse;
+    int m_dragIdx = -1;
 };
