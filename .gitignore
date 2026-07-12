@@ -1,0 +1,33 @@
+# Build artifacts
+build/
+build_msvc/
+build.sh
+dobuild.sh
+test.cmd
+
+# Temp / install artifacts
+*.log
+*_vs_installer/
+*.obj
+*.exe
+*.lib
+*.dll
+nul
+
+# OS / editor
+Thumbs.db
+.DS_Store
+*~
+*.swp
+.vs/
+.idea/
+
+# Python fallback prototype (obsolete)
+prototype.py
+
+# Status/outdated docs
+STATUS.md
+viewer/
+
+# CMake user files
+CMakeLists.txt.user

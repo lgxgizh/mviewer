@@ -1,0 +1,76 @@
+#pragma once
+
+#include "ImageObject.h"
+#include "ImageCache.h"
+
+#include <QImage>
+#include <QString>
+#include <QStringList>
+#include <QPointF>
+#include <QSize>
+#include <vector>
+
+// 比较模式：N 张图的网格布局规则
+// 2=左右, 3=左中右, 4=2x2, 5-8=2行 x 4列
+struct CompareLayout
+{
+    int cols = 0;
+    int rows = 0;
+    int imageCount = 0;
+
+    static CompareLayout forCount(int n);
+    QPoint cellPos(int index, const QSize &viewportSize) const; // 该图在视口内的偏移
+    QSize cellSize(const QSize &viewportSize) const;
+};
+
+// 同步变换：所有比较图共享同一个 scale/offset，保证同步缩放/平移
+struct SyncTransform
+{
+    double scale = 1.0;
+    QPointF offset;
+    bool enabled = true;
+};
+
+// Compare Engine：持有 N 张图片，管理同步变换、闪烁、差异图。
+// 完全独立于 QWidget，可由任意 Viewer/Workspace 使用。
+class CompareEngine
+{
+public:
+    CompareEngine();
+
+    // 图片管理
+    void setImages(const QStringList &paths);
+    void addImage(const QString &path);
+    void removeImage(int index);
+    void clear();
+    int imageCount() const { return static_cast<int>(m_images.size()); }
+    const ImageObject &image(int index) const { return m_images[index]; }
+    const ImageObject *imageAt(int index) const;
+
+    // 布局
+    const CompareLayout &layout() const { return m_layout; }
+
+    // 同步变换
+    const SyncTransform &syncTransform() const { return m_sync; }
+    void setSyncEnabled(bool on) { m_sync.enabled = on; }
+    bool syncEnabled() const { return m_sync.enabled; }
+    void setScale(double s);
+    void setOffset(const QPointF &off);
+    void zoomAt(const QPointF &viewPos, double factor, int exceptIndex = -1);
+
+    // 闪烁比较：切换显示哪张(单张突出模式)
+    int blinkIndex() const { return m_blinkIndex; }
+    void setBlinkIndex(int idx);
+    void clearBlink() { setBlinkIndex(-1); }
+
+    // 差异图：返回 index 与 baseIndex 的像素差异灰度图(相同=黑,差异越大越亮)
+    QImage differenceMap(int index, int baseIndex = 0);
+
+private:
+    void rebuildLayout();
+
+    std::vector<ImageObject> m_images;
+    CompareLayout m_layout;
+    SyncTransform m_sync;
+    int m_blinkIndex = -1;
+};
