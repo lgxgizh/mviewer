@@ -1,6 +1,6 @@
 #pragma once
 
-#include "ImageObject.h"
+#include "core/image/ImageObject.h"
 #include <QImage>
 #include <QString>
 #include <QStringList>

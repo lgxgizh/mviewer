@@ -1,6 +1,6 @@
-#include "CompareEngine.h"
-#include "Decoder.h"
-#include "TaskScheduler.h"
+#include "core/compare/CompareEngine.h"
+#include "core/image/Decoder.h"
+#include "core/scheduler/TaskScheduler.h"
 
 #include <QImage>
 #include <QPointF>

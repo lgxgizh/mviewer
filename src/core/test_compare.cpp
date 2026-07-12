@@ -6,7 +6,7 @@
 #include <QSize>
 #include <cmath>
 #include <cstdio>
-#include "core/CompareEngine.h"
+#include "core/compare/CompareEngine.h"
 
 int main(int argc, char **argv)
 {

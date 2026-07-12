@@ -1,4 +1,4 @@
-#include "TaskScheduler.h"
+#include "core/scheduler/TaskScheduler.h"
 
 #include <QCoreApplication>
 #include <QMetaObject>

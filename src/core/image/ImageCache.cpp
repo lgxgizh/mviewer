@@ -1,4 +1,4 @@
-#include "ImageCache.h"
+#include "core/image/ImageCache.h"
 
 ImageCache &ImageCache::instance()
 {

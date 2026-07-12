@@ -1,6 +1,6 @@
 #include "imageviewer.h"
 
-#include "core/AnalysisEngine.h"
+#include "core/analysis/AnalysisEngine.h"
 
 #include <QApplication>
 #include <QDir>

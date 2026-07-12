@@ -1,4 +1,4 @@
-#include "ImageObject.h"
+#include "core/image/ImageObject.h"
 
 #include <QCryptographicHash>
 #include <QFileInfo>

@@ -1,6 +1,6 @@
 #include "analysispanel.h"
 
-#include "core/AnalysisEngine.h"
+#include "core/analysis/AnalysisEngine.h"
 
 #include <algorithm>
 

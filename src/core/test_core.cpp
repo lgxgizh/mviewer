@@ -4,10 +4,10 @@
 #include <QTimer>
 #include <QImage>
 #include <cstdio>
-#include "core/Decoder.h"
-#include "core/ImageCache.h"
-#include "core/TaskScheduler.h"
-#include "core/ImageObject.h"
+#include "core/image/Decoder.h"
+#include "core/image/ImageCache.h"
+#include "core/scheduler/TaskScheduler.h"
+#include "core/image/ImageObject.h"
 
 int main(int argc, char **argv)
 {

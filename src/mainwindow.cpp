@@ -16,7 +16,7 @@
 
 #include "analysispanel.h"
 #include "compareworkspace.h"
-#include "core/FileSystem.h"
+#include "core/filesystem/FileSystem.h"
 #include "directorytree.h"
 #include "imageviewer.h"
 #include "previewpanel.h"

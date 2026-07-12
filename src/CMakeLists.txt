@@ -1,12 +1,12 @@
 add_library(mviewer_core STATIC
-    core/ImageObject.cpp
-    core/Decoder.cpp
-    core/ImageCache.cpp
-    core/FileSystem.cpp
-    core/TaskScheduler.cpp
-    core/CompareEngine.cpp
-    core/AnalysisEngine.cpp
-    core/RenderEngine.cpp
+    core/image/Decoder.cpp
+    core/image/ImageObject.cpp
+    core/image/ImageCache.cpp
+    core/filesystem/FileSystem.cpp
+    core/scheduler/TaskScheduler.cpp
+    core/compare/CompareEngine.cpp
+    core/analysis/AnalysisEngine.cpp
+    core/render/RenderEngine.cpp
 )
 
 target_link_libraries(mviewer_core PUBLIC Qt6::Widgets)

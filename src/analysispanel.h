@@ -5,7 +5,7 @@
 #include <QString>
 #include <QRect>
 
-#include "core/AnalysisEngine.h"
+#include "core/analysis/AnalysisEngine.h"
 
 // AnalysisPanel：显示单张图的直方图 + 统计信息 + 框选区域统计
 class AnalysisPanel : public QWidget

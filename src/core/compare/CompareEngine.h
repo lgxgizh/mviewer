@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ImageObject.h"
-#include "ImageCache.h"
+#include "core/image/ImageObject.h"
+#include "core/image/ImageCache.h"
 
 #include <QImage>
 #include <QString>

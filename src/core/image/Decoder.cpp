@@ -1,4 +1,4 @@
-#include "Decoder.h"
+#include "core/image/Decoder.h"
 
 #include <QImageReader>
 

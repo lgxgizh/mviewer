@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/CompareEngine.h"
-#include "core/AnalysisEngine.h"
+#include "core/compare/CompareEngine.h"
+#include "core/analysis/AnalysisEngine.h"
 
 #include <QWidget>
 #include <QLabel>
