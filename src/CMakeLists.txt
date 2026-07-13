@@ -2,6 +2,7 @@ add_library(mviewer_core STATIC
     core/image/Decoder.cpp
     core/image/ImageObject.cpp
     core/image/ImageCache.cpp
+    core/image/QtConvert.cpp
     core/filesystem/FileSystem.cpp
     core/scheduler/TaskScheduler.cpp
     core/compare/CompareEngine.cpp

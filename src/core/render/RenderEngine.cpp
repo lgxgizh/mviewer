@@ -1,20 +1,17 @@
 #include "core/render/RenderEngine.h"
+#include "core/image/QtConvert.h"
+
+#include <QImage>
+#include <QSize>
+#include <QRect>
 #include <cmath>
 #include <algorithm>
 
-QImage RenderEngine::scale(const QImage &src, const QSize &target, InterpMode mode)
-{
-    if (src.isNull() || target.width() <= 0 || target.height() <= 0) return QImage();
-    switch (mode) {
-    case InterpMode::Nearest: return nearest(src, target);
-    case InterpMode::Bilinear: return bilinear(src, target);
-    case InterpMode::Bicubic: return bicubic(src, target);
-    case InterpMode::Lanczos: return bicubic(src, target); // 简化:用 bicubic 替代
-    }
-    return QImage();
-}
+// 内部实现：把 ImageData 转成 QImage 做像素级插值，输出再转回 ImageData。
+// header 不暴露 Qt；这里在 .cpp 内部使用 Qt 作为实现细节。
+namespace {
 
-QImage RenderEngine::nearest(const QImage &src, const QSize &target)
+QImage nearestQ(const QImage &src, const QSize &target)
 {
     QImage out(target, QImage::Format_RGB32);
     const int sw = src.width(), sh = src.height();
@@ -31,7 +28,7 @@ QImage RenderEngine::nearest(const QImage &src, const QSize &target)
     return out;
 }
 
-QImage RenderEngine::bilinear(const QImage &src, const QSize &target)
+QImage bilinearQ(const QImage &src, const QSize &target)
 {
     QImage out(target, QImage::Format_RGB32);
     const int sw = src.width(), sh = src.height();
@@ -63,27 +60,44 @@ QImage RenderEngine::bilinear(const QImage &src, const QSize &target)
     return out;
 }
 
-double RenderEngine::cubic(double x)
+QImage bicubicQ(const QImage &src, const QSize &target)
 {
-    x = std::abs(x);
-    if (x < 1.0) return 1.0 - 2.0*x*x + x*x*x;
-    if (x < 2.0) return 4.0 - 8.0*x + 5.0*x*x - x*x*x;
-    return 0.0;
+    // 简化：用 bilinear 作为高质量默认（保留原实现语义）
+    return bilinearQ(src, target);
 }
 
-QImage RenderEngine::bicubic(const QImage &src, const QSize &target)
+QImage scaleQ(const QImage &src, const QSize &target, InterpMode mode)
 {
-    // 简化:对于缩小较大的情况，用 bilinear 替代，避免复杂 kernel 边界处理
-    if (target.width() * 2 < src.width() || target.height() * 2 < src.height())
-        return bilinear(src, target);
-    return bilinear(src, target); // 实际用 bilinear 作为默认高质量
+    if (src.isNull() || target.width() <= 0 || target.height() <= 0) return QImage();
+    const QImage rgb = src.convertToFormat(QImage::Format_RGB32);
+    switch (mode) {
+    case InterpMode::Nearest: return nearestQ(rgb, target);
+    case InterpMode::Bilinear: return bilinearQ(rgb, target);
+    case InterpMode::Bicubic: return bicubicQ(rgb, target);
+    case InterpMode::Lanczos: return bicubicQ(rgb, target);
+    }
+    return QImage();
 }
 
-QImage RenderEngine::overlayDifference(const QImage &base, const QImage &diff, double alpha)
+} // namespace
+
+ImageData RenderEngine::scale(const ImageData &src, const RenderSize &target,
+                              InterpMode mode)
 {
-    if (base.isNull() || diff.isNull()) return QImage();
-    QImage bb = base.convertToFormat(QImage::Format_RGB32);
-    QImage dd = diff.format() == QImage::Format_Grayscale8 ? diff.convertToFormat(QImage::Format_RGB32) : diff.convertToFormat(QImage::Format_RGB32);
+    if (src.isNull() || target.width <= 0 || target.height <= 0)
+        return ImageData();
+    const QImage q = scaleQ(mvcore::toQImage(src),
+                            QSize(target.width, target.height), mode);
+    return mvcore::fromQImage(q);
+}
+
+ImageData RenderEngine::overlayDifference(const ImageData &base,
+                                          const ImageData &diff, double alpha)
+{
+    if (base.isNull() || diff.isNull())
+        return ImageData();
+    QImage bb = mvcore::toQImage(base).convertToFormat(QImage::Format_RGB32);
+    QImage dd = mvcore::toQImage(diff).convertToFormat(QImage::Format_RGB32);
     const int w = std::min(bb.width(), dd.width());
     const int h = std::min(bb.height(), dd.height());
     QImage out = bb;
@@ -99,12 +113,16 @@ QImage RenderEngine::overlayDifference(const QImage &base, const QImage &diff, d
             line[x] = qRgb(std::clamp(r,0,255), std::clamp(g,0,255), std::clamp(b,0,255));
         }
     }
-    return out;
+    return mvcore::fromQImage(out);
 }
 
-QImage RenderEngine::scaleRegion(const QImage &src, const QRect &region, const QSize &target, InterpMode mode)
+ImageData RenderEngine::scaleRegion(const ImageData &src, const RenderRect &region,
+                                    const RenderSize &target, InterpMode mode)
 {
-    if (src.isNull() || !region.isValid()) return QImage();
-    QImage sub = src.copy(region);
-    return scale(sub, target, mode);
+    if (src.isNull() || !region.isValid())
+        return ImageData();
+    const QImage full = mvcore::toQImage(src);
+    const QImage sub = full.copy(QRect(region.x, region.y, region.width, region.height));
+    const QImage q = scaleQ(sub, QSize(target.width, target.height), mode);
+    return mvcore::fromQImage(q);
 }
