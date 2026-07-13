@@ -6,6 +6,33 @@
 #include <QPointF>
 #include <QSize>
 #include <cmath>
+#include <cstring>
+
+namespace {
+
+// UI 边界转换工具：把核心层的 ImageData 转成 Qt 的 QImage(ARGB32)。
+// 核心层头文件不暴露 Qt，这里在 .cpp 内部做转换。
+QImage toQImage(const ImageData &src)
+{
+    if (src.isNull())
+        return QImage();
+    const ImageBuffer v = src.view();
+    const int cpp = v.channelsPerPixel();
+    QImage out(v.width, v.height, QImage::Format_ARGB32);
+    if (out.isNull())
+        return QImage();
+    for (int y = 0; y < v.height; ++y) {
+        const uint8_t *sl = v.data + y * v.stride();
+        QRgb *dl = reinterpret_cast<QRgb *>(out.scanLine(y));
+        for (int x = 0; x < v.width; ++x) {
+            const uint8_t *p = sl + x * cpp;
+            dl[x] = qRgba(p[0], p[1], p[2], 255);
+        }
+    }
+    return out;
+}
+
+} // namespace
 
 CompareLayout CompareLayout::forCount(int n)
 {
@@ -49,9 +76,9 @@ void CompareEngine::setImages(const QStringList &paths)
     m_images.reserve(paths.size());
     for (const QString &p : paths) {
         // 解码到 Viewer 级缓存
-        QImage img = Decoder::decodeFull(p);
+        ImageData img = Decoder::decodeFull(p.toStdString());
         if (!img.isNull()) {
-            m_images.emplace_back(p, img);
+            m_images.emplace_back(p.toStdString(), img);
         }
     }
     rebuildLayout();
@@ -60,9 +87,9 @@ void CompareEngine::setImages(const QStringList &paths)
 
 void CompareEngine::addImage(const QString &path)
 {
-    QImage img = Decoder::decodeFull(path);
+    ImageData img = Decoder::decodeFull(path.toStdString());
     if (!img.isNull()) {
-        m_images.emplace_back(path, img);
+        m_images.emplace_back(path.toStdString(), img);
         rebuildLayout();
     }
 }
@@ -119,8 +146,8 @@ QImage CompareEngine::differenceMap(int index, int baseIndex)
 {
     if (index < 0 || index >= imageCount()) return QImage();
     if (baseIndex < 0 || baseIndex >= imageCount()) return QImage();
-    const QImage &a = m_images[baseIndex].image();
-    const QImage &b = m_images[index].image();
+    const QImage a = toQImage(m_images[baseIndex].image());
+    const QImage b = toQImage(m_images[index].image());
     if (a.isNull() || b.isNull()) return QImage();
 
     const int w = std::min(a.width(), b.width());

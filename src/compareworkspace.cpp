@@ -1,5 +1,7 @@
 #include "compareworkspace.h"
 
+#include "core/image/ImageBuffer.h"
+
 #include <QPainter>
 #include <QWheelEvent>
 #include <QMouseEvent>
@@ -8,6 +10,34 @@
 #include <QCheckBox>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
+
+namespace {
+
+// UI 边界转换：核心层 ImageData -> Qt QImage(ARGB32)。
+QImage imageObjectToQImage(const ImageObject *img)
+{
+    if (!img)
+        return QImage();
+    const ImageData &src = img->image();
+    if (src.isNull())
+        return QImage();
+    const ImageBuffer v = src.view();
+    const int cpp = v.channelsPerPixel();
+    QImage out(v.width, v.height, QImage::Format_ARGB32);
+    if (out.isNull())
+        return QImage();
+    for (int y = 0; y < v.height; ++y) {
+        const uint8_t *sl = v.data + y * v.stride();
+        QRgb *dl = reinterpret_cast<QRgb *>(out.scanLine(y));
+        for (int x = 0; x < v.width; ++x) {
+            const uint8_t *p = sl + x * cpp;
+            dl[x] = qRgba(p[0], p[1], p[2], 255);
+        }
+    }
+    return out;
+}
+
+} // namespace
 
 CompareWorkspace::CompareWorkspace(QWidget *parent)
     : QWidget(parent)
@@ -104,8 +134,10 @@ void CompareWorkspace::rebuildCells()
         m_cells.push_back(lbl);
 
         const ImageObject *img = m_engine.imageAt(i);
-        if (img && !img->image().isNull())
-            m_stats.insert(i, AnalysisEngine::computeStats(img->image()));
+        if (img && !img->image().isNull()) {
+            QImage q = imageObjectToQImage(img);
+            m_stats.insert(i, AnalysisEngine::computeStats(q));
+        }
     }
 }
 
@@ -117,7 +149,7 @@ void CompareWorkspace::fitAll()
     for (int i = 0; i < n; ++i) {
         const ImageObject *img = m_engine.imageAt(i);
         if (!img || !m_cells[i]) continue;
-        QPixmap pm = QPixmap::fromImage(img->image());
+        QPixmap pm = QPixmap::fromImage(imageObjectToQImage(img));
         if (pm.isNull()) continue;
         const QSize cell = m_cells[i]->size();
         if (cell.width() <= 0 || cell.height() <= 0) continue;
@@ -146,7 +178,7 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
         if (!m_cells[i]) continue;
         const ImageObject *img = m_engine.imageAt(i);
         if (!img) continue;
-        QPixmap pm = QPixmap::fromImage(img->image());
+        QPixmap pm = QPixmap::fromImage(imageObjectToQImage(img));
         if (pm.isNull()) {
             m_cells[i]->setPixmap(QPixmap());
             continue;

@@ -3,34 +3,36 @@
 #include <QCryptographicHash>
 #include <QFileInfo>
 
-ImageObject::ImageObject(const QString &path, const QImage &image)
+ImageObject::ImageObject(const std::string &path, const ImageData &image)
     : m_path(path)
     , m_image(image)
 {
-    const QFileInfo fi(path);
+    const QFileInfo fi(QString::fromStdString(path));
     m_fileSize = fi.size();
     m_modified = fi.lastModified();
-    m_hash = QCryptographicHash::hash(
-        (path + QString::number(m_fileSize) +
-         QString::number(fi.lastModified().toSecsSinceEpoch()))
-            .toUtf8(),
-        QCryptographicHash::Sha1);
+    const QString key = QString::fromStdString(path) +
+                        QString::number(m_fileSize) +
+                        QString::number(fi.lastModified().toSecsSinceEpoch());
+    const QByteArray raw = QCryptographicHash::hash(
+        key.toUtf8(), QCryptographicHash::Sha1);
+    m_hash.assign(raw.constData(), static_cast<size_t>(raw.size()));
 }
 
 void ImageObject::computeStats()
 {
     if (m_statsComputed || m_image.isNull())
         return;
-    const int w = m_image.width();
-    const int h = m_image.height();
+    const ImageBuffer v = m_image.view();
+    const int w = v.width;
+    const int h = v.height;
+    const int cpp = v.channelsPerPixel();
     const long long n = static_cast<long long>(w) * h;
     long long sumL = 0, sumR = 0, sumG = 0, sumB = 0;
     for (int y = 0; y < h; ++y) {
-        const QRgb *line =
-            reinterpret_cast<const QRgb *>(m_image.constScanLine(y));
+        const uint8_t *line = v.data + y * v.stride();
         for (int x = 0; x < w; ++x) {
-            const QRgb c = line[x];
-            const int r = qRed(c), g = qGreen(c), b = qBlue(c);
+            const uint8_t *p = line + x * cpp;
+            const int r = p[0], g = p[1], b = p[2];
             sumR += r; sumG += g; sumB += b;
             sumL += static_cast<long long>(0.299 * r + 0.587 * g + 0.114 * b);
         }

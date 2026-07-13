@@ -1,28 +1,31 @@
 #pragma once
 
-#include <QImage>
-#include <QString>
-#include <QDateTime>
-#include <QSize>
+#include "ImageBuffer.h"
 
-// 一张图片的内存表示：解码后的 QImage + 元数据。
+#include <string>
+#include <QDateTime>
+
+// 一张图片的内存表示：解码后的 ImageData + 元数据。
 // 由 Decoder 产出，被 Cache / Viewer / Analysis 共享。
+// 接口层不暴露 Qt 类型（ImageData 使用 std 容器）；QDateTime 仅作为
+// 数据型元数据保留（非 UI 类型）。
 class ImageObject
 {
 public:
     ImageObject() = default;
-    ImageObject(const QString &path, const QImage &image);
+    ImageObject(const std::string &path, const ImageData &image);
 
     bool isValid() const { return !m_image.isNull(); }
 
-    const QString &path() const { return m_path; }
-    const QImage &image() const { return m_image; }
-    QSize size() const { return m_image.size(); }
+    const std::string &path() const { return m_path; }
+    const ImageData &image() const { return m_image; }
+    int width() const { return m_image.width; }
+    int height() const { return m_image.height; }
 
     // 元数据（解码时填，供缓存/比较用）
     qint64 fileSize() const { return m_fileSize; }
     QDateTime modified() const { return m_modified; }
-    QByteArray hash() const { return m_hash; }
+    const std::string &hash() const { return m_hash; }
 
     // 亮度均值 + RGB 均值（首次需要时才算，缓存结果）
     double luminanceMean();
@@ -31,11 +34,11 @@ public:
 private:
     void computeStats();
 
-    QString m_path;
-    QImage m_image;
+    std::string m_path;
+    ImageData m_image;
     qint64 m_fileSize = 0;
     QDateTime m_modified;
-    QByteArray m_hash;
+    std::string m_hash;
 
     bool m_statsComputed = false;
     double m_lumMean = 0.0;

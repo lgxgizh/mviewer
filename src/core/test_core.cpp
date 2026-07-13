@@ -4,6 +4,7 @@
 #include <QTimer>
 #include <QImage>
 #include <cstdio>
+#include <string>
 #include "core/image/Decoder.h"
 #include "core/image/ImageCache.h"
 #include "core/scheduler/TaskScheduler.h"
@@ -13,28 +14,28 @@ int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
 
-    const QString p = "D:/photos/pixnio-6000x4000.jpg";
+    const std::string p = "D:/photos/pixnio-6000x4000.jpg";
 
     // 1) Decoder 按缩略图尺寸解码
-    QImage thumb = Decoder::decodeScaled(p, 140);
-    printf("DECODE_SCALED=%d %dx%d\n", !thumb.isNull(), thumb.width(),
-           thumb.height());
+    ImageData thumb = Decoder::decodeScaled(p, 140);
+    printf("DECODE_SCALED=%d %dx%d\n", !thumb.isNull(), thumb.width,
+           thumb.height);
 
     // 2) 缓存写入读取
     ImageCache::instance().put(ImageCache::Thumbnail, p, thumb);
-    QImage back;
+    ImageData back;
     bool ok = ImageCache::instance().get(ImageCache::Thumbnail, p, back);
-    printf("CACHE_GET=%d %dx%d\n", ok, back.width(), back.height());
+    printf("CACHE_GET=%d %dx%d\n", ok, back.width, back.height);
 
     // 3) 调度器：后台解码全图 + 回调
-    QImage full;
+    ImageData full;
     bool done = false;
     TaskScheduler::instance().submit(
         TaskScheduler::DecodePool,
         [&]() { full = Decoder::decodeFull(p); },
         [&]() {
-            printf("SCHED_DECODE=%d %dx%d\n", !full.isNull(), full.width(),
-                   full.height());
+            printf("SCHED_DECODE=%d %dx%d\n", !full.isNull(), full.width,
+                   full.height);
             // 4) ImageObject 统计
             ImageObject obj(p, full);
             int r, g, b;
