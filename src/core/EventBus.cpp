@@ -8,6 +8,12 @@ EventBus &EventBus::instance()
     return inst;
 }
 
+EventBus &EventBus::scope(EventBusScope s)
+{
+    static EventBus buses[4];
+    return buses[static_cast<int>(s)];
+}
+
 int EventBus::subscribe(const std::string &event, Handler h)
 {
     std::lock_guard<std::mutex> lock(m_mutex);

@@ -11,7 +11,12 @@
 class EventBus
 {
 public:
+    // Logical scopes — each scope is an isolated bus instance so events in one
+    // domain (e.g. Analysis) don't cross-fire subscribers in another (e.g. UI).
+    enum class EventBusScope : uint8_t { Application, Image, Analysis, UI };
+
     static EventBus &instance();
+    static EventBus &scope(EventBusScope s);
 
     // Subscribe to an event type. Returns subscription id (use to unsubscribe).
     using Handler = std::function<void(void *)>;
