@@ -1,4 +1,4 @@
-// M2 Core 自测：验证 Decoder / ImageCache / TaskScheduler 真正工作。
+// M2 Core 自测：验证 Decoder / ImageCache / TaskScheduler / ImageFrame 真正工作。
 // 用法：独立编译，链接 core 的 .obj + Qt6，跑 headless。
 #include <QCoreApplication>
 #include <QTimer>
@@ -8,7 +8,7 @@
 #include "core/image/Decoder.h"
 #include "core/image/ImageCache.h"
 #include "core/scheduler/TaskScheduler.h"
-#include "core/image/ImageObject.h"
+#include "core/image/ImageFrame.h"
 
 int main(int argc, char **argv)
 {
@@ -36,12 +36,13 @@ int main(int argc, char **argv)
         [&]() {
             printf("SCHED_DECODE=%d %dx%d\n", !full.isNull(), full.width,
                    full.height);
-            // 4) ImageObject 统计
-            ImageObject obj(p, full);
-            int r, g, b;
-            obj.rgbMeans(r, g, b);
-            printf("IMGOBJ_LUM=%.1f RGB=%d,%d,%d\n", obj.luminanceMean(), r,
-                   g, b);
+            // 4) ImageFrame 统计
+            ImageFrame frame = ImageFrame::create(p, full);
+            frame.computeHistogram();
+            double r, g, b;
+            frame.rgbMeans(r, g, b);
+            printf("FRAMEOBJ_LUM=%.1f RGB=%.0f,%.0f,%.0f\n",
+                   frame.luminanceMean(), r, g, b);
             done = true;
             app.quit();
         });

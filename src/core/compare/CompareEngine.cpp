@@ -1,6 +1,7 @@
 #include "core/compare/CompareEngine.h"
 #include "core/image/Decoder.h"
-#include "core/image/DiskCache.h"
+#include "core/image/ImageObject.h"
+#include "core/image/ImageFrame.h"  // for create()
 #include "core/image/QtConvert.h"
 #include "core/scheduler/TaskScheduler.h"
 
@@ -57,12 +58,12 @@ void CompareEngine::setImages(const std::vector<std::string> &paths)
         std::string key = p;
         ImageData img;
         if (DiskCache::instance().get(key, img)) {
-            m_images.emplace_back(p, img);
+            m_images.push_back(ImageFrame::create(p, img));
         } else {
             img = Decoder::decodeFull(p);
             if (!img.isNull()) {
                 DiskCache::instance().put(key, img);
-                m_images.emplace_back(p, img);
+                m_images.push_back(ImageFrame::create(p, img));
             }
         }
     }
@@ -75,12 +76,12 @@ void CompareEngine::addImage(const std::string &path)
     std::string key = path;
     ImageData img;
     if (DiskCache::instance().get(key, img)) {
-        m_images.emplace_back(path, img);
+        m_images.push_back(ImageFrame::create(path, img));
     } else {
         img = Decoder::decodeFull(path);
         if (!img.isNull()) {
             DiskCache::instance().put(key, img);
-            m_images.emplace_back(path, img);
+            m_images.push_back(ImageFrame::create(path, img));
         }
     }
     if (!m_images.empty())
@@ -101,7 +102,7 @@ void CompareEngine::clear()
     m_blinkIndex = -1;
 }
 
-const ImageObject *CompareEngine::imageAt(int index) const
+const ImageFrame *CompareEngine::imageAt(int index) const
 {
     if (index < 0 || index >= static_cast<int>(m_images.size())) return nullptr;
     return &m_images[index];
@@ -173,8 +174,8 @@ ImageData CompareEngine::differenceMap(int index, int baseIndex)
 {
     if (index < 0 || index >= imageCount()) return ImageData();
     if (baseIndex < 0 || baseIndex >= imageCount()) return ImageData();
-    const QImage a = mvcore::toQImage(m_images[baseIndex].image());
-    const QImage b = mvcore::toQImage(m_images[index].image());
+    const QImage a = mvcore::toQImage(m_images[baseIndex].pixels());
+    const QImage b = mvcore::toQImage(m_images[index].pixels());
     if (a.isNull() || b.isNull()) return ImageData();
 
     const QImage aa = a.convertToFormat(QImage::Format_RGB32);

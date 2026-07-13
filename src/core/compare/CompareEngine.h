@@ -1,6 +1,6 @@
 #pragma once
 
-#include "core/image/ImageObject.h"
+#include "core/image/ImageFrame.h"
 #include "core/image/ImageCache.h"
 
 #include <string>
@@ -65,8 +65,8 @@ public:
     void removeImage(int index);
     void clear();
     int imageCount() const { return static_cast<int>(m_images.size()); }
-    const ImageObject &image(int index) const { return m_images[index]; }
-    const ImageObject *imageAt(int index) const;
+    const ImageFrame &image(int index) const { return m_images[index]; }
+    const ImageFrame *imageAt(int index) const;
 
     // 布局
     const CompareLayout &layout() const { return m_layout; }
@@ -100,7 +100,7 @@ public:
 private:
     void rebuildLayout();
 
-    std::vector<ImageObject> m_images;
+    std::vector<ImageFrame> m_images;
     CompareLayout m_layout;
     SyncTransform m_sync;
     std::vector<CellTransform> m_cells;

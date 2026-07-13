@@ -14,12 +14,12 @@
 
 namespace {
 
-// UI 边界转换：核心层 ImageObject -> Qt QImage，复用 mvcore::toQImage。
-QImage imageObjectToQImage(const ImageObject *img)
+// UI 边界转换：核心层 ImageFrame -> Qt QImage，复用 mvcore::toQImage。
+QImage imageObjectToQImage(const ImageFrame *img)
 {
     if (!img)
         return QImage();
-    return mvcore::toQImage(img->image());
+    return mvcore::toQImage(img->pixels());
 }
 
 } // namespace
@@ -122,8 +122,8 @@ void CompareWorkspace::rebuildCells()
         m_layout->addWidget(lbl, i / lay.cols, i % lay.cols);
         m_cells.push_back(lbl);
 
-        const ImageObject *img = m_engine.imageAt(i);
-        if (img && !img->image().isNull()) {
+        const ImageFrame *img = m_engine.imageAt(i);
+        if (img && !img->pixels().isNull()) {
             QImage q = imageObjectToQImage(img);
             m_stats.insert(i, AnalysisEngine::computeStats(mvcore::fromQImage(q)));
         }
@@ -136,7 +136,7 @@ void CompareWorkspace::fitAll()
     bool first = true;
     const int n = m_engine.imageCount();
     for (int i = 0; i < n; ++i) {
-        const ImageObject *img = m_engine.imageAt(i);
+        const ImageFrame *img = m_engine.imageAt(i);
         const QSize qs = m_cells[i]->size();
         const CellSize cell{qs.width(), qs.height()};
         QPixmap pm = QPixmap::fromImage(imageObjectToQImage(img));
@@ -158,7 +158,7 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
     const int n = m_engine.imageCount();
     for (int i = 0; i < n; ++i) {
         if (!m_cells[i]) continue;
-        const ImageObject *img = m_engine.imageAt(i);
+        const ImageFrame *img = m_engine.imageAt(i);
         if (!img) continue;
         QPixmap pm = QPixmap::fromImage(imageObjectToQImage(img));
         if (pm.isNull()) {

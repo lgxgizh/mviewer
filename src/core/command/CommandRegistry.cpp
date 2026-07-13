@@ -1,5 +1,7 @@
 #include "core/command/CommandRegistry.h"
 
+#include <algorithm>
+
 CommandRegistry &CommandRegistry::instance()
 {
     static CommandRegistry inst;
