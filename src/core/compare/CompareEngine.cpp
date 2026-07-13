@@ -108,6 +108,31 @@ const ImageFrame *CompareEngine::imageAt(int index) const
     return &m_images[index];
 }
 
+mviewer::domain::CompareSession CompareEngine::session() const
+{
+    mviewer::domain::CompareSession s;
+    s.imageIds.reserve(imageCount());
+    for (int i = 0; i < imageCount(); ++i)
+        s.imageIds.push_back(m_images[i].metadata().filePath);
+
+    s.cells.resize(m_cells.size());
+    for (size_t i = 0; i < m_cells.size(); ++i) {
+        s.cells[i].scale    = m_cells[i].scale;
+        s.cells[i].offsetX  = m_cells[i].offset.x;
+        s.cells[i].offsetY  = m_cells[i].offset.y;
+    }
+
+    s.syncMode   = m_sync.enabled ? mviewer::domain::SyncMode::All
+                                  : mviewer::domain::SyncMode::Off;
+    s.blinkIndex = m_blinkIndex;
+    s.sharedScale    = m_sync.scale;
+    s.sharedOffsetX  = m_sync.offset.x;
+    s.sharedOffsetY  = m_sync.offset.y;
+    s.cols = m_layout.cols;
+    s.rows = m_layout.rows;
+    return s;
+}
+
 void CompareEngine::rebuildLayout()
 {
     m_layout = CompareLayout::forCount(imageCount());

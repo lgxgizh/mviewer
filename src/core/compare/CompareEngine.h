@@ -2,6 +2,7 @@
 
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageCache.h"
+#include "domain/CompareSession.h"
 
 #include <string>
 #include <vector>
@@ -64,6 +65,9 @@ public:
     void addImage(const std::string &path);
     void removeImage(int index);
     void clear();
+    // Session state (read-only view for UI; engine owns the live state)
+    mviewer::domain::CompareSession session() const;
+
     int imageCount() const { return static_cast<int>(m_images.size()); }
     const ImageFrame &image(int index) const { return m_images[index]; }
     const ImageFrame *imageAt(int index) const;
