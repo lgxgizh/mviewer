@@ -1,5 +1,6 @@
 #include "core/analysis/AnalysisEngine.h"
 #include "core/image/QtConvert.h"
+#include "domain/Selection.h"
 
 #include <QImage>
 #include <algorithm>
@@ -11,18 +12,33 @@
 
 ImageStats AnalysisEngine::computeStats(const ImageData &imgData)
 {
+    // 全图统计：ROI 设为整图
+    mviewer::domain::Selection full;
+    full.x = 0; full.y = 0; full.width = imgData.width; full.height = imgData.height;
+    return computeStatsROI(imgData, full);
+}
+
+ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData, const mviewer::domain::Selection &region)
+{
     ImageStats s;
     if (imgData.isNull()) return s;
     const QImage image = mvcore::toQImage(imgData).convertToFormat(QImage::Format_RGB32);
     const int w = image.width();
     const int h = image.height();
-    const int n = w * h;
-    if (n == 0) return s;
+    if (w <= 0 || h <= 0) return s;
+
+    // 裁剪 ROI 到图像边界
+    int rx = std::max(0, region.x);
+    int ry = std::max(0, region.y);
+    int rw = std::min(region.width, w - rx);
+    int rh = std::min(region.height, h - ry);
+    if (rw <= 0 || rh <= 0) return s;
 
     long long sumL = 0, sumR = 0, sumG = 0, sumB = 0;
-    for (int y = 0; y < h; ++y) {
+    int count = 0;
+    for (int y = ry; y < ry + rh; ++y) {
         const QRgb *line = reinterpret_cast<const QRgb *>(image.constScanLine(y));
-        for (int x = 0; x < w; ++x) {
+        for (int x = rx; x < rx + rw; ++x) {
             const QRgb c = line[x];
             const int r = qRed(c), g = qGreen(c), b = qBlue(c);
             sumR += r; sumG += g; sumB += b;
@@ -32,12 +48,16 @@ ImageStats AnalysisEngine::computeStats(const ImageData &imgData)
             ++s.histR[std::clamp(r,0,255)];
             ++s.histG[std::clamp(g,0,255)];
             ++s.histB[std::clamp(b,0,255)];
+            ++count;
         }
     }
-    s.lumMean = static_cast<double>(sumL) / n;
-    s.rMean = static_cast<double>(sumR) / n;
-    s.gMean = static_cast<double>(sumG) / n;
-    s.bMean = static_cast<double>(sumB) / n;
+    s.pixelCount = count;
+    if (count > 0) {
+        s.lumMean = static_cast<double>(sumL) / count;
+        s.rMean = static_cast<double>(sumR) / count;
+        s.gMean = static_cast<double>(sumG) / count;
+        s.bMean = static_cast<double>(sumB) / count;
+    }
     return s;
 }
 
@@ -130,6 +150,38 @@ double AnalysisEngine::ssim(const ImageData &aData, const ImageData &bData)
         }
     }
     return blocks > 0 ? ssimSum / blocks : 0.0;
+}
+
+double AnalysisEngine::noiseEstimate(const ImageData &imgData)
+{
+    if (imgData.isNull()) return 0.0;
+    QImage img = mvcore::toQImage(imgData).convertToFormat(QImage::Format_Grayscale8);
+    const int w = img.width();
+    const int h = img.height();
+    if (w < 3 || h < 3) return 0.0;
+
+    // 拉普拉斯算子 (3x3): [0 1 0; 1 -4 1; 0 1 0]
+    // 噪声估计 = 拉普拉斯响应的方差 * (调整因子)
+    // 参考: variance-of-Laplacian 方法
+    double sum = 0.0;
+    double sumSq = 0.0;
+    int count = 0;
+    for (int y = 1; y < h - 1; ++y) {
+        const uchar *prev = img.constScanLine(y - 1);
+        const uchar *curr = img.constScanLine(y);
+        const uchar *next = img.constScanLine(y + 1);
+        for (int x = 1; x < w - 1; ++x) {
+            // 拉普拉斯响应
+            int lap = prev[x] + curr[x-1] + curr[x+1] + next[x] - 4 * curr[x];
+            sum += lap;
+            sumSq += static_cast<double>(lap) * lap;
+            ++count;
+        }
+    }
+    if (count < 2) return 0.0;
+    double mean = sum / count;
+    double variance = sumSq / count - mean * mean;
+    return std::max(0.0, variance);
 }
 
 ImageData AnalysisEngine::heatMap(const ImageData &grayData)

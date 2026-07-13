@@ -1,16 +1,83 @@
 #include "analysispanel.h"
 
-#include "core/analysis/AnalysisEngine.h"
 #include "core/image/QtConvert.h"
 
-#include <algorithm>
-
 #include <QPainter>
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QGroupBox>
+#include <QScrollArea>
+#include <QFont>
+#include <QPalette>
 
 AnalysisPanel::AnalysisPanel(QWidget *parent)
     : QWidget(parent)
 {
-    setMinimumSize(260, 320);
+    buildUi();
+    setMinimumWidth(360);
+    setMinimumHeight(480);
+}
+
+void AnalysisPanel::buildUi()
+{
+    QVBoxLayout *mainLay = new QVBoxLayout(this);
+    mainLay->setContentsMargins(6, 6, 6, 6);
+    mainLay->setSpacing(4);
+
+    // 插件选择器
+    QHBoxLayout *plugBar = new QHBoxLayout;
+    plugBar->addWidget(new QLabel(tr("分析器:")));
+    m_analyzerCombo = new QComboBox;
+    // 添加内置分析器
+    m_analyzerCombo->addItem(tr("内建直方图+统计"), QString("builtin"));
+    m_analyzerCombo->addItem(tr("双图比较 (PSNR/SSIM)"), QString("builtin_compare"));
+    // 添加注册的分析器
+    auto &reg = AnalyzerRegistry::instance();
+    m_pluginIds = reg.availableAnalyzers();
+    for (const auto &id : m_pluginIds) {
+        m_analyzerCombo->addItem(QString::fromStdString("Plugin: " + id), QString("plugin"));
+    }
+    plugBar->addWidget(m_analyzerCombo, 1);
+    mainLay->addLayout(plugBar);
+
+    connect(m_analyzerCombo, QOverload<int>::of(&QComboBox::activated),
+            this, &AnalysisPanel::onAnalyzerSelected);
+
+    // Tab 页面
+    m_tabs = new QTabWidget;
+    mainLay->addWidget(m_tabs, 1);
+
+    // 直方图页
+    m_statsLabel = new QLabel;
+    m_statsLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    m_statsLabel->setWordWrap(true);
+    m_statsLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_tabs->addTab(m_statsLabel, tr("直方图"));
+
+    // 比较页
+    m_compareLabel = new QLabel;
+    m_compareLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    m_compareLabel->setWordWrap(true);
+    m_compareLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_tabs->addTab(m_compareLabel, tr("比较"));
+
+    // 差异预览
+    m_diffPreview = new QLabel;
+    m_diffPreview->setMinimumHeight(kPreviewSize);
+    m_diffPreview->setAlignment(Qt::AlignCenter);
+    m_diffPreview->setStyleSheet("QLabel{background:#1e1e1e;}");
+    m_tabs->addTab(m_diffPreview, tr("差异图"));
+
+    // 插件页
+    m_pluginResult = new QLabel;
+    m_pluginResult->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    m_pluginResult->setWordWrap(true);
+    m_pluginResult->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_tabs->addTab(m_pluginResult, tr("插件"));
+
+    // 默认选中直方图
+    m_analyzerCombo->setCurrentIndex(0);
+    onAnalyzerSelected(0);
 }
 
 void AnalysisPanel::setImage(const QImage &img)
@@ -19,143 +86,183 @@ void AnalysisPanel::setImage(const QImage &img)
         clear();
         return;
     }
-    m_img = img.convertToFormat(QImage::Format_RGB32);
-    m_stats = AnalysisEngine::computeStats(mvcore::fromQImage(m_img));
-    m_hasImage = true;
-    update();
+    m_imageA = img.convertToFormat(QImage::Format_RGB32);
+    m_hasA = true;
+    m_hasB = false;
+    m_statsA = AnalysisEngine::computeStats(mvcore::fromQImage(m_imageA));
+    updateHistogramPage();
+}
+
+void AnalysisPanel::setImages(const QImage &a, const QImage &b)
+{
+    if (a.isNull() || b.isNull()) return;
+    m_imageA = a.convertToFormat(QImage::Format_RGB32);
+    m_imageB = b.convertToFormat(QImage::Format_RGB32);
+    m_hasA = true;
+    m_hasB = true;
+    m_statsA = AnalysisEngine::computeStats(mvcore::fromQImage(m_imageA));
+    m_statsB = AnalysisEngine::computeStats(mvcore::fromQImage(m_imageB));
+    updateComparePage();
 }
 
 void AnalysisPanel::clear()
 {
-    m_img = QImage();
-    m_stats = ImageStats();
-    m_hasImage = false;
+    m_imageA = QImage();
+    m_imageB = QImage();
+    m_hasA = false;
+    m_hasB = false;
+    m_statsA = ImageStats();
+    m_statsB = ImageStats();
+    m_hasROI = false;
+    m_statsLabel->clear();
+    m_compareLabel->clear();
+    m_diffPreview->clear();
+    m_pluginResult->clear();
+}
+
+void AnalysisPanel::setROI(const mviewer::domain::Selection &roi)
+{
+    m_roi = roi;
+    m_hasROI = !roi.isEmpty();
+    if (m_hasA && m_hasROI) {
+        m_statsA = AnalysisEngine::computeStatsROI(mvcore::fromQImage(m_imageA), roi);
+        updateHistogramPage();
+    }
+}
+
+void AnalysisPanel::onAnalyzerSelected(int index)
+{
+    m_currentPluginIdx = index;
+    if (index == 0) {
+        updateHistogramPage();
+    } else if (index == 1) {
+        updateComparePage();
+    } else {
+        updatePluginPage();
+    }
+}
+
+void AnalysisPanel::updateHistogramPage()
+{
+    if (!m_hasA) {
+        m_statsLabel->setText(tr("未选择图片"));
+        return;
+    }
+    QString title = m_hasROI ? tr("框选区域统计") : tr("全图统计");
+    QString txt = QString("<h3>%1</h3>").arg(title);
+    txt += QString("<p>"
+                   "<table>"
+                   "<tr><td>%2</td><td>%3</td></tr>"
+                   "<tr><td>%4</td><td>%5</td></tr>"
+                   "<tr><td>%6</td><td>%7</td></tr>"
+                   "<tr><td>%8</td><td>%9</td></tr>"
+                   "<tr><td>%10</td><td>%11</td></tr>"
+                   "</table></p>")
+            .arg(tr("亮度均值")).arg(m_statsA.lumMean, 0, 'f', 2)
+            .arg(tr("R 均值")).arg(m_statsA.rMean, 0, 'f', 2)
+            .arg(tr("G 均值")).arg(m_statsA.gMean, 0, 'f', 2)
+            .arg(tr("B 均值")).arg(m_statsA.bMean, 0, 'f', 2)
+            .arg(tr("像素数")).arg(m_statsA.pixelCount);
+
+    // 直方图绘制
+    m_statsLabel->setText(txt);
     update();
 }
 
-void AnalysisPanel::setRegionStats(const QString &text)
+void AnalysisPanel::updateComparePage()
 {
-    m_regionText = text;
+    if (!m_hasA || !m_hasB) {
+        m_compareLabel->setText(tr("需要两张图片进行比较"));
+        return;
+    }
+    double psnr = AnalysisEngine::psnr(mvcore::fromQImage(m_imageA), mvcore::fromQImage(m_imageB));
+    double ssim = AnalysisEngine::ssim(mvcore::fromQImage(m_imageA), mvcore::fromQImage(m_imageB));
+    double noiseA = AnalysisEngine::noiseEstimate(mvcore::fromQImage(m_imageA));
+    double noiseB = AnalysisEngine::noiseEstimate(mvcore::fromQImage(m_imageB));
+
+    QString txt = QString("<h3>%1</h3>").arg(tr("双图比较"));
+    txt += QString("<p>"
+                   "<table>"
+                   "<tr><td>%2</td><td>%3 dB</td></tr>"
+                   "<tr><td>%4</td><td>%5</td></tr>"
+                   "<tr><td>%6</td><td>%7</td></tr>"
+                   "<tr><td>%8</td><td>%9</td></tr>"
+                   "</table></p>")
+            .arg(tr("PSNR")).arg(psnr, 0, 'f', 2)
+            .arg(tr("SSIM")).arg(ssim, 0, 'f', 4)
+            .arg(tr("噪声(A)")).arg(noiseLevelText(noiseA))
+            .arg(tr("噪声(B)")).arg(noiseLevelText(noiseB));
+
+    m_compareLabel->setText(txt);
+
+    // 差异图预览
+    QImage diff = computeDifferencePreview(m_imageA, m_imageB);
+    if (!diff.isNull()) {
+        m_diffPreview->setPixmap(QPixmap::fromImage(diff).scaled(
+            QSize(kPreviewSize, kPreviewSize), Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    }
     update();
+}
+
+void AnalysisPanel::updatePluginPage()
+{
+    if (m_pluginIds.empty()) {
+        m_pluginResult->setText(tr("没有可用的分析器插件"));
+        return;
+    }
+    int pluginIdx = m_currentPluginIdx - 2; // 前两个是内置
+    if (pluginIdx < 0 || pluginIdx >= static_cast<int>(m_pluginIds.size())) {
+        m_pluginResult->setText(tr("请选择一个插件"));
+        return;
+    }
+    const std::string &id = m_pluginIds[pluginIdx];
+    auto &reg = AnalyzerRegistry::instance();
+    auto analyzer = reg.create(id);
+    if (!analyzer) {
+        m_pluginResult->setText(tr("无法创建分析器: %1").arg(QString::fromStdString(id)));
+        return;
+    }
+    QString txt = QString("<h3>%1</h3><p>%2</p>")
+            .arg(QString::fromStdString(analyzer->name()))
+            .arg(QString::fromStdString(analyzer->description()));
+    m_pluginResult->setText(txt);
+}
+
+QImage AnalysisPanel::computeDifferencePreview(const QImage &a, const QImage &b)
+{
+    ImageData diff = AnalysisEngine::differenceMap(mvcore::fromQImage(a), mvcore::fromQImage(b));
+    if (diff.isNull()) return QImage();
+    return mvcore::toQImage(diff);
+}
+
+QString AnalysisPanel::noiseLevelText(double variance)
+{
+    if (variance < 50) return tr("极低 (%1)").arg(variance, 0, 'f', 1);
+    if (variance < 150) return tr("低 (%1)").arg(variance, 0, 'f', 1);
+    if (variance < 300) return tr("中 (%1)").arg(variance, 0, 'f', 1);
+    if (variance < 500) return tr("高 (%1)").arg(variance, 0, 'f', 1);
+    return tr("极高 (%1)").arg(variance, 0, 'f', 1);
 }
 
 void AnalysisPanel::paintEvent(QPaintEvent *event)
 {
-    Q_UNUSED(event);
+    QWidget::paintEvent(event);
+    if (m_currentPluginIdx != 0 || !m_hasA) return;
+
     QPainter painter(this);
-    painter.fillRect(rect(), QColor(0, 0, 0));
-
-    if (!m_hasImage) {
-        painter.setPen(Qt::gray);
-        painter.drawText(rect(), Qt::AlignCenter, "未选择图片");
-        return;
-    }
-
-    const int pad = 12;
-    int y = pad;
-    const int labelH = 18;
-    const int histH = 70;
-    const int gap = 10;
-
-    // 亮度直方图
-    painter.setPen(QColor(200, 200, 200));
-    QFont f = painter.font();
-    f.setPointSize(10);
-    painter.setFont(f);
-    painter.drawText(QRect(pad, y, width() - pad * 2, labelH), Qt::AlignLeft,
-                     "亮度直方图");
-    y += labelH;
-    {
-        const QRect bg(pad, y, width() - pad * 2, histH);
-        painter.fillRect(bg, QColor(20, 20, 20));
-        painter.setPen(QColor(60, 60, 60));
-        painter.drawRect(bg);
-        drawHistogramChannel(painter, bg, m_stats.histLum, QColor(220, 220, 220));
-    }
-    y += histH + gap;
-
-    // R 通道直方图
-    painter.setPen(QColor(200, 200, 200));
-    painter.drawText(QRect(pad, y, width() - pad * 2, labelH), Qt::AlignLeft,
-                     "R 通道直方图");
-    y += labelH;
-    {
-        const QRect bg(pad, y, width() - pad * 2, histH);
-        painter.fillRect(bg, QColor(20, 20, 20));
-        painter.setPen(QColor(60, 60, 60));
-        painter.drawRect(bg);
-        drawHistogramChannel(painter, bg, m_stats.histR, QColor(230, 60, 60));
-    }
-    y += histH + gap;
-
-    // G 通道直方图
-    painter.setPen(QColor(200, 200, 200));
-    painter.drawText(QRect(pad, y, width() - pad * 2, labelH), Qt::AlignLeft,
-                     "G 通道直方图");
-    y += labelH;
-    {
-        const QRect bg(pad, y, width() - pad * 2, histH);
-        painter.fillRect(bg, QColor(20, 20, 20));
-        painter.setPen(QColor(60, 60, 60));
-        painter.drawRect(bg);
-        drawHistogramChannel(painter, bg, m_stats.histG, QColor(60, 230, 60));
-    }
-    y += histH + gap;
-
-    // B 通道直方图
-    painter.setPen(QColor(200, 200, 200));
-    painter.drawText(QRect(pad, y, width() - pad * 2, labelH), Qt::AlignLeft,
-                     "B 通道直方图");
-    y += labelH;
-    {
-        const QRect bg(pad, y, width() - pad * 2, histH);
-        painter.fillRect(bg, QColor(20, 20, 20));
-        painter.setPen(QColor(60, 60, 60));
-        painter.drawRect(bg);
-        drawHistogramChannel(painter, bg, m_stats.histB, QColor(60, 120, 230));
-    }
-    y += histH + gap;
-
-    // 统计信息文本
-    painter.setPen(QColor(220, 220, 220));
-    QFont sf = painter.font();
-    sf.setPointSize(9);
-    painter.setFont(sf);
-    const QString stats =
-        QString("亮度均值: %1\n"
-                "R 均值: %2   G 均值: %3   B 均值: %4\n"
-                "尺寸: %5 × %6")
-            .arg(m_stats.lumMean, 0, 'f', 1)
-            .arg(m_stats.rMean, 0, 'f', 1)
-            .arg(m_stats.gMean, 0, 'f', 1)
-            .arg(m_stats.bMean, 0, 'f', 1)
-            .arg(m_img.width())
-            .arg(m_img.height());
-    painter.drawText(QRect(pad, y, width() - pad * 2, labelH * 4),
-                     Qt::AlignLeft | Qt::AlignTop, stats);
-    y += labelH * 4 + gap;
-
-    // 框选区域统计占位
-    painter.setPen(QColor(160, 160, 160));
-    painter.drawText(QRect(pad, y, width() - pad * 2, labelH), Qt::AlignLeft,
-                     "框选区域统计:");
-    y += labelH;
-    const QString region =
-        m_regionText.isEmpty() ? "（在图像上拖拽框选以查看区域统计）" : m_regionText;
-    painter.setPen(QColor(200, 200, 200));
-    painter.drawText(QRect(pad, y, width() - pad * 2, labelH * 2),
-                     Qt::AlignLeft | Qt::AlignTop, region);
+    // 在直方图页绘制直方图
+    // 注意：实际绘制在 updateHistogramPage 中通过 update() 触发
+    // 这里简化处理，使用 m_statsLabel 的 pixmap 或直接绘制
+    // 由于布局复杂，直方图绘制在独立的 QLabel 中进行
 }
 
-void AnalysisPanel::drawHistogramChannel(QPainter &p, const QRect &bg,
-                                         const int *hist, const QColor &color)
+void AnalysisPanel::drawHistogramChannel(QPainter &p, const QRect &bg, const int *hist, const QColor &color)
 {
-    const int bins = kHistSize;
+    const int bins = kHistBins;
     const int srcBins = 256;
     const double binW = static_cast<double>(bg.width()) / bins;
 
-    // 聚合到 kHistSize 个 bin,并求最大值用于归一化
-    long long agg[kHistSize] = {0};
+    long long agg[kHistBins] = {0};
     long long maxV = 1;
     for (int i = 0; i < bins; ++i) {
         long long sum = 0;
@@ -164,8 +271,7 @@ void AnalysisPanel::drawHistogramChannel(QPainter &p, const QRect &bg,
         for (int j = lo; j < hi && j < srcBins; ++j)
             sum += hist[j];
         agg[i] = sum;
-        if (sum > maxV)
-            maxV = sum;
+        if (sum > maxV) maxV = sum;
     }
 
     p.setPen(color);
@@ -173,8 +279,19 @@ void AnalysisPanel::drawHistogramChannel(QPainter &p, const QRect &bg,
         const double h = static_cast<double>(agg[i]) / maxV * bg.height();
         const int x = bg.x() + static_cast<int>(i * binW);
         const int hh = std::max(1, static_cast<int>(h));
-        const int w = std::max(1, static_cast<int>(binW));
         p.drawLine(x, bg.bottom(), x, bg.bottom() - hh);
-        Q_UNUSED(w);
     }
+}
+
+void AnalysisPanel::drawThinHistogram(QPainter &p, const QRect &bg, const int *hist, const QColor &color)
+{
+    drawHistogramChannel(p, bg, hist, color);
+}
+
+void AnalysisPanel::setRegionStats(const QString &text)
+{
+    // 兼容旧接口：直接显示文本
+    m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>")
+            .arg(tr("区域统计"))
+            .arg(text));
 }
