@@ -14,28 +14,12 @@
 
 namespace {
 
-// UI 边界转换：核心层 ImageData -> Qt QImage(ARGB32)。
+// UI 边界转换：核心层 ImageObject -> Qt QImage，复用 mvcore::toQImage。
 QImage imageObjectToQImage(const ImageObject *img)
 {
     if (!img)
         return QImage();
-    const ImageData &src = img->image();
-    if (src.isNull())
-        return QImage();
-    const ImageBuffer v = src.view();
-    const int cpp = v.channelsPerPixel();
-    QImage out(v.width, v.height, QImage::Format_ARGB32);
-    if (out.isNull())
-        return QImage();
-    for (int y = 0; y < v.height; ++y) {
-        const uint8_t *sl = v.data + y * v.stride();
-        QRgb *dl = reinterpret_cast<QRgb *>(out.scanLine(y));
-        for (int x = 0; x < v.width; ++x) {
-            const uint8_t *p = sl + x * cpp;
-            dl[x] = qRgba(p[0], p[1], p[2], 255);
-        }
-    }
-    return out;
+    return mvcore::toQImage(img->image());
 }
 
 } // namespace
@@ -92,7 +76,11 @@ CompareWorkspace::CompareWorkspace(QWidget *parent)
 
 void CompareWorkspace::setImages(const QStringList &paths)
 {
-    m_engine.setImages(paths);
+    std::vector<std::string> stdPaths;
+    stdPaths.reserve(paths.size());
+    for (const QString &p : paths)
+        stdPaths.push_back(p.toStdString());
+    m_engine.setImages(stdPaths);
     rebuildCells();
     fitAll();
     update();
@@ -169,7 +157,7 @@ void CompareWorkspace::fitAll()
     if (m_syncZoom)
         m_engine.setScale(sharedScale);
     if (m_syncDrag)
-        m_engine.setOffset(QPointF(0, 0));
+        m_engine.setOffset(0.0, 0.0);
 }
 
 void CompareWorkspace::paintEvent(QPaintEvent *)
@@ -186,7 +174,8 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
         }
         double sc = m_syncZoom ? m_engine.syncTransform().scale
                                : m_imageScale.value(i, 1.0);
-        QPointF off = m_syncDrag ? m_engine.syncTransform().offset
+        QPointF off = m_syncDrag ? QPointF(m_engine.syncTransform().offset.x,
+                                           m_engine.syncTransform().offset.y)
                                  : m_imageOffset.value(i, QPointF());
         const QSize cell = m_cells[i]->size();
         if (cell.width() <= 0 || cell.height() <= 0) continue;
@@ -258,7 +247,7 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
         auto *we = static_cast<QWheelEvent*>(event);
         const double factor = we->angleDelta().y() > 0 ? 1.15 : 1.0 / 1.15;
         if (m_syncZoom) {
-            m_engine.zoomAt(QPointF(), factor);
+            m_engine.zoomAt(0.0, 0.0, factor);
         } else {
             double &sc = m_imageScale[idx];
             sc = std::clamp(sc * factor, 0.05, 50.0);
@@ -282,9 +271,10 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
         if (m_dragging) {
             const QPoint delta = me->pos() - m_lastMouse;
             m_lastMouse = me->pos();
-            if (m_syncDrag)
-                m_engine.setOffset(m_engine.syncTransform().offset + delta);
-            else
+            if (m_syncDrag) {
+                const Vec2 o = m_engine.syncTransform().offset;
+                m_engine.setOffset(o.x + delta.x(), o.y + delta.y());
+            } else
                 m_imageOffset[m_dragIdx] += delta;
             update();
         }

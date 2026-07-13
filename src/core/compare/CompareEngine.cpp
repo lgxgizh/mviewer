@@ -1,38 +1,15 @@
 #include "core/compare/CompareEngine.h"
 #include "core/image/Decoder.h"
+#include "core/image/QtConvert.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QImage>
-#include <QPointF>
-#include <QSize>
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
-namespace {
-
-// UI 边界转换工具：把核心层的 ImageData 转成 Qt 的 QImage(ARGB32)。
-// 核心层头文件不暴露 Qt，这里在 .cpp 内部做转换。
-QImage toQImage(const ImageData &src)
-{
-    if (src.isNull())
-        return QImage();
-    const ImageBuffer v = src.view();
-    const int cpp = v.channelsPerPixel();
-    QImage out(v.width, v.height, QImage::Format_ARGB32);
-    if (out.isNull())
-        return QImage();
-    for (int y = 0; y < v.height; ++y) {
-        const uint8_t *sl = v.data + y * v.stride();
-        QRgb *dl = reinterpret_cast<QRgb *>(out.scanLine(y));
-        for (int x = 0; x < v.width; ++x) {
-            const uint8_t *p = sl + x * cpp;
-            dl[x] = qRgba(p[0], p[1], p[2], 255);
-        }
-    }
-    return out;
-}
-
-} // namespace
+// 内部实现：像素级差异计算用 QImage（经 QtConvert 转换）。
+// header 不暴露 Qt；这里在 .cpp 内部使用 Qt 作为实现细节。
 
 CompareLayout CompareLayout::forCount(int n)
 {
@@ -49,20 +26,20 @@ CompareLayout CompareLayout::forCount(int n)
     return l;
 }
 
-QPoint CompareLayout::cellPos(int index, const QSize &viewportSize) const
+CellPoint CompareLayout::cellPos(int index, const CellSize &viewport) const
 {
-    if (imageCount <= 0) return QPoint(0, 0);
-    const int cellW = viewportSize.width() / cols;
-    const int cellH = viewportSize.height() / rows;
+    if (imageCount <= 0) return CellPoint{0, 0};
+    const int cellW = viewport.w / cols;
+    const int cellH = viewport.h / rows;
     const int c = index % cols;
     const int r = index / cols;
-    return QPoint(c * cellW, r * cellH);
+    return CellPoint{c * cellW, r * cellH};
 }
 
-QSize CompareLayout::cellSize(const QSize &viewportSize) const
+CellSize CompareLayout::cellSize(const CellSize &viewport) const
 {
-    if (imageCount <= 0) return viewportSize;
-    return QSize(viewportSize.width() / cols, viewportSize.height() / rows);
+    if (imageCount <= 0) return viewport;
+    return CellSize{viewport.w / cols, viewport.h / rows};
 }
 
 CompareEngine::CompareEngine()
@@ -70,26 +47,26 @@ CompareEngine::CompareEngine()
     m_layout = CompareLayout::forCount(0);
 }
 
-void CompareEngine::setImages(const QStringList &paths)
+void CompareEngine::setImages(const std::vector<std::string> &paths)
 {
     m_images.clear();
     m_images.reserve(paths.size());
-    for (const QString &p : paths) {
-        // 解码到 Viewer 级缓存
-        ImageData img = Decoder::decodeFull(p.toStdString());
+    for (const std::string &p : paths) {
+        // 解码到 Viewer 级
+        ImageData img = Decoder::decodeFull(p);
         if (!img.isNull()) {
-            m_images.emplace_back(p.toStdString(), img);
+            m_images.emplace_back(p, img);
         }
     }
     rebuildLayout();
     m_blinkIndex = -1;
 }
 
-void CompareEngine::addImage(const QString &path)
+void CompareEngine::addImage(const std::string &path)
 {
-    ImageData img = Decoder::decodeFull(path.toStdString());
+    ImageData img = Decoder::decodeFull(path);
     if (!img.isNull()) {
-        m_images.emplace_back(path.toStdString(), img);
+        m_images.emplace_back(path, img);
         rebuildLayout();
     }
 }
@@ -124,17 +101,17 @@ void CompareEngine::setScale(double s)
     m_sync.scale = s;
 }
 
-void CompareEngine::setOffset(const QPointF &off)
+void CompareEngine::setOffset(double ox, double oy)
 {
-    m_sync.offset = off;
+    m_sync.offset = Vec2{ox, oy};
 }
 
-void CompareEngine::zoomAt(const QPointF &viewPos, double factor, int exceptIndex)
+void CompareEngine::zoomAt(double viewX, double viewY, double factor, int exceptIndex)
 {
     m_sync.scale *= factor;
     m_sync.scale = std::clamp(m_sync.scale, 0.05, 50.0);
-    // offset 不变(保持视图中心); exceptIndex 预留给独立缩放某张
-    Q_UNUSED(viewPos); Q_UNUSED(exceptIndex);
+    // offset 不变(保持视图中心); viewX/viewY/exceptIndex 预留给独立缩放某张
+    (void)viewX; (void)viewY; (void)exceptIndex;
 }
 
 void CompareEngine::setBlinkIndex(int idx)
@@ -142,22 +119,24 @@ void CompareEngine::setBlinkIndex(int idx)
     m_blinkIndex = (idx >= 0 && idx < imageCount()) ? idx : -1;
 }
 
-QImage CompareEngine::differenceMap(int index, int baseIndex)
+ImageData CompareEngine::differenceMap(int index, int baseIndex)
 {
-    if (index < 0 || index >= imageCount()) return QImage();
-    if (baseIndex < 0 || baseIndex >= imageCount()) return QImage();
-    const QImage a = toQImage(m_images[baseIndex].image());
-    const QImage b = toQImage(m_images[index].image());
-    if (a.isNull() || b.isNull()) return QImage();
+    if (index < 0 || index >= imageCount()) return ImageData();
+    if (baseIndex < 0 || baseIndex >= imageCount()) return ImageData();
+    const QImage a = mvcore::toQImage(m_images[baseIndex].image());
+    const QImage b = mvcore::toQImage(m_images[index].image());
+    if (a.isNull() || b.isNull()) return ImageData();
 
-    const int w = std::min(a.width(), b.width());
-    const int h = std::min(a.height(), b.height());
+    const QImage aa = a.convertToFormat(QImage::Format_RGB32);
+    const QImage bb = b.convertToFormat(QImage::Format_RGB32);
+    const int w = std::min(aa.width(), bb.width());
+    const int h = std::min(aa.height(), bb.height());
     QImage out(w, h, QImage::Format_Grayscale8);
-    if (out.isNull()) return QImage();
+    if (out.isNull()) return ImageData();
 
     for (int y = 0; y < h; ++y) {
-        const QRgb *la = reinterpret_cast<const QRgb *>(a.constScanLine(y));
-        const QRgb *lb = reinterpret_cast<const QRgb *>(b.constScanLine(y));
+        const QRgb *la = reinterpret_cast<const QRgb *>(aa.constScanLine(y));
+        const QRgb *lb = reinterpret_cast<const QRgb *>(bb.constScanLine(y));
         uchar *dst = out.scanLine(y);
         for (int x = 0; x < w; ++x) {
             const int dr = abs(static_cast<int>(qRed(la[x])) - qRed(lb[x]));
@@ -166,5 +145,5 @@ QImage CompareEngine::differenceMap(int index, int baseIndex)
             dst[x] = static_cast<uchar>(std::min(255, (dr + dg + db) / 3));
         }
     }
-    return out;
+    return mvcore::fromQImage(out);
 }
