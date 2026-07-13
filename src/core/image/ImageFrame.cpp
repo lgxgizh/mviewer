@@ -1,6 +1,9 @@
 #include "core/image/ImageFrame.h"
 #include <algorithm>
 #include <cstring>
+#include <functional>
+
+#include <QFileInfo>
 
 namespace {
 
@@ -14,7 +17,20 @@ ImageFrame::ImageFrame(const mviewer::domain::ImageMetadata& meta, const ImageDa
     : m_meta(meta), m_pixels(pixels) {}
 
 /*static*/ ImageFrame ImageFrame::create(const std::string& path, const ImageData& pixels) {
-    return ImageFrame(mviewer::domain::ImageMetadata{}, pixels);
+    mviewer::domain::ImageMetadata meta;
+    const QFileInfo fi(QString::fromStdString(path));
+    meta.filePath = path;
+    meta.fileName = fi.fileName().toStdString();
+    meta.width = pixels.width;
+    meta.height = pixels.height;
+    meta.fileSize = static_cast<int64_t>(fi.size());
+    meta.modifiedEpochSec = fi.lastModified().toSecsSinceEpoch();
+    // 身份哈希：路径 + 尺寸 + 修改时间，决定缓存键与 ImageId。
+    const std::string composite = path + "|" +
+        std::to_string(meta.fileSize) + "|" +
+        std::to_string(meta.modifiedEpochSec);
+    meta.hash = std::to_string(std::hash<std::string>{}(composite));
+    return ImageFrame(meta, pixels);
 }
 
 mviewer::domain::ImageId ImageFrame::id() const {

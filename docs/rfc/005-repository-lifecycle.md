@@ -1,7 +1,7 @@
 # RFC-005: ImageRepository Lifecycle
 
 ## Status
-Draft → Accepted
+Accepted
 
 ## Priority
 P0

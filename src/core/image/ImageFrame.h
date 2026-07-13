@@ -31,6 +31,11 @@ public:
     int height() const { return m_pixels.height; }
     bool isValid() const { return !m_pixels.isNull(); }
 
+    // Thumbnail (lazy; may be empty until populated by repository/decoder)
+    const ImageData& thumbnail() const { return m_thumbnail; }
+    void setThumbnail(const ImageData& t) { m_thumbnail = t; }
+    bool hasThumbnail() const { return !m_thumbnail.isNull(); }
+
     // Decode state
     DecodeState decodeState() const { return m_decodeState; }
     void setDecodeState(DecodeState s) { m_decodeState = s; }
@@ -43,6 +48,9 @@ public:
     // Cache state
     CacheState cacheState() const { return m_cacheState; }
     void setCacheState(CacheState s) { m_cacheState = s; }
+
+    // Metadata (set by repository / create())
+    void setMetadata(const mviewer::domain::ImageMetadata& m) { m_meta = m; }
 
     // Stats convenience
     double luminanceMean() const { return m_histogram.lumMean; }
@@ -57,4 +65,5 @@ private:
     CacheState m_cacheState = CacheState::None;
     bool m_histogramComputed = false;
     mviewer::domain::Histogram m_histogram;
+    ImageData m_thumbnail;
 };

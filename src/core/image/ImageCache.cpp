@@ -8,6 +8,7 @@ ImageCache &ImageCache::instance()
 
 ImageCache::ImageCache()
 {
+    m_pools[Metadata].maxBytes = kMetaMaxBytes;
     m_pools[Thumbnail].maxBytes = kThumbMaxBytes;
     m_pools[Preview].maxBytes = kPreviewMaxBytes;
     m_pools[Viewer].maxBytes = kViewerMaxBytes;
@@ -36,14 +37,9 @@ void ImageCache::put(Level level, const std::string &key, const ImageData &img)
 {
     if (img.isNull())
         return;
-    if (level == Disk) {
-        DiskCache::instance().put(key, img);
-        return;
-    }
-    std::lock_guard<std::mutex> lock(m_mutex);
     Pool &pool = m_pools[level];
     const size_t bytes = img.byteSize();
-
+    std::lock_guard<std::mutex> lock(pool.mtx);
     auto it = pool.map.find(key);
     if (it != pool.map.end()) {
         pool.curBytes -= it->second.bytes;
@@ -59,11 +55,8 @@ void ImageCache::put(Level level, const std::string &key, const ImageData &img)
 
 bool ImageCache::get(Level level, const std::string &key, ImageData &out)
 {
-    if (level == Disk) {
-        return DiskCache::instance().get(key, out);
-    }
-    std::lock_guard<std::mutex> lock(m_mutex);
     Pool &pool = m_pools[level];
+    std::lock_guard<std::mutex> lock(pool.mtx);
     auto it = pool.map.find(key);
     if (it == pool.map.end())
         return false;
@@ -72,21 +65,57 @@ bool ImageCache::get(Level level, const std::string &key, ImageData &out)
     return true;
 }
 
+void ImageCache::remove(Level level, const std::string &key)
+{
+    Pool &pool = m_pools[level];
+    std::lock_guard<std::mutex> lock(pool.mtx);
+    auto it = pool.map.find(key);
+    if (it != pool.map.end()) {
+        pool.curBytes -= it->second.bytes;
+        pool.map.erase(it);
+        pool.order.remove(key);
+    }
+}
+
 void ImageCache::clear()
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    for (int i = 0; i < 3; ++i) {
-        m_pools[i].map.clear();
-        m_pools[i].order.clear();
-        m_pools[i].curBytes = 0;
+    for (int i = 0; i < LevelCount; ++i) {
+        Pool &pool = m_pools[i];
+        std::lock_guard<std::mutex> lock(pool.mtx);
+        pool.map.clear();
+        pool.order.clear();
+        pool.curBytes = 0;
     }
+}
+
+void ImageCache::setCapacity(Level level, size_t maxBytes)
+{
+    Pool &pool = m_pools[level];
+    std::lock_guard<std::mutex> lock(pool.mtx);
+    pool.maxBytes = maxBytes;
+}
+
+size_t ImageCache::usedBytes(Level level) const
+{
+    const Pool &pool = m_pools[level];
+    std::lock_guard<std::mutex> lock(pool.mtx);
+    return pool.curBytes;
+}
+
+size_t ImageCache::entryCount(Level level) const
+{
+    const Pool &pool = m_pools[level];
+    std::lock_guard<std::mutex> lock(pool.mtx);
+    return pool.map.size();
 }
 
 size_t ImageCache::totalUsedBytes() const
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
     size_t total = 0;
-    for (int i = 0; i < 3; ++i)
-        total += m_pools[i].curBytes;
+    for (int i = 0; i < LevelCount; ++i) {
+        const Pool &pool = m_pools[i];
+        std::lock_guard<std::mutex> lock(pool.mtx);
+        total += pool.curBytes;
+    }
     return total;
 }

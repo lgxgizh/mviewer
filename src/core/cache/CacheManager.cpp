@@ -6,13 +6,29 @@ CacheManager& CacheManager::instance()
     return inst;
 }
 
-ImageCache::Level CacheManager::toImageCacheLevel(CacheLevel level)
+CacheManager::CacheManager()
+{
+    configure(m_config);
+}
+
+void CacheManager::configure(const CacheConfig& cfg)
+{
+    m_config = cfg;
+    ImageCache::instance().setCapacity(ImageCache::Metadata, cfg.metadataCacheSize);
+    ImageCache::instance().setCapacity(ImageCache::Thumbnail, cfg.thumbnailCacheSize);
+    ImageCache::instance().setCapacity(ImageCache::Preview, cfg.previewCacheSize);
+    ImageCache::instance().setCapacity(ImageCache::Viewer, cfg.viewerCacheSize);
+    DiskCache::instance().setMaxEntries(cfg.maxDiskCacheEntries);
+}
+
+ImageCache::Level CacheManager::toImageCacheLevel(CacheLevel level) const
 {
     switch (level) {
+    case CacheLevel::Metadata:  return ImageCache::Metadata;
     case CacheLevel::Thumbnail: return ImageCache::Thumbnail;
     case CacheLevel::Preview:   return ImageCache::Preview;
     case CacheLevel::FullImage: return ImageCache::Viewer;
-    case CacheLevel::Disk:      return ImageCache::Viewer; // never used for memory
+    case CacheLevel::Disk:      return ImageCache::Viewer; // 内存路径不会走到这里
     }
     return ImageCache::Viewer;
 }
@@ -41,16 +57,17 @@ bool CacheManager::getDisk(const std::string& key, ImageData& out)
 
 bool CacheManager::get(CacheLevel level, const std::string& key, ImageData& out)
 {
-    if (level == CacheLevel::Disk)
-        return getDisk(key, out);
-    if (getMemory(level, key, out))
-        return true;
-    // Fall back to disk for memory levels
+    if (level == CacheLevel::Disk) {
+        if (getDisk(key, out)) { recordHit(level); return true; }
+        recordMiss(level); return false;
+    }
+    if (getMemory(level, key, out)) { recordHit(level); return true; }
+    // 回退到磁盘层
     if (getDisk(key, out)) {
         putMemory(level, key, out);
-        return true;
+        recordHit(level); return true;
     }
-    return false;
+    recordMiss(level); return false;
 }
 
 void CacheManager::put(CacheLevel level, const std::string& key, const ImageData& img)
@@ -59,6 +76,31 @@ void CacheManager::put(CacheLevel level, const std::string& key, const ImageData
         putDisk(key, img);
     else
         putMemory(level, key, img);
+}
+
+CacheLevelStats CacheManager::levelStats(CacheLevel level) const
+{
+    CacheLevelStats s;
+    s.hits = m_hits[static_cast<int>(level)].load();
+    s.misses = m_misses[static_cast<int>(level)].load();
+    if (level == CacheLevel::Disk) {
+        s.entries = DiskCache::instance().entryCount();
+        s.bytes = diskUsageBytes();
+    } else {
+        ImageCache::Level icl = toImageCacheLevel(level);
+        s.entries = ImageCache::instance().entryCount(icl);
+        s.bytes = ImageCache::instance().usedBytes(icl);
+    }
+    return s;
+}
+
+void CacheManager::erase(const std::string& key)
+{
+    ImageCache::instance().remove(ImageCache::Metadata, key);
+    ImageCache::instance().remove(ImageCache::Thumbnail, key);
+    ImageCache::instance().remove(ImageCache::Preview, key);
+    ImageCache::instance().remove(ImageCache::Viewer, key);
+    DiskCache::instance().remove(key);
 }
 
 void CacheManager::clear()
@@ -79,23 +121,74 @@ void CacheManager::clearDisk()
 
 size_t CacheManager::memoryUsageBytes() const
 {
-    // 让 ImageCache 统计其三个内存池的已用字节
     return ImageCache::instance().totalUsedBytes();
 }
 
 size_t CacheManager::diskUsageBytes() const
 {
-    // DiskCache 目前未暴露总大小的统计接口，保留 0，等 DiskCache 扩展后由它汇总
+    // DiskCache 目前未暴露总大小的统计接口，保留 0，等 DiskCache 扩展后由它汇总。
     return 0;
 }
 
-void CacheManager::prefetch(std::function<std::vector<std::string>()> nextKeys)
+void CacheManager::putMetadata(const std::string& key, const mviewer::domain::ImageMetadata& meta)
+{
+    std::lock_guard<std::mutex> lock(m_metaMutex);
+    auto it = m_metaStore.find(key);
+    if (it != m_metaStore.end()) {
+        m_metaOrder.remove(key);
+    } else if (m_metaStore.size() >= kMetaMaxEntries) {
+        const std::string victim = m_metaOrder.back();
+        m_metaOrder.pop_back();
+        m_metaStore.erase(victim);
+    }
+    m_metaStore[key] = meta;
+    m_metaOrder.push_front(key);
+}
+
+bool CacheManager::getMetadata(const std::string& key, mviewer::domain::ImageMetadata& out) const
+{
+    std::lock_guard<std::mutex> lock(m_metaMutex);
+    auto it = m_metaStore.find(key);
+    if (it == m_metaStore.end())
+        return false;
+    out = it->second;
+    return true;
+}
+
+bool CacheManager::hasMetadata(const std::string& key) const
+{
+    std::lock_guard<std::mutex> lock(m_metaMutex);
+    return m_metaStore.find(key) != m_metaStore.end();
+}
+
+void CacheManager::invalidate(const std::string& key)
+{
+    ImageCache::instance().remove(ImageCache::Metadata, key);
+    ImageCache::instance().remove(ImageCache::Thumbnail, key);
+    ImageCache::instance().remove(ImageCache::Preview, key);
+    ImageCache::instance().remove(ImageCache::Viewer, key);
+    {
+        std::lock_guard<std::mutex> lock(m_metaMutex);
+        m_metaStore.erase(key);
+        m_metaOrder.remove(key);
+    }
+    DiskCache::instance().remove(key);
+}
+
+void CacheManager::prefetch(std::function<std::vector<std::string>()> nextKeys,
+                            CacheLevel level)
 {
     if (!nextKeys)
         return;
-    for (const std::string& key : nextKeys()) {
+    prefetch(nextKeys(), level);
+}
+
+void CacheManager::prefetch(const std::vector<std::string>& keys, CacheLevel level)
+{
+    if (level == CacheLevel::Disk) return; // 磁盘层无需预热
+    for (const std::string& key : keys) {
         ImageData img;
         if (getDisk(key, img))
-            putMemory(CacheLevel::FullImage, key, img);
+            putMemory(level, key, img);
     }
 }

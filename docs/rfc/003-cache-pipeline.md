@@ -1,7 +1,7 @@
 # RFC-003: Cache Pipeline
 
 ## Status
-Draft → Accepted
+Accepted
 
 ## Priority
 P0
