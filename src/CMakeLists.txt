@@ -12,6 +12,8 @@ add_library(mviewer_core STATIC
     core/scheduler/TaskScheduler.cpp
     core/compare/CompareEngine.cpp
     core/analysis/AnalysisEngine.cpp
+    core/analyzer/Analyzer.cpp
+    core/analyzer/HistogramAnalyzer.cpp
     core/render/RenderEngine.cpp
     core/command/CommandRegistry.cpp
     core/command/OpenDirectoryCommand.cpp
