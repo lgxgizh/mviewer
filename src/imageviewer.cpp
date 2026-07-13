@@ -1,6 +1,7 @@
 #include "imageviewer.h"
 
 #include "core/analysis/AnalysisEngine.h"
+#include "core/image/QtConvert.h"
 
 #include <QApplication>
 #include <QDir>
@@ -276,7 +277,7 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
                     QRect(0, 0, img.width(), img.height()));
                 if (!valid.isEmpty()) {
                     const ImageStats stats =
-                        AnalysisEngine::computeStats(img.copy(valid));
+                        AnalysisEngine::computeStats(mvcore::fromQImage(img.copy(valid)));
                     const QString text =
                         QString("框选 [%1,%2,%3,%4]: 亮度=%5, R=%6,G=%7,B=%8")
                             .arg(valid.x())

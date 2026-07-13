@@ -1,12 +1,19 @@
 #include "core/analysis/AnalysisEngine.h"
+#include "core/image/QtConvert.h"
+
+#include <QImage>
 #include <algorithm>
+#include <cmath>
 #include <cstring>
 
-ImageStats AnalysisEngine::computeStats(const QImage &img)
+// 内部实现：把 ImageData 转成 QImage 做像素级统计，算法逻辑保持不变。
+// header 不暴露 Qt；这里在 .cpp 内部使用 Qt 作为实现细节。
+
+ImageStats AnalysisEngine::computeStats(const ImageData &imgData)
 {
     ImageStats s;
-    if (img.isNull()) return s;
-    QImage image = img.convertToFormat(QImage::Format_RGB32);
+    if (imgData.isNull()) return s;
+    const QImage image = mvcore::toQImage(imgData).convertToFormat(QImage::Format_RGB32);
     const int w = image.width();
     const int h = image.height();
     const int n = w * h;
@@ -34,15 +41,15 @@ ImageStats AnalysisEngine::computeStats(const QImage &img)
     return s;
 }
 
-QImage AnalysisEngine::differenceMap(const QImage &a, const QImage &b)
+ImageData AnalysisEngine::differenceMap(const ImageData &aData, const ImageData &bData)
 {
-    if (a.isNull() || b.isNull()) return QImage();
-    QImage aa = a.convertToFormat(QImage::Format_RGB32);
-    QImage bb = b.convertToFormat(QImage::Format_RGB32);
+    if (aData.isNull() || bData.isNull()) return ImageData();
+    QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_RGB32);
+    QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_RGB32);
     const int w = std::min(aa.width(), bb.width());
     const int h = std::min(aa.height(), bb.height());
     QImage out(w, h, QImage::Format_Grayscale8);
-    if (out.isNull()) return QImage();
+    if (out.isNull()) return ImageData();
     for (int y = 0; y < h; ++y) {
         const QRgb *la = reinterpret_cast<const QRgb *>(aa.constScanLine(y));
         const QRgb *lb = reinterpret_cast<const QRgb *>(bb.constScanLine(y));
@@ -54,13 +61,13 @@ QImage AnalysisEngine::differenceMap(const QImage &a, const QImage &b)
             dst[x] = static_cast<uchar>(std::min(255, (dr+dg+db)/3));
         }
     }
-    return out;
+    return mvcore::fromQImage(out);
 }
 
-double AnalysisEngine::psnr(const QImage &a, const QImage &b)
+double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
 {
-    QImage aa = a.convertToFormat(QImage::Format_RGB32);
-    QImage bb = b.convertToFormat(QImage::Format_RGB32);
+    QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_RGB32);
+    QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_RGB32);
     const int w = std::min(aa.width(), bb.width());
     const int h = std::min(aa.height(), bb.height());
     if (w == 0 || h == 0) return 0.0;
@@ -82,10 +89,10 @@ double AnalysisEngine::psnr(const QImage &a, const QImage &b)
     return 10.0 * std::log10(65025.0 / mse);
 }
 
-double AnalysisEngine::ssim(const QImage &a, const QImage &b)
+double AnalysisEngine::ssim(const ImageData &aData, const ImageData &bData)
 {
-    QImage aa = a.convertToFormat(QImage::Format_Grayscale8);
-    QImage bb = b.convertToFormat(QImage::Format_Grayscale8);
+    QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_Grayscale8);
+    QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_Grayscale8);
     const int w = std::min(aa.width(), bb.width());
     const int h = std::min(aa.height(), bb.height());
     if (w < 8 || h < 8) return 0.0;
@@ -125,10 +132,11 @@ double AnalysisEngine::ssim(const QImage &a, const QImage &b)
     return blocks > 0 ? ssimSum / blocks : 0.0;
 }
 
-QImage AnalysisEngine::heatMap(const QImage &gray)
+ImageData AnalysisEngine::heatMap(const ImageData &grayData)
 {
-    if (gray.isNull()) return QImage();
-    QImage src = gray.format() == QImage::Format_Grayscale8 ? gray : gray.convertToFormat(QImage::Format_Grayscale8);
+    if (grayData.isNull()) return ImageData();
+    QImage src = mvcore::toQImage(grayData);
+    src = src.format() == QImage::Format_Grayscale8 ? src : src.convertToFormat(QImage::Format_Grayscale8);
     const int w = src.width();
     const int h = src.height();
     QImage out(w, h, QImage::Format_RGB32);
@@ -143,5 +151,5 @@ QImage AnalysisEngine::heatMap(const QImage &gray)
             dst[x] = qRgb(std::min(255,r/2), std::min(255,g/2), std::min(255,b/2));
         }
     }
-    return out;
+    return mvcore::fromQImage(out);
 }

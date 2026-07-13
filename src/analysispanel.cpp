@@ -1,6 +1,7 @@
 #include "analysispanel.h"
 
 #include "core/analysis/AnalysisEngine.h"
+#include "core/image/QtConvert.h"
 
 #include <algorithm>
 
@@ -19,7 +20,7 @@ void AnalysisPanel::setImage(const QImage &img)
         return;
     }
     m_img = img.convertToFormat(QImage::Format_RGB32);
-    m_stats = AnalysisEngine::computeStats(m_img);
+    m_stats = AnalysisEngine::computeStats(mvcore::fromQImage(m_img));
     m_hasImage = true;
     update();
 }

@@ -1,6 +1,7 @@
 #include "compareworkspace.h"
 
 #include "core/image/ImageBuffer.h"
+#include "core/image/QtConvert.h"
 
 #include <QPainter>
 #include <QWheelEvent>
@@ -136,7 +137,7 @@ void CompareWorkspace::rebuildCells()
         const ImageObject *img = m_engine.imageAt(i);
         if (img && !img->image().isNull()) {
             QImage q = imageObjectToQImage(img);
-            m_stats.insert(i, AnalysisEngine::computeStats(q));
+            m_stats.insert(i, AnalysisEngine::computeStats(mvcore::fromQImage(q)));
         }
     }
 }
