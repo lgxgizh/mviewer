@@ -7,6 +7,7 @@ add_library(mviewer_core STATIC
     core/image/ImageCache.cpp
     core/image/DiskCache.cpp
     core/cache/CacheManager.cpp
+    core/image/Encoder.cpp
     core/image/QtConvert.cpp
     core/filesystem/FileSystem.cpp
     core/scheduler/TaskScheduler.cpp
@@ -21,6 +22,7 @@ add_library(mviewer_core STATIC
     core/command/RenameCommand.cpp
     core/command/DeleteCommand.cpp
     core/command/ToggleHistogramCommand.cpp
+    core/benchmark/Benchmark.cpp
 )
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
@@ -39,6 +41,8 @@ add_library(mviewer_ui STATIC
     thumbnailcache.cpp
     compareworkspace.cpp
     analysispanel.cpp
+    exportdialog.cpp
+    exportcommand.cpp
 )
 
 target_link_libraries(mviewer_ui PUBLIC Qt6::Widgets mviewer_core mviewer_application)
@@ -131,3 +135,19 @@ target_link_libraries(analyze_main
 )
 
 target_compile_features(analyze_main PRIVATE cxx_std_20)
+
+add_executable(benchmark
+    benchmark_main.cpp
+)
+
+target_link_libraries(benchmark
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(benchmark PRIVATE cxx_std_20)
+
+target_include_directories(benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
