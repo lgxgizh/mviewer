@@ -1,5 +1,6 @@
 #include "core/compare/CompareEngine.h"
 #include "core/image/Decoder.h"
+#include "core/image/DiskCache.h"
 #include "core/image/QtConvert.h"
 #include "core/scheduler/TaskScheduler.h"
 
@@ -52,10 +53,17 @@ void CompareEngine::setImages(const std::vector<std::string> &paths)
     m_images.clear();
     m_images.reserve(paths.size());
     for (const std::string &p : paths) {
-        // 解码到 Viewer 级
-        ImageData img = Decoder::decodeFull(p);
-        if (!img.isNull()) {
+        // 先尝试磁盘缓存，避免重复全分辨率解码
+        std::string key = p;
+        ImageData img;
+        if (DiskCache::instance().get(key, img)) {
             m_images.emplace_back(p, img);
+        } else {
+            img = Decoder::decodeFull(p);
+            if (!img.isNull()) {
+                DiskCache::instance().put(key, img);
+                m_images.emplace_back(p, img);
+            }
         }
     }
     rebuildLayout();
@@ -64,11 +72,19 @@ void CompareEngine::setImages(const std::vector<std::string> &paths)
 
 void CompareEngine::addImage(const std::string &path)
 {
-    ImageData img = Decoder::decodeFull(path);
-    if (!img.isNull()) {
+    std::string key = path;
+    ImageData img;
+    if (DiskCache::instance().get(key, img)) {
         m_images.emplace_back(path, img);
-        rebuildLayout();
+    } else {
+        img = Decoder::decodeFull(path);
+        if (!img.isNull()) {
+            DiskCache::instance().put(key, img);
+            m_images.emplace_back(path, img);
+        }
     }
+    if (!m_images.empty())
+        rebuildLayout();
 }
 
 void CompareEngine::removeImage(int index)

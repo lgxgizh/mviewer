@@ -2,6 +2,7 @@ add_library(mviewer_core STATIC
     core/image/Decoder.cpp
     core/image/ImageObject.cpp
     core/image/ImageCache.cpp
+    core/image/DiskCache.cpp
     core/image/QtConvert.cpp
     core/filesystem/FileSystem.cpp
     core/scheduler/TaskScheduler.cpp
@@ -10,7 +11,8 @@ add_library(mviewer_core STATIC
     core/render/RenderEngine.cpp
 )
 
-target_link_libraries(mviewer_core PUBLIC Qt6::Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
+target_link_libraries(mviewer_core PUBLIC Qt6::Widgets Qt6::Sql)
 
 target_compile_features(mviewer_core PUBLIC cxx_std_20)
 

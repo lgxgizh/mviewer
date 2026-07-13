@@ -36,6 +36,10 @@ void ImageCache::put(Level level, const std::string &key, const ImageData &img)
 {
     if (img.isNull())
         return;
+    if (level == Disk) {
+        DiskCache::instance().put(key, img);
+        return;
+    }
     std::lock_guard<std::mutex> lock(m_mutex);
     Pool &pool = m_pools[level];
     const size_t bytes = img.byteSize();
@@ -55,6 +59,9 @@ void ImageCache::put(Level level, const std::string &key, const ImageData &img)
 
 bool ImageCache::get(Level level, const std::string &key, ImageData &out)
 {
+    if (level == Disk) {
+        return DiskCache::instance().get(key, out);
+    }
     std::lock_guard<std::mutex> lock(m_mutex);
     Pool &pool = m_pools[level];
     auto it = pool.map.find(key);

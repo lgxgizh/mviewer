@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ImageBuffer.h"
+#include "core/image/DiskCache.h"
 
 #include <mutex>
 #include <list>
@@ -16,7 +17,7 @@
 class ImageCache
 {
 public:
-    enum Level { Thumbnail, Preview, Viewer };
+    enum Level { Thumbnail, Preview, Viewer, Disk };
 
     static ImageCache &instance();
 
