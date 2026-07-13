@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: windows-2022
+    
+    env:
+      QT_VERSION: 6.11.1
+      QT_DIR: D:\\Qt
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Cache Qt
+      id: cache-qt
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.QT_DIR }}
+        key: qt-${{ env.QT_VERSION }}-windows
+    
+    - name: Install Qt (cache miss)
+      if: steps.cache-qt.outputs.cache-hit != 'true'
+      run: |
+        echo "Qt installation required; in production, use aqtinstall or pre-installed Qt"
+        # aqt install-qt windows desktop 6.11.1 win64_msvc2022_64 --outputdir $env:QT_DIR
+    
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+    
+    - name: Configure CMake
+      run: |
+        $env:PATH = "D:\Qt\${{ env.QT_VERSION }}\msvc2022_64\bin;$env:PATH"
+        cmake -B build_msvc -G "Ninja Multi-Config" -DCMAKE_PREFIX_PATH="D:\Qt\${{ env.QT_VERSION }}\msvc2022_64"
+    
+    - name: Build (Release)
+      run: cmake --build build_msvc --config Release -j
+    
+    - name: Run core_tests
+      run: QT_QPA_PLATFORM=offscreen ./build_msvc/bin/Release/core_tests.exe
+    
+    - name: Run m3m4m5_tests
+      run: QT_QPA_PLATFORM=offscreen ./build_msvc/bin/Release/test_m3m4m5.exe
+    
+    - name: Run mviewer_unit_tests
+      run: QT_QPA_PLATFORM=offscreen ./build_msvc/bin/Release/mviewer_unit_tests.exe
+    
+    - name: Run benchmark
+      run: |
+        cd build_msvc
+        QT_QPA_PLATFORM=offscreen ./bin/Release/benchmark.exe ../../benchmark_results.csv
+        cat ../../benchmark_results.csv
+    
+    - name: Upload benchmark results
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-${{ github.sha }}
+        path: benchmark_results.csv
+    
+    - name: Upload build log on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log
+        path: build_msvc/CMakeFiles/CMakeOutput.log

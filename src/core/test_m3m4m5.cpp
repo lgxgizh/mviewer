@@ -459,6 +459,127 @@ static void testCompareControllers()
     CHECK(!heat.isNull() && heat.format == PixelFormat::RGB24, "DifferenceEngine heatmap");
 }
 
+static void testImageFrameExtras()
+{
+    printf("\n[ImageFrame Selection/Tags/Cache]\n");
+
+    QImage img = makeColorTest(64, 64, QColor(100, 100, 100));
+    ImageData data = mvcore::fromQImage(img);
+    ImageFrame frame = ImageFrame::create("/tmp.png", data);
+
+    // Selection
+    mviewer::domain::Selection sel = {10, 20, 30, 40};
+    frame.setSelection(sel);
+    CHECK(frame.selection().x == 10, "Selection set");
+    CHECK(frame.selection().width == 30, "Selection width");
+    frame.clearSelection();
+    CHECK(frame.selection().isEmpty(), "Selection cleared");
+
+    // Tags
+    frame.addTag("favorite");
+    frame.addTag("checked");
+    frame.addTag("favorite"); // duplicate → no-op
+    CHECK(frame.hasTag("favorite"), "Tag added");
+    CHECK(frame.hasTag("checked"), "Tag added");
+    CHECK(!frame.hasTag("missing"), "Tag missing");
+    frame.removeTag("favorite");
+    CHECK(!frame.hasTag("favorite"), "Tag removed");
+
+    // Analysis cache
+    frame.setAnalysisResult("rgbmean", true);
+    frame.setAnalysisResult("entropy", true);
+    auto* e1 = frame.findAnalysis("rgbmean");
+    CHECK(e1 != nullptr && e1->ok, "Analysis cache hit");
+    CHECK(frame.findAnalysis("missing") == nullptr, "Analysis cache miss");
+    frame.clearAnalysisCache();
+    CHECK(frame.findAnalysis("rgbmean") == nullptr, "Analysis cache cleared");
+
+    // Render cache
+    ImageData thumb = mvcore::fromQImage(makeColorTest(32, 32, QColor(50, 50, 50)));
+    RenderCacheEntry rce;
+    rce.tag = RenderCacheEntry::Tag::ScaledView;
+    rce.data = thumb;
+    rce.srcWidth = 1920;
+    rce.srcHeight = 1080;
+    frame.setRenderCache(rce);
+    auto* found = frame.findRenderCache(RenderCacheEntry::Tag::ScaledView);
+    CHECK(found != nullptr, "Render cache hit");
+    CHECK(found->srcWidth == 1920, "Render cache meta");
+    frame.clearRenderCache();
+    CHECK(frame.findRenderCache(RenderCacheEntry::Tag::ScaledView) == nullptr, "Render cache cleared");
+}
+
+static void testCompareSession()
+{
+    printf("\n[CompareSession]\n");
+
+    mviewer::domain::CompareSession s;
+    CHECK(!s.isValid(), "Empty session invalid");
+    CHECK(!s.isComparing(), "Empty session not comparing");
+
+    s.imageIds.push_back("/a.png");
+    s.imageIds.push_back("/b.png");
+    s.imageIds.push_back("/c.png");
+    CHECK(s.isValid(), "3-image session valid");
+    CHECK(s.isComparing(), "Session is comparing");
+    CHECK(s.isSyncOn(), "Default sync on");
+
+    s.syncMode = mviewer::domain::SyncMode::Off;
+    CHECK(!s.isSyncOn(), "Sync mode off");
+
+    s.blinkIndex = 1;
+    CHECK(s.isBlinking(), "Blinking active");
+    s.blinkIndex = -1;
+    CHECK(!s.isBlinking(), "Blinking inactive");
+
+    // Viewport defaults
+    s.viewport = {1920, 1080, 960, 540, 2, 1};
+    CHECK(s.viewport.width == 1920, "Viewport assigned");
+
+    s.selection = {100, 100, 200, 200, true, false};
+    CHECK(s.selection.active, "Selection active");
+}
+
+static void testRenderCommand()
+{
+    printf("\n[RenderCommand]\n");
+
+    ImageData dummy;
+    auto c1 = RenderCommand::drawImage(dummy, {100, 100}, RenderInterp::Bilinear);
+    CHECK(c1.type == RenderCommandType::DrawImage, "DrawImage factory");
+    CHECK(c1.interp == static_cast<int>(RenderInterp::Bilinear), "DrawImage interp");
+
+    auto c2 = RenderCommand::drawOverlay(dummy, 0.5);
+    CHECK(c2.type == RenderCommandType::DrawOverlay, "DrawOverlay factory");
+    CHECK(c2.alpha == 0.5, "DrawOverlay alpha");
+
+    int bins[256] = {0};
+    bins[128] = 100;
+    auto c3 = RenderCommand::drawHistogram(bins, 256, {0, 0, 256, 100});
+    CHECK(c3.type == RenderCommandType::DrawHistogram, "DrawHistogram factory");
+
+    auto c4 = RenderCommand::drawSelection({10, 10, 50, 50}, 0xff00ff);
+    CHECK(c4.type == RenderCommandType::DrawSelection, "DrawSelection factory");
+
+    auto c5 = RenderCommand::drawPixelMarker(100, 200, 0xffffff);
+    CHECK(c5.type == RenderCommandType::DrawPixelMarker, "DrawPixelMarker factory");
+}
+
+static void testAnalyzerCapabilityFramework()
+{
+    printf("\n[AnalyzerCapability]\n");
+    auto& reg = AnalyzerRegistry::instance();
+
+    // All expected analyzers registered
+    const char* expected[] = {"histogram", "rgbmean", "noise", "psnr", "ssim", "entropy", "sharpness"};
+    auto ids = reg.availableAnalyzers();
+    for (const char* id : expected) {
+        bool found = false;
+        for (const auto& x : ids) if (x == id) { found = true; break; }
+        CHECK(found, id);
+    }
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -479,6 +600,10 @@ int main(int argc, char **argv)
     testSharpness();
     testRenderEngine();
     testCompareControllers();
+    testImageFrameExtras();
+    testCompareSession();
+    testRenderCommand();
+    testAnalyzerCapabilityFramework();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

@@ -8,7 +8,6 @@
 #include <algorithm>
 
 namespace {
-// Qt-backed software rendering (implementation detail, no Qt in header).
 
 QImage nearestQ(const QImage& src, const QSize& target) {
     QImage out(target, QImage::Format_RGB32);
@@ -55,14 +54,14 @@ QImage bilinearQ(const QImage& src, const QSize& target) {
     return out;
 }
 
-QImage scaleQ(const QImage& src, const QSize& target, InterpMode mode) {
+QImage scaleQ(const QImage& src, const QSize& target, RenderInterp mode) {
     if (src.isNull() || target.width() <= 0 || target.height() <= 0) return QImage();
     const QImage rgb = src.convertToFormat(QImage::Format_RGB32);
     switch (mode) {
-    case InterpMode::Nearest:  return nearestQ(rgb, target);
-    case InterpMode::Bilinear: return bilinearQ(rgb, target);
-    case InterpMode::Bicubic:  return bilinearQ(rgb, target);  // simplified
-    case InterpMode::Lanczos:  return bilinearQ(rgb, target);
+    case RenderInterp::Nearest:  return nearestQ(rgb, target);
+    case RenderInterp::Bilinear: return bilinearQ(rgb, target);
+    case RenderInterp::Bicubic:  return bilinearQ(rgb, target);
+    case RenderInterp::Lanczos:  return bilinearQ(rgb, target);
     }
     return QImage();
 }
@@ -72,7 +71,7 @@ QImage scaleQ(const QImage& src, const QSize& target, InterpMode mode) {
 // ─── SoftwareRenderer ────────────────────────────────────────────────────────
 
 ImageData SoftwareRenderer::scale(const ImageData& src, const RenderSize& target,
-                                  InterpMode mode) {
+                                  RenderInterp mode) {
     if (src.isNull() || !target.isValid()) return ImageData();
     const QImage q = scaleQ(mvcore::toQImage(src),
                             QSize(target.width, target.height), mode);
@@ -92,7 +91,7 @@ ImageData SoftwareRenderer::overlayDifference(const ImageData& base,
         QRgb* line = reinterpret_cast<QRgb*>(out.scanLine(y));
         const QRgb* dline = reinterpret_cast<const QRgb*>(dd.constScanLine(y));
         for (int x = 0; x < w; ++x) {
-            const int dv = qRed(dline[x]); // diff is grayscale
+            const int dv = qRed(dline[x]);
             const int r = static_cast<int>(qRed(line[x]) * (1.0 - a) + dv * a);
             const int g = static_cast<int>(qGreen(line[x]) * (1.0 - a) + dv * a);
             const int b = static_cast<int>(qBlue(line[x]) * (1.0 - a) + dv * a);
@@ -103,7 +102,7 @@ ImageData SoftwareRenderer::overlayDifference(const ImageData& base,
 }
 
 ImageData SoftwareRenderer::scaleRegion(const ImageData& src, const RenderRect& region,
-                                        const RenderSize& target, InterpMode mode) {
+                                        const RenderSize& target, RenderInterp mode) {
     if (src.isNull() || !region.isValid()) return ImageData();
     const QImage full = mvcore::toQImage(src);
     const QImage sub = full.copy(QRect(region.x, region.y, region.width, region.height));
@@ -125,7 +124,7 @@ void RenderEngine::setBackend(std::unique_ptr<Renderer> r) {
     m_backend = r ? std::move(r) : std::make_unique<SoftwareRenderer>();
 }
 
-ImageData RenderEngine::scale(const ImageData& src, const RenderSize& target, InterpMode mode) {
+ImageData RenderEngine::scale(const ImageData& src, const RenderSize& target, RenderInterp mode) {
     return m_backend->scale(src, target, mode);
 }
 
@@ -134,23 +133,19 @@ ImageData RenderEngine::overlayDifference(const ImageData& base, const ImageData
 }
 
 ImageData RenderEngine::scaleRegion(const ImageData& src, const RenderRect& region,
-                                    const RenderSize& target, InterpMode mode) {
+                                    const RenderSize& target, RenderInterp mode) {
     return m_backend->scaleRegion(src, region, target, mode);
 }
 
-// ─── Static compat wrappers (delegate to instance) ──────────────────────────
-
-ImageData RenderEngine::scaleStatic(const ImageData& src, const RenderSize& target,
-                                    InterpMode mode) {
+ImageData RenderEngine::scaleStatic(const ImageData& src, const RenderSize& target, RenderInterp mode) {
     return instance().scale(src, target, mode);
 }
 
-ImageData RenderEngine::overlayDifferenceStatic(const ImageData& base, const ImageData& diff,
-                                                 double alpha) {
+ImageData RenderEngine::overlayDifferenceStatic(const ImageData& base, const ImageData& diff, double alpha) {
     return instance().overlayDifference(base, diff, alpha);
 }
 
 ImageData RenderEngine::scaleRegionStatic(const ImageData& src, const RenderRect& region,
-                                           const RenderSize& target, InterpMode mode) {
+                                           const RenderSize& target, RenderInterp mode) {
     return instance().scaleRegion(src, region, target, mode);
 }

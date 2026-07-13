@@ -178,3 +178,43 @@ target_link_libraries(test_m3m4m5
 target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# ─── Engineering Excellence Targets ─────────────────────────────────────────
+
+add_executable(golden_main
+    ${CMAKE_SOURCE_DIR}/golden/golden_main.cpp
+)
+
+target_link_libraries(golden_main
+    PRIVATE
+        Qt6::Gui
+        Qt6::Core
+)
+
+target_compile_features(golden_main PRIVATE cxx_std_20)
+target_include_directories(golden_main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+
+add_executable(benchmark_scenario
+    ${CMAKE_SOURCE_DIR}/benchmarks/benchmark_main.cpp
+)
+
+target_link_libraries(benchmark_scenario
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(benchmark_scenario PRIVATE cxx_std_20)
+target_include_directories(benchmark_scenario PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+
+# ─── Clang-Tidy (optional) ──────────────────────────────────────────────────
+
+find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+if(CLANG_TIDY_EXE)
+    set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE}")
+    message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
+else()
+    message(STATUS "clang-tidy not found; skipping")
+endif()
