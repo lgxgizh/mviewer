@@ -1,7 +1,7 @@
 # RFC-006: Compare Engine Controllers
 
 ## Status
-Draft → Accepted
+Implemented
 
 ## Priority
 P0

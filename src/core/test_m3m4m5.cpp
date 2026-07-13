@@ -1,4 +1,7 @@
-// M3/M4/M5 unit tests: ROI stats, noise estimation, Encoder, CacheManager, AnalyzerRegistry
+// M3/M4/M5 unit tests: ROI stats, noise estimation, Encoder, CacheManager, AnalyzerRegistry,
+// TaskScheduler (dep), CacheConfig/CacheManager stats + metadata,
+// new analyzers (RGBMean, Noise, PSNR, SSIM, Entropy, Sharpness),
+// RenderEngine backend.
 #include <QCoreApplication>
 #include <QImage>
 #include <QBuffer>
@@ -6,12 +9,26 @@
 #include <cassert>
 #include <cmath>
 #include <string>
+#include <vector>
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/image/Encoder.h"
 #include "core/cache/CacheManager.h"
 #include "core/analyzer/Analyzer.h"
+#include "core/analyzer/RGBMeanAnalyzer.h"
+#include "core/analyzer/NoiseAnalyzer.h"
+#include "core/analyzer/PSNRAnalyzer.h"
+#include "core/analyzer/SSIMAnalyzer.h"
+#include "core/analyzer/EntropyAnalyzer.h"
+#include "core/analyzer/SharpnessAnalyzer.h"
+#include "core/image/ImageFrame.h"
 #include "core/image/QtConvert.h"
+#include "core/scheduler/TaskScheduler.h"
+#include "core/render/RenderEngine.h"
+#include "core/compare/CompareEngine.h"
+#include "core/compare/DifferenceEngine.h"
+#include "core/compare/SyncController.h"
+
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -141,25 +158,305 @@ static void testCacheManager()
 static void testAnalyzerRegistry()
 {
     printf("\n[AnalyzerRegistry]\n");
-    auto &reg = AnalyzerRegistry::instance();
+    auto& reg = AnalyzerRegistry::instance();
 
-    // HistogramAnalyzer 应已自注册
+    // HistogramAnalyzer should be auto-registered
     auto ids = reg.availableAnalyzers();
     bool hasHistogram = false;
-    for (const auto &id : ids) {
+    for (const auto& id : ids) {
         if (id == "histogram") { hasHistogram = true; break; }
     }
     CHECK(hasHistogram, "HistogramAnalyzer auto-registered as 'histogram'");
 
-    // 创建实例
+    // Create instance
     auto analyzer = reg.create("histogram");
     CHECK(analyzer != nullptr, "create('histogram') returns non-null");
     if (analyzer) {
         CHECK(analyzer->name() == "histogram", "analyzer name == 'histogram'");
     }
 
-    // 不存在的 ID
+    // Nonexistent ID
     CHECK(reg.create("nonexistent") == nullptr, "create('nonexistent') returns null");
+}
+
+// ─── New tests ──────────────────────────────────────────────────────────────
+
+static QImage makeColorTest(int w, int h, QColor c) {
+    QImage img(w, h, QImage::Format_RGB32);
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
+            img.setPixel(x, y, c.rgb());
+    return img;
+}
+
+static void testTaskSchedulerDependency()
+{
+    printf("\n[TaskScheduler Dependency]\n");
+    auto& sched = TaskScheduler::instance();
+
+    // Test TaskId auto-increment
+    auto h1 = sched.submit(TaskScheduler::Priority::Background, [](const TaskScheduler::TaskContext&) {});
+    auto h2 = sched.submit(TaskScheduler::Priority::Background, [](const TaskScheduler::TaskContext&) {});
+    CHECK(h1->id != h2->id, "TaskId auto-increments");
+    CHECK(h1->id > 0, "TaskId starts from 1");
+
+    // Test submit with dependency (dep on non-existent id — should still accept)
+    TaskScheduler::TaskId depId = 999999;
+    auto h3 = sched.submit(TaskScheduler::Priority::Background,
+                            [](const TaskScheduler::TaskContext&) {},
+                            {depId});
+    CHECK(h3->id > 0, "Dep task accepted");
+    CHECK(h3->dependencies.size() == 1, "Dep recorded");
+
+    // Test handle lookup
+    auto found = sched.handle(h3->id);
+    CHECK(found != nullptr, "handle() finds task");
+
+    // Test cancelTree (doesn't crash on missing)
+    TaskScheduler::cancelTree(depId);
+
+    // Compat submit
+    auto h4 = sched.submit(TaskScheduler::DecodePool, []() {});
+    CHECK(h4->id > 0, "Compat submit works");
+
+    // toPriority mapping
+    CHECK(TaskScheduler::toPriority(TaskScheduler::DecodePool) == TaskScheduler::Priority::Decode,
+          "toPriority(DecodePool) = Decode");
+    CHECK(TaskScheduler::toPriority(TaskScheduler::MetadataPool) == TaskScheduler::Priority::Background,
+          "toPriority(MetadataPool) = Background");
+}
+
+static void testCacheConfig()
+{
+    printf("\n[CacheConfig]\n");
+    CacheManager& mgr = CacheManager::instance();
+    mgr.clear();
+
+    CacheConfig cfg;
+    cfg.metadataCacheSize = 1024;
+    cfg.thumbnailCacheSize = 2048;
+    cfg.previewCacheSize = 4096;
+    cfg.viewerCacheSize = 8192;
+    cfg.maxDiskCacheEntries = 100;
+    mgr.configure(cfg);
+    CHECK(mgr.config().viewerCacheSize == 8192, "CacheConfig applied");
+
+    // Stats
+    CacheLevelStats s = mgr.levelStats(CacheLevel::FullImage);
+    CHECK(s.bytes == 0, "Empty stats show 0 bytes");
+
+    // Metadata store
+    mviewer::domain::ImageMetadata meta;
+    meta.filePath = "/test.png";
+    meta.fileSize = 100;
+    mgr.putMetadata("key1", meta);
+    CHECK(mgr.hasMetadata("key1"), "Metadata stored");
+    mviewer::domain::ImageMetadata meta2;
+    CHECK(mgr.getMetadata("key1", meta2), "Metadata retrieved");
+    CHECK(meta2.fileSize == 100, "Metadata preserved");
+
+    // Erase clears everything
+    QImage img = makeColorTest(16, 16, QColor(100, 100, 100));
+    ImageData data = mvcore::fromQImage(img);
+    mgr.put(CacheLevel::FullImage, "eraseKey", data);
+    mgr.putMetadata("eraseKey", meta);
+    mgr.erase("eraseKey");
+    CHECK(!mgr.hasMetadata("eraseKey"), "erase clears metadata");
+
+    // Invalidate
+    mgr.put(CacheLevel::Thumbnail, "invKey", data);
+    mgr.putMetadata("invKey", meta);
+    mgr.invalidate("invKey");
+    CHECK(!mgr.hasMetadata("invKey"), "invalidate clears metadata");
+}
+
+static void testRGBMean()
+{
+    printf("\n[RGBMeanAnalyzer]\n");
+    auto a = AnalyzerRegistry::instance().create("rgbmean");
+    CHECK(a != nullptr, "rgbmean registered");
+    if (!a) return;
+
+    QImage img = makeColorTest(100, 100, QColor(50, 100, 150));
+    ImageData data = mvcore::fromQImage(img);
+    ImageFrame frame = ImageFrame::create("/rgbmean.png", data);
+
+    bool ok = a->analyze(frame);
+    CHECK(ok, "rgbmean analyze ok");
+    auto& ra = static_cast<RGBMeanAnalyzer&>(*a);
+    CHECK(std::abs(ra.result().rMean - 50) < 0.5, "rgbmean rMean ~50");
+    CHECK(std::abs(ra.result().gMean - 100) < 0.5, "rgbmean gMean ~100");
+    CHECK(std::abs(ra.result().bMean - 150) < 0.5, "rgbmean bMean ~150");
+    CHECK(ra.result().rStd == 0.0, "rgbmean rStd uniform");
+
+    // Region ROI
+    mviewer::domain::Selection roi = {0, 0, 50, 50};
+    CHECK(a->analyzeRegion(frame, roi), "rgbmean analyzeRegion ok");
+}
+
+static void testNoiseAnalyzer()
+{
+    printf("\n[NoiseAnalyzer]\n");
+    auto a = AnalyzerRegistry::instance().create("noise");
+    CHECK(a != nullptr, "noise registered");
+    if (!a) return;
+
+    QImage flat = makeColorTest(100, 100, QColor(128, 128, 128));
+    ImageData data = mvcore::fromQImage(flat);
+    ImageFrame frame = ImageFrame::create("/noise.png", data);
+
+    CHECK(a->analyze(frame), "noise analyze ok");
+    auto& na = static_cast<NoiseAnalyzer&>(*a);
+    CHECK(na.noiseLevel() < 1.0, "noise flat image ~0");
+}
+
+static void testPSNR()
+{
+    printf("\n[PSNRAnalyzer]\n");
+    auto a = AnalyzerRegistry::instance().create("psnr");
+    CHECK(a != nullptr, "psnr registered");
+    if (!a) return;
+
+    QImage imgA = makeColorTest(64, 64, QColor(100, 100, 100));
+    QImage imgB = makeColorTest(64, 64, QColor(110, 110, 110));
+    ImageFrame frameA = ImageFrame::create("/a.png", mvcore::fromQImage(imgA));
+    ImageFrame frameB = ImageFrame::create("/b.png", mvcore::fromQImage(imgB));
+
+    auto& pa = static_cast<PSNRAnalyzer&>(*a);
+    pa.setReference(frameA);
+    CHECK(pa.analyze(frameB), "psnr analyze ok");
+    CHECK(pa.psnrValue() > 0, "psnr > 0");
+    CHECK(pa.psnrValue() < 100, "psnr < 100 (imperfect)");
+
+    // Identical → high PSNR
+    CHECK(pa.analyze(frameA), "psnr identical ok");
+    CHECK(pa.psnrValue() >= 99, "psnr identical ~100");
+}
+
+static void testSSIM()
+{
+    printf("\n[SSIMAnalyzer]\n");
+    auto a = AnalyzerRegistry::instance().create("ssim");
+    CHECK(a != nullptr, "ssim registered");
+    if (!a) return;
+
+    QImage imgA = makeColorTest(64, 64, QColor(100, 100, 100));
+    ImageFrame frameA = ImageFrame::create("/a.png", mvcore::fromQImage(imgA));
+
+    auto& sa = static_cast<SSIMAnalyzer&>(*a);
+    sa.setReference(frameA);
+    CHECK(sa.analyze(frameA), "ssim identical ok");
+    CHECK(sa.ssimValue() >= 0.99, "ssim identical ~1");
+}
+
+static void testEntropy()
+{
+    printf("\n[EntropyAnalyzer]\n");
+    auto a = AnalyzerRegistry::instance().create("entropy");
+    CHECK(a != nullptr, "entropy registered");
+    if (!a) return;
+
+    // Low entropy: uniform image
+    QImage flat = makeColorTest(100, 100, QColor(128, 128, 128));
+    ImageFrame frameFlat = ImageFrame::create("/flat.png", mvcore::fromQImage(flat));
+
+    auto& ea = static_cast<EntropyAnalyzer&>(*a);
+    CHECK(ea.analyze(frameFlat), "entropy flat ok");
+    CHECK(ea.entropyValue() == 0.0, "entropy uniform = 0");
+
+    // High entropy: random
+    QImage img(100, 100, QImage::Format_RGB32);
+    srand(42);
+    for (int y = 0; y < 100; ++y)
+        for (int x = 0; x < 100; ++x)
+            img.setPixel(x, y, qRgb(rand()%256, rand()%256, rand()%256));
+    ImageFrame frameRng = ImageFrame::create("/rng.png", mvcore::fromQImage(img));
+    CHECK(ea.analyze(frameRng), "entropy random ok");
+    CHECK(ea.entropyValue() > 7.0, "entropy random high");
+}
+
+static void testSharpness()
+{
+    printf("\n[SharpnessAnalyzer]\n");
+    auto a = AnalyzerRegistry::instance().create("sharpness");
+    CHECK(a != nullptr, "sharpness registered");
+    if (!a) return;
+
+    QImage flat = makeColorTest(100, 100, QColor(128, 128, 128));
+    ImageFrame frameFlat = ImageFrame::create("/flat.png", mvcore::fromQImage(flat));
+
+    auto& sa = static_cast<SharpnessAnalyzer&>(*a);
+    CHECK(sa.analyze(frameFlat), "sharpness flat ok");
+    CHECK(sa.sharpnessValue() == 0.0, "sharpness uniform = 0");
+}
+
+static void testRenderEngine()
+{
+    printf("\n[RenderEngine]\n");
+    auto& engine = RenderEngine::instance();
+
+    // Backend default
+    CHECK(engine.scale(ImageData(), {10, 10}).isNull(), "scale null input ok");
+    CHECK(engine.overlayDifference(ImageData(), ImageData(), 0.5).isNull(), "overlay null ok");
+    CHECK(engine.scaleRegion(ImageData(), {0,0,10,10}, {5,5}).isNull(), "scaleRegion null ok");
+
+    // Normal scale
+    QImage img(100, 100, QImage::Format_RGB32);
+    img.fill(qRgb(200, 100, 50));
+    ImageData data = mvcore::fromQImage(img);
+
+    ImageData scaled = engine.scale(data, {50, 50});
+    CHECK(scaled.width == 50 && scaled.height == 50, "scale 100→50 ok");
+
+    ImageData scaledRoi = engine.scaleRegion(data, {10, 10, 40, 40}, {20, 20});
+    CHECK(scaledRoi.width == 20 && scaledRoi.height == 20, "scaleRegion ok");
+
+    ImageData ov = engine.overlayDifference(data, data, 0.5);
+    CHECK(!ov.isNull() && ov.width == 100, "overlay ok");
+}
+
+static void testCompareControllers()
+{
+    printf("\n[CompareControllers]\n");
+    CompareEngine engine;
+
+    // Image count 0 initially
+    CHECK(engine.imageCount() == 0, "CompareEngine starts empty");
+
+    // Load 2 images
+    QImage imgA = makeColorTest(64, 64, QColor(100, 100, 100));
+    QImage imgB = makeColorTest(64, 64, QColor(200, 200, 200));
+    ImageData dataA = mvcore::fromQImage(imgA);
+    ImageData dataB = mvcore::fromQImage(imgB);
+
+    // Since CompareEngine loads from disk, we test the struct math directly.
+    // (The compare core tests in core_tests already verify the real flow.)
+
+    CompareLayout layout = CompareLayout::forCount(2);
+    CHECK(layout.cols == 2 && layout.rows == 1, "Layout for 2 = 2x1");
+    CompareLayout layout4 = CompareLayout::forCount(4);
+    CHECK(layout4.cols == 2 && layout4.rows == 2, "Layout for 4 = 2x2");
+    CompareLayout layout6 = CompareLayout::forCount(6);
+    CHECK(layout6.cols == 4 && layout6.rows == 2, "Layout for 6 = 4x2");
+
+    CellSize vp{800, 600};
+    CellPoint p0 = layout.cellPos(0, vp);
+    CellPoint p1 = layout.cellPos(1, vp);
+    CHECK(p0.x == 0 && p1.x == 400, "cellPos 2-cell horizontal");
+
+    CellSize cs = layout.cellSize(vp);
+    CHECK(cs.w == 400 && cs.h == 600, "cellSize 2-cell");
+
+    // SyncTransform defaults
+    SyncTransform sync;
+    CHECK(sync.scale == 1.0, "SyncTransform default scale");
+    CHECK(sync.enabled == true, "SyncTransform default enabled");
+
+    // DifferenceEngine standalone
+    ImageData diff = DifferenceEngine::differenceMap(dataA, dataB);
+    CHECK(!diff.isNull() && diff.width == 64, "DifferenceEngine diff map");
+    ImageData heat = DifferenceEngine::heatMap(diff);
+    CHECK(!heat.isNull() && heat.format == PixelFormat::RGB24, "DifferenceEngine heatmap");
 }
 
 int main(int argc, char **argv)
@@ -172,6 +469,16 @@ int main(int argc, char **argv)
     testEncoder();
     testCacheManager();
     testAnalyzerRegistry();
+    testTaskSchedulerDependency();
+    testCacheConfig();
+    testRGBMean();
+    testNoiseAnalyzer();
+    testPSNR();
+    testSSIM();
+    testEntropy();
+    testSharpness();
+    testRenderEngine();
+    testCompareControllers();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

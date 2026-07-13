@@ -1,7 +1,7 @@
 # RFC-004: Priority Scheduler
 
 ## Status
-Accepted
+Implemented
 
 ## Priority
 P0

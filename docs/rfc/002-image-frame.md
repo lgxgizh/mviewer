@@ -1,7 +1,7 @@
 # RFC-002: Image Domain Model (ImageFrame)
 
 ## Status
-Accepted
+Implemented
 
 ## Priority
 P0

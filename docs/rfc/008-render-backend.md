@@ -1,7 +1,7 @@
 # RFC-008: Render Backend Abstraction
 
 ## Status
-Draft → Accepted
+Implemented
 
 ## Priority
 P1

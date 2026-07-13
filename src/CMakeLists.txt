@@ -12,9 +12,20 @@ add_library(mviewer_core STATIC
     core/filesystem/FileSystem.cpp
     core/scheduler/TaskScheduler.cpp
     core/compare/CompareEngine.cpp
+    core/compare/SyncController.cpp
+    core/compare/BlinkController.cpp
+    core/compare/DifferenceEngine.cpp
+    core/compare/SelectionController.cpp
+    core/compare/ViewportController.cpp
     core/analysis/AnalysisEngine.cpp
     core/analyzer/Analyzer.cpp
     core/analyzer/HistogramAnalyzer.cpp
+    core/analyzer/RGBMeanAnalyzer.cpp
+    core/analyzer/NoiseAnalyzer.cpp
+    core/analyzer/PSNRAnalyzer.cpp
+    core/analyzer/SSIMAnalyzer.cpp
+    core/analyzer/EntropyAnalyzer.cpp
+    core/analyzer/SharpnessAnalyzer.cpp
     core/render/RenderEngine.cpp
     core/command/CommandRegistry.cpp
     core/command/OpenDirectoryCommand.cpp

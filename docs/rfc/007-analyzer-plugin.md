@@ -1,7 +1,7 @@
 # RFC-007: Analyzer Plugin Interface
 
 ## Status
-Draft → Accepted
+Implemented
 
 ## Priority
 P0

@@ -100,6 +100,11 @@ void CacheManager::erase(const std::string& key)
     ImageCache::instance().remove(ImageCache::Thumbnail, key);
     ImageCache::instance().remove(ImageCache::Preview, key);
     ImageCache::instance().remove(ImageCache::Viewer, key);
+    {
+        std::lock_guard<std::mutex> lock(m_metaMutex);
+        m_metaStore.erase(key);
+        m_metaOrder.remove(key);
+    }
     DiskCache::instance().remove(key);
 }
 
