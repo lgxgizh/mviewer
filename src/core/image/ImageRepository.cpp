@@ -2,12 +2,13 @@
 
 #include "core/image/Decoder.h"
 #include "core/image/DiskCache.h"
-#include "core/image/ImageFrame.h"
 #include "core/cache/CacheManager.h"
 #include "core/filesystem/FileSystem.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QFileInfo>
+#include <QImageReader>
+#include <QSize>
 
 const ImageRepository::LoadOptions ImageRepository::kDefaultLoadOptions{};
 
@@ -32,15 +33,18 @@ mviewer::domain::ImageMetadata ImageRepository::makeMeta(const std::string& file
     mviewer::domain::ImageMetadata meta;
     const QFileInfo fi(QString::fromStdString(filePath));
     if (!fi.exists())
-        return meta; // 空（默认）表示文件不存在
+        return meta; // 空（默认）metadata 表示文件不存在
     meta.filePath = filePath;
     meta.fileName = fi.fileName().toStdString();
-    meta.fileSize = static_cast<int64_t>(fi.size());
+    meta.fileSize = fi.size();
     meta.modifiedEpochSec = fi.lastModified().toSecsSinceEpoch();
-    const std::string composite = filePath + "|" +
-        std::to_string(meta.fileSize) + "|" +
-        std::to_string(meta.modifiedEpochSec);
-    meta.hash = std::to_string(std::hash<std::string>{}(composite));
+    // 仅读取头信息获取尺寸，不做完整解码。
+    QImageReader reader(QString::fromStdString(filePath));
+    const QSize s = reader.size();
+    meta.width = s.width();
+    meta.height = s.height();
+    meta.hash = filePath + "|" + std::to_string(meta.fileSize) + "|" +
+                std::to_string(meta.modifiedEpochSec);
     return meta;
 }
 
@@ -70,6 +74,9 @@ ImageRepository::Result ImageRepository::load(const std::string& filePath,
     frame->setDecodeState(DecodeState::Decoded);
     frame->setCacheState(fromCache ? CacheState::Disk : CacheState::None);
 
+    // 元数据也写入 Metadata 缓存层，供 metadata()/prefetch 复用。
+    CacheManager::instance().putMetadata(key, frame->metadata());
+
     res.frame = frame;
     res.fromCache = fromCache;
     return res;
@@ -81,7 +88,7 @@ void ImageRepository::loadAsync(const std::string& filePath,
 {
     auto out = std::make_shared<Result>();
     TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Decode,
+        TaskScheduler::DecodePool,
         [this, filePath, opts, out]() {
             *out = load(filePath, opts);
         },
@@ -104,32 +111,30 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(
 
 void ImageRepository::prefetch(const std::string& filePath, const LoadOptions& opts)
 {
-    // 后台预热：解码并写入磁盘/内存缓存，不阻塞调用方，也不回调。
+    // 后台预热：解码并写入缓存（磁盘 + 内存），不阻塞调用线程。
     TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
-        [this, filePath, opts]() {
-            const std::string key = makeKey(filePath);
-            ImageData img;
-            if (DiskCache::instance().get(key, img))
-                return; // 已在磁盘缓存
-            img = Decoder::decodeFull(filePath);
-            if (img.isNull())
-                return;
-            if (opts.useDiskCache)
-                DiskCache::instance().put(key, img);
-            CacheManager::instance().put(CacheLevel::FullImage, key, img);
+        [this, filePath, opts](const TaskScheduler::TaskContext&) {
+            (void)load(filePath, opts);
         });
 }
 
 void ImageRepository::release(const std::string& filePath)
 {
-    // 仓库放弃该图像的生命周期：从所有缓存层丢弃其条目。
-    CacheManager::instance().erase(makeKey(filePath));
+    // 生命周期结束：丢弃该路径在所有缓存层中的全部表示。
+    CacheManager::instance().invalidate(makeKey(filePath));
 }
 
 mviewer::domain::ImageMetadata ImageRepository::metadata(const std::string& filePath) const
 {
-    return makeMeta(filePath);
+    const std::string key = makeKey(filePath);
+    mviewer::domain::ImageMetadata meta;
+    if (CacheManager::instance().getMetadata(key, meta))
+        return meta;
+    meta = makeMeta(filePath);
+    if (!meta.filePath.empty())
+        CacheManager::instance().putMetadata(key, meta);
+    return meta;
 }
 
 void ImageRepository::cacheToDisk(const std::string& filePath)
@@ -142,11 +147,12 @@ void ImageRepository::cacheToDisk(const std::string& filePath)
 
 void ImageRepository::invalidate(const std::string& filePath)
 {
-    // 真实失效：从磁盘与所有内存层删除该路径的缓存条目。
-    CacheManager::instance().erase(makeKey(filePath));
+    // 移除该 path 在内存像素池 + 元数据对象 + 磁盘中的全部缓存。
+    CacheManager::instance().invalidate(makeKey(filePath));
 }
 
 void ImageRepository::invalidateAll()
 {
     DiskCache::instance().clear();
+    CacheManager::instance().clearMemory();
 }

@@ -139,41 +139,6 @@ void DiskCache::clear()
     q.exec("DELETE FROM blobs");
 }
 
-void DiskCache::remove(const std::string &key)
-{
-    if (!m_impl->db.isOpen()) return;
-    QSqlQuery q(m_impl->db);
-    q.prepare("DELETE FROM blobs WHERE key = ?");
-    q.addBindValue(QVariant(QString::fromStdString(key)));
-    q.exec();
-}
-
-size_t DiskCache::entryCount() const
-{
-    if (!m_impl->db.isOpen()) return 0;
-    QSqlQuery q(m_impl->db);
-    if (!q.exec("SELECT COUNT(*) FROM blobs") || !q.next())
-        return 0;
-    return static_cast<size_t>(q.value(0).toLongLong());
-}
-
-void DiskCache::enforceMaxEntries()
-{
-    if (m_maxEntries <= 0 || !m_impl->db.isOpen())
-        return;
-    QSqlQuery c(m_impl->db);
-    if (!c.exec("SELECT COUNT(*) FROM blobs") || !c.next())
-        return;
-    const qint64 count = c.value(0).toLongLong();
-    if (count <= m_maxEntries)
-        return;
-    QSqlQuery d(m_impl->db);
-    d.prepare("DELETE FROM blobs WHERE key IN "
-              "(SELECT key FROM blobs ORDER BY ts ASC LIMIT ?)");
-    d.addBindValue(static_cast<qint64>(count - m_maxEntries));
-    d.exec();
-}
-
 void DiskCache::prune(const std::set<std::string> &validKeys)
 {
     if (!m_impl->db.isOpen()) return;
