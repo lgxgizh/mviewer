@@ -12,11 +12,11 @@
 #include "core/analyzer/Analyzer.h"
 #include "domain/Selection.h"
 
-// AnalysisPanel：多模式分析面板
-//  - 直方图+统计（单图）
-//  - 框选区域统计（ROI）
-//  - 双图比较（PSNR/SSIM/差异图/噪声）
-//  - 支持 AnalyzerRegistry 插件扩展
+// AnalysisPanel: multi-mode analysis panel
+//  - Histogram + stats (single image)
+//  - ROI stats
+//  - Dual-image compare (PSNR/SSIM/Noise/Diff)
+//  - AnalyzerRegistry plugin extensibility
 class AnalysisPanel : public QWidget
 {
     Q_OBJECT
@@ -28,10 +28,10 @@ public:
     void setImages(const QImage &a, const QImage &b);
     void clear();
 
-    // ROI 区域设置（图像坐标系）
+    // ROI (image coordinates)
     void setROI(const mviewer::domain::Selection &roi);
 
-    // 向后兼容：显示任意文本区域统计(来自 ImageViewer::regionStats 信号)
+    // Backward-compat: display arbitrary region-stats text (from ImageViewer::regionStats)
     void setRegionStats(const QString &text);
 
 public slots:
@@ -45,8 +45,7 @@ private:
     void updateHistogramPage();
     void updateComparePage();
     void updatePluginPage();
-    void drawHistogramChannel(QPainter &p, const QRect &bg, const int *hist, const QColor &color);
-    void drawThinHistogram(QPainter &p, const QRect &bg, const int *hist, const QColor &color);
+    void renderHistogramPixmap();
     QImage computeDifferencePreview(const QImage &a, const QImage &b);
     QString noiseLevelText(double variance);
 
@@ -55,12 +54,13 @@ private:
     // UI
     QTabWidget *m_tabs = nullptr;
     QComboBox *m_analyzerCombo = nullptr;
+    QLabel *m_histogramLabel = nullptr;   // histogram viz (replaces dead drawHistogramChannel)
     QLabel *m_statsLabel = nullptr;
     QLabel *m_compareLabel = nullptr;
     QLabel *m_diffPreview = nullptr;
     QLabel *m_pluginResult = nullptr;
 
-    // 数据
+    // Data
     QImage m_imageA;
     QImage m_imageB;
     bool m_hasA = false;
@@ -70,10 +70,9 @@ private:
     mviewer::domain::Selection m_roi;
     bool m_hasROI = false;
 
-    // 插件
+    // Plugins
     std::vector<std::string> m_pluginIds;
     int m_currentPluginIdx = -1;
 
-    static constexpr int kHistBins = 128;
-    static constexpr int kPreviewSize = 128;
+    static constexpr int kPreviewSize = 192;
 };

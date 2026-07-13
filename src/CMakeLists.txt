@@ -151,3 +151,19 @@ target_link_libraries(benchmark
 target_compile_features(benchmark PRIVATE cxx_std_20)
 
 target_include_directories(benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(test_m3m4m5
+    core/test_m3m4m5.cpp
+)
+
+target_link_libraries(test_m3m4m5
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
+
+target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

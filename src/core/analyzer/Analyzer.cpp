@@ -1,10 +1,24 @@
 #include "core/analyzer/Analyzer.h"
+#include "core/analyzer/HistogramAnalyzer.h"
 
 AnalyzerRegistry& AnalyzerRegistry::instance()
 {
     static AnalyzerRegistry inst;
     return inst;
 }
+
+// Self-register: built-in analyzers register at module load time
+namespace {
+bool registerBuiltins()
+{
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "histogram", []() -> std::unique_ptr<Analyzer> {
+            return std::make_unique<HistogramAnalyzer>();
+        });
+    return true;
+}
+[[maybe_unused]] const bool kRegistered = registerBuiltins();
+} // namespace
 
 void AnalyzerRegistry::registerAnalyzer(const std::string& id, AnalyzerCreator creator)
 {

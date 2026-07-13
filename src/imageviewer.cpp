@@ -71,9 +71,12 @@ QPixmap ImageViewer::loadPixmap(const QString &path)
             pix = QPixmap::fromImage(mvcore::toQImage(decoded));
         }
     }
-    // 兜底
+    // 兜底：用 Decoder 解码（仍走 Encoder/Decoder 统一路径）
     if (pix.isNull()) {
-        pix = QPixmap(path);
+        ImageData decoded = Decoder::decodeFull(path.toStdString());
+        if (!decoded.isNull()) {
+            pix = QPixmap::fromImage(mvcore::toQImage(decoded));
+        }
     }
 
     m_cacheOrder.push_front(path);
@@ -308,6 +311,9 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
                             .arg(stats.gMean, 0, 'f', 1)
                             .arg(stats.bMean, 0, 'f', 1);
                     emit regionStats(text);
+                    emit selectionChanged(valid);  // new: live ROI stats
+                } else {
+                    emit selectionChanged(QRect());
                 }
             }
         } else {

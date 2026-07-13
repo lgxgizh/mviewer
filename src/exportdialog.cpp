@@ -167,15 +167,21 @@ void ExportDialog::exportBatch()
         QString dst = dir.absoluteFilePath(fi.baseName() + suffix);
 
         QImage img(src);
-        if (!img.isNull() && img.save(dst, fmt.toUtf8().constData(), params.quality)) {
-            ++success;
+        if (!img.isNull()) {
+            // Use Encoder (core API), not QImage::save
+            ImageData data = mvcore::fromQImage(img.convertToFormat(QImage::Format_RGB32));
+            if (Encoder::encode(data, dst.toStdString(), params)) {
+                ++success;
+            } else {
+                ++fail;
+            }
         } else {
             ++fail;
         }
         m_progress->setValue(i + 1);
-        m_statusLabel->setText(tr("处理中... %1/%2").arg(i + 1).arg(m_sourceImages.size()));
+        m_statusLabel->setText(tr("Processing... %1/%2").arg(i + 1).arg(m_sourceImages.size()));
     }
 
-    m_statusLabel->setText(tr("完成: 成功 %1, 失败 %2").arg(success).arg(fail));
+    m_statusLabel->setText(tr("Done: success %1, fail %2").arg(success).arg(fail));
     if (fail == 0) accept();
 }

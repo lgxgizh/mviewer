@@ -162,6 +162,14 @@ void MainWindow::setupUi()
 
     connect(m_imageViewer, &ImageViewer::regionStats,
             m_analysisPanel, &AnalysisPanel::setRegionStats);
+    connect(m_imageViewer, &ImageViewer::selectionChanged,
+            m_analysisPanel, [this](const QRect &sel) {
+                if (sel.isEmpty()) return;
+                mviewer::domain::Selection roi;
+                roi.x = sel.x(); roi.y = sel.y();
+                roi.width = sel.width(); roi.height = sel.height();
+                m_analysisPanel->setROI(roi);
+            });
     connect(m_imageViewer, &ImageViewer::requestPrev,
             this, [this]() { navigate(-1); });
     connect(m_imageViewer, &ImageViewer::requestNext,

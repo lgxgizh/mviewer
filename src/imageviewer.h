@@ -26,6 +26,7 @@ public slots:
 
 signals:
     void regionStats(const QString &text);
+    void selectionChanged(const QRect &sel);  // image coords (may be null rect)
     void requestPrev();
     void requestNext();
 
