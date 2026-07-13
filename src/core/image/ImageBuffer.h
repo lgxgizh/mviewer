@@ -109,3 +109,7 @@ inline ImageData makeImageData(int w, int h, PixelFormat fmt)
     d.format = fmt;
     return d;
 }
+
+inline int luminance(uint8_t r, uint8_t g, uint8_t b) {
+    return (int)(0.299*r + 0.587*g + 0.114*b);
+}

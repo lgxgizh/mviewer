@@ -132,28 +132,21 @@ void CompareWorkspace::rebuildCells()
 
 void CompareWorkspace::fitAll()
 {
-    const int n = m_engine.imageCount();
     double sharedScale = 1.0;
     bool first = true;
+    const int n = m_engine.imageCount();
     for (int i = 0; i < n; ++i) {
         const ImageObject *img = m_engine.imageAt(i);
-        if (!img || !m_cells[i]) continue;
+        const QSize qs = m_cells[i]->size();
+        const CellSize cell{qs.width(), qs.height()};
         QPixmap pm = QPixmap::fromImage(imageObjectToQImage(img));
-        if (pm.isNull()) continue;
-        const QSize cell = m_cells[i]->size();
-        if (cell.width() <= 0 || cell.height() <= 0) continue;
-        m_imageScale[i] = std::min(
-            static_cast<double>(cell.width()) / pm.width(),
-            static_cast<double>(cell.height()) / pm.height()) * 0.95;
-        m_imageOffset[i] = QPointF(
-            (cell.width() - pm.width() * m_imageScale[i]) / 2.0,
-            (cell.height() - pm.height() * m_imageScale[i]) / 2.0);
-        if (first) {
-            sharedScale = m_imageScale[i];
-            first = false;
-        }
+        if (pm.isNull() || cell.w <= 0 || cell.h <= 0) continue;
+        CellSize imgSize{pm.width(), pm.height()};
+        m_engine.fitCell(i, cell, imgSize);
+        if (first || m_engine.cellScale(i) < sharedScale)
+            sharedScale = m_engine.cellScale(i);
+        first = false;
     }
-    // 同步缩放开启时,用单张 fit 比例作为共享缩放基准
     if (m_syncZoom)
         m_engine.setScale(sharedScale);
     if (m_syncDrag)
@@ -172,11 +165,12 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
             m_cells[i]->setPixmap(QPixmap());
             continue;
         }
+        const auto &ct = m_engine.cellTransform(i);
         double sc = m_syncZoom ? m_engine.syncTransform().scale
-                               : m_imageScale.value(i, 1.0);
+                               : ct.scale;
         QPointF off = m_syncDrag ? QPointF(m_engine.syncTransform().offset.x,
-                                           m_engine.syncTransform().offset.y)
-                                 : m_imageOffset.value(i, QPointF());
+                                            m_engine.syncTransform().offset.y)
+                                 : QPointF(ct.offset.x, ct.offset.y);
         const QSize cell = m_cells[i]->size();
         if (cell.width() <= 0 || cell.height() <= 0) continue;
 
@@ -249,8 +243,8 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
         if (m_syncZoom) {
             m_engine.zoomAt(0.0, 0.0, factor);
         } else {
-            double &sc = m_imageScale[idx];
-            sc = std::clamp(sc * factor, 0.05, 50.0);
+            const double oldScale = m_engine.cellTransform(idx).scale;
+            m_engine.setCellScale(idx, std::clamp(oldScale * factor, 0.05, 50.0));
         }
         update();
         return true;
@@ -274,8 +268,10 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
             if (m_syncDrag) {
                 const Vec2 o = m_engine.syncTransform().offset;
                 m_engine.setOffset(o.x + delta.x(), o.y + delta.y());
-            } else
-                m_imageOffset[m_dragIdx] += delta;
+            } else {
+                const Vec2 oldOff = m_engine.cellTransform(m_dragIdx).offset;
+                m_engine.setCellOffset(m_dragIdx, oldOff.x + delta.x(), oldOff.y + delta.y());
+            }
             update();
         }
         return false;

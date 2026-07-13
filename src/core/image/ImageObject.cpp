@@ -3,6 +3,9 @@
 #include <QCryptographicHash>
 #include <QFileInfo>
 
+#include <algorithm>
+#include <cstring>
+
 ImageObject::ImageObject(const std::string &path, const ImageData &image)
     : m_path(path)
     , m_image(image)
@@ -54,4 +57,20 @@ void ImageObject::rgbMeans(int &r, int &g, int &b)
 {
     computeStats();
     r = m_rMean; g = m_gMean; b = m_bMean;
+}
+
+void ImageObject::computeHistogram()
+{
+    if (m_histogramComputed || m_image.isNull()) return;
+    const ImageBuffer v = m_image.view();
+    const int w = v.width, h = v.height, cpp = v.channelsPerPixel();
+    std::memset(m_histogram, 0, sizeof(m_histogram));
+    for (int y = 0; y < h; ++y) {
+        const uint8_t *line = v.data + y * v.stride();
+        for (int x = 0; x < w; ++x) {
+            const uint8_t *p = line + x * cpp;
+            ++m_histogram[std::clamp(luminance(p[0], p[1], p[2]), 0, 255)];
+        }
+    }
+    m_histogramComputed = true;
 }

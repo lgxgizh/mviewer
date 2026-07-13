@@ -94,6 +94,40 @@ const ImageObject *CompareEngine::imageAt(int index) const
 void CompareEngine::rebuildLayout()
 {
     m_layout = CompareLayout::forCount(imageCount());
+    m_cells.resize(imageCount());
+}
+
+double CompareEngine::cellScale(int index) const {
+    if (index < 0 || index >= (int)m_cells.size()) return 1.0;
+    return m_cells[index].scale;
+}
+Vec2 CompareEngine::cellOffset(int index) const {
+    if (index < 0 || index >= (int)m_cells.size()) return Vec2{0,0};
+    return m_cells[index].offset;
+}
+void CompareEngine::setCellScale(int index, double s) {
+    if (index < 0 || index >= (int)m_cells.size()) return;
+    m_cells[index].scale = std::clamp(s, 0.05, 50.0);
+}
+void CompareEngine::setCellOffset(int index, double ox, double oy) {
+    if (index < 0 || index >= (int)m_cells.size()) return;
+    m_cells[index].offset = Vec2{ox, oy};
+}
+void CompareEngine::fitCell(int index, const CellSize &viewport, const CellSize &imageSize) {
+    if (index < 0 || index >= (int)m_cells.size() || imageSize.w <= 0 || imageSize.h <= 0) return;
+    const double s = std::min((double)viewport.w / imageSize.w,
+                              (double)viewport.h / imageSize.h) * 0.95;
+    m_cells[index].scale = s;
+    m_cells[index].offset = Vec2{
+        (viewport.w - imageSize.w * s) / 2.0,
+        (viewport.h - imageSize.h * s) / 2.0
+    };
+}
+
+const CellTransform& CompareEngine::cellTransform(int index) const {
+    static const CellTransform def{1.0, Vec2{0,0}};
+    if (index < 0 || index >= (int)m_cells.size()) return def;
+    return m_cells[index];
 }
 
 void CompareEngine::setScale(double s)

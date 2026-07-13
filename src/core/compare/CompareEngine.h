@@ -44,6 +44,14 @@ struct SyncTransform
     bool enabled = true;
 };
 
+// Per-cell independent transform (when sync disabled)
+struct CellTransform {
+    double scale = 1.0;
+    Vec2 offset;
+};
+
+enum class CompareState { Idle, Comparing, SyncZoom, SyncDrag };
+
 // Compare Engine：持有 N 张图片，管理同步变换、闪烁、差异图。
 // 完全独立于 QWidget/Qt，可由任意 Viewer/Workspace 使用。
 class CompareEngine
@@ -71,6 +79,16 @@ public:
     void setOffset(double ox, double oy);
     void zoomAt(double viewX, double viewY, double factor, int exceptIndex = -1);
 
+    // Per-cell independent scale/offset (when sync off)
+    double cellScale(int index) const;
+    Vec2 cellOffset(int index) const;
+    void setCellScale(int index, double s);
+    void setCellOffset(int index, double ox, double oy);
+    const CellTransform& cellTransform(int index) const;
+
+    // Fit a cell to its viewport (centered, contain)
+    void fitCell(int index, const CellSize &viewport, const CellSize &imageSize);
+
     // 闪烁比较：切换显示哪张(单张突出模式)
     int blinkIndex() const { return m_blinkIndex; }
     void setBlinkIndex(int idx);
@@ -85,5 +103,6 @@ private:
     std::vector<ImageObject> m_images;
     CompareLayout m_layout;
     SyncTransform m_sync;
+    std::vector<CellTransform> m_cells;
     int m_blinkIndex = -1;
 };

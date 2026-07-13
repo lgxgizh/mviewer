@@ -48,8 +48,6 @@ private:
     QWidget *m_grid = nullptr;
     QGridLayout *m_layout = nullptr;
     QList<QLabel*> m_cells;
-    QHash<int, double> m_imageScale;
-    QHash<int, QPointF> m_imageOffset;
     QHash<int, ImageStats> m_stats;
     bool m_dragging = false;
     QPoint m_lastMouse;

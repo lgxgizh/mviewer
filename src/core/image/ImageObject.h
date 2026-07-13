@@ -3,6 +3,8 @@
 #include "ImageBuffer.h"
 
 #include <string>
+#include <chrono>
+#include <atomic>
 #include <QDateTime>
 
 // 一张图片的内存表示：解码后的 ImageData + 元数据。
@@ -12,6 +14,9 @@
 class ImageObject
 {
 public:
+    enum class DecodeState { Idle, Decoding, Decoded, Failed };
+    enum class CacheState  { None, Memory, Disk };
+
     ImageObject() = default;
     ImageObject(const std::string &path, const ImageData &image);
 
@@ -31,6 +36,13 @@ public:
     double luminanceMean();
     void rgbMeans(int &r, int &g, int &b);
 
+    const int* histogram() const { return m_histogram; }
+    DecodeState decodeState() const { return m_decodeState; }
+    void setDecodeState(DecodeState s) { m_decodeState = s; }
+    CacheState cacheState() const { return m_cacheState; }
+    void setCacheState(CacheState s) { m_cacheState = s; }
+    void computeHistogram(); // separate from stats
+
 private:
     void computeStats();
 
@@ -43,4 +55,9 @@ private:
     bool m_statsComputed = false;
     double m_lumMean = 0.0;
     int m_rMean = 0, m_gMean = 0, m_bMean = 0;
+
+    int m_histogram[256] = {0};
+    bool m_histogramComputed = false;
+    DecodeState m_decodeState = DecodeState::Idle;
+    CacheState  m_cacheState  = CacheState::None;
 };
