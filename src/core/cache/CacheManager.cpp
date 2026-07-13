@@ -79,13 +79,13 @@ void CacheManager::clearDisk()
 
 size_t CacheManager::memoryUsageBytes() const
 {
-    // ImageCache owns the memory bookkeeping; expose a rough estimate by
-    // summing decoded sizes is not currently tracked at this boundary.
-    return 0;
+    // 让 ImageCache 统计其三个内存池的已用字节
+    return ImageCache::instance().totalUsedBytes();
 }
 
 size_t CacheManager::diskUsageBytes() const
 {
+    // DiskCache 目前未暴露总大小的统计接口，保留 0，等 DiskCache 扩展后由它汇总
     return 0;
 }
 

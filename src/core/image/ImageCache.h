@@ -26,6 +26,9 @@ public:
 
     void clear();
 
+    // 三个内存池的已用字节总量
+    size_t totalUsedBytes() const;
+
 private:
     ImageCache();
 
@@ -46,7 +49,7 @@ private:
     void evictIfNeeded(Pool &pool, size_t incoming);
     void touch(Pool &pool, const std::string &key);
 
-    std::mutex m_mutex;
+    mutable std::mutex m_mutex;
     Pool m_pools[3];
 
     static constexpr size_t kThumbMaxBytes = 256 * 1024 * 1024;  // 256MB

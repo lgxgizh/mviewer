@@ -2,6 +2,8 @@
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/image/QtConvert.h"
+#include "core/cache/CacheManager.h"
+#include "core/image/Decoder.h"
 
 #include <QApplication>
 #include <QDir>
@@ -55,7 +57,24 @@ QPixmap ImageViewer::loadPixmap(const QString &path)
         return it->second;
     }
 
-    QPixmap pix(path);
+    // 尝试从 CacheManager 获取已解码的图像（省去二次磁盘IO）
+    QPixmap pix;
+    ImageData cached;
+    if (CacheManager::instance().getMemory(CacheLevel::FullImage, path.toStdString(), cached)) {
+        pix = QPixmap::fromImage(mvcore::toQImage(cached));
+    }
+    if (pix.isNull()) {
+        // 未命中：解码并写入 CacheManager
+        ImageData decoded = Decoder::decodeFull(path.toStdString());
+        if (!decoded.isNull()) {
+            CacheManager::instance().put(CacheLevel::FullImage, path.toStdString(), decoded);
+            pix = QPixmap::fromImage(mvcore::toQImage(decoded));
+        }
+    }
+    // 兜底
+    if (pix.isNull()) {
+        pix = QPixmap(path);
+    }
 
     m_cacheOrder.push_front(path);
     m_cache[path] = pix;

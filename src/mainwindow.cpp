@@ -5,6 +5,7 @@
 #include "core/command/RenameCommand.h"
 #include "core/command/DeleteCommand.h"
 #include "core/command/ToggleHistogramCommand.h"
+#include "exportcommand.h"
 
 #include <QApplication>
 #include <QComboBox>
@@ -214,6 +215,8 @@ void MainWindow::setupCommands()
         [this]() { m_thumbnailPanel->moveToTrashSelected(); }));
     reg.registerCommand(std::make_unique<ToggleHistogramCommand>(
         [this]() { m_actToggleAnalysis->trigger(); }));
+    reg.registerCommand(std::make_unique<ExportCommand>(
+        this));
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event)

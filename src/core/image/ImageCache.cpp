@@ -81,3 +81,12 @@ void ImageCache::clear()
         m_pools[i].curBytes = 0;
     }
 }
+
+size_t ImageCache::totalUsedBytes() const
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    size_t total = 0;
+    for (int i = 0; i < 3; ++i)
+        total += m_pools[i].curBytes;
+    return total;
+}
