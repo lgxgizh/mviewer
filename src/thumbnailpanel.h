@@ -36,6 +36,9 @@ public:
 
     QStringList selectedPaths() const;
 
+    void renameSelected();
+    void moveToTrashSelected();
+
 signals:
     void itemClicked(const QString &path);
     void itemDoubleClicked(const QString &path);
@@ -45,8 +48,6 @@ private:
     void startWorker();
     void stopWorker();
     void onCompareClicked();
-    void renameSelected();
-    void moveToTrashSelected();
 
     void contextMenuEvent(QContextMenuEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;

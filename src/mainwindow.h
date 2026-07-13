@@ -1,6 +1,9 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QKeyEvent>
+
+#include "core/command/CommandRegistry.h"
 
 class ImageViewer;
 class DirectoryTree;
@@ -20,9 +23,12 @@ public:
 
 private:
     void setupUi();
+    void setupCommands();
     void openCompare(const QStringList &images = {});
     void onImageOpen(const QString &path);
     void navigate(int delta);
+
+    void keyPressEvent(QKeyEvent *event) override;
 
     ImageViewer *m_imageViewer = nullptr;
     DirectoryTree *m_directoryTree = nullptr;

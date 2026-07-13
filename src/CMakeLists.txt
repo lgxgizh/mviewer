@@ -10,6 +10,12 @@ add_library(mviewer_core STATIC
     core/compare/CompareEngine.cpp
     core/analysis/AnalysisEngine.cpp
     core/render/RenderEngine.cpp
+    core/command/CommandRegistry.cpp
+    core/command/OpenDirectoryCommand.cpp
+    core/command/CompareCommand.cpp
+    core/command/RenameCommand.cpp
+    core/command/DeleteCommand.cpp
+    core/command/ToggleHistogramCommand.cpp
 )
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)

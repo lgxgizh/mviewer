@@ -1,5 +1,11 @@
 #include "mainwindow.h"
 
+#include "core/command/OpenDirectoryCommand.h"
+#include "core/command/CompareCommand.h"
+#include "core/command/RenameCommand.h"
+#include "core/command/DeleteCommand.h"
+#include "core/command/ToggleHistogramCommand.h"
+
 #include <QApplication>
 #include <QComboBox>
 #include <QDialog>
@@ -27,6 +33,7 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
 {
     setupUi();
+    setupCommands();
     setWindowTitle("MViewer");
     resize(1280, 800);
 }
@@ -192,6 +199,32 @@ void MainWindow::setupUi()
     });
 
     statusBar()->showMessage("就绪");
+}
+
+void MainWindow::setupCommands()
+{
+    auto &reg = CommandRegistry::instance();
+    reg.registerCommand(std::make_unique<OpenDirectoryCommand>(
+        [this]() { m_actOpenDir->trigger(); }));
+    reg.registerCommand(std::make_unique<CompareCommand>(
+        [this]() { openCompare(); }));
+    reg.registerCommand(std::make_unique<RenameCommand>(
+        [this]() { m_thumbnailPanel->renameSelected(); }));
+    reg.registerCommand(std::make_unique<DeleteCommand>(
+        [this]() { m_thumbnailPanel->moveToTrashSelected(); }));
+    reg.registerCommand(std::make_unique<ToggleHistogramCommand>(
+        [this]() { m_actToggleAnalysis->trigger(); }));
+}
+
+void MainWindow::keyPressEvent(QKeyEvent *event)
+{
+    ICommand *cmd = CommandRegistry::instance().findByShortcut(
+        event->key(), static_cast<int>(event->modifiers()));
+    if (cmd) {
+        cmd->execute();
+        return;
+    }
+    QMainWindow::keyPressEvent(event);
 }
 
 void MainWindow::onImageOpen(const QString &path)
