@@ -2,32 +2,41 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QString>
+#include <QStringList>
 
-QStringList FileSystem::imageFilters()
+std::vector<std::string> FileSystem::imageFilters()
 {
-    return {"*.jpg", "*.jpeg", "*.bmp", "*.png"};
+    QStringList filters{"*.jpg", "*.jpeg", "*.bmp", "*.png"};
+    std::vector<std::string> result;
+    result.reserve(filters.size());
+    for (const QString &f : filters) {
+        result.push_back(f.toStdString());
+    }
+    return result;
 }
 
-QStringList FileSystem::listImages(const QString &dir, int max)
+std::vector<std::string> FileSystem::listImages(const std::string &dir, int max)
 {
-    QDir d(dir);
+    QDir d(QString::fromStdString(dir));
     if (!d.exists())
         return {};
+    QStringList filters{"*.jpg", "*.jpeg", "*.bmp", "*.png"};
     QFileInfoList entries =
-        d.entryInfoList(imageFilters(), QDir::Files, QDir::Name);
-    QStringList result;
-    result.reserve(entries.size());
+        d.entryInfoList(filters, QDir::Files, QDir::Name);
+    std::vector<std::string> result;
+    result.reserve(std::min(static_cast<int>(entries.size()), max));
     for (const QFileInfo &fi : entries) {
-        result.append(fi.absoluteFilePath());
-        if (result.size() >= max)
+        result.push_back(fi.absoluteFilePath().toStdString());
+        if (result.size() >= static_cast<size_t>(max))
             break;
     }
     return result;
 }
 
-bool FileSystem::isImage(const QString &path)
+bool FileSystem::isImage(const std::string &path)
 {
-    const QString suffix = QFileInfo(path).suffix().toLower();
+    const QString suffix = QFileInfo(QString::fromStdString(path)).suffix().toLower();
     return suffix == "jpg" || suffix == "jpeg" || suffix == "bmp" ||
            suffix == "png";
 }
