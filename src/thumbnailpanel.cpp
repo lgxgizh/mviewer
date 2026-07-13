@@ -14,6 +14,8 @@
 #include <QPainter>
 #include <QPushButton>
 
+#include "application/DeleteImageUseCase.h"
+#include "application/RenameImageUseCase.h"
 #include "thumbnailcache.h"
 
 namespace
@@ -312,7 +314,9 @@ void ThumbnailPanel::renameSelected()
     }
 
     const QString newPath = fi.absolutePath() + "/" + newName;
-    if (QFile::rename(oldPath, newPath))
+    RenameImageUseCase::Result r =
+        RenameImageUseCase::execute(oldPath.toStdString(), newName.toStdString());
+    if (r.success)
         setDirectory(m_currentDir);
     else
         QMessageBox::warning(this, "重命名", "重命名失败");
@@ -336,7 +340,7 @@ void ThumbnailPanel::moveToTrashSelected()
 
     bool allOk = true;
     for (const QString &path : sel) {
-        if (!QFile::moveToTrash(path))
+        if (!DeleteImageUseCase::execute(path.toStdString()).success)
             allOk = false;
     }
     if (allOk)

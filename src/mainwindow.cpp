@@ -15,8 +15,8 @@
 #include <QWidget>
 
 #include "analysispanel.h"
+#include "application/OpenDirectoryUseCase.h"
 #include "compareworkspace.h"
-#include "core/filesystem/FileSystem.h"
 #include "directorytree.h"
 #include "imageviewer.h"
 #include "previewpanel.h"
@@ -116,7 +116,8 @@ void MainWindow::setupUi()
     connect(m_directoryTree, &DirectoryTree::directoryChanged, this,
             [this](const QString &path) {
                 m_currentDir = path;
-                const int n = FileSystem::listImages(path).size();
+                const int n = static_cast<int>(
+                    OpenDirectoryUseCase::execute(path.toStdString()).imagePaths.size());
                 statusBar()->showMessage(
                     QString("目录: %1, 图片数: %2").arg(path).arg(n));
             });
@@ -174,7 +175,10 @@ void MainWindow::setupUi()
     });
     connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
     connect(m_actCompare, &QAction::triggered, this, [this]() {
-        QStringList imgs = FileSystem::listImages(m_currentDir);
+        QStringList imgs;
+        for (const auto &p :
+             OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
+            imgs.append(QString::fromStdString(p));
         if (imgs.size() > 8)
             imgs = imgs.mid(0, 8);
         openCompare(imgs);
@@ -195,7 +199,9 @@ void MainWindow::openCompare(const QStringList &images)
     if (imgs.isEmpty()) {
         if (m_currentDir.isEmpty())
             return;
-        imgs = FileSystem::listImages(m_currentDir);
+        for (const auto &p :
+             OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
+            imgs.append(QString::fromStdString(p));
     }
     if (imgs.isEmpty())
         return;
@@ -218,7 +224,10 @@ void MainWindow::navigate(int delta)
     if (m_currentDir.isEmpty() || m_currentImagePath.isEmpty())
         return;
 
-    const QStringList list = FileSystem::listImages(m_currentDir);
+    QStringList list;
+    for (const auto &p :
+         OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
+        list.append(QString::fromStdString(p));
     if (list.isEmpty())
         return;
 

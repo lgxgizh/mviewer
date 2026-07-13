@@ -26,11 +26,22 @@ add_library(mviewer_ui STATIC
     analysispanel.cpp
 )
 
-target_link_libraries(mviewer_ui PUBLIC Qt6::Widgets mviewer_core)
+target_link_libraries(mviewer_ui PUBLIC Qt6::Widgets mviewer_core mviewer_application)
 
 target_compile_features(mviewer_ui PUBLIC cxx_std_20)
 
 target_include_directories(mviewer_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_library(mviewer_application STATIC
+    application/OpenDirectoryUseCase.cpp
+    application/CompareImagesUseCase.cpp
+    application/RenameImageUseCase.cpp
+    application/DeleteImageUseCase.cpp
+)
+
+target_link_libraries(mviewer_application PUBLIC mviewer_core Qt6::Gui)
+target_include_directories(mviewer_application PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_features(mviewer_application PUBLIC cxx_std_20)
 
 add_executable(MViewer
     main.cpp
@@ -41,6 +52,7 @@ target_link_libraries(MViewer
         Qt6::Widgets
         mviewer_core
         mviewer_ui
+        mviewer_application
 )
 
 target_compile_features(MViewer PRIVATE cxx_std_20)
