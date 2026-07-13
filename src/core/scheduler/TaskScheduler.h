@@ -1,17 +1,15 @@
 #pragma once
 
-#include <QObject>
 #include <QRunnable>
 #include <QThreadPool>
-#include <QString>
 #include <functional>
 
 // 统一任务调度器：所有后台工作（解码/缩略图/分析/IO）都经它提交，
 // 按 PoolType 路由到独立线程池，避免 ad-hoc QThread 失控。
-class TaskScheduler : public QObject
+// 注意：不继承 QObject（无信号/槽）；QThreadPool/QRunnable 为 QtCore
+// 线程原语，作为实现细节保留。接口不暴露 UI 类型。
+class TaskScheduler
 {
-    Q_OBJECT
-
 public:
     enum PoolType { DecodePool, ThumbnailPool, AnalysisPool, IOPool };
 
