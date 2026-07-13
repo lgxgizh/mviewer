@@ -5,7 +5,7 @@ add_library(mviewer_core STATIC
     core/image/ImageFrame.cpp
     core/image/ImageCache.cpp
     core/image/DiskCache.cpp
-    core/image/ImageFrame.cpp
+    core/cache/CacheManager.cpp
     core/image/QtConvert.cpp
     core/filesystem/FileSystem.cpp
     core/scheduler/TaskScheduler.cpp
