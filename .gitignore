@@ -4,6 +4,7 @@ build_msvc/
 build.sh
 dobuild.sh
 test.cmd
+_v.sh
 
 # Temp / install artifacts
 *.log
@@ -27,7 +28,6 @@ prototype.py
 
 # Status/outdated docs
 STATUS.md
-viewer/
 
 # CMake user files
 CMakeLists.txt.user
