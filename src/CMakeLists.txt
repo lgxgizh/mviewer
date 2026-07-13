@@ -1,4 +1,5 @@
 add_library(mviewer_core STATIC
+    core/EventBus.cpp
     core/image/Decoder.cpp
     core/image/ImageObject.cpp
     core/image/ImageCache.cpp

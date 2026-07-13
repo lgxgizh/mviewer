@@ -21,6 +21,7 @@ public:
 private:
     void setupUi();
     void openCompare(const QStringList &images = {});
+    void onImageOpen(const QString &path);
     void navigate(int delta);
 
     ImageViewer *m_imageViewer = nullptr;

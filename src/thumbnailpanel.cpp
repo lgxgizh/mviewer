@@ -16,6 +16,7 @@
 
 #include "application/DeleteImageUseCase.h"
 #include "application/RenameImageUseCase.h"
+#include "core/EventBus.h"
 #include "thumbnailcache.h"
 
 namespace
@@ -197,9 +198,13 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent)
             });
     connect(this, &QListWidget::itemDoubleClicked, this,
             [this](QListWidgetItem *item) {
-                if (item)
-                    emit itemDoubleClicked(
-                        item->data(Qt::UserRole).toString());
+                if (item) {
+                    const QString path =
+                        item->data(Qt::UserRole).toString();
+                    emit itemDoubleClicked(path);
+                    EventBus::instance().publish("image.open",
+                                                 const_cast<QString *>(&path));
+                }
             });
 
     connect(m_worker, &ThumbnailWorker::thumbnailReady, this,
@@ -291,6 +296,8 @@ void ThumbnailPanel::onCompareClicked()
         return;
     }
     emit compareRequested(sel);
+    EventBus::instance().publish("compare.requested",
+                                 const_cast<QStringList *>(&sel));
 }
 
 void ThumbnailPanel::renameSelected()

@@ -17,6 +17,7 @@
 #include "analysispanel.h"
 #include "application/OpenDirectoryUseCase.h"
 #include "compareworkspace.h"
+#include "core/EventBus.h"
 #include "directorytree.h"
 #include "imageviewer.h"
 #include "previewpanel.h"
@@ -133,23 +134,23 @@ void MainWindow::setupUi()
                         .arg(img.width()).arg(img.height()));
             });
     connect(m_thumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
-            [this](const QString &path) {
-                m_previewPanel->setImage(path);
-                m_imageViewer->setImage(path);
-                QImage img(path);
-                m_analysisPanel->setImage(img);
-                m_currentImagePath = path;
-                statusBar()->showMessage(
-                    QString("当前: %1, 尺寸: %2x%3")
-                        .arg(QFileInfo(path).fileName())
-                        .arg(img.width()).arg(img.height()));
-                if (m_imageViewer->isHidden())
-                    m_imageViewer->show();
-                m_imageViewer->raise();
-                m_imageViewer->activateWindow();
-            });
+            [this](const QString &path) { onImageOpen(path); });
     connect(m_thumbnailPanel, &ThumbnailPanel::compareRequested, this,
             &MainWindow::openCompare);
+
+    // EventBus (decoupled, dual-mode) subscriptions.
+    EventBus::instance().subscribe("image.open",
+            [this](void *ctx) {
+                auto *path = static_cast<QString *>(ctx);
+                if (path)
+                    onImageOpen(*path);
+            });
+    EventBus::instance().subscribe("compare.requested",
+            [this](void *ctx) {
+                auto *paths = static_cast<QStringList *>(ctx);
+                if (paths)
+                    openCompare(*paths);
+            });
 
     connect(m_imageViewer, &ImageViewer::regionStats,
             m_analysisPanel, &AnalysisPanel::setRegionStats);
@@ -191,6 +192,23 @@ void MainWindow::setupUi()
     });
 
     statusBar()->showMessage("就绪");
+}
+
+void MainWindow::onImageOpen(const QString &path)
+{
+    m_previewPanel->setImage(path);
+    m_imageViewer->setImage(path);
+    QImage img(path);
+    m_analysisPanel->setImage(img);
+    m_currentImagePath = path;
+    statusBar()->showMessage(
+        QString("当前: %1, 尺寸: %2x%3")
+            .arg(QFileInfo(path).fileName())
+            .arg(img.width()).arg(img.height()));
+    if (m_imageViewer->isHidden())
+        m_imageViewer->show();
+    m_imageViewer->raise();
+    m_imageViewer->activateWindow();
 }
 
 void MainWindow::openCompare(const QStringList &images)
