@@ -13,24 +13,22 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v2
-
     - name: Install Qt 6.8.0
       uses: jurplel/install-qt-action@v4
       with:
         version: 6.8.0
         arch: win64_msvc2022_64
-        cache: true
+
+    - name: Configure MSVC
+      uses: ilammy/msvc-dev-cmd@v1
 
     - name: Configure CMake
-      run: |
-        cmake -B build_msvc -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl
+      run: cmake -B build_msvc -G "Ninja" -DCMAKE_BUILD_TYPE=Release
 
     - name: Build
       run: cmake --build build_msvc -j
 
-    - name: CTest (all registered tests)
+    - name: CTest
       run: cd build_msvc && ctest --output-on-failure --output-junit test-results.xml -j4
 
     - name: Upload test results
