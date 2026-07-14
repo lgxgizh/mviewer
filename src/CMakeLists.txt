@@ -28,6 +28,8 @@ add_library(mviewer_core STATIC
     core/analyzer/SharpnessAnalyzer.cpp
     core/render/RenderEngine.cpp
     core/plugin/PluginLoader.cpp
+    core/plugin/PluginManager.cpp
+
     core/command/CommandRegistry.cpp
     core/command/OpenDirectoryCommand.cpp
     core/command/CompareCommand.cpp
@@ -236,6 +238,35 @@ target_link_libraries(test_plugin_loader
 
 target_compile_features(test_plugin_loader PRIVATE cxx_std_20)
 target_include_directories(test_plugin_loader PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+
+# ─── PluginManager tests ──────────────────────────────────────────────
+
+add_executable(test_plugin_manager
+    ${CMAKE_SOURCE_DIR}/tests/plugin/test_plugin_manager.cpp
+)
+
+target_link_libraries(test_plugin_manager
+    PRIVATE
+        mviewer_core
+)
+
+target_compile_features(test_plugin_manager PRIVATE cxx_std_20)
+target_include_directories(test_plugin_manager PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+
+# ─── UI fixture regression ─────────────────────────────────────────────
+
+add_executable(ui_fixture
+    ${CMAKE_SOURCE_DIR}/tests/ui_fixture/ui_fixture.cpp
+)
+
+target_link_libraries(ui_fixture
+    PRIVATE
+        Qt6::Widgets
+        mviewer_ui
+)
+
+target_compile_features(ui_fixture PRIVATE cxx_std_20)
+target_include_directories(ui_fixture PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
 
 # ─── Clang-Tidy (optional) ──────────────────────────────────────────────────
 

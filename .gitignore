@@ -16,6 +16,7 @@ _v.sh
 nul
 benchmark_results.csv
 tests/vision/current/
+tests/ui_fixture/current/
 
 # OS / editor
 Thumbs.db
