@@ -114,6 +114,19 @@ public:
     size_t queueDepth(PoolType pool) const;
     size_t activeTaskCount(PoolType pool) const;
 
+    // Pause / resume a pool. Paused pools hold accepts no new tasks (submit
+    // returns nullptr with back-pressure callback). Running tasks complete
+    // normally.
+    void pause(PoolType pool);
+    void resume(PoolType pool);
+
+    // Block until all active tasks in a pool finish, or timeout elapses.
+    // Returns true if drained, false on timeout.
+    bool drain(PoolType pool, std::chrono::milliseconds timeout);
+
+    // Shutdown: pause all pools, drain each with timeout. For app exit.
+    void shutdown(std::chrono::milliseconds timeout = std::chrono::seconds(5));
+
     using BackPressureFn = std::function<void(PoolType)>;
     void setBackPressureHandler(BackPressureFn fn) { m_backpressure = std::move(fn); }
 
@@ -144,8 +157,12 @@ protected:
     {
         PoolMetrics metrics;
         size_t max_queue_depth = 1000;
+        bool paused = false;   /// refuses new tasks when true
     };
     PoolState m_poolState[5];
+
+    /// Wait until all active tasks finish or timeout. Returns false on timeout.
+    bool waitForPoolDrained(int idx, std::chrono::milliseconds timeout);
 
     BackPressureFn m_backpressure;
 
