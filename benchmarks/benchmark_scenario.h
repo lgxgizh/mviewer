@@ -1,4 +1,5 @@
 // Per-scenario benchmark library: outputs CSV with Min/Avg/Max for each scenario.
+// Supports baseline comparison with degradation threshold (RFC-012 EE).
 #include <QImage>
 #include <QElapsedTimer>
 #include <QBuffer>
@@ -12,6 +13,8 @@
 #include <chrono>
 #include <cmath>
 #include <iomanip>
+#include <sstream>
+#include <unordered_map>
 
 struct BenchResult {
     std::string scenario;
@@ -20,6 +23,22 @@ struct BenchResult {
     double min_ms = 0;
     double max_ms = 0;
     int iterations = 0;
+};
+
+struct BaselineEntry {
+    double avg_ms = 0;
+    double min_ms = 0;
+    double max_ms = 0;
+};
+
+// Compare result vs baseline; returns true if within threshold (e.g., 1.2 = +20%)
+struct CompareResult {
+    std::string scenario;
+    std::string name;
+    double current_avg_ms = 0;
+    double baseline_avg_ms = 0;
+    double ratio = 0;  // current / baseline (1.0 = same, >1 = slower)
+    bool passed = false;
 };
 
 class ScenarioBenchmark {
@@ -51,6 +70,61 @@ public:
               << r.avg_ms << "," << r.min_ms << "," << r.max_ms << "," << r.iterations << "\n";
         std::cout << "CSV written: " << path << " (" << m_results.size() << " rows)" << std::endl;
     }
+
+    // Load a baseline CSV (format: scenario,name,avg_ms,min_ms,max_ms,iterations)
+    static std::unordered_map<std::string, BaselineEntry> loadBaseline(const std::string& path) {
+        std::unordered_map<std::string, BaselineEntry> map;
+        std::ifstream f(path);
+        if (!f.is_open()) {
+            std::cerr << "baseline not found: " << path << std::endl;
+            return map;
+        }
+        std::string line;
+        std::getline(f, line); // header
+        while (std::getline(f, line)) {
+            std::istringstream ss(line);
+            std::string scenario, name, avg_s, min_s, max_s, it_s;
+            if (!std::getline(ss, scenario, ',')) continue;
+            if (!std::getline(ss, name, ',')) continue;
+            if (!std::getline(ss, avg_s, ',')) continue;
+            if (!std::getline(ss, min_s, ',')) continue;
+            if (!std::getline(ss, max_s, ',')) continue;
+            BaselineEntry e;
+            e.avg_ms = std::stod(avg_s);
+            e.min_ms = std::stod(min_s);
+            e.max_ms = std::stod(max_s);
+            map[scenario + "::" + name] = e;
+        }
+        return map;
+    }
+
+    // Compare current results vs baseline with threshold ratio
+    // threshold = 1.2 means up to +20% degradation is allowed
+    std::vector<CompareResult> compare(
+        const std::unordered_map<std::string, BaselineEntry>& baseline,
+        double threshold = 1.2) const {
+        std::vector<CompareResult> out;
+        for (const auto& r : m_results) {
+            CompareResult c;
+            c.scenario = r.scenario;
+            c.name = r.name;
+            c.current_avg_ms = r.avg_ms;
+            auto it = baseline.find(r.scenario + "::" + r.name);
+            if (it == baseline.end()) {
+                c.baseline_avg_ms = 0;
+                c.ratio = 0;
+                c.passed = true; // no baseline = pass
+            } else {
+                c.baseline_avg_ms = it->second.avg_ms;
+                c.ratio = (it->second.avg_ms > 0) ? r.avg_ms / it->second.avg_ms : 0;
+                c.passed = (c.ratio <= threshold);
+            }
+            out.push_back(c);
+        }
+        return out;
+    }
+
+    const std::vector<BenchResult>& results() const { return m_results; }
 
 private:
     std::vector<BenchResult> m_results;

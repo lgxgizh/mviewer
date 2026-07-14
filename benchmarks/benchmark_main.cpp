@@ -7,6 +7,8 @@
 #include <QElapsedTimer>
 #include <iostream>
 #include <random>
+#include <string>
+#include <vector>
 
 #include "benchmarks/benchmark_scenario.h"
 
@@ -45,7 +47,25 @@ static QImage makeTestImage(int w, int h, int seed = 42) {
 int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
     ScenarioBenchmark bench;
-    std::cout << "MViewer Engineering Benchmark Suite" << std::endl;
+    std::string baselinePath;
+    double threshold = 1.2; // allowed +20% degradation
+    std::string csvPath = "D:/mviewer/build_msvc/bin/benchmark_results.csv";
+
+    for (int i = 1; i < argc; ++i) {
+        std::string a = argv[i];
+        if (a == "--baseline" && i+1 < argc) baselinePath = argv[++i];
+        else if (a == "--threshold" && i+1 < argc) threshold = std::stod(argv[++i]);
+        else if (a == "--csv" && i+1 < argc) csvPath = argv[++i];
+        else if (a == "--help") {
+            std::cout << "Usage: benchmark_scenario [--baseline <csv>] [--threshold <ratio>] [--csv <path>]\n"
+                      << "Defaults: threshold=1.2 (+20% degradation allowed)\n";
+            return 0;
+        }
+    }
+
+    std::cout << "MViewer Engineering Benchmark Suite\n";
+    if (!baselinePath.empty())
+        std::cout << "Baseline: " << baselinePath << "  threshold: " << threshold << "x\n";
 
     // Setup: generate test images
     QImage img1080 = makeTestImage(1920, 1080, 1);
@@ -161,8 +181,28 @@ int main(int argc, char** argv) {
     }, 10);
 
     // CSV output
-    std::string csvPath = (argc > 1) ? argv[1] : "D:/mviewer/build_msvc/bin/benchmark_results.csv";
     bench.writeCsv(csvPath);
+
+    // Baseline comparison
+    if (!baselinePath.empty()) {
+        auto baseline = ScenarioBenchmark::loadBaseline(baselinePath);
+        auto cmp = bench.compare(baseline, threshold);
+        int fails = 0;
+        std::cout << "\n=== Baseline Comparison (threshold " << threshold << "x) ===\n";
+        for (const auto& c : cmp) {
+            std::cout << (c.passed ? "PASS  " : "FAIL  ")
+                      << c.scenario << "::" << c.name
+                      << "  cur=" << c.current_avg_ms << "ms"
+                      << "  base=" << c.baseline_avg_ms << "ms"
+                      << "  ratio=" << c.ratio << "x\n";
+            if (!c.passed) ++fails;
+        }
+        if (fails > 0) {
+            std::cerr << "\n" << fails << " scenario(s) exceeded degradation threshold\n";
+            return 2;
+        }
+        std::cout << "\nAll scenarios within baseline threshold\n";
+    }
 
     return 0;
 }

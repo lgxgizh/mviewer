@@ -21,7 +21,7 @@ bool registerBuiltins()
 
 void AnalyzerRegistry::registerAnalyzer(const std::string& id, AnalyzerCreator creator)
 {
-    m_factories[id] = creator;
+    m_factories[id] = std::move(creator);
 }
 
 std::unique_ptr<Analyzer> AnalyzerRegistry::create(const std::string& id) const

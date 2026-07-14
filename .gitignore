@@ -14,6 +14,8 @@ _v.sh
 *.lib
 *.dll
 nul
+benchmark_results.csv
+tests/vision/current/
 
 # OS / editor
 Thumbs.db

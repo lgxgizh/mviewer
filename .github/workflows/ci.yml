@@ -7,61 +7,101 @@ on:
     branches: [ master ]
 
 jobs:
-  build:
+  # ─── Formatting check ──────────────────────────────────────────────────────
+  format:
     runs-on: windows-2022
-    
-    env:
-      QT_VERSION: 6.11.1
-      QT_DIR: D:\\Qt
-    
     steps:
     - uses: actions/checkout@v4
-    
+
+    - name: Install LLVM (clang-format)
+      uses: KyleMayes/install-llvm-action@v2
+      with:
+        version: "18.1.8"
+
+    - name: Check formatting
+      run: |
+        $env:PATH = "$env:LLVM_INSTALL_DIR\bin;$env:PATH"
+        $files = Get-ChildItem -Recurse -Path src,tests,benchmarks -Include *.cpp,*.h
+        $unformatted = @()
+        foreach ($f in $files) {
+          $out = clang-format --dry-run --Werror $f.FullName 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            $unformatted += $f.FullName
+          }
+        }
+        if ($unformatted.Count -gt 0) {
+          Write-Host "Formatting issues in $($unformatted.Count) file(s):"
+          foreach ($f in $unformatted) { Write-Host "  $f" }
+          exit 1
+        }
+        Write-Host "All files formatted correctly"
+
+  # ─── Build and test ────────────────────────────────────────────────────────
+  build:
+    runs-on: windows-2022
+    needs: format
+
+    env:
+      QT_VERSION: 6.11.1
+      QT_DIR: D:\QT
+
+    steps:
+    - uses: actions/checkout@v4
+
     - name: Cache Qt
       id: cache-qt
       uses: actions/cache@v4
       with:
         path: ${{ env.QT_DIR }}
         key: qt-${{ env.QT_VERSION }}-windows
-    
+
     - name: Install Qt (cache miss)
       if: steps.cache-qt.outputs.cache-hit != 'true'
       run: |
-        echo "Qt installation required; in production, use aqtinstall or pre-installed Qt"
-        # aqt install-qt windows desktop 6.11.1 win64_msvc2022_64 --outputdir $env:QT_DIR
-    
+        pip install aqtinstall
+        aqt install-qt windows desktop 6.11.1 win64_msvc2022_64 --outputdir $env:QT_DIR
+
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v2
-    
+
     - name: Configure CMake
       run: |
-        $env:PATH = "D:\Qt\${{ env.QT_VERSION }}\msvc2022_64\bin;$env:PATH"
-        cmake -B build_msvc -G "Ninja Multi-Config" -DCMAKE_PREFIX_PATH="D:\Qt\${{ env.QT_VERSION }}\msvc2022_64"
-    
+        $env:PATH = "D:\QT\${{ env.QT_VERSION }}\msvc2022_64\bin;$env:PATH"
+        cmake -B build_msvc -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="D:\QT\${{ env.QT_VERSION }}\msvc2022_64"
+
     - name: Build (Release)
-      run: cmake --build build_msvc --config Release -j
-    
+      run: cmake --build build_msvc -j
+
     - name: Run core_tests
-      run: QT_QPA_PLATFORM=offscreen ./build_msvc/bin/Release/core_tests.exe
-    
+      run: QT_QPA_PLATFORM=offscreen ./build_msvc/bin/core_tests.exe
+
     - name: Run m3m4m5_tests
-      run: QT_QPA_PLATFORM=offscreen ./build_msvc/bin/Release/test_m3m4m5.exe
-    
+      run: QT_QPA_PLATFORM=offscreen ./build_msvc/bin/test_m3m4m5.exe
+
     - name: Run mviewer_unit_tests
-      run: QT_QPA_PLATFORM=offscreen ./build_msvc/bin/Release/mviewer_unit_tests.exe
-    
-    - name: Run benchmark
+      run: QT_QPA_PLATFORM=offscreen ./build_msvc/bin/mviewer_unit_tests.exe
+
+    - name: Run benchmark_scenario
       run: |
         cd build_msvc
-        QT_QPA_PLATFORM=offscreen ./bin/Release/benchmark.exe ../../benchmark_results.csv
-        cat ../../benchmark_results.csv
-    
+        QT_QPA_PLATFORM=offscreen ./bin/benchmark_scenario.exe
+
+    - name: Run golden regression (compare mode)
+      run: |
+        cd build_msvc
+        QT_QPA_PLATFORM=offscreen ./bin/golden_main.exe --compare
+
+    - name: Run vision regression (compare mode)
+      run: |
+        cd build_msvc
+        QT_QPA_PLATFORM=offscreen ./bin/vision_regression.exe --compare
+
     - name: Upload benchmark results
       uses: actions/upload-artifact@v4
       with:
         name: benchmark-${{ github.sha }}
-        path: benchmark_results.csv
-    
+        path: build_msvc/bin/benchmark_results.csv
+
     - name: Upload build log on failure
       if: failure()
       uses: actions/upload-artifact@v4

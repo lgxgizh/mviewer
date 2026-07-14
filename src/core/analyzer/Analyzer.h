@@ -4,6 +4,7 @@
 #include "domain/Selection.h"
 #include <string>
 #include <memory>
+#include <functional>
 #include <vector>
 #include <unordered_map>
 
@@ -45,8 +46,10 @@ public:
     }
 };
 
-// Factory function type for analyzer plugins.
-using AnalyzerCreator = std::unique_ptr<Analyzer>(*)();
+// Factory: callable that returns a new analyzer instance.
+// Defined as std::function so plugin C exports (raw pointers),
+// capturing lambdas, and callable objects all register uniformly.
+using AnalyzerCreator = std::function<std::unique_ptr<Analyzer>()>;
 
 // Registry for analyzer plugins.
 class AnalyzerRegistry

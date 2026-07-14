@@ -27,6 +27,7 @@ add_library(mviewer_core STATIC
     core/analyzer/EntropyAnalyzer.cpp
     core/analyzer/SharpnessAnalyzer.cpp
     core/render/RenderEngine.cpp
+    core/plugin/PluginLoader.cpp
     core/command/CommandRegistry.cpp
     core/command/OpenDirectoryCommand.cpp
     core/command/CompareCommand.cpp
@@ -221,6 +222,20 @@ target_link_libraries(benchmark_scenario
 
 target_compile_features(benchmark_scenario PRIVATE cxx_std_20)
 target_include_directories(benchmark_scenario PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+
+# ─── Plugin loader tests ─────────────────────────────────────────────────
+
+add_executable(test_plugin_loader
+    ${CMAKE_SOURCE_DIR}/tests/plugin/test_plugin_loader.cpp
+)
+
+target_link_libraries(test_plugin_loader
+    PRIVATE
+        mviewer_core
+)
+
+target_compile_features(test_plugin_loader PRIVATE cxx_std_20)
+target_include_directories(test_plugin_loader PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
 
 # ─── Clang-Tidy (optional) ──────────────────────────────────────────────────
 
