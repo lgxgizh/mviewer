@@ -8,7 +8,16 @@ class PSNRAnalyzer : public Analyzer
 public:
     std::string name() const override { return "psnr"; }
     std::string description() const override { return "峰值信噪比 (dB)"; }
-
+    AnalyzerCapability capabilities() const override {
+        return AnalyzerCapability::MultiImage | AnalyzerCapability::QualityMetric;
+    }
+    AnalyzerInfo info() const override {
+        return AnalyzerInfo{
+            .id = "psnr", .name = name(), .description = description(),
+            .version = "0.1.0", .capabilities = capabilities(),
+            .outputFields = {"psnr_dB"}
+        };
+    }
     void setReference(const ImageFrame& ref) { m_ref = &ref; }
 
     bool analyze(const ImageFrame& frame) override;
