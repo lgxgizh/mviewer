@@ -137,6 +137,12 @@ TaskScheduler::TaskHandle TaskScheduler::submit(
     // Back-pressure check
     {
         std::lock_guard<std::mutex> lock(m_graphMtx);
+        if (m_poolState[pIdx].paused) {
+            m_poolState[pIdx].metrics.backpressure_rejected++;
+            if (m_backpressure)
+                m_backpressure(poolFromPriority(prio));
+            return nullptr;
+        }
         const size_t md = m_poolState[pIdx].metrics.queue_depth +
                           m_poolState[pIdx].metrics.active_tasks;
         if (m_poolState[pIdx].max_queue_depth > 0 &&
@@ -331,6 +337,49 @@ size_t TaskScheduler::queueDepth(PoolType pool) const
     auto idx = static_cast<int>(toPriority(pool));
     std::lock_guard<std::mutex> lock(m_graphMtx);
     return m_poolState[idx].metrics.queue_depth;
+}
+
+void TaskScheduler::pause(PoolType pool) {
+    auto idx = static_cast<int>(toPriority(pool));
+    std::lock_guard<std::mutex> lock(m_graphMtx);
+    m_poolState[idx].paused = true;
+}
+
+void TaskScheduler::resume(PoolType pool) {
+    auto idx = static_cast<int>(toPriority(pool));
+    std::lock_guard<std::mutex> lock(m_graphMtx);
+    m_poolState[idx].paused = false;
+}
+
+bool TaskScheduler::waitForPoolDrained(int idx, std::chrono::milliseconds timeout) {
+    auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        {
+            std::lock_guard<std::mutex> lock(m_graphMtx);
+            if (m_poolState[idx].metrics.active_tasks == 0 &&
+                m_poolState[idx].metrics.queue_depth == 0)
+                return true;
+        }
+        QThread::msleep(5);
+    }
+    return false;
+}
+
+bool TaskScheduler::drain(PoolType pool, std::chrono::milliseconds timeout) {
+    auto idx = static_cast<int>(toPriority(pool));
+    return waitForPoolDrained(idx, timeout);
+}
+
+void TaskScheduler::shutdown(std::chrono::milliseconds timeout) {
+    // Pause all pools
+    for (int i = 0; i < 5; ++i) {
+        std::lock_guard<std::mutex> lock(m_graphMtx);
+        m_poolState[i].paused = true;
+    }
+    // Drain each pool sequentially
+    for (int i = 0; i < 5; ++i) {
+        waitForPoolDrained(i, timeout / 5);
+    }
 }
 
 size_t TaskScheduler::activeTaskCount(PoolType pool) const
