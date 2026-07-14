@@ -114,10 +114,10 @@ private:
   // pool, so no worker thread blocks spinning on dep readiness.
   struct DeferredEntry {
     Priority prio;
-    QRunnable *runnable = nullptr;
+    void *runnable = nullptr;  // stored as void* to keep Qt out of the header
   };
   std::unordered_map<TaskId, DeferredEntry> m_deferred;
 
-  void releaseReadyTasks(std::vector<std::pair<Priority, QRunnable *>> &out);
+  void releaseReadyTasks(std::vector<std::pair<Priority, void *>> &out);
   void onTaskComplete(TaskId id);
 };

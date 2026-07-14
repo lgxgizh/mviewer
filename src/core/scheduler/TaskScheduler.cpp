@@ -104,7 +104,7 @@ depDone(const std::unordered_map<uint64_t, TaskScheduler::TaskHandle> &handles,
 // Scan deferred tasks — launch any whose deps are now all satisfied.
 // Caller must hold m_graphMtx.
 void TaskScheduler::releaseReadyTasks(
-    std::vector<std::pair<Priority, QRunnable *>> &out) {
+    std::vector<std::pair<Priority, void *>> &out) {
   if (m_deferred.empty())
     return;
 
@@ -127,7 +127,7 @@ void TaskScheduler::releaseReadyTasks(
 }
 
 void TaskScheduler::onTaskComplete(TaskId id) {
-  std::vector<std::pair<Priority, QRunnable *>> ready;
+  std::vector<std::pair<Priority, void *>> ready;
   {
     std::lock_guard<std::mutex> lock(m_graphMtx);
     m_handles.erase(id);
@@ -136,7 +136,8 @@ void TaskScheduler::onTaskComplete(TaskId id) {
   }
   // Launch outside the lock to avoid re-entering the scheduler.
   for (auto &[prio, r] : ready)
-    m_impl->priorityQueues[static_cast<int>(prio)].start(r);
+    m_impl->priorityQueues[static_cast<int>(prio)].start(
+        static_cast<QRunnable *>(r));
 }
 
 TaskScheduler::TaskHandle
@@ -172,10 +173,11 @@ TaskScheduler::submit(Priority prio,
       m_deferred[ctx_id] = DeferredEntry{prio, runnable};
       // If any deps already finished between submission and here,
       // launch all now-ready deferred tasks with their own priority.
-      std::vector<std::pair<Priority, QRunnable *>> ready;
+      std::vector<std::pair<Priority, void *>> ready;
       releaseReadyTasks(ready);
       for (auto &[p, r] : ready)
-        m_impl->priorityQueues[static_cast<int>(p)].start(r);
+        m_impl->priorityQueues[static_cast<int>(p)].start(
+            static_cast<QRunnable *>(r));
     } else {
       m_impl->priorityQueues[static_cast<int>(prio)].start(runnable);
     }
@@ -229,10 +231,11 @@ void TaskScheduler::cancelTree(TaskId rootId) {
       sched.m_handles.erase(hit);
     }
     // Any deferred task matching this id is dropped; its QRunnable
-    // was never started, so we delete it here.
+    // was never started, so we delete it here. Stored as void*, so
+    // cast back to QRunnable* for the destructor to run correctly.
     auto dit = sched.m_deferred.find(*it);
     if (dit != sched.m_deferred.end()) {
-      delete dit->second.runnable;
+      delete static_cast<QRunnable *>(dit->second.runnable);
       sched.m_deferred.erase(dit);
     }
   }
