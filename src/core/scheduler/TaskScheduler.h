@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -10,12 +11,6 @@
 #include <utility>
 #include <vector>
 
-// Unified priority task scheduler: all background work flows through here.
-// Routes to 5 independent thread pools by Priority.
-//
-// Qt headers (QRunnable/QThreadPool) are kept in the .cpp to avoid leaking
-// Qt into core-layer headers. This class owns the threading primitives
-// via PIMPL (internals in TaskScheduler.cpp).
 class TaskScheduler
 {
 public:
@@ -31,24 +26,29 @@ public:
     };
     enum class Priority : int
     {
-        UI,
-        Decode,
-        Thumbnail,
-        Analysis,
-        Background
+        Background = 0,
+        Analysis = 25,
+        Thumbnail = 50,
+        Decode = 75,
+        UI = 100
     };
 
-    // Per-task runtime context: cancel token + progress + dependencies.
-    // All fields are thread-safe.
     struct TaskContext
     {
         TaskId id = 0;
-        std::shared_ptr<std::atomic<bool>> cancel = std::make_shared<std::atomic<bool>>(false);
-        std::shared_ptr<std::atomic<int>> progress = std::make_shared<std::atomic<int>>(0);
+        std::shared_ptr<std::atomic<bool>> cancel =
+            std::make_shared<std::atomic<bool>>(false);
+        std::shared_ptr<std::atomic<int>> progress =
+            std::make_shared<std::atomic<int>>(0);
         std::function<void(int)> onProgress;
-
-        // Tasks whose completion gates this one (RFC-004 dependency).
         std::vector<TaskId> dependencies;
+
+        std::chrono::steady_clock::time_point deadline =
+            std::chrono::steady_clock::time_point::max();
+        std::atomic<bool> deadline_exceeded{false};
+
+        Priority priority = Priority::Background;
+        PoolType pool = MetadataPool;
 
         void requestCancel() { *cancel = true; }
         bool isCancelled() const { return cancel->load(std::memory_order_relaxed); }
@@ -60,72 +60,106 @@ public:
             if (onProgress)
                 onProgress(v);
         }
+        bool isExpired() const
+        {
+            return deadline != std::chrono::steady_clock::time_point::max() &&
+                   std::chrono::steady_clock::now() > deadline;
+        }
     };
     using TaskHandle = std::shared_ptr<TaskContext>;
 
+    struct PoolMetrics
+    {
+        uint64_t submitted{0};
+        uint64_t completed{0};
+        uint64_t cancelled{0};
+        uint64_t deadline_exceeded{0};
+        uint64_t backpressure_rejected{0};
+        uint64_t total_latency_ns{0};
+        size_t active_tasks{0};
+        size_t queue_depth{0};
+    };
+
     static TaskScheduler& instance();
 
-    // Legacy QRunnable submit.
-    // NOTE: takes a raw QRunnable* — callers must include <QRunnable> from .cpp
-    void submit(PoolType pool,
-        void* runnable); // void* to avoid QRunnable in header
+    void submit(PoolType pool, void* runnable);
 
-    // Priority submit with dependency list (RFC-004). Work starts only after
-    // all dependencies finish. Work/done/onProgress: done is dispatched back
-    // to the QCoreApplication event loop.
-    TaskHandle submit(Priority prio,
+    TaskHandle submit(
+        Priority prio,
         std::function<void(const TaskContext&)> work,
         std::vector<TaskId> deps = {},
+        std::chrono::steady_clock::time_point deadline =
+            std::chrono::steady_clock::time_point::max(),
         std::function<void()> done = {},
         std::function<void(int)> onProgress = {});
 
-    // Compat submit for void() work (no priority context).
-    TaskHandle submit(PoolType pool, std::function<void()> work, std::function<void()> done = {});
+    TaskHandle submit(PoolType pool, std::function<void()> work,
+                      std::function<void()> done = {});
 
-    // Map legacy PoolType to normalized Priority.
     static Priority toPriority(PoolType pool);
 
-    // Per-queue thread cap.
     void setQueueMaxThreads(Priority prio, int n);
     void setPoolMaxThreads(PoolType pool, int n);
 
-    // Cancel just a task's own token.
-    static void cancel(TaskHandle& h)
-    {
-        if (h)
-            h->requestCancel();
-    }
+    void setMaxQueueDepth(PoolType pool, size_t max);
+    size_t maxQueueDepth(PoolType pool) const;
 
-    // Cancel a task and recursively all tasks that depend on it (BFS over dep
-    // graph).
+    static void cancel(TaskHandle& h) { if (h) h->requestCancel(); }
     static void cancelTree(TaskId rootId);
 
-    // Look up a live task handle by id.
     TaskHandle handle(TaskId id);
 
-private:
+    PoolMetrics metrics(PoolType pool) const;
+    bool isSaturated(PoolType pool) const;
+    size_t queueDepth(PoolType pool) const;
+    size_t activeTaskCount(PoolType pool) const;
+
+    using BackPressureFn = std::function<void(PoolType)>;
+    void setBackPressureHandler(BackPressureFn fn) { m_backpressure = std::move(fn); }
+
+protected:
     TaskScheduler();
     ~TaskScheduler();
     TaskScheduler(const TaskScheduler&) = delete;
     TaskScheduler& operator=(const TaskScheduler&) = delete;
 
-    struct Impl; // hides QThreadPool from this header
+    struct Impl;
     Impl* m_impl = nullptr;
 
     static std::atomic<uint64_t> s_nextId;
     std::unordered_map<TaskId, std::vector<TaskId>> m_depGraph;
     std::unordered_map<TaskId, TaskHandle> m_handles;
+    std::unordered_map<TaskId, Priority> m_taskPriomap;
     mutable std::mutex m_graphMtx;
 
-    // Tasks with unresolved dependencies are held here instead of the thread
-    // pool, so no worker thread blocks spinning on dep readiness.
     struct DeferredEntry
     {
         Priority prio;
-        void* runnable = nullptr; // stored as void* to keep Qt out of the header
+        void* runnable = nullptr;
+        std::chrono::steady_clock::time_point deadline;
     };
     std::unordered_map<TaskId, DeferredEntry> m_deferred;
 
+    struct PoolState
+    {
+        PoolMetrics metrics;
+        size_t max_queue_depth = 1000;
+    };
+    PoolState m_poolState[5];
+
+    BackPressureFn m_backpressure;
+
+    static PoolType poolFromPriority(Priority p) {
+        switch (p) {
+        case Priority::UI:        return IOPool;
+        case Priority::Decode:    return DecodePool;
+        case Priority::Thumbnail: return ThumbnailPool;
+        case Priority::Analysis:  return AnalysisPool;
+        case Priority::Background: return MetadataPool;
+        }
+        return MetadataPool;
+    }
+
     void releaseReadyTasks(std::vector<std::pair<Priority, void*>>& out);
-    void onTaskComplete(TaskId id);
+    void onTaskComplete(TaskId id, Priority prio);
 };
