@@ -7,7 +7,17 @@ class EntropyAnalyzer : public Analyzer
 public:
     std::string name() const override { return "entropy"; }
     std::string description() const override { return "香农熵 (bits/px)"; }
-
+    AnalyzerCapability capabilities() const override {
+        return AnalyzerCapability::SingleImage | AnalyzerCapability::RegionOfInterest |
+               AnalyzerCapability::StatsOutput;
+    }
+    AnalyzerInfo info() const override {
+        return AnalyzerInfo{
+            .id = "entropy", .name = name(), .description = description(),
+            .version = "0.1.0", .capabilities = capabilities(),
+            .outputFields = {"entropy"}
+        };
+    }
     bool analyze(const ImageFrame& frame) override;
     bool analyzeRegion(const ImageFrame& frame, const mviewer::domain::Selection& region) override;
 

@@ -32,11 +32,18 @@ prototype.py
 # Status/outdated docs
 STATUS.md
 
-# Testdata: generated fixtures — only track .gitkeep, README, script, and catalog
+# Testdata: generated locally. Do NOT commit image binaries.
+# Track only: README.md, generate_fixtures.py, CATALOG.md, .gitkeep
 testdata/golden/*
 !testdata/golden/.gitkeep
 testdata/corrupted/*
 !testdata/corrupted/.gitkeep
+testdata/generated/*
+!testdata/generated/.gitkeep
+testdata/screenshots/*
+!testdata/screenshots/.gitkeep
+testdata/perf/*
+!testdata/perf/.gitkeep
 
 # CMake user files
 CMakeLists.txt.user

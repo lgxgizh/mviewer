@@ -2,6 +2,9 @@
 
 #include "core/analyzer/HistogramAnalyzer.h"
 
+#include <algorithm>
+#include <optional>
+
 AnalyzerRegistry& AnalyzerRegistry::instance()
 {
     static AnalyzerRegistry inst;
@@ -13,7 +16,21 @@ namespace
 bool registerBuiltins()
 {
     AnalyzerRegistry::instance().registerAnalyzer("histogram",
-        []() -> std::unique_ptr<Analyzer> { return std::make_unique<HistogramAnalyzer>(); });
+        []() -> std::unique_ptr<Analyzer> {
+            struct Concrete : public HistogramAnalyzer {
+                AnalyzerInfo info() const override {
+                    return AnalyzerInfo{
+                        .id = "histogram",
+                        .name = name(),
+                        .description = description(),
+                        .version = "0.1.0",
+                        .capabilities = capabilities(),
+                        .outputFields = {"histogramLuminance", "histogramRGB", "lumMean", "rgbMeans"}
+                    };
+                }
+            };
+            return std::make_unique<Concrete>();
+        });
     return true;
 }
 [[maybe_unused]] const bool kRegistered = registerBuiltins();
@@ -48,4 +65,26 @@ AnalyzerCapability AnalyzerRegistry::capabilitiesOf(const std::string& id) const
         return AnalyzerCapability::None;
     auto instance = it->second();
     return instance->capabilities();
+}
+
+std::optional<AnalyzerInfo> AnalyzerRegistry::infoFor(const std::string& id) const
+{
+    auto it = m_factories.find(id);
+    if (it == m_factories.end())
+        return std::nullopt;
+    auto instance = it->second();
+    return instance->info();
+}
+
+std::vector<std::string> AnalyzerRegistry::queryByCapability(AnalyzerCapability required) const
+{
+    std::vector<std::string> result;
+    for (const auto& [id, factory] : m_factories) {
+        auto instance = factory();
+        if (required == AnalyzerCapability::None ||
+            hasCapability(instance->capabilities(), required)) {
+            result.push_back(id);
+        }
+    }
+    return result;
 }

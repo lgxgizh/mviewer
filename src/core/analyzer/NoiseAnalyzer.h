@@ -7,7 +7,17 @@ class NoiseAnalyzer : public Analyzer
 public:
     std::string name() const override { return "noise"; }
     std::string description() const override { return "噪声估计 (Laplacian 方差)"; }
-
+    AnalyzerCapability capabilities() const override {
+        return AnalyzerCapability::SingleImage | AnalyzerCapability::RegionOfInterest |
+               AnalyzerCapability::StatsOutput;
+    }
+    AnalyzerInfo info() const override {
+        return AnalyzerInfo{
+            .id = "noise", .name = name(), .description = description(),
+            .version = "0.1.0", .capabilities = capabilities(),
+            .outputFields = {"noise"}
+        };
+    }
     bool analyze(const ImageFrame& frame) override;
     bool analyzeRegion(const ImageFrame& frame, const mviewer::domain::Selection& region) override;
 
