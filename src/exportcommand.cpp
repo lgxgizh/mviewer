@@ -1,28 +1,38 @@
 #include "exportcommand.h"
+
 #include "application/OpenDirectoryUseCase.h"
+
 #include "exportdialog.h"
 
 #include <QSettings>
 #include <QWidget>
 
-ExportCommand::ExportCommand(QWidget *parent) : m_parent(parent) {}
+ExportCommand::ExportCommand(QWidget* parent)
+    : m_parent(parent)
+{
+}
 
-bool ExportCommand::canExecute() const { return true; }
+bool ExportCommand::canExecute() const
+{
+    return true;
+}
 
-void ExportCommand::execute() {
-  QSettings settings;
-  QString lastDir = settings.value("lastDir").toString();
-  if (lastDir.isEmpty())
-    return;
+void ExportCommand::execute()
+{
+    QSettings settings;
+    QString lastDir = settings.value("lastDir").toString();
+    if (lastDir.isEmpty())
+        return;
 
-  auto result = OpenDirectoryUseCase::execute(lastDir.toStdString());
-  QStringList images;
-  for (const auto &p : result.imagePaths) {
-    images.append(QString::fromStdString(p));
-  }
-  if (images.isEmpty())
-    return;
+    auto result = OpenDirectoryUseCase::execute(lastDir.toStdString());
+    QStringList images;
+    for (const auto& p : result.imagePaths)
+    {
+        images.append(QString::fromStdString(p));
+    }
+    if (images.isEmpty())
+        return;
 
-  ExportDialog dlg(images, m_parent);
-  dlg.exec();
+    ExportDialog dlg(images, m_parent);
+    dlg.exec();
 }

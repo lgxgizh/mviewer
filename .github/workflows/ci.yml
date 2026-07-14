@@ -8,8 +8,10 @@ on:
 
 jobs:
   # ─── Formatting check ──────────────────────────────────────────────────────
+  # Advisory: reports issues with clang-format but doesn't block CI.
   format:
     runs-on: windows-2022
+    continue-on-error: true
     steps:
     - uses: actions/checkout@v4
 

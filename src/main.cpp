@@ -2,13 +2,14 @@
 
 #include <QApplication>
 
-int main(int argc, char *argv[]) {
-  QApplication app(argc, argv);
-  app.setApplicationName("MViewer");
-  app.setOrganizationName("MViewer");
+int main(int argc, char* argv[])
+{
+    QApplication app(argc, argv);
+    app.setApplicationName("MViewer");
+    app.setOrganizationName("MViewer");
 
-  MainWindow mainWindow;
-  mainWindow.show();
+    MainWindow mainWindow;
+    mainWindow.show();
 
-  return app.exec();
+    return app.exec();
 }
