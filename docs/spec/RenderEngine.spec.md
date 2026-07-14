@@ -1,69 +1,123 @@
 # RenderEngine Specification
 
-## Overview
+## Module
+RenderEngine + Renderer interface + SoftwareRenderer
 
-RenderEngine provides image scaling and overlay operations. It is Qt-free at the header level; implementations may use Qt internally.
+## Purpose
+RenderEngine is the UI-independent facade over image rendering. It supports a pluggable backend (Renderer interface), defaulting to SoftwareRenderer (Qt-backed). UI code submits RenderCommand batches; the engine dispatches to the current backend.
 
 ## API
 
 ```cpp
-enum class InterpMode { Nearest, Bilinear, Bicubic, Lanczos };
-
-struct RenderSize { int width = 0; int height = 0; };
-struct RenderRect { int x=0, y=0, width=0, height=0; bool isValid() const; };
+class Renderer {
+public:
+    virtual ~Renderer() = default;
+    virtual std::string backendName() const = 0;
+    virtual ImageData scale(const ImageData& src, const RenderSize& target, RenderInterp mode) = 0;
+    virtual ImageData overlayDifference(const ImageData& base, const ImageData& diff, double alpha) = 0;
+    virtual ImageData scaleRegion(const ImageData& src, const RenderRect& region, const RenderSize& target, RenderInterp mode) = 0;
+};
 
 class RenderEngine {
 public:
-    // Scale entire image to target size
-    static ImageData scale(const ImageData& src, const RenderSize& target,
-                           InterpMode mode = InterpMode::Bilinear);
-
-    // Scale a source region to target size
-    static ImageData scaleRegion(const ImageData& src, const RenderRect& region,
-                                 const RenderSize& target,
-                                 InterpMode mode = InterpMode::Bilinear);
-
-    // Overlay diff onto base with alpha blending
-    static ImageData overlayDifference(const ImageData& base,
-                                       const ImageData& diff, double alpha = 0.5);
+    static RenderEngine& instance();
+    void setBackend(std::unique_ptr<Renderer> r);
+    ImageData scale(const ImageData& src, const RenderSize& target, RenderInterp mode = RenderInterp::Bilinear);
+    ImageData overlayDifference(const ImageData& base, const ImageData& diff, double alpha = 0.5);
+    ImageData scaleRegion(const ImageData& src, const RenderRect& region, const RenderSize& target, RenderInterp mode = RenderInterp::Bilinear);
 };
 ```
 
-## Input
+## Input / Output
 
-| Parameter | Type | Range |
-|-----------|------|-------|
-| `src` | `ImageData` | Valid, non-null |
-| `target` | `RenderSize` | width > 0, height > 0 |
-| `region` | `RenderRect` | Clipped to src bounds |
-| `mode` | `InterpMode` | Default Bilinear |
-| `alpha` | `double` | 0.0 – 1.0 |
+| Method | Input | Output |
+|--------|-------|--------|
+| `scale` | `src`, `target.size`, `interp` | Scaled ImageData (RGB24) |
+| `overlayDifference` | `base`, `diff`, `alpha∈[0,1]` | Blended ImageData (RGB24) |
+| `scaleRegion` | `src.region`, `target.size`, `interp` | Scaled sub-image |
 
-## Output
+## Ownership
 
-| Method | Return | Semantics |
-|--------|--------|-----------|
-| `scale` | `ImageData` | Scaled image or null on failure |
-| `scaleRegion` | `ImageData` | Scaled region or null |
-| `overlayDifference` | `ImageData` | Blended image or null |
+- RenderEngine **owns** the current Renderer backend.
+- Caller provides ImageData by const reference; output is a new ImageData (value semantics).
+- ImageFrame::renderCache stores results (weak-cache semantics; UI may discard at any time).
+
+## Thread Safety
+
+| Thread | Use |
+|--------|-----|
+| UI thread | Scale/overlay results dispatched to Qt pixmap |
+| Background | Pre-render for comparison (future) |
+| Backend | Single-threaded (Qt QImage paint device) |
+
+## Memory
+
+| Operation | Dominant Allocation |
+|-----------|---------------------|
+| `scale` | `target.w * target.h * 3` bytes (output ImageData) |
+| `overlayDifference` | same as base + same as diff |
+| Cache entries in ImageFrame | Bounded by LRU eviction in CacheManager (Viewer pool) |
 
 ## Performance
 
-| Operation | Budget |
-|-----------|--------|
-| Bilinear scale (24MP → 1080p) | < 16ms |
-| Bicubic scale (24MP → 1080p) | < 50ms |
-| Overlay blend | < 5ms |
+| Scenario | Budget |
+|----------|--------|
+| `scale(1920→800)` | <15 ms |
+| `overlayDifference(1080p)` | <5 ms |
+| `scaleRegion(ROI 200x200→400x400)` | <3 ms |
 
-## Error Handling
+## Errors
 
-- Null input → null output
-- Zero target size → null output
-- Region outside bounds → clipped automatically
+| Error | Cause | Recovery |
+|-------|-------|----------|
+| null/empty source | Invalid input | Return null ImageData |
+| zero/negative target | Invalid size | Return null ImageData |
+| backend failure | Internal Qt error | Log, return null |
 
-## Future Backends
+## Examples
 
-- `SoftwareRenderer` (current, Qt-based)
-- `D2DRenderer` (Direct2D, Windows)
-- `OpenGLRenderer` (cross-platform)
-- `VulkanRenderer` (future)
+```cpp
+// Scale to fit viewport
+RenderSize target{cellW, cellH};
+ImageData scaled = RenderEngine::instance().scale(frame.pixels(), target);
+
+// Overlay diff at 50% alpha
+ImageData blended = RenderEngine::instance().overlayDifference(base, diff, 0.5);
+
+// Scale a ROI
+RenderRect roi = {100, 100, 400, 400};
+ImageData zoomed = RenderEngine::instance().scaleRegion(frame.pixels(), roi, {800, 800});
+```
+
+## Unit Tests
+
+```cpp
+TEST(RenderEngine, ScaleNullInput) {
+    ImageData out = RenderEngine::instance().scale(ImageData(), {100, 100});
+    EXPECT_TRUE(out.isNull());
+}
+
+TEST(RenderEngine, Scale100to50) {
+    ImageData data = makeTestData(100, 100);
+    ImageData out = RenderEngine::instance().scale(data, {50, 50});
+    EXPECT_EQ(out.width, 50);
+    EXPECT_EQ(out.height, 50);
+}
+
+TEST(RenderEngine, OverlayNullInput) {
+    ImageData out = RenderEngine::instance().overlayDifference(ImageData(), ImageData(), 0.5);
+    EXPECT_TRUE(out.isNull());
+}
+```
+
+## Benchmark
+
+See `benchmarks/benchmark_main.csv` scenario `Render::scale(1920x1080→1280x720)`.
+
+## Future Extension
+
+- D2DRenderer (Direct2D, Windows-only)
+- OpenGLRenderer (cross-platform)
+- VulkanRenderer (cross-platform, high-perf)
+- MetalRenderer (macOS)
+- GPU-accelerated diff/heatmap via compute shaders

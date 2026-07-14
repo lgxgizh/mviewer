@@ -181,6 +181,19 @@ target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── Engineering Excellence Targets ─────────────────────────────────────────
 
+add_executable(vision_regression
+    ${CMAKE_SOURCE_DIR}/tests/vision/vision_regression.cpp
+)
+
+target_link_libraries(vision_regression
+    PRIVATE
+        Qt6::Gui
+        Qt6::Core
+)
+
+target_compile_features(vision_regression PRIVATE cxx_std_20)
+target_include_directories(vision_regression PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+
 add_executable(golden_main
     ${CMAKE_SOURCE_DIR}/golden/golden_main.cpp
 )

@@ -578,6 +578,20 @@ static void testAnalyzerCapabilityFramework()
         for (const auto& x : ids) if (x == id) { found = true; break; }
         CHECK(found, id);
     }
+
+    // Capability query works
+    auto cap = reg.capabilitiesOf("histogram");
+    CHECK(hasCapability(cap, AnalyzerCapability::SingleImage), "histogram has SingleImage");
+    CHECK(!hasCapability(cap, AnalyzerCapability::GPU), "histogram no GPU");
+
+    // Unknown analyzer returns None
+    CHECK(reg.capabilitiesOf("nonexistent") == AnalyzerCapability::None, "unknown → None");
+
+    // Capability bitwise ops work
+    auto combined = AnalyzerCapability::SingleImage | AnalyzerCapability::RegionOfInterest | AnalyzerCapability::Streaming;
+    CHECK(hasCapability(combined, AnalyzerCapability::SingleImage), "bitwise-or keeps SingleImage");
+    CHECK(hasCapability(combined, AnalyzerCapability::Streaming), "bitwise-or keeps Streaming");
+    CHECK(!hasCapability(combined, AnalyzerCapability::MultiImage), "bitwise-or not MultiImage");
 }
 
 int main(int argc, char **argv)

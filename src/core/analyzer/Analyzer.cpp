@@ -7,7 +7,6 @@ AnalyzerRegistry& AnalyzerRegistry::instance()
     return inst;
 }
 
-// Self-register: built-in analyzers register at module load time
 namespace {
 bool registerBuiltins()
 {
@@ -40,4 +39,13 @@ std::vector<std::string> AnalyzerRegistry::availableAnalyzers() const
     for (const auto& kv : m_factories)
         out.push_back(kv.first);
     return out;
+}
+
+AnalyzerCapability AnalyzerRegistry::capabilitiesOf(const std::string& id) const
+{
+    auto it = m_factories.find(id);
+    if (it == m_factories.end())
+        return AnalyzerCapability::None;
+    auto instance = it->second();
+    return instance->capabilities();
 }
