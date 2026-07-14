@@ -15,6 +15,7 @@ enum class RenderCommandType : uint8_t
     DrawOverlay,
     DrawHistogram,
     DrawSelection,
+    DrawHeatmap,
     DrawPixelMarker,
 };
 
@@ -57,6 +58,7 @@ public:
         const RenderRect& region,
         const RenderSize& target,
         RenderInterp mode) = 0;
+    virtual ImageData heatMap(const ImageData& gray, const RenderRect& rect) = 0;
 };
 
 class SoftwareRenderer : public Renderer
@@ -64,12 +66,12 @@ class SoftwareRenderer : public Renderer
 public:
     std::string backendName() const override { return "software"; }
     ImageData scale(const ImageData& src, const RenderSize& target, RenderInterp mode) override;
-    ImageData
-    overlayDifference(const ImageData& base, const ImageData& diff, double alpha) override;
+    ImageData overlayDifference(const ImageData& base, const ImageData& diff, double alpha) override;
     ImageData scaleRegion(const ImageData& src,
         const RenderRect& region,
         const RenderSize& target,
         RenderInterp mode) override;
+    ImageData heatMap(const ImageData& gray, const RenderRect& rect) override;
 };
 
 // ─── RenderCommand ──────────────────────────────────────────────────────────
@@ -115,6 +117,14 @@ struct RenderCommand
             c.histData[i] = bins[i];
         return c;
     }
+    static RenderCommand drawHeatmap(const ImageData& gray, const RenderRect& r)
+    {
+        RenderCommand c;
+        c.type = RenderCommandType::DrawHeatmap;
+        c.srcImage = gray;
+        c.rect = r;
+        return c;
+    }
     static RenderCommand drawSelection(const RenderRect& r, int rgb)
     {
         RenderCommand c;
@@ -152,6 +162,7 @@ public:
         const RenderRect& region,
         const RenderSize& target,
         RenderInterp mode = RenderInterp::Bilinear);
+    ImageData heatMap(const ImageData& gray, const RenderRect& rect);
 
     static ImageData scaleStatic(const ImageData& src,
         const RenderSize& target,

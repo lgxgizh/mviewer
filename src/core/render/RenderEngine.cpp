@@ -203,9 +203,57 @@ QImage scaleQ(const QImage& src, const QSize& target, RenderInterp mode)
     return QImage();
 }
 
+QImage heatMapQ(const QImage& gray, const QRect& r)
+{
+    QImage out(r.width(), r.height(), QImage::Format_RGB32);
+    if (gray.isNull() || r.width() <= 0 || r.height() <= 0)
+        return out;
+    const int x0 = std::max(0, r.x());
+    const int y0 = std::max(0, r.y());
+    const int x1 = std::min(gray.width(), r.x() + r.width());
+    const int y1 = std::min(gray.height(), r.y() + r.height());
+    for (int y = 0; y < out.height(); ++y)
+    {
+        QRgb* dst = reinterpret_cast<QRgb*>(out.scanLine(y));
+        for (int x = 0; x < out.width(); ++x)
+        {
+            const int sx = x0 + x;
+            const int sy = y0 + y;
+            const int v = (sx < x1 && sy < y1)
+                ? qRed(gray.pixel(sx, sy))
+                : 0;
+            // Blue (cold) -> Green -> Red (hot)
+            int rr, gg, bb;
+            if (v < 128) {
+                rr = 0;
+                gg = v * 2;
+                bb = 255 - v * 2;
+            } else {
+                rr = (v - 128) * 2;
+                gg = 255 - (v - 128) * 2;
+                bb = 0;
+            }
+            dst[x] = qRgb(std::clamp(rr, 0, 255), std::clamp(gg, 0, 255), std::clamp(bb, 0, 255));
+        }
+    }
+    return out;
+}
+
 } // namespace
 
 // ─── SoftwareRenderer ────────────────────────────────────────────────────────
+
+ImageData SoftwareRenderer::heatMap(const ImageData& gray, const RenderRect& rect)
+{
+    if (gray.isNull())
+        return ImageData();
+    const QImage g = mvcore::toQImage(gray).convertToFormat(QImage::Format_Grayscale8);
+    RenderRect r = rect;
+    if (!r.isValid())
+        r = {0, 0, g.width(), g.height()};
+    const QRect qr(r.x, r.y, r.width, r.height);
+    return mvcore::fromQImage(heatMapQ(g, qr));
+}
 
 ImageData SoftwareRenderer::scale(const ImageData& src, const RenderSize& target, RenderInterp mode)
 {
@@ -289,10 +337,14 @@ RenderEngine::overlayDifference(const ImageData& base, const ImageData& diff, do
     return m_backend->overlayDifference(base, diff, alpha);
 }
 
-ImageData RenderEngine::scaleRegion(const ImageData& src,
-    const RenderRect& region,
-    const RenderSize& target,
-    RenderInterp mode)
+ImageData RenderEngine::heatMap(const ImageData& gray, const RenderRect& rect)
+{
+    return m_backend->heatMap(gray, rect);
+}
+
+ImageData
+RenderEngine::scaleRegion(const ImageData& src, const RenderRect& region,
+    const RenderSize& target, RenderInterp mode)
 {
     return m_backend->scaleRegion(src, region, target, mode);
 }

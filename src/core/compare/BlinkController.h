@@ -1,7 +1,9 @@
 #pragma once
+
 class CompareEngine;
 
-// BlinkController: timer-based alternating highlight for blink comparison.
+// BlinkController: manages blink comparison state (which image is highlighted).
+// Delegates to CompareEngine for state storage but owns the blink logic.
 class BlinkController
 {
 public:
@@ -10,6 +12,7 @@ public:
     void setBlinkIndex(int idx);
     void clearBlink();
     int blinkIndex() const;
+    bool isBlinking() const;
 
 private:
     CompareEngine& m_engine;
