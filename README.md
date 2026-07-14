@@ -1,22 +1,23 @@
 # MViewer
 
-**Image algorithm validation tool** — FastStone Pro + algorithm analysis, rebuilt with modern C++20 clean architecture.
+**Visual analysis platform for image algorithm engineers** — compare, validate, and analyze image processing algorithm outputs.
 
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/)
 [![Qt](https://img.shields.io/badge/Qt-6.11_Widgets-green.svg)](https://www.qt.io/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![CI](https://github.com/lgxgizh/mviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/lgxgizh/mviewer/actions)
 
 ---
 
 ## Overview
 
-MViewer is **not an image browser** — it's an **image algorithm validation tool** designed for comparing and analyzing image processing algorithms. The core workflow is **comparison** and **analysis**; browsing is just the entry point.
+MViewer is **not a general-purpose image viewer** — it is a **visual analysis platform** for engineers who compare and validate the outputs of different image processing algorithms (camera ISP, CV pipelines, SDK versions). The core workflow is **comparison** and **analysis**; browsing is just the entry point.
 
-- **Compare**: Multi-image side-by-side with synchronized zoom/pan/selection, blink comparison, difference maps
-- **Analyze**: Histogram, RGB mean, PSNR, SSIM, noise estimation, ROI statistics
-- **Export**: PNG/JPEG/BMP/WebP with quality control, batch conversion
+- **Compare**: Multi-image (2–8) side-by-side with synchronized zoom/pan/selection, blink comparison, difference maps
+- **Analyze**: Histogram, RGB mean, PSNR, SSIM, noise estimation, entropy, sharpness, ROI statistics
 - **Plugin**: Extensible analyzer system via `AnalyzerRegistry`
+- **Performance**: Background decoding, 5-level cache, predictive preloading — UI never blocks
 
 ---
 
@@ -55,9 +56,9 @@ MViewer is **not an image browser** — it's an **image algorithm validation too
 | Language | C++20 |
 | GUI | Qt 6.11 Widgets |
 | Build | CMake + Ninja |
-| Compiler | MSVC 2022 (primary), Clang/GCC (future) |
+| Compiler | MSVC 2022 (primary), Clang/GCC (CI / Linux) |
 | Cache | SQLite (disk) + LRU (memory) |
-| Tests | Custom lightweight framework |
+| Tests | Custom lightweight framework + golden/vision regression |
 
 ---
 
@@ -65,28 +66,28 @@ MViewer is **not an image browser** — it's an **image algorithm validation too
 
 ### Prerequisites
 
-- Visual Studio 2022 (MSVC 14.44+)
-- Qt 6.11.x (`msvc2022_64`)
-- CMake 3.20+
-- Ninja
+- A C++20 compiler (MSVC 2022, or recent Clang/GCC)
+- Qt 6.11.x (`msvc2022_64` on Windows, or system Qt on Linux/macOS)
+- CMake 3.22+
+- Ninja (recommended)
 
 ### Build Commands
 
 ```bash
-# Configure
-cmake -B build_msvc -G Ninja \
-  -DCMAKE_PREFIX_PATH="D:/QT/6.11.1/msvc2022_64" \
-  -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl
+# Configure — point CMAKE_PREFIX_PATH at your Qt installation
+cmake -B build -G Ninja \
+  -DCMAKE_PREFIX_PATH="<path-to-Qt>/6.11.1/msvc2022_64"
 
 # Build
-cmake --build build_msvc
+cmake --build build
 
-# Run tests
-cd build_msvc && QT_QPA_PLATFORM=offscreen ./bin/core_tests.exe
-
-# Run benchmark
-./bin/benchmark.exe
+# Run tests (headless)
+cd build && QT_QPA_PLATFORM=offscreen ./bin/core_tests
+QT_QPA_PLATFORM=offscreen ./bin/test_m3m4m5
+QT_QPA_PLATFORM=offscreen ./bin/mviewer_unit_tests
 ```
+
+> **Windows note**: Put the MSVC `bin` directory first on `PATH` (or use the Visual Studio developer prompt) so `cl.exe` resolves correctly.
 
 ### Targets
 
@@ -95,23 +96,12 @@ cd build_msvc && QT_QPA_PLATFORM=offscreen ./bin/core_tests.exe
 | `MViewer` | Main application |
 | `core_tests` | Core engine tests (compare, layout, sync) |
 | `mviewer_unit_tests` | Unit tests (decode, cache, scheduler) |
-| `visual_test` | Visual/manual verification |
-| `analyze_main` | CLI analysis tool |
-| `benchmark` | Performance benchmark suite |
-
----
-
-## Milestones
-
-| Milestone | Status | Description |
-|-----------|--------|-------------|
-| M0/M1 | ✅ | Working browser: 3-panel, directory tree, gallery, preview, thumbnails |
-| M2 | ✅ | Architecture solidification: Image Core, Task Scheduler, domain layer, EventBus, Command system |
-| M3 | ✅ | Analysis panel: Histogram, PSNR/SSIM/Noise, ROI stats, plugin registry |
-| M4 | ✅ | Image export: Encoder (PNG/JPEG/BMP/WebP), batch conversion |
-| M5 | ✅ | CacheManager integration + Benchmark suite |
-| M6 | 📋 | SQLite disk cache deepening |
-| M7 | 📋 | CommandPalette / AnalysisPanel integration |
+| `test_m3m4m5` | M3/M4/M5 integration tests |
+| `test_plugin_loader` / `test_plugin_manager` | Plugin framework tests |
+| `golden_main` | Golden image regression (generate / `--compare`) |
+| `vision_regression` | Vision regression (generate / `--compare`) |
+| `ui_fixture` | UI screenshot regression (generate / `--compare`) |
+| `benchmark_scenario` | Per-scenario performance benchmark (CSV + baseline diff) |
 
 ---
 
@@ -122,7 +112,7 @@ mviewer/
 ├── src/
 │   ├── core/
 │   │   ├── analysis/      # AnalysisEngine (PSNR, SSIM, noise, histogram)
-│   │   ├── analyzer/      # Analyzer plugin interface + HistogramAnalyzer
+│   │   ├── analyzer/      # Analyzer plugin interface + built-in analyzers
 │   │   ├── benchmark/     # Benchmark framework
 │   │   ├── cache/         # CacheManager (unified memory + disk)
 │   │   ├── command/       # Command pattern (ICommand + Registry)
@@ -130,21 +120,22 @@ mviewer/
 │   │   ├── filesystem/    # FileSystem (image enumeration)
 │   │   ├── image/         # Decoder, Encoder, ImageCache, DiskCache, ImageRepository
 │   │   ├── render/        # RenderEngine
-│   │   └── scheduler/     # TaskScheduler (4 independent pools)
+│   │   ├── scheduler/     # TaskScheduler (5 independent pools)
+│   │   └── plugin/        # PluginLoader + PluginManager
 │   ├── domain/            # Pure business objects (Image, Histogram, Selection, CompareSession)
 │   ├── application/       # UseCases (OpenDirectory, Compare, Rename, Delete)
 │   └── ui/                # Qt Widgets (MainWindow, ImageViewer, CompareWorkspace, ...)
 ├── docs/
-│   ├── adr/               # Architecture Decision Records (001-010)
-│   ├── vision.md          # Product vision
-│   ├── architecture.md    # Target architecture
-│   ├── roadmap.md         # Development roadmap
-│   ├── coding_style.md    # C++20 coding standards
-│   ├── performance.md     # Performance targets
-│   ├── image_pipeline.md  # Image processing pipeline
-│   ├── cache.md           # Cache hierarchy design
-│   ├── ui.md              # UI specification
-│   └── plugin.md          # Plugin system specification
+│   ├── adr/               # Architecture Decision Records
+│   ├── rfc/               # Request For Comments (design proposals)
+│   ├── spec/              # Module specifications
+│   ├── contracts/         # Per-module API contracts
+│   ├── workflow/          # Development workflows
+│   ├── design/            # Design notes (data flow, etc.)
+│   └── quality/           # Performance / threading / memory budgets
+├── golden/                # Golden reference images for regression tests
+├── tests/                 # Regression test suites (vision, ui_fixture, plugin)
+├── benchmarks/            # Benchmark suite
 ├── CMakeLists.txt
 └── README.md
 ```
@@ -164,7 +155,7 @@ if (result.success()) {
 ```
 
 ### CacheManager
-Unified cache orchestration over memory (3 LRU pools) and disk (SQLite).
+Unified cache orchestration over memory (LRU pools) and disk (SQLite).
 
 ```cpp
 // Memory first, then disk
@@ -178,17 +169,16 @@ if (CacheManager::instance().get(CacheLevel::FullImage, key, img)) {
 Extensible analysis via `AnalyzerRegistry`:
 
 ```cpp
-// Register a custom analyzer
 AnalyzerRegistry::instance().registerAnalyzer("my_analyzer", []() {
     return std::make_unique<MyAnalyzer>();
 });
 ```
 
-### Command System
-All user actions implement `ICommand` and register in `CommandRegistry`:
+### Plugin Loading
+Load external analyzer plugins at runtime via `PluginManager`:
 
 ```cpp
-reg.registerCommand(std::make_unique<ExportCommand>(this));
+PluginManager::instance().loadDirectory("<path-to-plugins>");
 ```
 
 ---
@@ -197,16 +187,19 @@ reg.registerCommand(std::make_unique<ExportCommand>(this));
 
 | Document | Description |
 |----------|-------------|
-| [vision.md](docs/vision.md) | Product vision and scope |
-| [architecture.md](docs/architecture.md) | Target architecture overview |
-| [roadmap.md](docs/roadmap.md) | Milestone plan |
-| [coding_style.md](docs/coding_style.md) | C++20/Qt coding standards |
-| [performance.md](docs/performance.md) | Performance targets and profiling |
-| [image_pipeline.md](docs/image_pipeline.md) | Decode → Color → Cache → Render pipeline |
-| [cache.md](docs/cache.md) | Multi-level cache hierarchy |
-| [ui.md](docs/ui.md) | UI specification |
-| [plugin.md](docs/plugin.md) | Plugin system design |
-| [adr/](docs/adr/) | Architecture Decision Records |
+| [docs/vision.md](docs/vision.md) | Product vision and scope |
+| [docs/architecture.md](docs/architecture.md) | Target architecture overview |
+| [docs/roadmap.md](docs/roadmap.md) | Milestone plan |
+| [docs/coding_style.md](docs/coding_style.md) | C++20/Qt coding standards |
+| [docs/performance.md](docs/performance.md) | Performance targets and profiling |
+| [docs/image_pipeline.md](docs/image_pipeline.md) | Decode → Color → Cache → Render pipeline |
+| [docs/cache.md](docs/cache.md) | Multi-level cache hierarchy |
+| [docs/ui.md](docs/ui.md) | UI specification |
+| [docs/plugin.md](docs/plugin.md) | Plugin system design |
+| [docs/adr/](docs/adr/) | Architecture Decision Records |
+| [docs/rfc/](docs/rfc/) | Design proposals |
+| [docs/spec/](docs/spec/) | Module specifications |
+| [QUALITY.md](QUALITY.md) | Quality gates and engineering workflow |
 
 ---
 
@@ -223,20 +216,12 @@ reg.registerCommand(std::make_unique<ExportCommand>(this));
 
 ---
 
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before opening a pull request. See
+[CHANGELOG.md](CHANGELOG.md) for the release history.
+
 ## License
 
 MIT License — see [LICENSE](LICENSE) for details.
-
----
-
-## Contributing
-
-This is an open-source project. Contributions welcome:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-Please read [coding_style.md](docs/coding_style.md) and [architecture.md](docs/architecture.md) before contributing.

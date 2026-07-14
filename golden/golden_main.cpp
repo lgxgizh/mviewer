@@ -1,8 +1,12 @@
 // Golden image regression test framework.
 // Generate golden images once, then compare future runs against them.
-// Usage: 
-//   ./golden_generate.exe   (generate golden/ from test images)
-//   ./golden_compare.exe    (compare test output vs golden/)
+// Usage:
+//   ./golden_main.exe                 (generate golden/ from test images)
+//   ./golden_main.exe --compare       (compare test output vs golden/)
+//   ./golden_main.exe --golden-dir <path>
+//
+// Default golden directory is <source-root>/golden (set at configure time via
+// MVIEWER_SOURCE_DIR). Override with --golden-dir for local runs.
 #include <QImage>
 #include <QDir>
 #include <QFileInfo>
@@ -15,7 +19,9 @@
 #include <string>
 #include <cmath>
 
-static std::string g_goldenDir;
+#ifndef MVIEWER_SOURCE_DIR
+#define MVIEWER_SOURCE_DIR "."
+#endif
 
 static bool ensureDir(const std::string& path) {
     return QDir(QString::fromStdString(path)).mkpath(".");
@@ -95,19 +101,27 @@ static bool generateGoldenImages(const std::string& dir) {
 
 int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
-    g_goldenDir = "D:/mviewer/golden";
 
-    if (argc > 1 && std::string(argv[1]) == "--compare") {
-        // Compare mode: generate current images and compare vs golden/.
-        ensureDir("D:/mviewer/tests/vision/current");
-        QImage grad = makeGradient(256, 256);
-        grad.save("D:/mviewer/tests/vision/current/gradient_256x256.png");
-        bool ok = compareImages(
-            QString::fromStdString(g_goldenDir + "/image/gradient_256x256.png"),
-            "D:/mviewer/tests/vision/current/gradient_256x256.png");
-        std::cout << (ok ? "PASS: gradient" : "FAIL: gradient") << std::endl;
-        return ok ? 0 : 1;
+    // Default golden directory: <source-root>/golden (set at configure time).
+    std::string goldenDir = std::string(MVIEWER_SOURCE_DIR) + "/golden";
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--compare") {
+            // Compare mode: generate current images and compare vs golden/.
+            std::string currentDir = std::string(MVIEWER_SOURCE_DIR) + "/tests/vision/current";
+            QDir().mkpath(QString::fromStdString(currentDir));
+            QImage grad = makeGradient(256, 256);
+            grad.save(QString::fromStdString(currentDir + "/gradient_256x256.png"));
+            bool ok = compareImages(
+                QString::fromStdString(goldenDir + "/image/gradient_256x256.png"),
+                QString::fromStdString(currentDir + "/gradient_256x256.png"));
+            std::cout << (ok ? "PASS: gradient" : "FAIL: gradient") << std::endl;
+            return ok ? 0 : 1;
+        } else if (arg == "--golden-dir" && i + 1 < argc) {
+            goldenDir = argv[++i];
+        }
     }
 
-    return generateGoldenImages(g_goldenDir) ? 0 : 1;
+    return generateGoldenImages(goldenDir) ? 0 : 1;
 }

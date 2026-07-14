@@ -196,6 +196,7 @@ target_link_libraries(vision_regression
 
 target_compile_features(vision_regression PRIVATE cxx_std_20)
 target_include_directories(vision_regression PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+target_compile_definitions(vision_regression PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 add_executable(golden_main
     ${CMAKE_SOURCE_DIR}/golden/golden_main.cpp
@@ -209,6 +210,7 @@ target_link_libraries(golden_main
 
 target_compile_features(golden_main PRIVATE cxx_std_20)
 target_include_directories(golden_main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+target_compile_definitions(golden_main PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 add_executable(benchmark_scenario
     ${CMAKE_SOURCE_DIR}/benchmarks/benchmark_main.cpp
@@ -224,6 +226,7 @@ target_link_libraries(benchmark_scenario
 
 target_compile_features(benchmark_scenario PRIVATE cxx_std_20)
 target_include_directories(benchmark_scenario PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+target_compile_definitions(benchmark_scenario PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 # ─── Plugin loader tests ─────────────────────────────────────────────────
 
@@ -267,6 +270,7 @@ target_link_libraries(ui_fixture
 
 target_compile_features(ui_fixture PRIVATE cxx_std_20)
 target_include_directories(ui_fixture PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+target_compile_definitions(ui_fixture PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 # ─── Clang-Tidy (optional) ──────────────────────────────────────────────────
 

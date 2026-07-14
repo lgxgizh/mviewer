@@ -8,10 +8,8 @@ on:
 
 jobs:
   # ─── Formatting check ──────────────────────────────────────────────────────
-  # Advisory: reports issues with clang-format but doesn't block CI.
   format:
     runs-on: windows-2022
-    continue-on-error: true
     steps:
     - uses: actions/checkout@v4
 
@@ -21,29 +19,22 @@ jobs:
         version: "18.1.8"
 
     - name: Check formatting
-      continue-on-error: true
-      shell: pwsh
       run: |
-        $env:PATH = "${env:LLVM_INSTALL_DIR}\bin;$env:PATH"
-        $fmt = Get-Command clang-format -ErrorAction SilentlyContinue
-        if (-not $fmt) {
-          Write-Host "clang-format not found, skipping format check."
-          exit 0
-        }
+        $env:PATH = "$env:LLVM_INSTALL_DIR\bin;$env:PATH"
         $files = Get-ChildItem -Recurse -Path src,tests,benchmarks -Include *.cpp,*.h
         $unformatted = @()
         foreach ($f in $files) {
-          $out = clang-format --dry-run --Werror $f.FullName 2>&1
+          clang-format --dry-run --Werror $f.FullName 2>&1 | Out-Null
           if ($LASTEXITCODE -ne 0) {
             $unformatted += $f.FullName
           }
         }
         if ($unformatted.Count -gt 0) {
-          Write-Host "::notice::clang-format found issues in $($unformatted.Count) file(s):"
-          foreach ($f in $unformatted) { Write-Host "::notice::  $f" }
+          Write-Host "Formatting issues in $($unformatted.Count) file(s):"
+          foreach ($f in $unformatted) { Write-Host "  $f" }
+          exit 1
         }
-        # Don't fail CI for formatting issues; just report.
-        Write-Host "Format check diagnostic complete"
+        Write-Host "All files formatted correctly"
 
   # ─── Build and test ────────────────────────────────────────────────────────
   build:
@@ -52,7 +43,6 @@ jobs:
 
     env:
       QT_VERSION: 6.11.1
-      QT_DIR: D:\QT
 
     steps:
     - uses: actions/checkout@v4
@@ -61,23 +51,22 @@ jobs:
       id: cache-qt
       uses: actions/cache@v4
       with:
-        path: ${{ env.QT_DIR }}
+        path: ${{ github.workspace }}/Qt
         key: qt-${{ env.QT_VERSION }}-windows
 
     - name: Install Qt (cache miss)
       if: steps.cache-qt.outputs.cache-hit != 'true'
       run: |
         pip install aqtinstall
-        aqt install-qt windows desktop 6.11.1 win64_msvc2022_64 --outputdir $env:QT_DIR
+        aqt install-qt windows desktop ${{ env.QT_VERSION }} win64_msvc2022_64 --outputdir ${{ github.workspace }}/Qt
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v2
 
     - name: Configure CMake
-      shell: pwsh
       run: |
-        $env:PATH = "D:\QT\${{ env.QT_VERSION }}\msvc2022_64\bin;$env:PATH"
-        cmake -B build_msvc -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="D:\QT\${{ env.QT_VERSION }}\msvc2022_64"
+        $env:PATH = "${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/msvc2022_64/bin;$env:PATH"
+        cmake -B build_msvc -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/msvc2022_64"
 
     - name: Build (Release)
       run: cmake --build build_msvc -j
@@ -123,3 +112,46 @@ jobs:
       with:
         name: build-log
         path: build_msvc/CMakeFiles/CMakeOutput.log
+
+  # ─── AddressSanitizer (memory leak / UB check) ─────────────────────────────
+  asan:
+    runs-on: windows-2022
+
+    env:
+      QT_VERSION: 6.11.1
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Cache Qt
+      id: cache-qt-asan
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/Qt
+        key: qt-${{ env.QT_VERSION }}-windows
+
+    - name: Install Qt (cache miss)
+      if: steps.cache-qt-asan.outputs.cache-hit != 'true'
+      run: |
+        pip install aqtinstall
+        aqt install-qt windows desktop ${{ env.QT_VERSION }} win64_msvc2022_64 --outputdir ${{ github.workspace }}/Qt
+
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v2
+
+    - name: Configure CMake (ASan)
+      run: |
+        $env:PATH = "${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/msvc2022_64/bin;$env:PATH"
+        cmake -B build_msvc_asan -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH="${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/msvc2022_64" -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi" -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO"
+
+    - name: Build (ASan)
+      run: cmake --build build_msvc_asan -j
+
+    - name: Run core_tests (ASan)
+      run: QT_QPA_PLATFORM=offscreen ./build_msvc_asan/bin/core_tests.exe
+
+    - name: Run m3m4m5_tests (ASan)
+      run: QT_QPA_PLATFORM=offscreen ./build_msvc_asan/bin/test_m3m4m5.exe
+
+    - name: Run mviewer_unit_tests (ASan)
+      run: QT_QPA_PLATFORM=offscreen ./build_msvc_asan/bin/mviewer_unit_tests.exe

@@ -16,6 +16,10 @@
 #include <vector>
 #include <cmath>
 
+#ifndef MVIEWER_SOURCE_DIR
+#define MVIEWER_SOURCE_DIR "."
+#endif
+
 struct VisionTestCase {
     std::string name;
     std::string goldenPath;
@@ -119,8 +123,8 @@ inline QImage renderTestPattern(const std::string& name, int w = 256, int h = 25
 
 int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
-    std::string goldenDir = "D:/mviewer/golden/vision";
-    std::string outputDir = "D:/mviewer/tests/vision/current";
+    std::string goldenDir = std::string(MVIEWER_SOURCE_DIR) + "/golden/vision";
+    std::string outputDir = std::string(MVIEWER_SOURCE_DIR) + "/tests/vision/current";
     std::string mode = "generate";
 
     for (int i = 1; i < argc; ++i) {

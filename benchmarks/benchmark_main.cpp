@@ -49,7 +49,9 @@ int main(int argc, char** argv) {
     ScenarioBenchmark bench;
     std::string baselinePath;
     double threshold = 1.2; // allowed +20% degradation
-    std::string csvPath = "D:/mviewer/build_msvc/bin/benchmark_results.csv";
+    std::string csvPath = (argc > 1 && argv[1][0] != '-')
+        ? argv[1]
+        : std::string(MVIEWER_SOURCE_DIR) + "/build_msvc/bin/benchmark_results.csv";
 
     for (int i = 1; i < argc; ++i) {
         std::string a = argv[i];

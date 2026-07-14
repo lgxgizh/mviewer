@@ -5,6 +5,7 @@
 // Usage:
 //   ./ui_fixture.exe --generate   (save golden screenshot from current UI)
 //   ./ui_fixture.exe --compare    (compare current screenshot vs golden)
+//   ./ui_fixture.exe --golden-dir <path> --output-dir <path>
 #include <QApplication>
 #include <QTimer>
 #include <QPixmap>
@@ -24,8 +25,11 @@
 #include <thread>
 #include <random>
 
-// Include the real MainWindow
 #include "mainwindow.h"
+
+#ifndef MVIEWER_SOURCE_DIR
+#define MVIEWER_SOURCE_DIR "."
+#endif
 
 struct UiTestFixture {
     std::string name;
@@ -64,7 +68,6 @@ public:
         return img.save(QString::fromStdString(m_goldenDir + "/" + name + ".png"));
     }
 
-    // Capture screenshot of a QWidget by rendering to QPixmap
     static QImage captureWidget(QWidget* w) {
         QPixmap pm(w->size());
         w->render(&pm);
@@ -119,30 +122,25 @@ private:
     std::vector<UiTestFixture> m_fixtures;
 };
 
-// Generate synthetic test images (deterministic patterns) into a directory
 static std::vector<QImage> generateTestImages() {
     std::vector<QImage> images;
 
-    // Image 1: gradient
     QImage g1(256, 256, QImage::Format_RGB32);
     for (int y = 0; y < 256; ++y)
         for (int x = 0; x < 256; ++x)
             g1.setPixel(x, y, qRgb(x, y, 128));
     images.push_back(g1);
 
-    // Image 2: flat color
     QImage g2(256, 256, QImage::Format_RGB32);
     g2.fill(qRgb(200, 100, 50));
     images.push_back(g2);
 
-    // Image 3: checker
     QImage g3(256, 256, QImage::Format_RGB32);
     for (int y = 0; y < 256; ++y)
         for (int x = 0; x < 256; ++x)
             g3.setPixel(x, y, ((x/16 + y/16) % 2) ? qRgb(255,255,255) : qRgb(0,0,0));
     images.push_back(g3);
 
-    // Image 4: random noise (fixed seed)
     QImage g4(256, 256, QImage::Format_RGB32);
     std::mt19937 rng(42);
     std::uniform_int_distribution<int> dist(0, 255);
@@ -162,9 +160,7 @@ static bool saveTestImages(const QString& dir, const std::vector<QImage>& imgs) 
     return true;
 }
 
-// Render a real MainWindow with test images loaded
 static QImage renderMainWindow(int w = 1600, int h = 900) {
-    // Create temp directory with test images
     QString tempRoot = QDir::tempPath() + "/mviewer_ui_fixture";
     QDir(tempRoot).removeRecursively();
     QDir().mkpath(tempRoot);
@@ -176,13 +172,6 @@ static QImage renderMainWindow(int w = 1600, int h = 900) {
     window.resize(w, h);
     window.show();
 
-    // Load the directory into the thumbnail panel
-    // We access the directory tree to trigger loading
-    // Since we can't easily access private members, we use the public interface
-    // The MainWindow has a "Open Directory" action - we simulate by directly
-    // calling the thumbnail panel via findChild or by using the compare mode
-
-    // Process events to allow layout/render to settle
     QApplication::processEvents();
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
     QApplication::processEvents();
@@ -196,8 +185,8 @@ static QImage renderMainWindow(int w = 1600, int h = 900) {
 
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
-    std::string goldenDir = "D:/mviewer/golden/ui";
-    std::string outputDir = "D:/mviewer/tests/ui_fixture/current";
+    std::string goldenDir = std::string(MVIEWER_SOURCE_DIR) + "/golden/ui";
+    std::string outputDir = std::string(MVIEWER_SOURCE_DIR) + "/tests/ui_fixture/current";
     std::string mode = "generate";
 
     for (int i = 1; i < argc; ++i) {
@@ -220,7 +209,6 @@ int main(int argc, char** argv) {
         return 0;
     }
 
-    // Compare mode
     QImage img = renderMainWindow();
     vr.saveCurrent("main_window_default", img);
     auto results = vr.compareAll();
