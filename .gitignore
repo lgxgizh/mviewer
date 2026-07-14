@@ -47,3 +47,8 @@ testdata/perf/*
 
 # CMake user files
 CMakeLists.txt.user
+
+# uv / Python
+.python-version
+uv.lock
+pyproject.toml
