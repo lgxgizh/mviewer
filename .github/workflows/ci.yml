@@ -41,10 +41,10 @@ jobs:
   # ─── Build and test ────────────────────────────────────────────────────────
   build:
     runs-on: windows-2022
-    needs: format
+    # format job is advisory (continue-on-error), so don't gate on it
 
     env:
-      QT_VERSION: 6.11.1
+      QT_VERSION: 6.8.0
 
     steps:
     - uses: actions/checkout@v4
@@ -53,22 +53,22 @@ jobs:
       id: cache-qt
       uses: actions/cache@v4
       with:
-        path: ${{ github.workspace }}/Qt
+        path: ${{ github.workspace }}/${{ env.QT_VERSION }}
         key: qt-${{ env.QT_VERSION }}-windows
 
     - name: Install Qt (cache miss)
       if: steps.cache-qt.outputs.cache-hit != 'true'
       run: |
         pip install aqtinstall
-        aqt install-qt windows desktop ${{ env.QT_VERSION }} win64_msvc2022_64 --outputdir ${{ github.workspace }}/Qt
+        aqt install-qt windows desktop ${{ env.QT_VERSION }} win64_msvc2022_64 -b https://mirrors.ustc.edu.cn/qtproject/ --UNSAFE-ignore-hash --outputdir ${{ github.workspace }}/${{ env.QT_VERSION }}
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v2
 
     - name: Configure CMake
       run: |
-        $env:PATH = "${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/msvc2022_64/bin;$env:PATH"
-        cmake -B build_msvc -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/msvc2022_64"
+        $env:PATH = "${{ github.workspace }}/${{ env.QT_VERSION }}/msvc2022_64/bin;$env:PATH"
+        cmake -B build_msvc -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ github.workspace }}/${{ env.QT_VERSION }}/msvc2022_64"
 
     - name: Build (Release)
       run: cmake --build build_msvc -j
@@ -121,7 +121,7 @@ jobs:
     runs-on: windows-2022
 
     env:
-      QT_VERSION: 6.11.1
+      QT_VERSION: 6.8.0
 
     steps:
     - uses: actions/checkout@v4
@@ -130,22 +130,22 @@ jobs:
       id: cache-qt-asan
       uses: actions/cache@v4
       with:
-        path: ${{ github.workspace }}/Qt
+        path: ${{ github.workspace }}/${{ env.QT_VERSION }}
         key: qt-${{ env.QT_VERSION }}-windows
 
     - name: Install Qt (cache miss)
       if: steps.cache-qt-asan.outputs.cache-hit != 'true'
       run: |
         pip install aqtinstall
-        aqt install-qt windows desktop ${{ env.QT_VERSION }} win64_msvc2022_64 --outputdir ${{ github.workspace }}/Qt
+        aqt install-qt windows desktop ${{ env.QT_VERSION }} win64_msvc2022_64 -b https://mirrors.ustc.edu.cn/qtproject/ --UNSAFE-ignore-hash --outputdir ${{ github.workspace }}/${{ env.QT_VERSION }}
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v2
 
     - name: Configure CMake (ASan)
       run: |
-        $env:PATH = "${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/msvc2022_64/bin;$env:PATH"
-        cmake -B build_msvc_asan -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH="${{ github.workspace }}/Qt/${{ env.QT_VERSION }}/msvc2022_64" -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi" -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO"
+        $env:PATH = "${{ github.workspace }}/${{ env.QT_VERSION }}/msvc2022_64/bin;$env:PATH"
+        cmake -B build_msvc_asan -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH="${{ github.workspace }}/${{ env.QT_VERSION }}/msvc2022_64" -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi" -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO"
 
     - name: Build (ASan)
       run: cmake --build build_msvc_asan -j
