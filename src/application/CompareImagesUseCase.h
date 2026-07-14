@@ -3,13 +3,12 @@
 #include <vector>
 
 // UseCase: orchestrate multi-image comparison
-class CompareImagesUseCase
-{
+class CompareImagesUseCase {
 public:
-    struct Result {
-        bool success = false;
-        std::string error;
-    };
+  struct Result {
+    bool success = false;
+    std::string error;
+  };
 
-    static Result execute(const std::vector<std::string> &imagePaths);
+  static Result execute(const std::vector<std::string> &imagePaths);
 };

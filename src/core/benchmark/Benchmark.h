@@ -1,45 +1,46 @@
 #pragma once
 
 #include <chrono>
+#include <functional>
+#include <iomanip>
+#include <iostream>
 #include <string>
 #include <vector>
-#include <functional>
-#include <iostream>
-#include <iomanip>
 
 // 简易基准测试框架
-class Benchmark
-{
+class Benchmark {
 public:
-    struct Result {
-        std::string name;
-        double avgMs = 0;
-        double minMs = 0;
-        double maxMs = 0;
-        int iterations = 0;
-    };
+  struct Result {
+    std::string name;
+    double avgMs = 0;
+    double minMs = 0;
+    double maxMs = 0;
+    int iterations = 0;
+  };
 
-    static Benchmark& instance();
+  static Benchmark &instance();
 
-    void run(const std::string& name, std::function<void()> fn, int iterations = 10);
-    void run(const std::string& name, std::function<void(int)> fn, int iterations = 10);
+  void run(const std::string &name, std::function<void()> fn,
+           int iterations = 10);
+  void run(const std::string &name, std::function<void(int)> fn,
+           int iterations = 10);
 
-    void report() const;
-    void clear();
+  void report() const;
+  void clear();
 
 private:
-    std::vector<Result> m_results;
+  std::vector<Result> m_results;
 };
 
 // 计时辅助类
-class Timer
-{
+class Timer {
 public:
-    void start() { m_start = std::chrono::high_resolution_clock::now(); }
-    double elapsedMs() const {
-        auto end = std::chrono::high_resolution_clock::now();
-        return std::chrono::duration<double, std::milli>(end - m_start).count();
-    }
+  void start() { m_start = std::chrono::high_resolution_clock::now(); }
+  double elapsedMs() const {
+    auto end = std::chrono::high_resolution_clock::now();
+    return std::chrono::duration<double, std::milli>(end - m_start).count();
+  }
+
 private:
-    std::chrono::time_point<std::chrono::high_resolution_clock> m_start;
+  std::chrono::time_point<std::chrono::high_resolution_clock> m_start;
 };

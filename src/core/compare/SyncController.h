@@ -8,16 +8,16 @@ class CompareEngine;
 // Emits transformChanged on change (via engine callback).
 class SyncController {
 public:
-    explicit SyncController(CompareEngine& engine);
+  explicit SyncController(CompareEngine &engine);
 
-    void setScale(double s);
-    void setOffset(double ox, double oy);
-    void zoomAt(double viewX, double viewY, double factor, int exceptIndex = -1);
-    void setEnabled(bool on);
-    bool enabled() const;
-    double scale() const;
-    void offset(double& ox, double& oy) const;
+  void setScale(double s);
+  void setOffset(double ox, double oy);
+  void zoomAt(double viewX, double viewY, double factor, int exceptIndex = -1);
+  void setEnabled(bool on);
+  bool enabled() const;
+  double scale() const;
+  void offset(double &ox, double &oy) const;
 
 private:
-    CompareEngine& m_engine;
+  CompareEngine &m_engine;
 };

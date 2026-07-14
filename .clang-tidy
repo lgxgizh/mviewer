@@ -1,0 +1,23 @@
+---
+Checks: >
+  bugprone-*,
+  clang-analyzer-*,
+  cppcoreguidelines-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-owning-memory,
+  -modernize-use-trailing-return-type,
+  -readability-named-parameter,
+  -readability-braces-around-statements,
+  -bugprone-easily-swappable-parameters
+
+CheckOptions:
+  - key:   readability-magic-numbers.IgnoredFloatValues
+    value: '0.0;1.0;2.0;100.0;1000.0;255.0'
+  - key: performance-unnecessary-value-param.AllowedTypes
+    value: 'std::shared_ptr;std::atomic;QString;QImage'

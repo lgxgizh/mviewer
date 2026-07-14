@@ -1,0 +1,15 @@
+repos:
+  - repo: local
+    hooks:
+      - id: clang-format
+        name: clang-format
+        entry: clang-format --dry-run --Werror
+        language: system
+        types_or: [c++, c]
+        args: [--style=file]
+      - id: cmake-test
+        name: cmake-test
+        entry: cmake --build build_msvc --target core_tests
+        language: system
+        pass_filenames: false
+        always_run: false

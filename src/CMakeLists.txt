@@ -109,21 +109,6 @@ target_compile_features(core_tests PRIVATE cxx_std_20)
 
 target_include_directories(core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(visual_test
-    visual_test.cpp
-)
-
-target_link_libraries(visual_test
-    PRIVATE
-        Qt6::Widgets
-        mviewer_core
-        mviewer_ui
-)
-
-target_compile_features(visual_test PRIVATE cxx_std_20)
-
-target_include_directories(visual_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
 add_executable(mviewer_unit_tests
     core/test_core.cpp
 )
@@ -138,17 +123,6 @@ target_compile_features(mviewer_unit_tests PRIVATE cxx_std_20)
 
 target_include_directories(mviewer_unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_executable(analyze_main
-    analyze_main.cpp
-)
-
-target_link_libraries(analyze_main
-    PRIVATE
-        Qt6::Gui
-        Qt6::Core
-)
-
-target_compile_features(analyze_main PRIVATE cxx_std_20)
 
 add_executable(benchmark
     benchmark_main.cpp
@@ -280,4 +254,23 @@ if(CLANG_TIDY_EXE)
     message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
 else()
     message(STATUS "clang-tidy not found; skipping")
+endif()
+
+# ─── ctest registration ──────────────────────────────────────────────────────
+
+add_test(NAME core_tests       COMMAND core_tests)
+add_test(NAME m3m4m5_tests     COMMAND test_m3m4m5)
+add_test(NAME unit_tests       COMMAND mviewer_unit_tests)
+
+# ─── Format target ──────────────────────────────────────────────────────────
+
+find_program(CLANG_FORMAT_EXE NAMES clang-format)
+if(CLANG_FORMAT_EXE)
+    file(GLOB_RECURSE ALL_SOURCE_FILES
+         ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
+         ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
+    add_custom_target(format
+        COMMAND ${CLANG_FORMAT_EXE} -i ${ALL_SOURCE_FILES}
+        COMMENT "Running clang-format on all source files"
+        VERBATIM)
 endif()

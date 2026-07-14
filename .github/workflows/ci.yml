@@ -71,14 +71,8 @@ jobs:
     - name: Build (Release)
       run: cmake --build build_msvc -j
 
-    - name: Run core_tests
-      run: QT_QPA_PLATFORM=offscreen ./build_msvc/bin/core_tests.exe
-
-    - name: Run m3m4m5_tests
-      run: QT_QPA_PLATFORM=offscreen ./build_msvc/bin/test_m3m4m5.exe
-
-    - name: Run mviewer_unit_tests
-      run: QT_QPA_PLATFORM=offscreen ./build_msvc/bin/mviewer_unit_tests.exe
+    - name: Run tests
+      run: cd build_msvc && ctest --output-on-failure --output-junit test-results.xml -j4
 
     - name: Run benchmark_scenario
       run: |
@@ -99,6 +93,13 @@ jobs:
       run: |
         cd build_msvc
         QT_QPA_PLATFORM=offscreen ./bin/ui_fixture.exe --compare
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ github.sha }}
+        path: build_msvc/test-results.xml
 
     - name: Upload benchmark results
       uses: actions/upload-artifact@v4
@@ -147,11 +148,10 @@ jobs:
     - name: Build (ASan)
       run: cmake --build build_msvc_asan -j
 
-    - name: Run core_tests (ASan)
-      run: QT_QPA_PLATFORM=offscreen ./build_msvc_asan/bin/core_tests.exe
-
-    - name: Run m3m4m5_tests (ASan)
-      run: QT_QPA_PLATFORM=offscreen ./build_msvc_asan/bin/test_m3m4m5.exe
-
-    - name: Run mviewer_unit_tests (ASan)
-      run: QT_QPA_PLATFORM=offscreen ./build_msvc_asan/bin/mviewer_unit_tests.exe
+    - name: Run all tests (ASan)
+      working-directory: build_msvc_asan
+      run: |
+        QT_QPA_PLATFORM=offscreen ./bin/core_tests.exe
+        QT_QPA_PLATFORM=offscreen ./bin/test_m3m4m5.exe
+        QT_QPA_PLATFORM=offscreen ./bin/mviewer_unit_tests.exe
+        ./bin/ctest --output-on-failure -j4
