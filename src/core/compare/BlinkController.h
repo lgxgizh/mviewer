@@ -1,19 +1,19 @@
 #pragma once
 
-class CompareEngine;
-
-// BlinkController: manages blink comparison state (which image is highlighted).
-// Delegates to CompareEngine for state storage but owns the blink logic.
+// BlinkController: owns blink state for blink comparison mode.
 class BlinkController
 {
 public:
-    explicit BlinkController(CompareEngine& engine);
+    explicit BlinkController(int imageCount = 0);
 
     void setBlinkIndex(int idx);
     void clearBlink();
-    int blinkIndex() const;
-    bool isBlinking() const;
+    int blinkIndex() const { return m_blinkIndex; }
+    bool isBlinking() const { return m_blinkIndex >= 0; }
+
+    void setImageCount(int n) { m_imageCount = n; }
 
 private:
-    CompareEngine& m_engine;
+    int m_imageCount = 0;
+    int m_blinkIndex = -1;
 };
