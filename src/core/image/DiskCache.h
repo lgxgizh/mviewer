@@ -25,6 +25,9 @@ public:
     // Number of cached entries.
     size_t entryCount() const;
 
+    // Total bytes consumed by all cached blobs (approximate).
+    size_t totalBytes() const;
+
     // Soft cap on entry count; enforced lazily on put() by dropping oldest.
     void setMaxEntries(int n) { m_maxEntries = n; }
     int maxEntries() const { return m_maxEntries; }

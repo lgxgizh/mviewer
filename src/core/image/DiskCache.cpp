@@ -132,6 +132,17 @@ size_t DiskCache::entryCount() const
     return 0;
 }
 
+size_t DiskCache::totalBytes() const
+{
+    if (!m_impl->db.isOpen()) return 0;
+    QSqlQuery q(m_impl->db);
+    // Approximate: width * height * 3 bytes per entry (RGB24)
+    q.exec("SELECT COALESCE(SUM(CAST(w AS INTEGER) * CAST(h AS INTEGER) * 3), 0) FROM blobs");
+    if (q.next())
+        return static_cast<size_t>(q.value(0).toLongLong());
+    return 0;
+}
+
 void DiskCache::clear()
 {
     if (!m_impl->db.isOpen()) return;

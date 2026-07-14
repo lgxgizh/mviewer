@@ -1,26 +1,25 @@
 #pragma once
 
-#include <QRunnable>
-#include <QThreadPool>
 #include <functional>
 #include <memory>
 #include <atomic>
 #include <mutex>
 #include <vector>
 #include <unordered_map>
+#include <cstdint>
 
 // Unified priority task scheduler: all background work flows through here.
-// Routes to 5 independent QThreadPools by Priority.
+// Routes to 5 independent thread pools by Priority.
 //
-// Does not inherit QObject (no signals/slots); QThreadPool/QRunnable are
-// QtCore threading primitives kept as implementation detail.
+// Qt headers (QRunnable/QThreadPool) are kept in the .cpp to avoid leaking
+// Qt into core-layer headers. This class owns the threading primitives
+// via PIMPL (internals in TaskScheduler.cpp).
 class TaskScheduler
 {
 public:
     using TaskId = uint64_t;
 
     enum PoolType { MetadataPool, DecodePool, ThumbnailPool, AnalysisPool, IOPool };
-
     enum class Priority : int { UI, Decode, Thumbnail, Analysis, Background };
 
     // Per-task runtime context: cancel token + progress + dependencies.
@@ -50,7 +49,8 @@ public:
     static TaskScheduler& instance();
 
     // Legacy QRunnable submit.
-    void submit(PoolType pool, QRunnable* task);
+    // NOTE: takes a raw QRunnable* — callers must include <QRunnable> from .cpp
+    void submit(PoolType pool, void* runnable); // void* to avoid QRunnable in header
 
     // Priority submit with dependency list (RFC-004). Work starts only after
     // all dependencies finish. Work/done/onProgress: done is dispatched back
@@ -84,11 +84,12 @@ public:
 
 private:
     TaskScheduler();
-    QThreadPool* pool(PoolType p) { return &m_priorityQueues[static_cast<int>(toPriority(p))]; }
-    QThreadPool* pool(Priority p) { return &m_priorityQueues[static_cast<int>(p)]; }
+    ~TaskScheduler();
+    TaskScheduler(const TaskScheduler&) = delete;
+    TaskScheduler& operator=(const TaskScheduler&) = delete;
 
-    static constexpr int kNumQueues = 5;
-    QThreadPool m_priorityQueues[kNumQueues];
+    struct Impl; // hides QThreadPool from this header
+    Impl* m_impl = nullptr;
 
     static std::atomic<uint64_t> s_nextId;
     std::unordered_map<TaskId, std::vector<TaskId>> m_depGraph;

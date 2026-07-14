@@ -216,7 +216,7 @@ static void testTaskSchedulerDependency()
     TaskScheduler::cancelTree(depId);
 
     // Compat submit
-    auto h4 = sched.submit(TaskScheduler::DecodePool, []() {});
+    auto h4 = sched.submit(TaskScheduler::DecodePool, []() {}, []() {});
     CHECK(h4->id > 0, "Compat submit works");
 
     // toPriority mapping

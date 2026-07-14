@@ -131,8 +131,7 @@ size_t CacheManager::memoryUsageBytes() const
 
 size_t CacheManager::diskUsageBytes() const
 {
-    // DiskCache 目前未暴露总大小的统计接口，保留 0，等 DiskCache 扩展后由它汇总。
-    return 0;
+    return DiskCache::instance().totalBytes();
 }
 
 void CacheManager::putMetadata(const std::string& key, const mviewer::domain::ImageMetadata& meta)

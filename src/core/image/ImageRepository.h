@@ -1,5 +1,6 @@
 #pragma once
 #include "ImageFrame.h"
+#include "core/cache/CacheManager.h"
 #include <string>
 #include <vector>
 #include <functional>
@@ -26,7 +27,6 @@ public:
 
     static const LoadOptions kDefaultLoadOptions;
 
-    // 单例：ImageRepository 是图像生命周期的唯一管理者（RFC-005）。
     static ImageRepository& instance();
 
     // Synchronous load (uses DiskCache internally)
@@ -37,28 +37,40 @@ public:
                    std::function<void(const Result&)> callback,
                    const LoadOptions& opts = kDefaultLoadOptions);
 
-    // Batch load directory
+    // Parallel directory load: dispatches each file to DecodePool using TaskScheduler.
+    // This is synchronous (blocks until all done) but parallel across all files.
     std::vector<Result> loadDirectory(const std::string& dirPath, int maxImages = 1000);
 
-    // 预取：在后台把图像解码并预热到缓存（不阻塞调用线程）。
-    void prefetch(const std::string& filePath, const LoadOptions& opts = kDefaultLoadOptions);
+    // Async parallel directory load: dispatches files to DecodePool, calls callback
+    // when all files are loaded (or errored).
+    void loadDirectoryAsync(const std::string& dirPath,
+                            std::function<void(const std::vector<Result>&)> callback,
+                            int maxImages = 1000);
 
-    // 释放：丢弃该路径在所有缓存层中的条目（仓库释放其生命周期所有权）。
+    // Predictive preloading: prioritize visible images, prefetch neighbors.
+    // visiblePaths = currently visible image paths (high priority).
+    // adjacentPaths = next/prev N images around the visible set (background priority).
+    void prefetchVisible(const std::vector<std::string>& visiblePaths,
+                         const std::vector<std::string>& adjacentPaths = {});
+
+    // Prefetch given paths at specified cache level (default FullImage).
+    void prefetch(const std::vector<std::string>& keys,
+                  CacheLevel level = CacheLevel::FullImage);
+
+    // Release: drop this path from all cache layers.
     void release(const std::string& filePath);
 
-    // 轻量元数据：不解码像素，仅文件级信息（路径/尺寸/大小/mtime/哈希）。
-    // 文件不存在时返回默认（空）ImageMetadata。
+    // Lightweight metadata: no pixel decode (path/size/mtime/hash).
     mviewer::domain::ImageMetadata metadata(const std::string& filePath) const;
 
-    // Save to disk cache explicitly
+    // Save to disk cache explicitly.
     void cacheToDisk(const std::string& filePath);
 
-    // Invalidate cached entries (specific path or all)
+    // Invalidate cached entries (specific path or all).
     void invalidate(const std::string& filePath);
     void invalidateAll();
 
-private:
-    ImageRepository() = default;
+    // Key derivation (shared with tests and advanced callers).
     std::string makeKey(const std::string& filePath) const;
     mviewer::domain::ImageMetadata makeMeta(const std::string& filePath) const;
 };

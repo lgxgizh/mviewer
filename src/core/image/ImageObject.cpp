@@ -19,7 +19,6 @@ std::string computeFileHash(const std::string& path, int64_t size, int64_t mtime
 ImageObject::ImageObject(const std::string& path, const ImageData& image) {
     const QFileInfo fi(QString::fromStdString(path));
     const int64_t size = fi.size();
-    const QDateTime mod = fi.lastModified();
 
     mviewer::domain::ImageMetadata meta;
     meta.filePath = path;
@@ -27,14 +26,11 @@ ImageObject::ImageObject(const std::string& path, const ImageData& image) {
     meta.width = image.width;
     meta.height = image.height;
     meta.fileSize = size;
-    meta.modifiedEpochSec = mod.toSecsSinceEpoch();
+    meta.modifiedEpochSec = fi.lastModified().toSecsSinceEpoch();
     meta.hash = computeFileHash(path, size, meta.modifiedEpochSec);
 
     m_frame = ImageFrame(meta, image);
-    m_modified = mod;
 }
-
-QDateTime ImageObject::modified() const { return m_modified; }
 
 double ImageObject::luminanceMean() {
     m_frame.computeHistogram();

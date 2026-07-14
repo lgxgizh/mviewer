@@ -1,16 +1,16 @@
 #include "core/scheduler/TaskScheduler.h"
 
+#include <QRunnable>
+#include <QThreadPool>
 #include <QCoreApplication>
 #include <QMetaObject>
 #include <QThread>
 
-#include <memory>
 #include <algorithm>
+#include <memory>
 
 namespace
 {
-// Lambda wrapper: polls deps in waitForDeps(), then runs work.
-// After work, reports progress=100, then dispatches done via QueuedConnection.
 class LambdaTask : public QRunnable
 {
 public:
@@ -25,13 +25,9 @@ public:
         setAutoDelete(true);
     }
 
-    // Called by QThreadPool BEFORE run() for dependency tasks.
-    // We override start() by hooking run() itself — QThreadPool calls run().
-    // So this is called from inside run() before work executes.
     void waitForDeps()
     {
         if (m_deps.empty()) return;
-        // Poll: wait until every dependency handle is gone (finished/cancelled).
         size_t resolved = 0;
         while (resolved < m_deps.size()) {
             resolved = 0;
@@ -73,6 +69,12 @@ private:
 };
 } // namespace
 
+struct TaskScheduler::Impl
+{
+    static constexpr int kNumQueues = 5;
+    QThreadPool priorityQueues[kNumQueues];
+};
+
 std::atomic<uint64_t> TaskScheduler::s_nextId{1};
 
 TaskScheduler& TaskScheduler::instance()
@@ -82,6 +84,7 @@ TaskScheduler& TaskScheduler::instance()
 }
 
 TaskScheduler::TaskScheduler()
+    : m_impl(new Impl)
 {
     const int n = QThread::idealThreadCount();
     setQueueMaxThreads(Priority::UI, std::max(1, n));
@@ -89,6 +92,11 @@ TaskScheduler::TaskScheduler()
     setQueueMaxThreads(Priority::Thumbnail, std::max(2, n));
     setQueueMaxThreads(Priority::Analysis, std::max(1, n / 2));
     setQueueMaxThreads(Priority::Background, std::max(1, n / 2));
+}
+
+TaskScheduler::~TaskScheduler()
+{
+    delete m_impl;
 }
 
 TaskScheduler::Priority TaskScheduler::toPriority(PoolType pool)
@@ -103,9 +111,9 @@ TaskScheduler::Priority TaskScheduler::toPriority(PoolType pool)
     return Priority::Background;
 }
 
-void TaskScheduler::submit(PoolType p, QRunnable* task)
+void TaskScheduler::submit(PoolType pool, void* runnable)
 {
-    pool(p)->start(task);
+    m_impl->priorityQueues[static_cast<int>(toPriority(pool))].start(static_cast<QRunnable*>(runnable));
 }
 
 TaskScheduler::TaskHandle TaskScheduler::submit(
@@ -127,9 +135,7 @@ TaskScheduler::TaskHandle TaskScheduler::submit(
         m_handles[ctx->id] = ctx;
     }
 
-    // For tasks with deps, use the LambdaTask that polls before starting work.
-    // For tasks with no deps, still use LambdaTask but with empty deps (waitForDeps returns immediately).
-    pool(prio)->start(new LambdaTask(ctx, std::move(work), std::move(done), this, ctx->dependencies));
+    m_impl->priorityQueues[static_cast<int>(prio)].start(new LambdaTask(ctx, std::move(work), std::move(done), this, ctx->dependencies));
     return ctx;
 }
 
@@ -144,7 +150,7 @@ TaskScheduler::TaskHandle TaskScheduler::submit(PoolType pool,
 
 void TaskScheduler::setQueueMaxThreads(Priority prio, int n)
 {
-    pool(prio)->setMaxThreadCount(std::max(1, n));
+    m_impl->priorityQueues[static_cast<int>(prio)].setMaxThreadCount(std::max(1, n));
 }
 
 void TaskScheduler::setPoolMaxThreads(PoolType pool, int n)
@@ -157,14 +163,12 @@ void TaskScheduler::cancelTree(TaskId rootId)
     auto& sched = instance();
     std::lock_guard<std::mutex> lock(sched.m_graphMtx);
 
-    // BFS to find all descendants (tasks depending on rootId, recursively).
     std::vector<TaskId> stack;
     std::vector<TaskId> victims;
     stack.push_back(rootId);
     while (!stack.empty()) {
         TaskId cur = stack.back();
         stack.pop_back();
-        // Avoid cycles
         if (std::find(victims.begin(), victims.end(), cur) != victims.end())
             continue;
         victims.push_back(cur);
@@ -174,7 +178,6 @@ void TaskScheduler::cancelTree(TaskId rootId)
                 stack.push_back(child);
         }
     }
-    // Cancel children first (reverse order), then remove from handle map.
     for (auto it = victims.rbegin(); it != victims.rend(); ++it) {
         auto hit = sched.m_handles.find(*it);
         if (hit != sched.m_handles.end()) {

@@ -4,7 +4,7 @@
 #include "ImageBuffer.h"
 
 #include <string>
-#include <QDateTime>
+#include <cstdint>
 
 class ImageObject
 {
@@ -21,8 +21,9 @@ public:
     int width() const { return m_frame.width(); }
     int height() const { return m_frame.height(); }
 
-    qint64 fileSize() const { return m_frame.metadata().fileSize; }
-    QDateTime modified() const;
+    int64_t fileSize() const { return static_cast<int64_t>(m_frame.metadata().fileSize); }
+    // Return modification time as epoch seconds (Qt-free).
+    int64_t modifiedEpochSec() const { return m_frame.metadata().modifiedEpochSec; }
     const std::string& hash() const { return m_frame.metadata().hash; }
 
     double luminanceMean();
@@ -42,7 +43,6 @@ public:
 
 private:
     ImageFrame m_frame;
-    QDateTime m_modified;
 };
 
 inline ImageObject::DecodeState ImageObject::decodeState() const {

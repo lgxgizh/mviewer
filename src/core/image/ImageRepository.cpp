@@ -9,6 +9,10 @@
 #include <QFileInfo>
 #include <QImageReader>
 #include <QSize>
+#include <QTimer>
+
+#include <atomic>
+#include <future>
 
 const ImageRepository::LoadOptions ImageRepository::kDefaultLoadOptions{};
 
@@ -20,7 +24,6 @@ ImageRepository& ImageRepository::instance()
 
 std::string ImageRepository::makeKey(const std::string& filePath) const
 {
-    // Identity key = path + size + mtime, so edits invalidate the cache entry.
     const QFileInfo fi(QString::fromStdString(filePath));
     const QString key = QString::fromStdString(filePath) +
                         QString::number(fi.size()) +
@@ -33,12 +36,11 @@ mviewer::domain::ImageMetadata ImageRepository::makeMeta(const std::string& file
     mviewer::domain::ImageMetadata meta;
     const QFileInfo fi(QString::fromStdString(filePath));
     if (!fi.exists())
-        return meta; // 空（默认）metadata 表示文件不存在
+        return meta;
     meta.filePath = filePath;
     meta.fileName = fi.fileName().toStdString();
     meta.fileSize = fi.size();
     meta.modifiedEpochSec = fi.lastModified().toSecsSinceEpoch();
-    // 仅读取头信息获取尺寸，不做完整解码。
     QImageReader reader(QString::fromStdString(filePath));
     const QSize s = reader.size();
     meta.width = s.width();
@@ -74,7 +76,6 @@ ImageRepository::Result ImageRepository::load(const std::string& filePath,
     frame->setDecodeState(DecodeState::Decoded);
     frame->setCacheState(fromCache ? CacheState::Disk : CacheState::None);
 
-    // 元数据也写入 Metadata 缓存层，供 metadata()/prefetch 复用。
     CacheManager::instance().putMetadata(key, frame->metadata());
 
     res.frame = frame;
@@ -100,28 +101,96 @@ void ImageRepository::loadAsync(const std::string& filePath,
 std::vector<ImageRepository::Result> ImageRepository::loadDirectory(
     const std::string& dirPath, int maxImages)
 {
-    std::vector<Result> results;
     const std::vector<std::string> files =
         FileSystem::listImages(dirPath, maxImages);
-    results.reserve(files.size());
-    for (const std::string& f : files)
-        results.push_back(load(f));
+    if (files.empty()) return {};
+
+    const int n = static_cast<int>(files.size());
+    std::vector<Result> results(n);
+    std::atomic<int> completed{0};
+
+    for (int i = 0; i < n; ++i) {
+        TaskScheduler::instance().submit(
+            TaskScheduler::Priority::Decode,
+            [this, &files, &results, &completed, n, i](const TaskScheduler::TaskContext&) {
+                results[i] = load(files[i]);
+                completed.fetch_add(1, std::memory_order_release);
+            });
+    }
+
+    while (completed.load(std::memory_order_acquire) < n) {
+        std::this_thread::sleep_for(std::chrono::microseconds(100));
+    }
     return results;
 }
 
-void ImageRepository::prefetch(const std::string& filePath, const LoadOptions& opts)
+void ImageRepository::loadDirectoryAsync(
+    const std::string& dirPath,
+    std::function<void(const std::vector<Result>&)> callback,
+    int maxImages)
 {
-    // 后台预热：解码并写入缓存（磁盘 + 内存），不阻塞调用线程。
-    TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Background,
-        [this, filePath, opts](const TaskScheduler::TaskContext&) {
-            (void)load(filePath, opts);
-        });
+    const std::vector<std::string> files =
+        FileSystem::listImages(dirPath, maxImages);
+    if (files.empty()) {
+        if (callback) callback({});
+        return;
+    }
+
+    const int n = static_cast<int>(files.size());
+    auto results = std::make_shared<std::vector<Result>>(n);
+    auto completed = std::make_shared<std::atomic<int>>(0);
+    auto callbackPtr = std::make_shared<std::function<void(const std::vector<Result>&)>>(std::move(callback));
+
+    for (int i = 0; i < n; ++i) {
+        TaskScheduler::instance().submit(
+            TaskScheduler::Priority::Decode,
+            [this, &files, results, completed, n, i, callbackPtr](const TaskScheduler::TaskContext&) {
+                (*results)[i] = load(files[i]);
+                int prev = completed->fetch_add(1, std::memory_order_acq_rel);
+                if (prev + 1 == n) {
+                    auto* cb = callbackPtr.get();
+                    if (*cb) {
+                        auto func = *cb;
+                        QTimer::singleShot(0, [func, results]() { func(*results); });
+                    }
+                }
+            });
+    }
+}
+
+void ImageRepository::prefetchVisible(
+    const std::vector<std::string>& visiblePaths,
+    const std::vector<std::string>& adjacentPaths)
+{
+    for (const auto& p : visiblePaths) {
+        TaskScheduler::instance().submit(
+            TaskScheduler::Priority::UI,
+            [this, p](const TaskScheduler::TaskContext&) {
+                load(p);
+            });
+    }
+
+    for (const auto& p : adjacentPaths) {
+        TaskScheduler::instance().submit(
+            TaskScheduler::Priority::Background,
+            [this, p](const TaskScheduler::TaskContext&) {
+                load(p);
+            });
+    }
+}
+
+void ImageRepository::prefetch(const std::vector<std::string>& keys, CacheLevel level)
+{
+    if (level == CacheLevel::Disk) return;
+    for (const auto& key : keys) {
+        ImageData img;
+        if (CacheManager::instance().getDisk(key, img))
+            CacheManager::instance().putMemory(level, key, img);
+    }
 }
 
 void ImageRepository::release(const std::string& filePath)
 {
-    // 生命周期结束：丢弃该路径在所有缓存层中的全部表示。
     CacheManager::instance().invalidate(makeKey(filePath));
 }
 
@@ -147,7 +216,6 @@ void ImageRepository::cacheToDisk(const std::string& filePath)
 
 void ImageRepository::invalidate(const std::string& filePath)
 {
-    // 移除该 path 在内存像素池 + 元数据对象 + 磁盘中的全部缓存。
     CacheManager::instance().invalidate(makeKey(filePath));
 }
 

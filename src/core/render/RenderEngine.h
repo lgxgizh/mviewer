@@ -109,6 +109,8 @@ public:
     static RenderEngine& instance();
 
     void setBackend(std::unique_ptr<Renderer> r);
+    // Query the active backend name (useful for tests/logging).
+    std::string backendName() const;
 
     ImageData scale(const ImageData& src, const RenderSize& target,
                     RenderInterp mode = RenderInterp::Bilinear);
