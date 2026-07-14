@@ -1,9 +1,23 @@
 #include "core/compare/BlinkController.h"
-#include "core/compare/CompareEngine.h"
 
-BlinkController::BlinkController(CompareEngine& engine) : m_engine(engine) {}
+#include <algorithm>
 
-void BlinkController::setBlinkIndex(int idx) { m_engine.setBlinkIndex(idx); }
-void BlinkController::clearBlink() { m_engine.clearBlink(); }
-int BlinkController::blinkIndex() const { return m_engine.blinkIndex(); }
-bool BlinkController::isBlinking() const { return m_engine.blinkIndex() >= 0; }
+BlinkController::BlinkController(int imageCount)
+    : m_imageCount(imageCount)
+{
+}
+
+void BlinkController::setBlinkIndex(int idx)
+{
+    if (idx == -1) {
+        m_blinkIndex = -1;
+        return;
+    }
+    if (idx >= 0 && idx < m_imageCount)
+        m_blinkIndex = idx;
+}
+
+void BlinkController::clearBlink()
+{
+    m_blinkIndex = -1;
+}
