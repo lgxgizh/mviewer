@@ -32,5 +32,11 @@ prototype.py
 # Status/outdated docs
 STATUS.md
 
+# Testdata: generated fixtures — only track .gitkeep, README, script, and catalog
+testdata/golden/*
+!testdata/golden/.gitkeep
+testdata/corrupted/*
+!testdata/corrupted/.gitkeep
+
 # CMake user files
 CMakeLists.txt.user
