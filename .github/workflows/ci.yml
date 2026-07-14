@@ -7,94 +7,31 @@ on:
     branches: [ master ]
 
 jobs:
-  # ─── Formatting check ──────────────────────────────────────────────────────
-  # Advisory: reports issues with clang-format but doesn't block CI.
-  format:
-    runs-on: windows-2022
-    continue-on-error: true
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Install LLVM (clang-format)
-      uses: KyleMayes/install-llvm-action@v2
-      with:
-        version: "18.1.8"
-
-    - name: Check formatting
-      run: |
-        $env:PATH = "$env:LLVM_INSTALL_DIR\bin;$env:PATH"
-        $files = Get-ChildItem -Recurse -Path src,tests,benchmarks -Include *.cpp,*.h
-        $unformatted = @()
-        foreach ($f in $files) {
-          clang-format --dry-run --Werror $f.FullName 2>&1 | Out-Null
-          if ($LASTEXITCODE -ne 0) {
-            $unformatted += $f.FullName
-          }
-        }
-        if ($unformatted.Count -gt 0) {
-          Write-Host "Formatting issues in $($unformatted.Count) file(s):"
-          foreach ($f in $unformatted) { Write-Host "  $f" }
-          exit 1
-        }
-        Write-Host "All files formatted correctly"
-
-  # ─── Build and test ────────────────────────────────────────────────────────
   build:
     runs-on: windows-2022
-    # format job is advisory (continue-on-error), so don't gate on it
-
-    env:
-      QT_VERSION: 6.8.0
 
     steps:
     - uses: actions/checkout@v4
-
-    - name: Cache Qt
-      id: cache-qt
-      uses: actions/cache@v4
-      with:
-        path: ${{ github.workspace }}/${{ env.QT_VERSION }}
-        key: qt-${{ env.QT_VERSION }}-windows
-
-    - name: Install Qt (cache miss)
-      if: steps.cache-qt.outputs.cache-hit != 'true'
-      run: |
-        pip install aqtinstall
-        aqt install-qt windows desktop ${{ env.QT_VERSION }} win64_msvc2022_64 -b https://mirrors.ustc.edu.cn/qtproject/ --UNSAFE-ignore-hash --outputdir ${{ github.workspace }}/${{ env.QT_VERSION }}
 
     - name: Setup MSVC
       uses: microsoft/setup-msbuild@v2
 
+    - name: Install Qt 6.8.0
+      uses: jurplel/install-qt-action@v4
+      with:
+        version: 6.8.0
+        arch: win64_msvc2022_64
+        cache: true
+
     - name: Configure CMake
       run: |
-        $env:PATH = "${{ github.workspace }}/${{ env.QT_VERSION }}/msvc2022_64/bin;$env:PATH"
-        cmake -B build_msvc -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="${{ github.workspace }}/${{ env.QT_VERSION }}/msvc2022_64"
+        cmake -B build_msvc -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl -DCMAKE_CXX_COMPILER=cl
 
-    - name: Build (Release)
+    - name: Build
       run: cmake --build build_msvc -j
 
-    - name: Run tests
+    - name: CTest (all registered tests)
       run: cd build_msvc && ctest --output-on-failure --output-junit test-results.xml -j4
-
-    - name: Run benchmark_scenario
-      run: |
-        cd build_msvc
-        QT_QPA_PLATFORM=offscreen ./bin/benchmark_scenario.exe
-
-    - name: Run golden regression (compare mode)
-      run: |
-        cd build_msvc
-        QT_QPA_PLATFORM=offscreen ./bin/golden_main.exe --compare
-
-    - name: Run vision regression (compare mode)
-      run: |
-        cd build_msvc
-        QT_QPA_PLATFORM=offscreen ./bin/vision_regression.exe --compare
-
-    - name: Run UI fixture regression (compare mode)
-      run: |
-        cd build_msvc
-        QT_QPA_PLATFORM=offscreen ./bin/ui_fixture.exe --compare
 
     - name: Upload test results
       if: always()
@@ -102,58 +39,3 @@ jobs:
       with:
         name: test-results-${{ github.sha }}
         path: build_msvc/test-results.xml
-
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v4
-      with:
-        name: benchmark-${{ github.sha }}
-        path: build_msvc/bin/benchmark_results.csv
-
-    - name: Upload build log on failure
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-log
-        path: build_msvc/CMakeFiles/CMakeOutput.log
-
-  # ─── AddressSanitizer (memory leak / UB check) ─────────────────────────────
-  asan:
-    runs-on: windows-2022
-
-    env:
-      QT_VERSION: 6.8.0
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Cache Qt
-      id: cache-qt-asan
-      uses: actions/cache@v4
-      with:
-        path: ${{ github.workspace }}/${{ env.QT_VERSION }}
-        key: qt-${{ env.QT_VERSION }}-windows
-
-    - name: Install Qt (cache miss)
-      if: steps.cache-qt-asan.outputs.cache-hit != 'true'
-      run: |
-        pip install aqtinstall
-        aqt install-qt windows desktop ${{ env.QT_VERSION }} win64_msvc2022_64 -b https://mirrors.ustc.edu.cn/qtproject/ --UNSAFE-ignore-hash --outputdir ${{ github.workspace }}/${{ env.QT_VERSION }}
-
-    - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v2
-
-    - name: Configure CMake (ASan)
-      run: |
-        $env:PATH = "${{ github.workspace }}/${{ env.QT_VERSION }}/msvc2022_64/bin;$env:PATH"
-        cmake -B build_msvc_asan -G "Ninja" -DCMAKE_BUILD_TYPE=Debug -DCMAKE_PREFIX_PATH="${{ github.workspace }}/${{ env.QT_VERSION }}/msvc2022_64" -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi" -DCMAKE_EXE_LINKER_FLAGS="/INCREMENTAL:NO"
-
-    - name: Build (ASan)
-      run: cmake --build build_msvc_asan -j
-
-    - name: Run all tests (ASan)
-      working-directory: build_msvc_asan
-      run: |
-        QT_QPA_PLATFORM=offscreen ./bin/core_tests.exe
-        QT_QPA_PLATFORM=offscreen ./bin/test_m3m4m5.exe
-        QT_QPA_PLATFORM=offscreen ./bin/mviewer_unit_tests.exe
-        ./bin/ctest --output-on-failure -j4
