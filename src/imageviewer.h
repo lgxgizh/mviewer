@@ -1,10 +1,11 @@
 #pragma once
 
+#include "core/image/ImageFrame.h"
+
+#include <memory>
 #include <QPixmap>
 #include <QStringList>
 #include <QWidget>
-#include <list>
-#include <unordered_map>
 
 // Full-image zoomable viewer. Shown in its own window when the user
 // double-clicks a thumbnail (or single-clicks the bottom-left preview).
@@ -29,6 +30,11 @@ signals:
     void requestPrev();
     void requestNext();
 
+    // Pixel Inspector (P1 #6): emitted on mouse move with the pixel under the
+    // cursor, read directly from the ImageFrame (not QImage). x/y are image
+    // pixel coordinates; valid=false when the cursor is outside the image.
+    void pixelInfo(int x, int y, int r, int g, int b, bool valid);
+
 protected:
     void paintEvent(QPaintEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
@@ -48,8 +54,6 @@ private:
 
     static QStringList listImages(const QString& dirPath);
 
-    static constexpr int kMaxCache = 5;
-
     QPixmap m_pixmap;
     QString m_currentPath;
     QStringList m_fileList;
@@ -61,8 +65,9 @@ private:
     bool m_dragging = false;
     QPoint m_lastMousePos;
 
-    std::list<QString> m_cacheOrder;
-    std::unordered_map<QString, QPixmap> m_cache;
+    // ImageFrame backing the current view. The QWidget itself never decodes;
+    // it only renders the QPixmap produced by ImageRepository.
+    std::shared_ptr<ImageFrame> m_frame;
 
     int m_histogram[256] = {0};
     bool m_hasHistogram = false;

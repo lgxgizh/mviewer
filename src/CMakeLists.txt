@@ -156,6 +156,24 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
+# ─── M3 Phase-1 pipeline acceptance tests ───────────────────────────────
+add_executable(m3pipeline_tests
+    core/test_m3_pipeline.cpp
+)
+
+target_link_libraries(m3pipeline_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(m3pipeline_tests PRIVATE cxx_std_20)
+
+target_include_directories(m3pipeline_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m3pipeline_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
 # ─── Engineering Excellence Targets ─────────────────────────────────────────
 
 add_executable(vision_regression
@@ -278,6 +296,7 @@ endif()
 add_test(NAME core_tests       COMMAND core_tests)
 add_test(NAME m3m4m5_tests     COMMAND test_m3m4m5)
 add_test(NAME unit_tests       COMMAND mviewer_unit_tests)
+add_test(NAME m3pipeline_tests COMMAND m3pipeline_tests)
 
 # ─── Format target ──────────────────────────────────────────────────────────
 

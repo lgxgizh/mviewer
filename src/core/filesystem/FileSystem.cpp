@@ -7,7 +7,7 @@
 
 std::vector<std::string> FileSystem::imageFilters()
 {
-    QStringList filters{"*.jpg", "*.jpeg", "*.bmp", "*.png"};
+    QStringList filters{"*.jpg", "*.jpeg", "*.bmp", "*.png", "*.tif", "*.tiff"};
     std::vector<std::string> result;
     result.reserve(filters.size());
     for (const QString& f : filters)
@@ -22,7 +22,7 @@ std::vector<std::string> FileSystem::listImages(const std::string& dir, int max)
     QDir d(QString::fromStdString(dir));
     if (!d.exists())
         return {};
-    QStringList filters{"*.jpg", "*.jpeg", "*.bmp", "*.png"};
+    QStringList filters{"*.jpg", "*.jpeg", "*.bmp", "*.png", "*.tif", "*.tiff"};
     QFileInfoList entries = d.entryInfoList(filters, QDir::Files, QDir::Name);
     std::vector<std::string> result;
     result.reserve(std::min(static_cast<int>(entries.size()), max));
@@ -38,5 +38,6 @@ std::vector<std::string> FileSystem::listImages(const std::string& dir, int max)
 bool FileSystem::isImage(const std::string& path)
 {
     const QString suffix = QFileInfo(QString::fromStdString(path)).suffix().toLower();
-    return suffix == "jpg" || suffix == "jpeg" || suffix == "bmp" || suffix == "png";
+    return suffix == "jpg" || suffix == "jpeg" || suffix == "bmp" || suffix == "png" ||
+           suffix == "tif" || suffix == "tiff";
 }

@@ -77,6 +77,12 @@ ImageRepository::Result ImageRepository::load(const std::string& filePath, const
     frame->setDecodeState(DecodeState::Decoded);
     frame->setCacheState(fromCache ? CacheState::Disk : CacheState::None);
 
+    // P0: keep the decoded pixels in the in-memory Viewer/FullImage LRU so that
+    // switching to an adjacent image is instant after the first decode. Without
+    // this, every navigation re-decodes from disk/DiskCache.
+    if (!img.isNull())
+        CacheManager::instance().put(CacheLevel::FullImage, key, img);
+
     CacheManager::instance().putMetadata(key, frame->metadata());
 
     res.frame = frame;

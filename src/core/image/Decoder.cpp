@@ -34,7 +34,7 @@ ImageData toImageData(const QImage& src)
 
 std::vector<std::string> Decoder::supportedExtensions()
 {
-    return {"*.jpg", "*.jpeg", "*.bmp", "*.png"};
+    return {"*.jpg", "*.jpeg", "*.bmp", "*.png", "*.tif", "*.tiff"};
 }
 
 ImageData Decoder::decodeFull(const std::string& path)
