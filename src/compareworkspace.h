@@ -1,11 +1,9 @@
 #pragma once
 
-#include "core/analysis/AnalysisEngine.h"
 #include "core/compare/CompareEngine.h"
 
 #include <QCheckBox>
 #include <QGridLayout>
-#include <QHash>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPixmap>
@@ -44,7 +42,6 @@ protected:
 private:
     void rebuildCells();
     void fitAll();
-    void drawCellHistogram(QPainter& p, const QSize& cell, int index);
     void applySelectionToAll(const mviewer::domain::Selection& sel);
 
     CompareEngine m_engine;
@@ -56,7 +53,6 @@ private:
     QGridLayout* m_layout = nullptr;
     QList<QLabel*> m_cellLabels;
     QList<RawImageView*> m_cellViews;
-    QHash<int, ImageStats> m_stats;
     bool m_dragging = false;
     QPoint m_lastMouse;
     int m_dragIdx = -1;
