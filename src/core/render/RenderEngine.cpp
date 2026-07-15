@@ -386,7 +386,7 @@ ImageData RenderEngine::executeCommand(const RenderCommand& cmd) const
     {
         if (cmd.srcImage.isNull())
             return ImageData();
-        return heatMap(cmd.srcImage, cmd.rect);
+        return m_backend->heatMap(cmd.srcImage, cmd.rect);
     }
     case RenderCommandType::DrawHistogram:
     case RenderCommandType::DrawSelection:
@@ -408,7 +408,7 @@ ImageData RenderEngine::executeCommand(const RenderCommand& cmd, const ImageData
     {
         if (produced.isNull())
             return buffer;
-        return overlayDifference(buffer, produced, cmd.alpha);
+        return m_backend->overlayDifference(buffer, produced, cmd.alpha);
     }
     case RenderCommandType::DrawHistogram:
     case RenderCommandType::DrawSelection:
@@ -464,7 +464,7 @@ void RenderEngine::executeDrawImage(QPainter& painter,
     if (!tgt.isValid())
         tgt = {cmd.rect.width, cmd.rect.height};
     const RenderInterp mode = static_cast<RenderInterp>(std::clamp(cmd.interp, 0, 3));
-    ImageData scaled = scale(cmd.srcImage, tgt, mode);
+    ImageData scaled = m_backend->scale(cmd.srcImage, tgt, mode);
     QImage q = mvcore::toQImage(scaled);
     if (q.isNull())
         return;
@@ -484,7 +484,7 @@ void RenderEngine::executeDrawOverlay(QPainter& painter,
     if (!tgt.isValid())
         tgt = {cmd.rect.width, cmd.rect.height};
     const RenderInterp mode = static_cast<RenderInterp>(std::clamp(cmd.interp, 0, 3));
-    ImageData scaled = scale(cmd.overlayImage, tgt, mode);
+    ImageData scaled = m_backend->scale(cmd.overlayImage, tgt, mode);
     QImage q = mvcore::toQImage(scaled);
     if (q.isNull())
         return;
