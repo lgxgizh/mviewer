@@ -139,6 +139,7 @@ void CompareWorkspace::rebuildCells()
         view->setMinimumSize(64, 64);
         view->setMouseTracking(true);
         view->installEventFilter(this);
+        view->setCellIndex(i);
         cellLay->addWidget(view, 1);
         m_cellViews.push_back(view);
 
@@ -149,6 +150,23 @@ void CompareWorkspace::rebuildCells()
             view->setImage(q);
             m_stats.insert(i, AnalysisEngine::computeStats(mvcore::fromQImage(q)));
         }
+
+        const QString cellName = img ? QString::fromStdString(img->metadata().fileName) : QString();
+        connect(view, &RawImageView::pixelInfo, this,
+                [this, cellName](int x, int y, int r, int g, int b, bool valid) {
+                    if (!valid)
+                    {
+                        emit pixelInfo(QString());
+                        return;
+                    }
+                    emit pixelInfo(QString("[%1] (%2,%3) RGB(%4,%5,%6)")
+                                       .arg(cellName)
+                                       .arg(x)
+                                       .arg(y)
+                                       .arg(r)
+                                       .arg(g)
+                                       .arg(b));
+                });
 
         // Caption label
         auto* caption = new QLabel(cellWidget);

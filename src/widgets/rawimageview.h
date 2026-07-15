@@ -18,6 +18,10 @@ public:
     void setImage(const QImage& img);
     void clear();
 
+    // 0-based grid index (set by CompareWorkspace so the inspector can label the cell).
+    void setCellIndex(int idx) { m_cellIndex = idx; }
+    int cellIndex() const { return m_cellIndex; }
+
     double scale() const { return m_scale; }
     const QPointF& offset() const { return m_offset; }
 
@@ -28,6 +32,9 @@ public:
 
 signals:
     void scaleChanged(double scale);
+    // Emitted on hover with the image-space pixel under the cursor (RGB + validity).
+    // Mirrors ImageViewer::pixelInfo so the compare grid feeds the same inspector.
+    void pixelInfo(int x, int y, int r, int g, int b, bool valid);
 
 public slots:
     void zoom(double factor, const QPointF& anchor = {});
@@ -50,4 +57,5 @@ private:
     QPointF m_offset;
     bool m_dragging = false;
     QPoint m_lastMouse;
+    int m_cellIndex = -1;
 };
