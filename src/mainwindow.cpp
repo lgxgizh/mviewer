@@ -204,11 +204,28 @@ void MainWindow::setupUi()
     connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
     connect(m_actCompare, &QAction::triggered, this, [this]() {
         QStringList imgs;
-        for (const auto& p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
-            imgs.append(QString::fromStdString(p));
+        if (!m_currentDir.isEmpty())
+        {
+            for (const auto& p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
+                imgs.append(QString::fromStdString(p));
+        }
+        if (imgs.isEmpty())
+        {
+            const QString dir = QFileDialog::getExistingDirectory(this, tr("打开目录"));
+            if (!dir.isEmpty())
+            {
+                m_currentDir = dir;
+                m_cachedImagePaths.clear();
+                m_dirListDirty = true;
+                m_thumbnailPanel->setDirectory(dir);
+                for (const auto& p : OpenDirectoryUseCase::execute(dir.toStdString()).imagePaths)
+                    imgs.append(QString::fromStdString(p));
+            }
+        }
         if (imgs.size() > 8)
             imgs = imgs.mid(0, 8);
-        openCompare(imgs);
+        if (!imgs.isEmpty())
+            openCompare(imgs);
     });
     connect(m_actToggleAnalysis, &QAction::triggered, m_analysisPanel, &QWidget::setVisible);
     connect(m_actAbout, &QAction::triggered, this, [this]() {

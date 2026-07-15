@@ -11,6 +11,9 @@
 #include <QString>
 #include <QTabWidget>
 #include <QWidget>
+#include <memory>
+
+class RawImageView;
 
 // AnalysisPanel: multi-mode analysis panel
 //  - Histogram + stats (single image)
@@ -37,6 +40,8 @@ public:
 
 public slots:
     void onAnalyzerSelected(int index);
+    void updateImage(const QImage& img);
+    void updateHistogram(const mviewer::domain::Histogram& hist);
 
 protected:
     void paintEvent(QPaintEvent*) override;
@@ -47,6 +52,7 @@ private:
     void updateComparePage();
     void updatePluginPage();
     void renderHistogramPixmap();
+    void renderHistogramPixmap(const mviewer::domain::Histogram& hist);
     QImage computeDifferencePreview(const QImage& a, const QImage& b);
     QString noiseLevelText(double variance);
 
@@ -65,6 +71,7 @@ private:
     QLabel* m_compareLabel = nullptr;
     QLabel* m_diffPreview = nullptr;
     QLabel* m_pluginResult = nullptr;
+    std::unique_ptr<RawImageView> m_imageView;
 
     // Data
     QImage m_imageA;

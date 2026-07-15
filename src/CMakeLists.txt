@@ -55,6 +55,7 @@ add_library(mviewer_ui STATIC
     analysispanel.cpp
     exportdialog.cpp
     exportcommand.cpp
+    widgets/rawimageview.cpp
 )
 
 target_link_libraries(mviewer_ui PUBLIC Qt6::Widgets mviewer_core mviewer_application)
@@ -196,6 +197,23 @@ target_link_libraries(benchmark_scenario
         Qt6::Core
         mviewer_core
 )
+
+# ─── Testdata regression ───────────────────────────────────────────────
+
+add_executable(testdata_regression
+    ${CMAKE_SOURCE_DIR}/tests/testdata_regression.cpp
+)
+
+target_link_libraries(testdata_regression
+    PRIVATE
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(testdata_regression PRIVATE cxx_std_20)
+target_include_directories(testdata_regression PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+target_compile_definitions(testdata_regression PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 target_compile_features(benchmark_scenario PRIVATE cxx_std_20)
 target_include_directories(benchmark_scenario PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
