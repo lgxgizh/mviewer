@@ -3,14 +3,12 @@
 
 #include "core/image/ImageBuffer.h"
 #include "core/image/QtConvert.h"
-#include "core/render/RenderEngine.h"
 
 #include <QCheckBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMouseEvent>
-#include <QPainter>
 #include <QScrollArea>
 #include <QVBoxLayout>
 #include <QWheelEvent>
@@ -122,7 +120,6 @@ void CompareWorkspace::rebuildCells()
     }
     m_cellLabels.clear();
     m_cellViews.clear();
-    m_stats.clear();
 
     const int n = m_engine.imageCount();
     const auto& lay = m_engine.layout();
@@ -148,7 +145,6 @@ void CompareWorkspace::rebuildCells()
         {
             QImage q = imageObjectToQImage(img);
             view->setImage(q);
-            m_stats.insert(i, AnalysisEngine::computeStats(mvcore::fromQImage(q)));
         }
 
         const QString cellName = img ? QString::fromStdString(img->metadata().fileName) : QString();
@@ -229,95 +225,20 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection& sel
 
 void CompareWorkspace::paintEvent(QPaintEvent*)
 {
+    // Cells are raw QWidgets (RawImageView) that paint themselves. The workspace
+    // only pushes the synchronized transform (scale + offset) so every cell tracks
+    // the shared zoom/pan state. Image decode/overlay/draw lives in RawImageView,
+    // never in this compare layer (see AGENTS.md: no decode in the QWidget layer).
     const int n = m_engine.imageCount();
-    const bool multi = n > 1;
     for (int i = 0; i < n; ++i)
     {
         if (!m_cellViews[i])
             continue;
-        const ImageFrame* img = m_engine.imageAt(i);
-        if (!img)
-            continue;
-        QPixmap pm = QPixmap::fromImage(imageObjectToQImage(img));
-        if (pm.isNull())
-        {
-            m_cellViews[i]->setImage(QImage());
-            continue;
-        }
-        const QSize cell = m_cellViews[i]->size();
-        if (cell.width() <= 0 || cell.height() <= 0)
-            continue;
-
         const auto& ct = m_engine.cellTransform(i);
         const double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
         const QPointF off = m_syncDrag
             ? QPointF(m_engine.syncTransform().offset.x, m_engine.syncTransform().offset.y)
             : QPointF(ct.offset.x, ct.offset.y);
-
-        const QSize target = pm.size().scaled(cell * sc, Qt::KeepAspectRatio);
-        const int dx = (cell.width() - target.width()) / 2 + static_cast<int>(off.x());
-        const int dy = (cell.height() - target.height()) / 2 + static_cast<int>(off.y());
-        const RenderRect dest{dx, dy, target.width(), target.height()};
-        const QRect viewport(0, 0, cell.width(), cell.height());
-
-        QPixmap canvas(cell);
-        canvas.fill(Qt::transparent);
-        QPainter p(&canvas);
-
-        // 1) base image
-        RenderCommand imgCmd = RenderCommand::drawImage(
-            img->pixels(), RenderSize{target.width(), target.height()}, RenderInterp::Bilinear);
-        imgCmd.rect = dest;
-        imgCmd.interp = static_cast<int>(RenderInterp::Bilinear);
-        RenderEngine::instance().executeCommand(p, imgCmd, viewport);
-
-        // 2) difference overlay (compare mode)
-        if (multi)
-        {
-            ImageData diff = m_engine.differenceMap(i);
-            if (!diff.isNull())
-            {
-                RenderCommand ovCmd = RenderCommand::drawOverlay(diff, 0.5);
-                ovCmd.rect = dest;
-                ovCmd.interp = static_cast<int>(RenderInterp::Bilinear);
-                RenderEngine::instance().executeCommand(p, ovCmd, viewport);
-            }
-        }
-
-        // 3) ROI selection (image coords -> viewport coords)
-        const auto& sel = img->selection();
-        if (!sel.isEmpty())
-        {
-            const double sx = target.width() / static_cast<double>(pm.width());
-            const double sy = target.height() / static_cast<double>(pm.height());
-            const RenderRect srect{
-                dest.x + static_cast<int>(sel.x * sx),
-                dest.y + static_cast<int>(sel.y * sy),
-                static_cast<int>(sel.width * sx),
-                static_cast<int>(sel.height * sy)};
-            RenderCommand selCmd = RenderCommand::drawSelection(srect, 0xFFFF0000);
-            RenderEngine::instance().executeCommand(p, selCmd, viewport);
-        }
-
-        // 4) luminance histogram (bottom-right overlay)
-        auto it = m_stats.find(i);
-        if (it != m_stats.end())
-        {
-            const int w = cell.width() / 4;
-            const int h = cell.height() / 4;
-            if (w > 4 && h > 4)
-            {
-                const int margin = 6;
-                const int x = cell.width() - w - margin;
-                const int y = cell.height() - h - margin;
-                RenderCommand histCmd =
-                    RenderCommand::drawHistogram(it->histLum, 256, RenderRect{x, y, w, h});
-                RenderEngine::instance().executeCommand(p, histCmd, viewport);
-            }
-        }
-
-        // We don't setPixmap on RawImageView (it paints itself); instead
-        // we just update the view's transform to reflect sync state.
         m_cellViews[i]->setTransform(sc, off);
     }
 }

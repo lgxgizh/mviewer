@@ -69,6 +69,11 @@ All notable changes to this project are documented here. The format is based on
 ### Removed
 - Obsolete `src/analyze_main.cpp` and `src/visual_test.cpp` (hardcoded paths)
 - `RenderCommand.h` / `RenderTypes.h` (consolidated into `RenderEngine.h`)
+- **M3 cleanup:** dead `CompareWorkspace::paintEvent` off-screen `canvas` composite
+  (base/diff/selection/histogram passes drawn into a `QPixmap` that was never blitted —
+  `RawImageView` already paints itself). Also removed the now-unused `m_stats` member,
+  `drawCellHistogram` declaration, and `RenderEngine`/`QPainter` includes from the compare
+  layer. No behavior change; compare cells still receive the synchronized transform.
 
 ## [0.1.0] - 2026-07-12
 
