@@ -27,8 +27,8 @@
 |-----------|-------|--------|
 | Foundation | Build system, dir structure, ADR, AGENTS, Roadmap | ✅ Done |
 | M2 | Image Core + Task Scheduler | ✅ Done |
-| M3 | Core Image Pipeline | 🟡 In progress (Phase-1 complete) |
-| M4 | Compare & Analysis maturity | ⬜ Planned |
+| M3 | Core Image Pipeline | 🟡 In progress (Phase-1 + Phase-2 complete) |
+| M4 | Compare & Analysis maturity | 🟡 In progress (analyzer registry wired to UI) |
 | M5 | Scale & Performance | ⬜ Planned |
 
 > Historical note: an earlier internal scheme reused M3/M4/M5 for the prototype Compare /
@@ -87,11 +87,11 @@ Deliverables:
   Entropy) wired so the plugin registry is the single entry point for analysis.
 
 **Acceptance criteria (M3 Phase-2):**
-- [ ] Two images support synchronized zoom / pan / scroll / selection in the UI.
-- [ ] Pixel Inspector displays Left RGB / Right RGB / Difference in real time.
-- [ ] `Selection` is the sole ROI type passed to analyzers; no `QRect` crosses the core API.
-- [ ] Switching the active analyzer in the UI routes through `AnalyzerRegistry::create`.
-- [ ] Regression: all M3 Phase-1 acceptance checks still pass.
+- [x] Two images support synchronized zoom / pan / scroll / selection in the UI.
+- [x] Pixel Inspector displays Left RGB / Right RGB / Difference in real time.
+- [x] `Selection` is the sole ROI type passed to analyzers; no `QRect` crosses the core API.
+- [x] Switching the active analyzer in the UI routes through `AnalyzerRegistry::create`.
+- [x] Regression: all M3 Phase-1 acceptance checks still pass.
 
 ### M3 Phase-3 — Thumbnail & Viewer hardening (⬜ Planned)
 

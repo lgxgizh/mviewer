@@ -3,6 +3,7 @@
 #include "core/analysis/AnalysisEngine.h"
 
 #include <cmath>
+#include <cstdio>
 
 // NOTE: RGBMeanAnalyzer uses AnalysisEngine::computeStats (ROI) for both
 // full-frame and region analysis; mean/std are derived from the histogram.
@@ -85,4 +86,14 @@ bool RGBMeanAnalyzer::analyzeRegion(const ImageFrame& frame,
     m_result.bStd = std::sqrt(sumB2 / n - m_result.bMean * m_result.bMean);
     m_result.ok = true;
     return true;
+}
+
+std::string RGBMeanAnalyzer::resultText() const
+{
+    char buf[256];
+    std::snprintf(buf, sizeof(buf),
+        "RGB mean: (%.1f, %.1f, %.1f)  std: (%.1f, %.1f, %.1f)",
+        m_result.rMean, m_result.gMean, m_result.bMean,
+        m_result.rStd, m_result.gStd, m_result.bStd);
+    return buf;
 }

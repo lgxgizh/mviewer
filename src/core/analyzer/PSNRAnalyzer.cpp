@@ -43,3 +43,8 @@ bool PSNRAnalyzer::analyzeRegion(const ImageFrame& frame, const mviewer::domain:
     m_psnr = AnalysisEngine::psnr(subR, subT);
     return true;
 }
+
+std::string PSNRAnalyzer::resultText() const
+{
+    return "psnr (dB): " + std::to_string(m_psnr);
+}

@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <cstdio>
 
 namespace
 {
@@ -78,4 +79,13 @@ bool HistogramAnalyzer::analyzeRegion(const ImageFrame& frame,
     h.bMean = static_cast<double>(sumB) / n;
     m_result = h;
     return true;
-} // namespace
+}
+
+std::string HistogramAnalyzer::resultText() const
+{
+    char buf[256];
+    std::snprintf(buf, sizeof(buf),
+        "lumMean: %.1f  R: %.1f  G: %.1f  B: %.1f",
+        m_result.lumMean, m_result.rMean, m_result.gMean, m_result.bMean);
+    return buf;
+}

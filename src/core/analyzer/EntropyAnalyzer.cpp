@@ -56,3 +56,8 @@ bool EntropyAnalyzer::analyzeRegion(const ImageFrame& frame,
     m_entropy = computeEntropy(v, x0, y0, x1, y1);
     return true;
 }
+
+std::string EntropyAnalyzer::resultText() const
+{
+    return "entropy (bits/px): " + std::to_string(m_entropy);
+}
