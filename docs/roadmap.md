@@ -29,7 +29,7 @@
 | M2 | Image Core + Task Scheduler | ✅ Done |
 | M3 | Core Image Pipeline | ✅ Done (Phase-1 + Phase-2 + cleanup) |
 | M4 | Compare & Analysis maturity | ✅ Done (all 4 acceptance criteria met) |
-| M5 | Scale & Performance | ⬜ Planned |
+| M5 | Scale & Performance | 🟡 In progress (disk persistence + preload verified; 1000-img + benchmark gate pending) |
 
 > Historical note: an earlier internal scheme reused M3/M4/M5 for the prototype Compare /
 > Analysis / Render engines. Those engines are complete and live under `core/compare`,
@@ -149,8 +149,8 @@ Deliverables:
 
 **Acceptance criteria (M5):**
 - [ ] 1000-image directory opens without blocking UI; first thumbnail < 200 ms.
-- [ ] Switching adjacent images is instant after cache warm-up.
-- [ ] 5-level cache hit ratio reported; disk cache survives restart.
+- [x] Switching adjacent images is instant after cache warm-up (predictive preload verified).
+- [x] 5-level cache hit ratio reported; disk cache survives restart (verified).
 - [ ] Benchmark CI gate fails on regression beyond threshold.
 
 ---
