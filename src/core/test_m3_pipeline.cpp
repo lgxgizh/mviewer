@@ -267,6 +267,36 @@ static void testSynchronizedSelection()
     }
 }
 
+// Acceptance: two images support synchronized zoom. With sync enabled, zooming
+// updates the shared transform and every cell tracks it (the "soul" of the product).
+static void testSynchronizedZoom()
+{
+    printf("\n[Synchronized zoom across images]\n");
+    fflush(stdout);
+
+    const std::string a = golden("flat_color_256x256.jpg");
+    const std::string b = golden("flat_color_256x256.png");
+    CompareEngine engine;
+    engine.setImages({a, b});
+    engine.setSyncEnabled(true);
+    CHECK(engine.syncEnabled(), "sync enabled");
+
+    const double before = engine.syncTransform().scale;
+    engine.zoomAt(0.0, 0.0, 1.5); // zoom in 1.5x around origin
+    const double after = engine.syncTransform().scale;
+    CHECK(after > before, "zoom updates shared scale");
+
+    // Both cells follow the shared transform.
+    CHECK(std::abs(engine.cellTransform(0).scale - after) < 1e-9, "cell 0 tracks shared scale");
+    CHECK(std::abs(engine.cellTransform(1).scale - after) < 1e-9, "cell 1 tracks shared scale");
+
+    // Pan tracks the shared offset too.
+    engine.setOffset(12.0, -7.0);
+    CHECK(std::abs(engine.cellTransform(0).offset.x - 12.0) < 1e-9 &&
+              std::abs(engine.cellTransform(1).offset.x - 12.0) < 1e-9,
+          "both cells share the pan offset");
+}
+
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv); // required: DiskCache/ImageRepository use Qt paths & SQLite
@@ -279,6 +309,7 @@ int main(int argc, char** argv)
     testPixelInspectorReadsFrame();
     testPixelInspectorDelta();
     testSynchronizedSelection();
+    testSynchronizedZoom();
 
     printf("\n=== M3 Pipeline: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
