@@ -13,7 +13,6 @@
 #include "core/cache/CacheManager.h"
 #include "core/compare/CompareEngine.h"
 #include "core/compare/DifferenceEngine.h"
-#include "core/compare/SyncController.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/QtConvert.h"

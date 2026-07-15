@@ -7,6 +7,13 @@
 #include <algorithm>
 #include <cassert>
 
+namespace
+{
+
+CellState kDefaultCell{};
+
+} // namespace
+
 CompareLayout CompareLayout::forCount(int n)
 {
     CompareLayout l;
@@ -39,6 +46,87 @@ CellSize CompareLayout::cellSize(const CellSize& viewport) const
     if (imageCount <= 0) return viewport;
     return CellSize{viewport.w / cols, viewport.h / rows};
 }
+
+// ─── SyncController ────────────────────────────────────────────────────────
+
+void SyncController::setScale(double s)
+{
+    m_sync.scale = s;
+    if (m_sync.enabled)
+        for (auto& c : m_cells) c.scale = s;
+}
+
+void SyncController::setOffset(double ox, double oy)
+{
+    m_sync.offset = Vec2{ox, oy};
+    if (m_sync.enabled)
+        for (auto& c : m_cells) { c.offset.x = ox; c.offset.y = oy; }
+}
+
+void SyncController::zoomAt(double /*viewX*/, double /*viewY*/, double factor, int exceptIndex)
+{
+    if (m_sync.enabled) {
+        const double ns = m_sync.scale * factor;
+        for (int i = 0; i < static_cast<int>(m_cells.size()); ++i)
+            if (i != exceptIndex) m_cells[i].scale = ns;
+        m_sync.scale = ns;
+    } else if (exceptIndex >= 0 && exceptIndex < static_cast<int>(m_cells.size())) {
+        m_cells[exceptIndex].scale *= factor;
+    }
+}
+
+void SyncController::zoomAtCell(int index, double factor)
+{
+    if (0 <= index && index < static_cast<int>(m_cells.size()))
+        m_cells[index].scale *= factor;
+}
+
+void SyncController::setCellScale(int index, double s)
+{
+    if (0 <= index && index < static_cast<int>(m_cells.size()))
+        m_cells[index].scale = s;
+}
+
+void SyncController::setCellOffset(int index, double ox, double oy)
+{
+    if (0 <= index && index < static_cast<int>(m_cells.size())) {
+        m_cells[index].offset.x = ox;
+        m_cells[index].offset.y = oy;
+    }
+}
+
+void SyncController::fitCell(int index, const CellSize& viewport, const CellSize& imageSize)
+{
+    if (index < 0 || index >= static_cast<int>(m_cells.size())) return;
+    if (imageSize.w <= 0 || imageSize.h <= 0) return;
+    const double scaleX = static_cast<double>(viewport.w) / imageSize.w;
+    const double scaleY = static_cast<double>(viewport.h) / imageSize.h;
+    m_cells[index].scale = std::min(scaleX, scaleY);
+    m_cells[index].offset.x = 0;
+    m_cells[index].offset.y = 0;
+}
+
+void SyncController::reset()
+{
+    m_sync = SyncTransform{};
+    for (auto& c : m_cells) c = CellState{};
+}
+
+CellState& SyncController::cell(int index)
+{
+    if (0 <= index && index < static_cast<int>(m_cells.size()))
+        return m_cells[index];
+    return kDefaultCell;
+}
+
+const CellState& SyncController::cell(int index) const
+{
+    if (0 <= index && index < static_cast<int>(m_cells.size()))
+        return m_cells[index];
+    return kDefaultCell;
+}
+
+// ─── CompareEngine (facade) ─────────────────────────────────────────────────
 
 CompareEngine::CompareEngine()
     : m_layout(CompareLayout::forCount(0))
@@ -90,7 +178,8 @@ const ImageFrame* CompareEngine::imageAt(int index) const
 void CompareEngine::rebuildLayout()
 {
     m_layout = CompareLayout::forCount(imageCount());
-    m_cells.resize(imageCount());
+    m_sync.setCellCount(imageCount());
+    m_viewport.setCellCount(imageCount());
     m_blink.setImageCount(imageCount());
 }
 
@@ -100,110 +189,27 @@ mviewer::domain::CompareSession CompareEngine::session() const
     s.imageIds.reserve(imageCount());
     for (int i = 0; i < imageCount(); ++i)
         s.imageIds.push_back(m_images[i]->metadata().filePath);
-    s.cells.resize(m_cells.size());
-    for (size_t i = 0; i < m_cells.size(); ++i) {
-        s.cells[i].scale   = m_cells[i].scale;
-        s.cells[i].offsetX = m_cells[i].offset.x;
-        s.cells[i].offsetY = m_cells[i].offset.y;
+    const std::vector<CellState>& cells = m_sync.cells();
+    s.cells.resize(cells.size());
+    for (size_t i = 0; i < cells.size(); ++i) {
+        s.cells[i].scale   = cells[i].scale;
+        s.cells[i].offsetX = cells[i].offset.x;
+        s.cells[i].offsetY = cells[i].offset.y;
     }
-    s.syncMode      = m_sync.enabled ? mviewer::domain::SyncMode::All : mviewer::domain::SyncMode::Off;
+    s.syncMode      = m_sync.enabled() ? mviewer::domain::SyncMode::All : mviewer::domain::SyncMode::Off;
     s.blinkIndex    = m_blink.blinkIndex();
-    s.sharedScale   = m_sync.scale;
-    s.sharedOffsetX = m_sync.offset.x;
-    s.sharedOffsetY = m_sync.offset.y;
+    s.sharedScale   = m_sync.scale();
+    s.sharedOffsetX = m_sync.offset().x;
+    s.sharedOffsetY = m_sync.offset().y;
     s.cols          = m_layout.cols;
     s.rows          = m_layout.rows;
     return s;
-}
-
-void CompareEngine::setScale(double s)
-{
-    m_sync.scale = s;
-    if (m_sync.enabled)
-        for (auto& c : m_cells) c.scale = s;
-}
-
-void CompareEngine::setOffset(double ox, double oy)
-{
-    m_sync.offset.x = ox;
-    m_sync.offset.y = oy;
-    if (m_sync.enabled)
-        for (auto& c : m_cells) { c.offset.x = ox; c.offset.y = oy; }
-}
-
-void CompareEngine::zoomAt(double /*viewX*/, double /*viewY*/, double factor, int exceptIndex)
-{
-    if (m_sync.enabled) {
-        const double ns = m_sync.scale * factor;
-        for (int i = 0; i < static_cast<int>(m_cells.size()); ++i)
-            if (i != exceptIndex) m_cells[i].scale = ns;
-        m_sync.scale = ns;
-    } else if (exceptIndex >= 0 && exceptIndex < static_cast<int>(m_cells.size())) {
-        m_cells[exceptIndex].scale *= factor;
-    }
-}
-
-void CompareEngine::setCellScale(int index, double s)
-{
-    if (0 <= index && index < static_cast<int>(m_cells.size()))
-        m_cells[index].scale = s;
-}
-
-void CompareEngine::setCellOffset(int index, double ox, double oy)
-{
-    if (0 <= index && index < static_cast<int>(m_cells.size())) {
-        m_cells[index].offset.x = ox;
-        m_cells[index].offset.y = oy;
-    }
-}
-
-double CompareEngine::cellScale(int index) const
-{
-    if (0 <= index && index < static_cast<int>(m_cells.size()))
-        return m_cells[index].scale;
-    return 1.0;
-}
-
-Vec2 CompareEngine::cellOffset(int index) const
-{
-    if (0 <= index && index < static_cast<int>(m_cells.size()))
-        return m_cells[index].offset;
-    return {0.0, 0.0};
-}
-
-void CompareEngine::fitCell(int index, const CellSize& viewport, const CellSize& imageSize)
-{
-    if (index < 0 || index >= static_cast<int>(m_cells.size())) return;
-    if (imageSize.w <= 0 || imageSize.h <= 0) return;
-    const double scaleX = static_cast<double>(viewport.w) / imageSize.w;
-    const double scaleY = static_cast<double>(viewport.h) / imageSize.h;
-    m_cells[index].scale = std::min(scaleX, scaleY);
-    m_cells[index].offset.x = 0;
-    m_cells[index].offset.y = 0;
-}
-
-const CellTransform& CompareEngine::cellTransform(int index) const
-{
-    static const CellTransform kDefault{};
-    if (0 <= index && index < static_cast<int>(m_cells.size()))
-        return m_cells[index];
-    return kDefault;
-}
-
-int CompareEngine::blinkIndex() const
-{
-    return m_blink.blinkIndex();
 }
 
 void CompareEngine::setBlinkIndex(int idx)
 {
     if (idx < -1 || idx >= imageCount()) return;
     m_blink.setBlinkIndex(idx);
-}
-
-void CompareEngine::clearBlink()
-{
-    m_blink.clearBlink();
 }
 
 ImageData CompareEngine::differenceMap(int index, int baseIndex)
