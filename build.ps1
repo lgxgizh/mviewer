@@ -114,6 +114,6 @@ switch ($Task) {
         Write-Host "[Build] $config..." -ForegroundColor Cyan
         cmake --build . -j
         if ($LASTEXITCODE -ne 0) { throw "Build failed" }
-        Write-Host "[Build] OK — $config" -ForegroundColor Green
+        Write-Host "[Build] OK - $config" -ForegroundColor Green
     }
 }
