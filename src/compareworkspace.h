@@ -38,7 +38,6 @@ protected:
 private:
     void rebuildCells();
     void fitAll();
-    void drawCellHistogram(QPainter& p, const QSize& cell, int index);
 
     CompareEngine m_engine;
     QCheckBox* m_syncZoomChk = nullptr;

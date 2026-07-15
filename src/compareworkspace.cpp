@@ -2,6 +2,7 @@
 
 #include "core/image/ImageBuffer.h"
 #include "core/image/QtConvert.h"
+#include "core/render/RenderEngine.h"
 
 #include <QCheckBox>
 #include <QGridLayout>
@@ -162,6 +163,7 @@ void CompareWorkspace::fitAll()
 void CompareWorkspace::paintEvent(QPaintEvent*)
 {
     const int n = m_engine.imageCount();
+    const bool multi = n > 1;
     for (int i = 0; i < n; ++i)
     {
         if (!m_cells[i])
@@ -175,72 +177,80 @@ void CompareWorkspace::paintEvent(QPaintEvent*)
             m_cells[i]->setPixmap(QPixmap());
             continue;
         }
-        const auto& ct = m_engine.cellTransform(i);
-        double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
-        QPointF off = m_syncDrag ? QPointF(m_engine.syncTransform().offset.x,
-                                       m_engine.syncTransform().offset.y)
-                                 : QPointF(ct.offset.x, ct.offset.y);
         const QSize cell = m_cells[i]->size();
         if (cell.width() <= 0 || cell.height() <= 0)
             continue;
 
-        QPixmap scaled = pm.scaled(cell * sc, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        const auto& ct = m_engine.cellTransform(i);
+        const double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
+        const QPointF off = m_syncDrag
+            ? QPointF(m_engine.syncTransform().offset.x, m_engine.syncTransform().offset.y)
+            : QPointF(ct.offset.x, ct.offset.y);
+
+        const QSize target = pm.size().scaled(cell * sc, Qt::KeepAspectRatio);
+        const int dx = (cell.width() - target.width()) / 2 + static_cast<int>(off.x());
+        const int dy = (cell.height() - target.height()) / 2 + static_cast<int>(off.y());
+        const RenderRect dest{dx, dy, target.width(), target.height()};
+        const QRect viewport(0, 0, cell.width(), cell.height());
+
         QPixmap canvas(cell);
         canvas.fill(Qt::transparent);
         QPainter p(&canvas);
-        p.drawPixmap((cell.width() - scaled.width()) / 2 + off.x(),
-            (cell.height() - scaled.height()) / 2 + off.y(),
-            scaled);
 
-        // 亮度直方图半透明叠加在右下角
+        // 1) base image
+        RenderCommand imgCmd = RenderCommand::drawImage(
+            img->pixels(), RenderSize{target.width(), target.height()}, RenderInterp::Bilinear);
+        imgCmd.rect = dest;
+        imgCmd.interp = static_cast<int>(RenderInterp::Bilinear);
+        RenderEngine::executeCommand(p, imgCmd, viewport);
+
+        // 2) difference overlay (compare mode)
+        if (multi)
+        {
+            ImageData diff = m_engine.differenceMap(i);
+            if (!diff.isNull())
+            {
+                RenderCommand ovCmd = RenderCommand::drawOverlay(diff, 0.5);
+                ovCmd.rect = dest;
+                ovCmd.interp = static_cast<int>(RenderInterp::Bilinear);
+                RenderEngine::executeCommand(p, ovCmd, viewport);
+            }
+        }
+
+        // 3) ROI selection (image coords -> viewport coords)
+        const auto& sel = img->selection();
+        if (!sel.isEmpty())
+        {
+            const double sx = target.width() / static_cast<double>(pm.width());
+            const double sy = target.height() / static_cast<double>(pm.height());
+            const RenderRect srect{
+                dest.x + static_cast<int>(sel.x * sx),
+                dest.y + static_cast<int>(sel.y * sy),
+                static_cast<int>(sel.width * sx),
+                static_cast<int>(sel.height * sy)};
+            RenderCommand selCmd = RenderCommand::drawSelection(srect, 0xFFFF0000);
+            RenderEngine::executeCommand(p, selCmd, viewport);
+        }
+
+        // 4) luminance histogram (bottom-right overlay)
         auto it = m_stats.find(i);
         if (it != m_stats.end())
-            drawCellHistogram(p, cell, i);
+        {
+            const int w = cell.width() / 4;
+            const int h = cell.height() / 4;
+            if (w > 4 && h > 4)
+            {
+                const int margin = 6;
+                const int x = cell.width() - w - margin;
+                const int y = cell.height() - h - margin;
+                RenderCommand histCmd =
+                    RenderCommand::drawHistogram(it->histLum, 256, RenderRect{x, y, w, h});
+                RenderEngine::executeCommand(p, histCmd, viewport);
+            }
+        }
 
         m_cells[i]->setPixmap(canvas);
     }
-}
-
-void CompareWorkspace::drawCellHistogram(QPainter& p, const QSize& cell, int index)
-{
-    auto it = m_stats.find(index);
-    if (it == m_stats.end())
-        return;
-
-    const int w = cell.width() / 4;
-    const int h = cell.height() / 4;
-    if (w <= 4 || h <= 4)
-        return;
-    const int margin = 6;
-    const int x = cell.width() - w - margin;
-    const int y = cell.height() - h - margin;
-
-    // 小黑底
-    p.save();
-    p.setBrush(QColor(0, 0, 0, 150));
-    p.setPen(Qt::NoPen);
-    p.drawRect(x, y, w, h);
-
-    const int* hist = it->histLum;
-    int maxV = 1;
-    for (int i = 0; i < 256; ++i)
-        if (hist[i] > maxV)
-            maxV = hist[i];
-
-    // 白色半透明折线
-    p.setPen(QColor(255, 255, 255, 180));
-    p.setBrush(Qt::NoBrush);
-    QPointF prev;
-    for (int i = 0; i < 256; ++i)
-    {
-        const double px = x + static_cast<double>(i) / 255 * (w - 1);
-        const double py = y + h - static_cast<double>(hist[i]) / maxV * (h - 1);
-        const QPointF cur(px, py);
-        if (i > 0)
-            p.drawLine(prev, cur);
-        prev = cur;
-    }
-    p.restore();
 }
 
 bool CompareWorkspace::eventFilter(QObject* obj, QEvent* event)

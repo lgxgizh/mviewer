@@ -3,6 +3,9 @@
 #include "core/image/QtConvert.h"
 
 #include <QImage>
+#include <QPainter>
+#include <QPen>
+#include <QRect>
 #include <algorithm>
 #include <cmath>
 #include <mutex>
@@ -367,4 +370,185 @@ ImageData RenderEngine::scaleRegionStatic(const ImageData& src,
     RenderInterp mode)
 {
     return instance().scaleRegion(src, region, target, mode);
+}
+
+// ─── RenderCommand pipeline (ImageData-based) ────────────────────────────────
+
+ImageData RenderEngine::executeCommand(const RenderCommand& cmd) const
+{
+    switch (cmd.type)
+    {
+    case RenderCommandType::DrawImage:
+        return cmd.srcImage;
+    case RenderCommandType::DrawOverlay:
+        return cmd.overlayImage;
+    case RenderCommandType::DrawHeatmap:
+    {
+        if (cmd.srcImage.isNull())
+            return ImageData();
+        return heatMap(cmd.srcImage, cmd.rect);
+    }
+    case RenderCommandType::DrawHistogram:
+    case RenderCommandType::DrawSelection:
+    case RenderCommandType::DrawPixelMarker:
+        return ImageData();
+    }
+    return ImageData();
+}
+
+ImageData RenderEngine::executeCommand(const RenderCommand& cmd, const ImageData& buffer) const
+{
+    ImageData produced = executeCommand(cmd);
+    switch (cmd.type)
+    {
+    case RenderCommandType::DrawImage:
+    case RenderCommandType::DrawHeatmap:
+        return produced;
+    case RenderCommandType::DrawOverlay:
+    {
+        if (produced.isNull())
+            return buffer;
+        return overlayDifference(buffer, produced, cmd.alpha);
+    }
+    case RenderCommandType::DrawHistogram:
+    case RenderCommandType::DrawSelection:
+    case RenderCommandType::DrawPixelMarker:
+        return buffer;
+    }
+    return buffer;
+}
+
+ImageData RenderEngine::executeCommands(const std::vector<RenderCommand>& cmds) const
+{
+    ImageData buffer;
+    for (const auto& cmd : cmds)
+        buffer = executeCommand(cmd, buffer);
+    return buffer;
+}
+
+// ─── RenderCommand pipeline (QPainter-based) ─────────────────────────────────
+
+void RenderEngine::executeCommand(QPainter& painter,
+    const RenderCommand& cmd,
+    const QRect& viewport)
+{
+    switch (cmd.type)
+    {
+    case RenderCommandType::DrawImage:
+        executeDrawImage(painter, cmd, viewport);
+        break;
+    case RenderCommandType::DrawOverlay:
+        executeDrawOverlay(painter, cmd, viewport);
+        break;
+    case RenderCommandType::DrawSelection:
+        executeDrawSelection(painter, cmd, viewport);
+        break;
+    case RenderCommandType::DrawHistogram:
+        executeDrawHistogram(painter, cmd, viewport);
+        break;
+    case RenderCommandType::DrawHeatmap:
+        executeDrawHeatmap(painter, cmd, viewport);
+        break;
+    default:
+        break;
+    }
+}
+
+void RenderEngine::executeDrawImage(QPainter& painter,
+    const RenderCommand& cmd,
+    const QRect& viewport)
+{
+    QImage q = mvcore::toQImage(cmd.srcImage);
+    if (q.isNull() || !cmd.rect.isValid())
+        return;
+    painter.save();
+    painter.setClipRect(viewport);
+    const bool smooth = cmd.interp != 0;
+    if (smooth)
+        painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.drawImage(QRect(cmd.rect.x, cmd.rect.y, cmd.rect.width, cmd.rect.height), q);
+    painter.restore();
+}
+
+void RenderEngine::executeDrawOverlay(QPainter& painter,
+    const RenderCommand& cmd,
+    const QRect& viewport)
+{
+    QImage q = mvcore::toQImage(cmd.overlayImage);
+    if (q.isNull() || !cmd.rect.isValid())
+        return;
+    painter.save();
+    painter.setClipRect(viewport);
+    painter.setOpacity(std::clamp(cmd.alpha, 0.0, 1.0));
+    const bool smooth = cmd.interp != 0;
+    if (smooth)
+        painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.drawImage(QRect(cmd.rect.x, cmd.rect.y, cmd.rect.width, cmd.rect.height), q);
+    painter.restore();
+}
+
+void RenderEngine::executeDrawSelection(QPainter& painter,
+    const RenderCommand& cmd,
+    const QRect& viewport)
+{
+    if (!cmd.rect.isValid())
+        return;
+    painter.save();
+    painter.setClipRect(viewport);
+    QPen pen(QColor(static_cast<QRgb>(cmd.rgba)));
+    pen.setWidth(2);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(QRect(cmd.rect.x, cmd.rect.y, cmd.rect.width, cmd.rect.height));
+    painter.restore();
+}
+
+void RenderEngine::executeDrawHistogram(QPainter& painter,
+    const RenderCommand& cmd,
+    const QRect& viewport)
+{
+    const QRect r(cmd.rect.x, cmd.rect.y, cmd.rect.width, cmd.rect.height);
+    if (!r.isValid() || cmd.histCount <= 0)
+        return;
+    painter.save();
+    painter.setClipRect(viewport);
+    // 小黑底
+    painter.setBrush(QColor(0, 0, 0, 150));
+    painter.setPen(Qt::NoPen);
+    painter.drawRect(r);
+    int maxV = 1;
+    const int n = std::min(cmd.histCount, 256);
+    for (int i = 0; i < n; ++i)
+        if (cmd.histData[i] > maxV)
+            maxV = cmd.histData[i];
+    // 白色半透明折线
+    painter.setPen(QColor(255, 255, 255, 180));
+    painter.setBrush(Qt::NoBrush);
+    QPointF prev;
+    for (int i = 0; i < n; ++i)
+    {
+        const double px = r.x() + static_cast<double>(i) / 255 * (r.width() - 1);
+        const double py = r.y() + r.height() - static_cast<double>(cmd.histData[i]) / maxV * (r.height() - 1);
+        const QPointF cur(px, py);
+        if (i > 0)
+            painter.drawLine(prev, cur);
+        prev = cur;
+    }
+    painter.restore();
+}
+
+void RenderEngine::executeDrawHeatmap(QPainter& painter,
+    const RenderCommand& cmd,
+    const QRect& viewport)
+{
+    QImage q = mvcore::toQImage(cmd.srcImage);
+    if (q.isNull() || !cmd.rect.isValid())
+        return;
+    painter.save();
+    painter.setClipRect(viewport);
+    const bool smooth = cmd.interp != 0;
+    if (smooth)
+        painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.drawImage(QRect(cmd.rect.x, cmd.rect.y, cmd.rect.width, cmd.rect.height), q);
+    painter.restore();
 }
