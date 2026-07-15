@@ -22,18 +22,24 @@ void AnalysisPanel::buildUi()
     mainLay->setContentsMargins(6, 6, 6, 6);
     mainLay->setSpacing(4);
 
-    // Plugin selector
+    // Plugin selector — every analyzer is reachable through the AnalyzerRegistry,
+    // which is the single entry point for analysis (M4). The combo items carry the
+    // registry id as user data so switching the active analyzer routes through
+    // AnalyzerRegistry::create(id).
     QHBoxLayout* plugBar = new QHBoxLayout;
     plugBar->addWidget(new QLabel(tr("Analyzer:")));
     m_analyzerCombo = new QComboBox;
-    m_analyzerCombo->addItem(tr("Built-in Histogram+Stats"), QString("builtin"));
-    m_analyzerCombo->addItem(tr("Dual Compare (PSNR/SSIM)"), QString("builtin_compare"));
     auto& reg = AnalyzerRegistry::instance();
     m_pluginIds = reg.availableAnalyzers();
     for (const auto& id : m_pluginIds)
     {
-        m_analyzerCombo->addItem(QString::fromStdString("Plugin: " + id), QString("plugin"));
+        const auto info = reg.infoFor(id);
+        const QString label = info ? QString::fromStdString(info->name) : QString::fromStdString(id);
+        m_analyzerCombo->addItem(label, QString::fromStdString(id));
     }
+    // Dual-image comparison (PSNR/SSIM) is a built-in composite view, not a single
+    // registry analyzer, so it stays as an extra option.
+    m_analyzerCombo->addItem(tr("Dual Compare (PSNR/SSIM)"), QString("builtin_compare"));
     plugBar->addWidget(m_analyzerCombo, 1);
     mainLay->addLayout(plugBar);
 
@@ -141,40 +147,59 @@ void AnalysisPanel::setROI(const mviewer::domain::Selection& roi)
 {
     m_roi = roi;
     m_hasROI = !roi.isEmpty();
+    reanalyze();
+}
 
-    // Route ROI analysis through the AnalyzerRegistry (Selection-based), so the
-    // analyzer consumes a domain Selection rather than a QRect. Falls back to the
-    // legacy QImage path only when no ImageFrame is available.
-    if (m_frameA && !m_frameA->pixels().isNull())
+// Run the currently-selected analyzer (from the registry) over the left frame and
+// the active ROI, then render its result. The registry is the single entry point:
+// the analyzer consumes a domain Selection, never a QRect.
+void AnalysisPanel::reanalyze()
+{
+    const QString id = m_analyzerCombo ? m_analyzerCombo->currentData().toString() : QString();
+
+    // Dual-image comparison is a built-in composite view, not a single registry analyzer.
+    if (id == "builtin_compare")
     {
-        auto analyzer = AnalyzerRegistry::instance().create("histogram");
-        if (analyzer && analyzer->analyzeRegion(*m_frameA, roi))
+        updateComparePage();
+        return;
+    }
+
+    if (m_frameA && !m_frameA->pixels().isNull() && !id.isEmpty())
+    {
+        auto analyzer = AnalyzerRegistry::instance().create(id.toStdString());
+        if (analyzer && analyzer->analyzeRegion(*m_frameA, m_roi))
         {
-            const auto& h = static_cast<HistogramAnalyzer*>(analyzer.get())->result();
-            m_statsA.lumMean = h.lumMean;
-            m_statsA.rMean = h.rMean;
-            m_statsA.gMean = h.gMean;
-            m_statsA.bMean = h.bMean;
             m_statsA.pixelCount =
-                std::max(0, roi.width) * std::max(0, roi.height);
-            // Render from the analyzer's histogram result.
-            renderHistogramPixmap(h);
-            m_statsLabel->setText(
-                QString("<h3>%1</h3><p>%2</p>")
-                    .arg(tr("ROI Stats (registry)"))
-                    .arg(QString("Lum %1  R %2  G %3  B %4  Px %5")
-                             .arg(h.lumMean, 0, 'f', 1)
-                             .arg(h.rMean, 0, 'f', 1)
-                             .arg(h.gMean, 0, 'f', 1)
-                             .arg(h.bMean, 0, 'f', 1)
-                             .arg(m_statsA.pixelCount)));
+                std::max(0, m_roi.width) * std::max(0, m_roi.height);
+            const std::string text = analyzer->resultText();
+            const auto* hist = dynamic_cast<const HistogramAnalyzer*>(analyzer.get());
+            if (hist)
+            {
+                const auto& h = hist->result();
+                m_statsA.lumMean = h.lumMean;
+                m_statsA.rMean = h.rMean;
+                m_statsA.gMean = h.gMean;
+                m_statsA.bMean = h.bMean;
+                renderHistogramPixmap(h);
+                m_statsLabel->setText(
+                    QString("<h3>%1</h3><p>%2</p>")
+                        .arg(tr("ROI Stats (registry)"))
+                        .arg(QString::fromStdString(text)));
+            }
+            else
+            {
+                m_statsLabel->setText(
+                    QString("<h3>%1</h3><p>%2</p>")
+                        .arg(tr("ROI Stats (registry)"))
+                        .arg(QString::fromStdString(text)));
+            }
             return;
         }
     }
 
     if (m_hasA && m_hasROI)
     {
-        m_statsA = AnalysisEngine::computeStatsROI(mvcore::fromQImage(m_imageA), roi);
+        m_statsA = AnalysisEngine::computeStatsROI(mvcore::fromQImage(m_imageA), m_roi);
         updateHistogramPage();
     }
 }
@@ -182,6 +207,7 @@ void AnalysisPanel::setROI(const mviewer::domain::Selection& roi)
 void AnalysisPanel::setFrame(std::shared_ptr<ImageFrame> frame)
 {
     m_frameA = std::move(frame);
+    reanalyze();
 }
 
 void AnalysisPanel::setRegionStats(const QString& text)
@@ -242,12 +268,7 @@ void AnalysisPanel::updateInspectorPage()
 void AnalysisPanel::onAnalyzerSelected(int index)
 {
     m_currentPluginIdx = index;
-    if (index == 0)
-        updateHistogramPage();
-    else if (index == 1)
-        updateComparePage();
-    else
-        updatePluginPage();
+    reanalyze();
 }
 
 void AnalysisPanel::updateHistogramPage()

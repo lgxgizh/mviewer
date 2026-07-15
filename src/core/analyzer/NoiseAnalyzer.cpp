@@ -64,3 +64,8 @@ bool NoiseAnalyzer::analyzeRegion(const ImageFrame& frame, const mviewer::domain
     m_noise = estimateLaplacian(v, x0, y0, x1, y1);
     return true;
 }
+
+std::string NoiseAnalyzer::resultText() const
+{
+    return "noise (Laplacian variance): " + std::to_string(m_noise);
+}

@@ -31,6 +31,11 @@ public:
     virtual bool analyzeRegion(const ImageFrame& frame,
         const mviewer::domain::Selection& region) = 0;
 
+    // Human-readable summary of the last analysis result. Default empty;
+    // concrete analyzers override to report their scalar (the UI shows this
+    // generically so every registered analyzer renders without custom code).
+    virtual std::string resultText() const { return {}; }
+
     // Capability flags: agents query this automatically to know which analyzer
     // fits a task. Override with a bitwise-or of AnalyzerCapability values.
     virtual AnalyzerCapability capabilities() const { return AnalyzerCapability::SingleImage; }

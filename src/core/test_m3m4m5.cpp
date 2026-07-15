@@ -202,6 +202,34 @@ static void testAnalyzerRegistry()
 
     // Nonexistent ID
     CHECK(reg.create("nonexistent") == nullptr, "create('nonexistent') returns null");
+
+    // M4: every built-in analyzer is reachable through the registry and produces
+    // a human-readable result (single entry point; no QRect crosses the core API).
+    QImage solid(64, 64, QImage::Format_RGB32);
+    solid.fill(QColor(120, 160, 200));
+    ImageFrame frame = ImageFrame::create("registry-check", mvcore::fromQImage(solid));
+    frame.computeHistogram();
+    const char* builtins[] = {"histogram", "noise", "entropy", "psnr",
+                               "sharpness", "ssim", "rgbmean"};
+    for (const char* id : builtins)
+    {
+        auto a = reg.create(id);
+        CHECK(a != nullptr, ("registry creates '" + std::string(id) + "'").c_str());
+        if (a)
+        {
+            // psnr/ssim are reference-based; point them at the same frame so the
+            // region analysis has a valid reference.
+            if (id == std::string("psnr"))
+                dynamic_cast<PSNRAnalyzer*>(a.get())->setReference(frame);
+            else if (id == std::string("ssim"))
+                dynamic_cast<SSIMAnalyzer*>(a.get())->setReference(frame);
+            mviewer::domain::Selection full{0, 0, 64, 64};
+            const bool ok = a->analyzeRegion(frame, full);
+            CHECK(ok, ("'" + std::string(id) + "' analyzes a region").c_str());
+            CHECK(!a->resultText().empty(),
+                  ("'" + std::string(id) + "' reports a result").c_str());
+        }
+    }
 }
 
 // ─── New tests ──────────────────────────────────────────────────────────────

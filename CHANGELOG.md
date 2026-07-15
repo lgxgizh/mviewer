@@ -44,7 +44,16 @@ All notable changes to this project are documented here. The format is based on
   only as a fallback when no `ImageFrame` is available. `ImageViewer::frame()` exposes the
   backing `ImageFrame` so the QWidget layer decodes nothing.
 
-### Changed
+- **M4 — Analyzer registry is the single UI entry point:** `AnalysisPanel`'s analyzer
+  dropdown is now populated from `AnalyzerRegistry::availableAnalyzers()` (histogram,
+  noise, entropy, psnr, sharpness, ssim, rgbmean) instead of a hardcoded "histogram".
+  Switching the active analyzer — and every ROI analysis — routes through
+  `AnalyzerRegistry::create(id)->analyzeRegion(frame, selection)`. Each built-in analyzer
+  exposes a generic `resultText()` so the panel renders any registered analyzer without
+  custom code. `test_m3m4m5` now asserts all built-ins are creatable via the registry and
+  produce a non-empty result.
+
+### Changed (M4)
 - `TaskScheduler` now uses PIMPL to keep Qt threading primitives out of the core header
 - `ImageObject` header no longer depends on `QDateTime`
 - `CacheManager::diskUsageBytes()` now reports real disk usage via `DiskCache::totalBytes()`

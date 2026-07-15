@@ -63,3 +63,8 @@ bool SharpnessAnalyzer::analyzeRegion(const ImageFrame& frame,
     m_sharp = computeSharpness(v, x0, y0, x1, y1);
     return true;
 }
+
+std::string SharpnessAnalyzer::resultText() const
+{
+    return "sharpness (gradient magnitude): " + std::to_string(m_sharp);
+}

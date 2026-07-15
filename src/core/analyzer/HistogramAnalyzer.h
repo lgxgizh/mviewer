@@ -23,6 +23,7 @@ public:
 
     bool analyze(const ImageFrame& frame) override;
     bool analyzeRegion(const ImageFrame& frame, const mviewer::domain::Selection& region) override;
+    std::string resultText() const override;
 
     const mviewer::domain::Histogram& result() const { return m_result; }
 

@@ -34,7 +34,8 @@ public:
 
     // ROI (image coordinates)
     void setROI(const mviewer::domain::Selection& roi);
-
+    // Re-run the currently-selected registry analyzer over the left frame + ROI.
+    void reanalyze();
     // Backward-compat: display arbitrary region-stats text (from
     // ImageViewer::regionStats)
     void setRegionStats(const QString& text);

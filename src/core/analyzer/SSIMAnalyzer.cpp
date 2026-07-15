@@ -42,3 +42,8 @@ bool SSIMAnalyzer::analyzeRegion(const ImageFrame& frame, const mviewer::domain:
     m_ssim = AnalysisEngine::ssim(subR, subT);
     return true;
 }
+
+std::string SSIMAnalyzer::resultText() const
+{
+    return "ssim: " + std::to_string(m_ssim);
+}
