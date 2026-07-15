@@ -1,8 +1,7 @@
 #include "imageviewer.h"
 
 #include "core/analysis/AnalysisEngine.h"
-#include "core/cache/CacheManager.h"
-#include "core/image/Decoder.h"
+#include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
 
 #include <QApplication>
@@ -17,7 +16,7 @@
 
 namespace
 {
-const QStringList kImageExtensions = {"*.jpg", "*.jpeg", "*.bmp", "*.png"};
+const QStringList kImageExtensions = {"*.jpg", "*.jpeg", "*.bmp", "*.png", "*.tif", "*.tiff"};
 const double kZoomStep = 1.15;
 } // namespace
 
@@ -48,51 +47,16 @@ ImageViewer::~ImageViewer() = default;
 
 QPixmap ImageViewer::loadPixmap(const QString& path)
 {
-    auto it = m_cache.find(path);
-    if (it != m_cache.end())
-    {
-        m_cacheOrder.erase(std::find(m_cacheOrder.begin(), m_cacheOrder.end(), path));
-        m_cacheOrder.push_front(path);
-        return it->second;
-    }
+    // Acceptance #7: ALL image operations pass through ImageRepository.
+    // The QWidget never decodes — it only renders the ImageFrame pixels.
+    // ImageRepository serves pixels from the in-memory Viewer/FullImage LRU
+    // after the first decode, so adjacent-image switching is instant.
+    ImageRepository::Result res = ImageRepository::instance().load(path.toStdString());
+    if (!res.success())
+        return QPixmap();
 
-    // 尝试从 CacheManager 获取已解码的图像（省去二次磁盘IO）
-    QPixmap pix;
-    ImageData cached;
-    if (CacheManager::instance().getMemory(CacheLevel::FullImage, path.toStdString(), cached))
-    {
-        pix = QPixmap::fromImage(mvcore::toQImage(cached));
-    }
-    if (pix.isNull())
-    {
-        // 未命中：解码并写入 CacheManager
-        ImageData decoded = Decoder::decodeFull(path.toStdString());
-        if (!decoded.isNull())
-        {
-            CacheManager::instance().put(CacheLevel::FullImage, path.toStdString(), decoded);
-            pix = QPixmap::fromImage(mvcore::toQImage(decoded));
-        }
-    }
-    // 兜底：用 Decoder 解码（仍走 Encoder/Decoder 统一路径）
-    if (pix.isNull())
-    {
-        ImageData decoded = Decoder::decodeFull(path.toStdString());
-        if (!decoded.isNull())
-        {
-            pix = QPixmap::fromImage(mvcore::toQImage(decoded));
-        }
-    }
-
-    m_cacheOrder.push_front(path);
-    m_cache[path] = pix;
-    while (static_cast<int>(m_cacheOrder.size()) > kMaxCache)
-    {
-        const QString victim = m_cacheOrder.back();
-        m_cacheOrder.pop_back();
-        m_cache.erase(victim);
-    }
-
-    return pix;
+    m_frame = res.frame;
+    return QPixmap::fromImage(mvcore::toQImage(m_frame->pixels()));
 }
 
 void ImageViewer::setImage(const QString& path)
@@ -151,28 +115,19 @@ void ImageViewer::fitToWidget()
 
 void ImageViewer::computeHistogram(const QPixmap& pixmap)
 {
+    Q_UNUSED(pixmap);
     std::fill(std::begin(m_histogram), std::end(m_histogram), 0);
 
-    const QImage image = pixmap.toImage().convertToFormat(QImage::Format_RGB32);
-    if (image.isNull())
+    // Reuse the ImageFrame's cached luminance histogram (computed once on
+    // decode inside ImageRepository). No re-decode in the QWidget layer.
+    if (!m_frame || !m_frame->hasHistogram())
     {
         m_hasHistogram = false;
         return;
     }
-
-    const int w = image.width();
-    const int h = image.height();
-    for (int y = 0; y < h; ++y)
-    {
-        const QRgb* line = reinterpret_cast<const QRgb*>(image.scanLine(y));
-        for (int x = 0; x < w; ++x)
-        {
-            const QRgb c = line[x];
-            const int lum =
-                static_cast<int>(0.299 * qRed(c) + 0.587 * qGreen(c) + 0.114 * qBlue(c));
-            ++m_histogram[std::clamp(lum, 0, 255)];
-        }
-    }
+    const auto& hist = m_frame->histogram();
+    for (int i = 0; i < 256; ++i)
+        m_histogram[i] = std::min(hist.luminance[i], 0x7FFFFFFF);
     m_hasHistogram = true;
 }
 
@@ -295,6 +250,29 @@ void ImageViewer::mouseMoveEvent(QMouseEvent* event)
         m_lastMousePos = event->pos();
         update();
     }
+
+    // Pixel Inspector (P1 #6): read the pixel under the cursor directly from
+    // the ImageFrame (RGB24), using the inverse of the view transform.
+    int ix = -1, iy = -1, r = 0, g = 0, b = 0;
+    bool valid = false;
+    if (m_frame && !m_pixmap.isNull())
+    {
+        ix = static_cast<int>((event->pos().x() - m_offset.x()) / m_scale);
+        iy = static_cast<int>((event->pos().y() - m_offset.y()) / m_scale);
+        const int iw = m_pixmap.width();
+        const int ih = m_pixmap.height();
+        if (ix >= 0 && ix < iw && iy >= 0 && iy < ih)
+        {
+            const ImageBuffer view = m_frame->pixels().view();
+            const uint8_t* p = view.data + static_cast<size_t>(iy) * view.stride() +
+                                static_cast<size_t>(ix) * view.channelsPerPixel();
+            r = p[0];
+            g = p[1];
+            b = p[2];
+            valid = true;
+        }
+    }
+    emit pixelInfo(ix, iy, r, g, b, valid);
 }
 
 void ImageViewer::mouseReleaseEvent(QMouseEvent* event)

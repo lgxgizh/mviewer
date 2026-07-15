@@ -21,7 +21,7 @@
 
 namespace
 {
-const QStringList kImageExtensions = {"*.jpg", "*.jpeg", "*.bmp", "*.png"};
+const QStringList kImageExtensions = {"*.jpg", "*.jpeg", "*.bmp", "*.png", "*.tif", "*.tiff"};
 
 QList<QFileInfo> sortedEntries(const QString& dirPath, ThumbnailPanel::SortMode mode)
 {

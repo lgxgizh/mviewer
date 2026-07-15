@@ -181,6 +181,14 @@ void MainWindow::setupUi()
         });
     connect(m_imageViewer, &ImageViewer::requestPrev, this, [this]() { navigate(-1); });
     connect(m_imageViewer, &ImageViewer::requestNext, this, [this]() { navigate(1); });
+    connect(m_imageViewer,
+        &ImageViewer::pixelInfo,
+        this,
+        [this](int x, int y, int r, int g, int b, bool valid) {
+            if (valid)
+                statusBar()->showMessage(
+                    QString("像素 [%1,%2]  RGB(%3,%4,%5)").arg(x).arg(y).arg(r).arg(g).arg(b));
+        });
 
     connect(sortCombo,
         QOverload<int>::of(&QComboBox::currentIndexChanged),

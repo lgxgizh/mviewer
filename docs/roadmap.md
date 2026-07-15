@@ -2,221 +2,163 @@
 
 ## Guiding Principles
 
-1. **Performance before features** — Every phase must meet its performance targets before moving on.
-2. **Vertical slices** — Each phase delivers a working, testable product.
-3. **No premature optimization** — Build correctly first, then benchmark and optimize.
-4. **Maintainability always** — Code quality is non-negotiable at every stage.
+1. **Stop infrastructure churn** — The build system, CI, presets, and project layout are
+   frozen. Do not touch `build.ps1`, `CMakePresets.json`, or `.github/workflows/ci.yml`
+   unless explicitly requested.
+2. **Milestone cadence over free-form work** — Development proceeds in explicit milestones
+   (**M3 → M4 → M5**), each with verifiable acceptance criteria. An Agent must not deviate
+   from the milestone's scope or acceptance bar.
+3. **Production pipeline before features** — Build the real decode → cache → viewer path
+   before menus, toolbars, or chrome.
+4. **Domain/Core/UI separation is law** — `domain/` and `core/` headers stay Qt-free. No
+   image decoding logic is allowed in the `QWidget` layer; everything goes through
+   `ImageRepository`.
+5. **No decode in the QWidget layer** — `QWidget` only renders an `ImageFrame`. All decode,
+   cache, and preload decisions live in `core/`.
+6. **Do not build for architecture's sake** — Implement the minimal real thing that meets the
+   acceptance criteria. Do not pre-build SQLite/predict/5-level-cache ahead of the layer that
+   needs them.
 
 ---
 
-## Phase 0: Foundation (Weeks 1-3)
+## Milestone status
 
-**Goal:** Project scaffolding and build infrastructure.
+| Milestone | Theme | Status |
+|-----------|-------|--------|
+| Foundation | Build system, dir structure, ADR, AGENTS, Roadmap | ✅ Done |
+| M2 | Image Core + Task Scheduler | ✅ Done |
+| M3 | Core Image Pipeline | 🟡 In progress (Phase-1 complete) |
+| M4 | Compare & Analysis maturity | ⬜ Planned |
+| M5 | Scale & Performance | ⬜ Planned |
 
-### Deliverables
-- CMake build system with Ninja generator support
-- Module directory structure
-- CI pipeline (GitHub Actions: Windows MSVC, Linux Clang/GCC)
-- clang-format and clang-tidy configuration
-- Unit test framework integration (Catch2 or Google Test)
-- Basic application skeleton (window, event loop, exit)
-
-### Exit Criteria
-- Project builds on Windows (MSVC) and Linux (Clang)
-- CI passes with zero warnings
-- Empty application window opens and closes cleanly
+> Historical note: an earlier internal scheme reused M3/M4/M5 for the prototype Compare /
+> Analysis / Render engines. Those engines are complete and live under `core/compare`,
+> `core/analyzer`, and `core/render`. The milestone names below refer to the **current**
+> pipeline milestones, not those engines.
 
 ---
 
-## Phase 1: Core Image Loading (Weeks 4-7)
+## M3 — Core Image Pipeline
 
-**Goal:** Open and display a single image.
+**Goal:** A production image pipeline where every pixel on screen is served by
+`ImageRepository` → `Decoder` → `Cache` → `ImageFrame`, never by a `QWidget` that opened a
+file itself.
 
-### Deliverables
-- Filesystem module (file enumeration, path handling)
-- Decoder interface (`IDecoder`)
-- JPEG decoder (libjpeg-turbo)
-- PNG decoder (libpng or WIC)
-- BMP decoder (custom, simple format)
-- Basic renderer (D3D11 on Windows)
-- Image canvas widget (display, window fit)
-- "Open File" dialog
+### M3 Phase-1 — Decode / Cache / Frame (✅ Complete)
 
-### Exit Criteria
-- Open and display JPEG, PNG, BMP images
-- Image fits to window correctly
-- No memory leaks (verified by AddressSanitizer/Valgrind)
-- Startup time < 300ms (cold), < 100ms (warm)
+Deliverables:
+- `ImageRepository::load` returns an `ImageFrame` (pixels + metadata + decode state + histogram).
+- JPEG / PNG / BMP / TIFF supported. TIFF requires the Qt `qtiff` plugin plus an MSVC-built
+  `libtiff-6.dll` deployed beside the executable; the format pipeline lists TIFF and the
+  codec-gated test auto-skips when the codec is absent.
+- `ImageRepository::load` populates the in-memory Viewer/FullImage LRU, so adjacent-image
+  switching is instant after the first decode.
+- Background thumbnail pipeline (directory scan → immediate file list → background thumbnail
+  generation → LRU → UI update) already exists and is retained.
+- `ImageViewer` loads exclusively through `ImageRepository` (no `Decoder`/`CacheManager`
+  decode path, no standalone QPixmap LRU in the widget). Histogram is reused from the
+  `ImageFrame` cache.
+- Pixel Inspector: `ImageViewer` emits `pixelInfo(x,y,r,g,b,valid)` on mouse move, read
+  directly from the `ImageFrame` pixels, wired to the main-window status bar.
+- `Selection` domain object exists; analyzers consume `Selection` rather than `QRect`.
+- `AnalyzerRegistry` exists with `HistogramAnalyzer` and peers registered.
 
----
+**Acceptance criteria (M3 Phase-1):**
+- [x] Open a directory and load any JPEG/PNG/BMP; `ImageRepository` returns a valid
+      `ImageFrame` (no UI decode).
+- [x] TIFF is listed by `Decoder`/`FileSystem`/UI filters (decode enabled once `qtiff` +
+      `libtiff-6.dll` are deployed).
+- [x] Second load of the same path is served from the in-memory Viewer LRU (identical pixels,
+      no disk round-trip).
+- [x] `ImageViewer` contains no `QImageReader`/`Decoder`/`CacheManager` decode calls.
+- [x] Pixel Inspector reports RGB under the cursor, read from `ImageFrame`.
+- [x] `m3pipeline_tests` acceptance suite passes (27 checks; TIFF case skips if codec absent).
 
-## Phase 2: Navigation & Thumbnails (Weeks 8-12)
+### M3 Phase-2 — Sync, Inspector Panel, Selection-driven Analysis (⬜ Next)
 
-**Goal:** Browse folders efficiently.
+Deliverables:
+- `CompareEngine` synchronization verified end-to-end through the UI: zoom / pan / scroll /
+  selection stay in lock-step across compared cells.
+- Pixel Inspector promoted to a live Analysis-panel subscription: mouse move → `ImageFrame`
+  read → `pixelInfo` → panel shows Left RGB / Right RGB / Delta / Difference for dual views.
+- All analyzers consume the `Selection` domain object (no `QRect` in analyzer signatures);
+  `Analyze(selection)` path exercised by the ROI stats UI.
+- `AnalyzerRegistry` first analyzers (Histogram / Mean / Noise / PSNR / SSIM / Sharpness /
+  Entropy) wired so the plugin registry is the single entry point for analysis.
 
-### Deliverables
-- Async directory scanning
-- Folder open dialog
-- Previous/Next navigation
-- Thumbnail sidebar panel
-- Thumbnail generation pipeline
-- Persistent thumbnail cache (disk-backed)
-- Preloading (next image in direction)
+**Acceptance criteria (M3 Phase-2):**
+- [ ] Two images support synchronized zoom / pan / scroll / selection in the UI.
+- [ ] Pixel Inspector displays Left RGB / Right RGB / Difference in real time.
+- [ ] `Selection` is the sole ROI type passed to analyzers; no `QRect` crosses the core API.
+- [ ] Switching the active analyzer in the UI routes through `AnalyzerRegistry::create`.
+- [ ] Regression: all M3 Phase-1 acceptance checks still pass.
 
-### Exit Criteria
-- Open folder with 10,000 images — thumbnails appear immediately
-- Navigation latency < 16ms for preloaded images
-- Thumbnail cache persists across sessions
-- UI remains responsive during folder scan
+### M3 Phase-3 — Thumbnail & Viewer hardening (⬜ Planned)
 
----
+Deliverables:
+- Predictive preload (`ImageRepository::prefetchVisible`) exercised against the viewer's
+  navigation so the next/prev image is warm before the keypress.
+- Viewer LRU sizing validated against `performance-budget.md` (adjacent switch instant,
+  memory within budget).
+- Thumbnail pipeline first-paint latency measured and within budget.
 
-## Phase 3: GPU Acceleration & Interaction (Weeks 13-17)
-
-**Goal:** Smooth zoom, pan, and fullscreen.
-
-### Deliverables
-- GPU-accelerated zoom (mouse wheel, keyboard)
-- Smooth pan (click-drag)
-- Fit to window / Original size / Stretch
-- Fullscreen mode (F11)
-- Rotate (90° clockwise/counter-clockwise)
-- GPU texture cache with LRU eviction
-- Renderer fallback chain (D3D11 → D2D)
-
-### Exit Criteria
-- Zoom/pan at 60fps for 50MP images
-- Fullscreen toggle < 100ms
-- GPU memory usage stays within configured budget
-- Smooth interaction on integrated graphics
-
----
-
-## Phase 4: Format Expansion (Weeks 18-22)
-
-**Goal:** Support all required formats.
-
-### Deliverables
-- GIF decoder (with animation playback)
-- TIFF decoder (libtiff)
-- WebP decoder (libwebp)
-- AVIF decoder (libdav1d + libaom)
-- HEIF/HEIC decoder (libheif)
-- JPEG XL decoder (libjxl)
-- Format detection by magic bytes
-- Decoder factory with priority chain
-
-### Exit Criteria
-- All required formats open and display correctly
-- GIF animations play smoothly at correct speed
-- Format detection works without file extension
-- Decode performance benchmarks pass
+**Acceptance criteria (M3 Phase-3):**
+- [ ] Navigating next/prev after warm-up is visually instantaneous (no decode spinner).
+- [ ] Viewer memory stays within the configured `viewerCacheSize` budget under a 1000-image
+      walk.
+- [ ] First thumbnail appears within the roadmap latency target.
 
 ---
 
-## Phase 5: Metadata & Slideshow (Weeks 23-26)
+## M4 — Compare & Analysis Maturity
 
-**Goal:** Information display and passive viewing.
+**Goal:** The comparison and analysis feature set is production-grade and plugin-extensible.
 
-### Deliverables
-- EXIF parser
-- IPTC parser
-- XMP parser
-- Metadata panel (collapsible sidebar)
-- Metadata-driven auto-rotation
-- Slideshow mode (configurable interval)
-- Ken Burns effect (optional, future)
+Deliverables:
+- Dual-image sync (zoom / pan / scroll / selection) hardened for 2–8 images and large
+  (50 MP) inputs.
+- Analyzer registry complete: `HistogramAnalyzer`, `MeanAnalyzer`, `NoiseAnalyzer`,
+  `PSNRAnalyzer`, `SSIMAnalyzer`, `SharpnessAnalyzer`, `EntropyAnalyzer` — all behind the
+  unified `IAnalyzer` interface; plugins register the same way.
+- Selection-driven analysis: `Analyze(selection)` for mean / variance / noise / PSNR / SSIM.
+- Difference heatmap overlay wired into the compare workspace.
+- Plugin loader: drop-in analyzer plugins discovered and registered at startup.
 
-### Exit Criteria
-- Metadata displays without blocking image render
-- Slideshow transitions smoothly
-- Panel updates on navigation
-- All metadata parsing is async
-
----
-
-## Phase 6: Performance Pass (Weeks 27-30)
-
-**Goal:** Optimize, benchmark, and stabilize.
-
-### Deliverables
-- Comprehensive benchmark suite
-- Profiling infrastructure (Tracy integration)
-- Cache tuning (size policies, hit ratio optimization)
-- Preloading algorithm refinement
-- Memory usage optimization
-- Startup time optimization pass
-- Performance regression CI gates
-
-### Exit Criteria
-- All performance targets met (see `performance.md`)
-- Benchmark suite runs in CI
-- No regressions vs. Phase 5
-- Memory usage within defined budgets
+**Acceptance criteria (M4):**
+- [ ] 8-image grid compares with synchronized transform and no UI stall on 50 MP inputs.
+- [ ] Every built-in analyzer is reachable through `AnalyzerRegistry` and returns results
+      consistent with `AnalysisEngine` reference values.
+- [ ] ROI analysis on an arbitrary `Selection` matches full-image analysis on the same region.
+- [ ] A sample plugin loads and appears in the analyzer list without code changes.
 
 ---
 
-## Phase 7: Linux Port (Weeks 31-36)
+## M5 — Scale & Performance
 
-**Goal:** Full Linux support.
+**Goal:** The pipeline scales to real photo libraries and meets the performance budgets.
 
-### Deliverables
-- OpenGL renderer implementation
-- Linux filesystem watcher (inotify)
-- Linux thumbnail cache path (XDG_CACHE_HOME)
-- GTK/Qt theme integration
-- AppImage or Flatpak packaging
-- Linux CI pipeline
+Deliverables:
+- Open a directory of 1000 images without blocking the UI (scan returns the file list
+  immediately; thumbnails stream in).
+- First thumbnail appears within ~200 ms of opening a directory.
+- Predictive preload tuned to navigation patterns.
+- SQLite-backed disk cache (5-level hierarchy: Metadata → Thumbnail → Preview → Viewer →
+  Disk) with hit-ratio reporting.
+- Benchmark suite in CI with regression gates (`benchmark --baseline --threshold`).
+- Memory within `performance-budget.md` limits under sustained navigation.
 
-### Exit Criteria
-- Feature parity with Windows version
-- Performance targets met on Linux
-- Native look on GNOME and KDE
-- Package installs and runs on Ubuntu 24.04, Fedora 40
-
----
-
-## Phase 8: Post-MVP Features (Weeks 37+)
-
-**Goal:** Community-requested enhancements.
-
-### Planned Features
-- Dual image comparison (side-by-side)
-- Multiple image comparison (grid)
-- Histogram overlay
-- Batch rename
-- Batch format conversion
-- Duplicate image detection
-- Similar image search (perceptual hash)
-- Bookmarks / Favorites
-- Tag management
-
-### Constraints
-- Each feature must pass performance regression tests
-- Features implemented as plugins where possible
-- Core browsing performance must not degrade
+**Acceptance criteria (M5):**
+- [ ] 1000-image directory opens without blocking UI; first thumbnail < 200 ms.
+- [ ] Switching adjacent images is instant after cache warm-up.
+- [ ] 5-level cache hit ratio reported; disk cache survives restart.
+- [ ] Benchmark CI gate fails on regression beyond threshold.
 
 ---
 
-## Release Schedule
+## Definition of Done (per milestone)
 
-| Version | Target | Key Milestone |
-|---------|--------|---------------|
-| 0.1.0 | End of Phase 5 | MVP — all required features |
-| 0.1.1 | End of Phase 6 | Performance-optimized MVP |
-| 0.2.0 | End of Phase 7 | Linux release |
-| 0.3.0+ | Phase 8 | Post-MVP features (iterative) |
-
----
-
-## Definition of Done
-
-For any release:
-- [ ] All unit tests pass
-- [ ] All integration tests pass
-- [ ] All benchmarks meet targets
-- [ ] No memory leaks (ASan clean)
-- [ ] No data races (TSan clean)
-- [ ] Code reviewed and approved
-- [ ] Documentation updated
-- [ ] changelog.md updated
+- [ ] All unit tests pass (`build.ps1 Test` → 100%).
+- [ ] All acceptance criteria for the phase are checked.
+- [ ] No image-decoding logic in the `QWidget` layer (verified by code review).
+- [ ] `CHANGELOG.md` and `STATUS.md` updated.
+- [ ] Code reviewed; no new clang-tidy warnings introduced.
