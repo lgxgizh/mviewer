@@ -2,6 +2,7 @@
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/Analyzer.h"
+#include "core/image/ImageFrame.h"
 #include "domain/Selection.h"
 
 #include <QComboBox>
@@ -38,16 +39,20 @@ public:
     // ImageViewer::regionStats)
     void setRegionStats(const QString& text);
 
-public slots:
-    void onAnalyzerSelected(int index);
-    void updateImage(const QImage& img);
-    void updateHistogram(const mviewer::domain::Histogram& hist);
-
     // Pixel Inspector (M3 Phase-2): live readout of the hovered pixel.
     // `left*` are the RGB read directly from the ImageFrame (passed by the
     // viewer). When a second image is loaded, `right*` come from the compare
     // image so the panel can show Left RGB / Right RGB / Delta / Difference.
     void showPixel(int x, int y, int leftR, int leftG, int leftB, bool valid);
+
+    // Set the left image as an ImageFrame so ROI analysis routes through the
+    // AnalyzerRegistry (Selection-based), not the legacy QImage path.
+    void setFrame(std::shared_ptr<ImageFrame> frame);
+
+public slots:
+    void onAnalyzerSelected(int index);
+    void updateImage(const QImage& img);
+    void updateHistogram(const mviewer::domain::Histogram& hist);
 
 protected:
     void paintEvent(QPaintEvent*) override;
@@ -91,6 +96,7 @@ private:
     ImageStats m_statsB;
     mviewer::domain::Selection m_roi;
     bool m_hasROI = false;
+    std::shared_ptr<ImageFrame> m_frameA; // left image frame for ROI analysis
 
     // Pixel Inspector last sample
     int m_px = -1, m_py = -1;
