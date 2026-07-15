@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/image/ImageBuffer.h"
+
 class DifferenceEngine
 {
 public:
