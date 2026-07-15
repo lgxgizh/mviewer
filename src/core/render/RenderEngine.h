@@ -2,10 +2,14 @@
 
 #include "core/image/ImageBuffer.h"
 
+#include <QPainter>
+#include <QRect>
+
 #include <array>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 // ─── Foundation types ───────────────────────────────────────────────────────
 
@@ -164,6 +168,17 @@ public:
         RenderInterp mode = RenderInterp::Bilinear);
     ImageData heatMap(const ImageData& gray, const RenderRect& rect);
 
+    // ─── RenderCommand pipeline ─────────────────────────────────────────────
+    // Execute a single command. Self-contained commands (DrawImage, DrawHeatmap,
+    // DrawHistogram) produce a fresh ImageData; other commands return null.
+    ImageData executeCommand(const RenderCommand& cmd) const;
+    // Execute a command against the current buffer, returning the new buffer.
+    // Used to composite overlays (DrawOverlay/Selection/Marker/Histogram).
+    ImageData executeCommand(const RenderCommand& cmd, const ImageData& buffer) const;
+    // Execute a batch sequentially; each command receives the prior output as
+    // its buffer. The initial buffer is empty.
+    ImageData executeCommands(const std::vector<RenderCommand>& cmds) const;
+
     static ImageData scaleStatic(const ImageData& src,
         const RenderSize& target,
         RenderInterp mode = RenderInterp::Bilinear);
@@ -174,7 +189,21 @@ public:
         const RenderSize& target,
         RenderInterp mode = RenderInterp::Bilinear);
 
+    // RenderCommand pipeline: execute a single command onto a QPainter.
+    // `viewport` is the cell's local rectangle the painter draws into.
+    // SmoothPixmapTransform is enabled while drawing when cmd.interp != 0.
+    static void executeCommand(QPainter& painter,
+        const RenderCommand& cmd,
+        const QRect& viewport);
+
 private:
     RenderEngine();
     std::unique_ptr<Renderer> m_backend;
+
+    // Command dispatch targets.
+    static void executeDrawImage(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
+    static void executeDrawOverlay(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
+    static void executeDrawSelection(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
+    static void executeDrawHistogram(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
+    static void executeDrawHeatmap(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
 };
