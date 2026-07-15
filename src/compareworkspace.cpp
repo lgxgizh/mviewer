@@ -234,7 +234,7 @@ void CompareWorkspace::paintEvent(QPaintEvent*)
             img->pixels(), RenderSize{target.width(), target.height()}, RenderInterp::Bilinear);
         imgCmd.rect = dest;
         imgCmd.interp = static_cast<int>(RenderInterp::Bilinear);
-        RenderEngine::executeCommand(p, imgCmd, viewport);
+        RenderEngine::instance().executeCommand(p, imgCmd, viewport);
 
         // 2) difference overlay (compare mode)
         if (multi)
@@ -245,7 +245,7 @@ void CompareWorkspace::paintEvent(QPaintEvent*)
                 RenderCommand ovCmd = RenderCommand::drawOverlay(diff, 0.5);
                 ovCmd.rect = dest;
                 ovCmd.interp = static_cast<int>(RenderInterp::Bilinear);
-                RenderEngine::executeCommand(p, ovCmd, viewport);
+                RenderEngine::instance().executeCommand(p, ovCmd, viewport);
             }
         }
 
@@ -261,7 +261,7 @@ void CompareWorkspace::paintEvent(QPaintEvent*)
                 static_cast<int>(sel.width * sx),
                 static_cast<int>(sel.height * sy)};
             RenderCommand selCmd = RenderCommand::drawSelection(srect, 0xFFFF0000);
-            RenderEngine::executeCommand(p, selCmd, viewport);
+            RenderEngine::instance().executeCommand(p, selCmd, viewport);
         }
 
         // 4) luminance histogram (bottom-right overlay)
@@ -277,7 +277,7 @@ void CompareWorkspace::paintEvent(QPaintEvent*)
                 const int y = cell.height() - h - margin;
                 RenderCommand histCmd =
                     RenderCommand::drawHistogram(it->histLum, 256, RenderRect{x, y, w, h});
-                RenderEngine::executeCommand(p, histCmd, viewport);
+                RenderEngine::instance().executeCommand(p, histCmd, viewport);
             }
         }
 
