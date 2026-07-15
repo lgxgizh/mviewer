@@ -85,6 +85,14 @@ void AnalysisPanel::buildUi()
     m_pluginResult->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
     m_tabs->addTab(m_pluginResult, tr("Plugin"));
 
+    // Pixel Inspector tab (M3 Phase-2)
+    m_inspectorLabel = new QLabel;
+    m_inspectorLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    m_inspectorLabel->setWordWrap(true);
+    m_inspectorLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;font-family:monospace;}");
+    m_inspectorLabel->setText(tr("Move the mouse over an image to inspect pixels."));
+    m_tabs->addTab(m_inspectorLabel, tr("Inspector"));
+
     m_analyzerCombo->setCurrentIndex(0);
     onAnalyzerSelected(0);
 }
@@ -142,6 +150,56 @@ void AnalysisPanel::setROI(const mviewer::domain::Selection& roi)
 void AnalysisPanel::setRegionStats(const QString& text)
 {
     m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("Region Stats")).arg(text));
+}
+
+void AnalysisPanel::showPixel(int x, int y, int leftR, int leftG, int leftB, bool valid)
+{
+    m_px = x;
+    m_py = y;
+    m_pR = leftR;
+    m_pG = leftG;
+    m_pB = leftB;
+    m_pValid = valid;
+    updateInspectorPage();
+}
+
+void AnalysisPanel::updateInspectorPage()
+{
+    if (!m_pValid)
+    {
+        m_inspectorLabel->setText(tr("Move the mouse over an image to inspect pixels."));
+        return;
+    }
+
+    QString txt = QString("<h3>Pixel Inspector</h3>");
+    txt += QString("pos: (%1, %2)<br>").arg(m_px).arg(m_py);
+    txt += QString("<span style='color:#e66;'>●</span> Left  RGB(%1, %2, %3)<br>")
+               .arg(m_pR)
+               .arg(m_pG)
+               .arg(m_pB);
+
+    if (m_hasB && !m_imageB.isNull() && m_px >= 0 && m_py >= 0 && m_px < m_imageB.width() &&
+        m_py < m_imageB.height())
+    {
+        const QRgb c = m_imageB.pixel(m_px, m_py);
+        const int rR = qRed(c), rG = qGreen(c), rB = qBlue(c);
+        const int dR = m_pR - rR, dG = m_pG - rG, dB = m_pB - rB;
+        const double dist = qSqrt(static_cast<double>(dR * dR + dG * dG + dB * dB));
+        txt += QString("<span style='color:#6e6;'>●</span> Right RGB(%1, %2, %3)<br>")
+                   .arg(rR)
+                   .arg(rG)
+                   .arg(rB);
+        txt += QString("Δ      (%1, %2, %3)<br>")
+                   .arg(dR)
+                   .arg(dG)
+                   .arg(dB);
+        txt += QString("dist: %1").arg(dist, 0, 'f', 2);
+    }
+    else
+    {
+        txt += tr("(load a second image to compare Left/Right/Δ)");
+    }
+    m_inspectorLabel->setText(txt);
 }
 
 void AnalysisPanel::onAnalyzerSelected(int index)

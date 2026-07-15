@@ -43,6 +43,12 @@ public slots:
     void updateImage(const QImage& img);
     void updateHistogram(const mviewer::domain::Histogram& hist);
 
+    // Pixel Inspector (M3 Phase-2): live readout of the hovered pixel.
+    // `left*` are the RGB read directly from the ImageFrame (passed by the
+    // viewer). When a second image is loaded, `right*` come from the compare
+    // image so the panel can show Left RGB / Right RGB / Delta / Difference.
+    void showPixel(int x, int y, int leftR, int leftG, int leftB, bool valid);
+
 protected:
     void paintEvent(QPaintEvent*) override;
 
@@ -51,6 +57,7 @@ private:
     void updateHistogramPage();
     void updateComparePage();
     void updatePluginPage();
+    void updateInspectorPage();
     void renderHistogramPixmap();
     void renderHistogramPixmap(const mviewer::domain::Histogram& hist);
     QImage computeDifferencePreview(const QImage& a, const QImage& b);
@@ -60,7 +67,8 @@ private:
     {
         HistogramPage,
         ComparePage,
-        PluginPage
+        PluginPage,
+        InspectorPage
     };
 
     // UI
@@ -71,6 +79,7 @@ private:
     QLabel* m_compareLabel = nullptr;
     QLabel* m_diffPreview = nullptr;
     QLabel* m_pluginResult = nullptr;
+    QLabel* m_inspectorLabel = nullptr; // Pixel Inspector readout
     std::unique_ptr<RawImageView> m_imageView;
 
     // Data
@@ -82,6 +91,11 @@ private:
     ImageStats m_statsB;
     mviewer::domain::Selection m_roi;
     bool m_hasROI = false;
+
+    // Pixel Inspector last sample
+    int m_px = -1, m_py = -1;
+    int m_pR = 0, m_pG = 0, m_pB = 0;
+    bool m_pValid = false;
 
     // Plugins
     std::vector<std::string> m_pluginIds;
