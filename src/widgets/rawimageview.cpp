@@ -110,6 +110,20 @@ void RawImageView::paintEvent(QPaintEvent*)
     const int dh = qRound(m_image.height() * m_scale);
 
     p.drawImage(QRectF(cx - dw / 2.0, cy - dh / 2.0, dw, dh), m_image);
+
+    // ROI selection box (image coords -> widget coords, same transform as the image)
+    if (!m_selection.isEmpty())
+    {
+        const double sx = static_cast<double>(dw) / m_image.width();
+        const double sy = static_cast<double>(dh) / m_image.height();
+        const QRect box(qRound(cx - dw / 2.0 + m_selection.x * sx),
+                        qRound(cy - dh / 2.0 + m_selection.y * sy),
+                        qRound(m_selection.width * sx),
+                        qRound(m_selection.height * sy));
+        p.setPen(QPen(QColor(0xFF, 0x33, 0x33), 2));
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(box);
+    }
 }
 
 void RawImageView::wheelEvent(QWheelEvent* ev)
@@ -120,6 +134,15 @@ void RawImageView::wheelEvent(QWheelEvent* ev)
 
 void RawImageView::mousePressEvent(QMouseEvent* ev)
 {
+    if (ev->button() == Qt::RightButton)
+    {
+        // Begin box selection (image coords) instead of panning.
+        m_selecting = true;
+        m_selectStart = widgetToImage(ev->pos());
+        m_selection = mviewer::domain::Selection{};
+        update();
+        return;
+    }
     if (ev->button() == Qt::LeftButton)
     {
         m_dragging = true;
@@ -130,6 +153,17 @@ void RawImageView::mousePressEvent(QMouseEvent* ev)
 
 void RawImageView::mouseMoveEvent(QMouseEvent* ev)
 {
+    if (m_selecting)
+    {
+        const QPointF cur = widgetToImage(ev->pos());
+        const int x = qMin(m_selectStart.x(), cur.x());
+        const int y = qMin(m_selectStart.y(), cur.y());
+        const int w = qAbs(cur.x() - m_selectStart.x());
+        const int h = qAbs(cur.y() - m_selectStart.y());
+        m_selection = mviewer::domain::Selection{x, y, w, h};
+        update();
+        return;
+    }
     if (!m_dragging)
     {
         // Hover: report the image-space pixel under the cursor for the inspector.
@@ -160,11 +194,26 @@ void RawImageView::mouseMoveEvent(QMouseEvent* ev)
 
 void RawImageView::mouseReleaseEvent(QMouseEvent* ev)
 {
+    if (ev->button() == Qt::RightButton && m_selecting)
+    {
+        m_selecting = false;
+        emit selectionChanged(m_selection);
+        return;
+    }
     if (ev->button() == Qt::LeftButton)
     {
         m_dragging = false;
         setCursor(Qt::OpenHandCursor);
     }
+}
+
+QPointF RawImageView::widgetToImage(const QPoint& pos) const
+{
+    if (m_scale <= 0.0 || m_image.isNull())
+        return {};
+    const double cx = width() / 2.0 + m_offset.x();
+    const double cy = height() / 2.0 + m_offset.y();
+    return QPointF((pos.x() - cx) / m_scale, (pos.y() - cy) / m_scale);
 }
 
 void RawImageView::resizeEvent(QResizeEvent* ev)
