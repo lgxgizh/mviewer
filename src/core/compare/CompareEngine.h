@@ -19,7 +19,7 @@ struct CellSize
 };
 struct Vec2
 {
-    double x = 0.0, double y = 0.0;
+    double x = 0.0, y = 0.0;
 };
 
 // Comparison grid layout rule
