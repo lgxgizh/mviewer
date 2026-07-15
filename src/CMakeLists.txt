@@ -12,6 +12,7 @@ add_library(mviewer_core STATIC
     core/filesystem/FileSystem.cpp
     core/scheduler/TaskScheduler.cpp
     core/compare/CompareEngine.cpp
+    core/compare/SyncController.cpp
     core/compare/BlinkController.cpp
     core/compare/DifferenceEngine.cpp
     core/analysis/AnalysisEngine.cpp
@@ -67,6 +68,7 @@ add_library(mviewer_application STATIC
     application/CompareImagesUseCase.cpp
     application/RenameImageUseCase.cpp
     application/DeleteImageUseCase.cpp
+    application/Startup.cpp
 )
 
 target_link_libraries(mviewer_application PUBLIC mviewer_core Qt6::Gui)

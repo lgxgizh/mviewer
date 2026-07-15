@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/compare/BlinkController.h"
+#include "core/compare/CompareTypes.h"
 #include "core/image/ImageFrame.h"
 #include "domain/CompareSession.h"
 #include "domain/Selection.h"
@@ -8,52 +9,6 @@
 #include <algorithm>
 #include <string>
 #include <vector>
-
-struct CellPoint
-{
-    int x = 0, y = 0;
-};
-struct CellSize
-{
-    int w = 0, h = 0;
-};
-struct Vec2
-{
-    double x = 0.0, y = 0.0;
-};
-
-// Comparison grid layout rule
-struct CompareLayout
-{
-    int cols = 0, rows = 0, imageCount = 0;
-    static CompareLayout forCount(int n);
-    CellPoint cellPos(int index, const CellSize& viewport) const;
-    CellSize cellSize(const CellSize& viewport) const;
-};
-
-struct SyncTransform
-{
-    double scale = 1.0;
-    Vec2 offset;
-    bool enabled = true;
-};
-
-// Per-cell view state. Named CellState inside controllers; CellTransform is
-// kept as a backward-compatible alias (same shape: scale + Vec2 offset).
-struct CellState
-{
-    double scale = 1.0;
-    Vec2 offset;
-};
-using CellTransform = CellState;
-
-enum class CompareState
-{
-    Idle,
-    Comparing,
-    SyncZoom,
-    SyncDrag
-};
 
 // SyncController owns the shared zoom/pan transform plus the independent
 // per-cell transforms (used when sync is disabled).
@@ -190,7 +145,12 @@ public:
 
     // Blink
     int blinkIndex() const { return m_blink.blinkIndex(); }
-    void setBlinkIndex(int idx);
+    void setBlinkIndex(int idx)
+    {
+        if (idx < -1 || idx >= imageCount())
+            return;
+        m_blink.setBlinkIndex(idx);
+    }
     void clearBlink() { m_blink.clearBlink(); }
 
     // Difference
