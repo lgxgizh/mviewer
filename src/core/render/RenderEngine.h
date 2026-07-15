@@ -57,12 +57,12 @@ public:
 
     virtual ImageData scale(const ImageData& src, const RenderSize& target, RenderInterp mode) = 0;
     virtual ImageData
-    overlayDifference(const ImageData& base, const ImageData& diff, double alpha) = 0;
+    overlayDifference(const ImageData& base, const ImageData& diff, double alpha) const = 0;
     virtual ImageData scaleRegion(const ImageData& src,
         const RenderRect& region,
         const RenderSize& target,
         RenderInterp mode) = 0;
-    virtual ImageData heatMap(const ImageData& gray, const RenderRect& rect) = 0;
+    virtual ImageData heatMap(const ImageData& gray, const RenderRect& rect) const = 0;
 };
 
 class SoftwareRenderer : public Renderer
@@ -70,12 +70,12 @@ class SoftwareRenderer : public Renderer
 public:
     std::string backendName() const override { return "software"; }
     ImageData scale(const ImageData& src, const RenderSize& target, RenderInterp mode) override;
-    ImageData overlayDifference(const ImageData& base, const ImageData& diff, double alpha) override;
+    ImageData overlayDifference(const ImageData& base, const ImageData& diff, double alpha) const override;
     ImageData scaleRegion(const ImageData& src,
         const RenderRect& region,
         const RenderSize& target,
         RenderInterp mode) override;
-    ImageData heatMap(const ImageData& gray, const RenderRect& rect) override;
+    ImageData heatMap(const ImageData& gray, const RenderRect& rect) const override;
 };
 
 // ─── RenderCommand ──────────────────────────────────────────────────────────
@@ -161,12 +161,12 @@ public:
     ImageData scale(const ImageData& src,
         const RenderSize& target,
         RenderInterp mode = RenderInterp::Bilinear);
-    ImageData overlayDifference(const ImageData& base, const ImageData& diff, double alpha = 0.5);
+    ImageData overlayDifference(const ImageData& base, const ImageData& diff, double alpha = 0.5) const;
     ImageData scaleRegion(const ImageData& src,
         const RenderRect& region,
         const RenderSize& target,
         RenderInterp mode = RenderInterp::Bilinear);
-    ImageData heatMap(const ImageData& gray, const RenderRect& rect);
+    ImageData heatMap(const ImageData& gray, const RenderRect& rect) const;
 
     // ─── RenderCommand pipeline ─────────────────────────────────────────────
     // Execute a single command. Self-contained commands (DrawImage, DrawHeatmap,

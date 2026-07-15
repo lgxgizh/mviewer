@@ -1,8 +1,8 @@
 #include "analysispanel.h"
+#include "widgets/rawimageview.h"
 
 #include "core/image/QtConvert.h"
 
-#include <QFont>
 #include <QHBoxLayout>
 #include <QPainter>
 #include <QVBoxLayout>
@@ -42,6 +42,10 @@ void AnalysisPanel::buildUi()
         &AnalysisPanel::onAnalyzerSelected);
 
     m_tabs = new QTabWidget;
+
+    m_imageView = std::make_unique<RawImageView>(this);
+    mainLay->addWidget(m_imageView.get(), 2);
+
     mainLay->addWidget(m_tabs, 1);
 
     // Histogram tab: viz + stats text
@@ -315,4 +319,85 @@ void AnalysisPanel::paintEvent(QPaintEvent* event)
 {
     QWidget::paintEvent(event);
     // Histogram viz rendered via QPixmap in renderHistogramPixmap()
+}
+
+void AnalysisPanel::updateImage(const QImage& img)
+{
+    if (m_imageView)
+    {
+        if (img.isNull())
+            m_imageView->clear();
+        else
+            m_imageView->setImage(img.convertToFormat(QImage::Format_RGB32));
+    }
+}
+
+void AnalysisPanel::updateHistogram(const mviewer::domain::Histogram& hist)
+{
+    renderHistogramPixmap(hist);
+    m_statsLabel->setText(QString("<h3>%1</h3>"
+                                  "<table>"
+                                  "<tr><td>%2</td><td>%3</td></tr>"
+                                  "<tr><td>%4</td><td>%5</td></tr>"
+                                  "<tr><td>%6</td><td>%7</td></tr>"
+                                  "<tr><td>%8</td><td>%9</td></tr>"
+                                  "<tr><td>%10</td><td>%11</td></tr>"
+                                  "</table>")
+                              .arg(tr("Full Image Stats"))
+                              .arg(tr("Lum Mean"))
+                              .arg(hist.lumMean, 0, 'f', 2)
+                              .arg(tr("R Mean"))
+                              .arg(hist.rMean, 0, 'f', 2)
+                              .arg(tr("G Mean"))
+                              .arg(hist.gMean, 0, 'f', 2)
+                              .arg(tr("B Mean"))
+                              .arg(hist.bMean, 0, 'f', 2)
+                              .arg(tr("Pixels"))
+                              .arg(hist.totalPixels()));
+}
+
+void AnalysisPanel::renderHistogramPixmap(const mviewer::domain::Histogram& hist)
+{
+    if (!m_histogramLabel)
+        return;
+    const int W = qMax(200, m_histogramLabel->width() - 8);
+    const int H = 160;
+    QPixmap pix(W, H);
+    pix.fill(QColor(20, 20, 20));
+    QPainter p(&pix);
+    const int pad = 4;
+    const QRect bg(pad, pad, W - pad * 2, H - pad * 2);
+
+    auto drawChannel = [&bg, &p](const int* histBins, const QColor& color) {
+        constexpr int srcBins = 256;
+        constexpr int drawBins = 64;
+        const double binW = static_cast<double>(bg.width()) / drawBins;
+        long long agg[drawBins] = {0};
+        long long maxV = 1;
+        for (int i = 0; i < drawBins; ++i)
+        {
+            long long sum = 0;
+            const int lo = i * srcBins / drawBins;
+            const int hi = (i + 1) * srcBins / drawBins;
+            for (int j = lo; j < hi && j < srcBins; ++j)
+                sum += histBins[j];
+            agg[i] = sum;
+            if (sum > maxV)
+                maxV = sum;
+        }
+        p.setPen(color);
+        for (int i = 0; i < drawBins; ++i)
+        {
+            const double h = static_cast<double>(agg[i]) / maxV * bg.height();
+            const int x = bg.x() + static_cast<int>(i * binW);
+            const int hh = qMax(1, static_cast<int>(h));
+            p.drawLine(x, bg.bottom(), x, bg.bottom() - hh);
+        }
+    };
+
+    drawChannel(hist.luminance.data(), QColor(220, 220, 220));
+    drawChannel(hist.red.data(), QColor(230, 70, 70));
+    drawChannel(hist.green.data(), QColor(70, 220, 70));
+    drawChannel(hist.blue.data(), QColor(70, 130, 230));
+    m_histogramLabel->setPixmap(pix);
 }

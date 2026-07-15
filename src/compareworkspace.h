@@ -11,6 +11,10 @@
 #include <QPixmap>
 #include <QPointF>
 #include <QWidget>
+#include <memory>
+
+class QScrollArea;
+class RawImageView;
 
 // CompareWorkspace：多图同步比较工作区
 class CompareWorkspace : public QWidget
@@ -38,6 +42,7 @@ protected:
 private:
     void rebuildCells();
     void fitAll();
+    void drawCellHistogram(QPainter& p, const QSize& cell, int index);
 
     CompareEngine m_engine;
     QCheckBox* m_syncZoomChk = nullptr;
@@ -46,7 +51,8 @@ private:
     bool m_syncDrag = true;
     QWidget* m_grid = nullptr;
     QGridLayout* m_layout = nullptr;
-    QList<QLabel*> m_cells;
+    QList<QLabel*> m_cellLabels;
+    QList<RawImageView*> m_cellViews;
     QHash<int, ImageStats> m_stats;
     bool m_dragging = false;
     QPoint m_lastMouse;

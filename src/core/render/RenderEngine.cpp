@@ -246,7 +246,7 @@ QImage heatMapQ(const QImage& gray, const QRect& r)
 
 // ─── SoftwareRenderer ────────────────────────────────────────────────────────
 
-ImageData SoftwareRenderer::heatMap(const ImageData& gray, const RenderRect& rect)
+ImageData SoftwareRenderer::heatMap(const ImageData& gray, const RenderRect& rect) const
 {
     if (gray.isNull())
         return ImageData();
@@ -267,7 +267,7 @@ ImageData SoftwareRenderer::scale(const ImageData& src, const RenderSize& target
 }
 
 ImageData
-SoftwareRenderer::overlayDifference(const ImageData& base, const ImageData& diff, double alpha)
+SoftwareRenderer::overlayDifference(const ImageData& base, const ImageData& diff, double alpha) const
 {
     if (base.isNull() || diff.isNull())
         return ImageData();
@@ -335,12 +335,12 @@ ImageData RenderEngine::scale(const ImageData& src, const RenderSize& target, Re
 }
 
 ImageData
-RenderEngine::overlayDifference(const ImageData& base, const ImageData& diff, double alpha)
+RenderEngine::overlayDifference(const ImageData& base, const ImageData& diff, double alpha) const
 {
     return m_backend->overlayDifference(base, diff, alpha);
 }
 
-ImageData RenderEngine::heatMap(const ImageData& gray, const RenderRect& rect)
+ImageData RenderEngine::heatMap(const ImageData& gray, const RenderRect& rect) const
 {
     return m_backend->heatMap(gray, rect);
 }
@@ -458,14 +458,18 @@ void RenderEngine::executeDrawImage(QPainter& painter,
     const RenderCommand& cmd,
     const QRect& viewport)
 {
-    QImage q = mvcore::toQImage(cmd.srcImage);
-    if (q.isNull() || !cmd.rect.isValid())
+    if (cmd.srcImage.isNull() || !cmd.rect.isValid())
+        return;
+    RenderSize tgt = cmd.targetSize;
+    if (!tgt.isValid())
+        tgt = {cmd.rect.width, cmd.rect.height};
+    const RenderInterp mode = static_cast<RenderInterp>(std::clamp(cmd.interp, 0, 3));
+    ImageData scaled = scale(cmd.srcImage, tgt, mode);
+    QImage q = mvcore::toQImage(scaled);
+    if (q.isNull())
         return;
     painter.save();
     painter.setClipRect(viewport);
-    const bool smooth = cmd.interp != 0;
-    if (smooth)
-        painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
     painter.drawImage(QRect(cmd.rect.x, cmd.rect.y, cmd.rect.width, cmd.rect.height), q);
     painter.restore();
 }
@@ -474,15 +478,19 @@ void RenderEngine::executeDrawOverlay(QPainter& painter,
     const RenderCommand& cmd,
     const QRect& viewport)
 {
-    QImage q = mvcore::toQImage(cmd.overlayImage);
-    if (q.isNull() || !cmd.rect.isValid())
+    if (cmd.overlayImage.isNull() || !cmd.rect.isValid())
+        return;
+    RenderSize tgt = cmd.targetSize;
+    if (!tgt.isValid())
+        tgt = {cmd.rect.width, cmd.rect.height};
+    const RenderInterp mode = static_cast<RenderInterp>(std::clamp(cmd.interp, 0, 3));
+    ImageData scaled = scale(cmd.overlayImage, tgt, mode);
+    QImage q = mvcore::toQImage(scaled);
+    if (q.isNull())
         return;
     painter.save();
     painter.setClipRect(viewport);
     painter.setOpacity(std::clamp(cmd.alpha, 0.0, 1.0));
-    const bool smooth = cmd.interp != 0;
-    if (smooth)
-        painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
     painter.drawImage(QRect(cmd.rect.x, cmd.rect.y, cmd.rect.width, cmd.rect.height), q);
     painter.restore();
 }
@@ -546,8 +554,7 @@ void RenderEngine::executeDrawHeatmap(QPainter& painter,
         return;
     painter.save();
     painter.setClipRect(viewport);
-    const bool smooth = cmd.interp != 0;
-    if (smooth)
+    if (cmd.interp != 0)
         painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
     painter.drawImage(QRect(cmd.rect.x, cmd.rect.y, cmd.rect.width, cmd.rect.height), q);
     painter.restore();

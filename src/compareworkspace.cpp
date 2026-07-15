@@ -1,4 +1,5 @@
 #include "compareworkspace.h"
+#include "widgets/rawimageview.h"
 
 #include "core/image/ImageBuffer.h"
 #include "core/image/QtConvert.h"
@@ -10,6 +11,7 @@
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QScrollArea>
 #include <QVBoxLayout>
 #include <QWheelEvent>
 
@@ -63,16 +65,24 @@ CompareWorkspace::CompareWorkspace(QWidget* parent)
     syncLayout->addWidget(m_syncDragChk);
     syncLayout->addStretch(1);
 
-    m_grid = new QWidget(this);
+    m_grid = new QWidget;
     m_layout = new QGridLayout(m_grid);
     m_layout->setSpacing(2);
     m_layout->setContentsMargins(0, 0, 0, 0);
+
+    // QScrollArea wraps the grid so 2×4 layouts (5-8 images) can scroll
+    auto* scroll = new QScrollArea(this);
+    scroll->setWidgetResizable(false);
+    scroll->setWidget(m_grid);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll->setFrameShape(QFrame::NoFrame);
 
     QVBoxLayout* root = new QVBoxLayout(this);
     root->setContentsMargins(4, 4, 4, 4);
     root->setSpacing(4);
     root->addWidget(syncBar);
-    root->addWidget(m_grid, 1);
+    root->addWidget(scroll, 1);
 }
 
 void CompareWorkspace::setImages(const QStringList& paths)
@@ -110,28 +120,50 @@ void CompareWorkspace::rebuildCells()
             delete item->widget();
         delete item;
     }
-    m_cells.clear();
+    m_cellLabels.clear();
+    m_cellViews.clear();
     m_stats.clear();
 
     const int n = m_engine.imageCount();
     const auto& lay = m_engine.layout();
     for (int i = 0; i < n; ++i)
     {
-        auto* lbl = new QLabel(m_grid);
-        lbl->setAlignment(Qt::AlignCenter);
-        lbl->setStyleSheet("background-color: #222; border: 1px solid #555;");
-        lbl->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        lbl->setMouseTracking(true);
-        lbl->installEventFilter(this);
-        m_layout->addWidget(lbl, i / lay.cols, i % lay.cols);
-        m_cells.push_back(lbl);
+        // Each cell: a RawImageView for the image + a QLabel caption below
+        auto* cellWidget = new QWidget(m_grid);
+        auto* cellLay = new QVBoxLayout(cellWidget);
+        cellLay->setContentsMargins(0, 0, 0, 0);
+        cellLay->setSpacing(1);
+
+        auto* view = new RawImageView(cellWidget);
+        view->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        view->setMinimumSize(64, 64);
+        view->setMouseTracking(true);
+        view->installEventFilter(this);
+        cellLay->addWidget(view, 1);
+        m_cellViews.push_back(view);
 
         const ImageFrame* img = m_engine.imageAt(i);
         if (img && !img->pixels().isNull())
         {
             QImage q = imageObjectToQImage(img);
+            view->setImage(q);
             m_stats.insert(i, AnalysisEngine::computeStats(mvcore::fromQImage(q)));
         }
+
+        // Caption label
+        auto* caption = new QLabel(cellWidget);
+        caption->setAlignment(Qt::AlignCenter);
+        caption->setStyleSheet("QLabel{background:#222;color:#ccc;padding:2px;}");
+        caption->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        caption->setMinimumHeight(20);
+        if (img)
+            caption->setText(QString::fromStdString(img->metadata().fileName));
+        cellLay->addWidget(caption);
+        m_cellLabels.push_back(caption);
+
+        const int row = i / lay.cols;
+        const int col = i % lay.cols;
+        m_layout->addWidget(cellWidget, row, col);
     }
 }
 
@@ -143,7 +175,7 @@ void CompareWorkspace::fitAll()
     for (int i = 0; i < n; ++i)
     {
         const ImageFrame* img = m_engine.imageAt(i);
-        const QSize qs = m_cells[i]->size();
+        const QSize qs = m_cellViews[i]->size();
         const CellSize cell{qs.width(), qs.height()};
         QPixmap pm = QPixmap::fromImage(imageObjectToQImage(img));
         if (pm.isNull() || cell.w <= 0 || cell.h <= 0)
@@ -166,7 +198,7 @@ void CompareWorkspace::paintEvent(QPaintEvent*)
     const bool multi = n > 1;
     for (int i = 0; i < n; ++i)
     {
-        if (!m_cells[i])
+        if (!m_cellViews[i])
             continue;
         const ImageFrame* img = m_engine.imageAt(i);
         if (!img)
@@ -174,10 +206,10 @@ void CompareWorkspace::paintEvent(QPaintEvent*)
         QPixmap pm = QPixmap::fromImage(imageObjectToQImage(img));
         if (pm.isNull())
         {
-            m_cells[i]->setPixmap(QPixmap());
+            m_cellViews[i]->setImage(QImage());
             continue;
         }
-        const QSize cell = m_cells[i]->size();
+        const QSize cell = m_cellViews[i]->size();
         if (cell.width() <= 0 || cell.height() <= 0)
             continue;
 
@@ -249,13 +281,15 @@ void CompareWorkspace::paintEvent(QPaintEvent*)
             }
         }
 
-        m_cells[i]->setPixmap(canvas);
+        // We don't setPixmap on RawImageView (it paints itself); instead
+        // we just update the view's transform to reflect sync state.
+        m_cellViews[i]->setTransform(sc, off);
     }
 }
 
 bool CompareWorkspace::eventFilter(QObject* obj, QEvent* event)
 {
-    const int idx = m_cells.indexOf(static_cast<QLabel*>(obj));
+    const int idx = m_cellViews.indexOf(static_cast<RawImageView*>(obj));
     if (idx < 0)
         return QWidget::eventFilter(obj, event);
 
