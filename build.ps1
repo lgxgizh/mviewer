@@ -49,13 +49,20 @@ function Import-MSVCEnvironment {
 Import-MSVCEnvironment | Out-Null
 
 # ── 2. Locate Qt (priority order: env vars > default) ────────────────────
+# install-qt-action@v4 exports QT_ROOT_DIR (already the msvc2022_64 root).
+# Other setups may set Qt6_DIR (lib/cmake/Qt6) or QT_ROOT (install prefix).
 $qtPath = $null
-if ($env:Qt6_DIR) {
-    $qtPath = $env:Qt6_DIR
+if ($env:QT_ROOT_DIR -and (Test-Path $env:QT_ROOT_DIR)) {
+    $qtPath = $env:QT_ROOT_DIR
+    Write-Host "[Qt] `$env:QT_ROOT_DIR = $qtPath" -ForegroundColor Cyan
+}
+elseif ($env:Qt6_DIR) {
+    # Qt6_DIR usually points at <prefix>/lib/cmake/Qt6; walk up to the Qt root.
+    $qtPath = (Resolve-Path (Join-Path $env:Qt6_DIR '..\..\..')).Path
     Write-Host "[Qt] `$env:Qt6_DIR = $qtPath" -ForegroundColor Cyan
 }
 elseif ($env:QT_ROOT) {
-    $qtPath = "$env:QT_ROOT\msvc2022_64"
+    $qtPath = Join-Path $env:QT_ROOT 'msvc2022_64'
     Write-Host "[Qt] `$env:QT_ROOT = $qtPath" -ForegroundColor Cyan
 }
 elseif (Test-Path 'D:\QT\6.11.1\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake') {
@@ -65,8 +72,9 @@ elseif (Test-Path 'D:\QT\6.11.1\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake') {
 else {
     Write-Error @"
 Qt 6 not found. Set one of:
-  `$env:Qt6_DIR     e.g. C:\Qt\6.11.1\msvc2022_64\lib\cmake\Qt6
-  `$env:QT_ROOT     e.g. C:\Qt\6.11.1
+  `$env:QT_ROOT_DIR  e.g. C:\Qt\6.11.1\msvc2022_64   (install-qt-action@v4 default)
+  `$env:Qt6_DIR      e.g. C:\Qt\6.11.1\msvc2022_64\lib\cmake\Qt6
+  `$env:QT_ROOT      e.g. C:\Qt\6.11.1
 Or install Qt to: D:\QT\6.11.1\msvc2022_64
 "@
     exit 1
