@@ -78,17 +78,4 @@ bool HistogramAnalyzer::analyzeRegion(const ImageFrame& frame,
     h.bMean = static_cast<double>(sumB) / n;
     m_result = h;
     return true;
-}
-
-namespace
-{
-// Auto-register with the analyzer registry on load.
-struct HistogramAnalyzerRegistrar
-{
-    HistogramAnalyzerRegistrar()
-    {
-        AnalyzerRegistry::instance().registerAnalyzer("histogram",
-            []() -> std::unique_ptr<Analyzer> { return std::make_unique<HistogramAnalyzer>(); });
-    }
-} g_histogramAnalyzerRegistrar;
 } // namespace

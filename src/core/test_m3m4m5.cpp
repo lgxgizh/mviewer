@@ -71,12 +71,14 @@ static QImage makeTestImage(int w, int h, QColor base, bool gradient = false)
 static void testROIStats()
 {
     printf("\n[ROI Stats]\n");
+    fflush(stdout);
     QImage img = makeTestImage(200, 200, QColor(100, 150, 200));
     ImageData data = mvcore::fromQImage(img);
 
     // 全图
     ImageStats full = AnalysisEngine::computeStats(data);
     CHECK(std::abs(full.lumMean - 140.75) < 1.0, "full image lumMean ~140.75");
+
     CHECK(full.pixelCount == 200 * 200, "full image pixelCount = 40000");
 
     // ROI: 中心 100x100
@@ -639,6 +641,7 @@ int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
     printf("=== M3/M4/M5 Unit Tests ===\n");
+    fflush(stdout);
 
     testROIStats();
     testNoiseEstimate();

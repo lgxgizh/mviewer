@@ -30,15 +30,3 @@ private:
     double computeSharpness(const ImageBuffer& v, int x0, int y0, int x1, int y1) const;
     double m_sharp = 0.0;
 };
-
-namespace
-{
-struct SharpnessAnalyzerRegistrar
-{
-    SharpnessAnalyzerRegistrar()
-    {
-        AnalyzerRegistry::instance().registerAnalyzer("sharpness",
-            []() -> std::unique_ptr<Analyzer> { return std::make_unique<SharpnessAnalyzer>(); });
-    }
-} g_sharpAnalyzerRegistrar;
-} // namespace

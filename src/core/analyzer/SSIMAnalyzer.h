@@ -28,15 +28,3 @@ private:
     const ImageFrame* m_ref = nullptr;
     double m_ssim = 0.0;
 };
-
-namespace
-{
-struct SSIMAnalyzerRegistrar
-{
-    SSIMAnalyzerRegistrar()
-    {
-        AnalyzerRegistry::instance().registerAnalyzer(
-            "ssim", []() -> std::unique_ptr<Analyzer> { return std::make_unique<SSIMAnalyzer>(); });
-    }
-} g_ssimAnalyzerRegistrar;
-} // namespace

@@ -27,15 +27,3 @@ private:
     double computeEntropy(const ImageBuffer& v, int x0, int y0, int x1, int y1) const;
     double m_entropy = 0.0;
 };
-
-namespace
-{
-struct EntropyAnalyzerRegistrar
-{
-    EntropyAnalyzerRegistrar()
-    {
-        AnalyzerRegistry::instance().registerAnalyzer("entropy",
-            []() -> std::unique_ptr<Analyzer> { return std::make_unique<EntropyAnalyzer>(); });
-    }
-} g_entropyAnalyzerRegistrar;
-} // namespace
