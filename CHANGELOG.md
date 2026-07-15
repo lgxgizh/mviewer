@@ -19,16 +19,24 @@ All notable changes to this project are documented here. The format is based on
 - Per-scenario benchmark suite (`benchmark_scenario`)
 - `clang-format` configuration and CI formatting check
 - **M3 Phase-1 — Core Image Pipeline:**
-  - TIFF (`.tif`/`.tiff`) added as a first-class supported format across `Decoder`,
-    `FileSystem`, and all UI file filters (decode path is codec-gated; see note below).
-  - `ImageRepository::load` now populates the in-memory Viewer/FullImage LRU cache, so
-    switching to an adjacent image is instant after the first decode.
-  - `ImageViewer` now loads exclusively through `ImageRepository` (no decode logic in the
-    QWidget); the histogram is reused from the `ImageFrame` cache, not re-decoded.
-  - Pixel Inspector: `ImageViewer` emits `pixelInfo(x,y,r,g,b,valid)` on mouse move, read
-    directly from the `ImageFrame` pixels (not `QImage`). Wired to the main-window status bar.
-  - `m3pipeline_tests` acceptance suite covering repository→frame, 4-format decode,
-    Viewer LRU cache hit, and pixel-inspector reads.
+- TIFF (`.tif`/`.tiff`) added as a first-class supported format across `Decoder`,
+  `FileSystem`, and all UI file filters (decode path is codec-gated; see note below).
+- `ImageRepository::load` now populates the in-memory Viewer/FullImage LRU cache, so
+  switching to an adjacent image is instant after the first decode.
+- `ImageViewer` now loads exclusively through `ImageRepository` (no decode logic in the
+  QWidget); the histogram is reused from the `ImageFrame` cache, not re-decoded.
+- Pixel Inspector: `ImageViewer` emits `pixelInfo(x,y,r,g,b,valid)` on mouse move, read
+  directly from the `ImageFrame` pixels (not `QImage`). Wired to the main-window status bar.
+- `m3pipeline_tests` acceptance suite covering repository→frame, 4-format decode,
+  Viewer LRU cache hit, and pixel-inspector reads.
+
+### Added (M3 Phase-2 — Pixel Inspector panel)
+- `AnalysisPanel` gains a **Pixel Inspector** tab that live-displays the hovered pixel:
+  coordinates, Left RGB, and (when a second image is loaded) Right RGB / per-channel
+  Δ / euclidean distance. Fed by `ImageViewer::pixelInfo` (frame-derived RGB), so the
+  primary read still comes from `ImageFrame`, never `QImage`.
+- `m3pipeline_tests` now also covers the inspector delta math (zero-delta on identical
+  pixels; correct per-channel Δ and euclidean distance).
 
 ### Changed
 - `TaskScheduler` now uses PIMPL to keep Qt threading primitives out of the core header

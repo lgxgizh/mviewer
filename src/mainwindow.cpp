@@ -188,6 +188,7 @@ void MainWindow::setupUi()
             if (valid)
                 statusBar()->showMessage(
                     QString("像素 [%1,%2]  RGB(%3,%4,%5)").arg(x).arg(y).arg(r).arg(g).arg(b));
+            m_analysisPanel->showPixel(x, y, r, g, b, valid);
         });
 
     connect(sortCombo,

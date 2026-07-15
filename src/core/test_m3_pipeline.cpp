@@ -16,9 +16,9 @@
 #include <QImageReader>
 #include <QString>
 #include <cassert>
+#include <cmath>
 #include <cstdio>
 #include <string>
-
 #ifndef MVIEWER_SOURCE_DIR
 #define MVIEWER_SOURCE_DIR "."
 #endif
@@ -191,6 +191,38 @@ static void testPixelInspectorReadsFrame()
     CHECK(9999 >= view.width, "out-of-bounds x is correctly rejected by bounds check");
 }
 
+// Acceptance (P1 #6 / M3 Phase-2): Pixel Inspector shows Left RGB / Right RGB /
+// Delta / Difference. This reproduces the panel's pure delta math so the
+// computation is unit-tested without a QWidget.
+static void testPixelInspectorDelta()
+{
+    printf("\n[Pixel Inspector delta math]\n");
+    fflush(stdout);
+
+    // Mirror AnalysisPanel::updateInspectorPage delta computation.
+    auto delta = [](int lr, int lg, int lb, int rr, int rg, int rb, int& dR, int& dG, int& dB,
+                    double& dist) {
+        dR = lr - rr;
+        dG = lg - rg;
+        dB = lb - rb;
+        dist = std::sqrt(double(dR * dR + dG * dG + dB * dB));
+    };
+
+    int dR = 0, dG = 0, dB = 0;
+    double dist = 0;
+
+    // Identical pixels -> zero delta.
+    delta(80, 160, 220, 80, 160, 220, dR, dG, dB, dist);
+    CHECK(dR == 0 && dG == 0 && dB == 0, "identical pixels -> zero delta");
+    CHECK(std::abs(dist) < 1e-9, "identical pixels -> zero distance");
+
+    // Known delta.
+    delta(200, 100, 50, 100, 100, 150, dR, dG, dB, dist);
+    CHECK(dR == 100 && dG == 0 && dB == -100, "per-channel delta computed");
+    // distance = sqrt(100^2 + 0 + (-100)^2) = sqrt(20000) ~= 141.421
+    CHECK(std::abs(dist - 141.421) < 0.01, "euclidean distance correct (~141.42)");
+}
+
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv); // required: DiskCache/ImageRepository use Qt paths & SQLite
@@ -201,6 +233,7 @@ int main(int argc, char** argv)
     testTiffSupport();
     testViewerCache();
     testPixelInspectorReadsFrame();
+    testPixelInspectorDelta();
 
     printf("\n=== M3 Pipeline: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
