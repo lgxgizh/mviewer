@@ -311,6 +311,8 @@ void MainWindow::openCompare(const QStringList& images)
     m_compareView = new CompareWorkspace(dlg);
     layout->addWidget(m_compareView);
     m_compareView->setImages(imgs);
+    connect(m_compareView, &CompareWorkspace::pixelInfo, this,
+            [this](const QString& text) { statusBar()->showMessage(text); });
 
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();

@@ -33,6 +33,8 @@ public:
 
 signals:
     void syncToggled(bool on);
+    // Hover pixel read from any cell, formatted for the status bar. Empty string clears.
+    void pixelInfo(const QString& text);
 
 protected:
     void paintEvent(QPaintEvent*) override;
