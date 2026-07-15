@@ -252,16 +252,17 @@ static void testSynchronizedSelection()
               engine.selection().selection().height == 80,
           "SelectionController stores the shared ROI");
 
-    // UI mirroring (exactly what CompareWorkspace::applySelectionToAll does):
+    // Engine-owned mirroring (c3e6eec): applySelectionToAll propagates the ROI
+    // to every owned ImageFrame. Replaces the old const_cast loop in the UI layer.
+    engine.applySelectionToAll(sel);
     for (int i = 0; i < engine.imageCount(); ++i)
     {
         const ImageFrame* img = engine.imageAt(i);
         CHECK(img != nullptr, ("image " + std::to_string(i) + " present").c_str());
         if (img)
         {
-            const_cast<ImageFrame*>(img)->setSelection(sel);
             const auto& got = img->selection();
-            CHECK(got.width == 100 && got.height == 80,
+            CHECK(got.x == 10 && got.y == 20 && got.width == 100 && got.height == 80,
                   ("cell " + std::to_string(i) + " mirrors the synchronized ROI").c_str());
         }
     }
