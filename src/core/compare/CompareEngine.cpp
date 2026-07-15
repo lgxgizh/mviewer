@@ -100,3 +100,13 @@ ImageData CompareEngine::differenceMap(int index, int baseIndex)
     return DifferenceEngine::differenceMap(
         m_images[baseIndex]->pixels(), m_images[index]->pixels());
 }
+
+void CompareEngine::applySelectionToAll(const mviewer::domain::Selection& sel)
+{
+    m_selection.setSelection(sel);
+    for (auto& frame : m_images)
+    {
+        if (frame)
+            frame->setSelection(sel);
+    }
+}

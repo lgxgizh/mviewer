@@ -5,13 +5,16 @@
 #include "core/EventBus.h"
 
 #include "thumbnailcache.h"
+#include "core/image/Decoder.h"
+#include "core/image/ImageBuffer.h"
+#include "core/image/ImageRepository.h"
+#include "core/image/QtConvert.h"
 
 #include <QApplication>
 #include <QContextMenuEvent>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QImageReader>
 #include <QInputDialog>
 #include <QMenu>
 #include <QMessageBox>
@@ -52,8 +55,8 @@ QList<QFileInfo> sortedEntries(const QString& dirPath, ThumbnailPanel::SortMode 
         break;
     case ThumbnailPanel::SortResolution: {
         auto area = [](const QFileInfo& fi) {
-            const QImageReader r(fi.absoluteFilePath());
-            return r.size().width() * r.size().height();
+            const auto meta = ImageRepository::instance().metadata(fi.absoluteFilePath().toStdString());
+            return static_cast<qint64>(meta.width) * meta.height;
         };
         std::sort(entries.begin(), entries.end(), [&](const QFileInfo& a, const QFileInfo& b) {
             return area(a) < area(b);
@@ -103,33 +106,18 @@ QPixmap ThumbnailWorker::makeThumbnail(const QString& path)
     if (ThumbnailCache::instance().get(path, cached))
         return cached;
 
-    // Decode at thumbnail resolution (avoids full-image decode).
-    QImageReader reader(path);
-    reader.setAutoDetectImageFormat(true);
-    if (!reader.canRead())
-        return {};
-
-    const QSize full = reader.size();
-    if (!full.isValid() || full.isEmpty())
-        return {};
-
-    // Only downscale if the image is larger than the thumb size.
-    int target = ThumbnailPanel::kThumbSize;
-    if (full.width() > target || full.height() > target)
-    {
-        const double ratio = static_cast<double>(target) / std::max(full.width(), full.height());
-        reader.setScaledSize(
-            QSize(static_cast<int>(full.width() * ratio), static_cast<int>(full.height() * ratio)));
-    }
-
-    QImage img = reader.read();
+    // Decode at thumbnail resolution through the core decoder (no UI-layer decode).
+    ImageData img = Decoder::decodeScaled(path.toStdString(), ThumbnailPanel::kThumbSize);
     if (img.isNull())
+        return {};
+    QImage qimg = mvcore::toQImage(img);
+    if (qimg.isNull())
         return {};
 
     // Compose on a square transparent canvas with aspect-correct scaling.
     QPixmap pm(ThumbnailPanel::kThumbSize, ThumbnailPanel::kThumbSize);
     pm.fill(Qt::transparent);
-    QPixmap scaled = QPixmap::fromImage(img).scaled(ThumbnailPanel::kThumbSize,
+    QPixmap scaled = QPixmap::fromImage(qimg).scaled(ThumbnailPanel::kThumbSize,
         ThumbnailPanel::kThumbSize,
         Qt::KeepAspectRatio,
         Qt::SmoothTransformation);

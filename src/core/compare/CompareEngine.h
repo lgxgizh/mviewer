@@ -163,6 +163,8 @@ public:
     SyncController& sync() { return m_sync; }
     const SelectionController& selection() const { return m_selection; }
     SelectionController& selection() { return m_selection; }
+    // Mirror the synchronized ROI to every owned frame (called by CompareWorkspace).
+    void applySelectionToAll(const mviewer::domain::Selection& sel);
     const ViewportController& viewport() const { return m_viewport; }
     ViewportController& viewport() { return m_viewport; }
 
