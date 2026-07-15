@@ -277,6 +277,8 @@ void MainWindow::onImageOpen(const QString& path)
     m_imageViewer->setImage(path);
     QImage img(path);
     m_analysisPanel->setImage(img);
+    if (auto f = m_imageViewer->frame())
+        m_analysisPanel->setFrame(f);
     m_currentImagePath = path;
     statusBar()->showMessage(QString("当前: %1, 尺寸: %2x%3")
             .arg(QFileInfo(path).fileName())
@@ -342,4 +344,6 @@ void MainWindow::navigate(int delta)
     m_currentImagePath = path;
     m_imageViewer->setImage(path);
     m_analysisPanel->setImage(QImage(path));
+    if (auto f = m_imageViewer->frame())
+        m_analysisPanel->setFrame(f);
 }

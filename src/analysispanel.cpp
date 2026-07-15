@@ -1,4 +1,5 @@
 #include "analysispanel.h"
+#include "core/analyzer/HistogramAnalyzer.h"
 #include "widgets/rawimageview.h"
 
 #include "core/image/QtConvert.h"
@@ -140,11 +141,47 @@ void AnalysisPanel::setROI(const mviewer::domain::Selection& roi)
 {
     m_roi = roi;
     m_hasROI = !roi.isEmpty();
+
+    // Route ROI analysis through the AnalyzerRegistry (Selection-based), so the
+    // analyzer consumes a domain Selection rather than a QRect. Falls back to the
+    // legacy QImage path only when no ImageFrame is available.
+    if (m_frameA && !m_frameA->pixels().isNull())
+    {
+        auto analyzer = AnalyzerRegistry::instance().create("histogram");
+        if (analyzer && analyzer->analyzeRegion(*m_frameA, roi))
+        {
+            const auto& h = static_cast<HistogramAnalyzer*>(analyzer.get())->result();
+            m_statsA.lumMean = h.lumMean;
+            m_statsA.rMean = h.rMean;
+            m_statsA.gMean = h.gMean;
+            m_statsA.bMean = h.bMean;
+            m_statsA.pixelCount =
+                std::max(0, roi.width) * std::max(0, roi.height);
+            // Render from the analyzer's histogram result.
+            renderHistogramPixmap(h);
+            m_statsLabel->setText(
+                QString("<h3>%1</h3><p>%2</p>")
+                    .arg(tr("ROI Stats (registry)"))
+                    .arg(QString("Lum %1  R %2  G %3  B %4  Px %5")
+                             .arg(h.lumMean, 0, 'f', 1)
+                             .arg(h.rMean, 0, 'f', 1)
+                             .arg(h.gMean, 0, 'f', 1)
+                             .arg(h.bMean, 0, 'f', 1)
+                             .arg(m_statsA.pixelCount)));
+            return;
+        }
+    }
+
     if (m_hasA && m_hasROI)
     {
         m_statsA = AnalysisEngine::computeStatsROI(mvcore::fromQImage(m_imageA), roi);
         updateHistogramPage();
     }
+}
+
+void AnalysisPanel::setFrame(std::shared_ptr<ImageFrame> frame)
+{
+    m_frameA = std::move(frame);
 }
 
 void AnalysisPanel::setRegionStats(const QString& text)

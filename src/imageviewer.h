@@ -21,6 +21,10 @@ public:
 
     void setImage(const QString& path);
 
+    // Returns the ImageFrame backing the current view (null if none loaded).
+    // Lets the analysis panel route ROI analysis through the registry.
+    std::shared_ptr<ImageFrame> frame() const { return m_frame; }
+
 public slots:
     void setSelectMode(bool on);
 
