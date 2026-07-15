@@ -201,9 +201,9 @@ private:
     std::unique_ptr<Renderer> m_backend;
 
     // Command dispatch targets.
-    static void executeDrawImage(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
-    static void executeDrawOverlay(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
-    static void executeDrawSelection(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
-    static void executeDrawHistogram(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
-    static void executeDrawHeatmap(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
+    void executeDrawImage(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
+    void executeDrawOverlay(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
+    void executeDrawSelection(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
+    void executeDrawHistogram(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
+    void executeDrawHeatmap(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
 };
