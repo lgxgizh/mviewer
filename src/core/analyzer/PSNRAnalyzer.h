@@ -29,15 +29,3 @@ private:
     const ImageFrame* m_ref = nullptr;
     double m_psnr = 0.0;
 };
-
-namespace
-{
-struct PSNRAnalyzerRegistrar
-{
-    PSNRAnalyzerRegistrar()
-    {
-        AnalyzerRegistry::instance().registerAnalyzer(
-            "psnr", []() -> std::unique_ptr<Analyzer> { return std::make_unique<PSNRAnalyzer>(); });
-    }
-} g_psnrAnalyzerRegistrar;
-} // namespace

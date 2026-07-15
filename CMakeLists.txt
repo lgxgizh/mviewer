@@ -20,8 +20,10 @@ set(CMAKE_AUTOUIC ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+# Enable CTest before add_subdirectory(src) so the add_test() calls in
+# src/CMakeLists.txt register into the generated CTestTestfile.
+enable_testing()
+
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
 add_subdirectory(src)
-
-enable_testing()

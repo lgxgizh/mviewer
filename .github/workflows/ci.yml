@@ -13,27 +13,16 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    - name: Setup MSVC
+      uses: ilammy/msvc-dev-cmd@v1
+
     - name: Install Qt 6.8.0
       uses: jurplel/install-qt-action@v4
       with:
         version: 6.8.0
         arch: win64_msvc2022_64
+        cache: true
 
-    - name: Configure MSVC
-      uses: ilammy/msvc-dev-cmd@v1
-
-    - name: Configure CMake
-      run: cmake -B build_msvc -G "Ninja" -DCMAKE_BUILD_TYPE=Release
-
-    - name: Build
-      run: cmake --build build_msvc -j
-
-    - name: CTest
-      run: cd build_msvc && ctest --output-on-failure --output-junit test-results.xml -j4
-
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results-${{ github.sha }}
-        path: build_msvc/test-results.xml
+    - name: Build + Test
+      run: |
+        powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test

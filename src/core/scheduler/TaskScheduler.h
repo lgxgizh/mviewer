@@ -24,13 +24,16 @@ public:
         AnalysisPool,
         IOPool
     };
+    // NOTE: values are used directly as array indices into priorityQueues[5]
+    // and m_poolState[5] (via static_cast<int>). They MUST stay contiguous
+    // 0..4. Ordering here intentionally mirrors priority (low -> high).
     enum class Priority : int
     {
         Background = 0,
-        Analysis = 25,
-        Thumbnail = 50,
-        Decode = 75,
-        UI = 100
+        Analysis = 1,
+        Thumbnail = 2,
+        Decode = 3,
+        UI = 4
     };
 
     struct TaskContext

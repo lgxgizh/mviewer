@@ -1,6 +1,12 @@
 #include "core/analyzer/Analyzer.h"
 
+#include "core/analyzer/EntropyAnalyzer.h"
 #include "core/analyzer/HistogramAnalyzer.h"
+#include "core/analyzer/NoiseAnalyzer.h"
+#include "core/analyzer/PSNRAnalyzer.h"
+#include "core/analyzer/RGBMeanAnalyzer.h"
+#include "core/analyzer/SharpnessAnalyzer.h"
+#include "core/analyzer/SSIMAnalyzer.h"
 
 #include <algorithm>
 #include <optional>
@@ -8,33 +14,39 @@
 AnalyzerRegistry& AnalyzerRegistry::instance()
 {
     static AnalyzerRegistry inst;
+    Analyzer::registerBuiltins();
     return inst;
 }
 
-namespace
+void Analyzer::registerBuiltins()
 {
-bool registerBuiltins()
-{
-    AnalyzerRegistry::instance().registerAnalyzer("histogram",
-        []() -> std::unique_ptr<Analyzer> {
-            struct Concrete : public HistogramAnalyzer {
-                AnalyzerInfo info() const override {
-                    return AnalyzerInfo{
-                        .id = "histogram",
-                        .name = name(),
-                        .description = description(),
-                        .version = "0.1.0",
-                        .capabilities = capabilities(),
-                        .outputFields = {"histogramLuminance", "histogramRGB", "lumMean", "rgbMeans"}
-                    };
-                }
-            };
-            return std::make_unique<Concrete>();
-        });
-    return true;
+    static bool s_registered = false;
+    if (s_registered)
+        return;
+    s_registered = true;
+
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "histogram",
+        []() -> std::unique_ptr<Analyzer> { return std::make_unique<HistogramAnalyzer>(); });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "noise",
+        []() -> std::unique_ptr<Analyzer> { return std::make_unique<NoiseAnalyzer>(); });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "entropy",
+        []() -> std::unique_ptr<Analyzer> { return std::make_unique<EntropyAnalyzer>(); });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "psnr",
+        []() -> std::unique_ptr<Analyzer> { return std::make_unique<PSNRAnalyzer>(); });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "rgbmean",
+        []() -> std::unique_ptr<Analyzer> { return std::make_unique<RGBMeanAnalyzer>(); });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "sharpness",
+        []() -> std::unique_ptr<Analyzer> { return std::make_unique<SharpnessAnalyzer>(); });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "ssim",
+        []() -> std::unique_ptr<Analyzer> { return std::make_unique<SSIMAnalyzer>(); });
 }
-[[maybe_unused]] const bool kRegistered = registerBuiltins();
-} // namespace
 
 void AnalyzerRegistry::registerAnalyzer(const std::string& id, AnalyzerCreator creator)
 {

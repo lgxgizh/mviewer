@@ -33,15 +33,3 @@ public:
 private:
     Result m_result;
 };
-
-namespace
-{
-struct RGBMeanAnalyzerRegistrar
-{
-    RGBMeanAnalyzerRegistrar()
-    {
-        AnalyzerRegistry::instance().registerAnalyzer("rgbmean",
-            []() -> std::unique_ptr<Analyzer> { return std::make_unique<RGBMeanAnalyzer>(); });
-    }
-} g_rgbMeanAnalyzerRegistrar;
-} // namespace

@@ -27,15 +27,3 @@ private:
     double estimateLaplacian(const ImageBuffer& v, int x0, int y0, int x1, int y1) const;
     double m_noise = 0.0;
 };
-
-namespace
-{
-struct NoiseAnalyzerRegistrar
-{
-    NoiseAnalyzerRegistrar()
-    {
-        AnalyzerRegistry::instance().registerAnalyzer("noise",
-            []() -> std::unique_ptr<Analyzer> { return std::make_unique<NoiseAnalyzer>(); });
-    }
-} g_noiseAnalyzerRegistrar;
-} // namespace

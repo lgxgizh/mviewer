@@ -17,6 +17,12 @@ class Analyzer
 {
 public:
     virtual ~Analyzer() = default;
+
+    // Register all built-in analyzers (histogram, noise, entropy, psnr,
+    // rgbmean, sharpness, ssim). Idempotent; called automatically by
+    // AnalyzerRegistry::instance() so registration does not depend on
+    // static-library object-file pruning.
+    static void registerBuiltins();
     virtual std::string name() const = 0;
     virtual std::string description() const = 0;
 
