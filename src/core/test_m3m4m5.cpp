@@ -14,8 +14,10 @@
 #include "core/cache/CacheManager.h"
 #include "core/compare/CompareEngine.h"
 #include "core/compare/DifferenceEngine.h"
+#include "core/image/DiskCache.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageFrame.h"
+#include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
 #include "core/scheduler/TaskScheduler.h"
@@ -188,6 +190,123 @@ static void testCacheManager()
     mgr.clearMemory();
     CHECK(mgr.memoryUsageBytes() == 0, "memoryUsageBytes == 0 after clearMemory");
 }
+
+// M5 acceptance: 5-level cache hierarchy, disk persistence (survives memory clear /
+// restart), and hit-ratio reporting.
+static void testCacheManagerM5()
+{
+    printf("\n[CacheManager M5 — disk persistence + hit ratio]\n");
+    fflush(stdout);
+    CacheManager& mgr = CacheManager::instance();
+    DiskCache& disk = DiskCache::instance();
+    mgr.clear();
+    disk.clear();
+
+    QImage img = makeTestImage(48, 48, QColor(70, 130, 200));
+    ImageData data = mvcore::fromQImage(img);
+    const std::string key = "m5_disk_key_1";
+
+    // Write through the 5-level manager to the Disk tier.
+    mgr.put(CacheLevel::Disk, key, data);
+    CHECK(disk.entryCount() >= 1, "disk tier has an entry after put");
+    CHECK(disk.totalBytes() > 0, "disk tier reports >0 bytes");
+
+    // Simulate restart: memory cleared, only disk survives.
+    mgr.clearMemory();
+    CHECK(mgr.memoryUsageBytes() == 0, "memory empty after clear (disk is source of truth)");
+
+    // Read back from disk — pixels must be identical (survives restart).
+    ImageData back;
+    CHECK(mgr.getDisk(key, back), "disk get after memory clear succeeds");
+    CHECK(back.width == 48 && back.height == 48, "disk pixels dimensions preserved");
+    bool identical = back.width == data.width && back.height == data.height;
+    if (identical)
+    {
+        const ImageBuffer vb = back.view(), vd = data.view();
+        for (int i = 0; identical && i < back.height; ++i)
+        {
+            const uint8_t* lb = vb.data + static_cast<size_t>(i) * vb.stride();
+            const uint8_t* ld = vd.data + static_cast<size_t>(i) * vd.stride();
+            for (int j = 0; j < back.width * 3; ++j)
+                if (lb[j] != ld[j])
+                {
+                    identical = false;
+                    break;
+                }
+        }
+    }
+    CHECK(identical, "disk-stored pixels are byte-identical to source");
+
+    // 5-level hit-ratio reporting: a get populates hits; a miss populates misses.
+    mgr.clear();
+    disk.clear();
+    const std::string kHit = "m5_hit", kMiss = "m5_miss";
+    mgr.put(CacheLevel::FullImage, kHit, data);
+    ImageData out;
+    CHECK(mgr.get(CacheLevel::FullImage, kHit, out), "warm get -> hit");
+    CHECK(!mgr.get(CacheLevel::FullImage, kMiss, out), "cold get -> miss");
+    const CacheLevelStats s = mgr.levelStats(CacheLevel::FullImage);
+    CHECK(s.hits >= 1, "FullImage level records a hit");
+    CHECK(s.misses >= 1, "FullImage level records a miss");
+    const double ratio = s.hits + s.misses > 0
+        ? static_cast<double>(s.hits) / (s.hits + s.misses) : 0.0;
+    CHECK(ratio > 0.0 && ratio <= 1.0, "hit ratio in (0,1]");
+    printf("  hit ratio = %.3f (hits=%llu misses=%llu)\n",
+           ratio, static_cast<unsigned long long>(s.hits),
+           static_cast<unsigned long long>(s.misses));
+
+    mgr.clear();
+    disk.clear();
+}
+
+// M5 acceptance: predictive preload warms adjacent images from disk into memory
+// so navigating to a neighbor is instant after cache warm-up.
+static void testPredictivePreload()
+{
+    printf("\n[Predictive preload (M5)]\n");
+    fflush(stdout);
+    CacheManager& mgr = CacheManager::instance();
+    DiskCache& disk = DiskCache::instance();
+    mgr.clear();
+    disk.clear();
+
+    ImageRepository& repo = ImageRepository::instance();
+    const std::string base =
+        std::string(MVIEWER_SOURCE_DIR) + "/testdata/golden/256x256/";
+    const char* files[] = {"flat_color_256x256.jpg", "checker_256x256.jpg",
+                            "gradient_256x256.png"};
+
+    // Load through the repository (writes each to the disk tier).
+    std::vector<std::string> keys;
+    for (const char* f : files)
+    {
+        auto r = repo.load(base + f);
+        CHECK(r.success(), ("repository load " + std::string(f)).c_str());
+        keys.push_back(repo.makeKey(base + f));
+    }
+    CHECK(disk.entryCount() >= 3, "disk tier holds the loaded images");
+
+    // Drop memory so the only source is disk (simulates cold navigation start).
+    mgr.clearMemory();
+    ImageData probe;
+    CHECK(!mgr.getMemory(CacheLevel::FullImage, keys[1], probe),
+          "neighbor not in memory before preload");
+
+    // Predictive preload warms adjacent images from the disk tier into memory
+    // (synchronous core of prefetchVisible); after this, switching to a neighbor
+    // is instant because the pixels are already in the FullImage LRU.
+    repo.prefetch({keys[1], keys[2]}, CacheLevel::FullImage);
+
+    ImageData warm;
+    CHECK(mgr.getMemory(CacheLevel::FullImage, keys[1], warm),
+          "preloaded neighbor present in memory");
+    CHECK(mgr.getMemory(CacheLevel::FullImage, keys[2], warm),
+          "preloaded second neighbor present in memory");
+
+    mgr.clear();
+    disk.clear();
+}
+
 static void testAnalyzerRegistry()
 {
     printf("\n[AnalyzerRegistry]\n");
@@ -777,6 +896,8 @@ int main(int argc, char** argv)
     testNoiseEstimate();
     testEncoder();
     testCacheManager();
+    testCacheManagerM5();
+    testPredictivePreload();
     testAnalyzerRegistry();
     testAnalyzerRegistryConsistency();
     testTaskSchedulerDependency();

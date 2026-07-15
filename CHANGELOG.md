@@ -66,6 +66,15 @@ All notable changes to this project are documented here. The format is based on
   previously dead code (an off-screen canvas that was never blitted). Guarded by
   `testCompareDiffOverlay` in `test_m3m4m5`.
 
+### Added (M5 — Scale & Performance, partial)
+- `testCacheManagerM5`: verifies the 5-level cache hierarchy — SQLite-backed disk tier
+  persists decoded pixels across a memory clear (byte-identical round-trip, proving the
+  disk cache is the durable store / survives restart), and `CacheManager::levelStats`
+  reports per-level hit/miss counts with a computed hit ratio.
+- `testPredictivePreload`: verifies `ImageRepository::prefetch` warms adjacent images
+  from the disk tier into the in-memory FullImage LRU, so navigating to a neighbor is
+  instant after cache warm-up (the deterministic core of `prefetchVisible`).
+
 ### Changed (M4)
 - `TaskScheduler` now uses PIMPL to keep Qt threading primitives out of the core header
 - `ImageObject` header no longer depends on `QDateTime`
