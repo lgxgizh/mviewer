@@ -192,7 +192,7 @@ public:
     // RenderCommand pipeline: execute a single command onto a QPainter.
     // `viewport` is the cell's local rectangle the painter draws into.
     // SmoothPixmapTransform is enabled while drawing when cmd.interp != 0.
-    static void executeCommand(QPainter& painter,
+    void executeCommand(QPainter& painter,
         const RenderCommand& cmd,
         const QRect& viewport);
 
