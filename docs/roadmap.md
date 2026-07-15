@@ -27,8 +27,8 @@
 |-----------|-------|--------|
 | Foundation | Build system, dir structure, ADR, AGENTS, Roadmap | ✅ Done |
 | M2 | Image Core + Task Scheduler | ✅ Done |
-| M3 | Core Image Pipeline | 🟡 In progress (Phase-1 + Phase-2 complete) |
-| M4 | Compare & Analysis maturity | 🟡 In progress (analyzer registry wired to UI) |
+| M3 | Core Image Pipeline | ✅ Done (Phase-1 + Phase-2 + cleanup) |
+| M4 | Compare & Analysis maturity | ✅ Done (all 4 acceptance criteria met) |
 | M5 | Scale & Performance | ⬜ Planned |
 
 > Historical note: an earlier internal scheme reused M3/M4/M5 for the prototype Compare /
@@ -125,11 +125,11 @@ Deliverables:
 - Plugin loader: drop-in analyzer plugins discovered and registered at startup.
 
 **Acceptance criteria (M4):**
-- [ ] 8-image grid compares with synchronized transform and no UI stall on 50 MP inputs.
-- [ ] Every built-in analyzer is reachable through `AnalyzerRegistry` and returns results
+- [x] 8-image grid compares with synchronized transform and no UI stall on 50 MP inputs.
+- [x] Every built-in analyzer is reachable through `AnalyzerRegistry` and returns results
       consistent with `AnalysisEngine` reference values.
-- [ ] ROI analysis on an arbitrary `Selection` matches full-image analysis on the same region.
-- [ ] A sample plugin loads and appears in the analyzer list without code changes.
+- [x] ROI analysis on an arbitrary `Selection` matches full-image analysis on the same region.
+- [x] A sample plugin loads and appears in the analyzer list without code changes.
 
 ---
 

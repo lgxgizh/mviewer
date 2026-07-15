@@ -5,6 +5,7 @@
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/analyzer/EntropyAnalyzer.h"
+#include "core/analyzer/HistogramAnalyzer.h"
 #include "core/analyzer/NoiseAnalyzer.h"
 #include "core/analyzer/PSNRAnalyzer.h"
 #include "core/analyzer/RGBMeanAnalyzer.h"
@@ -173,10 +174,10 @@ static void testCacheManager()
     mgr.clearMemory();
     CHECK(mgr.memoryUsageBytes() == 0, "memoryUsageBytes == 0 after clearMemory");
 }
-
 static void testAnalyzerRegistry()
 {
     printf("\n[AnalyzerRegistry]\n");
+    fflush(stdout);
     auto& reg = AnalyzerRegistry::instance();
 
     // HistogramAnalyzer should be auto-registered
@@ -230,6 +231,60 @@ static void testAnalyzerRegistry()
                   ("'" + std::string(id) + "' reports a result").c_str());
         }
     }
+}
+
+// M4 acceptance (AC2 + AC3): registry-driven ROI analysis on an arbitrary Selection
+// must (a) actually respect the Selection (different regions -> different results)
+// and (b) agree with the AnalysisEngine reference on the same region. This is the
+// core claim of "Analyze(selection) replaces reading QRect".
+static void testAnalyzerRegistryConsistency()
+{
+    printf("\n[AnalyzerRegistry consistency with AnalysisEngine (AC2/AC3)]\n");
+    fflush(stdout);
+
+    // Non-uniform image: left half dark, right half bright.
+    const int W = 128, H = 128;
+    QImage img(W, H, QImage::Format_RGB32);
+    for (int y = 0; y < H; ++y)
+        for (int x = 0; x < W; ++x)
+            img.setPixel(x, y, x < W / 2 ? qRgb(40, 40, 40) : qRgb(200, 200, 200));
+    ImageData data = mvcore::fromQImage(img);
+    ImageFrame frame = ImageFrame::create("consistency", mvcore::fromQImage(img));
+
+    auto& reg = AnalyzerRegistry::instance();
+
+    // (AC3) ROI analysis respects the Selection: left vs right half differ.
+    mviewer::domain::Selection left{0, 0, W / 2, H};
+    mviewer::domain::Selection right{W / 2, 0, W / 2, H};
+    auto al = reg.create("rgbmean");
+    auto ar = reg.create("rgbmean");
+    CHECK(al && ar, "registry creates two rgbmean analyzers");
+    CHECK(al->analyzeRegion(frame, left) && ar->analyzeRegion(frame, right),
+          "both regions analyze");
+    const double lMean = dynamic_cast<RGBMeanAnalyzer*>(al.get())->result().rMean;
+    const double rMean = dynamic_cast<RGBMeanAnalyzer*>(ar.get())->result().rMean;
+    CHECK(std::abs(lMean - rMean) > 100.0,
+          ("left ROI mean (" + std::to_string(lMean) + ") != right ROI mean (" +
+           std::to_string(rMean) + "): Selection is honored").c_str());
+
+    // (AC2/AC3) Full-frame RGBMean via registry agrees with AnalysisEngine reference.
+    mviewer::domain::Selection full{0, 0, W, H};
+    auto af = reg.create("rgbmean");
+    CHECK(af->analyzeRegion(frame, full), "full-frame rgbmean analyzes");
+    const double regMean = dynamic_cast<RGBMeanAnalyzer*>(af.get())->result().rMean;
+    const ImageStats ref = AnalysisEngine::computeStatsROI(data, full);
+    CHECK(std::abs(regMean - ref.rMean) < 1.0,
+          ("registry rgbmean (" + std::to_string(regMean) +
+           ") matches AnalysisEngine rMean (" + std::to_string(ref.rMean) + ")").c_str());
+
+    // (AC2/AC3) Full-frame histogram lumMean via registry agrees with reference.
+    auto ah = reg.create("histogram");
+    CHECK(ah->analyzeRegion(frame, full), "full-frame histogram analyzes");
+    const double regLum = dynamic_cast<HistogramAnalyzer*>(ah.get())->result().lumMean;
+    const ImageStats refH = AnalysisEngine::computeStatsROI(data, full);
+    CHECK(std::abs(regLum - refH.lumMean) < 1.0,
+          ("registry histogram lumMean (" + std::to_string(regLum) +
+           ") matches AnalysisEngine lumMean (" + std::to_string(refH.lumMean) + ")").c_str());
 }
 
 // ─── New tests ──────────────────────────────────────────────────────────────
@@ -676,6 +731,7 @@ int main(int argc, char** argv)
     testEncoder();
     testCacheManager();
     testAnalyzerRegistry();
+    testAnalyzerRegistryConsistency();
     testTaskSchedulerDependency();
     testCacheConfig();
     testRGBMean();

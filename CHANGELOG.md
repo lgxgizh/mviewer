@@ -52,6 +52,11 @@ All notable changes to this project are documented here. The format is based on
   exposes a generic `resultText()` so the panel renders any registered analyzer without
   custom code. `test_m3m4m5` now asserts all built-ins are creatable via the registry and
   produce a non-empty result.
+- **M4 acceptance tests (AC2/AC3):** `testAnalyzerRegistryConsistency` proves the registry
+  is the real single entry point — ROI analysis honors an arbitrary `Selection` (left vs
+  right half differ) and its results agree with `AnalysisEngine::computeStatsROI` on the
+  same region (rgbmean rMean and histogram lumMean within 1.0). This is the core M4 claim
+  that `Analyze(selection)` replaces reading `QRect`.
 
 ### Changed (M4)
 - `TaskScheduler` now uses PIMPL to keep Qt threading primitives out of the core header
