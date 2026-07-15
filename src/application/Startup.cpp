@@ -5,7 +5,7 @@
 
 namespace {
 
-void startupPlugins() {
+void doStartupPlugins() {
     namespace fs = std::filesystem;
     const fs::path pluginDir = fs::absolute("plugins");
 
@@ -14,7 +14,7 @@ void startupPlugins() {
         return;
     }
 
-    auto& mgr = mviewer::core::PluginManager::instance();
+    auto& mgr = PluginManager::instance();
     int count = mgr.loadDirectory(pluginDir.string());
 
     if (count == 0) {
@@ -26,7 +26,6 @@ void startupPlugins() {
 
 } // namespace
 
-// Called from main() before showing MainWindow
 void startupPlugins() {
-    ::startupPlugins();
+    doStartupPlugins();
 }
