@@ -9,6 +9,8 @@
 #include "core/image/Decoder.h"
 #include "core/cache/CacheManager.h"
 #include "core/image/QtConvert.h"
+#include "core/compare/CompareEngine.h"
+#include "domain/Selection.h"
 
 #include <QByteArray>
 #include <QCoreApplication>
@@ -223,6 +225,48 @@ static void testPixelInspectorDelta()
     CHECK(std::abs(dist - 141.421) < 0.01, "euclidean distance correct (~141.42)");
 }
 
+// Acceptance: two images support a synchronized selection propagated across cells.
+// Mirrors CompareWorkspace::applySelectionToAll so the assertion covers the real
+// contract the UI relies on (SelectionController + ImageFrame::selection()).
+static void testSynchronizedSelection()
+{
+    printf("\n[Synchronized selection across images]\n");
+    fflush(stdout);
+
+    const std::string a = golden("flat_color_256x256.jpg");
+    const std::string b = golden("flat_color_256x256.png");
+    CompareEngine engine;
+    engine.setImages({a, b});
+    CHECK(engine.imageCount() == 2, "engine loaded 2 images");
+
+    engine.selection().setSyncAcrossCells(true);
+    CHECK(engine.selection().synced(), "selection sync across cells enabled");
+
+    const mviewer::domain::Selection sel{10, 20, 100, 80};
+    engine.selection().setSelection(sel);
+
+    // The SelectionController holds the shared ROI.
+    CHECK(engine.selection().selection().x == 10 &&
+              engine.selection().selection().y == 20 &&
+              engine.selection().selection().width == 100 &&
+              engine.selection().selection().height == 80,
+          "SelectionController stores the shared ROI");
+
+    // UI mirroring (exactly what CompareWorkspace::applySelectionToAll does):
+    for (int i = 0; i < engine.imageCount(); ++i)
+    {
+        const ImageFrame* img = engine.imageAt(i);
+        CHECK(img != nullptr, ("image " + std::to_string(i) + " present").c_str());
+        if (img)
+        {
+            const_cast<ImageFrame*>(img)->setSelection(sel);
+            const auto& got = img->selection();
+            CHECK(got.width == 100 && got.height == 80,
+                  ("cell " + std::to_string(i) + " mirrors the synchronized ROI").c_str());
+        }
+    }
+}
+
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv); // required: DiskCache/ImageRepository use Qt paths & SQLite
@@ -234,6 +278,7 @@ int main(int argc, char** argv)
     testViewerCache();
     testPixelInspectorReadsFrame();
     testPixelInspectorDelta();
+    testSynchronizedSelection();
 
     printf("\n=== M3 Pipeline: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);

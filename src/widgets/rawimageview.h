@@ -1,5 +1,7 @@
 #pragma once
 
+#include "domain/Selection.h"
+
 #include <QImage>
 #include <QWidget>
 
@@ -22,6 +24,13 @@ public:
     void setCellIndex(int idx) { m_cellIndex = idx; }
     int cellIndex() const { return m_cellIndex; }
 
+    // ROI selection in image coordinates. The widget renders it on top of the
+    // fit/pan transform. CompareWorkspace drives this through the SelectionController
+    // so a box drawn on one cell is mirrored across the grid.
+    void setSelection(const mviewer::domain::Selection& sel) { m_selection = sel; update(); }
+    const mviewer::domain::Selection& selection() const { return m_selection; }
+    void clearSelection() { m_selection = mviewer::domain::Selection{}; update(); }
+
     double scale() const { return m_scale; }
     const QPointF& offset() const { return m_offset; }
 
@@ -35,6 +44,8 @@ signals:
     // Emitted on hover with the image-space pixel under the cursor (RGB + validity).
     // Mirrors ImageViewer::pixelInfo so the compare grid feeds the same inspector.
     void pixelInfo(int x, int y, int r, int g, int b, bool valid);
+    // Emitted when the user finishes drawing a selection box (image coords).
+    void selectionChanged(const mviewer::domain::Selection& sel);
 
 public slots:
     void zoom(double factor, const QPointF& anchor = {});
@@ -58,4 +69,9 @@ private:
     bool m_dragging = false;
     QPoint m_lastMouse;
     int m_cellIndex = -1;
+    mviewer::domain::Selection m_selection;
+    bool m_selecting = false;
+    QPointF m_selectStart;
+
+    QPointF widgetToImage(const QPoint& pos) const;
 };

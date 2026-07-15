@@ -167,6 +167,10 @@ void CompareWorkspace::rebuildCells()
                                        .arg(g)
                                        .arg(b));
                 });
+        connect(view, &RawImageView::selectionChanged, this,
+                [this](const mviewer::domain::Selection& sel) {
+                    applySelectionToAll(sel);
+                });
 
         // Caption label
         auto* caption = new QLabel(cellWidget);
@@ -208,6 +212,25 @@ void CompareWorkspace::fitAll()
         m_engine.setScale(sharedScale);
     if (m_syncDrag)
         m_engine.setOffset(0.0, 0.0);
+}
+
+void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection& sel)
+{
+    m_engine.selection().setSelection(sel);
+    const int n = m_engine.imageCount();
+    for (int i = 0; i < n; ++i)
+    {
+        if (m_cellViews[i])
+            m_cellViews[i]->setSelection(sel);
+        const ImageFrame* img = m_engine.imageAt(i);
+        if (img && !img->pixels().isNull())
+        {
+            // const_cast: CompareWorkspace owns the frames in this view and must
+            // mirror the synchronized ROI so the analysis panel can consume it.
+            const_cast<ImageFrame*>(img)->setSelection(sel);
+        }
+    }
+    update();
 }
 
 void CompareWorkspace::paintEvent(QPaintEvent*)
