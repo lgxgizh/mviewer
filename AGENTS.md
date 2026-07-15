@@ -45,6 +45,28 @@ UI (Qt Widgets) → Application → Core → Domain
 - **Core**: Qt-free headers; `.cpp` internals may use Qt
 - **UI**: Qt 6 Widgets boundary only
 
+## Agent Role Division
+
+This project is developed by a two-agent team. The division is by *role*, not
+by task — the commander does not write the bulk of the implementation, and the
+writer does not decide scope or merge.
+
+- **Hermes (commander / reviewer)**: owns product direction, milestone
+  planning (roadmap M3/M4/M5 with acceptance criteria), architecture freezes,
+  code review, build+test verification, and commit/push. Delegates implementation
+  to OpenCode; reviews the diff before it lands; never lets a change merge that
+  breaks `.\build.ps1 Test`.
+- **OpenCode (code writer)**: implements the specific change Hermes delegates,
+  against the current ADRs and the frozen architecture. Writes code, runs the
+  local build to confirm it compiles, but does **not** commit or push, and does
+  **not** change scope/architecture on its own.
+
+Principles:
+- Roadmap and ADRs are the source of truth. A writer that finds a missing
+  capability must surface it to the commander; it must not silently expand scope.
+- No change is merged without local build + test green (see Local Verify Policy).
+- Infrastructure/build/CI stay frozen unless the commander explicitly asks.
+
 ## Git
 
 - Branch: `master`

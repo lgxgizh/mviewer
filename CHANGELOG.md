@@ -37,6 +37,12 @@ All notable changes to this project are documented here. The format is based on
   primary read still comes from `ImageFrame`, never `QImage`.
 - `m3pipeline_tests` now also covers the inspector delta math (zero-delta on identical
   pixels; correct per-channel Δ and euclidean distance).
+- **M3 Phase-2 — Selection-driven analysis (registry path):** `AnalysisPanel` now holds
+  the left image as an `ImageFrame` (`setFrame`) and routes ROI analysis through
+  `AnalyzerRegistry::create("histogram")->analyzeRegion(frame, selection)`, consuming
+  `mviewer::domain::Selection` (not `QRect`). The legacy `AnalysisEngine` path is kept
+  only as a fallback when no `ImageFrame` is available. `ImageViewer::frame()` exposes the
+  backing `ImageFrame` so the QWidget layer decodes nothing.
 
 ### Changed
 - `TaskScheduler` now uses PIMPL to keep Qt threading primitives out of the core header
