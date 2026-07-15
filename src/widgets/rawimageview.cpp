@@ -27,6 +27,13 @@ void RawImageView::clear()
     update();
 }
 
+void RawImageView::setOverlay(const QImage& overlay, double alpha)
+{
+    m_overlay = overlay;
+    m_overlayAlpha = alpha;
+    update();
+}
+
 void RawImageView::setTransform(double scale, const QPointF& offset)
 {
     m_scale = scale;
@@ -110,6 +117,22 @@ void RawImageView::paintEvent(QPaintEvent*)
     const int dh = qRound(m_image.height() * m_scale);
 
     p.drawImage(QRectF(cx - dw / 2.0, cy - dh / 2.0, dw, dh), m_image);
+
+    // Difference/heatmap overlay (compare mode): same transform as the base image
+    // so it tracks zoom/pan. The QImage is produced by the workspace from core-layer
+    // data (DifferenceEngine::heatMap) — RawImageView performs no decoding here.
+    if (!m_overlay.isNull())
+    {
+        const int ow = qRound(m_overlay.width() * m_scale);
+        const int oh = qRound(m_overlay.height() * m_scale);
+        p.save();
+        p.setOpacity(m_overlayAlpha);
+        p.drawImage(QRect(cx - dw / 2 + static_cast<int>((dw - ow) / 2.0),
+                          cy - dh / 2 + static_cast<int>((dh - oh) / 2.0),
+                          ow, oh),
+                    m_overlay);
+        p.restore();
+    }
 
     // ROI selection box (image coords -> widget coords, same transform as the image)
     if (!m_selection.isEmpty())

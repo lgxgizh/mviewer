@@ -29,6 +29,20 @@
 #include <string>
 #include <vector>
 
+// test_m3m4m5 isn't given MVIEWER_SOURCE_DIR (see CMakeLists); derive it from the
+// source path so golden-image tests don't need a build-definition change.
+#ifndef MVIEWER_SOURCE_DIR
+static std::string srcRootFromThisFile()
+{
+    std::string f = __FILE__;
+    auto p = f.find("/src/core/test_m3m4m5.cpp");
+    if (p == std::string::npos)
+        p = f.find("\\src\\core\\test_m3m4m5.cpp");
+    return p == std::string::npos ? "." : f.substr(0, p);
+}
+#define MVIEWER_SOURCE_DIR srcRootFromThisFile().c_str()
+#endif
+
 static int g_pass = 0;
 static int g_fail = 0;
 
@@ -720,6 +734,39 @@ static void testAnalyzerCapabilityFramework()
     CHECK(!hasCapability(combined, AnalyzerCapability::MultiImage), "bitwise-or not MultiImage");
 }
 
+// M4 deliverable: difference heatmap overlay in the compare workspace.
+// Guards the exact data path CompareWorkspace uses to build the overlay QImage
+// (DifferenceEngine::differenceMap -> heatMap), without a QWidget.
+static void testCompareDiffOverlay()
+{
+    printf("\n[Compare diff heatmap overlay (M4)]\n");
+    fflush(stdout);
+
+    CompareEngine eng;
+    const std::string a = std::string(MVIEWER_SOURCE_DIR) +
+                          "/testdata/golden/256x256/checker_256x256.jpg";
+    const std::string b = std::string(MVIEWER_SOURCE_DIR) +
+                          "/testdata/golden/256x256/flat_color_256x256.jpg";
+    eng.setImages({a, b});
+    CHECK(eng.imageCount() == 2, "engine loaded 2 images for overlay");
+
+    // Same path CompareWorkspace::rebuildCells uses.
+    ImageData diff = eng.differenceMap(1);
+    CHECK(!diff.isNull(), "differenceMap(1) non-null");
+    CHECK(diff.format == PixelFormat::Grayscale8, "diff is Grayscale8");
+    if (!diff.isNull())
+    {
+        ImageData heat = DifferenceEngine::heatMap(diff);
+        CHECK(!heat.isNull(), "heatMap(diff) non-null");
+        CHECK(heat.format == PixelFormat::RGB24, "heatmap is RGB24");
+        CHECK(heat.width == diff.width && heat.height == diff.height,
+              "heatmap preserves diff dimensions");
+        // Convert to QImage exactly as the workspace does (core->Qt, not decode).
+        QImage q = mvcore::toQImage(heat);
+        CHECK(!q.isNull() && q.width() == heat.width, "toQImage(heat) valid");
+    }
+}
+
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
@@ -746,6 +793,8 @@ int main(int argc, char** argv)
     testCompareSession();
     testRenderCommand();
     testAnalyzerCapabilityFramework();
+
+    testCompareDiffOverlay();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

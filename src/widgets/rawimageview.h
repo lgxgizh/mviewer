@@ -20,6 +20,12 @@ public:
     void setImage(const QImage& img);
     void clear();
 
+    // Difference/heatmap overlay (compare mode). The workspace computes the overlay
+    // from core-layer data and hands it in as a QImage — RawImageView only renders it,
+    // it never decodes pixels (see AGENTS.md: no decode in the QWidget layer).
+    void setOverlay(const QImage& overlay, double alpha = 0.5);
+    void clearOverlay() { m_overlay = QImage(); update(); }
+
     // 0-based grid index (set by CompareWorkspace so the inspector can label the cell).
     void setCellIndex(int idx) { m_cellIndex = idx; }
     int cellIndex() const { return m_cellIndex; }
@@ -72,6 +78,8 @@ private:
     mviewer::domain::Selection m_selection;
     bool m_selecting = false;
     QPointF m_selectStart;
+    QImage m_overlay;
+    double m_overlayAlpha = 0.5;
 
     QPointF widgetToImage(const QPoint& pos) const;
 };

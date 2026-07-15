@@ -57,6 +57,14 @@ All notable changes to this project are documented here. The format is based on
   right half differ) and its results agree with `AnalysisEngine::computeStatsROI` on the
   same region (rgbmean rMean and histogram lumMean within 1.0). This is the core M4 claim
   that `Analyze(selection)` replaces reading `QRect`.
+- **M4 — Difference heatmap overlay (compare mode):** `CompareWorkspace` now builds a
+  difference heatmap per cell (cell *i* vs base) from the core layer
+  (`CompareEngine::differenceMap` → `DifferenceEngine::heatMap`) and hands it to
+  `RawImageView::setOverlay` for compositing over the base image with the same
+  transform (tracks zoom/pan). The QWidget layer performs no decoding — it only renders a
+  QImage the workspace produced from core data. Restores the M4 deliverable that was
+  previously dead code (an off-screen canvas that was never blitted). Guarded by
+  `testCompareDiffOverlay` in `test_m3m4m5`.
 
 ### Changed (M4)
 - `TaskScheduler` now uses PIMPL to keep Qt threading primitives out of the core header

@@ -1,6 +1,7 @@
 #include "compareworkspace.h"
 #include "widgets/rawimageview.h"
 
+#include "core/compare/DifferenceEngine.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/QtConvert.h"
 
@@ -145,6 +146,21 @@ void CompareWorkspace::rebuildCells()
         {
             QImage q = imageObjectToQImage(img);
             view->setImage(q);
+        }
+
+        // Compare mode (2+ images): overlay a difference heatmap (cell i vs base).
+        // Data comes from the core layer (DifferenceEngine); the workspace only
+        // converts it to a QImage and hands it to the view for rendering.
+        const int n = m_engine.imageCount();
+        if (n > 1 && img)
+        {
+            ImageData diff = m_engine.differenceMap(i);
+            if (!diff.isNull())
+            {
+                ImageData heat = DifferenceEngine::heatMap(diff);
+                if (!heat.isNull())
+                    view->setOverlay(mvcore::toQImage(heat), 0.5);
+            }
         }
 
         const QString cellName = img ? QString::fromStdString(img->metadata().fileName) : QString();
