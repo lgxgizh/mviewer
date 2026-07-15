@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/image/ImageFrame.h"
 #include "core/compare/BlinkController.h"
+#include "core/image/ImageFrame.h"
 #include "domain/CompareSession.h"
 #include "domain/Selection.h"
 
@@ -9,9 +9,18 @@
 #include <string>
 #include <vector>
 
-struct CellPoint { int x = 0, y = 0; };
-struct CellSize  { int w = 0, h = 0; };
-struct Vec2      { double x = 0.0, double y = 0.0; };
+struct CellPoint
+{
+    int x = 0, y = 0;
+};
+struct CellSize
+{
+    int w = 0, h = 0;
+};
+struct Vec2
+{
+    double x = 0.0, double y = 0.0;
+};
 
 // Comparison grid layout rule
 struct CompareLayout
@@ -38,7 +47,13 @@ struct CellState
 };
 using CellTransform = CellState;
 
-enum class CompareState { Idle, Comparing, SyncZoom, SyncDrag };
+enum class CompareState
+{
+    Idle,
+    Comparing,
+    SyncZoom,
+    SyncDrag
+};
 
 // SyncController owns the shared zoom/pan transform plus the independent
 // per-cell transforms (used when sync is disabled).
@@ -93,7 +108,11 @@ private:
 class ViewportController
 {
 public:
-    void setViewport(int w, int h) { m_vpW = w; m_vpH = h; }
+    void setViewport(int w, int h)
+    {
+        m_vpW = w;
+        m_vpH = h;
+    }
     void setCellCount(int n)
     {
         const CompareLayout l = CompareLayout::forCount(n);
@@ -115,11 +134,13 @@ public:
 
     double fitScale(CellSize imageSize) const
     {
-        if (imageSize.w <= 0 || imageSize.h <= 0) return 1.0;
+        if (imageSize.w <= 0 || imageSize.h <= 0)
+            return 1.0;
         const CellSize cs = cellSize();
-        if (cs.w <= 0 || cs.h <= 0) return 1.0;
-        return std::min(static_cast<double>(cs.w) / imageSize.w,
-                        static_cast<double>(cs.h) / imageSize.h);
+        if (cs.w <= 0 || cs.h <= 0)
+            return 1.0;
+        return std::min(
+            static_cast<double>(cs.w) / imageSize.w, static_cast<double>(cs.h) / imageSize.h);
     }
 
 private:
@@ -152,7 +173,9 @@ public:
     void setScale(double s) { m_sync.setScale(s); }
     void setOffset(double ox, double oy) { m_sync.setOffset(ox, oy); }
     void zoomAt(double viewX, double viewY, double factor, int exceptIndex = -1)
-    { m_sync.zoomAt(viewX, viewY, factor, exceptIndex); }
+    {
+        m_sync.zoomAt(viewX, viewY, factor, exceptIndex);
+    }
 
     // Per-cell independent transform (when sync off)
     double cellScale(int index) const { return m_sync.cell(index).scale; }
@@ -161,7 +184,9 @@ public:
     void setCellOffset(int index, double ox, double oy) { m_sync.setCellOffset(index, ox, oy); }
     const CellTransform& cellTransform(int index) const { return m_sync.cell(index); }
     void fitCell(int index, const CellSize& viewport, const CellSize& imageSize)
-    { m_sync.fitCell(index, viewport, imageSize); }
+    {
+        m_sync.fitCell(index, viewport, imageSize);
+    }
 
     // Blink
     int blinkIndex() const { return m_blink.blinkIndex(); }
