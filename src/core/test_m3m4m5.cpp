@@ -26,8 +26,10 @@
 #include <QCoreApplication>
 #include <QImage>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -886,6 +888,79 @@ static void testCompareDiffOverlay()
     }
 }
 
+// M5 acceptance: open a directory of 1000 images synchronously through the
+// repository's loadDirectory() (no Qt event loop required) and confirm the
+// directory enumerates + decodes all of them, reporting a count.
+static void test1000ImageNonBlocking()
+{
+    printf("\n[1000-image directory non-blocking open (M5)]\n");
+    fflush(stdout);
+
+    namespace fs = std::filesystem;
+    ImageRepository& repo = ImageRepository::instance();
+
+    const fs::path tempDir = fs::temp_directory_path() / "mviewer_m5_1k";
+    std::error_code ec;
+    fs::remove_all(tempDir, ec);              // best-effort cleanup (pre-existence)
+    fs::create_directories(tempDir, ec);
+
+    bool allWritten = true;
+    for (int i = 0; i < 1000; ++i)
+    {
+        QImage img = makeColorTest(16, 16,
+            QColor((i * 7) % 256, (i * 13) % 256, (i * 29) % 256));
+        const std::string path =
+            (tempDir / ("img_" + std::to_string(i) + ".png")).string();
+        const bool ok = Encoder::encode(mvcore::fromQImage(img), path, Encoder::Params{});
+        if (!ok)
+            allWritten = false;
+    }
+    CHECK(allWritten, "all 1000 PNGs written to temp dir");
+
+    const auto t0 = std::chrono::steady_clock::now();
+    std::vector<ImageRepository::Result> results = repo.loadDirectory(tempDir.string(), 1000);
+    const auto t1 = std::chrono::steady_clock::now();
+    const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    CHECK(results.size() == 1000,
+          (std::to_string(results.size()) + " images loaded from directory").c_str());
+    printf("  loadDirectory(1000) elapsed = %.1f ms\n", ms);
+    fflush(stdout);
+
+    fs::remove_all(tempDir, ec);              // best-effort cleanup
+}
+
+// M5 acceptance: a smoke-decode benchmark of the 4 golden 256x256 images
+// (jpg/png/bmp/tiff) through the synchronous repo.load() must all decode and
+// finish well within a stable bound.
+static void testBenchmarkSmokeDecode()
+{
+    printf("\n[benchmark smoke decode (M5)]\n");
+    fflush(stdout);
+
+    ImageRepository& repo = ImageRepository::instance();
+    const std::string base = std::string(MVIEWER_SOURCE_DIR) + "/testdata/golden/256x256/";
+    const char* files[] = {"flat_color_256x256.jpg", "flat_color_256x256.png",
+                           "flat_color_256x256.bmp", "flat_color_256x256.tiff"};
+
+    const auto t0 = std::chrono::steady_clock::now();
+    int ok = 0;
+    for (const char* f : files)
+    {
+        auto r = repo.load(base + f);
+        if (r.success())
+            ++ok;
+    }
+    const auto t1 = std::chrono::steady_clock::now();
+    const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+
+    CHECK(ok == 4, ("all 4 golden images decoded (ok=" + std::to_string(ok) + ")").c_str());
+    CHECK(ms < 5000.0, ("smoke decode under 5000 ms (elapsed=" +
+                        std::to_string(static_cast<long long>(ms)) + ")").c_str());
+    printf("  smoke decode of 4 golden images elapsed = %.1f ms\n", ms);
+    fflush(stdout);
+}
+
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
@@ -916,6 +991,8 @@ int main(int argc, char** argv)
     testAnalyzerCapabilityFramework();
 
     testCompareDiffOverlay();
+    test1000ImageNonBlocking();
+    testBenchmarkSmokeDecode();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
