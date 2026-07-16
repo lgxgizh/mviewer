@@ -1,20 +1,24 @@
 #include "core/image/Decoder.h"
 
 #include "core/image/decoder/DecoderRegistry.h"
+#include "core/trace/Trace.h"
 
 ImageData Decoder::decodeFull(const std::string& path)
 {
+    MV_TRACE_SCOPED("Decoder::decodeFull");
     return DecoderRegistry::instance().decodeFull(path);
 }
 
 ImageData Decoder::decodeFull(const std::string& path,
                                        mviewer::domain::ImageMetadata& outMeta)
 {
+    MV_TRACE_SCOPED("Decoder::decodeFull");
     return DecoderRegistry::instance().decodeFull(path, outMeta);
 }
 
 ImageData Decoder::decodeScaled(const std::string& path, int maxEdge)
 {
+    MV_TRACE_SCOPED("Decoder::decodeScaled");
     return DecoderRegistry::instance().decodeScaled(path, maxEdge);
 }
 

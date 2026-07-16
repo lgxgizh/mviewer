@@ -5,6 +5,7 @@
 #include "core/image/Decoder.h"
 #include "core/image/DiskCache.h"
 #include "core/scheduler/TaskScheduler.h"
+#include "core/trace/Trace.h"
 
 #include <QFileInfo>
 #include <QImageReader>
@@ -50,6 +51,7 @@ mviewer::domain::ImageMetadata ImageRepository::makeMeta(const std::string& file
 
 ImageRepository::Result ImageRepository::load(const std::string& filePath, const LoadOptions& opts)
 {
+    MV_TRACE_SCOPED("ImageRepository::load");
     Result res;
     const std::string key = makeKey(filePath);
 
@@ -148,6 +150,7 @@ void ImageRepository::loadAsync(const std::string& filePath,
 std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::string& dirPath,
     int maxImages)
 {
+    MV_TRACE_SCOPED("ImageRepository::loadDirectory");
     const std::vector<std::string> files = FileSystem::listImages(dirPath, maxImages);
     if (files.empty())
         return {};

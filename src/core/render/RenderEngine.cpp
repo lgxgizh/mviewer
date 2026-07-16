@@ -1,6 +1,7 @@
 #include "core/render/RenderEngine.h"
 
 #include "core/image/QtConvert.h"
+#include "core/trace/Trace.h"
 
 #include <QImage>
 #include <QPainter>
@@ -432,6 +433,7 @@ void RenderEngine::executeCommand(QPainter& painter,
     const RenderCommand& cmd,
     const QRect& viewport)
 {
+    MV_TRACE_SCOPED("RenderEngine::executeCommand");
     switch (cmd.type)
     {
     case RenderCommandType::DrawImage:
