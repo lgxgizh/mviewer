@@ -1,8 +1,9 @@
 #pragma once
 
 #include "core/image/ImageFrame.h"
-#include "core/render/TileGrid.h"
 #include "core/render/Viewport.h"
+#include "core/render/TileGrid.h"
+#include "core/render/TileCache.h"
 
 #include <QPixmap>
 #include <QStringList>
@@ -74,6 +75,11 @@ class ImageViewer : public QWidget
     // Tile grid for the current image; drives per-tile rendering so large
     // images (100MP/RAW) are rasterized a tile at a time, never one bitmap.
     TileGrid m_tiles;
+    // LRU tile cache (memory tier of the Render Pipeline). Visible tiles are
+    // decoded once and reused across paints; LOD selection keeps zoomed-out
+    // views cheap. No decode happens in the Widget — the cache's decode
+    // callback calls RenderEngine (core/), never QWidget.
+    TileCache m_tileCache;
 
     bool m_dragging = false;
     QPoint m_lastMousePos;
