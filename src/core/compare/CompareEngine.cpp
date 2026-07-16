@@ -110,3 +110,12 @@ void CompareEngine::applySelectionToAll(const mviewer::domain::Selection& sel)
             frame->setSelection(sel);
     }
 }
+
+PixelController::ProbeResult CompareEngine::inspectPixel(int imgX, int imgY, int baseIndex) const
+{
+    std::vector<ImageData> frames;
+    frames.reserve(m_images.size());
+    for (const auto& f : m_images)
+        frames.push_back(f ? f->pixels() : ImageData{});
+    return m_pixel.inspect(frames, imgX, imgY, baseIndex);
+}

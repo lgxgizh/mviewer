@@ -2,6 +2,7 @@
 
 #include "core/compare/BlinkController.h"
 #include "core/compare/CompareTypes.h"
+#include "core/compare/PixelController.h"
 #include "core/image/ImageFrame.h"
 #include "domain/CompareSession.h"
 #include "domain/Selection.h"
@@ -168,6 +169,12 @@ public:
     const ViewportController& viewport() const { return m_viewport; }
     ViewportController& viewport() { return m_viewport; }
 
+    // Pixel probe (fifth Compare Engine module). Reads the pixel at (imgX,imgY)
+    // from every compared cell and returns samples + deltas vs baseIndex.
+    PixelController::ProbeResult inspectPixel(int imgX, int imgY, int baseIndex = 0) const;
+    const PixelController& pixel() const { return m_pixel; }
+    PixelController& pixel() { return m_pixel; }
+
 private:
     void rebuildLayout();
 
@@ -177,4 +184,5 @@ private:
     SyncController m_sync;
     SelectionController m_selection;
     ViewportController m_viewport;
+    PixelController m_pixel;
 };
