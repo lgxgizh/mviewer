@@ -2,6 +2,7 @@
 #include "core/cache/CacheManager.h"
 
 #include "ImageFrame.h"
+#include "domain/Workspace.h"
 
 #include <functional>
 #include <memory>
@@ -29,7 +30,7 @@ public:
         bool success() const { return frame != nullptr && error.empty(); }
     };
 
-    static const LoadOptions kDefaultLoadOptions;
+    static inline const LoadOptions kDefaultLoadOptions{};
 
     static ImageRepository& instance();
 
@@ -67,6 +68,13 @@ public:
 
     // Lightweight metadata: no pixel decode (path/size/mtime/hash).
     mviewer::domain::ImageMetadata metadata(const std::string& filePath) const;
+
+    // Build a domain Workspace model from a root directory: recursively scan
+    // for image files, group them by parent directory into Folders, each with
+    // an ImageSet of lightweight ImageMetadata (no pixel decode). Used by the
+    // UI to present the browsing model without loading any pixels.
+    mviewer::domain::Workspace loadWorkspace(const std::string& rootPath,
+        int maxPerFolder = 2000, bool recursive = true) const;
 
     // Save to disk cache explicitly.
     void cacheToDisk(const std::string& filePath);

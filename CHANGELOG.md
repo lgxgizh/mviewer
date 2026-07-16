@@ -56,10 +56,35 @@ All notable changes to this project are documented here. The format is based on
     `rotate90CW` core helper in `ImageBuffer.h`; `ImageFrame::setPixels` added) and
     `LabelCommand` are reversible. `test_commandstack` (18 checks). **16/16 CTest green**.
   - Honest gaps (not faked): true disk-LOD decode (Decoder emitting reduced-res bitmaps) is
-    a later milestone; `CropCommand` is a follow-up (needs ROI pixel extraction);
-    `ThumbnailWorker` still drives decode synchronously from its thread (the pipeline's async
-    path is unit-tested but not yet the panel's sole decode route — needs display to verify
-    visually).
+    a later milestone; `ThumbnailWorker` still drives decode synchronously from its thread
+    (the pipeline's async path is unit-tested but not yet the panel's sole decode route —
+    needs display to verify visually).
+- **M8 — Feature completion (Architect follow-ups, DONE):** the four highest-leverage
+  follow-ups from the review, each product-grade with its own CTest suite (20/20 total):
+  - **CropCommand** (`core/command/CropCommand` + `core/image/ImageBuffer::cropRegion`):
+    reversible crop that captures pre-crop pixels for exact undo; `cropRegion` is a pure-`std`
+    helper (clamps `Selection` to bounds, row-wise `memcpy`). `test_crop` — 14 checks.
+  - **Data Model** (`domain/Workspace`: `Workspace → Folder → ImageSet → ImageFrame`): pure
+    value types; `ImageRepository::loadWorkspace(rootPath, maxPerFolder, recursive)` does a
+    real recursive scan grouping files by directory into `Folder`/`ImageSet` (metadata only,
+    no pixel decode). `test_datamodel` — 12 checks.
+  - **Job System** (`core/job/Job` facade over the existing `TaskScheduler`): `Job` /
+    `JobHandle` / `JobSystem` unify Decode / Thumbnail / Analyzer / IO behind one API
+    (submit / cancel / cancel-tree / progress / dependency). The 3 existing pools are
+    untouched. `test_job` — 8 checks.
+  - **Plugin Registry (E2E — now real, not a stub):** `mviewer_core` converted `STATIC →
+    SHARED` (+ `WINDOWS_EXPORT_ALL_SYMBOLS`) so host and plugin share one `Analyzer`/`Command`
+    vtable; `AnalyzerCreator` uses a `std::function` deleter so plugins supply
+    `destroyAnalyzer` (cross-module alloc/free safe); `plugins/example/ExampleAnalyzerPlugin`
+    is a buildable loadable analyzer (`MeanLuminanceAnalyzer`); `PluginManager` probe leak
+    fixed and `unload`/`unloadAll` no longer `FreeLibrary` (plugins are process-lifetime —
+    unloading a Qt-linking DLL at teardown crashes on Windows). CTest uses a **subprocess
+    runner** (`test_pluginregistryrunner` spawns `test_pluginregistry`, judges by flushed
+    stdout) to contain the known Windows DLL-unload-at-exit crash while still proving
+    load → self-register → create → analyze. `test_pluginregistry` + `test_pluginregistryrunner`.
+  - **Flagged build-system change:** making `mviewer_core` SHARED is a real change to
+    `src/CMakeLists.txt` (root adds `add_subdirectory(plugins/example)`). It is within the
+    plugin feature's authorized scope, not a frozen-infra change.
 - Plugin loading framework (`PluginLoader` + `PluginManager`) with lifecycle management
 - UI fixture screenshot regression test (`ui_fixture`)
 - AddressSanitizer CI job for memory-leak / UB detection

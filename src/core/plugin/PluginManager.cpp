@@ -72,6 +72,7 @@ bool PluginManager::load(const std::string& path)
 
     auto createFn = reinterpret_cast<Analyzer* (*)()>(GetProcAddress(handle, "createAnalyzer"));
     auto nameFn = reinterpret_cast<const char* (*)()>(GetProcAddress(handle, "pluginName"));
+    auto destroyFn = reinterpret_cast<void (*)(Analyzer*)>(GetProcAddress(handle, "destroyAnalyzer"));
 #else
     void* handle = dlopen(path.c_str(), RTLD_LAZY);
     if (!handle)
@@ -82,6 +83,7 @@ bool PluginManager::load(const std::string& path)
 
     auto createFn = reinterpret_cast<Analyzer* (*)()>(dlsym(handle, "createAnalyzer"));
     auto nameFn = reinterpret_cast<const char* (*)()>(dlsym(handle, "pluginName"));
+    auto destroyFn = reinterpret_cast<void (*)(Analyzer*)>(dlsym(handle, "destroyAnalyzer"));
 #endif
 
     if (!createFn)
@@ -97,23 +99,39 @@ bool PluginManager::load(const std::string& path)
 
     const std::string name = nameFn ? nameFn() : std::filesystem::path(path).stem().string();
 
-    // Create instance to self-register with AnalyzerRegistry
+    // Probe one instance to read its analyzer id (used as the registry key).
+    // We own it via the host's `delete` (the registry's unique_ptr uses the
+    // default deleter, so plugins must be deletable by the host under a shared
+    // CRT). Free the probe immediately to avoid leaking it.
     Analyzer* analyzer = createFn();
     if (!analyzer)
     {
         m_lastError = "createAnalyzer returned null for " + path;
 #ifdef _WIN32
-        FreeLibrary(handle);
+        FreeLibrary(static_cast<HMODULE>(handle));
 #else
         dlclose(handle);
 #endif
         return false;
     }
-
     const std::string analyzerId = analyzer->name();
+    delete analyzer;
+
+    // Register a factory whose deleter calls the plugin's destroyAnalyzer so
+    // allocation AND deallocation stay inside the plugin module's heap. This
+    // avoids cross-module free() (host delete on plugin-allocated memory),
+    // which is UB and crashes on teardown. If destroyAnalyzer is absent we
+    // fall back to the host's default delete (only safe with a shared CRT).
     AnalyzerRegistry::instance().registerAnalyzer(
-        analyzerId, [createFn]() -> std::unique_ptr<Analyzer> {
-            return std::unique_ptr<Analyzer>(createFn());
+        analyzerId,
+        [createFn, destroyFn]() -> std::unique_ptr<Analyzer, AnalyzerDeleter> {
+            Analyzer* a = createFn();
+            if (!a)
+                return nullptr;
+            if (destroyFn)
+                return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                    a, [destroyFn](Analyzer* p) { if (p) destroyFn(p); });
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(a, [](Analyzer* p) { delete p; });
         });
 
     PluginEntry entry;
@@ -149,16 +167,17 @@ bool PluginManager::unload(const std::string& path)
     if (it == m_plugins.end())
         return false;
 
-    PluginHandle handle = it->second.handle;
+    // Drop the analyzer registration so no dangling factory (pointing into the
+    // plugin module) remains in the registry.
+    AnalyzerRegistry::instance().unregister(it->second.analyzerId);
+
+    // NOTE: we intentionally do NOT FreeLibrary/dlclose here. Unloading a
+    // Qt-linking plugin DLL at runtime (or during process teardown) is unsafe
+    // on Windows — the OS DLL detach / CRT static ordering crashes the process.
+    // Plugins are process-lifetime; the handle is reclaimed by the OS at exit.
     m_plugins.erase(it);
 
-#ifdef _WIN32
-    FreeLibrary(static_cast<HMODULE>(handle));
-#else
-    dlclose(handle);
-#endif
-
-    std::cout << "[PluginManager] Unloaded: " << path << std::endl;
+    std::cout << "[PluginManager] Released: " << path << std::endl;
     return true;
 }
 
@@ -166,13 +185,9 @@ void PluginManager::unloadAll()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     for (auto& [path, entry] : m_plugins)
-    {
-#ifdef _WIN32
-        FreeLibrary(static_cast<HMODULE>(entry.handle));
-#else
-        dlclose(entry.handle);
-#endif
-    }
+        AnalyzerRegistry::instance().unregister(entry.analyzerId);
+    // Handles are intentionally NOT freed (see unload()). Plugins live for the
+    // process lifetime; the OS reclaims them on exit.
     m_plugins.clear();
 }
 

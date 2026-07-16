@@ -56,6 +56,7 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string& path)
 
     auto createFn = reinterpret_cast<Analyzer* (*)()>(GetProcAddress(handle, "createAnalyzer"));
     auto nameFn = reinterpret_cast<const char* (*)()>(GetProcAddress(handle, "pluginName"));
+    auto destroyFn = reinterpret_cast<void (*)(Analyzer*)>(GetProcAddress(handle, "destroyAnalyzer"));
 
     if (!createFn)
     {
@@ -109,12 +110,19 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string& path)
         return result;
     }
 
-    // Register with the analyzer registry (wrap raw pointer factory into
-    // unique_ptr)
+    // Register with the analyzer registry using the plugin's destroyAnalyzer
+    // as the deleter so allocation AND deallocation stay in the plugin's heap.
     std::string id = analyzer->name();
-    AnalyzerRegistry::instance().registerAnalyzer(id, [createFn]() -> std::unique_ptr<Analyzer> {
-        return std::unique_ptr<Analyzer>(createFn());
-    });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        id, [createFn, destroyFn]() -> std::unique_ptr<Analyzer, AnalyzerDeleter> {
+            Analyzer* a = createFn();
+            if (!a)
+                return nullptr;
+            if (destroyFn)
+                return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                    a, [destroyFn](Analyzer* p) { if (p) destroyFn(p); });
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(a, [](Analyzer* p) { delete p; });
+        });
 
     result.loaded = true;
     std::cout << "[PluginLoader] Loaded plugin: " << result.name << " (analyzer: " << id

@@ -1,4 +1,4 @@
-add_library(mviewer_core STATIC
+add_library(mviewer_core SHARED
     core/EventBus.cpp
     core/image/Decoder.cpp
     core/image/decoder/QtDecoder.cpp
@@ -35,6 +35,7 @@ add_library(mviewer_core STATIC
 
     core/command/CommandRegistry.cpp
     core/command/RotateCommand.cpp
+    core/command/CropCommand.cpp
     core/command/LabelCommand.cpp
     core/command/OpenDirectoryCommand.cpp
     core/command/CompareCommand.cpp
@@ -45,9 +46,15 @@ add_library(mviewer_core STATIC
 )
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
-target_link_libraries(mviewer_core PUBLIC Qt6::Widgets Qt6::Sql)
+target_link_libraries(mviewer_core PRIVATE Qt6::Widgets Qt6::Sql)
 
 target_compile_features(mviewer_core PUBLIC cxx_std_20)
+
+# Plugin systems require a single, shared core so host and plugin share one
+# Analyzer/Command vtable (a static core would give each module its own vtable
+# copy and crash on cross-module delete / teardown). Auto-export all symbols
+# so consumers link without per-symbol declspec markup.
+set_target_properties(mviewer_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 target_include_directories(mviewer_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
@@ -164,7 +171,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -333,6 +340,10 @@ add_test(NAME tilecache_tests COMMAND test_tilecache)
 add_test(NAME pixelcontroller_tests COMMAND test_pixelcontroller)
 add_test(NAME thumbnailpipeline_tests COMMAND test_thumbnailpipeline)
 add_test(NAME commandstack_tests COMMAND test_commandstack)
+add_test(NAME crop_tests COMMAND test_crop)
+add_test(NAME job_tests COMMAND test_job)
+add_test(NAME datamodel_tests COMMAND test_datamodel)
+add_test(NAME pluginregistry_tests COMMAND test_pluginregistry_runner)
 
 # ─── Format target ──────────────────────────────────────────────────────────
 
