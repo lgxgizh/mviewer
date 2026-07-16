@@ -12,7 +12,7 @@ class ImageFrame;
 // album workflows (Architect P1-4).
 class LabelCommand : public ICommand
 {
-public:
+  public:
     enum class Mode
     {
         Add,
@@ -20,13 +20,19 @@ public:
     };
     LabelCommand(std::shared_ptr<ImageFrame> frame, std::string tag, Mode mode);
 
-    std::string id() const override { return "label.set"; }
+    std::string id() const override
+    {
+        return "label.set";
+    }
     std::string description() const override;
     void execute() override;
     void undo() override;
-    bool canUndo() const override { return true; }
+    bool canUndo() const override
+    {
+        return true;
+    }
 
-private:
+  private:
     std::shared_ptr<ImageFrame> m_frame;
     std::string m_tag;
     Mode m_mode;

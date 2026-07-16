@@ -1,8 +1,8 @@
 // M7 ④ Undo/Redo Command pattern: CommandStack history + Rotate/Label commands
 // with real undo. Domain-free; no display.
 #include "core/command/CommandStack.h"
-#include "core/command/RotateCommand.h"
 #include "core/command/LabelCommand.h"
+#include "core/command/RotateCommand.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
 
@@ -13,19 +13,19 @@
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 static ImageData makeRGB(int w, int h, uint8_t r, uint8_t g, uint8_t b)
@@ -94,8 +94,7 @@ static void testCommandStack()
 
     CHECK(!stack.canUndo() && !stack.canRedo(), "empty stack: no undo/redo");
 
-    stack.execute(std::make_unique<LabelCommand>(
-        f, "keep", LabelCommand::Mode::Add));
+    stack.execute(std::make_unique<LabelCommand>(f, "keep", LabelCommand::Mode::Add));
     CHECK(stack.canUndo() && !stack.canRedo(), "after execute: can undo, not redo");
     CHECK(f->hasTag("keep"), "command applied via stack");
 
@@ -107,8 +106,7 @@ static void testCommandStack()
     CHECK(f->hasTag("keep"), "stack.redo re-applied the command");
 
     // New action clears the redo branch.
-    stack.execute(std::make_unique<LabelCommand>(
-        f, "another", LabelCommand::Mode::Add));
+    stack.execute(std::make_unique<LabelCommand>(f, "another", LabelCommand::Mode::Add));
     CHECK(!stack.canRedo(), "new execute clears redo branch");
 
     // rotate via stack, then undo restores dimensions.

@@ -10,19 +10,19 @@
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 static ImageData makeRGB(int w, int h, uint8_t r, uint8_t g, uint8_t b)
@@ -47,9 +47,9 @@ static void testProbe()
     auto samples = pc.probe(frames, 2, 2);
     CHECK(samples.size() == 2, "probe returns one sample per cell");
     CHECK(samples[0].valid && samples[0].r == 255 && samples[0].g == 0 && samples[0].b == 0,
-        "cell0 reads solid red at (2,2)");
+          "cell0 reads solid red at (2,2)");
     CHECK(samples[1].valid && samples[1].r == 0 && samples[1].g == 0 && samples[1].b == 255,
-        "cell1 reads solid blue at (2,2)");
+          "cell1 reads solid blue at (2,2)");
 
     // Out-of-bounds -> invalid.
     auto oob = pc.probe(frames, 100, 100);
@@ -66,11 +66,11 @@ static void testDelta()
     CHECK(res.deltas.size() == 2, "delta vector sized per cell");
     // delta of base against itself = 0.
     CHECK(res.deltas[0].dr == 0 && res.deltas[0].dg == 0 && res.deltas[0].db == 0 &&
-            res.deltas[0].dist == 0.0,
-        "base cell delta vs itself is zero");
+              res.deltas[0].dist == 0.0,
+          "base cell delta vs itself is zero");
     // cell1 - cell0 = (30,30,30), dist = sqrt(3*900)=sqrt(2700)~51.96.
     CHECK(res.deltas[1].dr == 30 && res.deltas[1].dg == 30 && res.deltas[1].db == 30,
-        "cell1 delta = (+30,+30,+30) vs base");
+          "cell1 delta = (+30,+30,+30) vs base");
     CHECK(std::abs(res.deltas[1].dist - 51.96) < 0.1, "cell1 euclidean distance ~51.96");
 }
 

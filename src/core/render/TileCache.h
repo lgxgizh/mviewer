@@ -1,8 +1,8 @@
 #pragma once
 
-#include "core/image/ImageBuffer.h"
-#include "Viewport.h"
 #include "TileGrid.h"
+#include "Viewport.h"
+#include "core/image/ImageBuffer.h"
 
 #include <cstdint>
 #include <functional>
@@ -34,7 +34,7 @@ struct TileKey
     int row = 0;
     int lod = 0;
 
-    bool operator==(const TileKey& o) const
+    bool operator==(const TileKey &o) const
     {
         return imageId == o.imageId && col == o.col && row == o.row && lod == o.lod;
     }
@@ -42,7 +42,7 @@ struct TileKey
 
 struct TileKeyHash
 {
-    size_t operator()(const TileKey& k) const
+    size_t operator()(const TileKey &k) const
     {
         size_t h = std::hash<std::string>()(k.imageId);
         h ^= std::hash<int>()(k.col) + 0x9e3779b9 + (h << 6) + (h >> 2);
@@ -55,8 +55,8 @@ struct TileKeyHash
 // Decodes the source region (in full-res image pixels) for the given LOD into a
 // scaled tile of `targetW x targetH` screen pixels. Returns null ImageData on
 // failure. The callback owns the real decode (RenderEngine::scaleRegion).
-using TileDecodeFn = std::function<ImageData(
-    const std::string& imageId, int srcX, int srcY, int srcW, int srcH, int targetW, int targetH)>;
+using TileDecodeFn = std::function<ImageData(const std::string &imageId, int srcX, int srcY,
+                                             int srcW, int srcH, int targetW, int targetH)>;
 
 struct TileCache
 {
@@ -100,7 +100,7 @@ struct TileCache
     }
 
     // Returns the tile for (imageId, col, row, lod) if cached, else null.
-    ImageData get(const TileKey& k)
+    ImageData get(const TileKey &k)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         auto it = m_map.find(k);
@@ -112,7 +112,7 @@ struct TileCache
 
     // Insert/replace a tile, enforcing the LRU budget (evicts least-recently-
     // used tiles). Thread-safe.
-    void put(const TileKey& k, const ImageData& data)
+    void put(const TileKey &k, const ImageData &data)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         auto it = m_map.find(k);
@@ -134,19 +134,21 @@ struct TileCache
         m_map[k] = n;
         while (m_map.size() > maxTiles)
         {
-            const Entry2& back = m_lru.back();
+            const Entry2 &back = m_lru.back();
             m_map.erase(back.key);
             m_lru.pop_back();
         }
     }
 
-    void clear() {
+    void clear()
+    {
         std::lock_guard<std::mutex> lk(m_mtx);
         m_map.clear();
         m_lru.clear();
     }
 
-    size_t size() const {
+    size_t size() const
+    {
         std::lock_guard<std::mutex> lk(m_mtx);
         return m_map.size();
     }
@@ -161,19 +163,16 @@ struct TileCache
         TileKey key;
         ImageData data;
     };
-    std::vector<ReadyTile> request(const std::string& imageId,
-        const Viewport& vp,
-        const TileGrid& grid,
-        const TileDecodeFn& decode,
-        int* decodeCalls = nullptr,
-        int maxLod = 4)
+    std::vector<ReadyTile> request(const std::string &imageId, const Viewport &vp,
+                                   const TileGrid &grid, const TileDecodeFn &decode,
+                                   int *decodeCalls = nullptr, int maxLod = 4)
     {
         std::vector<ReadyTile> out;
         const int lod = chooseLod(vp.scale, maxLod);
         const int lodSize = lodTileSize(grid.tileSize, lod);
         const TileGrid lodGrid(grid.imageW, grid.imageH, lodSize);
         auto tiles = lodGrid.visibleTiles(vp);
-        for (const auto& t : tiles)
+        for (const auto &t : tiles)
         {
             TileKey k{imageId, t.coord.col, t.coord.row, lod};
             ImageData cached = get(k);
@@ -195,7 +194,7 @@ struct TileCache
         return out;
     }
 
-private:
+  private:
     struct Entry2
     {
         TileKey key;

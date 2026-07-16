@@ -37,6 +37,29 @@ All notable changes to this project are documented here. The format is based on
     (uploads artifact, never blocks); ASan **Phase-3 non-gating** signal job. This reverts
     the earlier gating change (`f3d3ffa`).
   - RAW decoder remains deferred: `DecoderRegistry` keeps `TODO(M7): RAW` until libraw lands.
+- **M7 P1 — vertical foundations (Architect re-prioritization, DONE):** the four P1
+  verticals from the Architect's review, built on the domain/core/UI layering:
+  - **① Render Pipeline — TileCache + LOD:** `core/render/TileCache.h` (LRU keyed by
+    imageId/col/row/lod, injectable decode fn, LOD selection math) + `test_tilecache`
+    (17 checks). `ImageViewer` now requests visible tiles from the cache; missing tiles
+    decoded via `RenderEngine::scaleRegion` (core/) and reused across paints. 13/13 green.
+  - **② Compare Engine — Pixel module:** `core/compare/PixelController.h` reads the pixel
+    at a shared image-space point from every compared cell and computes delta vs a base
+    cell. Completes the five-module split (Layout/Sync/ROI/Diff/Pixel). `test_pixelcontroller`
+    (9 checks). 14/14 green.
+  - **③ Thumbnail Pipeline subsystem:** `core/thumbnail/ThumbnailPipeline.h` (singleton) on
+    the shared TaskScheduler — in-memory LRU + `setVisibleRange` priority + `setPredictiveCount`
+    forward prefetch; decode fn injected (default `Decoder::decodeScaled`). `ThumbnailPanel`
+    consults it as a hot tier. `test_thumbnailpipeline` (8 checks). 15/15 green.
+  - **④ Undo/Redo Command pattern:** `ICommand` gained `undo()`/`canUndo()`; new
+    `core/command/CommandStack.h` (bounded undo/redo history); `RotateCommand` (backed by new
+    `rotate90CW` core helper in `ImageBuffer.h`; `ImageFrame::setPixels` added) and
+    `LabelCommand` are reversible. `test_commandstack` (18 checks). **16/16 CTest green**.
+  - Honest gaps (not faked): true disk-LOD decode (Decoder emitting reduced-res bitmaps) is
+    a later milestone; `CropCommand` is a follow-up (needs ROI pixel extraction);
+    `ThumbnailWorker` still drives decode synchronously from its thread (the pipeline's async
+    path is unit-tested but not yet the panel's sole decode route — needs display to verify
+    visually).
 - Plugin loading framework (`PluginLoader` + `PluginManager`) with lifecycle management
 - UI fixture screenshot regression test (`ui_fixture`)
 - AddressSanitizer CI job for memory-leak / UB detection
