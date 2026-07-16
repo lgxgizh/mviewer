@@ -1,7 +1,7 @@
-// M3/M4/M5 unit tests: ROI stats, noise estimation, Encoder, CacheManager,
-// AnalyzerRegistry, TaskScheduler (dep), CacheConfig/CacheManager stats +
-// metadata, new analyzers (RGBMean, Noise, PSNR, SSIM, Entropy, Sharpness),
-// RenderEngine backend.
+// M3/M4/M5 unit tests: ROI stats, noise estimation, Encoder, AnalyzerRegistry,
+// analyzers, RenderEngine, CompareEngine (decode/cache/scheduler/metadata suites
+// were split into test_decoder/test_cache/test_repository/test_scheduler/
+// test_metadata per M6 test hygiene).
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/analyzer/EntropyAnalyzer.h"
@@ -11,30 +11,20 @@
 #include "core/analyzer/RGBMeanAnalyzer.h"
 #include "core/analyzer/SSIMAnalyzer.h"
 #include "core/analyzer/SharpnessAnalyzer.h"
-#include "core/cache/CacheManager.h"
 #include "core/compare/CompareEngine.h"
 #include "core/compare/DifferenceEngine.h"
-#include "core/image/DiskCache.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageFrame.h"
-#include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
-#include "core/scheduler/TaskScheduler.h"
 
 #include <QBuffer>
 #include <QCoreApplication>
+#include <QColor>
 #include <QImage>
-#include <cassert>
-#include <chrono>
-#include <cmath>
 #include <cstdio>
-#include <filesystem>
 #include <string>
-#include <vector>
 
-// test_m3m4m5 isn't given MVIEWER_SOURCE_DIR (see CMakeLists); derive it from the
-// source path so golden-image tests don't need a build-definition change.
 #ifndef MVIEWER_SOURCE_DIR
 static std::string srcRootFromThisFile()
 {
@@ -87,6 +77,15 @@ static QImage makeTestImage(int w, int h, QColor base, bool gradient = false)
     return img;
 }
 
+static QImage makeColorTest(int w, int h, QColor c)
+{
+    QImage img(w, h, QImage::Format_RGB32);
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
+            img.setPixel(x, y, c.rgb());
+    return img;
+}
+
 static void testROIStats()
 {
     printf("\n[ROI Stats]\n");
@@ -94,25 +93,20 @@ static void testROIStats()
     QImage img = makeTestImage(200, 200, QColor(100, 150, 200));
     ImageData data = mvcore::fromQImage(img);
 
-    // 全图
     ImageStats full = AnalysisEngine::computeStats(data);
     CHECK(std::abs(full.lumMean - 140.75) < 1.0, "full image lumMean ~140.75");
-
     CHECK(full.pixelCount == 200 * 200, "full image pixelCount = 40000");
 
-    // ROI: 中心 100x100
     mviewer::domain::Selection roi = {50, 50, 100, 100};
     ImageStats roiStats = AnalysisEngine::computeStatsROI(data, roi);
     CHECK(roiStats.pixelCount == 100 * 100, "ROI pixelCount = 10000");
     CHECK(std::abs(roiStats.lumMean - full.lumMean) < 0.01,
         "ROI lumMean matches full (uniform image)");
 
-    // ROI 超出边界（应自动裁剪）
     mviewer::domain::Selection roiOut = {150, 150, 100, 100};
     ImageStats outStats = AnalysisEngine::computeStatsROI(data, roiOut);
     CHECK(outStats.pixelCount == 50 * 50, "out-of-bounds ROI clipped to 50x50 = 2500");
 
-    // 空 ROI
     mviewer::domain::Selection roiEmpty = {0, 0, 0, 0};
     ImageStats emptyStats = AnalysisEngine::computeStatsROI(data, roiEmpty);
     CHECK(emptyStats.pixelCount == 0, "empty ROI pixelCount = 0");
@@ -121,13 +115,11 @@ static void testROIStats()
 static void testNoiseEstimate()
 {
     printf("\n[Noise Estimate]\n");
-    // 纯色图 → 噪声应接近 0
     QImage flat = makeTestImage(100, 100, QColor(128, 128, 128));
     ImageData flatData = mvcore::fromQImage(flat);
     double noiseFlat = AnalysisEngine::noiseEstimate(flatData);
     CHECK(noiseFlat < 1.0, "flat image noise ~0");
 
-    // 渐变图 → 噪声应较低
     QImage grad = makeTestImage(100, 100, QColor(), true);
     ImageData gradData = mvcore::fromQImage(grad);
     double noiseGrad = AnalysisEngine::noiseEstimate(gradData);
@@ -140,21 +132,17 @@ static void testEncoder()
     QImage img = makeTestImage(64, 64, QColor(200, 100, 50));
     ImageData data = mvcore::fromQImage(img);
 
-    // 编码到内存缓冲
     auto buf = Encoder::encodeToBuffer(data, "png", {});
     CHECK(!buf.empty(), "encodeToBuffer(PNG) non-empty");
     CHECK(buf.size() > 100, "encodeToBuffer(PNG) size > 100");
 
-    // 不同格式
     auto jpgBuf = Encoder::encodeToBuffer(data, "jpg", {90});
     CHECK(!jpgBuf.empty(), "encodeToBuffer(JPG) non-empty");
 
-    // 空数据
     ImageData empty;
     auto emptyBuf = Encoder::encodeToBuffer(empty, "png", {});
     CHECK(emptyBuf.empty(), "encodeToBuffer(empty) returns empty");
 
-    // 格式推断（jpg → jpeg 是 Qt 标准约定）
     CHECK(Encoder::formatForExtension("jpg") == "jpeg",
         "formatForExtension(jpg)==jpeg (Qt convention)");
     CHECK(Encoder::formatForExtension("JPEG") == "jpeg", "formatForExtension(JPEG)==jpeg");
@@ -165,157 +153,12 @@ static void testEncoder()
         "formatForExtension(unknown)==png (default)");
 }
 
-static void testCacheManager()
-{
-    printf("\n[CacheManager]\n");
-    CacheManager& mgr = CacheManager::instance();
-    mgr.clear();
-
-    QImage img = makeTestImage(32, 32, QColor(100, 100, 100));
-    ImageData data = mvcore::fromQImage(img);
-    std::string key = "test_key_123";
-
-    // 未命中
-    ImageData miss;
-    CHECK(!mgr.get(CacheLevel::FullImage, key, miss), "CacheManager miss returns false");
-
-    // 写入
-    mgr.put(CacheLevel::FullImage, key, data);
-    CHECK(mgr.memoryUsageBytes() > 0, "memoryUsageBytes > 0 after put");
-
-    // 命中
-    ImageData hit;
-    CHECK(mgr.get(CacheLevel::FullImage, key, hit), "CacheManager hit returns true");
-    CHECK(hit.width == 32 && hit.height == 32, "hit data dimensions match");
-
-    // 清除
-    mgr.clearMemory();
-    CHECK(mgr.memoryUsageBytes() == 0, "memoryUsageBytes == 0 after clearMemory");
-}
-
-// M5 acceptance: 5-level cache hierarchy, disk persistence (survives memory clear /
-// restart), and hit-ratio reporting.
-static void testCacheManagerM5()
-{
-    printf("\n[CacheManager M5 — disk persistence + hit ratio]\n");
-    fflush(stdout);
-    CacheManager& mgr = CacheManager::instance();
-    DiskCache& disk = DiskCache::instance();
-    mgr.clear();
-    disk.clear();
-
-    QImage img = makeTestImage(48, 48, QColor(70, 130, 200));
-    ImageData data = mvcore::fromQImage(img);
-    const std::string key = "m5_disk_key_1";
-
-    // Write through the 5-level manager to the Disk tier.
-    mgr.put(CacheLevel::Disk, key, data);
-    CHECK(disk.entryCount() >= 1, "disk tier has an entry after put");
-    CHECK(disk.totalBytes() > 0, "disk tier reports >0 bytes");
-
-    // Simulate restart: memory cleared, only disk survives.
-    mgr.clearMemory();
-    CHECK(mgr.memoryUsageBytes() == 0, "memory empty after clear (disk is source of truth)");
-
-    // Read back from disk — pixels must be identical (survives restart).
-    ImageData back;
-    CHECK(mgr.getDisk(key, back), "disk get after memory clear succeeds");
-    CHECK(back.width == 48 && back.height == 48, "disk pixels dimensions preserved");
-    bool identical = back.width == data.width && back.height == data.height;
-    if (identical)
-    {
-        const ImageBuffer vb = back.view(), vd = data.view();
-        for (int i = 0; identical && i < back.height; ++i)
-        {
-            const uint8_t* lb = vb.data + static_cast<size_t>(i) * vb.stride();
-            const uint8_t* ld = vd.data + static_cast<size_t>(i) * vd.stride();
-            for (int j = 0; j < back.width * 3; ++j)
-                if (lb[j] != ld[j])
-                {
-                    identical = false;
-                    break;
-                }
-        }
-    }
-    CHECK(identical, "disk-stored pixels are byte-identical to source");
-
-    // 5-level hit-ratio reporting: a get populates hits; a miss populates misses.
-    mgr.clear();
-    disk.clear();
-    const std::string kHit = "m5_hit", kMiss = "m5_miss";
-    mgr.put(CacheLevel::FullImage, kHit, data);
-    ImageData out;
-    CHECK(mgr.get(CacheLevel::FullImage, kHit, out), "warm get -> hit");
-    CHECK(!mgr.get(CacheLevel::FullImage, kMiss, out), "cold get -> miss");
-    const CacheLevelStats s = mgr.levelStats(CacheLevel::FullImage);
-    CHECK(s.hits >= 1, "FullImage level records a hit");
-    CHECK(s.misses >= 1, "FullImage level records a miss");
-    const double ratio = s.hits + s.misses > 0
-        ? static_cast<double>(s.hits) / (s.hits + s.misses) : 0.0;
-    CHECK(ratio > 0.0 && ratio <= 1.0, "hit ratio in (0,1]");
-    printf("  hit ratio = %.3f (hits=%llu misses=%llu)\n",
-           ratio, static_cast<unsigned long long>(s.hits),
-           static_cast<unsigned long long>(s.misses));
-
-    mgr.clear();
-    disk.clear();
-}
-
-// M5 acceptance: predictive preload warms adjacent images from disk into memory
-// so navigating to a neighbor is instant after cache warm-up.
-static void testPredictivePreload()
-{
-    printf("\n[Predictive preload (M5)]\n");
-    fflush(stdout);
-    CacheManager& mgr = CacheManager::instance();
-    DiskCache& disk = DiskCache::instance();
-    mgr.clear();
-    disk.clear();
-
-    ImageRepository& repo = ImageRepository::instance();
-    const std::string base =
-        std::string(MVIEWER_SOURCE_DIR) + "/testdata/golden/256x256/";
-    const char* files[] = {"flat_color_256x256.jpg", "checker_256x256.jpg",
-                            "gradient_256x256.png"};
-
-    // Load through the repository (writes each to the disk tier).
-    std::vector<std::string> keys;
-    for (const char* f : files)
-    {
-        auto r = repo.load(base + f);
-        CHECK(r.success(), ("repository load " + std::string(f)).c_str());
-        keys.push_back(repo.makeKey(base + f));
-    }
-    CHECK(disk.entryCount() >= 3, "disk tier holds the loaded images");
-
-    // Drop memory so the only source is disk (simulates cold navigation start).
-    mgr.clearMemory();
-    ImageData probe;
-    CHECK(!mgr.getMemory(CacheLevel::FullImage, keys[1], probe),
-          "neighbor not in memory before preload");
-
-    // Predictive preload warms adjacent images from the disk tier into memory
-    // (synchronous core of prefetchVisible); after this, switching to a neighbor
-    // is instant because the pixels are already in the FullImage LRU.
-    repo.prefetch({keys[1], keys[2]}, CacheLevel::FullImage);
-
-    ImageData warm;
-    CHECK(mgr.getMemory(CacheLevel::FullImage, keys[1], warm),
-          "preloaded neighbor present in memory");
-    CHECK(mgr.getMemory(CacheLevel::FullImage, keys[2], warm),
-          "preloaded second neighbor present in memory");
-
-    mgr.clear();
-    disk.clear();
-}
-
 static void testAnalyzerRegistry()
 {
     printf("\n[AnalyzerRegistry]\n");
     fflush(stdout);
     auto& reg = AnalyzerRegistry::instance();
 
-    // HistogramAnalyzer should be auto-registered
     auto ids = reg.availableAnalyzers();
     bool hasHistogram = false;
     for (const auto& id : ids)
@@ -328,7 +171,6 @@ static void testAnalyzerRegistry()
     }
     CHECK(hasHistogram, "HistogramAnalyzer auto-registered as 'histogram'");
 
-    // Create instance
     auto analyzer = reg.create("histogram");
     CHECK(analyzer != nullptr, "create('histogram') returns non-null");
     if (analyzer)
@@ -336,25 +178,20 @@ static void testAnalyzerRegistry()
         CHECK(analyzer->name() == "histogram", "analyzer name == 'histogram'");
     }
 
-    // Nonexistent ID
     CHECK(reg.create("nonexistent") == nullptr, "create('nonexistent') returns null");
 
-    // M4: every built-in analyzer is reachable through the registry and produces
-    // a human-readable result (single entry point; no QRect crosses the core API).
     QImage solid(64, 64, QImage::Format_RGB32);
     solid.fill(QColor(120, 160, 200));
     ImageFrame frame = ImageFrame::create("registry-check", mvcore::fromQImage(solid));
     frame.computeHistogram();
     const char* builtins[] = {"histogram", "noise", "entropy", "psnr",
-                               "sharpness", "ssim", "rgbmean"};
+                              "sharpness", "ssim", "rgbmean"};
     for (const char* id : builtins)
     {
         auto a = reg.create(id);
         CHECK(a != nullptr, ("registry creates '" + std::string(id) + "'").c_str());
         if (a)
         {
-            // psnr/ssim are reference-based; point them at the same frame so the
-            // region analysis has a valid reference.
             if (id == std::string("psnr"))
                 dynamic_cast<PSNRAnalyzer*>(a.get())->setReference(frame);
             else if (id == std::string("ssim"))
@@ -370,14 +207,12 @@ static void testAnalyzerRegistry()
 
 // M4 acceptance (AC2 + AC3): registry-driven ROI analysis on an arbitrary Selection
 // must (a) actually respect the Selection (different regions -> different results)
-// and (b) agree with the AnalysisEngine reference on the same region. This is the
-// core claim of "Analyze(selection) replaces reading QRect".
+// and (b) agree with the AnalysisEngine reference on the same region.
 static void testAnalyzerRegistryConsistency()
 {
     printf("\n[AnalyzerRegistry consistency with AnalysisEngine (AC2/AC3)]\n");
     fflush(stdout);
 
-    // Non-uniform image: left half dark, right half bright.
     const int W = 128, H = 128;
     QImage img(W, H, QImage::Format_RGB32);
     for (int y = 0; y < H; ++y)
@@ -388,7 +223,6 @@ static void testAnalyzerRegistryConsistency()
 
     auto& reg = AnalyzerRegistry::instance();
 
-    // (AC3) ROI analysis respects the Selection: left vs right half differ.
     mviewer::domain::Selection left{0, 0, W / 2, H};
     mviewer::domain::Selection right{W / 2, 0, W / 2, H};
     auto al = reg.create("rgbmean");
@@ -402,7 +236,6 @@ static void testAnalyzerRegistryConsistency()
           ("left ROI mean (" + std::to_string(lMean) + ") != right ROI mean (" +
            std::to_string(rMean) + "): Selection is honored").c_str());
 
-    // (AC2/AC3) Full-frame RGBMean via registry agrees with AnalysisEngine reference.
     mviewer::domain::Selection full{0, 0, W, H};
     auto af = reg.create("rgbmean");
     CHECK(af->analyzeRegion(frame, full), "full-frame rgbmean analyzes");
@@ -412,7 +245,6 @@ static void testAnalyzerRegistryConsistency()
           ("registry rgbmean (" + std::to_string(regMean) +
            ") matches AnalysisEngine rMean (" + std::to_string(ref.rMean) + ")").c_str());
 
-    // (AC2/AC3) Full-frame histogram lumMean via registry agrees with reference.
     auto ah = reg.create("histogram");
     CHECK(ah->analyzeRegion(frame, full), "full-frame histogram analyzes");
     const double regLum = dynamic_cast<HistogramAnalyzer*>(ah.get())->result().lumMean;
@@ -420,100 +252,6 @@ static void testAnalyzerRegistryConsistency()
     CHECK(std::abs(regLum - refH.lumMean) < 1.0,
           ("registry histogram lumMean (" + std::to_string(regLum) +
            ") matches AnalysisEngine lumMean (" + std::to_string(refH.lumMean) + ")").c_str());
-}
-
-// ─── New tests ──────────────────────────────────────────────────────────────
-
-static QImage makeColorTest(int w, int h, QColor c)
-{
-    QImage img(w, h, QImage::Format_RGB32);
-    for (int y = 0; y < h; ++y)
-        for (int x = 0; x < w; ++x)
-            img.setPixel(x, y, c.rgb());
-    return img;
-}
-
-static void testTaskSchedulerDependency()
-{
-    printf("\n[TaskScheduler Dependency]\n");
-    auto& sched = TaskScheduler::instance();
-
-    // Test TaskId auto-increment
-    auto h1 =
-        sched.submit(TaskScheduler::Priority::Background, [](const TaskScheduler::TaskContext&) {});
-    auto h2 =
-        sched.submit(TaskScheduler::Priority::Background, [](const TaskScheduler::TaskContext&) {});
-    CHECK(h1->id != h2->id, "TaskId auto-increments");
-    CHECK(h1->id > 0, "TaskId starts from 1");
-
-    // Test submit with dependency (dep on non-existent id — should still accept)
-    TaskScheduler::TaskId depId = 999999;
-    auto h3 = sched.submit(
-        TaskScheduler::Priority::Background, [](const TaskScheduler::TaskContext&) {}, {depId});
-    CHECK(h3->id > 0, "Dep task accepted");
-    CHECK(h3->dependencies.size() == 1, "Dep recorded");
-
-    // Test handle lookup
-    auto found = sched.handle(h3->id);
-    CHECK(found != nullptr, "handle() finds task");
-
-    // Test cancelTree (doesn't crash on missing)
-    TaskScheduler::cancelTree(depId);
-
-    // Compat submit
-    auto h4 = sched.submit(TaskScheduler::DecodePool, []() {}, []() {});
-    CHECK(h4->id > 0, "Compat submit works");
-
-    // toPriority mapping
-    CHECK(TaskScheduler::toPriority(TaskScheduler::DecodePool) == TaskScheduler::Priority::Decode,
-        "toPriority(DecodePool) = Decode");
-    CHECK(TaskScheduler::toPriority(TaskScheduler::MetadataPool) ==
-              TaskScheduler::Priority::Background,
-        "toPriority(MetadataPool) = Background");
-}
-
-static void testCacheConfig()
-{
-    printf("\n[CacheConfig]\n");
-    CacheManager& mgr = CacheManager::instance();
-    mgr.clear();
-
-    CacheConfig cfg;
-    cfg.metadataCacheSize = 1024;
-    cfg.thumbnailCacheSize = 2048;
-    cfg.previewCacheSize = 4096;
-    cfg.viewerCacheSize = 8192;
-    cfg.maxDiskCacheEntries = 100;
-    mgr.configure(cfg);
-    CHECK(mgr.config().viewerCacheSize == 8192, "CacheConfig applied");
-
-    // Stats
-    CacheLevelStats s = mgr.levelStats(CacheLevel::FullImage);
-    CHECK(s.bytes == 0, "Empty stats show 0 bytes");
-
-    // Metadata store
-    mviewer::domain::ImageMetadata meta;
-    meta.filePath = "/test.png";
-    meta.fileSize = 100;
-    mgr.putMetadata("key1", meta);
-    CHECK(mgr.hasMetadata("key1"), "Metadata stored");
-    mviewer::domain::ImageMetadata meta2;
-    CHECK(mgr.getMetadata("key1", meta2), "Metadata retrieved");
-    CHECK(meta2.fileSize == 100, "Metadata preserved");
-
-    // Erase clears everything
-    QImage img = makeColorTest(16, 16, QColor(100, 100, 100));
-    ImageData data = mvcore::fromQImage(img);
-    mgr.put(CacheLevel::FullImage, "eraseKey", data);
-    mgr.putMetadata("eraseKey", meta);
-    mgr.erase("eraseKey");
-    CHECK(!mgr.hasMetadata("eraseKey"), "erase clears metadata");
-
-    // Invalidate
-    mgr.put(CacheLevel::Thumbnail, "invKey", data);
-    mgr.putMetadata("invKey", meta);
-    mgr.invalidate("invKey");
-    CHECK(!mgr.hasMetadata("invKey"), "invalidate clears metadata");
 }
 
 static void testRGBMean()
@@ -536,7 +274,6 @@ static void testRGBMean()
     CHECK(std::abs(ra.result().bMean - 150) < 0.5, "rgbmean bMean ~150");
     CHECK(ra.result().rStd == 0.0, "rgbmean rStd uniform");
 
-    // Region ROI
     mviewer::domain::Selection roi = {0, 0, 50, 50};
     CHECK(a->analyzeRegion(frame, roi), "rgbmean analyzeRegion ok");
 }
@@ -577,7 +314,6 @@ static void testPSNR()
     CHECK(pa.psnrValue() > 0, "psnr > 0");
     CHECK(pa.psnrValue() < 100, "psnr < 100 (imperfect)");
 
-    // Identical → high PSNR
     CHECK(pa.analyze(frameA), "psnr identical ok");
     CHECK(pa.psnrValue() >= 99, "psnr identical ~100");
 }
@@ -607,7 +343,6 @@ static void testEntropy()
     if (!a)
         return;
 
-    // Low entropy: uniform image
     QImage flat = makeColorTest(100, 100, QColor(128, 128, 128));
     ImageFrame frameFlat = ImageFrame::create("/flat.png", mvcore::fromQImage(flat));
 
@@ -615,7 +350,6 @@ static void testEntropy()
     CHECK(ea.analyze(frameFlat), "entropy flat ok");
     CHECK(ea.entropyValue() == 0.0, "entropy uniform = 0");
 
-    // High entropy: random
     QImage img(100, 100, QImage::Format_RGB32);
     srand(42);
     for (int y = 0; y < 100; ++y)
@@ -647,12 +381,10 @@ static void testRenderEngine()
     printf("\n[RenderEngine]\n");
     auto& engine = RenderEngine::instance();
 
-    // Backend default
     CHECK(engine.scale(ImageData(), {10, 10}).isNull(), "scale null input ok");
     CHECK(engine.overlayDifference(ImageData(), ImageData(), 0.5).isNull(), "overlay null ok");
     CHECK(engine.scaleRegion(ImageData(), {0, 0, 10, 10}, {5, 5}).isNull(), "scaleRegion null ok");
 
-    // Normal scale
     QImage img(100, 100, QImage::Format_RGB32);
     img.fill(qRgb(200, 100, 50));
     ImageData data = mvcore::fromQImage(img);
@@ -672,17 +404,12 @@ static void testCompareControllers()
     printf("\n[CompareControllers]\n");
     CompareEngine engine;
 
-    // Image count 0 initially
     CHECK(engine.imageCount() == 0, "CompareEngine starts empty");
 
-    // Load 2 images
     QImage imgA = makeColorTest(64, 64, QColor(100, 100, 100));
     QImage imgB = makeColorTest(64, 64, QColor(200, 200, 200));
     ImageData dataA = mvcore::fromQImage(imgA);
     ImageData dataB = mvcore::fromQImage(imgB);
-
-    // Since CompareEngine loads from disk, we test the struct math directly.
-    // (The compare core tests in core_tests already verify the real flow.)
 
     CompareLayout layout = CompareLayout::forCount(2);
     CHECK(layout.cols == 2 && layout.rows == 1, "Layout for 2 = 2x1");
@@ -699,67 +426,14 @@ static void testCompareControllers()
     CellSize cs = layout.cellSize(vp);
     CHECK(cs.w == 400 && cs.h == 600, "cellSize 2-cell");
 
-    // SyncTransform defaults
     SyncTransform sync;
     CHECK(sync.scale == 1.0, "SyncTransform default scale");
     CHECK(sync.enabled == true, "SyncTransform default enabled");
 
-    // DifferenceEngine standalone
     ImageData diff = DifferenceEngine::differenceMap(dataA, dataB);
     CHECK(!diff.isNull() && diff.width == 64, "DifferenceEngine diff map");
     ImageData heat = DifferenceEngine::heatMap(diff);
     CHECK(!heat.isNull() && heat.format == PixelFormat::RGB24, "DifferenceEngine heatmap");
-}
-
-static void testImageFrameExtras()
-{
-    printf("\n[ImageFrame Selection/Tags/Cache]\n");
-
-    QImage img = makeColorTest(64, 64, QColor(100, 100, 100));
-    ImageData data = mvcore::fromQImage(img);
-    ImageFrame frame = ImageFrame::create("/tmp.png", data);
-
-    // Selection
-    mviewer::domain::Selection sel = {10, 20, 30, 40};
-    frame.setSelection(sel);
-    CHECK(frame.selection().x == 10, "Selection set");
-    CHECK(frame.selection().width == 30, "Selection width");
-    frame.clearSelection();
-    CHECK(frame.selection().isEmpty(), "Selection cleared");
-
-    // Tags
-    frame.addTag("favorite");
-    frame.addTag("checked");
-    frame.addTag("favorite"); // duplicate → no-op
-    CHECK(frame.hasTag("favorite"), "Tag added");
-    CHECK(frame.hasTag("checked"), "Tag added");
-    CHECK(!frame.hasTag("missing"), "Tag missing");
-    frame.removeTag("favorite");
-    CHECK(!frame.hasTag("favorite"), "Tag removed");
-
-    // Analysis cache
-    frame.setAnalysisResult("rgbmean", true);
-    frame.setAnalysisResult("entropy", true);
-    auto* e1 = frame.findAnalysis("rgbmean");
-    CHECK(e1 != nullptr && e1->ok, "Analysis cache hit");
-    CHECK(frame.findAnalysis("missing") == nullptr, "Analysis cache miss");
-    frame.clearAnalysisCache();
-    CHECK(frame.findAnalysis("rgbmean") == nullptr, "Analysis cache cleared");
-
-    // Render cache
-    ImageData thumb = mvcore::fromQImage(makeColorTest(32, 32, QColor(50, 50, 50)));
-    RenderCacheEntry rce;
-    rce.tag = RenderCacheEntry::Tag::ScaledView;
-    rce.data = thumb;
-    rce.srcWidth = 1920;
-    rce.srcHeight = 1080;
-    frame.setRenderCache(rce);
-    auto* found = frame.findRenderCache(RenderCacheEntry::Tag::ScaledView);
-    CHECK(found != nullptr, "Render cache hit");
-    CHECK(found->srcWidth == 1920, "Render cache meta");
-    frame.clearRenderCache();
-    CHECK(frame.findRenderCache(RenderCacheEntry::Tag::ScaledView) == nullptr,
-        "Render cache cleared");
 }
 
 static void testCompareSession()
@@ -785,7 +459,6 @@ static void testCompareSession()
     s.blinkIndex = -1;
     CHECK(!s.isBlinking(), "Blinking inactive");
 
-    // Viewport defaults
     s.viewport = {1920, 1080, 960, 540, 2, 1};
     CHECK(s.viewport.width == 1920, "Viewport assigned");
 
@@ -823,7 +496,6 @@ static void testAnalyzerCapabilityFramework()
     printf("\n[AnalyzerCapability]\n");
     auto& reg = AnalyzerRegistry::instance();
 
-    // All expected analyzers registered
     const char* expected[] = {
         "histogram", "rgbmean", "noise", "psnr", "ssim", "entropy", "sharpness"};
     auto ids = reg.availableAnalyzers();
@@ -839,15 +511,12 @@ static void testAnalyzerCapabilityFramework()
         CHECK(found, id);
     }
 
-    // Capability query works
     auto cap = reg.capabilitiesOf("histogram");
     CHECK(hasCapability(cap, AnalyzerCapability::SingleImage), "histogram has SingleImage");
     CHECK(!hasCapability(cap, AnalyzerCapability::GPU), "histogram no GPU");
 
-    // Unknown analyzer returns None
     CHECK(reg.capabilitiesOf("nonexistent") == AnalyzerCapability::None, "unknown → None");
 
-    // Capability bitwise ops work
     auto combined = AnalyzerCapability::SingleImage | AnalyzerCapability::RegionOfInterest |
                     AnalyzerCapability::Streaming;
     CHECK(hasCapability(combined, AnalyzerCapability::SingleImage), "bitwise-or keeps SingleImage");
@@ -856,8 +525,6 @@ static void testAnalyzerCapabilityFramework()
 }
 
 // M4 deliverable: difference heatmap overlay in the compare workspace.
-// Guards the exact data path CompareWorkspace uses to build the overlay QImage
-// (DifferenceEngine::differenceMap -> heatMap), without a QWidget.
 static void testCompareDiffOverlay()
 {
     printf("\n[Compare diff heatmap overlay (M4)]\n");
@@ -871,7 +538,6 @@ static void testCompareDiffOverlay()
     eng.setImages({a, b});
     CHECK(eng.imageCount() == 2, "engine loaded 2 images for overlay");
 
-    // Same path CompareWorkspace::rebuildCells uses.
     ImageData diff = eng.differenceMap(1);
     CHECK(!diff.isNull(), "differenceMap(1) non-null");
     CHECK(diff.format == PixelFormat::Grayscale8, "diff is Grayscale8");
@@ -882,101 +548,22 @@ static void testCompareDiffOverlay()
         CHECK(heat.format == PixelFormat::RGB24, "heatmap is RGB24");
         CHECK(heat.width == diff.width && heat.height == diff.height,
               "heatmap preserves diff dimensions");
-        // Convert to QImage exactly as the workspace does (core->Qt, not decode).
         QImage q = mvcore::toQImage(heat);
         CHECK(!q.isNull() && q.width() == heat.width, "toQImage(heat) valid");
     }
 }
 
-// M5 acceptance: open a directory of 1000 images synchronously through the
-// repository's loadDirectory() (no Qt event loop required) and confirm the
-// directory enumerates + decodes all of them, reporting a count.
-static void test1000ImageNonBlocking()
-{
-    printf("\n[1000-image directory non-blocking open (M5)]\n");
-    fflush(stdout);
-
-    namespace fs = std::filesystem;
-    ImageRepository& repo = ImageRepository::instance();
-
-    const fs::path tempDir = fs::temp_directory_path() / "mviewer_m5_1k";
-    std::error_code ec;
-    fs::remove_all(tempDir, ec);              // best-effort cleanup (pre-existence)
-    fs::create_directories(tempDir, ec);
-
-    bool allWritten = true;
-    for (int i = 0; i < 1000; ++i)
-    {
-        QImage img = makeColorTest(16, 16,
-            QColor((i * 7) % 256, (i * 13) % 256, (i * 29) % 256));
-        const std::string path =
-            (tempDir / ("img_" + std::to_string(i) + ".png")).string();
-        const bool ok = Encoder::encode(mvcore::fromQImage(img), path, Encoder::Params{});
-        if (!ok)
-            allWritten = false;
-    }
-    CHECK(allWritten, "all 1000 PNGs written to temp dir");
-
-    const auto t0 = std::chrono::steady_clock::now();
-    std::vector<ImageRepository::Result> results = repo.loadDirectory(tempDir.string(), 1000);
-    const auto t1 = std::chrono::steady_clock::now();
-    const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-
-    CHECK(results.size() == 1000,
-          (std::to_string(results.size()) + " images loaded from directory").c_str());
-    printf("  loadDirectory(1000) elapsed = %.1f ms\n", ms);
-    fflush(stdout);
-
-    fs::remove_all(tempDir, ec);              // best-effort cleanup
-}
-
-// M5 acceptance: a smoke-decode benchmark of the 4 golden 256x256 images
-// (jpg/png/bmp/tiff) through the synchronous repo.load() must all decode and
-// finish well within a stable bound.
-static void testBenchmarkSmokeDecode()
-{
-    printf("\n[benchmark smoke decode (M5)]\n");
-    fflush(stdout);
-
-    ImageRepository& repo = ImageRepository::instance();
-    const std::string base = std::string(MVIEWER_SOURCE_DIR) + "/testdata/golden/256x256/";
-    const char* files[] = {"flat_color_256x256.jpg", "flat_color_256x256.png",
-                           "flat_color_256x256.bmp", "flat_color_256x256.tiff"};
-
-    const auto t0 = std::chrono::steady_clock::now();
-    int ok = 0;
-    for (const char* f : files)
-    {
-        auto r = repo.load(base + f);
-        if (r.success())
-            ++ok;
-    }
-    const auto t1 = std::chrono::steady_clock::now();
-    const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-
-    CHECK(ok == 4, ("all 4 golden images decoded (ok=" + std::to_string(ok) + ")").c_str());
-    CHECK(ms < 5000.0, ("smoke decode under 5000 ms (elapsed=" +
-                        std::to_string(static_cast<long long>(ms)) + ")").c_str());
-    printf("  smoke decode of 4 golden images elapsed = %.1f ms\n", ms);
-    fflush(stdout);
-}
-
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
-    printf("=== M3/M4/M5 Unit Tests ===\n");
+    printf("=== M3/M4/M5 Unit Tests (remaining suite) ===\n");
     fflush(stdout);
 
     testROIStats();
     testNoiseEstimate();
     testEncoder();
-    testCacheManager();
-    testCacheManagerM5();
-    testPredictivePreload();
     testAnalyzerRegistry();
     testAnalyzerRegistryConsistency();
-    testTaskSchedulerDependency();
-    testCacheConfig();
     testRGBMean();
     testNoiseAnalyzer();
     testPSNR();
@@ -985,14 +572,10 @@ int main(int argc, char** argv)
     testSharpness();
     testRenderEngine();
     testCompareControllers();
-    testImageFrameExtras();
     testCompareSession();
     testRenderCommand();
     testAnalyzerCapabilityFramework();
-
     testCompareDiffOverlay();
-    test1000ImageNonBlocking();
-    testBenchmarkSmokeDecode();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
