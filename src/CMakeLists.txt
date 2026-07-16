@@ -161,7 +161,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -325,6 +325,7 @@ add_test(NAME scheduler_tests  COMMAND test_scheduler)
 add_test(NAME metadata_tests   COMMAND test_metadata)
 add_test(NAME filesystem_tests COMMAND test_filesystem)
 add_test(NAME eventbus_tests   COMMAND test_eventbus)
+add_test(NAME render_pipeline_tests COMMAND test_render_pipeline)
 
 # ─── Format target ──────────────────────────────────────────────────────────
 

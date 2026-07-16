@@ -31,7 +31,7 @@
 | M4 | Compare & Analysis maturity | ✅ Done (all 4 acceptance criteria met) |
 | M5 | Scale & Performance | ✅ Done (disk persistence + hit-ratio + predictive-preload + 1000-img non-blocking verified; benchmark CI gate deferred to Phase-3) |
 | M6 | Vertical Browsing Chain (product-grade) | ✅ Done (DecoderRegistry + per-format decoders, metadata enrichment, scheduler priority wiring, test split into 5 suites; 9/9 CTest suites green) |
-| M7 | Stability hardening + CI static analysis | ✅ Done (clang-tidy+ASan gating, clazy advisory; Perfetto trace points; benchmark scale extensions; RenderEngine paint layering; MetadataReader extraction; 11/11 CTest green) |
+| M7 | Stability hardening + Render Pipeline foundation | ✅ Done (coverage tests; Perfetto opt-in trace shim; MetadataReader extraction; Render Pipeline foundation: `Viewport`+`TileGrid`+tile-based `ImageViewer` paint; 12/12 CTest green). **CI gate reverted to Phase-1 mandatory** (clang-tidy/ASan advisory, non-gating) per Architect re-prioritization. |
 
 > Historical note: an earlier internal scheme reused M3/M4/M5 for the prototype Compare /
 > Analysis / Render engines. Those engines are complete and live under `core/compare`,
@@ -204,6 +204,57 @@ Deliverables:
 - [x] No image-decoding logic in the `QWidget` layer (decode flows only through
       `ImageRepository` → `DecoderRegistry`).
 - [x] `test_m3m4m5.cpp` no longer the single growing mega-file (split done).
+
+---
+
+## Next Phase (post-M7) — Architect re-prioritization (2026-07-16)
+
+The Architect's review re-ranked priorities after M7. Core thesis: **stop infra/static-analysis
+expansion; the highest-leverage work is the vertical that every future feature hangs off.**
+Agreed-✓ vs. disagreed-✗ from the review:
+
+- ✓ Don't split `ImageRepository` further (YAGNI; it's already a clean façade).
+- ✓ `DecoderRegistry` done — must stay the seam for RAW/HEIF/AVIF/OpenCV/GPU later.
+- ✓ 5-level cache + priority/cancel/merge/tree-cancel scheduler done.
+- ✓ `domain/` stays Qt-free — non-negotiable.
+- ✗ Perfetto / clang-tidy-gating / ASan-gating were premature — **demoted** (see CI note).
+- ✗ Plugin ABI must NOT be frozen before v1.0 (churn risk).
+
+### P1 (now)
+1. **Render Pipeline** (highest priority). `Image → Tile → Viewport → Renderer → Widget`.
+   M7 laid the foundation: `core/render/Viewport` (domain-free pan/zoom math) +
+   `core/render/TileGrid` (visible-tile enumeration) + `ImageViewer` now paints per visible
+   tile via `RenderEngine::scaleRegion` (no whole-image bitmap). Next: tile cache + LOD so
+   100 MP / RAW render without loading the full bitmap into the Widget.
+2. **Compare Engine decomposition** — split `CompareController` into `Layout` / `Sync` /
+   `ROI` / `Diff` / `Pixel` modules (not more monolithic controller).
+3. **Thumbnail Pipeline** — background decode → thumbnail cache → visible queue → predictive
+   loading, as its own subsystem.
+4. **Undo/Redo** — unify Rotate / Crop / Compare / Label under a `Command` pattern.
+5. **Plugin Registry** — Registry/Factory/Metadata fixed now (no ABI freeze).
+
+### P2
+- Perfetto, memory benchmark, ASan, clazy (all deferred until architecture stable).
+
+### P3
+- Python / Lua / AI / OpenCV plugins.
+
+### Two new directions the review added
+- **Data Model**: `Workspace → Folder → ImageSet → ImageFrame` so Compare / Album / Project /
+  recents compose cleanly.
+- **Job System**: unify Decode / Thumbnail / Analyzer / Benchmark under one
+  `Task → Scheduler → Worker → Cancellation → Dependency → Progress` mechanism (the existing
+  `TaskScheduler` is the seed).
+
+### CI phasing (Architect directive)
+- **Phase-1 (mandatory gate):** Format + Build + Test + Package.
+- **Phase-2:** clang-tidy **advisory only** (uploads artifact, never blocks).
+- **Phase-3:** ASan (MSVC `/fsanitize=address`) — non-gating signal job.
+- **Phase-4:** performance harness + benchmark regression gate.
+- **Phase-5:** plugin/AI benchmarks, release automation.
+- Perfetto / clazy / ASan are explicitly **deferred** until the architecture is stable; they
+  must not add developer burden before then. (M7 temporarily gated clang-tidy/ASan, then
+  reverted to this phased model in `f3d3ffa`.)
 
 ---
 

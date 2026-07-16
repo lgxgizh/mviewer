@@ -17,34 +17,25 @@ All notable changes to this project are documented here. The format is based on
 - Test suite split: `test_m3m4m5.cpp` broken into `test_decoder`, `test_cache`,
   `test_repository`, `test_scheduler`, `test_metadata` (each its own CTest executable),
   preserving all prior coverage.
-- **M7 — Stability hardening + CI static analysis (DONE):**
-  - **CI (review P2-11):** clang-tidy promoted to **gating**, scoped to bug-finding
-    checks (bugprone/performance/clang-analyzer/cppcoreguidelines-pro-type), fails on
-    findings, uploads `clang-tidy.txt` artifact. Added **clazy** (advisory, uploads
-    `clazy.txt`) and **ASan** (MSVC `/fsanitize=address /Zi`, **gating**). ASan verified
-    locally: full 143-target build + 11/11 ctest under AddressSanitizer, zero leaks.
-    `ci-gate` now requires `static-analysis` + `asan` (clazy stays advisory).
+- **M7 — Stability hardening + Render Pipeline foundation (DONE):**
   - **Test coverage (review ② + P0-1 scanner):** added `test_filesystem` (16 checks:
     `FileSystem::listImages` enumeration) and `test_eventbus` (11 checks: publish/
     subscribe/unsubscribe/scope isolation); added LRU-eviction test to `test_cache`
-    (10 checks). CTest 9 → **11 suites, all green**.
-  - **Perfetto trace points (review P1-10):** `core/trace/Trace.h` zero-overhead
-    `MV_TRACE_EVENT`/`MV_TRACE_SCOPED` shim (opt-in Perfetto backend via
-    `MVIEWER_ENABLE_PERFETTO`). Wired at `Decoder::decodeFull/decodeScaled`,
-    `ImageRepository::load/loadDirectory`, `ThumbnailCache::get/put`,
-    `RenderEngine::executeCommand`, `ImageViewer::paint`.
-  - **Benchmark scale extensions (review P1-10 / P2):** `benchmark_main.cpp` now covers
-    `ThumbnailGen(1000)` + `ThumbnailGen(10000)` via `Decoder::decodeScaled`,
-    `RenderEngine::scale` across zoom levels (256/512/1024/1920px), and
-    `ImageRepository::load` adjacent-switch (scroll proxy). All emitted to CSV.
-  - **Render pipeline layering (review P1-9):** `ImageViewer::paintEvent` no longer
-    rasterizes directly — it issues a `RenderCommand::drawImage` from `ImageFrame`
-    pixels to `RenderEngine` (Viewport → Renderer → Widget). Histogram/selection remain
-    UI chrome.
-  - **Repository Manager extraction (review P0-1):** extracted `core/image/MetadataReader`
-    (`MetadataReader::read` + `MetadataReader::key`); `ImageRepository::makeMeta/makeKey`
-    now delegate to it. `ImageRepository` is a thinner orchestrator
-    (Decoder + CacheManager + FileSystem + MetadataReader).
+    (10 checks). CTest 9 → **12 suites, all green**.
+  - **Render Pipeline foundation (Architect P1-①):** new domain-free `core/render/Viewport`
+    (pan/zoom/visible-rect math) and `core/render/TileGrid` (visible-tile enumeration) plus
+    `test_render_pipeline` (17 checks). `ImageViewer` now drives its transform through
+    `Viewport` and paints per visible tile via `RenderEngine::scaleRegion` — no whole-image
+    bitmap, no decode in the Widget. This is the seed for 100 MP / RAW tile rendering.
+  - **MetadataReader extraction (④):** `core/image/MetadataReader` (`read`/`key`) split from
+    `ImageRepository`; 9 new checks in `test_metadata` (now 46 passed).
+  - **Perfetto opt-in trace shim (②):** `core/trace/Trace.h` zero-overhead `MV_TRACE_*`
+    macros; real Perfetto backend only under `MVIEWER_ENABLE_PERFETTO`. Demoted to P2 per
+    Architect re-prioritization (kept because it adds zero burden).
+  - **CI (Architect directive):** reverted gating clang-tidy/ASan back to the phased model —
+    Phase-1 mandatory gate = Format/Build/Test/Package only; clang-tidy **advisory**
+    (uploads artifact, never blocks); ASan **Phase-3 non-gating** signal job. This reverts
+    the earlier gating change (`f3d3ffa`).
   - RAW decoder remains deferred: `DecoderRegistry` keeps `TODO(M7): RAW` until libraw lands.
 - Plugin loading framework (`PluginLoader` + `PluginManager`) with lifecycle management
 - UI fixture screenshot regression test (`ui_fixture`)

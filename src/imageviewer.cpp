@@ -22,7 +22,7 @@ const QStringList kImageExtensions = {"*.jpg", "*.jpeg", "*.bmp", "*.png", "*.ti
 const double kZoomStep = 1.15;
 } // namespace
 
-QStringList ImageViewer::listImages(const QString& dirPath)
+QStringList ImageViewer::listImages(const QString &dirPath)
 {
     QDir dir(dirPath);
     if (!dir.exists())
@@ -31,13 +31,12 @@ QStringList ImageViewer::listImages(const QString& dirPath)
     QFileInfoList entries = dir.entryInfoList(kImageExtensions, QDir::Files, QDir::Name);
     QStringList result;
     result.reserve(entries.size());
-    for (const QFileInfo& info : entries)
+    for (const QFileInfo &info : entries)
         result.append(info.absoluteFilePath());
     return result;
 }
 
-ImageViewer::ImageViewer(QWidget* parent)
-    : QWidget(parent)
+ImageViewer::ImageViewer(QWidget *parent) : QWidget(parent)
 {
     setWindowTitle("图片查看");
     setMouseTracking(true);
@@ -47,7 +46,7 @@ ImageViewer::ImageViewer(QWidget* parent)
 
 ImageViewer::~ImageViewer() = default;
 
-QPixmap ImageViewer::loadPixmap(const QString& path)
+QPixmap ImageViewer::loadPixmap(const QString &path)
 {
     // Acceptance #7: ALL image operations pass through ImageRepository.
     // The QWidget never decodes — it only renders the ImageFrame pixels.
@@ -61,7 +60,7 @@ QPixmap ImageViewer::loadPixmap(const QString& path)
     return QPixmap::fromImage(mvcore::toQImage(m_frame->pixels()));
 }
 
-void ImageViewer::setImage(const QString& path)
+void ImageViewer::setImage(const QString &path)
 {
     m_currentPath = path;
     m_pixmap = loadPixmap(path);
@@ -79,12 +78,18 @@ void ImageViewer::setImage(const QString& path)
     m_fileList = listImages(info.absolutePath());
     m_currentIndex = m_fileList.indexOf(path);
 
-    fitToWidget();
+    // Build the render pipeline state: tile grid over the full-res image, and
+    // a Viewport fitted into the widget. The Widget no longer keeps its own
+    // scale/offset — pan/zoom math is delegated to core/render/Viewport.
+    m_tiles = TileGrid(m_pixmap.width(), m_pixmap.height(), 256);
+    m_view.screenW = width();
+    m_view.screenH = height();
+    m_view.fit(m_pixmap.width(), m_pixmap.height(), 0.95);
     preloadNeighbors(path);
     update();
 }
 
-void ImageViewer::preloadNeighbors(const QString& path)
+void ImageViewer::preloadNeighbors(const QString &path)
 {
     if (m_currentIndex < 0)
         return;
@@ -104,18 +109,13 @@ void ImageViewer::fitToWidget()
 {
     if (m_pixmap.isNull())
         return;
-
-    const double sx = static_cast<double>(width()) / m_pixmap.width();
-    const double sy = static_cast<double>(height()) / m_pixmap.height();
-    m_scale = std::min(sx, sy) * 0.95;
-    if (m_scale <= 0.0)
-        m_scale = 1.0;
-
-    m_offset = QPointF((width() - m_pixmap.width() * m_scale) / 2.0,
-        (height() - m_pixmap.height() * m_scale) / 2.0);
+    // Delegate the fit math to Viewport; keep the Widget free of scale/offset.
+    m_view.screenW = width();
+    m_view.screenH = height();
+    m_view.fit(m_pixmap.width(), m_pixmap.height(), 0.95);
 }
 
-void ImageViewer::computeHistogram(const QPixmap& pixmap)
+void ImageViewer::computeHistogram(const QPixmap &pixmap)
 {
     Q_UNUSED(pixmap);
     std::fill(std::begin(m_histogram), std::end(m_histogram), 0);
@@ -127,36 +127,47 @@ void ImageViewer::computeHistogram(const QPixmap& pixmap)
         m_hasHistogram = false;
         return;
     }
-    const auto& hist = m_frame->histogram();
+    const auto &hist = m_frame->histogram();
     for (int i = 0; i < 256; ++i)
         m_histogram[i] = std::min(hist.luminance[i], 0x7FFFFFFF);
     m_hasHistogram = true;
 }
 
-void ImageViewer::paintEvent(QPaintEvent* event)
+void ImageViewer::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
 
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);
 
-    // Review P1-9: Widget (Viewport) must not rasterize directly. It issues a
-    // RenderCommand to the Renderer, which owns scaling/blitting. The image
-    // source is the ImageFrame pixels (never a raw QImage decoded in the Widget).
+    // Render Pipeline (P1-①): the Widget is the Viewport owner. It asks the
+    // TileGrid which source tiles are visible, then asks the Renderer to scale
+    // each visible region from the ImageFrame pixels — never decoding, never
+    // rasterizing the whole image into one bitmap. This is what makes 100MP/
+    // RAW rendering feasible later.
     if (!m_pixmap.isNull() && m_frame)
     {
         MV_TRACE_SCOPED("ImageViewer::paint");
-        const QSize scaled = m_pixmap.size() * m_scale;
-        const QRectF dst(m_offset, scaled);
-        RenderCommand cmd = RenderCommand::drawImage(
-            m_frame->pixels(),
-            RenderSize{scaled.width(), scaled.height()},
-            RenderInterp::Bilinear);
-        cmd.rect = {static_cast<int>(m_offset.x()),
-                    static_cast<int>(m_offset.y()),
-                    scaled.width(),
-                    scaled.height()};
-        RenderEngine::instance().executeCommand(painter, cmd, dst.toRect());
+        m_view.screenW = width();
+        m_view.screenH = height();
+        auto tiles = m_tiles.visibleTiles(m_view);
+        RenderEngine &eng = RenderEngine::instance();
+        for (const auto &t : tiles)
+        {
+            int sx, sy, sw, sh;
+            m_view.imageRectToScreen(t.srcX, t.srcY, t.srcW, t.srcH, sx, sy, sw, sh);
+            const RenderRect region{t.srcX, t.srcY, t.srcW, t.srcH};
+            const RenderSize tgt{sw, sh};
+            ImageData regionImg = eng.scaleRegion(m_frame->pixels(), region, tgt,
+                                                  m_view.scale < 1.0 ? RenderInterp::Bilinear
+                                                                     : RenderInterp::Nearest);
+            if (regionImg.isNull())
+                continue;
+            QImage q = mvcore::toQImage(regionImg);
+            if (q.isNull())
+                continue;
+            painter.drawImage(QRect(sx, sy, sw, sh), q);
+        }
     }
     else if (!m_currentPath.isEmpty())
     {
@@ -181,7 +192,7 @@ void ImageViewer::paintEvent(QPaintEvent* event)
     }
 }
 
-void ImageViewer::drawHistogram(QPainter& painter) const
+void ImageViewer::drawHistogram(QPainter &painter) const
 {
     const int w = 160;
     const int h = 90;
@@ -215,24 +226,20 @@ void ImageViewer::drawHistogram(QPainter& painter) const
     painter.restore();
 }
 
-void ImageViewer::wheelEvent(QWheelEvent* event)
+void ImageViewer::wheelEvent(QWheelEvent *event)
 {
     if (m_pixmap.isNull())
         return;
 
+    m_view.screenW = width();
+    m_view.screenH = height();
     const QPointF mouse = event->position();
-
     const double factor = event->angleDelta().y() > 0 ? kZoomStep : 1.0 / kZoomStep;
-
-    const QPointF imagePos = (mouse - m_offset) / m_scale;
-    m_scale *= factor;
-    m_scale = std::clamp(m_scale, 0.05, 50.0);
-    m_offset = mouse - imagePos * m_scale;
-
+    m_view.zoomAt(mouse.x(), mouse.y(), factor);
     update();
 }
 
-void ImageViewer::mousePressEvent(QMouseEvent* event)
+void ImageViewer::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton && !m_pixmap.isNull())
     {
@@ -250,7 +257,7 @@ void ImageViewer::mousePressEvent(QMouseEvent* event)
     }
 }
 
-void ImageViewer::mouseMoveEvent(QMouseEvent* event)
+void ImageViewer::mouseMoveEvent(QMouseEvent *event)
 {
     if (m_selecting)
     {
@@ -259,26 +266,30 @@ void ImageViewer::mouseMoveEvent(QMouseEvent* event)
     }
     else if (m_dragging)
     {
-        m_offset += (event->pos() - m_lastMousePos);
+        m_view.pan(event->pos().x() - m_lastMousePos.x(), event->pos().y() - m_lastMousePos.y());
         m_lastMousePos = event->pos();
         update();
     }
 
     // Pixel Inspector (P1 #6): read the pixel under the cursor directly from
-    // the ImageFrame (RGB24), using the inverse of the view transform.
+    // the ImageFrame (RGB24), using the inverse of the Viewport transform.
     int ix = -1, iy = -1, r = 0, g = 0, b = 0;
     bool valid = false;
     if (m_frame && !m_pixmap.isNull())
     {
-        ix = static_cast<int>((event->pos().x() - m_offset.x()) / m_scale);
-        iy = static_cast<int>((event->pos().y() - m_offset.y()) / m_scale);
+        m_view.screenW = width();
+        m_view.screenH = height();
+        const double imgX = (event->pos().x() - m_view.offsetX) / m_view.scale;
+        const double imgY = (event->pos().y() - m_view.offsetY) / m_view.scale;
+        ix = static_cast<int>(std::floor(imgX));
+        iy = static_cast<int>(std::floor(imgY));
         const int iw = m_pixmap.width();
         const int ih = m_pixmap.height();
         if (ix >= 0 && ix < iw && iy >= 0 && iy < ih)
         {
             const ImageBuffer view = m_frame->pixels().view();
-            const uint8_t* p = view.data + static_cast<size_t>(iy) * view.stride() +
-                                static_cast<size_t>(ix) * view.channelsPerPixel();
+            const uint8_t *p = view.data + static_cast<size_t>(iy) * view.stride() +
+                               static_cast<size_t>(ix) * view.channelsPerPixel();
             r = p[0];
             g = p[1];
             b = p[2];
@@ -288,7 +299,7 @@ void ImageViewer::mouseMoveEvent(QMouseEvent* event)
     emit pixelInfo(ix, iy, r, g, b, valid);
 }
 
-void ImageViewer::mouseReleaseEvent(QMouseEvent* event)
+void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton)
     {
@@ -299,11 +310,12 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent* event)
             if (r.width() > 5 && r.height() > 5)
             {
                 QImage img = m_pixmap.toImage().convertToFormat(QImage::Format_RGB32);
-                const QRect imgRect = QRect(static_cast<int>((r.x() - m_offset.x()) / m_scale),
-                    static_cast<int>((r.y() - m_offset.y()) / m_scale),
-                    static_cast<int>(r.width() / m_scale),
-                    static_cast<int>(r.height() / m_scale))
-                                          .normalized();
+                const QRect imgRect =
+                    QRect(static_cast<int>((r.x() - m_view.offsetX) / m_view.scale),
+                          static_cast<int>((r.y() - m_view.offsetY) / m_view.scale),
+                          static_cast<int>(r.width() / m_view.scale),
+                          static_cast<int>(r.height() / m_view.scale))
+                        .normalized();
                 const QRect valid = imgRect.intersected(QRect(0, 0, img.width(), img.height()));
                 if (!valid.isEmpty())
                 {
@@ -335,7 +347,7 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent* event)
     }
 }
 
-void ImageViewer::resizeEvent(QResizeEvent* event)
+void ImageViewer::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     if (m_currentIndex < 0 && !m_pixmap.isNull())
@@ -354,7 +366,7 @@ void ImageViewer::setSelectMode(bool on)
     update();
 }
 
-void ImageViewer::keyPressEvent(QKeyEvent* event)
+void ImageViewer::keyPressEvent(QKeyEvent *event)
 {
     if (event->key() == Qt::Key_Left)
         emit requestPrev();
