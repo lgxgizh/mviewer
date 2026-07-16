@@ -31,6 +31,7 @@
 | M4 | Compare & Analysis maturity | ✅ Done (all 4 acceptance criteria met) |
 | M5 | Scale & Performance | ✅ Done (disk persistence + hit-ratio + predictive-preload + 1000-img non-blocking verified; benchmark CI gate deferred to Phase-3) |
 | M6 | Vertical Browsing Chain (product-grade) | ✅ Done (DecoderRegistry + per-format decoders, metadata enrichment, scheduler priority wiring, test split into 5 suites; 9/9 CTest suites green) |
+| M7 | Stability hardening + CI static analysis | 🔧 In progress (benchmark CSV baseline shipped + verified; clang-tidy CI job authored, non-gating; RAW deferred) |
 
 > Historical note: an earlier internal scheme reused M3/M4/M5 for the prototype Compare /
 > Analysis / Render engines. Those engines are complete and live under `core/compare`,

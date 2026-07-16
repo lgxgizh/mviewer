@@ -1,5 +1,7 @@
 #include "core/benchmark/Benchmark.h"
 
+#include <fstream>
+
 Benchmark& Benchmark::instance()
 {
     static Benchmark inst;
@@ -51,6 +53,29 @@ void Benchmark::report() const
                   << std::setprecision(3) << r.minMs << std::setw(10) << std::fixed
                   << std::setprecision(3) << r.maxMs << std::setw(8) << r.iterations << std::endl;
     }
+}
+
+bool Benchmark::reportCsv(const std::string& path) const
+{
+    std::string outPath = path;
+    if (outPath.empty())
+    {
+        // Default: benchmark_results.csv next to the running executable.
+        outPath = "benchmark_results.csv";
+    }
+    std::ofstream f(outPath);
+    if (!f.is_open())
+        return false;
+    f << "name,avg_ms,min_ms,max_ms,iterations\n";
+    for (const auto& r : m_results)
+    {
+        f << '"' << r.name << "\","
+          << std::fixed << std::setprecision(3) << r.avgMs << ","
+          << r.minMs << ","
+          << r.maxMs << ","
+          << r.iterations << "\n";
+    }
+    return static_cast<bool>(f);
 }
 
 void Benchmark::clear()

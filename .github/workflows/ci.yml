@@ -155,6 +155,44 @@ jobs:
           path: mviewer-win-x64.zip
 
   # ---------------------------------------------------------------------------
+  # static-analysis — clang-tidy (ubuntu, advisory / non-gating Phase-2)
+  # Generates its own compile_commands.json via a clang configure so it can
+  # resolve Qt6/MSVC includes; reports findings without blocking the green gate.
+  # ---------------------------------------------------------------------------
+  static-analysis:
+    name: Static analysis (clang-tidy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang-tidy + clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang clang-tidy clang-tools cmake ninja-build
+
+      - name: Install Qt6
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qt6-base-dev qt6-imageformats-plugin
+
+      - name: Configure (export compile_commands.json)
+        run: |
+          cmake -S . -B build_sa \
+            -G Ninja \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang
+
+      - name: Run clang-tidy
+        run: |
+          find src \( -name '*.cpp' -o -name '*.h' \) \
+            -not -path '*/build*' -print0 \
+            | xargs -0 clang-tidy -p build_sa \
+                --quiet --warnings-as-errors='' \
+            || echo "clang-tidy reported findings (advisory, non-gating)"
+
+  # ---------------------------------------------------------------------------
   # ci-gate — aggregate required statuses for branch protection
   # ---------------------------------------------------------------------------
   ci-gate:
