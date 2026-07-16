@@ -2,7 +2,7 @@
 
 #include "core/image/ImageBuffer.h"
 
-#include <QRecursiveMutex>
+#include <mutex>
 #include <set>
 #include <string>
 
@@ -79,7 +79,10 @@ private:
     // put()/get() calls race and corrupt Qt's connection state and the C++ heap
     // (observed as STATUS_HEAP_CORRUPTION / 0xC0000374 during the 1000-image
     // loadDirectory test).
-    mutable QRecursiveMutex m_mutex;
+    // Uses std::recursive_mutex (NOT a Qt type) to keep this core header Qt-free
+    // per AGENTS.md; the .cpp still uses QMutex/QMutexLocker for the per-thread
+    // connection-creation lock where Qt is allowed.
+    mutable std::recursive_mutex m_mutex;
     bool m_enabled = true;
     std::string m_dbPath;
     int m_maxEntries = 100000;

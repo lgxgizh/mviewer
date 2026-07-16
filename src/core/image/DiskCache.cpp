@@ -96,7 +96,7 @@ QSqlDatabase DiskCache::connectionForThread() const
         // creation so only one connection is registered at a time.
         static QMutex s_createMutex;
         QMutexLocker createLock(&s_createMutex);
-        const QString name = (tid == QThread::currentThreadId() && m_impl->db.isOpen())
+        const QString name = (tid == QThread::currentThreadId())
                                  ? QStringLiteral("mviewer_disk_cache")
                                  : QString("mviewer_disk_cache_t%1").arg(
                                        reinterpret_cast<quintptr>(tid));
@@ -119,7 +119,7 @@ bool DiskCache::get(const std::string& key, ImageData& out)
 {
     if (!m_enabled || !connectionForThread().isOpen())
         return false;
-    QMutexLocker lock(&m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QSqlQuery q(connectionForThread());
     q.prepare("SELECT w, h, fmt, data FROM blobs WHERE key = ?");
     q.addBindValue(QVariant(QString::fromStdString(key)));
@@ -144,7 +144,7 @@ void DiskCache::put(const std::string& key, const ImageData& img)
 {
     if (!m_enabled || !connectionForThread().isOpen() || img.isNull())
         return;
-    QMutexLocker lock(&m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QSqlQuery q(connectionForThread());
     q.prepare("INSERT OR REPLACE INTO blobs(key, w, h, fmt, ts, data) VALUES(?, "
               "?, ?, ?, ?, ?)");
@@ -177,7 +177,7 @@ void DiskCache::remove(const std::string& key)
 {
     if (!connectionForThread().isOpen())
         return;
-    QMutexLocker lock(&m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QSqlQuery q(connectionForThread());
     q.prepare("DELETE FROM blobs WHERE key = ?");
     q.addBindValue(QVariant(QString::fromStdString(key)));
@@ -188,7 +188,7 @@ size_t DiskCache::entryCount() const
 {
     if (!connectionForThread().isOpen())
         return 0;
-    QMutexLocker lock(&m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QSqlQuery q(connectionForThread());
     q.exec("SELECT COUNT(*) FROM blobs");
     if (q.next())
@@ -200,7 +200,7 @@ size_t DiskCache::totalBytes() const
 {
     if (!connectionForThread().isOpen())
         return 0;
-    QMutexLocker lock(&m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QSqlQuery q(connectionForThread());
     // Approximate: width * height * 3 bytes per entry (RGB24)
     q.exec("SELECT COALESCE(SUM(CAST(w AS INTEGER) * CAST(h AS INTEGER) * 3), 0) "
@@ -214,7 +214,7 @@ void DiskCache::clear()
 {
     if (!connectionForThread().isOpen())
         return;
-    QMutexLocker lock(&m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QSqlQuery q(connectionForThread());
     q.exec("DELETE FROM blobs");
 }
@@ -223,7 +223,7 @@ void DiskCache::prune(const std::set<std::string>& validKeys)
 {
     if (!connectionForThread().isOpen())
         return;
-    QMutexLocker lock(&m_mutex);
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QSqlQuery q(connectionForThread());
     q.exec("SELECT key FROM blobs");
     std::set<std::string> stale;
