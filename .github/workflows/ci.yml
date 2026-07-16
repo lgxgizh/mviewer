@@ -7,7 +7,8 @@
 #
 # Phase roadmap:
 #   - Phase-1 (this file): format, build, test, package, status gate.
-#   - Phase-2: clang-tidy + clazy static analysis, ASan/UBSan sanitizer runs.
+#   - Phase-2 (ACTIVE): clang-tidy (gating, bug-finding checks) + clazy (advisory)
+#     static analysis, ASan (MSVC /fsanitize=address, gating).
 #   - Phase-3: benchmark harness, headless (offscreen) run, screenshot diff.
 #   - Phase-4: release automation (tagging, signed installers, changelog).
 #
@@ -155,9 +156,10 @@ jobs:
           path: mviewer-win-x64.zip
 
   # ---------------------------------------------------------------------------
-  # static-analysis — clang-tidy (ubuntu, advisory / non-gating Phase-2)
+  # static-analysis — clang-tidy (ubuntu, GATING Phase-2)
   # Generates its own compile_commands.json via a clang configure so it can
-  # resolve Qt6/MSVC includes; reports findings without blocking the green gate.
+  # resolve Qt6 includes. Scoped to high-signal bug-finding checks (not style
+  # nits) so the gate catches real defects. Findings uploaded as an artifact.
   # ---------------------------------------------------------------------------
   static-analysis:
     name: Static analysis (clang-tidy)
@@ -173,7 +175,6 @@ jobs:
 
       - name: Install Qt6
         run: |
-          sudo apt-get update
           sudo apt-get install -y qt6-base-dev qt6-imageformats-plugin
 
       - name: Configure (export compile_commands.json)
@@ -184,13 +185,98 @@ jobs:
             -DCMAKE_CXX_COMPILER=clang++ \
             -DCMAKE_C_COMPILER=clang
 
-      - name: Run clang-tidy
+      - name: Run clang-tidy (bug-finding checks, fails on findings)
         run: |
           find src \( -name '*.cpp' -o -name '*.h' \) \
             -not -path '*/build*' -print0 \
             | xargs -0 clang-tidy -p build_sa \
-                --quiet --warnings-as-errors='' \
-            || echo "clang-tidy reported findings (advisory, non-gating)"
+                --checks='bugprone-*,performance-*,clang-analyzer-*,cppcoreguidelines-pro-type-*,cppcoreguidelines-special-member-functions' \
+            > clang-tidy.txt 2>&1 || true
+          if grep -qE 'warning:|error:' clang-tidy.txt; then
+            echo "clang-tidy found issues (see artifact)"
+            cat clang-tidy.txt
+            exit 1
+          fi
+
+      - name: Upload findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clang-tidy-findings
+          path: clang-tidy.txt
+
+  # ---------------------------------------------------------------------------
+  # clazy — Qt-aware static analysis (ubuntu, advisory / non-gating Phase-2)
+  # Reports Qt-specific anti-patterns; findings uploaded, never blocks the gate.
+  # ---------------------------------------------------------------------------
+  clazy:
+    name: Static analysis (clazy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clazy + clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clazy clang clang-tools cmake ninja-build
+          sudo apt-get install -y qt6-base-dev qt6-imageformats-plugin
+
+      - name: Configure (clazy build)
+        run: |
+          cmake -S . -B build_clazy \
+            -G Ninja \
+            -DCMAKE_CXX_COMPILER=clazy \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build with clazy (advisory)
+        run: |
+          cmake --build build_clazy -j 4 2> clazy.txt || true
+          echo "clazy run complete (advisory)"
+
+      - name: Upload findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: clazy-findings
+          path: clazy.txt
+
+  # ---------------------------------------------------------------------------
+  # asan — AddressSanitizer via MSVC /fsanitize=address (windows-2022, GATING)
+  # Catches memory errors (use-after-free, leaks, buffer overflows) on the real
+  # MSVC toolchain used for release builds.
+  # ---------------------------------------------------------------------------
+  asan:
+    name: ASan (MSVC /fsanitize=address)
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          modules: qtimageformats
+          cache: true
+
+      - name: Configure (ASan)
+        run: cmake -S . -B build_asan -G Ninja -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi"
+
+      - name: Build (ASan)
+        run: cmake --build build_asan -j 4
+
+      - name: Test (ASan)
+        run: |
+          $env:PATH = "D:\QT\6.11.1\msvc2022_64\bin;$env:PATH"
+          $env:QT_QPA_PLATFORM = "offscreen"
+          cd build_asan
+          ctest --output-on-failure -j4
 
   # ---------------------------------------------------------------------------
   # ci-gate — aggregate required statuses for branch protection
@@ -198,8 +284,8 @@ jobs:
   ci-gate:
     name: CI gate
     runs-on: ubuntu-latest
-    needs: [format, build, test, package]
+    needs: [format, build, test, package, static-analysis, asan]
     if: always()
     steps:
       - name: All required jobs passed
-        run: echo "format, build, test, and package all succeeded."
+        run: echo "format, build, test, package, static-analysis, and asan all succeeded."
