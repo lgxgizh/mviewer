@@ -1,11 +1,13 @@
 #pragma once
 
 #include "core/image/ImageFrame.h"
+#include "core/render/TileGrid.h"
+#include "core/render/Viewport.h"
 
-#include <memory>
 #include <QPixmap>
 #include <QStringList>
 #include <QWidget>
+#include <memory>
 
 // Full-image zoomable viewer. Shown in its own window when the user
 // double-clicks a thumbnail (or single-clicks the bottom-left preview).
@@ -13,24 +15,27 @@
 // a LRU cache of decoded pixmaps.
 class ImageViewer : public QWidget
 {
-Q_OBJECT
+    Q_OBJECT
 
-public:
-    explicit ImageViewer(QWidget* parent = nullptr);
+  public:
+    explicit ImageViewer(QWidget *parent = nullptr);
     ~ImageViewer() override;
 
-    void setImage(const QString& path);
+    void setImage(const QString &path);
 
     // Returns the ImageFrame backing the current view (null if none loaded).
     // Lets the analysis panel route ROI analysis through the registry.
-    std::shared_ptr<ImageFrame> frame() const { return m_frame; }
+    std::shared_ptr<ImageFrame> frame() const
+    {
+        return m_frame;
+    }
 
-public slots:
+  public slots:
     void setSelectMode(bool on);
 
-signals:
-    void regionStats(const QString& text);
-    void selectionChanged(const QRect& sel); // image coords (may be null rect)
+  signals:
+    void regionStats(const QString &text);
+    void selectionChanged(const QRect &sel); // image coords (may be null rect)
     void requestPrev();
     void requestNext();
 
@@ -39,32 +44,36 @@ signals:
     // pixel coordinates; valid=false when the cursor is outside the image.
     void pixelInfo(int x, int y, int r, int g, int b, bool valid);
 
-protected:
-    void paintEvent(QPaintEvent* event) override;
-    void wheelEvent(QWheelEvent* event) override;
-    void mousePressEvent(QMouseEvent* event) override;
-    void mouseMoveEvent(QMouseEvent* event) override;
-    void mouseReleaseEvent(QMouseEvent* event) override;
-    void resizeEvent(QResizeEvent* event) override;
-    void keyPressEvent(QKeyEvent* event) override;
+  protected:
+    void paintEvent(QPaintEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
 
-private:
+  private:
     void fitToWidget();
-    void preloadNeighbors(const QString& path);
-    void drawHistogram(QPainter& painter) const;
-    void computeHistogram(const QPixmap& pixmap);
+    void preloadNeighbors(const QString &path);
+    void drawHistogram(QPainter &painter) const;
+    void computeHistogram(const QPixmap &pixmap);
 
-    QPixmap loadPixmap(const QString& path);
+    QPixmap loadPixmap(const QString &path);
 
-    static QStringList listImages(const QString& dirPath);
+    static QStringList listImages(const QString &dirPath);
 
     QPixmap m_pixmap;
     QString m_currentPath;
     QStringList m_fileList;
     int m_currentIndex = -1;
 
-    double m_scale = 1.0;
-    QPointF m_offset;
+    // View transform (pan/zoom). The math lives in the domain-free Viewport
+    // (core/render); the Widget only stores it and feeds screen geometry.
+    Viewport m_view;
+    // Tile grid for the current image; drives per-tile rendering so large
+    // images (100MP/RAW) are rasterized a tile at a time, never one bitmap.
+    TileGrid m_tiles;
 
     bool m_dragging = false;
     QPoint m_lastMousePos;
