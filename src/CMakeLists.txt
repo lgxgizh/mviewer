@@ -7,6 +7,7 @@ add_library(mviewer_core STATIC
     core/image/ImageObject.cpp
     core/image/ImageFrame.cpp
     core/image/ImageRepository.cpp
+    core/image/MetadataReader.cpp
     core/image/ImageCache.cpp
     core/image/DiskCache.cpp
     core/cache/CacheManager.cpp
