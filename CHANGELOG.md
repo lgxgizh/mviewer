@@ -17,6 +17,14 @@ All notable changes to this project are documented here. The format is based on
 - Test suite split: `test_m3m4m5.cpp` broken into `test_decoder`, `test_cache`,
   `test_repository`, `test_scheduler`, `test_metadata` (each its own CTest executable),
   preserving all prior coverage.
+- **M7 — Stability hardening + CI static analysis (in progress):**
+  - `Benchmark::reportCsv()` emits a machine-readable `benchmark_results.csv`
+    (`name,avg_ms,min_ms,max_ms,iterations`); `benchmark.exe` writes it on every run.
+    Verified: 11 measurements emitted, CSV round-trips.
+  - New non-gating `static-analysis` CI job runs `clang-tidy` (ubuntu, generates its own
+    `compile_commands.json` via a clang configure) so the existing green gate is unaffected
+    until findings are triaged. Not yet run in CI — first push will surface Qt6-path tuning.
+  - RAW decoder remains deferred: `DecoderRegistry` keeps `TODO(M7): RAW` until libraw lands.
 - Plugin loading framework (`PluginLoader` + `PluginManager`) with lifecycle management
 - UI fixture screenshot regression test (`ui_fixture`)
 - AddressSanitizer CI job for memory-leak / UB detection

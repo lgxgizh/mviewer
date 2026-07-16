@@ -26,6 +26,10 @@ public:
     void run(const std::string& name, std::function<void(int)> fn, int iterations = 10);
 
     void report() const;
+    // Emit a machine-readable CSV (name,avg_ms,min_ms,max_ms,iterations) to `path`.
+    // Returns true if the file was written successfully. If `path` is empty,
+    // writes "<exe_dir>/benchmark_results.csv".
+    bool reportCsv(const std::string& path = "") const;
     void clear();
 
 private:

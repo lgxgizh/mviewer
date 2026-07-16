@@ -188,6 +188,13 @@ int main(int argc, char** argv)
     std::cout << std::endl;
     Benchmark::instance().report();
 
+    // P2-⑫: emit a machine-readable baseline (CSV) so PRs can diff against it.
+    const std::string csvPath = "benchmark_results.csv";
+    if (Benchmark::instance().reportCsv(csvPath))
+        std::cout << "\nBenchmark CSV written to: " << csvPath << std::endl;
+    else
+        std::cerr << "\nWARNING: failed to write benchmark CSV to " << csvPath << std::endl;
+
     std::cout << std::endl;
     std::cout << "Cache after benchmarks:" << std::endl;
     std::cout << "  ImageCache totalUsedBytes = " << ImageCache::instance().totalUsedBytes()
