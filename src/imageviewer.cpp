@@ -3,6 +3,8 @@
 #include "core/analysis/AnalysisEngine.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
+#include "core/render/RenderEngine.h"
+#include "core/trace/Trace.h"
 
 #include <QApplication>
 #include <QDir>
@@ -138,12 +140,23 @@ void ImageViewer::paintEvent(QPaintEvent* event)
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);
 
-    if (!m_pixmap.isNull())
+    // Review P1-9: Widget (Viewport) must not rasterize directly. It issues a
+    // RenderCommand to the Renderer, which owns scaling/blitting. The image
+    // source is the ImageFrame pixels (never a raw QImage decoded in the Widget).
+    if (!m_pixmap.isNull() && m_frame)
     {
-        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        MV_TRACE_SCOPED("ImageViewer::paint");
         const QSize scaled = m_pixmap.size() * m_scale;
-        painter.drawPixmap(
-            QRectF(m_offset, scaled), m_pixmap, QRectF(QPointF(0, 0), m_pixmap.size()));
+        const QRectF dst(m_offset, scaled);
+        RenderCommand cmd = RenderCommand::drawImage(
+            m_frame->pixels(),
+            RenderSize{scaled.width(), scaled.height()},
+            RenderInterp::Bilinear);
+        cmd.rect = {static_cast<int>(m_offset.x()),
+                    static_cast<int>(m_offset.y()),
+                    scaled.width(),
+                    scaled.height()};
+        RenderEngine::instance().executeCommand(painter, cmd, dst.toRect());
     }
     else if (!m_currentPath.isEmpty())
     {
