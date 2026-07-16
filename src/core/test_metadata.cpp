@@ -3,11 +3,13 @@
 #include "core/image/ImageRepository.h"
 #include "core/image/Decoder.h"
 #include "core/image/decoder/DecoderRegistry.h"
+#include "core/image/MetadataReader.h"
 
 #include <QColor>
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QImage>
+#include <QTemporaryDir>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -101,6 +103,38 @@ static void testDecoderEnrichment()
     CHECK(meta.bitDepth > 0, "Decoder fills bitDepth");
 }
 
+// M7: MetadataReader is the Manager that ImageRepository delegates metadata/key
+// computation to (Review P0-1). Verify it directly.
+static void testMetadataReader()
+{
+    printf("\n[MetadataReader (M7)]\n");
+    fflush(stdout);
+
+    QTemporaryDir dir;
+    CHECK(dir.isValid(), "temp dir created");
+    const std::string p = (dir.path() + "/mr.png").toStdString();
+    {
+        QImage img(256, 128, QImage::Format_RGB32);
+        img.fill(QColor(10, 20, 30));
+        CHECK(img.save(QString::fromStdString(p), "PNG"), "write test png");
+    }
+
+    mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
+    CHECK(m.width == 256 && m.height == 128, "MetadataReader reads dimensions");
+    CHECK(m.fileSize > 0, "MetadataReader reads fileSize");
+    CHECK(!m.hash.empty(), "MetadataReader builds hash");
+    CHECK(m.fileName == "mr.png", "MetadataReader reads fileName");
+
+    const std::string k1 = mviewer::core::MetadataReader::key(p);
+    CHECK(!k1.empty(), "key non-empty");
+    // Same path+size+mtime -> stable key.
+    CHECK(mviewer::core::MetadataReader::key(p) == k1, "key stable across calls");
+
+    // Missing file -> empty metadata, no throw.
+    mviewer::domain::ImageMetadata missing = mviewer::core::MetadataReader::read("/no/such/file.png");
+    CHECK(missing.fileSize == 0, "missing file -> empty metadata");
+}
+
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
@@ -109,6 +143,7 @@ int main(int argc, char** argv)
 
     testMetadataGolden();
     testDecoderEnrichment();
+    testMetadataReader();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

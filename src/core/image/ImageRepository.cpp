@@ -4,6 +4,7 @@
 #include "core/filesystem/FileSystem.h"
 #include "core/image/Decoder.h"
 #include "core/image/DiskCache.h"
+#include "core/image/MetadataReader.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/trace/Trace.h"
 
@@ -24,29 +25,12 @@ ImageRepository& ImageRepository::instance()
 
 std::string ImageRepository::makeKey(const std::string& filePath) const
 {
-    const QFileInfo fi(QString::fromStdString(filePath));
-    const QString key = QString::fromStdString(filePath) + QString::number(fi.size()) +
-                        QString::number(fi.lastModified().toSecsSinceEpoch());
-    return key.toStdString();
+    return mviewer::core::MetadataReader::key(filePath);
 }
 
 mviewer::domain::ImageMetadata ImageRepository::makeMeta(const std::string& filePath) const
 {
-    mviewer::domain::ImageMetadata meta;
-    const QFileInfo fi(QString::fromStdString(filePath));
-    if (!fi.exists())
-        return meta;
-    meta.filePath = filePath;
-    meta.fileName = fi.fileName().toStdString();
-    meta.fileSize = fi.size();
-    meta.modifiedEpochSec = fi.lastModified().toSecsSinceEpoch();
-    QImageReader reader(QString::fromStdString(filePath));
-    const QSize s = reader.size();
-    meta.width = s.width();
-    meta.height = s.height();
-    meta.hash = filePath + "|" + std::to_string(meta.fileSize) + "|" +
-                std::to_string(meta.modifiedEpochSec);
-    return meta;
+    return mviewer::core::MetadataReader::read(filePath);
 }
 
 ImageRepository::Result ImageRepository::load(const std::string& filePath, const LoadOptions& opts)
