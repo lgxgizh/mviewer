@@ -166,6 +166,49 @@ static void testCacheConfig()
     CHECK(!mgr.hasMetadata("invKey"), "invalidate clears metadata");
 }
 
+static void testCacheLruEviction()
+{
+    printf("\n[CacheLruEviction]\n");
+    ImageCache& cache = ImageCache::instance();
+    cache.clear();
+
+    // Review ②: Cache eviction / LRU behavior must be a covered regression area.
+    // Force a tiny Viewer capacity so eviction is deterministic.
+    const size_t cap = 3 * 16 * 16 * 3; // ~3 small RGB images
+    cache.setCapacity(ImageCache::Viewer, cap);
+
+    auto mk = [](int i) {
+        QImage img = makeColorTest(16, 16, QColor(i * 10, i * 5, 255 - i * 10));
+        return mvcore::fromQImage(img);
+    };
+
+    // Insert 5 images; capacity allows ~3, so the 2 least-recently-used must go.
+    for (int i = 0; i < 5; ++i)
+        cache.put(ImageCache::Viewer, "key" + std::to_string(i), mk(i));
+
+    ImageData out;
+    CHECK(!cache.get(ImageCache::Viewer, "key0", out), "oldest (key0) evicted");
+    CHECK(!cache.get(ImageCache::Viewer, "key1", out), "second-oldest (key1) evicted");
+    CHECK(cache.get(ImageCache::Viewer, "key2", out), "key2 retained");
+    CHECK(cache.get(ImageCache::Viewer, "key3", out), "key3 retained");
+    CHECK(cache.get(ImageCache::Viewer, "key4", out), "key4 (most recent) retained");
+
+    // Touch key2 (make it most-recently-used); insert 2 more to overflow again.
+    cache.get(ImageCache::Viewer, "key2", out);
+    cache.put(ImageCache::Viewer, "key5", mk(5));
+    cache.put(ImageCache::Viewer, "key6", mk(6));
+
+    // Recency order after operations: key6 > key5 > key2(touched) > key4 > key3.
+    // Capacity ~3 -> LRU evicts key4 then key3. key2/key5/key6 survive.
+    CHECK(cache.get(ImageCache::Viewer, "key2", out), "key2 retained after touch (LRU reorder)");
+    CHECK(cache.get(ImageCache::Viewer, "key5", out), "key5 retained (recent)");
+    CHECK(cache.get(ImageCache::Viewer, "key6", out), "key6 retained (most recent)");
+    CHECK(!cache.get(ImageCache::Viewer, "key4", out), "key4 evicted (LRU after 2nd overflow)");
+    CHECK(!cache.get(ImageCache::Viewer, "key3", out), "key3 evicted (was LRU after touch)");
+
+    cache.clear();
+}
+
 int main(int argc, char** argv)
 {
     QCoreApplication app(argc, argv);
@@ -175,6 +218,7 @@ int main(int argc, char** argv)
     testCacheManager();
     testCacheManagerM5();
     testCacheConfig();
+    testCacheLruEviction();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
