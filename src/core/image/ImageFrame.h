@@ -52,79 +52,142 @@ struct RenderCacheEntry
 // Thread-safe for read-only access; cache/decode state changes are atomic.
 class ImageFrame
 {
-public:
+  public:
     ImageFrame() = default;
-    ImageFrame(const mviewer::domain::ImageMetadata& meta, const ImageData& pixels);
+    ImageFrame(const mviewer::domain::ImageMetadata &meta, const ImageData &pixels);
 
     // Factory: create from a decoded image, filling metadata (hash, size, mtime).
     // Implementation may use Qt for file interrogation (.cpp only).
-    static ImageFrame create(const std::string& path, const ImageData& pixels);
+    static ImageFrame create(const std::string &path, const ImageData &pixels);
 
     // ─── Identity ─────────────────────────────────────────────────────────────
-    const mviewer::domain::ImageMetadata& metadata() const { return m_meta; }
+    const mviewer::domain::ImageMetadata &metadata() const
+    {
+        return m_meta;
+    }
     mviewer::domain::ImageId id() const;
 
     // ─── Pixel access ────────────────────────────────────────────────────────
-    const ImageData& pixels() const { return m_pixels; }
-    const ImageBuffer view() const { return m_pixels.view(); }
+    const ImageData &pixels() const
+    {
+        return m_pixels;
+    }
+    const ImageBuffer view() const
+    {
+        return m_pixels.view();
+    }
     // Replace the pixel buffer (e.g. after a reversible Rotate command). Updates
     // metadata dimensions to match. Callers must ensure the new buffer is valid.
-    void setPixels(const ImageData& pixels);
-    int width() const { return m_pixels.width; }
-    int height() const { return m_pixels.height; }
-    bool isValid() const { return !m_pixels.isNull(); }
+    void setPixels(const ImageData &pixels);
+    int width() const
+    {
+        return m_pixels.width;
+    }
+    int height() const
+    {
+        return m_pixels.height;
+    }
+    bool isValid() const
+    {
+        return !m_pixels.isNull();
+    }
 
     // ─── Thumbnail (lazy) ────────────────────────────────────────────────────
-    const ImageData& thumbnail() const { return m_thumbnail; }
-    void setThumbnail(const ImageData& t) { m_thumbnail = t; }
-    bool hasThumbnail() const { return !m_thumbnail.isNull(); }
+    const ImageData &thumbnail() const
+    {
+        return m_thumbnail;
+    }
+    void setThumbnail(const ImageData &t)
+    {
+        m_thumbnail = t;
+    }
+    bool hasThumbnail() const
+    {
+        return !m_thumbnail.isNull();
+    }
 
     // ─── Decode / Cache states ──────────────────────────────────────────────
-    DecodeState decodeState() const { return m_decodeState; }
-    void setDecodeState(DecodeState s) { m_decodeState = s; }
-    CacheState cacheState() const { return m_cacheState; }
-    void setCacheState(CacheState s) { m_cacheState = s; }
+    DecodeState decodeState() const
+    {
+        return m_decodeState;
+    }
+    void setDecodeState(DecodeState s)
+    {
+        m_decodeState = s;
+    }
+    CacheState cacheState() const
+    {
+        return m_cacheState;
+    }
+    void setCacheState(CacheState s)
+    {
+        m_cacheState = s;
+    }
 
     // ─── Histogram (lazy-computed) ───────────────────────────────────────────
-    const mviewer::domain::Histogram& histogram() const;
+    const mviewer::domain::Histogram &histogram() const;
     void computeHistogram();
-    bool hasHistogram() const { return m_histogramComputed; }
+    bool hasHistogram() const
+    {
+        return m_histogramComputed;
+    }
 
     // ─── Metadata ────────────────────────────────────────────────────────────
-    void setMetadata(const mviewer::domain::ImageMetadata& m) { m_meta = m; }
+    void setMetadata(const mviewer::domain::ImageMetadata &m)
+    {
+        m_meta = m;
+    }
 
     // ─── Selection ───────────────────────────────────────────────────────────
-    const mviewer::domain::Selection& selection() const { return m_selection; }
-    void setSelection(const mviewer::domain::Selection& s) { m_selection = s; }
-    void clearSelection() { m_selection = {}; }
+    const mviewer::domain::Selection &selection() const
+    {
+        return m_selection;
+    }
+    void setSelection(const mviewer::domain::Selection &s)
+    {
+        m_selection = s;
+    }
+    void clearSelection()
+    {
+        m_selection = {};
+    }
 
     // ─── Tags ───────────────────────────────────────────────────────────────
-    const std::vector<std::string>& tags() const { return m_tags; }
-    void addTag(const std::string& tag);
-    void removeTag(const std::string& tag);
-    bool hasTag(const std::string& tag) const;
+    const std::vector<std::string> &tags() const
+    {
+        return m_tags;
+    }
+    void addTag(const std::string &tag);
+    void removeTag(const std::string &tag);
+    bool hasTag(const std::string &tag) const;
 
     // ─── Analysis cache ─────────────────────────────────────────────────────
-    const AnalysisCacheEntry* findAnalysis(const std::string& analyzer) const;
-    const std::vector<AnalysisCacheEntry>& analysisCache() const { return m_analysisCache; }
-    void setAnalysisResult(const std::string& analyzer, bool ok);
+    const AnalysisCacheEntry *findAnalysis(const std::string &analyzer) const;
+    const std::vector<AnalysisCacheEntry> &analysisCache() const
+    {
+        return m_analysisCache;
+    }
+    void setAnalysisResult(const std::string &analyzer, bool ok);
     void clearAnalysisCache();
 
     // ─── Render cache ───────────────────────────────────────────────────────
-    const RenderCacheEntry* findRenderCache(RenderCacheEntry::Tag tag) const;
-    void setRenderCache(const RenderCacheEntry& entry);
+    const RenderCacheEntry *findRenderCache(RenderCacheEntry::Tag tag) const;
+    void setRenderCache(const RenderCacheEntry &entry);
     void clearRenderCache();
 
     // ─── Stats convenience ──────────────────────────────────────────────────
-    double luminanceMean() const { return m_histogram.lumMean; }
-    void rgbMeans(double& r, double& g, double& b) const
+    double luminanceMean() const
+    {
+        return m_histogram.lumMean;
+    }
+    void rgbMeans(double &r, double &g, double &b) const
     {
         r = m_histogram.rMean;
         g = m_histogram.gMean;
         b = m_histogram.bMean;
     }
 
-private:
+  private:
     mviewer::domain::ImageMetadata m_meta;
     ImageData m_pixels;
     DecodeState m_decodeState = DecodeState::Idle;

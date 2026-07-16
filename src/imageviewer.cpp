@@ -151,7 +151,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
         MV_TRACE_SCOPED("ImageViewer::paint");
         m_view.screenW = width();
         m_view.screenH = height();
-        RenderEngine& eng = RenderEngine::instance();
+        RenderEngine &eng = RenderEngine::instance();
         // Render Pipeline (P1-①): ask the TileCache for the visible tiles at
         // the LOD chosen for the current zoom. Only missing tiles are decoded
         // (via RenderEngine::scaleRegion in core/), then cached. The Widget
@@ -159,21 +159,23 @@ void ImageViewer::paintEvent(QPaintEvent *event)
         const std::string id = m_frame->id().hash;
         auto ready = m_tileCache.request(
             id, m_view, m_tiles,
-            [&](const std::string&, int sx, int sy, int sw, int sh, int tw, int th) -> ImageData {
+            [&](const std::string &, int sx, int sy, int sw, int sh, int tw, int th) -> ImageData
+            {
                 const RenderRect region{sx, sy, sw, sh};
                 const RenderSize tgt{tw, th};
                 return eng.scaleRegion(m_frame->pixels(), region, tgt,
-                    m_view.scale < 1.0 ? RenderInterp::Bilinear : RenderInterp::Nearest);
+                                       m_view.scale < 1.0 ? RenderInterp::Bilinear
+                                                          : RenderInterp::Nearest);
             });
-        for (const auto& rt : ready)
+        for (const auto &rt : ready)
         {
             // Compute on-screen rect for this tile's LOD/source region.
             int tsx, tsy, tsw, tsh;
             m_view.imageRectToScreen(rt.key.col * m_tiles.tileSize * (1 << rt.key.lod),
-                rt.key.row * m_tiles.tileSize * (1 << rt.key.lod),
-                TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod),
-                TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod),
-                tsx, tsy, tsw, tsh);
+                                     rt.key.row * m_tiles.tileSize * (1 << rt.key.lod),
+                                     TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod),
+                                     TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod), tsx, tsy,
+                                     tsw, tsh);
             QImage q = mvcore::toQImage(rt.data);
             if (q.isNull())
                 continue;

@@ -4,12 +4,12 @@
 #include "application/RenameImageUseCase.h"
 #include "core/EventBus.h"
 
-#include "thumbnailcache.h"
 #include "core/image/Decoder.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
+#include "thumbnailcache.h"
 
 #include <QApplication>
 #include <QContextMenuEvent>
@@ -27,7 +27,7 @@ namespace
 {
 const QStringList kImageExtensions = {"*.jpg", "*.jpeg", "*.bmp", "*.png", "*.tif", "*.tiff"};
 
-QList<QFileInfo> sortedEntries(const QString& dirPath, ThumbnailPanel::SortMode mode)
+QList<QFileInfo> sortedEntries(const QString &dirPath, ThumbnailPanel::SortMode mode)
 {
     QDir dir(dirPath);
     if (!dir.exists())
@@ -40,28 +40,29 @@ QList<QFileInfo> sortedEntries(const QString& dirPath, ThumbnailPanel::SortMode 
     switch (mode)
     {
     case ThumbnailPanel::SortName:
-        std::sort(entries.begin(), entries.end(), [](const QFileInfo& a, const QFileInfo& b) {
-            return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0;
-        });
+        std::sort(entries.begin(), entries.end(),
+                  [](const QFileInfo &a, const QFileInfo &b)
+                  { return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0; });
         break;
     case ThumbnailPanel::SortDate:
-        std::sort(entries.begin(), entries.end(), [](const QFileInfo& a, const QFileInfo& b) {
-            return a.lastModified() < b.lastModified();
-        });
+        std::sort(entries.begin(), entries.end(),
+                  [](const QFileInfo &a, const QFileInfo &b)
+                  { return a.lastModified() < b.lastModified(); });
         break;
     case ThumbnailPanel::SortSize:
-        std::sort(entries.begin(), entries.end(), [](const QFileInfo& a, const QFileInfo& b) {
-            return a.size() < b.size();
-        });
+        std::sort(entries.begin(), entries.end(),
+                  [](const QFileInfo &a, const QFileInfo &b) { return a.size() < b.size(); });
         break;
-    case ThumbnailPanel::SortResolution: {
-        auto area = [](const QFileInfo& fi) {
-            const auto meta = ImageRepository::instance().metadata(fi.absoluteFilePath().toStdString());
+    case ThumbnailPanel::SortResolution:
+    {
+        auto area = [](const QFileInfo &fi)
+        {
+            const auto meta =
+                ImageRepository::instance().metadata(fi.absoluteFilePath().toStdString());
             return static_cast<qint64>(meta.width) * meta.height;
         };
-        std::sort(entries.begin(), entries.end(), [&](const QFileInfo& a, const QFileInfo& b) {
-            return area(a) < area(b);
-        });
+        std::sort(entries.begin(), entries.end(),
+                  [&](const QFileInfo &a, const QFileInfo &b) { return area(a) < area(b); });
         break;
     }
     }
@@ -71,8 +72,7 @@ QList<QFileInfo> sortedEntries(const QString& dirPath, ThumbnailPanel::SortMode 
 
 // ---- ThumbnailWorker -------------------------------------------------------
 
-ThumbnailWorker::ThumbnailWorker(QObject* parent)
-    : QObject(parent)
+ThumbnailWorker::ThumbnailWorker(QObject *parent) : QObject(parent)
 {
 }
 
@@ -83,7 +83,7 @@ void ThumbnailWorker::stop()
     m_cond.wakeAll();
 }
 
-void ThumbnailWorker::enqueue(const Request& req)
+void ThumbnailWorker::enqueue(const Request &req)
 {
     QMutexLocker lock(&m_mutex);
     // De-duplicate: keep only the latest request for the same id.
@@ -100,7 +100,7 @@ void ThumbnailWorker::enqueue(const Request& req)
     m_cond.wakeOne();
 }
 
-QPixmap ThumbnailWorker::makeThumbnail(const QString& path)
+QPixmap ThumbnailWorker::makeThumbnail(const QString &path)
 {
     // 1) On-disk cache (persistent tier).
     QPixmap cached;
@@ -118,11 +118,12 @@ QPixmap ThumbnailWorker::makeThumbnail(const QString& path)
         {
             QPixmap pm(ThumbnailPanel::kThumbSize, ThumbnailPanel::kThumbSize);
             pm.fill(Qt::transparent);
-            QPixmap scaled = QPixmap::fromImage(qimg).scaled(ThumbnailPanel::kThumbSize,
-                ThumbnailPanel::kThumbSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            QPixmap scaled = QPixmap::fromImage(qimg).scaled(
+                ThumbnailPanel::kThumbSize, ThumbnailPanel::kThumbSize, Qt::KeepAspectRatio,
+                Qt::SmoothTransformation);
             QPainter painter(&pm);
             painter.drawPixmap((ThumbnailPanel::kThumbSize - scaled.width()) / 2,
-                (ThumbnailPanel::kThumbSize - scaled.height()) / 2, scaled);
+                               (ThumbnailPanel::kThumbSize - scaled.height()) / 2, scaled);
             painter.end();
             return pm;
         }
@@ -140,14 +141,12 @@ QPixmap ThumbnailWorker::makeThumbnail(const QString& path)
     // Compose on a square transparent canvas with aspect-correct scaling.
     QPixmap pm(ThumbnailPanel::kThumbSize, ThumbnailPanel::kThumbSize);
     pm.fill(Qt::transparent);
-    QPixmap scaled = QPixmap::fromImage(qimg).scaled(ThumbnailPanel::kThumbSize,
-        ThumbnailPanel::kThumbSize,
-        Qt::KeepAspectRatio,
-        Qt::SmoothTransformation);
+    QPixmap scaled =
+        QPixmap::fromImage(qimg).scaled(ThumbnailPanel::kThumbSize, ThumbnailPanel::kThumbSize,
+                                        Qt::KeepAspectRatio, Qt::SmoothTransformation);
     QPainter painter(&pm);
     painter.drawPixmap((ThumbnailPanel::kThumbSize - scaled.width()) / 2,
-        (ThumbnailPanel::kThumbSize - scaled.height()) / 2,
-        scaled);
+                       (ThumbnailPanel::kThumbSize - scaled.height()) / 2, scaled);
     painter.end();
 
     ThumbnailCache::instance().put(path, pm);
@@ -179,8 +178,7 @@ void ThumbnailWorker::process()
 
 // ---- ThumbnailPanel --------------------------------------------------------
 
-ThumbnailPanel::ThumbnailPanel(QWidget* parent)
-    : QListWidget(parent)
+ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListWidget(parent)
 {
     setViewMode(QListView::IconMode);
     setFlow(QListView::LeftToRight);
@@ -199,28 +197,31 @@ ThumbnailPanel::ThumbnailPanel(QWidget* parent)
     m_compareBtn->setVisible(true);
     connect(m_compareBtn, &QPushButton::clicked, this, &ThumbnailPanel::onCompareClicked);
 
-    connect(this, &QListWidget::itemClicked, this, [this](QListWidgetItem* item) {
-        if (item)
-            emit itemClicked(item->data(Qt::UserRole).toString());
-    });
-    connect(this, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* item) {
-        if (item)
-        {
-            const QString path = item->data(Qt::UserRole).toString();
-            emit itemDoubleClicked(path);
-            EventBus::instance().publish("image.open", const_cast<QString*>(&path));
-        }
-    });
+    connect(this, &QListWidget::itemClicked, this,
+            [this](QListWidgetItem *item)
+            {
+                if (item)
+                    emit itemClicked(item->data(Qt::UserRole).toString());
+            });
+    connect(this, &QListWidget::itemDoubleClicked, this,
+            [this](QListWidgetItem *item)
+            {
+                if (item)
+                {
+                    const QString path = item->data(Qt::UserRole).toString();
+                    emit itemDoubleClicked(path);
+                    EventBus::instance().publish("image.open", const_cast<QString *>(&path));
+                }
+            });
 
     connect(
-        m_worker,
-        &ThumbnailWorker::thumbnailReady,
-        this,
-        [this](const QString& path, const QPixmap& pm, const QString& id) {
+        m_worker, &ThumbnailWorker::thumbnailReady, this,
+        [this](const QString &path, const QPixmap &pm, const QString &id)
+        {
             // Match by the stored id to avoid stale updates after
             // a directory switch.
             Q_UNUSED(path);
-            QListWidgetItem* item = m_itemById.value(id, nullptr);
+            QListWidgetItem *item = m_itemById.value(id, nullptr);
             if (item)
                 item->setIcon(QIcon(pm));
         },
@@ -259,7 +260,7 @@ void ThumbnailPanel::setSortMode(SortMode mode)
         setDirectory(m_currentDir);
 }
 
-void ThumbnailPanel::setDirectory(const QString& path)
+void ThumbnailPanel::setDirectory(const QString &path)
 {
     m_currentDir = path;
     clear();
@@ -268,11 +269,11 @@ void ThumbnailPanel::setDirectory(const QString& path)
     const QList<QFileInfo> entries = sortedEntries(path, m_sortMode);
     for (int i = 0; i < entries.size() && i < kMaxImages; ++i)
     {
-        const QFileInfo& info = entries.at(i);
+        const QFileInfo &info = entries.at(i);
         const QString filePath = info.absoluteFilePath();
         const QString id = path + "#" + QString::number(i);
 
-        auto* item = new QListWidgetItem(this);
+        auto *item = new QListWidgetItem(this);
         item->setData(Qt::UserRole, filePath);
         item->setData(Qt::UserRole + 1, id);
         item->setText(info.fileName());
@@ -289,7 +290,7 @@ void ThumbnailPanel::setDirectory(const QString& path)
 QStringList ThumbnailPanel::selectedPaths() const
 {
     QStringList result;
-    for (QListWidgetItem* item : selectedItems())
+    for (QListWidgetItem *item : selectedItems())
         result.append(item->data(Qt::UserRole).toString());
     return result;
 }
@@ -303,19 +304,19 @@ void ThumbnailPanel::onCompareClicked()
         return;
     }
     emit compareRequested(sel);
-    EventBus::instance().publish("compare.requested", const_cast<QStringList*>(&sel));
+    EventBus::instance().publish("compare.requested", const_cast<QStringList *>(&sel));
 }
 
 void ThumbnailPanel::renameSelected()
 {
-    const QList<QListWidgetItem*> items = selectedItems();
+    const QList<QListWidgetItem *> items = selectedItems();
     if (items.isEmpty())
         return;
 
     const QString oldPath = items.first()->data(Qt::UserRole).toString();
     const QFileInfo fi(oldPath);
-    const QString newName = QInputDialog::getText(
-        this, "重命名", "请输入新的文件名：", QLineEdit::Normal, fi.fileName());
+    const QString newName = QInputDialog::getText(this, "重命名", "请输入新的文件名：",
+                                                  QLineEdit::Normal, fi.fileName());
     if (newName.isEmpty() || newName == fi.fileName())
         return;
     // 不接受带路径分隔符的输入(只改文件名)
@@ -349,7 +350,7 @@ void ThumbnailPanel::moveToTrashSelected()
         return;
 
     bool allOk = true;
-    for (const QString& path : sel)
+    for (const QString &path : sel)
     {
         if (!DeleteImageUseCase::execute(path.toStdString()).success)
             allOk = false;
@@ -360,9 +361,9 @@ void ThumbnailPanel::moveToTrashSelected()
         QMessageBox::warning(this, "删除到回收站", "部分文件删除失败");
 }
 
-void ThumbnailPanel::contextMenuEvent(QContextMenuEvent* event)
+void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
 {
-    QListWidgetItem* item = itemAt(event->pos());
+    QListWidgetItem *item = itemAt(event->pos());
     if (!item)
         return;
 
@@ -371,14 +372,14 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent* event)
         setCurrentItem(item, QItemSelectionModel::Select);
 
     QMenu menu(this);
-    QAction* actRename = menu.addAction("重命名(&R)");
-    QAction* actTrash = menu.addAction("删除到回收站(&D)");
+    QAction *actRename = menu.addAction("重命名(&R)");
+    QAction *actTrash = menu.addAction("删除到回收站(&D)");
     connect(actRename, &QAction::triggered, this, &ThumbnailPanel::renameSelected);
     connect(actTrash, &QAction::triggered, this, &ThumbnailPanel::moveToTrashSelected);
     menu.exec(event->globalPos());
 }
 
-void ThumbnailPanel::resizeEvent(QResizeEvent* event)
+void ThumbnailPanel::resizeEvent(QResizeEvent *event)
 {
     QListWidget::resizeEvent(event);
     if (m_compareBtn)

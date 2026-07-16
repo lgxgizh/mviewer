@@ -31,7 +31,7 @@
 | M4 | Compare & Analysis maturity | ✅ Done (all 4 acceptance criteria met) |
 | M5 | Scale & Performance | ✅ Done (disk persistence + hit-ratio + predictive-preload + 1000-img non-blocking verified; benchmark CI gate deferred to Phase-3) |
 | M6 | Vertical Browsing Chain (product-grade) | ✅ Done (DecoderRegistry + per-format decoders, metadata enrichment, scheduler priority wiring, test split into 5 suites; 9/9 CTest suites green) |
-| M7 | Stability hardening + Render Pipeline foundation | ✅ Done (coverage tests; Perfetto opt-in trace shim; MetadataReader extraction; Render Pipeline foundation: `Viewport`+`TileGrid`+tile-based `ImageViewer` paint; 12/12 CTest green). **CI gate reverted to Phase-1 mandatory** (clang-tidy/ASan advisory, non-gating) per Architect re-prioritization. |
+| M7 | Stability hardening + Render Pipeline foundation | ✅ Done (coverage tests; Perfetto opt-in trace shim; MetadataReader extraction; **Render Pipeline foundation**: `Viewport`+`TileGrid`+`TileCache`(LOD)+tile-based `ImageViewer` paint; **Compare Engine Pixel module** completing Layout/Sync/ROI/Diff/Pixel; **ThumbnailPipeline** subsystem; **Undo/Redo CommandStack**+Rotate/Label; 16/16 CTest green). **CI gate reverted to Phase-1 mandatory** (clang-tidy/ASan advisory, non-gating) per Architect re-prioritization. |
 
 > Historical note: an earlier internal scheme reused M3/M4/M5 for the prototype Compare /
 > Analysis / Render engines. Those engines are complete and live under `core/compare`,
@@ -220,17 +220,24 @@ Agreed-✓ vs. disagreed-✗ from the review:
 - ✗ Perfetto / clang-tidy-gating / ASan-gating were premature — **demoted** (see CI note).
 - ✗ Plugin ABI must NOT be frozen before v1.0 (churn risk).
 
-### P1 (now)
+### P1 (now — DONE in M7)
 1. **Render Pipeline** (highest priority). `Image → Tile → Viewport → Renderer → Widget`.
-   M7 laid the foundation: `core/render/Viewport` (domain-free pan/zoom math) +
-   `core/render/TileGrid` (visible-tile enumeration) + `ImageViewer` now paints per visible
-   tile via `RenderEngine::scaleRegion` (no whole-image bitmap). Next: tile cache + LOD so
-   100 MP / RAW render without loading the full bitmap into the Widget.
-2. **Compare Engine decomposition** — split `CompareController` into `Layout` / `Sync` /
-   `ROI` / `Diff` / `Pixel` modules (not more monolithic controller).
-3. **Thumbnail Pipeline** — background decode → thumbnail cache → visible queue → predictive
-   loading, as its own subsystem.
-4. **Undo/Redo** — unify Rotate / Crop / Compare / Label under a `Command` pattern.
+   M7 laid the foundation: `core/render/Viewport` (domain-free pan/zoom) +
+   `core/render/TileGrid` (visible-tile enumeration) + `core/render/TileCache` (LRU +
+   LOD) + `ImageViewer` paints per visible tile via `RenderEngine::scaleRegion` (no
+   whole-image bitmap). Next: tile cache + LOD so 100 MP / RAW render without loading
+   the full bitmap into the Widget. *(Note: this "next" was itself completed in M7 —
+   LOD + TileCache added. True disk-LOD decode (Decoder emitting reduced-res bitmaps)
+   remains a later milestone.)*
+2. **Compare Engine decomposition** — split into `Layout` (ViewportController) /
+   `Sync` (SyncController) / `ROI` (SelectionController) / `Diff` (DifferenceEngine +
+   BlinkController) / `Pixel` (PixelController, added M7). Done; no more monolithic
+   CompareController.
+3. **Thumbnail Pipeline** — background decode → thumbnail cache → visible queue →
+   predictive loading, as its own subsystem (`core/thumbnail/ThumbnailPipeline`, M7).
+4. **Undo/Redo** — unified `Command` pattern with `CommandStack` history (undo/redo);
+   Rotate + Label commands reversible (M7). *(CropCommand is a follow-up: needs ROI
+   pixel extraction; `Selection` domain object exists.)*
 5. **Plugin Registry** — Registry/Factory/Metadata fixed now (no ABI freeze).
 
 ### P2

@@ -1,8 +1,8 @@
 // M7 ① Tile cache + LOD: TileCache put/get/eviction, LOD selection math, and
 // request() cache-hit behavior (decode called once, then served from cache).
 #include "core/render/TileCache.h"
-#include "core/render/Viewport.h"
 #include "core/render/TileGrid.h"
+#include "core/render/Viewport.h"
 
 #include <cstdio>
 #include <functional>
@@ -10,19 +10,19 @@
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 static void testLodSelection()
@@ -83,9 +83,8 @@ static void testRequestCacheHit()
     Viewport vp(256, 256, 0.5, 0.0, 0.0);
 
     int decodeCalls = 0;
-    auto decode = [&](const std::string&, int, int, int, int, int, int) -> ImageData {
-        return makeImageData(1, 1, PixelFormat::RGB24);
-    };
+    auto decode = [&](const std::string &, int, int, int, int, int, int) -> ImageData
+    { return makeImageData(1, 1, PixelFormat::RGB24); };
 
     auto r1 = cache.request("img", vp, grid, decode, &decodeCalls);
     CHECK(!r1.empty(), "first request returns a tile");

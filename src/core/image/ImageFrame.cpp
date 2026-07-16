@@ -15,13 +15,12 @@ inline int toLum(uint8_t r, uint8_t g, uint8_t b)
 
 } // namespace
 
-ImageFrame::ImageFrame(const mviewer::domain::ImageMetadata& meta, const ImageData& pixels)
-    : m_meta(meta)
-    , m_pixels(pixels)
+ImageFrame::ImageFrame(const mviewer::domain::ImageMetadata &meta, const ImageData &pixels)
+    : m_meta(meta), m_pixels(pixels)
 {
 }
 
-/*static*/ ImageFrame ImageFrame::create(const std::string& path, const ImageData& pixels)
+/*static*/ ImageFrame ImageFrame::create(const std::string &path, const ImageData &pixels)
 {
     mviewer::domain::ImageMetadata meta;
     const QFileInfo fi(QString::fromStdString(path));
@@ -42,7 +41,7 @@ mviewer::domain::ImageId ImageFrame::id() const
     return mviewer::domain::ImageId{m_meta.hash};
 }
 
-void ImageFrame::setPixels(const ImageData& pixels)
+void ImageFrame::setPixels(const ImageData &pixels)
 {
     if (pixels.isNull())
         return;
@@ -54,7 +53,7 @@ void ImageFrame::setPixels(const ImageData& pixels)
     m_histogram.clear();
 }
 
-const mviewer::domain::Histogram& ImageFrame::histogram() const
+const mviewer::domain::Histogram &ImageFrame::histogram() const
 {
     return m_histogram;
 }
@@ -72,10 +71,10 @@ void ImageFrame::computeHistogram()
     int64_t sumL = 0, sumR = 0, sumG = 0, sumB = 0;
     for (int y = 0; y < h; ++y)
     {
-        const uint8_t* line = v.data + static_cast<size_t>(y) * v.stride();
+        const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
         for (int x = 0; x < w; ++x)
         {
-            const uint8_t* p = line + static_cast<size_t>(x) * cpp;
+            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
             const int r = p[0], g = p[1], b = p[2];
             ++m_histogram.luminance[std::clamp(toLum(r, g, b), 0, 255)];
             ++m_histogram.red[std::clamp(r, 0, 255)];
@@ -96,35 +95,35 @@ void ImageFrame::computeHistogram()
 
 // ─── Tags ───────────────────────────────────────────────────────────────────
 
-void ImageFrame::addTag(const std::string& tag)
+void ImageFrame::addTag(const std::string &tag)
 {
     if (!hasTag(tag))
         m_tags.push_back(tag);
 }
 
-void ImageFrame::removeTag(const std::string& tag)
+void ImageFrame::removeTag(const std::string &tag)
 {
     m_tags.erase(std::remove(m_tags.begin(), m_tags.end(), tag), m_tags.end());
 }
 
-bool ImageFrame::hasTag(const std::string& tag) const
+bool ImageFrame::hasTag(const std::string &tag) const
 {
     return std::find(m_tags.begin(), m_tags.end(), tag) != m_tags.end();
 }
 
 // ─── Analysis cache ─────────────────────────────────────────────────────────
 
-const AnalysisCacheEntry* ImageFrame::findAnalysis(const std::string& analyzer) const
+const AnalysisCacheEntry *ImageFrame::findAnalysis(const std::string &analyzer) const
 {
-    for (const auto& e : m_analysisCache)
+    for (const auto &e : m_analysisCache)
         if (e.analyzerName == analyzer)
             return &e;
     return nullptr;
 }
 
-void ImageFrame::setAnalysisResult(const std::string& analyzer, bool ok)
+void ImageFrame::setAnalysisResult(const std::string &analyzer, bool ok)
 {
-    for (auto& e : m_analysisCache)
+    for (auto &e : m_analysisCache)
     {
         if (e.analyzerName == analyzer)
         {
@@ -143,17 +142,17 @@ void ImageFrame::clearAnalysisCache()
 
 // ─── Render cache ───────────────────────────────────────────────────────────
 
-const RenderCacheEntry* ImageFrame::findRenderCache(RenderCacheEntry::Tag tag) const
+const RenderCacheEntry *ImageFrame::findRenderCache(RenderCacheEntry::Tag tag) const
 {
-    for (const auto& e : m_renderCache)
+    for (const auto &e : m_renderCache)
         if (e.tag == tag)
             return &e;
     return nullptr;
 }
 
-void ImageFrame::setRenderCache(const RenderCacheEntry& entry)
+void ImageFrame::setRenderCache(const RenderCacheEntry &entry)
 {
-    for (auto& e : m_renderCache)
+    for (auto &e : m_renderCache)
     {
         if (e.tag == entry.tag)
         {

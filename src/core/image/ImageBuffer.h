@@ -15,7 +15,7 @@ enum class PixelFormat
 
 struct ImageBuffer
 {
-    uint8_t* data = nullptr;
+    uint8_t *data = nullptr;
     int width = 0;
     int height = 0;
     PixelFormat format = PixelFormat::RGB24;
@@ -44,9 +44,15 @@ struct ImageBuffer
                static_cast<size_t>(channelsPerPixel());
     }
 
-    bool isNull() const { return data == nullptr || width <= 0 || height <= 0; }
+    bool isNull() const
+    {
+        return data == nullptr || width <= 0 || height <= 0;
+    }
 
-    ptrdiff_t stride() const { return static_cast<ptrdiff_t>(width) * channelsPerPixel(); }
+    ptrdiff_t stride() const
+    {
+        return static_cast<ptrdiff_t>(width) * channelsPerPixel();
+    }
 };
 
 struct ImageData
@@ -56,7 +62,10 @@ struct ImageData
     int height = 0;
     PixelFormat format = PixelFormat::RGB24;
 
-    bool isNull() const { return !buffer || width <= 0 || height <= 0; }
+    bool isNull() const
+    {
+        return !buffer || width <= 0 || height <= 0;
+    }
 
     ImageBuffer view() const
     {
@@ -68,7 +77,10 @@ struct ImageData
         return b;
     }
 
-    ptrdiff_t stride() const { return static_cast<ptrdiff_t>(width) * channelsPerPixel(); }
+    ptrdiff_t stride() const
+    {
+        return static_cast<ptrdiff_t>(width) * channelsPerPixel();
+    }
 
     size_t byteSize() const
     {
@@ -117,7 +129,7 @@ inline int luminance(uint8_t r, uint8_t g, uint8_t b)
 // Rotate an RGB/RGBA image 90 degrees clockwise. Pure std implementation
 // (no Qt). Returns an empty ImageData on invalid input. Channels preserved
 // (RGB24 -> RGB24, RGBA32 -> RGBA32); Grayscale8 -> Grayscale8.
-inline ImageData rotate90CW(const ImageData& src)
+inline ImageData rotate90CW(const ImageData &src)
 {
     if (src.isNull())
         return ImageData{};
@@ -132,13 +144,13 @@ inline ImageData rotate90CW(const ImageData& src)
     {
         for (int x = 0; x < w; ++x)
         {
-            const uint8_t* sp = v.data + static_cast<size_t>(y) * v.stride() +
-                                 static_cast<size_t>(x) * cpp;
+            const uint8_t *sp =
+                v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
             // 90 CW: dst (x', y') where x' = h-1-y, y' = x.
             const int dx = h - 1 - y;
             const int dy = x;
-            uint8_t* dp = dv.data + static_cast<size_t>(dy) * dv.stride() +
-                          static_cast<size_t>(dx) * cpp;
+            uint8_t *dp =
+                dv.data + static_cast<size_t>(dy) * dv.stride() + static_cast<size_t>(dx) * cpp;
             for (int c = 0; c < cpp; ++c)
                 dp[c] = sp[c];
         }

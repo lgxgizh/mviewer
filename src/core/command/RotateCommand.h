@@ -13,17 +13,26 @@ class ImageFrame;
 // captured so undo() restores them exactly. Core-only (no Qt).
 class RotateCommand : public ICommand
 {
-public:
+  public:
     explicit RotateCommand(std::shared_ptr<ImageFrame> frame);
 
-    std::string id() const override { return "rotate.cw90"; }
-    std::string description() const override { return "Rotate 90° CW"; }
+    std::string id() const override
+    {
+        return "rotate.cw90";
+    }
+    std::string description() const override
+    {
+        return "Rotate 90° CW";
+    }
     void execute() override;
     void undo() override;
-    bool canUndo() const override { return true; }
+    bool canUndo() const override
+    {
+        return true;
+    }
     bool canExecute() const override;
 
-private:
+  private:
     std::shared_ptr<ImageFrame> m_frame;
     struct Impl
     {

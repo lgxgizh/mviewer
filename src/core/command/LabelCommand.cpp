@@ -3,9 +3,7 @@
 #include "core/image/ImageFrame.h"
 
 LabelCommand::LabelCommand(std::shared_ptr<ImageFrame> frame, std::string tag, Mode mode)
-    : m_frame(std::move(frame))
-    , m_tag(std::move(tag))
-    , m_mode(mode)
+    : m_frame(std::move(frame)), m_tag(std::move(tag)), m_mode(mode)
 {
 }
 

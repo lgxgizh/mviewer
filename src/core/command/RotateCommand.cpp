@@ -6,8 +6,7 @@
 #include <utility>
 
 RotateCommand::RotateCommand(std::shared_ptr<ImageFrame> frame)
-    : m_frame(std::move(frame))
-    , m_impl(std::make_unique<Impl>())
+    : m_frame(std::move(frame)), m_impl(std::make_unique<Impl>())
 {
 }
 

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "core/image/ImageBuffer.h"
 #include "core/image/Decoder.h"
+#include "core/image/ImageBuffer.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <functional>
@@ -26,19 +26,25 @@
 
 struct ThumbnailPipeline
 {
-    using DecodeFn = std::function<ImageData(const std::string& path, int size)>;
-    using ResultFn = std::function<void(const std::string& path, const ImageData& thumb)>;
+    using DecodeFn = std::function<ImageData(const std::string &path, int size)>;
+    using ResultFn = std::function<void(const std::string &path, const ImageData &thumb)>;
 
     int thumbSize = 256;
     size_t memCacheMax = 512; // hot thumbnails retained in memory (LRU)
 
     // Inject the decode step (default: Decoder::decodeScaled). Tests inject a fake.
-    void setDecodeFn(DecodeFn fn) { m_decode = std::move(fn); }
+    void setDecodeFn(DecodeFn fn)
+    {
+        m_decode = std::move(fn);
+    }
     // Deliver decoded thumbnails here (called on the scheduler worker thread).
-    void setResultFn(ResultFn fn) { m_result = std::move(fn); }
+    void setResultFn(ResultFn fn)
+    {
+        m_result = std::move(fn);
+    }
 
     // Full directory listing (image paths, in display order).
-    void setSources(const std::vector<std::string>& paths)
+    void setSources(const std::vector<std::string> &paths)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         m_sources = paths;
@@ -57,11 +63,14 @@ struct ThumbnailPipeline
 
     // Number of neighbors beyond the visible range to pre-decode at Background
     // priority (predictive loading for fast scroll). Default 16.
-    void setPredictiveCount(size_t n) { m_predictive = n; }
+    void setPredictiveCount(size_t n)
+    {
+        m_predictive = n;
+    }
 
     // Synchronous cache probe: returns the cached thumbnail if present, else
     // null and kicks an async decode (respecting visible/predictive ordering).
-    ImageData request(const std::string& path)
+    ImageData request(const std::string &path)
     {
         {
             std::lock_guard<std::mutex> lk(m_mtx);
@@ -82,7 +91,7 @@ struct ThumbnailPipeline
     void clear()
     {
         std::lock_guard<std::mutex> lk(m_mtx);
-        for (auto& kv : m_handles)
+        for (auto &kv : m_handles)
             TaskScheduler::cancel(kv.second);
         m_handles.clear();
         m_memCache.clear();
@@ -97,13 +106,13 @@ struct ThumbnailPipeline
         return m_memCache.size();
     }
 
-    static ThumbnailPipeline& instance()
+    static ThumbnailPipeline &instance()
     {
         static ThumbnailPipeline inst;
         return inst;
     }
 
-private:
+  private:
     struct MemEntry
     {
         ImageData data;
@@ -130,7 +139,7 @@ private:
         // user scrolls forward; reverse prefetch can be added later.)
     }
 
-    void enqueueLocked(const std::string& path, TaskScheduler::Priority prio)
+    void enqueueLocked(const std::string &path, TaskScheduler::Priority prio)
     {
         if (m_memCache.count(path) || m_pending.count(path))
             return;
@@ -140,7 +149,7 @@ private:
         ResultFn result = m_result;
         auto handle = TaskScheduler::instance().submit(
             prio,
-            [this, path, size, decode, result](const TaskScheduler::TaskContext&)
+            [this, path, size, decode, result](const TaskScheduler::TaskContext &)
             {
                 ImageData thumb = decode(path, size);
                 {
@@ -159,7 +168,7 @@ private:
             m_handles[path] = handle;
     }
 
-    void cacheLocked(const std::string& path, const ImageData& data)
+    void cacheLocked(const std::string &path, const ImageData &data)
     {
         MemEntry e;
         e.data = data;
@@ -168,7 +177,7 @@ private:
         m_memCache[path] = e;
         while (m_memCache.size() > memCacheMax)
         {
-            const std::string& back = m_lru.back();
+            const std::string &back = m_lru.back();
             m_memCache.erase(back);
             m_lru.pop_back();
         }
@@ -179,9 +188,8 @@ private:
     size_t m_visibleBegin = 0;
     size_t m_visibleEnd = 0;
     size_t m_predictive = 16;
-    DecodeFn m_decode = [](const std::string& path, int size) {
-        return Decoder::decodeScaled(path, size);
-    };
+    DecodeFn m_decode = [](const std::string &path, int size)
+    { return Decoder::decodeScaled(path, size); };
     ResultFn m_result;
     std::unordered_map<std::string, MemEntry> m_memCache;
     std::list<std::string> m_lru;

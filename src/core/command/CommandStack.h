@@ -19,9 +19,8 @@
 
 class CommandStack
 {
-public:
-    explicit CommandStack(size_t maxDepth = 100)
-        : m_maxDepth(maxDepth)
+  public:
+    explicit CommandStack(size_t maxDepth = 100) : m_maxDepth(maxDepth)
     {
     }
 
@@ -46,7 +45,7 @@ public:
         std::lock_guard<std::mutex> lk(m_mtx);
         if (m_undo.empty() || !m_undo.back()->canUndo())
             return;
-        auto& cmd = m_undo.back();
+        auto &cmd = m_undo.back();
         cmd->undo();
         m_redo.push_back(std::move(cmd));
         m_undo.pop_back();
@@ -59,7 +58,7 @@ public:
         std::lock_guard<std::mutex> lk(m_mtx);
         if (m_redo.empty())
             return;
-        auto& cmd = m_redo.back();
+        auto &cmd = m_redo.back();
         cmd->execute();
         m_undo.push_back(std::move(cmd));
         m_redo.pop_back();
@@ -96,7 +95,10 @@ public:
         notify();
     }
 
-    void setChangeCallback(std::function<void()> cb) { m_onChange = std::move(cb); }
+    void setChangeCallback(std::function<void()> cb)
+    {
+        m_onChange = std::move(cb);
+    }
 
     size_t undoDepth() const
     {
@@ -109,7 +111,7 @@ public:
         return m_redo.size();
     }
 
-private:
+  private:
     void notify()
     {
         if (m_onChange)
