@@ -2,8 +2,12 @@
 
 #include "core/image/ImageBuffer.h"
 
+#include <QRecursiveMutex>
 #include <set>
 #include <string>
+
+class QSqlDatabase; // forward decl: connectionForThread() returns one; the real
+                     // Qt SQL header stays hidden behind the Impl PIMPL.
 
 // SQLite-backed disk cache for decoded full-resolution images.
 // Key = file identity hash (path + mtime + size), so mtime change
@@ -56,8 +60,26 @@ private:
     void ensureTable();
     void openDb();
 
+    // Returns a QSqlDatabase connection owned by the *current* thread, opened
+    // against the same SQLite file as the main-thread template connection.
+    // QSqlDatabase is thread-bound: a connection created on one thread must not
+    // be touched from another. This gives every TaskScheduler worker thread its
+    // own connection so parallel load() calls stop sharing (and corrupting) the
+    // main-thread connection. The m_mutex still serializes SQL statements.
+    QSqlDatabase connectionForThread() const;
+
     class Impl; // hides Qt SQL headers from this header
     Impl* m_impl = nullptr;
+
+    // Guards all access to the shared QSqlDatabase connection. QSqlDatabase /
+    // QSqlQuery are NOT thread-safe: a single connection must not be used
+    // concurrently from multiple threads. DiskCache::instance() is a singleton
+    // hit by every parallel load() in ImageRepository::loadDirectory, so every
+    // DB-touching method must serialize on this mutex. Without it, concurrent
+    // put()/get() calls race and corrupt Qt's connection state and the C++ heap
+    // (observed as STATUS_HEAP_CORRUPTION / 0xC0000374 during the 1000-image
+    // loadDirectory test).
+    mutable QRecursiveMutex m_mutex;
     bool m_enabled = true;
     std::string m_dbPath;
     int m_maxEntries = 100000;
