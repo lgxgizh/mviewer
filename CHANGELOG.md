@@ -74,6 +74,30 @@ All notable changes to this project are documented here. The format is based on
 - `testPredictivePreload`: verifies `ImageRepository::prefetch` warms adjacent images
   from the disk tier into the in-memory FullImage LRU, so navigating to a neighbor is
   instant after cache warm-up (the deterministic core of `prefetchVisible`).
+- `test1000ImageNonBlocking`: generates a 1000-image directory and loads it through
+  `ImageRepository::loadDirectory` without blocking the UI; verifies all 1000 frames
+  return (`Results: 185 passed, 0 failed` on the full M5 suite).
+- `testBenchmarkSmokeDecode`: decodes the 4 golden formats (JPEG/PNG/BMP/TIFF) and asserts
+  all succeed within budget; now exercises TIFF against the official `qtiff.dll` plugin
+  (the format pipeline lists TIFF and the test covers it once the codec ships).
+- **Phase-1 CI pipeline** (`ci.yml`): `format` (clang-format + markdownlint) → `build`
+  (MSVC + Qt 6.8.0, zero-warning gate) → `test` (ctest) → `package` (artifact zip) →
+  `ci-gate` aggregator. No build-system / CMake edits; respects the frozen build contract.
+
+### Fixed (M5 — 1000-image load RCA)
+- **Crash (`0xC0000005`) under 1000-image `loadDirectory`**: `DiskCache` shared a single
+  `QSqlDatabase` connection (created on the main thread) across all `TaskScheduler` worker
+  threads. Qt forbids cross-thread `QSqlDatabase` use → UB → heap corruption. Fixed by
+  giving each thread its own `QSqlDatabase` connection to the same SQLite file
+  (`DiskCache::connectionForThread`, thread_local, creation serialized by a mutex). The
+  shared connection is still used on the owning (main) thread.
+- **Hang after the crash fix**: `TaskScheduler` silently dropped tasks exceeding its
+  default 1000 queue cap, while `ImageRepository::loadDirectory` busy-waited on a
+  completed-task counter that never reached the total. Fixed by setting the DecodePool
+  queue depth to unlimited (`setMaxQueueDepth(DecodePool, 0)`) inside `loadDirectory`
+  before submitting, so no task is silently dropped for this bounded batch. Both fixed and
+  verified green; the defect only manifested at scale (1000 parallel decodes hammering the
+  shared connection / exceeding the primed pool cap).
 
 ### Changed (M4)
 - `TaskScheduler` now uses PIMPL to keep Qt threading primitives out of the core header
