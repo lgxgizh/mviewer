@@ -1,8 +1,12 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <memory>
+
+#include "domain/Selection.h"
 
 enum class PixelFormat
 {
@@ -124,6 +128,42 @@ inline ImageData makeImageData(int w, int h, PixelFormat fmt)
 inline int luminance(uint8_t r, uint8_t g, uint8_t b)
 {
     return (int)(0.299 * r + 0.587 * g + 0.114 * b);
+}
+
+// Crop a rectangular region from an image. Pure std implementation (no Qt).
+// Returns an empty ImageData on invalid input or an out-of-bounds / empty
+// selection. The selection is clamped to the source bounds, so a partially
+// out-of-bounds ROI yields the valid intersection. Channels/format preserved.
+inline ImageData cropRegion(const ImageData &src, const mviewer::domain::Selection &sel)
+{
+    if (src.isNull() || sel.isEmpty())
+        return ImageData{};
+    const int cpp = src.channelsPerPixel();
+    const int sw = src.width;
+    const int sh = src.height;
+
+    // Clamp selection to source bounds.
+    const int x0 = std::max(0, sel.x);
+    const int y0 = std::max(0, sel.y);
+    const int x1 = std::min(sw, sel.x + sel.width);
+    const int y1 = std::min(sh, sel.y + sel.height);
+    const int cw = x1 - x0;
+    const int ch = y1 - y0;
+    if (cw <= 0 || ch <= 0)
+        return ImageData{};
+
+    ImageData dst = makeImageData(cw, ch, src.format);
+    const ImageBuffer v = src.view();
+    const ImageBuffer dv = dst.view();
+    for (int y = 0; y < ch; ++y)
+    {
+        const uint8_t *sp =
+            v.data + static_cast<size_t>(y0 + y) * v.stride() +
+            static_cast<size_t>(x0) * cpp;
+        uint8_t *dp = dv.data + static_cast<size_t>(y) * dv.stride();
+        std::memcpy(dp, sp, static_cast<size_t>(cw) * static_cast<size_t>(cpp));
+    }
+    return dst;
 }
 
 // Rotate an RGB/RGBA image 90 degrees clockwise. Pure std implementation

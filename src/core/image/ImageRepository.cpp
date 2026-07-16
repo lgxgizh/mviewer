@@ -13,9 +13,9 @@
 #include <QSize>
 #include <QTimer>
 #include <atomic>
+#include <filesystem>
 #include <future>
-
-const ImageRepository::LoadOptions ImageRepository::kDefaultLoadOptions{};
+#include <map>
 
 ImageRepository& ImageRepository::instance()
 {
@@ -268,4 +268,56 @@ void ImageRepository::invalidateAll()
 {
     DiskCache::instance().clear();
     CacheManager::instance().clearMemory();
+}
+
+mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string& rootPath,
+    int maxPerFolder, bool recursive) const
+{
+    mviewer::domain::Workspace ws;
+    ws.rootPath = rootPath;
+
+    std::error_code ec;
+    const std::filesystem::path root(rootPath);
+    if (!std::filesystem::exists(root, ec) || !std::filesystem::is_directory(root, ec))
+        return ws;
+
+    // Collect (directory -> image paths) by walking the tree.
+    std::map<std::string, std::vector<std::string>> byDir;
+
+    auto visitDir = [&](const std::filesystem::path& dir) {
+        std::vector<std::string> files = FileSystem::listImages(dir.string(), maxPerFolder);
+        if (!files.empty())
+            byDir[dir.string()] = std::move(files);
+    };
+
+    if (recursive)
+    {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(root, ec))
+        {
+            if (entry.is_directory(ec))
+                visitDir(entry.path());
+        }
+        // recursive_directory_iterator does not yield the root itself if it has
+        // no subdirectories; ensure the root is scanned too.
+        visitDir(root);
+    }
+    else
+    {
+        visitDir(root);
+    }
+
+    for (const auto& [dir, files] : byDir)
+    {
+        mviewer::domain::Folder folder;
+        folder.path = dir;
+        folder.name = std::filesystem::path(dir).filename().string();
+        mviewer::domain::ImageSet set;
+        set.folderPath = dir;
+        set.images.reserve(files.size());
+        for (const auto& f : files)
+            set.images.push_back(makeMeta(f));
+        folder.imageSet = std::move(set);
+        ws.folders.push_back(std::move(folder));
+    }
+    return ws;
 }

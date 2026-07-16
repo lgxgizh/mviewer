@@ -27,25 +27,46 @@ void Analyzer::registerBuiltins()
 
     AnalyzerRegistry::instance().registerAnalyzer(
         "histogram",
-        []() -> std::unique_ptr<Analyzer> { return std::make_unique<HistogramAnalyzer>(); });
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter> {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new HistogramAnalyzer(),
+                [](Analyzer* p) { delete p; });
+        });
     AnalyzerRegistry::instance().registerAnalyzer(
         "noise",
-        []() -> std::unique_ptr<Analyzer> { return std::make_unique<NoiseAnalyzer>(); });
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter> {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new NoiseAnalyzer(),
+                [](Analyzer* p) { delete p; });
+        });
     AnalyzerRegistry::instance().registerAnalyzer(
         "entropy",
-        []() -> std::unique_ptr<Analyzer> { return std::make_unique<EntropyAnalyzer>(); });
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter> {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new EntropyAnalyzer(),
+                [](Analyzer* p) { delete p; });
+        });
     AnalyzerRegistry::instance().registerAnalyzer(
         "psnr",
-        []() -> std::unique_ptr<Analyzer> { return std::make_unique<PSNRAnalyzer>(); });
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter> {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new PSNRAnalyzer(),
+                [](Analyzer* p) { delete p; });
+        });
     AnalyzerRegistry::instance().registerAnalyzer(
         "rgbmean",
-        []() -> std::unique_ptr<Analyzer> { return std::make_unique<RGBMeanAnalyzer>(); });
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter> {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new RGBMeanAnalyzer(),
+                [](Analyzer* p) { delete p; });
+        });
     AnalyzerRegistry::instance().registerAnalyzer(
         "sharpness",
-        []() -> std::unique_ptr<Analyzer> { return std::make_unique<SharpnessAnalyzer>(); });
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter> {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new SharpnessAnalyzer(),
+                [](Analyzer* p) { delete p; });
+        });
     AnalyzerRegistry::instance().registerAnalyzer(
         "ssim",
-        []() -> std::unique_ptr<Analyzer> { return std::make_unique<SSIMAnalyzer>(); });
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter> {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new SSIMAnalyzer(),
+                [](Analyzer* p) { delete p; });
+        });
 }
 
 void AnalyzerRegistry::registerAnalyzer(const std::string& id, AnalyzerCreator creator)
@@ -53,7 +74,12 @@ void AnalyzerRegistry::registerAnalyzer(const std::string& id, AnalyzerCreator c
     m_factories[id] = std::move(creator);
 }
 
-std::unique_ptr<Analyzer> AnalyzerRegistry::create(const std::string& id) const
+void AnalyzerRegistry::unregister(const std::string& id)
+{
+    m_factories.erase(id);
+}
+
+std::unique_ptr<Analyzer, AnalyzerDeleter> AnalyzerRegistry::create(const std::string& id) const
 {
     auto it = m_factories.find(id);
     if (it == m_factories.end())

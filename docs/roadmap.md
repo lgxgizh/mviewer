@@ -32,6 +32,7 @@
 | M5 | Scale & Performance | ✅ Done (disk persistence + hit-ratio + predictive-preload + 1000-img non-blocking verified; benchmark CI gate deferred to Phase-3) |
 | M6 | Vertical Browsing Chain (product-grade) | ✅ Done (DecoderRegistry + per-format decoders, metadata enrichment, scheduler priority wiring, test split into 5 suites; 9/9 CTest suites green) |
 | M7 | Stability hardening + Render Pipeline foundation | ✅ Done (coverage tests; Perfetto opt-in trace shim; MetadataReader extraction; **Render Pipeline foundation**: `Viewport`+`TileGrid`+`TileCache`(LOD)+tile-based `ImageViewer` paint; **Compare Engine Pixel module** completing Layout/Sync/ROI/Diff/Pixel; **ThumbnailPipeline** subsystem; **Undo/Redo CommandStack**+Rotate/Label; 16/16 CTest green). **CI gate reverted to Phase-1 mandatory** (clang-tidy/ASan advisory, non-gating) per Architect re-prioritization. |
+| M8 | Feature completion: Crop + Data Model + Job System + Plugin Registry | ✅ Done (CropCommand reversible; `Workspace→Folder→ImageSet` domain model + `ImageRepository::loadWorkspace`; `Job`/`JobSystem` facade over `TaskScheduler`; **Plugin Registry E2E** — shared `mviewer_core`, real loadable/registerable/queryable `example_analyzer` plugin, subprocess-runner CTest; 20/20 CTest green). |
 
 > Historical note: an earlier internal scheme reused M3/M4/M5 for the prototype Compare /
 > Analysis / Render engines. Those engines are complete and live under `core/compare`,
@@ -204,6 +205,66 @@ Deliverables:
 - [x] No image-decoding logic in the `QWidget` layer (decode flows only through
       `ImageRepository` → `DecoderRegistry`).
 - [x] `test_m3m4m5.cpp` no longer the single growing mega-file (split done).
+
+---
+
+## M8 — Feature Completion (Crop + Data Model + Job System + Plugin Registry)
+
+**Goal:** Land the four highest-leverage follow-up features the Architect's review
+called out, each product-grade and verified by its own CTest suite. No infrastructure /
+build-system / CI changes beyond what these features require.
+
+### Deliverables (✅ Complete)
+
+1. **CropCommand** (`core/command/CropCommand` + `core/image/ImageBuffer::cropRegion`)
+   - Reversible crop that captures pre-crop pixels for exact undo (mirrors `RotateCommand`).
+   - `cropRegion` is a pure-`std` helper: clamps the `Selection` to frame bounds, `memcpy`s
+     row-by-row into a new `ImageData`. No Qt in the core path.
+   - 14 checks in `test_crop`.
+
+2. **Data Model** (`domain/Workspace`: `Workspace → Folder → ImageSet → ImageFrame`)
+   - Pure value types so Compare / Album / Project / Recents compose cleanly.
+   - `ImageRepository::loadWorkspace(rootPath, maxPerFolder, recursive)` does a real
+     recursive directory scan, groups files by directory into `Folder`/`ImageSet`
+     (`ImageMetadata` only, no pixel decode).
+   - 12 checks in `test_datamodel` (real temp tree with subdirs `a/` and `b/`).
+
+3. **Job System** (`core/job/Job` — facade over the existing `TaskScheduler`)
+   - `Job` / `JobHandle` / `JobSystem` unify Decode / Thumbnail / Analyzer / IO work behind
+     one API: submit, cancel, cancel-tree, progress, dependency. The 3 existing pools
+     (Decode / Thumbnail / Analysis) are untouched — zero regression.
+   - 8 checks in `test_job` (submit, done-callback, progress→100, cancel-stops-early,
+     dependency ordering).
+
+4. **Plugin Registry (E2E)** — the registry is now *real*, not a stub
+   - `mviewer_core` converted `STATIC → SHARED` (+ `WINDOWS_EXPORT_ALL_SYMBOLS`) so host and
+     plugin share one `Analyzer`/`Command` vtable (a static core gave each module its own
+     vtable copy → cross-module `dynamic_cast` failures).
+   - `AnalyzerCreator` uses a `std::function` deleter so a plugin supplies `destroyAnalyzer`
+     for safe cross-module allocation/free.
+   - `plugins/example/ExampleAnalyzerPlugin.cpp` is a buildable, loadable analyzer plugin
+     (`MeanLuminanceAnalyzer`); exports `createAnalyzer`/`destroyAnalyzer`/`pluginName`.
+   - `PluginManager` leak fixed (probe instance deleted after name read); `unload`/`unloadAll`
+     intentionally **do not** `FreeLibrary` (plugins are process-lifetime — unloading a
+     Qt-linking DLL at teardown crashes on Windows; OS reclaims at exit).
+   - CTest uses a **subprocess runner** (`test_pluginregistryrunner` spawns
+     `test_pluginregistry`, judges by flushed stdout) to contain the known Windows
+     DLL-unload-at-exit crash while still proving load → self-register → create → analyze.
+
+**Acceptance criteria (M8):**
+- [x] CropCommand reverts to the original pixels on undo.
+- [x] `ImageRepository::loadWorkspace` returns a `Workspace` grouping real files by folder
+      (no pixel decode).
+- [x] `JobSystem` submits/cancels/orders dependent jobs through the existing scheduler.
+- [x] A sample plugin loads, self-registers, and is queryable/creatable through
+      `AnalyzerRegistry`; `analyze()` / `analyzeRegion()` return real numbers.
+- [x] `build.ps1 Test` green — **20/20 CTest suites** (added crop / job / datamodel /
+      pluginregistry / pluginregistryrunner).
+
+> **Build-system note (flagged):** M8 required `mviewer_core` to become a SHARED library so
+> the plugin can share its vtable. This is a real, intentional change to `src/CMakeLists.txt`
+> (and root `CMakeLists.txt` adds `add_subdirectory(plugins/example)`). It is within the
+> feature's authorized scope (making the plugin system real), not a frozen-infra change.
 
 ---
 

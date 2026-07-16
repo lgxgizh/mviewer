@@ -55,8 +55,12 @@ public:
     }
 };
 
-// Factory: callable that returns a new analyzer instance.
-using AnalyzerCreator = std::function<std::unique_ptr<Analyzer>()>;
+// Factory: callable that returns a new analyzer instance. The deleter is a
+// std::function so plugins can supply a module-local destroy() and keep
+// allocation/deallocation in the same (plugin) module's heap — required for
+// safe cross-module lifetime when the plugin is a separate shared library.
+using AnalyzerDeleter = std::function<void(Analyzer*)>;
+using AnalyzerCreator = std::function<std::unique_ptr<Analyzer, AnalyzerDeleter>()>;
 
 // Registry for analyzer plugins.
 class AnalyzerRegistry
@@ -65,7 +69,8 @@ public:
     static AnalyzerRegistry& instance();
 
     void registerAnalyzer(const std::string& id, AnalyzerCreator creator);
-    std::unique_ptr<Analyzer> create(const std::string& id) const;
+    void unregister(const std::string& id);
+    std::unique_ptr<Analyzer, AnalyzerDeleter> create(const std::string& id) const;
     std::vector<std::string> availableAnalyzers() const;
 
     // Query capabilities of a registered analyzer without creating a shared copy.
