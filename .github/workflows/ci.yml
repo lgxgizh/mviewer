@@ -79,6 +79,7 @@ jobs:
         with:
           version: 6.8.0
           arch: win64_msvc2022_64
+          modules: qtimageformats   # provides the TIFF plugin (qtiff.dll) required by M3/M5 golden tests
           cache: true
 
       - name: Build
@@ -107,6 +108,7 @@ jobs:
         with:
           version: 6.8.0
           arch: win64_msvc2022_64
+          modules: qtimageformats   # provides the TIFF plugin (qtiff.dll) required by M3/M5 golden tests
           cache: true
 
       - name: Test
@@ -131,6 +133,7 @@ jobs:
         with:
           version: 6.8.0
           arch: win64_msvc2022_64
+          modules: qtimageformats   # provides the TIFF plugin (qtiff.dll) required by M3/M5 golden tests
           cache: true
 
       - name: Build
