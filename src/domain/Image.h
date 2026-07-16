@@ -29,6 +29,14 @@ struct ImageMetadata
     int64_t fileSize = 0;
     int64_t modifiedEpochSec = 0;
     std::string hash;
+
+    // ─── Decode-time enrichment (M6) ──────────────────────────────────────────
+    int bitDepth = 0;             // bits per channel (e.g. 8, 16)
+    int channels = 0;             // number of color channels (e.g. 3 = RGB)
+    std::string colorSpace;       // "sRGB", "AdobeRGB", "DisplayP3", or ""/unknown
+    int orientation = 1;          // EXIF orientation 1-8 (1 = normal)
+    bool hasIccProfile = false;   // true if an ICC profile is embedded
+    std::string format;           // container format, e.g. "JPEG","PNG","BMP","TIFF"
 };
 
 // Domain-level image identifier (value type)
