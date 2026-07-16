@@ -1,6 +1,9 @@
 add_library(mviewer_core STATIC
     core/EventBus.cpp
     core/image/Decoder.cpp
+    core/image/decoder/QtDecoder.cpp
+    core/image/decoder/QtFallbackDecoder.cpp
+    core/image/decoder/DecoderRegistry.cpp
     core/image/ImageObject.cpp
     core/image/ImageFrame.cpp
     core/image/ImageRepository.cpp
@@ -156,6 +159,23 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
+# ─── M6 split test suites (per-module) ────────────────────────────────────
+foreach(_t decoder cache repository scheduler metadata)
+    add_executable(test_${_t}
+        core/test_${_t}.cpp
+    )
+    target_link_libraries(test_${_t}
+        PRIVATE
+            Qt6::Widgets
+            Qt6::Gui
+            Qt6::Core
+            mviewer_core
+    )
+    target_compile_features(test_${_t} PRIVATE cxx_std_20)
+    target_include_directories(test_${_t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_definitions(test_${_t} PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+endforeach()
+
 # ─── M3 Phase-1 pipeline acceptance tests ───────────────────────────────
 add_executable(m3pipeline_tests
     core/test_m3_pipeline.cpp
@@ -297,6 +317,11 @@ add_test(NAME core_tests       COMMAND core_tests)
 add_test(NAME m3m4m5_tests     COMMAND test_m3m4m5)
 add_test(NAME unit_tests       COMMAND mviewer_unit_tests)
 add_test(NAME m3pipeline_tests COMMAND m3pipeline_tests)
+add_test(NAME decoder_tests    COMMAND test_decoder)
+add_test(NAME cache_tests      COMMAND test_cache)
+add_test(NAME repository_tests COMMAND test_repository)
+add_test(NAME scheduler_tests  COMMAND test_scheduler)
+add_test(NAME metadata_tests   COMMAND test_metadata)
 
 # ─── Format target ──────────────────────────────────────────────────────────
 
