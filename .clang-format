@@ -1,72 +1,10 @@
 ---
 BasedOnStyle: LLVM
-AccessModifierOffset: -4
-AlignAfterOpenBracket: DontAlign
-AlignConsecutiveAssignments: false
-AlignConsecutiveDeclarations: false
-AlignEscapedNewlines: Left
-AlignOperands: true
-AlignTrailingComments: true
-AllowAllParametersOfDeclarationOnNextLine: false
-AllowShortBlocksOnASingleLine: Empty
-AllowShortCaseLabelsOnASingleLine: false
-AllowShortFunctionsOnASingleLine: Inline
-AllowShortIfStatementsOnASingleLine: Never
-AllowShortLoopsOnASingleLine: false
-AlwaysBreakTemplateDeclarations: Yes
-BinPackArguments: false
-BinPackParameters: false
-BreakBeforeBraces: Custom
-BraceWrapping:
-  AfterClass: true
-  AfterControlStatement: true
-  AfterEnum: true
-  AfterFunction: true
-  AfterNamespace: true
-  AfterStruct: true
-  AfterUnion: true
-  BeforeCatch: true
-  BeforeElse: true
-  SplitEmptyFunction: true
-  SplitEmptyRecord: true
-  SplitEmptyNamespace: true
-BreakConstructorInitializers: BeforeComma
-ColumnLimit: 100
-FixNamespaceComments: true
-IncludeBlocks: Regroup
-IncludeCategories:
-  - Regex: '^"(stdafx|pch|precompiled)'
-    Priority: -2
-  - Regex: '^"(Qt|Q)'
-    Priority: 1
-  - Regex: '^"(core|domain|application|infrastructure)/'
-    Priority: 2
-  - Regex: '^"'
-    Priority: 3
-  - Regex: '^<'
-    Priority: 4
-IndentCaseLabels: false
 IndentWidth: 4
-KeepEmptyLinesAtTheStartOfBlocks: false
-MaxEmptyLinesToKeep: 1
-NamespaceIndentation: None
-PointerAlignment: Left
-SortIncludes: true
-SpaceBeforeParens: ControlStatements
-Standard: c++17
-UseTab: Never
-StatementAttributeLikeMacros:
-  - Q_DECL_EXPORT
-  - Q_DECL_IMPORT
-  - Q_DECL_HIDDEN
-  - Q_NAMESPACE
-  - Q_CLASSINFO
-ForEachMacros:
-  - foreach
-  - Q_FOREACH
-  - BOOST_FOREACH
-AttributeMacros:
-  - Q_OBJECT
-  - Q_GADGET
-  - Q_NAMESPACE
-...
+ColumnLimit: 100
+AccessModifierOffset: -2
+AllowShortFunctionsOnASingleLine: None
+BreakBeforeBraces: Allman
+PointerAlignment: Right
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve

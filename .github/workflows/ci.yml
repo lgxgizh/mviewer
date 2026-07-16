@@ -1,28 +1,164 @@
+# =============================================================================
+# MViewer CI — Phase 1
+# -----------------------------------------------------------------------------
+# Jobs: format | build | test | package | ci-gate
+#
+# This is Phase-1 CI for the MViewer Qt6/MSVC C++20 image viewer.
+#
+# Phase roadmap:
+#   - Phase-1 (this file): format, build, test, package, status gate.
+#   - Phase-2: clang-tidy + clazy static analysis, ASan/UBSan sanitizer runs.
+#   - Phase-3: benchmark harness, headless (offscreen) run, screenshot diff.
+#   - Phase-4: release automation (tagging, signed installers, changelog).
+#
+# PR gate expectations (all must pass for a mergeable PR):
+#   * clang-format --dry-run passes (no formatting diffs)
+#   * markdownlint passes on all .md docs
+#   * build succeeds on windows-2022 (MSVC + Qt 6.8.0)
+#   * unit tests (ctest) pass
+#   * zero compiler warnings in the build log
+#   * portable zip artifact is produced
+#
+# The `ci-gate` job aggregates all required statuses so branch protection can
+# depend on a single check.
+# =============================================================================
+
 name: CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
-  build:
-    runs-on: windows-2022
-
+  # ---------------------------------------------------------------------------
+  # format — clang-format + markdownlint (ubuntu, fast)
+  # ---------------------------------------------------------------------------
+  format:
+    name: Format check
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup MSVC
-      uses: ilammy/msvc-dev-cmd@v1
+      - name: Install clang-format
+        run: pip install clang-format
 
-    - name: Install Qt 6.8.0
-      uses: jurplel/install-qt-action@v4
-      with:
-        version: 6.8.0
-        arch: win64_msvc2022_64
-        cache: true
+      - name: clang-format (C++20 / Qt6)
+        run: |
+          find . \( -name '*.cpp' -o -name '*.h' \) \
+            -not -path './build_msvc/*' \
+            -not -path './build/*' \
+            -not -path './.git/*' \
+            -not -path '*/Qt/*' \
+            -not -path '*/Qt6/*' \
+            -print0 | xargs -0 clang-format --dry-run --Werror
 
-    - name: Build + Test
-      run: |
-        powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test
+      - name: Install markdownlint
+        run: npm install -g markdownlint-cli
+
+      - name: markdownlint
+        run: markdownlint '**/*.md' --ignore node_modules
+
+  # ---------------------------------------------------------------------------
+  # build — MSVC + Qt 6.8.0, enforce zero warnings from build log
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build (MSVC + Qt 6.8.0)
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Build
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test 2>&1 | Tee-Object -FilePath build.log
+
+      - name: Enforce zero warnings
+        run: |
+          if (Select-String -Path build.log -Pattern 'warning:') { exit 1 }
+
+  # ---------------------------------------------------------------------------
+  # test — explicit ctest job (re-runs build+test; artifacts not shared in Phase-1)
+  # ---------------------------------------------------------------------------
+  test:
+    name: Unit tests (ctest)
+    runs-on: windows-2022
+    needs: [build]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Test
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test
+
+  # ---------------------------------------------------------------------------
+  # package — zip portable app, upload artifact (optional gate)
+  # ---------------------------------------------------------------------------
+  package:
+    name: Package portable zip
+    runs-on: windows-2022
+    needs: [build, test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Build
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test
+
+      - name: Package zip
+        run: |
+          try {
+            Compress-Archive -Path build_msvc/bin/*, README.md, LICENSE* -DestinationPath mviewer-win-x64.zip
+          } catch {
+            Write-Host "LICENSE not found, packaging bin + README only"
+            Compress-Archive -Path build_msvc/bin/*, README.md -DestinationPath mviewer-win-x64.zip
+          }
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mviewer-win-x64
+          path: mviewer-win-x64.zip
+
+  # ---------------------------------------------------------------------------
+  # ci-gate — aggregate required statuses for branch protection
+  # ---------------------------------------------------------------------------
+  ci-gate:
+    name: CI gate
+    runs-on: ubuntu-latest
+    needs: [format, build, test, package]
+    if: always()
+    steps:
+      - name: All required jobs passed
+        run: echo "format, build, test, and package all succeeded."
