@@ -85,6 +85,7 @@ void ImageViewer::setImage(const QString &path)
     m_view.screenW = width();
     m_view.screenH = height();
     m_view.fit(m_pixmap.width(), m_pixmap.height(), 0.95);
+    m_tileCache.clear(); // drop tiles from any previously viewed image
     preloadNeighbors(path);
     update();
 }
@@ -150,23 +151,33 @@ void ImageViewer::paintEvent(QPaintEvent *event)
         MV_TRACE_SCOPED("ImageViewer::paint");
         m_view.screenW = width();
         m_view.screenH = height();
-        auto tiles = m_tiles.visibleTiles(m_view);
-        RenderEngine &eng = RenderEngine::instance();
-        for (const auto &t : tiles)
+        RenderEngine& eng = RenderEngine::instance();
+        // Render Pipeline (P1-①): ask the TileCache for the visible tiles at
+        // the LOD chosen for the current zoom. Only missing tiles are decoded
+        // (via RenderEngine::scaleRegion in core/), then cached. The Widget
+        // never decodes and never rasterizes the whole image.
+        const std::string id = m_frame->id().hash;
+        auto ready = m_tileCache.request(
+            id, m_view, m_tiles,
+            [&](const std::string&, int sx, int sy, int sw, int sh, int tw, int th) -> ImageData {
+                const RenderRect region{sx, sy, sw, sh};
+                const RenderSize tgt{tw, th};
+                return eng.scaleRegion(m_frame->pixels(), region, tgt,
+                    m_view.scale < 1.0 ? RenderInterp::Bilinear : RenderInterp::Nearest);
+            });
+        for (const auto& rt : ready)
         {
-            int sx, sy, sw, sh;
-            m_view.imageRectToScreen(t.srcX, t.srcY, t.srcW, t.srcH, sx, sy, sw, sh);
-            const RenderRect region{t.srcX, t.srcY, t.srcW, t.srcH};
-            const RenderSize tgt{sw, sh};
-            ImageData regionImg = eng.scaleRegion(m_frame->pixels(), region, tgt,
-                                                  m_view.scale < 1.0 ? RenderInterp::Bilinear
-                                                                     : RenderInterp::Nearest);
-            if (regionImg.isNull())
-                continue;
-            QImage q = mvcore::toQImage(regionImg);
+            // Compute on-screen rect for this tile's LOD/source region.
+            int tsx, tsy, tsw, tsh;
+            m_view.imageRectToScreen(rt.key.col * m_tiles.tileSize * (1 << rt.key.lod),
+                rt.key.row * m_tiles.tileSize * (1 << rt.key.lod),
+                TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod),
+                TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod),
+                tsx, tsy, tsw, tsh);
+            QImage q = mvcore::toQImage(rt.data);
             if (q.isNull())
                 continue;
-            painter.drawImage(QRect(sx, sy, sw, sh), q);
+            painter.drawImage(QRect(tsx, tsy, tsw, tsh), q);
         }
     }
     else if (!m_currentPath.isEmpty())
