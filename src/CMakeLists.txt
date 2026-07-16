@@ -34,6 +34,8 @@ add_library(mviewer_core STATIC
     core/plugin/PluginManager.cpp
 
     core/command/CommandRegistry.cpp
+    core/command/RotateCommand.cpp
+    core/command/LabelCommand.cpp
     core/command/OpenDirectoryCommand.cpp
     core/command/CompareCommand.cpp
     core/command/RenameCommand.cpp
@@ -162,7 +164,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -330,6 +332,7 @@ add_test(NAME render_pipeline_tests COMMAND test_render_pipeline)
 add_test(NAME tilecache_tests COMMAND test_tilecache)
 add_test(NAME pixelcontroller_tests COMMAND test_pixelcontroller)
 add_test(NAME thumbnailpipeline_tests COMMAND test_thumbnailpipeline)
+add_test(NAME commandstack_tests COMMAND test_commandstack)
 
 # ─── Format target ──────────────────────────────────────────────────────────
 

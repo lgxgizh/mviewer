@@ -42,6 +42,18 @@ mviewer::domain::ImageId ImageFrame::id() const
     return mviewer::domain::ImageId{m_meta.hash};
 }
 
+void ImageFrame::setPixels(const ImageData& pixels)
+{
+    if (pixels.isNull())
+        return;
+    m_pixels = pixels;
+    m_meta.width = pixels.width;
+    m_meta.height = pixels.height;
+    // Pixel content changed: any cached histogram is now stale.
+    m_histogramComputed = false;
+    m_histogram.clear();
+}
+
 const mviewer::domain::Histogram& ImageFrame::histogram() const
 {
     return m_histogram;
