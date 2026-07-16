@@ -9,6 +9,7 @@
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
+#include "core/thumbnail/ThumbnailPipeline.h"
 
 #include <QApplication>
 #include <QContextMenuEvent>
@@ -101,12 +102,34 @@ void ThumbnailWorker::enqueue(const Request& req)
 
 QPixmap ThumbnailWorker::makeThumbnail(const QString& path)
 {
-    // On-disk cache first.
+    // 1) On-disk cache (persistent tier).
     QPixmap cached;
     if (ThumbnailCache::instance().get(path, cached))
         return cached;
 
-    // Decode at thumbnail resolution through the core decoder (no UI-layer decode).
+    // 2) ThumbnailPipeline in-memory LRU (hot tier). The pipeline decodes on a
+    //    background scheduler thread with visible-range priority + predictive
+    //    loading; here we probe its cache synchronously. If present, use it.
+    ImageData memHit = ThumbnailPipeline::instance().request(path.toStdString());
+    if (!memHit.isNull())
+    {
+        QImage qimg = mvcore::toQImage(memHit);
+        if (!qimg.isNull())
+        {
+            QPixmap pm(ThumbnailPanel::kThumbSize, ThumbnailPanel::kThumbSize);
+            pm.fill(Qt::transparent);
+            QPixmap scaled = QPixmap::fromImage(qimg).scaled(ThumbnailPanel::kThumbSize,
+                ThumbnailPanel::kThumbSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+            QPainter painter(&pm);
+            painter.drawPixmap((ThumbnailPanel::kThumbSize - scaled.width()) / 2,
+                (ThumbnailPanel::kThumbSize - scaled.height()) / 2, scaled);
+            painter.end();
+            return pm;
+        }
+    }
+
+    // 3) Decode at thumbnail resolution through the core decoder (no UI-layer
+    //    decode). Store into the pipeline LRU for fast reuse on revisit.
     ImageData img = Decoder::decodeScaled(path.toStdString(), ThumbnailPanel::kThumbSize);
     if (img.isNull())
         return {};
