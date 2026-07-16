@@ -55,13 +55,14 @@ ImageRepository::Result ImageRepository::load(const std::string& filePath, const
 
     ImageData img;
     bool fromCache = false;
+    mviewer::domain::ImageMetadata decodeMeta;
     if (opts.useDiskCache && DiskCache::instance().get(key, img))
     {
         fromCache = true;
     }
     else
     {
-        img = Decoder::decodeFull(filePath);
+        img = Decoder::decodeFull(filePath, decodeMeta);
         if (img.isNull())
         {
             res.error = "decode failed: " + filePath;
@@ -72,6 +73,46 @@ ImageRepository::Result ImageRepository::load(const std::string& filePath, const
     }
 
     auto frame = std::make_shared<ImageFrame>(ImageFrame::create(filePath, img));
+
+    // Enrich the frame metadata with decode-time fields (bitDepth, channels,
+    // colorSpace, orientation, format). The file-level fields were already set
+    // by ImageFrame::create. These are populated from the decoded pixels (always
+    // available, whether served from cache or freshly decoded) so the metadata
+    // is correct even on a disk-cache hit. Values the decoder can only determine
+    // on a fresh decode (orientation, ICC) are taken from decodeMeta when present.
+    {
+        mviewer::domain::ImageMetadata m = frame->metadata();
+        // format: derive from the file extension (covers all cached/uncached paths).
+        if (m.format.empty())
+        {
+            const QString ext = QFileInfo(QString::fromStdString(filePath)).suffix().toLower();
+            if (ext == "jpg" || ext == "jpeg")
+                m.format = "JPEG";
+            else if (ext == "png")
+                m.format = "PNG";
+            else if (ext == "bmp")
+                m.format = "BMP";
+            else if (ext == "tif" || ext == "tiff")
+                m.format = "TIFF";
+            else if (!ext.isEmpty())
+                m.format = ext.toUpper().toStdString();
+        }
+        // channels / bitDepth from the actual RGB24 pixel buffer we hold.
+        m.channels = img.channelsPerPixel();
+        m.bitDepth = 8;
+        if (!decodeMeta.format.empty())
+            m.format = decodeMeta.format;
+        if (decodeMeta.channels > 0)
+            m.channels = decodeMeta.channels;
+        if (decodeMeta.bitDepth > 0)
+            m.bitDepth = decodeMeta.bitDepth;
+        if (!decodeMeta.colorSpace.empty())
+            m.colorSpace = decodeMeta.colorSpace;
+        if (decodeMeta.orientation >= 1 && decodeMeta.orientation <= 8)
+            m.orientation = decodeMeta.orientation;
+        m.hasIccProfile = decodeMeta.hasIccProfile;
+        frame->setMetadata(m);
+    }
     if (opts.generateHistogram)
         frame->computeHistogram();
     frame->setDecodeState(DecodeState::Decoded);
