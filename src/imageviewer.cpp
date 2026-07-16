@@ -76,7 +76,7 @@ void ImageViewer::setImage(const QString &path)
 
     const QFileInfo info(path);
     m_fileList = listImages(info.absolutePath());
-    m_currentIndex = m_fileList.indexOf(path);
+    m_currentIndex = static_cast<int>(m_fileList.indexOf(path));
 
     // Build the render pipeline state: tile grid over the full-res image, and
     // a Viewport fitted into the widget. The Widget no longer keeps its own
