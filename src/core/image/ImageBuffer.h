@@ -113,3 +113,35 @@ inline int luminance(uint8_t r, uint8_t g, uint8_t b)
 {
     return (int)(0.299 * r + 0.587 * g + 0.114 * b);
 }
+
+// Rotate an RGB/RGBA image 90 degrees clockwise. Pure std implementation
+// (no Qt). Returns an empty ImageData on invalid input. Channels preserved
+// (RGB24 -> RGB24, RGBA32 -> RGBA32); Grayscale8 -> Grayscale8.
+inline ImageData rotate90CW(const ImageData& src)
+{
+    if (src.isNull())
+        return ImageData{};
+    const int cpp = src.channelsPerPixel();
+    const int w = src.width;
+    const int h = src.height;
+    // dst is h x w.
+    ImageData dst = makeImageData(h, w, src.format);
+    const ImageBuffer v = src.view();
+    const ImageBuffer dv = dst.view();
+    for (int y = 0; y < h; ++y)
+    {
+        for (int x = 0; x < w; ++x)
+        {
+            const uint8_t* sp = v.data + static_cast<size_t>(y) * v.stride() +
+                                 static_cast<size_t>(x) * cpp;
+            // 90 CW: dst (x', y') where x' = h-1-y, y' = x.
+            const int dx = h - 1 - y;
+            const int dy = x;
+            uint8_t* dp = dv.data + static_cast<size_t>(dy) * dv.stride() +
+                          static_cast<size_t>(dx) * cpp;
+            for (int c = 0; c < cpp; ++c)
+                dp[c] = sp[c];
+        }
+    }
+    return dst;
+}

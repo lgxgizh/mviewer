@@ -67,6 +67,9 @@ public:
     // ─── Pixel access ────────────────────────────────────────────────────────
     const ImageData& pixels() const { return m_pixels; }
     const ImageBuffer view() const { return m_pixels.view(); }
+    // Replace the pixel buffer (e.g. after a reversible Rotate command). Updates
+    // metadata dimensions to match. Callers must ensure the new buffer is valid.
+    void setPixels(const ImageData& pixels);
     int width() const { return m_pixels.width; }
     int height() const { return m_pixels.height; }
     bool isValid() const { return !m_pixels.isNull(); }
