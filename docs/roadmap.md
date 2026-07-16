@@ -30,6 +30,7 @@
 | M3 | Core Image Pipeline | ✅ Done (Phase-1 + Phase-2 + cleanup) |
 | M4 | Compare & Analysis maturity | ✅ Done (all 4 acceptance criteria met) |
 | M5 | Scale & Performance | ✅ Done (disk persistence + hit-ratio + predictive-preload + 1000-img non-blocking verified; benchmark CI gate deferred to Phase-3) |
+| M6 | Vertical Browsing Chain (product-grade) | ✅ Done (DecoderRegistry + per-format decoders, metadata enrichment, scheduler priority wiring, test split into 5 suites; 9/9 CTest suites green) |
 
 > Historical note: an earlier internal scheme reused M3/M4/M5 for the prototype Compare /
 > Analysis / Render engines. Those engines are complete and live under `core/compare`,
@@ -164,6 +165,44 @@ Deliverables:
 > 1000 queue cap while `loadDirectory` assumed all submitted tasks ran → fixed by setting
 > the DecodePool queue depth to unlimited inside `loadDirectory`. Both fixed and verified
 > green (`test_m3m4m5`: 185 passed, 0 failed; `build.ps1 Test`: 4/4 suites).
+
+---
+
+## M6 — Vertical Browsing Chain (product-grade)
+
+**Goal:** Stop horizontal expansion; make ONE vertical chain product-grade. The end-to-end
+browse path (scan dir → immediate file list → background thumbnails → click → background full
+decode → fast display → next/prev → predictive preload) must be proven, not just assembled.
+
+Deliverables:
+- `DecoderRegistry` (singleton, Qt-free header) dispatches each file to the first decoder
+  whose `canDecode` returns true. Concrete decoders: `QtDecoder` (JPEG/PNG/BMP/TIFF via
+  `QImageReader`, EXIF auto-transform, RGB24 output) and `QtFallbackDecoder` (last-resort,
+  claims everything, graceful empty-result on failure). RAW is an explicit `TODO(M7): RAW`
+  stub (no `libraw` dependency).
+- `Decoder` is kept as a thin delegating shim over `DecoderRegistry` so existing callers keep
+  compiling; decode output is unchanged (RGB24 `ImageData`).
+- `ImageMetadata` (Qt-free, `domain/Image.h`) enriched with `bitDepth`, `channels`,
+  `colorSpace`, `orientation` (EXIF 1-8), `hasIccProfile`, and `format` (JPEG/PNG/BMP/TIFF),
+  populated during decode / in `ImageRepository::load`.
+- Scheduler priority wiring: `ImageRepository::prefetchVisible` submits visible paths at the
+  highest priority (`Priority::UI`) and adjacent paths at the lowest (`Priority::Background`).
+  The M5 RCA fix (DecodePool queue depth = unlimited inside `loadDirectory`) is retained.
+- Test hygiene: the monolithic `test_m3m4m5.cpp` is split into per-module suites
+  (`test_decoder`, `test_cache`, `test_repository`, `test_scheduler`, `test_metadata`), each
+  registered as its own CTest executable. All prior coverage is preserved; the 1000-image
+  non-blocking test and the 4-format golden decode test (`ok=4`) still pass.
+
+**Acceptance criteria (M6):**
+- [x] `DecoderRegistry` dispatches JPEG/PNG/BMP/TIFF to `QtDecoder`; unknown → fallback /
+      unsupported (graceful, no crash).
+- [x] Decode output identical to before (RGB24 `ImageData`); 4-format golden test `ok=4`.
+- [x] `ImageMetadata` carries bitDepth/channels/colorSpace/orientation/format; populated for
+      the 4 golden images.
+- [x] `build.ps1 Test` green (all CTest suites, including the new split test binaries).
+- [x] No image-decoding logic in the `QWidget` layer (decode flows only through
+      `ImageRepository` → `DecoderRegistry`).
+- [x] `test_m3m4m5.cpp` no longer the single growing mega-file (split done).
 
 ---
 

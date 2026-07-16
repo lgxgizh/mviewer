@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **M6 — Vertical Browsing Chain:** `DecoderRegistry` (singleton) dispatches files to
+  per-format decoders (`QtDecoder` for JPEG/PNG/BMP/TIFF, `QtFallbackDecoder` as last-resort);
+  `Decoder` is now a thin shim over the registry. RAW deferred to M7 (`TODO(M7): RAW`).
+- `ImageMetadata` enriched with `bitDepth`, `channels`, `colorSpace`, `orientation`
+  (EXIF 1-8), `hasIccProfile`, and `format`, populated during decode.
+- `ImageRepository::prefetchVisible` submits visible paths at `Priority::UI` (high) and
+  adjacent paths at `Priority::Background` (low); M5 DecodePool unlimited-queue fix retained.
+- Test suite split: `test_m3m4m5.cpp` broken into `test_decoder`, `test_cache`,
+  `test_repository`, `test_scheduler`, `test_metadata` (each its own CTest executable),
+  preserving all prior coverage.
 - Plugin loading framework (`PluginLoader` + `PluginManager`) with lifecycle management
 - UI fixture screenshot regression test (`ui_fixture`)
 - AddressSanitizer CI job for memory-leak / UB detection
@@ -98,6 +108,34 @@ All notable changes to this project are documented here. The format is based on
   before submitting, so no task is silently dropped for this bounded batch. Both fixed and
   verified green; the defect only manifested at scale (1000 parallel decodes hammering the
   shared connection / exceeding the primed pool cap).
+
+### Added (M6 — Vertical Browsing Chain, product-grade)
+- **`DecoderRegistry` + per-format decoders** (`core/image/decoder/`): the single static
+  `Decoder` is split into an `IDecoder` interface (Qt-free header, std-only), `QtDecoder`
+  (JPEG/PNG/BMP/TIFF via `QImageReader`, EXIF auto-transform, RGB24 output), and
+  `QtFallbackDecoder` (last-resort, graceful empty result on failure). `DecoderRegistry`
+  (singleton, Qt-free header) dispatches each file to the first decoder whose `canDecode`
+  returns true. Unknown formats return an empty `ImageData` (no crash). `Decoder` is kept as
+  a thin delegating shim so existing callers keep compiling. RAW is an explicit `TODO(M7): RAW`
+  stub (no `libraw` dependency). New images auto-claim via extension; adding a format means
+  adding one `IDecoder` — no edits to existing decoders.
+- **`ImageMetadata` enrichment** (`domain/Image.h`, Qt-free): added `bitDepth`, `channels`,
+  `colorSpace` (sRGB/AdobeRGB/unknown), `orientation` (EXIF 1-8), `hasIccProfile`, and
+  `format` (JPEG/PNG/BMP/TIFF). Populated in `QtDecoder` from the decoded `QImage` and merged
+  into the `ImageFrame` in `ImageRepository::load` (correct even on a disk-cache hit).
+- **Scheduler priority wiring**: `ImageRepository::prefetchVisible` submits visible paths at
+  the highest priority and adjacent paths at the lowest; the M5 RCA fix (DecodePool queue
+  depth = unlimited inside `loadDirectory`) is retained.
+- **Per-module test split**: the monolithic `test_m3m4m5.cpp` (was ~1921 lines) is trimmed
+  and its cases redistributed into `test_decoder`, `test_cache`, `test_repository`,
+  `test_scheduler`, `test_metadata` (each its own CTest executable via a `foreach` in
+  `src/CMakeLists.txt`). All prior coverage preserved — the 1000-image non-blocking test and
+  the 4-format golden decode (`ok=4`) still pass.
+
+### Verified
+- `build.ps1 Test` → **100% tests passed out of 9** (core_tests, m3m4m5_tests, unit_tests,
+  m3pipeline_tests, decoder_tests, cache_tests, repository_tests, scheduler_tests,
+  metadata_tests), zero compiler warnings.
 
 ### Changed (M4)
 - `TaskScheduler` now uses PIMPL to keep Qt threading primitives out of the core header
