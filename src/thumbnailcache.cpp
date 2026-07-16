@@ -1,5 +1,7 @@
 #include "thumbnailcache.h"
 
+#include "core/trace/Trace.h"
+
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -30,6 +32,7 @@ QString ThumbnailCache::keyFor(const QString& path) const
 
 bool ThumbnailCache::get(const QString& path, QPixmap& out)
 {
+    MV_TRACE_SCOPED("ThumbnailCache::get");
     QMutexLocker lock(&m_mutex);
     const QString file = cacheDir() + "/" + keyFor(path) + ".png";
     if (QFile::exists(file))
@@ -46,6 +49,7 @@ bool ThumbnailCache::get(const QString& path, QPixmap& out)
 
 void ThumbnailCache::put(const QString& path, const QPixmap& pm)
 {
+    MV_TRACE_SCOPED("ThumbnailCache::put");
     QMutexLocker lock(&m_mutex);
     const QString file = cacheDir() + "/" + keyFor(path) + ".png";
     pm.save(file, "PNG");

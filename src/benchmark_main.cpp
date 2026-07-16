@@ -9,7 +9,9 @@
 #include "core/image/DiskCache.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageCache.h"
+#include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
+#include "core/render/RenderEngine.h"
 
 #include <QApplication>
 #include <QDebug>
@@ -140,6 +142,75 @@ static void benchCache()
         100);
 }
 
+// Review P1-10 / P2: thumbnail generation throughput at scale. Generates N
+// thumbnails by decoding to a max-edge via Decoder::decodeScaled (the real
+// pipeline path the UI uses), measuring end-to-end generation latency.
+static void benchThumbnailGen(int n, const std::string& label)
+{
+    const int thumbEdge = 256;
+    QImage base = makeTestImage(1920, 1080, 11);
+    QString tmpPath = QDir::tempPath() + "/mviewer_bench_thumb_src.png";
+    base.save(tmpPath);
+    const std::string path = tmpPath.toStdString();
+
+    Benchmark::instance().run(
+        "ThumbnailGen(" + label + ",decodeScaled 256px)",
+        [path, thumbEdge]() {
+            ImageData d = Decoder::decodeScaled(path, thumbEdge);
+            (void)d;
+        },
+        n);
+}
+
+// Review P1-10 / P2: zoom latency proxy — scaling a full-res image to a target
+// edge across representative zoom levels via RenderEngine::scale.
+static void benchZoom()
+{
+    QImage testImg = makeTestImage(1920, 1080, 12);
+    ImageData data = mvcore::fromQImage(testImg);
+
+    const int levels[] = {256, 512, 1024, 1920};
+    for (int edge : levels)
+    {
+        Benchmark::instance().run(
+            "RenderEngine::scale->" + std::to_string(edge) + "px",
+            [&data, edge]() {
+                ImageData s = RenderEngine::instance().scale(
+                    data, RenderSize{edge, edge * 1080 / 1920}, RenderInterp::Bilinear);
+                (void)s;
+            },
+            20);
+    }
+}
+
+// Review P1-10 / P2: scroll latency proxy — switching to adjacent images via
+// ImageRepository::load (decode + frame build + metadata enrich), the hot path
+// used when scrolling through a directory.
+static void benchScroll()
+{
+    const int n = 200;
+    std::vector<std::string> paths;
+    paths.reserve(n);
+    for (int i = 0; i < n; ++i)
+    {
+        QImage img = makeTestImage(1920, 1080, 20 + i);
+        QString p = QDir::tempPath() + "/mviewer_bench_scroll_" + QString::number(i) + ".png";
+        img.save(p);
+        paths.push_back(p.toStdString());
+    }
+
+    Benchmark::instance().run(
+        "ImageRepository::load(adjacent switch)",
+        [&paths, n]() {
+            for (int i = 0; i < n; ++i)
+            {
+                ImageRepository::Result r = ImageRepository::instance().load(paths[i]);
+                (void)r;
+            }
+        },
+        1);
+}
+
 static void benchROI()
 {
     QImage testImg = makeTestImage(1920, 1080, 7);
@@ -184,6 +255,10 @@ int main(int argc, char** argv)
     benchROI();
     benchDifference();
     benchCache();
+    benchThumbnailGen(1000, "1000");
+    benchThumbnailGen(10000, "10000");
+    benchZoom();
+    benchScroll();
 
     std::cout << std::endl;
     Benchmark::instance().report();
