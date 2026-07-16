@@ -115,6 +115,15 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
     std::vector<Result> results(n);
     std::atomic<int> completed{0};
 
+    // Bulk directory load must submit ALL n decode tasks and wait for every
+    // one to finish. The TaskScheduler enforces max_queue_depth (default 1000);
+    // if the pool is already busy (e.g. tasks from earlier work in flight),
+    // submits that exceed the cap are SILENTLY DROPPED (submit returns nullptr
+    // and the task never runs). A dropped task would never increment
+    // `completed`, so the busy-wait below would spin forever. Relax the cap to
+    // unlimited for this bulk load so no task is lost.
+    TaskScheduler::instance().setMaxQueueDepth(TaskScheduler::DecodePool, 0);
+
     for (int i = 0; i < n; ++i)
     {
         TaskScheduler::instance().submit(TaskScheduler::Priority::Decode,

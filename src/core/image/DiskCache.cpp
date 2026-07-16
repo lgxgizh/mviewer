@@ -10,6 +10,8 @@
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QStandardPaths>
+#include <QThread>
+#include <QMutex>
 #include <QVariant>
 #include <cstring>
 #include <memory>
@@ -17,6 +19,10 @@
 class DiskCache::Impl
 {
 public:
+    // Main-thread connection, used only during construction (ensureTable) and
+    // as the template whose database file every per-thread connection opens.
+    // QSqlDatabase is bound to the thread that opened it; it must NEVER be used
+    // from another thread. All runtime access goes through connectionForThread().
     QSqlDatabase db;
 };
 
@@ -71,11 +77,50 @@ void DiskCache::ensureTable()
     q.exec("CREATE INDEX IF NOT EXISTS idx_ts ON blobs(ts)");
 }
 
+QSqlDatabase DiskCache::connectionForThread() const
+{
+    // One QSqlDatabase per thread, each bound to the same SQLite file. The
+    // connection name must be unique process-wide, so derive it from the
+    // thread id. The main thread keeps the "mviewer_disk_cache" name created in
+    // openDb(); reuse it there to avoid a second handle to the same file.
+    const Qt::HANDLE tid = QThread::currentThreadId();
+    static thread_local QSqlDatabase tlConn;
+    static thread_local bool tlInitialized = false;
+    if (!tlInitialized)
+    {
+        // QSqlDatabase::addDatabase() mutates a process-global connection
+        // registry that is NOT thread-safe. TaskScheduler runs decode tasks on
+        // a pool of worker threads, and several of them can reach this branch
+        // (first DB touch on that thread) simultaneously -> concurrent
+        // addDatabase() calls race on Qt's registry and deadlock. Serialize the
+        // creation so only one connection is registered at a time.
+        static QMutex s_createMutex;
+        QMutexLocker createLock(&s_createMutex);
+        const QString name = (tid == QThread::currentThreadId() && m_impl->db.isOpen())
+                                 ? QStringLiteral("mviewer_disk_cache")
+                                 : QString("mviewer_disk_cache_t%1").arg(
+                                       reinterpret_cast<quintptr>(tid));
+        if (name != QStringLiteral("mviewer_disk_cache"))
+        {
+            tlConn = QSqlDatabase::addDatabase("QSQLITE", name);
+            tlConn.setDatabaseName(QString::fromStdString(m_dbPath));
+            tlConn.open();
+        }
+        else
+        {
+            tlConn = m_impl->db; // main thread: reuse the already-open connection
+        }
+        tlInitialized = true;
+    }
+    return tlConn;
+}
+
 bool DiskCache::get(const std::string& key, ImageData& out)
 {
-    if (!m_enabled || !m_impl->db.isOpen())
+    if (!m_enabled || !connectionForThread().isOpen())
         return false;
-    QSqlQuery q(m_impl->db);
+    QMutexLocker lock(&m_mutex);
+    QSqlQuery q(connectionForThread());
     q.prepare("SELECT w, h, fmt, data FROM blobs WHERE key = ?");
     q.addBindValue(QVariant(QString::fromStdString(key)));
     if (!q.exec() || !q.next())
@@ -97,9 +142,10 @@ bool DiskCache::get(const std::string& key, ImageData& out)
 
 void DiskCache::put(const std::string& key, const ImageData& img)
 {
-    if (!m_enabled || !m_impl->db.isOpen() || img.isNull())
+    if (!m_enabled || !connectionForThread().isOpen() || img.isNull())
         return;
-    QSqlQuery q(m_impl->db);
+    QMutexLocker lock(&m_mutex);
+    QSqlQuery q(connectionForThread());
     q.prepare("INSERT OR REPLACE INTO blobs(key, w, h, fmt, ts, data) VALUES(?, "
               "?, ?, ?, ?, ?)");
     q.addBindValue(QVariant(QString::fromStdString(key)));
@@ -116,7 +162,7 @@ void DiskCache::put(const std::string& key, const ImageData& img)
     while ((m_maxEntries > 0 && static_cast<int>(entryCount()) > m_maxEntries) ||
            (m_maxBytes > 0 && totalBytes() > m_maxBytes))
     {
-        QSqlQuery dq(m_impl->db);
+        QSqlQuery dq(connectionForThread());
         dq.prepare("DELETE FROM blobs WHERE key = "
                    "(SELECT key FROM blobs ORDER BY ts ASC LIMIT 1)");
         if (!dq.exec())
@@ -129,9 +175,10 @@ void DiskCache::put(const std::string& key, const ImageData& img)
 
 void DiskCache::remove(const std::string& key)
 {
-    if (!m_impl->db.isOpen())
+    if (!connectionForThread().isOpen())
         return;
-    QSqlQuery q(m_impl->db);
+    QMutexLocker lock(&m_mutex);
+    QSqlQuery q(connectionForThread());
     q.prepare("DELETE FROM blobs WHERE key = ?");
     q.addBindValue(QVariant(QString::fromStdString(key)));
     q.exec();
@@ -139,9 +186,10 @@ void DiskCache::remove(const std::string& key)
 
 size_t DiskCache::entryCount() const
 {
-    if (!m_impl->db.isOpen())
+    if (!connectionForThread().isOpen())
         return 0;
-    QSqlQuery q(m_impl->db);
+    QMutexLocker lock(&m_mutex);
+    QSqlQuery q(connectionForThread());
     q.exec("SELECT COUNT(*) FROM blobs");
     if (q.next())
         return static_cast<size_t>(q.value(0).toLongLong());
@@ -150,9 +198,10 @@ size_t DiskCache::entryCount() const
 
 size_t DiskCache::totalBytes() const
 {
-    if (!m_impl->db.isOpen())
+    if (!connectionForThread().isOpen())
         return 0;
-    QSqlQuery q(m_impl->db);
+    QMutexLocker lock(&m_mutex);
+    QSqlQuery q(connectionForThread());
     // Approximate: width * height * 3 bytes per entry (RGB24)
     q.exec("SELECT COALESCE(SUM(CAST(w AS INTEGER) * CAST(h AS INTEGER) * 3), 0) "
            "FROM blobs");
@@ -163,17 +212,19 @@ size_t DiskCache::totalBytes() const
 
 void DiskCache::clear()
 {
-    if (!m_impl->db.isOpen())
+    if (!connectionForThread().isOpen())
         return;
-    QSqlQuery q(m_impl->db);
+    QMutexLocker lock(&m_mutex);
+    QSqlQuery q(connectionForThread());
     q.exec("DELETE FROM blobs");
 }
 
 void DiskCache::prune(const std::set<std::string>& validKeys)
 {
-    if (!m_impl->db.isOpen())
+    if (!connectionForThread().isOpen())
         return;
-    QSqlQuery q(m_impl->db);
+    QMutexLocker lock(&m_mutex);
+    QSqlQuery q(connectionForThread());
     q.exec("SELECT key FROM blobs");
     std::set<std::string> stale;
     while (q.next())
@@ -184,7 +235,7 @@ void DiskCache::prune(const std::set<std::string>& validKeys)
     }
     for (const auto& k : stale)
     {
-        QSqlQuery dq(m_impl->db);
+        QSqlQuery dq(connectionForThread());
         dq.prepare("DELETE FROM blobs WHERE key = ?");
         dq.addBindValue(QVariant(QString::fromStdString(k)));
         dq.exec();
