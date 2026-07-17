@@ -8,6 +8,7 @@
 #include "core/scheduler/TaskScheduler.h"
 #include "core/trace/Trace.h"
 
+#include <QCoreApplication>
 #include <QFileInfo>
 #include <QImageReader>
 #include <QSize>
@@ -172,15 +173,16 @@ void ImageRepository::loadDirectoryAsync(const std::string& dirPath,
     std::function<void(const std::vector<Result>&)> callback,
     int maxImages)
 {
-    const std::vector<std::string> files = FileSystem::listImages(dirPath, maxImages);
-    if (files.empty())
+    auto files = std::make_shared<std::vector<std::string>>(
+        FileSystem::listImages(dirPath, maxImages));
+    if (files->empty())
     {
         if (callback)
             callback({});
         return;
     }
 
-    const int n = static_cast<int>(files.size());
+    const int n = static_cast<int>(files->size());
     auto results = std::make_shared<std::vector<Result>>(n);
     auto completed = std::make_shared<std::atomic<int>>(0);
     auto callbackPtr =
@@ -189,9 +191,9 @@ void ImageRepository::loadDirectoryAsync(const std::string& dirPath,
     for (int i = 0; i < n; ++i)
     {
         TaskScheduler::instance().submit(TaskScheduler::Priority::Decode,
-            [this, &files, results, completed, n, i, callbackPtr](
+            [this, files, results, completed, n, i, callbackPtr](
                 const TaskScheduler::TaskContext&) {
-                (*results)[i] = load(files[i]);
+                (*results)[i] = load((*files)[i]);
                 int prev = completed->fetch_add(1, std::memory_order_acq_rel);
                 if (prev + 1 == n)
                 {
@@ -199,7 +201,15 @@ void ImageRepository::loadDirectoryAsync(const std::string& dirPath,
                     if (*cb)
                     {
                         auto func = *cb;
-                        QTimer::singleShot(0, [func, results]() { func(*results); });
+                        // Marshal the completion callback onto the application
+                        // (main/UI) thread's event loop. A context-less
+                        // QTimer::singleShot created from a worker thread never
+                        // fires (the worker has no running loop), so the
+                        // callback was silently lost. With the QCoreApplication
+                        // instance as context, Qt delivers it on the thread that
+                        // actually runs the loop.
+                        QTimer::singleShot(0, QCoreApplication::instance(),
+                            [func, results]() { func(*results); });
                     }
                 }
             });

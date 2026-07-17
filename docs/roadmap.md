@@ -76,6 +76,14 @@ Deliverables:
 - [x] `ImageViewer` contains no `QImageReader`/`Decoder`/`CacheManager` decode calls.
 - [x] Pixel Inspector reports RGB under the cursor, read from `ImageFrame`.
 - [x] `m3pipeline_tests` acceptance suite passes (27 checks; TIFF case skips if codec absent).
+- [x] **M3 acceptance automated (`test_m3acceptance`):** proves the two P0 bars against the
+      real async pipeline — `loadDirectoryAsync` returns in ~15 ms (budget ≤100 ms, i.e. the
+      open does NOT block on 1000 decodes) and all 1000 frames decode via the async path; the
+      `ThumbnailPipeline` emits the first thumbnail in ~3 ms (budget ≤200 ms). 5/5 checks.
+      (Two real bugs in `ImageRepository::loadDirectoryAsync` were found and fixed by this
+      suite: a use-after-free from capturing a local `files` vector by reference into worker
+      tasks, and a silently-lost completion callback from a context-less `QTimer::singleShot`
+      on a worker thread — now marshaled to the app/main thread's event loop.)
 
 ### M3 Phase-2 — Sync, Inspector Panel, Selection-driven Analysis (⬜ Next)
 

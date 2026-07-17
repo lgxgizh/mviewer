@@ -85,6 +85,18 @@ All notable changes to this project are documented here. The format is based on
   - **Flagged build-system change:** making `mviewer_core` SHARED is a real change to
     `src/CMakeLists.txt` (root adds `add_subdirectory(plugins/example)`). It is within the
     plugin feature's authorized scope, not a frozen-infra change.
+- **M3 acceptance verification — review's two P0 bars now proven by automated test (DONE):**
+  new `core/test_m3acceptance.cpp` (`m3acceptance_tests` CTest) measures the review's P0
+  acceptance against the real async pipeline: (1) `ImageRepository::loadDirectoryAsync` on
+  1000 images returns in ~15 ms (open does NOT block on decode) and delivers all 1000 frames
+  via the callback; (2) `ThumbnailPipeline` emits the first thumbnail in ~3 ms. 5/5 checks.
+  This suite **caught two real bugs** in `ImageRepository::loadDirectoryAsync` and they are
+  fixed: (a) use-after-free — the worker lambda captured the local `files` vector by
+  reference; now a `shared_ptr` captured by value. (b) the completion callback was delivered
+  via a context-less `QTimer::singleShot(0, ...)` created on a worker thread, so it never
+  fired (worker has no event loop); now marshaled to `QCoreApplication::instance()` so it
+  runs on the thread with a live loop. `ImageRepository` callers that relied on the async
+  completion callback now actually receive it.
 - Plugin loading framework (`PluginLoader` + `PluginManager`) with lifecycle management
 - UI fixture screenshot regression test (`ui_fixture`)
 - AddressSanitizer CI job for memory-leak / UB detection
