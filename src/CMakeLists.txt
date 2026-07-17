@@ -20,6 +20,8 @@ add_library(mviewer_core SHARED
     core/compare/BlinkController.cpp
     core/compare/DifferenceEngine.cpp
     core/analysis/AnalysisEngine.cpp
+    core/analysis/ExportReport.cpp
+    core/workspace/WorkspaceSerializer.cpp
     core/analyzer/Analyzer.cpp
     core/analyzer/HistogramAnalyzer.cpp
     core/analyzer/RGBMeanAnalyzer.cpp
@@ -205,6 +207,108 @@ target_compile_features(m3pipeline_tests PRIVATE cxx_std_20)
 target_include_directories(m3pipeline_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(m3pipeline_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
+# ─── M9-1 Browse workflow acceptance tests ────────────────────────────────
+add_executable(product_browse_tests
+    core/test_product_browse.cpp
+)
+
+target_link_libraries(product_browse_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(product_browse_tests PRIVATE cxx_std_20)
+target_include_directories(product_browse_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(product_browse_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# ─── M9-2 Compare workflow acceptance tests ───────────────────────────────
+add_executable(compare_workflow_tests
+    core/test_compare_workflow.cpp
+)
+
+target_link_libraries(compare_workflow_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(compare_workflow_tests PRIVATE cxx_std_20)
+target_include_directories(compare_workflow_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(compare_workflow_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# ─── M9-3 Analysis workflow acceptance tests ─────────────────────────────
+add_executable(analysis_panel_tests
+    core/test_analysis_panel.cpp
+)
+
+target_link_libraries(analysis_panel_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(analysis_panel_tests PRIVATE cxx_std_20)
+target_include_directories(analysis_panel_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(analysis_panel_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# ─── M9-4 Export workflow acceptance tests ────────────────────────────────
+add_executable(export_tests
+    core/test_export.cpp
+)
+
+target_link_libraries(export_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(export_tests PRIVATE cxx_std_20)
+target_include_directories(export_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(export_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# ─── M9-5 Workspace persistence acceptance tests ──────────────────────────
+add_executable(workspace_persist_tests
+    core/test_workspace_persist.cpp
+)
+
+target_link_libraries(workspace_persist_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(workspace_persist_tests PRIVATE cxx_std_20)
+target_include_directories(workspace_persist_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(workspace_persist_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# ─── M9-6 Polish (shortcuts route via Command) acceptance tests ──────────
+add_executable(shortcuts_tests
+    core/test_shortcuts.cpp
+)
+
+target_link_libraries(shortcuts_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(shortcuts_tests PRIVATE cxx_std_20)
+target_include_directories(shortcuts_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(shortcuts_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
 # ─── Engineering Excellence Targets ─────────────────────────────────────────
 
 add_executable(vision_regression
@@ -343,8 +447,13 @@ add_test(NAME commandstack_tests COMMAND test_commandstack)
 add_test(NAME crop_tests COMMAND test_crop)
 add_test(NAME job_tests COMMAND test_job)
 add_test(NAME datamodel_tests COMMAND test_datamodel)
-add_test(NAME pluginregistry_tests COMMAND test_pluginregistry_runner)
+add_test(NAME pluginregistry_tests COMMAND test_pluginregistryrunner)
 add_test(NAME m3acceptance_tests COMMAND test_m3acceptance)
+add_test(NAME product_browse_tests COMMAND product_browse_tests)
+add_test(NAME compare_workflow_tests COMMAND compare_workflow_tests)
+add_test(NAME analysis_panel_tests COMMAND analysis_panel_tests)
+add_test(NAME export_tests COMMAND export_tests)
+add_test(NAME workspace_persist_tests COMMAND workspace_persist_tests)
 
 # ─── Format target ──────────────────────────────────────────────────────────
 

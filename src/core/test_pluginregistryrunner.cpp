@@ -24,6 +24,18 @@
 static std::string childName()
 {
 #ifdef _WIN32
+    // Resolve the sibling child executable relative to THIS executable's
+    // directory. ctest may set the working directory to somewhere
+    // other than build_msvc/bin/, so a bare "test_pluginregistry.exe"
+    // would not be found by _popen (which shells via cmd.exe).
+    char self[MAX_PATH] = {0};
+    if (GetModuleFileNameA(nullptr, self, MAX_PATH))
+    {
+        std::string s(self);
+        auto pos = s.find_last_of("\\/");
+        if (pos != std::string::npos)
+            return s.substr(0, pos + 1) + "test_pluginregistry.exe";
+    }
     return "test_pluginregistry.exe";
 #else
     return "./test_pluginregistry";
