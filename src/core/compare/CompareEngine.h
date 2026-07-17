@@ -181,7 +181,10 @@ public:
     // Most recent asynchronous diff result (mutex-guarded). valid==false until
     // the first requestDiff completes.
     DiffResult lastDiff() const;
-    const ImageData& lastDiffImage() const { return m_lastDiffImage; }
+    // By-value: the internal buffer is mutex-guarded and released after the
+    // call returns, so returning a reference would dangle. ImageData is
+    // shared_ptr-backed, so a value copy is cheap and thread-safe.
+    ImageData lastDiffImage() const;
 
     // Access controllers / blink
     const BlinkController& blinkController() const { return m_blink; }
