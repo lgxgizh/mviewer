@@ -11,9 +11,8 @@
 #include <QCoreApplication>
 #include <QFileInfo>
 #include <QImageReader>
-#include <QSize>
-#include <QTimer>
 #include <atomic>
+#include <exception>
 #include <filesystem>
 #include <future>
 #include <map>
@@ -170,49 +169,57 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
 }
 
 void ImageRepository::loadDirectoryAsync(const std::string& dirPath,
-    std::function<void(const std::vector<Result>&)> callback,
+    std::function<void(std::vector<Result>)> callback,
+    int maxImages)
+{
+    loadDirectoryAsyncImpl(dirPath, std::move(callback), maxImages);
+}
+
+void ImageRepository::loadDirectoryAsyncImpl(const std::string& dirPath,
+    std::function<void(std::vector<Result>)> callback,
     int maxImages)
 {
     auto files = std::make_shared<std::vector<std::string>>(
         FileSystem::listImages(dirPath, maxImages));
     if (files->empty())
     {
-        if (callback)
-            callback({});
+        auto cb = std::move(callback);
+        cb({});
         return;
     }
 
     const int n = static_cast<int>(files->size());
     auto results = std::make_shared<std::vector<Result>>(n);
     auto completed = std::make_shared<std::atomic<int>>(0);
-    auto callbackPtr =
-        std::make_shared<std::function<void(const std::vector<Result>&)>>(std::move(callback));
+    auto callbackPtr = std::make_shared<std::function<void(std::vector<Result>)>>(
+        std::move(callback));
 
     for (int i = 0; i < n; ++i)
     {
         TaskScheduler::instance().submit(TaskScheduler::Priority::Decode,
             [this, files, results, completed, n, i, callbackPtr](
                 const TaskScheduler::TaskContext&) {
-                (*results)[i] = load((*files)[i]);
+                try
+                {
+                    (*results)[i] = load((*files)[i]);
+                }
+                catch (...)
+                {
+                    Result err;
+                    err.error = "decode threw for: " + (*files)[i];
+                    (*results)[i] = std::move(err);
+                }
                 int prev = completed->fetch_add(1, std::memory_order_acq_rel);
                 if (prev + 1 == n)
                 {
-                    auto* cb = callbackPtr.get();
-                    if (*cb)
-                    {
-                        auto func = *cb;
-                        // Marshal the completion callback onto the application
-                        // (main/UI) thread's event loop. A context-less
-                        // QTimer::singleShot created from a worker thread never
-                        // fires (the worker has no running loop), so the
-                        // callback was silently lost. With the QCoreApplication
-                        // instance as context, Qt delivers it on the thread that
-                        // actually runs the loop.
-                        QTimer::singleShot(0, QCoreApplication::instance(),
-                            [func, results]() { func(*results); });
-                    }
+                    auto cb = *callbackPtr;
+                    auto resultCopy = *results;
+                    cb(resultCopy);
                 }
-            });
+            },
+            {}, // deps
+            std::chrono::steady_clock::time_point::max(), // deadline
+            []{}); // done callback (required for drain tracking)
     }
 }
 

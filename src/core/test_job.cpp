@@ -51,8 +51,15 @@ int main()
 
         auto h = js.submit(job);
         CHECK(h != nullptr, "submit returns a handle");
-        // Wait for completion (job is ~20ms).
-        std::this_thread::sleep_for(std::chrono::milliseconds(80));
+        // Wait (poll) until the done callback fires or a generous timeout elapses.
+        // A fixed sleep is racy under ctest concurrency where the Background
+        // pool's worker thread may not start the task within a short window.
+        {
+            const auto deadline = std::chrono::steady_clock::now() +
+                                  std::chrono::milliseconds(2000);
+            while (!done.load() && std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
         CHECK(done.load(), "done callback fired");
         CHECK(last.load() == 100, "progress reached 100");
         CHECK(h->currentProgress() == 100, "handle reports progress 100");
@@ -114,7 +121,14 @@ int main()
         };
         js.submit(child);
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(120));
+        // Wait until both parent and child have run (poll, not a blind sleep,
+        // to stay robust under ctest concurrency).
+        {
+            const auto depDeadline = std::chrono::steady_clock::now() +
+                                     std::chrono::milliseconds(2000);
+            while (order.size() < 2 && std::chrono::steady_clock::now() < depDeadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        }
         CHECK(!order.empty() && order[0] == "parent",
               "parent ran before child (dependency honored)");
         CHECK(order.size() == 2 && order[1] == "child", "child ran after parent");
