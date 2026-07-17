@@ -152,6 +152,12 @@ DiffResult CompareEngine::lastDiff() const
     return m_lastDiff;
 }
 
+ImageData CompareEngine::lastDiffImage() const
+{
+    std::lock_guard<std::mutex> lock(m_diffMtx);
+    return m_lastDiffImage;
+}
+
 void CompareEngine::applySelectionToAll(const mviewer::domain::Selection& sel)
 {
     m_selection.setSelection(sel);

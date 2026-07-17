@@ -61,7 +61,7 @@ CompareWorkspace::CompareWorkspace(QWidget* parent)
     // thread and publishes "CompareEngine.DiffResult" on the EventBus from that
     // thread. We hop to the UI thread before repainting (the engine pointer in
     // ctx identifies which CompareEngine produced it).
-    EventBus::instance().subscribe("CompareEngine.DiffResult", [this](void* ctx) {
+    m_diffSubId = EventBus::instance().subscribe("CompareEngine.DiffResult", [this](void* ctx) {
         if (ctx != static_cast<void*>(&m_engine))
             return;
         // Repaint on the UI thread; refreshDiffOverlay() reads lastDiffImage().
@@ -94,6 +94,15 @@ CompareWorkspace::CompareWorkspace(QWidget* parent)
     root->setSpacing(4);
     root->addWidget(syncBar);
     root->addWidget(scroll, 1);
+}
+
+CompareWorkspace::~CompareWorkspace()
+{
+    // The EventBus is a process-global singleton. If we don't unsubscribe, a
+    // pending "CompareEngine.DiffResult" could fire into this (now destroyed)
+    // widget and crash. The subscription id is stored in m_diffSubId.
+    if (m_diffSubId != 0)
+        EventBus::instance().unsubscribe(m_diffSubId);
 }
 
 void CompareWorkspace::setImages(const QStringList& paths)
@@ -164,7 +173,8 @@ void CompareWorkspace::rebuildCells()
         // (cell i vs base). The compute runs on a worker thread via JobSystem;
         // the result is delivered through the EventBus and painted by
         // refreshDiffOverlay() on the UI thread. The UI thread never blocks here.
-        if (n > 1 && img)
+        // Skip i==0 (self-diff is all-black and overwrites the useful result).
+        if (n > 1 && img && i > 0)
         {
             m_engine.requestDiff(i, 0);
         }

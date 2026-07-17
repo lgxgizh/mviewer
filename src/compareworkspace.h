@@ -21,6 +21,7 @@ Q_OBJECT
 
 public:
     explicit CompareWorkspace(QWidget* parent = nullptr);
+    ~CompareWorkspace();
 
     void setImages(const QStringList& paths);
 
@@ -60,4 +61,9 @@ private:
     // Paints the most recent async diff result (from the EventBus) onto the
     // matching cell. Called on the UI thread via QueuedConnection.
     void refreshDiffOverlay();
+
+    // EventBus subscription id for "CompareEngine.DiffResult"; unsubscribed in
+    // the destructor because the EventBus is a process-global singleton and a
+    // live subscription into a destroyed widget would crash.
+    int m_diffSubId = 0;
 };
