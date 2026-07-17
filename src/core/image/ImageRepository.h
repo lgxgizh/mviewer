@@ -49,8 +49,14 @@ public:
 
     // Async parallel directory load: dispatches files to DecodePool, calls
     // callback when all files are loaded (or errored).
+    //
+    // Takes std::function by value. NOTE: this toolchain's MSVC STL (19.51)
+    // has a broken std::function operator bool (always returns false for
+    // non-empty functions) but invocation works. The implementation therefore
+    // NEVER checks operator bool on a std::function it intends to call — it
+    // invokes directly and relies on the caller to pass a valid callable.
     void loadDirectoryAsync(const std::string& dirPath,
-        std::function<void(const std::vector<Result>&)> callback,
+        std::function<void(std::vector<Result>)> callback,
         int maxImages = 1000);
 
     // Predictive preloading: prioritize visible images, prefetch neighbors.
@@ -86,4 +92,12 @@ public:
     // Key derivation (shared with tests and advanced callers).
     std::string makeKey(const std::string& filePath) const;
     mviewer::domain::ImageMetadata makeMeta(const std::string& filePath) const;
+
+private:
+    // Non-template implementation backing the public loadDirectoryAsync.
+    // Invokes the callback directly (never checks operator bool — broken on
+    // this toolchain).
+    void loadDirectoryAsyncImpl(const std::string& dirPath,
+        std::function<void(std::vector<Result>)> callback,
+        int maxImages);
 };
