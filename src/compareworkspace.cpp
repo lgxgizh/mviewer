@@ -4,11 +4,13 @@
 #include "core/compare/DifferenceEngine.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/QtConvert.h"
+#include "core/EventBus.h"
 
 #include <QCheckBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QMetaObject>
 #include <QMouseEvent>
 #include <QScrollArea>
 #include <QVBoxLayout>
@@ -30,8 +32,7 @@ QImage imageObjectToQImage(const ImageFrame* img)
 CompareWorkspace::CompareWorkspace(QWidget* parent)
     : QWidget(parent)
 {
-    m_engine = CompareEngine();
-
+    // m_engine is default-constructed as a member; no assignment needed.
     m_syncZoomChk = new QCheckBox("同步缩放(&Z)", this);
     m_syncZoomChk->setChecked(true);
     m_syncDragChk = new QCheckBox("同步拖动(&D)", this);
@@ -54,6 +55,17 @@ CompareWorkspace::CompareWorkspace(QWidget* parent)
         m_syncDrag = on;
         m_engine.setSyncEnabled(m_syncZoom && m_syncDrag);
         applySync(on);
+    });
+
+    // Async diff result delivery. requestDiff() computes the diff on a worker
+    // thread and publishes "CompareEngine.DiffResult" on the EventBus from that
+    // thread. We hop to the UI thread before repainting (the engine pointer in
+    // ctx identifies which CompareEngine produced it).
+    EventBus::instance().subscribe("CompareEngine.DiffResult", [this](void* ctx) {
+        if (ctx != static_cast<void*>(&m_engine))
+            return;
+        // Repaint on the UI thread; refreshDiffOverlay() reads lastDiffImage().
+        QMetaObject::invokeMethod(this, "refreshDiffOverlay", Qt::QueuedConnection);
     });
 
     auto* syncBar = new QWidget(this);
@@ -148,19 +160,13 @@ void CompareWorkspace::rebuildCells()
             view->setImage(q);
         }
 
-        // Compare mode (2+ images): overlay a difference heatmap (cell i vs base).
-        // Data comes from the core layer (DifferenceEngine); the workspace only
-        // converts it to a QImage and hands it to the view for rendering.
-        const int n = m_engine.imageCount();
+        // Compare mode (2+ images): request an asynchronous difference heatmap
+        // (cell i vs base). The compute runs on a worker thread via JobSystem;
+        // the result is delivered through the EventBus and painted by
+        // refreshDiffOverlay() on the UI thread. The UI thread never blocks here.
         if (n > 1 && img)
         {
-            ImageData diff = m_engine.differenceMap(i);
-            if (!diff.isNull())
-            {
-                ImageData heat = DifferenceEngine::heatMap(diff);
-                if (!heat.isNull())
-                    view->setOverlay(mvcore::toQImage(heat), 0.5);
-            }
+            m_engine.requestDiff(i, 0);
         }
 
         const QString cellName = img ? QString::fromStdString(img->metadata().fileName) : QString();
@@ -199,6 +205,21 @@ void CompareWorkspace::rebuildCells()
         const int col = i % lay.cols;
         m_layout->addWidget(cellWidget, row, col);
     }
+}
+
+void CompareWorkspace::refreshDiffOverlay()
+{
+    const DiffResult res = m_engine.lastDiff();
+    if (!res.valid || res.index < 0 || res.index >= m_cellViews.size())
+        return;
+    const ImageData diff = m_engine.lastDiffImage();
+    if (diff.isNull())
+        return;
+    const ImageData heat = DifferenceEngine::heatMap(diff);
+    if (heat.isNull())
+        return;
+    m_cellViews[res.index]->setOverlay(mvcore::toQImage(heat), 0.5);
+    update();
 }
 
 void CompareWorkspace::fitAll()

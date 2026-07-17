@@ -8,6 +8,7 @@
 #include "domain/Selection.h"
 
 #include <algorithm>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -104,12 +105,25 @@ private:
     int m_cols = 1, m_rows = 1;
 };
 
+// Result of an asynchronous difference computation. Published on the EventBus
+// (event "CompareEngine.DiffResult", scope Application) when requestDiff
+// completes. The pixels live in CompareEngine::lastDiff() (mutex-guarded), not
+// in this struct, so subscribers read them from the engine after the event.
+struct DiffResult
+{
+    int index = -1;
+    int baseIndex = -1;
+    bool valid = false;
+};
+
 // CompareEngine: pure facade. Owns images + blink, and composes the three
 // independent controllers (sync, selection, viewport).
 class CompareEngine
 {
 public:
     CompareEngine();
+    CompareEngine(const CompareEngine&) = delete;
+    CompareEngine& operator=(const CompareEngine&) = delete;
 
     void setImages(const std::vector<std::string>& paths);
     void addImage(const std::string& path);
@@ -154,8 +168,20 @@ public:
     }
     void clearBlink() { m_blink.clearBlink(); }
 
-    // Difference
+    // Difference (synchronous; for tests / callers needing an immediate result)
     ImageData differenceMap(int index, int baseIndex = 0);
+
+    // Difference (asynchronous). Submits the compute to JobSystem (Analysis
+    // pool) so the calling thread never blocks; on completion the result is
+    // stored in lastDiff() and a "CompareEngine.DiffResult" event is published
+    // on the EventBus (scope Application). Returns true if the job was accepted.
+    // The UI subscribes to that event and hops to the UI thread before painting.
+    bool requestDiff(int index, int baseIndex = 0);
+
+    // Most recent asynchronous diff result (mutex-guarded). valid==false until
+    // the first requestDiff completes.
+    DiffResult lastDiff() const;
+    const ImageData& lastDiffImage() const { return m_lastDiffImage; }
 
     // Access controllers / blink
     const BlinkController& blinkController() const { return m_blink; }
@@ -185,4 +211,10 @@ private:
     SelectionController m_selection;
     ViewportController m_viewport;
     PixelController m_pixel;
+
+    // Async diff result storage (mutex-guarded; written on worker thread, read
+    // on UI/EventBus subscriber thread).
+    mutable std::mutex m_diffMtx;
+    DiffResult m_lastDiff;
+    ImageData m_lastDiffImage;
 };
