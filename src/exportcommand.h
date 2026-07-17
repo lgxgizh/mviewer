@@ -13,7 +13,7 @@ public:
     std::string description() const override { return "导出图片"; }
     void execute() override;
     bool canExecute() const override;
-    std::vector<CommandShortcut> shortcuts() const override { return {}; }
+    std::vector<CommandShortcut> shortcuts() const override;
 
 private:
     QWidget* m_parent = nullptr;
