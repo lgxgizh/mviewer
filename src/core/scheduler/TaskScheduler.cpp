@@ -35,9 +35,14 @@ public:
             return;
         }
 
-        // HACK: std::function operator bool is broken on this MSVC 19.51
-        // toolchain (always returns false for non-empty functions), but
-        // invocation works. Always invoke m_work; guard only against cancel.
+        // Guard against cancellation only; invoke m_work unconditionally.
+        // std::function::operator bool is standard-guaranteed reliable, so an
+        // empty task here is programmer error, not a runtime condition to
+        // branch on. The assert below catches that error in debug builds;
+        // assert() compiles out under NDEBUG, so it is a dev-time guard only,
+        // not a runtime safety mechanism.
+        // Empty task is programmer error. Runtime path assumes valid callable.
+        assert(m_work.target_type() != typeid(void));
         if (!m_ctx->isCancelled())
             m_work(*m_ctx);
         m_ctx->reportProgress(100);

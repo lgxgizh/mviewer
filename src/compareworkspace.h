@@ -56,4 +56,8 @@ private:
     bool m_dragging = false;
     QPoint m_lastMouse;
     int m_dragIdx = -1;
+
+    // Paints the most recent async diff result (from the EventBus) onto the
+    // matching cell. Called on the UI thread via QueuedConnection.
+    void refreshDiffOverlay();
 };

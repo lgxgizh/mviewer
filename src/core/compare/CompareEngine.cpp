@@ -3,9 +3,12 @@
 #include "core/compare/DifferenceEngine.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageRepository.h"
+#include "core/job/Job.h"
+#include "core/EventBus.h"
 
 #include <algorithm>
 #include <cassert>
+#include <mutex>
 
 // ─── CompareEngine (facade) ─────────────────────────────────────────────────
 
@@ -99,6 +102,54 @@ ImageData CompareEngine::differenceMap(int index, int baseIndex)
         return ImageData();
     return DifferenceEngine::differenceMap(
         m_images[baseIndex]->pixels(), m_images[index]->pixels());
+}
+
+bool CompareEngine::requestDiff(int index, int baseIndex)
+{
+    if (index < 0 || index >= imageCount())
+        return false;
+    if (baseIndex < 0 || baseIndex >= imageCount())
+        return false;
+
+    // Capture the two frames' pixel buffers by value (shared_ptr keeps the
+    // underlying pixels alive on the worker thread without a copy).
+    const ImageData a = m_images[baseIndex]->pixels();
+    const ImageData b = m_images[index]->pixels();
+    const int idx = index, base = baseIndex;
+
+    mviewer::core::Job job;
+    job.name = "CompareEngine.diff";
+    // Analysis pool keeps diff work off the UI/decode paths. submit() uses
+    // job.priority to route; pool is advisory for submitOnPool callers.
+    job.pool = TaskScheduler::PoolType::AnalysisPool;
+    job.priority = TaskScheduler::Priority::Analysis;
+
+    job.work = [a, b, idx, base, this](const TaskScheduler::TaskContext&) {
+        ImageData diff = DifferenceEngine::differenceMap(a, b);
+        DiffResult res;
+        res.index = idx;
+        res.baseIndex = base;
+        res.valid = !diff.isNull();
+        std::lock_guard<std::mutex> lock(m_diffMtx);
+        m_lastDiff = res;
+        m_lastDiffImage = diff;
+    };
+    job.done = [this]() {
+        // Publish on the EventBus (scope Application) so subscribers (UI) learn
+        // the diff is ready. This runs on the worker thread; subscribers that
+        // touch widgets must hop to the UI thread themselves (see
+        // CompareWorkspace).
+        EventBus::instance().publish("CompareEngine.DiffResult",
+                                     static_cast<void*>(this));
+    };
+
+    return mviewer::core::JobSystem::instance().submit(job) != nullptr;
+}
+
+DiffResult CompareEngine::lastDiff() const
+{
+    std::lock_guard<std::mutex> lock(m_diffMtx);
+    return m_lastDiff;
 }
 
 void CompareEngine::applySelectionToAll(const mviewer::domain::Selection& sel)
