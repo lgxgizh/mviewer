@@ -117,13 +117,9 @@ static void testNonBlocking1000()
     const auto t0 = std::chrono::steady_clock::now();
     repo.loadDirectoryAsync(tempDir.string(),
         [&](std::vector<ImageRepository::Result> results) {
-            fprintf(stderr, "[TEST] lambda invoked, results.size=%zu\n", results.size());
-            fflush(stderr);
             finalResults = std::move(results);
             got.store(static_cast<int>(finalResults.size()));
             done.store(true);
-            fprintf(stderr, "[TEST] lambda done, got=%d\n", got.load());
-            fflush(stderr);
         },
         1000);
     const auto tCall = std::chrono::steady_clock::now();
