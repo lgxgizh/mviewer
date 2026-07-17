@@ -171,7 +171,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -344,6 +344,7 @@ add_test(NAME crop_tests COMMAND test_crop)
 add_test(NAME job_tests COMMAND test_job)
 add_test(NAME datamodel_tests COMMAND test_datamodel)
 add_test(NAME pluginregistry_tests COMMAND test_pluginregistry_runner)
+add_test(NAME m3acceptance_tests COMMAND test_m3acceptance)
 
 # ─── Format target ──────────────────────────────────────────────────────────
 
