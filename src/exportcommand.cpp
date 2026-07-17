@@ -1,9 +1,9 @@
 #include "exportcommand.h"
 
 #include "application/OpenDirectoryUseCase.h"
-
 #include "exportdialog.h"
 
+#include <QKeySequence>
 #include <QSettings>
 #include <QWidget>
 
@@ -15,6 +15,11 @@ ExportCommand::ExportCommand(QWidget* parent)
 bool ExportCommand::canExecute() const
 {
     return true;
+}
+
+std::vector<CommandShortcut> ExportCommand::shortcuts() const
+{
+    return {{Qt::Key_S, Qt::ControlModifier}};
 }
 
 void ExportCommand::execute()
