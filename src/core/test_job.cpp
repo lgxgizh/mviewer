@@ -8,18 +8,18 @@
 #include <thread>
 #include <vector>
 
-#define CHECK(cond, msg)                               \
-    do                                                 \
-    {                                                  \
-        if (!(cond))                                   \
-        {                                              \
-            std::cerr << "FAIL: " << msg << std::endl; \
-            return 1;                                  \
-        }                                              \
-        else                                           \
-        {                                              \
-            std::cout << "PASS: " << msg << std::endl; \
-        }                                              \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(cond))                                                                               \
+        {                                                                                          \
+            std::cerr << "FAIL: " << msg << std::endl;                                             \
+            return 1;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            std::cout << "PASS: " << msg << std::endl;                                             \
+        }                                                                                          \
     } while (0)
 
 using namespace mviewer::core;
@@ -27,8 +27,8 @@ using namespace mviewer::core;
 int main()
 {
     std::cout << "[Job system tests]\n";
-    auto& js = JobSystem::instance();
-    auto& sched = TaskScheduler::instance();
+    auto &js = JobSystem::instance();
+    auto &sched = TaskScheduler::instance();
 
     // 1) Progress callbacks fire and the handle reports the latest value.
     {
@@ -37,13 +37,14 @@ int main()
         Job job;
         job.name = "progress-job";
         job.priority = TaskScheduler::Priority::Background;
-        job.work = [&](const TaskScheduler::TaskContext& ctx) {
+        job.work = [&](const TaskScheduler::TaskContext &ctx)
+        {
             for (int i = 1; i <= 10; ++i)
             {
                 if (ctx.isCancelled())
                     return;
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
-                const_cast<TaskScheduler::TaskContext&>(ctx).reportProgress(i * 10);
+                const_cast<TaskScheduler::TaskContext &>(ctx).reportProgress(i * 10);
             }
         };
         job.onProgress = [&](int p) { last = p; };
@@ -55,8 +56,8 @@ int main()
         // A fixed sleep is racy under ctest concurrency where the Background
         // pool's worker thread may not start the task within a short window.
         {
-            const auto deadline = std::chrono::steady_clock::now() +
-                                  std::chrono::milliseconds(2000);
+            const auto deadline =
+                std::chrono::steady_clock::now() + std::chrono::milliseconds(2000);
             while (!done.load() && std::chrono::steady_clock::now() < deadline)
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
@@ -72,14 +73,15 @@ int main()
         Job job;
         job.name = "cancel-job";
         job.priority = TaskScheduler::Priority::Background;
-        job.work = [&](const TaskScheduler::TaskContext& ctx) {
+        job.work = [&](const TaskScheduler::TaskContext &ctx)
+        {
             for (int i = 1; i <= 100; ++i)
             {
                 if (ctx.isCancelled())
                     return;
                 std::this_thread::sleep_for(std::chrono::milliseconds(5));
                 ++iterations;
-                const_cast<TaskScheduler::TaskContext&>(ctx).reportProgress(i);
+                const_cast<TaskScheduler::TaskContext &>(ctx).reportProgress(i);
             }
         };
         job.onProgress = [&](int p) { progress = p; };
@@ -101,7 +103,8 @@ int main()
         Job parent;
         parent.name = "parent";
         parent.priority = TaskScheduler::Priority::Background;
-        parent.work = [&](const TaskScheduler::TaskContext& ctx) {
+        parent.work = [&](const TaskScheduler::TaskContext &ctx)
+        {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
             std::lock_guard<std::mutex> l(m);
             order.push_back("parent");
@@ -115,7 +118,8 @@ int main()
         child.name = "child";
         child.priority = TaskScheduler::Priority::Background;
         child.dependsOn = {ph->id};
-        child.work = [&](const TaskScheduler::TaskContext&) {
+        child.work = [&](const TaskScheduler::TaskContext &)
+        {
             std::lock_guard<std::mutex> l(m);
             order.push_back("child");
         };
@@ -124,8 +128,8 @@ int main()
         // Wait until both parent and child have run (poll, not a blind sleep,
         // to stay robust under ctest concurrency).
         {
-            const auto depDeadline = std::chrono::steady_clock::now() +
-                                     std::chrono::milliseconds(2000);
+            const auto depDeadline =
+                std::chrono::steady_clock::now() + std::chrono::milliseconds(2000);
             while (order.size() < 2 && std::chrono::steady_clock::now() < depDeadline)
                 std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }

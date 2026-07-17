@@ -6,7 +6,7 @@
 namespace mviewer::core
 {
 
-std::string MetadataReader::key(const std::string& filePath)
+std::string MetadataReader::key(const std::string &filePath)
 {
     const QFileInfo fi(QString::fromStdString(filePath));
     const QString k = QString::fromStdString(filePath) + QString::number(fi.size()) +
@@ -14,7 +14,7 @@ std::string MetadataReader::key(const std::string& filePath)
     return k.toStdString();
 }
 
-mviewer::domain::ImageMetadata MetadataReader::read(const std::string& filePath)
+mviewer::domain::ImageMetadata MetadataReader::read(const std::string &filePath)
 {
     mviewer::domain::ImageMetadata meta;
     const QFileInfo fi(QString::fromStdString(filePath));

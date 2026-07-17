@@ -15,16 +15,27 @@ struct CommandShortcut
 // that are not reversible simply leave undo() a no-op and canUndo()==false.
 class ICommand
 {
-public:
+  public:
     virtual ~ICommand() = default;
     virtual std::string id() const = 0;
     virtual std::string description() const = 0;
     virtual void execute() = 0;
 
     // Reverse execute(). Default: not reversible.
-    virtual void undo() {}
-    virtual bool canUndo() const { return false; }
+    virtual void undo()
+    {
+    }
+    virtual bool canUndo() const
+    {
+        return false;
+    }
 
-    virtual bool canExecute() const { return true; }
-    virtual std::vector<CommandShortcut> shortcuts() const { return {}; }
+    virtual bool canExecute() const
+    {
+        return true;
+    }
+    virtual std::vector<CommandShortcut> shortcuts() const
+    {
+        return {};
+    }
 };

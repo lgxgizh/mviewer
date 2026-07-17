@@ -1,6 +1,6 @@
+#include "core/EventBus.h"
 #include "core/compare/CompareEngine.h"
 #include "core/image/ImageBuffer.h"
-#include "core/EventBus.h"
 
 #include <QCoreApplication>
 #include <QTimer>
@@ -12,7 +12,7 @@
 #include <thread>
 #include <vector>
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     int fails = 0;
@@ -152,62 +152,64 @@ int main(int argc, char** argv)
         }
         else
         {
-        std::atomic<bool> delivered{false};
-        int gotIndex = -1;
-        EventBus::instance().subscribe("CompareEngine.DiffResult", [&](void* ctx) {
-            if (ctx != static_cast<void*>(&eng2))
-                return;
-            delivered.store(true);
-            gotIndex = eng2.lastDiff().index;
-        });
+            std::atomic<bool> delivered{false};
+            int gotIndex = -1;
+            EventBus::instance().subscribe("CompareEngine.DiffResult",
+                                           [&](void *ctx)
+                                           {
+                                               if (ctx != static_cast<void *>(&eng2))
+                                                   return;
+                                               delivered.store(true);
+                                               gotIndex = eng2.lastDiff().index;
+                                           });
 
-        // requestDiff must return immediately (does not block on compute).
-        const auto t0 = std::chrono::steady_clock::now();
-        const bool accepted = eng2.requestDiff(1, 0);
-        const auto t1 = std::chrono::steady_clock::now();
-        const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-        if (!accepted)
-        {
-            printf("ASYNCDIFF_FAIL not-accepted\n");
-            fails++;
-        }
-        else if (ms > 50.0)
-        {
-            printf("ASYNCDIFF_FAIL blocking=%.1fms\n", ms);
-            fails++;
-        }
-        else
-            printf("ASYNCDIFF_NONBLOCK ok=%.2fms\n", ms);
+            // requestDiff must return immediately (does not block on compute).
+            const auto t0 = std::chrono::steady_clock::now();
+            const bool accepted = eng2.requestDiff(1, 0);
+            const auto t1 = std::chrono::steady_clock::now();
+            const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+            if (!accepted)
+            {
+                printf("ASYNCDIFF_FAIL not-accepted\n");
+                fails++;
+            }
+            else if (ms > 50.0)
+            {
+                printf("ASYNCDIFF_FAIL blocking=%.1fms\n", ms);
+                fails++;
+            }
+            else
+                printf("ASYNCDIFF_NONBLOCK ok=%.2fms\n", ms);
 
-        // Wait (bounded) for the EventBus result to arrive from the worker.
-        const int maxWaitMs = 5000;
-        const int stepMs = 20;
-        int waited = 0;
-        while (!delivered.load() && waited < maxWaitMs)
-        {
-            std::this_thread::sleep_for(std::chrono::milliseconds(stepMs));
-            QCoreApplication::processEvents();
-            waited += stepMs;
-        }
-        if (!delivered.load())
-        {
-            printf("ASYNCDIFF_FAIL no-event\n");
-            fails++;
-        }
-        else if (!eng2.lastDiff().valid || gotIndex != 1)
-        {
-            printf("ASYNCDIFF_FAIL result index=%d valid=%d\n",
-                   gotIndex, eng2.lastDiff().valid ? 1 : 0);
-            fails++;
-        }
-        else if (eng2.lastDiffImage().isNull())
-        {
-            printf("ASYNCDIFF_FAIL null-image\n");
-            fails++;
-        }
-        else
-            printf("ASYNCDIFF_OK index=%d %dx%d\n",
-                   gotIndex, eng2.lastDiffImage().width, eng2.lastDiffImage().height);
+            // Wait (bounded) for the EventBus result to arrive from the worker.
+            const int maxWaitMs = 5000;
+            const int stepMs = 20;
+            int waited = 0;
+            while (!delivered.load() && waited < maxWaitMs)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(stepMs));
+                QCoreApplication::processEvents();
+                waited += stepMs;
+            }
+            if (!delivered.load())
+            {
+                printf("ASYNCDIFF_FAIL no-event\n");
+                fails++;
+            }
+            else if (!eng2.lastDiff().valid || gotIndex != 1)
+            {
+                printf("ASYNCDIFF_FAIL result index=%d valid=%d\n", gotIndex,
+                       eng2.lastDiff().valid ? 1 : 0);
+                fails++;
+            }
+            else if (eng2.lastDiffImage().isNull())
+            {
+                printf("ASYNCDIFF_FAIL null-image\n");
+                fails++;
+            }
+            else
+                printf("ASYNCDIFF_OK index=%d %dx%d\n", gotIndex, eng2.lastDiffImage().width,
+                       eng2.lastDiffImage().height);
         }
     }
 

@@ -6,7 +6,7 @@
 
 // Laplacian variance: |Laplacian(img)| variance, where L = [0 1 0; 1 -4 1; 0 1
 // 0].
-double NoiseAnalyzer::estimateLaplacian(const ImageBuffer& v, int x0, int y0, int x1, int y1) const
+double NoiseAnalyzer::estimateLaplacian(const ImageBuffer &v, int x0, int y0, int x1, int y1) const
 {
     const int w = v.width, h = v.height, cpp = v.channelsPerPixel();
     if (x0 < 1)
@@ -25,8 +25,9 @@ double NoiseAnalyzer::estimateLaplacian(const ImageBuffer& v, int x0, int y0, in
     {
         for (int x = x0; x < x1; ++x)
         {
-            auto lum = [&](int xx, int yy) {
-                const uint8_t* p =
+            auto lum = [&](int xx, int yy)
+            {
+                const uint8_t *p =
                     v.data + static_cast<size_t>(yy) * v.stride() + static_cast<size_t>(xx) * cpp;
                 return (p[0] + p[1] + p[2]) / 3.0;
             };
@@ -41,7 +42,7 @@ double NoiseAnalyzer::estimateLaplacian(const ImageBuffer& v, int x0, int y0, in
     return sum2 / n - mean * mean;
 }
 
-bool NoiseAnalyzer::analyze(const ImageFrame& frame)
+bool NoiseAnalyzer::analyze(const ImageFrame &frame)
 {
     if (frame.pixels().isNull())
         return false;
@@ -50,7 +51,7 @@ bool NoiseAnalyzer::analyze(const ImageFrame& frame)
     return true;
 }
 
-bool NoiseAnalyzer::analyzeRegion(const ImageFrame& frame, const mviewer::domain::Selection& region)
+bool NoiseAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain::Selection &region)
 {
     if (frame.pixels().isNull() || region.isEmpty())
         return false;

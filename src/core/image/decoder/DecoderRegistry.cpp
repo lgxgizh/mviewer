@@ -3,7 +3,7 @@
 #include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/QtFallbackDecoder.h"
 
-DecoderRegistry& DecoderRegistry::instance()
+DecoderRegistry &DecoderRegistry::instance()
 {
     static DecoderRegistry inst;
     return inst;
@@ -29,16 +29,16 @@ void DecoderRegistry::registerDecoder(std::shared_ptr<IDecoder> decoder)
         m_decoders.push_back(std::move(decoder));
 }
 
-ImageData DecoderRegistry::decodeFull(const std::string& path) const
+ImageData DecoderRegistry::decodeFull(const std::string &path) const
 {
     mviewer::domain::ImageMetadata meta;
     return decodeFull(path, meta);
 }
 
-ImageData DecoderRegistry::decodeFull(const std::string& path,
-                                               mviewer::domain::ImageMetadata& outMeta) const
+ImageData DecoderRegistry::decodeFull(const std::string &path,
+                                      mviewer::domain::ImageMetadata &outMeta) const
 {
-    for (const auto& d : m_decoders)
+    for (const auto &d : m_decoders)
     {
         if (d->canDecode(path))
         {
@@ -52,9 +52,9 @@ ImageData DecoderRegistry::decodeFull(const std::string& path,
     return ImageData();
 }
 
-ImageData DecoderRegistry::decodeScaled(const std::string& path, int maxEdge) const
+ImageData DecoderRegistry::decodeScaled(const std::string &path, int maxEdge) const
 {
-    for (const auto& d : m_decoders)
+    for (const auto &d : m_decoders)
     {
         if (d->canDecode(path))
         {
@@ -69,7 +69,7 @@ ImageData DecoderRegistry::decodeScaled(const std::string& path, int maxEdge) co
 std::vector<std::string> DecoderRegistry::supportedExtensions() const
 {
     std::vector<std::string> all;
-    for (const auto& d : m_decoders)
+    for (const auto &d : m_decoders)
     {
         const auto exts = d->extensions();
         all.insert(all.end(), exts.begin(), exts.end());

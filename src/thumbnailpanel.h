@@ -20,9 +20,9 @@ class QResizeEvent;
 // itemDoubleClicked(path) means open the full viewer.
 class ThumbnailPanel : public QListWidget
 {
-Q_OBJECT
+    Q_OBJECT
 
-public:
+  public:
     static constexpr int kThumbSize = 140;
     static constexpr int kMaxImages = 1000;
 
@@ -34,10 +34,10 @@ public:
         SortResolution
     };
 
-    explicit ThumbnailPanel(QWidget* parent = nullptr);
+    explicit ThumbnailPanel(QWidget *parent = nullptr);
     ~ThumbnailPanel() override;
 
-    void setDirectory(const QString& path);
+    void setDirectory(const QString &path);
     void setSortMode(SortMode mode);
 
     QStringList selectedPaths() const;
@@ -45,25 +45,25 @@ public:
     void renameSelected();
     void moveToTrashSelected();
 
-signals:
-    void itemClicked(const QString& path);
-    void itemDoubleClicked(const QString& path);
-    void compareRequested(const QStringList& paths);
+  signals:
+    void itemClicked(const QString &path);
+    void itemDoubleClicked(const QString &path);
+    void compareRequested(const QStringList &paths);
 
-private:
+  private:
     void startWorker();
     void stopWorker();
     void onCompareClicked();
 
-    void contextMenuEvent(QContextMenuEvent* event) override;
-    void resizeEvent(QResizeEvent* event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
-    ThumbnailWorker* m_worker = nullptr;
+    ThumbnailWorker *m_worker = nullptr;
     QThread m_thread;
     QString m_currentDir;
     SortMode m_sortMode = SortName;
-    QHash<QString, QListWidgetItem*> m_itemById;
-    QPushButton* m_compareBtn = nullptr;
+    QHash<QString, QListWidgetItem *> m_itemById;
+    QPushButton *m_compareBtn = nullptr;
 };
 
 // Background worker: reads each image at thumbnail resolution (fast, no
@@ -71,10 +71,10 @@ private:
 // previously visited folder loads instantly.
 class ThumbnailWorker : public QObject
 {
-Q_OBJECT
+    Q_OBJECT
 
-public:
-    explicit ThumbnailWorker(QObject* parent = nullptr);
+  public:
+    explicit ThumbnailWorker(QObject *parent = nullptr);
 
     struct Request
     {
@@ -83,17 +83,17 @@ public:
         QString id; // unique per load request (dir + index)
     };
 
-public slots:
-    void enqueue(const Request& req);
+  public slots:
+    void enqueue(const Request &req);
     void stop();
     void process();
 
-signals:
-    void thumbnailReady(const QString& path, const QPixmap& pm, const QString& id);
+  signals:
+    void thumbnailReady(const QString &path, const QPixmap &pm, const QString &id);
     void finished();
 
-private:
-    QPixmap makeThumbnail(const QString& path);
+  private:
+    QPixmap makeThumbnail(const QString &path);
 
     bool m_stop = false;
     QMutex m_mutex;

@@ -9,7 +9,7 @@
 #include <dlfcn.h>
 #endif
 
-PluginManager& PluginManager::instance()
+PluginManager &PluginManager::instance()
 {
     static PluginManager inst;
     return inst;
@@ -26,7 +26,7 @@ std::string PluginManager::lastError() const
     return m_lastError;
 }
 
-std::vector<std::string> PluginManager::scanDirectory(const std::string& dirPath)
+std::vector<std::string> PluginManager::scanDirectory(const std::string &dirPath)
 {
     std::vector<std::string> candidates;
     std::filesystem::path dir(dirPath);
@@ -43,7 +43,7 @@ std::vector<std::string> PluginManager::scanDirectory(const std::string& dirPath
 #endif
 #endif
 
-    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    for (const auto &entry : std::filesystem::directory_iterator(dir))
     {
         if (entry.is_regular_file() && entry.path().extension() == ext)
             candidates.push_back(entry.path().string());
@@ -51,7 +51,7 @@ std::vector<std::string> PluginManager::scanDirectory(const std::string& dirPath
     return candidates;
 }
 
-bool PluginManager::load(const std::string& path)
+bool PluginManager::load(const std::string &path)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -70,20 +70,21 @@ bool PluginManager::load(const std::string& path)
         return false;
     }
 
-    auto createFn = reinterpret_cast<Analyzer* (*)()>(GetProcAddress(handle, "createAnalyzer"));
-    auto nameFn = reinterpret_cast<const char* (*)()>(GetProcAddress(handle, "pluginName"));
-    auto destroyFn = reinterpret_cast<void (*)(Analyzer*)>(GetProcAddress(handle, "destroyAnalyzer"));
+    auto createFn = reinterpret_cast<Analyzer *(*)()>(GetProcAddress(handle, "createAnalyzer"));
+    auto nameFn = reinterpret_cast<const char *(*)()>(GetProcAddress(handle, "pluginName"));
+    auto destroyFn =
+        reinterpret_cast<void (*)(Analyzer *)>(GetProcAddress(handle, "destroyAnalyzer"));
 #else
-    void* handle = dlopen(path.c_str(), RTLD_LAZY);
+    void *handle = dlopen(path.c_str(), RTLD_LAZY);
     if (!handle)
     {
         m_lastError = "dlopen failed: " + std::string(dlerror());
         return false;
     }
 
-    auto createFn = reinterpret_cast<Analyzer* (*)()>(dlsym(handle, "createAnalyzer"));
-    auto nameFn = reinterpret_cast<const char* (*)()>(dlsym(handle, "pluginName"));
-    auto destroyFn = reinterpret_cast<void (*)(Analyzer*)>(dlsym(handle, "destroyAnalyzer"));
+    auto createFn = reinterpret_cast<Analyzer *(*)()>(dlsym(handle, "createAnalyzer"));
+    auto nameFn = reinterpret_cast<const char *(*)()>(dlsym(handle, "pluginName"));
+    auto destroyFn = reinterpret_cast<void (*)(Analyzer *)>(dlsym(handle, "destroyAnalyzer"));
 #endif
 
     if (!createFn)
@@ -103,7 +104,7 @@ bool PluginManager::load(const std::string& path)
     // We own it via the host's `delete` (the registry's unique_ptr uses the
     // default deleter, so plugins must be deletable by the host under a shared
     // CRT). Free the probe immediately to avoid leaking it.
-    Analyzer* analyzer = createFn();
+    Analyzer *analyzer = createFn();
     if (!analyzer)
     {
         m_lastError = "createAnalyzer returned null for " + path;
@@ -124,14 +125,19 @@ bool PluginManager::load(const std::string& path)
     // fall back to the host's default delete (only safe with a shared CRT).
     AnalyzerRegistry::instance().registerAnalyzer(
         analyzerId,
-        [createFn, destroyFn]() -> std::unique_ptr<Analyzer, AnalyzerDeleter> {
-            Analyzer* a = createFn();
+        [createFn, destroyFn]() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
+            Analyzer *a = createFn();
             if (!a)
                 return nullptr;
             if (destroyFn)
-                return std::unique_ptr<Analyzer, AnalyzerDeleter>(
-                    a, [destroyFn](Analyzer* p) { if (p) destroyFn(p); });
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(a, [](Analyzer* p) { delete p; });
+                return std::unique_ptr<Analyzer, AnalyzerDeleter>(a,
+                                                                  [destroyFn](Analyzer *p)
+                                                                  {
+                                                                      if (p)
+                                                                          destroyFn(p);
+                                                                  });
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(a, [](Analyzer *p) { delete p; });
         });
 
     PluginEntry entry;
@@ -147,11 +153,11 @@ bool PluginManager::load(const std::string& path)
     return true;
 }
 
-int PluginManager::loadDirectory(const std::string& dirPath)
+int PluginManager::loadDirectory(const std::string &dirPath)
 {
     const auto candidates = scanDirectory(dirPath);
     int count = 0;
-    for (const auto& path : candidates)
+    for (const auto &path : candidates)
     {
         if (load(path))
             ++count;
@@ -159,7 +165,7 @@ int PluginManager::loadDirectory(const std::string& dirPath)
     return count;
 }
 
-bool PluginManager::unload(const std::string& path)
+bool PluginManager::unload(const std::string &path)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
 
@@ -184,7 +190,7 @@ bool PluginManager::unload(const std::string& path)
 void PluginManager::unloadAll()
 {
     std::lock_guard<std::mutex> lock(m_mutex);
-    for (auto& [path, entry] : m_plugins)
+    for (auto &[path, entry] : m_plugins)
         AnalyzerRegistry::instance().unregister(entry.analyzerId);
     // Handles are intentionally NOT freed (see unload()). Plugins live for the
     // process lifetime; the OS reclaims them on exit.
@@ -195,12 +201,12 @@ std::vector<PluginManager::PluginEntry> PluginManager::loadedPlugins() const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     std::vector<PluginEntry> out;
-    for (const auto& [path, entry] : m_plugins)
+    for (const auto &[path, entry] : m_plugins)
         out.push_back(entry);
     return out;
 }
 
-bool PluginManager::isLoaded(const std::string& path) const
+bool PluginManager::isLoaded(const std::string &path) const
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     return m_plugins.count(path) > 0;

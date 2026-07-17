@@ -13,7 +13,7 @@ void SyncController::setScale(double s)
 {
     m_sync.scale = s;
     if (m_sync.enabled)
-        for (auto& c : m_cells)
+        for (auto &c : m_cells)
             c.scale = s;
 }
 
@@ -21,7 +21,7 @@ void SyncController::setOffset(double ox, double oy)
 {
     m_sync.offset = Vec2{ox, oy};
     if (m_sync.enabled)
-        for (auto& c : m_cells)
+        for (auto &c : m_cells)
         {
             c.offset.x = ox;
             c.offset.y = oy;
@@ -65,7 +65,7 @@ void SyncController::setCellOffset(int index, double ox, double oy)
     }
 }
 
-void SyncController::fitCell(int index, const CellSize& viewport, const CellSize& imageSize)
+void SyncController::fitCell(int index, const CellSize &viewport, const CellSize &imageSize)
 {
     if (index < 0 || index >= static_cast<int>(m_cells.size()))
         return;
@@ -81,18 +81,18 @@ void SyncController::fitCell(int index, const CellSize& viewport, const CellSize
 void SyncController::reset()
 {
     m_sync = SyncTransform{};
-    for (auto& c : m_cells)
+    for (auto &c : m_cells)
         c = CellState{};
 }
 
-CellState& SyncController::cell(int index)
+CellState &SyncController::cell(int index)
 {
     if (0 <= index && index < static_cast<int>(m_cells.size()))
         return m_cells[index];
     return kDefaultCell;
 }
 
-const CellState& SyncController::cell(int index) const
+const CellState &SyncController::cell(int index) const
 {
     if (0 <= index && index < static_cast<int>(m_cells.size()))
         return m_cells[index];

@@ -10,9 +10,9 @@ namespace mvcore
 {
 
 // ImageData -> QImage（格式感知：Grayscale8/RGB24/RGBA32 各自映射）
-QImage toQImage(const ImageData& src);
+QImage toQImage(const ImageData &src);
 
 // QImage -> ImageData（格式感知：Grayscale8 保留为灰度，其余转 RGB24）
-ImageData fromQImage(const QImage& src);
+ImageData fromQImage(const QImage &src);
 
 } // namespace mvcore

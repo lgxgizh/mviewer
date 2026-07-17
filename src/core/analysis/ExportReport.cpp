@@ -11,7 +11,7 @@ namespace
 {
 
 // Scan a grayscale diff map for min/mean/max (0..255).
-void summarizeDiff(const ImageData& d, double& mn, double& mean, double& mx)
+void summarizeDiff(const ImageData &d, double &mn, double &mean, double &mx)
 {
     mn = 255.0;
     mx = 0.0;
@@ -22,7 +22,7 @@ void summarizeDiff(const ImageData& d, double& mn, double& mean, double& mx)
         mn = mean = mx = 0.0;
         return;
     }
-    const uint8_t* p = d.buffer.get();
+    const uint8_t *p = d.buffer.get();
     for (int i = 0; i < n; ++i)
     {
         const double v = static_cast<double>(p[i]);
@@ -35,7 +35,7 @@ void summarizeDiff(const ImageData& d, double& mn, double& mean, double& mx)
     mean = sum / static_cast<double>(n);
 }
 
-void fillMeanRgb(const ImageFrame& f, double& r, double& g, double& b)
+void fillMeanRgb(const ImageFrame &f, double &r, double &g, double &b)
 {
     RGBMeanAnalyzer an;
     if (an.analyze(f))
@@ -47,7 +47,7 @@ void fillMeanRgb(const ImageFrame& f, double& r, double& g, double& b)
     }
 }
 
-void fillNoise(const ImageFrame& f, double& out)
+void fillNoise(const ImageFrame &f, double &out)
 {
     NoiseAnalyzer an;
     if (an.analyze(f))
@@ -56,7 +56,7 @@ void fillNoise(const ImageFrame& f, double& out)
 
 } // namespace
 
-CompareReport buildCompareReport(const ImageFrame& a, const ImageFrame& b)
+CompareReport buildCompareReport(const ImageFrame &a, const ImageFrame &b)
 {
     CompareReport r;
     r.imageA = a.metadata().filePath;
@@ -90,7 +90,7 @@ CompareReport buildCompareReport(const ImageFrame& a, const ImageFrame& b)
     return r;
 }
 
-ImageData compareDiffImage(const ImageFrame& a, const ImageFrame& b)
+ImageData compareDiffImage(const ImageFrame &a, const ImageFrame &b)
 {
     if (!a.isValid() || !b.isValid())
         return ImageData{};
@@ -123,10 +123,9 @@ std::string CompareReport::toCsv() const
     std::ostringstream os;
     os << "imageA,imageB,psnr_dB,ssim,meanR_A,meanG_A,meanB_A,"
           "meanR_B,meanG_B,meanB_B,noise_A,noise_B,diff_min,diff_mean,diff_max\n";
-    os << imageA << "," << imageB << "," << psnr << "," << ssim << ","
-       << meanR_A << "," << meanG_A << "," << meanB_A << "," << meanR_B << ","
-       << meanG_B << "," << meanB_B << "," << noiseA << "," << noiseB << ","
-       << diffMin << "," << diffMean << "," << diffMax << "\n";
+    os << imageA << "," << imageB << "," << psnr << "," << ssim << "," << meanR_A << "," << meanG_A
+       << "," << meanB_A << "," << meanR_B << "," << meanG_B << "," << meanB_B << "," << noiseA
+       << "," << noiseB << "," << diffMin << "," << diffMean << "," << diffMax << "\n";
     return os.str();
 }
 

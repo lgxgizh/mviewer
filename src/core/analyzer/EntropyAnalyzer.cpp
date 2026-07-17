@@ -3,7 +3,7 @@
 #include <cmath>
 #include <cstring>
 
-double EntropyAnalyzer::computeEntropy(const ImageBuffer& v, int x0, int y0, int x1, int y1) const
+double EntropyAnalyzer::computeEntropy(const ImageBuffer &v, int x0, int y0, int x1, int y1) const
 {
     if (x1 <= x0 || y1 <= y0)
         return 0.0;
@@ -14,10 +14,10 @@ double EntropyAnalyzer::computeEntropy(const ImageBuffer& v, int x0, int y0, int
         return 0.0;
     for (int y = y0; y < y1; ++y)
     {
-        const uint8_t* line = v.data + static_cast<size_t>(y) * v.stride();
+        const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
         for (int x = x0; x < x1; ++x)
         {
-            const uint8_t* p = line + static_cast<size_t>(x) * cpp;
+            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
             ++hist[(p[0] + p[1] + p[2]) / 3];
         }
     }
@@ -32,7 +32,7 @@ double EntropyAnalyzer::computeEntropy(const ImageBuffer& v, int x0, int y0, int
     return H;
 }
 
-bool EntropyAnalyzer::analyze(const ImageFrame& frame)
+bool EntropyAnalyzer::analyze(const ImageFrame &frame)
 {
     if (frame.pixels().isNull())
         return false;
@@ -41,8 +41,8 @@ bool EntropyAnalyzer::analyze(const ImageFrame& frame)
     return true;
 }
 
-bool EntropyAnalyzer::analyzeRegion(const ImageFrame& frame,
-    const mviewer::domain::Selection& region)
+bool EntropyAnalyzer::analyzeRegion(const ImageFrame &frame,
+                                    const mviewer::domain::Selection &region)
 {
     if (frame.pixels().isNull() || region.isEmpty())
         return false;

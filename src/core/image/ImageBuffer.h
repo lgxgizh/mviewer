@@ -158,8 +158,7 @@ inline ImageData cropRegion(const ImageData &src, const mviewer::domain::Selecti
     for (int y = 0; y < ch; ++y)
     {
         const uint8_t *sp =
-            v.data + static_cast<size_t>(y0 + y) * v.stride() +
-            static_cast<size_t>(x0) * cpp;
+            v.data + static_cast<size_t>(y0 + y) * v.stride() + static_cast<size_t>(x0) * cpp;
         uint8_t *dp = dv.data + static_cast<size_t>(y) * dv.stride();
         std::memcpy(dp, sp, static_cast<size_t>(cw) * static_cast<size_t>(cpp));
     }

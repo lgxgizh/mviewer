@@ -5,7 +5,8 @@
 
 #include <utility>
 
-CropCommand::CropCommand(std::shared_ptr<ImageFrame> frame, const mviewer::domain::Selection& region)
+CropCommand::CropCommand(std::shared_ptr<ImageFrame> frame,
+                         const mviewer::domain::Selection &region)
     : m_frame(std::move(frame)), m_region(region), m_impl(std::make_unique<Impl>())
 {
 }

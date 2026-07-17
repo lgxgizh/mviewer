@@ -47,11 +47,9 @@ struct CompareResult
 
 class ScenarioBenchmark
 {
-public:
-    void run(const std::string& scenario,
-        const std::string& name,
-        std::function<void()> fn,
-        int iters = 50)
+  public:
+    void run(const std::string &scenario, const std::string &name, std::function<void()> fn,
+             int iters = 50)
     {
         std::vector<double> times;
         times.reserve(iters);
@@ -76,18 +74,18 @@ public:
                   << "ms  max=" << r.max_ms << "ms" << std::endl;
     }
 
-    void writeCsv(const std::string& path) const
+    void writeCsv(const std::string &path) const
     {
         std::ofstream f(path);
         f << "scenario,name,avg_ms,min_ms,max_ms,iterations\n";
-        for (const auto& r : m_results)
+        for (const auto &r : m_results)
             f << r.scenario << "," << r.name << "," << r.avg_ms << "," << r.min_ms << ","
               << r.max_ms << "," << r.iterations << "\n";
         std::cout << "CSV written: " << path << " (" << m_results.size() << " rows)" << std::endl;
     }
 
     // Load a baseline CSV (format: scenario,name,avg_ms,min_ms,max_ms,iterations)
-    static std::unordered_map<std::string, BaselineEntry> loadBaseline(const std::string& path)
+    static std::unordered_map<std::string, BaselineEntry> loadBaseline(const std::string &path)
     {
         std::unordered_map<std::string, BaselineEntry> map;
         std::ifstream f(path);
@@ -123,12 +121,12 @@ public:
 
     // Compare current results vs baseline with threshold ratio
     // threshold = 1.2 means up to +20% degradation is allowed
-    std::vector<CompareResult> compare(
-        const std::unordered_map<std::string, BaselineEntry>& baseline,
-        double threshold = 1.2) const
+    std::vector<CompareResult>
+    compare(const std::unordered_map<std::string, BaselineEntry> &baseline,
+            double threshold = 1.2) const
     {
         std::vector<CompareResult> out;
-        for (const auto& r : m_results)
+        for (const auto &r : m_results)
         {
             CompareResult c;
             c.scenario = r.scenario;
@@ -152,8 +150,11 @@ public:
         return out;
     }
 
-    const std::vector<BenchResult>& results() const { return m_results; }
+    const std::vector<BenchResult> &results() const
+    {
+        return m_results;
+    }
 
-private:
+  private:
     std::vector<BenchResult> m_results;
 };

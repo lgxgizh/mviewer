@@ -10,9 +10,8 @@
 #include <QMessageBox>
 #include <QVBoxLayout>
 
-ExportDialog::ExportDialog(const QStringList& sourceImages, QWidget* parent)
-    : QDialog(parent)
-    , m_sourceImages(sourceImages)
+ExportDialog::ExportDialog(const QStringList &sourceImages, QWidget *parent)
+    : QDialog(parent), m_sourceImages(sourceImages)
 {
     setupUi();
     setWindowTitle(tr("导出图片"));
@@ -21,7 +20,7 @@ ExportDialog::ExportDialog(const QStringList& sourceImages, QWidget* parent)
 
 void ExportDialog::setupUi()
 {
-    auto* mainLay = new QVBoxLayout(this);
+    auto *mainLay = new QVBoxLayout(this);
 
     // 源文件信息
     mainLay->addWidget(new QLabel(tr("源文件: %1 张图片").arg(m_sourceImages.size())));
@@ -32,17 +31,17 @@ void ExportDialog::setupUi()
     mainLay->addWidget(m_batchCheck);
 
     // 输出路径
-    auto* outLay = new QHBoxLayout;
+    auto *outLay = new QHBoxLayout;
     outLay->addWidget(new QLabel(tr("输出:")));
     m_outputEdit = new QLineEdit;
     m_outputEdit->setPlaceholderText(tr("选择文件或目录"));
     outLay->addWidget(m_outputEdit, 1);
-    auto* browseBtn = new QPushButton(tr("浏览..."));
+    auto *browseBtn = new QPushButton(tr("浏览..."));
     outLay->addWidget(browseBtn);
     mainLay->addLayout(outLay);
 
     // 格式
-    auto* fmtLay = new QHBoxLayout;
+    auto *fmtLay = new QHBoxLayout;
     fmtLay->addWidget(new QLabel(tr("格式:")));
     m_formatCombo = new QComboBox;
     m_formatCombo->addItem("PNG", "png");
@@ -54,7 +53,7 @@ void ExportDialog::setupUi()
     mainLay->addLayout(fmtLay);
 
     // 质量
-    auto* qualLay = new QHBoxLayout;
+    auto *qualLay = new QHBoxLayout;
     qualLay->addWidget(new QLabel(tr("质量:")));
     m_qualitySpin = new QSpinBox;
     m_qualitySpin->setRange(1, 100);
@@ -72,20 +71,18 @@ void ExportDialog::setupUi()
     mainLay->addWidget(m_statusLabel);
 
     // 按钮
-    auto* btnLay = new QHBoxLayout;
+    auto *btnLay = new QHBoxLayout;
     btnLay->addStretch(1);
     m_exportBtn = new QPushButton(tr("导出"));
-    auto* cancelBtn = new QPushButton(tr("取消"));
+    auto *cancelBtn = new QPushButton(tr("取消"));
     btnLay->addWidget(m_exportBtn);
     btnLay->addWidget(cancelBtn);
     mainLay->addLayout(btnLay);
 
     // 信号
     connect(browseBtn, &QPushButton::clicked, this, &ExportDialog::onBrowseOutput);
-    connect(m_formatCombo,
-        QOverload<int>::of(&QComboBox::currentIndexChanged),
-        this,
-        &ExportDialog::onFormatChanged);
+    connect(m_formatCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &ExportDialog::onFormatChanged);
     connect(m_exportBtn, &QPushButton::clicked, this, &ExportDialog::onExportClicked);
     connect(cancelBtn, &QPushButton::clicked, this, &QDialog::reject);
 
@@ -134,7 +131,7 @@ void ExportDialog::onExportClicked()
     }
 }
 
-void ExportDialog::exportSingle(const QString& src, const QString& dst)
+void ExportDialog::exportSingle(const QString &src, const QString &dst)
 {
     // 加载图片
     QImage img(src);
@@ -180,7 +177,7 @@ void ExportDialog::exportBatch()
     int fail = 0;
     for (int i = 0; i < m_sourceImages.size(); ++i)
     {
-        const QString& src = m_sourceImages[i];
+        const QString &src = m_sourceImages[i];
         QFileInfo fi(src);
         QString dst = dir.absoluteFilePath(fi.baseName() + suffix);
 

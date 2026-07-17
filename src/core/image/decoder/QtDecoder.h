@@ -11,12 +11,15 @@
 // outputs RGB24 ImageData, identical to the legacy Decoder output.
 class QtDecoder : public IDecoder
 {
-public:
-    bool canDecode(const std::string& path) const override;
-    ImageData decodeFull(const std::string& path) const override;
-    ImageData decodeScaled(const std::string& path, int maxEdge) const override;
-    ImageData decodeFull(const std::string& path,
-                                  mviewer::domain::ImageMetadata& outMeta) const override;
+  public:
+    bool canDecode(const std::string &path) const override;
+    ImageData decodeFull(const std::string &path) const override;
+    ImageData decodeScaled(const std::string &path, int maxEdge) const override;
+    ImageData decodeFull(const std::string &path,
+                         mviewer::domain::ImageMetadata &outMeta) const override;
     std::vector<std::string> extensions() const override;
-    const char* name() const override { return "QtDecoder"; }
+    const char *name() const override
+    {
+        return "QtDecoder";
+    }
 };

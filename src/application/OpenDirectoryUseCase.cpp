@@ -4,12 +4,12 @@
 
 #include <algorithm>
 
-OpenDirectoryUseCase::Result OpenDirectoryUseCase::execute(const std::string& directoryPath,
-    int maxImages)
+OpenDirectoryUseCase::Result OpenDirectoryUseCase::execute(const std::string &directoryPath,
+                                                           int maxImages)
 {
     Result r;
     std::vector<std::string> images = FileSystem::listImages(directoryPath, maxImages);
-    for (const std::string& p : images)
+    for (const std::string &p : images)
     {
         r.imagePaths.push_back(p);
     }

@@ -6,12 +6,12 @@
 //   2) "First thumbnail appears within ~200 ms"
 //      -> ThumbnailPipeline must emit the first thumbnail within the budget.
 #include "core/image/Encoder.h"
-#include "core/image/ImageRepository.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
+#include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
-#include "core/thumbnail/ThumbnailPipeline.h"
 #include "core/scheduler/TaskScheduler.h"
+#include "core/thumbnail/ThumbnailPipeline.h"
 
 #include <QColor>
 #include <QCoreApplication>
@@ -41,19 +41,19 @@ static std::string srcRootFromThisFile()
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 static QImage makeColorTest(int w, int h, QColor c)
@@ -70,11 +70,11 @@ static QImage makeColorTest(int w, int h, QColor c)
 static constexpr double kNonBlockingBudgetMs = 100.0;
 // Review target: first thumbnail within ~200 ms.
 static constexpr double kFirstThumbBudgetMs = 2000.0; // worst-case ceiling under heavy concurrency
-                                           // (e.g. 21-test ctest run). The real
-                                           // single-user target from the review is
-                                           // ~200 ms; this looser ceiling still
-                                           // proves the pipeline is non-blocking and
-                                           // the first thumbnail arrives promptly.
+                                                      // (e.g. 21-test ctest run). The real
+                                                      // single-user target from the review is
+                                                      // ~200 ms; this looser ceiling still
+                                                      // proves the pipeline is non-blocking and
+                                                      // the first thumbnail arrives promptly.
 
 static int write1000(const std::filesystem::path &dir)
 {
@@ -115,8 +115,10 @@ static void testNonBlocking1000()
     std::vector<ImageRepository::Result> finalResults;
 
     const auto t0 = std::chrono::steady_clock::now();
-    repo.loadDirectoryAsync(tempDir.string(),
-        [&](std::vector<ImageRepository::Result> results) {
+    repo.loadDirectoryAsync(
+        tempDir.string(),
+        [&](std::vector<ImageRepository::Result> results)
+        {
             finalResults = std::move(results);
             got.store(static_cast<int>(finalResults.size()));
             done.store(true);
@@ -124,7 +126,8 @@ static void testNonBlocking1000()
         1000);
     const auto tCall = std::chrono::steady_clock::now();
     const double callMs = std::chrono::duration<double, std::milli>(tCall - t0).count();
-    printf("  loadDirectoryAsync() returned in %.1f ms (budget %.0f ms)\n", callMs, kNonBlockingBudgetMs);
+    printf("  loadDirectoryAsync() returned in %.1f ms (budget %.0f ms)\n", callMs,
+           kNonBlockingBudgetMs);
     fflush(stdout);
 
     CHECK(callMs < kNonBlockingBudgetMs,
@@ -136,8 +139,7 @@ static void testNonBlocking1000()
     // the test's stack scope is still alive (prevents use-after-free on
     // finalResults/got/done in the callback). Block until the pool drains,
     // bounded by a generous budget for 1000 PNG decodes under load.
-    TaskScheduler::instance().drain(
-        TaskScheduler::DecodePool, std::chrono::seconds(120));
+    TaskScheduler::instance().drain(TaskScheduler::DecodePool, std::chrono::seconds(120));
     printf("  async callback delivered %d frames\n", got.load());
     CHECK(got.load() == 1000, "all 1000 images decoded via the async path");
 
@@ -146,7 +148,8 @@ static void testNonBlocking1000()
 
 static void testFirstThumbnailLatency()
 {
-    printf("\n[M3 acceptance: first thumbnail within ~200 ms (single-user) / 2000 ms ceiling under load]\n");
+    printf("\n[M3 acceptance: first thumbnail within ~200 ms (single-user) / 2000 ms ceiling under "
+           "load]\n");
     fflush(stdout);
 
     namespace fs = std::filesystem;
@@ -163,9 +166,7 @@ static void testFirstThumbnailLatency()
 
     ThumbnailPipeline &pipe = ThumbnailPipeline::instance();
     pipe.clear();
-    pipe.setDecodeFn([](const std::string &p, int size) {
-        return Decoder::decodeScaled(p, size);
-    });
+    pipe.setDecodeFn([](const std::string &p, int size) { return Decoder::decodeScaled(p, size); });
 
     std::atomic<double> firstMs{-1.0};
     std::atomic<int> thumbCount{0};
@@ -174,23 +175,25 @@ static void testFirstThumbnailLatency()
     bool firstSeen = false;
     std::chrono::steady_clock::time_point tAnchor;
 
-    pipe.setResultFn([&](const std::string &, const ImageData &) {
-        const double ms = std::chrono::duration<double, std::milli>(
-                              std::chrono::steady_clock::now() - tAnchor)
-                              .count();
-        double expected = -1.0;
-        if (firstMs.compare_exchange_strong(expected, ms))
+    pipe.setResultFn(
+        [&](const std::string &, const ImageData &)
         {
-            thumbCount.fetch_add(1, std::memory_order_relaxed);
-            std::lock_guard<std::mutex> lk(cvMtx);
-            firstSeen = true;
-            cv.notify_all();
-        }
-        else
-        {
-            thumbCount.fetch_add(1, std::memory_order_relaxed);
-        }
-    });
+            const double ms = std::chrono::duration<double, std::milli>(
+                                  std::chrono::steady_clock::now() - tAnchor)
+                                  .count();
+            double expected = -1.0;
+            if (firstMs.compare_exchange_strong(expected, ms))
+            {
+                thumbCount.fetch_add(1, std::memory_order_relaxed);
+                std::lock_guard<std::mutex> lk(cvMtx);
+                firstSeen = true;
+                cv.notify_all();
+            }
+            else
+            {
+                thumbCount.fetch_add(1, std::memory_order_relaxed);
+            }
+        });
 
     pipe.setSources(paths);
 
@@ -205,8 +208,8 @@ static void testFirstThumbnailLatency()
     }
 
     const double fm = firstMs.load();
-    printf("  first thumbnail emitted at %.1f ms (budget %.0f ms), total emitted=%d\n",
-           fm, kFirstThumbBudgetMs, thumbCount.load());
+    printf("  first thumbnail emitted at %.1f ms (budget %.0f ms), total emitted=%d\n", fm,
+           kFirstThumbBudgetMs, thumbCount.load());
     CHECK(fm >= 0.0, "at least one thumbnail was produced");
     CHECK(fm < kFirstThumbBudgetMs, "first thumbnail appears within the ~200 ms budget");
 

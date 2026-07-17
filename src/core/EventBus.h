@@ -10,7 +10,7 @@
 // No Qt dependency.
 class EventBus
 {
-public:
+  public:
     // Logical scopes — each scope is an isolated bus instance so events in one
     // domain (e.g. Analysis) don't cross-fire subscribers in another (e.g. UI).
     enum class EventBusScope : uint8_t
@@ -21,19 +21,19 @@ public:
         UI
     };
 
-    static EventBus& instance();
-    static EventBus& scope(EventBusScope s);
+    static EventBus &instance();
+    static EventBus &scope(EventBusScope s);
 
     // Subscribe to an event type. Returns subscription id (use to unsubscribe).
-    using Handler = std::function<void(void*)>;
-    int subscribe(const std::string& event, Handler h);
+    using Handler = std::function<void(void *)>;
+    int subscribe(const std::string &event, Handler h);
     void unsubscribe(int id);
 
     // Publish an event (synchronous call to all subscribers).
     // ctx is opaque user data (e.g., pointer to event data struct).
-    void publish(const std::string& event, void* ctx = nullptr);
+    void publish(const std::string &event, void *ctx = nullptr);
 
-private:
+  private:
     struct Subscriber
     {
         int id;

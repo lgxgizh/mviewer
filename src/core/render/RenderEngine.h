@@ -35,7 +35,10 @@ struct RenderSize
 {
     int width = 0;
     int height = 0;
-    bool isValid() const { return width > 0 && height > 0; }
+    bool isValid() const
+    {
+        return width > 0 && height > 0;
+    }
 };
 
 struct RenderRect
@@ -44,38 +47,41 @@ struct RenderRect
     int y = 0;
     int width = 0;
     int height = 0;
-    bool isValid() const { return width > 0 && height > 0; }
+    bool isValid() const
+    {
+        return width > 0 && height > 0;
+    }
 };
 
 // ─── Renderer interface ─────────────────────────────────────────────────────
 
 class Renderer
 {
-public:
+  public:
     virtual ~Renderer() = default;
     virtual std::string backendName() const = 0;
 
-    virtual ImageData scale(const ImageData& src, const RenderSize& target, RenderInterp mode) = 0;
-    virtual ImageData
-    overlayDifference(const ImageData& base, const ImageData& diff, double alpha) const = 0;
-    virtual ImageData scaleRegion(const ImageData& src,
-        const RenderRect& region,
-        const RenderSize& target,
-        RenderInterp mode) = 0;
-    virtual ImageData heatMap(const ImageData& gray, const RenderRect& rect) const = 0;
+    virtual ImageData scale(const ImageData &src, const RenderSize &target, RenderInterp mode) = 0;
+    virtual ImageData overlayDifference(const ImageData &base, const ImageData &diff,
+                                        double alpha) const = 0;
+    virtual ImageData scaleRegion(const ImageData &src, const RenderRect &region,
+                                  const RenderSize &target, RenderInterp mode) = 0;
+    virtual ImageData heatMap(const ImageData &gray, const RenderRect &rect) const = 0;
 };
 
 class SoftwareRenderer : public Renderer
 {
-public:
-    std::string backendName() const override { return "software"; }
-    ImageData scale(const ImageData& src, const RenderSize& target, RenderInterp mode) override;
-    ImageData overlayDifference(const ImageData& base, const ImageData& diff, double alpha) const override;
-    ImageData scaleRegion(const ImageData& src,
-        const RenderRect& region,
-        const RenderSize& target,
-        RenderInterp mode) override;
-    ImageData heatMap(const ImageData& gray, const RenderRect& rect) const override;
+  public:
+    std::string backendName() const override
+    {
+        return "software";
+    }
+    ImageData scale(const ImageData &src, const RenderSize &target, RenderInterp mode) override;
+    ImageData overlayDifference(const ImageData &base, const ImageData &diff,
+                                double alpha) const override;
+    ImageData scaleRegion(const ImageData &src, const RenderRect &region, const RenderSize &target,
+                          RenderInterp mode) override;
+    ImageData heatMap(const ImageData &gray, const RenderRect &rect) const override;
 };
 
 // ─── RenderCommand ──────────────────────────────────────────────────────────
@@ -94,7 +100,7 @@ struct RenderCommand
     ImageData srcImage;
     ImageData overlayImage;
 
-    static RenderCommand drawImage(const ImageData& img, const RenderSize& tgt, RenderInterp m)
+    static RenderCommand drawImage(const ImageData &img, const RenderSize &tgt, RenderInterp m)
     {
         RenderCommand c;
         c.type = RenderCommandType::DrawImage;
@@ -103,7 +109,7 @@ struct RenderCommand
         c.interp = static_cast<int>(m);
         return c;
     }
-    static RenderCommand drawOverlay(const ImageData& img, double a)
+    static RenderCommand drawOverlay(const ImageData &img, double a)
     {
         RenderCommand c;
         c.type = RenderCommandType::DrawOverlay;
@@ -111,7 +117,7 @@ struct RenderCommand
         c.alpha = a;
         return c;
     }
-    static RenderCommand drawHistogram(const int* bins, int n, const RenderRect& r)
+    static RenderCommand drawHistogram(const int *bins, int n, const RenderRect &r)
     {
         RenderCommand c;
         c.type = RenderCommandType::DrawHistogram;
@@ -121,7 +127,7 @@ struct RenderCommand
             c.histData[i] = bins[i];
         return c;
     }
-    static RenderCommand drawHeatmap(const ImageData& gray, const RenderRect& r)
+    static RenderCommand drawHeatmap(const ImageData &gray, const RenderRect &r)
     {
         RenderCommand c;
         c.type = RenderCommandType::DrawHeatmap;
@@ -129,7 +135,7 @@ struct RenderCommand
         c.rect = r;
         return c;
     }
-    static RenderCommand drawSelection(const RenderRect& r, int rgb)
+    static RenderCommand drawSelection(const RenderRect &r, int rgb)
     {
         RenderCommand c;
         c.type = RenderCommandType::DrawSelection;
@@ -151,59 +157,53 @@ struct RenderCommand
 
 class RenderEngine
 {
-public:
-    static RenderEngine& instance();
+  public:
+    static RenderEngine &instance();
 
     void setBackend(std::unique_ptr<Renderer> r);
     // Query the active backend name (useful for tests/logging).
     std::string backendName() const;
 
-    ImageData scale(const ImageData& src,
-        const RenderSize& target,
-        RenderInterp mode = RenderInterp::Bilinear);
-    ImageData overlayDifference(const ImageData& base, const ImageData& diff, double alpha = 0.5) const;
-    ImageData scaleRegion(const ImageData& src,
-        const RenderRect& region,
-        const RenderSize& target,
-        RenderInterp mode = RenderInterp::Bilinear);
-    ImageData heatMap(const ImageData& gray, const RenderRect& rect) const;
+    ImageData scale(const ImageData &src, const RenderSize &target,
+                    RenderInterp mode = RenderInterp::Bilinear);
+    ImageData overlayDifference(const ImageData &base, const ImageData &diff,
+                                double alpha = 0.5) const;
+    ImageData scaleRegion(const ImageData &src, const RenderRect &region, const RenderSize &target,
+                          RenderInterp mode = RenderInterp::Bilinear);
+    ImageData heatMap(const ImageData &gray, const RenderRect &rect) const;
 
     // ─── RenderCommand pipeline ─────────────────────────────────────────────
     // Execute a single command. Self-contained commands (DrawImage, DrawHeatmap,
     // DrawHistogram) produce a fresh ImageData; other commands return null.
-    ImageData executeCommand(const RenderCommand& cmd) const;
+    ImageData executeCommand(const RenderCommand &cmd) const;
     // Execute a command against the current buffer, returning the new buffer.
     // Used to composite overlays (DrawOverlay/Selection/Marker/Histogram).
-    ImageData executeCommand(const RenderCommand& cmd, const ImageData& buffer) const;
+    ImageData executeCommand(const RenderCommand &cmd, const ImageData &buffer) const;
     // Execute a batch sequentially; each command receives the prior output as
     // its buffer. The initial buffer is empty.
-    ImageData executeCommands(const std::vector<RenderCommand>& cmds) const;
+    ImageData executeCommands(const std::vector<RenderCommand> &cmds) const;
 
-    static ImageData scaleStatic(const ImageData& src,
-        const RenderSize& target,
-        RenderInterp mode = RenderInterp::Bilinear);
-    static ImageData
-    overlayDifferenceStatic(const ImageData& base, const ImageData& diff, double alpha = 0.5);
-    static ImageData scaleRegionStatic(const ImageData& src,
-        const RenderRect& region,
-        const RenderSize& target,
-        RenderInterp mode = RenderInterp::Bilinear);
+    static ImageData scaleStatic(const ImageData &src, const RenderSize &target,
+                                 RenderInterp mode = RenderInterp::Bilinear);
+    static ImageData overlayDifferenceStatic(const ImageData &base, const ImageData &diff,
+                                             double alpha = 0.5);
+    static ImageData scaleRegionStatic(const ImageData &src, const RenderRect &region,
+                                       const RenderSize &target,
+                                       RenderInterp mode = RenderInterp::Bilinear);
 
     // RenderCommand pipeline: execute a single command onto a QPainter.
     // `viewport` is the cell's local rectangle the painter draws into.
     // SmoothPixmapTransform is enabled while drawing when cmd.interp != 0.
-    void executeCommand(QPainter& painter,
-        const RenderCommand& cmd,
-        const QRect& viewport);
+    void executeCommand(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
 
-private:
+  private:
     RenderEngine();
     std::unique_ptr<Renderer> m_backend;
 
     // Command dispatch targets.
-    void executeDrawImage(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
-    void executeDrawOverlay(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
-    void executeDrawSelection(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
-    void executeDrawHistogram(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
-    void executeDrawHeatmap(QPainter& painter, const RenderCommand& cmd, const QRect& viewport);
+    void executeDrawImage(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
+    void executeDrawOverlay(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
+    void executeDrawSelection(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
+    void executeDrawHistogram(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
+    void executeDrawHeatmap(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
 };

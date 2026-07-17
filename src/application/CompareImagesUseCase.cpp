@@ -3,8 +3,8 @@
 #include "core/compare/CompareEngine.h"
 #include "core/image/Decoder.h"
 
-CompareImagesUseCase::Result CompareImagesUseCase::execute(
-    const std::vector<std::string>& imagePaths)
+CompareImagesUseCase::Result
+CompareImagesUseCase::execute(const std::vector<std::string> &imagePaths)
 {
     Result r;
     if (imagePaths.size() < 2)
@@ -13,7 +13,7 @@ CompareImagesUseCase::Result CompareImagesUseCase::execute(
         return r;
     }
     // Validation: check all paths are decodeable
-    for (const auto& p : imagePaths)
+    for (const auto &p : imagePaths)
     {
         ImageData img = Decoder::decodeScaled(p, 64); // tiny decode to validate
         if (img.isNull())

@@ -1,6 +1,6 @@
 #include "core/cache/CacheManager.h"
 
-CacheManager& CacheManager::instance()
+CacheManager &CacheManager::instance()
 {
     static CacheManager inst;
     return inst;
@@ -11,7 +11,7 @@ CacheManager::CacheManager()
     configure(m_config);
 }
 
-void CacheManager::configure(const CacheConfig& cfg)
+void CacheManager::configure(const CacheConfig &cfg)
 {
     m_config = cfg;
     ImageCache::instance().setCapacity(ImageCache::Metadata, cfg.metadataCacheSize);
@@ -39,31 +39,31 @@ ImageCache::Level CacheManager::toImageCacheLevel(CacheLevel level) const
     return ImageCache::Viewer;
 }
 
-void CacheManager::putMemory(CacheLevel level, const std::string& key, const ImageData& img)
+void CacheManager::putMemory(CacheLevel level, const std::string &key, const ImageData &img)
 {
     if (level == CacheLevel::Disk)
         return;
     ImageCache::instance().put(toImageCacheLevel(level), key, img);
 }
 
-bool CacheManager::getMemory(CacheLevel level, const std::string& key, ImageData& out)
+bool CacheManager::getMemory(CacheLevel level, const std::string &key, ImageData &out)
 {
     if (level == CacheLevel::Disk)
         return false;
     return ImageCache::instance().get(toImageCacheLevel(level), key, out);
 }
 
-void CacheManager::putDisk(const std::string& key, const ImageData& img)
+void CacheManager::putDisk(const std::string &key, const ImageData &img)
 {
     DiskCache::instance().put(key, img);
 }
 
-bool CacheManager::getDisk(const std::string& key, ImageData& out)
+bool CacheManager::getDisk(const std::string &key, ImageData &out)
 {
     return DiskCache::instance().get(key, out);
 }
 
-bool CacheManager::get(CacheLevel level, const std::string& key, ImageData& out)
+bool CacheManager::get(CacheLevel level, const std::string &key, ImageData &out)
 {
     if (level == CacheLevel::Disk)
     {
@@ -91,7 +91,7 @@ bool CacheManager::get(CacheLevel level, const std::string& key, ImageData& out)
     return false;
 }
 
-void CacheManager::put(CacheLevel level, const std::string& key, const ImageData& img)
+void CacheManager::put(CacheLevel level, const std::string &key, const ImageData &img)
 {
     if (level == CacheLevel::Disk)
         putDisk(key, img);
@@ -118,7 +118,7 @@ CacheLevelStats CacheManager::levelStats(CacheLevel level) const
     return s;
 }
 
-void CacheManager::erase(const std::string& key)
+void CacheManager::erase(const std::string &key)
 {
     ImageCache::instance().remove(ImageCache::Metadata, key);
     ImageCache::instance().remove(ImageCache::Thumbnail, key);
@@ -158,7 +158,7 @@ size_t CacheManager::diskUsageBytes() const
     return DiskCache::instance().totalBytes();
 }
 
-void CacheManager::putMetadata(const std::string& key, const mviewer::domain::ImageMetadata& meta)
+void CacheManager::putMetadata(const std::string &key, const mviewer::domain::ImageMetadata &meta)
 {
     std::lock_guard<std::mutex> lock(m_metaMutex);
     auto it = m_metaStore.find(key);
@@ -176,7 +176,7 @@ void CacheManager::putMetadata(const std::string& key, const mviewer::domain::Im
     m_metaOrder.push_front(key);
 }
 
-bool CacheManager::getMetadata(const std::string& key, mviewer::domain::ImageMetadata& out) const
+bool CacheManager::getMetadata(const std::string &key, mviewer::domain::ImageMetadata &out) const
 {
     std::lock_guard<std::mutex> lock(m_metaMutex);
     auto it = m_metaStore.find(key);
@@ -186,13 +186,13 @@ bool CacheManager::getMetadata(const std::string& key, mviewer::domain::ImageMet
     return true;
 }
 
-bool CacheManager::hasMetadata(const std::string& key) const
+bool CacheManager::hasMetadata(const std::string &key) const
 {
     std::lock_guard<std::mutex> lock(m_metaMutex);
     return m_metaStore.find(key) != m_metaStore.end();
 }
 
-void CacheManager::invalidate(const std::string& key)
+void CacheManager::invalidate(const std::string &key)
 {
     ImageCache::instance().remove(ImageCache::Metadata, key);
     ImageCache::instance().remove(ImageCache::Thumbnail, key);
@@ -213,11 +213,11 @@ void CacheManager::prefetch(std::function<std::vector<std::string>()> nextKeys, 
     prefetch(nextKeys(), level);
 }
 
-void CacheManager::prefetch(const std::vector<std::string>& keys, CacheLevel level)
+void CacheManager::prefetch(const std::vector<std::string> &keys, CacheLevel level)
 {
     if (level == CacheLevel::Disk)
         return; // 磁盘层无需预热
-    for (const std::string& key : keys)
+    for (const std::string &key : keys)
     {
         ImageData img;
         if (getDisk(key, img))

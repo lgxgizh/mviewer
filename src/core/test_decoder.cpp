@@ -1,9 +1,9 @@
 // M6 unit tests: DecoderRegistry dispatch + golden format decode.
+#include "core/image/Decoder.h"
+#include "core/image/ImageRepository.h"
 #include "core/image/decoder/DecoderRegistry.h"
 #include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/QtFallbackDecoder.h"
-#include "core/image/Decoder.h"
-#include "core/image/ImageRepository.h"
 
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -27,19 +27,19 @@ static std::string srcRootFromThisFile()
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 // M5 acceptance: smoke-decode of the 4 golden 256x256 images (jpg/png/bmp/tiff)
@@ -49,14 +49,14 @@ static void testBenchmarkSmokeDecode()
     printf("\n[benchmark smoke decode (DecoderRegistry)]\n");
     fflush(stdout);
 
-    DecoderRegistry& reg = DecoderRegistry::instance();
+    DecoderRegistry &reg = DecoderRegistry::instance();
     const std::string base = std::string(MVIEWER_SOURCE_DIR) + "/testdata/golden/256x256/";
-    const char* files[] = {"flat_color_256x256.jpg", "flat_color_256x256.png",
+    const char *files[] = {"flat_color_256x256.jpg", "flat_color_256x256.png",
                            "flat_color_256x256.bmp", "flat_color_256x256.tiff"};
 
     const auto t0 = std::chrono::steady_clock::now();
     int ok = 0;
-    for (const char* f : files)
+    for (const char *f : files)
     {
         ImageData d = reg.decodeFull(base + f);
         if (!d.isNull())
@@ -68,7 +68,8 @@ static void testBenchmarkSmokeDecode()
     CHECK(ok == 4,
           ("all 4 golden images decoded via registry (ok=" + std::to_string(ok) + ")").c_str());
     CHECK(ms < 5000.0, ("smoke decode under 5000 ms (elapsed=" +
-                        std::to_string(static_cast<long long>(ms)) + ")").c_str());
+                        std::to_string(static_cast<long long>(ms)) + ")")
+                           .c_str());
     printf("  smoke decode of 4 golden images elapsed = %.1f ms\n", ms);
     fflush(stdout);
 }
@@ -80,12 +81,12 @@ static void testRegistryDispatch()
     printf("\n[DecoderRegistry dispatch (M6)]\n");
     fflush(stdout);
 
-    DecoderRegistry& reg = DecoderRegistry::instance();
+    DecoderRegistry &reg = DecoderRegistry::instance();
 
     // Supported extensions aggregate to the known raster set, not empty.
     auto exts = reg.supportedExtensions();
     bool hasJpg = false, hasPng = false, hasBmp = false, hasTiff = false;
-    for (const auto& e : exts)
+    for (const auto &e : exts)
     {
         if (e == "jpg" || e == "jpeg")
             hasJpg = true;
@@ -113,7 +114,7 @@ static void testRegistryDispatch()
     CHECK(empty.isNull(), "unknown file returns empty ImageData (graceful, no crash)");
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     printf("=== Decoder Tests (M6) ===\n");

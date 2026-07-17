@@ -13,19 +13,19 @@
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 static QImage makeColorTest(int w, int h, QColor c)
@@ -40,7 +40,7 @@ static QImage makeColorTest(int w, int h, QColor c)
 static void testCacheManager()
 {
     printf("\n[CacheManager]\n");
-    CacheManager& mgr = CacheManager::instance();
+    CacheManager &mgr = CacheManager::instance();
     mgr.clear();
 
     QImage img = makeColorTest(32, 32, QColor(100, 100, 100));
@@ -67,8 +67,8 @@ static void testCacheManagerM5()
 {
     printf("\n[CacheManager M5 — disk persistence + hit ratio]\n");
     fflush(stdout);
-    CacheManager& mgr = CacheManager::instance();
-    DiskCache& disk = DiskCache::instance();
+    CacheManager &mgr = CacheManager::instance();
+    DiskCache &disk = DiskCache::instance();
     mgr.clear();
     disk.clear();
 
@@ -92,8 +92,8 @@ static void testCacheManagerM5()
         const ImageBuffer vb = back.view(), vd = data.view();
         for (int i = 0; identical && i < back.height; ++i)
         {
-            const uint8_t* lb = vb.data + static_cast<size_t>(i) * vb.stride();
-            const uint8_t* ld = vd.data + static_cast<size_t>(i) * vd.stride();
+            const uint8_t *lb = vb.data + static_cast<size_t>(i) * vb.stride();
+            const uint8_t *ld = vd.data + static_cast<size_t>(i) * vd.stride();
             for (int j = 0; j < back.width * 3; ++j)
                 if (lb[j] != ld[j])
                 {
@@ -114,13 +114,11 @@ static void testCacheManagerM5()
     const CacheLevelStats s = mgr.levelStats(CacheLevel::FullImage);
     CHECK(s.hits >= 1, "FullImage level records a hit");
     CHECK(s.misses >= 1, "FullImage level records a miss");
-    const double ratio = s.hits + s.misses > 0
-                             ? static_cast<double>(s.hits) / (s.hits + s.misses)
-                             : 0.0;
+    const double ratio =
+        s.hits + s.misses > 0 ? static_cast<double>(s.hits) / (s.hits + s.misses) : 0.0;
     CHECK(ratio > 0.0 && ratio <= 1.0, "hit ratio in (0,1]");
     printf("  hit ratio = %.3f (hits=%llu misses=%llu)\n", ratio,
-           static_cast<unsigned long long>(s.hits),
-           static_cast<unsigned long long>(s.misses));
+           static_cast<unsigned long long>(s.hits), static_cast<unsigned long long>(s.misses));
 
     mgr.clear();
     disk.clear();
@@ -129,7 +127,7 @@ static void testCacheManagerM5()
 static void testCacheConfig()
 {
     printf("\n[CacheConfig]\n");
-    CacheManager& mgr = CacheManager::instance();
+    CacheManager &mgr = CacheManager::instance();
     mgr.clear();
 
     CacheConfig cfg;
@@ -169,7 +167,7 @@ static void testCacheConfig()
 static void testCacheLruEviction()
 {
     printf("\n[CacheLruEviction]\n");
-    ImageCache& cache = ImageCache::instance();
+    ImageCache &cache = ImageCache::instance();
     cache.clear();
 
     // Review ②: Cache eviction / LRU behavior must be a covered regression area.
@@ -177,7 +175,8 @@ static void testCacheLruEviction()
     const size_t cap = 3 * 16 * 16 * 3; // ~3 small RGB images
     cache.setCapacity(ImageCache::Viewer, cap);
 
-    auto mk = [](int i) {
+    auto mk = [](int i)
+    {
         QImage img = makeColorTest(16, 16, QColor(i * 10, i * 5, 255 - i * 10));
         return mvcore::fromQImage(img);
     };
@@ -209,7 +208,7 @@ static void testCacheLruEviction()
     cache.clear();
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     printf("=== Cache Tests (M6) ===\n");

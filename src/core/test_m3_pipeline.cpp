@@ -4,12 +4,12 @@
 //  - JPEG/PNG/BMP/TIFF all decode (TIFF gated on codec availability).
 //  - Viewer/FullImage LRU cache makes a second load instant (in-memory hit).
 //  - Pixel Inspector reads RGB directly from the ImageFrame, not QImage.
+#include "core/cache/CacheManager.h"
+#include "core/compare/CompareEngine.h"
+#include "core/image/Decoder.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageRepository.h"
-#include "core/image/Decoder.h"
-#include "core/cache/CacheManager.h"
 #include "core/image/QtConvert.h"
-#include "core/compare/CompareEngine.h"
 #include "domain/Selection.h"
 
 #include <QByteArray>
@@ -28,22 +28,22 @@
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                               \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
-static std::string golden(const char* name)
+static std::string golden(const char *name)
 {
     return std::string(MVIEWER_SOURCE_DIR) + "/testdata/golden/256x256/" + name;
 }
@@ -54,8 +54,8 @@ static void testRepositoryReturnsFrame()
     printf("\n[ImageRepository -> ImageFrame]\n");
     fflush(stdout);
 
-    const char* fmts[] = {"jpg", "png", "bmp"};
-    for (const char* f : fmts)
+    const char *fmts[] = {"jpg", "png", "bmp"};
+    for (const char *f : fmts)
     {
         const std::string path = golden(("flat_color_256x256." + std::string(f)).c_str());
         auto res = ImageRepository::instance().load(path);
@@ -64,10 +64,11 @@ static void testRepositoryReturnsFrame()
         if (res.frame)
         {
             CHECK(res.frame->width() == 256 && res.frame->height() == 256,
-                ("load " + std::string(f) + " dims 256x256").c_str());
+                  ("load " + std::string(f) + " dims 256x256").c_str());
             CHECK(res.frame->decodeState() == DecodeState::Decoded,
-                ("load " + std::string(f) + " decodeState==Decoded").c_str());
-            CHECK(res.frame->hasHistogram(), ("load " + std::string(f) + " histogram computed").c_str());
+                  ("load " + std::string(f) + " decodeState==Decoded").c_str());
+            CHECK(res.frame->hasHistogram(),
+                  ("load " + std::string(f) + " histogram computed").c_str());
         }
     }
 }
@@ -81,7 +82,7 @@ static void testTiffSupport()
 
     const QList<QByteArray> supported = QImageReader::supportedImageFormats();
     bool tiffCodec = false;
-    for (const QByteArray& fmt : supported)
+    for (const QByteArray &fmt : supported)
         if (fmt.toLower() == "tiff")
             tiffCodec = true;
 
@@ -97,12 +98,12 @@ static void testTiffSupport()
     auto res = ImageRepository::instance().load(path);
     CHECK(res.success(), "load tiff succeeds (codec present)");
     CHECK(res.frame && res.frame->width() == 256 && res.frame->height() == 256,
-        "load tiff dims 256x256");
+          "load tiff dims 256x256");
 
     // Decoder must advertise tiff among supported extensions.
     auto exts = Decoder::supportedExtensions();
     bool listsTiff = false;
-    for (const auto& e : exts)
+    for (const auto &e : exts)
         if (e == "*.tif" || e == "*.tiff")
             listsTiff = true;
     CHECK(listsTiff, "Decoder::supportedExtensions includes .tif/.tiff");
@@ -122,11 +123,11 @@ static void testViewerCache()
 
     // CacheManager must hold the decoded pixels in the FullImage (Viewer) pool.
     ImageData cached;
-    const bool hit = CacheManager::instance().getMemory(CacheLevel::FullImage,
-        ImageRepository::instance().makeKey(path), cached);
+    const bool hit = CacheManager::instance().getMemory(
+        CacheLevel::FullImage, ImageRepository::instance().makeKey(path), cached);
     CHECK(hit, "decoded pixels present in Viewer/FullImage LRU after first load");
     CHECK(hit && !cached.isNull() && cached.width == 256 && cached.height == 256,
-        "cached pixels have correct dimensions");
+          "cached pixels have correct dimensions");
 
     // Second load must come from the in-memory cache (no disk/decoder round-trip).
     auto second = ImageRepository::instance().load(path);
@@ -141,8 +142,8 @@ static void testViewerCache()
     {
         for (int y = 0; y < a.height && identical; ++y)
         {
-            const uint8_t* pa = a.data + static_cast<size_t>(y) * a.stride();
-            const uint8_t* pb = b.data + static_cast<size_t>(y) * b.stride();
+            const uint8_t *pa = a.data + static_cast<size_t>(y) * a.stride();
+            const uint8_t *pb = b.data + static_cast<size_t>(y) * b.stride();
             for (int x = 0; x < a.width * 3; ++x)
                 if (pa[x] != pb[x])
                 {
@@ -173,8 +174,8 @@ static void testPixelInspectorReadsFrame()
     CHECK(view.format == PixelFormat::RGB24, "frame pixels are RGB24");
 
     const int cx = 128, cy = 128;
-    const uint8_t* p = view.data + static_cast<size_t>(cy) * view.stride() +
-                        static_cast<size_t>(cx) * view.channelsPerPixel();
+    const uint8_t *p = view.data + static_cast<size_t>(cy) * view.stride() +
+                       static_cast<size_t>(cx) * view.channelsPerPixel();
     const int r = p[0], g = p[1], b = p[2];
     CHECK(r == 80 && g == 160 && b == 220, "flat_color center pixel RGB == (80,160,220)");
 
@@ -183,10 +184,10 @@ static void testPixelInspectorReadsFrame()
     if (bmp.success())
     {
         const ImageBuffer bv = bmp.frame->pixels().view();
-        const uint8_t* bp = bv.data + static_cast<size_t>(cy) * bv.stride() +
-                             static_cast<size_t>(cx) * bv.channelsPerPixel();
+        const uint8_t *bp = bv.data + static_cast<size_t>(cy) * bv.stride() +
+                            static_cast<size_t>(cx) * bv.channelsPerPixel();
         CHECK(bp[0] == r && bp[1] == g && bp[2] == b,
-            "BMP decodes to identical pixel as PNG (decoder-agnostic read)");
+              "BMP decodes to identical pixel as PNG (decoder-agnostic read)");
     }
 
     // Out-of-bounds reads must be guarded (valid=false behaviour in the UI layer).
@@ -202,8 +203,9 @@ static void testPixelInspectorDelta()
     fflush(stdout);
 
     // Mirror AnalysisPanel::updateInspectorPage delta computation.
-    auto delta = [](int lr, int lg, int lb, int rr, int rg, int rb, int& dR, int& dG, int& dB,
-                    double& dist) {
+    auto delta =
+        [](int lr, int lg, int lb, int rr, int rg, int rb, int &dR, int &dG, int &dB, double &dist)
+    {
         dR = lr - rr;
         dG = lg - rg;
         dB = lb - rb;
@@ -246,8 +248,7 @@ static void testSynchronizedSelection()
     engine.selection().setSelection(sel);
 
     // The SelectionController holds the shared ROI.
-    CHECK(engine.selection().selection().x == 10 &&
-              engine.selection().selection().y == 20 &&
+    CHECK(engine.selection().selection().x == 10 && engine.selection().selection().y == 20 &&
               engine.selection().selection().width == 100 &&
               engine.selection().selection().height == 80,
           "SelectionController stores the shared ROI");
@@ -257,11 +258,11 @@ static void testSynchronizedSelection()
     engine.applySelectionToAll(sel);
     for (int i = 0; i < engine.imageCount(); ++i)
     {
-        const ImageFrame* img = engine.imageAt(i);
+        const ImageFrame *img = engine.imageAt(i);
         CHECK(img != nullptr, ("image " + std::to_string(i) + " present").c_str());
         if (img)
         {
-            const auto& got = img->selection();
+            const auto &got = img->selection();
             CHECK(got.x == 10 && got.y == 20 && got.width == 100 && got.height == 80,
                   ("cell " + std::to_string(i) + " mirrors the synchronized ROI").c_str());
         }
@@ -298,7 +299,7 @@ static void testSynchronizedZoom()
           "both cells share the pan offset");
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv); // required: DiskCache/ImageRepository use Qt paths & SQLite
     printf("=== M3 Pipeline Acceptance Tests ===\n");

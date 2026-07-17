@@ -8,7 +8,7 @@
 #include <QFileInfo>
 #include <QStandardPaths>
 
-ThumbnailCache& ThumbnailCache::instance()
+ThumbnailCache &ThumbnailCache::instance()
 {
     static ThumbnailCache inst;
     return inst;
@@ -22,7 +22,7 @@ QString ThumbnailCache::cacheDir() const
     return dir;
 }
 
-QString ThumbnailCache::keyFor(const QString& path) const
+QString ThumbnailCache::keyFor(const QString &path) const
 {
     const QFileInfo fi(path);
     const QString raw = path + "|" + QString::number(fi.lastModified().toSecsSinceEpoch()) + "|" +
@@ -30,7 +30,7 @@ QString ThumbnailCache::keyFor(const QString& path) const
     return QCryptographicHash::hash(raw.toUtf8(), QCryptographicHash::Sha1).toHex();
 }
 
-bool ThumbnailCache::get(const QString& path, QPixmap& out)
+bool ThumbnailCache::get(const QString &path, QPixmap &out)
 {
     MV_TRACE_SCOPED("ThumbnailCache::get");
     QMutexLocker lock(&m_mutex);
@@ -47,7 +47,7 @@ bool ThumbnailCache::get(const QString& path, QPixmap& out)
     return false;
 }
 
-void ThumbnailCache::put(const QString& path, const QPixmap& pm)
+void ThumbnailCache::put(const QString &path, const QPixmap &pm)
 {
     MV_TRACE_SCOPED("ThumbnailCache::put");
     QMutexLocker lock(&m_mutex);

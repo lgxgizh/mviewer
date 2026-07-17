@@ -11,7 +11,7 @@
 #include <cstdio>
 #include <string>
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
 
@@ -31,9 +31,9 @@ int main(int argc, char** argv)
     ImageData full;
     bool done = false;
     TaskScheduler::instance().submit(
-        TaskScheduler::DecodePool,
-        [&]() { full = Decoder::decodeFull(p); },
-        [&]() {
+        TaskScheduler::DecodePool, [&]() { full = Decoder::decodeFull(p); },
+        [&]()
+        {
             printf("SCHED_DECODE=%d %dx%d\n", !full.isNull(), full.width, full.height);
             // 4) ImageFrame 统计
             ImageFrame frame = ImageFrame::create(p, full);
@@ -45,12 +45,14 @@ int main(int argc, char** argv)
             app.quit();
         });
 
-    QTimer::singleShot(8000, &app, [&]() {
-        if (!done)
-        {
-            printf("TIMEOUT\n");
-            app.quit();
-        }
-    });
+    QTimer::singleShot(8000, &app,
+                       [&]()
+                       {
+                           if (!done)
+                           {
+                               printf("TIMEOUT\n");
+                               app.quit();
+                           }
+                       });
     return app.exec();
 }

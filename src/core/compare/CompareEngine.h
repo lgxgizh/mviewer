@@ -16,28 +16,49 @@
 // per-cell transforms (used when sync is disabled).
 class SyncController
 {
-public:
+  public:
     void setScale(double s);
     void setOffset(double ox, double oy);
     void zoomAt(double viewX, double viewY, double factor, int exceptIndex = -1);
     void zoomAtCell(int index, double factor);
-    void setEnabled(bool on) { m_sync.enabled = on; }
-    bool enabled() const { return m_sync.enabled; }
-    void setCellCount(int n) { m_cells.resize(n); }
+    void setEnabled(bool on)
+    {
+        m_sync.enabled = on;
+    }
+    bool enabled() const
+    {
+        return m_sync.enabled;
+    }
+    void setCellCount(int n)
+    {
+        m_cells.resize(n);
+    }
     void setCellScale(int index, double s);
     void setCellOffset(int index, double ox, double oy);
-    void fitCell(int index, const CellSize& viewport, const CellSize& imageSize);
+    void fitCell(int index, const CellSize &viewport, const CellSize &imageSize);
     void reset();
 
-    CellState& cell(int index);
-    const CellState& cell(int index) const;
+    CellState &cell(int index);
+    const CellState &cell(int index) const;
 
-    double scale() const { return m_sync.scale; }
-    Vec2 offset() const { return m_sync.offset; }
-    const SyncTransform& transform() const { return m_sync; }
-    const std::vector<CellState>& cells() const { return m_cells; }
+    double scale() const
+    {
+        return m_sync.scale;
+    }
+    Vec2 offset() const
+    {
+        return m_sync.offset;
+    }
+    const SyncTransform &transform() const
+    {
+        return m_sync;
+    }
+    const std::vector<CellState> &cells() const
+    {
+        return m_cells;
+    }
 
-private:
+  private:
     SyncTransform m_sync;
     std::vector<CellState> m_cells;
 };
@@ -45,17 +66,38 @@ private:
 // SelectionController owns the ROI selection plus sync/enable flags.
 class SelectionController
 {
-public:
-    void setSelection(const mviewer::domain::Selection& s) { m_selection = s; }
-    void clearSelection() { m_selection = mviewer::domain::Selection{}; }
-    void setEnabled(bool on) { m_enabled = on; }
-    void setSyncAcrossCells(bool on) { m_synced = on; }
+  public:
+    void setSelection(const mviewer::domain::Selection &s)
+    {
+        m_selection = s;
+    }
+    void clearSelection()
+    {
+        m_selection = mviewer::domain::Selection{};
+    }
+    void setEnabled(bool on)
+    {
+        m_enabled = on;
+    }
+    void setSyncAcrossCells(bool on)
+    {
+        m_synced = on;
+    }
 
-    const mviewer::domain::Selection& selection() const { return m_selection; }
-    bool enabled() const { return m_enabled; }
-    bool synced() const { return m_synced; }
+    const mviewer::domain::Selection &selection() const
+    {
+        return m_selection;
+    }
+    bool enabled() const
+    {
+        return m_enabled;
+    }
+    bool synced() const
+    {
+        return m_synced;
+    }
 
-private:
+  private:
     mviewer::domain::Selection m_selection;
     bool m_enabled = true;
     bool m_synced = false;
@@ -64,7 +106,7 @@ private:
 // ViewportController owns the viewport size and the grid (cols/rows).
 class ViewportController
 {
-public:
+  public:
     void setViewport(int w, int h)
     {
         m_vpW = w;
@@ -77,7 +119,10 @@ public:
         m_rows = l.rows;
     }
 
-    CellSize cellSize() const { return CellSize{m_vpW / m_cols, m_vpH / m_rows}; }
+    CellSize cellSize() const
+    {
+        return CellSize{m_vpW / m_cols, m_vpH / m_rows};
+    }
     CellPoint cellPos(int index) const
     {
         const CellSize cs = cellSize();
@@ -86,8 +131,14 @@ public:
         return CellPoint{c * cs.w, r * cs.h};
     }
 
-    int cols() const { return m_cols; }
-    int rows() const { return m_rows; }
+    int cols() const
+    {
+        return m_cols;
+    }
+    int rows() const
+    {
+        return m_rows;
+    }
 
     double fitScale(CellSize imageSize) const
     {
@@ -96,11 +147,11 @@ public:
         const CellSize cs = cellSize();
         if (cs.w <= 0 || cs.h <= 0)
             return 1.0;
-        return std::min(
-            static_cast<double>(cs.w) / imageSize.w, static_cast<double>(cs.h) / imageSize.h);
+        return std::min(static_cast<double>(cs.w) / imageSize.w,
+                        static_cast<double>(cs.h) / imageSize.h);
     }
 
-private:
+  private:
     int m_vpW = 0, m_vpH = 0;
     int m_cols = 1, m_rows = 1;
 };
@@ -120,53 +171,98 @@ struct DiffResult
 // independent controllers (sync, selection, viewport).
 class CompareEngine
 {
-public:
+  public:
     CompareEngine();
-    CompareEngine(const CompareEngine&) = delete;
-    CompareEngine& operator=(const CompareEngine&) = delete;
+    CompareEngine(const CompareEngine &) = delete;
+    CompareEngine &operator=(const CompareEngine &) = delete;
 
-    void setImages(const std::vector<std::string>& paths);
-    void addImage(const std::string& path);
+    void setImages(const std::vector<std::string> &paths);
+    void addImage(const std::string &path);
     void removeImage(int index);
     void clear();
 
     mviewer::domain::CompareSession session() const;
-    int imageCount() const { return static_cast<int>(m_images.size()); }
-    const std::shared_ptr<ImageFrame>& image(int index) const { return m_images[index]; }
-    const ImageFrame* imageAt(int index) const;
-    const CompareLayout& layout() const { return m_layout; }
+    int imageCount() const
+    {
+        return static_cast<int>(m_images.size());
+    }
+    const std::shared_ptr<ImageFrame> &image(int index) const
+    {
+        return m_images[index];
+    }
+    const ImageFrame *imageAt(int index) const;
+    const CompareLayout &layout() const
+    {
+        return m_layout;
+    }
 
     // Sync transform
-    const SyncTransform& syncTransform() const { return m_sync.transform(); }
-    void setSyncEnabled(bool on) { m_sync.setEnabled(on); }
-    bool syncEnabled() const { return m_sync.enabled(); }
-    void setScale(double s) { m_sync.setScale(s); }
-    void setOffset(double ox, double oy) { m_sync.setOffset(ox, oy); }
+    const SyncTransform &syncTransform() const
+    {
+        return m_sync.transform();
+    }
+    void setSyncEnabled(bool on)
+    {
+        m_sync.setEnabled(on);
+    }
+    bool syncEnabled() const
+    {
+        return m_sync.enabled();
+    }
+    void setScale(double s)
+    {
+        m_sync.setScale(s);
+    }
+    void setOffset(double ox, double oy)
+    {
+        m_sync.setOffset(ox, oy);
+    }
     void zoomAt(double viewX, double viewY, double factor, int exceptIndex = -1)
     {
         m_sync.zoomAt(viewX, viewY, factor, exceptIndex);
     }
 
     // Per-cell independent transform (when sync off)
-    double cellScale(int index) const { return m_sync.cell(index).scale; }
-    Vec2 cellOffset(int index) const { return m_sync.cell(index).offset; }
-    void setCellScale(int index, double s) { m_sync.setCellScale(index, s); }
-    void setCellOffset(int index, double ox, double oy) { m_sync.setCellOffset(index, ox, oy); }
-    const CellTransform& cellTransform(int index) const { return m_sync.cell(index); }
-    void fitCell(int index, const CellSize& viewport, const CellSize& imageSize)
+    double cellScale(int index) const
+    {
+        return m_sync.cell(index).scale;
+    }
+    Vec2 cellOffset(int index) const
+    {
+        return m_sync.cell(index).offset;
+    }
+    void setCellScale(int index, double s)
+    {
+        m_sync.setCellScale(index, s);
+    }
+    void setCellOffset(int index, double ox, double oy)
+    {
+        m_sync.setCellOffset(index, ox, oy);
+    }
+    const CellTransform &cellTransform(int index) const
+    {
+        return m_sync.cell(index);
+    }
+    void fitCell(int index, const CellSize &viewport, const CellSize &imageSize)
     {
         m_sync.fitCell(index, viewport, imageSize);
     }
 
     // Blink
-    int blinkIndex() const { return m_blink.blinkIndex(); }
+    int blinkIndex() const
+    {
+        return m_blink.blinkIndex();
+    }
     void setBlinkIndex(int idx)
     {
         if (idx < -1 || idx >= imageCount())
             return;
         m_blink.setBlinkIndex(idx);
     }
-    void clearBlink() { m_blink.clearBlink(); }
+    void clearBlink()
+    {
+        m_blink.clearBlink();
+    }
 
     // Difference (synchronous; for tests / callers needing an immediate result)
     ImageData differenceMap(int index, int baseIndex = 0);
@@ -187,24 +283,54 @@ public:
     ImageData lastDiffImage() const;
 
     // Access controllers / blink
-    const BlinkController& blinkController() const { return m_blink; }
-    BlinkController& blinkController() { return m_blink; }
-    const SyncController& sync() const { return m_sync; }
-    SyncController& sync() { return m_sync; }
-    const SelectionController& selection() const { return m_selection; }
-    SelectionController& selection() { return m_selection; }
+    const BlinkController &blinkController() const
+    {
+        return m_blink;
+    }
+    BlinkController &blinkController()
+    {
+        return m_blink;
+    }
+    const SyncController &sync() const
+    {
+        return m_sync;
+    }
+    SyncController &sync()
+    {
+        return m_sync;
+    }
+    const SelectionController &selection() const
+    {
+        return m_selection;
+    }
+    SelectionController &selection()
+    {
+        return m_selection;
+    }
     // Mirror the synchronized ROI to every owned frame (called by CompareWorkspace).
-    void applySelectionToAll(const mviewer::domain::Selection& sel);
-    const ViewportController& viewport() const { return m_viewport; }
-    ViewportController& viewport() { return m_viewport; }
+    void applySelectionToAll(const mviewer::domain::Selection &sel);
+    const ViewportController &viewport() const
+    {
+        return m_viewport;
+    }
+    ViewportController &viewport()
+    {
+        return m_viewport;
+    }
 
     // Pixel probe (fifth Compare Engine module). Reads the pixel at (imgX,imgY)
     // from every compared cell and returns samples + deltas vs baseIndex.
     PixelController::ProbeResult inspectPixel(int imgX, int imgY, int baseIndex = 0) const;
-    const PixelController& pixel() const { return m_pixel; }
-    PixelController& pixel() { return m_pixel; }
+    const PixelController &pixel() const
+    {
+        return m_pixel;
+    }
+    PixelController &pixel()
+    {
+        return m_pixel;
+    }
 
-private:
+  private:
     void rebuildLayout();
 
     std::vector<std::shared_ptr<ImageFrame>> m_images;

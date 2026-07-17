@@ -23,22 +23,22 @@ class RawImageView;
 //  - AnalyzerRegistry plugin extensibility
 class AnalysisPanel : public QWidget
 {
-Q_OBJECT
+    Q_OBJECT
 
-public:
-    explicit AnalysisPanel(QWidget* parent = nullptr);
+  public:
+    explicit AnalysisPanel(QWidget *parent = nullptr);
 
-    void setImage(const QImage& img);
-    void setImages(const QImage& a, const QImage& b);
+    void setImage(const QImage &img);
+    void setImages(const QImage &a, const QImage &b);
     void clear();
 
     // ROI (image coordinates)
-    void setROI(const mviewer::domain::Selection& roi);
+    void setROI(const mviewer::domain::Selection &roi);
     // Re-run the currently-selected registry analyzer over the left frame + ROI.
     void reanalyze();
     // Backward-compat: display arbitrary region-stats text (from
     // ImageViewer::regionStats)
-    void setRegionStats(const QString& text);
+    void setRegionStats(const QString &text);
 
     // Pixel Inspector (M3 Phase-2): live readout of the hovered pixel.
     // `left*` are the RGB read directly from the ImageFrame (passed by the
@@ -50,23 +50,23 @@ public:
     // AnalyzerRegistry (Selection-based), not the legacy QImage path.
     void setFrame(std::shared_ptr<ImageFrame> frame);
 
-public slots:
+  public slots:
     void onAnalyzerSelected(int index);
-    void updateImage(const QImage& img);
-    void updateHistogram(const mviewer::domain::Histogram& hist);
+    void updateImage(const QImage &img);
+    void updateHistogram(const mviewer::domain::Histogram &hist);
 
-protected:
-    void paintEvent(QPaintEvent*) override;
+  protected:
+    void paintEvent(QPaintEvent *) override;
 
-private:
+  private:
     void buildUi();
     void updateHistogramPage();
     void updateComparePage();
     void updatePluginPage();
     void updateInspectorPage();
     void renderHistogramPixmap();
-    void renderHistogramPixmap(const mviewer::domain::Histogram& hist);
-    QImage computeDifferencePreview(const QImage& a, const QImage& b);
+    void renderHistogramPixmap(const mviewer::domain::Histogram &hist);
+    QImage computeDifferencePreview(const QImage &a, const QImage &b);
     QString noiseLevelText(double variance);
 
     enum Page
@@ -78,14 +78,14 @@ private:
     };
 
     // UI
-    QTabWidget* m_tabs = nullptr;
-    QComboBox* m_analyzerCombo = nullptr;
-    QLabel* m_histogramLabel = nullptr; // histogram viz (replaces dead drawHistogramChannel)
-    QLabel* m_statsLabel = nullptr;
-    QLabel* m_compareLabel = nullptr;
-    QLabel* m_diffPreview = nullptr;
-    QLabel* m_pluginResult = nullptr;
-    QLabel* m_inspectorLabel = nullptr; // Pixel Inspector readout
+    QTabWidget *m_tabs = nullptr;
+    QComboBox *m_analyzerCombo = nullptr;
+    QLabel *m_histogramLabel = nullptr; // histogram viz (replaces dead drawHistogramChannel)
+    QLabel *m_statsLabel = nullptr;
+    QLabel *m_compareLabel = nullptr;
+    QLabel *m_diffPreview = nullptr;
+    QLabel *m_pluginResult = nullptr;
+    QLabel *m_inspectorLabel = nullptr; // Pixel Inspector readout
     std::unique_ptr<RawImageView> m_imageView;
 
     // Data

@@ -5,13 +5,12 @@
 #include <QResizeEvent>
 #include <algorithm>
 
-PreviewPanel::PreviewPanel(QWidget* parent)
-    : QWidget(parent)
+PreviewPanel::PreviewPanel(QWidget *parent) : QWidget(parent)
 {
     setMinimumSize(220, 220);
 }
 
-void PreviewPanel::setImage(const QString& path)
+void PreviewPanel::setImage(const QString &path)
 {
     m_path = path;
     m_full.load(path);
@@ -30,7 +29,7 @@ void PreviewPanel::setImage(const QString& path)
     update();
 }
 
-void PreviewPanel::computeStats(const QPixmap& pm)
+void PreviewPanel::computeStats(const QPixmap &pm)
 {
     const QImage img = pm.toImage().convertToFormat(QImage::Format_RGB32);
     if (img.isNull())
@@ -45,7 +44,7 @@ void PreviewPanel::computeStats(const QPixmap& pm)
     const long long n = static_cast<long long>(w) * h;
     for (int y = 0; y < h; ++y)
     {
-        const QRgb* line = reinterpret_cast<const QRgb*>(img.scanLine(y));
+        const QRgb *line = reinterpret_cast<const QRgb *>(img.scanLine(y));
         for (int x = 0; x < w; ++x)
         {
             const QRgb c = line[x];
@@ -76,21 +75,20 @@ void PreviewPanel::rebuild()
         return;
     }
     const double s = std::min(static_cast<double>(availW) / m_full.width(),
-        static_cast<double>(availH) / m_full.height());
-    m_scaled = m_full.scaled(static_cast<int>(m_full.width() * s),
-        static_cast<int>(m_full.height() * s),
-        Qt::KeepAspectRatio,
-        Qt::SmoothTransformation);
+                              static_cast<double>(availH) / m_full.height());
+    m_scaled =
+        m_full.scaled(static_cast<int>(m_full.width() * s), static_cast<int>(m_full.height() * s),
+                      Qt::KeepAspectRatio, Qt::SmoothTransformation);
 }
 
-void PreviewPanel::resizeEvent(QResizeEvent* event)
+void PreviewPanel::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     if (m_hasImage)
         rebuild();
 }
 
-void PreviewPanel::paintEvent(QPaintEvent* event)
+void PreviewPanel::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
     QPainter painter(this);
@@ -121,16 +119,14 @@ void PreviewPanel::paintEvent(QPaintEvent* event)
     f.setPointSize(9);
     painter.setFont(f);
     const QString name = QFileInfo(m_path).fileName();
-    painter.drawText(txtArea,
-        Qt::AlignTop | Qt::AlignLeft,
-        name + "\n" + QString::number(m_imgW) + "×" + QString::number(m_imgH) + "  " +
-            QString::number(m_fileSize / 1024) + " KB");
+    painter.drawText(txtArea, Qt::AlignTop | Qt::AlignLeft,
+                     name + "\n" + QString::number(m_imgW) + "×" + QString::number(m_imgH) + "  " +
+                         QString::number(m_fileSize / 1024) + " KB");
     painter.setPen(QColor(180, 180, 180));
-    painter.drawText(txtArea.adjusted(0, 36, 0, 0),
-        Qt::AlignTop | Qt::AlignLeft,
-        QString("亮度 %1   RGB(%2,%3,%4)")
-            .arg(m_lumMean, 0, 'f', 1)
-            .arg(m_rMean)
-            .arg(m_gMean)
-            .arg(m_bMean));
+    painter.drawText(txtArea.adjusted(0, 36, 0, 0), Qt::AlignTop | Qt::AlignLeft,
+                     QString("亮度 %1   RGB(%2,%3,%4)")
+                         .arg(m_lumMean, 0, 'f', 1)
+                         .arg(m_rMean)
+                         .arg(m_gMean)
+                         .arg(m_bMean));
 }

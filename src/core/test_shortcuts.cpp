@@ -6,30 +6,30 @@
 #include <string>
 
 static int g_pass = 0, g_fail = 0;
-#define CHECK(c, m)                                          \
-    do                                                       \
-    {                                                        \
-        if (c)                                               \
-        {                                                    \
-            printf("  PASS: %s\n", m);                       \
-            g_pass++;                                        \
-        }                                                    \
-        else                                                 \
-        {                                                    \
-            printf("  FAIL: %s\n", m);                       \
-            g_fail++;                                        \
-        }                                                    \
-        fflush(stdout);                                     \
+#define CHECK(c, m)                                                                                \
+    do                                                                                             \
+    {                                                                                              \
+        if (c)                                                                                     \
+        {                                                                                          \
+            printf("  PASS: %s\n", m);                                                             \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", m);                                                             \
+            g_fail++;                                                                              \
+        }                                                                                          \
+        fflush(stdout);                                                                            \
     } while (0)
 
 // Map a Qt key + modifier to a registered command id (or "" if none).
 static std::string idFor(int key, int mods)
 {
-    ICommand* c = CommandRegistry::instance().findByShortcut(key, mods);
+    ICommand *c = CommandRegistry::instance().findByShortcut(key, mods);
     return c ? c->id() : std::string();
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     // Product-critical shortcuts that must resolve to the right command.

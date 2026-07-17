@@ -13,7 +13,7 @@
 namespace
 {
 
-ImageData toImageData(const QImage& src)
+ImageData toImageData(const QImage &src)
 {
     if (src.isNull())
         return ImageData();
@@ -26,8 +26,8 @@ ImageData toImageData(const QImage& src)
     const size_t rowBytes = static_cast<size_t>(w) * 3;
     for (int y = 0; y < h; ++y)
     {
-        const uchar* s = img.constScanLine(y);
-        uint8_t* d = out.buffer.get() + static_cast<size_t>(y) * out.stride();
+        const uchar *s = img.constScanLine(y);
+        uint8_t *d = out.buffer.get() + static_cast<size_t>(y) * out.stride();
         std::memcpy(d, s, rowBytes);
     }
     return out;
@@ -35,8 +35,8 @@ ImageData toImageData(const QImage& src)
 
 // Populate the M6 metadata fields from a decoded QImage + its reader. Any
 // field that cannot be determined is left at its default. Never throws.
-void fillMetadata(const QImageReader& reader, const QImage& img,
-                  mviewer::domain::ImageMetadata& meta)
+void fillMetadata(const QImageReader &reader, const QImage &img,
+                  mviewer::domain::ImageMetadata &meta)
 {
     meta.width = img.width();
     meta.height = img.height();
@@ -146,10 +146,10 @@ std::vector<std::string> kExtensions = {"jpg", "jpeg", "bmp", "png", "tif", "tif
 
 } // namespace
 
-bool QtDecoder::canDecode(const std::string& path) const
+bool QtDecoder::canDecode(const std::string &path) const
 {
     const QString ext = QFileInfo(QString::fromStdString(path)).suffix().toLower();
-    for (const auto& e : kExtensions)
+    for (const auto &e : kExtensions)
     {
         if (ext == QString::fromStdString(e))
             return true;
@@ -157,14 +157,14 @@ bool QtDecoder::canDecode(const std::string& path) const
     return false;
 }
 
-ImageData QtDecoder::decodeFull(const std::string& path) const
+ImageData QtDecoder::decodeFull(const std::string &path) const
 {
     mviewer::domain::ImageMetadata meta;
     return decodeFull(path, meta);
 }
 
-ImageData QtDecoder::decodeFull(const std::string& path,
-                                         mviewer::domain::ImageMetadata& outMeta) const
+ImageData QtDecoder::decodeFull(const std::string &path,
+                                mviewer::domain::ImageMetadata &outMeta) const
 {
     QImageReader reader(QString::fromStdString(path));
     reader.setAutoTransform(true); // 尊重 EXIF 方向
@@ -178,7 +178,7 @@ ImageData QtDecoder::decodeFull(const std::string& path,
     return toImageData(img);
 }
 
-ImageData QtDecoder::decodeScaled(const std::string& path, int maxEdge) const
+ImageData QtDecoder::decodeScaled(const std::string &path, int maxEdge) const
 {
     QImageReader reader(QString::fromStdString(path));
     reader.setAutoTransform(true);
@@ -188,10 +188,9 @@ ImageData QtDecoder::decodeScaled(const std::string& path, int maxEdge) const
     if (full.width() <= maxEdge && full.height() <= maxEdge)
         return toImageData(reader.read()); // 本身已够小，直接解
 
-    const double ratio =
-        static_cast<double>(maxEdge) / std::max(full.width(), full.height());
-    reader.setScaledSize(QSize(static_cast<int>(full.width() * ratio),
-                               static_cast<int>(full.height() * ratio)));
+    const double ratio = static_cast<double>(maxEdge) / std::max(full.width(), full.height());
+    reader.setScaledSize(
+        QSize(static_cast<int>(full.width() * ratio), static_cast<int>(full.height() * ratio)));
     return toImageData(reader.read());
 }
 

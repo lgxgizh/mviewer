@@ -8,21 +8,21 @@
 // selected image plus its filename and basic stats.
 class PreviewPanel : public QWidget
 {
-Q_OBJECT
+    Q_OBJECT
 
-public:
-    explicit PreviewPanel(QWidget* parent = nullptr);
+  public:
+    explicit PreviewPanel(QWidget *parent = nullptr);
 
-public slots:
-    void setImage(const QString& path);
+  public slots:
+    void setImage(const QString &path);
 
-protected:
-    void paintEvent(QPaintEvent* event) override;
-    void resizeEvent(QResizeEvent* event) override;
+  protected:
+    void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
-private:
+  private:
     void rebuild();
-    void computeStats(const QPixmap& pm);
+    void computeStats(const QPixmap &pm);
 
     QString m_path;
     QPixmap m_full;   // full image (for accurate stats)

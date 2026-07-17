@@ -23,19 +23,19 @@
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 static QImage makeColorTest(int w, int h, QColor c)
@@ -47,7 +47,7 @@ static QImage makeColorTest(int w, int h, QColor c)
     return img;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
 
@@ -80,8 +80,8 @@ int main(int argc, char** argv)
     ImageFrame fb(mb, db);
 
     const mviewer::core::CompareReport report = mviewer::core::buildCompareReport(fa, fb);
-    printf("  PSNR=%.2f dB  SSIM=%.4f  diffMean=%.2f  noiseA=%.1f\n",
-           report.psnr, report.ssim, report.diffMean, report.noiseA);
+    printf("  PSNR=%.2f dB  SSIM=%.4f  diffMean=%.2f  noiseA=%.1f\n", report.psnr, report.ssim,
+           report.diffMean, report.noiseA);
     CHECK(report.psnr > 0.0, "PSNR computed and positive");
     CHECK(report.ssim >= 0.0 && report.ssim <= 1.0, "SSIM in [0,1]");
     CHECK(report.diffMean >= 0.0, "diff summary mean non-negative");

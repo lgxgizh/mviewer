@@ -7,14 +7,14 @@ namespace
 {
 const QStringList kImageExtensions = {".jpg", ".jpeg", ".bmp", ".png"};
 
-bool containsImages(const QString& dirPath)
+bool containsImages(const QString &dirPath)
 {
     QDir dir(dirPath);
     if (!dir.exists())
         return false;
 
     const QFileInfoList entries = dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
-    for (const QFileInfo& info : entries)
+    for (const QFileInfo &info : entries)
     {
         const QString suffix = info.suffix().toLower();
         if (kImageExtensions.contains("." + suffix))
@@ -24,14 +24,13 @@ bool containsImages(const QString& dirPath)
 }
 } // namespace
 
-DirectoryProxyModel::DirectoryProxyModel(QObject* parent)
-    : QSortFilterProxyModel(parent)
+DirectoryProxyModel::DirectoryProxyModel(QObject *parent) : QSortFilterProxyModel(parent)
 {
 }
 
-bool DirectoryProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const
+bool DirectoryProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
 {
-    QFileSystemModel* fsModel = qobject_cast<QFileSystemModel*>(sourceModel());
+    QFileSystemModel *fsModel = qobject_cast<QFileSystemModel *>(sourceModel());
     if (!fsModel)
         return true;
 
@@ -53,8 +52,7 @@ bool DirectoryProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex& sou
     return containsImages(path);
 }
 
-DirectoryTree::DirectoryTree(QWidget* parent)
-    : QTreeView(parent)
+DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
 {
     m_model = new QFileSystemModel(this);
     m_model->setRootPath(QDir::homePath());
@@ -72,12 +70,14 @@ DirectoryTree::DirectoryTree(QWidget* parent)
     setAnimated(true);
     setIndentation(15);
 
-    connect(this, &QTreeView::clicked, this, [this](const QModelIndex& index) {
-        const QModelIndex source = m_proxy->mapToSource(index);
-        const QString path = m_model->filePath(source);
-        if (m_model->isDir(source))
-            emit directoryChanged(path);
-    });
+    connect(this, &QTreeView::clicked, this,
+            [this](const QModelIndex &index)
+            {
+                const QModelIndex source = m_proxy->mapToSource(index);
+                const QString path = m_model->filePath(source);
+                if (m_model->isDir(source))
+                    emit directoryChanged(path);
+            });
 }
 
 DirectoryTree::~DirectoryTree() = default;

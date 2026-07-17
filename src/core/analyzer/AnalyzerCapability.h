@@ -9,15 +9,15 @@
 enum class AnalyzerCapability : uint32_t
 {
     None = 0,
-    SingleImage = 1 << 0,        // operates on a single frame at a time
-    MultiImage = 1 << 1,         // compares two or more frames
-    RegionOfInterest = 1 << 2,   // supports analyzeRegion() on a Selection
-    Streaming = 1 << 3,          // progressive analysis with onProgress
-    GPU = 1 << 4,                // offloads to GPU if available
-    HistogramOutput = 1 << 5,    // output includes histogram data
-    StatsOutput = 1 << 6,        // output includes ImageStats (means, etc.)
-    QualityMetric = 1 << 7,      // output is a computed quality score (PSNR/SSIM)
-    DifferenceOutput = 1 << 8,   // output is an ImageData (heatmap/difference)
+    SingleImage = 1 << 0,      // operates on a single frame at a time
+    MultiImage = 1 << 1,       // compares two or more frames
+    RegionOfInterest = 1 << 2, // supports analyzeRegion() on a Selection
+    Streaming = 1 << 3,        // progressive analysis with onProgress
+    GPU = 1 << 4,              // offloads to GPU if available
+    HistogramOutput = 1 << 5,  // output includes histogram data
+    StatsOutput = 1 << 6,      // output includes ImageStats (means, etc.)
+    QualityMetric = 1 << 7,    // output is a computed quality score (PSNR/SSIM)
+    DifferenceOutput = 1 << 8, // output is an ImageData (heatmap/difference)
 };
 
 constexpr AnalyzerCapability operator|(AnalyzerCapability a, AnalyzerCapability b)
@@ -33,10 +33,10 @@ constexpr bool hasCapability(AnalyzerCapability flags, AnalyzerCapability c)
 // Concrete analyzers expose this via a static `info()` method.
 struct AnalyzerInfo
 {
-    std::string id;                          // registry key (e.g. "histogram")
-    std::string name;                        // display name
+    std::string id;   // registry key (e.g. "histogram")
+    std::string name; // display name
     std::string description;
-    std::string version;                     // semantic version string
-    AnalyzerCapability capabilities;         // bitwise OR of flags
-    std::vector<std::string> outputFields;   // what the UI can display
+    std::string version;                   // semantic version string
+    AnalyzerCapability capabilities;       // bitwise OR of flags
+    std::vector<std::string> outputFields; // what the UI can display
 };

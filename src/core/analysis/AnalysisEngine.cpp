@@ -11,7 +11,7 @@
 // 内部实现：把 ImageData 转成 QImage 做像素级统计，算法逻辑保持不变。
 // header 不暴露 Qt；这里在 .cpp 内部使用 Qt 作为实现细节。
 
-ImageStats AnalysisEngine::computeStats(const ImageData& imgData)
+ImageStats AnalysisEngine::computeStats(const ImageData &imgData)
 {
     // 全图统计：ROI 设为整图
     mviewer::domain::Selection full;
@@ -22,8 +22,8 @@ ImageStats AnalysisEngine::computeStats(const ImageData& imgData)
     return computeStatsROI(imgData, full);
 }
 
-ImageStats AnalysisEngine::computeStatsROI(const ImageData& imgData,
-    const mviewer::domain::Selection& region)
+ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
+                                           const mviewer::domain::Selection &region)
 {
     ImageStats s;
     if (imgData.isNull())
@@ -46,7 +46,7 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData& imgData,
     int count = 0;
     for (int y = ry; y < ry + rh; ++y)
     {
-        const QRgb* line = reinterpret_cast<const QRgb*>(image.constScanLine(y));
+        const QRgb *line = reinterpret_cast<const QRgb *>(image.constScanLine(y));
         for (int x = rx; x < rx + rw; ++x)
         {
             const QRgb c = line[x];
@@ -74,7 +74,7 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData& imgData,
     return s;
 }
 
-ImageData AnalysisEngine::differenceMap(const ImageData& aData, const ImageData& bData)
+ImageData AnalysisEngine::differenceMap(const ImageData &aData, const ImageData &bData)
 {
     if (aData.isNull() || bData.isNull())
         return ImageData();
@@ -87,9 +87,9 @@ ImageData AnalysisEngine::differenceMap(const ImageData& aData, const ImageData&
         return ImageData();
     for (int y = 0; y < h; ++y)
     {
-        const QRgb* la = reinterpret_cast<const QRgb*>(aa.constScanLine(y));
-        const QRgb* lb = reinterpret_cast<const QRgb*>(bb.constScanLine(y));
-        uchar* dst = out.scanLine(y);
+        const QRgb *la = reinterpret_cast<const QRgb *>(aa.constScanLine(y));
+        const QRgb *lb = reinterpret_cast<const QRgb *>(bb.constScanLine(y));
+        uchar *dst = out.scanLine(y);
         for (int x = 0; x < w; ++x)
         {
             const int dr = abs(static_cast<int>(qRed(la[x])) - qRed(lb[x]));
@@ -101,7 +101,7 @@ ImageData AnalysisEngine::differenceMap(const ImageData& aData, const ImageData&
     return mvcore::fromQImage(out);
 }
 
-double AnalysisEngine::psnr(const ImageData& aData, const ImageData& bData)
+double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
 {
     QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_RGB32);
     QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_RGB32);
@@ -113,8 +113,8 @@ double AnalysisEngine::psnr(const ImageData& aData, const ImageData& bData)
     double mse = 0.0;
     for (int y = 0; y < h; ++y)
     {
-        const QRgb* la = reinterpret_cast<const QRgb*>(aa.constScanLine(y));
-        const QRgb* lb = reinterpret_cast<const QRgb*>(bb.constScanLine(y));
+        const QRgb *la = reinterpret_cast<const QRgb *>(aa.constScanLine(y));
+        const QRgb *lb = reinterpret_cast<const QRgb *>(bb.constScanLine(y));
         for (int x = 0; x < w; ++x)
         {
             const int dr = static_cast<int>(qRed(la[x])) - qRed(lb[x]);
@@ -130,7 +130,7 @@ double AnalysisEngine::psnr(const ImageData& aData, const ImageData& bData)
     return 10.0 * std::log10(65025.0 / mse);
 }
 
-double AnalysisEngine::ssim(const ImageData& aData, const ImageData& bData)
+double AnalysisEngine::ssim(const ImageData &aData, const ImageData &bData)
 {
     QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_Grayscale8);
     QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_Grayscale8);
@@ -186,7 +186,7 @@ double AnalysisEngine::ssim(const ImageData& aData, const ImageData& bData)
     return blocks > 0 ? ssimSum / blocks : 0.0;
 }
 
-double AnalysisEngine::noiseEstimate(const ImageData& imgData)
+double AnalysisEngine::noiseEstimate(const ImageData &imgData)
 {
     if (imgData.isNull())
         return 0.0;
@@ -204,9 +204,9 @@ double AnalysisEngine::noiseEstimate(const ImageData& imgData)
     int count = 0;
     for (int y = 1; y < h - 1; ++y)
     {
-        const uchar* prev = img.constScanLine(y - 1);
-        const uchar* curr = img.constScanLine(y);
-        const uchar* next = img.constScanLine(y + 1);
+        const uchar *prev = img.constScanLine(y - 1);
+        const uchar *curr = img.constScanLine(y);
+        const uchar *next = img.constScanLine(y + 1);
         for (int x = 1; x < w - 1; ++x)
         {
             // 拉普拉斯响应
@@ -223,7 +223,7 @@ double AnalysisEngine::noiseEstimate(const ImageData& imgData)
     return std::max(0.0, variance);
 }
 
-ImageData AnalysisEngine::heatMap(const ImageData& grayData)
+ImageData AnalysisEngine::heatMap(const ImageData &grayData)
 {
     if (grayData.isNull())
         return ImageData();
@@ -236,8 +236,8 @@ ImageData AnalysisEngine::heatMap(const ImageData& grayData)
     QImage out(w, h, QImage::Format_RGB32);
     for (int y = 0; y < h; ++y)
     {
-        const uchar* line = src.constScanLine(y);
-        QRgb* dst = reinterpret_cast<QRgb*>(out.scanLine(y));
+        const uchar *line = src.constScanLine(y);
+        QRgb *dst = reinterpret_cast<QRgb *>(out.scanLine(y));
         for (int x = 0; x < w; ++x)
         {
             const int v = line[x]; // 0..255

@@ -6,19 +6,19 @@
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
+#include <QMutex>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QStandardPaths>
 #include <QThread>
-#include <QMutex>
 #include <QVariant>
 #include <cstring>
 #include <memory>
 
 class DiskCache::Impl
 {
-public:
+  public:
     // Main-thread connection, used only during construction (ensureTable) and
     // as the template whose database file every per-thread connection opens.
     // QSqlDatabase is bound to the thread that opened it; it must NEVER be used
@@ -42,7 +42,7 @@ DiskCache::~DiskCache()
     }
 }
 
-DiskCache& DiskCache::instance()
+DiskCache &DiskCache::instance()
 {
     static DiskCache inst;
     return inst;
@@ -96,10 +96,10 @@ QSqlDatabase DiskCache::connectionForThread() const
         // creation so only one connection is registered at a time.
         static QMutex s_createMutex;
         QMutexLocker createLock(&s_createMutex);
-        const QString name = (tid == QThread::currentThreadId())
-                                 ? QStringLiteral("mviewer_disk_cache")
-                                 : QString("mviewer_disk_cache_t%1").arg(
-                                       reinterpret_cast<quintptr>(tid));
+        const QString name =
+            (tid == QThread::currentThreadId())
+                ? QStringLiteral("mviewer_disk_cache")
+                : QString("mviewer_disk_cache_t%1").arg(reinterpret_cast<quintptr>(tid));
         if (name != QStringLiteral("mviewer_disk_cache"))
         {
             tlConn = QSqlDatabase::addDatabase("QSQLITE", name);
@@ -115,7 +115,7 @@ QSqlDatabase DiskCache::connectionForThread() const
     return tlConn;
 }
 
-bool DiskCache::get(const std::string& key, ImageData& out)
+bool DiskCache::get(const std::string &key, ImageData &out)
 {
     if (!m_enabled || !connectionForThread().isOpen())
         return false;
@@ -140,7 +140,7 @@ bool DiskCache::get(const std::string& key, ImageData& out)
     return true;
 }
 
-void DiskCache::put(const std::string& key, const ImageData& img)
+void DiskCache::put(const std::string &key, const ImageData &img)
 {
     if (!m_enabled || !connectionForThread().isOpen() || img.isNull())
         return;
@@ -153,8 +153,8 @@ void DiskCache::put(const std::string& key, const ImageData& img)
     q.addBindValue(img.height);
     q.addBindValue(static_cast<int>(img.format));
     q.addBindValue(QVariant::fromValue<qint64>(QDateTime::currentSecsSinceEpoch()));
-    q.addBindValue(QByteArray(
-        reinterpret_cast<const char*>(img.buffer.get()), static_cast<int>(img.byteSize())));
+    q.addBindValue(QByteArray(reinterpret_cast<const char *>(img.buffer.get()),
+                              static_cast<int>(img.byteSize())));
     q.exec();
 
     // 容量限制：超出任一上限时删除最旧条目，直到两个指标都达标。
@@ -173,7 +173,7 @@ void DiskCache::put(const std::string& key, const ImageData& img)
         qDebug() << "DiskCache: pruned to" << entryCount() << "entries," << totalBytes() << "bytes";
 }
 
-void DiskCache::remove(const std::string& key)
+void DiskCache::remove(const std::string &key)
 {
     if (!connectionForThread().isOpen())
         return;
@@ -219,7 +219,7 @@ void DiskCache::clear()
     q.exec("DELETE FROM blobs");
 }
 
-void DiskCache::prune(const std::set<std::string>& validKeys)
+void DiskCache::prune(const std::set<std::string> &validKeys)
 {
     if (!connectionForThread().isOpen())
         return;
@@ -233,7 +233,7 @@ void DiskCache::prune(const std::set<std::string>& validKeys)
         if (validKeys.find(k) == validKeys.end())
             stale.insert(k);
     }
-    for (const auto& k : stale)
+    for (const auto &k : stale)
     {
         QSqlQuery dq(connectionForThread());
         dq.prepare("DELETE FROM blobs WHERE key = ?");

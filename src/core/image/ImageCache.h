@@ -19,7 +19,7 @@
 // 注意：接口只暴露 std::string 键与 ImageData 值，不依赖 Qt 类型。
 class ImageCache
 {
-public:
+  public:
     enum Level
     {
         Metadata,
@@ -29,13 +29,13 @@ public:
         LevelCount
     };
 
-    static ImageCache& instance();
+    static ImageCache &instance();
 
-    void put(Level level, const std::string& key, const ImageData& img);
-    bool get(Level level, const std::string& key, ImageData& out);
+    void put(Level level, const std::string &key, const ImageData &img);
+    bool get(Level level, const std::string &key, ImageData &out);
 
     // 删除单条条目（仓库释放/失效时使用）。
-    void remove(Level level, const std::string& key);
+    void remove(Level level, const std::string &key);
 
     void clear();
 
@@ -49,7 +49,7 @@ public:
     // 所有内存池的已用字节总量
     size_t totalUsedBytes() const;
 
-private:
+  private:
     ImageCache();
 
     struct Entry
@@ -67,8 +67,8 @@ private:
         mutable std::mutex mtx;
     };
 
-    void evictIfNeeded(Pool& pool, size_t incoming);
-    void touch(Pool& pool, const std::string& key);
+    void evictIfNeeded(Pool &pool, size_t incoming);
+    void touch(Pool &pool, const std::string &key);
 
     Pool m_pools[LevelCount];
 

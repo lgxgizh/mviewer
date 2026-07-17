@@ -46,10 +46,10 @@ struct CompareReport
 // Run PSNR / SSIM / Noise analyzers + the difference engine over two frames
 // and populate a CompareReport. Returns an empty-report-with-paths on invalid
 // input (null/decode-failed frames).
-CompareReport buildCompareReport(const ImageFrame& a, const ImageFrame& b);
+CompareReport buildCompareReport(const ImageFrame &a, const ImageFrame &b);
 
 // Heatmap diff image (RGB24) suitable for writing as compare_diff.png via
 // Encoder. Returns a null ImageData on invalid input.
-ImageData compareDiffImage(const ImageFrame& a, const ImageFrame& b);
+ImageData compareDiffImage(const ImageFrame &a, const ImageFrame &b);
 
 } // namespace mviewer::core

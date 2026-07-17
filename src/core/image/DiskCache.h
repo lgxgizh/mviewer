@@ -7,24 +7,24 @@
 #include <string>
 
 class QSqlDatabase; // forward decl: connectionForThread() returns one; the real
-                     // Qt SQL header stays hidden behind the Impl PIMPL.
+                    // Qt SQL header stays hidden behind the Impl PIMPL.
 
 // SQLite-backed disk cache for decoded full-resolution images.
 // Key = file identity hash (path + mtime + size), so mtime change
 // automatically invalidates the entry.
 class DiskCache
 {
-public:
-    static DiskCache& instance();
+  public:
+    static DiskCache &instance();
 
     // Retrieve decoded image from disk cache. Returns false on miss.
-    bool get(const std::string& key, ImageData& out);
+    bool get(const std::string &key, ImageData &out);
 
     // Store decoded image to disk cache.
-    void put(const std::string& key, const ImageData& img);
+    void put(const std::string &key, const ImageData &img);
 
     // Remove a single entry (used by repository invalidate).
-    void remove(const std::string& key);
+    void remove(const std::string &key);
 
     // Number of cached entries.
     size_t entryCount() const;
@@ -33,29 +33,47 @@ public:
     size_t totalBytes() const;
 
     // Soft cap on entry count; enforced lazily on put() by dropping oldest.
-    void setMaxEntries(int n) { m_maxEntries = n; }
-    int maxEntries() const { return m_maxEntries; }
+    void setMaxEntries(int n)
+    {
+        m_maxEntries = n;
+    }
+    int maxEntries() const
+    {
+        return m_maxEntries;
+    }
 
     // Soft cap on total bytes consumed; enforced lazily on put() by dropping
     // oldest entries until totalBytes() falls below this value.
-    void setMaxBytes(size_t n) { m_maxBytes = n; }
-    size_t maxBytes() const { return m_maxBytes; }
+    void setMaxBytes(size_t n)
+    {
+        m_maxBytes = n;
+    }
+    size_t maxBytes() const
+    {
+        return m_maxBytes;
+    }
 
     // Clear all cached entries.
     void clear();
 
     // Remove stale entries for paths no longer present.
-    void prune(const std::set<std::string>& validKeys);
+    void prune(const std::set<std::string> &validKeys);
 
     // Enable/disable disk caching (default: enabled)
-    void setEnabled(bool on) { m_enabled = on; }
-    bool isEnabled() const { return m_enabled; }
+    void setEnabled(bool on)
+    {
+        m_enabled = on;
+    }
+    bool isEnabled() const
+    {
+        return m_enabled;
+    }
 
-private:
+  private:
     DiskCache();
     ~DiskCache();
-    DiskCache(const DiskCache&) = delete;
-    void operator=(const DiskCache&) = delete;
+    DiskCache(const DiskCache &) = delete;
+    void operator=(const DiskCache &) = delete;
 
     void ensureTable();
     void openDb();
@@ -69,7 +87,7 @@ private:
     QSqlDatabase connectionForThread() const;
 
     class Impl; // hides Qt SQL headers from this header
-    Impl* m_impl = nullptr;
+    Impl *m_impl = nullptr;
 
     // Guards all access to the shared QSqlDatabase connection. QSqlDatabase /
     // QSqlQuery are NOT thread-safe: a single connection must not be used
