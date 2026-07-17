@@ -30,7 +30,7 @@ static QImage makeTestImage(int w, int h, int seed = 42)
     std::uniform_int_distribution<int> dist(0, 255);
     for (int y = 0; y < h; ++y)
     {
-        QRgb* line = reinterpret_cast<QRgb*>(img.scanLine(y));
+        QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
         for (int x = 0; x < w; ++x)
         {
             line[x] = qRgb(dist(rng), dist(rng), dist(rng));
@@ -47,7 +47,8 @@ static void benchDecode()
 
     Benchmark::instance().run(
         "Decoder::decodeFull(1920x1080)",
-        [tmpPath]() {
+        [tmpPath]()
+        {
             ImageData d = Decoder::decodeFull(tmpPath.toStdString());
             (void)d;
         },
@@ -62,8 +63,7 @@ static void benchEncode()
 
     Benchmark::instance().run(
         "Encoder::encode(JPEG 1920x1080)",
-        [&data, tmpPath]() { Encoder::encode(data, tmpPath.toStdString()); },
-        20);
+        [&data, tmpPath]() { Encoder::encode(data, tmpPath.toStdString()); }, 20);
 }
 
 static void benchAnalysis()
@@ -73,7 +73,8 @@ static void benchAnalysis()
 
     Benchmark::instance().run(
         "AnalysisEngine::computeStats(1920x1080)",
-        [&data]() {
+        [&data]()
+        {
             ImageStats s = AnalysisEngine::computeStats(data);
             (void)s;
         },
@@ -81,7 +82,8 @@ static void benchAnalysis()
 
     Benchmark::instance().run(
         "AnalysisEngine::noiseEstimate(1920x1080)",
-        [&data]() {
+        [&data]()
+        {
             double n = AnalysisEngine::noiseEstimate(data);
             (void)n;
         },
@@ -97,7 +99,8 @@ static void benchPSNR()
 
     Benchmark::instance().run(
         "AnalysisEngine::psnr(1920x1080)",
-        [&a, &b]() {
+        [&a, &b]()
+        {
             double v = AnalysisEngine::psnr(a, b);
             (void)v;
         },
@@ -105,7 +108,8 @@ static void benchPSNR()
 
     Benchmark::instance().run(
         "AnalysisEngine::ssim(1920x1080)",
-        [&a, &b]() {
+        [&a, &b]()
+        {
             double v = AnalysisEngine::ssim(a, b);
             (void)v;
         },
@@ -120,12 +124,12 @@ static void benchCache()
 
     Benchmark::instance().run(
         "ImageCache::put(FullImage)",
-        [&data, &key]() { ImageCache::instance().put(ImageCache::Viewer, key, data); },
-        100);
+        [&data, &key]() { ImageCache::instance().put(ImageCache::Viewer, key, data); }, 100);
 
     Benchmark::instance().run(
         "ImageCache::get(hit)",
-        [&key]() {
+        [&key]()
+        {
             ImageData out;
             ImageCache::instance().get(ImageCache::Viewer, key, out);
             (void)out;
@@ -134,7 +138,8 @@ static void benchCache()
 
     Benchmark::instance().run(
         "CacheManager::get(Miss)",
-        [&key]() {
+        [&key]()
+        {
             ImageData out;
             CacheManager::instance().get(CacheLevel::FullImage, "no_such_key_" + key, out);
             (void)out;
@@ -145,7 +150,7 @@ static void benchCache()
 // Review P1-10 / P2: thumbnail generation throughput at scale. Generates N
 // thumbnails by decoding to a max-edge via Decoder::decodeScaled (the real
 // pipeline path the UI uses), measuring end-to-end generation latency.
-static void benchThumbnailGen(int n, const std::string& label)
+static void benchThumbnailGen(int n, const std::string &label)
 {
     const int thumbEdge = 256;
     QImage base = makeTestImage(1920, 1080, 11);
@@ -155,7 +160,8 @@ static void benchThumbnailGen(int n, const std::string& label)
 
     Benchmark::instance().run(
         "ThumbnailGen(" + label + ",decodeScaled 256px)",
-        [path, thumbEdge]() {
+        [path, thumbEdge]()
+        {
             ImageData d = Decoder::decodeScaled(path, thumbEdge);
             (void)d;
         },
@@ -174,7 +180,8 @@ static void benchZoom()
     {
         Benchmark::instance().run(
             "RenderEngine::scale->" + std::to_string(edge) + "px",
-            [&data, edge]() {
+            [&data, edge]()
+            {
                 ImageData s = RenderEngine::instance().scale(
                     data, RenderSize{edge, edge * 1080 / 1920}, RenderInterp::Bilinear);
                 (void)s;
@@ -201,7 +208,8 @@ static void benchScroll()
 
     Benchmark::instance().run(
         "ImageRepository::load(adjacent switch)",
-        [&paths, n]() {
+        [&paths, n]()
+        {
             for (int i = 0; i < n; ++i)
             {
                 ImageRepository::Result r = ImageRepository::instance().load(paths[i]);
@@ -219,7 +227,8 @@ static void benchROI()
 
     Benchmark::instance().run(
         "AnalysisEngine::computeStatsROI(800x600)",
-        [&data, &roi]() {
+        [&data, &roi]()
+        {
             ImageStats s = AnalysisEngine::computeStatsROI(data, roi);
             (void)s;
         },
@@ -235,14 +244,15 @@ static void benchDifference()
 
     Benchmark::instance().run(
         "AnalysisEngine::differenceMap(1920x1080)",
-        [&a, &b]() {
+        [&a, &b]()
+        {
             ImageData d = AnalysisEngine::differenceMap(a, b);
             (void)d;
         },
         20);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
     std::cout << "MViewer Benchmark Suite (M5)" << std::endl;

@@ -3,13 +3,13 @@
 #include "core/analysis/AnalysisEngine.h"
 
 #include <algorithm>
-#include <cstring>
 #include <cstdio>
+#include <cstring>
 
 namespace
 {
 
-mviewer::domain::Histogram toHistogram(const ImageStats& s)
+mviewer::domain::Histogram toHistogram(const ImageStats &s)
 {
     mviewer::domain::Histogram h;
     for (int i = 0; i < 256; ++i)
@@ -28,7 +28,7 @@ mviewer::domain::Histogram toHistogram(const ImageStats& s)
 
 } // namespace
 
-bool HistogramAnalyzer::analyze(const ImageFrame& frame)
+bool HistogramAnalyzer::analyze(const ImageFrame &frame)
 {
     if (frame.pixels().isNull())
         return false;
@@ -36,8 +36,8 @@ bool HistogramAnalyzer::analyze(const ImageFrame& frame)
     return true;
 }
 
-bool HistogramAnalyzer::analyzeRegion(const ImageFrame& frame,
-    const mviewer::domain::Selection& region)
+bool HistogramAnalyzer::analyzeRegion(const ImageFrame &frame,
+                                      const mviewer::domain::Selection &region)
 {
     if (frame.pixels().isNull() || region.isEmpty())
         return false;
@@ -58,10 +58,10 @@ bool HistogramAnalyzer::analyzeRegion(const ImageFrame& frame,
 
     for (int y = y0; y < y1; ++y)
     {
-        const uint8_t* line = v.data + static_cast<size_t>(y) * v.stride();
+        const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
         for (int x = x0; x < x1; ++x)
         {
-            const uint8_t* p = line + static_cast<size_t>(x) * cpp;
+            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
             const int r = p[0], g = p[1], b = p[2];
             ++h.luminance[std::clamp(luminance(r, g, b), 0, 255)];
             ++h.red[std::clamp(r, 0, 255)];
@@ -84,8 +84,7 @@ bool HistogramAnalyzer::analyzeRegion(const ImageFrame& frame,
 std::string HistogramAnalyzer::resultText() const
 {
     char buf[256];
-    std::snprintf(buf, sizeof(buf),
-        "lumMean: %.1f  R: %.1f  G: %.1f  B: %.1f",
-        m_result.lumMean, m_result.rMean, m_result.gMean, m_result.bMean);
+    std::snprintf(buf, sizeof(buf), "lumMean: %.1f  R: %.1f  G: %.1f  B: %.1f", m_result.lumMean,
+                  m_result.rMean, m_result.gMean, m_result.bMean);
     return buf;
 }

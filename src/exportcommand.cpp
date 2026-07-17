@@ -7,8 +7,7 @@
 #include <QSettings>
 #include <QWidget>
 
-ExportCommand::ExportCommand(QWidget* parent)
-    : m_parent(parent)
+ExportCommand::ExportCommand(QWidget *parent) : m_parent(parent)
 {
 }
 
@@ -31,7 +30,7 @@ void ExportCommand::execute()
 
     auto result = OpenDirectoryUseCase::execute(lastDir.toStdString());
     QStringList images;
-    for (const auto& p : result.imagePaths)
+    for (const auto &p : result.imagePaths)
     {
         images.append(QString::fromStdString(p));
     }

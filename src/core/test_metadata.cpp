@@ -1,9 +1,9 @@
 // M6 unit tests: ImageMetadata enrichment (bitDepth/channels/colorSpace/
 // orientation/format) populated during decode, and registry dispatch of format.
-#include "core/image/ImageRepository.h"
 #include "core/image/Decoder.h"
-#include "core/image/decoder/DecoderRegistry.h"
+#include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
+#include "core/image/decoder/DecoderRegistry.h"
 
 #include <QColor>
 #include <QCoreApplication>
@@ -29,19 +29,19 @@ static std::string srcRootFromThisFile()
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 // M6 acceptance: the 4 golden images must decode with format/channels/bitDepth
@@ -52,28 +52,27 @@ static void testMetadataGolden()
     printf("\n[Metadata enrichment — golden images (M6)]\n");
     fflush(stdout);
 
-    ImageRepository& repo = ImageRepository::instance();
+    ImageRepository &repo = ImageRepository::instance();
     const std::string base = std::string(MVIEWER_SOURCE_DIR) + "/testdata/golden/256x256/";
     struct Golden
     {
-        const char* file;
-        const char* expectFormat;
+        const char *file;
+        const char *expectFormat;
     } files[] = {{"flat_color_256x256.jpg", "JPEG"},
                  {"flat_color_256x256.png", "PNG"},
                  {"flat_color_256x256.bmp", "BMP"},
                  {"flat_color_256x256.tiff", "TIFF"}};
 
-    for (const auto& g : files)
+    for (const auto &g : files)
     {
         const std::string path = base + g.file;
         auto r = repo.load(path);
         CHECK(r.success(), ("load " + std::string(g.file)).c_str());
         if (!r.success())
             continue;
-        const auto& m = r.frame->metadata();
+        const auto &m = r.frame->metadata();
         CHECK(m.format == g.expectFormat,
-              (std::string(g.file) + " format == " + g.expectFormat +
-               " (got '" + m.format + "')")
+              (std::string(g.file) + " format == " + g.expectFormat + " (got '" + m.format + "')")
                   .c_str());
         CHECK(m.width == 256 && m.height == 256, "dimensions preserved (256x256)");
         CHECK(m.channels >= 1, "channels populated (>0)");
@@ -131,11 +130,12 @@ static void testMetadataReader()
     CHECK(mviewer::core::MetadataReader::key(p) == k1, "key stable across calls");
 
     // Missing file -> empty metadata, no throw.
-    mviewer::domain::ImageMetadata missing = mviewer::core::MetadataReader::read("/no/such/file.png");
+    mviewer::domain::ImageMetadata missing =
+        mviewer::core::MetadataReader::read("/no/such/file.png");
     CHECK(missing.fileSize == 0, "missing file -> empty metadata");
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     printf("=== Metadata Tests (M6) ===\n");

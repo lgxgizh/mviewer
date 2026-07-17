@@ -8,8 +8,7 @@
 #include <QPainter>
 #include <QVBoxLayout>
 
-AnalysisPanel::AnalysisPanel(QWidget* parent)
-    : QWidget(parent)
+AnalysisPanel::AnalysisPanel(QWidget *parent) : QWidget(parent)
 {
     buildUi();
     setMinimumWidth(360);
@@ -18,7 +17,7 @@ AnalysisPanel::AnalysisPanel(QWidget* parent)
 
 void AnalysisPanel::buildUi()
 {
-    QVBoxLayout* mainLay = new QVBoxLayout(this);
+    QVBoxLayout *mainLay = new QVBoxLayout(this);
     mainLay->setContentsMargins(6, 6, 6, 6);
     mainLay->setSpacing(4);
 
@@ -26,15 +25,16 @@ void AnalysisPanel::buildUi()
     // which is the single entry point for analysis (M4). The combo items carry the
     // registry id as user data so switching the active analyzer routes through
     // AnalyzerRegistry::create(id).
-    QHBoxLayout* plugBar = new QHBoxLayout;
+    QHBoxLayout *plugBar = new QHBoxLayout;
     plugBar->addWidget(new QLabel(tr("Analyzer:")));
     m_analyzerCombo = new QComboBox;
-    auto& reg = AnalyzerRegistry::instance();
+    auto &reg = AnalyzerRegistry::instance();
     m_pluginIds = reg.availableAnalyzers();
-    for (const auto& id : m_pluginIds)
+    for (const auto &id : m_pluginIds)
     {
         const auto info = reg.infoFor(id);
-        const QString label = info ? QString::fromStdString(info->name) : QString::fromStdString(id);
+        const QString label =
+            info ? QString::fromStdString(info->name) : QString::fromStdString(id);
         m_analyzerCombo->addItem(label, QString::fromStdString(id));
     }
     // Dual-image comparison (PSNR/SSIM) is a built-in composite view, not a single
@@ -43,10 +43,8 @@ void AnalysisPanel::buildUi()
     plugBar->addWidget(m_analyzerCombo, 1);
     mainLay->addLayout(plugBar);
 
-    connect(m_analyzerCombo,
-        QOverload<int>::of(&QComboBox::activated),
-        this,
-        &AnalysisPanel::onAnalyzerSelected);
+    connect(m_analyzerCombo, QOverload<int>::of(&QComboBox::activated), this,
+            &AnalysisPanel::onAnalyzerSelected);
 
     m_tabs = new QTabWidget;
 
@@ -63,8 +61,8 @@ void AnalysisPanel::buildUi()
     m_statsLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_statsLabel->setWordWrap(true);
     m_statsLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
-    auto* histPage = new QWidget;
-    auto* histLay = new QVBoxLayout(histPage);
+    auto *histPage = new QWidget;
+    auto *histLay = new QVBoxLayout(histPage);
     histLay->setContentsMargins(0, 0, 0, 0);
     histLay->setSpacing(4);
     histLay->addWidget(m_histogramLabel, 1);
@@ -96,7 +94,8 @@ void AnalysisPanel::buildUi()
     m_inspectorLabel = new QLabel;
     m_inspectorLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_inspectorLabel->setWordWrap(true);
-    m_inspectorLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;font-family:monospace;}");
+    m_inspectorLabel->setStyleSheet(
+        "QLabel{background:#1e1e1e;color:#eee;padding:8px;font-family:monospace;}");
     m_inspectorLabel->setText(tr("Move the mouse over an image to inspect pixels."));
     m_tabs->addTab(m_inspectorLabel, tr("Inspector"));
 
@@ -104,7 +103,7 @@ void AnalysisPanel::buildUi()
     onAnalyzerSelected(0);
 }
 
-void AnalysisPanel::setImage(const QImage& img)
+void AnalysisPanel::setImage(const QImage &img)
 {
     if (img.isNull())
     {
@@ -118,7 +117,7 @@ void AnalysisPanel::setImage(const QImage& img)
     updateHistogramPage();
 }
 
-void AnalysisPanel::setImages(const QImage& a, const QImage& b)
+void AnalysisPanel::setImages(const QImage &a, const QImage &b)
 {
     if (a.isNull() || b.isNull())
         return;
@@ -143,7 +142,7 @@ void AnalysisPanel::clear()
     m_histogramLabel->clear();
 }
 
-void AnalysisPanel::setROI(const mviewer::domain::Selection& roi)
+void AnalysisPanel::setROI(const mviewer::domain::Selection &roi)
 {
     m_roi = roi;
     m_hasROI = !roi.isEmpty();
@@ -169,29 +168,26 @@ void AnalysisPanel::reanalyze()
         auto analyzer = AnalyzerRegistry::instance().create(id.toStdString());
         if (analyzer && analyzer->analyzeRegion(*m_frameA, m_roi))
         {
-            m_statsA.pixelCount =
-                std::max(0, m_roi.width) * std::max(0, m_roi.height);
+            m_statsA.pixelCount = std::max(0, m_roi.width) * std::max(0, m_roi.height);
             const std::string text = analyzer->resultText();
-            const auto* hist = dynamic_cast<const HistogramAnalyzer*>(analyzer.get());
+            const auto *hist = dynamic_cast<const HistogramAnalyzer *>(analyzer.get());
             if (hist)
             {
-                const auto& h = hist->result();
+                const auto &h = hist->result();
                 m_statsA.lumMean = h.lumMean;
                 m_statsA.rMean = h.rMean;
                 m_statsA.gMean = h.gMean;
                 m_statsA.bMean = h.bMean;
                 renderHistogramPixmap(h);
-                m_statsLabel->setText(
-                    QString("<h3>%1</h3><p>%2</p>")
-                        .arg(tr("ROI Stats (registry)"))
-                        .arg(QString::fromStdString(text)));
+                m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>")
+                                          .arg(tr("ROI Stats (registry)"))
+                                          .arg(QString::fromStdString(text)));
             }
             else
             {
-                m_statsLabel->setText(
-                    QString("<h3>%1</h3><p>%2</p>")
-                        .arg(tr("ROI Stats (registry)"))
-                        .arg(QString::fromStdString(text)));
+                m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>")
+                                          .arg(tr("ROI Stats (registry)"))
+                                          .arg(QString::fromStdString(text)));
             }
             return;
         }
@@ -210,7 +206,7 @@ void AnalysisPanel::setFrame(std::shared_ptr<ImageFrame> frame)
     reanalyze();
 }
 
-void AnalysisPanel::setRegionStats(const QString& text)
+void AnalysisPanel::setRegionStats(const QString &text)
 {
     m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("Region Stats")).arg(text));
 }
@@ -252,10 +248,7 @@ void AnalysisPanel::updateInspectorPage()
                    .arg(rR)
                    .arg(rG)
                    .arg(rB);
-        txt += QString("Δ      (%1, %2, %3)<br>")
-                   .arg(dR)
-                   .arg(dG)
-                   .arg(dB);
+        txt += QString("Δ      (%1, %2, %3)<br>").arg(dR).arg(dG).arg(dB);
         txt += QString("dist: %1").arg(dist, 0, 'f', 2);
     }
     else
@@ -313,7 +306,8 @@ void AnalysisPanel::renderHistogramPixmap()
     const int pad = 4;
     const QRect bg(pad, pad, W - pad * 2, H - pad * 2);
     // Overlaid 4 channels
-    auto drawChannel = [&bg, &p](const int* hist, const QColor& color) {
+    auto drawChannel = [&bg, &p](const int *hist, const QColor &color)
+    {
         constexpr int srcBins = 256;
         constexpr int drawBins = 64;
         const double binW = static_cast<double>(bg.width()) / drawBins;
@@ -396,8 +390,8 @@ void AnalysisPanel::updatePluginPage()
         m_pluginResult->setText(tr("Select a plugin"));
         return;
     }
-    const std::string& id = m_pluginIds[pluginIdx];
-    auto& reg = AnalyzerRegistry::instance();
+    const std::string &id = m_pluginIds[pluginIdx];
+    auto &reg = AnalyzerRegistry::instance();
     auto analyzer = reg.create(id);
     if (!analyzer)
     {
@@ -410,7 +404,7 @@ void AnalysisPanel::updatePluginPage()
     m_pluginResult->setText(txt);
 }
 
-QImage AnalysisPanel::computeDifferencePreview(const QImage& a, const QImage& b)
+QImage AnalysisPanel::computeDifferencePreview(const QImage &a, const QImage &b)
 {
     ImageData diff = AnalysisEngine::differenceMap(mvcore::fromQImage(a), mvcore::fromQImage(b));
     if (diff.isNull())
@@ -431,13 +425,13 @@ QString AnalysisPanel::noiseLevelText(double variance)
     return tr("Very High (%1)").arg(variance, 0, 'f', 1);
 }
 
-void AnalysisPanel::paintEvent(QPaintEvent* event)
+void AnalysisPanel::paintEvent(QPaintEvent *event)
 {
     QWidget::paintEvent(event);
     // Histogram viz rendered via QPixmap in renderHistogramPixmap()
 }
 
-void AnalysisPanel::updateImage(const QImage& img)
+void AnalysisPanel::updateImage(const QImage &img)
 {
     if (m_imageView)
     {
@@ -448,7 +442,7 @@ void AnalysisPanel::updateImage(const QImage& img)
     }
 }
 
-void AnalysisPanel::updateHistogram(const mviewer::domain::Histogram& hist)
+void AnalysisPanel::updateHistogram(const mviewer::domain::Histogram &hist)
 {
     renderHistogramPixmap(hist);
     m_statsLabel->setText(QString("<h3>%1</h3>"
@@ -472,7 +466,7 @@ void AnalysisPanel::updateHistogram(const mviewer::domain::Histogram& hist)
                               .arg(hist.totalPixels()));
 }
 
-void AnalysisPanel::renderHistogramPixmap(const mviewer::domain::Histogram& hist)
+void AnalysisPanel::renderHistogramPixmap(const mviewer::domain::Histogram &hist)
 {
     if (!m_histogramLabel)
         return;
@@ -484,7 +478,8 @@ void AnalysisPanel::renderHistogramPixmap(const mviewer::domain::Histogram& hist
     const int pad = 4;
     const QRect bg(pad, pad, W - pad * 2, H - pad * 2);
 
-    auto drawChannel = [&bg, &p](const int* histBins, const QColor& color) {
+    auto drawChannel = [&bg, &p](const int *histBins, const QColor &color)
+    {
         constexpr int srcBins = 256;
         constexpr int drawBins = 64;
         const double binW = static_cast<double>(bg.width()) / drawBins;

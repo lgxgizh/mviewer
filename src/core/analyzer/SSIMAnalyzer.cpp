@@ -2,7 +2,7 @@
 
 #include "core/analysis/AnalysisEngine.h"
 
-bool SSIMAnalyzer::analyze(const ImageFrame& frame)
+bool SSIMAnalyzer::analyze(const ImageFrame &frame)
 {
     if (!m_ref || m_ref->pixels().isNull() || frame.pixels().isNull())
         return false;
@@ -10,7 +10,7 @@ bool SSIMAnalyzer::analyze(const ImageFrame& frame)
     return true;
 }
 
-bool SSIMAnalyzer::analyzeRegion(const ImageFrame& frame, const mviewer::domain::Selection& region)
+bool SSIMAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain::Selection &region)
 {
     if (!m_ref || m_ref->pixels().isNull() || frame.pixels().isNull() || region.isEmpty())
         return false;
@@ -33,11 +33,13 @@ bool SSIMAnalyzer::analyzeRegion(const ImageFrame& frame, const mviewer::domain:
     for (int y = 0; y < rh; ++y)
     {
         std::memcpy(subR.buffer.get() + static_cast<size_t>(y) * rw * cppR,
-            vR.data + static_cast<size_t>(y0 + y) * vR.stride() + static_cast<size_t>(x0) * cppR,
-            static_cast<size_t>(rw) * cppR);
+                    vR.data + static_cast<size_t>(y0 + y) * vR.stride() +
+                        static_cast<size_t>(x0) * cppR,
+                    static_cast<size_t>(rw) * cppR);
         std::memcpy(subT.buffer.get() + static_cast<size_t>(y) * rw * cppT,
-            vT.data + static_cast<size_t>(y0 + y) * vT.stride() + static_cast<size_t>(x0) * cppT,
-            static_cast<size_t>(rw) * cppT);
+                    vT.data + static_cast<size_t>(y0 + y) * vT.stride() +
+                        static_cast<size_t>(x0) * cppT,
+                    static_cast<size_t>(rw) * cppT);
     }
     m_ssim = AnalysisEngine::ssim(subR, subT);
     return true;

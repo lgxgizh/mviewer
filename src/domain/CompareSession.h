@@ -61,13 +61,28 @@ struct CompareSession
     Viewport viewport;
     CompareSelection selection;
 
-    int imageCount() const { return static_cast<int>(imageIds.size()); }
-    bool isValid() const { return imageCount() >= 2 && imageCount() <= MAX_IMAGES; }
+    int imageCount() const
+    {
+        return static_cast<int>(imageIds.size());
+    }
+    bool isValid() const
+    {
+        return imageCount() >= 2 && imageCount() <= MAX_IMAGES;
+    }
 
     // Derived: true when a session is in "comparing" mode (≥2 images loaded).
-    bool isComparing() const { return isValid(); }
-    bool isBlinking() const { return blinkIndex >= 0 && blinkIndex < imageCount(); }
-    bool isSyncOn() const { return syncMode != SyncMode::Off; }
+    bool isComparing() const
+    {
+        return isValid();
+    }
+    bool isBlinking() const
+    {
+        return blinkIndex >= 0 && blinkIndex < imageCount();
+    }
+    bool isSyncOn() const
+    {
+        return syncMode != SyncMode::Off;
+    }
 };
 
 } // namespace mviewer::domain

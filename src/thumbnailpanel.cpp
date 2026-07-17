@@ -40,13 +40,11 @@ QList<QFileInfo> sortedEntries(const QString &dirPath, ThumbnailPanel::SortMode 
     switch (mode)
     {
     case ThumbnailPanel::SortName:
-        std::sort(entries.begin(), entries.end(),
-                  [](const QFileInfo &a, const QFileInfo &b)
+        std::sort(entries.begin(), entries.end(), [](const QFileInfo &a, const QFileInfo &b)
                   { return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0; });
         break;
     case ThumbnailPanel::SortDate:
-        std::sort(entries.begin(), entries.end(),
-                  [](const QFileInfo &a, const QFileInfo &b)
+        std::sort(entries.begin(), entries.end(), [](const QFileInfo &a, const QFileInfo &b)
                   { return a.lastModified() < b.lastModified(); });
         break;
     case ThumbnailPanel::SortSize:

@@ -13,7 +13,7 @@
 // 接口层只暴露 std 类型，QImage 仅作为内部实现细节。
 class Encoder
 {
-public:
+  public:
     struct Params
     {
         int quality = 90;       // JPEG/WebP 质量 (0-100)
@@ -21,14 +21,14 @@ public:
     };
 
     // 编码到文件
-    static bool encode(const ImageData& img, const std::string& path, const Params& params = {});
+    static bool encode(const ImageData &img, const std::string &path, const Params &params = {});
 
     // 编码到内存缓冲区
-    static std::vector<uint8_t>
-    encodeToBuffer(const ImageData& img, const std::string& format, const Params& params = {});
+    static std::vector<uint8_t> encodeToBuffer(const ImageData &img, const std::string &format,
+                                               const Params &params = {});
 
     // 根据文件扩展名推断格式
-    static std::string formatForExtension(const std::string& ext);
+    static std::string formatForExtension(const std::string &ext);
 
     // 支持的输出格式
     static std::vector<std::string> supportedOutputFormats();

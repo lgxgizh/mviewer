@@ -7,14 +7,17 @@
 // Emits progress callbacks (loaded count) and completion
 class OpenDirectoryUseCase
 {
-public:
+  public:
     struct Result
     {
         std::vector<std::string> imagePaths;
         std::string error;
-        bool success() const { return error.empty(); }
+        bool success() const
+        {
+            return error.empty();
+        }
     };
 
     // Synchronous version for simplicity (async can be added later)
-    static Result execute(const std::string& directoryPath, int maxImages = 1000);
+    static Result execute(const std::string &directoryPath, int maxImages = 1000);
 };

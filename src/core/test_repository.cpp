@@ -1,11 +1,11 @@
 // M6 unit tests: ImageRepository (predictive preload, 1000-image load, frame extras).
 #include "core/cache/CacheManager.h"
 #include "core/image/DiskCache.h"
-#include "core/image/ImageRepository.h"
+#include "core/image/Encoder.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
+#include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
-#include "core/image/Encoder.h"
 
 #include <QColor>
 #include <QCoreApplication>
@@ -31,19 +31,19 @@ static std::string srcRootFromThisFile()
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 static QImage makeColorTest(int w, int h, QColor c)
@@ -59,18 +59,17 @@ static void testPredictivePreload()
 {
     printf("\n[Predictive preload (M5)]\n");
     fflush(stdout);
-    CacheManager& mgr = CacheManager::instance();
-    DiskCache& disk = DiskCache::instance();
+    CacheManager &mgr = CacheManager::instance();
+    DiskCache &disk = DiskCache::instance();
     mgr.clear();
     disk.clear();
 
-    ImageRepository& repo = ImageRepository::instance();
+    ImageRepository &repo = ImageRepository::instance();
     const std::string base = std::string(MVIEWER_SOURCE_DIR) + "/testdata/golden/256x256/";
-    const char* files[] = {"flat_color_256x256.jpg", "checker_256x256.jpg",
-                           "gradient_256x256.png"};
+    const char *files[] = {"flat_color_256x256.jpg", "checker_256x256.jpg", "gradient_256x256.png"};
 
     std::vector<std::string> keys;
-    for (const char* f : files)
+    for (const char *f : files)
     {
         auto r = repo.load(base + f);
         CHECK(r.success(), ("repository load " + std::string(f)).c_str());
@@ -101,7 +100,7 @@ static void test1000ImageNonBlocking()
     fflush(stdout);
 
     namespace fs = std::filesystem;
-    ImageRepository& repo = ImageRepository::instance();
+    ImageRepository &repo = ImageRepository::instance();
 
     const fs::path tempDir = fs::temp_directory_path() / "mviewer_m5_1k";
     std::error_code ec;
@@ -158,7 +157,7 @@ static void testImageFrameExtras()
 
     frame.setAnalysisResult("rgbmean", true);
     frame.setAnalysisResult("entropy", true);
-    auto* e1 = frame.findAnalysis("rgbmean");
+    auto *e1 = frame.findAnalysis("rgbmean");
     CHECK(e1 != nullptr && e1->ok, "Analysis cache hit");
     CHECK(frame.findAnalysis("missing") == nullptr, "Analysis cache miss");
     frame.clearAnalysisCache();
@@ -171,7 +170,7 @@ static void testImageFrameExtras()
     rce.srcWidth = 1920;
     rce.srcHeight = 1080;
     frame.setRenderCache(rce);
-    auto* found = frame.findRenderCache(RenderCacheEntry::Tag::ScaledView);
+    auto *found = frame.findRenderCache(RenderCacheEntry::Tag::ScaledView);
     CHECK(found != nullptr, "Render cache hit");
     CHECK(found->srcWidth == 1920, "Render cache meta");
     frame.clearRenderCache();
@@ -179,7 +178,7 @@ static void testImageFrameExtras()
           "Render cache cleared");
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     printf("=== Repository Tests (M6) ===\n");

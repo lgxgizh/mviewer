@@ -4,8 +4,8 @@
 #include <QFile>
 #include <QFileInfo>
 
-RenameImageUseCase::Result RenameImageUseCase::execute(const std::string& oldPath,
-    const std::string& newName)
+RenameImageUseCase::Result RenameImageUseCase::execute(const std::string &oldPath,
+                                                       const std::string &newName)
 {
     Result r;
     QString qOldPath = QString::fromStdString(oldPath);

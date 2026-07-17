@@ -2,8 +2,7 @@
 
 #include <QKeySequence>
 
-DeleteCommand::DeleteCommand(std::function<void()> onExecute)
-    : m_onExecute(std::move(onExecute))
+DeleteCommand::DeleteCommand(std::function<void()> onExecute) : m_onExecute(std::move(onExecute))
 {
 }
 

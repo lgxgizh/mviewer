@@ -3,24 +3,24 @@
 
 #include <iostream>
 
-#define CHECK(cond, msg)                               \
-    do                                                 \
-    {                                                  \
-        if (!(cond))                                   \
-        {                                              \
-            std::cerr << "FAIL: " << msg << std::endl; \
-            return 1;                                  \
-        }                                              \
-        else                                           \
-        {                                              \
-            std::cout << "PASS: " << msg << std::endl; \
-        }                                              \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(cond))                                                                               \
+        {                                                                                          \
+            std::cerr << "FAIL: " << msg << std::endl;                                             \
+            return 1;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            std::cout << "PASS: " << msg << std::endl;                                             \
+        }                                                                                          \
     } while (0)
 
 int main()
 {
     std::cout << "[PluginManager tests]\n";
-    auto& mgr = PluginManager::instance();
+    auto &mgr = PluginManager::instance();
 
     // Initially empty
     CHECK(mgr.count() == 0, "initially empty");

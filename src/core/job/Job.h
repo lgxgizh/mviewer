@@ -31,7 +31,7 @@ struct Job
 
     // The work itself. Receives the live TaskContext so it can honour
     // cancellation and report progress.
-    std::function<void(const TaskScheduler::TaskContext&)> work;
+    std::function<void(const TaskScheduler::TaskContext &)> work;
 
     // Called when the work completes (success or after cancellation).
     std::function<void()> done;
@@ -43,8 +43,7 @@ struct Job
     std::vector<TaskScheduler::TaskId> dependsOn;
 
     // Optional deadline; expired jobs are skipped / reported.
-    std::chrono::steady_clock::time_point deadline =
-        std::chrono::steady_clock::time_point::max();
+    std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::time_point::max();
 };
 
 // Shared handle to a submitted job: cancel, inspect progress, query id.
@@ -53,7 +52,7 @@ using JobHandle = TaskScheduler::TaskHandle;
 class JobSystem
 {
   public:
-    static JobSystem& instance()
+    static JobSystem &instance()
     {
         static JobSystem inst;
         return inst;
@@ -61,22 +60,28 @@ class JobSystem
 
     // Submit a Job. Returns a handle (nullptr if the pool rejected it under
     // back-pressure / pause).
-    JobHandle submit(const Job& job)
+    JobHandle submit(const Job &job)
     {
-        return TaskScheduler::instance().submit(
-            job.priority, job.work, job.dependsOn, job.deadline, job.done, job.onProgress);
+        return TaskScheduler::instance().submit(job.priority, job.work, job.dependsOn, job.deadline,
+                                                job.done, job.onProgress);
     }
 
     // Convenience: submit with an explicit pool (priority derived from pool).
-    JobHandle submitOnPool(const Job& job)
+    JobHandle submitOnPool(const Job &job)
     {
         Job j = job;
         j.priority = TaskScheduler::toPriority(job.pool);
         return submit(j);
     }
 
-    static void cancel(JobHandle& h) { TaskScheduler::cancel(h); }
-    static void cancelTree(TaskScheduler::TaskId root) { TaskScheduler::cancelTree(root); }
+    static void cancel(JobHandle &h)
+    {
+        TaskScheduler::cancel(h);
+    }
+    static void cancelTree(TaskScheduler::TaskId root)
+    {
+        TaskScheduler::cancelTree(root);
+    }
 
     TaskScheduler::PoolMetrics metrics(TaskScheduler::PoolType pool) const
     {

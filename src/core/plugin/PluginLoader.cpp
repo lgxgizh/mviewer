@@ -15,7 +15,7 @@ std::string PluginLoader::lastError()
     return s_lastError;
 }
 
-std::vector<std::string> PluginLoader::scanDirectory(const std::string& dirPath)
+std::vector<std::string> PluginLoader::scanDirectory(const std::string &dirPath)
 {
     std::vector<std::string> candidates;
     std::filesystem::path dir(dirPath);
@@ -32,7 +32,7 @@ std::vector<std::string> PluginLoader::scanDirectory(const std::string& dirPath)
 #endif
 #endif
 
-    for (const auto& entry : std::filesystem::directory_iterator(dir))
+    for (const auto &entry : std::filesystem::directory_iterator(dir))
     {
         if (entry.is_regular_file() && entry.path().extension() == ext)
             candidates.push_back(entry.path().string());
@@ -40,7 +40,7 @@ std::vector<std::string> PluginLoader::scanDirectory(const std::string& dirPath)
     return candidates;
 }
 
-PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string& path)
+PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
 {
     LoadedPlugin result;
     result.path = path;
@@ -54,9 +54,10 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string& path)
         return result;
     }
 
-    auto createFn = reinterpret_cast<Analyzer* (*)()>(GetProcAddress(handle, "createAnalyzer"));
-    auto nameFn = reinterpret_cast<const char* (*)()>(GetProcAddress(handle, "pluginName"));
-    auto destroyFn = reinterpret_cast<void (*)(Analyzer*)>(GetProcAddress(handle, "destroyAnalyzer"));
+    auto createFn = reinterpret_cast<Analyzer *(*)()>(GetProcAddress(handle, "createAnalyzer"));
+    auto nameFn = reinterpret_cast<const char *(*)()>(GetProcAddress(handle, "pluginName"));
+    auto destroyFn =
+        reinterpret_cast<void (*)(Analyzer *)>(GetProcAddress(handle, "destroyAnalyzer"));
 
     if (!createFn)
     {
@@ -66,7 +67,7 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string& path)
         return result;
     }
 #else
-    void* handle = dlopen(path.c_str(), RTLD_LAZY);
+    void *handle = dlopen(path.c_str(), RTLD_LAZY);
     if (!handle)
     {
         result.error = "dlopen failed: " + std::string(dlerror());
@@ -74,8 +75,8 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string& path)
         return result;
     }
 
-    auto createFn = reinterpret_cast<Analyzer* (*)()>(dlsym(handle, "createAnalyzer"));
-    auto nameFn = reinterpret_cast<const char* (*)()>(dlsym(handle, "pluginName"));
+    auto createFn = reinterpret_cast<Analyzer *(*)()>(dlsym(handle, "createAnalyzer"));
+    auto nameFn = reinterpret_cast<const char *(*)()>(dlsym(handle, "pluginName"));
 
     if (!createFn)
     {
@@ -97,7 +98,7 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string& path)
     }
 
     // Create instance and register
-    Analyzer* analyzer = createFn();
+    Analyzer *analyzer = createFn();
     if (!analyzer)
     {
         result.error = "createAnalyzer returned null";
@@ -114,14 +115,20 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string& path)
     // as the deleter so allocation AND deallocation stay in the plugin's heap.
     std::string id = analyzer->name();
     AnalyzerRegistry::instance().registerAnalyzer(
-        id, [createFn, destroyFn]() -> std::unique_ptr<Analyzer, AnalyzerDeleter> {
-            Analyzer* a = createFn();
+        id,
+        [createFn, destroyFn]() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
+            Analyzer *a = createFn();
             if (!a)
                 return nullptr;
             if (destroyFn)
-                return std::unique_ptr<Analyzer, AnalyzerDeleter>(
-                    a, [destroyFn](Analyzer* p) { if (p) destroyFn(p); });
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(a, [](Analyzer* p) { delete p; });
+                return std::unique_ptr<Analyzer, AnalyzerDeleter>(a,
+                                                                  [destroyFn](Analyzer *p)
+                                                                  {
+                                                                      if (p)
+                                                                          destroyFn(p);
+                                                                  });
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(a, [](Analyzer *p) { delete p; });
         });
 
     result.loaded = true;
@@ -139,11 +146,11 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string& path)
     return result;
 }
 
-std::vector<PluginLoader::LoadedPlugin> PluginLoader::loadFromDirectory(const std::string& dirPath)
+std::vector<PluginLoader::LoadedPlugin> PluginLoader::loadFromDirectory(const std::string &dirPath)
 {
     std::vector<LoadedPlugin> results;
     auto candidates = scanDirectory(dirPath);
-    for (const auto& path : candidates)
+    for (const auto &path : candidates)
     {
         results.push_back(loadPlugin(path));
     }

@@ -17,23 +17,23 @@
 #include <future>
 #include <map>
 
-ImageRepository& ImageRepository::instance()
+ImageRepository &ImageRepository::instance()
 {
     static ImageRepository inst;
     return inst;
 }
 
-std::string ImageRepository::makeKey(const std::string& filePath) const
+std::string ImageRepository::makeKey(const std::string &filePath) const
 {
     return mviewer::core::MetadataReader::key(filePath);
 }
 
-mviewer::domain::ImageMetadata ImageRepository::makeMeta(const std::string& filePath) const
+mviewer::domain::ImageMetadata ImageRepository::makeMeta(const std::string &filePath) const
 {
     return mviewer::core::MetadataReader::read(filePath);
 }
 
-ImageRepository::Result ImageRepository::load(const std::string& filePath, const LoadOptions& opts)
+ImageRepository::Result ImageRepository::load(const std::string &filePath, const LoadOptions &opts)
 {
     MV_TRACE_SCOPED("ImageRepository::load");
     Result res;
@@ -117,22 +117,22 @@ ImageRepository::Result ImageRepository::load(const std::string& filePath, const
     return res;
 }
 
-void ImageRepository::loadAsync(const std::string& filePath,
-    std::function<void(const Result&)> callback,
-    const LoadOptions& opts)
+void ImageRepository::loadAsync(const std::string &filePath,
+                                std::function<void(const Result &)> callback,
+                                const LoadOptions &opts)
 {
     auto out = std::make_shared<Result>();
     TaskScheduler::instance().submit(
-        TaskScheduler::DecodePool,
-        [this, filePath, opts, out]() { *out = load(filePath, opts); },
-        [callback, out]() {
+        TaskScheduler::DecodePool, [this, filePath, opts, out]() { *out = load(filePath, opts); },
+        [callback, out]()
+        {
             if (callback)
                 callback(*out);
         });
 }
 
-std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::string& dirPath,
-    int maxImages)
+std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::string &dirPath,
+                                                                    int maxImages)
 {
     MV_TRACE_SCOPED("ImageRepository::loadDirectory");
     const std::vector<std::string> files = FileSystem::listImages(dirPath, maxImages);
@@ -154,8 +154,10 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
 
     for (int i = 0; i < n; ++i)
     {
-        TaskScheduler::instance().submit(TaskScheduler::Priority::Decode,
-            [this, &files, &results, &completed, n, i](const TaskScheduler::TaskContext&) {
+        TaskScheduler::instance().submit(
+            TaskScheduler::Priority::Decode,
+            [this, &files, &results, &completed, n, i](const TaskScheduler::TaskContext &)
+            {
                 results[i] = load(files[i]);
                 completed.fetch_add(1, std::memory_order_release);
             });
@@ -168,19 +170,19 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
     return results;
 }
 
-void ImageRepository::loadDirectoryAsync(const std::string& dirPath,
-    std::function<void(std::vector<Result>)> callback,
-    int maxImages)
+void ImageRepository::loadDirectoryAsync(const std::string &dirPath,
+                                         std::function<void(std::vector<Result>)> callback,
+                                         int maxImages)
 {
     loadDirectoryAsyncImpl(dirPath, std::move(callback), maxImages);
 }
 
-void ImageRepository::loadDirectoryAsyncImpl(const std::string& dirPath,
-    std::function<void(std::vector<Result>)> callback,
-    int maxImages)
+void ImageRepository::loadDirectoryAsyncImpl(const std::string &dirPath,
+                                             std::function<void(std::vector<Result>)> callback,
+                                             int maxImages)
 {
-    auto files = std::make_shared<std::vector<std::string>>(
-        FileSystem::listImages(dirPath, maxImages));
+    auto files =
+        std::make_shared<std::vector<std::string>>(FileSystem::listImages(dirPath, maxImages));
     if (files->empty())
     {
         auto cb = std::move(callback);
@@ -191,14 +193,15 @@ void ImageRepository::loadDirectoryAsyncImpl(const std::string& dirPath,
     const int n = static_cast<int>(files->size());
     auto results = std::make_shared<std::vector<Result>>(n);
     auto completed = std::make_shared<std::atomic<int>>(0);
-    auto callbackPtr = std::make_shared<std::function<void(std::vector<Result>)>>(
-        std::move(callback));
+    auto callbackPtr =
+        std::make_shared<std::function<void(std::vector<Result>)>>(std::move(callback));
 
     for (int i = 0; i < n; ++i)
     {
-        TaskScheduler::instance().submit(TaskScheduler::Priority::Decode,
-            [this, files, results, completed, n, i, callbackPtr](
-                const TaskScheduler::TaskContext&) {
+        TaskScheduler::instance().submit(
+            TaskScheduler::Priority::Decode,
+            [this, files, results, completed, n, i, callbackPtr](const TaskScheduler::TaskContext &)
+            {
                 try
                 {
                     (*results)[i] = load((*files)[i]);
@@ -217,33 +220,35 @@ void ImageRepository::loadDirectoryAsyncImpl(const std::string& dirPath,
                     cb(resultCopy);
                 }
             },
-            {}, // deps
+            {},                                           // deps
             std::chrono::steady_clock::time_point::max(), // deadline
-            []{}); // done callback (required for drain tracking)
+            [] {}); // done callback (required for drain tracking)
     }
 }
 
-void ImageRepository::prefetchVisible(const std::vector<std::string>& visiblePaths,
-    const std::vector<std::string>& adjacentPaths)
+void ImageRepository::prefetchVisible(const std::vector<std::string> &visiblePaths,
+                                      const std::vector<std::string> &adjacentPaths)
 {
-    for (const auto& p : visiblePaths)
+    for (const auto &p : visiblePaths)
     {
-        TaskScheduler::instance().submit(
-            TaskScheduler::Priority::UI, [this, p](const TaskScheduler::TaskContext&) { load(p); });
+        TaskScheduler::instance().submit(TaskScheduler::Priority::UI,
+                                         [this, p](const TaskScheduler::TaskContext &)
+                                         { load(p); });
     }
 
-    for (const auto& p : adjacentPaths)
+    for (const auto &p : adjacentPaths)
     {
         TaskScheduler::instance().submit(TaskScheduler::Priority::Background,
-            [this, p](const TaskScheduler::TaskContext&) { load(p); });
+                                         [this, p](const TaskScheduler::TaskContext &)
+                                         { load(p); });
     }
 }
 
-void ImageRepository::prefetch(const std::vector<std::string>& keys, CacheLevel level)
+void ImageRepository::prefetch(const std::vector<std::string> &keys, CacheLevel level)
 {
     if (level == CacheLevel::Disk)
         return;
-    for (const auto& key : keys)
+    for (const auto &key : keys)
     {
         ImageData img;
         if (CacheManager::instance().getDisk(key, img))
@@ -251,12 +256,12 @@ void ImageRepository::prefetch(const std::vector<std::string>& keys, CacheLevel 
     }
 }
 
-void ImageRepository::release(const std::string& filePath)
+void ImageRepository::release(const std::string &filePath)
 {
     CacheManager::instance().invalidate(makeKey(filePath));
 }
 
-mviewer::domain::ImageMetadata ImageRepository::metadata(const std::string& filePath) const
+mviewer::domain::ImageMetadata ImageRepository::metadata(const std::string &filePath) const
 {
     const std::string key = makeKey(filePath);
     mviewer::domain::ImageMetadata meta;
@@ -268,7 +273,7 @@ mviewer::domain::ImageMetadata ImageRepository::metadata(const std::string& file
     return meta;
 }
 
-void ImageRepository::cacheToDisk(const std::string& filePath)
+void ImageRepository::cacheToDisk(const std::string &filePath)
 {
     const std::string key = makeKey(filePath);
     ImageData img = Decoder::decodeFull(filePath);
@@ -276,7 +281,7 @@ void ImageRepository::cacheToDisk(const std::string& filePath)
         DiskCache::instance().put(key, img);
 }
 
-void ImageRepository::invalidate(const std::string& filePath)
+void ImageRepository::invalidate(const std::string &filePath)
 {
     CacheManager::instance().invalidate(makeKey(filePath));
 }
@@ -287,8 +292,8 @@ void ImageRepository::invalidateAll()
     CacheManager::instance().clearMemory();
 }
 
-mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string& rootPath,
-    int maxPerFolder, bool recursive) const
+mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string &rootPath,
+                                                          int maxPerFolder, bool recursive) const
 {
     mviewer::domain::Workspace ws;
     ws.rootPath = rootPath;
@@ -301,7 +306,8 @@ mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string& roo
     // Collect (directory -> image paths) by walking the tree.
     std::map<std::string, std::vector<std::string>> byDir;
 
-    auto visitDir = [&](const std::filesystem::path& dir) {
+    auto visitDir = [&](const std::filesystem::path &dir)
+    {
         std::vector<std::string> files = FileSystem::listImages(dir.string(), maxPerFolder);
         if (!files.empty())
             byDir[dir.string()] = std::move(files);
@@ -309,7 +315,7 @@ mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string& roo
 
     if (recursive)
     {
-        for (const auto& entry : std::filesystem::recursive_directory_iterator(root, ec))
+        for (const auto &entry : std::filesystem::recursive_directory_iterator(root, ec))
         {
             if (entry.is_directory(ec))
                 visitDir(entry.path());
@@ -323,7 +329,7 @@ mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string& roo
         visitDir(root);
     }
 
-    for (const auto& [dir, files] : byDir)
+    for (const auto &[dir, files] : byDir)
     {
         mviewer::domain::Folder folder;
         folder.path = dir;
@@ -331,7 +337,7 @@ mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string& roo
         mviewer::domain::ImageSet set;
         set.folderPath = dir;
         set.images.reserve(files.size());
-        for (const auto& f : files)
+        for (const auto &f : files)
             set.images.push_back(makeMeta(f));
         folder.imageSet = std::move(set);
         ws.folders.push_back(std::move(folder));

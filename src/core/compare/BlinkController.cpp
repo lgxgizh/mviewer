@@ -2,14 +2,14 @@
 
 #include <algorithm>
 
-BlinkController::BlinkController(int imageCount)
-    : m_imageCount(imageCount)
+BlinkController::BlinkController(int imageCount) : m_imageCount(imageCount)
 {
 }
 
 void BlinkController::setBlinkIndex(int idx)
 {
-    if (idx == -1) {
+    if (idx == -1)
+    {
         m_blinkIndex = -1;
         return;
     }

@@ -1,10 +1,10 @@
 #include "core/compare/CompareEngine.h"
 
+#include "core/EventBus.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageRepository.h"
 #include "core/job/Job.h"
-#include "core/EventBus.h"
 
 #include <algorithm>
 #include <cassert>
@@ -12,17 +12,15 @@
 
 // ─── CompareEngine (facade) ─────────────────────────────────────────────────
 
-CompareEngine::CompareEngine()
-    : m_layout(CompareLayout::forCount(0))
-    , m_blink(imageCount())
+CompareEngine::CompareEngine() : m_layout(CompareLayout::forCount(0)), m_blink(imageCount())
 {
 }
 
-void CompareEngine::setImages(const std::vector<std::string>& paths)
+void CompareEngine::setImages(const std::vector<std::string> &paths)
 {
     m_images.clear();
     m_images.reserve(paths.size());
-    for (const auto& p : paths)
+    for (const auto &p : paths)
     {
         auto r = ImageRepository::instance().load(p);
         if (r.success())
@@ -32,7 +30,7 @@ void CompareEngine::setImages(const std::vector<std::string>& paths)
     m_blink.clearBlink();
 }
 
-void CompareEngine::addImage(const std::string& path)
+void CompareEngine::addImage(const std::string &path)
 {
     auto r = ImageRepository::instance().load(path);
     if (r.success())
@@ -55,7 +53,7 @@ void CompareEngine::clear()
     m_blink.clearBlink();
 }
 
-const ImageFrame* CompareEngine::imageAt(int index) const
+const ImageFrame *CompareEngine::imageAt(int index) const
 {
     if (index < 0 || index >= static_cast<int>(m_images.size()))
         return nullptr;
@@ -76,7 +74,7 @@ mviewer::domain::CompareSession CompareEngine::session() const
     s.imageIds.reserve(imageCount());
     for (int i = 0; i < imageCount(); ++i)
         s.imageIds.push_back(m_images[i]->metadata().filePath);
-    const std::vector<CellState>& cells = m_sync.cells();
+    const std::vector<CellState> &cells = m_sync.cells();
     s.cells.resize(cells.size());
     for (size_t i = 0; i < cells.size(); ++i)
     {
@@ -100,8 +98,8 @@ ImageData CompareEngine::differenceMap(int index, int baseIndex)
         return ImageData();
     if (baseIndex < 0 || baseIndex >= imageCount())
         return ImageData();
-    return DifferenceEngine::differenceMap(
-        m_images[baseIndex]->pixels(), m_images[index]->pixels());
+    return DifferenceEngine::differenceMap(m_images[baseIndex]->pixels(),
+                                           m_images[index]->pixels());
 }
 
 bool CompareEngine::requestDiff(int index, int baseIndex)
@@ -124,7 +122,8 @@ bool CompareEngine::requestDiff(int index, int baseIndex)
     job.pool = TaskScheduler::PoolType::AnalysisPool;
     job.priority = TaskScheduler::Priority::Analysis;
 
-    job.work = [a, b, idx, base, this](const TaskScheduler::TaskContext&) {
+    job.work = [a, b, idx, base, this](const TaskScheduler::TaskContext &)
+    {
         ImageData diff = DifferenceEngine::differenceMap(a, b);
         DiffResult res;
         res.index = idx;
@@ -134,13 +133,13 @@ bool CompareEngine::requestDiff(int index, int baseIndex)
         m_lastDiff = res;
         m_lastDiffImage = diff;
     };
-    job.done = [this]() {
+    job.done = [this]()
+    {
         // Publish on the EventBus (scope Application) so subscribers (UI) learn
         // the diff is ready. This runs on the worker thread; subscribers that
         // touch widgets must hop to the UI thread themselves (see
         // CompareWorkspace).
-        EventBus::instance().publish("CompareEngine.DiffResult",
-                                     static_cast<void*>(this));
+        EventBus::instance().publish("CompareEngine.DiffResult", static_cast<void *>(this));
     };
 
     return mviewer::core::JobSystem::instance().submit(job) != nullptr;
@@ -158,10 +157,10 @@ ImageData CompareEngine::lastDiffImage() const
     return m_lastDiffImage;
 }
 
-void CompareEngine::applySelectionToAll(const mviewer::domain::Selection& sel)
+void CompareEngine::applySelectionToAll(const mviewer::domain::Selection &sel)
 {
     m_selection.setSelection(sel);
-    for (auto& frame : m_images)
+    for (auto &frame : m_images)
     {
         if (frame)
             frame->setSelection(sel);
@@ -172,7 +171,7 @@ PixelController::ProbeResult CompareEngine::inspectPixel(int imgX, int imgY, int
 {
     std::vector<ImageData> frames;
     frames.reserve(m_images.size());
-    for (const auto& f : m_images)
+    for (const auto &f : m_images)
         frames.push_back(f ? f->pixels() : ImageData{});
     return m_pixel.inspect(frames, imgX, imgY, baseIndex);
 }

@@ -40,30 +40,26 @@ struct VisionResult
 
 class VisionRegression
 {
-public:
+  public:
     explicit VisionRegression(std::string goldenDir, std::string outputDir)
-        : m_goldenDir(std::move(goldenDir))
-        , m_outputDir(std::move(outputDir))
+        : m_goldenDir(std::move(goldenDir)), m_outputDir(std::move(outputDir))
     {
     }
 
-    void addTestCase(const std::string& name, double tolerance = 2.0, double maxDiffFraction = 0.01)
+    void addTestCase(const std::string &name, double tolerance = 2.0, double maxDiffFraction = 0.01)
     {
-        m_tests.push_back({name,
-            m_goldenDir + "/" + name + ".png",
-            m_outputDir + "/" + name + ".png",
-            tolerance,
-            maxDiffFraction});
+        m_tests.push_back({name, m_goldenDir + "/" + name + ".png",
+                           m_outputDir + "/" + name + ".png", tolerance, maxDiffFraction});
     }
 
     // Save a rendered frame as the current snapshot
-    bool saveCurrent(const std::string& name, const QImage& img)
+    bool saveCurrent(const std::string &name, const QImage &img)
     {
         return img.save(QString::fromStdString(m_outputDir + "/" + name + ".png"));
     }
 
     // Save a rendered frame as golden (only during --generate)
-    bool saveGolden(const std::string& name, const QImage& img)
+    bool saveGolden(const std::string &name, const QImage &img)
     {
         return img.save(QString::fromStdString(m_goldenDir + "/" + name + ".png"));
     }
@@ -72,15 +68,15 @@ public:
     std::vector<VisionResult> compareAll()
     {
         std::vector<VisionResult> results;
-        for (const auto& tc : m_tests)
+        for (const auto &tc : m_tests)
         {
             results.push_back(compareOne(tc));
         }
         return results;
     }
 
-private:
-    VisionResult compareOne(const VisionTestCase& tc)
+  private:
+    VisionResult compareOne(const VisionTestCase &tc)
     {
         VisionResult r;
         r.name = tc.name;
@@ -106,8 +102,8 @@ private:
         int diffs = 0;
         for (int y = 0; y < h; ++y)
         {
-            const QRgb* lg = reinterpret_cast<const QRgb*>(gold.constScanLine(y));
-            const QRgb* lc = reinterpret_cast<const QRgb*>(curr.constScanLine(y));
+            const QRgb *lg = reinterpret_cast<const QRgb *>(gold.constScanLine(y));
+            const QRgb *lc = reinterpret_cast<const QRgb *>(curr.constScanLine(y));
             for (int x = 0; x < w; ++x)
             {
                 const int dr = std::abs(static_cast<int>(qRed(lg[x])) - qRed(lc[x]));
@@ -132,7 +128,7 @@ private:
 };
 
 // Render helper: creates test patterns as placeholder for actual UI render.
-inline QImage renderTestPattern(const std::string& name, int w = 256, int h = 256)
+inline QImage renderTestPattern(const std::string &name, int w = 256, int h = 256)
 {
     QImage img(w, h, QImage::Format_RGB32);
     if (name == "gradient")
@@ -158,7 +154,7 @@ inline QImage renderTestPattern(const std::string& name, int w = 256, int h = 25
     return img;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     std::string goldenDir = std::string(MVIEWER_SOURCE_DIR) + "/golden/vision";
@@ -187,7 +183,7 @@ int main(int argc, char** argv)
 
     if (mode == "generate")
     {
-        for (const auto& name : {"gradient", "flat_gray", "checker"})
+        for (const auto &name : {"gradient", "flat_gray", "checker"})
         {
             QImage img = renderTestPattern(name);
             vr.saveGolden(name, img);
@@ -197,14 +193,14 @@ int main(int argc, char** argv)
     }
 
     // Compare mode: render current + diff
-    for (const auto& name : {"gradient", "flat_gray", "checker"})
+    for (const auto &name : {"gradient", "flat_gray", "checker"})
     {
         QImage img = renderTestPattern(name);
         vr.saveCurrent(name, img);
     }
     auto results = vr.compareAll();
     int fails = 0;
-    for (const auto& r : results)
+    for (const auto &r : results)
     {
         std::cout << (r.passed ? "PASS  " : "FAIL  ") << r.name << "  " << r.message << std::endl;
         if (!r.passed)

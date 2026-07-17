@@ -2,13 +2,13 @@
 
 #include <fstream>
 
-Benchmark& Benchmark::instance()
+Benchmark &Benchmark::instance()
 {
     static Benchmark inst;
     return inst;
 }
 
-void Benchmark::run(const std::string& name, std::function<void()> fn, int iterations)
+void Benchmark::run(const std::string &name, std::function<void()> fn, int iterations)
 {
     if (!fn || iterations <= 0)
         return;
@@ -34,7 +34,7 @@ void Benchmark::run(const std::string& name, std::function<void()> fn, int itera
     m_results.push_back(r);
 }
 
-void Benchmark::run(const std::string& name, std::function<void(int)> fn, int iterations)
+void Benchmark::run(const std::string &name, std::function<void(int)> fn, int iterations)
 {
     run(name, [fn, iterations]() { fn(iterations); }, iterations);
 }
@@ -46,7 +46,7 @@ void Benchmark::report() const
               << std::setw(10) << "Min(ms)" << std::setw(10) << "Max(ms)" << std::setw(8) << "Iter"
               << std::endl;
     std::cout << std::string(78, '-') << std::endl;
-    for (const auto& r : m_results)
+    for (const auto &r : m_results)
     {
         std::cout << std::left << std::setw(40) << r.name << std::right << std::setw(10)
                   << std::fixed << std::setprecision(3) << r.avgMs << std::setw(10) << std::fixed
@@ -55,7 +55,7 @@ void Benchmark::report() const
     }
 }
 
-bool Benchmark::reportCsv(const std::string& path) const
+bool Benchmark::reportCsv(const std::string &path) const
 {
     std::string outPath = path;
     if (outPath.empty())
@@ -67,13 +67,10 @@ bool Benchmark::reportCsv(const std::string& path) const
     if (!f.is_open())
         return false;
     f << "name,avg_ms,min_ms,max_ms,iterations\n";
-    for (const auto& r : m_results)
+    for (const auto &r : m_results)
     {
-        f << '"' << r.name << "\","
-          << std::fixed << std::setprecision(3) << r.avgMs << ","
-          << r.minMs << ","
-          << r.maxMs << ","
-          << r.iterations << "\n";
+        f << '"' << r.name << "\"," << std::fixed << std::setprecision(3) << r.avgMs << ","
+          << r.minMs << "," << r.maxMs << "," << r.iterations << "\n";
     }
     return static_cast<bool>(f);
 }

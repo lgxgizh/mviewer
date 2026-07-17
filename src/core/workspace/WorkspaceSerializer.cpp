@@ -10,19 +10,31 @@ namespace mviewer::core
 namespace
 {
 
-void esc(std::ostringstream& os, const std::string& s)
+void esc(std::ostringstream &os, const std::string &s)
 {
     os << '"';
     for (char c : s)
     {
         switch (c)
         {
-        case '"': os << "\\\""; break;
-        case '\\': os << "\\\\"; break;
-        case '\n': os << "\\n"; break;
-        case '\r': os << "\\r"; break;
-        case '\t': os << "\\t"; break;
-        default: os << c; break;
+        case '"':
+            os << "\\\"";
+            break;
+        case '\\':
+            os << "\\\\";
+            break;
+        case '\n':
+            os << "\\n";
+            break;
+        case '\r':
+            os << "\\r";
+            break;
+        case '\t':
+            os << "\\t";
+            break;
+        default:
+            os << c;
+            break;
         }
     }
     os << '"';
@@ -33,11 +45,17 @@ void esc(std::ostringstream& os, const std::string& s)
 // tolerant. Returns false on structural mismatch.
 struct Parser
 {
-    const std::string& s;
+    const std::string &s;
     size_t i = 0;
-    explicit Parser(const std::string& text) : s(text) {}
+    explicit Parser(const std::string &text) : s(text)
+    {
+    }
 
-    void skipws() { while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i]))) ++i; }
+    void skipws()
+    {
+        while (i < s.size() && std::isspace(static_cast<unsigned char>(s[i])))
+            ++i;
+    }
 
     bool eat(char c)
     {
@@ -62,10 +80,18 @@ struct Parser
                 ++i;
                 switch (s[i])
                 {
-                case 'n': out += '\n'; break;
-                case 't': out += '\t'; break;
-                case 'r': out += '\r'; break;
-                default: out += s[i]; break;
+                case 'n':
+                    out += '\n';
+                    break;
+                case 't':
+                    out += '\t';
+                    break;
+                case 'r':
+                    out += '\r';
+                    break;
+                default:
+                    out += s[i];
+                    break;
                 }
             }
             else
@@ -90,7 +116,7 @@ struct Parser
     // Parse a value that we expect to be a string at `key` within the current
     // object; advances past it. Returns true if the key was found and a string
     // consumed.
-    bool memberStr(const std::string& key, std::string& out)
+    bool memberStr(const std::string &key, std::string &out)
     {
         skipws();
         if (i < s.size() && s[i] == '}')
@@ -104,7 +130,7 @@ struct Parser
         return true;
     }
 
-    bool memberNum(const std::string& key, long long& out)
+    bool memberNum(const std::string &key, long long &out)
     {
         skipws();
         if (i < s.size() && s[i] == '}')
@@ -121,7 +147,7 @@ struct Parser
 
 } // namespace
 
-std::string serializeWorkspace(const mviewer::domain::Workspace& ws)
+std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
 {
     std::ostringstream os;
     os << "{\"root\":";
@@ -129,7 +155,7 @@ std::string serializeWorkspace(const mviewer::domain::Workspace& ws)
     os << ",\"folders\":[";
     for (size_t f = 0; f < ws.folders.size(); ++f)
     {
-        const auto& folder = ws.folders[f];
+        const auto &folder = ws.folders[f];
         if (f)
             os << ',';
         os << "{\"path\":";
@@ -139,7 +165,7 @@ std::string serializeWorkspace(const mviewer::domain::Workspace& ws)
         os << ",\"images\":[";
         for (size_t im = 0; im < folder.imageSet.images.size(); ++im)
         {
-            const auto& m = folder.imageSet.images[im];
+            const auto &m = folder.imageSet.images[im];
             if (im)
                 os << ',';
             os << "{\"filePath\":";
@@ -154,7 +180,7 @@ std::string serializeWorkspace(const mviewer::domain::Workspace& ws)
     return os.str();
 }
 
-bool deserializeWorkspace(const std::string& text, mviewer::domain::Workspace& out)
+bool deserializeWorkspace(const std::string &text, mviewer::domain::Workspace &out)
 {
     Parser p(text);
     if (!p.eat('{'))
@@ -222,7 +248,7 @@ bool deserializeWorkspace(const std::string& text, mviewer::domain::Workspace& o
     return true;
 }
 
-void RecentFiles::add(const std::string& path)
+void RecentFiles::add(const std::string &path)
 {
     for (size_t i = 0; i < m_items.size(); ++i)
     {
@@ -254,7 +280,7 @@ std::string RecentFiles::serialize() const
     return os.str();
 }
 
-bool RecentFiles::deserialize(const std::string& text)
+bool RecentFiles::deserialize(const std::string &text)
 {
     Parser p(text);
     if (!p.eat('{'))

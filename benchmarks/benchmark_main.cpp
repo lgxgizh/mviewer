@@ -39,14 +39,14 @@ static QImage makeTestImage(int w, int h, int seed = 42)
     std::uniform_int_distribution<int> dist(0, 255);
     for (int y = 0; y < h; ++y)
     {
-        QRgb* line = reinterpret_cast<QRgb*>(img.scanLine(y));
+        QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
         for (int x = 0; x < w; ++x)
             line[x] = qRgb(dist(rng), dist(rng), dist(rng));
     }
     return img;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     ScenarioBenchmark bench;
@@ -95,18 +95,18 @@ int main(int argc, char** argv)
 
     // Decode (Open File / Open Directory)
     bench.run(
-        "Open File",
-        "decodeFull(1920x1080)",
-        [&]() {
+        "Open File", "decodeFull(1920x1080)",
+        [&]()
+        {
             ImageData d = Decoder::decodeFull(tmpPng.toStdString());
             (void)d;
         },
         20);
 
     bench.run(
-        "Open File",
-        "decodeFull(1280x720)",
-        [&]() {
+        "Open File", "decodeFull(1280x720)",
+        [&]()
+        {
             ImageData d = Decoder::decodeFull(tmpPng.toStdString());
             (void)d;
         },
@@ -114,9 +114,9 @@ int main(int argc, char** argv)
 
     // Switch Image (decode + cache hit)
     bench.run(
-        "Switch Image",
-        "cacheHit(FullImage)",
-        [&]() {
+        "Switch Image", "cacheHit(FullImage)",
+        [&]()
+        {
             ImageCache::instance().put(ImageCache::Viewer, "switch_key", data1080);
             ImageData out;
             ImageCache::instance().get(ImageCache::Viewer, "switch_key", out);
@@ -125,9 +125,9 @@ int main(int argc, char** argv)
 
     // Thumbnail (Encoder scaled-down)
     bench.run(
-        "Thumbnail",
-        "encode(PNG 256x256)",
-        [&]() {
+        "Thumbnail", "encode(PNG 256x256)",
+        [&]()
+        {
             auto buf = Encoder::encodeToBuffer(dataSmall, "png", {});
             (void)buf;
         },
@@ -135,18 +135,18 @@ int main(int argc, char** argv)
 
     // Compare (DifferenceEngine)
     bench.run(
-        "Compare",
-        "differenceMap(1920x1080)",
-        [&]() {
+        "Compare", "differenceMap(1920x1080)",
+        [&]()
+        {
             ImageData d = DifferenceEngine::differenceMap(data1080, data1080b);
             (void)d;
         },
         20);
 
     bench.run(
-        "Compare",
-        "heatMap(1920x1080)",
-        [&]() {
+        "Compare", "heatMap(1920x1080)",
+        [&]()
+        {
             ImageData d = DifferenceEngine::heatMap(data1080);
             (void)d;
         },
@@ -154,9 +154,9 @@ int main(int argc, char** argv)
 
     // Histogram Analyzer
     bench.run(
-        "Histogram",
-        "analyze(1920x1080)",
-        [&]() {
+        "Histogram", "analyze(1920x1080)",
+        [&]()
+        {
             ImageFrame f = ImageFrame::create("/tmp.png", data1080);
             HistogramAnalyzer a;
             a.analyze(f);
@@ -165,9 +165,9 @@ int main(int argc, char** argv)
 
     // RGBMean Analyzer
     bench.run(
-        "RGBMean",
-        "analyze(1920x1080)",
-        [&]() {
+        "RGBMean", "analyze(1920x1080)",
+        [&]()
+        {
             ImageFrame f = ImageFrame::create("/tmp.png", data1080);
             RGBMeanAnalyzer a;
             a.analyze(f);
@@ -176,9 +176,9 @@ int main(int argc, char** argv)
 
     // Noise Analyzer
     bench.run(
-        "Noise",
-        "analyze(1920x1080)",
-        [&]() {
+        "Noise", "analyze(1920x1080)",
+        [&]()
+        {
             ImageFrame f = ImageFrame::create("/tmp.png", data1080);
             NoiseAnalyzer a;
             a.analyze(f);
@@ -187,9 +187,9 @@ int main(int argc, char** argv)
 
     // PSNR Analyzer
     bench.run(
-        "PSNR",
-        "analyze(1920x1080)",
-        [&]() {
+        "PSNR", "analyze(1920x1080)",
+        [&]()
+        {
             ImageFrame f = ImageFrame::create("/tmp.png", data1080);
             ImageFrame g = ImageFrame::create("/tmp2.png", data1080b);
             PSNRAnalyzer a;
@@ -200,9 +200,9 @@ int main(int argc, char** argv)
 
     // SSIM Analyzer
     bench.run(
-        "SSIM",
-        "analyze(1920x1080)",
-        [&]() {
+        "SSIM", "analyze(1920x1080)",
+        [&]()
+        {
             ImageFrame f = ImageFrame::create("/tmp.png", data1080);
             ImageFrame g = ImageFrame::create("/tmp2.png", data1080b);
             SSIMAnalyzer a;
@@ -213,9 +213,9 @@ int main(int argc, char** argv)
 
     // Entropy Analyzer
     bench.run(
-        "Entropy",
-        "analyze(1920x1080)",
-        [&]() {
+        "Entropy", "analyze(1920x1080)",
+        [&]()
+        {
             ImageFrame f = ImageFrame::create("/tmp.png", data1080);
             EntropyAnalyzer a;
             a.analyze(f);
@@ -224,9 +224,9 @@ int main(int argc, char** argv)
 
     // Sharpness Analyzer
     bench.run(
-        "Sharpness",
-        "analyze(1920x1080)",
-        [&]() {
+        "Sharpness", "analyze(1920x1080)",
+        [&]()
+        {
             ImageFrame f = ImageFrame::create("/tmp.png", data1080);
             SharpnessAnalyzer a;
             a.analyze(f);
@@ -235,9 +235,9 @@ int main(int argc, char** argv)
 
     // Cache
     bench.run(
-        "Cache",
-        "memoryUsage",
-        [&]() {
+        "Cache", "memoryUsage",
+        [&]()
+        {
             volatile size_t s = CacheManager::instance().memoryUsageBytes();
             (void)s;
         },
@@ -245,10 +245,8 @@ int main(int argc, char** argv)
 
     // Render Engine scale
     bench.run(
-        "Render",
-        "scale(1920x1080→1280x720)",
-        [&]() { RenderEngine::instance().scale(data1080, {1280, 720}); },
-        10);
+        "Render", "scale(1920x1080→1280x720)",
+        [&]() { RenderEngine::instance().scale(data1080, {1280, 720}); }, 10);
 
     // CSV output
     bench.writeCsv(csvPath);
@@ -260,7 +258,7 @@ int main(int argc, char** argv)
         auto cmp = bench.compare(baseline, threshold);
         int fails = 0;
         std::cout << "\n=== Baseline Comparison (threshold " << threshold << "x) ===\n";
-        for (const auto& c : cmp)
+        for (const auto &c : cmp)
         {
             std::cout << (c.passed ? "PASS  " : "FAIL  ") << c.scenario << "::" << c.name
                       << "  cur=" << c.current_avg_ms << "ms"

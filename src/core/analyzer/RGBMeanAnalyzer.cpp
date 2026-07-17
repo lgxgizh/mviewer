@@ -9,7 +9,7 @@
 // full-frame and region analysis; mean/std are derived from the histogram.
 // AnalysisEngine::computeStats already computes histo + lumMean, so we extend
 // to compute per-channel stats directly for precision.
-bool RGBMeanAnalyzer::analyze(const ImageFrame& frame)
+bool RGBMeanAnalyzer::analyze(const ImageFrame &frame)
 {
     if (frame.pixels().isNull())
         return false;
@@ -22,10 +22,10 @@ bool RGBMeanAnalyzer::analyze(const ImageFrame& frame)
     double sumR2 = 0, sumG2 = 0, sumB2 = 0;
     for (int y = 0; y < h; ++y)
     {
-        const uint8_t* line = v.data + static_cast<size_t>(y) * v.stride();
+        const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
         for (int x = 0; x < w; ++x)
         {
-            const uint8_t* p = line + static_cast<size_t>(x) * cpp;
+            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
             const double r = p[0], g = p[1], b = p[2];
             sumR += r;
             sumG += g;
@@ -45,8 +45,8 @@ bool RGBMeanAnalyzer::analyze(const ImageFrame& frame)
     return true;
 }
 
-bool RGBMeanAnalyzer::analyzeRegion(const ImageFrame& frame,
-    const mviewer::domain::Selection& region)
+bool RGBMeanAnalyzer::analyzeRegion(const ImageFrame &frame,
+                                    const mviewer::domain::Selection &region)
 {
     if (frame.pixels().isNull() || region.isEmpty())
         return false;
@@ -65,10 +65,10 @@ bool RGBMeanAnalyzer::analyzeRegion(const ImageFrame& frame,
     double sumR2 = 0, sumG2 = 0, sumB2 = 0;
     for (int y = y0; y < y1; ++y)
     {
-        const uint8_t* line = v.data + static_cast<size_t>(y) * v.stride();
+        const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
         for (int x = x0; x < x1; ++x)
         {
-            const uint8_t* p = line + static_cast<size_t>(x) * cpp;
+            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
             const double r = p[0], g = p[1], b = p[2];
             sumR += r;
             sumG += g;
@@ -91,9 +91,8 @@ bool RGBMeanAnalyzer::analyzeRegion(const ImageFrame& frame,
 std::string RGBMeanAnalyzer::resultText() const
 {
     char buf[256];
-    std::snprintf(buf, sizeof(buf),
-        "RGB mean: (%.1f, %.1f, %.1f)  std: (%.1f, %.1f, %.1f)",
-        m_result.rMean, m_result.gMean, m_result.bMean,
-        m_result.rStd, m_result.gStd, m_result.bStd);
+    std::snprintf(buf, sizeof(buf), "RGB mean: (%.1f, %.1f, %.1f)  std: (%.1f, %.1f, %.1f)",
+                  m_result.rMean, m_result.gMean, m_result.bMean, m_result.rStd, m_result.gStd,
+                  m_result.bStd);
     return buf;
 }

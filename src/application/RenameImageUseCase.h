@@ -3,7 +3,7 @@
 
 class RenameImageUseCase
 {
-public:
+  public:
     struct Result
     {
         bool success = false;
@@ -11,5 +11,5 @@ public:
         std::string newPath;
     };
 
-    static Result execute(const std::string& oldPath, const std::string& newName);
+    static Result execute(const std::string &oldPath, const std::string &newName);
 };

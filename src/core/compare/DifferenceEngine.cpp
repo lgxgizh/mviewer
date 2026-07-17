@@ -4,17 +4,24 @@
 
 int DifferenceEngine::channelOffset(PixelFormat fmt, int channel)
 {
-    switch (fmt) {
-    case PixelFormat::RGB24:      return channel;
-    case PixelFormat::BGR24:      return 2 - channel;
-    case PixelFormat::RGBA32:     return channel;
-    case PixelFormat::BGRA32:     return 2 - channel;
-    case PixelFormat::Grayscale8: return 0;
-    default:                      return channel;
+    switch (fmt)
+    {
+    case PixelFormat::RGB24:
+        return channel;
+    case PixelFormat::BGR24:
+        return 2 - channel;
+    case PixelFormat::RGBA32:
+        return channel;
+    case PixelFormat::BGRA32:
+        return 2 - channel;
+    case PixelFormat::Grayscale8:
+        return 0;
+    default:
+        return channel;
     }
 }
 
-ImageData DifferenceEngine::differenceMap(const ImageData& a, const ImageData& b)
+ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b)
 {
     if (a.isNull() || b.isNull())
         return ImageData();
@@ -42,11 +49,13 @@ ImageData DifferenceEngine::differenceMap(const ImageData& a, const ImageData& b
     if (out.isNull())
         return ImageData();
 
-    for (int y = 0; y < h; ++y) {
-        const uint8_t* la = a.buffer.get() + static_cast<size_t>(y) * a.stride();
-        const uint8_t* lb = b.buffer.get() + static_cast<size_t>(y) * b.stride();
-        uint8_t* dst = out.buffer.get() + static_cast<size_t>(y) * out.stride();
-        for (int x = 0; x < w; ++x) {
+    for (int y = 0; y < h; ++y)
+    {
+        const uint8_t *la = a.buffer.get() + static_cast<size_t>(y) * a.stride();
+        const uint8_t *lb = b.buffer.get() + static_cast<size_t>(y) * b.stride();
+        uint8_t *dst = out.buffer.get() + static_cast<size_t>(y) * out.stride();
+        for (int x = 0; x < w; ++x)
+        {
             const int dr = std::abs(static_cast<int>(la[x * cppA + roA0]) -
                                     static_cast<int>(lb[x * cppB + roB0]));
             const int dg = std::abs(static_cast<int>(la[x * cppA + roA1]) -
@@ -59,7 +68,7 @@ ImageData DifferenceEngine::differenceMap(const ImageData& a, const ImageData& b
     return out;
 }
 
-ImageData DifferenceEngine::heatMap(const ImageData& gray)
+ImageData DifferenceEngine::heatMap(const ImageData &gray)
 {
     if (gray.isNull())
         return ImageData();
@@ -71,17 +80,22 @@ ImageData DifferenceEngine::heatMap(const ImageData& gray)
     if (out.isNull())
         return ImageData();
 
-    for (int y = 0; y < h; ++y) {
-        const uint8_t* src = gray.buffer.get() + static_cast<size_t>(y) * gray.stride();
-        uint8_t* dst = out.buffer.get() + static_cast<size_t>(y) * out.stride();
-        for (int x = 0; x < w; ++x) {
+    for (int y = 0; y < h; ++y)
+    {
+        const uint8_t *src = gray.buffer.get() + static_cast<size_t>(y) * gray.stride();
+        uint8_t *dst = out.buffer.get() + static_cast<size_t>(y) * out.stride();
+        for (int x = 0; x < w; ++x)
+        {
             const int v = src[x * cpp + ro];
             int r, g, b;
-            if (v < 128) {
+            if (v < 128)
+            {
                 r = 0;
                 g = v * 2;
                 b = 255 - v * 2;
-            } else {
+            }
+            else
+            {
                 r = (v - 128) * 2;
                 g = 255 - (v - 128) * 2;
                 b = 0;

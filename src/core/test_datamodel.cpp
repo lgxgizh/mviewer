@@ -9,18 +9,18 @@
 #include <iostream>
 #include <string>
 
-#define CHECK(cond, msg)                               \
-    do                                                 \
-    {                                                  \
-        if (!(cond))                                   \
-        {                                              \
-            std::cerr << "FAIL: " << msg << std::endl; \
-            return 1;                                  \
-        }                                              \
-        else                                           \
-        {                                              \
-            std::cout << "PASS: " << msg << std::endl; \
-        }                                              \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(cond))                                                                               \
+        {                                                                                          \
+            std::cerr << "FAIL: " << msg << std::endl;                                             \
+            return 1;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            std::cout << "PASS: " << msg << std::endl;                                             \
+        }                                                                                          \
     } while (0)
 
 using namespace mviewer::domain;
@@ -28,14 +28,14 @@ using namespace mviewer::domain;
 static std::string makeTempTree()
 {
     std::error_code ec;
-    const std::string base = std::filesystem::temp_directory_path(ec).string() +
-                             "/mviewer_dm_test";
+    const std::string base = std::filesystem::temp_directory_path(ec).string() + "/mviewer_dm_test";
     std::filesystem::remove_all(base, ec);
     std::filesystem::create_directories(base + "/a", ec);
     std::filesystem::create_directories(base + "/b", ec);
     // Empty files with image extensions (FileSystem::listImages filters by ext).
-    auto touch = [&](const std::string& p) {
-        std::FILE* f = std::fopen(p.c_str(), "wb");
+    auto touch = [&](const std::string &p)
+    {
+        std::FILE *f = std::fopen(p.c_str(), "wb");
         if (f)
             std::fclose(f);
     };
@@ -84,12 +84,12 @@ int main()
         // root + a + b => 3 folders (root has root.png; a has 2; b has 1).
         CHECK(ws.folderCount() == 3, "3 folders discovered (root, a, b)");
         size_t total = 0;
-        for (const auto& f : ws.folders)
+        for (const auto &f : ws.folders)
             total += f.imageSet.size();
         CHECK(total == 4, "4 images total across folders");
         // Find folder 'a' and check its image set.
-        const Folder* fa = nullptr;
-        for (const auto& f : ws.folders)
+        const Folder *fa = nullptr;
+        for (const auto &f : ws.folders)
             if (f.name == "a")
                 fa = &f;
         CHECK(fa != nullptr, "folder 'a' present");

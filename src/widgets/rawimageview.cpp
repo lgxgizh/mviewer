@@ -4,15 +4,14 @@
 #include <QPainter>
 #include <QWheelEvent>
 
-RawImageView::RawImageView(QWidget* parent)
-    : QWidget(parent)
+RawImageView::RawImageView(QWidget *parent) : QWidget(parent)
 {
     setMinimumSize(64, 64);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setCursor(Qt::OpenHandCursor);
 }
 
-void RawImageView::setImage(const QImage& img)
+void RawImageView::setImage(const QImage &img)
 {
     m_image = img;
     resetFit();
@@ -27,14 +26,14 @@ void RawImageView::clear()
     update();
 }
 
-void RawImageView::setOverlay(const QImage& overlay, double alpha)
+void RawImageView::setOverlay(const QImage &overlay, double alpha)
 {
     m_overlay = overlay;
     m_overlayAlpha = alpha;
     update();
 }
 
-void RawImageView::setTransform(double scale, const QPointF& offset)
+void RawImageView::setTransform(double scale, const QPointF &offset)
 {
     m_scale = scale;
     m_offset = offset;
@@ -56,7 +55,7 @@ void RawImageView::clampOffset()
     m_offset.setY(qBound(-maxOffY, m_offset.y(), maxOffY));
 }
 
-void RawImageView::zoom(double factor, const QPointF& anchor)
+void RawImageView::zoom(double factor, const QPointF &anchor)
 {
     const double newScale = qBound(m_fitScale * 0.05, m_scale * factor, m_fitScale * 50.0);
     if (newScale == m_scale)
@@ -93,14 +92,13 @@ void RawImageView::computeFit()
         m_fitScale = 1.0;
         return;
     }
-    m_fitScale = std::min(
-        static_cast<double>(width()) / m_image.width(),
-        static_cast<double>(height()) / m_image.height());
+    m_fitScale = std::min(static_cast<double>(width()) / m_image.width(),
+                          static_cast<double>(height()) / m_image.height());
     m_scale = m_fitScale;
     m_offset = {};
 }
 
-void RawImageView::paintEvent(QPaintEvent*)
+void RawImageView::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
     p.fillRect(rect(), palette().color(QPalette::Dark));
@@ -128,8 +126,7 @@ void RawImageView::paintEvent(QPaintEvent*)
         p.save();
         p.setOpacity(m_overlayAlpha);
         p.drawImage(QRect(cx - dw / 2 + static_cast<int>((dw - ow) / 2.0),
-                          cy - dh / 2 + static_cast<int>((dh - oh) / 2.0),
-                          ow, oh),
+                          cy - dh / 2 + static_cast<int>((dh - oh) / 2.0), ow, oh),
                     m_overlay);
         p.restore();
     }
@@ -140,8 +137,7 @@ void RawImageView::paintEvent(QPaintEvent*)
         const double sx = static_cast<double>(dw) / m_image.width();
         const double sy = static_cast<double>(dh) / m_image.height();
         const QRect box(qRound(cx - dw / 2.0 + m_selection.x * sx),
-                        qRound(cy - dh / 2.0 + m_selection.y * sy),
-                        qRound(m_selection.width * sx),
+                        qRound(cy - dh / 2.0 + m_selection.y * sy), qRound(m_selection.width * sx),
                         qRound(m_selection.height * sy));
         p.setPen(QPen(QColor(0xFF, 0x33, 0x33), 2));
         p.setBrush(Qt::NoBrush);
@@ -149,13 +145,13 @@ void RawImageView::paintEvent(QPaintEvent*)
     }
 }
 
-void RawImageView::wheelEvent(QWheelEvent* ev)
+void RawImageView::wheelEvent(QWheelEvent *ev)
 {
     const double factor = ev->angleDelta().y() > 0 ? 1.25 : 1.0 / 1.25;
     zoom(factor, ev->position());
 }
 
-void RawImageView::mousePressEvent(QMouseEvent* ev)
+void RawImageView::mousePressEvent(QMouseEvent *ev)
 {
     if (ev->button() == Qt::RightButton)
     {
@@ -174,7 +170,7 @@ void RawImageView::mousePressEvent(QMouseEvent* ev)
     }
 }
 
-void RawImageView::mouseMoveEvent(QMouseEvent* ev)
+void RawImageView::mouseMoveEvent(QMouseEvent *ev)
 {
     if (m_selecting)
     {
@@ -215,7 +211,7 @@ void RawImageView::mouseMoveEvent(QMouseEvent* ev)
     update();
 }
 
-void RawImageView::mouseReleaseEvent(QMouseEvent* ev)
+void RawImageView::mouseReleaseEvent(QMouseEvent *ev)
 {
     if (ev->button() == Qt::RightButton && m_selecting)
     {
@@ -230,7 +226,7 @@ void RawImageView::mouseReleaseEvent(QMouseEvent* ev)
     }
 }
 
-QPointF RawImageView::widgetToImage(const QPoint& pos) const
+QPointF RawImageView::widgetToImage(const QPoint &pos) const
 {
     if (m_scale <= 0.0 || m_image.isNull())
         return {};
@@ -239,7 +235,7 @@ QPointF RawImageView::widgetToImage(const QPoint& pos) const
     return QPointF((pos.x() - cx) / m_scale, (pos.y() - cy) / m_scale);
 }
 
-void RawImageView::resizeEvent(QResizeEvent* ev)
+void RawImageView::resizeEvent(QResizeEvent *ev)
 {
     QWidget::resizeEvent(ev);
     computeFit();

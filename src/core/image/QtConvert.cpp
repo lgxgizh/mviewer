@@ -5,14 +5,15 @@
 namespace mvcore
 {
 
-QImage toQImage(const ImageData& src)
+QImage toQImage(const ImageData &src)
 {
     if (src.isNull())
         return QImage();
     const ImageBuffer v = src.view();
     switch (src.format)
     {
-    case PixelFormat::Grayscale8: {
+    case PixelFormat::Grayscale8:
+    {
         QImage out(v.width, v.height, QImage::Format_Grayscale8);
         if (out.isNull())
             return QImage();
@@ -24,18 +25,19 @@ QImage toQImage(const ImageData& src)
         return out;
     }
     case PixelFormat::RGBA32:
-    case PixelFormat::BGRA32: {
+    case PixelFormat::BGRA32:
+    {
         QImage out(v.width, v.height, QImage::Format_ARGB32);
         if (out.isNull())
             return QImage();
         const int cpp = v.channelsPerPixel();
         for (int y = 0; y < v.height; ++y)
         {
-            const uint8_t* sl = v.data + static_cast<size_t>(y) * v.stride();
-            QRgb* dl = reinterpret_cast<QRgb*>(out.scanLine(y));
+            const uint8_t *sl = v.data + static_cast<size_t>(y) * v.stride();
+            QRgb *dl = reinterpret_cast<QRgb *>(out.scanLine(y));
             for (int x = 0; x < v.width; ++x)
             {
-                const uint8_t* p = sl + x * cpp;
+                const uint8_t *p = sl + x * cpp;
                 if (src.format == PixelFormat::RGBA32)
                     dl[x] = qRgba(p[0], p[1], p[2], p[3]);
                 else // BGRA32
@@ -46,18 +48,19 @@ QImage toQImage(const ImageData& src)
     }
     case PixelFormat::RGB24:
     case PixelFormat::BGR24:
-    default: {
+    default:
+    {
         QImage out(v.width, v.height, QImage::Format_RGB888);
         if (out.isNull())
             return QImage();
         const int cpp = v.channelsPerPixel();
         for (int y = 0; y < v.height; ++y)
         {
-            const uint8_t* sl = v.data + static_cast<size_t>(y) * v.stride();
-            uchar* dl = out.scanLine(y);
+            const uint8_t *sl = v.data + static_cast<size_t>(y) * v.stride();
+            uchar *dl = out.scanLine(y);
             for (int x = 0; x < v.width; ++x)
             {
-                const uint8_t* p = sl + x * cpp;
+                const uint8_t *p = sl + x * cpp;
                 if (src.format == PixelFormat::BGR24)
                 {
                     dl[x * 3 + 0] = p[2];
@@ -77,7 +80,7 @@ QImage toQImage(const ImageData& src)
     }
 }
 
-ImageData fromQImage(const QImage& src)
+ImageData fromQImage(const QImage &src)
 {
     if (src.isNull())
         return ImageData();
@@ -89,8 +92,7 @@ ImageData fromQImage(const QImage& src)
         for (int y = 0; y < src.height(); ++y)
         {
             std::memcpy(out.buffer.get() + static_cast<size_t>(y) * out.stride(),
-                src.constScanLine(y),
-                rowBytes);
+                        src.constScanLine(y), rowBytes);
         }
         return out;
     }
@@ -102,9 +104,8 @@ ImageData fromQImage(const QImage& src)
     const size_t rowBytes = static_cast<size_t>(img.width()) * 3;
     for (int y = 0; y < img.height(); ++y)
     {
-        std::memcpy(out.buffer.get() + static_cast<size_t>(y) * out.stride(),
-            img.constScanLine(y),
-            rowBytes);
+        std::memcpy(out.buffer.get() + static_cast<size_t>(y) * out.stride(), img.constScanLine(y),
+                    rowBytes);
     }
     return out;
 }

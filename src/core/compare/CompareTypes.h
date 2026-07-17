@@ -18,8 +18,8 @@ struct CompareLayout
 {
     int cols = 0, rows = 0, imageCount = 0;
     static CompareLayout forCount(int n);
-    CellPoint cellPos(int index, const CellSize& viewport) const;
-    CellSize cellSize(const CellSize& viewport) const;
+    CellPoint cellPos(int index, const CellSize &viewport) const;
+    CellSize cellSize(const CellSize &viewport) const;
 };
 
 inline CompareLayout CompareLayout::forCount(int n)
@@ -53,7 +53,7 @@ inline CompareLayout CompareLayout::forCount(int n)
     return l;
 }
 
-inline CellPoint CompareLayout::cellPos(int index, const CellSize& viewport) const
+inline CellPoint CompareLayout::cellPos(int index, const CellSize &viewport) const
 {
     if (imageCount <= 0)
         return CellPoint{0, 0};
@@ -64,7 +64,7 @@ inline CellPoint CompareLayout::cellPos(int index, const CellSize& viewport) con
     return CellPoint{c * cellW, r * cellH};
 }
 
-inline CellSize CompareLayout::cellSize(const CellSize& viewport) const
+inline CellSize CompareLayout::cellSize(const CellSize &viewport) const
 {
     if (imageCount <= 0)
         return viewport;

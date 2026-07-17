@@ -12,12 +12,12 @@
 // verifies the existing analysis flow produces results. A plain std::vector of
 // analyzers would be equivalent for display; the registry is used here only
 // because it is the existing enumeration entry point.
+#include "core/analyzer/Analyzer.h"
 #include "core/image/Encoder.h"
-#include "core/image/ImageRepository.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
+#include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
-#include "core/analyzer/Analyzer.h"
 
 #include <QColor>
 #include <QCoreApplication>
@@ -32,19 +32,19 @@
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 static QImage makeColorTest(int w, int h, QColor c)
@@ -56,7 +56,7 @@ static QImage makeColorTest(int w, int h, QColor c)
     return img;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
 
@@ -78,7 +78,7 @@ int main(int argc, char** argv)
 
     // Enumerate the built-in analyzers via the existing registry entry point.
     Analyzer::registerBuiltins();
-    AnalyzerRegistry& reg = AnalyzerRegistry::instance();
+    AnalyzerRegistry &reg = AnalyzerRegistry::instance();
     const std::vector<std::string> ids = reg.availableAnalyzers();
     printf("  registry reports %zu analyzers\n", ids.size());
     CHECK(ids.size() >= 7, "registry enumerates the built-in analyzers (>=7)");
@@ -90,7 +90,7 @@ int main(int argc, char** argv)
     int okFull = 0;
     int singleImg = 0;
     int multiImg = 0;
-    for (const std::string& id : ids)
+    for (const std::string &id : ids)
     {
         auto a = reg.create(id);
         if (!a)
@@ -121,7 +121,7 @@ int main(int argc, char** argv)
     roi.width = 64;
     roi.height = 48;
     int okRegion = 0;
-    for (const std::string& id : ids)
+    for (const std::string &id : ids)
     {
         auto a = reg.create(id);
         if (!a)

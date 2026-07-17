@@ -49,55 +49,64 @@ struct CacheLevelStats
 
 class CacheManager
 {
-public:
-    static CacheManager& instance();
+  public:
+    static CacheManager &instance();
 
     // 应用容量配置（在构造后调用一次；默认配置见 CacheConfig）。
-    void configure(const CacheConfig& cfg);
-    const CacheConfig& config() const { return m_config; }
+    void configure(const CacheConfig &cfg);
+    const CacheConfig &config() const
+    {
+        return m_config;
+    }
 
     // 内存级（LRU 淘汰由 ImageCache 负责）
-    void putMemory(CacheLevel level, const std::string& key, const ImageData& img);
-    bool getMemory(CacheLevel level, const std::string& key, ImageData& out);
+    void putMemory(CacheLevel level, const std::string &key, const ImageData &img);
+    bool getMemory(CacheLevel level, const std::string &key, ImageData &out);
 
     // 磁盘级
-    void putDisk(const std::string& key, const ImageData& img);
-    bool getDisk(const std::string& key, ImageData& out);
+    void putDisk(const std::string &key, const ImageData &img);
+    bool getDisk(const std::string &key, ImageData &out);
 
     // 组合：内存优先，未命中回退磁盘（命中后回填内存）
-    bool get(CacheLevel level, const std::string& key, ImageData& out);
-    void put(CacheLevel level, const std::string& key, const ImageData& img);
+    bool get(CacheLevel level, const std::string &key, ImageData &out);
+    void put(CacheLevel level, const std::string &key, const ImageData &img);
 
     // 从所有层级删除某 key（仓库释放/失效时使用）。
-    void erase(const std::string& key);
+    void erase(const std::string &key);
 
     // 逐层统计
     CacheLevelStats levelStats(CacheLevel level) const;
 
     // 元数据对象缓存层（RFC-003 的 Metadata 级，存 ImageMetadata 而非像素）。
-    void putMetadata(const std::string& key, const mviewer::domain::ImageMetadata& meta);
-    bool getMetadata(const std::string& key, mviewer::domain::ImageMetadata& out) const;
-    bool hasMetadata(const std::string& key) const;
+    void putMetadata(const std::string &key, const mviewer::domain::ImageMetadata &meta);
+    bool getMetadata(const std::string &key, mviewer::domain::ImageMetadata &out) const;
+    bool hasMetadata(const std::string &key) const;
 
     // 管理
     void clear();
     void clearMemory();
     void clearDisk();
     // 移除某 key 在全部层级（内存像素池 + 元数据对象 + 磁盘）的缓存。
-    void invalidate(const std::string& key);
+    void invalidate(const std::string &key);
     size_t memoryUsageBytes() const;
     size_t diskUsageBytes() const;
 
     // 预取：把给定 key 预热到指定内存级（默认 FullImage）。
     void prefetch(std::function<std::vector<std::string>()> nextKeys,
-        CacheLevel level = CacheLevel::FullImage);
-    void prefetch(const std::vector<std::string>& keys, CacheLevel level = CacheLevel::FullImage);
+                  CacheLevel level = CacheLevel::FullImage);
+    void prefetch(const std::vector<std::string> &keys, CacheLevel level = CacheLevel::FullImage);
 
-private:
+  private:
     CacheManager();
     ImageCache::Level toImageCacheLevel(CacheLevel level) const;
-    void recordHit(CacheLevel level) { m_hits[static_cast<int>(level)].fetch_add(1); }
-    void recordMiss(CacheLevel level) { m_misses[static_cast<int>(level)].fetch_add(1); }
+    void recordHit(CacheLevel level)
+    {
+        m_hits[static_cast<int>(level)].fetch_add(1);
+    }
+    void recordMiss(CacheLevel level)
+    {
+        m_misses[static_cast<int>(level)].fetch_add(1);
+    }
 
     CacheConfig m_config;
     mutable std::atomic<uint64_t> m_hits[5] = {};

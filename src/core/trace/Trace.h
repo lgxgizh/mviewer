@@ -16,17 +16,17 @@
 #define MV_TRACE_SCOPED(name) TRACE_EVENT0("mviewer", name)
 #else
 // No-op: compiles away, zero runtime cost.
-#define MV_TRACE_EVENT(name)         \
-    do                                \
-    {                                 \
+#define MV_TRACE_EVENT(name)                                                                       \
+    do                                                                                             \
+    {                                                                                              \
     } while (0)
-#define MV_TRACE_EVENT1(name, k1, v1) \
-    do                                 \
-    {                                  \
+#define MV_TRACE_EVENT1(name, k1, v1)                                                              \
+    do                                                                                             \
+    {                                                                                              \
     } while (0)
-#define MV_TRACE_SCOPED(name)         \
-    do                                 \
-    {                                  \
+#define MV_TRACE_SCOPED(name)                                                                      \
+    do                                                                                             \
+    {                                                                                              \
     } while (0)
 #endif
 
@@ -35,7 +35,9 @@
 struct MvTraceScope
 {
     // No-op by default; the Perfetto backend provides real scoping via the macro.
-    explicit MvTraceScope(const char*) {}
+    explicit MvTraceScope(const char *)
+    {
+    }
 };
 #if defined(MVIEWER_ENABLE_PERFETTO)
 #undef MV_TRACE_SCOPED

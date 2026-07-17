@@ -17,43 +17,46 @@ class RawImageView;
 // CompareWorkspace：多图同步比较工作区
 class CompareWorkspace : public QWidget
 {
-Q_OBJECT
+    Q_OBJECT
 
-public:
-    explicit CompareWorkspace(QWidget* parent = nullptr);
+  public:
+    explicit CompareWorkspace(QWidget *parent = nullptr);
     ~CompareWorkspace();
 
-    void setImages(const QStringList& paths);
+    void setImages(const QStringList &paths);
 
     bool isSyncEnabled() const;
     void setSyncEnabled(bool on);
 
-    CompareEngine& engine() { return m_engine; }
+    CompareEngine &engine()
+    {
+        return m_engine;
+    }
 
-signals:
+  signals:
     void syncToggled(bool on);
     // Hover pixel read from any cell, formatted for the status bar. Empty string clears.
-    void pixelInfo(const QString& text);
+    void pixelInfo(const QString &text);
 
-protected:
-    void paintEvent(QPaintEvent*) override;
-    bool eventFilter(QObject*, QEvent*) override;
-    void resizeEvent(QResizeEvent*) override;
+  protected:
+    void paintEvent(QPaintEvent *) override;
+    bool eventFilter(QObject *, QEvent *) override;
+    void resizeEvent(QResizeEvent *) override;
 
-private:
+  private:
     void rebuildCells();
     void fitAll();
-    void applySelectionToAll(const mviewer::domain::Selection& sel);
+    void applySelectionToAll(const mviewer::domain::Selection &sel);
 
     CompareEngine m_engine;
-    QCheckBox* m_syncZoomChk = nullptr;
-    QCheckBox* m_syncDragChk = nullptr;
+    QCheckBox *m_syncZoomChk = nullptr;
+    QCheckBox *m_syncDragChk = nullptr;
     bool m_syncZoom = true;
     bool m_syncDrag = true;
-    QWidget* m_grid = nullptr;
-    QGridLayout* m_layout = nullptr;
-    QList<QLabel*> m_cellLabels;
-    QList<RawImageView*> m_cellViews;
+    QWidget *m_grid = nullptr;
+    QGridLayout *m_layout = nullptr;
+    QList<QLabel *> m_cellLabels;
+    QList<RawImageView *> m_cellViews;
     bool m_dragging = false;
     QPoint m_lastMouse;
     int m_dragIdx = -1;

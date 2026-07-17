@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <unordered_map>
 
-bool Encoder::encode(const ImageData& img, const std::string& path, const Params& params)
+bool Encoder::encode(const ImageData &img, const std::string &path, const Params &params)
 {
     if (img.isNull())
         return false;
@@ -34,8 +34,8 @@ bool Encoder::encode(const ImageData& img, const std::string& path, const Params
     return writer.write(image);
 }
 
-std::vector<uint8_t>
-Encoder::encodeToBuffer(const ImageData& img, const std::string& format, const Params& params)
+std::vector<uint8_t> Encoder::encodeToBuffer(const ImageData &img, const std::string &format,
+                                             const Params &params)
 {
     if (img.isNull())
         return {};
@@ -62,16 +62,11 @@ Encoder::encodeToBuffer(const ImageData& img, const std::string& format, const P
     return std::vector<uint8_t>(buffer.constData(), buffer.constData() + buffer.size());
 }
 
-std::string Encoder::formatForExtension(const std::string& ext)
+std::string Encoder::formatForExtension(const std::string &ext)
 {
     static const std::unordered_map<std::string, std::string> map = {
-        {"jpg", "jpeg"},
-        {"jpeg", "jpeg"},
-        {"png", "png"},
-        {"bmp", "bmp"},
-        {"webp", "webp"},
-        {"tiff", "tiff"},
-        {"tif", "tiff"},
+        {"jpg", "jpeg"},  {"jpeg", "jpeg"}, {"png", "png"},  {"bmp", "bmp"},
+        {"webp", "webp"}, {"tiff", "tiff"}, {"tif", "tiff"},
     };
     std::string lower = ext;
     std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);

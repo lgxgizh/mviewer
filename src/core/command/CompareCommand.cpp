@@ -2,8 +2,7 @@
 
 #include <QKeySequence>
 
-CompareCommand::CompareCommand(std::function<void()> onExecute)
-    : m_onExecute(std::move(onExecute))
+CompareCommand::CompareCommand(std::function<void()> onExecute) : m_onExecute(std::move(onExecute))
 {
 }
 

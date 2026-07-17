@@ -12,8 +12,8 @@
 // RAW (libraw) is intentionally NOT supported yet — see TODO(M7): RAW.
 class DecoderRegistry
 {
-public:
-    static DecoderRegistry& instance();
+  public:
+    static DecoderRegistry &instance();
 
     // Register a decoder. The FIRST registered decoder is the highest priority.
     // Decoders are tried in registration order; the fallback should be
@@ -22,12 +22,11 @@ public:
 
     // Decode via the first claiming decoder. Returns empty ImageData if no
     // decoder can handle the file (graceful — no crash). TODO(M7): RAW support.
-    ImageData decodeFull(const std::string& path) const;
-    ImageData decodeScaled(const std::string& path, int maxEdge) const;
+    ImageData decodeFull(const std::string &path) const;
+    ImageData decodeScaled(const std::string &path, int maxEdge) const;
 
     // Decode and populate metadata in a single pass.
-    ImageData decodeFull(const std::string& path,
-                                  mviewer::domain::ImageMetadata& outMeta) const;
+    ImageData decodeFull(const std::string &path, mviewer::domain::ImageMetadata &outMeta) const;
 
     // Union of all registered decoders' extensions (fallback contributes none).
     std::vector<std::string> supportedExtensions() const;
@@ -35,11 +34,11 @@ public:
     // Reset to the default registry (QtDecoder + QtFallbackDecoder).
     void resetToDefaults();
 
-private:
+  private:
     DecoderRegistry();
     ~DecoderRegistry() = default;
-    DecoderRegistry(const DecoderRegistry&) = delete;
-    DecoderRegistry& operator=(const DecoderRegistry&) = delete;
+    DecoderRegistry(const DecoderRegistry &) = delete;
+    DecoderRegistry &operator=(const DecoderRegistry &) = delete;
 
     std::vector<std::shared_ptr<IDecoder>> m_decoders;
 };

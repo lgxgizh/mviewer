@@ -2,8 +2,7 @@
 
 #include <QKeySequence>
 
-RenameCommand::RenameCommand(std::function<void()> onExecute)
-    : m_onExecute(std::move(onExecute))
+RenameCommand::RenameCommand(std::function<void()> onExecute) : m_onExecute(std::move(onExecute))
 {
 }
 

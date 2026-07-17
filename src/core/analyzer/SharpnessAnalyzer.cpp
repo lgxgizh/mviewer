@@ -3,8 +3,8 @@
 #include <cmath>
 #include <cstring>
 
-double
-SharpnessAnalyzer::computeSharpness(const ImageBuffer& v, int x0, int y0, int x1, int y1) const
+double SharpnessAnalyzer::computeSharpness(const ImageBuffer &v, int x0, int y0, int x1,
+                                           int y1) const
 {
     const int w = v.width, h = v.height, cpp = v.channelsPerPixel();
     if (x0 < 1)
@@ -23,8 +23,9 @@ SharpnessAnalyzer::computeSharpness(const ImageBuffer& v, int x0, int y0, int x1
     {
         for (int x = x0; x < x1; ++x)
         {
-            auto lum = [&](int xx, int yy) {
-                const uint8_t* p =
+            auto lum = [&](int xx, int yy)
+            {
+                const uint8_t *p =
                     v.data + static_cast<size_t>(yy) * v.stride() + static_cast<size_t>(xx) * cpp;
                 return (p[0] + p[1] + p[2]) / 3.0;
             };
@@ -39,7 +40,7 @@ SharpnessAnalyzer::computeSharpness(const ImageBuffer& v, int x0, int y0, int x1
     return sumG / n;
 }
 
-bool SharpnessAnalyzer::analyze(const ImageFrame& frame)
+bool SharpnessAnalyzer::analyze(const ImageFrame &frame)
 {
     if (frame.pixels().isNull())
         return false;
@@ -48,8 +49,8 @@ bool SharpnessAnalyzer::analyze(const ImageFrame& frame)
     return true;
 }
 
-bool SharpnessAnalyzer::analyzeRegion(const ImageFrame& frame,
-    const mviewer::domain::Selection& region)
+bool SharpnessAnalyzer::analyzeRegion(const ImageFrame &frame,
+                                      const mviewer::domain::Selection &region)
 {
     if (frame.pixels().isNull() || region.isEmpty())
         return false;

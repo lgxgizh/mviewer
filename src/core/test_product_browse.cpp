@@ -7,12 +7,12 @@
 // Scope is M9-1 ONLY (Browse). Compare / Analysis / Export / Workspace /
 // Polish are later phases and are NOT touched here.
 #include "core/image/Encoder.h"
-#include "core/image/ImageRepository.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
+#include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
-#include "core/thumbnail/ThumbnailPipeline.h"
 #include "core/scheduler/TaskScheduler.h"
+#include "core/thumbnail/ThumbnailPipeline.h"
 
 #include <QColor>
 #include <QCoreApplication>
@@ -42,19 +42,19 @@ static std::string srcRootFromThisFile()
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 static QImage makeColorTest(int w, int h, QColor c)
@@ -69,7 +69,7 @@ static QImage makeColorTest(int w, int h, QColor c)
 static constexpr double kNonBlockingBudgetMs = 100.0;
 static constexpr double kFirstThumbBudgetMs = 2000.0; // worst-case ceiling under ctest concurrency
 
-static int write1000(const std::filesystem::path& dir)
+static int write1000(const std::filesystem::path &dir)
 {
     int written = 0;
     for (int i = 0; i < 1000; ++i)
@@ -99,15 +99,17 @@ static void testBrowseWorkflow()
     const int written = write1000(tempDir);
     CHECK(written == 1000, "all 1000 PNGs written to temp dir");
 
-    ImageRepository& repo = ImageRepository::instance();
+    ImageRepository &repo = ImageRepository::instance();
 
     std::atomic<int> got{0};
     std::atomic<bool> done{false};
     std::vector<ImageRepository::Result> finalResults;
 
     const auto t0 = std::chrono::steady_clock::now();
-    repo.loadDirectoryAsync(tempDir.string(),
-        [&](std::vector<ImageRepository::Result> results) {
+    repo.loadDirectoryAsync(
+        tempDir.string(),
+        [&](std::vector<ImageRepository::Result> results)
+        {
             finalResults = std::move(results);
             got.store(static_cast<int>(finalResults.size()));
             done.store(true);
@@ -115,9 +117,11 @@ static void testBrowseWorkflow()
         1000);
     const auto tCall = std::chrono::steady_clock::now();
     const double callMs = std::chrono::duration<double, std::milli>(tCall - t0).count();
-    printf("  loadDirectoryAsync() returned in %.1f ms (budget %.0f ms)\n", callMs, kNonBlockingBudgetMs);
+    printf("  loadDirectoryAsync() returned in %.1f ms (budget %.0f ms)\n", callMs,
+           kNonBlockingBudgetMs);
     fflush(stdout);
-    CHECK(callMs < kNonBlockingBudgetMs, "open() returns immediately (UI thread not blocked on 1000 decodes)");
+    CHECK(callMs < kNonBlockingBudgetMs,
+          "open() returns immediately (UI thread not blocked on 1000 decodes)");
 
     TaskScheduler::instance().drain(TaskScheduler::DecodePool, std::chrono::seconds(120));
     printf("  async callback delivered %d frames\n", got.load());
@@ -145,11 +149,9 @@ static void testFirstThumbnailLatency()
     for (int i = 0; i < 1000; ++i)
         paths.push_back((tempDir / ("img_" + std::to_string(i) + ".png")).string());
 
-    ThumbnailPipeline& pipe = ThumbnailPipeline::instance();
+    ThumbnailPipeline &pipe = ThumbnailPipeline::instance();
     pipe.clear();
-    pipe.setDecodeFn([](const std::string& p, int size) {
-        return Decoder::decodeScaled(p, size);
-    });
+    pipe.setDecodeFn([](const std::string &p, int size) { return Decoder::decodeScaled(p, size); });
 
     std::atomic<double> firstMs{-1.0};
     std::atomic<int> thumbCount{0};
@@ -158,23 +160,25 @@ static void testFirstThumbnailLatency()
     bool firstSeen = false;
     std::chrono::steady_clock::time_point tAnchor;
 
-    pipe.setResultFn([&](const std::string&, const ImageData&) {
-        const double ms = std::chrono::duration<double, std::milli>(
-                              std::chrono::steady_clock::now() - tAnchor)
-                              .count();
-        double expected = -1.0;
-        if (firstMs.compare_exchange_strong(expected, ms))
+    pipe.setResultFn(
+        [&](const std::string &, const ImageData &)
         {
-            thumbCount.fetch_add(1, std::memory_order_relaxed);
-            std::lock_guard<std::mutex> lk(cvMtx);
-            firstSeen = true;
-            cv.notify_all();
-        }
-        else
-        {
-            thumbCount.fetch_add(1, std::memory_order_relaxed);
-        }
-    });
+            const double ms = std::chrono::duration<double, std::milli>(
+                                  std::chrono::steady_clock::now() - tAnchor)
+                                  .count();
+            double expected = -1.0;
+            if (firstMs.compare_exchange_strong(expected, ms))
+            {
+                thumbCount.fetch_add(1, std::memory_order_relaxed);
+                std::lock_guard<std::mutex> lk(cvMtx);
+                firstSeen = true;
+                cv.notify_all();
+            }
+            else
+            {
+                thumbCount.fetch_add(1, std::memory_order_relaxed);
+            }
+        });
 
     pipe.setSources(paths);
 
@@ -187,8 +191,8 @@ static void testFirstThumbnailLatency()
     }
 
     const double fm = firstMs.load();
-    printf("  first thumbnail emitted at %.1f ms (budget %.0f ms), total emitted=%d\n",
-           fm, kFirstThumbBudgetMs, thumbCount.load());
+    printf("  first thumbnail emitted at %.1f ms (budget %.0f ms), total emitted=%d\n", fm,
+           kFirstThumbBudgetMs, thumbCount.load());
     CHECK(fm >= 0.0, "at least one thumbnail was produced");
     CHECK(fm < kFirstThumbBudgetMs, "first thumbnail appears within the ~200 ms budget");
 
@@ -196,7 +200,7 @@ static void testFirstThumbnailLatency()
     fs::remove_all(tempDir, ec);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     (void)MVIEWER_SOURCE_DIR;

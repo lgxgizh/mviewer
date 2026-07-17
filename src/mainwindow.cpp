@@ -30,8 +30,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-MainWindow::MainWindow(QWidget* parent)
-    : QMainWindow(parent)
+MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
     setupUi();
     setupCommands();
@@ -43,17 +42,17 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::setupUi()
 {
-    auto* menuBar = new QMenuBar(this);
+    auto *menuBar = new QMenuBar(this);
 
     // ----- 文件(&F) -----
-    auto* fileMenu = menuBar->addMenu("文件(&F)");
+    auto *fileMenu = menuBar->addMenu("文件(&F)");
     m_actOpenDir = new QAction("打开目录(&O)", this);
     m_actExit = new QAction("退出(&Q)", this);
     fileMenu->addAction(m_actOpenDir);
     fileMenu->addAction(m_actExit);
 
     // ----- 视图(&V) -----
-    auto* viewMenu = menuBar->addMenu("视图(&V)");
+    auto *viewMenu = menuBar->addMenu("视图(&V)");
     m_actCompare = new QAction("比较模式(&C)", this);
     m_actToggleAnalysis = new QAction("直方图(&H)", this);
     m_actToggleAnalysis->setCheckable(true);
@@ -62,15 +61,15 @@ void MainWindow::setupUi()
     viewMenu->addAction(m_actToggleAnalysis);
 
     // ----- 帮助(&H) -----
-    auto* helpMenu = menuBar->addMenu("帮助(&H)");
+    auto *helpMenu = menuBar->addMenu("帮助(&H)");
     m_actAbout = new QAction("关于(&A)", this);
     helpMenu->addAction(m_actAbout);
 
     setMenuBar(menuBar);
 
     // ----- Left column: directory tree (top) + preview (bottom) -----
-    auto* leftWidget = new QWidget(this);
-    auto* leftLayout = new QVBoxLayout(leftWidget);
+    auto *leftWidget = new QWidget(this);
+    auto *leftLayout = new QVBoxLayout(leftWidget);
     leftLayout->setContentsMargins(0, 0, 0, 0);
     leftLayout->setSpacing(2);
 
@@ -80,16 +79,16 @@ void MainWindow::setupUi()
     leftLayout->addWidget(m_previewPanel, 2);
 
     // ----- Right column: sort bar (top) + image gallery -----
-    auto* rightWidget = new QWidget(this);
-    auto* rightLayout = new QVBoxLayout(rightWidget);
+    auto *rightWidget = new QWidget(this);
+    auto *rightLayout = new QVBoxLayout(rightWidget);
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(4);
 
-    auto* sortBar = new QWidget(rightWidget);
-    auto* sortLayout = new QHBoxLayout(sortBar);
+    auto *sortBar = new QWidget(rightWidget);
+    auto *sortLayout = new QHBoxLayout(sortBar);
     sortLayout->setContentsMargins(6, 4, 6, 4);
     sortLayout->addWidget(new QLabel("排序：", sortBar));
-    auto* sortCombo = new QComboBox(sortBar);
+    auto *sortCombo = new QComboBox(sortBar);
     sortCombo->addItem("文件名", ThumbnailPanel::SortName);
     sortCombo->addItem("日期", ThumbnailPanel::SortDate);
     sortCombo->addItem("大小", ThumbnailPanel::SortSize);
@@ -105,7 +104,7 @@ void MainWindow::setupUi()
     m_analysisPanel = new AnalysisPanel(this);
 
     // ----- 3-way horizontal split: left | gallery | analysis -----
-    auto* centralSplitter = new QSplitter(Qt::Horizontal, this);
+    auto *centralSplitter = new QSplitter(Qt::Horizontal, this);
     centralSplitter->addWidget(leftWidget);
     centralSplitter->addWidget(rightWidget);
     centralSplitter->addWidget(m_analysisPanel);
@@ -120,133 +119,143 @@ void MainWindow::setupUi()
     m_imageViewer->setWindowTitle("图片查看 - MViewer");
 
     // ----- Signals -----
-    connect(m_directoryTree,
-        &DirectoryTree::directoryChanged,
-        m_thumbnailPanel,
-        &ThumbnailPanel::setDirectory);
-    connect(m_directoryTree, &DirectoryTree::directoryChanged, this, [this](const QString& path) {
-        m_currentDir = path;
-        m_dirListDirty = true; // invalidate cache on dir change
-        if (m_cachedImagePaths.isEmpty() || path != m_currentDir)
-        {
-            // re-populate eagerly so the status bar reflects the count
-            m_cachedImagePaths.clear();
-            for (const auto& p : OpenDirectoryUseCase::execute(path.toStdString()).imagePaths)
-                m_cachedImagePaths.append(QString::fromStdString(p));
-            m_dirListDirty = false;
-        }
-        const int n = m_cachedImagePaths.size();
-        statusBar()->showMessage(QString("目录: %1, 图片数: %2").arg(path).arg(n));
-    });
+    connect(m_directoryTree, &DirectoryTree::directoryChanged, m_thumbnailPanel,
+            &ThumbnailPanel::setDirectory);
+    connect(m_directoryTree, &DirectoryTree::directoryChanged, this,
+            [this](const QString &path)
+            {
+                m_currentDir = path;
+                m_dirListDirty = true; // invalidate cache on dir change
+                if (m_cachedImagePaths.isEmpty() || path != m_currentDir)
+                {
+                    // re-populate eagerly so the status bar reflects the count
+                    m_cachedImagePaths.clear();
+                    for (const auto &p :
+                         OpenDirectoryUseCase::execute(path.toStdString()).imagePaths)
+                        m_cachedImagePaths.append(QString::fromStdString(p));
+                    m_dirListDirty = false;
+                }
+                const int n = m_cachedImagePaths.size();
+                statusBar()->showMessage(QString("目录: %1, 图片数: %2").arg(path).arg(n));
+            });
 
-    connect(m_thumbnailPanel, &ThumbnailPanel::itemClicked, this, [this](const QString& path) {
-        m_previewPanel->setImage(path);
-        QImage img(path);
-        m_analysisPanel->setImage(img);
-        statusBar()->showMessage(QString("当前: %1, 尺寸: %2x%3")
-                .arg(QFileInfo(path).fileName())
-                .arg(img.width())
-                .arg(img.height()));
-    });
-    connect(
-        m_thumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this, [this](const QString& path) {
-            onImageOpen(path);
-        });
+    connect(m_thumbnailPanel, &ThumbnailPanel::itemClicked, this,
+            [this](const QString &path)
+            {
+                m_previewPanel->setImage(path);
+                QImage img(path);
+                m_analysisPanel->setImage(img);
+                statusBar()->showMessage(QString("当前: %1, 尺寸: %2x%3")
+                                             .arg(QFileInfo(path).fileName())
+                                             .arg(img.width())
+                                             .arg(img.height()));
+            });
+    connect(m_thumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
+            [this](const QString &path) { onImageOpen(path); });
     connect(m_thumbnailPanel, &ThumbnailPanel::compareRequested, this, &MainWindow::openCompare);
 
     // EventBus (decoupled, dual-mode) subscriptions.
-    EventBus::instance().subscribe("image.open", [this](void* ctx) {
-        auto* path = static_cast<QString*>(ctx);
-        if (path)
-            onImageOpen(*path);
-    });
-    EventBus::instance().subscribe("compare.requested", [this](void* ctx) {
-        auto* paths = static_cast<QStringList*>(ctx);
-        if (paths)
-            openCompare(*paths);
-    });
+    EventBus::instance().subscribe("image.open",
+                                   [this](void *ctx)
+                                   {
+                                       auto *path = static_cast<QString *>(ctx);
+                                       if (path)
+                                           onImageOpen(*path);
+                                   });
+    EventBus::instance().subscribe("compare.requested",
+                                   [this](void *ctx)
+                                   {
+                                       auto *paths = static_cast<QStringList *>(ctx);
+                                       if (paths)
+                                           openCompare(*paths);
+                                   });
 
-    connect(
-        m_imageViewer, &ImageViewer::regionStats, m_analysisPanel, &AnalysisPanel::setRegionStats);
-    connect(
-        m_imageViewer, &ImageViewer::selectionChanged, m_analysisPanel, [this](const QRect& sel) {
-            if (sel.isEmpty())
-                return;
-            mviewer::domain::Selection roi;
-            roi.x = sel.x();
-            roi.y = sel.y();
-            roi.width = sel.width();
-            roi.height = sel.height();
-            m_analysisPanel->setROI(roi);
-        });
+    connect(m_imageViewer, &ImageViewer::regionStats, m_analysisPanel,
+            &AnalysisPanel::setRegionStats);
+    connect(m_imageViewer, &ImageViewer::selectionChanged, m_analysisPanel,
+            [this](const QRect &sel)
+            {
+                if (sel.isEmpty())
+                    return;
+                mviewer::domain::Selection roi;
+                roi.x = sel.x();
+                roi.y = sel.y();
+                roi.width = sel.width();
+                roi.height = sel.height();
+                m_analysisPanel->setROI(roi);
+            });
     connect(m_imageViewer, &ImageViewer::requestPrev, this, [this]() { navigate(-1); });
     connect(m_imageViewer, &ImageViewer::requestNext, this, [this]() { navigate(1); });
-    connect(m_imageViewer,
-        &ImageViewer::pixelInfo,
-        this,
-        [this](int x, int y, int r, int g, int b, bool valid) {
-            if (valid)
-                statusBar()->showMessage(
-                    QString("像素 [%1,%2]  RGB(%3,%4,%5)").arg(x).arg(y).arg(r).arg(g).arg(b));
-            m_analysisPanel->showPixel(x, y, r, g, b, valid);
-        });
+    connect(m_imageViewer, &ImageViewer::pixelInfo, this,
+            [this](int x, int y, int r, int g, int b, bool valid)
+            {
+                if (valid)
+                    statusBar()->showMessage(
+                        QString("像素 [%1,%2]  RGB(%3,%4,%5)").arg(x).arg(y).arg(r).arg(g).arg(b));
+                m_analysisPanel->showPixel(x, y, r, g, b, valid);
+            });
 
-    connect(sortCombo,
-        QOverload<int>::of(&QComboBox::currentIndexChanged),
-        this,
-        [this, sortCombo](int) {
-            m_thumbnailPanel->setSortMode(
-                static_cast<ThumbnailPanel::SortMode>(sortCombo->currentData().toInt()));
-        });
+    connect(sortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this, sortCombo](int)
+            {
+                m_thumbnailPanel->setSortMode(
+                    static_cast<ThumbnailPanel::SortMode>(sortCombo->currentData().toInt()));
+            });
 
     // ----- Menu actions -----
-    connect(m_actOpenDir, &QAction::triggered, this, [this]() {
-        const QString dir = QFileDialog::getExistingDirectory(this, "打开目录");
-        if (!dir.isEmpty())
-        {
-            m_currentDir = dir;
-            m_cachedImagePaths.clear();
-            m_dirListDirty = true;
-            m_thumbnailPanel->setDirectory(dir);
-        }
-    });
-    connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
-    connect(m_actCompare, &QAction::triggered, this, [this]() {
-        QStringList imgs;
-        if (!m_currentDir.isEmpty())
-        {
-            for (const auto& p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
-                imgs.append(QString::fromStdString(p));
-        }
-        if (imgs.isEmpty())
-        {
-            const QString dir = QFileDialog::getExistingDirectory(this, tr("打开目录"));
-            if (!dir.isEmpty())
+    connect(m_actOpenDir, &QAction::triggered, this,
+            [this]()
             {
-                m_currentDir = dir;
-                m_cachedImagePaths.clear();
-                m_dirListDirty = true;
-                m_thumbnailPanel->setDirectory(dir);
-                for (const auto& p : OpenDirectoryUseCase::execute(dir.toStdString()).imagePaths)
-                    imgs.append(QString::fromStdString(p));
-            }
-        }
-        if (imgs.size() > 8)
-            imgs = imgs.mid(0, 8);
-        if (!imgs.isEmpty())
-            openCompare(imgs);
-    });
+                const QString dir = QFileDialog::getExistingDirectory(this, "打开目录");
+                if (!dir.isEmpty())
+                {
+                    m_currentDir = dir;
+                    m_cachedImagePaths.clear();
+                    m_dirListDirty = true;
+                    m_thumbnailPanel->setDirectory(dir);
+                }
+            });
+    connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
+    connect(m_actCompare, &QAction::triggered, this,
+            [this]()
+            {
+                QStringList imgs;
+                if (!m_currentDir.isEmpty())
+                {
+                    for (const auto &p :
+                         OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
+                        imgs.append(QString::fromStdString(p));
+                }
+                if (imgs.isEmpty())
+                {
+                    const QString dir = QFileDialog::getExistingDirectory(this, tr("打开目录"));
+                    if (!dir.isEmpty())
+                    {
+                        m_currentDir = dir;
+                        m_cachedImagePaths.clear();
+                        m_dirListDirty = true;
+                        m_thumbnailPanel->setDirectory(dir);
+                        for (const auto &p :
+                             OpenDirectoryUseCase::execute(dir.toStdString()).imagePaths)
+                            imgs.append(QString::fromStdString(p));
+                    }
+                }
+                if (imgs.size() > 8)
+                    imgs = imgs.mid(0, 8);
+                if (!imgs.isEmpty())
+                    openCompare(imgs);
+            });
     connect(m_actToggleAnalysis, &QAction::triggered, m_analysisPanel, &QWidget::setVisible);
-    connect(m_actAbout, &QAction::triggered, this, [this]() {
-        QMessageBox::about(this, "关于 MViewer", "MViewer\n\n一个简单的图片查看与分析工具。");
-    });
+    connect(
+        m_actAbout, &QAction::triggered, this, [this]()
+        { QMessageBox::about(this, "关于 MViewer", "MViewer\n\n一个简单的图片查看与分析工具。"); });
 
     statusBar()->showMessage("就绪");
 }
 
 void MainWindow::setupCommands()
 {
-    auto& reg = CommandRegistry::instance();
+    auto &reg = CommandRegistry::instance();
     reg.registerCommand(
         std::make_unique<OpenDirectoryCommand>([this]() { m_actOpenDir->trigger(); }));
     reg.registerCommand(std::make_unique<CompareCommand>([this]() { openCompare(); }));
@@ -259,9 +268,9 @@ void MainWindow::setupCommands()
     reg.registerCommand(std::make_unique<ExportCommand>(this));
 }
 
-void MainWindow::keyPressEvent(QKeyEvent* event)
+void MainWindow::keyPressEvent(QKeyEvent *event)
 {
-    ICommand* cmd = CommandRegistry::instance().findByShortcut(
+    ICommand *cmd = CommandRegistry::instance().findByShortcut(
         event->key(), static_cast<int>(event->modifiers()));
     if (cmd)
     {
@@ -271,7 +280,7 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
     QMainWindow::keyPressEvent(event);
 }
 
-void MainWindow::onImageOpen(const QString& path)
+void MainWindow::onImageOpen(const QString &path)
 {
     m_previewPanel->setImage(path);
     m_imageViewer->setImage(path);
@@ -281,38 +290,38 @@ void MainWindow::onImageOpen(const QString& path)
         m_analysisPanel->setFrame(f);
     m_currentImagePath = path;
     statusBar()->showMessage(QString("当前: %1, 尺寸: %2x%3")
-            .arg(QFileInfo(path).fileName())
-            .arg(img.width())
-            .arg(img.height()));
+                                 .arg(QFileInfo(path).fileName())
+                                 .arg(img.width())
+                                 .arg(img.height()));
     if (m_imageViewer->isHidden())
         m_imageViewer->show();
     m_imageViewer->raise();
     m_imageViewer->activateWindow();
 }
 
-void MainWindow::openCompare(const QStringList& images)
+void MainWindow::openCompare(const QStringList &images)
 {
     QStringList imgs = images;
     if (imgs.isEmpty())
     {
         if (m_currentDir.isEmpty())
             return;
-        for (const auto& p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
+        for (const auto &p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
             imgs.append(QString::fromStdString(p));
     }
     if (imgs.isEmpty())
         return;
 
-    auto* dlg = new QDialog(this);
+    auto *dlg = new QDialog(this);
     dlg->setWindowTitle("比较模式 - MViewer");
     dlg->resize(1000, 700);
 
-    auto* layout = new QVBoxLayout(dlg);
+    auto *layout = new QVBoxLayout(dlg);
     m_compareView = new CompareWorkspace(dlg);
     layout->addWidget(m_compareView);
     m_compareView->setImages(imgs);
     connect(m_compareView, &CompareWorkspace::pixelInfo, this,
-            [this](const QString& text) { statusBar()->showMessage(text); });
+            [this](const QString &text) { statusBar()->showMessage(text); });
 
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();
@@ -327,7 +336,7 @@ void MainWindow::navigate(int delta)
     if (m_dirListDirty)
     {
         m_cachedImagePaths.clear();
-        for (const auto& p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
+        for (const auto &p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
             m_cachedImagePaths.append(QString::fromStdString(p));
         m_dirListDirty = false;
     }

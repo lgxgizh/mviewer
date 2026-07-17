@@ -13,7 +13,7 @@
 #include <cstdio>
 #include <string>
 
-static int parseDim(const QString& folder, int& w, int& h)
+static int parseDim(const QString &folder, int &w, int &h)
 {
     const int x = folder.indexOf('x');
     if (x < 1)
@@ -24,7 +24,7 @@ static int parseDim(const QString& folder, int& w, int& h)
     return (ok1 && ok2) ? 1 : 0;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     int fails = 0;
@@ -37,16 +37,15 @@ int main(int argc, char** argv)
         QDir golden(root + "/golden");
         const QStringList tiers = golden.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
         int checked = 0;
-        for (const QString& tier : tiers)
+        for (const QString &tier : tiers)
         {
             int w, h;
             if (!parseDim(tier, w, h))
                 continue;
             QDir d(golden.absoluteFilePath(tier));
-            const QStringList files =
-                d.entryList(QStringList() << "*.png" << "*.jpg" << "*.bmp" << "*.tiff",
-                            QDir::Files);
-            for (const QString& f : files)
+            const QStringList files = d.entryList(
+                QStringList() << "*.png" << "*.jpg" << "*.bmp" << "*.tiff", QDir::Files);
+            for (const QString &f : files)
             {
                 const std::string path = d.absoluteFilePath(f).toStdString();
                 ImageData img = Decoder::decodeFull(path);
@@ -57,8 +56,8 @@ int main(int argc, char** argv)
                 }
                 else if (img.width != w || img.height != h)
                 {
-                    printf("GOLDEN_FAIL dims %s got %dx%d want %dx%d\n",
-                           f.toUtf8().constData(), img.width, img.height, w, h);
+                    printf("GOLDEN_FAIL dims %s got %dx%d want %dx%d\n", f.toUtf8().constData(),
+                           img.width, img.height, w, h);
                     fails++;
                 }
                 checked++;
@@ -76,14 +75,13 @@ int main(int argc, char** argv)
     //    a non-null result is also accepted (defensive decode may recover).
     {
         QDir corrupted(root + "/corrupted");
-        const QStringList files =
-            corrupted.entryList(QStringList() << "*.png" << "*.jpg" << "*.bmp" << "*.tiff",
-                                QDir::Files);
+        const QStringList files = corrupted.entryList(
+            QStringList() << "*.png" << "*.jpg" << "*.bmp" << "*.tiff", QDir::Files);
         int checked = 0;
-        for (const QString& f : files)
+        for (const QString &f : files)
         {
             const std::string path = corrupted.absoluteFilePath(f).toStdString();
-            ImageData img = Decoder::decodeFull(path);  // must not throw/crash
+            ImageData img = Decoder::decodeFull(path); // must not throw/crash
             (void)img;
             checked++;
         }

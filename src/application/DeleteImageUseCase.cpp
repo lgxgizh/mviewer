@@ -2,7 +2,7 @@
 
 #include <QFile>
 
-DeleteImageUseCase::Result DeleteImageUseCase::execute(const std::string& filePath)
+DeleteImageUseCase::Result DeleteImageUseCase::execute(const std::string &filePath)
 {
     Result r;
     QString qPath = QString::fromStdString(filePath);

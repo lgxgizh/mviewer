@@ -14,18 +14,18 @@
 #include <memory>
 #include <string>
 
-#define CHECK(cond, msg)                               \
-    do                                                 \
-    {                                                  \
-        if (!(cond))                                   \
-        {                                              \
-            std::cerr << "FAIL: " << msg << std::endl; \
-            return 1;                                  \
-        }                                              \
-        else                                           \
-        {                                              \
-            std::cout << "PASS: " << msg << std::endl; \
-        }                                              \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(cond))                                                                               \
+        {                                                                                          \
+            std::cerr << "FAIL: " << msg << std::endl;                                             \
+            return 1;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            std::cout << "PASS: " << msg << std::endl;                                             \
+        }                                                                                          \
     } while (0)
 
 static ImageData makeGradient(int w, int h)
@@ -34,7 +34,7 @@ static ImageData makeGradient(int w, int h)
     for (int y = 0; y < h; ++y)
         for (int x = 0; x < w; ++x)
         {
-            uint8_t* p = d.buffer.get() + (static_cast<size_t>(y) * w + x) * 3;
+            uint8_t *p = d.buffer.get() + (static_cast<size_t>(y) * w + x) * 3;
             p[0] = static_cast<uint8_t>(x);
             p[1] = static_cast<uint8_t>(y);
             p[2] = 128;
@@ -42,7 +42,7 @@ static ImageData makeGradient(int w, int h)
     return d;
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     // A QCoreApplication must exist so Qt's static teardown is orderly when
     // the process exits (without it, unloading the plugin DLL at process death
@@ -53,23 +53,23 @@ int main(int argc, char* argv[])
 
     // The example plugin is built alongside the test executable (bin/).
 #ifdef _WIN32
-    const char* kPlugin = "example_analyzer";
+    const char *kPlugin = "example_analyzer";
 #else
-    const char* kPlugin = "example_analyzer";
+    const char *kPlugin = "example_analyzer";
 #endif
     const std::string kAnalyzerId = "example.mean_luminance";
 
-    auto& mgr = PluginManager::instance();
+    auto &mgr = PluginManager::instance();
     bool loaded = mgr.load(kPlugin);
     CHECK(loaded, "PluginManager::load(example_analyzer) succeeds");
     CHECK(mgr.count() == 1, "one plugin now loaded");
     CHECK(mgr.isLoaded(kPlugin), "isLoaded reports true");
 
     // The plugin self-registered with AnalyzerRegistry.
-    auto& reg = AnalyzerRegistry::instance();
+    auto &reg = AnalyzerRegistry::instance();
     auto available = reg.availableAnalyzers();
     bool found = false;
-    for (const auto& id : available)
+    for (const auto &id : available)
         if (id == kAnalyzerId)
             found = true;
     CHECK(found, "analyzer id present in AnalyzerRegistry after load");

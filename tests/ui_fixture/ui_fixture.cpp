@@ -50,33 +50,29 @@ struct UiTestResult
 
 class UiFixtureRegression
 {
-public:
+  public:
     explicit UiFixtureRegression(std::string goldenDir, std::string outputDir)
-        : m_goldenDir(std::move(goldenDir))
-        , m_outputDir(std::move(outputDir))
+        : m_goldenDir(std::move(goldenDir)), m_outputDir(std::move(outputDir))
     {
     }
 
-    void addFixture(const std::string& name, double tolerance = 8.0, double maxDiffFraction = 0.05)
+    void addFixture(const std::string &name, double tolerance = 8.0, double maxDiffFraction = 0.05)
     {
-        m_fixtures.push_back({name,
-            m_goldenDir + "/" + name + ".png",
-            m_outputDir + "/" + name + ".png",
-            tolerance,
-            maxDiffFraction});
+        m_fixtures.push_back({name, m_goldenDir + "/" + name + ".png",
+                              m_outputDir + "/" + name + ".png", tolerance, maxDiffFraction});
     }
 
-    bool saveCurrent(const std::string& name, const QImage& img)
+    bool saveCurrent(const std::string &name, const QImage &img)
     {
         return img.save(QString::fromStdString(m_outputDir + "/" + name + ".png"));
     }
 
-    bool saveGolden(const std::string& name, const QImage& img)
+    bool saveGolden(const std::string &name, const QImage &img)
     {
         return img.save(QString::fromStdString(m_goldenDir + "/" + name + ".png"));
     }
 
-    static QImage captureWidget(QWidget* w)
+    static QImage captureWidget(QWidget *w)
     {
         QPixmap pm(w->size());
         w->render(&pm);
@@ -86,13 +82,13 @@ public:
     std::vector<UiTestResult> compareAll()
     {
         std::vector<UiTestResult> results;
-        for (const auto& f : m_fixtures)
+        for (const auto &f : m_fixtures)
             results.push_back(compareOne(f));
         return results;
     }
 
-private:
-    UiTestResult compareOne(const UiTestFixture& f)
+  private:
+    UiTestResult compareOne(const UiTestFixture &f)
     {
         UiTestResult r;
         r.name = f.name;
@@ -120,8 +116,8 @@ private:
         int diffs = 0;
         for (int y = 0; y < h; ++y)
         {
-            const QRgb* lg = reinterpret_cast<const QRgb*>(gold.constScanLine(y));
-            const QRgb* lc = reinterpret_cast<const QRgb*>(curr.constScanLine(y));
+            const QRgb *lg = reinterpret_cast<const QRgb *>(gold.constScanLine(y));
+            const QRgb *lc = reinterpret_cast<const QRgb *>(curr.constScanLine(y));
             for (int x = 0; x < w; ++x)
             {
                 const int dr = std::abs(static_cast<int>(qRed(lg[x])) - qRed(lc[x]));
@@ -176,7 +172,7 @@ static std::vector<QImage> generateTestImages()
     return images;
 }
 
-static bool saveTestImages(const QString& dir, const std::vector<QImage>& imgs)
+static bool saveTestImages(const QString &dir, const std::vector<QImage> &imgs)
 {
     for (int i = 0; i < (int)imgs.size(); ++i)
     {
@@ -211,7 +207,7 @@ static QImage renderMainWindow(int w = 1600, int h = 900)
     return img;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
     std::string goldenDir = std::string(MVIEWER_SOURCE_DIR) + "/golden/ui";
@@ -249,7 +245,7 @@ int main(int argc, char** argv)
     vr.saveCurrent("main_window_default", img);
     auto results = vr.compareAll();
     int fails = 0;
-    for (const auto& r : results)
+    for (const auto &r : results)
     {
         std::cout << (r.passed ? "PASS  " : "FAIL  ") << r.name << "  " << r.message << std::endl;
         if (!r.passed)

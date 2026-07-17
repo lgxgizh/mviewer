@@ -3,7 +3,7 @@
 
 class DeleteImageUseCase
 {
-public:
+  public:
     struct Result
     {
         bool success = false;
@@ -11,5 +11,5 @@ public:
     };
 
     // Move file to recycle bin (Qt's moveToTrash)
-    static Result execute(const std::string& filePath);
+    static Result execute(const std::string &filePath);
 };

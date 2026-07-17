@@ -24,22 +24,22 @@ static std::string srcRootFromThisFile()
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            ++g_pass;                    \
-        }                                \
-        else                             \
-        {                                \
-            ++g_fail;                    \
-            printf("  FAIL: %s\n", msg); \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            ++g_pass;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            ++g_fail;                                                                              \
+            printf("  FAIL: %s\n", msg);                                                           \
+        }                                                                                          \
     } while (0)
 
 // QFile takes a QString; write a tiny file and report success.
-static bool writeFile(const std::string& path)
+static bool writeFile(const std::string &path)
 {
     QFile f(QString::fromStdString(path));
     return f.open(QIODevice::WriteOnly);
@@ -64,7 +64,7 @@ static void testFileSystemScan()
     const std::vector<std::string> images = FileSystem::listImages(root, 2000);
     // Non-recursive: should find a/b/c but NOT subdir/d.bmp.
     CHECK(images.size() == 3, "exactly 3 top-level images listed");
-    for (const auto& p : images)
+    for (const auto &p : images)
     {
         CHECK(FileSystem::isImage(p), ("isImage true for " + p).c_str());
     }
@@ -86,10 +86,10 @@ static void testFileSystemEmptyDir()
     const std::vector<std::string> images = FileSystem::listImages(dir.path().toStdString(), 2000);
     CHECK(images.empty(), "empty directory yields no images");
     CHECK(FileSystem::listImages("/path/that/does/not/exist", 10).empty(),
-        "missing directory yields no images (no throw)");
+          "missing directory yields no images (no throw)");
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     printf("=== FileSystem Tests (M7) ===\n");

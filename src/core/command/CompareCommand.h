@@ -5,14 +5,20 @@
 
 class CompareCommand : public ICommand
 {
-public:
+  public:
     explicit CompareCommand(std::function<void()> onExecute);
-    std::string id() const override { return "compare_images"; }
-    std::string description() const override { return "比较选中的图片..."; }
+    std::string id() const override
+    {
+        return "compare_images";
+    }
+    std::string description() const override
+    {
+        return "比较选中的图片...";
+    }
     void execute() override;
     bool canExecute() const override;
     std::vector<CommandShortcut> shortcuts() const override;
 
-private:
+  private:
     std::function<void()> m_onExecute;
 };

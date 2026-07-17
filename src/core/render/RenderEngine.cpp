@@ -14,16 +14,16 @@
 namespace
 {
 
-QImage nearestQ(const QImage& src, const QSize& target)
+QImage nearestQ(const QImage &src, const QSize &target)
 {
     QImage out(target, QImage::Format_RGB32);
     const int sw = src.width(), sh = src.height();
     const int tw = target.width(), th = target.height();
     for (int y = 0; y < th; ++y)
     {
-        QRgb* line = reinterpret_cast<QRgb*>(out.scanLine(y));
+        QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
         const int sy = std::min(sh - 1, (y * sh) / th);
-        const QRgb* sline = reinterpret_cast<const QRgb*>(src.constScanLine(sy));
+        const QRgb *sline = reinterpret_cast<const QRgb *>(src.constScanLine(sy));
         for (int x = 0; x < tw; ++x)
         {
             const int sx = std::min(sw - 1, (x * sw) / tw);
@@ -33,7 +33,7 @@ QImage nearestQ(const QImage& src, const QSize& target)
     return out;
 }
 
-QImage bilinearQ(const QImage& src, const QSize& target)
+QImage bilinearQ(const QImage &src, const QSize &target)
 {
     QImage out(target, QImage::Format_RGB32);
     const int sw = src.width(), sh = src.height();
@@ -42,12 +42,12 @@ QImage bilinearQ(const QImage& src, const QSize& target)
     const double ry = static_cast<double>(sh) / th;
     for (int y = 0; y < th; ++y)
     {
-        QRgb* line = reinterpret_cast<QRgb*>(out.scanLine(y));
+        QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
         const double sy = (y + 0.5) * ry - 0.5;
         const int y0 = std::max(0, std::min(sh - 2, static_cast<int>(std::floor(sy))));
         const double fy = std::max(0.0, sy - std::floor(sy));
-        const QRgb* sl0 = reinterpret_cast<const QRgb*>(src.constScanLine(y0));
-        const QRgb* sl1 = reinterpret_cast<const QRgb*>(src.constScanLine(y0 + 1));
+        const QRgb *sl0 = reinterpret_cast<const QRgb *>(src.constScanLine(y0));
+        const QRgb *sl1 = reinterpret_cast<const QRgb *>(src.constScanLine(y0 + 1));
         for (int x = 0; x < tw; ++x)
         {
             const double sx = (x + 0.5) * rx - 0.5;
@@ -80,7 +80,7 @@ static double cubicKernel(double x)
     return 0.0;
 }
 
-QImage bicubicQ(const QImage& src, const QSize& target)
+QImage bicubicQ(const QImage &src, const QSize &target)
 {
     QImage out(target, QImage::Format_RGB32);
     const int sw = src.width(), sh = src.height();
@@ -89,7 +89,7 @@ QImage bicubicQ(const QImage& src, const QSize& target)
     const double ry = static_cast<double>(sh) / th;
     for (int y = 0; y < th; ++y)
     {
-        QRgb* line = reinterpret_cast<QRgb*>(out.scanLine(y));
+        QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
         const double sy = (y + 0.5) * ry - 0.5;
         const int y0 = static_cast<int>(std::floor(sy));
         for (int x = 0; x < tw; ++x)
@@ -101,7 +101,7 @@ QImage bicubicQ(const QImage& src, const QSize& target)
             {
                 const int syy = std::max(0, std::min(sh - 1, y0 + m));
                 const double wy = cubicKernel(sy - (y0 + m));
-                const QRgb* sline = reinterpret_cast<const QRgb*>(src.constScanLine(syy));
+                const QRgb *sline = reinterpret_cast<const QRgb *>(src.constScanLine(syy));
                 for (int n = -1; n <= 2; ++n)
                 {
                     const int sxx = std::max(0, std::min(sw - 1, x0 + n));
@@ -120,8 +120,8 @@ QImage bicubicQ(const QImage& src, const QSize& target)
                 b /= wsum;
             }
             line[x] = qRgb(std::clamp(static_cast<int>(std::round(r)), 0, 255),
-                std::clamp(static_cast<int>(std::round(g)), 0, 255),
-                std::clamp(static_cast<int>(std::round(b)), 0, 255));
+                           std::clamp(static_cast<int>(std::round(g)), 0, 255),
+                           std::clamp(static_cast<int>(std::round(b)), 0, 255));
         }
     }
     return out;
@@ -141,7 +141,7 @@ static double lanczosKernel(double x)
     return 3.0 * std::sin(pix) * std::sin(pix / 3.0) / (pix * pix);
 }
 
-QImage lanczosQ(const QImage& src, const QSize& target)
+QImage lanczosQ(const QImage &src, const QSize &target)
 {
     QImage out(target, QImage::Format_RGB32);
     const int sw = src.width(), sh = src.height();
@@ -150,7 +150,7 @@ QImage lanczosQ(const QImage& src, const QSize& target)
     const double ry = static_cast<double>(sh) / th;
     for (int y = 0; y < th; ++y)
     {
-        QRgb* line = reinterpret_cast<QRgb*>(out.scanLine(y));
+        QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
         const double sy = (y + 0.5) * ry - 0.5;
         const int y0 = static_cast<int>(std::floor(sy));
         for (int x = 0; x < tw; ++x)
@@ -162,7 +162,7 @@ QImage lanczosQ(const QImage& src, const QSize& target)
             {
                 const int syy = std::max(0, std::min(sh - 1, y0 + m));
                 const double wy = lanczosKernel(sy - (y0 + m));
-                const QRgb* sline = reinterpret_cast<const QRgb*>(src.constScanLine(syy));
+                const QRgb *sline = reinterpret_cast<const QRgb *>(src.constScanLine(syy));
                 for (int n = -2; n <= 2; ++n)
                 {
                     const int sxx = std::max(0, std::min(sw - 1, x0 + n));
@@ -181,14 +181,14 @@ QImage lanczosQ(const QImage& src, const QSize& target)
                 b /= wsum;
             }
             line[x] = qRgb(std::clamp(static_cast<int>(std::round(r)), 0, 255),
-                std::clamp(static_cast<int>(std::round(g)), 0, 255),
-                std::clamp(static_cast<int>(std::round(b)), 0, 255));
+                           std::clamp(static_cast<int>(std::round(g)), 0, 255),
+                           std::clamp(static_cast<int>(std::round(b)), 0, 255));
         }
     }
     return out;
 }
 
-QImage scaleQ(const QImage& src, const QSize& target, RenderInterp mode)
+QImage scaleQ(const QImage &src, const QSize &target, RenderInterp mode)
 {
     if (src.isNull() || target.width() <= 0 || target.height() <= 0)
         return QImage();
@@ -207,7 +207,7 @@ QImage scaleQ(const QImage& src, const QSize& target, RenderInterp mode)
     return QImage();
 }
 
-QImage heatMapQ(const QImage& gray, const QRect& r)
+QImage heatMapQ(const QImage &gray, const QRect &r)
 {
     QImage out(r.width(), r.height(), QImage::Format_RGB32);
     if (gray.isNull() || r.width() <= 0 || r.height() <= 0)
@@ -218,21 +218,22 @@ QImage heatMapQ(const QImage& gray, const QRect& r)
     const int y1 = std::min(gray.height(), r.y() + r.height());
     for (int y = 0; y < out.height(); ++y)
     {
-        QRgb* dst = reinterpret_cast<QRgb*>(out.scanLine(y));
+        QRgb *dst = reinterpret_cast<QRgb *>(out.scanLine(y));
         for (int x = 0; x < out.width(); ++x)
         {
             const int sx = x0 + x;
             const int sy = y0 + y;
-            const int v = (sx < x1 && sy < y1)
-                ? qRed(gray.pixel(sx, sy))
-                : 0;
+            const int v = (sx < x1 && sy < y1) ? qRed(gray.pixel(sx, sy)) : 0;
             // Blue (cold) -> Green -> Red (hot)
             int rr, gg, bb;
-            if (v < 128) {
+            if (v < 128)
+            {
                 rr = 0;
                 gg = v * 2;
                 bb = 255 - v * 2;
-            } else {
+            }
+            else
+            {
                 rr = (v - 128) * 2;
                 gg = 255 - (v - 128) * 2;
                 bb = 0;
@@ -247,7 +248,7 @@ QImage heatMapQ(const QImage& gray, const QRect& r)
 
 // ─── SoftwareRenderer ────────────────────────────────────────────────────────
 
-ImageData SoftwareRenderer::heatMap(const ImageData& gray, const RenderRect& rect) const
+ImageData SoftwareRenderer::heatMap(const ImageData &gray, const RenderRect &rect) const
 {
     if (gray.isNull())
         return ImageData();
@@ -259,7 +260,7 @@ ImageData SoftwareRenderer::heatMap(const ImageData& gray, const RenderRect& rec
     return mvcore::fromQImage(heatMapQ(g, qr));
 }
 
-ImageData SoftwareRenderer::scale(const ImageData& src, const RenderSize& target, RenderInterp mode)
+ImageData SoftwareRenderer::scale(const ImageData &src, const RenderSize &target, RenderInterp mode)
 {
     if (src.isNull() || !target.isValid())
         return ImageData();
@@ -267,8 +268,8 @@ ImageData SoftwareRenderer::scale(const ImageData& src, const RenderSize& target
     return mvcore::fromQImage(q);
 }
 
-ImageData
-SoftwareRenderer::overlayDifference(const ImageData& base, const ImageData& diff, double alpha) const
+ImageData SoftwareRenderer::overlayDifference(const ImageData &base, const ImageData &diff,
+                                              double alpha) const
 {
     if (base.isNull() || diff.isNull())
         return ImageData();
@@ -280,8 +281,8 @@ SoftwareRenderer::overlayDifference(const ImageData& base, const ImageData& diff
     const double a = std::clamp(alpha, 0.0, 1.0);
     for (int y = 0; y < h; ++y)
     {
-        QRgb* line = reinterpret_cast<QRgb*>(out.scanLine(y));
-        const QRgb* dline = reinterpret_cast<const QRgb*>(dd.constScanLine(y));
+        QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
+        const QRgb *dline = reinterpret_cast<const QRgb *>(dd.constScanLine(y));
         for (int x = 0; x < w; ++x)
         {
             const int dv = qRed(dline[x]);
@@ -294,10 +295,8 @@ SoftwareRenderer::overlayDifference(const ImageData& base, const ImageData& diff
     return mvcore::fromQImage(out);
 }
 
-ImageData SoftwareRenderer::scaleRegion(const ImageData& src,
-    const RenderRect& region,
-    const RenderSize& target,
-    RenderInterp mode)
+ImageData SoftwareRenderer::scaleRegion(const ImageData &src, const RenderRect &region,
+                                        const RenderSize &target, RenderInterp mode)
 {
     if (src.isNull() || !region.isValid())
         return ImageData();
@@ -309,12 +308,11 @@ ImageData SoftwareRenderer::scaleRegion(const ImageData& src,
 
 // ─── RenderEngine facade ─────────────────────────────────────────────────────
 
-RenderEngine::RenderEngine()
-    : m_backend(std::make_unique<SoftwareRenderer>())
+RenderEngine::RenderEngine() : m_backend(std::make_unique<SoftwareRenderer>())
 {
 }
 
-RenderEngine& RenderEngine::instance()
+RenderEngine &RenderEngine::instance()
 {
     static RenderEngine inst;
     return inst;
@@ -330,52 +328,49 @@ std::string RenderEngine::backendName() const
     return m_backend ? m_backend->backendName() : "none";
 }
 
-ImageData RenderEngine::scale(const ImageData& src, const RenderSize& target, RenderInterp mode)
+ImageData RenderEngine::scale(const ImageData &src, const RenderSize &target, RenderInterp mode)
 {
     return m_backend->scale(src, target, mode);
 }
 
-ImageData
-RenderEngine::overlayDifference(const ImageData& base, const ImageData& diff, double alpha) const
+ImageData RenderEngine::overlayDifference(const ImageData &base, const ImageData &diff,
+                                          double alpha) const
 {
     return m_backend->overlayDifference(base, diff, alpha);
 }
 
-ImageData RenderEngine::heatMap(const ImageData& gray, const RenderRect& rect) const
+ImageData RenderEngine::heatMap(const ImageData &gray, const RenderRect &rect) const
 {
     return m_backend->heatMap(gray, rect);
 }
 
-ImageData
-RenderEngine::scaleRegion(const ImageData& src, const RenderRect& region,
-    const RenderSize& target, RenderInterp mode)
+ImageData RenderEngine::scaleRegion(const ImageData &src, const RenderRect &region,
+                                    const RenderSize &target, RenderInterp mode)
 {
     return m_backend->scaleRegion(src, region, target, mode);
 }
 
-ImageData
-RenderEngine::scaleStatic(const ImageData& src, const RenderSize& target, RenderInterp mode)
+ImageData RenderEngine::scaleStatic(const ImageData &src, const RenderSize &target,
+                                    RenderInterp mode)
 {
     return instance().scale(src, target, mode);
 }
 
-ImageData
-RenderEngine::overlayDifferenceStatic(const ImageData& base, const ImageData& diff, double alpha)
+ImageData RenderEngine::overlayDifferenceStatic(const ImageData &base, const ImageData &diff,
+                                                double alpha)
 {
     return instance().overlayDifference(base, diff, alpha);
 }
 
-ImageData RenderEngine::scaleRegionStatic(const ImageData& src,
-    const RenderRect& region,
-    const RenderSize& target,
-    RenderInterp mode)
+ImageData RenderEngine::scaleRegionStatic(const ImageData &src, const RenderRect &region,
+                                          const RenderSize &target, RenderInterp mode)
 {
     return instance().scaleRegion(src, region, target, mode);
 }
 
 // ─── RenderCommand pipeline (ImageData-based) ────────────────────────────────
 
-ImageData RenderEngine::executeCommand(const RenderCommand& cmd) const
+ImageData RenderEngine::executeCommand(const RenderCommand &cmd) const
 {
     switch (cmd.type)
     {
@@ -397,7 +392,7 @@ ImageData RenderEngine::executeCommand(const RenderCommand& cmd) const
     return ImageData();
 }
 
-ImageData RenderEngine::executeCommand(const RenderCommand& cmd, const ImageData& buffer) const
+ImageData RenderEngine::executeCommand(const RenderCommand &cmd, const ImageData &buffer) const
 {
     ImageData produced = executeCommand(cmd);
     switch (cmd.type)
@@ -419,19 +414,18 @@ ImageData RenderEngine::executeCommand(const RenderCommand& cmd, const ImageData
     return buffer;
 }
 
-ImageData RenderEngine::executeCommands(const std::vector<RenderCommand>& cmds) const
+ImageData RenderEngine::executeCommands(const std::vector<RenderCommand> &cmds) const
 {
     ImageData buffer;
-    for (const auto& cmd : cmds)
+    for (const auto &cmd : cmds)
         buffer = executeCommand(cmd, buffer);
     return buffer;
 }
 
 // ─── RenderCommand pipeline (QPainter-based) ─────────────────────────────────
 
-void RenderEngine::executeCommand(QPainter& painter,
-    const RenderCommand& cmd,
-    const QRect& viewport)
+void RenderEngine::executeCommand(QPainter &painter, const RenderCommand &cmd,
+                                  const QRect &viewport)
 {
     MV_TRACE_SCOPED("RenderEngine::executeCommand");
     switch (cmd.type)
@@ -456,9 +450,8 @@ void RenderEngine::executeCommand(QPainter& painter,
     }
 }
 
-void RenderEngine::executeDrawImage(QPainter& painter,
-    const RenderCommand& cmd,
-    const QRect& viewport)
+void RenderEngine::executeDrawImage(QPainter &painter, const RenderCommand &cmd,
+                                    const QRect &viewport)
 {
     if (cmd.srcImage.isNull() || !cmd.rect.isValid())
         return;
@@ -476,9 +469,8 @@ void RenderEngine::executeDrawImage(QPainter& painter,
     painter.restore();
 }
 
-void RenderEngine::executeDrawOverlay(QPainter& painter,
-    const RenderCommand& cmd,
-    const QRect& viewport)
+void RenderEngine::executeDrawOverlay(QPainter &painter, const RenderCommand &cmd,
+                                      const QRect &viewport)
 {
     if (cmd.overlayImage.isNull() || !cmd.rect.isValid())
         return;
@@ -497,9 +489,8 @@ void RenderEngine::executeDrawOverlay(QPainter& painter,
     painter.restore();
 }
 
-void RenderEngine::executeDrawSelection(QPainter& painter,
-    const RenderCommand& cmd,
-    const QRect& viewport)
+void RenderEngine::executeDrawSelection(QPainter &painter, const RenderCommand &cmd,
+                                        const QRect &viewport)
 {
     if (!cmd.rect.isValid())
         return;
@@ -513,9 +504,8 @@ void RenderEngine::executeDrawSelection(QPainter& painter,
     painter.restore();
 }
 
-void RenderEngine::executeDrawHistogram(QPainter& painter,
-    const RenderCommand& cmd,
-    const QRect& viewport)
+void RenderEngine::executeDrawHistogram(QPainter &painter, const RenderCommand &cmd,
+                                        const QRect &viewport)
 {
     const QRect r(cmd.rect.x, cmd.rect.y, cmd.rect.width, cmd.rect.height);
     if (!r.isValid() || cmd.histCount <= 0)
@@ -538,7 +528,8 @@ void RenderEngine::executeDrawHistogram(QPainter& painter,
     for (int i = 0; i < n; ++i)
     {
         const double px = r.x() + static_cast<double>(i) / 255 * (r.width() - 1);
-        const double py = r.y() + r.height() - static_cast<double>(cmd.histData[i]) / maxV * (r.height() - 1);
+        const double py =
+            r.y() + r.height() - static_cast<double>(cmd.histData[i]) / maxV * (r.height() - 1);
         const QPointF cur(px, py);
         if (i > 0)
             painter.drawLine(prev, cur);
@@ -547,9 +538,8 @@ void RenderEngine::executeDrawHistogram(QPainter& painter,
     painter.restore();
 }
 
-void RenderEngine::executeDrawHeatmap(QPainter& painter,
-    const RenderCommand& cmd,
-    const QRect& viewport)
+void RenderEngine::executeDrawHeatmap(QPainter &painter, const RenderCommand &cmd,
+                                      const QRect &viewport)
 {
     QImage q = mvcore::toQImage(cmd.srcImage);
     if (q.isNull() || !cmd.rect.isValid())

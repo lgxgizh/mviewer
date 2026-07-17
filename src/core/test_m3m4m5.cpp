@@ -19,8 +19,8 @@
 #include "core/render/RenderEngine.h"
 
 #include <QBuffer>
-#include <QCoreApplication>
 #include <QColor>
+#include <QCoreApplication>
 #include <QImage>
 #include <cstdio>
 #include <string>
@@ -40,19 +40,19 @@ static std::string srcRootFromThisFile()
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 // 生成测试图：纯色 + 渐变
@@ -101,7 +101,7 @@ static void testROIStats()
     ImageStats roiStats = AnalysisEngine::computeStatsROI(data, roi);
     CHECK(roiStats.pixelCount == 100 * 100, "ROI pixelCount = 10000");
     CHECK(std::abs(roiStats.lumMean - full.lumMean) < 0.01,
-        "ROI lumMean matches full (uniform image)");
+          "ROI lumMean matches full (uniform image)");
 
     mviewer::domain::Selection roiOut = {150, 150, 100, 100};
     ImageStats outStats = AnalysisEngine::computeStatsROI(data, roiOut);
@@ -144,24 +144,24 @@ static void testEncoder()
     CHECK(emptyBuf.empty(), "encodeToBuffer(empty) returns empty");
 
     CHECK(Encoder::formatForExtension("jpg") == "jpeg",
-        "formatForExtension(jpg)==jpeg (Qt convention)");
+          "formatForExtension(jpg)==jpeg (Qt convention)");
     CHECK(Encoder::formatForExtension("JPEG") == "jpeg", "formatForExtension(JPEG)==jpeg");
     CHECK(Encoder::formatForExtension("png") == "png", "formatForExtension(png)==png");
     CHECK(Encoder::formatForExtension("bmp") == "bmp", "formatForExtension(bmp)==bmp");
     CHECK(Encoder::formatForExtension("webp") == "webp", "formatForExtension(webp)==webp");
     CHECK(Encoder::formatForExtension("unknown") == "png",
-        "formatForExtension(unknown)==png (default)");
+          "formatForExtension(unknown)==png (default)");
 }
 
 static void testAnalyzerRegistry()
 {
     printf("\n[AnalyzerRegistry]\n");
     fflush(stdout);
-    auto& reg = AnalyzerRegistry::instance();
+    auto &reg = AnalyzerRegistry::instance();
 
     auto ids = reg.availableAnalyzers();
     bool hasHistogram = false;
-    for (const auto& id : ids)
+    for (const auto &id : ids)
     {
         if (id == "histogram")
         {
@@ -184,23 +184,22 @@ static void testAnalyzerRegistry()
     solid.fill(QColor(120, 160, 200));
     ImageFrame frame = ImageFrame::create("registry-check", mvcore::fromQImage(solid));
     frame.computeHistogram();
-    const char* builtins[] = {"histogram", "noise", "entropy", "psnr",
-                              "sharpness", "ssim", "rgbmean"};
-    for (const char* id : builtins)
+    const char *builtins[] = {"histogram", "noise", "entropy", "psnr",
+                              "sharpness", "ssim",  "rgbmean"};
+    for (const char *id : builtins)
     {
         auto a = reg.create(id);
         CHECK(a != nullptr, ("registry creates '" + std::string(id) + "'").c_str());
         if (a)
         {
             if (id == std::string("psnr"))
-                dynamic_cast<PSNRAnalyzer*>(a.get())->setReference(frame);
+                dynamic_cast<PSNRAnalyzer *>(a.get())->setReference(frame);
             else if (id == std::string("ssim"))
-                dynamic_cast<SSIMAnalyzer*>(a.get())->setReference(frame);
+                dynamic_cast<SSIMAnalyzer *>(a.get())->setReference(frame);
             mviewer::domain::Selection full{0, 0, 64, 64};
             const bool ok = a->analyzeRegion(frame, full);
             CHECK(ok, ("'" + std::string(id) + "' analyzes a region").c_str());
-            CHECK(!a->resultText().empty(),
-                  ("'" + std::string(id) + "' reports a result").c_str());
+            CHECK(!a->resultText().empty(), ("'" + std::string(id) + "' reports a result").c_str());
         }
     }
 }
@@ -221,7 +220,7 @@ static void testAnalyzerRegistryConsistency()
     ImageData data = mvcore::fromQImage(img);
     ImageFrame frame = ImageFrame::create("consistency", mvcore::fromQImage(img));
 
-    auto& reg = AnalyzerRegistry::instance();
+    auto &reg = AnalyzerRegistry::instance();
 
     mviewer::domain::Selection left{0, 0, W / 2, H};
     mviewer::domain::Selection right{W / 2, 0, W / 2, H};
@@ -230,28 +229,31 @@ static void testAnalyzerRegistryConsistency()
     CHECK(al && ar, "registry creates two rgbmean analyzers");
     CHECK(al->analyzeRegion(frame, left) && ar->analyzeRegion(frame, right),
           "both regions analyze");
-    const double lMean = dynamic_cast<RGBMeanAnalyzer*>(al.get())->result().rMean;
-    const double rMean = dynamic_cast<RGBMeanAnalyzer*>(ar.get())->result().rMean;
+    const double lMean = dynamic_cast<RGBMeanAnalyzer *>(al.get())->result().rMean;
+    const double rMean = dynamic_cast<RGBMeanAnalyzer *>(ar.get())->result().rMean;
     CHECK(std::abs(lMean - rMean) > 100.0,
           ("left ROI mean (" + std::to_string(lMean) + ") != right ROI mean (" +
-           std::to_string(rMean) + "): Selection is honored").c_str());
+           std::to_string(rMean) + "): Selection is honored")
+              .c_str());
 
     mviewer::domain::Selection full{0, 0, W, H};
     auto af = reg.create("rgbmean");
     CHECK(af->analyzeRegion(frame, full), "full-frame rgbmean analyzes");
-    const double regMean = dynamic_cast<RGBMeanAnalyzer*>(af.get())->result().rMean;
+    const double regMean = dynamic_cast<RGBMeanAnalyzer *>(af.get())->result().rMean;
     const ImageStats ref = AnalysisEngine::computeStatsROI(data, full);
     CHECK(std::abs(regMean - ref.rMean) < 1.0,
-          ("registry rgbmean (" + std::to_string(regMean) +
-           ") matches AnalysisEngine rMean (" + std::to_string(ref.rMean) + ")").c_str());
+          ("registry rgbmean (" + std::to_string(regMean) + ") matches AnalysisEngine rMean (" +
+           std::to_string(ref.rMean) + ")")
+              .c_str());
 
     auto ah = reg.create("histogram");
     CHECK(ah->analyzeRegion(frame, full), "full-frame histogram analyzes");
-    const double regLum = dynamic_cast<HistogramAnalyzer*>(ah.get())->result().lumMean;
+    const double regLum = dynamic_cast<HistogramAnalyzer *>(ah.get())->result().lumMean;
     const ImageStats refH = AnalysisEngine::computeStatsROI(data, full);
     CHECK(std::abs(regLum - refH.lumMean) < 1.0,
           ("registry histogram lumMean (" + std::to_string(regLum) +
-           ") matches AnalysisEngine lumMean (" + std::to_string(refH.lumMean) + ")").c_str());
+           ") matches AnalysisEngine lumMean (" + std::to_string(refH.lumMean) + ")")
+              .c_str());
 }
 
 static void testRGBMean()
@@ -268,7 +270,7 @@ static void testRGBMean()
 
     bool ok = a->analyze(frame);
     CHECK(ok, "rgbmean analyze ok");
-    auto& ra = static_cast<RGBMeanAnalyzer&>(*a);
+    auto &ra = static_cast<RGBMeanAnalyzer &>(*a);
     CHECK(std::abs(ra.result().rMean - 50) < 0.5, "rgbmean rMean ~50");
     CHECK(std::abs(ra.result().gMean - 100) < 0.5, "rgbmean gMean ~100");
     CHECK(std::abs(ra.result().bMean - 150) < 0.5, "rgbmean bMean ~150");
@@ -291,7 +293,7 @@ static void testNoiseAnalyzer()
     ImageFrame frame = ImageFrame::create("/noise.png", data);
 
     CHECK(a->analyze(frame), "noise analyze ok");
-    auto& na = static_cast<NoiseAnalyzer&>(*a);
+    auto &na = static_cast<NoiseAnalyzer &>(*a);
     CHECK(na.noiseLevel() < 1.0, "noise flat image ~0");
 }
 
@@ -308,7 +310,7 @@ static void testPSNR()
     ImageFrame frameA = ImageFrame::create("/a.png", mvcore::fromQImage(imgA));
     ImageFrame frameB = ImageFrame::create("/b.png", mvcore::fromQImage(imgB));
 
-    auto& pa = static_cast<PSNRAnalyzer&>(*a);
+    auto &pa = static_cast<PSNRAnalyzer &>(*a);
     pa.setReference(frameA);
     CHECK(pa.analyze(frameB), "psnr analyze ok");
     CHECK(pa.psnrValue() > 0, "psnr > 0");
@@ -329,7 +331,7 @@ static void testSSIM()
     QImage imgA = makeColorTest(64, 64, QColor(100, 100, 100));
     ImageFrame frameA = ImageFrame::create("/a.png", mvcore::fromQImage(imgA));
 
-    auto& sa = static_cast<SSIMAnalyzer&>(*a);
+    auto &sa = static_cast<SSIMAnalyzer &>(*a);
     sa.setReference(frameA);
     CHECK(sa.analyze(frameA), "ssim identical ok");
     CHECK(sa.ssimValue() >= 0.99, "ssim identical ~1");
@@ -346,7 +348,7 @@ static void testEntropy()
     QImage flat = makeColorTest(100, 100, QColor(128, 128, 128));
     ImageFrame frameFlat = ImageFrame::create("/flat.png", mvcore::fromQImage(flat));
 
-    auto& ea = static_cast<EntropyAnalyzer&>(*a);
+    auto &ea = static_cast<EntropyAnalyzer &>(*a);
     CHECK(ea.analyze(frameFlat), "entropy flat ok");
     CHECK(ea.entropyValue() == 0.0, "entropy uniform = 0");
 
@@ -371,7 +373,7 @@ static void testSharpness()
     QImage flat = makeColorTest(100, 100, QColor(128, 128, 128));
     ImageFrame frameFlat = ImageFrame::create("/flat.png", mvcore::fromQImage(flat));
 
-    auto& sa = static_cast<SharpnessAnalyzer&>(*a);
+    auto &sa = static_cast<SharpnessAnalyzer &>(*a);
     CHECK(sa.analyze(frameFlat), "sharpness flat ok");
     CHECK(sa.sharpnessValue() == 0.0, "sharpness uniform = 0");
 }
@@ -379,7 +381,7 @@ static void testSharpness()
 static void testRenderEngine()
 {
     printf("\n[RenderEngine]\n");
-    auto& engine = RenderEngine::instance();
+    auto &engine = RenderEngine::instance();
 
     CHECK(engine.scale(ImageData(), {10, 10}).isNull(), "scale null input ok");
     CHECK(engine.overlayDifference(ImageData(), ImageData(), 0.5).isNull(), "overlay null ok");
@@ -494,15 +496,15 @@ static void testRenderCommand()
 static void testAnalyzerCapabilityFramework()
 {
     printf("\n[AnalyzerCapability]\n");
-    auto& reg = AnalyzerRegistry::instance();
+    auto &reg = AnalyzerRegistry::instance();
 
-    const char* expected[] = {
-        "histogram", "rgbmean", "noise", "psnr", "ssim", "entropy", "sharpness"};
+    const char *expected[] = {"histogram", "rgbmean", "noise",    "psnr",
+                              "ssim",      "entropy", "sharpness"};
     auto ids = reg.availableAnalyzers();
-    for (const char* id : expected)
+    for (const char *id : expected)
     {
         bool found = false;
-        for (const auto& x : ids)
+        for (const auto &x : ids)
             if (x == id)
             {
                 found = true;
@@ -531,10 +533,10 @@ static void testCompareDiffOverlay()
     fflush(stdout);
 
     CompareEngine eng;
-    const std::string a = std::string(MVIEWER_SOURCE_DIR) +
-                          "/testdata/golden/256x256/checker_256x256.jpg";
-    const std::string b = std::string(MVIEWER_SOURCE_DIR) +
-                          "/testdata/golden/256x256/flat_color_256x256.jpg";
+    const std::string a =
+        std::string(MVIEWER_SOURCE_DIR) + "/testdata/golden/256x256/checker_256x256.jpg";
+    const std::string b =
+        std::string(MVIEWER_SOURCE_DIR) + "/testdata/golden/256x256/flat_color_256x256.jpg";
     eng.setImages({a, b});
     CHECK(eng.imageCount() == 2, "engine loaded 2 images for overlay");
 
@@ -553,7 +555,7 @@ static void testCompareDiffOverlay()
     }
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     printf("=== M3/M4/M5 Unit Tests (remaining suite) ===\n");

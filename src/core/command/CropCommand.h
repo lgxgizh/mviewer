@@ -16,7 +16,7 @@ class ImageFrame;
 class CropCommand : public ICommand
 {
   public:
-    CropCommand(std::shared_ptr<ImageFrame> frame, const mviewer::domain::Selection& region);
+    CropCommand(std::shared_ptr<ImageFrame> frame, const mviewer::domain::Selection &region);
 
     std::string id() const override
     {

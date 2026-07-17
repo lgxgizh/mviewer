@@ -51,9 +51,9 @@ int main()
 
     // Capture the child's stdout via a pipe.
 #ifdef _WIN32
-    FILE* pipe = _popen(cmd.c_str(), "r");
+    FILE *pipe = _popen(cmd.c_str(), "r");
 #else
-    FILE* pipe = popen(cmd.c_str(), "r");
+    FILE *pipe = popen(cmd.c_str(), "r");
 #endif
     if (!pipe)
     {
@@ -74,7 +74,7 @@ int main()
     (void)rc; // child may crash at teardown; we judge by captured output.
 
     // Required evidence that the round-trip succeeded.
-    const char* must[] = {
+    const char *must[] = {
         "PASS: PluginManager::load(example_analyzer) succeeds",
         "PASS: analyzer id present in AnalyzerRegistry after load",
         "PASS: AnalyzerRegistry::create returns an instance",
@@ -83,7 +83,7 @@ int main()
     };
 
     bool all = true;
-    for (const char* m : must)
+    for (const char *m : must)
     {
         bool found = output.find(m) != std::string::npos;
         std::cout << (found ? "PASS: " : "FAIL: ") << "child emitted: " << m << std::endl;

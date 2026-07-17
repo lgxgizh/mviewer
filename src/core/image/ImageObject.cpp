@@ -6,7 +6,7 @@
 namespace
 {
 
-std::string computeFileHash(const std::string& path, int64_t size, int64_t mtime)
+std::string computeFileHash(const std::string &path, int64_t size, int64_t mtime)
 {
     const QString key =
         QString::fromStdString(path) + QString::number(size) + QString::number(mtime);
@@ -16,7 +16,7 @@ std::string computeFileHash(const std::string& path, int64_t size, int64_t mtime
 
 } // namespace
 
-ImageObject::ImageObject(const std::string& path, const ImageData& image)
+ImageObject::ImageObject(const std::string &path, const ImageData &image)
 {
     const QFileInfo fi(QString::fromStdString(path));
     const int64_t size = fi.size();
@@ -39,13 +39,13 @@ double ImageObject::luminanceMean()
     return m_frame.luminanceMean();
 }
 
-void ImageObject::rgbMeans(double& r, double& g, double& b)
+void ImageObject::rgbMeans(double &r, double &g, double &b)
 {
     m_frame.computeHistogram();
     m_frame.rgbMeans(r, g, b);
 }
 
-void ImageObject::rgbMeans(int& r, int& g, int& b)
+void ImageObject::rgbMeans(int &r, int &g, int &b)
 {
     double dr, dg, db;
     m_frame.computeHistogram();

@@ -13,7 +13,7 @@
 
 class TaskScheduler
 {
-public:
+  public:
     using TaskId = uint64_t;
 
     enum PoolType
@@ -39,10 +39,8 @@ public:
     struct TaskContext
     {
         TaskId id = 0;
-        std::shared_ptr<std::atomic<bool>> cancel =
-            std::make_shared<std::atomic<bool>>(false);
-        std::shared_ptr<std::atomic<int>> progress =
-            std::make_shared<std::atomic<int>>(0);
+        std::shared_ptr<std::atomic<bool>> cancel = std::make_shared<std::atomic<bool>>(false);
+        std::shared_ptr<std::atomic<int>> progress = std::make_shared<std::atomic<int>>(0);
         std::function<void(int)> onProgress;
         std::vector<TaskId> dependencies;
 
@@ -53,9 +51,18 @@ public:
         Priority priority = Priority::Background;
         PoolType pool = MetadataPool;
 
-        void requestCancel() { *cancel = true; }
-        bool isCancelled() const { return cancel->load(std::memory_order_relaxed); }
-        int currentProgress() const { return progress->load(std::memory_order_relaxed); }
+        void requestCancel()
+        {
+            *cancel = true;
+        }
+        bool isCancelled() const
+        {
+            return cancel->load(std::memory_order_relaxed);
+        }
+        int currentProgress() const
+        {
+            return progress->load(std::memory_order_relaxed);
+        }
         void reportProgress(int p)
         {
             const int v = p < 0 ? 0 : (p > 100 ? 100 : p);
@@ -83,21 +90,17 @@ public:
         size_t queue_depth{0};
     };
 
-    static TaskScheduler& instance();
+    static TaskScheduler &instance();
 
-    void submit(PoolType pool, void* runnable);
+    void submit(PoolType pool, void *runnable);
 
-    TaskHandle submit(
-        Priority prio,
-        std::function<void(const TaskContext&)> work,
-        std::vector<TaskId> deps = {},
-        std::chrono::steady_clock::time_point deadline =
-            std::chrono::steady_clock::time_point::max(),
-        std::function<void()> done = {},
-        std::function<void(int)> onProgress = {});
+    TaskHandle submit(Priority prio, std::function<void(const TaskContext &)> work,
+                      std::vector<TaskId> deps = {},
+                      std::chrono::steady_clock::time_point deadline =
+                          std::chrono::steady_clock::time_point::max(),
+                      std::function<void()> done = {}, std::function<void(int)> onProgress = {});
 
-    TaskHandle submit(PoolType pool, std::function<void()> work,
-                      std::function<void()> done = {});
+    TaskHandle submit(PoolType pool, std::function<void()> work, std::function<void()> done = {});
 
     static Priority toPriority(PoolType pool);
 
@@ -107,7 +110,11 @@ public:
     void setMaxQueueDepth(PoolType pool, size_t max);
     size_t maxQueueDepth(PoolType pool) const;
 
-    static void cancel(TaskHandle& h) { if (h) h->requestCancel(); }
+    static void cancel(TaskHandle &h)
+    {
+        if (h)
+            h->requestCancel();
+    }
     static void cancelTree(TaskId rootId);
 
     TaskHandle handle(TaskId id);
@@ -131,16 +138,19 @@ public:
     void shutdown(std::chrono::milliseconds timeout = std::chrono::seconds(5));
 
     using BackPressureFn = std::function<void(PoolType)>;
-    void setBackPressureHandler(BackPressureFn fn) { m_backpressure = std::move(fn); }
+    void setBackPressureHandler(BackPressureFn fn)
+    {
+        m_backpressure = std::move(fn);
+    }
 
-protected:
+  protected:
     TaskScheduler();
     ~TaskScheduler();
-    TaskScheduler(const TaskScheduler&) = delete;
-    TaskScheduler& operator=(const TaskScheduler&) = delete;
+    TaskScheduler(const TaskScheduler &) = delete;
+    TaskScheduler &operator=(const TaskScheduler &) = delete;
 
     struct Impl;
-    Impl* m_impl = nullptr;
+    Impl *m_impl = nullptr;
 
     static std::atomic<uint64_t> s_nextId;
     std::unordered_map<TaskId, std::vector<TaskId>> m_depGraph;
@@ -151,7 +161,7 @@ protected:
     struct DeferredEntry
     {
         Priority prio;
-        void* runnable = nullptr;
+        void *runnable = nullptr;
         std::chrono::steady_clock::time_point deadline;
     };
     std::unordered_map<TaskId, DeferredEntry> m_deferred;
@@ -160,7 +170,7 @@ protected:
     {
         PoolMetrics metrics;
         size_t max_queue_depth = 1000;
-        bool paused = false;   /// refuses new tasks when true
+        bool paused = false; /// refuses new tasks when true
     };
     PoolState m_poolState[5];
 
@@ -169,17 +179,24 @@ protected:
 
     BackPressureFn m_backpressure;
 
-    static PoolType poolFromPriority(Priority p) {
-        switch (p) {
-        case Priority::UI:        return IOPool;
-        case Priority::Decode:    return DecodePool;
-        case Priority::Thumbnail: return ThumbnailPool;
-        case Priority::Analysis:  return AnalysisPool;
-        case Priority::Background: return MetadataPool;
+    static PoolType poolFromPriority(Priority p)
+    {
+        switch (p)
+        {
+        case Priority::UI:
+            return IOPool;
+        case Priority::Decode:
+            return DecodePool;
+        case Priority::Thumbnail:
+            return ThumbnailPool;
+        case Priority::Analysis:
+            return AnalysisPool;
+        case Priority::Background:
+            return MetadataPool;
         }
         return MetadataPool;
     }
 
-    void releaseReadyTasks(std::vector<std::pair<Priority, void*>>& out);
+    void releaseReadyTasks(std::vector<std::pair<Priority, void *>> &out);
     void onTaskComplete(TaskId id, Priority prio);
 };

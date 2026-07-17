@@ -6,13 +6,13 @@
 //
 // Scope is M9-2 ONLY. Browse / Analysis / Export / Workspace / Polish are
 // other phases and are NOT touched here.
-#include "core/image/Encoder.h"
-#include "core/image/ImageRepository.h"
-#include "core/image/ImageBuffer.h"
-#include "core/image/ImageFrame.h"
-#include "core/image/QtConvert.h"
 #include "core/compare/CompareEngine.h"
 #include "core/compare/CompareTypes.h"
+#include "core/image/Encoder.h"
+#include "core/image/ImageBuffer.h"
+#include "core/image/ImageFrame.h"
+#include "core/image/ImageRepository.h"
+#include "core/image/QtConvert.h"
 
 #include <QColor>
 #include <QCoreApplication>
@@ -26,19 +26,19 @@
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                 \
-    do                                   \
-    {                                    \
-        if (cond)                        \
-        {                                \
-            printf("  PASS: %s\n", msg); \
-            g_pass++;                    \
-        }                                \
-        else                             \
-        {                                \
-            printf("  FAIL: %s\n", msg); \
-            g_fail++;                    \
-        }                                \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 static QImage makeColorTest(int w, int h, QColor c)
@@ -55,8 +55,7 @@ static QImage makeColorTest(int w, int h, QColor c)
 static void testLayoutForCount(int n, int expectCols, int expectRows)
 {
     namespace fs = std::filesystem;
-    const fs::path tempDir =
-        fs::temp_directory_path() / ("mviewer_m9_cmp_" + std::to_string(n));
+    const fs::path tempDir = fs::temp_directory_path() / ("mviewer_m9_cmp_" + std::to_string(n));
     std::error_code ec;
     fs::remove_all(tempDir, ec);
     fs::create_directories(tempDir, ec);
@@ -69,15 +68,16 @@ static void testLayoutForCount(int n, int expectCols, int expectRows)
         if (Encoder::encode(mvcore::fromQImage(img), path, Encoder::Params{}))
             paths.push_back(path);
     }
-    CHECK(static_cast<int>(paths.size()) == n, ("wrote all test images for n=" + std::to_string(n)).c_str());
+    CHECK(static_cast<int>(paths.size()) == n,
+          ("wrote all test images for n=" + std::to_string(n)).c_str());
 
     CompareEngine engine;
     engine.setImages(paths);
     CHECK(engine.imageCount() == n, "CompareEngine loaded n images");
 
     const CompareLayout lay = engine.layout();
-    printf("  n=%d -> layout %dx%d (expected %dx%d)\n", n, lay.cols, lay.rows,
-           expectCols, expectRows);
+    printf("  n=%d -> layout %dx%d (expected %dx%d)\n", n, lay.cols, lay.rows, expectCols,
+           expectRows);
     CHECK(lay.cols == expectCols, "column count matches expected");
     CHECK(lay.rows == expectRows, "row count matches expected");
 
@@ -97,7 +97,7 @@ static void testLayoutForCount(int n, int expectCols, int expectRows)
     fs::remove_all(tempDir, ec);
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
 

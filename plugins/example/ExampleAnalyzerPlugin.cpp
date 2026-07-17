@@ -33,7 +33,10 @@ namespace
 class MeanLuminanceAnalyzer : public Analyzer
 {
   public:
-    std::string name() const override { return "example.mean_luminance"; }
+    std::string name() const override
+    {
+        return "example.mean_luminance";
+    }
     std::string description() const override
     {
         return "Example plugin: mean luminance of a frame or region";
@@ -45,14 +48,14 @@ class MeanLuminanceAnalyzer : public Analyzer
                AnalyzerCapability::StatsOutput;
     }
 
-    bool analyze(const ImageFrame& frame) override
+    bool analyze(const ImageFrame &frame) override
     {
         m_mean = computeMean(frame.pixels(), 0, 0, frame.width(), frame.height());
         m_lastRegion = "full";
         return !frame.pixels().isNull();
     }
 
-    bool analyzeRegion(const ImageFrame& frame, const mviewer::domain::Selection& region) override
+    bool analyzeRegion(const ImageFrame &frame, const mviewer::domain::Selection &region) override
     {
         if (region.isEmpty())
             return analyze(frame);
@@ -71,7 +74,7 @@ class MeanLuminanceAnalyzer : public Analyzer
     }
 
   private:
-    static double computeMean(const ImageData& img, int x0, int y0, int w, int h)
+    static double computeMean(const ImageData &img, int x0, int y0, int w, int h)
     {
         if (img.isNull() || w <= 0 || h <= 0)
             return 0.0;
@@ -81,10 +84,10 @@ class MeanLuminanceAnalyzer : public Analyzer
         long long n = 0;
         for (int y = y0; y < y0 + h; ++y)
         {
-            const uint8_t* row = v.data + static_cast<size_t>(y) * v.stride();
+            const uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
             for (int x = x0; x < x0 + w; ++x)
             {
-                const uint8_t* p = row + static_cast<size_t>(x) * cpp;
+                const uint8_t *p = row + static_cast<size_t>(x) * cpp;
                 if (cpp >= 3)
                     sum += luminance(p[0], p[1], p[2]);
                 else
@@ -103,17 +106,17 @@ class MeanLuminanceAnalyzer : public Analyzer
 
 extern "C"
 {
-    MVIEWER_PLUGIN_EXPORT Analyzer* createAnalyzer()
+    MVIEWER_PLUGIN_EXPORT Analyzer *createAnalyzer()
     {
         return new MeanLuminanceAnalyzer();
     }
 
-    MVIEWER_PLUGIN_EXPORT void destroyAnalyzer(Analyzer* a)
+    MVIEWER_PLUGIN_EXPORT void destroyAnalyzer(Analyzer *a)
     {
         delete a;
     }
 
-    MVIEWER_PLUGIN_EXPORT const char* pluginName()
+    MVIEWER_PLUGIN_EXPORT const char *pluginName()
     {
         return "example.mean_luminance";
     }
