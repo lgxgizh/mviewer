@@ -554,4 +554,108 @@ ScenarioResult scenarioImageSwitch(const Corpus &corpus)
     return r;
 }
 
+// ─── B8: first-interaction latency for a PRELOADED switch (< 16 ms) ──────────
+// docs/performance.md: "Perceived latency < 16 ms (one frame at 60fps)" and
+// "Decode + display (preloaded) < 16 ms". We fully warm the cache, then navigate
+// back-and-forth (i -> i+1 -> i) so every switch hits the in-memory FullImage
+// LRU — measuring the user-perceived single-frame latency, NOT decode cost.
+ScenarioResult scenarioSwitchLatency(const Corpus &corpus)
+{
+    auto &repo = ImageRepository::instance();
+    repo.invalidateAll();
+    const auto all = corpus.allPaths();
+    if (all.size() < 2)
+        return ScenarioResult{"B8", "switch_p50_ms", 0, {}, "need >=2 imgs", false};
+
+    // Warm pass: load every image once so they live in the in-memory cache.
+    for (const auto &p : all)
+        repo.load(p);
+
+    // Timed pass: 200 forward/back switches (all cache hits). Measure the
+    // frame-to-frame navigation time the UI would incur (repo.load path).
+    std::vector<double> sw;
+    const size_t m = std::min<size_t>(all.size(), 50);
+    for (size_t k = 0; k < 200; ++k)
+    {
+        const size_t i = k % (m - 1);
+        const double a = nowMs();
+        repo.load(all[i]);       // hit
+        repo.load(all[i + 1]);   // step forward
+        const double b = nowMs();
+        sw.push_back(b - a);
+    }
+
+    ScenarioResult r;
+    r.name = "B8";
+    r.metric = "switch_p50_ms";
+    r.value = summarize(sw).p50Ms;
+    r.timing = summarize(sw);
+    // Soft local gate; --enforce applies the strict <16ms budget (set in main).
+    r.passed = summarize(sw).p50Ms <= 50.0;
+    r.detail = "warm p50=" + std::to_string(summarize(sw).p50Ms) +
+               " p95=" + std::to_string(summarize(sw).p95Ms) +
+               " p99=" + std::to_string(summarize(sw).p99Ms) +
+               " (preloaded; budget <16ms under --enforce)";
+    return r;
+}
+
+// ─── B9: memory soak / stability ─────────────────────────────────────────────
+// docs/performance.md: "Memory returns to baseline after cache eviction." Run
+// CYCLES iterations of (load a window of images -> navigate -> clearMemory ->
+// sample). Assert each cycle's post-clear sample <= its peak (monotonic decay)
+// and that the final baseline is within tolerance of the initial baseline (no
+// cumulative leak across cycles). Also track the global peak across cycles.
+ScenarioResult scenarioSoakStability(const Corpus &corpus)
+{
+    auto &cm = CacheManager::instance();
+    auto &mt = mviewer::perf::MemoryTracker::instance();
+    cm.clearMemory();
+    mt.reset();
+
+    const auto all = corpus.allPaths();
+    if (all.empty())
+        return ScenarioResult{"B9", "baseline_return_ok", 0, {}, "empty corpus", false};
+
+    const size_t window = std::min<size_t>(all.size(), 80);
+    const int cycles = 10;
+    const double initBase = static_cast<double>(mt.sample().cacheTotalBytes);
+
+    bool decayOk = true;
+    double globalPeak = initBase;
+    std::ostringstream perCycle;
+
+    for (int c = 0; c < cycles; ++c)
+    {
+        // Offset the window each cycle so different images churn through.
+        const size_t off = static_cast<size_t>(c) * (window / 2) % all.size();
+        for (size_t i = 0; i < window; ++i)
+            ImageRepository::instance().load(all[(off + i) % all.size()]);
+        const auto peak = mt.sample();
+        globalPeak = std::max(globalPeak, static_cast<double>(peak.cacheTotalBytes));
+
+        cm.clearMemory();
+        const auto after = mt.sample();
+        // Each cycle must return to <= its own peak (no growth within a cycle).
+        if (after.cacheTotalBytes > peak.cacheTotalBytes)
+            decayOk = false;
+        perCycle << " c" << c << ":peak=" << peak.cacheTotalBytes
+                 << ",after=" << after.cacheTotalBytes;
+    }
+
+    const double finalBase = static_cast<double>(mt.sample().cacheTotalBytes);
+
+    ScenarioResult r;
+    r.name = "B9";
+    r.metric = "baseline_return_ok";
+    r.value = decayOk ? 1.0 : 0.0;
+    // Soft local gate; --enforce checks decayOk AND final within 2x initial.
+    r.passed = decayOk;
+    r.detail = "cycles=" + std::to_string(cycles) +
+               " initBase=" + std::to_string(static_cast<long long>(initBase)) +
+               " globalPeak=" + std::to_string(static_cast<long long>(globalPeak)) +
+               " finalBase=" + std::to_string(static_cast<long long>(finalBase)) +
+               perCycle.str();
+    return r;
+}
+
 } // namespace mviewer::bench

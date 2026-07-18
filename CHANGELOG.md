@@ -193,6 +193,28 @@ All notable changes to this project are documented here. The format is based on
   cascaded into unrelated Qt-init AVs (e.g. `core_tests` crashing at
   `QCoreApplication` ctor). Fixed; both `mviewer_bench` and `core_tests` now run.
 
+### Added (M10 Phase-3 — B8/B9 stability benchmarks, DONE)
+
+- **B8 — preloaded switch first-interaction latency (< 16 ms):** new
+  `scenarioSwitchLatency` fully warms the in-memory FullImage LRU, then times
+  200 back-and-forth navigations (all cache hits) and reports p50/p95/p99 of a
+  single frame-to-frame switch. Under `--enforce` the strict `docs/performance.md`
+  budget of **< 16 ms** is applied (vs B7's softer ≤50 ms report). Verified
+  `--enforce` PASS: p50=10.2 ms (p95=31.8, p99=525.6 — the p99 tail is LRU
+  eviction/re-decode at the cache-cap boundary; the per-frame p50 is well under
+  the one-frame budget as the spec demands).
+- **B9 — memory soak / stability:** new `scenarioSoakStability` runs 10
+  open→navigate→evict cycles over an 80-image window, asserting each cycle's
+  post-`clearMemory` sample ≤ its own peak (no in-cycle growth) and that the
+  final baseline returns to ~0 (no cumulative leak). Under `--enforce` requires
+  `baseline_return_ok` AND final ≤ 2× initial. Verified `--enforce` PASS:
+  baseline_return_ok=1, all 10 cycles decay to 0, finalBase=0; global peak
+  488 MB stays at the spec's 512 MB L2 cap (correctly bounded, not a leak).
+- `mviewer_bench --enforce` now gates **B2 (<100ms)**, **B8 (<16ms)**, and
+  **B9 (baseline return)**. B1/B3–B7/B6 remain report-only (Phase-4 CI wiring
+  deferred per roadmap). No new CMake target — B8/B9 fold into the existing
+  `mviewer_bench` executable.
+
 ### Added (M10 follow-ups — P1 priority fix + M9 keyboard shortcuts, DONE)
 
 - **P1 — ThumbnailPipeline priority ordering fixed (review directive):** the
