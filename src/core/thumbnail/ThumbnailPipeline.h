@@ -120,21 +120,32 @@ struct ThumbnailPipeline
     };
 
     // Must hold m_mtx. Enqueues visible items (Thumbnail prio) then predictive
-    // neighbors (Background prio), skipping cached/pending paths.
+    // neighbors (also Thumbnail prio, enqueued AFTER visible).
+    //
+    // Priority note (M10 P1 fix): neighbors were previously submitted at
+    // Background priority, which maps to a SEPARATE QThreadPool that runs
+    // concurrently with the Thumbnail pool. Under many cores the Background
+    // pool finished neighbor decodes BEFORE some visible decodes still queued
+    // in the Thumbnail pool -> tier_ordering=VIOLATED (visible not strictly
+    // ahead). Submitting both to the SAME Thumbnail pool with visible enqueued
+    // first gives FIFO ordering: visible tasks occupy the front of the queue
+    // and drain before any neighbor starts, so background never preempts
+    // visible. No Scheduler redesign -- just correct pool usage.
     void scheduleLocked()
     {
         if (!m_decode)
             return;
         const size_t n = m_sources.size();
-        // Visible range (clamped).
+        // Visible range (clamped) -- enqueued FIRST so it leads the queue.
         const size_t vb = std::min(m_visibleBegin, n);
         const size_t ve = std::min(m_visibleEnd, n);
         for (size_t i = vb; i < ve; ++i)
             enqueueLocked(m_sources[i], TaskScheduler::Priority::Thumbnail);
-        // Predictive neighbors after the visible range.
+        // Predictive neighbors after the visible range -- same pool, behind
+        // visible in FIFO order, so they never preempt visible work.
         const size_t pe = std::min(ve + m_predictive, n);
         for (size_t i = ve; i < pe; ++i)
-            enqueueLocked(m_sources[i], TaskScheduler::Priority::Background);
+            enqueueLocked(m_sources[i], TaskScheduler::Priority::Thumbnail);
         // (Predictive *before* the visible range is intentionally omitted: the
         // user scrolls forward; reverse prefetch can be added later.)
     }
