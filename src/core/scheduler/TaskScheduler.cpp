@@ -166,6 +166,7 @@ void TaskScheduler::submit(PoolType pool, void *runnable)
     m_impl->priorityQueues[idx].start(static_cast<QRunnable *>(runnable));
     // Legacy path: metrics updated opportunistically
     m_poolState[idx].metrics.submitted++;
+    m_poolState[idx].metrics.pending++;
     m_poolState[idx].metrics.active_tasks++;
 }
 
@@ -233,6 +234,7 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
         else
         {
             m_poolState[pIdx].metrics.queue_depth++;
+            m_poolState[pIdx].metrics.pending++;
             m_impl->priorityQueues[pIdx].start(runnable);
             m_poolState[pIdx].metrics.queue_depth--;
             m_poolState[pIdx].metrics.active_tasks++;
@@ -312,6 +314,7 @@ void TaskScheduler::onTaskComplete(TaskId id, Priority prio)
         m_depGraph.erase(id);
         const int pIdx = static_cast<int>(prio);
         m_poolState[pIdx].metrics.completed++;
+        m_poolState[pIdx].metrics.pending--;
         m_poolState[pIdx].metrics.active_tasks--;
         releaseReadyTasks(ready);
         for (auto &[p, r] : ready)
@@ -424,7 +427,27 @@ bool TaskScheduler::waitForPoolDrained(int idx, std::chrono::milliseconds timeou
     // std::function operator bool on this toolchain, so the counter-based
     // drain never observes zero. Fall back to QThreadPool::waitForDone()
     // which actually blocks until all QRunnable::run() calls finish.
-    return m_impl->priorityQueues[idx].waitForDone(static_cast<int>(timeout.count()));
+    // BUT waitForDone() only sees tasks already in the pool; a producer
+    // submitting concurrently (e.g. loadDirectoryAsync's 1000-task loop
+    // racing drain()) can enqueue AFTER waitForDone() started and be
+    // missed -> early return -> use-after-free. Guard with the per-pool
+    // `pending` counter: spin until pending hits 0 (all submitted tasks
+    // observed complete) AND the pool is idle.
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_graphMtx);
+            if (m_poolState[idx].metrics.pending == 0 &&
+                m_poolState[idx].metrics.active_tasks == 0)
+                return m_impl->priorityQueues[idx].waitForDone(
+                    static_cast<int>(timeout.count()));
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    // Timed out; do a final waitForDone to drain whatever is left.
+    return m_impl->priorityQueues[idx].waitForDone(
+        static_cast<int>(timeout.count()));
 }
 
 bool TaskScheduler::drain(PoolType pool, std::chrono::milliseconds timeout)

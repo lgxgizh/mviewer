@@ -88,6 +88,13 @@ class TaskScheduler
         uint64_t total_latency_ns{0};
         size_t active_tasks{0};
         size_t queue_depth{0};
+        // pending = tasks submitted but not yet observed complete. Incremented in
+        // submit() BEFORE start(); decremented in onTaskComplete(). Lets
+        // waitForPoolDrained() block until EVERY submitted task (including ones
+        // submitted concurrently with the drain) has finished, not just until the
+        // pool is momentarily idle (which QThreadPool::waitForDone can miss
+        // under a submitting producer on another thread -> use-after-free).
+        size_t pending{0};
     };
 
     static TaskScheduler &instance();
