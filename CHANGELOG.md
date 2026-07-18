@@ -193,6 +193,37 @@ All notable changes to this project are documented here. The format is based on
   cascaded into unrelated Qt-init AVs (e.g. `core_tests` crashing at
   `QCoreApplication` ctor). Fixed; both `mviewer_bench` and `core_tests` now run.
 
+### Added (M10 follow-ups — P1 priority fix + M9 keyboard shortcuts, DONE)
+
+- **P1 — ThumbnailPipeline priority ordering fixed (review directive):** the
+  scheduler maps `Priority::Background` to a separate `QThreadPool` that runs
+  **concurrently** with the `Thumbnail` pool. That let neighbor (background)
+  thumbnails finish *before* the visible ones on multi-core machines, violating
+  the review's first-screen priority. Fix: `ThumbnailPipeline::scheduleLocked`
+  now enqueues neighbors at `Priority::Thumbnail` (same pool as visible) and
+  *after* the visible batch, so FIFO guarantees the visible set drains first.
+  No Scheduler redesign — only the priority tag + ordering in the pipeline.
+  Proven by a new `mviewer_bench --scenario pipeline_priority` trace that records
+  per-image decode-*start* order (decode-cost-independent): `priority_by_start=OK`
+  (visible_start_max ≤ neighbor_start_min). Replaces the earlier completion-order
+  check that was fooled by mixed JPEG/TIFF decode costs.
+- **M9 — missing keyboard shortcuts wired (review P2.2):** added a generic
+  `core/command/CallbackCommand` (id + description + callback + shortcuts) and
+  registered four commands in `MainWindow::setupCommands`: `Left` → previous
+  image, `Right` → next image, `Space` → quick-preview current image,
+  `F` → toggle fullscreen (acts on the viewer when open, else the main window).
+  Pre-existing shortcuts (`Ctrl+O` open, `Ctrl+S` export, `Ctrl+M` compare,
+  `Delete`, `F2` rename, `Ctrl+H` histogram) were left intact. No new abstraction
+  layer — one reusable command class instead of three boilerplate command files.
+- **M9 acceptance verification (real tests, no fakes):** the Compare workflow is
+  exercised by `core_tests` (`test_compare.cpp` → `ALL_COMPARE_OK`) proving
+  layout/sync/blink/diff + **non-blocking async diff with EventBus delivery**
+  (acceptance C2); Export is exercised by `export_tests` (13/13) proving the real
+  `core::buildCompareReport` + `Encoder` produce compare JSON/CSV + diff PNG;
+  AnalysisPanel routes ROI through `AnalyzerRegistry::create("histogram")` consuming
+  a domain `Selection` (QRect→Selection at the UI boundary, as the review required).
+  `MViewer.exe` builds + links + launches headless (offscreen) with no startup crash.
+
 ### Added (M5 — Scale & Performance, partial)
 
 - `testCacheManagerM5`: verifies the 5-level cache hierarchy — SQLite-backed disk tier

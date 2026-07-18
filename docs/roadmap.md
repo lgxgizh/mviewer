@@ -342,6 +342,23 @@ regression gate is wired in (roadmap Phase-4).
 - [ ] `--enforce` regression gate wired into CI (roadmap Phase-4; intentionally
     deferred so it does not add developer burden before the architecture is stable).
 
+**Follow-up fixes (post-M10, still in this roadmap's scope):**
+
+- **P1 — ThumbnailPipeline priority ordering** (`ThumbnailPipeline::scheduleLocked`):
+  neighbors were enqueued at `Priority::Background`, which maps to a *separate*
+  `QThreadPool` running concurrently with the `Thumbnail` pool — so on multi-core
+  machines background thumbnails could finish before the visible set, violating
+  first-screen priority. Fixed by enqueuing neighbors at `Priority::Thumbnail`
+  (same pool, after the visible batch) so FIFO drains visible first. Proven by a
+  `mviewer_bench --scenario pipeline_priority` trace on decode-*start* order
+  (`priority_by_start=OK`). **No Scheduler redesign.**
+- **M9 — missing keyboard shortcuts** wired via a new `CallbackCommand`: `Left` /
+  `Right` (navigate), `Space` (quick-preview), `F` (fullscreen). Compare sync
+  (zoom/pan/blink/diff/ROI), Analysis Panel (registry-driven analyzers + domain
+  `Selection` ROI + Pixel Inspector Left/Right/Δ), and Export (compare JSON/CSV +
+  diff PNG) are all verified by `core_tests` (`ALL_COMPARE_OK`), `export_tests`
+  (13/13), and headless `MViewer.exe` launch.
+
 **Notes / honest gaps:**
 
 - The harness measures the **real `ImageRepository` / `CacheManager` / `Decoder`**
