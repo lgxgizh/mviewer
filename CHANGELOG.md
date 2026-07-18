@@ -246,6 +246,24 @@ All notable changes to this project are documented here. The format is based on
   a domain `Selection` (QRect→Selection at the UI boundary, as the review required).
   `MViewer.exe` builds + links + launches headless (offscreen) with no startup crash.
 
+### Added (M11 — Release Candidate v1.0.0-rc, DONE)
+
+- **Version bump** `CMakeLists.txt` `0.1.0` → `1.0.0` (RC; not a build-system
+  change — `build.ps1`/`CMakePresets.json`/`ci.yml` untouched per the freeze).
+- **Release notes** `docs/release/RELEASE_v1.0.0-rc.md` — accurate, verification-backed
+  notes (core pipeline / compare / analysis / productization / performance), derived
+  from the CHANGELOG + RFCs. The README was **not** modified (out of scope; it already
+  describes the product correctly).
+- **Git tag + GitHub release** `v1.0.0-rc` (pre-release) published via `gh`:
+  https://github.com/lgxgizh/mviewer/releases/tag/v1.0.0-rc
+- **Final RC verification (real runs):** `core_tests` (`ALL_COMPARE_OK=0`,
+  `m10_tests ALL PASS`), `export_tests` (13/13), `mviewer_bench --enforce`
+  (B2 11–20ms, B8 p50≈6–10ms <16ms, B9 `baseline_return_ok=1`; ALL PASS),
+  `MViewer.exe` builds + links + headless-launch with no startup crash.
+- **Deferred to post-1.0 (honest):** NSIS/WiX installer / CPack packaging — the RC
+  ships as a built `MViewer.exe` + Qt runtime deployment. CI `--enforce` regression
+  gate remains Phase-4 (advisory, non-gating per the frozen CI model).
+
 ### Added (M5 — Scale & Performance, partial)
 
 - `testCacheManagerM5`: verifies the 5-level cache hierarchy — SQLite-backed disk tier
