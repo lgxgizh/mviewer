@@ -74,6 +74,25 @@ static void testFileSystemScan()
     const std::vector<std::string> limited = FileSystem::listImages(root, 2);
     CHECK(limited.size() == 2, "max limit honored (2 of 3)");
 
+    // max=0 means "no limit" (used by large-corpus scans).
+    const std::vector<std::string> unlimited = FileSystem::listImages(root, 0);
+    CHECK(unlimited.size() == 3, "max=0 means no limit (all 3 listed)");
+
+    // Default cap must NOT truncate large directories (review gap: >2000 images
+    // were silently truncated at the old 2000 default). Build 2500 images and
+    // confirm the default listImages() returns all of them.
+    QTemporaryDir big;
+    CHECK(big.isValid(), "big temp dir created");
+    const std::string bigRoot = big.path().toStdString();
+    for (int i = 0; i < 2500; ++i)
+    {
+        char name[32];
+        std::snprintf(name, sizeof(name), "/img_%04d.jpg", i);
+        CHECK(writeFile(bigRoot + name), "write big image");
+    }
+    const std::vector<std::string> bigDefault = FileSystem::listImages(bigRoot); // no max arg
+    CHECK(bigDefault.size() == 2500, "default cap does not truncate 2500 images");
+
     // imageFilters lists the supported suffixes.
     const std::vector<std::string> filters = FileSystem::imageFilters();
     CHECK(!filters.empty(), "imageFilters non-empty");

@@ -2,6 +2,8 @@
 
 #include "application/OpenDirectoryUseCase.h"
 #include "core/EventBus.h"
+#include "core/image/ImageRepository.h"
+#include "core/workspace/WorkspaceSerializer.h"
 #include "core/command/CompareCommand.h"
 #include "core/command/CallbackCommand.h"
 #include "core/command/DeleteCommand.h"
@@ -48,8 +50,14 @@ void MainWindow::setupUi()
     // ----- 文件(&F) -----
     auto *fileMenu = menuBar->addMenu("文件(&F)");
     m_actOpenDir = new QAction("打开目录(&O)", this);
+    m_actSaveWorkspace = new QAction("保存工作区(&S)", this);
+    m_actOpenWorkspace = new QAction("打开工作区(&W)", this);
     m_actExit = new QAction("退出(&Q)", this);
     fileMenu->addAction(m_actOpenDir);
+    fileMenu->addSeparator();
+    fileMenu->addAction(m_actSaveWorkspace);
+    fileMenu->addAction(m_actOpenWorkspace);
+    fileMenu->addSeparator();
     fileMenu->addAction(m_actExit);
 
     // ----- 视图(&V) -----
@@ -216,6 +224,8 @@ void MainWindow::setupUi()
                     m_thumbnailPanel->setDirectory(dir);
                 }
             });
+    connect(m_actSaveWorkspace, &QAction::triggered, this, &MainWindow::saveWorkspace);
+    connect(m_actOpenWorkspace, &QAction::triggered, this, &MainWindow::openWorkspace);
     connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
     connect(m_actCompare, &QAction::triggered, this,
             [this]()
@@ -388,4 +398,74 @@ void MainWindow::navigate(int delta)
     m_analysisPanel->setImage(QImage(path));
     if (auto f = m_imageViewer->frame())
         m_analysisPanel->setFrame(f);
+}
+
+void MainWindow::saveWorkspace()
+{
+    if (m_currentDir.isEmpty())
+    {
+        QMessageBox::information(this, "保存工作区", "请先打开一个图片目录。");
+        return;
+    }
+    const QString filePath = QFileDialog::getSaveFileName(
+        this, "保存工作区", m_currentDir + "/workspace.mvws", "MViewer 工作区 (*.mvws)");
+    if (filePath.isEmpty())
+        return;
+
+    // Build the domain model from the real directory (recursive, no pixel
+    // decode) using the existing, tested ImageRepository::loadWorkspace.
+    const mviewer::domain::Workspace ws =
+        ImageRepository::instance().loadWorkspace(m_currentDir.toStdString());
+    if (ws.empty())
+    {
+        QMessageBox::warning(this, "保存工作区", "当前目录没有可保存的图片。");
+        return;
+    }
+    const std::string json = mviewer::core::serializeWorkspace(ws);
+    QFile f(filePath);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text) || f.write(json.c_str()) < 0)
+    {
+        QMessageBox::critical(this, "保存工作区", "无法写入文件：" + filePath);
+        return;
+    }
+    statusBar()->showMessage(
+        QString("工作区已保存: %1 (%2 张图片, %3 个目录)")
+            .arg(QFileInfo(filePath).fileName())
+            .arg(static_cast<int>(ws.imageCount()))
+            .arg(static_cast<int>(ws.folderCount())));
+}
+
+void MainWindow::openWorkspace()
+{
+    const QString filePath =
+        QFileDialog::getOpenFileName(this, "打开工作区", QString(), "MViewer 工作区 (*.mvws)");
+    if (filePath.isEmpty())
+        return;
+
+    QFile f(filePath);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QMessageBox::critical(this, "打开工作区", "无法读取文件：" + filePath);
+        return;
+    }
+    const QByteArray data = f.readAll();
+    mviewer::domain::Workspace ws;
+    if (!mviewer::core::deserializeWorkspace(std::string(data.constData(), data.size()), ws) ||
+        ws.empty())
+    {
+        QMessageBox::critical(this, "打开工作区", "工作区文件无效或为空。");
+        return;
+    }
+
+    // Restore the browsing view: load the workspace root back into the gallery.
+    const QString root = QString::fromStdString(ws.rootPath);
+    m_currentDir = root;
+    m_cachedImagePaths.clear();
+    m_dirListDirty = true;
+    m_thumbnailPanel->setDirectory(root);
+    statusBar()->showMessage(
+        QString("工作区已打开: %1 (%2 张图片, %3 个目录)")
+            .arg(QFileInfo(filePath).fileName())
+            .arg(static_cast<int>(ws.imageCount()))
+            .arg(static_cast<int>(ws.folderCount())));
 }

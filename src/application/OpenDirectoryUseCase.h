@@ -18,6 +18,9 @@ class OpenDirectoryUseCase
         }
     };
 
-    // Synchronous version for simplicity (async can be added later)
-    static Result execute(const std::string &directoryPath, int maxImages = 1000);
+    // Synchronous version for simplicity (async can be added later).
+    // Default raised from 1000 -> 100000 to match FileSystem::listImages and
+    // avoid truncating large directories (10000-image benchmark target).
+    // Callers may still pass an explicit smaller cap.
+    static Result execute(const std::string &directoryPath, int maxImages = 100000);
 };
