@@ -1,15 +1,19 @@
 # RFC-007: Analyzer Plugin Interface
 
 ## Status
+
 Implemented
 
 ## Priority
+
 P0
 
 ## Goal
+
 AnalysisEngine becomes plugin-based. Adding new analyzers never requires touching AnalysisEngine.
 
 ## Interface
+
 ```cpp
 class Analyzer {
 public:
@@ -22,6 +26,7 @@ public:
 ```
 
 ## Built-in Implementations
+
 - `HistogramAnalyzer` — brightness + RGB histogram
 - `RGBMeanAnalyzer` — per-channel mean + stddev
 - `NoiseAnalyzer` — Laplacian variance
@@ -31,11 +36,13 @@ public:
 - `SharpnessAnalyzer` — gradient magnitude
 
 ## AnalyzerRegistry
+
 - Self-register at startup
 - Dynamic CRUD (registerAnalyzer, unregister, create, availableAnalyzers)
 - Thread-safe (read-heavy, mutex-protected map)
 
 ## AnalysisInput/Output
+
 ```cpp
 struct AnalysisInput {
     ImageFrame& frame;
@@ -50,6 +57,7 @@ struct AnalysisResult {
 ```
 
 ## Consequences
+
 - New algorithms without code changes
 - Dynamic UI discovery
 - Parallel analysis execution

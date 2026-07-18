@@ -3,7 +3,7 @@
 ## Budgets
 
 | Operation | Budget | Measurement |
-|-----------|--------|-------------|
+| ----------- | -------- | ------------- |
 | Cold start | < 300ms | Process entry to first paint |
 | Warm start (cached) | < 100ms | Process entry to first paint |
 | Open folder (first thumbnail) | < 100ms | Folder open to first visible thumbnail |
@@ -28,7 +28,7 @@
 ## Per-Module Tracked Metrics
 
 | Module | Metric | Budget |
-|--------|--------|--------|
+| -------- | -------- | -------- |
 | ImageRepository (cold load) | end-to-end load time | < 50 ms |
 | ImageRepository (warm load) | shared_ptr + metadata return | < 5 ms |
 | DiskCache (put) | SQLite insert + blob write | < 5 ms |
@@ -42,7 +42,7 @@
 ## Current Baselines (0.1.0)
 
 | Operation | Avg | Status |
-|-----------|-----|--------|
+| ----------- | ----- | -------- |
 | Decode 1920x1080 (JPEG) | 24.7ms | ✅ |
 | Encode 1920x1080 (JPEG) | 64.0ms | ✅ |
 | ImageCache hit | <0.01ms | ✅ |
@@ -56,6 +56,7 @@
 ## Enforcement
 
 Every PR must:
+
 1. Run `benchmark_scenario.exe`
 2. Compare results against this budget
 3. Document any deviation

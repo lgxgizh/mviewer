@@ -1,9 +1,11 @@
 # CacheManager Specification
 
 ## Module
+
 CacheManager + CacheConfig + CacheLevelStats
 
 ## Purpose
+
 CacheManager is the **sole owner** of all image cache state. It routes reads/writes across 5 levels (Metadata → Thumbnail → Preview → FullImage → Disk), handles cross-layer fallback, eviction budgeting, prefetch coordination, and per-level statistics. Memory pools delegate to `ImageCache`; disk pool delegates to `DiskCache`. All public interfaces expose only std types.
 
 ## API
@@ -76,7 +78,7 @@ public:
 ## Input
 
 | Parameter | Type | Constraints | Default |
-|-----------|------|-------------|---------|
+| ----------- | ------ | ------------- | --------- |
 | `level` | `CacheLevel` | — | — |
 | `key` | `string` | Non-empty path or URL | — |
 | `img` | `const ImageData&` | Non-null for put | — |
@@ -86,7 +88,7 @@ public:
 ## Output
 
 | Method | Return | Semantics |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `getMemory/getDisk/get` | `bool` | True = hit; out filled. False = miss |
 | `putMemory/putDisk/put` | `void` | Stores entry; evict triggered if over budget |
 | `erase/invalidate` | `void` | Purges all levels for key |
@@ -103,7 +105,7 @@ public:
 ## Thread Safety
 
 | Method | Thread | Mechanism |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `get/put/erase/invalidate` | Any thread | Per-pool mutex (ImageCache) + atomic hit/miss counters |
 | `getMetadata/putMetadata` | Any thread | `m_metaMutex` |
 | `prefetch` | Background only | Queues to TaskScheduler |
@@ -112,7 +114,7 @@ public:
 ## Memory
 
 | Level | Capacity | Bound |
-|-------|----------|-------|
+| ------- | ---------- | ------- |
 | Metadata | 16 MB | 50k entries × ~320 bytes |
 | Thumbnail | 64 MB | 256×256 RGB thumbnails |
 | Preview | 256 MB | 1024×1024 preview images |
@@ -122,7 +124,7 @@ public:
 ## Performance
 
 | Scenario | Budget | Baseline |
-|----------|--------|----------|
+| ---------- | -------- | ---------- |
 | Memory hit | <1 ms | ~0.01 ms |
 | Disk hit | <10 ms | ~7 ms |
 | Cold decode (24 MP JPEG) | <50 ms | ~25 ms |
@@ -131,7 +133,7 @@ public:
 ## Errors
 
 | Error | Cause | Recovery |
-|-------|-------|----------|
+| ------- | ------- | ---------- |
 | `null key` | Invalid input | No-op; return false |
 | `disk full` | SQLite write fail | Memory cache only; log warning |
 | `decode failed` | Corrupt cached blob | Remove entry; return false |

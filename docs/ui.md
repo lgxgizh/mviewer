@@ -38,7 +38,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Default Panel Visibility
 
 | Panel | Default | User Toggle |
-|-------|---------|-------------|
+| ------- | --------- | ------------- |
 | Menu Bar | Visible | Always visible |
 | Toolbar | Hidden | View → Toolbar |
 | Thumbnail Sidebar | Visible | View → Thumbnails (T) |
@@ -52,7 +52,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### File
 
 | Action | Shortcut | Description |
-|--------|----------|-------------|
+| -------- | ---------- | ------------- |
 | Open File... | `Ctrl+O` | Open single image file |
 | Open Folder... | `Ctrl+Shift+O` | Open folder for browsing |
 | Exit | `Alt+F4` / `Ctrl+Q` | Close application |
@@ -60,7 +60,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### View
 
 | Action | Shortcut | Description |
-|--------|----------|-------------|
+| -------- | ---------- | ------------- |
 | Zoom In | `+` / `Ctrl+=` | Increase zoom level |
 | Zoom Out | `-` | Decrease zoom level |
 | Fit to Window | `F` | Scale image to fit canvas |
@@ -75,7 +75,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Navigate
 
 | Action | Shortcut | Description |
-|--------|----------|-------------|
+| -------- | ---------- | ------------- |
 | Next Image | `→` / `Space` | Go to next image |
 | Previous Image | `←` / `Backspace` | Go to previous image |
 | First Image | `Home` | Go to first image in folder |
@@ -85,7 +85,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Image
 
 | Action | Shortcut | Description |
-|--------|----------|-------------|
+| -------- | ---------- | ------------- |
 | Rotate Clockwise | `R` | Rotate 90° clockwise |
 | Rotate Counter-CCW | `Shift+R` | Rotate 90° counter-clockwise |
 | Flip Horizontal | `H` | Mirror horizontally |
@@ -112,7 +112,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Navigation
 
 | Key | Action |
-|-----|--------|
+| ----- | -------- |
 | `→` or `PageDown` | Next image |
 | `←` or `PageUp` | Previous image |
 | `Home` | First image |
@@ -123,7 +123,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Zoom
 
 | Key | Action |
-|-----|--------|
+| ----- | -------- |
 | `+` or `=` | Zoom in |
 | `-` | Zoom out |
 | `F` | Fit to window |
@@ -135,7 +135,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### View
 
 | Key | Action |
-|-----|--------|
+| ----- | -------- |
 | `F11` | Toggle fullscreen |
 | `T` | Toggle thumbnail sidebar |
 | `M` | Toggle metadata panel |
@@ -144,7 +144,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Image Manipulation
 
 | Key | Action |
-|-----|--------|
+| ----- | -------- |
 | `R` | Rotate 90° clockwise |
 | `Shift+R` | Rotate 90° counter-clockwise |
 | `H` | Flip horizontal |
@@ -153,7 +153,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### File
 
 | Key | Action |
-|-----|--------|
+| ----- | -------- |
 | `Ctrl+O` | Open file |
 | `Ctrl+Shift+O` | Open folder |
 | `Ctrl+Q` | Quit |
@@ -173,7 +173,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Interaction
 
 | Input | Action |
-|-------|--------|
+| ------- | -------- |
 | Mouse drag | Pan image |
 | Mouse wheel | Zoom in/out (cursor-centered) |
 | Double-click | Toggle fit-to-window / actual size |
@@ -210,7 +210,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Thumbnail Display
 
 | Property | Value |
-|----------|-------|
+| ---------- | ------- |
 | Thumbnail size | 128-256px (user-configurable) |
 | Aspect ratio | Preserved |
 | Border | 2px, highlight on selected |
@@ -246,7 +246,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Sections
 
 | Section | Content |
-|---------|---------|
+| --------- | --------- |
 | File Info | Filename, path, size, dimensions, format |
 | EXIF | Camera, lens, exposure, ISO, focal length, date |
 | IPTC | Title, keywords, copyright, creator |
@@ -274,7 +274,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Content
 
 | Position | Content | Example |
-|----------|---------|---------|
+| ---------- | --------- | --------- |
 | Left | Image info | `1920×1080 JPEG 2.3 MB` |
 | Center | Zoom level | `100%` |
 | Right | Position | `42 / 1000` |
@@ -301,7 +301,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Interaction
 
 | Input | Action |
-|-------|--------|
+| ------- | -------- |
 | `→` / `←` | Navigate |
 | `Esc` | Exit fullscreen |
 | Mouse move | Show cursor (auto-hide after 2s) |
@@ -323,7 +323,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Controls
 
 | Input | Action |
-|-------|--------|
+| ------- | -------- |
 | `Space` | Pause/resume |
 | `→` | Next (manual advance) |
 | `←` | Previous |
@@ -343,7 +343,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Color Scheme
 
 | Element | Light | Dark |
-|---------|-------|------|
+| --------- | ------- | ------ |
 | Background | `#FFFFFF` | `#1E1E1E` |
 | Canvas | `#808080` (neutral gray) | `#404040` |
 | Text | `#000000` | `#FFFFFF` |
@@ -424,7 +424,7 @@ QMainWindow
 ### Custom Widgets
 
 | Widget | Parent | Purpose |
-|--------|--------|---------|
+| -------- | -------- | --------- |
 | `ImageCanvas` | QWidget | Image display with GPU rendering |
 | `ThumbnailListWidget` | QWidget | Virtualized thumbnail grid |
 | `ThumbnailScrollArea` | QScrollArea | Scrollable thumbnail container |

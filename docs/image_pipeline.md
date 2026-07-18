@@ -28,7 +28,7 @@ The image pipeline transforms a file path into pixels on screen. It encompasses 
 ### Magic Byte Signatures
 
 | Format | Magic Bytes | Offset |
-|--------|------------|--------|
+| -------- | ------------ | -------- |
 | JPEG | `FF D8 FF` | 0 |
 | PNG | `89 50 4E 47 0D 0A 1A 0A` | 0 |
 | BMP | `42 4D` | 0 |
@@ -92,7 +92,7 @@ public:
 The factory maintains a priority-ordered list of decoders. For each format, multiple decoders may be registered (primary + fallback).
 
 | Format | Primary Decoder | Fallback Decoder |
-|--------|----------------|------------------|
+| -------- | ---------------- | ------------------ |
 | JPEG | libjpeg-turbo | WIC |
 | PNG | libpng | WIC |
 | BMP | Custom | — |
@@ -174,7 +174,7 @@ struct DecodedImage {
 ### Operations
 
 | Operation | When | Where |
-|-----------|------|-------|
+| ----------- | ------ | ------- |
 | Color space conversion | During decode | CPU (SIMD) |
 | EXIF orientation | During decode | CPU (SIMD) |
 | Demosaicing (RAW) | N/A — RAW out of scope | — |
@@ -184,7 +184,7 @@ struct DecodedImage {
 ### Resize Quality
 
 | Use Case | Algorithm |
-|----------|-----------|
+| ---------- | ----------- |
 | Thumbnail generation | Lanczos3 or bilinear |
 | On-screen zoom (downscale) | GPU bilinear/trilinear |
 | On-screen zoom (upscale) | GPU bilinear |
@@ -230,7 +230,7 @@ auto uploadToGpu(const DecodedImage& image) -> TextureHandle;
 ### Texture Format Mapping
 
 | Decoded Format | GPU Format (D3D11) | GPU Format (OpenGL) |
-|----------------|-------------------|---------------------|
+| ---------------- | ------------------- | --------------------- |
 | RGBA8 | `DXGI_FORMAT_R8G8B8A8_UNORM` | `GL_RGBA8` |
 | RGB8 | `DXGI_FORMAT_R8G8B8A8_UNORM` (pad) | `GL_RGBA8` (pad) |
 | Gray8 | `DXGI_FORMAT_R8_UNORM` | `GL_R8` |
@@ -298,7 +298,7 @@ Enqueue decode tasks with HIGH priority
 ### Preload Configuration
 
 | Parameter | Default | Range |
-|-----------|---------|-------|
+| ----------- | --------- | ------- |
 | Forward preload count | 3 | 0-10 |
 | Backward preload count | 1 | 0-5 |
 | Preload trigger threshold | 2 consecutive same-direction navigations | 1-5 |
@@ -321,7 +321,7 @@ Priority 5: Background thumbnail generation
 ### Decode Errors
 
 | Error | Cause | Recovery |
-|-------|-------|----------|
+| ------- | ------- | ---------- |
 | `FileNotFound` | Path doesn't exist | Show error, skip to next |
 | `InvalidFormat` | Magic bytes don't match extension | Try fallback decoder |
 | `CorruptData` | File truncated or damaged | Show partial decode if possible |
@@ -341,7 +341,7 @@ Priority 5: Background thumbnail generation
 ## Performance Targets
 
 | Operation | Target |
-|-----------|--------|
+| ----------- | -------- |
 | Format detection | < 1 ms |
 | Decoder selection | < 0.1 ms |
 | JPEG decode (24MP) | < 50 ms |

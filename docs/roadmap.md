@@ -24,7 +24,7 @@
 ## Milestone status
 
 | Milestone | Theme | Status |
-|-----------|-------|--------|
+| ----------- | ------- | -------- |
 | Foundation | Build system, dir structure, ADR, AGENTS, Roadmap | ✅ Done |
 | M2 | Image Core + Task Scheduler | ✅ Done |
 | M3 | Core Image Pipeline | ✅ Done (Phase-1 + Phase-2 + cleanup) |
@@ -50,6 +50,7 @@ file itself.
 ### M3 Phase-1 — Decode / Cache / Frame (✅ Complete)
 
 Deliverables:
+
 - `ImageRepository::load` returns an `ImageFrame` (pixels + metadata + decode state + histogram).
 - JPEG / PNG / BMP / TIFF supported. TIFF requires the Qt `qtiff` plugin plus an MSVC-built
   `libtiff-6.dll` deployed beside the executable; the format pipeline lists TIFF and the
@@ -67,6 +68,7 @@ Deliverables:
 - `AnalyzerRegistry` exists with `HistogramAnalyzer` and peers registered.
 
 **Acceptance criteria (M3 Phase-1):**
+
 - [x] Open a directory and load any JPEG/PNG/BMP; `ImageRepository` returns a valid
       `ImageFrame` (no UI decode).
 - [x] TIFF is listed by `Decoder`/`FileSystem`/UI filters (decode enabled once `qtiff` +
@@ -88,6 +90,7 @@ Deliverables:
 ### M3 Phase-2 — Sync, Inspector Panel, Selection-driven Analysis (⬜ Next)
 
 Deliverables:
+
 - `CompareEngine` synchronization verified end-to-end through the UI: zoom / pan / scroll /
   selection stay in lock-step across compared cells.
 - Pixel Inspector promoted to a live Analysis-panel subscription: mouse move → `ImageFrame`
@@ -98,6 +101,7 @@ Deliverables:
   Entropy) wired so the plugin registry is the single entry point for analysis.
 
 **Acceptance criteria (M3 Phase-2):**
+
 - [x] Two images support synchronized zoom / pan / scroll / selection in the UI.
 - [x] Pixel Inspector displays Left RGB / Right RGB / Difference in real time.
 - [x] `Selection` is the sole ROI type passed to analyzers; no `QRect` crosses the core API.
@@ -107,6 +111,7 @@ Deliverables:
 ### M3 Phase-3 — Thumbnail & Viewer hardening (⬜ Planned)
 
 Deliverables:
+
 - Predictive preload (`ImageRepository::prefetchVisible`) exercised against the viewer's
   navigation so the next/prev image is warm before the keypress.
 - Viewer LRU sizing validated against `performance-budget.md` (adjacent switch instant,
@@ -114,6 +119,7 @@ Deliverables:
 - Thumbnail pipeline first-paint latency measured and within budget.
 
 **Acceptance criteria (M3 Phase-3):**
+
 - [ ] Navigating next/prev after warm-up is visually instantaneous (no decode spinner).
 - [ ] Viewer memory stays within the configured `viewerCacheSize` budget under a 1000-image
       walk.
@@ -126,6 +132,7 @@ Deliverables:
 **Goal:** The comparison and analysis feature set is production-grade and plugin-extensible.
 
 Deliverables:
+
 - Dual-image sync (zoom / pan / scroll / selection) hardened for 2–8 images and large
   (50 MP) inputs.
 - Analyzer registry complete: `HistogramAnalyzer`, `MeanAnalyzer`, `NoiseAnalyzer`,
@@ -136,6 +143,7 @@ Deliverables:
 - Plugin loader: drop-in analyzer plugins discovered and registered at startup.
 
 **Acceptance criteria (M4):**
+
 - [x] 8-image grid compares with synchronized transform and no UI stall on 50 MP inputs.
 - [x] Every built-in analyzer is reachable through `AnalyzerRegistry` and returns results
       consistent with `AnalysisEngine` reference values.
@@ -149,6 +157,7 @@ Deliverables:
 **Goal:** The pipeline scales to real photo libraries and meets the performance budgets.
 
 Deliverables:
+
 - Open a directory of 1000 images without blocking the UI (scan returns the file list
   immediately; thumbnails stream in).
 - First thumbnail appears within ~200 ms of opening a directory.
@@ -159,6 +168,7 @@ Deliverables:
 - Memory within `performance-budget.md` limits under sustained navigation.
 
 **Acceptance criteria (M5):**
+
 - [x] 1000-image directory opens without blocking UI; first thumbnail < 200 ms
       (verified: `test_m3m4m5::test1000ImageNonBlocking` loads 1000 images via
       `ImageRepository::loadDirectory` with no UI stall; elapsed ~8.8 s for the full
@@ -185,6 +195,7 @@ browse path (scan dir → immediate file list → background thumbnails → clic
 decode → fast display → next/prev → predictive preload) must be proven, not just assembled.
 
 Deliverables:
+
 - `DecoderRegistry` (singleton, Qt-free header) dispatches each file to the first decoder
   whose `canDecode` returns true. Concrete decoders: `QtDecoder` (JPEG/PNG/BMP/TIFF via
   `QImageReader`, EXIF auto-transform, RGB24 output) and `QtFallbackDecoder` (last-resort,
@@ -204,6 +215,7 @@ Deliverables:
   non-blocking test and the 4-format golden decode test (`ok=4`) still pass.
 
 **Acceptance criteria (M6):**
+
 - [x] `DecoderRegistry` dispatches JPEG/PNG/BMP/TIFF to `QtDecoder`; unknown → fallback /
       unsupported (graceful, no crash).
 - [x] Decode output identical to before (RGB24 `ImageData`); 4-format golden test `ok=4`.
@@ -260,6 +272,7 @@ build-system / CI changes beyond what these features require.
      DLL-unload-at-exit crash while still proving load → self-register → create → analyze.
 
 **Acceptance criteria (M8):**
+
 - [x] CropCommand reverts to the original pixels on undo.
 - [x] `ImageRepository::loadWorkspace` returns a `Workspace` grouping real files by folder
       (no pixel decode).
@@ -290,6 +303,7 @@ Agreed-✓ vs. disagreed-✗ from the review:
 - ✗ Plugin ABI must NOT be frozen before v1.0 (churn risk).
 
 ### P1 (now — DONE in M7)
+
 1. **Render Pipeline** (highest priority). `Image → Tile → Viewport → Renderer → Widget`.
    M7 laid the foundation: `core/render/Viewport` (domain-free pan/zoom) +
    `core/render/TileGrid` (visible-tile enumeration) + `core/render/TileCache` (LRU +
@@ -310,12 +324,15 @@ Agreed-✓ vs. disagreed-✗ from the review:
 5. **Plugin Registry** — Registry/Factory/Metadata fixed now (no ABI freeze).
 
 ### P2
+
 - Perfetto, memory benchmark, ASan, clazy (all deferred until architecture stable).
 
 ### P3
+
 - Python / Lua / AI / OpenCV plugins.
 
 ### Two new directions the review added
+
 - **Data Model**: `Workspace → Folder → ImageSet → ImageFrame` so Compare / Album / Project /
   recents compose cleanly.
 - **Job System**: unify Decode / Thumbnail / Analyzer / Benchmark under one
@@ -323,6 +340,7 @@ Agreed-✓ vs. disagreed-✗ from the review:
   `TaskScheduler` is the seed).
 
 ### CI phasing (Architect directive)
+
 - **Phase-1 (mandatory gate):** Format + Build + Test + Package.
 - **Phase-2:** clang-tidy **advisory only** (uploads artifact, never blocks).
 - **Phase-3:** ASan (MSVC `/fsanitize=address`) — non-gating signal job.

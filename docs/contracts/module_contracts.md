@@ -6,7 +6,7 @@
 **Purpose:** Universal domain object holding all image-related data: pixels, metadata, histogram, render cache, analysis cache, decode/cache state, selection, tags.
 
 | Field | Type | Owner | Access |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `pixels` | `const ImageFrame*` | ImageRepository | Read-only |
 | `metadata` | `const ImageMetadata&` | ImageFrame.create() | Immutable |
 | `thumbnail` | `ImageData` | ImageRepository/decoder | Populated lazily |
@@ -24,7 +24,7 @@
 **5-level hierarchy:**
 
 | Level | Purpose | Capacity | Eviction |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Metadata | ImageMetadata objects | 16 MB | LRU (entry count) |
 | Thumbnail | List/gallery thumbnails | 64 MB | LRU (byte pool) |
 | Preview | Preview panel semi-large | 256 MB | LRU (byte pool) |
@@ -43,7 +43,7 @@
 **Task structure:**
 
 | Field | Type | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `id` | `uint64_t` (auto-inc) | Unique per task |
 | `cancel` | `shared_ptr<atomic<bool>>` | Task-local cancel; TaskHandle crosses threads |
 | `progress` | `shared_ptr<atomic<int>>` | 0-100 |
@@ -66,10 +66,10 @@ Built-in IDs: `histogram`, `rgbmean`, `noise`, `psnr`, `ssim`, `entropy`, `sharp
 
 ## Module: RenderEngine
 
-|`Renderer` | Backend interface | `scale`, `overlayDifference`, `scaleRegion` |
-|---|---|---|
-|`SoftwareRenderer` | Qt-backed (impl detail) | Current default |
-|`RenderEngine` | Facade | `setBackend()`, instance + static compat API |
+| `Renderer` | Backend interface | `scale`, `overlayDifference`, `scaleRegion` |
+| --- | --- | --- |
+| `SoftwareRenderer` | Qt-backed (impl detail) | Current default |
+| `RenderEngine` | Facade | `setBackend()`, instance + static compat API |
 | `RenderCommand` | Flat struct for composable draw ops | `DrawImage`, `DrawOverlay`, `DrawHistogram`, `DrawSelection`, `DrawPixelMarker` |
 
 **Future backends:** D2D / OpenGL / Vulkan / Metal.
@@ -79,7 +79,7 @@ Built-in IDs: `histogram`, `rgbmean`, `noise`, `psnr`, `ssim`, `entropy`, `sharp
 State is **solely** owned by `mviewer::domain::CompareSession`. Facade exposes controllers as thin wrappers.
 
 | Controller | Responsibility |
-|---|---|
+| --- | --- |
 | `SyncController` | Shared zoom/pan/scroll |
 | `BlinkController` | Alternating highlight |
 | `DifferenceEngine` | Pixel diff + heatmap |

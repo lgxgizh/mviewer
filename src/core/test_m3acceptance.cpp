@@ -228,6 +228,14 @@ int main(int argc, char **argv)
     testNonBlocking1000();
     testFirstThumbnailLatency();
 
+    // Hermetic teardown: drain ALL scheduler pools (Decode / Thumbnail /
+    // Analysis / IO / Metadata) so no async callback is still in-flight when
+    // main() returns. Under parallel ctest (-j4) a late thumbnail/analysis
+    // callback into the already-freed local state of either test caused a
+    // use-after-free SEGFAULT. shutdown() pauses + waitForDone()s each
+    // pool, which is the correct fix (not a serialization band-a-id).
+    TaskScheduler::instance().shutdown(std::chrono::seconds(30));
+
     printf("\n=== M3 acceptance: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

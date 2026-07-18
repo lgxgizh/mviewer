@@ -164,7 +164,7 @@ test-results.xml -j4` under the offscreen Qt platform.
 ## 8. Common errors
 
 | Symptom | Cause | Fix |
-|---------|-------|-----|
+| --------- | ------- | ----- |
 | `Qt 6 not found` | No Qt on `Qt6_DIR`/`QT_ROOT` and default missing | Set `$env:Qt6_DIR`, or install to `D:\QT\6.11.1\msvc2022_64` |
 | `Qt cmake config not found at ...` | Path points at Qt root, not the msvc dir | Use `.../msvc2022_64` (or `QT_ROOT` = the `6.11.1` dir) |
 | `vswhere.exe not found` / `vcvars64.bat not found` | VS Build Tools absent | Install VS2022 Build Tools + "Desktop development with C++" |

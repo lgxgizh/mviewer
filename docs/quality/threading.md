@@ -10,7 +10,7 @@
 ## Thread Pools
 
 | Pool | Thread Count | Purpose |
-|------|-------------|---------|
+| ------ | ------------- | --------- |
 | UI | 1 (main) | Render, input, signals |
 | Decode | N/2 | Full-image decode |
 | Thumbnail | N/2 | Thumbnail generation |
@@ -23,7 +23,7 @@ N = hardware concurrency (QThread::idealThreadCount)
 ## Task Priority
 
 | Priority | Queue | Rules |
-|----------|-------|-------|
+| ---------- | ------- | ------- |
 | Highest | UI task | Preempt others, never wait |
 | High | Decode | Current image |
 | Medium | Thumbnail | Visible items |

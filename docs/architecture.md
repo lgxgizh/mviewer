@@ -17,7 +17,7 @@ MViewer **不是图片浏览器**，而是 **图像算法验证工具**
 ## 2. 技术选型
 
 | 项 | 决策 | 说明 |
-|----|------|------|
+| ---- | ------ | ------ |
 | 语言 | C++20 | ✅ 已验证 |
 | GUI | Qt 6 **Widgets**（非 QML） | ✅ 已验证 |
 | 工具链 | **MSVC 2022**（目标已达成） | M2 已完成从 MinGW 到 MSVC 的切换 |
@@ -70,6 +70,7 @@ Task Scheduler
 ## 5. 缓存设计（✅ M2 已冻结落地）
 
 至少三级内存缓存 + 磁盘缓存：
+
 - **Thumbnail Cache**（小图，列表用）
 - **Preview Cache**（中图，左栏预览用）
 - **Viewer Cache**（全分辨率解码后的 ImageData，LRU）
@@ -81,7 +82,7 @@ Task Scheduler
 ## 6. 演进路线（里程碑）
 
 | 里程碑 | 内容 | 状态 |
-|--------|------|------|
+| -------- | ------ | ------ |
 | **M0 / M1** | 可运行浏览器：3 栏、目录树、画廊、预览、双击大图、后台缩略图 + 磁盘缓存 | ✅ 已完成原型 |
 | **M2** | 抽离 **Image Core + Task Scheduler + domain/ 层 + 统一事件/命令/缓存体系** | ✅ **已完成，架构冻结** |
 | **M3** | **Analysis Engine 面板**：Histogram / RGB Mean / Difference → PSNR / SSIM / Noise 可视化 | 计划 |
@@ -95,7 +96,7 @@ Task Scheduler
 ## 7. M2 已冻结基础设施清单
 
 | 组件 | 文件 | 说明 |
-|------|------|------|
+| ------ | ------ | ------ |
 | domain/ 层 | `src/domain/{Image,Histogram,Selection,CompareSession}.h` | 纯业务对象，零 Qt 依赖 |
 | ImageFrame | `src/core/image/ImageFrame.{h,cpp}` | 通用图像载体（像素+状态+直方图） |
 | ImageRepository | `src/core/image/ImageRepository.{h,cpp}` | 图片生命周期抽象（FileSystem + Decoder + Cache） |

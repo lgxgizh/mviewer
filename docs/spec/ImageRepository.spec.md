@@ -1,9 +1,11 @@
 # ImageRepository Specification
 
 ## Module
+
 ImageRepository
 
 ## Purpose
+
 ImageRepository is the single entry point for managing image lifecycle: load, cache, decode, release. Other modules MUST NOT create ImageFrame directly.
 
 ## API
@@ -30,7 +32,7 @@ public:
 ## Input
 
 | Parameter | Type | Constraints | Default |
-|-----------|------|-------------|---------|
+| ----------- | ------ | ------------- | --------- |
 | `filePath` | `std::string` | Valid UTF-8 path, non-empty | — |
 | `opts.useDiskCache` | `bool` | — | `true` |
 | `opts.generateHistogram` | `bool` | — | `true` |
@@ -42,7 +44,7 @@ public:
 ## Output
 
 | Method | Return | Semantics |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `load` | `Result` | `success()` true on valid frame; `error` set on failure |
 | `loadAsync` | `void` | Callback invoked on UI thread with Result |
 | `loadDirectory` | `vector<Result>` | One entry per file, in sorted order |
@@ -63,7 +65,7 @@ public:
 ## Thread Safety
 
 | Method | Thread | Mechanism |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `load` | Any thread | CacheManager per-pool mutex |
 | `loadAsync` | Any thread submit; UI thread callback | TaskScheduler LambdaTask + QueuedConnection |
 | `loadDirectory` | Any thread | spawns N async tasks |
@@ -74,7 +76,7 @@ public:
 ## Memory
 
 | Path | Dominant | Bound |
-|------|----------|-------|
+| ------ | ---------- | ------- |
 | `load` (cold) | ImageData pixels | Bounded by Viewer cache (512 MB LRU) |
 | `load` (warm) | None (cache hit) | — |
 | `loadDirectory` | N × ImageData | N ≤ maxImages; evicted by LRU under pressure |
@@ -83,7 +85,7 @@ public:
 ## Performance
 
 | Scenario | Budget | Baseline |
-|----------|--------|----------|
+| ---------- | -------- | ---------- |
 | `loadAsync` dispatch | <1 ms | immediate callback on UI thread |
 | Disk cache hit → ImageFrame | <5 ms | — |
 | Cold decode (1920x1080 JPEG) | <50 ms | 24.7 ms |
@@ -93,7 +95,7 @@ public:
 ## Errors
 
 | Error | Cause | Recovery |
-|-------|-------|----------|
+| ------- | ------- | ---------- |
 | `success() == false` | Decode failed, corrupt file | Log; UI shows placeholder |
 | `error.find("permission") == 0` | File locked by another process | Retry with backoff |
 | IOException during load | Disk/network failure | Degrade to memory-only mode |

@@ -6,6 +6,7 @@ ImageRepository is the **sole entry point** for the complete image lifecycle:
 **Discovery → Decode → State → Analysis → Thumbnail → Cache → Release**.
 
 Other modules MUST NOT:
+
 - Directly instantiate `ImageFrame`
 - Access `DiskCache` or `ImageCache` directly for image data
 - Retain raw `ImageData` outside of `shared_ptr<ImageFrame>`
@@ -60,6 +61,7 @@ Repository caches metadata (path, mtime, size) in memory
 ```
 
 **Post-conditions:**
+
 - `repository.metadata(filePath)` returns valid `ImageMetadata` without decoding
 - Image count = `filePaths.size()`
 
@@ -86,6 +88,7 @@ load(filePath, opts)
 ```
 
 **Post-conditions:**
+
 - Returned `shared_ptr<ImageFrame>` has valid `pixels()`
 - `DiskCache` contains the blob (if `opts.useDiskCache`)
 - `CacheState` reflects hit/miss path
@@ -95,7 +98,7 @@ load(filePath, opts)
 **Ownership:** `ImageFrame` owns all per-frame mutable state.
 
 | Field | Transition | Authorized Callers |
-|-------|------------|-------------------|
+| ------- | ------------ | ------------------- |
 | `DecodeState` | Idle → Decoding → Decoded/Failed | `ImageRepository` only |
 | `CacheState` | None → Memory → Disk | `ImageRepository` only |
 | `Histogram` | lazy-computed | `ImageRepository` + analyzer request |
@@ -133,6 +136,7 @@ Order of operations (MUST be atomic w.r.t. cache lookups):
    after cache release (reference counting handles final deallocation)
 
 **Post-conditions:**
+
 - `MemoryCache.get(key)` returns false
 - `DiskCache.get(key)` returns false
 - Any prior `shared_ptr<ImageFrame>` remains valid (heap-detached)
@@ -140,7 +144,7 @@ Order of operations (MUST be atomic w.r.t. cache lookups):
 ## Thread Safety
 
 | Operation | Mechanism | Use Case |
-|-----------|-----------|----------|
+| ----------- | ----------- | ---------- |
 | `load` | `CacheManager` per-pool mutex | Any thread |
 | `loadAsync` | TaskScheduler (raw QRunnable → DecodePool) | Background |
 | `loadDirectory` | N × `loadAsync` tasks | Background thread spawn |
@@ -178,7 +182,7 @@ Order of operations (MUST be atomic w.r.t. cache lookups):
 ## API Compliance Table
 
 | Requirement | Current API | RFC-005 Compliance |
-|-------------|-------------|-------------------|
+| ------------- | ------------- | ------------------- |
 | Single entry for load | `load`, `loadAsync` | ✅ |
 | Release path | `release` | ✅ |
 | Cancel in-flight | Implicit via TaskScheduler cancel | ✅ |
@@ -190,7 +194,7 @@ Order of operations (MUST be atomic w.r.t. cache lookups):
 ## Error Handling
 
 | Symptom | Detection | Recovery |
-|---------|-----------|----------|
+| --------- | ----------- | ---------- |
 | Load after release | Cache miss | Re-load from File → Decode |
 | Frame return after release | weak_ptr expired (if using weak) | Caller re-acquires via `load` |
 | Disk full during cache write | SQLite `FULL` error | Log warning; memory cache only |

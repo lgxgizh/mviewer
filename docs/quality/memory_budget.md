@@ -3,7 +3,7 @@
 ## Limits
 
 | Layer | Default | Configurable |
-|-------|---------|--------------|
+| ------- | --------- | -------------- |
 | Thumbnail cache | 64 MB | Yes |
 | Preview cache | 256 MB | Yes |
 | Viewer cache | 512 MB | Yes |
@@ -13,7 +13,7 @@
 ## Per-Image Budget (24MP RGBA8)
 
 | Representation | Size |
-|----------------|------|
+| ---------------- | ------ |
 | Raw pixels | ~96 MB |
 | Thumbnail (256x256) | ~256 KB |
 | Preview (1024x768) | ~3 MB |
@@ -22,6 +22,7 @@
 ## Eviction
 
 Each pool evicts LRU entries when exceeding budget.
+
 - Order touched on every access.
 - Eviction in batch (up to 10% of pool) to avoid thrashing.
 

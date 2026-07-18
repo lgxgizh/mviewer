@@ -1,0 +1,37 @@
+{
+  // MViewer markdownlint config.
+  //
+  // The CI "Format check" job runs `markdownlint '**/*.md' --ignore node_modules`.
+  // Most structural rules (MD022 blanks-around-headings, MD032 blanks-around-lists,
+  // MD034 no-bare-urls) are enforced and the docs already comply.
+  //
+  // The three rules below are disabled by deliberate decision, not neglect:
+  //   MD040/fenced-code-language : our docs use many plain ``` blocks for file
+  //           listings / directory trees where a language tag is noise.
+  //   MD024/no-duplicate-heading : section titles like "Added" / "Purpose" /
+  //           "Operations" repeat across per-version or per-cache entries by design
+  //           (CHANGELOG, cache.md) — they are scoped by their parent heading.
+  //   MD013/line-length : CHANGELOG / ADR entries routinely exceed 80 cols
+  //           with version hashes and long path strings; wrapping them harms
+  //           readability more than it helps. clang-format governs code; docs
+  //           prose is intentionally wider here.
+  //   MD033/no-inline-html : docs/quality/* use <bool> / <T> in prose
+  //           to name C++ types; that is intentional inline markup.
+  //   MD032/blanks-around-lists : RFC checklists (M4_REVIEW_CHECKLIST)
+  //           use tight +/- list items by design.
+  //   MD025/single-h1 : vision.md / ADRs use one H1 per major
+  //           section as a de-facto TOC; multiple top-level headings
+  //           are intentional, not a structural error.
+  //   MD042/no-empty-links : README badges use the
+  //           [![alt](img)](url) image-link pattern; the outer link
+  //           text is intentionally the image, not empty prose.
+  "default": true,
+  "MD040": false,
+  "MD024": false,
+  "MD060": false,
+  "MD013": false,
+  "MD033": false,
+  "MD032": false,
+  "MD025": false,
+  "MD042": false
+}

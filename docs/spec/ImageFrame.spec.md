@@ -1,9 +1,11 @@
 # ImageFrame Specification
 
 ## Module
+
 ImageFrame + RenderCacheEntry + AnalysisCacheEntry + DecodeState + CacheState
 
 ## Purpose
+
 ImageFrame is the universal domain object: it holds pixels, metadata, thumbnail, histogram, decode/cache state, selection, tags, analysis cache, and render cache. All engines operate on ImageFrame; no external ad-hoc data structures. Thread-safe for read-only access; cache/decode state changes are atomic.
 
 ## API
@@ -96,7 +98,7 @@ public:
 ## Input
 
 | Parameter | Type | Constraints | Default |
-|-----------|------|-------------|---------|
+| ----------- | ------ | ------------- | --------- |
 | `meta` | `const ImageMetadata&` | Valid (width/height >0) | — |
 | `pixels` | `const ImageData&` | Matches meta dimensions | — |
 | `t` | `const ImageData&` | Optional smaller-than-full thumbnail | — |
@@ -106,7 +108,7 @@ public:
 ## Output
 
 | Method | Return | Semantics |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `create(path, pixels)` | `ImageFrame` | Populates metadata from path |
 | `pixels()` | `const ImageData&` | Full-resolution pixels; null if not decoded |
 | `thumbnail()` | `const ImageData&` | Lazy thumbnail; call `hasThumbnail()` first |
@@ -123,7 +125,7 @@ public:
 ## Thread Safety
 
 | Method | Thread | Mechanism |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `pixels()`, `view()`, `width()`, `height()`, `isValid()` | Any thread | Read-only, safe concurrent |
 | `decodeState()`, `cacheState()` | Any thread | Atomic enum access |
 | `setDecodeState()`, `setCacheState()` | Any thread | Atomic store |
@@ -134,7 +136,7 @@ public:
 ## Memory
 
 | Component | Dominant Allocation |
-|-----------|---------------------|
+| ----------- | --------------------- |
 | `pixels()` | `w*h*3` bytes (RGB24) |
 | `thumbnail()` | `64*64*3` bytes typical (256×256 max) |
 | `histogram()` | 4 × 256 ints = 4 KB |
@@ -144,7 +146,7 @@ public:
 ## Performance
 
 | Scenario | Budget | Baseline |
-|----------|--------|----------|
+| ---------- | -------- | ---------- |
 | `create()` (with metadata) | <0.5 ms | hash + QFileInfo |
 | `computeHistogram(1080p)` | <5 ms | ~3 ms |
 | `findAnalysis()` | <0.01 ms | vector lookup |
@@ -153,7 +155,7 @@ public:
 ## Errors
 
 | Error | Cause | Recovery |
-|-------|-------|----------|
+| ------- | ------- | ---------- |
 | `invalid pixels` | Decode failed | `decodeState()` returns `Failed`; `isValid()` returns false |
 | `null selection` | Cleared | `selection()` returns default empty Selection |
 | `tag duplicate` | Already has tag | `addTag` is idempotent (no-op) |

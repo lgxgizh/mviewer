@@ -13,7 +13,7 @@ Performance is the primary design goal of MViewer. Every architectural decision,
 ### Startup
 
 | Metric | Cold Start | Warm Start |
-|--------|-----------|------------|
+| -------- | ----------- | ------------ |
 | Target | < 300 ms | < 100 ms |
 | Measurement | Process main() to first paint | Process main() to first paint |
 
@@ -23,7 +23,7 @@ Performance is the primary design goal of MViewer. Every architectural decision,
 ### Folder Loading
 
 | Metric | Target |
-|--------|--------|
+| -------- | -------- |
 | Time to first thumbnail | < 100 ms |
 | UI responsiveness | No frame drops during scan |
 | 10,000 image folder | < 2s to display all visible thumbnails |
@@ -33,7 +33,7 @@ Performance is the primary design goal of MViewer. Every architectural decision,
 ### Image Switching
 
 | Metric | Target |
-|--------|--------|
+| -------- | -------- |
 | Perceived latency | < 16 ms (one frame at 60fps) |
 | Decode + display (preloaded) | < 16 ms |
 | Decode + display (cold) | < 100 ms for 24MP JPEG |
@@ -43,7 +43,7 @@ Performance is the primary design goal of MViewer. Every architectural decision,
 ### Zoom & Pan
 
 | Metric | Target |
-|--------|--------|
+| -------- | -------- |
 | Frame rate | 60 fps sustained |
 | Frame time | < 16.6 ms |
 | Large images (50MP+) | No degradation in zoom/pan smoothness |
@@ -53,7 +53,7 @@ Performance is the primary design goal of MViewer. Every architectural decision,
 ### Thumbnail Generation
 
 | Metric | Target |
-|--------|--------|
+| -------- | -------- |
 | First thumbnail decode | < 50 ms |
 | Thumbnail resize | < 10 ms |
 | Throughput | > 100 thumbnails/second (background) |
@@ -61,7 +61,7 @@ Performance is the primary design goal of MViewer. Every architectural decision,
 ### Memory Usage
 
 | Metric | Target |
-|--------|--------|
+| -------- | -------- |
 | Base memory (empty window) | < 50 MB |
 | Per-image cache (24MP RGBA) | ~96 MB (uncompressed) |
 | GPU texture budget | Configurable, default 512 MB |
@@ -74,7 +74,7 @@ Performance is the primary design goal of MViewer. Every architectural decision,
 ### Tools
 
 | Platform | Tool | Use Case |
-|----------|------|----------|
+| ---------- | ------ | ---------- |
 | Windows | Tracy Profiler | CPU/GPU timeline, memory tracking |
 | Windows | Intel VTune | Micro-architectural analysis |
 | Windows | GPUView | GPU scheduling analysis |
@@ -242,7 +242,7 @@ Apply optimizations in this order. Never skip levels.
 ## Cache Performance Targets
 
 | Cache Layer | Hit Ratio Target | Eviction Policy |
-|-------------|-----------------|-----------------|
+| ------------- | ----------------- | ----------------- |
 | L1 GPU Texture | > 85% | LRU, VRAM-bounded |
 | L2 Decoded Image | > 90% | LRU, RAM-bounded |
 | L3 Thumbnail (memory) | > 95% | LRU, count-bounded |
@@ -253,7 +253,7 @@ Apply optimizations in this order. Never skip levels.
 ## Preloading Strategy
 
 | Navigation Direction | Preload Count | Priority |
-|---------------------|---------------|----------|
+| --------------------- | --------------- | ---------- |
 | Forward | 3 images | High |
 | Backward | 1 image | Medium |
 | Thumbnail scroll | Visible + 20 buffer | High |
@@ -265,7 +265,7 @@ Apply optimizations in this order. Never skip levels.
 ## Memory Budget Defaults
 
 | Resource | Default Limit | Configurable |
-|----------|--------------|--------------|
+| ---------- | -------------- | -------------- |
 | L2 Decoded Image Cache | 256 MB | Yes |
 | L1 GPU Texture Cache | 512 MB | Yes |
 | L3 Thumbnail Memory Cache | 64 MB | Yes |

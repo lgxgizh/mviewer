@@ -90,7 +90,12 @@ jobs:
 
       - name: Enforce zero warnings
         run: |
-          if (Select-String -Path build.log -Pattern 'warning:') { exit 1 }
+          $m = Select-String -Path build.log -Pattern 'warning:'
+          if ($m) {
+            Write-Host "::error:: Zero-warnings gate: build.log contains warning(s):"
+            $m | ForEach-Object { Write-Host ("  " + $_.Line) }
+            exit 1
+          }
 
   # ---------------------------------------------------------------------------
   # test — explicit ctest job (re-runs build+test; artifacts not shared in Phase-1)

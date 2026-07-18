@@ -90,7 +90,7 @@ Each stage has well-defined inputs and outputs. Bugs manifest at stage boundarie
 To locate a bug, identify which stage produces wrong output — then trace inputs.
 
 | Boundary | Symptoms | Likely Cause |
-|----------|----------|--------------|
+| ---------- | ---------- | -------------- |
 | Directory → Repository | Missing files, wrong order | `FileSystem` filter, mtime sort |
 | Repository → Decoder | Black/corrupt image, slow | `Decoder` codec, `DiskCache` mismatch |
 | Decoder → Frame | Library hangs, no histogram | `ImageFrame::create()`, pool exhaustion |

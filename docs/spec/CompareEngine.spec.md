@@ -1,9 +1,11 @@
 # CompareEngine Specification
 
 ## Module
+
 CompareEngine + controllers (SyncController · BlinkController · DifferenceEngine · SelectionController · ViewportController) + CompareSession
 
 ## Purpose
+
 CompareEngine is the facade that owns comparison state (CompareSession) and routes operations to dedicated controllers. UI (CompareWorkspace) never modifies session directly — it reads `session()` after each mutation and renders.
 
 ## API
@@ -94,7 +96,7 @@ class ViewportController { /* fit-to-cell math */ };
 ## Input
 
 | Parameter | Type | Constraints | Default |
-|-----------|------|-------------|---------|
+| ----------- | ------ | ------------- | --------- |
 | `paths` | `vector<string>` | Valid UTF-8 paths, non-empty | — |
 | `index` | `int` | `[0, imageCount)` | — |
 | `path` | `string` | Valid UTF-8 path | — |
@@ -105,7 +107,7 @@ class ViewportController { /* fit-to-cell math */ };
 ## Output
 
 | Method | Return | Semantics |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `setImages/addImage/removeImage/clear` | `void` | Rebuilds layout, resets transforms |
 | `session()` | `CompareSession` | Immutable snapshot for UI |
 | `differenceMap` | `ImageData` | Grayscale diff (RGB24); empty on size mismatch |
@@ -136,7 +138,7 @@ class ViewportController { /* fit-to-cell math */ };
 ## Performance
 
 | Scenario | Budget | Baseline |
-|----------|--------|----------|
+| ---------- | -------- | ---------- |
 | `differenceMap(1080p)` | <25 ms | ~22 ms |
 | `setImages(9)` | <10 ms | layout-only math |
 | `fitCell` | <1 ms | pure math |
@@ -145,7 +147,7 @@ class ViewportController { /* fit-to-cell math */ };
 ## Errors
 
 | Error | Cause | Recovery |
-|-------|-------|----------|
+| ------- | ------- | ---------- |
 | `size mismatch` | Diff dimensions differ | Clip to min(w,h); return empty if severe |
 | `invalid index` | Index out of range | Return null / no-op |
 | `null frame` | ImageFrame not loaded | Skip; return empty diff |

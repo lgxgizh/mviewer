@@ -66,7 +66,7 @@ Store textures already uploaded to GPU memory. Avoid redundant GPU uploads for r
 ### Characteristics
 
 | Property | Value |
-|----------|-------|
+| ---------- | ------- |
 | Storage | VRAM (GPU memory) |
 | Default size | 512 MB |
 | Entry size | width × height × 4 bytes (RGBA8) |
@@ -124,7 +124,7 @@ Store decoded pixel data in RAM. Avoid redundant file I/O and decode operations 
 ### Characteristics
 
 | Property | Value |
-|----------|-------|
+| ---------- | ------- |
 | Storage | System RAM |
 | Default size | 256 MB |
 | Entry size | width × height × bytesPerPixel |
@@ -194,7 +194,7 @@ Store recently used thumbnails in RAM for instant display in the sidebar.
 ### Characteristics
 
 | Property | Value |
-|----------|-------|
+| ---------- | ------- |
 | Storage | System RAM |
 | Default size | 64 MB |
 | Entry size | ~256 × 256 × 4 = ~256 KB |
@@ -205,7 +205,7 @@ Store recently used thumbnails in RAM for instant display in the sidebar.
 ### Thumbnail Specifications
 
 | Property | Value |
-|----------|-------|
+| ---------- | ------- |
 | Default size | 256 × 256 pixels |
 | Aspect ratio | Preserved (fit within box) |
 | Format | RGBA8 |
@@ -330,7 +330,7 @@ public:
 ### Size Limits
 
 | Property | Default | Range |
-|----------|---------|-------|
+| ---------- | --------- | ------- |
 | Max disk cache size | 1 GB | 256 MB - 8 GB |
 | Max entries | 100,000 | 10,000 - 500,000 |
 | Max single thumbnail | 1 MB | — |
@@ -342,7 +342,7 @@ public:
 ### Triggers
 
 | Event | Action |
-|-------|--------|
+| ------- | -------- |
 | File modification time changed | Invalidate L2, L3, L4 |
 | File size changed | Invalidate L2, L3, L4 |
 | File deleted | Invalidate all layers |
@@ -390,7 +390,7 @@ public:
 ### Metrics
 
 | Metric | Description |
-|--------|-------------|
+| -------- | ------------- |
 | Hit ratio | hits / (hits + misses) per layer |
 | Eviction count | Number of evictions per layer |
 | Total size | Current memory/disk usage |
@@ -409,7 +409,7 @@ public:
 ## Thread Safety Summary
 
 | Cache | Read Lock | Write Lock | Notes |
-|-------|-----------|------------|-------|
+| ------- | ----------- | ------------ | ------- |
 | L1 GPU Texture | None (render thread only) | None | Single-threaded access |
 | L2 Decoded Image | `std::shared_lock` | `std::unique_lock` | Read-heavy |
 | L3 Thumbnail Memory | `std::shared_lock` | `std::unique_lock` | Read-heavy |

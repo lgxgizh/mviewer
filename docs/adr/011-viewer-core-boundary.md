@@ -1,9 +1,11 @@
 # ADR-011: Why Viewer Core scope is bounded (no Tile Pipeline / Plugin ABI / Perfetto in M4)
 
 ## Status
+
 Accepted (2026-07-17)
 
 ## Context
+
 The `M4_PROFESSIONAL_VIEWER_CORE` RFC matures the existing Compare Engine and
 AnalyzerRegistry into a professional viewer core. There is pressure to also pull
 in adjacent large subsystems (Render Tile Pipeline, Plugin ABI rework, Perfetto
@@ -11,6 +13,7 @@ tracing). Each of those is independently valuable but carries high complexity
 and would dilute M4's focus on **maturity of what already works**.
 
 ## Decision
+
 M4 is explicitly bounded:
 
 - **Render Tile Pipeline — OUT (deferred).** A `core/render/Viewport` +
@@ -26,6 +29,7 @@ M4 is explicitly bounded:
   not depend on it and does not make it mandatory.
 
 ## Rationale
+
 - **Focus:** M4's value is hardening synchronization, pixel inspector,
   selection, analyzer-stability, and command unification — not new engine
   architecture.
@@ -36,6 +40,7 @@ M4 is explicitly bounded:
   Render Pipeline after Compare maturity. M4 = Compare; Render Pipeline = later.
 
 ## Consequences
+
 - ✅ M4 stays a tight, verifiable maturity milestone.
 - ✅ Existing foundations (render seed, plugin E2E, Perfetto shim) are preserved
   and extended in their own later milestones, not abandoned.
@@ -43,5 +48,6 @@ M4 is explicitly bounded:
 - ❌ No plugin ABI/loading changes in M4 (by design).
 
 ## Related
+
 - RFC: `docs/rfc/M4_PROFESSIONAL_VIEWER_CORE.md`
 - Roadmap re-prioritization note (2026-07-16) — `docs/roadmap.md`
