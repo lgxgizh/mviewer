@@ -320,7 +320,12 @@ regression gate is wired in (roadmap Phase-4).
   - **B4** thumbnail throughput (decoded+placed / sec);
   - **B5** cache-hit ratio under Zipf navigation (predictive-prefetch proxy);
   - **B6** memory budget (peak cache bytes; decays after `clearMemory`);
-  - **B7** image-switch warm/cold p50.
+  - **B7** image-switch warm/cold p50;
+  - **B8** first-interaction latency for a **preloaded** switch (`switch_p50_ms`,
+    budget < 16 ms under `--enforce` — docs/performance.md "Perceived latency < 16 ms");
+  - **B9** memory soak / stability — 10 open→navigate→evict cycles; asserts each
+    cycle's post-clear sample ≤ its peak (no in-cycle growth) and final baseline
+    returns to ~0 (no cumulative leak); budget enforced under `--enforce`.
 - **`mviewer_bench`** — standalone harness: `--smoke` (small corpus, exits 0;
   CI gate: proves it links + runs), `--enforce` (applies `docs/performance.md`
   budgets; exits ≠0 on fail — Phase-4 wiring, not yet in `ci.yml`),
@@ -339,6 +344,10 @@ regression gate is wired in (roadmap Phase-4).
     corpus (JPEG/PNG/TIFF).
 - [x] All M10 structural checks pass inside `core_tests` (`build.ps1 Test` → 100%).
 - [x] No allocator interposition; OS RSS never fails a budget check.
+- [x] **B8** preloaded switch p50 < 16 ms (verified: p50=10.2 ms / p95=31.8 / p99=525.6
+    on a 200-img corpus; `--enforce` PASS).
+- [x] **B9** memory soak: 10 cycles return to baseline after `clearMemory`, no cumulative
+    leak (verified: baseline_return_ok=1, finalBase=0; `--enforce` PASS).
 - [ ] `--enforce` regression gate wired into CI (roadmap Phase-4; intentionally
     deferred so it does not add developer burden before the architecture is stable).
 

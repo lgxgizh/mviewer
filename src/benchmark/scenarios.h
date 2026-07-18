@@ -78,4 +78,18 @@ ScenarioResult scenarioMemoryBudget(const Corpus &corpus);
 // B7: image-switch latency, preloaded vs cold.
 ScenarioResult scenarioImageSwitch(const Corpus &corpus);
 
+// B8: first-interaction latency for a PRELOADED image switch (docs/performance.md:
+// "Perceived latency < 16 ms (one frame at 60fps)" / "Decode + display (preloaded)
+// < 16 ms"). Navigates back-and-forth across a warm (fully cached) corpus and
+// reports p50/p95/p99 of a single frame-to-frame switch. Under --enforce the
+// budget is the strict <16ms gate (vs B7's softer <=50ms report).
+ScenarioResult scenarioSwitchLatency(const Corpus &corpus);
+
+// B9: memory soak / stability. Runs repeated open -> navigate -> evict cycles and
+// asserts peak cache bytes stay bounded and RETURN TO BASELINE after each clear
+// (no monotonic leak across cycles). docs/performance.md: "Memory returns to
+// baseline after cache eviction". Under --enforce requires each cycle's post-clear
+// sample <= its peak and final baseline within a tolerance of the initial baseline.
+ScenarioResult scenarioSoakStability(const Corpus &corpus);
+
 } // namespace mviewer::bench

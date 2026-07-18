@@ -95,14 +95,42 @@ int main(int argc, char **argv)
     results.push_back(mviewer::bench::scenarioCacheHitRatio(corpus));
     results.push_back(mviewer::bench::scenarioMemoryBudget(corpus));
     results.push_back(mviewer::bench::scenarioImageSwitch(corpus));
+    results.push_back(mviewer::bench::scenarioSwitchLatency(corpus));
+    results.push_back(mviewer::bench::scenarioSoakStability(corpus));
 
     bool allPass = true;
     for (auto &r : results)
     {
-        // M10 performance gate: under --enforce, B2 (first thumbnail) must meet
-        // the docs/performance.md budget of <100ms (cold). Smoke reports only.
-        if (b.enforce && r.name == "B2")
-            r.passed = b.check(r.value, 100.0);
+        // M10 performance gate: under --enforce, apply the docs/performance.md
+        // budgets. Smoke (no --enforce) reports metrics only.
+        if (b.enforce)
+        {
+            if (r.name == "B2")
+                r.passed = b.check(r.value, 100.0);               // first thumbnail <100ms
+            else if (r.name == "B8")
+                r.passed = b.check(r.value, 16.0);                // preloaded switch <16ms
+            else if (r.name == "B9")
+            {
+                // baseline_return_ok == 1.0 AND final within 2x initial baseline.
+                bool ok = (r.value > 0.5);
+                if (ok)
+                {
+                    // Parse finalBase / initBase from detail for the tolerance check.
+                    const auto posF = r.detail.find("finalBase=");
+                    const auto posI = r.detail.find("initBase=");
+                    if (posF != std::string::npos && posI != std::string::npos)
+                    {
+                        const double finalB =
+                            std::strtod(r.detail.c_str() + posF + 10, nullptr);
+                        const double initB =
+                            std::strtod(r.detail.c_str() + posI + 9, nullptr);
+                        if (initB > 0)
+                            ok = (finalB <= initB * 2.0);
+                    }
+                }
+                r.passed = ok;
+            }
+        }
         printVerdict(r, b);
         if (!r.passed)
             allPass = false;
