@@ -105,8 +105,10 @@ Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH)
         if (write(pp, rgb, "png"))
             c.pngPaths.push_back(pp.toStdString());
 
-        // TIFF at 4 MP (codec gated / heavier).
-        QImage tiff(2000, 2000, QImage::Format_RGB888);
+        // TIFF at 512x512 (matches JPEG/PNG dimensions; keeps the TIFF decode
+        // path exercised without the 2000x2000 uncompressed ~12MB/file space
+        // bomb that starved the data disk at large corpus sizes).
+        QImage tiff(512, 512, QImage::Format_RGB888);
         paint(tiff, static_cast<uint32_t>(i + 100000));
         const QImage trgb = tiff.convertToFormat(QImage::Format_RGB888);
         const QString tp = QString::fromStdString(c.dir) + QString("/img_%1.tif").arg(
