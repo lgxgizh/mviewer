@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <memory>
 #include <random>
 
 namespace mviewer::bench
@@ -68,9 +69,22 @@ void Corpus::clear() const
 Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH)
 {
     Corpus c;
-    QTemporaryDir tmp;
-    tmp.setAutoRemove(false);
-    c.dir = tmp.path().toStdString();
+    // Corpus lives on disk; default QTemporaryDir uses the system TEMP which on
+    // this machine is the starved C: system drive. Allow redirecting to a large
+    // data disk via MVIEWER_BENCH_TMP (benchmark-only, no product impact).
+    const QString envTmp = qEnvironmentVariable("MVIEWER_BENCH_TMP");
+    std::unique_ptr<QTemporaryDir> tmp;
+    if (!envTmp.isEmpty())
+    {
+        QDir().mkpath(envTmp);
+        tmp = std::make_unique<QTemporaryDir>(envTmp + QDir::separator());
+    }
+    else
+    {
+        tmp = std::make_unique<QTemporaryDir>();
+    }
+    tmp->setAutoRemove(false);
+    c.dir = tmp->path().toStdString();
 
     QDir().mkpath(QString::fromStdString(c.dir));
 

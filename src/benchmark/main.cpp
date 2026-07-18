@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include <QCoreApplication>
+#include <QApplication>
 #include <QImage>
 
 // mviewer_bench — M10 performance harness (docs/rfc/M10_PERFORMANCE_ENGINEERING.md).
@@ -50,11 +50,13 @@ void printVerdict(const mviewer::bench::ScenarioResult &r, const Budget &b)
 
 int main(int argc, char **argv)
 {
-    // Qt (QImage codecs, event loop) requires a live Q*Application BEFORE any
+    // Qt (QImage codecs, event loop) requires a live QApplication BEFORE any
     // QImage / codec work. Construct it first so makeCorpus() and the scenarios
-    // run inside a valid Qt context. scenarioStartup() detects this instance and
-    // only probes the already-live event loop instead of constructing a second one.
-    QCoreApplication app(argc, argv);
+    // run inside a valid Qt context. Image codec plugins live in the GUI module,
+    // so QApplication (not QCoreApplication) is required. scenarioStartup() detects
+    // this instance and only probes the already-live event loop instead of
+    // constructing a second one.
+    QApplication app(argc, argv);
 
     Budget b;
     size_t corpusSize = 1000;
@@ -94,8 +96,12 @@ int main(int argc, char **argv)
     results.push_back(mviewer::bench::scenarioImageSwitch(corpus));
 
     bool allPass = true;
-    for (const auto &r : results)
+    for (auto &r : results)
     {
+        // M10 performance gate: under --enforce, B2 (first thumbnail) must meet
+        // the docs/performance.md budget of <100ms (cold). Smoke reports only.
+        if (b.enforce && r.name == "B2")
+            r.passed = b.check(r.value, 100.0);
         printVerdict(r, b);
         if (!r.passed)
             allPass = false;
