@@ -89,6 +89,7 @@ int main(int argc, char **argv)
     std::vector<mviewer::bench::ScenarioResult> results;
     results.push_back(mviewer::bench::scenarioStartup());
     results.push_back(mviewer::bench::scenarioFirstThumbnail(corpus));
+    results.push_back(mviewer::bench::scenarioPipelinePriority(corpus));
     results.push_back(mviewer::bench::scenarioDecodeLatency(corpus));
     results.push_back(mviewer::bench::scenarioThumbThroughput(corpus));
     results.push_back(mviewer::bench::scenarioCacheHitRatio(corpus));

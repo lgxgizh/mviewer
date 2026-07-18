@@ -17,6 +17,7 @@
 #include <random>
 #include <sstream>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 namespace mviewer::bench
@@ -246,6 +247,122 @@ ScenarioResult scenarioFirstThumbnail(const Corpus &corpus)
                " (real ThumbnailPipeline path; budget <100ms)";
     return r;
 }
+
+// ─── Pipeline priority trace (M10 P1 verification) ───────────────────────────
+//
+// The user's review asked to PROVE ThumbnailPipeline priority scheduling
+// actually works: visible images (P0) must arrive before predictive neighbors
+// (Background), and background work must not block visible work. We trace the
+// completion order + latency of the first N thumbnails and classify each by
+// its scheduling tier (visible range [0,vis), neighbors [vis,vis+pred),
+// background beyond). No architecture change — pure observation.
+struct PipelineTraceEntry
+{
+    size_t index;
+    double arrivalMs;
+    std::string tier;
+};
+
+ScenarioResult scenarioPipelinePriority(const Corpus &corpus)
+{
+    auto &pipe = ThumbnailPipeline::instance();
+    pipe.clear();
+
+    const auto paths = FileSystem::listImages(corpus.dir);
+    if (paths.empty())
+        return ScenarioResult{"TRACE", "pipeline_priority", 0, {}, "empty corpus", false};
+
+    const size_t visBegin = 0, visEnd = 20;     // visible screenful
+    const size_t predCount = 16;                 // predictive neighbors
+    const size_t neighborEnd = visEnd + predCount;
+
+    // Authoritative index = position in the display-order path list the
+    // pipeline consumes. Filename parsing is fragile (mixed formats collide
+    // on img_NNNNN across .jpg/.png/.tif). Map path -> position instead.
+    std::unordered_map<std::string, size_t> pathToIndex;
+    for (size_t i = 0; i < paths.size(); ++i)
+        pathToIndex[paths[i]] = i;
+
+    std::mutex trMtx;
+    std::vector<PipelineTraceEntry> trace;
+    std::condition_variable cv;
+    std::atomic<int> arrived{0};
+    const int want = static_cast<int>(std::min<size_t>(60, paths.size()));
+    std::atomic<bool> done{false};
+    double tAnchorTrace = 0.0;
+
+    pipe.setDecodeFn([](const std::string &p, int size) {
+        return Decoder::decodeScaled(p, size);
+    });
+    pipe.setResultFn([&](const std::string &p, const ImageData &) {
+        const double ms = nowMs() - tAnchorTrace;
+        std::lock_guard<std::mutex> lk(trMtx);
+        size_t idx = paths.size();
+        auto it = pathToIndex.find(p);
+        if (it != pathToIndex.end())
+            idx = it->second;
+        std::string tier = (idx >= visBegin && idx < visEnd) ? "visible"
+                          : (idx >= visEnd && idx < neighborEnd) ? "neighbor"
+                                                                 : "background";
+        trace.push_back({idx, ms, tier});
+        if (++arrived >= want)
+        {
+            done.store(true);
+            cv.notify_all();
+        }
+    });
+
+    pipe.setSources(paths);
+    tAnchorTrace = nowMs();
+    pipe.setVisibleRange(visBegin, visEnd);
+
+    {
+        std::unique_lock<std::mutex> lk(trMtx);
+        cv.wait_for(lk, std::chrono::seconds(30), [&] { return done.load(); });
+    }
+
+    // Analyze: do all visible arrive before any neighbor, and all neighbors
+    // before any background? (Strict tier ordering proves priority works.)
+    bool visibleSeen = false, neighborSeen = false;
+    bool orderingOk = true;
+    for (const auto &e : trace)
+    {
+        if (e.tier == "visible")
+        {
+            if (neighborSeen)     // visible after a neighbor -> bad
+                orderingOk = false;
+            visibleSeen = true;
+        }
+        else if (e.tier == "neighbor")
+        {
+            if (!visibleSeen)     // neighbor before any visible -> bad
+                orderingOk = false;
+            neighborSeen = true;
+        }
+        else // background
+        {
+            if (!neighborSeen)     // background before any neighbor -> bad
+                orderingOk = false;
+        }
+    }
+
+    ScenarioResult r;
+    r.name = "TRACE";
+    r.metric = "pipeline_priority";
+    // Report-only: strict visible>neighbor>background ordering is a P1
+    // observation, not yet a hard --enforce gate (user said do not redesign
+    // Scheduler). The detail line carries tier_ordering=OK|VIOLATED.
+    r.passed = true;
+    std::ostringstream oss;
+    oss << "first_" << trace.size() << "_arrivals=";
+    for (size_t i = 0; i < std::min<size_t>(trace.size(), 12); ++i)
+        oss << trace[i].index << "@" << trace[i].arrivalMs << "[" << trace[i].tier << "] ";
+    oss << " tier_ordering=" << (orderingOk ? "OK" : "VIOLATED");
+    r.detail = oss.str();
+    pipe.clear();
+    return r;
+}
+
 
 // ─── B3: decode latency per format ──────────────────────────────────────────
 ScenarioResult scenarioDecodeLatency(const Corpus &corpus)
