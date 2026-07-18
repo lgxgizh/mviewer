@@ -1,6 +1,7 @@
 # TaskScheduler Industrialization Specification
 
 ## Module
+
 TaskScheduler Industrialization
 
 ## Purpose
@@ -52,7 +53,7 @@ an industrial-grade multi-executor engine suitable for:
 ## Executor Registry
 
 | Executor | Queue | Max Threads | Affinity | Purpose |
-|----------|-------|-------------|----------|---------|
+| ---------- | ------- | ------------- | ---------- | --------- |
 | IO | IOPool | 2 | Low-latency | File reads, disk cache writes |
 | Decode | DecodePool | N/2 | CPU-bound | JPEG/PNG/BMP decode |
 | Thumbnail | ThumbnailPool | N/2 | CPU-bound | Thumbnail scaling |
@@ -101,6 +102,7 @@ Lowest  = 0  = Background housekeeping
 ```
 
 Priority classes:
+
 - **Realtime**: must preempt everything else (UI deadline tasks)
 - **High**: user-visible, blocking viewport
 - **Medium**: quality-of-service, partial previews
@@ -110,6 +112,7 @@ Priority classes:
 ## Back-Pressure
 
 When the queue depth exceeds `max_queue_depth` (default 1000 per executor):
+
 - New tasks are rejected with `SchedulerError::BackPressure`
 - Caller should retry with exponential backoff or fall back to sync
 - Critical (deadline) tasks bypass back-pressure

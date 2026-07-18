@@ -19,7 +19,7 @@
 ## Naming Conventions
 
 | Element | Convention | Example |
-|---------|-----------|---------|
+| --------- | ----------- | --------- |
 | Types (classes, structs, enums) | `PascalCase` | `ImageDecoder`, `CacheEntry` |
 | Functions / Methods | `camelCase` | `decodeImage()`, `nextFrame()` |
 | Variables (local) | `camelCase` | `fileCount`, `pixelBuffer` |
@@ -129,7 +129,7 @@ private:
 ## Smart Pointer Policy
 
 | Situation | Use |
-|-----------|-----|
+| ----------- | ----- |
 | Exclusive ownership | `std::unique_ptr<T>` |
 | Shared ownership | `std::shared_ptr<T>` |
 | Non-owning observer | `raw pointer` (`T*`) or `std::observer_ptr` (C++20) |
@@ -313,7 +313,7 @@ auto hash = computePHash(image);
 ### Types
 
 | Type | Meaning |
-|------|---------|
+| ------ | --------- |
 | `feat` | New feature |
 | `fix` | Bug fix |
 | `perf` | Performance improvement |

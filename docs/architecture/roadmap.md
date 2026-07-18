@@ -25,7 +25,7 @@ met without it — not because of feature creep.
 ## Subsystem timeline (verified against source on disk, 2026-07-17)
 
 | Subsystem | Where | Introduced (milestone) | Why early |
-|-----------|-------|------------------------|-----------|
+| ----------- | ------- | ------------------------ | ----------- |
 | ImageRepository / DecoderRegistry | `src/core/image/*` | M3 | Core pipeline (M3 P0) |
 | ImageFrame / ImageBuffer | `src/core/image/*` | M3 | Single pixel container for all consumers |
 | Viewer/FullImage LRU + DiskCache | `src/core/image/*`, `src/core/cache/*` | M3→M5 | Adjacent-image instant switch (M3) + 5-level cache (M5) |
@@ -47,7 +47,9 @@ met without it — not because of feature creep.
 ## The early-arrival cases (do NOT remove)
 
 ### EventBus + JobSystem (M8 infra, needed by M4)
+
 M4's acceptance requires:
+
 - Diff computed off the UI thread → needs **JobSystem** (`src/core/job/Job.h`).
 - Sync / pixel / diff notifications decoupled from the Widget → needs
   **EventBus** (`src/core/EventBus.*`).
@@ -57,6 +59,7 @@ These were landed as part of the M8 "Job System + Plugin Registry" work but are
 shared infrastructure, not as something to prune when "finishing M4."
 
 ### Data Model (Workspace→Folder→ImageSet)
+
 The `Workspace`/`Folder`/`ImageSet` domain types and
 `ImageRepository::loadWorkspace` underpin both the M4 compare session and the M5
 browsing chain. Introduced with M8's data-model work; shared, not M4-specific.

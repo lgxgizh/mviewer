@@ -75,6 +75,7 @@ AnalyzerRegistry  ──► Analyzer (unified IAnalyzer)
 > live owner — that would couple domain to engine state (violates ADR-003/009).
 
 ### Class relationships (as implemented)
+
 - `CompareEngine` owns the `std::vector<shared_ptr<ImageFrame>>` and composes
   the 6 controllers. UI never owns comparison logic (ADR-009).
 - `CompareSession` is a **serialization snapshot** of compare state (returned by
@@ -84,6 +85,7 @@ AnalyzerRegistry  ──► Analyzer (unified IAnalyzer)
   built-ins idempotently (static-lib object-file pruning safe).
 
 ### Data flow (dual-image)
+
 1. `setImages({A,B})` → `rebuildLayout()` (2 cols × 1 row).
 2. `zoomAt(vx,vy,factor)` → `SyncController` updates `SyncTransform`; both cells
    read the shared transform when `syncEnabled()`.
@@ -94,6 +96,7 @@ AnalyzerRegistry  ──► Analyzer (unified IAnalyzer)
   thread; result delivered via `EventBus` (no synchronous UI-thread compute).
 
 ### Thread model
+
 - Decode/off-thread work runs on `TaskScheduler` pools (Decode/Thumbnail/UI).
 - Compare transform math is single-threaded on the UI thread (cheap; no decode).
 - `PixelController` reads already-decoded `ImageFrame` pixels synchronously
@@ -129,7 +132,7 @@ Priority order per review:
 5. **AnalyzerRegistry interface stability (P1)**
    - Freeze `Analyzer::analyze` / `analyzeRegion` signatures; no new algorithms
      in M4 — stabilize the contract so plugins can rely on it.
-5. **Command system unification (P1)**
+6. **Command system unification (P1)**
    - Ensure `OpenImageCommand`, `CompareCommand`, `CropCommand`, `RotateCommand`
      all go through `CommandStack` so Undo/Redo/Replay/AI-Agent all share one
      path. (Most already do; verify coverage.)

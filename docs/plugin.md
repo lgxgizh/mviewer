@@ -191,7 +191,7 @@ public:
 ### Search Paths
 
 | Platform | Path |
-|----------|------|
+| ---------- | ------ |
 | Windows | `%APPDATA%\MViewer\plugins\` |
 | Windows | `<install_dir>\plugins\` |
 | Linux | `~/.local/share/mviewer/plugins/` |
@@ -252,7 +252,7 @@ int mviewer_plugin_api_version();
 ### States
 
 | State | Description |
-|-------|-------------|
+| ------- | ------------- |
 | Discovered | Found in plugin directory, not yet loaded |
 | Loaded | Library loaded, entry point resolved |
 | Initialized | `initialize()` called successfully |
@@ -263,7 +263,7 @@ int mviewer_plugin_api_version();
 ### Lifecycle Events
 
 | Event | When | Plugin Action |
-|-------|------|---------------|
+| ------- | ------ | --------------- |
 | `OnLoad` | Library loaded | Allocate resources |
 | `OnInitialize` | `initialize()` called | Register capabilities |
 | `OnEnable` | User enables plugin | Activate functionality |
@@ -285,7 +285,7 @@ int mviewer_plugin_api_version();
 ### Compatibility
 
 | MViewer Version | API Version | Supports Plugins Targeting |
-|----------------|-------------|---------------------------|
+| ---------------- | ------------- | --------------------------- |
 | 1.0.x | 1 | 1 |
 | 1.1.x | 1 | 1 |
 | 2.0.x | 2 | 1, 2 |
@@ -306,6 +306,7 @@ int mviewer_plugin_api_version();
 Plugins run in the same process as MViewer. This provides maximum performance but requires trust.
 
 **Implications:**
+
 - A misbehaving plugin can crash the application
 - Plugins have access to the same memory space
 - No sandboxing (by design, for performance)
@@ -459,7 +460,7 @@ int mviewer_plugin_api_version() {
 ## Performance Requirements
 
 | Requirement | Target |
-|-------------|--------|
+| ------------- | -------- |
 | Plugin discovery | < 50ms |
 | Plugin load | < 100ms |
 | Plugin initialization | < 200ms |

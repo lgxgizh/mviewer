@@ -79,6 +79,7 @@ directly mutates engine/domain state.** Every user action goes
 ## 3. Scope — revised M9 phases (reordered per review)
 
 ### M9-1 Browse workflow
+
 - Directory navigation via **`QTreeView` + `QFileSystemModel`** (Qt built-in —
   do NOT implement a custom tree/scanner).
 - Wire `DirectoryTree → ThumbnailPanel → ImageViewer` (both exist).
@@ -88,6 +89,7 @@ directly mutates engine/domain state.** Every user action goes
   temp dir, asserts return < 100 ms and frame count == 1000.
 
 ### M9-2 Compare workflow
+
 - UI: select image A, Ctrl-select B, right-click → Compare → `CompareWorkspace`.
 - 2 / 4 / 8 layouts (engine already supports N via `CompareLayout::forCount`).
   Sync zoom/pan/scroll/selection + Blink + async Diff already in engine.
@@ -96,6 +98,7 @@ directly mutates engine/domain state.** Every user action goes
   `imageCount()` + `layout()` cols/rows.
 
 ### M9-3 Analysis workflow (YAGNI: NO AnalyzerRegistry)
+
 - `AnalysisPanel` (new UI) holds a **simple `std::vector<Analyzer*>`** of the
   existing analyzers and runs them directly. **No Registry / Factory /
   Plugin descriptor.** Introduce a Registry only if analyzer count exceeds ~10.
@@ -110,6 +113,7 @@ directly mutates engine/domain state.** Every user action goes
   runs on a frame, asserts non-empty results.
 
 ### M9-4 Export (raised priority — most valuable to algorithm engineers)
+
 - `ExportReport` (core/domain): JSON + CSV of
   `{imageA, imageB, PSNR, SSIM, meanRGB, noise, diffSummary}`.
 - `compare_diff.png` via `DifferenceEngine::heatMap` → `ImageBuffer` → PNG.
@@ -120,6 +124,7 @@ directly mutates engine/domain state.** Every user action goes
   exist + JSON parses + PSNR/SSIM present.
 
 ### M9-5 Workspace persistence (LOWEST priority — deferred in phase order)
+
 - Use existing `domain/Workspace.h` (`Folder`, `ImageSet`). Serialize to
   `.mviewer_workspace` (images / compare / roi / analyzer). Plus "Recent files"
   list (cheap, high value).
@@ -127,6 +132,7 @@ directly mutates engine/domain state.** Every user action goes
 - **Test:** `test_workspace_persist.cpp` (new) — serialize/parse round-trip.
 
 ### M9-6 Polish (product ergonomics — the real gap)
+
 - Keyboard: `Ctrl+O` (open), `Ctrl+S` (save/export), `Delete`, `F11`
   (fullscreen), `Space` (next), `Backspace` (prev).
 - Mouse: wheel zoom, drag-drop file/folder open.
@@ -153,6 +159,7 @@ directly mutates engine/domain state.** Every user action goes
 10. Do NOT split `CompareEngine.h` for tidiness (deferred past M9).
 
 ### Risk cleanups (minimal, scoped)
+
 - **Risk #1 (RenderEngine Qt leak):** `src/core/render/RenderEngine.h:5-6`
   `#include <QPainter>` / `<QRect>` leak Qt into a Core header. Allowed ONLY a
   minimal fix: define Qt-free `RenderRect`/`RenderSize` (RenderSize already

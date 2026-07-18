@@ -1,9 +1,11 @@
 # RenderCommand Specification
 
 ## Module
+
 RenderCommand + RenderCommandType + RenderInterp + RenderSize + RenderRect + Renderer + SoftwareRenderer + RenderEngine
 
 ## Purpose
+
 RenderCommand is a flat-struct command pattern for composable UI draw operations. Each command carries its data inline (srcImage, overlayImage, histogram bins, rect, color, alpha). 5 operations: DrawImage, DrawOverlay, DrawHistogram, DrawSelection, DrawPixelMarker. The RenderEngine facade dispatches to a pluggable Renderer backend (default: SoftwareRenderer). Flat struct (not union) because ImageData has a non-trivial constructor.
 
 ## API
@@ -85,7 +87,7 @@ public:
 ## Input
 
 | Factory Parameter | Type | Constraints | Default |
-|-------------------|------|-------------|---------|
+| ------------------- | ------ | ------------- | --------- |
 | `img` | `const ImageData&` | Valid pixels for DrawImage/DrawOverlay | — |
 | `tgt` | `const RenderSize&` | width>0, height>0 | — |
 | `m` | `RenderInterp` | — | — |
@@ -99,7 +101,7 @@ public:
 ## Output
 
 | Factory | Return | Content |
-|---------|--------|---------|
+| --------- | -------- | --------- |
 | `drawImage` | `RenderCommand` | type=DrawImage, srcImage=img, targetSize=tgt, interp=m |
 | `drawOverlay` | `RenderCommand` | type=DrawOverlay, overlayImage=img, alpha=a |
 | `drawHistogram` | `RenderCommand` | type=DrawHistogram, histData[0..n]=bins, rect=r, histCount=n |
@@ -115,7 +117,7 @@ public:
 ## Thread Safety
 
 | Method | Thread | Mechanism |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `scale/overlayDifference/scaleRegion` | UI thread typically | Backend dispatch; Qt paint device not thread-safe |
 | `setBackend` | UI thread | Atomic swap |
 | `scaleStatic/overlayDifferenceStatic/scaleRegionStatic` | Any thread | Stateless w/ static software backend |
@@ -123,7 +125,7 @@ public:
 ## Memory
 
 | Operation | Dominant Allocation |
-|-----------|---------------------|
+| ----------- | --------------------- |
 | `scale` | `target.w * target.h * 3` bytes (output ImageData) |
 | `overlayDifference` | same as base + same as diff |
 | `scaleRegion` | `target.w * target.h * 3` bytes |
@@ -132,7 +134,7 @@ public:
 ## Performance
 
 | Scenario | Budget | Baseline |
-|----------|--------|----------|
+| ---------- | -------- | ---------- |
 | `scale(1920→800)` | <15 ms | ~13 ms |
 | `overlayDifference(1080p)` | <5 ms | ~3 ms |
 | `scaleRegion(200×200→400×400)` | <3 ms | ~1.5 ms |
@@ -140,7 +142,7 @@ public:
 ## Errors
 
 | Error | Cause | Recovery |
-|-------|-------|----------|
+| ------- | ------- | ---------- |
 | null/empty source | Invalid input | Return null ImageData |
 | zero/negative target | Invalid RenderSize | Return null ImageData |
 | backend failure | Internal Qt error | Log, return null |

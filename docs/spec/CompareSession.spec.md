@@ -1,9 +1,11 @@
 # CompareSession Specification
 
 ## Module
+
 CompareSession + CellTransform + SyncMode + Viewport + CompareSelection
 
 ## Purpose
+
 CompareSession is the sole owner of all comparison state (RFC-007). UI (CompareWorkspace) reads the session after each mutation and renders; it never owns state. CompareEngine builds and mutates the session; UI consumes it.
 
 ## API
@@ -64,6 +66,7 @@ struct CompareSession {
 ## Input
 
 CompareSession is not directly constructed by UI. CompareEngine builds it:
+
 ```cpp
 CompareSession s = engine.session();  // snapshot for rendering
 ```
@@ -73,7 +76,7 @@ Fields are populated by CompareEngine::setImages() and transform mutations.
 ## Output
 
 | Method | Return | Semantics |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `imageCount()` | `int` | Number of loaded images |
 | `isValid()` | `bool` | true if 2..8 images loaded |
 | `isComparing()` | `bool` | Alias for isValid() |
@@ -90,7 +93,7 @@ Fields are populated by CompareEngine::setImages() and transform mutations.
 ## Thread Safety
 
 | Thread | Use |
-|--------|-----|
+| -------- | ----- |
 | UI thread | Reads session snapshot (copy) for rendering |
 | Engine thread | Mutates live session; UI reads only via `session()` snapshot |
 | Copy | Copy is independent; UI outlives the mutation |
@@ -98,7 +101,7 @@ Fields are populated by CompareEngine::setImages() and transform mutations.
 ## Memory
 
 | Component | Size |
-|-----------|------|
+| ----------- | ------ |
 | `imageIds` | ~64 bytes × count |
 | `cells` | 24 bytes × count (3 doubles per CellTransform) |
 | `viewport` | 24 bytes |
@@ -108,7 +111,7 @@ Fields are populated by CompareEngine::setImages() and transform mutations.
 ## Performance
 
 | Operation | Budget | Baseline |
-|-----------|--------|----------|
+| ----------- | -------- | ---------- |
 | `session()` (copy) | <0.01 ms | shallow string copies |
 | `isComparing()` | <0.001 ms | arithmetic only |
 | `isBlinking()` | <0.001 ms | bounds check |
@@ -116,7 +119,7 @@ Fields are populated by CompareEngine::setImages() and transform mutations.
 ## Errors
 
 | Error | Cause | Recovery |
-|-------|-------|----------|
+| ------- | ------- | ---------- |
 | `imageCount() < 2` | Session not yet populated | `isValid()` returns false; UI shows "load 2+ images" |
 | `blinkIndex out of range` | Race set during image removal | `isBlinking()` returns false; ignore |
 | `invalid syncMode` | Bad cast | Default to SyncMode::Off |

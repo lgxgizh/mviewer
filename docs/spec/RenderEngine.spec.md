@@ -1,9 +1,11 @@
 # RenderEngine Specification
 
 ## Module
+
 RenderEngine + Renderer interface + SoftwareRenderer
 
 ## Purpose
+
 RenderEngine is the UI-independent facade over image rendering. It supports a pluggable backend (Renderer interface), defaulting to SoftwareRenderer (Qt-backed). UI code submits RenderCommand batches; the engine dispatches to the current backend.
 
 ## API
@@ -31,7 +33,7 @@ public:
 ## Input / Output
 
 | Method | Input | Output |
-|--------|-------|--------|
+| -------- | ------- | -------- |
 | `scale` | `src`, `target.size`, `interp` | Scaled ImageData (RGB24) |
 | `overlayDifference` | `base`, `diff`, `alpha∈[0,1]` | Blended ImageData (RGB24) |
 | `scaleRegion` | `src.region`, `target.size`, `interp` | Scaled sub-image |
@@ -45,7 +47,7 @@ public:
 ## Thread Safety
 
 | Thread | Use |
-|--------|-----|
+| -------- | ----- |
 | UI thread | Scale/overlay results dispatched to Qt pixmap |
 | Background | Pre-render for comparison (future) |
 | Backend | Single-threaded (Qt QImage paint device) |
@@ -53,7 +55,7 @@ public:
 ## Memory
 
 | Operation | Dominant Allocation |
-|-----------|---------------------|
+| ----------- | --------------------- |
 | `scale` | `target.w * target.h * 3` bytes (output ImageData) |
 | `overlayDifference` | same as base + same as diff |
 | Cache entries in ImageFrame | Bounded by LRU eviction in CacheManager (Viewer pool) |
@@ -61,7 +63,7 @@ public:
 ## Performance
 
 | Scenario | Budget |
-|----------|--------|
+| ---------- | -------- |
 | `scale(1920→800)` | <15 ms |
 | `overlayDifference(1080p)` | <5 ms |
 | `scaleRegion(ROI 200x200→400x400)` | <3 ms |
@@ -69,7 +71,7 @@ public:
 ## Errors
 
 | Error | Cause | Recovery |
-|-------|-------|----------|
+| ------- | ------- | ---------- |
 | null/empty source | Invalid input | Return null ImageData |
 | zero/negative target | Invalid size | Return null ImageData |
 | backend failure | Internal Qt error | Log, return null |

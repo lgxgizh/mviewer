@@ -1,9 +1,11 @@
 # TaskScheduler Specification
 
 ## Module
+
 TaskScheduler + TaskContext + TaskHandle (Priority, PoolType, TaskId)
 
 ## Purpose
+
 TaskScheduler is the unified priority task scheduler: all background work flows through here. It routes tasks to 5 independent thread pools by Priority (UI, Decode, Thumbnail, Analysis, Background). Each task owns a TaskId, cancel token, progress counter, and dependency list. `cancelTree()` cancels a task plus all transitive dependents (BFS over the dependency graph).
 
 ## API
@@ -66,7 +68,7 @@ public:
 ## Input
 
 | Parameter | Type | Constraints | Default |
-|-----------|------|-------------|---------|
+| ----------- | ------ | ------------- | --------- |
 | `prio` | `Priority` | — | — |
 | `pool` | `PoolType` | — | — |
 | `work` | `function<void(TaskContext&)>` | Non-null | — |
@@ -78,7 +80,7 @@ public:
 ## Output
 
 | Method | Return | Semantics |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `submit` | `TaskHandle` | Handle for cancel/progress; null on failure |
 | `cancel(TaskHandle&)` | `void` | Sets cancel token |
 | `cancelTree(TaskId)` | `void` | BFS cancel |
@@ -95,7 +97,7 @@ public:
 ## Thread Safety
 
 | Method | Thread | Mechanism |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `submit` | Any thread | Mutex-protected dep graph + pool queues |
 | `cancel/cancelTree` | Any thread | Atomic cancel + graph BFS under mutex |
 | `handle` | Any thread | Graph lookup under mutex |
@@ -104,7 +106,7 @@ public:
 ## Memory
 
 | Operation | Dominant Allocation |
-|-----------|---------------------|
+| ----------- | --------------------- |
 | `submit` | 1 × TaskContext (~200 bytes + function captures) |
 | `cancelTree` | O(k) BFS where k = dependents |
 | `handle` | shared_ptr copy |
@@ -112,7 +114,7 @@ public:
 ## Performance
 
 | Scenario | Budget | Baseline |
-|----------|--------|----------|
+| ---------- | -------- | ---------- |
 | `submit` | <0.1 ms | queue only |
 | `cancelTree(k deps)` | <0.05 ms | atomic ops only |
 | Latency to start (no deps) | <5 ms | QThreadPool dispatch |
@@ -120,7 +122,7 @@ public:
 ## Errors
 
 | Error | Cause | Recovery |
-|-------|-------|----------|
+| ------- | ------- | ---------- |
 | null work | Invalid input | Return null handle |
 | dependency not found | Unknown TaskId | Log warning; treat as no-dep (run immediately) |
 | deadlock via circular deps | Bad usage | Not detected; use `cancelTree` to break |

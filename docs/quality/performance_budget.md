@@ -3,7 +3,7 @@
 ## Targets
 
 | Operation | Target | Measurement |
-|-----------|--------|-------------|
+| ----------- | -------- | ------------- |
 | Cold start | < 300ms | Process entry to first paint |
 | Warm start | < 100ms | Process entry to first paint |
 | Open folder (1st thumbnail) | < 100ms | Folder open to first visible thumbnail |
@@ -23,6 +23,7 @@
 ## Enforcement
 
 Every PR:
+
 1. Run `benchmark.exe`
 2. Compare results against budget
 3. Document any deviation
@@ -31,7 +32,7 @@ Every PR:
 ## Current Baseline (M5)
 
 | Operation | Avg | Status |
-|-----------|-----|--------|
+| ----------- | ----- | -------- |
 | Decode 1920x1080 (JPEG) | 24.7ms | ✅ |
 | Encode 1920x1080 (JPEG) | 64.0ms | ✅ |
 | ImageCache hit | <0.01ms | ✅ |

@@ -2,6 +2,7 @@
 
 **Reviewed:** 2026-07-17 (second review pass)
 **Verdict:** ⛔ NOT approved for implementation yet — 1 blocking gap (Diff async)
+
 + 2 clarifications required. The RFC structure is sound; these are doc fixes
 only. No implementation code may start until the gap is closed in the RFC.
 
@@ -14,11 +15,11 @@ only. No implementation code may start until the gap is closed in the RFC.
 ## A. CompareSession lifecycle — is it explicit?  ✅ (clarify in RFC)
 
 **Code reality:**
-- `CompareEngine` is owned **by value** inside `CompareWorkspace`
++ `CompareEngine` is owned **by value** inside `CompareWorkspace`
   (`CompareEngine m_engine;` — a QWidget member). Not a raw pointer to a Widget,
   not a dangling ptr. Ownership is: QWidget owns Engine owns frames.
-- Frames are `std::vector<shared_ptr<ImageFrame>>` (ref-counted, never raw).
-- `CompareEngine::session()` returns a **by-value `CompareSession` copy** — it is
++ Frames are `std::vector<shared_ptr<ImageFrame>>` (ref-counted, never raw).
++ `CompareEngine::session()` returns a **by-value `CompareSession` copy** — it is
   a *serialization snapshot*, NOT the live state owner. Live sync/selection/
   viewport state lives in `SyncController` / `SelectionController` /
   `ViewportController` (all core, no Qt).
@@ -31,9 +32,9 @@ mutable engine state). Add a one-line lifecycle note to RFC §2.
 ## B. ViewState location — is zoom/pan/roi detached from Qt Widget?  ✅ (minor gap)
 
 **Code reality:**
-- `SyncController` (core, zero Qt) owns `SyncTransform {scale, offset}` and
++ `SyncController` (core, zero Qt) owns `SyncTransform {scale, offset}` and
   per-cell `CellState`. No `QWidget`, no `QPoint` in the transform math.
-- `CompareSession` carries flat `sharedScale/sharedOffsetX/...` snapshot fields.
++ `CompareSession` carries flat `sharedScale/sharedOffsetX/...` snapshot fields.
 
 **Finding:** ViewState is correctly **not** in the View. But there is **no
 explicit `CompareViewState` sub-struct** — the user's proposed shape
@@ -45,13 +46,13 @@ Recommend (a) for M4 (no new type churn) — note it in RFC §2.
 ## C. Diff/Blink — does it run off the UI thread via JobSystem?  ❌ BLOCKING GAP
 
 **Code reality:**
-- `CompareEngine::differenceMap(idx, base)` calls
++ `CompareEngine::differenceMap(idx, base)` calls
   `DifferenceEngine::differenceMap(a.pixels(), b.pixels())` **synchronously**,
   on whatever thread invokes it. If the UI calls it directly → **main-thread
   block** on large images. ❌
-- `BlinkController` is timer-driven (QTimer in the controller) — that part is
++ `BlinkController` is timer-driven (QTimer in the controller) — that part is
   already off the compute path (just toggles an index). OK.
-- `JobSystem` (`src/core/job/Job.h`) and `TaskScheduler` exist and are the
++ `JobSystem` (`src/core/job/Job.h`) and `TaskScheduler` exist and are the
   sanctioned async path.
 
 **Required RFC change:** §3 maturity scope must mandate
@@ -65,12 +66,12 @@ on the UI thread. Add an explicit acceptance line under §6:
 ## D. Pixel Inspector data path — does it read ImageFrame, not QImage?  ✅
 
 **Code reality:**
-- `inspectPixel(imgX,imgY)` → `ImageFrame::pixels()` → `ImageData` →
++ `inspectPixel(imgX,imgY)` → `ImageFrame::pixels()` → `ImageData` →
   `ImageBuffer::view()` → raw pixel read (`data + y*stride + x*ch`). **No QImage
   in the read path.** ✓
-- UI converts `ImageFrame::pixels()` → QImage only at *paint* time via
++ UI converts `ImageFrame::pixels()` → QImage only at *paint* time via
   `mvcore::toQImage` (`compareworkspace.cpp:25`) — correct boundary.
-- `PixelController` is domain-free (core/compare, no Qt) and reusable.
++ `PixelController` is domain-free (core/compare, no Qt) and reusable.
 
 **Finding:** path is future-proof for Tile/RAW. RFC §2 data-flow already states
 this; keep. ✅
@@ -119,5 +120,6 @@ this; keep. ✅
 5. **M4_ACCEPTANCE_SPEC.md §C** — add the async-diff check.
 
 ## Out of scope (unchanged, per user)
+
 ❌ Repository/Cache/Scheduler refactor · ❌ Plugin ABI · ❌ Perfetto · ❌ GPU
 Render. Infra is sufficient; do not expand.

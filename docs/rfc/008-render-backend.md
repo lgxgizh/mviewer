@@ -1,15 +1,19 @@
 # RFC-008: Render Backend Abstraction
 
 ## Status
+
 Implemented
 
 ## Priority
+
 P1
 
 ## Goal
+
 RenderEngine supports backend abstraction. Software renderer now; Direct2D/OpenGL/Vulkan later.
 
 ## Interface
+
 ```cpp
 class Renderer {
 public:
@@ -24,9 +28,11 @@ class SoftwareRenderer : public Renderer { /* Qt-based, current */ };
 ```
 
 ## Rule
+
 RenderEngine should never directly depend on QWidget. UI only provides render target.
 
 ## Consequences
+
 - Backend-swappable rendering
 - No QWidget dependency in render path
 - Future GPU acceleration ready

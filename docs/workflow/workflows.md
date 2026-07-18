@@ -48,6 +48,7 @@
 ```
 
 Self-review checklist:
+
 - [ ] All headers Qt-free (except intentional boundaries like QtConvert.h)
 - [ ] New symbols documented
 - [ ] Error paths covered
@@ -56,6 +57,7 @@ Self-review checklist:
 - [ ] RFC status bumped (`Draft → Accepted → Implemented`)
 
 CI checklist:
+
 - [ ] Build 0 error, 0 warning on MSVC + Ninja
 - [ ] Tests pass: core_tests + test_m3m4m5 + mviewer_unit_tests
 - [ ] Benchmark: no regression >10%

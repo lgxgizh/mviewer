@@ -1,9 +1,11 @@
 # AnalysisEngine Specification
 
 ## Module
+
 AnalysisEngine (static utility — pure analysis algorithms)
 
 ## Purpose
+
 AnalysisEngine provides image analysis algorithms: statistics, PSNR, SSIM, noise estimation, difference maps, and heatmap pseudo-coloring. All methods are static. ROI is supported via `domain::Selection`. ImageFrame provides higher-level orchestration; AnalysisEngine is the algorithm layer.
 
 ## API
@@ -45,7 +47,7 @@ public:
 ## Input
 
 | Parameter | Type | Constraints | Default |
-|-----------|------|-------------|---------|
+| ----------- | ------ | ------------- | --------- |
 | `img` | `const ImageData&` | Non-null | — |
 | `a, b` | `const ImageData&` | Same dimensions for pairwise ops | — |
 | `region` | `const Selection&` | Image coordinates; clipped | — |
@@ -54,7 +56,7 @@ public:
 ## Output
 
 | Method | Return | Semantics |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `computeStats` | `ImageStats` | Full-image stats |
 | `computeStatsROI` | `ImageStats` | Stats within region |
 | `differenceMap` | `ImageData` | Grayscale RGB24; null on severe size mismatch |
@@ -72,7 +74,7 @@ public:
 ## Thread Safety
 
 | Method | Thread | Mechanism |
-|--------|--------|-----------|
+| -------- | -------- | ----------- |
 | `computeStats/computeStatsROI` | Any thread | Stateless; safe for concurrent use on distinct ImageData |
 | `differenceMap/psnr/ssim` | Any thread | Stateless |
 | `noiseEstimate/heatMap` | Any thread | Stateless |
@@ -80,7 +82,7 @@ public:
 ## Memory
 
 | Operation | Dominant Allocation |
-|-----------|---------------------|
+| ----------- | --------------------- |
 | `computeStats` | 6 × 256 ints (histogram stack) |
 | `differenceMap` | `w*h*3` bytes (output) |
 | `heatMap` | `w*h*3` bytes (output) |
@@ -88,7 +90,7 @@ public:
 ## Performance
 
 | Scenario | Budget | Baseline |
-|----------|--------|----------|
+| ---------- | -------- | ---------- |
 | `computeStats(24MP)` | <20 ms | ~19 ms |
 | `psnr(24MP)` | <20 ms | ~18 ms |
 | `ssim(24MP)` | <100 ms | ~97 ms |
@@ -99,7 +101,7 @@ public:
 ## Errors
 
 | Error | Cause | Recovery |
-|-------|-------|----------|
+| ------- | ------- | ---------- |
 | null input | Invalid ImageData | Return null ImageData / 0.0 / empty ImageStats |
 | size mismatch | Pairwise ops on different dimensions | Clip to min(w,h); if severe, return null |
 | empty ROI | Selection outside frame | pixelCount = 0, all means 0 |
