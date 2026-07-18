@@ -53,8 +53,9 @@ struct RenderCacheEntry
 class ImageFrame
 {
   public:
-    ImageFrame() = default;
+    ImageFrame();
     ImageFrame(const mviewer::domain::ImageMetadata &meta, const ImageData &pixels);
+    ~ImageFrame();
 
     // Factory: create from a decoded image, filling metadata (hash, size, mtime).
     // Implementation may use Qt for file interrogation (.cpp only).

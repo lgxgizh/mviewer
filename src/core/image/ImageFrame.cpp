@@ -1,5 +1,7 @@
 #include "core/image/ImageFrame.h"
 
+#include "core/perf/MemoryTracker.h"
+
 #include <QFileInfo>
 #include <algorithm>
 #include <cstring>
@@ -15,9 +17,20 @@ inline int toLum(uint8_t r, uint8_t g, uint8_t b)
 
 } // namespace
 
+ImageFrame::ImageFrame()
+{
+    mviewer::perf::MemoryTracker::notifyFrameCreated();
+}
+
 ImageFrame::ImageFrame(const mviewer::domain::ImageMetadata &meta, const ImageData &pixels)
     : m_meta(meta), m_pixels(pixels)
 {
+    mviewer::perf::MemoryTracker::notifyFrameCreated();
+}
+
+ImageFrame::~ImageFrame()
+{
+    mviewer::perf::MemoryTracker::notifyFrameDestroyed();
 }
 
 /*static*/ ImageFrame ImageFrame::create(const std::string &path, const ImageData &pixels)

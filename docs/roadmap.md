@@ -33,6 +33,8 @@
 | M6 | Vertical Browsing Chain (product-grade) | ✅ Done (DecoderRegistry + per-format decoders, metadata enrichment, scheduler priority wiring, test split into 5 suites; 9/9 CTest suites green) |
 | M7 | Stability hardening + Render Pipeline foundation | ✅ Done (coverage tests; Perfetto opt-in trace shim; MetadataReader extraction; **Render Pipeline foundation**: `Viewport`+`TileGrid`+`TileCache`(LOD)+tile-based `ImageViewer` paint; **Compare Engine Pixel module** completing Layout/Sync/ROI/Diff/Pixel; **ThumbnailPipeline** subsystem; **Undo/Redo CommandStack**+Rotate/Label; 16/16 CTest green). **CI gate reverted to Phase-1 mandatory** (clang-tidy/ASan advisory, non-gating) per Architect re-prioritization. |
 | M8 | Feature completion: Crop + Data Model + Job System + Plugin Registry | ✅ Done (CropCommand reversible; `Workspace→Folder→ImageSet` domain model + `ImageRepository::loadWorkspace`; `Job`/`JobSystem` facade over `TaskScheduler`; **Plugin Registry E2E** — shared `mviewer_core`, real loadable/registerable/queryable `example_analyzer` plugin, subprocess-runner CTest; 20/20 CTest green). |
+| M9 | Productization (RFC-driven, scope-disciplined) | ✅ Done (RFC M9_PRODUCTIZATION approved; product-browse / compare-workflow / analysis-panel / export / workspace-persist suites added; CI green on public Qt 6.8.0). |
+| M10 | Performance Engineering (MemoryTracker + benchmark harness) | ✅ Done (RFC M10_PERFORMANCE_ENGINEERING approved; `core/perf/MemoryTracker` Qt-free ledger sampling `CacheManager` + live `ImageFrame` count + OS working-set; `benchmark/` 7-scenario suite B1–B7 + standalone `mviewer_bench` harness; `core_tests` folds MemoryTracker + benchmark structural suites; all green. **CI regression gate deferred to Phase-4** per roadmap.) |
 
 > Historical note: an earlier internal scheme reused M3/M4/M5 for the prototype Compare /
 > Analysis / Render engines. Those engines are complete and live under `core/compare`,
@@ -286,6 +288,70 @@ build-system / CI changes beyond what these features require.
 > the plugin can share its vtable. This is a real, intentional change to `src/CMakeLists.txt`
 > (and root `CMakeLists.txt` adds `add_subdirectory(plugins/example)`). It is within the
 > feature's authorized scope (making the plugin system real), not a frozen-infra change.
+
+---
+
+## M10 — Performance Engineering (RFC M10_PERFORMANCE_ENGINEERING)
+
+**Goal:** Establish a repeatable, deterministic performance ledger + benchmark harness so
+that every future speed/scale claim is backed by a number, not a vibe. Scope is
+strictly M9-§8: `MemoryTracker` (Qt-free ledger) + a benchmark suite. No CI
+regression gate is wired in (roadmap Phase-4).
+
+**Deliverables (✅ Complete):**
+
+- **`core/perf/MemoryTracker`** — a Qt-free ledger (`MemoryTracker.h` is
+  Qt-free; only the `.cpp` OS-RSS read is per-platform guarded). It does **not**
+  interpose the allocator (YAGNI — full heaptrack-style interposition is a Phase-4
+  concern). It *samples* counters that already exist in `core`:
+  - `CacheManager::memoryUsageBytes()` + per-level `levelStats` (hits/misses) →
+    `cacheTotalBytes`, `cacheByLevel[4]`, `cacheHits/Misses[4]`;
+  - live `ImageFrame` count via additive `ImageFrame` ctor/dtor hooks
+    (`notifyFrameCreated/Destroyed`, lock-free atomics, peak tracked);
+  - a manual `externalBytes` ledger for in-flight decode buffers held outside the
+    cache;
+  - a best-effort OS working-set read (never used to fail a budget — OS RSS
+    is noisy; budget checks use deterministic bytes + live-frame count).
+- **`benchmark/` suite** — 7 scenarios, each returning a structured
+  `ScenarioResult{name, metric, value, Timing, detail, passed}`:
+  - **B1** startup-to-Qt-ready (event-loop probe when folded into `core_tests`);
+  - **B2** first-thumbnail latency (`loadDirectoryAsync` → first thumbnail in cache);
+  - **B3** decode latency per format (JPEG/PNG/TIFF p50/p95/p99);
+  - **B4** thumbnail throughput (decoded+placed / sec);
+  - **B5** cache-hit ratio under Zipf navigation (predictive-prefetch proxy);
+  - **B6** memory budget (peak cache bytes; decays after `clearMemory`);
+  - **B7** image-switch warm/cold p50.
+- **`mviewer_bench`** — standalone harness: `--smoke` (small corpus, exits 0;
+  CI gate: proves it links + runs), `--enforce` (applies `docs/performance.md`
+  budgets; exits ≠0 on fail — Phase-4 wiring, not yet in `ci.yml`),
+  `--corpus-size N`.
+- **`core_tests` folds the M10 structural suites** (`MemoryTracker` ledger +
+  `benchmark` scenario functors) via `core/test_m10.cpp`, so they run in the
+  known-good consolidated exe link environment.
+
+**Acceptance criteria (M10):**
+
+- [x] `MemoryTracker` samples `CacheManager` deterministic bytes + live `ImageFrame`
+    count; peak is tracked and `reset()` clears it.
+- [x] Benchmark scenarios return well-formed results (finite timing, ratios in [0,1],
+    memory decays after clear) — structural, not wall-clock-gated.
+- [x] `mviewer_bench --smoke` links and runs end-to-end (exit 0) on a generated
+    corpus (JPEG/PNG/TIFF).
+- [x] All M10 structural checks pass inside `core_tests` (`build.ps1 Test` → 100%).
+- [x] No allocator interposition; OS RSS never fails a budget check.
+- [ ] `--enforce` regression gate wired into CI (roadmap Phase-4; intentionally
+    deferred so it does not add developer burden before the architecture is stable).
+
+**Notes / honest gaps:**
+
+- The harness measures the **real `ImageRepository` / `CacheManager` / `Decoder`**
+  paths (no mocks), so the numbers reflect actual product behavior on this machine.
+- B2/B4 `passed` is informational in `--smoke` (budget enforcement is
+  `--enforce`'s job); the scenarios still *report* the metric.
+- A latent `paint()` row-offset bug in the corpus generator (wrote pixels with a
+  full-image index instead of a per-row index) was found and fixed during M10 —
+  it had been silently corrupting the heap and cascading into unrelated Qt-init
+  crashes. Root-caused and removed.
 
 ---
 

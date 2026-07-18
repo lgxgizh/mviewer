@@ -45,6 +45,7 @@ add_library(mviewer_core SHARED
     core/command/DeleteCommand.cpp
     core/command/ToggleHistogramCommand.cpp
     core/benchmark/Benchmark.cpp
+    core/perf/MemoryTracker.cpp
 )
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
@@ -113,6 +114,12 @@ target_include_directories(MViewer
 
 add_executable(core_tests
     core/test_compare.cpp
+    core/test_m10.cpp
+    # M10 suites (incremental isolation)
+    core/test_memorytracker.cpp
+    core/test_benchmark.cpp
+    benchmark/corpus.cpp
+    benchmark/scenarios.cpp
 )
 
 target_link_libraries(core_tests
@@ -454,6 +461,31 @@ add_test(NAME compare_workflow_tests COMMAND compare_workflow_tests)
 add_test(NAME analysis_panel_tests COMMAND analysis_panel_tests)
 add_test(NAME export_tests COMMAND export_tests)
 add_test(NAME workspace_persist_tests COMMAND workspace_persist_tests)
+
+# ─── M10 Performance Engineering ─────────────────────────────────────────────
+# MemoryTracker + benchmark scenario structural tests are folded into core_tests
+# (via core/test_m10.cpp) — the known-good consolidated exe link environment.
+#
+# mviewer_bench: standalone perf harness (docs/rfc/M10_PERFORMANCE_ENGINEERING.md).
+# CI only runs --smoke (proves it links + runs). The --enforce regression gate
+# is roadmap Phase-4 and is NOT wired into ci.yml here.
+add_executable(mviewer_bench
+    benchmark/main.cpp
+    benchmark/corpus.cpp
+    benchmark/scenarios.cpp
+)
+
+target_link_libraries(mviewer_bench
+    PRIVATE
+        Qt6::Widgets
+        mviewer_core
+)
+
+target_compile_features(mviewer_bench PRIVATE cxx_std_20)
+target_include_directories(mviewer_bench PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(mviewer_bench PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+add_test(NAME bench_smoke COMMAND mviewer_bench --smoke)
 
 # ─── Format target ──────────────────────────────────────────────────────────
 
