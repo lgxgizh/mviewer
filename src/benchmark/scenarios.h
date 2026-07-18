@@ -57,8 +57,11 @@ struct ThumbnailBreakdown
 // B1: startup-to-first-paint. Offscreen QApplication + first QWidget paint.
 ScenarioResult scenarioStartup();
 
-// B2: folder load -> first thumbnail emit. loadDirectoryAsync latched.
+// B2: folder load -> first thumbnail emit. Real ThumbnailPipeline path + breakdown.
 ScenarioResult scenarioFirstThumbnail(const Corpus &corpus);
+
+// TRACE: prove ThumbnailPipeline priority scheduling (visible > neighbor > background).
+ScenarioResult scenarioPipelinePriority(const Corpus &corpus);
 
 // B3: decode latency per format (p50/p95/p99 ms).
 ScenarioResult scenarioDecodeLatency(const Corpus &corpus);
