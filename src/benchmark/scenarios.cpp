@@ -291,7 +291,18 @@ ScenarioResult scenarioPipelinePriority(const Corpus &corpus)
     std::atomic<bool> done{false};
     double tAnchorTrace = 0.0;
 
-    pipe.setDecodeFn([](const std::string &p, int size) {
+    // Decode START times, keyed by path. Captured inside a wrapping decode
+    // fn so we can prove priority by DISPATCH/START order (decode-cost
+    // independent), not by completion order (which TIFF-vs-JPEG cost dominates
+    // and would falsely flag a slow visible TIFF as "behind" a fast neighbor).
+    std::unordered_map<std::string, double> startMs;
+    std::mutex startMtx;
+
+    pipe.setDecodeFn([&](const std::string &p, int size) -> ImageData {
+        {
+            std::lock_guard<std::mutex> lk(startMtx);
+            startMs[p] = nowMs() - tAnchorTrace;
+        }
         return Decoder::decodeScaled(p, size);
     });
     pipe.setResultFn([&](const std::string &p, const ImageData &) {
@@ -321,43 +332,48 @@ ScenarioResult scenarioPipelinePriority(const Corpus &corpus)
         cv.wait_for(lk, std::chrono::seconds(30), [&] { return done.load(); });
     }
 
-    // Analyze: do all visible arrive before any neighbor, and all neighbors
-    // before any background? (Strict tier ordering proves priority works.)
-    bool visibleSeen = false, neighborSeen = false;
-    bool orderingOk = true;
-    for (const auto &e : trace)
+    // Priority proof (decode-cost independent): every visible decode must START
+    // no later than any neighbor starts, and every neighbor no later than any
+    // background starts. This is what "visible gets highest priority" means.
+    double maxVisibleStart = -1, minNeighborStart = 1e9;
+    double maxNeighborStart = -1, minBackgroundStart = 1e9;
+    for (const auto &kv : startMs)
     {
-        if (e.tier == "visible")
+        auto it = pathToIndex.find(kv.first);
+        if (it == pathToIndex.end())
+            continue;
+        const size_t idx = it->second;
+        const double s = kv.second;
+        if (idx >= visBegin && idx < visEnd)
         {
-            if (neighborSeen)     // visible after a neighbor -> bad
-                orderingOk = false;
-            visibleSeen = true;
+            maxVisibleStart = std::max(maxVisibleStart, s);
         }
-        else if (e.tier == "neighbor")
+        else if (idx >= visEnd && idx < neighborEnd)
         {
-            if (!visibleSeen)     // neighbor before any visible -> bad
-                orderingOk = false;
-            neighborSeen = true;
+            minNeighborStart = std::min(minNeighborStart, s);
+            maxNeighborStart = std::max(maxNeighborStart, s);
         }
-        else // background
+        else
         {
-            if (!neighborSeen)     // background before any neighbor -> bad
-                orderingOk = false;
+            minBackgroundStart = std::min(minBackgroundStart, s);
         }
     }
+    const bool orderingOk =
+        (maxVisibleStart <= minNeighborStart + 1e-6) &&
+        (maxNeighborStart <= minBackgroundStart + 1e-6);
 
     ScenarioResult r;
     r.name = "TRACE";
     r.metric = "pipeline_priority";
-    // Report-only: strict visible>neighbor>background ordering is a P1
-    // observation, not yet a hard --enforce gate (user said do not redesign
-    // Scheduler). The detail line carries tier_ordering=OK|VIOLATED.
+    // Report-only: priority-by-start-order proof. Not a hard --enforce gate
+    // (user said do not redesign Scheduler). detail carries the verdict.
     r.passed = true;
     std::ostringstream oss;
-    oss << "first_" << trace.size() << "_arrivals=";
-    for (size_t i = 0; i < std::min<size_t>(trace.size(), 12); ++i)
-        oss << trace[i].index << "@" << trace[i].arrivalMs << "[" << trace[i].tier << "] ";
-    oss << " tier_ordering=" << (orderingOk ? "OK" : "VIOLATED");
+    oss << "visible_start_max=" << maxVisibleStart
+        << " neighbor_start_min=" << minNeighborStart
+        << " neighbor_start_max=" << maxNeighborStart
+        << " background_start_min=" << minBackgroundStart
+        << " priority_by_start=" << (orderingOk ? "OK" : "VIOLATED");
     r.detail = oss.str();
     pipe.clear();
     return r;
