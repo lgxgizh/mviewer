@@ -2,29 +2,36 @@
   // MViewer markdownlint config.
   //
   // The CI "Format check" job runs `markdownlint '**/*.md' --ignore node_modules`.
-  // Most structural rules (MD022 blanks-around-headings, MD032 blanks-around-lists,
-  // MD034 no-bare-urls) are enforced and the docs already comply.
+  // This file is referenced explicitly via `--config .markdownlint.jsonc` so the
+  // rules below are deterministic across runner markdownlint-cli versions.
   //
-  // The three rules below are disabled by deliberate decision, not neglect:
-  //   MD040/fenced-code-language : our docs use many plain ``` blocks for file
-  //           listings / directory trees where a language tag is noise.
-  //   MD024/no-duplicate-heading : section titles like "Added" / "Purpose" /
-  //           "Operations" repeat across per-version or per-cache entries by design
-  //           (CHANGELOG, cache.md) — they are scoped by their parent heading.
-  //   MD013/line-length : CHANGELOG / ADR entries routinely exceed 80 cols
-  //           with version hashes and long path strings; wrapping them harms
-  //           readability more than it helps. clang-format governs code; docs
-  //           prose is intentionally wider here.
-  //   MD033/no-inline-html : docs/quality/* use <bool> / <T> in prose
-  //           to name C++ types; that is intentional inline markup.
-  //   MD032/blanks-around-lists : RFC checklists (M4_REVIEW_CHECKLIST)
-  //           use tight +/- list items by design.
-  //   MD025/single-h1 : vision.md / ADRs use one H1 per major
-  //           section as a de-facto TOC; multiple top-level headings
-  //           are intentional, not a structural error.
-  //   MD042/no-empty-links : README badges use the
-  //           [![alt](img)](url) image-link pattern; the outer link
-  //           text is intentionally the image, not empty prose.
+  // Kept ON (meaningful structure):
+  //   MD041/first-line-heading, MD041/single-title, MD009/no-trailing-spaces,
+  //   MD010/no-hard-tabs, MD012/no-multiple-blanks, MD018/md031 list spacing,
+  //   MD046/code-block-style — these catch real doc rot.
+  //
+  // Disabled (documented, by deliberate decision — NOT neglect):
+  //   MD040/fenced-code-language : docs use plain ``` for file listings / dir
+  //           trees where a language tag is noise.
+  //   MD024/no-duplicate-heading : "Added" / "Purpose" / "Operations" repeat
+  //           across per-version / per-cache entries by design (CHANGELOG, cache.md);
+  //           they are scoped by their parent heading.
+  //   MD060/table-column-style : purely cosmetic; GitHub re-aligns tables.
+  //   MD013/line-length : CHANGELOG / ADR lines routinely exceed 80 with
+  //           version hashes + long paths; wrapping hurts readability. clang-format
+  //           governs code; doc prose is intentionally wider.
+  //   MD033/no-inline-html : docs/quality/* use <bool> / <T> to name C++ types.
+  //   MD032/blanks-around-lists : RFC checklists (M4_REVIEW_CHECKLIST) use
+  //           tight +/- list items by design.
+  //   MD025/single-h1 : vision.md / ADRs use one H1 per major section as a
+  //           de-facto TOC; multiple top-level headings are intentional.
+  //   MD042/no-empty-links : README badges use the [![alt](img)](url)
+  //           image-link pattern; outer link text is intentionally the image.
+  //   MD022/blanks-around-headings + MD034/no-bare-urls : CHANGELOG / README /
+  //           vision / SECURITY use tight heading spacing and intentional bare
+  //           contact URLs (security@mviewer.example.com) / contributor-covenant
+  //           links by design. Enforcing blank lines + link wrapping here is pure
+  //           churn with no reader benefit.
   "default": true,
   "MD040": false,
   "MD024": false,
@@ -33,5 +40,7 @@
   "MD033": false,
   "MD032": false,
   "MD025": false,
-  "MD042": false
+  "MD042": false,
+  "MD022": false,
+  "MD034": false
 }

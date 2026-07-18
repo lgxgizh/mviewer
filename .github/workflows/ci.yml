@@ -62,7 +62,7 @@ jobs:
         run: npm install -g markdownlint-cli
 
       - name: markdownlint
-        run: markdownlint '**/*.md' --ignore node_modules
+        run: markdownlint --config .markdownlint.jsonc '**/*.md' --ignore node_modules
 
   # ---------------------------------------------------------------------------
   # build — MSVC + Qt 6.8.0, enforce zero warnings from build log
@@ -90,9 +90,12 @@ jobs:
 
       - name: Enforce zero warnings
         run: |
-          $m = Select-String -Path build.log -Pattern 'warning:'
+          # Match MSVC compiler warnings (e.g. "warning C1234:") only.
+          # Do NOT match ctest's own "WARNING: Tests failed" status
+          # line (uppercase, no code) that build.ps1 pipes into build.log.
+          $m = Select-String -Path build.log -Pattern 'warning C\d'
           if ($m) {
-            Write-Host "::error:: Zero-warnings gate: build.log contains warning(s):"
+            Write-Host "::error:: Zero-warnings gate: build.log contains compiler warning(s):"
             $m | ForEach-Object { Write-Host ("  " + $_.Line) }
             exit 1
           }
