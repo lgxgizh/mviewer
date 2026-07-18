@@ -1,15 +1,21 @@
 #include "benchmark/scenarios.h"
 
 #include "core/cache/CacheManager.h"
+#include "core/filesystem/FileSystem.h"
+#include "core/image/Decoder.h"
 #include "core/image/ImageRepository.h"
 #include "core/perf/MemoryTracker.h"
+#include "core/thumbnail/ThumbnailPipeline.h"
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QImage>
+#include <QImageReader>
 #include <algorithm>
 #include <chrono>
 #include <numeric>
 #include <random>
+#include <sstream>
 #include <thread>
 #include <vector>
 
@@ -48,12 +54,10 @@ double nowMs()
 // ─── B1: startup to first paint ──────────────────────────────────────────────
 ScenarioResult scenarioStartup()
 {
-    // B1 measures Qt-core readiness cost. Two contexts:
-    //  - standalone mviewer_bench: no Q*Application exists yet -> measure the
-    //    cold QCoreApplication construction + platform-plugin load.
-    //  - folded into core_tests (which already owns a QCoreApplication):
-    //    constructing a SECOND one is illegal in Qt and crashes, so we instead
-    //    probe the already-live event loop. Either way: exactly one app, ever.
+    // B1 probes Qt readiness. The harness (mviewer_bench main, or core_tests)
+    // ALWAYS owns a live QApplication before this runs, so we never construct a
+    // second one (illegal in Qt, crashes). We just probe the already-live event
+    // loop. Exactly one QApplication exists per process, ever.
     ScenarioResult r;
     r.name = "B1";
 
@@ -64,58 +68,182 @@ ScenarioResult scenarioStartup()
         const double t1 = nowMs();
         r.metric = "qt_event_loop_probe_ms";
         r.value = t1 - t0;
-        r.detail = "Qt already initialized (folded into core_tests)";
+        r.detail = "Qt already initialized (QApplication owned by harness)";
         return r;
     }
 
+    // Defensive fallback only: if invoked with no live Q*Application (should not
+    // happen — both mviewer_bench and core_tests construct one first), measure a
+    // cold QApplication construction + platform-plugin load.
     const double t0 = nowMs();
     int argc = 1;
     char arg0[] = "mviewer_bench";
     char *argv[] = {arg0, nullptr};
-    QCoreApplication app(argc, argv); // forces QtCore + platform plugin load
-    QCoreApplication::processEvents();
+    QApplication app(argc, argv); // forces Qt + platform plugin load
+    QApplication::processEvents();
     const double t1 = nowMs();
 
     r.metric = "startup_to_qtcore_ready_ms";
     r.value = t1 - t0;
-    r.detail = "QCoreApplication + platform-plugin load";
+    r.detail = "QApplication + platform-plugin load (cold fallback)";
     // Budget: cold <300ms / warm <100ms — set by harness, not here.
     return r;
 }
 
-// ─── B2: first thumbnail latency ─────────────────────────────────────────────
+// ─── B2: first thumbnail latency (REAL ThumbnailPipeline path) ───────────────
+//
+// NOTE: previously this scenario drove ImageRepository::loadDirectoryAsync,
+// which submits a FULL-SIZE decode for EVERY image and waits for ALL of them.
+// That measured directory-wide decode time, NOT the user-perceived first
+// thumbnail. The product's actual first-thumbnail path is ThumbnailPipeline
+// (visible range -> Thumbnail priority, neighbors -> Background), which the
+// M3 acceptance test already exercises. This scenario now measures THAT path,
+// with a stage breakdown (M10 performance gate: profile before optimize).
+//
+// Measure one cold+warm first-thumbnail cycle through the real pipeline and
+// return the stage split. `warm` reuses an already-warm corpus directory so
+// filesystem/codec caches are hot.
+ThumbnailBreakdown measureFirstThumbnail(const Corpus &corpus)
+{
+    ThumbnailBreakdown bd;
+
+    // 1) scan: directory enumeration (what setSources consumes).
+    const double tScan0 = nowMs();
+    const auto paths = FileSystem::listImages(corpus.dir);
+    const double tScan1 = nowMs();
+    bd.scan_ms = tScan1 - tScan0;
+    if (paths.empty())
+        return bd;
+
+    auto &pipe = ThumbnailPipeline::instance();
+    pipe.clear();
+
+    // All mutable timing state lives on the HEAP via shared_ptr and is captured
+    // BY VALUE by the worker lambdas. The ThumbnailPipeline does NOT join
+    // in-flight decode tasks on clear(); they run to completion on scheduler
+    // worker threads. If we captured stack locals by reference, a late task
+    // would write into freed stack -> use-after-free (flaky SEGFAULT under
+    // parallel ctest). Heap-backed state survives the function scope safely.
+    struct State
+    {
+        std::atomic<double> firstDecodeStart{-1.0};
+        std::atomic<double> firstDecodeEnd{-1.0};
+        std::atomic<double> firstResultAt{-1.0};
+        std::atomic<bool> firstCaptured{false};
+        std::atomic<double> anchor{-1.0};
+        std::atomic<bool> firstSeen{false};
+        std::atomic<double> resizeMs{0.0};
+        std::atomic<double> cacheMs{0.0};
+    };
+    auto st = std::make_shared<State>();
+
+    // Injected decode: measure decode (incl. scaled-resize via Qt codec) and a
+    // separate standalone resize pass so the breakdown shows resize distinctly.
+    pipe.setDecodeFn([st](const std::string &p, int size) -> ImageData {
+        // Latch the very first decode-start (queue_wait end) exactly once.
+        if (st->anchor.load() >= 0.0 && st->firstDecodeStart.load() < 0.0)
+        {
+            double expect = -1.0;
+            st->firstDecodeStart.compare_exchange_strong(expect, nowMs());
+        }
+        const double ds = nowMs();
+        ImageData thumb = Decoder::decodeScaled(p, size);
+        const double de = nowMs();
+        // Record the first decode's end + standalone resize, once.
+        bool expected = false;
+        if (st->firstCaptured.compare_exchange_strong(expected, true))
+        {
+            st->firstDecodeEnd.store(de);
+            st->firstDecodeStart.store(ds);
+            // Standalone resize cost: the Qt codec path folds scaling into the
+            // decode (setScaledSize), so decode_ms already includes it. Measure
+            // an explicit QImage::scaled on a fresh full read to surface the
+            // independent resize cost for the breakdown (first thumbnail only).
+            QImageReader rr(QString::fromStdString(p));
+            QImage full = rr.read();
+            if (!full.isNull())
+            {
+                const double rs = nowMs();
+                (void)full.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                const double re = nowMs();
+                st->resizeMs.fetch_add(re - rs, std::memory_order_relaxed);
+            }
+        }
+        return thumb;
+    });
+
+    pipe.setResultFn([st](const std::string &, const ImageData &) {
+        const double now = nowMs();
+        double expect = -1.0;
+        if (st->firstResultAt.compare_exchange_strong(expect, now))
+        {
+            // cache = decode-end -> result-callback (worker mem-cache insert).
+            const double de = st->firstDecodeEnd.load();
+            if (de >= 0.0)
+                st->cacheMs.store(now - de, std::memory_order_relaxed);
+            st->firstSeen.store(true, std::memory_order_relaxed);
+        }
+    });
+
+    pipe.setSources(paths);
+
+    // Anchor right before the visible-range kick (the user-visible trigger).
+    st->anchor.store(nowMs());
+    const double tAnchor = st->anchor.load();
+    pipe.setVisibleRange(0, 20); // first screenful
+
+    // Latch on the first thumbnail reaching the UI adapter.
+    const double tDeadline = tAnchor + 10000.0;
+    while (!st->firstSeen.load(std::memory_order_relaxed) && nowMs() < tDeadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+
+    const double tFirst = nowMs();
+    bd.cache_ms = st->cacheMs.load();
+    bd.ui_notify_ms = tFirst - tAnchor;
+    bd.queue_wait_ms = (st->firstDecodeStart.load() >= 0.0)
+                           ? (st->firstDecodeStart.load() - tAnchor)
+                           : bd.ui_notify_ms;
+    bd.decode_ms = (st->firstDecodeEnd.load() >= 0.0 && st->firstDecodeStart.load() >= 0.0)
+                      ? (st->firstDecodeEnd.load() - st->firstDecodeStart.load())
+                      : 0.0;
+    bd.resize_ms = st->resizeMs.load();
+    bd.total_ms = tFirst - tScan0;
+
+    pipe.clear();
+    // `st` (heap) outlives this function; late worker tasks write only to its
+    // atomics, which remain valid. No stack capture -> no use-after-free.
+    return bd;
+}
+
+std::string ThumbnailBreakdown::toString() const
+{
+    std::ostringstream oss;
+    oss << "scan=" << scan_ms << "ms"
+        << " queue_wait=" << queue_wait_ms << "ms"
+        << " decode=" << decode_ms << "ms"
+        << " resize=" << resize_ms << "ms"
+        << " cache=" << cache_ms << "ms"
+        << " ui_notify=" << ui_notify_ms << "ms"
+        << " total=" << total_ms << "ms";
+    return oss.str();
+}
+
 ScenarioResult scenarioFirstThumbnail(const Corpus &corpus)
 {
-    auto &repo = ImageRepository::instance();
-    repo.invalidateAll();
-
-    const double t0 = nowMs();
-    std::atomic<bool> done{false};
-    repo.loadDirectoryAsync(corpus.dir, [&done](std::vector<ImageRepository::Result>) {
-        done.store(true, std::memory_order_relaxed);
-    });
-    // Latch on first thumbnail being available in the cache (background gen).
-    double elapsed = 0;
-    const double budget = 100.0; // docs/performance.md: first thumbnail <100ms
-    while (!done.load(std::memory_order_relaxed) && elapsed < 10000.0)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        elapsed = nowMs() - t0;
-    }
-    const double tFirst = elapsed;
-
-    // Drain.
-    for (int i = 0; i < 200 && !done.load(); ++i)
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    // Cold: fresh process, empty scheduler pools (corpus dir exists on disk;
+    // filesystem/codec caches are cold on first open of the run).
+    ThumbnailBreakdown cold = measureFirstThumbnail(corpus);
+    // Warm: repeat the same open in-process; caches hot.
+    ThumbnailBreakdown warm = measureFirstThumbnail(corpus);
 
     ScenarioResult r;
     r.name = "B2";
     r.metric = "first_thumbnail_ms";
-    r.value = tFirst;
-    // Smoke (non-enforce): report the metric; do not fail on budget here.
-    // Budget enforcement (first thumbnail <100ms) is the --enforce / Phase-4 gate.
-    r.passed = true;
-    r.detail = "loadDirectoryAsync -> first thumbnail in cache";
+    r.value = cold.ui_notify_ms;
+    r.passed = true; // smoke reports; --enforce applies the <100ms budget
+    r.detail = "COLD {" + cold.toString() + "}"
+               " WARM {" + warm.toString() + "}"
+               " (real ThumbnailPipeline path; budget <100ms)";
     return r;
 }
 

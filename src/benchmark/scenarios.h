@@ -32,6 +32,28 @@ struct ScenarioResult
     bool passed = true;   // vs budget (only meaningful under --enforce)
 };
 
+// B2 stage breakdown for the first-thumbnail pipeline (M10 performance gate).
+// Measures the REAL ThumbnailPipeline path, split into user-facing stages:
+//   scan       - directory enumeration (FileSystem::listImages)
+//   queue_wait - anchor (visible-range kick) -> first worker begins decode
+//   decode     - decodeScaled (includes scaled-resize for the Qt codec path)
+//   resize     - standalone resize cost (separate from decode; ~0 when folded)
+//   cache      - worker-side mem-cache insert before result callback fires
+//   ui_notify  - anchor -> first thumbnail handed to the UI adapter (resultFn)
+//   total      - scan + ui_notify (end-to-end, user-perceived)
+struct ThumbnailBreakdown
+{
+    double scan_ms = 0;
+    double queue_wait_ms = 0;
+    double decode_ms = 0;
+    double resize_ms = 0;
+    double cache_ms = 0;
+    double ui_notify_ms = 0;
+    double total_ms = 0;
+
+    std::string toString() const;
+};
+
 // B1: startup-to-first-paint. Offscreen QApplication + first QWidget paint.
 ScenarioResult scenarioStartup();
 
