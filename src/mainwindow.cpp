@@ -3,6 +3,7 @@
 #include "application/OpenDirectoryUseCase.h"
 #include "core/EventBus.h"
 #include "core/command/CompareCommand.h"
+#include "core/command/CallbackCommand.h"
 #include "core/command/DeleteCommand.h"
 #include "core/command/OpenDirectoryCommand.h"
 #include "core/command/RenameCommand.h"
@@ -266,6 +267,36 @@ void MainWindow::setupCommands()
     reg.registerCommand(
         std::make_unique<ToggleHistogramCommand>([this]() { m_actToggleAnalysis->trigger(); }));
     reg.registerCommand(std::make_unique<ExportCommand>(this));
+
+    // M9 keyboard shortcuts (per product review P2.2): Left/Right navigate,
+    // Space quick-preview current image, F toggles fullscreen. These delegate
+    // to existing MainWindow handlers via CallbackCommand.
+    reg.registerCommand(std::make_unique<CallbackCommand>(
+        "navigate_prev", "上一张 (Left)",
+        [this]() { navigate(-1); }, std::vector<CommandShortcut>{{Qt::Key_Left, 0}}));
+    reg.registerCommand(std::make_unique<CallbackCommand>(
+        "navigate_next", "下一张 (Right)",
+        [this]() { navigate(1); }, std::vector<CommandShortcut>{{Qt::Key_Right, 0}}));
+    reg.registerCommand(std::make_unique<CallbackCommand>(
+        "quick_preview", "快速预览 (Space)",
+        [this]()
+        {
+            if (!m_currentImagePath.isEmpty())
+                onImageOpen(m_currentImagePath);
+        },
+        std::vector<CommandShortcut>{{Qt::Key_Space, 0}}));
+    reg.registerCommand(std::make_unique<CallbackCommand>(
+        "fullscreen", "全屏 (F)",
+        [this]()
+        {
+            QWidget *target = m_imageViewer->isVisible() ? (QWidget *)m_imageViewer
+                                                         : (QWidget *)this;
+            if (target->isFullScreen())
+                target->showNormal();
+            else
+                target->showFullScreen();
+        },
+        std::vector<CommandShortcut>{{Qt::Key_F, 0}}));
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event)

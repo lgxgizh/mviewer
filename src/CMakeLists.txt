@@ -44,6 +44,7 @@ add_library(mviewer_core SHARED
     core/command/RenameCommand.cpp
     core/command/DeleteCommand.cpp
     core/command/ToggleHistogramCommand.cpp
+    core/command/CallbackCommand.cpp
     core/benchmark/Benchmark.cpp
     core/perf/MemoryTracker.cpp
 )
