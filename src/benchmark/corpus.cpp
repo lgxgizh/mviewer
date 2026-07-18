@@ -66,25 +66,36 @@ void Corpus::clear() const
     d.removeRecursively();
 }
 
-Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH)
+Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &outDir)
 {
     Corpus c;
     // Corpus lives on disk; default QTemporaryDir uses the system TEMP which on
     // this machine is the starved C: system drive. Allow redirecting to a large
     // data disk via MVIEWER_BENCH_TMP (benchmark-only, no product impact).
-    const QString envTmp = qEnvironmentVariable("MVIEWER_BENCH_TMP");
+    // If an explicit outDir is given (P3 tier generator), emit there directly
+    // and keep the files (no auto-remove, no clear) so they persist as a
+    // reusable dataset.
     std::unique_ptr<QTemporaryDir> tmp;
-    if (!envTmp.isEmpty())
+    if (!outDir.empty())
     {
-        QDir().mkpath(envTmp);
-        tmp = std::make_unique<QTemporaryDir>(envTmp + QDir::separator());
+        QDir().mkpath(QString::fromStdString(outDir));
+        c.dir = outDir;
     }
     else
     {
-        tmp = std::make_unique<QTemporaryDir>();
+        const QString envTmp = qEnvironmentVariable("MVIEWER_BENCH_TMP");
+        if (!envTmp.isEmpty())
+        {
+            QDir().mkpath(envTmp);
+            tmp = std::make_unique<QTemporaryDir>(envTmp + QDir::separator());
+        }
+        else
+        {
+            tmp = std::make_unique<QTemporaryDir>();
+        }
+        tmp->setAutoRemove(false);
+        c.dir = tmp->path().toStdString();
     }
-    tmp->setAutoRemove(false);
-    c.dir = tmp->path().toStdString();
 
     QDir().mkpath(QString::fromStdString(c.dir));
 

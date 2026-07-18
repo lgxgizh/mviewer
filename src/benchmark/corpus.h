@@ -30,9 +30,13 @@ struct Corpus
 
 // totalImages: how many of EACH format to generate (default 1000 per format).
 // jpegW/H: dimensions of the generated JPEG/PNG images.
+// outDir: if non-empty, emit the corpus into this directory (no auto-removal,
+//   no scenarios) — used by the P3 `benchmark/data/` tier generator. Defaults
+//   to "" which uses MVIEWER_BENCH_TMP / system TEMP as before.
 // NOTE: keep these modest by default — generating multi-thousand-pixel images
 // needs a live GUI/Qt context and is slow; the bench harness overrides sizes
 // per-scenario. Default 512x512 is enough to exercise real decode/encode paths.
-Corpus makeCorpus(size_t totalImages = 1000, int jpegW = 512, int jpegH = 512);
+Corpus makeCorpus(size_t totalImages = 1000, int jpegW = 512, int jpegH = 512,
+                  const std::string &outDir = "");
 
 } // namespace mviewer::bench

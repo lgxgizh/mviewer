@@ -1,0 +1,150 @@
+# =============================================================================
+# MViewer Nightly — consolidated heavy analysis (NON-GATING)
+# -----------------------------------------------------------------------------
+# Implements the 2026-07-18 engineering-review P4:
+#   "add a nightly workflow that runs clang-tidy / ASan / benchmark once a day,
+#    never blocking PRs."
+#
+# This file is ADDITIVE and does NOT touch the frozen `ci.yml`, `build.ps1`, or
+# `CMakePresets.json` (per AGENTS.md freeze policy). It mirrors the advisory
+# jobs already present in `ci.yml` (static-analysis / clazy / asan) but runs
+# them on a daily schedule instead of on every push/PR, reducing developer
+# burden while keeping the heavy signals alive. Benchmark runs in `--enforce`
+# mode so real regressions are surfaced in the nightly artifact/log (it still
+# does not fail the mandatory PR gate).
+#
+# Every job uses `continue-on-error: true` so the nightly never blocks anything.
+# =============================================================================
+
+name: Nightly
+
+on:
+  schedule:
+    # 03:17 UTC daily — off-peak, non-round minute to avoid GitHub cron stampede.
+    - cron: '17 3 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # clang-tidy — full tree, bug-finding + performance checks (advisory)
+  # ---------------------------------------------------------------------------
+  clang-tidy:
+    name: Nightly clang-tidy
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang-tidy + clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang clang-tidy clang-tools cmake ninja-build
+
+      - name: Install Qt6
+        run: |
+          sudo apt-get install -y qt6-base-dev qt6-imageformats-plugin
+
+      - name: Configure (export compile_commands.json)
+        run: |
+          cmake -S . -B build_sa \
+            -G Ninja \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang
+
+      - name: Run clang-tidy
+        run: |
+          find src \( -name '*.cpp' -o -name '*.h' \) \
+            -not -path '*/build*' -print0 \
+            | xargs -0 clang-tidy -p build_sa \
+                --checks='bugprone-*,performance-*,clang-analyzer-*,cppcoreguidelines-pro-type-*,cppcoreguidelines-special-member-functions' \
+            > nightly-clang-tidy.txt 2>&1 || true
+          echo "nightly clang-tidy complete (see artifact)"
+
+      - name: Upload findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-clang-tidy
+          path: nightly-clang-tidy.txt
+
+  # ---------------------------------------------------------------------------
+  # benchmark — mviewer_bench --enforce (surfaces perf regressions in log)
+  # ---------------------------------------------------------------------------
+  benchmark:
+    name: Nightly benchmark (--enforce)
+    runs-on: windows-2022
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          modules: qtimageformats
+          cache: true
+
+      - name: Build + Test
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test
+
+      - name: Benchmark (--enforce; prints budget verdicts, non-blocking)
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          build_msvc\bin\mviewer_bench.exe --enforce > nightly-benchmark.txt 2>&1 || true
+          echo "nightly benchmark complete (see artifact)"
+
+      - name: Upload findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-benchmark
+          path: nightly-benchmark.txt
+
+  # ---------------------------------------------------------------------------
+  # asan — AddressSanitizer via MSVC /fsanitize=address (advisory)
+  # ---------------------------------------------------------------------------
+  asan:
+    name: Nightly ASan (MSVC)
+    runs-on: windows-2022
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          modules: qtimageformats
+          cache: true
+
+      - name: Configure (ASan)
+        run: cmake -S . -B build_asan -G Ninja -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi"
+
+      - name: Build (ASan)
+        run: cmake --build build_asan -j 4 2> nightly-asan.txt || true
+
+      - name: Test (ASan)
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          cd build_asan
+          ctest --output-on-failure -j4 >> ../nightly-asan.txt 2>&1 || true
+          echo "nightly ASan complete (see artifact)"
+
+      - name: Upload findings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-asan
+          path: nightly-asan.txt

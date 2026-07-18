@@ -6,6 +6,12 @@ dobuild.sh
 test.cmd
 _v.sh
 
+# Release packaging output (portable zip is a build artifact, not source)
+dist/
+
+# ctest temp
+Testing/
+
 # Temp / install artifacts
 *.log
 *_vs_installer/
