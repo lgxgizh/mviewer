@@ -61,6 +61,7 @@ int main(int argc, char **argv)
     Budget b;
     size_t corpusSize = 1000;
     bool smoke = false;
+    std::string emitData; // P3: if set, emit corpus to this dir and exit.
 
     for (int i = 1; i < argc; ++i)
     {
@@ -72,6 +73,8 @@ int main(int argc, char **argv)
             smoke = true;
             corpusSize = 20;
         }
+        else if (a == "--emit-data" && i + 1 < argc)
+            emitData = argv[++i];
         else if (a == "--corpus-size" && i + 1 < argc)
             corpusSize = static_cast<size_t>(std::strtoul(argv[++i], nullptr, 10));
     }
@@ -79,6 +82,20 @@ int main(int argc, char **argv)
     std::cout << "=== MViewer benchmark (M10) ===" << std::endl;
     std::cout << (smoke ? "[smoke] " : "") << "corpus-size=" << corpusSize
               << " enforce=" << (b.enforce ? "yes" : "no") << std::endl;
+
+    // P3 dataset emission mode: generate the corpus into emitData and stop
+    // (no scenarios, no cleanup) so benchmark/data/{small,medium,large} can be
+    // materialized as reproducible, reusable image sets.
+    if (!emitData.empty())
+    {
+        mviewer::bench::Corpus corpus = mviewer::bench::makeCorpus(corpusSize, 512, 512, emitData);
+        std::cout << "emitted: jpeg=" << corpus.jpegPaths.size()
+                  << " png=" << corpus.pngPaths.size()
+                  << " tiff=" << corpus.tiffPaths.size()
+                  << " dir=" << corpus.dir << std::endl;
+        std::cout << "=== EMIT DONE ===" << std::endl;
+        return 0;
+    }
 
     mviewer::bench::Corpus corpus = mviewer::bench::makeCorpus(corpusSize);
     std::cout << "corpus: jpeg=" << corpus.jpegPaths.size()
