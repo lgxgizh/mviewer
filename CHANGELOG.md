@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+
 - **M6 — Vertical Browsing Chain:** `DecoderRegistry` (singleton) dispatches files to
   per-format decoders (`QtDecoder` for JPEG/PNG/BMP/TIFF, `QtFallbackDecoder` as last-resort);
   `Decoder` is now a thin shim over the registry. RAW deferred to M7 (`TODO(M7): RAW`).
@@ -121,6 +122,7 @@ All notable changes to this project are documented here. The format is based on
   Viewer LRU cache hit, and pixel-inspector reads.
 
 ### Added (M3 Phase-2 — Pixel Inspector panel)
+
 - `AnalysisPanel` gains a **Pixel Inspector** tab that live-displays the hovered pixel:
   coordinates, Left RGB, and (when a second image is loaded) Right RGB / per-channel
   Δ / euclidean distance. Fed by `ImageViewer::pixelInfo` (frame-derived RGB), so the
@@ -156,7 +158,43 @@ All notable changes to this project are documented here. The format is based on
   previously dead code (an off-screen canvas that was never blitted). Guarded by
   `testCompareDiffOverlay` in `test_m3m4m5`.
 
+### Added (M10 — Performance Engineering, DONE)
+
+- **`core/perf/MemoryTracker`** (Qt-free ledger; RFC `M10_PERFORMANCE_ENGINEERING`):
+  samples existing core counters — `CacheManager::memoryUsageBytes()` + per-level
+  `levelStats` (hits/misses) → `cacheTotalBytes` / `cacheByLevel[4]` /
+  `cacheHits/Misses[4]`; tracks live `ImageFrame` count via additive
+  `ImageFrame` ctor/dtor hooks (`notifyFrameCreated/Destroyed`, lock-free
+  atomics, peak tracked); a manual `externalBytes` ledger for in-flight decode
+  buffers; and a best-effort OS working-set read that is **never** used to
+  fail a budget (OS RSS is noisy — budget checks use deterministic bytes +
+  live-frame count). No allocator interposition (YAGNI; heaptrack-style is Phase-4).
+- **Benchmark suite `benchmark/`** — 7 structural scenarios B1–B7, each
+  returning a `ScenarioResult{name, metric, value, Timing, detail, passed}`:
+  - **B1** startup-to-Qt-ready (event-loop probe when folded into `core_tests`);
+  - **B2** first-thumbnail latency (`loadDirectoryAsync` → first thumbnail);
+  - **B3** decode latency per format (JPEG/PNG/TIFF p50/p95/p99);
+  - **B4** thumbnail throughput (decoded+placed / sec);
+  - **B5** cache-hit ratio under Zipf navigation (predictive-prefetch proxy);
+  - **B6** memory budget (peak cache bytes; decays after `clearMemory`);
+  - **B7** image-switch warm/cold p50.
+- **`mviewer_bench` standalone harness**: `--smoke` (small corpus, exit 0 — CI
+  gate: proves it links + runs), `--enforce` (applies `docs/performance.md`
+  budgets; exits ≠0 on fail — Phase-4 wiring, not yet in `ci.yml`),
+  `--corpus-size N`.
+- **`core_tests` folds the M10 structural suites** (`MemoryTracker` ledger +
+  `benchmark` scenario functors) via `core/test_m10.cpp`, so they run in the
+  known-good consolidated-exe link environment. CMake: MemoryTracker.cpp added
+  to `mviewer_core`; `mviewer_bench` target + `bench_smoke` CTest added.
+- **Root-caused a latent corpus-generator bug**: `benchmark/corpus.cpp`'s
+  `paint()` wrote pixels with a full-image index `idx = (y*w+x)*3` instead of
+  the per-row `x*3` (the row pointer `scanLine(y)` already offsets the row).
+  This wrote far past the `QImage` buffer → silent heap corruption that
+  cascaded into unrelated Qt-init AVs (e.g. `core_tests` crashing at
+  `QCoreApplication` ctor). Fixed; both `mviewer_bench` and `core_tests` now run.
+
 ### Added (M5 — Scale & Performance, partial)
+
 - `testCacheManagerM5`: verifies the 5-level cache hierarchy — SQLite-backed disk tier
   persists decoded pixels across a memory clear (byte-identical round-trip, proving the
   disk cache is the durable store / survives restart), and `CacheManager::levelStats`
@@ -175,6 +213,7 @@ All notable changes to this project are documented here. The format is based on
   `ci-gate` aggregator. No build-system / CMake edits; respects the frozen build contract.
 
 ### Fixed (M5 — 1000-image load RCA)
+
 - **Crash (`0xC0000005`) under 1000-image `loadDirectory`**: `DiskCache` shared a single
   `QSqlDatabase` connection (created on the main thread) across all `TaskScheduler` worker
   threads. Qt forbids cross-thread `QSqlDatabase` use → UB → heap corruption. Fixed by
@@ -190,6 +229,7 @@ All notable changes to this project are documented here. The format is based on
   shared connection / exceeding the primed pool cap).
 
 ### Added (M6 — Vertical Browsing Chain, product-grade)
+
 - **`DecoderRegistry` + per-format decoders** (`core/image/decoder/`): the single static
   `Decoder` is split into an `IDecoder` interface (Qt-free header, std-only), `QtDecoder`
   (JPEG/PNG/BMP/TIFF via `QImageReader`, EXIF auto-transform, RGB24 output), and
@@ -213,11 +253,13 @@ All notable changes to this project are documented here. The format is based on
   the 4-format golden decode (`ok=4`) still pass.
 
 ### Verified
+
 - `build.ps1 Test` → **100% tests passed out of 9** (core_tests, m3m4m5_tests, unit_tests,
   m3pipeline_tests, decoder_tests, cache_tests, repository_tests, scheduler_tests,
   metadata_tests), zero compiler warnings.
 
 ### Changed (M4)
+
 - `TaskScheduler` now uses PIMPL to keep Qt threading primitives out of the core header
 - `ImageObject` header no longer depends on `QDateTime`
 - `CacheManager::diskUsageBytes()` now reports real disk usage via `DiskCache::totalBytes()`
@@ -231,6 +273,7 @@ All notable changes to this project are documented here. The format is based on
   absent, so the suite stays green and TIFF is exercised automatically once the codec ships.
 
 ### Removed
+
 - Obsolete `src/analyze_main.cpp` and `src/visual_test.cpp` (hardcoded paths)
 - `RenderCommand.h` / `RenderTypes.h` (consolidated into `RenderEngine.h`)
 - **M3 cleanup:** dead `CompareWorkspace::paintEvent` off-screen `canvas` composite
@@ -242,6 +285,7 @@ All notable changes to this project are documented here. The format is based on
 ## [0.1.0] - 2026-07-12
 
 ### Added
+
 - Initial architecture: 3-panel UI (DirectoryTree, ThumbnailPanel, AnalysisPanel)
 - Compare Engine: multi-image sync zoom/pan, blink, difference maps
 - Analysis Engine: histogram, PSNR, SSIM, noise, ROI statistics

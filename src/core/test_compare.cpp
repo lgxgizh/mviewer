@@ -12,8 +12,12 @@
 #include <thread>
 #include <vector>
 
+int m10_tests(); // defined in test_m10.cpp (MemoryTracker + benchmark suites)
+
 int main(int argc, char **argv)
 {
+    std::fprintf(stderr, "ENTRY core_tests main\n");
+    std::fflush(stderr);
     QCoreApplication app(argc, argv);
     int fails = 0;
 
@@ -214,5 +218,7 @@ int main(int argc, char **argv)
     }
 
     printf(fails == 0 ? "ALL_COMPARE_OK=%d\n" : "FAILS=%d\n", fails);
-    return fails == 0 ? 0 : 1;
+    int m10 = m10_tests();
+    (void)m10;
+    return (fails == 0 && m10 == 0) ? 0 : 1;
 }
