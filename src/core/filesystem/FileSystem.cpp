@@ -29,7 +29,8 @@ std::vector<std::string> FileSystem::listImages(const std::string &dir, int max)
     for (const QFileInfo &fi : entries)
     {
         result.push_back(fi.absoluteFilePath().toStdString());
-        if (result.size() >= static_cast<size_t>(max))
+        // max <= 0 means "no limit" (used by large-corpus scans).
+        if (max > 0 && result.size() >= static_cast<size_t>(max))
             break;
     }
     return result;

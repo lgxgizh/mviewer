@@ -39,6 +39,8 @@ class MainWindow : public QMainWindow
     CompareWorkspace *m_compareView = nullptr;
 
     QAction *m_actOpenDir = nullptr;
+    QAction *m_actSaveWorkspace = nullptr;
+    QAction *m_actOpenWorkspace = nullptr;
     QAction *m_actExit = nullptr;
     QAction *m_actCompare = nullptr;
     QAction *m_actToggleAnalysis = nullptr;
@@ -48,4 +50,7 @@ class MainWindow : public QMainWindow
     QString m_currentImagePath;
     QStringList m_cachedImagePaths; // cached image list for current dir
     bool m_dirListDirty = true;     // invalidated when directory changes
+
+    void saveWorkspace();
+    void openWorkspace();
 };
