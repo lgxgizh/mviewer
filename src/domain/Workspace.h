@@ -61,6 +61,13 @@ struct Workspace
     std::string rootPath;
     std::vector<Folder> folders;
 
+    // M12.2 (review fix): explicit list of image paths that were open in the
+    // Compare session when the workspace was saved. Stored explicitly rather
+    // than inferred from ROI/analysis presence, because a compare session with
+    // neither ROI nor analysis would otherwise be lost on reopen. May be empty
+    // for single-image or legacy workspaces.
+    std::vector<std::string> comparedImages;
+
     bool empty() const
     {
         return folders.empty();

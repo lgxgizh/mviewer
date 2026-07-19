@@ -121,6 +121,25 @@ int main(int argc, char **argv)
         CHECK(r1.roiX == 5 && r1.roiW == 100 && r1.analysis == "PSNR=38.0dB SSIM=0.97",
               "image[1] independent ROI+analysis round-trips");
 
+        // M12.2 (review fix): a compare session with NO ROI and NO analysis must
+        // still round-trip via the explicit comparedImages list. This is the
+        // edge case the heuristic filter used to drop.
+        ws.comparedImages.clear();
+        ws.comparedImages.push_back("D:/photos/a/1.png");
+        ws.comparedImages.push_back("D:/photos/a/2.jpg");
+        const std::string json4 = mviewer::core::serializeWorkspace(ws);
+        mviewer::domain::Workspace back5;
+        CHECK(mviewer::core::deserializeWorkspace(json4, back5),
+              "workspace with comparedImages (no ROI/analysis) deserialized");
+        CHECK(back5.comparedImages.size() == 2, "comparedImages count round-trips");
+        CHECK(back5.comparedImages[0] == "D:/photos/a/1.png" &&
+                  back5.comparedImages[1] == "D:/photos/a/2.jpg",
+              "comparedImages paths round-trip exactly");
+
+        // Tolerant of older files: the legacy string below (lines ~125) omits
+        // comparedImages entirely, and deserializeWorkspace must default it to
+        // empty (verified by the legacy parse test that follows).
+
         // Tolerant of older files that omit roi/analysis.
         const std::string legacy = "{\"root\":\"D:/p\","
                                    "\"folders\":[{\"path\":\"D:/p/a\",\"name\":\"a\","

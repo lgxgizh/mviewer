@@ -188,7 +188,18 @@ std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
         }
         os << "]}";
     }
-    os << "]}";
+    os << "]";
+    // M12.2 (review fix): persist the explicit compare-session image list so a
+    // compare session with no ROI/analysis is still restored on reopen.
+    os << ",\"comparedImages\":[";
+    for (size_t ci = 0; ci < ws.comparedImages.size(); ++ci)
+    {
+        if (ci)
+            os << ',';
+        esc(os, ws.comparedImages[ci]);
+    }
+    os << ']';
+    os << "}";
     return os.str();
 }
 
@@ -275,6 +286,23 @@ bool deserializeWorkspace(const std::string &text, mviewer::domain::Workspace &o
         }
         p.eat('}');
         out.folders.push_back(folder);
+    }
+    // M12.2 (review fix): optional explicit compare-session image list.
+    // Absent in legacy files, so tolerate its absence.
+    if (p.peek(','))
+    {
+        p.eat(',');
+        if (p.parseString() == "comparedImages" && p.eat(':'))
+        {
+            if (!p.eat('['))
+                return false;
+            while (!p.eat(']'))
+            {
+                if (!out.comparedImages.empty())
+                    p.eat(',');
+                out.comparedImages.push_back(p.parseString());
+            }
+        }
     }
     p.eat('}'); // close root object
     return true;
