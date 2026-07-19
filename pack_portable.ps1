@@ -31,13 +31,25 @@ if (-not (Test-Path $exe)) { Write-Host "ERROR: $exe not found"; exit 1 }
 Write-Host "=== Step 2: windeployqt ==="
 $windeploy = Join-Path $QtBin 'windeployqt.exe'
 if (-not (Test-Path $windeploy)) { Write-Host "ERROR: $windeploy missing"; exit 1 }
-# windeployqt emits benign warnings to stderr and may return non-zero; treat as
-# non-fatal (the deployment artifacts are what matter, verified below).
-& $windeploy --release --no-translations --no-opengl-sw --no-system-d3d-compiler $exe 2>&1 | ForEach-Object { Write-Host $_ }
+# windeployqt emits benign warnings to stderr and may return non-zero; run it
+# via cmd /c so its exit code is isolated (avoids PowerShell's RemoteException
+# terminating the script under $ErrorActionPreference='Stop'). The deployment
+# artifacts are verified below, not the exit code.
+cmd /c "$windeploy --release --no-translations --no-opengl-sw --no-system-d3d-compiler $exe 2>&1"
 if (-not (Test-Path (Join-Path $BuildDir 'bin\Qt6Core.dll'))) {
     Write-Host "ERROR: windeployqt did not deploy Qt6Core.dll"; exit 1
 }
 Write-Host "windeployqt: Qt runtime deployed."
+
+# G1 guard: the imageformat plugins MUST be present so TIFF (qtiff.dll) and
+# other formats decode on a clean Windows with no Qt installed. Fail loudly
+# rather than shipping a zip where .tif/.tiff silently won't open.
+$qtiff = Join-Path $BuildDir 'bin\imageformats\qtiff.dll'
+if (-not (Test-Path $qtiff)) {
+    Write-Host "ERROR: imageformats/qtiff.dll not deployed — TIFF would fail on clean Windows (G1). Aborting portable package."
+    exit 1
+}
+Write-Host "G1 guard OK: imageformats/qtiff.dll present in deployment."
 
 # 3) Zip the deployment folder.
 Write-Host "=== Step 3: zip portable ==="
