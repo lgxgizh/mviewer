@@ -49,6 +49,13 @@ All notable changes to this project are documented here. The format is based on
     points now forward to it under `MVIEWER_ENABLE_PERFETTO` (OFF by default — green build
     untouched, zero dependency). `mviewer_bench --trace <file>` flushes; `scripts/trace_report.py`
     prints per-stage p50/p95/p99 from a real trace (5274 spans captured; decodeFull p99 8.3ms).
+  - **M13.6 Plugin SDK stabilize:** `docs/sdk/PLUGIN_SDK.md` (stable contract: `Analyzer` iface +
+    3 frozen `extern "C"` exports + ABI rules), `plugins/example/README.md` (reference plugin),
+    ADR-005 ABI-stability contract resolved. `test_plugin_loader`/`test_plugin_manager` (built but
+    never registered) now gated as `pluginloader_tests`/`pluginmanager_tests` ctest — both PASS.
+    Demo plugin `example_analyzer.dll` builds + is load→register→create→analyze'd by MViewer
+    (`pluginregistry_tests` PASS). Known: 7 pre-existing tests flaky under `ctest -j4` (shared
+    singletons/fixtures), pass serially — not a Phase 6 regression.
   - **MetadataReader extraction (④):** `core/image/MetadataReader` (`read`/`key`) split from
     `ImageRepository`; 9 new checks in `test_metadata` (now 46 passed).
   - **Perfetto opt-in trace shim (②):** `core/trace/Trace.h` zero-overhead `MV_TRACE_*`

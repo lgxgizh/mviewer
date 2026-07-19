@@ -421,6 +421,11 @@ target_link_libraries(test_plugin_manager
 target_compile_features(test_plugin_manager PRIVATE cxx_std_20)
 target_include_directories(test_plugin_manager PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
 
+# M13.6: wire the loader/manager unit tests into the gate (they were built but
+# never registered as ctest, so they could bit-rot). Both pass standalone.
+add_test(NAME pluginloader_tests COMMAND test_plugin_loader)
+add_test(NAME pluginmanager_tests COMMAND test_plugin_manager)
+
 # ─── UI fixture regression ─────────────────────────────────────────────
 
 add_executable(ui_fixture
