@@ -2,6 +2,8 @@
 
 #include "core/cache/CacheManager.h"
 
+#include <QtGlobal> // defines Q_OS_WIN / Q_OS_LINUX for the OS-RSS branch below
+
 #include <algorithm>
 
 #ifdef Q_OS_WIN

@@ -50,7 +50,9 @@ add_library(mviewer_core SHARED
 )
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
-target_link_libraries(mviewer_core PRIVATE Qt6::Widgets Qt6::Sql)
+# psapi: provides GetProcessMemoryInfo used by core/perf/MemoryTracker for the
+# OS working-set (RSS) sample. Windows-only; harmless on other platforms.
+target_link_libraries(mviewer_core PRIVATE Qt6::Widgets Qt6::Sql $<$<PLATFORM_ID:Windows>:psapi>)
 
 target_compile_features(mviewer_core PUBLIC cxx_std_20)
 
