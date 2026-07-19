@@ -148,3 +148,52 @@ jobs:
         with:
           name: nightly-asan
           path: nightly-asan.txt
+
+  # ---------------------------------------------------------------------------
+  # dashboard — regenerate benchmark/report/{history.csv,index.html} from the
+  # nightly --enforce run and upload it. Implements review P3 (trend) + M13
+  # Phase 2: "can we answer 'did performance drop in the last 3 months?'"
+  # Additive; never blocks.
+  # ---------------------------------------------------------------------------
+  dashboard:
+    name: Nightly benchmark dashboard
+    runs-on: windows-2022
+    continue-on-error: true
+    needs: benchmark
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          modules: qtimageformats
+          cache: true
+
+      - name: Build (Release)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
+
+      - name: Benchmark (--enforce) -> result log
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $dst = "D:\mviewer_bench_data"
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          build_msvc\bin\mviewer_bench.exe --corpus-size 1000 --enforce > $dst/result_medium.txt 2>&1 || true
+          build_msvc\bin\mviewer_bench.exe --corpus-size 100  --enforce > $dst/result_small.txt  2>&1 || true
+          echo "nightly benchmark logs written"
+
+      - name: Generate dashboard
+        run: |
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/benchmark_dashboard.ps1
+
+      - name: Upload dashboard
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-benchmark-dashboard
+          path: benchmark/report/

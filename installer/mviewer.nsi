@@ -18,7 +18,9 @@
 ; pack_installer.ps1 produces exactly this layout and sets DEPLOY_DIR below.
 
 !define APPNAME "MViewer"
-!define APPVERSION "1.0.0"
+!ifndef APPVERSION
+  !define APPVERSION "1.0.0"
+!endif
 !ifndef DEPLOY_DIR
   !define DEPLOY_DIR "D:\mviewer\build_msvc\bin"
 !endif
