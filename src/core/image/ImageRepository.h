@@ -12,15 +12,23 @@
 // ImageRepository: abstraction over image lifecycle.
 // Hides FileSystem + Decoder + Cache behind a single interface.
 // Header is Qt-free; implementation may use Qt internally (.cpp).
+
+// LoadOptions is a top-level (non-nested) struct. Keeping it independent of
+// ImageRepository avoids a Clang clang-tidy co-compile diagnostic that fired
+// when the nested struct's default member initializers were needed to
+// initialize an inline static of the enclosing class outside a member
+// function. Behavior is unchanged.
+struct ImageLoadOptions
+{
+    bool useDiskCache = true;
+    bool generateHistogram = true;
+    int maxEdgeForThumbnail = 256;
+};
+
 class ImageRepository
 {
   public:
-    struct LoadOptions
-    {
-        bool useDiskCache = true;
-        bool generateHistogram = true;
-        int maxEdgeForThumbnail = 256;
-    };
+    using LoadOptions = ImageLoadOptions;
 
     struct Result
     {

@@ -16,7 +16,7 @@ Instead, report it privately using one of the following:
 - **GitHub Security Advisories**: Use the "Security" tab → "Report a
   vulnerability" on the repository. This keeps the report private until a fix is
   released.
-- **Email**: security@mviewer.example.com (replace with the project's actual
+- **Email**: <security@mviewer.example.com> (replace with the project's actual
   contact if different)
 
 Please include:

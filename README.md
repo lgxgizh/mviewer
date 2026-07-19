@@ -52,7 +52,7 @@ MViewer is **not a general-purpose image viewer** — it is a **visual analysis 
 ## Tech Stack
 
 | Component | Choice |
-|-----------|--------|
+| ----------- | -------- |
 | Language | C++20 |
 | GUI | Qt 6.11 Widgets |
 | Build | CMake + Ninja |
@@ -92,7 +92,7 @@ QT_QPA_PLATFORM=offscreen ./bin/mviewer_unit_tests
 ### Targets
 
 | Target | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `MViewer` | Main application |
 | `core_tests` | Core engine tests (compare, layout, sync) |
 | `mviewer_unit_tests` | Unit tests (decode, cache, scheduler) |
@@ -145,6 +145,7 @@ mviewer/
 ## Key Components
 
 ### ImageRepository
+
 Abstraction over the image lifecycle — hides FileSystem + Decoder + Cache behind a single interface.
 
 ```cpp
@@ -155,6 +156,7 @@ if (result.success()) {
 ```
 
 ### CacheManager
+
 Unified cache orchestration over memory (LRU pools) and disk (SQLite).
 
 ```cpp
@@ -166,6 +168,7 @@ if (CacheManager::instance().get(CacheLevel::FullImage, key, img)) {
 ```
 
 ### Analyzer Plugin System
+
 Extensible analysis via `AnalyzerRegistry`:
 
 ```cpp
@@ -175,6 +178,7 @@ AnalyzerRegistry::instance().registerAnalyzer("my_analyzer", []() {
 ```
 
 ### Plugin Loading
+
 Load external analyzer plugins at runtime via `PluginManager`:
 
 ```cpp
@@ -186,7 +190,7 @@ PluginManager::instance().loadDirectory("<path-to-plugins>");
 ## Documentation
 
 | Document | Description |
-|----------|-------------|
+| ---------- | ------------- |
 | [docs/vision.md](docs/vision.md) | Product vision and scope |
 | [docs/architecture.md](docs/architecture.md) | Target architecture overview |
 | [docs/roadmap.md](docs/roadmap.md) | Milestone plan |
@@ -206,7 +210,7 @@ PluginManager::instance().loadDirectory("<path-to-plugins>");
 ## Performance Targets
 
 | Operation | Target |
-|-----------|--------|
+| ----------- | -------- |
 | Cold start | < 300ms |
 | Warm start | < 100ms |
 | Image switching (preloaded) | < 16ms |

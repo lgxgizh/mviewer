@@ -5,7 +5,7 @@
 Every new feature must satisfy **all** of the following before merging:
 
 | Gate | Definition |
-|---|---|
+| --- | --- |
 | **Build** | `cmake --build build_msvc --clean-first` succeeds with 0 errors, 0 warnings (warnings-as-errors where applicable) |
 | **Test** | All existing + new tests pass: `core_tests.exe`, `test_m3m4m5.exe`, `mviewer_unit_tests.exe` |
 | **Benchmark** | No regression >10% on any established scenario from `benchmark_results.csv` |
@@ -25,7 +25,7 @@ See `docs/adr/001`–`010` for canonical decisions.
 ### Frozen Names (do NOT rename)
 
 | Module | Role |
-|---|---|
+| --- | --- |
 | `ImageRepository` | Sole image lifecycle owner |
 | `CacheManager` | 5-level hierarchical cache owner |
 | `TaskScheduler` | Priority multi-queue scheduler |

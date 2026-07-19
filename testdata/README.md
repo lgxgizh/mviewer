@@ -63,7 +63,7 @@ python testdata/generate_fixtures.py --report
 ## Common Operations
 
 | Goal | Command |
-|------|---------|
+| ------ | --------- |
 | Regenerate all | `python testdata/generate_fixtures.py --clean` |
 | Add new golden | `python testdata/generate_fixtures.py` (then commit CATALOG.md) |
 | Add new corrupted | Manually add to `generate_fixtures.py`, re-run |
