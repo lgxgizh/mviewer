@@ -88,8 +88,11 @@ static void testTiffSupport()
 
     if (!tiffCodec)
     {
-        printf("  SKIP: qtiff codec not deployed (libtiff-6.dll missing) - "
-               "format pipeline lists .tiff/.tif; decode enabled once plugin is present.\n");
+        printf("  SKIP: qtiff imageformat plugin not deployed in this build "
+               "context (unit tests run from build_msvc/bin without the "
+               "imageformats/ plugins). The released portable zip / installer "
+               "deploy imageformats/qtiff.dll via windeployqt, so TIFF decodes "
+               "on a clean Windows (G1). Decode path is exercised there.\n");
         g_pass++; // gate, not a failure
         return;
     }
