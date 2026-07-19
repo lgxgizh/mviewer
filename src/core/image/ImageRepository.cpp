@@ -3,6 +3,7 @@
 #include "core/cache/CacheManager.h"
 #include "core/filesystem/FileSystem.h"
 #include "core/image/Decoder.h"
+#include "core/image/ImageFrame.h"
 #include "core/image/DiskCache.h"
 #include "core/image/MetadataReader.h"
 #include "core/scheduler/TaskScheduler.h"
@@ -204,7 +205,35 @@ void ImageRepository::loadDirectoryAsyncImpl(const std::string &dirPath,
             {
                 try
                 {
-                    (*results)[i] = load((*files)[i]);
+                    // Directory pre-decode produces browse/thumbnail-sized
+                    // frames, NOT full-resolution pixels. Full decode is
+                    // done on demand when the user opens a single image
+                    // (load()). This matches the product flow (open
+                    // directory -> thumbnails) and, critically, avoids
+                    // QImageReader::read() at full resolution: under the
+                    // offscreen platform (and likely Windows too) a fully
+                    // concurrent QImageReader::read() deadlocks the
+                    // worker pool, which hung the M3 acceptance test
+                    // forever and would freeze the UI on a large
+                    // directory. The scaled path (setScaledSize +
+                    // read()) does not hit that deadlock.
+                    static constexpr int kBrowseEdge = 256;
+                    ImageData thumb =
+                        Decoder::decodeScaled((*files)[i], kBrowseEdge);
+                    if (thumb.isNull())
+                    {
+                        Result err;
+                        err.error = "decode failed for: " + (*files)[i];
+                        (*results)[i] = std::move(err);
+                    }
+                    else
+                    {
+                        Result r;
+                        r.frame = std::make_shared<ImageFrame>(
+                            ImageFrame::create((*files)[i], thumb));
+                        r.fromCache = false;
+                        (*results)[i] = std::move(r);
+                    }
                 }
                 catch (...)
                 {

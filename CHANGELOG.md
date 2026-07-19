@@ -74,6 +74,19 @@ All notable changes to this project are documented here. The format is based on
     (uploads artifact, never blocks); ASan **Phase-3 non-gating** signal job. This reverts
     the earlier gating change (`f3d3ffa`).
   - RAW decoder remains deferred: `DecoderRegistry` keeps `TODO(M7): RAW` until libraw lands.
+  - **Bug fix (M13 — `loadDirectoryAsync` concurrent full-decode deadlock):**
+    `ImageRepository::loadDirectoryAsync` fanned out 1000 full-resolution
+    `QImageReader::read()` decodes across the DecodePool. Under Qt 6.11.1
+    (offscreen platform, and likely Windows) a fully concurrent
+    `QImageReader::read()` deadlocks the worker pool, hanging
+    `TaskScheduler::drain` forever and freezing the UI on a large
+    directory. Root cause: the directory pre-decode path produced
+    full-resolution frames instead of browse/thumbnail-sized ones. Fixed by
+    switching the pre-decode to `Decoder::decodeScaled(256px)`; full
+    decode stays on-demand in `load()` when a single image is opened.
+    This both matches the product flow (open dir -> thumbnails) and
+    removes the deadlock. `test_m3acceptance` now passes 5/5 and the
+    full `.\build.ps1 Test` gate is green (31/31).
 - **M7 P1 — vertical foundations (Architect re-prioritization, DONE):** the four P1
   verticals from the Architect's review, built on the domain/core/UI layering:
   - **① Render Pipeline — TileCache + LOD:** `core/render/TileCache.h` (LRU keyed by
