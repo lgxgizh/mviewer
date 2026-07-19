@@ -56,6 +56,11 @@ All notable changes to this project are documented here. The format is based on
     Demo plugin `example_analyzer.dll` builds + is load→register→create→analyze'd by MViewer
     (`pluginregistry_tests` PASS). Known: 7 pre-existing tests flaky under `ctest -j4` (shared
     singletons/fixtures), pass serially — not a Phase 6 regression.
+  - **M13.7 GPU route RFC:** `docs/rfc/M13_GPU_ROADMAP.md` — staged CPU→Tile→GPU-upload→
+    Direct2D/D3D11→Vulkan route grounded in the actual render path (TileCache/TileGrid/Viewport
+    + RenderEngine::scaleRegion). Recommends Stage A (GPU blit, low risk) only, gated on a
+    measured 100 MP deficit; Stage C/D deferred (frozen UI=Qt Widgets boundary). Design only,
+    no code.
   - **MetadataReader extraction (④):** `core/image/MetadataReader` (`read`/`key`) split from
     `ImageRepository`; 9 new checks in `test_metadata` (now 46 passed).
   - **Perfetto opt-in trace shim (②):** `core/trace/Trace.h` zero-overhead `MV_TRACE_*`
