@@ -2,7 +2,11 @@
 
 #include "core/image/ImageBuffer.h"
 
-#include <QPainter>
+// QPainter is used only by reference in method signatures below; a forward
+// declaration keeps this core header Qt-free per the architecture boundary
+// (no <QWidget>/<QPainter>/<QImage> in src/core/**/*.h). The full type is
+// included in RenderEngine.cpp where the painting is implemented.
+class QPainter;
 #include <QRect>
 
 #include <array>
