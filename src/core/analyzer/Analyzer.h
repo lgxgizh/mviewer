@@ -75,7 +75,18 @@ class AnalyzerRegistry
     void registerAnalyzer(const std::string &id, AnalyzerCreator creator);
     void unregister(const std::string &id);
     std::unique_ptr<Analyzer, AnalyzerDeleter> create(const std::string &id) const;
+    // Alias kept for the review's P1 API contract (getAnalyzer == create).
+    std::unique_ptr<Analyzer, AnalyzerDeleter> getAnalyzer(const std::string &id) const
+    {
+        return create(id);
+    }
     std::vector<std::string> availableAnalyzers() const;
+
+    // Convenience: run every registered analyzer on a frame and collect each
+    // one's human-readable result text, keyed by analyzer id. Satisfies the
+    // review's P1 `runAnalyzer()` contract. Analyzers that fail to run are
+    // omitted from the result map.
+    std::unordered_map<std::string, std::string> runAnalyzer(const ImageFrame &frame) const;
 
     // Query capabilities of a registered analyzer without creating a shared copy.
     AnalyzerCapability capabilitiesOf(const std::string &id) const;
