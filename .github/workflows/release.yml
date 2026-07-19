@@ -73,7 +73,11 @@ jobs:
       # --- Portable ZIP (always produced) -------------------------------------
       - name: Deploy Qt runtime (windeployqt)
         run: |
-          $windeploy = Join-Path $env:Qt6_DIR 'bin\windeployqt.exe'
+          # install-qt-action exports QT_ROOT_DIR (and sometimes Qt6_DIR); use a
+          # robust lookup so the step does not break when Qt6_DIR is unset.
+          $qtRoot = if ($env:Qt6_DIR) { Split-Path $env:Qt6_DIR -Parent } else { $env:QT_ROOT_DIR }
+          if (-not $qtRoot) { Write-Host "::error:: Qt root not found (Qt6_DIR/QT_ROOT_DIR unset)"; exit 1 }
+          $windeploy = Join-Path $qtRoot 'bin\windeployqt.exe'
           if (-not (Test-Path $windeploy)) { Write-Host "::error:: windeployqt not found at $windeploy"; exit 1 }
           cmd /c "$windeploy --release --no-translations --no-opengl-sw --no-system-d3d-compiler build_msvc\bin\MViewer.exe 2>&1"
           if (-not (Test-Path build_msvc\bin\Qt6Core.dll)) { Write-Host "::error:: windeployqt did not deploy Qt6Core.dll"; exit 1 }
@@ -116,7 +120,9 @@ jobs:
           $dist  = 'dist'
           if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          $windeploy = Join-Path $env:Qt6_DIR 'bin\windeployqt.exe'
+          $qtRoot = if ($env:Qt6_DIR) { Split-Path $env:Qt6_DIR -Parent } else { $env:QT_ROOT_DIR }
+          if (-not $qtRoot) { Write-Host "::error:: Qt root not found (Qt6_DIR/QT_ROOT_DIR unset)"; exit 1 }
+          $windeploy = Join-Path $qtRoot 'bin\windeployqt.exe'
           cmd /c "$windeploy --release --no-translations --no-opengl-sw --no-system-d3d-compiler build_msvc\bin\MViewer.exe --dir $stage 2>&1"
           if (-not (Test-Path "$stage\imageformats\qtiff.dll")) { Write-Host "::error:: installer stage missing qtiff.dll (G1)"; exit 1 }
           & $makensis /DDEPLOY_DIR="$stage" /DOUTDIR="$dist" /DAPPVERSION="$ver" installer\mviewer.nsi
