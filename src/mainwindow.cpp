@@ -187,7 +187,13 @@ void MainWindow::setupUi()
             [this](const QString &text)
             {
                 if (!m_currentImagePath.isEmpty())
+                {
+                    // Cap the per-image analysis map so it can't grow unbounded
+                    // across a long session of browsing many images (M12.5 hygiene).
+                    if (m_analysisByPath.size() > 500)
+                        m_analysisByPath.erase(m_analysisByPath.begin());
                     m_analysisByPath.insert(m_currentImagePath, text);
+                }
             });
     connect(m_imageViewer, &ImageViewer::selectionChanged, m_analysisPanel,
             [this](const QRect &sel)
@@ -509,6 +515,22 @@ void MainWindow::openWorkspace()
     m_cachedImagePaths.clear();
     m_dirListDirty = true;
     m_thumbnailPanel->setDirectory(root);
+
+    // M12.2 (G2-ext): restore the full compare session. The saved workspace
+    // carries every image's path, but only the images that were actually in
+    // the compare session have ROI/analysis context written by saveWorkspace
+    // (it iterates m_compareView->comparedImages()). Restoring ALL workspace
+    // images would wrongly dump a 1000-image directory into the compare cells,
+    // so filter to images that carried compare-session context. The compare ROI
+    // is synchronized across cells, so a single shared ROI is applied below.
+    QStringList comparePaths;
+    comparePaths.reserve(static_cast<int>(ws.imageCount()));
+    for (const auto &folder : ws.folders)
+        for (const auto &img : folder.imageSet.images)
+            if (img.roiW > 0 || img.roiH > 0 || !img.analysis.empty())
+                comparePaths.push_back(QString::fromStdString(img.filePath));
+    if (!comparePaths.isEmpty() && m_compareView)
+        m_compareView->setImages(comparePaths);
 
     // M12.2 (G2-ext): rebuild the per-image analysis map from the saved model so
     // the whole compare session's analysis context is available on reload (each

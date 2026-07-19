@@ -52,13 +52,6 @@ class CompareWorkspace : public QWidget
     // Used by Workspace persistence to capture session context per image.
     QStringList comparedImages() const;
 
-    // M12.2 (G2-ext): the ROI applied during the compare session, keyed by image
-    // path. The compare ROI is synchronized across cells (one region shown on
-    // every image), so every compared image maps to the same Selection here;
-    // returning a per-path map keeps the serialized .mvws carrying each image's
-    // own ROI field (ImageMetadata.roiX/Y/W/H) for forward compatibility.
-    QMap<QString, mviewer::domain::Selection> roiByPath() const;
-
   signals:
     void syncToggled(bool on);
     // Hover pixel read from any cell, formatted for the status bar. Empty string clears.
