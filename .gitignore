@@ -50,6 +50,8 @@ testdata/screenshots/*
 !testdata/screenshots/.gitkeep
 testdata/perf/*
 !testdata/perf/.gitkeep
+testdata/variants/*
+!testdata/variants/.gitkeep
 
 # CMake user files
 CMakeLists.txt.user

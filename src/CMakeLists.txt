@@ -441,6 +441,24 @@ target_link_libraries(ui_screenshot
 target_compile_features(ui_screenshot PRIVATE cxx_std_20)
 target_include_directories(ui_screenshot PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
 
+# M13 Phase 4 — real-image-dataset acceptance: open every testdata/ fixture
+# via the real Decoder; assert no crash + (decoded OR gracefully skipped).
+add_executable(test_assets_acceptance
+    core/test_assets_acceptance.cpp
+)
+
+target_link_libraries(test_assets_acceptance
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(test_assets_acceptance PRIVATE cxx_std_20)
+target_include_directories(test_assets_acceptance PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_assets_acceptance PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
 
 # ─── Clang-Tidy (optional) ──────────────────────────────────────────────────
 
@@ -480,6 +498,7 @@ add_test(NAME compare_workflow_tests COMMAND compare_workflow_tests)
 add_test(NAME analysis_panel_tests COMMAND analysis_panel_tests)
 add_test(NAME export_tests COMMAND export_tests)
 add_test(NAME workspace_persist_tests COMMAND workspace_persist_tests)
+add_test(NAME assets_acceptance_tests COMMAND test_assets_acceptance)
 
 # ─── M13 Phase 1: Product Workflow gate ──────────────────────────────────
 # A single ctest that runs the full user-chain in order:
