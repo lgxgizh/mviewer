@@ -181,6 +181,14 @@ void MainWindow::setupUi()
 
     connect(m_imageViewer, &ImageViewer::regionStats, m_analysisPanel,
             &AnalysisPanel::setRegionStats);
+    // M12.2 (G2-ext): also record each image's analysis result per-path so the
+    // whole compare session's analysis context can be persisted into the .mvws.
+    connect(m_imageViewer, &ImageViewer::regionStats, this,
+            [this](const QString &text)
+            {
+                if (!m_currentImagePath.isEmpty())
+                    m_analysisByPath.insert(m_currentImagePath, text);
+            });
     connect(m_imageViewer, &ImageViewer::selectionChanged, m_analysisPanel,
             [this](const QRect &sel)
             {
@@ -330,6 +338,11 @@ void MainWindow::onImageOpen(const QString &path)
     if (auto f = m_imageViewer->frame())
         m_analysisPanel->setFrame(f);
     m_currentImagePath = path;
+    // M12.2 (G2-ext): if this image had a saved analysis in the workspace, restore
+    // it to the panel (e.g. after reopening a .mvws with per-image analysis).
+    const auto it = m_analysisByPath.find(path);
+    if (it != m_analysisByPath.end() && !it->isEmpty())
+        m_analysisPanel->setRegionStats(*it);
     statusBar()->showMessage(QString("当前: %1, 尺寸: %2x%3")
                                  .arg(QFileInfo(path).fileName())
                                  .arg(img.width())
@@ -422,19 +435,26 @@ void MainWindow::saveWorkspace()
         return;
     }
 
-    // M12.1: persist the active image's session context (ROI from Compare +
-    // last analysis result) into the model before serializing, so reopening
-    // restores it. Matched by filePath of the active image.
-    const std::string activePath = m_currentImagePath.toStdString();
+    // M12.2 (G2-ext): persist every compared image's session context (ROI from
+    // Compare + last analysis result) into the model before serializing, so
+    // reopening restores the full compare session, not just the active image.
+    // The compare ROI is synchronized across cells, so currentROI() is the same
+    // region for all compared images; we still write it per-image into each
+    // ImageMetadata so the .mvws carries each image's own ROI/analysis fields.
     const mviewer::domain::Selection roi = m_compareView->currentROI();
-    const std::string analysis = m_analysisPanel->analysisText().toStdString();
-    if (!activePath.empty() && (!roi.isEmpty() || !analysis.empty()))
+    const QStringList compared = m_compareView->comparedImages();
+    for (const QString &cpath : compared)
     {
+        const std::string key = cpath.toStdString();
+        const auto it = m_analysisByPath.find(cpath);
+        const std::string analysis = (it != m_analysisByPath.end()) ? it->toStdString() : std::string();
+        if (roi.isEmpty() && analysis.empty())
+            continue;
         for (auto &folder : ws.folders)
         {
             for (auto &img : folder.imageSet.images)
             {
-                if (img.filePath == activePath)
+                if (img.filePath == key)
                 {
                     img.roiX = roi.x;
                     img.roiY = roi.y;
@@ -490,8 +510,12 @@ void MainWindow::openWorkspace()
     m_dirListDirty = true;
     m_thumbnailPanel->setDirectory(root);
 
-    // M12.1: restore the active image's session context (ROI + analysis) if
-    // present. Re-open that image and re-apply its ROI/analysis to the panels.
+    // M12.2 (G2-ext): rebuild the per-image analysis map from the saved model so
+    // the whole compare session's analysis context is available on reload (each
+    // image's analysis shows when it becomes the active image). Also pick the
+    // first image carrying session context (ROI or analysis) as the active one
+    // to re-open and re-apply.
+    m_analysisByPath.clear();
     mviewer::domain::Selection restoredRoi;
     std::string restoredAnalysis;
     std::string restoredPath;
@@ -499,16 +523,17 @@ void MainWindow::openWorkspace()
     {
         for (const auto &img : folder.imageSet.images)
         {
-            if (img.roiW > 0 || img.roiH > 0 || !img.analysis.empty())
+            if (!img.analysis.empty())
+                m_analysisByPath.insert(QString::fromStdString(img.filePath),
+                                        QString::fromStdString(img.analysis));
+            if (restoredPath.empty() &&
+                (img.roiW > 0 || img.roiH > 0 || !img.analysis.empty()))
             {
                 restoredRoi = {img.roiX, img.roiY, img.roiW, img.roiH};
                 restoredAnalysis = img.analysis;
                 restoredPath = img.filePath;
-                break;
             }
         }
-        if (!restoredPath.empty())
-            break;
     }
     if (!restoredPath.empty())
     {

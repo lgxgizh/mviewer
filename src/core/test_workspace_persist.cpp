@@ -103,6 +103,24 @@ int main(int argc, char **argv)
               "ROI round-trips");
         CHECK(ri.analysis == "PSNR=42.1dB SSIM=0.99", "analysis text round-trips");
 
+        // M12.2 (G2-ext): multiple images each carry their OWN ROI + analysis
+        // (a multi-image compare session), not just the active one.
+        ws.folders[0].imageSet.images[1].roiX = 5;
+        ws.folders[0].imageSet.images[1].roiY = 6;
+        ws.folders[0].imageSet.images[1].roiW = 100;
+        ws.folders[0].imageSet.images[1].roiH = 80;
+        ws.folders[0].imageSet.images[1].analysis = "PSNR=38.0dB SSIM=0.97";
+        const std::string json3 = mviewer::core::serializeWorkspace(ws);
+        mviewer::domain::Workspace back4;
+        CHECK(mviewer::core::deserializeWorkspace(json3, back4),
+              "workspace with per-image ROI+analysis deserialized");
+        const auto &r0 = back4.folders[0].imageSet.images[0];
+        const auto &r1 = back4.folders[0].imageSet.images[1];
+        CHECK(r0.roiW == 256 && r0.analysis == "PSNR=42.1dB SSIM=0.99",
+              "image[0] ROI+analysis round-trips");
+        CHECK(r1.roiX == 5 && r1.roiW == 100 && r1.analysis == "PSNR=38.0dB SSIM=0.97",
+              "image[1] independent ROI+analysis round-trips");
+
         // Tolerant of older files that omit roi/analysis.
         const std::string legacy = "{\"root\":\"D:/p\","
                                    "\"folders\":[{\"path\":\"D:/p/a\",\"name\":\"a\","

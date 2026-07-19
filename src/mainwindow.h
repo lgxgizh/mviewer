@@ -4,6 +4,7 @@
 
 #include <QKeyEvent>
 #include <QMainWindow>
+#include <QMap>
 
 class ImageViewer;
 class DirectoryTree;
@@ -50,6 +51,11 @@ class MainWindow : public QMainWindow
     QString m_currentImagePath;
     QStringList m_cachedImagePaths; // cached image list for current dir
     bool m_dirListDirty = true;     // invalidated when directory changes
+
+    // M12.2 (G2-ext): per-image last analysis result text, keyed by image path.
+    // Populated as analysis runs for each opened image; persisted per-image into
+    // the .mvws so a compare session's analysis context survives a reload.
+    QMap<QString, QString> m_analysisByPath;
 
     void saveWorkspace();
     void openWorkspace();
