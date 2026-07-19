@@ -114,6 +114,21 @@ int main(int argc, char **argv)
     CHECK(multiImg >= 2, "registry has dual-image quality analyzers PSNR/SSIM (>=2)");
     CHECK(okFull >= 5, "all single-image analyzers produce a non-empty result on the full frame");
 
+    // P1 contract: getAnalyzer() is an alias of create(), and runAnalyzer()
+    // runs every registered analyzer on a frame and returns id->resultText.
+    auto viaGet = reg.getAnalyzer("histogram");
+    CHECK(static_cast<bool>(viaGet), "getAnalyzer() alias returns a valid analyzer");
+    auto viaCreate = reg.create("histogram");
+    CHECK(static_cast<bool>(viaCreate), "create() still returns a valid analyzer");
+
+    const auto ran = reg.runAnalyzer(frame);
+    CHECK(!ran.empty(), "runAnalyzer() returns a non-empty result map");
+    CHECK(ran.find("histogram") != ran.end(), "runAnalyzer() includes histogram result");
+    CHECK(!ran.at("histogram").empty(), "runAnalyzer() histogram result is non-empty");
+    // Multi-image analyzers require a second frame; on a single frame they are
+    // legitimately omitted from runAnalyzer()'s result map.
+    printf("  runAnalyzer() produced %zu results (single-frame)\n", ran.size());
+
     // Region analysis must run for the single-image analyzers (ROI-based).
     mviewer::domain::Selection roi;
     roi.x = 0;

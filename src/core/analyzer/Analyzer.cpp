@@ -10,6 +10,8 @@
 
 #include <algorithm>
 #include <optional>
+#include <string>
+#include <unordered_map>
 
 AnalyzerRegistry &AnalyzerRegistry::instance()
 {
@@ -101,6 +103,18 @@ std::vector<std::string> AnalyzerRegistry::availableAnalyzers() const
     for (const auto &kv : m_factories)
         out.push_back(kv.first);
     return out;
+}
+
+std::unordered_map<std::string, std::string> AnalyzerRegistry::runAnalyzer(const ImageFrame &frame) const
+{
+    std::unordered_map<std::string, std::string> results;
+    for (const auto &[id, factory] : m_factories)
+    {
+        auto analyzer = factory();
+        if (analyzer && analyzer->analyze(frame))
+            results[id] = analyzer->resultText();
+    }
+    return results;
 }
 
 AnalyzerCapability AnalyzerRegistry::capabilitiesOf(const std::string &id) const
