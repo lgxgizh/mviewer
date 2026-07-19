@@ -61,6 +61,9 @@ All notable changes to this project are documented here. The format is based on
     + RenderEngine::scaleRegion). Recommends Stage A (GPU blit, low risk) only, gated on a
     measured 100 MP deficit; Stage C/D deferred (frozen UI=Qt Widgets boundary). Design only,
     no code.
+  - **M13.8 Public roadmap:** `docs/ROADMAP_PUBLIC.md` — user-facing Beta→1.0→1.1→2.0 track
+    (what ships now / planned / deferred: RAW, GPU Stage C/D, language plugins). `roadmap.md`
+    cross-links it. Closes all 8 M13 phases.
   - **MetadataReader extraction (④):** `core/image/MetadataReader` (`read`/`key`) split from
     `ImageRepository`; 9 new checks in `test_metadata` (now 46 passed).
   - **Perfetto opt-in trace shim (②):** `core/trace/Trace.h` zero-overhead `MV_TRACE_*`

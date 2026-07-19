@@ -37,7 +37,7 @@
 | M10 | Performance Engineering (MemoryTracker + benchmark harness) | ✅ Done (RFC M10_PERFORMANCE_ENGINEERING approved; `core/perf/MemoryTracker` Qt-free ledger sampling `CacheManager` + live `ImageFrame` count + OS working-set; `benchmark/` 9-scenario suite B1–B9 + standalone `mviewer_bench` harness; `core_tests` folds MemoryTracker + benchmark structural suites; **B8 (<16ms preloaded switch) + B9 (memory soak) verified under `--enforce`**; **CI regression gate deferred to Phase-4** per roadmap.) |
 | M11 | Release Candidate (v1.0.0-rc) | ✅ RC tagged + GitHub release published (`v1.0.0-rc`, pre-release). Version bumped 0.1.0→1.0.0; release notes in `docs/release/RELEASE_v1.0.0-rc.md`. Build+tests green (core_tests / export_tests / mviewer_bench --enforce ALL PASS). Installer (NSIS/WiX) deferred to post-1.0. |
 | M12 | Product Beta Hardening | ✅ Done (RFC `docs/acceptance/user_workflow.md` approved). (M12.1) ✅ user-workflow acceptance + Workspace ROI/analysis persistence; (M12.2) ✅ performance reality-check vs `performance.md` on `benchmark/data/` tiers + fixed latent RSS measurement bug; (M12.2-G2ext) ✅ per-image ROI/analysis across multi-image compare sessions; (M12.3) ✅ installer: `installer/mviewer.nsi` + `pack_installer.ps1` written, G1 (TIFF on clean Windows) **runtime-proven** via `scripts/g1_clean_windows_proof.ps1` (decode on isolated dir, no system Qt) — NSIS `.exe` build deferred (needs NSIS installed one-time); (M12.4) ✅ tag→build→test→package release automation (`.github/workflows/release.yml`); (M12.5) ✅ Qt-boundary scan (`scripts/audit_qt_boundary.ps1` → 0 forbidden) + thread-safety audit (4 singletons sound) + `docs/api/`. P1 (review): AnalyzerRegistry now exposes `getAnalyzer()`/`runAnalyzer()` (verified 12/12). Review-fix: openWorkspace restores compare session via explicit `comparedImages` array (closes the no-ROI/no-analysis edge case). No architecture changes — freeze from M11 holds. |
-| M13 | **Product Beta** (public track: **Beta → 1.0 → 1.1 → 2.0**; old `v1.0.0-rc` = internal pre-release) | 🔵 In progress. Phase 1 (Product Workflow verification) done; Phase 2/3 (Dashboard + NSIS installer) done; review blockers (screenshot + large tier) closed; Phase 4 (real datasets) done; Phase 5 (Perfetto profiling) done; Phase 6 (Plugin SDK stabilize) done; **Phase 7 (GPU RFC) drafted** — `docs/rfc/M13_GPU_ROADMAP.md` (staged A→D route, Stage A only recommended, Stage C/D deferred: frozen UI boundary). Remaining: ⑧ Public roadmap. |
+| M13 | **Product Beta** (public track: **Beta → 1.0 → 1.1 → 2.0**; old `v1.0.0-rc` = internal pre-release) | ✅ Done. Phase 1 (Product Workflow verification) done; Phase 2/3 (Dashboard + NSIS installer) done; review blockers (screenshot + large tier) closed; Phase 4 (real datasets) done; Phase 5 (Perfetto profiling) done; Phase 6 (Plugin SDK stabilize) done; Phase 7 (GPU RFC) drafted — `docs/rfc/M13_GPU_ROADMAP.md`; **Phase 8 (Public roadmap) done** — `docs/ROADMAP_PUBLIC.md` (Beta→1.0→1.1→2.0 user-facing track, deferred items listed). All 8 M13 phases complete. |
 
 
 ## Public versioning (M13+)
@@ -51,6 +51,10 @@ as the *internal* pre-release; the real **1.0** is what M13 produces.
 > Analysis / Render engines. Those engines are complete and live under `core/compare`,
 > `core/analyzer`, and `core/render`. The milestone names below refer to the **current**
 > pipeline milestones, not those engines.
+
+**User-facing roadmap:** [`docs/ROADMAP_PUBLIC.md`](ROADMAP_PUBLIC.md) — the
+Beta → 1.0 → 1.1 → 2.0 track, what's shipping now, what's planned, and what's
+deferred (RAW, GPU Stage C/D, language plugins).
 
 ---
 
