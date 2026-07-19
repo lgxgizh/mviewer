@@ -9,6 +9,7 @@ powershell -ExecutionPolicy Bypass -File D:\mviewer\build.ps1 [Release|Debug|Tes
 ```
 
 **Do not** invoke these directly:
+
 - `vcvars64.bat` / `vcvarsall.bat`
 - `cmake`
 - `ninja`
@@ -62,6 +63,7 @@ writer does not decide scope or merge.
   **not** change scope/architecture on its own.
 
 Principles:
+
 - Roadmap and ADRs are the source of truth. A writer that finds a missing
   capability must surface it to the commander; it must not silently expand scope.
 - No change is merged without local build + test green (see Local Verify Policy).

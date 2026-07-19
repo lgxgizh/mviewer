@@ -73,6 +73,7 @@ Every change must pass:
 ## Reporting Issues
 
 Please use GitHub Issues. Include:
+
 - OS / compiler / Qt version
 - Steps to reproduce
 - Expected vs actual behavior
