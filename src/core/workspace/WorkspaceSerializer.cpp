@@ -180,8 +180,7 @@ std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
             esc(os, m.fileName);
             os << ",\"width\":" << m.width << ",\"height\":" << m.height;
             // M12.1 session persistence: ROI (pixel coords) + analysis text.
-            os << ",\"roi\":[" << m.roiX << ',' << m.roiY << ',' << m.roiW
-               << ',' << m.roiH << ']';
+            os << ",\"roi\":[" << m.roiX << ',' << m.roiY << ',' << m.roiW << ',' << m.roiH << ']';
             os << ",\"analysis\":";
             esc(os, m.analysis);
             os << '}';

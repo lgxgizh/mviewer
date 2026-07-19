@@ -35,50 +35,47 @@ struct ScopedTrace
     const char *name_;
     int64_t startUs_;
     explicit ScopedTrace(const char *cat, const char *name)
-        : cat_(cat), name_(name),
-          startUs_(std::chrono::duration_cast<std::chrono::microseconds>(
-                       std::chrono::steady_clock::now().time_since_epoch())
-                       .count())
+        : cat_(cat), name_(name), startUs_(std::chrono::duration_cast<std::chrono::microseconds>(
+                                               std::chrono::steady_clock::now().time_since_epoch())
+                                               .count())
     {
     }
     ~ScopedTrace()
     {
-        int64_t endUs =
-            std::chrono::duration_cast<std::chrono::microseconds>(
-                std::chrono::steady_clock::now().time_since_epoch())
-                .count();
+        int64_t endUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                            std::chrono::steady_clock::now().time_since_epoch())
+                            .count();
         record(cat_, name_, startUs_, endUs - startUs_);
     }
 };
 } // namespace mviewer::trace
 
-#define MV_TRACE_EVENT(name)                                                       \
-    do                                                                             \
-    {                                                                              \
-        mviewer::trace::record("event", name,                                      \
-            std::chrono::duration_cast<std::chrono::microseconds>(                 \
-                std::chrono::steady_clock::now().time_since_epoch())               \
-                .count(),                                                          \
-            0);                                                                    \
+#define MV_TRACE_EVENT(name)                                                                       \
+    do                                                                                             \
+    {                                                                                              \
+        mviewer::trace::record("event", name,                                                      \
+                               std::chrono::duration_cast<std::chrono::microseconds>(              \
+                                   std::chrono::steady_clock::now().time_since_epoch())            \
+                                   .count(),                                                       \
+                               0);                                                                 \
     } while (0)
 
 #define MV_TRACE_EVENT1(name, k1, v1) MV_TRACE_EVENT(name)
 
-#define MV_TRACE_SCOPED(name)                                                      \
-    mviewer::trace::ScopedTrace _mv_scope_##__LINE__("stage", name)
+#define MV_TRACE_SCOPED(name) mviewer::trace::ScopedTrace _mv_scope_##__LINE__("stage", name)
 
 #else
 // No-op: compiles away, zero runtime cost.
-#define MV_TRACE_EVENT(name)                                                       \
-    do                                                                             \
-    {                                                                              \
+#define MV_TRACE_EVENT(name)                                                                       \
+    do                                                                                             \
+    {                                                                                              \
     } while (0)
-#define MV_TRACE_EVENT1(name, k1, v1)                                              \
-    do                                                                             \
-    {                                                                              \
+#define MV_TRACE_EVENT1(name, k1, v1)                                                              \
+    do                                                                                             \
+    {                                                                                              \
     } while (0)
-#define MV_TRACE_SCOPED(name)                                                      \
-    do                                                                             \
-    {                                                                              \
+#define MV_TRACE_SCOPED(name)                                                                      \
+    do                                                                                             \
+    {                                                                                              \
     } while (0)
 #endif

@@ -7,11 +7,11 @@
 #include <algorithm>
 
 #ifdef Q_OS_WIN
-#    include <windows.h>
-#    include <psapi.h>
+#include <windows.h>
+#include <psapi.h>
 #elif defined(Q_OS_LINUX)
-#    include <sys/resource.h>
-#    include <unistd.h>
+#include <sys/resource.h>
+#include <unistd.h>
 #endif
 
 namespace mviewer::perf
@@ -29,8 +29,7 @@ void MemoryTracker::notifyFrameCreated()
     const size_t n = self.m_liveFrames.fetch_add(1, std::memory_order_relaxed) + 1;
     size_t expected = self.m_peakLiveFrames.load(std::memory_order_relaxed);
     while (n > expected &&
-           !self.m_peakLiveFrames.compare_exchange_weak(
-               expected, n, std::memory_order_relaxed))
+           !self.m_peakLiveFrames.compare_exchange_weak(expected, n, std::memory_order_relaxed))
     {
     }
 }
@@ -39,8 +38,8 @@ void MemoryTracker::notifyFrameDestroyed()
 {
     auto &self = instance();
     size_t cur = self.m_liveFrames.load(std::memory_order_relaxed);
-    while (cur > 0 && !self.m_liveFrames.compare_exchange_weak(
-                           cur, cur - 1, std::memory_order_relaxed))
+    while (cur > 0 &&
+           !self.m_liveFrames.compare_exchange_weak(cur, cur - 1, std::memory_order_relaxed))
     {
     }
 }
@@ -83,8 +82,7 @@ MemorySnapshot MemoryTracker::sample()
 
     const size_t total = s.cacheTotalBytes + s.externalBytes;
     size_t prev = m_peak.load(std::memory_order_relaxed);
-    while (total > prev &&
-           !m_peak.compare_exchange_weak(prev, total, std::memory_order_relaxed))
+    while (total > prev && !m_peak.compare_exchange_weak(prev, total, std::memory_order_relaxed))
         ; // lock-free peak update
 
     s.peakBytes = m_peak.load(std::memory_order_relaxed);
@@ -99,8 +97,7 @@ void MemoryTracker::addExternal(size_t bytes)
 void MemoryTracker::removeExternal(size_t bytes)
 {
     size_t cur = m_external.load(std::memory_order_relaxed);
-    while (cur < bytes &&
-           !m_external.compare_exchange_weak(cur, 0, std::memory_order_relaxed))
+    while (cur < bytes && !m_external.compare_exchange_weak(cur, 0, std::memory_order_relaxed))
         ;
     const size_t dec = (cur >= bytes) ? bytes : cur;
     m_external.fetch_sub(dec, std::memory_order_relaxed);

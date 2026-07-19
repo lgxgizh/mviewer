@@ -14,23 +14,34 @@
 class CallbackCommand : public ICommand
 {
   public:
-    CallbackCommand(std::string id, std::string description,
-                    std::function<void()> onExecute,
+    CallbackCommand(std::string id, std::string description, std::function<void()> onExecute,
                     std::vector<CommandShortcut> shortcuts = {})
         : m_id(std::move(id)), m_description(std::move(description)),
           m_onExecute(std::move(onExecute)), m_shortcuts(std::move(shortcuts))
     {
     }
 
-    std::string id() const override { return m_id; }
-    std::string description() const override { return m_description; }
+    std::string id() const override
+    {
+        return m_id;
+    }
+    std::string description() const override
+    {
+        return m_description;
+    }
     void execute() override
     {
         if (canExecute() && m_onExecute)
             m_onExecute();
     }
-    bool canExecute() const override { return m_onExecute != nullptr; }
-    std::vector<CommandShortcut> shortcuts() const override { return m_shortcuts; }
+    bool canExecute() const override
+    {
+        return m_onExecute != nullptr;
+    }
+    std::vector<CommandShortcut> shortcuts() const override
+    {
+        return m_shortcuts;
+    }
 
   private:
     std::string m_id;

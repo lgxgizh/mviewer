@@ -19,7 +19,7 @@ int main(int argc, char **argv)
         printf("G1_PROBE_FAIL: decode returned null ImageData for %s\n", path.c_str());
         return 1;
     }
-    printf("G1_PROBE_OK: %s -> %d x %d (channels=%d)\n",
-           path.c_str(), img.width, img.height, img.channelsPerPixel());
+    printf("G1_PROBE_OK: %s -> %d x %d (channels=%d)\n", path.c_str(), img.width, img.height,
+           img.channelsPerPixel());
     return 0;
 }

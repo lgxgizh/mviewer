@@ -62,7 +62,7 @@ int main(int argc, char **argv)
     Budget b;
     size_t corpusSize = 1000;
     bool smoke = false;
-    std::string emitData; // P3: if set, emit corpus to this dir and exit.
+    std::string emitData;           // P3: if set, emit corpus to this dir and exit.
     std::string emitFormat = "all"; // P3: "all" or "jpeg" (10000-jpeg large tier)
     std::string traceFile;          // M13.5: if set, flush a Chrome trace JSON at exit
 
@@ -95,20 +95,18 @@ int main(int argc, char **argv)
     // materialized as reproducible, reusable image sets.
     if (!emitData.empty())
     {
-        mviewer::bench::Corpus corpus = mviewer::bench::makeCorpus(corpusSize, 512, 512, emitData, emitFormat);
+        mviewer::bench::Corpus corpus =
+            mviewer::bench::makeCorpus(corpusSize, 512, 512, emitData, emitFormat);
         std::cout << "emitted: jpeg=" << corpus.jpegPaths.size()
-                  << " png=" << corpus.pngPaths.size()
-                  << " tiff=" << corpus.tiffPaths.size()
+                  << " png=" << corpus.pngPaths.size() << " tiff=" << corpus.tiffPaths.size()
                   << " dir=" << corpus.dir << std::endl;
         std::cout << "=== EMIT DONE ===" << std::endl;
         return 0;
     }
 
     mviewer::bench::Corpus corpus = mviewer::bench::makeCorpus(corpusSize);
-    std::cout << "corpus: jpeg=" << corpus.jpegPaths.size()
-              << " png=" << corpus.pngPaths.size()
-              << " tiff=" << corpus.tiffPaths.size()
-              << " dir=" << corpus.dir << std::endl;
+    std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
+              << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << std::endl;
 
     std::vector<mviewer::bench::ScenarioResult> results;
     results.push_back(mviewer::bench::scenarioStartup());
@@ -130,9 +128,9 @@ int main(int argc, char **argv)
         if (b.enforce)
         {
             if (r.name == "B2")
-                r.passed = b.check(r.value, 100.0);               // first thumbnail <100ms
+                r.passed = b.check(r.value, 100.0); // first thumbnail <100ms
             else if (r.name == "B8")
-                r.passed = b.check(r.value, 16.0);                // preloaded switch <16ms
+                r.passed = b.check(r.value, 16.0); // preloaded switch <16ms
             else if (r.name == "B9")
             {
                 // baseline_return_ok == 1.0 AND final within 2x initial baseline.
@@ -144,10 +142,8 @@ int main(int argc, char **argv)
                     const auto posI = r.detail.find("initBase=");
                     if (posF != std::string::npos && posI != std::string::npos)
                     {
-                        const double finalB =
-                            std::strtod(r.detail.c_str() + posF + 10, nullptr);
-                        const double initB =
-                            std::strtod(r.detail.c_str() + posI + 9, nullptr);
+                        const double finalB = std::strtod(r.detail.c_str() + posF + 10, nullptr);
+                        const double initB = std::strtod(r.detail.c_str() + posI + 9, nullptr);
                         if (initB > 0)
                             ok = (finalB <= initB * 2.0);
                     }
@@ -162,8 +158,7 @@ int main(int argc, char **argv)
 
     corpus.clear();
 
-    std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ==="
-              << std::endl;
+    std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ===" << std::endl;
     // M13.5: flush a Chrome trace JSON if --trace was given (only meaningful
     // when built with MVIEWER_ENABLE_PERFETTO; otherwise the macros are no-ops
     // and the buffer is empty, so we report and skip).
@@ -171,14 +166,12 @@ int main(int argc, char **argv)
     if (!traceFile.empty())
     {
         const bool ok = mviewer::trace::flush(traceFile);
-        std::cout << "trace: " << (ok ? "wrote " : "FAILED to write ")
-                  << traceFile << " (" << mviewer::trace::count() << " spans)"
-                  << std::endl;
+        std::cout << "trace: " << (ok ? "wrote " : "FAILED to write ") << traceFile << " ("
+                  << mviewer::trace::count() << " spans)" << std::endl;
     }
 #else
     if (!traceFile.empty())
-        std::cout << "trace: --trace needs a build with MVIEWER_ENABLE_PERFETTO=ON"
-                  << std::endl;
+        std::cout << "trace: --trace needs a build with MVIEWER_ENABLE_PERFETTO=ON" << std::endl;
 #endif
 
     // CI (--smoke) always exits 0 (proves links + runs). Local --enforce may exit 1.

@@ -32,14 +32,14 @@ enum class MemLevel : int
 
 struct MemorySnapshot
 {
-    size_t cacheTotalBytes = 0;                 // CacheManager::memoryUsageBytes()
-    size_t cacheByLevel[4] = {0, 0, 0, 0};   // per MemLevel
-    uint64_t cacheHits[4] = {0, 0, 0, 0};    // per MemLevel (from levelStats)
-    uint64_t cacheMisses[4] = {0, 0, 0, 0};  // per MemLevel
-    size_t liveImageFrames = 0;                 // tracked via ImageFrame ctor/dtor
-    size_t externalBytes = 0;                   // caller-accounted in-flight buffers
-    size_t peakBytes = 0;                       // max (cacheTotal + external) seen
-    size_t processWorkingSetKB = 0;             // best-effort OS RSS (0 if N/A)
+    size_t cacheTotalBytes = 0;             // CacheManager::memoryUsageBytes()
+    size_t cacheByLevel[4] = {0, 0, 0, 0};  // per MemLevel
+    uint64_t cacheHits[4] = {0, 0, 0, 0};   // per MemLevel (from levelStats)
+    uint64_t cacheMisses[4] = {0, 0, 0, 0}; // per MemLevel
+    size_t liveImageFrames = 0;             // tracked via ImageFrame ctor/dtor
+    size_t externalBytes = 0;               // caller-accounted in-flight buffers
+    size_t peakBytes = 0;                   // max (cacheTotal + external) seen
+    size_t processWorkingSetKB = 0;         // best-effort OS RSS (0 if N/A)
 };
 
 class MemoryTracker

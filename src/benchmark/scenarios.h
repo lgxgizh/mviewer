@@ -24,12 +24,12 @@ struct Timing
 
 struct ScenarioResult
 {
-    std::string name;     // "B1".."B7"
-    std::string metric;   // human-readable metric name
-    double value = 0;     // primary metric (ms or ratio or bytes)
-    Timing timing;         // for timing scenarios
-    std::string detail;   // extra printed line
-    bool passed = true;   // vs budget (only meaningful under --enforce)
+    std::string name;   // "B1".."B7"
+    std::string metric; // human-readable metric name
+    double value = 0;   // primary metric (ms or ratio or bytes)
+    Timing timing;      // for timing scenarios
+    std::string detail; // extra printed line
+    bool passed = true; // vs budget (only meaningful under --enforce)
 };
 
 // B2 stage breakdown for the first-thumbnail pipeline (M10 performance gate).

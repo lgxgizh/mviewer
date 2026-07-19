@@ -45,8 +45,7 @@ Timing summarize(std::vector<double> vals)
 }
 
 // Block until a std::atomic<bool> flips or timeout (used to latch async callbacks).
-template <typename Clock = std::chrono::steady_clock>
-double nowMs()
+template <typename Clock = std::chrono::steady_clock> double nowMs()
 {
     return std::chrono::duration<double, std::milli>(Clock::now().time_since_epoch()).count();
 }
@@ -140,51 +139,55 @@ ThumbnailBreakdown measureFirstThumbnail(const Corpus &corpus)
 
     // Injected decode: measure decode (incl. scaled-resize via Qt codec) and a
     // separate standalone resize pass so the breakdown shows resize distinctly.
-    pipe.setDecodeFn([st](const std::string &p, int size) -> ImageData {
-        // Latch the very first decode-start (queue_wait end) exactly once.
-        if (st->anchor.load() >= 0.0 && st->firstDecodeStart.load() < 0.0)
+    pipe.setDecodeFn(
+        [st](const std::string &p, int size) -> ImageData
         {
-            double expect = -1.0;
-            st->firstDecodeStart.compare_exchange_strong(expect, nowMs());
-        }
-        const double ds = nowMs();
-        ImageData thumb = Decoder::decodeScaled(p, size);
-        const double de = nowMs();
-        // Record the first decode's end + standalone resize, once.
-        bool expected = false;
-        if (st->firstCaptured.compare_exchange_strong(expected, true))
-        {
-            st->firstDecodeEnd.store(de);
-            st->firstDecodeStart.store(ds);
-            // Standalone resize cost: the Qt codec path folds scaling into the
-            // decode (setScaledSize), so decode_ms already includes it. Measure
-            // an explicit QImage::scaled on a fresh full read to surface the
-            // independent resize cost for the breakdown (first thumbnail only).
-            QImageReader rr(QString::fromStdString(p));
-            QImage full = rr.read();
-            if (!full.isNull())
+            // Latch the very first decode-start (queue_wait end) exactly once.
+            if (st->anchor.load() >= 0.0 && st->firstDecodeStart.load() < 0.0)
             {
-                const double rs = nowMs();
-                (void)full.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-                const double re = nowMs();
-                st->resizeMs.fetch_add(re - rs, std::memory_order_relaxed);
+                double expect = -1.0;
+                st->firstDecodeStart.compare_exchange_strong(expect, nowMs());
             }
-        }
-        return thumb;
-    });
+            const double ds = nowMs();
+            ImageData thumb = Decoder::decodeScaled(p, size);
+            const double de = nowMs();
+            // Record the first decode's end + standalone resize, once.
+            bool expected = false;
+            if (st->firstCaptured.compare_exchange_strong(expected, true))
+            {
+                st->firstDecodeEnd.store(de);
+                st->firstDecodeStart.store(ds);
+                // Standalone resize cost: the Qt codec path folds scaling into the
+                // decode (setScaledSize), so decode_ms already includes it. Measure
+                // an explicit QImage::scaled on a fresh full read to surface the
+                // independent resize cost for the breakdown (first thumbnail only).
+                QImageReader rr(QString::fromStdString(p));
+                QImage full = rr.read();
+                if (!full.isNull())
+                {
+                    const double rs = nowMs();
+                    (void)full.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                    const double re = nowMs();
+                    st->resizeMs.fetch_add(re - rs, std::memory_order_relaxed);
+                }
+            }
+            return thumb;
+        });
 
-    pipe.setResultFn([st](const std::string &, const ImageData &) {
-        const double now = nowMs();
-        double expect = -1.0;
-        if (st->firstResultAt.compare_exchange_strong(expect, now))
+    pipe.setResultFn(
+        [st](const std::string &, const ImageData &)
         {
-            // cache = decode-end -> result-callback (worker mem-cache insert).
-            const double de = st->firstDecodeEnd.load();
-            if (de >= 0.0)
-                st->cacheMs.store(now - de, std::memory_order_relaxed);
-            st->firstSeen.store(true, std::memory_order_relaxed);
-        }
-    });
+            const double now = nowMs();
+            double expect = -1.0;
+            if (st->firstResultAt.compare_exchange_strong(expect, now))
+            {
+                // cache = decode-end -> result-callback (worker mem-cache insert).
+                const double de = st->firstDecodeEnd.load();
+                if (de >= 0.0)
+                    st->cacheMs.store(now - de, std::memory_order_relaxed);
+                st->firstSeen.store(true, std::memory_order_relaxed);
+            }
+        });
 
     pipe.setSources(paths);
 
@@ -205,8 +208,8 @@ ThumbnailBreakdown measureFirstThumbnail(const Corpus &corpus)
                            ? (st->firstDecodeStart.load() - tAnchor)
                            : bd.ui_notify_ms;
     bd.decode_ms = (st->firstDecodeEnd.load() >= 0.0 && st->firstDecodeStart.load() >= 0.0)
-                      ? (st->firstDecodeEnd.load() - st->firstDecodeStart.load())
-                      : 0.0;
+                       ? (st->firstDecodeEnd.load() - st->firstDecodeStart.load())
+                       : 0.0;
     bd.resize_ms = st->resizeMs.load();
     bd.total_ms = tFirst - tScan0;
 
@@ -242,8 +245,11 @@ ScenarioResult scenarioFirstThumbnail(const Corpus &corpus)
     r.metric = "first_thumbnail_ms";
     r.value = cold.ui_notify_ms;
     r.passed = true; // smoke reports; --enforce applies the <100ms budget
-    r.detail = "COLD {" + cold.toString() + "}"
-               " WARM {" + warm.toString() + "}"
+    r.detail = "COLD {" + cold.toString() +
+               "}"
+               " WARM {" +
+               warm.toString() +
+               "}"
                " (real ThumbnailPipeline path; budget <100ms)";
     return r;
 }
@@ -272,8 +278,8 @@ ScenarioResult scenarioPipelinePriority(const Corpus &corpus)
     if (paths.empty())
         return ScenarioResult{"TRACE", "pipeline_priority", 0, {}, "empty corpus", false};
 
-    const size_t visBegin = 0, visEnd = 20;     // visible screenful
-    const size_t predCount = 16;                 // predictive neighbors
+    const size_t visBegin = 0, visEnd = 20; // visible screenful
+    const size_t predCount = 16;            // predictive neighbors
     const size_t neighborEnd = visEnd + predCount;
 
     // Authoritative index = position in the display-order path list the
@@ -298,30 +304,34 @@ ScenarioResult scenarioPipelinePriority(const Corpus &corpus)
     std::unordered_map<std::string, double> startMs;
     std::mutex startMtx;
 
-    pipe.setDecodeFn([&](const std::string &p, int size) -> ImageData {
+    pipe.setDecodeFn(
+        [&](const std::string &p, int size) -> ImageData
         {
-            std::lock_guard<std::mutex> lk(startMtx);
-            startMs[p] = nowMs() - tAnchorTrace;
-        }
-        return Decoder::decodeScaled(p, size);
-    });
-    pipe.setResultFn([&](const std::string &p, const ImageData &) {
-        const double ms = nowMs() - tAnchorTrace;
-        std::lock_guard<std::mutex> lk(trMtx);
-        size_t idx = paths.size();
-        auto it = pathToIndex.find(p);
-        if (it != pathToIndex.end())
-            idx = it->second;
-        std::string tier = (idx >= visBegin && idx < visEnd) ? "visible"
-                          : (idx >= visEnd && idx < neighborEnd) ? "neighbor"
-                                                                 : "background";
-        trace.push_back({idx, ms, tier});
-        if (++arrived >= want)
+            {
+                std::lock_guard<std::mutex> lk(startMtx);
+                startMs[p] = nowMs() - tAnchorTrace;
+            }
+            return Decoder::decodeScaled(p, size);
+        });
+    pipe.setResultFn(
+        [&](const std::string &p, const ImageData &)
         {
-            done.store(true);
-            cv.notify_all();
-        }
-    });
+            const double ms = nowMs() - tAnchorTrace;
+            std::lock_guard<std::mutex> lk(trMtx);
+            size_t idx = paths.size();
+            auto it = pathToIndex.find(p);
+            if (it != pathToIndex.end())
+                idx = it->second;
+            std::string tier = (idx >= visBegin && idx < visEnd)      ? "visible"
+                               : (idx >= visEnd && idx < neighborEnd) ? "neighbor"
+                                                                      : "background";
+            trace.push_back({idx, ms, tier});
+            if (++arrived >= want)
+            {
+                done.store(true);
+                cv.notify_all();
+            }
+        });
 
     pipe.setSources(paths);
     tAnchorTrace = nowMs();
@@ -358,9 +368,8 @@ ScenarioResult scenarioPipelinePriority(const Corpus &corpus)
             minBackgroundStart = std::min(minBackgroundStart, s);
         }
     }
-    const bool orderingOk =
-        (maxVisibleStart <= minNeighborStart + 1e-6) &&
-        (maxNeighborStart <= minBackgroundStart + 1e-6);
+    const bool orderingOk = (maxVisibleStart <= minNeighborStart + 1e-6) &&
+                            (maxNeighborStart <= minBackgroundStart + 1e-6);
 
     ScenarioResult r;
     r.name = "TRACE";
@@ -369,8 +378,7 @@ ScenarioResult scenarioPipelinePriority(const Corpus &corpus)
     // (user said do not redesign Scheduler). detail carries the verdict.
     r.passed = true;
     std::ostringstream oss;
-    oss << "visible_start_max=" << maxVisibleStart
-        << " neighbor_start_min=" << minNeighborStart
+    oss << "visible_start_max=" << maxVisibleStart << " neighbor_start_min=" << minNeighborStart
         << " neighbor_start_max=" << maxNeighborStart
         << " background_start_min=" << minBackgroundStart
         << " priority_by_start=" << (orderingOk ? "OK" : "VIOLATED");
@@ -379,14 +387,14 @@ ScenarioResult scenarioPipelinePriority(const Corpus &corpus)
     return r;
 }
 
-
 // ─── B3: decode latency per format ──────────────────────────────────────────
 ScenarioResult scenarioDecodeLatency(const Corpus &corpus)
 {
     auto &repo = ImageRepository::instance();
     repo.invalidateAll();
 
-    auto timeOne = [&](const std::string &p) -> double {
+    auto timeOne = [&](const std::string &p) -> double
+    {
         const double a = nowMs();
         repo.load(p);
         return nowMs() - a;
@@ -428,9 +436,8 @@ ScenarioResult scenarioThumbThroughput(const Corpus &corpus)
         auto res = ImageRepository::instance().load(all[i]);
         if (res.frame)
             cm.putMemory(CacheLevel::Thumbnail, all[i],
-                         res.frame->thumbnail().isNull()
-                             ? res.frame->pixels()
-                             : res.frame->thumbnail());
+                         res.frame->thumbnail().isNull() ? res.frame->pixels()
+                                                         : res.frame->thumbnail());
     }
     const double dt = nowMs() - t0;
     const double perSec = (dt > 0) ? (n * 1000.0 / dt) : 0;
@@ -442,8 +449,8 @@ ScenarioResult scenarioThumbThroughput(const Corpus &corpus)
     // Smoke (non-enforce): report the metric; budget (>100/s) is the
     // --enforce / Phase-4 gate, not evaluated here.
     r.passed = true;
-    r.detail = "decoded+placed " + std::to_string(n) + " thumbnails in " +
-               std::to_string(dt) + " ms";
+    r.detail =
+        "decoded+placed " + std::to_string(n) + " thumbnails in " + std::to_string(dt) + " ms";
     return r;
 }
 
@@ -482,8 +489,8 @@ ScenarioResult scenarioCacheHitRatio(const Corpus &corpus)
     r.metric = "cache_hit_ratio";
     r.value = ratio;
     r.passed = ratio >= 0.0 && ratio <= 1.0; // structural; --enforce uses L2>0.90
-    r.detail = "Zipf nav over " + std::to_string(n) + " imgs, " +
-               std::to_string(navs) + " navigations";
+    r.detail =
+        "Zipf nav over " + std::to_string(n) + " imgs, " + std::to_string(navs) + " navigations";
     return r;
 }
 
@@ -510,8 +517,8 @@ ScenarioResult scenarioMemoryBudget(const Corpus &corpus)
     r.metric = "peak_cache_bytes";
     r.value = static_cast<double>(peak.cacheTotalBytes);
     r.detail = "liveFrames=" + std::to_string(liveFrames) +
-               " peakBytes=" + std::to_string(peak.peakBytes) +
-               " expectedFloor~" + std::to_string(expectedFloor) +
+               " peakBytes=" + std::to_string(peak.peakBytes) + " expectedFloor~" +
+               std::to_string(expectedFloor) +
                " rssMB=" + std::to_string(peak.processWorkingSetKB / 1024);
 
     // Now evict and confirm return toward baseline.
@@ -580,8 +587,8 @@ ScenarioResult scenarioSwitchLatency(const Corpus &corpus)
     {
         const size_t i = k % (m - 1);
         const double a = nowMs();
-        repo.load(all[i]);       // hit
-        repo.load(all[i + 1]);   // step forward
+        repo.load(all[i]);     // hit
+        repo.load(all[i + 1]); // step forward
         const double b = nowMs();
         sw.push_back(b - a);
     }
@@ -654,9 +661,8 @@ ScenarioResult scenarioSoakStability(const Corpus &corpus)
     r.detail = "cycles=" + std::to_string(cycles) +
                " initBase=" + std::to_string(static_cast<long long>(initBase)) +
                " globalPeak=" + std::to_string(static_cast<long long>(globalPeak)) +
-               " finalBase=" + std::to_string(static_cast<long long>(finalBase)) +
-               " finalRssMB=" + std::to_string(static_cast<long long>(
-                                          mt.sample().processWorkingSetKB / 1024)) +
+               " finalBase=" + std::to_string(static_cast<long long>(finalBase)) + " finalRssMB=" +
+               std::to_string(static_cast<long long>(mt.sample().processWorkingSetKB / 1024)) +
                perCycle.str();
     return r;
 }

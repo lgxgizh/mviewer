@@ -37,8 +37,8 @@ static int g_fail = 0;
     } while (0)
 
 // Image extensions the Decoder is expected to attempt.
-static const std::set<std::string> kImgExt = {
-    ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp"};
+static const std::set<std::string> kImgExt = {".png",  ".jpg", ".jpeg", ".tif",
+                                              ".tiff", ".bmp", ".gif",  ".webp"};
 
 static bool isImage(const std::string &ext)
 {

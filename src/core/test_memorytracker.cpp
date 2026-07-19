@@ -12,14 +12,14 @@
 // These assert deterministic ledger behavior — NOT wall-clock budgets.
 
 static int g_failures = 0;
-#define CHECK(cond)                                                                       \
-    do                                                                                     \
-    {                                                                                      \
-        if (!(cond))                                                                       \
-        {                                                                                  \
-            std::cerr << "FAIL: " #cond " @ " << __LINE__ << "\n";                        \
-            ++g_failures;                                                                  \
-        }                                                                                  \
+#define CHECK(cond)                                                                                \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(cond))                                                                               \
+        {                                                                                          \
+            std::cerr << "FAIL: " #cond " @ " << __LINE__ << "\n";                                 \
+            ++g_failures;                                                                          \
+        }                                                                                          \
     } while (0)
 
 using namespace mviewer::perf;

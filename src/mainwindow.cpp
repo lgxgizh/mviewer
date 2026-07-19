@@ -2,14 +2,14 @@
 
 #include "application/OpenDirectoryUseCase.h"
 #include "core/EventBus.h"
-#include "core/image/ImageRepository.h"
-#include "core/workspace/WorkspaceSerializer.h"
-#include "core/command/CompareCommand.h"
 #include "core/command/CallbackCommand.h"
+#include "core/command/CompareCommand.h"
 #include "core/command/DeleteCommand.h"
 #include "core/command/OpenDirectoryCommand.h"
 #include "core/command/RenameCommand.h"
 #include "core/command/ToggleHistogramCommand.h"
+#include "core/image/ImageRepository.h"
+#include "core/workspace/WorkspaceSerializer.h"
 
 #include "analysispanel.h"
 #include "compareworkspace.h"
@@ -296,11 +296,11 @@ void MainWindow::setupCommands()
     // Space quick-preview current image, F toggles fullscreen. These delegate
     // to existing MainWindow handlers via CallbackCommand.
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "navigate_prev", "上一张 (Left)",
-        [this]() { navigate(-1); }, std::vector<CommandShortcut>{{Qt::Key_Left, 0}}));
+        "navigate_prev", "上一张 (Left)", [this]() { navigate(-1); },
+        std::vector<CommandShortcut>{{Qt::Key_Left, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "navigate_next", "下一张 (Right)",
-        [this]() { navigate(1); }, std::vector<CommandShortcut>{{Qt::Key_Right, 0}}));
+        "navigate_next", "下一张 (Right)", [this]() { navigate(1); },
+        std::vector<CommandShortcut>{{Qt::Key_Right, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
         "quick_preview", "快速预览 (Space)",
         [this]()
@@ -313,8 +313,8 @@ void MainWindow::setupCommands()
         "fullscreen", "全屏 (F)",
         [this]()
         {
-            QWidget *target = m_imageViewer->isVisible() ? (QWidget *)m_imageViewer
-                                                         : (QWidget *)this;
+            QWidget *target =
+                m_imageViewer->isVisible() ? (QWidget *)m_imageViewer : (QWidget *)this;
             if (target->isFullScreen())
                 target->showNormal();
             else
@@ -457,7 +457,8 @@ void MainWindow::saveWorkspace()
     {
         const std::string key = cpath.toStdString();
         const auto it = m_analysisByPath.find(cpath);
-        const std::string analysis = (it != m_analysisByPath.end()) ? it->toStdString() : std::string();
+        const std::string analysis =
+            (it != m_analysisByPath.end()) ? it->toStdString() : std::string();
         if (roi.isEmpty() && analysis.empty())
             continue;
         for (auto &folder : ws.folders)
@@ -484,11 +485,10 @@ void MainWindow::saveWorkspace()
         QMessageBox::critical(this, "保存工作区", "无法写入文件：" + filePath);
         return;
     }
-    statusBar()->showMessage(
-        QString("工作区已保存: %1 (%2 张图片, %3 个目录)")
-            .arg(QFileInfo(filePath).fileName())
-            .arg(static_cast<int>(ws.imageCount()))
-            .arg(static_cast<int>(ws.folderCount())));
+    statusBar()->showMessage(QString("工作区已保存: %1 (%2 张图片, %3 个目录)")
+                                 .arg(QFileInfo(filePath).fileName())
+                                 .arg(static_cast<int>(ws.imageCount()))
+                                 .arg(static_cast<int>(ws.folderCount())));
 }
 
 void MainWindow::openWorkspace()
@@ -549,8 +549,7 @@ void MainWindow::openWorkspace()
             if (!img.analysis.empty())
                 m_analysisByPath.insert(QString::fromStdString(img.filePath),
                                         QString::fromStdString(img.analysis));
-            if (restoredPath.empty() &&
-                (img.roiW > 0 || img.roiH > 0 || !img.analysis.empty()))
+            if (restoredPath.empty() && (img.roiW > 0 || img.roiH > 0 || !img.analysis.empty()))
             {
                 restoredRoi = {img.roiX, img.roiY, img.roiW, img.roiH};
                 restoredAnalysis = img.analysis;
@@ -573,9 +572,8 @@ void MainWindow::openWorkspace()
             m_compareView->applyROI(restoredRoi);
     }
 
-    statusBar()->showMessage(
-        QString("工作区已打开: %1 (%2 张图片, %3 个目录)")
-            .arg(QFileInfo(filePath).fileName())
-            .arg(static_cast<int>(ws.imageCount()))
-            .arg(static_cast<int>(ws.folderCount())));
+    statusBar()->showMessage(QString("工作区已打开: %1 (%2 张图片, %3 个目录)")
+                                 .arg(QFileInfo(filePath).fileName())
+                                 .arg(static_cast<int>(ws.imageCount()))
+                                 .arg(static_cast<int>(ws.folderCount())));
 }
