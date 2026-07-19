@@ -15,7 +15,8 @@
 param(
     [string]$Tiers = "small,medium",   # comma-separated: small,medium,large,all
     [string]$OutRoot = "D:/mviewer_bench_data",  # where tiers are written
-    [string]$BuildDir = "D:/mviewer/build_msvc"
+    [string]$BuildDir = "D:/mviewer/build_msvc",
+    [string]$Format = "all"            # "all" (jpeg+png+tif) or "jpeg" (large tier fits disk)
 )
 
 $ErrorActionPreference = 'Stop'
@@ -26,6 +27,9 @@ if (-not (Test-Path $bench)) {
     exit 1
 }
 $env:PATH = "D:\QT\6.11.1\msvc2022_64\bin;D:\msvc\VC\Tools\MSVC\14.51.36231\bin\Hostx64\x64;$env:PATH"
+# QImageWriter needs the Qt imageformat plugins (imageformats/qjpeg.dll).
+# Without this, --emit-format jpeg silently writes 0 files.
+$env:QT_PLUGIN_PATH = "D:\QT\6.11.1\msvc2022_64\plugins"
 
 $map = @{
     small  = 100
@@ -41,9 +45,9 @@ foreach ($t in $tierList) {
     $dest = Join-Path $OutRoot $t
     if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
     New-Item -ItemType Directory -Force -Path $dest | Out-Null
-    Write-Host "=== generating tier '$t' (n=$n) -> $dest ==="
+    Write-Host "=== generating tier '$t' (n=$n, format=$Format) -> $dest ==="
     $freeBefore = (Get-PSDrive D).Free
-    & $bench --emit-data $dest --corpus-size $n 2>&1 | ForEach-Object { Write-Host $_ }
+    & $bench --emit-data $dest --corpus-size $n --emit-format $Format 2>&1 | ForEach-Object { Write-Host $_ }
     $freeAfter = (Get-PSDrive D).Free
     $sizeMB = [math]::Round((Get-ChildItem $dest -Recurse -File | Measure-Object -Property Length -Sum).Sum / 1MB)
     Write-Host "tier '$t' done: ~$sizeMB MB on disk; D: free $([math]::Round($freeBefore/1MB)) -> $([math]::Round($freeAfter/1MB)) MB"

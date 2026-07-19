@@ -7,7 +7,7 @@
 #include <string>
 #include <vector>
 
-#include <QApplication>
+#include <QCoreApplication>
 #include <QImage>
 
 // mviewer_bench — M10 performance harness (docs/rfc/M10_PERFORMANCE_ENGINEERING.md).
@@ -50,18 +50,18 @@ void printVerdict(const mviewer::bench::ScenarioResult &r, const Budget &b)
 
 int main(int argc, char **argv)
 {
-    // Qt (QImage codecs, event loop) requires a live QApplication BEFORE any
-    // QImage / codec work. Construct it first so makeCorpus() and the scenarios
-    // run inside a valid Qt context. Image codec plugins live in the GUI module,
-    // so QApplication (not QCoreApplication) is required. scenarioStartup() detects
-    // this instance and only probes the already-live event loop instead of
-    // constructing a second one.
-    QApplication app(argc, argv);
+    // mviewer_bench only synthesizes QImage corpora and decodes them — it needs
+    // QtGui (QImage/QImageWriter) but NOT a windowing platform. Use
+    // QCoreApplication (not QApplication) so it runs headless without a platform
+    // plugin; this also avoids a QApplication init hang when the Qt platform
+    // plugin search path is not set up in the build dir.
+    QCoreApplication app(argc, argv);
 
     Budget b;
     size_t corpusSize = 1000;
     bool smoke = false;
     std::string emitData; // P3: if set, emit corpus to this dir and exit.
+    std::string emitFormat = "all"; // P3: "all" or "jpeg" (10000-jpeg large tier)
 
     for (int i = 1; i < argc; ++i)
     {
@@ -75,6 +75,8 @@ int main(int argc, char **argv)
         }
         else if (a == "--emit-data" && i + 1 < argc)
             emitData = argv[++i];
+        else if (a == "--emit-format" && i + 1 < argc)
+            emitFormat = argv[++i];
         else if (a == "--corpus-size" && i + 1 < argc)
             corpusSize = static_cast<size_t>(std::strtoul(argv[++i], nullptr, 10));
     }
@@ -88,7 +90,7 @@ int main(int argc, char **argv)
     // materialized as reproducible, reusable image sets.
     if (!emitData.empty())
     {
-        mviewer::bench::Corpus corpus = mviewer::bench::makeCorpus(corpusSize, 512, 512, emitData);
+        mviewer::bench::Corpus corpus = mviewer::bench::makeCorpus(corpusSize, 512, 512, emitData, emitFormat);
         std::cout << "emitted: jpeg=" << corpus.jpegPaths.size()
                   << " png=" << corpus.pngPaths.size()
                   << " tiff=" << corpus.tiffPaths.size()
