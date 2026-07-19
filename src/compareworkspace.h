@@ -5,9 +5,11 @@
 #include <QCheckBox>
 #include <QGridLayout>
 #include <QLabel>
+#include <QMap>
 #include <QMouseEvent>
 #include <QPixmap>
 #include <QPointF>
+#include <QStringList>
 #include <QWidget>
 #include <memory>
 
@@ -45,6 +47,17 @@ class CompareWorkspace : public QWidget
     {
         applySelectionToAll(sel);
     }
+
+    // M12.2 (G2-ext): the image paths currently loaded into the compare cells.
+    // Used by Workspace persistence to capture session context per image.
+    QStringList comparedImages() const;
+
+    // M12.2 (G2-ext): the ROI applied during the compare session, keyed by image
+    // path. The compare ROI is synchronized across cells (one region shown on
+    // every image), so every compared image maps to the same Selection here;
+    // returning a per-path map keeps the serialized .mvws carrying each image's
+    // own ROI field (ImageMetadata.roiX/Y/W/H) for forward compatibility.
+    QMap<QString, mviewer::domain::Selection> roiByPath() const;
 
   signals:
     void syncToggled(bool on);

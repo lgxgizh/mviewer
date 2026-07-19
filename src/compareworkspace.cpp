@@ -124,6 +124,33 @@ void CompareWorkspace::setImages(const QStringList &paths)
     update();
 }
 
+QStringList CompareWorkspace::comparedImages() const
+{
+    QStringList out;
+    const int n = m_engine.imageCount();
+    out.reserve(n);
+    for (int i = 0; i < n; ++i)
+    {
+        const ImageFrame *img = m_engine.imageAt(i);
+        if (img)
+            out.push_back(QString::fromStdString(img->metadata().filePath));
+    }
+    return out;
+}
+
+QMap<QString, mviewer::domain::Selection> CompareWorkspace::roiByPath() const
+{
+    QMap<QString, mviewer::domain::Selection> map;
+    const int n = m_engine.imageCount();
+    for (int i = 0; i < n; ++i)
+    {
+        const ImageFrame *img = m_engine.imageAt(i);
+        if (img)
+            map.insert(QString::fromStdString(img->metadata().filePath), m_lastSelection);
+    }
+    return map;
+}
+
 bool CompareWorkspace::isSyncEnabled() const
 {
     return m_syncZoom && m_syncDrag;
