@@ -1,0 +1,168 @@
+# =============================================================================
+# MViewer Release — tag-triggered publish (M12.4 Release Automation)
+# -----------------------------------------------------------------------------
+# Triggers on a pushed version tag (v*.*.*). Builds Release, runs the mandated
+# test suite (build.ps1 Test — the single sanctioned entry point), deploys the
+# Qt runtime, and publishes:
+#   * a portable ZIP  (always — guaranteed deliverable, G1 guard inside)
+#   * an NSIS installer (best-effort — skipped with a clear note if NSIS is
+#     absent on the runner; M12.3 installer script is ready locally)
+# plus a GitHub Release with both artifacts and a short changelog derived from
+# the tag.
+#
+# This file is ADDITIVE and does NOT touch the frozen `ci.yml`, `build.ps1`, or
+# `CMakePresets.json` (per AGENTS.md freeze policy). It reuses the exact build
+# and test entry point as ci.yml so local <-> CI parity is preserved.
+# =============================================================================
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write   # needed to create a GitHub Release
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # release — build, test, package, publish
+  # ---------------------------------------------------------------------------
+  release:
+    name: Build, test & publish release
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so we can derive a changelog
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          modules: qtimageformats   # provides the TIFF plugin (qtiff.dll) — G1
+          cache: true
+
+      - name: Derive version from tag
+        id: ver
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # strip leading 'v'
+          VER="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Release version: $VER (from tag $TAG)"
+
+      - name: Build & Test (sanctioned entry point)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test
+
+      - name: Verify executable exists
+        run: |
+          if (-not (Test-Path build_msvc\bin\MViewer.exe)) {
+            Write-Host "::error:: build_msvc/bin/MViewer.exe not found after build"
+            exit 1
+          }
+
+      # --- Portable ZIP (always produced) -------------------------------------
+      - name: Deploy Qt runtime (windeployqt)
+        run: |
+          $windeploy = Join-Path $env:Qt6_DIR 'bin\windeployqt.exe'
+          if (-not (Test-Path $windeploy)) { Write-Host "::error:: windeployqt not found at $windeploy"; exit 1 }
+          cmd /c "$windeploy --release --no-translations --no-opengl-sw --no-system-d3d-compiler build_msvc\bin\MViewer.exe 2>&1"
+          if (-not (Test-Path build_msvc\bin\Qt6Core.dll)) { Write-Host "::error:: windeployqt did not deploy Qt6Core.dll"; exit 1 }
+
+      - name: G1 guard — TIFF plugin must be present
+        run: |
+          $qtiff = 'build_msvc\bin\imageformats\qtiff.dll'
+          if (-not (Test-Path $qtiff)) {
+            Write-Host "::error:: imageformats/qtiff.dll missing — TIFF would fail on clean Windows (G1). Aborting release."
+            exit 1
+          }
+          Write-Host "G1 guard OK: qtiff.dll present."
+
+      - name: Zip portable
+        id: zip
+        run: |
+          $ver = '${{ steps.ver.outputs.version }}'
+          $zip = "MViewer-portable-$ver.zip"
+          Compress-Archive -Path 'build_msvc\bin\*' -DestinationPath $zip -Force
+          echo "zip=$zip" >> "$env:GITHUB_OUTPUT"
+          Write-Host "portable zip: $zip ($([math]::Round((Get-Item $zip).Length/1MB)) MB)"
+
+      # --- NSIS installer (best-effort) ---------------------------------------
+      - name: Build NSIS installer (if makensis available)
+        id: nsis
+        continue-on-error: true
+        run: |
+          $ver = '${{ steps.ver.outputs.version }}'
+          $makensis = Get-Command makensis -ErrorAction SilentlyContinue
+          if (-not $makensis) {
+            $p = Join-Path ${env:ProgramFiles(x86)} 'NSIS\makensis.exe'
+            if (Test-Path $p) { $makensis = $p }
+          }
+          if (-not $makensis) {
+            Write-Host "NSIS (makensis) not installed on runner — skipping installer build."
+            Write-Host "The installer can be built locally via pack_installer.ps1 (needs 'choco install nsis')."
+            exit 0
+          }
+          $stage = 'dist\stage'
+          $dist  = 'dist'
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          $windeploy = Join-Path $env:Qt6_DIR 'bin\windeployqt.exe'
+          cmd /c "$windeploy --release --no-translations --no-opengl-sw --no-system-d3d-compiler build_msvc\bin\MViewer.exe --dir $stage 2>&1"
+          if (-not (Test-Path "$stage\imageformats\qtiff.dll")) { Write-Host "::error:: installer stage missing qtiff.dll (G1)"; exit 1 }
+          & $makensis /DDEPLOY_DIR="$stage" /DOUTDIR="$dist" /DAPPVERSION="$ver" installer\mviewer.nsi
+          $setup = "dist\MViewer-$ver-setup.exe"
+          if (-not (Test-Path $setup)) { Write-Host "::error:: installer not produced"; exit 1 }
+          echo "setup=$setup" >> "$env:GITHUB_OUTPUT"
+          Write-Host "installer: $setup ($([math]::Round((Get-Item $setup).Length/1MB)) MB)"
+
+      # --- Changelog from git -------------------------------------------------
+      - name: Build changelog
+        id: changelog
+        shell: bash
+        run: |
+          PREV=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || true)
+          if [ -z "$PREV" ]; then
+            RANGE=""
+          else
+            RANGE="$PREV..${{ steps.ver.outputs.tag }}"
+          fi
+          {
+            echo "## MViewer ${{ steps.ver.outputs.version }}"
+            echo ""
+            echo "### Changes since ${PREV:-the beginning}"
+            echo ""
+            git log --pretty=format:"- %s" $RANGE | head -50
+            echo ""
+            echo ""
+            echo "### Assets"
+            echo "- \`${{ steps.zip.outputs.zip }}\` — portable ZIP (extract & run MViewer.exe)"
+            if [ -n "${{ steps.nsis.outputs.setup }}" ]; then
+              echo "- \`${{ steps.nsis.outputs.setup }}\` — Windows installer"
+            else
+              echo "- _Windows installer not built on CI (NSIS unavailable); build locally via pack_installer.ps1_"
+            fi
+          } > CHANGELOG.md
+          cat CHANGELOG.md
+
+      # --- Publish GitHub Release --------------------------------------------
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: MViewer ${{ steps.ver.outputs.version }}
+          body_path: CHANGELOG.md
+          files: |
+            ${{ steps.zip.outputs.zip }}
+            ${{ steps.nsis.outputs.setup }}
+          fail_on_unmatched_files: false   # installer may be absent on CI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
