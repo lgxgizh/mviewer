@@ -7,8 +7,12 @@
 #include <algorithm>
 
 #ifdef Q_OS_WIN
+// clang-format off
+// windows.h must precede psapi.h: on the Windows SDK, psapi.h relies on types
+// defined by windows.h, so the include order is load-bearing, not cosmetic.
 #include <windows.h>
 #include <psapi.h>
+// clang-format on
 #elif defined(Q_OS_LINUX)
 #include <sys/resource.h>
 #include <unistd.h>
