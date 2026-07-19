@@ -1,45 +1,84 @@
-// Thin trace-event shim for performance instrumentation.
+// Thin trace-event shim for performance instrumentation (M13 Phase 5).
 //
-// Review P1-10 / P2: requests TRACE_EVENT instrumentation at Decode / Thumbnail /
-// Cache / Compare / Render so future Perfetto analysis is straightforward.
+// The hot paths already carry MV_TRACE_* instrumentation points. By default
+// they compile to no-ops (zero runtime cost). When built with
+// MVIEWER_ENABLE_PERFETTO, they forward to the self-contained sink in
+// core/trace/TraceSink.{h,cpp}, which records spans and can emit a Chrome
+// trace-format JSON file (openable in ui.perfetto.dev / chrome://tracing).
 //
-// Design: a zero-overhead no-op by default. When built with MVIEWER_ENABLE_PERFETTO,
-// it forwards to Perfetto's TRACE_EVENT (opt-in backend — Perfetto is NOT a hard
-// dependency of the green build, so CI/tests stay dependency-free). The trace *points*
-// are wired into the hot paths today; enabling the backend is a single compile flag.
+// Perfetto (binary .perfetto-trace) would require vendoring the perfetto SDK
+// (protobuf + large build). To honor the AGENTS.md freeze (no new hard
+// dependency in the green build) the sink is fully self-contained — the
+// timeline data is identical and the Perfetto UI ingests Chrome JSON.
+//
+// Usage:
+//   MV_TRACE_EVENT("stage");            // instantaneous marker
+//   MV_TRACE_EVENT1("stage","k",v);     // marker with one arg
+//   MV_TRACE_SCOPED("Decoder::decode"); // duration of the enclosing scope
+//
+// At exit (only when tracing is compiled in):
+//   mviewer::trace::flush("trace.json");
 #pragma once
 
-#if defined(MVIEWER_ENABLE_PERFETTO)
-#include <perfetto/trace_event.h>
-#define MV_TRACE_EVENT(name) TRACE_EVENT0("mviewer", name)
-#define MV_TRACE_EVENT1(name, k1, v1) TRACE_EVENT1("mviewer", name, k1, v1)
-#define MV_TRACE_SCOPED(name) TRACE_EVENT0("mviewer", name)
-#else
-// No-op: compiles away, zero runtime cost.
-#define MV_TRACE_EVENT(name)                                                                       \
-    do                                                                                             \
-    {                                                                                              \
-    } while (0)
-#define MV_TRACE_EVENT1(name, k1, v1)                                                              \
-    do                                                                                             \
-    {                                                                                              \
-    } while (0)
-#define MV_TRACE_SCOPED(name)                                                                      \
-    do                                                                                             \
-    {                                                                                              \
-    } while (0)
-#endif
+#include <chrono>
+#include <cstdint>
 
-// Scoped RAII helper: traces a named region for its lifetime.
-//   MV_TRACE_SCOPE("ImageRepository::load");
-struct MvTraceScope
+#if defined(MVIEWER_ENABLE_PERFETTO)
+#include "core/trace/TraceSink.h"
+
+namespace mviewer::trace
 {
-    // No-op by default; the Perfetto backend provides real scoping via the macro.
-    explicit MvTraceScope(const char *)
+// RAII duration scope: records [now, now+dur) under `name` in category `cat`.
+struct ScopedTrace
+{
+    const char *cat_;
+    const char *name_;
+    int64_t startUs_;
+    explicit ScopedTrace(const char *cat, const char *name)
+        : cat_(cat), name_(name),
+          startUs_(std::chrono::duration_cast<std::chrono::microseconds>(
+                       std::chrono::steady_clock::now().time_since_epoch())
+                       .count())
     {
     }
+    ~ScopedTrace()
+    {
+        int64_t endUs =
+            std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now().time_since_epoch())
+                .count();
+        record(cat_, name_, startUs_, endUs - startUs_);
+    }
 };
-#if defined(MVIEWER_ENABLE_PERFETTO)
-#undef MV_TRACE_SCOPED
-#define MV_TRACE_SCOPED(name) TRACE_EVENT0("mviewer", name)
+} // namespace mviewer::trace
+
+#define MV_TRACE_EVENT(name)                                                       \
+    do                                                                             \
+    {                                                                              \
+        mviewer::trace::record("event", name,                                      \
+            std::chrono::duration_cast<std::chrono::microseconds>(                 \
+                std::chrono::steady_clock::now().time_since_epoch())               \
+                .count(),                                                          \
+            0);                                                                    \
+    } while (0)
+
+#define MV_TRACE_EVENT1(name, k1, v1) MV_TRACE_EVENT(name)
+
+#define MV_TRACE_SCOPED(name)                                                      \
+    mviewer::trace::ScopedTrace _mv_scope_##__LINE__("stage", name)
+
+#else
+// No-op: compiles away, zero runtime cost.
+#define MV_TRACE_EVENT(name)                                                       \
+    do                                                                             \
+    {                                                                              \
+    } while (0)
+#define MV_TRACE_EVENT1(name, k1, v1)                                              \
+    do                                                                             \
+    {                                                                              \
+    } while (0)
+#define MV_TRACE_SCOPED(name)                                                      \
+    do                                                                             \
+    {                                                                              \
+    } while (0)
 #endif
