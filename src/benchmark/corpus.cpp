@@ -66,7 +66,8 @@ void Corpus::clear() const
     d.removeRecursively();
 }
 
-Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &outDir)
+Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &outDir,
+                  const std::string &format)
 {
     Corpus c;
     // Corpus lives on disk; default QTemporaryDir uses the system TEMP which on
@@ -75,6 +76,7 @@ Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &o
     // If an explicit outDir is given (P3 tier generator), emit there directly
     // and keep the files (no auto-remove, no clear) so they persist as a
     // reusable dataset.
+    const bool jpegOnly = (format == "jpeg");
     std::unique_ptr<QTemporaryDir> tmp;
     if (!outDir.empty())
     {
@@ -113,19 +115,24 @@ Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &o
             static_cast<qlonglong>(i), 5, 10, QChar('0'));
         if (write(jp, rgb, "jpg"))
             c.jpegPaths.push_back(jp.toStdString());
-        if (write(pp, rgb, "png"))
+        // JPEG-only tier (review P3 "large: 10000 jpeg") skips png/tif to keep
+        // the dataset small enough to fit constrained data disks.
+        if (!jpegOnly && write(pp, rgb, "png"))
             c.pngPaths.push_back(pp.toStdString());
 
         // TIFF at 512x512 (matches JPEG/PNG dimensions; keeps the TIFF decode
         // path exercised without the 2000x2000 uncompressed ~12MB/file space
         // bomb that starved the data disk at large corpus sizes).
-        QImage tiff(512, 512, QImage::Format_RGB888);
-        paint(tiff, static_cast<uint32_t>(i + 100000));
-        const QImage trgb = tiff.convertToFormat(QImage::Format_RGB888);
-        const QString tp = QString::fromStdString(c.dir) + QString("/img_%1.tif").arg(
-            static_cast<qlonglong>(i), 5, 10, QChar('0'));
-        if (write(tp, trgb, "tif"))
-            c.tiffPaths.push_back(tp.toStdString());
+        if (!jpegOnly)
+        {
+            QImage tiff(512, 512, QImage::Format_RGB888);
+            paint(tiff, static_cast<uint32_t>(i + 100000));
+            const QImage trgb = tiff.convertToFormat(QImage::Format_RGB888);
+            const QString tp = QString::fromStdString(c.dir) + QString("/img_%1.tif").arg(
+                static_cast<qlonglong>(i), 5, 10, QChar('0'));
+            if (write(tp, trgb, "tif"))
+                c.tiffPaths.push_back(tp.toStdString());
+        }
     }
     return c;
 }

@@ -426,6 +426,22 @@ target_compile_features(ui_fixture PRIVATE cxx_std_20)
 target_include_directories(ui_fixture PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
 target_compile_definitions(ui_fixture PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
+# M11.3 release artifact: render the REAL MainWindow to a PNG (headless via
+# QT_QPA_PLATFORM=offscreen + QWidget::grab). No mock — uses actual UI code.
+add_executable(ui_screenshot
+    ui_screenshot.cpp
+)
+
+target_link_libraries(ui_screenshot
+    PRIVATE
+        Qt6::Widgets
+        mviewer_ui
+)
+
+target_compile_features(ui_screenshot PRIVATE cxx_std_20)
+target_include_directories(ui_screenshot PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+
+
 # ─── Clang-Tidy (optional) ──────────────────────────────────────────────────
 
 find_program(CLANG_TIDY_EXE NAMES clang-tidy)

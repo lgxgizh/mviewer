@@ -22,11 +22,14 @@ class MainWindow : public QMainWindow
     explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow() override;
 
-  private:
+    // Public so a headless screenshot harness (M11.3 release artifact) can build
+    // the real UI and render it to a pixmap without a visible window.
     void setupUi();
+    void onImageOpen(const QString &path);
+
+  private:
     void setupCommands();
     void openCompare(const QStringList &images = {});
-    void onImageOpen(const QString &path);
     void navigate(int delta);
 
     void keyPressEvent(QKeyEvent *event) override;
