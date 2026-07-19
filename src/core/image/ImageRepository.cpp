@@ -3,8 +3,8 @@
 #include "core/cache/CacheManager.h"
 #include "core/filesystem/FileSystem.h"
 #include "core/image/Decoder.h"
-#include "core/image/ImageFrame.h"
 #include "core/image/DiskCache.h"
+#include "core/image/ImageFrame.h"
 #include "core/image/MetadataReader.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/trace/Trace.h"
@@ -218,8 +218,7 @@ void ImageRepository::loadDirectoryAsyncImpl(const std::string &dirPath,
                     // directory. The scaled path (setScaledSize +
                     // read()) does not hit that deadlock.
                     static constexpr int kBrowseEdge = 256;
-                    ImageData thumb =
-                        Decoder::decodeScaled((*files)[i], kBrowseEdge);
+                    ImageData thumb = Decoder::decodeScaled((*files)[i], kBrowseEdge);
                     if (thumb.isNull())
                     {
                         Result err;
@@ -229,8 +228,8 @@ void ImageRepository::loadDirectoryAsyncImpl(const std::string &dirPath,
                     else
                     {
                         Result r;
-                        r.frame = std::make_shared<ImageFrame>(
-                            ImageFrame::create((*files)[i], thumb));
+                        r.frame =
+                            std::make_shared<ImageFrame>(ImageFrame::create((*files)[i], thumb));
                         r.fromCache = false;
                         (*results)[i] = std::move(r);
                     }

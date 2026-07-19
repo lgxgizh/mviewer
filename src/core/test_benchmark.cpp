@@ -10,14 +10,14 @@
 // decays after clear) — NOT wall-clock budget enforcement (that is --enforce).
 
 static int g_failures = 0;
-#define CHECK(cond)                                                                       \
-    do                                                                                     \
-    {                                                                                      \
-        if (!(cond))                                                                       \
-        {                                                                                  \
-            std::cerr << "FAIL: " #cond " @ " << __LINE__ << "\n";                        \
-            ++g_failures;                                                                  \
-        }                                                                                  \
+#define CHECK(cond)                                                                                \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(cond))                                                                               \
+        {                                                                                          \
+            std::cerr << "FAIL: " #cond " @ " << __LINE__ << "\n";                                 \
+            ++g_failures;                                                                          \
+        }                                                                                          \
     } while (0)
 
 using namespace mviewer::bench;
@@ -34,8 +34,7 @@ int benchmark_suite()
     CHECK(!corpus.jpegPaths.empty());
     CHECK(!corpus.pngPaths.empty());
     const auto all = corpus.allPaths();
-    CHECK(all.size() == corpus.jpegPaths.size() + corpus.pngPaths.size() +
-                            corpus.tiffPaths.size());
+    CHECK(all.size() == corpus.jpegPaths.size() + corpus.pngPaths.size() + corpus.tiffPaths.size());
 
     // B1 startup: finite, positive.
     auto b1 = scenarioStartup();

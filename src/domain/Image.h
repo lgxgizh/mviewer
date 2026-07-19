@@ -36,7 +36,7 @@ struct ImageMetadata
     std::string colorSpace;     // "sRGB", "AdobeRGB", "DisplayP3", or ""/unknown
     int orientation = 1;        // EXIF orientation 1-8 (1 = normal)
     bool hasIccProfile = false; // true if an ICC profile is embedded
-    std::string format;        // container format, e.g. "JPEG","PNG","BMP","TIFF"
+    std::string format;         // container format, e.g. "JPEG","PNG","BMP","TIFF"
 
     // ─── Session persistence (M12.1) ────────────────────────────────────────
     // ROI (in image pixel coords) captured for this image during a Compare

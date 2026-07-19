@@ -67,7 +67,8 @@ static QImage makeColorTest(int w, int h, QColor c)
 }
 
 static constexpr double kNonBlockingBudgetMs = 100.0;
-static constexpr double kFirstThumbBudgetMs = 300.0; // review target: first thumbnail < 300 ms (cold)
+static constexpr double kFirstThumbBudgetMs =
+    300.0; // review target: first thumbnail < 300 ms (cold)
 
 static int write1000(const std::filesystem::path &dir)
 {

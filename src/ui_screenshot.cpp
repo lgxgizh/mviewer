@@ -7,11 +7,11 @@
 #include "mainwindow.h"
 
 #include <QApplication>
+#include <QFont>
 #include <QImage>
 #include <QPainter>
 #include <QPixmap>
 #include <QTimer>
-#include <QFont>
 
 #include <cstdio>
 #include <filesystem>
@@ -45,9 +45,9 @@ int main(int argc, char **argv)
     QApplication app(argc, argv);
 
     const std::string out =
-        (argc > 1) ? argv[1] : (std::filesystem::temp_directory_path() / "mviewer_screenshot.png").string();
-    const std::filesystem::path tp =
-        std::filesystem::temp_directory_path() / "mviewer_sample.png";
+        (argc > 1) ? argv[1]
+                   : (std::filesystem::temp_directory_path() / "mviewer_screenshot.png").string();
+    const std::filesystem::path tp = std::filesystem::temp_directory_path() / "mviewer_sample.png";
     const std::string sample = makeSample(tp);
 
     MainWindow w;
@@ -56,15 +56,18 @@ int main(int argc, char **argv)
     w.onImageOpen(QString::fromStdString(sample));
 
     // Let the async repository load + UI settle, then grab the real widget.
-    QTimer::singleShot(1000, &app, [&]() {
-        const QPixmap pm = w.grab();
-        const bool ok = pm.save(QString::fromStdString(out));
-        if (ok)
-            printf("SCREENSHOT_OK: %s (%dx%d)\n", out.c_str(), pm.width(), pm.height());
-        else
-            printf("SCREENSHOT_FAIL: could not save %s\n", out.c_str());
-        app.quit();
-    });
+    QTimer::singleShot(1000, &app,
+                       [&]()
+                       {
+                           const QPixmap pm = w.grab();
+                           const bool ok = pm.save(QString::fromStdString(out));
+                           if (ok)
+                               printf("SCREENSHOT_OK: %s (%dx%d)\n", out.c_str(), pm.width(),
+                                      pm.height());
+                           else
+                               printf("SCREENSHOT_FAIL: could not save %s\n", out.c_str());
+                           app.quit();
+                       });
 
     return app.exec();
 }

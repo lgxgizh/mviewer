@@ -438,16 +438,13 @@ bool TaskScheduler::waitForPoolDrained(int idx, std::chrono::milliseconds timeou
     {
         {
             std::lock_guard<std::mutex> lock(m_graphMtx);
-            if (m_poolState[idx].metrics.pending == 0 &&
-                m_poolState[idx].metrics.active_tasks == 0)
-                return m_impl->priorityQueues[idx].waitForDone(
-                    static_cast<int>(timeout.count()));
+            if (m_poolState[idx].metrics.pending == 0 && m_poolState[idx].metrics.active_tasks == 0)
+                return m_impl->priorityQueues[idx].waitForDone(static_cast<int>(timeout.count()));
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     // Timed out; do a final waitForDone to drain whatever is left.
-    return m_impl->priorityQueues[idx].waitForDone(
-        static_cast<int>(timeout.count()));
+    return m_impl->priorityQueues[idx].waitForDone(static_cast<int>(timeout.count()));
 }
 
 bool TaskScheduler::drain(PoolType pool, std::chrono::milliseconds timeout)

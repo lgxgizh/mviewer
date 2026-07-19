@@ -31,10 +31,8 @@ void paint(QImage &img, uint32_t seed)
         {
             const int idx = x * 3; // line already points at row y
             const uint8_t g = static_cast<uint8_t>((x * 255) / w);
-            const uint8_t r =
-                static_cast<uint8_t>(((y * 255) / h + (rng() & 0x1F)) & 0xFF);
-            const uint8_t b =
-                static_cast<uint8_t>((((x + y) * 255) / (w + h)) & 0xFF);
+            const uint8_t r = static_cast<uint8_t>(((y * 255) / h + (rng() & 0x1F)) & 0xFF);
+            const uint8_t b = static_cast<uint8_t>((((x + y) * 255) / (w + h)) & 0xFF);
             line[idx + 0] = r;
             line[idx + 1] = g;
             line[idx + 2] = b;
@@ -109,10 +107,10 @@ Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &o
         // Already RGB888; kept explicit for clarity / future format changes.
         const QImage rgb = big.convertToFormat(QImage::Format_RGB888);
 
-        const QString jp = QString::fromStdString(c.dir) + QString("/img_%1.jpg").arg(
-            static_cast<qlonglong>(i), 5, 10, QChar('0'));
-        const QString pp = QString::fromStdString(c.dir) + QString("/img_%1.png").arg(
-            static_cast<qlonglong>(i), 5, 10, QChar('0'));
+        const QString jp = QString::fromStdString(c.dir) +
+                           QString("/img_%1.jpg").arg(static_cast<qlonglong>(i), 5, 10, QChar('0'));
+        const QString pp = QString::fromStdString(c.dir) +
+                           QString("/img_%1.png").arg(static_cast<qlonglong>(i), 5, 10, QChar('0'));
         if (write(jp, rgb, "jpg"))
             c.jpegPaths.push_back(jp.toStdString());
         // JPEG-only tier (review P3 "large: 10000 jpeg") skips png/tif to keep
@@ -128,8 +126,9 @@ Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &o
             QImage tiff(512, 512, QImage::Format_RGB888);
             paint(tiff, static_cast<uint32_t>(i + 100000));
             const QImage trgb = tiff.convertToFormat(QImage::Format_RGB888);
-            const QString tp = QString::fromStdString(c.dir) + QString("/img_%1.tif").arg(
-                static_cast<qlonglong>(i), 5, 10, QChar('0'));
+            const QString tp =
+                QString::fromStdString(c.dir) +
+                QString("/img_%1.tif").arg(static_cast<qlonglong>(i), 5, 10, QChar('0'));
             if (write(tp, trgb, "tif"))
                 c.tiffPaths.push_back(tp.toStdString());
         }

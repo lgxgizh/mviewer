@@ -105,7 +105,8 @@ std::vector<std::string> AnalyzerRegistry::availableAnalyzers() const
     return out;
 }
 
-std::unordered_map<std::string, std::string> AnalyzerRegistry::runAnalyzer(const ImageFrame &frame) const
+std::unordered_map<std::string, std::string>
+AnalyzerRegistry::runAnalyzer(const ImageFrame &frame) const
 {
     std::unordered_map<std::string, std::string> results;
     for (const auto &[id, factory] : m_factories)

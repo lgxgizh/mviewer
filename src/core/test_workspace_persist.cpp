@@ -146,7 +146,8 @@ int main(int argc, char **argv)
                                    "\"images\":[{\"filePath\":\"D:/p/a/1.png\","
                                    "\"fileName\":\"1.png\",\"width\":100,\"height\":80}]}]}";
         mviewer::domain::Workspace leg;
-        CHECK(mviewer::core::deserializeWorkspace(legacy, leg), "legacy workspace (no roi/analysis) parses");
+        CHECK(mviewer::core::deserializeWorkspace(legacy, leg),
+              "legacy workspace (no roi/analysis) parses");
         CHECK(leg.folders[0].imageSet.images[0].roiW == 0, "legacy ROI defaults to 0");
         CHECK(leg.folders[0].imageSet.images[0].analysis.empty(), "legacy analysis defaults empty");
     }
