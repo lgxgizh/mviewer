@@ -33,6 +33,19 @@ class CompareWorkspace : public QWidget
         return m_engine;
     }
 
+    // M12.1: last ROI applied to the compare cells (for Workspace persistence).
+    // Empty selection (width<=0) means no ROI was set.
+    mviewer::domain::Selection currentROI() const
+    {
+        return m_lastSelection;
+    }
+
+    // M12.1: re-apply a persisted ROI (delegates to the internal all-cells apply).
+    void applyROI(const mviewer::domain::Selection &sel)
+    {
+        applySelectionToAll(sel);
+    }
+
   signals:
     void syncToggled(bool on);
     // Hover pixel read from any cell, formatted for the status bar. Empty string clears.
@@ -60,6 +73,7 @@ class CompareWorkspace : public QWidget
     bool m_dragging = false;
     QPoint m_lastMouse;
     int m_dragIdx = -1;
+    mviewer::domain::Selection m_lastSelection; // M12.1: last applied ROI
 
     // Paints the most recent async diff result (from the EventBus) onto the
     // matching cell. Called on the UI thread via QueuedConnection.

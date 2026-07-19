@@ -267,6 +267,7 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
 {
     // Engine owns the frames; it mirrors the synchronized ROI to every ImageFrame.
     m_engine.applySelectionToAll(sel);
+    m_lastSelection = sel;
     const int n = m_engine.imageCount();
     for (int i = 0; i < n; ++i)
     {

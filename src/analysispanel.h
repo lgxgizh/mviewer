@@ -40,6 +40,12 @@ class AnalysisPanel : public QWidget
     // ImageViewer::regionStats)
     void setRegionStats(const QString &text);
 
+    // M12.1: last analysis result text (for Workspace persistence).
+    QString analysisText() const
+    {
+        return m_pluginResult ? m_pluginResult->text() : QString();
+    }
+
     // Pixel Inspector (M3 Phase-2): live readout of the hovered pixel.
     // `left*` are the RGB read directly from the ImageFrame (passed by the
     // viewer). When a second image is loaded, `right*` come from the compare
