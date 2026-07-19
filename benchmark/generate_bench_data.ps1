@@ -9,8 +9,10 @@
 #   powershell -ExecutionPolicy Bypass -File benchmark/generate_bench_data.ps1
 #
 # By default it materializes small+medium into benchmark/data/ (kept on disk).
-# `large` is ~2 GB; pass -Tiers large (or -All) to also generate it. Output goes
-# to D: by default to avoid starving the C: system drive.
+# `large` is 10000 JPEG (~628 MB with -Format jpeg, fits D:); the default
+# $Format="all" (jpeg+png+tif) would be ~2 GB for large and is NOT recommended
+# on constrained disks — pass -Tiers large -Format jpeg. Output goes to D: by
+# default to avoid starving the C: system drive.
 
 param(
     [string]$Tiers = "small,medium",   # comma-separated: small,medium,large,all

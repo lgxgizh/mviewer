@@ -28,6 +28,22 @@ All notable changes to this project are documented here. The format is based on
     `test_render_pipeline` (17 checks). `ImageViewer` now drives its transform through
     `Viewport` and paints per visible tile via `RenderEngine::scaleRegion` — no whole-image
     bitmap, no decode in the Widget. This is the seed for 100 MP / RAW tile rendering.
+- **M13 — Product Beta (in progress):** shift from infrastructure to value.
+  - **M13.1 Product Workflow gate:** `scripts/product_workflow_gate.ps1` chains the five
+    workflow executables (Browse → Compare → Analyzer → Export → Workspace) in user order;
+    ctest `product_workflow_gate` passed 5/5.
+  - **M13.2 Benchmark dashboard:** `scripts/benchmark_dashboard.ps1` parses result logs into
+    `benchmark/report/{history.csv,index.html}` trend; `nightly.yml` dashboard job (non-gating).
+  - **M13.3 NSIS installer:** `installer/mviewer.nsi` + `pack_installer.ps1` produce
+    `dist/MViewer-1.0.0-setup.exe`; portable zip + real UI screenshot (`ui_screenshot` harness).
+  - **M13.4 Real image datasets:** `testdata/generate_variants.py` adds format/integrity variants
+    (16-bit TIFF, Gray/RGBA PNG, CMYK TIFF, bad-EXIF JPEG, bad-ICC PNG); `test_assets_acceptance`
+    opens every fixture via real `Decoder::decodeFull` — 122 scanned / 108 decoded / 14 graceful-skip
+    / 0 crash. Perf: B2 first-thumbnail COLD 34 ms (review target <300 ms) — prior 2400 ms gap closed.
+  - **Review P2 Tile RFC:** `docs/rfc/M13_TILE_PIPELINE.md`; `core/render/TileCache.h`/`TileGrid.h`
+    + tests landed and wired into `ImageViewer::paintEvent`.
+  - **Review P1 AnalyzerRegistry realized:** `getAnalyzer()`/`runAnalyzer()` exercised by
+    `test_analysis_panel` (7+ analyzers, single + ROI + dual-image PSNR/SSIM).
   - **MetadataReader extraction (④):** `core/image/MetadataReader` (`read`/`key`) split from
     `ImageRepository`; 9 new checks in `test_metadata` (now 46 passed).
   - **Perfetto opt-in trace shim (②):** `core/trace/Trace.h` zero-overhead `MV_TRACE_*`
