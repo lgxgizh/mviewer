@@ -465,6 +465,18 @@ add_test(NAME analysis_panel_tests COMMAND analysis_panel_tests)
 add_test(NAME export_tests COMMAND export_tests)
 add_test(NAME workspace_persist_tests COMMAND workspace_persist_tests)
 
+# ─── M13 Phase 1: Product Workflow gate ──────────────────────────────────
+# A single ctest that runs the full user-chain in order:
+#   Browse -> Compare -> Analyzer -> Export -> Workspace
+# (-> Restart -> Restore is exercised inside workspace_persist_tests).
+# If any link regresses, the whole workflow gate fails — so no PR can
+# silently break the product loop. Orchestration only: a small PowerShell
+# script chains the existing per-phase executables (no new C++ test logic).
+add_test(NAME product_workflow_gate
+    COMMAND powershell -ExecutionPolicy Bypass -File
+        ${CMAKE_SOURCE_DIR}/scripts/product_workflow_gate.ps1
+        $<TARGET_FILE_DIR:product_browse_tests>)
+
 # ─── M10 Performance Engineering ─────────────────────────────────────────────
 # MemoryTracker + benchmark scenario structural tests are folded into core_tests
 # (via core/test_m10.cpp) — the known-good consolidated exe link environment.
