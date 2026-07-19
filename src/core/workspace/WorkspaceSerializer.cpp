@@ -68,6 +68,12 @@ struct Parser
         return false;
     }
 
+    bool peek(char c)
+    {
+        skipws();
+        return i < s.size() && s[i] == c;
+    }
+
     std::string parseString()
     {
         std::string out;
@@ -109,7 +115,7 @@ struct Parser
         skipws();
         size_t start = i;
         while (i < s.size() && (std::isdigit(static_cast<unsigned char>(s[i])) || s[i] == '-'))
-            ++i;
+            i++;
         return std::strtoll(s.substr(start, i - start).c_str(), nullptr, 10);
     }
 
@@ -172,7 +178,13 @@ std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
             esc(os, m.filePath);
             os << ",\"fileName\":";
             esc(os, m.fileName);
-            os << ",\"width\":" << m.width << ",\"height\":" << m.height << '}';
+            os << ",\"width\":" << m.width << ",\"height\":" << m.height;
+            // M12.1 session persistence: ROI (pixel coords) + analysis text.
+            os << ",\"roi\":[" << m.roiX << ',' << m.roiY << ',' << m.roiW
+               << ',' << m.roiH << ']';
+            os << ",\"analysis\":";
+            esc(os, m.analysis);
+            os << '}';
         }
         os << "]}";
     }
@@ -238,6 +250,26 @@ bool deserializeWorkspace(const std::string &text, mviewer::domain::Workspace &o
                 return false;
             m.width = static_cast<int>(w);
             m.height = static_cast<int>(h);
+            // M12.1: optional roi + analysis (absent in older files).
+            if (p.peek(','))
+            {
+                p.eat(',');
+                if (p.parseString() != "roi" || !p.eat(':') || !p.eat('['))
+                    return false;
+                m.roiX = static_cast<int>(p.parseNumber());
+                p.eat(',');
+                m.roiY = static_cast<int>(p.parseNumber());
+                p.eat(',');
+                m.roiW = static_cast<int>(p.parseNumber());
+                p.eat(',');
+                m.roiH = static_cast<int>(p.parseNumber());
+                p.eat(']');
+                if (!p.eat(','))
+                    return false;
+                if (p.parseString() != "analysis" || !p.eat(':'))
+                    return false;
+                m.analysis = p.parseString();
+            }
             folder.imageSet.images.push_back(m);
             p.eat('}');
         }

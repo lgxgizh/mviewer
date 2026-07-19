@@ -414,13 +414,39 @@ void MainWindow::saveWorkspace()
 
     // Build the domain model from the real directory (recursive, no pixel
     // decode) using the existing, tested ImageRepository::loadWorkspace.
-    const mviewer::domain::Workspace ws =
+    mviewer::domain::Workspace ws =
         ImageRepository::instance().loadWorkspace(m_currentDir.toStdString());
     if (ws.empty())
     {
         QMessageBox::warning(this, "保存工作区", "当前目录没有可保存的图片。");
         return;
     }
+
+    // M12.1: persist the active image's session context (ROI from Compare +
+    // last analysis result) into the model before serializing, so reopening
+    // restores it. Matched by filePath of the active image.
+    const std::string activePath = m_currentImagePath.toStdString();
+    const mviewer::domain::Selection roi = m_compareView->currentROI();
+    const std::string analysis = m_analysisPanel->analysisText().toStdString();
+    if (!activePath.empty() && (!roi.isEmpty() || !analysis.empty()))
+    {
+        for (auto &folder : ws.folders)
+        {
+            for (auto &img : folder.imageSet.images)
+            {
+                if (img.filePath == activePath)
+                {
+                    img.roiX = roi.x;
+                    img.roiY = roi.y;
+                    img.roiW = roi.width;
+                    img.roiH = roi.height;
+                    img.analysis = analysis;
+                    break;
+                }
+            }
+        }
+    }
+
     const std::string json = mviewer::core::serializeWorkspace(ws);
     QFile f(filePath);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text) || f.write(json.c_str()) < 0)
@@ -463,6 +489,42 @@ void MainWindow::openWorkspace()
     m_cachedImagePaths.clear();
     m_dirListDirty = true;
     m_thumbnailPanel->setDirectory(root);
+
+    // M12.1: restore the active image's session context (ROI + analysis) if
+    // present. Re-open that image and re-apply its ROI/analysis to the panels.
+    mviewer::domain::Selection restoredRoi;
+    std::string restoredAnalysis;
+    std::string restoredPath;
+    for (const auto &folder : ws.folders)
+    {
+        for (const auto &img : folder.imageSet.images)
+        {
+            if (img.roiW > 0 || img.roiH > 0 || !img.analysis.empty())
+            {
+                restoredRoi = {img.roiX, img.roiY, img.roiW, img.roiH};
+                restoredAnalysis = img.analysis;
+                restoredPath = img.filePath;
+                break;
+            }
+        }
+        if (!restoredPath.empty())
+            break;
+    }
+    if (!restoredPath.empty())
+    {
+        m_currentImagePath = QString::fromStdString(restoredPath);
+        if (m_imageViewer)
+        {
+            m_imageViewer->setImage(m_currentImagePath);
+            if (auto f = m_imageViewer->frame())
+                m_analysisPanel->setFrame(f);
+        }
+        if (!restoredAnalysis.empty())
+            m_analysisPanel->setRegionStats(QString::fromStdString(restoredAnalysis));
+        if (!restoredRoi.isEmpty() && m_compareView)
+            m_compareView->applyROI(restoredRoi);
+    }
+
     statusBar()->showMessage(
         QString("工作区已打开: %1 (%2 张图片, %3 个目录)")
             .arg(QFileInfo(filePath).fileName())

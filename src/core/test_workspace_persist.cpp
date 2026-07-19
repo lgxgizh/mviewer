@@ -87,6 +87,31 @@ int main(int argc, char **argv)
               "nested image metadata (width) survives round-trip");
         CHECK(back.folders[1].imageSet.images[0].fileName == "3.png",
               "nested image filename survives round-trip");
+
+        // M12.1: ROI + analysis session fields round-trip.
+        ws.folders[0].imageSet.images[0].roiX = 12;
+        ws.folders[0].imageSet.images[0].roiY = 34;
+        ws.folders[0].imageSet.images[0].roiW = 256;
+        ws.folders[0].imageSet.images[0].roiH = 128;
+        ws.folders[0].imageSet.images[0].analysis = "PSNR=42.1dB SSIM=0.99";
+        const std::string json2 = mviewer::core::serializeWorkspace(ws);
+        mviewer::domain::Workspace back3;
+        CHECK(mviewer::core::deserializeWorkspace(json2, back3),
+              "workspace with ROI+analysis deserialized");
+        const auto &ri = back3.folders[0].imageSet.images[0];
+        CHECK(ri.roiX == 12 && ri.roiY == 34 && ri.roiW == 256 && ri.roiH == 128,
+              "ROI round-trips");
+        CHECK(ri.analysis == "PSNR=42.1dB SSIM=0.99", "analysis text round-trips");
+
+        // Tolerant of older files that omit roi/analysis.
+        const std::string legacy = "{\"root\":\"D:/p\","
+                                   "\"folders\":[{\"path\":\"D:/p/a\",\"name\":\"a\","
+                                   "\"images\":[{\"filePath\":\"D:/p/a/1.png\","
+                                   "\"fileName\":\"1.png\",\"width\":100,\"height\":80}]}]}";
+        mviewer::domain::Workspace leg;
+        CHECK(mviewer::core::deserializeWorkspace(legacy, leg), "legacy workspace (no roi/analysis) parses");
+        CHECK(leg.folders[0].imageSet.images[0].roiW == 0, "legacy ROI defaults to 0");
+        CHECK(leg.folders[0].imageSet.images[0].analysis.empty(), "legacy analysis defaults empty");
     }
     else
     {
