@@ -511,7 +511,8 @@ ScenarioResult scenarioMemoryBudget(const Corpus &corpus)
     r.value = static_cast<double>(peak.cacheTotalBytes);
     r.detail = "liveFrames=" + std::to_string(liveFrames) +
                " peakBytes=" + std::to_string(peak.peakBytes) +
-               " expectedFloor~" + std::to_string(expectedFloor);
+               " expectedFloor~" + std::to_string(expectedFloor) +
+               " rssMB=" + std::to_string(peak.processWorkingSetKB / 1024);
 
     // Now evict and confirm return toward baseline.
     cm.clearMemory();
@@ -654,6 +655,8 @@ ScenarioResult scenarioSoakStability(const Corpus &corpus)
                " initBase=" + std::to_string(static_cast<long long>(initBase)) +
                " globalPeak=" + std::to_string(static_cast<long long>(globalPeak)) +
                " finalBase=" + std::to_string(static_cast<long long>(finalBase)) +
+               " finalRssMB=" + std::to_string(static_cast<long long>(
+                                          mt.sample().processWorkingSetKB / 1024)) +
                perCycle.str();
     return r;
 }
