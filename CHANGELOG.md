@@ -44,6 +44,11 @@ All notable changes to this project are documented here. The format is based on
     + tests landed and wired into `ImageViewer::paintEvent`.
   - **Review P1 AnalyzerRegistry realized:** `getAnalyzer()`/`runAnalyzer()` exercised by
     `test_analysis_panel` (7+ analyzers, single + ROI + dual-image PSNR/SSIM).
+  - **M13.5 Perfetto profiling:** `core/trace/TraceSink.{h,cpp}` self-contained span recorder
+    (Chrome trace JSON, openable in ui.perfetto.dev / chrome://tracing); `MV_TRACE_*` hot-path
+    points now forward to it under `MVIEWER_ENABLE_PERFETTO` (OFF by default — green build
+    untouched, zero dependency). `mviewer_bench --trace <file>` flushes; `scripts/trace_report.py`
+    prints per-stage p50/p95/p99 from a real trace (5274 spans captured; decodeFull p99 8.3ms).
   - **MetadataReader extraction (④):** `core/image/MetadataReader` (`read`/`key`) split from
     `ImageRepository`; 9 new checks in `test_metadata` (now 46 passed).
   - **Perfetto opt-in trace shim (②):** `core/trace/Trace.h` zero-overhead `MV_TRACE_*`

@@ -10,6 +10,8 @@
 #include <QCoreApplication>
 #include <QImage>
 
+#include "core/trace/TraceSink.h"
+
 // mviewer_bench — M10 performance harness (docs/rfc/M10_PERFORMANCE_ENGINEERING.md).
 //
 // Usage:
@@ -62,6 +64,7 @@ int main(int argc, char **argv)
     bool smoke = false;
     std::string emitData; // P3: if set, emit corpus to this dir and exit.
     std::string emitFormat = "all"; // P3: "all" or "jpeg" (10000-jpeg large tier)
+    std::string traceFile;          // M13.5: if set, flush a Chrome trace JSON at exit
 
     for (int i = 1; i < argc; ++i)
     {
@@ -79,6 +82,8 @@ int main(int argc, char **argv)
             emitFormat = argv[++i];
         else if (a == "--corpus-size" && i + 1 < argc)
             corpusSize = static_cast<size_t>(std::strtoul(argv[++i], nullptr, 10));
+        else if (a == "--trace" && i + 1 < argc)
+            traceFile = argv[++i];
     }
 
     std::cout << "=== MViewer benchmark (M10) ===" << std::endl;
@@ -159,6 +164,23 @@ int main(int argc, char **argv)
 
     std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ==="
               << std::endl;
+    // M13.5: flush a Chrome trace JSON if --trace was given (only meaningful
+    // when built with MVIEWER_ENABLE_PERFETTO; otherwise the macros are no-ops
+    // and the buffer is empty, so we report and skip).
+#if defined(MVIEWER_ENABLE_PERFETTO)
+    if (!traceFile.empty())
+    {
+        const bool ok = mviewer::trace::flush(traceFile);
+        std::cout << "trace: " << (ok ? "wrote " : "FAILED to write ")
+                  << traceFile << " (" << mviewer::trace::count() << " spans)"
+                  << std::endl;
+    }
+#else
+    if (!traceFile.empty())
+        std::cout << "trace: --trace needs a build with MVIEWER_ENABLE_PERFETTO=ON"
+                  << std::endl;
+#endif
+
     // CI (--smoke) always exits 0 (proves links + runs). Local --enforce may exit 1.
     if (b.enforce && !allPass)
         return 1;

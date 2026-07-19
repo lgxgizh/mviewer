@@ -1,3 +1,13 @@
+# ─── M13 Phase 5: optional Perfetto-style trace instrumentation ────────────
+# OFF by default: the MV_TRACE_* macros compile to no-ops and the green build
+# gains no dependency. When ON, hot-path spans are recorded and can be flushed
+# to a Chrome trace JSON (openable in ui.perfetto.dev / chrome://tracing) via
+# mviewer::trace::flush(). Build with -DMVIEWER_ENABLE_PERFETTO=ON to opt in.
+option(MVIEWER_ENABLE_PERFETTO "Enable MV_TRACE_* instrumentation -> Chrome trace JSON" OFF)
+if(MVIEWER_ENABLE_PERFETTO)
+    add_compile_definitions(MVIEWER_ENABLE_PERFETTO)
+endif()
+
 add_library(mviewer_core SHARED
     core/EventBus.cpp
     core/image/Decoder.cpp
@@ -47,6 +57,7 @@ add_library(mviewer_core SHARED
     core/command/CallbackCommand.cpp
     core/benchmark/Benchmark.cpp
     core/perf/MemoryTracker.cpp
+    core/trace/TraceSink.cpp
 )
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
