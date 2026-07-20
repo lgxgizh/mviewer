@@ -40,6 +40,17 @@ class ThumbnailPanel : public QListWidget
     void setDirectory(const QString &path);
     void setSortMode(SortMode mode);
 
+    // M18: live search. Filters the gallery by filename (case-insensitive
+    // substring). When `recursive` is true, subfolders are enumerated and any
+    // matching image is appended as a temporary item (cleared on next
+    // setDirectory). Empty `text` clears the filter.
+    void setFilter(const QString &text, bool recursive = false);
+
+    // Halt the background thumbnail-decode worker (e.g. before a headless
+    // render where async QPixmap updates are undesirable). Public so test/
+    // demo harnesses can quiesce the panel.
+    void stopThumbnailWorker();
+
     // Scroll the grid so the item for `path` is visible and select it. Used by
     // browse-position restore (reopen last image after launch).
     void scrollToPath(const QString &path);
@@ -50,6 +61,9 @@ class ThumbnailPanel : public QListWidget
 
     void renameSelected();
     void moveToTrashSelected();
+    void copySelectedTo();
+    void moveSelectedTo();
+    void revealSelected();
 
   signals:
     void itemClicked(const QString &path);
@@ -70,6 +84,12 @@ class ThumbnailPanel : public QListWidget
     SortMode m_sortMode = SortName;
     QHash<QString, QListWidgetItem *> m_itemById;
     QPushButton *m_compareBtn = nullptr;
+
+    // M18: search state.
+    QString m_filterText;
+    bool m_filterRecursive = false;
+    // Items added by recursive search (cleared on setDirectory / filter change).
+    QList<QListWidgetItem *> m_recursiveItems;
 };
 
 // Background worker: reads each image at thumbnail resolution (fast, no

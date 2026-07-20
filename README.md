@@ -18,6 +18,11 @@ MViewer is **not a general-purpose image viewer** — it is a **visual analysis 
 - **Analyze**: Histogram, RGB mean, PSNR, SSIM, noise estimation, entropy, sharpness, MTF (MTF50), dead-pixel detection, ColorChecker Delta-E, ROI statistics
 - **Performance**: Background async decode, 5-level cache, predictive preloading, CPU tile pipeline (100 MP visible-region decode), capability-gated GPU tile upload, UI never blocks
 - **Plugin**: Extensible analyzer system via `AnalyzerRegistry`
+- **Browse & Manage**: File-name search with recursive subfolder scan, live
+  gallery filter; per-image Metadata panel (format, dimensions, bit depth,
+  channels, color space, DPI, EXIF orientation, ICC profile, embedded
+  EXIF/XMP text); file actions — rename, move to recycle bin, copy/move to…,
+  reveal in Explorer (shortcuts: F2 / Delete / Ctrl+C / Ctrl+M / Ctrl+E)
 
 ---
 
@@ -242,11 +247,16 @@ DLLs/plugins `MViewer.exe` imports, then bundles the matching MSVC C++ runtime
 so the archive runs on a clean Windows install. Prereqs: Qt 6.11.1
 (`msvc2022_64`), `windeployqt`, and `makensis` (NSIS) on `PATH`.
 
-> **Screenshot / demo GIF**: A real UI screenshot and a workflow demo GIF
-> require a desktop display session and a screen recorder (e.g. `ffmpeg`);
-> they are generated manually and are **not** part of the automated build.
-> The app is fully exercisable headless via the benchmark/acceptance
-> executables (see `scripts/product_workflow_gate.ps1`).
+> **Screenshot / demo GIF**: Generated from the real UI (no mock) via
+> `scripts/record_demo.ps1`, which renders the actual `MainWindow` offscreen
+> through Qt (`mviewer_demo_render`) across three workflow states — directory
+> open, image selected with the Metadata panel populated, and a live filename
+> search — then stitches them into `dist/mviewer_demo.gif` (and a static
+> `dist/mviewer_screenshot.png`) with `ffmpeg`. This runs headlessly because the
+> build/terminal session cannot reach the interactive display session; the
+> rendered frames are genuine Qt output of the shipping UI code. Prereq: `ffmpeg`
+> on `PATH` (`choco install ffmpeg`). The app is also fully exercisable headless
+> via the benchmark/acceptance executables (see `scripts/product_workflow_gate.ps1`).
 
 ---
 

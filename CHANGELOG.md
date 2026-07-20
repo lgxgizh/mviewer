@@ -15,8 +15,27 @@ All notable changes to this project are documented here. The format is based on
   with no missing-dependency errors). `scripts/package_release.ps1` orchestrates the Release
   build + portable zip + NSIS installer (`installer/mviewer.nsi` → `dist/MViewer-<ver>-Setup.exe`,
   start-menu/desktop shortcuts + uninstaller). README now has a Distribution section.
-  Screenshot / demo GIF are intentionally manual (need a display session + screen recorder;
-  `ffmpeg` is not in the build environment), and are documented as such in README.
+  Screenshot / demo GIF are generated from the real UI offscreen via
+  `scripts/record_demo.ps1` (see M18) and documented in README.
+- **M18 — File Management + Search + Metadata panel:** turn MViewer into a
+  daily-use file tool, not just a viewer.
+  - **Metadata panel** (new rightmost dock): shows the selected image's
+    file-system + decode-time metadata — format, dimensions, megapixels, file
+    size, bit depth, channels, color space, DPI, EXIF orientation, embedded ICC
+    profile, and any EXIF/XMP text keys the Qt plugin exposes. `MetadataReader`
+    enriched (reads at 1×1 to get DPI/ICC cheaply; no new dependency).
+  - **Live search bar** in the gallery sort bar: filename substring filter with
+    a "包含子目录" (recursive subfolder) option that enumerates and appends
+    matches. Drives `ThumbnailPanel::setFilter`.
+  - **File actions** on the gallery context menu + keyboard shortcuts:
+    rename (F2), move to recycle bin (Delete), copy to… (Ctrl+C), move to…
+    (Ctrl+M), reveal in Explorer (Ctrl+E). Reuses the existing
+    `RenameImageUseCase` / `DeleteImageUseCase` pattern.
+  - Added `ThumbnailPanel::stopThumbnailWorker()` (public) so the headless
+    demo render can quiesce async thumbnail decode.
+  - `demo_workflow.cpp` (real-window harness) + `demo_render.cpp` (offscreen
+    multi-state renderer) + `scripts/record_demo.ps1` produce a genuine
+    `dist/mviewer_demo.gif` and `dist/mviewer_screenshot.png` (ffmpeg required).
 - **M6 — Vertical Browsing Chain:** `DecoderRegistry` (singleton) dispatches files to
   per-format decoders (`QtDecoder` for JPEG/PNG/BMP/TIFF, `QtFallbackDecoder` as last-resort);
   `Decoder` is now a thin shim over the registry. RAW deferred to M7 (`TODO(M7): RAW`).

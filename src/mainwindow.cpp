@@ -17,6 +17,7 @@
 #include "directorytree.h"
 #include "exportcommand.h"
 #include "imageviewer.h"
+#include "metadatapanel.h"
 #include "previewpanel.h"
 #include "thumbnailpanel.h"
 
@@ -30,8 +31,10 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QJsonDocument>
-#include <QJsonParseError>
+#include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
+#include <QCheckBox>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMetaObject>
@@ -146,24 +149,36 @@ void MainWindow::setupUi()
     sortCombo->addItem("大小", ThumbnailPanel::SortSize);
     sortCombo->addItem("分辨率", ThumbnailPanel::SortResolution);
     sortLayout->addWidget(sortCombo);
-    sortLayout->addStretch(1);
+
+    // M18: live search bar.
+    sortLayout->addWidget(new QLabel("搜索：", sortBar));
+    m_searchEdit = new QLineEdit(sortBar);
+    m_searchEdit->setPlaceholderText("按文件名过滤...");
+    m_searchEdit->setClearButtonEnabled(true);
+    sortLayout->addWidget(m_searchEdit, 1);
+    m_searchRecursive = new QCheckBox("包含子目录", sortBar);
+    sortLayout->addWidget(m_searchRecursive);
+    sortLayout->addStretch(0);
     rightLayout->addWidget(sortBar);
 
     m_thumbnailPanel = new ThumbnailPanel(rightWidget);
     rightLayout->addWidget(m_thumbnailPanel, 1);
 
-    // ----- Analysis panel (rightmost, smallest stretch) -----
+    // ----- Analysis panel (rightmost) + Metadata panel (M18, between gallery & analysis) -----
     m_analysisPanel = new AnalysisPanel(this);
+    m_metadataPanel = new MetadataPanel(this);
 
-    // ----- 3-way horizontal split: left | gallery | analysis -----
+    // ----- 4-way horizontal split: left | gallery | metadata | analysis -----
     auto *centralSplitter = new QSplitter(Qt::Horizontal, this);
     centralSplitter->addWidget(leftWidget);
     centralSplitter->addWidget(rightWidget);
+    centralSplitter->addWidget(m_metadataPanel);
     centralSplitter->addWidget(m_analysisPanel);
     centralSplitter->setStretchFactor(0, 0);
     centralSplitter->setStretchFactor(1, 1);
     centralSplitter->setStretchFactor(2, 0);
-    centralSplitter->setSizes({360, 900, 320});
+    centralSplitter->setStretchFactor(3, 0);
+    centralSplitter->setSizes({340, 820, 300, 320});
     setCentralWidget(centralSplitter);
 
     // ----- Full image viewer window -----
@@ -198,7 +213,8 @@ void MainWindow::setupUi()
     connect(m_thumbnailPanel, &ThumbnailPanel::itemClicked, this,
             [this](const QString &path)
             {
-                m_previewPanel->setImage(path); // async decode (off UI thread)
+                m_previewPanel->setImage(path);       // async decode (off UI thread)
+                m_metadataPanel->setImage(path);      // M18: show metadata
                 statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
             });
     connect(m_thumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
@@ -269,6 +285,19 @@ void MainWindow::setupUi()
             {
                 m_thumbnailPanel->setSortMode(
                     static_cast<ThumbnailPanel::SortMode>(sortCombo->currentData().toInt()));
+            });
+
+    // M18: live search → gallery filter (debounced via textChanged; recursive
+    // checkbox re-applies immediately).
+    connect(m_searchEdit, &QLineEdit::textChanged, this,
+            [this](const QString &)
+            {
+                m_thumbnailPanel->setFilter(m_searchEdit->text(), m_searchRecursive->isChecked());
+            });
+    connect(m_searchRecursive, &QCheckBox::toggled, this,
+            [this](bool)
+            {
+                m_thumbnailPanel->setFilter(m_searchEdit->text(), m_searchRecursive->isChecked());
             });
 
     // ----- Menu actions -----
@@ -372,6 +401,25 @@ void MainWindow::setupCommands()
                 target->showFullScreen();
         },
         std::vector<CommandShortcut>{{Qt::Key_F, 0}}));
+
+    // M18: file-management shortcuts for the selected gallery items.
+    reg.registerCommand(std::make_unique<CallbackCommand>(
+        "file_rename", "重命名 (F2)", [this]() { m_thumbnailPanel->renameSelected(); },
+        std::vector<CommandShortcut>{{Qt::Key_F2, 0}}));
+    reg.registerCommand(std::make_unique<CallbackCommand>(
+        "file_delete", "删除到回收站 (Delete)",
+        [this]() { m_thumbnailPanel->moveToTrashSelected(); },
+        std::vector<CommandShortcut>{{Qt::Key_Delete, 0}}));
+    reg.registerCommand(std::make_unique<CallbackCommand>(
+        "file_copy", "复制到... (Ctrl+C)", [this]() { m_thumbnailPanel->copySelectedTo(); },
+        std::vector<CommandShortcut>{{Qt::Key_C, Qt::ControlModifier}}));
+    reg.registerCommand(std::make_unique<CallbackCommand>(
+        "file_move", "移动到... (Ctrl+M)", [this]() { m_thumbnailPanel->moveSelectedTo(); },
+        std::vector<CommandShortcut>{{Qt::Key_M, Qt::ControlModifier}}));
+    reg.registerCommand(std::make_unique<CallbackCommand>(
+        "file_reveal", "在资源管理器中显示 (Ctrl+E)",
+        [this]() { m_thumbnailPanel->revealSelected(); },
+        std::vector<CommandShortcut>{{Qt::Key_E, Qt::ControlModifier}}));
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
@@ -390,6 +438,7 @@ void MainWindow::onImageOpen(const QString &path)
 {
     m_previewPanel->setImage(path); // async decode (off UI thread)
     m_imageViewer->setImage(path);  // async decode; imageReady() feeds AnalysisPanel
+    m_metadataPanel->setImage(path); // M18: show metadata for the opened image
     m_currentImagePath = path;
     pushHistory(path); // P0: in-session browse history
     // M12.2 (G2-ext): if this image had a saved analysis in the workspace, restore

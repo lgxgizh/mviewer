@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include <map>
 #include <string>
 
 namespace mviewer::domain
@@ -37,6 +38,12 @@ struct ImageMetadata
     int orientation = 1;        // EXIF orientation 1-8 (1 = normal)
     bool hasIccProfile = false; // true if an ICC profile is embedded
     std::string format;         // container format, e.g. "JPEG","PNG","BMP","TIFF"
+    int dpiX = 0, dpiY = 0;     // physical resolution in DPI (0 = unknown)
+
+    // M18: embedded text metadata (EXIF/XMP/IPTCCore keys the plugin exposes),
+    // e.g. "Make", "Model", "DateTimeOriginal", "Software". Best-effort; the
+    // exact keys available depend on the container + Qt image plugin.
+    std::map<std::string, std::string> textKeys;
 
     // ─── Session persistence (M12.1) ────────────────────────────────────────
     // ROI (in image pixel coords) captured for this image during a Compare

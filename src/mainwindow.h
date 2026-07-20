@@ -14,9 +14,12 @@ class DirectoryTree;
 class ThumbnailPanel;
 class PreviewPanel;
 class AnalysisPanel;
+class MetadataPanel;
 class CompareWorkspace;
 class QAction;
 class QMenu;
+class QLineEdit;
+class QCheckBox;
 
 class MainWindow : public QMainWindow
 {
@@ -56,6 +59,7 @@ class MainWindow : public QMainWindow
     PreviewPanel *m_previewPanel = nullptr;
 
     AnalysisPanel *m_analysisPanel = nullptr;
+    MetadataPanel *m_metadataPanel = nullptr;
     CompareWorkspace *m_compareView = nullptr;
 
     QAction *m_actOpenDir = nullptr;
@@ -71,6 +75,10 @@ class MainWindow : public QMainWindow
 
     QMenu *m_recentMenu = nullptr;
     QMenu *m_favMenu = nullptr;
+
+    // M18: gallery search bar.
+    QLineEdit *m_searchEdit = nullptr;
+    QCheckBox *m_searchRecursive = nullptr;
 
     QString m_currentDir;
     QString m_currentImagePath;

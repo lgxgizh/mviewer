@@ -13,15 +13,19 @@
 
 #include <QApplication>
 #include <QContextMenuEvent>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QInputDialog>
 #include <QMenu>
 #include <QMessageBox>
 #include <QPainter>
+#include <QProcess>
 #include <QPushButton>
 #include <QScrollBar>
+#include <QUrl>
 #include <algorithm>
 
 namespace
@@ -250,6 +254,11 @@ void ThumbnailPanel::stopWorker()
     m_worker = nullptr;
 }
 
+void ThumbnailPanel::stopThumbnailWorker()
+{
+    stopWorker();
+}
+
 void ThumbnailPanel::setSortMode(SortMode mode)
 {
     if (mode == m_sortMode)
@@ -264,6 +273,12 @@ void ThumbnailPanel::setDirectory(const QString &path)
     m_currentDir = path;
     clear();
     m_itemById.clear();
+    // M18: drop any recursive-search temp items + reset the active filter state
+    // so a directory switch starts from a clean, unfiltered view.
+    qDeleteAll(m_recursiveItems);
+    m_recursiveItems.clear();
+    m_filterText.clear();
+    m_filterRecursive = false;
 
     const QList<QFileInfo> entries = sortedEntries(path, m_sortMode);
     for (int i = 0; i < entries.size() && i < kMaxImages; ++i)
@@ -383,6 +398,139 @@ void ThumbnailPanel::moveToTrashSelected()
         QMessageBox::warning(this, "删除到回收站", "部分文件删除失败");
 }
 
+namespace
+{
+// Collect image files under `root` whose filename contains `needle`
+// (case-insensitive). Recurses into subfolders.
+QStringList recursiveMatches(const QString &root, const QString &needle)
+{
+    QStringList out;
+    QDir dir(root);
+    if (!dir.exists())
+        return out;
+    const QDir::Filters filters = QDir::Files | QDir::Readable;
+    QFileInfoList top = dir.entryInfoList(kImageExtensions, filters);
+    for (const QFileInfo &fi : top)
+        if (fi.fileName().contains(needle, Qt::CaseInsensitive))
+            out.append(fi.absoluteFilePath());
+    // Recurse one level at a time (bounded) to avoid pathological deep trees.
+    QFileInfoList sub = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::Readable);
+    for (const QFileInfo &d : sub)
+    {
+        if (out.size() >= ThumbnailPanel::kMaxImages)
+            break;
+        out.append(recursiveMatches(d.absoluteFilePath(), needle));
+    }
+    return out;
+}
+} // namespace
+
+void ThumbnailPanel::setFilter(const QString &text, bool recursive)
+{
+    m_filterText = text.trimmed();
+    m_filterRecursive = recursive;
+
+    // Reset to the base directory listing, then apply the filter.
+    const QString baseDir = m_currentDir;
+    setDirectory(baseDir); // clears + reloads (also clears this same filter state)
+    // setDirectory() reset m_filterText; restore it so the live search sticks.
+    m_filterText = text.trimmed();
+    m_filterRecursive = recursive;
+
+    if (m_filterText.isEmpty())
+        return;
+
+    // 1) Hide non-matching items currently in the directory.
+    for (int i = 0; i < count(); ++i)
+    {
+        QListWidgetItem *it = item(i);
+        if (!it)
+            continue;
+        const QString name = QFileInfo(it->data(Qt::UserRole).toString()).fileName();
+        it->setHidden(!name.contains(m_filterText, Qt::CaseInsensitive));
+    }
+
+    // 2) Recursive: append matches found in subfolders as extra items.
+    if (recursive)
+    {
+        const QStringList matches = recursiveMatches(baseDir, m_filterText);
+        int idx = count();
+        for (const QString &p : matches)
+        {
+            if (idx >= kMaxImages)
+                break;
+            const QFileInfo fi(p);
+            auto *it = new QListWidgetItem(this);
+            it->setData(Qt::UserRole, p);
+            it->setData(Qt::UserRole + 1, p + "#rec");
+            it->setText(fi.fileName() + "  [" + fi.dir().dirName() + "]");
+            addItem(it);
+            m_recursiveItems.append(it);
+            ThumbnailWorker::Request req{p, kThumbSize, p + "#rec"};
+            m_worker->enqueue(req);
+            ++idx;
+        }
+    }
+}
+
+void ThumbnailPanel::copySelectedTo()
+{
+    const QStringList sel = selectedPaths();
+    if (sel.isEmpty())
+        return;
+    const QString dest = QFileDialog::getExistingDirectory(this, tr("复制到..."), m_currentDir);
+    if (dest.isEmpty())
+        return;
+    int copied = 0;
+    for (const QString &p : sel)
+    {
+        const QFileInfo fi(p);
+        if (QFile::copy(p, dest + "/" + fi.fileName()))
+            ++copied;
+    }
+    QMessageBox::information(this, tr("复制完成"),
+                             tr("已复制 %1 / %2 个文件到:\n%3").arg(copied).arg(sel.size()).arg(dest));
+}
+
+void ThumbnailPanel::moveSelectedTo()
+{
+    const QStringList sel = selectedPaths();
+    if (sel.isEmpty())
+        return;
+    const QString dest = QFileDialog::getExistingDirectory(this, tr("移动到..."), m_currentDir);
+    if (dest.isEmpty())
+        return;
+    int moved = 0;
+    for (const QString &p : sel)
+    {
+        const QFileInfo fi(p);
+        if (QFile::rename(p, dest + "/" + fi.fileName()))
+            ++moved;
+    }
+    if (moved > 0)
+        setDirectory(m_currentDir);
+    QMessageBox::information(this, tr("移动完成"),
+                             tr("已移动 %1 / %2 个文件到:\n%3").arg(moved).arg(sel.size()).arg(dest));
+}
+
+void ThumbnailPanel::revealSelected()
+{
+    const QStringList sel = selectedPaths();
+    if (sel.isEmpty())
+        return;
+    // Open the OS file manager with the first selected file highlighted.
+    // Explanatory note: on Windows, explorer /select, passes the file path.
+    const QString first = sel.first();
+    const QUrl url = QUrl::fromLocalFile(first);
+#ifdef Q_OS_WIN
+    // Use explorer's /select switch to highlight the file in its folder.
+    QProcess::startDetached("explorer", QStringList() << "/select," << QDir::toNativeSeparators(first));
+#else
+    QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(first).absolutePath()));
+#endif
+    Q_UNUSED(url);
+}
+
 void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
 {
     QListWidgetItem *item = itemAt(event->pos());
@@ -396,8 +544,15 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
     QMenu menu(this);
     QAction *actRename = menu.addAction("重命名(&R)");
     QAction *actTrash = menu.addAction("删除到回收站(&D)");
+    menu.addSeparator();
+    QAction *actCopy = menu.addAction("复制到...(C)");
+    QAction *actMove = menu.addAction("移动到...(M)");
+    QAction *actReveal = menu.addAction("在资源管理器中显示(&E)");
     connect(actRename, &QAction::triggered, this, &ThumbnailPanel::renameSelected);
     connect(actTrash, &QAction::triggered, this, &ThumbnailPanel::moveToTrashSelected);
+    connect(actCopy, &QAction::triggered, this, &ThumbnailPanel::copySelectedTo);
+    connect(actMove, &QAction::triggered, this, &ThumbnailPanel::moveSelectedTo);
+    connect(actReveal, &QAction::triggered, this, &ThumbnailPanel::revealSelected);
     menu.exec(event->globalPos());
 }
 

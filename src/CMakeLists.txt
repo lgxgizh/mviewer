@@ -90,6 +90,7 @@ add_library(mviewer_ui STATIC
     analysispanel.cpp
     exportdialog.cpp
     exportcommand.cpp
+    metadatapanel.cpp
     widgets/rawimageview.cpp
     gpu/GpuTileUploader.cpp
 )
@@ -490,6 +491,39 @@ target_link_libraries(ui_screenshot
 
 target_compile_features(ui_screenshot PRIVATE cxx_std_20)
 target_include_directories(ui_screenshot PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+
+# M18 demo harness: drives the REAL MainWindow on the visible desktop so a
+# screen recorder can capture the new file-search / metadata workflow. Exercised
+# by scripts/record_demo.ps1; not part of the test gate.
+add_executable(mviewer_demo
+    demo_workflow.cpp
+)
+
+target_link_libraries(mviewer_demo
+    PRIVATE
+        Qt6::Widgets
+        mviewer_ui
+)
+
+target_compile_features(mviewer_demo PRIVATE cxx_std_20)
+target_include_directories(mviewer_demo PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
+
+# M18 demo render: renders the REAL MainWindow offscreen and grabs three
+# workflow states (dir open / image selected+metadata / live search) to PNGs;
+# scripts/record_demo.ps1 stitches them into an animated GIF. Headless-safe
+# (QT_QPA_PLATFORM=offscreen); genuinely renders the real UI code.
+add_executable(mviewer_demo_render
+    demo_render.cpp
+)
+
+target_link_libraries(mviewer_demo_render
+    PRIVATE
+        Qt6::Widgets
+        mviewer_ui
+)
+
+target_compile_features(mviewer_demo_render PRIVATE cxx_std_20)
+target_include_directories(mviewer_demo_render PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
 
 # M13 Phase 4 — real-image-dataset acceptance: open every testdata/ fixture
 # via the real Decoder; assert no crash + (decoded OR gracefully skipped).
