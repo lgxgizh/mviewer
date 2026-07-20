@@ -198,13 +198,8 @@ void MainWindow::setupUi()
     connect(m_thumbnailPanel, &ThumbnailPanel::itemClicked, this,
             [this](const QString &path)
             {
-                m_previewPanel->setImage(path);
-                QImage img(path);
-                m_analysisPanel->setImage(img);
-                statusBar()->showMessage(QString("当前: %1, 尺寸: %2x%3")
-                                             .arg(QFileInfo(path).fileName())
-                                             .arg(img.width())
-                                             .arg(img.height()));
+                m_previewPanel->setImage(path); // async decode (off UI thread)
+                statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
             });
     connect(m_thumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
             [this](const QString &path) { onImageOpen(path); });
@@ -228,6 +223,10 @@ void MainWindow::setupUi()
 
     connect(m_imageViewer, &ImageViewer::regionStats, m_analysisPanel,
             &AnalysisPanel::setRegionStats);
+    // P0续: feed the decoded ImageFrame to the analysis panel once the async
+    // load completes (no re-decode on the UI thread). This replaces the old
+    // synchronous QImage(path) decode that blocked browsing.
+    connect(m_imageViewer, &ImageViewer::imageReady, m_analysisPanel, &AnalysisPanel::setFrame);
     // M12.2 (G2-ext): also record each image's analysis result per-path so the
     // whole compare session's analysis context can be persisted into the .mvws.
     connect(m_imageViewer, &ImageViewer::regionStats, this,
@@ -389,12 +388,8 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
 
 void MainWindow::onImageOpen(const QString &path)
 {
-    m_previewPanel->setImage(path);
-    m_imageViewer->setImage(path);
-    QImage img(path);
-    m_analysisPanel->setImage(img);
-    if (auto f = m_imageViewer->frame())
-        m_analysisPanel->setFrame(f);
+    m_previewPanel->setImage(path); // async decode (off UI thread)
+    m_imageViewer->setImage(path);  // async decode; imageReady() feeds AnalysisPanel
     m_currentImagePath = path;
     pushHistory(path); // P0: in-session browse history
     // M12.2 (G2-ext): if this image had a saved analysis in the workspace, restore
@@ -402,10 +397,7 @@ void MainWindow::onImageOpen(const QString &path)
     const auto it = m_analysisByPath.find(path);
     if (it != m_analysisByPath.end() && !it->isEmpty())
         m_analysisPanel->setRegionStats(*it);
-    statusBar()->showMessage(QString("当前: %1, 尺寸: %2x%3")
-                                 .arg(QFileInfo(path).fileName())
-                                 .arg(img.width())
-                                 .arg(img.height()));
+    statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
     if (m_imageViewer->isHidden())
         m_imageViewer->show();
     m_imageViewer->raise();
@@ -466,10 +458,9 @@ void MainWindow::navigate(int delta)
 
     const QString path = list.at(next);
     m_currentImagePath = path;
-    m_imageViewer->setImage(path);
-    m_analysisPanel->setImage(QImage(path));
-    if (auto f = m_imageViewer->frame())
-        m_analysisPanel->setFrame(f);
+    m_imageViewer->setImage(path);  // async; imageReady() feeds AnalysisPanel
+    m_previewPanel->setImage(path); // async; off UI thread
+    statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
 }
 
 void MainWindow::saveWorkspace()
@@ -615,9 +606,10 @@ void MainWindow::openWorkspace()
         m_currentImagePath = QString::fromStdString(restoredPath);
         if (m_imageViewer)
         {
+            // Async decode; imageReady() feeds AnalysisPanel once the frame is
+            // ready (no synchronous frame() read here — it isn't ready yet).
             m_imageViewer->setImage(m_currentImagePath);
-            if (auto f = m_imageViewer->frame())
-                m_analysisPanel->setFrame(f);
+            m_previewPanel->setImage(m_currentImagePath);
         }
         if (!restoredAnalysis.empty())
             m_analysisPanel->setRegionStats(QString::fromStdString(restoredAnalysis));
@@ -657,11 +649,8 @@ void MainWindow::navigateHistory(int delta)
     const QString path = m_history.at(next);
     // Re-open without pushing again (pushHistory is a no-op for the same tip).
     m_currentImagePath = path;
-    m_imageViewer->setImage(path);
-    m_analysisPanel->setImage(QImage(path));
-    if (auto f = m_imageViewer->frame())
-        m_analysisPanel->setFrame(f);
-    m_previewPanel->setImage(path);
+    m_imageViewer->setImage(path);  // async; imageReady() feeds AnalysisPanel
+    m_previewPanel->setImage(path); // async; off UI thread
     statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
 }
 
@@ -744,11 +733,8 @@ void MainWindow::restoreLastSession()
             {
                 pushHistory(img);
                 m_currentImagePath = img;
-                m_imageViewer->setImage(img);
-                m_analysisPanel->setImage(QImage(img));
-                if (auto f = m_imageViewer->frame())
-                    m_analysisPanel->setFrame(f);
-                m_previewPanel->setImage(img);
+                m_imageViewer->setImage(img);  // async; imageReady() feeds AnalysisPanel
+                m_previewPanel->setImage(img); // async; off UI thread
             }
             // Restore the thumbnail-grid scroll position after items exist.
             QMetaObject::invokeMethod(

@@ -31,6 +31,11 @@ class ImageViewer : public QWidget
         return m_frame;
     }
 
+  signals:
+    // Emitted on the UI thread once an async load (setImage) completes. Carries
+    // the decoded ImageFrame so the analysis panel can run without re-decoding.
+    void imageReady(std::shared_ptr<ImageFrame> frame);
+
   public slots:
     void setSelectMode(bool on);
 
@@ -59,8 +64,6 @@ class ImageViewer : public QWidget
     void preloadNeighbors(const QString &path);
     void drawHistogram(QPainter &painter) const;
     void computeHistogram(const QPixmap &pixmap);
-
-    QPixmap loadPixmap(const QString &path);
 
     static QStringList listImages(const QString &dirPath);
 

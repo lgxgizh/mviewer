@@ -46,48 +46,55 @@ ImageViewer::ImageViewer(QWidget *parent) : QWidget(parent)
 
 ImageViewer::~ImageViewer() = default;
 
-QPixmap ImageViewer::loadPixmap(const QString &path)
-{
-    // Acceptance #7: ALL image operations pass through ImageRepository.
-    // The QWidget never decodes — it only renders the ImageFrame pixels.
-    // ImageRepository serves pixels from the in-memory Viewer/FullImage LRU
-    // after the first decode, so adjacent-image switching is instant.
-    ImageRepository::Result res = ImageRepository::instance().load(path.toStdString());
-    if (!res.success())
-        return QPixmap();
-
-    m_frame = res.frame;
-    return QPixmap::fromImage(mvcore::toQImage(m_frame->pixels()));
-}
-
 void ImageViewer::setImage(const QString &path)
 {
     m_currentPath = path;
-    m_pixmap = loadPixmap(path);
-
-    if (m_pixmap.isNull())
-    {
-        m_hasHistogram = false;
-        update();
-        return;
-    }
-
-    computeHistogram(m_pixmap);
-
-    const QFileInfo info(path);
-    m_fileList = listImages(info.absolutePath());
-    m_currentIndex = static_cast<int>(m_fileList.indexOf(path));
-
-    // Build the render pipeline state: tile grid over the full-res image, and
-    // a Viewport fitted into the widget. The Widget no longer keeps its own
-    // scale/offset — pan/zoom math is delegated to core/render/Viewport.
-    m_tiles = TileGrid(m_pixmap.width(), m_pixmap.height(), 256);
-    m_view.screenW = width();
-    m_view.screenH = height();
-    m_view.fit(m_pixmap.width(), m_pixmap.height(), 0.95);
-    m_tileCache.clear(); // drop tiles from any previously viewed image
-    preloadNeighbors(path);
-    update();
+    // Decode off the UI thread: ImageRepository::loadAsync dispatches to the
+    // DecodePool, so first-open / next-prev never block the UI thread (keeps
+    // within the performance budget: first <100ms, switch <20ms). The decoded
+    // frame is applied back on the UI thread via QMetaObject::invokeMethod.
+    ImageRepository::instance().loadAsync(
+        path.toStdString(),
+        [this, path](const ImageRepository::Result &res)
+        {
+            if (!res.success())
+            {
+                QMetaObject::invokeMethod(this,
+                                          [this]()
+                                          {
+                                              m_hasHistogram = false;
+                                              update();
+                                          });
+                return;
+            }
+            QMetaObject::invokeMethod(
+                this,
+                [this, res, path]()
+                {
+                    m_frame = res.frame;
+                    m_pixmap = QPixmap::fromImage(mvcore::toQImage(m_frame->pixels()));
+                    if (m_pixmap.isNull())
+                    {
+                        m_hasHistogram = false;
+                        update();
+                        return;
+                    }
+                    computeHistogram(m_pixmap);
+                    const QFileInfo info(path);
+                    m_fileList = listImages(info.absolutePath());
+                    m_currentIndex = static_cast<int>(m_fileList.indexOf(path));
+                    // Build the render pipeline state (tile grid + fitted Viewport)
+                    // exactly as before — now applied on the UI thread post-decode.
+                    m_tiles = TileGrid(m_pixmap.width(), m_pixmap.height(), 256);
+                    m_view.screenW = width();
+                    m_view.screenH = height();
+                    m_view.fit(m_pixmap.width(), m_pixmap.height(), 0.95);
+                    m_tileCache.clear(); // drop tiles from any previously viewed image
+                    preloadNeighbors(path);
+                    update();
+                    emit imageReady(m_frame);
+                });
+        });
 }
 
 void ImageViewer::preloadNeighbors(const QString &path)
@@ -102,7 +109,10 @@ void ImageViewer::preloadNeighbors(const QString &path)
             continue;
         if (m_fileList[i] == path)
             continue;
-        loadPixmap(m_fileList[i]);
+        // Warm the cache only (off UI thread). Do NOT call loadPixmap(): it
+        // assigns m_frame, which would race with the UI thread's frame() read.
+        ImageRepository::instance().loadAsync(m_fileList[i].toStdString(),
+                                              [](const ImageRepository::Result &) {});
     }
 }
 

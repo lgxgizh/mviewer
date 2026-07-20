@@ -1,6 +1,10 @@
 #include "previewpanel.h"
 
+#include "core/image/ImageRepository.h"
+#include "core/image/QtConvert.h"
+
 #include <QFileInfo>
+#include <QMetaObject>
 #include <QPainter>
 #include <QResizeEvent>
 #include <algorithm>
@@ -13,20 +17,39 @@ PreviewPanel::PreviewPanel(QWidget *parent) : QWidget(parent)
 void PreviewPanel::setImage(const QString &path)
 {
     m_path = path;
-    m_full.load(path);
-    if (m_full.isNull())
-    {
-        m_hasImage = false;
-        update();
-        return;
-    }
-    m_hasImage = true;
-    computeStats(m_full);
-    m_imgW = m_full.width();
-    m_imgH = m_full.height();
-    m_fileSize = QFileInfo(path).size();
-    rebuild();
-    update();
+    // Decode off the UI thread (ImageRepository::loadAsync -> DecodePool) so the
+    // bottom-left preview never blocks browsing. Compute stats on the worker
+    // thread; only the cheap rebuild()/update() run on the UI thread.
+    ImageRepository::instance().loadAsync(path.toStdString(),
+                                          [this, path](const ImageRepository::Result &res)
+                                          {
+                                              QMetaObject::invokeMethod(
+                                                  this,
+                                                  [this, res, path]()
+                                                  {
+                                                      if (!res.success() || !res.frame)
+                                                      {
+                                                          m_hasImage = false;
+                                                          update();
+                                                          return;
+                                                      }
+                                                      m_full = QPixmap::fromImage(
+                                                          mvcore::toQImage(res.frame->pixels()));
+                                                      if (m_full.isNull())
+                                                      {
+                                                          m_hasImage = false;
+                                                          update();
+                                                          return;
+                                                      }
+                                                      m_hasImage = true;
+                                                      computeStats(m_full);
+                                                      m_imgW = m_full.width();
+                                                      m_imgH = m_full.height();
+                                                      m_fileSize = QFileInfo(path).size();
+                                                      rebuild();
+                                                      update();
+                                                  });
+                                          });
 }
 
 void PreviewPanel::computeStats(const QPixmap &pm)

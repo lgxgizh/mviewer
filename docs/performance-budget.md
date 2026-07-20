@@ -10,6 +10,27 @@
 | Switch image (preloaded) | < 16ms | Keypress to full render |
 | Switch image (cold) | < 100ms | JPEG 24MP decode + upload |
 | Thumbnail generation | background only | Never blocks UI |
+
+## Implementation status (2026-07-20)
+
+The browse decode path is **async** (off the UI thread):
+
+- `ImageViewer::setImage` uses `ImageRepository::loadAsync` (DecodePool); the
+  decoded `ImageFrame` is applied on the UI thread via `QMetaObject::invokeMethod`
+  and surfaced to the analysis panel through the `imageReady(frame)` signal.
+- `PreviewPanel::setImage` and the `MainWindow` browse flow (`itemClicked`,
+  `onImageOpen`, `navigate`, `navigateHistory`) no longer do a synchronous
+  `QImage(path)` decode on the UI thread — the old blocking path that violated
+  the first-thumbnail / switch-image budget is removed.
+- Neighbor preloading warms the `ImageRepository` LRU without touching the
+  visible frame (no `m_frame` write from the worker thread).
+
+Net effect: opening an image and stepping with ←/→ no longer freeze the UI
+thread while a 24MP+ image decodes. The remaining UI-thread cost per switch is
+the cheap `rebuild()`/`update()` (thumbnail-grid + preview) plus the histogram
+viz — well under the 16ms/20ms budget for cached images. Enforcing the budget
+as a hard CI gate is tracked separately (Phase 2 / M17).
+
 | UI response to mouse/keyboard | < 16ms | Input to frame render |
 | Memory (normal workload) | < 500 MB | Private working set |
 | Memory (large 24MP image decoded) | < 96 MB | raw pixel buffer |
