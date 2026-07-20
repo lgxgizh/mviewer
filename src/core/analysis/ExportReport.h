@@ -10,6 +10,8 @@
 #include "core/image/ImageFrame.h"
 
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 namespace mviewer::core
 {
@@ -51,5 +53,30 @@ CompareReport buildCompareReport(const ImageFrame &a, const ImageFrame &b);
 // Heatmap diff image (RGB24) suitable for writing as compare_diff.png via
 // Encoder. Returns a null ImageData on invalid input.
 ImageData compareDiffImage(const ImageFrame &a, const ImageFrame &b);
+
+// ─── M13.4 batch analyzer export ──────────────────────────────────────────
+// Tabular report of running ONE analyzer over MANY images. `columns` is the
+// stable union of every metric key seen across `results` (in first-seen
+// order); `filenames` and `rows` run in parallel (one entry per result).
+// Pure data + serialization; no Qt, no file I/O — the caller writes the file.
+struct AnalysisBatchReport
+{
+    std::string analyzerId;
+    std::vector<std::string> columns; // metric keys (excludes "filename")
+    std::vector<std::string> filenames;
+    std::vector<std::unordered_map<std::string, double>> rows;
+
+    // CSV: header `filename,col1,col2,...` then one row per result. Missing
+    // metrics render as an empty field.
+    std::string toCsv() const;
+    // JSON: {"analyzer":id,"columns":[...],"rows":[{"filename":..,col:val,..}]}
+    std::string toJson() const;
+};
+
+// Assemble an AnalysisBatchReport from the raw per-image AnalyzerResults
+// produced by AnalyzerRegistry::runBatch().
+AnalysisBatchReport
+buildBatchReport(const std::string &analyzerId,
+                 const std::vector<mviewer::analyzer::AnalyzerResult> &results);
 
 } // namespace mviewer::core

@@ -4,6 +4,8 @@
 #include "application/RenameImageUseCase.h"
 #include "core/EventBus.h"
 
+#include "core/analysis/ExportReport.h"
+#include "core/analyzer/Analyzer.h"
 #include "core/image/Decoder.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageRepository.h"
@@ -18,6 +20,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QImage>
 #include <QInputDialog>
 #include <QMenu>
 #include <QMessageBox>
@@ -27,6 +30,9 @@
 #include <QScrollBar>
 #include <QUrl>
 #include <algorithm>
+#include <memory>
+#include <utility>
+#include <vector>
 
 namespace
 {
@@ -531,6 +537,86 @@ void ThumbnailPanel::revealSelected()
     Q_UNUSED(url);
 }
 
+void ThumbnailPanel::batchAnalyzeExport()
+{
+    const QStringList sel = selectedPaths();
+    if (sel.isEmpty())
+    {
+        QMessageBox::information(this, "批量分析", "请先选择至少一张图片。");
+        return;
+    }
+
+    const auto ids = ::AnalyzerRegistry::instance().availableAnalyzers();
+    if (ids.empty())
+    {
+        QMessageBox::warning(this, "批量分析", "没有可用的分析器。");
+        return;
+    }
+
+    QStringList idList;
+    for (const auto &id : ids)
+        idList << QString::fromStdString(id);
+    idList.sort();
+
+    bool ok = false;
+    const QString chosen =
+        QInputDialog::getItem(this, "选择分析器", "分析器:", idList, 0, false, &ok);
+    if (!ok || chosen.isEmpty())
+        return;
+    const std::string id = chosen.toStdString();
+
+    // Decode each selected image and build (filename, frame) pairs for core.
+    std::vector<std::pair<std::string, std::shared_ptr<ImageFrame>>> frames;
+    frames.reserve(static_cast<size_t>(sel.size()));
+    for (const QString &p : sel)
+    {
+        QImage img(p);
+        if (img.isNull())
+            continue;
+        mviewer::domain::ImageMetadata meta;
+        meta.filePath = p.toStdString();
+        auto frame = std::make_shared<ImageFrame>(meta, mvcore::fromQImage(img));
+        frames.emplace_back(p.toStdString(), std::move(frame));
+    }
+
+    if (frames.empty())
+    {
+        QMessageBox::warning(this, "批量分析", "选中的图片均无法解码。");
+        return;
+    }
+
+    const auto results = ::AnalyzerRegistry::instance().runBatch(frames, id);
+    if (results.empty())
+    {
+        QMessageBox::warning(this, "批量分析", "分析未产生任何结果。");
+        return;
+    }
+
+    const auto report = mviewer::core::buildBatchReport(id, results);
+
+    const QString target =
+        QFileDialog::getSaveFileName(this, "导出分析结果", QString("analysis_%1").arg(chosen),
+                                     "CSV 文件 (*.csv);;JSON 文件 (*.json)");
+    if (target.isEmpty())
+        return;
+
+    const QString suffix = QFileInfo(target).suffix().toLower();
+    const std::string content = (suffix == "json") ? report.toJson() : report.toCsv();
+
+    QFile out(target);
+    if (!out.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QMessageBox::critical(this, "批量分析", QString("无法写入文件:\n%1").arg(target));
+        return;
+    }
+    out.write(content.data(), static_cast<qint64>(content.size()));
+    out.close();
+
+    QMessageBox::information(
+        this, "批量分析",
+        QString("已分析 %1 张图片，结果已导出到:\n%2").arg(results.size()).arg(target));
+}
+
 void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
 {
     QListWidgetItem *item = itemAt(event->pos());
@@ -548,11 +634,14 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
     QAction *actCopy = menu.addAction("复制到...(C)");
     QAction *actMove = menu.addAction("移动到...(M)");
     QAction *actReveal = menu.addAction("在资源管理器中显示(&E)");
+    menu.addSeparator();
+    QAction *actBatchAnalyze = menu.addAction("批量分析并导出(&B)");
     connect(actRename, &QAction::triggered, this, &ThumbnailPanel::renameSelected);
     connect(actTrash, &QAction::triggered, this, &ThumbnailPanel::moveToTrashSelected);
     connect(actCopy, &QAction::triggered, this, &ThumbnailPanel::copySelectedTo);
     connect(actMove, &QAction::triggered, this, &ThumbnailPanel::moveSelectedTo);
     connect(actReveal, &QAction::triggered, this, &ThumbnailPanel::revealSelected);
+    connect(actBatchAnalyze, &QAction::triggered, this, &ThumbnailPanel::batchAnalyzeExport);
     menu.exec(event->globalPos());
 }
 

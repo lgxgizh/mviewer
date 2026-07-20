@@ -61,3 +61,8 @@ std::string EntropyAnalyzer::resultText() const
 {
     return "entropy (bits/px): " + std::to_string(m_entropy);
 }
+
+std::unordered_map<std::string, double> EntropyAnalyzer::resultMetrics() const
+{
+    return {{"entropy", m_entropy}};
+}

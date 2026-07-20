@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstring>
+#include <unordered_map>
 
 double SharpnessAnalyzer::computeSharpness(const ImageBuffer &v, int x0, int y0, int x1,
                                            int y1) const
@@ -68,4 +69,9 @@ bool SharpnessAnalyzer::analyzeRegion(const ImageFrame &frame,
 std::string SharpnessAnalyzer::resultText() const
 {
     return "sharpness (gradient magnitude): " + std::to_string(m_sharp);
+}
+
+std::unordered_map<std::string, double> SharpnessAnalyzer::resultMetrics() const
+{
+    return {{"sharpness", m_sharp}};
 }

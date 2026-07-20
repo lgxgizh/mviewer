@@ -117,3 +117,8 @@ std::string ColorCheckerAnalyzer::resultText() const
                   m_meanDE);
     return std::string(buf);
 }
+
+std::unordered_map<std::string, double> ColorCheckerAnalyzer::resultMetrics() const
+{
+    return {{"meanDeltaE", m_meanDE}, {"patchCount", static_cast<double>(m_patches)}};
+}

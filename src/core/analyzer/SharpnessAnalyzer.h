@@ -38,6 +38,7 @@ class SharpnessAnalyzer : public Analyzer
     {
         return m_sharp;
     }
+    std::unordered_map<std::string, double> resultMetrics() const override;
 
   private:
     double computeSharpness(const ImageBuffer &v, int x0, int y0, int x1, int y1) const;

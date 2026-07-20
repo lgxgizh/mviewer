@@ -1,5 +1,6 @@
 #include "core/analyzer/Analyzer.h"
 
+#include "core/analyzer/AnalyzerResult.h"
 #include "core/analyzer/ColorCheckerAnalyzer.h"
 #include "core/analyzer/DeadPixelAnalyzer.h"
 #include "core/analyzer/EntropyAnalyzer.h"
@@ -12,9 +13,12 @@
 #include "core/analyzer/SharpnessAnalyzer.h"
 
 #include <algorithm>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 AnalyzerRegistry &AnalyzerRegistry::instance()
 {
@@ -143,6 +147,29 @@ AnalyzerRegistry::runAnalyzer(const ImageFrame &frame) const
     return results;
 }
 
+std::vector<mviewer::analyzer::AnalyzerResult> AnalyzerRegistry::runBatch(
+    const std::vector<std::pair<std::string, std::shared_ptr<ImageFrame>>> &frames,
+    const std::string &id) const
+{
+    std::vector<mviewer::analyzer::AnalyzerResult> out;
+    auto it = m_factories.find(id);
+    if (it == m_factories.end())
+        return out;
+
+    out.reserve(frames.size());
+    for (const auto &[filename, frame] : frames)
+    {
+        if (!frame || frame->pixels().isNull())
+            continue;
+        auto analyzer = it->second();
+        if (!analyzer || !analyzer->analyze(*frame))
+            continue;
+        out.push_back(mviewer::analyzer::AnalyzerResult{filename, analyzer->resultMetrics(),
+                                                        analyzer->resultText()});
+    }
+    return out;
+}
+
 AnalyzerCapability AnalyzerRegistry::capabilitiesOf(const std::string &id) const
 {
     auto it = m_factories.find(id);
@@ -175,3 +202,15 @@ std::vector<std::string> AnalyzerRegistry::queryByCapability(AnalyzerCapability 
     }
     return result;
 }
+
+namespace mviewer::analyzer
+{
+
+std::vector<AnalyzerResult>
+runBatch(const std::vector<std::pair<std::string, std::shared_ptr<ImageFrame>>> &frames,
+         const std::string &analyzerId)
+{
+    return AnalyzerRegistry::instance().runBatch(frames, analyzerId);
+}
+
+} // namespace mviewer::analyzer

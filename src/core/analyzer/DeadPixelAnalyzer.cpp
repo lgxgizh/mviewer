@@ -86,3 +86,9 @@ std::string DeadPixelAnalyzer::resultText() const
     std::snprintf(buf, sizeof(buf), "dead/hot pixels: %d (max dev %d)", m_count, m_maxDev);
     return std::string(buf);
 }
+
+std::unordered_map<std::string, double> DeadPixelAnalyzer::resultMetrics() const
+{
+    return {{"deadPixelCount", static_cast<double>(m_count)},
+            {"maxDeviation", static_cast<double>(m_maxDev)}};
+}

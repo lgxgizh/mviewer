@@ -34,6 +34,7 @@ class HistogramAnalyzer : public Analyzer
     bool analyze(const ImageFrame &frame) override;
     bool analyzeRegion(const ImageFrame &frame, const mviewer::domain::Selection &region) override;
     std::string resultText() const override;
+    std::unordered_map<std::string, double> resultMetrics() const override;
 
     const mviewer::domain::Histogram &result() const
     {

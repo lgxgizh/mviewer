@@ -88,3 +88,11 @@ std::string HistogramAnalyzer::resultText() const
                   m_result.rMean, m_result.gMean, m_result.bMean);
     return buf;
 }
+
+std::unordered_map<std::string, double> HistogramAnalyzer::resultMetrics() const
+{
+    return {{"lumMean", m_result.lumMean},
+            {"rMean", m_result.rMean},
+            {"gMean", m_result.gMean},
+            {"bMean", m_result.bMean}};
+}

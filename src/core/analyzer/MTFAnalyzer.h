@@ -48,6 +48,7 @@ class MTFAnalyzer : public Analyzer
     {
         return m_mtf50Cps;
     }
+    std::unordered_map<std::string, double> resultMetrics() const override;
 
   private:
     // Compute MTF50 over the given pixel rectangle. Returns true on success.

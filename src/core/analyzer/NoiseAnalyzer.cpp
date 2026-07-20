@@ -3,6 +3,7 @@
 #include "core/analysis/AnalysisEngine.h"
 
 #include <cmath>
+#include <unordered_map>
 
 // Laplacian variance: |Laplacian(img)| variance, where L = [0 1 0; 1 -4 1; 0 1
 // 0].
@@ -69,4 +70,12 @@ bool NoiseAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain
 std::string NoiseAnalyzer::resultText() const
 {
     return "noise (Laplacian variance): " + std::to_string(m_noise);
+}
+
+std::unordered_map<std::string, double> NoiseAnalyzer::resultMetrics() const
+{
+    // m_noise is the Laplacian-response variance (the analyzer's primary
+    // scalar). We also emit its std (sqrt) for convenience. There is no
+    // separate "noise mean" stored by the analyzer.
+    return {{"noiseVariance", m_noise}, {"noiseStd", m_noise > 0.0 ? std::sqrt(m_noise) : 0.0}};
 }

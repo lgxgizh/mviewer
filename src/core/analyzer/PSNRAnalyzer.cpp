@@ -50,3 +50,13 @@ std::string PSNRAnalyzer::resultText() const
 {
     return "psnr (dB): " + std::to_string(m_psnr);
 }
+
+std::unordered_map<std::string, double> PSNRAnalyzer::resultMetrics() const
+{
+    // PSNR is a dual-image metric: only meaningful once a reference has been
+    // supplied via setReference() before analyze(). Batch runBatch() supplies
+    // no reference, so report an empty metric map rather than a misleading 0.
+    if (m_ref == nullptr)
+        return {};
+    return {{"psnr", m_psnr}};
+}

@@ -96,3 +96,9 @@ std::string RGBMeanAnalyzer::resultText() const
                   m_result.bStd);
     return buf;
 }
+
+std::unordered_map<std::string, double> RGBMeanAnalyzer::resultMetrics() const
+{
+    return {{"rMean", m_result.rMean}, {"gMean", m_result.gMean}, {"bMean", m_result.bMean},
+            {"rStd", m_result.rStd},   {"gStd", m_result.gStd},   {"bStd", m_result.bStd}};
+}

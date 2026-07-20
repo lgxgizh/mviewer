@@ -40,6 +40,7 @@ class PSNRAnalyzer : public Analyzer
     {
         return m_psnr;
     }
+    std::unordered_map<std::string, double> resultMetrics() const override;
 
   private:
     const ImageFrame *m_ref = nullptr;

@@ -65,6 +65,10 @@ class ThumbnailPanel : public QListWidget
     void moveSelectedTo();
     void revealSelected();
 
+    // M13.4: run a chosen analyzer over every selected image and export the
+    // structured per-image metrics to CSV/JSON. Drives core AnalyzerRegistry.
+    void batchAnalyzeExport();
+
   signals:
     void itemClicked(const QString &path);
     void itemDoubleClicked(const QString &path);

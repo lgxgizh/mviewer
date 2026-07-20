@@ -194,3 +194,8 @@ std::string MTFAnalyzer::resultText() const
     std::snprintf(buf, sizeof(buf), "MTF50=%.3f (Nyquist)  %.4f c/px", m_mtf50, m_mtf50Cps);
     return std::string(buf);
 }
+
+std::unordered_map<std::string, double> MTFAnalyzer::resultMetrics() const
+{
+    return {{"mtf50", m_mtf50}, {"mtf50CyclesPerPixel", m_mtf50Cps}};
+}

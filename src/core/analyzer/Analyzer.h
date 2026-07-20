@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/analyzer/AnalyzerCapability.h"
+#include "core/analyzer/AnalyzerResult.h"
 #include "core/image/ImageFrame.h"
 #include "domain/Histogram.h"
 #include "domain/Selection.h"
@@ -35,6 +36,15 @@ class Analyzer
     // concrete analyzers override to report their scalar (the UI shows this
     // generically so every registered analyzer renders without custom code).
     virtual std::string resultText() const
+    {
+        return {};
+    }
+
+    // Structured scalar metrics from the last analysis, keyed by a stable
+    // machine name (e.g. "lumMean", "psnr"). Default empty; concrete analyzers
+    // override to feed the batch CSV/JSON exporter. Kept separate from
+    // resultText() so the human-readable string is untouched.
+    virtual std::unordered_map<std::string, double> resultMetrics() const
     {
         return {};
     }
@@ -87,6 +97,13 @@ class AnalyzerRegistry
     // review's P1 `runAnalyzer()` contract. Analyzers that fail to run are
     // omitted from the result map.
     std::unordered_map<std::string, std::string> runAnalyzer(const ImageFrame &frame) const;
+
+    // M13.4: run one analyzer (by id) over many (filename, frame) pairs and
+    // collect a structured AnalyzerResult per non-null frame. Drives the
+    // batch CSV/JSON export. Unknown id -> empty vector; null frames skipped.
+    std::vector<mviewer::analyzer::AnalyzerResult>
+    runBatch(const std::vector<std::pair<std::string, std::shared_ptr<ImageFrame>>> &frames,
+             const std::string &id) const;
 
     // Query capabilities of a registered analyzer without creating a shared copy.
     AnalyzerCapability capabilitiesOf(const std::string &id) const;
