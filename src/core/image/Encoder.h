@@ -16,16 +16,23 @@ class Encoder
   public:
     struct Params
     {
-        int quality = 90;       // JPEG/WebP 质量 (0-100)
-        int pngCompression = 6; // PNG 压缩级别 (0-9)
+        int quality;
+        int pngCompression;
+        Params() : quality(90), pngCompression(6) {}
+        Params(int q) : quality(q), pngCompression(6) {}
+        Params(int q, int p) : quality(q), pngCompression(p) {}
     };
 
+    // 默认编码参数（clang-cl 需要具名默认实参；inline 定义避免跨 DLL 导出问题）
+    static inline const Params kDefaultParams{90, 6};
+
     // 编码到文件
-    static bool encode(const ImageData &img, const std::string &path, const Params &params = {});
+    static bool encode(const ImageData &img, const std::string &path,
+                       const Params &params = kDefaultParams);
 
     // 编码到内存缓冲区
     static std::vector<uint8_t> encodeToBuffer(const ImageData &img, const std::string &format,
-                                               const Params &params = {});
+                                               const Params &params = kDefaultParams);
 
     // 根据文件扩展名推断格式
     static std::string formatForExtension(const std::string &ext);

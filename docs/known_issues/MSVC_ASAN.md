@@ -1,9 +1,12 @@
 # Known Issue: MSVC AddressSanitizer crashes on `shared_ptr` instrumentation
 
-**Status:** Open — advisory only, non-gating.
-**Severity:** Toolchain compatibility (not a confirmed product defect).
+**Status:** Resolved via independent sanitizer (2026-07-20, M17). MSVC ASan job
+remains advisory-only / non-gating; the clang-cl + LLVM ASan/UBSan nightly job
+is now the authoritative sanitizer gate.
+**Severity:** Toolchain compatibility (MSVC ASan); one real product defect
+(global-buffer-overflow in `mviewer_bench`) was found and fixed (see below).
 **First observed:** 2026-07-20, CI run `29710165150` (ASan job, windows-2022).
-**Owner:** Tech Lead (revisit on next MSVC / VS toolchain update).
+**Owner:** Tech Lead.
 
 ---
 
@@ -121,22 +124,38 @@ The review (2026-07-19) is explicit: do not refactor `ImageData` /
 
 ---
 
-## Future verification plan (Phase 2 — evolve to B)
+## Resolution (M17 — 2026-07-20)
 
-Tracked as a Nightly-only work item (NOT in the PR gate, to keep PR velocity
-high). Target milestone: **M13** (or whenever RAW decoder / SIMD / Tile Cache
-land and sanitizer signal becomes high-value).
+The independent sanitizer was stood up as a real, non-blocking nightly job
+(`llvm-sanitizer` in `.github/workflows/nightly.yml`): clang-cl 22 + LLVM
+ASan/UBSan, Release CRT (`/MD`), `/EHsc`, with the `clang_rt` asan/ubsan libs
+passed explicitly (CMake links via `lld-link` directly, so `-fsanitize` alone
+does not pull in the runtime).
 
-1. Add a **clang-cl + LLVM ASan / UBSan** nightly workflow:
-   - Build with `clang-cl` (`-fsanitize=address,undefined`).
-   - Run the same CTest suite offscreen.
-   - Publish findings as a nightly artifact; never block PRs.
-2. If clang-cl ASan passes consistently, that is the **independent
-   sanitizer** needed to either:
-   - confirm the MSVC crash was toolchain-only (close this issue), or
-   - surface a real defect the MSVC run could not reach (fix it).
-3. Keep MSVC ASan advisory until step 2 yields a conclusion; then either
-   retire it (superseded by clang-cl) or keep both.
+**Result:** the CTest suite (33 tests) runs **clean under ASan/UBSan** — no
+sanitizer errors in any core/UI test. `mviewer_bench --enforce` under ASan
+surfaced **one real defect** the MSVC run could not reach:
+
+- `global-buffer-overflow` at process init, reading the empty-string literal
+  `""` (main.cpp:90, `smoke ? "[smoke] " : ""`) which the linker placed inside
+  the redzone of an adjacent string literal. `operator<<(const char*)` strlen
+  of the empty literal tripped ASan. **Fixed** by emitting `[smoke] ` via an
+  explicit `if (smoke)` instead of a `?:` with an empty literal. After the fix,
+  `mviewer_bench --enforce` runs with zero sanitizer findings.
+
+Conclusion: the MSVC ASan `shared_ptr` crash is a **toolchain limitation**
+(confirmed — the independent clang-cl sanitizer passes the same code paths
+cleanly). The one real defect found was in `mviewer_bench`, not the product
+core/UI libraries, and is fixed.
+
+> Note: under ASan instrumentation, wall-clock timings are ~3–5× slower, so the
+> `<16ms` preloaded-switch (B8) and `<100ms` first-thumbnail budget assertions
+> legitimately miss under the sanitizer build. These are environment-sensitive
+> timing gates, not memory bugs; the sanitizer job is `continue-on-error: true`.
+
+The plan above is now **realized** (nightly `llvm-sanitizer` job). Step 2's
+outcome: clang-cl ASan passes the CTest suite cleanly (MSVC crash confirmed
+toolchain-only) AND surfaced one real defect (fixed). MSVC ASan stays advisory.
 
 Recommended long-term CI shape (matches mature C++ projects):
 

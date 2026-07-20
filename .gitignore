@@ -60,3 +60,11 @@ CMakeLists.txt.user
 .python-version
 uv.lock
 pyproject.toml
+
+# LLVM/clang-cl sanitizer scratch (local verification only, NOT source)
+build_llvm_san/
+llvm_build.ps1
+llvm_cfg.ps1
+llvm_cfg.bat
+llvm_run.ps1
+llvm_bench_run.txt

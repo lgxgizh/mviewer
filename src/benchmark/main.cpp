@@ -87,7 +87,9 @@ int main(int argc, char **argv)
     }
 
     std::cout << "=== MViewer benchmark (M10) ===" << std::endl;
-    std::cout << (smoke ? "[smoke] " : "") << "corpus-size=" << corpusSize
+    if (smoke)
+        std::cout << "[smoke] ";
+    std::cout << "corpus-size=" << corpusSize
               << " enforce=" << (b.enforce ? "yes" : "no") << std::endl;
 
     // P3 dataset emission mode: generate the corpus into emitData and stop
