@@ -1,69 +1,76 @@
-; MViewer NSIS installer (M12.3 Release Engineering).
+; MViewer.nsi - M11.3 Release Engineering
 ;
-; Builds an installable MViewer-<version>-setup.exe that bundles the Qt
-; runtime (deployed by windeployqt) INCLUDING the imageformat plugins
-; (imageformats/qtiff.dll et al.), so TIFF and other formats work on a clean
-; Windows machine with no Qt installed (closes gap G1).
+; NSIS installer for MViewer. Expects a pre-deployed application directory
+; (produced by scripts/package_portable.ps1 staging: MViewer.exe + Qt DLLs +
+; plugins + VC runtime). Run from repo root:
 ;
-; Usage (from repo root, after pack_installer.ps1 stages the deploy dir):
-;   makensis installer/mviewer.nsi
+;   makensis /DAPP_DIR=dist\staging\MViewer /DVERSION=0.11.0 /DVI_VERSION=0.11.0.0 installer\MViewer.nsi
 ;
-; The deploy layout expected under DEPLOY_DIR:
-;   DEPLOY_DIR/
-;     MViewer.exe
-;     Qt6Core.dll ... (windeployqt output)
-;     imageformats/qtiff.dll ...
-;     platforms/qwindows.dll ...
-;     ...
-; pack_installer.ps1 produces exactly this layout and sets DEPLOY_DIR below.
+; Output: dist\MViewer-<version>-Setup.exe
 
 !define APPNAME "MViewer"
-!ifndef APPVERSION
-  !define APPVERSION "1.0.0"
+!ifndef VERSION
+  !define VERSION "0.0.0-dev"
 !endif
-!ifndef DEPLOY_DIR
-  !define DEPLOY_DIR "D:\mviewer\build_msvc\bin"
+!ifndef VI_VERSION
+  !define VI_VERSION "0.0.0.0"
 !endif
-!ifndef OUTDIR
-  !define OUTDIR "D:\mviewer\dist"
+!ifndef APP_DIR
+  !define APP_DIR "dist\staging\MViewer"
+!endif
+!ifndef OUTFILE
+  !define OUTFILE "dist\MViewer-${VERSION}-Setup.exe"
 !endif
 
-Name "${APPNAME} ${APPVERSION}"
-OutFile "${OUTDIR}\${APPNAME}-${APPVERSION}-setup.exe"
+Name "${APPNAME} ${VERSION}"
+OutFile "${OUTFILE}"
 InstallDir "$PROGRAMFILES64\${APPNAME}"
-RequestExecutionLevel admin
+InstallDirRegKey HKLM "Software\${APPNAME}" "InstallDir"
 
-!include "MUI2.nsh"
-!insertmacro MUI_PAGE_DIRECTORY
-!insertmacro MUI_PAGE_INSTFILES
-!insertmacro MUI_UNPAGE_CONFIRM
-!insertmacro MUI_UNPAGE_INSTFILES
-!insertmacro MUI_LANGUAGE "English"
+RequestExecutionLevel admin
+Unicode True
+
+VIProductVersion "${VI_VERSION}"
+VIAddVersionKey "ProductName" "${APPNAME}"
+VIAddVersionKey "FileVersion" "${VERSION}"
+VIAddVersionKey "LegalCopyright" "(c) MViewer contributors"
+VIAddVersionKey "FileDescription" "${APPNAME} installer"
+
+Page directory
+Page instfiles
+
+UninstPage uninstConfirm
+UninstPage instfiles
 
 Section "Install"
   SetOutPath "$INSTDIR"
-  ; Deploy the entire windeployqt layout (exe + Qt DLLs + plugins).
-  File /r "${DEPLOY_DIR}\*.*"
+  ; Deploy the entire pre-built app directory verbatim.
+  File /r "${APP_DIR}\*.*"
 
-  ; Start Menu + Desktop shortcuts.
+  ; Start-menu shortcut
   CreateDirectory "$SMPROGRAMS\${APPNAME}"
   CreateShortcut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\MViewer.exe"
+  CreateShortcut "$SMPROGRAMS\${APPNAME}\Uninstall ${APPNAME}.lnk" "$INSTDIR\Uninstall.exe"
+
+  ; Desktop shortcut
   CreateShortcut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\MViewer.exe"
 
-  ; Uninstaller.
+  ; Uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" \
-    "DisplayName" "${APPNAME} ${APPVERSION}"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" \
-    "UninstallString" "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" \
-    "DisplayVersion" "${APPVERSION}"
+  WriteRegStr HKLM "Software\${APPNAME}" "InstallDir" "$INSTDIR"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayName" "${APPNAME}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "UninstallString" "$INSTDIR\Uninstall.exe"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayVersion" "${VERSION}"
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "NoModify" 1
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "NoRepair" 1
 SectionEnd
 
 Section "Uninstall"
-  Delete "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk"
-  Delete "$DESKTOP\${APPNAME}.lnk"
-  RMDir "$SMPROGRAMS\${APPNAME}"
   RMDir /r "$INSTDIR"
+  Delete "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk"
+  Delete "$SMPROGRAMS\${APPNAME}\Uninstall ${APPNAME}.lnk"
+  RMDir "$SMPROGRAMS\${APPNAME}"
+  Delete "$DESKTOP\${APPNAME}.lnk"
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
+  DeleteRegKey HKLM "Software\${APPNAME}"
 SectionEnd

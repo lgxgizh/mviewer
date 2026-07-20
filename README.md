@@ -15,9 +15,9 @@
 MViewer is **not a general-purpose image viewer** — it is a **visual analysis platform** for engineers who compare and validate the outputs of different image processing algorithms (camera ISP, CV pipelines, SDK versions). The core workflow is **comparison** and **analysis**; browsing is just the entry point.
 
 - **Compare**: Multi-image (2–8) side-by-side with synchronized zoom/pan/selection, blink comparison, difference maps
-- **Analyze**: Histogram, RGB mean, PSNR, SSIM, noise estimation, entropy, sharpness, ROI statistics
+- **Analyze**: Histogram, RGB mean, PSNR, SSIM, noise estimation, entropy, sharpness, MTF (MTF50), dead-pixel detection, ColorChecker Delta-E, ROI statistics
+- **Performance**: Background async decode, 5-level cache, predictive preloading, CPU tile pipeline (100 MP visible-region decode), capability-gated GPU tile upload, UI never blocks
 - **Plugin**: Extensible analyzer system via `AnalyzerRegistry`
-- **Performance**: Background decoding, 5-level cache, predictive preloading — UI never blocks
 
 ---
 
@@ -217,6 +217,36 @@ PluginManager::instance().loadDirectory("<path-to-plugins>");
 | JPEG decode (24MP) | < 50ms |
 | Zoom/pan | 60fps sustained |
 | Cache hit ratio (memory) | > 90% |
+
+---
+
+## Distribution
+
+Two self-contained packages are produced from a Release build (no external
+Qt / Visual C++ install required on the target machine):
+
+| Artifact | Command | Contents |
+| -------- | ------- | -------- |
+| `dist/MViewer-<ver>-portable.zip` | `scripts/package_portable.ps1` | `MViewer.exe` + Qt6 runtime + platform/imageformat plugins + bundled VC runtime + README/CHANGELOG |
+| `dist/MViewer-<ver>-Setup.exe` | `scripts/package_release.ps1` | NSIS installer (start-menu + desktop shortcuts, uninstaller) |
+
+Build everything in one step:
+
+```powershell
+# Release build + portable zip + installer
+powershell -ExecutionPolicy Bypass -File scripts/package_release.ps1 -Build -Version 0.11.0
+```
+
+`package_portable.ps1` uses Qt's official `windeployqt` to gather exactly the
+DLLs/plugins `MViewer.exe` imports, then bundles the matching MSVC C++ runtime
+so the archive runs on a clean Windows install. Prereqs: Qt 6.11.1
+(`msvc2022_64`), `windeployqt`, and `makensis` (NSIS) on `PATH`.
+
+> **Screenshot / demo GIF**: A real UI screenshot and a workflow demo GIF
+> require a desktop display session and a screen recorder (e.g. `ffmpeg`);
+> they are generated manually and are **not** part of the automated build.
+> The app is fully exercisable headless via the benchmark/acceptance
+> executables (see `scripts/product_workflow_gate.ps1`).
 
 ---
 

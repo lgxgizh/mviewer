@@ -8,6 +8,15 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **M11.3 — Release Engineering (distribution):** self-contained Windows packages from a
+  Release build. `scripts/package_portable.ps1` runs Qt's `windeployqt` to gather exactly the
+  DLLs/plugins `MViewer.exe` imports, bundles the matching MSVC C++ runtime, and zips to
+  `dist/MViewer-<ver>-portable.zip` (verified: the packaged `MViewer.exe` launches offscreen
+  with no missing-dependency errors). `scripts/package_release.ps1` orchestrates the Release
+  build + portable zip + NSIS installer (`installer/mviewer.nsi` → `dist/MViewer-<ver>-Setup.exe`,
+  start-menu/desktop shortcuts + uninstaller). README now has a Distribution section.
+  Screenshot / demo GIF are intentionally manual (need a display session + screen recorder;
+  `ffmpeg` is not in the build environment), and are documented as such in README.
 - **M6 — Vertical Browsing Chain:** `DecoderRegistry` (singleton) dispatches files to
   per-format decoders (`QtDecoder` for JPEG/PNG/BMP/TIFF, `QtFallbackDecoder` as last-resort);
   `Decoder` is now a thin shim over the registry. RAW deferred to M7 (`TODO(M7): RAW`).
