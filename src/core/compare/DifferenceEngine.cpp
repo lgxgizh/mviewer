@@ -51,9 +51,9 @@ ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b
 
     for (int y = 0; y < h; ++y)
     {
-        const uint8_t *la = a.buffer.get() + static_cast<size_t>(y) * a.stride();
-        const uint8_t *lb = b.buffer.get() + static_cast<size_t>(y) * b.stride();
-        uint8_t *dst = out.buffer.get() + static_cast<size_t>(y) * out.stride();
+        const uint8_t *la = a.buffer->data() + static_cast<size_t>(y) * a.stride();
+        const uint8_t *lb = b.buffer->data() + static_cast<size_t>(y) * b.stride();
+        uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
         for (int x = 0; x < w; ++x)
         {
             const int dr = std::abs(static_cast<int>(la[x * cppA + roA0]) -
@@ -82,8 +82,8 @@ ImageData DifferenceEngine::heatMap(const ImageData &gray)
 
     for (int y = 0; y < h; ++y)
     {
-        const uint8_t *src = gray.buffer.get() + static_cast<size_t>(y) * gray.stride();
-        uint8_t *dst = out.buffer.get() + static_cast<size_t>(y) * out.stride();
+        const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
+        uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
         for (int x = 0; x < w; ++x)
         {
             const int v = src[x * cpp + ro];

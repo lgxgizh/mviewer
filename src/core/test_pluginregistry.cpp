@@ -34,7 +34,7 @@ static ImageData makeGradient(int w, int h)
     for (int y = 0; y < h; ++y)
         for (int x = 0; x < w; ++x)
         {
-            uint8_t *p = d.buffer.get() + (static_cast<size_t>(y) * w + x) * 3;
+            uint8_t *p = d.buffer->data() + (static_cast<size_t>(y) * w + x) * 3;
             p[0] = static_cast<uint8_t>(x);
             p[1] = static_cast<uint8_t>(y);
             p[2] = 128;

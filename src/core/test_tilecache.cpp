@@ -57,7 +57,7 @@ static void testLruEviction()
     auto tile = [&](int v)
     {
         ImageData d = makeImageData(1, 1, PixelFormat::RGB24);
-        d.buffer[0] = static_cast<uint8_t>(v);
+        (*d.buffer)[0] = static_cast<uint8_t>(v);
         return d;
     };
     cache.put(k1, tile(1));

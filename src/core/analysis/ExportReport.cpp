@@ -22,7 +22,7 @@ void summarizeDiff(const ImageData &d, double &mn, double &mean, double &mx)
         mn = mean = mx = 0.0;
         return;
     }
-    const uint8_t *p = d.buffer.get();
+    const uint8_t *p = d.buffer->data();
     for (int i = 0; i < n; ++i)
     {
         const double v = static_cast<double>(p[i]);

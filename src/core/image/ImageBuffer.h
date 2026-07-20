@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <vector>
 
 #include "domain/Selection.h"
 
@@ -61,26 +62,38 @@ struct ImageBuffer
 
 struct ImageData
 {
-    std::shared_ptr<uint8_t[]> buffer;
+    // Pixels owned by a std::vector, shared via shared_ptr. This restores
+    // the cheap-copy semantics the old std::shared_ptr<uint8_t[]> had
+    // (copying an ImageData aliases the buffer instead of deep-copying
+    // all pixels), while avoiding the shared_ptr<T[]> ARRAY
+    // specialization that crashes under MSVC /fsanitize=address (STL
+    // control-block instrumentation conflict). shared_ptr<vector> is the
+    // fully-supported, AddressSanitizer-clean form.
+    std::shared_ptr<std::vector<uint8_t>> buffer;
     int width = 0;
     int height = 0;
     PixelFormat format = PixelFormat::RGB24;
 
     bool isNull() const
     {
-        return !buffer || width <= 0 || height <= 0;
+        return !buffer || buffer->empty() || width <= 0 || height <= 0;
     }
 
     ImageBuffer view() const
     {
         ImageBuffer b;
-        b.data = buffer.get();
+        // Non-owning alias of the pixel bytes. The source ImageData
+        // owns the buffer; this view is valid only while the owner is
+        // alive. const_cast: buffer->data() is const here (view() is
+        // const), but ImageBuffer::data is intentionally non-const for
+        // in-place pixel access by analyzers/engines that hold the
+        // alive owner.
+        b.data = const_cast<uint8_t *>(buffer->data());
         b.width = width;
         b.height = height;
         b.format = format;
         return b;
     }
-
     ptrdiff_t stride() const
     {
         return static_cast<ptrdiff_t>(width) * channelsPerPixel();
@@ -118,7 +131,7 @@ inline ImageData makeImageData(int w, int h, PixelFormat fmt)
                         : (fmt == PixelFormat::Grayscale8 ? 1 : 3);
     const size_t bytes = static_cast<size_t>(w) * static_cast<size_t>(h) * static_cast<size_t>(cpp);
     ImageData d;
-    d.buffer = std::shared_ptr<uint8_t[]>(new uint8_t[bytes]);
+    d.buffer = std::make_shared<std::vector<uint8_t>>(bytes);
     d.width = w;
     d.height = h;
     d.format = fmt;

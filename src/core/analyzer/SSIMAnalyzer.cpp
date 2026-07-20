@@ -32,11 +32,11 @@ bool SSIMAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain:
     const int cppT = vT.channelsPerPixel();
     for (int y = 0; y < rh; ++y)
     {
-        std::memcpy(subR.buffer.get() + static_cast<size_t>(y) * rw * cppR,
+        std::memcpy(subR.buffer->data() + static_cast<size_t>(y) * rw * cppR,
                     vR.data + static_cast<size_t>(y0 + y) * vR.stride() +
                         static_cast<size_t>(x0) * cppR,
                     static_cast<size_t>(rw) * cppR);
-        std::memcpy(subT.buffer.get() + static_cast<size_t>(y) * rw * cppT,
+        std::memcpy(subT.buffer->data() + static_cast<size_t>(y) * rw * cppT,
                     vT.data + static_cast<size_t>(y0 + y) * vT.stride() +
                         static_cast<size_t>(x0) * cppT,
                     static_cast<size_t>(rw) * cppT);

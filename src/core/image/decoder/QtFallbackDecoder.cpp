@@ -26,7 +26,7 @@ ImageData toImageData(const QImage &src)
     for (int y = 0; y < h; ++y)
     {
         const uchar *s = img.constScanLine(y);
-        uint8_t *d = out.buffer.get() + static_cast<size_t>(y) * out.stride();
+        uint8_t *d = out.buffer->data() + static_cast<size_t>(y) * out.stride();
         std::memcpy(d, s, rowBytes);
     }
     return out;

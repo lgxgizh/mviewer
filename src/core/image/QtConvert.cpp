@@ -91,7 +91,7 @@ ImageData fromQImage(const QImage &src)
         const size_t rowBytes = static_cast<size_t>(src.width());
         for (int y = 0; y < src.height(); ++y)
         {
-            std::memcpy(out.buffer.get() + static_cast<size_t>(y) * out.stride(),
+            std::memcpy(out.buffer->data() + static_cast<size_t>(y) * out.stride(),
                         src.constScanLine(y), rowBytes);
         }
         return out;
@@ -104,7 +104,7 @@ ImageData fromQImage(const QImage &src)
     const size_t rowBytes = static_cast<size_t>(img.width()) * 3;
     for (int y = 0; y < img.height(); ++y)
     {
-        std::memcpy(out.buffer.get() + static_cast<size_t>(y) * out.stride(), img.constScanLine(y),
+        std::memcpy(out.buffer->data() + static_cast<size_t>(y) * out.stride(), img.constScanLine(y),
                     rowBytes);
     }
     return out;

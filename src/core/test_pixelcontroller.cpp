@@ -30,9 +30,9 @@ static ImageData makeRGB(int w, int h, uint8_t r, uint8_t g, uint8_t b)
     ImageData d = makeImageData(w, h, PixelFormat::RGB24);
     for (size_t i = 0; i < static_cast<size_t>(w) * h; ++i)
     {
-        d.buffer[i * 3 + 0] = r;
-        d.buffer[i * 3 + 1] = g;
-        d.buffer[i * 3 + 2] = b;
+        (*d.buffer)[i * 3 + 0] = r;
+        (*d.buffer)[i * 3 + 1] = g;
+        (*d.buffer)[i * 3 + 2] = b;
     }
     return d;
 }

@@ -136,7 +136,7 @@ bool DiskCache::get(const std::string &key, ImageData &out)
     const PixelFormat pf = static_cast<PixelFormat>(fmt);
     out = makeImageData(w, h, pf);
     const size_t bytesToCopy = std::min(static_cast<size_t>(blob.size()), out.byteSize());
-    std::memcpy(out.buffer.get(), blob.constData(), bytesToCopy);
+    std::memcpy(out.buffer->data(), blob.constData(), bytesToCopy);
     return true;
 }
 
@@ -153,7 +153,7 @@ void DiskCache::put(const std::string &key, const ImageData &img)
     q.addBindValue(img.height);
     q.addBindValue(static_cast<int>(img.format));
     q.addBindValue(QVariant::fromValue<qint64>(QDateTime::currentSecsSinceEpoch()));
-    q.addBindValue(QByteArray(reinterpret_cast<const char *>(img.buffer.get()),
+    q.addBindValue(QByteArray(reinterpret_cast<const char *>(img.buffer->data()),
                               static_cast<int>(img.byteSize())));
     q.exec();
 

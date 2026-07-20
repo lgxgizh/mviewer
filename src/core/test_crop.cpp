@@ -32,7 +32,7 @@ static ImageData makeGradient(int w, int h)
     for (int y = 0; y < h; ++y)
         for (int x = 0; x < w; ++x)
         {
-            uint8_t *p = d.buffer.get() + (static_cast<size_t>(y) * w + x) * 3;
+            uint8_t *p = d.buffer->data() + (static_cast<size_t>(y) * w + x) * 3;
             p[0] = static_cast<uint8_t>(x);
             p[1] = static_cast<uint8_t>(y);
             p[2] = 128;
@@ -57,15 +57,15 @@ int main()
 
         CHECK(frame->width() == 4 && frame->height() == 4, "cropped to 4x4");
         // Top-left cropped pixel should be source (2,3): rgb (2,3,128).
-        const uint8_t *tl = frame->pixels().buffer.get();
+        const uint8_t *tl = frame->pixels().buffer->data();
         CHECK(tl[0] == 2 && tl[1] == 3 && tl[2] == 128, "top-left pixel == source (2,3)");
         // Bottom-right cropped pixel should be source (5,6): rgb (5,6,128).
-        const uint8_t *br = frame->pixels().buffer.get() + (static_cast<size_t>(3) * 4 + 3) * 3;
+        const uint8_t *br = frame->pixels().buffer->data() + (static_cast<size_t>(3) * 4 + 3) * 3;
         CHECK(br[0] == 5 && br[1] == 6 && br[2] == 128, "bottom-right pixel == source (5,6)");
 
         cmd.undo();
         CHECK(frame->width() == 10 && frame->height() == 10, "undo restores 10x10");
-        const uint8_t *restored = frame->pixels().buffer.get();
+        const uint8_t *restored = frame->pixels().buffer->data();
         CHECK(restored[0] == 0 && restored[1] == 0, "undo restores original top-left (0,0)");
     }
 
