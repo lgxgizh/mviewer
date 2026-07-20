@@ -1,0 +1,64 @@
+name: Perf Gate
+
+# M13.3 — Performance Budget as a HARD CI gate.
+#
+# Runs `mviewer_bench --enforce --budget benchmark/performance_budget.json`.
+# Unlike the nightly (which is report-only, `|| true`), THIS job FAILS the
+# PR when any budget is violated or a regression vs the committed baseline
+# exceeds max_regression_pct. This is the user-requested
+# "CI 自动检测性能回归 / fail if regression" gate.
+#
+# It is ADDITIVE: ci.yml (Phase-1 mandatory gate) is untouched/frozen.
+# Perf Gate runs *in addition* on every PR to master.
+
+on:
+  pull_request:
+    branches: [master]
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  perf-gate:
+    name: Performance budget (enforce)
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          modules: qtimageformats
+          cache: true
+
+      - name: Build (Release)
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
+
+      - name: Run performance budget gate
+        # No `|| true` — a budget violation MUST block the PR.
+        run: |
+          $bin = "build_msvc\bin\mviewer_bench.exe"
+          if (-not (Test-Path $bin)) { throw "benchmark binary missing after build" }
+          & $bin --enforce --budget benchmark/performance_budget.json
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "PERFORMANCE BUDGET VIOLATED — see verdicts above. Fix the regression or adjust benchmark/performance_budget.json with architectural justification."
+            exit 1
+          }
+        shell: powershell
+
+      - name: Upload verdict log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-gate-verdicts
+          path: |
+            benchmark/report/
+          if-no-files-found: ignore

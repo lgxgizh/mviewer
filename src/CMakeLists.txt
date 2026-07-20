@@ -623,6 +623,16 @@ target_compile_definitions(mviewer_bench PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOU
 
 add_test(NAME bench_smoke COMMAND mviewer_bench --smoke)
 
+# M13.3 — Performance Budget as a HARD gate (data-driven via JSON).
+# Runs the same binary in --enforce mode against
+# benchmark/performance_budget.json. On a budget violation the binary exits
+# non-zero and THIS ctest FAILS (so `.\build.ps1 Test` cannot go green
+# with a perf regression). The PR-level perf-gate.yml reuses the same
+# invocation against the committed baseline.
+add_test(NAME bench_enforce
+    COMMAND mviewer_bench --enforce
+            --budget ${CMAKE_SOURCE_DIR}/benchmark/performance_budget.json)
+
 # ─── Format target ──────────────────────────────────────────────────────────
 
 find_program(CLANG_FORMAT_EXE NAMES clang-format)

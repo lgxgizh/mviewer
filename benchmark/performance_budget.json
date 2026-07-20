@@ -1,0 +1,23 @@
+{
+  "_comment": "MViewer performance budget — single source of truth for `mviewer_bench --enforce --budget`. Values are hard gates: a scenario whose measured metric exceeds the limit FAILS the run (exit 1). Lower-is-better for all latency/memory metrics. Mirrors docs/performance-budget.md and rfc/011-performance-budget.md.",
+  "schema_version": 1,
+  "budgets": {
+    "open_folder_ms": 500,
+    "first_thumbnail_ms": 100,
+    "image_switch_ms": 20,
+    "zoom_frame_ms": 16,
+    "ui_thread_ms": 16,
+    "memory_mb": 512
+  },
+  "scenario_map": {
+    "B1": "open_folder_ms",
+    "B2": "first_thumbnail_ms",
+    "B8": "image_switch_ms",
+    "B9": "memory_mb"
+  },
+  "regression": {
+    "baseline_file": "benchmark/perf_baseline.json",
+    "max_regression_pct": 10,
+    "fail_on_regression": true
+  }
+}
