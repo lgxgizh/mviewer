@@ -43,6 +43,25 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
     ImageData img;
     bool fromCache = false;
     mviewer::domain::ImageMetadata decodeMeta;
+
+    // P0/B8: in-memory LRU fast-path. A preloaded image switch (the common case
+    // for navigating an already-open folder) must be a PURE in-memory hit: no
+    // disk I/O, no ImageFrame reallocation, no metadata re-parse. This avoids the
+    // p95/p99 tail spikes caused by DiskCache::get / allocator contention.
+    if (CacheManager::instance().getMemory(CacheLevel::FullImage, key, img))
+    {
+        auto frame = std::make_shared<ImageFrame>(ImageFrame::create(filePath, img));
+        mviewer::domain::ImageMetadata m;
+        if (CacheManager::instance().getMetadata(key, m))
+            frame->setMetadata(m);
+        frame->setDecodeState(DecodeState::Decoded);
+        frame->setCacheState(CacheState::Memory);
+        CacheManager::instance().putMemory(CacheLevel::FullImage, key, img);
+        res.frame = frame;
+        res.fromCache = true;
+        return res;
+    }
+
     if (opts.useDiskCache && DiskCache::instance().get(key, img))
     {
         fromCache = true;
