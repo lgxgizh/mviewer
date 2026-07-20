@@ -107,7 +107,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: 6.11.1
+          version: 6.8.0
           arch: win64_msvc2022_64
           modules: qtimageformats
           cache: true
@@ -145,7 +145,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: 6.11.1
+          version: 6.8.0
           arch: win64_msvc2022_64
           modules: qtimageformats
           cache: true
@@ -189,7 +189,7 @@ jobs:
   #
   # Platform: windows-2022 — clang-cl compiles against the MSVC toolset
   #   (headers/libs) while LLVM provides the sanitizer runtime. Qt is the
-  #   same 6.11.1 msvc2022_64 build used everywhere.
+  #   same 6.8.0 msvc2022_64 build used everywhere.
   #
   # Non-blocking by design (continue-on-error: true) — sanitizer timings are
   # ~3-5x slower under instrumentation, so the <16ms / <100ms budget assertions
@@ -219,7 +219,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: 6.11.1
+          version: 6.8.0
           arch: win64_msvc2022_64
           modules: qtimageformats
           cache: true
@@ -278,7 +278,7 @@ jobs:
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
         with:
-          version: 6.11.1
+          version: 6.8.0
           arch: win64_msvc2022_64
           modules: qtimageformats
           cache: true
