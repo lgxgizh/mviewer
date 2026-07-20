@@ -1,29 +1,41 @@
 # =============================================================================
-# MViewer CI — Phase 1
+# MViewer CI — Phase1 (PR gate) + advisory jobs
 # -----------------------------------------------------------------------------
-# Jobs: format | build | test | package | ci-gate
+# PR gate (REQUIRED, must all pass for a mergeable PR):
+#   format | build | test | package | clazy
+#
+# Advisory / non-gating signal jobs (continue-on-error: true):
+#   static-analysis (clang-tidy)  — upload findings artifact, never blocks
+#   asan (MSVC /fsanitize=address) — see docs/known_issues/MSVC_ASAN.md
 #
 # This is Phase-1 CI for the MViewer Qt6/MSVC C++20 image viewer.
 #
-# Phase roadmap (Architect directive 2026-07-16):
-#   - Phase-1 (this file, MANDATORY GATE): format, build, test, package.
-#   - Phase-2: clang-tidy ADVISORY only (uploads artifact, never blocks).
-#   - Phase-3: ASan (MSVC /fsanitize=address) — non-gating, signal only.
-#   - Phase-4: performance harness + benchmark regression gate.
-#   - Phase-5: plugin/AI benchmarks, release automation.
-# Perfetto / clazy / ASan are explicitly DEFERRED until the architecture is
-# stable; they must not add developer burden before then.
+# Phase roadmap (Architect directive 2026-07-16, refined 2026-07-20):
+#   - Phase-1 (this file, PR GATE): format, build, test, package, clazy.
+#   - Phase-2 (NIGHTLY, NOT in PR gate): clang-tidy + LLVM ASan/UBSan +
+#     benchmark + coverage. Target milestone M13. Never blocks PRs — keeps
+#     PR velocity high while raising long-term quality signal.
+#   - Phase-3 (RELEASE): tag -> package -> installer -> sign -> upload.
+# Perfetto / clazy / ASan are DEFERRED from the mandatory gate until the
+# architecture is stable; they must not add developer burden before then.
 #
 # PR gate expectations (all must pass for a mergeable PR):
 #   * clang-format --dry-run passes (no formatting diffs)
 #   * markdownlint passes on all .md docs
 #   * build succeeds on windows-2022 (MSVC + Qt 6.8.0)
-#   * unit tests (ctest) pass
+#   * unit tests (ctest) pass (31/31)
 #   * zero compiler warnings in the build log
 #   * portable zip artifact is produced
+#   * clazy (Qt-aware static analysis) passes
 #
-# The `ci-gate` job aggregates all required statuses so branch protection can
-# depend on a single check.
+# Long-term CI shape (mature C++ project pattern):
+#   PR:      format | build | test | package | clazy            -> ci-gate
+#   Nightly: build -> test -> clang-tidy -> LLVM ASan/UBSan
+#             -> benchmark -> coverage -> artifact
+#   Release: tag -> package -> installer -> sign -> upload
+#
+# The `ci-gate` job aggregates all REQUIRED statuses so branch protection can
+# depend on a single check. Advisory jobs are intentionally excluded.
 # =============================================================================
 
 name: CI
@@ -258,13 +270,27 @@ jobs:
           path: clazy.txt
 
   # ---------------------------------------------------------------------------
-  # asan — AddressSanitizer via MSVC /fsanitize=address (windows-2022, Phase-3)
-  # Non-gating: runs as a signal job to surface memory errors on the real MSVC
-  # toolchain. Deferred from the mandatory gate per Architect directive (no
-  # premature dev burden). Results are advisory until the architecture stabilizes.
+  # asan — AddressSanitizer via MSVC /fsanitize=address (windows-2022)
+  #
+  # *** ADVISORY ONLY — NOT REQUIRED. DOES NOT BLOCK ci-gate. ***
+  #
+  # Known issue: MSVC's experimental /fsanitize=address crashes inside the STL
+  # shared_ptr control-block interception (access-violation at a near-null
+  # address) when instrumenting ImageData::view() const. The same source builds
+  # and passes 31/31 CTest WITHOUT ASan. Current evidence suggests this is a
+  # toolchain-compatibility limitation, NOT a confirmed product defect; the root
+  # cause is not yet proven. Full detail + re-check checklist:
+  #   docs/known_issues/MSVC_ASAN.md
+  #
+  # Disposition (Architect directive 2026-07-20, "A+ then evolve to B"):
+  #   - stays continue-on-error (advisory, signal only);
+  #   - must NOT be "fixed" by refactoring ImageData / shared_ptr design;
+  #   - Phase-2 (target M13): add clang-cl + LLVM ASan/UBSan as a NIGHTLY
+  #     job (independent sanitizer) to either close this or surface a real
+  #     defect. Nightly only — never in the PR gate, to protect dev velocity.
   # ---------------------------------------------------------------------------
   asan:
-    name: ASan (MSVC /fsanitize=address, advisory)
+    name: ASan (MSVC /fsanitize=address, ADVISORY — see docs/known_issues/MSVC_ASAN.md)
     runs-on: windows-2022
     continue-on-error: true
     steps:
@@ -301,8 +327,8 @@ jobs:
   ci-gate:
     name: CI gate
     runs-on: ubuntu-latest
-    needs: [format, build, test, package]
+    needs: [format, build, test, package, clazy]
     if: always()
     steps:
       - name: All required jobs passed
-        run: echo "format, build, test, and package all succeeded (clang-tidy/asan are advisory, non-gating)."
+        run: echo "format, build, test, package, and clazy all succeeded (clang-tidy/asan are advisory, non-gating)."
