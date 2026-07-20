@@ -40,6 +40,12 @@ class ThumbnailPanel : public QListWidget
     void setDirectory(const QString &path);
     void setSortMode(SortMode mode);
 
+    // Scroll the grid so the item for `path` is visible and select it. Used by
+    // browse-position restore (reopen last image after launch).
+    void scrollToPath(const QString &path);
+    // Current vertical scroll offset of the thumbnail grid (for persistence).
+    int scrollOffset() const;
+
     QStringList selectedPaths() const;
 
     void renameSelected();

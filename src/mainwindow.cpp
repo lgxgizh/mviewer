@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 
 #include "application/OpenDirectoryUseCase.h"
+#include "appstate.h"
 #include "core/EventBus.h"
 #include "core/command/CallbackCommand.h"
 #include "core/command/CompareCommand.h"
@@ -20,25 +21,50 @@
 #include "thumbnailpanel.h"
 
 #include <QApplication>
+#include <QCloseEvent>
 #include <QComboBox>
 #include <QDialog>
+#include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QImage>
+#include <QJsonDocument>
+#include <QJsonParseError>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QMetaObject>
+#include <QScrollBar>
 #include <QSplitter>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QVBoxLayout>
 #include <QWidget>
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
+    // P0: load persisted cross-session state + recent-folders LRU before UI.
+    m_appState = AppState::load();
+    const QString recentPath =
+        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recent.json";
+    {
+        QFile rf(recentPath);
+        if (rf.open(QIODevice::ReadOnly))
+        {
+            const QByteArray raw = rf.readAll();
+            m_recent.deserialize(std::string(raw.constData(), raw.size()));
+        }
+    }
+
     setupUi();
     setupCommands();
     setWindowTitle("MViewer");
     resize(1280, 800);
+
+    // P0: restore last folder + image + scroll position (deferred to event loop).
+    rebuildFavoritesMenu();
+    restoreLastSession();
 }
 
 MainWindow::~MainWindow() = default;
@@ -55,6 +81,15 @@ void MainWindow::setupUi()
     m_actExit = new QAction("退出(&Q)", this);
     fileMenu->addAction(m_actOpenDir);
     fileMenu->addSeparator();
+
+    // P0: Recent folders (from core::RecentFiles LRU) + Favorites (pinned).
+    m_recentMenu = fileMenu->addMenu("最近目录(&R)");
+    m_favMenu = fileMenu->addMenu("收藏目录(&F)");
+    m_actAddFavorite = new QAction("收藏当前目录(&D)", this);
+    m_actAddFavorite->setShortcut(QKeySequence("Ctrl+D")); // Ctrl+D
+    fileMenu->addAction(m_actAddFavorite);
+
+    fileMenu->addSeparator();
     fileMenu->addAction(m_actSaveWorkspace);
     fileMenu->addAction(m_actOpenWorkspace);
     fileMenu->addSeparator();
@@ -66,6 +101,14 @@ void MainWindow::setupUi()
     m_actToggleAnalysis = new QAction("直方图(&H)", this);
     m_actToggleAnalysis->setCheckable(true);
     m_actToggleAnalysis->setChecked(true);
+    // P0: in-session browse history (browser-style back/forward).
+    m_actHistoryBack = new QAction("上一步(&B)", this);
+    m_actHistoryBack->setShortcut(QKeySequence::Back); // Alt+Left
+    m_actHistoryForward = new QAction("下一步(&N)", this);
+    m_actHistoryForward->setShortcut(QKeySequence::Forward); // Alt+Right
+    viewMenu->addAction(m_actHistoryBack);
+    viewMenu->addAction(m_actHistoryForward);
+    viewMenu->addSeparator();
     viewMenu->addAction(m_actCompare);
     viewMenu->addAction(m_actToggleAnalysis);
 
@@ -144,6 +187,10 @@ void MainWindow::setupUi()
                         m_cachedImagePaths.append(QString::fromStdString(p));
                     m_dirListDirty = false;
                 }
+                // P0: record this folder in the recent-folders LRU + repopulate
+                // the Recent menu so it is always one click away.
+                m_recent.add(path.toStdString());
+                rebuildRecentMenu();
                 const int n = m_cachedImagePaths.size();
                 statusBar()->showMessage(QString("目录: %1, 图片数: %2").arg(path).arg(n));
             });
@@ -275,6 +322,11 @@ void MainWindow::setupUi()
         m_actAbout, &QAction::triggered, this, [this]()
         { QMessageBox::about(this, "关于 MViewer", "MViewer\n\n一个简单的图片查看与分析工具。"); });
 
+    // P0: recent / favorites / history wiring.
+    connect(m_actAddFavorite, &QAction::triggered, this, &MainWindow::addFavoriteCurrent);
+    connect(m_actHistoryBack, &QAction::triggered, this, [this]() { navigateHistory(-1); });
+    connect(m_actHistoryForward, &QAction::triggered, this, [this]() { navigateHistory(1); });
+
     statusBar()->showMessage("就绪");
 }
 
@@ -344,6 +396,7 @@ void MainWindow::onImageOpen(const QString &path)
     if (auto f = m_imageViewer->frame())
         m_analysisPanel->setFrame(f);
     m_currentImagePath = path;
+    pushHistory(path); // P0: in-session browse history
     // M12.2 (G2-ext): if this image had a saved analysis in the workspace, restore
     // it to the panel (e.g. after reopening a .mvws with per-image analysis).
     const auto it = m_analysisByPath.find(path);
@@ -576,4 +629,156 @@ void MainWindow::openWorkspace()
                                  .arg(QFileInfo(filePath).fileName())
                                  .arg(static_cast<int>(ws.imageCount()))
                                  .arg(static_cast<int>(ws.folderCount())));
+}
+
+// ─── P0: product browse state (recent / favorites / history / restore) ────────
+
+void MainWindow::pushHistory(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+    // Drop any "forward" entries when a new navigation occurs (browser semantics).
+    if (m_historyIndex >= 0 && m_historyIndex + 1 < m_history.size())
+        m_history.erase(m_history.begin() + m_historyIndex + 1, m_history.end());
+    if (!m_history.isEmpty() && m_history.last() == path)
+        return; // no duplicate of the current tip
+    m_history.append(path);
+    m_historyIndex = m_history.size() - 1;
+}
+
+void MainWindow::navigateHistory(int delta)
+{
+    if (m_history.isEmpty())
+        return;
+    const int next = m_historyIndex + delta;
+    if (next < 0 || next >= m_history.size())
+        return;
+    m_historyIndex = next;
+    const QString path = m_history.at(next);
+    // Re-open without pushing again (pushHistory is a no-op for the same tip).
+    m_currentImagePath = path;
+    m_imageViewer->setImage(path);
+    m_analysisPanel->setImage(QImage(path));
+    if (auto f = m_imageViewer->frame())
+        m_analysisPanel->setFrame(f);
+    m_previewPanel->setImage(path);
+    statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
+}
+
+void MainWindow::rebuildRecentMenu()
+{
+    if (!m_recentMenu)
+        return;
+    m_recentMenu->clear();
+    for (const auto &p : m_recent.items())
+    {
+        const QString qs = QString::fromStdString(p);
+        auto *act = m_recentMenu->addAction(QFileInfo(qs).fileName());
+        act->setToolTip(qs);
+        connect(act, &QAction::triggered, this,
+                [this, qs]()
+                {
+                    m_currentDir = qs;
+                    m_cachedImagePaths.clear();
+                    m_dirListDirty = true;
+                    m_thumbnailPanel->setDirectory(qs);
+                });
+    }
+    if (m_recentMenu->isEmpty())
+        m_recentMenu->addAction("(无)")->setEnabled(false);
+}
+
+void MainWindow::rebuildFavoritesMenu()
+{
+    if (!m_favMenu)
+        return;
+    m_favMenu->clear();
+    for (const auto &qs : m_appState.favorites)
+    {
+        auto *act = m_favMenu->addAction(QFileInfo(qs).fileName());
+        act->setToolTip(qs);
+        connect(act, &QAction::triggered, this,
+                [this, qs]()
+                {
+                    m_currentDir = qs;
+                    m_cachedImagePaths.clear();
+                    m_dirListDirty = true;
+                    m_thumbnailPanel->setDirectory(qs);
+                });
+    }
+    if (m_favMenu->isEmpty())
+        m_favMenu->addAction("(无)")->setEnabled(false);
+}
+
+void MainWindow::addFavoriteCurrent()
+{
+    if (m_currentDir.isEmpty())
+    {
+        statusBar()->showMessage("没有可收藏的目录");
+        return;
+    }
+    m_appState.addFavorite(m_currentDir);
+    m_appState.save();
+    rebuildFavoritesMenu();
+    statusBar()->showMessage(QString("已收藏: %1").arg(m_currentDir));
+}
+
+void MainWindow::restoreLastSession()
+{
+    // Defer to the next event loop tick so the thumbnail worker has started and
+    // setDirectory() has populated items before we try to scroll/select.
+    QMetaObject::invokeMethod(
+        this,
+        [this]()
+        {
+            const QString dir = m_appState.lastDir;
+            if (dir.isEmpty() || !QDir(dir).exists())
+                return;
+            m_currentDir = dir;
+            m_cachedImagePaths.clear();
+            m_dirListDirty = true;
+            m_thumbnailPanel->setDirectory(dir);
+
+            const QString img = m_appState.lastImage;
+            if (!img.isEmpty() && QFile::exists(img))
+            {
+                pushHistory(img);
+                m_currentImagePath = img;
+                m_imageViewer->setImage(img);
+                m_analysisPanel->setImage(QImage(img));
+                if (auto f = m_imageViewer->frame())
+                    m_analysisPanel->setFrame(f);
+                m_previewPanel->setImage(img);
+            }
+            // Restore the thumbnail-grid scroll position after items exist.
+            QMetaObject::invokeMethod(
+                this,
+                [this]()
+                {
+                    if (m_appState.lastThumbScroll > 0)
+                        m_thumbnailPanel->verticalScrollBar()->setValue(m_appState.lastThumbScroll);
+                    if (!m_appState.lastImage.isEmpty())
+                        m_thumbnailPanel->scrollToPath(m_appState.lastImage);
+                },
+                Qt::QueuedConnection);
+        },
+        Qt::QueuedConnection);
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    // Persist browse position for next launch (P0 cross-session restore).
+    m_appState.lastDir = m_currentDir;
+    m_appState.lastImage = m_currentImagePath;
+    m_appState.lastThumbScroll = m_thumbnailPanel ? m_thumbnailPanel->scrollOffset() : 0;
+    m_appState.save();
+
+    // Persist the recent-folders LRU alongside app state.
+    const QString recentPath =
+        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recent.json";
+    QFile rf(recentPath);
+    if (rf.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        rf.write(QByteArray::fromStdString(m_recent.serialize()));
+
+    QMainWindow::closeEvent(event);
 }

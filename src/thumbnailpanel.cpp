@@ -21,6 +21,7 @@
 #include <QMessageBox>
 #include <QPainter>
 #include <QPushButton>
+#include <QScrollBar>
 #include <algorithm>
 
 namespace
@@ -291,6 +292,29 @@ QStringList ThumbnailPanel::selectedPaths() const
     for (QListWidgetItem *item : selectedItems())
         result.append(item->data(Qt::UserRole).toString());
     return result;
+}
+
+void ThumbnailPanel::scrollToPath(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+    // Find the item by its stored absolute path (UserRole).
+    for (int i = 0; i < count(); ++i)
+    {
+        QListWidgetItem *it = item(i);
+        if (it && it->data(Qt::UserRole).toString() == path)
+        {
+            setCurrentItem(it);
+            scrollToItem(it, QAbstractItemView::PositionAtCenter);
+            return;
+        }
+    }
+}
+
+int ThumbnailPanel::scrollOffset() const
+{
+    QScrollBar *bar = verticalScrollBar();
+    return bar ? bar->value() : 0;
 }
 
 void ThumbnailPanel::onCompareClicked()

@@ -77,6 +77,7 @@ target_include_directories(mviewer_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_library(mviewer_ui STATIC
     mainwindow.cpp
+    appstate.cpp
     imageviewer.cpp
     directorytree.cpp
     thumbnailpanel.cpp
@@ -159,6 +160,20 @@ target_link_libraries(mviewer_unit_tests
 target_compile_features(mviewer_unit_tests PRIVATE cxx_std_20)
 
 target_include_directories(mviewer_unit_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_executable(test_appstate
+    test_appstate.cpp
+    appstate.cpp
+)
+
+target_link_libraries(test_appstate
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(test_appstate PRIVATE cxx_std_20)
+target_include_directories(test_appstate PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 
 add_executable(benchmark
@@ -491,6 +506,7 @@ endif()
 add_test(NAME core_tests       COMMAND core_tests)
 add_test(NAME m3m4m5_tests     COMMAND test_m3m4m5)
 add_test(NAME unit_tests       COMMAND mviewer_unit_tests)
+add_test(NAME appstate_tests   COMMAND test_appstate)
 add_test(NAME m3pipeline_tests COMMAND m3pipeline_tests)
 add_test(NAME decoder_tests    COMMAND test_decoder)
 add_test(NAME cache_tests      COMMAND test_cache)
