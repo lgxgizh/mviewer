@@ -43,7 +43,10 @@ jobs:
 
       - name: Install Qt6
         run: |
-          sudo apt-get install -y qt6-base-dev qt6-imageformats-plugin
+          # qt6-base-dev only (see ci.yml static-analysis): qtimageformats is a
+          # runtime dep; the old 'qt6-imageformats-plugin' name does not exist on
+          # Ubuntu noble and broke the install step.
+          sudo apt-get install -y qt6-base-dev
 
       - name: Configure (export compile_commands.json)
         run: |

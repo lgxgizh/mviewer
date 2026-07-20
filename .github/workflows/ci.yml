@@ -186,7 +186,12 @@ jobs:
 
       - name: Install Qt6
         run: |
-          sudo apt-get install -y qt6-base-dev qt6-imageformats-plugin
+          # qt6-base-dev provides the QtCore/QtGui/QtWidgets headers needed for
+          # static analysis. The qtimageformats module (TIFF plugin) is a RUNTIME
+          # dependency only; it is not required to parse/analyze the source, so we
+          # omit it here (the old 'qt6-imageformats-plugin' name does not exist on
+          # Ubuntu noble and broke the install step).
+          sudo apt-get install -y qt6-base-dev
 
       - name: Configure (export compile_commands.json)
         run: |
@@ -227,7 +232,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y clazy clang clang-tools cmake ninja-build
-          sudo apt-get install -y qt6-base-dev qt6-imageformats-plugin
+          # qt6-base-dev only (see static-analysis job): qtimageformats is a
+          # runtime dep, not needed for clazy source analysis; the old
+          # 'qt6-imageformats-plugin' package name does not exist on noble.
+          sudo apt-get install -y qt6-base-dev
 
       - name: Configure (clazy build)
         run: |
