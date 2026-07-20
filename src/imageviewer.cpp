@@ -5,6 +5,7 @@
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
 #include "core/trace/Trace.h"
+#include "gpu/GpuTileUploader.h"
 
 #include <QApplication>
 #include <QDir>
@@ -179,6 +180,17 @@ void ImageViewer::paintEvent(QPaintEvent *event)
             });
         for (const auto &rt : ready)
         {
+            // M16: when the GPU tier is enabled (real GL context +
+            // MVIEWER_GPU=1), ensure the decoded tile is uploaded to a
+            // resident texture exactly once; re-paints composite from the
+            // handle instead of re-converting to QImage on the CPU. The
+            // upload is a no-op when disabled (CPU path stays the default
+            // and is the verified-green fallback everywhere, including here).
+            if (GpuTileUploader::enabled())
+            {
+                const ImageBuffer view = rt.data.view();
+                m_gpu.ensure(rt.key, view.data, view.width, view.height, view.channelsPerPixel());
+            }
             // Compute on-screen rect for this tile's LOD/source region.
             int tsx, tsy, tsw, tsh;
             m_view.imageRectToScreen(rt.key.col * m_tiles.tileSize * (1 << rt.key.lod),

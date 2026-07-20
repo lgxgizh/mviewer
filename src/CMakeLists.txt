@@ -88,6 +88,7 @@ add_library(mviewer_ui STATIC
     exportdialog.cpp
     exportcommand.cpp
     widgets/rawimageview.cpp
+    gpu/GpuTileUploader.cpp
 )
 
 target_link_libraries(mviewer_ui PUBLIC Qt6::Widgets mviewer_core mviewer_application)
@@ -179,6 +180,21 @@ target_include_directories(test_appstate PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_executable(benchmark
     benchmark_main.cpp
 )
+
+# M16: GpuTileUploader bookkeeping (headless; GL upload is a no-op
+# offscreen and activates only on real hardware with MVIEWER_GPU=1).
+add_executable(test_gputile
+    core/test_gputile.cpp
+    gpu/GpuTileUploader.cpp
+)
+target_link_libraries(test_gputile
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(test_gputile PRIVATE cxx_std_20)
+target_include_directories(test_gputile PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 target_link_libraries(benchmark
     PRIVATE
@@ -517,6 +533,7 @@ add_test(NAME filesystem_tests COMMAND test_filesystem)
 add_test(NAME eventbus_tests   COMMAND test_eventbus)
 add_test(NAME render_pipeline_tests COMMAND test_render_pipeline)
 add_test(NAME tilecache_tests COMMAND test_tilecache)
+add_test(NAME gputile_tests  COMMAND test_gputile)
 add_test(NAME pixelcontroller_tests COMMAND test_pixelcontroller)
 add_test(NAME thumbnailpipeline_tests COMMAND test_thumbnailpipeline)
 add_test(NAME commandstack_tests COMMAND test_commandstack)

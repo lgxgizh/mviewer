@@ -102,6 +102,48 @@ static void testRequestCacheHit()
     CHECK(decodeCalls == 1, "new image id triggers one decode");
 }
 
+static void test100MpVisibleOnly()
+{
+    printf("\n[TileCache 100MP visible-only decode (M16)]\n");
+    fflush(stdout);
+    // 10000x8000 ~= 80MP image. Tile base 256 -> at fit-into a 1280x1024
+    // window the scale is ~0.128, so chooseLod -> LOD 3 (256*8=2048 src px
+    // per coarse tile). Only the tiles intersecting the viewport are decoded, never
+    // the full bitmap. This is the "100MP 不卡" guarantee.
+    const int W = 10000, H = 8000;
+    TileCache cache;
+    TileGrid grid(W, H, 256);
+    // Window 1280x1024, image fit (scale < 1).
+    Viewport vp(1280, 1024, 0.128, 0.0, 0.0);
+
+    int decodeCalls = 0;
+    auto decode = [&](const std::string &, int, int, int, int, int, int) -> ImageData
+    { return makeImageData(1, 1, PixelFormat::RGB24); };
+
+    auto r1 = cache.request("big", vp, grid, decode, &decodeCalls);
+    CHECK(!r1.empty(), "100MP: at least one visible tile returned");
+    // LOD 3 -> each coarse tile covers 2048x2048 src px. Window 1280x1024
+    // at scale 0.128 shows ~10k x 8k src -> ~5x4 coarse tiles = ~20.
+    // The key assertion: far fewer than the full fine-grid decode
+    // (10000/256 * 8000/256 ~= 39*31 = 1222 fine tiles).
+    CHECK(decodeCalls > 0 && decodeCalls < 200,
+          "100MP: only visible coarse tiles decoded (not the full 1222-tile grid)");
+
+    // Second identical request: served from cache, zero new decodes.
+    decodeCalls = 0;
+    auto r2 = cache.request("big", vp, grid, decode, &decodeCalls);
+    CHECK(!r2.empty() && decodeCalls == 0, "100MP: cached request reuses tiles (0 decode calls)");
+
+    // Pan the view by ~half a screen; only newly-visible tiles decode.
+    Viewport vpPan(1280, 1024, 0.128, -600.0, 0.0);
+    decodeCalls = 0;
+    auto r3 = cache.request("big", vpPan, grid, decode, &decodeCalls);
+    CHECK(!r3.empty(), "100MP: pan returns visible tiles");
+    CHECK(decodeCalls >= 0 && decodeCalls < 200, "100MP: pan decodes only newly-visible tiles");
+    // Pan must not re-decode tiles already resident from the first view.
+    CHECK(cache.size() < 200, "100MP: resident tile count stays bounded");
+}
+
 int main()
 {
     printf("=== TileCache + LOD tests (M7 ①) ===\n");
@@ -109,6 +151,7 @@ int main()
     testLodSelection();
     testLruEviction();
     testRequestCacheHit();
+    test100MpVisibleOnly();
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

@@ -4,6 +4,7 @@
 #include "core/render/TileCache.h"
 #include "core/render/TileGrid.h"
 #include "core/render/Viewport.h"
+#include "gpu/GpuTileUploader.h"
 
 #include <QPixmap>
 #include <QStringList>
@@ -83,6 +84,14 @@ class ImageViewer : public QWidget
     // views cheap. No decode happens in the Widget — the cache's decode
     // callback calls RenderEngine (core/), never QWidget.
     TileCache m_tileCache;
+
+    // M16: GPU upload tier (opt-in, capability-gated). When enabled
+    // (real GL context + MVIEWER_GPU=1), decoded tiles are uploaded to
+    // GL textures once and composited from resident handles; otherwise this
+    // stays idle and the CPU QPainter path above is used. Bookkeeping is
+    // unit-tested headlessly; the actual GL upload runs only where a
+    // context exists.
+    GpuTileUploader m_gpu;
 
     bool m_dragging = false;
     QPoint m_lastMousePos;
