@@ -15,7 +15,9 @@
 #>
 param(
     [string]$BuildDir = "build_msvc",
-    [string]$QtDir    = "D:/QT/6.11.1/msvc2022_64",
+    # CI (install-qt-action) exports QT_ROOT_DIR to the msvc2022_64 root.
+    # Locally that env var is absent, so fall back to the dev Qt path.
+    [string]$QtDir    = $(if ($env:QT_ROOT_DIR) { $env:QT_ROOT_DIR } else { "D:/QT/6.11.1/msvc2022_64" }),
     [string]$Version  = "",
     [string]$OutDir   = "dist"
 )
