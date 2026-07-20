@@ -4,16 +4,34 @@
 # Implements the 2026-07-18 engineering-review P4:
 #   "add a nightly workflow that runs clang-tidy / ASan / benchmark once a day,
 #    never blocking PRs."
+# Refined 2026-07-20 (Architect "A+ then evolve to B"): adds an LLVM /
+# clang-cl sanitizer job as the INDEPENDENT sanitizer needed to either close
+# docs/known_issues/MSVC_ASAN.md or surface a real defect the MSVC ASan run
+# cannot reach.
 #
 # This file is ADDITIVE and does NOT touch the frozen `ci.yml`, `build.ps1`, or
 # `CMakePresets.json` (per AGENTS.md freeze policy). It mirrors the advisory
 # jobs already present in `ci.yml` (static-analysis / clazy / asan) but runs
 # them on a daily schedule instead of on every push/PR, reducing developer
-# burden while keeping the heavy signals alive. Benchmark runs in `--enforce`
-# mode so real regressions are surfaced in the nightly artifact/log (it still
-# does not fail the mandatory PR gate).
+# burden while keeping the heavy signals alive.
+#
+# Long-term CI shape (mature C++ project pattern):
+#   PR:      format | build | test | package | clazy            -> ci-gate
+#   Nightly: build -> test -> clang-tidy -> LLVM ASan/UBSan
+#             -> benchmark -> coverage -> artifact
+#   Release: tag -> package -> installer -> sign -> upload
 #
 # Every job uses `continue-on-error: true` so the nightly never blocks anything.
+#
+# Job inventory:
+#   clang-tidy       — LLVM clang-tidy on ubuntu (bugprone/performance/cppcore)
+#   benchmark        — mviewer_bench --enforce (surfaces perf regressions in log)
+#   asan (MSVC)     — MSVC /fsanitize=address (advisory; see known-issue doc)
+#   llvm-sanitizer  — *** PHASE-2 CONTAINER (target M13) *** clang-cl +
+#                      LLVM ASan/UBSan on windows-2022. The independent
+#                      sanitizer that cross-checks MSVC_ASAN.md. See job block
+#                      for enable/verify TODO before first production use.
+#   dashboard        — regenerate benchmark/report/{history.csv,index.html}
 # =============================================================================
 
 name: Nightly
@@ -151,6 +169,101 @@ jobs:
         with:
           name: nightly-asan
           path: nightly-asan.txt
+
+  # ---------------------------------------------------------------------------
+  # llvm-sanitizer — clang-cl + LLVM ASan/UBSan (INDEPENDENT sanitizer)
+  #
+  # *** PHASE-2 CONTAINER — TARGET MILESTONE M13. NOT ACTIVE YET. ***
+  #
+  # Purpose (Architect "A+ then evolve to B", 2026-07-20):
+  #   This is the INDEPENDENT sanitizer required to resolve
+  #   docs/known_issues/MSVC_ASAN.md. MSVC's /fsanitize=address crashes
+  #   inside STL shared_ptr instrumentation; LLVM's clang-cl ASan/UBSan is
+  #   first-class and does NOT exhibit that crash. A green run here either
+  #   (a) confirms the MSVC crash was toolchain-only (close the issue), or
+  #   (b) surfaces a real defect the MSVC run could not reach (fix it).
+  #
+  # Platform: windows-2022 — clang-cl compiles against the MSVC toolset
+  #   (headers/libs) while LLVM provides the sanitizer runtime. Qt is the
+  #   same 6.8.0 msvc2022_64 build used everywhere.
+  #
+  # ENABLE / VERIFY TODO (do these before flipping this job from skeleton
+  # to production in M13):
+  #   1. Confirm an LLVM install step that puts `clang-cl.exe` +
+  #      `llvm-symbolizer` on PATH for windows-2022. Candidates:
+  #        - `winget install LLVM.LLVM` (needs --accept-package-agreements)
+  #        - chocolatey `choco install llvm` (network-dependent)
+  #        - pin a specific LLVM release via actions or a cached artifact
+  #      Pick ONE and verify `clang-cl --version` succeeds in CI.
+  #   2. Verify Qt 6.8.0 msvc2022_64 links cleanly under clang-cl
+  #      (clang-cl is MSVC-ABI compatible, but Qt's prebuilt libs are
+  #      MSVC-built — usually fine; confirm no LNK incompatibility).
+  #   3. Run the CTest suite offscreen once manually; capture the first
+  #      baseline verdict (pass/fail + any sanitizer findings).
+  #   4. Only after 1-3 are green, remove the "skeleton guard" below and
+  #      let this job run on the daily schedule like the others.
+  #   Until then the job is present but EXITS EARLY (guard), so it cannot
+  #   produce a misleading red/clean signal.
+  #
+  # Sanitizers: -fsanitize=address,undefined (ASan + UBSan). UBSan is the
+  #   extra value LLVM adds over MSVC ASan (catches UB the MSVC run misses).
+  # ---------------------------------------------------------------------------
+  llvm-sanitizer:
+    name: Nightly LLVM sanitizer (clang-cl ASan/UBSan) [PHASE-2 SKELETON]
+    runs-on: windows-2022
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC (provides Windows headers/libs for clang-cl)
+        uses: ilammy/msvc-dev-cmd@v1
+
+      # TODO(M13): replace this echo-guard with a real LLVM install step
+      # (see ENABLE/VERIFY TODO above). Until then the job is a skeleton.
+      - name: '[SKELETON GUARD] LLVM toolchain not yet wired — exit early'
+        run: |
+          echo "llvm-sanitizer is a Phase-2 (M13) container."
+          echo "clang-cl + LLVM ASan/UBSan not yet enabled."
+          echo "See docs/known_issues/MSVC_ASAN.md (Future verification plan)."
+          echo "When enabled, this job will:"
+          echo "  1. install LLVM (clang-cl + llvm-symbolizer) on PATH"
+          echo "  2. cmake -S . -B build_llvm_san -G Ninja ^"
+          echo "       -DCMAKE_CXX_COMPILER=clang-cl ^"
+          echo "       -DCMAKE_C_COMPILER=clang-cl ^"
+          echo "       -DCMAKE_CXX_FLAGS=-fsanitize=address,undefined"
+          echo "  3. cmake --build build_llvm_san -j 4"
+          echo "  4. ctest --output-on-failure -j4 (offscreen) and upload log"
+          echo "Skeleton exit 0 (non-blocking)."
+
+      # --- Production steps (commented until M13 enable/verify complete) ---
+      # - name: Install LLVM (clang-cl + llvm-symbolizer)
+      #   run: winget install LLVM.LLVM --accept-package-agreements --silent
+      # - name: Install Qt
+      #   uses: jurplel/install-qt-action@v4
+      #   with:
+      #     version: 6.8.0
+      #     arch: win64_msvc2022_64
+      #     modules: qtimageformats
+      #     cache: true
+      # - name: Configure (clang-cl + ASan/UBSan)
+      #   run: cmake -S . -B build_llvm_san -G Ninja
+      #     -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl
+      #     -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined"
+      # - name: Build
+      #   run: cmake --build build_llvm_san -j 4 2> llvm-san.txt || true
+      # - name: Test (offscreen)
+      #   run: |
+      #     $env:QT_QPA_PLATFORM = "offscreen"
+      #     cd build_llvm_san
+      #     ctest --output-on-failure -j4 >> ../llvm-san.txt 2>&1 || true
+      #     echo "llvm sanitizer run complete (see artifact)"
+      # - name: Upload findings
+      #   if: always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: nightly-llvm-sanitizer
+      #     path: llvm-san.txt
 
   # ---------------------------------------------------------------------------
   # dashboard — regenerate benchmark/report/{history.csv,index.html} from the
