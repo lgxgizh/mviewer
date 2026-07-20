@@ -43,13 +43,13 @@ jobs:
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
 
       - name: Run performance budget gate
-        # No `|| true` — a budget violation MUST block the PR.
+        # No `|| true`: a budget violation MUST block the PR.
         run: |
           $bin = "build_msvc\bin\mviewer_bench.exe"
           if (-not (Test-Path $bin)) { throw "benchmark binary missing after build" }
           & $bin --enforce --budget benchmark/performance_budget.json
           if ($LASTEXITCODE -ne 0) {
-            Write-Error "PERFORMANCE BUDGET VIOLATED — see verdicts above. Fix the regression or adjust benchmark/performance_budget.json with architectural justification."
+            Write-Error "PERFORMANCE BUDGET VIOLATED: see verdicts above. Fix the regression or adjust benchmark/performance_budget.json with architectural justification."
             exit 1
           }
         shell: powershell
