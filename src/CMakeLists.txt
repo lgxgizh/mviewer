@@ -40,6 +40,9 @@ add_library(mviewer_core SHARED
     core/analyzer/SSIMAnalyzer.cpp
     core/analyzer/EntropyAnalyzer.cpp
     core/analyzer/SharpnessAnalyzer.cpp
+    core/analyzer/MTFAnalyzer.cpp
+    core/analyzer/DeadPixelAnalyzer.cpp
+    core/analyzer/ColorCheckerAnalyzer.cpp
     core/render/RenderEngine.cpp
     core/thumbnail/ThumbnailPipeline.h
     core/plugin/PluginLoader.cpp
@@ -225,7 +228,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )

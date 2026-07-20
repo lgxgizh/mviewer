@@ -1,7 +1,10 @@
 #include "core/analyzer/Analyzer.h"
 
+#include "core/analyzer/ColorCheckerAnalyzer.h"
+#include "core/analyzer/DeadPixelAnalyzer.h"
 #include "core/analyzer/EntropyAnalyzer.h"
 #include "core/analyzer/HistogramAnalyzer.h"
+#include "core/analyzer/MTFAnalyzer.h"
 #include "core/analyzer/NoiseAnalyzer.h"
 #include "core/analyzer/PSNRAnalyzer.h"
 #include "core/analyzer/RGBMeanAnalyzer.h"
@@ -74,6 +77,28 @@ void Analyzer::registerBuiltins()
         []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
         {
             return std::unique_ptr<Analyzer, AnalyzerDeleter>(new SSIMAnalyzer(),
+                                                              [](Analyzer *p) { delete p; });
+        });
+    // M13: analyzer extensions (MTF / Dead Pixel / ColorChecker).
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "mtf",
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new MTFAnalyzer(),
+                                                              [](Analyzer *p) { delete p; });
+        });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "deadpixel",
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new DeadPixelAnalyzer(),
+                                                              [](Analyzer *p) { delete p; });
+        });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "colorchecker",
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new ColorCheckerAnalyzer(),
                                                               [](Analyzer *p) { delete p; });
         });
 }
