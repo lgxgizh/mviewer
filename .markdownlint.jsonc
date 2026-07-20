@@ -32,6 +32,11 @@
   //           contact URLs (security@mviewer.example.com) / contributor-covenant
   //           links by design. Enforcing blank lines + link wrapping here is pure
   //           churn with no reader benefit.
+  //   MD004/ul-style : docs use '+' bullets (e.g. CHANGELOG, RFCs) by convention;
+  //           forcing '-' is pure churn with no reader benefit.
+  //   MD031/blanks-around-fences + MD058/blanks-around-tables : tight fences /
+  //           tables are the project's doc convention across api/ + rfc/ + release/
+  //           docs; blank-line padding around every fence/table is cosmetic churn.
   "default": true,
   "MD040": false,
   "MD024": false,
@@ -42,5 +47,8 @@
   "MD025": false,
   "MD042": false,
   "MD022": false,
-  "MD034": false
+  "MD034": false,
+  "MD004": false,
+  "MD031": false,
+  "MD058": false
 }
