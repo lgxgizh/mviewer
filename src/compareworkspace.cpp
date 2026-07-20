@@ -277,6 +277,42 @@ void CompareWorkspace::fitAll()
         m_engine.setOffset(0.0, 0.0);
 }
 
+void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
+{
+    // Sync mode: All == both zoom+drag synced; Off == neither. (The CompareSession
+    // only stores All/Off for the persisted snapshot; per-axis toggles default
+    // to the synced state.)
+    const bool syncOn = (s.syncMode != mviewer::domain::SyncMode::Off);
+    m_syncZoom = syncOn;
+    m_syncDrag = syncOn;
+    m_syncZoomChk->setChecked(syncOn);
+    m_syncDragChk->setChecked(syncOn);
+    m_engine.setSyncEnabled(syncOn);
+
+    // Shared transform (used when sync is on).
+    m_engine.setScale(s.sharedScale);
+    m_engine.setOffset(s.sharedOffsetX, s.sharedOffsetY);
+
+    // Per-cell independent transforms (used when sync is off).
+    for (size_t i = 0; i < s.cells.size(); ++i)
+    {
+        const int idx = static_cast<int>(i);
+        if (idx >= m_engine.imageCount())
+            break;
+        m_engine.setCellScale(idx, s.cells[i].scale);
+        m_engine.setCellOffset(idx, s.cells[i].offsetX, s.cells[i].offsetY);
+    }
+
+    // ROI / selection (synchronized across cells).
+    if (s.selection.w > 0 && s.selection.h > 0)
+    {
+        applySelectionToAll(
+            mviewer::domain::Selection{s.selection.x, s.selection.y, s.selection.w, s.selection.h});
+    }
+
+    update();
+}
+
 void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel)
 {
     // Engine owns the frames; it mirrors the synchronized ROI to every ImageFrame.

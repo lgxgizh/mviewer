@@ -497,6 +497,11 @@ void MainWindow::saveWorkspace()
     // session with neither ROI nor analysis still reopens correctly.
     for (const QString &cpath : compared)
         ws.comparedImages.push_back(cpath.toStdString());
+    // M15: persist the full compare-session snapshot (sync mode, zoom/pan, ROI)
+    // so reopening restores the entire compare view, not just the image list.
+    if (m_compareView && m_compareView->compareSession().isValid())
+        ws.compareSessionJson =
+            mviewer::core::serializeCompareSession(m_compareView->compareSession());
     for (const QString &cpath : compared)
     {
         const std::string key = cpath.toStdString();
@@ -574,18 +579,12 @@ void MainWindow::openWorkspace()
     comparePaths.reserve(static_cast<int>(ws.comparedImages.size()));
     for (const auto &p : ws.comparedImages)
         comparePaths.push_back(QString::fromStdString(p));
-    if (!comparePaths.isEmpty() && m_compareView)
-        m_compareView->setImages(comparePaths);
 
-    // M12.2 (G2-ext): rebuild the per-image analysis map from the saved model so
-    // the whole compare session's analysis context is available on reload (each
-    // image's analysis shows when it becomes the active image). Also pick the
-    // first image carrying session context (ROI or analysis) as the active one
-    // to re-open and re-apply.
+    // M15: rebuild the per-image analysis map from the saved model so the whole
+    // compare session's analysis context is available on reload (each image's
+    // own ROI/analysis is restored, not just the first). openCompare() below
+    // creates m_compareView; we apply the per-image context after it loads.
     m_analysisByPath.clear();
-    mviewer::domain::Selection restoredRoi;
-    std::string restoredAnalysis;
-    std::string restoredPath;
     for (const auto &folder : ws.folders)
     {
         for (const auto &img : folder.imageSet.images)
@@ -593,6 +592,34 @@ void MainWindow::openWorkspace()
             if (!img.analysis.empty())
                 m_analysisByPath.insert(QString::fromStdString(img.filePath),
                                         QString::fromStdString(img.analysis));
+        }
+    }
+
+    // M15: if a compare session was saved, auto-open the compare dialog (it may
+    // not exist yet in a fresh launch) and load the exact image set. Previously
+    // the session was silently dropped when m_compareView was still null.
+    mviewer::domain::CompareSession restoredSession;
+    bool haveSession =
+        !ws.compareSessionJson.empty() &&
+        mviewer::core::deserializeCompareSession(ws.compareSessionJson, restoredSession);
+    if (!comparePaths.isEmpty())
+    {
+        openCompare(comparePaths); // creates m_compareView + setImages + show
+        // openCompare() shows the dialog; restore the saved transform snapshot.
+        if (haveSession && m_compareView)
+            m_compareView->applySession(restoredSession);
+    }
+
+    // Pick the active (browsing) image: prefer the first image carrying session
+    // context (ROI or analysis), else the first compared image, else the first
+    // image in the workspace.
+    std::string restoredPath;
+    mviewer::domain::Selection restoredRoi;
+    std::string restoredAnalysis;
+    for (const auto &folder : ws.folders)
+    {
+        for (const auto &img : folder.imageSet.images)
+        {
             if (restoredPath.empty() && (img.roiW > 0 || img.roiH > 0 || !img.analysis.empty()))
             {
                 restoredRoi = {img.roiX, img.roiY, img.roiW, img.roiH};
@@ -601,6 +628,11 @@ void MainWindow::openWorkspace()
             }
         }
     }
+    if (restoredPath.empty() && !comparePaths.isEmpty())
+        restoredPath = comparePaths.first().toStdString();
+    else if (restoredPath.empty() && ws.imageCount() > 0)
+        restoredPath = ws.folders.front().imageSet.images.front().filePath;
+
     if (!restoredPath.empty())
     {
         m_currentImagePath = QString::fromStdString(restoredPath);

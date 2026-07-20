@@ -1,5 +1,6 @@
 #pragma once
 
+#include "domain/CompareSession.h"
 #include "domain/Workspace.h"
 
 #include <string>
@@ -14,6 +15,12 @@ namespace mviewer::core
 // shape only.
 std::string serializeWorkspace(const mviewer::domain::Workspace &ws);
 bool deserializeWorkspace(const std::string &text, mviewer::domain::Workspace &out);
+
+// M15: CompareSession snapshot embedded in the workspace JSON so the full
+// compare view (sync mode, per-cell zoom/pan, shared transform, ROI) survives a
+// reload. Pure std; keeps the compare state in the Qt-free core.
+std::string serializeCompareSession(const mviewer::domain::CompareSession &s);
+bool deserializeCompareSession(const std::string &text, mviewer::domain::CompareSession &out);
 
 // Recent-files list (cheap, high-value product feature). Capped at maxEntries;
 // most-recent first; duplicates are moved to front rather than duplicated.

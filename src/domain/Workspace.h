@@ -68,6 +68,12 @@ struct Workspace
     // for single-image or legacy workspaces.
     std::vector<std::string> comparedImages;
 
+    // M15: serialized CompareSession snapshot (sync mode, per-cell zoom/pan,
+    // shared transform, ROI). Stored as an embedded JSON string so the
+    // Workspace model stays a flat value type and the serializer change is
+    // localized. Empty when no compare session was active at save time.
+    std::string compareSessionJson;
+
     bool empty() const
     {
         return folders.empty();

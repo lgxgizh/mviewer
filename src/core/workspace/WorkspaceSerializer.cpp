@@ -119,6 +119,16 @@ struct Parser
         return std::strtoll(s.substr(start, i - start).c_str(), nullptr, 10);
     }
 
+    double parseDouble()
+    {
+        skipws();
+        size_t start = i;
+        while (i < s.size() && (std::isdigit(static_cast<unsigned char>(s[i])) || s[i] == '-' ||
+                                s[i] == '+' || s[i] == '.' || s[i] == 'e' || s[i] == 'E'))
+            i++;
+        return std::strtod(s.substr(start, i - start).c_str(), nullptr);
+    }
+
     // Parse a value that we expect to be a string at `key` within the current
     // object; advances past it. Returns true if the key was found and a string
     // consumed.
@@ -152,6 +162,139 @@ struct Parser
 };
 
 } // namespace
+
+// --- CompareSession (M15): embedded so Workspace stays a flat value type. ---
+// Shape: {"imageIds":[...],"cells":[[s,ox,oy],...],"syncMode":N,"blink":I,
+//         "sharedScale":S,"sharedOffsetX":X,"sharedOffsetY":Y,
+//         "cols":C,"rows":R,"selection":[x,y,w,h,sync]}
+std::string serializeCompareSession(const mviewer::domain::CompareSession &s)
+{
+    std::ostringstream os;
+    os << "{\"imageIds\":[";
+    for (size_t i = 0; i < s.imageIds.size(); ++i)
+    {
+        if (i)
+            os << ',';
+        esc(os, s.imageIds[i]);
+    }
+    os << "],\"cells\":[";
+    for (size_t i = 0; i < s.cells.size(); ++i)
+    {
+        if (i)
+            os << ',';
+        os << '[' << s.cells[i].scale << ',' << s.cells[i].offsetX << ',' << s.cells[i].offsetY
+           << ']';
+    }
+    os << "],\"syncMode\":" << static_cast<int>(s.syncMode) << ",\"blink\":" << s.blinkIndex
+       << ",\"sharedScale\":" << s.sharedScale << ",\"sharedOffsetX\":" << s.sharedOffsetX
+       << ",\"sharedOffsetY\":" << s.sharedOffsetY << ",\"cols\":" << s.cols
+       << ",\"rows\":" << s.rows << ",\"selection\":[" << s.selection.x << ',' << s.selection.y
+       << ',' << s.selection.w << ',' << s.selection.h << ',' << (s.selection.synced ? 1 : 0)
+       << "]}";
+    return os.str();
+}
+
+bool deserializeCompareSession(const std::string &text, mviewer::domain::CompareSession &out)
+{
+    Parser p(text);
+    if (!p.eat('{'))
+        return false;
+    long long syncMode = 0, blink = -1, cols = 0, rows = 0;
+    double sharedScale = 1.0, sharedOffsetX = 0.0, sharedOffsetY = 0.0;
+    int sx = 0, sy = 0, sw = 0, sh = 0, ssync = 0;
+    bool haveIds = false, haveCells = false;
+    while (!p.peek('}'))
+    {
+        if (!out.imageIds.empty() || haveIds || haveCells)
+            p.eat(',');
+        const std::string k = p.parseString();
+        if (!p.eat(':'))
+            return false;
+        if (k == "imageIds")
+        {
+            haveIds = true;
+            if (!p.eat('['))
+                return false;
+            while (!p.eat(']'))
+            {
+                if (!out.imageIds.empty())
+                    p.eat(',');
+                out.imageIds.push_back(p.parseString());
+            }
+        }
+        else if (k == "cells")
+        {
+            haveCells = true;
+            if (!p.eat('['))
+                return false;
+            while (!p.eat(']'))
+            {
+                if (!out.cells.empty())
+                    p.eat(',');
+                if (!p.eat('['))
+                    return false;
+                mviewer::domain::CellTransform ct;
+                ct.scale = static_cast<double>(p.parseDouble());
+                p.eat(',');
+                ct.offsetX = static_cast<double>(p.parseDouble());
+                p.eat(',');
+                ct.offsetY = static_cast<double>(p.parseDouble());
+                if (!p.eat(']'))
+                    return false;
+                out.cells.push_back(ct);
+            }
+        }
+        else if (k == "syncMode")
+            syncMode = p.parseNumber();
+        else if (k == "blink")
+            blink = p.parseNumber();
+        else if (k == "sharedScale")
+            sharedScale = p.parseDouble();
+        else if (k == "sharedOffsetX")
+            sharedOffsetX = p.parseDouble();
+        else if (k == "sharedOffsetY")
+            sharedOffsetY = p.parseDouble();
+        else if (k == "cols")
+            cols = p.parseNumber();
+        else if (k == "rows")
+            rows = p.parseNumber();
+        else if (k == "selection")
+        {
+            if (!p.eat('['))
+                return false;
+            sx = static_cast<int>(p.parseNumber());
+            p.eat(',');
+            sy = static_cast<int>(p.parseNumber());
+            p.eat(',');
+            sw = static_cast<int>(p.parseNumber());
+            p.eat(',');
+            sh = static_cast<int>(p.parseNumber());
+            p.eat(',');
+            ssync = static_cast<int>(p.parseNumber());
+            if (!p.eat(']'))
+                return false;
+        }
+        else
+        {
+            // Unknown key: skip a scalar/string value to stay forward-tolerant.
+            p.parseString();
+        }
+    }
+    if (!p.eat('}'))
+        return false;
+    out.syncMode = static_cast<mviewer::domain::SyncMode>(syncMode);
+    out.blinkIndex = static_cast<int>(blink);
+    out.sharedScale = sharedScale;
+    out.sharedOffsetX = sharedOffsetX;
+    out.sharedOffsetY = sharedOffsetY;
+    out.cols = static_cast<int>(cols);
+    out.rows = static_cast<int>(rows);
+    // CompareSelection field order is {x,y,w,h,active,synced}. The JSON
+    // stores [x,y,w,h,synced] (5 values), so map the 5th to synced and
+    // derive active from a non-empty region.
+    out.selection = {sx, sy, sw, sh, (sw > 0 && sh > 0), ssync != 0};
+    return haveIds; // require at least the image list to be a valid session
+}
 
 std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
 {
@@ -198,6 +341,10 @@ std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
         esc(os, ws.comparedImages[ci]);
     }
     os << ']';
+    // M15: embed the serialized CompareSession snapshot (sync mode, zoom/pan,
+    // shared transform, ROI) so reopening restores the full compare view.
+    os << ",\"compareSession\":";
+    esc(os, ws.compareSessionJson);
     os << "}";
     return os.str();
 }
@@ -292,6 +439,29 @@ bool deserializeWorkspace(const std::string &text, mviewer::domain::Workspace &o
     {
         p.eat(',');
         if (p.parseString() == "comparedImages" && p.eat(':'))
+        {
+            if (!p.eat('['))
+                return false;
+            while (!p.eat(']'))
+            {
+                if (!out.comparedImages.empty())
+                    p.eat(',');
+                out.comparedImages.push_back(p.parseString());
+            }
+        }
+        else if (p.parseString() == "compareSession" && p.eat(':'))
+        {
+            out.compareSessionJson = p.parseString();
+        }
+    }
+    // M15: also tolerate the case where compareSession appears after
+    // comparedImages (order-independent; only one optional comma consumed above).
+    if (p.peek(','))
+    {
+        p.eat(',');
+        if (p.parseString() == "compareSession" && p.eat(':'))
+            out.compareSessionJson = p.parseString();
+        else if (p.parseString() == "comparedImages" && p.eat(':'))
         {
             if (!p.eat('['))
                 return false;

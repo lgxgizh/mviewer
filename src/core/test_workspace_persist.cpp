@@ -184,6 +184,69 @@ int main(int argc, char **argv)
     }
 
     printf("\n=== M9-5 Workspace acceptance: %d passed, %d failed ===\n", g_pass, g_fail);
+
+    // ─── M15: CompareSession snapshot round-trip ─────────────────────────────
+    printf("\n[M15 CompareSession persistence]\n");
+    fflush(stdout);
+
+    mviewer::domain::CompareSession cs;
+    cs.imageIds = {"D:/photos/a/1.png", "D:/photos/a/2.jpg", "D:/photos/b/3.png"};
+    cs.cells.resize(3);
+    cs.cells[0] = {1.0, 0.0, 0.0};
+    cs.cells[1] = {2.5, -30.0, 12.0};
+    cs.cells[2] = {0.75, 5.0, -8.0};
+    cs.syncMode = mviewer::domain::SyncMode::All;
+    cs.blinkIndex = 1;
+    cs.sharedScale = 2.5;
+    cs.sharedOffsetX = -30.0;
+    cs.sharedOffsetY = 12.0;
+    cs.cols = 3;
+    cs.rows = 1;
+    cs.selection = {100, 80, 256, 128, true};
+    cs.selection.synced = true; // 5-value aggregate sets `active`; set synced explicitly
+
+    const std::string csJson = mviewer::core::serializeCompareSession(cs);
+    CHECK(!csJson.empty(), "compare session serialized to non-empty JSON");
+    mviewer::domain::CompareSession csBack;
+    CHECK(mviewer::core::deserializeCompareSession(csJson, csBack), "compare session deserialized");
+    CHECK(csBack.imageCount() == 3, "compare session image count round-trips");
+    CHECK(csBack.imageIds[1] == "D:/photos/a/2.jpg", "compare session image id round-trips");
+    CHECK(csBack.cells[1].scale == 2.5 && csBack.cells[1].offsetX == -30.0 &&
+              csBack.cells[1].offsetY == 12.0,
+          "per-cell transform round-trips");
+    CHECK(csBack.syncMode == mviewer::domain::SyncMode::All, "sync mode round-trips");
+    CHECK(csBack.sharedScale == 2.5 && csBack.sharedOffsetX == -30.0 &&
+              csBack.sharedOffsetY == 12.0,
+          "shared transform round-trips");
+    CHECK(csBack.cols == 3 && csBack.rows == 1, "grid dims round-trip");
+    CHECK(csBack.selection.w == 256 && csBack.selection.h == 128 && csBack.selection.synced,
+          "ROI selection round-trips");
+    CHECK(csBack.blinkIndex == 1, "blink index round-trips");
+
+    // Off-sync mode variant.
+    cs.syncMode = mviewer::domain::SyncMode::Off;
+    mviewer::domain::CompareSession csOff;
+    CHECK(
+        mviewer::core::deserializeCompareSession(mviewer::core::serializeCompareSession(cs), csOff),
+        "compare session (sync off) deserialized");
+    CHECK(csOff.syncMode == mviewer::domain::SyncMode::Off, "sync-off round-trips");
+
+    // Embedded in a Workspace and round-tripped end-to-end.
+    mviewer::domain::Workspace wscs;
+    wscs.rootPath = "D:/photos";
+    wscs.comparedImages = cs.imageIds;
+    wscs.compareSessionJson = csJson;
+    mviewer::domain::Workspace wscsBack;
+    CHECK(mviewer::core::deserializeWorkspace(mviewer::core::serializeWorkspace(wscs), wscsBack),
+          "workspace with compareSession deserialized");
+    CHECK(wscsBack.comparedImages.size() == 3, "embedded comparedImages round-trips");
+    mviewer::domain::CompareSession csEmb;
+    CHECK(mviewer::core::deserializeCompareSession(wscsBack.compareSessionJson, csEmb) &&
+              csEmb.selection.w == 256,
+          "embedded compareSession JSON round-trips through workspace");
+    CHECK(wscsBack.compareSessionJson == csJson, "compareSessionJson verbatim round-trips");
+
+    printf("\n=== M15-5 acceptance: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;
 }

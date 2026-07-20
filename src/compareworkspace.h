@@ -52,6 +52,18 @@ class CompareWorkspace : public QWidget
     // Used by Workspace persistence to capture session context per image.
     QStringList comparedImages() const;
 
+    // M15: full compare-session snapshot (sync mode, per-cell zoom/pan, shared
+    // transform, ROI) for Workspace persistence.
+    mviewer::domain::CompareSession compareSession() const
+    {
+        return m_engine.session();
+    }
+
+    // M15: restore a persisted CompareSession: sync mode, shared zoom/pan, and
+    // per-cell transforms. Call after setImages() so the engine owns the frames
+    // the transforms reference. The selection/ROI is applied via applyROI().
+    void applySession(const mviewer::domain::CompareSession &s);
+
   signals:
     void syncToggled(bool on);
     // Hover pixel read from any cell, formatted for the status bar. Empty string clears.
