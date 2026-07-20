@@ -1,5 +1,5 @@
 <#
-# package_portable.ps1 — M11.3 Release Engineering
+# package_portable.ps1 -- M11.3 Release Engineering
 #
 # Produce a self-contained, redistributable MViewer portable ZIP from a Release
 # build. Uses windeployqt (Qt's official deploy tool) to gather the exact set of
@@ -45,7 +45,7 @@ New-Item -ItemType Directory -Force -Path $staging | Out-Null
 # 1) Qt runtime + plugins via windeployqt (release only, no translations/debug).
 #    Run it against BOTH MViewer.exe AND mviewer_core.dll: the core DLL is what
 #    actually links Qt6::Sql (DiskCache), and MViewer.exe does not import it
-#    directly — so windeployqt on MViewer.exe alone can miss Qt6Sql.dll.
+#    directly -- so windeployqt on MViewer.exe alone can miss Qt6Sql.dll.
 & $windeployqt --release --no-translations --no-compiler-runtime --dir $staging $exe 2>&1 | ForEach-Object { Write-Host "  [windeployqt] $_" }
 $coreDll = Join-Path $root (Join-Path $BuildDir "bin/mviewer_core.dll")
 if (Test-Path $coreDll) {
@@ -73,7 +73,7 @@ if ($crtDir) {
 
 # 3) App assets --------------------------------------------------------------
 Copy-Item $exe $staging | Out-Null
-# The shared core library links Qt6::Sql etc. — must ship alongside the exe.
+# The shared core library links Qt6::Sql etc. -- must ship alongside the exe.
 if (Test-Path $coreDll) { Copy-Item $coreDll $staging | Out-Null; Write-Host "  [asset] mviewer_core.dll" }
 foreach ($f in @("README.md","CHANGELOG.md","LICENSE")) {
     $src = Join-Path $root $f

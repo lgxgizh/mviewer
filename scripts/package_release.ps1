@@ -1,5 +1,5 @@
 <#
-# package_release.ps1 — M11.3 Release Engineering orchestrator
+# package_release.ps1 -- M11.3 Release Engineering orchestrator
 #
 # Builds (optional) the Release target, then produces BOTH distribution artifacts
 # from the review's M11.3 checklist:
@@ -59,7 +59,7 @@ if ($makensis) {
     $setup = Join-Path $root "dist/MViewer-$Version-Setup.exe"
     if (Test-Path $setup) { Write-Host "=== installer: $setup ($([math]::Round((Get-Item $setup).Length/1MB,1)) MB) ===" }
 } else {
-    Write-Warning "makensis not found — skipped installer. Portable zip is the distributable."
+    Write-Warning "makensis not found -- skipped installer. Portable zip is the distributable."
 }
 
 Write-Host "=== release packaging complete (version $Version) ==="
