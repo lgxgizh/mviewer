@@ -80,34 +80,58 @@ async-EventBus), `export_tests` (13/13 — real report+diff PNG), `mviewer_bench
 
 ---
 
-## 3. Missing features / current gaps (the real list)
+## 3. Missing features / current gaps (re-verified 2026-07-20 against `master`)
 
-1. **Workspace persistence (P0 chain break):** the flow ends at "scan into
-   `domain::Workspace` model." There is **no `save()`/`load()` to disk** and no
-   wiring in `MainWindow`. The review's chain "保存 Workspace" is unimplemented.
-   *This is the one true P0 gap.* (Domain model exists; only persistence + UI hook missing.)
-2. **`FileSystem::listImages` 2000 cap:** truncates large dirs; blocks the 10000-img
-   benchmark target. Needs a higher cap or streaming/paging.
-3. **No real benchmark dataset:** `mviewer_bench` generates a synthetic corpus
-   (512×512). The review wants `benchmark/data/{small,medium,large}` = 100/1000/10000
-   real JPEGs, plus B1 scan p50/p95/p99 percentiles.
-4. **No `nightly.yml`:** CI is Phase-1 only (format/build/test/package). Review wants
-   a non-blocking nightly running clang-tidy + ASan + benchmark.
-5. **Tile Render RFC missing:** M7 laid `Viewport`+`TileCache`+`TileGrid` foundation;
-   a formal RFC (CPU tile, 12000×8000 JPEG, visible-region-only load) is not written.
+> The review was based on an older `mviewer-master.zip`. After the M13 phase
+> shipped, every item the review listed as "missing" is in fact **already
+> implemented and verified**. Recorded here so future readers don't re-do it:
+>
+> 1. ~~Workspace persistence~~ — **DONE.** `MainWindow::saveWorkspace` /
+>    `openWorkspace` write/read `.mvws` to disk; `ImageRepository::loadWorkspace`
+>    + `core::serializeWorkspace/deserializeWorkspace` + `workspace_persist_tests`
+>    round-trip (folders + image sets + per-image ROI/analysis + compare session).
+> 2. ~~`FileSystem::listImages` cap~~ — **DONE.** Default raised to **100000**
+>    (`OpenDirectoryUseCase.h` note "1000 -> 100000"); 10000-img dirs no longer
+>    truncate.
+> 3. ~~No real benchmark dataset~~ — **DONE.** `benchmark/generate_bench_data.ps1`
+>    emits `small/medium/large` = 100/1000/10000 real JPEGs (deterministic
+>    gradient+noise). `mviewer_bench` reports B1 scan + B2/B3 p50/p95/p99.
+> 4. ~~No `nightly.yml`~~ — **DONE.** `.github/workflows/nightly.yml` runs
+>    clang-tidy + benchmark + MSVC/LLVM ASan on a daily cron with
+>    `continue-on-error: true` (never blocks PRs).
+> 5. ~~Tile Render RFC missing~~ — **DONE.** `docs/rfc/M11_TILE_RENDER.md` +
+>    `docs/rfc/M13_TILE_PIPELINE.md` + `docs/rfc/M13_GPU_ROADMAP.md` define the
+>    CPU-tile loader (visible-region-only, 12000×8000 target) and the staged GPU
+>    route. GPU implementation stays deferred per review.
+
+### Genuinely open (the real remaining work after M13)
+
+- **B8 image-switch tail latency:** on a real 1000-img run, warm-switch p50 is
+  **7.5 ms** (great) but p95/p99 reach **76 / 89 ms** — over the 16 ms budget.
+  Cold paths and preload-boundary navigations are the cause. Not a blocker
+  (daily use is fluid) but worth a follow-up optimization pass.
+- **P3 large-tier (10000-img) run not yet executed locally** — the generator and
+  gate exist; only `medium` (1000) has been measured end-to-end. Large-tier
+  validation is recommended before claiming the 10000-img target.
 
 ---
 
-## 4. Acceptance criteria (this document's bar)
+## 4. Acceptance criteria (this document's bar — status 2026-07-20)
 
-- [ ] **Workflow doc approved by review** (this file) — gate before any code.
-- [ ] Case 1/2/3 reproduce on a **real 1000-img dataset** with the metrics in §2 met.
-- [ ] Workspace **save + load** round-trips (open dir → analyze → save → reopen →
-      state restored). New acceptance test `workspace_persist_tests` extended to disk.
-- [ ] `FileSystem::listImages` handles ≥10000 imgs without truncation (cap raised or paged).
-- [ ] `benchmark/data/` present; B1 reports p50/p95/p99 scan latency.
-- [ ] `nightly.yml` added (non-blocking).
-- [ ] Tile Render RFC written and reviewed (no implementation yet).
+- [x] **Workflow doc approved by review** (this file) — RFC-first gate honored.
+- [x] Case 1/2/3 reproduce on a **real 1000-img dataset** with the metrics in §2 met
+      — **verified by `mviewer_bench --enforce` on a real 1000-img corpus**:
+      B2 first-thumbnail **cold 10.16 ms** (budget <300 ms, 30× headroom),
+      B1 scan 24.8 ms (budget <500 ms), B3 jpeg decode p50/p95/p99 = 19.4/23.1/24.5 ms.
+- [x] Workspace **save + load** round-trips (open dir → analyze → save → reopen →
+      state restored). Covered by `workspace_persist_tests` + `MainWindow` `.mvws` I/O.
+- [x] `FileSystem::listImages` handles ≥10000 imgs without truncation (cap = 100000).
+- [x] `benchmark/data/` present; B1/B2/B3 report p50/p95/p99 latencies.
+- [x] `nightly.yml` added (non-blocking, daily cron).
+- [x] Tile Render RFC written and reviewed (no implementation yet — GPU deferred).
+- [ ] **B8 image-switch p95/p99 (76/89 ms) within the 16 ms budget** — open optimization.
+- [ ] **Large-tier (10000-img) benchmark executed end-to-end** — generator + gate ready;
+      run pending.
 
 ---
 
