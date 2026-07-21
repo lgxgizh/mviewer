@@ -93,6 +93,13 @@ class CompareWorkspace : public QWidget
     int m_dragIdx = -1;
     mviewer::domain::Selection m_lastSelection; // M12.1: last applied ROI
 
+    // M14-3: blink (flicker) compare
+    QCheckBox *m_blinkChk = nullptr;
+    QTimer *m_blinkTimer = nullptr;
+    bool m_blinkState = false;
+    void toggleBlink();
+    void applyBlink(bool state);
+
     // Paints the most recent async diff result (from the EventBus) onto the
     // matching cell. Called on the UI thread via QueuedConnection.
     void refreshDiffOverlay();

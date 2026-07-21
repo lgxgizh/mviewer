@@ -13,6 +13,7 @@
 #include <QMetaObject>
 #include <QMouseEvent>
 #include <QScrollArea>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWheelEvent>
 
@@ -81,6 +82,31 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     syncLayout->setSpacing(12);
     syncLayout->addWidget(m_syncZoomChk);
     syncLayout->addWidget(m_syncDragChk);
+
+    // M14-3: blink (flicker) compare — 500ms toggle between base and target.
+    m_blinkChk = new QCheckBox("闪烁对比(&B)", this);
+    connect(m_blinkChk, &QCheckBox::toggled, this, [this](bool on) {
+        if (on)
+        {
+            if (!m_blinkTimer)
+            {
+                m_blinkTimer = new QTimer(this);
+                connect(m_blinkTimer, &QTimer::timeout, this, [this]() { this->toggleBlink(); });
+            }
+            m_blinkTimer->start(500);
+            m_blinkState = false;
+            applyBlink(m_blinkState);
+        }
+        else
+        {
+            if (m_blinkTimer)
+                m_blinkTimer->stop();
+            // restore all cells visible
+            for (auto *v : m_cellViews)
+                if (v) v->setVisible(true);
+        }
+    });
+    syncLayout->addWidget(m_blinkChk);
     syncLayout->addStretch(1);
 
     m_grid = new QWidget;
@@ -250,6 +276,27 @@ void CompareWorkspace::refreshDiffOverlay()
         return;
     m_cellViews[res.index]->setOverlay(mvcore::toQImage(heat), 0.5);
     update();
+}
+
+void CompareWorkspace::toggleBlink()
+{
+    m_blinkState = !m_blinkState;
+    applyBlink(m_blinkState);
+    update();
+}
+
+void CompareWorkspace::applyBlink(bool state)
+{
+    const int n = m_cellViews.size();
+    for (int i = 0; i < n; ++i)
+    {
+        if (!m_cellViews[i])
+            continue;
+        if (i == 0)
+            m_cellViews[i]->setVisible(!state);
+        else
+            m_cellViews[i]->setVisible(state);
+    }
 }
 
 void CompareWorkspace::fitAll()
