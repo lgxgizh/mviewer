@@ -99,6 +99,30 @@ All notable changes to this project are documented here. The format is based on
     pipeline.
   - Added `export_pipeline_tests` (16 checks: resize dims, watermark dims, contact-sheet grid, rename
     tokens, PDF header + existence).
+- **P5 — Crash / Benchmark / Release engineering (ship-ready hardening):** the review's
+  "do last" engineering system, delivered without new infrastructure.
+  - **Crash diagnostics (opt-in):** new `core/CrashHandler` installs a Windows
+    unhandled-exception filter that writes a minidump + `.txt` log to
+    `%TEMP%/mviewer-crash-reports/` when `MVIEWER_CRASH_DUMP=1` is set (no-op otherwise, so the
+    test suite is unaffected). Verified by `crashhandler_tests` (4 checks: report-path format,
+    idempotent install).
+  - **Release self-test gate:** `mviewer --selftest` runs a headless decode → metadata
+    roundtrip through the real `DecoderRegistry` path and exits 0/1; wired as the `selftest`
+    CTest so a release pipeline can prove the core decode path without a display. (The benchmark
+    tool `mviewer_bench` and M15 session autosave/recovery cover the other two legs.)
+  - Added `crashhandler_tests` (4 checks) and the `selftest` gate.
+- **P6 — GPU / RAW (do-last foundation, no new heavy dependencies):** the review's final
+  phase, delivered as thin, fallback-safe capability — not a rewrite.
+  - **RAW actually opens now:** new `core/image/decoder/RawDecoder` extracts the embedded JPEG
+    preview from RAW containers (CR2/CR3/NEF/NRW/ARW/DNG/ORF/RW2/PEF/RAF and ~15 more) and decodes
+    it, so RAW files display immediately without pulling in libraw/RawSpeed. Graceful fallthrough
+    (empty `ImageData`) when no preview is present; registered first in `DecoderRegistry` so it
+    never steals non-RAW formats. Verified by `rawdecode_tests` (10 checks: canDecode gating,
+    full/scaled decode dims, graceful empty, non-RAW passthrough).
+  - **GPU capability gate made real:** `GpuTileUploader::available()` now performs a genuine,
+    safe GL-context probe (returns false under `QCoreApplication`/offscreen, so the CPU
+    compositor stays the verified default). The Stage-A texture-upload host (QOpenGLWidget)
+    remains deferred per the M13 RFC; the bookkeeping tier + fallback are covered by `gputile_tests`.
 - **M6 — Vertical Browsing Chain:** `DecoderRegistry` (singleton) dispatches files to
   per-format decoders (`QtDecoder` for JPEG/PNG/BMP/TIFF, `QtFallbackDecoder` as last-resort);
   `Decoder` is now a thin shim over the registry. RAW deferred to M7 (`TODO(M7): RAW`).

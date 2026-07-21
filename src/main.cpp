@@ -1,8 +1,12 @@
 #include "mainwindow.h"
 
 #include "application/Startup.h"
+#include "core/CrashHandler.h"
+#include "core/SelfTest.h"
 
 #include <QApplication>
+
+#include <string>
 
 class MainWindow;
 static QString g_openOnLaunch;
@@ -12,6 +16,17 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     app.setApplicationName("MViewer");
     app.setOrganizationName("MViewer");
+
+    // P5: crash diagnostics (opt-in via MVIEWER_CRASH_DUMP=1).
+    mviewer::core::installCrashHandler("MViewer");
+
+    // P5: headless release self-test gate. Runs before any window is created so
+    // a release pipeline can verify the decode path without a display.
+    for (int i = 1; i < argc; ++i)
+    {
+        if (std::string(argv[i]) == "--selftest")
+            return mviewer::core::runSelfTest();
+    }
 
     // M14-1: Windows Native — open a file directly from the command line.
     // `mviewer.exe image.jpg` → open the image instead of an empty window.
