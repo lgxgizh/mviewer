@@ -657,6 +657,26 @@ target_include_directories(flags_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(flags_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 add_test(NAME flags_tests COMMAND flags_tests)
+
+# P2 — AnalyzerRegistry extensibility: a new analyzer is discoverable/runnable
+# without any MainWindow/UI change.
+add_executable(analyzer_registry_tests
+    core/test_register.cpp
+)
+
+target_link_libraries(analyzer_registry_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(analyzer_registry_tests PRIVATE cxx_std_20)
+target_include_directories(analyzer_registry_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(analyzer_registry_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+add_test(NAME analyzer_registry_tests COMMAND analyzer_registry_tests)
 add_test(NAME workspace_persist_tests COMMAND workspace_persist_tests)
 add_test(NAME assets_acceptance_tests COMMAND test_assets_acceptance)
 add_test(NAME analysis_batch_tests COMMAND test_analyzer_batch)

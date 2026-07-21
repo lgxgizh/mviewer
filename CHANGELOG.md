@@ -70,6 +70,12 @@ All notable changes to this project are documented here. The format is based on
     by minimum stars.
   - Added core unit tests: `histogram_tests` (channel order, null, sums) and `ratingstore_tests`
     (clamp, persistence round-trip).
+- **P2 — AnalyzerRegistry (plugin-friendly analysis, zero-UI-change):** the review's Phase-2
+  analyzer registry, already implemented (8 built-in analyzers + plugin loader in `core/plugin`);
+  the UI auto-generates from `availableAnalyzers()`, so a new analyzer needs no `MainWindow`
+  change.
+  - Added `analyzer_registry_tests` (8 checks) asserting a runtime-registered analyzer is
+    discoverable, creatable, queryable by capability and runnable end-to-end.
 - **P3 tail — Color Label / Reject / Pick / Recents (rating system extended):** the review's
   P3 "rating" tail, delivered without new infrastructure.
   - **`RatingStore`** extended (separate `flags.txt` so the ratings format/tests stay intact):
