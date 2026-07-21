@@ -1,6 +1,0 @@
-INFO    : aqtinstall(aqt) v3.3.0 on Python 3.11.15 [CPython MSC v.1944 64 bit (AMD64)]
-WARNING : Failed to download checksum for the file 'online/qtsdkrepository/windows_x86/desktop/qt6_6111/qt6_6111/Updates.xml'. This may happen on unofficial mirrors.
-ERROR   : Failed to locate XML data for Qt version '6.11.1'.
-==============================Suggested follow-up:==============================
-* Please use 'aqt list-qt windows desktop' to show versions available.
-QT_REAL_EXIT=1

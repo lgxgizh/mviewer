@@ -4,3 +4,20 @@ perf_regression_*.ps1
 bench_*.ps1
 msvc_run.log
 Testing/
+
+# Build artifacts accidentally committed before (see cleanup commit)
+*.obj
+build/
+build_msvc/
+dist/
+6.8.0/
+
+# Local logs and generated reports
+*.log
+buildlog.txt
+benchmark/report/history.csv
+benchmark/report/index.html
+
+# Generated test/benchmark data
+demo_assets/
+testdata/
