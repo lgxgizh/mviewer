@@ -239,10 +239,10 @@ Build everything in one step:
 
 ```powershell
 # Release build + portable zip + installer
-powershell -ExecutionPolicy Bypass -File scripts/package_release.ps1 -Build -Version 0.11.0
+powershell -ExecutionPolicy Bypass -File scripts/package_release.ps1 -Build -Version 1.0.0
 ```
 
-`package_portable.ps1` uses Qt's official `windeployqt` to gather exactly the
+`scripts/package_portable.ps1` uses Qt's official `windeployqt` to gather exactly the
 DLLs/plugins `MViewer.exe` imports, then bundles the matching MSVC C++ runtime
 so the archive runs on a clean Windows install. Prereqs: Qt 6.11.1
 (`msvc2022_64`), `windeployqt`, and `makensis` (NSIS) on `PATH`.

@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Release version (e.g. 0.11.0)'
+        description: 'Release version (e.g. 1.0.0)'
         required: true
-        default: '0.11.0'
+        default: '1.0.0'
 
 # Build a Release binary, package the portable zip + NSIS installer, and attach
 # them to the GitHub Release. This is the M11.3 "Release Engineering" automation.

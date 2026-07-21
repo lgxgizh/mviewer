@@ -188,7 +188,10 @@ All notable changes to this project are documented here. The format is based on
     Phase-1 mandatory gate = Format/Build/Test/Package only; clang-tidy **advisory**
     (uploads artifact, never blocks); ASan **Phase-3 non-gating** signal job. This reverts
     the earlier gating change (`f3d3ffa`).
-  - RAW decoder remains deferred: `DecoderRegistry` keeps `TODO(M7): RAW` until libraw lands.
+  - RAW: basic opening shipped (P6) — `RawDecoder` extracts the embedded JPEG
+    preview, so RAW files display without libraw. Full demosaic (libraw) is a
+    post-1.0 enhancement; `DecoderRegistry` no longer carries the old
+    `TODO(M7): RAW` deferral.
   - **Bug fix (M13 — `loadDirectoryAsync` concurrent full-decode deadlock):**
     `ImageRepository::loadDirectoryAsync` fanned out 1000 full-resolution
     `QImageReader::read()` decodes across the DecodePool. Under Qt 6.11.1

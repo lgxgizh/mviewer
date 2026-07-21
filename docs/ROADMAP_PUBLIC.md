@@ -59,8 +59,10 @@ is what this Beta produces.
 
 ## Explicitly deferred (not in the current track)
 
-- **Camera RAW** (NEF/CR2/ARW) — needs a libraw integration (decoder-scope;
-  today's Qt-based decoder doesn't read RAW containers).
+- **Camera RAW — full processing** (NEF/CR2/ARW demosaic) — needs a libraw
+  integration (decoder-scope). **Basic opening already shipped (P6):** `RawDecoder`
+  extracts the embedded JPEG preview so RAW files display without libraw; full
+  demosaic remains a post-1.0 enhancement.
 - **GPU Stage C/D** (Direct2D/D3D11 direct compositing, Vulkan) — deferred per
   the frozen `UI = Qt Widgets` boundary and the "CPU tile is enough for v1"
   guidance.

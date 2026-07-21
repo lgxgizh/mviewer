@@ -56,7 +56,7 @@ image-processing outputs — not a general-purpose viewer.
 
 ### Packaging (M12 / M13)
 - **Portable ZIP** always produced by `release.yml` (tag-triggered).
-- **NSIS installer** (`installer/mviewer.nsi`, built via `pack_installer.ps1`)
+- **NSIS installer** (`installer/mviewer.nsi`, built via `scripts/package_release.ps1`)
   produced best-effort by CI; the RC's "no installer" gap is closed.
 - `test_package.ps1` validates the produced artifacts.
 
