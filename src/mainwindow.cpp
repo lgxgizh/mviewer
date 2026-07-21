@@ -10,6 +10,8 @@
 #include "core/command/RenameCommand.h"
 #include "core/command/ToggleHistogramCommand.h"
 #include "core/image/ImageRepository.h"
+#include "core/image/QtConvert.h"
+#include "core/analysis/ReportHtml.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
 #include "analysispanel.h"
@@ -22,19 +24,21 @@
 #include "thumbnailpanel.h"
 
 #include <QApplication>
+#include <QBuffer>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDialog>
+#include <QCheckBox>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QHeaderView>
 #include <QImage>
-#include <QJsonDocument>
 #include <QInputDialog>
+#include <QJsonDocument>
 #include <QLabel>
 #include <QLineEdit>
-#include <QCheckBox>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMetaObject>
@@ -111,6 +115,8 @@ void MainWindow::setupUi()
     fileMenu->addSeparator();
     fileMenu->addAction(m_actSaveWorkspace);
     fileMenu->addAction(m_actOpenWorkspace);
+    m_actExportReport = new QAction("导出报告(&R)...", this);
+    fileMenu->addAction(m_actExportReport);
     fileMenu->addSeparator();
     fileMenu->addAction(m_actExit);
 
@@ -331,6 +337,7 @@ void MainWindow::setupUi()
             });
     connect(m_actSaveWorkspace, &QAction::triggered, this, &MainWindow::saveWorkspace);
     connect(m_actOpenWorkspace, &QAction::triggered, this, &MainWindow::openWorkspace);
+    connect(m_actExportReport, &QAction::triggered, this, &MainWindow::exportReport);
     connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
     connect(m_actCompare, &QAction::triggered, this,
             [this]()
@@ -529,6 +536,98 @@ void MainWindow::navigate(int delta)
     m_imageViewer->setImage(path);  // async; imageReady() feeds AnalysisPanel
     m_previewPanel->setImage(path); // async; off UI thread
     statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
+}
+
+void MainWindow::exportReport()
+{
+    // M14-4: collect current view data and build an HTML report.
+    mviewer::core::ReportContext ctx;
+    ctx.title = "MViewer Analysis Report";
+
+    if (m_currentImagePath.isEmpty())
+    {
+        QMessageBox::information(this, tr("导出报告"), tr("请先打开一张图片。"));
+        return;
+    }
+    ctx.imagePath = m_currentImagePath.toStdString();
+
+    // Grab the histogram pixmap from the analysis panel (if rendered).
+    if (m_analysisPanel)
+    {
+        QPixmap hist = m_analysisPanel->histogramPixmap();
+        if (!hist.isNull())
+        {
+            QByteArray buf;
+            QBuffer stream(&buf);
+            hist.save(&stream, "PNG");
+            ctx.histogramPng = buf.toBase64().toStdString();
+        }
+    }
+
+    // Compare data (if a compare session is active).
+    if (m_compareView)
+    {
+        const mviewer::domain::CompareSession sess = m_compareView->compareSession();
+        // Only meaningful if 2+ images.
+        const int n = m_compareView->engine().imageCount();
+        if (n >= 2)
+        {
+            const ImageFrame *a = m_compareView->engine().imageAt(0);
+            const ImageFrame *b = m_compareView->engine().imageAt(1);
+            if (a && b)
+            {
+                ctx.compare = mviewer::core::buildCompareReport(*a, *b);
+                ctx.hasCompare = true;
+                ImageData diffImg = mviewer::core::compareDiffImage(*a, *b);
+                if (!diffImg.isNull())
+                {
+                    // Convert to PNG base64 (via Qt).
+                    QImage q = mvcore::toQImage(diffImg);
+                    QByteArray buf;
+                    QBuffer stream(&buf);
+                    q.save(&stream, "PNG");
+                    ctx.compareDiffPng = buf.toBase64().toStdString();
+                }
+            }
+        }
+    }
+
+    const std::string html = mviewer::core::buildReportHtml(ctx);
+    if (html.empty())
+    {
+        QMessageBox::warning(this, tr("导出报告"), tr("报告内容为空。"));
+        return;
+    }
+
+    const QString out = QFileDialog::getSaveFileName(
+        this, tr("导出报告"),
+        QString(), tr("HTML 文件 (*.html);;JSON 文件 (*.json)"));
+    if (out.isEmpty())
+        return;
+    const QFileInfo fi(out);
+    const QString suffix = fi.suffix().toLower();
+
+    QFile f(out);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QMessageBox::critical(this, tr("错误"), tr("无法写入：%1").arg(out));
+        return;
+    }
+    if (suffix == "json")
+    {
+        // JSON: emit the compare report only (structured data).
+        std::string json = "{\"error\":\"no compare data\"}";
+        if (ctx.hasCompare)
+            json = ctx.compare.toJson();
+        f.write(QByteArray::fromStdString(json));
+    }
+    else
+    {
+        f.write(QByteArray::fromStdString(html));
+    }
+    f.close();
+    QMessageBox::information(this, tr("导出报告"),
+                             tr("已导出：%1").arg(out));
 }
 
 void MainWindow::saveWorkspace()

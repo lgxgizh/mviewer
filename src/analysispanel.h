@@ -8,6 +8,7 @@
 #include <QComboBox>
 #include <QImage>
 #include <QLabel>
+#include <QPixmap>
 #include <QRect>
 #include <QString>
 #include <QTabWidget>
@@ -31,6 +32,12 @@ class AnalysisPanel : public QWidget
     void setImage(const QImage &img);
     void setImages(const QImage &a, const QImage &b);
     void clear();
+
+    // M14-4: expose the histogram pixmap for report export.
+    QPixmap histogramPixmap() const
+    {
+        return m_histogramLabel ? m_histogramLabel->pixmap() : QPixmap();
+    }
 
     // ROI (image coordinates)
     void setROI(const mviewer::domain::Selection &roi);
@@ -62,7 +69,9 @@ class AnalysisPanel : public QWidget
     void updateHistogram(const mviewer::domain::Histogram &hist);
 
   protected:
-    void paintEvent(QPaintEvent *) override;
+    void paintEvent(QPaintEvent *event) override;
+    void renderHistogramPixmap();
+    void renderHistogramPixmap(const mviewer::domain::Histogram &hist);
 
   private:
     void buildUi();
@@ -70,8 +79,6 @@ class AnalysisPanel : public QWidget
     void updateComparePage();
     void updatePluginPage();
     void updateInspectorPage();
-    void renderHistogramPixmap();
-    void renderHistogramPixmap(const mviewer::domain::Histogram &hist);
     QImage computeDifferencePreview(const QImage &a, const QImage &b);
     QString noiseLevelText(double variance);
 

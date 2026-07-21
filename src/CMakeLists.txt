@@ -32,6 +32,7 @@ add_library(mviewer_core SHARED
     core/compare/DifferenceEngine.cpp
     core/analysis/AnalysisEngine.cpp
     core/analysis/ExportReport.cpp
+    core/analysis/ReportHtml.cpp
     core/workspace/WorkspaceSerializer.cpp
     core/analyzer/Analyzer.cpp
     core/analyzer/HistogramAnalyzer.cpp

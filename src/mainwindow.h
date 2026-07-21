@@ -67,6 +67,7 @@ class MainWindow : public QMainWindow
     QAction *m_actOpenDir = nullptr;
     QAction *m_actSaveWorkspace = nullptr;
     QAction *m_actOpenWorkspace = nullptr;
+    QAction *m_actExportReport = nullptr;
     QAction *m_actExit = nullptr;
     QAction *m_actCompare = nullptr;
     QAction *m_actToggleAnalysis = nullptr;
@@ -104,4 +105,5 @@ class MainWindow : public QMainWindow
 
     void saveWorkspace();
     void openWorkspace();
+    void exportReport();
 };
