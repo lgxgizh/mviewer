@@ -74,6 +74,7 @@ class MainWindow : public QMainWindow
     QAction *m_actSaveWorkspace = nullptr;
     QAction *m_actOpenWorkspace = nullptr;
     QAction *m_actExportReport = nullptr;
+    QAction *m_actExportImages = nullptr;
     QAction *m_actExit = nullptr;
     QAction *m_actCompare = nullptr;
     QAction *m_actToggleAnalysis = nullptr;
@@ -132,6 +133,8 @@ class MainWindow : public QMainWindow
     void saveWorkspace();
     void openWorkspace();
     void exportReport();
+    // P4: batch export pipeline entry point.
+    void exportImages();
     // M15: crash recovery
     void autosaveSession();
     void restoreSessionRecovery();

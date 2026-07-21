@@ -23,6 +23,7 @@ add_library(mviewer_core SHARED
     core/image/DiskCache.cpp
     core/cache/CacheManager.cpp
     core/image/Encoder.cpp
+    core/image/ImageTransform.cpp
     core/image/QtConvert.cpp
     core/filesystem/FileSystem.cpp
     core/scheduler/TaskScheduler.cpp
@@ -365,6 +366,23 @@ target_compile_features(export_tests PRIVATE cxx_std_20)
 target_include_directories(export_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(export_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
+# P4 — Batch export pipeline (resize / watermark / contact sheet / PDF / rename)
+add_executable(export_pipeline_tests
+    core/test_export_pipeline.cpp
+)
+
+target_link_libraries(export_pipeline_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(export_pipeline_tests PRIVATE cxx_std_20)
+target_include_directories(export_pipeline_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(export_pipeline_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
 # ─── M9-5 Workspace persistence acceptance tests ──────────────────────────
 add_executable(workspace_persist_tests
     core/test_workspace_persist.cpp
@@ -619,6 +637,7 @@ add_test(NAME histogram_tests COMMAND histogram_tests)
 add_test(NAME ratingstore_tests COMMAND ratingstore_tests)
 add_test(NAME analysis_panel_tests COMMAND analysis_panel_tests)
 add_test(NAME export_tests COMMAND export_tests)
+add_test(NAME export_pipeline_tests COMMAND export_pipeline_tests)
 add_test(NAME workspace_persist_tests COMMAND workspace_persist_tests)
 add_test(NAME assets_acceptance_tests COMMAND test_assets_acceptance)
 add_test(NAME analysis_batch_tests COMMAND test_analyzer_batch)

@@ -70,6 +70,19 @@ All notable changes to this project are documented here. The format is based on
     by minimum stars.
   - Added core unit tests: `histogram_tests` (channel order, null, sums) and `ratingstore_tests`
     (clamp, persistence round-trip).
+- **P4 — Batch Export Pipeline (product-grade export):** the review's Phase-3 export, delivered as a
+  reusable core module + dialog without new infrastructure.
+  - **`core/image/ImageTransform`** (Qt-free header, Qt internals): `resizeToFit` (keep-aspect, no
+    upscale), `resizeByFactor`, `addTextWatermark` (6 positions incl. tile, opacity), `makeContactSheet`
+    (N-up grid of thumbnails), `applyRenamePattern` (`{name}`/`{ext}`/`{n}`/`{total}`/`{seq:W}`), and a
+    minimal dependency-free `writePdf` (embeds each image as JPEG, one per page).
+  - **`ExportDialog`** extended: mode selector (Convert/Batch · Contact Sheet · PDF), resize (fit-long-edge
+    / scale %), text watermark (position + opacity), batch rename pattern, contact-sheet columns/thumbnail
+    size. The legacy single/batch `ExportCommand` path is preserved via a delegating constructor.
+  - New **"导出图片…"** menu action feeds the current gallery selection (or whole directory) into the
+    pipeline.
+  - Added `export_pipeline_tests` (16 checks: resize dims, watermark dims, contact-sheet grid, rename
+    tokens, PDF header + existence).
 - **M6 — Vertical Browsing Chain:** `DecoderRegistry` (singleton) dispatches files to
   per-format decoders (`QtDecoder` for JPEG/PNG/BMP/TIFF, `QtFallbackDecoder` as last-resort);
   `Decoder` is now a thin shim over the registry. RAW deferred to M7 (`TODO(M7): RAW`).

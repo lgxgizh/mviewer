@@ -20,6 +20,7 @@
 #include "compareworkspace.h"
 #include "directorytree.h"
 #include "exportcommand.h"
+#include "exportdialog.h"
 #include "imageviewer.h"
 #include "metadatapanel.h"
 #include "previewpanel.h"
@@ -390,6 +391,7 @@ void MainWindow::setupUi()
     connect(m_actSaveWorkspace, &QAction::triggered, this, &MainWindow::saveWorkspace);
     connect(m_actOpenWorkspace, &QAction::triggered, this, &MainWindow::openWorkspace);
     connect(m_actExportReport, &QAction::triggered, this, &MainWindow::exportReport);
+    connect(m_actExportImages, &QAction::triggered, this, &MainWindow::exportImages);
     connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
     connect(m_actCompare, &QAction::triggered, this,
             [this]()
@@ -739,6 +741,24 @@ void MainWindow::exportReport()
     f.close();
     QMessageBox::information(this, tr("导出报告"),
                              tr("已导出：%1").arg(out));
+}
+
+void MainWindow::exportImages()
+{
+    // P4: open the batch export pipeline on the current gallery selection
+    // (or the full directory if nothing is selected).
+    QStringList paths = m_thumbnailPanel->selectedPaths();
+    if (paths.isEmpty())
+        paths = m_thumbnailPanel->pathList();
+    if (paths.isEmpty())
+    {
+        QMessageBox::information(this, tr("导出图片"), tr("请先打开一个图片目录。"));
+        return;
+    }
+
+    ExportDialog dlg(this);
+    dlg.setSources(paths);
+    dlg.exec();
 }
 
 void MainWindow::saveWorkspace()
