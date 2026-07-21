@@ -90,6 +90,29 @@ ScenarioResult scenarioStartup()
     return r;
 }
 
+// ─── B0: cold-start (full pipeline: launch → first thumbnail) ───────────────
+// Combines B1 (startup) + B2 (first thumbnail) into a single end-to-end
+// measurement that simulates: reboot app → open folder → first image visible.
+ScenarioResult scenarioColdStart(const Corpus &corpus)
+{
+    ScenarioResult r;
+    r.name = "B0";
+    r.metric = "cold_start_to_thumbnail_ms";
+
+    // Phase 1: startup (reuse B1).
+    auto startup = scenarioStartup();
+
+    // Phase 2: first thumbnail (reuse B2).
+    auto thumb = scenarioFirstThumbnail(corpus);
+
+    r.value = startup.value + thumb.value;
+    r.timing = thumb.timing;
+    r.detail = "startup=" + std::to_string(startup.value) +
+               "ms + thumbnail=" + std::to_string(thumb.value) +
+               "ms (cold start to first image)";
+    return r;
+}
+
 // ─── B2: first thumbnail latency (REAL ThumbnailPipeline path) ───────────────
 //
 // NOTE: previously this scenario drove ImageRepository::loadDirectoryAsync,

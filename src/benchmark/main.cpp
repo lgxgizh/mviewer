@@ -135,7 +135,8 @@ void printVerdict(const mviewer::bench::ScenarioResult &r, const Budget &b)
 // whether every scenario passed. Shared by the regen path and the --corpus-dir
 // path so both exercise identical scenarios/printing.
 bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
-                  const std::set<std::string> &runOnly = {})
+                  const std::set<std::string> &runOnly = {},
+                  std::vector<mviewer::bench::ScenarioResult> *outResults = nullptr)
 {
     const bool filter = !runOnly.empty();
     // Lazy scenario registry, filtered on the AUTHORITATIVE name BEFORE
@@ -144,6 +145,7 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     // targeted subset (e.g. --scenarios B1,B2,B8 for large-scale acceptance).
     struct Item { std::string name; std::function<mviewer::bench::ScenarioResult()> fn; };
     std::vector<Item> items;
+    items.push_back({"B0",    [&]() { return mviewer::bench::scenarioColdStart(corpus); }});
     items.push_back({"B1",    [&]() { return mviewer::bench::scenarioStartup(); }});
     items.push_back({"B2",    [&]() { return mviewer::bench::scenarioFirstThumbnail(corpus); }});
     items.push_back({"TRACE", [&]() { return mviewer::bench::scenarioPipelinePriority(corpus); }});
@@ -194,6 +196,8 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
         if (!r.passed)
             allPass = false;
     }
+    if (outResults)
+        *outResults = std::move(results);
     return allPass;
 }
 } // namespace
@@ -216,6 +220,8 @@ int main(int argc, char **argv)
     std::string budgetFile;         // M13.3: performance_budget.json (data-driven gates)
     std::string corpusDir;          // P3: if set, reuse an existing on-disk corpus dir
     std::string scenariosArg;       // P3: comma-separated scenario ids to run (e.g. "B1,B2,B8")
+    std::string resultsFile;        // M14: if set, write JSON results (for regression tracking)
+    std::string baselineFile;       // M14: if set, compare against baseline for regression
 
     for (int i = 1; i < argc; ++i)
     {
@@ -241,6 +247,10 @@ int main(int argc, char **argv)
             corpusDir = argv[++i];
         else if (a == "--scenarios" && i + 1 < argc)
             scenariosArg = argv[++i];
+        else if (a == "--results" && i + 1 < argc)
+            resultsFile = argv[++i];
+        else if (a == "--baseline" && i + 1 < argc)
+            baselineFile = argv[++i];
     }
 
     // Build the restricted scenario set (empty = run all). Normalize tokens to the
@@ -300,6 +310,9 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    std::vector<mviewer::bench::ScenarioResult> results;
+    bool allPass = true;
+
     // P3 reusable-corpus mode: consume an existing on-disk dataset instead of
     // regenerating one. Behavior is otherwise identical to the regen path below.
     if (!corpusDir.empty())
@@ -307,22 +320,84 @@ int main(int argc, char **argv)
         mviewer::bench::Corpus corpus = mviewer::bench::makeCorpusFromDir(corpusDir);
         std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
                   << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << std::endl;
-        const bool allPass = runScenarios(corpus, b, runOnly);
+        allPass = runScenarios(corpus, b, runOnly, &results);
         std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ===" << std::endl;
-        if (b.enforce && !allPass)
-            return 1;
-        return 0;
+    }
+    else
+    {
+        mviewer::bench::Corpus corpus = mviewer::bench::makeCorpus(corpusSize);
+        std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
+                  << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << std::endl;
+
+        allPass = runScenarios(corpus, b, runOnly, &results);
+        corpus.clear();
     }
 
-    mviewer::bench::Corpus corpus = mviewer::bench::makeCorpus(corpusSize);
-    std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
-              << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << std::endl;
-
-    const bool allPass = runScenarios(corpus, b, runOnly);
-
-    corpus.clear();
-
     std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ===" << std::endl;
+
+    // M14: write JSON results if --results given.
+    if (!resultsFile.empty())
+    {
+        std::ofstream out(resultsFile);
+        out << "{\n  \"results\": [\n";
+        for (size_t i = 0; i < results.size(); ++i)
+        {
+            const auto &r = results[i];
+            out << "    {\"name\":\"" << r.name << "\",\"metric\":\"" << r.metric
+                << "\",\"value\":" << r.value << ",\"passed\":" << (r.passed ? "true" : "false")
+                << "}";
+            if (i + 1 < results.size()) out << ",";
+            out << "\n";
+        }
+        out << "  ]\n}\n";
+        out.close();
+        std::cout << "results written to " << resultsFile << std::endl;
+    }
+
+    // M14: regression vs baseline if --baseline given.
+    if (!baselineFile.empty())
+    {
+        std::ifstream in(baselineFile);
+        if (in.is_open())
+        {
+            std::string content((std::istreambuf_iterator<char>(in)),
+                                std::istreambuf_iterator<char>());
+            in.close();
+            std::cout << "Baseline comparison: baseline file read (" << content.size() << " bytes)\n";
+            std::cout << "  (regression check: compare current results against baseline manually or via CI)\n";
+            // Naive: look for "B0_cold_start_to_thumbnail_ms": value etc.
+            // For each result, check if baseline has it; if delta% > 10% -> regression
+            for (const auto &r : results)
+            {
+                std::string key = "\"" + r.name + "_" + r.metric + "\"";
+                auto pos = content.find(key);
+                if (pos != std::string::npos)
+                {
+                    auto colon = content.find(':', pos);
+                    if (colon != std::string::npos)
+                    {
+                        double baselineVal = std::strtod(content.c_str() + colon + 1, nullptr);
+                        if (baselineVal > 0)
+                        {
+                            double delta = ((r.value - baselineVal) / baselineVal) * 100.0;
+                            std::cout << "  " << r.name << ": current=" << r.value
+                                      << " baseline=" << baselineVal << " delta=" << delta << "%";
+                            if (std::abs(delta) > 10.0)
+                            {
+                                std::cout << " *** REGRESSION >10% ***";
+                                allPass = false;
+                            }
+                            std::cout << std::endl;
+                        }
+                    }
+                }
+            }
+        }
+        else
+        {
+            std::cout << "Warning: could not open baseline file " << baselineFile << std::endl;
+        }
+    }
     // M13.5: flush a Chrome trace JSON if --trace was given (only meaningful
     // when built with MVIEWER_ENABLE_PERFETTO; otherwise the macros are no-ops
     // and the buffer is empty, so we report and skip).

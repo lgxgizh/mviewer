@@ -18,7 +18,7 @@ param(
     [string]$Tiers = "small,medium",   # comma-separated: small,medium,large,all
     [string]$OutRoot = "D:/mviewer_bench_data",  # where tiers are written
     [string]$BuildDir = "D:/mviewer/build_msvc",
-    [string]$Format = "all"            # "all" (jpeg+png+tif) or "jpeg" (large tier fits disk)
+    [string]$Format = "all"            # "all" (jpeg+png+tif), "jpeg" (large tier fits disk), "mixed" (jpeg+png+tiff+bmp round-robin)
 )
 
 $ErrorActionPreference = 'Stop'

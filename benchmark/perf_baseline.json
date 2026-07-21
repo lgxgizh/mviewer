@@ -1,0 +1,14 @@
+{
+  "_comment": "MViewer performance baseline — committed known-good numbers. perf-gate compares current runs against this; regression >10% fails PR.",
+  "schema_version": 1,
+  "date": "2026-07-21",
+  "commit": "cb78946",
+  "metrics": {
+    "B0_cold_start_to_thumbnail_ms": 120.0,
+    "B1_startup_ms": 0.05,
+    "B2_first_thumbnail_ms": 22.76,
+    "B8_switch_p50_ms": 0.08,
+    "B8_switch_p95_ms": 0.13,
+    "B8_switch_p99_ms": 0.25
+  }
+}

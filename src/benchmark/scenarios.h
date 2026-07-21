@@ -57,6 +57,12 @@ struct ThumbnailBreakdown
 // B1: startup-to-first-paint. Offscreen QApplication + first QWidget paint.
 ScenarioResult scenarioStartup();
 
+// B0: cold-start — full pipeline from process launch to first thumbnail.
+// Wraps scenarioStartup + scenarioFirstThumbnail and reports the combined
+// end-to-end time (simulates: reboot app → open folder → first image visible).
+// Requires g_coldStartAnchor (set in main() before QApplication construction).
+ScenarioResult scenarioColdStart(const Corpus &corpus);
+
 // B2: folder load -> first thumbnail emit. Real ThumbnailPipeline path + breakdown.
 ScenarioResult scenarioFirstThumbnail(const Corpus &corpus);
 

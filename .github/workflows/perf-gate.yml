@@ -44,12 +44,13 @@ jobs:
 
       - name: Run performance budget gate
         # No `|| true`: a budget violation MUST block the PR.
+        # M14: --results emits JSON; --baseline checks regression vs committed baseline.
         run: |
           $bin = "build_msvc\bin\mviewer_bench.exe"
           if (-not (Test-Path $bin)) { throw "benchmark binary missing after build" }
-          & $bin --enforce --budget benchmark/performance_budget.json
+          & $bin --enforce --budget benchmark/performance_budget.json --results benchmark/report/last_run.json --baseline benchmark/perf_baseline.json
           if ($LASTEXITCODE -ne 0) {
-            Write-Error "PERFORMANCE BUDGET VIOLATED: see verdicts above. Fix the regression or adjust benchmark/performance_budget.json with architectural justification."
+            Write-Error "PERFORMANCE BUDGET VIOLATED or REGRESSION DETECTED: see verdicts above. Fix the regression or adjust benchmark/performance_budget.json with architectural justification."
             exit 1
           }
         shell: powershell

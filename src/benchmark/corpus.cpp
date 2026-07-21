@@ -108,30 +108,57 @@ Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &o
         // Already RGB888; kept explicit for clarity / future format changes.
         const QImage rgb = big.convertToFormat(QImage::Format_RGB888);
 
-        const QString jp = QString::fromStdString(c.dir) +
-                           QString("/img_%1.jpg").arg(static_cast<qlonglong>(i), 5, 10, QChar('0'));
-        const QString pp = QString::fromStdString(c.dir) +
-                           QString("/img_%1.png").arg(static_cast<qlonglong>(i), 5, 10, QChar('0'));
-        if (write(jp, rgb, "jpg"))
-            c.jpegPaths.push_back(jp.toStdString());
-        // JPEG-only tier (review P3 "large: 10000 jpeg") skips png/tif to keep
-        // the dataset small enough to fit constrained data disks.
-        if (!jpegOnly && write(pp, rgb, "png"))
-            c.pngPaths.push_back(pp.toStdString());
+        const QString prefix = QString::fromStdString(c.dir) +
+                               QString("/img_%1").arg(static_cast<qlonglong>(i), 5, 10, QChar('0'));
+        const QString jp = prefix + ".jpg";
+        const QString pp = prefix + ".png";
+        const QString bp = prefix + ".bmp";
 
-        // TIFF at 512x512 (matches JPEG/PNG dimensions; keeps the TIFF decode
-        // path exercised without the 2000x2000 uncompressed ~12MB/file space
-        // bomb that starved the data disk at large corpus sizes).
-        if (!jpegOnly)
+        if (format == "mixed")
         {
-            QImage tiff(512, 512, QImage::Format_RGB888);
-            paint(tiff, static_cast<uint32_t>(i + 100000));
-            const QImage trgb = tiff.convertToFormat(QImage::Format_RGB888);
-            const QString tp =
-                QString::fromStdString(c.dir) +
-                QString("/img_%1.tif").arg(static_cast<qlonglong>(i), 5, 10, QChar('0'));
-            if (write(tp, trgb, "tif"))
-                c.tiffPaths.push_back(tp.toStdString());
+            // Round-robin: JPEG, PNG, TIFF, BMP.
+            const int r = static_cast<int>(i % 4);
+            if (r == 0)
+            {
+                if (write(jp, rgb, "jpg")) c.jpegPaths.push_back(jp.toStdString());
+            }
+            else if (r == 1)
+            {
+                if (write(pp, rgb, "png")) c.pngPaths.push_back(pp.toStdString());
+            }
+            else if (r == 2)
+            {
+                QImage tiff(512, 512, QImage::Format_RGB888);
+                paint(tiff, static_cast<uint32_t>(i + 100000));
+                const QString tp = prefix + ".tif";
+                if (write(tp, tiff, "tif")) c.tiffPaths.push_back(tp.toStdString());
+            }
+            else
+            {
+                if (write(bp, rgb, "bmp")) c.jpegPaths.push_back(bp.toStdString());
+            }
+        }
+        else
+        {
+            if (write(jp, rgb, "jpg"))
+                c.jpegPaths.push_back(jp.toStdString());
+            if (!jpegOnly && write(pp, rgb, "png"))
+                c.pngPaths.push_back(pp.toStdString());
+
+            // TIFF at 512x512 (matches JPEG/PNG dimensions; keeps the TIFF decode
+            // path exercised without the 2000x2000 uncompressed ~12MB/file space
+            // bomb that starved the data disk at large corpus sizes).
+            if (!jpegOnly)
+            {
+                QImage tiff(512, 512, QImage::Format_RGB888);
+                paint(tiff, static_cast<uint32_t>(i + 100000));
+                const QImage trgb = tiff.convertToFormat(QImage::Format_RGB888);
+                const QString tp =
+                    QString::fromStdString(c.dir) +
+                    QString("/img_%1.tif").arg(static_cast<qlonglong>(i), 5, 10, QChar('0'));
+                if (write(tp, trgb, "tif"))
+                    c.tiffPaths.push_back(tp.toStdString());
+            }
         }
     }
     return c;
