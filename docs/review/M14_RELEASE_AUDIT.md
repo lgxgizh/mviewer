@@ -49,8 +49,8 @@
 ### 6. SDK — ✅ PASS (exists + ABI frozen in M14.2)
 - `docs/sdk/PLUGIN_SDK.md` is thorough: interfaces, C exports, build contract, ABI rules §3, restrictions.
 - **ABI frozen (M14.2):** `PluginABI` now carries `apiVersion` / `abiVersion` / `sdkVersion`; the loader enforces it and `pluginabi_tests` proves the gate end-to-end (including `example_analyzer_badabi` with `abiVersion=999`). The review P0-2 requirement is satisfied. `docs/sdk/PLUGIN_ABI.md` is the frozen contract.
-- **Coverage:** only the **Analyzer** surface ships + `plugins/example` (built via `add_subdirectory(plugins/example)`, loaded by `pluginregistry_tests`, ABI-tested by `pluginabi_tests`). Decoder/Exporter plugin surfaces are "future" — so SDK examples for those are still missing (→ M14.3).
-- **TODO (M14.3):** add Decoder/Exporter example plugins (Analyzer example already ships and is ABI-tested).
+- **Coverage:** `plugins/example` (built via `add_subdirectory(plugins/example)`) now ships **Analyzer + Decoder (PPM) + Exporter (PNG/BMP)** reference plugins; loaded by `pluginregistry_tests` / `pluginexamples_tests` and ABI-tested by `pluginabi_tests`. Decoder/Exporter plugin surfaces are live (`DecoderRegistry` + `ExporterRegistry`).
+- **M14.3 DONE:** Analyzer/Decoder/Exporter example plugins ship and `pluginexamples_tests` loads all three end-to-end; CI runs `pluginabi_tests` + `pluginexamples_tests`.
 
 ### 7. CI — ✅ PASS (mostly) / 🔲 TODO (SHA256, changelog)
 - `ci.yml`: gating = Format + Build + Test + Package + clazy; clang-tidy/ASan advisory; nightly fan-out separate. Sound.
@@ -87,4 +87,4 @@ After items 1–5 (M14.1) the audit flips README / ROADMAP / CHANGELOG / STATUS 
 - **Code:** release-grade engine (decode/cache/scheduler/compare/analyze/plugin SDK all present and tested). ✅
 - **Release metadata & docs:** ✅ consistent after M14.1 reconciliation.
 - **Plugin ABI:** ✅ frozen for v1.x (M14.2).
-- **Next:** M14.3 (SDK Example plugins for Decoder/Exporter) and M14.4 (Dataset Matrix).
+- **Next:** M14.3 (SDK Example) is **done** — Analyzer/Decoder/Exporter reference plugins ship and `pluginexamples_tests` loads all three end-to-end (CI-verified). Remaining: M14.4 (Dataset Matrix).
