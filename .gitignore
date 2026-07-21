@@ -2,3 +2,5 @@
 benchmark/report/last_run.json
 perf_regression_*.ps1
 bench_*.ps1
+msvc_run.log
+Testing/
