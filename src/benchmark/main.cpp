@@ -1,18 +1,26 @@
 #include "benchmark/corpus.h"
 #include "benchmark/scenarios.h"
 
+#include <QCoreApplication>
+#include <QDateTime>
+#include <QFile>
+#include <QImage>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
+#include <QTextStream>
+
+#include "core/trace/TraceSink.h"
+
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <set>
 #include <string>
+#include <unordered_map>
 #include <vector>
-
-#include <QCoreApplication>
-#include <QImage>
-
-#include "core/trace/TraceSink.h"
 
 // mviewer_bench — M10 performance harness (docs/rfc/M10_PERFORMANCE_ENGINEERING.md).
 //
@@ -21,6 +29,11 @@
 //   mviewer_bench --smoke         small corpus (20/img), exit 0 (CI gate: prove it links+runs)
 //   mviewer_bench --enforce       apply exact docs/performance.md budgets; exit !=0 on fail
 //   mviewer_bench --corpus-size N generate N images per format
+//   mviewer_bench --budget <file> load performance_budget.json (data-driven gates)
+//   mviewer_bench --corpus-dir <d> reuse an existing on-disk corpus (no regen)
+//   mviewer_bench --scenarios <s> comma-separated ids (e.g. B1,B2,B8)
+//   mviewer_bench --results <f>   write JSON verdicts to <f>
+//   mviewer_bench --baseline <f>  compare against baseline JSON; >10% regression -> fail
 //
 // CI runs --smoke only (roadmap Phase-1). The regression gate (--enforce in CI)
 // is roadmap Phase-4 and is intentionally NOT wired into ci.yml here.
@@ -46,77 +59,90 @@ struct Budget
     }
 };
 
-// Minimal JSON reader — the budget file is flat (no nesting beyond one
-// `budgets` object), so we avoid pulling in a full JSON library into the
-// benchmark binary. Returns false on any parse failure (caller keeps
-// defaults and prints a warning).
+// Qt JSON-based budget reader (replaces naive string-parsing version).
 bool loadBudgetJson(const std::string &path, Budget &b)
 {
-    std::ifstream in(path);
-    if (!in)
+    QFile f(QString::fromStdString(path));
+    if (!f.open(QIODevice::ReadOnly))
         return false;
-    std::string txt((std::istreambuf_iterator<char>(in)),
-                   std::istreambuf_iterator<char>());
-    auto findNum = [&](const std::string &key, double &out) -> bool
-    {
-        const auto pos = txt.find("\"" + key + "\"");
-        if (pos == std::string::npos)
-            return false;
-        const auto colon = txt.find(':', pos + key.size() + 1);
-        if (colon == std::string::npos)
-            return false;
-        const auto comma = txt.find_first_of(",}", colon);
-        if (comma == std::string::npos)
-            return false;
-        // Manual numeric parse (exceptions may be disabled in this TU).
-        const std::string slice = txt.substr(colon + 1, comma - colon - 1);
-        const char *beg = slice.c_str();
-        char *end = nullptr;
-        double v = std::strtod(beg, &end);
-        if (end == beg || *end != '\0')
-            return false;
-        out = v;
-        return true;
+    const QByteArray data = f.readAll();
+    f.close();
+
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (doc.isNull() || !doc.isObject())
+        return false;
+
+    const QJsonObject root = doc.object();
+    const QJsonObject budgets = root.value("budgets").toObject();
+    if (budgets.isEmpty())
+        return false;
+
+    auto get = [&](const char *key, double &out) {
+        const QJsonValue v = budgets.value(QString::fromLatin1(key));
+        if (v.isDouble()) { out = v.toDouble(); return true; }
+        return false;
     };
-    // Parse the nested "budgets": { ... } object.
-    const auto bpos = txt.find("\"budgets\"");
-    const auto objStart = (bpos == std::string::npos) ? std::string::npos : txt.find('{', bpos);
-    const auto objEnd = (objStart == std::string::npos) ? std::string::npos : txt.find('}', objStart);
-    if (objStart != std::string::npos && objEnd != std::string::npos)
-    {
-        const std::string inner = txt.substr(objStart, objEnd - objStart + 1);
-        auto findIn = [&](const std::string &key, double &out) -> bool
-        {
-            const auto p = inner.find("\"" + key + "\"");
-            if (p == std::string::npos)
-                return false;
-            const auto c = inner.find(':', p + key.size() + 1);
-            if (c == std::string::npos)
-                return false;
-            const auto e = inner.find_first_of(",}", c);
-            if (e == std::string::npos)
-                return false;
-            // Manual numeric parse (exceptions may be disabled in this TU).
-            const std::string slice = inner.substr(c + 1, e - c - 1);
-            const char *beg = slice.c_str();
-            char *end = nullptr;
-            double v = std::strtod(beg, &end);
-            if (end == beg || *end != '\0')
-                return false;
-            out = v;
-            return true;
-        };
-        findIn("open_folder_ms", b.open_folder_ms);
-        findIn("first_thumbnail_ms", b.first_thumbnail_ms);
-        findIn("image_switch_ms", b.image_switch_ms);
-        findIn("memory_mb", b.memory_mb);
-    }
-    // Tolerate a flat key as well (back-compat).
-    findNum("open_folder_ms", b.open_folder_ms);
-    findNum("first_thumbnail_ms", b.first_thumbnail_ms);
-    findNum("image_switch_ms", b.image_switch_ms);
-    findNum("memory_mb", b.memory_mb);
+    get("open_folder_ms", b.open_folder_ms);
+    get("first_thumbnail_ms", b.first_thumbnail_ms);
+    get("image_switch_ms", b.image_switch_ms);
+    get("memory_mb", b.memory_mb);
     return true;
+}
+
+// Load baseline metrics from a JSON file using QJson.
+// Returns a map of metric name -> baseline value.
+std::unordered_map<std::string, double> loadBaselineJson(const std::string &path)
+{
+    std::unordered_map<std::string, double> m;
+    QFile f(QString::fromStdString(path));
+    if (!f.open(QIODevice::ReadOnly))
+        return m;
+    const QByteArray data = f.readAll();
+    f.close();
+
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (doc.isNull() || !doc.isObject())
+        return m;
+
+    const QJsonObject root = doc.object();
+    const QJsonObject metrics = root.value("metrics").toObject();
+    for (auto it = metrics.begin(); it != metrics.end(); ++it)
+    {
+        if (it.value().isDouble())
+            m[it.key().toStdString()] = it.value().toDouble();
+        else if (it.value().isString())
+            m[it.key().toStdString()] = std::strtod(it.value().toString().toStdString().c_str(), nullptr);
+    }
+    return m;
+}
+
+// Write results to a JSON file.
+void writeResultsJson(const std::string &path,
+                      const std::vector<mviewer::bench::ScenarioResult> &results)
+{
+    QJsonArray arr;
+    for (const auto &r : results)
+    {
+        QJsonObject o;
+        o.insert("name", QString::fromStdString(r.name));
+        o.insert("metric", QString::fromStdString(r.metric));
+        o.insert("value", r.value);
+        o.insert("passed", r.passed);
+        arr.append(o);
+    }
+    QJsonObject root;
+    root.insert("results", arr);
+    root.insert("timestamp", QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+
+    QJsonDocument doc(root);
+    QFile f(QString::fromStdString(path));
+    if (f.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        f.write(doc.toJson(QJsonDocument::Indented));
+        f.close();
+    }
 }
 
 void printVerdict(const mviewer::bench::ScenarioResult &r, const Budget &b)
@@ -200,6 +226,7 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
         *outResults = std::move(results);
     return allPass;
 }
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -337,67 +364,40 @@ int main(int argc, char **argv)
 
     // M14: write JSON results if --results given.
     if (!resultsFile.empty())
-    {
-        std::ofstream out(resultsFile);
-        out << "{\n  \"results\": [\n";
-        for (size_t i = 0; i < results.size(); ++i)
-        {
-            const auto &r = results[i];
-            out << "    {\"name\":\"" << r.name << "\",\"metric\":\"" << r.metric
-                << "\",\"value\":" << r.value << ",\"passed\":" << (r.passed ? "true" : "false")
-                << "}";
-            if (i + 1 < results.size()) out << ",";
-            out << "\n";
-        }
-        out << "  ]\n}\n";
-        out.close();
-        std::cout << "results written to " << resultsFile << std::endl;
-    }
+        writeResultsJson(resultsFile, results);
 
     // M14: regression vs baseline if --baseline given.
     if (!baselineFile.empty())
     {
-        std::ifstream in(baselineFile);
-        if (in.is_open())
+        auto baseline = loadBaselineJson(baselineFile);
+        if (!baseline.empty())
         {
-            std::string content((std::istreambuf_iterator<char>(in)),
-                                std::istreambuf_iterator<char>());
-            in.close();
-            std::cout << "Baseline comparison: baseline file read (" << content.size() << " bytes)\n";
-            std::cout << "  (regression check: compare current results against baseline manually or via CI)\n";
-            // Naive: look for "B0_cold_start_to_thumbnail_ms": value etc.
-            // For each result, check if baseline has it; if delta% > 10% -> regression
+            std::cout << "=== REGRESSION CHECK ===" << std::endl;
             for (const auto &r : results)
             {
-                std::string key = "\"" + r.name + "_" + r.metric + "\"";
-                auto pos = content.find(key);
-                if (pos != std::string::npos)
+                // Match by metric name (e.g. "B2_first_thumbnail_ms").
+                std::string key = r.name + "_" + r.metric;
+                auto it = baseline.find(key);
+                if (it != baseline.end() && it->second > 0.0)
                 {
-                    auto colon = content.find(':', pos);
-                    if (colon != std::string::npos)
+                    double delta = ((r.value - it->second) / it->second) * 100.0;
+                    std::cout << "  " << r.name << ": current=" << r.value
+                              << " baseline=" << it->second << " delta=" << delta << "%";
+                    if (delta > 10.0)
                     {
-                        double baselineVal = std::strtod(content.c_str() + colon + 1, nullptr);
-                        if (baselineVal > 0)
-                        {
-                            double delta = ((r.value - baselineVal) / baselineVal) * 100.0;
-                            std::cout << "  " << r.name << ": current=" << r.value
-                                      << " baseline=" << baselineVal << " delta=" << delta << "%";
-                            if (std::abs(delta) > 10.0)
-                            {
-                                std::cout << " *** REGRESSION >10% ***";
-                                allPass = false;
-                            }
-                            std::cout << std::endl;
-                        }
+                        std::cout << " *** REGRESSION >10% ***";
+                        allPass = false;
                     }
+                    std::cout << std::endl;
                 }
             }
         }
         else
         {
-            std::cout << "Warning: could not open baseline file " << baselineFile << std::endl;
+            std::cout << "Warning: could not load baseline from " << baselineFile << std::endl;
         }
     }
+
     // M13.5: flush a Chrome trace JSON if --trace was given (only meaningful
     // when built with MVIEWER_ENABLE_PERFETTO; otherwise the macros are no-ops
     // and the buffer is empty, so we report and skip).

@@ -616,6 +616,7 @@ add_executable(mviewer_bench
 
 target_link_libraries(mviewer_bench
     PRIVATE
+        Qt6::Core
         Qt6::Widgets
         mviewer_core
 )
