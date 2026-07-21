@@ -10,6 +10,8 @@
 #include "core/image/RawMetadata.h"
 
 class RatingWidget;
+class QComboBox;
+class QPushButton;
 
 // M18 + M14-2: Metadata panel — shows file-system + decode-time metadata AND
 // RAW sensor metadata (ISO/exposure/focal/bayer) for RAW files.
@@ -27,6 +29,8 @@ class MetadataPanel : public QWidget
   signals:
     // P1: emitted when the user changes the current image's star rating.
     void ratingEdited(const QString &path, int stars);
+    // P3 tail: emitted when color label / reject / pick changes.
+    void flagsEdited(const QString &path, int label, bool rejected, bool picked);
 
   private:
     void addRow(const QString &key, const QString &value);
@@ -35,5 +39,8 @@ class MetadataPanel : public QWidget
 
     QTableWidget *m_table = nullptr;
     RatingWidget *m_rating = nullptr;  // P1: 0-5 star editor
+    QComboBox *m_colorLabel = nullptr; // P3 tail: color label selector
+    QPushButton *m_rejectBtn = nullptr; // P3 tail: reject toggle
+    QPushButton *m_pickBtn = nullptr;    // P3 tail: pick/favorite toggle
     QString m_currentPath;             // P1: tracks the rated image
 };

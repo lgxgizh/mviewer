@@ -638,6 +638,25 @@ add_test(NAME ratingstore_tests COMMAND ratingstore_tests)
 add_test(NAME analysis_panel_tests COMMAND analysis_panel_tests)
 add_test(NAME export_tests COMMAND export_tests)
 add_test(NAME export_pipeline_tests COMMAND export_pipeline_tests)
+
+# P3 tail — RatingStore flag persistence (color label / reject / pick / recents)
+add_executable(flags_tests
+    core/test_flags.cpp
+)
+
+target_link_libraries(flags_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(flags_tests PRIVATE cxx_std_20)
+target_include_directories(flags_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(flags_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+add_test(NAME flags_tests COMMAND flags_tests)
 add_test(NAME workspace_persist_tests COMMAND workspace_persist_tests)
 add_test(NAME assets_acceptance_tests COMMAND test_assets_acceptance)
 add_test(NAME analysis_batch_tests COMMAND test_analyzer_batch)

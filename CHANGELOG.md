@@ -70,6 +70,16 @@ All notable changes to this project are documented here. The format is based on
     by minimum stars.
   - Added core unit tests: `histogram_tests` (channel order, null, sums) and `ratingstore_tests`
     (clamp, persistence round-trip).
+- **P3 tail — Color Label / Reject / Pick / Recents (rating system extended):** the review's
+  P3 "rating" tail, delivered without new infrastructure.
+  - **`RatingStore`** extended (separate `flags.txt` so the ratings format/tests stay intact):
+    color label (6 colors), reject, pick (favorite) and a capped recents (recently-viewed) list.
+  - **`MetadataPanel`** gains a color-label selector and reject/pick toggles; `ThumbnailPanel`
+    delegate draws a color-label bar, a reject overlay and a pick marker; a new "标记" toolbar
+    filter (favorite / rejected / recents / color label) is wired in `MainWindow`.
+  - Shortcuts: `Ctrl+Shift+1..6` set a color label (0 clears), `Ctrl+Shift+P` pick,
+    `Ctrl+Shift+X` reject. Viewing an image records it in recents.
+  - Added `flags_tests` (10 checks: persistence, clamp, recents ordering).
 - **P4 — Batch Export Pipeline (product-grade export):** the review's Phase-3 export, delivered as a
   reusable core module + dialog without new infrastructure.
   - **`core/image/ImageTransform`** (Qt-free header, Qt internals): `resizeToFit` (keep-aspect, no

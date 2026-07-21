@@ -215,6 +215,39 @@ void ThumbnailPanel::setRatingFilter(int stars)
     applyFilter();
 }
 
+void ThumbnailPanel::setLabelFilter(int label)
+{
+    m_labelFilter = qBound(0, label, 6);
+    applyFilter();
+}
+
+void ThumbnailPanel::setRejectFilter(bool on)
+{
+    m_rejectFilter = on;
+    applyFilter();
+}
+
+void ThumbnailPanel::setPickFilter(bool on)
+{
+    m_pickFilter = on;
+    applyFilter();
+}
+
+void ThumbnailPanel::setRecentFilter(bool on)
+{
+    m_recentFilter = on;
+    applyFilter();
+}
+
+void ThumbnailPanel::clearFlagFilters()
+{
+    m_labelFilter = 0;
+    m_rejectFilter = false;
+    m_pickFilter = false;
+    m_recentFilter = false;
+    applyFilter();
+}
+
 void ThumbnailPanel::invalidateRatings()
 {
     viewport()->update();
@@ -281,6 +314,22 @@ void ThumbnailPanel::applyFilter()
             mviewer::core::RatingStore::instance().rating(e.path.toStdString()) <
                 m_ratingFilter)
             continue;
+        const std::string ep = e.path.toStdString();
+        auto &rs = mviewer::core::RatingStore::instance();
+        if (m_labelFilter > 0 && rs.colorLabel(ep) != m_labelFilter)
+            continue;
+        if (m_rejectFilter && !rs.rejected(ep))
+            continue;
+        if (m_pickFilter && !rs.picked(ep))
+            continue;
+        if (m_recentFilter)
+        {
+            bool inRecents = false;
+            for (const auto &r : rs.recents())
+                if (r == ep) { inRecents = true; break; }
+            if (!inRecents)
+                continue;
+        }
         if (!t.isEmpty())
         {
             if (m_metaSearch)
@@ -699,6 +748,38 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter,
         for (int s = 0; s < 5; ++s)
             starStr += (s < stars ? "★" : "☆");
         painter->drawText(option.rect.x() + 4, option.rect.y() + 16, starStr);
+    }
+
+    // P3 tail: color label bar, reject overlay and pick marker.
+    const auto &rs = mviewer::core::RatingStore::instance();
+    const std::string ep = path.toStdString();
+    const int label = rs.colorLabel(ep);
+    if (label > 0)
+    {
+        static const QColor kColors[7] = {
+            QColor(), QColor(229, 57, 53), QColor(251, 140, 0), QColor(249, 215, 41),
+            QColor(67, 160, 71), QColor(30, 136, 229), QColor(142, 36, 170)};
+        painter->fillRect(option.rect.x(), option.rect.y(), 4, option.rect.height(),
+                          kColors[label]);
+    }
+    if (rs.rejected(ep))
+    {
+        painter->fillRect(option.rect, QColor(200, 30, 30, 90));
+        QFont rf = painter->font();
+        rf.setPixelSize(22);
+        rf.setBold(true);
+        painter->setFont(rf);
+        painter->setPen(QColor(255, 255, 255));
+        painter->drawText(option.rect, Qt::AlignCenter, "✕");
+    }
+    if (rs.picked(ep))
+    {
+        QFont pf = painter->font();
+        pf.setPixelSize(15);
+        painter->setFont(pf);
+        painter->setPen(QColor(255, 215, 0));
+        painter->drawText(option.rect.x() + option.rect.width() - 18,
+                          option.rect.y() + 16, "⚑");
     }
 }
 

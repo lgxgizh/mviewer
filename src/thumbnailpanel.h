@@ -59,6 +59,15 @@ class ThumbnailPanel : public QListView
     void setMetaSearch(bool on);
     void setRatingFilter(int stars);
 
+    // P3 tail: color label / reject / pick / recents filters (each independent;
+    // applyFilter() combines them with AND). 0 label = any; recent uses the
+    // RatingStore recents list.
+    void setLabelFilter(int label);
+    void setRejectFilter(bool on);
+    void setPickFilter(bool on);
+    void setRecentFilter(bool on);
+    void clearFlagFilters();
+
     // Quiesce background decode work (e.g. before a headless render where async
     // QPixmap updates are undesirable). Public so test/demo harnesses can
     // quiesce the panel.
@@ -142,6 +151,10 @@ class ThumbnailPanel : public QListView
     QList<Entry> m_allEntries;                 // full listing; source for filtering
     bool m_metaSearch = false;                 // search embedded metadata, not just names
     int m_ratingFilter = 0;                    // show only images rated >= this (0 = all)
+    int m_labelFilter = 0;                     // show only images with this color label (0 = any)
+    bool m_rejectFilter = false;               // show only rejected images
+    bool m_pickFilter = false;                 // show only picked (favorite) images
+    bool m_recentFilter = false;               // show only recently-viewed images
     QHash<QString, QString> m_metaIndex;       // path -> lowercase searchable string
 
     void applyFilter();                        // (re)build the filtered model

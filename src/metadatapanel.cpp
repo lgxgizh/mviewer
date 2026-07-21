@@ -4,10 +4,12 @@
 #include "core/image/MetadataReader.h"
 #include "widgets/ratingwidget.h"
 
+#include <QComboBox>
 #include <QDateTime>
 #include <QFileInfo>
 #include <QHeaderView>
 #include <QLabel>
+#include <QPushButton>
 #include <QTableWidget>
 #include <QVBoxLayout>
 
@@ -47,6 +49,59 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
             });
 
     layout->addWidget(ratingBox);
+
+    // P3 tail: color label + reject / pick (favorite) controls.
+    auto *flagBox = new QWidget(this);
+    auto *flagLay = new QHBoxLayout(flagBox);
+    flagLay->setContentsMargins(0, 0, 0, 0);
+    flagLay->setSpacing(6);
+    flagLay->addWidget(new QLabel(tr("色标:"), this));
+    m_colorLabel = new QComboBox(this);
+    m_colorLabel->addItem(tr("无"), 0);
+    m_colorLabel->addItem(tr("红"), 1);
+    m_colorLabel->addItem(tr("橙"), 2);
+    m_colorLabel->addItem(tr("黄"), 3);
+    m_colorLabel->addItem(tr("绿"), 4);
+    m_colorLabel->addItem(tr("蓝"), 5);
+    m_colorLabel->addItem(tr("紫"), 6);
+    flagLay->addWidget(m_colorLabel);
+    m_rejectBtn = new QPushButton(tr("拒绝"), this);
+    m_rejectBtn->setCheckable(true);
+    m_pickBtn = new QPushButton(tr("收藏"), this);
+    m_pickBtn->setCheckable(true);
+    flagLay->addWidget(m_rejectBtn);
+    flagLay->addWidget(m_pickBtn);
+    flagLay->addStretch(1);
+    connect(m_colorLabel, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int)
+            {
+                if (m_currentPath.isEmpty())
+                    return;
+                const int label = m_colorLabel->currentData().toInt();
+                mviewer::core::RatingStore::instance().setColorLabel(m_currentPath.toStdString(),
+                                                                     label);
+                emit flagsEdited(m_currentPath, label, m_rejectBtn->isChecked(),
+                                 m_pickBtn->isChecked());
+            });
+    connect(m_rejectBtn, &QPushButton::toggled, this, [this](bool on)
+            {
+                if (m_currentPath.isEmpty())
+                    return;
+                mviewer::core::RatingStore::instance().setRejected(m_currentPath.toStdString(),
+                                                                   on);
+                emit flagsEdited(m_currentPath, m_colorLabel->currentData().toInt(), on,
+                                 m_pickBtn->isChecked());
+            });
+    connect(m_pickBtn, &QPushButton::toggled, this, [this](bool on)
+            {
+                if (m_currentPath.isEmpty())
+                    return;
+                mviewer::core::RatingStore::instance().setPicked(m_currentPath.toStdString(), on);
+                emit flagsEdited(m_currentPath, m_colorLabel->currentData().toInt(),
+                                 m_rejectBtn->isChecked(), on);
+            });
+
+    layout->addWidget(flagBox);
     layout->addWidget(m_table, 1);
 
     clear();
@@ -57,6 +112,12 @@ void MetadataPanel::clear()
     m_currentPath.clear();
     if (m_rating)
         m_rating->setRating(0);
+    if (m_colorLabel)
+        m_colorLabel->setCurrentIndex(0);
+    if (m_rejectBtn)
+        m_rejectBtn->setChecked(false);
+    if (m_pickBtn)
+        m_pickBtn->setChecked(false);
     m_table->setRowCount(0);
     addRow(tr("提示"), tr("在画廊中选择一张图片以查看元数据"));
 }
@@ -113,10 +174,18 @@ void MetadataPanel::render(const mviewer::domain::ImageMetadata &meta)
 void MetadataPanel::setImage(const QString &path)
 {
     m_currentPath = path;
+    const auto &rs = mviewer::core::RatingStore::instance();
     if (m_rating)
-        m_rating->setRating(
-            path.isEmpty() ? 0
-                           : mviewer::core::RatingStore::instance().rating(path.toStdString()));
+        m_rating->setRating(path.isEmpty() ? 0 : rs.rating(path.toStdString()));
+    if (m_colorLabel)
+    {
+        const int label = path.isEmpty() ? 0 : rs.colorLabel(path.toStdString());
+        m_colorLabel->setCurrentIndex(m_colorLabel->findData(label));
+    }
+    if (m_rejectBtn)
+        m_rejectBtn->setChecked(!path.isEmpty() && rs.rejected(path.toStdString()));
+    if (m_pickBtn)
+        m_pickBtn->setChecked(!path.isEmpty() && rs.picked(path.toStdString()));
     if (path.isEmpty())
     {
         clear();

@@ -219,6 +219,21 @@ void MainWindow::setupUi()
     m_ratingFilter->addItem("★★★★★", 5);
     sortLayout->addWidget(m_ratingFilter);
 
+    // P3 tail: color label / reject / pick / recents filter.
+    sortLayout->addWidget(new QLabel("标记:", sortBar));
+    m_flagFilter = new QComboBox(sortBar);
+    m_flagFilter->addItem("全部", 0);
+    m_flagFilter->addItem("已收藏", 1);
+    m_flagFilter->addItem("已拒绝", 2);
+    m_flagFilter->addItem("最近浏览", 3);
+    m_flagFilter->addItem("红标", 11);
+    m_flagFilter->addItem("橙标", 12);
+    m_flagFilter->addItem("黄标", 13);
+    m_flagFilter->addItem("绿标", 14);
+    m_flagFilter->addItem("蓝标", 15);
+    m_flagFilter->addItem("紫标", 16);
+    sortLayout->addWidget(m_flagFilter);
+
     sortLayout->addStretch(0);
     rightLayout->addWidget(sortBar);
 
@@ -276,6 +291,7 @@ void MainWindow::setupUi()
             {
                 m_previewPanel->setImage(path);       // async decode (off UI thread)
                 m_metadataPanel->setImage(path);      // M18: show metadata
+                mviewer::core::RatingStore::instance().addRecent(path.toStdString()); // P3 recents
                 statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
             });
     connect(m_thumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
@@ -367,6 +383,13 @@ void MainWindow::setupUi()
     // P1: star-rating filter.
     connect(m_ratingFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &MainWindow::onRatingFilterChanged);
+    // P3 tail: color label / reject / pick / recents filter.
+    connect(m_flagFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &MainWindow::onFlagFilterChanged);
+    // P3 tail: a flag change in the metadata panel refreshes the gallery overlay
+    // (and re-applies the active filter so list membership stays correct).
+    connect(m_metadataPanel, &MetadataPanel::flagsEdited, this,
+            &MainWindow::onFlagsEdited);
     // P1: a rating set in the metadata panel refreshes the gallery star overlay.
     connect(m_metadataPanel, &MetadataPanel::ratingEdited, this,
             [this](const QString &path, int)
@@ -531,8 +554,29 @@ void MainWindow::setupCommands()
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
+    const auto mod = event->modifiers();
+    // P3 tail: Ctrl+Shift+1..6 set a color label; Ctrl+Shift+0 clears it;
+    // Ctrl+Shift+P toggles pick; Ctrl+Shift+X toggles reject.
+    if ((mod & Qt::ControlModifier) && (mod & Qt::ShiftModifier))
+    {
+        if (event->key() >= Qt::Key_0 && event->key() <= Qt::Key_6)
+        {
+            setCurrentColorLabel(event->key() - Qt::Key_0);
+            return;
+        }
+        if (event->key() == Qt::Key_P)
+        {
+            toggleCurrentPick();
+            return;
+        }
+        if (event->key() == Qt::Key_X)
+        {
+            toggleCurrentReject();
+            return;
+        }
+    }
     // P1: Ctrl+1..5 rate the current image; Ctrl+0 clears the rating.
-    if (event->modifiers() & Qt::ControlModifier &&
+    if ((mod & Qt::ControlModifier) && !(mod & Qt::ShiftModifier) &&
         event->key() >= Qt::Key_0 && event->key() <= Qt::Key_5)
     {
         rateCurrentImage(event->key() - Qt::Key_0);
@@ -570,12 +614,82 @@ void MainWindow::rateCurrentImage(int stars)
                                  .arg(stars));
 }
 
+void MainWindow::onFlagFilterChanged(int)
+{
+    const int v = m_flagFilter->currentData().toInt();
+    m_thumbnailPanel->clearFlagFilters();
+    m_thumbnailPanel->setRatingFilter(m_ratingFilter->currentData().toInt());
+    switch (v)
+    {
+    case 1: m_thumbnailPanel->setPickFilter(true); break;
+    case 2: m_thumbnailPanel->setRejectFilter(true); break;
+    case 3: m_thumbnailPanel->setRecentFilter(true); break;
+    case 11: m_thumbnailPanel->setLabelFilter(1); break;
+    case 12: m_thumbnailPanel->setLabelFilter(2); break;
+    case 13: m_thumbnailPanel->setLabelFilter(3); break;
+    case 14: m_thumbnailPanel->setLabelFilter(4); break;
+    case 15: m_thumbnailPanel->setLabelFilter(5); break;
+    case 16: m_thumbnailPanel->setLabelFilter(6); break;
+    default: break;
+    }
+}
+
+void MainWindow::onFlagsEdited(const QString &path, int label, bool rejected, bool picked)
+{
+    Q_UNUSED(path);
+    Q_UNUSED(label);
+    Q_UNUSED(rejected);
+    Q_UNUSED(picked);
+    m_thumbnailPanel->invalidateRatings();
+    // Re-apply the active filter so gallery membership stays correct.
+    m_thumbnailPanel->setRatingFilter(m_ratingFilter->currentData().toInt());
+}
+
+void MainWindow::setCurrentColorLabel(int label)
+{
+    if (m_currentImagePath.isEmpty())
+        return;
+    mviewer::core::RatingStore::instance().setColorLabel(m_currentImagePath.toStdString(), label);
+    m_thumbnailPanel->invalidateRatings();
+    m_metadataPanel->setImage(m_currentImagePath);
+    const QString name = QFileInfo(m_currentImagePath).fileName();
+    statusBar()->showMessage(label == 0 ? QString("已清除 %1 的色标").arg(name)
+                                         : QString("已为 %1 设置色标 %2").arg(name).arg(label));
+}
+
+void MainWindow::toggleCurrentPick()
+{
+    if (m_currentImagePath.isEmpty())
+        return;
+    auto &rs = mviewer::core::RatingStore::instance();
+    const bool v = !rs.picked(m_currentImagePath.toStdString());
+    rs.setPicked(m_currentImagePath.toStdString(), v);
+    m_thumbnailPanel->invalidateRatings();
+    m_metadataPanel->setImage(m_currentImagePath);
+    statusBar()->showMessage(v ? QString("已收藏 %1").arg(QFileInfo(m_currentImagePath).fileName())
+                                : QString("已取消收藏 %1").arg(QFileInfo(m_currentImagePath).fileName()));
+}
+
+void MainWindow::toggleCurrentReject()
+{
+    if (m_currentImagePath.isEmpty())
+        return;
+    auto &rs = mviewer::core::RatingStore::instance();
+    const bool v = !rs.rejected(m_currentImagePath.toStdString());
+    rs.setRejected(m_currentImagePath.toStdString(), v);
+    m_thumbnailPanel->invalidateRatings();
+    m_metadataPanel->setImage(m_currentImagePath);
+    statusBar()->showMessage(v ? QString("已拒绝 %1").arg(QFileInfo(m_currentImagePath).fileName())
+                                : QString("已取消拒绝 %1").arg(QFileInfo(m_currentImagePath).fileName()));
+}
+
 void MainWindow::onImageOpen(const QString &path)
 {
     m_previewPanel->setImage(path); // async decode (off UI thread)
     m_imageViewer->setImage(path);  // async decode; imageReady() feeds AnalysisPanel
     m_metadataPanel->setImage(path); // M18: show metadata for the opened image
     m_currentImagePath = path;
+    mviewer::core::RatingStore::instance().addRecent(path.toStdString()); // P3 recents
     pushHistory(path); // P0: in-session browse history
     // M14-1: track in recent-files LRU + refresh menu.
     m_recentFiles.add(path.toStdString());

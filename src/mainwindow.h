@@ -96,6 +96,7 @@ class MainWindow : public QMainWindow
     // P1: metadata-aware search + star-rating filter.
     QCheckBox *m_searchMeta = nullptr;
     QComboBox *m_ratingFilter = nullptr;
+    QComboBox *m_flagFilter = nullptr;  // P3 tail: color label / reject / pick / recents
 
     // P0 #①: real-time status bar (image count / size / zoom / cache hit-rate).
     QLabel *m_lblCount = nullptr;
@@ -109,7 +110,13 @@ class MainWindow : public QMainWindow
     // P1: gallery search/filter controls.
     void onSearchMetaToggled(bool on);
     void onRatingFilterChanged(int index);
+    void onFlagFilterChanged(int index);
+    void onFlagsEdited(const QString &path, int label, bool rejected, bool picked);
     void rateCurrentImage(int stars);
+    // P3 tail: shortcuts for color label / reject / pick on the current image.
+    void setCurrentColorLabel(int label);
+    void toggleCurrentPick();
+    void toggleCurrentReject();
 
     QString m_currentDir;
     QString m_currentImagePath;
