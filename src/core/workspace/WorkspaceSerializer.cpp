@@ -74,6 +74,34 @@ struct Parser
         return i < s.size() && s[i] == c;
     }
 
+    // Non-consuming string peek: returns the next string token's CONTENT
+    // (without quotes) WITHOUT advancing the parser position.
+    std::string peekString() const
+    {
+        size_t j = i;
+        while (j < s.size() && std::isspace(static_cast<unsigned char>(s[j]))) ++j;
+        if (j >= s.size() || s[j] != '"') return "";
+        ++j;
+        std::string result;
+        while (j < s.size() && s[j] != '"')
+        {
+            if (s[j] == '\\' && j + 1 < s.size())
+            {
+                ++j;
+                switch (s[j])
+                {
+                case 'n': result += '\n'; break;
+                case 't': result += '\t'; break;
+                case 'r': result += '\r'; break;
+                default: result += s[j]; break;
+                }
+            }
+            else result += s[j];
+            ++j;
+        }
+        return result;
+    }
+
     std::string parseString()
     {
         std::string out;
@@ -296,10 +324,15 @@ bool deserializeCompareSession(const std::string &text, mviewer::domain::Compare
     return haveIds; // require at least the image list to be a valid session
 }
 
+// M15: workspace version for forward/backward compatibility.
+// Version 1 = legacy (no version field). Version 2 = current.
+static constexpr int kWorkspaceVersion = 2;
+
 std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
 {
     std::ostringstream os;
-    os << "{\"root\":";
+    os << "{\"version\":" << kWorkspaceVersion;
+    os << ",\"root\":";
     esc(os, ws.rootPath);
     os << ",\"folders\":[";
     for (size_t f = 0; f < ws.folders.size(); ++f)
@@ -354,6 +387,20 @@ bool deserializeWorkspace(const std::string &text, mviewer::domain::Workspace &o
     Parser p(text);
     if (!p.eat('{'))
         return false;
+
+    // M15: version-aware deserialization. Version 1 (legacy) has no "version" field;
+    // version 2+ starts with "version":N. Detect by peeking at the first key.
+    std::string firstKey = p.peekString();
+    if (firstKey == "version")
+    {
+        p.parseString(); // consume "version"
+        p.eat(':');
+        int version = static_cast<int>(p.parseNumber());
+        p.eat(',');
+        // Future: handle migration from version 1 -> 2 here.
+        (void)version;
+    }
+
     if (!p.memberStr("root", out.rootPath))
         return false;
     if (!p.eat(','))

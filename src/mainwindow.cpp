@@ -26,6 +26,10 @@
 #include <QApplication>
 #include <QBuffer>
 #include <QCloseEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 #include <QComboBox>
 #include <QDialog>
 #include <QCheckBox>
@@ -43,10 +47,13 @@
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QScrollBar>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSettings>
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QStatusBar>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -87,6 +94,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     // M14-1: open the file passed on the command line (deferred to event loop).
     if (!m_openOnLaunch.isEmpty())
         QMetaObject::invokeMethod(this, [this]() { onImageOpen(m_openOnLaunch); }, Qt::QueuedConnection);
+
+    // M12.4 / M15: crash recovery — restore previous session if it exists.
+    restoreLastSession();
+
+    // M15: drag & drop — accept files/folders dropped onto the window.
+    setAcceptDrops(true);
+
+    // M15: crash recovery — autosave current session every 30s + restore on launch.
+    m_autosaveTimer = new QTimer(this);
+    connect(m_autosaveTimer, &QTimer::timeout, this, &MainWindow::autosaveSession);
+    m_autosaveTimer->start(30000);
+    m_autosaveLoaded = false;
+    restoreSessionRecovery();
 }
 
 MainWindow::~MainWindow() = default;
@@ -993,4 +1013,114 @@ void MainWindow::closeEvent(QCloseEvent *event)
     }
 
     QMainWindow::closeEvent(event);
+}
+
+// M15: crash recovery — autosave current session to a recovery file.
+void MainWindow::autosaveSession()
+{
+    if (m_currentDir.isEmpty() && m_currentImagePath.isEmpty())
+        return;
+    const QString recoveryPath =
+        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recovery.json";
+    QFile f(recoveryPath);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return;
+    // Simple JSON: lastDir, lastImage, lastThumbScroll
+    QJsonObject obj;
+    obj.insert("lastDir", m_currentDir);
+    obj.insert("lastImage", m_currentImagePath);
+    obj.insert("lastThumbScroll", m_thumbnailPanel ? m_thumbnailPanel->scrollOffset() : 0);
+    obj.insert("timestamp", QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
+    QJsonDocument doc(obj);
+    f.write(doc.toJson());
+    f.close();
+}
+
+// M15: crash recovery — restore session from recovery file if it exists.
+void MainWindow::restoreSessionRecovery()
+{
+    const QString recoveryPath =
+        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recovery.json";
+    QFile f(recoveryPath);
+    if (!f.exists() || !f.open(QIODevice::ReadOnly))
+        return;
+    const QByteArray data = f.readAll();
+    f.close();
+
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (doc.isNull() || !doc.isObject())
+        return;
+
+    const QJsonObject obj = doc.object();
+    const QString lastDir = obj.value("lastDir").toString();
+    const QString lastImage = obj.value("lastImage").toString();
+    const int lastThumbScroll = obj.value("lastThumbScroll").toInt();
+
+    if (lastDir.isEmpty() && lastImage.isEmpty())
+        return;
+
+    // Restore the session (deferred to event loop).
+    QTimer::singleShot(100, this, [this, lastDir, lastImage, lastThumbScroll]() {
+        if (!lastDir.isEmpty() && QDir(lastDir).exists())
+        {
+            m_currentDir = lastDir;
+            m_cachedImagePaths.clear();
+            m_dirListDirty = true;
+            m_thumbnailPanel->setDirectory(lastDir);
+            if (lastThumbScroll > 0)
+                m_thumbnailPanel->verticalScrollBar()->setValue(lastThumbScroll);
+        }
+        if (!lastImage.isEmpty() && QFile::exists(lastImage))
+        {
+            m_currentImagePath = lastImage;
+            onImageOpen(lastImage);
+        }
+        m_autosaveLoaded = true;
+    });
+}
+
+// M15: drag & drop — accept files/folders dropped onto the window.
+void MainWindow::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (event->mimeData()->hasUrls())
+        event->acceptProposedAction();
+    else
+        QMainWindow::dragEnterEvent(event);
+}
+
+void MainWindow::dropEvent(QDropEvent *event)
+{
+    if (!event->mimeData()->hasUrls())
+    {
+        QMainWindow::dropEvent(event);
+        return;
+    }
+    const QList<QUrl> urls = event->mimeData()->urls();
+    QStringList paths;
+    for (const QUrl &url : urls)
+    {
+        const QString local = url.toLocalFile();
+        if (!local.isEmpty())
+            paths.append(local);
+    }
+    if (paths.isEmpty())
+    {
+        QMainWindow::dropEvent(event);
+        return;
+    }
+    event->acceptProposedAction();
+    // If first path is a directory, open it; otherwise open as images.
+    const QFileInfo fi(paths.first());
+    if (fi.isDir())
+    {
+        m_currentDir = paths.first();
+        m_cachedImagePaths.clear();
+        m_dirListDirty = true;
+        m_thumbnailPanel->setDirectory(paths.first());
+    }
+    else
+    {
+        onImageOpen(paths.first());
+    }
 }

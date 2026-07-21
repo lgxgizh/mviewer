@@ -37,6 +37,9 @@ class MainWindow : public QMainWindow
 
   protected:
     void closeEvent(QCloseEvent *event) override;
+    // M15: drag & drop support
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
   private:
     void setupCommands();
@@ -75,9 +78,13 @@ class MainWindow : public QMainWindow
     QAction *m_actAddFavorite = nullptr;
     QAction *m_actHistoryBack = nullptr;
     QAction *m_actHistoryForward = nullptr;
-
     QMenu *m_recentMenu = nullptr;
+    QMenu *m_recentFileMenu = nullptr;  // recent-files menu (opened images)
     QMenu *m_favMenu = nullptr;
+
+    // M15: crash recovery
+    QTimer *m_autosaveTimer = nullptr;
+    bool m_autosaveLoaded = false;
 
     // M18: gallery search bar.
     QLineEdit *m_searchEdit = nullptr;
@@ -94,7 +101,6 @@ class MainWindow : public QMainWindow
     // Persisted, cross-session app state (favorites + restore position).
     mviewer::core::RecentFiles m_recent;         // recent-folders LRU
     mviewer::core::RecentFiles m_recentFiles;    // recent-files LRU (opened images)
-    QMenu *m_recentFileMenu = nullptr;  // recent-files menu (opened images)
     QString m_openOnLaunch;       // path passed via command line
     AppState m_appState;
 
@@ -106,4 +112,7 @@ class MainWindow : public QMainWindow
     void saveWorkspace();
     void openWorkspace();
     void exportReport();
+    // M15: crash recovery
+    void autosaveSession();
+    void restoreSessionRecovery();
 };
