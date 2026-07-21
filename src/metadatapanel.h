@@ -7,11 +7,10 @@
 
 #include "domain/Image.h"
 
-// M18: Metadata panel — shows file-system + decode-time metadata for the
-// currently selected image (filename, size, dimensions, format, bit depth,
-// channels, color space, DPI, EXIF orientation, ICC profile, and any embedded
-// EXIF/XMP text keys exposed by the Qt image plugin). Pure UI layer; reads via
-// core::MetadataReader.
+#include "core/image/RawMetadata.h"
+
+// M18 + M14-2: Metadata panel — shows file-system + decode-time metadata AND
+// RAW sensor metadata (ISO/exposure/focal/bayer) for RAW files.
 class MetadataPanel : public QWidget
 {
     Q_OBJECT
@@ -20,14 +19,13 @@ class MetadataPanel : public QWidget
     explicit MetadataPanel(QWidget *parent = nullptr);
 
   public slots:
-    // Load + display metadata for the given image path.
     void setImage(const QString &path);
-    // Clear the panel (e.g. when nothing is selected).
     void clear();
 
   private:
     void addRow(const QString &key, const QString &value);
     void render(const mviewer::domain::ImageMetadata &meta);
+    void renderRaw(const mviewer::core::RawMetadata &rm);
 
     QTableWidget *m_table = nullptr;
 };

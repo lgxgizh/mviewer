@@ -101,4 +101,45 @@ void MetadataPanel::setImage(const QString &path)
         return;
     }
     render(meta);
+
+    // M14-2: if the file is a RAW format, also show sensor metadata.
+    const mviewer::core::RawMetadata rm = mviewer::core::parseRawMetadata(path.toStdString());
+    if (rm.parsed)
+        renderRaw(rm);
+}
+
+void MetadataPanel::renderRaw(const mviewer::core::RawMetadata &rm)
+{
+    addRow(tr("── RAW ──"), QString());
+    if (!rm.make.empty())
+        addRow(tr("相机厂商"), QString::fromStdString(rm.make));
+    if (!rm.model.empty())
+        addRow(tr("相机型号"), QString::fromStdString(rm.model));
+    if (!rm.lens.empty())
+        addRow(tr("镜头"), QString::fromStdString(rm.lens));
+    if (rm.iso > 0)
+        addRow(tr("ISO"), QString::number(rm.iso));
+    if (rm.exposureSec > 0.0)
+    {
+        if (rm.exposureSec >= 1.0)
+            addRow(tr("曝光时间"), QString("%1 s").arg(rm.exposureSec, 0, 'f', 2));
+        else
+        {
+            int den = qRound(1.0 / rm.exposureSec);
+            addRow(tr("曝光时间"), QString("1/%1 s").arg(den));
+        }
+    }
+    if (rm.fNumber > 0.0)
+        addRow(tr("光圈"), QString("f/%1").arg(rm.fNumber, 0, 'f', 1));
+    if (rm.focalLength > 0.0)
+        addRow(tr("焦距"), QString("%1 mm").arg(rm.focalLength, 0, 'f', 1));
+    if (!rm.bayerPattern.empty())
+        addRow(tr("Bayer 阵列"), QString::fromStdString(rm.bayerPattern));
+    if (rm.blackLevel > 0)
+        addRow(tr("黑电平"), QString::number(rm.blackLevel));
+    if (rm.whiteLevel > 0)
+        addRow(tr("白电平"), QString::number(rm.whiteLevel));
+    if (!rm.whiteBalance.empty())
+        addRow(tr("白平衡"), QString::fromStdString(rm.whiteBalance));
+    m_table->resizeColumnsToContents();
 }
