@@ -69,10 +69,30 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
         return result;
     }
 
-    // M14-5: ABI version check (if plugin exports version function).
-    if (versionFn && versionFn() != MVIEWER_PLUGIN_API_VERSION)
+    // M14.2: ABI triple check. Prefer the frozen descriptor; fall back to the
+    // legacy single-version export for plugins that haven't adopted it yet.
+    auto abiFn =
+        reinterpret_cast<const PluginABI *(*)()>(GetProcAddress(handle, "mviewer_plugin_abi"));
+    if (abiFn)
     {
-        result.error = "plugin API version mismatch";
+        const PluginABI *pabi = abiFn();
+        if (!pluginABICompatible(hostPluginABI(), *pabi))
+        {
+            result.error = "plugin ABI incompatible: host abi=" +
+                           std::to_string(hostPluginABI().abiVersion) +
+                           " api=" + std::to_string(hostPluginABI().apiVersion) +
+                           ", plugin abi=" + std::to_string(pabi->abiVersion) +
+                           " api=" + std::to_string(pabi->apiVersion);
+            s_lastError = result.error;
+            return result;
+        }
+        std::string warn = pluginABIWarnings(hostPluginABI(), *pabi);
+        if (!warn.empty())
+            std::cout << "[PluginLoader] Warning: " << warn << std::endl;
+    }
+    else if (versionFn && versionFn() != MVIEWER_PLUGIN_API_VERSION)
+    {
+        result.error = "plugin API version mismatch (legacy export)";
         s_lastError = result.error;
         FreeLibrary(handle);
         return result;
@@ -95,6 +115,26 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
         s_lastError = result.error;
         dlclose(handle);
         return result;
+    }
+
+    // M14.2: ABI triple gate (mirrors the Windows branch).
+    auto abiFn = reinterpret_cast<const PluginABI *(*)()>(dlsym(handle, "mviewer_plugin_abi"));
+    if (abiFn)
+    {
+        const PluginABI *pabi = abiFn();
+        if (!pluginABICompatible(hostPluginABI(), *pabi))
+        {
+            result.error = "plugin ABI incompatible: host abi=" +
+                           std::to_string(hostPluginABI().abiVersion) +
+                           " api=" + std::to_string(hostPluginABI().apiVersion) +
+                           ", plugin abi=" + std::to_string(pabi->abiVersion) +
+                           " api=" + std::to_string(pabi->apiVersion);
+            s_lastError = result.error;
+            return result;
+        }
+        std::string warn = pluginABIWarnings(hostPluginABI(), *pabi);
+        if (!warn.empty())
+            std::cout << "[PluginLoader] Warning: " << warn << std::endl;
     }
 #endif
 

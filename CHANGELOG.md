@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **M14.2 — Plugin ABI freeze:** the plugin ABI is now frozen for the v1.x line. Plugins export a `PluginABI` descriptor (`mviewer_plugin_abi()`) carrying `apiVersion` / `abiVersion` / `sdkVersion`; the loader rejects any plugin whose `abiVersion` mismatches or whose `apiVersion` is newer than the host, and warns (never blocks) on `sdkVersion` drift. `docs/sdk/PLUGIN_ABI.md` is the contract; `pluginabi_tests` covers the gate end-to-end (including a deliberately incompatible `example_analyzer_badabi` plugin).
+
+- **M14.3 — Plugin SDK examples (Analyzer / Decoder / Exporter):** the unified plugin loader now discovers a plugin's kind by probing `create*` exports (Analyzer → Decoder → Exporter) and registers the instance into `AnalyzerRegistry` / `DecoderRegistry` / `ExporterRegistry`. A new core `IExporter` interface + `ExporterRegistry` mirror the existing Decoder pattern, so Exporter plugins are first-class (previously only Analyzer plugins were dynamically loadable). Three reference plugins ship in `plugins/example/`: an Analyzer (`ExampleAnalyzerPlugin.cpp`), a Decoder for the uncompressed PPM format (`ExampleDecoderPlugin.cpp`), and a PNG/BMP Exporter (`ExampleExporterPlugin.cpp`, Qt `QImage`-backed). `ctest pluginexamples_tests` builds, loads, and exercises all three end-to-end (decode a PPM, export it to PNG). CI's `test` job runs this gate explicitly. `docs/sdk/PLUGIN_SDK.md` documents the unified C ABI and the three example plugins.
+
 - **M11.3 — Release Engineering (distribution):** self-contained Windows packages from a
   Release build. `scripts/package_portable.ps1` runs Qt's `windeployqt` to gather exactly the
   DLLs/plugins `MViewer.exe` imports, bundles the matching MSVC C++ runtime, and zips to

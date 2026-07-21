@@ -15,6 +15,7 @@
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
 #include "domain/Selection.h"
+#include "core/plugin/PluginABI.h"
 
 #include <cmath>
 #include <cstdint>
@@ -119,5 +120,18 @@ extern "C"
     MVIEWER_PLUGIN_EXPORT const char *pluginName()
     {
         return "example.mean_luminance";
+    }
+
+    // M14.2: declare the frozen ABI triple so the host can verify compatibility.
+    MVIEWER_PLUGIN_EXPORT const PluginABI *mviewer_plugin_abi()
+    {
+        static const PluginABI abi;
+        return &abi;
+    }
+
+    // Legacy single-version export (kept for backward compatibility).
+    MVIEWER_PLUGIN_EXPORT int mviewer_plugin_api_version()
+    {
+        return MVIEWER_API_VERSION;
     }
 }

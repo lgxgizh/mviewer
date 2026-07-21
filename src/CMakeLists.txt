@@ -54,6 +54,8 @@ add_library(mviewer_core SHARED
     core/thumbnail/ThumbnailPipeline.h
     core/plugin/PluginLoader.cpp
     core/plugin/PluginManager.cpp
+    core/export/IExporter.h
+    core/export/ExporterRegistry.cpp
 
     core/command/CommandRegistry.cpp
     core/command/RotateCommand.cpp
@@ -238,7 +240,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -640,6 +642,13 @@ add_test(NAME crop_tests COMMAND test_crop)
 add_test(NAME job_tests COMMAND test_job)
 add_test(NAME datamodel_tests COMMAND test_datamodel)
 add_test(NAME pluginregistry_tests COMMAND test_pluginregistryrunner)
+add_test(NAME pluginabi_tests COMMAND test_pluginabi)
+add_test(NAME pluginexamples_tests COMMAND test_pluginexamples)
+
+# The exporter example is compiled into the test so its IExporter implementation
+# can be exercised via its C entry point (createExporter) WITHOUT LoadLibrary'ing
+# the Qt-GUI exporter DLL, which is unsafe inside a test process on Windows.
+target_sources(test_pluginexamples PRIVATE ${CMAKE_SOURCE_DIR}/plugins/example/ExampleExporterPlugin.cpp)
 add_test(NAME m3acceptance_tests COMMAND test_m3acceptance)
 add_test(NAME product_browse_tests COMMAND product_browse_tests)
 add_test(NAME compare_workflow_tests COMMAND compare_workflow_tests)

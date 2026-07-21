@@ -19,6 +19,11 @@ class DecoderRegistry
     // Decoders are tried in registration order; the fallback should be
     // registered last.
     void registerDecoder(std::shared_ptr<IDecoder> decoder);
+    void unregister(const std::string &id);
+
+    // Lookup / listing for loader and tests.
+    std::shared_ptr<IDecoder> get(const std::string &id) const;
+    std::vector<std::string> available() const;
 
     // Decode via the first claiming decoder. Returns empty ImageData if no
     // decoder can handle the file (graceful — no crash). TODO(M7): RAW support.

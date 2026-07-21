@@ -1,5 +1,7 @@
 #include "core/image/decoder/DecoderRegistry.h"
 
+#include <algorithm>
+
 #include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/QtFallbackDecoder.h"
 #include "core/image/decoder/RawDecoder.h"
@@ -31,6 +33,32 @@ void DecoderRegistry::registerDecoder(std::shared_ptr<IDecoder> decoder)
 {
     if (decoder)
         m_decoders.push_back(std::move(decoder));
+}
+
+void DecoderRegistry::unregister(const std::string &id)
+{
+    m_decoders.erase(
+        std::remove_if(m_decoders.begin(), m_decoders.end(),
+                       [&](const std::shared_ptr<IDecoder> &d) { return d && d->name() == id; }),
+        m_decoders.end());
+}
+
+std::shared_ptr<IDecoder> DecoderRegistry::get(const std::string &id) const
+{
+    for (const auto &d : m_decoders)
+        if (d && d->name() == id)
+            return d;
+    return nullptr;
+}
+
+std::vector<std::string> DecoderRegistry::available() const
+{
+    std::vector<std::string> ids;
+    ids.reserve(m_decoders.size());
+    for (const auto &d : m_decoders)
+        if (d)
+            ids.push_back(d->name());
+    return ids;
 }
 
 ImageData DecoderRegistry::decodeFull(const std::string &path) const

@@ -26,6 +26,8 @@ class PluginManager
         std::string path;
         std::string name;
         std::string analyzerId;
+        std::string decoderId;
+        std::string exporterId;
         PluginHandle handle = nullptr;
         bool loaded = false;
     };

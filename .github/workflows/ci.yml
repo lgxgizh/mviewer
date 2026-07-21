@@ -137,6 +137,12 @@ jobs:
       - name: Test
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test
 
+      - name: Plugin examples (M14.3 — Analyzer/Decoder/Exporter)
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          cd build_msvc
+          ctest -R pluginexamples_tests --output-on-failure
+
   # ---------------------------------------------------------------------------
   # package — zip portable app, upload artifact (optional gate)
   # ---------------------------------------------------------------------------
