@@ -292,6 +292,15 @@ All notable changes to this project are documented here. The format is based on
 - `m3pipeline_tests` acceptance suite covering repository→frame, 4-format decode,
   Viewer LRU cache hit, and pixel-inspector reads.
 
+### Fixed
+
+- **M14.3 — fix plugin teardown segfault:** `PluginManager`'s destructor no longer calls
+  `unloadAll()` (which unregistered plugins from the analyzer/decoder/exporter registries).
+  At process teardown those registry singletons may already be destroyed, so touching them
+  was undefined behavior and crashed `pluginexamples_tests` on process exit. Plugins are
+  process-lifetime, so the OS reclaims the loaded module handles; runtime `unload()` is
+  unchanged.
+
 ### Added (M3 Phase-2 — Pixel Inspector panel)
 
 - `AnalysisPanel` gains a **Pixel Inspector** tab that live-displays the hovered pixel:

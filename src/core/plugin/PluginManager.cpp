@@ -23,7 +23,13 @@ PluginManager &PluginManager::instance()
 
 PluginManager::~PluginManager()
 {
-    unloadAll();
+    std::lock_guard<std::mutex> lock(m_mutex);
+    // Do NOT unregister from the analyzer/decoder/exporter registries here:
+    // at static teardown those singletons may already be destroyed, and
+    // touching them is UB (segfault). Plugins are process-lifetime; the OS
+    // reclaims the loaded module handles on exit, and the registries tear
+    // themselves down independently.
+    m_plugins.clear();
 }
 
 std::string PluginManager::lastError() const
