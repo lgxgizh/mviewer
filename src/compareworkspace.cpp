@@ -107,6 +107,26 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
         }
     });
     syncLayout->addWidget(m_blinkChk);
+
+    // M15: threshold slider for difference heatmap (0-255).
+    auto *thresholdLabel = new QLabel("阈值:", this);
+    syncLayout->addWidget(thresholdLabel);
+    m_thresholdSlider = new QSlider(Qt::Horizontal, this);
+    m_thresholdSlider->setRange(0, 255);
+    m_thresholdSlider->setValue(0);
+    m_thresholdSlider->setMaximumWidth(120);
+    m_thresholdSlider->setToolTip("差异阈值: 低于此值的像素将被隐藏");
+    connect(m_thresholdSlider, &QSlider::valueChanged, this, [this](int value) {
+        m_thresholdValue = static_cast<uint8_t>(value);
+        refreshDiffOverlay();
+    });
+    syncLayout->addWidget(m_thresholdSlider);
+    m_thresholdLabel = new QLabel("0", this);
+    m_thresholdLabel->setMinimumWidth(24);
+    connect(m_thresholdSlider, &QSlider::valueChanged, this, [this](int value) {
+        m_thresholdLabel->setText(QString::number(value));
+    });
+    syncLayout->addWidget(m_thresholdLabel);
     syncLayout->addStretch(1);
 
     m_grid = new QWidget;
@@ -271,7 +291,9 @@ void CompareWorkspace::refreshDiffOverlay()
     const ImageData diff = m_engine.lastDiffImage();
     if (diff.isNull())
         return;
-    const ImageData heat = DifferenceEngine::heatMap(diff);
+    // M15: apply threshold from UI slider
+    const ImageData thresholded = DifferenceEngine::applyThreshold(diff, m_thresholdValue);
+    const ImageData heat = DifferenceEngine::heatMap(thresholded);
     if (heat.isNull())
         return;
     m_cellViews[res.index]->setOverlay(mvcore::toQImage(heat), 0.5);

@@ -1,0 +1,82 @@
+[VS] D:\msvc
+[VS] Initializing environment...
+[Qt] $env:QT_ROOT_DIR = D:/QT/6.11.1/msvc2022_64
+-- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR) 
+-- clang-tidy found: D:/msvc/VC/Tools/Llvm/x64/bin/clang-tidy.exe
+-- Configuring done (1.0s)
+-- Generating done (0.9s)
+-- Build files have been written to: D:/mviewer/build_msvc
+[Build] Release...
+[1/4] Automatic MOC and UIC for target test_m3acceptance
+[2/3] Building CXX object src\CMakeFiles\test_m3acceptance.dir\core\test_m3acceptance.cpp.obj
+[3/3] Linking CXX executable bin\test_m3acceptance.exe
+[Test] Running CTest...
+Test project D:/mviewer/build_msvc
+      Start 20: pluginregistry_tests
+Could not find executable test_pluginregistry_runner
+Looked in the following places:
+test_pluginregistry_runner
+test_pluginregistry_runner.exe
+Release/test_pluginregistry_runner
+Release/test_pluginregistry_runner.exe
+Debug/test_pluginregistry_runner
+Debug/test_pluginregistry_runner.exe
+MinSizeRel/test_pluginregistry_runner
+MinSizeRel/test_pluginregistry_runner.exe
+RelWithDebInfo/test_pluginregistry_runner
+RelWithDebInfo/test_pluginregistry_runner.exe
+Deployment/test_pluginregistry_runner
+Deployment/test_pluginregistry_runner.exe
+Development/test_pluginregistry_runner
+Development/test_pluginregistry_runner.exe
+Unable to find executable: test_pluginregistry_runner
+ 1/21 Test #20: pluginregistry_tests .............***Not Run   0.00 sec
+      Start 21: m3acceptance_tests
+      Start  7: repository_tests
+      Start  3: unit_tests
+      Start  1: core_tests
+ 2/21 Test  #1: core_tests .......................   Passed    1.52 sec
+      Start 18: job_tests
+ 3/21 Test  #3: unit_tests .......................   Passed    2.01 sec
+      Start  2: m3m4m5_tests
+ 4/21 Test #18: job_tests ........................   Passed    0.82 sec
+      Start 15: thumbnailpipeline_tests
+ 5/21 Test  #2: m3m4m5_tests .....................   Passed    0.36 sec
+      Start  6: cache_tests
+ 6/21 Test #15: thumbnailpipeline_tests ..........   Passed    0.21 sec
+      Start  4: m3pipeline_tests
+ 7/21 Test  #6: cache_tests ......................   Passed    0.25 sec
+      Start  9: metadata_tests
+ 8/21 Test  #4: m3pipeline_tests .................   Passed    0.19 sec
+      Start 19: datamodel_tests
+ 9/21 Test  #9: metadata_tests ...................   Passed    0.22 sec
+      Start  5: decoder_tests
+10/21 Test #19: datamodel_tests ..................   Passed    0.20 sec
+      Start  8: scheduler_tests
+11/21 Test  #5: decoder_tests ....................   Passed    0.14 sec
+      Start 10: filesystem_tests
+12/21 Test  #8: scheduler_tests ..................   Passed    0.10 sec
+      Start 17: crop_tests
+13/21 Test #10: filesystem_tests .................   Passed    0.14 sec
+14/21 Test #17: crop_tests .......................   Passed    0.09 sec
+      Start 11: eventbus_tests
+      Start 16: commandstack_tests
+15/21 Test #11: eventbus_tests ...................   Passed    0.08 sec
+16/21 Test #16: commandstack_tests ...............   Passed    0.07 sec
+      Start 13: tilecache_tests
+      Start 14: pixelcontroller_tests
+17/21 Test #14: pixelcontroller_tests ............   Passed    0.04 sec
+      Start 12: render_pipeline_tests
+18/21 Test #13: tilecache_tests ..................   Passed    0.07 sec
+19/21 Test #12: render_pipeline_tests ............   Passed    0.03 sec
+20/21 Test  #7: repository_tests .................   Passed    7.45 sec
+21/21 Test #21: m3acceptance_tests ...............   Passed   84.57 sec
+
+95% tests passed, 1 tests failed out of 21
+
+Total Test time (real) =  84.58 sec
+
+The following tests FAILED:
+	 20 - pluginregistry_tests (Not Run)
+Errors while running CTest
+WARNING: Tests failed

@@ -19,12 +19,12 @@ static int g_fail = 0;
         {                                                                                          \
             printf("  PASS: %s\n", msg);                                                           \
             g_pass++;                                                                              \
-        }                                                                                                                                                       \
+        }                                                                                          \
         else                                                                                       \
         {                                                                                          \
             printf("  FAIL: %s\n", msg);                                                           \
             g_fail++;                                                                              \
-        }                                                                                              \
+        }                                                                                          \
     } while (0)
 
 // Write a minimal little-endian TIFF + one IFD containing the tags we parse.
@@ -32,14 +32,14 @@ static bool writeFakeDng(const std::string &path, uint16_t iso, uint32_t exposur
                          uint32_t exposureDen, uint32_t focalNum, uint32_t focalDen)
 {
     FILE *f = std::fopen(path.c_str(), "wb");
-    if (!f)
-        return false;
+    if (!f) return false;
 
-    // TIFF header (little-endian)
-    uint8_t hdr[8] = {'I', 'I', 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00}; // IFD at offset 8
+    // TIFF header (little-endian): IFD at offset 8
+    uint8_t hdr[8] = {'I', 'I', 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00};
     std::fwrite(hdr, 1, 8, f);
 
-    // IFD: 5 entries
+    // IFD: 5 entries (each 12 bytes) + 4-byte next-IFD offset = 64 bytes total
+    // data starts at offset 8 + 2 + 5*12 + 4 = 74
     uint16_t count = 5;
     std::fwrite(&count, 2, 1, f);
 
@@ -50,20 +50,20 @@ static bool writeFakeDng(const std::string &path, uint16_t iso, uint32_t exposur
         std::fwrite(&val, 4, 1, f);
     };
 
-    // Entry offsets (after IFD: 8 + 2 + 5*12 + 4 = 8+2+60+4 = 74)
-    // We'll lay entries inline for simplicity (count=1, fits in 4 bytes).
+    // Entries: ISO (SHORT inline), ExposureTime (RATIONAL), FocalLength (RATIONAL),
+    // Make (ASCII), Model (ASCII)
     long ifdStart = 8;
-    long dataOffset = ifdStart + 2 + count * 12 + 4; // after IFD
+    long dataOffset = ifdStart + 2 + count * 12 + 4;
 
-    // ISO (0x8827, SHORT, 1) -> inline
+    // ISO (0x8827, SHORT, count=1) -> inline value
     writeEntry(0x8827, 3, 1, iso);
-    // ExposureTime (0x829A, RATIONAL, 1) -> [num, den] at dataOffset
+    // ExposureTime (0x829A, RATIONAL, count=1) -> offset to data
     writeEntry(0x829A, 5, 1, dataOffset);
-    // FocalLength (0x920A, RATIONAL, 1) -> [num, den] after exposure
+    // FocalLength (0x920A, RATIONAL, count=1) -> offset to data + 8
     writeEntry(0x920A, 5, 1, dataOffset + 8);
-    // Make (0x010F, ASCII, 4) -> "SONY" at dataOffset+16
+    // Make (0x010F, ASCII, count=4) -> offset to data + 16
     writeEntry(0x010F, 2, 4, dataOffset + 16);
-    // Model (0x0110, ASCII, 3) -> "A7R" + null at dataOffset+20
+    // Model (0x0110, ASCII, count=4) -> offset to data + 20
     writeEntry(0x0110, 2, 4, dataOffset + 20);
 
     // Next IFD offset (0 = none)
@@ -96,7 +96,7 @@ int main(int argc, char **argv)
 
     auto rm = mviewer::core::parseRawMetadata(rawPath);
     CHECK(rm.parsed, "RAW file parsed (extension recognized)");
-    CHECK(rm.iso == 800, "ISO = 800");
+    CHECK(rm.isoSpeed == 800, "ISO = 800");
     CHECK(rm.exposureSec > 0.0039 && rm.exposureSec < 0.0041, "exposure = 1/250s ~= 0.004");
     CHECK(rm.focalLength > 84.0 && rm.focalLength < 86.0, "focal = 85mm");
     CHECK(rm.make == "SONY", "make = SONY");
@@ -106,6 +106,10 @@ int main(int argc, char **argv)
     const std::string jpgPath = tmp.path().toStdString() + "/test.jpg";
     auto rm2 = mviewer::core::parseRawMetadata(jpgPath);
     CHECK(!rm2.parsed, "non-RAW returns parsed=false");
+
+    // Empty path
+    auto rm3 = mviewer::core::parseRawMetadata("");
+    CHECK(!rm3.parsed, "empty path returns parsed=false");
 
     printf("\n==== RAW metadata test: %d/%d passed ====\n", g_pass, g_pass + g_fail);
     std::fflush(stdout);

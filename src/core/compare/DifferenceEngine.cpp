@@ -21,7 +21,7 @@ int DifferenceEngine::channelOffset(PixelFormat fmt, int channel)
     }
 }
 
-ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b)
+ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b, uint8_t threshold)
 {
     if (a.isNull() || b.isNull())
         return ImageData();
@@ -62,7 +62,32 @@ ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b
                                     static_cast<int>(lb[x * cppB + roB1]));
             const int db = std::abs(static_cast<int>(la[x * cppA + roA2]) -
                                     static_cast<int>(lb[x * cppB + roB2]));
-            dst[x] = static_cast<uint8_t>(dr + dg + db > 765 ? 255 : (dr + dg + db) / 3);
+            const uint8_t diff = static_cast<uint8_t>((dr + dg + db) / 3);
+            // M15: apply threshold — only highlight pixels above threshold
+            dst[x] = (diff > threshold) ? diff : 0;
+        }
+    }
+    return out;
+}
+
+ImageData DifferenceEngine::applyThreshold(const ImageData &gray, uint8_t threshold)
+{
+    if (gray.isNull())
+        return ImageData();
+    ImageData out = makeImageData(gray.width, gray.height, gray.format);
+    if (out.isNull())
+        return ImageData();
+    const int n = gray.width * gray.height;
+    const int cpp = gray.channelsPerPixel();
+    const int ro = channelOffset(gray.format, 0);
+    for (int y = 0; y < gray.height; ++y)
+    {
+        const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
+        uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+        for (int x = 0; x < gray.width; ++x)
+        {
+            const uint8_t v = src[x * cpp + ro];
+            dst[x] = (v > threshold) ? v : 0;
         }
     }
     return out;

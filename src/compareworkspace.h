@@ -4,12 +4,16 @@
 
 #include <QCheckBox>
 #include <QGridLayout>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QMap>
 #include <QMouseEvent>
 #include <QPixmap>
 #include <QPointF>
+#include <QScrollArea>
+#include <QSlider>
 #include <QStringList>
+#include <QTimer>
 #include <QWidget>
 #include <memory>
 
@@ -99,6 +103,11 @@ class CompareWorkspace : public QWidget
     bool m_blinkState = false;
     void toggleBlink();
     void applyBlink(bool state);
+
+    // M15: difference threshold
+    QSlider *m_thresholdSlider = nullptr;
+    QLabel *m_thresholdLabel = nullptr;
+    uint8_t m_thresholdValue = 0;
 
     // Paints the most recent async diff result (from the EventBus) onto the
     // matching cell. Called on the UI thread via QueuedConnection.
