@@ -139,6 +139,12 @@ class ViewportController
     {
         return m_rows;
     }
+    // P0 #③: set the grid dimensions directly (used for forced layouts).
+    void setGrid(int cols, int rows)
+    {
+        m_cols = cols;
+        m_rows = rows;
+    }
 
     double fitScale(CellSize imageSize) const
     {
@@ -195,6 +201,10 @@ class CompareEngine
     {
         return m_layout;
     }
+
+    // P0 #③: force a column count for the compare grid (0 = auto by image count).
+    void setColumns(int cols);
+    int forcedColumns() const { return m_forcedCols; }
 
     // Sync transform
     const SyncTransform &syncTransform() const
@@ -335,6 +345,7 @@ class CompareEngine
 
     std::vector<std::shared_ptr<ImageFrame>> m_images;
     CompareLayout m_layout;
+    int m_forcedCols = 0;  // P0 #③: 0 = auto layout by image count
     BlinkController m_blink;
     SyncController m_sync;
     SelectionController m_selection;

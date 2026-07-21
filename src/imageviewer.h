@@ -51,6 +51,10 @@ class ImageViewer : public QWidget
     // pixel coordinates; valid=false when the cursor is outside the image.
     void pixelInfo(int x, int y, int r, int g, int b, bool valid);
 
+    // P0 #①: live zoom factor (percent) for the status bar. Emitted on wheel
+    // zoom and on fit/resize.
+    void zoomChanged(int percent);
+
   protected:
     void paintEvent(QPaintEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
@@ -61,6 +65,7 @@ class ImageViewer : public QWidget
     void keyPressEvent(QKeyEvent *event) override;
 
   private:
+    void emitZoom();
     void fitToWidget();
     void preloadNeighbors(const QString &path);
     void drawHistogram(QPainter &painter) const;

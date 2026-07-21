@@ -1,21 +1,27 @@
 #include "compareworkspace.h"
+#include "widgets/histogramwidget.h"
 #include "widgets/rawimageview.h"
 
 #include "core/EventBus.h"
 #include "core/compare/DifferenceEngine.h"
+#include "core/compare/Histogram.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/QtConvert.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QHeaderView>
 #include <QLabel>
 #include <QMetaObject>
 #include <QMouseEvent>
 #include <QScrollArea>
+#include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWheelEvent>
+#include <vector>
 
 namespace
 {
@@ -127,6 +133,24 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
         m_thresholdLabel->setText(QString::number(value));
     });
     syncLayout->addWidget(m_thresholdLabel);
+
+    // P0 #③: explicit multi-layout selector (auto / single / 2-4 columns / row).
+    auto *layoutLabel = new QLabel(tr("布局:"), this);
+    syncLayout->addWidget(layoutLabel);
+    m_layoutCombo = new QComboBox(this);
+    m_layoutCombo->addItems(
+        {tr("自动"), tr("单列"), tr("2 列"), tr("3 列"), tr("4 列"), tr("一行")});
+    m_layoutCombo->setCurrentIndex(0);
+    connect(m_layoutCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &CompareWorkspace::onLayoutChanged);
+    syncLayout->addWidget(m_layoutCombo);
+
+    // P0 #③: inspector + histogram side panel toggle.
+    m_sideChk = new QCheckBox(tr("检视面板"), this);
+    m_sideChk->setChecked(false);
+    connect(m_sideChk, &QCheckBox::toggled, this, &CompareWorkspace::onSideToggled);
+    syncLayout->addWidget(m_sideChk);
+
     syncLayout->addStretch(1);
 
     m_grid = new QWidget;
@@ -142,11 +166,41 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scroll->setFrameShape(QFrame::NoFrame);
 
-    QVBoxLayout *root = new QVBoxLayout(this);
+    // P0 #③: right-side inspector/histogram panel (collapsible).
+    m_sidePanel = new QWidget(this);
+    m_sidePanel->setFixedWidth(280);
+    auto *sideLay = new QVBoxLayout(m_sidePanel);
+    sideLay->setContentsMargins(4, 4, 4, 4);
+    sideLay->setSpacing(6);
+
+    sideLay->addWidget(new QLabel(tr("像素检视"), this));
+    m_inspector = new QTableWidget(this);
+    m_inspector->setColumnCount(6);
+    m_inspector->setHorizontalHeaderLabels(
+        {tr("#"), tr("名称"), tr("R"), tr("G"), tr("B"), tr("Δ")});
+    m_inspector->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_inspector->setSelectionMode(QAbstractItemView::NoSelection);
+    m_inspector->horizontalHeader()->setStretchLastSection(true);
+    m_inspector->setFixedHeight(220);
+    sideLay->addWidget(m_inspector);
+
+    sideLay->addWidget(new QLabel(tr("RGB 直方图"), this));
+    m_hist = new HistogramWidget(this);
+    m_hist->setMinimumHeight(140);
+    sideLay->addWidget(m_hist, 1);
+    m_sidePanel->setVisible(false);
+
+    auto *leftLay = new QVBoxLayout;
+    leftLay->setContentsMargins(0, 0, 0, 0);
+    leftLay->setSpacing(4);
+    leftLay->addWidget(syncBar);
+    leftLay->addWidget(scroll, 1);
+
+    auto *root = new QHBoxLayout(this);
     root->setContentsMargins(4, 4, 4, 4);
     root->setSpacing(4);
-    root->addWidget(syncBar);
-    root->addWidget(scroll, 1);
+    root->addLayout(leftLay, 1);
+    root->addWidget(m_sidePanel);
 }
 
 CompareWorkspace::~CompareWorkspace()
@@ -168,6 +222,8 @@ void CompareWorkspace::setImages(const QStringList &paths)
     rebuildCells();
     fitAll();
     update();
+    if (m_sidePanel && m_sidePanel->isVisible())
+        refreshHistograms();
 }
 
 QStringList CompareWorkspace::comparedImages() const
@@ -262,6 +318,8 @@ void CompareWorkspace::rebuildCells()
                                        .arg(r)
                                        .arg(g)
                                        .arg(b));
+                    if (m_sidePanel && m_sidePanel->isVisible())
+                        updateInspector(x, y);
                 });
         connect(view, &RawImageView::selectionChanged, this,
                 [this](const mviewer::domain::Selection &sel) { applySelectionToAll(sel); });
@@ -319,6 +377,86 @@ void CompareWorkspace::applyBlink(bool state)
         else
             m_cellViews[i]->setVisible(state);
     }
+}
+
+void CompareWorkspace::onLayoutChanged()
+{
+    if (!m_layoutCombo)
+        return;
+    const int idx = m_layoutCombo->currentIndex();
+    int cols = 0;
+    switch (idx)
+    {
+        case 1: cols = 1; break;   // 单列
+        case 2: cols = 2; break;   // 2 列
+        case 3: cols = 3; break;   // 3 列
+        case 4: cols = 4; break;   // 4 列
+        case 5: cols = m_engine.imageCount(); break;  // 一行
+        default: cols = 0; break;  // 自动
+    }
+    m_engine.setColumns(cols);
+    rebuildCells();
+    fitAll();
+    update();
+    if (m_sidePanel && m_sidePanel->isVisible())
+        refreshHistograms();
+}
+
+void CompareWorkspace::onSideToggled(bool on)
+{
+    if (!m_sidePanel)
+        return;
+    m_sidePanel->setVisible(on);
+    if (on)
+        refreshHistograms();
+    update();
+}
+
+void CompareWorkspace::updateInspector(int x, int y)
+{
+    if (!m_inspector)
+        return;
+    const auto probe = m_engine.inspectPixel(x, y);
+    if (probe.samples.empty() || !probe.samples[0].valid)
+    {
+        m_inspector->setRowCount(0);
+        return;
+    }
+    const int n = m_engine.imageCount();
+    m_inspector->setRowCount(n);
+    for (int i = 0; i < n; ++i)
+    {
+        const ImageFrame *img = m_engine.imageAt(i);
+        const QString name =
+            img ? QString::fromStdString(img->metadata().fileName) : QString();
+        const auto &s = probe.samples[static_cast<size_t>(i)];
+        const double dist = (static_cast<size_t>(i) < probe.deltas.size())
+                                ? probe.deltas[static_cast<size_t>(i)].dist
+                                : 0.0;
+        m_inspector->setItem(i, 0, new QTableWidgetItem(QString::number(i + 1)));
+        m_inspector->setItem(i, 1, new QTableWidgetItem(name));
+        m_inspector->setItem(i, 2, new QTableWidgetItem(QString::number(s.r)));
+        m_inspector->setItem(i, 3, new QTableWidgetItem(QString::number(s.g)));
+        m_inspector->setItem(i, 4, new QTableWidgetItem(QString::number(s.b)));
+        m_inspector->setItem(
+            i, 5, new QTableWidgetItem(QString::number(static_cast<int>(dist))));
+    }
+}
+
+void CompareWorkspace::refreshHistograms()
+{
+    if (!m_hist)
+        return;
+    const int n = m_engine.imageCount();
+    std::vector<mviewer::core::Histogram> hists;
+    hists.reserve(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i)
+    {
+        const ImageFrame *img = m_engine.imageAt(i);
+        hists.push_back(img ? mviewer::core::computeHistogram(img->pixels())
+                            : mviewer::core::Histogram{});
+    }
+    m_hist->setHistograms(hists);
 }
 
 void CompareWorkspace::fitAll()

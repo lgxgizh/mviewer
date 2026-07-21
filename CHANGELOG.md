@@ -36,6 +36,40 @@ All notable changes to this project are documented here. The format is based on
   - `demo_workflow.cpp` (real-window harness) + `demo_render.cpp` (offscreen
     multi-state renderer) + `scripts/record_demo.ps1` produce a genuine
     `dist/mviewer_demo.gif` and `dist/mviewer_screenshot.png` (ffmpeg required).
+- **P0 — Product browsing workflow (virtualized gallery + real-time status bar):**
+  rewrote `ThumbnailPanel` from a `QListWidget` (one widget **per image**, hard-capped at
+  1000) into a **virtualized `QListView` + custom delegate** that holds only a path list — so
+  it scrolls smoothly with tens of thousands of images (no per-image widget, only visible
+  cells painted). Thumbnails are now decoded through the existing shared `ThumbnailPipeline`
+  (viewport + predictive priority, LRU + disk cache) instead of a per-panel worker thread, and
+  the on-disk thumbnail cache is consulted first so revisited folders paint instantly. The
+  status bar is now a **persistent real-time readout**: image count, total/selected file size,
+  live viewer zoom (new `ImageViewer::zoomChanged` signal), and live cache hit-rate sampled
+  from `CacheManager::levelStats`. Acceptance target: 10,000 images, no scroll jank, CPU<20%,
+  stable memory.
+- **P0 #③ — Compare workflow enhancements (multi-layout + inspector + histogram):**
+  - **Multi-layout selector** in the compare toolbar: Auto / 单列 / 2 列 / 3 列 / 4 列 / 一行.
+    `CompareEngine::setColumns(int)` forces a column count; the existing sync-zoom, blink,
+    diff heatmap + threshold, ROI select and per-cell pixel readout all continue to work in any
+    layout. Diffs stay async, so pan/zoom stays at interactive frame rates (60 FPS target).
+  - **Pixel inspector** side panel: hovering any cell probes that image-space pixel across all
+    compared images (`CompareEngine::inspectPixel`) and shows a live table of per-image
+    R/G/B + Δ (distance vs base).
+  - **RGB histogram** side panel: `core/compare/Histogram.h` computes a domain-free per-channel
+    histogram over decoded pixels; `HistogramWidget` overlays all compared images' R/G/B
+    histograms for quick exposure/colour comparison.
+  - Side panel toggled by a "检视面板" checkbox; histogram is recomputed lazily when shown.
+- **P1 — Metadata search + star rating:**
+  - **Metadata-aware search:** the gallery search bar gains a "元数据" checkbox. When on, the
+    filter matches the embedded EXIF/IPTC/XMP text keys **and** RAW make/model/lens/ISO (lazy
+    indexed on first metadata search), not just filenames.
+  - **Star rating (0–5):** new `core/RatingStore` (Qt-free, persisted to
+    `%LOCALAPPDATA%/mviewer/ratings.txt`) with a UI `RatingWidget`. The thumbnail delegate draws
+    rating stars; the metadata panel shows/edits the current image's rating; `Ctrl+1…5` (and
+    `Ctrl+0` to clear) rate the current image; a "评分" combo in the sort bar filters the gallery
+    by minimum stars.
+  - Added core unit tests: `histogram_tests` (channel order, null, sums) and `ratingstore_tests`
+    (clamp, persistence round-trip).
 - **M6 — Vertical Browsing Chain:** `DecoderRegistry` (singleton) dispatches files to
   per-format decoders (`QtDecoder` for JPEG/PNG/BMP/TIFF, `QtFallbackDecoder` as last-resort);
   `Decoder` is now a thin shim over the registry. RAW deferred to M7 (`TODO(M7): RAW`).

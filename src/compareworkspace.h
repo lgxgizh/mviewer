@@ -18,6 +18,9 @@
 #include <memory>
 
 class QScrollArea;
+class QTableWidget;
+class QComboBox;
+class HistogramWidget;
 class RawImageView;
 
 // CompareWorkspace：多图同步比较工作区
@@ -108,6 +111,19 @@ class CompareWorkspace : public QWidget
     QSlider *m_thresholdSlider = nullptr;
     QLabel *m_thresholdLabel = nullptr;
     uint8_t m_thresholdValue = 0;
+
+    // P0 #③: explicit multi-layout selector.
+    QComboBox *m_layoutCombo = nullptr;
+    void onLayoutChanged();
+
+    // P0 #③: collapsible inspector + histogram side panel.
+    QCheckBox *m_sideChk = nullptr;
+    QWidget *m_sidePanel = nullptr;
+    QTableWidget *m_inspector = nullptr;
+    HistogramWidget *m_hist = nullptr;
+    void onSideToggled(bool on);
+    void updateInspector(int x, int y);
+    void refreshHistograms();
 
     // Paints the most recent async diff result (from the EventBus) onto the
     // matching cell. Called on the UI thread via QueuedConnection.

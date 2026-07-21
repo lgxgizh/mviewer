@@ -1,6 +1,8 @@
 #include "metadatapanel.h"
 
+#include "core/RatingStore.h"
 #include "core/image/MetadataReader.h"
+#include "widgets/ratingwidget.h"
 
 #include <QDateTime>
 #include <QFileInfo>
@@ -25,6 +27,26 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
     m_table->horizontalHeader()->setStretchLastSection(true);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
+
+    // P1: star-rating editor, persists to RatingStore.
+    auto *ratingBox = new QWidget(this);
+    auto *ratingLay = new QHBoxLayout(ratingBox);
+    ratingLay->setContentsMargins(0, 0, 0, 0);
+    ratingLay->setSpacing(6);
+    ratingLay->addWidget(new QLabel(tr("评分:"), this));
+    m_rating = new RatingWidget(this);
+    ratingLay->addWidget(m_rating);
+    ratingLay->addStretch(1);
+    connect(m_rating, &RatingWidget::ratingChanged, this, [this](int stars)
+            {
+                if (m_currentPath.isEmpty())
+                    return;
+                mviewer::core::RatingStore::instance().setRating(m_currentPath.toStdString(),
+                                                                stars);
+                emit ratingEdited(m_currentPath, stars);
+            });
+
+    layout->addWidget(ratingBox);
     layout->addWidget(m_table, 1);
 
     clear();
@@ -32,6 +54,9 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
 
 void MetadataPanel::clear()
 {
+    m_currentPath.clear();
+    if (m_rating)
+        m_rating->setRating(0);
     m_table->setRowCount(0);
     addRow(tr("提示"), tr("在画廊中选择一张图片以查看元数据"));
 }
@@ -87,6 +112,11 @@ void MetadataPanel::render(const mviewer::domain::ImageMetadata &meta)
 
 void MetadataPanel::setImage(const QString &path)
 {
+    m_currentPath = path;
+    if (m_rating)
+        m_rating->setRating(
+            path.isEmpty() ? 0
+                           : mviewer::core::RatingStore::instance().rating(path.toStdString()));
     if (path.isEmpty())
     {
         clear();

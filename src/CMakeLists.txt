@@ -30,6 +30,7 @@ add_library(mviewer_core SHARED
     core/compare/SyncController.cpp
     core/compare/BlinkController.cpp
     core/compare/DifferenceEngine.cpp
+    core/RatingStore.cpp
     core/analysis/AnalysisEngine.cpp
     core/analysis/ExportReport.cpp
     core/analysis/ReportHtml.cpp
@@ -94,6 +95,8 @@ add_library(mviewer_ui STATIC
     exportcommand.cpp
     metadatapanel.cpp
     widgets/rawimageview.cpp
+    widgets/ratingwidget.cpp
+    widgets/histogramwidget.cpp
     gpu/GpuTileUploader.cpp
 )
 
@@ -300,6 +303,35 @@ target_include_directories(compare_workflow_tests PRIVATE ${CMAKE_CURRENT_SOURCE
 target_compile_definitions(compare_workflow_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 # ─── M9-3 Analysis workflow acceptance tests ─────────────────────────────
+# ─── P0 #③ / P1 core unit tests (histogram, rating store) ───────────────────
+add_executable(histogram_tests
+    core/test_histogram.cpp
+)
+target_link_libraries(histogram_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(histogram_tests PRIVATE cxx_std_20)
+target_include_directories(histogram_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(histogram_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+add_executable(ratingstore_tests
+    core/test_ratingstore.cpp
+)
+target_link_libraries(ratingstore_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(ratingstore_tests PRIVATE cxx_std_20)
+target_include_directories(ratingstore_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(ratingstore_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
 add_executable(analysis_panel_tests
     core/test_analysis_panel.cpp
 )
@@ -583,6 +615,8 @@ add_test(NAME pluginregistry_tests COMMAND test_pluginregistryrunner)
 add_test(NAME m3acceptance_tests COMMAND test_m3acceptance)
 add_test(NAME product_browse_tests COMMAND product_browse_tests)
 add_test(NAME compare_workflow_tests COMMAND compare_workflow_tests)
+add_test(NAME histogram_tests COMMAND histogram_tests)
+add_test(NAME ratingstore_tests COMMAND ratingstore_tests)
 add_test(NAME analysis_panel_tests COMMAND analysis_panel_tests)
 add_test(NAME export_tests COMMAND export_tests)
 add_test(NAME workspace_persist_tests COMMAND workspace_persist_tests)

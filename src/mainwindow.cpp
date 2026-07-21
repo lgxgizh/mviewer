@@ -11,6 +11,8 @@
 #include "core/command/ToggleHistogramCommand.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
+#include "core/RatingStore.h"
+#include "core/cache/CacheManager.h"
 #include "core/analysis/ReportHtml.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
@@ -200,6 +202,22 @@ void MainWindow::setupUi()
     sortLayout->addWidget(m_searchEdit, 1);
     m_searchRecursive = new QCheckBox("包含子目录", sortBar);
     sortLayout->addWidget(m_searchRecursive);
+
+    // P1: metadata-aware search (camera / lens / ISO / date / …).
+    m_searchMeta = new QCheckBox("元数据", sortBar);
+    sortLayout->addWidget(m_searchMeta);
+
+    // P1: star-rating filter.
+    sortLayout->addWidget(new QLabel("评分:", sortBar));
+    m_ratingFilter = new QComboBox(sortBar);
+    m_ratingFilter->addItem("全部", 0);
+    m_ratingFilter->addItem("★ 及以上", 1);
+    m_ratingFilter->addItem("★★ 及以上", 2);
+    m_ratingFilter->addItem("★★★ 及以上", 3);
+    m_ratingFilter->addItem("★★★★ 及以上", 4);
+    m_ratingFilter->addItem("★★★★★", 5);
+    sortLayout->addWidget(m_ratingFilter);
+
     sortLayout->addStretch(0);
     rightLayout->addWidget(sortBar);
 
@@ -341,6 +359,20 @@ void MainWindow::setupUi()
             {
                 m_thumbnailPanel->setFilter(m_searchEdit->text(), m_searchRecursive->isChecked());
             });
+    // P1: metadata search toggle — re-applies the active filter against embedded
+    // metadata instead of just filenames.
+    connect(m_searchMeta, &QCheckBox::toggled, this,
+            &MainWindow::onSearchMetaToggled);
+    // P1: star-rating filter.
+    connect(m_ratingFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            &MainWindow::onRatingFilterChanged);
+    // P1: a rating set in the metadata panel refreshes the gallery star overlay.
+    connect(m_metadataPanel, &MetadataPanel::ratingEdited, this,
+            [this](const QString &path, int)
+            {
+                Q_UNUSED(path);
+                m_thumbnailPanel->invalidateRatings();
+            });
 
     // ----- Menu actions -----
     connect(m_actOpenDir, &QAction::triggered, this,
@@ -397,6 +429,36 @@ void MainWindow::setupUi()
     connect(m_actAddFavorite, &QAction::triggered, this, &MainWindow::addFavoriteCurrent);
     connect(m_actHistoryBack, &QAction::triggered, this, [this]() { navigateHistory(-1); });
     connect(m_actHistoryForward, &QAction::triggered, this, [this]() { navigateHistory(1); });
+
+    // P0 #①: real-time status bar — image count, total/selected size, viewer
+    // zoom, and live cache hit-rate. Persistent (not transient showMessage).
+    m_lblCount = new QLabel("图片 0", this);
+    m_lblSize = new QLabel("大小 0 B", this);
+    m_lblZoom = new QLabel("缩放 —", this);
+    m_lblCache = new QLabel("命中率 —", this);
+    for (QLabel *l : {m_lblCount, m_lblSize, m_lblZoom, m_lblCache})
+        l->setContentsMargins(8, 0, 8, 0);
+    statusBar()->addPermanentWidget(m_lblCount);
+    statusBar()->addPermanentWidget(m_lblSize);
+    statusBar()->addPermanentWidget(m_lblZoom);
+    statusBar()->addPermanentWidget(m_lblCache);
+
+    connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
+            [this](int total, qint64 totalBytes, int selected, qint64 selBytes)
+            {
+                m_lblCount->setText(QString("图片 %1").arg(total));
+                if (selected > 0)
+                    m_lblSize->setText(
+                        QString("已选 %1 · %2").arg(selected).arg(formatBytes(selBytes)));
+                else
+                    m_lblSize->setText(QString("大小 %1").arg(formatBytes(totalBytes)));
+            });
+    connect(m_imageViewer, &ImageViewer::zoomChanged, this,
+            [this](int pct) { m_lblZoom->setText(QString("缩放 %1%").arg(pct)); });
+
+    m_statTimer = new QTimer(this);
+    connect(m_statTimer, &QTimer::timeout, this, &MainWindow::updateCacheStat);
+    m_statTimer->start(500);
 
     statusBar()->showMessage("就绪");
 }
@@ -467,6 +529,13 @@ void MainWindow::setupCommands()
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
+    // P1: Ctrl+1..5 rate the current image; Ctrl+0 clears the rating.
+    if (event->modifiers() & Qt::ControlModifier &&
+        event->key() >= Qt::Key_0 && event->key() <= Qt::Key_5)
+    {
+        rateCurrentImage(event->key() - Qt::Key_0);
+        return;
+    }
     ICommand *cmd = CommandRegistry::instance().findByShortcut(
         event->key(), static_cast<int>(event->modifiers()));
     if (cmd)
@@ -475,6 +544,28 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
     QMainWindow::keyPressEvent(event);
+}
+
+void MainWindow::onSearchMetaToggled(bool on)
+{
+    m_thumbnailPanel->setMetaSearch(on);
+}
+
+void MainWindow::onRatingFilterChanged(int)
+{
+    m_thumbnailPanel->setRatingFilter(m_ratingFilter->currentData().toInt());
+}
+
+void MainWindow::rateCurrentImage(int stars)
+{
+    if (m_currentImagePath.isEmpty())
+        return;
+    mviewer::core::RatingStore::instance().setRating(m_currentImagePath.toStdString(), stars);
+    m_thumbnailPanel->invalidateRatings();
+    m_metadataPanel->setImage(m_currentImagePath);  // refresh the rating widget
+    statusBar()->showMessage(QString("已为 %1 评分: %2 星")
+                                 .arg(QFileInfo(m_currentImagePath).fileName())
+                                 .arg(stars));
 }
 
 void MainWindow::onImageOpen(const QString &path)
@@ -1123,4 +1214,39 @@ void MainWindow::dropEvent(QDropEvent *event)
     {
         onImageOpen(paths.first());
     }
+}
+
+// P0 #①: status bar helpers.
+
+QString MainWindow::formatBytes(qint64 bytes)
+{
+    if (bytes < 1024)
+        return QString("%1 B").arg(bytes);
+    const double kb = bytes / 1024.0;
+    if (kb < 1024.0)
+        return QString::number(kb, 'f', 1) + " KB";
+    const double mb = kb / 1024.0;
+    if (mb < 1024.0)
+        return QString::number(mb, 'f', 1) + " MB";
+    const double gb = mb / 1024.0;
+    return QString::number(gb, 'f', 2) + " GB";
+}
+
+void MainWindow::updateCacheStat()
+{
+    if (!m_lblCache)
+        return;
+    auto &cm = CacheManager::instance();
+    uint64_t hits = 0, misses = 0;
+    for (CacheLevel lvl : {CacheLevel::Metadata, CacheLevel::Thumbnail,
+                           CacheLevel::Preview, CacheLevel::FullImage})
+    {
+        const CacheLevelStats s = cm.levelStats(lvl);
+        hits += s.hits;
+        misses += s.misses;
+    }
+    if (hits + misses == 0)
+        m_lblCache->setText("命中率 —");
+    else
+        m_lblCache->setText(QString("命中率 %1%").arg(int(100.0 * hits / (hits + misses))));
 }

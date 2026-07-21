@@ -1,659 +1,709 @@
 #include "thumbnailpanel.h"
 
-#include "application/DeleteImageUseCase.h"
-#include "application/RenameImageUseCase.h"
-#include "core/EventBus.h"
-
-#include "core/analysis/ExportReport.h"
 #include "core/analyzer/Analyzer.h"
+#include "core/RatingStore.h"
 #include "core/image/Decoder.h"
-#include "core/image/ImageBuffer.h"
 #include "core/image/ImageRepository.h"
+#include "core/image/MetadataReader.h"
 #include "core/image/QtConvert.h"
+#include "core/image/RawMetadata.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
+#include "domain/Image.h"
 #include "thumbnailcache.h"
 
-#include <QApplication>
+#include <algorithm>
+#include <limits>
+#include <unordered_map>
+
+#include <QAbstractItemView>
+#include <QClipboard>
 #include <QContextMenuEvent>
-#include <QDesktopServices>
+#include <QDebug>
 #include <QDir>
+#include <QDirIterator>
+#include <QDrag>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QImage>
 #include <QInputDialog>
+#include <QLabel>
 #include <QMenu>
-#include <QMessageBox>
+#include <QMimeData>
+#include <QAction>
 #include <QPainter>
 #include <QProcess>
 #include <QPushButton>
+#include <QResizeEvent>
+#include <QStandardPaths>
 #include <QScrollBar>
-#include <QUrl>
-#include <algorithm>
-#include <memory>
-#include <utility>
-#include <vector>
+#include <QShowEvent>
+#include <QStringListModel>
+#include <QTimer>
 
 namespace
 {
-const QStringList kImageExtensions = {"*.jpg", "*.jpeg", "*.bmp", "*.png", "*.tif", "*.tiff"};
-
-QList<QFileInfo> sortedEntries(const QString &dirPath, ThumbnailPanel::SortMode mode)
+bool isImageSuffix(const QString &suffix)
 {
-    QDir dir(dirPath);
-    if (!dir.exists())
-        return {};
+    static const QStringList exts = {"bmp", "gif",  "jpg", "jpeg", "png",
+                                     "tif", "tiff", "webp"};
+    return exts.contains(suffix);
+}
 
-    QFileInfoList entries = dir.entryInfoList(kImageExtensions, QDir::Files);
-    if (entries.isEmpty())
-        return {};
-
-    switch (mode)
-    {
-    case ThumbnailPanel::SortName:
-        std::sort(entries.begin(), entries.end(), [](const QFileInfo &a, const QFileInfo &b)
-                  { return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0; });
-        break;
-    case ThumbnailPanel::SortDate:
-        std::sort(entries.begin(), entries.end(), [](const QFileInfo &a, const QFileInfo &b)
-                  { return a.lastModified() < b.lastModified(); });
-        break;
-    case ThumbnailPanel::SortSize:
-        std::sort(entries.begin(), entries.end(),
-                  [](const QFileInfo &a, const QFileInfo &b) { return a.size() < b.size(); });
-        break;
-    case ThumbnailPanel::SortResolution:
-    {
-        auto area = [](const QFileInfo &fi)
-        {
-            const auto meta =
-                ImageRepository::instance().metadata(fi.absoluteFilePath().toStdString());
-            return static_cast<qint64>(meta.width) * meta.height;
-        };
-        std::sort(entries.begin(), entries.end(),
-                  [&](const QFileInfo &a, const QFileInfo &b) { return area(a) < area(b); });
-        break;
-    }
-    }
-    return entries;
+std::vector<std::string> toStdPaths(const QStringList &in)
+{
+    std::vector<std::string> out;
+    out.reserve(static_cast<size_t>(in.size()));
+    for (const QString &s : in)
+        out.push_back(s.toStdString());
+    return out;
 }
 } // namespace
 
-// ---- ThumbnailWorker -------------------------------------------------------
+// ---- ThumbnailPanel ---------------------------------------------------------
 
-ThumbnailWorker::ThumbnailWorker(QObject *parent) : QObject(parent)
-{
-}
-
-void ThumbnailWorker::stop()
-{
-    QMutexLocker lock(&m_mutex);
-    m_stop = true;
-    m_cond.wakeAll();
-}
-
-void ThumbnailWorker::enqueue(const Request &req)
-{
-    QMutexLocker lock(&m_mutex);
-    // De-duplicate: keep only the latest request for the same id.
-    for (int i = 0; i < m_queue.size(); ++i)
-    {
-        if (m_queue[i].id == req.id)
-        {
-            m_queue[i] = req;
-            m_cond.wakeOne();
-            return;
-        }
-    }
-    m_queue.enqueue(req);
-    m_cond.wakeOne();
-}
-
-QPixmap ThumbnailWorker::makeThumbnail(const QString &path)
-{
-    // 1) On-disk cache (persistent tier).
-    QPixmap cached;
-    if (ThumbnailCache::instance().get(path, cached))
-        return cached;
-
-    // 2) ThumbnailPipeline in-memory LRU (hot tier). The pipeline decodes on a
-    //    background scheduler thread with visible-range priority + predictive
-    //    loading; here we probe its cache synchronously. If present, use it.
-    ImageData memHit = ThumbnailPipeline::instance().request(path.toStdString());
-    if (!memHit.isNull())
-    {
-        QImage qimg = mvcore::toQImage(memHit);
-        if (!qimg.isNull())
-        {
-            QPixmap pm(ThumbnailPanel::kThumbSize, ThumbnailPanel::kThumbSize);
-            pm.fill(Qt::transparent);
-            QPixmap scaled = QPixmap::fromImage(qimg).scaled(
-                ThumbnailPanel::kThumbSize, ThumbnailPanel::kThumbSize, Qt::KeepAspectRatio,
-                Qt::SmoothTransformation);
-            QPainter painter(&pm);
-            painter.drawPixmap((ThumbnailPanel::kThumbSize - scaled.width()) / 2,
-                               (ThumbnailPanel::kThumbSize - scaled.height()) / 2, scaled);
-            painter.end();
-            return pm;
-        }
-    }
-
-    // 3) Decode at thumbnail resolution through the core decoder (no UI-layer
-    //    decode). Store into the pipeline LRU for fast reuse on revisit.
-    ImageData img = Decoder::decodeScaled(path.toStdString(), ThumbnailPanel::kThumbSize);
-    if (img.isNull())
-        return {};
-    QImage qimg = mvcore::toQImage(img);
-    if (qimg.isNull())
-        return {};
-
-    // Compose on a square transparent canvas with aspect-correct scaling.
-    QPixmap pm(ThumbnailPanel::kThumbSize, ThumbnailPanel::kThumbSize);
-    pm.fill(Qt::transparent);
-    QPixmap scaled =
-        QPixmap::fromImage(qimg).scaled(ThumbnailPanel::kThumbSize, ThumbnailPanel::kThumbSize,
-                                        Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    QPainter painter(&pm);
-    painter.drawPixmap((ThumbnailPanel::kThumbSize - scaled.width()) / 2,
-                       (ThumbnailPanel::kThumbSize - scaled.height()) / 2, scaled);
-    painter.end();
-
-    ThumbnailCache::instance().put(path, pm);
-    return pm;
-}
-
-// Worker event loop (runs on the worker thread via exec()).
-void ThumbnailWorker::process()
-{
-    for (;;)
-    {
-        Request req;
-        {
-            QMutexLocker lock(&m_mutex);
-            while (m_queue.isEmpty() && !m_stop)
-                m_cond.wait(&m_mutex);
-            if (m_stop)
-                break;
-            if (m_queue.isEmpty())
-                continue;
-            req = m_queue.dequeue();
-        }
-        const QPixmap pm = makeThumbnail(req.path);
-        if (!pm.isNull())
-            emit thumbnailReady(req.path, pm, req.id);
-    }
-    emit finished();
-}
-
-// ---- ThumbnailPanel --------------------------------------------------------
-
-ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListWidget(parent)
+ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
 {
     setViewMode(QListView::IconMode);
-    setFlow(QListView::LeftToRight);
-    setWrapping(true);
-    setResizeMode(QListView::Adjust);
     setMovement(QListView::Static);
-    setIconSize(QSize(kThumbSize, kThumbSize));
-    setGridSize(QSize(kThumbSize + 16, kThumbSize + 30));
-    setSpacing(8);
-    setUniformItemSizes(true);
-    setSelectionMode(QAbstractItemView::MultiSelection);
+    setResizeMode(QListView::Adjust);
+    setWrapping(true);
+    setUniformItemSizes(true); // all cells identical -> cheap layout for huge lists
+    setSpacing(6);
+    setGridSize(QSize(kThumbSize + 16, kThumbSize + 34));
+    setSelectionMode(QAbstractItemView::ExtendedSelection);
+    setTextElideMode(Qt::ElideRight);
+    setEditTriggers(QAbstractItemView::NoEditTriggers);
+    setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
 
-    startWorker();
+    m_model = new QStringListModel(this);
+    setModel(m_model);
 
-    m_compareBtn = new QPushButton("比较(&C)", this);
-    m_compareBtn->setVisible(true);
+    m_delegate = new ThumbDelegate(kThumbSize, this, this);
+    setItemDelegate(m_delegate);
+
+    m_compareBtn = new QPushButton("比较选中", this);
+    m_compareBtn->setVisible(false);
     connect(m_compareBtn, &QPushButton::clicked, this, &ThumbnailPanel::onCompareClicked);
 
-    connect(this, &QListWidget::itemClicked, this,
-            [this](QListWidgetItem *item)
-            {
-                if (item)
-                    emit itemClicked(item->data(Qt::UserRole).toString());
-            });
-    connect(this, &QListWidget::itemDoubleClicked, this,
-            [this](QListWidgetItem *item)
-            {
-                if (item)
-                {
-                    const QString path = item->data(Qt::UserRole).toString();
-                    emit itemDoubleClicked(path);
-                    EventBus::instance().publish("image.open", const_cast<QString *>(&path));
-                }
-            });
+    connect(selectionModel(), &QItemSelectionModel::selectionChanged, this,
+            &ThumbnailPanel::onSelectionChanged);
 
-    connect(
-        m_worker, &ThumbnailWorker::thumbnailReady, this,
-        [this](const QString &path, const QPixmap &pm, const QString &id)
-        {
-            // Match by the stored id to avoid stale updates after
-            // a directory switch.
-            Q_UNUSED(path);
-            QListWidgetItem *item = m_itemById.value(id, nullptr);
-            if (item)
-                item->setIcon(QIcon(pm));
-        },
-        Qt::QueuedConnection);
+    // Drive thumbnail decode priority from the viewport (P0 #②).
+    connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
+            &ThumbnailPanel::updateVisibleRange);
+    connect(horizontalScrollBar(), &QScrollBar::valueChanged, this,
+            &ThumbnailPanel::updateVisibleRange);
+
+    // Restore path-based navigation signals (used by MainWindow to open images
+    // and refresh the metadata panel) from the view's built-in index signals.
+    connect(this, &QAbstractItemView::clicked, this,
+            [this](const QModelIndex &idx)
+            { if (idx.isValid()) emit itemClicked(m_paths.value(idx.row())); });
+    connect(this, &QAbstractItemView::doubleClicked, this,
+            [this](const QModelIndex &idx)
+            { if (idx.isValid()) emit itemDoubleClicked(m_paths.value(idx.row())); });
+
+    // Wire the shared pipeline ONCE. The decode step is disk-cache-aware (so a
+    // previously visited folder loads instantly without re-decoding), and the
+    // result callback lands the QPixmap into our ready map + repaints the cell.
+    // The pipeline is a singleton used only by the gallery, so configuring it
+    // here is safe.
+    m_alive = std::make_shared<std::atomic<bool>>(true);
+    if (!m_pipelineWired)
+    {
+        m_pipelineWired = true;
+        ThumbnailPipeline::instance().thumbSize = kThumbSize;
+        ThumbnailPipeline::instance().setDecodeFn(
+            [this](const std::string &p, int /*size*/)
+            {
+                QString qp = QString::fromStdString(p);
+                QPixmap cached;
+                if (ThumbnailCache::instance().get(qp, cached))
+                    return mvcore::fromQImage(cached.toImage());
+                return Decoder::decodeScaled(p, kThumbSize);
+            });
+        auto alive = m_alive;
+        ThumbnailPipeline::instance().setResultFn(
+            [this, alive](const std::string &p, const ImageData &img)
+            {
+                if (!alive->load())
+                    return; // panel destroyed; ignore late callback
+                QImage q = mvcore::toQImage(img);
+                if (q.isNull())
+                    return;
+                const int s = kThumbSize;
+                QPixmap pm(s, s);
+                pm.fill(Qt::transparent);
+                QPixmap scaled = QPixmap::fromImage(q).scaled(
+                    s, s, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                QPainter painter(&pm);
+                painter.drawPixmap((s - scaled.width()) / 2, (s - scaled.height()) / 2,
+                                   scaled);
+                painter.end();
+                QString qp = QString::fromStdString(p);
+                {
+                    QMutexLocker lk(&m_thumbMtx);
+                    m_thumbReady[qp] = pm;
+                    m_thumbPending.remove(qp);
+                }
+                ThumbnailCache::instance().put(qp, pm);
+                QMetaObject::invokeMethod(this, "onThumbReady", Qt::QueuedConnection,
+                                          Q_ARG(QString, qp));
+            });
+    }
 }
 
 ThumbnailPanel::~ThumbnailPanel()
 {
-    stopWorker();
+    if (m_alive)
+        *m_alive = false;
+    // Detach from the shared pipeline so its worker thread can't call back into
+    // a destroyed panel (and restore the default decode for the next panel).
+    ThumbnailPipeline::instance().setResultFn(
+        [](const std::string &, const ImageData &) {});
+    ThumbnailPipeline::instance().setDecodeFn(
+        [](const std::string &p, int size) { return Decoder::decodeScaled(p, size); });
 }
 
-void ThumbnailPanel::startWorker()
+void ThumbnailPanel::setDirectory(const QString &path)
 {
-    m_worker = new ThumbnailWorker;
-    m_worker->moveToThread(&m_thread);
-    connect(&m_thread, &QThread::finished, m_worker, &QObject::deleteLater);
-    m_thread.start();
-    QMetaObject::invokeMethod(m_worker, &ThumbnailWorker::process, Qt::QueuedConnection);
-}
+    m_currentDir = path;
+    m_filterText.clear();
+    m_filterRecursive = false;
 
-void ThumbnailPanel::stopWorker()
-{
-    if (m_worker)
-        m_worker->stop();
-    m_thread.quit();
-    m_thread.wait();
-    m_worker = nullptr;
-}
-
-void ThumbnailPanel::stopThumbnailWorker()
-{
-    stopWorker();
+    QList<Entry> entries;
+    QDir dir(path);
+    if (dir.exists())
+    {
+        const QFileInfoList list = sortedEntries(dir, m_sortMode);
+        for (const QFileInfo &fi : list)
+            entries.append({fi.absoluteFilePath(), fi.fileName(), fi.size()});
+    }
+    m_allEntries = entries;
+    m_metaIndex.clear();
+    applyFilter();
 }
 
 void ThumbnailPanel::setSortMode(SortMode mode)
 {
-    if (mode == m_sortMode)
+    if (m_sortMode == mode)
         return;
     m_sortMode = mode;
     if (!m_currentDir.isEmpty())
         setDirectory(m_currentDir);
 }
 
-void ThumbnailPanel::setDirectory(const QString &path)
+void ThumbnailPanel::setFilter(const QString &text, bool recursive)
 {
-    m_currentDir = path;
-    clear();
-    m_itemById.clear();
-    // M18: drop any recursive-search temp items + reset the active filter state
-    // so a directory switch starts from a clean, unfiltered view.
-    qDeleteAll(m_recursiveItems);
-    m_recursiveItems.clear();
-    m_filterText.clear();
-    m_filterRecursive = false;
+    m_filterText = text;
+    m_filterRecursive = recursive;
+    applyFilter();
+}
 
-    const QList<QFileInfo> entries = sortedEntries(path, m_sortMode);
-    for (int i = 0; i < entries.size() && i < kMaxImages; ++i)
+void ThumbnailPanel::setMetaSearch(bool on)
+{
+    m_metaSearch = on;
+    if (on)
+        ensureMetaIndex();
+    applyFilter();
+}
+
+void ThumbnailPanel::setRatingFilter(int stars)
+{
+    m_ratingFilter = qBound(0, stars, 5);
+    applyFilter();
+}
+
+void ThumbnailPanel::invalidateRatings()
+{
+    viewport()->update();
+}
+
+void ThumbnailPanel::ensureMetaIndex()
+{
+    if (!m_metaIndex.isEmpty())
+        return;
+    for (const Entry &e : m_allEntries)
     {
-        const QFileInfo &info = entries.at(i);
-        const QString filePath = info.absoluteFilePath();
-        const QString id = path + "#" + QString::number(i);
-
-        auto *item = new QListWidgetItem(this);
-        item->setData(Qt::UserRole, filePath);
-        item->setData(Qt::UserRole + 1, id);
-        item->setText(info.fileName());
-        item->setFlags(item->flags() & ~Qt::ItemIsDropEnabled);
-        // Placeholder icon until the worker delivers the real thumbnail.
-        addItem(item);
-        m_itemById.insert(id, item);
-
-        ThumbnailWorker::Request req{filePath, kThumbSize, id};
-        m_worker->enqueue(req);
+        const mviewer::domain::ImageMetadata meta =
+            mviewer::core::MetadataReader::read(e.path.toStdString());
+        const mviewer::core::RawMetadata rm =
+            mviewer::core::parseRawMetadata(e.path.toStdString());
+        QStringList parts;
+        parts << QString::fromStdString(meta.fileName)
+              << QString::fromStdString(meta.filePath)
+              << QString::fromStdString(meta.format);
+        for (const auto &[k, v] : meta.textKeys)
+        {
+            parts << QString::fromStdString(k) << QString::fromStdString(v);
+        }
+        parts << QString::fromStdString(rm.make) << QString::fromStdString(rm.model)
+              << QString::fromStdString(rm.lens);
+        if (rm.iso > 0)
+            parts << QString::number(rm.iso);
+        m_metaIndex.insert(e.path, parts.join(' ').toLower());
     }
 }
 
-QStringList ThumbnailPanel::selectedPaths() const
+void ThumbnailPanel::applyFilter()
 {
-    QStringList result;
-    for (QListWidgetItem *item : selectedItems())
-        result.append(item->data(Qt::UserRole).toString());
-    return result;
+    const QString t = m_filterText.trimmed().toLower();
+    if (m_metaSearch && !t.isEmpty())
+        ensureMetaIndex();
+
+    QList<Entry> src = m_allEntries;
+
+    // Optional recursive subfolder scan (filename search only).
+    if (m_filterRecursive && !t.isEmpty() && !m_metaSearch && !m_currentDir.isEmpty())
+    {
+        QDirIterator it(m_currentDir,
+                        QDir::Files | QDir::Readable | QDir::NoDotAndDotDot,
+                        QDirIterator::Subdirectories);
+        while (it.hasNext())
+        {
+            it.next();
+            const QFileInfo fi = it.fileInfo();
+            if (!isImageSuffix(fi.suffix().toLower()))
+                continue;
+            if (!fi.fileName().toLower().contains(t))
+                continue;
+            const QString sub = QDir(m_currentDir).relativeFilePath(fi.absolutePath());
+            src.append(
+                {fi.absoluteFilePath(), fi.fileName() + " [" + sub + "]", fi.size()});
+        }
+    }
+
+    QList<Entry> out;
+    for (const Entry &e : src)
+    {
+        if (m_ratingFilter > 0 &&
+            mviewer::core::RatingStore::instance().rating(e.path.toStdString()) <
+                m_ratingFilter)
+            continue;
+        if (!t.isEmpty())
+        {
+            if (m_metaSearch)
+            {
+                if (!m_metaIndex.value(e.path).contains(t))
+                    continue;
+            }
+            else if (!e.name.toLower().contains(t))
+                continue;
+        }
+        out.append(e);
+    }
+    buildModel(out);
+}
+
+void ThumbnailPanel::buildModel(const QList<Entry> &entries)
+{
+    m_paths.clear();
+    m_rowByPath.clear();
+    m_sizeByPath.clear();
+    QStringList names;
+    names.reserve(entries.size());
+    qint64 total = 0;
+    for (int i = 0; i < entries.size(); ++i)
+    {
+        m_paths.append(entries.at(i).path);
+        m_rowByPath.insert(entries.at(i).path, i);
+        m_sizeByPath.insert(entries.at(i).path, entries.at(i).size);
+        names.append(entries.at(i).name);
+        total += entries.at(i).size;
+    }
+    m_totalBytes = total;
+    m_model->setStringList(names);
+
+    {
+        QMutexLocker lk(&m_thumbMtx);
+        m_thumbReady.clear();
+        m_thumbPending.clear();
+    }
+    ThumbnailPipeline::instance().setSources(toStdPaths(m_paths));
+
+    emit statsChanged(m_paths.size(), m_totalBytes, 0, 0);
+    // Defer priority scheduling until layout/geometry is ready (avoids
+    // scheduling the whole directory before the viewport is laid out).
+    QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
+}
+
+void ThumbnailPanel::updateVisibleRange()
+{
+    const int n = m_model->rowCount();
+    if (n == 0)
+        return;
+    // Geometry may not be ready yet (panel not shown / zero-size). Wait for
+    // showEvent / resizeEvent before scheduling.
+    if (viewport()->width() < 10 || viewport()->height() < 10)
+        return;
+
+    const QModelIndex firstIdx = indexAt(QPoint(2, 2));
+    const QModelIndex lastIdx =
+        indexAt(QPoint(viewport()->width() - 2, viewport()->height() - 2));
+    int first = firstIdx.isValid() ? firstIdx.row() : 0;
+    int last = lastIdx.isValid() ? lastIdx.row() : n - 1;
+    if (last < first)
+        last = first;
+
+    // Prime instantly-available disk-cached thumbs for the visible window so a
+    // revisited folder paints at once instead of waiting for a decode.
+    {
+        QMutexLocker lk(&m_thumbMtx);
+        for (int r = first; r <= last && r < n; ++r)
+        {
+            const QString &p = m_paths.at(r);
+            if (m_thumbReady.contains(p))
+                continue;
+            QPixmap pm;
+            if (ThumbnailCache::instance().get(p, pm))
+            {
+                m_thumbReady.insert(p, pm);
+                QMetaObject::invokeMethod(this, "onThumbReady", Qt::QueuedConnection,
+                                          Q_ARG(QString, p));
+            }
+        }
+    }
+
+    // P0 #②: visible range at Thumbnail priority, then predictive neighbors.
+    ThumbnailPipeline::instance().setVisibleRange(static_cast<size_t>(first),
+                                                  static_cast<size_t>(last + 1));
+    ThumbnailPipeline::instance().setPredictiveCount(48);
+}
+
+void ThumbnailPanel::onThumbReady(const QString &path)
+{
+    const int row = m_rowByPath.value(path, -1);
+    if (row < 0)
+        return;
+    const QModelIndex idx = m_model->index(row, 0);
+    emit dataChanged(idx, idx, {Qt::DecorationRole});
+}
+
+QPixmap ThumbnailPanel::thumbReady(const QString &path) const
+{
+    QMutexLocker lk(&m_thumbMtx);
+    auto it = m_thumbReady.constFind(path);
+    return it == m_thumbReady.constEnd() ? QPixmap() : it.value();
+}
+
+void ThumbnailPanel::onSelectionChanged()
+{
+    const QModelIndexList sel = selectionModel()->selectedIndexes();
+    qint64 selBytes = 0;
+    for (const QModelIndex &idx : sel)
+        selBytes += m_sizeByPath.value(m_paths.value(idx.row()), 0);
+    m_compareBtn->setVisible(sel.size() >= 2 && sel.size() <= 8);
+    emit statsChanged(m_paths.size(), m_totalBytes, sel.size(), selBytes);
 }
 
 void ThumbnailPanel::scrollToPath(const QString &path)
 {
-    if (path.isEmpty())
+    const int row = m_rowByPath.value(path, -1);
+    if (row < 0)
         return;
-    // Find the item by its stored absolute path (UserRole).
-    for (int i = 0; i < count(); ++i)
-    {
-        QListWidgetItem *it = item(i);
-        if (it && it->data(Qt::UserRole).toString() == path)
-        {
-            setCurrentItem(it);
-            scrollToItem(it, QAbstractItemView::PositionAtCenter);
-            return;
-        }
-    }
+    const QModelIndex idx = m_model->index(row, 0);
+    setCurrentIndex(idx);
+    scrollTo(idx, PositionAtCenter);
 }
 
 int ThumbnailPanel::scrollOffset() const
 {
-    QScrollBar *bar = verticalScrollBar();
-    return bar ? bar->value() : 0;
+    return verticalScrollBar()->value();
+}
+
+QStringList ThumbnailPanel::selectedPaths() const
+{
+    QStringList r;
+    for (const QModelIndex &idx : selectionModel()->selectedIndexes())
+        r.append(m_paths.value(idx.row()));
+    return r;
+}
+
+void ThumbnailPanel::renameSelected()
+{
+    const QStringList paths = selectedPaths();
+    if (paths.isEmpty())
+        return;
+    const QString oldPath = paths.first();
+    const QFileInfo fi(oldPath);
+    bool ok = false;
+    const QString newName = QInputDialog::getText(this, "重命名", "新文件名:",
+                                                  QLineEdit::Normal, fi.fileName(), &ok);
+    if (!ok || newName.isEmpty())
+        return;
+    const QString newPath = fi.absolutePath() + "/" + newName;
+    if (QFile::rename(oldPath, newPath) && !m_currentDir.isEmpty())
+        setDirectory(m_currentDir);
+}
+
+void ThumbnailPanel::moveToTrashSelected()
+{
+    const QStringList paths = selectedPaths();
+    if (paths.isEmpty())
+        return;
+    // Qt6 removed QStandardPaths::TrashLocation; emulate a per-user trash dir.
+    const QString trashDir =
+        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) +
+        "/mviewer/trash";
+    QDir().mkpath(trashDir);
+    for (const QString &p : paths)
+    {
+        if (QFile::rename(p, trashDir + "/" + QFileInfo(p).fileName()))
+            continue;
+        QFile::remove(p);
+    }
+    if (!m_currentDir.isEmpty())
+        setDirectory(m_currentDir);
+}
+
+void ThumbnailPanel::copySelectedTo()
+{
+    const QStringList paths = selectedPaths();
+    if (paths.isEmpty())
+        return;
+    const QString dir = QFileDialog::getExistingDirectory(this, "复制到...");
+    if (dir.isEmpty())
+        return;
+    for (const QString &p : paths)
+        QFile::copy(p, dir + "/" + QFileInfo(p).fileName());
+}
+
+void ThumbnailPanel::moveSelectedTo()
+{
+    const QStringList paths = selectedPaths();
+    if (paths.isEmpty())
+        return;
+    const QString dir = QFileDialog::getExistingDirectory(this, "移动到...");
+    if (dir.isEmpty())
+        return;
+    for (const QString &p : paths)
+        QFile::rename(p, dir + "/" + QFileInfo(p).fileName());
+    if (!m_currentDir.isEmpty())
+        setDirectory(m_currentDir);
+}
+
+void ThumbnailPanel::revealSelected()
+{
+    const QStringList paths = selectedPaths();
+    if (paths.isEmpty())
+        return;
+    const QString p = QDir::toNativeSeparators(paths.first());
+#ifdef Q_OS_WIN
+    QProcess::execute("explorer.exe", QStringList() << "/select," << p);
+#else
+    QProcess::execute("xdg-open", QStringList() << QFileInfo(paths.first()).absolutePath());
+#endif
+}
+
+void ThumbnailPanel::batchAnalyzeExport()
+{
+    const QStringList paths = selectedPaths();
+    if (paths.isEmpty())
+        return;
+    const QString out = QFileDialog::getSaveFileName(this, "导出分析结果", "",
+                                                     "CSV (*.csv);;JSON (*.json)");
+    if (out.isEmpty())
+        return;
+
+    AnalyzerRegistry &reg = AnalyzerRegistry::instance();
+    const std::vector<std::string> ids = reg.availableAnalyzers();
+
+    QStringList headers = {"path"};
+    for (const auto &id : ids)
+        headers.append(QString::fromStdString(id));
+    QStringList rows;
+    rows.append(headers.join(","));
+
+    for (const QString &p : paths)
+    {
+        auto res = ImageRepository::instance().load(p.toStdString());
+        if (!res.frame)
+            continue;
+        const std::unordered_map<std::string, std::string> texts = reg.runAnalyzer(*res.frame);
+        QStringList cells = {p};
+        for (const auto &id : ids)
+        {
+            auto it = texts.find(id);
+            cells.append(it == texts.end() ? QString() : QString::fromStdString(it->second));
+        }
+        rows.append(cells.join(","));
+    }
+    QFile f(out);
+    if (f.open(QIODevice::WriteOnly))
+        f.write(rows.join("\n").toUtf8());
 }
 
 void ThumbnailPanel::onCompareClicked()
 {
     const QStringList sel = selectedPaths();
-    if (sel.size() < 2 || sel.size() > 8)
-    {
-        QMessageBox::warning(this, "比较模式", "请选择 2~8 张图片");
-        return;
-    }
-    emit compareRequested(sel);
-    EventBus::instance().publish("compare.requested", const_cast<QStringList *>(&sel));
-}
-
-void ThumbnailPanel::renameSelected()
-{
-    const QList<QListWidgetItem *> items = selectedItems();
-    if (items.isEmpty())
-        return;
-
-    const QString oldPath = items.first()->data(Qt::UserRole).toString();
-    const QFileInfo fi(oldPath);
-    const QString newName = QInputDialog::getText(this, "重命名", "请输入新的文件名：",
-                                                  QLineEdit::Normal, fi.fileName());
-    if (newName.isEmpty() || newName == fi.fileName())
-        return;
-    // 不接受带路径分隔符的输入(只改文件名)
-    if (newName.contains('/') || newName.contains('\\'))
-    {
-        QMessageBox::warning(this, "重命名", "文件名不能包含路径分隔符");
-        return;
-    }
-
-    const QString newPath = fi.absolutePath() + "/" + newName;
-    RenameImageUseCase::Result r =
-        RenameImageUseCase::execute(oldPath.toStdString(), newName.toStdString());
-    if (r.success)
-        setDirectory(m_currentDir);
-    else
-        QMessageBox::warning(this, "重命名", "重命名失败");
-}
-
-void ThumbnailPanel::moveToTrashSelected()
-{
-    const QStringList sel = selectedPaths();
-    if (sel.isEmpty())
-        return;
-
-    const QString msg =
-        sel.size() == 1
-            ? QString("确定将 \"%1\" 移入回收站吗？").arg(QFileInfo(sel.first()).fileName())
-            : QString("确定将 %1 个文件移入回收站吗？").arg(sel.size());
-    if (QMessageBox::question(this, "删除到回收站", msg, QMessageBox::Yes | QMessageBox::No) !=
-        QMessageBox::Yes)
-        return;
-
-    bool allOk = true;
-    for (const QString &path : sel)
-    {
-        if (!DeleteImageUseCase::execute(path.toStdString()).success)
-            allOk = false;
-    }
-    if (allOk)
-        setDirectory(m_currentDir);
-    else
-        QMessageBox::warning(this, "删除到回收站", "部分文件删除失败");
-}
-
-namespace
-{
-// Collect image files under `root` whose filename contains `needle`
-// (case-insensitive). Recurses into subfolders.
-QStringList recursiveMatches(const QString &root, const QString &needle)
-{
-    QStringList out;
-    QDir dir(root);
-    if (!dir.exists())
-        return out;
-    const QDir::Filters filters = QDir::Files | QDir::Readable;
-    QFileInfoList top = dir.entryInfoList(kImageExtensions, filters);
-    for (const QFileInfo &fi : top)
-        if (fi.fileName().contains(needle, Qt::CaseInsensitive))
-            out.append(fi.absoluteFilePath());
-    // Recurse one level at a time (bounded) to avoid pathological deep trees.
-    QFileInfoList sub = dir.entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot | QDir::Readable);
-    for (const QFileInfo &d : sub)
-    {
-        if (out.size() >= ThumbnailPanel::kMaxImages)
-            break;
-        out.append(recursiveMatches(d.absoluteFilePath(), needle));
-    }
-    return out;
-}
-} // namespace
-
-void ThumbnailPanel::setFilter(const QString &text, bool recursive)
-{
-    m_filterText = text.trimmed();
-    m_filterRecursive = recursive;
-
-    // Reset to the base directory listing, then apply the filter.
-    const QString baseDir = m_currentDir;
-    setDirectory(baseDir); // clears + reloads (also clears this same filter state)
-    // setDirectory() reset m_filterText; restore it so the live search sticks.
-    m_filterText = text.trimmed();
-    m_filterRecursive = recursive;
-
-    if (m_filterText.isEmpty())
-        return;
-
-    // 1) Hide non-matching items currently in the directory.
-    for (int i = 0; i < count(); ++i)
-    {
-        QListWidgetItem *it = item(i);
-        if (!it)
-            continue;
-        const QString name = QFileInfo(it->data(Qt::UserRole).toString()).fileName();
-        it->setHidden(!name.contains(m_filterText, Qt::CaseInsensitive));
-    }
-
-    // 2) Recursive: append matches found in subfolders as extra items.
-    if (recursive)
-    {
-        const QStringList matches = recursiveMatches(baseDir, m_filterText);
-        int idx = count();
-        for (const QString &p : matches)
-        {
-            if (idx >= kMaxImages)
-                break;
-            const QFileInfo fi(p);
-            auto *it = new QListWidgetItem(this);
-            it->setData(Qt::UserRole, p);
-            it->setData(Qt::UserRole + 1, p + "#rec");
-            it->setText(fi.fileName() + "  [" + fi.dir().dirName() + "]");
-            addItem(it);
-            m_recursiveItems.append(it);
-            ThumbnailWorker::Request req{p, kThumbSize, p + "#rec"};
-            m_worker->enqueue(req);
-            ++idx;
-        }
-    }
-}
-
-void ThumbnailPanel::copySelectedTo()
-{
-    const QStringList sel = selectedPaths();
-    if (sel.isEmpty())
-        return;
-    const QString dest = QFileDialog::getExistingDirectory(this, tr("复制到..."), m_currentDir);
-    if (dest.isEmpty())
-        return;
-    int copied = 0;
-    for (const QString &p : sel)
-    {
-        const QFileInfo fi(p);
-        if (QFile::copy(p, dest + "/" + fi.fileName()))
-            ++copied;
-    }
-    QMessageBox::information(this, tr("复制完成"),
-                             tr("已复制 %1 / %2 个文件到:\n%3").arg(copied).arg(sel.size()).arg(dest));
-}
-
-void ThumbnailPanel::moveSelectedTo()
-{
-    const QStringList sel = selectedPaths();
-    if (sel.isEmpty())
-        return;
-    const QString dest = QFileDialog::getExistingDirectory(this, tr("移动到..."), m_currentDir);
-    if (dest.isEmpty())
-        return;
-    int moved = 0;
-    for (const QString &p : sel)
-    {
-        const QFileInfo fi(p);
-        if (QFile::rename(p, dest + "/" + fi.fileName()))
-            ++moved;
-    }
-    if (moved > 0)
-        setDirectory(m_currentDir);
-    QMessageBox::information(this, tr("移动完成"),
-                             tr("已移动 %1 / %2 个文件到:\n%3").arg(moved).arg(sel.size()).arg(dest));
-}
-
-void ThumbnailPanel::revealSelected()
-{
-    const QStringList sel = selectedPaths();
-    if (sel.isEmpty())
-        return;
-    // Open the OS file manager with the first selected file highlighted.
-    // Explanatory note: on Windows, explorer /select, passes the file path.
-    const QString first = sel.first();
-    const QUrl url = QUrl::fromLocalFile(first);
-#ifdef Q_OS_WIN
-    // Use explorer's /select switch to highlight the file in its folder.
-    QProcess::startDetached("explorer", QStringList() << "/select," << QDir::toNativeSeparators(first));
-#else
-    QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(first).absolutePath()));
-#endif
-    Q_UNUSED(url);
-}
-
-void ThumbnailPanel::batchAnalyzeExport()
-{
-    const QStringList sel = selectedPaths();
-    if (sel.isEmpty())
-    {
-        QMessageBox::information(this, "批量分析", "请先选择至少一张图片。");
-        return;
-    }
-
-    const auto ids = ::AnalyzerRegistry::instance().availableAnalyzers();
-    if (ids.empty())
-    {
-        QMessageBox::warning(this, "批量分析", "没有可用的分析器。");
-        return;
-    }
-
-    QStringList idList;
-    for (const auto &id : ids)
-        idList << QString::fromStdString(id);
-    idList.sort();
-
-    bool ok = false;
-    const QString chosen =
-        QInputDialog::getItem(this, "选择分析器", "分析器:", idList, 0, false, &ok);
-    if (!ok || chosen.isEmpty())
-        return;
-    const std::string id = chosen.toStdString();
-
-    // Decode each selected image and build (filename, frame) pairs for core.
-    std::vector<std::pair<std::string, std::shared_ptr<ImageFrame>>> frames;
-    frames.reserve(static_cast<size_t>(sel.size()));
-    for (const QString &p : sel)
-    {
-        QImage img(p);
-        if (img.isNull())
-            continue;
-        mviewer::domain::ImageMetadata meta;
-        meta.filePath = p.toStdString();
-        auto frame = std::make_shared<ImageFrame>(meta, mvcore::fromQImage(img));
-        frames.emplace_back(p.toStdString(), std::move(frame));
-    }
-
-    if (frames.empty())
-    {
-        QMessageBox::warning(this, "批量分析", "选中的图片均无法解码。");
-        return;
-    }
-
-    const auto results = ::AnalyzerRegistry::instance().runBatch(frames, id);
-    if (results.empty())
-    {
-        QMessageBox::warning(this, "批量分析", "分析未产生任何结果。");
-        return;
-    }
-
-    const auto report = mviewer::core::buildBatchReport(id, results);
-
-    const QString target =
-        QFileDialog::getSaveFileName(this, "导出分析结果", QString("analysis_%1").arg(chosen),
-                                     "CSV 文件 (*.csv);;JSON 文件 (*.json)");
-    if (target.isEmpty())
-        return;
-
-    const QString suffix = QFileInfo(target).suffix().toLower();
-    const std::string content = (suffix == "json") ? report.toJson() : report.toCsv();
-
-    QFile out(target);
-    if (!out.open(QIODevice::WriteOnly | QIODevice::Text))
-    {
-        QMessageBox::critical(this, "批量分析", QString("无法写入文件:\n%1").arg(target));
-        return;
-    }
-    out.write(content.data(), static_cast<qint64>(content.size()));
-    out.close();
-
-    QMessageBox::information(
-        this, "批量分析",
-        QString("已分析 %1 张图片，结果已导出到:\n%2").arg(results.size()).arg(target));
+    if (sel.size() >= 2 && sel.size() <= 8)
+        emit compareRequested(sel);
 }
 
 void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
 {
-    QListWidgetItem *item = itemAt(event->pos());
-    if (!item)
+    const QModelIndex idx = indexAt(event->pos());
+    if (!idx.isValid())
         return;
-
-    // 确保右键项被选中,便于后续操作
-    if (!item->isSelected())
-        setCurrentItem(item, QItemSelectionModel::Select);
+    const QString path = m_paths.value(idx.row());
+    if (!selectionModel()->isSelected(idx))
+        selectionModel()->select(idx, QItemSelectionModel::Select | QItemSelectionModel::Clear);
 
     QMenu menu(this);
-    QAction *actRename = menu.addAction("重命名(&R)");
-    QAction *actTrash = menu.addAction("删除到回收站(&D)");
-    menu.addSeparator();
-    QAction *actCopy = menu.addAction("复制到...(C)");
-    QAction *actMove = menu.addAction("移动到...(M)");
-    QAction *actReveal = menu.addAction("在资源管理器中显示(&E)");
-    menu.addSeparator();
-    QAction *actBatchAnalyze = menu.addAction("批量分析并导出(&B)");
-    connect(actRename, &QAction::triggered, this, &ThumbnailPanel::renameSelected);
-    connect(actTrash, &QAction::triggered, this, &ThumbnailPanel::moveToTrashSelected);
-    connect(actCopy, &QAction::triggered, this, &ThumbnailPanel::copySelectedTo);
-    connect(actMove, &QAction::triggered, this, &ThumbnailPanel::moveSelectedTo);
-    connect(actReveal, &QAction::triggered, this, &ThumbnailPanel::revealSelected);
-    connect(actBatchAnalyze, &QAction::triggered, this, &ThumbnailPanel::batchAnalyzeExport);
-    menu.exec(event->globalPos());
+    QAction *aOpen = menu.addAction("打开");
+    QAction *aRename = menu.addAction("重命名");
+    QAction *aCopy = menu.addAction("复制...");
+    QAction *aMove = menu.addAction("移动...");
+    QAction *aTrash = menu.addAction("移到回收站");
+    QAction *aReveal = menu.addAction("在资源管理器中显示");
+    QAction *aCompare = menu.addAction("比较");
+    QAction *aAnalyze = menu.addAction("批量分析导出");
+    QAction *chosen = menu.exec(event->globalPos());
+    if (!chosen)
+        return;
+    if (chosen == aOpen)
+        emit itemDoubleClicked(path);
+    else if (chosen == aRename)
+        renameSelected();
+    else if (chosen == aCopy)
+        copySelectedTo();
+    else if (chosen == aMove)
+        moveSelectedTo();
+    else if (chosen == aTrash)
+        moveToTrashSelected();
+    else if (chosen == aReveal)
+        revealSelected();
+    else if (chosen == aCompare)
+        onCompareClicked();
+    else if (chosen == aAnalyze)
+        batchAnalyzeExport();
 }
 
 void ThumbnailPanel::resizeEvent(QResizeEvent *event)
 {
-    QListWidget::resizeEvent(event);
+    QListView::resizeEvent(event);
     if (m_compareBtn)
+        m_compareBtn->move(viewport()->width() - m_compareBtn->width() - 8, 8);
+    QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
+}
+
+void ThumbnailPanel::showEvent(QShowEvent *event)
+{
+    QListView::showEvent(event);
+    QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
+}
+
+void ThumbnailPanel::stopThumbnailWorker()
+{
+    QMutexLocker lk(&m_thumbMtx);
+    m_thumbReady.clear();
+    m_thumbPending.clear();
+}
+
+// static
+QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode)
+{
+    QStringList imgExts = {"bmp", "gif", "jpg", "jpeg", "png", "tif", "tiff", "webp"};
+    QFileInfoList files = dir.entryInfoList(QDir::Files | QDir::Readable, QDir::NoSort);
+    QFileInfoList out;
+    for (const QFileInfo &fi : files)
+        if (imgExts.contains(fi.suffix().toLower()))
+            out.append(fi);
+
+    switch (mode)
     {
-        const int bw = 90;
-        const int bh = 28;
-        const int margin = 6;
-        m_compareBtn->setGeometry(width() - bw - margin, height() - bh - margin, bw, bh);
-        m_compareBtn->raise();
+    case SortName:
+        std::sort(out.begin(), out.end(),
+                  [](const QFileInfo &a, const QFileInfo &b)
+                  { return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0; });
+        break;
+    case SortDate:
+        std::sort(out.begin(), out.end(),
+                  [](const QFileInfo &a, const QFileInfo &b)
+                  { return a.lastModified() > b.lastModified(); });
+        break;
+    case SortSize:
+        std::sort(out.begin(), out.end(),
+                  [](const QFileInfo &a, const QFileInfo &b)
+                  { return a.size() > b.size(); });
+        break;
+    case SortResolution:
+        std::sort(out.begin(), out.end(),
+                  [](const QFileInfo &a, const QFileInfo &b)
+                  {
+                      const auto ra =
+                          ImageRepository::instance().metadata(a.absoluteFilePath().toStdString());
+                      const auto rb =
+                          ImageRepository::instance().metadata(b.absoluteFilePath().toStdString());
+                      const qint64 pa = static_cast<qint64>(ra.width) * ra.height;
+                      const qint64 pb = static_cast<qint64>(rb.width) * rb.height;
+                      return pa > pb;
+                  });
+        break;
     }
+    return out;
+}
+
+// ---- ThumbDelegate ----------------------------------------------------------
+
+void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter,
+                                          const QStyleOptionViewItem &option,
+                                          const QModelIndex &index) const
+{
+    const QStringList &paths = m_panel->pathList();
+    if (index.row() < 0 || index.row() >= paths.size())
+        return;
+    const QString path = paths.at(index.row());
+    const QString name = index.data(Qt::DisplayRole).toString();
+
+    if (option.state & QStyle::State_Selected)
+        painter->fillRect(option.rect, option.palette.color(QPalette::Highlight));
+    else
+        painter->fillRect(option.rect, option.palette.color(QPalette::Base));
+
+    const int s = m_thumbSize;
+    const QRect thumbRect(option.rect.x() + (option.rect.width() - s) / 2,
+                          option.rect.y() + 6, s, s);
+    const QPixmap pm = m_panel->thumbReady(path);
+    if (!pm.isNull())
+    {
+        const QPixmap scaled = pm.scaled(thumbRect.size(), Qt::KeepAspectRatio,
+                                         Qt::SmoothTransformation);
+        painter->drawPixmap(thumbRect.x() + (thumbRect.width() - scaled.width()) / 2,
+                            thumbRect.y() + (thumbRect.height() - scaled.height()) / 2, scaled);
+    }
+    else
+    {
+        painter->fillRect(thumbRect, QColor(228, 228, 228));
+    }
+
+    QRect textRect(option.rect.x() + 4, thumbRect.bottom() + 4, option.rect.width() - 8,
+                   option.rect.height() - thumbRect.height() - 8);
+    painter->setPen(option.state & QStyle::State_Selected
+                        ? option.palette.color(QPalette::HighlightedText)
+                        : option.palette.color(QPalette::Text));
+    painter->drawText(textRect, Qt::AlignHCenter | Qt::AlignTop | Qt::ElideRight, name);
+
+    // P1: rating stars overlay (top-left corner).
+    const int stars =
+        mviewer::core::RatingStore::instance().rating(path.toStdString());
+    if (stars > 0)
+    {
+        QFont sf = painter->font();
+        sf.setPixelSize(15);
+        painter->setFont(sf);
+        painter->setPen(QColor(255, 215, 0));
+        QString starStr;
+        starStr.reserve(5);
+        for (int s = 0; s < 5; ++s)
+            starStr += (s < stars ? "★" : "☆");
+        painter->drawText(option.rect.x() + 4, option.rect.y() + 16, starStr);
+    }
+}
+
+QSize ThumbnailPanel::ThumbDelegate::sizeHint(const QStyleOptionViewItem &,
+                                             const QModelIndex &) const
+{
+    return QSize(m_thumbSize + 16, m_thumbSize + 34);
 }

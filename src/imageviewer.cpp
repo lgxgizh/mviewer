@@ -117,6 +117,11 @@ void ImageViewer::preloadNeighbors(const QString &path)
     }
 }
 
+void ImageViewer::emitZoom()
+{
+    emit zoomChanged(static_cast<int>(m_view.scale * 100.0 + 0.5));
+}
+
 void ImageViewer::fitToWidget()
 {
     if (m_pixmap.isNull())
@@ -125,6 +130,7 @@ void ImageViewer::fitToWidget()
     m_view.screenW = width();
     m_view.screenH = height();
     m_view.fit(m_pixmap.width(), m_pixmap.height(), 0.95);
+    emitZoom();
 }
 
 void ImageViewer::computeHistogram(const QPixmap &pixmap)
@@ -271,6 +277,7 @@ void ImageViewer::wheelEvent(QWheelEvent *event)
     const QPointF mouse = event->position();
     const double factor = event->angleDelta().y() > 0 ? kZoomStep : 1.0 / kZoomStep;
     m_view.zoomAt(mouse.x(), mouse.y(), factor);
+    emitZoom();
     update();
 }
 

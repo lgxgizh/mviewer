@@ -20,6 +20,9 @@ class QAction;
 class QMenu;
 class QLineEdit;
 class QCheckBox;
+class QLabel;
+class QTimer;
+class QComboBox;
 
 class MainWindow : public QMainWindow
 {
@@ -89,6 +92,23 @@ class MainWindow : public QMainWindow
     // M18: gallery search bar.
     QLineEdit *m_searchEdit = nullptr;
     QCheckBox *m_searchRecursive = nullptr;
+    // P1: metadata-aware search + star-rating filter.
+    QCheckBox *m_searchMeta = nullptr;
+    QComboBox *m_ratingFilter = nullptr;
+
+    // P0 #①: real-time status bar (image count / size / zoom / cache hit-rate).
+    QLabel *m_lblCount = nullptr;
+    QLabel *m_lblSize = nullptr;
+    QLabel *m_lblZoom = nullptr;
+    QLabel *m_lblCache = nullptr;
+    QTimer *m_statTimer = nullptr;
+    void updateCacheStat();
+    static QString formatBytes(qint64 bytes);
+
+    // P1: gallery search/filter controls.
+    void onSearchMetaToggled(bool on);
+    void onRatingFilterChanged(int index);
+    void rateCurrentImage(int stars);
 
     QString m_currentDir;
     QString m_currentImagePath;

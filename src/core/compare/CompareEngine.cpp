@@ -62,10 +62,28 @@ const ImageFrame *CompareEngine::imageAt(int index) const
 
 void CompareEngine::rebuildLayout()
 {
-    m_layout = CompareLayout::forCount(imageCount());
-    m_sync.setCellCount(imageCount());
-    m_viewport.setCellCount(imageCount());
-    m_blink.setImageCount(imageCount());
+    const int n = imageCount();
+    if (m_forcedCols > 0)
+    {
+        const int cols = m_forcedCols;
+        const int rows = n > 0 ? (n + cols - 1) / cols : 0;
+        m_layout = CompareLayout(cols, rows, n);
+        m_viewport.setGrid(cols, rows);
+    }
+    else
+    {
+        const CompareLayout l = CompareLayout::forCount(n);
+        m_layout = l;
+        m_viewport.setGrid(l.cols, l.rows);
+    }
+    m_sync.setCellCount(n);
+    m_blink.setImageCount(n);
+}
+
+void CompareEngine::setColumns(int cols)
+{
+    m_forcedCols = cols;
+    rebuildLayout();
 }
 
 mviewer::domain::CompareSession CompareEngine::session() const
