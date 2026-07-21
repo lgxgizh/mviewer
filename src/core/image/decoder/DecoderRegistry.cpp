@@ -2,6 +2,7 @@
 
 #include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/QtFallbackDecoder.h"
+#include "core/image/decoder/RawDecoder.h"
 
 DecoderRegistry &DecoderRegistry::instance()
 {
@@ -17,8 +18,11 @@ DecoderRegistry::DecoderRegistry()
 void DecoderRegistry::resetToDefaults()
 {
     m_decoders.clear();
+    // P6: RAW preview decoder gets first pick for RAW extensions. It returns an
+    // empty ImageData when no embedded JPEG preview is found, so non-RAW and
+    // preview-less RAW fall through to the Qt decoders below.
+    registerDecoder(std::make_shared<RawDecoder>());
     registerDecoder(std::make_shared<QtDecoder>());
-    // TODO(M7): RAW — add a RawDecoder here once libraw integration lands.
     // The fallback must remain LAST so specific decoders get first pick.
     registerDecoder(std::make_shared<QtFallbackDecoder>());
 }

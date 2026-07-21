@@ -14,6 +14,7 @@ add_library(mviewer_core SHARED
     core/image/decoder/QtDecoder.cpp
     core/image/decoder/QtFallbackDecoder.cpp
     core/image/decoder/DecoderRegistry.cpp
+    core/image/decoder/RawDecoder.cpp
     core/image/ImageObject.cpp
     core/image/ImageFrame.cpp
     core/image/ImageRepository.cpp
@@ -32,6 +33,8 @@ add_library(mviewer_core SHARED
     core/compare/BlinkController.cpp
     core/compare/DifferenceEngine.cpp
     core/RatingStore.cpp
+    core/CrashHandler.cpp
+    core/SelfTest.cpp
     core/analysis/AnalysisEngine.cpp
     core/analysis/ExportReport.cpp
     core/analysis/ReportHtml.cpp
@@ -235,7 +238,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -250,6 +253,12 @@ foreach(_t decoder cache repository scheduler metadata filesystem eventbus rende
     target_include_directories(test_${_t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_definitions(test_${_t} PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endforeach()
+
+# P5: headless release self-test gate. Runs the full application with --selftest,
+# which decodes a generated image through the real product path and exits 0/1.
+add_test(NAME selftest COMMAND MViewer --selftest)
+set_tests_properties(selftest PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 # ─── M3 Phase-1 pipeline acceptance tests ───────────────────────────────
 add_executable(m3pipeline_tests
@@ -623,6 +632,7 @@ add_test(NAME eventbus_tests   COMMAND test_eventbus)
 add_test(NAME render_pipeline_tests COMMAND test_render_pipeline)
 add_test(NAME tilecache_tests COMMAND test_tilecache)
 add_test(NAME gputile_tests  COMMAND test_gputile)
+add_test(NAME rawdecode_tests COMMAND test_rawdecode)
 add_test(NAME pixelcontroller_tests COMMAND test_pixelcontroller)
 add_test(NAME thumbnailpipeline_tests COMMAND test_thumbnailpipeline)
 add_test(NAME commandstack_tests COMMAND test_commandstack)
@@ -681,6 +691,7 @@ add_test(NAME workspace_persist_tests COMMAND workspace_persist_tests)
 add_test(NAME assets_acceptance_tests COMMAND test_assets_acceptance)
 add_test(NAME analysis_batch_tests COMMAND test_analyzer_batch)
 add_test(NAME raw_metadata_tests COMMAND test_raw_metadata)
+add_test(NAME crashhandler_tests COMMAND test_crashhandler)
 # ─── M13 Phase 1: Product Workflow gate ──────────────────────────────────
 # A single ctest that runs the full user-chain in order:
 #   Browse -> Compare -> Analyzer -> Export -> Workspace

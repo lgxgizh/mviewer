@@ -1,5 +1,8 @@
 #include "gpu/GpuTileUploader.h"
 
+#include <QOpenGLContext>
+#include <QGuiApplication>
+#include <QCoreApplication>
 #include <cstdlib>
 
 namespace
@@ -17,16 +20,27 @@ bool glContextAvailable()
     // a live context safely reports unavailable when none can be created.
     // Kept simple + safe: report based on whether Qt reported OpenGL
     // support at startup. On offscreen platforms that is false.
-#if defined(QT_NO_OPENGL) || defined(QT_OPENGL_ES_2)
+#if defined(QT_NO_OPENGL)
     return false;
 #else
-    // A robust runtime probe requires creating a QOpenGLWidget / QOpenGLContext,
-    // which is meaningless headless. We therefore treat the GPU path as
-    // available ONLY when explicitly opted in AND a context can be created —
-    // the caller (enabled()) already gates on the env var, and a real
-    // QOpenGLWidget host provides the context at composite time. If we cannot
-    // prove a context here, we say false and the CPU path wins.
-    return false;
+    // Safe capability probe. A GL context can only exist under a real GUI
+    // platform. Under QCoreApplication (unit tests) or the offscreen platform
+    // (headless CI) there is no GL integration, and attempting ctx.create()
+    // there is undefined (historically crashes). So we report false and keep
+    // the CPU compositor as the verified default in those environments.
+    // Stage A's actual texture upload still requires a QOpenGLWidget host
+    // (deferred per the M13 RFC) — this only answers "is GL usable here?".
+    QCoreApplication *app = QCoreApplication::instance();
+    if (!qobject_cast<QGuiApplication *>(app) ||
+        QGuiApplication::platformName() == "offscreen")
+    {
+        return false;
+    }
+    static const bool can = [] {
+        QOpenGLContext ctx;
+        return ctx.create();
+    }();
+    return can;
 #endif
 }
 

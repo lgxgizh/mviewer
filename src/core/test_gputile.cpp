@@ -78,6 +78,12 @@ int main()
     CHECK(up.residentCount() == 0, "clear() drops all resident textures");
     CHECK(freed.size() >= 2, "clear() freed all handles");
 
+    // P6: capability probe is callable headless and never lies about a context.
+    const bool avail = GpuTileUploader::available();
+    CHECK(avail == true || avail == false, "available() probe is callable");
+    CHECK(!GpuTileUploader::enabled() || GpuTileUploader::available(),
+          "enabled() implies available() (no GPU without a context)");
+
     printf("\n=== M16 GpuTileUploader: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;
