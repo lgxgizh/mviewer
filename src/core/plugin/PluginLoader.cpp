@@ -1,4 +1,5 @@
 #include "core/plugin/PluginLoader.h"
+#include "core/plugin/PluginABI.h"
 
 #include <iostream>
 
@@ -58,10 +59,20 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
     auto nameFn = reinterpret_cast<const char *(*)()>(GetProcAddress(handle, "pluginName"));
     auto destroyFn =
         reinterpret_cast<void (*)(Analyzer *)>(GetProcAddress(handle, "destroyAnalyzer"));
+    auto versionFn = reinterpret_cast<int (*)()>(GetProcAddress(handle, "mviewer_plugin_api_version"));
 
     if (!createFn)
     {
         result.error = "createAnalyzer export not found";
+        s_lastError = result.error;
+        FreeLibrary(handle);
+        return result;
+    }
+
+    // M14-5: ABI version check (if plugin exports version function).
+    if (versionFn && versionFn() != MVIEWER_PLUGIN_API_VERSION)
+    {
+        result.error = "plugin API version mismatch";
         s_lastError = result.error;
         FreeLibrary(handle);
         return result;

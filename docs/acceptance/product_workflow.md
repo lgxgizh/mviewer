@@ -104,27 +104,16 @@ async-EventBus), `export_tests` (13/13 — real report+diff PNG), `mviewer_bench
 >    CPU-tile loader (visible-region-only, 12000×8000 target) and the staged GPU
 >    route. GPU implementation stays deferred per review.
 
-### Genuinely open (the real remaining work after M13)
+### Genuinely open (the real remaining work after M14)
 
-- **B8 image-switch latency — FIXED (2026-07-20):** added an in-memory
-  FullImage LRU fast-path in `ImageRepository::load` so a preloaded switch is a
-  PURE memory hit. On a real 1000-img run p50 went 7.5 ms -> 0.15 ms; p95/p99
-  76/89 ms -> 47/51 ms (remaining tail is benchmark process noise, not a
-  product defect). Closing as optimized.
-- **P3 large-tier (10000-img) acceptance — DONE (2026-07-21):** generated a
-  real 10000-jpeg corpus and ran the P0 acceptance (B1/B2/B8) end-to-end:
-  - **B1 directory scan: 85.4 ms** (budget <500 ms).
-  - **B2 first thumbnail cold: 22.76 ms** (budget <100 ms).
-  - **B8 switch p50/p95/p99: 0.08 / 0.13 / 0.25 ms** (budget <20 ms).
-  The harness needed two tooling fixes to make large-scale runs possible:
-  `--corpus-dir` (consume an existing corpus instead of regenerating, which
-  crashed the TIFF writer at 10000 scale) and `--scenarios` (skip the
-  corpus-flooding scenarios B3-B6 that OOM at large scale). Both are additive
-  bench-tooling only (no product/core/build/CI change).
-- **Workspace window-layout persistence — DONE (2026-07-21):** added
-  `QSettings`-based `saveGeometry/restoreGeometry` in MainWindow ctor and
-  `saveState/restoreState` in closeEvent. Independent of the `.mvws` workspace
-  flow; restores even with no workspace loaded.
+- **GPU D3D11** — deferred. CPU Tile pipeline should be benchmarked at 100MP
+  first; only if <30 FPS should GPU be considered. OpenGL GPU tile path
+  exists (GpuTileUploader) but is OFF by default.
+- **Performance regression history** — `benchmark/report/history.csv` exists
+  but CI does not yet diff against baseline or fail on regression. Recommended
+  for M15.
+- **External RAW libraries (libraw/RawSpeed)** — deferred per RFC Phase A.
+  Self-contained parser covers metadata; true demosaic display is Phase B.
 
 ---
 
