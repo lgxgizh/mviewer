@@ -77,7 +77,12 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     // P0: restore last folder + image + scroll position (deferred to event loop).
     rebuildFavoritesMenu();
+    rebuildRecentFilesMenu();
     restoreLastSession();
+
+    // M14-1: open the file passed on the command line (deferred to event loop).
+    if (!m_openOnLaunch.isEmpty())
+        QMetaObject::invokeMethod(this, [this]() { onImageOpen(m_openOnLaunch); }, Qt::QueuedConnection);
 }
 
 MainWindow::~MainWindow() = default;
@@ -97,7 +102,8 @@ void MainWindow::setupUi()
 
     // P0: Recent folders (from core::RecentFiles LRU) + Favorites (pinned).
     m_recentMenu = fileMenu->addMenu("最近目录(&R)");
-    m_favMenu = fileMenu->addMenu("收藏目录(&F)");
+    m_recentFileMenu = fileMenu->addMenu("最近文件(&F)");
+    m_favMenu = fileMenu->addMenu("收藏目录(&V)");
     m_actAddFavorite = new QAction("收藏当前目录(&D)", this);
     m_actAddFavorite->setShortcut(QKeySequence("Ctrl+D")); // Ctrl+D
     fileMenu->addAction(m_actAddFavorite);
@@ -451,6 +457,9 @@ void MainWindow::onImageOpen(const QString &path)
     m_metadataPanel->setImage(path); // M18: show metadata for the opened image
     m_currentImagePath = path;
     pushHistory(path); // P0: in-session browse history
+    // M14-1: track in recent-files LRU + refresh menu.
+    m_recentFiles.add(path.toStdString());
+    rebuildRecentFilesMenu();
     // M12.2 (G2-ext): if this image had a saved analysis in the workspace, restore
     // it to the panel (e.g. after reopening a .mvws with per-image analysis).
     const auto it = m_analysisByPath.find(path);
@@ -766,6 +775,26 @@ void MainWindow::rebuildRecentMenu()
     }
     if (m_recentMenu->isEmpty())
         m_recentMenu->addAction("(无)")->setEnabled(false);
+}
+
+void MainWindow::rebuildRecentFilesMenu()
+{
+    if (!m_recentFileMenu)
+        return;
+    m_recentFileMenu->clear();
+    for (const auto &p : m_recentFiles.items())
+    {
+        const QString qs = QString::fromStdString(p);
+        auto *act = m_recentFileMenu->addAction(QFileInfo(qs).fileName());
+        act->setToolTip(qs);
+        connect(act, &QAction::triggered, this,
+                [this, qs]()
+                {
+                    onImageOpen(qs);
+                });
+    }
+    if (m_recentFileMenu->isEmpty())
+        m_recentFileMenu->addAction("(无)")->setEnabled(false);
 }
 
 void MainWindow::rebuildFavoritesMenu()

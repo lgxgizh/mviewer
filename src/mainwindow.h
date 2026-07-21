@@ -33,6 +33,7 @@ class MainWindow : public QMainWindow
     // the real UI and render it to a pixmap without a visible window.
     void setupUi();
     void onImageOpen(const QString &path);
+    void setOpenOnLaunch(const QString &path) { m_openOnLaunch = path; }
 
   protected:
     void closeEvent(QCloseEvent *event) override;
@@ -47,6 +48,7 @@ class MainWindow : public QMainWindow
     void pushHistory(const QString &path);
     void navigateHistory(int delta);
     void rebuildRecentMenu();
+    void rebuildRecentFilesMenu();
     void rebuildFavoritesMenu();
     void addFavoriteCurrent();
     void restoreLastSession();
@@ -88,10 +90,12 @@ class MainWindow : public QMainWindow
     // In-session navigation history (like a browser back/forward).
     QStringList m_history;
     int m_historyIndex = -1;
-
     // Persisted, cross-session app state (favorites + restore position).
+    mviewer::core::RecentFiles m_recent;         // recent-folders LRU
+    mviewer::core::RecentFiles m_recentFiles;    // recent-files LRU (opened images)
+    QMenu *m_recentFileMenu = nullptr;  // recent-files menu (opened images)
+    QString m_openOnLaunch;       // path passed via command line
     AppState m_appState;
-    mviewer::core::RecentFiles m_recent;
 
     // M12.2 (G2-ext): per-image last analysis result text, keyed by image path.
     // Populated as analysis runs for each opened image; persisted per-image into
