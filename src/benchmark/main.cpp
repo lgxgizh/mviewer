@@ -1,9 +1,11 @@
 #include "benchmark/corpus.h"
 #include "benchmark/scenarios.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -128,6 +130,72 @@ void printVerdict(const mviewer::bench::ScenarioResult &r, const Budget &b)
         std::cout << "  # " << r.detail;
     std::cout << std::endl;
 }
+
+// Build the scenario list, apply --enforce budgets, print verdicts, and return
+// whether every scenario passed. Shared by the regen path and the --corpus-dir
+// path so both exercise identical scenarios/printing.
+bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
+                  const std::set<std::string> &runOnly = {})
+{
+    const bool filter = !runOnly.empty();
+    // Lazy scenario registry, filtered on the AUTHORITATIVE name BEFORE
+    // invocation. Corpus-flooding scenarios (B3-B6 preload all 10000 imgs) are
+    // skipped entirely instead of OOM-ing the process when running only a
+    // targeted subset (e.g. --scenarios B1,B2,B8 for large-scale acceptance).
+    struct Item { std::string name; std::function<mviewer::bench::ScenarioResult()> fn; };
+    std::vector<Item> items;
+    items.push_back({"B1",    [&]() { return mviewer::bench::scenarioStartup(); }});
+    items.push_back({"B2",    [&]() { return mviewer::bench::scenarioFirstThumbnail(corpus); }});
+    items.push_back({"TRACE", [&]() { return mviewer::bench::scenarioPipelinePriority(corpus); }});
+    items.push_back({"B3",    [&]() { return mviewer::bench::scenarioDecodeLatency(corpus); }});
+    items.push_back({"B4",    [&]() { return mviewer::bench::scenarioThumbThroughput(corpus); }});
+    items.push_back({"B5",    [&]() { return mviewer::bench::scenarioCacheHitRatio(corpus); }});
+    items.push_back({"B6",    [&]() { return mviewer::bench::scenarioMemoryBudget(corpus); }});
+    items.push_back({"B7",    [&]() { return mviewer::bench::scenarioImageSwitch(corpus); }});
+    items.push_back({"B8",    [&]() { return mviewer::bench::scenarioSwitchLatency(corpus); }});
+    items.push_back({"B9",    [&]() { return mviewer::bench::scenarioSoakStability(corpus); }});
+
+    std::vector<mviewer::bench::ScenarioResult> results;
+    for (const auto &it : items)
+    {
+        if (filter && !runOnly.count(it.name))
+            continue;
+        results.push_back(it.fn());
+    }
+
+    bool allPass = true;
+    for (auto &r : results)
+    {
+        if (b.enforce)
+        {
+            if (r.name == "B2")
+                r.passed = b.check(r.value, b.first_thumbnail_ms);
+            else if (r.name == "B8")
+                r.passed = b.check(r.value, b.image_switch_ms);
+            else if (r.name == "B9")
+            {
+                bool ok = (r.value > 0.5);
+                if (ok)
+                {
+                    const auto posF = r.detail.find("finalBase=");
+                    const auto posI = r.detail.find("initBase=");
+                    if (posF != std::string::npos && posI != std::string::npos)
+                    {
+                        const double finalB = std::strtod(r.detail.c_str() + posF + 10, nullptr);
+                        const double initB = std::strtod(r.detail.c_str() + posI + 9, nullptr);
+                        if (initB > 0)
+                            ok = (finalB <= initB * 2.0);
+                    }
+                }
+                r.passed = ok;
+            }
+        }
+        printVerdict(r, b);
+        if (!r.passed)
+            allPass = false;
+    }
+    return allPass;
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -146,6 +214,8 @@ int main(int argc, char **argv)
     std::string emitFormat = "all"; // P3: "all" or "jpeg" (10000-jpeg large tier)
     std::string traceFile;          // M13.5: if set, flush a Chrome trace JSON at exit
     std::string budgetFile;         // M13.3: performance_budget.json (data-driven gates)
+    std::string corpusDir;          // P3: if set, reuse an existing on-disk corpus dir
+    std::string scenariosArg;       // P3: comma-separated scenario ids to run (e.g. "B1,B2,B8")
 
     for (int i = 1; i < argc; ++i)
     {
@@ -167,6 +237,39 @@ int main(int argc, char **argv)
             corpusSize = static_cast<size_t>(std::strtoul(argv[++i], nullptr, 10));
         else if (a == "--trace" && i + 1 < argc)
             traceFile = argv[++i];
+        else if (a == "--corpus-dir" && i + 1 < argc)
+            corpusDir = argv[++i];
+        else if (a == "--scenarios" && i + 1 < argc)
+            scenariosArg = argv[++i];
+    }
+
+    // Build the restricted scenario set (empty = run all). Normalize tokens to the
+    // exact scenario names (B1..B9, TRACE) so "--scenarios B1,B2,B8" works.
+    std::set<std::string> runOnly;
+    if (!scenariosArg.empty())
+    {
+        size_t pos = 0;
+        while (pos < scenariosArg.size())
+        {
+            size_t comma = scenariosArg.find(',', pos);
+            std::string tok = (comma == std::string::npos)
+                ? scenariosArg.substr(pos)
+                : scenariosArg.substr(pos, comma - pos);
+            // trim + uppercase
+            auto start = tok.find_first_not_of(" \t");
+            if (start != std::string::npos)
+            {
+                auto end = tok.find_last_not_of(" \t");
+                tok = tok.substr(start, end - start + 1);
+            }
+            for (auto &c : tok)
+                c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
+            if (!tok.empty())
+                runOnly.insert(tok);
+            if (comma == std::string::npos)
+                break;
+            pos = comma + 1;
+        }
     }
 
     std::cout << "=== MViewer benchmark (M10) ===" << std::endl;
@@ -197,57 +300,25 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    // P3 reusable-corpus mode: consume an existing on-disk dataset instead of
+    // regenerating one. Behavior is otherwise identical to the regen path below.
+    if (!corpusDir.empty())
+    {
+        mviewer::bench::Corpus corpus = mviewer::bench::makeCorpusFromDir(corpusDir);
+        std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
+                  << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << std::endl;
+        const bool allPass = runScenarios(corpus, b, runOnly);
+        std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ===" << std::endl;
+        if (b.enforce && !allPass)
+            return 1;
+        return 0;
+    }
+
     mviewer::bench::Corpus corpus = mviewer::bench::makeCorpus(corpusSize);
     std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
               << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << std::endl;
 
-    std::vector<mviewer::bench::ScenarioResult> results;
-    results.push_back(mviewer::bench::scenarioStartup());
-    results.push_back(mviewer::bench::scenarioFirstThumbnail(corpus));
-    results.push_back(mviewer::bench::scenarioPipelinePriority(corpus));
-    results.push_back(mviewer::bench::scenarioDecodeLatency(corpus));
-    results.push_back(mviewer::bench::scenarioThumbThroughput(corpus));
-    results.push_back(mviewer::bench::scenarioCacheHitRatio(corpus));
-    results.push_back(mviewer::bench::scenarioMemoryBudget(corpus));
-    results.push_back(mviewer::bench::scenarioImageSwitch(corpus));
-    results.push_back(mviewer::bench::scenarioSwitchLatency(corpus));
-    results.push_back(mviewer::bench::scenarioSoakStability(corpus));
-
-    bool allPass = true;
-    for (auto &r : results)
-    {
-        // M10 performance gate: under --enforce, apply the docs/performance.md
-        // budgets. Smoke (no --enforce) reports metrics only.
-        if (b.enforce)
-        {
-            if (r.name == "B2")
-                r.passed = b.check(r.value, b.first_thumbnail_ms); // first thumbnail budget
-            else if (r.name == "B8")
-                r.passed = b.check(r.value, b.image_switch_ms); // preloaded switch budget
-            else if (r.name == "B9")
-            {
-                // baseline_return_ok == 1.0 AND final within 2x initial baseline.
-                bool ok = (r.value > 0.5);
-                if (ok)
-                {
-                    // Parse finalBase / initBase from detail for the tolerance check.
-                    const auto posF = r.detail.find("finalBase=");
-                    const auto posI = r.detail.find("initBase=");
-                    if (posF != std::string::npos && posI != std::string::npos)
-                    {
-                        const double finalB = std::strtod(r.detail.c_str() + posF + 10, nullptr);
-                        const double initB = std::strtod(r.detail.c_str() + posI + 9, nullptr);
-                        if (initB > 0)
-                            ok = (finalB <= initB * 2.0);
-                    }
-                }
-                r.passed = ok;
-            }
-        }
-        printVerdict(r, b);
-        if (!r.passed)
-            allPass = false;
-    }
+    const bool allPass = runScenarios(corpus, b, runOnly);
 
     corpus.clear();
 

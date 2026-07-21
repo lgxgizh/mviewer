@@ -575,14 +575,17 @@ ScenarioResult scenarioSwitchLatency(const Corpus &corpus)
     if (all.size() < 2)
         return ScenarioResult{"B8", "switch_p50_ms", 0, {}, "need >=2 imgs", false};
 
-    // Warm pass: load every image once so they live in the in-memory cache.
-    for (const auto &p : all)
-        repo.load(p);
-
+    // Warm pass: load just the measured window so each lives in memory. The
+    // timed pass navigates only within this window, matching real usage where
+    // the user flips among recently-viewed images. Preloading the WHOLE corpus
+    // (all 10000 at large scale) blows the cache budget for no measurement
+    // benefit.
+    const size_t m = std::min<size_t>(all.size(), 50);
+    for (size_t i = 0; i < m; ++i)
+        repo.load(all[i]);
     // Timed pass: 200 forward/back switches (all cache hits). Measure the
     // frame-to-frame navigation time the UI would incur (repo.load path).
     std::vector<double> sw;
-    const size_t m = std::min<size_t>(all.size(), 50);
     for (size_t k = 0; k < 200; ++k)
     {
         const size_t i = k % (m - 1);

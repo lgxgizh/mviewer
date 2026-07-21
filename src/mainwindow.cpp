@@ -39,6 +39,7 @@
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QScrollBar>
+#include <QSettings>
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QStatusBar>
@@ -64,6 +65,15 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     setupCommands();
     setWindowTitle("MViewer");
     resize(1280, 800);
+
+    // M13.5: restore persisted window geometry/layout (QSettings, independent of workspace).
+    {
+        QSettings settings;
+        if (settings.contains("geometry"))
+            restoreGeometry(settings.value("geometry").toByteArray());
+        if (settings.contains("windowState"))
+            restoreState(settings.value("windowState").toByteArray());
+    }
 
     // P0: restore last folder + image + scroll position (deferred to event loop).
     rebuildFavoritesMenu();
@@ -846,6 +856,13 @@ void MainWindow::closeEvent(QCloseEvent *event)
     QFile rf(recentPath);
     if (rf.open(QIODevice::WriteOnly | QIODevice::Truncate))
         rf.write(QByteArray::fromStdString(m_recent.serialize()));
+
+    // M13.5: persist window geometry/layout (QSettings, independent of workspace).
+    {
+        QSettings settings;
+        settings.setValue("geometry", saveGeometry());
+        settings.setValue("windowState", saveState());
+    }
 
     QMainWindow::closeEvent(event);
 }

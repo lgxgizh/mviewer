@@ -41,6 +41,11 @@ struct Corpus
 // needs a live GUI/Qt context and is slow; the bench harness overrides sizes
 // per-scenario. Default 512x512 is enough to exercise real decode/encode paths.
 Corpus makeCorpus(size_t totalImages = 1000, int jpegW = 512, int jpegH = 512,
-                  const std::string &outDir = "", const std::string &format = "all");
+                   const std::string &outDir = "", const std::string &format = "all");
+
+// Build a Corpus from an EXISTING on-disk directory of images (no regeneration).
+// Enumerates *.jpg/*.jpeg, *.png, *.tif/*.tiff files and records their absolute
+// paths. Returns an empty Corpus (all vectors empty) if the dir has no images.
+Corpus makeCorpusFromDir(const std::string &dir);
 
 } // namespace mviewer::bench

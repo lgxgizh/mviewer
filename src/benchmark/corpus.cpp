@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QImageWriter>
 #include <QString>
@@ -133,6 +134,26 @@ Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &o
                 c.tiffPaths.push_back(tp.toStdString());
         }
     }
+    return c;
+}
+
+Corpus makeCorpusFromDir(const std::string &dir)
+{
+    Corpus c;
+    c.dir = dir;
+
+    const QDir qdir(QString::fromStdString(dir));
+    const QStringList jpegExts = QStringList() << "*.jpg" << "*.jpeg";
+    const QStringList pngExts = QStringList() << "*.png";
+    const QStringList tiffExts = QStringList() << "*.tif" << "*.tiff";
+
+    for (const QString &f : qdir.entryList(jpegExts, QDir::Files))
+        c.jpegPaths.push_back(QFileInfo(qdir, f).absoluteFilePath().toStdString());
+    for (const QString &f : qdir.entryList(pngExts, QDir::Files))
+        c.pngPaths.push_back(QFileInfo(qdir, f).absoluteFilePath().toStdString());
+    for (const QString &f : qdir.entryList(tiffExts, QDir::Files))
+        c.tiffPaths.push_back(QFileInfo(qdir, f).absoluteFilePath().toStdString());
+
     return c;
 }
 
