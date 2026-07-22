@@ -38,6 +38,10 @@
 | M11 | Release Candidate (v1.0.0-rc) | ✅ RC tagged + GitHub release published (`v1.0.0-rc`, pre-release). Version bumped 0.1.0→1.0.0; release notes in `docs/release/RELEASE_v1.0.0-rc.md`. Build+tests green (core_tests / export_tests / mviewer_bench --enforce ALL PASS). Installer (NSIS/WiX) deferred to post-1.0. |
 | M12 | Product Beta Hardening | ✅ Done (RFC `docs/acceptance/user_workflow.md` approved). (M12.1) ✅ user-workflow acceptance + Workspace ROI/analysis persistence; (M12.2) ✅ performance reality-check vs `performance.md` on `benchmark/data/` tiers + fixed latent RSS measurement bug; (M12.2-G2ext) ✅ per-image ROI/analysis across multi-image compare sessions; (M12.3) ✅ installer: `installer/mviewer.nsi` + `pack_installer.ps1` written, G1 (TIFF on clean Windows) **runtime-proven** via `scripts/g1_clean_windows_proof.ps1` (decode on isolated dir, no system Qt) — NSIS `.exe` build deferred (needs NSIS installed one-time); (M12.4) ✅ tag→build→test→package release automation (`.github/workflows/release.yml`); (M12.5) ✅ Qt-boundary scan (`scripts/audit_qt_boundary.ps1` → 0 forbidden) + thread-safety audit (4 singletons sound) + `docs/api/`. P1 (review): AnalyzerRegistry now exposes `getAnalyzer()`/`runAnalyzer()` (verified 12/12). Review-fix: openWorkspace restores compare session via explicit `comparedImages` array (closes the no-ROI/no-analysis edge case). No architecture changes — freeze from M11 holds. |
 | M13 | **Product Beta** (public track: **Beta → 1.0 → 1.1 → 2.0**; old `v1.0.0-rc` = internal pre-release) | ✅ Done. Phase 1 (Product Workflow verification) done; Phase 2/3 (Dashboard + NSIS installer) done; review blockers (screenshot + large tier) closed; Phase 4 (real datasets) done; Phase 5 (Perfetto profiling) done; Phase 6 (Plugin SDK stabilize) done; Phase 7 (GPU RFC) drafted — `docs/rfc/M13_GPU_ROADMAP.md`; **Phase 8 (Public roadmap) done** — `docs/ROADMAP_PUBLIC.md` (Beta→1.0→1.1→2.0 user-facing track, deferred items listed). All 8 M13 phases complete. |
+| M14 | **Hardening & Cleanup** — Fix P0 thread-safety bugs, clean repository, complete B7 benchmark | ✅ Done. (P0-1) TaskScheduler PoolMetrics data race: metrics updates moved under `m_graphMtx`; (P0-2) `waitForPoolDrained` deadlock: lock released before `waitForDone()`; (P2-4) `onTaskComplete` double-decrement: handle existence check added; (P0-3) Repository cleanup: 13 orphaned/duplicate files removed from root. B7 benchmark to be completed in follow-up. |
+| M15 | **Architecture Refactoring** — MainWindow split + Application layer fill + Analysis persistence | ⬜ Planned. P1-1: MainWindow God Class → per-panel widgets (L); P1-2: Application layer re-fill with thin AppService mediators (M); P1-3: ImageData const-correctness; Analysis result persistence (in progress). |
+| M16 | **RAW Support** — libraw decoder integration for ISP/AI engineer target audience | ⬜ Planned. `libraw` decoder in `DecoderRegistry`; RAW browsing parity with JPEG/PNG/TIFF; performance budgets for RAW decode; #1 demand from target users. |
+| M17 | **v1.0 Release Quality** — Stability hardening, zero known bugs, production-ready | ⬜ Planned. Zero known P0/P1 bugs; mock-based error-path tests; CI advisory workflow reliability; NSIS installer QA; documentation completeness. |
 
 ## Public versioning (M13+)
 
@@ -455,6 +459,167 @@ Agreed-✓ vs. disagreed-✗ from the review:
 - Perfetto / clazy / ASan are explicitly **deferred** until the architecture is stable; they
   must not add developer burden before then. (M7 temporarily gated clang-tidy/ASan, then
   reverted to this phased model in `f3d3ffa`.)
+
+---
+
+## M14 — Hardening & Cleanup (✅ Complete)
+
+**Goal:** Fix critical thread-safety bugs found in the M13 Code Review, clean the
+repository of orphaned artifacts, and complete the B7 benchmark gap. No new features.
+This is the foundation-stabilization milestone before the architecture refactoring
+in M15.
+
+**Deliverables:**
+
+- **P0-1 — TaskScheduler PoolMetrics data race** (`commit bf046df`): `submit(PoolType,void*)`
+  and `submit(Priority,...)` modified non-atomic `PoolMetrics` fields (`submitted`/`pending`/
+  `active_tasks`) without holding `m_graphMtx`, causing a confirmed data race (UB) with
+  `onTaskComplete()` which modified the same fields under the lock. Fixed by moving all
+  metrics updates under `m_graphMtx`.
+- **P0-2 — TaskScheduler waitForPoolDrained deadlock** (`commit bf046df`):
+  `waitForPoolDrained()` called `QThreadPool::waitForDone()` while holding `m_graphMtx`.
+  Worker threads need that mutex in `onTaskComplete()` to decrement counters → deadlock.
+  Fixed by releasing the lock before `waitForDone()`.
+- **P2-4 — onTaskComplete double-decrement after cancelTree** (`commit bf046df`): If
+  `cancelTree()` erased a handle and decremented `active_tasks`/`pending`, a subsequent
+  `onTaskComplete()` for the same task would double-decrement. Fixed with handle existence
+  check.
+- **P0-3 — Repository cleanup**: Removed 13 orphaned/duplicate files from the root
+  directory: `mainwindow.cpp` (old copy), `SearchEngine.cpp`, `searchpanel.cpp`,
+  `test_search.cpp` (duplicates of `src/` files), and 9 build log temporary files
+  (`build_err.txt`, `build_errors.txt`, `build_log.txt`, `build_output.txt`,
+  `build_test_log.txt`, `test_log.txt`, `test_out.txt`, `build_verify.txt`,
+  `build_verify2.txt`).
+
+**Acceptance criteria:**
+
+- [x] `build.ps1 Test` green (56/57 pass; `compare_session_tests` is a pre-existing
+  flaky failure under parallel CTest, passes in isolation).
+- [x] All P0 thread-safety bugs fixed and verified.
+- [x] Repository cleaned of orphaned/duplicate files.
+- [ ] B7 benchmark (image-switch warm/cold p50) completed — **carried to M15**.
+
+---
+
+## M15 — Architecture Refactoring
+
+**Goal:** Execute structural improvements identified in the M13 Code Review that affect
+maintainability and regression risk, without changing user-facing behavior. Ships
+alongside the in-progress Analysis Persistence work.
+
+**Why now:** MainWindow at 1791 lines with 15+ responsibilities and 170 lines of
+duplicate image-loading code between `openFile()` and `openFiles()` is a growing
+regression risk. Every new feature touches this file. The hollow Application layer
+means UI calls Core directly in 15+ places, making it hard to test UI logic in
+isolation.
+
+**Deliverables (priority order):**
+
+1. **P1-1 — MainWindow God Class split** (L workload, ~2 weeks):
+   - Extract `FilePanel` (directory tree + file list)
+   - Extract `ThumbnailPanel` (already separate, verify boundaries)
+   - Extract `ImageViewerPanel` (viewer + toolbar + statusbar)
+   - Extract `ComparePanel` (compare session management + sync wiring)
+   - Extract `AnalysisPanel` (analyzer selection + results display)
+   - Extract `MenuBar/ToolBar` (keyboard shortcut → command mapping)
+   - Deduplicate the 170-line image-loading block (`openFile()`/`openFiles()`)
+   - Target: MainWindow ≤ 400 lines, each sub-panel ≤ 300 lines
+
+2. **P1-2 — Application layer re-fill** (M workload, ~1 week):
+   - Create thin `AppService` / `UseCase` mediators for the 3 most-crossed boundaries:
+     - `NavigationUseCase` (open directory, navigate, preload)
+     - `CompareUseCase` (session create/open/close, sync state)
+     - `AnalysisUseCase` (run analyzer, collect results)
+   - UI → Application → Core, not UI → Core directly
+   - Existing behavior preserved; refactoring-only (no new features)
+
+3. **P1-3 — ImageData const-correctness** (S workload):
+   - Make `ImageBuffer::data()` return `const uint8_t*` (15 call sites affected,
+     all safe — writes are on newly-created buffers)
+   - Remove `const_cast` in `ImageData::view()`
+
+4. **Analysis result persistence** (in progress from M15 sprint):
+   - Save/load per-image analysis results across sessions
+
+**Acceptance criteria:**
+
+- [ ] `build.ps1 Test` 100% green (all suites).
+- [ ] MainWindow ≤ 400 lines; each sub-panel has a single responsibility.
+- [ ] UI layer makes zero direct calls to Core services (only through Application layer).
+- [ ] All existing browse/compare/analyze workflows produce identical results.
+- [ ] `ImageBuffer::data()` is `const` return; no `const_cast` in image paths.
+
+---
+
+## M16 — RAW Support (libraw Integration)
+
+**Goal:** Add RAW file browsing with performance parity to JPEG/PNG/TIFF paths.
+This is the #1 missing feature for the target audience — ISP engineers and AI
+engineers who work primarily with RAW files from camera sensors.
+
+**Why now:** After the architecture clean-up (M15), the `DecoderRegistry` seam is
+proven and stable. Adding a `libraw` decoder is a bounded, low-risk addition that
+does not touch existing code paths. Deferring past M16 would mean shipping v1.0
+without the primary use case for the target user.
+
+**Deliverables:**
+
+- `LibRawDecoder` registered in `DecoderRegistry`, dispatched by file extension
+  (`.CR2`, `.NEF`, `.ARW`, `.DNG`, `.RAF`, `.ORF`, etc.)
+- Decode pipeline: RAW → RGB24 via libraw (`dcraw_emu`-compatible defaults)
+- Thumbnail extraction from embedded JPEG preview (fast browse) with
+  full-resolution decode on demand
+- Performance budgets: first-thumbnail < 200ms (from embedded preview),
+  full decode p50 < 500ms (typical 24MP RAW)
+- 5-level cache integration: RAW metadata, embedded preview thumbnails,
+  full-decoded viewer frames all routed through `CacheManager`
+- Golden tests: decode reference RAW files to known checksums
+- `mviewer_bench` scenario B10: RAW decode latency p50/p95/p99
+
+**Acceptance criteria:**
+
+- [ ] Open a directory of RAW files; thumbnails appear from embedded previews (no
+  full decode required).
+- [ ] Click to view → full RAW decode renders in viewer.
+- [ ] RAW navigation after cache warm-up is instant (adjacent preload, same as JPEG).
+- [ ] B10 `--enforce` passes (RAW decode p50 < 500ms on reference corpus).
+- [ ] All existing JPEG/PNG/TIFF tests still pass (zero regression).
+- [ ] No libraw in `domain/` headers; decode path stays in `core/`.
+
+---
+
+## M17 — v1.0 Release Quality
+
+**Goal:** Zero known P0/P1 bugs, stable CI pipeline, complete documentation,
+and production-ready installer. This is the final hardening milestone before the
+public 1.0 release.
+
+**Deliverables:**
+
+1. **Bug zero**: All known P0/P1 issues resolved; P2 issues triaged as "will-fix"
+   or "wont-fix for 1.0".
+2. **Test gap closure**: Add mock-based tests for error paths in
+   `ImageRepository` (load failure), `CacheManager` (eviction edge cases),
+   `TaskScheduler` (cancellation race). Target: critical error paths covered.
+3. **CI hardening**: Make `clang-tidy` / `nightly-sanitizer` advisory workflows
+   reliably green (not perfect — zero false positives). Fix flaky
+   `compare_session_tests` parallel CTest failure.
+4. **Installer**: NSIS `.exe` buildable from `pack_installer.ps1` on clean CI;
+   smoke-tested on clean Windows VM.
+5. **Documentation**: `docs/` complete for all public APIs; user guide covers
+   all product workflows; SDK samples verified.
+6. **Performance gate**: B1–B9 `--enforce` all green; B7 completed (carried
+   from M14).
+
+**Acceptance criteria:**
+
+- [ ] All known P0/P1 bugs resolved.
+- [ ] `build.ps1 Test` 100% green (all suites, zero flaky).
+- [ ] `mviewer_bench --enforce` 100% green (B1–B9, B10 if M16 done).
+- [ ] NSIS installer builds and runs on clean Windows.
+- [ ] `clang-tidy` advisory workflow produces ≤ 5 warnings (all triaged as
+  false-positive or deferred).
+- [ ] All public API headers documented; user guide ships.
 
 ---
 

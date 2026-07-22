@@ -24,6 +24,10 @@ All notable changes to this project are documented here. The format is based on
   `onTaskComplete()` for the same task would double-decrement.
   `onTaskComplete()` now checks whether the handle still exists before adjusting
   metrics.
+- **P0-3 — Repository cleanup:** Removed 13 orphaned/duplicate files from
+  repository root: `mainwindow.cpp` (old copy), `SearchEngine.cpp`,
+  `searchpanel.cpp`, `test_search.cpp` (duplicates of `src/`), and 9 build-log
+  temporary files.
 
 ### Added
 
