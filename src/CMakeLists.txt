@@ -60,6 +60,7 @@ add_library(mviewer_core SHARED
     core/export/IExporter.h
     core/export/ExporterRegistry.cpp
     core/search/SearchEngine.cpp
+    core/batch/BatchProcessor.cpp
 
     core/command/CommandRegistry.cpp
     core/command/RotateCommand.cpp
@@ -106,6 +107,7 @@ add_library(mviewer_ui STATIC
     metadatapanel.cpp
     metadatamodel.cpp
     searchpanel.cpp
+    batchdialog.cpp
     widgets/rawimageview.cpp
     widgets/ratingwidget.cpp
     widgets/histogramwidget.cpp
@@ -527,6 +529,24 @@ target_compile_features(search_tests PRIVATE cxx_std_20)
 target_include_directories(search_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(search_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME search_tests COMMAND search_tests)
+
+# ─── M15 Sprint 2-2 Batch Workflow (batch processor + dialog) ────────────────
+add_executable(batch_tests
+    test_batch.cpp
+)
+
+target_link_libraries(batch_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(batch_tests PRIVATE cxx_std_20)
+target_include_directories(batch_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(batch_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME batch_tests COMMAND batch_tests)
 
 # ─── M9-6 Polish (shortcuts route via Command) acceptance tests ──────────
 add_executable(shortcuts_tests

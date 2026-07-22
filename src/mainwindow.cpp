@@ -30,6 +30,7 @@
 #include "metadatapanel.h"
 #include "previewpanel.h"
 #include "searchpanel.h"
+#include "batchdialog.h"
 #include "thumbnailpanel.h"
 
 #include <QApplication>
@@ -183,6 +184,12 @@ void MainWindow::setupUi()
     m_actToggleSearch->setChecked(true);
     m_actToggleSearch->setShortcut(QKeySequence("Ctrl+Shift+F"));
     viewMenu->addAction(m_actToggleSearch);
+
+    // ----- 工具(&T) -----
+    auto *toolsMenu = menuBar->addMenu("工具(&T)");
+    m_actBatch = new QAction("批量处理(&B)", this);
+    m_actBatch->setShortcut(QKeySequence("Ctrl+Shift+B"));
+    toolsMenu->addAction(m_actBatch);
 
     // ----- 帮助(&H) -----
     auto *helpMenu = menuBar->addMenu("帮助(&H)");
@@ -484,6 +491,14 @@ void MainWindow::setupUi()
     connect(m_actToggleSearch, &QAction::triggered, m_searchPanel, &QWidget::setVisible);
     connect(m_searchPanel, &SearchPanel::resultActivated,
             this, QOverload<const QString &>::of(&MainWindow::onImageOpen));
+    connect(m_actBatch, &QAction::triggered, this, [this]()
+    {
+        if (!m_batchDialog)
+            m_batchDialog = new BatchDialog(this);
+        // Pre-fill with current directory's images.
+        m_batchDialog->setInputFiles(m_cachedImagePaths);
+        m_batchDialog->exec();
+    });
     connect(
         m_actAbout, &QAction::triggered, this, [this]()
         { QMessageBox::about(this, "关于 MViewer", "MViewer\n\n一个简单的图片查看与分析工具。"); });

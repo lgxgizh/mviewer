@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **M15 Sprint 2-2 — Batch Workflow (批量处理流水线):** 新增 `BatchProcessor`（`core/batch/`）支持对多图像批量执行解码→变换（缩放、水印）→分析→重命名→导出流水线，进度回调与取消支持。Domain 层新增 `BatchJob.h`（`BatchJobConfig`/`BatchJobResult`/`BatchFileResult`/`BatchOp` 枚举）。UI 层新增 `BatchDialog` 对话框，集成到 MainWindow 工具菜单（`Ctrl+Shift+B`），自动预填充当前目录图像列表。新增 `batch_tests` (ctest) 覆盖缩放导出、进度回调、重命名模式、无效文件、空操作、取消等边界场景。
+
 - **M15 Sprint 2-1 — Search (全局检索):** 新增 `SearchEngine` / `SearchIndex`（`core/search/`）作为 Qt-free 的核心检索引擎，对工作区所有图像的文件名、EXIF/相机元数据、分析器输出建立可搜索文本索引，按相关度排序返回 `SearchResult`。Domain 层新增 `SearchQuery` / `SearchResult` / `SearchMatch` DTO（纯 std 类型）。UI 层新增 `SearchPanel` 面板（搜索栏 + 作用域复选框 + 结果表格），集成到 MainWindow 5 列分栏最右侧，支持 `Ctrl+Shift+F` 快捷键聚焦。目录切换时自动重建索引，双击结果行打开对应图像。新增 `search_tests` (ctest) 覆盖索引增删改、文件名/元数据/分析结果多作用域查询、排序与空查询边界。
 
 - **M15 P0#3 — Analyzer Pipeline (decoupling):** introduced `AnalyzerPipeline`, a thin, Qt-free orchestration layer (`core/analyzer/AnalyzerPipeline.{h,cpp}`) that sits between the UI and `AnalyzerRegistry`. `AnalysisPanel` now depends on the pipeline (via `setPipeline()`), not on the registry directly, and `MainWindow` only constructs and injects the pipeline — it never lists or creates analyzers itself. This removes the MainWindow → Analyzer coupling flagged in the review and satisfies the acceptance criterion: **adding a new analyzer only requires registering it in the `AnalyzerFactory`; neither `MainWindow` nor `AnalysisPanel` changes**. A new headless `analyzer_pipeline_tests` (ctest) registers a brand-new analyzer and verifies the pipeline surfaces, creates, and runs it with zero `MainWindow` code change.
