@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **P0-1 — TaskScheduler PoolMetrics data race:** `submit(PoolType, void*)` and
+  `submit(Priority,...)` modified non-atomic `PoolMetrics` fields
+  (`submitted`/`pending`/`active_tasks`) without holding `m_graphMtx`, causing a
+  confirmed data race (undefined behavior) with `onTaskComplete()` which modifies
+  the same fields under the lock. Both submit paths now update metrics under
+  `m_graphMtx`.
+- **P0-2 — TaskScheduler waitForPoolDrained potential deadlock:**
+  `waitForPoolDrained()` called `QThreadPool::waitForDone()` while holding
+  `m_graphMtx`. Worker threads need the same mutex in `onTaskComplete()` to
+  decrement `pending`/`active_tasks`, so the drain could deadlock. The lock is
+  now released before calling `waitForDone()`.
+- **P2-4 — onTaskComplete double-decrement after cancelTree:** If `cancelTree()`
+  erased a task handle and decremented `active_tasks`/`pending`, a subsequent
+  `onTaskComplete()` for the same task would double-decrement.
+  `onTaskComplete()` now checks whether the handle still exists before adjusting
+  metrics.
+
 ### Added
 
 - **M15 Sprint 2-4 — Compare Regression (性能回归检测):** 增强 `mviewer_bench`，新增 `--history <file>` 标志将每次运行结果追加到 CSV（日期/场景/指标/值/百分位/回归百分比），新增 `--report <file>` 标志生成 Markdown 回归报告。`--enforce` 模式下自动加载 `benchmark/perf_baseline.json` 作为基线，实现开箱即用的 CI 回归检测。回归输出增强为 per-metric delta + 分级 verdict（>10% 失败，>5% 警告）。更新 `nightly.yml` 的 Dashboard/Benchmark 作业以启用自动基线对比和历史追踪。关闭 M15 产品工作流缺口 "CI 尚未对比基线或拒绝回归"。

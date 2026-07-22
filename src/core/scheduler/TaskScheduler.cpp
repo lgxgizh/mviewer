@@ -164,7 +164,10 @@ void TaskScheduler::submit(PoolType pool, void *runnable)
     auto prio = toPriority(pool);
     auto idx = static_cast<int>(prio);
     m_impl->priorityQueues[idx].start(static_cast<QRunnable *>(runnable));
-    // Legacy path: metrics updated opportunistically
+    // P0-1 fix: metrics must be updated under m_graphMtx to avoid data race
+    // with onTaskComplete() and submit(Priority,...) which both modify the
+    // same non-atomic PoolMetrics fields under the lock.
+    std::lock_guard<std::mutex> lock(m_graphMtx);
     m_poolState[idx].metrics.submitted++;
     m_poolState[idx].metrics.pending++;
     m_poolState[idx].metrics.active_tasks++;
@@ -215,10 +218,11 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
                                             done();
                                     });
 
-    m_poolState[pIdx].metrics.submitted++;
-
     {
+        // P0-1 fix: submitted++ moved inside the lock to avoid data race
+        // with submit(PoolType, void*) and onTaskComplete().
         std::lock_guard<std::mutex> lock(m_graphMtx);
+        m_poolState[pIdx].metrics.submitted++;
         m_handles[ctx_id] = ctx;
         m_taskPriomap[ctx_id] = prio;
         if (!ctx->dependencies.empty())
@@ -309,7 +313,12 @@ void TaskScheduler::onTaskComplete(TaskId id, Priority prio)
     std::vector<std::pair<Priority, void *>> ready;
     {
         std::lock_guard<std::mutex> lock(m_graphMtx);
-        m_handles.erase(id);
+        // P2-4 fix: if cancelTree() already erased this handle and decremented
+        // active_tasks/pending, skip the metrics update to avoid double-decrement.
+        auto it = m_handles.find(id);
+        if (it == m_handles.end())
+            return; // already cancelled/removed — metrics already adjusted
+        m_handles.erase(it);
         m_taskPriomap.erase(id);
         m_depGraph.erase(id);
         const int pIdx = static_cast<int>(prio);
@@ -423,27 +432,23 @@ void TaskScheduler::resume(PoolType pool)
 
 bool TaskScheduler::waitForPoolDrained(int idx, std::chrono::milliseconds timeout)
 {
-    // HACK: active_tasks/queue_depth tracking is coupled to the broken
-    // std::function operator bool on this toolchain, so the counter-based
-    // drain never observes zero. Fall back to QThreadPool::waitForDone()
-    // which actually blocks until all QRunnable::run() calls finish.
-    // BUT waitForDone() only sees tasks already in the pool; a producer
-    // submitting concurrently (e.g. loadDirectoryAsync's 1000-task loop
-    // racing drain()) can enqueue AFTER waitForDone() started and be
-    // missed -> early return -> use-after-free. Guard with the per-pool
-    // `pending` counter: spin until pending hits 0 (all submitted tasks
-    // observed complete) AND the pool is idle.
+    // P0-2 fix: never call QThreadPool::waitForDone() while holding m_graphMtx.
+    // Worker threads call onTaskComplete() -> lock(m_graphMtx) when they finish;
+    // if we hold the lock during waitForDone(), the workers can never complete
+    // -> deadlock. Instead, read the pending/active snapshot under the lock,
+    // release it, then call waitForDone() unlocked.
     const auto deadline = std::chrono::steady_clock::now() + timeout;
     while (std::chrono::steady_clock::now() < deadline)
     {
         {
             std::lock_guard<std::mutex> lock(m_graphMtx);
             if (m_poolState[idx].metrics.pending == 0 && m_poolState[idx].metrics.active_tasks == 0)
-                return m_impl->priorityQueues[idx].waitForDone(static_cast<int>(timeout.count()));
+                break; // pool is idle — exit loop to do a final waitForDone unlocked
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
-    // Timed out; do a final waitForDone to drain whatever is left.
+    // Call waitForDone() WITHOUT holding the lock so worker threads can acquire
+    // m_graphMtx in onTaskComplete() and decrement pending/active_tasks.
     return m_impl->priorityQueues[idx].waitForDone(static_cast<int>(timeout.count()));
 }
 
