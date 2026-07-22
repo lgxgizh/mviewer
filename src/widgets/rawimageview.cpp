@@ -1,8 +1,11 @@
 #include "widgets/rawimageview.h"
 
+#include <QEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QWheelEvent>
+
+#include <cmath>
 
 RawImageView::RawImageView(QWidget *parent) : QWidget(parent)
 {
@@ -143,6 +146,21 @@ void RawImageView::paintEvent(QPaintEvent *)
         p.setBrush(Qt::NoBrush);
         p.drawRect(box);
     }
+
+    // M16.1: synced crosshair at the shared image-space position (n/n compare).
+    if (m_crosshairOn)
+        drawCrosshair(p, cx, cy, dw, dh);
+
+    // M16.1: focus-lock highlight — draw a thick accent border when this cell
+    // is the locked reference.
+    if (m_focused)
+    {
+        QPen pen(QColor(0xFF, 0xB0, 0x20), 3);
+        pen.setCosmetic(true);
+        p.setPen(pen);
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(QRectF(1.5, 1.5, width() - 3.0, height() - 3.0));
+    }
 }
 
 void RawImageView::wheelEvent(QWheelEvent *ev)
@@ -196,10 +214,13 @@ void RawImageView::mouseMoveEvent(QMouseEvent *ev)
             {
                 const QRgb c = m_image.pixel(ix, iy);
                 emit pixelInfo(ix, iy, qRed(c), qGreen(c), qBlue(c), true);
+                // M16.1 (n/n crosshair): mirror the cursor position to all cells.
+                emit crosshairMoved(QPointF(ix, iy));
             }
             else
             {
                 emit pixelInfo(-1, -1, 0, 0, 0, false);
+                emit crosshairMoved(QPointF(-1, -1));
             }
         }
         return;
@@ -226,13 +247,39 @@ void RawImageView::mouseReleaseEvent(QMouseEvent *ev)
     }
 }
 
-QPointF RawImageView::widgetToImage(const QPoint &pos) const
+void RawImageView::mouseDoubleClickEvent(QMouseEvent *ev)
 {
-    if (m_scale <= 0.0 || m_image.isNull())
-        return {};
-    const double cx = width() / 2.0 + m_offset.x();
-    const double cy = height() / 2.0 + m_offset.y();
-    return QPointF((pos.x() - cx) / m_scale, (pos.y() - cy) / m_scale);
+    // M16.1: toggle this cell as the locked reference (focus-lock, n/1).
+    Q_UNUSED(ev);
+    emit focusRequested(m_cellIndex);
+}
+
+void RawImageView::leaveEvent(QEvent *ev)
+{
+    QWidget::leaveEvent(ev);
+    // Cursor left the cell: clear the synced crosshair everywhere.
+    emit crosshairMoved(QPointF(-1, -1));
+}
+
+void RawImageView::drawCrosshair(QPainter &p, double cx, double cy, double dw, double dh) const
+{
+    if (m_image.isNull() || m_scale <= 0.0)
+        return;
+    // Map the image-space crosshair point to widget coords (same transform as
+    // the rendered image, so it tracks zoom/pan).
+    const double wx = cx - dw / 2.0 + m_crosshair.x() * m_scale;
+    const double wy = cy - dh / 2.0 + m_crosshair.y() * m_scale;
+    if (!std::isfinite(wx) || !std::isfinite(wy))
+        return;
+    QPen pen(QColor(0x33, 0xDD, 0xFF), 1, Qt::DashLine);
+    pen.setCosmetic(true);
+    p.setPen(pen);
+    p.drawLine(QPointF(0, wy), QPointF(width(), wy));
+    p.drawLine(QPointF(wx, 0), QPointF(wx, height()));
+    // Center marker
+    p.setBrush(QColor(0x33, 0xDD, 0xFF));
+    p.setPen(Qt::NoPen);
+    p.drawEllipse(QPointF(wx, wy), 3, 3);
 }
 
 void RawImageView::resizeEvent(QResizeEvent *ev)
@@ -240,4 +287,13 @@ void RawImageView::resizeEvent(QResizeEvent *ev)
     QWidget::resizeEvent(ev);
     computeFit();
     clampOffset();
+}
+
+QPointF RawImageView::widgetToImage(const QPoint &pos) const
+{
+    if (m_scale <= 0.0 || m_image.isNull())
+        return {};
+    const double cx = width() / 2.0 + m_offset.x();
+    const double cy = height() / 2.0 + m_offset.y();
+    return QPointF((pos.x() - cx) / m_scale, (pos.y() - cy) / m_scale);
 }

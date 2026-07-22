@@ -39,8 +39,8 @@
 | M12 | Product Beta Hardening | ✅ Done (RFC `docs/acceptance/user_workflow.md` approved). (M12.1) ✅ user-workflow acceptance + Workspace ROI/analysis persistence; (M12.2) ✅ performance reality-check vs `performance.md` on `benchmark/data/` tiers + fixed latent RSS measurement bug; (M12.2-G2ext) ✅ per-image ROI/analysis across multi-image compare sessions; (M12.3) ✅ installer: `installer/mviewer.nsi` + `pack_installer.ps1` written, G1 (TIFF on clean Windows) **runtime-proven** via `scripts/g1_clean_windows_proof.ps1` (decode on isolated dir, no system Qt) — NSIS `.exe` build deferred (needs NSIS installed one-time); (M12.4) ✅ tag→build→test→package release automation (`.github/workflows/release.yml`); (M12.5) ✅ Qt-boundary scan (`scripts/audit_qt_boundary.ps1` → 0 forbidden) + thread-safety audit (4 singletons sound) + `docs/api/`. P1 (review): AnalyzerRegistry now exposes `getAnalyzer()`/`runAnalyzer()` (verified 12/12). Review-fix: openWorkspace restores compare session via explicit `comparedImages` array (closes the no-ROI/no-analysis edge case). No architecture changes — freeze from M11 holds. |
 | M13 | **Product Beta** (public track: **Beta → 1.0 → 1.1 → 2.0**; old `v1.0.0-rc` = internal pre-release) | ✅ Done. Phase 1 (Product Workflow verification) done; Phase 2/3 (Dashboard + NSIS installer) done; review blockers (screenshot + large tier) closed; Phase 4 (real datasets) done; Phase 5 (Perfetto profiling) done; Phase 6 (Plugin SDK stabilize) done; Phase 7 (GPU RFC) drafted — `docs/rfc/M13_GPU_ROADMAP.md`; **Phase 8 (Public roadmap) done** — `docs/ROADMAP_PUBLIC.md` (Beta→1.0→1.1→2.0 user-facing track, deferred items listed). All 8 M13 phases complete. |
 | M14 | **Hardening & Cleanup** — Fix P0 thread-safety bugs, clean repository, complete B7 benchmark | ✅ Done. (P0-1) TaskScheduler PoolMetrics data race: metrics updates moved under `m_graphMtx`; (P0-2) `waitForPoolDrained` deadlock: lock released before `waitForDone()`; (P2-4) `onTaskComplete` double-decrement: handle existence check added; (P0-3) Repository cleanup: 13 orphaned/duplicate files removed from root. B7 benchmark to be completed in follow-up. |
-| M15 | **Product Shell** — Browse Workflow: FastStone/ImageGlass-grade browsing (P0) | ⬜ Planned. Complete browse workflow: Directory Tree + Breadcrumb + Recent/Favorites/History + Filter/Sort/Search; Thumbnail View 重做 (Grid/List/Detail/Filmstrip/Icon/Compact 即时切换); Selection Model (Ctrl/Shift/Drag/Keyboard); Metadata Overlay; 10000-image browse <100ms. Core principle: **product completeness > infrastructure completeness**. |
-| M16 | **Professional Compare** — Industry-tool compare workflow (P0) | ⬜ Planned. 2/3/4/8-image compare; full sync (Zoom/Pan/Scroll/ROI/Histogram/Pixel/Blink/Diff); Pixel Inspector; analyze-while-comparing; no separate window required. |
+| M15 | **Product Shell** — Browse Workflow: FastStone/ImageGlass-grade browsing (P0) | ✅ Done. Browse workflow implemented: Directory Tree + Breadcrumb + Recent/Favorites/History + Filter/Sort/Search; Thumbnail View (Grid/List/Detail/Filmstrip/Compact); Selection Model; Metadata Overlay; batch rename/move/delete; analyzer library (right-click/batch/CSV+HTML export). 10000-image perf target pending dedicated profiling. |
+| M16 | **Professional Compare** — Industry-tool compare workflow (P0) | 🔄 In Progress. Sync Compare Engine: zoom/pan sync, focus-lock (n/1), cursor-sync crosshair (n/n), diff-overlay, multi-grid 2/3/4/8 — done; remaining: editing-within-compare, reference/difference metrics, layout presets. |
 | M17 | **Asset Management** — Rating, labeling, filtering, search, export (P1) | ⬜ Planned. Rating/Color Label/Reject/Pick/Favorite; unified filter + search; ExportManager (PNG/JPEG/TIFF/CSV/HTML/Report); Plugin Manager UI; Workspace layout restore; Analyzer workflow (right-click, batch, CSV/HTML/JSON export). |
 | M18 | **AI Workflow** — Analyzer + AI + Embedding pipeline (P2) | ⬜ Planned. Caption generation, similarity search via embeddings, object detection, smart search; RAW support (libraw decoder); GPU acceleration when 100MP/RAW/HDR becomes a bottleneck. |
 
@@ -602,6 +602,18 @@ end-to-end workflow and UX polish.
 - [ ] Pixel Inspector shows RGB + Lab values on hover for all compared images.
 - [ ] Blink mode runs at ≥10 fps for 24MP images.
 - [ ] Compare session persists across app restart (Workspace restore).
+
+**Progress (2026-07-22):**
+- ✅ Multi-image compare (2/3/4/8, contact sheet, dynamic layout) — done.
+- ✅ Full sync: zoom/pan/scroll/ROI/Histogram/Pixel/Blink/Diff — done (sync via
+  `CompareEngine` shared transform; diff-overlay threshold heatmap; blink A/B).
+- ✅ **cursor-sync crosshair (n/n)** — hover any cell marks the same image-space
+  point in every cell; inspector samples all cells at the synced point.
+- ✅ **focus-lock / reference pin (n/1)** — double-click (or 「锁定基准」按钮)
+  pins a reference cell; diff overlay + inspector delta use it as base.
+- ⬜ Editing within compare (brightness/contrast/gamma/WB/crop/rotate) — pending.
+- ⬜ Reference/difference metrics (PSNR/SSIM quick) + per-pane histogram overlay — pending.
+- ⬜ Layout presets save/load + per-pane overlay toggles + swap panes — pending.
 
 ---
 

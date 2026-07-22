@@ -149,6 +149,28 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     connect(m_sideChk, &QCheckBox::toggled, this, &CompareWorkspace::onSideToggled);
     syncLayout->addWidget(m_sideChk);
 
+    // M16.1: cursor-sync crosshair (n/n). When on, hovering any cell draws a
+    // crosshair at the same image-space point across all compared cells, and the
+    // inspector samples every cell at that point.
+    m_crosshairChk = new QCheckBox(tr("同步准星"), this);
+    m_crosshairChk->setChecked(false);
+    syncLayout->addWidget(m_crosshairChk);
+
+    // M16.1: focus-lock / reference pin (n/1). Locks a cell as the comparison
+    // reference; diff overlays and inspector deltas use it as the base.
+    m_focusBtn = new QPushButton(tr("锁定基准"), this);
+    m_focusBtn->setCheckable(true);
+    connect(m_focusBtn, &QPushButton::toggled, this, [this](bool on) {
+        // Lock the focus on the cell under the cursor (fall back to cell 0 when
+        // none is hovered). Toggling off clears the lock.
+        const int idx = (on && m_hoverIdx >= 0) ? m_hoverIdx : (on ? 0 : m_focusIndex);
+        onFocusRequested(on ? idx : -1);
+    });
+    syncLayout->addWidget(m_focusBtn);
+    m_focusLabel = new QLabel(tr("基准: —"), this);
+    m_focusLabel->setMinimumWidth(60);
+    syncLayout->addWidget(m_focusLabel);
+
     syncLayout->addStretch(1);
 
     m_grid = new QWidget;
@@ -265,6 +287,15 @@ void CompareWorkspace::rebuildCells()
     m_cellViews.clear();
 
     const int n = m_engine.imageCount();
+    // Drop a stale focus lock when the image set shrank.
+    if (m_focusIndex >= n)
+    {
+        m_focusIndex = -1;
+        if (m_focusBtn)
+            m_focusBtn->setChecked(false);
+        if (m_focusLabel)
+            m_focusLabel->setText(tr("基准: —"));
+    }
     const auto &lay = m_engine.layout();
     for (int i = 0; i < n; ++i)
     {
@@ -297,7 +328,7 @@ void CompareWorkspace::rebuildCells()
         // Skip i==0 (self-diff is all-black and overwrites the useful result).
         if (n > 1 && img && i > 0)
         {
-            m_engine.requestDiff(i, 0);
+            m_engine.requestDiff(i, diffBaseIndex());
         }
 
         const QString cellName = img ? QString::fromStdString(img->metadata().fileName) : QString();
@@ -317,10 +348,17 @@ void CompareWorkspace::rebuildCells()
                                        .arg(g)
                                        .arg(b));
                     if (m_sidePanel && m_sidePanel->isVisible())
+                    {
+                        m_lastInspectX = x;
+                        m_lastInspectY = y;
                         updateInspector(x, y);
+                    }
                 });
         connect(view, &RawImageView::selectionChanged, this,
                 [this](const mviewer::domain::Selection &sel) { applySelectionToAll(sel); });
+        connect(view, &RawImageView::crosshairMoved, this,
+                [this, view](const QPointF &p) { onCrosshairMoved(view, p); });
+        connect(view, &RawImageView::focusRequested, this, &CompareWorkspace::onFocusRequested);
 
         // Caption label
         auto *caption = new QLabel(cellWidget);
@@ -437,7 +475,7 @@ void CompareWorkspace::updateInspector(int x, int y)
 {
     if (!m_inspector)
         return;
-    const auto probe = m_engine.inspectPixel(x, y);
+    const auto probe = m_engine.inspectPixel(x, y, diffBaseIndex());
     if (probe.samples.empty() || !probe.samples[0].valid)
     {
         m_inspector->setRowCount(0);
@@ -584,6 +622,70 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
         if (m_cellViews[i])
             m_cellViews[i]->setSelection(sel);
     }
+    update();
+}
+
+void CompareWorkspace::onCrosshairMoved(RawImageView *view, const QPointF &pos)
+{
+    if (!view)
+        return;
+    // Track the hovered cell so the focus-lock button knows which cell to pin.
+    m_hoverIdx = view->cellIndex();
+
+    if (!m_crosshairChk || !m_crosshairChk->isChecked())
+        return;
+
+    const bool valid = pos.x() >= 0.0 && pos.y() >= 0.0;
+    const int n = m_engine.imageCount();
+    for (int i = 0; i < n; ++i)
+    {
+        if (!m_cellViews[i])
+            continue;
+        if (valid)
+            m_cellViews[i]->setCrosshair(pos);
+        else
+            m_cellViews[i]->clearCrosshair();
+    }
+    // Sample every cell at the synced image-space point.
+    if (valid && m_sidePanel && m_sidePanel->isVisible())
+    {
+        m_lastInspectX = qRound(pos.x());
+        m_lastInspectY = qRound(pos.y());
+        updateInspector(m_lastInspectX, m_lastInspectY);
+    }
+}
+
+void CompareWorkspace::onFocusRequested(int cellIndex)
+{
+    // Toggle the locked reference: re-clicking the focused cell clears it.
+    const int newFocus = (cellIndex == m_focusIndex) ? -1 : cellIndex;
+    const bool locking = newFocus >= 0;
+
+    m_focusIndex = newFocus;
+    if (m_focusBtn)
+        m_focusBtn->setChecked(locking);
+    if (m_focusLabel)
+        m_focusLabel->setText(locking ? tr("基准: %1").arg(newFocus + 1) : tr("基准: —"));
+
+    const int n = m_engine.imageCount();
+    for (int i = 0; i < n; ++i)
+    {
+        if (m_cellViews[i])
+            m_cellViews[i]->setFocused(i == m_focusIndex);
+    }
+
+    // Re-request diffs against the new base and refresh the inspector deltas.
+    if (n > 1)
+    {
+        for (int i = 0; i < n; ++i)
+        {
+            if (i != m_focusIndex)
+                m_engine.requestDiff(i, diffBaseIndex());
+        }
+        refreshDiffOverlay();
+    }
+    if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0)
+        updateInspector(m_lastInspectX, m_lastInspectY);
     update();
 }
 

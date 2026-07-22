@@ -75,6 +75,37 @@ class RawImageView : public QWidget
     // Constrain offset so image stays visible
     void clampOffset();
 
+    // M16.1 (cursor-sync crosshair, n/n): a synced crosshair drawn at an
+    // image-space position so the same point is marked in every compared cell.
+    void setCrosshair(const QPointF &imgPos)
+    {
+        m_crosshair = imgPos;
+        m_crosshairOn = true;
+        update();
+    }
+    void clearCrosshair()
+    {
+        m_crosshairOn = false;
+        update();
+    }
+    bool hasCrosshair() const
+    {
+        return m_crosshairOn;
+    }
+
+    // M16.1 (focus-lock / reference pin, n/1): mark this cell as the locked
+    // reference. The workspace highlights it and uses it as the diff/inspector
+    // base when comparing n images against 1 reference.
+    void setFocused(bool on)
+    {
+        m_focused = on;
+        update();
+    }
+    bool isFocused() const
+    {
+        return m_focused;
+    }
+
   signals:
     void scaleChanged(double scale);
     // Emitted on hover with the image-space pixel under the cursor (RGB + validity).
@@ -82,6 +113,12 @@ class RawImageView : public QWidget
     void pixelInfo(int x, int y, int r, int g, int b, bool valid);
     // Emitted when the user finishes drawing a selection box (image coords).
     void selectionChanged(const mviewer::domain::Selection &sel);
+    // M16.1: emitted on hover with the image-space cursor position so the
+    // workspace can mirror a synced crosshair across all cells. A negative x
+    // signals "cursor left the cell" (clear the crosshair).
+    void crosshairMoved(const QPointF &imgPos);
+    // M16.1: double-click toggles this cell as the locked reference (focus).
+    void focusRequested(int cellIndex);
 
   public slots:
     void zoom(double factor, const QPointF &anchor = {});
@@ -93,10 +130,13 @@ class RawImageView : public QWidget
     void mousePressEvent(QMouseEvent *) override;
     void mouseMoveEvent(QMouseEvent *) override;
     void mouseReleaseEvent(QMouseEvent *) override;
+    void mouseDoubleClickEvent(QMouseEvent *) override;
+    void leaveEvent(QEvent *) override;
     void resizeEvent(QResizeEvent *) override;
 
   private:
     void computeFit();
+    void drawCrosshair(QPainter &p, double cx, double cy, double dw, double dh) const;
 
     QImage m_image;
     double m_scale = 1.0;
@@ -110,6 +150,12 @@ class RawImageView : public QWidget
     QPointF m_selectStart;
     QImage m_overlay;
     double m_overlayAlpha = 0.5;
+
+    // M16.1 sync crosshair state (image-space position)
+    bool m_crosshairOn = false;
+    QPointF m_crosshair;
+    // M16.1 focus-lock (reference) flag
+    bool m_focused = false;
 
     QPointF widgetToImage(const QPoint &pos) const;
 };

@@ -8,6 +8,7 @@
 #include <QLabel>
 #include <QMap>
 #include <QMouseEvent>
+#include <QPushButton>
 #include <QPixmap>
 #include <QPointF>
 #include <QScrollArea>
@@ -137,6 +138,18 @@ class CompareWorkspace : public QWidget
     void onSideToggled(bool on);
     void updateInspector(int x, int y);
     void refreshHistograms();
+
+    // M16.1: cursor-sync crosshair (n/n) + focus-lock / reference pin (n/1).
+    QCheckBox *m_crosshairChk = nullptr;   // 同步准星开关
+    QPushButton *m_focusBtn = nullptr;      // 锁定/解除基准
+    QLabel *m_focusLabel = nullptr;         // 显示当前基准格
+    int m_focusIndex = -1;                  // 锁定的基准格索引 (-1 = 未锁定)
+    int m_hoverIdx = -1;                     // 当前光标所在格 (用于锁定基准)
+    int m_lastInspectX = -1;                 // 最近检视位置 (焦点切换时重刷)
+    int m_lastInspectY = -1;
+    void onCrosshairMoved(RawImageView *view, const QPointF &pos);
+    void onFocusRequested(int cellIndex);
+    int diffBaseIndex() const { return m_focusIndex >= 0 ? m_focusIndex : 0; }
 
     // Paints the most recent async diff result (from the EventBus) onto the
     // matching cell. Called on the UI thread via QueuedConnection.

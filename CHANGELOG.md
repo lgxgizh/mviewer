@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — M16 Professional Compare (P0#3 Sync)
+
+- **同步准星 (cursor-sync crosshair, n/n):** 对比网格中悬停任意格，会在所有被比较的格内
+  同一图像空间坐标处绘制同步十字准星（`RawImageView::setCrosshair/clearCrosshair`）。
+  同步栏新增「同步准星」开关；开启时检视面板会在该点对所有格采样，一次看全各格像素值。
+  (`src/widgets/rawimageview.cpp`, `src/compareworkspace.cpp`)
+- **焦点锁定 / 基准钉 (focus-lock / reference pin, n/1):** 双击任意格（或点击「锁定基准」
+  按钮锁定光标所在格）将其设为对比基准，高亮金色边框；差异热力图与检视面板 delta 列
+  均以该基准为参考，实现 n 张图对 1 张基准的对比。再次双击同一格解除锁定。
+  `CompareWorkspace::onFocusRequested` + `RawImageView::setFocused`，图片集变化时自动
+  清除越界锁定。
+
 ### Added — M15 Product Shell (P0 Browse Workflow)
 
 - **Breadcrumb导航栏:** 路径分段面包屑导航，点击任意段直接跳转，溢出路径显示"..."溢出菜单
