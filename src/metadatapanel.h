@@ -1,20 +1,20 @@
 #pragma once
 
-#include <QDateTime>
-#include <QMap>
-#include <QTableWidget>
 #include <QWidget>
 
+#include "core/image/RawMetadata.h"
 #include "domain/Image.h"
 
-#include "core/image/RawMetadata.h"
-
+class QTreeView;
+class MetadataModel;
 class RatingWidget;
 class QComboBox;
 class QPushButton;
 
-// M18 + M14-2: Metadata panel — shows file-system + decode-time metadata AND
-// RAW sensor metadata (ISO/exposure/focal/bayer) for RAW files.
+// M15 P0#4 Metadata Center: the metadata table is now rendered by a single
+// unified MetadataModel + QTreeView. The rating / color-label / reject / pick
+// controls (P1, P3) are preserved with their existing signals so MainWindow's
+// gallery overlays keep refreshing.
 class MetadataPanel : public QWidget
 {
     Q_OBJECT
@@ -33,14 +33,11 @@ class MetadataPanel : public QWidget
     void flagsEdited(const QString &path, int label, bool rejected, bool picked);
 
   private:
-    void addRow(const QString &key, const QString &value);
-    void render(const mviewer::domain::ImageMetadata &meta);
-    void renderRaw(const mviewer::core::RawMetadata &rm);
-
-    QTableWidget *m_table = nullptr;
-    RatingWidget *m_rating = nullptr;  // P1: 0-5 star editor
-    QComboBox *m_colorLabel = nullptr; // P3 tail: color label selector
+    QTreeView *m_tree = nullptr;
+    MetadataModel *m_model = nullptr;
+    RatingWidget *m_rating = nullptr;   // P1: 0-5 star editor
+    QComboBox *m_colorLabel = nullptr;  // P3 tail: color label selector
     QPushButton *m_rejectBtn = nullptr; // P3 tail: reject toggle
-    QPushButton *m_pickBtn = nullptr;    // P3 tail: pick/favorite toggle
-    QString m_currentPath;             // P1: tracks the rated image
+    QPushButton *m_pickBtn = nullptr;   // P3 tail: pick/favorite toggle
+    QString m_currentPath;              // P1: tracks the rated image
 };

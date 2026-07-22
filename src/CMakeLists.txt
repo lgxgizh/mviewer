@@ -102,6 +102,7 @@ add_library(mviewer_ui STATIC
     exportdialog.cpp
     exportcommand.cpp
     metadatapanel.cpp
+    metadatamodel.cpp
     widgets/rawimageview.cpp
     widgets/ratingwidget.cpp
     widgets/histogramwidget.cpp
@@ -447,6 +448,26 @@ target_compile_features(test_pixelinspector PRIVATE cxx_std_20)
 target_include_directories(test_pixelinspector PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(NAME pixelinspector_tests COMMAND test_pixelinspector)
+
+# ─── M15 P0#4 Metadata Center (unified MetadataModel + QTreeView) ───────────
+add_executable(test_metadatamodel
+    test_metadatamodel.cpp
+)
+
+target_link_libraries(test_metadatamodel
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(test_metadatamodel PRIVATE cxx_std_20)
+target_include_directories(test_metadatamodel PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_metadatamodel PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+add_test(NAME metadatamodel_tests COMMAND test_metadatamodel)
 
 # ─── M9-6 Polish (shortcuts route via Command) acceptance tests ──────────
 add_executable(shortcuts_tests
