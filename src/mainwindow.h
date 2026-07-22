@@ -73,6 +73,8 @@ class MainWindow : public QMainWindow
     QAction *m_actOpenDir = nullptr;
     QAction *m_actSaveWorkspace = nullptr;
     QAction *m_actOpenWorkspace = nullptr;
+    QAction *m_actSaveProject = nullptr;
+    QAction *m_actOpenProject = nullptr;
     QAction *m_actExportReport = nullptr;
     QAction *m_actExportImages = nullptr;
     QAction *m_actExit = nullptr;
@@ -139,6 +141,11 @@ class MainWindow : public QMainWindow
 
     void saveWorkspace();
     void openWorkspace();
+    // M15 (Project): persist / restore the full evaluation environment as a
+    // self-contained .mvproj file (datasets + compare session + analysis +
+    // analyzer pipeline + export/review/benchmark config).
+    void saveProject();
+    void openProject();
     void exportReport();
     // P4: batch export pipeline entry point.
     void exportImages();

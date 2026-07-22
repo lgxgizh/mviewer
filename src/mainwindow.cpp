@@ -15,6 +15,8 @@
 #include "core/cache/CacheManager.h"
 #include "core/analysis/ReportHtml.h"
 #include "core/workspace/WorkspaceSerializer.h"
+#include "core/analyzer/Analyzer.h"
+#include "core/project/ProjectSerializer.h"
 
 #include "analysispanel.h"
 #include "compareworkspace.h"
@@ -27,6 +29,7 @@
 #include "thumbnailpanel.h"
 
 #include <QApplication>
+#include <QDateTime>
 #include <QBuffer>
 #include <QCloseEvent>
 #include <QDragEnterEvent>
@@ -123,6 +126,8 @@ void MainWindow::setupUi()
     m_actOpenDir = new QAction("打开目录(&O)", this);
     m_actSaveWorkspace = new QAction("保存工作区(&S)", this);
     m_actOpenWorkspace = new QAction("打开工作区(&W)", this);
+    m_actSaveProject = new QAction("保存项目(&P)", this);
+    m_actOpenProject = new QAction("打开项目(&J)", this);
     m_actExit = new QAction("退出(&Q)", this);
     fileMenu->addAction(m_actOpenDir);
     fileMenu->addSeparator();
@@ -138,6 +143,8 @@ void MainWindow::setupUi()
     fileMenu->addSeparator();
     fileMenu->addAction(m_actSaveWorkspace);
     fileMenu->addAction(m_actOpenWorkspace);
+    fileMenu->addAction(m_actSaveProject);
+    fileMenu->addAction(m_actOpenProject);
     m_actExportReport = new QAction("导出报告(&R)...", this);
     fileMenu->addAction(m_actExportReport);
     fileMenu->addSeparator();
@@ -413,6 +420,8 @@ void MainWindow::setupUi()
             });
     connect(m_actSaveWorkspace, &QAction::triggered, this, &MainWindow::saveWorkspace);
     connect(m_actOpenWorkspace, &QAction::triggered, this, &MainWindow::openWorkspace);
+    connect(m_actSaveProject, &QAction::triggered, this, &MainWindow::saveProject);
+    connect(m_actOpenProject, &QAction::triggered, this, &MainWindow::openProject);
     connect(m_actExportReport, &QAction::triggered, this, &MainWindow::exportReport);
     connect(m_actExportImages, &QAction::triggered, this, &MainWindow::exportImages);
     connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
@@ -1062,6 +1071,173 @@ void MainWindow::openWorkspace()
     }
 
     statusBar()->showMessage(QString("工作区已打开: %1 (%2 张图片, %3 个目录)")
+                                 .arg(QFileInfo(filePath).fileName())
+                                 .arg(static_cast<int>(ws.imageCount()))
+                                 .arg(static_cast<int>(ws.folderCount())));
+}
+
+void MainWindow::saveProject()
+{
+    if (m_currentDir.isEmpty())
+    {
+        QMessageBox::information(this, "保存项目", "请先打开一个图片目录。");
+        return;
+    }
+    const QString filePath = QFileDialog::getSaveFileName(
+        this, "保存项目", m_currentDir + "/project.mvproj", "MViewer 项目 (*.mvproj)");
+    if (filePath.isEmpty())
+        return;
+
+    // Build the workspace exactly like saveWorkspace (datasets + compared images
+    // + compare-session snapshot + per-image ROI/analysis).
+    mviewer::domain::Workspace ws =
+        ImageRepository::instance().loadWorkspace(m_currentDir.toStdString());
+    if (ws.empty())
+    {
+        QMessageBox::warning(this, "保存项目", "当前目录没有可保存的图片。");
+        return;
+    }
+
+    const mviewer::domain::Selection roi = m_compareView->currentROI();
+    const QStringList compared = m_compareView->comparedImages();
+    for (const QString &cpath : compared)
+        ws.comparedImages.push_back(cpath.toStdString());
+    if (m_compareView && m_compareView->compareSession().isValid())
+        ws.compareSessionJson =
+            mviewer::core::serializeCompareSession(m_compareView->compareSession());
+    for (const QString &cpath : compared)
+    {
+        const std::string key = cpath.toStdString();
+        const auto it = m_analysisByPath.find(cpath);
+        const std::string analysis =
+            (it != m_analysisByPath.end()) ? it->toStdString() : std::string();
+        if (roi.isEmpty() && analysis.empty())
+            continue;
+        for (auto &folder : ws.folders)
+            for (auto &img : folder.imageSet.images)
+                if (img.filePath == key)
+                {
+                    img.roiX = roi.x;
+                    img.roiY = roi.y;
+                    img.roiW = roi.width;
+                    img.roiH = roi.height;
+                    img.analysis = analysis;
+                    break;
+                }
+    }
+
+    // M15 (Project): wrap the workspace in a Project that also captures the
+    // analyzer pipeline and forward-compatible export/review/benchmark config,
+    // so reopening the .mvproj restores the whole evaluation environment.
+    mviewer::domain::Project proj;
+    proj.name = QFileInfo(filePath).baseName().toStdString();
+    proj.filePath = filePath.toStdString();
+    proj.appVersion = "1.0.0";
+    proj.createdIso = QDateTime::currentDateTimeUtc().toString(Qt::ISODate).toStdString();
+    proj.modifiedIso = proj.createdIso;
+    proj.workspace = ws;
+    proj.datasetRoots = {m_currentDir.toStdString()};
+    for (const auto &a : AnalyzerRegistry::instance().availableAnalyzers())
+        proj.analyzerPipeline.push_back(a);
+
+    const std::string json = mviewer::core::serializeProject(proj);
+    QFile f(filePath);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text) || f.write(json.c_str()) < 0)
+    {
+        QMessageBox::critical(this, "保存项目", "无法写入文件：" + filePath);
+        return;
+    }
+    statusBar()->showMessage(QString("项目已保存: %1 (%2 张图片, %3 个目录)")
+                                 .arg(QFileInfo(filePath).fileName())
+                                 .arg(static_cast<int>(ws.imageCount()))
+                                 .arg(static_cast<int>(ws.folderCount())));
+}
+
+void MainWindow::openProject()
+{
+    const QString filePath =
+        QFileDialog::getOpenFileName(this, "打开项目", QString(), "MViewer 项目 (*.mvproj)");
+    if (filePath.isEmpty())
+        return;
+
+    QFile f(filePath);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QMessageBox::critical(this, "打开项目", "无法读取文件：" + filePath);
+        return;
+    }
+    const QByteArray data = f.readAll();
+    mviewer::domain::Project proj;
+    if (!mviewer::core::deserializeProject(std::string(data.constData(), data.size()), proj) ||
+        proj.workspace.empty())
+    {
+        QMessageBox::critical(this, "打开项目", "项目文件无效或为空。");
+        return;
+    }
+
+    // Reuse the workspace-restore path from openWorkspace() so the browsing view
+    // + compare session + per-image ROI/analysis all come back from the .mvproj.
+    const mviewer::domain::Workspace &ws = proj.workspace;
+    const QString root = QString::fromStdString(ws.rootPath);
+    m_currentDir = root;
+    m_cachedImagePaths.clear();
+    m_dirListDirty = true;
+    m_thumbnailPanel->setDirectory(root);
+
+    QStringList comparePaths;
+    comparePaths.reserve(static_cast<int>(ws.comparedImages.size()));
+    for (const auto &p : ws.comparedImages)
+        comparePaths.push_back(QString::fromStdString(p));
+
+    m_analysisByPath.clear();
+    for (const auto &folder : ws.folders)
+        for (const auto &img : folder.imageSet.images)
+            if (!img.analysis.empty())
+                m_analysisByPath.insert(QString::fromStdString(img.filePath),
+                                        QString::fromStdString(img.analysis));
+
+    mviewer::domain::CompareSession restoredSession;
+    bool haveSession =
+        !ws.compareSessionJson.empty() &&
+        mviewer::core::deserializeCompareSession(ws.compareSessionJson, restoredSession);
+    if (!comparePaths.isEmpty())
+    {
+        openCompare(comparePaths);
+        if (haveSession && m_compareView)
+            m_compareView->applySession(restoredSession);
+    }
+
+    std::string restoredPath;
+    mviewer::domain::Selection restoredRoi;
+    std::string restoredAnalysis;
+    for (const auto &folder : ws.folders)
+        for (const auto &img : folder.imageSet.images)
+            if (restoredPath.empty() && (img.roiW > 0 || img.roiH > 0 || !img.analysis.empty()))
+            {
+                restoredRoi = {img.roiX, img.roiY, img.roiW, img.roiH};
+                restoredAnalysis = img.analysis;
+                restoredPath = img.filePath;
+            }
+    if (restoredPath.empty() && !comparePaths.isEmpty())
+        restoredPath = comparePaths.first().toStdString();
+    else if (restoredPath.empty() && ws.imageCount() > 0)
+        restoredPath = ws.folders.front().imageSet.images.front().filePath;
+
+    if (!restoredPath.empty())
+    {
+        m_currentImagePath = QString::fromStdString(restoredPath);
+        if (m_imageViewer)
+        {
+            m_imageViewer->setImage(m_currentImagePath);
+            m_previewPanel->setImage(m_currentImagePath);
+        }
+        if (!restoredAnalysis.empty())
+            m_analysisPanel->setRegionStats(QString::fromStdString(restoredAnalysis));
+        if (!restoredRoi.isEmpty() && m_compareView)
+            m_compareView->applyROI(restoredRoi);
+    }
+
+    statusBar()->showMessage(QString("项目已打开: %1 (%2 张图片, %3 个目录)")
                                  .arg(QFileInfo(filePath).fileName())
                                  .arg(static_cast<int>(ws.imageCount()))
                                  .arg(static_cast<int>(ws.folderCount())));

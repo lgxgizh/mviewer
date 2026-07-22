@@ -39,6 +39,7 @@ add_library(mviewer_core SHARED
     core/analysis/ExportReport.cpp
     core/analysis/ReportHtml.cpp
     core/workspace/WorkspaceSerializer.cpp
+    core/project/ProjectSerializer.cpp
     core/analyzer/Analyzer.cpp
     core/analyzer/HistogramAnalyzer.cpp
     core/analyzer/RGBMeanAnalyzer.cpp
@@ -410,6 +411,25 @@ target_link_libraries(workspace_persist_tests
 target_compile_features(workspace_persist_tests PRIVATE cxx_std_20)
 target_include_directories(workspace_persist_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(workspace_persist_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# ─── M15 Project (.mvproj) acceptance tests ──────────────────────────────
+add_executable(test_project
+    core/test_project.cpp
+)
+
+target_link_libraries(test_project
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(test_project PRIVATE cxx_std_20)
+target_include_directories(test_project PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(test_project PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+add_test(NAME project_tests COMMAND test_project)
 
 # ─── M9-6 Polish (shortcuts route via Command) acceptance tests ──────────
 add_executable(shortcuts_tests
