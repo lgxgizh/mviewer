@@ -29,6 +29,15 @@ All notable changes to this project are documented here. The format is based on
   `searchpanel.cpp`, `test_search.cpp` (duplicates of `src/`), and 9 build-log
   temporary files.
 
+### Changed
+
+- **Roadmap realigned to product-first direction (M15-M18):** After comprehensive
+  Code Review, the roadmap shifts from architecture-refactoring focus to
+  product-workflow focus. M15 (Product Shell): FastStone-grade browse workflow;
+  M16 (Professional Compare): industry-tool compare; M17 (Asset Management):
+  rating/labeling/filter/export; M18 (AI Workflow): caption/similarity/RAW/GPU.
+  Core principle: UI/Workflow 70%, Core 20%, Optimization 10%.
+
 ### Added
 
 - **M15 Sprint 2-4 — Compare Regression (性能回归检测):** 增强 `mviewer_bench`，新增 `--history <file>` 标志将每次运行结果追加到 CSV（日期/场景/指标/值/百分位/回归百分比），新增 `--report <file>` 标志生成 Markdown 回归报告。`--enforce` 模式下自动加载 `benchmark/perf_baseline.json` 作为基线，实现开箱即用的 CI 回归检测。回归输出增强为 per-metric delta + 分级 verdict（>10% 失败，>5% 警告）。更新 `nightly.yml` 的 Dashboard/Benchmark 作业以启用自动基线对比和历史追踪。关闭 M15 产品工作流缺口 "CI 尚未对比基线或拒绝回归"。
