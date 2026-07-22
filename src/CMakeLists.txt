@@ -102,6 +102,8 @@ add_library(mviewer_ui STATIC
     appstate.cpp
     imageviewer.cpp
     directorytree.cpp
+    breadcrumbbar.cpp
+    metadataoverlay.cpp
     thumbnailpanel.cpp
     previewpanel.cpp
     thumbnailcache.cpp

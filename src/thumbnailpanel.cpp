@@ -72,7 +72,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     setWrapping(true);
     setUniformItemSizes(true); // all cells identical -> cheap layout for huge lists
     setSpacing(6);
-    setGridSize(QSize(kThumbSize + 16, kThumbSize + 34));
+    setGridSize(QSize(m_thumbSize + 16, m_thumbSize + 34));
     setSelectionMode(QAbstractItemView::ExtendedSelection);
     setTextElideMode(Qt::ElideRight);
     setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -82,7 +82,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     m_model = new QStringListModel(this);
     setModel(m_model);
 
-    m_delegate = new ThumbDelegate(kThumbSize, this, this);
+    m_delegate = new ThumbDelegate(this, this);
     setItemDelegate(m_delegate);
 
     m_compareBtn = new QPushButton("比较选中", this);
@@ -116,7 +116,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     if (!m_pipelineWired)
     {
         m_pipelineWired = true;
-        ThumbnailPipeline::instance().thumbSize = kThumbSize;
+        ThumbnailPipeline::instance().thumbSize = m_thumbSize;
         ThumbnailPipeline::instance().setDecodeFn(
             [this](const std::string &p, int /*size*/)
             {
@@ -124,7 +124,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                 QPixmap cached;
                 if (ThumbnailCache::instance().get(qp, cached))
                     return mvcore::fromQImage(cached.toImage());
-                return Decoder::decodeScaled(p, kThumbSize);
+                return Decoder::decodeScaled(p, m_thumbSize);
             });
         auto alive = m_alive;
         ThumbnailPipeline::instance().setResultFn(
@@ -135,7 +135,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                 QImage q = mvcore::toQImage(img);
                 if (q.isNull())
                     return;
-                const int s = kThumbSize;
+                const int s = m_thumbSize;
                 QPixmap pm(s, s);
                 pm.fill(Qt::transparent);
                 QPixmap scaled = QPixmap::fromImage(q).scaled(
@@ -225,18 +225,67 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         m_delegate = new DetailsDelegate(this, this);
         setItemDelegate(m_delegate);
     }
+    else if (mode == Filmstrip)
+    {
+        // M15: horizontal single-row strip, no wrapping
+        QListView::setViewMode(QListView::IconMode);
+        setWrapping(false);
+        setUniformItemSizes(true);
+        const int stripH = qMax(m_thumbSize, 64) + 18;
+        setGridSize(QSize(stripH, stripH));
+        setSpacing(4);
+        setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        setResizeMode(QListView::Fixed);
+        if (m_delegate)
+            delete m_delegate;
+        m_delegate = new ThumbDelegate(this, this);
+        setItemDelegate(m_delegate);
+    }
+    else if (mode == Compact)
+    {
+        // M15: dense grid, minimised padding
+        QListView::setViewMode(QListView::IconMode);
+        setWrapping(true);
+        setUniformItemSizes(true);
+        const int compactS = qMax(m_thumbSize / 3, 32);
+        setGridSize(QSize(compactS + 4, compactS + 14));
+        setSpacing(2);
+        setResizeMode(QListView::Adjust);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        if (m_delegate)
+            delete m_delegate;
+        m_delegate = new ThumbDelegate(this, this);
+        setItemDelegate(m_delegate);
+    }
     else
     {
         QListView::setViewMode(QListView::IconMode);
         setWrapping(true);
         setUniformItemSizes(true);
-        setGridSize(QSize(kThumbSize + 16, kThumbSize + 34));
+        setGridSize(QSize(m_thumbSize + 16, m_thumbSize + 34));
         setSpacing(6);
+        setResizeMode(QListView::Adjust);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         if (m_delegate)
             delete m_delegate;
-        m_delegate = new ThumbDelegate(kThumbSize, this, this);
+        m_delegate = new ThumbDelegate(this, this);
         setItemDelegate(m_delegate);
     }
+}
+
+void ThumbnailPanel::setThumbSize(int size)
+{
+    size = qBound(kMinThumbSize, size, kMaxThumbSize);
+    if (size == m_thumbSize)
+        return;
+    m_thumbSize = size;
+    // Update pipeline to generate thumbnails at the new size.
+    ThumbnailPipeline::instance().thumbSize = size;
+    // Re-apply the current view mode with new grid size.
+    setViewMode(m_viewMode);
 }
 
 void ThumbnailPanel::setFilter(const QString &text, bool recursive)
@@ -786,7 +835,7 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter,
     else
         painter->fillRect(option.rect, option.palette.color(QPalette::Base));
 
-    const int s = m_thumbSize;
+    const int s = thumbSize();
     const QRect thumbRect(option.rect.x() + (option.rect.width() - s) / 2,
                           option.rect.y() + 6, s, s);
     const QPixmap pm = m_panel->thumbReady(path);
@@ -861,7 +910,12 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter,
 QSize ThumbnailPanel::ThumbDelegate::sizeHint(const QStyleOptionViewItem &,
                                              const QModelIndex &) const
 {
-    return QSize(m_thumbSize + 16, m_thumbSize + 34);
+    return QSize(thumbSize() + 16, thumbSize() + 34);
+}
+
+int ThumbnailPanel::ThumbDelegate::thumbSize() const
+{
+    return m_panel->thumbSize();
 }
 
 // ---- DetailsDelegate ---------------------------------------------------------

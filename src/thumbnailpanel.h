@@ -35,7 +35,9 @@ class ThumbnailPanel : public QListView
     Q_OBJECT
 
   public:
-    static constexpr int kThumbSize = 140;
+    static constexpr int kDefaultThumbSize = 140;
+    static constexpr int kMinThumbSize = 48;
+    static constexpr int kMaxThumbSize = 512;
 
     enum SortMode
     {
@@ -47,8 +49,10 @@ class ThumbnailPanel : public QListView
 
     enum ViewMode
     {
-        Thumbnail = 0,
-        Details
+        Thumbnail = 0,   // Grid of thumbnails (default)
+        Details,         // List view with columns
+        Filmstrip,       // Horizontal strip, single row (M15)
+        Compact          // Dense grid, minimal padding (M15)
     };
 
     explicit ThumbnailPanel(QWidget *parent = nullptr);
@@ -58,6 +62,10 @@ class ThumbnailPanel : public QListView
     void setSortMode(SortMode mode);
     void setViewMode(ViewMode mode);
     ViewMode viewMode() const { return m_viewMode; }
+
+    // M15: dynamic thumbnail size (slider-controlled).
+    void setThumbSize(int size);
+    int thumbSize() const { return m_thumbSize; }
 
     // Entry metadata — public so DetailsDelegate can read it.
     struct Entry
@@ -161,6 +169,7 @@ class ThumbnailPanel : public QListView
     QString m_currentDir;
     SortMode m_sortMode = SortName;
     ViewMode m_viewMode = Thumbnail;
+    int m_thumbSize = kDefaultThumbSize;  // M15: dynamic thumb size
     QString m_filterText;
     bool m_filterRecursive = false;
     qint64 m_totalBytes = 0;
@@ -189,8 +198,8 @@ class ThumbnailPanel : public QListView
 class ThumbnailPanel::ThumbDelegate : public QStyledItemDelegate
 {
   public:
-    explicit ThumbDelegate(int thumbSize, ThumbnailPanel *panel, QObject *parent = nullptr)
-        : QStyledItemDelegate(parent), m_thumbSize(thumbSize), m_panel(panel)
+    explicit ThumbDelegate(ThumbnailPanel *panel, QObject *parent = nullptr)
+        : QStyledItemDelegate(parent), m_panel(panel)
     {
     }
 
@@ -200,7 +209,7 @@ class ThumbnailPanel::ThumbDelegate : public QStyledItemDelegate
                    const QModelIndex &index) const override;
 
   private:
-    int m_thumbSize;
+    int thumbSize() const;  // reads m_panel->thumbSize()
     ThumbnailPanel *m_panel;
 };
 

@@ -31,6 +31,8 @@
 #include "previewpanel.h"
 #include "searchpanel.h"
 #include "batchdialog.h"
+#include "breadcrumbbar.h"
+#include "metadataoverlay.h"
 #include "thumbnailpanel.h"
 
 #include <QApplication>
@@ -202,6 +204,9 @@ void MainWindow::setupUi()
 
     setMenuBar(menuBar);
 
+    // ----- Breadcrumb navigation bar (M15 Product Shell P0) -----
+    m_breadcrumb = new BreadcrumbBar(this);
+
     // ----- Left column: directory tree (top) + preview (bottom) -----
     auto *leftWidget = new QWidget(this);
     auto *leftLayout = new QVBoxLayout(leftWidget);
@@ -230,24 +235,32 @@ void MainWindow::setupUi()
     sortCombo->addItem("分辨率", ThumbnailPanel::SortResolution);
     sortLayout->addWidget(sortCombo);
 
-    // View mode toggle: Thumbnail ↔ Details
-    auto *viewModeBtn = new QPushButton("🖼 Thumbnails");
-    viewModeBtn->setCheckable(true);
-    viewModeBtn->setToolTip("切换缩略图 / 详细信息视图");
-    sortLayout->addWidget(viewModeBtn);
-    connect(viewModeBtn, &QPushButton::toggled, this,
-            [this, viewModeBtn](bool checked) {
-                if (checked)
-                {
-                    m_thumbnailPanel->setViewMode(ThumbnailPanel::Details);
-                    viewModeBtn->setText("📋 Details");
-                }
-                else
-                {
-                    m_thumbnailPanel->setViewMode(ThumbnailPanel::Thumbnail);
-                    viewModeBtn->setText("🖼 Thumbnails");
-                }
+    // M15: View mode switcher (Grid / Detail / Filmstrip / Compact)
+    auto *viewModeCombo = new QComboBox(sortBar);
+    viewModeCombo->addItem("网格", ThumbnailPanel::Thumbnail);
+    viewModeCombo->addItem("详情", ThumbnailPanel::Details);
+    viewModeCombo->addItem("胶片条", ThumbnailPanel::Filmstrip);
+    viewModeCombo->addItem("紧凑", ThumbnailPanel::Compact);
+    viewModeCombo->setToolTip("切换缩略图视图模式");
+    sortLayout->addWidget(viewModeCombo);
+    connect(viewModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this, viewModeCombo]() {
+                auto mode = static_cast<ThumbnailPanel::ViewMode>(
+                    viewModeCombo->currentData().toInt());
+                m_thumbnailPanel->setViewMode(mode);
             });
+
+    // M15: Dynamic thumbnail size slider (48–512 px)
+    sortLayout->addWidget(new QLabel("缩略图：", sortBar));
+    auto *thumbSizeSlider = new QSlider(Qt::Horizontal, sortBar);
+    thumbSizeSlider->setRange(ThumbnailPanel::kMinThumbSize,
+                              ThumbnailPanel::kMaxThumbSize);
+    thumbSizeSlider->setValue(ThumbnailPanel::kDefaultThumbSize);
+    thumbSizeSlider->setFixedWidth(100);
+    thumbSizeSlider->setToolTip("调整缩略图大小");
+    sortLayout->addWidget(thumbSizeSlider);
+    connect(thumbSizeSlider, &QSlider::valueChanged, this,
+            [this](int value) { m_thumbnailPanel->setThumbSize(value); });
 
     // M18: live search bar.
     sortLayout->addWidget(new QLabel("搜索：", sortBar));
@@ -315,7 +328,14 @@ void MainWindow::setupUi()
     centralSplitter->setStretchFactor(2, 0);
     centralSplitter->setStretchFactor(3, 0);
     centralSplitter->setSizes({340, 820, 300, 240});
-    setCentralWidget(centralSplitter);
+    // ----- M15: main content wrapper (breadcrumb + splitter) -----
+    auto *mainContainer = new QWidget(this);
+    auto *mainLayout = new QVBoxLayout(mainContainer);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
+    mainLayout->addWidget(m_breadcrumb);
+    mainLayout->addWidget(centralSplitter, 1);
+    setCentralWidget(mainContainer);
 
     // ----- Metadata overlay (P1: not in splitter, floats over main area) -----
     m_metadataPanel->setParent(this);
@@ -330,12 +350,19 @@ void MainWindow::setupUi()
     m_imageViewer = new ImageViewer(nullptr);
     m_imageViewer->setWindowTitle("图片查看 - MViewer");
 
+    // M15: metadata overlay on the image viewer (toggle with 'I' key)
+    m_metadataOverlay = new MetadataOverlay(m_imageViewer);
+    m_metadataOverlay->hide();
+
     // ----- Signals -----
     connect(m_directoryTree, &DirectoryTree::directoryChanged, m_thumbnailPanel,
             &ThumbnailPanel::setDirectory);
+    connect(m_breadcrumb, &BreadcrumbBar::pathSelected, this,
+            &MainWindow::onBreadcrumbPath);
     connect(m_directoryTree, &DirectoryTree::directoryChanged, this,
             [this](const QString &path)
             {
+                m_breadcrumb->setPath(path);  // M15: update breadcrumb bar
                 m_currentDir = path;
                 m_dirListDirty = true; // invalidate cache on dir change
                 if (m_cachedImagePaths.isEmpty() || path != m_currentDir)
@@ -693,6 +720,19 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         rateCurrentImage(event->key() - Qt::Key_0);
         return;
     }
+    // M15: 'I' key toggles the metadata overlay on the image viewer.
+    if (event->key() == Qt::Key_I && !mod)
+    {
+        if (m_imageViewer && m_imageViewer->isVisible() &&
+            !m_currentImagePath.isEmpty())
+        {
+            if (m_metadataOverlay->isVisible())
+                m_metadataOverlay->hide();
+            else
+                m_metadataOverlay->showForImage(m_currentImagePath);
+        }
+        return;
+    }
     ICommand *cmd = CommandRegistry::instance().findByShortcut(
         event->key(), static_cast<int>(event->modifiers()));
     if (cmd)
@@ -917,6 +957,13 @@ void MainWindow::navigate(int delta)
     m_imageViewer->setImage(path);  // async; imageReady() feeds AnalysisPanel
     m_previewPanel->setImage(path); // async; off UI thread
     statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
+}
+
+void MainWindow::onBreadcrumbPath(const QString &path)
+{
+    // M15 Product Shell P0: navigate the directory tree to the breadcrumb path.
+    if (!path.isEmpty())
+        m_directoryTree->navigateTo(path, true);
 }
 
 void MainWindow::exportReport()

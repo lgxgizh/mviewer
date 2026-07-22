@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — M15 Product Shell (P0 Browse Workflow)
+
+- **Breadcrumb导航栏:** 路径分段面包屑导航，点击任意段直接跳转，溢出路径显示"..."溢出菜单
+  (`src/breadcrumbbar.h/.cpp`)。集成到 MainWindow，位于菜单栏下方、内容区上方。
+- **动态缩略图大小:** QSlider 调节缩略图尺寸（48–512px），即时生效，无需重建视图。
+  `ThumbnailPanel::setThumbSize(int)` 同步更新 `ThumbnailPipeline` 和 delegate。
+- **视图模式切换器:** 下拉菜单支持四种模式——网格、详情、胶片条、紧凑。每模式独立
+  grid size 计算，即时切换无延迟。
+  - **胶片条模式:** 单行水平滚动，禁用换行，thumb size 缩放。
+  - **紧凑模式:** 密集网格（1/3 thumb size），最小间距，最大化可视缩略图数。
+- **MetadataOverlay:** 半透明信息叠加层，在 Viewer 上按 `I` 键显示关键 EXIF 元数据
+  （文件名、路径、尺寸、格式、分辨率、相机/ISO/快门/光圈/焦距、色彩空间、DPI、
+  ICC 配置、修改时间）。深色圆角背景 + 按 `I`/`ESC`/点击 关闭。
+  (`src/metadataoverlay.h/.cpp`)
+- `ThumbDelegate` 重构为动态读取 `ThumbnailPanel::thumbSize()`，不再使用固定 int。
+
 ### Fixed
 
 - **P0-1 — TaskScheduler PoolMetrics data race:** `submit(PoolType, void*)` and

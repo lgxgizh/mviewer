@@ -11,6 +11,8 @@
 
 class ImageViewer;
 class DirectoryTree;
+class BreadcrumbBar;
+class MetadataOverlay;
 class ThumbnailPanel;
 class PreviewPanel;
 class AnalysisPanel;
@@ -50,6 +52,7 @@ class MainWindow : public QMainWindow
     void setupCommands();
     void openCompare(const QStringList &images = {}, const QString &sessionJson = {});
     void navigate(int delta);
+    void onBreadcrumbPath(const QString &path);
 
     // P0: product browse state — recent folders, favorites, in-session history,
     // and cross-session restore.
@@ -68,6 +71,8 @@ class MainWindow : public QMainWindow
 
     ImageViewer *m_imageViewer = nullptr;
     DirectoryTree *m_directoryTree = nullptr;
+    BreadcrumbBar *m_breadcrumb = nullptr;
+    MetadataOverlay *m_metadataOverlay = nullptr;  // M15: semi-transparent info overlay
     ThumbnailPanel *m_thumbnailPanel = nullptr;
     PreviewPanel *m_previewPanel = nullptr;
 
