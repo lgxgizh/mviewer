@@ -69,11 +69,11 @@ struct CompareSession
     bool sidePanelVisible = false; // 检视面板开关
     int layoutIndex = 0;        // 布局下拉框选中项 (0=自动,1=单列,2=2列,3=3列,4=4列,5=一行)
 
-    int imageCount() const
+    int imageCount() const noexcept
     {
         return static_cast<int>(imageIds.size());
     }
-    bool isValid() const
+    bool isValid() const noexcept
     {
         return imageCount() >= 2 && imageCount() <= MAX_IMAGES;
     }

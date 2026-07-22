@@ -4,16 +4,18 @@
 #include <QComboBox>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
+#include <QFutureWatcher>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTextEdit>
 #include <QVBoxLayout>
-#include <QMessageBox>
+#include <QtConcurrent/QtConcurrent>
 
 BatchDialog::BatchDialog(QWidget *parent)
     : QDialog(parent)
@@ -238,42 +240,69 @@ void BatchDialog::onStart()
     m_progress->setValue(0);
     m_log->clear();
 
+    // Progress callback runs on the worker thread → post updates to the UI
+    // thread via invokeMethod so widget access is always safe.
     m_processor->setProgressCallback(
         [this](int current, int total, const std::string &path)
         {
-            m_progress->setValue(current);
-            if (!path.empty())
-            {
-                m_statusLabel->setText(
-                    QString("处理中 (%1/%2): %3")
-                        .arg(current + 1).arg(total)
-                        .arg(QString::fromStdString(path)));
-            }
+            QMetaObject::invokeMethod(
+                this,
+                [this, current, total, path]()
+                {
+                    m_progress->setValue(current);
+                    if (!path.empty())
+                    {
+                        m_statusLabel->setText(
+                            QString("处理中 (%1/%2): %3")
+                                .arg(current + 1)
+                                .arg(total)
+                                .arg(QString::fromStdString(path)));
+                    }
+                },
+                Qt::QueuedConnection);
         });
 
-    // Run synchronously (simpler; for very large batches this could move to
-    // a background thread, but for now the UI is acceptable).
-    auto result = m_processor->execute(config);
+    // Move processor ownership into a shared_ptr for the background thread;
+    // a fresh processor is created when the job finishes so the dialog can
+    // be reused.
+    std::shared_ptr<mviewer::core::BatchProcessor> proc = std::move(m_processor);
 
-    m_progress->setValue(m_progress->maximum());
-    m_statusLabel->setText(
-        QString("完成: %1 成功, %2 失败")
-            .arg(result.totalSucceeded).arg(result.totalFailed));
+    auto future = QtConcurrent::run([proc, config = std::move(config)]()
+                                    { return proc->execute(config); });
 
-    // Log results.
-    for (const auto &r : result.fileResults)
-    {
-        QString line = r.success
-            ? QString("[OK] %1 → %2")
-                  .arg(QString::fromStdString(r.inputPath))
-                  .arg(QString::fromStdString(r.outputPath))
-            : QString("[FAIL] %1: %2")
-                  .arg(QString::fromStdString(r.inputPath))
-                  .arg(QString::fromStdString(r.errorMessage));
-        m_log->append(line);
-    }
+    auto *watcher = new QFutureWatcher<mviewer::domain::BatchJobResult>(this);
+    connect(watcher, &QFutureWatcher<mviewer::domain::BatchJobResult>::finished,
+            this,
+            [this, watcher]()
+            {
+                auto result = watcher->result();
 
-    updateUiState(false);
+                m_progress->setValue(m_progress->maximum());
+                m_statusLabel->setText(
+                    QString("完成: %1 成功, %2 失败")
+                        .arg(result.totalSucceeded)
+                        .arg(result.totalFailed));
+
+                // Log results.
+                for (const auto &r : result.fileResults)
+                {
+                    QString line = r.success
+                                       ? QString("[OK] %1 → %2")
+                                             .arg(QString::fromStdString(r.inputPath))
+                                             .arg(QString::fromStdString(r.outputPath))
+                                       : QString("[FAIL] %1: %2")
+                                             .arg(QString::fromStdString(r.inputPath))
+                                             .arg(QString::fromStdString(r.errorMessage));
+                    m_log->append(line);
+                }
+
+                // Create a fresh processor so the dialog can be reused.
+                m_processor = std::make_unique<mviewer::core::BatchProcessor>();
+                updateUiState(false);
+                watcher->deleteLater();
+            });
+
+    watcher->setFuture(future);
 }
 
 void BatchDialog::onCancel()

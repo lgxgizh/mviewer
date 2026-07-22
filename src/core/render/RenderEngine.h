@@ -7,7 +7,7 @@
 // (no <QWidget>/<QPainter>/<QImage> in src/core/**/*.h). The full type is
 // included in RenderEngine.cpp where the painting is implemented.
 class QPainter;
-#include <QRect>
+class QRect;
 
 #include <array>
 #include <cstdint>

@@ -207,6 +207,34 @@ static QImage renderMainWindow(int w = 1600, int h = 900)
     return img;
 }
 
+static QImage renderMainWindowWithImage(int w = 1600, int h = 900)
+{
+    QString tempRoot = QDir::tempPath() + "/mviewer_ui_fixture_with_img";
+    QDir(tempRoot).removeRecursively();
+    QDir().mkpath(tempRoot);
+
+    auto imgs = generateTestImages();
+    saveTestImages(tempRoot, imgs);
+
+    MainWindow window;
+    window.resize(w, h);
+    window.show();
+
+    // Load the first generated test image.
+    QString imgPath = QStringLiteral("%1/test_image_0.png").arg(tempRoot);
+    window.onImageOpen(imgPath);
+
+    QApplication::processEvents();
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    QApplication::processEvents();
+
+    QImage img = UiFixtureRegression::captureWidget(&window);
+
+    window.close();
+    QDir(tempRoot).removeRecursively();
+    return img;
+}
+
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
@@ -232,17 +260,33 @@ int main(int argc, char **argv)
     UiFixtureRegression vr(goldenDir, outputDir);
     vr.addFixture("main_window_default");
 
+    // Additional fixture: window with a loaded image so we catch rendering
+    // regressions when an image is displayed.
+    vr.addFixture("main_window_with_image");
+
     if (mode == "generate")
     {
-        QImage img = renderMainWindow();
-        vr.saveGolden("main_window_default", img);
-        std::cout << "Generated UI golden screenshot: " << img.width() << "x" << img.height()
+        QImage img1 = renderMainWindow();
+        vr.saveGolden("main_window_default", img1);
+        std::cout << "Generated golden: main_window_default " << img1.width() << "x" << img1.height()
                   << "\n";
+
+        QImage img2 = renderMainWindowWithImage();
+        vr.saveGolden("main_window_with_image", img2);
+        std::cout << "Generated golden: main_window_with_image " << img2.width() << "x"
+                  << img2.height() << "\n";
         return 0;
     }
 
-    QImage img = renderMainWindow();
-    vr.saveCurrent("main_window_default", img);
+    // Compare mode: render each fixture and compare against its golden.
+    {
+        QImage img = renderMainWindow();
+        vr.saveCurrent("main_window_default", img);
+    }
+    {
+        QImage img = renderMainWindowWithImage();
+        vr.saveCurrent("main_window_with_image", img);
+    }
     auto results = vr.compareAll();
     int fails = 0;
     for (const auto &r : results)

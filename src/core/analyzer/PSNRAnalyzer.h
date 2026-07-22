@@ -1,8 +1,12 @@
 #pragma once
 #include "core/analyzer/Analyzer.h"
 
+#include <optional>
+
 // PSNR analyzer: peak signal-to-noise ratio between reference and target.
 // Set reference via setReference() before calling analyze().
+// The analyzer stores its own copy of the reference so the caller does not
+// need to keep the original alive.
 class PSNRAnalyzer : public Analyzer
 {
   public:
@@ -29,7 +33,7 @@ class PSNRAnalyzer : public Analyzer
     }
     void setReference(const ImageFrame &ref)
     {
-        m_ref = &ref;
+        m_ref = ref;
     }
 
     bool analyze(const ImageFrame &frame) override;
@@ -43,6 +47,6 @@ class PSNRAnalyzer : public Analyzer
     std::unordered_map<std::string, double> resultMetrics() const override;
 
   private:
-    const ImageFrame *m_ref = nullptr;
+    std::optional<ImageFrame> m_ref;
     double m_psnr = 0.0;
 };

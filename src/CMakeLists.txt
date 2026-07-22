@@ -253,7 +253,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform differenceengine blinkcontroller)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -843,6 +843,10 @@ add_test(NAME assets_acceptance_tests COMMAND test_assets_acceptance)
 add_test(NAME analysis_batch_tests COMMAND test_analyzer_batch)
 add_test(NAME raw_metadata_tests COMMAND test_raw_metadata)
 add_test(NAME crashhandler_tests COMMAND test_crashhandler)
+add_test(NAME encoder_tests COMMAND test_encoder)
+add_test(NAME imagetransform_tests COMMAND test_imagetransform)
+add_test(NAME differenceengine_tests COMMAND test_differenceengine)
+add_test(NAME blinkcontroller_tests COMMAND test_blinkcontroller)
 # ─── M13 Phase 1: Product Workflow gate ──────────────────────────────────
 # A single ctest that runs the full user-chain in order:
 #   Browse -> Compare -> Analyzer -> Export -> Workspace

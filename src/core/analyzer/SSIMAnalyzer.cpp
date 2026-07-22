@@ -55,7 +55,7 @@ std::unordered_map<std::string, double> SSIMAnalyzer::resultMetrics() const
     // SSIM is a dual-image metric: needs a reference set via setReference()
     // before analyze(). Batch runBatch() supplies no reference, so report an
     // empty metric map rather than a misleading 0.
-    if (m_ref == nullptr)
+    if (!m_ref.has_value())
         return {};
     return {{"ssim", m_ssim}};
 }

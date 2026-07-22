@@ -19,15 +19,15 @@ struct Histogram
 
     Histogram() = default;
 
-    int totalPixels() const
+    int64_t totalPixels() const noexcept
     {
-        int s = 0;
+        int64_t s = 0;
         for (int v : luminance)
-            s += v;
+            s += static_cast<int64_t>(v);
         return s;
     }
 
-    void clear()
+    void clear() noexcept
     {
         luminance.fill(0);
         red.fill(0);

@@ -157,7 +157,9 @@ void MainWindow::setupUi()
     fileMenu->addAction(m_actSaveProject);
     fileMenu->addAction(m_actOpenProject);
     m_actExportReport = new QAction("导出报告(&R)...", this);
+    m_actExportImages = new QAction("导出图片(&E)...", this);
     fileMenu->addAction(m_actExportReport);
+    fileMenu->addAction(m_actExportImages);
     fileMenu->addSeparator();
     fileMenu->addAction(m_actExit);
 
@@ -873,6 +875,15 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
 
     }
 
+    // P0-1: guard m_compareView lifetime — when the compare dialog is closed
+    // (WA_DeleteOnClose), reset the pointer so every downstream accessor
+    // (saveWorkspace, saveProject, exportReport, autosaveSession) is safe.
+    connect(dlg, &QDialog::destroyed, this, [this]()
+    {
+        m_compareView = nullptr;
+        disconnect(m_compareDestroyConnection);
+    });
+
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();
 }
@@ -1046,17 +1057,22 @@ void MainWindow::saveWorkspace()
     // The compare ROI is synchronized across cells, so currentROI() is the same
     // region for all compared images; we still write it per-image into each
     // ImageMetadata so the .mvws carries each image's own ROI/analysis fields.
-    const mviewer::domain::Selection roi = m_compareView->currentROI();
-    const QStringList compared = m_compareView->comparedImages();
-    // M12.2 (review fix): persist the explicit compared-image list so a compare
-    // session with neither ROI nor analysis still reopens correctly.
-    for (const QString &cpath : compared)
-        ws.comparedImages.push_back(cpath.toStdString());
-    // M15: persist the full compare-session snapshot (sync mode, zoom/pan, ROI)
-    // so reopening restores the entire compare view, not just the image list.
-    if (m_compareView && m_compareView->compareSession().isValid())
-        ws.compareSessionJson =
-            mviewer::core::serializeCompareSession(m_compareView->compareSession());
+    mviewer::domain::Selection roi;
+    QStringList compared;
+    if (m_compareView)
+    {
+        roi = m_compareView->currentROI();
+        compared = m_compareView->comparedImages();
+        // M12.2 (review fix): persist the explicit compared-image list so a compare
+        // session with neither ROI nor analysis still reopens correctly.
+        for (const QString &cpath : compared)
+            ws.comparedImages.push_back(cpath.toStdString());
+        // M15: persist the full compare-session snapshot (sync mode, zoom/pan, ROI)
+        // so reopening restores the entire compare view, not just the image list.
+        if (m_compareView->compareSession().isValid())
+            ws.compareSessionJson =
+                mviewer::core::serializeCompareSession(m_compareView->compareSession());
+    }
     for (const QString &cpath : compared)
     {
         const std::string key = cpath.toStdString();
@@ -1233,13 +1249,18 @@ void MainWindow::saveProject()
         return;
     }
 
-    const mviewer::domain::Selection roi = m_compareView->currentROI();
-    const QStringList compared = m_compareView->comparedImages();
-    for (const QString &cpath : compared)
-        ws.comparedImages.push_back(cpath.toStdString());
-    if (m_compareView && m_compareView->compareSession().isValid())
-        ws.compareSessionJson =
-            mviewer::core::serializeCompareSession(m_compareView->compareSession());
+    mviewer::domain::Selection roi;
+    QStringList compared;
+    if (m_compareView)
+    {
+        roi = m_compareView->currentROI();
+        compared = m_compareView->comparedImages();
+        for (const QString &cpath : compared)
+            ws.comparedImages.push_back(cpath.toStdString());
+        if (m_compareView->compareSession().isValid())
+            ws.compareSessionJson =
+                mviewer::core::serializeCompareSession(m_compareView->compareSession());
+    }
     for (const QString &cpath : compared)
     {
         const std::string key = cpath.toStdString();

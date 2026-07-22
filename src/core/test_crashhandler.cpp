@@ -1,3 +1,17 @@
+// CrashHandler tests.
+//
+// NOTE: Crash handler tests are inherently limited in a standard CI
+// environment.  Platform signal handlers (SEH on Windows, sigaction on
+// POSIX) can only be fully validated by real crash scenarios (null deref,
+// div-by-zero, stack overflow), which are destructive and cannot be run
+// automatically.  The tests below verify the infrastructure: crash report
+// path naming, handler installation safety, and no-side-effect behaviour
+// when MVIEWER_CRASH_DUMP is unset.
+//
+// For full crash handling validation, manual testing is required:
+//   1. Set MVIEWER_CRASH_DUMP=1 and trigger a crash → verify .dmp is written
+//   2. Verify the .dmp opens in WinDbg with readable stack frames
+
 #include "core/CrashHandler.h"
 
 #include <QCoreApplication>

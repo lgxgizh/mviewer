@@ -1,5 +1,15 @@
-// Plugin loader tests (tests plugin loadFromDirectory + scanDirectory on empty
-// dir)
+// Plugin loader tests.
+//
+// NOTE: These tests only verify the failure paths (nonexistent directory,
+// invalid DLL, empty path).  A proper integration test that loads a real
+// plugin would require either:
+//   1. A minimal test plugin built and deployed to a known directory
+//   2. A mock DLL with the expected export ABI
+// The plugins/example/ directory contains a sample plugin that can be
+// used for this purpose when its build is integrated into the test
+// harness.  Until then, manual verification is needed:
+//   mviewer --plugindir plugins/example/build
+
 #include "core/plugin/PluginLoader.h"
 
 #include <cassert>

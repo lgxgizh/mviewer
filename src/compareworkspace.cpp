@@ -2,6 +2,8 @@
 #include "widgets/histogramwidget.h"
 #include "widgets/rawimageview.h"
 
+#include <QPointer>
+
 #include "core/EventBus.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/compare/Histogram.h"
@@ -79,7 +81,14 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
             if (ctx != static_cast<void *>(&m_engine))
                 return;
             // Repaint on the UI thread; refreshDiffOverlay() reads lastDiffImage().
-            QMetaObject::invokeMethod(this, "refreshDiffOverlay", Qt::QueuedConnection);
+            QPointer<CompareWorkspace> guard(this);
+            QMetaObject::invokeMethod(
+                this, [guard]()
+                {
+                    if (!guard) return;
+                    guard->refreshDiffOverlay();
+                },
+                Qt::QueuedConnection);
         });
 
     auto *syncBar = new QWidget(this);

@@ -76,6 +76,7 @@ class MainWindow : public QMainWindow
     SearchPanel *m_searchPanel = nullptr;
     BatchDialog *m_batchDialog = nullptr;
     CompareWorkspace *m_compareView = nullptr;
+    QMetaObject::Connection m_compareDestroyConnection;  // guard WA_DeleteOnClose
 
     QAction *m_actOpenDir = nullptr;
     QAction *m_actSaveWorkspace = nullptr;

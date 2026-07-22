@@ -25,7 +25,7 @@ struct ImageBuffer
     int height = 0;
     PixelFormat format = PixelFormat::RGB24;
 
-    int channelsPerPixel() const
+    int channelsPerPixel() const noexcept
     {
         switch (format)
         {
@@ -43,20 +43,22 @@ struct ImageBuffer
         return 3;
     }
 
-    size_t byteSize() const
+    size_t byteSize() const noexcept
     {
         return static_cast<size_t>(width) * static_cast<size_t>(height) *
                static_cast<size_t>(channelsPerPixel());
     }
 
-    bool isNull() const
+    bool isNull() const noexcept
     {
         return data == nullptr || width <= 0 || height <= 0;
     }
 
-    ptrdiff_t stride() const
+    ptrdiff_t stride() const noexcept
     {
-        return static_cast<ptrdiff_t>(width) * channelsPerPixel();
+        // Multiply in a wider type to avoid int overflow for extreme widths
+        // (e.g. DICOM pathology images > 100 000 px).
+        return static_cast<int64_t>(width) * static_cast<int64_t>(channelsPerPixel());
     }
 };
 
@@ -74,7 +76,7 @@ struct ImageData
     int height = 0;
     PixelFormat format = PixelFormat::RGB24;
 
-    bool isNull() const
+    bool isNull() const noexcept
     {
         return !buffer || buffer->empty() || width <= 0 || height <= 0;
     }
@@ -94,12 +96,12 @@ struct ImageData
         b.format = format;
         return b;
     }
-    ptrdiff_t stride() const
+    ptrdiff_t stride() const noexcept
     {
-        return static_cast<ptrdiff_t>(width) * channelsPerPixel();
+        return static_cast<int64_t>(width) * static_cast<int64_t>(channelsPerPixel());
     }
 
-    size_t byteSize() const
+    size_t byteSize() const noexcept
     {
         return static_cast<size_t>(width) * static_cast<size_t>(height) *
                static_cast<size_t>(channelsPerPixel());

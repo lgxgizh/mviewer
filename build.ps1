@@ -69,6 +69,14 @@ elseif (Test-Path 'D:\QT\6.11.1\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake') {
     $qtPath = 'D:\QT\6.11.1\msvc2022_64'
     Write-Host "[Qt] Default: $qtPath" -ForegroundColor Cyan
 }
+elseif (Test-Path "$env:USERPROFILE\Qt\6.11.1\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake") {
+    $qtPath = "$env:USERPROFILE\Qt\6.11.1\msvc2022_64"
+    Write-Host "[Qt] Default: $qtPath" -ForegroundColor Cyan
+}
+elseif (Test-Path "$env:ProgramFiles\Qt\6.11.1\msvc2022_64\lib\cmake\Qt6\Qt6Config.cmake") {
+    $qtPath = "$env:ProgramFiles\Qt\6.11.1\msvc2022_64"
+    Write-Host "[Qt] Default: $qtPath" -ForegroundColor Cyan
+}
 else {
     Write-Error @"
 Qt 6 not found. Set one of:

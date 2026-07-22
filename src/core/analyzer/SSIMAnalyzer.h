@@ -1,7 +1,11 @@
 #pragma once
 #include "core/analyzer/Analyzer.h"
 
+#include <optional>
+
 // SSIM analyzer: structural similarity between reference and target.
+// The analyzer stores its own copy of the reference so the caller does not
+// need to keep the original alive.
 class SSIMAnalyzer : public Analyzer
 {
   public:
@@ -28,7 +32,7 @@ class SSIMAnalyzer : public Analyzer
     }
     void setReference(const ImageFrame &ref)
     {
-        m_ref = &ref;
+        m_ref = ref;
     }
 
     bool analyze(const ImageFrame &frame) override;
@@ -42,6 +46,6 @@ class SSIMAnalyzer : public Analyzer
     std::unordered_map<std::string, double> resultMetrics() const override;
 
   private:
-    const ImageFrame *m_ref = nullptr;
+    std::optional<ImageFrame> m_ref;
     double m_ssim = 0.0;
 };

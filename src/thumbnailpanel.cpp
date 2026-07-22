@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <QPointer>
 #include <unordered_map>
 
 #include <QAbstractItemView>
@@ -452,8 +453,14 @@ void ThumbnailPanel::updateVisibleRange()
             if (ThumbnailCache::instance().get(p, pm))
             {
                 m_thumbReady.insert(p, pm);
-                QMetaObject::invokeMethod(this, "onThumbReady", Qt::QueuedConnection,
-                                          Q_ARG(QString, p));
+                QPointer<ThumbnailPanel> guard(this);
+                QMetaObject::invokeMethod(
+                    this, [guard, p]()
+                    {
+                        if (!guard) return;
+                        guard->onThumbReady(p);
+                    },
+                    Qt::QueuedConnection);
             }
         }
     }
@@ -874,6 +881,14 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
                                             const QStyleOptionViewItem &option,
                                             const QModelIndex &index) const
 {
+    // QStyledItemDelegate may call paint() with an invalid index (e.g. empty
+    // view, filter cleared, or during layout).  Fall back to the default
+    // rendering so the viewport background is still drawn.
+    if (!index.isValid())
+    {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
     const QStringList &paths = m_panel->pathList();
     if (index.row() < 0 || index.row() >= paths.size())
         return;
