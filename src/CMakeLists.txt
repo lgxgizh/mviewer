@@ -382,6 +382,26 @@ target_include_directories(analyzer_pipeline_tests PRIVATE ${CMAKE_CURRENT_SOURC
 target_compile_definitions(analyzer_pipeline_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME analyzer_pipeline_tests COMMAND analyzer_pipeline_tests)
 
+# ─── M15 P0#1 Compare Workspace session round-trip ─────────────────────────
+add_executable(compare_session_tests
+    test_compare_session.cpp
+)
+
+target_link_libraries(compare_session_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(compare_session_tests PRIVATE cxx_std_20)
+target_include_directories(compare_session_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(compare_session_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME compare_session_tests COMMAND compare_session_tests)
+
+
 # ─── M9-4 Export workflow acceptance tests ────────────────────────────────
 add_executable(export_tests
     core/test_export.cpp

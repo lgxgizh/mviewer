@@ -191,10 +191,11 @@ struct Parser
 
 } // namespace
 
-// --- CompareSession (M15): embedded so Workspace stays a flat value type. ---
+// --- CompareSession (M15 P0#1): embedded so Workspace stays a flat value type. ---
 // Shape: {"imageIds":[...],"cells":[[s,ox,oy],...],"syncMode":N,"blink":I,
 //         "sharedScale":S,"sharedOffsetX":X,"sharedOffsetY":Y,
-//         "cols":C,"rows":R,"selection":[x,y,w,h,sync]}
+//         "cols":C,"rows":R,"selection":[x,y,w,h,sync],
+//         "threshold":T,"blinkIntervalMs":B,"sidePanel":0|1,"layoutIndex":L}
 std::string serializeCompareSession(const mviewer::domain::CompareSession &s)
 {
     std::ostringstream os;
@@ -218,7 +219,10 @@ std::string serializeCompareSession(const mviewer::domain::CompareSession &s)
        << ",\"sharedOffsetY\":" << s.sharedOffsetY << ",\"cols\":" << s.cols
        << ",\"rows\":" << s.rows << ",\"selection\":[" << s.selection.x << ',' << s.selection.y
        << ',' << s.selection.w << ',' << s.selection.h << ',' << (s.selection.synced ? 1 : 0)
-       << "]}";
+       << "],\"threshold\":" << static_cast<int>(s.threshold)
+       << ",\"blinkIntervalMs\":" << s.blinkIntervalMs
+       << ",\"sidePanel\":" << (s.sidePanelVisible ? 1 : 0)
+       << ",\"layoutIndex\":" << s.layoutIndex << "}";
     return os.str();
 }
 
@@ -230,6 +234,7 @@ bool deserializeCompareSession(const std::string &text, mviewer::domain::Compare
     long long syncMode = 0, blink = -1, cols = 0, rows = 0;
     double sharedScale = 1.0, sharedOffsetX = 0.0, sharedOffsetY = 0.0;
     int sx = 0, sy = 0, sw = 0, sh = 0, ssync = 0;
+    long long threshold = 0, blinkIntervalMs = 500, sidePanel = 0, layoutIndex = 0;
     bool haveIds = false, haveCells = false;
     while (!p.peek('}'))
     {
@@ -302,6 +307,14 @@ bool deserializeCompareSession(const std::string &text, mviewer::domain::Compare
             if (!p.eat(']'))
                 return false;
         }
+        else if (k == "threshold")
+            threshold = p.parseNumber();
+        else if (k == "blinkIntervalMs")
+            blinkIntervalMs = p.parseNumber();
+        else if (k == "sidePanel")
+            sidePanel = p.parseNumber();
+        else if (k == "layoutIndex")
+            layoutIndex = p.parseNumber();
         else
         {
             // Unknown key: skip a scalar/string value to stay forward-tolerant.
@@ -321,6 +334,10 @@ bool deserializeCompareSession(const std::string &text, mviewer::domain::Compare
     // stores [x,y,w,h,synced] (5 values), so map the 5th to synced and
     // derive active from a non-empty region.
     out.selection = {sx, sy, sw, sh, (sw > 0 && sh > 0), ssync != 0};
+    out.threshold = static_cast<uint8_t>(threshold);
+    out.blinkIntervalMs = static_cast<int>(blinkIntervalMs);
+    out.sidePanelVisible = (sidePanel != 0);
+    out.layoutIndex = static_cast<int>(layoutIndex);
     return haveIds; // require at least the image list to be a valid session
 }
 

@@ -46,7 +46,7 @@ class MainWindow : public QMainWindow
 
   private:
     void setupCommands();
-    void openCompare(const QStringList &images = {});
+    void openCompare(const QStringList &images = {}, const QString &sessionJson = {});
     void navigate(int delta);
 
     // P0: product browse state — recent folders, favorites, in-session history,

@@ -54,6 +54,7 @@
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QScrollBar>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSettings>
@@ -63,6 +64,13 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
+
+#include <optional>
+
+// M15 P0#1: forward declaration so openCompare() can restore a persisted
+// session before the helper is defined later in this file.
+static std::optional<mviewer::domain::CompareSession>
+decodeCompareSession(const std::string &json);
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
@@ -308,7 +316,8 @@ void MainWindow::setupUi()
             });
     connect(m_thumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
             [this](const QString &path) { onImageOpen(path); });
-    connect(m_thumbnailPanel, &ThumbnailPanel::compareRequested, this, &MainWindow::openCompare);
+    connect(m_thumbnailPanel, &ThumbnailPanel::compareRequested, this,
+            [this](const QStringList &images) { openCompare(images); });
 
     // EventBus (decoupled, dual-mode) subscriptions.
     EventBus::instance().subscribe("image.open",
@@ -720,7 +729,7 @@ void MainWindow::onImageOpen(const QString &path)
     m_imageViewer->activateWindow();
 }
 
-void MainWindow::openCompare(const QStringList &images)
+void MainWindow::openCompare(const QStringList &images, const QString &sessionJson)
 {
     QStringList imgs = images;
     if (imgs.isEmpty())
@@ -743,6 +752,16 @@ void MainWindow::openCompare(const QStringList &images)
     m_compareView->setImages(imgs);
     connect(m_compareView, &CompareWorkspace::pixelInfo, this,
             [this](const QString &text) { statusBar()->showMessage(text); });
+
+    // M15 P0#1: if a persisted compare session was supplied, restore it *after*
+    // the images are loaded (applySession needs the engine + cell views alive).
+    if (!sessionJson.isEmpty() && m_compareView)
+    {
+        const auto session = decodeCompareSession(sessionJson.toStdString());
+        if (session)
+            m_compareView->applySession(*session);
+
+    }
 
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();
@@ -1423,6 +1442,16 @@ void MainWindow::closeEvent(QCloseEvent *event)
     QMainWindow::closeEvent(event);
 }
 
+// M15: decode a persisted compare-session JSON string into a value, or nullopt.
+static std::optional<mviewer::domain::CompareSession>
+decodeCompareSession(const std::string &json)
+{
+    mviewer::domain::CompareSession s;
+    if (json.empty() || !mviewer::core::deserializeCompareSession(json, s))
+        return std::nullopt;
+    return s;
+}
+
 // M15: crash recovery — autosave current session to a recovery file.
 void MainWindow::autosaveSession()
 {
@@ -1433,11 +1462,26 @@ void MainWindow::autosaveSession()
     QFile f(recoveryPath);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
         return;
-    // Simple JSON: lastDir, lastImage, lastThumbScroll
+    // Simple JSON: lastDir, lastImage, lastThumbScroll, compare (M15 P0#1)
     QJsonObject obj;
     obj.insert("lastDir", m_currentDir);
     obj.insert("lastImage", m_currentImagePath);
     obj.insert("lastThumbScroll", m_thumbnailPanel ? m_thumbnailPanel->scrollOffset() : 0);
+
+    // M15 P0#1: also persist the live Compare session (images + full state) so a
+    // crash can restore Compare, not just the gallery/single view.
+    if (m_compareView && m_compareView->comparedImageCount() >= 2)
+    {
+        const auto cs = m_compareView->compareSession();
+        QJsonArray cmpImg;
+        for (const auto &id : cs.imageIds)
+            cmpImg.append(QString::fromStdString(id));
+        obj.insert("compareImages", cmpImg);
+        obj.insert("compareSession",
+                   QString::fromStdString(
+                       mviewer::core::serializeCompareSession(cs)));
+    }
+
     obj.insert("timestamp", QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
     QJsonDocument doc(obj);
     f.write(doc.toJson());
@@ -1464,28 +1508,48 @@ void MainWindow::restoreSessionRecovery()
     const QString lastDir = obj.value("lastDir").toString();
     const QString lastImage = obj.value("lastImage").toString();
     const int lastThumbScroll = obj.value("lastThumbScroll").toInt();
+    const QJsonArray compareImages = obj.value("compareImages").toArray();
+    const QString compareSession = obj.value("compareSession").toString();
 
-    if (lastDir.isEmpty() && lastImage.isEmpty())
+    if (lastDir.isEmpty() && lastImage.isEmpty() && compareImages.isEmpty())
         return;
 
+    // M15 P0#1: restore the Compare session too. Only trust it if the recorded
+    // images still exist on disk.
+    QStringList cmpImgs;
+    for (const auto &v : compareImages)
+    {
+        const QString p = v.toString();
+        if (!p.isEmpty() && QFile::exists(p))
+            cmpImgs.append(p);
+    }
+    const bool restoreCompare = cmpImgs.size() >= 2 && !compareSession.isEmpty();
+
     // Restore the session (deferred to event loop).
-    QTimer::singleShot(100, this, [this, lastDir, lastImage, lastThumbScroll]() {
-        if (!lastDir.isEmpty() && QDir(lastDir).exists())
-        {
-            m_currentDir = lastDir;
-            m_cachedImagePaths.clear();
-            m_dirListDirty = true;
-            m_thumbnailPanel->setDirectory(lastDir);
-            if (lastThumbScroll > 0)
-                m_thumbnailPanel->verticalScrollBar()->setValue(lastThumbScroll);
-        }
-        if (!lastImage.isEmpty() && QFile::exists(lastImage))
-        {
-            m_currentImagePath = lastImage;
-            onImageOpen(lastImage);
-        }
-        m_autosaveLoaded = true;
-    });
+    QTimer::singleShot(100, this,
+                       [this, lastDir, lastImage, lastThumbScroll, cmpImgs,
+                        compareSession, restoreCompare]() {
+                           if (!lastDir.isEmpty() && QDir(lastDir).exists())
+                           {
+                               m_currentDir = lastDir;
+                               m_cachedImagePaths.clear();
+                               m_dirListDirty = true;
+                               m_thumbnailPanel->setDirectory(lastDir);
+                               if (lastThumbScroll > 0)
+                                   m_thumbnailPanel->verticalScrollBar()->setValue(
+                                       lastThumbScroll);
+                           }
+                           if (!lastImage.isEmpty() && QFile::exists(lastImage))
+                           {
+                               m_currentImagePath = lastImage;
+                               onImageOpen(lastImage);
+                           }
+                           // M15 P0#1: reopen Compare with its fully persisted
+                           // session (ROI, zoom, layout, threshold, blink, ...).
+                           if (restoreCompare)
+                               openCompare(cmpImgs, compareSession);
+                           m_autosaveLoaded = true;
+                       });
 }
 
 // M15: drag & drop — accept files/folders dropped onto the window.

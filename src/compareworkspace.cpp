@@ -94,22 +94,11 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     connect(m_blinkChk, &QCheckBox::toggled, this, [this](bool on) {
         if (on)
         {
-            if (!m_blinkTimer)
-            {
-                m_blinkTimer = new QTimer(this);
-                connect(m_blinkTimer, &QTimer::timeout, this, [this]() { this->toggleBlink(); });
-            }
-            m_blinkTimer->start(500);
-            m_blinkState = false;
-            applyBlink(m_blinkState);
+            startBlink(500);
         }
         else
         {
-            if (m_blinkTimer)
-                m_blinkTimer->stop();
-            // restore all cells visible
-            for (auto *v : m_cellViews)
-                if (v) v->setVisible(true);
+            stopBlink();
         }
     });
     syncLayout->addWidget(m_blinkChk);
@@ -365,6 +354,29 @@ void CompareWorkspace::toggleBlink()
     update();
 }
 
+// M15 P0#1: start the blink timer at the given interval (ms). Extracted so the
+// persisted blink interval can be restored via applySession().
+void CompareWorkspace::startBlink(int intervalMs)
+{
+    if (!m_blinkTimer)
+    {
+        m_blinkTimer = new QTimer(this);
+        connect(m_blinkTimer, &QTimer::timeout, this, [this]() { this->toggleBlink(); });
+    }
+    m_blinkTimer->start(intervalMs);
+    m_blinkState = false;
+    applyBlink(m_blinkState);
+}
+
+void CompareWorkspace::stopBlink()
+{
+    if (m_blinkTimer)
+        m_blinkTimer->stop();
+    // restore all cells visible
+    for (auto *v : m_cellViews)
+        if (v) v->setVisible(true);
+}
+
 void CompareWorkspace::applyBlink(bool state)
 {
     const int n = m_cellViews.size();
@@ -515,6 +527,38 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
     {
         applySelectionToAll(
             mviewer::domain::Selection{s.selection.x, s.selection.y, s.selection.w, s.selection.h});
+    }
+
+    // M15 P0#1: replay the UI-only state so the reopened view is identical.
+    // HeatMap / Diff threshold.
+    m_thresholdValue = s.threshold;
+    if (m_thresholdSlider)
+    {
+        m_thresholdSlider->setValue(static_cast<int>(s.threshold));
+        if (m_thresholdLabel)
+            m_thresholdLabel->setText(QString::number(static_cast<int>(s.threshold)));
+    }
+    refreshDiffOverlay();
+
+    // Layout combo (0=auto,1=single-col,2=2col,3=3col,4=4col,5=one-row). Setting
+    // the index triggers onLayoutChanged which drives the engine's column count.
+    if (m_layoutCombo && m_layoutCombo->currentIndex() != s.layoutIndex)
+        m_layoutCombo->setCurrentIndex(s.layoutIndex);
+
+    // Side (inspector + histogram) panel visibility.
+    if (m_sideChk && m_sideChk->isChecked() != s.sidePanelVisible)
+        m_sideChk->setChecked(s.sidePanelVisible);
+
+    // Blink compare: restore interval + on/off state.
+    if (m_blinkChk)
+    {
+        const bool wantBlink = s.isBlinking();
+        if (m_blinkChk->isChecked() != wantBlink)
+            m_blinkChk->setChecked(wantBlink);
+        if (wantBlink)
+            startBlink(s.blinkIntervalMs > 0 ? s.blinkIntervalMs : 500);
+        else
+            stopBlink();
     }
 
     update();

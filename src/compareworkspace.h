@@ -14,6 +14,7 @@
 #include <QSlider>
 #include <QStringList>
 #include <QTimer>
+#include <QComboBox>
 #include <QWidget>
 #include <memory>
 
@@ -59,17 +60,27 @@ class CompareWorkspace : public QWidget
     // Used by Workspace persistence to capture session context per image.
     QStringList comparedImages() const;
 
-    // M15: full compare-session snapshot (sync mode, per-cell zoom/pan, shared
-    // transform, ROI) for Workspace persistence.
+    // M15 P0#1: full compare-session snapshot (sync mode, per-cell zoom/pan,
+    // shared transform, ROI) plus the UI-only state (HeatMap threshold, blink
+    // interval, side panel, layout combo) so a reopen fully restores the view.
     mviewer::domain::CompareSession compareSession() const
     {
-        return m_engine.session();
+        mviewer::domain::CompareSession s = m_engine.session();
+        s.threshold = m_thresholdValue;
+        s.blinkIntervalMs = m_blinkTimer ? m_blinkTimer->interval() : 500;
+        s.sidePanelVisible = m_sideChk ? m_sideChk->isChecked() : false;
+        s.layoutIndex = m_layoutCombo ? m_layoutCombo->currentIndex() : 0;
+        return s;
     }
 
     // M15: restore a persisted CompareSession: sync mode, shared zoom/pan, and
     // per-cell transforms. Call after setImages() so the engine owns the frames
     // the transforms reference. The selection/ROI is applied via applyROI().
     void applySession(const mviewer::domain::CompareSession &s);
+
+    // M15 P0#1: number of images currently loaded into the comparison. Used by
+    // the crash-recovery autosave to decide whether a Compare session is active.
+    int comparedImageCount() const { return m_engine.imageCount(); }
 
   signals:
     void syncToggled(bool on);
@@ -106,6 +117,8 @@ class CompareWorkspace : public QWidget
     bool m_blinkState = false;
     void toggleBlink();
     void applyBlink(bool state);
+    void startBlink(int intervalMs);
+    void stopBlink();
 
     // M15: difference threshold
     QSlider *m_thresholdSlider = nullptr;

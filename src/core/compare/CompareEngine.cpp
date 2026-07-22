@@ -107,6 +107,12 @@ mviewer::domain::CompareSession CompareEngine::session() const
     s.sharedOffsetY = m_sync.offset().y;
     s.cols = m_layout.cols;
     s.rows = m_layout.rows;
+    // M15 P0#1 (review fix): previously the ROI/selection was NEVER captured
+    // here, so it was serialized as [0,0,0,0] and could never be restored.
+    // Capture the engine's current synchronized selection (empty if none).
+    const auto &sel = m_selection.selection();
+    s.selection = {sel.x, sel.y, sel.width, sel.height,
+                   (sel.width > 0 && sel.height > 0), m_selection.synced()};
     return s;
 }
 
