@@ -52,6 +52,7 @@
 #include <QImage>
 #include <QInputDialog>
 #include <QJsonDocument>
+#include <QPushButton>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenuBar>
@@ -113,9 +114,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     // M14-1: open the file passed on the command line (deferred to event loop).
     if (!m_openOnLaunch.isEmpty())
         QMetaObject::invokeMethod(this, [this]() { onImageOpen(m_openOnLaunch); }, Qt::QueuedConnection);
-
-    // M12.4 / M15: crash recovery — restore previous session if it exists.
-    restoreLastSession();
 
     // M15: drag & drop — accept files/folders dropped onto the window.
     setAcceptDrops(true);
@@ -184,6 +182,10 @@ void MainWindow::setupUi()
     m_actToggleSearch->setChecked(true);
     m_actToggleSearch->setShortcut(QKeySequence("Ctrl+Shift+F"));
     viewMenu->addAction(m_actToggleSearch);
+    m_actToggleMetadata = new QAction("图片信息(&I)", this);
+    m_actToggleMetadata->setCheckable(true);
+    m_actToggleMetadata->setShortcut(QKeySequence("Ctrl+I"));
+    viewMenu->addAction(m_actToggleMetadata);
 
     // ----- 工具(&T) -----
     auto *toolsMenu = menuBar->addMenu("工具(&T)");
@@ -225,6 +227,25 @@ void MainWindow::setupUi()
     sortCombo->addItem("大小", ThumbnailPanel::SortSize);
     sortCombo->addItem("分辨率", ThumbnailPanel::SortResolution);
     sortLayout->addWidget(sortCombo);
+
+    // View mode toggle: Thumbnail ↔ Details
+    auto *viewModeBtn = new QPushButton("🖼 Thumbnails");
+    viewModeBtn->setCheckable(true);
+    viewModeBtn->setToolTip("切换缩略图 / 详细信息视图");
+    sortLayout->addWidget(viewModeBtn);
+    connect(viewModeBtn, &QPushButton::toggled, this,
+            [this, viewModeBtn](bool checked) {
+                if (checked)
+                {
+                    m_thumbnailPanel->setViewMode(ThumbnailPanel::Details);
+                    viewModeBtn->setText("📋 Details");
+                }
+                else
+                {
+                    m_thumbnailPanel->setViewMode(ThumbnailPanel::Thumbnail);
+                    viewModeBtn->setText("🖼 Thumbnails");
+                }
+            });
 
     // M18: live search bar.
     sortLayout->addWidget(new QLabel("搜索：", sortBar));
@@ -280,20 +301,28 @@ void MainWindow::setupUi()
     m_metadataPanel = new MetadataPanel(this);
     m_searchPanel = new SearchPanel(this);
 
-    // ----- 5-way horizontal split: left | gallery | metadata | analysis | search -----
+    // ----- 4-way horizontal split: left | gallery | analysis | search -----
+    // Metadata panel is an overlay — hidden by default, shown on image click.
     auto *centralSplitter = new QSplitter(Qt::Horizontal, this);
     centralSplitter->addWidget(leftWidget);
     centralSplitter->addWidget(rightWidget);
-    centralSplitter->addWidget(m_metadataPanel);
     centralSplitter->addWidget(m_analysisPanel);
     centralSplitter->addWidget(m_searchPanel);
     centralSplitter->setStretchFactor(0, 0);
     centralSplitter->setStretchFactor(1, 1);
     centralSplitter->setStretchFactor(2, 0);
     centralSplitter->setStretchFactor(3, 0);
-    centralSplitter->setStretchFactor(4, 0);
-    centralSplitter->setSizes({340, 820, 300, 320, 240});
+    centralSplitter->setSizes({340, 820, 300, 240});
     setCentralWidget(centralSplitter);
+
+    // ----- Metadata overlay (P1: not in splitter, floats over main area) -----
+    m_metadataPanel->setParent(this);
+    m_metadataPanel->setWindowFlags(m_metadataPanel->windowFlags() | Qt::Tool);
+    m_metadataPanel->setFixedSize(300, 440);
+    m_metadataPanel->setStyleSheet(
+        "MetadataPanel { background: palette(window); border: 1px solid palette(shadow); "
+        "border-radius: 4px; }");
+    m_metadataPanel->hide();
 
     // ----- Full image viewer window -----
     m_imageViewer = new ImageViewer(nullptr);
@@ -328,8 +357,16 @@ void MainWindow::setupUi()
     connect(m_thumbnailPanel, &ThumbnailPanel::itemClicked, this,
             [this](const QString &path)
             {
+                m_currentImagePath = path;
                 m_previewPanel->setImage(path);       // async decode (off UI thread)
-                m_metadataPanel->setImage(path);      // M18: show metadata
+
+                // P1: show metadata as floating overlay if toggled on.
+                if (m_actToggleMetadata && m_actToggleMetadata->isChecked())
+                {
+                    m_metadataPanel->setImage(path);  // M18: load EXIF only when overlay is visible
+                    showMetadataOverlay();
+                }
+
                 mviewer::core::RatingStore::instance().addRecent(path.toStdString()); // P3 recents
                 statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
             });
@@ -449,6 +486,7 @@ void MainWindow::setupUi()
                     m_cachedImagePaths.clear();
                     m_dirListDirty = true;
                     m_thumbnailPanel->setDirectory(dir);
+                    m_directoryTree->navigateTo(dir);
                 }
             });
     connect(m_actSaveWorkspace, &QAction::triggered, this, &MainWindow::saveWorkspace);
@@ -477,6 +515,7 @@ void MainWindow::setupUi()
                         m_cachedImagePaths.clear();
                         m_dirListDirty = true;
                         m_thumbnailPanel->setDirectory(dir);
+                        m_directoryTree->navigateTo(dir);
                         for (const auto &p :
                              OpenDirectoryUseCase::execute(dir.toStdString()).imagePaths)
                             imgs.append(QString::fromStdString(p));
@@ -489,6 +528,23 @@ void MainWindow::setupUi()
             });
     connect(m_actToggleAnalysis, &QAction::triggered, m_analysisPanel, &QWidget::setVisible);
     connect(m_actToggleSearch, &QAction::triggered, m_searchPanel, &QWidget::setVisible);
+    // P1: metadata overlay toggle — show/hide the floating metadata panel.
+    connect(m_actToggleMetadata, &QAction::triggered, this,
+            [this](bool checked)
+            {
+                if (checked)
+                {
+                    if (!m_currentImagePath.isEmpty())
+                    {
+                        m_metadataPanel->setImage(m_currentImagePath);
+                        showMetadataOverlay();
+                    }
+                }
+                else
+                {
+                    m_metadataPanel->hide();
+                }
+            });
     connect(m_searchPanel, &SearchPanel::resultActivated,
             this, QOverload<const QString &>::of(&MainWindow::onImageOpen));
     connect(m_actBatch, &QAction::triggered, this, [this]()
@@ -1067,6 +1123,7 @@ void MainWindow::openWorkspace()
     m_cachedImagePaths.clear();
     m_dirListDirty = true;
     m_thumbnailPanel->setDirectory(root);
+    m_directoryTree->navigateTo(root);
 
     // M12.2 (review fix): restore the compare session from the explicit
     // comparedImages list written by saveWorkspace(). This is the exact set of
@@ -1263,6 +1320,7 @@ void MainWindow::openProject()
     m_cachedImagePaths.clear();
     m_dirListDirty = true;
     m_thumbnailPanel->setDirectory(root);
+    m_directoryTree->navigateTo(root);
 
     QStringList comparePaths;
     comparePaths.reserve(static_cast<int>(ws.comparedImages.size()));
@@ -1371,6 +1429,7 @@ void MainWindow::rebuildRecentMenu()
                     m_cachedImagePaths.clear();
                     m_dirListDirty = true;
                     m_thumbnailPanel->setDirectory(qs);
+                    m_directoryTree->navigateTo(qs);
                 });
     }
     if (m_recentMenu->isEmpty())
@@ -1413,6 +1472,7 @@ void MainWindow::rebuildFavoritesMenu()
                     m_cachedImagePaths.clear();
                     m_dirListDirty = true;
                     m_thumbnailPanel->setDirectory(qs);
+                    m_directoryTree->navigateTo(qs);
                 });
     }
     if (m_favMenu->isEmpty())
@@ -1447,6 +1507,7 @@ void MainWindow::restoreLastSession()
             m_cachedImagePaths.clear();
             m_dirListDirty = true;
             m_thumbnailPanel->setDirectory(dir);
+            m_directoryTree->navigateTo(dir);
 
             const QString img = m_appState.lastImage;
             if (!img.isEmpty() && QFile::exists(img))
@@ -1589,6 +1650,7 @@ void MainWindow::restoreSessionRecovery()
                                m_cachedImagePaths.clear();
                                m_dirListDirty = true;
                                m_thumbnailPanel->setDirectory(lastDir);
+                               m_directoryTree->navigateTo(lastDir);
                                if (lastThumbScroll > 0)
                                    m_thumbnailPanel->verticalScrollBar()->setValue(
                                        lastThumbScroll);
@@ -1644,11 +1706,31 @@ void MainWindow::dropEvent(QDropEvent *event)
         m_cachedImagePaths.clear();
         m_dirListDirty = true;
         m_thumbnailPanel->setDirectory(paths.first());
+        m_directoryTree->navigateTo(paths.first());
     }
     else
     {
         onImageOpen(paths.first());
     }
+}
+
+void MainWindow::showMetadataOverlay()
+{
+    if (!m_metadataPanel || m_currentImagePath.isEmpty())
+        return;
+    m_metadataPanel->setImage(m_currentImagePath);
+
+    // Position the overlay: top-right corner of the main window, with padding.
+    // Must use mapToGlobal because Qt::Tool windows interpret move() as
+    // absolute screen coordinates, not widget-relative ones.
+    const QRect wr = rect();
+    const QSize ms = m_metadataPanel->size();
+    const int pad = 12;
+    QPoint pos = mapToGlobal(
+        QPoint(wr.right() - ms.width() - pad, wr.top() + 60 + pad));
+    m_metadataPanel->move(pos);
+    m_metadataPanel->raise();
+    m_metadataPanel->show();
 }
 
 // P0 #①: status bar helpers.

@@ -6,8 +6,11 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QHash>
+#include <QDate>
+#include <QDateTime>
 #include <QListView>
 #include <QMutex>
+#include <QMouseEvent>
 #include <QPixmap>
 #include <QSet>
 #include <QSize>
@@ -42,11 +45,30 @@ class ThumbnailPanel : public QListView
         SortResolution
     };
 
+    enum ViewMode
+    {
+        Thumbnail = 0,
+        Details
+    };
+
     explicit ThumbnailPanel(QWidget *parent = nullptr);
     ~ThumbnailPanel() override;
 
     void setDirectory(const QString &path);
     void setSortMode(SortMode mode);
+    void setViewMode(ViewMode mode);
+    ViewMode viewMode() const { return m_viewMode; }
+
+    // Entry metadata — public so DetailsDelegate can read it.
+    struct Entry
+    {
+        QString path;
+        QString name;
+        qint64 size = 0;
+        int width = 0;
+        int height = 0;
+        QDateTime date;
+    };
 
     // M18: live search. Filters the gallery by filename (case-insensitive
     // substring). When `recursive` is true, subfolders are enumerated and any
@@ -91,9 +113,10 @@ class ThumbnailPanel : public QListView
     // structured per-image metrics to CSV/JSON. Drives core AnalyzerRegistry.
     void batchAnalyzeExport();
 
-    // P0 #①: read access for the delegate (paths + ready pixmaps).
+    // P0 #①: read access for the delegate (paths + ready pixmaps + entry data).
     const QStringList &pathList() const { return m_paths; }
     QPixmap thumbReady(const QString &path) const;
+    const QList<Entry> &entries() const { return m_allEntries; }
 
     // P1: repaint the gallery to reflect a rating change made elsewhere.
     void invalidateRatings();
@@ -110,13 +133,6 @@ class ThumbnailPanel : public QListView
     void onSelectionChanged();
 
   private:
-    struct Entry
-    {
-        QString path;
-        QString name;
-        qint64 size = 0;
-    };
-
     void buildModel(const QList<Entry> &entries);
     void updateVisibleRange();
     void onCompareClicked();
@@ -125,14 +141,16 @@ class ThumbnailPanel : public QListView
     void contextMenuEvent(QContextMenuEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
 
     class ThumbDelegate;
+    class DetailsDelegate;
 
     QStringList m_paths;                       // actual file paths, aligned with model
     QHash<QString, int> m_rowByPath;           // path -> model row (scroll / repaint)
     QHash<QString, qint64> m_sizeByPath;       // path -> byte size (selection stats)
     QStringListModel *m_model = nullptr;
-    ThumbDelegate *m_delegate = nullptr;
+    QStyledItemDelegate *m_delegate = nullptr;
 
     // Thread-safe ready thumbnail pixmaps (filled from the pipeline result fn).
     mutable QMutex m_thumbMtx;
@@ -142,6 +160,7 @@ class ThumbnailPanel : public QListView
     QPushButton *m_compareBtn = nullptr;
     QString m_currentDir;
     SortMode m_sortMode = SortName;
+    ViewMode m_viewMode = Thumbnail;
     QString m_filterText;
     bool m_filterRecursive = false;
     qint64 m_totalBytes = 0;
@@ -182,5 +201,24 @@ class ThumbnailPanel::ThumbDelegate : public QStyledItemDelegate
 
   private:
     int m_thumbSize;
+    ThumbnailPanel *m_panel;
+};
+
+// Details / List mode delegate: renders each row as a horizontal strip with
+// columns for thumbnail, filename, resolution, size, date, and format.
+class ThumbnailPanel::DetailsDelegate : public QStyledItemDelegate
+{
+  public:
+    explicit DetailsDelegate(ThumbnailPanel *panel, QObject *parent = nullptr)
+        : QStyledItemDelegate(parent), m_panel(panel)
+    {
+    }
+
+    void paint(QPainter *painter, const QStyleOptionViewItem &option,
+               const QModelIndex &index) const override;
+    QSize sizeHint(const QStyleOptionViewItem &option,
+                   const QModelIndex &index) const override;
+
+  private:
     ThumbnailPanel *m_panel;
 };

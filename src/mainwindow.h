@@ -61,6 +61,9 @@ class MainWindow : public QMainWindow
     void addFavoriteCurrent();
     void restoreLastSession();
 
+    // P1: metadata overlay — position and show the floating metadata panel.
+    void showMetadataOverlay();
+
     void keyPressEvent(QKeyEvent *event) override;
 
     ImageViewer *m_imageViewer = nullptr;
@@ -90,6 +93,7 @@ class MainWindow : public QMainWindow
     QAction *m_actHistoryForward = nullptr;
     QAction *m_actToggleSearch = nullptr;
     QAction *m_actBatch = nullptr;
+    QAction *m_actToggleMetadata = nullptr;
     QMenu *m_recentMenu = nullptr;
     QMenu *m_recentFileMenu = nullptr;  // recent-files menu (opened images)
     QMenu *m_favMenu = nullptr;

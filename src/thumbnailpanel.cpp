@@ -25,6 +25,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QImageReader>
 #include <QInputDialog>
 #include <QLabel>
 #include <QMenu>
@@ -63,7 +64,8 @@ std::vector<std::string> toStdPaths(const QStringList &in)
 
 ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
 {
-    setViewMode(QListView::IconMode);
+    // QListView:: prefix disambiguates from our own ThumbnailPanel::setViewMode().
+    QListView::setViewMode(QListView::IconMode);
     setMovement(QListView::Static);
     setResizeMode(QListView::Adjust);
     setWrapping(true);
@@ -178,7 +180,15 @@ void ThumbnailPanel::setDirectory(const QString &path)
     {
         const QFileInfoList list = sortedEntries(dir, m_sortMode);
         for (const QFileInfo &fi : list)
-            entries.append({fi.absoluteFilePath(), fi.fileName(), fi.size()});
+        {
+            // Quick header read for dimensions (QImageReader::size() is O(1) —
+            // it only reads the image header, not the full pixel data).
+            QImageReader reader(fi.absoluteFilePath());
+            reader.setAutoTransform(true);
+            const QSize sz = reader.size();
+            entries.append({fi.absoluteFilePath(), fi.fileName(), fi.size(),
+                            sz.width(), sz.height(), fi.lastModified()});
+        }
     }
     m_allEntries = entries;
     m_metaIndex.clear();
@@ -192,6 +202,40 @@ void ThumbnailPanel::setSortMode(SortMode mode)
     m_sortMode = mode;
     if (!m_currentDir.isEmpty())
         setDirectory(m_currentDir);
+}
+
+void ThumbnailPanel::setViewMode(ViewMode mode)
+{
+    if (m_viewMode == mode)
+        return;
+    m_viewMode = mode;
+
+    if (mode == Details)
+    {
+        QListView::setViewMode(QListView::ListMode);
+        setWrapping(false);
+        setUniformItemSizes(false);
+        setGridSize(QSize());
+        setIconSize(QSize(48, 48));
+        setSpacing(0);
+        // Swap to the details delegate.
+        if (m_delegate)
+            delete m_delegate;
+        m_delegate = new DetailsDelegate(this, this);
+        setItemDelegate(m_delegate);
+    }
+    else
+    {
+        QListView::setViewMode(QListView::IconMode);
+        setWrapping(true);
+        setUniformItemSizes(true);
+        setGridSize(QSize(kThumbSize + 16, kThumbSize + 34));
+        setSpacing(6);
+        if (m_delegate)
+            delete m_delegate;
+        m_delegate = new ThumbDelegate(kThumbSize, this, this);
+        setItemDelegate(m_delegate);
+    }
 }
 
 void ThumbnailPanel::setFilter(const QString &text, bool recursive)
@@ -643,6 +687,30 @@ void ThumbnailPanel::showEvent(QShowEvent *event)
     QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
 }
 
+void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
+{
+    // P0: Enforce single-selection on plain left-click (no modifier keys).
+    // ExtendedSelection normally handles this, but in IconMode with certain Qt
+    // builds the selection is not reliably cleared. We make it explicit.
+    if (event->button() == Qt::LeftButton &&
+        !(event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier)))
+    {
+        const QModelIndex idx = indexAt(event->pos());
+        if (idx.isValid())
+        {
+            selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect |
+                                         QItemSelectionModel::Rows);
+            event->accept();
+            return;
+        }
+        // Click on empty area: deselect everything.
+        selectionModel()->clearSelection();
+        event->accept();
+        return;
+    }
+    QListView::mousePressEvent(event);
+}
+
 void ThumbnailPanel::stopThumbnailWorker()
 {
     QMutexLocker lk(&m_thumbMtx);
@@ -787,4 +855,117 @@ QSize ThumbnailPanel::ThumbDelegate::sizeHint(const QStyleOptionViewItem &,
                                              const QModelIndex &) const
 {
     return QSize(m_thumbSize + 16, m_thumbSize + 34);
+}
+
+// ---- DetailsDelegate ---------------------------------------------------------
+
+static QString formatFileSize(qint64 bytes)
+{
+    if (bytes < 1024)
+        return QString::number(bytes) + " B";
+    if (bytes < 1024 * 1024)
+        return QString::number(bytes / 1024.0, 'f', 1) + " KB";
+    if (bytes < 1024LL * 1024 * 1024)
+        return QString::number(bytes / (1024.0 * 1024.0), 'f', 1) + " MB";
+    return QString::number(bytes / (1024.0 * 1024.0 * 1024.0), 'f', 2) + " GB";
+}
+
+void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
+                                            const QStyleOptionViewItem &option,
+                                            const QModelIndex &index) const
+{
+    const QStringList &paths = m_panel->pathList();
+    if (index.row() < 0 || index.row() >= paths.size())
+        return;
+    const QString path = paths.at(index.row());
+    const QString name = index.data(Qt::DisplayRole).toString();
+    const QFileInfo fi(path);
+
+    const bool sel = option.state & QStyle::State_Selected;
+    painter->fillRect(option.rect,
+                      sel ? option.palette.color(QPalette::Highlight)
+                          : option.palette.color(
+                                index.row() & 1 ? QPalette::AlternateBase : QPalette::Base));
+
+    painter->save();
+    const QRect r = option.rect.adjusted(4, 2, -4, -2);
+
+    // Column 1: small thumbnail (48×48)
+    const int thumbColW = 60;
+    const QRect thumbR(r.x(), r.y() + (r.height() - 48) / 2, 48, 48);
+    QPixmap pm = m_panel->thumbReady(path);
+    if (!pm.isNull())
+    {
+        const QPixmap scaled = pm.scaled(thumbR.size(), Qt::KeepAspectRatio,
+                                         Qt::SmoothTransformation);
+        painter->drawPixmap(thumbR.x() + (48 - scaled.width()) / 2,
+                            thumbR.y() + (48 - scaled.height()) / 2, scaled);
+    }
+    else
+    {
+        painter->fillRect(thumbR, QColor(228, 228, 228));
+    }
+
+    const QColor textColor =
+        sel ? option.palette.color(QPalette::HighlightedText)
+            : option.palette.color(QPalette::Text);
+    painter->setPen(textColor);
+
+    QFont nameFont = painter->font();
+    nameFont.setBold(true);
+    painter->setFont(nameFont);
+
+    int cx = r.x() + thumbColW;
+
+    // Column 2: filename
+    const int nameW = qMax(r.width() * 3 / 10, 180);
+    QRect nameR(cx, r.y(), nameW, r.height());
+    painter->drawText(nameR, Qt::AlignVCenter | Qt::TextSingleLine, name);
+    cx += nameW + 12;
+
+    // Column 3: resolution — read from pre-populated Entry data.
+    painter->setFont(option.font);
+    QString resStr = "-";
+    const QList<Entry> &all = m_panel->entries();
+    if (index.row() < all.size())
+    {
+        const auto &e = all.at(index.row());
+        if (e.width > 0 && e.height > 0)
+            resStr = QString("%1×%2").arg(e.width).arg(e.height);
+    }
+    const int resW = 120;
+    QRect resR(cx, r.y(), resW, r.height());
+    painter->drawText(resR, Qt::AlignVCenter | Qt::TextSingleLine, resStr);
+    cx += resW + 12;
+
+    // Column 4: file size
+    const int sizeW = 100;
+    QRect sizeR(cx, r.y(), sizeW, r.height());
+    painter->drawText(sizeR, Qt::AlignVCenter | Qt::TextSingleLine,
+                      formatFileSize(fi.size()));
+    cx += sizeW + 12;
+
+    // Column 5: modified date
+    const int dateW = 160;
+    QRect dateR(cx, r.y(), dateW, r.height());
+    painter->drawText(dateR, Qt::AlignVCenter | Qt::TextSingleLine,
+                      fi.lastModified().toString("yyyy-MM-dd hh:mm:ss"));
+    cx += dateW + 12;
+
+    // Column 6: format
+    const int fmtW = 80;
+    QRect fmtR(cx, r.y(), fmtW, r.height());
+    painter->drawText(fmtR, Qt::AlignVCenter | Qt::TextSingleLine,
+                      fi.suffix().toUpper());
+
+    painter->restore();
+}
+
+QSize ThumbnailPanel::DetailsDelegate::sizeHint(const QStyleOptionViewItem &,
+                                                const QModelIndex &) const
+{
+    // At least 920px for the three-column layout; expand with viewport so the
+    // rightmost column (format / date) is never clipped when the panel is narrow.
+    const int w = qMax(920, m_panel->viewport()->width());
+    return QSize(w, 52);
 }

@@ -25,6 +25,11 @@ class DirectoryTree : public QTreeView
     explicit DirectoryTree(QWidget *parent = nullptr);
     ~DirectoryTree() override;
 
+    // Navigate the tree to the given path: expand parents, scroll to, and
+    // select the item. If `emitSignal` is false, directoryChanged is suppressed
+    // so callers can drive the tree programmatically without loops.
+    void navigateTo(const QString &path, bool emitSignal = false);
+
   signals:
     void directoryChanged(const QString &path);
 
