@@ -16,6 +16,7 @@ class PreviewPanel;
 class AnalysisPanel;
 class MetadataPanel;
 class CompareWorkspace;
+class SearchPanel;
 class QAction;
 class QMenu;
 class QLineEdit;
@@ -68,6 +69,7 @@ class MainWindow : public QMainWindow
 
     AnalysisPanel *m_analysisPanel = nullptr;
     MetadataPanel *m_metadataPanel = nullptr;
+    SearchPanel *m_searchPanel = nullptr;
     CompareWorkspace *m_compareView = nullptr;
 
     QAction *m_actOpenDir = nullptr;
@@ -84,6 +86,7 @@ class MainWindow : public QMainWindow
     QAction *m_actAddFavorite = nullptr;
     QAction *m_actHistoryBack = nullptr;
     QAction *m_actHistoryForward = nullptr;
+    QAction *m_actToggleSearch = nullptr;
     QMenu *m_recentMenu = nullptr;
     QMenu *m_recentFileMenu = nullptr;  // recent-files menu (opened images)
     QMenu *m_favMenu = nullptr;
@@ -91,6 +94,9 @@ class MainWindow : public QMainWindow
     // M15: crash recovery
     QTimer *m_autosaveTimer = nullptr;
     bool m_autosaveLoaded = false;
+
+    // M15 Sprint 2-1: global search index rebuild on directory change.
+    void reindexSearch();
 
     // M18: gallery search bar.
     QLineEdit *m_searchEdit = nullptr;

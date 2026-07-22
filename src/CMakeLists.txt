@@ -59,6 +59,7 @@ add_library(mviewer_core SHARED
     core/plugin/PluginManager.cpp
     core/export/IExporter.h
     core/export/ExporterRegistry.cpp
+    core/search/SearchEngine.cpp
 
     core/command/CommandRegistry.cpp
     core/command/RotateCommand.cpp
@@ -104,6 +105,7 @@ add_library(mviewer_ui STATIC
     exportcommand.cpp
     metadatapanel.cpp
     metadatamodel.cpp
+    searchpanel.cpp
     widgets/rawimageview.cpp
     widgets/ratingwidget.cpp
     widgets/histogramwidget.cpp
@@ -507,6 +509,24 @@ target_include_directories(test_metadatamodel PRIVATE ${CMAKE_CURRENT_SOURCE_DIR
 target_compile_definitions(test_metadatamodel PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 add_test(NAME metadatamodel_tests COMMAND test_metadatamodel)
+
+# ─── M15 Sprint 2-1 Search (global index + query engine) ─────────────────────
+add_executable(search_tests
+    test_search.cpp
+)
+
+target_link_libraries(search_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(search_tests PRIVATE cxx_std_20)
+target_include_directories(search_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(search_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME search_tests COMMAND search_tests)
 
 # ─── M9-6 Polish (shortcuts route via Command) acceptance tests ──────────
 add_executable(shortcuts_tests

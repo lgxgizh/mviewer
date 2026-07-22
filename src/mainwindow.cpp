@@ -10,6 +10,8 @@
 #include "core/command/RenameCommand.h"
 #include "core/command/ToggleHistogramCommand.h"
 #include "core/image/ImageRepository.h"
+#include "core/image/MetadataReader.h"
+#include "core/image/RawMetadata.h"
 #include "core/image/QtConvert.h"
 #include "core/RatingStore.h"
 #include "core/cache/CacheManager.h"
@@ -27,6 +29,7 @@
 #include "imageviewer.h"
 #include "metadatapanel.h"
 #include "previewpanel.h"
+#include "searchpanel.h"
 #include "thumbnailpanel.h"
 
 #include <QApplication>
@@ -175,6 +178,11 @@ void MainWindow::setupUi()
     viewMenu->addSeparator();
     viewMenu->addAction(m_actCompare);
     viewMenu->addAction(m_actToggleAnalysis);
+    m_actToggleSearch = new QAction("全局搜索(&S)", this);
+    m_actToggleSearch->setCheckable(true);
+    m_actToggleSearch->setChecked(true);
+    m_actToggleSearch->setShortcut(QKeySequence("Ctrl+Shift+F"));
+    viewMenu->addAction(m_actToggleSearch);
 
     // ----- 帮助(&H) -----
     auto *helpMenu = menuBar->addMenu("帮助(&H)");
@@ -263,18 +271,21 @@ void MainWindow::setupUi()
     // lists or creates analyzers itself — the pipeline owns that responsibility.
     m_analysisPanel->setPipeline(std::make_shared<AnalyzerPipeline>());
     m_metadataPanel = new MetadataPanel(this);
+    m_searchPanel = new SearchPanel(this);
 
-    // ----- 4-way horizontal split: left | gallery | metadata | analysis -----
+    // ----- 5-way horizontal split: left | gallery | metadata | analysis | search -----
     auto *centralSplitter = new QSplitter(Qt::Horizontal, this);
     centralSplitter->addWidget(leftWidget);
     centralSplitter->addWidget(rightWidget);
     centralSplitter->addWidget(m_metadataPanel);
     centralSplitter->addWidget(m_analysisPanel);
+    centralSplitter->addWidget(m_searchPanel);
     centralSplitter->setStretchFactor(0, 0);
     centralSplitter->setStretchFactor(1, 1);
     centralSplitter->setStretchFactor(2, 0);
     centralSplitter->setStretchFactor(3, 0);
-    centralSplitter->setSizes({340, 820, 300, 320});
+    centralSplitter->setStretchFactor(4, 0);
+    centralSplitter->setSizes({340, 820, 300, 320, 240});
     setCentralWidget(centralSplitter);
 
     // ----- Full image viewer window -----
@@ -304,6 +315,7 @@ void MainWindow::setupUi()
                 rebuildRecentMenu();
                 const int n = m_cachedImagePaths.size();
                 statusBar()->showMessage(QString("目录: %1, 图片数: %2").arg(path).arg(n));
+                reindexSearch();
             });
 
     connect(m_thumbnailPanel, &ThumbnailPanel::itemClicked, this,
@@ -469,6 +481,9 @@ void MainWindow::setupUi()
                     openCompare(imgs);
             });
     connect(m_actToggleAnalysis, &QAction::triggered, m_analysisPanel, &QWidget::setVisible);
+    connect(m_actToggleSearch, &QAction::triggered, m_searchPanel, &QWidget::setVisible);
+    connect(m_searchPanel, &SearchPanel::resultActivated,
+            this, QOverload<const QString &>::of(&MainWindow::onImageOpen));
     connect(
         m_actAbout, &QAction::triggered, this, [this]()
         { QMessageBox::about(this, "关于 MViewer", "MViewer\n\n一个简单的图片查看与分析工具。"); });
@@ -618,6 +633,30 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
 void MainWindow::onSearchMetaToggled(bool on)
 {
     m_thumbnailPanel->setMetaSearch(on);
+}
+
+void MainWindow::reindexSearch()
+{
+    if (!m_searchPanel)
+        return;
+
+    std::vector<std::string> paths;
+    std::vector<mviewer::domain::ImageMetadata> metas;
+    std::vector<mviewer::core::RawMetadata> raws;
+
+    for (const QString &p : m_cachedImagePaths)
+    {
+        const std::string sp = p.toStdString();
+        paths.push_back(sp);
+
+        auto meta = mviewer::core::MetadataReader::read(sp);
+        metas.push_back(meta);
+
+        auto raw = mviewer::core::parseRawMetadata(sp);
+        raws.push_back(raw);
+    }
+
+    m_searchPanel->reindex(paths, metas, raws);
 }
 
 void MainWindow::onRatingFilterChanged(int)
