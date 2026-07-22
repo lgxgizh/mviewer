@@ -36,6 +36,7 @@ add_library(mviewer_core SHARED
     core/CrashHandler.cpp
     core/SelfTest.cpp
     core/analysis/AnalysisEngine.cpp
+    core/analysis/PixelInspector.cpp
     core/analysis/ExportReport.cpp
     core/analysis/ReportHtml.cpp
     core/workspace/WorkspaceSerializer.cpp
@@ -430,6 +431,22 @@ target_include_directories(test_project PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(test_project PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 add_test(NAME project_tests COMMAND test_project)
+
+# ─── M15 Pixel Inspector Pro (color-space + kernel math) ───────────────────
+add_executable(test_pixelinspector
+    core/test_pixelinspector.cpp
+)
+
+target_link_libraries(test_pixelinspector
+    PRIVATE
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(test_pixelinspector PRIVATE cxx_std_20)
+target_include_directories(test_pixelinspector PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(NAME pixelinspector_tests COMMAND test_pixelinspector)
 
 # ─── M9-6 Polish (shortcuts route via Command) acceptance tests ──────────
 add_executable(shortcuts_tests

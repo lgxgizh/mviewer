@@ -90,14 +90,53 @@ void AnalysisPanel::buildUi()
     m_pluginResult->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
     m_tabs->addTab(m_pluginResult, tr("Plugin"));
 
-    // Pixel Inspector tab (M3 Phase-2)
+    // Pixel Inspector tab (M3 Phase-2, upgraded to Pro in M15 P0 #2)
+    auto *inspectorPage = new QWidget;
+    auto *insLay = new QVBoxLayout(inspectorPage);
+    insLay->setContentsMargins(0, 0, 0, 0);
+    insLay->setSpacing(4);
+
+    // Color-space + kernel selectors (cheap; changing them just re-renders the
+    // inspector text — no histogram recompute, so mouse-move stays smooth).
+    QHBoxLayout *insBar = new QHBoxLayout;
+    insBar->addWidget(new QLabel(tr("Space:")));
+    QComboBox *csCombo = new QComboBox;
+    csCombo->addItem(tr("RGB"), static_cast<int>(mviewer::core::ColorSpace::RGB));
+    csCombo->addItem(tr("HSV"), static_cast<int>(mviewer::core::ColorSpace::HSV));
+    csCombo->addItem(tr("Lab"), static_cast<int>(mviewer::core::ColorSpace::Lab));
+    csCombo->addItem(tr("YUV"), static_cast<int>(mviewer::core::ColorSpace::YUV));
+    csCombo->addItem(tr("YCbCr"), static_cast<int>(mviewer::core::ColorSpace::YCbCr));
+    insBar->addWidget(csCombo, 1);
+    insBar->addWidget(new QLabel(tr("Kernel:")));
+    QComboBox *kCombo = new QComboBox;
+    kCombo->addItem(tr("1×1"), 1);
+    kCombo->addItem(tr("3×3"), 3);
+    kCombo->addItem(tr("5×5"), 5);
+    kCombo->addItem(tr("7×7"), 7);
+    insBar->addWidget(kCombo, 1);
+    insLay->addLayout(insBar);
+
     m_inspectorLabel = new QLabel;
     m_inspectorLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_inspectorLabel->setWordWrap(true);
     m_inspectorLabel->setStyleSheet(
         "QLabel{background:#1e1e1e;color:#eee;padding:8px;font-family:monospace;}");
     m_inspectorLabel->setText(tr("Move the mouse over an image to inspect pixels."));
-    m_tabs->addTab(m_inspectorLabel, tr("Inspector"));
+    insLay->addWidget(m_inspectorLabel, 1);
+    m_tabs->addTab(inspectorPage, tr("Inspector"));
+
+    connect(csCombo, QOverload<int>::of(&QComboBox::activated), this,
+            [this, csCombo](int)
+            {
+                m_colorSpace = static_cast<mviewer::core::ColorSpace>(csCombo->currentData().toInt());
+                updateInspectorPage();
+            });
+    connect(kCombo, QOverload<int>::of(&QComboBox::activated), this,
+            [this, kCombo](int)
+            {
+                m_kernel = kCombo->currentData().toInt();
+                updateInspectorPage();
+            });
 
     m_analyzerCombo->setCurrentIndex(0);
     onAnalyzerSelected(0);
@@ -230,12 +269,41 @@ void AnalysisPanel::updateInspectorPage()
         return;
     }
 
-    QString txt = QString("<h3>Pixel Inspector</h3>");
+    const char *csLabel = mviewer::core::colorSpaceLabel(m_colorSpace);
+    const mviewer::core::ColorTriple px = mviewer::core::toColorSpace(
+        static_cast<uint8_t>(m_pR), static_cast<uint8_t>(m_pG), static_cast<uint8_t>(m_pB),
+        m_colorSpace);
+
+    QString txt = QString("<h3>Pixel Inspector — %1</h3>").arg(csLabel);
     txt += QString("pos: (%1, %2)<br>").arg(m_px).arg(m_py);
-    txt += QString("<span style='color:#e66;'>●</span> Left  RGB(%1, %2, %3)<br>")
-               .arg(m_pR)
-               .arg(m_pG)
-               .arg(m_pB);
+    txt += QString("<span style='color:#e66;'>●</span> Left %2(%3, %4, %5)<br>")
+               .arg(csLabel)
+               .arg(px.c1, 0, 'f', 1)
+               .arg(px.c2, 0, 'f', 1)
+               .arg(px.c3, 0, 'f', 1);
+
+    // NxN neighborhood luminance statistics over the left image (real pixels,
+    // read from m_imageA which is Format_RGB32). Clipped to image bounds.
+    if (m_hasA && !m_imageA.isNull())
+    {
+        const int w = m_imageA.width(), h = m_imageA.height();
+        if (m_px >= 0 && m_py >= 0 && m_px < w && m_py < h)
+        {
+            const uchar *data = m_imageA.constBits();
+            const int stride = m_imageA.bytesPerLine();
+            const mviewer::core::NeighborhoodStats s =
+                mviewer::core::neighborhoodStats(data, stride, w, h, m_px, m_py, m_kernel);
+            txt += QString("<br><b>%1×%1 Kernel</b> (lum)<br>").arg(m_kernel);
+            txt += QString("mean:%1  std:%2<br>")
+                       .arg(s.mean, 0, 'f', 1)
+                       .arg(s.stdDev, 0, 'f', 1);
+            txt += QString("min:%1  max:%2  var:%3  n:%4")
+                       .arg(s.min, 0, 'f', 0)
+                       .arg(s.max, 0, 'f', 0)
+                       .arg(s.variance, 0, 'f', 1)
+                       .arg(s.count);
+        }
+    }
 
     if (m_hasB && !m_imageB.isNull() && m_px >= 0 && m_py >= 0 && m_px < m_imageB.width() &&
         m_py < m_imageB.height())
@@ -244,7 +312,7 @@ void AnalysisPanel::updateInspectorPage()
         const int rR = qRed(c), rG = qGreen(c), rB = qBlue(c);
         const int dR = m_pR - rR, dG = m_pG - rG, dB = m_pB - rB;
         const double dist = qSqrt(static_cast<double>(dR * dR + dG * dG + dB * dB));
-        txt += QString("<span style='color:#6e6;'>●</span> Right RGB(%1, %2, %3)<br>")
+        txt += QString("<br><span style='color:#6e6;'>●</span> Right RGB(%1, %2, %3)<br>")
                    .arg(rR)
                    .arg(rG)
                    .arg(rB);
@@ -253,7 +321,7 @@ void AnalysisPanel::updateInspectorPage()
     }
     else
     {
-        txt += tr("(load a second image to compare Left/Right/Δ)");
+        txt += tr("<br>(load a second image to compare Left/Right/Δ)");
     }
     m_inspectorLabel->setText(txt);
 }

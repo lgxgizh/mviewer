@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/analysis/AnalysisEngine.h"
+#include "core/analysis/PixelInspector.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/image/ImageFrame.h"
 #include "domain/Selection.h"
@@ -116,6 +117,10 @@ class AnalysisPanel : public QWidget
     int m_px = -1, m_py = -1;
     int m_pR = 0, m_pG = 0, m_pB = 0;
     bool m_pValid = false;
+
+    // M15 P0 #2: Pixel Inspector Pro — selected color space + NxN kernel.
+    mviewer::core::ColorSpace m_colorSpace = mviewer::core::ColorSpace::RGB;
+    int m_kernel = 1; // 1,3,5,7 → 1×1,3×3,5×5,7×7
 
     // Plugins
     std::vector<std::string> m_pluginIds;
