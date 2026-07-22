@@ -21,14 +21,14 @@ void AnalysisPanel::buildUi()
     mainLay->setContentsMargins(6, 6, 6, 6);
     mainLay->setSpacing(4);
 
-    // Plugin selector — every analyzer is reachable through the AnalyzerRegistry,
-    // which is the single entry point for analysis (M4). The combo items carry the
-    // registry id as user data so switching the active analyzer routes through
-    // AnalyzerRegistry::create(id).
+    // Plugin selector — every analyzer is reachable through the AnalyzerPipeline
+    // (the orchestration layer over the AnalyzerRegistry). The combo items carry
+    // the pipeline id as user data so switching the active analyzer routes
+    // through the pipeline, never the registry directly (M15 P0#3).
     QHBoxLayout *plugBar = new QHBoxLayout;
     plugBar->addWidget(new QLabel(tr("Analyzer:")));
     m_analyzerCombo = new QComboBox;
-    auto &reg = AnalyzerRegistry::instance();
+    auto &reg = m_pipeline ? m_pipeline->registry() : AnalyzerRegistry::instance();
     m_pluginIds = reg.availableAnalyzers();
     for (const auto &id : m_pluginIds)
     {
@@ -188,9 +188,10 @@ void AnalysisPanel::setROI(const mviewer::domain::Selection &roi)
     reanalyze();
 }
 
-// Run the currently-selected analyzer (from the registry) over the left frame and
-// the active ROI, then render its result. The registry is the single entry point:
-// the analyzer consumes a domain Selection, never a QRect.
+// Run the currently-selected analyzer (from the pipeline) over the left frame and
+// the active ROI, then render its result. The analyzer consumes a domain
+// Selection, never a QRect. Creation/execution routes through the injected
+// AnalyzerPipeline so the panel never touches the registry directly (M15 P0#3).
 void AnalysisPanel::reanalyze()
 {
     const QString id = m_analyzerCombo ? m_analyzerCombo->currentData().toString() : QString();
@@ -204,7 +205,8 @@ void AnalysisPanel::reanalyze()
 
     if (m_frameA && !m_frameA->pixels().isNull() && !id.isEmpty())
     {
-        auto analyzer = AnalyzerRegistry::instance().create(id.toStdString());
+        auto analyzer = (m_pipeline ? m_pipeline->create(id.toStdString())
+                                    : AnalyzerRegistry::instance().create(id.toStdString()));
         if (analyzer && analyzer->analyzeRegion(*m_frameA, m_roi))
         {
             m_statsA.pixelCount = std::max(0, m_roi.width) * std::max(0, m_roi.height);
@@ -459,8 +461,8 @@ void AnalysisPanel::updatePluginPage()
         return;
     }
     const std::string &id = m_pluginIds[pluginIdx];
-    auto &reg = AnalyzerRegistry::instance();
-    auto analyzer = reg.create(id);
+    auto analyzer = (m_pipeline ? m_pipeline->create(id)
+                                : AnalyzerRegistry::instance().create(id));
     if (!analyzer)
     {
         m_pluginResult->setText(tr("Cannot create: %1").arg(QString::fromStdString(id)));

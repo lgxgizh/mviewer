@@ -42,6 +42,7 @@ add_library(mviewer_core SHARED
     core/workspace/WorkspaceSerializer.cpp
     core/project/ProjectSerializer.cpp
     core/analyzer/Analyzer.cpp
+    core/analyzer/AnalyzerPipeline.cpp
     core/analyzer/HistogramAnalyzer.cpp
     core/analyzer/RGBMeanAnalyzer.cpp
     core/analyzer/NoiseAnalyzer.cpp
@@ -362,6 +363,24 @@ target_link_libraries(analysis_panel_tests
 target_compile_features(analysis_panel_tests PRIVATE cxx_std_20)
 target_include_directories(analysis_panel_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(analysis_panel_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# ─── M15 P0#3 Analyzer Pipeline acceptance tests ──────────────────────────
+add_executable(analyzer_pipeline_tests
+    test_analyzer_pipeline.cpp
+)
+
+target_link_libraries(analyzer_pipeline_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(analyzer_pipeline_tests PRIVATE cxx_std_20)
+target_include_directories(analyzer_pipeline_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(analyzer_pipeline_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME analyzer_pipeline_tests COMMAND analyzer_pipeline_tests)
 
 # ─── M9-4 Export workflow acceptance tests ────────────────────────────────
 add_executable(export_tests

@@ -3,6 +3,7 @@
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/PixelInspector.h"
 #include "core/analyzer/Analyzer.h"
+#include "core/analyzer/AnalyzerPipeline.h"
 #include "core/image/ImageFrame.h"
 #include "domain/Selection.h"
 
@@ -29,6 +30,17 @@ class AnalysisPanel : public QWidget
 
   public:
     explicit AnalysisPanel(QWidget *parent = nullptr);
+
+    // M15 P0#3: inject the analyzer pipeline (orchestration layer over the
+    // AnalyzerRegistry). The panel routes all analyzer creation/execution
+    // through this pipeline instead of touching the registry directly, so the
+    // MainWindow -> Analyzer coupling is removed. Adding a new analyzer only
+    // needs registration in the AnalyzerFactory; MainWindow/Panel stay
+    // unchanged (acceptance: "新增 Analyzer 时 MainWindow 0 修改").
+    void setPipeline(std::shared_ptr<AnalyzerPipeline> pipeline)
+    {
+        m_pipeline = std::move(pipeline);
+    }
 
     void setImage(const QImage &img);
     void setImages(const QImage &a, const QImage &b);
@@ -125,6 +137,10 @@ class AnalysisPanel : public QWidget
     // Plugins
     std::vector<std::string> m_pluginIds;
     int m_currentPluginIdx = -1;
+
+    // M15 P0#3: orchestration layer. Nullable so headless/tests can still fall
+    // back to the registry (see reanalyze() / buildUi()).
+    std::shared_ptr<AnalyzerPipeline> m_pipeline;
 
     static constexpr int kPreviewSize = 192;
 };

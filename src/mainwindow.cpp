@@ -20,6 +20,7 @@
 
 #include "analysispanel.h"
 #include "compareworkspace.h"
+#include "core/analyzer/AnalyzerPipeline.h"
 #include "directorytree.h"
 #include "exportcommand.h"
 #include "exportdialog.h"
@@ -249,6 +250,10 @@ void MainWindow::setupUi()
 
     // ----- Analysis panel (rightmost) + Metadata panel (M18, between gallery & analysis) -----
     m_analysisPanel = new AnalysisPanel(this);
+    // M15 P0#3: inject the analyzer pipeline so the panel orchestrates analyzers
+    // through it instead of reaching the registry directly. MainWindow never
+    // lists or creates analyzers itself — the pipeline owns that responsibility.
+    m_analysisPanel->setPipeline(std::make_shared<AnalyzerPipeline>());
     m_metadataPanel = new MetadataPanel(this);
 
     // ----- 4-way horizontal split: left | gallery | metadata | analysis -----
@@ -1137,7 +1142,9 @@ void MainWindow::saveProject()
     proj.modifiedIso = proj.createdIso;
     proj.workspace = ws;
     proj.datasetRoots = {m_currentDir.toStdString()};
-    for (const auto &a : AnalyzerRegistry::instance().availableAnalyzers())
+    // M15 P0#3: list analyzers through the pipeline, not the registry directly.
+    const AnalyzerPipeline pipeline;
+    for (const auto &a : pipeline.analyzerIds())
         proj.analyzerPipeline.push_back(a);
 
     const std::string json = mviewer::core::serializeProject(proj);
