@@ -53,6 +53,11 @@ add_library(mviewer_core SHARED
     core/analyzer/MTFAnalyzer.cpp
     core/analyzer/DeadPixelAnalyzer.cpp
     core/analyzer/ColorCheckerAnalyzer.cpp
+    core/analyzer/BrightnessAnalyzer.cpp
+    core/analyzer/ContrastAnalyzer.cpp
+    core/analyzer/BlurAnalyzer.cpp
+    core/analyzer/ColorCastAnalyzer.cpp
+    core/analyzer/ExposureAnalyzer.cpp
     core/render/RenderEngine.cpp
     core/thumbnail/ThumbnailPipeline.h
     core/plugin/PluginLoader.cpp

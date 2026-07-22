@@ -1,8 +1,13 @@
 #include "core/analyzer/Analyzer.h"
 
 #include "core/analyzer/AnalyzerResult.h"
+#include "core/analyzer/BlurAnalyzer.h"
+#include "core/analyzer/BrightnessAnalyzer.h"
+#include "core/analyzer/ColorCastAnalyzer.h"
 #include "core/analyzer/ColorCheckerAnalyzer.h"
+#include "core/analyzer/ContrastAnalyzer.h"
 #include "core/analyzer/DeadPixelAnalyzer.h"
+#include "core/analyzer/ExposureAnalyzer.h"
 #include "core/analyzer/EntropyAnalyzer.h"
 #include "core/analyzer/HistogramAnalyzer.h"
 #include "core/analyzer/MTFAnalyzer.h"
@@ -103,6 +108,42 @@ void Analyzer::registerBuiltins()
         []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
         {
             return std::unique_ptr<Analyzer, AnalyzerDeleter>(new ColorCheckerAnalyzer(),
+                                                              [](Analyzer *p) { delete p; });
+        });
+    // M15: analyzer extensions (Brightness/Contrast/Blur/ColorCast/Exposure).
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "brightness",
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new BrightnessAnalyzer(),
+                                                              [](Analyzer *p) { delete p; });
+        });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "contrast",
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new ContrastAnalyzer(),
+                                                              [](Analyzer *p) { delete p; });
+        });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "blur",
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new BlurAnalyzer(),
+                                                              [](Analyzer *p) { delete p; });
+        });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "colorcast",
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new ColorCastAnalyzer(),
+                                                              [](Analyzer *p) { delete p; });
+        });
+    AnalyzerRegistry::instance().registerAnalyzer(
+        "exposure",
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new ExposureAnalyzer(),
                                                               [](Analyzer *p) { delete p; });
         });
 }

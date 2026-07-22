@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **M15 Sprint 2-3 — Analyzer Library Expansion (分析器库扩充):** 新增 5 个单帧分析器：`BrightnessAnalyzer`（亮度均值/最小/最大）、`ContrastAnalyzer`（RMS 对比度与均值亮度）、`BlurAnalyzer`（3x3 Laplacian 方差评估模糊度）、`ColorCastAnalyzer`（RGB 偏色检测与偏色幅度）、`ExposureAnalyzer`（阴影/高光像素百分比与平均亮度）。全部注册到 `AnalyzerRegistry`（ID: brightness/contrast/blur/colorcast/exposure），遵循 `AnalyzerPipeline` 解耦架构——MainWindow/AnalysisPanel 零改动即可自动发现和使用。
+
 - **M15 Sprint 2-2 — Batch Workflow (批量处理流水线):** 新增 `BatchProcessor`（`core/batch/`）支持对多图像批量执行解码→变换（缩放、水印）→分析→重命名→导出流水线，进度回调与取消支持。Domain 层新增 `BatchJob.h`（`BatchJobConfig`/`BatchJobResult`/`BatchFileResult`/`BatchOp` 枚举）。UI 层新增 `BatchDialog` 对话框，集成到 MainWindow 工具菜单（`Ctrl+Shift+B`），自动预填充当前目录图像列表。新增 `batch_tests` (ctest) 覆盖缩放导出、进度回调、重命名模式、无效文件、空操作、取消等边界场景。
 
 - **M15 Sprint 2-1 — Search (全局检索):** 新增 `SearchEngine` / `SearchIndex`（`core/search/`）作为 Qt-free 的核心检索引擎，对工作区所有图像的文件名、EXIF/相机元数据、分析器输出建立可搜索文本索引，按相关度排序返回 `SearchResult`。Domain 层新增 `SearchQuery` / `SearchResult` / `SearchMatch` DTO（纯 std 类型）。UI 层新增 `SearchPanel` 面板（搜索栏 + 作用域复选框 + 结果表格），集成到 MainWindow 5 列分栏最右侧，支持 `Ctrl+Shift+F` 快捷键聚焦。目录切换时自动重建索引，双击结果行打开对应图像。新增 `search_tests` (ctest) 覆盖索引增删改、文件名/元数据/分析结果多作用域查询、排序与空查询边界。
