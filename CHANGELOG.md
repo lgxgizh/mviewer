@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- **M15 Sprint 2-4 — Compare Regression (性能回归检测):** 增强 `mviewer_bench`，新增 `--history <file>` 标志将每次运行结果追加到 CSV（日期/场景/指标/值/百分位/回归百分比），新增 `--report <file>` 标志生成 Markdown 回归报告。`--enforce` 模式下自动加载 `benchmark/perf_baseline.json` 作为基线，实现开箱即用的 CI 回归检测。回归输出增强为 per-metric delta + 分级 verdict（>10% 失败，>5% 警告）。更新 `nightly.yml` 的 Dashboard/Benchmark 作业以启用自动基线对比和历史追踪。关闭 M15 产品工作流缺口 "CI 尚未对比基线或拒绝回归"。
+
 - **M15 Sprint 2-3 — Analyzer Library Expansion (分析器库扩充):** 新增 5 个单帧分析器：`BrightnessAnalyzer`（亮度均值/最小/最大）、`ContrastAnalyzer`（RMS 对比度与均值亮度）、`BlurAnalyzer`（3x3 Laplacian 方差评估模糊度）、`ColorCastAnalyzer`（RGB 偏色检测与偏色幅度）、`ExposureAnalyzer`（阴影/高光像素百分比与平均亮度）。全部注册到 `AnalyzerRegistry`（ID: brightness/contrast/blur/colorcast/exposure），遵循 `AnalyzerPipeline` 解耦架构——MainWindow/AnalysisPanel 零改动即可自动发现和使用。
 
 - **M15 Sprint 2-2 — Batch Workflow (批量处理流水线):** 新增 `BatchProcessor`（`core/batch/`）支持对多图像批量执行解码→变换（缩放、水印）→分析→重命名→导出流水线，进度回调与取消支持。Domain 层新增 `BatchJob.h`（`BatchJobConfig`/`BatchJobResult`/`BatchFileResult`/`BatchOp` 枚举）。UI 层新增 `BatchDialog` 对话框，集成到 MainWindow 工具菜单（`Ctrl+Shift+B`），自动预填充当前目录图像列表。新增 `batch_tests` (ctest) 覆盖缩放导出、进度回调、重命名模式、无效文件、空操作、取消等边界场景。

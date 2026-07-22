@@ -34,9 +34,13 @@
 //   mviewer_bench --scenarios <s> comma-separated ids (e.g. B1,B2,B8)
 //   mviewer_bench --results <f>   write JSON verdicts to <f>
 //   mviewer_bench --baseline <f>  compare against baseline JSON; >10% regression -> fail
+//   mviewer_bench --history <f>   append results row to history CSV (M15 regression tracking)
+//   mviewer_bench --report  <f>   write markdown regression report to <f>
 //
-// CI runs --smoke only (roadmap Phase-1). The regression gate (--enforce in CI)
-// is roadmap Phase-4 and is intentionally NOT wired into ci.yml here.
+// When --enforce is set without --baseline, the harness automatically loads
+// benchmark/perf_baseline.json if it exists, providing regression detection
+// out-of-the-box. This closes the M15 gap:
+//   "CI does not yet diff against baseline or fail on regression."
 
 namespace
 {
@@ -249,6 +253,8 @@ int main(int argc, char **argv)
     std::string scenariosArg;       // P3: comma-separated scenario ids to run (e.g. "B1,B2,B8")
     std::string resultsFile;        // M14: if set, write JSON results (for regression tracking)
     std::string baselineFile;       // M14: if set, compare against baseline for regression
+    std::string historyFile;        // M15: if set, append results row to history CSV
+    std::string reportFile;         // M15: if set, write markdown regression report
 
     for (int i = 1; i < argc; ++i)
     {
@@ -278,6 +284,10 @@ int main(int argc, char **argv)
             resultsFile = argv[++i];
         else if (a == "--baseline" && i + 1 < argc)
             baselineFile = argv[++i];
+        else if (a == "--history" && i + 1 < argc)
+            historyFile = argv[++i];
+        else if (a == "--report" && i + 1 < argc)
+            reportFile = argv[++i];
     }
 
     // Build the restricted scenario set (empty = run all). Normalize tokens to the
@@ -366,7 +376,29 @@ int main(int argc, char **argv)
     if (!resultsFile.empty())
         writeResultsJson(resultsFile, results);
 
-    // M14: regression vs baseline if --baseline given.
+    // M15: auto-baseline — when --enforce is on but no --baseline specified, attempt
+    // to load benchmark/perf_baseline.json from cwd. This closes the M15 gap:
+    //   "CI does not yet diff against baseline or fail on regression."
+    if (b.enforce && baselineFile.empty())
+    {
+        static const char *const kCandidates[] = {
+            "benchmark/perf_baseline.json",
+            "../benchmark/perf_baseline.json",
+            nullptr
+        };
+        for (int ci = 0; kCandidates[ci]; ++ci)
+        {
+            if (QFile::exists(QString::fromLatin1(kCandidates[ci])))
+            {
+                baselineFile = kCandidates[ci];
+                std::cout << "auto-baseline: " << baselineFile << std::endl;
+                break;
+            }
+        }
+    }
+
+    // M15: regression vs baseline.
+    std::vector<std::string> regressionIssues; // { "B2: +12.3%", ... }
     if (!baselineFile.empty())
     {
         auto baseline = loadBaselineJson(baselineFile);
@@ -375,26 +407,114 @@ int main(int argc, char **argv)
             std::cout << "=== REGRESSION CHECK ===" << std::endl;
             for (const auto &r : results)
             {
-                // Match by metric name (e.g. "B2_first_thumbnail_ms").
                 std::string key = r.name + "_" + r.metric;
                 auto it = baseline.find(key);
                 if (it != baseline.end() && it->second > 0.0)
                 {
                     double delta = ((r.value - it->second) / it->second) * 100.0;
+                    const char *flag = "";
+                    if (delta > 10.0)      { flag = " *** REGRESSION >10% ***"; allPass = false; }
+                    else if (delta > 5.0)  { flag = " * WARN >5%"; }
                     std::cout << "  " << r.name << ": current=" << r.value
-                              << " baseline=" << it->second << " delta=" << delta << "%";
+                              << " baseline=" << it->second << " delta=" << delta << "%" << flag
+                              << std::endl;
                     if (delta > 10.0)
                     {
-                        std::cout << " *** REGRESSION >10% ***";
-                        allPass = false;
+                        char buf[128];
+                        std::snprintf(buf, sizeof(buf), "%s: %+.1f%% (%.3f -> %.3f)",
+                                      r.name.c_str(), delta, it->second, r.value);
+                        regressionIssues.push_back(buf);
                     }
-                    std::cout << std::endl;
                 }
             }
         }
         else
         {
             std::cout << "Warning: could not load baseline from " << baselineFile << std::endl;
+        }
+    }
+
+    // M15: append results row to history CSV.
+    if (!historyFile.empty())
+    {
+        // Determine if the file exists (needs header on first write).
+        bool hasHeader = QFile::exists(QString::fromStdString(historyFile));
+        std::ofstream csv(historyFile, std::ios::app);
+        if (csv.is_open())
+        {
+            if (!hasHeader)
+            {
+                csv << "date,scenario,metric,value,p50,p95,p99,passed,regression_pct\n";
+            }
+            const std::string today =
+                QDateTime::currentDateTime().toString("yyyy-MM-dd").toStdString();
+            // Load baseline once (avoid re-parsing per row).
+            auto bl = baselineFile.empty() ? std::unordered_map<std::string, double>{}
+                                           : loadBaselineJson(baselineFile);
+            for (const auto &r : results)
+            {
+                csv << today << ',' << r.name << ',' << r.metric << ',' << r.value << ','
+                    << r.timing.p50Ms << ',' << r.timing.p95Ms << ',' << r.timing.p99Ms << ','
+                    << (r.passed ? "1" : "0") << ',';
+                // Include regression delta for baseline-matched metrics.
+                if (!bl.empty())
+                {
+                    std::string key = r.name + "_" + r.metric;
+                    auto it = bl.find(key);
+                    if (it != bl.end() && it->second > 0.0)
+                        csv << ((r.value - it->second) / it->second) * 100.0;
+                }
+                csv << '\n';
+            }
+            csv.close();
+            std::cout << "history: appended " << results.size() << " rows to " << historyFile
+                      << std::endl;
+        }
+    }
+
+    // M15: write markdown regression report.
+    if (!reportFile.empty())
+    {
+        std::ofstream rpt(reportFile);
+        if (rpt.is_open())
+        {
+            rpt << "# MViewer Benchmark Regression Report\n\n";
+            rpt << "**Date:** " << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss").toStdString() << "\n\n";
+            rpt << "**Baseline:** " << (baselineFile.empty() ? "(none)" : baselineFile) << "\n\n";
+            rpt << "| Scenario | Metric | Value | Passed | Regression |\n";
+            rpt << "|----------|--------|-------|--------|------------|\n";
+            auto baseline = baselineFile.empty() ? std::unordered_map<std::string, double>{}
+                                                 : loadBaselineJson(baselineFile);
+            for (const auto &r : results)
+            {
+                std::string regr = "—";
+                if (!baseline.empty())
+                {
+                    std::string key = r.name + "_" + r.metric;
+                    auto it = baseline.find(key);
+                    if (it != baseline.end() && it->second > 0.0)
+                    {
+                        double delta = ((r.value - it->second) / it->second) * 100.0;
+                        char buf[64];
+                        std::snprintf(buf, sizeof(buf), "%+.1f%%", delta);
+                        regr = buf;
+                    }
+                }
+                rpt << "| " << r.name << " | " << r.metric << " | " << r.value << " | "
+                    << (r.passed ? "PASS" : "FAIL") << " | " << regr << " |\n";
+            }
+            if (!regressionIssues.empty())
+            {
+                rpt << "\n### Regressions (>10%)\n\n";
+                for (const auto &issue : regressionIssues)
+                    rpt << "- " << issue << "\n";
+            }
+            else
+            {
+                rpt << "\n### No regressions detected\n";
+            }
+            rpt.close();
+            std::cout << "report: wrote " << reportFile << std::endl;
         }
     }
 

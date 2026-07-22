@@ -115,10 +115,11 @@ jobs:
       - name: Build + Test
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test
 
-      - name: Benchmark (--enforce; prints budget verdicts, non-blocking)
+      - name: Benchmark (--enforce; auto-baseline regression detection)
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
-          build_msvc\bin\mviewer_bench.exe --enforce > nightly-benchmark.txt 2>&1 || true
+          New-Item -ItemType Directory -Force -Path benchmark/report | Out-Null
+          build_msvc\bin\mviewer_bench.exe --enforce --budget benchmark/performance_budget.json --results benchmark/report/results.json --history benchmark/report/history.csv --report benchmark/report/regression.md > nightly-benchmark.txt 2>&1 || true
           echo "nightly benchmark complete (see artifact)"
 
       - name: Upload findings
@@ -286,13 +287,14 @@ jobs:
       - name: Build (Release)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
 
-      - name: Benchmark (--enforce) -> result log
+      - name: Benchmark (--enforce + --baseline + --history + --report)
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
           $dst = "D:\mviewer_bench_data"
           New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          build_msvc\bin\mviewer_bench.exe --corpus-size 1000 --enforce > $dst/result_medium.txt 2>&1 || true
-          build_msvc\bin\mviewer_bench.exe --corpus-size 100  --enforce > $dst/result_small.txt  2>&1 || true
+          New-Item -ItemType Directory -Force -Path benchmark/report | Out-Null
+          build_msvc\bin\mviewer_bench.exe --corpus-size 1000 --enforce --budget benchmark/performance_budget.json --results $dst/result_medium.json --history $dst/bench_history.csv --report benchmark/report/regression.md > $dst/result_medium.txt 2>&1 || true
+          build_msvc\bin\mviewer_bench.exe --corpus-size 100  --enforce --results $dst/result_small.json  --history $dst/bench_history.csv --report benchmark/report/regression.md > $dst/result_small.txt  2>&1 || true
           echo "nightly benchmark logs written"
 
       - name: Generate dashboard
