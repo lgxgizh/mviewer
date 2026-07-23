@@ -78,6 +78,8 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     setEditTriggers(QAbstractItemView::NoEditTriggers);
     setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    viewport()->setAttribute(Qt::WA_Hover);
+    viewport()->setMouseTracking(true);
 
     m_model = new QStringListModel(this);
     setModel(m_model);
@@ -210,6 +212,42 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
     if (m_viewMode == mode)
         return;
     m_viewMode = mode;
+
+    // P0-2: Large/Small icon modes are thumbnail grids with fixed sizes.
+    if (mode == LargeIcon)
+    {
+        setThumbSize(240);
+        QListView::setViewMode(QListView::IconMode);
+        setWrapping(true);
+        setUniformItemSizes(true);
+        setGridSize(QSize(m_thumbSize + 16, m_thumbSize + 34));
+        setSpacing(8);
+        setResizeMode(QListView::Adjust);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        if (m_delegate)
+            delete m_delegate;
+        m_delegate = new ThumbDelegate(this, this);
+        setItemDelegate(m_delegate);
+        return;
+    }
+    if (mode == SmallIcon)
+    {
+        setThumbSize(64);
+        QListView::setViewMode(QListView::IconMode);
+        setWrapping(true);
+        setUniformItemSizes(true);
+        setGridSize(QSize(m_thumbSize + 12, m_thumbSize + 30));
+        setSpacing(4);
+        setResizeMode(QListView::Adjust);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        if (m_delegate)
+            delete m_delegate;
+        m_delegate = new ThumbDelegate(this, this);
+        setItemDelegate(m_delegate);
+        return;
+    }
 
     if (mode == Details)
     {
@@ -832,6 +870,8 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter,
 
     if (option.state & QStyle::State_Selected)
         painter->fillRect(option.rect, option.palette.color(QPalette::Highlight));
+    else if (option.state & QStyle::State_MouseOver)
+        painter->fillRect(option.rect, option.palette.color(QPalette::Midlight));
     else
         painter->fillRect(option.rect, option.palette.color(QPalette::Base));
 
@@ -951,10 +991,15 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
     const QFileInfo fi(path);
 
     const bool sel = option.state & QStyle::State_Selected;
-    painter->fillRect(option.rect,
-                      sel ? option.palette.color(QPalette::Highlight)
-                          : option.palette.color(
-                                index.row() & 1 ? QPalette::AlternateBase : QPalette::Base));
+    const bool hover = option.state & QStyle::State_MouseOver;
+    QColor bg;
+    if (sel)
+        bg = option.palette.color(QPalette::Highlight);
+    else if (hover)
+        bg = option.palette.color(QPalette::Midlight);
+    else
+        bg = option.palette.color(index.row() & 1 ? QPalette::AlternateBase : QPalette::Base);
+    painter->fillRect(option.rect, bg);
 
     painter->save();
     const QRect r = option.rect.adjusted(4, 2, -4, -2);

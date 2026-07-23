@@ -20,6 +20,8 @@ class MetadataOverlay : public QWidget
   public:
     explicit MetadataOverlay(QWidget *parent = nullptr);
 
+    /// Build metadata for the given image path without changing visibility.
+    void setImage(const QString &path);
     /// Show metadata for the given image path.
     void showForImage(const QString &path);
     /// Toggle visibility.
@@ -34,6 +36,7 @@ class MetadataOverlay : public QWidget
     void paintEvent(QPaintEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
 
   private:
     void buildContent(const QString &path);

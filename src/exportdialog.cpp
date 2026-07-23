@@ -1,13 +1,17 @@
 #include "exportdialog.h"
 
+#include "core/analysis/AnalysisEngine.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageTransform.h"
 #include "core/image/QtConvert.h"
 
+#include <QApplication>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QGroupBox>
@@ -18,6 +22,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QTextStream>
 #include <QVBoxLayout>
 
 #include <vector>
@@ -63,6 +68,10 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     m_modeCombo->addItem(tr("转换 / 批量"), "convert");
     m_modeCombo->addItem(tr("联系表 (Contact Sheet)"), "contact");
     m_modeCombo->addItem(tr("PDF 文档"), "pdf");
+    m_modeCombo->addItem(tr("CSV 报告"), "csv");
+    m_modeCombo->addItem(tr("JSON 报告"), "json");
+    m_modeCombo->addItem(tr("HTML 报告"), "html");
+    m_modeCombo->addItem(tr("复制到剪贴板"), "clipboard");
     modeLay->addRow(tr("模式:"), m_modeCombo);
     root->addWidget(modeBox);
 
@@ -217,6 +226,14 @@ void ExportDialog::onExportClicked()
         exportContactSheet();
     else if (mode == "pdf")
         exportPdf();
+    else if (mode == "csv")
+        exportCsv();
+    else if (mode == "json")
+        exportJson();
+    else if (mode == "html")
+        exportHtmlReport();
+    else if (mode == "clipboard")
+        exportClipboard();
     else
         exportConvertBatch();
 }
@@ -314,4 +331,163 @@ void ExportDialog::exportPdf()
         m_statusLabel->setText(tr("PDF 已生成: %1").arg(dst));
     else
         m_statusLabel->setText(tr("PDF 生成失败。"));
+}
+
+namespace
+{
+struct ExportRow
+{
+    QString name;
+    int width = 0;
+    int height = 0;
+    double lumMean = 0.0;
+    double rMean = 0.0;
+    double gMean = 0.0;
+    double bMean = 0.0;
+};
+
+ExportRow analyzePath(const QString &path)
+{
+    ExportRow row;
+    row.name = QFileInfo(path).fileName();
+    QImage img(path);
+    if (img.isNull())
+        return row;
+    row.width = img.width();
+    row.height = img.height();
+    const auto s = AnalysisEngine::computeStats(mvcore::fromQImage(img));
+    row.lumMean = s.lumMean;
+    row.rMean = s.rMean;
+    row.gMean = s.gMean;
+    row.bMean = s.bMean;
+    return row;
+}
+
+QVector<ExportRow> collectRows(const QStringList &files)
+{
+    QVector<ExportRow> rows;
+    rows.reserve(files.size());
+    for (const QString &f : files)
+        rows.append(analyzePath(f));
+    return rows;
+}
+} // namespace
+
+void ExportDialog::exportCsv()
+{
+    const QStringList files = collectSources();
+    if (files.isEmpty())
+    {
+        m_statusLabel->setText(tr("没有可导出的图片。"));
+        return;
+    }
+    const auto rows = collectRows(files);
+    const QString dst = QDir(m_outDir).absoluteFilePath("export_report.csv");
+    QFile f(dst);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        m_statusLabel->setText(tr("CSV 打开失败。"));
+        return;
+    }
+    QTextStream out(&f);
+    out.setEncoding(QStringConverter::Utf8);
+    out << "Name,Width,Height,LumMean,RMean,GMean,BMean\n";
+    for (const auto &r : rows)
+    {
+        out << "\"" << r.name << "\","
+            << r.width << ","
+            << r.height << ","
+            << QString::number(r.lumMean, 'f', 2) << ","
+            << QString::number(r.rMean, 'f', 2) << ","
+            << QString::number(r.gMean, 'f', 2) << ","
+            << QString::number(r.bMean, 'f', 2) << "\n";
+    }
+    m_statusLabel->setText(tr("CSV 已生成: %1").arg(dst));
+}
+
+void ExportDialog::exportJson()
+{
+    const QStringList files = collectSources();
+    if (files.isEmpty())
+    {
+        m_statusLabel->setText(tr("没有可导出的图片。"));
+        return;
+    }
+    const auto rows = collectRows(files);
+    const QString dst = QDir(m_outDir).absoluteFilePath("export_report.json");
+    QFile f(dst);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        m_statusLabel->setText(tr("JSON 打开失败。"));
+        return;
+    }
+    QTextStream out(&f);
+    out.setEncoding(QStringConverter::Utf8);
+    out << "{\n  \"images\": [\n";
+    for (int i = 0; i < rows.size(); ++i)
+    {
+        const auto &r = rows[i];
+        out << "    {"
+            << "\"name\":\"" << r.name << "\","
+            << "\"width\":" << r.width << ","
+            << "\"height\":" << r.height << ","
+            << "\"lumMean\":" << QString::number(r.lumMean, 'f', 2) << ","
+            << "\"rMean\":" << QString::number(r.rMean, 'f', 2) << ","
+            << "\"gMean\":" << QString::number(r.gMean, 'f', 2) << ","
+            << "\"bMean\":" << QString::number(r.bMean, 'f', 2) << "}";
+        out << (i + 1 < rows.size() ? ",\n" : "\n");
+    }
+    out << "  ]\n}\n";
+    m_statusLabel->setText(tr("JSON 已生成: %1").arg(dst));
+}
+
+void ExportDialog::exportHtmlReport()
+{
+    const QStringList files = collectSources();
+    if (files.isEmpty())
+    {
+        m_statusLabel->setText(tr("没有可导出的图片。"));
+        return;
+    }
+    const auto rows = collectRows(files);
+    const QString dst = QDir(m_outDir).absoluteFilePath("export_report.html");
+    QFile f(dst);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        m_statusLabel->setText(tr("HTML 打开失败。"));
+        return;
+    }
+    QTextStream out(&f);
+    out.setEncoding(QStringConverter::Utf8);
+    out << "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Export Report</title></head><body>\n";
+    out << "<h1>Export Report</h1><table border=\"1\" cellpadding=\"4\">\n";
+    out << "<tr><th>Name</th><th>Width</th><th>Height</th><th>LumMean</th><th>R</th><th>G</th><th>B</th></tr>\n";
+    for (const auto &r : rows)
+    {
+        out << "<tr><td>" << r.name << "</td><td>" << r.width << "</td><td>" << r.height
+            << "</td><td>" << QString::number(r.lumMean, 'f', 2)
+            << "</td><td>" << QString::number(r.rMean, 'f', 2)
+            << "</td><td>" << QString::number(r.gMean, 'f', 2)
+            << "</td><td>" << QString::number(r.bMean, 'f', 2) << "</td></tr>\n";
+    }
+    out << "</table></body></html>\n";
+    m_statusLabel->setText(tr("HTML 报告已生成: %1").arg(dst));
+}
+
+void ExportDialog::exportClipboard()
+{
+    const QStringList files = collectSources();
+    if (files.isEmpty())
+    {
+        m_statusLabel->setText(tr("没有可复制的图片。"));
+        return;
+    }
+    const QImage img(files.first());
+    if (img.isNull())
+    {
+        m_statusLabel->setText(tr("无法读取图片。"));
+        return;
+    }
+    QApplication::clipboard()->setImage(img);
+    m_statusLabel->setText(tr("已复制 %1 到剪贴板").arg(QFileInfo(files.first()).fileName()));
 }

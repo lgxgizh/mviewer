@@ -24,6 +24,8 @@
 struct AppState
 {
     QStringList favorites;
+    QStringList recentFolders; // P0-1: LRU of recently opened folders (max 15)
+    QStringList history;       // P0-1: recently opened images (max 50)
     QString lastDir;
     QString lastImage;
     int lastThumbScroll = 0;
@@ -40,4 +42,12 @@ struct AppState
     void addFavorite(const QString &dir);
     bool removeFavorite(const QString &dir);
     bool isFavorite(const QString &dir) const;
+
+    // P0-1: recent-folder LRU. Moves existing entry to front; caps at max.
+    void addRecentFolder(const QString &dir);
+    void clearRecentFolders();
+
+    // P0-1: image history. Caps at max.
+    void addHistory(const QString &imagePath);
+    void clearHistory();
 };

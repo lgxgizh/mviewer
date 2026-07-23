@@ -13,6 +13,8 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
+
+#include <algorithm>
 #include <QFileDialog>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -20,10 +22,12 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QStandardPaths>
@@ -48,6 +52,9 @@ QImage imageObjectToQImage(const ImageFrame *img)
 
 CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 {
+    setMouseTracking(true);
+    setFocusPolicy(Qt::StrongFocus);
+
     // m_engine is default-constructed as a member; no assignment needed.
     m_syncZoomChk = new QCheckBox("同步缩放(&Z)", this);
     m_syncZoomChk->setChecked(true);
@@ -119,6 +126,25 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
         }
     });
     syncLayout->addWidget(m_blinkChk);
+
+    // P0-4: split / swipe compare for exactly two images.
+    m_splitChk = new QCheckBox("左右分割(&S)", this);
+    m_splitChk->setEnabled(false);
+    connect(m_splitChk, &QCheckBox::toggled, this, [this](bool on) {
+        if (on && m_swipeChk) m_swipeChk->setChecked(false);
+        if (m_grid) m_grid->setVisible(!isSplitOrSwipe());
+        update();
+    });
+    syncLayout->addWidget(m_splitChk);
+
+    m_swipeChk = new QCheckBox("滑动对比(&W)", this);
+    m_swipeChk->setEnabled(false);
+    connect(m_swipeChk, &QCheckBox::toggled, this, [this](bool on) {
+        if (on && m_splitChk) m_splitChk->setChecked(false);
+        if (m_grid) m_grid->setVisible(!isSplitOrSwipe());
+        update();
+    });
+    syncLayout->addWidget(m_swipeChk);
 
     // M15: threshold slider for difference heatmap (0-255).
     auto *thresholdLabel = new QLabel("阈值:", this);
@@ -286,6 +312,22 @@ void CompareWorkspace::setImages(const QStringList &paths)
     update();
     if (m_sidePanel && m_sidePanel->isVisible())
         refreshHistograms();
+
+    // P0-4: split / swipe only make sense for exactly two images.
+    const bool two = m_engine.imageCount() == 2;
+    if (m_splitChk)
+    {
+        if (!two) m_splitChk->setChecked(false);
+        m_splitChk->setEnabled(two);
+    }
+    if (m_swipeChk)
+    {
+        if (!two) m_swipeChk->setChecked(false);
+        m_swipeChk->setEnabled(two);
+    }
+    if (m_grid && !two)
+        m_grid->setVisible(true);
+    setFocus();
 }
 
 QStringList CompareWorkspace::comparedImages() const
@@ -765,6 +807,59 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
                                        : QPointF(ct.offset.x, ct.offset.y);
         m_cellViews[i]->setTransform(sc, off);
     }
+
+    // P0-4: split / swipe overlay for two images.
+    if (n == 2 && isSplitOrSwipe() && m_cellViews.size() >= 2)
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::SmoothPixmapTransform);
+        if (m_splitChk && m_splitChk->isChecked())
+            drawSplitCompare(p);
+        else if (m_swipeChk && m_swipeChk->isChecked())
+            drawSwipeCompare(p, int(width() * m_splitPos));
+    }
+}
+
+void CompareWorkspace::drawSplitCompare(QPainter &p)
+{
+    const QRect r = rect();
+    const QRect left(r.topLeft(), QSize(r.width() / 2, r.height()));
+    const QRect right(left.topRight() + QPoint(1, 0), QSize(r.width() - left.width() - 1, r.height()));
+    const QImage &img0 = m_cellViews[0]->image();
+    const QImage &img1 = m_cellViews[1]->image();
+    drawFitImage(p, img0, left);
+    drawFitImage(p, img1, right);
+    p.setPen(QPen(QColor(255, 255, 255), 2));
+    p.drawLine(left.topRight(), left.bottomRight());
+}
+
+void CompareWorkspace::drawSwipeCompare(QPainter &p, int x)
+{
+    const QRect r = rect();
+    const QRect left(r.topLeft(), QSize(x, r.height()));
+    const QRect right(left.topRight() + QPoint(1, 0), QSize(r.width() - x, r.height()));
+    const QImage &img0 = m_cellViews[0]->image();
+    const QImage &img1 = m_cellViews[1]->image();
+    drawFitImage(p, img0, left);
+    drawFitImage(p, img1, right);
+    p.setPen(QPen(QColor(255, 255, 255), 2));
+    p.drawLine(QPoint(x, 0), QPoint(x, r.height()));
+    p.setBrush(QColor(255, 255, 255));
+    p.drawEllipse(QPoint(x, r.height() / 2), 4, 4);
+}
+
+void CompareWorkspace::drawFitImage(QPainter &p, const QImage &img, const QRect &target)
+{
+    if (img.isNull() || target.width() <= 0 || target.height() <= 0)
+        return;
+    const QSizeF src(img.size());
+    const QSizeF dst(target.size());
+    const double s = qMin(dst.width() / src.width(), dst.height() / src.height());
+    const int w = int(src.width() * s);
+    const int h = int(src.height() * s);
+    const QRect dr(target.x() + (target.width() - w) / 2,
+                   target.y() + (target.height() - h) / 2, w, h);
+    p.drawImage(dr, img);
 }
 
 bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
@@ -1411,4 +1506,83 @@ void CompareWorkspace::onSwapPanes()
         refreshHistograms();
         updateMetrics();
     }
+}
+
+// P0-4: temporary compare — hold Space to blink, release to stop.
+void CompareWorkspace::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Space && !event->isAutoRepeat())
+    {
+        if (m_blinkChk && m_blinkChk->isEnabled() && !m_blinkChk->isChecked())
+        {
+            m_tempBlinking = true;
+            m_blinkChk->setChecked(true);
+        }
+        event->accept();
+        return;
+    }
+    QWidget::keyPressEvent(event);
+}
+
+void CompareWorkspace::keyReleaseEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Space && !event->isAutoRepeat() && m_tempBlinking)
+    {
+        m_tempBlinking = false;
+        if (m_blinkChk && m_blinkChk->isChecked())
+            m_blinkChk->setChecked(false);
+        event->accept();
+        return;
+    }
+    QWidget::keyReleaseEvent(event);
+}
+
+// P0-4: swipe divider drag. In split mode the divider is fixed; in swipe mode it follows the cursor.
+void CompareWorkspace::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton && m_swipeChk && m_swipeChk->isChecked())
+    {
+        const int x = int(width() * m_splitPos);
+        if (std::abs(event->pos().x() - x) < 12)
+        {
+            m_splitDragging = true;
+            m_splitPos = std::clamp(event->pos().x() / double(width()), 0.05, 0.95);
+            update();
+            return;
+        }
+    }
+    QWidget::mousePressEvent(event);
+}
+
+void CompareWorkspace::mouseMoveEvent(QMouseEvent *event)
+{
+    if (m_splitDragging && m_swipeChk && m_swipeChk->isChecked())
+    {
+        m_splitPos = std::clamp(event->pos().x() / double(width()), 0.05, 0.95);
+        update();
+        return;
+    }
+    if (m_swipeChk && m_swipeChk->isChecked())
+    {
+        const int x = int(width() * m_splitPos);
+        setCursor(std::abs(event->pos().x() - x) < 12 ? Qt::SplitHCursor : Qt::ArrowCursor);
+    }
+    QWidget::mouseMoveEvent(event);
+}
+
+void CompareWorkspace::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (event->button() == Qt::LeftButton && m_splitDragging)
+    {
+        m_splitDragging = false;
+        update();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+
+void CompareWorkspace::leaveEvent(QEvent *)
+{
+    m_splitDragging = false;
+    setCursor(Qt::ArrowCursor);
 }

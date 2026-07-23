@@ -50,6 +50,8 @@ class ThumbnailPanel : public QListView
     enum ViewMode
     {
         Thumbnail = 0,   // Grid of thumbnails (default)
+        LargeIcon,       // P0-2: big thumbnail grid
+        SmallIcon,       // P0-2: small thumbnail grid
         Details,         // List view with columns
         Filmstrip,       // Horizontal strip, single row (M15)
         Compact          // Dense grid, minimal padding (M15)

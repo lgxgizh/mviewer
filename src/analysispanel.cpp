@@ -1,4 +1,5 @@
 #include "analysispanel.h"
+#include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/HistogramAnalyzer.h"
 #include "widgets/rawimageview.h"
 
@@ -53,7 +54,7 @@ void AnalysisPanel::buildUi()
 
     mainLay->addWidget(m_tabs, 1);
 
-    // Histogram tab: viz + stats text
+    // P1-1: Histogram tab: viz + stats text
     m_histogramLabel = new QLabel;
     m_histogramLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_histogramLabel->setStyleSheet("QLabel{background:#141414;}");
@@ -68,6 +69,43 @@ void AnalysisPanel::buildUi()
     histLay->addWidget(m_histogramLabel, 1);
     histLay->addWidget(m_statsLabel);
     m_tabs->addTab(histPage, tr("Histogram"));
+
+    // P1-1: RGB tab
+    m_rgbLabel = new QLabel;
+    m_rgbLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    m_rgbLabel->setStyleSheet("QLabel{background:#141414;}");
+    m_rgbStatsLabel = new QLabel;
+    m_rgbStatsLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    m_rgbStatsLabel->setWordWrap(true);
+    m_rgbStatsLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    auto *rgbPage = new QWidget;
+    auto *rgbLay = new QVBoxLayout(rgbPage);
+    rgbLay->setContentsMargins(0, 0, 0, 0);
+    rgbLay->setSpacing(4);
+    rgbLay->addWidget(m_rgbLabel, 1);
+    rgbLay->addWidget(m_rgbStatsLabel);
+    m_tabs->addTab(rgbPage, tr("RGB"));
+
+    // P1-1: Exposure tab
+    m_exposureLabel = new QLabel;
+    m_exposureLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    m_exposureLabel->setWordWrap(true);
+    m_exposureLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_tabs->addTab(m_exposureLabel, tr("Exposure"));
+
+    // P1-1: Focus tab
+    m_focusLabel = new QLabel;
+    m_focusLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    m_focusLabel->setWordWrap(true);
+    m_focusLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_tabs->addTab(m_focusLabel, tr("Focus"));
+
+    // P1-1: Metadata tab (inside the analysis workspace)
+    m_metaLabel = new QLabel;
+    m_metaLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+    m_metaLabel->setWordWrap(true);
+    m_metaLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
+    m_tabs->addTab(m_metaLabel, tr("Metadata"));
 
     // Compare tab
     m_compareLabel = new QLabel;
@@ -144,16 +182,26 @@ void AnalysisPanel::buildUi()
 
 void AnalysisPanel::setImage(const QImage &img)
 {
+    setImage(img, QString());
+}
+
+void AnalysisPanel::setImage(const QImage &img, const QString &path)
+{
     if (img.isNull())
     {
         clear();
         return;
     }
     m_imageA = img.convertToFormat(QImage::Format_RGB32);
+    m_imagePath = path;
     m_hasA = true;
     m_hasB = false;
     m_statsA = AnalysisEngine::computeStats(mvcore::fromQImage(m_imageA));
     updateHistogramPage();
+    updateRgbPage();
+    updateExposurePage();
+    updateFocusPage();
+    updateMetadataPage();
 }
 
 void AnalysisPanel::setImages(const QImage &a, const QImage &b)
@@ -244,6 +292,11 @@ void AnalysisPanel::reanalyze()
 void AnalysisPanel::setFrame(std::shared_ptr<ImageFrame> frame)
 {
     m_frameA = std::move(frame);
+    if (m_frameA && m_frameA->isValid())
+    {
+        const QImage img = mvcore::toQImage(m_frameA->pixels()).convertToFormat(QImage::Format_RGB32);
+        setImage(img, QString::fromStdString(m_frameA->metadata().filePath));
+    }
     reanalyze();
 }
 
@@ -408,6 +461,161 @@ void AnalysisPanel::renderHistogramPixmap()
     drawChannel(m_statsA.histG, QColor(70, 220, 70));
     drawChannel(m_statsA.histB, QColor(70, 130, 230));
     m_histogramLabel->setPixmap(pix);
+}
+
+// P1-1: RGB channel page — separate R/G/B histograms + per-channel means.
+void AnalysisPanel::updateRgbPage()
+{
+    if (!m_hasA)
+    {
+        m_rgbLabel->setText(tr("No image selected"));
+        m_rgbStatsLabel->setText(QString());
+        return;
+    }
+    QString txt = QString("<h3>%1</h3>").arg(tr("RGB Channels"));
+    txt += QString("<table>"
+                   "<tr><td>%1</td><td>%2</td></tr>"
+                   "<tr><td>%3</td><td>%4</td></tr>"
+                   "<tr><td>%5</td><td>%6</td></tr>"
+                   "</table>")
+               .arg(tr("R Mean")).arg(m_statsA.rMean, 0, 'f', 2)
+               .arg(tr("G Mean")).arg(m_statsA.gMean, 0, 'f', 2)
+               .arg(tr("B Mean")).arg(m_statsA.bMean, 0, 'f', 2);
+    m_rgbStatsLabel->setText(txt);
+
+    const int W = qMax(200, m_rgbLabel->width() - 8);
+    const int H = 160;
+    QPixmap pix(W, H);
+    pix.fill(QColor(20, 20, 20));
+    QPainter p(&pix);
+    const int pad = 4;
+    const QRect bg(pad, pad, W - pad * 2, H - pad * 2);
+    auto drawChannel = [&bg, &p](const int *hist, const QColor &color)
+    {
+        constexpr int srcBins = 256;
+        constexpr int drawBins = 64;
+        const double binW = static_cast<double>(bg.width()) / drawBins;
+        long long agg[drawBins] = {0};
+        long long maxV = 1;
+        for (int i = 0; i < drawBins; ++i)
+        {
+            long long sum = 0;
+            const int lo = i * srcBins / drawBins;
+            const int hi = (i + 1) * srcBins / drawBins;
+            for (int j = lo; j < hi && j < srcBins; ++j)
+                sum += hist[j];
+            agg[i] = sum;
+            if (sum > maxV)
+                maxV = sum;
+        }
+        p.setPen(color);
+        for (int i = 0; i < drawBins; ++i)
+        {
+            const double h = static_cast<double>(agg[i]) / maxV * bg.height();
+            const int x = bg.x() + static_cast<int>(i * binW);
+            const int hh = qMax(1, static_cast<int>(h));
+            p.drawLine(x, bg.bottom(), x, bg.bottom() - hh);
+        }
+    };
+    drawChannel(m_statsA.histR, QColor(230, 70, 70));
+    drawChannel(m_statsA.histG, QColor(70, 220, 70));
+    drawChannel(m_statsA.histB, QColor(70, 130, 230));
+    m_rgbLabel->setPixmap(pix);
+}
+
+void AnalysisPanel::updateExposurePage()
+{
+    if (!m_hasA)
+    {
+        m_exposureLabel->setText(tr("No image selected"));
+        return;
+    }
+    long long highlights = 0, shadows = 0, total = 0;
+    for (int i = 0; i < 256; ++i)
+    {
+        const long long v = m_statsA.histLum[i];
+        total += v;
+        if (i >= 240)
+            highlights += v;
+        if (i <= 15)
+            shadows += v;
+    }
+    const double highlightPct = total ? 100.0 * highlights / total : 0.0;
+    const double shadowPct = total ? 100.0 * shadows / total : 0.0;
+
+    QString txt = QString("<h3>%1</h3>").arg(tr("Exposure"));
+    txt += QString("<table>"
+                   "<tr><td>%1</td><td>%2%</td></tr>"
+                   "<tr><td>%3</td><td>%4%</td></tr>"
+                   "<tr><td>%5</td><td>%6</td></tr>"
+                   "</table>")
+               .arg(tr("Highlights (>=240)")).arg(highlightPct, 0, 'f', 2)
+               .arg(tr("Shadows (<=15)")).arg(shadowPct, 0, 'f', 2)
+               .arg(tr("Luminance Mean")).arg(m_statsA.lumMean, 0, 'f', 2);
+    m_exposureLabel->setText(txt);
+}
+
+void AnalysisPanel::updateFocusPage()
+{
+    if (!m_hasA)
+    {
+        m_focusLabel->setText(tr("No image selected"));
+        return;
+    }
+    const double noise = AnalysisEngine::noiseEstimate(mvcore::fromQImage(m_imageA));
+
+    QString txt = QString("<h3>%1</h3>").arg(tr("Focus / Sharpness"));
+    txt += QString("<table>"
+                   "<tr><td>%1</td><td>%2</td></tr>"
+                   "<tr><td>%3</td><td>%4</td></tr>"
+                   "<tr><td>%5</td><td>%6</td></tr>"
+                   "</table>")
+               .arg(tr("Luminance Mean")).arg(m_statsA.lumMean, 0, 'f', 2)
+               .arg(tr("Noise Estimate")).arg(noiseLevelText(noise))
+               .arg(tr("Pixel Count")).arg(m_statsA.pixelCount);
+    m_focusLabel->setText(txt);
+}
+
+static QString formatToString(QImage::Format f)
+{
+    switch (f)
+    {
+        case QImage::Format_RGB32:
+            return "RGB32";
+        case QImage::Format_ARGB32:
+            return "ARGB32";
+        case QImage::Format_ARGB32_Premultiplied:
+            return "ARGB32 PM";
+        case QImage::Format_RGB888:
+            return "RGB888";
+        case QImage::Format_RGBA8888:
+            return "RGBA8888";
+        case QImage::Format_Grayscale8:
+            return "Gray8";
+        default:
+            return QString("Format_%1").arg(static_cast<int>(f));
+    }
+}
+
+void AnalysisPanel::updateMetadataPage()
+{
+    if (!m_hasA)
+    {
+        m_metaLabel->setText(tr("No image selected"));
+        return;
+    }
+    QString txt = QString("<h3>%1</h3>").arg(tr("Metadata"));
+    txt += QString("<table>"
+                   "<tr><td>%1</td><td>%2 x %3</td></tr>"
+                   "<tr><td>%4</td><td>%5</td></tr>"
+                   "<tr><td>%6</td><td>%7</td></tr>"
+                   "</table>")
+               .arg(tr("Dimensions")).arg(m_imageA.width()).arg(m_imageA.height())
+               .arg(tr("Format")).arg(formatToString(m_imageA.format()))
+               .arg(tr("Depth")).arg(m_imageA.depth());
+    if (!m_imagePath.isEmpty())
+        txt += QString("<br><b>%1</b> %2").arg(tr("Path:")).arg(m_imagePath);
+    m_metaLabel->setText(txt);
 }
 
 void AnalysisPanel::updateComparePage()

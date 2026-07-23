@@ -8,6 +8,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QDateTime>
+#include <QResizeEvent>
 
 MetadataOverlay::MetadataOverlay(QWidget *parent)
     : QWidget(parent)
@@ -17,6 +18,11 @@ MetadataOverlay::MetadataOverlay(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     setAutoFillBackground(false);
+}
+
+void MetadataOverlay::setImage(const QString &path)
+{
+    buildContent(path);
 }
 
 void MetadataOverlay::showForImage(const QString &path)
@@ -214,11 +220,17 @@ void MetadataOverlay::mousePressEvent(QMouseEvent *event)
 
 void MetadataOverlay::keyPressEvent(QKeyEvent *event)
 {
-    if (event->key() == Qt::Key_Escape || event->key() == Qt::Key_I)
+    if (event->key() == Qt::Key_Escape || event->key() == Qt::Key_I || event->key() == Qt::Key_M)
     {
         hide();
         event->accept();
         return;
     }
     QWidget::keyPressEvent(event);
+}
+
+void MetadataOverlay::resizeEvent(QResizeEvent *)
+{
+    if (parentWidget() && isVisible())
+        setGeometry(parentWidget()->rect());
 }

@@ -43,6 +43,7 @@ class AnalysisPanel : public QWidget
     }
 
     void setImage(const QImage &img);
+    void setImage(const QImage &img, const QString &path);
     void setImages(const QImage &a, const QImage &b);
     void clear();
 
@@ -92,13 +93,23 @@ class AnalysisPanel : public QWidget
     void updateComparePage();
     void updatePluginPage();
     void updateInspectorPage();
+    void updateRgbPage();
+    void updateExposurePage();
+    void updateFocusPage();
+    void updateMetadataPage();
+    void renderChannel(QLabel *label, const int *hist, const QColor &color);
     QImage computeDifferencePreview(const QImage &a, const QImage &b);
     QString noiseLevelText(double variance);
 
     enum Page
     {
         HistogramPage,
+        RgbPage,
+        ExposurePage,
+        FocusPage,
+        MetadataPage,
         ComparePage,
+        DiffMapPage,
         PluginPage,
         InspectorPage
     };
@@ -108,6 +119,11 @@ class AnalysisPanel : public QWidget
     QComboBox *m_analyzerCombo = nullptr;
     QLabel *m_histogramLabel = nullptr; // histogram viz (replaces dead drawHistogramChannel)
     QLabel *m_statsLabel = nullptr;
+    QLabel *m_rgbLabel = nullptr;       // P1-1: RGB channel viz
+    QLabel *m_rgbStatsLabel = nullptr;  // P1-1: RGB stats text
+    QLabel *m_exposureLabel = nullptr;  // P1-1: exposure stats
+    QLabel *m_focusLabel = nullptr;     // P1-1: focus / sharpness stats
+    QLabel *m_metaLabel = nullptr;      // P1-1: metadata summary
     QLabel *m_compareLabel = nullptr;
     QLabel *m_diffPreview = nullptr;
     QLabel *m_pluginResult = nullptr;
@@ -117,6 +133,7 @@ class AnalysisPanel : public QWidget
     // Data
     QImage m_imageA;
     QImage m_imageB;
+    QString m_imagePath; // P1-1: source path for metadata extraction
     bool m_hasA = false;
     bool m_hasB = false;
     ImageStats m_statsA;

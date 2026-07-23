@@ -28,6 +28,9 @@ class QCheckBox;
 class QLabel;
 class QTimer;
 class QComboBox;
+class QTreeWidget;
+class QTreeWidgetItem;
+class QSplitter;
 
 class MainWindow : public QMainWindow
 {
@@ -48,12 +51,15 @@ class MainWindow : public QMainWindow
     // M15: drag & drop support
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
+    // P0-3: intercept image-viewer mouse events for metadata overlay triggers.
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
   private:
     void setupCommands();
     void openCompare(const QStringList &images = {}, const QString &sessionJson = {});
     void navigate(int delta);
     void onBreadcrumbPath(const QString &path);
+    void openDirectory(const QString &dir);
 
     // P0: product browse state — recent folders, favorites, in-session history,
     // and cross-session restore.
@@ -65,14 +71,25 @@ class MainWindow : public QMainWindow
     void addFavoriteCurrent();
     void restoreLastSession();
 
-    // P1: metadata overlay — position and show the floating metadata panel.
+    // P0-3: metadata overlay — position and show the floating metadata panel.
     void showMetadataOverlay();
+    void toggleMetadataOverlay();
+    void copyCurrentImageToClipboard();
+    void openQuickCompare();
 
     void keyPressEvent(QKeyEvent *event) override;
 
+    // P0-1: navigation sidebar helpers.
+    void buildNavSidebar();
+    void refreshNavSidebar();
+    void onNavSidebarActivated(QTreeWidgetItem *item, int column);
+    void onNavSidebarContextMenu(const QPoint &pos);
+
     ImageViewer *m_imageViewer = nullptr;
     DirectoryTree *m_directoryTree = nullptr;
+    QTreeWidget *m_navSidebar = nullptr; // P0-1: favorites / recent / history
     BreadcrumbBar *m_breadcrumb = nullptr;
+    QSplitter *m_mainSplitter = nullptr; // P1-3: central layout splitter
     MetadataOverlay *m_metadataOverlay = nullptr;  // M15: semi-transparent info overlay
     ThumbnailPanel *m_thumbnailPanel = nullptr;
     PreviewPanel *m_previewPanel = nullptr;
@@ -110,6 +127,9 @@ class MainWindow : public QMainWindow
     // M15: crash recovery
     QTimer *m_autosaveTimer = nullptr;
     bool m_autosaveLoaded = false;
+
+    // P0-3: hover-activated metadata overlay.
+    QTimer *m_metadataHoverTimer = nullptr;
 
     // M15 Sprint 2-1: global search index rebuild on directory change.
     void reindexSearch();

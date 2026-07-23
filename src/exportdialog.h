@@ -47,6 +47,10 @@ class ExportDialog : public QDialog
     void exportConvertBatch();
     void exportContactSheet();
     void exportPdf();
+    void exportCsv();
+    void exportJson();
+    void exportHtmlReport();
+    void exportClipboard();
 
     QString m_path;
     QString m_outDir;

@@ -97,6 +97,12 @@ class CompareWorkspace : public QWidget
     void paintEvent(QPaintEvent *) override;
     bool eventFilter(QObject *, QEvent *) override;
     void resizeEvent(QResizeEvent *) override;
+    void keyPressEvent(QKeyEvent *) override;
+    void keyReleaseEvent(QKeyEvent *) override;
+    void mousePressEvent(QMouseEvent *) override;
+    void mouseMoveEvent(QMouseEvent *) override;
+    void mouseReleaseEvent(QMouseEvent *) override;
+    void leaveEvent(QEvent *) override;
 
   private:
     void rebuildCells();
@@ -118,14 +124,29 @@ class CompareWorkspace : public QWidget
     int m_dragIdx = -1;
     mviewer::domain::Selection m_lastSelection; // M12.1: last applied ROI
 
-    // M14-3: blink (flicker) compare
+    // M14-3 / P0-4: blink (flicker) compare
     QCheckBox *m_blinkChk = nullptr;
     QTimer *m_blinkTimer = nullptr;
     bool m_blinkState = false;
+    bool m_tempBlinking = false; // true while Space is held down
     void toggleBlink();
     void applyBlink(bool state);
     void startBlink(int intervalMs);
     void stopBlink();
+    bool isSplitOrSwipe() const
+    {
+        return (m_splitChk && m_splitChk->isChecked()) ||
+               (m_swipeChk && m_swipeChk->isChecked());
+    }
+
+    // P0-4: split / swipe compare (only meaningful for exactly two images).
+    QCheckBox *m_splitChk = nullptr;
+    QCheckBox *m_swipeChk = nullptr;
+    double m_splitPos = 0.5;
+    bool m_splitDragging = false;
+    void drawSplitCompare(QPainter &p);
+    void drawSwipeCompare(QPainter &p, int x);
+    void drawFitImage(QPainter &p, const QImage &img, const QRect &target);
 
     // M15: difference threshold
     QSlider *m_thresholdSlider = nullptr;

@@ -5,23 +5,9 @@
 
 namespace
 {
-const QStringList kImageExtensions = {".jpg", ".jpeg", ".bmp", ".png"};
-
-bool containsImages(const QString &dirPath)
-{
-    QDir dir(dirPath);
-    if (!dir.exists())
-        return false;
-
-    const QFileInfoList entries = dir.entryInfoList(QDir::Files | QDir::NoDotAndDotDot);
-    for (const QFileInfo &info : entries)
-    {
-        const QString suffix = info.suffix().toLower();
-        if (kImageExtensions.contains("." + suffix))
-            return true;
-    }
-    return false;
-}
+const QStringList kImageExtensions = {
+    ".jpg", ".jpeg", ".bmp", ".png", ".tif", ".tiff",
+    ".webp", ".gif", ".ico", ".pcx", ".tga", ".ppm"};
 } // namespace
 
 DirectoryProxyModel::DirectoryProxyModel(QObject *parent) : QSortFilterProxyModel(parent)
@@ -38,18 +24,12 @@ bool DirectoryProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex &sou
     if (!index.isValid())
         return false;
 
+    // P0-1: show all directories for an Explorer-like navigation experience.
+    // Hidden files remain filtered by the model filter flags.
     if (!fsModel->isDir(index))
         return false;
 
-    const QString path = fsModel->filePath(index);
-
-    if (fsModel->fileName(index).isEmpty())
-        return true;
-
-    if (fsModel->fileInfo(index).isRoot())
-        return true;
-
-    return containsImages(path);
+    return true;
 }
 
 DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
