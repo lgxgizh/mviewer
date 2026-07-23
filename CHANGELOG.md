@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — 基础用户体验打磨 (Viewer & Browse UX Polish)
+
+- **查看器缩放命令体系:** `ImageViewer` 新增 `zoomIn()/zoomOut()/zoomFit()/zoomActual()`
+  公共槽；快捷键 `+`/`-`(主键盘或 `Ctrl++`/`Ctrl+-`)放大缩小、`0` 适应窗口、`1` 实际
+  大小;双击在「适应窗口 ↔ 光标处 100%」之间切换;视图菜单新增对应菜单项。
+  (`src/imageviewer.cpp`, `src/mainwindow.cpp`)
+- **适应窗口跟随 resize:** 新增 `m_fitMode` 状态——处于适应窗口模式时,窗口缩放会持续
+  重新适配;任何显式缩放(滚轮/键盘/双击)退出该模式。修复了旧逻辑仅 `m_currentIndex<0`
+  时才 refit 导致浏览中窗口缩放图片不跟随的问题。
+- **查看器键盘/鼠标完善:** `F`/`F11` 全屏切换;`ESC` 退出全屏或关闭查看器;鼠标侧键
+  (Back/Forward) 翻页;窗口标题实时显示「文件名 (宽x高) [序号/总数] - MViewer」。
+- **幻灯片放映:** `S` 键或视图菜单切换,3 秒/张循环播放,自动全屏查看器;`S`/`ESC`
+  停止(查看器关闭时自动停止)。配合新增的首尾循环导航(上一张/下一张到达边界后环绕)。
+- **主窗口快捷键补齐:** 打开目录 `Ctrl+O`、新增「打开文件...」`Ctrl+Shift+O`、退出
+  `Ctrl+Q`、比较模式 `C`、全屏 `F11`;缩放命令加入视图菜单(Ctrl 系快捷键见菜单,
+  纯字母键走 keyPressEvent,避免 QAction 快捷键遮蔽搜索框输入)。
+- **画廊键盘导航闭环:** `Enter` 在查看器中打开选中图片(`activated` 信号);方向键移动
+  当前项时经 `currentChanged` 联动共享 `SelectionModel`,预览/状态栏/元数据无需鼠标
+  即可跟随(SelectionModel 同路径去重,无回环风险)。
+- **画廊交互:** `Ctrl+滚轮` 调整缩略图大小(48–512px 步进 16);缩略图面板直接接受
+  外部文件/文件夹拖放(与主窗口同一 `handleDroppedPaths` 逻辑:多图进比较、目录打开、
+  单图查看);右键菜单新增「复制路径」并补齐各项快捷键标注;打开目录时显示忙碌光标。
+- **状态栏与反馈:** 新增当前图片「宽x高 · 文件大小」永久指示;窗口标题随当前图片/
+  目录更新;图片解码失败不再静默——查看器发出 `loadFailed` 信号,主窗口状态栏给出
+  明确提示;F1 快捷键速查表同步收录全部新按键。
+
 ### Added — M16 Professional Compare (P0#3 Sync)
 
 - **同步准星 (cursor-sync crosshair, n/n):** 对比网格中悬停任意格，会在所有被比较的格内

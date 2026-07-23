@@ -62,10 +62,13 @@ void ImageViewer::setImage(const QString &path)
             if (!res.success())
             {
                 QMetaObject::invokeMethod(this,
-                                          [this]()
+                                          [this, path]()
                                           {
                                               m_hasHistogram = false;
+                                              setWindowTitle(QString("无法加载 - %1 - MViewer")
+                                                                 .arg(QFileInfo(path).fileName()));
                                               update();
+                                              emit loadFailed(path);
                                           });
                 return;
             }
@@ -78,7 +81,10 @@ void ImageViewer::setImage(const QString &path)
                     if (m_pixmap.isNull())
                     {
                         m_hasHistogram = false;
+                        setWindowTitle(
+                            QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
                         update();
+                        emit loadFailed(path);
                         return;
                     }
                     computeHistogram(m_pixmap);
@@ -91,6 +97,17 @@ void ImageViewer::setImage(const QString &path)
                     m_view.screenW = width();
                     m_view.screenH = height();
                     m_view.fit(m_pixmap.width(), m_pixmap.height(), 0.95);
+                    m_fitMode = true;
+                    const QString position = m_currentIndex >= 0
+                                                 ? QString(" [%1/%2]")
+                                                       .arg(m_currentIndex + 1)
+                                                       .arg(m_fileList.size())
+                                                 : QString();
+                    setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
+                                       .arg(info.fileName())
+                                       .arg(m_pixmap.width())
+                                       .arg(m_pixmap.height())
+                                       .arg(position));
                     // P1-7: if a session-restore zoom/pan was requested before the
                     // async decode finished, apply it now. Only reuse the saved pan
                     // offsets when the window size matches (offsets are screen-space);
@@ -105,6 +122,7 @@ void ImageViewer::setImage(const QString &path)
                             m_view.offsetY = m_pendingView->offsetY;
                         }
                         m_pendingView.reset();
+                        m_fitMode = false; // restored zoom is explicit, not fit
                         emitZoom();
                     }
                     m_tileCache.clear(); // drop tiles from any previously viewed image
@@ -154,7 +172,51 @@ void ImageViewer::fitToWidget()
     m_view.screenW = width();
     m_view.screenH = height();
     m_view.fit(m_pixmap.width(), m_pixmap.height(), 0.95);
+    m_fitMode = true;
     emitZoom();
+}
+
+void ImageViewer::zoomIn()
+{
+    if (m_pixmap.isNull())
+        return;
+    m_view.screenW = width();
+    m_view.screenH = height();
+    m_view.zoomAt(width() / 2.0, height() / 2.0, kZoomStep);
+    m_fitMode = false;
+    emitZoom();
+    update();
+}
+
+void ImageViewer::zoomOut()
+{
+    if (m_pixmap.isNull())
+        return;
+    m_view.screenW = width();
+    m_view.screenH = height();
+    m_view.zoomAt(width() / 2.0, height() / 2.0, 1.0 / kZoomStep);
+    m_fitMode = false;
+    emitZoom();
+    update();
+}
+
+void ImageViewer::zoomFit()
+{
+    fitToWidget(); // sets m_fitMode and emits zoomChanged
+    update();
+}
+
+void ImageViewer::zoomActual()
+{
+    if (m_pixmap.isNull())
+        return;
+    // Keep the current view center stable while restoring 100%.
+    m_view.screenW = width();
+    m_view.screenH = height();
+    m_view.zoomAt(width() / 2.0, height() / 2.0, 1.0 / m_view.scale);
+    m_fitMode = false;
+    emitZoom();
+    update();
 }
 
 void ImageViewer::computeHistogram(const QPixmap &pixmap)
@@ -301,12 +363,49 @@ void ImageViewer::wheelEvent(QWheelEvent *event)
     const QPointF mouse = event->position();
     const double factor = event->angleDelta().y() > 0 ? kZoomStep : 1.0 / kZoomStep;
     m_view.zoomAt(mouse.x(), mouse.y(), factor);
+    m_fitMode = false;
     emitZoom();
+    update();
+}
+
+void ImageViewer::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    // Double-click toggles between fit-to-window and 100% at the cursor —
+    // the standard image-viewer zoom gesture.
+    if (event->button() != Qt::LeftButton || m_pixmap.isNull())
+    {
+        QWidget::mouseDoubleClickEvent(event);
+        return;
+    }
+    if (m_fitMode)
+    {
+        m_view.screenW = width();
+        m_view.screenH = height();
+        const QPointF p = event->position();
+        m_view.zoomAt(p.x(), p.y(), 1.0 / m_view.scale);
+        m_fitMode = false;
+        emitZoom();
+    }
+    else
+    {
+        fitToWidget();
+    }
     update();
 }
 
 void ImageViewer::mousePressEvent(QMouseEvent *event)
 {
+    // Mouse back/forward buttons (XButton1/2) navigate prev/next image.
+    if (event->button() == Qt::BackButton)
+    {
+        emit requestPrev();
+        return;
+    }
+    if (event->button() == Qt::ForwardButton)
+    {
+        emit requestNext();
+        return;
+    }
     if (event->button() == Qt::LeftButton && !m_pixmap.isNull())
     {
         if (m_selectMode)
@@ -416,7 +515,9 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
 void ImageViewer::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
-    if (m_currentIndex < 0 && !m_pixmap.isNull())
+    // Keep the image fitted across window resizes while in fit mode; an
+    // explicit zoom (wheel/keyboard/double-click) opts out of re-fitting.
+    if (m_fitMode && !m_pixmap.isNull())
         fitToWidget();
 }
 
@@ -434,10 +535,34 @@ void ImageViewer::setSelectMode(bool on)
 
 void ImageViewer::keyPressEvent(QKeyEvent *event)
 {
-    if (event->key() == Qt::Key_Left)
+    const int key = event->key();
+    const auto mods = event->modifiers();
+    if (key == Qt::Key_Left)
         emit requestPrev();
-    else if (event->key() == Qt::Key_Right)
+    else if (key == Qt::Key_Right)
         emit requestNext();
+    else if (key == Qt::Key_Plus || key == Qt::Key_Equal)
+        zoomIn();
+    else if (key == Qt::Key_Minus || key == Qt::Key_Underscore)
+        zoomOut();
+    else if (key == Qt::Key_0 && !(mods & Qt::ControlModifier))
+        zoomFit();
+    else if (key == Qt::Key_1 && !(mods & Qt::ControlModifier))
+        zoomActual();
+    else if ((key == Qt::Key_F && !mods) || key == Qt::Key_F11)
+    {
+        if (isFullScreen())
+            showNormal();
+        else
+            showFullScreen();
+    }
+    else if (key == Qt::Key_Escape)
+    {
+        if (isFullScreen())
+            showNormal();
+        else
+            close();
+    }
     else
         QWidget::keyPressEvent(event);
 }

@@ -164,6 +164,8 @@ class ThumbnailPanel : public QListView
     void itemClicked(const QString &path);
     void itemDoubleClicked(const QString &path);
     void compareRequested(const QStringList &paths);
+    // External files/folders dropped onto the gallery (forwarded to MainWindow).
+    void filesDropped(const QStringList &paths);
     // P0 #①: live gallery stats for the status bar (count / sizes / selection).
     void statsChanged(int total, qint64 totalBytes, int selected, qint64 selectedBytes);
 
@@ -181,6 +183,12 @@ class ThumbnailPanel : public QListView
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    // Ctrl+wheel adjusts the thumbnail size (Explorer/FastStone parity).
+    void wheelEvent(QWheelEvent *event) override;
+    // External drag & drop of files/folders onto the gallery.
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragMoveEvent(QDragMoveEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
     class ThumbDelegate;
     class DetailsDelegate;

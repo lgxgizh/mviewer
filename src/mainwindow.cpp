@@ -157,13 +157,18 @@ void MainWindow::setupUi()
 
     // ----- 文件(&F) -----
     auto *fileMenu = menuBar->addMenu("文件(&F)");
-    m_actOpenDir = new QAction("打开目录(&O)", this);
+    m_actOpenDir = new QAction("打开目录(&O)...", this);
+    m_actOpenDir->setShortcut(QKeySequence::Open); // Ctrl+O
+    m_actOpenFile = new QAction("打开文件(&F)...", this);
+    m_actOpenFile->setShortcut(QKeySequence("Ctrl+Shift+O"));
     m_actSaveWorkspace = new QAction("保存工作区(&S)", this);
     m_actOpenWorkspace = new QAction("打开工作区(&W)", this);
     m_actSaveProject = new QAction("保存项目(&P)", this);
     m_actOpenProject = new QAction("打开项目(&J)", this);
     m_actExit = new QAction("退出(&Q)", this);
+    m_actExit->setShortcut(QKeySequence::Quit); // Ctrl+Q
     fileMenu->addAction(m_actOpenDir);
+    fileMenu->addAction(m_actOpenFile);
     fileMenu->addSeparator();
 
     // P0: Recent folders (from core::RecentFiles LRU) + Favorites (pinned).
@@ -212,6 +217,28 @@ void MainWindow::setupUi()
     m_actToggleMetadata->setChecked(false);
     m_actToggleMetadata->setShortcut(QKeySequence("Ctrl+I"));
     viewMenu->addAction(m_actToggleMetadata);
+    viewMenu->addSeparator();
+    // Zoom commands act on the image viewer. Plain +/-/0/1 keys are handled
+    // in keyPressEvent; the Ctrl variants live on the actions so they show
+    // in the menu. Fit/Actual use plain 0/1 (a QAction plain-key shortcut
+    // would shadow text entry in the search box).
+    m_actZoomIn = new QAction("放大(&Z)", this);
+    m_actZoomIn->setShortcuts({QKeySequence("Ctrl++"), QKeySequence("Ctrl+=")});
+    m_actZoomOut = new QAction("缩小(&O)", this);
+    m_actZoomOut->setShortcut(QKeySequence("Ctrl+-"));
+    m_actZoomFit = new QAction("适应窗口(&F) (0)", this);
+    m_actZoomActual = new QAction("实际大小(&A) (1)", this);
+    m_actFullscreen = new QAction("全屏(&U)", this);
+    m_actFullscreen->setShortcut(QKeySequence("F11"));
+    viewMenu->addAction(m_actZoomIn);
+    viewMenu->addAction(m_actZoomOut);
+    viewMenu->addAction(m_actZoomFit);
+    viewMenu->addAction(m_actZoomActual);
+    viewMenu->addSeparator();
+    viewMenu->addAction(m_actFullscreen);
+    m_actSlideshow = new QAction("幻灯片放映(&S) (S)", this);
+    m_actSlideshow->setCheckable(true);
+    viewMenu->addAction(m_actSlideshow);
 
     // ----- 工具(&T) -----
     auto *toolsMenu = menuBar->addMenu("工具(&T)");
@@ -452,6 +479,9 @@ void MainWindow::setupUi()
                 rebuildRecentMenu();
                 const int n = m_cachedImagePaths.size();
                 statusBar()->showMessage(QString("目录: %1, 图片数: %2").arg(path).arg(n));
+                // With no image selected yet, the title carries the folder.
+                if (m_currentImagePath.isEmpty())
+                    setWindowTitle(QString("%1 - MViewer").arg(QDir(path).dirName()));
                 scheduleReindex();
             });
 
@@ -471,6 +501,10 @@ void MainWindow::setupUi()
             [this](const QString &path) { onImageOpen(path); });
     connect(m_thumbnailPanel, &ThumbnailPanel::compareRequested, this,
             [this](const QStringList &images) { openCompare(images); });
+    // Dropping files directly onto the gallery behaves the same as dropping
+    // them anywhere else on the window.
+    connect(m_thumbnailPanel, &ThumbnailPanel::filesDropped, this,
+            &MainWindow::handleDroppedPaths);
 
     // EventBus (decoupled, dual-mode) subscriptions.
     EventBus::instance().subscribe("image.open",
@@ -579,6 +613,30 @@ void MainWindow::setupUi()
                     mviewer::core::SidecarStore::instance().importDirectory(dir.toStdString());
                 }
             });
+    connect(m_actOpenFile, &QAction::triggered, this,
+            [this]()
+            {
+                const QString file = QFileDialog::getOpenFileName(
+                    this, "打开图片", QString(),
+                    "图片文件 (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp"
+                    " *.cr2 *.cr3 *.nef *.nrw *.arw *.dng *.orf *.rw2 *.pef *.raf);;"
+                    "所有文件 (*)");
+                if (!file.isEmpty())
+                    onImageOpen(file);
+            });
+    connect(m_actZoomIn, &QAction::triggered, this, [this]() { zoomViewer(0); });
+    connect(m_actZoomOut, &QAction::triggered, this, [this]() { zoomViewer(1); });
+    connect(m_actZoomFit, &QAction::triggered, this, [this]() { zoomViewer(2); });
+    connect(m_actZoomActual, &QAction::triggered, this, [this]() { zoomViewer(3); });
+    connect(m_actFullscreen, &QAction::triggered, this, &MainWindow::toggleFullscreen);
+    connect(m_actSlideshow, &QAction::triggered, this, &MainWindow::toggleSlideshow);
+    // Surface decode failures instead of leaving them silent on the canvas.
+    connect(m_imageViewer, &ImageViewer::loadFailed, this,
+            [this](const QString &path)
+            {
+                statusBar()->showMessage(
+                    QString("无法加载图片: %1").arg(QFileInfo(path).fileName()), 5000);
+            });
     connect(m_actSaveWorkspace, &QAction::triggered, this, &MainWindow::saveWorkspace);
     connect(m_actOpenWorkspace, &QAction::triggered, this, &MainWindow::openWorkspace);
     connect(m_actSaveProject, &QAction::triggered, this, &MainWindow::saveProject);
@@ -666,12 +724,14 @@ void MainWindow::setupUi()
 
     // P0 #①: real-time status bar — image count, total/selected size, viewer
     // zoom, and live cache hit-rate. Persistent (not transient showMessage).
+    m_lblImage = new QLabel("—", this);
     m_lblCount = new QLabel("图片 0", this);
     m_lblSize = new QLabel("大小 0 B", this);
     m_lblZoom = new QLabel("缩放 —", this);
     m_lblCache = new QLabel("命中率 —", this);
-    for (QLabel *l : {m_lblCount, m_lblSize, m_lblZoom, m_lblCache})
+    for (QLabel *l : {m_lblImage, m_lblCount, m_lblSize, m_lblZoom, m_lblCache})
         l->setContentsMargins(8, 0, 8, 0);
+    statusBar()->addPermanentWidget(m_lblImage);
     statusBar()->addPermanentWidget(m_lblCount);
     statusBar()->addPermanentWidget(m_lblSize);
     statusBar()->addPermanentWidget(m_lblZoom);
@@ -729,16 +789,7 @@ void MainWindow::setupCommands()
         },
         std::vector<CommandShortcut>{{Qt::Key_Space, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "fullscreen", "全屏 (F)",
-        [this]()
-        {
-            QWidget *target =
-                m_imageViewer->isVisible() ? (QWidget *)m_imageViewer : (QWidget *)this;
-            if (target->isFullScreen())
-                target->showNormal();
-            else
-                target->showFullScreen();
-        },
+        "fullscreen", "全屏 (F)", [this]() { toggleFullscreen(); },
         std::vector<CommandShortcut>{{Qt::Key_F, 0}}));
 
     // M18: file-management shortcuts for the selected gallery items.
@@ -899,6 +950,46 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     if (event->key() == Qt::Key_Space && !mod)
     {
         openQuickCompare();
+        event->accept();
+        return;
+    }
+    // Compare mode on a plain 'C' — same style as G/D/H/M above. (A QAction
+    // plain-key shortcut would shadow text entry in the search box.)
+    if (event->key() == Qt::Key_C && !mod)
+    {
+        m_actCompare->trigger();
+        event->accept();
+        return;
+    }
+    // 'S' toggles the slideshow (same plain-key rationale as 'C').
+    if (event->key() == Qt::Key_S && !mod)
+    {
+        toggleSlideshow();
+        event->accept();
+        return;
+    }
+    // Viewer zoom keys: plain +/-/0/1 (forwarded to the viewer when visible).
+    if (!mod && (event->key() == Qt::Key_Plus || event->key() == Qt::Key_Equal))
+    {
+        zoomViewer(0);
+        event->accept();
+        return;
+    }
+    if (!mod && event->key() == Qt::Key_Minus)
+    {
+        zoomViewer(1);
+        event->accept();
+        return;
+    }
+    if (!mod && event->key() == Qt::Key_0)
+    {
+        zoomViewer(2);
+        event->accept();
+        return;
+    }
+    if (!mod && event->key() == Qt::Key_1)
+    {
+        zoomViewer(3);
         event->accept();
         return;
     }
@@ -1127,7 +1218,21 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     m_thumbnailPanel->selectPath(path);
 
     mviewer::core::RatingStore::instance().addRecent(path.toStdString()); // P3 recents
-    statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
+
+    // Window title + status bar identity follow the current image.
+    const QFileInfo fi(path);
+    setWindowTitle(QString("%1 - MViewer").arg(fi.fileName()));
+    // Cheap header-only read (MetadataReader decodes at 1x1) for dimensions;
+    // file size comes straight from the filesystem entry.
+    const auto meta = mviewer::core::MetadataReader::read(path.toStdString());
+    if (meta.width > 0 && meta.height > 0)
+        m_lblImage->setText(QString("%1x%2 · %3")
+                                .arg(meta.width)
+                                .arg(meta.height)
+                                .arg(formatBytes(fi.size())));
+    else
+        m_lblImage->setText(formatBytes(fi.size()));
+    statusBar()->showMessage(QString("当前: %1").arg(fi.fileName()));
 }
 
 void MainWindow::openDirectory(const QString &dir)
@@ -1204,9 +1309,9 @@ void MainWindow::navigate(int delta)
     int idx = list.indexOf(m_currentImagePath);
     if (idx < 0)
         idx = 0;
-    const int next = idx + delta;
-    if (next < 0 || next >= list.size())
-        return;
+    // Wrap around at both ends (FastStone/ImageGlass parity; also keeps the
+    // slideshow advancing past the last image).
+    const int next = (idx + delta + list.size()) % list.size();
 
     const QString path = list.at(next);
     // P0-2: single source of truth. onCurrentImageChanged() now also keeps the
@@ -1263,23 +1368,36 @@ void MainWindow::showShortcutsHelp()
         "<style>td{padding:2px 14px 2px 0;} th{text-align:left;padding-top:8px;}"
         "kbd{background:#333;color:#fff;border-radius:3px;padding:1px 5px;}</style>"
         "<table>"
+        "<tr><th colspan='2'>文件</th></tr>"
+        "<tr><td><kbd>Ctrl+O</kbd> / <kbd>Ctrl+Shift+O</kbd></td><td>打开目录 / 打开文件</td></tr>"
+        "<tr><td><kbd>Ctrl+Q</kbd></td><td>退出</td></tr>"
         "<tr><th colspan='2'>浏览</th></tr>"
-        "<tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>上一张 / 下一张</td></tr>"
+        "<tr><td><kbd>←</kbd> / <kbd>→</kbd> / 鼠标侧键</td><td>上一张 / 下一张（循环）</td></tr>"
+        "<tr><td><kbd>Enter</kbd></td><td>在查看器中打开选中图片</td></tr>"
         "<tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>第一张 / 最后一张</td></tr>"
         "<tr><td><kbd>PageUp</kbd> / <kbd>PageDown</kbd></td><td>上翻 / 下翻一页（10 张）</td></tr>"
         "<tr><td><kbd>F5</kbd></td><td>刷新目录树与画廊</td></tr>"
+        "<tr><td><kbd>Ctrl+滚轮</kbd></td><td>调整缩略图大小</td></tr>"
         "<tr><td><kbd>Tab</kbd></td><td>显示 / 隐藏侧边面板</td></tr>"
+        "<tr><th colspan='2'>缩放（查看器）</th></tr>"
+        "<tr><td><kbd>+</kbd> / <kbd>-</kbd>（或 <kbd>Ctrl++</kbd> / <kbd>Ctrl+-</kbd>）</td><td>"
+        "放大 / 缩小</td></tr>"
+        "<tr><td><kbd>0</kbd> / <kbd>1</kbd></td><td>适应窗口 / 实际大小</td></tr>"
+        "<tr><td>双击</td><td>适应窗口 ↔ 100% 切换</td></tr>"
+        "<tr><td><kbd>F</kbd> / <kbd>F11</kbd></td><td>全屏切换</td></tr>"
+        "<tr><td><kbd>S</kbd></td><td>幻灯片放映（3 秒/张，循环）</td></tr>"
+        "<tr><td><kbd>ESC</kbd></td><td>退出全屏 / 关闭查看器 / 停止放映 / 关闭信息浮层</td></tr>"
         "<tr><th colspan='2'>视图模式</th></tr>"
         "<tr><td><kbd>G</kbd></td><td>缩略图视图</td></tr>"
         "<tr><td><kbd>D</kbd></td><td>详情视图</td></tr>"
         "<tr><td><kbd>Ctrl+1</kbd>…<kbd>Ctrl+6</kbd></td><td>缩略图 / 大图标 / 小图标 / 详情 / "
         "胶片 / 紧凑</td></tr>"
         "<tr><th colspan='2'>比较</th></tr>"
+        "<tr><td><kbd>C</kbd></td><td>比较模式</td></tr>"
         "<tr><td><kbd>Space</kbd></td><td>快速比较当前 + 下一张</td></tr>"
         "<tr><th colspan='2'>分析 / 信息</th></tr>"
         "<tr><td><kbd>H</kbd></td><td>直方图 / 分析面板</td></tr>"
         "<tr><td><kbd>M</kbd> / <kbd>Ctrl+I</kbd></td><td>图片信息浮层</td></tr>"
-        "<tr><td><kbd>ESC</kbd></td><td>关闭信息浮层</td></tr>"
         "<tr><th colspan='2'>评分 / 标签</th></tr>"
         "<tr><td><kbd>Ctrl+0</kbd>…<kbd>Ctrl+5</kbd></td><td>评分（0 = 清除）</td></tr>"
         "<tr><td><kbd>Ctrl+Shift+0</kbd>…<kbd>Ctrl+Shift+6</kbd></td><td>颜色标签（0 = "
@@ -2194,6 +2312,13 @@ void MainWindow::dropEvent(QDropEvent *event)
         return;
     }
     event->acceptProposedAction();
+    handleDroppedPaths(paths);
+}
+
+void MainWindow::handleDroppedPaths(const QStringList &paths)
+{
+    if (paths.isEmpty())
+        return;
     // P1-5: drag workflow — dropping multiple images jumps straight into Compare
     // (no manual "add" button); a single image opens it; a directory opens the folder.
     if (paths.size() >= 2)
@@ -2260,6 +2385,85 @@ void MainWindow::copyCurrentImageToClipboard()
         QApplication::clipboard()->setImage(img);
 }
 
+void MainWindow::toggleFullscreen()
+{
+    QWidget *target = m_imageViewer->isVisible() ? (QWidget *)m_imageViewer : (QWidget *)this;
+    if (target->isFullScreen())
+        target->showNormal();
+    else
+        target->showFullScreen();
+}
+
+void MainWindow::toggleSlideshow()
+{
+    if (m_slideshowTimer && m_slideshowTimer->isActive())
+    {
+        stopSlideshow();
+        return;
+    }
+    if (m_currentImagePath.isEmpty() || m_currentDir.isEmpty())
+    {
+        statusBar()->showMessage("请先选择一张图片再开始幻灯片放映", 3000);
+        if (m_actSlideshow)
+            m_actSlideshow->setChecked(false);
+        return;
+    }
+    // Fullscreen the viewer for the slideshow; ESC (or S) stops it.
+    onImageOpen(m_currentImagePath);
+    if (!m_imageViewer->isFullScreen())
+        m_imageViewer->showFullScreen();
+    if (!m_slideshowTimer)
+    {
+        m_slideshowTimer = new QTimer(this);
+        connect(m_slideshowTimer, &QTimer::timeout, this,
+                [this]()
+                {
+                    // Closing the viewer (ESC) ends the show.
+                    if (m_imageViewer->isHidden())
+                    {
+                        stopSlideshow();
+                        return;
+                    }
+                    navigate(1); // wraps at the end of the folder
+                });
+    }
+    m_slideshowTimer->start(3000);
+    if (m_actSlideshow)
+        m_actSlideshow->setChecked(true);
+    statusBar()->showMessage("幻灯片放映中 — 按 S 或 ESC 停止", 3000);
+}
+
+void MainWindow::stopSlideshow()
+{
+    if (m_slideshowTimer)
+        m_slideshowTimer->stop();
+    if (m_actSlideshow)
+        m_actSlideshow->setChecked(false);
+    statusBar()->showMessage("幻灯片放映已停止", 2000);
+}
+
+void MainWindow::zoomViewer(int op)
+{
+    // Zoom commands only make sense while the viewer is on screen.
+    if (m_imageViewer->isHidden())
+        return;
+    switch (op)
+    {
+    case 0:
+        m_imageViewer->zoomIn();
+        break;
+    case 1:
+        m_imageViewer->zoomOut();
+        break;
+    case 2:
+        m_imageViewer->zoomFit();
+        break;
+    case 3:
+        m_imageViewer->zoomActual();
+        break;
+    }
+}
+
 void MainWindow::openQuickCompare()
 {
     if (m_currentImagePath.isEmpty())
@@ -2323,10 +2527,20 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     if (event->type() == QEvent::KeyPress)
     {
         auto *ke = static_cast<QKeyEvent *>(event);
+        // While the viewer window has focus (e.g. slideshow fullscreen), 'S'
+        // still toggles the slideshow; the viewer itself has no such binding.
+        if (watched == m_imageViewer && ke->key() == Qt::Key_S && !ke->modifiers())
+        {
+            toggleSlideshow();
+            return true;
+        }
         // Forward navigation / workflow shortcuts from child widgets so they work
         // regardless of which panel has focus.
-        static const QList<int> globalKeys = {Qt::Key_Space, Qt::Key_M, Qt::Key_H,  Qt::Key_G,
-                                              Qt::Key_D,     Qt::Key_F, Qt::Key_Tab};
+        static const QList<int> globalKeys = {Qt::Key_Space, Qt::Key_M,     Qt::Key_H,
+                                              Qt::Key_G,     Qt::Key_D,     Qt::Key_F,
+                                              Qt::Key_Tab,   Qt::Key_C,     Qt::Key_S,
+                                              Qt::Key_Plus,  Qt::Key_Equal, Qt::Key_Minus,
+                                              Qt::Key_0,     Qt::Key_1};
         const bool isGlobalKey =
             globalKeys.contains(ke->key()) ||
             ((ke->modifiers() & Qt::ControlModifier) &&

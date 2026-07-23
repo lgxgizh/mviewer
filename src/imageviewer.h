@@ -49,8 +49,19 @@ class ImageViewer : public QWidget
 
   public slots:
     void setSelectMode(bool on);
+    // Zoom commands (keyboard / menu driven). zoomIn/zoomOut zoom around the
+    // widget center; zoomFit fits the whole image into the window and keeps
+    // re-fitting on resize; zoomActual restores 100% around the view center.
+    void zoomIn();
+    void zoomOut();
+    void zoomFit();
+    void zoomActual();
 
   signals:
+    // Emitted when the async decode of a setImage() request fails, so the
+    // host can surface the failure (status bar) instead of it being silent.
+    void loadFailed(const QString &path);
+
     void regionStats(const QString &text);
     void selectionChanged(const QRect &sel); // image coords (may be null rect)
     void requestPrev();
@@ -73,6 +84,7 @@ class ImageViewer : public QWidget
     void mouseReleaseEvent(QMouseEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
 
   private:
     void emitZoom();
@@ -113,6 +125,10 @@ class ImageViewer : public QWidget
 
     bool m_dragging = false;
     QPoint m_lastMousePos;
+
+    // Fit mode: while true the image is kept fitted to the window, so a
+    // resize re-fits. Cleared by any explicit zoom (wheel / keyboard / menu).
+    bool m_fitMode = true;
 
     // ImageFrame backing the current view. The QWidget itself never decodes;
     // it only renders the QPixmap produced by ImageRepository.

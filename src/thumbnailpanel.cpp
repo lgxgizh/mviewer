@@ -18,6 +18,7 @@
 
 #include <QAbstractItemView>
 #include <QAction>
+#include <QApplication>
 #include <QClipboard>
 #include <QContextMenuEvent>
 #include <QDebug>
@@ -37,11 +38,13 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QResizeEvent>
+#include <QScopeGuard>
 #include <QScrollBar>
 #include <QShowEvent>
 #include <QStandardPaths>
 #include <QStringListModel>
 #include <QTimer>
+#include <QWheelEvent>
 #include <QWidget>
 
 #include <thread>
@@ -186,6 +189,23 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                 if (idx.isValid())
                     emit itemDoubleClicked(m_paths.value(idx.row()));
             });
+    // Keyboard parity: Enter opens the viewer (same as double-click), and
+    // moving the current item with the arrow keys drives the shared selection
+    // model so the preview/status bar follow without a mouse. The central
+    // SelectionModel no-ops on a same-path set, so selectPath() → currentChanged
+    // → itemClicked cannot loop.
+    connect(this, &QAbstractItemView::activated, this,
+            [this](const QModelIndex &idx)
+            {
+                if (idx.isValid())
+                    emit itemDoubleClicked(m_paths.value(idx.row()));
+            });
+    connect(selectionModel(), &QItemSelectionModel::currentChanged, this,
+            [this](const QModelIndex &current, const QModelIndex &)
+            {
+                if (current.isValid())
+                    emit itemClicked(m_paths.value(current.row()));
+            });
 
     // Wire the shared pipeline ONCE. The decode step is disk-cache-aware (so a
     // previously visited folder loads instantly without re-decoding), and the
@@ -249,6 +269,11 @@ ThumbnailPanel::~ThumbnailPanel()
 
 void ThumbnailPanel::setDirectory(const QString &path)
 {
+    // Enumerating a large folder can take a moment; give the user immediate
+    // busy feedback instead of a silently frozen cursor.
+    QApplication::setOverrideCursor(Qt::BusyCursor);
+    const auto cursorGuard = qScopeGuard([] { QApplication::restoreOverrideCursor(); });
+
     m_currentDir = path;
     m_filterText.clear();
     m_filterRecursive = false;
@@ -906,11 +931,19 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
 
     QMenu menu(this);
     QAction *aOpen = menu.addAction("打开");
+    aOpen->setShortcut(QKeySequence(Qt::Key_Return));
     QAction *aRename = menu.addAction("重命名");
+    aRename->setShortcut(QKeySequence(Qt::Key_F2));
     QAction *aCopy = menu.addAction("复制...");
+    aCopy->setShortcut(QKeySequence("Ctrl+C"));
     QAction *aMove = menu.addAction("移动...");
+    aMove->setShortcut(QKeySequence("Ctrl+M"));
     QAction *aTrash = menu.addAction("移到回收站");
+    aTrash->setShortcut(QKeySequence(Qt::Key_Delete));
     QAction *aReveal = menu.addAction("在资源管理器中显示");
+    aReveal->setShortcut(QKeySequence("Ctrl+E"));
+    QAction *aCopyPath = menu.addAction("复制路径");
+    aCopyPath->setShortcut(QKeySequence("Ctrl+Shift+C"));
     QAction *aCompare = menu.addAction("比较");
     QAction *aAnalyze = menu.addAction("批量分析导出");
     QAction *chosen = menu.exec(event->globalPos());
@@ -928,6 +961,8 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
         moveToTrashSelected();
     else if (chosen == aReveal)
         revealSelected();
+    else if (chosen == aCopyPath)
+        QApplication::clipboard()->setText(path);
     else if (chosen == aCompare)
         onCompareClicked();
     else if (chosen == aAnalyze)
@@ -941,6 +976,63 @@ void ThumbnailPanel::resizeEvent(QResizeEvent *event)
         m_compareBtn->move(viewport()->width() - m_compareBtn->width() - 8, 8);
     positionDetailsHeader();
     QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
+}
+
+void ThumbnailPanel::wheelEvent(QWheelEvent *event)
+{
+    // Ctrl+wheel resizes thumbnails (Windows Explorer / FastStone parity);
+    // plain wheel scrolls as usual.
+    if (event->modifiers() & Qt::ControlModifier)
+    {
+        const int delta = event->angleDelta().y();
+        if (delta != 0)
+        {
+            const int step = (delta > 0 ? 1 : -1) * 16;
+            setThumbSize(qBound(kMinThumbSize, m_thumbSize + step, kMaxThumbSize));
+            event->accept();
+            return;
+        }
+    }
+    QListView::wheelEvent(event);
+}
+
+void ThumbnailPanel::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (event->mimeData()->hasUrls())
+        event->acceptProposedAction();
+    else
+        QListView::dragEnterEvent(event);
+}
+
+void ThumbnailPanel::dragMoveEvent(QDragMoveEvent *event)
+{
+    if (event->mimeData()->hasUrls())
+        event->acceptProposedAction();
+    else
+        QListView::dragMoveEvent(event);
+}
+
+void ThumbnailPanel::dropEvent(QDropEvent *event)
+{
+    if (!event->mimeData()->hasUrls())
+    {
+        QListView::dropEvent(event);
+        return;
+    }
+    QStringList paths;
+    for (const QUrl &url : event->mimeData()->urls())
+    {
+        const QString local = url.toLocalFile();
+        if (!local.isEmpty())
+            paths.append(local);
+    }
+    if (paths.isEmpty())
+    {
+        QListView::dropEvent(event);
+        return;
+    }
+    event->acceptProposedAction();
+    emit filesDropped(paths);
 }
 
 void ThumbnailPanel::positionDetailsHeader()

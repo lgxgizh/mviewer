@@ -41,6 +41,13 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 - **GPU**: `GpuTileUploader::available()` performs a real, safe GL-context probe
   and returns false under `QCoreApplication`/offscreen; the CPU compositor is the
   verified default.
+- **UX polish (2026-07-23)**: viewer zoom command system (`+`/`-`/`0`/`1`, double-click
+  fit↔100%, fit-follows-resize), ESC/F11 fullscreen handling, mouse back/forward
+  navigation, wrap-around prev/next, slideshow (`S`, 3 s loop), open-file dialog
+  (`Ctrl+Shift+O`), full shortcut coverage (`Ctrl+O`/`Ctrl+Q`/`C`/F11), gallery
+  keyboard loop (Enter opens, arrows drive selection), Ctrl+wheel thumbnail sizing,
+  gallery drag & drop, live window titles, status-bar image dimensions, and explicit
+  decode-failure feedback (`ImageViewer::loadFailed`).
 - **CI**: `ci.yml` (gate: format+build+test+package+clazy; clang-tidy/ASan advisory),
   `release.yml` (tag/dispatch → portable zip + NSIS installer → GitHub Release),
   `nightly.yml` (clang-tidy / benchmark / ASan / llvm-sanitizer / dashboard),

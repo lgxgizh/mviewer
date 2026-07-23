@@ -70,6 +70,11 @@ class MainWindow : public QMainWindow
     // P1-8: keyboard-shortcut cheat-sheet dialog (F1 / Help menu).
     void showShortcutsHelp();
     void openDirectory(const QString &dir);
+    // Toggles fullscreen on the image viewer when it is visible, else on the
+    // main window itself. Shared by the F command, F11 and the View menu.
+    void toggleFullscreen();
+    // Forwards a zoom command to the viewer when it is on screen.
+    void zoomViewer(int op); // 0=in, 1=out, 2=fit, 3=actual
 
     // P0: product browse state — recent folders, favorites, in-session history,
     // and cross-session restore.
@@ -113,6 +118,7 @@ class MainWindow : public QMainWindow
     QMetaObject::Connection m_compareDestroyConnection; // guard WA_DeleteOnClose
 
     QAction *m_actOpenDir = nullptr;
+    QAction *m_actOpenFile = nullptr;
     QAction *m_actSaveWorkspace = nullptr;
     QAction *m_actOpenWorkspace = nullptr;
     QAction *m_actSaveProject = nullptr;
@@ -130,6 +136,12 @@ class MainWindow : public QMainWindow
     QAction *m_actBatch = nullptr;
     QAction *m_actPluginSettings = nullptr;
     QAction *m_actToggleMetadata = nullptr;
+    // Zoom / fullscreen view commands (forwarded to the image viewer).
+    QAction *m_actZoomIn = nullptr;
+    QAction *m_actZoomOut = nullptr;
+    QAction *m_actZoomFit = nullptr;
+    QAction *m_actZoomActual = nullptr;
+    QAction *m_actFullscreen = nullptr;
     QMenu *m_recentMenu = nullptr;
     QMenu *m_recentFileMenu = nullptr; // recent-files menu (opened images)
     QMenu *m_favMenu = nullptr;
@@ -159,6 +171,7 @@ class MainWindow : public QMainWindow
     QComboBox *m_flagFilter = nullptr; // P3 tail: color label / reject / pick / recents
 
     // P0 #①: real-time status bar (image count / size / zoom / cache hit-rate).
+    QLabel *m_lblImage = nullptr; // current image dimensions + file size
     QLabel *m_lblCount = nullptr;
     QLabel *m_lblSize = nullptr;
     QLabel *m_lblZoom = nullptr;
@@ -211,4 +224,14 @@ class MainWindow : public QMainWindow
     // M15: crash recovery
     void autosaveSession();
     void restoreSessionRecovery();
+
+    // Shared drop handling for the main window and the thumbnail gallery:
+    // ≥2 images → Compare; a directory → open folder; one image → open it.
+    void handleDroppedPaths(const QStringList &paths);
+
+    // Slideshow: auto-advance through the current folder on a timer.
+    void toggleSlideshow();
+    void stopSlideshow();
+    QTimer *m_slideshowTimer = nullptr;
+    QAction *m_actSlideshow = nullptr;
 };
