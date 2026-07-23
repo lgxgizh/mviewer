@@ -12,13 +12,21 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDir>
+#include <QFileDialog>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QLabel>
+#include <QMessageBox>
 #include <QMetaObject>
 #include <QMouseEvent>
 #include <QScrollArea>
+#include <QSignalBlocker>
+#include <QStandardPaths>
 #include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -208,7 +216,41 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     m_hist = new HistogramWidget(this);
     m_hist->setMinimumHeight(140);
     sideLay->addWidget(m_hist, 1);
+
+    // M16.5: per-pane histogram overlay toggle
+    m_perPaneHistChk = new QCheckBox(tr("每窗格独立直方图"), this);
+    m_perPaneHistChk->setChecked(false);
+    connect(m_perPaneHistChk, &QCheckBox::toggled, this, &CompareWorkspace::onPerPaneHistToggled);
+    sideLay->addWidget(m_perPaneHistChk);
+
+    // M16.4: quick PSNR/SSIM metrics label
+    sideLay->addWidget(new QLabel(tr("差异指标"), this));
+    m_metricLabel = new QLabel(tr("PSNR: —  SSIM: —"), this);
+    m_metricLabel->setWordWrap(true);
+    m_metricLabel->setStyleSheet("color:#888;");
+    sideLay->addWidget(m_metricLabel);
+
+    // M16.2: per-cell image edit panel (collapsible section inside side panel)
+    buildEditPanel(sideLay);
+
     m_sidePanel->setVisible(false);
+
+    // M16.6: layout presets save/load + swap panes (sync bar right side)
+    m_savePresetBtn = new QPushButton(tr("存储布局"), this);
+    m_savePresetBtn->setToolTip(tr("将当前布局存储为预设"));
+    connect(m_savePresetBtn, &QPushButton::clicked, this, &CompareWorkspace::onSavePreset);
+    syncLayout->addWidget(m_savePresetBtn);
+
+    m_loadPresetBtn = new QPushButton(tr("读取布局"), this);
+    m_loadPresetBtn->setToolTip(tr("从预设文件中读取布局"));
+    connect(m_loadPresetBtn, &QPushButton::clicked, this, &CompareWorkspace::onLoadPreset);
+    syncLayout->addWidget(m_loadPresetBtn);
+
+    m_swapBtn = new QPushButton(tr("交换窗格"), this);
+    m_swapBtn->setToolTip(tr("交换选中的两个窗格"));
+    m_swapBtn->setEnabled(false);
+    connect(m_swapBtn, &QPushButton::clicked, this, &CompareWorkspace::onSwapPanes);
+    syncLayout->addWidget(m_swapBtn);
 
     auto *leftLay = new QVBoxLayout;
     leftLay->setContentsMargins(0, 0, 0, 0);
@@ -467,7 +509,10 @@ void CompareWorkspace::onSideToggled(bool on)
         return;
     m_sidePanel->setVisible(on);
     if (on)
+    {
         refreshHistograms();
+        updateMetrics();
+    }
     update();
 }
 
@@ -507,15 +552,28 @@ void CompareWorkspace::refreshHistograms()
     if (!m_hist)
         return;
     const int n = m_engine.imageCount();
-    std::vector<mviewer::core::Histogram> hists;
-    hists.reserve(static_cast<size_t>(n));
-    for (int i = 0; i < n; ++i)
+
+    if (m_perPaneHist && m_editIdx >= 0 && m_editIdx < n)
     {
-        const ImageFrame *img = m_engine.imageAt(i);
-        hists.push_back(img ? mviewer::core::computeHistogram(img->pixels())
-                            : mviewer::core::Histogram{});
+        // Per-pane: show only the selected cell's histogram
+        const ImageFrame *img = m_engine.imageAt(m_editIdx);
+        auto h = img ? mviewer::core::computeHistogram(img->pixels())
+                     : mviewer::core::Histogram{};
+        m_hist->setHistograms({h});
     }
-    m_hist->setHistograms(hists);
+    else
+    {
+        // Overlaid: show all
+        std::vector<mviewer::core::Histogram> hists;
+        hists.reserve(static_cast<size_t>(n));
+        for (int i = 0; i < n; ++i)
+        {
+            const ImageFrame *img = m_engine.imageAt(i);
+            hists.push_back(img ? mviewer::core::computeHistogram(img->pixels())
+                                : mviewer::core::Histogram{});
+        }
+        m_hist->setHistograms(hists);
+    }
 }
 
 void CompareWorkspace::fitAll()
@@ -739,6 +797,7 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
         {
             m_dragging = true;
             m_lastMouse = me->pos();
+            m_dragStartPos = me->pos();
             m_dragIdx = idx;
         }
         return false;
@@ -770,7 +829,16 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
     {
         auto *me = static_cast<QMouseEvent *>(event);
         if (me->button() == Qt::LeftButton)
+        {
             m_dragging = false;
+            // Click (no significant drag): select cell for editing & per-pane histogram
+            const QPoint delta = me->pos() - m_dragStartPos;
+            if (delta.manhattanLength() < 4)
+            {
+                onEditCellSelected(m_dragIdx);
+                refreshHistograms();
+            }
+        }
         return false;
     }
 
@@ -781,4 +849,566 @@ void CompareWorkspace::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     fitAll();
+}
+
+// ─── M16.2: Per-cell image adjustments ───────────────────────────────────────
+
+ImageData CompareWorkspace::applyAdjusts(const ImageData &src,
+                                                  const CellAdjust &a)
+{
+    if (src.isNull() || a.isIdentity())
+        return src;
+
+    ImageData cur = src;
+
+    // Order: brightness → contrast → gamma → white balance
+    if (a.brightness != 0)
+        cur = adjustBrightness(cur, a.brightness);
+    if (std::abs(a.contrast - 1.0f) >= 1e-6f)
+        cur = adjustContrast(cur, a.contrast);
+    if (std::abs(a.gamma - 1.0f) >= 1e-6f)
+        cur = adjustGamma(cur, a.gamma);
+    if (std::abs(a.rGain - 1.0f) >= 1e-6f || std::abs(a.bGain - 1.0f) >= 1e-6f)
+        cur = adjustWhiteBalance(cur, a.rGain, a.bGain);
+
+    // Crop
+    if (a.hasCrop && a.cropW > 0 && a.cropH > 0)
+    {
+        const mviewer::domain::Selection sel{a.cropX, a.cropY, a.cropW, a.cropH};
+        cur = cropRegion(cur, sel);
+    }
+
+    // Rotation (apply after crop)
+    if (a.rotation != 0)
+    {
+        int rot = a.rotation % 360;
+        if (rot < 0) rot += 360;
+        while (rot > 0)
+        {
+            cur = rotate90CW(cur);
+            rot -= 90;
+        }
+    }
+
+    return cur;
+}
+
+void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
+{
+    m_editPanel = new QWidget(m_sidePanel);
+    auto *editLay = new QVBoxLayout(m_editPanel);
+    editLay->setContentsMargins(0, 4, 0, 0);
+    editLay->setSpacing(3);
+
+    m_editLabel = new QLabel(tr("— 选中窗格后可编辑 —"), m_editPanel);
+    m_editLabel->setStyleSheet("font-weight:bold;color:#ccc;");
+    editLay->addWidget(m_editLabel);
+
+    // Brightness slider [-255, 255]; 0=identity
+    {
+        auto *row = new QHBoxLayout;
+        row->addWidget(new QLabel(tr("亮度"), m_editPanel));
+        m_brightSlider = new QSlider(Qt::Horizontal, m_editPanel);
+        m_brightSlider->setRange(-255, 255);
+        m_brightSlider->setValue(0);
+        m_brightVal = new QLabel("0", m_editPanel);
+        m_brightVal->setMinimumWidth(30);
+        row->addWidget(m_brightSlider);
+        row->addWidget(m_brightVal);
+        editLay->addLayout(row);
+        connect(m_brightSlider, &QSlider::valueChanged, this,
+                [this](int v) { m_brightVal->setText(QString::number(v)); onAdjChanged(); });
+    }
+
+    // Contrast slider [0..300] → float [0.0..3.0]; 100=identity
+    {
+        auto *row = new QHBoxLayout;
+        row->addWidget(new QLabel(tr("对比度"), m_editPanel));
+        m_contrastSlider = new QSlider(Qt::Horizontal, m_editPanel);
+        m_contrastSlider->setRange(0, 300);
+        m_contrastSlider->setValue(100);
+        m_contrastVal = new QLabel("1.0", m_editPanel);
+        m_contrastVal->setMinimumWidth(30);
+        row->addWidget(m_contrastSlider);
+        row->addWidget(m_contrastVal);
+        editLay->addLayout(row);
+        connect(m_contrastSlider, &QSlider::valueChanged, this,
+                [this](int v) { m_contrastVal->setText(QString::number(v / 100.0, 'f', 2));
+                                onAdjChanged(); });
+    }
+
+    // Gamma slider [5..800] → float [0.05..8.0]; 100=identity
+    {
+        auto *row = new QHBoxLayout;
+        row->addWidget(new QLabel(tr("伽马"), m_editPanel));
+        m_gammaSlider = new QSlider(Qt::Horizontal, m_editPanel);
+        m_gammaSlider->setRange(5, 800);
+        m_gammaSlider->setValue(100);
+        m_gammaVal = new QLabel("1.00", m_editPanel);
+        m_gammaVal->setMinimumWidth(30);
+        row->addWidget(m_gammaSlider);
+        row->addWidget(m_gammaVal);
+        editLay->addLayout(row);
+        connect(m_gammaSlider, &QSlider::valueChanged, this,
+                [this](int v) { m_gammaVal->setText(QString::number(v / 100.0, 'f', 2));
+                                onAdjChanged(); });
+    }
+
+    // White balance: R gain [1..500] → float [0.01..5.0]; 100=identity
+    {
+        auto *row = new QHBoxLayout;
+        row->addWidget(new QLabel(tr("WB R"), m_editPanel));
+        m_rGainSlider = new QSlider(Qt::Horizontal, m_editPanel);
+        m_rGainSlider->setRange(1, 500);
+        m_rGainSlider->setValue(100);
+        m_rGainVal = new QLabel("1.00", m_editPanel);
+        m_rGainVal->setMinimumWidth(30);
+        row->addWidget(m_rGainSlider);
+        row->addWidget(m_rGainVal);
+        editLay->addLayout(row);
+        connect(m_rGainSlider, &QSlider::valueChanged, this,
+                [this](int v) { m_rGainVal->setText(QString::number(v / 100.0, 'f', 2));
+                                onAdjChanged(); });
+    }
+
+    // White balance: B gain [1..500] → float [0.01..5.0]; 100=identity
+    {
+        auto *row = new QHBoxLayout;
+        row->addWidget(new QLabel(tr("WB B"), m_editPanel));
+        m_bGainSlider = new QSlider(Qt::Horizontal, m_editPanel);
+        m_bGainSlider->setRange(1, 500);
+        m_bGainSlider->setValue(100);
+        m_bGainVal = new QLabel("1.00", m_editPanel);
+        m_bGainVal->setMinimumWidth(30);
+        row->addWidget(m_bGainSlider);
+        row->addWidget(m_bGainVal);
+        editLay->addLayout(row);
+        connect(m_bGainSlider, &QSlider::valueChanged, this,
+                [this](int v) { m_bGainVal->setText(QString::number(v / 100.0, 'f', 2));
+                                onAdjChanged(); });
+    }
+
+    // Reset button
+    m_resetAdjBtn = new QPushButton(tr("重置调整"), m_editPanel);
+    connect(m_resetAdjBtn, &QPushButton::clicked, this, &CompareWorkspace::onResetAdj);
+    editLay->addWidget(m_resetAdjBtn);
+
+    sideLayout->addWidget(m_editPanel);
+}
+
+void CompareWorkspace::onEditCellSelected(int cellIdx)
+{
+    m_editIdx = cellIdx;
+
+    // Resize adjustment vector if needed
+    const int needed = cellIdx + 1;
+    if (static_cast<int>(m_cellAdjusts.size()) < needed)
+        m_cellAdjusts.resize(static_cast<size_t>(needed));
+
+    const CellAdjust &a = m_cellAdjusts[static_cast<size_t>(cellIdx)];
+
+    // Block signals while setting slider values to avoid triggering onAdjChanged
+    {
+        QSignalBlocker b(m_brightSlider);
+        m_brightSlider->setValue(a.brightness);
+    }
+    m_brightVal->setText(QString::number(a.brightness));
+
+    {
+        QSignalBlocker b(m_contrastSlider);
+        m_contrastSlider->setValue(static_cast<int>(a.contrast * 100.0f));
+    }
+    m_contrastVal->setText(QString::number(a.contrast, 'f', 2));
+
+    {
+        QSignalBlocker b(m_gammaSlider);
+        m_gammaSlider->setValue(static_cast<int>(a.gamma * 100.0f));
+    }
+    m_gammaVal->setText(QString::number(a.gamma, 'f', 2));
+
+    {
+        QSignalBlocker b(m_rGainSlider);
+        m_rGainSlider->setValue(static_cast<int>(a.rGain * 100.0f));
+    }
+    m_rGainVal->setText(QString::number(a.rGain, 'f', 2));
+
+    {
+        QSignalBlocker b(m_bGainSlider);
+        m_bGainSlider->setValue(static_cast<int>(a.bGain * 100.0f));
+    }
+    m_bGainVal->setText(QString::number(a.bGain, 'f', 2));
+
+    const ImageFrame *img = m_engine.imageAt(cellIdx);
+    m_editLabel->setText(img ? QString::fromStdString(img->metadata().fileName)
+                             : tr("窗格 %1").arg(cellIdx + 1));
+}
+
+void CompareWorkspace::onAdjChanged()
+{
+    if (m_editIdx < 0 || m_editIdx >= static_cast<int>(m_cellAdjusts.size()))
+        return;
+
+    CellAdjust &a = m_cellAdjusts[static_cast<size_t>(m_editIdx)];
+    a.brightness = m_brightSlider->value();
+    a.contrast = m_contrastSlider->value() / 100.0f;
+    a.gamma = m_gammaSlider->value() / 100.0f;
+    a.rGain = m_rGainSlider->value() / 100.0f;
+    a.bGain = m_bGainSlider->value() / 100.0f;
+
+    applyAdjToCell(m_editIdx);
+}
+
+void CompareWorkspace::onResetAdj()
+{
+    if (m_editIdx < 0 || m_editIdx >= static_cast<int>(m_cellAdjusts.size()))
+        return;
+
+    m_cellAdjusts[static_cast<size_t>(m_editIdx)] = CellAdjust{};
+    onEditCellSelected(m_editIdx); // resync sliders
+
+    // Restore original image
+    const ImageFrame *img = m_engine.imageAt(m_editIdx);
+    if (img && m_cellViews[m_editIdx])
+        m_cellViews[m_editIdx]->setImage(imageObjectToQImage(img));
+
+    update();
+}
+
+void CompareWorkspace::applyAdjToCell(int cellIdx)
+{
+    if (cellIdx < 0 || cellIdx >= static_cast<int>(m_cellViews.size()))
+        return;
+
+    const ImageFrame *img = m_engine.imageAt(cellIdx);
+    if (!img || img->pixels().isNull())
+        return;
+
+    const CellAdjust &a = (cellIdx < static_cast<int>(m_cellAdjusts.size()))
+                              ? m_cellAdjusts[static_cast<size_t>(cellIdx)]
+                              : CellAdjust{};
+
+    if (a.isIdentity())
+    {
+        // Just show original
+        if (m_cellViews[cellIdx])
+            m_cellViews[cellIdx]->setImage(imageObjectToQImage(img));
+    }
+    else
+    {
+        ImageData adjusted = applyAdjusts(img->pixels(), a);
+        if (adjusted.isNull())
+            return;
+        QImage qi = mvcore::toQImage(adjusted);
+        if (m_cellViews[cellIdx])
+            m_cellViews[cellIdx]->setImage(qi);
+    }
+
+    update();
+}
+
+// ─── M16.4: Quick PSNR/SSIM metrics ─────────────────────────────────────────
+
+void CompareWorkspace::updateMetrics()
+{
+    if (!m_metricLabel)
+        return;
+
+    const int n = m_engine.imageCount();
+    if (n < 2)
+    {
+        m_metricLabel->setText(tr("PSNR: —  SSIM: —"));
+        return;
+    }
+
+    const int baseIdx = diffBaseIndex();
+    // Pick the first non-base cell
+    int targetIdx = -1;
+    for (int i = 0; i < n; ++i)
+    {
+        if (i != baseIdx)
+        {
+            targetIdx = i;
+            break;
+        }
+    }
+    if (targetIdx < 0)
+    {
+        m_metricLabel->setText(tr("PSNR: —  SSIM: —"));
+        return;
+    }
+
+    const ImageFrame *baseImg = m_engine.imageAt(baseIdx);
+    const ImageFrame *tgtImg = m_engine.imageAt(targetIdx);
+    if (!baseImg || !tgtImg || baseImg->pixels().isNull() || tgtImg->pixels().isNull())
+    {
+        m_metricLabel->setText(tr("PSNR: —  SSIM: —"));
+        return;
+    }
+
+    const auto baseV = baseImg->pixels().view();
+    const auto tgtV = tgtImg->pixels().view();
+    if (baseV.width != tgtV.width || baseV.height != tgtV.height)
+    {
+        m_metricLabel->setText(tr("PSNR: —  SSIM: —\n(图像尺寸不一致)"));
+        return;
+    }
+
+    const double psnrVal = AnalysisEngine::psnr(baseImg->pixels(), tgtImg->pixels());
+    const double ssimVal = AnalysisEngine::ssim(baseImg->pixels(), tgtImg->pixels());
+
+    const QString psnrStr = QString::number(psnrVal, 'f', 2) + " dB";
+    const QString ssimStr = QString::number(ssimVal, 'f', 4);
+
+    m_metricLabel->setText(
+        tr("PSNR: %1  SSIM: %2\n(Image #%3 vs #%4)")
+            .arg(psnrStr, ssimStr)
+            .arg(baseIdx + 1)
+            .arg(targetIdx + 1));
+}
+
+// ─── M16.5: Per-pane histogram toggle ────────────────────────────────────────
+
+void CompareWorkspace::onPerPaneHistToggled(bool on)
+{
+    m_perPaneHist = on;
+    refreshHistograms();
+}
+
+// ─── M16.6: Layout presets save/load ─────────────────────────────────────────
+
+void CompareWorkspace::ensurePresetDir()
+{
+    if (!m_presetDir.isEmpty())
+        return;
+    // Store presets under the app's cache/config directory
+    m_presetDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
+                  + "/compare_presets";
+    QDir().mkpath(m_presetDir);
+}
+
+void CompareWorkspace::onSavePreset()
+{
+    ensurePresetDir();
+    const QString fileName =
+        QFileDialog::getSaveFileName(this, tr("存储对比布局"), m_presetDir,
+                                     tr("对比布局文件 (*.mvc)\n所有文件 (*.*)"));
+    if (fileName.isEmpty())
+        return;
+
+    QJsonObject root;
+
+    // Save per-cell adjustments
+    QJsonArray adjArray;
+    for (size_t i = 0; i < m_cellAdjusts.size(); ++i)
+    {
+        const auto &a = m_cellAdjusts[i];
+        QJsonObject ao;
+        ao["brightness"] = a.brightness;
+        ao["contrast"] = static_cast<double>(a.contrast);
+        ao["gamma"] = static_cast<double>(a.gamma);
+        ao["rGain"] = static_cast<double>(a.rGain);
+        ao["bGain"] = static_cast<double>(a.bGain);
+        ao["rotation"] = a.rotation;
+        ao["hasCrop"] = a.hasCrop;
+        if (a.hasCrop)
+        {
+            ao["cropX"] = a.cropX;
+            ao["cropY"] = a.cropY;
+            ao["cropW"] = a.cropW;
+            ao["cropH"] = a.cropH;
+        }
+        adjArray.append(ao);
+    }
+    root["adjustments"] = adjArray;
+    root["perPaneHist"] = m_perPaneHist;
+    root["layoutIndex"] = m_layoutCombo ? m_layoutCombo->currentIndex() : 0;
+
+    // Save session settings (includes engine state + UI state)
+    const mviewer::domain::CompareSession sess = compareSession();
+    QJsonObject sessionObj;
+    sessionObj["synced"] = (sess.syncMode != mviewer::domain::SyncMode::Off);
+    sessionObj["sharedScale"] = sess.sharedScale;
+    sessionObj["sharedOffsetX"] = sess.sharedOffsetX;
+    sessionObj["sharedOffsetY"] = sess.sharedOffsetY;
+    sessionObj["blinkIndex"] = sess.blinkIndex;
+    sessionObj["blinkIntervalMs"] = sess.blinkIntervalMs;
+    sessionObj["threshold"] = static_cast<int>(sess.threshold);
+    sessionObj["sidePanelVisible"] = sess.sidePanelVisible;
+    sessionObj["layoutIndex"] = sess.layoutIndex;
+    // selection
+    QJsonObject selObj;
+    selObj["x"] = sess.selection.x;
+    selObj["y"] = sess.selection.y;
+    selObj["w"] = sess.selection.w;
+    selObj["h"] = sess.selection.h;
+    selObj["active"] = sess.selection.active;
+    selObj["synced"] = sess.selection.synced;
+    sessionObj["selection"] = selObj;
+    root["session"] = sessionObj;
+
+    // Save image paths
+    const QStringList imgPaths = comparedImages();
+    QJsonArray pathArray;
+    for (const auto &p : imgPaths)
+        pathArray.append(p);
+    root["paths"] = pathArray;
+
+    QFile f(fileName);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QMessageBox::warning(this, tr("存储失败"),
+                             tr("无法写入文件:\n%1").arg(fileName));
+        return;
+    }
+    f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    f.close();
+}
+
+void CompareWorkspace::onLoadPreset()
+{
+    ensurePresetDir();
+    const QString fileName =
+        QFileDialog::getOpenFileName(this, tr("读取对比布局"), m_presetDir,
+                                     tr("对比布局文件 (*.mvc)\n所有文件 (*.*)"));
+    if (fileName.isEmpty())
+        return;
+
+    QFile f(fileName);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QMessageBox::warning(this, tr("读取失败"),
+                             tr("无法打开文件:\n%1").arg(fileName));
+        return;
+    }
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    f.close();
+
+    if (!doc.isObject())
+        return;
+    const QJsonObject root = doc.object();
+
+    // Restore adjustments
+    if (root.contains("adjustments"))
+    {
+        const QJsonArray adjArray = root["adjustments"].toArray();
+        m_cellAdjusts.resize(static_cast<size_t>(adjArray.size()));
+        for (int i = 0; i < adjArray.size(); ++i)
+        {
+            const QJsonObject ao = adjArray[i].toObject();
+            auto &a = m_cellAdjusts[static_cast<size_t>(i)];
+            a.brightness = ao["brightness"].toInt();
+            a.contrast = static_cast<float>(ao["contrast"].toDouble(1.0));
+            a.gamma = static_cast<float>(ao["gamma"].toDouble(1.0));
+            a.rGain = static_cast<float>(ao["rGain"].toDouble(1.0));
+            a.bGain = static_cast<float>(ao["bGain"].toDouble(1.0));
+            a.rotation = ao["rotation"].toInt();
+            a.hasCrop = ao["hasCrop"].toBool();
+            if (a.hasCrop)
+            {
+                a.cropX = ao["cropX"].toInt();
+                a.cropY = ao["cropY"].toInt();
+                a.cropW = ao["cropW"].toInt();
+                a.cropH = ao["cropH"].toInt();
+            }
+        }
+    }
+
+    // per-pane histogram
+    if (root.contains("perPaneHist"))
+    {
+        const bool ph = root["perPaneHist"].toBool();
+        m_perPaneHist = ph;
+        if (m_perPaneHistChk)
+            m_perPaneHistChk->setChecked(ph);
+    }
+
+    // Restore session settings inline
+    if (root.contains("session") && root["session"].isObject())
+    {
+        const QJsonObject s = root["session"].toObject();
+        mviewer::domain::CompareSession sess;
+        sess.syncMode = s["synced"].toBool(false)
+                            ? mviewer::domain::SyncMode::All
+                            : mviewer::domain::SyncMode::Off;
+        sess.sharedScale = s["sharedScale"].toDouble(1.0);
+        sess.sharedOffsetX = s["sharedOffsetX"].toDouble(0.0);
+        sess.sharedOffsetY = s["sharedOffsetY"].toDouble(0.0);
+        sess.blinkIndex = s["blinkIndex"].toInt(-1);
+        sess.blinkIntervalMs = s["blinkIntervalMs"].toInt(500);
+        sess.threshold = static_cast<uint8_t>(s["threshold"].toInt(0));
+        sess.sidePanelVisible = s["sidePanelVisible"].toBool(false);
+        sess.layoutIndex = s["layoutIndex"].toInt(0);
+        if (s.contains("selection") && s["selection"].isObject())
+        {
+            const QJsonObject sel = s["selection"].toObject();
+            sess.selection.x = sel["x"].toInt();
+            sess.selection.y = sel["y"].toInt();
+            sess.selection.w = sel["w"].toInt();
+            sess.selection.h = sel["h"].toInt();
+            sess.selection.active = sel["active"].toBool();
+            sess.selection.synced = sel["synced"].toBool();
+        }
+        applySession(sess);
+    }
+
+    // Apply adjustments to all cells
+    for (size_t i = 0; i < m_cellAdjusts.size(); ++i)
+    {
+        const int idx = static_cast<int>(i);
+        if (idx < m_engine.imageCount())
+            applyAdjToCell(idx);
+    }
+
+    // Restore layout combo
+    if (root.contains("layoutIndex") && m_layoutCombo)
+    {
+        const int li = root["layoutIndex"].toInt(0);
+        if (li >= 0 && li < m_layoutCombo->count())
+            m_layoutCombo->setCurrentIndex(li);
+    }
+
+    if (m_sidePanel && m_sidePanel->isVisible())
+    {
+        refreshHistograms();
+        updateMetrics();
+    }
+    update();
+}
+
+// ─── M16.6: Swap panes ───────────────────────────────────────────────────────
+
+void CompareWorkspace::onSwapPanes()
+{
+    const int n = m_cellViews.size();
+    if (n < 2)
+        return;
+
+    // Swap pane 0 and pane 1 by default; if editIdx is set, swap that with adjacent
+    const int a = (m_editIdx >= 0 && m_editIdx < n) ? m_editIdx : 0;
+    const int b = (a == 0) ? 1 : 0;
+
+    if (a == b || a >= n || b >= n)
+        return;
+
+    // Swap engine frames
+    m_engine.swapFrames(a, b);
+
+    // Swap cell adjustments
+    if (static_cast<size_t>(std::max(a, b)) < m_cellAdjusts.size())
+        std::swap(m_cellAdjusts[static_cast<size_t>(a)], m_cellAdjusts[static_cast<size_t>(b)]);
+
+    rebuildCells();
+
+    // Re-apply adjustments to swapped positions
+    applyAdjToCell(a);
+    applyAdjToCell(b);
+
+    fitAll();
+    update();
+
+    if (m_sidePanel && m_sidePanel->isVisible())
+    {
+        refreshHistograms();
+        updateMetrics();
+    }
 }

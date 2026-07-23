@@ -1,6 +1,9 @@
 #pragma once
 
 #include "core/compare/CompareEngine.h"
+#include "core/image/ImageAdjust.h"
+#include "core/image/ImageBuffer.h"
+#include "core/analysis/AnalysisEngine.h"
 
 #include <QCheckBox>
 #include <QGridLayout>
@@ -13,11 +16,13 @@
 #include <QPointF>
 #include <QScrollArea>
 #include <QSlider>
+#include <QSpinBox>
 #include <QStringList>
 #include <QTimer>
 #include <QComboBox>
 #include <QWidget>
 #include <memory>
+#include <vector>
 
 class QScrollArea;
 class QTableWidget;
@@ -109,6 +114,7 @@ class CompareWorkspace : public QWidget
     QList<RawImageView *> m_cellViews;
     bool m_dragging = false;
     QPoint m_lastMouse;
+    QPoint m_dragStartPos;
     int m_dragIdx = -1;
     mviewer::domain::Selection m_lastSelection; // M12.1: last applied ROI
 
@@ -159,4 +165,68 @@ class CompareWorkspace : public QWidget
     // the destructor because the EventBus is a process-global singleton and a
     // live subscription into a destroyed widget would crash.
     int m_diffSubId = 0;
+
+    // ── M16.2: per-cell image adjustments ──
+    struct CellAdjust
+    {
+        int brightness = 0;     // [-255, 255]
+        float contrast = 1.0f;  // [0, 3.0]
+        float gamma = 1.0f;     // [0.05, 8.0]
+        float rGain = 1.0f;     // WB red gain [0.01, 5.0]
+        float bGain = 1.0f;     // WB blue gain [0.01, 5.0]
+        int rotation = 0;       // 0, 90, 180, 270
+        bool hasCrop = false;
+        int cropX = 0, cropY = 0, cropW = 0, cropH = 0;
+
+        bool isIdentity() const {
+            return brightness == 0 && std::abs(contrast - 1.0f) < 1e-6f &&
+                   std::abs(gamma - 1.0f) < 1e-6f &&
+                   std::abs(rGain - 1.0f) < 1e-6f &&
+                   std::abs(bGain - 1.0f) < 1e-6f && rotation == 0 && !hasCrop;
+        }
+    };
+    std::vector<CellAdjust> m_cellAdjusts;              // per-cell adjustment state
+    int m_editIdx = -1;                                  // currently selected cell for editing
+    ImageData applyAdjusts(const ImageData &src, const CellAdjust &a);
+
+    // Edit panel widgets (inside side panel)
+    QWidget *m_editPanel = nullptr;
+    QLabel *m_editLabel = nullptr;                       // shows which cell is being edited
+    QSlider *m_brightSlider = nullptr;
+    QLabel *m_brightVal = nullptr;
+    QSlider *m_contrastSlider = nullptr;
+    QLabel *m_contrastVal = nullptr;
+    QSlider *m_gammaSlider = nullptr;
+    QLabel *m_gammaVal = nullptr;
+    QSlider *m_rGainSlider = nullptr;
+    QLabel *m_rGainVal = nullptr;
+    QSlider *m_bGainSlider = nullptr;
+    QLabel *m_bGainVal = nullptr;
+    QPushButton *m_resetAdjBtn = nullptr;
+    void onEditCellSelected(int cellIdx);
+    void onAdjChanged();
+    void onResetAdj();
+    void buildEditPanel(QVBoxLayout *sideLayout);
+    void applyAdjToCell(int cellIdx);
+
+    // ── M16.4: quick PSNR/SSIM metrics ──
+    QLabel *m_metricLabel = nullptr;
+    void updateMetrics();
+
+    // ── M16.5: per-pane histogram overlay toggle ──
+    bool m_perPaneHist = false;
+    QCheckBox *m_perPaneHistChk = nullptr;
+    void onPerPaneHistToggled(bool on);
+
+    // ── M16.6: layout presets save/load ──
+    QPushButton *m_savePresetBtn = nullptr;
+    QPushButton *m_loadPresetBtn = nullptr;
+    QString m_presetDir;
+    void onSavePreset();
+    void onLoadPreset();
+    void ensurePresetDir();
+
+    // ── M16.6: swap panes ──
+    QPushButton *m_swapBtn = nullptr;
+    void onSwapPanes();
 };

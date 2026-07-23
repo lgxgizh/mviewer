@@ -186,6 +186,7 @@ class CompareEngine
     void addImage(const std::string &path);
     void removeImage(int index);
     void clear();
+    void swapFrames(int a, int b);
 
     mviewer::domain::CompareSession session() const;
     int imageCount() const

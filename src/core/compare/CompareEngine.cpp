@@ -53,6 +53,14 @@ void CompareEngine::clear()
     m_blink.clearBlink();
 }
 
+void CompareEngine::swapFrames(int a, int b)
+{
+    const int n = static_cast<int>(m_images.size());
+    if (a < 0 || a >= n || b < 0 || b >= n || a == b)
+        return;
+    std::swap(m_images[a], m_images[b]);
+}
+
 const ImageFrame *CompareEngine::imageAt(int index) const
 {
     if (index < 0 || index >= static_cast<int>(m_images.size()))

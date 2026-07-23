@@ -33,6 +33,7 @@ add_library(mviewer_core SHARED
     core/compare/BlinkController.cpp
     core/compare/DifferenceEngine.cpp
     core/RatingStore.cpp
+    core/SidecarStore.cpp
     core/CrashHandler.cpp
     core/SelfTest.cpp
     core/analysis/AnalysisEngine.cpp
@@ -64,6 +65,7 @@ add_library(mviewer_core SHARED
     core/plugin/PluginManager.cpp
     core/export/IExporter.h
     core/export/ExporterRegistry.cpp
+    core/export/ExportManager.cpp
     core/search/SearchEngine.cpp
     core/batch/BatchProcessor.cpp
 
@@ -118,6 +120,7 @@ add_library(mviewer_ui STATIC
     widgets/rawimageview.cpp
     widgets/ratingwidget.cpp
     widgets/histogramwidget.cpp
+    pluginsettings.cpp
     gpu/GpuTileUploader.cpp
 )
 

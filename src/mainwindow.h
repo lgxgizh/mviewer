@@ -20,6 +20,7 @@ class MetadataPanel;
 class CompareWorkspace;
 class SearchPanel;
 class BatchDialog;
+class PluginSettings;
 class QAction;
 class QMenu;
 class QLineEdit;
@@ -80,6 +81,7 @@ class MainWindow : public QMainWindow
     MetadataPanel *m_metadataPanel = nullptr;
     SearchPanel *m_searchPanel = nullptr;
     BatchDialog *m_batchDialog = nullptr;
+    PluginSettings *m_pluginSettings = nullptr;
     CompareWorkspace *m_compareView = nullptr;
     QMetaObject::Connection m_compareDestroyConnection;  // guard WA_DeleteOnClose
 
@@ -99,6 +101,7 @@ class MainWindow : public QMainWindow
     QAction *m_actHistoryForward = nullptr;
     QAction *m_actToggleSearch = nullptr;
     QAction *m_actBatch = nullptr;
+    QAction *m_actPluginSettings = nullptr;
     QAction *m_actToggleMetadata = nullptr;
     QMenu *m_recentMenu = nullptr;
     QMenu *m_recentFileMenu = nullptr;  // recent-files menu (opened images)

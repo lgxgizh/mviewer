@@ -74,6 +74,7 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     m_formatCombo->addItem("JPEG", "jpeg");
     m_formatCombo->addItem("BMP", "bmp");
     m_formatCombo->addItem("WebP", "webp");
+    m_formatCombo->addItem("TIFF", "tiff");
     m_formatCombo->setCurrentIndex(1); // JPEG
     m_qualitySpin = new QSpinBox(this);
     m_qualitySpin->setRange(1, 100);
@@ -159,7 +160,7 @@ QStringList ExportDialog::collectSources() const
         return m_sources;
     // Legacy: batch over the output directory.
     if (!m_outDir.isEmpty())
-        return QDir(m_outDir).entryList({"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp"},
+        return QDir(m_outDir).entryList({"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp", "*.tiff", "*.tif"},
                                         QDir::Files, QDir::Name);
     if (!m_path.isEmpty())
         return {m_path};

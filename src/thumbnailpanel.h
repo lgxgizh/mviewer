@@ -123,6 +123,9 @@ class ThumbnailPanel : public QListView
 
     // P0 #①: read access for the delegate (paths + ready pixmaps + entry data).
     const QStringList &pathList() const { return m_paths; }
+    // M17: paths currently visible in the gallery (post-filter). Same as pathList()
+    // when a filter is active — added for explicit "export filtered set" UX.
+    const QStringList &visiblePaths() const { return m_paths; }
     QPixmap thumbReady(const QString &path) const;
     const QList<Entry> &entries() const { return m_allEntries; }
 

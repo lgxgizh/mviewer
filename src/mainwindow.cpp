@@ -14,10 +14,12 @@
 #include "core/image/RawMetadata.h"
 #include "core/image/QtConvert.h"
 #include "core/RatingStore.h"
+#include "core/SidecarStore.h"
 #include "core/cache/CacheManager.h"
 #include "core/analysis/ReportHtml.h"
 #include "core/workspace/WorkspaceSerializer.h"
 #include "core/analyzer/Analyzer.h"
+#include "core/export/ExportManager.h"
 #include "core/project/ProjectSerializer.h"
 
 #include "analysispanel.h"
@@ -27,6 +29,7 @@
 #include "exportcommand.h"
 #include "exportdialog.h"
 #include "imageviewer.h"
+#include "pluginsettings.h"
 #include "metadatapanel.h"
 #include "previewpanel.h"
 #include "searchpanel.h"
@@ -196,6 +199,8 @@ void MainWindow::setupUi()
     m_actBatch = new QAction("批量处理(&B)", this);
     m_actBatch->setShortcut(QKeySequence("Ctrl+Shift+B"));
     toolsMenu->addAction(m_actBatch);
+    m_actPluginSettings = new QAction("插件管理(&P)...", this);
+    toolsMenu->addAction(m_actPluginSettings);
 
     // ----- 帮助(&H) -----
     auto *helpMenu = menuBar->addMenu("帮助(&H)");
@@ -516,6 +521,7 @@ void MainWindow::setupUi()
                     m_dirListDirty = true;
                     m_thumbnailPanel->setDirectory(dir);
                     m_directoryTree->navigateTo(dir);
+                    mviewer::core::SidecarStore::instance().importDirectory(dir.toStdString());
                 }
             });
     connect(m_actSaveWorkspace, &QAction::triggered, this, &MainWindow::saveWorkspace);
@@ -540,14 +546,15 @@ void MainWindow::setupUi()
                     const QString dir = QFileDialog::getExistingDirectory(this, tr("打开目录"));
                     if (!dir.isEmpty())
                     {
-                        m_currentDir = dir;
-                        m_cachedImagePaths.clear();
-                        m_dirListDirty = true;
-                        m_thumbnailPanel->setDirectory(dir);
-                        m_directoryTree->navigateTo(dir);
-                        for (const auto &p :
-                             OpenDirectoryUseCase::execute(dir.toStdString()).imagePaths)
-                            imgs.append(QString::fromStdString(p));
+                    m_currentDir = dir;
+                    m_cachedImagePaths.clear();
+                    m_dirListDirty = true;
+                    m_thumbnailPanel->setDirectory(dir);
+                    m_directoryTree->navigateTo(dir);
+                    mviewer::core::SidecarStore::instance().importDirectory(dir.toStdString());
+                    for (const auto &p :
+                         OpenDirectoryUseCase::execute(dir.toStdString()).imagePaths)
+                        imgs.append(QString::fromStdString(p));
                     }
                 }
                 if (imgs.size() > 8)
@@ -583,6 +590,19 @@ void MainWindow::setupUi()
         // Pre-fill with current directory's images.
         m_batchDialog->setInputFiles(m_cachedImagePaths);
         m_batchDialog->exec();
+    });
+    connect(m_actPluginSettings, &QAction::triggered, this, [this]()
+    {
+        if (!m_pluginSettings)
+        {
+            m_pluginSettings = new PluginSettings(this);
+            m_pluginSettings->setAttribute(Qt::WA_DeleteOnClose);
+            connect(m_pluginSettings, &QDialog::destroyed,
+                    this, [this]() { m_pluginSettings = nullptr; });
+        }
+        m_pluginSettings->show();
+        m_pluginSettings->raise();
+        m_pluginSettings->activateWindow();
     });
     connect(
         m_actAbout, &QAction::triggered, this, [this]()
@@ -733,6 +753,12 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         }
         return;
     }
+    // M17: 'F' key favorites (picks) the current image.
+    if (event->key() == Qt::Key_F && !mod)
+    {
+        toggleCurrentPick();
+        return;
+    }
     ICommand *cmd = CommandRegistry::instance().findByShortcut(
         event->key(), static_cast<int>(event->modifiers()));
     if (cmd)
@@ -784,6 +810,7 @@ void MainWindow::rateCurrentImage(int stars)
     mviewer::core::RatingStore::instance().setRating(m_currentImagePath.toStdString(), stars);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(m_currentImagePath);  // refresh the rating widget
+    mviewer::core::SidecarStore::instance().writeSidecar(m_currentImagePath.toStdString());
     statusBar()->showMessage(QString("已为 %1 评分: %2 星")
                                  .arg(QFileInfo(m_currentImagePath).fileName())
                                  .arg(stars));
@@ -827,6 +854,7 @@ void MainWindow::setCurrentColorLabel(int label)
     mviewer::core::RatingStore::instance().setColorLabel(m_currentImagePath.toStdString(), label);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(m_currentImagePath);
+    mviewer::core::SidecarStore::instance().writeSidecar(m_currentImagePath.toStdString());
     const QString name = QFileInfo(m_currentImagePath).fileName();
     statusBar()->showMessage(label == 0 ? QString("已清除 %1 的色标").arg(name)
                                          : QString("已为 %1 设置色标 %2").arg(name).arg(label));
@@ -841,6 +869,7 @@ void MainWindow::toggleCurrentPick()
     rs.setPicked(m_currentImagePath.toStdString(), v);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(m_currentImagePath);
+    mviewer::core::SidecarStore::instance().writeSidecar(m_currentImagePath.toStdString());
     statusBar()->showMessage(v ? QString("已收藏 %1").arg(QFileInfo(m_currentImagePath).fileName())
                                 : QString("已取消收藏 %1").arg(QFileInfo(m_currentImagePath).fileName()));
 }
@@ -854,6 +883,7 @@ void MainWindow::toggleCurrentReject()
     rs.setRejected(m_currentImagePath.toStdString(), v);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(m_currentImagePath);
+    mviewer::core::SidecarStore::instance().writeSidecar(m_currentImagePath.toStdString());
     statusBar()->showMessage(v ? QString("已拒绝 %1").arg(QFileInfo(m_currentImagePath).fileName())
                                 : QString("已取消拒绝 %1").arg(QFileInfo(m_currentImagePath).fileName()));
 }
@@ -1060,11 +1090,12 @@ void MainWindow::exportReport()
 
 void MainWindow::exportImages()
 {
-    // P4: open the batch export pipeline on the current gallery selection
-    // (or the full directory if nothing is selected).
+    // M17: export selected paths, or the filtered/visible set, or the full directory.
     QStringList paths = m_thumbnailPanel->selectedPaths();
     if (paths.isEmpty())
-        paths = m_thumbnailPanel->pathList();
+        paths = m_thumbnailPanel->visiblePaths();   // filtered set
+    if (paths.isEmpty())
+        paths = m_thumbnailPanel->pathList();        // fallback: all
     if (paths.isEmpty())
     {
         QMessageBox::information(this, tr("导出图片"), tr("请先打开一个图片目录。"));
