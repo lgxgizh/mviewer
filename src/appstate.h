@@ -18,6 +18,8 @@
 //   * lastDir        — directory open at shutdown (restored on launch)
 //   * lastImage      — image open at shutdown (re-selected on launch)
 //   * lastThumbScroll— thumbnail-grid scroll offset (browse position restored)
+//   * analysisVisible/analysisPage — Analysis panel + active sub-page (P1-3)
+//   * navSidebarVisible           — left nav tree visibility (P1-3)
 //
 // Recent-folders history is handled separately by core::RecentFiles (it has
 // its own LRU + cap). AppState owns the *pinned* and *restored* state.
@@ -29,6 +31,12 @@ struct AppState
     QString lastDir;
     QString lastImage;
     int lastThumbScroll = 0;
+
+    // P1-3: restore the Analysis workspace on next launch so reopening the
+    // app lands the user exactly where they left off (not just the image).
+    bool analysisVisible = true;   // Analysis panel shown at shutdown? (true = prior default)
+    int analysisPage = 0;          // active Analysis sub-page (Histogram/RGB/...)
+    bool navSidebarVisible = true; // left navigation tree visible at shutdown?
 
     // Load from the per-user config path. Missing/corrupt file => defaults
     // (empty favorites, empty lastDir). Never throws.

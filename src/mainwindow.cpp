@@ -1712,6 +1712,18 @@ void MainWindow::restoreLastSession()
             if (m_thumbnailPanel)
                 m_thumbnailPanel->setViewMode(static_cast<ThumbnailPanel::ViewMode>(vm));
 
+            // P1-3: restore the Analysis workspace + nav sidebar visibility so the
+            // UI reopens exactly where the user left off.
+            if (m_analysisPanel)
+            {
+                m_analysisPanel->setVisible(m_appState.analysisVisible);
+                if (m_actToggleAnalysis)
+                    m_actToggleAnalysis->setChecked(m_appState.analysisVisible);
+                m_analysisPanel->setCurrentPage(m_appState.analysisPage);
+            }
+            if (m_navSidebar)
+                m_navSidebar->setVisible(m_appState.navSidebarVisible);
+
             const QString dir = m_appState.lastDir;
             if (dir.isEmpty() || !QDir(dir).exists())
                 return;
@@ -1753,6 +1765,12 @@ void MainWindow::closeEvent(QCloseEvent *event)
     m_appState.lastDir = m_currentDir;
     m_appState.lastImage = m_currentImagePath;
     m_appState.lastThumbScroll = m_thumbnailPanel ? m_thumbnailPanel->scrollOffset() : 0;
+
+    // P1-3: persist the Analysis workspace + nav sidebar so reopening the app
+    // restores the full UI state, not just the last image.
+    m_appState.analysisVisible = m_analysisPanel && m_analysisPanel->isVisible();
+    m_appState.analysisPage = m_analysisPanel ? m_analysisPanel->currentPage() : 0;
+    m_appState.navSidebarVisible = m_navSidebar && m_navSidebar->isVisible();
     m_appState.save();
 
     // Persist the recent-folders LRU alongside app state.

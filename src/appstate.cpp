@@ -52,6 +52,11 @@ AppState AppState::load()
     s.lastDir = o.value("lastDir").toString();
     s.lastImage = o.value("lastImage").toString();
     s.lastThumbScroll = o.value("lastThumbScroll").toInt(0);
+
+    // P1-3: restore Analysis workspace + nav sidebar state (defaults safe).
+    s.analysisVisible = o.value("analysisVisible").toBool(false);
+    s.analysisPage = o.value("analysisPage").toInt(0);
+    s.navSidebarVisible = o.value("navSidebarVisible").toBool(true);
     return s;
 }
 
@@ -80,6 +85,11 @@ bool AppState::save() const
     o["lastDir"] = lastDir;
     o["lastImage"] = lastImage;
     o["lastThumbScroll"] = lastThumbScroll;
+
+    // P1-3: persist Analysis workspace + nav sidebar for 100% session restore.
+    o["analysisVisible"] = analysisVisible;
+    o["analysisPage"] = analysisPage;
+    o["navSidebarVisible"] = navSidebarVisible;
 
     QFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))

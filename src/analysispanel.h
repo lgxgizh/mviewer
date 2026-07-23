@@ -55,6 +55,10 @@ class AnalysisPanel : public QWidget
 
     // ROI (image coordinates)
     void setROI(const mviewer::domain::Selection &roi);
+
+    // P1-3: read/restore the active Analysis sub-page (Histogram/RGB/Noise/...).
+    int currentPage() const;
+    void setCurrentPage(int index);
     // Re-run the currently-selected registry analyzer over the left frame + ROI.
     void reanalyze();
     // Backward-compat: display arbitrary region-stats text (from

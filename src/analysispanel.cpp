@@ -381,6 +381,17 @@ void AnalysisPanel::updateInspectorPage()
     m_inspectorLabel->setText(txt);
 }
 
+int AnalysisPanel::currentPage() const
+{
+    return m_tabs ? m_tabs->currentIndex() : 0;
+}
+
+void AnalysisPanel::setCurrentPage(int index)
+{
+    if (m_tabs && index >= 0 && index < m_tabs->count())
+        m_tabs->setCurrentIndex(index);
+}
+
 void AnalysisPanel::onAnalyzerSelected(int index)
 {
     m_currentPluginIdx = index;
