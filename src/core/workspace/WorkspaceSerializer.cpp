@@ -2,6 +2,7 @@
 
 #include <cctype>
 #include <cstdio>
+#include <optional>
 #include <sstream>
 
 namespace mviewer::core
@@ -226,7 +227,7 @@ std::string serializeCompareSession(const mviewer::domain::CompareSession &s)
     return os.str();
 }
 
-bool deserializeCompareSession(const std::string &text, mviewer::domain::CompareSession &out)
+bool parseCompareSession(const std::string &text, mviewer::domain::CompareSession &out)
 {
     Parser p(text);
     if (!p.eat('{'))
@@ -399,7 +400,7 @@ std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
     return os.str();
 }
 
-bool deserializeWorkspace(const std::string &text, mviewer::domain::Workspace &out)
+bool parseWorkspace(const std::string &text, mviewer::domain::Workspace &out)
 {
     Parser p(text);
     if (!p.eat('{'))
@@ -590,6 +591,25 @@ bool RecentFiles::deserialize(const std::string &text)
         m_items.push_back(p.parseString());
     }
     return true;
+}
+
+// M15 (review follow-up): caller-facing entry points return std::optional and
+// drop the bool + out-param style. The robust parsers above stay bool+out
+// internally; these thin wrappers only convert to std::optional.
+std::optional<mviewer::domain::Workspace> deserializeWorkspace(const std::string &text)
+{
+    mviewer::domain::Workspace ws;
+    if (parseWorkspace(text, ws))
+        return ws;
+    return std::nullopt;
+}
+
+std::optional<mviewer::domain::CompareSession> deserializeCompareSession(const std::string &text)
+{
+    mviewer::domain::CompareSession s;
+    if (parseCompareSession(text, s))
+        return s;
+    return std::nullopt;
 }
 
 } // namespace mviewer::core

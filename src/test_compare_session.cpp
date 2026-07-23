@@ -67,22 +67,21 @@ int main(int argc, char **argv)
 
     // ---- 2) Serialize -> deserialize round-trip preserves every field. ----
     const std::string json = mviewer::core::serializeCompareSession(s);
-    mviewer::domain::CompareSession r;
-    const bool ok = mviewer::core::deserializeCompareSession(json, r);
-    assert(ok && "deserializeCompareSession must succeed");
-    assert(r.selection.w == 4 && r.selection.h == 3 && "ROI must survive round-trip");
-    assert(r.threshold == 120 && "threshold must survive round-trip");
-    assert(r.layoutIndex == 2 && "layoutIndex must survive round-trip");
-    assert(r.sidePanelVisible == true && "sidePanelVisible must survive round-trip");
-    assert(r.blinkIntervalMs == 350 && "blinkIntervalMs must survive round-trip");
-    assert(r.blinkIndex == 1 && "blinkIndex must survive round-trip");
-    assert(static_cast<int>(r.imageIds.size()) == 2 && "image list must survive round-trip");
+    const auto r = mviewer::core::deserializeCompareSession(json);
+    assert(r.has_value() && "deserializeCompareSession must succeed");
+    assert(r->selection.w == 4 && r->selection.h == 3 && "ROI must survive round-trip");
+    assert(r->threshold == 120 && "threshold must survive round-trip");
+    assert(r->layoutIndex == 2 && "layoutIndex must survive round-trip");
+    assert(r->sidePanelVisible == true && "sidePanelVisible must survive round-trip");
+    assert(r->blinkIntervalMs == 350 && "blinkIntervalMs must survive round-trip");
+    assert(r->blinkIndex == 1 && "blinkIndex must survive round-trip");
+    assert(static_cast<int>(r->imageIds.size()) == 2 && "image list must survive round-trip");
     std::cout << "[ok] serialize -> deserialize preserves ROI/threshold/layout/side/blink\n";
 
     // ---- 3) applySession on a fresh workspace restores the state. ----
     CompareWorkspace consumer;
     consumer.setImages(paths); // engine must own frames before applySession
-    consumer.applySession(r);
+    consumer.applySession(*r);
 
     mviewer::domain::CompareSession after = consumer.compareSession();
     assert(after.selection.w == 4 && after.selection.h == 3 &&

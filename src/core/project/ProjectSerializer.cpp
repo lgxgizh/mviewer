@@ -56,8 +56,10 @@ bool deserializeProject(const std::string &json, domain::Project &out)
     if (!obj.contains("workspaceB64") || !obj["workspaceB64"].isString())
         return false;
     const QByteArray wsJson = QByteArray::fromBase64(obj["workspaceB64"].toString().toLatin1());
-    if (!deserializeWorkspace(std::string(wsJson.constData(), wsJson.size()), out.workspace))
+    const auto maybeWs = deserializeWorkspace(std::string(wsJson.constData(), wsJson.size()));
+    if (!maybeWs)
         return false;
+    out.workspace = std::move(*maybeWs);
 
     auto str = [&](const char *k, std::string &dst) {
         if (obj.contains(k) && obj[k].isString())

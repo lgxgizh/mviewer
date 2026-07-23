@@ -338,7 +338,7 @@ void MainWindow::setupUi()
     // M15 P0#3: inject the analyzer pipeline so the panel orchestrates analyzers
     // through it instead of reaching the registry directly. MainWindow never
     // lists or creates analyzers itself — the pipeline owns that responsibility.
-    m_analysisPanel->setPipeline(std::make_shared<AnalyzerPipeline>());
+    m_analysisPanel->setPipeline(std::make_unique<AnalyzerPipeline>());
     m_metadataPanel = new MetadataPanel(this);
     m_searchPanel = new SearchPanel(this);
     m_searchPanel->installEventFilter(this);
@@ -1308,13 +1308,13 @@ void MainWindow::openWorkspace()
         return;
     }
     const QByteArray data = f.readAll();
-    mviewer::domain::Workspace ws;
-    if (!mviewer::core::deserializeWorkspace(std::string(data.constData(), data.size()), ws) ||
-        ws.empty())
+    const auto maybeWs = mviewer::core::deserializeWorkspace(std::string(data.constData(), data.size()));
+    if (!maybeWs || maybeWs->empty())
     {
         QMessageBox::critical(this, "打开工作区", "工作区文件无效或为空。");
         return;
     }
+    mviewer::domain::Workspace ws = std::move(*maybeWs);
 
     // Restore the browsing view: load the workspace root back into the gallery.
     const QString root = QString::fromStdString(ws.rootPath);
@@ -1353,16 +1353,19 @@ void MainWindow::openWorkspace()
     // M15: if a compare session was saved, auto-open the compare dialog (it may
     // not exist yet in a fresh launch) and load the exact image set. Previously
     // the session was silently dropped when m_compareView was still null.
-    mviewer::domain::CompareSession restoredSession;
-    bool haveSession =
-        !ws.compareSessionJson.empty() &&
-        mviewer::core::deserializeCompareSession(ws.compareSessionJson, restoredSession);
+    std::optional<mviewer::domain::CompareSession> restoredSession;
+    bool haveSession = false;
+    if (!ws.compareSessionJson.empty())
+    {
+        restoredSession = mviewer::core::deserializeCompareSession(ws.compareSessionJson);
+        haveSession = restoredSession.has_value();
+    }
     if (!comparePaths.isEmpty())
     {
         openCompare(comparePaths); // creates m_compareView + setImages + show
         // openCompare() shows the dialog; restore the saved transform snapshot.
         if (haveSession && m_compareView)
-            m_compareView->applySession(restoredSession);
+            m_compareView->applySession(*restoredSession);
     }
 
     // Pick the active (browsing) image: prefer the first image carrying session
@@ -1538,15 +1541,18 @@ void MainWindow::openProject()
                 m_analysisByPath.insert(QString::fromStdString(img.filePath),
                                         QString::fromStdString(img.analysis));
 
-    mviewer::domain::CompareSession restoredSession;
-    bool haveSession =
-        !ws.compareSessionJson.empty() &&
-        mviewer::core::deserializeCompareSession(ws.compareSessionJson, restoredSession);
+    std::optional<mviewer::domain::CompareSession> restoredSession;
+    bool haveSession = false;
+    if (!ws.compareSessionJson.empty())
+    {
+        restoredSession = mviewer::core::deserializeCompareSession(ws.compareSessionJson);
+        haveSession = restoredSession.has_value();
+    }
     if (!comparePaths.isEmpty())
     {
         openCompare(comparePaths);
         if (haveSession && m_compareView)
-            m_compareView->applySession(restoredSession);
+            m_compareView->applySession(*restoredSession);
     }
 
     std::string restoredPath;
@@ -1822,10 +1828,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
 static std::optional<mviewer::domain::CompareSession>
 decodeCompareSession(const std::string &json)
 {
-    mviewer::domain::CompareSession s;
-    if (json.empty() || !mviewer::core::deserializeCompareSession(json, s))
+    if (json.empty())
         return std::nullopt;
-    return s;
+    return mviewer::core::deserializeCompareSession(json);
 }
 
 // M15: crash recovery — autosave current session to a recovery file.

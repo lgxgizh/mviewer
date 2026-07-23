@@ -15,6 +15,8 @@
 #include <QString>
 #include <QTabWidget>
 #include <QWidget>
+
+#include <memory>
 #include <memory>
 
 class RawImageView;
@@ -37,7 +39,7 @@ class AnalysisPanel : public QWidget
     // MainWindow -> Analyzer coupling is removed. Adding a new analyzer only
     // needs registration in the AnalyzerFactory; MainWindow/Panel stay
     // unchanged (acceptance: "新增 Analyzer 时 MainWindow 0 修改").
-    void setPipeline(std::shared_ptr<AnalyzerPipeline> pipeline)
+    void setPipeline(std::unique_ptr<AnalyzerPipeline> pipeline)
     {
         m_pipeline = std::move(pipeline);
     }
@@ -159,9 +161,10 @@ class AnalysisPanel : public QWidget
     std::vector<std::string> m_pluginIds;
     int m_currentPluginIdx = -1;
 
-    // M15 P0#3: orchestration layer. Nullable so headless/tests can still fall
-    // back to the registry (see reanalyze() / buildUi()).
-    std::shared_ptr<AnalyzerPipeline> m_pipeline;
+    // M15 P0#3: orchestration layer, owned solely by this panel. Nullable so
+    // headless/tests can still fall back to the registry (see reanalyze() /
+    // buildUi()).
+    std::unique_ptr<AnalyzerPipeline> m_pipeline;
 
     static constexpr int kPreviewSize = 192;
 };

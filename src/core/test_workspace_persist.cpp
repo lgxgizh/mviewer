@@ -76,8 +76,9 @@ int main(int argc, char **argv)
     const std::string json = mviewer::core::serializeWorkspace(ws);
     CHECK(!json.empty(), "workspace serialized to non-empty JSON");
 
-    mviewer::domain::Workspace back;
-    CHECK(mviewer::core::deserializeWorkspace(json, back), "workspace deserialized");
+    auto maybeWs = mviewer::core::deserializeWorkspace(json);
+    CHECK(maybeWs.has_value(), "workspace deserialized");
+    mviewer::domain::Workspace back = maybeWs ? std::move(*maybeWs) : mviewer::domain::Workspace{};
     if (!back.folders.empty())
     {
         CHECK(back.rootPath == ws.rootPath, "root path survives round-trip");
@@ -95,9 +96,11 @@ int main(int argc, char **argv)
         ws.folders[0].imageSet.images[0].roiH = 128;
         ws.folders[0].imageSet.images[0].analysis = "PSNR=42.1dB SSIM=0.99";
         const std::string json2 = mviewer::core::serializeWorkspace(ws);
-        mviewer::domain::Workspace back3;
-        CHECK(mviewer::core::deserializeWorkspace(json2, back3),
+        auto maybeBack3 = mviewer::core::deserializeWorkspace(json2);
+        CHECK(maybeBack3.has_value(),
               "workspace with ROI+analysis deserialized");
+        mviewer::domain::Workspace back3 =
+            maybeBack3 ? std::move(*maybeBack3) : mviewer::domain::Workspace{};
         const auto &ri = back3.folders[0].imageSet.images[0];
         CHECK(ri.roiX == 12 && ri.roiY == 34 && ri.roiW == 256 && ri.roiH == 128,
               "ROI round-trips");
@@ -111,9 +114,11 @@ int main(int argc, char **argv)
         ws.folders[0].imageSet.images[1].roiH = 80;
         ws.folders[0].imageSet.images[1].analysis = "PSNR=38.0dB SSIM=0.97";
         const std::string json3 = mviewer::core::serializeWorkspace(ws);
-        mviewer::domain::Workspace back4;
-        CHECK(mviewer::core::deserializeWorkspace(json3, back4),
+        auto maybeBack4 = mviewer::core::deserializeWorkspace(json3);
+        CHECK(maybeBack4.has_value(),
               "workspace with per-image ROI+analysis deserialized");
+        mviewer::domain::Workspace back4 =
+            maybeBack4 ? std::move(*maybeBack4) : mviewer::domain::Workspace{};
         const auto &r0 = back4.folders[0].imageSet.images[0];
         const auto &r1 = back4.folders[0].imageSet.images[1];
         CHECK(r0.roiW == 256 && r0.analysis == "PSNR=42.1dB SSIM=0.99",
@@ -128,9 +133,11 @@ int main(int argc, char **argv)
         ws.comparedImages.push_back("D:/photos/a/1.png");
         ws.comparedImages.push_back("D:/photos/a/2.jpg");
         const std::string json4 = mviewer::core::serializeWorkspace(ws);
-        mviewer::domain::Workspace back5;
-        CHECK(mviewer::core::deserializeWorkspace(json4, back5),
+        auto maybeBack5 = mviewer::core::deserializeWorkspace(json4);
+        CHECK(maybeBack5.has_value(),
               "workspace with comparedImages (no ROI/analysis) deserialized");
+        mviewer::domain::Workspace back5 =
+            maybeBack5 ? std::move(*maybeBack5) : mviewer::domain::Workspace{};
         CHECK(back5.comparedImages.size() == 2, "comparedImages count round-trips");
         CHECK(back5.comparedImages[0] == "D:/photos/a/1.png" &&
                   back5.comparedImages[1] == "D:/photos/a/2.jpg",
@@ -145,9 +152,11 @@ int main(int argc, char **argv)
                                    "\"folders\":[{\"path\":\"D:/p/a\",\"name\":\"a\","
                                    "\"images\":[{\"filePath\":\"D:/p/a/1.png\","
                                    "\"fileName\":\"1.png\",\"width\":100,\"height\":80}]}]}";
-        mviewer::domain::Workspace leg;
-        CHECK(mviewer::core::deserializeWorkspace(legacy, leg),
+        auto maybeLeg = mviewer::core::deserializeWorkspace(legacy);
+        CHECK(maybeLeg.has_value(),
               "legacy workspace (no roi/analysis) parses");
+        mviewer::domain::Workspace leg =
+            maybeLeg ? std::move(*maybeLeg) : mviewer::domain::Workspace{};
         CHECK(leg.folders[0].imageSet.images[0].roiW == 0, "legacy ROI defaults to 0");
         CHECK(leg.folders[0].imageSet.images[0].analysis.empty(), "legacy analysis defaults empty");
     }
@@ -157,8 +166,8 @@ int main(int argc, char **argv)
     }
 
     // Re-parse the exact string to be sure deserialization is deterministic.
-    mviewer::domain::Workspace back2;
-    CHECK(mviewer::core::deserializeWorkspace(json, back2), "second parse of same JSON succeeds");
+    auto maybeBack2 = mviewer::core::deserializeWorkspace(json);
+    CHECK(maybeBack2.has_value(), "second parse of same JSON succeeds");
 
     // RecentFiles.
     mviewer::core::RecentFiles recent(3);
@@ -207,8 +216,10 @@ int main(int argc, char **argv)
 
     const std::string csJson = mviewer::core::serializeCompareSession(cs);
     CHECK(!csJson.empty(), "compare session serialized to non-empty JSON");
-    mviewer::domain::CompareSession csBack;
-    CHECK(mviewer::core::deserializeCompareSession(csJson, csBack), "compare session deserialized");
+    auto maybeCs = mviewer::core::deserializeCompareSession(csJson);
+    CHECK(maybeCs.has_value(), "compare session deserialized");
+    mviewer::domain::CompareSession csBack =
+        maybeCs ? std::move(*maybeCs) : mviewer::domain::CompareSession{};
     CHECK(csBack.imageCount() == 3, "compare session image count round-trips");
     CHECK(csBack.imageIds[1] == "D:/photos/a/2.jpg", "compare session image id round-trips");
     CHECK(csBack.cells[1].scale == 2.5 && csBack.cells[1].offsetX == -30.0 &&
@@ -225,10 +236,11 @@ int main(int argc, char **argv)
 
     // Off-sync mode variant.
     cs.syncMode = mviewer::domain::SyncMode::Off;
-    mviewer::domain::CompareSession csOff;
-    CHECK(
-        mviewer::core::deserializeCompareSession(mviewer::core::serializeCompareSession(cs), csOff),
-        "compare session (sync off) deserialized");
+    auto maybeCsOff = mviewer::core::deserializeCompareSession(
+        mviewer::core::serializeCompareSession(cs));
+    CHECK(maybeCsOff.has_value(), "compare session (sync off) deserialized");
+    mviewer::domain::CompareSession csOff =
+        maybeCsOff ? std::move(*maybeCsOff) : mviewer::domain::CompareSession{};
     CHECK(csOff.syncMode == mviewer::domain::SyncMode::Off, "sync-off round-trips");
 
     // Embedded in a Workspace and round-tripped end-to-end.
@@ -236,13 +248,15 @@ int main(int argc, char **argv)
     wscs.rootPath = "D:/photos";
     wscs.comparedImages = cs.imageIds;
     wscs.compareSessionJson = csJson;
-    mviewer::domain::Workspace wscsBack;
-    CHECK(mviewer::core::deserializeWorkspace(mviewer::core::serializeWorkspace(wscs), wscsBack),
+    auto maybeWscs = mviewer::core::deserializeWorkspace(
+        mviewer::core::serializeWorkspace(wscs));
+    CHECK(maybeWscs.has_value(),
           "workspace with compareSession deserialized");
+    mviewer::domain::Workspace wscsBack =
+        maybeWscs ? std::move(*maybeWscs) : mviewer::domain::Workspace{};
     CHECK(wscsBack.comparedImages.size() == 3, "embedded comparedImages round-trips");
-    mviewer::domain::CompareSession csEmb;
-    CHECK(mviewer::core::deserializeCompareSession(wscsBack.compareSessionJson, csEmb) &&
-              csEmb.selection.w == 256,
+    auto maybeCsEmb = mviewer::core::deserializeCompareSession(wscsBack.compareSessionJson);
+    CHECK(maybeCsEmb.has_value() && maybeCsEmb->selection.w == 256,
           "embedded compareSession JSON round-trips through workspace");
     CHECK(wscsBack.compareSessionJson == csJson, "compareSessionJson verbatim round-trips");
 
