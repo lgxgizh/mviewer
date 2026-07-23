@@ -107,7 +107,7 @@ struct ImageData
                static_cast<size_t>(channelsPerPixel());
     }
 
-    int channelsPerPixel() const
+    int channelsPerPixel() const noexcept
     {
         switch (format)
         {

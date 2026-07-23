@@ -12,6 +12,7 @@ class QRect;
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -121,13 +122,17 @@ struct RenderCommand
         c.alpha = a;
         return c;
     }
-    static RenderCommand drawHistogram(const int *bins, int n, const RenderRect &r)
+    // bins is the histogram luminance array (typically 256 entries). Using
+    // std::span removes the separate count argument and the manual
+    // `i < n && i < 256` bounds hack, eliminating an out-of-bounds hazard.
+    static RenderCommand drawHistogram(std::span<const int> bins, const RenderRect &r)
     {
         RenderCommand c;
         c.type = RenderCommandType::DrawHistogram;
+        const int n = std::min(static_cast<int>(bins.size()), 256);
         c.histCount = n;
         c.rect = r;
-        for (int i = 0; i < n && i < 256; ++i)
+        for (int i = 0; i < n; ++i)
             c.histData[i] = bins[i];
         return c;
     }

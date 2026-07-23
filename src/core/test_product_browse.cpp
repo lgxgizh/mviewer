@@ -201,6 +201,54 @@ static void testFirstThumbnailLatency()
     fs::remove_all(tempDir, ec);
 }
 
+// Continuous left/right navigation across the directory must keep streaming
+// thumbnails without re-blocking the caller or dropping work — mirrors the user
+// holding ←/→ through a large folder.
+static void testNavigateWorkflow()
+{
+    printf("\n[M9-1 Browse: continuous left/right navigation streams thumbnails]\n");
+    fflush(stdout);
+
+    namespace fs = std::filesystem;
+    const fs::path tempDir = fs::temp_directory_path() / "mviewer_m9_nav";
+    std::error_code ec;
+    fs::remove_all(tempDir, ec);
+    fs::create_directories(tempDir, ec);
+    write1000(tempDir);
+
+    std::vector<std::string> paths;
+    for (int i = 0; i < 1000; ++i)
+        paths.push_back((tempDir / ("img_" + std::to_string(i) + ".png")).string());
+
+    ThumbnailPipeline &pipe = ThumbnailPipeline::instance();
+    pipe.clear();
+    pipe.setDecodeFn([](const std::string &p, int size) { return Decoder::decodeScaled(p, size); });
+
+    std::atomic<int> thumbCount{0};
+    pipe.setResultFn([&](const std::string &, const ImageData &) { thumbCount.fetch_add(1); });
+
+    pipe.setSources(paths);
+
+    // Rapid ←/→ jumps across the directory (begin, middle, far end, back, wrap).
+    const std::vector<std::pair<size_t, size_t>> jumps = {
+        {0, 20}, {100, 120}, {500, 520}, {250, 270}, {0, 20}, {980, 999}};
+    for (auto [b, e] : jumps)
+    {
+        const auto t0 = std::chrono::steady_clock::now();
+        pipe.setVisibleRange(b, e);
+        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                              .count();
+        CHECK(ms < kNonBlockingBudgetMs, "setVisibleRange() returns immediately during navigation");
+    }
+
+    TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool, std::chrono::seconds(120));
+    printf("  navigation produced %d thumbnails\n", thumbCount.load());
+    CHECK(thumbCount.load() >= 20, "navigation produced thumbnails for the visited windows");
+
+    pipe.clear();
+    fs::remove_all(tempDir, ec);
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -211,6 +259,7 @@ int main(int argc, char **argv)
 
     testBrowseWorkflow();
     testFirstThumbnailLatency();
+    testNavigateWorkflow();
 
     printf("\n=== M9-1 Browse acceptance: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);

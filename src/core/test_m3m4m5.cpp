@@ -483,7 +483,7 @@ static void testRenderCommand()
 
     int bins[256] = {0};
     bins[128] = 100;
-    auto c3 = RenderCommand::drawHistogram(bins, 256, {0, 0, 256, 100});
+    auto c3 = RenderCommand::drawHistogram(std::span<const int>(bins, 256), {0, 0, 256, 100});
     CHECK(c3.type == RenderCommandType::DrawHistogram, "DrawHistogram factory");
 
     auto c4 = RenderCommand::drawSelection({10, 10, 50, 50}, 0xff00ff);
