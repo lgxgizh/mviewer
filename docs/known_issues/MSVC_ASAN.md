@@ -140,7 +140,7 @@ surfaced **one real defect** the MSVC run could not reach:
 - `global-buffer-overflow` at process init, reading the empty-string literal
   `""` (main.cpp:90, `smoke ? "[smoke] " : ""`) which the linker placed inside
   the redzone of an adjacent string literal. `operator<<(const char*)` strlen
-  of the empty literal tripped ASan. **Fixed** by emitting `[smoke] ` via an
+  of the empty literal tripped ASan. **Fixed** by emitting `[smoke]` via an
   explicit `if (smoke)` instead of a `?:` with an empty literal. After the fix,
   `mviewer_bench --enforce` runs with zero sanitizer findings.
 
