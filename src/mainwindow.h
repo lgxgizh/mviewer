@@ -56,6 +56,8 @@ class MainWindow : public QMainWindow
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
+    void dragLeaveEvent(QDragLeaveEvent *event) override;
+    void paintEvent(QPaintEvent *event) override;
     // P0-3: intercept image-viewer mouse events for metadata overlay triggers.
     bool eventFilter(QObject *watched, QEvent *event) override;
 
@@ -236,4 +238,5 @@ class MainWindow : public QMainWindow
     void stopSlideshow();
     QTimer *m_slideshowTimer = nullptr;
     QAction *m_actSlideshow = nullptr;
+    bool m_dragHighlight = false; // border highlight while a drag is hovering
 };

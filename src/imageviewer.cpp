@@ -304,6 +304,18 @@ void ImageViewer::paintEvent(QPaintEvent *event)
         painter.setPen(Qt::white);
         painter.drawText(rect(), Qt::AlignCenter, "无法加载图片");
     }
+    else
+    {
+        // Empty state: no image loaded yet — prompt the user to open one.
+        painter.setPen(QColor(180, 180, 180));
+        QFont f = painter.font();
+        f.setPointSize(f.pointSize() + 2);
+        painter.setFont(f);
+        painter.drawText(rect(), Qt::AlignCenter,
+                         "拖放图片或文件夹到此处\n"
+                         "或按 Ctrl+O 打开目录\n"
+                         "或双击缩略图查看");
+    }
 
     if (m_hasHistogram)
         drawHistogram(painter);
@@ -544,6 +556,8 @@ void ImageViewer::keyPressEvent(QKeyEvent *event)
         emit requestPrev();
     else if (key == Qt::Key_Right)
         emit requestNext();
+    // Home/End/PageUp/PageDown are handled via eventFilter → MainWindow's
+    // keyPressEvent, so they work identically in the viewer and the gallery.
     else if (key == Qt::Key_Plus || key == Qt::Key_Equal)
         zoomIn();
     else if (key == Qt::Key_Minus || key == Qt::Key_Underscore)

@@ -55,6 +55,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QHeaderView>
 #include <QImage>
 #include <QInputDialog>
@@ -65,10 +66,13 @@
 #include <QLineEdit>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QPainter>
 #include <QMetaObject>
 #include <QMimeData>
 #include <QPushButton>
+#include <QScreen>
 #include <QScrollBar>
+#include <QSet>
 #include <QSettings>
 #include <QSplitter>
 #include <QStandardPaths>
@@ -116,7 +120,26 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     {
         QSettings settings;
         if (settings.contains("geometry"))
+        {
             restoreGeometry(settings.value("geometry").toByteArray());
+            // If the restored window is entirely off-screen (e.g. the second
+            // monitor was disconnected), re-center it on the primary screen.
+            const QRect wr = frameGeometry();
+            bool onAnyScreen = false;
+            for (QScreen *scr : QGuiApplication::screens())
+            {
+                if (scr->availableGeometry().intersects(wr))
+                {
+                    onAnyScreen = true;
+                    break;
+                }
+            }
+            if (!onAnyScreen)
+            {
+                const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
+                move(ag.center() - QPoint(width() / 2, height() / 2));
+            }
+        }
         if (settings.contains("windowState"))
             restoreState(settings.value("windowState").toByteArray());
         // P1-7: closeEvent() already persists the splitter layout and the
@@ -633,6 +656,10 @@ void MainWindow::setupUi()
             {
                 Q_UNUSED(path);
                 m_thumbnailPanel->invalidateRatings();
+                // Re-apply the active filter so a rating change that moves an
+                // image out of the filter range immediately removes it from the
+                // gallery (and vice versa).
+                m_thumbnailPanel->setRatingFilter(m_ratingFilter->currentData().toInt());
             });
 
     // ----- Menu actions -----
@@ -1459,8 +1486,8 @@ void MainWindow::showShortcutsHelp()
         "<tr><th colspan='2'>浏览</th></tr>"
         "<tr><td><kbd>←</kbd> / <kbd>→</kbd> / 鼠标侧键</td><td>上一张 / 下一张（循环）</td></tr>"
         "<tr><td><kbd>Enter</kbd></td><td>在查看器中打开选中图片</td></tr>"
-        "<tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>第一张 / 最后一张</td></tr>"
-        "<tr><td><kbd>PageUp</kbd> / <kbd>PageDown</kbd></td><td>上翻 / 下翻一页（10 张）</td></tr>"
+        "<tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>第一张 / 最后一张（查看器中同样有效）</td></tr>"
+        "<tr><td><kbd>PageUp</kbd> / <kbd>PageDown</kbd></td><td>上翻 / 下翻一页（10 张，查看器中同样有效）</td></tr>"
         "<tr><td><kbd>F5</kbd></td><td>刷新目录树与画廊</td></tr>"
         "<tr><td><kbd>Ctrl+滚轮</kbd></td><td>调整缩略图大小</td></tr>"
         "<tr><td><kbd>Tab</kbd></td><td>显示 / 隐藏侧边面板</td></tr>"
@@ -2397,7 +2424,11 @@ void MainWindow::restoreSessionRecovery()
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
     if (event->mimeData()->hasUrls())
+    {
         event->acceptProposedAction();
+        m_dragHighlight = true;
+        update();
+    }
     else
         QMainWindow::dragEnterEvent(event);
 }
@@ -2407,13 +2438,53 @@ void MainWindow::dragMoveEvent(QDragMoveEvent *event)
     // Accept moves anywhere on the window (including splitter handles and
     // status-bar edges) so the drop cursor never flickers to "forbidden".
     if (event->mimeData()->hasUrls())
+    {
         event->acceptProposedAction();
+        if (!m_dragHighlight)
+        {
+            m_dragHighlight = true;
+            update();
+        }
+    }
     else
         QMainWindow::dragMoveEvent(event);
 }
 
+void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
+{
+    QMainWindow::dragLeaveEvent(event);
+    if (m_dragHighlight)
+    {
+        m_dragHighlight = false;
+        update();
+    }
+}
+
+void MainWindow::paintEvent(QPaintEvent *event)
+{
+    QMainWindow::paintEvent(event);
+    // Draw a translucent accent border while a drag-hover is active so the
+    // user gets visual confirmation that a drop is accepted.
+    if (m_dragHighlight)
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        const QColor accent = palette().color(QPalette::Highlight);
+        QPen pen(accent, 4);
+        p.setPen(pen);
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(rect().adjusted(2, 2, -2, -2));
+    }
+}
+
 void MainWindow::dropEvent(QDropEvent *event)
 {
+    // Drop received — turn off the drag highlight regardless of outcome.
+    if (m_dragHighlight)
+    {
+        m_dragHighlight = false;
+        update();
+    }
     if (!event->mimeData()->hasUrls())
     {
         QMainWindow::dropEvent(event);
@@ -2657,17 +2728,33 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
         // Forward navigation / workflow shortcuts from child widgets so they work
         // regardless of which panel has focus.
-        static const QList<int> globalKeys = {Qt::Key_Space, Qt::Key_M,     Qt::Key_H,
-                                              Qt::Key_G,     Qt::Key_D,     Qt::Key_F,
-                                              Qt::Key_Tab,   Qt::Key_C,     Qt::Key_S,
-                                              Qt::Key_Plus,  Qt::Key_Equal, Qt::Key_Minus,
-                                              Qt::Key_0,     Qt::Key_1};
+        static const QList<int> globalKeys = {Qt::Key_Space,    Qt::Key_M,     Qt::Key_H,
+                                              Qt::Key_G,        Qt::Key_D,     Qt::Key_F,
+                                              Qt::Key_Tab,      Qt::Key_C,     Qt::Key_S,
+                                              Qt::Key_Plus,     Qt::Key_Equal, Qt::Key_Minus,
+                                              Qt::Key_0,        Qt::Key_1,     Qt::Key_Home,
+                                              Qt::Key_End,      Qt::Key_PageUp, Qt::Key_PageDown};
         const bool isGlobalKey =
             globalKeys.contains(ke->key()) ||
             ((ke->modifiers() & Qt::ControlModifier) &&
              (ke->key() == Qt::Key_C || (ke->key() >= Qt::Key_1 && ke->key() <= Qt::Key_6)));
-        if (isGlobalKey && watched != this && watched != m_imageViewer)
+        if (isGlobalKey && watched != this)
         {
+            // Also forward from the image viewer (it has its own keyPressEvent
+            // that handles zoom/navigation, but Home/End/PageUp/PageDown and
+            // workflow keys like C/S/Space should still reach MainWindow).
+            if (watched == m_imageViewer)
+            {
+                // Only forward keys the viewer doesn't handle itself.
+                static const QSet<int> viewerOwns = {Qt::Key_Left,    Qt::Key_Right,
+                                                     Qt::Key_Plus,    Qt::Key_Equal,
+                                                     Qt::Key_Minus,   Qt::Key_0,
+                                                     Qt::Key_1,       Qt::Key_F,
+                                                     Qt::Key_F11,     Qt::Key_Escape,
+                                                     Qt::Key_Underscore};
+                if (viewerOwns.contains(ke->key()))
+                    return false; // let the viewer handle it
+            }
             keyPressEvent(ke);
             return true;
         }

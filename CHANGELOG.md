@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — 基础功能打磨第五轮 (Navigation & Feedback Polish)
+
+- **导航键全面打通:** `Home`/`End`（第一张/最后一张）、`PageUp`/`PageDown`（翻页 10 张）
+  加入 eventFilter 全局转发列表，在查看器、画廊、目录树等任意焦点状态下均有效。
+  之前这些键只在 MainWindow 自身有焦点时工作（几乎不会发生）。
+  (`src/mainwindow.cpp`, `src/imageviewer.cpp`)
+- **评分联动画廊过滤:** MetadataPanel 中修改评分后，除了重绘星标覆盖层，还会重新
+  应用当前的评级过滤器——如把 3 星改为 1 星后图片立即从"3 星以上"过滤中移除。
+  (`src/mainwindow.cpp`)
+- **查看器空状态引导:** 未加载图片时，查看器显示"拖放图片或文件夹到此处 / 按 Ctrl+O
+  打开目录 / 双击缩略图查看"引导文字，而非空黑色面板。
+  (`src/imageviewer.cpp`)
+- **拖放视觉反馈:** 拖放文件到窗口时，窗口边框高亮显示（使用系统强调色 4px 边框），
+  drop 或 dragLeave 后消失，给用户明确的"可放下"视觉确认。
+  (`src/mainwindow.cpp/h`)
+- **窗口位置屏幕有效性检查:** `restoreGeometry` 后检查窗口是否在可见屏幕范围内
+  （多显示器断开后窗口可能恢复到屏幕外），如果不在任何屏幕上则重新居中到主屏幕。
+  (`src/mainwindow.cpp`)
+
 ### Added — 基础功能打磨第四轮 (Shortcut Fix & Panel Polish)
 
 - **快捷键冲突修复 (功能 bug):** `Ctrl+1..5` 原先被评分拦截，导致视图模式 1–5（网格/
