@@ -88,6 +88,12 @@ class AnalysisPanel : public QWidget
     void updateImage(const QImage &img);
     void updateHistogram(const mviewer::domain::Histogram &hist);
 
+  signals:
+    // P1-6: one-click "export report" entry inside the analysis panel itself,
+    // so the analysis workflow doesn't force the user into a menu. The MainWindow
+    // wires this to its report-exporter for the current image.
+    void exportRequested();
+
   protected:
     void paintEvent(QPaintEvent *event) override;
     void renderHistogramPixmap();

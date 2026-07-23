@@ -10,6 +10,7 @@
 #include <QStringList>
 #include <QWidget>
 #include <memory>
+#include <optional>
 
 // Full-image zoomable viewer. Shown in its own window when the user
 // double-clicks a thumbnail (or single-clicks the bottom-left preview).
@@ -24,6 +25,12 @@ class ImageViewer : public QWidget
     ~ImageViewer() override;
 
     void setImage(const QString &path);
+
+    // P1-7: serialize/restore the current view transform (scale + pan). Used to
+    // restore the viewer's zoom level and pan position across sessions. Viewport
+    // is domain-free (core/render), so it carries no Qt types.
+    Viewport viewTransform() const { return m_view; }
+    void setViewTransform(const Viewport &v);
 
     // Returns the ImageFrame backing the current view (null if none loaded).
     // Lets the analysis panel route ROI analysis through the registry.
@@ -81,6 +88,9 @@ class ImageViewer : public QWidget
     // View transform (pan/zoom). The math lives in the domain-free Viewport
     // (core/render); the Widget only stores it and feeds screen geometry.
     Viewport m_view;
+    // P1-7: a pending transform to apply once the (async) image load completes,
+    // since scale/offset are only meaningful after the frame/screen are known.
+    std::optional<Viewport> m_pendingView;
     // Tile grid for the current image; drives per-tile rendering so large
     // images (100MP/RAW) are rasterized a tile at a time, never one bitmap.
     TileGrid m_tiles;

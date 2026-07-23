@@ -19,6 +19,7 @@ class AnalysisPanel;
 class MetadataPanel;
 class CompareWorkspace;
 class SearchPanel;
+class SelectionModel;
 class BatchDialog;
 class PluginSettings;
 class QAction;
@@ -58,7 +59,13 @@ class MainWindow : public QMainWindow
     void setupCommands();
     void openCompare(const QStringList &images = {}, const QString &sessionJson = {});
     void navigate(int delta);
+    // P1-8: Home/End/PageUp/PageDown navigation within the current folder.
+    void navigatePage(int key);
     void onBreadcrumbPath(const QString &path);
+    // P0-2: central handler that keeps every view synced with the current image.
+    void onCurrentImageChanged(const QString &path);
+    // P1-8: keyboard-shortcut cheat-sheet dialog (F1 / Help menu).
+    void showShortcutsHelp();
     void openDirectory(const QString &dir);
 
     // P0: product browse state — recent folders, favorites, in-session history,
@@ -133,6 +140,12 @@ class MainWindow : public QMainWindow
 
     // M15 Sprint 2-1: global search index rebuild on directory change.
     void reindexSearch();
+    // P0-1 (perf): building the search index reads full metadata for every
+    // image, which used to run synchronously on the folder-switch path and froze
+    // the UI. Debounce it so switching folders stays responsive; the index is
+    // (re)built shortly after the user settles on a directory.
+    QTimer *m_reindexTimer = nullptr;
+    void scheduleReindex();
 
     // M18: gallery search bar.
     QLineEdit *m_searchEdit = nullptr;
@@ -163,7 +176,8 @@ class MainWindow : public QMainWindow
     void toggleCurrentReject();
 
     QString m_currentDir;
-    QString m_currentImagePath;
+    QString m_currentImagePath;     // mirror of m_selection->currentImage()
+    SelectionModel *m_selection = nullptr; // P0-2: single source of truth
     QStringList m_cachedImagePaths; // cached image list for current dir
     bool m_dirListDirty = true;     // invalidated when directory changes
 

@@ -41,6 +41,10 @@
 #include <QShowEvent>
 #include <QStringListModel>
 #include <QTimer>
+#include <QPaintEvent>
+#include <QWidget>
+
+#include <thread>
 
 namespace
 {
@@ -59,6 +63,76 @@ std::vector<std::string> toStdPaths(const QStringList &in)
         out.push_back(s.toStdString());
     return out;
 }
+
+// P0-4: shared column geometry for the Details view so the delegate cells and
+// the header row stay perfectly aligned.
+constexpr int kDetailsHeaderH = 24;
+struct DetailLayout
+{
+    QRect thumb, name, res, size, date, fmt, rate, label;
+};
+DetailLayout detailLayout(const QRect &row)
+{
+    const QRect r = row.adjusted(4, 0, -4, 0);
+    const int thumbColW = 60, resW = 120, sizeW = 100, dateW = 160, fmtW = 80,
+              rateW = 90, labelW = 90, gap = 12;
+    const int fixed =
+        thumbColW + resW + sizeW + dateW + fmtW + rateW + labelW + gap * 6;
+    const int nameW = qMax(140, r.width() - fixed);
+    DetailLayout L;
+    int x = r.x();
+    L.thumb = QRect(x, r.y(), thumbColW, r.height());
+    x += thumbColW;
+    L.name = QRect(x, r.y(), nameW, r.height());
+    x += nameW + gap;
+    L.res = QRect(x, r.y(), resW, r.height());
+    x += resW + gap;
+    L.size = QRect(x, r.y(), sizeW, r.height());
+    x += sizeW + gap;
+    L.date = QRect(x, r.y(), dateW, r.height());
+    x += dateW + gap;
+    L.fmt = QRect(x, r.y(), fmtW, r.height());
+    x += fmtW + gap;
+    L.rate = QRect(x, r.y(), rateW, r.height());
+    x += rateW + gap;
+    L.label = QRect(x, r.y(), labelW, r.height());
+    return L;
+}
+
+// P0-4: header strip painted above the Details list. Uses the same column
+// geometry as the delegate so titles align with the values below.
+class DetailsHeader : public QWidget
+{
+  public:
+    explicit DetailsHeader(QWidget *parent) : QWidget(parent)
+    {
+        setAttribute(Qt::WA_TransparentForMouseEvents);
+    }
+
+  protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter p(this);
+        const QRect full(0, 0, width(), height());
+        p.fillRect(full, palette().color(QPalette::Button));
+        p.setPen(palette().color(QPalette::Mid));
+        p.drawLine(full.bottomLeft(), full.bottomRight());
+
+        const DetailLayout L = detailLayout(full);
+        p.setPen(palette().color(QPalette::ButtonText));
+        QFont f = p.font();
+        f.setBold(true);
+        p.setFont(f);
+        const int flags = Qt::AlignVCenter | Qt::TextSingleLine;
+        p.drawText(L.name, flags, QStringLiteral("名称"));
+        p.drawText(L.res, flags, QStringLiteral("分辨率"));
+        p.drawText(L.size, flags, QStringLiteral("大小"));
+        p.drawText(L.date, flags, QStringLiteral("修改日期"));
+        p.drawText(L.fmt, flags, QStringLiteral("格式"));
+        p.drawText(L.rate, flags, QStringLiteral("评分"));
+        p.drawText(L.label, flags, QStringLiteral("标签"));
+    }
+};
 } // namespace
 
 // ---- ThumbnailPanel ---------------------------------------------------------
@@ -177,6 +251,11 @@ void ThumbnailPanel::setDirectory(const QString &path)
     m_filterText.clear();
     m_filterRecursive = false;
 
+    // P0-1 (perf): a new directory generation. Any in-flight background
+    // dimension resolve from the previous folder is invalidated by the bump.
+    ++m_dirGen;
+    m_dimsResolved = false;
+
     QList<Entry> entries;
     QDir dir(path);
     if (dir.exists())
@@ -184,18 +263,73 @@ void ThumbnailPanel::setDirectory(const QString &path)
         const QFileInfoList list = sortedEntries(dir, m_sortMode);
         for (const QFileInfo &fi : list)
         {
-            // Quick header read for dimensions (QImageReader::size() is O(1) —
-            // it only reads the image header, not the full pixel data).
-            QImageReader reader(fi.absoluteFilePath());
-            reader.setAutoTransform(true);
-            const QSize sz = reader.size();
+            // P0-1 (perf): do NOT read pixel dimensions here. Even
+            // QImageReader::size() opens the file and reads its header, so for a
+            // 10k-image folder this blocked the UI thread for seconds on every
+            // folder switch. Dimensions are only needed by the Details view, so
+            // they are resolved lazily in the background (see ensureDimensions).
             entries.append({fi.absoluteFilePath(), fi.fileName(), fi.size(),
-                            sz.width(), sz.height(), fi.lastModified()});
+                            0, 0, fi.lastModified()});
         }
     }
     m_allEntries = entries;
     m_metaIndex.clear();
     applyFilter();
+
+    // Only pay the header-read cost when the Details view actually shows the
+    // resolution column.
+    if (m_viewMode == Details)
+        ensureDimensions();
+}
+
+void ThumbnailPanel::refresh()
+{
+    if (!m_currentDir.isEmpty())
+        setDirectory(m_currentDir);
+}
+
+void ThumbnailPanel::ensureDimensions()
+{
+    if (m_dimsResolved || m_allEntries.isEmpty())
+        return;
+    m_dimsResolved = true; // mark up-front so we launch the worker only once
+
+    const int gen = m_dirGen;
+    QStringList paths;
+    paths.reserve(m_allEntries.size());
+    for (const Entry &e : m_allEntries)
+        paths.append(e.path);
+
+    auto alive = m_alive;
+    std::thread(
+        [this, gen, paths, alive]()
+        {
+            QVector<QSize> sizes;
+            sizes.reserve(paths.size());
+            for (const QString &p : paths)
+            {
+                QImageReader reader(p);
+                reader.setAutoTransform(true);
+                sizes.append(reader.size());
+            }
+            QMetaObject::invokeMethod(
+                this,
+                [this, gen, sizes, alive]()
+                {
+                    if (!alive || !*alive)
+                        return;
+                    if (gen != m_dirGen) // folder changed while resolving
+                        return;
+                    for (int i = 0; i < sizes.size() && i < m_allEntries.size(); ++i)
+                    {
+                        m_allEntries[i].width = sizes[i].width();
+                        m_allEntries[i].height = sizes[i].height();
+                    }
+                    viewport()->update();
+                },
+                Qt::QueuedConnection);
+        })
+        .detach();
 }
 
 void ThumbnailPanel::setSortMode(SortMode mode)
@@ -212,6 +346,15 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
     if (m_viewMode == mode)
         return;
     m_viewMode = mode;
+
+    // P0-4: only the Details view reserves a top margin for the column header.
+    // Reset here so switching away from Details restores the full viewport.
+    if (mode != Details)
+    {
+        setViewportMargins(0, 0, 0, 0);
+        if (m_detailsHeader)
+            m_detailsHeader->hide();
+    }
 
     // P0-2: Large/Small icon modes are thumbnail grids with fixed sizes.
     if (mode == LargeIcon)
@@ -262,6 +405,17 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
             delete m_delegate;
         m_delegate = new DetailsDelegate(this, this);
         setItemDelegate(m_delegate);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        // Reserve space for and show the column header.
+        if (!m_detailsHeader)
+            m_detailsHeader = new DetailsHeader(this);
+        setViewportMargins(0, kDetailsHeaderH, 0, 0);
+        m_detailsHeader->show();
+        positionDetailsHeader();
+        // Details is the only view that shows the resolution column, so this is
+        // where we pay the (deferred, background) header-read cost.
+        ensureDimensions();
     }
     else if (mode == Filmstrip)
     {
@@ -594,6 +748,18 @@ void ThumbnailPanel::scrollToPath(const QString &path)
     scrollTo(idx, PositionAtCenter);
 }
 
+void ThumbnailPanel::selectPath(const QString &path)
+{
+    const int row = m_rowByPath.value(path, -1);
+    if (row < 0)
+        return;
+    const QModelIndex idx = m_model->index(row, 0);
+    if (currentIndex() == idx)
+        return; // already the current item — nothing to do, no scroll jank
+    setCurrentIndex(idx);
+    scrollTo(idx); // default EnsureVisible: only scrolls when off-screen
+}
+
 int ThumbnailPanel::scrollOffset() const
 {
     return verticalScrollBar()->value();
@@ -772,7 +938,18 @@ void ThumbnailPanel::resizeEvent(QResizeEvent *event)
     QListView::resizeEvent(event);
     if (m_compareBtn)
         m_compareBtn->move(viewport()->width() - m_compareBtn->width() - 8, 8);
+    positionDetailsHeader();
     QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
+}
+
+void ThumbnailPanel::positionDetailsHeader()
+{
+    if (!m_detailsHeader || m_viewMode != Details)
+        return;
+    const QRect vp = viewport()->geometry();
+    m_detailsHeader->setGeometry(vp.x(), vp.y() - kDetailsHeaderH, vp.width(),
+                                 kDetailsHeaderH);
+    m_detailsHeader->raise();
 }
 
 void ThumbnailPanel::showEvent(QShowEvent *event)
@@ -1003,10 +1180,10 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
 
     painter->save();
     const QRect r = option.rect.adjusted(4, 2, -4, -2);
+    const DetailLayout L = detailLayout(option.rect.adjusted(0, 2, 0, -2));
 
     // Column 1: small thumbnail (48×48)
-    const int thumbColW = 60;
-    const QRect thumbR(r.x(), r.y() + (r.height() - 48) / 2, 48, 48);
+    const QRect thumbR(L.thumb.x(), r.y() + (r.height() - 48) / 2, 48, 48);
     QPixmap pm = m_panel->thumbReady(path);
     if (!pm.isNull())
     {
@@ -1029,13 +1206,8 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
     nameFont.setBold(true);
     painter->setFont(nameFont);
 
-    int cx = r.x() + thumbColW;
-
     // Column 2: filename
-    const int nameW = qMax(r.width() * 3 / 10, 180);
-    QRect nameR(cx, r.y(), nameW, r.height());
-    painter->drawText(nameR, Qt::AlignVCenter | Qt::TextSingleLine, name);
-    cx += nameW + 12;
+    painter->drawText(L.name, Qt::AlignVCenter | Qt::TextSingleLine, name);
 
     // Column 3: resolution — read from pre-populated Entry data.
     painter->setFont(option.font);
@@ -1047,30 +1219,69 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
         if (e.width > 0 && e.height > 0)
             resStr = QString("%1×%2").arg(e.width).arg(e.height);
     }
-    const int resW = 120;
-    QRect resR(cx, r.y(), resW, r.height());
-    painter->drawText(resR, Qt::AlignVCenter | Qt::TextSingleLine, resStr);
-    cx += resW + 12;
+    painter->drawText(L.res, Qt::AlignVCenter | Qt::TextSingleLine, resStr);
 
     // Column 4: file size
-    const int sizeW = 100;
-    QRect sizeR(cx, r.y(), sizeW, r.height());
-    painter->drawText(sizeR, Qt::AlignVCenter | Qt::TextSingleLine,
+    painter->drawText(L.size, Qt::AlignVCenter | Qt::TextSingleLine,
                       formatFileSize(fi.size()));
-    cx += sizeW + 12;
 
     // Column 5: modified date
-    const int dateW = 160;
-    QRect dateR(cx, r.y(), dateW, r.height());
-    painter->drawText(dateR, Qt::AlignVCenter | Qt::TextSingleLine,
+    painter->drawText(L.date, Qt::AlignVCenter | Qt::TextSingleLine,
                       fi.lastModified().toString("yyyy-MM-dd hh:mm:ss"));
-    cx += dateW + 12;
 
     // Column 6: format
-    const int fmtW = 80;
-    QRect fmtR(cx, r.y(), fmtW, r.height());
-    painter->drawText(fmtR, Qt::AlignVCenter | Qt::TextSingleLine,
+    painter->drawText(L.fmt, Qt::AlignVCenter | Qt::TextSingleLine,
                       fi.suffix().toUpper());
+
+    // Column 7: rating (P0-4). Draw filled/empty stars from the RatingStore.
+    const auto &rs = mviewer::core::RatingStore::instance();
+    const std::string ep = path.toStdString();
+    const int stars = rs.rating(ep);
+    if (stars > 0)
+    {
+        QString starStr;
+        starStr.reserve(5);
+        for (int s = 0; s < 5; ++s)
+            starStr += (s < stars ? QStringLiteral("★") : QStringLiteral("☆"));
+        painter->save();
+        painter->setPen(sel ? textColor : QColor(255, 179, 0));
+        painter->drawText(L.rate, Qt::AlignVCenter | Qt::TextSingleLine, starStr);
+        painter->restore();
+    }
+    else
+    {
+        painter->drawText(L.rate, Qt::AlignVCenter | Qt::TextSingleLine,
+                          QStringLiteral("-"));
+    }
+
+    // Column 8: color label (P0-4). Draw a small colored chip + name.
+    const int label = rs.colorLabel(ep);
+    const QRect labelR = L.label;
+    if (label > 0)
+    {
+        static const QColor kLabelColors[7] = {
+            QColor(), QColor(229, 57, 53), QColor(251, 140, 0),
+            QColor(249, 215, 41), QColor(67, 160, 71),
+            QColor(30, 136, 229), QColor(142, 36, 170)};
+        static const char *kLabelNames[7] = {"", "红", "橙", "黄", "绿", "蓝", "紫"};
+        const QColor chip = kLabelColors[label];
+        const int cs = 12;
+        QRect chipR(labelR.x(), labelR.y() + (labelR.height() - cs) / 2, cs, cs);
+        painter->save();
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(chip);
+        painter->drawRoundedRect(chipR, 3, 3);
+        painter->restore();
+        QRect chipTextR(labelR.x() + cs + 6, labelR.y(),
+                        labelR.width() - cs - 6, labelR.height());
+        painter->drawText(chipTextR, Qt::AlignVCenter | Qt::TextSingleLine,
+                          QString::fromUtf8(kLabelNames[label]));
+    }
+    else
+    {
+        painter->drawText(labelR, Qt::AlignVCenter | Qt::TextSingleLine,
+                          QStringLiteral("-"));
+    }
 
     painter->restore();
 }
@@ -1078,8 +1289,9 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
 QSize ThumbnailPanel::DetailsDelegate::sizeHint(const QStyleOptionViewItem &,
                                                 const QModelIndex &) const
 {
-    // At least 920px for the three-column layout; expand with viewport so the
-    // rightmost column (format / date) is never clipped when the panel is narrow.
-    const int w = qMax(920, m_panel->viewport()->width());
+    // Match the viewport width exactly so no horizontal scrollbar appears and
+    // the header row (painted in the top margin) stays aligned with the cells.
+    // detailLayout() clamps the name column so all columns always fit.
+    const int w = qMax(320, m_panel->viewport()->width());
     return QSize(w, 52);
 }

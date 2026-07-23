@@ -29,9 +29,11 @@
 #include "exportcommand.h"
 #include "exportdialog.h"
 #include "imageviewer.h"
+#include "core/render/Viewport.h"
 #include "pluginsettings.h"
 #include "metadatapanel.h"
 #include "previewpanel.h"
+#include "selectionmodel.h"
 #include "searchpanel.h"
 #include "batchdialog.h"
 #include "breadcrumbbar.h"
@@ -49,6 +51,8 @@
 #include <QUrl>
 #include <QComboBox>
 #include <QDialog>
+#include <QDialogButtonBox>
+#include <QTextBrowser>
 #include <QCheckBox>
 #include <QDir>
 #include <QFile>
@@ -87,6 +91,10 @@ decodeCompareSession(const std::string &json);
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
+    // P0-2: the single source of truth for the current image / selection. Every
+    // panel reacts to this instead of tracking its own current index.
+    m_selection = new SelectionModel(this);
+
     // P0: load persisted cross-session state + recent-folders LRU before UI.
     m_appState = AppState::load();
     const QString recentPath =
@@ -112,6 +120,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
             restoreGeometry(settings.value("geometry").toByteArray());
         if (settings.contains("windowState"))
             restoreState(settings.value("windowState").toByteArray());
+        // P1-7: closeEvent() already persists the splitter layout and the
+        // thumbnail view mode, but they were never restored on launch — recover
+        // them here so the panel widths and list style survive a restart exactly.
+        if (m_mainSplitter && settings.contains("splitterState"))
+            m_mainSplitter->restoreState(settings.value("splitterState").toByteArray());
+        if (m_thumbnailPanel && settings.contains("thumbViewMode"))
+            m_thumbnailPanel->setViewMode(
+                static_cast<ThumbnailPanel::ViewMode>(settings.value("thumbViewMode").toInt()));
     }
 
     // P0: restore last folder + image + scroll position (deferred to event loop).
@@ -208,6 +224,10 @@ void MainWindow::setupUi()
 
     // ----- 帮助(&H) -----
     auto *helpMenu = menuBar->addMenu("帮助(&H)");
+    auto *actShortcuts = new QAction("键盘快捷键(&K)", this);
+    actShortcuts->setShortcut(QKeySequence(Qt::Key_F1));
+    connect(actShortcuts, &QAction::triggered, this, &MainWindow::showShortcutsHelp);
+    helpMenu->addAction(actShortcuts);
     m_actAbout = new QAction("关于(&A)", this);
     helpMenu->addAction(m_actAbout);
 
@@ -339,6 +359,9 @@ void MainWindow::setupUi()
     // through it instead of reaching the registry directly. MainWindow never
     // lists or creates analyzers itself — the pipeline owns that responsibility.
     m_analysisPanel->setPipeline(std::make_unique<AnalyzerPipeline>());
+    // P1-6: expose a one-click report export from inside the analysis panel.
+    connect(m_analysisPanel, &AnalysisPanel::exportRequested, this,
+            [this]() { exportReport(); });
     m_metadataPanel = new MetadataPanel(this);
     m_searchPanel = new SearchPanel(this);
     m_searchPanel->installEventFilter(this);
@@ -381,6 +404,16 @@ void MainWindow::setupUi()
     // P0-3: metadata overlay on the image viewer (toggle with 'M' key / click / hover)
     m_metadataOverlay = new MetadataOverlay(m_imageViewer);
     m_metadataOverlay->hide();
+    // P0-3: the overlay can close itself (ESC / I / M / click). Mirror any
+    // visibility change back into the "图片信息" menu toggle so all entry points
+    // stay consistent and a closed overlay does not silently re-open on the next
+    // image selection.
+    connect(m_metadataOverlay, &MetadataOverlay::visibilityChanged, this,
+            [this](bool visible)
+            {
+                if (m_actToggleMetadata)
+                    m_actToggleMetadata->setChecked(visible);
+            });
 
     // Intercept viewer mouse events to show overlay on click / hover.
     m_imageViewer->installEventFilter(this);
@@ -421,25 +454,21 @@ void MainWindow::setupUi()
                 rebuildRecentMenu();
                 const int n = m_cachedImagePaths.size();
                 statusBar()->showMessage(QString("目录: %1, 图片数: %2").arg(path).arg(n));
-                reindexSearch();
+                scheduleReindex();
             });
 
     connect(m_thumbnailPanel, &ThumbnailPanel::itemClicked, this,
             [this](const QString &path)
             {
-                m_currentImagePath = path;
-                m_previewPanel->setImage(path);       // async decode (off UI thread)
-
-                // P0-3: show metadata overlay if toggled on.
-                if (m_actToggleMetadata && m_actToggleMetadata->isChecked())
-                {
-                    if (m_metadataOverlay)
-                        m_metadataOverlay->showForImage(path);
-                }
-
-                mviewer::core::RatingStore::instance().addRecent(path.toStdString()); // P3 recents
-                statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
+                // P0-2: route selection through the shared model; all panels are
+                // updated centrally in onCurrentImageChanged().
+                m_selection->setCurrentImage(path);
             });
+    // P0-2: the single place that keeps every view in sync with the current
+    // image. Connected once; fired whenever the selection model changes,
+    // regardless of the source (thumbnail click, keyboard nav, open, restore).
+    connect(m_selection, &SelectionModel::currentImageChanged, this,
+            &MainWindow::onCurrentImageChanged);
     connect(m_thumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
             [this](const QString &path) { onImageOpen(path); });
     connect(m_thumbnailPanel, &ThumbnailPanel::compareRequested, this,
@@ -743,6 +772,42 @@ void MainWindow::setupCommands()
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
     const auto mod = event->modifiers();
+    // P0-1: F5 refreshes the directory tree and the gallery from disk.
+    if (event->key() == Qt::Key_F5 && !mod)
+    {
+        m_directoryTree->refresh();
+        m_thumbnailPanel->refresh();
+        m_dirListDirty = true;
+        scheduleReindex();
+        event->accept();
+        return;
+    }
+    // P0-3: ESC dismisses the metadata overlay (keeps the image area maximal for
+    // browsing). Only consume the key when the overlay is actually showing.
+    if (event->key() == Qt::Key_Escape && !mod && m_metadataOverlay &&
+        m_metadataOverlay->isVisible())
+    {
+        m_metadataOverlay->hide();
+        if (m_actToggleMetadata)
+            m_actToggleMetadata->setChecked(false);
+        event->accept();
+        return;
+    }
+    // P1-8: F1 shows the keyboard-shortcut cheat sheet.
+    if (event->key() == Qt::Key_F1 && !mod)
+    {
+        showShortcutsHelp();
+        event->accept();
+        return;
+    }
+    // P1-8: Home/End jump to the first/last image; PageUp/PageDown jump a page.
+    if (!mod && (event->key() == Qt::Key_Home || event->key() == Qt::Key_End ||
+                 event->key() == Qt::Key_PageUp || event->key() == Qt::Key_PageDown))
+    {
+        navigatePage(event->key());
+        event->accept();
+        return;
+    }
     // P3 tail: Ctrl+Shift+1..6 set a color label; Ctrl+Shift+0 clears it;
     // Ctrl+Shift+P toggles pick; Ctrl+Shift+X toggles reject.
     if ((mod & Qt::ControlModifier) && (mod & Qt::ShiftModifier))
@@ -863,6 +928,22 @@ void MainWindow::onSearchMetaToggled(bool on)
     m_thumbnailPanel->setMetaSearch(on);
 }
 
+void MainWindow::scheduleReindex()
+{
+    if (!m_searchPanel)
+        return;
+    if (!m_reindexTimer)
+    {
+        m_reindexTimer = new QTimer(this);
+        m_reindexTimer->setSingleShot(true);
+        m_reindexTimer->setInterval(500);
+        connect(m_reindexTimer, &QTimer::timeout, this, &MainWindow::reindexSearch);
+    }
+    // Restart the countdown on every folder change so rapid browsing does not
+    // trigger repeated (expensive) index rebuilds.
+    m_reindexTimer->start();
+}
+
 void MainWindow::reindexSearch()
 {
     if (!m_searchPanel)
@@ -979,14 +1060,17 @@ void MainWindow::toggleCurrentReject()
 
 void MainWindow::onImageOpen(const QString &path)
 {
-    m_previewPanel->setImage(path); // async decode (off UI thread)
-    m_imageViewer->setImage(path);  // async decode; imageReady() feeds AnalysisPanel
-    // P0-3: keep both metadata views in sync; overlay stays hidden until triggered.
-    m_metadataPanel->setImage(path);
-    if (m_metadataOverlay)
-        m_metadataOverlay->setImage(path);
-    m_currentImagePath = path;
-    mviewer::core::RatingStore::instance().addRecent(path.toStdString()); // P3 recents
+    const bool wasHidden = m_imageViewer->isHidden();
+    // P0-2: route the "current image" change through the shared model so every
+    // panel (preview, metadata, status bar, thumbnail highlight) syncs centrally
+    // in onCurrentImageChanged(). The central handler only decodes into the
+    // viewer when it is already visible, so when opening it fresh we set the
+    // image explicitly below.
+    m_selection->setCurrentImage(path);
+    if (wasHidden)
+        m_imageViewer->setImage(path); // async; imageReady() feeds AnalysisPanel
+
+    // --- "open" extras (only meaningful for an explicit open, not selection) ---
     pushHistory(path); // P0: in-session browse history
     // P0-1: cross-session image history.
     m_appState.addHistory(path);
@@ -999,11 +1083,41 @@ void MainWindow::onImageOpen(const QString &path)
     const auto it = m_analysisByPath.find(path);
     if (it != m_analysisByPath.end() && !it->isEmpty())
         m_analysisPanel->setRegionStats(*it);
-    statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
-    if (m_imageViewer->isHidden())
+    if (wasHidden)
         m_imageViewer->show();
     m_imageViewer->raise();
     m_imageViewer->activateWindow();
+}
+
+void MainWindow::onCurrentImageChanged(const QString &path)
+{
+    // P0-2: the ONE place that fans the current-image change out to every view.
+    m_currentImagePath = path; // keep the mirror for existing readers
+    if (path.isEmpty())
+        return;
+
+    m_previewPanel->setImage(path); // async decode (off UI thread)
+    // Only decode into the viewer when it is actually on screen — avoids a
+    // second decode per thumbnail while browsing with the viewer closed.
+    if (!m_imageViewer->isHidden())
+        m_imageViewer->setImage(path);
+
+    // Metadata: the overlay follows its toggle; the (usually hidden) tool panel
+    // is refreshed only when visible so rapid browsing stays cheap.
+    if (m_metadataOverlay)
+    {
+        m_metadataOverlay->setImage(path);
+        if (m_actToggleMetadata && m_actToggleMetadata->isChecked())
+            m_metadataOverlay->showForImage(path);
+    }
+    if (m_metadataPanel && m_metadataPanel->isVisible())
+        m_metadataPanel->setImage(path);
+
+    // Keep the thumbnail-grid highlight in lock-step (no-op if already current).
+    m_thumbnailPanel->selectPath(path);
+
+    mviewer::core::RatingStore::instance().addRecent(path.toStdString()); // P3 recents
+    statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
 }
 
 void MainWindow::openDirectory(const QString &dir)
@@ -1085,13 +1199,97 @@ void MainWindow::navigate(int delta)
         return;
 
     const QString path = list.at(next);
-    m_currentImagePath = path;
-    m_imageViewer->setImage(path);  // async; imageReady() feeds AnalysisPanel
-    m_previewPanel->setImage(path); // async; off UI thread
-    m_metadataPanel->setImage(path);
-    if (m_metadataOverlay)
-        m_metadataOverlay->setImage(path);
-    statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
+    // P0-2: single source of truth. onCurrentImageChanged() now also keeps the
+    // thumbnail-grid highlight in sync with keyboard navigation — previously the
+    // grid selection lagged behind the viewer when using the arrow keys.
+    m_selection->setCurrentImage(path);
+}
+
+void MainWindow::navigatePage(int key)
+{
+    if (m_currentDir.isEmpty())
+        return;
+    if (m_dirListDirty)
+    {
+        m_cachedImagePaths.clear();
+        for (const auto &p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
+            m_cachedImagePaths.append(QString::fromStdString(p));
+        m_dirListDirty = false;
+    }
+    const QStringList &list = m_cachedImagePaths;
+    if (list.isEmpty())
+        return;
+
+    int idx = list.indexOf(m_currentImagePath);
+    if (idx < 0)
+        idx = 0;
+    constexpr int kPage = 10; // images per PageUp/PageDown step
+    int target = idx;
+    switch (key)
+    {
+    case Qt::Key_Home:
+        target = 0;
+        break;
+    case Qt::Key_End:
+        target = list.size() - 1;
+        break;
+    case Qt::Key_PageUp:
+        target = qMax(0, idx - kPage);
+        break;
+    case Qt::Key_PageDown:
+        target = qMin(list.size() - 1, idx + kPage);
+        break;
+    default:
+        return;
+    }
+    if (target != idx || m_currentImagePath.isEmpty())
+        m_selection->setCurrentImage(list.at(target));
+}
+
+void MainWindow::showShortcutsHelp()
+{
+    // P1-8: a single, authoritative cheat sheet so users never have to guess.
+    const QString html = QStringLiteral(
+        "<style>td{padding:2px 14px 2px 0;} th{text-align:left;padding-top:8px;}"
+        "kbd{background:#333;color:#fff;border-radius:3px;padding:1px 5px;}</style>"
+        "<table>"
+        "<tr><th colspan='2'>浏览</th></tr>"
+        "<tr><td><kbd>←</kbd> / <kbd>→</kbd></td><td>上一张 / 下一张</td></tr>"
+        "<tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>第一张 / 最后一张</td></tr>"
+        "<tr><td><kbd>PageUp</kbd> / <kbd>PageDown</kbd></td><td>上翻 / 下翻一页（10 张）</td></tr>"
+        "<tr><td><kbd>F5</kbd></td><td>刷新目录树与画廊</td></tr>"
+        "<tr><td><kbd>Tab</kbd></td><td>显示 / 隐藏侧边面板</td></tr>"
+        "<tr><th colspan='2'>视图模式</th></tr>"
+        "<tr><td><kbd>G</kbd></td><td>缩略图视图</td></tr>"
+        "<tr><td><kbd>D</kbd></td><td>详情视图</td></tr>"
+        "<tr><td><kbd>Ctrl+1</kbd>…<kbd>Ctrl+6</kbd></td><td>缩略图 / 大图标 / 小图标 / 详情 / 胶片 / 紧凑</td></tr>"
+        "<tr><th colspan='2'>比较</th></tr>"
+        "<tr><td><kbd>Space</kbd></td><td>快速比较当前 + 下一张</td></tr>"
+        "<tr><th colspan='2'>分析 / 信息</th></tr>"
+        "<tr><td><kbd>H</kbd></td><td>直方图 / 分析面板</td></tr>"
+        "<tr><td><kbd>M</kbd> / <kbd>Ctrl+I</kbd></td><td>图片信息浮层</td></tr>"
+        "<tr><td><kbd>ESC</kbd></td><td>关闭信息浮层</td></tr>"
+        "<tr><th colspan='2'>评分 / 标签</th></tr>"
+        "<tr><td><kbd>Ctrl+0</kbd>…<kbd>Ctrl+5</kbd></td><td>评分（0 = 清除）</td></tr>"
+        "<tr><td><kbd>Ctrl+Shift+0</kbd>…<kbd>Ctrl+Shift+6</kbd></td><td>颜色标签（0 = 清除）</td></tr>"
+        "<tr><td><kbd>Ctrl+Shift+P</kbd> / <kbd>Ctrl+Shift+X</kbd></td><td>标记选中 / 拒绝</td></tr>"
+        "<tr><th colspan='2'>剪贴板</th></tr>"
+        "<tr><td><kbd>Ctrl+C</kbd> / <kbd>Ctrl+Shift+C</kbd></td><td>复制图片 / 复制路径</td></tr>"
+        "</table>");
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("键盘快捷键"));
+    dlg.resize(480, 560);
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *browser = new QTextBrowser(&dlg);
+    browser->setHtml(html);
+    browser->setOpenExternalLinks(false);
+    lay->addWidget(browser);
+    auto *box = new QDialogButtonBox(QDialogButtonBox::Close, &dlg);
+    connect(box, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    connect(box, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    lay->addWidget(box);
+    dlg.exec();
 }
 
 void MainWindow::onBreadcrumbPath(const QString &path)
@@ -1819,6 +2017,17 @@ void MainWindow::closeEvent(QCloseEvent *event)
             settings.setValue("thumbViewMode", m_thumbnailPanel->viewMode());
         if (m_mainSplitter)
             settings.setValue("splitterState", m_mainSplitter->saveState());
+        // P1-7: persist the main viewer's zoom level + pan position so a session
+        // that ended with the viewer open restores identically (scale/offset are
+        // screen-space, so the viewer must have been visible to be meaningful).
+        if (m_imageViewer && !m_imageViewer->isHidden() && !m_currentImagePath.isEmpty())
+        {
+            const auto v = m_imageViewer->viewTransform();
+            settings.setValue("viewerPath", m_currentImagePath);
+            settings.setValue("viewerScale", v.scale);
+            settings.setValue("viewerOffX", v.offsetX);
+            settings.setValue("viewerOffY", v.offsetY);
+        }
     }
 
     QMainWindow::closeEvent(event);
@@ -1925,6 +2134,21 @@ void MainWindow::restoreSessionRecovery()
                            {
                                m_currentImagePath = lastImage;
                                onImageOpen(lastImage);
+                               // P1-7: if the session ended with the viewer open on
+                               // this exact image, restore its zoom level + pan. The
+                               // transform is applied on the UI thread after the async
+                               // decode completes (see ImageViewer::setImage).
+                               QSettings vs;
+                               if (vs.value("viewerPath").toString() == lastImage)
+                               {
+                                   Viewport v;
+                                   v.screenW = m_imageViewer->width();
+                                   v.screenH = m_imageViewer->height();
+                                   v.scale = vs.value("viewerScale", 1.0).toReal();
+                                   v.offsetX = vs.value("viewerOffX", 0.0).toReal();
+                                   v.offsetY = vs.value("viewerOffY", 0.0).toReal();
+                                   m_imageViewer->setViewTransform(v);
+                               }
                            }
                            // M15 P0#1: reopen Compare with its fully persisted
                            // session (ROI, zoom, layout, threshold, blink, ...).
@@ -1964,6 +2188,25 @@ void MainWindow::dropEvent(QDropEvent *event)
         return;
     }
     event->acceptProposedAction();
+    // P1-5: drag workflow — dropping multiple images jumps straight into Compare
+    // (no manual "add" button); a single image opens it; a directory opens the folder.
+    if (paths.size() >= 2)
+    {
+        // All dropped items must be images (not a mix of dirs + files).
+        bool allImages = true;
+        for (const QString &p : paths)
+            if (QFileInfo(p).isDir())
+            {
+                allImages = false;
+                break;
+            }
+        if (allImages)
+        {
+            openCompare(paths);
+            return;
+        }
+        // Mixed: open the first directory, ignore the rest.
+    }
     // If first path is a directory, open it; otherwise open as images.
     const QFileInfo fi(paths.first());
     if (fi.isDir())
@@ -1991,10 +2234,15 @@ void MainWindow::toggleMetadataOverlay()
 {
     if (!m_metadataOverlay || m_currentImagePath.isEmpty())
         return;
-    if (m_metadataOverlay->isVisible())
-        m_metadataOverlay->hide();
-    else
+    const bool show = !m_metadataOverlay->isVisible();
+    if (show)
         m_metadataOverlay->showForImage(m_currentImagePath);
+    else
+        m_metadataOverlay->hide();
+    // P0-3: keep the "图片信息" toggle in the View menu in sync so every entry
+    // point (Ctrl+I, M key, ESC) agrees on the overlay's state.
+    if (m_actToggleMetadata)
+        m_actToggleMetadata->setChecked(show);
 }
 
 void MainWindow::copyCurrentImageToClipboard()

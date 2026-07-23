@@ -7,6 +7,7 @@
 
 #include <QHBoxLayout>
 #include <QPainter>
+#include <QPushButton>
 #include <QVBoxLayout>
 
 AnalysisPanel::AnalysisPanel(QWidget *parent) : QWidget(parent)
@@ -42,6 +43,12 @@ void AnalysisPanel::buildUi()
     // registry analyzer, so it stays as an extra option.
     m_analyzerCombo->addItem(tr("Dual Compare (PSNR/SSIM)"), QString("builtin_compare"));
     plugBar->addWidget(m_analyzerCombo, 1);
+    // P1-6: one-click export of the current analysis report, so the analyzer
+    // workflow (Image -> pipeline -> result panel -> export) stays inside the panel
+    // instead of forcing a trip to the File menu.
+    auto *exportBtn = new QPushButton(tr("导出报告"));
+    connect(exportBtn, &QPushButton::clicked, this, &AnalysisPanel::exportRequested);
+    plugBar->addWidget(exportBtn);
     mainLay->addLayout(plugBar);
 
     connect(m_analyzerCombo, QOverload<int>::of(&QComboBox::activated), this,

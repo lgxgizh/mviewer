@@ -16,6 +16,7 @@
 #include <QRect>
 #include <QResizeEvent>
 #include <QWheelEvent>
+#include <cmath>
 
 namespace
 {
@@ -90,12 +91,35 @@ void ImageViewer::setImage(const QString &path)
                     m_view.screenW = width();
                     m_view.screenH = height();
                     m_view.fit(m_pixmap.width(), m_pixmap.height(), 0.95);
+                    // P1-7: if a session-restore zoom/pan was requested before the
+                    // async decode finished, apply it now. Only reuse the saved pan
+                    // offsets when the window size matches (offsets are screen-space);
+                    // otherwise keep the fitted pan and just restore the zoom level.
+                    if (m_pendingView)
+                    {
+                        m_view.scale = m_pendingView->scale;
+                        if (std::fabs(m_view.screenW - m_pendingView->screenW) < 2.0 &&
+                            std::fabs(m_view.screenH - m_pendingView->screenH) < 2.0)
+                        {
+                            m_view.offsetX = m_pendingView->offsetX;
+                            m_view.offsetY = m_pendingView->offsetY;
+                        }
+                        m_pendingView.reset();
+                        emitZoom();
+                    }
                     m_tileCache.clear(); // drop tiles from any previously viewed image
                     preloadNeighbors(path);
                     update();
                     emit imageReady(m_frame);
                 });
         });
+}
+
+void ImageViewer::setViewTransform(const Viewport &v)
+{
+    // Store until the async load of the current image completes; the callback
+    // in setImage() applies it once screen geometry is known.
+    m_pendingView = v;
 }
 
 void ImageViewer::preloadNeighbors(const QString &path)

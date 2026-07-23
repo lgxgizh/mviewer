@@ -101,6 +101,7 @@ target_include_directories(mviewer_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_library(mviewer_ui STATIC
     mainwindow.cpp
+    selectionmodel.cpp
     appstate.cpp
     imageviewer.cpp
     directorytree.cpp

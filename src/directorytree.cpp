@@ -62,6 +62,30 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
 
 DirectoryTree::~DirectoryTree() = default;
 
+QString DirectoryTree::currentPath() const
+{
+    const QModelIndex idx = currentIndex();
+    if (!idx.isValid())
+        return {};
+    const QModelIndex source = m_proxy->mapToSource(idx);
+    if (!m_model->isDir(source))
+        return {};
+    return m_model->filePath(source);
+}
+
+void DirectoryTree::refresh()
+{
+    const QString path = currentPath();
+    if (path.isEmpty())
+        return;
+    // Nudge QFileSystemModel to re-scan this node's children so freshly created
+    // or removed sub-folders are reflected immediately.
+    const QModelIndex source = m_model->index(path);
+    if (source.isValid())
+        m_model->fetchMore(source);
+    emit directoryChanged(path);
+}
+
 void DirectoryTree::navigateTo(const QString &path, bool emitSignal)
 {
     if (path.isEmpty() || !QDir(path).exists())

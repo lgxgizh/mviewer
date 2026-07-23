@@ -12,6 +12,7 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDialog>
 #include <QDir>
 
 #include <algorithm>
@@ -1519,6 +1520,15 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
             m_blinkChk->setChecked(true);
         }
         event->accept();
+        return;
+    }
+    // P1-5: ESC dismisses the Compare dialog (the panel sits inside a QDialog,
+    // and key events here don't auto-bubble up to it, so handle it explicitly).
+    if (event->key() == Qt::Key_Escape)
+    {
+        event->accept();
+        if (auto *dlg = qobject_cast<QDialog *>(window()))
+            dlg->reject();
         return;
     }
     QWidget::keyPressEvent(event);

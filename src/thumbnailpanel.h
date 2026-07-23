@@ -61,6 +61,14 @@ class ThumbnailPanel : public QListView
     ~ThumbnailPanel() override;
 
     void setDirectory(const QString &path);
+    // P0-1: F5 refresh — reload the current directory from disk.
+    void refresh();
+    QString currentDir() const { return m_currentDir; }
+    // P0-2: programmatically make `path` the selected/current item so the grid
+    // highlight stays in lock-step with the shared SelectionModel. Unlike
+    // scrollToPath() this only scrolls when the item is off-screen (avoids
+    // recentring jank when the user clicked an already-visible thumbnail).
+    void selectPath(const QString &path);
     void setSortMode(SortMode mode);
     void setViewMode(ViewMode mode);
     ViewMode viewMode() const { return m_viewMode; }
@@ -192,6 +200,19 @@ class ThumbnailPanel : public QListView
 
     void applyFilter();                        // (re)build the filtered model
     void ensureMetaIndex();                    // lazily index metadata for m_allEntries
+
+    // P0-1 (perf): resolve pixel dimensions off the UI thread. setDirectory no
+    // longer reads image headers eagerly (that blocked folder switching on large
+    // directories); dimensions are filled in the background only when the
+    // Details view needs them. m_dirGen invalidates stale background results.
+    void ensureDimensions();
+    int m_dirGen = 0;
+    bool m_dimsResolved = false;
+
+    // P0-4: column-title header row shown only in the Details view. Positioned in
+    // the reserved viewport top margin so it lines up with the delegate columns.
+    QWidget *m_detailsHeader = nullptr;
+    void positionDetailsHeader();
 
     // Guards against the shared pipeline's worker thread calling back into a
     // destroyed panel after the destructor runs.
