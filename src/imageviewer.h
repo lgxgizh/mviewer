@@ -85,6 +85,7 @@ class ImageViewer : public QWidget
     void resizeEvent(QResizeEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
+    void contextMenuEvent(QContextMenuEvent *event) override;
 
   private:
     void emitZoom();

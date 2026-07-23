@@ -152,6 +152,7 @@ class ThumbnailPanel : public QListView
         return m_paths;
     }
     QPixmap thumbReady(const QString &path) const;
+    bool thumbFailed(const QString &path) const;
     const QList<Entry> &entries() const
     {
         return m_allEntries;
@@ -206,6 +207,7 @@ class ThumbnailPanel : public QListView
     mutable QMutex m_thumbMtx;
     QHash<QString, QPixmap> m_thumbReady;
     QSet<QString> m_thumbPending;
+    QSet<QString> m_thumbFailed; // decode returned null → show error placeholder
 
     QPushButton *m_compareBtn = nullptr;
     QString m_currentDir;

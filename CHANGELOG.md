@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — 基础功能打磨第四轮 (Shortcut Fix & Panel Polish)
+
+- **快捷键冲突修复 (功能 bug):** `Ctrl+1..5` 原先被评分拦截，导致视图模式 1–5（网格/
+  大图标/小图标/详情/胶片条）永远无法通过快捷键切换，只有 `Ctrl+6`（紧凑）可达。
+  评分快捷键改为 `Ctrl+Shift+0..5`，颜色标签改为 `Alt+0..6`，`Ctrl+1..6` 专用于
+  视图模式切换。F1 速查表同步更新。
+  (`src/mainwindow.cpp`)
+- **排序模式持久化:** 排序模式（文件名/日期/大小/分辨率）现在在关闭时保存到 QSettings，
+  启动时自动恢复，不再每次重置为"文件名"。
+  (`src/mainwindow.cpp/h`)
+- **启动初始焦点:** 构造函数末尾将焦点设置到画廊，启动后即可用方向键导航，无需先点击。
+  (`src/mainwindow.cpp`)
+- **窗口最小尺寸:** 主窗口设置 `setMinimumSize(800, 500)`；中央分隔条设为不可折叠
+  （`setChildrenCollapsible(false)`），各子面板设置最小宽度（200/320/200/180），
+  防止缩到极小时布局崩溃。
+  (`src/mainwindow.cpp`)
+- **查看器右键上下文菜单:** ImageViewer 新增 `contextMenuEvent`，右键菜单包含
+  复制图片、复制路径、放大/缩小/适应窗口/实际大小、上一张/下一张、全屏切换。
+  (`src/imageviewer.cpp/h`)
+- **缩略图加载失败占位图:** 解码失败的图片现在显示深灰色背景+"无法加载"文字，
+  与"正在加载"的浅灰色占位区分开。新增 `m_thumbFailed` 集合和 `thumbFailed()` 方法。
+  (`src/thumbnailpanel.cpp/h`)
+
 ### Added — 基础功能打磨第三轮 (Interaction & Workflow Polish)
 
 - **拖放体验统一:** MainWindow 补 `dragMoveEvent`，拖动文件到窗口任意区域（分隔条、

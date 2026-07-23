@@ -8,9 +8,12 @@
 #include "gpu/GpuTileUploader.h"
 
 #include <QApplication>
+#include <QClipboard>
+#include <QContextMenuEvent>
 #include <QDir>
 #include <QFileInfo>
 #include <QKeyEvent>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QRect>
@@ -565,4 +568,42 @@ void ImageViewer::keyPressEvent(QKeyEvent *event)
     }
     else
         QWidget::keyPressEvent(event);
+}
+
+void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
+{
+    QMenu menu(this);
+    QAction *aCopy = menu.addAction("复制图片");
+    QAction *aCopyPath = menu.addAction("复制路径");
+    menu.addSeparator();
+    QAction *aZoomIn = menu.addAction("放大 (+)");
+    QAction *aZoomOut = menu.addAction("缩小 (-)");
+    QAction *aZoomFit = menu.addAction("适应窗口 (0)");
+    QAction *aZoomActual = menu.addAction("实际大小 (1)");
+    menu.addSeparator();
+    QAction *aNext = menu.addAction("下一张 (→)");
+    QAction *aPrev = menu.addAction("上一张 (←)");
+    menu.addSeparator();
+    QAction *aFullscreen = menu.addAction("全屏 (F)");
+    QAction *chosen = menu.exec(event->globalPos());
+    if (!chosen)
+        return;
+    if (chosen == aCopy)
+        QApplication::clipboard()->setPixmap(m_pixmap);
+    else if (chosen == aCopyPath)
+        QApplication::clipboard()->setText(m_currentPath);
+    else if (chosen == aZoomIn)
+        zoomIn();
+    else if (chosen == aZoomOut)
+        zoomOut();
+    else if (chosen == aZoomFit)
+        zoomFit();
+    else if (chosen == aZoomActual)
+        zoomActual();
+    else if (chosen == aNext)
+        emit requestNext();
+    else if (chosen == aPrev)
+        emit requestPrev();
+    else if (chosen == aFullscreen)
+        isFullScreen() ? showNormal() : showFullScreen();
 }

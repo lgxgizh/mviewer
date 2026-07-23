@@ -110,6 +110,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     setupCommands();
     setWindowTitle("MViewer");
     resize(1280, 800);
+    setMinimumSize(800, 500); // prevent layout collapse at tiny sizes
 
     // M13.5: restore persisted window geometry/layout (QSettings, independent of workspace).
     {
@@ -126,6 +127,17 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         if (m_thumbnailPanel && settings.contains("thumbViewMode"))
             m_thumbnailPanel->setViewMode(
                 static_cast<ThumbnailPanel::ViewMode>(settings.value("thumbViewMode").toInt()));
+        // Restore the last-used sort mode (Name/Date/Size/Resolution).
+        if (m_sortCombo && settings.contains("thumbSortMode"))
+        {
+            const int sm = settings.value("thumbSortMode").toInt();
+            for (int i = 0; i < m_sortCombo->count(); ++i)
+                if (m_sortCombo->itemData(i).toInt() == sm)
+                {
+                    m_sortCombo->setCurrentIndex(i);
+                    break;
+                }
+        }
     }
 
     // P0: restore last folder + image + scroll position (deferred to event loop).
@@ -140,6 +152,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     // M15: drag & drop — accept files/folders dropped onto the window.
     setAcceptDrops(true);
+
+    // Give the gallery keyboard focus on launch so arrow-key navigation works
+    // immediately without the user having to click first.
+    if (m_thumbnailPanel)
+        m_thumbnailPanel->setFocus();
 
     // M15: crash recovery — autosave current session every 30s + restore on launch.
     m_autosaveTimer = new QTimer(this);
@@ -296,6 +313,7 @@ void MainWindow::setupUi()
     sortLayout->setContentsMargins(6, 4, 6, 4);
     sortLayout->addWidget(new QLabel("排序：", sortBar));
     auto *sortCombo = new QComboBox(sortBar);
+    m_sortCombo = sortCombo;
     sortCombo->addItem("文件名", ThumbnailPanel::SortName);
     sortCombo->addItem("日期", ThumbnailPanel::SortDate);
     sortCombo->addItem("大小", ThumbnailPanel::SortSize);
@@ -403,6 +421,13 @@ void MainWindow::setupUi()
     centralSplitter->setStretchFactor(2, 0);
     centralSplitter->setStretchFactor(3, 0);
     centralSplitter->setSizes({340, 820, 300, 240});
+    // Prevent any panel from being collapsed to zero width — keeps the layout
+    // usable when the window is narrow.
+    centralSplitter->setChildrenCollapsible(false);
+    leftWidget->setMinimumWidth(200);
+    rightWidget->setMinimumWidth(320);
+    m_analysisPanel->setMinimumWidth(200);
+    m_searchPanel->setMinimumWidth(180);
     // ----- M15: main content wrapper (breadcrumb + splitter) -----
     auto *mainContainer = new QWidget(this);
     auto *mainLayout = new QVBoxLayout(mainContainer);
@@ -865,7 +890,10 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     }
     // P3 tail: Ctrl+Shift+1..6 set a color label; Ctrl+Shift+0 clears it;
     // Ctrl+Shift+P toggles pick; Ctrl+Shift+X toggles reject.
-    if ((mod & Qt::ControlModifier) && (mod & Qt::ShiftModifier))
+    // Alt+0..6 sets color labels (moved from Ctrl+Shift+0..6 to free those for
+    // star ratings, which in turn were moved from Ctrl+0..5 to avoid colliding
+    // with Ctrl+1..6 view-mode shortcuts).
+    if ((mod & Qt::AltModifier) && !event->isAutoRepeat())
     {
         if (event->key() >= Qt::Key_0 && event->key() <= Qt::Key_6)
         {
@@ -873,6 +901,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             event->accept();
             return;
         }
+    }
+    if ((mod & Qt::ControlModifier) && (mod & Qt::ShiftModifier))
+    {
         if (event->key() == Qt::Key_P)
         {
             toggleCurrentPick();
@@ -886,8 +917,10 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             return;
         }
     }
-    // P1: Ctrl+1..5 rate the current image; Ctrl+0 clears the rating.
-    if ((mod & Qt::ControlModifier) && !(mod & Qt::ShiftModifier) && event->key() >= Qt::Key_0 &&
+    // P1: Ctrl+Shift+0..5 rate the current image; Ctrl+Shift+0 clears.
+    // (Was Ctrl+0..5, which collided with the Ctrl+1..6 view-mode shortcuts —
+    //  Ctrl+1..5 could never reach view-mode switching.)
+    if ((mod & Qt::ControlModifier) && (mod & Qt::ShiftModifier) && event->key() >= Qt::Key_0 &&
         event->key() <= Qt::Key_5)
     {
         rateCurrentImage(event->key() - Qt::Key_0);
@@ -1453,8 +1486,8 @@ void MainWindow::showShortcutsHelp()
         "<tr><td><kbd>H</kbd></td><td>直方图 / 分析面板</td></tr>"
         "<tr><td><kbd>M</kbd> / <kbd>Ctrl+I</kbd></td><td>图片信息浮层（浮层内 Ctrl+C 复制全部元数据）</td></tr>"
         "<tr><th colspan='2'>评分 / 标签</th></tr>"
-        "<tr><td><kbd>Ctrl+0</kbd>…<kbd>Ctrl+5</kbd></td><td>评分（0 = 清除）</td></tr>"
-        "<tr><td><kbd>Ctrl+Shift+0</kbd>…<kbd>Ctrl+Shift+6</kbd></td><td>颜色标签（0 = "
+        "<tr><td><kbd>Ctrl+Shift+0</kbd>…<kbd>Ctrl+Shift+5</kbd></td><td>评分（0 = 清除）</td></tr>"
+        "<tr><td><kbd>Alt+0</kbd>…<kbd>Alt+6</kbd></td><td>颜色标签（0 = "
         "清除）</td></tr>"
         "<tr><td><kbd>Ctrl+Shift+P</kbd> / <kbd>Ctrl+Shift+X</kbd></td><td>标记选中 / "
         "拒绝</td></tr>"
@@ -2204,6 +2237,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
         // P1-3: persist thumbnail view mode and splitter geometry.
         if (m_thumbnailPanel)
             settings.setValue("thumbViewMode", m_thumbnailPanel->viewMode());
+        if (m_sortCombo)
+            settings.setValue("thumbSortMode", m_sortCombo->currentData().toInt());
         if (m_mainSplitter)
             settings.setValue("splitterState", m_mainSplitter->saveState());
         // P1-7: persist the main viewer's zoom level + pan position so a session

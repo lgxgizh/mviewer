@@ -234,7 +234,17 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                     return; // panel destroyed; ignore late callback
                 QImage q = mvcore::toQImage(img);
                 if (q.isNull())
+                {
+                    // Record the failure so the delegate can paint a distinct
+                    // "无法加载" placeholder instead of the generic loading grey.
+                    {
+                        QMutexLocker l(&m_thumbMtx);
+                        m_thumbFailed.insert(QString::fromStdString(p));
+                        m_thumbPending.remove(QString::fromStdString(p));
+                    }
+                    QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
                     return;
+                }
                 const int s = m_thumbSize;
                 QPixmap pm(s, s);
                 pm.fill(Qt::transparent);
@@ -684,6 +694,7 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
         QMutexLocker lk(&m_thumbMtx);
         m_thumbReady.clear();
         m_thumbPending.clear();
+        m_thumbFailed.clear();
     }
     ThumbnailPipeline::instance().setSources(toStdPaths(m_paths));
 
@@ -757,6 +768,12 @@ QPixmap ThumbnailPanel::thumbReady(const QString &path) const
     QMutexLocker lk(&m_thumbMtx);
     auto it = m_thumbReady.constFind(path);
     return it == m_thumbReady.constEnd() ? QPixmap() : it.value();
+}
+
+bool ThumbnailPanel::thumbFailed(const QString &path) const
+{
+    QMutexLocker lk(&m_thumbMtx);
+    return m_thumbFailed.contains(path);
 }
 
 void ThumbnailPanel::onSelectionChanged()
@@ -1088,6 +1105,7 @@ void ThumbnailPanel::stopThumbnailWorker()
     QMutexLocker lk(&m_thumbMtx);
     m_thumbReady.clear();
     m_thumbPending.clear();
+    m_thumbFailed.clear();
 }
 
 // static
@@ -1162,7 +1180,21 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
     }
     else
     {
-        painter->fillRect(thumbRect, QColor(228, 228, 228));
+        // Distinguish "failed to decode" (darker grey + hint text) from
+        // "still loading" (light grey, no text).
+        if (m_panel->thumbFailed(path))
+        {
+            painter->fillRect(thumbRect, QColor(200, 200, 200));
+            painter->setPen(QColor(150, 150, 150));
+            QFont f = painter->font();
+            f.setPointSize(qMax(7, f.pointSize() - 1));
+            painter->setFont(f);
+            painter->drawText(thumbRect, Qt::AlignCenter, "无法\n加载");
+        }
+        else
+        {
+            painter->fillRect(thumbRect, QColor(228, 228, 228));
+        }
     }
 
     QRect textRect(option.rect.x() + 4, thumbRect.bottom() + 4, option.rect.width() - 8,
@@ -1292,7 +1324,19 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
     }
     else
     {
-        painter->fillRect(thumbR, QColor(228, 228, 228));
+        if (m_panel->thumbFailed(path))
+        {
+            painter->fillRect(thumbR, QColor(200, 200, 200));
+            painter->setPen(QColor(150, 150, 150));
+            QFont f = painter->font();
+            f.setPointSize(qMax(7, f.pointSize() - 1));
+            painter->setFont(f);
+            painter->drawText(thumbR, Qt::AlignCenter, "无法\n加载");
+        }
+        else
+        {
+            painter->fillRect(thumbR, QColor(228, 228, 228));
+        }
     }
 
     const QColor textColor = sel ? option.palette.color(QPalette::HighlightedText)
