@@ -166,6 +166,9 @@ class ThumbnailPanel : public QListView
     void compareRequested(const QStringList &paths);
     // External files/folders dropped onto the gallery (forwarded to MainWindow).
     void filesDropped(const QStringList &paths);
+    // Emitted after a delete/trash operation so the host can advance the viewer
+    // off the deleted image. `deletedPaths` lists the removed files.
+    void pathsRemoved(const QStringList &deletedPaths);
     // P0 #①: live gallery stats for the status bar (count / sizes / selection).
     void statsChanged(int total, qint64 totalBytes, int selected, qint64 selectedBytes);
 

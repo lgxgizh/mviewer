@@ -54,6 +54,7 @@ class MainWindow : public QMainWindow
     void closeEvent(QCloseEvent *event) override;
     // M15: drag & drop support
     void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragMoveEvent(QDragMoveEvent *event) override;
     void dropEvent(QDropEvent *event) override;
     // P0-3: intercept image-viewer mouse events for metadata overlay triggers.
     bool eventFilter(QObject *watched, QEvent *event) override;

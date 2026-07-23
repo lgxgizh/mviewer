@@ -505,6 +505,18 @@ void MainWindow::setupUi()
     // them anywhere else on the window.
     connect(m_thumbnailPanel, &ThumbnailPanel::filesDropped, this,
             &MainWindow::handleDroppedPaths);
+    // When the user deletes images from the gallery, advance the viewer off the
+    // deleted image if it was the one being viewed.
+    connect(m_thumbnailPanel, &ThumbnailPanel::pathsRemoved, this,
+            [this](const QStringList &deleted)
+            {
+                if (m_currentImagePath.isEmpty() || m_imageViewer->isHidden())
+                    return;
+                if (!deleted.contains(m_currentImagePath))
+                    return;
+                // Advance to the next available image in the (refreshed) folder.
+                navigate(1);
+            });
 
     // EventBus (decoupled, dual-mode) subscriptions.
     EventBus::instance().subscribe("image.open",
@@ -946,8 +958,47 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
+    // Ctrl+V: paste an image from the clipboard (e.g. after a screenshot) and
+    // view it directly — common screenshot-to-viewer workflow.
+    if ((mod & Qt::ControlModifier) && event->key() == Qt::Key_V && !(mod & Qt::ShiftModifier))
+    {
+        const QClipboard *cb = QApplication::clipboard();
+        const QMimeData *md = cb->mimeData();
+        if (md && md->hasImage())
+        {
+            const QImage img = qvariant_cast<QImage>(md->imageData());
+            if (!img.isNull())
+            {
+                // Persist to a temp file on D: drive so ImageViewer can load it
+                // via its normal async path (keeps decode/histogram consistent).
+                const QString tmpDir = "D:/mviewer/clip-paste";
+                QDir().mkpath(tmpDir);
+                const QString tmpPath = tmpDir + "/paste_" +
+                                        QDateTime::currentDateTime().toString(
+                                            "yyyyMMdd_HHmmss") + ".png";
+                if (img.save(tmpPath, "PNG"))
+                {
+                    onImageOpen(tmpPath);
+                    statusBar()->showMessage("已从剪贴板粘贴图片", 3000);
+                }
+                else
+                    statusBar()->showMessage("无法保存剪贴板图片", 3000);
+            }
+            else
+                statusBar()->showMessage("剪贴板中无图片数据", 3000);
+        }
+        else
+            statusBar()->showMessage("剪贴板中无图片数据", 3000);
+        event->accept();
+        return;
+    }
     // P0-4 / P1-4: Space triggers compare for the current + next image.
     if (event->key() == Qt::Key_Space && !mod)
+    {
+        openQuickCompare();
+        event->accept();
+        return;
+    }
     {
         openQuickCompare();
         event->accept();
@@ -1370,6 +1421,7 @@ void MainWindow::showShortcutsHelp()
         "<table>"
         "<tr><th colspan='2'>文件</th></tr>"
         "<tr><td><kbd>Ctrl+O</kbd> / <kbd>Ctrl+Shift+O</kbd></td><td>打开目录 / 打开文件</td></tr>"
+        "<tr><td><kbd>Ctrl+V</kbd></td><td>从剪贴板粘贴图片（截图后直接查看）</td></tr>"
         "<tr><td><kbd>Ctrl+Q</kbd></td><td>退出</td></tr>"
         "<tr><th colspan='2'>浏览</th></tr>"
         "<tr><td><kbd>←</kbd> / <kbd>→</kbd> / 鼠标侧键</td><td>上一张 / 下一张（循环）</td></tr>"
@@ -2313,6 +2365,16 @@ void MainWindow::dragEnterEvent(QDragEnterEvent *event)
         event->acceptProposedAction();
     else
         QMainWindow::dragEnterEvent(event);
+}
+
+void MainWindow::dragMoveEvent(QDragMoveEvent *event)
+{
+    // Accept moves anywhere on the window (including splitter handles and
+    // status-bar edges) so the drop cursor never flickers to "forbidden".
+    if (event->mimeData()->hasUrls())
+        event->acceptProposedAction();
+    else
+        QMainWindow::dragMoveEvent(event);
 }
 
 void MainWindow::dropEvent(QDropEvent *event)

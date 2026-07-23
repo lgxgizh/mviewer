@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — 基础功能打磨第三轮 (Interaction & Workflow Polish)
+
+- **拖放体验统一:** MainWindow 补 `dragMoveEvent`，拖动文件到窗口任意区域（分隔条、
+  状态栏边缘等）均保持"可放置"光标，不再出现"禁止"闪烁。
+  (`src/mainwindow.cpp/h`)
+- **大目录滚动流畅度:** ThumbnailPanel 设置 `setBatchSize(256)`，1000+ 张图片时
+  滚动到末尾的批量布局延迟降低。
+  (`src/thumbnailpanel.cpp`)
+- **剪贴板图片粘贴 (`Ctrl+V`):** 从剪贴板粘贴图片（截图后直接查看），自动保存为
+  临时 PNG 文件并通过正常的异步解码路径加载，保持直方图/解码一致。
+  (`src/mainwindow.cpp`)
+- **删除后自动跳转:** 画廊中删除图片后发出 `pathsRemoved` 信号；若当前查看器正在
+  显示被删图片，自动跳转到下一张，避免查看已不存在的图片。
+  (`src/thumbnailpanel.cpp/h`, `src/mainwindow.cpp`)
+- **F1 速查表:** 新增 `Ctrl+V` 粘贴快捷键说明。
+
 ### Added — 精细 UX 打磨第二轮 (Panel & Workflow Polish)
 
 - **预览面板空状态引导:** 无图片时显示"拖放图片或文件夹到此处 / 按 Ctrl+O 打开目录"

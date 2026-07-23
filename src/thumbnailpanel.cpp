@@ -374,6 +374,10 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         return;
     m_viewMode = mode;
 
+    // Large folders (1000+ images) scroll noticeably smoother with a larger
+    // layout batch and a persistent scrollbar (no layout jump when items appear).
+    setBatchSize(256);
+
     // P0-4: only the Details view reserves a top margin for the column header.
     // Reset here so switching away from Details restores the full viewport.
     if (mode != Details)
@@ -826,14 +830,19 @@ void ThumbnailPanel::moveToTrashSelected()
     const QString trashDir =
         QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/mviewer/trash";
     QDir().mkpath(trashDir);
+    QStringList removed;
     for (const QString &p : paths)
     {
         if (QFile::rename(p, trashDir + "/" + QFileInfo(p).fileName()))
-            continue;
-        QFile::remove(p);
+            removed.append(p);
+        else if (QFile::remove(p))
+            removed.append(p);
     }
     if (!m_currentDir.isEmpty())
         setDirectory(m_currentDir);
+    // Let the host advance the viewer if the current image was just deleted.
+    if (!removed.isEmpty())
+        emit pathsRemoved(removed);
 }
 
 void ThumbnailPanel::copySelectedTo()
