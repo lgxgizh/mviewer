@@ -57,6 +57,13 @@ AppState AppState::load()
     s.analysisVisible = o.value("analysisVisible").toBool(false);
     s.analysisPage = o.value("analysisPage").toInt(0);
     s.navSidebarVisible = o.value("navSidebarVisible").toBool(true);
+
+    // P1-3: restore the navigation history stack (browser back/forward).
+    const QJsonArray nav = o.value("navHistory").toArray();
+    for (const auto &v : nav)
+        if (v.isString())
+            s.navHistory.append(v.toString());
+    s.navHistoryIndex = o.value("navHistoryIndex").toInt(-1);
     return s;
 }
 
@@ -90,6 +97,13 @@ bool AppState::save() const
     o["analysisVisible"] = analysisVisible;
     o["analysisPage"] = analysisPage;
     o["navSidebarVisible"] = navSidebarVisible;
+
+    // P1-3: persist the navigation history stack so History panel + back/forward work.
+    QJsonArray nav;
+    for (const auto &h : navHistory)
+        nav.append(h);
+    o["navHistory"] = nav;
+    o["navHistoryIndex"] = navHistoryIndex;
 
     QFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))

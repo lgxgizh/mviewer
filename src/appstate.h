@@ -38,6 +38,11 @@ struct AppState
     int analysisPage = 0;          // active Analysis sub-page (Histogram/RGB/...)
     bool navSidebarVisible = true; // left navigation tree visible at shutdown?
 
+    // P1-3: persist the back/forward navigation stack (browser-style) so the
+    // History panel and ←/→ history work after reopening the app.
+    QStringList navHistory; // ordered visited-image paths
+    int navHistoryIndex = -1; // index of the current image within navHistory
+
     // Load from the per-user config path. Missing/corrupt file => defaults
     // (empty favorites, empty lastDir). Never throws.
     static AppState load();

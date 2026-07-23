@@ -1744,6 +1744,24 @@ void MainWindow::restoreLastSession()
                 if (m_metadataOverlay)
                     m_metadataOverlay->setImage(img);
             }
+
+            // P1-3: restore the full navigation history stack (browser back/forward
+            // + History sidebar) so reopening lands the user mid-browse, not just
+            // on the last image. Drop entries whose files no longer exist.
+            QStringList restoredHist;
+            for (const QString &p : m_appState.navHistory)
+                if (QFile::exists(p))
+                    restoredHist.append(p);
+            if (!restoredHist.isEmpty())
+            {
+                m_history = restoredHist;
+                int idx = m_appState.navHistoryIndex;
+                if (idx < 0 || idx >= m_history.size())
+                    idx = m_history.size() - 1;
+                m_historyIndex = idx;
+                // Feed the History sidebar panel from the restored stack.
+                m_appState.history = m_history;
+            }
             // Restore the thumbnail-grid scroll position after items exist.
             QMetaObject::invokeMethod(
                 this,
@@ -1771,6 +1789,11 @@ void MainWindow::closeEvent(QCloseEvent *event)
     m_appState.analysisVisible = m_analysisPanel && m_analysisPanel->isVisible();
     m_appState.analysisPage = m_analysisPanel ? m_analysisPanel->currentPage() : 0;
     m_appState.navSidebarVisible = m_navSidebar && m_navSidebar->isVisible();
+
+    // P1-3: persist the navigation history stack (browser back/forward + History
+    // panel) so reopening restores exactly where the user was browsing.
+    m_appState.navHistory = m_history;
+    m_appState.navHistoryIndex = m_historyIndex;
     m_appState.save();
 
     // Persist the recent-folders LRU alongside app state.
