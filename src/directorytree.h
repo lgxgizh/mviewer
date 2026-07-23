@@ -42,6 +42,13 @@ class DirectoryTree : public QTreeView
   signals:
     void directoryChanged(const QString &path);
 
+  protected:
+    // Enter/Return opens the selected directory (same as double-click) so the
+    // tree is fully keyboard-navigable.
+    void keyPressEvent(QKeyEvent *event) override;
+    // Right-click context menu: "在资源管理器中显示" + "复制路径".
+    void contextMenuEvent(QContextMenuEvent *event) override;
+
   private:
     QFileSystemModel *m_model = nullptr;
     DirectoryProxyModel *m_proxy = nullptr;

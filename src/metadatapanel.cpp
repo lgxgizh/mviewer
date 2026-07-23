@@ -5,6 +5,8 @@
 #include "metadatamodel.h"
 #include "widgets/ratingwidget.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QComboBox>
 #include <QFileInfo>
 #include <QHeaderView>
@@ -20,6 +22,17 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
     layout->setSpacing(4);
 
     layout->addWidget(new QLabel(tr("元数据 (Metadata)"), this));
+
+    // "复制全部" button: dumps the full hierarchical model to the clipboard as
+    // "Key: Value" lines — handy for sharing EXIF info or pasting into reports.
+    auto *topBar = new QHBoxLayout();
+    topBar->addStretch(1);
+    auto *copyBtn = new QPushButton(tr("复制全部"), this);
+    copyBtn->setToolTip(tr("复制全部元数据到剪贴板 (Ctrl+Shift+C)"));
+    copyBtn->setShortcut(QKeySequence("Ctrl+Shift+C"));
+    topBar->addWidget(copyBtn);
+    connect(copyBtn, &QPushButton::clicked, this, &MetadataPanel::copyAll);
+    layout->addLayout(topBar);
 
     // P0#4: a single unified model drives the tree view.
     m_model = new MetadataModel(this);
@@ -161,4 +174,29 @@ void MetadataPanel::clear()
     m_colorLabel->setCurrentIndex(0);
     m_rejectBtn->setChecked(false);
     m_pickBtn->setChecked(false);
+}
+
+void MetadataPanel::copyAll()
+{
+    // Walk the model's top-level categories and their leaf rows, emitting
+    // "Category / Key: Value" lines for the clipboard.
+    QStringList lines;
+    const QModelIndex root;
+    for (int cat = 0; cat < m_model->rowCount(root); ++cat)
+    {
+        const QModelIndex catIdx = m_model->index(cat, 0, root);
+        const QString catName = catIdx.data().toString();
+        if (!catName.isEmpty())
+            lines << QString("[%1]").arg(catName);
+        for (int r = 0; r < m_model->rowCount(catIdx); ++r)
+        {
+            const QModelIndex keyIdx = m_model->index(r, 0, catIdx);
+            const QModelIndex valIdx = m_model->index(r, 1, catIdx);
+            lines << QString("  %1: %2")
+                       .arg(keyIdx.data().toString(), valIdx.data().toString());
+        }
+    }
+    if (lines.isEmpty())
+        return;
+    QApplication::clipboard()->setText(lines.join('\n'));
 }

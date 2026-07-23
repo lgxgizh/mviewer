@@ -2,6 +2,8 @@
 
 #include "core/image/MetadataReader.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QDateTime>
 #include <QFileInfo>
 #include <QKeyEvent>
@@ -218,6 +220,14 @@ void MetadataOverlay::keyPressEvent(QKeyEvent *event)
     if (event->key() == Qt::Key_Escape || event->key() == Qt::Key_I || event->key() == Qt::Key_M)
     {
         hide();
+        event->accept();
+        return;
+    }
+    // Ctrl+C copies the full metadata block to the clipboard — the overlay is a
+    // paint-only widget (no selectable text), so this is the copy affordance.
+    if (event->matches(QKeySequence::Copy))
+    {
+        QApplication::clipboard()->setText(m_lines.join('\n'));
         event->accept();
         return;
     }

@@ -1395,9 +1395,11 @@ void MainWindow::showShortcutsHelp()
         "<tr><th colspan='2'>比较</th></tr>"
         "<tr><td><kbd>C</kbd></td><td>比较模式</td></tr>"
         "<tr><td><kbd>Space</kbd></td><td>快速比较当前 + 下一张</td></tr>"
+        "<tr><td><kbd>1</kbd>…<kbd>6</kbd>（比较窗口内）</td><td>切换布局预设</td></tr>"
+        "<tr><td><kbd>ESC</kbd>（比较窗口内）</td><td>关闭比较窗口</td></tr>"
         "<tr><th colspan='2'>分析 / 信息</th></tr>"
         "<tr><td><kbd>H</kbd></td><td>直方图 / 分析面板</td></tr>"
-        "<tr><td><kbd>M</kbd> / <kbd>Ctrl+I</kbd></td><td>图片信息浮层</td></tr>"
+        "<tr><td><kbd>M</kbd> / <kbd>Ctrl+I</kbd></td><td>图片信息浮层（浮层内 Ctrl+C 复制全部元数据）</td></tr>"
         "<tr><th colspan='2'>评分 / 标签</th></tr>"
         "<tr><td><kbd>Ctrl+0</kbd>…<kbd>Ctrl+5</kbd></td><td>评分（0 = 清除）</td></tr>"
         "<tr><td><kbd>Ctrl+Shift+0</kbd>…<kbd>Ctrl+Shift+6</kbd></td><td>颜色标签（0 = "
@@ -2126,6 +2128,15 @@ void MainWindow::closeEvent(QCloseEvent *event)
     m_appState.navHistoryIndex = m_historyIndex;
     m_appState.save();
 
+    // Normal exit: remove the crash-recovery marker so the next launch doesn't
+    // prompt for a restore (only an unclean shutdown leaves it behind).
+    {
+        const QString recoveryPath =
+            QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) +
+            "/recovery.json";
+        QFile::remove(recoveryPath);
+    }
+
     // Persist the recent-folders LRU alongside app state.
     const QString recentPath =
         QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recent.json";
@@ -2227,6 +2238,19 @@ void MainWindow::restoreSessionRecovery()
 
     if (lastDir.isEmpty() && lastImage.isEmpty() && compareImages.isEmpty())
         return;
+
+    // Ask the user whether to restore the previous session. The recovery file
+    // is a crash-recovery artifact; a normal exit clears it (see closeEvent),
+    // so its presence implies an unclean shutdown.
+    const auto answer = QMessageBox::question(
+        this, tr("恢复上次会话"),
+        tr("检测到上次会话未正常关闭。\n是否恢复上次浏览的图片和目录？"),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
+    if (answer != QMessageBox::Yes)
+    {
+        QFile::remove(recoveryPath);
+        return;
+    }
 
     // M15 P0#1: restore the Compare session too. Only trust it if the recorded
     // images still exist on disk.

@@ -32,6 +32,9 @@ class MetadataPanel : public QWidget
     // P3 tail: emitted when color label / reject / pick changes.
     void flagsEdited(const QString &path, int label, bool rejected, bool picked);
 
+  private slots:
+    void copyAll();
+
   private:
     QTreeView *m_tree = nullptr;
     MetadataModel *m_model = nullptr;

@@ -1,7 +1,12 @@
 #include "directorytree.h"
 
+#include <QApplication>
+#include <QClipboard>
+#include <QContextMenuEvent>
 #include <QDir>
 #include <QFileSystemModel>
+#include <QMenu>
+#include <QProcess>
 
 namespace
 {
@@ -83,6 +88,56 @@ void DirectoryTree::refresh()
     if (source.isValid())
         m_model->fetchMore(source);
     emit directoryChanged(path);
+}
+
+void DirectoryTree::keyPressEvent(QKeyEvent *event)
+{
+    // Enter/Return opens the selected directory (same as double-click).
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter)
+    {
+        const QString path = currentPath();
+        if (!path.isEmpty())
+        {
+            emit directoryChanged(path);
+            event->accept();
+            return;
+        }
+    }
+    QTreeView::keyPressEvent(event);
+}
+
+void DirectoryTree::contextMenuEvent(QContextMenuEvent *event)
+{
+    const QModelIndex idx = indexAt(event->pos());
+    if (!idx.isValid())
+    {
+        QTreeView::contextMenuEvent(event);
+        return;
+    }
+    const QString path = m_model->filePath(m_proxy->mapToSource(idx));
+    if (path.isEmpty())
+    {
+        QTreeView::contextMenuEvent(event);
+        return;
+    }
+
+    QMenu menu(this);
+    QAction *aOpen = menu.addAction("打开");
+    QAction *aReveal = menu.addAction("在资源管理器中显示");
+    QAction *aCopyPath = menu.addAction("复制路径");
+    QAction *chosen = menu.exec(event->globalPos());
+    if (!chosen)
+        return;
+    if (chosen == aOpen)
+        emit directoryChanged(path);
+    else if (chosen == aReveal)
+    {
+        // explorer.exe /select,<file> highlights the item in File Explorer.
+        QProcess::startDetached("explorer.exe", {QStringLiteral("/select,\"%1\"").arg(
+                                                      QDir::toNativeSeparators(path))});
+    }
+    else if (chosen == aCopyPath)
+        QApplication::clipboard()->setText(QDir::toNativeSeparators(path));
 }
 
 void DirectoryTree::navigateTo(const QString &path, bool emitSignal)

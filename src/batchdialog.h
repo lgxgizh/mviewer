@@ -4,6 +4,7 @@
 #include "domain/BatchJob.h"
 
 #include <QDialog>
+#include <QString>
 #include <memory>
 
 class QListWidget;
@@ -35,6 +36,7 @@ class BatchDialog : public QDialog
     void onStart();
     void onCancel();
     void onBrowseOutputDir();
+    void onOpenOutputDir();
 
   private:
     void buildConfig(mviewer::domain::BatchJobConfig &config) const;
@@ -77,6 +79,8 @@ class BatchDialog : public QDialog
     QPushButton *m_startBtn = nullptr;
     QPushButton *m_cancelBtn = nullptr;
     QPushButton *m_closeBtn = nullptr;
+    QPushButton *m_openOutputBtn = nullptr; // enabled after a job finishes
 
     std::unique_ptr<mviewer::core::BatchProcessor> m_processor;
+    QString m_lastOutputDir; // set after a job finishes, drives "open output dir"
 };

@@ -120,7 +120,11 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
     if (!m_hasImage)
     {
         painter.setPen(Qt::gray);
-        painter.drawText(rect(), Qt::AlignCenter, "未选择图片");
+        QFont f = font();
+        f.setItalic(true);
+        painter.setFont(f);
+        painter.drawText(rect(), Qt::AlignCenter,
+                         "拖放图片或文件夹到此处\n或按 Ctrl+O 打开目录");
         return;
     }
 

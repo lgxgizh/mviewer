@@ -1569,6 +1569,25 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
             dlg->reject();
         return;
     }
+    // Number keys 1-6 switch the layout preset (parity with the layout combo),
+    // so the user can re-tile without reaching for the mouse.
+    if (m_layoutCombo && !event->modifiers())
+    {
+        const int key = event->key();
+        int idx = -1;
+        if (key == Qt::Key_1) idx = 0;
+        else if (key == Qt::Key_2) idx = 1;
+        else if (key == Qt::Key_3) idx = 2;
+        else if (key == Qt::Key_4) idx = 3;
+        else if (key == Qt::Key_5) idx = 4;
+        else if (key == Qt::Key_6) idx = 5;
+        if (idx >= 0 && idx < m_layoutCombo->count())
+        {
+            m_layoutCombo->setCurrentIndex(idx);
+            event->accept();
+            return;
+        }
+    }
     QWidget::keyPressEvent(event);
 }
 

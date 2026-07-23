@@ -2,6 +2,8 @@
 
 #include <QCheckBox>
 #include <QComboBox>
+#include <QDesktopServices>
+#include <QDir>
 #include <QDoubleSpinBox>
 #include <QFileDialog>
 #include <QFutureWatcher>
@@ -14,6 +16,7 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QTextEdit>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
@@ -130,6 +133,7 @@ BatchDialog::BatchDialog(QWidget *parent)
 
     // ── progress + log ────────────────────────────────────────────
     m_progress = new QProgressBar;
+    m_progress->setFormat(tr("%p%"));
     mainLayout->addWidget(m_progress);
 
     m_statusLabel = new QLabel("就绪");
@@ -145,8 +149,13 @@ BatchDialog::BatchDialog(QWidget *parent)
     m_startBtn = new QPushButton("开始");
     m_cancelBtn = new QPushButton("取消处理");
     m_cancelBtn->setEnabled(false);
+    m_openOutputBtn = new QPushButton("打开输出目录");
+    m_openOutputBtn->setEnabled(false);
+    m_openOutputBtn->setToolTip(tr("在资源管理器中打开上一个任务的输出目录"));
     m_closeBtn = new QPushButton("关闭");
     btnBar->addStretch();
+    btnBar->addWidget(m_openOutputBtn);
+    btnBar->addSpacing(12);
     btnBar->addWidget(m_startBtn);
     btnBar->addWidget(m_cancelBtn);
     btnBar->addWidget(m_closeBtn);
@@ -157,6 +166,7 @@ BatchDialog::BatchDialog(QWidget *parent)
     connect(m_removeBtn, &QPushButton::clicked, this, &BatchDialog::onRemoveSelected);
     connect(m_startBtn, &QPushButton::clicked, this, &BatchDialog::onStart);
     connect(m_cancelBtn, &QPushButton::clicked, this, &BatchDialog::onCancel);
+    connect(m_openOutputBtn, &QPushButton::clicked, this, &BatchDialog::onOpenOutputDir);
     connect(m_closeBtn, &QPushButton::clicked, this, &QDialog::reject);
     connect(m_browseBtn, &QPushButton::clicked, this, &BatchDialog::onBrowseOutputDir);
 }
@@ -278,6 +288,13 @@ void BatchDialog::onStart()
                                            .arg(result.totalSucceeded)
                                            .arg(result.totalFailed));
 
+                // Enable "open output dir" if any files were produced and the
+                // output directory is known (empty = same-as-source per file).
+                m_lastOutputDir = m_outputDir->text().trimmed();
+                m_openOutputBtn->setEnabled(!m_lastOutputDir.isEmpty() &&
+                                            result.totalSucceeded > 0 &&
+                                            QDir(m_lastOutputDir).exists());
+
                 // Log results.
                 for (const auto &r : result.fileResults)
                 {
@@ -303,6 +320,13 @@ void BatchDialog::onCancel()
 {
     m_processor->requestCancel();
     m_statusLabel->setText("正在取消...");
+}
+
+void BatchDialog::onOpenOutputDir()
+{
+    if (m_lastOutputDir.isEmpty() || !QDir(m_lastOutputDir).exists())
+        return;
+    QDesktopServices::openUrl(QUrl::fromLocalFile(m_lastOutputDir));
 }
 
 void BatchDialog::updateUiState(bool running)

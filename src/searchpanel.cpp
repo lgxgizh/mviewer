@@ -62,6 +62,8 @@ SearchPanel::SearchPanel(QWidget *parent)
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_table->setSelectionMode(QAbstractItemView::SingleSelection);
     m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    // Click a column header to sort the results by that column.
+    m_table->setSortingEnabled(true);
     m_table->verticalHeader()->setVisible(false);
     m_table->setShowGrid(false);
     mainLayout->addWidget(m_table);
@@ -126,8 +128,17 @@ void SearchPanel::onSearchTextChanged()
     m_lastResults = m_engine->search(q);
 
     const int n = static_cast<int>(m_lastResults.size());
+    m_table->setSortingEnabled(false); // avoid resorting mid-populate
     m_table->setRowCount(n);
-    m_countLabel->setText(QString("找到 %1 个结果").arg(n));
+
+    if (n == 0)
+    {
+        m_countLabel->setText("未找到匹配结果 — 试试其他关键词或勾选更多搜索范围");
+    }
+    else
+    {
+        m_countLabel->setText(QString("找到 %1 个结果（点击列头可排序）").arg(n));
+    }
 
     for (int i = 0; i < n; ++i)
     {
@@ -154,6 +165,7 @@ void SearchPanel::onSearchTextChanged()
         m_table->setItem(i, 1, new QTableWidgetItem(fname));
         m_table->setItem(i, 2, new QTableWidgetItem(snippet));
     }
+    m_table->setSortingEnabled(true); // re-enable so header-click sorting works
 }
 
 void SearchPanel::onResultDoubleClicked(const QModelIndex &index)

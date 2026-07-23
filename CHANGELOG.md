@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — 精细 UX 打磨第二轮 (Panel & Workflow Polish)
+
+- **预览面板空状态引导:** 无图片时显示"拖放图片或文件夹到此处 / 按 Ctrl+O 打开目录"
+  引导文案，而非仅"未选择图片"。
+  (`src/previewpanel.cpp`)
+- **目录树键盘与右键增强:** `Enter`/`Return` 打开选中目录（与双击一致）；右键菜单新增
+  "在资源管理器中显示"和"复制路径"。
+  (`src/directorytree.cpp/h`)
+- **元数据复制:** 信息浮层（`MetadataOverlay`）支持 `Ctrl+C` 一键复制全部元数据到剪贴板；
+  元数据面板（`MetadataPanel`）新增"复制全部"按钮（`Ctrl+Shift+C`），输出带分组层级的
+  "Key: Value"文本。
+  (`src/metadataoverlay.cpp`, `src/metadatapanel.cpp/h`)
+- **搜索结果排序与空提示:** 搜索结果表启用 `setSortingEnabled`，点击列头可排序；无结果
+  时显示友好提示文案。
+  (`src/searchpanel.cpp`)
+- **崩溃恢复确认对话框:** 启动时检测到 `recovery.json`（上次未正常退出）会弹出确认框，
+  用户可选"恢复"或"跳过"；正常退出时自动清理 `recovery.json`，避免每次启动都弹框。
+  (`src/mainwindow.cpp`)
+- **比较窗口数字键布局切换:** 比较窗口内按 `1`–`6` 切换布局预设（与布局下拉框同步），
+  无需鼠标操作。
+  (`src/compareworkspace.cpp`)
+- **批量处理对话框增强:** 进度条显示百分比（`%p%`）；任务完成后"打开输出目录"按钮可用，
+  点击在资源管理器中打开输出目录。
+  (`src/batchdialog.cpp/h`)
+- **F1 速查表同步:** 收录比较窗口布局键、浮层复制、ESC 关闭比较等新快捷键。
+
 ### Added — 基础用户体验打磨 (Viewer & Browse UX Polish)
 
 - **查看器缩放命令体系:** `ImageViewer` 新增 `zoomIn()/zoomOut()/zoomFit()/zoomActual()`
