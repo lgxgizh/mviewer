@@ -1030,8 +1030,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             {
                 // Persist to a temp file so ImageViewer can load it via its
                 // normal async path (keeps decode/histogram consistent).
-                const QString tmpDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
-                                       "/mviewer-clip-paste";
+                const QString tmpDir =
+                    QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
+                    "/mviewer-clip-paste";
                 QDir().mkpath(tmpDir);
                 const QString tmpPath = tmpDir + "/paste_" +
                                         QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") +

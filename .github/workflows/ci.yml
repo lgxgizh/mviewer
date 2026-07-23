@@ -304,7 +304,7 @@ jobs:
 
       - name: Install LLVM (clang-cl + llvm-symbolizer)
         id: llvm
-        uses: llvm/install-llvm-action@v1
+        uses: KyleMayes/install-llvm-action@v2
         with:
           version: "22"
 
@@ -322,8 +322,8 @@ jobs:
           -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl
           -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
           -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.."
-          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined /libpath:${{ steps.llvm.outputs.install-path }}/lib/clang/22/lib/windows clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib"
-          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined /libpath:${{ steps.llvm.outputs.install-path }}/lib/clang/22/lib/windows clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined /libpath:${{ env.LLVM_PATH }}/lib/clang/22/lib/windows clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib"
+          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined /libpath:${{ env.LLVM_PATH }}/lib/clang/22/lib/windows clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib"
           -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=address,undefined -g"
 
       - name: Build (ASan)
@@ -332,7 +332,7 @@ jobs:
       - name: Test (ASan)
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
-          $env:PATH = "${{ steps.llvm.outputs.install-path }}\bin;${{ steps.llvm.outputs.install-path }}\lib\clang\22\lib\windows;$env:PATH"
+          $env:PATH = "${{ env.LLVM_PATH }}\bin;${{ env.LLVM_PATH }}\lib\clang\22\lib\windows;$env:PATH"
           cd build_asan
           ctest --output-on-failure -j4
 

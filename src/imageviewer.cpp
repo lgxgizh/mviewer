@@ -24,8 +24,8 @@
 
 namespace
 {
-const QStringList kImageExtensions = {"*.jpg",  "*.jpeg", "*.bmp", "*.png",
-                                      "*.tif",  "*.tiff", "*.webp", "*.gif"};
+const QStringList kImageExtensions = {"*.jpg", "*.jpeg", "*.bmp",  "*.png",
+                                      "*.tif", "*.tiff", "*.webp", "*.gif"};
 const double kZoomStep = 1.15;
 } // namespace
 
