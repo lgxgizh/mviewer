@@ -339,6 +339,10 @@ jobs:
           $env:QT_QPA_PLATFORM = "offscreen"
           $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
           $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\21\lib\windows;$env:PATH"
+          # Disable ODR-violation detection: the linker merges identical string
+          # literals across translation units (e.g. "-" in main.cpp and u"-" in
+          # thumbnailpanel.cpp), which is valid but trips ASan's ODR check.
+          $env:ASAN_OPTIONS = "detect_odr_violation=0"
           cd build_asan
           ctest --output-on-failure -j4
 
