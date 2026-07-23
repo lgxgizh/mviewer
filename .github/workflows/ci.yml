@@ -317,14 +317,19 @@ jobs:
           cache: true
 
       - name: Configure (clang-cl + ASan/UBSan)
-        run: cmake -S . -B build_asan -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl
-          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
-          -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.."
-          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined /libpath:${{ env.LLVM_PATH }}/lib/clang/21/lib/windows clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib"
-          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined /libpath:${{ env.LLVM_PATH }}/lib/clang/21/lib/windows clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib"
-          -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=address,undefined -g"
+        run: |
+          # Use the 8.3 short path to avoid space-in-path breakage in
+          # linker flags (LLVM installs to "C:\Program Files\LLVM").
+          $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
+          $asanLib = "$llvmShort/lib/clang/21/lib/windows"
+          cmake -S . -B build_asan -G Ninja
+            -DCMAKE_BUILD_TYPE=Release
+            -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
+            -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.."
+            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib"
+            "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib"
+            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=address,undefined -g"
 
       - name: Build (ASan)
         run: cmake --build build_asan -j 4
@@ -332,7 +337,8 @@ jobs:
       - name: Test (ASan)
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
-          $env:PATH = "${{ env.LLVM_PATH }}\bin;${{ env.LLVM_PATH }}\lib\clang\21\lib\windows;$env:PATH"
+          $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
+          $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\21\lib\windows;$env:PATH"
           cd build_asan
           ctest --output-on-failure -j4
 
