@@ -605,6 +605,8 @@ void CompareWorkspace::updateInspector(int x, int y)
     {
         const ImageFrame *img = m_engine.imageAt(i);
         const QString name = img ? QString::fromStdString(img->metadata().fileName) : QString();
+        if (static_cast<size_t>(i) >= probe.samples.size())
+            continue;
         const auto &s = probe.samples[static_cast<size_t>(i)];
         const double dist = (static_cast<size_t>(i) < probe.deltas.size())
                                 ? probe.deltas[static_cast<size_t>(i)].dist
@@ -653,6 +655,8 @@ void CompareWorkspace::fitAll()
     const int n = m_engine.imageCount();
     for (int i = 0; i < n; ++i)
     {
+        if (i >= m_cellViews.size() || !m_cellViews[i])
+            continue;
         const ImageFrame *img = m_engine.imageAt(i);
         const QSize qs = m_cellViews[i]->size();
         const CellSize cell{qs.width(), qs.height()};
@@ -747,8 +751,9 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
     const int n = m_engine.imageCount();
     for (int i = 0; i < n; ++i)
     {
-        if (m_cellViews[i])
-            m_cellViews[i]->setSelection(sel);
+        if (i >= m_cellViews.size() || !m_cellViews[i])
+            continue;
+        m_cellViews[i]->setSelection(sel);
     }
     update();
 }
@@ -767,7 +772,7 @@ void CompareWorkspace::onCrosshairMoved(RawImageView *view, const QPointF &pos)
     const int n = m_engine.imageCount();
     for (int i = 0; i < n; ++i)
     {
-        if (!m_cellViews[i])
+        if (i >= m_cellViews.size() || !m_cellViews[i])
             continue;
         if (valid)
             m_cellViews[i]->setCrosshair(pos);
@@ -798,8 +803,9 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
     const int n = m_engine.imageCount();
     for (int i = 0; i < n; ++i)
     {
-        if (m_cellViews[i])
-            m_cellViews[i]->setFocused(i == m_focusIndex);
+        if (i >= m_cellViews.size() || !m_cellViews[i])
+            continue;
+        m_cellViews[i]->setFocused(i == m_focusIndex);
     }
 
     // Re-request diffs against the new base and refresh the inspector deltas.
@@ -826,7 +832,7 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
     const int n = m_engine.imageCount();
     for (int i = 0; i < n; ++i)
     {
-        if (!m_cellViews[i])
+        if (i >= m_cellViews.size() || !m_cellViews[i])
             continue;
         const auto &ct = m_engine.cellTransform(i);
         const double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
@@ -1575,12 +1581,18 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
     {
         const int key = event->key();
         int idx = -1;
-        if (key == Qt::Key_1) idx = 0;
-        else if (key == Qt::Key_2) idx = 1;
-        else if (key == Qt::Key_3) idx = 2;
-        else if (key == Qt::Key_4) idx = 3;
-        else if (key == Qt::Key_5) idx = 4;
-        else if (key == Qt::Key_6) idx = 5;
+        if (key == Qt::Key_1)
+            idx = 0;
+        else if (key == Qt::Key_2)
+            idx = 1;
+        else if (key == Qt::Key_3)
+            idx = 2;
+        else if (key == Qt::Key_4)
+            idx = 3;
+        else if (key == Qt::Key_5)
+            idx = 4;
+        else if (key == Qt::Key_6)
+            idx = 5;
         if (idx >= 0 && idx < m_layoutCombo->count())
         {
             m_layoutCombo->setCurrentIndex(idx);

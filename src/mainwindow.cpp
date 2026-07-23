@@ -66,9 +66,9 @@
 #include <QLineEdit>
 #include <QMenuBar>
 #include <QMessageBox>
-#include <QPainter>
 #include <QMetaObject>
 #include <QMimeData>
+#include <QPainter>
 #include <QPushButton>
 #include <QScreen>
 #include <QScrollBar>
@@ -551,8 +551,7 @@ void MainWindow::setupUi()
             [this](const QStringList &images) { openCompare(images); });
     // Dropping files directly onto the gallery behaves the same as dropping
     // them anywhere else on the window.
-    connect(m_thumbnailPanel, &ThumbnailPanel::filesDropped, this,
-            &MainWindow::handleDroppedPaths);
+    connect(m_thumbnailPanel, &ThumbnailPanel::filesDropped, this, &MainWindow::handleDroppedPaths);
     // When the user deletes images from the gallery, advance the viewer off the
     // deleted image if it was the one being viewed.
     connect(m_thumbnailPanel, &ThumbnailPanel::pathsRemoved, this,
@@ -1029,13 +1028,14 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             const QImage img = qvariant_cast<QImage>(md->imageData());
             if (!img.isNull())
             {
-                // Persist to a temp file on D: drive so ImageViewer can load it
-                // via its normal async path (keeps decode/histogram consistent).
-                const QString tmpDir = "D:/mviewer/clip-paste";
+                // Persist to a temp file so ImageViewer can load it via its
+                // normal async path (keeps decode/histogram consistent).
+                const QString tmpDir = QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
+                                       "/mviewer-clip-paste";
                 QDir().mkpath(tmpDir);
                 const QString tmpPath = tmpDir + "/paste_" +
-                                        QDateTime::currentDateTime().toString(
-                                            "yyyyMMdd_HHmmss") + ".png";
+                                        QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") +
+                                        ".png";
                 if (img.save(tmpPath, "PNG"))
                 {
                     onImageOpen(tmpPath);
@@ -1054,11 +1054,6 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     }
     // P0-4 / P1-4: Space triggers compare for the current + next image.
     if (event->key() == Qt::Key_Space && !mod)
-    {
-        openQuickCompare();
-        event->accept();
-        return;
-    }
     {
         openQuickCompare();
         event->accept();
@@ -1337,10 +1332,8 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     // file size comes straight from the filesystem entry.
     const auto meta = mviewer::core::MetadataReader::read(path.toStdString());
     if (meta.width > 0 && meta.height > 0)
-        m_lblImage->setText(QString("%1x%2 · %3")
-                                .arg(meta.width)
-                                .arg(meta.height)
-                                .arg(formatBytes(fi.size())));
+        m_lblImage->setText(
+            QString("%1x%2 · %3").arg(meta.width).arg(meta.height).arg(formatBytes(fi.size())));
     else
         m_lblImage->setText(formatBytes(fi.size()));
     statusBar()->showMessage(QString("当前: %1").arg(fi.fileName()));
@@ -1486,8 +1479,10 @@ void MainWindow::showShortcutsHelp()
         "<tr><th colspan='2'>浏览</th></tr>"
         "<tr><td><kbd>←</kbd> / <kbd>→</kbd> / 鼠标侧键</td><td>上一张 / 下一张（循环）</td></tr>"
         "<tr><td><kbd>Enter</kbd></td><td>在查看器中打开选中图片</td></tr>"
-        "<tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>第一张 / 最后一张（查看器中同样有效）</td></tr>"
-        "<tr><td><kbd>PageUp</kbd> / <kbd>PageDown</kbd></td><td>上翻 / 下翻一页（10 张，查看器中同样有效）</td></tr>"
+        "<tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>第一张 / "
+        "最后一张（查看器中同样有效）</td></tr>"
+        "<tr><td><kbd>PageUp</kbd> / <kbd>PageDown</kbd></td><td>上翻 / 下翻一页（10 "
+        "张，查看器中同样有效）</td></tr>"
         "<tr><td><kbd>F5</kbd></td><td>刷新目录树与画廊</td></tr>"
         "<tr><td><kbd>Ctrl+滚轮</kbd></td><td>调整缩略图大小</td></tr>"
         "<tr><td><kbd>Tab</kbd></td><td>显示 / 隐藏侧边面板</td></tr>"
@@ -1511,7 +1506,8 @@ void MainWindow::showShortcutsHelp()
         "<tr><td><kbd>ESC</kbd>（比较窗口内）</td><td>关闭比较窗口</td></tr>"
         "<tr><th colspan='2'>分析 / 信息</th></tr>"
         "<tr><td><kbd>H</kbd></td><td>直方图 / 分析面板</td></tr>"
-        "<tr><td><kbd>M</kbd> / <kbd>Ctrl+I</kbd></td><td>图片信息浮层（浮层内 Ctrl+C 复制全部元数据）</td></tr>"
+        "<tr><td><kbd>M</kbd> / <kbd>Ctrl+I</kbd></td><td>图片信息浮层（浮层内 Ctrl+C "
+        "复制全部元数据）</td></tr>"
         "<tr><th colspan='2'>评分 / 标签</th></tr>"
         "<tr><td><kbd>Ctrl+Shift+0</kbd>…<kbd>Ctrl+Shift+5</kbd></td><td>评分（0 = 清除）</td></tr>"
         "<tr><td><kbd>Alt+0</kbd>…<kbd>Alt+6</kbd></td><td>颜色标签（0 = "
@@ -2244,8 +2240,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
     // prompt for a restore (only an unclean shutdown leaves it behind).
     {
         const QString recoveryPath =
-            QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) +
-            "/recovery.json";
+            QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recovery.json";
         QFile::remove(recoveryPath);
     }
 
@@ -2357,8 +2352,7 @@ void MainWindow::restoreSessionRecovery()
     // is a crash-recovery artifact; a normal exit clears it (see closeEvent),
     // so its presence implies an unclean shutdown.
     const auto answer = QMessageBox::question(
-        this, tr("恢复上次会话"),
-        tr("检测到上次会话未正常关闭。\n是否恢复上次浏览的图片和目录？"),
+        this, tr("恢复上次会话"), tr("检测到上次会话未正常关闭。\n是否恢复上次浏览的图片和目录？"),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::Yes);
     if (answer != QMessageBox::Yes)
     {
@@ -2728,12 +2722,10 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
         // Forward navigation / workflow shortcuts from child widgets so they work
         // regardless of which panel has focus.
-        static const QList<int> globalKeys = {Qt::Key_Space,    Qt::Key_M,     Qt::Key_H,
-                                              Qt::Key_G,        Qt::Key_D,     Qt::Key_F,
-                                              Qt::Key_Tab,      Qt::Key_C,     Qt::Key_S,
-                                              Qt::Key_Plus,     Qt::Key_Equal, Qt::Key_Minus,
-                                              Qt::Key_0,        Qt::Key_1,     Qt::Key_Home,
-                                              Qt::Key_End,      Qt::Key_PageUp, Qt::Key_PageDown};
+        static const QList<int> globalKeys = {
+            Qt::Key_Space, Qt::Key_M, Qt::Key_H,    Qt::Key_G,    Qt::Key_D,      Qt::Key_F,
+            Qt::Key_Tab,   Qt::Key_C, Qt::Key_S,    Qt::Key_Plus, Qt::Key_Equal,  Qt::Key_Minus,
+            Qt::Key_0,     Qt::Key_1, Qt::Key_Home, Qt::Key_End,  Qt::Key_PageUp, Qt::Key_PageDown};
         const bool isGlobalKey =
             globalKeys.contains(ke->key()) ||
             ((ke->modifiers() & Qt::ControlModifier) &&
@@ -2746,12 +2738,10 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             if (watched == m_imageViewer)
             {
                 // Only forward keys the viewer doesn't handle itself.
-                static const QSet<int> viewerOwns = {Qt::Key_Left,    Qt::Key_Right,
-                                                     Qt::Key_Plus,    Qt::Key_Equal,
-                                                     Qt::Key_Minus,   Qt::Key_0,
-                                                     Qt::Key_1,       Qt::Key_F,
-                                                     Qt::Key_F11,     Qt::Key_Escape,
-                                                     Qt::Key_Underscore};
+                static const QSet<int> viewerOwns = {
+                    Qt::Key_Left,  Qt::Key_Right,  Qt::Key_Plus,      Qt::Key_Equal,
+                    Qt::Key_Minus, Qt::Key_0,      Qt::Key_1,         Qt::Key_F,
+                    Qt::Key_F11,   Qt::Key_Escape, Qt::Key_Underscore};
                 if (viewerOwns.contains(ke->key()))
                     return false; // let the viewer handle it
             }

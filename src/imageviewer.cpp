@@ -16,6 +16,7 @@
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QPointer>
 #include <QRect>
 #include <QResizeEvent>
 #include <QWheelEvent>
@@ -23,7 +24,8 @@
 
 namespace
 {
-const QStringList kImageExtensions = {"*.jpg", "*.jpeg", "*.bmp", "*.png", "*.tif", "*.tiff"};
+const QStringList kImageExtensions = {"*.jpg",  "*.jpeg", "*.bmp", "*.png",
+                                      "*.tif",  "*.tiff", "*.webp", "*.gif"};
 const double kZoomStep = 1.15;
 } // namespace
 
@@ -58,27 +60,33 @@ void ImageViewer::setImage(const QString &path)
     // DecodePool, so first-open / next-prev never block the UI thread (keeps
     // within the performance budget: first <100ms, switch <20ms). The decoded
     // frame is applied back on the UI thread via QMetaObject::invokeMethod.
+    QPointer<ImageViewer> guard(this);
     ImageRepository::instance().loadAsync(
         path.toStdString(),
-        [this, path](const ImageRepository::Result &res)
+        [this, path, guard](const ImageRepository::Result &res)
         {
             if (!res.success())
             {
-                QMetaObject::invokeMethod(this,
-                                          [this, path]()
-                                          {
-                                              m_hasHistogram = false;
-                                              setWindowTitle(QString("无法加载 - %1 - MViewer")
-                                                                 .arg(QFileInfo(path).fileName()));
-                                              update();
-                                              emit loadFailed(path);
-                                          });
+                QMetaObject::invokeMethod(
+                    this,
+                    [this, path, guard]()
+                    {
+                        if (!guard || path != m_currentPath)
+                            return;
+                        m_hasHistogram = false;
+                        setWindowTitle(
+                            QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
+                        update();
+                        emit loadFailed(path);
+                    });
                 return;
             }
             QMetaObject::invokeMethod(
                 this,
-                [this, res, path]()
+                [this, res, path, guard]()
                 {
+                    if (!guard || path != m_currentPath)
+                        return; // widget destroyed or user navigated away
                     m_frame = res.frame;
                     m_pixmap = QPixmap::fromImage(mvcore::toQImage(m_frame->pixels()));
                     if (m_pixmap.isNull())
@@ -101,11 +109,10 @@ void ImageViewer::setImage(const QString &path)
                     m_view.screenH = height();
                     m_view.fit(m_pixmap.width(), m_pixmap.height(), 0.95);
                     m_fitMode = true;
-                    const QString position = m_currentIndex >= 0
-                                                 ? QString(" [%1/%2]")
-                                                       .arg(m_currentIndex + 1)
-                                                       .arg(m_fileList.size())
-                                                 : QString();
+                    const QString position =
+                        m_currentIndex >= 0
+                            ? QString(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
+                            : QString();
                     setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
                                        .arg(info.fileName())
                                        .arg(m_pixmap.width())
@@ -468,12 +475,15 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
         if (ix >= 0 && ix < iw && iy >= 0 && iy < ih)
         {
             const ImageBuffer view = m_frame->pixels().view();
-            const uint8_t *p = view.data + static_cast<size_t>(iy) * view.stride() +
-                               static_cast<size_t>(ix) * view.channelsPerPixel();
-            r = p[0];
-            g = p[1];
-            b = p[2];
-            valid = true;
+            if (view.channelsPerPixel() >= 3)
+            {
+                const uint8_t *p = view.data + static_cast<size_t>(iy) * view.stride() +
+                                   static_cast<size_t>(ix) * view.channelsPerPixel();
+                r = p[0];
+                g = p[1];
+                b = p[2];
+                valid = true;
+            }
         }
     }
     emit pixelInfo(ix, iy, r, g, b, valid);
@@ -491,10 +501,10 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
             {
                 QImage img = m_pixmap.toImage().convertToFormat(QImage::Format_RGB32);
                 const QRect imgRect =
-                    QRect(static_cast<int>((r.x() - m_view.offsetX) / m_view.scale),
-                          static_cast<int>((r.y() - m_view.offsetY) / m_view.scale),
-                          static_cast<int>(r.width() / m_view.scale),
-                          static_cast<int>(r.height() / m_view.scale))
+                    QRect(static_cast<int>(std::floor((r.x() - m_view.offsetX) / m_view.scale)),
+                          static_cast<int>(std::floor((r.y() - m_view.offsetY) / m_view.scale)),
+                          static_cast<int>(std::round(r.width() / m_view.scale)),
+                          static_cast<int>(std::round(r.height() / m_view.scale)))
                         .normalized();
                 const QRect valid = imgRect.intersected(QRect(0, 0, img.width(), img.height()));
                 if (!valid.isEmpty())

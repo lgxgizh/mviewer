@@ -133,8 +133,8 @@ void DirectoryTree::contextMenuEvent(QContextMenuEvent *event)
     else if (chosen == aReveal)
     {
         // explorer.exe /select,<file> highlights the item in File Explorer.
-        QProcess::startDetached("explorer.exe", {QStringLiteral("/select,\"%1\"").arg(
-                                                      QDir::toNativeSeparators(path))});
+        QProcess::startDetached(
+            "explorer.exe", {QStringLiteral("/select,\"%1\"").arg(QDir::toNativeSeparators(path))});
     }
     else if (chosen == aCopyPath)
         QApplication::clipboard()->setText(QDir::toNativeSeparators(path));

@@ -123,8 +123,7 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
         QFont f = font();
         f.setItalic(true);
         painter.setFont(f);
-        painter.drawText(rect(), Qt::AlignCenter,
-                         "拖放图片或文件夹到此处\n或按 Ctrl+O 打开目录");
+        painter.drawText(rect(), Qt::AlignCenter, "拖放图片或文件夹到此处\n或按 Ctrl+O 打开目录");
         return;
     }
 

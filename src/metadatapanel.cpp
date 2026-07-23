@@ -192,8 +192,7 @@ void MetadataPanel::copyAll()
         {
             const QModelIndex keyIdx = m_model->index(r, 0, catIdx);
             const QModelIndex valIdx = m_model->index(r, 1, catIdx);
-            lines << QString("  %1: %2")
-                       .arg(keyIdx.data().toString(), valIdx.data().toString());
+            lines << QString("  %1: %2").arg(keyIdx.data().toString(), valIdx.data().toString());
         }
     }
     if (lines.isEmpty())
