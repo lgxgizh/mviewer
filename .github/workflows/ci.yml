@@ -334,6 +334,20 @@ jobs:
       - name: Build (ASan)
         run: cmake --build build_asan -j 4
 
+      - name: Deploy Qt image plugins for ASan tests
+        run: |
+          # Qt image format plugins (qjpeg.dll, qpng.dll, etc.) are MSVC-built
+          # DLLs. Under clang-cl ASan, Qt's dynamic plugin loading via
+          # QT_PLUGIN_PATH can silently fail. Copy them next to the test
+          # executables so Qt finds them via the default "app-dir/imageformats"
+          # search path, which is more reliable under ASan.
+          $pluginSrc = "$env:Qt6_DIR\plugins\imageformats"
+          $pluginDst = "build_asan\bin\imageformats"
+          New-Item -ItemType Directory -Force -Path $pluginDst | Out-Null
+          Copy-Item "$pluginSrc\*.dll" $pluginDst -Force
+          Write-Host "Deployed image format plugins:"
+          Get-ChildItem $pluginDst | ForEach-Object { Write-Host "  $($_.Name)" }
+
       - name: Test (ASan)
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
