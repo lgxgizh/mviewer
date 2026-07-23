@@ -14,20 +14,23 @@ class RatingWidget : public QWidget
 {
     Q_OBJECT
 
-public:
-    explicit RatingWidget(QWidget* parent = nullptr);
+  public:
+    explicit RatingWidget(QWidget *parent = nullptr);
 
-    int rating() const { return m_rating; }
+    int rating() const
+    {
+        return m_rating;
+    }
 
-public slots:
+  public slots:
     void setRating(int stars);
 
-signals:
+  signals:
     void ratingChanged(int stars);
 
-private:
+  private:
     void refresh();
 
     int m_rating = 0;
-    QList<QToolButton*> m_stars;
+    QList<QToolButton *> m_stars;
 };

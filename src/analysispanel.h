@@ -17,7 +17,6 @@
 #include <QWidget>
 
 #include <memory>
-#include <memory>
 
 class RawImageView;
 
@@ -131,11 +130,11 @@ class AnalysisPanel : public QWidget
     QComboBox *m_analyzerCombo = nullptr;
     QLabel *m_histogramLabel = nullptr; // histogram viz (replaces dead drawHistogramChannel)
     QLabel *m_statsLabel = nullptr;
-    QLabel *m_rgbLabel = nullptr;       // P1-1: RGB channel viz
-    QLabel *m_rgbStatsLabel = nullptr;  // P1-1: RGB stats text
-    QLabel *m_exposureLabel = nullptr;  // P1-1: exposure stats
-    QLabel *m_focusLabel = nullptr;     // P1-1: focus / sharpness stats
-    QLabel *m_metaLabel = nullptr;      // P1-1: metadata summary
+    QLabel *m_rgbLabel = nullptr;      // P1-1: RGB channel viz
+    QLabel *m_rgbStatsLabel = nullptr; // P1-1: RGB stats text
+    QLabel *m_exposureLabel = nullptr; // P1-1: exposure stats
+    QLabel *m_focusLabel = nullptr;    // P1-1: focus / sharpness stats
+    QLabel *m_metaLabel = nullptr;     // P1-1: metadata summary
     QLabel *m_compareLabel = nullptr;
     QLabel *m_diffPreview = nullptr;
     QLabel *m_pluginResult = nullptr;

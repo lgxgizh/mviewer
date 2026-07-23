@@ -11,12 +11,15 @@ struct SearchQuery
 {
     std::string text; // the search term(s)
     bool searchFilenames = true;
-    bool searchMetadata = true;  // EXIF, camera model, lens, ISO, etc.
-    bool searchAnalysis = true;  // analyzer result text
-    bool searchPaths = false;    // full file-path substring match
+    bool searchMetadata = true; // EXIF, camera model, lens, ISO, etc.
+    bool searchAnalysis = true; // analyzer result text
+    bool searchPaths = false;   // full file-path substring match
     bool caseSensitive = false;
 
-    bool empty() const { return text.empty(); }
+    bool empty() const
+    {
+        return text.empty();
+    }
 };
 
 } // namespace mviewer::domain

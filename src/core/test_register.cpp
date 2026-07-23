@@ -25,7 +25,7 @@ static int g_fail = 0;
             printf("  PASS: %s\n", msg);                                                           \
             g_pass++;                                                                              \
         }                                                                                          \
-        else                                                                                      \
+        else                                                                                       \
         {                                                                                          \
             printf("  FAIL: %s\n", msg);                                                           \
             g_fail++;                                                                              \
@@ -38,8 +38,14 @@ namespace
 class SumAnalyzer : public Analyzer
 {
   public:
-    std::string name() const override { return "Test Sum"; }
-    std::string description() const override { return "Sums all pixel channels (test)."; }
+    std::string name() const override
+    {
+        return "Test Sum";
+    }
+    std::string description() const override
+    {
+        return "Sums all pixel channels (test).";
+    }
     bool analyze(const ImageFrame &) override
     {
         m_sum = 123; // pretend work
@@ -49,8 +55,14 @@ class SumAnalyzer : public Analyzer
     {
         return analyze(frame);
     }
-    std::string resultText() const override { return "sum=" + std::to_string(m_sum); }
-    AnalyzerCapability capabilities() const override { return AnalyzerCapability::SingleImage; }
+    std::string resultText() const override
+    {
+        return "sum=" + std::to_string(m_sum);
+    }
+    AnalyzerCapability capabilities() const override
+    {
+        return AnalyzerCapability::SingleImage;
+    }
 
   private:
     int m_sum = 0;

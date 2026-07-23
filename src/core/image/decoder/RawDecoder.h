@@ -27,7 +27,10 @@ class RawDecoder : public IDecoder
     ImageData decodeFull(const std::string &path,
                          mviewer::domain::ImageMetadata &outMeta) const override;
     std::vector<std::string> extensions() const override;
-    const char *name() const override { return "RawDecoder"; }
+    const char *name() const override
+    {
+        return "RawDecoder";
+    }
 
   private:
     // Extract the largest embedded JPEG preview from a RAW container and decode

@@ -23,20 +23,47 @@ namespace
 class BadAbiAnalyzer : public Analyzer
 {
   public:
-    std::string name() const override { return "example.bad_abi"; }
-    std::string description() const override { return "Test plugin with a wrong ABI version"; }
-    AnalyzerCapability capabilities() const override { return AnalyzerCapability::SingleImage; }
-    bool analyze(const ImageFrame &) override { return true; }
-    bool analyzeRegion(const ImageFrame &, const mviewer::domain::Selection &) override { return true; }
-    std::string resultText() const override { return "bad"; }
+    std::string name() const override
+    {
+        return "example.bad_abi";
+    }
+    std::string description() const override
+    {
+        return "Test plugin with a wrong ABI version";
+    }
+    AnalyzerCapability capabilities() const override
+    {
+        return AnalyzerCapability::SingleImage;
+    }
+    bool analyze(const ImageFrame &) override
+    {
+        return true;
+    }
+    bool analyzeRegion(const ImageFrame &, const mviewer::domain::Selection &) override
+    {
+        return true;
+    }
+    std::string resultText() const override
+    {
+        return "bad";
+    }
 };
 } // namespace
 
 extern "C"
 {
-    MVIEWER_PLUGIN_EXPORT Analyzer *createAnalyzer() { return new BadAbiAnalyzer(); }
-    MVIEWER_PLUGIN_EXPORT void destroyAnalyzer(Analyzer *a) { delete a; }
-    MVIEWER_PLUGIN_EXPORT const char *pluginName() { return "example.bad_abi"; }
+    MVIEWER_PLUGIN_EXPORT Analyzer *createAnalyzer()
+    {
+        return new BadAbiAnalyzer();
+    }
+    MVIEWER_PLUGIN_EXPORT void destroyAnalyzer(Analyzer *a)
+    {
+        delete a;
+    }
+    MVIEWER_PLUGIN_EXPORT const char *pluginName()
+    {
+        return "example.bad_abi";
+    }
 
     // M14.2: declare a deliberately incompatible ABI triple (abiVersion 999).
     MVIEWER_PLUGIN_EXPORT const PluginABI *mviewer_plugin_abi()
@@ -44,5 +71,8 @@ extern "C"
         static const PluginABI abi{MVIEWER_API_VERSION, 999, MVIEWER_SDK_VERSION};
         return &abi;
     }
-    MVIEWER_PLUGIN_EXPORT int mviewer_plugin_api_version() { return MVIEWER_API_VERSION; }
+    MVIEWER_PLUGIN_EXPORT int mviewer_plugin_api_version()
+    {
+        return MVIEWER_API_VERSION;
+    }
 }

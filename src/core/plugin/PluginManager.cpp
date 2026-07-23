@@ -1,9 +1,9 @@
 #include "core/plugin/PluginManager.h"
-#include "core/plugin/PluginABI.h"
-#include "core/image/decoder/IDecoder.h"
-#include "core/image/decoder/DecoderRegistry.h"
-#include "core/export/IExporter.h"
 #include "core/export/ExporterRegistry.h"
+#include "core/export/IExporter.h"
+#include "core/image/decoder/DecoderRegistry.h"
+#include "core/image/decoder/IDecoder.h"
+#include "core/plugin/PluginABI.h"
 
 #include <filesystem>
 #include <iostream>
@@ -84,7 +84,8 @@ bool PluginManager::load(const std::string &path)
 
     auto abiFn =
         reinterpret_cast<const PluginABI *(*)()>(GetProcAddress(handle, "mviewer_plugin_abi"));
-    auto versionFn = reinterpret_cast<int (*)()>(GetProcAddress(handle, "mviewer_plugin_api_version"));
+    auto versionFn =
+        reinterpret_cast<int (*)()>(GetProcAddress(handle, "mviewer_plugin_api_version"));
     auto createAnalyzerFn =
         reinterpret_cast<Analyzer *(*)()>(GetProcAddress(handle, "createAnalyzer"));
     auto destroyAnalyzerFn =
@@ -105,11 +106,11 @@ bool PluginManager::load(const std::string &path)
         const PluginABI *pabi = abiFn();
         if (!pluginABICompatible(hostPluginABI(), *pabi))
         {
-            m_lastError = "plugin ABI incompatible: host abi=" +
-                          std::to_string(hostPluginABI().abiVersion) +
-                          " api=" + std::to_string(hostPluginABI().apiVersion) +
-                          ", plugin abi=" + std::to_string(pabi->abiVersion) +
-                          " api=" + std::to_string(pabi->apiVersion);
+            m_lastError =
+                "plugin ABI incompatible: host abi=" + std::to_string(hostPluginABI().abiVersion) +
+                " api=" + std::to_string(hostPluginABI().apiVersion) +
+                ", plugin abi=" + std::to_string(pabi->abiVersion) +
+                " api=" + std::to_string(pabi->apiVersion);
             FreeLibrary(handle);
             return false;
         }
@@ -133,11 +134,13 @@ bool PluginManager::load(const std::string &path)
     auto abiFn = reinterpret_cast<const PluginABI *(*)()>(dlsym(handle, "mviewer_plugin_abi"));
     auto versionFn = reinterpret_cast<int (*)()>(dlsym(handle, "mviewer_plugin_api_version"));
     auto createAnalyzerFn = reinterpret_cast<Analyzer *(*)()>(dlsym(handle, "createAnalyzer"));
-    auto destroyAnalyzerFn = reinterpret_cast<void (*)(Analyzer *)>(dlsym(handle, "destroyAnalyzer"));
+    auto destroyAnalyzerFn =
+        reinterpret_cast<void (*)(Analyzer *)>(dlsym(handle, "destroyAnalyzer"));
     auto createDecoderFn = reinterpret_cast<IDecoder *(*)()>(dlsym(handle, "createDecoder"));
     auto destroyDecoderFn = reinterpret_cast<void (*)(IDecoder *)>(dlsym(handle, "destroyDecoder"));
     auto createExporterFn = reinterpret_cast<IExporter *(*)()>(dlsym(handle, "createExporter"));
-    auto destroyExporterFn = reinterpret_cast<void (*)(IExporter *)>(dlsym(handle, "destroyExporter"));
+    auto destroyExporterFn =
+        reinterpret_cast<void (*)(IExporter *)>(dlsym(handle, "destroyExporter"));
     auto nameFn = reinterpret_cast<const char *(*)()>(dlsym(handle, "pluginName"));
 
     // M14.2: ABI triple gate (mirrors the Windows branch).
@@ -146,11 +149,11 @@ bool PluginManager::load(const std::string &path)
         const PluginABI *pabi = abiFn();
         if (!pluginABICompatible(hostPluginABI(), *pabi))
         {
-            m_lastError = "plugin ABI incompatible: host abi=" +
-                          std::to_string(hostPluginABI().abiVersion) +
-                          " api=" + std::to_string(hostPluginABI().apiVersion) +
-                          ", plugin abi=" + std::to_string(pabi->abiVersion) +
-                          " api=" + std::to_string(pabi->apiVersion);
+            m_lastError =
+                "plugin ABI incompatible: host abi=" + std::to_string(hostPluginABI().abiVersion) +
+                " api=" + std::to_string(hostPluginABI().apiVersion) +
+                ", plugin abi=" + std::to_string(pabi->abiVersion) +
+                " api=" + std::to_string(pabi->apiVersion);
             return false;
         }
         std::string warn = pluginABIWarnings(hostPluginABI(), *pabi);
@@ -159,8 +162,7 @@ bool PluginManager::load(const std::string &path)
     }
 #endif
 
-    const std::string displayName =
-        nameFn ? nameFn() : std::filesystem::path(path).stem().string();
+    const std::string displayName = nameFn ? nameFn() : std::filesystem::path(path).stem().string();
 
     // --- Analyzer plugin (existing contract) ---
     if (createAnalyzerFn)
@@ -188,7 +190,12 @@ bool PluginManager::load(const std::string &path)
                     return nullptr;
                 if (destroyAnalyzerFn)
                     return std::unique_ptr<Analyzer, AnalyzerDeleter>(
-                        a, [destroyAnalyzerFn](Analyzer *p) { if (p) destroyAnalyzerFn(p); });
+                        a,
+                        [destroyAnalyzerFn](Analyzer *p)
+                        {
+                            if (p)
+                                destroyAnalyzerFn(p);
+                        });
                 return std::unique_ptr<Analyzer, AnalyzerDeleter>(a, [](Analyzer *p) { delete p; });
             });
 
@@ -220,8 +227,12 @@ bool PluginManager::load(const std::string &path)
         }
         const std::string decoderId = dec->name();
         auto decPtr = destroyDecoderFn
-                          ? std::shared_ptr<IDecoder>(
-                                dec, [destroyDecoderFn](IDecoder *p) { if (p) destroyDecoderFn(p); })
+                          ? std::shared_ptr<IDecoder>(dec,
+                                                      [destroyDecoderFn](IDecoder *p)
+                                                      {
+                                                          if (p)
+                                                              destroyDecoderFn(p);
+                                                      })
                           : std::shared_ptr<IDecoder>(dec, [](IDecoder *p) { delete p; });
         dec = nullptr;
         DecoderRegistry::instance().registerDecoder(decPtr);
@@ -254,8 +265,12 @@ bool PluginManager::load(const std::string &path)
         }
         const std::string exporterId = exp->name();
         auto expPtr = destroyExporterFn
-                          ? std::shared_ptr<IExporter>(
-                                exp, [destroyExporterFn](IExporter *p) { if (p) destroyExporterFn(p); })
+                          ? std::shared_ptr<IExporter>(exp,
+                                                       [destroyExporterFn](IExporter *p)
+                                                       {
+                                                           if (p)
+                                                               destroyExporterFn(p);
+                                                       })
                           : std::shared_ptr<IExporter>(exp, [](IExporter *p) { delete p; });
         exp = nullptr;
         ExporterRegistry::instance().registerExporter(expPtr);

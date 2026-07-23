@@ -82,9 +82,14 @@ bool loadBudgetJson(const std::string &path, Budget &b)
     if (budgets.isEmpty())
         return false;
 
-    auto get = [&](const char *key, double &out) {
+    auto get = [&](const char *key, double &out)
+    {
         const QJsonValue v = budgets.value(QString::fromLatin1(key));
-        if (v.isDouble()) { out = v.toDouble(); return true; }
+        if (v.isDouble())
+        {
+            out = v.toDouble();
+            return true;
+        }
         return false;
     };
     get("open_folder_ms", b.open_folder_ms);
@@ -117,7 +122,8 @@ std::unordered_map<std::string, double> loadBaselineJson(const std::string &path
         if (it.value().isDouble())
             m[it.key().toStdString()] = it.value().toDouble();
         else if (it.value().isString())
-            m[it.key().toStdString()] = std::strtod(it.value().toString().toStdString().c_str(), nullptr);
+            m[it.key().toStdString()] =
+                std::strtod(it.value().toString().toStdString().c_str(), nullptr);
     }
     return m;
 }
@@ -173,19 +179,23 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     // invocation. Corpus-flooding scenarios (B3-B6 preload all 10000 imgs) are
     // skipped entirely instead of OOM-ing the process when running only a
     // targeted subset (e.g. --scenarios B1,B2,B8 for large-scale acceptance).
-    struct Item { std::string name; std::function<mviewer::bench::ScenarioResult()> fn; };
+    struct Item
+    {
+        std::string name;
+        std::function<mviewer::bench::ScenarioResult()> fn;
+    };
     std::vector<Item> items;
-    items.push_back({"B0",    [&]() { return mviewer::bench::scenarioColdStart(corpus); }});
-    items.push_back({"B1",    [&]() { return mviewer::bench::scenarioStartup(); }});
-    items.push_back({"B2",    [&]() { return mviewer::bench::scenarioFirstThumbnail(corpus); }});
+    items.push_back({"B0", [&]() { return mviewer::bench::scenarioColdStart(corpus); }});
+    items.push_back({"B1", [&]() { return mviewer::bench::scenarioStartup(); }});
+    items.push_back({"B2", [&]() { return mviewer::bench::scenarioFirstThumbnail(corpus); }});
     items.push_back({"TRACE", [&]() { return mviewer::bench::scenarioPipelinePriority(corpus); }});
-    items.push_back({"B3",    [&]() { return mviewer::bench::scenarioDecodeLatency(corpus); }});
-    items.push_back({"B4",    [&]() { return mviewer::bench::scenarioThumbThroughput(corpus); }});
-    items.push_back({"B5",    [&]() { return mviewer::bench::scenarioCacheHitRatio(corpus); }});
-    items.push_back({"B6",    [&]() { return mviewer::bench::scenarioMemoryBudget(corpus); }});
-    items.push_back({"B7",    [&]() { return mviewer::bench::scenarioImageSwitch(corpus); }});
-    items.push_back({"B8",    [&]() { return mviewer::bench::scenarioSwitchLatency(corpus); }});
-    items.push_back({"B9",    [&]() { return mviewer::bench::scenarioSoakStability(corpus); }});
+    items.push_back({"B3", [&]() { return mviewer::bench::scenarioDecodeLatency(corpus); }});
+    items.push_back({"B4", [&]() { return mviewer::bench::scenarioThumbThroughput(corpus); }});
+    items.push_back({"B5", [&]() { return mviewer::bench::scenarioCacheHitRatio(corpus); }});
+    items.push_back({"B6", [&]() { return mviewer::bench::scenarioMemoryBudget(corpus); }});
+    items.push_back({"B7", [&]() { return mviewer::bench::scenarioImageSwitch(corpus); }});
+    items.push_back({"B8", [&]() { return mviewer::bench::scenarioSwitchLatency(corpus); }});
+    items.push_back({"B9", [&]() { return mviewer::bench::scenarioSoakStability(corpus); }});
 
     std::vector<mviewer::bench::ScenarioResult> results;
     for (const auto &it : items)
@@ -299,9 +309,8 @@ int main(int argc, char **argv)
         while (pos < scenariosArg.size())
         {
             size_t comma = scenariosArg.find(',', pos);
-            std::string tok = (comma == std::string::npos)
-                ? scenariosArg.substr(pos)
-                : scenariosArg.substr(pos, comma - pos);
+            std::string tok = (comma == std::string::npos) ? scenariosArg.substr(pos)
+                                                           : scenariosArg.substr(pos, comma - pos);
             // trim + uppercase
             auto start = tok.find_first_not_of(" \t");
             if (start != std::string::npos)
@@ -322,8 +331,7 @@ int main(int argc, char **argv)
     std::cout << "=== MViewer benchmark (M10) ===" << std::endl;
     if (smoke)
         std::cout << "[smoke] ";
-    std::cout << "corpus-size=" << corpusSize
-              << " enforce=" << (b.enforce ? "yes" : "no");
+    std::cout << "corpus-size=" << corpusSize << " enforce=" << (b.enforce ? "yes" : "no");
     if (!budgetFile.empty())
     {
         if (loadBudgetJson(budgetFile, b))
@@ -381,11 +389,8 @@ int main(int argc, char **argv)
     //   "CI does not yet diff against baseline or fail on regression."
     if (b.enforce && baselineFile.empty())
     {
-        static const char *const kCandidates[] = {
-            "benchmark/perf_baseline.json",
-            "../benchmark/perf_baseline.json",
-            nullptr
-        };
+        static const char *const kCandidates[] = {"benchmark/perf_baseline.json",
+                                                  "../benchmark/perf_baseline.json", nullptr};
         for (int ci = 0; kCandidates[ci]; ++ci)
         {
             if (QFile::exists(QString::fromLatin1(kCandidates[ci])))
@@ -413,8 +418,15 @@ int main(int argc, char **argv)
                 {
                     double delta = ((r.value - it->second) / it->second) * 100.0;
                     const char *flag = "";
-                    if (delta > 10.0)      { flag = " *** REGRESSION >10% ***"; allPass = false; }
-                    else if (delta > 5.0)  { flag = " * WARN >5%"; }
+                    if (delta > 10.0)
+                    {
+                        flag = " *** REGRESSION >10% ***";
+                        allPass = false;
+                    }
+                    else if (delta > 5.0)
+                    {
+                        flag = " * WARN >5%";
+                    }
                     std::cout << "  " << r.name << ": current=" << r.value
                               << " baseline=" << it->second << " delta=" << delta << "%" << flag
                               << std::endl;
@@ -479,7 +491,9 @@ int main(int argc, char **argv)
         if (rpt.is_open())
         {
             rpt << "# MViewer Benchmark Regression Report\n\n";
-            rpt << "**Date:** " << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss").toStdString() << "\n\n";
+            rpt << "**Date:** "
+                << QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss").toStdString()
+                << "\n\n";
             rpt << "**Baseline:** " << (baselineFile.empty() ? "(none)" : baselineFile) << "\n\n";
             rpt << "| Scenario | Metric | Value | Passed | Regression |\n";
             rpt << "|----------|--------|-------|--------|------------|\n";

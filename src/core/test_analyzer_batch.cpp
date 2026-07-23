@@ -67,11 +67,9 @@ static void testHistogramBatch()
     fflush(stdout);
 
     std::vector<std::pair<std::string, std::shared_ptr<ImageFrame>>> frames;
-    frames.emplace_back("dark.png", makeFrame("dark.png", 16, 16,
-                                              [](uint8_t *p, int, int, int)
+    frames.emplace_back("dark.png", makeFrame("dark.png", 16, 16, [](uint8_t *p, int, int, int)
                                               { p[0] = p[1] = p[2] = 40; }));
-    frames.emplace_back("bright.png", makeFrame("bright.png", 16, 16,
-                                                [](uint8_t *p, int, int, int)
+    frames.emplace_back("bright.png", makeFrame("bright.png", 16, 16, [](uint8_t *p, int, int, int)
                                                 { p[0] = p[1] = p[2] = 200; }));
     // A null frame must be skipped, not crash.
     frames.emplace_back("missing.png", std::shared_ptr<ImageFrame>());
@@ -121,8 +119,7 @@ static void testUnknownAnalyzer()
     printf("\n[batch unknown analyzer id]\n");
     fflush(stdout);
     std::vector<std::pair<std::string, std::shared_ptr<ImageFrame>>> frames;
-    frames.emplace_back("a.png", makeFrame("a.png", 8, 8,
-                                           [](uint8_t *p, int, int, int)
+    frames.emplace_back("a.png", makeFrame("a.png", 8, 8, [](uint8_t *p, int, int, int)
                                            { p[0] = p[1] = p[2] = 100; }));
     const auto results = ::AnalyzerRegistry::instance().runBatch(frames, "does_not_exist");
     CHECK(results.empty(), "unknown analyzer id -> empty results");

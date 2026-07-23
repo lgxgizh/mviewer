@@ -15,7 +15,6 @@
 #include <QDialog>
 #include <QDir>
 
-#include <algorithm>
 #include <QFileDialog>
 #include <QGridLayout>
 #include <QHBoxLayout>
@@ -36,6 +35,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWheelEvent>
+#include <algorithm>
 #include <vector>
 
 namespace
@@ -90,22 +90,24 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     // thread and publishes "CompareEngine.DiffResult" on the EventBus from that
     // thread. We hop to the UI thread before repainting (the engine pointer in
     // ctx identifies which CompareEngine produced it).
-    m_diffSubId = EventBus::instance().subscribe(
-        "CompareEngine.DiffResult",
-        [this](void *ctx)
-        {
-            if (ctx != static_cast<void *>(&m_engine))
-                return;
-            // Repaint on the UI thread; refreshDiffOverlay() reads lastDiffImage().
-            QPointer<CompareWorkspace> guard(this);
-            QMetaObject::invokeMethod(
-                this, [guard]()
-                {
-                    if (!guard) return;
-                    guard->refreshDiffOverlay();
-                },
-                Qt::QueuedConnection);
-        });
+    m_diffSubId = EventBus::instance().subscribe("CompareEngine.DiffResult",
+                                                 [this](void *ctx)
+                                                 {
+                                                     if (ctx != static_cast<void *>(&m_engine))
+                                                         return;
+                                                     // Repaint on the UI thread;
+                                                     // refreshDiffOverlay() reads lastDiffImage().
+                                                     QPointer<CompareWorkspace> guard(this);
+                                                     QMetaObject::invokeMethod(
+                                                         this,
+                                                         [guard]()
+                                                         {
+                                                             if (!guard)
+                                                                 return;
+                                                             guard->refreshDiffOverlay();
+                                                         },
+                                                         Qt::QueuedConnection);
+                                                 });
 
     auto *syncBar = new QWidget(this);
     auto *syncLayout = new QHBoxLayout(syncBar);
@@ -116,35 +118,45 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 
     // M14-3: blink (flicker) compare — 500ms toggle between base and target.
     m_blinkChk = new QCheckBox("闪烁对比(&B)", this);
-    connect(m_blinkChk, &QCheckBox::toggled, this, [this](bool on) {
-        if (on)
-        {
-            startBlink(500);
-        }
-        else
-        {
-            stopBlink();
-        }
-    });
+    connect(m_blinkChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                if (on)
+                {
+                    startBlink(500);
+                }
+                else
+                {
+                    stopBlink();
+                }
+            });
     syncLayout->addWidget(m_blinkChk);
 
     // P0-4: split / swipe compare for exactly two images.
     m_splitChk = new QCheckBox("左右分割(&S)", this);
     m_splitChk->setEnabled(false);
-    connect(m_splitChk, &QCheckBox::toggled, this, [this](bool on) {
-        if (on && m_swipeChk) m_swipeChk->setChecked(false);
-        if (m_grid) m_grid->setVisible(!isSplitOrSwipe());
-        update();
-    });
+    connect(m_splitChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                if (on && m_swipeChk)
+                    m_swipeChk->setChecked(false);
+                if (m_grid)
+                    m_grid->setVisible(!isSplitOrSwipe());
+                update();
+            });
     syncLayout->addWidget(m_splitChk);
 
     m_swipeChk = new QCheckBox("滑动对比(&W)", this);
     m_swipeChk->setEnabled(false);
-    connect(m_swipeChk, &QCheckBox::toggled, this, [this](bool on) {
-        if (on && m_splitChk) m_splitChk->setChecked(false);
-        if (m_grid) m_grid->setVisible(!isSplitOrSwipe());
-        update();
-    });
+    connect(m_swipeChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                if (on && m_splitChk)
+                    m_splitChk->setChecked(false);
+                if (m_grid)
+                    m_grid->setVisible(!isSplitOrSwipe());
+                update();
+            });
     syncLayout->addWidget(m_swipeChk);
 
     // M15: threshold slider for difference heatmap (0-255).
@@ -155,16 +167,17 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     m_thresholdSlider->setValue(0);
     m_thresholdSlider->setMaximumWidth(120);
     m_thresholdSlider->setToolTip("差异阈值: 低于此值的像素将被隐藏");
-    connect(m_thresholdSlider, &QSlider::valueChanged, this, [this](int value) {
-        m_thresholdValue = static_cast<uint8_t>(value);
-        refreshDiffOverlay();
-    });
+    connect(m_thresholdSlider, &QSlider::valueChanged, this,
+            [this](int value)
+            {
+                m_thresholdValue = static_cast<uint8_t>(value);
+                refreshDiffOverlay();
+            });
     syncLayout->addWidget(m_thresholdSlider);
     m_thresholdLabel = new QLabel("0", this);
     m_thresholdLabel->setMinimumWidth(24);
-    connect(m_thresholdSlider, &QSlider::valueChanged, this, [this](int value) {
-        m_thresholdLabel->setText(QString::number(value));
-    });
+    connect(m_thresholdSlider, &QSlider::valueChanged, this,
+            [this](int value) { m_thresholdLabel->setText(QString::number(value)); });
     syncLayout->addWidget(m_thresholdLabel);
 
     // P0 #③: explicit multi-layout selector (auto / single / 2-4 columns / row).
@@ -195,12 +208,14 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     // reference; diff overlays and inspector deltas use it as the base.
     m_focusBtn = new QPushButton(tr("锁定基准"), this);
     m_focusBtn->setCheckable(true);
-    connect(m_focusBtn, &QPushButton::toggled, this, [this](bool on) {
-        // Lock the focus on the cell under the cursor (fall back to cell 0 when
-        // none is hovered). Toggling off clears the lock.
-        const int idx = (on && m_hoverIdx >= 0) ? m_hoverIdx : (on ? 0 : m_focusIndex);
-        onFocusRequested(on ? idx : -1);
-    });
+    connect(m_focusBtn, &QPushButton::toggled, this,
+            [this](bool on)
+            {
+                // Lock the focus on the cell under the cursor (fall back to cell 0 when
+                // none is hovered). Toggling off clears the lock.
+                const int idx = (on && m_hoverIdx >= 0) ? m_hoverIdx : (on ? 0 : m_focusIndex);
+                onFocusRequested(on ? idx : -1);
+            });
     syncLayout->addWidget(m_focusBtn);
     m_focusLabel = new QLabel(tr("基准: —"), this);
     m_focusLabel->setMinimumWidth(60);
@@ -318,12 +333,14 @@ void CompareWorkspace::setImages(const QStringList &paths)
     const bool two = m_engine.imageCount() == 2;
     if (m_splitChk)
     {
-        if (!two) m_splitChk->setChecked(false);
+        if (!two)
+            m_splitChk->setChecked(false);
         m_splitChk->setEnabled(two);
     }
     if (m_swipeChk)
     {
-        if (!two) m_swipeChk->setChecked(false);
+        if (!two)
+            m_swipeChk->setChecked(false);
         m_swipeChk->setEnabled(two);
     }
     if (m_grid && !two)
@@ -506,7 +523,8 @@ void CompareWorkspace::stopBlink()
         m_blinkTimer->stop();
     // restore all cells visible
     for (auto *v : m_cellViews)
-        if (v) v->setVisible(true);
+        if (v)
+            v->setVisible(true);
 }
 
 void CompareWorkspace::applyBlink(bool state)
@@ -531,12 +549,24 @@ void CompareWorkspace::onLayoutChanged()
     int cols = 0;
     switch (idx)
     {
-        case 1: cols = 1; break;   // 单列
-        case 2: cols = 2; break;   // 2 列
-        case 3: cols = 3; break;   // 3 列
-        case 4: cols = 4; break;   // 4 列
-        case 5: cols = m_engine.imageCount(); break;  // 一行
-        default: cols = 0; break;  // 自动
+    case 1:
+        cols = 1;
+        break; // 单列
+    case 2:
+        cols = 2;
+        break; // 2 列
+    case 3:
+        cols = 3;
+        break; // 3 列
+    case 4:
+        cols = 4;
+        break; // 4 列
+    case 5:
+        cols = m_engine.imageCount();
+        break; // 一行
+    default:
+        cols = 0;
+        break; // 自动
     }
     m_engine.setColumns(cols);
     rebuildCells();
@@ -574,8 +604,7 @@ void CompareWorkspace::updateInspector(int x, int y)
     for (int i = 0; i < n; ++i)
     {
         const ImageFrame *img = m_engine.imageAt(i);
-        const QString name =
-            img ? QString::fromStdString(img->metadata().fileName) : QString();
+        const QString name = img ? QString::fromStdString(img->metadata().fileName) : QString();
         const auto &s = probe.samples[static_cast<size_t>(i)];
         const double dist = (static_cast<size_t>(i) < probe.deltas.size())
                                 ? probe.deltas[static_cast<size_t>(i)].dist
@@ -585,8 +614,7 @@ void CompareWorkspace::updateInspector(int x, int y)
         m_inspector->setItem(i, 2, new QTableWidgetItem(QString::number(s.r)));
         m_inspector->setItem(i, 3, new QTableWidgetItem(QString::number(s.g)));
         m_inspector->setItem(i, 4, new QTableWidgetItem(QString::number(s.b)));
-        m_inspector->setItem(
-            i, 5, new QTableWidgetItem(QString::number(static_cast<int>(dist))));
+        m_inspector->setItem(i, 5, new QTableWidgetItem(QString::number(static_cast<int>(dist))));
     }
 }
 
@@ -600,8 +628,7 @@ void CompareWorkspace::refreshHistograms()
     {
         // Per-pane: show only the selected cell's histogram
         const ImageFrame *img = m_engine.imageAt(m_editIdx);
-        auto h = img ? mviewer::core::computeHistogram(img->pixels())
-                     : mviewer::core::Histogram{};
+        auto h = img ? mviewer::core::computeHistogram(img->pixels()) : mviewer::core::Histogram{};
         m_hist->setHistograms({h});
     }
     else
@@ -825,7 +852,8 @@ void CompareWorkspace::drawSplitCompare(QPainter &p)
 {
     const QRect r = rect();
     const QRect left(r.topLeft(), QSize(r.width() / 2, r.height()));
-    const QRect right(left.topRight() + QPoint(1, 0), QSize(r.width() - left.width() - 1, r.height()));
+    const QRect right(left.topRight() + QPoint(1, 0),
+                      QSize(r.width() - left.width() - 1, r.height()));
     const QImage &img0 = m_cellViews[0]->image();
     const QImage &img1 = m_cellViews[1]->image();
     drawFitImage(p, img0, left);
@@ -858,8 +886,8 @@ void CompareWorkspace::drawFitImage(QPainter &p, const QImage &img, const QRect 
     const double s = qMin(dst.width() / src.width(), dst.height() / src.height());
     const int w = int(src.width() * s);
     const int h = int(src.height() * s);
-    const QRect dr(target.x() + (target.width() - w) / 2,
-                   target.y() + (target.height() - h) / 2, w, h);
+    const QRect dr(target.x() + (target.width() - w) / 2, target.y() + (target.height() - h) / 2, w,
+                   h);
     p.drawImage(dr, img);
 }
 
@@ -949,8 +977,7 @@ void CompareWorkspace::resizeEvent(QResizeEvent *event)
 
 // ─── M16.2: Per-cell image adjustments ───────────────────────────────────────
 
-ImageData CompareWorkspace::applyAdjusts(const ImageData &src,
-                                                  const CellAdjust &a)
+ImageData CompareWorkspace::applyAdjusts(const ImageData &src, const CellAdjust &a)
 {
     if (src.isNull() || a.isIdentity())
         return src;
@@ -978,7 +1005,8 @@ ImageData CompareWorkspace::applyAdjusts(const ImageData &src,
     if (a.rotation != 0)
     {
         int rot = a.rotation % 360;
-        if (rot < 0) rot += 360;
+        if (rot < 0)
+            rot += 360;
         while (rot > 0)
         {
             cur = rotate90CW(cur);
@@ -1013,7 +1041,11 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
         row->addWidget(m_brightVal);
         editLay->addLayout(row);
         connect(m_brightSlider, &QSlider::valueChanged, this,
-                [this](int v) { m_brightVal->setText(QString::number(v)); onAdjChanged(); });
+                [this](int v)
+                {
+                    m_brightVal->setText(QString::number(v));
+                    onAdjChanged();
+                });
     }
 
     // Contrast slider [0..300] → float [0.0..3.0]; 100=identity
@@ -1029,8 +1061,11 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
         row->addWidget(m_contrastVal);
         editLay->addLayout(row);
         connect(m_contrastSlider, &QSlider::valueChanged, this,
-                [this](int v) { m_contrastVal->setText(QString::number(v / 100.0, 'f', 2));
-                                onAdjChanged(); });
+                [this](int v)
+                {
+                    m_contrastVal->setText(QString::number(v / 100.0, 'f', 2));
+                    onAdjChanged();
+                });
     }
 
     // Gamma slider [5..800] → float [0.05..8.0]; 100=identity
@@ -1046,8 +1081,11 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
         row->addWidget(m_gammaVal);
         editLay->addLayout(row);
         connect(m_gammaSlider, &QSlider::valueChanged, this,
-                [this](int v) { m_gammaVal->setText(QString::number(v / 100.0, 'f', 2));
-                                onAdjChanged(); });
+                [this](int v)
+                {
+                    m_gammaVal->setText(QString::number(v / 100.0, 'f', 2));
+                    onAdjChanged();
+                });
     }
 
     // White balance: R gain [1..500] → float [0.01..5.0]; 100=identity
@@ -1063,8 +1101,11 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
         row->addWidget(m_rGainVal);
         editLay->addLayout(row);
         connect(m_rGainSlider, &QSlider::valueChanged, this,
-                [this](int v) { m_rGainVal->setText(QString::number(v / 100.0, 'f', 2));
-                                onAdjChanged(); });
+                [this](int v)
+                {
+                    m_rGainVal->setText(QString::number(v / 100.0, 'f', 2));
+                    onAdjChanged();
+                });
     }
 
     // White balance: B gain [1..500] → float [0.01..5.0]; 100=identity
@@ -1080,8 +1121,11 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
         row->addWidget(m_bGainVal);
         editLay->addLayout(row);
         connect(m_bGainSlider, &QSlider::valueChanged, this,
-                [this](int v) { m_bGainVal->setText(QString::number(v / 100.0, 'f', 2));
-                                onAdjChanged(); });
+                [this](int v)
+                {
+                    m_bGainVal->setText(QString::number(v / 100.0, 'f', 2));
+                    onAdjChanged();
+                });
     }
 
     // Reset button
@@ -1255,11 +1299,10 @@ void CompareWorkspace::updateMetrics()
     const QString psnrStr = QString::number(psnrVal, 'f', 2) + " dB";
     const QString ssimStr = QString::number(ssimVal, 'f', 4);
 
-    m_metricLabel->setText(
-        tr("PSNR: %1  SSIM: %2\n(Image #%3 vs #%4)")
-            .arg(psnrStr, ssimStr)
-            .arg(baseIdx + 1)
-            .arg(targetIdx + 1));
+    m_metricLabel->setText(tr("PSNR: %1  SSIM: %2\n(Image #%3 vs #%4)")
+                               .arg(psnrStr, ssimStr)
+                               .arg(baseIdx + 1)
+                               .arg(targetIdx + 1));
 }
 
 // ─── M16.5: Per-pane histogram toggle ────────────────────────────────────────
@@ -1277,17 +1320,16 @@ void CompareWorkspace::ensurePresetDir()
     if (!m_presetDir.isEmpty())
         return;
     // Store presets under the app's cache/config directory
-    m_presetDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)
-                  + "/compare_presets";
+    m_presetDir =
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/compare_presets";
     QDir().mkpath(m_presetDir);
 }
 
 void CompareWorkspace::onSavePreset()
 {
     ensurePresetDir();
-    const QString fileName =
-        QFileDialog::getSaveFileName(this, tr("存储对比布局"), m_presetDir,
-                                     tr("对比布局文件 (*.mvc)\n所有文件 (*.*)"));
+    const QString fileName = QFileDialog::getSaveFileName(
+        this, tr("存储对比布局"), m_presetDir, tr("对比布局文件 (*.mvc)\n所有文件 (*.*)"));
     if (fileName.isEmpty())
         return;
 
@@ -1352,8 +1394,7 @@ void CompareWorkspace::onSavePreset()
     QFile f(fileName);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
     {
-        QMessageBox::warning(this, tr("存储失败"),
-                             tr("无法写入文件:\n%1").arg(fileName));
+        QMessageBox::warning(this, tr("存储失败"), tr("无法写入文件:\n%1").arg(fileName));
         return;
     }
     f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
@@ -1363,17 +1404,15 @@ void CompareWorkspace::onSavePreset()
 void CompareWorkspace::onLoadPreset()
 {
     ensurePresetDir();
-    const QString fileName =
-        QFileDialog::getOpenFileName(this, tr("读取对比布局"), m_presetDir,
-                                     tr("对比布局文件 (*.mvc)\n所有文件 (*.*)"));
+    const QString fileName = QFileDialog::getOpenFileName(
+        this, tr("读取对比布局"), m_presetDir, tr("对比布局文件 (*.mvc)\n所有文件 (*.*)"));
     if (fileName.isEmpty())
         return;
 
     QFile f(fileName);
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
     {
-        QMessageBox::warning(this, tr("读取失败"),
-                             tr("无法打开文件:\n%1").arg(fileName));
+        QMessageBox::warning(this, tr("读取失败"), tr("无法打开文件:\n%1").arg(fileName));
         return;
     }
     const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
@@ -1423,9 +1462,8 @@ void CompareWorkspace::onLoadPreset()
     {
         const QJsonObject s = root["session"].toObject();
         mviewer::domain::CompareSession sess;
-        sess.syncMode = s["synced"].toBool(false)
-                            ? mviewer::domain::SyncMode::All
-                            : mviewer::domain::SyncMode::Off;
+        sess.syncMode = s["synced"].toBool(false) ? mviewer::domain::SyncMode::All
+                                                  : mviewer::domain::SyncMode::Off;
         sess.sharedScale = s["sharedScale"].toDouble(1.0);
         sess.sharedOffsetX = s["sharedOffsetX"].toDouble(0.0);
         sess.sharedOffsetY = s["sharedOffsetY"].toDouble(0.0);
@@ -1547,7 +1585,8 @@ void CompareWorkspace::keyReleaseEvent(QKeyEvent *event)
     QWidget::keyReleaseEvent(event);
 }
 
-// P0-4: swipe divider drag. In split mode the divider is fixed; in swipe mode it follows the cursor.
+// P0-4: swipe divider drag. In split mode the divider is fixed; in swipe mode it follows the
+// cursor.
 void CompareWorkspace::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton && m_swipeChk && m_swipeChk->isChecked())

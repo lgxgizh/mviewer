@@ -3,82 +3,81 @@
 #include "application/OpenDirectoryUseCase.h"
 #include "appstate.h"
 #include "core/EventBus.h"
+#include "core/RatingStore.h"
+#include "core/SidecarStore.h"
+#include "core/analysis/ReportHtml.h"
+#include "core/analyzer/Analyzer.h"
+#include "core/cache/CacheManager.h"
 #include "core/command/CallbackCommand.h"
 #include "core/command/CompareCommand.h"
 #include "core/command/DeleteCommand.h"
 #include "core/command/OpenDirectoryCommand.h"
 #include "core/command/RenameCommand.h"
 #include "core/command/ToggleHistogramCommand.h"
+#include "core/export/ExportManager.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
-#include "core/image/RawMetadata.h"
 #include "core/image/QtConvert.h"
-#include "core/RatingStore.h"
-#include "core/SidecarStore.h"
-#include "core/cache/CacheManager.h"
-#include "core/analysis/ReportHtml.h"
-#include "core/workspace/WorkspaceSerializer.h"
-#include "core/analyzer/Analyzer.h"
-#include "core/export/ExportManager.h"
+#include "core/image/RawMetadata.h"
 #include "core/project/ProjectSerializer.h"
+#include "core/workspace/WorkspaceSerializer.h"
 
 #include "analysispanel.h"
+#include "batchdialog.h"
+#include "breadcrumbbar.h"
 #include "compareworkspace.h"
 #include "core/analyzer/AnalyzerPipeline.h"
+#include "core/render/Viewport.h"
 #include "directorytree.h"
 #include "exportcommand.h"
 #include "exportdialog.h"
 #include "imageviewer.h"
-#include "core/render/Viewport.h"
-#include "pluginsettings.h"
-#include "metadatapanel.h"
-#include "previewpanel.h"
-#include "selectionmodel.h"
-#include "searchpanel.h"
-#include "batchdialog.h"
-#include "breadcrumbbar.h"
 #include "metadataoverlay.h"
+#include "metadatapanel.h"
+#include "pluginsettings.h"
+#include "previewpanel.h"
+#include "searchpanel.h"
+#include "selectionmodel.h"
 #include "thumbnailpanel.h"
 
 #include <QApplication>
-#include <QClipboard>
-#include <QDateTime>
 #include <QBuffer>
+#include <QCheckBox>
+#include <QClipboard>
 #include <QCloseEvent>
-#include <QDragEnterEvent>
-#include <QDropEvent>
-#include <QMimeData>
-#include <QUrl>
 #include <QComboBox>
+#include <QDateTime>
 #include <QDialog>
 #include <QDialogButtonBox>
-#include <QTextBrowser>
-#include <QCheckBox>
 #include <QDir>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHeaderView>
 #include <QImage>
 #include <QInputDialog>
+#include <QJsonArray>
 #include <QJsonDocument>
-#include <QPushButton>
+#include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QMetaObject>
+#include <QMimeData>
+#include <QPushButton>
 #include <QScrollBar>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QSettings>
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QStatusBar>
+#include <QTextBrowser>
 #include <QTimer>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -86,8 +85,7 @@
 
 // M15 P0#1: forward declaration so openCompare() can restore a persisted
 // session before the helper is defined later in this file.
-static std::optional<mviewer::domain::CompareSession>
-decodeCompareSession(const std::string &json);
+static std::optional<mviewer::domain::CompareSession> decodeCompareSession(const std::string &json);
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
@@ -137,7 +135,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     // M14-1: open the file passed on the command line (deferred to event loop).
     if (!m_openOnLaunch.isEmpty())
-        QMetaObject::invokeMethod(this, [this]() { onImageOpen(m_openOnLaunch); }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(
+            this, [this]() { onImageOpen(m_openOnLaunch); }, Qt::QueuedConnection);
 
     // M15: drag & drop — accept files/folders dropped onto the window.
     setAcceptDrops(true);
@@ -247,10 +246,9 @@ void MainWindow::setupUi()
     m_navSidebar->setMaximumHeight(180);
     m_navSidebar->setContextMenuPolicy(Qt::CustomContextMenu);
     buildNavSidebar();
-    connect(m_navSidebar, &QTreeWidget::itemClicked,
-            this, &MainWindow::onNavSidebarActivated);
-    connect(m_navSidebar, &QTreeWidget::customContextMenuRequested,
-            this, &MainWindow::onNavSidebarContextMenu);
+    connect(m_navSidebar, &QTreeWidget::itemClicked, this, &MainWindow::onNavSidebarActivated);
+    connect(m_navSidebar, &QTreeWidget::customContextMenuRequested, this,
+            &MainWindow::onNavSidebarContextMenu);
     leftLayout->addWidget(m_navSidebar, 1);
 
     m_directoryTree = new DirectoryTree(leftWidget);
@@ -287,18 +285,18 @@ void MainWindow::setupUi()
     viewModeCombo->addItem("紧凑", ThumbnailPanel::Compact);
     viewModeCombo->setToolTip("切换缩略图视图模式 (Ctrl+1..6)");
     sortLayout->addWidget(viewModeCombo);
-    connect(viewModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this, viewModeCombo]() {
-                auto mode = static_cast<ThumbnailPanel::ViewMode>(
-                    viewModeCombo->currentData().toInt());
+    connect(viewModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this, viewModeCombo]()
+            {
+                auto mode =
+                    static_cast<ThumbnailPanel::ViewMode>(viewModeCombo->currentData().toInt());
                 m_thumbnailPanel->setViewMode(mode);
             });
 
     // M15: Dynamic thumbnail size slider (48–512 px)
     sortLayout->addWidget(new QLabel("缩略图：", sortBar));
     auto *thumbSizeSlider = new QSlider(Qt::Horizontal, sortBar);
-    thumbSizeSlider->setRange(ThumbnailPanel::kMinThumbSize,
-                              ThumbnailPanel::kMaxThumbSize);
+    thumbSizeSlider->setRange(ThumbnailPanel::kMinThumbSize, ThumbnailPanel::kMaxThumbSize);
     thumbSizeSlider->setValue(ThumbnailPanel::kDefaultThumbSize);
     thumbSizeSlider->setFixedWidth(100);
     thumbSizeSlider->setToolTip("调整缩略图大小");
@@ -360,8 +358,7 @@ void MainWindow::setupUi()
     // lists or creates analyzers itself — the pipeline owns that responsibility.
     m_analysisPanel->setPipeline(std::make_unique<AnalyzerPipeline>());
     // P1-6: expose a one-click report export from inside the analysis panel.
-    connect(m_analysisPanel, &AnalysisPanel::exportRequested, this,
-            [this]() { exportReport(); });
+    connect(m_analysisPanel, &AnalysisPanel::exportRequested, this, [this]() { exportReport(); });
     m_metadataPanel = new MetadataPanel(this);
     m_searchPanel = new SearchPanel(this);
     m_searchPanel->installEventFilter(this);
@@ -421,20 +418,21 @@ void MainWindow::setupUi()
     m_metadataHoverTimer = new QTimer(this);
     m_metadataHoverTimer->setSingleShot(true);
     m_metadataHoverTimer->setInterval(600);
-    connect(m_metadataHoverTimer, &QTimer::timeout, this, [this]() {
-        if (!m_currentImagePath.isEmpty())
-            showMetadataOverlay();
-    });
+    connect(m_metadataHoverTimer, &QTimer::timeout, this,
+            [this]()
+            {
+                if (!m_currentImagePath.isEmpty())
+                    showMetadataOverlay();
+            });
 
     // ----- Signals -----
     connect(m_directoryTree, &DirectoryTree::directoryChanged, m_thumbnailPanel,
             &ThumbnailPanel::setDirectory);
-    connect(m_breadcrumb, &BreadcrumbBar::pathSelected, this,
-            &MainWindow::onBreadcrumbPath);
+    connect(m_breadcrumb, &BreadcrumbBar::pathSelected, this, &MainWindow::onBreadcrumbPath);
     connect(m_directoryTree, &DirectoryTree::directoryChanged, this,
             [this](const QString &path)
             {
-                m_breadcrumb->setPath(path);  // M15: update breadcrumb bar
+                m_breadcrumb->setPath(path); // M15: update breadcrumb bar
                 m_currentDir = path;
                 m_dirListDirty = true; // invalidate cache on dir change
                 if (m_cachedImagePaths.isEmpty() || path != m_currentDir)
@@ -542,20 +540,13 @@ void MainWindow::setupUi()
 
     // M18: live search → gallery filter (debounced via textChanged; recursive
     // checkbox re-applies immediately).
-    connect(m_searchEdit, &QLineEdit::textChanged, this,
-            [this](const QString &)
-            {
-                m_thumbnailPanel->setFilter(m_searchEdit->text(), m_searchRecursive->isChecked());
-            });
-    connect(m_searchRecursive, &QCheckBox::toggled, this,
-            [this](bool)
-            {
-                m_thumbnailPanel->setFilter(m_searchEdit->text(), m_searchRecursive->isChecked());
-            });
+    connect(m_searchEdit, &QLineEdit::textChanged, this, [this](const QString &)
+            { m_thumbnailPanel->setFilter(m_searchEdit->text(), m_searchRecursive->isChecked()); });
+    connect(m_searchRecursive, &QCheckBox::toggled, this, [this](bool)
+            { m_thumbnailPanel->setFilter(m_searchEdit->text(), m_searchRecursive->isChecked()); });
     // P1: metadata search toggle — re-applies the active filter against embedded
     // metadata instead of just filenames.
-    connect(m_searchMeta, &QCheckBox::toggled, this,
-            &MainWindow::onSearchMetaToggled);
+    connect(m_searchMeta, &QCheckBox::toggled, this, &MainWindow::onSearchMetaToggled);
     // P1: star-rating filter.
     connect(m_ratingFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &MainWindow::onRatingFilterChanged);
@@ -564,8 +555,7 @@ void MainWindow::setupUi()
             &MainWindow::onFlagFilterChanged);
     // P3 tail: a flag change in the metadata panel refreshes the gallery overlay
     // (and re-applies the active filter so list membership stays correct).
-    connect(m_metadataPanel, &MetadataPanel::flagsEdited, this,
-            &MainWindow::onFlagsEdited);
+    connect(m_metadataPanel, &MetadataPanel::flagsEdited, this, &MainWindow::onFlagsEdited);
     // P1: a rating set in the metadata panel refreshes the gallery star overlay.
     connect(m_metadataPanel, &MetadataPanel::ratingEdited, this,
             [this](const QString &path, int)
@@ -611,15 +601,15 @@ void MainWindow::setupUi()
                     const QString dir = QFileDialog::getExistingDirectory(this, tr("打开目录"));
                     if (!dir.isEmpty())
                     {
-                    m_currentDir = dir;
-                    m_cachedImagePaths.clear();
-                    m_dirListDirty = true;
-                    m_thumbnailPanel->setDirectory(dir);
-                    m_directoryTree->navigateTo(dir);
-                    mviewer::core::SidecarStore::instance().importDirectory(dir.toStdString());
-                    for (const auto &p :
-                         OpenDirectoryUseCase::execute(dir.toStdString()).imagePaths)
-                        imgs.append(QString::fromStdString(p));
+                        m_currentDir = dir;
+                        m_cachedImagePaths.clear();
+                        m_dirListDirty = true;
+                        m_thumbnailPanel->setDirectory(dir);
+                        m_directoryTree->navigateTo(dir);
+                        mviewer::core::SidecarStore::instance().importDirectory(dir.toStdString());
+                        for (const auto &p :
+                             OpenDirectoryUseCase::execute(dir.toStdString()).imagePaths)
+                            imgs.append(QString::fromStdString(p));
                     }
                 }
                 if (imgs.size() > 8)
@@ -640,29 +630,31 @@ void MainWindow::setupUi()
                 else
                     m_metadataOverlay->hide();
             });
-    connect(m_searchPanel, &SearchPanel::resultActivated,
-            this, QOverload<const QString &>::of(&MainWindow::onImageOpen));
-    connect(m_actBatch, &QAction::triggered, this, [this]()
-    {
-        if (!m_batchDialog)
-            m_batchDialog = new BatchDialog(this);
-        // Pre-fill with current directory's images.
-        m_batchDialog->setInputFiles(m_cachedImagePaths);
-        m_batchDialog->exec();
-    });
-    connect(m_actPluginSettings, &QAction::triggered, this, [this]()
-    {
-        if (!m_pluginSettings)
-        {
-            m_pluginSettings = new PluginSettings(this);
-            m_pluginSettings->setAttribute(Qt::WA_DeleteOnClose);
-            connect(m_pluginSettings, &QDialog::destroyed,
-                    this, [this]() { m_pluginSettings = nullptr; });
-        }
-        m_pluginSettings->show();
-        m_pluginSettings->raise();
-        m_pluginSettings->activateWindow();
-    });
+    connect(m_searchPanel, &SearchPanel::resultActivated, this,
+            QOverload<const QString &>::of(&MainWindow::onImageOpen));
+    connect(m_actBatch, &QAction::triggered, this,
+            [this]()
+            {
+                if (!m_batchDialog)
+                    m_batchDialog = new BatchDialog(this);
+                // Pre-fill with current directory's images.
+                m_batchDialog->setInputFiles(m_cachedImagePaths);
+                m_batchDialog->exec();
+            });
+    connect(m_actPluginSettings, &QAction::triggered, this,
+            [this]()
+            {
+                if (!m_pluginSettings)
+                {
+                    m_pluginSettings = new PluginSettings(this);
+                    m_pluginSettings->setAttribute(Qt::WA_DeleteOnClose);
+                    connect(m_pluginSettings, &QDialog::destroyed, this,
+                            [this]() { m_pluginSettings = nullptr; });
+                }
+                m_pluginSettings->show();
+                m_pluginSettings->raise();
+                m_pluginSettings->activateWindow();
+            });
     connect(
         m_actAbout, &QAction::triggered, this, [this]()
         { QMessageBox::about(this, "关于 MViewer", "MViewer\n\n一个简单的图片查看与分析工具。"); });
@@ -832,8 +824,8 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         }
     }
     // P1: Ctrl+1..5 rate the current image; Ctrl+0 clears the rating.
-    if ((mod & Qt::ControlModifier) && !(mod & Qt::ShiftModifier) &&
-        event->key() >= Qt::Key_0 && event->key() <= Qt::Key_5)
+    if ((mod & Qt::ControlModifier) && !(mod & Qt::ShiftModifier) && event->key() >= Qt::Key_0 &&
+        event->key() <= Qt::Key_5)
     {
         rateCurrentImage(event->key() - Qt::Key_0);
         event->accept();
@@ -859,13 +851,11 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
-    if ((mod & Qt::ControlModifier) && event->key() >= Qt::Key_1 &&
-        event->key() <= Qt::Key_6)
+    if ((mod & Qt::ControlModifier) && event->key() >= Qt::Key_1 && event->key() <= Qt::Key_6)
     {
         static const ThumbnailPanel::ViewMode modes[] = {
-            ThumbnailPanel::Thumbnail, ThumbnailPanel::LargeIcon,
-            ThumbnailPanel::SmallIcon, ThumbnailPanel::Details,
-            ThumbnailPanel::Filmstrip, ThumbnailPanel::Compact};
+            ThumbnailPanel::Thumbnail, ThumbnailPanel::LargeIcon, ThumbnailPanel::SmallIcon,
+            ThumbnailPanel::Details,   ThumbnailPanel::Filmstrip, ThumbnailPanel::Compact};
         m_thumbnailPanel->setViewMode(modes[event->key() - Qt::Key_1]);
         event->accept();
         return;
@@ -979,11 +969,10 @@ void MainWindow::rateCurrentImage(int stars)
         return;
     mviewer::core::RatingStore::instance().setRating(m_currentImagePath.toStdString(), stars);
     m_thumbnailPanel->invalidateRatings();
-    m_metadataPanel->setImage(m_currentImagePath);  // refresh the rating widget
+    m_metadataPanel->setImage(m_currentImagePath); // refresh the rating widget
     mviewer::core::SidecarStore::instance().writeSidecar(m_currentImagePath.toStdString());
-    statusBar()->showMessage(QString("已为 %1 评分: %2 星")
-                                 .arg(QFileInfo(m_currentImagePath).fileName())
-                                 .arg(stars));
+    statusBar()->showMessage(
+        QString("已为 %1 评分: %2 星").arg(QFileInfo(m_currentImagePath).fileName()).arg(stars));
 }
 
 void MainWindow::onFlagFilterChanged(int)
@@ -993,16 +982,35 @@ void MainWindow::onFlagFilterChanged(int)
     m_thumbnailPanel->setRatingFilter(m_ratingFilter->currentData().toInt());
     switch (v)
     {
-    case 1: m_thumbnailPanel->setPickFilter(true); break;
-    case 2: m_thumbnailPanel->setRejectFilter(true); break;
-    case 3: m_thumbnailPanel->setRecentFilter(true); break;
-    case 11: m_thumbnailPanel->setLabelFilter(1); break;
-    case 12: m_thumbnailPanel->setLabelFilter(2); break;
-    case 13: m_thumbnailPanel->setLabelFilter(3); break;
-    case 14: m_thumbnailPanel->setLabelFilter(4); break;
-    case 15: m_thumbnailPanel->setLabelFilter(5); break;
-    case 16: m_thumbnailPanel->setLabelFilter(6); break;
-    default: break;
+    case 1:
+        m_thumbnailPanel->setPickFilter(true);
+        break;
+    case 2:
+        m_thumbnailPanel->setRejectFilter(true);
+        break;
+    case 3:
+        m_thumbnailPanel->setRecentFilter(true);
+        break;
+    case 11:
+        m_thumbnailPanel->setLabelFilter(1);
+        break;
+    case 12:
+        m_thumbnailPanel->setLabelFilter(2);
+        break;
+    case 13:
+        m_thumbnailPanel->setLabelFilter(3);
+        break;
+    case 14:
+        m_thumbnailPanel->setLabelFilter(4);
+        break;
+    case 15:
+        m_thumbnailPanel->setLabelFilter(5);
+        break;
+    case 16:
+        m_thumbnailPanel->setLabelFilter(6);
+        break;
+    default:
+        break;
     }
 }
 
@@ -1027,7 +1035,7 @@ void MainWindow::setCurrentColorLabel(int label)
     mviewer::core::SidecarStore::instance().writeSidecar(m_currentImagePath.toStdString());
     const QString name = QFileInfo(m_currentImagePath).fileName();
     statusBar()->showMessage(label == 0 ? QString("已清除 %1 的色标").arg(name)
-                                         : QString("已为 %1 设置色标 %2").arg(name).arg(label));
+                                        : QString("已为 %1 设置色标 %2").arg(name).arg(label));
 }
 
 void MainWindow::toggleCurrentPick()
@@ -1040,8 +1048,9 @@ void MainWindow::toggleCurrentPick()
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(m_currentImagePath);
     mviewer::core::SidecarStore::instance().writeSidecar(m_currentImagePath.toStdString());
-    statusBar()->showMessage(v ? QString("已收藏 %1").arg(QFileInfo(m_currentImagePath).fileName())
-                                : QString("已取消收藏 %1").arg(QFileInfo(m_currentImagePath).fileName()));
+    statusBar()->showMessage(
+        v ? QString("已收藏 %1").arg(QFileInfo(m_currentImagePath).fileName())
+          : QString("已取消收藏 %1").arg(QFileInfo(m_currentImagePath).fileName()));
 }
 
 void MainWindow::toggleCurrentReject()
@@ -1054,8 +1063,9 @@ void MainWindow::toggleCurrentReject()
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(m_currentImagePath);
     mviewer::core::SidecarStore::instance().writeSidecar(m_currentImagePath.toStdString());
-    statusBar()->showMessage(v ? QString("已拒绝 %1").arg(QFileInfo(m_currentImagePath).fileName())
-                                : QString("已取消拒绝 %1").arg(QFileInfo(m_currentImagePath).fileName()));
+    statusBar()->showMessage(
+        v ? QString("已拒绝 %1").arg(QFileInfo(m_currentImagePath).fileName())
+          : QString("已取消拒绝 %1").arg(QFileInfo(m_currentImagePath).fileName()));
 }
 
 void MainWindow::onImageOpen(const QString &path)
@@ -1158,17 +1168,17 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
         const auto session = decodeCompareSession(sessionJson.toStdString());
         if (session)
             m_compareView->applySession(*session);
-
     }
 
     // P0-1: guard m_compareView lifetime — when the compare dialog is closed
     // (WA_DeleteOnClose), reset the pointer so every downstream accessor
     // (saveWorkspace, saveProject, exportReport, autosaveSession) is safe.
-    connect(dlg, &QDialog::destroyed, this, [this]()
-    {
-        m_compareView = nullptr;
-        disconnect(m_compareDestroyConnection);
-    });
+    connect(dlg, &QDialog::destroyed, this,
+            [this]()
+            {
+                m_compareView = nullptr;
+                disconnect(m_compareDestroyConnection);
+            });
 
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();
@@ -1262,7 +1272,8 @@ void MainWindow::showShortcutsHelp()
         "<tr><th colspan='2'>视图模式</th></tr>"
         "<tr><td><kbd>G</kbd></td><td>缩略图视图</td></tr>"
         "<tr><td><kbd>D</kbd></td><td>详情视图</td></tr>"
-        "<tr><td><kbd>Ctrl+1</kbd>…<kbd>Ctrl+6</kbd></td><td>缩略图 / 大图标 / 小图标 / 详情 / 胶片 / 紧凑</td></tr>"
+        "<tr><td><kbd>Ctrl+1</kbd>…<kbd>Ctrl+6</kbd></td><td>缩略图 / 大图标 / 小图标 / 详情 / "
+        "胶片 / 紧凑</td></tr>"
         "<tr><th colspan='2'>比较</th></tr>"
         "<tr><td><kbd>Space</kbd></td><td>快速比较当前 + 下一张</td></tr>"
         "<tr><th colspan='2'>分析 / 信息</th></tr>"
@@ -1271,8 +1282,10 @@ void MainWindow::showShortcutsHelp()
         "<tr><td><kbd>ESC</kbd></td><td>关闭信息浮层</td></tr>"
         "<tr><th colspan='2'>评分 / 标签</th></tr>"
         "<tr><td><kbd>Ctrl+0</kbd>…<kbd>Ctrl+5</kbd></td><td>评分（0 = 清除）</td></tr>"
-        "<tr><td><kbd>Ctrl+Shift+0</kbd>…<kbd>Ctrl+Shift+6</kbd></td><td>颜色标签（0 = 清除）</td></tr>"
-        "<tr><td><kbd>Ctrl+Shift+P</kbd> / <kbd>Ctrl+Shift+X</kbd></td><td>标记选中 / 拒绝</td></tr>"
+        "<tr><td><kbd>Ctrl+Shift+0</kbd>…<kbd>Ctrl+Shift+6</kbd></td><td>颜色标签（0 = "
+        "清除）</td></tr>"
+        "<tr><td><kbd>Ctrl+Shift+P</kbd> / <kbd>Ctrl+Shift+X</kbd></td><td>标记选中 / "
+        "拒绝</td></tr>"
         "<tr><th colspan='2'>剪贴板</th></tr>"
         "<tr><td><kbd>Ctrl+C</kbd> / <kbd>Ctrl+Shift+C</kbd></td><td>复制图片 / 复制路径</td></tr>"
         "</table>");
@@ -1360,9 +1373,8 @@ void MainWindow::exportReport()
         return;
     }
 
-    const QString out = QFileDialog::getSaveFileName(
-        this, tr("导出报告"),
-        QString(), tr("HTML 文件 (*.html);;JSON 文件 (*.json)"));
+    const QString out = QFileDialog::getSaveFileName(this, tr("导出报告"), QString(),
+                                                     tr("HTML 文件 (*.html);;JSON 文件 (*.json)"));
     if (out.isEmpty())
         return;
     const QFileInfo fi(out);
@@ -1387,8 +1399,7 @@ void MainWindow::exportReport()
         f.write(QByteArray::fromStdString(html));
     }
     f.close();
-    QMessageBox::information(this, tr("导出报告"),
-                             tr("已导出：%1").arg(out));
+    QMessageBox::information(this, tr("导出报告"), tr("已导出：%1").arg(out));
 }
 
 void MainWindow::exportImages()
@@ -1396,9 +1407,9 @@ void MainWindow::exportImages()
     // M17: export selected paths, or the filtered/visible set, or the full directory.
     QStringList paths = m_thumbnailPanel->selectedPaths();
     if (paths.isEmpty())
-        paths = m_thumbnailPanel->visiblePaths();   // filtered set
+        paths = m_thumbnailPanel->visiblePaths(); // filtered set
     if (paths.isEmpty())
-        paths = m_thumbnailPanel->pathList();        // fallback: all
+        paths = m_thumbnailPanel->pathList(); // fallback: all
     if (paths.isEmpty())
     {
         QMessageBox::information(this, tr("导出图片"), tr("请先打开一个图片目录。"));
@@ -1506,7 +1517,8 @@ void MainWindow::openWorkspace()
         return;
     }
     const QByteArray data = f.readAll();
-    const auto maybeWs = mviewer::core::deserializeWorkspace(std::string(data.constData(), data.size()));
+    const auto maybeWs =
+        mviewer::core::deserializeWorkspace(std::string(data.constData(), data.size()));
     if (!maybeWs || maybeWs->empty())
     {
         QMessageBox::critical(this, "打开工作区", "工作区文件无效或为空。");
@@ -1854,11 +1866,7 @@ void MainWindow::rebuildRecentFilesMenu()
         const QString qs = QString::fromStdString(p);
         auto *act = m_recentFileMenu->addAction(QFileInfo(qs).fileName());
         act->setToolTip(qs);
-        connect(act, &QAction::triggered, this,
-                [this, qs]()
-                {
-                    onImageOpen(qs);
-                });
+        connect(act, &QAction::triggered, this, [this, qs]() { onImageOpen(qs); });
     }
     if (m_recentFileMenu->isEmpty())
         m_recentFileMenu->addAction("(无)")->setEnabled(false);
@@ -2034,8 +2042,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
 }
 
 // M15: decode a persisted compare-session JSON string into a value, or nullopt.
-static std::optional<mviewer::domain::CompareSession>
-decodeCompareSession(const std::string &json)
+static std::optional<mviewer::domain::CompareSession> decodeCompareSession(const std::string &json)
 {
     if (json.empty())
         return std::nullopt;
@@ -2068,8 +2075,7 @@ void MainWindow::autosaveSession()
             cmpImg.append(QString::fromStdString(id));
         obj.insert("compareImages", cmpImg);
         obj.insert("compareSession",
-                   QString::fromStdString(
-                       mviewer::core::serializeCompareSession(cs)));
+                   QString::fromStdString(mviewer::core::serializeCompareSession(cs)));
     }
 
     obj.insert("timestamp", QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
@@ -2116,46 +2122,46 @@ void MainWindow::restoreSessionRecovery()
     const bool restoreCompare = cmpImgs.size() >= 2 && !compareSession.isEmpty();
 
     // Restore the session (deferred to event loop).
-    QTimer::singleShot(100, this,
-                       [this, lastDir, lastImage, lastThumbScroll, cmpImgs,
-                        compareSession, restoreCompare]() {
-                           if (!lastDir.isEmpty() && QDir(lastDir).exists())
-                           {
-                               m_currentDir = lastDir;
-                               m_cachedImagePaths.clear();
-                               m_dirListDirty = true;
-                               m_thumbnailPanel->setDirectory(lastDir);
-                               m_directoryTree->navigateTo(lastDir);
-                               if (lastThumbScroll > 0)
-                                   m_thumbnailPanel->verticalScrollBar()->setValue(
-                                       lastThumbScroll);
-                           }
-                           if (!lastImage.isEmpty() && QFile::exists(lastImage))
-                           {
-                               m_currentImagePath = lastImage;
-                               onImageOpen(lastImage);
-                               // P1-7: if the session ended with the viewer open on
-                               // this exact image, restore its zoom level + pan. The
-                               // transform is applied on the UI thread after the async
-                               // decode completes (see ImageViewer::setImage).
-                               QSettings vs;
-                               if (vs.value("viewerPath").toString() == lastImage)
-                               {
-                                   Viewport v;
-                                   v.screenW = m_imageViewer->width();
-                                   v.screenH = m_imageViewer->height();
-                                   v.scale = vs.value("viewerScale", 1.0).toReal();
-                                   v.offsetX = vs.value("viewerOffX", 0.0).toReal();
-                                   v.offsetY = vs.value("viewerOffY", 0.0).toReal();
-                                   m_imageViewer->setViewTransform(v);
-                               }
-                           }
-                           // M15 P0#1: reopen Compare with its fully persisted
-                           // session (ROI, zoom, layout, threshold, blink, ...).
-                           if (restoreCompare)
-                               openCompare(cmpImgs, compareSession);
-                           m_autosaveLoaded = true;
-                       });
+    QTimer::singleShot(
+        100, this,
+        [this, lastDir, lastImage, lastThumbScroll, cmpImgs, compareSession, restoreCompare]()
+        {
+            if (!lastDir.isEmpty() && QDir(lastDir).exists())
+            {
+                m_currentDir = lastDir;
+                m_cachedImagePaths.clear();
+                m_dirListDirty = true;
+                m_thumbnailPanel->setDirectory(lastDir);
+                m_directoryTree->navigateTo(lastDir);
+                if (lastThumbScroll > 0)
+                    m_thumbnailPanel->verticalScrollBar()->setValue(lastThumbScroll);
+            }
+            if (!lastImage.isEmpty() && QFile::exists(lastImage))
+            {
+                m_currentImagePath = lastImage;
+                onImageOpen(lastImage);
+                // P1-7: if the session ended with the viewer open on
+                // this exact image, restore its zoom level + pan. The
+                // transform is applied on the UI thread after the async
+                // decode completes (see ImageViewer::setImage).
+                QSettings vs;
+                if (vs.value("viewerPath").toString() == lastImage)
+                {
+                    Viewport v;
+                    v.screenW = m_imageViewer->width();
+                    v.screenH = m_imageViewer->height();
+                    v.scale = vs.value("viewerScale", 1.0).toReal();
+                    v.offsetX = vs.value("viewerOffX", 0.0).toReal();
+                    v.offsetY = vs.value("viewerOffY", 0.0).toReal();
+                    m_imageViewer->setViewTransform(v);
+                }
+            }
+            // M15 P0#1: reopen Compare with its fully persisted
+            // session (ROI, zoom, layout, threshold, blink, ...).
+            if (restoreCompare)
+                openCompare(cmpImgs, compareSession);
+            m_autosaveLoaded = true;
+        });
 }
 
 // M15: drag & drop — accept files/folders dropped onto the window.
@@ -2297,8 +2303,8 @@ void MainWindow::updateCacheStat()
         return;
     auto &cm = CacheManager::instance();
     uint64_t hits = 0, misses = 0;
-    for (CacheLevel lvl : {CacheLevel::Metadata, CacheLevel::Thumbnail,
-                           CacheLevel::Preview, CacheLevel::FullImage})
+    for (CacheLevel lvl :
+         {CacheLevel::Metadata, CacheLevel::Thumbnail, CacheLevel::Preview, CacheLevel::FullImage})
     {
         const CacheLevelStats s = cm.levelStats(lvl);
         hits += s.hits;
@@ -2319,13 +2325,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         auto *ke = static_cast<QKeyEvent *>(event);
         // Forward navigation / workflow shortcuts from child widgets so they work
         // regardless of which panel has focus.
-        static const QList<int> globalKeys = {
-            Qt::Key_Space, Qt::Key_M, Qt::Key_H, Qt::Key_G, Qt::Key_D,
-            Qt::Key_F, Qt::Key_Tab};
-        const bool isGlobalKey = globalKeys.contains(ke->key()) ||
-                                 ((ke->modifiers() & Qt::ControlModifier) &&
-                                  (ke->key() == Qt::Key_C ||
-                                   (ke->key() >= Qt::Key_1 && ke->key() <= Qt::Key_6)));
+        static const QList<int> globalKeys = {Qt::Key_Space, Qt::Key_M, Qt::Key_H,  Qt::Key_G,
+                                              Qt::Key_D,     Qt::Key_F, Qt::Key_Tab};
+        const bool isGlobalKey =
+            globalKeys.contains(ke->key()) ||
+            ((ke->modifiers() & Qt::ControlModifier) &&
+             (ke->key() == Qt::Key_C || (ke->key() >= Qt::Key_1 && ke->key() <= Qt::Key_6)));
         if (isGlobalKey && watched != this && watched != m_imageViewer)
         {
             keyPressEvent(ke);
@@ -2441,28 +2446,28 @@ void MainWindow::onNavSidebarContextMenu(const QPoint &pos)
     QAction *actClearHistory = menu.addAction("清空历史图片");
 
     QAction *chosen = menu.exec(m_navSidebar->mapToGlobal(pos));
-        if (chosen == actAdd)
-        {
-            m_appState.addFavorite(data);
-            refreshNavSidebar();
-            rebuildFavoritesMenu();
-        }
-        else if (chosen == actRemove)
-        {
-            m_appState.removeFavorite(data);
-            refreshNavSidebar();
-            rebuildFavoritesMenu();
-        }
-        else if (chosen == actClearRecent)
-        {
-            m_appState.clearRecentFolders();
-            refreshNavSidebar();
-            rebuildRecentMenu();
-        }
-        else if (chosen == actClearHistory)
-        {
-            m_appState.clearHistory();
-            refreshNavSidebar();
-            // History is only shown in the sidebar, no separate menu yet.
-        }
+    if (chosen == actAdd)
+    {
+        m_appState.addFavorite(data);
+        refreshNavSidebar();
+        rebuildFavoritesMenu();
+    }
+    else if (chosen == actRemove)
+    {
+        m_appState.removeFavorite(data);
+        refreshNavSidebar();
+        rebuildFavoritesMenu();
+    }
+    else if (chosen == actClearRecent)
+    {
+        m_appState.clearRecentFolders();
+        refreshNavSidebar();
+        rebuildRecentMenu();
+    }
+    else if (chosen == actClearHistory)
+    {
+        m_appState.clearHistory();
+        refreshNavSidebar();
+        // History is only shown in the sidebar, no separate menu yet.
+    }
 }

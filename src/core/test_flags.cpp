@@ -17,7 +17,7 @@ static int g_fail = 0;
             printf("  PASS: %s\n", msg);                                                           \
             g_pass++;                                                                              \
         }                                                                                          \
-        else                                                                                      \
+        else                                                                                       \
         {                                                                                          \
             printf("  FAIL: %s\n", msg);                                                           \
             g_fail++;                                                                              \
@@ -52,8 +52,10 @@ int main(int argc, char **argv)
     bool hasC = false, hasD = false;
     for (const auto &r : recents)
     {
-        if (r == "c.png") hasC = true;
-        if (r == "d.png") hasD = true;
+        if (r == "c.png")
+            hasC = true;
+        if (r == "d.png")
+            hasD = true;
     }
     CHECK(hasC && hasD, "recents persisted (c, d)");
 

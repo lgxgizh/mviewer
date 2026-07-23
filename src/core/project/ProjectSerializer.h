@@ -4,8 +4,10 @@
 
 #include "domain/Project.h"
 
-namespace mviewer {
-namespace core {
+namespace mviewer
+{
+namespace core
+{
 
 // Serialize a Project to a .mvproj JSON document. The embedded Workspace is
 // serialized with serializeWorkspace and stored under the "workspace" key, so a

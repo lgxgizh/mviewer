@@ -4,8 +4,8 @@
 
 #include <QCoreApplication>
 #include <QTemporaryDir>
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <string>
 
@@ -32,7 +32,8 @@ static bool writeFakeDng(const std::string &path, uint16_t iso, uint32_t exposur
                          uint32_t exposureDen, uint32_t focalNum, uint32_t focalDen)
 {
     FILE *f = std::fopen(path.c_str(), "wb");
-    if (!f) return false;
+    if (!f)
+        return false;
 
     // TIFF header (little-endian): IFD at offset 8
     uint8_t hdr[8] = {'I', 'I', 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00};
@@ -43,7 +44,8 @@ static bool writeFakeDng(const std::string &path, uint16_t iso, uint32_t exposur
     uint16_t count = 5;
     std::fwrite(&count, 2, 1, f);
 
-    auto writeEntry = [&](uint16_t tag, uint16_t type, uint32_t cnt, uint32_t val) {
+    auto writeEntry = [&](uint16_t tag, uint16_t type, uint32_t cnt, uint32_t val)
+    {
         std::fwrite(&tag, 2, 1, f);
         std::fwrite(&type, 2, 1, f);
         std::fwrite(&cnt, 4, 1, f);

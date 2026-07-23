@@ -15,37 +15,37 @@
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                                                                         \
-    do                                                                                           \
-    {                                                                                            \
-        if (cond)                                                                                \
-        {                                                                                        \
-            printf("  PASS: %s\n", msg);                                                         \
-            g_pass++;                                                                            \
-        }                                                                                        \
-        else                                                                                     \
-        {                                                                                        \
-            printf("  FAIL: %s\n", msg);                                                          \
-            g_fail++;                                                                            \
-        }                                                                                        \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 using namespace mviewer::core;
 
-namespace {
+namespace
+{
 ImageData makeRgb(int w, int h, const std::vector<uint8_t> &px)
 {
     ImageData img = makeImageData(w, h, PixelFormat::RGB24);
     std::memcpy(img.buffer->data(), px.data(), px.size());
     return img;
 }
-}  // namespace
+} // namespace
 
 int main()
 {
     // 2x2 image with 4 distinct pixels.
-    const std::vector<uint8_t> px = {10,  20,  30,  40,  50,  60,
-                                      70,  80,  90,  100, 110, 120};
+    const std::vector<uint8_t> px = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120};
     ImageData img = makeRgb(2, 2, px);
     Histogram h = computeHistogram(img);
     CHECK(h.total == 4, "histogram total equals pixel count");

@@ -1,7 +1,7 @@
 // P4 — Batch export pipeline acceptance tests.
 // Covers resize, watermark, contact sheet, batch rename and PDF export.
-#include "core/image/ImageTransform.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/ImageTransform.h"
 
 #include <QGuiApplication>
 
@@ -74,9 +74,8 @@ int main(int argc, char **argv)
     // --- addTextWatermark (dims preserved) ---
     {
         ImageData img = makeSolid(120, 90, 255, 0, 0);
-        ImageData w = mviewer::core::addTextWatermark(img, "MViewer",
-                                                      mviewer::core::WatermarkPosition::BottomRight,
-                                                      0.5, 32);
+        ImageData w = mviewer::core::addTextWatermark(
+            img, "MViewer", mviewer::core::WatermarkPosition::BottomRight, 0.5, 32);
         CHECK(!w.isNull(), "addTextWatermark: result not null");
         CHECK(w.width == 120 && w.height == 90, "addTextWatermark: dimensions preserved");
     }
@@ -84,8 +83,8 @@ int main(int argc, char **argv)
     // --- addTextWatermark (empty text -> copy) ---
     {
         ImageData img = makeSolid(30, 30, 0, 0, 0);
-        ImageData w = mviewer::core::addTextWatermark(img, "",
-                                                      mviewer::core::WatermarkPosition::Center, 0.5, 16);
+        ImageData w = mviewer::core::addTextWatermark(
+            img, "", mviewer::core::WatermarkPosition::Center, 0.5, 16);
         CHECK(w.width == 30 && w.height == 30, "addTextWatermark empty: unchanged");
     }
 
@@ -104,7 +103,8 @@ int main(int argc, char **argv)
     {
         std::string r1 = mviewer::core::applyRenamePattern("{name}_{seq:3}", "img", "jpg", 4, 10);
         CHECK(r1 == "img_005", "applyRenamePattern {name}_{seq:3} -> img_005");
-        std::string r2 = mviewer::core::applyRenamePattern("{name}_{n}_of_{total}", "photo", "png", 0, 7);
+        std::string r2 =
+            mviewer::core::applyRenamePattern("{name}_{n}_of_{total}", "photo", "png", 0, 7);
         CHECK(r2 == "photo_1_of_7", "applyRenamePattern {n}/{total}");
         std::string r3 = mviewer::core::applyRenamePattern("", "keep", "jpg", 0, 1);
         CHECK(r3 == "keep", "applyRenamePattern empty -> original base name");

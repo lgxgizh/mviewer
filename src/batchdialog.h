@@ -23,20 +23,20 @@ class QLabel;
 class BatchDialog : public QDialog
 {
     Q_OBJECT
-public:
+  public:
     explicit BatchDialog(QWidget *parent = nullptr);
 
     // Pre-fill the file list with the given paths.
     void setInputFiles(const QStringList &paths);
 
-private slots:
+  private slots:
     void onAddFiles();
     void onRemoveSelected();
     void onStart();
     void onCancel();
     void onBrowseOutputDir();
 
-private:
+  private:
     void buildConfig(mviewer::domain::BatchJobConfig &config) const;
     void updateUiState(bool running);
 

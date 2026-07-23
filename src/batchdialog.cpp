@@ -18,8 +18,7 @@
 #include <QtConcurrent/QtConcurrent>
 
 BatchDialog::BatchDialog(QWidget *parent)
-    : QDialog(parent)
-    , m_processor(std::make_unique<mviewer::core::BatchProcessor>())
+    : QDialog(parent), m_processor(std::make_unique<mviewer::core::BatchProcessor>())
 {
     setWindowTitle("批量处理");
     setMinimumSize(640, 600);
@@ -171,8 +170,7 @@ void BatchDialog::setInputFiles(const QStringList &paths)
 void BatchDialog::onAddFiles()
 {
     const auto files = QFileDialog::getOpenFileNames(
-        this, "选择文件", {},
-        "Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)");
+        this, "选择文件", {}, "Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)");
     for (const auto &f : files)
         m_fileList->addItem(f);
 }
@@ -252,11 +250,10 @@ void BatchDialog::onStart()
                     m_progress->setValue(current);
                     if (!path.empty())
                     {
-                        m_statusLabel->setText(
-                            QString("处理中 (%1/%2): %3")
-                                .arg(current + 1)
-                                .arg(total)
-                                .arg(QString::fromStdString(path)));
+                        m_statusLabel->setText(QString("处理中 (%1/%2): %3")
+                                                   .arg(current + 1)
+                                                   .arg(total)
+                                                   .arg(QString::fromStdString(path)));
                     }
                 },
                 Qt::QueuedConnection);
@@ -267,32 +264,29 @@ void BatchDialog::onStart()
     // be reused.
     std::shared_ptr<mviewer::core::BatchProcessor> proc = std::move(m_processor);
 
-    auto future = QtConcurrent::run([proc, config = std::move(config)]()
-                                    { return proc->execute(config); });
+    auto future =
+        QtConcurrent::run([proc, config = std::move(config)]() { return proc->execute(config); });
 
     auto *watcher = new QFutureWatcher<mviewer::domain::BatchJobResult>(this);
-    connect(watcher, &QFutureWatcher<mviewer::domain::BatchJobResult>::finished,
-            this,
+    connect(watcher, &QFutureWatcher<mviewer::domain::BatchJobResult>::finished, this,
             [this, watcher]()
             {
                 auto result = watcher->result();
 
                 m_progress->setValue(m_progress->maximum());
-                m_statusLabel->setText(
-                    QString("完成: %1 成功, %2 失败")
-                        .arg(result.totalSucceeded)
-                        .arg(result.totalFailed));
+                m_statusLabel->setText(QString("完成: %1 成功, %2 失败")
+                                           .arg(result.totalSucceeded)
+                                           .arg(result.totalFailed));
 
                 // Log results.
                 for (const auto &r : result.fileResults)
                 {
-                    QString line = r.success
-                                       ? QString("[OK] %1 → %2")
-                                             .arg(QString::fromStdString(r.inputPath))
-                                             .arg(QString::fromStdString(r.outputPath))
-                                       : QString("[FAIL] %1: %2")
-                                             .arg(QString::fromStdString(r.inputPath))
-                                             .arg(QString::fromStdString(r.errorMessage));
+                    QString line = r.success ? QString("[OK] %1 → %2")
+                                                   .arg(QString::fromStdString(r.inputPath))
+                                                   .arg(QString::fromStdString(r.outputPath))
+                                             : QString("[FAIL] %1: %2")
+                                                   .arg(QString::fromStdString(r.inputPath))
+                                                   .arg(QString::fromStdString(r.errorMessage));
                     m_log->append(line);
                 }
 

@@ -16,12 +16,24 @@ std::string escapeHtml(const std::string &s)
     {
         switch (c)
         {
-        case '&': r += "&amp;"; break;
-        case '<': r += "&lt;"; break;
-        case '>': r += "&gt;"; break;
-        case '"': r += "&quot;"; break;
-        case '\'': r += "&#39;"; break;
-        default: r += c; break;
+        case '&':
+            r += "&amp;";
+            break;
+        case '<':
+            r += "&lt;";
+            break;
+        case '>':
+            r += "&gt;";
+            break;
+        case '"':
+            r += "&quot;";
+            break;
+        case '\'':
+            r += "&#39;";
+            break;
+        default:
+            r += c;
+            break;
         }
     }
     return r;
@@ -37,10 +49,11 @@ std::string tag(const std::string &name, const std::string &content)
 std::string buildReportHtml(const ReportContext &ctx)
 {
     std::ostringstream os;
-    os << "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>"
-       << escapeHtml(ctx.title) << "</title>\n"
+    os << "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>" << escapeHtml(ctx.title)
+       << "</title>\n"
        << "<style>\n"
-       << "body{font-family:sans-serif;max-width:960px;margin:24px auto;padding:0 16px;color:#222;}\n"
+       << "body{font-family:sans-serif;max-width:960px;margin:24px auto;padding:0 "
+          "16px;color:#222;}\n"
        << "h1{color:#1a73e8;border-bottom:2px solid #1a73e8;padding-bottom:8px;}\n"
        << "h2{color:#555;margin-top:32px;}\n"
        << "table{border-collapse:collapse;width:100%;margin:12px 0;}\n"
@@ -57,8 +70,8 @@ std::string buildReportHtml(const ReportContext &ctx)
 
     if (!ctx.histogramPng.empty())
     {
-        os << tag("h2", "Histogram")
-           << "<img src=\"data:image/png;base64," << ctx.histogramPng << "\" alt=\"histogram\">\n";
+        os << tag("h2", "Histogram") << "<img src=\"data:image/png;base64," << ctx.histogramPng
+           << "\" alt=\"histogram\">\n";
     }
 
     if (ctx.hasCompare)

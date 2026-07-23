@@ -13,8 +13,7 @@
 #include <QVBoxLayout>
 
 SearchPanel::SearchPanel(QWidget *parent)
-    : QWidget(parent)
-    , m_engine(std::make_shared<mviewer::core::SearchEngine>())
+    : QWidget(parent), m_engine(std::make_shared<mviewer::core::SearchEngine>())
 {
     auto *mainLayout = new QVBoxLayout(this);
     mainLayout->setContentsMargins(4, 4, 4, 4);
@@ -68,26 +67,22 @@ SearchPanel::SearchPanel(QWidget *parent)
     mainLayout->addWidget(m_table);
 
     // ── connections ─────────────────────────────────────────────────
-    connect(m_searchEdit, &QLineEdit::textChanged,
-            this, &SearchPanel::onSearchTextChanged);
-    connect(m_table, &QTableWidget::doubleClicked,
-            this, &SearchPanel::onResultDoubleClicked);
-    connect(m_chkFilename, &QCheckBox::toggled,
-            this, &SearchPanel::onSearchTextChanged);
-    connect(m_chkMetadata, &QCheckBox::toggled,
-            this, &SearchPanel::onSearchTextChanged);
-    connect(m_chkAnalysis, &QCheckBox::toggled,
-            this, &SearchPanel::onSearchTextChanged);
-    connect(m_chkPaths, &QCheckBox::toggled,
-            this, &SearchPanel::onSearchTextChanged);
-    connect(m_reindexBtn, &QPushButton::clicked, this, [this]() {
-        if (m_engine)
-        {
-            // Re-index is handled externally via reindex().
-            // Re-run the current filter to refresh the table.
-            onSearchTextChanged();
-        }
-    });
+    connect(m_searchEdit, &QLineEdit::textChanged, this, &SearchPanel::onSearchTextChanged);
+    connect(m_table, &QTableWidget::doubleClicked, this, &SearchPanel::onResultDoubleClicked);
+    connect(m_chkFilename, &QCheckBox::toggled, this, &SearchPanel::onSearchTextChanged);
+    connect(m_chkMetadata, &QCheckBox::toggled, this, &SearchPanel::onSearchTextChanged);
+    connect(m_chkAnalysis, &QCheckBox::toggled, this, &SearchPanel::onSearchTextChanged);
+    connect(m_chkPaths, &QCheckBox::toggled, this, &SearchPanel::onSearchTextChanged);
+    connect(m_reindexBtn, &QPushButton::clicked, this,
+            [this]()
+            {
+                if (m_engine)
+                {
+                    // Re-index is handled externally via reindex().
+                    // Re-run the current filter to refresh the table.
+                    onSearchTextChanged();
+                }
+            });
 }
 
 void SearchPanel::setEngine(std::shared_ptr<mviewer::core::SearchEngine> engine)
@@ -184,10 +179,14 @@ QString SearchPanel::matchTypeLabel(mviewer::domain::SearchMatch::Type type) con
 {
     switch (type)
     {
-    case mviewer::domain::SearchMatch::Type::Filename: return "文件名";
-    case mviewer::domain::SearchMatch::Type::Metadata: return "元数据";
-    case mviewer::domain::SearchMatch::Type::Analysis: return "分析结果";
-    case mviewer::domain::SearchMatch::Type::Path: return "路径";
+    case mviewer::domain::SearchMatch::Type::Filename:
+        return "文件名";
+    case mviewer::domain::SearchMatch::Type::Metadata:
+        return "元数据";
+    case mviewer::domain::SearchMatch::Type::Analysis:
+        return "分析结果";
+    case mviewer::domain::SearchMatch::Type::Path:
+        return "路径";
     }
     return {};
 }

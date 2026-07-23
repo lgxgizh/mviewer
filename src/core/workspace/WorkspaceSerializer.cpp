@@ -80,8 +80,10 @@ struct Parser
     std::string peekString() const
     {
         size_t j = i;
-        while (j < s.size() && std::isspace(static_cast<unsigned char>(s[j]))) ++j;
-        if (j >= s.size() || s[j] != '"') return "";
+        while (j < s.size() && std::isspace(static_cast<unsigned char>(s[j])))
+            ++j;
+        if (j >= s.size() || s[j] != '"')
+            return "";
         ++j;
         std::string result;
         while (j < s.size() && s[j] != '"')
@@ -91,13 +93,22 @@ struct Parser
                 ++j;
                 switch (s[j])
                 {
-                case 'n': result += '\n'; break;
-                case 't': result += '\t'; break;
-                case 'r': result += '\r'; break;
-                default: result += s[j]; break;
+                case 'n':
+                    result += '\n';
+                    break;
+                case 't':
+                    result += '\t';
+                    break;
+                case 'r':
+                    result += '\r';
+                    break;
+                default:
+                    result += s[j];
+                    break;
                 }
             }
-            else result += s[j];
+            else
+                result += s[j];
             ++j;
         }
         return result;
@@ -222,8 +233,8 @@ std::string serializeCompareSession(const mviewer::domain::CompareSession &s)
        << ',' << s.selection.w << ',' << s.selection.h << ',' << (s.selection.synced ? 1 : 0)
        << "],\"threshold\":" << static_cast<int>(s.threshold)
        << ",\"blinkIntervalMs\":" << s.blinkIntervalMs
-       << ",\"sidePanel\":" << (s.sidePanelVisible ? 1 : 0)
-       << ",\"layoutIndex\":" << s.layoutIndex << "}";
+       << ",\"sidePanel\":" << (s.sidePanelVisible ? 1 : 0) << ",\"layoutIndex\":" << s.layoutIndex
+       << "}";
     return os.str();
 }
 

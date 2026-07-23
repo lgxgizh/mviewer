@@ -14,7 +14,8 @@
 #endif
 
 // Lightweight JSON building — no Qt dependency in core layer.
-namespace {
+namespace
+{
 
 std::string qs(const std::string &v)
 {
@@ -40,8 +41,14 @@ std::string qs(const std::string &v)
 
 int parseInt(const std::string &s, int fallback = 0)
 {
-    try { return std::stoi(s); }
-    catch (...) { return fallback; }
+    try
+    {
+        return std::stoi(s);
+    }
+    catch (...)
+    {
+        return fallback;
+    }
 }
 
 // Crude JSON token reader: reads the first string value for a known key.
@@ -66,10 +73,18 @@ std::string extractStr(const std::string &json, const std::string &key)
             ++pos;
             switch (json[pos])
             {
-            case 'n': val += '\n'; break;
-            case 'r': val += '\r'; break;
-            case 't': val += '\t'; break;
-            default: val += json[pos]; break;
+            case 'n':
+                val += '\n';
+                break;
+            case 'r':
+                val += '\r';
+                break;
+            case 't':
+                val += '\t';
+                break;
+            default:
+                val += json[pos];
+                break;
             }
         }
         else
@@ -96,7 +111,7 @@ int extractInt(const std::string &json, const std::string &key, int fallback = 0
     return parseInt(json.substr(pos, end - pos), fallback);
 }
 
-}  // namespace
+} // namespace
 
 ExportManager &ExportManager::instance()
 {

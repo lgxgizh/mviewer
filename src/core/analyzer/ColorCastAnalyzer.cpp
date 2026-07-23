@@ -35,9 +35,9 @@ bool ColorCastAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, in
     m_result.castR = meanR - gray;
     m_result.castG = meanG - gray;
     m_result.castB = meanB - gray;
-    m_result.magnitude = std::sqrt(m_result.castR * m_result.castR +
-                                   m_result.castG * m_result.castG +
-                                   m_result.castB * m_result.castB);
+    m_result.magnitude =
+        std::sqrt(m_result.castR * m_result.castR + m_result.castG * m_result.castG +
+                  m_result.castB * m_result.castB);
     m_result.ok = true;
     return true;
 }
@@ -66,8 +66,8 @@ bool ColorCastAnalyzer::analyzeRegion(const ImageFrame &frame,
 std::string ColorCastAnalyzer::resultText() const
 {
     char buf[128];
-    std::snprintf(buf, sizeof(buf), "Color cast: R%+.1f G%+.1f B%+.1f  mag=%.1f",
-                  m_result.castR, m_result.castG, m_result.castB, m_result.magnitude);
+    std::snprintf(buf, sizeof(buf), "Color cast: R%+.1f G%+.1f B%+.1f  mag=%.1f", m_result.castR,
+                  m_result.castG, m_result.castB, m_result.magnitude);
     return buf;
 }
 

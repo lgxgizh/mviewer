@@ -40,8 +40,7 @@ static QModelIndex findCategory(MetadataModel *m, const QString &name)
     return {};
 }
 
-static QString leafValue(MetadataModel *m, const QModelIndex &cat,
-                         const QString &key)
+static QString leafValue(MetadataModel *m, const QModelIndex &cat, const QString &key)
 {
     if (!cat.isValid())
         return QString("<no-category:%1>").arg(key);
@@ -67,8 +66,7 @@ int main(int argc, char **argv)
         CHECK(m.rowCount() == 1, "empty model has one (hint) category");
         QModelIndex hint = findCategory(&m, "提示");
         CHECK(hint.isValid(), "empty model shows 提示 category");
-        CHECK(leafValue(&m, hint, "说明").contains("画廊"),
-              "empty model hint mentions gallery");
+        CHECK(leafValue(&m, hint, "说明").contains("画廊"), "empty model hint mentions gallery");
         CHECK(m.columnCount() == 2, "model exposes 2 columns");
     }
 
@@ -105,14 +103,12 @@ int main(int argc, char **argv)
         QModelIndex img = findCategory(&m, "图像信息");
         CHECK(img.isValid(), "Image category present");
         CHECK(leafValue(&m, img, "格式") == "PNG", "format leaf");
-        CHECK(leafValue(&m, img, "尺寸").contains("1920"),
-              "dimensions leaf shows width");
+        CHECK(leafValue(&m, img, "尺寸").contains("1920"), "dimensions leaf shows width");
         CHECK(leafValue(&m, img, "长宽比") == "16:9", "aspect ratio 16:9");
         CHECK(leafValue(&m, img, "像素量").contains("2.07"), "megapixel leaf");
         CHECK(leafValue(&m, img, "通道数") == "3", "channels leaf");
         CHECK(leafValue(&m, img, "色彩空间") == "sRGB", "color space leaf");
-        CHECK(leafValue(&m, img, "方向").contains("90"),
-              "orientation leaf mentions 90");
+        CHECK(leafValue(&m, img, "方向").contains("90"), "orientation leaf mentions 90");
         CHECK(leafValue(&m, img, "ICC 配置") == "已嵌入", "ICC leaf");
 
         QModelIndex exif = findCategory(&m, "EXIF / 元数据");

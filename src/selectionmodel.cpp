@@ -1,6 +1,8 @@
 #include "selectionmodel.h"
 
-SelectionModel::SelectionModel(QObject *parent) : QObject(parent) {}
+SelectionModel::SelectionModel(QObject *parent) : QObject(parent)
+{
+}
 
 void SelectionModel::setCurrentImage(const QString &path)
 {
@@ -15,8 +17,7 @@ void SelectionModel::setCurrentImage(const QString &path)
 
 void SelectionModel::setSelection(const QStringList &paths, const QString &current)
 {
-    const QString cur =
-        (current.isEmpty() && !paths.isEmpty()) ? paths.first() : current;
+    const QString cur = (current.isEmpty() && !paths.isEmpty()) ? paths.first() : current;
     const bool curChanged = (cur != m_current);
     m_selection = paths;
     m_current = cur;

@@ -205,7 +205,10 @@ class CompareEngine
 
     // P0 #③: force a column count for the compare grid (0 = auto by image count).
     void setColumns(int cols);
-    int forcedColumns() const { return m_forcedCols; }
+    int forcedColumns() const
+    {
+        return m_forcedCols;
+    }
 
     // Sync transform
     const SyncTransform &syncTransform() const
@@ -346,7 +349,7 @@ class CompareEngine
 
     std::vector<std::shared_ptr<ImageFrame>> m_images;
     CompareLayout m_layout;
-    int m_forcedCols = 0;  // P0 #③: 0 = auto layout by image count
+    int m_forcedCols = 0; // P0 #③: 0 = auto layout by image count
     BlinkController m_blink;
     SyncController m_sync;
     SelectionController m_selection;

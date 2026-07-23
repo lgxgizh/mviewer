@@ -5,9 +5,8 @@
 
 namespace
 {
-const QStringList kImageExtensions = {
-    ".jpg", ".jpeg", ".bmp", ".png", ".tif", ".tiff",
-    ".webp", ".gif", ".ico", ".pcx", ".tga", ".ppm"};
+const QStringList kImageExtensions = {".jpg",  ".jpeg", ".bmp", ".png", ".tif", ".tiff",
+                                      ".webp", ".gif",  ".ico", ".pcx", ".tga", ".ppm"};
 } // namespace
 
 DirectoryProxyModel::DirectoryProxyModel(QObject *parent) : QSortFilterProxyModel(parent)
@@ -120,8 +119,8 @@ void DirectoryTree::navigateTo(const QString &path, bool emitSignal)
     QStringList parts;
     {
         QString p = normalized;
-        QString root = QDir::fromNativeSeparators(
-            m_model->filePath(m_model->index(QDir::homePath())));
+        QString root =
+            QDir::fromNativeSeparators(m_model->filePath(m_model->index(QDir::homePath())));
         while (p.size() > root.size() && p != root)
         {
             parts.prepend(p);

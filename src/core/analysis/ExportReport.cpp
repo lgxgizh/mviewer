@@ -170,9 +170,8 @@ std::string jsonEscape(const std::string &s)
 // CSV field escaper: quote if the value contains a comma, quote or newline.
 std::string csvEscape(const std::string &s)
 {
-    const bool needQuote =
-        s.find(',') != std::string::npos || s.find('"') != std::string::npos ||
-        s.find('\n') != std::string::npos || s.find('\r') != std::string::npos;
+    const bool needQuote = s.find(',') != std::string::npos || s.find('"') != std::string::npos ||
+                           s.find('\n') != std::string::npos || s.find('\r') != std::string::npos;
     if (!needQuote)
         return s;
     std::string out = "\"";
@@ -189,9 +188,8 @@ std::string csvEscape(const std::string &s)
 
 } // namespace
 
-AnalysisBatchReport
-buildBatchReport(const std::string &analyzerId,
-                 const std::vector<mviewer::analyzer::AnalyzerResult> &results)
+AnalysisBatchReport buildBatchReport(const std::string &analyzerId,
+                                     const std::vector<mviewer::analyzer::AnalyzerResult> &results)
 {
     AnalysisBatchReport rep;
     rep.analyzerId = analyzerId;

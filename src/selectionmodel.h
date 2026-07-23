@@ -20,9 +20,18 @@ class SelectionModel : public QObject
   public:
     explicit SelectionModel(QObject *parent = nullptr);
 
-    QString currentImage() const { return m_current; }
-    QStringList selection() const { return m_selection; }
-    bool isEmpty() const { return m_current.isEmpty(); }
+    QString currentImage() const
+    {
+        return m_current;
+    }
+    QStringList selection() const
+    {
+        return m_selection;
+    }
+    bool isEmpty() const
+    {
+        return m_current.isEmpty();
+    }
 
   public slots:
     // Make `path` the current image and the sole selection.

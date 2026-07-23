@@ -59,8 +59,8 @@ bool ContrastAnalyzer::analyzeRegion(const ImageFrame &frame,
 std::string ContrastAnalyzer::resultText() const
 {
     char buf[80];
-    std::snprintf(buf, sizeof(buf), "RMS contrast: %.2f  mean lum: %.1f",
-                  m_result.rms, m_result.mean);
+    std::snprintf(buf, sizeof(buf), "RMS contrast: %.2f  mean lum: %.1f", m_result.rms,
+                  m_result.mean);
     return buf;
 }
 

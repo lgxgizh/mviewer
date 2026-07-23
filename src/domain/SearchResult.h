@@ -18,7 +18,7 @@ struct SearchMatch
     };
 
     Type type = Type::Filename;
-    std::string key;    // e.g. "Make", "Lens", "Histogram", empty for filename
+    std::string key;     // e.g. "Make", "Lens", "Histogram", empty for filename
     std::string snippet; // the matched text fragment
 };
 
@@ -29,7 +29,10 @@ struct SearchResult
     std::vector<SearchMatch> matches;
     int score = 0; // relevance score (higher = more relevant)
 
-    bool operator<(const SearchResult &o) const { return score > o.score; }
+    bool operator<(const SearchResult &o) const
+    {
+        return score > o.score;
+    }
 };
 
 } // namespace mviewer::domain

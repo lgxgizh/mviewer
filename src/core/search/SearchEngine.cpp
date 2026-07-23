@@ -55,30 +55,34 @@ int calcScore(size_t matchCount, size_t totalMatches, domain::SearchMatch::Type 
     int base = 0;
     switch (type)
     {
-    case domain::SearchMatch::Type::Filename: base = 40; break;
-    case domain::SearchMatch::Type::Metadata: base = 20; break;
-    case domain::SearchMatch::Type::Analysis: base = 10; break;
-    case domain::SearchMatch::Type::Path: base = 5; break;
+    case domain::SearchMatch::Type::Filename:
+        base = 40;
+        break;
+    case domain::SearchMatch::Type::Metadata:
+        base = 20;
+        break;
+    case domain::SearchMatch::Type::Analysis:
+        base = 10;
+        break;
+    case domain::SearchMatch::Type::Path:
+        base = 5;
+        break;
     }
     // Prefer fewer files with more matches; demote if spread across many files.
     if (totalMatches == 0)
         return base + static_cast<int>(matchCount * 5);
-    return base + static_cast<int>(matchCount * 5) -
-           static_cast<int>(totalMatches / 2);
+    return base + static_cast<int>(matchCount * 5) - static_cast<int>(totalMatches / 2);
 }
 
 } // anonymous namespace
 
 // ── SearchIndex ──────────────────────────────────────────────────────────────
 
-std::string SearchIndex::buildBlob(const domain::ImageMetadata &meta,
-                                   const RawMetadata &raw,
+std::string SearchIndex::buildBlob(const domain::ImageMetadata &meta, const RawMetadata &raw,
                                    const std::string &analysisText)
 {
     std::ostringstream oss;
-    oss << meta.fileName << " "
-        << meta.filePath << " "
-        << meta.format << " ";
+    oss << meta.fileName << " " << meta.filePath << " " << meta.format << " ";
     for (const auto &[k, v] : meta.textKeys)
         oss << k << " " << v << " ";
     oss << raw.make << " " << raw.model << " " << raw.lens << " ";
@@ -97,10 +101,8 @@ std::string SearchIndex::buildBlob(const domain::ImageMetadata &meta,
     return toLower(oss.str());
 }
 
-void SearchIndex::indexFile(const std::string &path,
-                            const domain::ImageMetadata &meta,
-                            const RawMetadata &raw,
-                            const std::string &analysisText)
+void SearchIndex::indexFile(const std::string &path, const domain::ImageMetadata &meta,
+                            const RawMetadata &raw, const std::string &analysisText)
 {
     // Update existing entry if found.
     for (auto &e : m_blobs)
@@ -116,10 +118,9 @@ void SearchIndex::indexFile(const std::string &path,
 
 void SearchIndex::removeFile(const std::string &path)
 {
-    m_blobs.erase(
-        std::remove_if(m_blobs.begin(), m_blobs.end(),
-                       [&](const Entry &e) { return e.path == path; }),
-        m_blobs.end());
+    m_blobs.erase(std::remove_if(m_blobs.begin(), m_blobs.end(),
+                                 [&](const Entry &e) { return e.path == path; }),
+                  m_blobs.end());
 }
 
 void SearchIndex::clear()
@@ -127,9 +128,9 @@ void SearchIndex::clear()
     m_blobs.clear();
 }
 
-std::vector<domain::SearchResult> SearchIndex::search(
-    const domain::SearchQuery &query,
-    const AnalysisTextProvider &analysisProvider) const
+std::vector<domain::SearchResult>
+SearchIndex::search(const domain::SearchQuery &query,
+                    const AnalysisTextProvider &analysisProvider) const
 {
     if (query.text.empty())
         return {};
@@ -143,19 +144,17 @@ std::vector<domain::SearchResult> SearchIndex::search(
 
         // Filename match (extract just the filename part).
         const auto sep = entry.path.find_last_of("/\\");
-        const std::string fname = (sep != std::string::npos) ? entry.path.substr(sep + 1)
-                                                              : entry.path;
+        const std::string fname =
+            (sep != std::string::npos) ? entry.path.substr(sep + 1) : entry.path;
         if (query.searchFilenames && contains(fname, term, query.caseSensitive))
         {
-            matches.push_back({domain::SearchMatch::Type::Filename, "",
-                               snippet(fname, term)});
+            matches.push_back({domain::SearchMatch::Type::Filename, "", snippet(fname, term)});
         }
 
         // Path match.
         if (query.searchPaths && contains(entry.path, term, query.caseSensitive))
         {
-            matches.push_back({domain::SearchMatch::Type::Path, "",
-                               snippet(entry.path, term)});
+            matches.push_back({domain::SearchMatch::Type::Path, "", snippet(entry.path, term)});
         }
 
         // Blob (metadata + analysis) match.
@@ -175,11 +174,11 @@ std::vector<domain::SearchResult> SearchIndex::search(
                 // We'll mark all as Metadata first; if analysisProvider exists, we
                 // can check, but for simplicity we mark both types.
                 if (query.searchMetadata)
-                    matches.push_back({domain::SearchMatch::Type::Metadata, "",
-                                       snippet(entry.blob, term)});
+                    matches.push_back(
+                        {domain::SearchMatch::Type::Metadata, "", snippet(entry.blob, term)});
                 if (query.searchAnalysis)
-                    matches.push_back({domain::SearchMatch::Type::Analysis, "",
-                                       snippet(entry.blob, term)});
+                    matches.push_back(
+                        {domain::SearchMatch::Type::Analysis, "", snippet(entry.blob, term)});
                 pos += termLower.size();
                 break; // one match per type per file is enough
             }
@@ -224,8 +223,7 @@ void SearchEngine::reset()
     m_analysisProvider = {};
 }
 
-std::vector<domain::SearchResult> SearchEngine::search(
-    const domain::SearchQuery &query) const
+std::vector<domain::SearchResult> SearchEngine::search(const domain::SearchQuery &query) const
 {
     return m_index.search(query, m_analysisProvider);
 }

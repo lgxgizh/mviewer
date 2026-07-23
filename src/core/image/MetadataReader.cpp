@@ -1,9 +1,9 @@
 #include "core/image/MetadataReader.h"
 
+#include <QColorSpace>
 #include <QFileInfo>
 #include <QImage>
 #include <QImageReader>
-#include <QColorSpace>
 #include <QtMath>
 
 namespace mviewer::core

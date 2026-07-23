@@ -30,8 +30,7 @@ class AnalyzerPipeline
     // Run every registered analyzer over the full frame and return each one's
     // human-readable result, keyed by analyzer id. Analyzers that fail are
     // omitted, matching AnalyzerRegistry::runAnalyzer() semantics.
-    std::unordered_map<std::string, std::string>
-    run(const ImageFrame &frame) const
+    std::unordered_map<std::string, std::string> run(const ImageFrame &frame) const
     {
         return AnalyzerRegistry::instance().runAnalyzer(frame);
     }
@@ -39,8 +38,7 @@ class AnalyzerPipeline
     // Run a single analyzer (by id) over a rectangular region of the frame.
     // Returns the human-readable result, or empty if the id is unknown or the
     // analysis fails.
-    std::string runRegion(const ImageFrame &frame,
-                          const mviewer::domain::Selection &region,
+    std::string runRegion(const ImageFrame &frame, const mviewer::domain::Selection &region,
                           const std::string &id) const
     {
         auto a = AnalyzerRegistry::instance().create(id);

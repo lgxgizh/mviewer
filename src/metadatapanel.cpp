@@ -13,8 +13,7 @@
 #include <QTreeView>
 #include <QVBoxLayout>
 
-MetadataPanel::MetadataPanel(QWidget *parent)
-    : QWidget(parent)
+MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
 {
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(6, 6, 6, 6);
@@ -42,7 +41,8 @@ MetadataPanel::MetadataPanel(QWidget *parent)
     m_rating = new RatingWidget(this);
     ratingLay->addWidget(m_rating);
     ratingLay->addStretch(1);
-    connect(m_rating, &RatingWidget::ratingChanged, this, [this](int stars)
+    connect(m_rating, &RatingWidget::ratingChanged, this,
+            [this](int stars)
             {
                 if (m_currentPath.isEmpty())
                     return;
@@ -85,8 +85,8 @@ MetadataPanel::MetadataPanel(QWidget *parent)
                          rs.picked(m_currentPath.toStdString()));
     };
 
-    connect(m_colorLabel, QOverload<int>::of(&QComboBox::currentIndexChanged),
-            this, [this, emitFlags](int)
+    connect(m_colorLabel, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this, emitFlags](int)
             {
                 if (m_currentPath.isEmpty())
                     return;
@@ -95,20 +95,20 @@ MetadataPanel::MetadataPanel(QWidget *parent)
                 rs.setColorLabel(m_currentPath.toStdString(), label);
                 emitFlags();
             });
-    connect(m_rejectBtn, &QPushButton::toggled, this, [this, emitFlags](bool on)
+    connect(m_rejectBtn, &QPushButton::toggled, this,
+            [this, emitFlags](bool on)
             {
                 if (m_currentPath.isEmpty())
                     return;
-                mviewer::core::RatingStore::instance().setRejected(
-                    m_currentPath.toStdString(), on);
+                mviewer::core::RatingStore::instance().setRejected(m_currentPath.toStdString(), on);
                 emitFlags();
             });
-    connect(m_pickBtn, &QPushButton::toggled, this, [this, emitFlags](bool on)
+    connect(m_pickBtn, &QPushButton::toggled, this,
+            [this, emitFlags](bool on)
             {
                 if (m_currentPath.isEmpty())
                     return;
-                mviewer::core::RatingStore::instance().setPicked(
-                    m_currentPath.toStdString(), on);
+                mviewer::core::RatingStore::instance().setPicked(m_currentPath.toStdString(), on);
                 emitFlags();
             });
     layout->addWidget(flagBox);
@@ -123,10 +123,8 @@ void MetadataPanel::setImage(const QString &path)
 
     auto &rs = mviewer::core::RatingStore::instance();
     m_rating->setRating(rs.rating(path.toStdString()));
-    m_colorLabel->setCurrentIndex(
-        m_colorLabel->findData(rs.colorLabel(path.toStdString())));
-    m_rejectBtn->setChecked(!path.isEmpty() &&
-                            rs.rejected(path.toStdString()));
+    m_colorLabel->setCurrentIndex(m_colorLabel->findData(rs.colorLabel(path.toStdString())));
+    m_rejectBtn->setChecked(!path.isEmpty() && rs.rejected(path.toStdString()));
     m_pickBtn->setChecked(!path.isEmpty() && rs.picked(path.toStdString()));
 
     if (path.isEmpty())
@@ -148,8 +146,7 @@ void MetadataPanel::setImage(const QString &path)
     m_model->setImage(meta);
 
     // M14-2: if the file is a RAW format, also show sensor metadata.
-    const mviewer::core::RawMetadata rm =
-        mviewer::core::parseRawMetadata(path.toStdString());
+    const mviewer::core::RawMetadata rm = mviewer::core::parseRawMetadata(path.toStdString());
     m_model->setRaw(rm);
 
     m_tree->expandAll();

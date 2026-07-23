@@ -169,8 +169,9 @@ QStringList ExportDialog::collectSources() const
         return m_sources;
     // Legacy: batch over the output directory.
     if (!m_outDir.isEmpty())
-        return QDir(m_outDir).entryList({"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp", "*.tiff", "*.tif"},
-                                        QDir::Files, QDir::Name);
+        return QDir(m_outDir).entryList(
+            {"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp", "*.tiff", "*.tif"}, QDir::Files,
+            QDir::Name);
     if (!m_path.isEmpty())
         return {m_path};
     return {};
@@ -198,8 +199,8 @@ ImageData ExportDialog::applyWatermark(const ImageData &d) const
 
 void ExportDialog::onBrowse()
 {
-    const QString dir = QFileDialog::getExistingDirectory(this, tr("选择输出目录"),
-                                                          m_dirEdit->text());
+    const QString dir =
+        QFileDialog::getExistingDirectory(this, tr("选择输出目录"), m_dirEdit->text());
     if (!dir.isEmpty())
     {
         m_outDir = dir;
@@ -394,13 +395,9 @@ void ExportDialog::exportCsv()
     out << "Name,Width,Height,LumMean,RMean,GMean,BMean\n";
     for (const auto &r : rows)
     {
-        out << "\"" << r.name << "\","
-            << r.width << ","
-            << r.height << ","
-            << QString::number(r.lumMean, 'f', 2) << ","
-            << QString::number(r.rMean, 'f', 2) << ","
-            << QString::number(r.gMean, 'f', 2) << ","
-            << QString::number(r.bMean, 'f', 2) << "\n";
+        out << "\"" << r.name << "\"," << r.width << "," << r.height << ","
+            << QString::number(r.lumMean, 'f', 2) << "," << QString::number(r.rMean, 'f', 2) << ","
+            << QString::number(r.gMean, 'f', 2) << "," << QString::number(r.bMean, 'f', 2) << "\n";
     }
     m_statusLabel->setText(tr("CSV 已生成: %1").arg(dst));
 }
@@ -459,15 +456,16 @@ void ExportDialog::exportHtmlReport()
     }
     QTextStream out(&f);
     out.setEncoding(QStringConverter::Utf8);
-    out << "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Export Report</title></head><body>\n";
+    out << "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Export "
+           "Report</title></head><body>\n";
     out << "<h1>Export Report</h1><table border=\"1\" cellpadding=\"4\">\n";
-    out << "<tr><th>Name</th><th>Width</th><th>Height</th><th>LumMean</th><th>R</th><th>G</th><th>B</th></tr>\n";
+    out << "<tr><th>Name</th><th>Width</th><th>Height</th><th>LumMean</th><th>R</th><th>G</"
+           "th><th>B</th></tr>\n";
     for (const auto &r : rows)
     {
         out << "<tr><td>" << r.name << "</td><td>" << r.width << "</td><td>" << r.height
-            << "</td><td>" << QString::number(r.lumMean, 'f', 2)
-            << "</td><td>" << QString::number(r.rMean, 'f', 2)
-            << "</td><td>" << QString::number(r.gMean, 'f', 2)
+            << "</td><td>" << QString::number(r.lumMean, 'f', 2) << "</td><td>"
+            << QString::number(r.rMean, 'f', 2) << "</td><td>" << QString::number(r.gMean, 'f', 2)
             << "</td><td>" << QString::number(r.bMean, 'f', 2) << "</td></tr>\n";
     }
     out << "</table></body></html>\n";

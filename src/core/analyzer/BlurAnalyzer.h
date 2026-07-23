@@ -6,8 +6,14 @@
 class BlurAnalyzer : public Analyzer
 {
   public:
-    std::string name() const override { return "blur"; }
-    std::string description() const override { return "模糊检测 (Laplacian 方差)"; }
+    std::string name() const override
+    {
+        return "blur";
+    }
+    std::string description() const override
+    {
+        return "模糊检测 (Laplacian 方差)";
+    }
     AnalyzerCapability capabilities() const override
     {
         return AnalyzerCapability::SingleImage | AnalyzerCapability::RegionOfInterest |
@@ -33,7 +39,10 @@ class BlurAnalyzer : public Analyzer
         double variance = 0;
         bool ok = false;
     };
-    const Result &result() const { return m_result; }
+    const Result &result() const
+    {
+        return m_result;
+    }
 
   private:
     Result m_result;

@@ -173,7 +173,8 @@ void AnalysisPanel::buildUi()
     connect(csCombo, QOverload<int>::of(&QComboBox::activated), this,
             [this, csCombo](int)
             {
-                m_colorSpace = static_cast<mviewer::core::ColorSpace>(csCombo->currentData().toInt());
+                m_colorSpace =
+                    static_cast<mviewer::core::ColorSpace>(csCombo->currentData().toInt());
                 updateInspectorPage();
             });
     connect(kCombo, QOverload<int>::of(&QComboBox::activated), this,
@@ -301,7 +302,8 @@ void AnalysisPanel::setFrame(std::shared_ptr<ImageFrame> frame)
     m_frameA = std::move(frame);
     if (m_frameA && m_frameA->isValid())
     {
-        const QImage img = mvcore::toQImage(m_frameA->pixels()).convertToFormat(QImage::Format_RGB32);
+        const QImage img =
+            mvcore::toQImage(m_frameA->pixels()).convertToFormat(QImage::Format_RGB32);
         setImage(img, QString::fromStdString(m_frameA->metadata().filePath));
     }
     reanalyze();
@@ -332,9 +334,9 @@ void AnalysisPanel::updateInspectorPage()
     }
 
     const char *csLabel = mviewer::core::colorSpaceLabel(m_colorSpace);
-    const mviewer::core::ColorTriple px = mviewer::core::toColorSpace(
-        static_cast<uint8_t>(m_pR), static_cast<uint8_t>(m_pG), static_cast<uint8_t>(m_pB),
-        m_colorSpace);
+    const mviewer::core::ColorTriple px =
+        mviewer::core::toColorSpace(static_cast<uint8_t>(m_pR), static_cast<uint8_t>(m_pG),
+                                    static_cast<uint8_t>(m_pB), m_colorSpace);
 
     QString txt = QString("<h3>Pixel Inspector — %1</h3>").arg(csLabel);
     txt += QString("pos: (%1, %2)<br>").arg(m_px).arg(m_py);
@@ -356,9 +358,7 @@ void AnalysisPanel::updateInspectorPage()
             const mviewer::core::NeighborhoodStats s =
                 mviewer::core::neighborhoodStats(data, stride, w, h, m_px, m_py, m_kernel);
             txt += QString("<br><b>%1×%1 Kernel</b> (lum)<br>").arg(m_kernel);
-            txt += QString("mean:%1  std:%2<br>")
-                       .arg(s.mean, 0, 'f', 1)
-                       .arg(s.stdDev, 0, 'f', 1);
+            txt += QString("mean:%1  std:%2<br>").arg(s.mean, 0, 'f', 1).arg(s.stdDev, 0, 'f', 1);
             txt += QString("min:%1  max:%2  var:%3  n:%4")
                        .arg(s.min, 0, 'f', 0)
                        .arg(s.max, 0, 'f', 0)
@@ -496,9 +496,12 @@ void AnalysisPanel::updateRgbPage()
                    "<tr><td>%3</td><td>%4</td></tr>"
                    "<tr><td>%5</td><td>%6</td></tr>"
                    "</table>")
-               .arg(tr("R Mean")).arg(m_statsA.rMean, 0, 'f', 2)
-               .arg(tr("G Mean")).arg(m_statsA.gMean, 0, 'f', 2)
-               .arg(tr("B Mean")).arg(m_statsA.bMean, 0, 'f', 2);
+               .arg(tr("R Mean"))
+               .arg(m_statsA.rMean, 0, 'f', 2)
+               .arg(tr("G Mean"))
+               .arg(m_statsA.gMean, 0, 'f', 2)
+               .arg(tr("B Mean"))
+               .arg(m_statsA.bMean, 0, 'f', 2);
     m_rgbStatsLabel->setText(txt);
 
     const int W = qMax(200, m_rgbLabel->width() - 8);
@@ -567,9 +570,12 @@ void AnalysisPanel::updateExposurePage()
                    "<tr><td>%3</td><td>%4%</td></tr>"
                    "<tr><td>%5</td><td>%6</td></tr>"
                    "</table>")
-               .arg(tr("Highlights (>=240)")).arg(highlightPct, 0, 'f', 2)
-               .arg(tr("Shadows (<=15)")).arg(shadowPct, 0, 'f', 2)
-               .arg(tr("Luminance Mean")).arg(m_statsA.lumMean, 0, 'f', 2);
+               .arg(tr("Highlights (>=240)"))
+               .arg(highlightPct, 0, 'f', 2)
+               .arg(tr("Shadows (<=15)"))
+               .arg(shadowPct, 0, 'f', 2)
+               .arg(tr("Luminance Mean"))
+               .arg(m_statsA.lumMean, 0, 'f', 2);
     m_exposureLabel->setText(txt);
 }
 
@@ -588,9 +594,12 @@ void AnalysisPanel::updateFocusPage()
                    "<tr><td>%3</td><td>%4</td></tr>"
                    "<tr><td>%5</td><td>%6</td></tr>"
                    "</table>")
-               .arg(tr("Luminance Mean")).arg(m_statsA.lumMean, 0, 'f', 2)
-               .arg(tr("Noise Estimate")).arg(noiseLevelText(noise))
-               .arg(tr("Pixel Count")).arg(m_statsA.pixelCount);
+               .arg(tr("Luminance Mean"))
+               .arg(m_statsA.lumMean, 0, 'f', 2)
+               .arg(tr("Noise Estimate"))
+               .arg(noiseLevelText(noise))
+               .arg(tr("Pixel Count"))
+               .arg(m_statsA.pixelCount);
     m_focusLabel->setText(txt);
 }
 
@@ -598,20 +607,20 @@ static QString formatToString(QImage::Format f)
 {
     switch (f)
     {
-        case QImage::Format_RGB32:
-            return "RGB32";
-        case QImage::Format_ARGB32:
-            return "ARGB32";
-        case QImage::Format_ARGB32_Premultiplied:
-            return "ARGB32 PM";
-        case QImage::Format_RGB888:
-            return "RGB888";
-        case QImage::Format_RGBA8888:
-            return "RGBA8888";
-        case QImage::Format_Grayscale8:
-            return "Gray8";
-        default:
-            return QString("Format_%1").arg(static_cast<int>(f));
+    case QImage::Format_RGB32:
+        return "RGB32";
+    case QImage::Format_ARGB32:
+        return "ARGB32";
+    case QImage::Format_ARGB32_Premultiplied:
+        return "ARGB32 PM";
+    case QImage::Format_RGB888:
+        return "RGB888";
+    case QImage::Format_RGBA8888:
+        return "RGBA8888";
+    case QImage::Format_Grayscale8:
+        return "Gray8";
+    default:
+        return QString("Format_%1").arg(static_cast<int>(f));
     }
 }
 
@@ -628,9 +637,13 @@ void AnalysisPanel::updateMetadataPage()
                    "<tr><td>%4</td><td>%5</td></tr>"
                    "<tr><td>%6</td><td>%7</td></tr>"
                    "</table>")
-               .arg(tr("Dimensions")).arg(m_imageA.width()).arg(m_imageA.height())
-               .arg(tr("Format")).arg(formatToString(m_imageA.format()))
-               .arg(tr("Depth")).arg(m_imageA.depth());
+               .arg(tr("Dimensions"))
+               .arg(m_imageA.width())
+               .arg(m_imageA.height())
+               .arg(tr("Format"))
+               .arg(formatToString(m_imageA.format()))
+               .arg(tr("Depth"))
+               .arg(m_imageA.depth());
     if (!m_imagePath.isEmpty())
         txt += QString("<br><b>%1</b> %2").arg(tr("Path:")).arg(m_imagePath);
     m_metaLabel->setText(txt);
@@ -687,8 +700,7 @@ void AnalysisPanel::updatePluginPage()
         return;
     }
     const std::string &id = m_pluginIds[pluginIdx];
-    auto analyzer = (m_pipeline ? m_pipeline->create(id)
-                                : AnalyzerRegistry::instance().create(id));
+    auto analyzer = (m_pipeline ? m_pipeline->create(id) : AnalyzerRegistry::instance().create(id));
     if (!analyzer)
     {
         m_pluginResult->setText(tr("Cannot create: %1").arg(QString::fromStdString(id)));

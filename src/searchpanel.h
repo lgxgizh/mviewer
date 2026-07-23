@@ -31,7 +31,7 @@ class SearchEngine;
 class SearchPanel : public QWidget
 {
     Q_OBJECT
-public:
+  public:
     explicit SearchPanel(QWidget *parent = nullptr);
 
     // Supply an external engine so the panel shares state with the caller.
@@ -45,15 +45,15 @@ public:
                  const std::vector<mviewer::domain::ImageMetadata> &metas,
                  const std::vector<mviewer::core::RawMetadata> &raws);
 
-signals:
+  signals:
     // Emitted when the user clicks a result row; the caller opens the image.
     void resultActivated(const QString &filePath);
 
-private slots:
+  private slots:
     void onSearchTextChanged();
     void onResultDoubleClicked(const QModelIndex &index);
 
-private:
+  private:
     void buildQuery(mviewer::domain::SearchQuery &q) const;
     QString matchTypeLabel(mviewer::domain::SearchMatch::Type type) const;
 

@@ -2,16 +2,15 @@
 
 #include "core/image/MetadataReader.h"
 
+#include <QDateTime>
 #include <QFileInfo>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
-#include <QDateTime>
 #include <QResizeEvent>
 
-MetadataOverlay::MetadataOverlay(QWidget *parent)
-    : QWidget(parent)
+MetadataOverlay::MetadataOverlay(QWidget *parent) : QWidget(parent)
 {
     setVisible(false);
     setAttribute(Qt::WA_TransparentForMouseEvents, false);
@@ -98,9 +97,7 @@ void MetadataOverlay::buildContent(const QString &path)
         m_lines << QString("分辨率: %1 × %2").arg(meta.width).arg(meta.height);
 
     if (meta.channels > 0)
-        m_lines << QString("通道: %1 · 色深: %2-bit")
-                       .arg(meta.channels)
-                       .arg(meta.bitDepth);
+        m_lines << QString("通道: %1 · 色深: %2-bit").arg(meta.channels).arg(meta.bitDepth);
 
     if (!meta.colorSpace.empty())
         m_lines << QString("色彩空间: %1").arg(QString::fromStdString(meta.colorSpace));
@@ -149,8 +146,7 @@ void MetadataOverlay::buildContent(const QString &path)
     // Modified time
     if (meta.modifiedEpochSec > 0)
     {
-        const auto dt = QDateTime::fromSecsSinceEpoch(
-            static_cast<qint64>(meta.modifiedEpochSec));
+        const auto dt = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(meta.modifiedEpochSec));
         m_lines << QString("修改: %1").arg(dt.toString("yyyy-MM-dd hh:mm:ss"));
     }
 }
@@ -198,8 +194,7 @@ void MetadataOverlay::paintEvent(QPaintEvent *)
 
     for (int i = 0; i < m_lines.size(); ++i)
     {
-        p.drawText(QRect(x + padding, y + padding + (i + 1) * lineH,
-                         boxW - padding * 2, lineH),
+        p.drawText(QRect(x + padding, y + padding + (i + 1) * lineH, boxW - padding * 2, lineH),
                    Qt::AlignLeft | Qt::AlignVCenter, m_lines.at(i));
     }
 

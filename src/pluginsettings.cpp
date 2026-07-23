@@ -17,8 +17,7 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
-PluginSettings::PluginSettings(QWidget *parent)
-    : QDialog(parent)
+PluginSettings::PluginSettings(QWidget *parent) : QDialog(parent)
 {
     setWindowTitle(tr("插件管理"));
     resize(600, 420);
@@ -76,11 +75,11 @@ void PluginSettings::setupUi()
 void PluginSettings::loadSettings()
 {
     QSettings settings;
-    m_disabledPlugins =
-        settings.value("plugins/disabled", QStringList()).toStringList();
+    m_disabledPlugins = settings.value("plugins/disabled", QStringList()).toStringList();
     const QStringList paths =
-        settings.value("plugins/searchPaths",
-                       QStringList{QCoreApplication::applicationDirPath() + "/plugins"})
+        settings
+            .value("plugins/searchPaths",
+                   QStringList{QCoreApplication::applicationDirPath() + "/plugins"})
             .toStringList();
     if (!paths.isEmpty())
         m_searchPath->setText(paths.join(';'));
@@ -107,10 +106,8 @@ void PluginSettings::refreshList()
         return;
     }
 
-    const QIcon loadedIcon(
-        QApplication::style()->standardIcon(QStyle::SP_CommandLink));
-    const QIcon disabledIcon(
-        QApplication::style()->standardIcon(QStyle::SP_BrowserStop));
+    const QIcon loadedIcon(QApplication::style()->standardIcon(QStyle::SP_CommandLink));
+    const QIcon disabledIcon(QApplication::style()->standardIcon(QStyle::SP_BrowserStop));
 
     for (const auto &p : plugins)
     {
@@ -129,13 +126,10 @@ void PluginSettings::refreshList()
 
         QString label;
         if (disabled)
-            label = tr("[已禁用] %1 [%2]")
-                        .arg(pluginName, capStr);
+            label = tr("[已禁用] %1 [%2]").arg(pluginName, capStr);
         else
-            label = tr("%1 [%2] — %3")
-                        .arg(pluginName)
-                        .arg(capStr)
-                        .arg(QString::fromStdString(p.path));
+            label =
+                tr("%1 [%2] — %3").arg(pluginName).arg(capStr).arg(QString::fromStdString(p.path));
 
         auto *item = new QListWidgetItem(disabled ? disabledIcon : loadedIcon, label);
         item->setData(Qt::UserRole, pluginName);
@@ -169,10 +163,10 @@ void PluginSettings::onAddPluginPath()
         return;
 
     QSettings settings;
-    QStringList paths =
-        settings.value("plugins/searchPaths",
-                       QStringList{QCoreApplication::applicationDirPath() + "/plugins"})
-            .toStringList();
+    QStringList paths = settings
+                            .value("plugins/searchPaths",
+                                   QStringList{QCoreApplication::applicationDirPath() + "/plugins"})
+                            .toStringList();
     if (!paths.contains(dir))
     {
         paths.append(dir);
@@ -184,10 +178,10 @@ void PluginSettings::onAddPluginPath()
 void PluginSettings::onRemovePluginPath()
 {
     QSettings settings;
-    QStringList paths =
-        settings.value("plugins/searchPaths",
-                       QStringList{QCoreApplication::applicationDirPath() + "/plugins"})
-            .toStringList();
+    QStringList paths = settings
+                            .value("plugins/searchPaths",
+                                   QStringList{QCoreApplication::applicationDirPath() + "/plugins"})
+                            .toStringList();
     paths.clear();
     settings.setValue("plugins/searchPaths", paths);
     m_searchPath->setText(QCoreApplication::applicationDirPath() + "/plugins");
@@ -195,8 +189,7 @@ void PluginSettings::onRemovePluginPath()
 
 void PluginSettings::onBrowsePluginDir()
 {
-    const QStringList paths =
-        m_searchPath->text().split(';', Qt::SkipEmptyParts);
+    const QStringList paths = m_searchPath->text().split(';', Qt::SkipEmptyParts);
     if (!paths.isEmpty())
         QDesktopServices::openUrl(QUrl::fromLocalFile(paths.first()));
 }

@@ -1,7 +1,7 @@
 #include "core/SelfTest.h"
 
-#include "core/image/decoder/DecoderRegistry.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/decoder/DecoderRegistry.h"
 
 #include <QImage>
 #include <QTemporaryDir>
@@ -62,8 +62,8 @@ int runSelfTest()
     const int cx = 32, cy = 32;
     if (!d.isNull())
     {
-        const uint8_t *p = d.buffer->data() + static_cast<size_t>(cy) * d.stride() +
-                           static_cast<size_t>(cx) * 3;
+        const uint8_t *p =
+            d.buffer->data() + static_cast<size_t>(cy) * d.stride() + static_cast<size_t>(cx) * 3;
         const int r = src.pixelColor(cx, cy).red();
         const int g = src.pixelColor(cx, cy).green();
         const int b = src.pixelColor(cx, cy).blue();

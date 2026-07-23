@@ -19,9 +19,9 @@ int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
 
-    const std::filesystem::path assets =
-        (argc > 1) ? std::filesystem::path(argv[1])
-                   : (std::filesystem::current_path() / "demo_assets");
+    const std::filesystem::path assets = (argc > 1)
+                                             ? std::filesystem::path(argv[1])
+                                             : (std::filesystem::current_path() / "demo_assets");
 
     MainWindow w;
     w.setupUi();
@@ -35,9 +35,8 @@ int main(int argc, char **argv)
     auto *search = w.findChild<QLineEdit *>();
 
     const QString dir = QString::fromStdString(assets.string());
-    const QFileInfoList files =
-        QDir(dir).entryInfoList({"*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tif", "*.tiff"},
-                                QDir::Files, QDir::Name);
+    const QFileInfoList files = QDir(dir).entryInfoList(
+        {"*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tif", "*.tiff"}, QDir::Files, QDir::Name);
 
     // Step 1 (t=1.0s): open the demo directory.
     QTimer::singleShot(1000, &app,

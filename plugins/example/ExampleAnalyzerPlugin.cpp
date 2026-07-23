@@ -14,8 +14,8 @@
 #include "core/analyzer/AnalyzerCapability.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
-#include "domain/Selection.h"
 #include "core/plugin/PluginABI.h"
+#include "domain/Selection.h"
 
 #include <cmath>
 #include <cstdint>

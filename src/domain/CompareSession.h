@@ -64,10 +64,10 @@ struct CompareSession
 
     // M15 P0#1 (review): additional UI state that must survive a save/close/reopen
     // cycle so the Compare view is fully restored, not just its geometry.
-    uint8_t threshold = 0;      // HeatMap / Diff 阈值 (0-255)
-    int blinkIntervalMs = 500;   // Blink 间隔 (硬编码 500 改为可持久化)
+    uint8_t threshold = 0;         // HeatMap / Diff 阈值 (0-255)
+    int blinkIntervalMs = 500;     // Blink 间隔 (硬编码 500 改为可持久化)
     bool sidePanelVisible = false; // 检视面板开关
-    int layoutIndex = 0;        // 布局下拉框选中项 (0=自动,1=单列,2=2列,3=3列,4=4列,5=一行)
+    int layoutIndex = 0;           // 布局下拉框选中项 (0=自动,1=单列,2=2列,3=3列,4=4列,5=一行)
 
     int imageCount() const noexcept
     {

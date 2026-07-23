@@ -13,13 +13,15 @@
 // analyzer pipeline, and export / review / benchmark configuration — so
 // opening one file restores the full workspace an ISP / Camera / CV engineer
 // was working in.
-namespace mviewer {
-namespace domain {
+namespace mviewer
+{
+namespace domain
+{
 
 struct Project
 {
     std::string name;
-    std::string filePath;   // absolute path of the .mvproj file
+    std::string filePath; // absolute path of the .mvproj file
     std::string createdIso;
     std::string modifiedIso;
     std::string appVersion;
@@ -30,12 +32,12 @@ struct Project
     Workspace workspace;
 
     // M15 Project facets layered on top of the workspace:
-    std::vector<std::string> datasetRoots;       // extra dataset directories
-    std::vector<std::string> analyzerPipeline;    // analyzer ids (AnalyzerRegistry order)
-    std::string analyzerPipelineJson;             // detailed pipeline config (forward-compat)
-    std::string exportConfigJson;                 // export settings (forward-compat)
-    std::string benchmarkBaselineJson;            // benchmark baseline (forward-compat)
-    std::string reviewNotes;                      // Review Report notes
+    std::vector<std::string> datasetRoots;     // extra dataset directories
+    std::vector<std::string> analyzerPipeline; // analyzer ids (AnalyzerRegistry order)
+    std::string analyzerPipelineJson;          // detailed pipeline config (forward-compat)
+    std::string exportConfigJson;              // export settings (forward-compat)
+    std::string benchmarkBaselineJson;         // benchmark baseline (forward-compat)
+    std::string reviewNotes;                   // Review Report notes
 };
 
 } // namespace domain

@@ -40,7 +40,7 @@ struct AppState
 
     // P1-3: persist the back/forward navigation stack (browser-style) so the
     // History panel and ←/→ history work after reopening the app.
-    QStringList navHistory; // ordered visited-image paths
+    QStringList navHistory;   // ordered visited-image paths
     int navHistoryIndex = -1; // index of the current image within navHistory
 
     // Load from the per-user config path. Missing/corrupt file => defaults

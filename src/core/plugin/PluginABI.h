@@ -23,9 +23,9 @@
 //                 major*10000 + minor*100 + patch. Informational only; a
 //                 mismatch is a warning, never a hard gate.
 
-#define MVIEWER_API_VERSION   1      // plugin API contract version
-#define MVIEWER_ABI_VERSION   1      // binary ABI compatibility level (v1.x == 1)
-#define MVIEWER_SDK_VERSION   10000  // SDK release 1.0.0
+#define MVIEWER_API_VERSION 1     // plugin API contract version
+#define MVIEWER_ABI_VERSION 1     // binary ABI compatibility level (v1.x == 1)
+#define MVIEWER_SDK_VERSION 10000 // SDK release 1.0.0
 
 // Backward-compatible alias for the single-version export still used by some
 // plugins / the loader's legacy fallback.
@@ -61,11 +61,11 @@ inline bool pluginABICompatible(const PluginABI &host, const PluginABI &plugin)
 inline std::string pluginABIWarnings(const PluginABI &host, const PluginABI &plugin)
 {
     if (plugin.sdkVersion > host.sdkVersion)
-        return "plugin SDK (" + std::to_string(plugin.sdkVersion) +
-               ") is newer than host SDK (" + std::to_string(host.sdkVersion) + ")";
+        return "plugin SDK (" + std::to_string(plugin.sdkVersion) + ") is newer than host SDK (" +
+               std::to_string(host.sdkVersion) + ")";
     if (plugin.sdkVersion < host.sdkVersion)
-        return "plugin SDK (" + std::to_string(plugin.sdkVersion) +
-               ") is older than host SDK (" + std::to_string(host.sdkVersion) + ")";
+        return "plugin SDK (" + std::to_string(plugin.sdkVersion) + ") is older than host SDK (" +
+               std::to_string(host.sdkVersion) + ")";
     return {};
 }
 

@@ -75,8 +75,7 @@ struct AnalysisBatchReport
 
 // Assemble an AnalysisBatchReport from the raw per-image AnalyzerResults
 // produced by AnalyzerRegistry::runBatch().
-AnalysisBatchReport
-buildBatchReport(const std::string &analyzerId,
-                 const std::vector<mviewer::analyzer::AnalyzerResult> &results);
+AnalysisBatchReport buildBatchReport(const std::string &analyzerId,
+                                     const std::vector<mviewer::analyzer::AnalyzerResult> &results);
 
 } // namespace mviewer::core

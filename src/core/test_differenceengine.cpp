@@ -6,17 +6,26 @@
 #include <vector>
 
 static int g_fail = 0;
-#define CHECK(cond, msg) \
-    do { \
-        if (!(cond)) { std::cerr << "FAIL: " << msg << "\n"; ++g_fail; } \
-        else { std::cout << "PASS: " << msg << "\n"; } \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(cond))                                                                               \
+        {                                                                                          \
+            std::cerr << "FAIL: " << msg << "\n";                                                  \
+            ++g_fail;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            std::cout << "PASS: " << msg << "\n";                                                  \
+        }                                                                                          \
     } while (0)
 
 static ImageData makeSolidRgb(int w, int h, uint8_t r, uint8_t g, uint8_t b)
 {
     const size_t sz = static_cast<size_t>(w) * h * 3;
     auto buf = std::make_shared<std::vector<uint8_t>>(sz);
-    for (size_t i = 0; i < sz; i += 3) {
+    for (size_t i = 0; i < sz; i += 3)
+    {
         (*buf)[i + 0] = r;
         (*buf)[i + 1] = g;
         (*buf)[i + 2] = b;
@@ -31,8 +40,11 @@ static ImageData makeSolidRgb(int w, int h, uint8_t r, uint8_t g, uint8_t b)
 
 static bool isAllBlack(const ImageData &img)
 {
-    if (img.isNull()) return false;
-    for (auto v : *img.buffer) if (v != 0) return false;
+    if (img.isNull())
+        return false;
+    for (auto v : *img.buffer)
+        if (v != 0)
+            return false;
     return true;
 }
 
@@ -66,8 +78,12 @@ int main(int argc, char **argv)
         auto diffRaw = DifferenceEngine::differenceMap(a, b);
         auto diffThresh = DifferenceEngine::differenceMap(a, b, 200);
         int rawNZ = 0, threshNZ = 0;
-        for (auto v : *diffRaw.buffer) if (v > 0) ++rawNZ;
-        for (auto v : *diffThresh.buffer) if (v > 0) ++threshNZ;
+        for (auto v : *diffRaw.buffer)
+            if (v > 0)
+                ++rawNZ;
+        for (auto v : *diffThresh.buffer)
+            if (v > 0)
+                ++threshNZ;
         CHECK(threshNZ < rawNZ || rawNZ == 0, "threshold reduces highlighted pixels");
     }
 

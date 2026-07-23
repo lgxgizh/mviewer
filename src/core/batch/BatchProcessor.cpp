@@ -46,29 +46,32 @@ WatermarkPosition mapWatermarkPos(int pos)
 {
     switch (pos)
     {
-    case 0: return WatermarkPosition::TopLeft;
-    case 1: return WatermarkPosition::TopRight;
-    case 2: return WatermarkPosition::BottomLeft;
-    case 3: return WatermarkPosition::BottomRight;
-    case 5: return WatermarkPosition::Tile;
-    default: return WatermarkPosition::Center;
+    case 0:
+        return WatermarkPosition::TopLeft;
+    case 1:
+        return WatermarkPosition::TopRight;
+    case 2:
+        return WatermarkPosition::BottomLeft;
+    case 3:
+        return WatermarkPosition::BottomRight;
+    case 5:
+        return WatermarkPosition::Tile;
+    default:
+        return WatermarkPosition::Center;
     }
 }
 
 // Build the output path for an exported file.
-std::string buildOutputPath(const domain::BatchJobConfig &config,
-                            const std::string &inputPath,
+std::string buildOutputPath(const domain::BatchJobConfig &config, const std::string &inputPath,
                             int index, int total)
 {
     const std::string base = baseNameOf(inputPath);
-    const std::string ext = config.exportFormat.empty() ? extOf(inputPath)
-                                                         : config.exportFormat;
+    const std::string ext = config.exportFormat.empty() ? extOf(inputPath) : config.exportFormat;
 
     std::string outName;
     if (!config.renamePattern.empty())
     {
-        outName = applyRenamePattern(config.renamePattern, base, ext,
-                                      index, total);
+        outName = applyRenamePattern(config.renamePattern, base, ext, index, total);
         if (!ext.empty())
             outName += "." + ext;
     }
@@ -87,10 +90,9 @@ std::string buildOutputPath(const domain::BatchJobConfig &config,
 
 } // anonymous namespace
 
-domain::BatchFileResult BatchProcessor::processFile(
-    const domain::BatchJobConfig &config,
-    const std::string &inputPath,
-    int fileIndex, int totalFiles)
+domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig &config,
+                                                    const std::string &inputPath, int fileIndex,
+                                                    int totalFiles)
 {
     domain::BatchFileResult result;
     result.inputPath = inputPath;
@@ -135,8 +137,7 @@ domain::BatchFileResult BatchProcessor::processFile(
 
         case domain::BatchOp::Resize:
         {
-            img = resizeToFit(img, config.resizeMaxEdge,
-                               config.resizeMaxEdge);
+            img = resizeToFit(img, config.resizeMaxEdge, config.resizeMaxEdge);
             result.width = img.width;
             result.height = img.height;
             break;
@@ -146,10 +147,9 @@ domain::BatchFileResult BatchProcessor::processFile(
         {
             if (!config.watermarkText.empty())
             {
-                img = addTextWatermark(
-                    img, config.watermarkText,
-                    mapWatermarkPos(config.watermarkPosition),
-                    config.watermarkOpacity, config.watermarkFontSize);
+                img = addTextWatermark(img, config.watermarkText,
+                                       mapWatermarkPos(config.watermarkPosition),
+                                       config.watermarkOpacity, config.watermarkFontSize);
             }
             break;
         }
@@ -215,8 +215,7 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
         if (m_progressCb)
             m_progressCb(i, total, config.inputPaths[static_cast<size_t>(i)]);
 
-        auto fileResult = processFile(config, config.inputPaths[static_cast<size_t>(i)],
-                                       i, total);
+        auto fileResult = processFile(config, config.inputPaths[static_cast<size_t>(i)], i, total);
         if (fileResult.success)
             ++aggregate.totalSucceeded;
         else

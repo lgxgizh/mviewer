@@ -31,15 +31,21 @@
 
 class PngExporter : public IExporter
 {
-   public:
-    std::string name() const override { return "png-exporter"; }
+  public:
+    std::string name() const override
+    {
+        return "png-exporter";
+    }
 
     std::string description() const override
     {
         return "Example PNG/BMP exporter (Qt QImage backend)";
     }
 
-    std::vector<std::string> extensions() const override { return {"png", "bmp"}; }
+    std::vector<std::string> extensions() const override
+    {
+        return {"png", "bmp"};
+    }
 
     bool exportImage(const ImageData &img, const std::string &outPath) override
     {
@@ -51,22 +57,22 @@ class PngExporter : public IExporter
         bool needSwap = false;
         switch (img.format)
         {
-            case PixelFormat::RGB24:
-                fmt = QImage::Format_RGB888;
-                pxSize = 3;
-                break;
-            case PixelFormat::RGBA32:
-                fmt = QImage::Format_RGBA8888;
-                pxSize = 4;
-                break;
-            case PixelFormat::BGR24:
-                // QImage has no BGR888; copy with channels swapped.
-                fmt = QImage::Format_RGB888;
-                pxSize = 3;
-                needSwap = true;
-                break;
-            default:
-                return false;
+        case PixelFormat::RGB24:
+            fmt = QImage::Format_RGB888;
+            pxSize = 3;
+            break;
+        case PixelFormat::RGBA32:
+            fmt = QImage::Format_RGBA8888;
+            pxSize = 4;
+            break;
+        case PixelFormat::BGR24:
+            // QImage has no BGR888; copy with channels swapped.
+            fmt = QImage::Format_RGB888;
+            pxSize = 3;
+            needSwap = true;
+            break;
+        default:
+            return false;
         }
 
         QImage qimg(static_cast<int>(img.width), static_cast<int>(img.height), fmt);
@@ -116,7 +122,7 @@ extern "C" MVIEWER_PLUGIN_EXPORT const char *pluginName()
 
 extern "C" MVIEWER_PLUGIN_EXPORT const PluginABI *mviewer_plugin_abi()
 {
-    static const PluginABI abi;  // defaults to {api=1, abi=1, sdk=10000}
+    static const PluginABI abi; // defaults to {api=1, abi=1, sdk=10000}
     return &abi;
 }
 

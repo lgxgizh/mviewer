@@ -268,8 +268,8 @@ int main(int argc, char **argv)
     {
         QImage img1 = renderMainWindow();
         vr.saveGolden("main_window_default", img1);
-        std::cout << "Generated golden: main_window_default " << img1.width() << "x" << img1.height()
-                  << "\n";
+        std::cout << "Generated golden: main_window_default " << img1.width() << "x"
+                  << img1.height() << "\n";
 
         QImage img2 = renderMainWindowWithImage();
         vr.saveGolden("main_window_with_image", img2);

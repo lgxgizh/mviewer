@@ -3,19 +3,19 @@
 #include <atomic>
 #include <memory>
 
+#include <QDate>
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QHash>
-#include <QDate>
-#include <QDateTime>
 #include <QListView>
-#include <QMutex>
 #include <QMouseEvent>
+#include <QMutex>
 #include <QPixmap>
 #include <QSet>
+#include <QShowEvent>
 #include <QSize>
 #include <QStringList>
-#include <QShowEvent>
 #include <QStyledItemDelegate>
 
 class QPushButton;
@@ -49,12 +49,12 @@ class ThumbnailPanel : public QListView
 
     enum ViewMode
     {
-        Thumbnail = 0,   // Grid of thumbnails (default)
-        LargeIcon,       // P0-2: big thumbnail grid
-        SmallIcon,       // P0-2: small thumbnail grid
-        Details,         // List view with columns
-        Filmstrip,       // Horizontal strip, single row (M15)
-        Compact          // Dense grid, minimal padding (M15)
+        Thumbnail = 0, // Grid of thumbnails (default)
+        LargeIcon,     // P0-2: big thumbnail grid
+        SmallIcon,     // P0-2: small thumbnail grid
+        Details,       // List view with columns
+        Filmstrip,     // Horizontal strip, single row (M15)
+        Compact        // Dense grid, minimal padding (M15)
     };
 
     explicit ThumbnailPanel(QWidget *parent = nullptr);
@@ -63,7 +63,10 @@ class ThumbnailPanel : public QListView
     void setDirectory(const QString &path);
     // P0-1: F5 refresh — reload the current directory from disk.
     void refresh();
-    QString currentDir() const { return m_currentDir; }
+    QString currentDir() const
+    {
+        return m_currentDir;
+    }
     // P0-2: programmatically make `path` the selected/current item so the grid
     // highlight stays in lock-step with the shared SelectionModel. Unlike
     // scrollToPath() this only scrolls when the item is off-screen (avoids
@@ -71,11 +74,17 @@ class ThumbnailPanel : public QListView
     void selectPath(const QString &path);
     void setSortMode(SortMode mode);
     void setViewMode(ViewMode mode);
-    ViewMode viewMode() const { return m_viewMode; }
+    ViewMode viewMode() const
+    {
+        return m_viewMode;
+    }
 
     // M15: dynamic thumbnail size (slider-controlled).
     void setThumbSize(int size);
-    int thumbSize() const { return m_thumbSize; }
+    int thumbSize() const
+    {
+        return m_thumbSize;
+    }
 
     // Entry metadata — public so DetailsDelegate can read it.
     struct Entry
@@ -132,12 +141,21 @@ class ThumbnailPanel : public QListView
     void batchAnalyzeExport();
 
     // P0 #①: read access for the delegate (paths + ready pixmaps + entry data).
-    const QStringList &pathList() const { return m_paths; }
+    const QStringList &pathList() const
+    {
+        return m_paths;
+    }
     // M17: paths currently visible in the gallery (post-filter). Same as pathList()
     // when a filter is active — added for explicit "export filtered set" UX.
-    const QStringList &visiblePaths() const { return m_paths; }
+    const QStringList &visiblePaths() const
+    {
+        return m_paths;
+    }
     QPixmap thumbReady(const QString &path) const;
-    const QList<Entry> &entries() const { return m_allEntries; }
+    const QList<Entry> &entries() const
+    {
+        return m_allEntries;
+    }
 
     // P1: repaint the gallery to reflect a rating change made elsewhere.
     void invalidateRatings();
@@ -167,9 +185,9 @@ class ThumbnailPanel : public QListView
     class ThumbDelegate;
     class DetailsDelegate;
 
-    QStringList m_paths;                       // actual file paths, aligned with model
-    QHash<QString, int> m_rowByPath;           // path -> model row (scroll / repaint)
-    QHash<QString, qint64> m_sizeByPath;       // path -> byte size (selection stats)
+    QStringList m_paths;                 // actual file paths, aligned with model
+    QHash<QString, int> m_rowByPath;     // path -> model row (scroll / repaint)
+    QHash<QString, qint64> m_sizeByPath; // path -> byte size (selection stats)
     QStringListModel *m_model = nullptr;
     QStyledItemDelegate *m_delegate = nullptr;
 
@@ -182,24 +200,24 @@ class ThumbnailPanel : public QListView
     QString m_currentDir;
     SortMode m_sortMode = SortName;
     ViewMode m_viewMode = Thumbnail;
-    int m_thumbSize = kDefaultThumbSize;  // M15: dynamic thumb size
+    int m_thumbSize = kDefaultThumbSize; // M15: dynamic thumb size
     QString m_filterText;
     bool m_filterRecursive = false;
     qint64 m_totalBytes = 0;
     bool m_pipelineWired = false;
 
     // P1: filter state for metadata search + star-rating filter.
-    QList<Entry> m_allEntries;                 // full listing; source for filtering
-    bool m_metaSearch = false;                 // search embedded metadata, not just names
-    int m_ratingFilter = 0;                    // show only images rated >= this (0 = all)
-    int m_labelFilter = 0;                     // show only images with this color label (0 = any)
-    bool m_rejectFilter = false;               // show only rejected images
-    bool m_pickFilter = false;                 // show only picked (favorite) images
-    bool m_recentFilter = false;               // show only recently-viewed images
-    QHash<QString, QString> m_metaIndex;       // path -> lowercase searchable string
+    QList<Entry> m_allEntries;           // full listing; source for filtering
+    bool m_metaSearch = false;           // search embedded metadata, not just names
+    int m_ratingFilter = 0;              // show only images rated >= this (0 = all)
+    int m_labelFilter = 0;               // show only images with this color label (0 = any)
+    bool m_rejectFilter = false;         // show only rejected images
+    bool m_pickFilter = false;           // show only picked (favorite) images
+    bool m_recentFilter = false;         // show only recently-viewed images
+    QHash<QString, QString> m_metaIndex; // path -> lowercase searchable string
 
-    void applyFilter();                        // (re)build the filtered model
-    void ensureMetaIndex();                    // lazily index metadata for m_allEntries
+    void applyFilter();     // (re)build the filtered model
+    void ensureMetaIndex(); // lazily index metadata for m_allEntries
 
     // P0-1 (perf): resolve pixel dimensions off the UI thread. setDirectory no
     // longer reads image headers eagerly (that blocked folder switching on large
@@ -231,11 +249,10 @@ class ThumbnailPanel::ThumbDelegate : public QStyledItemDelegate
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option,
                const QModelIndex &index) const override;
-    QSize sizeHint(const QStyleOptionViewItem &option,
-                   const QModelIndex &index) const override;
+    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
 
   private:
-    int thumbSize() const;  // reads m_panel->thumbSize()
+    int thumbSize() const; // reads m_panel->thumbSize()
     ThumbnailPanel *m_panel;
 };
 
@@ -251,8 +268,7 @@ class ThumbnailPanel::DetailsDelegate : public QStyledItemDelegate
 
     void paint(QPainter *painter, const QStyleOptionViewItem &option,
                const QModelIndex &index) const override;
-    QSize sizeHint(const QStyleOptionViewItem &option,
-                   const QModelIndex &index) const override;
+    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
 
   private:
     ThumbnailPanel *m_panel;

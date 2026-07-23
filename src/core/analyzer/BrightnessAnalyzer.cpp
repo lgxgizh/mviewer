@@ -66,8 +66,8 @@ bool BrightnessAnalyzer::analyzeRegion(const ImageFrame &frame,
 std::string BrightnessAnalyzer::resultText() const
 {
     char buf[128];
-    std::snprintf(buf, sizeof(buf), "Lum: avg=%.1f  min=%.0f  max=%.0f",
-                  m_result.avgLum, m_result.minLum, m_result.maxLum);
+    std::snprintf(buf, sizeof(buf), "Lum: avg=%.1f  min=%.0f  max=%.0f", m_result.avgLum,
+                  m_result.minLum, m_result.maxLum);
     return buf;
 }
 

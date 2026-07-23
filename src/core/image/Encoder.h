@@ -18,9 +18,15 @@ class Encoder
     {
         int quality;
         int pngCompression;
-        Params() : quality(90), pngCompression(6) {}
-        Params(int q) : quality(q), pngCompression(6) {}
-        Params(int q, int p) : quality(q), pngCompression(p) {}
+        Params() : quality(90), pngCompression(6)
+        {
+        }
+        Params(int q) : quality(q), pngCompression(6)
+        {
+        }
+        Params(int q, int p) : quality(q), pngCompression(p)
+        {
+        }
     };
 
     // 默认编码参数（clang-cl 需要具名默认实参；inline 定义避免跨 DLL 导出问题）

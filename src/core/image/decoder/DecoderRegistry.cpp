@@ -37,10 +37,10 @@ void DecoderRegistry::registerDecoder(std::shared_ptr<IDecoder> decoder)
 
 void DecoderRegistry::unregister(const std::string &id)
 {
-    m_decoders.erase(
-        std::remove_if(m_decoders.begin(), m_decoders.end(),
-                       [&](const std::shared_ptr<IDecoder> &d) { return d && d->name() == id; }),
-        m_decoders.end());
+    m_decoders.erase(std::remove_if(m_decoders.begin(), m_decoders.end(),
+                                    [&](const std::shared_ptr<IDecoder> &d)
+                                    { return d && d->name() == id; }),
+                     m_decoders.end());
 }
 
 std::shared_ptr<IDecoder> DecoderRegistry::get(const std::string &id) const

@@ -10,20 +10,20 @@ namespace mviewer::domain
 // Operations a batch job can apply to each image, in execution order.
 enum class BatchOp : uint8_t
 {
-    Analyze = 0,   // run selected analyzers, collect metrics
-    Resize,        // resize to fit max edge (keeps aspect ratio)
-    Watermark,     // draw text watermark
-    Rename,        // apply rename pattern to output filename
-    Export         // export to a different format
+    Analyze = 0, // run selected analyzers, collect metrics
+    Resize,      // resize to fit max edge (keeps aspect ratio)
+    Watermark,   // draw text watermark
+    Rename,      // apply rename pattern to output filename
+    Export       // export to a different format
 };
 
 // Result of processing a single file in a batch.
 struct BatchFileResult
 {
     std::string inputPath;
-    std::string outputPath;   // empty if not exported
+    std::string outputPath; // empty if not exported
     bool success = false;
-    std::string errorMessage; // empty on success
+    std::string errorMessage;                        // empty on success
     std::unordered_map<std::string, double> metrics; // analyzer metrics
     int width = 0;
     int height = 0;
@@ -51,9 +51,9 @@ struct BatchJobConfig
     std::string renamePattern; // e.g. "{name}_batched_{seq:3}"
 
     // --- Export params ---
-    std::string exportFormat;   // "png", "jpg", "bmp" — empty = skip export
-    int exportQuality = 90;     // JPEG quality 1-100
-    std::string outputDir;      // destination directory for exported files
+    std::string exportFormat; // "png", "jpg", "bmp" — empty = skip export
+    int exportQuality = 90;   // JPEG quality 1-100
+    std::string outputDir;    // destination directory for exported files
 
     // --- Analyze params ---
     std::vector<std::string> analyzerIds; // which analyzers to run

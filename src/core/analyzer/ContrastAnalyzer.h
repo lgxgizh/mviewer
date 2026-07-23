@@ -5,8 +5,14 @@
 class ContrastAnalyzer : public Analyzer
 {
   public:
-    std::string name() const override { return "contrast"; }
-    std::string description() const override { return "对比度 (RMS)"; }
+    std::string name() const override
+    {
+        return "contrast";
+    }
+    std::string description() const override
+    {
+        return "对比度 (RMS)";
+    }
     AnalyzerCapability capabilities() const override
     {
         return AnalyzerCapability::SingleImage | AnalyzerCapability::RegionOfInterest |
@@ -33,7 +39,10 @@ class ContrastAnalyzer : public Analyzer
         double mean = 0;
         bool ok = false;
     };
-    const Result &result() const { return m_result; }
+    const Result &result() const
+    {
+        return m_result;
+    }
 
   private:
     Result m_result;

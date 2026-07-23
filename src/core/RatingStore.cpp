@@ -10,15 +10,17 @@
 #include <fstream>
 #include <sstream>
 
-namespace mviewer::core {
-
-namespace {
-std::string getEnv(const char* name)
+namespace mviewer::core
 {
-    const char* v = std::getenv(name);
+
+namespace
+{
+std::string getEnv(const char *name)
+{
+    const char *v = std::getenv(name);
     return v ? std::string(v) : std::string();
 }
-}  // namespace
+} // namespace
 
 RatingStore::RatingStore()
 {
@@ -28,7 +30,7 @@ RatingStore::RatingStore()
     loadFlags();
 }
 
-RatingStore& RatingStore::instance()
+RatingStore &RatingStore::instance()
 {
     static RatingStore s;
     return s;
@@ -57,28 +59,28 @@ std::string RatingStore::flagsPath() const
     return d + "/flags.txt";
 }
 
-std::string RatingStore::normalize(const std::string& path) const
+std::string RatingStore::normalize(const std::string &path) const
 {
     std::string out = path;
-    for (char& c : out)
+    for (char &c : out)
         if (c == '\\')
             c = '/';
     return out;
 }
 
-int RatingStore::rating(const std::string& path) const
+int RatingStore::rating(const std::string &path) const
 {
     std::lock_guard<std::mutex> lk(m_mutex);
     auto it = m_ratings.find(normalize(path));
     return it == m_ratings.end() ? 0 : it->second;
 }
 
-bool RatingStore::hasRating(const std::string& path) const
+bool RatingStore::hasRating(const std::string &path) const
 {
     return rating(path) > 0;
 }
 
-void RatingStore::setRating(const std::string& path, int stars)
+void RatingStore::setRating(const std::string &path, int stars)
 {
     stars = std::clamp(stars, 0, 5);
     const std::string key = normalize(path);
@@ -92,24 +94,24 @@ void RatingStore::setRating(const std::string& path, int stars)
     save();
 }
 
-void RatingStore::clearRating(const std::string& path)
+void RatingStore::clearRating(const std::string &path)
 {
     setRating(path, 0);
 }
 
-int RatingStore::colorLabel(const std::string& path) const
+int RatingStore::colorLabel(const std::string &path) const
 {
     std::lock_guard<std::mutex> lk(m_mutex);
     auto it = m_colorLabels.find(normalize(path));
     return it == m_colorLabels.end() ? 0 : it->second;
 }
 
-bool RatingStore::hasColorLabel(const std::string& path) const
+bool RatingStore::hasColorLabel(const std::string &path) const
 {
     return colorLabel(path) > 0;
 }
 
-void RatingStore::setColorLabel(const std::string& path, int label)
+void RatingStore::setColorLabel(const std::string &path, int label)
 {
     label = std::clamp(label, 0, 6);
     const std::string key = normalize(path);
@@ -123,18 +125,18 @@ void RatingStore::setColorLabel(const std::string& path, int label)
     saveFlags();
 }
 
-void RatingStore::clearColorLabel(const std::string& path)
+void RatingStore::clearColorLabel(const std::string &path)
 {
     setColorLabel(path, 0);
 }
 
-bool RatingStore::rejected(const std::string& path) const
+bool RatingStore::rejected(const std::string &path) const
 {
     std::lock_guard<std::mutex> lk(m_mutex);
     return m_rejected.count(normalize(path)) > 0;
 }
 
-void RatingStore::setRejected(const std::string& path, bool v)
+void RatingStore::setRejected(const std::string &path, bool v)
 {
     const std::string key = normalize(path);
     {
@@ -147,13 +149,13 @@ void RatingStore::setRejected(const std::string& path, bool v)
     saveFlags();
 }
 
-bool RatingStore::picked(const std::string& path) const
+bool RatingStore::picked(const std::string &path) const
 {
     std::lock_guard<std::mutex> lk(m_mutex);
     return m_picked.count(normalize(path)) > 0;
 }
 
-void RatingStore::setPicked(const std::string& path, bool v)
+void RatingStore::setPicked(const std::string &path, bool v)
 {
     const std::string key = normalize(path);
     {
@@ -172,7 +174,7 @@ std::vector<std::string> RatingStore::recents() const
     return m_recents;
 }
 
-void RatingStore::addRecent(const std::string& path)
+void RatingStore::addRecent(const std::string &path)
 {
     const std::string key = normalize(path);
     {
@@ -193,7 +195,7 @@ std::vector<std::string> RatingStore::favorites() const
     return std::vector<std::string>(m_picked.begin(), m_picked.end());
 }
 
-void RatingStore::setFilePath(const std::string& path)
+void RatingStore::setFilePath(const std::string &path)
 {
     m_filePath = path;
     m_flagsPath = flagsPath();
@@ -212,14 +214,14 @@ void RatingStore::saveFlags() const
     std::ofstream out(m_flagsPath, std::ios::trunc);
     if (!out)
         return;
-    for (const auto& [p, n] : m_colorLabels)
+    for (const auto &[p, n] : m_colorLabels)
         if (n > 0)
             out << "L|" << p << '|' << n << '\n';
-    for (const auto& p : m_rejected)
+    for (const auto &p : m_rejected)
         out << "X|" << p << '\n';
-    for (const auto& p : m_picked)
+    for (const auto &p : m_picked)
         out << "K|" << p << '\n';
-    for (const auto& p : m_recents)
+    for (const auto &p : m_recents)
         out << "N|" << p << '\n';
 }
 
@@ -317,9 +319,9 @@ bool RatingStore::save() const
     std::ofstream out(m_filePath, std::ios::trunc);
     if (!out)
         return false;
-    for (const auto& [p, s] : m_ratings)
+    for (const auto &[p, s] : m_ratings)
         out << s << '|' << p << '\n';
     return true;
 }
 
-}  // namespace mviewer::core
+} // namespace mviewer::core

@@ -1,8 +1,8 @@
 // SearchEngine unit tests — verify index building, search, ranking, and
 // integration with MetadataReader + RawMetadata.
-#include "core/search/SearchEngine.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/RawMetadata.h"
+#include "core/search/SearchEngine.h"
 #include "domain/Image.h"
 #include "domain/SearchQuery.h"
 #include "domain/SearchResult.h"
@@ -309,7 +309,7 @@ int main(int argc, char *argv[])
         CHECK(a < b, "Higher score should sort before lower score");
     }
 
-    std::fprintf(stderr, "%s: %d failures\n",
-                 g_fail == 0 ? "All tests passed" : "Tests failed", g_fail);
+    std::fprintf(stderr, "%s: %d failures\n", g_fail == 0 ? "All tests passed" : "Tests failed",
+                 g_fail);
     return g_fail == 0 ? 0 : 1;
 }

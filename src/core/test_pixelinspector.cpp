@@ -1,19 +1,19 @@
 #include "core/analysis/PixelInspector.h"
 #include <cassert>
-#include <cstdio>
 #include <cmath>
+#include <cstdio>
 
 using namespace mviewer::core;
 
 static int g_failures = 0;
-#define CHECK(cond)                                                                       \
-    do                                                                                    \
-    {                                                                                     \
-        if (!(cond))                                                                      \
-        {                                                                                 \
-            std::printf("FAIL: %s @line %d\n", #cond, __LINE__);                          \
-            ++g_failures;                                                                 \
-        }                                                                                 \
+#define CHECK(cond)                                                                                \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(cond))                                                                               \
+        {                                                                                          \
+            std::printf("FAIL: %s @line %d\n", #cond, __LINE__);                                   \
+            ++g_failures;                                                                          \
+        }                                                                                          \
     } while (0)
 
 static void test_color_spaces()

@@ -27,19 +27,19 @@
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                                                                             \
-    do                                                                                               \
-    {                                                                                                \
-        if (cond)                                                                                    \
-        {                                                                                            \
-            printf("  PASS: %s\n", msg);                                                             \
-            g_pass++;                                                                                \
-        }                                                                                            \
-        else                                                                                         \
-        {                                                                                            \
-            printf("  FAIL: %s\n", msg);                                                             \
-            g_fail++;                                                                                \
-        }                                                                                            \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 namespace
@@ -49,8 +49,14 @@ class PipelineTestAnalyzer : public Analyzer
 {
   public:
     static constexpr char ID[] = "pipeline_test_analyzer";
-    std::string name() const override { return ID; }
-    std::string description() const override { return "M15 P0#3 pipeline test"; }
+    std::string name() const override
+    {
+        return ID;
+    }
+    std::string description() const override
+    {
+        return "M15 P0#3 pipeline test";
+    }
     bool analyze(const ImageFrame &) override
     {
         m_text = "ran:" + std::string(ID);
@@ -60,7 +66,10 @@ class PipelineTestAnalyzer : public Analyzer
     {
         return analyze(frame);
     }
-    std::string resultText() const override { return m_text; }
+    std::string resultText() const override
+    {
+        return m_text;
+    }
 
   private:
     std::string m_text;
@@ -77,9 +86,10 @@ int main(int argc, char **argv)
     // Register a NEW analyzer — the only change needed to extend analysis.
     AnalyzerRegistry::instance().registerAnalyzer(
         PipelineTestAnalyzer::ID,
-        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter> {
+        []() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
             return std::unique_ptr<Analyzer, AnalyzerDeleter>(new PipelineTestAnalyzer(),
-                                                             [](Analyzer *p) { delete p; });
+                                                              [](Analyzer *p) { delete p; });
         });
 
     AnalyzerPipeline pipeline;

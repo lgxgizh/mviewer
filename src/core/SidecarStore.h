@@ -5,13 +5,14 @@
 
 #include <string>
 
-namespace mviewer::core {
+namespace mviewer::core
+{
 
 class RatingStore;
 
 class SidecarStore
 {
-public:
+  public:
     static SidecarStore &instance();
 
     // Write sidecar for a single image path (reads data from RatingStore).
@@ -31,10 +32,10 @@ public:
     // Get the sidecar file path for an image.
     static std::string sidecarPath(const std::string &imagePath);
 
-private:
+  private:
     SidecarStore() = default;
     std::string toJson(const std::string &imagePath);
     bool fromJson(const std::string &json, const std::string &imagePath);
 };
 
-}  // namespace mviewer::core
+} // namespace mviewer::core

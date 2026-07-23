@@ -1,33 +1,33 @@
 #include "core/image/decoder/DecoderRegistry.h"
 #include "core/image/decoder/RawDecoder.h"
 
+#include <QBuffer>
 #include <QGuiApplication>
 #include <QImage>
-#include <QBuffer>
 #include <QImageWriter>
 #include <QTemporaryDir>
 
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <fstream>
 #include <string>
 #include <vector>
 
 static int g_pass = 0;
 static int g_fail = 0;
-#define CHECK(cond, msg)                                                                        \
-    do                                                                                          \
-    {                                                                                           \
-        if (cond)                                                                               \
-        {                                                                                       \
-            printf("  PASS: %s\n", msg);                                                        \
-            ++g_pass;                                                                           \
-        }                                                                                       \
-        else                                                                                   \
-        {                                                                                       \
-            printf("  FAIL: %s\n", msg);                                                        \
-            ++g_fail;                                                                           \
-        }                                                                                       \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            ++g_pass;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            ++g_fail;                                                                              \
+        }                                                                                          \
     } while (0)
 
 // Build a JPEG byte stream at the given size via Qt's encoder.
@@ -63,8 +63,7 @@ static std::vector<uint8_t> makeFakeRaw(const QByteArray &jpeg)
 static void writeFile(const std::string &path, const std::vector<uint8_t> &data)
 {
     std::ofstream f(path, std::ios::binary);
-    f.write(reinterpret_cast<const char *>(data.data()),
-            static_cast<std::streamsize>(data.size()));
+    f.write(reinterpret_cast<const char *>(data.data()), static_cast<std::streamsize>(data.size()));
 }
 
 int main(int argc, char **argv)

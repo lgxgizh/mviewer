@@ -6,12 +6,12 @@
 
 #include <QPainter>
 
-HistogramWidget::HistogramWidget(QWidget* parent) : QWidget(parent)
+HistogramWidget::HistogramWidget(QWidget *parent) : QWidget(parent)
 {
     setMinimumHeight(120);
 }
 
-void HistogramWidget::setHistograms(const std::vector<mviewer::core::Histogram>& hists)
+void HistogramWidget::setHistograms(const std::vector<mviewer::core::Histogram> &hists)
 {
     m_hists = hists;
     update();
@@ -23,7 +23,7 @@ void HistogramWidget::clear()
     update();
 }
 
-void HistogramWidget::paintEvent(QPaintEvent*)
+void HistogramWidget::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
     p.fillRect(rect(), Qt::black);
@@ -35,10 +35,10 @@ void HistogramWidget::paintEvent(QPaintEvent*)
 
     // Shared scale across every histogram so channels/images are comparable.
     long maxVal = 1;
-    for (const auto& hist : m_hists)
+    for (const auto &hist : m_hists)
         for (int c = 0; c < 3; ++c)
         {
-            const auto& ch = c == 0 ? hist.r : (c == 1 ? hist.g : hist.b);
+            const auto &ch = c == 0 ? hist.r : (c == 1 ? hist.g : hist.b);
             for (long v : ch)
                 if (v > maxVal)
                     maxVal = v;
@@ -51,11 +51,11 @@ void HistogramWidget::paintEvent(QPaintEvent*)
     // Channel colours: R, G, B. Overlay every image with low alpha fills.
     const QColor cols[3] = {QColor(255, 70, 70), QColor(70, 220, 90), QColor(80, 140, 255)};
 
-    for (const auto& hist : m_hists)
+    for (const auto &hist : m_hists)
     {
         for (int c = 0; c < 3; ++c)
         {
-            const auto& ch = c == 0 ? hist.r : (c == 1 ? hist.g : hist.b);
+            const auto &ch = c == 0 ? hist.r : (c == 1 ? hist.g : hist.b);
             QPolygonF poly;
             poly.append(QPointF(0, h));
             for (int i = 0; i < bins; ++i)

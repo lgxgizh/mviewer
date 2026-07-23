@@ -230,14 +230,15 @@ static void testNavigateWorkflow()
     pipe.setSources(paths);
 
     // Rapid ←/→ jumps across the directory (begin, middle, far end, back, wrap).
-    const std::vector<std::pair<size_t, size_t>> jumps = {
-        {0, 20}, {100, 120}, {500, 520}, {250, 270}, {0, 20}, {980, 999}};
+    const std::vector<std::pair<size_t, size_t>> jumps = {{0, 20},    {100, 120}, {500, 520},
+                                                          {250, 270}, {0, 20},    {980, 999}};
     for (auto [b, e] : jumps)
     {
         const auto t0 = std::chrono::steady_clock::now();
         pipe.setVisibleRange(b, e);
-        const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                              .count();
+        const double ms =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                .count();
         CHECK(ms < kNonBlockingBudgetMs, "setVisibleRange() returns immediately during navigation");
     }
 

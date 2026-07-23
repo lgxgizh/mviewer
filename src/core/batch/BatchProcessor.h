@@ -17,14 +17,17 @@ namespace mviewer::core
 // Header is Qt-free; the .cpp may use Qt (Decoder, ImageTransform, etc.).
 class BatchProcessor
 {
-public:
+  public:
     // Progress callback: (currentFileIndex, totalFiles, currentFilePath).
     using ProgressCallback = std::function<void(int, int, const std::string &)>;
 
     BatchProcessor() = default;
 
     // Set a progress callback (called before each file is processed).
-    void setProgressCallback(ProgressCallback cb) { m_progressCb = std::move(cb); }
+    void setProgressCallback(ProgressCallback cb)
+    {
+        m_progressCb = std::move(cb);
+    }
 
     // Execute the batch job synchronously. Returns aggregated results.
     // If cancelled (via requestCancel()), stops after the current file.
@@ -32,19 +35,25 @@ public:
 
     // Request cancellation (thread-safe). The current file finishes, then
     // the run stops.
-    void requestCancel() { m_cancelled.store(true); }
+    void requestCancel()
+    {
+        m_cancelled.store(true);
+    }
 
     // Check whether cancellation was requested.
-    bool isCancelled() const { return m_cancelled.load(); }
+    bool isCancelled() const
+    {
+        return m_cancelled.load();
+    }
 
-private:
+  private:
     ProgressCallback m_progressCb;
     std::atomic<bool> m_cancelled{false};
 
     // Process a single file through the configured operation pipeline.
     domain::BatchFileResult processFile(const domain::BatchJobConfig &config,
-                                         const std::string &inputPath,
-                                         int fileIndex, int totalFiles);
+                                        const std::string &inputPath, int fileIndex,
+                                        int totalFiles);
 };
 
 } // namespace mviewer::core

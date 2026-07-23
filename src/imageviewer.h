@@ -29,7 +29,10 @@ class ImageViewer : public QWidget
     // P1-7: serialize/restore the current view transform (scale + pan). Used to
     // restore the viewer's zoom level and pan position across sessions. Viewport
     // is domain-free (core/render), so it carries no Qt types.
-    Viewport viewTransform() const { return m_view; }
+    Viewport viewTransform() const
+    {
+        return m_view;
+    }
     void setViewTransform(const Viewport &v);
 
     // Returns the ImageFrame backing the current view (null if none loaded).

@@ -25,7 +25,10 @@ class BreadcrumbBar : public QWidget
     /// Set the current path. Parses the path into segments and rebuilds buttons.
     void setPath(const QString &path);
     /// Return the currently displayed path.
-    QString currentPath() const { return m_currentPath; }
+    QString currentPath() const
+    {
+        return m_currentPath;
+    }
 
   signals:
     /// Emitted when the user clicks a breadcrumb segment.
@@ -40,8 +43,8 @@ class BreadcrumbBar : public QWidget
     QHBoxLayout *m_layout = nullptr;
     QString m_currentPath;
     QStringList m_segments;
-    bool m_overflow = false;  // true when path is too long and the first segment is "..."
-    int m_maxVisible = 6;     // max segments before overflow kicks in
+    bool m_overflow = false; // true when path is too long and the first segment is "..."
+    int m_maxVisible = 6;    // max segments before overflow kicks in
 
     // Style constants
     static constexpr int kArrowSize = 12;

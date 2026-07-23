@@ -59,7 +59,8 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
     auto nameFn = reinterpret_cast<const char *(*)()>(GetProcAddress(handle, "pluginName"));
     auto destroyFn =
         reinterpret_cast<void (*)(Analyzer *)>(GetProcAddress(handle, "destroyAnalyzer"));
-    auto versionFn = reinterpret_cast<int (*)()>(GetProcAddress(handle, "mviewer_plugin_api_version"));
+    auto versionFn =
+        reinterpret_cast<int (*)()>(GetProcAddress(handle, "mviewer_plugin_api_version"));
 
     if (!createFn)
     {
@@ -78,11 +79,11 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
         const PluginABI *pabi = abiFn();
         if (!pluginABICompatible(hostPluginABI(), *pabi))
         {
-            result.error = "plugin ABI incompatible: host abi=" +
-                           std::to_string(hostPluginABI().abiVersion) +
-                           " api=" + std::to_string(hostPluginABI().apiVersion) +
-                           ", plugin abi=" + std::to_string(pabi->abiVersion) +
-                           " api=" + std::to_string(pabi->apiVersion);
+            result.error =
+                "plugin ABI incompatible: host abi=" + std::to_string(hostPluginABI().abiVersion) +
+                " api=" + std::to_string(hostPluginABI().apiVersion) +
+                ", plugin abi=" + std::to_string(pabi->abiVersion) +
+                " api=" + std::to_string(pabi->apiVersion);
             s_lastError = result.error;
             return result;
         }
@@ -124,11 +125,11 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
         const PluginABI *pabi = abiFn();
         if (!pluginABICompatible(hostPluginABI(), *pabi))
         {
-            result.error = "plugin ABI incompatible: host abi=" +
-                           std::to_string(hostPluginABI().abiVersion) +
-                           " api=" + std::to_string(hostPluginABI().apiVersion) +
-                           ", plugin abi=" + std::to_string(pabi->abiVersion) +
-                           " api=" + std::to_string(pabi->apiVersion);
+            result.error =
+                "plugin ABI incompatible: host abi=" + std::to_string(hostPluginABI().abiVersion) +
+                " api=" + std::to_string(hostPluginABI().apiVersion) +
+                ", plugin abi=" + std::to_string(pabi->abiVersion) +
+                " api=" + std::to_string(pabi->apiVersion);
             s_lastError = result.error;
             return result;
         }

@@ -9,8 +9,10 @@
 #include <sstream>
 #include <system_error>
 
-namespace mviewer::core {
-namespace {
+namespace mviewer::core
+{
+namespace
+{
 
 // Lightweight JSON string quoting.
 std::string qs(const std::string &v)
@@ -52,10 +54,18 @@ std::string extractStr(const std::string &json, const std::string &key)
             ++pos;
             switch (json[pos])
             {
-            case 'n': val += '\n'; break;
-            case 'r': val += '\r'; break;
-            case 't': val += '\t'; break;
-            default: val += json[pos]; break;
+            case 'n':
+                val += '\n';
+                break;
+            case 'r':
+                val += '\r';
+                break;
+            case 't':
+                val += '\t';
+                break;
+            default:
+                val += json[pos];
+                break;
             }
         }
         else
@@ -107,7 +117,7 @@ bool extractBool(const std::string &json, const std::string &key, bool fallback 
     return fallback;
 }
 
-}  // namespace
+} // namespace
 
 SidecarStore &SidecarStore::instance()
 {
@@ -131,11 +141,11 @@ std::string SidecarStore::toJson(const std::string &imagePath)
     auto &rs = RatingStore::instance();
     std::ostringstream os;
     os << "{\n";
-    os << "  \"file\": "       << qs(imagePath)        << ",\n";
-    os << "  \"rating\": "     << rs.rating(imagePath)  << ",\n";
+    os << "  \"file\": " << qs(imagePath) << ",\n";
+    os << "  \"rating\": " << rs.rating(imagePath) << ",\n";
     os << "  \"colorLabel\": " << rs.colorLabel(imagePath) << ",\n";
-    os << "  \"picked\": "     << (rs.picked(imagePath) ? "true" : "false") << ",\n";
-    os << "  \"rejected\": "   << (rs.rejected(imagePath) ? "true" : "false") << "\n";
+    os << "  \"picked\": " << (rs.picked(imagePath) ? "true" : "false") << ",\n";
+    os << "  \"rejected\": " << (rs.rejected(imagePath) ? "true" : "false") << "\n";
     os << "}\n";
     return os.str();
 }
@@ -167,8 +177,8 @@ bool SidecarStore::writeSidecar(const std::string &imagePath)
 {
     auto &rs = RatingStore::instance();
     // Only write sidecar if there's actual data to save.
-    if (rs.rating(imagePath) == 0 && rs.colorLabel(imagePath) == 0 &&
-        !rs.picked(imagePath) && !rs.rejected(imagePath))
+    if (rs.rating(imagePath) == 0 && rs.colorLabel(imagePath) == 0 && !rs.picked(imagePath) &&
+        !rs.rejected(imagePath))
     {
         return removeSidecar(imagePath);
     }
@@ -237,11 +247,9 @@ int SidecarStore::exportDirectory(const std::string &dirPath)
     std::error_code ec;
 
     // Walk directory for all image files with known extensions
-    const std::set<std::string> imgExts = {
-        ".png", ".jpg", ".jpeg", ".bmp", ".webp",
-        ".tiff", ".tif", ".gif", ".tga", ".ppm", ".pgm", ".exr", ".hdr",
-        ".dds", ".psd", ".svg"
-    };
+    const std::set<std::string> imgExts = {".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tiff",
+                                           ".tif", ".gif", ".tga",  ".ppm", ".pgm",  ".exr",
+                                           ".hdr", ".dds", ".psd",  ".svg"};
 
     for (const auto &entry : std::filesystem::directory_iterator(dirPath, ec))
     {
@@ -257,8 +265,8 @@ int SidecarStore::exportDirectory(const std::string &dirPath)
             continue;
 
         const std::string imgPath = entry.path().string();
-        if (rs.rating(imgPath) > 0 || rs.colorLabel(imgPath) > 0 ||
-            rs.picked(imgPath) || rs.rejected(imgPath))
+        if (rs.rating(imgPath) > 0 || rs.colorLabel(imgPath) > 0 || rs.picked(imgPath) ||
+            rs.rejected(imgPath))
         {
             if (writeSidecar(imgPath))
                 ++count;
@@ -267,4 +275,4 @@ int SidecarStore::exportDirectory(const std::string &dirPath)
     return count;
 }
 
-}  // namespace mviewer::core
+} // namespace mviewer::core

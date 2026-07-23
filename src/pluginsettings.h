@@ -11,17 +11,17 @@ class QSettings;
 class PluginSettings : public QDialog
 {
     Q_OBJECT
-public:
+  public:
     explicit PluginSettings(QWidget *parent = nullptr);
 
-private slots:
+  private slots:
     void refreshList();
     void onTogglePlugin();
     void onAddPluginPath();
     void onRemovePluginPath();
     void onBrowsePluginDir();
 
-private:
+  private:
     void setupUi();
     void loadSettings();
     void saveSettings();

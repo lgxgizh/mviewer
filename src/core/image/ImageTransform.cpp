@@ -3,15 +3,15 @@
 #include "core/image/Encoder.h"
 #include "core/image/QtConvert.h"
 
-#include <QImage>
-#include <QPainter>
+#include <QFile>
 #include <QFont>
 #include <QFontMetrics>
+#include <QImage>
+#include <QPainter>
 #include <QString>
-#include <QFile>
-#include <fstream>
 #include <algorithm>
 #include <cstdio>
+#include <fstream>
 
 namespace mviewer::core
 {
@@ -68,8 +68,8 @@ ImageData resizeByFactor(const ImageData &src, double factor)
     return mvcore::fromQImage(r);
 }
 
-ImageData addTextWatermark(const ImageData &src, const std::string &text,
-                           WatermarkPosition pos, double opacity01, int fontSizePx)
+ImageData addTextWatermark(const ImageData &src, const std::string &text, WatermarkPosition pos,
+                           double opacity01, int fontSizePx)
 {
     if (src.isNull())
         return ImageData();
@@ -293,14 +293,15 @@ bool writePdf(const std::string &path, const std::vector<ImageData> &images, int
             " 0 R >> >> /Contents " + std::to_string(contentNum) + " 0 R >>\n";
         writeObj(pageNum, pageDict, "");
 
-        const std::string content = "q " + std::to_string(pg.w) + " 0 0 " + std::to_string(pg.h) +
-                                    " 0 0 cm /Im0 Do Q\n";
+        const std::string content =
+            "q " + std::to_string(pg.w) + " 0 0 " + std::to_string(pg.h) + " 0 0 cm /Im0 Do Q\n";
         const std::string contentDict = "<< /Length " + std::to_string(content.size()) + " >>\n";
         writeObj(contentNum, contentDict, content);
 
         const std::string imgDict =
             "<< /Type /XObject /Subtype /Image /Width " + std::to_string(pg.w) + " /Height " +
-            std::to_string(pg.h) + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " +
+            std::to_string(pg.h) +
+            " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " +
             std::to_string(pg.jpg.size()) + " >>\n";
         writeObj(imageNum, imgDict, std::string(pg.jpg.begin(), pg.jpg.end()));
     }

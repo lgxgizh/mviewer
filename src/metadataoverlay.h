@@ -1,8 +1,8 @@
 #pragma once
 
-#include <QWidget>
 #include <QString>
 #include <QStringList>
+#include <QWidget>
 
 class QLabel;
 

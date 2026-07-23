@@ -5,20 +5,20 @@
 // the build/terminal session cannot reach the interactive display session.
 // Build target `mviewer_demo_render`.
 #include "mainwindow.h"
-#include "thumbnailpanel.h"
-#include "previewpanel.h"
 #include "metadatapanel.h"
+#include "previewpanel.h"
+#include "thumbnailpanel.h"
 
 #include <QApplication>
 #include <QDir>
 #include <QFileInfo>
-#include <QLineEdit>
 #include <QImage>
+#include <QLineEdit>
 #include <QPixmap>
 #include <QTimer>
 
-#include <cstdio>
 #include <chrono>
+#include <cstdio>
 #include <filesystem>
 #include <thread>
 
@@ -35,14 +35,14 @@ int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
     app.setAttribute(Qt::AA_UseSoftwareOpenGL, true);
-    printf("RENDER_START\n"); fflush(stdout);
+    printf("RENDER_START\n");
+    fflush(stdout);
 
     const std::filesystem::path assets = (argc > 1)
                                              ? std::filesystem::path(argv[1])
                                              : (std::filesystem::current_path() / "demo_assets");
-    const std::filesystem::path outdir = (argc > 2)
-                                             ? std::filesystem::path(argv[2])
-                                             : std::filesystem::current_path();
+    const std::filesystem::path outdir =
+        (argc > 2) ? std::filesystem::path(argv[2]) : std::filesystem::current_path();
 
     MainWindow w;
     w.setupUi();

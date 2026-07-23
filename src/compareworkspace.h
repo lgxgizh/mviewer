@@ -1,25 +1,25 @@
 #pragma once
 
+#include "core/analysis/AnalysisEngine.h"
 #include "core/compare/CompareEngine.h"
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
-#include "core/analysis/AnalysisEngine.h"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMap>
 #include <QMouseEvent>
-#include <QPushButton>
 #include <QPixmap>
 #include <QPointF>
+#include <QPushButton>
 #include <QScrollArea>
 #include <QSlider>
 #include <QSpinBox>
 #include <QStringList>
 #include <QTimer>
-#include <QComboBox>
 #include <QWidget>
 #include <memory>
 #include <vector>
@@ -86,7 +86,10 @@ class CompareWorkspace : public QWidget
 
     // M15 P0#1: number of images currently loaded into the comparison. Used by
     // the crash-recovery autosave to decide whether a Compare session is active.
-    int comparedImageCount() const { return m_engine.imageCount(); }
+    int comparedImageCount() const
+    {
+        return m_engine.imageCount();
+    }
 
   signals:
     void syncToggled(bool on);
@@ -135,8 +138,7 @@ class CompareWorkspace : public QWidget
     void stopBlink();
     bool isSplitOrSwipe() const
     {
-        return (m_splitChk && m_splitChk->isChecked()) ||
-               (m_swipeChk && m_swipeChk->isChecked());
+        return (m_splitChk && m_splitChk->isChecked()) || (m_swipeChk && m_swipeChk->isChecked());
     }
 
     // P0-4: split / swipe compare (only meaningful for exactly two images).
@@ -167,16 +169,19 @@ class CompareWorkspace : public QWidget
     void refreshHistograms();
 
     // M16.1: cursor-sync crosshair (n/n) + focus-lock / reference pin (n/1).
-    QCheckBox *m_crosshairChk = nullptr;   // 同步准星开关
-    QPushButton *m_focusBtn = nullptr;      // 锁定/解除基准
-    QLabel *m_focusLabel = nullptr;         // 显示当前基准格
-    int m_focusIndex = -1;                  // 锁定的基准格索引 (-1 = 未锁定)
-    int m_hoverIdx = -1;                     // 当前光标所在格 (用于锁定基准)
-    int m_lastInspectX = -1;                 // 最近检视位置 (焦点切换时重刷)
+    QCheckBox *m_crosshairChk = nullptr; // 同步准星开关
+    QPushButton *m_focusBtn = nullptr;   // 锁定/解除基准
+    QLabel *m_focusLabel = nullptr;      // 显示当前基准格
+    int m_focusIndex = -1;               // 锁定的基准格索引 (-1 = 未锁定)
+    int m_hoverIdx = -1;                 // 当前光标所在格 (用于锁定基准)
+    int m_lastInspectX = -1;             // 最近检视位置 (焦点切换时重刷)
     int m_lastInspectY = -1;
     void onCrosshairMoved(RawImageView *view, const QPointF &pos);
     void onFocusRequested(int cellIndex);
-    int diffBaseIndex() const { return m_focusIndex >= 0 ? m_focusIndex : 0; }
+    int diffBaseIndex() const
+    {
+        return m_focusIndex >= 0 ? m_focusIndex : 0;
+    }
 
     // Paints the most recent async diff result (from the EventBus) onto the
     // matching cell. Called on the UI thread via QueuedConnection.
@@ -190,29 +195,29 @@ class CompareWorkspace : public QWidget
     // ── M16.2: per-cell image adjustments ──
     struct CellAdjust
     {
-        int brightness = 0;     // [-255, 255]
-        float contrast = 1.0f;  // [0, 3.0]
-        float gamma = 1.0f;     // [0.05, 8.0]
-        float rGain = 1.0f;     // WB red gain [0.01, 5.0]
-        float bGain = 1.0f;     // WB blue gain [0.01, 5.0]
-        int rotation = 0;       // 0, 90, 180, 270
+        int brightness = 0;    // [-255, 255]
+        float contrast = 1.0f; // [0, 3.0]
+        float gamma = 1.0f;    // [0.05, 8.0]
+        float rGain = 1.0f;    // WB red gain [0.01, 5.0]
+        float bGain = 1.0f;    // WB blue gain [0.01, 5.0]
+        int rotation = 0;      // 0, 90, 180, 270
         bool hasCrop = false;
         int cropX = 0, cropY = 0, cropW = 0, cropH = 0;
 
-        bool isIdentity() const {
+        bool isIdentity() const
+        {
             return brightness == 0 && std::abs(contrast - 1.0f) < 1e-6f &&
-                   std::abs(gamma - 1.0f) < 1e-6f &&
-                   std::abs(rGain - 1.0f) < 1e-6f &&
+                   std::abs(gamma - 1.0f) < 1e-6f && std::abs(rGain - 1.0f) < 1e-6f &&
                    std::abs(bGain - 1.0f) < 1e-6f && rotation == 0 && !hasCrop;
         }
     };
-    std::vector<CellAdjust> m_cellAdjusts;              // per-cell adjustment state
-    int m_editIdx = -1;                                  // currently selected cell for editing
+    std::vector<CellAdjust> m_cellAdjusts; // per-cell adjustment state
+    int m_editIdx = -1;                    // currently selected cell for editing
     ImageData applyAdjusts(const ImageData &src, const CellAdjust &a);
 
     // Edit panel widgets (inside side panel)
     QWidget *m_editPanel = nullptr;
-    QLabel *m_editLabel = nullptr;                       // shows which cell is being edited
+    QLabel *m_editLabel = nullptr; // shows which cell is being edited
     QSlider *m_brightSlider = nullptr;
     QLabel *m_brightVal = nullptr;
     QSlider *m_contrastSlider = nullptr;

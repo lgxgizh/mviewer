@@ -29,8 +29,8 @@ ImageData resizeByFactor(const ImageData &src, double factor);
 
 // Draw a text watermark. An empty `text` returns a copy unchanged.
 // `opacity01` is clamped to [0, 1]. `fontSizePx` is the font pixel size.
-ImageData addTextWatermark(const ImageData &src, const std::string &text,
-                           WatermarkPosition pos, double opacity01, int fontSizePx);
+ImageData addTextWatermark(const ImageData &src, const std::string &text, WatermarkPosition pos,
+                           double opacity01, int fontSizePx);
 
 // Compose a contact sheet: `cols` columns, each thumbnail `thumb` px on its
 // long edge, images laid out row by row. Returns an empty image if `imgs` is empty.

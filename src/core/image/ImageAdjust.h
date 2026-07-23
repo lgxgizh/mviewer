@@ -71,7 +71,8 @@ inline ImageData adjustContrast(const ImageData &src, float factor)
             for (int c = 0; c < ch; ++c)
             {
                 float val = (static_cast<float>(s[x * cpp + c]) - 128.0f) * f + 128.0f;
-                t[x * cpp + c] = static_cast<uint8_t>(std::clamp(static_cast<int>(std::lroundf(val)), 0, 255));
+                t[x * cpp + c] =
+                    static_cast<uint8_t>(std::clamp(static_cast<int>(std::lroundf(val)), 0, 255));
             }
             if (cpp == 4)
                 t[x * cpp + 3] = s[x * cpp + 3];
@@ -109,8 +110,7 @@ inline ImageData adjustGamma(const ImageData &src, float gamma)
             {
                 float norm = static_cast<float>(s[x * cpp + c]) / 255.0f;
                 float corrected = std::pow(norm, invGamma);
-                t[x * cpp + c] = static_cast<uint8_t>(
-                    std::lroundf(corrected * 255.0f));
+                t[x * cpp + c] = static_cast<uint8_t>(std::lroundf(corrected * 255.0f));
             }
             if (cpp == 4)
                 t[x * cpp + 3] = s[x * cpp + 3];

@@ -15,7 +15,7 @@
 
 class ExportManager
 {
-public:
+  public:
     // Preset — serializable export configuration.
     struct Preset
     {
@@ -23,10 +23,10 @@ public:
         std::string outDir;
         std::string format = "jpeg";
         int quality = 90;
-        std::string resizeMode;   // "none", "fit", "scale"
+        std::string resizeMode; // "none", "fit", "scale"
         int resizeValue = 1920;
         std::string watermarkText;
-        int watermarkPos = 0;     // 0=tl,1=tr,2=bl,3=br,4=center,5=tile
+        int watermarkPos = 0; // 0=tl,1=tr,2=bl,3=br,4=center,5=tile
         int watermarkOpacity = 40;
         std::string renamePattern = "{name}_{seq:3}";
         int cols = 4;
@@ -55,7 +55,7 @@ public:
     static std::string defaultPresetDir();
     static std::string presetPath(const std::string &name);
 
-private:
+  private:
     ExportManager() = default;
     std::vector<Preset> m_presets;
 };

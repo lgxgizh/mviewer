@@ -12,7 +12,8 @@
 
 #include "core/image/ImageBuffer.h"
 
-namespace mviewer::core {
+namespace mviewer::core
+{
 
 // Per-channel 256-bin luminance/colour histogram of a decoded image.
 struct Histogram
@@ -25,7 +26,7 @@ struct Histogram
 // Compute an RGB histogram over every pixel of @p img.
 // Handles RGB24 / BGR24 / RGBA32 / BGRA32 / Grayscale8 layouts.
 // Returns an empty histogram (all zeros) when @p img is null.
-inline Histogram computeHistogram(const ImageData& img, int bins = 256)
+inline Histogram computeHistogram(const ImageData &img, int bins = 256)
 {
     Histogram h;
     h.bins = std::max(1, bins);
@@ -41,17 +42,17 @@ inline Histogram computeHistogram(const ImageData& img, int bins = 256)
     const int ht = v.height;
     const int cpp = v.channelsPerPixel();
     const long stride = static_cast<long>(v.stride());
-    const uint8_t* data = v.data;
+    const uint8_t *data = v.data;
 
     const bool gray = (v.format == PixelFormat::Grayscale8);
     const bool bgr = (v.format == PixelFormat::BGR24 || v.format == PixelFormat::BGRA32);
 
     for (int y = 0; y < ht; ++y)
     {
-        const uint8_t* row = data + static_cast<ptrdiff_t>(y) * stride;
+        const uint8_t *row = data + static_cast<ptrdiff_t>(y) * stride;
         for (int x = 0; x < w; ++x)
         {
-            const uint8_t* p = row + static_cast<ptrdiff_t>(x) * cpp;
+            const uint8_t *p = row + static_cast<ptrdiff_t>(x) * cpp;
             int R, G, B;
             if (gray)
             {
@@ -78,4 +79,4 @@ inline Histogram computeHistogram(const ImageData& img, int bins = 256)
     return h;
 }
 
-}  // namespace mviewer::core
+} // namespace mviewer::core

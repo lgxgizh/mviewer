@@ -26,13 +26,19 @@ class ExportDialog : public QDialog
     explicit ExportDialog(const QStringList &sources, QWidget *parent = nullptr);
 
     // Legacy single-file export (used by the export command).
-    void setPath(const QString &path) { m_path = path; }
+    void setPath(const QString &path)
+    {
+        m_path = path;
+    }
     // Legacy batch output directory. When set (and no explicit sources are
     // provided) the dialog converts the images found in this directory.
     void setOutputDir(const QString &dir);
 
     // New: explicit list of source files to export (from the gallery selection).
-    void setSources(const QStringList &paths) { m_sources = paths; }
+    void setSources(const QStringList &paths)
+    {
+        m_sources = paths;
+    }
 
   private slots:
     void onBrowse();

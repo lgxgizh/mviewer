@@ -6,8 +6,14 @@
 class ExposureAnalyzer : public Analyzer
 {
   public:
-    std::string name() const override { return "exposure"; }
-    std::string description() const override { return "曝光检测 (过曝/欠曝)"; }
+    std::string name() const override
+    {
+        return "exposure";
+    }
+    std::string description() const override
+    {
+        return "曝光检测 (过曝/欠曝)";
+    }
     AnalyzerCapability capabilities() const override
     {
         return AnalyzerCapability::SingleImage | AnalyzerCapability::RegionOfInterest |
@@ -35,7 +41,10 @@ class ExposureAnalyzer : public Analyzer
         double avgLum = 0;
         bool ok = false;
     };
-    const Result &result() const { return m_result; }
+    const Result &result() const
+    {
+        return m_result;
+    }
 
   private:
     Result m_result;

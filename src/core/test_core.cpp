@@ -18,8 +18,8 @@ int main(int argc, char **argv)
     // Use a relative path to testdata/golden so this works on any machine and
     // in CI.  For ad-hoc runs from the build directory pass the image path as
     // the first argument.
-    const std::string p = (argc > 1) ? std::string(argv[1])
-        : std::string("../testdata/golden/pixnio-6000x4000.jpg");
+    const std::string p =
+        (argc > 1) ? std::string(argv[1]) : std::string("../testdata/golden/pixnio-6000x4000.jpg");
 
     // 1) Decoder 按缩略图尺寸解码
     ImageData thumb = Decoder::decodeScaled(p, 140);

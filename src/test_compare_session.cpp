@@ -60,8 +60,8 @@ int main(int argc, char **argv)
     // ---- 1) Engine-level ROI capture (the previously-broken path). ----
     assert(s.selection.w > 0 && s.selection.h > 0 &&
            "CompareEngine::session() must capture the ROI/selection");
-    assert(s.selection.x == 1 && s.selection.y == 2 && s.selection.w == 4 &&
-           s.selection.h == 3 && "captured ROI must match applied selection");
+    assert(s.selection.x == 1 && s.selection.y == 2 && s.selection.w == 4 && s.selection.h == 3 &&
+           "captured ROI must match applied selection");
     std::cout << "[ok] CompareEngine::session() captures ROI (" << s.selection.x << ","
               << s.selection.y << "," << s.selection.w << "," << s.selection.h << ")\n";
 
@@ -84,8 +84,7 @@ int main(int argc, char **argv)
     consumer.applySession(*r);
 
     mviewer::domain::CompareSession after = consumer.compareSession();
-    assert(after.selection.w == 4 && after.selection.h == 3 &&
-           "applied session must restore ROI");
+    assert(after.selection.w == 4 && after.selection.h == 3 && "applied session must restore ROI");
     assert(after.threshold == 120 && "applied session must restore threshold");
     assert(after.layoutIndex == 2 && "applied session must restore layout");
     assert(after.sidePanelVisible == true && "applied session must restore side panel");

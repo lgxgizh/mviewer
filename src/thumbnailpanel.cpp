@@ -1,7 +1,7 @@
 #include "thumbnailpanel.h"
 
-#include "core/analyzer/Analyzer.h"
 #include "core/RatingStore.h"
+#include "core/analyzer/Analyzer.h"
 #include "core/image/Decoder.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
@@ -11,12 +11,13 @@
 #include "domain/Image.h"
 #include "thumbnailcache.h"
 
+#include <QPointer>
 #include <algorithm>
 #include <limits>
-#include <QPointer>
 #include <unordered_map>
 
 #include <QAbstractItemView>
+#include <QAction>
 #include <QClipboard>
 #include <QContextMenuEvent>
 #include <QDebug>
@@ -31,17 +32,16 @@
 #include <QLabel>
 #include <QMenu>
 #include <QMimeData>
-#include <QAction>
+#include <QPaintEvent>
 #include <QPainter>
 #include <QProcess>
 #include <QPushButton>
 #include <QResizeEvent>
-#include <QStandardPaths>
 #include <QScrollBar>
 #include <QShowEvent>
+#include <QStandardPaths>
 #include <QStringListModel>
 #include <QTimer>
-#include <QPaintEvent>
 #include <QWidget>
 
 #include <thread>
@@ -50,8 +50,7 @@ namespace
 {
 bool isImageSuffix(const QString &suffix)
 {
-    static const QStringList exts = {"bmp", "gif",  "jpg", "jpeg", "png",
-                                     "tif", "tiff", "webp"};
+    static const QStringList exts = {"bmp", "gif", "jpg", "jpeg", "png", "tif", "tiff", "webp"};
     return exts.contains(suffix);
 }
 
@@ -74,10 +73,9 @@ struct DetailLayout
 DetailLayout detailLayout(const QRect &row)
 {
     const QRect r = row.adjusted(4, 0, -4, 0);
-    const int thumbColW = 60, resW = 120, sizeW = 100, dateW = 160, fmtW = 80,
-              rateW = 90, labelW = 90, gap = 12;
-    const int fixed =
-        thumbColW + resW + sizeW + dateW + fmtW + rateW + labelW + gap * 6;
+    const int thumbColW = 60, resW = 120, sizeW = 100, dateW = 160, fmtW = 80, rateW = 90,
+              labelW = 90, gap = 12;
+    const int fixed = thumbColW + resW + sizeW + dateW + fmtW + rateW + labelW + gap * 6;
     const int nameW = qMax(140, r.width() - fixed);
     DetailLayout L;
     int x = r.x();
@@ -178,10 +176,16 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     // and refresh the metadata panel) from the view's built-in index signals.
     connect(this, &QAbstractItemView::clicked, this,
             [this](const QModelIndex &idx)
-            { if (idx.isValid()) emit itemClicked(m_paths.value(idx.row())); });
+            {
+                if (idx.isValid())
+                    emit itemClicked(m_paths.value(idx.row()));
+            });
     connect(this, &QAbstractItemView::doubleClicked, this,
             [this](const QModelIndex &idx)
-            { if (idx.isValid()) emit itemDoubleClicked(m_paths.value(idx.row())); });
+            {
+                if (idx.isValid())
+                    emit itemDoubleClicked(m_paths.value(idx.row()));
+            });
 
     // Wire the shared pipeline ONCE. The decode step is disk-cache-aware (so a
     // previously visited folder loads instantly without re-decoding), and the
@@ -214,11 +218,10 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                 const int s = m_thumbSize;
                 QPixmap pm(s, s);
                 pm.fill(Qt::transparent);
-                QPixmap scaled = QPixmap::fromImage(q).scaled(
-                    s, s, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+                QPixmap scaled = QPixmap::fromImage(q).scaled(s, s, Qt::KeepAspectRatio,
+                                                              Qt::SmoothTransformation);
                 QPainter painter(&pm);
-                painter.drawPixmap((s - scaled.width()) / 2, (s - scaled.height()) / 2,
-                                   scaled);
+                painter.drawPixmap((s - scaled.width()) / 2, (s - scaled.height()) / 2, scaled);
                 painter.end();
                 QString qp = QString::fromStdString(p);
                 {
@@ -239,10 +242,9 @@ ThumbnailPanel::~ThumbnailPanel()
         *m_alive = false;
     // Detach from the shared pipeline so its worker thread can't call back into
     // a destroyed panel (and restore the default decode for the next panel).
-    ThumbnailPipeline::instance().setResultFn(
-        [](const std::string &, const ImageData &) {});
-    ThumbnailPipeline::instance().setDecodeFn(
-        [](const std::string &p, int size) { return Decoder::decodeScaled(p, size); });
+    ThumbnailPipeline::instance().setResultFn([](const std::string &, const ImageData &) {});
+    ThumbnailPipeline::instance().setDecodeFn([](const std::string &p, int size)
+                                              { return Decoder::decodeScaled(p, size); });
 }
 
 void ThumbnailPanel::setDirectory(const QString &path)
@@ -268,8 +270,8 @@ void ThumbnailPanel::setDirectory(const QString &path)
             // 10k-image folder this blocked the UI thread for seconds on every
             // folder switch. Dimensions are only needed by the Details view, so
             // they are resolved lazily in the background (see ensureDimensions).
-            entries.append({fi.absoluteFilePath(), fi.fileName(), fi.size(),
-                            0, 0, fi.lastModified()});
+            entries.append(
+                {fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()});
         }
     }
     m_allEntries = entries;
@@ -547,11 +549,9 @@ void ThumbnailPanel::ensureMetaIndex()
     {
         const mviewer::domain::ImageMetadata meta =
             mviewer::core::MetadataReader::read(e.path.toStdString());
-        const mviewer::core::RawMetadata rm =
-            mviewer::core::parseRawMetadata(e.path.toStdString());
+        const mviewer::core::RawMetadata rm = mviewer::core::parseRawMetadata(e.path.toStdString());
         QStringList parts;
-        parts << QString::fromStdString(meta.fileName)
-              << QString::fromStdString(meta.filePath)
+        parts << QString::fromStdString(meta.fileName) << QString::fromStdString(meta.filePath)
               << QString::fromStdString(meta.format);
         for (const auto &[k, v] : meta.textKeys)
         {
@@ -576,8 +576,7 @@ void ThumbnailPanel::applyFilter()
     // Optional recursive subfolder scan (filename search only).
     if (m_filterRecursive && !t.isEmpty() && !m_metaSearch && !m_currentDir.isEmpty())
     {
-        QDirIterator it(m_currentDir,
-                        QDir::Files | QDir::Readable | QDir::NoDotAndDotDot,
+        QDirIterator it(m_currentDir, QDir::Files | QDir::Readable | QDir::NoDotAndDotDot,
                         QDirIterator::Subdirectories);
         while (it.hasNext())
         {
@@ -588,8 +587,7 @@ void ThumbnailPanel::applyFilter()
             if (!fi.fileName().toLower().contains(t))
                 continue;
             const QString sub = QDir(m_currentDir).relativeFilePath(fi.absolutePath());
-            src.append(
-                {fi.absoluteFilePath(), fi.fileName() + " [" + sub + "]", fi.size()});
+            src.append({fi.absoluteFilePath(), fi.fileName() + " [" + sub + "]", fi.size()});
         }
     }
 
@@ -597,8 +595,7 @@ void ThumbnailPanel::applyFilter()
     for (const Entry &e : src)
     {
         if (m_ratingFilter > 0 &&
-            mviewer::core::RatingStore::instance().rating(e.path.toStdString()) <
-                m_ratingFilter)
+            mviewer::core::RatingStore::instance().rating(e.path.toStdString()) < m_ratingFilter)
             continue;
         const std::string ep = e.path.toStdString();
         auto &rs = mviewer::core::RatingStore::instance();
@@ -612,7 +609,11 @@ void ThumbnailPanel::applyFilter()
         {
             bool inRecents = false;
             for (const auto &r : rs.recents())
-                if (r == ep) { inRecents = true; break; }
+                if (r == ep)
+                {
+                    inRecents = true;
+                    break;
+                }
             if (!inRecents)
                 continue;
         }
@@ -674,8 +675,7 @@ void ThumbnailPanel::updateVisibleRange()
         return;
 
     const QModelIndex firstIdx = indexAt(QPoint(2, 2));
-    const QModelIndex lastIdx =
-        indexAt(QPoint(viewport()->width() - 2, viewport()->height() - 2));
+    const QModelIndex lastIdx = indexAt(QPoint(viewport()->width() - 2, viewport()->height() - 2));
     int first = firstIdx.isValid() ? firstIdx.row() : 0;
     int last = lastIdx.isValid() ? lastIdx.row() : n - 1;
     if (last < first)
@@ -696,9 +696,11 @@ void ThumbnailPanel::updateVisibleRange()
                 m_thumbReady.insert(p, pm);
                 QPointer<ThumbnailPanel> guard(this);
                 QMetaObject::invokeMethod(
-                    this, [guard, p]()
+                    this,
+                    [guard, p]()
                     {
-                        if (!guard) return;
+                        if (!guard)
+                            return;
                         guard->onThumbReady(p);
                     },
                     Qt::QueuedConnection);
@@ -781,8 +783,8 @@ void ThumbnailPanel::renameSelected()
     const QString oldPath = paths.first();
     const QFileInfo fi(oldPath);
     bool ok = false;
-    const QString newName = QInputDialog::getText(this, "重命名", "新文件名:",
-                                                  QLineEdit::Normal, fi.fileName(), &ok);
+    const QString newName =
+        QInputDialog::getText(this, "重命名", "新文件名:", QLineEdit::Normal, fi.fileName(), &ok);
     if (!ok || newName.isEmpty())
         return;
     const QString newPath = fi.absolutePath() + "/" + newName;
@@ -797,8 +799,7 @@ void ThumbnailPanel::moveToTrashSelected()
         return;
     // Qt6 removed QStandardPaths::TrashLocation; emulate a per-user trash dir.
     const QString trashDir =
-        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) +
-        "/mviewer/trash";
+        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/mviewer/trash";
     QDir().mkpath(trashDir);
     for (const QString &p : paths)
     {
@@ -854,8 +855,8 @@ void ThumbnailPanel::batchAnalyzeExport()
     const QStringList paths = selectedPaths();
     if (paths.isEmpty())
         return;
-    const QString out = QFileDialog::getSaveFileName(this, "导出分析结果", "",
-                                                     "CSV (*.csv);;JSON (*.json)");
+    const QString out =
+        QFileDialog::getSaveFileName(this, "导出分析结果", "", "CSV (*.csv);;JSON (*.json)");
     if (out.isEmpty())
         return;
 
@@ -947,8 +948,7 @@ void ThumbnailPanel::positionDetailsHeader()
     if (!m_detailsHeader || m_viewMode != Details)
         return;
     const QRect vp = viewport()->geometry();
-    m_detailsHeader->setGeometry(vp.x(), vp.y() - kDetailsHeaderH, vp.width(),
-                                 kDetailsHeaderH);
+    m_detailsHeader->setGeometry(vp.x(), vp.y() - kDetailsHeaderH, vp.width(), kDetailsHeaderH);
     m_detailsHeader->raise();
 }
 
@@ -970,7 +970,7 @@ void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
         if (idx.isValid())
         {
             selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect |
-                                         QItemSelectionModel::Rows);
+                                              QItemSelectionModel::Rows);
             event->accept();
             return;
         }
@@ -1002,19 +1002,16 @@ QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode)
     switch (mode)
     {
     case SortName:
-        std::sort(out.begin(), out.end(),
-                  [](const QFileInfo &a, const QFileInfo &b)
+        std::sort(out.begin(), out.end(), [](const QFileInfo &a, const QFileInfo &b)
                   { return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0; });
         break;
     case SortDate:
-        std::sort(out.begin(), out.end(),
-                  [](const QFileInfo &a, const QFileInfo &b)
+        std::sort(out.begin(), out.end(), [](const QFileInfo &a, const QFileInfo &b)
                   { return a.lastModified() > b.lastModified(); });
         break;
     case SortSize:
         std::sort(out.begin(), out.end(),
-                  [](const QFileInfo &a, const QFileInfo &b)
-                  { return a.size() > b.size(); });
+                  [](const QFileInfo &a, const QFileInfo &b) { return a.size() > b.size(); });
         break;
     case SortResolution:
         std::sort(out.begin(), out.end(),
@@ -1035,8 +1032,7 @@ QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode)
 
 // ---- ThumbDelegate ----------------------------------------------------------
 
-void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter,
-                                          const QStyleOptionViewItem &option,
+void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
                                           const QModelIndex &index) const
 {
     const QStringList &paths = m_panel->pathList();
@@ -1053,13 +1049,13 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter,
         painter->fillRect(option.rect, option.palette.color(QPalette::Base));
 
     const int s = thumbSize();
-    const QRect thumbRect(option.rect.x() + (option.rect.width() - s) / 2,
-                          option.rect.y() + 6, s, s);
+    const QRect thumbRect(option.rect.x() + (option.rect.width() - s) / 2, option.rect.y() + 6, s,
+                          s);
     const QPixmap pm = m_panel->thumbReady(path);
     if (!pm.isNull())
     {
-        const QPixmap scaled = pm.scaled(thumbRect.size(), Qt::KeepAspectRatio,
-                                         Qt::SmoothTransformation);
+        const QPixmap scaled =
+            pm.scaled(thumbRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
         painter->drawPixmap(thumbRect.x() + (thumbRect.width() - scaled.width()) / 2,
                             thumbRect.y() + (thumbRect.height() - scaled.height()) / 2, scaled);
     }
@@ -1076,8 +1072,7 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter,
     painter->drawText(textRect, Qt::AlignHCenter | Qt::AlignTop | Qt::ElideRight, name);
 
     // P1: rating stars overlay (top-left corner).
-    const int stars =
-        mviewer::core::RatingStore::instance().rating(path.toStdString());
+    const int stars = mviewer::core::RatingStore::instance().rating(path.toStdString());
     if (stars > 0)
     {
         QFont sf = painter->font();
@@ -1097,9 +1092,13 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter,
     const int label = rs.colorLabel(ep);
     if (label > 0)
     {
-        static const QColor kColors[7] = {
-            QColor(), QColor(229, 57, 53), QColor(251, 140, 0), QColor(249, 215, 41),
-            QColor(67, 160, 71), QColor(30, 136, 229), QColor(142, 36, 170)};
+        static const QColor kColors[7] = {QColor(),
+                                          QColor(229, 57, 53),
+                                          QColor(251, 140, 0),
+                                          QColor(249, 215, 41),
+                                          QColor(67, 160, 71),
+                                          QColor(30, 136, 229),
+                                          QColor(142, 36, 170)};
         painter->fillRect(option.rect.x(), option.rect.y(), 4, option.rect.height(),
                           kColors[label]);
     }
@@ -1119,13 +1118,12 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter,
         pf.setPixelSize(15);
         painter->setFont(pf);
         painter->setPen(QColor(255, 215, 0));
-        painter->drawText(option.rect.x() + option.rect.width() - 18,
-                          option.rect.y() + 16, "⚑");
+        painter->drawText(option.rect.x() + option.rect.width() - 18, option.rect.y() + 16, "⚑");
     }
 }
 
 QSize ThumbnailPanel::ThumbDelegate::sizeHint(const QStyleOptionViewItem &,
-                                             const QModelIndex &) const
+                                              const QModelIndex &) const
 {
     return QSize(thumbSize() + 16, thumbSize() + 34);
 }
@@ -1148,8 +1146,7 @@ static QString formatFileSize(qint64 bytes)
     return QString::number(bytes / (1024.0 * 1024.0 * 1024.0), 'f', 2) + " GB";
 }
 
-void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
-                                            const QStyleOptionViewItem &option,
+void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
                                             const QModelIndex &index) const
 {
     // QStyledItemDelegate may call paint() with an invalid index (e.g. empty
@@ -1187,8 +1184,8 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
     QPixmap pm = m_panel->thumbReady(path);
     if (!pm.isNull())
     {
-        const QPixmap scaled = pm.scaled(thumbR.size(), Qt::KeepAspectRatio,
-                                         Qt::SmoothTransformation);
+        const QPixmap scaled =
+            pm.scaled(thumbR.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
         painter->drawPixmap(thumbR.x() + (48 - scaled.width()) / 2,
                             thumbR.y() + (48 - scaled.height()) / 2, scaled);
     }
@@ -1197,9 +1194,8 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
         painter->fillRect(thumbR, QColor(228, 228, 228));
     }
 
-    const QColor textColor =
-        sel ? option.palette.color(QPalette::HighlightedText)
-            : option.palette.color(QPalette::Text);
+    const QColor textColor = sel ? option.palette.color(QPalette::HighlightedText)
+                                 : option.palette.color(QPalette::Text);
     painter->setPen(textColor);
 
     QFont nameFont = painter->font();
@@ -1222,16 +1218,14 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
     painter->drawText(L.res, Qt::AlignVCenter | Qt::TextSingleLine, resStr);
 
     // Column 4: file size
-    painter->drawText(L.size, Qt::AlignVCenter | Qt::TextSingleLine,
-                      formatFileSize(fi.size()));
+    painter->drawText(L.size, Qt::AlignVCenter | Qt::TextSingleLine, formatFileSize(fi.size()));
 
     // Column 5: modified date
     painter->drawText(L.date, Qt::AlignVCenter | Qt::TextSingleLine,
                       fi.lastModified().toString("yyyy-MM-dd hh:mm:ss"));
 
     // Column 6: format
-    painter->drawText(L.fmt, Qt::AlignVCenter | Qt::TextSingleLine,
-                      fi.suffix().toUpper());
+    painter->drawText(L.fmt, Qt::AlignVCenter | Qt::TextSingleLine, fi.suffix().toUpper());
 
     // Column 7: rating (P0-4). Draw filled/empty stars from the RatingStore.
     const auto &rs = mviewer::core::RatingStore::instance();
@@ -1250,8 +1244,7 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
     }
     else
     {
-        painter->drawText(L.rate, Qt::AlignVCenter | Qt::TextSingleLine,
-                          QStringLiteral("-"));
+        painter->drawText(L.rate, Qt::AlignVCenter | Qt::TextSingleLine, QStringLiteral("-"));
     }
 
     // Column 8: color label (P0-4). Draw a small colored chip + name.
@@ -1259,10 +1252,13 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
     const QRect labelR = L.label;
     if (label > 0)
     {
-        static const QColor kLabelColors[7] = {
-            QColor(), QColor(229, 57, 53), QColor(251, 140, 0),
-            QColor(249, 215, 41), QColor(67, 160, 71),
-            QColor(30, 136, 229), QColor(142, 36, 170)};
+        static const QColor kLabelColors[7] = {QColor(),
+                                               QColor(229, 57, 53),
+                                               QColor(251, 140, 0),
+                                               QColor(249, 215, 41),
+                                               QColor(67, 160, 71),
+                                               QColor(30, 136, 229),
+                                               QColor(142, 36, 170)};
         static const char *kLabelNames[7] = {"", "红", "橙", "黄", "绿", "蓝", "紫"};
         const QColor chip = kLabelColors[label];
         const int cs = 12;
@@ -1272,15 +1268,13 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter,
         painter->setBrush(chip);
         painter->drawRoundedRect(chipR, 3, 3);
         painter->restore();
-        QRect chipTextR(labelR.x() + cs + 6, labelR.y(),
-                        labelR.width() - cs - 6, labelR.height());
+        QRect chipTextR(labelR.x() + cs + 6, labelR.y(), labelR.width() - cs - 6, labelR.height());
         painter->drawText(chipTextR, Qt::AlignVCenter | Qt::TextSingleLine,
                           QString::fromUtf8(kLabelNames[label]));
     }
     else
     {
-        painter->drawText(labelR, Qt::AlignVCenter | Qt::TextSingleLine,
-                          QStringLiteral("-"));
+        painter->drawText(labelR, Qt::AlignVCenter | Qt::TextSingleLine, QStringLiteral("-"));
     }
 
     painter->restore();

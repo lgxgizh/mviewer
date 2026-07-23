@@ -8,8 +8,7 @@
 #include <QStyle>
 #include <QToolButton>
 
-BreadcrumbBar::BreadcrumbBar(QWidget *parent)
-    : QWidget(parent)
+BreadcrumbBar::BreadcrumbBar(QWidget *parent) : QWidget(parent)
 {
     m_layout = new QHBoxLayout(this);
     m_layout->setContentsMargins(2, 0, 2, 0);
@@ -77,7 +76,7 @@ void BreadcrumbBar::rebuild()
     if (m_segments.size() > m_maxVisible)
     {
         m_overflow = true;
-        firstVisible = m_segments.size() - m_maxVisible + 1;  // +1 for the "..." button
+        firstVisible = m_segments.size() - m_maxVisible + 1; // +1 for the "..." button
     }
 
     // Overflow button
@@ -100,9 +99,8 @@ void BreadcrumbBar::rebuild()
             }
             QAction *act = menu->addAction(m_segments.at(i));
             act->setData(partialPath);
-            connect(act, &QAction::triggered, this, [this, act]() {
-                emit pathSelected(act->data().toString());
-            });
+            connect(act, &QAction::triggered, this,
+                    [this, act]() { emit pathSelected(act->data().toString()); });
         }
         btn->setMenu(menu);
         m_layout->addWidget(btn);
@@ -144,19 +142,18 @@ void BreadcrumbBar::rebuild()
         connect(btn, &QToolButton::clicked, this, &BreadcrumbBar::onSegmentClicked);
 
         // Style: make it look like a link/navigation element
-        btn->setStyleSheet(
-            "QToolButton {"
-            "  border: 1px solid transparent;"
-            "  border-radius: 3px;"
-            "  padding: 1px 4px;"
-            "  color: #444;"
-            "  font-size: 11px;"
-            "}"
-            "QToolButton:hover {"
-            "  border-color: #c0c0c0;"
-            "  background: #f0f0f0;"
-            "  color: #0078d7;"
-            "}");
+        btn->setStyleSheet("QToolButton {"
+                           "  border: 1px solid transparent;"
+                           "  border-radius: 3px;"
+                           "  padding: 1px 4px;"
+                           "  color: #444;"
+                           "  font-size: 11px;"
+                           "}"
+                           "QToolButton:hover {"
+                           "  border-color: #c0c0c0;"
+                           "  background: #f0f0f0;"
+                           "  color: #0078d7;"
+                           "}");
 
         m_layout->addWidget(btn);
 

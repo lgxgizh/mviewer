@@ -7,6 +7,7 @@
 
 #ifdef Q_OS_WIN
 #include <windows.h>
+
 #include <dbghelp.h>
 #pragma comment(lib, "DbgHelp.lib")
 #endif
@@ -53,17 +54,16 @@ static LONG WINAPI crashExceptionFilter(EXCEPTION_POINTERS *ep)
         fclose(tf);
     }
 
-    const HANDLE hFile =
-        CreateFileW(dmpW.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
-                    FILE_ATTRIBUTE_NORMAL, nullptr);
+    const HANDLE hFile = CreateFileW(dmpW.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                                     FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile != INVALID_HANDLE_VALUE)
     {
         MINIDUMP_EXCEPTION_INFORMATION info{};
         info.ThreadId = GetCurrentThreadId();
         info.ExceptionPointers = ep;
         info.ClientPointers = FALSE;
-        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile,
-                          MiniDumpNormal, ep ? &info : nullptr, nullptr, nullptr);
+        MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), hFile, MiniDumpNormal,
+                          ep ? &info : nullptr, nullptr, nullptr);
         CloseHandle(hFile);
     }
     return EXCEPTION_EXECUTE_HANDLER;

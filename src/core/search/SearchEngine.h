@@ -23,14 +23,12 @@ using AnalysisTextProvider = std::function<std::string(const std::string &path)>
 // It lives in core, so the header stays Qt-free while the .cpp may use Qt.
 class SearchIndex
 {
-public:
+  public:
     SearchIndex() = default;
 
     // Add or update the index entry for a single file.
-    void indexFile(const std::string &path,
-                   const domain::ImageMetadata &meta,
-                   const RawMetadata &raw,
-                   const std::string &analysisText);
+    void indexFile(const std::string &path, const domain::ImageMetadata &meta,
+                   const RawMetadata &raw, const std::string &analysisText);
 
     // Remove an entry (e.g. when an image is closed).
     void removeFile(const std::string &path);
@@ -39,15 +37,19 @@ public:
     void clear();
 
     // Number of indexed files.
-    size_t size() const { return m_blobs.size(); }
+    size_t size() const
+    {
+        return m_blobs.size();
+    }
 
     // Execute a domain-level SearchQuery and return ranked results.
     // analysisProvider is called for paths that haven't been indexed yet
     // (lazy-fill), or pass a no-op provider if pre-indexed.
-    std::vector<domain::SearchResult> search(const domain::SearchQuery &query,
-                                             const AnalysisTextProvider &analysisProvider = {}) const;
+    std::vector<domain::SearchResult>
+    search(const domain::SearchQuery &query,
+           const AnalysisTextProvider &analysisProvider = {}) const;
 
-private:
+  private:
     struct Entry
     {
         std::string path;
@@ -55,8 +57,7 @@ private:
     };
     std::vector<Entry> m_blobs;
 
-    static std::string buildBlob(const domain::ImageMetadata &meta,
-                                 const RawMetadata &raw,
+    static std::string buildBlob(const domain::ImageMetadata &meta, const RawMetadata &raw,
                                  const std::string &analysisText);
 };
 
@@ -64,7 +65,7 @@ private:
 // It builds a SearchIndex from available data sources and executes queries.
 class SearchEngine
 {
-public:
+  public:
     SearchEngine() = default;
 
     // Register a data source: all images in a directory, with their metadata.
@@ -81,9 +82,12 @@ public:
     std::vector<domain::SearchResult> search(const domain::SearchQuery &query) const;
 
     // Access the underlying index (useful for tests).
-    const SearchIndex &index() const { return m_index; }
+    const SearchIndex &index() const
+    {
+        return m_index;
+    }
 
-private:
+  private:
     SearchIndex m_index;
     AnalysisTextProvider m_analysisProvider;
 };

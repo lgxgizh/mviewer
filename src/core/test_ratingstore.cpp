@@ -12,19 +12,19 @@
 static int g_pass = 0;
 static int g_fail = 0;
 
-#define CHECK(cond, msg)                                                                         \
-    do                                                                                           \
-    {                                                                                            \
-        if (cond)                                                                                \
-        {                                                                                        \
-            printf("  PASS: %s\n", msg);                                                         \
-            g_pass++;                                                                            \
-        }                                                                                        \
-        else                                                                                     \
-        {                                                                                        \
-            printf("  FAIL: %s\n", msg);                                                          \
-            g_fail++;                                                                            \
-        }                                                                                        \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+        {                                                                                          \
+            printf("  PASS: %s\n", msg);                                                           \
+            g_pass++;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            printf("  FAIL: %s\n", msg);                                                           \
+            g_fail++;                                                                              \
+        }                                                                                          \
     } while (0)
 
 using namespace mviewer::core;
@@ -38,10 +38,10 @@ int main()
     CHECK(s.rating("a.jpg") == 3, "rating set to 3");
     CHECK(s.hasRating("a.jpg"), "hasRating true after set");
 
-    s.setRating("a.jpg", 9);  // clamps to 5
+    s.setRating("a.jpg", 9); // clamps to 5
     CHECK(s.rating("a.jpg") == 5, "rating clamps to 5");
 
-    s.setRating("a.jpg", -1);  // clamps to 0 -> cleared
+    s.setRating("a.jpg", -1); // clamps to 0 -> cleared
     CHECK(s.rating("a.jpg") == 0, "negative rating clamps to 0 (cleared)");
     CHECK(!s.hasRating("a.jpg"), "hasRating false after clear");
 

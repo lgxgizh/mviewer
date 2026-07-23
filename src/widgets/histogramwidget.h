@@ -15,15 +15,15 @@ class HistogramWidget : public QWidget
 {
     Q_OBJECT
 
-public:
-    explicit HistogramWidget(QWidget* parent = nullptr);
+  public:
+    explicit HistogramWidget(QWidget *parent = nullptr);
 
-    void setHistograms(const std::vector<mviewer::core::Histogram>& hists);
+    void setHistograms(const std::vector<mviewer::core::Histogram> &hists);
     void clear();
 
-protected:
-    void paintEvent(QPaintEvent* event) override;
+  protected:
+    void paintEvent(QPaintEvent *event) override;
 
-private:
+  private:
     std::vector<mviewer::core::Histogram> m_hists;
 };

@@ -45,7 +45,10 @@ class MainWindow : public QMainWindow
     // the real UI and render it to a pixmap without a visible window.
     void setupUi();
     void onImageOpen(const QString &path);
-    void setOpenOnLaunch(const QString &path) { m_openOnLaunch = path; }
+    void setOpenOnLaunch(const QString &path)
+    {
+        m_openOnLaunch = path;
+    }
 
   protected:
     void closeEvent(QCloseEvent *event) override;
@@ -96,8 +99,8 @@ class MainWindow : public QMainWindow
     DirectoryTree *m_directoryTree = nullptr;
     QTreeWidget *m_navSidebar = nullptr; // P0-1: favorites / recent / history
     BreadcrumbBar *m_breadcrumb = nullptr;
-    QSplitter *m_mainSplitter = nullptr; // P1-3: central layout splitter
-    MetadataOverlay *m_metadataOverlay = nullptr;  // M15: semi-transparent info overlay
+    QSplitter *m_mainSplitter = nullptr;          // P1-3: central layout splitter
+    MetadataOverlay *m_metadataOverlay = nullptr; // M15: semi-transparent info overlay
     ThumbnailPanel *m_thumbnailPanel = nullptr;
     PreviewPanel *m_previewPanel = nullptr;
 
@@ -107,7 +110,7 @@ class MainWindow : public QMainWindow
     BatchDialog *m_batchDialog = nullptr;
     PluginSettings *m_pluginSettings = nullptr;
     CompareWorkspace *m_compareView = nullptr;
-    QMetaObject::Connection m_compareDestroyConnection;  // guard WA_DeleteOnClose
+    QMetaObject::Connection m_compareDestroyConnection; // guard WA_DeleteOnClose
 
     QAction *m_actOpenDir = nullptr;
     QAction *m_actSaveWorkspace = nullptr;
@@ -128,7 +131,7 @@ class MainWindow : public QMainWindow
     QAction *m_actPluginSettings = nullptr;
     QAction *m_actToggleMetadata = nullptr;
     QMenu *m_recentMenu = nullptr;
-    QMenu *m_recentFileMenu = nullptr;  // recent-files menu (opened images)
+    QMenu *m_recentFileMenu = nullptr; // recent-files menu (opened images)
     QMenu *m_favMenu = nullptr;
 
     // M15: crash recovery
@@ -153,7 +156,7 @@ class MainWindow : public QMainWindow
     // P1: metadata-aware search + star-rating filter.
     QCheckBox *m_searchMeta = nullptr;
     QComboBox *m_ratingFilter = nullptr;
-    QComboBox *m_flagFilter = nullptr;  // P3 tail: color label / reject / pick / recents
+    QComboBox *m_flagFilter = nullptr; // P3 tail: color label / reject / pick / recents
 
     // P0 #①: real-time status bar (image count / size / zoom / cache hit-rate).
     QLabel *m_lblCount = nullptr;
@@ -176,18 +179,18 @@ class MainWindow : public QMainWindow
     void toggleCurrentReject();
 
     QString m_currentDir;
-    QString m_currentImagePath;     // mirror of m_selection->currentImage()
+    QString m_currentImagePath;            // mirror of m_selection->currentImage()
     SelectionModel *m_selection = nullptr; // P0-2: single source of truth
-    QStringList m_cachedImagePaths; // cached image list for current dir
-    bool m_dirListDirty = true;     // invalidated when directory changes
+    QStringList m_cachedImagePaths;        // cached image list for current dir
+    bool m_dirListDirty = true;            // invalidated when directory changes
 
     // In-session navigation history (like a browser back/forward).
     QStringList m_history;
     int m_historyIndex = -1;
     // Persisted, cross-session app state (favorites + restore position).
-    mviewer::core::RecentFiles m_recent;         // recent-folders LRU
-    mviewer::core::RecentFiles m_recentFiles;    // recent-files LRU (opened images)
-    QString m_openOnLaunch;       // path passed via command line
+    mviewer::core::RecentFiles m_recent;      // recent-folders LRU
+    mviewer::core::RecentFiles m_recentFiles; // recent-files LRU (opened images)
+    QString m_openOnLaunch;                   // path passed via command line
     AppState m_appState;
 
     // M12.2 (G2-ext): per-image last analysis result text, keyed by image path.

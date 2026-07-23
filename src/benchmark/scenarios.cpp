@@ -108,8 +108,7 @@ ScenarioResult scenarioColdStart(const Corpus &corpus)
     r.value = startup.value + thumb.value;
     r.timing = thumb.timing;
     r.detail = "startup=" + std::to_string(startup.value) +
-               "ms + thumbnail=" + std::to_string(thumb.value) +
-               "ms (cold start to first image)";
+               "ms + thumbnail=" + std::to_string(thumb.value) + "ms (cold start to first image)";
     return r;
 }
 

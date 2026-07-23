@@ -27,8 +27,7 @@ bool BlurAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
         {
             auto lum = [&](int ox, int oy) -> double
             {
-                const uint8_t *line =
-                    v.data + static_cast<size_t>(y + oy) * v.stride();
+                const uint8_t *line = v.data + static_cast<size_t>(y + oy) * v.stride();
                 const uint8_t *p = line + static_cast<size_t>(x + ox) * cpp;
                 if (cpp >= 3)
                     return 0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2];
@@ -57,8 +56,7 @@ bool BlurAnalyzer::analyze(const ImageFrame &frame)
     return compute(v, 0, 0, v.width, v.height);
 }
 
-bool BlurAnalyzer::analyzeRegion(const ImageFrame &frame,
-                                 const mviewer::domain::Selection &region)
+bool BlurAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain::Selection &region)
 {
     if (frame.pixels().isNull() || region.isEmpty())
         return false;

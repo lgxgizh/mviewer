@@ -6,8 +6,10 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
-namespace mviewer {
-namespace core {
+namespace mviewer
+{
+namespace core
+{
 
 std::string serializeProject(const domain::Project &p)
 {
@@ -39,8 +41,7 @@ std::string serializeProject(const domain::Project &p)
     // arbitrary image paths / metadata). deserializeWorkspace does the real
     // workspace parsing on the decoded payload.
     const std::string wsJson = serializeWorkspace(p.workspace);
-    obj["workspaceB64"] =
-        QString::fromLatin1(QByteArray::fromStdString(wsJson).toBase64());
+    obj["workspaceB64"] = QString::fromLatin1(QByteArray::fromStdString(wsJson).toBase64());
 
     QJsonDocument doc(obj);
     return doc.toJson(QJsonDocument::Indented).toStdString();
@@ -61,7 +62,8 @@ bool deserializeProject(const std::string &json, domain::Project &out)
         return false;
     out.workspace = std::move(*maybeWs);
 
-    auto str = [&](const char *k, std::string &dst) {
+    auto str = [&](const char *k, std::string &dst)
+    {
         if (obj.contains(k) && obj[k].isString())
             dst = obj[k].toString().toStdString();
     };

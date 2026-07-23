@@ -120,22 +120,26 @@ Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &o
             const int r = static_cast<int>(i % 4);
             if (r == 0)
             {
-                if (write(jp, rgb, "jpg")) c.jpegPaths.push_back(jp.toStdString());
+                if (write(jp, rgb, "jpg"))
+                    c.jpegPaths.push_back(jp.toStdString());
             }
             else if (r == 1)
             {
-                if (write(pp, rgb, "png")) c.pngPaths.push_back(pp.toStdString());
+                if (write(pp, rgb, "png"))
+                    c.pngPaths.push_back(pp.toStdString());
             }
             else if (r == 2)
             {
                 QImage tiff(512, 512, QImage::Format_RGB888);
                 paint(tiff, static_cast<uint32_t>(i + 100000));
                 const QString tp = prefix + ".tif";
-                if (write(tp, tiff, "tif")) c.tiffPaths.push_back(tp.toStdString());
+                if (write(tp, tiff, "tif"))
+                    c.tiffPaths.push_back(tp.toStdString());
             }
             else
             {
-                if (write(bp, rgb, "bmp")) c.jpegPaths.push_back(bp.toStdString());
+                if (write(bp, rgb, "bmp"))
+                    c.jpegPaths.push_back(bp.toStdString());
             }
         }
         else

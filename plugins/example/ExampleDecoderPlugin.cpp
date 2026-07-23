@@ -8,8 +8,8 @@
 // This example decodes the uncompressed PPM (P6 binary) format, a tiny,
 // well-documented format ideal for teaching the decoder contract.
 
-#include "core/image/decoder/IDecoder.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/decoder/IDecoder.h"
 #include "core/plugin/PluginABI.h"
 #include "domain/Image.h"
 
@@ -59,10 +59,16 @@ static bool nextToken(std::istream &in, std::string &tok)
 
 class PPMDecoder : public IDecoder
 {
-   public:
-    const char *name() const override { return "ppm-decoder"; }
+  public:
+    const char *name() const override
+    {
+        return "ppm-decoder";
+    }
 
-    std::vector<std::string> extensions() const override { return {"ppm", "pnm"}; }
+    std::vector<std::string> extensions() const override
+    {
+        return {"ppm", "pnm"};
+    }
 
     bool canDecode(const std::string &path) const override
     {
@@ -86,7 +92,8 @@ class PPMDecoder : public IDecoder
             dh = std::max(1, (sh * maxEdge) / sw);
         else
             dw = std::max(1, (sw * maxEdge) / sh);
-        ImageData out = makeImageData(static_cast<uint32_t>(dw), static_cast<uint32_t>(dh), src.format);
+        ImageData out =
+            makeImageData(static_cast<uint32_t>(dw), static_cast<uint32_t>(dh), src.format);
         const int pxSize = (src.format == PixelFormat::RGBA32) ? 4 : 3;
         for (int y = 0; y < dh; ++y)
         {
@@ -94,7 +101,8 @@ class PPMDecoder : public IDecoder
             for (int x = 0; x < dw; ++x)
             {
                 int sx = (x * sw) / dw;
-                const uint8_t *s = src.buffer->data() + (static_cast<size_t>(sy) * sw + sx) * pxSize;
+                const uint8_t *s =
+                    src.buffer->data() + (static_cast<size_t>(sy) * sw + sx) * pxSize;
                 uint8_t *d = out.buffer->data() + (static_cast<size_t>(y) * dw + x) * pxSize;
                 for (int k = 0; k < pxSize; ++k)
                     d[k] = s[k];
@@ -120,11 +128,13 @@ class PPMDecoder : public IDecoder
         if (w <= 0 || h <= 0 || maxVal <= 0)
             return {};
 
-        ImageData img = makeImageData(static_cast<uint32_t>(w), static_cast<uint32_t>(h), PixelFormat::RGB24);
+        ImageData img =
+            makeImageData(static_cast<uint32_t>(w), static_cast<uint32_t>(h), PixelFormat::RGB24);
         const size_t bytes = static_cast<size_t>(w) * h * 3;
         if (maxVal <= 255)
         {
-            f.read(reinterpret_cast<char *>(img.buffer->data()), static_cast<std::streamsize>(bytes));
+            f.read(reinterpret_cast<char *>(img.buffer->data()),
+                   static_cast<std::streamsize>(bytes));
             if (static_cast<size_t>(f.gcount()) != bytes)
                 return {};
         }
@@ -149,7 +159,8 @@ class PPMDecoder : public IDecoder
         return downscale(full, maxEdge);
     }
 
-    ImageData decodeFull(const std::string &path, mviewer::domain::ImageMetadata &outMeta) const override
+    ImageData decodeFull(const std::string &path,
+                         mviewer::domain::ImageMetadata &outMeta) const override
     {
         ImageData img = decodeFull(path);
         if (img.buffer)
@@ -184,7 +195,7 @@ extern "C" MVIEWER_PLUGIN_EXPORT const char *pluginName()
 
 extern "C" MVIEWER_PLUGIN_EXPORT const PluginABI *mviewer_plugin_abi()
 {
-    static const PluginABI abi;  // defaults to {api=1, abi=1, sdk=10000}
+    static const PluginABI abi; // defaults to {api=1, abi=1, sdk=10000}
     return &abi;
 }
 

@@ -1,8 +1,8 @@
 #include "gpu/GpuTileUploader.h"
 
-#include <QOpenGLContext>
-#include <QGuiApplication>
 #include <QCoreApplication>
+#include <QGuiApplication>
+#include <QOpenGLContext>
 #include <cstdlib>
 
 namespace
@@ -31,12 +31,12 @@ bool glContextAvailable()
     // Stage A's actual texture upload still requires a QOpenGLWidget host
     // (deferred per the M13 RFC) — this only answers "is GL usable here?".
     QCoreApplication *app = QCoreApplication::instance();
-    if (!qobject_cast<QGuiApplication *>(app) ||
-        QGuiApplication::platformName() == "offscreen")
+    if (!qobject_cast<QGuiApplication *>(app) || QGuiApplication::platformName() == "offscreen")
     {
         return false;
     }
-    static const bool can = [] {
+    static const bool can = []
+    {
         QOpenGLContext ctx;
         return ctx.create();
     }();

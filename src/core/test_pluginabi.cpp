@@ -16,18 +16,18 @@
 #include <string>
 
 static int g_fail = 0;
-#define CHECK(cond, msg)                                                                     \
-    do                                                                                       \
-    {                                                                                        \
-        if (!(cond))                                                                         \
-        {                                                                                    \
-            std::cerr << "FAIL: " << msg << std::endl;                                       \
-            ++g_fail;                                                                        \
-        }                                                                                    \
-        else                                                                                 \
-        {                                                                                    \
-            std::cout << "PASS: " << msg << std::endl;                                       \
-        }                                                                                    \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(cond))                                                                               \
+        {                                                                                          \
+            std::cerr << "FAIL: " << msg << std::endl;                                             \
+            ++g_fail;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            std::cout << "PASS: " << msg << std::endl;                                             \
+        }                                                                                          \
     } while (0)
 
 int main()

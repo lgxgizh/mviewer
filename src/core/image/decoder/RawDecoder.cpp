@@ -2,10 +2,10 @@
 
 #include "core/image/ImageBuffer.h"
 
+#include <QByteArray>
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
-#include <QByteArray>
 
 #include <algorithm>
 #include <cstdint>
@@ -19,9 +19,9 @@ namespace
 // intentionally broad: every entry embeds at least a thumbnail/preview JPEG,
 // which is what we extract. Formats without an embedded JPEG simply fall
 // through (empty ImageData).
-const char *kRawExts[] = {
-    "cr2", "cr3", "nef", "nrw", "arw", "dng", "orf", "rw2", "raf", "pef",
-    "srw", "mrw", "kdc", "dcr", "sr2", "3fr", "fff", "iiq", "mos", "erf", "rwz"};
+const char *kRawExts[] = {"cr2", "cr3", "nef", "nrw", "arw", "dng", "orf",
+                          "rw2", "raf", "pef", "srw", "mrw", "kdc", "dcr",
+                          "sr2", "3fr", "fff", "iiq", "mos", "erf", "rwz"};
 
 // Walk a single JPEG starting at FFD8, returning the index just past EOI
 // (FFD9), or -1 if the stream is malformed/truncated. Length fields of marker
@@ -92,8 +92,7 @@ QByteArray extractLargestJpeg(const std::vector<uint8_t> &b)
     }
     if (bestStart < 0)
         return QByteArray();
-    return QByteArray(reinterpret_cast<const char *>(b.data() + bestStart),
-                      bestEnd - bestStart);
+    return QByteArray(reinterpret_cast<const char *>(b.data() + bestStart), bestEnd - bestStart);
 }
 
 ImageData toImageData(const QImage &src)
@@ -151,11 +150,9 @@ ImageData RawDecoder::extractPreview(const std::string &path, int maxEdge) const
 
     if (maxEdge > 0 && (img.width() > maxEdge || img.height() > maxEdge))
     {
-        const double r =
-            static_cast<double>(maxEdge) / std::max(img.width(), img.height());
-        img = img.scaled(static_cast<int>(img.width() * r),
-                         static_cast<int>(img.height() * r), Qt::KeepAspectRatio,
-                         Qt::SmoothTransformation);
+        const double r = static_cast<double>(maxEdge) / std::max(img.width(), img.height());
+        img = img.scaled(static_cast<int>(img.width() * r), static_cast<int>(img.height() * r),
+                         Qt::KeepAspectRatio, Qt::SmoothTransformation);
     }
     return toImageData(img);
 }

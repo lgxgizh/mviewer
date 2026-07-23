@@ -7,10 +7,18 @@
 #include <vector>
 
 static int g_fail = 0;
-#define CHECK(cond, msg) \
-    do { \
-        if (!(cond)) { std::cerr << "FAIL: " << msg << "\n"; ++g_fail; } \
-        else { std::cout << "PASS: " << msg << "\n"; } \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(cond))                                                                               \
+        {                                                                                          \
+            std::cerr << "FAIL: " << msg << "\n";                                                  \
+            ++g_fail;                                                                              \
+        }                                                                                          \
+        else                                                                                       \
+        {                                                                                          \
+            std::cout << "PASS: " << msg << "\n";                                                  \
+        }                                                                                          \
     } while (0)
 
 int main(int argc, char **argv)
