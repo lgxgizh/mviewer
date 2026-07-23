@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed — CI ASan 从 MSVC 切换到 clang-cl + LLVM ASan/UBSan
+
+- CI 中的 `asan` job 从 MSVC `/fsanitize=address`（experimental）切换为
+  clang-cl + LLVM ASan/UBSan。MSVC ASan 在每次运行中都因 `shared_ptr`
+  instrumentation 的工具链 bug 而 crash（access-violation at near-null
+  address），而 clang-cl + LLVM ASan 在 nightly job 中已验证通过全部 CTest
+  测试。ASan job 仍为 advisory（`continue-on-error: true`）。
+  (`.github/workflows/ci.yml`, `docs/known_issues/MSVC_ASAN.md`)
+
 ### Added — 基础功能打磨第五轮 (Navigation & Feedback Polish)
 
 - **导航键全面打通:** `Home`/`End`（第一张/最后一张）、`PageUp`/`PageDown`（翻页 10 张）

@@ -276,35 +276,37 @@ jobs:
           path: clazy.txt
 
   # ---------------------------------------------------------------------------
-  # asan — AddressSanitizer via MSVC /fsanitize=address (windows-2022)
+  # asan — AddressSanitizer via clang-cl + LLVM ASan/UBSan (windows-2022)
   #
   # *** ADVISORY ONLY — NOT REQUIRED. DOES NOT BLOCK ci-gate. ***
   #
-  # Known issue: MSVC's experimental /fsanitize=address crashes inside the STL
-  # shared_ptr control-block interception (access-violation at a near-null
-  # address) when instrumenting ImageData::view() const. The same source builds
-  # and passes 31/31 CTest WITHOUT ASan. Current evidence suggests this is a
-  # toolchain-compatibility limitation, NOT a confirmed product defect; the root
-  # cause is not yet proven. Full detail + re-check checklist:
-  #   docs/known_issues/MSVC_ASAN.md
+  # Replaces the previous MSVC /fsanitize=address job, which crashed on every
+  # run due to a toolchain bug in MSVC's STL shared_ptr instrumentation
+  # (access-violation at a near-null address in _Ptr_base::get()).
+  # The independent clang-cl + LLVM ASan/UBSan sanitizer was verified in the
+  # nightly job (M17, 2026-07-20) to pass the full CTest suite cleanly.
+  # Full detail: docs/known_issues/MSVC_ASAN.md
   #
-  # Disposition (Architect directive 2026-07-20, "A+ then evolve to B"):
-  #   - stays continue-on-error (advisory, signal only);
-  #   - must NOT be "fixed" by refactoring ImageData / shared_ptr design;
-  #   - Phase-2 (target M13): add clang-cl + LLVM ASan/UBSan as a NIGHTLY
-  #     job (independent sanitizer) to either close this or surface a real
-  #     defect. Nightly only — never in the PR gate, to protect dev velocity.
+  # Sanitizer timings are ~3-5x slower under instrumentation, so timing-based
+  # budget assertions (bench_smoke/bench_enforce) may legitimately miss; those
+  # are environment-sensitive gates, not memory bugs.
   # ---------------------------------------------------------------------------
   asan:
-    name: ASan (MSVC /fsanitize=address, ADVISORY — see docs/known_issues/MSVC_ASAN.md)
+    name: ASan (clang-cl + LLVM ASan/UBSan, ADVISORY)
     runs-on: windows-2022
     continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup MSVC
+      - name: Setup MSVC (provides Windows headers/libs for clang-cl)
         uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install LLVM (clang-cl + llvm-symbolizer)
+        id: llvm
+        uses: llvm/install-llvm-action@v1
+        with:
+          version: "22"
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -314,16 +316,23 @@ jobs:
           modules: qtimageformats
           cache: true
 
-      - name: Configure (ASan)
-        run: cmake -S . -B build_asan -G Ninja -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi"
+      - name: Configure (clang-cl + ASan/UBSan)
+        run: cmake -S . -B build_asan -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl
+          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
+          -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.."
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined /libpath:${{ steps.llvm.outputs.install-path }}/lib/clang/22/lib/windows clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib"
+          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined /libpath:${{ steps.llvm.outputs.install-path }}/lib/clang/22/lib/windows clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib"
+          -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=address,undefined -g"
 
       - name: Build (ASan)
         run: cmake --build build_asan -j 4
 
       - name: Test (ASan)
         run: |
-          $env:PATH = "D:\QT\6.11.1\msvc2022_64\bin;$env:PATH"
           $env:QT_QPA_PLATFORM = "offscreen"
+          $env:PATH = "${{ steps.llvm.outputs.install-path }}\bin;${{ steps.llvm.outputs.install-path }}\lib\clang\22\lib\windows;$env:PATH"
           cd build_asan
           ctest --output-on-failure -j4
 

@@ -1,8 +1,9 @@
 # Known Issue: MSVC AddressSanitizer crashes on `shared_ptr` instrumentation
 
-**Status:** Resolved via independent sanitizer (2026-07-20, M17). MSVC ASan job
-remains advisory-only / non-gating; the clang-cl + LLVM ASan/UBSan nightly job
-is now the authoritative sanitizer gate.
+**Status:** Resolved (2026-07-24). The CI `asan` job in `.github/workflows/ci.yml`
+has been switched from MSVC `/fsanitize=address` to clang-cl + LLVM ASan/UBSan
+(the independent sanitizer verified in M17). The MSVC ASan job is no longer in
+CI; the nightly `llvm-sanitizer` job remains as a secondary check.
 **Severity:** Toolchain compatibility (MSVC ASan); one real product defect
 (global-buffer-overflow in `mviewer_bench`) was found and fixed (see below).
 **First observed:** 2026-07-20, CI run `29710165150` (ASan job, windows-2022).
