@@ -353,6 +353,16 @@ void MainWindow::setupUi()
     m_actBatch = new QAction("批量处理(&B)", this);
     m_actBatch->setShortcut(QKeySequence("Ctrl+Shift+B"));
     toolsMenu->addAction(m_actBatch);
+    // M17: batch analyzer export — same path as gallery context menu.
+    auto *actBatchAnalyze = new QAction(tr("批量分析导出(&A)..."), this);
+    actBatchAnalyze->setShortcut(QKeySequence("Ctrl+Shift+A"));
+    toolsMenu->addAction(actBatchAnalyze);
+    connect(actBatchAnalyze, &QAction::triggered, this,
+            [this]()
+            {
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->batchAnalyzeExport();
+            });
     m_actPluginSettings = new QAction("插件管理(&P)...", this);
     toolsMenu->addAction(m_actPluginSettings);
 
@@ -683,13 +693,21 @@ void MainWindow::setupUi()
                     return;
                 const QStringList paths = m_thumbnailPanel->selectedPaths();
                 if (paths.isEmpty())
+                {
+                    // A-3.4: still refresh action enablement when selection clears.
+                    updateSelectionActions();
                     return;
+                }
                 const QString cur = m_thumbnailPanel->currentIndex().isValid()
                                        ? m_thumbnailPanel->pathList().value(
                                              m_thumbnailPanel->currentIndex().row())
                                        : paths.first();
                 m_selection->setSelection(paths, cur);
+                updateSelectionActions();
             });
+    // A-3.4: also react to SelectionModel changes from non-gallery sources.
+    connect(m_selection, &SelectionModel::selectionChanged, this,
+            [this](const QStringList &) { updateSelectionActions(); });
     // Dropping files directly onto the gallery behaves the same as dropping
     // them anywhere else on the window.
     connect(m_thumbnailPanel, &ThumbnailPanel::filesDropped, this, &MainWindow::handleDroppedPaths);
@@ -950,8 +968,12 @@ void MainWindow::setupUi()
             {
                 if (!m_batchDialog)
                     m_batchDialog = new BatchDialog(this);
-                // Pre-fill with current directory's images.
-                m_batchDialog->setInputFiles(m_cachedImagePaths);
+                // A-3: prefer SelectionModel multi-selection; fall back to
+                // gallery selection, then the full directory list.
+                QStringList inputs = resolveSelectedPaths(true);
+                if (inputs.isEmpty())
+                    inputs = m_cachedImagePaths;
+                m_batchDialog->setInputFiles(inputs);
                 m_batchDialog->exec();
             });
     connect(m_actPluginSettings, &QAction::triggered, this,
@@ -963,6 +985,15 @@ void MainWindow::setupUi()
                     m_pluginSettings->setAttribute(Qt::WA_DeleteOnClose);
                     connect(m_pluginSettings, &QDialog::destroyed, this,
                             [this]() { m_pluginSettings = nullptr; });
+                    // M17: after rescan / enable-toggle, refresh the analyzer combo
+                    // so newly loaded plugins appear without restarting.
+                    connect(m_pluginSettings, &PluginSettings::pluginsChanged, this,
+                            [this]()
+                            {
+                                if (m_analysisPanel)
+                                    m_analysisPanel->refreshAnalyzers();
+                                statusBar()->showMessage(tr("插件列表已更新"), 3000);
+                            });
                 }
                 m_pluginSettings->show();
                 m_pluginSettings->raise();
@@ -1008,6 +1039,9 @@ void MainWindow::setupUi()
     m_statTimer = new QTimer(this);
     connect(m_statTimer, &QTimer::timeout, this, &MainWindow::updateCacheStat);
     m_statTimer->start(500);
+
+    // A-3.4: initial enablement for selection-dependent actions.
+    updateSelectionActions();
 
     statusBar()->showMessage("就绪");
 }
@@ -1581,10 +1615,12 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     QStringList imgs = images;
     // A-3: prefer the shared SelectionModel multi-selection when the caller
     // didn't pass an explicit list (e.g. menu "比较模式").
-    if (imgs.isEmpty() && m_selection && m_selection->selection().size() >= 2)
-        imgs = m_selection->selection();
     if (imgs.isEmpty())
+        imgs = resolveSelectedPaths(true);
+    // Compare needs ≥2 images; if only one is selected, fall back to the folder.
+    if (imgs.size() < 2)
     {
+        imgs.clear();
         if (m_currentDir.isEmpty())
             return;
         for (const auto &p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
@@ -1893,14 +1929,52 @@ void MainWindow::exportReport()
     QMessageBox::information(this, tr("导出报告"), tr("已导出：%1").arg(out));
 }
 
+QStringList MainWindow::resolveSelectedPaths(bool preferMulti) const
+{
+    // A-3: single source of truth — SelectionModel first, then gallery.
+    if (m_selection)
+    {
+        const QStringList sel = m_selection->selection();
+        if (preferMulti && sel.size() >= 1)
+            return sel;
+        if (!preferMulti && !m_selection->currentImage().isEmpty())
+            return {m_selection->currentImage()};
+        if (!sel.isEmpty())
+            return sel;
+    }
+    if (m_thumbnailPanel)
+    {
+        const QStringList gallery = m_thumbnailPanel->selectedPaths();
+        if (!gallery.isEmpty())
+            return gallery;
+    }
+    return {};
+}
+
+void MainWindow::updateSelectionActions()
+{
+    // A-3.4: enable Compare when ≥2 selected; Export/Batch when ≥1 path available.
+    const int n = m_selection ? m_selection->selection().size() : 0;
+    const bool hasDir = !m_cachedImagePaths.isEmpty() ||
+                        (m_thumbnailPanel && !m_thumbnailPanel->pathList().isEmpty());
+    if (m_actCompare)
+        m_actCompare->setEnabled(n >= 2 || hasDir);
+    if (m_actExportImages)
+        m_actExportImages->setEnabled(n >= 1 || hasDir);
+    if (m_actBatch)
+        m_actBatch->setEnabled(n >= 1 || hasDir);
+}
+
 void MainWindow::exportImages()
 {
-    // M17: export selected paths, or the filtered/visible set, or the full directory.
-    QStringList paths = m_thumbnailPanel->selectedPaths();
-    if (paths.isEmpty())
-        paths = m_thumbnailPanel->visiblePaths(); // filtered set
-    if (paths.isEmpty())
-        paths = m_thumbnailPanel->pathList(); // fallback: all
+    // A-3 / M17: SelectionModel → gallery selection → filtered (rating/flag) set
+    // → full directory. Prefer the filtered visible set over the unfiltered
+    // directory so "export what I see" matches the rating/flag filters.
+    QStringList paths = resolveSelectedPaths(true);
+    if (paths.isEmpty() && m_thumbnailPanel)
+        paths = m_thumbnailPanel->visiblePaths(); // post-filter set
+    if (paths.isEmpty() && m_thumbnailPanel)
+        paths = m_thumbnailPanel->pathList();
     if (paths.isEmpty())
     {
         QMessageBox::information(this, tr("导出图片"), tr("请先打开一个图片目录。"));
@@ -1909,6 +1983,8 @@ void MainWindow::exportImages()
 
     ExportDialog dlg(this);
     dlg.setSources(paths);
+    // Surface how many images will be exported (helps when filters are active).
+    dlg.setWindowTitle(tr("导出图片 — %1 张").arg(paths.size()));
     dlg.exec();
 }
 

@@ -2,6 +2,7 @@
 #pragma once
 
 #include <QDialog>
+#include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
@@ -14,8 +15,13 @@ class PluginSettings : public QDialog
   public:
     explicit PluginSettings(QWidget *parent = nullptr);
 
+  signals:
+    // Emitted after a rescan / enable-toggle so AnalysisPanel can refreshAnalyzers().
+    void pluginsChanged();
+
   private slots:
     void refreshList();
+    void rescanPlugins();
     void onTogglePlugin();
     void onAddPluginPath();
     void onRemovePluginPath();
@@ -33,5 +39,6 @@ class PluginSettings : public QDialog
     QPushButton *m_browseBtn = nullptr;
     QPushButton *m_scanBtn = nullptr;
     QLineEdit *m_searchPath = nullptr;
+    QLabel *m_statusLabel = nullptr;
     QStringList m_disabledPlugins;
 };

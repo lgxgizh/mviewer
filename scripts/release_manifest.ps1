@@ -1,0 +1,106 @@
+<#
+.SYNOPSIS
+  M14.8 — Generate SHA256SUMS + release notes for a packaged MViewer release.
+
+.DESCRIPTION
+  Scans dist/ for shipping artifacts (portable zip, Setup.exe) and writes:
+    dist/SHA256SUMS.txt          — standard "hash  filename" lines
+    dist/RELEASE_NOTES.md        — auto-extracted section from CHANGELOG.md
+
+  Safe to re-run; overwrites previous outputs. Does not modify CI workflows
+  (AGENTS.md freezes release.yml); call this from package_release.ps1 or by hand.
+
+.PARAMETER Version
+  Version string used to pick the CHANGELOG section (e.g. "1.0.3"). Defaults to
+  git describe, then "0.0.0-dev".
+
+.PARAMETER OutDir
+  Directory containing the release artifacts (default: dist).
+
+.EXAMPLE
+  powershell -ExecutionPolicy Bypass -File scripts/release_manifest.ps1 -Version 1.0.3
+#>
+param(
+    [string]$Version = "",
+    [string]$OutDir  = "dist"
+)
+
+$ErrorActionPreference = 'Stop'
+$root = (Get-Location).Path
+
+if (-not $Version) {
+    $Version = (git describe --tags --always 2>$null)
+    if (-not $Version) { $Version = "0.0.0-dev" }
+    $Version = $Version.TrimStart("v")
+}
+
+$outAbs = Join-Path $root $OutDir
+if (-not (Test-Path $outAbs)) {
+    New-Item -ItemType Directory -Force -Path $outAbs | Out-Null
+}
+
+# ── 1) SHA256SUMS for shipping artifacts ────────────────────────────────────
+$patterns = @(
+    "MViewer-*-portable.zip",
+    "MViewer-*-Setup.exe",
+    "MViewer-*.zip",
+    "MViewer-*.exe"
+)
+$files = @()
+foreach ($pat in $patterns) {
+    $files += Get-ChildItem -Path $outAbs -Filter $pat -File -ErrorAction SilentlyContinue
+}
+# De-dup by full path
+$files = $files | Sort-Object FullName -Unique
+
+$sumsPath = Join-Path $outAbs "SHA256SUMS.txt"
+if ($files.Count -eq 0) {
+    Write-Warning "No release artifacts found under $outAbs — writing empty SHA256SUMS."
+    Set-Content -Path $sumsPath -Value "# No artifacts found for version $Version" -Encoding utf8
+} else {
+    $lines = @()
+    $lines += "# MViewer $Version — SHA256 checksums"
+    $lines += "# Generated $(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssK')"
+    foreach ($f in $files) {
+        $hash = (Get-FileHash -Path $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        # GNU coreutils style: "<hash>  <filename>" (two spaces)
+        $lines += "$hash  $($f.Name)"
+        Write-Host ("  [sha256] {0}  {1}" -f $hash.Substring(0,12), $f.Name)
+    }
+    Set-Content -Path $sumsPath -Value ($lines -join "`n") -Encoding utf8
+    Write-Host "=== SHA256SUMS: $sumsPath ($($files.Count) file(s)) ==="
+}
+
+# ── 2) RELEASE_NOTES.md from CHANGELOG.md ───────────────────────────────────
+$changelog = Join-Path $root "CHANGELOG.md"
+$notesPath = Join-Path $outAbs "RELEASE_NOTES.md"
+
+if (-not (Test-Path $changelog)) {
+    Write-Warning "CHANGELOG.md not found; skipping RELEASE_NOTES.md"
+    return
+}
+
+$raw = Get-Content -Path $changelog -Raw -Encoding utf8
+# Extract the first ## [X.Y.Z] section (or Unreleased) as the release notes body.
+# Match from the first version heading up to (but not including) the next ## heading.
+$section = $null
+if ($raw -match '(?ms)^## \[([^\]]+)\][^\n]*\n(.*?)(?=^## |\z)') {
+    $section = $Matches[0].TrimEnd()
+}
+
+$header = @"
+# MViewer $Version
+
+Auto-generated from CHANGELOG.md on $(Get-Date -Format 'yyyy-MM-dd').
+
+"@
+
+if ($section) {
+    Set-Content -Path $notesPath -Value ($header + $section) -Encoding utf8
+    Write-Host "=== RELEASE_NOTES: $notesPath ==="
+} else {
+    Set-Content -Path $notesPath -Value ($header + "_No CHANGELOG section found._") -Encoding utf8
+    Write-Warning "Could not parse a version section from CHANGELOG.md"
+}
+
+Write-Host "=== release_manifest complete (version $Version) ==="

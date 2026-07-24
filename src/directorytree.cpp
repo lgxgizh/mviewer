@@ -207,18 +207,22 @@ void DirectoryTree::navigateTo(const QString &path, bool emitSignal)
     // A-1.2: expand all ancestors so the target node is visible.
     expandAncestors(sourceIdx);
 
-    // A-1.5: for large directories, show loading indicator briefly.
+    // A-1.5: for large / not-yet-populated directories, show loading and fetch
+    // progressively so the UI stays responsive (yields via QTimer).
     const int rowCount = m_model->rowCount(sourceIdx);
-    if (rowCount >= kLargeDirThreshold || (rowCount == 0 && m_model->canFetchMore(sourceIdx)))
+    const bool needsFetch =
+        rowCount >= kLargeDirThreshold || (rowCount == 0 && m_model->canFetchMore(sourceIdx));
+    if (needsFetch)
     {
         setLoading(true);
-        m_model->fetchMore(sourceIdx);
+        scheduleFetchMore(sourceIdx);
     }
 
     const QModelIndex proxyIdx = m_proxy->mapFromSource(sourceIdx);
     if (!proxyIdx.isValid())
     {
-        setLoading(false);
+        if (!needsFetch)
+            setLoading(false);
         return;
     }
 
@@ -244,7 +248,9 @@ void DirectoryTree::navigateTo(const QString &path, bool emitSignal)
 
     // A-1.3: apply visual highlight to the current directory.
     applyCurrentHighlight(proxyIdx);
-    setLoading(false);
+    // Keep loading indicator until progressive fetch finishes (onRowsInserted).
+    if (!needsFetch)
+        setLoading(false);
 }
 
 void DirectoryTree::onDirectoryChanged(const QString &path)
@@ -261,12 +267,51 @@ void DirectoryTree::onDirectoryChanged(const QString &path)
     }
 }
 
+void DirectoryTree::scheduleFetchMore(const QModelIndex &sourceIdx)
+{
+    // A-1.5: progressive fetch — call fetchMore once, then re-schedule if the
+    // model still has more children. Yields to the event loop between batches
+    // so expand/navigate stays interactive on 10k+ entry directories.
+    if (!sourceIdx.isValid())
+        return;
+    const QString path = m_model->filePath(sourceIdx);
+    m_pendingFetchPath = path;
+    if (m_model->canFetchMore(sourceIdx))
+        m_model->fetchMore(sourceIdx);
+
+    // Re-check after the model has processed the batch.
+    QTimer::singleShot(0, this,
+                       [this, path]()
+                       {
+                           if (m_pendingFetchPath != path)
+                               return; // superseded by a newer navigate
+                           const QModelIndex src = m_model->index(path);
+                           if (!src.isValid())
+                           {
+                               setLoading(false);
+                               m_pendingFetchPath.clear();
+                               return;
+                           }
+                           if (m_model->canFetchMore(src))
+                           {
+                               setLoading(true);
+                               scheduleFetchMore(src);
+                           }
+                           else
+                           {
+                               setLoading(false);
+                               m_pendingFetchPath.clear();
+                           }
+                       });
+}
+
 void DirectoryTree::onRowsInserted(const QModelIndex &parent, int first, int last)
 {
     Q_UNUSED(first);
     Q_UNUSED(last);
-    // A-1.5: when children appear after fetchMore, clear loading state.
-    if (m_loading)
+    // A-1.5: when children appear after fetchMore, clear loading state
+    // only if no more progressive fetch is pending.
+    if (m_loading && m_pendingFetchPath.isEmpty())
     {
         const QString parentPath = m_model->filePath(parent);
         if (parentPath == m_currentPath || parentPath == m_watchedPath)
@@ -285,7 +330,16 @@ void DirectoryTree::onExpanded(const QModelIndex &index)
     if (path.isEmpty())
         return;
 
-    m_model->fetchMore(source);
+    // A-1.5: large dirs use progressive fetch so expand stays interactive.
+    if (m_model->canFetchMore(source) || m_model->rowCount(source) >= kLargeDirThreshold)
+    {
+        setLoading(true);
+        scheduleFetchMore(source);
+    }
+    else
+    {
+        m_model->fetchMore(source);
+    }
     watchPath(path);
 }
 

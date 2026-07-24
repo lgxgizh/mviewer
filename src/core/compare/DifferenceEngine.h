@@ -16,6 +16,12 @@ class DifferenceEngine
     // (blue = cold, green = mid, red = hot).
     static ImageData heatMap(const ImageData &gray);
 
+    // A-4.6: highlight mode — differences above threshold become red; similar
+    // pixels are desaturated gray (from base image luminance). Output RGB24.
+    // `base` may be null/empty: similar pixels then render as mid-gray.
+    static ImageData highlightMap(const ImageData &grayDiff, const ImageData &base,
+                                  uint8_t threshold = 0);
+
     // Apply threshold to a grayscale image: pixels below threshold become 0 (black).
     static ImageData applyThreshold(const ImageData &gray, uint8_t threshold);
 

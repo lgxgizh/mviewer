@@ -8,8 +8,10 @@
 #include <QCoreApplication>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
+#include <QDir>
 #include <QFileDialog>
 #include <QGroupBox>
+#include <QHBoxLayout>
 #include <QLabel>
 #include <QMessageBox>
 #include <QSettings>
@@ -39,7 +41,8 @@ void PluginSettings::setupUi()
     auto *btnLayout = new QHBoxLayout();
 
     m_scanBtn = new QPushButton(tr("重新扫描"), this);
-    connect(m_scanBtn, &QPushButton::clicked, this, &PluginSettings::refreshList);
+    m_scanBtn->setToolTip(tr("从搜索路径重新加载插件，并刷新分析器列表"));
+    connect(m_scanBtn, &QPushButton::clicked, this, &PluginSettings::rescanPlugins);
     btnLayout->addWidget(m_scanBtn);
 
     m_toggleBtn = new QPushButton(tr("启用 / 禁用"), this);
@@ -65,6 +68,10 @@ void PluginSettings::setupUi()
     m_searchPath->setReadOnly(true);
     pathLayout->addWidget(m_searchPath);
     mainLayout->addLayout(pathLayout);
+
+    m_statusLabel = new QLabel(this);
+    m_statusLabel->setStyleSheet("color:#888;");
+    mainLayout->addWidget(m_statusLabel);
 
     // ── Close button ──
     auto *btnBox = new QDialogButtonBox(QDialogButtonBox::Close, this);
@@ -103,12 +110,15 @@ void PluginSettings::refreshList()
         auto *item = new QListWidgetItem(tr("(未检测到任何插件)"));
         item->setFlags(Qt::NoItemFlags);
         m_list->addItem(item);
+        if (m_statusLabel)
+            m_statusLabel->setText(tr("已加载 0 个插件"));
         return;
     }
 
     const QIcon loadedIcon(QApplication::style()->standardIcon(QStyle::SP_CommandLink));
     const QIcon disabledIcon(QApplication::style()->standardIcon(QStyle::SP_BrowserStop));
 
+    int enabled = 0;
     for (const auto &p : plugins)
     {
         const QString pluginName = QString::fromStdString(p.name);
@@ -122,20 +132,52 @@ void PluginSettings::refreshList()
             caps << tr("解码器");
         if (!p.exporterId.empty())
             caps << tr("导出器");
+        if (!p.importerId.empty())
+            caps << tr("导入器");
         const QString capStr = caps.isEmpty() ? tr("通用") : caps.join(", ");
 
         QString label;
         if (disabled)
             label = tr("[已禁用] %1 [%2]").arg(pluginName, capStr);
         else
+        {
+            ++enabled;
             label =
                 tr("%1 [%2] — %3").arg(pluginName).arg(capStr).arg(QString::fromStdString(p.path));
+        }
 
         auto *item = new QListWidgetItem(disabled ? disabledIcon : loadedIcon, label);
         item->setData(Qt::UserRole, pluginName);
         item->setToolTip(QString::fromStdString(p.path));
         m_list->addItem(item);
     }
+    if (m_statusLabel)
+        m_statusLabel->setText(
+            tr("已加载 %1 个插件（启用 %2）").arg(plugins.size()).arg(enabled));
+}
+
+void PluginSettings::rescanPlugins()
+{
+    // Reload every configured search path so newly dropped DLLs appear without
+    // restarting the app. Then notify AnalysisPanel via pluginsChanged.
+    auto &pm = PluginManager::instance();
+    const QStringList paths = m_searchPath->text().split(';', Qt::SkipEmptyParts);
+    int total = 0;
+    for (const QString &dir : paths)
+    {
+        if (QDir(dir).exists())
+            total += pm.loadDirectory(dir.toStdString());
+    }
+    // Also scan the default app plugins folder if not already listed.
+    const QString def = QCoreApplication::applicationDirPath() + "/plugins";
+    if (!paths.contains(def) && QDir(def).exists())
+        total += pm.loadDirectory(def.toStdString());
+
+    refreshList();
+    if (m_statusLabel)
+        m_statusLabel->setText(m_statusLabel->text() +
+                               tr(" · 本次扫描加载 %1 个").arg(total));
+    emit pluginsChanged();
 }
 
 void PluginSettings::onTogglePlugin()
@@ -154,6 +196,7 @@ void PluginSettings::onTogglePlugin()
 
     saveSettings();
     refreshList();
+    emit pluginsChanged();
 }
 
 void PluginSettings::onAddPluginPath()

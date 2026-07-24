@@ -53,12 +53,29 @@ the test suite — it only activates in the field to make crashes diagnosable.
 ## 6. Package
 
 ```powershell
-scripts/package_release.ps1   # portable zip + NSIS installer
+scripts/package_release.ps1   # portable zip + NSIS installer + M14.8 manifest
 ```
 
 Verify `dist/MViewer-<ver>-portable.zip` launches offscreen with no missing
 dependency errors, and `dist/MViewer-<ver>-Setup.exe` installs/uninstalls
 cleanly.
+
+## 7. Release metadata (M14.8)
+
+After packaging, confirm:
+
+```
+dist/SHA256SUMS.txt      # one hash line per shipping artifact
+dist/RELEASE_NOTES.md    # auto-extracted from CHANGELOG.md
+```
+
+Or re-run standalone:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/release_manifest.ps1 -Version 1.0.3
+```
+
+Attach both files to the GitHub Release alongside the zip/installer.
 
 ## Notes
 

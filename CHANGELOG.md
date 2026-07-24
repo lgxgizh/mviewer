@@ -6,6 +6,43 @@ All notable changes to this project are documented here. The format is based on
 
 ## [1.0.3] - 2026-07-24
 
+### Added — Release automation (M14.8 / B7)
+
+- **SHA256SUMS + 发布说明:** `scripts/release_manifest.ps1` 扫描 `dist/` 产物，
+  生成 `SHA256SUMS.txt`（标准 hash 文件名格式）与 `RELEASE_NOTES.md`
+  （从 CHANGELOG 抽取最新版本段）。`package_release.ps1` 打包结束后自动调用。
+  不修改冻结的 `release.yml`（AGENTS.md）。
+
+### Improved — Asset / Analyzer 工作流 (M17 高价值子集)
+
+- **批量分析导出:** 支持选择分析器 → `runBatch` → CSV/JSON（`buildBatchReport`）；
+  无选中时回落当前过滤可见集；工具菜单 `Ctrl+Shift+A` + 右键入口。
+- **插件管理:** 「重新扫描」真正 `loadDirectory`；启用/禁用与扫描后发出
+  `pluginsChanged`，分析面板自动 `refreshAnalyzers()`；显示导入器能力与状态栏。
+- **导出尊重过滤:** 导出图片优先 Selection → 评分/标签过滤后的可见集。
+- **分析面板:** 增加「运行」按钮，统一分析入口更可发现。
+
+### Improved — Browse 体验门禁 (M15 / A-1~A-3)
+
+- **Selection 统一:** Export / Batch / Compare 优先消费 `SelectionModel`；
+  菜单动作随选中数量启用/禁用（`resolveSelectedPaths` / `updateSelectionActions`）。
+- **大目录异步:** DirectoryTree 对 ≥500 子项目录使用渐进式 `fetchMore`
+  （`scheduleFetchMore` 让出事件循环），展开/导航不再卡死 UI。
+- **万级缩略图:** 可见区优先解码；预测窗口随目录规模自适应（48/64/96）。
+
+### Added — Professional Compare 收尾 (M16 / A-4)
+
+- **像素连线 (Pixel Link):** 比较工作区新增「像素连线」模式（快捷键 L）。
+  开启后点击任意图片添加共享图像坐标标记点，各窗格显示编号圆点，两图之间
+  绘制虚线连接；悬停「标记」标签可查看每点 RGB 与相对基准的 Δ。
+  (`src/compareworkspace.{h,cpp}`, `src/widgets/rawimageview.{h,cpp}`)
+- **叠加不透明度滑块:** 叠加对比模式支持 0–100% 上层透明度调节（此前写死 0.45）。
+- **差异高亮模式:** 「高亮差异」开关 — 差异区域红色高亮、相似区域灰度显示
+  （`DifferenceEngine::highlightMap`）。
+- **自定义 M×N 网格:** 布局下拉新增「自定义」，行/列 SpinBox 可设 1–8。
+- **坐标映射修正:** `RawImageView::widgetToImage` 改为与绘制一致的左上角原点，
+  像素检视 / 准星 / 连线标记共用同一坐标系。
+
 ### Added — GPU Stage A (M13 / A-8.1)
 
 - **QOpenGLWidget 查看器:** `ImageViewer` 改为继承 `QOpenGLWidget`，为 GPU

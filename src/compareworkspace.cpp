@@ -173,9 +173,31 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
                     m_swipeChk->setChecked(false);
                 if (m_grid)
                     m_grid->setVisible(!on && !isSplitOrSwipe());
+                if (m_overlayAlphaSlider)
+                    m_overlayAlphaSlider->setEnabled(on);
                 update();
             });
     syncLayout->addWidget(m_overlayChk);
+
+    // A-4.1: overlay opacity slider (0–100%).
+    m_overlayAlphaSlider = new QSlider(Qt::Horizontal, this);
+    m_overlayAlphaSlider->setRange(0, 100);
+    m_overlayAlphaSlider->setValue(m_overlayAlpha);
+    m_overlayAlphaSlider->setMaximumWidth(80);
+    m_overlayAlphaSlider->setEnabled(false);
+    m_overlayAlphaSlider->setToolTip(tr("叠加不透明度（上层图片）"));
+    connect(m_overlayAlphaSlider, &QSlider::valueChanged, this,
+            [this](int v)
+            {
+                m_overlayAlpha = v;
+                if (m_overlayAlphaLabel)
+                    m_overlayAlphaLabel->setText(QString("%1%").arg(v));
+                update();
+            });
+    syncLayout->addWidget(m_overlayAlphaSlider);
+    m_overlayAlphaLabel = new QLabel(QString("%1%").arg(m_overlayAlpha), this);
+    m_overlayAlphaLabel->setMinimumWidth(28);
+    syncLayout->addWidget(m_overlayAlphaLabel);
 
     // A-4.5: continuous compare — walk consecutive pairs without reopening.
     m_prevPairBtn = new QPushButton("◀ 上一对", this);
@@ -211,16 +233,62 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
             [this](int value) { m_thresholdLabel->setText(QString::number(value)); });
     syncLayout->addWidget(m_thresholdLabel);
 
+    // A-4.6: Diff highlight mode (red diffs / gray similar).
+    m_diffHighlightChk = new QCheckBox(tr("高亮差异"), this);
+    m_diffHighlightChk->setToolTip(tr("差异区域红色高亮，相似区域灰度显示"));
+    connect(m_diffHighlightChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                m_diffHighlight = on;
+                refreshDiffOverlay();
+            });
+    syncLayout->addWidget(m_diffHighlightChk);
+
+    // A-4.3: Pixel Link — mark corresponding points across cells.
+    m_pixelLinkChk = new QCheckBox(tr("像素连线"), this);
+    m_pixelLinkChk->setToolTip(tr("开启后点击图片添加标记点，显示各图 RGB 与差值"));
+    connect(m_pixelLinkChk, &QCheckBox::toggled, this, &CompareWorkspace::onPixelLinkToggled);
+    syncLayout->addWidget(m_pixelLinkChk);
+    m_clearLinksBtn = new QPushButton(tr("清除标记"), this);
+    m_clearLinksBtn->setEnabled(false);
+    m_clearLinksBtn->setToolTip(tr("清除全部像素连线标记"));
+    connect(m_clearLinksBtn, &QPushButton::clicked, this, &CompareWorkspace::clearLinkPoints);
+    syncLayout->addWidget(m_clearLinksBtn);
+    m_linkInfoLabel = new QLabel(tr("标记: 0"), this);
+    m_linkInfoLabel->setMinimumWidth(48);
+    m_linkInfoLabel->setStyleSheet("color:#aaa;");
+    syncLayout->addWidget(m_linkInfoLabel);
+
     // P0 #③: explicit multi-layout selector (auto / single / 2-4 columns / row).
     auto *layoutLabel = new QLabel(tr("布局:"), this);
     syncLayout->addWidget(layoutLabel);
     m_layoutCombo = new QComboBox(this);
     m_layoutCombo->addItems(
-        {tr("自动"), tr("单列"), tr("2 列"), tr("3 列"), tr("4 列"), tr("一行")});
+        {tr("自动"), tr("单列"), tr("2 列"), tr("3 列"), tr("4 列"), tr("一行"), tr("自定义")});
     m_layoutCombo->setCurrentIndex(0);
     connect(m_layoutCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &CompareWorkspace::onLayoutChanged);
     syncLayout->addWidget(m_layoutCombo);
+
+    // A-4.2: custom M×N grid spin boxes (active when layout = 自定义).
+    syncLayout->addWidget(new QLabel(tr("行"), this));
+    m_gridRowsSpin = new QSpinBox(this);
+    m_gridRowsSpin->setRange(1, 8);
+    m_gridRowsSpin->setValue(2);
+    m_gridRowsSpin->setEnabled(false);
+    m_gridRowsSpin->setMaximumWidth(48);
+    connect(m_gridRowsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+            &CompareWorkspace::onCustomGridChanged);
+    syncLayout->addWidget(m_gridRowsSpin);
+    syncLayout->addWidget(new QLabel(tr("列"), this));
+    m_gridColsSpin = new QSpinBox(this);
+    m_gridColsSpin->setRange(1, 8);
+    m_gridColsSpin->setValue(2);
+    m_gridColsSpin->setEnabled(false);
+    m_gridColsSpin->setMaximumWidth(48);
+    connect(m_gridColsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+            &CompareWorkspace::onCustomGridChanged);
+    syncLayout->addWidget(m_gridColsSpin);
 
     // P0 #③: inspector + histogram side panel toggle.
     m_sideChk = new QCheckBox(tr("检视面板"), this);
@@ -549,6 +617,10 @@ void CompareWorkspace::rebuildCells()
                 [this, view](const QPointF &p) { onCrosshairMoved(view, p); });
         connect(view, &RawImageView::focusRequested, this, &CompareWorkspace::onFocusRequested);
 
+        // A-4.3: restore any existing pixel-link markers after rebuild.
+        if (!m_linkPoints.isEmpty())
+            view->setLinkMarkers(m_linkPoints);
+
         // Caption label
         auto *caption = new QLabel(cellWidget);
         caption->setAlignment(Qt::AlignCenter);
@@ -576,10 +648,26 @@ void CompareWorkspace::refreshDiffOverlay()
         return;
     // M15: apply threshold from UI slider
     const ImageData thresholded = DifferenceEngine::applyThreshold(diff, m_thresholdValue);
-    const ImageData heat = DifferenceEngine::heatMap(thresholded);
-    if (heat.isNull())
+
+    ImageData overlayImg;
+    if (m_diffHighlight)
+    {
+        // A-4.6: red diffs / gray similar, using the reference (base) image.
+        const int baseIdx = diffBaseIndex();
+        const ImageFrame *baseFrame = m_engine.imageAt(baseIdx);
+        const ImageData basePx =
+            (baseFrame && !baseFrame->pixels().isNull()) ? baseFrame->pixels() : ImageData();
+        overlayImg = DifferenceEngine::highlightMap(thresholded, basePx, m_thresholdValue);
+    }
+    else
+    {
+        overlayImg = DifferenceEngine::heatMap(thresholded);
+    }
+    if (overlayImg.isNull())
         return;
-    m_cellViews[res.index]->setOverlay(mvcore::toQImage(heat), 0.5);
+    // Highlight mode is denser (full-frame gray+red) so use higher alpha.
+    const double alpha = m_diffHighlight ? 0.75 : 0.5;
+    m_cellViews[res.index]->setOverlay(mvcore::toQImage(overlayImg), alpha);
     update();
 }
 
@@ -675,6 +763,12 @@ void CompareWorkspace::onLayoutChanged()
     if (!m_layoutCombo)
         return;
     const int idx = m_layoutCombo->currentIndex();
+    const bool custom = (idx == 6); // 自定义 M×N
+    if (m_gridRowsSpin)
+        m_gridRowsSpin->setEnabled(custom);
+    if (m_gridColsSpin)
+        m_gridColsSpin->setEnabled(custom);
+
     int cols = 0;
     switch (idx)
     {
@@ -693,6 +787,10 @@ void CompareWorkspace::onLayoutChanged()
     case 5:
         cols = m_engine.imageCount();
         break; // 一行
+    case 6:
+        // A-4.2: custom grid — columns from spin; rows derived by engine.
+        cols = m_gridColsSpin ? m_gridColsSpin->value() : 2;
+        break;
     default:
         cols = 0;
         break; // 自动
@@ -700,9 +798,23 @@ void CompareWorkspace::onLayoutChanged()
     m_engine.setColumns(cols);
     rebuildCells();
     fitAll();
+    refreshLinkMarkers();
     update();
     if (m_sidePanel && m_sidePanel->isVisible())
         refreshHistograms();
+}
+
+void CompareWorkspace::onCustomGridChanged()
+{
+    if (!m_layoutCombo || m_layoutCombo->currentIndex() != 6)
+        return;
+    // Re-apply custom columns; rows are informational (engine packs by cols).
+    const int cols = m_gridColsSpin ? m_gridColsSpin->value() : 2;
+    m_engine.setColumns(cols);
+    rebuildCells();
+    fitAll();
+    refreshLinkMarkers();
+    update();
 }
 
 void CompareWorkspace::onSideToggled(bool on)
@@ -984,6 +1096,13 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
         else if (m_overlayChk && m_overlayChk->isChecked())
             drawOverlayCompare(p);
     }
+
+    // A-4.3: draw connecting lines between linked points across cells (2-up).
+    if (m_pixelLinkChk && m_pixelLinkChk->isChecked() && !m_linkPoints.isEmpty() && n >= 2)
+    {
+        QPainter p(this);
+        drawPixelLinkLines(p);
+    }
 }
 
 void CompareWorkspace::drawSplitCompare(QPainter &p)
@@ -1027,9 +1146,9 @@ void CompareWorkspace::drawOverlayCompare(QPainter &p)
     // Draw the base image fully opaque over the entire viewport.
     drawFitImage(p, img0, r);
 
-    // Blend the second image on top with reduced opacity so differences glow
-    // and common content stays neutral.
-    p.setOpacity(0.45);
+    // Blend the second image on top with user-controlled opacity (A-4.1 slider).
+    const double opacity = std::clamp(m_overlayAlpha / 100.0, 0.0, 1.0);
+    p.setOpacity(opacity);
     p.setCompositionMode(QPainter::CompositionMode_SourceOver);
     drawFitImage(p, img1, r);
     p.setOpacity(1.0);
@@ -1081,6 +1200,14 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
         auto *me = static_cast<QMouseEvent *>(event);
         if (me->button() == Qt::LeftButton)
         {
+            // A-4.3: in Pixel Link mode, click places a shared image-space marker.
+            if (m_pixelLinkChk && m_pixelLinkChk->isChecked() && idx >= 0 &&
+                idx < m_cellViews.size() && m_cellViews[idx])
+            {
+                const QPointF imgPt = m_cellViews[idx]->widgetToImage(me->pos());
+                addLinkPoint(imgPt);
+                return true; // consume — do not start pan drag
+            }
             m_dragging = true;
             m_lastMouse = me->pos();
             m_dragStartPos = me->pos();
@@ -1709,6 +1836,184 @@ void CompareWorkspace::onSwapPanes()
     }
 }
 
+// ─── A-4.3: Pixel Link ───────────────────────────────────────────────────────
+
+void CompareWorkspace::onPixelLinkToggled(bool on)
+{
+    if (m_clearLinksBtn)
+        m_clearLinksBtn->setEnabled(on && !m_linkPoints.isEmpty());
+    if (!on)
+    {
+        // Keep markers stored but hide them when mode is off.
+        for (auto *v : m_cellViews)
+            if (v)
+                v->clearLinkMarkers();
+    }
+    else
+    {
+        refreshLinkMarkers();
+    }
+    updateLinkInfo();
+    update();
+}
+
+void CompareWorkspace::addLinkPoint(const QPointF &imgPt)
+{
+    if (imgPt.x() < 0 || imgPt.y() < 0)
+        return;
+    // Cap at 16 markers to keep the UI readable.
+    if (m_linkPoints.size() >= 16)
+        m_linkPoints.removeFirst();
+    m_linkPoints.push_back(imgPt);
+    refreshLinkMarkers();
+    updateLinkInfo();
+    if (m_clearLinksBtn)
+        m_clearLinksBtn->setEnabled(m_pixelLinkChk && m_pixelLinkChk->isChecked());
+    update();
+}
+
+void CompareWorkspace::clearLinkPoints()
+{
+    m_linkPoints.clear();
+    refreshLinkMarkers();
+    updateLinkInfo();
+    if (m_clearLinksBtn)
+        m_clearLinksBtn->setEnabled(false);
+    update();
+}
+
+void CompareWorkspace::refreshLinkMarkers()
+{
+    for (auto *v : m_cellViews)
+    {
+        if (!v)
+            continue;
+        if (m_pixelLinkChk && m_pixelLinkChk->isChecked() && !m_linkPoints.isEmpty())
+            v->setLinkMarkers(m_linkPoints);
+        else
+            v->clearLinkMarkers();
+    }
+}
+
+void CompareWorkspace::updateLinkInfo()
+{
+    if (!m_linkInfoLabel)
+        return;
+    if (m_linkPoints.isEmpty())
+    {
+        m_linkInfoLabel->setText(tr("标记: 0"));
+        m_linkInfoLabel->setToolTip(QString());
+        return;
+    }
+
+    // Build a multi-line tooltip with per-marker RGB + delta across cells.
+    QStringList lines;
+    lines << tr("共 %1 个标记点").arg(m_linkPoints.size());
+    const int n = m_engine.imageCount();
+    for (int i = 0; i < m_linkPoints.size(); ++i)
+    {
+        const int x = qRound(m_linkPoints[i].x());
+        const int y = qRound(m_linkPoints[i].y());
+        QString line = tr("#%1 (%2,%3)").arg(i + 1).arg(x).arg(y);
+        int baseR = -1, baseG = -1, baseB = -1;
+        for (int c = 0; c < n; ++c)
+        {
+            const auto probe = m_engine.inspectPixel(x, y, diffBaseIndex());
+            // inspectPixel returns all cells; sample from cell view image as fallback.
+            int r = 0, g = 0, b = 0;
+            bool ok = false;
+            if (c < m_cellViews.size() && m_cellViews[c] && !m_cellViews[c]->image().isNull())
+            {
+                const QImage &img = m_cellViews[c]->image();
+                if (x >= 0 && y >= 0 && x < img.width() && y < img.height())
+                {
+                    const QRgb px = img.pixel(x, y);
+                    r = qRed(px);
+                    g = qGreen(px);
+                    b = qBlue(px);
+                    ok = true;
+                }
+            }
+            Q_UNUSED(probe);
+            if (!ok)
+                continue;
+            if (c == 0 || c == diffBaseIndex())
+            {
+                baseR = r;
+                baseG = g;
+                baseB = b;
+                line += QString("  [%1] RGB(%2,%3,%4)").arg(c).arg(r).arg(g).arg(b);
+            }
+            else if (baseR >= 0)
+            {
+                line += QString("  [%1] RGB(%2,%3,%4) Δ(%5,%6,%7)")
+                            .arg(c)
+                            .arg(r)
+                            .arg(g)
+                            .arg(b)
+                            .arg(r - baseR)
+                            .arg(g - baseG)
+                            .arg(b - baseB);
+            }
+            else
+            {
+                line += QString("  [%1] RGB(%2,%3,%4)").arg(c).arg(r).arg(g).arg(b);
+            }
+        }
+        lines << line;
+    }
+    m_linkInfoLabel->setText(tr("标记: %1").arg(m_linkPoints.size()));
+    m_linkInfoLabel->setToolTip(lines.join('\n'));
+
+    // Also push a short summary to the status bar via pixelInfo.
+    if (!m_linkPoints.isEmpty())
+    {
+        const auto &last = m_linkPoints.last();
+        emit pixelInfo(tr("像素连线 #%1 @ (%2,%3) — 悬停「标记」查看全部 RGB/Δ")
+                           .arg(m_linkPoints.size())
+                           .arg(qRound(last.x()))
+                           .arg(qRound(last.y())));
+    }
+}
+
+void CompareWorkspace::drawPixelLinkLines(QPainter &p)
+{
+    // Draw dashed connectors between the same marker index on cell 0 and cell 1
+    // when both cells are visible in the grid (not split/swipe/overlay modes).
+    if (m_cellViews.size() < 2 || !m_cellViews[0] || !m_cellViews[1])
+        return;
+    if (isSplitOrSwipe() || (m_overlayChk && m_overlayChk->isChecked()))
+        return;
+
+    auto mapToWorkspace = [this](RawImageView *view, const QPointF &imgPt) -> QPointF
+    {
+        if (!view || view->image().isNull() || view->scale() <= 0.0)
+            return {};
+        // Image → widget (view-local), then map to this workspace.
+        const double sc = view->scale();
+        const QPointF off = view->offset();
+        const double cx = view->width() / 2.0 + off.x();
+        const double cy = view->height() / 2.0 + off.y();
+        const double dw = view->image().width() * sc;
+        const double dh = view->image().height() * sc;
+        const double wx = cx - dw / 2.0 + imgPt.x() * sc;
+        const double wy = cy - dh / 2.0 + imgPt.y() * sc;
+        return view->mapTo(this, QPoint(qRound(wx), qRound(wy)));
+    };
+
+    QPen pen(QColor(0xFF, 0x66, 0x66, 180), 1, Qt::DashLine);
+    pen.setCosmetic(true);
+    p.setPen(pen);
+    for (const QPointF &pt : m_linkPoints)
+    {
+        const QPointF a = mapToWorkspace(m_cellViews[0], pt);
+        const QPointF b = mapToWorkspace(m_cellViews[1], pt);
+        if (a.isNull() || b.isNull())
+            continue;
+        p.drawLine(a, b);
+    }
+}
+
 // P0-4: temporary compare — hold Space to blink, release to stop.
 void CompareWorkspace::keyPressEvent(QKeyEvent *event)
 {
@@ -1752,8 +2057,8 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
-    // Number keys 1-6 switch the layout preset (parity with the layout combo),
-    // so the user can re-tile without reaching for the mouse.
+    // Number keys 1-7 switch the layout preset (parity with the layout combo),
+    // so the user can re-tile without reaching for the mouse. 7 = 自定义.
     if (m_layoutCombo && !event->modifiers())
     {
         const int key = event->key();
@@ -1770,12 +2075,21 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
             idx = 4;
         else if (key == Qt::Key_6)
             idx = 5;
+        else if (key == Qt::Key_7)
+            idx = 6; // 自定义 M×N
         if (idx >= 0 && idx < m_layoutCombo->count())
         {
             m_layoutCombo->setCurrentIndex(idx);
             event->accept();
             return;
         }
+    }
+    // L key: toggle Pixel Link mode.
+    if (event->key() == Qt::Key_L && !event->modifiers() && m_pixelLinkChk)
+    {
+        m_pixelLinkChk->setChecked(!m_pixelLinkChk->isChecked());
+        event->accept();
+        return;
     }
     QWidget::keyPressEvent(event);
 }

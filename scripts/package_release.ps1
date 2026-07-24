@@ -62,4 +62,9 @@ if ($makensis) {
     Write-Warning "makensis not found -- skipped installer. Portable zip is the distributable."
 }
 
+# 4) M14.8: SHA256SUMS + auto release notes (does not touch release.yml)
+Write-Host "=== release_manifest (M14.8) ==="
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts/release_manifest.ps1") -Version $Version
+if ($LASTEXITCODE -ne 0) { Write-Warning "release_manifest failed (non-fatal)" }
+
 Write-Host "=== release packaging complete (version $Version) ==="

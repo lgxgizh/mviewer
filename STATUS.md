@@ -64,12 +64,23 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 - GPU Stage C/D: D3D11/Vulkan direct compositing (UI boundary frozen).
 - Linux/macOS native installers (Linux CI artifacts build; only Windows ships an installer).
 - GPU Stage B/C/D: custom shaders, multi-pass, D3D11/Vulkan (UI boundary frozen).
-- **M14.8**: release pipeline SHA256 manifest + auto-generated changelog.
 
 ## Known gaps
 
 - RAW = preview-only (no demosaic); some large/edge RAW containers may fall through to the fallback decoder.
 - GPU Stage A is opt-in (`MVIEWER_GPU=1`); default remains CPU tile path + HiDPI decode.
+- ~~**M14.8**: release pipeline SHA256 manifest + auto-generated changelog~~ ✅ (`scripts/release_manifest.ps1`).
+
+## Product-force progress (2026-07-24)
+
+| 工作流 | 状态 | 说明 |
+|--------|------|------|
+| A-1~A-10 对账 | ✅ | `docs/review/A_ITEMS_COMPLETION_AUDIT_2026-07-24.md` — DONE ~91% |
+| M16 Compare 收尾 | ✅ | Pixel Link / Overlay 透明度 / Diff 高亮 / 自定义网格 |
+| Browse 门禁 | ✅ | Selection 统一 + 大目录渐进 fetch + 万级缩略图预测窗口 |
+| Workspace 恢复 | ✅ | 布局/缩放/Compare/崩溃恢复（A-6 已落地） |
+| M17 高价值子集 | ✅ | 批量分析导出 / 插件 rescan / 评分过滤导出 |
+| 1.0 发布准备 | 🔄 | 性能实测 + 安装包验收（M14.8 SHA256/notes ✅） |
 
 ## Plugin SDK (frozen)
 
@@ -86,9 +97,10 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 3. Tag `v1.0.0` → `release.yml` builds, packages, and attaches artifacts to the
    GitHub Release.
 4. Verify `dist/MViewer-1.0.0-portable.zip` and `dist/MViewer-1.0.0-Setup.exe`.
+5. Attach SHA256SUMS.txt (M14.8) and release notes from CHANGELOG.
 
 ## Status verdict
 
-The engine is release-grade. Documentation and release-metadata consistency is
-tracked in `docs/review/M14_RELEASE_AUDIT.md` (M14.1). Resolve blockers B1–B5
-there before tagging the RC.
+The engine is release-grade. Product workflows (browse → compare → analyze → export)
+are closed for Beta. Remaining 1.0 work is release metadata automation, performance
+baseline recording, and package verification — not new architecture.

@@ -20,6 +20,7 @@
 #include <QSpinBox>
 #include <QStringList>
 #include <QTimer>
+#include <QVector>
 #include <QWidget>
 #include <memory>
 #include <vector>
@@ -158,10 +159,34 @@ class CompareWorkspace : public QWidget
     bool m_splitDragging = false;
     // A-4.1: Overlay compare mode — semi-transparent blend of the two images.
     QCheckBox *m_overlayChk = nullptr;
+    QSlider *m_overlayAlphaSlider = nullptr; // 0–100 → opacity of top image
+    QLabel *m_overlayAlphaLabel = nullptr;
+    int m_overlayAlpha = 45; // percent
     void drawSplitCompare(QPainter &p);
     void drawSwipeCompare(QPainter &p, int x);
     void drawOverlayCompare(QPainter &p);
     void drawFitImage(QPainter &p, const QImage &img, const QRect &target);
+
+    // A-4.3: Pixel Link — mark corresponding image-space points across cells.
+    QCheckBox *m_pixelLinkChk = nullptr;
+    QPushButton *m_clearLinksBtn = nullptr;
+    QLabel *m_linkInfoLabel = nullptr;
+    QVector<QPointF> m_linkPoints; // shared image-space markers (top-left origin)
+    void onPixelLinkToggled(bool on);
+    void addLinkPoint(const QPointF &imgPt);
+    void clearLinkPoints();
+    void refreshLinkMarkers();
+    void updateLinkInfo();
+    void drawPixelLinkLines(QPainter &p);
+
+    // A-4.6: Diff highlight mode (red diffs / gray similar) vs heatmap.
+    QCheckBox *m_diffHighlightChk = nullptr;
+    bool m_diffHighlight = false;
+
+    // A-4.2: custom M×N grid (spin boxes; 0 = use layout combo).
+    QSpinBox *m_gridRowsSpin = nullptr;
+    QSpinBox *m_gridColsSpin = nullptr;
+    void onCustomGridChanged();
 
     // A-4.5: continuous compare — walk consecutive pairs from a pool.
     QStringList m_imagePool;

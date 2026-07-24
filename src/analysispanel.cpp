@@ -68,6 +68,13 @@ void AnalysisPanel::buildUi()
     // registry analyzer, so it stays as an extra option.
     m_analyzerCombo->addItem(tr("Dual Compare (PSNR/SSIM)"), QString("builtin_compare"));
     plugBar->addWidget(m_analyzerCombo, 1);
+    // A-7.1: explicit Run button so the unified analyzer entry is discoverable
+    // without relying solely on combo activation.
+    auto *runBtn = new QPushButton(tr("运行"));
+    runBtn->setToolTip(tr("对当前图片运行所选分析器"));
+    connect(runBtn, &QPushButton::clicked, this, &AnalysisPanel::reanalyze);
+    plugBar->addWidget(runBtn);
+
     // P1-6: one-click export of the current analysis report, so the analyzer
     // workflow (Image -> pipeline -> result panel -> export) stays inside the panel
     // instead of forcing a trip to the File menu.

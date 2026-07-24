@@ -18,7 +18,7 @@
 | B4 | FAIL | Duplicate + broken packaging scripts at repo root | `pack_installer.ps1`, `pack_portable.ps1` | ✅ Fixed (M14.1) |
 | B5 | WARN | Qt version mismatch README (`6.11`) vs CI (`6.8.0`) | `README.md` vs `ci.yml` | ✅ Fixed (M14.1) |
 | B6 | ✅ RESOLVED | SDK lacked `apiVersion`/`sdkVersion`/`abiVersion` | `docs/sdk/PLUGIN_SDK.md` (→ M14.2) | ✅ Done (M14.2) |
-| B7 | TODO | Release automation missing SHA256 + auto-changelog | `release.yml` (→ M14.8 / P8) | ⏳ Pending |
+| B7 | ✅ RESOLVED | Release automation missing SHA256 + auto-changelog | `scripts/release_manifest.ps1` (→ M14.8) | ✅ Done (2026-07-24) |
 
 **Bottom line:** the code compiles, tests pass, four CI workflows exist, an NSIS installer and a portable zip ship. The audit caught four inconsistent "current version" strings and a self-contradicting RAW status; all were reconciled. The Plugin ABI is now frozen for the v1.x line.
 
@@ -57,7 +57,7 @@
 - `release.yml`: builds Release, packages via `scripts/package_release.ps1`, uploads `Setup.exe` + portable zip + notes to a GitHub Release. Default dispatch version corrected to `1.0.0` (was `0.11.0`).
 - `nightly.yml` and `perf-gate.yml` exist and are meaningful.
 - **Minor:** the `ci.yml` package artifact is a raw `build_msvc/bin` zip (CI convenience), not the windeployqt-deployed portable. Acceptable.
-- **TODO (M14.8 / P8):** add SHA256 manifest + auto-generated changelog.
+- **DONE (M14.8):** `scripts/release_manifest.ps1` writes `dist/SHA256SUMS.txt` + `dist/RELEASE_NOTES.md`; hooked from `package_release.ps1`. CI `release.yml` left frozen (AGENTS.md).
 
 ### 8. Installer — ✅ PASS (functional) / ✅ Consolidated
 - `installer/mviewer.nsi` is a correct, parametric NSIS script (version via `/DVERSION` + `/DVI_VERSION`, output via `/DOUTFILE`, staging via `/DAPP_DIR`). `scripts/package_release.ps1` passes exactly those defines → consistent.
@@ -78,9 +78,9 @@
 | 4 | Delete `pack_installer.ps1` + `pack_portable.ps1`; repoint refs | B4 | ✅ Done (M14.1) |
 | 5 | Align README Qt prerequisite text with CI matrix | B5 | ✅ Done (M14.1) |
 | 6 | (M14.2) Add `apiVersion`/`sdkVersion`/`abiVersion` to SDK + ABI compat test | B6 | ✅ Done (M14.2) |
-| 7 | (M14.8) `release.yml`: SHA256 manifest + auto-changelog | B7 | ⏳ Pending |
+| 7 | (M14.8) SHA256 manifest + auto-changelog via `scripts/release_manifest.ps1` (hooked from `package_release.ps1`; CI `release.yml` left frozen per AGENTS.md) | B7 | ✅ Done (2026-07-24) |
 
-After items 1–5 (M14.1) the audit flips README / ROADMAP / CHANGELOG / STATUS / Installer to **PASS**. B6 was closed by M14.2. B7 remains the only open release-automation item (tracked for M14.8 / P8).
+After items 1–5 (M14.1) the audit flips README / ROADMAP / CHANGELOG / STATUS / Installer to **PASS**. B6 was closed by M14.2. B7 closed by M14.8 (`scripts/release_manifest.ps1` + package_release hook).
 
 ## Sign-off gate
 

@@ -1,6 +1,7 @@
 #include "widgets/rawimageview.h"
 
 #include <QEvent>
+#include <QFont>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QWheelEvent>
@@ -161,6 +162,32 @@ void RawImageView::paintEvent(QPaintEvent *)
         p.setBrush(Qt::NoBrush);
         p.drawRect(QRectF(1.5, 1.5, width() - 3.0, height() - 3.0));
     }
+
+    // A-4.3: Pixel Link markers — numbered dots at image-space points.
+    if (!m_linkMarkers.isEmpty() && m_scale > 0.0)
+    {
+        const double imgLeft = cx - dw / 2.0;
+        const double imgTop = cy - dh / 2.0;
+        for (int i = 0; i < m_linkMarkers.size(); ++i)
+        {
+            const QPointF &pt = m_linkMarkers[i];
+            const double wx = imgLeft + pt.x() * m_scale;
+            const double wy = imgTop + pt.y() * m_scale;
+            if (!std::isfinite(wx) || !std::isfinite(wy))
+                continue;
+            // Outer ring
+            p.setPen(QPen(QColor(255, 255, 255), 2));
+            p.setBrush(QColor(0xFF, 0x44, 0x44));
+            p.drawEllipse(QPointF(wx, wy), 6, 6);
+            // Index label
+            p.setPen(Qt::white);
+            QFont f = p.font();
+            f.setBold(true);
+            f.setPointSize(8);
+            p.setFont(f);
+            p.drawText(QRectF(wx - 10, wy - 20, 20, 14), Qt::AlignCenter, QString::number(i + 1));
+        }
+    }
 }
 
 void RawImageView::wheelEvent(QWheelEvent *ev)
@@ -291,9 +318,15 @@ void RawImageView::resizeEvent(QResizeEvent *ev)
 
 QPointF RawImageView::widgetToImage(const QPoint &pos) const
 {
+    // Top-left origin image coords, matching paintEvent's draw rect:
+    //   imgLeft = cx - dw/2, imgTop = cy - dh/2
     if (m_scale <= 0.0 || m_image.isNull())
         return {};
     const double cx = width() / 2.0 + m_offset.x();
     const double cy = height() / 2.0 + m_offset.y();
-    return QPointF((pos.x() - cx) / m_scale, (pos.y() - cy) / m_scale);
+    const double dw = m_image.width() * m_scale;
+    const double dh = m_image.height() * m_scale;
+    const double imgLeft = cx - dw / 2.0;
+    const double imgTop = cy - dh / 2.0;
+    return QPointF((pos.x() - imgLeft) / m_scale, (pos.y() - imgTop) / m_scale);
 }

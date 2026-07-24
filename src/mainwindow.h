@@ -244,6 +244,11 @@ class MainWindow : public QMainWindow
     void exportReport();
     // P4: batch export pipeline entry point.
     void exportImages();
+    // A-3: resolve paths for Export/Batch/Compare from SelectionModel first,
+    // then fall back to gallery selection / visible set / full directory.
+    QStringList resolveSelectedPaths(bool preferMulti = true) const;
+    // A-3.4: enable/disable selection-dependent actions (Compare/Export/Batch).
+    void updateSelectionActions();
     // M15: crash recovery
     void autosaveSession();
     void restoreSessionRecovery();

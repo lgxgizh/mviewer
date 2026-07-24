@@ -1,6 +1,7 @@
 #include "thumbnailpanel.h"
 
 #include "core/RatingStore.h"
+#include "core/analysis/ExportReport.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/command/CommandStack.h"
 #include "core/command/FileDeleteCommand.h"
@@ -825,10 +826,14 @@ void ThumbnailPanel::updateVisibleRange()
         }
     }
 
-    // P0 #②: visible range at Thumbnail priority, then predictive neighbors.
+    // P0 #② / A-2.5: visible range at Thumbnail priority, then predictive
+    // neighbors. Scale the predictive window with directory size so 10k-image
+    // folders still feel snappy when scrolling, without over-scheduling tiny
+    // folders.
     ThumbnailPipeline::instance().setVisibleRange(static_cast<size_t>(first),
                                                   static_cast<size_t>(last + 1));
-    ThumbnailPipeline::instance().setPredictiveCount(48);
+    const int predictive = n > 2000 ? 96 : (n > 500 ? 64 : 48);
+    ThumbnailPipeline::instance().setPredictiveCount(static_cast<size_t>(predictive));
 }
 
 void ThumbnailPanel::onThumbReady(const QString &path)
@@ -1037,40 +1042,80 @@ void ThumbnailPanel::revealSelected()
 
 void ThumbnailPanel::batchAnalyzeExport()
 {
-    const QStringList paths = selectedPaths();
+    // Prefer multi-selection; fall back to the currently visible (filtered) set
+    // so rating/flag filters flow into batch analysis export (M17).
+    QStringList paths = selectedPaths();
     if (paths.isEmpty())
+        paths = visiblePaths();
+    if (paths.isEmpty())
+    {
+        QMessageBox::information(this, tr("批量分析导出"),
+                                 tr("请先选择图片，或打开一个已过滤的目录。"));
         return;
-    const QString out =
-        QFileDialog::getSaveFileName(this, "导出分析结果", "", "CSV (*.csv);;JSON (*.json)");
-    if (out.isEmpty())
-        return;
+    }
 
     AnalyzerRegistry &reg = AnalyzerRegistry::instance();
     const std::vector<std::string> ids = reg.availableAnalyzers();
+    if (ids.empty())
+    {
+        QMessageBox::warning(this, tr("批量分析导出"), tr("当前没有可用的分析器。"));
+        return;
+    }
 
-    QStringList headers = {"path"};
+    // Let the user pick which analyzer to run (default: first registered).
+    QStringList labels;
     for (const auto &id : ids)
-        headers.append(QString::fromStdString(id));
-    QStringList rows;
-    rows.append(headers.join(","));
+    {
+        const auto info = reg.infoFor(id);
+        labels << (info ? QString::fromStdString(info->name) : QString::fromStdString(id));
+    }
+    bool ok = false;
+    const QString chosen =
+        QInputDialog::getItem(this, tr("批量分析导出"), tr("选择分析器:"), labels, 0, false, &ok);
+    if (!ok || chosen.isEmpty())
+        return;
+    const int chosenIdx = labels.indexOf(chosen);
+    if (chosenIdx < 0 || chosenIdx >= static_cast<int>(ids.size()))
+        return;
+    const std::string analyzerId = ids[static_cast<size_t>(chosenIdx)];
 
+    const QString out = QFileDialog::getSaveFileName(this, tr("导出分析结果"), QString(),
+                                                     tr("CSV (*.csv);;JSON (*.json)"));
+    if (out.isEmpty())
+        return;
+
+    QApplication::setOverrideCursor(Qt::BusyCursor);
+    const auto cursorGuard = qScopeGuard([] { QApplication::restoreOverrideCursor(); });
+
+    std::vector<std::pair<std::string, std::shared_ptr<ImageFrame>>> frames;
+    frames.reserve(static_cast<size_t>(paths.size()));
     for (const QString &p : paths)
     {
         auto res = ImageRepository::instance().load(p.toStdString());
-        if (!res.frame)
-            continue;
-        const std::unordered_map<std::string, std::string> texts = reg.runAnalyzer(*res.frame);
-        QStringList cells = {p};
-        for (const auto &id : ids)
-        {
-            auto it = texts.find(id);
-            cells.append(it == texts.end() ? QString() : QString::fromStdString(it->second));
-        }
-        rows.append(cells.join(","));
+        if (res.frame)
+            frames.emplace_back(p.toStdString(), res.frame);
     }
+    if (frames.empty())
+    {
+        QMessageBox::warning(this, tr("批量分析导出"), tr("所选图片均无法解码。"));
+        return;
+    }
+
+    const auto results = reg.runBatch(frames, analyzerId);
+    const auto report = mviewer::core::buildBatchReport(analyzerId, results);
+    const bool asJson = out.endsWith(".json", Qt::CaseInsensitive);
+    const std::string body = asJson ? report.toJson() : report.toCsv();
+
     QFile f(out);
-    if (f.open(QIODevice::WriteOnly))
-        f.write(rows.join("\n").toUtf8());
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        QMessageBox::critical(this, tr("批量分析导出"), tr("无法写入：%1").arg(out));
+        return;
+    }
+    f.write(QByteArray::fromStdString(body));
+    f.close();
+    QMessageBox::information(this, tr("批量分析导出"),
+                             tr("已导出 %1 条结果 → %2").arg(results.size()).arg(out));
 }
 
 void ThumbnailPanel::onCompareClicked()

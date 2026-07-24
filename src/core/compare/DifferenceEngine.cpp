@@ -1,5 +1,6 @@
 #include "core/compare/DifferenceEngine.h"
 
+#include <algorithm>
 #include <cstring>
 
 int DifferenceEngine::channelOffset(PixelFormat fmt, int channel)
@@ -128,6 +129,66 @@ ImageData DifferenceEngine::heatMap(const ImageData &gray)
             dst[x * 3 + 0] = static_cast<uint8_t>(r);
             dst[x * 3 + 1] = static_cast<uint8_t>(g);
             dst[x * 3 + 2] = static_cast<uint8_t>(b);
+        }
+    }
+    return out;
+}
+
+ImageData DifferenceEngine::highlightMap(const ImageData &grayDiff, const ImageData &base,
+                                         uint8_t threshold)
+{
+    if (grayDiff.isNull())
+        return ImageData();
+    const int w = grayDiff.width;
+    const int h = grayDiff.height;
+    const int cppD = grayDiff.channelsPerPixel();
+    const int roD = channelOffset(grayDiff.format, 0);
+
+    const bool hasBase = !base.isNull() && base.width >= w && base.height >= h &&
+                         (base.format == PixelFormat::RGB24 || base.format == PixelFormat::BGR24 ||
+                          base.format == PixelFormat::RGBA32 || base.format == PixelFormat::BGRA32 ||
+                          base.format == PixelFormat::Grayscale8);
+    const int cppB = hasBase ? base.channelsPerPixel() : 0;
+    const int roB0 = hasBase ? channelOffset(base.format, 0) : 0;
+    const int roB1 = hasBase ? channelOffset(base.format, 1) : 0;
+    const int roB2 = hasBase ? channelOffset(base.format, 2) : 0;
+
+    ImageData out = makeImageData(w, h, PixelFormat::RGB24);
+    if (out.isNull())
+        return ImageData();
+
+    for (int y = 0; y < h; ++y)
+    {
+        const uint8_t *src = grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
+        const uint8_t *bs =
+            hasBase ? base.buffer->data() + static_cast<size_t>(y) * base.stride() : nullptr;
+        uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+        for (int x = 0; x < w; ++x)
+        {
+            const uint8_t v = src[x * cppD + roD];
+            if (v > threshold)
+            {
+                // Difference: solid red, intensity scaled by diff magnitude.
+                const uint8_t intensity = static_cast<uint8_t>(std::min(255, 80 + v * 2));
+                dst[x * 3 + 0] = intensity;
+                dst[x * 3 + 1] = 0;
+                dst[x * 3 + 2] = 0;
+            }
+            else
+            {
+                // Similar: desaturated gray from base luminance (or mid-gray).
+                uint8_t gray = 128;
+                if (bs)
+                {
+                    const int r = bs[x * cppB + roB0];
+                    const int g = bs[x * cppB + roB1];
+                    const int b = bs[x * cppB + roB2];
+                    gray = static_cast<uint8_t>((r * 30 + g * 59 + b * 11) / 100);
+                }
+                dst[x * 3 + 0] = gray;
+                dst[x * 3 + 1] = gray;
+                dst[x * 3 + 2] = gray;
+            }
         }
     }
     return out;

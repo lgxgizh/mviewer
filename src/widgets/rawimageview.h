@@ -3,6 +3,8 @@
 #include "domain/Selection.h"
 
 #include <QImage>
+#include <QPointF>
+#include <QVector>
 #include <QWidget>
 
 // RawImageView holds a QImage and renders it scaled to fit the widget
@@ -106,6 +108,26 @@ class RawImageView : public QWidget
         return m_focused;
     }
 
+    // A-4.3: Pixel Link markers (image-space points). Drawn as numbered dots so
+    // the same index can be correlated across compared cells.
+    void setLinkMarkers(const QVector<QPointF> &pts)
+    {
+        m_linkMarkers = pts;
+        update();
+    }
+    void clearLinkMarkers()
+    {
+        m_linkMarkers.clear();
+        update();
+    }
+    const QVector<QPointF> &linkMarkers() const
+    {
+        return m_linkMarkers;
+    }
+
+    // Map widget coords → image-space pixel coords (top-left origin).
+    QPointF widgetToImage(const QPoint &pos) const;
+
   signals:
     void scaleChanged(double scale);
     // Emitted on hover with the image-space pixel under the cursor (RGB + validity).
@@ -157,5 +179,6 @@ class RawImageView : public QWidget
     // M16.1 focus-lock (reference) flag
     bool m_focused = false;
 
-    QPointF widgetToImage(const QPoint &pos) const;
+    // A-4.3: pixel-link markers (image-space, top-left origin)
+    QVector<QPointF> m_linkMarkers;
 };

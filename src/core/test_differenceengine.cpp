@@ -112,6 +112,31 @@ int main(int argc, char **argv)
         CHECK(isAllBlack(thresh), "threshold > pixel all black");
     }
 
+    // A-4.6: highlightMap — diffs red, similar gray
+    {
+        auto a = makeSolidRgb(8, 8, 100, 100, 100);
+        auto b = makeSolidRgb(8, 8, 100, 100, 100);
+        // One bright-diff pixel at (0,0)
+        (*a.buffer)[0] = 255;
+        (*a.buffer)[1] = 255;
+        (*a.buffer)[2] = 255;
+        (*b.buffer)[0] = 0;
+        (*b.buffer)[1] = 0;
+        (*b.buffer)[2] = 0;
+        auto diff = DifferenceEngine::differenceMap(a, b);
+        auto hl = DifferenceEngine::highlightMap(diff, a, /*threshold=*/10);
+        CHECK(!hl.isNull(), "highlightMap non-null");
+        CHECK(hl.format == PixelFormat::RGB24, "highlightMap RGB24");
+        // Diff pixel should be red-dominant
+        CHECK((*hl.buffer)[0] > (*hl.buffer)[1] && (*hl.buffer)[0] > (*hl.buffer)[2],
+              "highlightMap diff pixel is red");
+        // A similar pixel (e.g. index 3) should be gray (R==G==B)
+        const size_t off = 3 * 3;
+        CHECK((*hl.buffer)[off] == (*hl.buffer)[off + 1] &&
+                  (*hl.buffer)[off] == (*hl.buffer)[off + 2],
+              "highlightMap similar pixel is gray");
+    }
+
     std::cout << "\nDifferenceEngine: " << (g_fail == 0 ? "ALL PASSED" : "FAILURES") << "\n";
     return g_fail == 0 ? 0 : 1;
 }

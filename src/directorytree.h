@@ -76,6 +76,8 @@ class DirectoryTree : public QTreeView
     void applyCurrentHighlight(const QModelIndex &proxyIdx);
     QModelIndex sourceIndexForPath(const QString &path) const;
     void expandAncestors(const QModelIndex &sourceIdx);
+    // A-1.5: progressive fetchMore for large directories (yields to event loop).
+    void scheduleFetchMore(const QModelIndex &sourceIdx);
 
     QFileSystemModel *m_model = nullptr;
     DirectoryProxyModel *m_proxy = nullptr;
@@ -84,4 +86,5 @@ class DirectoryTree : public QTreeView
     QString m_watchedPath; // currently watched directory
     bool m_loading = false;
     QLabel *m_loadingLabel = nullptr;
+    QString m_pendingFetchPath; // path currently being progressively fetched
 };
