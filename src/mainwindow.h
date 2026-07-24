@@ -119,6 +119,7 @@ class MainWindow : public QMainWindow
     BreadcrumbBar *m_breadcrumb = nullptr;
     QLineEdit *m_pathEdit = nullptr; // Path input bar above the gallery area
     QSplitter *m_mainSplitter = nullptr;          // P1-3: central layout splitter
+    QSplitter *m_leftSplitter = nullptr;          // A-6.4: nav | tree | preview heights
     MetadataOverlay *m_metadataOverlay = nullptr; // M15: semi-transparent info overlay
     ThumbnailPanel *m_thumbnailPanel = nullptr;
     PreviewPanel *m_previewPanel = nullptr;

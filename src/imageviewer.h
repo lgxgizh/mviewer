@@ -78,6 +78,11 @@ class ImageViewer : public QWidget
     // zoom and on fit/resize.
     void zoomChanged(int percent);
 
+    // A-7.3: user picked an analyzer from the context-menu "分析" submenu.
+    // MainWindow shows the AnalysisPanel and routes the run through it so
+    // results land in the unified Result tab (not a QMessageBox).
+    void analysisRequested(const QString &analyzerId);
+
   protected:
     void paintEvent(QPaintEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;

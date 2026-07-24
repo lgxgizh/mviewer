@@ -65,6 +65,11 @@ class AnalysisPanel : public QWidget
     // A-7.2: rebuild the analyzer combo from the current pipeline/registry so
     // runtime-loaded plugins appear without restarting the app.
     void refreshAnalyzers();
+    // A-7.1 / A-7.3: select an analyzer by registry id and run it. Used by the
+    // viewer context-menu "分析" submenu so every analyzer enters through the
+    // same panel path (combo + Result tab), not a one-off dialog.
+    void selectAnalyzer(const QString &id);
+    void runAnalyzer(const QString &id);
     // Backward-compat: display arbitrary region-stats text (from
     // ImageViewer::regionStats)
     void setRegionStats(const QString &text);

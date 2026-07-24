@@ -150,6 +150,27 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         // them here so the panel widths and list style survive a restart exactly.
         if (m_mainSplitter && settings.contains("splitterState"))
             m_mainSplitter->restoreState(settings.value("splitterState").toByteArray());
+        // A-6.4: restore left-sidebar width independently of the full splitter
+        // state so a narrow/wide nav preference survives analysis/search toggles.
+        if (m_mainSplitter && settings.contains("navSidebarWidth"))
+        {
+            const int navW = settings.value("navSidebarWidth").toInt();
+            if (navW > 40)
+            {
+                QList<int> sizes = m_mainSplitter->sizes();
+                if (!sizes.isEmpty())
+                {
+                    const int delta = navW - sizes[0];
+                    sizes[0] = navW;
+                    if (sizes.size() > 1)
+                        sizes[1] = qMax(100, sizes[1] - delta);
+                    m_mainSplitter->setSizes(sizes);
+                }
+            }
+        }
+        // A-6.4: restore vertical proportions inside the left sidebar.
+        if (m_leftSplitter && settings.contains("leftSplitterState"))
+            m_leftSplitter->restoreState(settings.value("leftSplitterState").toByteArray());
         if (m_thumbnailPanel && settings.contains("thumbViewMode"))
             m_thumbnailPanel->setViewMode(
                 static_cast<ThumbnailPanel::ViewMode>(settings.value("thumbViewMode").toInt()));
@@ -356,27 +377,34 @@ void MainWindow::setupUi()
     m_pathEdit->setClearButtonEnabled(true);
 
     // ----- Left column: navigation sidebar + directory tree + preview -----
-    auto *leftWidget = new QWidget(this);
-    auto *leftLayout = new QVBoxLayout(leftWidget);
-    leftLayout->setContentsMargins(0, 0, 0, 0);
-    leftLayout->setSpacing(2);
+    // A-6.4: vertical QSplitter so nav/tree/preview heights persist independently
+    // of the main horizontal splitter (and of analysis/search panel toggles).
+    auto *leftWidget = new QSplitter(Qt::Vertical, this);
+    m_leftSplitter = leftWidget;
 
     m_navSidebar = new QTreeWidget(leftWidget);
     m_navSidebar->setHeaderHidden(true);
-    m_navSidebar->setMaximumHeight(180);
+    m_navSidebar->setMaximumHeight(220);
+    m_navSidebar->setMinimumHeight(60);
     m_navSidebar->setContextMenuPolicy(Qt::CustomContextMenu);
     buildNavSidebar();
     connect(m_navSidebar, &QTreeWidget::itemClicked, this, &MainWindow::onNavSidebarActivated);
     connect(m_navSidebar, &QTreeWidget::customContextMenuRequested, this,
             &MainWindow::onNavSidebarContextMenu);
-    leftLayout->addWidget(m_navSidebar, 1);
 
     m_directoryTree = new DirectoryTree(leftWidget);
     m_directoryTree->installEventFilter(this);
     m_previewPanel = new PreviewPanel(leftWidget);
     m_previewPanel->installEventFilter(this);
-    leftLayout->addWidget(m_directoryTree, 3);
-    leftLayout->addWidget(m_previewPanel, 2);
+
+    leftWidget->addWidget(m_navSidebar);
+    leftWidget->addWidget(m_directoryTree);
+    leftWidget->addWidget(m_previewPanel);
+    leftWidget->setStretchFactor(0, 1);
+    leftWidget->setStretchFactor(1, 3);
+    leftWidget->setStretchFactor(2, 2);
+    leftWidget->setChildrenCollapsible(false);
+    leftWidget->setSizes({140, 320, 200});
 
     // ----- Right column: sort bar (top) + image gallery -----
     auto *rightWidget = new QWidget(this);
@@ -728,6 +756,15 @@ void MainWindow::setupUi()
             });
     connect(m_imageViewer, &ImageViewer::requestPrev, this, [this]() { navigate(-1); });
     connect(m_imageViewer, &ImageViewer::requestNext, this, [this]() { navigate(1); });
+    // A-7.3: viewer context-menu "分析" → show panel + run through unified entry.
+    connect(m_imageViewer, &ImageViewer::analysisRequested, this,
+            [this](const QString &analyzerId)
+            {
+                if (!m_analysisPanel)
+                    return;
+                m_analysisPanel->setVisible(true);
+                m_analysisPanel->runAnalyzer(analyzerId);
+            });
     connect(m_imageViewer, &ImageViewer::pixelInfo, this,
             [this](int x, int y, int r, int g, int b, int a, bool valid)
             {
@@ -2565,9 +2602,17 @@ void MainWindow::closeEvent(QCloseEvent *event)
             settings.remove("compareImages");
             settings.remove("compareSession");
         }
-        // A-6.4: persist nav sidebar width independently.
-        if (m_navSidebar)
-            settings.setValue("navSidebarWidth", m_navSidebar->width());
+        // A-6.4: persist left-column width (main splitter index 0) as a plain
+        // int so it can be restored even when analysis/search visibility changes.
+        if (m_mainSplitter)
+        {
+            const QList<int> sizes = m_mainSplitter->sizes();
+            if (!sizes.isEmpty())
+                settings.setValue("navSidebarWidth", sizes[0]);
+        }
+        // A-6.4: persist vertical proportions of the left sidebar independently.
+        if (m_leftSplitter)
+            settings.setValue("leftSplitterState", m_leftSplitter->saveState());
     }
 
     QMainWindow::closeEvent(event);

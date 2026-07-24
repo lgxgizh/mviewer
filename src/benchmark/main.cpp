@@ -55,6 +55,7 @@ struct Budget
     double first_thumbnail_ms = 100.0;
     double image_switch_ms = 16.0;
     double memory_mb = 512.0;
+    double hundred_mp_viewport_ms = 500.0; // A-8.4 / B10
     bool check(double measured, double limit, bool lowerIsBetter = true) const
     {
         if (!enforce)
@@ -96,6 +97,7 @@ bool loadBudgetJson(const std::string &path, Budget &b)
     get("first_thumbnail_ms", b.first_thumbnail_ms);
     get("image_switch_ms", b.image_switch_ms);
     get("memory_mb", b.memory_mb);
+    get("hundred_mp_viewport_ms", b.hundred_mp_viewport_ms);
     return true;
 }
 
@@ -196,6 +198,8 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     items.push_back({"B7", [&]() { return mviewer::bench::scenarioImageSwitch(corpus); }});
     items.push_back({"B8", [&]() { return mviewer::bench::scenarioSwitchLatency(corpus); }});
     items.push_back({"B9", [&]() { return mviewer::bench::scenarioSoakStability(corpus); }});
+    // B10 does not need the corpus; it synthesizes a 100MP buffer in-process.
+    items.push_back({"B10", [&]() { return mviewer::bench::scenarioHundredMpTiles(); }});
 
     std::vector<mviewer::bench::ScenarioResult> results;
     for (const auto &it : items)
@@ -230,6 +234,11 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
                     }
                 }
                 r.passed = ok;
+            }
+            else if (r.name == "B10")
+            {
+                // A-8.4: cold 100MP viewport tile fill must stay under budget.
+                r.passed = b.check(r.value, b.hundred_mp_viewport_ms) && r.passed;
             }
         }
         printVerdict(r, b);

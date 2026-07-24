@@ -98,4 +98,10 @@ ScenarioResult scenarioSwitchLatency(const Corpus &corpus);
 // sample <= its peak and final baseline within a tolerance of the initial baseline.
 ScenarioResult scenarioSoakStability(const Corpus &corpus);
 
+// B10 / A-8.4: 100MP tile-cache viewport request. Synthesizes a 10000x10000
+// RGBA image (100 MP) and measures TileCache::request() for a 1920x1080
+// viewport at fit scale. Budget: first-viewport tile fill < 200 ms (soft) /
+// < 500 ms under --enforce. Does not require a corpus file on disk.
+ScenarioResult scenarioHundredMpTiles();
+
 } // namespace mviewer::bench

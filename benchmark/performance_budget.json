@@ -7,13 +7,15 @@
     "image_switch_ms": 20,
     "zoom_frame_ms": 16,
     "ui_thread_ms": 16,
-    "memory_mb": 512
+    "memory_mb": 512,
+    "hundred_mp_viewport_ms": 500
   },
   "scenario_map": {
     "B1": "open_folder_ms",
     "B2": "first_thumbnail_ms",
     "B8": "image_switch_ms",
-    "B9": "memory_mb"
+    "B9": "memory_mb",
+    "B10": "hundred_mp_viewport_ms"
   },
   "regression": {
     "baseline_file": "benchmark/perf_baseline.json",

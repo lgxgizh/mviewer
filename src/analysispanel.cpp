@@ -8,6 +8,7 @@
 #include <QHBoxLayout>
 #include <QPainter>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QVBoxLayout>
 
 AnalysisPanel::AnalysisPanel(QWidget *parent) : QWidget(parent)
@@ -268,6 +269,36 @@ void AnalysisPanel::setROI(const mviewer::domain::Selection &roi)
     reanalyze();
 }
 
+// A-7.1: select an analyzer by registry id without running it.
+void AnalysisPanel::selectAnalyzer(const QString &id)
+{
+    if (id.isEmpty() || !m_analyzerCombo)
+        return;
+    refreshAnalyzers();
+    const int idx = m_analyzerCombo->findData(id);
+    if (idx < 0)
+        return;
+    const QSignalBlocker blocker(m_analyzerCombo);
+    m_analyzerCombo->setCurrentIndex(idx);
+    m_currentPluginIdx = idx;
+}
+
+// A-7.1 / A-7.3: unified entry — select, run, and surface the Plugin tab.
+void AnalysisPanel::runAnalyzer(const QString &id)
+{
+    if (id.isEmpty())
+        return;
+    selectAnalyzer(id);
+    reanalyze();
+    // Surface the Plugin tab so context-menu / combo runs land in one place.
+    if (m_tabs)
+    {
+        const int pluginTab = m_tabs->indexOf(m_pluginResult);
+        if (pluginTab >= 0)
+            m_tabs->setCurrentIndex(pluginTab);
+    }
+}
+
 // Run the currently-selected analyzer (from the pipeline) over the left frame and
 // the active ROI, then render its result. The analyzer consumes a domain
 // Selection, never a QRect. Creation/execution routes through the injected
@@ -280,6 +311,12 @@ void AnalysisPanel::reanalyze()
     if (id == "builtin_compare")
     {
         updateComparePage();
+        if (m_tabs && m_compareLabel)
+        {
+            const int tab = m_tabs->indexOf(m_compareLabel);
+            if (tab >= 0)
+                m_tabs->setCurrentIndex(tab);
+        }
         return;
     }
 
@@ -287,30 +324,49 @@ void AnalysisPanel::reanalyze()
     {
         auto analyzer = (m_pipeline ? m_pipeline->create(id.toStdString())
                                     : AnalyzerRegistry::instance().create(id.toStdString()));
-        if (analyzer && analyzer->analyzeRegion(*m_frameA, m_roi))
+        if (analyzer)
         {
-            m_statsA.pixelCount = std::max(0, m_roi.width) * std::max(0, m_roi.height);
-            const std::string text = analyzer->resultText();
-            const auto *hist = dynamic_cast<const HistogramAnalyzer *>(analyzer.get());
-            if (hist)
+            // Prefer ROI when set; otherwise analyze the full frame.
+            const bool ok = m_hasROI ? analyzer->analyzeRegion(*m_frameA, m_roi)
+                                     : analyzer->analyze(*m_frameA);
+            if (ok)
             {
-                const auto &h = hist->result();
-                m_statsA.lumMean = h.lumMean;
-                m_statsA.rMean = h.rMean;
-                m_statsA.gMean = h.gMean;
-                m_statsA.bMean = h.bMean;
-                renderHistogramPixmap(h);
-                m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>")
-                                          .arg(tr("ROI Stats (registry)"))
-                                          .arg(QString::fromStdString(text)));
+                m_statsA.pixelCount = m_hasROI
+                                          ? std::max(0, m_roi.width) * std::max(0, m_roi.height)
+                                          : m_frameA->width() * m_frameA->height();
+                const std::string text = analyzer->resultText();
+                const auto metrics = analyzer->resultMetrics();
+                const auto *hist = dynamic_cast<const HistogramAnalyzer *>(analyzer.get());
+                if (hist)
+                {
+                    const auto &h = hist->result();
+                    m_statsA.lumMean = h.lumMean;
+                    m_statsA.rMean = h.rMean;
+                    m_statsA.gMean = h.gMean;
+                    m_statsA.bMean = h.bMean;
+                    renderHistogramPixmap(h);
+                }
+                // Unified result surface: Histogram stats + Plugin tab.
+                const QString html = QString("<h3>%1</h3><p>%2</p>")
+                                         .arg(QString::fromStdString(analyzer->name()))
+                                         .arg(QString::fromStdString(text));
+                m_statsLabel->setText(html);
+                if (m_pluginResult)
+                {
+                    QString pluginHtml = html;
+                    if (!metrics.empty())
+                    {
+                        pluginHtml += "<table>";
+                        for (const auto &[k, v] : metrics)
+                            pluginHtml += QString("<tr><td>%1</td><td>%2</td></tr>")
+                                              .arg(QString::fromStdString(k))
+                                              .arg(v, 0, 'f', 4);
+                        pluginHtml += "</table>";
+                    }
+                    m_pluginResult->setText(pluginHtml);
+                }
+                return;
             }
-            else
-            {
-                m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>")
-                                          .arg(tr("ROI Stats (registry)"))
-                                          .arg(QString::fromStdString(text)));
-            }
-            return;
         }
     }
 

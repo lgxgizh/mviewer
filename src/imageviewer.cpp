@@ -736,18 +736,12 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;
-    // A-7.3: run the selected analyzer and show result in a dialog.
+    // A-7.3: route analyzer selection through AnalysisPanel (unified entry).
+    // MainWindow shows the panel and runs the analyzer so results land in the
+    // Plugin tab — not a one-off QMessageBox.
     if (analyzeActions.contains(chosen) && m_frame)
     {
-        const std::string id = chosen->data().toString().toStdString();
-        auto analyzer = AnalyzerRegistry::instance().create(id);
-        if (analyzer)
-        {
-            analyzer->analyze(*m_frame);
-            const QString text = QString::fromStdString(analyzer->resultText());
-            QMessageBox::information(this, chosen->text(),
-                                     text.isEmpty() ? tr("分析完成（无文本结果）") : text);
-        }
+        emit analysisRequested(chosen->data().toString());
         return;
     }
     if (chosen == aCopy)

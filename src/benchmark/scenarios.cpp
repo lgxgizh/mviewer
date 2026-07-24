@@ -3,8 +3,12 @@
 #include "core/cache/CacheManager.h"
 #include "core/filesystem/FileSystem.h"
 #include "core/image/Decoder.h"
+#include "core/image/ImageBuffer.h"
 #include "core/image/ImageRepository.h"
 #include "core/perf/MemoryTracker.h"
+#include "core/render/TileCache.h"
+#include "core/render/TileGrid.h"
+#include "core/render/Viewport.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
 
 #include <QApplication>
@@ -689,6 +693,101 @@ ScenarioResult scenarioSoakStability(const Corpus &corpus)
                " finalBase=" + std::to_string(static_cast<long long>(finalBase)) + " finalRssMB=" +
                std::to_string(static_cast<long long>(mt.sample().processWorkingSetKB / 1024)) +
                perCycle.str();
+    return r;
+}
+
+// ─── B10 / A-8.4: 100MP tile-cache viewport request ──────────────────────────
+// Treat the source as a 10000×10000 (100 MP) image and measure how long
+// TileCache::request() takes to fill a 1920×1080 viewport at fit scale.
+// Tiles are synthesized on demand (no full 400 MB buffer) so the metric
+// isolates tile enumeration + cache put/get + region fill cost without
+// stressing CI hosts.
+ScenarioResult scenarioHundredMpTiles()
+{
+    constexpr int kW = 10000;
+    constexpr int kH = 10000;
+    constexpr int kTile = 256;
+    constexpr int kScreenW = 1920;
+    constexpr int kScreenH = 1080;
+
+    Viewport vp;
+    vp.screenW = kScreenW;
+    vp.screenH = kScreenH;
+    vp.fit(kW, kH);
+
+    TileGrid grid(kW, kH, kTile);
+    TileCache cache;
+    cache.maxTiles = 512;
+
+    auto decode = [&](const std::string & /*id*/, int sx, int sy, int sw, int sh, int /*dw*/,
+                      int /*dh*/) -> ImageData
+    {
+        if (sx < 0)
+            sx = 0;
+        if (sy < 0)
+            sy = 0;
+        if (sx + sw > kW)
+            sw = kW - sx;
+        if (sy + sh > kH)
+            sh = kH - sy;
+        if (sw <= 0 || sh <= 0)
+            return ImageData{};
+        ImageData tile = makeImageData(sw, sh, PixelFormat::RGBA32);
+        if (tile.isNull() || !tile.buffer)
+            return ImageData{};
+        // Deterministic procedural fill — cheap stand-in for a region decode.
+        auto &buf = *tile.buffer;
+        for (int y = 0; y < sh; ++y)
+        {
+            for (int x = 0; x < sw; ++x)
+            {
+                const size_t i = (static_cast<size_t>(y) * sw + x) * 4;
+                buf[i + 0] = static_cast<uint8_t>((sx + x) & 0xFF);
+                buf[i + 1] = static_cast<uint8_t>((sy + y) & 0xFF);
+                buf[i + 2] = static_cast<uint8_t>(((sx + x) ^ (sy + y)) & 0xFF);
+                buf[i + 3] = 255;
+            }
+        }
+        return tile;
+    };
+
+    // Warm-up (not timed): exercise the path once so first-call allocator noise
+    // does not dominate the measured sample.
+    {
+        int warmCalls = 0;
+        (void)cache.request("100mp", vp, grid, decode, &warmCalls);
+        cache.clear();
+    }
+
+    // Timed cold request (empty cache).
+    int decodeCalls = 0;
+    const double t0 = nowMs();
+    auto ready = cache.request("100mp", vp, grid, decode, &decodeCalls);
+    const double coldMs = nowMs() - t0;
+
+    // Timed warm request (all tiles cached) — should be near-instant.
+    int warmCalls = 0;
+    const double t1 = nowMs();
+    auto readyWarm = cache.request("100mp", vp, grid, decode, &warmCalls);
+    const double warmMs = nowMs() - t1;
+
+    ScenarioResult r;
+    r.name = "B10";
+    r.metric = "hundred_mp_viewport_ms";
+    r.value = coldMs;
+    r.timing.samples = 1;
+    r.timing.p50Ms = coldMs;
+    r.timing.p95Ms = coldMs;
+    r.timing.p99Ms = coldMs;
+    // Soft local gate: cold fill under 500 ms is healthy on typical CI hosts.
+    // --enforce applies the budget from performance_budget.json.
+    r.passed = (coldMs <= 500.0) && !ready.empty() && (warmCalls == 0);
+    r.detail = "image=10000x10000 tiles_ready=" + std::to_string(ready.size()) +
+               " decode_calls=" + std::to_string(decodeCalls) +
+               " cold_ms=" + std::to_string(coldMs) + " warm_ms=" + std::to_string(warmMs) +
+               " warm_decode_calls=" + std::to_string(warmCalls) +
+               " cache_size=" + std::to_string(cache.size()) +
+               " warm_ready=" + std::to_string(readyWarm.size());
     return r;
 }
 
