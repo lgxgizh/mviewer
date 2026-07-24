@@ -17,6 +17,7 @@
 #include "core/command/ToggleHistogramCommand.h"
 // A-10: CommandStack is included via mainwindow.h
 #include "core/export/ExportManager.h"
+#include "core/perf/MemoryTracker.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/QtConvert.h"
@@ -25,14 +26,17 @@
 #include "core/workspace/WorkspaceSerializer.h"
 
 #include "analysispanel.h"
+#include "analyzermodel.h"
 #include "batchdialog.h"
 #include "breadcrumbbar.h"
 #include "compareworkspace.h"
 #include "core/analyzer/AnalyzerPipeline.h"
 #include "core/render/Viewport.h"
+#include "directorymodel.h"
 #include "directorytree.h"
 #include "exportcommand.h"
 #include "exportdialog.h"
+#include "imagelistmodel.h"
 #include "imageviewer.h"
 #include "metadataoverlay.h"
 #include "metadatapanel.h"
@@ -41,6 +45,7 @@
 #include "searchpanel.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
+#include "workspacemodel.h"
 
 #include <QApplication>
 #include <QBuffer>
@@ -86,6 +91,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
+#include <algorithm>
 #include <optional>
 
 // M15 P0#1: forward declaration so openCompare() can restore a persisted
@@ -94,12 +100,21 @@ static std::optional<mviewer::domain::CompareSession> decodeCompareSession(const
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
-    // P0-2: the single source of truth for the current image / selection. Every
-    // panel reacts to this instead of tracking its own current index.
+    // M19: UI models — single source of truth for Current / Selection /
+    // Directory / ImageList / Workspace / Analyzer. Every panel reacts to these
+    // instead of tracking its own copy of the same state.
     m_selection = new SelectionModel(this);
+    m_directory = new DirectoryModel(this);
+    m_imageList = new ImageListModel(this);
+    m_workspace = new WorkspaceModel(this);
+    m_analyzer = new AnalyzerModel(this);
 
     // P0: load persisted cross-session state + recent-folders LRU before UI.
     m_appState = AppState::load();
+    m_directory->setFavorites(m_appState.favorites);
+    m_directory->setRecentFolders(m_appState.recentFolders);
+    m_workspace->setAnalysisVisible(m_appState.analysisVisible);
+    m_workspace->setAnalysisPage(m_appState.analysisPage);
     const QString recentPath =
         QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recent.json";
     {
@@ -275,8 +290,8 @@ void MainWindow::setupUi()
                     updateUndoRedoActions();
                     return;
                 }
-                if (m_thumbnailPanel && !m_currentDir.isEmpty())
-                    m_thumbnailPanel->setDirectory(m_currentDir);
+                if (m_thumbnailPanel && !currentDir().isEmpty())
+                    m_thumbnailPanel->setDirectory(currentDir());
                 updateUndoRedoActions();
             });
     connect(m_actRedo, &QAction::triggered, this,
@@ -291,8 +306,8 @@ void MainWindow::setupUi()
                     updateUndoRedoActions();
                     return;
                 }
-                if (m_thumbnailPanel && !m_currentDir.isEmpty())
-                    m_thumbnailPanel->setDirectory(m_currentDir);
+                if (m_thumbnailPanel && !currentDir().isEmpty())
+                    m_thumbnailPanel->setDirectory(currentDir());
                 updateUndoRedoActions();
             });
     m_cmdStack.setChangeCallback([this]() { updateUndoRedoActions(); });
@@ -368,6 +383,48 @@ void MainWindow::setupUi()
     m_actImportSettings = new QAction("导入设置(&I)...", this);
     toolsMenu->addAction(m_actExportSettings);
     toolsMenu->addAction(m_actImportSettings);
+    toolsMenu->addSeparator();
+    // M21: Memory Timeline snapshot (status bar + optional CSV dump).
+    auto *actMemTimeline = new QAction("内存时间线(&M)...", this);
+    actMemTimeline->setToolTip(tr("采样 MemoryTracker 时间线并显示峰值/最近样本"));
+    connect(actMemTimeline, &QAction::triggered, this,
+            [this]()
+            {
+                using mviewer::perf::MemoryTracker;
+                auto &mt = MemoryTracker::instance();
+                const auto snap = mt.sample();
+                const auto hist = mt.timeline();
+                QString msg = QString("Cache: %1 MB · Peak: %2 MB · Frames: %3 · Samples: %4")
+                                  .arg(snap.cacheTotalBytes / (1024.0 * 1024.0), 0, 'f', 1)
+                                  .arg(snap.peakBytes / (1024.0 * 1024.0), 0, 'f', 1)
+                                  .arg(snap.liveImageFrames)
+                                  .arg(hist.size());
+                if (!hist.empty())
+                {
+                    // Compact sparkline of last ≤40 cache totals (▁..█).
+                    size_t lo = SIZE_MAX, hi = 0;
+                    const size_t n = hist.size();
+                    const size_t start = n > 40 ? n - 40 : 0;
+                    for (size_t i = start; i < n; ++i)
+                    {
+                        lo = std::min(lo, hist[i].cacheTotalBytes);
+                        hi = std::max(hi, hist[i].cacheTotalBytes);
+                    }
+                    QString spark;
+                    for (size_t i = start; i < n; ++i)
+                    {
+                        int lvl = 0;
+                        if (hi > lo)
+                            lvl = static_cast<int>((hist[i].cacheTotalBytes - lo) * 7 / (hi - lo));
+                        lvl = std::clamp(lvl, 0, 7);
+                        spark += QChar(0x2581 + lvl); // ▁▂▃▄▅▆▇█
+                    }
+                    msg += "\n" + spark;
+                }
+                statusBar()->showMessage(msg, 8000);
+                QMessageBox::information(this, tr("内存时间线"), msg);
+            });
+    toolsMenu->addAction(actMemTimeline);
 
     // ----- 帮助(&H) -----
     auto *helpMenu = menuBar->addMenu("帮助(&H)");
@@ -535,6 +592,14 @@ void MainWindow::setupUi()
     // ----- Analysis panel (rightmost) + Metadata panel (M18, between gallery & analysis) -----
     m_analysisPanel = new AnalysisPanel(this);
     m_analysisPanel->installEventFilter(this);
+    // M21: AnalysisPanel ↔ AnalyzerModel (history / pin / result SSOT).
+    m_analysisPanel->setAnalyzerModel(m_analyzer);
+    connect(m_analysisPanel, &AnalysisPanel::historyImageRequested, this,
+            [this](const QString &path)
+            {
+                if (!path.isEmpty())
+                    onImageOpen(path);
+            });
     // A-7.2: plugins are loaded in main() before MainWindow; refresh the combo
     // so runtime-discovered analyzers appear immediately.
     m_analysisPanel->refreshAnalyzers();
@@ -617,7 +682,7 @@ void MainWindow::setupUi()
     connect(m_metadataHoverTimer, &QTimer::timeout, this,
             [this]()
             {
-                if (!m_currentImagePath.isEmpty())
+                if (!currentImagePath().isEmpty())
                     showMetadataOverlay();
             });
 
@@ -631,26 +696,23 @@ void MainWindow::setupUi()
                 m_breadcrumb->setPath(path); // M15: update breadcrumb bar
                 if (m_pathEdit)
                     m_pathEdit->setText(QDir::toNativeSeparators(path));
-                m_currentDir = path;
-                m_dirListDirty = true; // invalidate cache on dir change
-                if (m_cachedImagePaths.isEmpty() || path != m_currentDir)
-                {
-                    // re-populate eagerly so the status bar reflects the count
-                    m_cachedImagePaths.clear();
-                    for (const auto &p :
-                         OpenDirectoryUseCase::execute(path.toStdString()).imagePaths)
-                        m_cachedImagePaths.append(QString::fromStdString(p));
-                    m_dirListDirty = false;
-                }
+                // M19: DirectoryModel + ImageListModel are the SSOT.
+                m_directory->setCurrentDirectory(path);
+                m_workspace->setRootPath(path);
+                QStringList paths;
+                for (const auto &p : OpenDirectoryUseCase::execute(path.toStdString()).imagePaths)
+                    paths.append(QString::fromStdString(p));
+                m_imageList->setPaths(paths, path);
                 // P0-1: record this folder in the recent-folders LRU + repopulate
-                // the Recent menu and navigation sidebar.
+                // the Recent menu.
                 m_recent.add(path.toStdString());
                 m_appState.addRecentFolder(path);
+                m_directory->addRecentFolder(path);
                 rebuildRecentMenu();
-                const int n = m_cachedImagePaths.size();
+                const int n = m_imageList->count();
                 statusBar()->showMessage(QString("目录: %1, 图片数: %2").arg(path).arg(n));
                 // With no image selected yet, the title carries the folder.
-                if (m_currentImagePath.isEmpty())
+                if (currentImagePath().isEmpty())
                     setWindowTitle(QString("%1 - MViewer").arg(QDir(path).dirName()));
                 scheduleReindex();
             });
@@ -671,18 +733,17 @@ void MainWindow::setupUi()
             [this](const QString &path) { onImageOpen(path); });
     connect(m_thumbnailPanel, &ThumbnailPanel::compareRequested, this,
             [this](const QStringList &images) { openCompare(images); });
-    // A-3: keep SelectionModel multi-selection in lock-step with the gallery.
-    // When the user Ctrl/Shift-selects multiple thumbnails, push the full set
-    // into the shared model so Compare / Delete / Export all see one source.
+    // A-3 / M19: keep SelectionModel multi-selection in lock-step with the
+    // gallery. Guarded by m_syncingSelection so model→gallery sync does not
+    // re-enter and overwrite a programmatic selection.
     connect(m_thumbnailPanel->selectionModel(), &QItemSelectionModel::selectionChanged, this,
             [this]()
             {
-                if (!m_selection || !m_thumbnailPanel)
+                if (m_syncingSelection || !m_selection || !m_thumbnailPanel)
                     return;
                 const QStringList paths = m_thumbnailPanel->selectedPaths();
                 if (paths.isEmpty())
                 {
-                    // A-3.4: still refresh action enablement when selection clears.
                     updateSelectionActions();
                     return;
                 }
@@ -693,9 +754,13 @@ void MainWindow::setupUi()
                 m_selection->setSelection(paths, cur);
                 updateSelectionActions();
             });
-    // A-3.4: also react to SelectionModel changes from non-gallery sources.
+    // A-3.4 / M19: SelectionModel → gallery (full multi-select, not just current).
     connect(m_selection, &SelectionModel::selectionChanged, this,
-            [this](const QStringList &) { updateSelectionActions(); });
+            [this](const QStringList &)
+            {
+                syncGalleryFromSelection();
+                updateSelectionActions();
+            });
     // Dropping files directly onto the gallery behaves the same as dropping
     // them anywhere else on the window.
     connect(m_thumbnailPanel, &ThumbnailPanel::filesDropped, this, &MainWindow::handleDroppedPaths);
@@ -704,9 +769,10 @@ void MainWindow::setupUi()
     connect(m_thumbnailPanel, &ThumbnailPanel::pathsRemoved, this,
             [this](const QStringList &deleted)
             {
-                if (m_currentImagePath.isEmpty() || m_imageViewer->isHidden())
+                m_imageList->removePaths(deleted);
+                if (currentImagePath().isEmpty() || m_imageViewer->isHidden())
                     return;
-                if (!deleted.contains(m_currentImagePath))
+                if (!deleted.contains(currentImagePath()))
                     return;
                 // Advance to the next available image in the (refreshed) folder.
                 navigate(1);
@@ -739,14 +805,9 @@ void MainWindow::setupUi()
     connect(m_imageViewer, &ImageViewer::regionStats, this,
             [this](const QString &text)
             {
-                if (!m_currentImagePath.isEmpty())
-                {
-                    // Cap the per-image analysis map so it can't grow unbounded
-                    // across a long session of browsing many images (M12.5 hygiene).
-                    if (m_analysisByPath.size() > 500)
-                        m_analysisByPath.erase(m_analysisByPath.begin());
-                    m_analysisByPath.insert(m_currentImagePath, text);
-                }
+                // M19: AnalyzerModel owns per-image results (capped + history).
+                if (!currentImagePath().isEmpty())
+                    m_analyzer->setResult(currentImagePath(), text);
             });
     connect(m_imageViewer, &ImageViewer::selectionChanged, m_analysisPanel,
             [this](const QRect &sel)
@@ -853,8 +914,8 @@ void MainWindow::setupUi()
                 {
                     statusBar()->showMessage(QString("路径不存在: %1").arg(text), 5000);
                     // Restore the current path in the edit.
-                    if (!m_currentDir.isEmpty())
-                        m_pathEdit->setText(QDir::toNativeSeparators(m_currentDir));
+                    if (!currentDir().isEmpty())
+                        m_pathEdit->setText(QDir::toNativeSeparators(currentDir()));
                 }
             });
     connect(m_actOpenFile, &QAction::triggered, this,
@@ -862,7 +923,7 @@ void MainWindow::setupUi()
             {
                 const QString file = QFileDialog::getOpenFileName(
                     this, "打开图片",
-                    m_currentDir.isEmpty() ? QString() : m_currentDir,
+                    currentDir().isEmpty() ? QString() : currentDir(),
                     "图片文件 (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp"
                     " *.cr2 *.cr3 *.nef *.nrw *.arw *.dng *.orf *.rw2 *.pef *.raf);;"
                     "所有文件 (*)");
@@ -892,27 +953,21 @@ void MainWindow::setupUi()
     connect(m_actCompare, &QAction::triggered, this,
             [this]()
             {
-                QStringList imgs;
-                if (!m_currentDir.isEmpty())
+                // M19: SelectionModel first; fall back to ImageListModel.
+                QStringList imgs = resolveSelectedPaths(true);
+                if (imgs.size() < 2)
                 {
-                    for (const auto &p :
-                         OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
-                        imgs.append(QString::fromStdString(p));
+                    ensureImageList();
+                    imgs = m_imageList ? m_imageList->paths() : QStringList();
                 }
                 if (imgs.isEmpty())
                 {
                     const QString dir = QFileDialog::getExistingDirectory(this, tr("打开目录"));
                     if (!dir.isEmpty())
                     {
-                        m_currentDir = dir;
-                        m_cachedImagePaths.clear();
-                        m_dirListDirty = true;
-                        m_thumbnailPanel->setDirectory(dir);
-                        m_directoryTree->navigateTo(dir);
-                        mviewer::core::SidecarStore::instance().importDirectory(dir.toStdString());
-                        for (const auto &p :
-                             OpenDirectoryUseCase::execute(dir.toStdString()).imagePaths)
-                            imgs.append(QString::fromStdString(p));
+                        changeDirectory(dir);
+                        ensureImageList();
+                        imgs = m_imageList ? m_imageList->paths() : QStringList();
                     }
                 }
                 if (imgs.size() > 8)
@@ -927,15 +982,15 @@ void MainWindow::setupUi()
     connect(m_actToggleMetadata, &QAction::triggered, this,
             [this](bool checked)
             {
-                if (m_currentImagePath.isEmpty())
+                if (currentImagePath().isEmpty())
                     return;
                 if (checked)
                 {
                     if (m_metadataOverlay)
-                        m_metadataOverlay->showForImage(m_currentImagePath);
+                        m_metadataOverlay->showForImage(currentImagePath());
                     if (m_metadataPanel)
                     {
-                        m_metadataPanel->setImage(m_currentImagePath);
+                        m_metadataPanel->setImage(currentImagePath());
                         positionMetadataPanel();
                         m_metadataPanel->show();
                         m_metadataPanel->raise();
@@ -960,7 +1015,7 @@ void MainWindow::setupUi()
                 // gallery selection, then the full directory list.
                 QStringList inputs = resolveSelectedPaths(true);
                 if (inputs.isEmpty())
-                    inputs = m_cachedImagePaths;
+                    inputs = m_imageList->paths();
                 m_batchDialog->setInputFiles(inputs);
                 m_batchDialog->exec();
             });
@@ -1095,8 +1150,8 @@ void MainWindow::setupCommands()
         "quick_preview", "在查看器中打开 (Enter)",
         [this]()
         {
-            if (!m_currentImagePath.isEmpty())
-                onImageOpen(m_currentImagePath);
+            if (!currentImagePath().isEmpty())
+                onImageOpen(currentImagePath());
         },
         std::vector<CommandShortcut>{{Qt::Key_Return, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
@@ -1131,7 +1186,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     {
         m_directoryTree->refresh();
         m_thumbnailPanel->refresh();
-        m_dirListDirty = true;
+        m_imageList->markDirty();
         scheduleReindex();
         event->accept();
         return;
@@ -1220,8 +1275,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
-    // P0-3 / P1-4: 'M' key toggles the metadata overlay on the image viewer.
-    if (event->key() == Qt::Key_M && !mod)
+    // P0-3 / P1-4 / M19: 'I' or 'M' toggles the metadata overlay (I is the
+    // product-facing shortcut; M kept for muscle memory).
+    if ((event->key() == Qt::Key_I || event->key() == Qt::Key_M) && !mod)
     {
         toggleMetadataOverlay();
         event->accept();
@@ -1273,8 +1329,8 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     {
         if ((mod & Qt::ShiftModifier))
         {
-            if (!m_currentImagePath.isEmpty())
-                QApplication::clipboard()->setText(m_currentImagePath);
+            if (!currentImagePath().isEmpty())
+                QApplication::clipboard()->setText(currentImagePath());
         }
         else
         {
@@ -1407,7 +1463,7 @@ void MainWindow::reindexSearch()
     std::vector<mviewer::domain::ImageMetadata> metas;
     std::vector<mviewer::core::RawMetadata> raws;
 
-    for (const QString &p : m_cachedImagePaths)
+    for (const QString &p : m_imageList->paths())
     {
         const std::string sp = p.toStdString();
         paths.push_back(sp);
@@ -1429,14 +1485,14 @@ void MainWindow::onRatingFilterChanged(int)
 
 void MainWindow::rateCurrentImage(int stars)
 {
-    if (m_currentImagePath.isEmpty())
+    if (currentImagePath().isEmpty())
         return;
-    mviewer::core::RatingStore::instance().setRating(m_currentImagePath.toStdString(), stars);
+    mviewer::core::RatingStore::instance().setRating(currentImagePath().toStdString(), stars);
     m_thumbnailPanel->invalidateRatings();
-    m_metadataPanel->setImage(m_currentImagePath); // refresh the rating widget
-    mviewer::core::SidecarStore::instance().writeSidecar(m_currentImagePath.toStdString());
+    m_metadataPanel->setImage(currentImagePath()); // refresh the rating widget
+    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toStdString());
     statusBar()->showMessage(
-        QString("已为 %1 评分: %2 星").arg(QFileInfo(m_currentImagePath).fileName()).arg(stars));
+        QString("已为 %1 评分: %2 星").arg(QFileInfo(currentImagePath()).fileName()).arg(stars));
 }
 
 void MainWindow::onFlagFilterChanged(int)
@@ -1491,45 +1547,45 @@ void MainWindow::onFlagsEdited(const QString &path, int label, bool rejected, bo
 
 void MainWindow::setCurrentColorLabel(int label)
 {
-    if (m_currentImagePath.isEmpty())
+    if (currentImagePath().isEmpty())
         return;
-    mviewer::core::RatingStore::instance().setColorLabel(m_currentImagePath.toStdString(), label);
+    mviewer::core::RatingStore::instance().setColorLabel(currentImagePath().toStdString(), label);
     m_thumbnailPanel->invalidateRatings();
-    m_metadataPanel->setImage(m_currentImagePath);
-    mviewer::core::SidecarStore::instance().writeSidecar(m_currentImagePath.toStdString());
-    const QString name = QFileInfo(m_currentImagePath).fileName();
+    m_metadataPanel->setImage(currentImagePath());
+    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toStdString());
+    const QString name = QFileInfo(currentImagePath()).fileName();
     statusBar()->showMessage(label == 0 ? QString("已清除 %1 的色标").arg(name)
                                         : QString("已为 %1 设置色标 %2").arg(name).arg(label));
 }
 
 void MainWindow::toggleCurrentPick()
 {
-    if (m_currentImagePath.isEmpty())
+    if (currentImagePath().isEmpty())
         return;
     auto &rs = mviewer::core::RatingStore::instance();
-    const bool v = !rs.picked(m_currentImagePath.toStdString());
-    rs.setPicked(m_currentImagePath.toStdString(), v);
+    const bool v = !rs.picked(currentImagePath().toStdString());
+    rs.setPicked(currentImagePath().toStdString(), v);
     m_thumbnailPanel->invalidateRatings();
-    m_metadataPanel->setImage(m_currentImagePath);
-    mviewer::core::SidecarStore::instance().writeSidecar(m_currentImagePath.toStdString());
+    m_metadataPanel->setImage(currentImagePath());
+    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toStdString());
     statusBar()->showMessage(
-        v ? QString("已收藏 %1").arg(QFileInfo(m_currentImagePath).fileName())
-          : QString("已取消收藏 %1").arg(QFileInfo(m_currentImagePath).fileName()));
+        v ? QString("已收藏 %1").arg(QFileInfo(currentImagePath()).fileName())
+          : QString("已取消收藏 %1").arg(QFileInfo(currentImagePath()).fileName()));
 }
 
 void MainWindow::toggleCurrentReject()
 {
-    if (m_currentImagePath.isEmpty())
+    if (currentImagePath().isEmpty())
         return;
     auto &rs = mviewer::core::RatingStore::instance();
-    const bool v = !rs.rejected(m_currentImagePath.toStdString());
-    rs.setRejected(m_currentImagePath.toStdString(), v);
+    const bool v = !rs.rejected(currentImagePath().toStdString());
+    rs.setRejected(currentImagePath().toStdString(), v);
     m_thumbnailPanel->invalidateRatings();
-    m_metadataPanel->setImage(m_currentImagePath);
-    mviewer::core::SidecarStore::instance().writeSidecar(m_currentImagePath.toStdString());
+    m_metadataPanel->setImage(currentImagePath());
+    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toStdString());
     statusBar()->showMessage(
-        v ? QString("已拒绝 %1").arg(QFileInfo(m_currentImagePath).fileName())
-          : QString("已取消拒绝 %1").arg(QFileInfo(m_currentImagePath).fileName()));
+        v ? QString("已拒绝 %1").arg(QFileInfo(currentImagePath()).fileName())
+          : QString("已取消拒绝 %1").arg(QFileInfo(currentImagePath()).fileName()));
 }
 
 void MainWindow::onImageOpen(const QString &path)
@@ -1551,11 +1607,10 @@ void MainWindow::onImageOpen(const QString &path)
     // M14-1: track in recent-files LRU + refresh menu.
     m_recentFiles.add(path.toStdString());
     rebuildRecentFilesMenu();
-    // M12.2 (G2-ext): if this image had a saved analysis in the workspace, restore
-    // it to the panel (e.g. after reopening a .mvws with per-image analysis).
-    const auto it = m_analysisByPath.find(path);
-    if (it != m_analysisByPath.end() && !it->isEmpty())
-        m_analysisPanel->setRegionStats(*it);
+    // M12.2 / M19: restore saved analysis from AnalyzerModel if present.
+    const QString savedAnalysis = m_analyzer->resultText(path);
+    if (!savedAnalysis.isEmpty())
+        m_analysisPanel->setRegionStats(savedAnalysis);
     if (wasHidden)
         m_imageViewer->show();
     m_imageViewer->raise();
@@ -1564,8 +1619,8 @@ void MainWindow::onImageOpen(const QString &path)
 
 void MainWindow::onCurrentImageChanged(const QString &path)
 {
-    // P0-2: the ONE place that fans the current-image change out to every view.
-    m_currentImagePath = path; // keep the mirror for existing readers
+    // P0-2 / M19: the ONE place that fans the current-image change out to every
+    // view. SelectionModel already holds the path — do not re-set it here.
     if (path.isEmpty())
         return;
 
@@ -1640,11 +1695,8 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     // Compare needs ≥2 images; if only one is selected, fall back to the folder.
     if (imgs.size() < 2)
     {
-        imgs.clear();
-        if (m_currentDir.isEmpty())
-            return;
-        for (const auto &p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
-            imgs.append(QString::fromStdString(p));
+        ensureImageList();
+        imgs = m_imageList ? m_imageList->paths() : QStringList();
     }
     if (imgs.isEmpty())
         return;
@@ -1657,12 +1709,15 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     m_compareView = new CompareWorkspace(dlg);
     layout->addWidget(m_compareView);
     m_compareView->setImages(imgs);
-    // A-4.5: continuous compare — seed the pool with the full folder so the
-    // user can walk consecutive pairs with Next/Prev without reopening.
-    if (!m_cachedImagePaths.isEmpty())
-        m_compareView->setImagePool(m_cachedImagePaths);
+    // A-4.5 / M19: continuous compare — seed the pool from ImageListModel.
+    ensureImageList();
+    if (m_imageList && !m_imageList->isEmpty())
+        m_compareView->setImagePool(m_imageList->paths());
     else if (imgs.size() > 2)
         m_compareView->setImagePool(imgs);
+    // M19: WorkspaceModel tracks the live compare set.
+    if (m_workspace)
+        m_workspace->setComparedImages(imgs);
     connect(m_compareView, &CompareWorkspace::pixelInfo, this,
             [this](const QString &text) { statusBar()->showMessage(text); });
 
@@ -1705,22 +1760,16 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
 
 void MainWindow::navigate(int delta)
 {
-    if (m_currentDir.isEmpty() || m_currentImagePath.isEmpty())
+    if (currentDir().isEmpty() || currentImagePath().isEmpty())
         return;
 
-    // Use cached directory list (no re-scan on arrow key press)
-    if (m_dirListDirty)
-    {
-        m_cachedImagePaths.clear();
-        for (const auto &p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
-            m_cachedImagePaths.append(QString::fromStdString(p));
-        m_dirListDirty = false;
-    }
-    QStringList list = m_cachedImagePaths;
+    // M19: ImageListModel is the SSOT for the directory listing.
+    ensureImageList();
+    const QStringList list = m_imageList->paths();
     if (list.isEmpty())
         return;
 
-    int idx = list.indexOf(m_currentImagePath);
+    int idx = list.indexOf(currentImagePath());
     if (idx < 0)
         idx = 0;
     // Wrap around at both ends (FastStone/ImageGlass parity; also keeps the
@@ -1736,20 +1785,14 @@ void MainWindow::navigate(int delta)
 
 void MainWindow::navigatePage(int key)
 {
-    if (m_currentDir.isEmpty())
+    if (currentDir().isEmpty())
         return;
-    if (m_dirListDirty)
-    {
-        m_cachedImagePaths.clear();
-        for (const auto &p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
-            m_cachedImagePaths.append(QString::fromStdString(p));
-        m_dirListDirty = false;
-    }
-    const QStringList &list = m_cachedImagePaths;
+    ensureImageList();
+    const QStringList list = m_imageList->paths();
     if (list.isEmpty())
         return;
 
-    int idx = list.indexOf(m_currentImagePath);
+    int idx = list.indexOf(currentImagePath());
     if (idx < 0)
         idx = 0;
     constexpr int kPage = 10; // images per PageUp/PageDown step
@@ -1771,7 +1814,7 @@ void MainWindow::navigatePage(int key)
     default:
         return;
     }
-    if (target != idx || m_currentImagePath.isEmpty())
+    if (target != idx || currentImagePath().isEmpty())
         m_selection->setCurrentImage(list.at(target));
 }
 
@@ -1812,14 +1855,22 @@ void MainWindow::showShortcutsHelp()
         "<tr><td><kbd>D</kbd></td><td>详情视图</td></tr>"
         "<tr><td><kbd>Ctrl+1</kbd>…<kbd>Ctrl+6</kbd></td><td>缩略图 / 大图标 / 小图标 / 详情 / "
         "胶片 / 紧凑</td></tr>"
-        "<tr><th colspan='2'>比较</th></tr>"
-        "<tr><td><kbd>C</kbd></td><td>比较模式</td></tr>"
-        "<tr><td><kbd>Space</kbd></td><td>快速比较当前 + 下一张</td></tr>"
-        "<tr><td><kbd>1</kbd>…<kbd>6</kbd>（比较窗口内）</td><td>切换布局预设</td></tr>"
-        "<tr><td><kbd>ESC</kbd>（比较窗口内）</td><td>关闭比较窗口</td></tr>"
+        "<tr><th colspan='2'>比较（比较窗口内）</th></tr>"
+        "<tr><td><kbd>C</kbd></td><td>打开比较模式</td></tr>"
+        "<tr><td><kbd>Space</kbd></td><td>按住 Blink / 主窗口快速比较</td></tr>"
+        "<tr><td><kbd>B</kbd> / <kbd>S</kbd> / <kbd>W</kbd> / <kbd>O</kbd></td>"
+        "<td>Blink / Split / Swipe / Overlay</td></tr>"
+        "<tr><td><kbd>H</kbd></td><td>Diff 高亮</td></tr>"
+        "<tr><td><kbd>Z</kbd> / <kbd>D</kbd></td><td>同步缩放 / 同步拖动</td></tr>"
+        "<tr><td><kbd>C</kbd> / <kbd>L</kbd> / <kbd>I</kbd></td><td>准星 / 像素连线 / 侧栏</td></tr>"
+        "<tr><td><kbd>Ctrl+2</kbd> / <kbd>4</kbd> / <kbd>8</kbd></td><td>2/4/8 布局预设</td></tr>"
+        "<tr><td><kbd>PgUp</kbd>/<kbd>PgDn</kbd> / <kbd>←</kbd>/<kbd>→</kbd></td>"
+        "<td>连续导航（保留模式）</td></tr>"
+        "<tr><td><kbd>F</kbd> / <kbd>X</kbd> / <kbd>?</kbd></td><td>Fit / 交换窗格 / 帮助</td></tr>"
+        "<tr><td><kbd>ESC</kbd></td><td>关闭比较窗口</td></tr>"
         "<tr><th colspan='2'>分析 / 信息</th></tr>"
         "<tr><td><kbd>H</kbd></td><td>直方图 / 分析面板</td></tr>"
-        "<tr><td><kbd>M</kbd> / <kbd>Ctrl+I</kbd></td><td>图片信息浮层（浮层内 Ctrl+C "
+        "<tr><td><kbd>I</kbd> / <kbd>M</kbd></td><td>图片信息浮层（ESC 关闭；浮层内 Ctrl+C "
         "复制全部元数据）</td></tr>"
         "<tr><th colspan='2'>评分 / 标签</th></tr>"
         "<tr><td><kbd>Ctrl+Shift+0</kbd>…<kbd>Ctrl+Shift+5</kbd></td><td>评分（0 = 清除）</td></tr>"
@@ -1865,12 +1916,12 @@ void MainWindow::exportReport()
     mviewer::core::ReportContext ctx;
     ctx.title = "MViewer Analysis Report";
 
-    if (m_currentImagePath.isEmpty())
+    if (currentImagePath().isEmpty())
     {
         QMessageBox::information(this, tr("导出报告"), tr("请先打开一张图片。"));
         return;
     }
-    ctx.imagePath = m_currentImagePath.toStdString();
+    ctx.imagePath = currentImagePath().toStdString();
 
     // Grab the histogram pixmap from the analysis panel (if rendered).
     if (m_analysisPanel)
@@ -1975,7 +2026,7 @@ void MainWindow::updateSelectionActions()
 {
     // A-3.4: enable Compare when ≥2 selected; Export/Batch when ≥1 path available.
     const int n = m_selection ? m_selection->selection().size() : 0;
-    const bool hasDir = !m_cachedImagePaths.isEmpty() ||
+    const bool hasDir = (m_imageList && !m_imageList->isEmpty()) ||
                         (m_thumbnailPanel && !m_thumbnailPanel->pathList().isEmpty());
     if (m_actCompare)
         m_actCompare->setEnabled(n >= 2 || hasDir);
@@ -1983,6 +2034,57 @@ void MainWindow::updateSelectionActions()
         m_actExportImages->setEnabled(n >= 1 || hasDir);
     if (m_actBatch)
         m_actBatch->setEnabled(n >= 1 || hasDir);
+}
+
+QString MainWindow::currentDir() const
+{
+    return m_directory ? m_directory->currentDirectory() : QString();
+}
+
+QString MainWindow::currentImagePath() const
+{
+    return m_selection ? m_selection->currentImage() : QString();
+}
+
+void MainWindow::ensureImageList()
+{
+    if (!m_imageList || !m_directory)
+        return;
+    const QString dir = m_directory->currentDirectory();
+    if (dir.isEmpty())
+        return;
+    if (!m_imageList->isDirty() && m_imageList->directory() == dir && !m_imageList->isEmpty())
+        return;
+    QStringList paths;
+    for (const auto &p : OpenDirectoryUseCase::execute(dir.toStdString()).imagePaths)
+        paths.append(QString::fromStdString(p));
+    m_imageList->setPaths(paths, dir);
+}
+
+void MainWindow::syncGalleryFromSelection()
+{
+    if (!m_selection || !m_thumbnailPanel || m_syncingSelection)
+        return;
+    const QStringList sel = m_selection->selection();
+    const QString cur = m_selection->currentImage();
+    // Avoid feedback when the gallery already matches (common path: user clicked
+    // a thumbnail → gallery selectionChanged → setSelection → here).
+    if (sel.size() <= 1)
+    {
+        if (!cur.isEmpty())
+            m_thumbnailPanel->selectPath(cur);
+        return;
+    }
+    const QStringList gallery = m_thumbnailPanel->selectedPaths();
+    if (gallery == sel)
+    {
+        if (!cur.isEmpty())
+            m_thumbnailPanel->selectPath(cur);
+        return;
+    }
+    m_syncingSelection = true;
+    m_thumbnailPanel->selectPaths(sel, cur);
+    m_syncingSelection = false;
 }
 
 void MainWindow::exportImages()
@@ -2010,20 +2112,20 @@ void MainWindow::exportImages()
 
 void MainWindow::saveWorkspace()
 {
-    if (m_currentDir.isEmpty())
+    if (currentDir().isEmpty())
     {
         QMessageBox::information(this, "保存工作区", "请先打开一个图片目录。");
         return;
     }
     const QString filePath = QFileDialog::getSaveFileName(
-        this, "保存工作区", m_currentDir + "/workspace.mvws", "MViewer 工作区 (*.mvws)");
+        this, "保存工作区", currentDir() + "/workspace.mvws", "MViewer 工作区 (*.mvws)");
     if (filePath.isEmpty())
         return;
 
     // Build the domain model from the real directory (recursive, no pixel
     // decode) using the existing, tested ImageRepository::loadWorkspace.
     mviewer::domain::Workspace ws =
-        ImageRepository::instance().loadWorkspace(m_currentDir.toStdString());
+        ImageRepository::instance().loadWorkspace(currentDir().toStdString());
     if (ws.empty())
     {
         QMessageBox::warning(this, "保存工作区", "当前目录没有可保存的图片。");
@@ -2055,9 +2157,7 @@ void MainWindow::saveWorkspace()
     for (const QString &cpath : compared)
     {
         const std::string key = cpath.toStdString();
-        const auto it = m_analysisByPath.find(cpath);
-        const std::string analysis =
-            (it != m_analysisByPath.end()) ? it->toStdString() : std::string();
+        const std::string analysis = m_analyzer->resultText(cpath).toStdString();
         if (roi.isEmpty() && analysis.empty())
             continue;
         for (auto &folder : ws.folders)
@@ -2114,12 +2214,18 @@ void MainWindow::openWorkspace()
     mviewer::domain::Workspace ws = std::move(*maybeWs);
 
     // Restore the browsing view: load the workspace root back into the gallery.
+    // changeDirectory drives DirectoryModel + ImageListModel + tree + gallery.
     const QString root = QString::fromStdString(ws.rootPath);
-    m_currentDir = root;
-    m_cachedImagePaths.clear();
-    m_dirListDirty = true;
-    m_thumbnailPanel->setDirectory(root);
-    m_directoryTree->navigateTo(root);
+    changeDirectory(root);
+    if (m_workspace)
+    {
+        m_workspace->setRootPath(root);
+        QStringList cmp;
+        for (const auto &p : ws.comparedImages)
+            cmp.append(QString::fromStdString(p));
+        m_workspace->setComparedImages(cmp);
+        m_workspace->setCompareSessionJson(QString::fromStdString(ws.compareSessionJson));
+    }
 
     // M12.2 (review fix): restore the compare session from the explicit
     // comparedImages list written by saveWorkspace(). This is the exact set of
@@ -2136,14 +2242,13 @@ void MainWindow::openWorkspace()
     // compare session's analysis context is available on reload (each image's
     // own ROI/analysis is restored, not just the first). openCompare() below
     // creates m_compareView; we apply the per-image context after it loads.
-    m_analysisByPath.clear();
+    m_analyzer->clearAllResults();
     for (const auto &folder : ws.folders)
     {
         for (const auto &img : folder.imageSet.images)
         {
             if (!img.analysis.empty())
-                m_analysisByPath.insert(QString::fromStdString(img.filePath),
-                                        QString::fromStdString(img.analysis));
+                m_analyzer->setResult(QString::fromStdString(img.filePath), QString::fromStdString(img.analysis));
         }
     }
 
@@ -2190,13 +2295,13 @@ void MainWindow::openWorkspace()
 
     if (!restoredPath.empty())
     {
-        m_currentImagePath = QString::fromStdString(restoredPath);
+        m_selection->setCurrentImage(QString::fromStdString(restoredPath));
         if (m_imageViewer)
         {
             // Async decode; imageReady() feeds AnalysisPanel once the frame is
             // ready (no synchronous frame() read here — it isn't ready yet).
-            m_imageViewer->setImage(m_currentImagePath);
-            m_previewPanel->setImage(m_currentImagePath);
+            m_imageViewer->setImage(currentImagePath());
+            m_previewPanel->setImage(currentImagePath());
         }
         if (!restoredAnalysis.empty())
             m_analysisPanel->setRegionStats(QString::fromStdString(restoredAnalysis));
@@ -2212,20 +2317,20 @@ void MainWindow::openWorkspace()
 
 void MainWindow::saveProject()
 {
-    if (m_currentDir.isEmpty())
+    if (currentDir().isEmpty())
     {
         QMessageBox::information(this, "保存项目", "请先打开一个图片目录。");
         return;
     }
     const QString filePath = QFileDialog::getSaveFileName(
-        this, "保存项目", m_currentDir + "/project.mvproj", "MViewer 项目 (*.mvproj)");
+        this, "保存项目", currentDir() + "/project.mvproj", "MViewer 项目 (*.mvproj)");
     if (filePath.isEmpty())
         return;
 
     // Build the workspace exactly like saveWorkspace (datasets + compared images
     // + compare-session snapshot + per-image ROI/analysis).
     mviewer::domain::Workspace ws =
-        ImageRepository::instance().loadWorkspace(m_currentDir.toStdString());
+        ImageRepository::instance().loadWorkspace(currentDir().toStdString());
     if (ws.empty())
     {
         QMessageBox::warning(this, "保存项目", "当前目录没有可保存的图片。");
@@ -2247,9 +2352,7 @@ void MainWindow::saveProject()
     for (const QString &cpath : compared)
     {
         const std::string key = cpath.toStdString();
-        const auto it = m_analysisByPath.find(cpath);
-        const std::string analysis =
-            (it != m_analysisByPath.end()) ? it->toStdString() : std::string();
+        const std::string analysis = m_analyzer->resultText(cpath).toStdString();
         if (roi.isEmpty() && analysis.empty())
             continue;
         for (auto &folder : ws.folders)
@@ -2275,7 +2378,7 @@ void MainWindow::saveProject()
     proj.createdIso = QDateTime::currentDateTimeUtc().toString(Qt::ISODate).toStdString();
     proj.modifiedIso = proj.createdIso;
     proj.workspace = ws;
-    proj.datasetRoots = {m_currentDir.toStdString()};
+    proj.datasetRoots = {currentDir().toStdString()};
     // M15 P0#3: list analyzers through the pipeline, not the registry directly.
     const AnalyzerPipeline pipeline;
     for (const auto &a : pipeline.analyzerIds())
@@ -2320,23 +2423,27 @@ void MainWindow::openProject()
     // + compare session + per-image ROI/analysis all come back from the .mvproj.
     const mviewer::domain::Workspace &ws = proj.workspace;
     const QString root = QString::fromStdString(ws.rootPath);
-    m_currentDir = root;
-    m_cachedImagePaths.clear();
-    m_dirListDirty = true;
-    m_thumbnailPanel->setDirectory(root);
-    m_directoryTree->navigateTo(root);
+    changeDirectory(root);
+    if (m_workspace)
+    {
+        m_workspace->setRootPath(root);
+        QStringList cmp;
+        for (const auto &p : ws.comparedImages)
+            cmp.append(QString::fromStdString(p));
+        m_workspace->setComparedImages(cmp);
+        m_workspace->setCompareSessionJson(QString::fromStdString(ws.compareSessionJson));
+    }
 
     QStringList comparePaths;
     comparePaths.reserve(static_cast<int>(ws.comparedImages.size()));
     for (const auto &p : ws.comparedImages)
         comparePaths.push_back(QString::fromStdString(p));
 
-    m_analysisByPath.clear();
+    m_analyzer->clearAllResults();
     for (const auto &folder : ws.folders)
         for (const auto &img : folder.imageSet.images)
             if (!img.analysis.empty())
-                m_analysisByPath.insert(QString::fromStdString(img.filePath),
-                                        QString::fromStdString(img.analysis));
+                m_analyzer->setResult(QString::fromStdString(img.filePath), QString::fromStdString(img.analysis));
 
     std::optional<mviewer::domain::CompareSession> restoredSession;
     bool haveSession = false;
@@ -2370,11 +2477,11 @@ void MainWindow::openProject()
 
     if (!restoredPath.empty())
     {
-        m_currentImagePath = QString::fromStdString(restoredPath);
+        m_selection->setCurrentImage(QString::fromStdString(restoredPath));
         if (m_imageViewer)
         {
-            m_imageViewer->setImage(m_currentImagePath);
-            m_previewPanel->setImage(m_currentImagePath);
+            m_imageViewer->setImage(currentImagePath());
+            m_previewPanel->setImage(currentImagePath());
         }
         if (!restoredAnalysis.empty())
             m_analysisPanel->setRegionStats(QString::fromStdString(restoredAnalysis));
@@ -2413,7 +2520,7 @@ void MainWindow::navigateHistory(int delta)
     m_historyIndex = next;
     const QString path = m_history.at(next);
     // Re-open without pushing again (pushHistory is a no-op for the same tip).
-    m_currentImagePath = path;
+    m_selection->setCurrentImage(path);
     m_imageViewer->setImage(path);  // async; imageReady() feeds AnalysisPanel
     m_previewPanel->setImage(path); // async; off UI thread
     statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
@@ -2429,15 +2536,7 @@ void MainWindow::rebuildRecentMenu()
         const QString qs = QString::fromStdString(p);
         auto *act = m_recentMenu->addAction(QFileInfo(qs).fileName());
         act->setToolTip(qs);
-        connect(act, &QAction::triggered, this,
-                [this, qs]()
-                {
-                    m_currentDir = qs;
-                    m_cachedImagePaths.clear();
-                    m_dirListDirty = true;
-                    m_thumbnailPanel->setDirectory(qs);
-                    m_directoryTree->navigateTo(qs);
-                });
+        connect(act, &QAction::triggered, this, [this, qs]() { changeDirectory(qs); });
     }
     if (m_recentMenu->isEmpty())
         m_recentMenu->addAction("(无)")->setEnabled(false);
@@ -2468,15 +2567,7 @@ void MainWindow::rebuildFavoritesMenu()
     {
         auto *act = m_favMenu->addAction(QFileInfo(qs).fileName());
         act->setToolTip(qs);
-        connect(act, &QAction::triggered, this,
-                [this, qs]()
-                {
-                    m_currentDir = qs;
-                    m_cachedImagePaths.clear();
-                    m_dirListDirty = true;
-                    m_thumbnailPanel->setDirectory(qs);
-                    m_directoryTree->navigateTo(qs);
-                });
+        connect(act, &QAction::triggered, this, [this, qs]() { changeDirectory(qs); });
     }
     if (m_favMenu->isEmpty())
         m_favMenu->addAction("(无)")->setEnabled(false);
@@ -2484,15 +2575,16 @@ void MainWindow::rebuildFavoritesMenu()
 
 void MainWindow::addFavoriteCurrent()
 {
-    if (m_currentDir.isEmpty())
+    if (currentDir().isEmpty())
     {
         statusBar()->showMessage("没有可收藏的目录");
         return;
     }
-    m_appState.addFavorite(m_currentDir);
+    m_appState.addFavorite(currentDir());
+    m_directory->addFavorite(currentDir());
     m_appState.save();
     rebuildFavoritesMenu();
-    statusBar()->showMessage(QString("已收藏: %1").arg(m_currentDir));
+    statusBar()->showMessage(QString("已收藏: %1").arg(currentDir()));
 }
 
 void MainWindow::restoreLastSession()
@@ -2535,17 +2627,13 @@ void MainWindow::restoreLastSession()
             const QString dir = m_appState.lastDir;
             if (dir.isEmpty() || !QDir(dir).exists())
                 return;
-            m_currentDir = dir;
-            m_cachedImagePaths.clear();
-            m_dirListDirty = true;
-            m_thumbnailPanel->setDirectory(dir);
-            m_directoryTree->navigateTo(dir);
+            changeDirectory(dir);
 
             const QString img = m_appState.lastImage;
             if (!img.isEmpty() && QFile::exists(img))
             {
                 pushHistory(img);
-                m_currentImagePath = img;
+                m_selection->setCurrentImage(img);
                 m_imageViewer->setImage(img);  // async; imageReady() feeds AnalysisPanel
                 m_previewPanel->setImage(img); // async; off UI thread
                 m_metadataPanel->setImage(img);
@@ -2583,8 +2671,8 @@ void MainWindow::restoreLastSession()
                     // A-6.3: restore viewer zoom/pan from QSettings (same logic as
                     // crash-recovery path, but for normal session restore).
                     QSettings vs;
-                    if (m_imageViewer && !m_currentImagePath.isEmpty() &&
-                        vs.value("viewerPath").toString() == m_currentImagePath)
+                    if (m_imageViewer && !currentImagePath().isEmpty() &&
+                        vs.value("viewerPath").toString() == currentImagePath())
                     {
                         Viewport v;
                         v.screenW = m_imageViewer->width();
@@ -2617,8 +2705,8 @@ void MainWindow::restoreLastSession()
 void MainWindow::closeEvent(QCloseEvent *event)
 {
     // Persist browse position for next launch (P0 cross-session restore).
-    m_appState.lastDir = m_currentDir;
-    m_appState.lastImage = m_currentImagePath;
+    m_appState.lastDir = currentDir();
+    m_appState.lastImage = currentImagePath();
     m_appState.lastThumbScroll = m_thumbnailPanel ? m_thumbnailPanel->scrollOffset() : 0;
 
     // P1-3: persist the Analysis workspace so reopening restores UI state.
@@ -2665,10 +2753,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
         // P1-7: persist the main viewer's zoom level + pan position so a session
         // that ended with the viewer open restores identically (scale/offset are
         // screen-space, so the viewer must have been visible to be meaningful).
-        if (m_imageViewer && !m_imageViewer->isHidden() && !m_currentImagePath.isEmpty())
+        if (m_imageViewer && !m_imageViewer->isHidden() && !currentImagePath().isEmpty())
         {
             const auto v = m_imageViewer->viewTransform();
-            settings.setValue("viewerPath", m_currentImagePath);
+            settings.setValue("viewerPath", currentImagePath());
             settings.setValue("viewerScale", v.scale);
             settings.setValue("viewerOffX", v.offsetX);
             settings.setValue("viewerOffY", v.offsetY);
@@ -2717,7 +2805,7 @@ static std::optional<mviewer::domain::CompareSession> decodeCompareSession(const
 // M15: crash recovery — autosave current session to a recovery file.
 void MainWindow::autosaveSession()
 {
-    if (m_currentDir.isEmpty() && m_currentImagePath.isEmpty())
+    if (currentDir().isEmpty() && currentImagePath().isEmpty())
         return;
     const QString recoveryPath =
         QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recovery.json";
@@ -2726,8 +2814,8 @@ void MainWindow::autosaveSession()
         return;
     // Simple JSON: lastDir, lastImage, lastThumbScroll, compare (M15 P0#1)
     QJsonObject obj;
-    obj.insert("lastDir", m_currentDir);
-    obj.insert("lastImage", m_currentImagePath);
+    obj.insert("lastDir", currentDir());
+    obj.insert("lastImage", currentImagePath());
     obj.insert("lastThumbScroll", m_thumbnailPanel ? m_thumbnailPanel->scrollOffset() : 0);
 
     // M15 P0#1: also persist the live Compare session (images + full state) so a
@@ -2805,17 +2893,13 @@ void MainWindow::restoreSessionRecovery()
         {
             if (!lastDir.isEmpty() && QDir(lastDir).exists())
             {
-                m_currentDir = lastDir;
-                m_cachedImagePaths.clear();
-                m_dirListDirty = true;
-                m_thumbnailPanel->setDirectory(lastDir);
-                m_directoryTree->navigateTo(lastDir);
+                changeDirectory(lastDir);
                 if (lastThumbScroll > 0)
                     m_thumbnailPanel->verticalScrollBar()->setValue(lastThumbScroll);
             }
             if (!lastImage.isEmpty() && QFile::exists(lastImage))
             {
-                m_currentImagePath = lastImage;
+                m_selection->setCurrentImage(lastImage);
                 onImageOpen(lastImage);
                 // P1-7: if the session ended with the viewer open on
                 // this exact image, restore its zoom level + pan. The
@@ -2954,24 +3038,16 @@ void MainWindow::handleDroppedPaths(const QStringList &paths)
     // If first path is a directory, open it; otherwise open as images.
     const QFileInfo fi(paths.first());
     if (fi.isDir())
-    {
-        m_currentDir = paths.first();
-        m_cachedImagePaths.clear();
-        m_dirListDirty = true;
-        m_thumbnailPanel->setDirectory(paths.first());
-        m_directoryTree->navigateTo(paths.first());
-    }
+        changeDirectory(paths.first());
     else
-    {
         onImageOpen(paths.first());
-    }
 }
 
 void MainWindow::showMetadataOverlay()
 {
-    if (!m_metadataOverlay || m_currentImagePath.isEmpty())
+    if (!m_metadataOverlay || currentImagePath().isEmpty())
         return;
-    m_metadataOverlay->showForImage(m_currentImagePath);
+    m_metadataOverlay->showForImage(currentImagePath());
 }
 
 // A-10: refresh Undo/Redo menu labels and enabled state from CommandStack.
@@ -3022,7 +3098,7 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 
 void MainWindow::toggleMetadataOverlay()
 {
-    if (m_currentImagePath.isEmpty())
+    if (currentImagePath().isEmpty())
         return;
     // A-5: toggle both the viewer overlay and the floating MetadataPanel.
     const bool show =
@@ -3031,10 +3107,10 @@ void MainWindow::toggleMetadataOverlay()
     if (show)
     {
         if (m_metadataOverlay)
-            m_metadataOverlay->showForImage(m_currentImagePath);
+            m_metadataOverlay->showForImage(currentImagePath());
         if (m_metadataPanel)
         {
-            m_metadataPanel->setImage(m_currentImagePath);
+            m_metadataPanel->setImage(currentImagePath());
             positionMetadataPanel();
             m_metadataPanel->show();
             m_metadataPanel->raise();
@@ -3055,9 +3131,9 @@ void MainWindow::toggleMetadataOverlay()
 
 void MainWindow::copyCurrentImageToClipboard()
 {
-    if (m_currentImagePath.isEmpty())
+    if (currentImagePath().isEmpty())
         return;
-    const QImage img(m_currentImagePath);
+    const QImage img(currentImagePath());
     if (!img.isNull())
         QApplication::clipboard()->setImage(img);
 }
@@ -3078,7 +3154,7 @@ void MainWindow::toggleSlideshow()
         stopSlideshow();
         return;
     }
-    if (m_currentImagePath.isEmpty() || m_currentDir.isEmpty())
+    if (currentImagePath().isEmpty() || currentDir().isEmpty())
     {
         statusBar()->showMessage("请先选择一张图片再开始幻灯片放映", 3000);
         if (m_actSlideshow)
@@ -3086,7 +3162,7 @@ void MainWindow::toggleSlideshow()
         return;
     }
     // Fullscreen the viewer for the slideshow; ESC (or S) stops it.
-    onImageOpen(m_currentImagePath);
+    onImageOpen(currentImagePath());
     if (!m_imageViewer->isFullScreen())
         m_imageViewer->showFullScreen();
     // Read interval from settings (default 3s), allow user to change via
@@ -3149,22 +3225,16 @@ void MainWindow::zoomViewer(int op)
 
 void MainWindow::openQuickCompare()
 {
-    if (m_currentImagePath.isEmpty())
+    if (currentImagePath().isEmpty())
         return;
-    if (m_dirListDirty)
-    {
-        m_cachedImagePaths.clear();
-        for (const auto &p : OpenDirectoryUseCase::execute(m_currentDir.toStdString()).imagePaths)
-            m_cachedImagePaths.append(QString::fromStdString(p));
-        m_dirListDirty = false;
-    }
+    ensureImageList();
     QStringList imgs;
-    imgs << m_currentImagePath;
-    const int idx = m_cachedImagePaths.indexOf(m_currentImagePath);
-    if (idx >= 0 && idx + 1 < m_cachedImagePaths.size())
-        imgs << m_cachedImagePaths.at(idx + 1);
-    else if (idx != 0 && !m_cachedImagePaths.isEmpty())
-        imgs << m_cachedImagePaths.first();
+    imgs << currentImagePath();
+    const int idx = m_imageList->indexOf(currentImagePath());
+    if (idx >= 0 && idx + 1 < m_imageList->count())
+        imgs << m_imageList->pathAt(idx + 1);
+    else if (idx != 0 && !m_imageList->isEmpty())
+        imgs << m_imageList->pathAt(0);
     openCompare(imgs);
 }
 
@@ -3249,7 +3319,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
     if (watched == m_imageViewer)
     {
-        if (event->type() == QEvent::MouseButtonPress && !m_currentImagePath.isEmpty())
+        if (event->type() == QEvent::MouseButtonPress && !currentImagePath().isEmpty())
         {
             auto *me = static_cast<QMouseEvent *>(event);
             if (me->button() == Qt::LeftButton)
@@ -3262,7 +3332,7 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
         else if (event->type() == QEvent::HoverMove || event->type() == QEvent::MouseMove)
         {
-            if (m_metadataHoverTimer && !m_currentImagePath.isEmpty())
+            if (m_metadataHoverTimer && !currentImagePath().isEmpty())
             {
                 m_metadataHoverTimer->stop();
                 m_metadataHoverTimer->start();

@@ -1,6 +1,7 @@
 #include "exportdialog.h"
 
 #include "core/analysis/AnalysisEngine.h"
+#include "core/export/ExportJob.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageTransform.h"
 #include "core/image/QtConvert.h"
@@ -241,10 +242,7 @@ void ExportDialog::onExportClicked()
 
 void ExportDialog::exportConvertBatch()
 {
-    const QString fmt = m_formatCombo->currentData().toString();
-    const int quality = m_qualitySpin->value();
-    const QString ext = "." + (fmt == "jpeg" ? QString("jpg") : fmt);
-
+    // M21: route Convert through the unified ExportJob runner.
     const QStringList files = collectSources();
     if (files.isEmpty())
     {
@@ -252,28 +250,34 @@ void ExportDialog::exportConvertBatch()
         return;
     }
 
-    QDir out(m_outDir);
-    const int total = files.size();
-    int done = 0;
-    for (int i = 0; i < files.size(); ++i)
+    mviewer::exportjob::ExportJobConfig cfg;
+    cfg.mode = mviewer::exportjob::Mode::Convert;
+    cfg.outDir = m_outDir.toStdString();
+    cfg.format = m_formatCombo->currentData().toString().toStdString();
+    cfg.quality = m_qualitySpin->value();
+    cfg.renamePattern = m_renameEdit->text().toStdString();
+    cfg.watermarkText = m_watermarkEdit->text().toStdString();
+    cfg.watermarkPos = m_wmPosCombo->currentIndex();
+    cfg.watermarkOpacity = m_wmOpacitySpin->value();
+    const QString resizeMode = m_resizeCombo->currentData().toString();
+    if (resizeMode == "fit")
     {
-        const QString src = m_sources.isEmpty() ? (m_outDir + "/" + files[i]) : files[i];
-        QImage img(src);
-        if (img.isNull())
-            continue;
-        ImageData data = applyWatermark(applyResize(mvcore::fromQImage(img)));
-
-        QFileInfo fi(src);
-        QString base = QString::fromStdString(mviewer::core::applyRenamePattern(
-            m_renameEdit->text().toStdString(), fi.baseName().toStdString(),
-            fi.suffix().toStdString(), i, total));
-        if (base.isEmpty())
-            base = fi.baseName();
-        const QString dst = out.absoluteFilePath(base + ext);
-        if (Encoder::encode(data, dst.toStdString(), Encoder::Params{quality}))
-            ++done;
+        cfg.resizeMode = mviewer::exportjob::ResizeMode::Fit;
+        cfg.resizeValue = m_resizeSpin->value();
     }
-    m_statusLabel->setText(tr("完成 %1 / %2").arg(done).arg(total));
+    else if (resizeMode == "scale")
+    {
+        cfg.resizeMode = mviewer::exportjob::ResizeMode::Scale;
+        cfg.resizeValue = m_resizeSpin->value();
+    }
+    for (const QString &f : files)
+    {
+        const QString src = m_sources.isEmpty() ? (m_outDir + "/" + f) : f;
+        cfg.sources.push_back(src.toStdString());
+    }
+
+    const auto result = mviewer::exportjob::run(cfg);
+    m_statusLabel->setText(QString::fromStdString(result.message));
 }
 
 void ExportDialog::exportContactSheet()

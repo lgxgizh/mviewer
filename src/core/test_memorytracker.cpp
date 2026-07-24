@@ -82,10 +82,31 @@ static void test_externalAndPeak()
     CHECK(mt.sample().externalBytes == 0);
 }
 
+static void test_timelineRing()
+{
+    // M21: sample() appends to a ring buffer; reset() clears it.
+    auto &mt = MemoryTracker::instance();
+    mt.reset();
+    CHECK(mt.timelineSize() == 0);
+
+    for (int i = 0; i < 5; ++i)
+        mt.sample();
+    CHECK(mt.timelineSize() == 5);
+    const auto hist = mt.timeline();
+    CHECK(hist.size() == 5);
+    // Timestamps are non-decreasing.
+    for (size_t i = 1; i < hist.size(); ++i)
+        CHECK(hist[i].timestampMs >= hist[i - 1].timestampMs);
+
+    mt.reset();
+    CHECK(mt.timelineSize() == 0);
+}
+
 int memorytracker_suite()
 {
     test_samplesCacheManager();
     test_liveFrameCounter();
     test_externalAndPeak();
+    test_timelineRing();
     return g_failures;
 }

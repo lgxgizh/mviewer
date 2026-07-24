@@ -43,6 +43,9 @@
 | M16 | **Professional Compare** — Industry-tool compare workflow (P0) | 🔄 In Progress. Sync Compare Engine: zoom/pan sync, focus-lock (n/1), cursor-sync crosshair (n/n), diff-overlay, multi-grid 2/3/4/8 — done; remaining: editing-within-compare, reference/difference metrics, layout presets. |
 | M17 | **Asset Management** — Rating, labeling, filtering, search, export (P1) | ⬜ Planned. Rating/Color Label/Reject/Pick/Favorite; unified filter + search; ExportManager (PNG/JPEG/TIFF/CSV/HTML/Report); Plugin Manager UI; Workspace layout restore; Analyzer workflow (right-click, batch, CSV/HTML/JSON export). |
 | M18 | **AI Workflow** — Analyzer + AI + Embedding pipeline (P2) | ⬜ Planned. Caption generation, similarity search via embeddings, object detection, smart search; RAW support (libraw decoder); GPU acceleration when 100MP/RAW/HDR becomes a bottleneck. |
+| M19 | **UI Model Convergence + Browse Polish** — product-state SSOT | ✅ Done. `SelectionModel` / `DirectoryModel` / `ImageListModel` / `WorkspaceModel` / `AnalyzerModel`; MainWindow mirrors removed; gallery multi-select bidirectional sync; Metadata Overlay `I`/`ESC` + Camera/Lens/ICC. |
+| M20 | **Professional Compare Polish** — keyboard-first continuous compare | ✅ Done. Layout presets Ctrl+2/4/8; Blink/Swipe/Overlay/Diff keyboard flow; continuous nav preserves mode/ROI; Pixel/ROI sync day-long usability. |
+| M21 | **Analysis + Export Workflow** — Result Model / ExportJob / observability | ✅ Done. Analysis History + Pinned Result UI; unified `ExportJob` Convert path; Memory Timeline ring + Tools menu; Nightly HTML sparklines. |
 
 ## Public versioning (M13+)
 

@@ -78,6 +78,9 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 | A-1~A-10 对账 | ✅ | `docs/review/A_ITEMS_COMPLETION_AUDIT_2026-07-24.md` — DONE ~91% |
 | M16 Compare 收尾 | ✅ | Pixel Link / Overlay 透明度 / Diff 高亮 / 自定义网格 |
 | Browse 门禁 | ✅ | Selection 统一 + 大目录渐进 fetch + 万级缩略图预测窗口 |
+| M19 UI Model 收敛 | ✅ | `DirectoryModel` / `ImageListModel` / `WorkspaceModel` / `AnalyzerModel` 落地；MainWindow 镜像状态移除；Thumbnail multi-select 双向同步；Metadata Overlay `I`/`ESC` + Lens/ICC |
+| M20 Compare 键盘流 | ✅ | Ctrl+2/4/8 布局预设；B/S/W/O/H/Z/D/C/L 模式键；连续导航保留模式/ROI；`?` 快捷键帮助 |
+| M21 Analysis+Export | ✅ | AnalysisPanel↔AnalyzerModel History/Pin；`ExportJob` Convert 统一路径；Memory Timeline；Dashboard Canvas 趋势图 |
 | Workspace 恢复 | ✅ | 布局/缩放/Compare/崩溃恢复（A-6 已落地） |
 | M17 高价值子集 | ✅ | 批量分析导出 / 插件 rescan / 评分过滤导出 |
 | 1.0 发布准备 | ✅ | 性能基线更新 + 安装包验收通过（M14.8 SHA256/notes ✅） |

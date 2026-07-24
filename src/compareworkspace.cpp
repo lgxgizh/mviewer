@@ -415,31 +415,112 @@ CompareWorkspace::~CompareWorkspace()
         EventBus::instance().unsubscribe(m_diffSubId);
 }
 
-// A-4.5: continuous compare — walk consecutive pairs from a pool.
+// A-4.5 / M20: continuous compare — walk a sliding window over the pool.
 void CompareWorkspace::setImagePool(const QStringList &allPaths)
 {
     m_imagePool = allPaths;
+    // Align window start to the first currently-loaded image when possible.
     m_pairIndex = 0;
+    if (!m_imagePool.isEmpty() && m_engine.imageCount() > 0)
+    {
+        const QString first = comparedImages().value(0);
+        const int idx = m_imagePool.indexOf(first);
+        if (idx >= 0)
+            m_pairIndex = idx;
+    }
+    // Infer nav window from current load count when it is a known preset.
+    const int n = m_engine.imageCount();
+    if (n == 2 || n == 4 || n == 8)
+        m_navWindow = n;
+    updatePairButtons();
+}
+
+void CompareWorkspace::setNavWindow(int n)
+{
+    if (n != 2 && n != 4 && n != 8)
+        n = 2;
+    m_navWindow = n;
     updatePairButtons();
 }
 
 bool CompareWorkspace::hasNextPair() const
 {
-    return m_pairIndex + 3 < m_imagePool.size(); // need at least pairIndex+2 and +3
+    return m_pairIndex + m_navWindow < m_imagePool.size();
 }
 
 bool CompareWorkspace::hasPrevPair() const
 {
-    return m_pairIndex >= 2;
+    return m_pairIndex >= m_navWindow;
+}
+
+CompareWorkspace::NavState CompareWorkspace::captureNavState() const
+{
+    NavState s;
+    s.blink = m_blinkChk && m_blinkChk->isChecked();
+    s.split = m_splitChk && m_splitChk->isChecked();
+    s.swipe = m_swipeChk && m_swipeChk->isChecked();
+    s.overlay = m_overlayChk && m_overlayChk->isChecked();
+    s.diffHighlight = m_diffHighlightChk && m_diffHighlightChk->isChecked();
+    s.syncZoom = m_syncZoomChk ? m_syncZoomChk->isChecked() : true;
+    s.syncDrag = m_syncDragChk ? m_syncDragChk->isChecked() : true;
+    s.crosshair = m_crosshairChk && m_crosshairChk->isChecked();
+    s.pixelLink = m_pixelLinkChk && m_pixelLinkChk->isChecked();
+    s.overlayAlpha = m_overlayAlpha;
+    s.threshold = m_thresholdValue;
+    s.layoutIndex = m_layoutCombo ? m_layoutCombo->currentIndex() : 0;
+    s.roi = m_lastSelection;
+    s.hasRoi = m_lastSelection.width > 0 && m_lastSelection.height > 0;
+    return s;
+}
+
+void CompareWorkspace::restoreNavState(const NavState &s)
+{
+    if (m_syncZoomChk)
+        m_syncZoomChk->setChecked(s.syncZoom);
+    if (m_syncDragChk)
+        m_syncDragChk->setChecked(s.syncDrag);
+    if (m_crosshairChk)
+        m_crosshairChk->setChecked(s.crosshair);
+    if (m_pixelLinkChk)
+        m_pixelLinkChk->setChecked(s.pixelLink);
+    if (m_diffHighlightChk)
+        m_diffHighlightChk->setChecked(s.diffHighlight);
+    m_overlayAlpha = s.overlayAlpha;
+    if (m_overlayAlphaSlider)
+        m_overlayAlphaSlider->setValue(s.overlayAlpha);
+    m_thresholdValue = s.threshold;
+    if (m_thresholdSlider)
+        m_thresholdSlider->setValue(s.threshold);
+    if (m_layoutCombo && s.layoutIndex >= 0 && s.layoutIndex < m_layoutCombo->count())
+        m_layoutCombo->setCurrentIndex(s.layoutIndex);
+    // Exclusive modes — only restore if still meaningful for image count.
+    const int n = m_engine.imageCount();
+    if (m_blinkChk)
+        m_blinkChk->setChecked(s.blink && n >= 2);
+    if (n == 2)
+    {
+        if (m_splitChk)
+            m_splitChk->setChecked(s.split);
+        if (m_swipeChk)
+            m_swipeChk->setChecked(s.swipe);
+        if (m_overlayChk)
+            m_overlayChk->setChecked(s.overlay);
+    }
+    if (s.hasRoi)
+        applySelectionToAll(s.roi);
 }
 
 void CompareWorkspace::nextPair()
 {
     if (!hasNextPair())
         return;
-    m_pairIndex += 2;
-    const QStringList pair{m_imagePool[m_pairIndex], m_imagePool[m_pairIndex + 1]};
-    setImages(pair);
+    const NavState saved = captureNavState();
+    m_pairIndex += m_navWindow;
+    QStringList win;
+    for (int i = 0; i < m_navWindow && m_pairIndex + i < m_imagePool.size(); ++i)
+        win << m_imagePool[m_pairIndex + i];
+    setImages(win);
+    restoreNavState(saved);
     updatePairButtons();
 }
 
@@ -447,9 +528,15 @@ void CompareWorkspace::prevPair()
 {
     if (!hasPrevPair())
         return;
-    m_pairIndex -= 2;
-    const QStringList pair{m_imagePool[m_pairIndex], m_imagePool[m_pairIndex + 1]};
-    setImages(pair);
+    const NavState saved = captureNavState();
+    m_pairIndex -= m_navWindow;
+    if (m_pairIndex < 0)
+        m_pairIndex = 0;
+    QStringList win;
+    for (int i = 0; i < m_navWindow && m_pairIndex + i < m_imagePool.size(); ++i)
+        win << m_imagePool[m_pairIndex + i];
+    setImages(win);
+    restoreNavState(saved);
     updatePairButtons();
 }
 
@@ -459,6 +546,73 @@ void CompareWorkspace::updatePairButtons()
         m_nextPairBtn->setEnabled(hasNextPair());
     if (m_prevPairBtn)
         m_prevPairBtn->setEnabled(hasPrevPair());
+}
+
+void CompareWorkspace::applyLayoutPreset(int n)
+{
+    if (n != 2 && n != 4 && n != 8)
+        return;
+    m_navWindow = n;
+    // Prefer pool; fall back to currently loaded images.
+    QStringList src = m_imagePool;
+    if (src.isEmpty())
+        src = comparedImages();
+    if (src.isEmpty())
+        return;
+    // Align start so we take a contiguous window of n images.
+    if (m_pairIndex < 0 || m_pairIndex >= src.size())
+        m_pairIndex = 0;
+    // If remaining images are fewer than n, clamp start.
+    if (m_pairIndex + n > src.size())
+        m_pairIndex = qMax(0, src.size() - n);
+    QStringList win;
+    for (int i = 0; i < n && m_pairIndex + i < src.size(); ++i)
+        win << src[m_pairIndex + i];
+    if (win.isEmpty())
+        return;
+    const NavState saved = captureNavState();
+    setImages(win);
+    // Force grid columns for the named preset.
+    // 2-up → 2 cols, 4-up → 2 cols (2×2), 8-up → 4 cols (4×2).
+    const int cols = (n == 2) ? 2 : (n == 4) ? 2 : 4;
+    m_engine.setColumns(cols);
+    if (m_layoutCombo)
+    {
+        // Map to combo: 2 cols → index 2, 4 cols → index 4.
+        const int comboIdx = (cols == 2) ? 2 : 4;
+        if (comboIdx < m_layoutCombo->count())
+            m_layoutCombo->setCurrentIndex(comboIdx);
+    }
+    rebuildCells();
+    fitAll();
+    restoreNavState(saved);
+    updatePairButtons();
+    update();
+}
+
+void CompareWorkspace::exclusiveMode(QCheckBox *keepOn)
+{
+    // Split / Swipe / Overlay are mutually exclusive (and only for 2 images).
+    auto uncheck = [keepOn](QCheckBox *c)
+    {
+        if (c && c != keepOn && c->isChecked())
+            c->setChecked(false);
+    };
+    uncheck(m_splitChk);
+    uncheck(m_swipeChk);
+    uncheck(m_overlayChk);
+}
+
+void CompareWorkspace::showShortcutHelp()
+{
+    // Lightweight status-bar style tip via window title flash — no modal dialog
+    // so day-long keyboard work is not interrupted.
+    const QString tip =
+        tr("Compare 快捷键: B Blink · Space 按住Blink · S Split · W Swipe · O Overlay · "
+           "H Diff高亮 · Z/D 同步缩放/拖动 · C 准星 · L 像素连线 · "
+           "Ctrl+2/4/8 布局预设 · PgUp/PgDn 或 ←/→ 连续导航 · F Fit · X 交换 · ? 帮助 · Esc 关闭");
+    if (auto *w = window())
+        w->setWindowTitle(tip);
 }
 
 void CompareWorkspace::setImages(const QStringList &paths)
@@ -2014,10 +2168,16 @@ void CompareWorkspace::drawPixelLinkLines(QPainter &p)
     }
 }
 
-// P0-4: temporary compare — hold Space to blink, release to stop.
+// P0-4 / M20: keyboard-first compare — day-long work without the mouse.
 void CompareWorkspace::keyPressEvent(QKeyEvent *event)
 {
-    if (event->key() == Qt::Key_Space && !event->isAutoRepeat())
+    const int key = event->key();
+    const auto mods = event->modifiers();
+    const bool plain = (mods == Qt::NoModifier);
+    const bool ctrl = (mods == Qt::ControlModifier);
+
+    // Space hold → temporary Blink.
+    if (key == Qt::Key_Space && !event->isAutoRepeat())
     {
         if (m_blinkChk && m_blinkChk->isEnabled() && !m_blinkChk->isChecked())
         {
@@ -2027,41 +2187,133 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
-    // P1-5: ESC dismisses the Compare dialog (the panel sits inside a QDialog,
-    // and key events here don't auto-bubble up to it, so handle it explicitly).
-    if (event->key() == Qt::Key_Escape)
+    // ESC closes the Compare dialog.
+    if (key == Qt::Key_Escape)
     {
         event->accept();
         if (auto *dlg = qobject_cast<QDialog *>(window()))
             dlg->reject();
         return;
     }
-    // A-4.5: PageDown / PageUp walk consecutive pairs in continuous compare.
-    if (event->key() == Qt::Key_PageDown && !event->modifiers())
+    // Continuous navigation: PageUp/Down + Left/Right arrows.
+    if (plain && (key == Qt::Key_PageDown || key == Qt::Key_Right || key == Qt::Key_N))
     {
         nextPair();
         event->accept();
         return;
     }
-    if (event->key() == Qt::Key_PageUp && !event->modifiers())
+    if (plain && (key == Qt::Key_PageUp || key == Qt::Key_Left || key == Qt::Key_P))
     {
         prevPair();
         event->accept();
         return;
     }
-    // B key: toggle blink compare on/off.
-    if (event->key() == Qt::Key_B && !event->modifiers() && m_blinkChk &&
-        m_blinkChk->isEnabled())
+    // Mode toggles (explicit keyPressEvent — not Alt mnemonics).
+    if (plain && key == Qt::Key_B && m_blinkChk && m_blinkChk->isEnabled())
     {
         m_blinkChk->setChecked(!m_blinkChk->isChecked());
         event->accept();
         return;
     }
-    // Number keys 1-7 switch the layout preset (parity with the layout combo),
-    // so the user can re-tile without reaching for the mouse. 7 = 自定义.
-    if (m_layoutCombo && !event->modifiers())
+    if (plain && key == Qt::Key_S && m_splitChk && m_splitChk->isEnabled())
     {
-        const int key = event->key();
+        exclusiveMode(m_splitChk);
+        m_splitChk->setChecked(!m_splitChk->isChecked());
+        event->accept();
+        return;
+    }
+    if (plain && key == Qt::Key_W && m_swipeChk && m_swipeChk->isEnabled())
+    {
+        exclusiveMode(m_swipeChk);
+        m_swipeChk->setChecked(!m_swipeChk->isChecked());
+        event->accept();
+        return;
+    }
+    if (plain && key == Qt::Key_O && m_overlayChk && m_overlayChk->isEnabled())
+    {
+        exclusiveMode(m_overlayChk);
+        m_overlayChk->setChecked(!m_overlayChk->isChecked());
+        event->accept();
+        return;
+    }
+    if (plain && key == Qt::Key_H && m_diffHighlightChk)
+    {
+        m_diffHighlightChk->setChecked(!m_diffHighlightChk->isChecked());
+        event->accept();
+        return;
+    }
+    // Sync toggles.
+    if (plain && key == Qt::Key_Z && m_syncZoomChk)
+    {
+        m_syncZoomChk->setChecked(!m_syncZoomChk->isChecked());
+        event->accept();
+        return;
+    }
+    if (plain && key == Qt::Key_D && m_syncDragChk)
+    {
+        m_syncDragChk->setChecked(!m_syncDragChk->isChecked());
+        event->accept();
+        return;
+    }
+    // Crosshair / Pixel Link / Side panel.
+    if (plain && key == Qt::Key_C && m_crosshairChk)
+    {
+        m_crosshairChk->setChecked(!m_crosshairChk->isChecked());
+        event->accept();
+        return;
+    }
+    if (plain && key == Qt::Key_L && m_pixelLinkChk)
+    {
+        m_pixelLinkChk->setChecked(!m_pixelLinkChk->isChecked());
+        event->accept();
+        return;
+    }
+    if (plain && key == Qt::Key_I && m_sideChk)
+    {
+        m_sideChk->setChecked(!m_sideChk->isChecked());
+        event->accept();
+        return;
+    }
+    // Fit all / Swap panes.
+    if (plain && key == Qt::Key_F)
+    {
+        fitAll();
+        event->accept();
+        return;
+    }
+    if (plain && key == Qt::Key_X)
+    {
+        onSwapPanes();
+        event->accept();
+        return;
+    }
+    // Diff threshold ± ( [ / ] ).
+    if (plain && (key == Qt::Key_BracketLeft || key == Qt::Key_BracketRight) && m_thresholdSlider)
+    {
+        const int step = (key == Qt::Key_BracketRight) ? 5 : -5;
+        m_thresholdSlider->setValue(qBound(0, m_thresholdSlider->value() + step, 255));
+        event->accept();
+        return;
+    }
+    // Overlay alpha ± ( , / . ).
+    if (plain && (key == Qt::Key_Comma || key == Qt::Key_Period) && m_overlayAlphaSlider)
+    {
+        const int step = (key == Qt::Key_Period) ? 5 : -5;
+        m_overlayAlphaSlider->setValue(qBound(0, m_overlayAlphaSlider->value() + step, 100));
+        event->accept();
+        return;
+    }
+    // M20: Ctrl+2 / Ctrl+4 / Ctrl+8 → named layout presets.
+    if (ctrl && (key == Qt::Key_2 || key == Qt::Key_4 || key == Qt::Key_8))
+    {
+        const int n = (key == Qt::Key_2) ? 2 : (key == Qt::Key_4) ? 4 : 8;
+        applyLayoutPreset(n);
+        event->accept();
+        return;
+    }
+    // Plain 1–7 still map to the layout combo (column modes).
+    if (plain && m_layoutCombo)
+    {
         int idx = -1;
         if (key == Qt::Key_1)
             idx = 0;
@@ -2076,7 +2328,7 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
         else if (key == Qt::Key_6)
             idx = 5;
         else if (key == Qt::Key_7)
-            idx = 6; // 自定义 M×N
+            idx = 6;
         if (idx >= 0 && idx < m_layoutCombo->count())
         {
             m_layoutCombo->setCurrentIndex(idx);
@@ -2084,10 +2336,10 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
             return;
         }
     }
-    // L key: toggle Pixel Link mode.
-    if (event->key() == Qt::Key_L && !event->modifiers() && m_pixelLinkChk)
+    // ? → shortcut help (title bar tip).
+    if (plain && (key == Qt::Key_Question || key == Qt::Key_Slash))
     {
-        m_pixelLinkChk->setChecked(!m_pixelLinkChk->isChecked());
+        showShortcutHelp();
         event->accept();
         return;
     }

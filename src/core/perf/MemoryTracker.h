@@ -2,8 +2,10 @@
 
 #include <atomic>
 #include <cstdint>
+#include <deque>
 #include <mutex>
 #include <string>
+#include <vector>
 
 // Qt-free performance ledger.
 //
@@ -40,15 +42,20 @@ struct MemorySnapshot
     size_t externalBytes = 0;               // caller-accounted in-flight buffers
     size_t peakBytes = 0;                   // max (cacheTotal + external) seen
     size_t processWorkingSetKB = 0;         // best-effort OS RSS (0 if N/A)
+    // M21: wall-clock ms since process start (for timeline X axis). 0 if unknown.
+    uint64_t timestampMs = 0;
 };
 
 class MemoryTracker
 {
   public:
+    // M21: ring-buffer capacity for the memory timeline.
+    static constexpr size_t kTimelineCapacity = 300;
+
     static MemoryTracker &instance();
 
     // Sample now from CacheManager + live-frame counter + OS; update peak;
-    // return the snapshot.
+    // append to the timeline ring; return the snapshot.
     MemorySnapshot sample();
 
     // Manual ledger for buffers the cache doesn't count (e.g. in-flight decode
@@ -56,11 +63,15 @@ class MemoryTracker
     void addExternal(size_t bytes);
     void removeExternal(size_t bytes);
 
-    // Clears peak + external. Does NOT touch CacheManager or ImageFrame counts.
+    // Clears peak + external + timeline. Does NOT touch CacheManager or frames.
     void reset();
 
     // Last-seen maximum of (cacheTotal + external).
     MemorySnapshot peak() const;
+
+    // M21: chronological timeline samples (oldest → newest), up to capacity.
+    std::vector<MemorySnapshot> timeline() const;
+    size_t timelineSize() const;
 
     // Called by ImageFrame ctor/dtor (additive, one line each in ImageFrame.cpp).
     static void notifyFrameCreated();
@@ -74,6 +85,9 @@ class MemoryTracker
     mutable std::atomic<size_t> m_liveFrames{0};
     mutable std::atomic<size_t> m_peakLiveFrames{0};
     mutable std::mutex m_peakMtx;
+    // M21: ring buffer of recent samples for Memory Timeline / dashboard.
+    mutable std::mutex m_timelineMtx;
+    std::deque<MemorySnapshot> m_timeline;
 };
 
 } // namespace mviewer::perf

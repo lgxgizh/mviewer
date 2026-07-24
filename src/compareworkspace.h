@@ -98,6 +98,16 @@ class CompareWorkspace : public QWidget
     bool hasNextPair() const;
     bool hasPrevPair() const;
 
+    // M20: named layout presets — 2-up (2×1), 4-up (2×2), 8-up (4×2).
+    // Loads up to N images from the pool (or current set) and forces the grid.
+    void applyLayoutPreset(int n); // n ∈ {2, 4, 8}
+    // M20: window size for continuous navigation (2/4/8). Default 2 = pair.
+    void setNavWindow(int n);
+    int navWindow() const
+    {
+        return m_navWindow;
+    }
+
   public slots:
     void nextPair();
     void prevPair();
@@ -188,12 +198,35 @@ class CompareWorkspace : public QWidget
     QSpinBox *m_gridColsSpin = nullptr;
     void onCustomGridChanged();
 
-    // A-4.5: continuous compare — walk consecutive pairs from a pool.
+    // A-4.5 / M20: continuous compare — walk a sliding window over the pool.
     QStringList m_imagePool;
-    int m_pairIndex = 0; // index of the first image of the current pair
+    int m_pairIndex = 0;  // index of the first image of the current window
+    int m_navWindow = 2;  // 2 / 4 / 8 — step size for next/prev
     QPushButton *m_prevPairBtn = nullptr;
     QPushButton *m_nextPairBtn = nullptr;
     void updatePairButtons();
+    // M20: snapshot UI mode so next/prev can restore after setImages rebuild.
+    struct NavState
+    {
+        bool blink = false;
+        bool split = false;
+        bool swipe = false;
+        bool overlay = false;
+        bool diffHighlight = false;
+        bool syncZoom = true;
+        bool syncDrag = true;
+        bool crosshair = false;
+        bool pixelLink = false;
+        int overlayAlpha = 45;
+        uint8_t threshold = 0;
+        int layoutIndex = 0;
+        mviewer::domain::Selection roi;
+        bool hasRoi = false;
+    };
+    NavState captureNavState() const;
+    void restoreNavState(const NavState &s);
+    void showShortcutHelp();
+    void exclusiveMode(QCheckBox *keepOn); // uncheck other exclusive modes
 
     // M15: difference threshold
     QSlider *m_thresholdSlider = nullptr;

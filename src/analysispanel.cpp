@@ -1,4 +1,5 @@
 #include "analysispanel.h"
+#include "analyzermodel.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/HistogramAnalyzer.h"
 #include "widgets/rawimageview.h"
@@ -7,7 +8,9 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QFileInfo>
 #include <QHBoxLayout>
+#include <QListWidget>
 #include <QPainter>
 #include <QPushButton>
 #include <QSignalBlocker>
@@ -85,7 +88,35 @@ void AnalysisPanel::buildUi()
     auto *exportBtn = new QPushButton(tr("导出报告"));
     connect(exportBtn, &QPushButton::clicked, this, &AnalysisPanel::exportRequested);
     plugBar->addWidget(exportBtn);
+    // M21: pin current result so AnalyzerModel never evicts it.
+    m_pinBtn = new QPushButton(tr("钉住"));
+    m_pinBtn->setCheckable(true);
+    m_pinBtn->setToolTip(tr("钉住当前分析结果（History 中保留，不被淘汰）"));
+    connect(m_pinBtn, &QPushButton::clicked, this, &AnalysisPanel::onPinToggled);
+    plugBar->addWidget(m_pinBtn);
     mainLay->addLayout(plugBar);
+
+    // M21: History + Pinned lists (compact, under the toolbar).
+    auto *histRow = new QHBoxLayout;
+    m_historyList = new QListWidget;
+    m_historyList->setMaximumHeight(72);
+    m_historyList->setToolTip(tr("分析历史（最近 50 条）— 双击打开图片并恢复结果"));
+    connect(m_historyList, &QListWidget::itemDoubleClicked, this,
+            [this](QListWidgetItem *) { onHistoryActivated(); });
+    m_pinnedList = new QListWidget;
+    m_pinnedList->setMaximumHeight(72);
+    m_pinnedList->setToolTip(tr("钉住的分析结果 — 双击打开"));
+    connect(m_pinnedList, &QListWidget::itemDoubleClicked, this,
+            [this](QListWidgetItem *) { onPinnedActivated(); });
+    auto *histCol = new QVBoxLayout;
+    histCol->addWidget(new QLabel(tr("历史")));
+    histCol->addWidget(m_historyList);
+    auto *pinCol = new QVBoxLayout;
+    pinCol->addWidget(new QLabel(tr("钉住")));
+    pinCol->addWidget(m_pinnedList);
+    histRow->addLayout(histCol, 1);
+    histRow->addLayout(pinCol, 1);
+    mainLay->addLayout(histRow);
 
     connect(m_analyzerCombo, QOverload<int>::of(&QComboBox::activated), this,
             &AnalysisPanel::onAnalyzerSelected);
@@ -434,6 +465,8 @@ void AnalysisPanel::reanalyze()
                     }
                     m_pluginResult->setText(pluginHtml);
                 }
+                // M21: publish plain result into AnalyzerModel (history + pin SSOT).
+                publishResult(QString::fromStdString(text));
                 return;
             }
         }
@@ -443,6 +476,9 @@ void AnalysisPanel::reanalyze()
     {
         m_statsA = AnalysisEngine::computeStatsROI(mvcore::fromQImage(m_imageA), m_roi);
         updateHistogramPage();
+        // Also publish ROI stats text when no plugin analyzer ran.
+        if (m_statsLabel)
+            publishResult(m_statsLabel->text());
     }
 }
 
@@ -968,4 +1004,131 @@ void AnalysisPanel::renderHistogramPixmap(const mviewer::domain::Histogram &hist
     drawChannel(hist.green.data(), QColor(70, 220, 70));
     drawChannel(hist.blue.data(), QColor(70, 130, 230));
     m_histogramLabel->setPixmap(pix);
+}
+
+// ── M21: AnalyzerModel wiring (history / pin / result SSOT) ──
+
+void AnalysisPanel::setAnalyzerModel(AnalyzerModel *model)
+{
+    if (m_analyzerModel == model)
+        return;
+    if (m_analyzerModel)
+        disconnect(m_analyzerModel, nullptr, this, nullptr);
+    m_analyzerModel = model;
+    if (!m_analyzerModel)
+        return;
+    connect(m_analyzerModel, &AnalyzerModel::historyChanged, this,
+            [this](const QStringList &) { refreshHistoryUi(); });
+    connect(m_analyzerModel, &AnalyzerModel::pinnedChanged, this,
+            [this](const QStringList &) { refreshPinnedUi(); });
+    refreshHistoryUi();
+    refreshPinnedUi();
+}
+
+void AnalysisPanel::publishResult(const QString &plainText)
+{
+    if (!m_analyzerModel || plainText.isEmpty())
+        return;
+    const QString path = !m_imagePath.isEmpty()
+                             ? m_imagePath
+                             : (m_frameA ? QString::fromStdString(m_frameA->metadata().filePath)
+                                         : QString());
+    if (path.isEmpty())
+        return;
+    m_analyzerModel->setResult(path, plainText);
+    if (m_analyzerCombo)
+    {
+        const QString id = m_analyzerCombo->currentData().toString();
+        if (!id.isEmpty())
+            m_analyzerModel->setCurrentAnalyzer(id);
+    }
+    if (m_pinBtn)
+        m_pinBtn->setChecked(m_analyzerModel->isPinned(path));
+}
+
+void AnalysisPanel::refreshHistoryUi()
+{
+    if (!m_historyList || !m_analyzerModel)
+        return;
+    m_historyList->clear();
+    for (const QString &p : m_analyzerModel->history())
+    {
+        auto *item = new QListWidgetItem(QFileInfo(p).fileName(), m_historyList);
+        item->setData(Qt::UserRole, p);
+        item->setToolTip(p);
+    }
+}
+
+void AnalysisPanel::refreshPinnedUi()
+{
+    if (!m_pinnedList || !m_analyzerModel)
+        return;
+    m_pinnedList->clear();
+    for (const QString &p : m_analyzerModel->pinned())
+    {
+        auto *item = new QListWidgetItem(QFileInfo(p).fileName(), m_pinnedList);
+        item->setData(Qt::UserRole, p);
+        item->setToolTip(p);
+    }
+}
+
+void AnalysisPanel::onHistoryActivated()
+{
+    if (!m_historyList)
+        return;
+    auto *item = m_historyList->currentItem();
+    if (!item)
+        return;
+    const QString path = item->data(Qt::UserRole).toString();
+    if (path.isEmpty())
+        return;
+    if (m_analyzerModel)
+    {
+        const QString text = m_analyzerModel->resultText(path);
+        if (!text.isEmpty())
+            setRegionStats(text);
+    }
+    emit historyImageRequested(path);
+}
+
+void AnalysisPanel::onPinnedActivated()
+{
+    if (!m_pinnedList)
+        return;
+    auto *item = m_pinnedList->currentItem();
+    if (!item)
+        return;
+    const QString path = item->data(Qt::UserRole).toString();
+    if (path.isEmpty())
+        return;
+    if (m_analyzerModel)
+    {
+        const QString text = m_analyzerModel->resultText(path);
+        if (!text.isEmpty())
+            setRegionStats(text);
+    }
+    emit historyImageRequested(path);
+}
+
+void AnalysisPanel::onPinToggled()
+{
+    if (!m_analyzerModel || !m_pinBtn)
+        return;
+    const QString path = !m_imagePath.isEmpty()
+                             ? m_imagePath
+                             : (m_frameA ? QString::fromStdString(m_frameA->metadata().filePath)
+                                         : QString());
+    if (path.isEmpty())
+    {
+        m_pinBtn->setChecked(false);
+        return;
+    }
+    // Ensure there is a result to pin (use current plugin text if needed).
+    if (m_analyzerModel->resultText(path).isEmpty() && m_pluginResult &&
+        !m_pluginResult->text().isEmpty())
+        m_analyzerModel->setResult(path, m_pluginResult->text());
+    if (m_pinBtn->isChecked())
+        m_analyzerModel->pinResult(path);
+    else
+        m_analyzerModel->unpinResult(path);
 }

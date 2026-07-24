@@ -5,6 +5,7 @@
 #include <QtGlobal> // defines Q_OS_WIN / Q_OS_LINUX for the OS-RSS branch below
 
 #include <algorithm>
+#include <chrono>
 
 #ifdef Q_OS_WIN
 // clang-format off
@@ -90,6 +91,21 @@ MemorySnapshot MemoryTracker::sample()
         ; // lock-free peak update
 
     s.peakBytes = m_peak.load(std::memory_order_relaxed);
+
+    // M21: stamp wall-clock ms since process start for the timeline X axis.
+    static const auto kStart = std::chrono::steady_clock::now();
+    s.timestampMs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() -
+                                                              kStart)
+            .count());
+
+    // Append to the ring buffer (oldest dropped when full).
+    {
+        std::lock_guard<std::mutex> lock(m_timelineMtx);
+        m_timeline.push_back(s);
+        while (m_timeline.size() > kTimelineCapacity)
+            m_timeline.pop_front();
+    }
     return s;
 }
 
@@ -112,6 +128,8 @@ void MemoryTracker::reset()
     m_peak.store(0, std::memory_order_relaxed);
     m_external.store(0, std::memory_order_relaxed);
     m_peakLiveFrames.store(0, std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lock(m_timelineMtx);
+    m_timeline.clear();
 }
 
 MemorySnapshot MemoryTracker::peak() const
@@ -121,6 +139,18 @@ MemorySnapshot MemoryTracker::peak() const
     s.externalBytes = m_external.load(std::memory_order_relaxed);
     s.liveImageFrames = m_peakLiveFrames.load(std::memory_order_relaxed);
     return s;
+}
+
+std::vector<MemorySnapshot> MemoryTracker::timeline() const
+{
+    std::lock_guard<std::mutex> lock(m_timelineMtx);
+    return std::vector<MemorySnapshot>(m_timeline.begin(), m_timeline.end());
+}
+
+size_t MemoryTracker::timelineSize() const
+{
+    std::lock_guard<std::mutex> lock(m_timelineMtx);
+    return m_timeline.size();
 }
 
 } // namespace mviewer::perf

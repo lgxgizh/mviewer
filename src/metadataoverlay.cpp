@@ -1,6 +1,7 @@
 #include "metadataoverlay.h"
 
 #include "core/image/MetadataReader.h"
+#include "core/image/RawMetadata.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -11,6 +12,8 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QResizeEvent>
+
+#include <algorithm>
 
 MetadataOverlay::MetadataOverlay(QWidget *parent) : QWidget(parent)
 {
@@ -136,14 +139,66 @@ void MetadataOverlay::buildContent(const QString &path)
         if (!fl.isEmpty())
             m_lines << QString("焦距: %1mm").arg(fl);
 
+        // Lens (EXIF LensModel / LensMake, with RAW fallback below).
+        const auto lensModel = lookup(meta.textKeys, "LensModel");
+        const auto lensMake = lookup(meta.textKeys, "LensMake");
+        if (!lensModel.isEmpty() || !lensMake.isEmpty())
+            m_lines << QString("镜头: %1 %2").arg(lensMake, lensModel).trimmed();
+
         const auto sw = lookup(meta.textKeys, "Software");
         if (!sw.isEmpty())
             m_lines << QString("软件: %1").arg(sw);
     }
 
+    // RAW sidecar EXIF (camera / lens) when the generic textKeys path is empty.
+    {
+        const auto raw = mviewer::core::parseRawMetadata(path.toStdString());
+        if (!raw.make.empty() || !raw.model.empty())
+        {
+            const bool hasCameraLine =
+                std::any_of(m_lines.cbegin(), m_lines.cend(),
+                            [](const QString &l) { return l.startsWith(QStringLiteral("相机:")); });
+            if (!hasCameraLine)
+                m_lines << QString("相机: %1 %2")
+                               .arg(QString::fromStdString(raw.make),
+                                    QString::fromStdString(raw.model))
+                               .trimmed();
+        }
+        if (!raw.lens.empty() || !raw.lensMaker.empty())
+        {
+            const bool hasLensLine =
+                std::any_of(m_lines.cbegin(), m_lines.cend(),
+                            [](const QString &l) { return l.startsWith(QStringLiteral("镜头:")); });
+            if (!hasLensLine)
+                m_lines << QString("镜头: %1 %2")
+                               .arg(QString::fromStdString(raw.lensMaker),
+                                    QString::fromStdString(raw.lens))
+                               .trimmed();
+        }
+        if (raw.iso > 0)
+        {
+            const bool hasIso =
+                std::any_of(m_lines.cbegin(), m_lines.cend(),
+                            [](const QString &l) { return l.startsWith(QStringLiteral("ISO:")); });
+            if (!hasIso)
+                m_lines << QString("ISO: %1").arg(raw.iso);
+        }
+    }
+
     // ICC profile
     if (meta.hasIccProfile)
-        m_lines << QString("ICC 配置: 已嵌入");
+        m_lines << QString("ICC 配置: 已嵌入 (%1)")
+                       .arg(meta.colorSpace.empty()
+                                ? QStringLiteral("embedded")
+                                : QString::fromStdString(meta.colorSpace));
+    else if (!meta.colorSpace.empty())
+        m_lines << QString("色彩配置: %1").arg(QString::fromStdString(meta.colorSpace));
+
+    // Histogram summary (cheap: min/max/mean from MetadataReader if present;
+    // full histogram lives in AnalysisPanel — overlay only shows a one-liner).
+    if (meta.width > 0 && meta.height > 0)
+        m_lines << QString("直方图: 见分析面板 (H) · 像素 %1")
+                       .arg(static_cast<qint64>(meta.width) * meta.height);
 
     // Modified time
     if (meta.modifiedEpochSec > 0)

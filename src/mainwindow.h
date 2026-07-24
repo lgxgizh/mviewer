@@ -21,6 +21,10 @@ class MetadataPanel;
 class CompareWorkspace;
 class SearchPanel;
 class SelectionModel;
+class DirectoryModel;
+class ImageListModel;
+class WorkspaceModel;
+class AnalyzerModel;
 class BatchDialog;
 class PluginSettings;
 class QAction;
@@ -207,11 +211,16 @@ class MainWindow : public QMainWindow
     void toggleCurrentPick();
     void toggleCurrentReject();
 
-    QString m_currentDir;
-    QString m_currentImagePath;            // mirror of m_selection->currentImage()
-    SelectionModel *m_selection = nullptr; // P0-2: single source of truth
-    QStringList m_cachedImagePaths;        // cached image list for current dir
-    bool m_dirListDirty = true;            // invalidated when directory changes
+    // M19: UI models — single source of truth for Current / Selection /
+    // Directory / ImageList / Workspace / Analyzer. Widgets listen; they do not
+    // own a second copy of these states.
+    SelectionModel *m_selection = nullptr;
+    DirectoryModel *m_directory = nullptr;
+    ImageListModel *m_imageList = nullptr;
+    WorkspaceModel *m_workspace = nullptr;
+    AnalyzerModel *m_analyzer = nullptr;
+    // Guard against gallery ↔ SelectionModel selection feedback loops.
+    bool m_syncingSelection = false;
 
     // In-session navigation history (like a browser back/forward).
     QStringList m_history;
@@ -221,11 +230,6 @@ class MainWindow : public QMainWindow
     mviewer::core::RecentFiles m_recentFiles; // recent-files LRU (opened images)
     QString m_openOnLaunch;                   // path passed via command line
     AppState m_appState;
-
-    // M12.2 (G2-ext): per-image last analysis result text, keyed by image path.
-    // Populated as analysis runs for each opened image; persisted per-image into
-    // the .mvws so a compare session's analysis context survives a reload.
-    QMap<QString, QString> m_analysisByPath;
 
     void saveWorkspace();
     void openWorkspace();
@@ -242,6 +246,13 @@ class MainWindow : public QMainWindow
     QStringList resolveSelectedPaths(bool preferMulti = true) const;
     // A-3.4: enable/disable selection-dependent actions (Compare/Export/Batch).
     void updateSelectionActions();
+    // M19: ensure ImageListModel is populated for the current directory.
+    void ensureImageList();
+    // M19: apply SelectionModel multi-selection onto the gallery (one-way).
+    void syncGalleryFromSelection();
+    // Convenience accessors over the UI models (read-only mirrors for call sites).
+    QString currentDir() const;
+    QString currentImagePath() const;
     // M15: crash recovery
     void autosaveSession();
     void restoreSessionRecovery();

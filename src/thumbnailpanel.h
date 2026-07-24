@@ -75,6 +75,9 @@ class ThumbnailPanel : public QListView
     // scrollToPath() this only scrolls when the item is off-screen (avoids
     // recentring jank when the user clicked an already-visible thumbnail).
     void selectPath(const QString &path);
+    // M19: apply a multi-selection from SelectionModel onto the gallery.
+    // `current` becomes the focused item; empty current falls back to paths[0].
+    void selectPaths(const QStringList &paths, const QString &current = {});
     void setSortMode(SortMode mode);
     // A-2.2: toggle ascending/descending sort order.
     void setSortAscending(bool ascending);

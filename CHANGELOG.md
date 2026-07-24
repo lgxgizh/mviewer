@@ -12,6 +12,26 @@ All notable changes to this project are documented here. The format is based on
   duplicated the directory tree. Favorites and Recent remain available via
   the File menu.
 
+### Added — M19/M20/M21 Product Polish
+
+- **UI Models (M19):** `DirectoryModel`, `ImageListModel`, `WorkspaceModel`,
+  `AnalyzerModel` — single source of truth for Current / Selection /
+  Directory / ImageList / Workspace / Analyzer. MainWindow no longer mirrors
+  these states.
+- **Metadata Overlay:** `I` / `M` toggle, `ESC` close; Lens / RAW camera /
+  ICC summary lines.
+- **Compare keyboard-first (M20):** `B/S/W/O/H` modes, `Z/D` sync, `C/L/I`
+  crosshair/link/side, `Ctrl+2/4/8` layout presets, continuous nav preserves
+  mode/ROI, `?` shortcut tip.
+- **Analysis History + Pin (M21):** AnalysisPanel lists recent/pinned results
+  via AnalyzerModel; double-click restores.
+- **ExportJob (M21):** unified Convert runner (`core/export/ExportJob`);
+  ExportDialog Convert path delegates to it.
+- **Memory Timeline (M21):** MemoryTracker ring buffer (300 samples);
+  Tools → 内存时间线 shows peak + sparkline.
+- **Benchmark Dashboard (M21):** `scripts/benchmark_dashboard.ps1` fixed table
+  binding + Canvas sparklines for trend metrics.
+
 ### Added — Product Experience & Professional Workflow
 
 - **Thumbnail fuzzy search:** search bar accepts `*` / `?` wildcards

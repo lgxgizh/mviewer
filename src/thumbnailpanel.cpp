@@ -909,6 +909,26 @@ void ThumbnailPanel::selectPath(const QString &path)
     scrollTo(idx); // default EnsureVisible: only scrolls when off-screen
 }
 
+void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &current)
+{
+    if (!selectionModel() || !m_model)
+        return;
+    QItemSelection sel;
+    for (const QString &p : paths)
+    {
+        const int row = m_rowByPath.value(p, -1);
+        if (row < 0)
+            continue;
+        const QModelIndex idx = m_model->index(row, 0);
+        sel.select(idx, idx);
+    }
+    selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect);
+    const QString focus = !current.isEmpty() ? current
+                                             : (paths.isEmpty() ? QString() : paths.first());
+    if (!focus.isEmpty())
+        selectPath(focus);
+}
+
 int ThumbnailPanel::scrollOffset() const
 {
     return verticalScrollBar()->value();

@@ -19,12 +19,16 @@
 #include <memory>
 
 class RawImageView;
+class AnalyzerModel;
+class QListWidget;
+class QPushButton;
 
 // AnalysisPanel: multi-mode analysis panel
 //  - Histogram + stats (single image)
 //  - ROI stats
 //  - Dual-image compare (PSNR/SSIM/Noise/Diff)
 //  - AnalyzerRegistry plugin extensibility
+//  - M21: Analysis History + Pinned Result via AnalyzerModel
 class AnalysisPanel : public QWidget
 {
     Q_OBJECT
@@ -42,6 +46,10 @@ class AnalysisPanel : public QWidget
     {
         m_pipeline = std::move(pipeline);
     }
+
+    // M21: inject the shared AnalyzerModel (history / pin / result SSOT).
+    // The panel writes results on reanalyze() and reads history/pin for UI.
+    void setAnalyzerModel(AnalyzerModel *model);
 
     void setImage(const QImage &img);
     void setImage(const QImage &img, const QString &path);
@@ -100,6 +108,8 @@ class AnalysisPanel : public QWidget
     // so the analysis workflow doesn't force the user into a menu. The MainWindow
     // wires this to its report-exporter for the current image.
     void exportRequested();
+    // M21: user picked a history/pinned entry — MainWindow should open that image.
+    void historyImageRequested(const QString &path);
 
   protected:
     void paintEvent(QPaintEvent *event) override;
@@ -178,6 +188,18 @@ class AnalysisPanel : public QWidget
     // headless/tests can still fall back to the registry (see reanalyze() /
     // buildUi()).
     std::unique_ptr<AnalyzerPipeline> m_pipeline;
+
+    // M21: shared result/history/pin model (not owned).
+    AnalyzerModel *m_analyzerModel = nullptr;
+    QListWidget *m_historyList = nullptr;
+    QListWidget *m_pinnedList = nullptr;
+    QPushButton *m_pinBtn = nullptr;
+    void refreshHistoryUi();
+    void refreshPinnedUi();
+    void onHistoryActivated();
+    void onPinnedActivated();
+    void onPinToggled();
+    void publishResult(const QString &plainText);
 
     static constexpr int kPreviewSize = 192;
 };

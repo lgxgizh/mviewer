@@ -69,6 +69,7 @@ add_library(mviewer_core SHARED
     core/export/ExporterRegistry.cpp
     core/import/ImporterRegistry.cpp
     core/export/ExportManager.cpp
+    core/export/ExportJob.cpp
     core/search/SearchEngine.cpp
     core/batch/BatchProcessor.cpp
 
@@ -108,6 +109,10 @@ target_include_directories(mviewer_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_library(mviewer_ui STATIC
     mainwindow.cpp
     selectionmodel.cpp
+    directorymodel.cpp
+    imagelistmodel.cpp
+    workspacemodel.cpp
+    analyzermodel.cpp
     appstate.cpp
     imageviewer.cpp
     directorytree.cpp
@@ -221,6 +226,23 @@ target_link_libraries(test_appstate
 )
 target_compile_features(test_appstate PRIVATE cxx_std_20)
 target_include_directories(test_appstate PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+# M19: UI models (Selection / Directory / ImageList / Workspace / Analyzer) headless unit test.
+add_executable(test_ui_models
+    test_ui_models.cpp
+    selectionmodel.cpp
+    directorymodel.cpp
+    imagelistmodel.cpp
+    workspacemodel.cpp
+    analyzermodel.cpp
+)
+target_link_libraries(test_ui_models
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Core
+)
+target_compile_features(test_ui_models PRIVATE cxx_std_20)
+target_include_directories(test_ui_models PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 
 add_executable(benchmark
@@ -462,6 +484,20 @@ target_link_libraries(export_pipeline_tests
 target_compile_features(export_pipeline_tests PRIVATE cxx_std_20)
 target_include_directories(export_pipeline_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(export_pipeline_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# M21: unified ExportJob runner tests
+add_executable(export_job_tests
+    core/test_export_job.cpp
+)
+target_link_libraries(export_job_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(export_job_tests PRIVATE cxx_std_20)
+target_include_directories(export_job_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M9-5 Workspace persistence acceptance tests ──────────────────────────
 add_executable(workspace_persist_tests
@@ -783,6 +819,7 @@ add_test(NAME core_tests       COMMAND core_tests)
 add_test(NAME m3m4m5_tests     COMMAND test_m3m4m5)
 add_test(NAME unit_tests       COMMAND mviewer_unit_tests)
 add_test(NAME appstate_tests   COMMAND test_appstate)
+add_test(NAME ui_models_tests  COMMAND test_ui_models)
 add_test(NAME m3pipeline_tests COMMAND m3pipeline_tests)
 add_test(NAME decoder_tests    COMMAND test_decoder)
 add_test(NAME cache_tests      COMMAND test_cache)
@@ -817,6 +854,7 @@ add_test(NAME ratingstore_tests COMMAND ratingstore_tests)
 add_test(NAME analysis_panel_tests COMMAND analysis_panel_tests)
 add_test(NAME export_tests COMMAND export_tests)
 add_test(NAME export_pipeline_tests COMMAND export_pipeline_tests)
+add_test(NAME export_job_tests COMMAND export_job_tests)
 
 # P3 tail — RatingStore flag persistence (color label / reject / pick / recents)
 add_executable(flags_tests
