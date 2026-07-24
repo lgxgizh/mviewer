@@ -4,9 +4,9 @@ Write an analysis plugin for MViewer in C++ and have it recognized at runtime.
 This document is the **stable contract** (M13 Phase 6). It is deliberately small:
 one interface, three C exports, one build rule.
 
-> Scope note: this SDK covers **analyzer plugins** (the `Analyzer` interface).
-> Command / compare / export plugins are future surface; the loader is generic
-> enough to host them later without changing the C ABI below.
+> Scope note: this SDK covers **Analyzer / Decoder / Exporter / Importer**
+> plugins. The loader probes `createAnalyzer` → `createDecoder` →
+> `createExporter` → `createImporter` and registers into the matching registry.
 
 ## 1. The interface you implement
 
@@ -59,6 +59,8 @@ extern "C" {
     void        destroyDecoder(IDecoder*);
     IExporter  *createExporter();          // Exporter plugin (M14.3)
     void        destroyExporter(IExporter*);
+    IImporter  *createImporter();          // Importer plugin (A-9.3)
+    void        destroyImporter(IImporter*);
     const char *pluginName();              // matches the implementation's name()
     const PluginABI *mviewer_plugin_abi(); // M14.2: frozen ABI triple (required)
     // optional:
@@ -70,12 +72,29 @@ On Windows use `__declspec(dllexport)`; on ELF use default visibility. The
 bundled `MVIEWER_PLUGIN_EXPORT` macro (see `plugins/example`) handles both.
 
 The host (`PluginLoader` / `PluginManager`) probes the `create*` exports in the
-order **Analyzer → Decoder → Exporter**, then registers the returned instance
-into the matching registry (`AnalyzerRegistry` / `DecoderRegistry` /
-`ExporterRegistry`) and calls the corresponding `destroy*` when the plugin is
-unloaded. **You own the lifetime inside the plugin** — allocate in `create*`,
-free in `destroy*`. The host wraps the instance in a `shared_ptr` whose deleter
-invokes your `destroy*` so allocation and deallocation stay in the plugin module.
+order **Analyzer → Decoder → Exporter → Importer**, then registers the returned
+instance into the matching registry (`AnalyzerRegistry` / `DecoderRegistry` /
+`ExporterRegistry` / `ImporterRegistry`) and calls the corresponding `destroy*`
+when the plugin is unloaded. **You own the lifetime inside the plugin** —
+allocate in `create*`, free in `destroy*`. The host wraps the instance in a
+`shared_ptr` whose deleter invokes your `destroy*` so allocation and
+deallocation stay in the plugin module.
+
+### Importer interface (A-9.3)
+
+```cpp
+class IImporter {
+  public:
+    virtual ~IImporter() = default;
+    virtual std::string name() const = 0;
+    virtual std::string description() const = 0;
+    virtual std::vector<std::string> extensions() const = 0;
+    virtual bool canImport(const std::string &path) const = 0;
+    virtual mviewer::domain::Workspace importWorkspace(const std::string &path) const = 0;
+};
+```
+
+See `plugins/example/ExampleImporterPlugin.cpp` for a complete folder importer.
 
 ## 3. ABI stability rules (MUST hold)
 

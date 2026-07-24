@@ -28,6 +28,7 @@ class PluginManager
         std::string analyzerId;
         std::string decoderId;
         std::string exporterId;
+        std::string importerId; // A-9.3
         PluginHandle handle = nullptr;
         bool loaded = false;
     };

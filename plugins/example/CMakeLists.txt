@@ -84,3 +84,23 @@ set_target_properties(example_exporter PROPERTIES
     PREFIX ""
 )
 
+# A-9.3: example importer plugin (folder → Workspace). Implements IImporter and
+# registers into ImporterRegistry via the unified PluginManager loader.
+add_library(example_importer SHARED
+    ExampleImporterPlugin.cpp
+)
+
+target_link_libraries(example_importer
+    PRIVATE
+        mviewer_core
+)
+
+target_compile_features(example_importer PRIVATE cxx_std_20)
+target_include_directories(example_importer PRIVATE ${CMAKE_SOURCE_DIR}/src)
+
+set_target_properties(example_importer PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+    PREFIX ""
+)
+

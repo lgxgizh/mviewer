@@ -492,6 +492,9 @@ void MainWindow::setupUi()
     // ----- Analysis panel (rightmost) + Metadata panel (M18, between gallery & analysis) -----
     m_analysisPanel = new AnalysisPanel(this);
     m_analysisPanel->installEventFilter(this);
+    // A-7.2: plugins are loaded in main() before MainWindow; refresh the combo
+    // so runtime-discovered analyzers appear immediately.
+    m_analysisPanel->refreshAnalyzers();
     // M15 P0#3: inject the analyzer pipeline so the panel orchestrates analyzers
     // through it instead of reaching the registry directly. MainWindow never
     // lists or creates analyzers itself — the pipeline owns that responsibility.
@@ -2375,6 +2378,9 @@ void MainWindow::restoreLastSession()
             }
             if (m_navSidebar)
                 m_navSidebar->setVisible(m_appState.navSidebarVisible);
+            // A-6.4: nav sidebar width is covered by main splitter state
+            // (left panel). Height is fixed via setMaximumHeight; no extra
+            // restore needed beyond splitterState above.
             // Restore search panel visibility.
             const bool searchVisible =
                 settings.value("searchVisible", true).toBool();
@@ -2430,6 +2436,35 @@ void MainWindow::restoreLastSession()
                         m_thumbnailPanel->verticalScrollBar()->setValue(m_appState.lastThumbScroll);
                     if (!m_appState.lastImage.isEmpty())
                         m_thumbnailPanel->scrollToPath(m_appState.lastImage);
+
+                    // A-6.3: restore viewer zoom/pan from QSettings (same logic as
+                    // crash-recovery path, but for normal session restore).
+                    QSettings vs;
+                    if (m_imageViewer && !m_currentImagePath.isEmpty() &&
+                        vs.value("viewerPath").toString() == m_currentImagePath)
+                    {
+                        Viewport v;
+                        v.screenW = m_imageViewer->width();
+                        v.screenH = m_imageViewer->height();
+                        v.scale = vs.value("viewerScale", 1.0).toReal();
+                        v.offsetX = vs.value("viewerOffX", 0.0).toReal();
+                        v.offsetY = vs.value("viewerOffY", 0.0).toReal();
+                        m_imageViewer->setViewTransform(v);
+                    }
+
+                    // A-6.1: restore Compare session on normal startup (not just
+                    // crash recovery). If QSettings has a compareSession, reopen it.
+                    const QJsonArray cmpImgs = vs.value("compareImages").toJsonArray();
+                    const QString cmpSession = vs.value("compareSession").toString();
+                    QStringList cmpPaths;
+                    for (const auto &v2 : cmpImgs)
+                    {
+                        const QString p = v2.toString();
+                        if (!p.isEmpty() && QFile::exists(p))
+                            cmpPaths.append(p);
+                    }
+                    if (cmpPaths.size() >= 2 && !cmpSession.isEmpty())
+                        openCompare(cmpPaths, cmpSession);
                 },
                 Qt::QueuedConnection);
         },
@@ -2497,6 +2532,26 @@ void MainWindow::closeEvent(QCloseEvent *event)
             settings.setValue("viewerOffX", v.offsetX);
             settings.setValue("viewerOffY", v.offsetY);
         }
+        // A-6.1: persist Compare session for normal startup restore (not just
+        // crash recovery). Same format as autosaveSession().
+        if (m_compareView && m_compareView->comparedImageCount() >= 2)
+        {
+            const auto cs = m_compareView->compareSession();
+            QJsonArray cmpImg;
+            for (const auto &id : cs.imageIds)
+                cmpImg.append(QString::fromStdString(id));
+            settings.setValue("compareImages", cmpImg);
+            settings.setValue("compareSession",
+                              QString::fromStdString(mviewer::core::serializeCompareSession(cs)));
+        }
+        else
+        {
+            settings.remove("compareImages");
+            settings.remove("compareSession");
+        }
+        // A-6.4: persist nav sidebar width independently.
+        if (m_navSidebar)
+            settings.setValue("navSidebarWidth", m_navSidebar->width());
     }
 
     QMainWindow::closeEvent(event);

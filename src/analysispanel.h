@@ -62,6 +62,9 @@ class AnalysisPanel : public QWidget
     void setCurrentPage(int index);
     // Re-run the currently-selected registry analyzer over the left frame + ROI.
     void reanalyze();
+    // A-7.2: rebuild the analyzer combo from the current pipeline/registry so
+    // runtime-loaded plugins appear without restarting the app.
+    void refreshAnalyzers();
     // Backward-compat: display arbitrary region-stats text (from
     // ImageViewer::regionStats)
     void setRegionStats(const QString &text);

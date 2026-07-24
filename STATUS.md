@@ -61,15 +61,22 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 - Full RAW demosaic (libraw).
 - GPU Stage C/D: D3D11/Vulkan direct compositing (UI boundary frozen).
 - Linux/macOS native installers (Linux CI artifacts build; only Windows ships an installer).
-- Plugin surfaces beyond Analyzer: Decoder / Exporter (ABI reserved, not yet frozen).
-- **M14.2**: Plugin ABI version triple (`apiVersion` / `sdkVersion` / `abiVersion`) freeze.
+- Full GPU Stage A (QOpenGLWidget direct compositing) — CPU tile path + HiDPI
+  tile decode remain the default; opt-in via `MVIEWER_GPU=1`.
 - **M14.8**: release pipeline SHA256 manifest + auto-generated changelog.
 
 ## Known gaps
 
 - RAW = preview-only (no demosaic); some large/edge RAW containers may fall through to the fallback decoder.
-- GPU tile-upload host (QOpenGLWidget, Stage A) deferred per the M13 RFC.
-- Plugin ABI is not yet versioned (tracked by M14.2).
+- GPU tile-upload host (QOpenGLWidget, Stage A) deferred per the M13 RFC;
+  HiDPI-aware CPU tile decode is active.
+
+## Plugin SDK (frozen)
+
+- ABI triple: `apiVersion=1` / `abiVersion=1` / `sdkVersion=10000` (M14.2).
+- Plugin kinds: Analyzer, Decoder, Exporter, **Importer** (A-9.3).
+- Examples: `plugins/example/{ExampleAnalyzer,ExampleDecoder,ExampleExporter,ExampleImporter}Plugin.cpp`.
+- Docs: `docs/sdk/PLUGIN_SDK.md`, `docs/sdk/PLUGIN_ABI.md`.
 
 ## Release process (v1.0.0)
 

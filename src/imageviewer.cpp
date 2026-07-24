@@ -1,6 +1,7 @@
 #include "imageviewer.h"
 
 #include "core/analysis/AnalysisEngine.h"
+#include "core/analyzer/Analyzer.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
@@ -16,6 +17,7 @@
 #include <QFileInfo>
 #include <QKeyEvent>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPointer>
@@ -292,16 +294,33 @@ void ImageViewer::paintEvent(QPaintEvent *event)
     if (!m_pixmap.isNull() && m_frame)
     {
         MV_TRACE_SCOPED("ImageViewer::paint");
+        // Keep Viewport in *logical* widget pixels so mouse pan/zoom math stays
+        // consistent. HiDPI sharpness is handled by decoding tiles at device
+        // resolution (see dpr scale below) without changing interaction space.
         m_view.screenW = width();
         m_view.screenH = height();
+        const qreal dpr = devicePixelRatioF();
+        if (dpr > 1.0)
+            painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
         RenderEngine &eng = RenderEngine::instance();
         // Render Pipeline (P1-①): ask the TileCache for the visible tiles at
         // the LOD chosen for the current zoom. Only missing tiles are decoded
         // (via RenderEngine::scaleRegion in core/), then cached. The Widget
         // never decodes and never rasterizes the whole image.
         const std::string id = m_frame->id().hash;
+        // A-8.3: on HiDPI, request tiles at device-pixel size so the blit is
+        // sharp when Qt scales the widget. Interaction coords stay logical.
+        Viewport tileView = m_view;
+        if (dpr > 1.0)
+        {
+            tileView.screenW = static_cast<int>(std::lround(m_view.screenW * dpr));
+            tileView.screenH = static_cast<int>(std::lround(m_view.screenH * dpr));
+            tileView.scale = m_view.scale * dpr;
+            tileView.offsetX = m_view.offsetX * dpr;
+            tileView.offsetY = m_view.offsetY * dpr;
+        }
         auto ready = m_tileCache.request(
-            id, m_view, m_tiles,
+            id, tileView, m_tiles,
             [&](const std::string &, int sx, int sy, int sw, int sh, int tw, int th) -> ImageData
             {
                 const RenderRect region{sx, sy, sw, sh};
@@ -324,15 +343,27 @@ void ImageViewer::paintEvent(QPaintEvent *event)
                 m_gpu.ensure(rt.key, view.data, view.width, view.height, view.channelsPerPixel());
             }
             // Compute on-screen rect for this tile's LOD/source region.
+            // When tiles were decoded in device space, convert back to logical
+            // widget coords for QPainter (which works in logical pixels).
             int tsx, tsy, tsw, tsh;
-            m_view.imageRectToScreen(rt.key.col * m_tiles.tileSize * (1 << rt.key.lod),
-                                     rt.key.row * m_tiles.tileSize * (1 << rt.key.lod),
-                                     TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod),
-                                     TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod), tsx, tsy,
-                                     tsw, tsh);
+            tileView.imageRectToScreen(rt.key.col * m_tiles.tileSize * (1 << rt.key.lod),
+                                       rt.key.row * m_tiles.tileSize * (1 << rt.key.lod),
+                                       TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod),
+                                       TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod), tsx,
+                                       tsy, tsw, tsh);
+            if (dpr > 1.0)
+            {
+                tsx = static_cast<int>(std::lround(tsx / dpr));
+                tsy = static_cast<int>(std::lround(tsy / dpr));
+                tsw = static_cast<int>(std::lround(tsw / dpr));
+                tsh = static_cast<int>(std::lround(tsh / dpr));
+            }
             QImage q = mvcore::toQImage(rt.data);
             if (q.isNull())
                 continue;
+            // Tile pixels are at device resolution; target rect is logical.
+            // QPainter scales the denser source into the logical rect → sharp
+            // on HiDPI without setDevicePixelRatio (which would double-scale).
             painter.drawImage(QRect(tsx, tsy, tsw, tsh), q);
         }
     }
@@ -675,6 +706,29 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     aSelectRegion->setCheckable(true);
     aSelectRegion->setChecked(m_selectMode);
     menu.addSeparator();
+    // A-7.3: "分析" submenu — list every registered analyzer for one-click run.
+    QMenu *analyzeMenu = menu.addMenu("分析");
+    QList<QAction *> analyzeActions;
+    if (m_frame)
+    {
+        const auto ids = AnalyzerRegistry::instance().availableAnalyzers();
+        for (const auto &id : ids)
+        {
+            const auto info = AnalyzerRegistry::instance().infoFor(id);
+            const QString label =
+                info ? QString::fromStdString(info->name) : QString::fromStdString(id);
+            QAction *a = analyzeMenu->addAction(label);
+            a->setData(QString::fromStdString(id));
+            analyzeActions.append(a);
+        }
+        if (analyzeActions.isEmpty())
+            analyzeMenu->addAction("（无可用分析器）")->setEnabled(false);
+    }
+    else
+    {
+        analyzeMenu->addAction("（请先打开图片）")->setEnabled(false);
+    }
+    menu.addSeparator();
     QAction *aNext = menu.addAction("下一张 (→)");
     QAction *aPrev = menu.addAction("上一张 (←)");
     menu.addSeparator();
@@ -682,6 +736,20 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;
+    // A-7.3: run the selected analyzer and show result in a dialog.
+    if (analyzeActions.contains(chosen) && m_frame)
+    {
+        const std::string id = chosen->data().toString().toStdString();
+        auto analyzer = AnalyzerRegistry::instance().create(id);
+        if (analyzer)
+        {
+            analyzer->analyze(*m_frame);
+            const QString text = QString::fromStdString(analyzer->resultText());
+            QMessageBox::information(this, chosen->text(),
+                                     text.isEmpty() ? tr("分析完成（无文本结果）") : text);
+        }
+        return;
+    }
     if (chosen == aCopy)
         QApplication::clipboard()->setPixmap(m_pixmap);
     else if (chosen == aCopyPath)

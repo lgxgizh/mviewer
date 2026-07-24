@@ -17,6 +17,30 @@ AnalysisPanel::AnalysisPanel(QWidget *parent) : QWidget(parent)
     setMinimumHeight(480);
 }
 
+// A-7.2: rebuild the analyzer combo from the live registry/pipeline.
+void AnalysisPanel::refreshAnalyzers()
+{
+    if (!m_analyzerCombo)
+        return;
+    const QString prev = m_analyzerCombo->currentData().toString();
+    m_analyzerCombo->clear();
+    m_pluginIds.clear();
+    auto &reg = m_pipeline ? m_pipeline->registry() : AnalyzerRegistry::instance();
+    m_pluginIds = reg.availableAnalyzers();
+    for (const auto &id : m_pluginIds)
+    {
+        const auto info = reg.infoFor(id);
+        const QString label =
+            info ? QString::fromStdString(info->name) : QString::fromStdString(id);
+        m_analyzerCombo->addItem(label, QString::fromStdString(id));
+    }
+    m_analyzerCombo->addItem(tr("Dual Compare (PSNR/SSIM)"), QString("builtin_compare"));
+    // Restore previous selection if still present.
+    const int idx = m_analyzerCombo->findData(prev);
+    if (idx >= 0)
+        m_analyzerCombo->setCurrentIndex(idx);
+}
+
 void AnalysisPanel::buildUi()
 {
     QVBoxLayout *mainLay = new QVBoxLayout(this);

@@ -3,6 +3,8 @@
 #include "core/export/IExporter.h"
 #include "core/image/decoder/DecoderRegistry.h"
 #include "core/image/decoder/IDecoder.h"
+#include "core/import/IImporter.h"
+#include "core/import/ImporterRegistry.h"
 #include "core/plugin/PluginABI.h"
 
 #include <filesystem>
@@ -98,6 +100,10 @@ bool PluginManager::load(const std::string &path)
         reinterpret_cast<IExporter *(*)()>(GetProcAddress(handle, "createExporter"));
     auto destroyExporterFn =
         reinterpret_cast<void (*)(IExporter *)>(GetProcAddress(handle, "destroyExporter"));
+    auto createImporterFn =
+        reinterpret_cast<IImporter *(*)()>(GetProcAddress(handle, "createImporter"));
+    auto destroyImporterFn =
+        reinterpret_cast<void (*)(IImporter *)>(GetProcAddress(handle, "destroyImporter"));
     auto nameFn = reinterpret_cast<const char *(*)()>(GetProcAddress(handle, "pluginName"));
 
     // M14.2: ABI triple gate (frozen for v1.x). Reject before probing an instance.
@@ -141,6 +147,9 @@ bool PluginManager::load(const std::string &path)
     auto createExporterFn = reinterpret_cast<IExporter *(*)()>(dlsym(handle, "createExporter"));
     auto destroyExporterFn =
         reinterpret_cast<void (*)(IExporter *)>(dlsym(handle, "destroyExporter"));
+    auto createImporterFn = reinterpret_cast<IImporter *(*)()>(dlsym(handle, "createImporter"));
+    auto destroyImporterFn =
+        reinterpret_cast<void (*)(IImporter *)>(dlsym(handle, "destroyImporter"));
     auto nameFn = reinterpret_cast<const char *(*)()>(dlsym(handle, "pluginName"));
 
     // M14.2: ABI triple gate (mirrors the Windows branch).
@@ -287,7 +296,46 @@ bool PluginManager::load(const std::string &path)
         return true;
     }
 
-    m_lastError = "plugin exposes no supported create* export (analyzer/decoder/exporter)";
+    // --- Importer plugin (A-9.3) ---
+    if (createImporterFn)
+    {
+        IImporter *imp = createImporterFn();
+        if (!imp)
+        {
+            m_lastError = "createImporter returned null for " + path;
+#ifdef _WIN32
+            FreeLibrary(static_cast<HMODULE>(handle));
+#else
+            dlclose(handle);
+#endif
+            return false;
+        }
+        const std::string importerId = imp->name();
+        auto impPtr = destroyImporterFn
+                          ? std::shared_ptr<IImporter>(imp,
+                                                       [destroyImporterFn](IImporter *p)
+                                                       {
+                                                           if (p)
+                                                               destroyImporterFn(p);
+                                                       })
+                          : std::shared_ptr<IImporter>(imp, [](IImporter *p) { delete p; });
+        imp = nullptr;
+        ImporterRegistry::instance().registerImporter(impPtr);
+
+        PluginEntry entry;
+        entry.path = path;
+        entry.name = displayName;
+        entry.importerId = importerId;
+        entry.handle = handle;
+        entry.loaded = true;
+        m_plugins[path] = entry;
+        std::cout << "[PluginManager] Loaded: " << displayName << " (importer: " << importerId
+                  << ") from " << path << std::endl;
+        return true;
+    }
+
+    m_lastError =
+        "plugin exposes no supported create* export (analyzer/decoder/exporter/importer)";
 #ifdef _WIN32
     FreeLibrary(static_cast<HMODULE>(handle));
 #else
@@ -324,6 +372,8 @@ bool PluginManager::unload(const std::string &path)
         DecoderRegistry::instance().unregister(it->second.decoderId);
     if (!it->second.exporterId.empty())
         ExporterRegistry::instance().unregister(it->second.exporterId);
+    if (!it->second.importerId.empty())
+        ImporterRegistry::instance().unregister(it->second.importerId);
 
     // NOTE: we intentionally do NOT FreeLibrary/dlclose here. Unloading a
     // Qt-linking plugin DLL at runtime (or during process teardown) is unsafe

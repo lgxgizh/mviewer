@@ -65,6 +65,7 @@ add_library(mviewer_core SHARED
     core/plugin/PluginManager.cpp
     core/export/IExporter.h
     core/export/ExporterRegistry.cpp
+    core/import/ImporterRegistry.cpp
     core/export/ExportManager.cpp
     core/search/SearchEngine.cpp
     core/batch/BatchProcessor.cpp
