@@ -4,9 +4,15 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.4] - 2026-07-24
+
+### Changed — Release v1.0.4
+
+- Version bump 1.0.3 → 1.0.4 for release build.
+
 ## [1.0.3] - 2026-07-24
 
-### Added — 1.0 Release Preparation
+### Added — 1.0 Release Preparation (v1.0.4)
 
 - **性能基线更新:** `benchmark/perf_baseline.json` 更新为 2026-07-24 实测值
   （commit `a930682`，1000-image corpus，全部场景 PASS）。
