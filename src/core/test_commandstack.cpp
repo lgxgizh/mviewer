@@ -1,12 +1,17 @@
 // M7 ④ Undo/Redo Command pattern: CommandStack history + Rotate/Label commands
 // with real undo. Domain-free; no display.
 #include "core/command/CommandStack.h"
+#include "core/command/FileDeleteCommand.h"
+#include "core/command/FileMoveCommand.h"
+#include "core/command/FileRenameCommand.h"
 #include "core/command/LabelCommand.h"
 #include "core/command/RotateCommand.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
 
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <vector>
 
@@ -121,6 +126,124 @@ static void testCommandStack()
     CHECK(!stack.canUndo(), "fully undone: no more undo");
 }
 
+static void writeFile(const std::filesystem::path &p, const std::string &content)
+{
+    std::ofstream out(p, std::ios::binary);
+    out << content;
+}
+
+static std::string readFile(const std::filesystem::path &p)
+{
+    std::ifstream in(p, std::ios::binary);
+    return std::string((std::istreambuf_iterator<char>(in)),
+                       std::istreambuf_iterator<char>());
+}
+
+static void testFileRenameCommand()
+{
+    printf("\n[FileRenameCommand + undo]\n");
+    fflush(stdout);
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "mviewer_test_rename";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    const fs::path a = dir / "a.txt";
+    const fs::path b = dir / "b.txt";
+    writeFile(a, "hello");
+
+    FileRenameCommand cmd(a.string(), b.string());
+    CHECK(cmd.canExecute(), "rename command can execute");
+    cmd.execute();
+    CHECK(cmd.lastError().empty() && fs::exists(b) && !fs::exists(a),
+          "rename moves file to new name");
+    cmd.undo();
+    CHECK(cmd.lastError().empty() && fs::exists(a) && !fs::exists(b),
+          "undo rename restores original name");
+
+    // Destination already exists -> execute must fail and leave source intact.
+    writeFile(a, "hello");
+    writeFile(b, "blocker");
+    FileRenameCommand cmd2(a.string(), b.string());
+    cmd2.execute();
+    CHECK(!cmd2.lastError().empty() && fs::exists(a), "rename fails when destination exists");
+
+    fs::remove_all(dir);
+}
+
+static void testFileDeleteCommand()
+{
+    printf("\n[FileDeleteCommand + undo]\n");
+    fflush(stdout);
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "mviewer_test_delete";
+    const fs::path trash = dir / "trash";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    const fs::path a = dir / "a.txt";
+    writeFile(a, "content");
+
+    FileDeleteCommand cmd({a.string()}, trash.string());
+    cmd.execute();
+    CHECK(cmd.lastError().empty() && !fs::exists(a), "delete moves source away");
+    CHECK(cmd.canUndo(), "delete command can undo");
+    cmd.undo();
+    CHECK(cmd.lastError().empty() && fs::exists(a) && fs::is_regular_file(a),
+          "undo delete restores source");
+
+    // Missing source -> execute must fail atomically.
+    FileDeleteCommand cmd2({(dir / "missing.txt").string()}, trash.string());
+    cmd2.execute();
+    CHECK(!cmd2.lastError().empty(), "delete fails when source is missing");
+
+    fs::remove_all(dir);
+}
+
+static void testFileMoveCommand()
+{
+    printf("\n[FileMoveCommand + undo]\n");
+    fflush(stdout);
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "mviewer_test_move";
+    const fs::path srcDir = dir / "src";
+    const fs::path dstDir = dir / "dst";
+    fs::remove_all(dir);
+    fs::create_directories(srcDir);
+    fs::create_directories(dstDir);
+    const fs::path a = srcDir / "a.txt";
+    writeFile(a, "move me");
+
+    FileMoveCommand cmd({a.string()}, dstDir.string());
+    cmd.execute();
+    CHECK(cmd.lastError().empty() && !fs::exists(a) && fs::exists(dstDir / "a.txt"),
+          "move relocates file to destination");
+    cmd.undo();
+    CHECK(cmd.lastError().empty() && fs::exists(a) && !fs::exists(dstDir / "a.txt"),
+          "undo move restores original location");
+
+    fs::remove_all(dir);
+}
+
+static void testCommandStackReportsErrors()
+{
+    printf("\n[CommandStack error reporting]\n");
+    fflush(stdout);
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "mviewer_test_stack_err";
+    fs::remove_all(dir);
+    fs::create_directories(dir);
+    const fs::path a = dir / "a.txt";
+    const fs::path b = dir / "b.txt";
+    writeFile(a, "a");
+    writeFile(b, "b");
+
+    CommandStack stack;
+    bool ok = stack.execute(std::make_unique<FileRenameCommand>(a.string(), b.string()));
+    CHECK(!ok && !stack.lastError().empty(), "stack reports failed execute");
+    CHECK(!stack.canUndo(), "failed execute is not added to undo history");
+
+    fs::remove_all(dir);
+}
+
 int main()
 {
     printf("=== CommandStack + Rotate/Label tests (M7 ④) ===\n");
@@ -128,6 +251,10 @@ int main()
     testRotateCommand();
     testLabelCommand();
     testCommandStack();
+    testFileRenameCommand();
+    testFileDeleteCommand();
+    testFileMoveCommand();
+    testCommandStackReportsErrors();
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

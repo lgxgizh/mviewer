@@ -35,8 +35,14 @@ class FileRenameCommand : public ICommand
         return m_newPath;
     }
 
+    std::string lastError() const override
+    {
+        return m_lastError;
+    }
+
   private:
     std::string m_oldPath;
     std::string m_newPath;
     bool m_executed = false;
+    std::string m_lastError;
 };

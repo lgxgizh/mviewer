@@ -38,4 +38,11 @@ class ICommand
     {
         return {};
     }
+
+    // Human-readable error from the last execute() or undo() attempt.
+    // Empty means the last operation succeeded.
+    virtual std::string lastError() const
+    {
+        return {};
+    }
 };

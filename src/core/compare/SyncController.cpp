@@ -28,19 +28,31 @@ void SyncController::setOffset(double ox, double oy)
         }
 }
 
-void SyncController::zoomAt(double /*viewX*/, double /*viewY*/, double factor, int exceptIndex)
+void SyncController::zoomAt(double viewX, double viewY, double factor, int exceptIndex)
 {
     if (m_sync.enabled)
     {
         const double ns = m_sync.scale * factor;
+        const Vec2 newOffset{
+            viewX - (viewX - m_sync.offset.x) * factor,
+            viewY - (viewY - m_sync.offset.y) * factor};
         for (int i = 0; i < static_cast<int>(m_cells.size()); ++i)
-            if (i != exceptIndex)
-                m_cells[i].scale = ns;
+        {
+            if (i == exceptIndex)
+                continue;
+            m_cells[i].scale = ns;
+            m_cells[i].offset = newOffset;
+        }
         m_sync.scale = ns;
+        m_sync.offset = newOffset;
     }
     else if (exceptIndex >= 0 && exceptIndex < static_cast<int>(m_cells.size()))
     {
-        m_cells[exceptIndex].scale *= factor;
+        CellState &c = m_cells[exceptIndex];
+        const double ns = c.scale * factor;
+        c.offset.x = viewX - (viewX - c.offset.x) * factor;
+        c.offset.y = viewY - (viewY - c.offset.y) * factor;
+        c.scale = ns;
     }
 }
 

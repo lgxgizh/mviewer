@@ -38,6 +38,7 @@
 #include <QInputDialog>
 #include <QLabel>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMimeData>
 #include <QPaintEvent>
 #include <QPainter>
@@ -559,9 +560,14 @@ void ThumbnailPanel::setThumbSize(int size)
     // Directly update gridSize instead of calling setViewMode(m_viewMode),
     // because setViewMode early-returns when the mode hasn't changed.
     if (m_viewMode == ViewMode::Compact)
-        setGridSize(QSize(m_thumbSize + 16, (m_thumbSize + 34) / 3));
+    {
+        const int compactS = qMax(m_thumbSize / 3, 32);
+        setGridSize(QSize(compactS + 4, compactS + 14));
+    }
     else
+    {
         setGridSize(QSize(m_thumbSize + 16, m_thumbSize + 34));
+    }
     viewport()->update();
 }
 
@@ -910,7 +916,12 @@ void ThumbnailPanel::renameSelected()
     if (m_cmdStack)
     {
         auto cmd = std::make_unique<FileRenameCommand>(oldPath.toStdString(), newPath.toStdString());
-        m_cmdStack->execute(std::move(cmd));
+        if (!m_cmdStack->execute(std::move(cmd)))
+        {
+            QMessageBox::warning(this, "重命名失败",
+                                 QString::fromStdString(m_cmdStack->lastError()));
+            return;
+        }
     }
     else if (!QFile::rename(oldPath, newPath))
     {
@@ -940,8 +951,13 @@ void ThumbnailPanel::moveToTrashSelected()
             stdPaths.push_back(p.toStdString());
         auto cmd = std::make_unique<FileDeleteCommand>(std::move(stdPaths), trashDir.toStdString());
         // Capture moved paths before ownership transfers.
-        m_cmdStack->execute(std::move(cmd));
-        // After execute, files are gone — treat all selected as removed.
+        if (!m_cmdStack->execute(std::move(cmd)))
+        {
+            QMessageBox::warning(this, "删除失败",
+                                 QString::fromStdString(m_cmdStack->lastError()));
+            return;
+        }
+        // After successful execute, files are gone — treat all selected as removed.
         removed = paths;
     }
     else
@@ -990,7 +1006,12 @@ void ThumbnailPanel::moveSelectedTo()
         for (const QString &p : paths)
             stdPaths.push_back(p.toStdString());
         auto cmd = std::make_unique<FileMoveCommand>(std::move(stdPaths), dir.toStdString());
-        m_cmdStack->execute(std::move(cmd));
+        if (!m_cmdStack->execute(std::move(cmd)))
+        {
+            QMessageBox::warning(this, "移动失败",
+                                 QString::fromStdString(m_cmdStack->lastError()));
+            return;
+        }
     }
     else
     {
@@ -1266,9 +1287,16 @@ QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode, bool
                   { return a.suffix().compare(b.suffix(), Qt::CaseInsensitive) < 0; });
         break;
     case SortRating:
-        // Rating is stored in core::RatingStore; we use a simple heuristic here.
-        // Full rating-based sorting requires per-image query which is handled by
-        // the filter system — this branch keeps the interface consistent.
+        std::sort(out.begin(), out.end(), [](const QFileInfo &a, const QFileInfo &b)
+                  {
+                      const int ra = mviewer::core::RatingStore::instance().rating(
+                          a.absoluteFilePath().toStdString());
+                      const int rb = mviewer::core::RatingStore::instance().rating(
+                          b.absoluteFilePath().toStdString());
+                      if (ra != rb)
+                          return ra < rb;
+                      return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0;
+                  });
         break;
     }
 

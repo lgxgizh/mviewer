@@ -247,7 +247,15 @@ void MainWindow::setupUi()
     connect(m_actUndo, &QAction::triggered, this,
             [this]()
             {
-                m_cmdStack.undo();
+                if (!m_cmdStack.undo())
+                {
+                    const std::string err = m_cmdStack.lastError();
+                    if (!err.empty())
+                        QMessageBox::warning(this, "撤销失败",
+                                             QString::fromStdString(err));
+                    updateUndoRedoActions();
+                    return;
+                }
                 if (m_thumbnailPanel && !m_currentDir.isEmpty())
                     m_thumbnailPanel->setDirectory(m_currentDir);
                 updateUndoRedoActions();
@@ -255,7 +263,15 @@ void MainWindow::setupUi()
     connect(m_actRedo, &QAction::triggered, this,
             [this]()
             {
-                m_cmdStack.redo();
+                if (!m_cmdStack.redo())
+                {
+                    const std::string err = m_cmdStack.lastError();
+                    if (!err.empty())
+                        QMessageBox::warning(this, "重做失败",
+                                             QString::fromStdString(err));
+                    updateUndoRedoActions();
+                    return;
+                }
                 if (m_thumbnailPanel && !m_currentDir.isEmpty())
                     m_thumbnailPanel->setDirectory(m_currentDir);
                 updateUndoRedoActions();

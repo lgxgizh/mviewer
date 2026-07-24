@@ -400,6 +400,9 @@ void CompareWorkspace::setImages(const QStringList &paths)
     for (const QString &p : paths)
         stdPaths.push_back(p.toStdString());
     m_engine.setImages(stdPaths);
+    // A-4: loading a fresh comparison set should not inherit adjustments from
+    // the previous session; applySession will repopulate persisted values.
+    m_cellAdjusts.clear();
     rebuildCells();
     fitAll();
     update();
@@ -1018,18 +1021,18 @@ void CompareWorkspace::drawOverlayCompare(QPainter &p)
     if (m_cellViews.size() < 2)
         return;
     const QRect r = rect();
-    const QRect left(r.topLeft(), QSize(r.width() / 2, r.height()));
-    const QRect right(left.topRight() + QPoint(1, 0),
-                      QSize(r.width() - left.width() - 1, r.height()));
     const QImage &img0 = m_cellViews[0]->image();
     const QImage &img1 = m_cellViews[1]->image();
-    drawFitImage(p, img0, left);
-    drawFitImage(p, img1, right);
-    p.setOpacity(0.35);
-    p.setCompositionMode(QPainter::CompositionMode_SourceAtop);
-    p.drawImage(right.translated(right.width(), 0), img1);
-    p.setOpacity(1.0);
+
+    // Draw the base image fully opaque over the entire viewport.
+    drawFitImage(p, img0, r);
+
+    // Blend the second image on top with reduced opacity so differences glow
+    // and common content stays neutral.
+    p.setOpacity(0.45);
     p.setCompositionMode(QPainter::CompositionMode_SourceOver);
+    drawFitImage(p, img1, r);
+    p.setOpacity(1.0);
 }
 
 void CompareWorkspace::drawFitImage(QPainter &p, const QImage &img, const QRect &target)
@@ -1056,14 +1059,18 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
     {
         auto *we = static_cast<QWheelEvent *>(event);
         const double factor = we->angleDelta().y() > 0 ? 1.15 : 1.0 / 1.15;
+        const QPoint pos = we->position().toPoint();
         if (m_syncZoom)
         {
-            m_engine.zoomAt(0.0, 0.0, factor);
+            m_engine.zoomAt(static_cast<double>(pos.x()), static_cast<double>(pos.y()), factor);
         }
         else
         {
-            const double oldScale = m_engine.cellTransform(idx).scale;
-            m_engine.setCellScale(idx, std::clamp(oldScale * factor, 0.05, 50.0));
+            // Zoom only the hovered cell around the cursor.
+            m_engine.zoomAt(static_cast<double>(pos.x()), static_cast<double>(pos.y()), factor, idx);
+            // Clamp to a sane range to avoid runaway zoom.
+            const double s = std::clamp(m_engine.cellTransform(idx).scale, 0.05, 50.0);
+            m_engine.setCellScale(idx, s);
         }
         update();
         return true;

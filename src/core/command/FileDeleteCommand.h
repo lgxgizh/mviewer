@@ -40,10 +40,18 @@ class FileDeleteCommand : public ICommand
         return m_moved;
     }
 
+    std::string lastError() const override
+    {
+        return m_lastError;
+    }
+
   private:
+    void rollback();
+
     std::vector<std::string> m_paths;
     std::string m_trashDir;
     // (originalPath, trashPath) for each successfully moved file.
     std::vector<std::pair<std::string, std::string>> m_moved;
     bool m_executed = false;
+    std::string m_lastError;
 };
