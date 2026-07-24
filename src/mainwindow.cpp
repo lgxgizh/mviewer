@@ -363,13 +363,13 @@ void MainWindow::setupUi()
 
     // M15: Dynamic thumbnail size slider (48–512 px)
     sortLayout->addWidget(new QLabel("缩略图：", sortBar));
-    auto *thumbSizeSlider = new QSlider(Qt::Horizontal, sortBar);
-    thumbSizeSlider->setRange(ThumbnailPanel::kMinThumbSize, ThumbnailPanel::kMaxThumbSize);
-    thumbSizeSlider->setValue(ThumbnailPanel::kDefaultThumbSize);
-    thumbSizeSlider->setFixedWidth(100);
-    thumbSizeSlider->setToolTip("调整缩略图大小");
-    sortLayout->addWidget(thumbSizeSlider);
-    connect(thumbSizeSlider, &QSlider::valueChanged, this,
+    m_thumbSizeSlider = new QSlider(Qt::Horizontal, sortBar);
+    m_thumbSizeSlider->setRange(ThumbnailPanel::kMinThumbSize, ThumbnailPanel::kMaxThumbSize);
+    m_thumbSizeSlider->setValue(ThumbnailPanel::kDefaultThumbSize);
+    m_thumbSizeSlider->setFixedWidth(100);
+    m_thumbSizeSlider->setToolTip("调整缩略图大小");
+    sortLayout->addWidget(m_thumbSizeSlider);
+    connect(m_thumbSizeSlider, &QSlider::valueChanged, this,
             [this](int value) { m_thumbnailPanel->setThumbSize(value); });
 
     // M18: live search bar.
@@ -680,7 +680,8 @@ void MainWindow::setupUi()
             [this]()
             {
                 const QString file = QFileDialog::getOpenFileName(
-                    this, "打开图片", QString(),
+                    this, "打开图片",
+                    m_currentDir.isEmpty() ? QString() : m_currentDir,
                     "图片文件 (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp"
                     " *.cr2 *.cr3 *.nef *.nrw *.arw *.dng *.orf *.rw2 *.pef *.raf);;"
                     "所有文件 (*)");
@@ -896,6 +897,13 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         m_metadataOverlay->hide();
         if (m_actToggleMetadata)
             m_actToggleMetadata->setChecked(false);
+        event->accept();
+        return;
+    }
+    // ESC exits fullscreen when the main window itself is fullscreen.
+    if (event->key() == Qt::Key_Escape && !mod && isFullScreen())
+    {
+        showNormal();
         event->accept();
         return;
     }
@@ -1476,9 +1484,12 @@ void MainWindow::showShortcutsHelp()
         "<tr><th colspan='2'>文件</th></tr>"
         "<tr><td><kbd>Ctrl+O</kbd> / <kbd>Ctrl+Shift+O</kbd></td><td>打开目录 / 打开文件</td></tr>"
         "<tr><td><kbd>Ctrl+V</kbd></td><td>从剪贴板粘贴图片（截图后直接查看）</td></tr>"
+        "<tr><td><kbd>Ctrl+D</kbd></td><td>收藏当前目录</td></tr>"
+        "<tr><td><kbd>Ctrl+Shift+F</kbd></td><td>全局搜索</td></tr>"
         "<tr><td><kbd>Ctrl+Q</kbd></td><td>退出</td></tr>"
         "<tr><th colspan='2'>浏览</th></tr>"
         "<tr><td><kbd>←</kbd> / <kbd>→</kbd> / 鼠标侧键</td><td>上一张 / 下一张（循环）</td></tr>"
+        "<tr><td><kbd>Alt+←</kbd> / <kbd>Alt+→</kbd></td><td>历史导航：上一步 / 下一步</td></tr>"
         "<tr><td><kbd>Enter</kbd></td><td>在查看器中打开选中图片</td></tr>"
         "<tr><td><kbd>Home</kbd> / <kbd>End</kbd></td><td>第一张 / "
         "最后一张（查看器中同样有效）</td></tr>"
@@ -1517,6 +1528,12 @@ void MainWindow::showShortcutsHelp()
         "拒绝</td></tr>"
         "<tr><th colspan='2'>剪贴板</th></tr>"
         "<tr><td><kbd>Ctrl+C</kbd> / <kbd>Ctrl+Shift+C</kbd></td><td>复制图片 / 复制路径</td></tr>"
+        "<tr><th colspan='2'>文件操作</th></tr>"
+        "<tr><td><kbd>F2</kbd></td><td>重命名选中图片</td></tr>"
+        "<tr><td><kbd>Delete</kbd></td><td>删除到回收站</td></tr>"
+        "<tr><td><kbd>Ctrl+M</kbd></td><td>移动到...</td></tr>"
+        "<tr><td><kbd>Ctrl+E</kbd></td><td>在资源管理器中显示</td></tr>"
+        "<tr><td><kbd>Ctrl+Shift+B</kbd></td><td>批量处理</td></tr>"
         "</table>");
 
     QDialog dlg(this);
@@ -2152,6 +2169,11 @@ void MainWindow::restoreLastSession()
             const int vm = settings.value("thumbViewMode", ThumbnailPanel::Thumbnail).toInt();
             if (m_thumbnailPanel)
                 m_thumbnailPanel->setViewMode(static_cast<ThumbnailPanel::ViewMode>(vm));
+            const int ts = settings.value("thumbSize", ThumbnailPanel::kDefaultThumbSize).toInt();
+            if (m_thumbnailPanel)
+                m_thumbnailPanel->setThumbSize(ts);
+            if (m_thumbSizeSlider)
+                m_thumbSizeSlider->setValue(ts);
 
             // P1-3: restore the Analysis workspace + nav sidebar visibility so the
             // UI reopens exactly where the user left off.
@@ -2164,6 +2186,13 @@ void MainWindow::restoreLastSession()
             }
             if (m_navSidebar)
                 m_navSidebar->setVisible(m_appState.navSidebarVisible);
+            // Restore search panel visibility.
+            const bool searchVisible =
+                settings.value("searchVisible", true).toBool();
+            if (m_searchPanel)
+                m_searchPanel->setVisible(searchVisible);
+            if (m_actToggleSearch)
+                m_actToggleSearch->setChecked(searchVisible);
 
             const QString dir = m_appState.lastDir;
             if (dir.isEmpty() || !QDir(dir).exists())
@@ -2260,10 +2289,14 @@ void MainWindow::closeEvent(QCloseEvent *event)
         // P1-3: persist thumbnail view mode and splitter geometry.
         if (m_thumbnailPanel)
             settings.setValue("thumbViewMode", m_thumbnailPanel->viewMode());
+        if (m_thumbnailPanel)
+            settings.setValue("thumbSize", m_thumbnailPanel->thumbSize());
         if (m_sortCombo)
             settings.setValue("thumbSortMode", m_sortCombo->currentData().toInt());
         if (m_mainSplitter)
             settings.setValue("splitterState", m_mainSplitter->saveState());
+        if (m_searchPanel && m_actToggleSearch)
+            settings.setValue("searchVisible", m_searchPanel->isVisible());
         // P1-7: persist the main viewer's zoom level + pan position so a session
         // that ended with the viewer open restores identically (scale/offset are
         // screen-space, so the viewer must have been visible to be meaningful).

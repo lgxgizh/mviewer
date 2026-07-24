@@ -32,6 +32,7 @@ class QComboBox;
 class QTreeWidget;
 class QTreeWidgetItem;
 class QSplitter;
+class QSlider;
 
 class MainWindow : public QMainWindow
 {
@@ -172,6 +173,7 @@ class MainWindow : public QMainWindow
     QCheckBox *m_searchMeta = nullptr;
     QComboBox *m_ratingFilter = nullptr;
     QComboBox *m_sortCombo = nullptr;  // persisted across sessions via QSettings
+    QSlider *m_thumbSizeSlider = nullptr;  // persisted across sessions via QSettings
     QComboBox *m_flagFilter = nullptr; // P3 tail: color label / reject / pick / recents
 
     // P0 #①: real-time status bar (image count / size / zoom / cache hit-rate).

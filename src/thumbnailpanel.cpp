@@ -517,8 +517,13 @@ void ThumbnailPanel::setThumbSize(int size)
     m_thumbSize = size;
     // Update pipeline to generate thumbnails at the new size.
     ThumbnailPipeline::instance().thumbSize = size;
-    // Re-apply the current view mode with new grid size.
-    setViewMode(m_viewMode);
+    // Directly update gridSize instead of calling setViewMode(m_viewMode),
+    // because setViewMode early-returns when the mode hasn't changed.
+    if (m_viewMode == ViewMode::Compact)
+        setGridSize(QSize(m_thumbSize + 16, (m_thumbSize + 34) / 3));
+    else
+        setGridSize(QSize(m_thumbSize + 16, m_thumbSize + 34));
+    viewport()->update();
 }
 
 void ThumbnailPanel::setFilter(const QString &text, bool recursive)
@@ -673,6 +678,15 @@ void ThumbnailPanel::applyFilter()
 
 void ThumbnailPanel::buildModel(const QList<Entry> &entries)
 {
+    // Preserve selection and current index across model rebuild (e.g. when
+    // sorting changes).  Without this, setStringList() resets the entire
+    // selection model and the user's multi-select is silently lost.
+    const QStringList prevSelected = selectedPaths();
+    const QString prevCurrent = m_paths.isEmpty() ? QString()
+                                : (currentIndex().isValid()
+                                       ? m_paths.value(currentIndex().row())
+                                       : QString());
+
     m_paths.clear();
     m_rowByPath.clear();
     m_sizeByPath.clear();
@@ -689,6 +703,24 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     }
     m_totalBytes = total;
     m_model->setStringList(names);
+
+    // Restore selection and current index.
+    QItemSelection selToRestore;
+    for (const QString &p : prevSelected)
+    {
+        auto it = m_rowByPath.constFind(p);
+        if (it != m_rowByPath.constEnd())
+            selToRestore.select(m_model->index(it.value(), 0),
+                                m_model->index(it.value(), 0));
+    }
+    if (!selToRestore.isEmpty())
+        selectionModel()->select(selToRestore, QItemSelectionModel::ClearAndSelect);
+    if (!prevCurrent.isEmpty())
+    {
+        auto it = m_rowByPath.constFind(prevCurrent);
+        if (it != m_rowByPath.constEnd())
+            setCurrentIndex(m_model->index(it.value(), 0));
+    }
 
     {
         QMutexLocker lk(&m_thumbMtx);

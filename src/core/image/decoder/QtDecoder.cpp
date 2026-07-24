@@ -170,7 +170,11 @@ ImageData QtDecoder::decodeFull(const std::string &path,
     reader.setAutoTransform(true); // 尊重 EXIF 方向
     const QImage img = reader.read();
     if (img.isNull())
+    {
+        qWarning("QtDecoder: failed to decode \"%s\": %s",
+                 path.c_str(), qPrintable(reader.errorString()));
         return ImageData();
+    }
 
     if (outMeta.filePath.empty())
         outMeta.filePath = path;

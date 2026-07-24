@@ -6,6 +6,40 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed — 基础功能打磨第七轮 (Polish Round 7)
+
+- **缩略图大小调整无效 bug (功能 bug):** `setThumbSize` 调用 `setViewMode(m_viewMode)`
+  试图更新 gridSize，但 `setViewMode` 开头的 `if (m_viewMode == mode) return;` 会
+  直接返回，导致 Ctrl+滚轮 调整大小后 gridSize 永远不更新，缩略图重叠或间距错误。
+  改为直接更新 gridSize。(`src/thumbnailpanel.cpp`)
+- **排序变更时多选丢失 (功能 bug):** `buildModel` 调用 `setStringList` 完全重建
+  模型，导致当前选择和当前索引全部丢失。在重建前保存选中路径，重建后通过
+  `m_rowByPath` 重新映射并恢复选择。(`src/thumbnailpanel.cpp`)
+- **ESC 无法退出主窗口全屏:** 主窗口全屏时 ESC 只在查看器有焦点时退出全屏，
+  主窗口本身有焦点时无法退出。新增 `isFullScreen()` 检查。(`src/mainwindow.cpp`)
+- **QtFallbackDecoder 除零风险:** `meta.bitDepth = img.depth() / meta.channels`
+  缺少 `meta.channels > 0` 保护，与 `QtDecoder::fillMetadata` 不一致。
+  (`src/core/image/decoder/QtFallbackDecoder.cpp`)
+- **loadDirectory 永久改变全局线程池状态:** `setMaxQueueDepth(DecodePool, 0)`
+  在 `loadDirectory` 结束后未恢复，导致后续所有 DecodePool 提交失去背压保护。
+  在返回前恢复为默认值 1000。(`src/core/image/ImageRepository.cpp`)
+- **解码失败无错误信息:** `QtDecoder::decodeFull` 在 `reader.read()` 返回空
+  QImage 时直接返回空 `ImageData`，不输出 `QImageReader::errorString()`，
+  难以诊断失败原因。添加 `qWarning` 输出。(`src/core/image/decoder/QtDecoder.cpp`)
+
+### Added — 基础功能打磨第七轮 (Polish Round 7)
+
+- **缩略图大小持久化:** 缩略图大小（Ctrl+滚轮或滑块调整）现在在关闭时保存到
+  QSettings，启动时自动恢复。(`src/mainwindow.cpp/h`)
+- **搜索面板可见性持久化:** 搜索面板的显示/隐藏状态现在在关闭时保存并启动时恢复。
+  (`src/mainwindow.cpp`)
+- **打开文件对话框默认路径:** "打开文件"对话框现在以当前浏览的目录为起始路径，
+  减少导航操作。(`src/mainwindow.cpp`)
+- **快捷键帮助补全:** F1 速查表新增 Ctrl+D（收藏目录）、Ctrl+Shift+F（全局搜索）、
+  F2（重命名）、Delete（删除到回收站）、Ctrl+M（移动到...）、Ctrl+E（在资源管理器
+  中显示）、Ctrl+Shift+B（批量处理）、Alt+←/→（历史导航）。
+  (`src/mainwindow.cpp`)
+
 ### Fixed — CI ASan 从 MSVC 切换到 clang-cl + LLVM ASan/UBSan
 
 - CI 中的 `asan` job 从 MSVC `/fsanitize=address`（experimental）切换为

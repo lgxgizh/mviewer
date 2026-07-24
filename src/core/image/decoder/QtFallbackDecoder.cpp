@@ -37,7 +37,7 @@ void fillMeta(const QImageReader &reader, const QImage &img, mviewer::domain::Im
     meta.width = img.width();
     meta.height = img.height();
     meta.channels = img.hasAlphaChannel() ? 4 : 3;
-    meta.bitDepth = img.depth() / meta.channels;
+    meta.bitDepth = img.depth() / (meta.channels > 0 ? meta.channels : 1);
     if (meta.bitDepth <= 0)
         meta.bitDepth = img.depth();
     const QByteArray fmt = reader.format();

@@ -187,6 +187,9 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
     {
         std::this_thread::sleep_for(std::chrono::microseconds(100));
     }
+    // Restore the default queue depth limit so subsequent submissions are
+    // subject to normal back-pressure.
+    TaskScheduler::instance().setMaxQueueDepth(TaskScheduler::DecodePool, 1000);
     return results;
 }
 
