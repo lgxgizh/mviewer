@@ -147,6 +147,9 @@ BatchDialog::BatchDialog(QWidget *parent)
     // ── buttons ───────────────────────────────────────────────────
     auto *btnBar = new QHBoxLayout;
     m_startBtn = new QPushButton("开始");
+    m_pauseBtn = new QPushButton("暂停");
+    m_pauseBtn->setEnabled(false);
+    m_pauseBtn->setToolTip(tr("暂停/恢复批处理（当前文件完成后生效）"));
     m_cancelBtn = new QPushButton("取消处理");
     m_cancelBtn->setEnabled(false);
     m_openOutputBtn = new QPushButton("打开输出目录");
@@ -157,6 +160,7 @@ BatchDialog::BatchDialog(QWidget *parent)
     btnBar->addWidget(m_openOutputBtn);
     btnBar->addSpacing(12);
     btnBar->addWidget(m_startBtn);
+    btnBar->addWidget(m_pauseBtn);
     btnBar->addWidget(m_cancelBtn);
     btnBar->addWidget(m_closeBtn);
     mainLayout->addLayout(btnBar);
@@ -165,6 +169,7 @@ BatchDialog::BatchDialog(QWidget *parent)
     connect(m_addBtn, &QPushButton::clicked, this, &BatchDialog::onAddFiles);
     connect(m_removeBtn, &QPushButton::clicked, this, &BatchDialog::onRemoveSelected);
     connect(m_startBtn, &QPushButton::clicked, this, &BatchDialog::onStart);
+    connect(m_pauseBtn, &QPushButton::clicked, this, &BatchDialog::onPauseResume);
     connect(m_cancelBtn, &QPushButton::clicked, this, &BatchDialog::onCancel);
     connect(m_openOutputBtn, &QPushButton::clicked, this, &BatchDialog::onOpenOutputDir);
     connect(m_closeBtn, &QPushButton::clicked, this, &QDialog::reject);
@@ -321,7 +326,36 @@ void BatchDialog::onCancel()
 {
     if (m_activeProcessor)
         m_activeProcessor->requestCancel();
+    // If paused, resume so the cancel can take effect.
+    if (m_isPaused && m_activeProcessor)
+    {
+        m_activeProcessor->resume();
+        m_isPaused = false;
+        m_pauseBtn->setText("暂停");
+    }
     m_statusLabel->setText("正在取消...");
+}
+
+void BatchDialog::onPauseResume()
+{
+    if (!m_activeProcessor)
+        return;
+    if (!m_isPaused)
+    {
+        m_activeProcessor->requestPause();
+        m_isPaused = true;
+        m_pauseBtn->setText("恢复");
+        m_statusLabel->setText("已暂停（当前文件完成后生效）");
+        m_log->append("[PAUSE] 批处理已暂停");
+    }
+    else
+    {
+        m_activeProcessor->resume();
+        m_isPaused = false;
+        m_pauseBtn->setText("暂停");
+        m_statusLabel->setText("已恢复处理...");
+        m_log->append("[RESUME] 批处理已恢复");
+    }
 }
 
 void BatchDialog::onOpenOutputDir()
@@ -334,8 +368,14 @@ void BatchDialog::onOpenOutputDir()
 void BatchDialog::updateUiState(bool running)
 {
     m_startBtn->setEnabled(!running);
+    m_pauseBtn->setEnabled(running);
     m_cancelBtn->setEnabled(running);
     m_addBtn->setEnabled(!running);
     m_removeBtn->setEnabled(!running);
     m_closeBtn->setEnabled(!running);
+    if (!running)
+    {
+        m_isPaused = false;
+        m_pauseBtn->setText("暂停");
+    }
 }

@@ -30,8 +30,6 @@ class QCheckBox;
 class QLabel;
 class QTimer;
 class QComboBox;
-class QTreeWidget;
-class QTreeWidgetItem;
 class QSplitter;
 class QSlider;
 
@@ -107,15 +105,8 @@ class MainWindow : public QMainWindow
 
     void keyPressEvent(QKeyEvent *event) override;
 
-    // P0-1: navigation sidebar helpers.
-    void buildNavSidebar();
-    void refreshNavSidebar();
-    void onNavSidebarActivated(QTreeWidgetItem *item, int column);
-    void onNavSidebarContextMenu(const QPoint &pos);
-
     ImageViewer *m_imageViewer = nullptr;
     DirectoryTree *m_directoryTree = nullptr;
-    QTreeWidget *m_navSidebar = nullptr; // P0-1: favorites / recent / history
     BreadcrumbBar *m_breadcrumb = nullptr;
     QLineEdit *m_pathEdit = nullptr; // Path input bar above the gallery area
     QSplitter *m_mainSplitter = nullptr;          // P1-3: central layout splitter
@@ -151,6 +142,8 @@ class MainWindow : public QMainWindow
     QAction *m_actBatch = nullptr;
     QAction *m_actPluginSettings = nullptr;
     QAction *m_actToggleMetadata = nullptr;
+    QAction *m_actExportSettings = nullptr;
+    QAction *m_actImportSettings = nullptr;
     // A-10: Undo/Redo via CommandStack.
     QAction *m_actUndo = nullptr;
     QAction *m_actRedo = nullptr;

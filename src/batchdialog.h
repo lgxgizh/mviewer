@@ -35,6 +35,7 @@ class BatchDialog : public QDialog
     void onRemoveSelected();
     void onStart();
     void onCancel();
+    void onPauseResume();
     void onBrowseOutputDir();
     void onOpenOutputDir();
 
@@ -77,6 +78,7 @@ class BatchDialog : public QDialog
     QTextEdit *m_log = nullptr;
     QLabel *m_statusLabel = nullptr;
     QPushButton *m_startBtn = nullptr;
+    QPushButton *m_pauseBtn = nullptr;
     QPushButton *m_cancelBtn = nullptr;
     QPushButton *m_closeBtn = nullptr;
     QPushButton *m_openOutputBtn = nullptr; // enabled after a job finishes
@@ -84,4 +86,5 @@ class BatchDialog : public QDialog
     std::unique_ptr<mviewer::core::BatchProcessor> m_processor;
     std::shared_ptr<mviewer::core::BatchProcessor> m_activeProcessor; // active job handle for cancel
     QString m_lastOutputDir; // set after a job finishes, drives "open output dir"
+    bool m_isPaused = false;
 };

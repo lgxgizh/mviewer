@@ -2,7 +2,9 @@
 
 #include "application/Startup.h"
 #include "core/CrashHandler.h"
+#include "core/Logger.h"
 #include "core/SelfTest.h"
+#include "core/SettingsIO.h"
 
 #include <QApplication>
 
@@ -17,8 +19,14 @@ int main(int argc, char *argv[])
     app.setApplicationName("MViewer");
     app.setOrganizationName("MViewer");
 
-    // P5: crash diagnostics (opt-in via MVIEWER_CRASH_DUMP=1).
+    // Structured file logging (AppData/logs/mviewer-YYYYMMDD.log).
+    mviewer::core::installFileLogger("MViewer");
+
+    // Crash diagnostics — always on; dumps land in AppData/crash-reports/.
     mviewer::core::installCrashHandler("MViewer");
+
+    // Settings schema migration (idempotent, runs once per schema bump).
+    mviewer::core::migrateSettingsIfNeeded();
 
     // P5: headless release self-test gate. Runs before any window is created so
     // a release pipeline can verify the decode path without a display.

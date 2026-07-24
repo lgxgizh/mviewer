@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 #include <QDir>
+#include <QStandardPaths>
 
 #include <cstdio>
 
@@ -15,11 +16,16 @@
 namespace mviewer::core
 {
 
-static std::string g_appName = "mviewer";
+static std::string g_appName = "MViewer";
 
 static QString crashDir()
 {
-    return QDir::tempPath() + "/mviewer-crash-reports";
+    // Prefer the platform app-data location so crash reports survive temp cleanup
+    // and are easy for users to find when filing a bug report.
+    QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (base.isEmpty())
+        base = QDir::tempPath();
+    return base + "/crash-reports";
 }
 
 std::string crashReportPath()
@@ -80,9 +86,9 @@ void installCrashHandler(const std::string &appName)
     // keep the default OS crash behaviour.
     return;
 #else
-    if (!qEnvironmentVariableIsSet("MVIEWER_CRASH_DUMP"))
-        return; // opt-in: never affect normal runs or the test suite
-
+    // Always install — crash dumps are written to AppData so they never pollute
+    // the working directory or the test suite's temp tree. Tests that need to
+    // avoid the handler can still call this safely (idempotent install).
     g_crashDir = crashDir();
     SetUnhandledExceptionFilter(crashExceptionFilter);
 #endif

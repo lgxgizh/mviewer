@@ -14,6 +14,11 @@ using PluginHandle = void *; // HMODULE
 using PluginHandle = void *; // void* from dlopen
 #endif
 
+namespace mviewer::core
+{
+class ICompareAlgorithm;
+}
+
 // PluginManager: persistent handle storage + lifecycle management (RFC-013).
 // Owns all loaded plugin handles; auto-unloads on destruction.
 class PluginManager
@@ -28,7 +33,8 @@ class PluginManager
         std::string analyzerId;
         std::string decoderId;
         std::string exporterId;
-        std::string importerId; // A-9.3
+        std::string importerId;
+        std::string compareAlgorithmId; // Compare Algorithm plugin
         PluginHandle handle = nullptr;
         bool loaded = false;
     };

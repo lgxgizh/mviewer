@@ -4,6 +4,7 @@
 #include "appstate.h"
 #include "core/EventBus.h"
 #include "core/RatingStore.h"
+#include "core/SettingsIO.h"
 #include "core/SidecarStore.h"
 #include "core/analysis/ReportHtml.h"
 #include "core/analyzer/Analyzer.h"
@@ -57,7 +58,6 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QGuiApplication>
-#include <QHeaderView>
 #include <QImage>
 #include <QInputDialog>
 #include <QJsonArray>
@@ -82,8 +82,6 @@
 #include <QStatusBar>
 #include <QTextBrowser>
 #include <QTimer>
-#include <QTreeWidget>
-#include <QTreeWidgetItem>
 #include <QUrl>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -365,6 +363,11 @@ void MainWindow::setupUi()
             });
     m_actPluginSettings = new QAction("插件管理(&P)...", this);
     toolsMenu->addAction(m_actPluginSettings);
+    toolsMenu->addSeparator();
+    m_actExportSettings = new QAction("导出设置(&E)...", this);
+    m_actImportSettings = new QAction("导入设置(&I)...", this);
+    toolsMenu->addAction(m_actExportSettings);
+    toolsMenu->addAction(m_actImportSettings);
 
     // ----- 帮助(&H) -----
     auto *helpMenu = menuBar->addMenu("帮助(&H)");
@@ -386,35 +389,21 @@ void MainWindow::setupUi()
     m_pathEdit->setToolTip("输入或粘贴目录路径，按 Enter 键进入该目录（等效于菜单\"打开目录\"）。");
     m_pathEdit->setClearButtonEnabled(true);
 
-    // ----- Left column: navigation sidebar + directory tree + preview -----
-    // A-6.4: vertical QSplitter so nav/tree/preview heights persist independently
-    // of the main horizontal splitter (and of analysis/search panel toggles).
+    // ----- Left column: directory tree + preview -----
     auto *leftWidget = new QSplitter(Qt::Vertical, this);
     m_leftSplitter = leftWidget;
-
-    m_navSidebar = new QTreeWidget(leftWidget);
-    m_navSidebar->setHeaderHidden(true);
-    m_navSidebar->setMaximumHeight(220);
-    m_navSidebar->setMinimumHeight(60);
-    m_navSidebar->setContextMenuPolicy(Qt::CustomContextMenu);
-    buildNavSidebar();
-    connect(m_navSidebar, &QTreeWidget::itemClicked, this, &MainWindow::onNavSidebarActivated);
-    connect(m_navSidebar, &QTreeWidget::customContextMenuRequested, this,
-            &MainWindow::onNavSidebarContextMenu);
 
     m_directoryTree = new DirectoryTree(leftWidget);
     m_directoryTree->installEventFilter(this);
     m_previewPanel = new PreviewPanel(leftWidget);
     m_previewPanel->installEventFilter(this);
 
-    leftWidget->addWidget(m_navSidebar);
     leftWidget->addWidget(m_directoryTree);
     leftWidget->addWidget(m_previewPanel);
-    leftWidget->setStretchFactor(0, 1);
-    leftWidget->setStretchFactor(1, 3);
-    leftWidget->setStretchFactor(2, 2);
+    leftWidget->setStretchFactor(0, 3);
+    leftWidget->setStretchFactor(1, 2);
     leftWidget->setChildrenCollapsible(false);
-    leftWidget->setSizes({140, 320, 200});
+    leftWidget->setSizes({320, 200});
 
     // ----- Right column: sort bar (top) + image gallery -----
     auto *rightWidget = new QWidget(this);
@@ -657,7 +646,6 @@ void MainWindow::setupUi()
                 // the Recent menu and navigation sidebar.
                 m_recent.add(path.toStdString());
                 m_appState.addRecentFolder(path);
-                refreshNavSidebar();
                 rebuildRecentMenu();
                 const int n = m_cachedImagePaths.size();
                 statusBar()->showMessage(QString("目录: %1, 图片数: %2").arg(path).arg(n));
@@ -999,6 +987,40 @@ void MainWindow::setupUi()
                 m_pluginSettings->raise();
                 m_pluginSettings->activateWindow();
             });
+    connect(m_actExportSettings, &QAction::triggered, this,
+            [this]()
+            {
+                const QString path = QFileDialog::getSaveFileName(
+                    this, tr("导出设置"), QString(),
+                    tr("MViewer 设置文件 (*.mvs);;所有文件 (*)"));
+                if (path.isEmpty())
+                    return;
+                std::string err;
+                if (mviewer::core::exportSettings(path.toStdString(), &err))
+                    QMessageBox::information(this, tr("导出设置"), tr("设置已导出至 %1").arg(path));
+                else
+                    QMessageBox::warning(this, tr("导出设置"),
+                                         tr("导出失败：%1").arg(QString::fromStdString(err)));
+            });
+    connect(m_actImportSettings, &QAction::triggered, this,
+            [this]()
+            {
+                const QString path = QFileDialog::getOpenFileName(
+                    this, tr("导入设置"), QString(),
+                    tr("MViewer 设置文件 (*.mvs);;所有文件 (*)"));
+                if (path.isEmpty())
+                    return;
+                std::string err;
+                if (mviewer::core::importSettings(path.toStdString(), &err))
+                {
+                    QMessageBox::information(
+                        this, tr("导入设置"),
+                        tr("设置已导入。部分更改需要重启 MViewer 才能生效。"));
+                }
+                else
+                    QMessageBox::warning(this, tr("导入设置"),
+                                         tr("导入失败：%1").arg(QString::fromStdString(err)));
+            });
     connect(
         m_actAbout, &QAction::triggered, this, [this]()
         { QMessageBox::about(this, "关于 MViewer", "MViewer\n\n一个简单的图片查看与分析工具。"); });
@@ -1243,7 +1265,6 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         m_previewPanel->setVisible(!visible);
         m_analysisPanel->setVisible(!visible);
         m_searchPanel->setVisible(!visible);
-        m_navSidebar->setVisible(!visible);
         event->accept();
         return;
     }
@@ -1527,7 +1548,6 @@ void MainWindow::onImageOpen(const QString &path)
     pushHistory(path); // P0: in-session browse history
     // P0-1: cross-session image history.
     m_appState.addHistory(path);
-    refreshNavSidebar();
     // M14-1: track in recent-files LRU + refresh menu.
     m_recentFiles.add(path.toStdString());
     rebuildRecentFilesMenu();
@@ -2496,8 +2516,7 @@ void MainWindow::restoreLastSession()
             if (m_thumbSizeSlider)
                 m_thumbSizeSlider->setValue(ts);
 
-            // P1-3: restore the Analysis workspace + nav sidebar visibility so the
-            // UI reopens exactly where the user left off.
+            // P1-3: restore the Analysis workspace so the UI reopens where left off.
             if (m_analysisPanel)
             {
                 m_analysisPanel->setVisible(m_appState.analysisVisible);
@@ -2505,11 +2524,6 @@ void MainWindow::restoreLastSession()
                     m_actToggleAnalysis->setChecked(m_appState.analysisVisible);
                 m_analysisPanel->setCurrentPage(m_appState.analysisPage);
             }
-            if (m_navSidebar)
-                m_navSidebar->setVisible(m_appState.navSidebarVisible);
-            // A-6.4: nav sidebar width is covered by main splitter state
-            // (left panel). Height is fixed via setMaximumHeight; no extra
-            // restore needed beyond splitterState above.
             // Restore search panel visibility.
             const bool searchVisible =
                 settings.value("searchVisible", true).toBool();
@@ -2607,11 +2621,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
     m_appState.lastImage = m_currentImagePath;
     m_appState.lastThumbScroll = m_thumbnailPanel ? m_thumbnailPanel->scrollOffset() : 0;
 
-    // P1-3: persist the Analysis workspace + nav sidebar so reopening the app
-    // restores the full UI state, not just the last image.
+    // P1-3: persist the Analysis workspace so reopening restores UI state.
     m_appState.analysisVisible = m_analysisPanel && m_analysisPanel->isVisible();
     m_appState.analysisPage = m_analysisPanel ? m_analysisPanel->currentPage() : 0;
-    m_appState.navSidebarVisible = m_navSidebar && m_navSidebar->isVisible();
 
     // P1-3: persist the navigation history stack (browser back/forward + History
     // panel) so reopening restores exactly where the user was browsing.
@@ -3263,108 +3275,4 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
     return QMainWindow::eventFilter(watched, event);
-}
-
-// P0-1: build the Explorer-like navigation sidebar with Favorites / Recent / History.
-void MainWindow::buildNavSidebar()
-{
-    if (!m_navSidebar)
-        return;
-    m_navSidebar->clear();
-
-    auto *favRoot = new QTreeWidgetItem(m_navSidebar, QStringList{"收藏夹"});
-    favRoot->setIcon(0, QApplication::style()->standardIcon(QStyle::SP_DirHomeIcon));
-    favRoot->setData(0, Qt::UserRole, "__favorites");
-    for (const QString &dir : m_appState.favorites)
-    {
-        auto *it = new QTreeWidgetItem(favRoot, QStringList{QFileInfo(dir).fileName()});
-        it->setToolTip(0, dir);
-        it->setData(0, Qt::UserRole, dir);
-        it->setIcon(0, QApplication::style()->standardIcon(QStyle::SP_DirIcon));
-    }
-    favRoot->setExpanded(true);
-
-    auto *recentRoot = new QTreeWidgetItem(m_navSidebar, QStringList{"最近访问"});
-    recentRoot->setIcon(0, QApplication::style()->standardIcon(QStyle::SP_DialogOpenButton));
-    recentRoot->setData(0, Qt::UserRole, "__recent");
-    for (const QString &dir : m_appState.recentFolders)
-    {
-        auto *it = new QTreeWidgetItem(recentRoot, QStringList{QFileInfo(dir).fileName()});
-        it->setToolTip(0, dir);
-        it->setData(0, Qt::UserRole, dir);
-        it->setIcon(0, QApplication::style()->standardIcon(QStyle::SP_DirIcon));
-    }
-    recentRoot->setExpanded(true);
-
-    auto *histRoot = new QTreeWidgetItem(m_navSidebar, QStringList{"历史图片"});
-    histRoot->setIcon(0, QApplication::style()->standardIcon(QStyle::SP_FileDialogContentsView));
-    histRoot->setData(0, Qt::UserRole, "__history");
-    for (const QString &img : m_appState.history)
-    {
-        auto *it = new QTreeWidgetItem(histRoot, QStringList{QFileInfo(img).fileName()});
-        it->setToolTip(0, img);
-        it->setData(0, Qt::UserRole, img);
-        it->setIcon(0, QApplication::style()->standardIcon(QStyle::SP_FileIcon));
-    }
-    histRoot->setExpanded(false);
-}
-
-void MainWindow::refreshNavSidebar()
-{
-    buildNavSidebar();
-}
-
-void MainWindow::onNavSidebarActivated(QTreeWidgetItem *item, int)
-{
-    if (!item)
-        return;
-    const QString data = item->data(0, Qt::UserRole).toString();
-    if (data.startsWith("__"))
-        return; // root nodes are not navigable directly
-    if (QFileInfo(data).isDir())
-        changeDirectory(data);
-    else if (QFileInfo(data).isFile())
-        onImageOpen(data);
-}
-
-void MainWindow::onNavSidebarContextMenu(const QPoint &pos)
-{
-    QTreeWidgetItem *item = m_navSidebar->itemAt(pos);
-    if (!item)
-        return;
-    const QString data = item->data(0, Qt::UserRole).toString();
-    if (data.startsWith("__"))
-        return;
-
-    QMenu menu(this);
-    QAction *actAdd = menu.addAction("添加到收藏夹");
-    QAction *actRemove = menu.addAction("从收藏夹移除");
-    QAction *actClearRecent = menu.addAction("清空最近访问");
-    QAction *actClearHistory = menu.addAction("清空历史图片");
-
-    QAction *chosen = menu.exec(m_navSidebar->mapToGlobal(pos));
-    if (chosen == actAdd)
-    {
-        m_appState.addFavorite(data);
-        refreshNavSidebar();
-        rebuildFavoritesMenu();
-    }
-    else if (chosen == actRemove)
-    {
-        m_appState.removeFavorite(data);
-        refreshNavSidebar();
-        rebuildFavoritesMenu();
-    }
-    else if (chosen == actClearRecent)
-    {
-        m_appState.clearRecentFolders();
-        refreshNavSidebar();
-        rebuildRecentMenu();
-    }
-    else if (chosen == actClearHistory)
-    {
-        m_appState.clearHistory();
-        refreshNavSidebar();
-        // History is only shown in the sidebar, no separate menu yet.
-    }
 }

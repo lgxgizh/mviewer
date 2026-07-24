@@ -35,7 +35,9 @@ add_library(mviewer_core SHARED
     core/RatingStore.cpp
     core/SidecarStore.cpp
     core/CrashHandler.cpp
+    core/Logger.cpp
     core/SelfTest.cpp
+    core/SettingsIO.cpp
     core/analysis/AnalysisEngine.cpp
     core/analysis/PixelInspector.cpp
     core/analysis/ExportReport.cpp

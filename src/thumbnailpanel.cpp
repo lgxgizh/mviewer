@@ -45,6 +45,7 @@
 #include <QPainter>
 #include <QProcess>
 #include <QPushButton>
+#include <QRegularExpression>
 #include <QResizeEvent>
 #include <QScopeGuard>
 #include <QScrollBar>
@@ -681,6 +682,19 @@ void ThumbnailPanel::applyFilter()
         }
     }
 
+    // Build a fuzzy/wildcard regex when the search text contains * or ?.
+    // Otherwise fall back to the fast substring match.
+    QRegularExpression fuzzyRe;
+    const bool useFuzzy = !t.isEmpty() && !m_metaSearch && (t.contains('*') || t.contains('?'));
+    if (useFuzzy)
+    {
+        // Convert glob pattern to regex: * → .*, ? → ., escape everything else.
+        QString pattern = QRegularExpression::escape(t);
+        pattern.replace("\\*", ".*").replace("\\?", ".");
+        fuzzyRe.setPattern(pattern);
+        fuzzyRe.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
+    }
+
     QList<Entry> out;
     for (const Entry &e : src)
     {
@@ -712,6 +726,11 @@ void ThumbnailPanel::applyFilter()
             if (m_metaSearch)
             {
                 if (!m_metaIndex.value(e.path).contains(t))
+                    continue;
+            }
+            else if (useFuzzy)
+            {
+                if (!fuzzyRe.match(e.name).hasMatch())
                     continue;
             }
             else if (!e.name.toLower().contains(t))
@@ -1266,8 +1285,10 @@ void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
         const QModelIndex idx = indexAt(event->pos());
         if (idx.isValid())
         {
-            selectionModel()->select(idx, QItemSelectionModel::ClearAndSelect |
-                                              QItemSelectionModel::Rows);
+            // CRITICAL FIX: Call setCurrentIndex to ensure currentChanged signal fires.
+            // Without this, itemClicked won't be emitted and the preview panel
+            // won't refresh when clicking a single image.
+            selectionModel()->setCurrentIndex(idx, QItemSelectionModel::ClearAndSelect);
             event->accept();
             return;
         }

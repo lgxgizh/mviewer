@@ -4,9 +4,10 @@ Write an analysis plugin for MViewer in C++ and have it recognized at runtime.
 This document is the **stable contract** (M13 Phase 6). It is deliberately small:
 one interface, three C exports, one build rule.
 
-> Scope note: this SDK covers **Analyzer / Decoder / Exporter / Importer**
-> plugins. The loader probes `createAnalyzer` → `createDecoder` →
-> `createExporter` → `createImporter` and registers into the matching registry.
+> Scope note: this SDK covers **Analyzer / Decoder / Exporter / Importer /
+> CompareAlgorithm** plugins. The loader probes `createAnalyzer` →
+> `createDecoder` → `createExporter` → `createImporter` →
+> `createCompareAlgorithm` and registers into the matching registry.
 
 ## 1. The interface you implement
 
@@ -61,6 +62,8 @@ extern "C" {
     void        destroyExporter(IExporter*);
     IImporter  *createImporter();          // Importer plugin (A-9.3)
     void        destroyImporter(IImporter*);
+    ICompareAlgorithm *createCompareAlgorithm();  // Compare Algorithm plugin
+    void        destroyCompareAlgorithm(ICompareAlgorithm*);
     const char *pluginName();              // matches the implementation's name()
     const PluginABI *mviewer_plugin_abi(); // M14.2: frozen ABI triple (required)
     // optional:
@@ -69,13 +72,16 @@ extern "C" {
 ```
 
 On Windows use `__declspec(dllexport)`; on ELF use default visibility. The
-bundled `MVIEWER_PLUGIN_EXPORT` macro (see `plugins/example`) handles both.
+public `MVIEWER_PLUGIN_EXPORT` macro lives in
+`src/core/plugin/MViewerPluginExport.h` (also mirrored in `plugins/example`).
 
 The host (`PluginLoader` / `PluginManager`) probes the `create*` exports in the
-order **Analyzer → Decoder → Exporter → Importer**, then registers the returned
-instance into the matching registry (`AnalyzerRegistry` / `DecoderRegistry` /
-`ExporterRegistry` / `ImporterRegistry`) and calls the corresponding `destroy*`
-when the plugin is unloaded. **You own the lifetime inside the plugin** —
+order **Analyzer → Decoder → Exporter → Importer → CompareAlgorithm**, then
+registers the returned instance into the matching registry
+(`AnalyzerRegistry` / `DecoderRegistry` / `ExporterRegistry` /
+`ImporterRegistry`; CompareAlgorithm is held by PluginManager until a full
+registry is wired) and calls the corresponding `destroy*` when the plugin is
+unloaded. **You own the lifetime inside the plugin** —
 allocate in `create*`, free in `destroy*`. The host wraps the instance in a
 `shared_ptr` whose deleter invokes your `destroy*` so allocation and
 deallocation stay in the plugin module.

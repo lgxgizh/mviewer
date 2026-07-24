@@ -76,6 +76,10 @@ extern "C" {
     void        destroyDecoder(IDecoder*);
     IExporter  *createExporter();          // Exporter plugin (M14.3)
     void        destroyExporter(IExporter*);
+    IImporter  *createImporter();          // Importer plugin (A-9.3)
+    void        destroyImporter(IImporter*);
+    ICompareAlgorithm *createCompareAlgorithm();  // Compare Algorithm plugin
+    void        destroyCompareAlgorithm(ICompareAlgorithm*);
     const char *pluginName();              // matches the impl's name()
     const PluginABI *mviewer_plugin_abi(); // MUST: frozen triple
     // optional:

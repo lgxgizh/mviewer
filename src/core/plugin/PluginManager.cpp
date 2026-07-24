@@ -1,4 +1,5 @@
 #include "core/plugin/PluginManager.h"
+#include "core/compare/ICompareAlgorithm.h"
 #include "core/export/ExporterRegistry.h"
 #include "core/export/IExporter.h"
 #include "core/image/decoder/DecoderRegistry.h"
@@ -104,6 +105,10 @@ bool PluginManager::load(const std::string &path)
         reinterpret_cast<IImporter *(*)()>(GetProcAddress(handle, "createImporter"));
     auto destroyImporterFn =
         reinterpret_cast<void (*)(IImporter *)>(GetProcAddress(handle, "destroyImporter"));
+    auto createCompareAlgorithmFn = reinterpret_cast<mviewer::core::ICompareAlgorithm *(*)()>(
+        GetProcAddress(handle, "createCompareAlgorithm"));
+    auto destroyCompareAlgorithmFn = reinterpret_cast<void (*)(mviewer::core::ICompareAlgorithm *)>(
+        GetProcAddress(handle, "destroyCompareAlgorithm"));
     auto nameFn = reinterpret_cast<const char *(*)()>(GetProcAddress(handle, "pluginName"));
 
     // M14.2: ABI triple gate (frozen for v1.x). Reject before probing an instance.
@@ -150,6 +155,11 @@ bool PluginManager::load(const std::string &path)
     auto createImporterFn = reinterpret_cast<IImporter *(*)()>(dlsym(handle, "createImporter"));
     auto destroyImporterFn =
         reinterpret_cast<void (*)(IImporter *)>(dlsym(handle, "destroyImporter"));
+    auto createCompareAlgorithmFn = reinterpret_cast<mviewer::core::ICompareAlgorithm *(*)()>(
+        dlsym(handle, "createCompareAlgorithm"));
+    auto destroyCompareAlgorithmFn =
+        reinterpret_cast<void (*)(mviewer::core::ICompareAlgorithm *)>(
+            dlsym(handle, "destroyCompareAlgorithm"));
     auto nameFn = reinterpret_cast<const char *(*)()>(dlsym(handle, "pluginName"));
 
     // M14.2: ABI triple gate (mirrors the Windows branch).
@@ -334,8 +344,45 @@ bool PluginManager::load(const std::string &path)
         return true;
     }
 
-    m_lastError =
-        "plugin exposes no supported create* export (analyzer/decoder/exporter/importer)";
+    // --- Compare Algorithm plugin ---
+    // Third-party compare algorithms are discovered and held by PluginManager.
+    // The host can query loadedPlugins() for compareAlgorithmId and instantiate
+    // via createCompareAlgorithm when needed. Full registry integration is
+    // deferred until CompareWorkspace exposes a plugin-algorithm picker.
+    if (createCompareAlgorithmFn)
+    {
+        mviewer::core::ICompareAlgorithm *algo = createCompareAlgorithmFn();
+        if (!algo)
+        {
+            m_lastError = "createCompareAlgorithm returned null for " + path;
+#ifdef _WIN32
+            FreeLibrary(static_cast<HMODULE>(handle));
+#else
+            dlclose(handle);
+#endif
+            return false;
+        }
+        const std::string algoId = algo->name();
+        // Destroy the probe instance; the host will re-create when needed.
+        if (destroyCompareAlgorithmFn)
+            destroyCompareAlgorithmFn(algo);
+        else
+            delete algo;
+
+        PluginEntry entry;
+        entry.path = path;
+        entry.name = displayName;
+        entry.compareAlgorithmId = algoId;
+        entry.handle = handle;
+        entry.loaded = true;
+        m_plugins[path] = entry;
+        std::cout << "[PluginManager] Loaded: " << displayName
+                  << " (compareAlgorithm: " << algoId << ") from " << path << std::endl;
+        return true;
+    }
+
+    m_lastError = "plugin exposes no supported create* export "
+                  "(analyzer/decoder/exporter/importer/compareAlgorithm)";
 #ifdef _WIN32
     FreeLibrary(static_cast<HMODULE>(handle));
 #else

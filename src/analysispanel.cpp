@@ -5,11 +5,15 @@
 
 #include "core/image/QtConvert.h"
 
+#include <QApplication>
+#include <QClipboard>
 #include <QHBoxLayout>
 #include <QPainter>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QVBoxLayout>
+
+#include <cmath>
 
 AnalysisPanel::AnalysisPanel(QWidget *parent) : QWidget(parent)
 {
@@ -200,6 +204,64 @@ void AnalysisPanel::buildUi()
         "QLabel{background:#1e1e1e;color:#eee;padding:8px;font-family:monospace;}");
     m_inspectorLabel->setText(tr("Move the mouse over an image to inspect pixels."));
     insLay->addWidget(m_inspectorLabel, 1);
+
+    // Copy buttons for RGB / HEX / XYZ (Pixel Inspector enhancement)
+    auto *copyBar = new QHBoxLayout;
+    auto *btnCopyRGB = new QPushButton(tr("Copy RGB"));
+    auto *btnCopyHEX = new QPushButton(tr("Copy HEX"));
+    auto *btnCopyXYZ = new QPushButton(tr("Copy XYZ"));
+    btnCopyRGB->setToolTip(tr("Copy current pixel RGB to clipboard"));
+    btnCopyHEX->setToolTip(tr("Copy current pixel HEX color to clipboard"));
+    btnCopyXYZ->setToolTip(tr("Copy current pixel XYZ to clipboard"));
+    copyBar->addWidget(btnCopyRGB);
+    copyBar->addWidget(btnCopyHEX);
+    copyBar->addWidget(btnCopyXYZ);
+    copyBar->addStretch();
+    insLay->addLayout(copyBar);
+
+    connect(btnCopyRGB, &QPushButton::clicked, this,
+            [this]()
+            {
+                if (!m_pValid)
+                    return;
+                QApplication::clipboard()->setText(
+                    QString("RGB(%1, %2, %3)").arg(m_pR).arg(m_pG).arg(m_pB));
+            });
+    connect(btnCopyHEX, &QPushButton::clicked, this,
+            [this]()
+            {
+                if (!m_pValid)
+                    return;
+                QApplication::clipboard()->setText(
+                    QString("#%1%2%3")
+                        .arg(m_pR, 2, 16, QChar('0'))
+                        .arg(m_pG, 2, 16, QChar('0'))
+                        .arg(m_pB, 2, 16, QChar('0')));
+            });
+    connect(btnCopyXYZ, &QPushButton::clicked, this,
+            [this]()
+            {
+                if (!m_pValid)
+                    return;
+                // sRGB to linear then to XYZ (D65)
+                auto srgbToLinear = [](uint8_t c) -> double
+                {
+                    double v = c / 255.0;
+                    return (v <= 0.04045) ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+                };
+                const double r = srgbToLinear(static_cast<uint8_t>(m_pR));
+                const double g = srgbToLinear(static_cast<uint8_t>(m_pG));
+                const double b = srgbToLinear(static_cast<uint8_t>(m_pB));
+                const double X = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
+                const double Y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
+                const double Z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
+                QApplication::clipboard()->setText(
+                    QString("XYZ(%1, %2, %3)")
+                        .arg(X, 0, 'f', 3)
+                        .arg(Y, 0, 'f', 3)
+                        .arg(Z, 0, 'f', 3));
+            });
+
     m_tabs->addTab(inspectorPage, tr("Inspector"));
 
     connect(csCombo, QOverload<int>::of(&QComboBox::activated), this,

@@ -13,10 +13,10 @@ std::string crashReportPath();
 
 // Install the unhandled-exception handler.
 //
-// On Windows, when the MVIEWER_CRASH_DUMP environment variable is set, a crash
-// writes a minidump + a short .txt log into the crash-reports directory. The
-// handler is opt-in so normal runs and the test suite are never affected.
+// On Windows, writes a minidump + a short .txt log into the crash-reports
+// directory under %APPDATA%/MViewer/crash-reports/ on every crash. The handler
+// is always active — no environment variable required for normal operation.
 // No-op on platforms without a supported minidump backend.
-void installCrashHandler(const std::string &appName = "mviewer");
+void installCrashHandler(const std::string &appName = "MViewer");
 
 } // namespace mviewer::core

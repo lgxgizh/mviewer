@@ -203,12 +203,15 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
 domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &config)
 {
     m_cancelled.store(false);
+    m_paused.store(false);
     domain::BatchJobResult aggregate;
     const int total = static_cast<int>(config.inputPaths.size());
     aggregate.fileResults.reserve(total);
 
     for (int i = 0; i < total; ++i)
     {
+        // Honour pause between files (current file always finishes first).
+        waitWhilePaused();
         if (m_cancelled.load())
             break;
 

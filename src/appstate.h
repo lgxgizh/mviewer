@@ -19,7 +19,7 @@
 //   * lastImage      — image open at shutdown (re-selected on launch)
 //   * lastThumbScroll— thumbnail-grid scroll offset (browse position restored)
 //   * analysisVisible/analysisPage — Analysis panel + active sub-page (P1-3)
-//   * navSidebarVisible           — left nav tree visibility (P1-3)
+
 //
 // Recent-folders history is handled separately by core::RecentFiles (it has
 // its own LRU + cap). AppState owns the *pinned* and *restored* state.
@@ -36,7 +36,7 @@ struct AppState
     // app lands the user exactly where they left off (not just the image).
     bool analysisVisible = true;   // Analysis panel shown at shutdown? (true = prior default)
     int analysisPage = 0;          // active Analysis sub-page (Histogram/RGB/...)
-    bool navSidebarVisible = true; // left navigation tree visible at shutdown?
+
 
     // P1-3: persist the back/forward navigation stack (browser-style) so the
     // History panel and ←/→ history work after reopening the app.

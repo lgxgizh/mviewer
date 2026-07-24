@@ -56,7 +56,7 @@ AppState AppState::load()
     // P1-3: restore Analysis workspace + nav sidebar state (defaults safe).
     s.analysisVisible = o.value("analysisVisible").toBool(false);
     s.analysisPage = o.value("analysisPage").toInt(0);
-    s.navSidebarVisible = o.value("navSidebarVisible").toBool(true);
+
 
     // P1-3: restore the navigation history stack (browser back/forward).
     const QJsonArray nav = o.value("navHistory").toArray();
@@ -96,7 +96,7 @@ bool AppState::save() const
     // P1-3: persist Analysis workspace + nav sidebar for 100% session restore.
     o["analysisVisible"] = analysisVisible;
     o["analysisPage"] = analysisPage;
-    o["navSidebarVisible"] = navSidebarVisible;
+
 
     // P1-3: persist the navigation history stack so History panel + back/forward work.
     QJsonArray nav;

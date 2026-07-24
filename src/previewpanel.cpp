@@ -27,6 +27,12 @@ void PreviewPanel::setImage(const QString &path)
                                                   this,
                                                   [this, res, path]()
                                                   {
+                                                      // Stale-callback guard: if the user has
+                                                      // already clicked another image, discard
+                                                      // this result so a slow decode of an older
+                                                      // path cannot overwrite the newer preview.
+                                                      if (path != m_path)
+                                                          return;
                                                       if (!res.success() || !res.frame)
                                                       {
                                                           m_hasImage = false;

@@ -4,6 +4,34 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Removed
+
+- **NavSidebar:** removed the left-side Favorites/Recent/History tree that
+  duplicated the directory tree. Favorites and Recent remain available via
+  the File menu.
+
+### Added — Product Experience & Professional Workflow
+
+- **Thumbnail fuzzy search:** search bar accepts `*` / `?` wildcards
+  (e.g. `IMG_*.jpg`, `DSC????.png`) via `QRegularExpression` glob matching.
+- **Pixel Inspector Copy:** Copy RGB / Copy HEX / Copy XYZ buttons in the
+  Inspector tab; XYZ uses sRGB→linear→D65 conversion.
+- **Batch pause/resume:** `BatchProcessor::requestPause()` / `resume()` with
+  condition-variable wait between files; BatchDialog UI exposes 暂停/恢复.
+- **Structured file logging:** `core/Logger` installs a Qt message handler
+  writing to `%APPDATA%/MViewer/logs/mviewer-YYYYMMDD.log`.
+- **CrashHandler always-on:** minidumps land in
+  `%APPDATA%/MViewer/crash-reports/` without requiring `MVIEWER_CRASH_DUMP`.
+- **Settings import/export:** Tools menu → 导出设置 / 导入设置
+  (`.mvs` JSON); schema version migration via `migrateSettingsIfNeeded()`.
+- **Compare Algorithm plugin interface:** `ICompareAlgorithm` +
+  `createCompareAlgorithm` / `destroyCompareAlgorithm` C exports;
+  PluginManager discovers and holds third-party compare algorithms.
+- **Public plugin export header:** `src/core/plugin/MViewerPluginExport.h`
+  is the single source of truth for `MVIEWER_PLUGIN_EXPORT`.
+
 ## [1.0.4] - 2026-07-24
 
 ### Changed — Release v1.0.4
