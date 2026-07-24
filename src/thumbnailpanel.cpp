@@ -1168,13 +1168,18 @@ QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode)
         std::sort(out.begin(), out.end(),
                   [](const QFileInfo &a, const QFileInfo &b)
                   {
-                      const auto ra =
-                          ImageRepository::instance().metadata(a.absoluteFilePath().toStdString());
-                      const auto rb =
-                          ImageRepository::instance().metadata(b.absoluteFilePath().toStdString());
-                      const qint64 pa = static_cast<qint64>(ra.width) * ra.height;
-                      const qint64 pb = static_cast<qint64>(rb.width) * rb.height;
-                      return pa > pb;
+                      // Read only the image header (not the full decode) to
+                      // get pixel dimensions. QImageReader::size() is much
+                      // faster than ImageRepository::metadata() which does a
+                      // full metadata read.
+                      auto readSize = [](const QString &path) -> qint64
+                      {
+                          QImageReader reader(path);
+                          reader.setAutoTransform(true);
+                          const QSize s = reader.size();
+                          return static_cast<qint64>(s.width()) * s.height();
+                      };
+                      return readSize(a.absoluteFilePath()) > readSize(b.absoluteFilePath());
                   });
         break;
     }
@@ -1216,12 +1221,14 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
         // "still loading" (light grey, no text).
         if (m_panel->thumbFailed(path))
         {
-            painter->fillRect(thumbRect, QColor(200, 200, 200));
-            painter->setPen(QColor(150, 150, 150));
+            painter->fillRect(thumbRect, QColor(200, 180, 180));
+            painter->setPen(QColor(150, 100, 100));
             QFont f = painter->font();
             f.setPointSize(qMax(7, f.pointSize() - 1));
             painter->setFont(f);
-            painter->drawText(thumbRect, Qt::AlignCenter, "无法\n加载");
+            const QString elidedName =
+                painter->fontMetrics().elidedText(name, Qt::ElideMiddle, thumbRect.width() - 8);
+            painter->drawText(thumbRect, Qt::AlignCenter, "无法加载\n" + elidedName);
         }
         else
         {

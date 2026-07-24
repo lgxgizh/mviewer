@@ -845,13 +845,13 @@ void MainWindow::setupCommands()
         "navigate_next", "下一张 (Right)", [this]() { navigate(1); },
         std::vector<CommandShortcut>{{Qt::Key_Right, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "quick_preview", "快速预览 (Space)",
+        "quick_preview", "在查看器中打开 (Enter)",
         [this]()
         {
             if (!m_currentImagePath.isEmpty())
                 onImageOpen(m_currentImagePath);
         },
-        std::vector<CommandShortcut>{{Qt::Key_Space, 0}}));
+        std::vector<CommandShortcut>{{Qt::Key_Return, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
         "fullscreen", "全屏 (F)", [this]() { toggleFullscreen(); },
         std::vector<CommandShortcut>{{Qt::Key_F, 0}}));
