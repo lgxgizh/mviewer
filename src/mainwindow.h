@@ -74,6 +74,11 @@ class MainWindow : public QMainWindow
     // P1-8: keyboard-shortcut cheat-sheet dialog (F1 / Help menu).
     void showShortcutsHelp();
     void openDirectory(const QString &dir);
+    // Unified directory-change handler: updates directory tree (which triggers
+    // the directoryChanged signal chain), thumbnail panel, breadcrumb, recent
+    // folders, status bar, etc. Used by the menu "Open Directory" action, the
+    // path input bar, and breadcrumb navigation.
+    void changeDirectory(const QString &dir);
     // Toggles fullscreen on the image viewer when it is visible, else on the
     // main window itself. Shared by the F command, F11 and the View menu.
     void toggleFullscreen();
@@ -108,6 +113,7 @@ class MainWindow : public QMainWindow
     DirectoryTree *m_directoryTree = nullptr;
     QTreeWidget *m_navSidebar = nullptr; // P0-1: favorites / recent / history
     BreadcrumbBar *m_breadcrumb = nullptr;
+    QLineEdit *m_pathEdit = nullptr; // Path input bar above the gallery area
     QSplitter *m_mainSplitter = nullptr;          // P1-3: central layout splitter
     MetadataOverlay *m_metadataOverlay = nullptr; // M15: semi-transparent info overlay
     ThumbnailPanel *m_thumbnailPanel = nullptr;

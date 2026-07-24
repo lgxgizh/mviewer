@@ -4,6 +4,33 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.3] - 2026-07-24
+
+### Fixed — 体验问题修复
+
+- **菜单打开目录后目录树不更新:** 点击菜单"打开目录"选择新目录后，左侧目录树、
+  面包屑导航、缩略图面板等现在会正确同步更新。新增统一的 `changeDirectory()`
+  方法，菜单打开目录、导航侧栏点击、路径输入框都走同一更新链路。
+  (`src/mainwindow.cpp`, `src/mainwindow.h`)
+- **图片比较弹窗不显示对比图片:** 比较弹窗打开后图片空白，需要手动点击"左右分割"
+  或"滑动对比"才能看到图片。根因是 `setImages()` 在对话框布局完成前调用，导致
+  `fitAll()` 因 cell 尺寸为零而跳过所有图片。修复为在 `dlg->show()` 后通过
+  `QTimer::singleShot(0, ...)` 延迟加载，确保布局完成后再计算适配缩放。
+  (`src/mainwindow.cpp`)
+- **闪烁对比效果不可见:** 修复 `fitAll()` 时序问题后图片正常显示，同时改进
+  `applyBlink()` 使两张图闪烁时活动图片全屏居中显示，效果更明显。
+  (`src/compareworkspace.cpp`)
+- **按住空格临时闪烁恢复正常:** 空格键临时闪烁功能在图片不可见时也无法感知，
+  随 `fitAll()` 修复一并恢复。(`src/compareworkspace.cpp`)
+
+### Added — 新功能
+
+- **路径输入框:** 图片展示区域上方新增当前文件夹路径输入框，实时显示当前路径，
+  输入新路径按 Enter 即可切换目录（等效于菜单"打开目录"）。路径不存在时在状态栏
+  提示并恢复原路径。(`src/mainwindow.cpp`, `src/mainwindow.h`)
+- **闪烁对比快捷键 B:** 按 B 键可快速切换闪烁对比开关，闪烁间隔固定为 150ms
+  实现快速切换效果。(`src/compareworkspace.cpp`)
+
 ## [1.0.2] - 2026-07-24
 
 ### Added — 基础功能打磨第八轮 (Polish Round 8)

@@ -73,7 +73,7 @@ class CompareWorkspace : public QWidget
     {
         mviewer::domain::CompareSession s = m_engine.session();
         s.threshold = m_thresholdValue;
-        s.blinkIntervalMs = m_blinkTimer ? m_blinkTimer->interval() : 500;
+        s.blinkIntervalMs = m_blinkTimer ? m_blinkTimer->interval() : 150;
         s.sidePanelVisible = m_sideChk ? m_sideChk->isChecked() : false;
         s.layoutIndex = m_layoutCombo ? m_layoutCombo->currentIndex() : 0;
         return s;

@@ -302,6 +302,12 @@ void MainWindow::setupUi()
     // ----- Breadcrumb navigation bar (M15 Product Shell P0) -----
     m_breadcrumb = new BreadcrumbBar(this);
 
+    // ----- Path input bar (UX: type a path to jump to a directory) -----
+    m_pathEdit = new QLineEdit(this);
+    m_pathEdit->setPlaceholderText("输入目录路径并按 Enter 切换...");
+    m_pathEdit->setToolTip("输入或粘贴目录路径，按 Enter 键进入该目录（等效于菜单\"打开目录\"）。");
+    m_pathEdit->setClearButtonEnabled(true);
+
     // ----- Left column: navigation sidebar + directory tree + preview -----
     auto *leftWidget = new QWidget(this);
     auto *leftLayout = new QVBoxLayout(leftWidget);
@@ -457,6 +463,7 @@ void MainWindow::setupUi()
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
     mainLayout->addWidget(m_breadcrumb);
+    mainLayout->addWidget(m_pathEdit);
     mainLayout->addWidget(centralSplitter, 1);
     setCentralWidget(mainContainer);
 
@@ -508,6 +515,8 @@ void MainWindow::setupUi()
             [this](const QString &path)
             {
                 m_breadcrumb->setPath(path); // M15: update breadcrumb bar
+                if (m_pathEdit)
+                    m_pathEdit->setText(QDir::toNativeSeparators(path));
                 m_currentDir = path;
                 m_dirListDirty = true; // invalidate cache on dir change
                 if (m_cachedImagePaths.isEmpty() || path != m_currentDir)
@@ -678,13 +687,27 @@ void MainWindow::setupUi()
             {
                 const QString dir = QFileDialog::getExistingDirectory(this, "打开目录");
                 if (!dir.isEmpty())
+                    changeDirectory(dir);
+            });
+
+    // Path input bar: pressing Enter navigates to the typed directory.
+    connect(m_pathEdit, &QLineEdit::returnPressed, this,
+            [this]()
+            {
+                QString text = m_pathEdit->text().trimmed();
+                if (text.isEmpty())
+                    return;
+                // Accept both native and forward-slash separators.
+                text = QDir::fromNativeSeparators(text);
+                QDir d(text);
+                if (d.exists())
+                    changeDirectory(QDir::cleanPath(text));
+                else
                 {
-                    m_currentDir = dir;
-                    m_cachedImagePaths.clear();
-                    m_dirListDirty = true;
-                    m_thumbnailPanel->setDirectory(dir);
-                    m_directoryTree->navigateTo(dir);
-                    mviewer::core::SidecarStore::instance().importDirectory(dir.toStdString());
+                    statusBar()->showMessage(QString("路径不存在: %1").arg(text), 5000);
+                    // Restore the current path in the edit.
+                    if (!m_currentDir.isEmpty())
+                        m_pathEdit->setText(QDir::toNativeSeparators(m_currentDir));
                 }
             });
     connect(m_actOpenFile, &QAction::triggered, this,
@@ -1366,6 +1389,24 @@ void MainWindow::openDirectory(const QString &dir)
     m_directoryTree->navigateTo(dir);
 }
 
+void MainWindow::changeDirectory(const QString &dir)
+{
+    if (dir.isEmpty() || !QDir(dir).exists())
+        return;
+
+    // Update the path input bar to reflect the new directory.
+    if (m_pathEdit)
+        m_pathEdit->setText(QDir::toNativeSeparators(dir));
+
+    // Navigate the tree with emitSignal=true so the directoryChanged signal
+    // fires, triggering the full update chain (breadcrumb, thumbnails, recent
+    // folders, status bar, reindex, etc.) — just like clicking a tree node.
+    m_directoryTree->navigateTo(dir, true);
+
+    // Import sidecar metadata for the new directory.
+    mviewer::core::SidecarStore::instance().importDirectory(dir.toStdString());
+}
+
 void MainWindow::openCompare(const QStringList &images, const QString &sessionJson)
 {
     QStringList imgs = images;
@@ -1390,18 +1431,6 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     connect(m_compareView, &CompareWorkspace::pixelInfo, this,
             [this](const QString &text) { statusBar()->showMessage(text); });
 
-    // M15 P0#1: if a persisted compare session was supplied, restore it *after*
-    // the images are loaded (applySession needs the engine + cell views alive).
-    if (!sessionJson.isEmpty() && m_compareView)
-    {
-        const auto session = decodeCompareSession(sessionJson.toStdString());
-        if (session)
-            m_compareView->applySession(*session);
-    }
-
-    // P0-1: guard m_compareView lifetime — when the compare dialog is closed
-    // (WA_DeleteOnClose), reset the pointer so every downstream accessor
-    // (saveWorkspace, saveProject, exportReport, autosaveSession) is safe.
     connect(dlg, &QDialog::destroyed, this,
             [this]()
             {
@@ -1411,6 +1440,32 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
 
     dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->show();
+
+    // Load images *after* the dialog has been shown AND the event loop has
+    // processed the layout pass, so that cell widgets have valid geometry when
+    // fitAll() computes the shared zoom scale. Without this delay, cell
+    // size() returns (0,0), fitAll() skips every cell, and the shared scale
+    // stays at 1.0 — making large images render off-screen and the compare
+    // view appears blank.
+    const QStringList imgsFinal = imgs;
+    const QString sessionFinal = sessionJson;
+    QTimer::singleShot(0, this,
+                       [this, imgsFinal, sessionFinal]()
+                       {
+                           if (!m_compareView)
+                               return;
+                           m_compareView->setImages(imgsFinal);
+
+                           // M15 P0#1: restore persisted compare session after images
+                           // are loaded.
+                           if (!sessionFinal.isEmpty())
+                           {
+                               const auto session =
+                                   decodeCompareSession(sessionFinal.toStdString());
+                               if (session)
+                                   m_compareView->applySession(*session);
+                           }
+                       });
 }
 
 void MainWindow::navigate(int delta)
@@ -2888,7 +2943,7 @@ void MainWindow::onNavSidebarActivated(QTreeWidgetItem *item, int)
     if (data.startsWith("__"))
         return; // root nodes are not navigable directly
     if (QFileInfo(data).isDir())
-        openDirectory(data);
+        changeDirectory(data);
     else if (QFileInfo(data).isFile())
         onImageOpen(data);
 }

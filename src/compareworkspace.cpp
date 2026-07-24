@@ -116,19 +116,17 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     syncLayout->addWidget(m_syncZoomChk);
     syncLayout->addWidget(m_syncDragChk);
 
-    // M14-3: blink (flicker) compare — 500ms toggle between base and target.
+    // M14-3: blink (flicker) compare — rapid toggle between base and target.
+    // Click the button (or press B) to start/stop rapid blinking.
     m_blinkChk = new QCheckBox("闪烁对比(&B)", this);
+    m_blinkChk->setToolTip(tr("点击开始/停止快速闪烁切换（快捷键: B）"));
     connect(m_blinkChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
                 if (on)
-                {
-                    startBlink(500);
-                }
+                    startBlink(150); // fast flicker
                 else
-                {
                     stopBlink();
-                }
             });
     syncLayout->addWidget(m_blinkChk);
 
@@ -525,19 +523,61 @@ void CompareWorkspace::stopBlink()
     for (auto *v : m_cellViews)
         if (v)
             v->setVisible(true);
+    // Rebuild the grid layout to restore proper cell positions after blink
+    // may have repositioned cells.
+    rebuildCells();
+    fitAll();
+    update();
 }
 
 void CompareWorkspace::applyBlink(bool state)
 {
     const int n = m_cellViews.size();
-    for (int i = 0; i < n; ++i)
+    if (n == 0)
+        return;
+
+    // For exactly two images, blink looks best when the active image fills the
+    // entire grid area (rather than staying in its own cell slot). We achieve
+    // this by showing only the active cell and stretching it across the grid.
+    if (n == 2 && m_grid && m_layout)
     {
-        if (!m_cellViews[i])
-            continue;
-        if (i == 0)
-            m_cellViews[i]->setVisible(!state);
-        else
-            m_cellViews[i]->setVisible(state);
+        const int activeIdx = state ? 1 : 0;
+        for (int i = 0; i < n; ++i)
+        {
+            if (!m_cellViews[i])
+                continue;
+            m_cellViews[i]->setVisible(i == activeIdx);
+        }
+        // Reposition the active cell to span the entire grid area.
+        for (int i = 0; i < m_layout->count(); ++i)
+        {
+            QLayoutItem *item = m_layout->itemAt(i);
+            if (item && item->widget())
+            {
+                m_layout->removeWidget(item->widget());
+                --i;
+            }
+        }
+        // Re-add the active cell's parent widget spanning the full grid.
+        if (activeIdx < m_cellViews.size() && m_cellViews[activeIdx])
+        {
+            auto *cellWidget = m_cellViews[activeIdx]->parentWidget();
+            if (cellWidget)
+                m_layout->addWidget(cellWidget, 0, 0, -1, -1);
+        }
+    }
+    else
+    {
+        // For 3+ images: toggle visibility of cell 0 vs all others.
+        for (int i = 0; i < n; ++i)
+        {
+            if (!m_cellViews[i])
+                continue;
+            if (i == 0)
+                m_cellViews[i]->setVisible(!state);
+            else
+                m_cellViews[i]->setVisible(state);
+        }
     }
 }
 
@@ -1573,6 +1613,14 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
         event->accept();
         if (auto *dlg = qobject_cast<QDialog *>(window()))
             dlg->reject();
+        return;
+    }
+    // B key: toggle blink compare on/off.
+    if (event->key() == Qt::Key_B && !event->modifiers() && m_blinkChk &&
+        m_blinkChk->isEnabled())
+    {
+        m_blinkChk->setChecked(!m_blinkChk->isChecked());
+        event->accept();
         return;
     }
     // Number keys 1-6 switch the layout preset (parity with the layout combo),
