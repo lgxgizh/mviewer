@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [1.0.3] - 2026-07-24
 
+### Added — 1.0 Release Preparation
+
+- **性能基线更新:** `benchmark/perf_baseline.json` 更新为 2026-07-24 实测值
+  （commit `a930682`，1000-image corpus，全部场景 PASS）。
+  关键指标：B0 冷启动 6.2ms、B2 首缩略图 17.6ms、B8 切换 p50 0.24ms、
+  B10 100MP 视口 710ms。历史记录写入 `benchmark/report/history.csv`，
+  回归报告写入 `benchmark/report/regression_2026-07-24.md`。
+- **安装包验收:** portable zip (24.7 MB) + NSIS installer (24.8 MB) 构建通过，
+  SHA256SUMS + RELEASE_NOTES 自动生成。`qtiff.dll` 确认包含在 imageformats 中。
+
 ### Added — Release automation (M14.8 / B7)
 
 - **SHA256SUMS + 发布说明:** `scripts/release_manifest.ps1` 扫描 `dist/` 产物，

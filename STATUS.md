@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-07-21 · Target: **v1.0.0 Release Candidate** (Beta → 1.0)
+> Snapshot: 2026-07-24 · Target: **v1.0.0 Release Candidate** (Beta → 1.0)
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 
@@ -80,7 +80,7 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 | Browse 门禁 | ✅ | Selection 统一 + 大目录渐进 fetch + 万级缩略图预测窗口 |
 | Workspace 恢复 | ✅ | 布局/缩放/Compare/崩溃恢复（A-6 已落地） |
 | M17 高价值子集 | ✅ | 批量分析导出 / 插件 rescan / 评分过滤导出 |
-| 1.0 发布准备 | 🔄 | 性能实测 + 安装包验收（M14.8 SHA256/notes ✅） |
+| 1.0 发布准备 | ✅ | 性能基线更新 + 安装包验收通过（M14.8 SHA256/notes ✅） |
 
 ## Plugin SDK (frozen)
 
@@ -102,5 +102,6 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 ## Status verdict
 
 The engine is release-grade. Product workflows (browse → compare → analyze → export)
-are closed for Beta. Remaining 1.0 work is release metadata automation, performance
-baseline recording, and package verification — not new architecture.
+are closed for Beta. **1.0 release preparation is complete**: performance baseline
+recorded (2026-07-24, all scenarios PASS), portable zip + NSIS installer verified,
+SHA256SUMS + RELEASE_NOTES generated. Ready for v1.0.0 tag.

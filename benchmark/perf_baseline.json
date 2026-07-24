@@ -1,14 +1,21 @@
 {
   "_comment": "MViewer performance baseline — committed known-good numbers for THIS machine. perf-gate compares current runs against this; regression >10% fails PR. Recalibrate when hardware changes.",
   "schema_version": 1,
-  "date": "2026-07-21",
-  "commit": "perf-regression-QJson",
+  "date": "2026-07-24",
+  "commit": "a930682",
   "metrics": {
-    "B0_cold_start_to_thumbnail_ms": 15.1,
-    "B1_qt_event_loop_probe_ms": 0.03,
-    "B2_first_thumbnail_ms": 10.5,
-    "B8_switch_p50_ms": 0.08,
-    "B8_switch_p95_ms": 0.13,
-    "B8_switch_p99_ms": 0.25
+    "B0_cold_start_to_thumbnail_ms": 6.174,
+    "B1_qt_event_loop_probe_ms": 0.013,
+    "B2_first_thumbnail_ms": 17.570,
+    "B3_decode_p50_ms_jpeg": 17.637,
+    "B4_thumbnails_per_sec": 66.915,
+    "B5_cache_hit_ratio": 0.157,
+    "B6_peak_cache_bytes": 536346624,
+    "B7_switch_warm_p50_ms": 0.241,
+    "B8_switch_p50_ms": 0.241,
+    "B8_switch_p95_ms": 0.471,
+    "B8_switch_p99_ms": 0.635,
+    "B9_baseline_return_ok": 1,
+    "B10_hundred_mp_viewport_ms": 710.223
   }
 }
