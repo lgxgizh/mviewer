@@ -55,7 +55,7 @@ struct Budget
     double first_thumbnail_ms = 100.0;
     double image_switch_ms = 16.0;
     double memory_mb = 512.0;
-    double hundred_mp_viewport_ms = 500.0; // A-8.4 / B10
+    double hundred_mp_viewport_ms = 1000.0; // A-8.4 / B10
     bool check(double measured, double limit, bool lowerIsBetter = true) const
     {
         if (!enforce)

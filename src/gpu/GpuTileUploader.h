@@ -1,96 +1,85 @@
 #pragma once
 
-#include "core/render/TileCache.h" // TileKey
+// M16 / Stage A — GPU tile upload tier (UI layer).
+//
+// Bookkeeping (resident set, LRU eviction) is unit-tested headlessly via
+// injected upload/free callbacks. Real GL upload/free run only when a current
+// QOpenGLContext exists and MVIEWER_GPU=1 is set.
+//
+// Architecture: lives under src/gpu/ (UI boundary). Core/domain stay Qt-free;
+// this module may use Qt OpenGL APIs in .cpp only.
 
-#include <cstddef>
+#include "core/render/TileCache.h"
+
+#include <cstdint>
 #include <functional>
+#include <list>
 #include <string>
 #include <unordered_map>
-#include <vector>
 
-// GpuTileUploader: the GPU memory tier of the Render Pipeline (M16).
-//
-// It mirrors TileCache's CPU LRU but tracks which tiles have been uploaded to
-// OpenGL textures. Decoded tiles are uploaded ONCE; subsequent paints composite
-// from resident GPU textures instead of re-rasterizing / re-converting to
-// QImage on the CPU. This is what keeps 100MP pan/zoom smooth.
-//
-// The component is CAPABILITY-GATED:
-//   * available() probes a real GL context. On a headless/offscreen build it
-//     returns false, so the whole GPU path is a no-op and the verified CPU
-//     compositor (TileCache + QPainter) stays the default.
-//   * The actual GL upload (glTexImage2D) is invoked only inside upload() when
-//     a context exists. Everything else (resident-set tracking, LRU eviction,
-//     re-upload cache hit) is pure logic and is unit-tested headlessly via
-//     injected upload/free callbacks — no GL context required for those tests.
-//
-// Default is OFF; opt in with env MVIEWER_GPU=1 (and a real GL context).
+// Uploads decoded tiles to GPU textures and tracks residency.
+// When no GL context is available (or MVIEWER_GPU is unset), ensure() is a
+// no-op and the CPU QPainter path remains the verified default.
 class GpuTileUploader
 {
   public:
-    // Soft budget: number of tile textures kept resident on the GPU.
-    size_t maxResident = 512;
-
-    // Injected texture callbacks so the bookkeeping is unit-testable without
-    // a GL context. `upload` is given the pixel bytes of the decoded tile and
-    // returns a handle (opaque, e.g. a GL texture id) or 0 on failure.
-    // `free` releases a previously-uploaded handle.
-    using UploadFn = std::function<uintptr_t(const TileKey &, const uint8_t *pixels, int w, int h,
-                                             int channels)>;
+    // Optional injected callbacks for headless tests. When null, real GL
+    // upload/free are used (requires a current QOpenGLContext).
+    using UploadFn = std::function<uintptr_t(const TileKey &key, const uint8_t *pixels, int w,
+                                             int h, int channels)>;
     using FreeFn = std::function<void(uintptr_t handle)>;
 
     GpuTileUploader() = default;
-    GpuTileUploader(UploadFn up, FreeFn fr) : m_upload(std::move(up)), m_free(std::move(fr))
+    explicit GpuTileUploader(UploadFn upload, FreeFn free = {})
+        : m_upload(std::move(upload)), m_free(std::move(free))
     {
     }
 
-    // Probe a real OpenGL context. Returns false on headless/offscreen builds
-    // (no shareable GL context) so the GPU path never activates there.
+    // Soft budget: max resident textures before LRU eviction.
+    int maxResident = 256;
+
+    // True when a real GL context is currently available (or a test injects
+    // upload callbacks). Safe to call headless — never throws.
     static bool available();
 
-    // True when GPU compositing is both supported AND opted in. The caller
-    // (ImageViewer) uses this to choose between the GPU tier and the CPU path.
-    // Opt in with env MVIEWER_GPU=1; requires a real GL context.
-    static bool enabled()
-    {
-        return available() && hasEnvOptIn();
-    }
+    // True when available() AND env MVIEWER_GPU is set to a truthy value
+    // ("1", "true", "yes", "on"). Opt-in only.
+    static bool enabled();
 
-    // Ensure `key` is resident. If already uploaded, it is touched (LRU) and
-    // no upload occurs. Otherwise `pixels` are uploaded via m_upload and the
-    // handle tracked. Returns true if the tile is now resident.
+    // Ensure the tile is resident on the GPU. Returns true if a handle is
+    // available after the call (upload or cache hit). Returns false when the
+    // GPU tier is disabled or upload fails — caller must fall back to CPU.
     bool ensure(const TileKey &key, const uint8_t *pixels, int w, int h, int channels);
 
-    // Release the least-recently-used resident tile if over budget. Returns the
-    // freed handle (0 if none freed).
-    uintptr_t evictOne();
-
-    // Drop all resident textures (e.g. on image switch).
-    void clear();
-
+    // True if the tile currently has a resident GPU handle.
     bool isResident(const TileKey &key) const;
-    size_t residentCount() const
+
+    // GPU texture handle (GLuint cast to uintptr_t), or 0 if not resident.
+    uintptr_t handle(const TileKey &key) const;
+
+    // Number of currently resident textures.
+    int residentCount() const
     {
-        return m_resident.size();
+        return static_cast<int>(m_map.size());
     }
 
-    // Handles for compositing (caller binds the texture). Returns 0 if not
-    // resident.
-    uintptr_t handle(const TileKey &key);
+    // Drop all resident textures (calls free for each).
+    void clear();
 
   private:
-    static bool hasEnvOptIn();
+    struct Entry
+    {
+        uintptr_t handle = 0;
+        std::list<TileKey>::iterator lruIt;
+    };
+
+    void touch(const TileKey &key);
+    void evictIfNeeded();
+    uintptr_t doUpload(const TileKey &key, const uint8_t *pixels, int w, int h, int channels);
+    void doFree(uintptr_t handle);
 
     UploadFn m_upload;
     FreeFn m_free;
-
-    struct Resident
-    {
-        uintptr_t handle = 0;
-        size_t bytes = 0;
-    };
-    std::unordered_map<TileKey, Resident, TileKeyHash> m_resident;
-
-    // LRU ordering of keys (front = most recent).
-    std::vector<TileKey> m_lru;
+    std::unordered_map<TileKey, Entry, TileKeyHash> m_map;
+    std::list<TileKey> m_lru; // front = oldest
 };

@@ -19,6 +19,10 @@
 #include <QMenu>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QMatrix4x4>
+#include <QOpenGLContext>
+#include <QOpenGLFunctions>
+#include <QOpenGLTextureBlitter>
 #include <QPainter>
 #include <QPointer>
 #include <QRect>
@@ -49,12 +53,14 @@ QStringList ImageViewer::listImages(const QString &dirPath)
     return result;
 }
 
-ImageViewer::ImageViewer(QWidget *parent) : QWidget(parent)
+ImageViewer::ImageViewer(QWidget *parent) : QOpenGLWidget(parent)
 {
     setWindowTitle("图片查看");
     setMouseTracking(true);
     setCursor(Qt::OpenHandCursor);
     setMinimumSize(200, 200);
+    // Stage A: QPainter over GL FBO for overlays (histogram / selection).
+    setUpdateBehavior(QOpenGLWidget::NoPartialUpdate);
     // Restore window geometry from the last session.
     QSettings settings;
     const QByteArray geom = settings.value("viewerGeometry").toByteArray();
@@ -76,7 +82,36 @@ ImageViewer::ImageViewer(QWidget *parent) : QWidget(parent)
     });
 }
 
-ImageViewer::~ImageViewer() = default;
+ImageViewer::~ImageViewer()
+{
+    // Stage A: free GPU textures + blitter while the GL context is still current.
+    // Skip if the widget never created a context (never shown).
+    if (context())
+    {
+        makeCurrent();
+        m_gpu.clear();
+        if (m_blitterReady)
+        {
+            m_blitter.destroy();
+            m_blitterReady = false;
+        }
+        doneCurrent();
+    }
+}
+
+void ImageViewer::initializeGL()
+{
+    // Context is now current — capability probe can succeed when MVIEWER_GPU=1.
+    // Stage A composites uploaded textures via QOpenGLTextureBlitter (Qt 6 has
+    // no QPainter::drawTexture).
+    if (QOpenGLFunctions *gl = QOpenGLContext::currentContext()
+                                   ? QOpenGLContext::currentContext()->functions()
+                                   : nullptr)
+    {
+        gl->glClearColor(0.f, 0.f, 0.f, 1.f);
+    }
+    m_blitterReady = m_blitter.create();
+}
 
 void ImageViewer::closeEvent(QCloseEvent *event)
 {
@@ -168,6 +203,14 @@ void ImageViewer::setImage(const QString &path)
                         emitZoom();
                     }
                     m_tileCache.clear(); // drop tiles from any previously viewed image
+                    // Stage A: drop GPU textures for the previous image while
+                    // the GL context is current (UI thread only).
+                    if (context())
+                    {
+                        makeCurrent();
+                        m_gpu.clear();
+                        doneCurrent();
+                    }
                     preloadNeighbors(path);
                     update();
                     emit imageReady(m_frame);
@@ -329,22 +372,57 @@ void ImageViewer::paintEvent(QPaintEvent *event)
                                        m_view.scale < 1.0 ? RenderInterp::Bilinear
                                                           : RenderInterp::Nearest);
             });
-        for (const auto &rt : ready)
+        // Stage A: QOpenGLWidget keeps a GL context current during paintEvent,
+        // so GpuTileUploader::enabled() can succeed when MVIEWER_GPU=1.
+        const bool useGpu = GpuTileUploader::enabled() && m_blitterReady;
+        const QRect viewportRect(0, 0, width(), height());
+
+        // Upload + GPU composite phase (native GL). Must not interleave with
+        // QPainter draws — beginNativePainting brackets all GL work.
+        if (useGpu)
         {
-            // M16: when the GPU tier is enabled (real GL context +
-            // MVIEWER_GPU=1), ensure the decoded tile is uploaded to a
-            // resident texture exactly once; re-paints composite from the
-            // handle instead of re-converting to QImage on the CPU. The
-            // upload is a no-op when disabled (CPU path stays the default
-            // and is the verified-green fallback everywhere, including here).
-            if (GpuTileUploader::enabled())
+            painter.beginNativePainting();
+            for (const auto &rt : ready)
             {
+                if (rt.data.isNull())
+                    continue;
                 const ImageBuffer view = rt.data.view();
                 m_gpu.ensure(rt.key, view.data, view.width, view.height, view.channelsPerPixel());
             }
-            // Compute on-screen rect for this tile's LOD/source region.
-            // When tiles were decoded in device space, convert back to logical
-            // widget coords for QPainter (which works in logical pixels).
+            m_blitter.bind();
+            for (const auto &rt : ready)
+            {
+                const auto hnd = m_gpu.handle(rt.key);
+                if (hnd == 0)
+                    continue;
+                int tsx, tsy, tsw, tsh;
+                tileView.imageRectToScreen(rt.key.col * m_tiles.tileSize * (1 << rt.key.lod),
+                                           rt.key.row * m_tiles.tileSize * (1 << rt.key.lod),
+                                           TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod),
+                                           TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod),
+                                           tsx, tsy, tsw, tsh);
+                if (dpr > 1.0)
+                {
+                    tsx = static_cast<int>(std::lround(tsx / dpr));
+                    tsy = static_cast<int>(std::lround(tsy / dpr));
+                    tsw = static_cast<int>(std::lround(tsw / dpr));
+                    tsh = static_cast<int>(std::lround(tsh / dpr));
+                }
+                const QRect dst(tsx, tsy, tsw, tsh);
+                const QMatrix4x4 target =
+                    QOpenGLTextureBlitter::targetTransform(dst, viewportRect);
+                m_blitter.blit(static_cast<GLuint>(hnd), target,
+                               QOpenGLTextureBlitter::OriginTopLeft);
+            }
+            m_blitter.release();
+            painter.endNativePainting();
+        }
+
+        // CPU fallback for tiles that are not GPU-resident (or GPU off).
+        for (const auto &rt : ready)
+        {
+            if (useGpu && m_gpu.handle(rt.key) != 0)
+                continue; // already drawn via blitter
             int tsx, tsy, tsw, tsh;
             tileView.imageRectToScreen(rt.key.col * m_tiles.tileSize * (1 << rt.key.lod),
                                        rt.key.row * m_tiles.tileSize * (1 << rt.key.lod),

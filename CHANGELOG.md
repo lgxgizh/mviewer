@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [1.0.3] - 2026-07-24
 
+### Added — GPU Stage A (M13 / A-8.1)
+
+- **QOpenGLWidget 查看器:** `ImageViewer` 改为继承 `QOpenGLWidget`，为 GPU
+  tile 上传提供真实 GL 上下文。(`src/imageviewer.h`, `src/imageviewer.cpp`)
+- **真实 GL 纹理上传:** `GpuTileUploader` 在 `MVIEWER_GPU=1` 且上下文可用时
+  通过 `glTexImage2D` 上传 tile，并用 `QOpenGLTextureBlitter` 合成；失败或
+  未开启时回退 CPU `drawImage`。(`src/gpu/GpuTileUploader.{h,cpp}`)
+- **链接 Qt OpenGL:** `mviewer_ui` 链接 `Qt6::OpenGL` / `Qt6::OpenGLWidgets`。
+
 ### Fixed — 体验问题修复
 
 - **菜单打开目录后目录树不更新:** 点击菜单"打开目录"选择新目录后，左侧目录树、

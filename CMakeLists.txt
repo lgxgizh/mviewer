@@ -24,7 +24,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # src/CMakeLists.txt register into the generated CTestTestfile.
 enable_testing()
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGL OpenGLWidgets)
 
 add_subdirectory(src)
 add_subdirectory(plugins/example)

@@ -6,9 +6,10 @@
 #include "core/render/Viewport.h"
 #include "gpu/GpuTileUploader.h"
 
+#include <QOpenGLTextureBlitter>
+#include <QOpenGLWidget>
 #include <QPixmap>
 #include <QStringList>
-#include <QWidget>
 #include <memory>
 #include <optional>
 
@@ -18,7 +19,12 @@ class QTimer;
 // double-clicks a thumbnail (or single-clicks the bottom-left preview).
 // Supports wheel zoom, left-drag pan, brightness histogram overlay, and
 // a LRU cache of decoded pixmaps.
-class ImageViewer : public QWidget
+//
+// Stage A (M13 / A-8.1): inherits QOpenGLWidget so a real GL context exists
+// for GpuTileUploader. When MVIEWER_GPU=1 and a context is current, tiles are
+// uploaded once and composited via QPainter::drawTexture; otherwise the CPU
+// QPainter path remains the verified default.
+class ImageViewer : public QOpenGLWidget
 {
     Q_OBJECT
 
@@ -84,6 +90,7 @@ class ImageViewer : public QWidget
     void analysisRequested(const QString &analyzerId);
 
   protected:
+    void initializeGL() override;
     void paintEvent(QPaintEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
@@ -124,13 +131,15 @@ class ImageViewer : public QWidget
     // callback calls RenderEngine (core/), never QWidget.
     TileCache m_tileCache;
 
-    // M16: GPU upload tier (opt-in, capability-gated). When enabled
+    // M16 / Stage A: GPU upload tier (opt-in, capability-gated). When enabled
     // (real GL context + MVIEWER_GPU=1), decoded tiles are uploaded to
-    // GL textures once and composited from resident handles; otherwise this
-    // stays idle and the CPU QPainter path above is used. Bookkeeping is
+    // GL textures once and composited via QOpenGLTextureBlitter; otherwise
+    // this stays idle and the CPU QPainter path is used. Bookkeeping is
     // unit-tested headlessly; the actual GL upload runs only where a
     // context exists.
     GpuTileUploader m_gpu;
+    QOpenGLTextureBlitter m_blitter;
+    bool m_blitterReady = false;
 
     bool m_dragging = false;
     QPoint m_lastMousePos;

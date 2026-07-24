@@ -88,7 +88,7 @@ add_library(mviewer_core SHARED
     core/trace/TraceSink.cpp
 )
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Sql)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Sql OpenGL OpenGLWidgets)
 # psapi: provides GetProcessMemoryInfo used by core/perf/MemoryTracker for the
 # OS working-set (RSS) sample. Windows-only; harmless on other platforms.
 target_link_libraries(mviewer_core PRIVATE Qt6::Widgets Qt6::Sql $<$<PLATFORM_ID:Windows>:psapi>)
@@ -129,7 +129,13 @@ add_library(mviewer_ui STATIC
     gpu/GpuTileUploader.cpp
 )
 
-target_link_libraries(mviewer_ui PUBLIC Qt6::Widgets mviewer_core mviewer_application)
+target_link_libraries(mviewer_ui PUBLIC
+    Qt6::Widgets
+    Qt6::OpenGL
+    Qt6::OpenGLWidgets
+    mviewer_core
+    mviewer_application
+)
 
 target_compile_features(mviewer_ui PUBLIC cxx_std_20)
 

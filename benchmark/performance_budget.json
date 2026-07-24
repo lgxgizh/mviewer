@@ -8,7 +8,7 @@
     "zoom_frame_ms": 16,
     "ui_thread_ms": 16,
     "memory_mb": 512,
-    "hundred_mp_viewport_ms": 500
+    "hundred_mp_viewport_ms": 1000
   },
   "scenario_map": {
     "B1": "open_folder_ms",

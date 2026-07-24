@@ -1,151 +1,185 @@
 #include "gpu/GpuTileUploader.h"
 
-#include <QCoreApplication>
-#include <QGuiApplication>
+#include <QByteArray>
 #include <QOpenGLContext>
+#include <QOpenGLFunctions>
 #include <cstdlib>
+#include <cstring>
 
-namespace
-{
-
-// Headless-safe GL probe. On a real display with a GL context this returns
-// true; on offscreen/no-shareable-context builds it returns false so the
-// entire GPU path stays a no-op and the verified CPU compositor is used.
-bool glContextAvailable()
-{
-    // Opt-in gate is checked by the caller (enabled()); this only answers
-    // "is a GL context actually usable here?". We probe lazily and cache.
-    // Without Qt OpenGL headers linked we must not assume a context; the
-    // build links Qt6::OpenGL only in the UI tier, so a probe that needs
-    // a live context safely reports unavailable when none can be created.
-    // Kept simple + safe: report based on whether Qt reported OpenGL
-    // support at startup. On offscreen platforms that is false.
-#if defined(QT_NO_OPENGL)
-    return false;
-#else
-    // Safe capability probe. A GL context can only exist under a real GUI
-    // platform. Under QCoreApplication (unit tests) or the offscreen platform
-    // (headless CI) there is no GL integration, and attempting ctx.create()
-    // there is undefined (historically crashes). So we report false and keep
-    // the CPU compositor as the verified default in those environments.
-    // Stage A's actual texture upload still requires a QOpenGLWidget host
-    // (deferred per the M13 RFC) — this only answers "is GL usable here?".
-    QCoreApplication *app = QCoreApplication::instance();
-    if (!qobject_cast<QGuiApplication *>(app) || QGuiApplication::platformName() == "offscreen")
-    {
-        return false;
-    }
-    static const bool can = []
-    {
-        QOpenGLContext ctx;
-        return ctx.create();
-    }();
-    return can;
-#endif
-}
-
-} // namespace
+// ─── capability probes ───────────────────────────────────────────────────────
 
 bool GpuTileUploader::available()
 {
-    return glContextAvailable();
+    // A current QOpenGLContext means we can issue GL calls (real Stage A host
+    // or a test that made a context current). Headless QCoreApplication /
+    // offscreen without GL returns false — CPU path stays the default.
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    return ctx != nullptr && ctx->isValid();
 }
 
-bool GpuTileUploader::hasEnvOptIn()
+bool GpuTileUploader::enabled()
 {
-    const char *v = std::getenv("MVIEWER_GPU");
-    return v != nullptr && v[0] != '\0' && v[0] != '0';
+    if (!available())
+        return false;
+    const char *env = std::getenv("MVIEWER_GPU");
+    if (!env || env[0] == '\0')
+        return false;
+    // Accept common truthy spellings.
+    if (std::strcmp(env, "1") == 0 || std::strcmp(env, "true") == 0 ||
+        std::strcmp(env, "TRUE") == 0 || std::strcmp(env, "yes") == 0 ||
+        std::strcmp(env, "YES") == 0 || std::strcmp(env, "on") == 0 ||
+        std::strcmp(env, "ON") == 0)
+        return true;
+    return false;
 }
+
+// ─── residency ───────────────────────────────────────────────────────────────
 
 bool GpuTileUploader::ensure(const TileKey &key, const uint8_t *pixels, int w, int h, int channels)
 {
-    auto it = m_resident.find(key);
-    if (it != m_resident.end())
+    // Injected callbacks (unit tests) always run; real GL path only when
+    // enabled() so the CPU compositor remains the verified default.
+    const bool useInjected = static_cast<bool>(m_upload);
+    if (!useInjected && !enabled())
+        return false;
+
+    auto it = m_map.find(key);
+    if (it != m_map.end())
     {
-        // Touch (LRU): move to front.
-        for (size_t i = 0; i < m_lru.size(); ++i)
-        {
-            if (m_lru[i] == key)
-            {
-                if (i != 0)
-                {
-                    TileKey k = m_lru[i];
-                    m_lru.erase(m_lru.begin() + static_cast<ptrdiff_t>(i));
-                    m_lru.insert(m_lru.begin(), k);
-                }
-                break;
-            }
-        }
-        return true;
+        touch(key);
+        return it->second.handle != 0;
     }
 
-    const uintptr_t tex = m_upload ? m_upload(key, pixels, w, h, channels) : 0;
-    if (tex == 0)
-        return false; // upload failed -> not resident (CPU fallback handles it)
+    if (w <= 0 || h <= 0 || channels <= 0)
+        return false;
+    // Real GL upload needs pixel data; injected tests may pass nullptr.
+    if (!useInjected && !pixels)
+        return false;
 
-    Resident r;
-    r.handle = tex;
-    r.bytes = static_cast<size_t>(w) * static_cast<size_t>(h) * static_cast<size_t>(channels);
-    m_resident[key] = r;
-    m_lru.insert(m_lru.begin(), key);
+    const uintptr_t hnd = doUpload(key, pixels, w, h, channels);
+    if (hnd == 0)
+        return false;
 
-    // Enforce budget.
-    while (m_resident.size() > maxResident)
-        evictOne();
-
+    m_lru.push_back(key);
+    Entry e;
+    e.handle = hnd;
+    e.lruIt = std::prev(m_lru.end());
+    m_map.emplace(key, e);
+    evictIfNeeded();
     return true;
-}
-
-uintptr_t GpuTileUploader::evictOne()
-{
-    if (m_lru.empty())
-        return 0;
-    const TileKey victim = m_lru.back();
-    m_lru.pop_back();
-    auto it = m_resident.find(victim);
-    if (it == m_resident.end())
-        return 0;
-    const uintptr_t h = it->second.handle;
-    if (m_free)
-        m_free(h);
-    m_resident.erase(it);
-    return h;
-}
-
-void GpuTileUploader::clear()
-{
-    if (m_free)
-    {
-        for (const auto &kv : m_resident)
-            m_free(kv.second.handle);
-    }
-    m_resident.clear();
-    m_lru.clear();
 }
 
 bool GpuTileUploader::isResident(const TileKey &key) const
 {
-    return m_resident.find(key) != m_resident.end();
+    return m_map.find(key) != m_map.end();
 }
 
-uintptr_t GpuTileUploader::handle(const TileKey &key)
+uintptr_t GpuTileUploader::handle(const TileKey &key) const
 {
-    auto it = m_resident.find(key);
-    if (it == m_resident.end())
-        return 0;
-    // Touch LRU on read too.
-    for (size_t i = 0; i < m_lru.size(); ++i)
+    auto it = m_map.find(key);
+    return it == m_map.end() ? 0 : it->second.handle;
+}
+
+void GpuTileUploader::clear()
+{
+    for (auto &kv : m_map)
+        doFree(kv.second.handle);
+    m_map.clear();
+    m_lru.clear();
+}
+
+void GpuTileUploader::touch(const TileKey &key)
+{
+    auto it = m_map.find(key);
+    if (it == m_map.end())
+        return;
+    m_lru.erase(it->second.lruIt);
+    m_lru.push_back(key);
+    it->second.lruIt = std::prev(m_lru.end());
+}
+
+void GpuTileUploader::evictIfNeeded()
+{
+    while (static_cast<int>(m_map.size()) > maxResident && !m_lru.empty())
     {
-        if (m_lru[i] == key)
-        {
-            if (i != 0)
-            {
-                TileKey k = m_lru[i];
-                m_lru.erase(m_lru.begin() + static_cast<ptrdiff_t>(i));
-                m_lru.insert(m_lru.begin(), k);
-            }
-            break;
-        }
+        const TileKey oldest = m_lru.front();
+        m_lru.pop_front();
+        auto it = m_map.find(oldest);
+        if (it == m_map.end())
+            continue;
+        doFree(it->second.handle);
+        m_map.erase(it);
     }
-    return it->second.handle;
+}
+
+uintptr_t GpuTileUploader::doUpload(const TileKey &key, const uint8_t *pixels, int w, int h,
+                                    int channels)
+{
+    if (m_upload)
+        return m_upload(key, pixels, w, h, channels);
+
+    // Real GL path — requires a current context (Stage A host).
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    if (!ctx || !ctx->isValid() || !pixels)
+        return 0;
+    QOpenGLFunctions *gl = ctx->functions();
+    if (!gl)
+        return 0;
+
+    GLenum format = GL_RGBA;
+    GLenum internal = GL_RGBA;
+    if (channels == 1)
+    {
+        format = GL_RED;
+        internal = GL_R8;
+    }
+    else if (channels == 3)
+    {
+        format = GL_RGB;
+        internal = GL_RGB;
+    }
+    else if (channels == 4)
+    {
+        format = GL_RGBA;
+        internal = GL_RGBA;
+    }
+    else
+    {
+        return 0;
+    }
+
+    GLuint tex = 0;
+    gl->glGenTextures(1, &tex);
+    if (tex == 0)
+        return 0;
+    gl->glBindTexture(GL_TEXTURE_2D, tex);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // Tight packing for odd widths (common on edge tiles).
+    gl->glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    gl->glTexImage2D(GL_TEXTURE_2D, 0, static_cast<GLint>(internal), w, h, 0, format,
+                     GL_UNSIGNED_BYTE, pixels);
+    gl->glBindTexture(GL_TEXTURE_2D, 0);
+    return static_cast<uintptr_t>(tex);
+}
+
+void GpuTileUploader::doFree(uintptr_t handle)
+{
+    if (handle == 0)
+        return;
+    if (m_free)
+    {
+        m_free(handle);
+        return;
+    }
+    QOpenGLContext *ctx = QOpenGLContext::currentContext();
+    if (!ctx || !ctx->isValid())
+        return;
+    QOpenGLFunctions *gl = ctx->functions();
+    if (!gl)
+        return;
+    GLuint tex = static_cast<GLuint>(handle);
+    gl->glDeleteTextures(1, &tex);
 }

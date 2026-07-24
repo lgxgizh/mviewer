@@ -38,9 +38,11 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   `plugins/example` (loaded and round-trip verified by `pluginregistry_tests`).
 - **Robustness**: opt-in Windows minidump crash handler (env `MVIEWER_CRASH_DUMP=1`);
   `--selftest` headless decode→metadata gate (CTest `selftest`).
-- **GPU**: `GpuTileUploader::available()` performs a real, safe GL-context probe
-  and returns false under `QCoreApplication`/offscreen; the CPU compositor is the
-  verified default.
+- **GPU Stage A**: `ImageViewer` is a `QOpenGLWidget`; `GpuTileUploader` uploads
+  tiles via real `glTexImage2D` when `MVIEWER_GPU=1` and a context is current,
+  then composites with `QOpenGLTextureBlitter`. `available()` probes the current
+  GL context (false under headless/`QCoreApplication`); CPU `drawImage` remains
+  the verified default when GPU is off or upload fails.
 - **UX polish (2026-07-23)**: viewer zoom command system (`+`/`-`/`0`/`1`, double-click
   fit↔100%, fit-follows-resize), ESC/F11 fullscreen handling, mouse back/forward
   navigation, wrap-around prev/next, slideshow (`S`, 3 s loop), open-file dialog
@@ -61,15 +63,13 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 - Full RAW demosaic (libraw).
 - GPU Stage C/D: D3D11/Vulkan direct compositing (UI boundary frozen).
 - Linux/macOS native installers (Linux CI artifacts build; only Windows ships an installer).
-- Full GPU Stage A (QOpenGLWidget direct compositing) — CPU tile path + HiDPI
-  tile decode remain the default; opt-in via `MVIEWER_GPU=1`.
+- GPU Stage B/C/D: custom shaders, multi-pass, D3D11/Vulkan (UI boundary frozen).
 - **M14.8**: release pipeline SHA256 manifest + auto-generated changelog.
 
 ## Known gaps
 
 - RAW = preview-only (no demosaic); some large/edge RAW containers may fall through to the fallback decoder.
-- GPU tile-upload host (QOpenGLWidget, Stage A) deferred per the M13 RFC;
-  HiDPI-aware CPU tile decode is active.
+- GPU Stage A is opt-in (`MVIEWER_GPU=1`); default remains CPU tile path + HiDPI decode.
 
 ## Plugin SDK (frozen)
 
