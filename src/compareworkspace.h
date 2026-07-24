@@ -146,8 +146,11 @@ class CompareWorkspace : public QWidget
     QCheckBox *m_swipeChk = nullptr;
     double m_splitPos = 0.5;
     bool m_splitDragging = false;
+    // A-4.1: Overlay compare mode — semi-transparent blend of the two images.
+    QCheckBox *m_overlayChk = nullptr;
     void drawSplitCompare(QPainter &p);
     void drawSwipeCompare(QPainter &p, int x);
+    void drawOverlayCompare(QPainter &p);
     void drawFitImage(QPainter &p, const QImage &img, const QRect &target);
 
     // M15: difference threshold

@@ -347,7 +347,40 @@ void MainWindow::setupUi()
     sortCombo->addItem("日期", ThumbnailPanel::SortDate);
     sortCombo->addItem("大小", ThumbnailPanel::SortSize);
     sortCombo->addItem("分辨率", ThumbnailPanel::SortResolution);
+    sortCombo->addItem("类型", ThumbnailPanel::SortType);   // A-2.2
+    sortCombo->addItem("评分", ThumbnailPanel::SortRating); // A-2.2
     sortLayout->addWidget(sortCombo);
+
+    // A-2.2: sort direction toggle (ascending / descending).
+    auto *sortDirBtn = new QPushButton("↑", sortBar);
+    sortDirBtn->setFixedWidth(28);
+    sortDirBtn->setCheckable(true);
+    sortDirBtn->setToolTip("切换升序/降序");
+    sortLayout->addWidget(sortDirBtn);
+    connect(sortDirBtn, &QPushButton::toggled, this,
+            [this, sortDirBtn](bool descending)
+            {
+                sortDirBtn->setText(descending ? "↓" : "↑");
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->setSortAscending(!descending);
+            });
+
+    // A-2.3: file-type quick filter buttons.
+    auto *typeFilterCombo = new QComboBox(sortBar);
+    typeFilterCombo->addItem("全部类型", "");
+    typeFilterCombo->addItem("JPG", "jpg,jpeg");
+    typeFilterCombo->addItem("PNG", "png");
+    typeFilterCombo->addItem("TIFF", "tif,tiff");
+    typeFilterCombo->addItem("WebP", "webp");
+    typeFilterCombo->addItem("RAW", "cr2,cr3,nef,nrw,arw,dng,orf,rw2,pef,raf");
+    typeFilterCombo->setToolTip("按文件类型过滤");
+    sortLayout->addWidget(typeFilterCombo);
+    connect(typeFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this, typeFilterCombo]()
+            {
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->setTypeFilter(typeFilterCombo->currentData().toString());
+            });
 
     // P0-2: View mode switcher (Grid / Large / Small / Detail / Filmstrip / Compact)
     auto *viewModeCombo = new QComboBox(sortBar);

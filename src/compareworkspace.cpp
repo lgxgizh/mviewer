@@ -138,6 +138,8 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
             {
                 if (on && m_swipeChk)
                     m_swipeChk->setChecked(false);
+                if (on && m_overlayChk)
+                    m_overlayChk->setChecked(false);
                 if (m_grid)
                     m_grid->setVisible(!isSplitOrSwipe());
                 update();
@@ -151,11 +153,29 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
             {
                 if (on && m_splitChk)
                     m_splitChk->setChecked(false);
+                if (on && m_overlayChk)
+                    m_overlayChk->setChecked(false);
                 if (m_grid)
                     m_grid->setVisible(!isSplitOrSwipe());
                 update();
             });
     syncLayout->addWidget(m_swipeChk);
+
+    // A-4.1: Overlay compare mode — semi-transparent blend of the two images.
+    m_overlayChk = new QCheckBox("叠加对比(&O)", this);
+    m_overlayChk->setEnabled(false);
+    connect(m_overlayChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                if (on && m_splitChk)
+                    m_splitChk->setChecked(false);
+                if (on && m_swipeChk)
+                    m_swipeChk->setChecked(false);
+                if (m_grid)
+                    m_grid->setVisible(!on && !isSplitOrSwipe());
+                update();
+            });
+    syncLayout->addWidget(m_overlayChk);
 
     // M15: threshold slider for difference heatmap (0-255).
     auto *thresholdLabel = new QLabel("阈值:", this);
@@ -340,6 +360,13 @@ void CompareWorkspace::setImages(const QStringList &paths)
         if (!two)
             m_swipeChk->setChecked(false);
         m_swipeChk->setEnabled(two);
+    }
+    // A-4.1: overlay mode also only for two images.
+    if (m_overlayChk)
+    {
+        if (!two)
+            m_overlayChk->setChecked(false);
+        m_overlayChk->setEnabled(two);
     }
     if (m_grid && !two)
         m_grid->setVisible(true);
@@ -883,7 +910,8 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
     }
 
     // P0-4: split / swipe overlay for two images.
-    if (n == 2 && isSplitOrSwipe() && m_cellViews.size() >= 2)
+    if (n == 2 && (isSplitOrSwipe() || (m_overlayChk && m_overlayChk->isChecked())) &&
+        m_cellViews.size() >= 2)
     {
         QPainter p(this);
         p.setRenderHint(QPainter::SmoothPixmapTransform);
@@ -891,6 +919,8 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
             drawSplitCompare(p);
         else if (m_swipeChk && m_swipeChk->isChecked())
             drawSwipeCompare(p, int(width() * m_splitPos));
+        else if (m_overlayChk && m_overlayChk->isChecked())
+            drawOverlayCompare(p);
     }
 }
 
@@ -921,6 +951,26 @@ void CompareWorkspace::drawSwipeCompare(QPainter &p, int x)
     p.drawLine(QPoint(x, 0), QPoint(x, r.height()));
     p.setBrush(QColor(255, 255, 255));
     p.drawEllipse(QPoint(x, r.height() / 2), 4, 4);
+}
+
+// A-4.1: semi-transparent overlay blend of two images.
+void CompareWorkspace::drawOverlayCompare(QPainter &p)
+{
+    if (m_cellViews.size() < 2)
+        return;
+    const QRect r = rect();
+    const QRect left(r.topLeft(), QSize(r.width() / 2, r.height()));
+    const QRect right(left.topRight() + QPoint(1, 0),
+                      QSize(r.width() - left.width() - 1, r.height()));
+    const QImage &img0 = m_cellViews[0]->image();
+    const QImage &img1 = m_cellViews[1]->image();
+    drawFitImage(p, img0, left);
+    drawFitImage(p, img1, right);
+    p.setOpacity(0.35);
+    p.setCompositionMode(QPainter::CompositionMode_SourceAtop);
+    p.drawImage(right.translated(right.width(), 0), img1);
+    p.setOpacity(1.0);
+    p.setCompositionMode(QPainter::CompositionMode_SourceOver);
 }
 
 void CompareWorkspace::drawFitImage(QPainter &p, const QImage &img, const QRect &target)

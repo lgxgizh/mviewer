@@ -44,7 +44,9 @@ class ThumbnailPanel : public QListView
         SortName,
         SortDate,
         SortSize,
-        SortResolution
+        SortResolution,
+        SortType,   // A-2.2: sort by file extension
+        SortRating  // A-2.2: sort by star rating
     };
 
     enum ViewMode
@@ -73,6 +75,19 @@ class ThumbnailPanel : public QListView
     // recentring jank when the user clicked an already-visible thumbnail).
     void selectPath(const QString &path);
     void setSortMode(SortMode mode);
+    // A-2.2: toggle ascending/descending sort order.
+    void setSortAscending(bool ascending);
+    bool sortAscending() const
+    {
+        return m_sortAscending;
+    }
+    // A-2.3: filter by file type (e.g. "jpg", "png", "raw"). Empty = all types.
+    // Multiple types can be OR-ed via comma: "jpg,png,tiff".
+    void setTypeFilter(const QString &types);
+    QString typeFilter() const
+    {
+        return m_typeFilter;
+    }
     void setViewMode(ViewMode mode);
     ViewMode viewMode() const
     {
@@ -182,7 +197,7 @@ class ThumbnailPanel : public QListView
     void updateVisibleRange();
     void onCompareClicked();
 
-    static QFileInfoList sortedEntries(const QDir &dir, SortMode mode);
+    static QFileInfoList sortedEntries(const QDir &dir, SortMode mode, bool ascending = true);
     void contextMenuEvent(QContextMenuEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
@@ -212,6 +227,8 @@ class ThumbnailPanel : public QListView
     QPushButton *m_compareBtn = nullptr;
     QString m_currentDir;
     SortMode m_sortMode = SortName;
+    bool m_sortAscending = true; // A-2.2: sort direction
+    QString m_typeFilter;        // A-2.3: comma-separated type filter
     ViewMode m_viewMode = Thumbnail;
     int m_thumbSize = kDefaultThumbSize; // M15: dynamic thumb size
     QString m_filterText;
