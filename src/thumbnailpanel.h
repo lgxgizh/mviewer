@@ -22,6 +22,7 @@ class QPushButton;
 class QContextMenuEvent;
 class QResizeEvent;
 class QStringListModel;
+class CommandStack;
 
 // Virtualized thumbnail gallery (P0 #①/#②).
 //
@@ -151,6 +152,14 @@ class ThumbnailPanel : public QListView
     void moveSelectedTo();
     void revealSelected();
 
+    // A-10: reversible file ops via CommandStack. When set, rename/delete/move
+    // go through the stack so Ctrl+Z can reverse them. When null, falls back
+    // to the irreversible direct path (tests / headless).
+    void setCommandStack(class CommandStack *stack)
+    {
+        m_cmdStack = stack;
+    }
+
     // M13.4: run a chosen analyzer over every selected image and export the
     // structured per-image metrics to CSV/JSON. Drives core AnalyzerRegistry.
     void batchAnalyzeExport();
@@ -226,6 +235,7 @@ class ThumbnailPanel : public QListView
 
     QPushButton *m_compareBtn = nullptr;
     QString m_currentDir;
+    CommandStack *m_cmdStack = nullptr; // A-10: optional reversible file ops
     SortMode m_sortMode = SortName;
     bool m_sortAscending = true; // A-2.2: sort direction
     QString m_typeFilter;        // A-2.3: comma-separated type filter

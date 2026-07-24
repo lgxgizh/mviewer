@@ -2,6 +2,7 @@
 
 #include "appstate.h"
 #include "core/command/CommandRegistry.h"
+#include "core/command/CommandStack.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
 #include <QKeyEvent>
@@ -59,6 +60,9 @@ class MainWindow : public QMainWindow
     void dropEvent(QDropEvent *event) override;
     void dragLeaveEvent(QDragLeaveEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
+    // A-5: keep floating MetadataPanel docked to the right edge on move/resize.
+    void moveEvent(QMoveEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
     // P0-3: intercept image-viewer mouse events for metadata overlay triggers.
     bool eventFilter(QObject *watched, QEvent *event) override;
 
@@ -146,6 +150,12 @@ class MainWindow : public QMainWindow
     QAction *m_actBatch = nullptr;
     QAction *m_actPluginSettings = nullptr;
     QAction *m_actToggleMetadata = nullptr;
+    // A-10: Undo/Redo via CommandStack.
+    QAction *m_actUndo = nullptr;
+    QAction *m_actRedo = nullptr;
+    CommandStack m_cmdStack;
+    void updateUndoRedoActions();
+    void positionMetadataPanel();
     // Zoom / fullscreen view commands (forwarded to the image viewer).
     QAction *m_actZoomIn = nullptr;
     QAction *m_actZoomOut = nullptr;

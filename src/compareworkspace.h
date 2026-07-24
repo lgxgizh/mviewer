@@ -91,6 +91,16 @@ class CompareWorkspace : public QWidget
         return m_engine.imageCount();
     }
 
+    // A-4.5: continuous compare — set the full image list so Next/Prev Pair
+    // can walk through consecutive pairs without reopening the dialog.
+    void setImagePool(const QStringList &allPaths);
+    bool hasNextPair() const;
+    bool hasPrevPair() const;
+
+  public slots:
+    void nextPair();
+    void prevPair();
+
   signals:
     void syncToggled(bool on);
     // Hover pixel read from any cell, formatted for the status bar. Empty string clears.
@@ -152,6 +162,13 @@ class CompareWorkspace : public QWidget
     void drawSwipeCompare(QPainter &p, int x);
     void drawOverlayCompare(QPainter &p);
     void drawFitImage(QPainter &p, const QImage &img, const QRect &target);
+
+    // A-4.5: continuous compare — walk consecutive pairs from a pool.
+    QStringList m_imagePool;
+    int m_pairIndex = 0; // index of the first image of the current pair
+    QPushButton *m_prevPairBtn = nullptr;
+    QPushButton *m_nextPairBtn = nullptr;
+    void updatePairButtons();
 
     // M15: difference threshold
     QSlider *m_thresholdSlider = nullptr;

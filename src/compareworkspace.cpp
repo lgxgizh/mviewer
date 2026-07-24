@@ -177,6 +177,19 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
             });
     syncLayout->addWidget(m_overlayChk);
 
+    // A-4.5: continuous compare — walk consecutive pairs without reopening.
+    m_prevPairBtn = new QPushButton("◀ 上一对", this);
+    m_prevPairBtn->setToolTip(tr("比较上一对图片 (PageUp)"));
+    m_prevPairBtn->setEnabled(false);
+    connect(m_prevPairBtn, &QPushButton::clicked, this, &CompareWorkspace::prevPair);
+    syncLayout->addWidget(m_prevPairBtn);
+
+    m_nextPairBtn = new QPushButton("下一对 ▶", this);
+    m_nextPairBtn->setToolTip(tr("比较下一对图片 (PageDown)"));
+    m_nextPairBtn->setEnabled(false);
+    connect(m_nextPairBtn, &QPushButton::clicked, this, &CompareWorkspace::nextPair);
+    syncLayout->addWidget(m_nextPairBtn);
+
     // M15: threshold slider for difference heatmap (0-255).
     auto *thresholdLabel = new QLabel("阈值:", this);
     syncLayout->addWidget(thresholdLabel);
@@ -332,6 +345,52 @@ CompareWorkspace::~CompareWorkspace()
     // widget and crash. The subscription id is stored in m_diffSubId.
     if (m_diffSubId != 0)
         EventBus::instance().unsubscribe(m_diffSubId);
+}
+
+// A-4.5: continuous compare — walk consecutive pairs from a pool.
+void CompareWorkspace::setImagePool(const QStringList &allPaths)
+{
+    m_imagePool = allPaths;
+    m_pairIndex = 0;
+    updatePairButtons();
+}
+
+bool CompareWorkspace::hasNextPair() const
+{
+    return m_pairIndex + 3 < m_imagePool.size(); // need at least pairIndex+2 and +3
+}
+
+bool CompareWorkspace::hasPrevPair() const
+{
+    return m_pairIndex >= 2;
+}
+
+void CompareWorkspace::nextPair()
+{
+    if (!hasNextPair())
+        return;
+    m_pairIndex += 2;
+    const QStringList pair{m_imagePool[m_pairIndex], m_imagePool[m_pairIndex + 1]};
+    setImages(pair);
+    updatePairButtons();
+}
+
+void CompareWorkspace::prevPair()
+{
+    if (!hasPrevPair())
+        return;
+    m_pairIndex -= 2;
+    const QStringList pair{m_imagePool[m_pairIndex], m_imagePool[m_pairIndex + 1]};
+    setImages(pair);
+    updatePairButtons();
+}
+
+void CompareWorkspace::updatePairButtons()
+{
+    if (m_nextPairBtn)
+        m_nextPairBtn->setEnabled(hasNextPair());
+    if (m_prevPairBtn)
+        m_prevPairBtn->setEnabled(hasPrevPair());
 }
 
 void CompareWorkspace::setImages(const QStringList &paths)
@@ -1663,6 +1722,19 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
         event->accept();
         if (auto *dlg = qobject_cast<QDialog *>(window()))
             dlg->reject();
+        return;
+    }
+    // A-4.5: PageDown / PageUp walk consecutive pairs in continuous compare.
+    if (event->key() == Qt::Key_PageDown && !event->modifiers())
+    {
+        nextPair();
+        event->accept();
+        return;
+    }
+    if (event->key() == Qt::Key_PageUp && !event->modifiers())
+    {
+        prevPair();
+        event->accept();
         return;
     }
     // B key: toggle blink compare on/off.

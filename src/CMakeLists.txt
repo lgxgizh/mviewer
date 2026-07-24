@@ -77,6 +77,9 @@ add_library(mviewer_core SHARED
     core/command/CompareCommand.cpp
     core/command/RenameCommand.cpp
     core/command/DeleteCommand.cpp
+    core/command/FileDeleteCommand.cpp
+    core/command/FileRenameCommand.cpp
+    core/command/FileMoveCommand.cpp
     core/command/ToggleHistogramCommand.cpp
     core/command/CallbackCommand.cpp
     core/benchmark/Benchmark.cpp

@@ -14,6 +14,7 @@
 #include "core/command/OpenDirectoryCommand.h"
 #include "core/command/RenameCommand.h"
 #include "core/command/ToggleHistogramCommand.h"
+// A-10: CommandStack is included via mainwindow.h
 #include "core/export/ExportManager.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
@@ -68,8 +69,10 @@
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QMimeData>
+#include <QMoveEvent>
 #include <QPainter>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QScreen>
 #include <QScrollBar>
 #include <QSet>
@@ -230,6 +233,34 @@ void MainWindow::setupUi()
     fileMenu->addAction(m_actExportImages);
     fileMenu->addSeparator();
     fileMenu->addAction(m_actExit);
+
+    // ----- 编辑(&E) — A-10: Undo/Redo -----
+    auto *editMenu = menuBar->addMenu("编辑(&E)");
+    m_actUndo = new QAction("撤销(&U)", this);
+    m_actUndo->setShortcut(QKeySequence::Undo); // Ctrl+Z
+    m_actUndo->setEnabled(false);
+    m_actRedo = new QAction("重做(&R)", this);
+    m_actRedo->setShortcut(QKeySequence::Redo); // Ctrl+Y / Ctrl+Shift+Z
+    m_actRedo->setEnabled(false);
+    editMenu->addAction(m_actUndo);
+    editMenu->addAction(m_actRedo);
+    connect(m_actUndo, &QAction::triggered, this,
+            [this]()
+            {
+                m_cmdStack.undo();
+                if (m_thumbnailPanel && !m_currentDir.isEmpty())
+                    m_thumbnailPanel->setDirectory(m_currentDir);
+                updateUndoRedoActions();
+            });
+    connect(m_actRedo, &QAction::triggered, this,
+            [this]()
+            {
+                m_cmdStack.redo();
+                if (m_thumbnailPanel && !m_currentDir.isEmpty())
+                    m_thumbnailPanel->setDirectory(m_currentDir);
+                updateUndoRedoActions();
+            });
+    m_cmdStack.setChangeCallback([this]() { updateUndoRedoActions(); });
 
     // ----- 视图(&V) -----
     auto *viewMenu = menuBar->addMenu("视图(&V)");
@@ -454,6 +485,7 @@ void MainWindow::setupUi()
     rightLayout->addWidget(sortBar);
 
     m_thumbnailPanel = new ThumbnailPanel(rightWidget);
+    m_thumbnailPanel->setCommandStack(&m_cmdStack); // A-10: reversible file ops
     m_thumbnailPanel->installEventFilter(this);
     rightLayout->addWidget(m_thumbnailPanel, 1);
 
@@ -500,13 +532,16 @@ void MainWindow::setupUi()
     mainLayout->addWidget(centralSplitter, 1);
     setCentralWidget(mainContainer);
 
-    // ----- Metadata overlay (P1: not in splitter, floats over main area) -----
+    // ----- Metadata overlay (A-5: floating tool window, default hidden) -----
+    // Not in the splitter — floats over the main area so browsing is unobstructed.
     m_metadataPanel->setParent(this);
-    m_metadataPanel->setWindowFlags(m_metadataPanel->windowFlags() | Qt::Tool);
-    m_metadataPanel->setFixedSize(300, 440);
+    m_metadataPanel->setWindowFlags(Qt::Tool | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint);
+    m_metadataPanel->setAttribute(Qt::WA_ShowWithoutActivating, false);
+    m_metadataPanel->setFixedSize(300, 480);
+    m_metadataPanel->setWindowOpacity(0.92); // semi-transparent
     m_metadataPanel->setStyleSheet(
-        "MetadataPanel { background: palette(window); border: 1px solid palette(shadow); "
-        "border-radius: 4px; }");
+        "MetadataPanel { background: rgba(30,30,30,220); color: #eee; "
+        "border: 1px solid #555; border-radius: 6px; }");
     m_metadataPanel->hide();
 
     // ----- Full image viewer window -----
@@ -591,6 +626,23 @@ void MainWindow::setupUi()
             [this](const QString &path) { onImageOpen(path); });
     connect(m_thumbnailPanel, &ThumbnailPanel::compareRequested, this,
             [this](const QStringList &images) { openCompare(images); });
+    // A-3: keep SelectionModel multi-selection in lock-step with the gallery.
+    // When the user Ctrl/Shift-selects multiple thumbnails, push the full set
+    // into the shared model so Compare / Delete / Export all see one source.
+    connect(m_thumbnailPanel->selectionModel(), &QItemSelectionModel::selectionChanged, this,
+            [this]()
+            {
+                if (!m_selection || !m_thumbnailPanel)
+                    return;
+                const QStringList paths = m_thumbnailPanel->selectedPaths();
+                if (paths.isEmpty())
+                    return;
+                const QString cur = m_thumbnailPanel->currentIndex().isValid()
+                                       ? m_thumbnailPanel->pathList().value(
+                                             m_thumbnailPanel->currentIndex().row())
+                                       : paths.first();
+                m_selection->setSelection(paths, cur);
+            });
     // Dropping files directly onto the gallery behaves the same as dropping
     // them anywhere else on the window.
     connect(m_thumbnailPanel, &ThumbnailPanel::filesDropped, this, &MainWindow::handleDroppedPaths);
@@ -808,16 +860,32 @@ void MainWindow::setupUi()
             });
     connect(m_actToggleAnalysis, &QAction::triggered, m_analysisPanel, &QWidget::setVisible);
     connect(m_actToggleSearch, &QAction::triggered, m_searchPanel, &QWidget::setVisible);
-    // P0-3: metadata overlay toggle — show/hide the semi-transparent overlay.
+    // P0-3 / A-5: metadata toggle — show both the viewer overlay AND the floating
+    // MetadataPanel (positioned on the right edge of the main window).
     connect(m_actToggleMetadata, &QAction::triggered, this,
             [this](bool checked)
             {
-                if (!m_metadataOverlay || m_currentImagePath.isEmpty())
+                if (m_currentImagePath.isEmpty())
                     return;
                 if (checked)
-                    m_metadataOverlay->showForImage(m_currentImagePath);
+                {
+                    if (m_metadataOverlay)
+                        m_metadataOverlay->showForImage(m_currentImagePath);
+                    if (m_metadataPanel)
+                    {
+                        m_metadataPanel->setImage(m_currentImagePath);
+                        positionMetadataPanel();
+                        m_metadataPanel->show();
+                        m_metadataPanel->raise();
+                    }
+                }
                 else
-                    m_metadataOverlay->hide();
+                {
+                    if (m_metadataOverlay)
+                        m_metadataOverlay->hide();
+                    if (m_metadataPanel)
+                        m_metadataPanel->hide();
+                }
             });
     connect(m_searchPanel, &SearchPanel::resultActivated, this,
             QOverload<const QString &>::of(&MainWindow::onImageOpen));
@@ -956,16 +1024,28 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
-    // P0-3: ESC dismisses the metadata overlay (keeps the image area maximal for
-    // browsing). Only consume the key when the overlay is actually showing.
-    if (event->key() == Qt::Key_Escape && !mod && m_metadataOverlay &&
-        m_metadataOverlay->isVisible())
+    // P0-3 / A-5: ESC dismisses the metadata overlay AND the floating panel
+    // (keeps the image area maximal for browsing).
+    if (event->key() == Qt::Key_Escape && !mod)
     {
-        m_metadataOverlay->hide();
-        if (m_actToggleMetadata)
-            m_actToggleMetadata->setChecked(false);
-        event->accept();
-        return;
+        bool dismissed = false;
+        if (m_metadataOverlay && m_metadataOverlay->isVisible())
+        {
+            m_metadataOverlay->hide();
+            dismissed = true;
+        }
+        if (m_metadataPanel && m_metadataPanel->isVisible())
+        {
+            m_metadataPanel->hide();
+            dismissed = true;
+        }
+        if (dismissed)
+        {
+            if (m_actToggleMetadata)
+                m_actToggleMetadata->setChecked(false);
+            event->accept();
+            return;
+        }
     }
     // ESC exits fullscreen when the main window itself is fullscreen.
     if (event->key() == Qt::Key_Escape && !mod && isFullScreen())
@@ -1443,6 +1523,10 @@ void MainWindow::changeDirectory(const QString &dir)
 void MainWindow::openCompare(const QStringList &images, const QString &sessionJson)
 {
     QStringList imgs = images;
+    // A-3: prefer the shared SelectionModel multi-selection when the caller
+    // didn't pass an explicit list (e.g. menu "比较模式").
+    if (imgs.isEmpty() && m_selection && m_selection->selection().size() >= 2)
+        imgs = m_selection->selection();
     if (imgs.isEmpty())
     {
         if (m_currentDir.isEmpty())
@@ -1461,6 +1545,12 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     m_compareView = new CompareWorkspace(dlg);
     layout->addWidget(m_compareView);
     m_compareView->setImages(imgs);
+    // A-4.5: continuous compare — seed the pool with the full folder so the
+    // user can walk consecutive pairs with Next/Prev without reopening.
+    if (!m_cachedImagePaths.isEmpty())
+        m_compareView->setImagePool(m_cachedImagePaths);
+    else if (imgs.size() > 2)
+        m_compareView->setImagePool(imgs);
     connect(m_compareView, &CompareWorkspace::pixelInfo, this,
             [this](const QString &text) { statusBar()->showMessage(text); });
 
@@ -2680,15 +2770,79 @@ void MainWindow::showMetadataOverlay()
     m_metadataOverlay->showForImage(m_currentImagePath);
 }
 
+// A-10: refresh Undo/Redo menu labels and enabled state from CommandStack.
+void MainWindow::updateUndoRedoActions()
+{
+    if (m_actUndo)
+    {
+        m_actUndo->setEnabled(m_cmdStack.canUndo());
+        const std::string label = m_cmdStack.undoLabel();
+        m_actUndo->setText(label.empty() ? QStringLiteral("撤销(&U)")
+                                         : QStringLiteral("撤销(&U) %1")
+                                               .arg(QString::fromStdString(label)));
+    }
+    if (m_actRedo)
+    {
+        m_actRedo->setEnabled(m_cmdStack.canRedo());
+        const std::string label = m_cmdStack.redoLabel();
+        m_actRedo->setText(label.empty() ? QStringLiteral("重做(&R)")
+                                         : QStringLiteral("重做(&R) %1")
+                                               .arg(QString::fromStdString(label)));
+    }
+}
+
+// A-5: position the floating MetadataPanel on the right edge of the main window.
+void MainWindow::positionMetadataPanel()
+{
+    if (!m_metadataPanel)
+        return;
+    const QPoint topRight = mapToGlobal(QPoint(width(), 0));
+    const int x = topRight.x() - m_metadataPanel->width() - 16;
+    const int y = topRight.y() + 80;
+    m_metadataPanel->move(x, y);
+}
+
+void MainWindow::moveEvent(QMoveEvent *event)
+{
+    QMainWindow::moveEvent(event);
+    if (m_metadataPanel && m_metadataPanel->isVisible())
+        positionMetadataPanel();
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    if (m_metadataPanel && m_metadataPanel->isVisible())
+        positionMetadataPanel();
+}
+
 void MainWindow::toggleMetadataOverlay()
 {
-    if (!m_metadataOverlay || m_currentImagePath.isEmpty())
+    if (m_currentImagePath.isEmpty())
         return;
-    const bool show = !m_metadataOverlay->isVisible();
+    // A-5: toggle both the viewer overlay and the floating MetadataPanel.
+    const bool show =
+        !(m_metadataOverlay && m_metadataOverlay->isVisible()) &&
+        !(m_metadataPanel && m_metadataPanel->isVisible());
     if (show)
-        m_metadataOverlay->showForImage(m_currentImagePath);
+    {
+        if (m_metadataOverlay)
+            m_metadataOverlay->showForImage(m_currentImagePath);
+        if (m_metadataPanel)
+        {
+            m_metadataPanel->setImage(m_currentImagePath);
+            positionMetadataPanel();
+            m_metadataPanel->show();
+            m_metadataPanel->raise();
+        }
+    }
     else
-        m_metadataOverlay->hide();
+    {
+        if (m_metadataOverlay)
+            m_metadataOverlay->hide();
+        if (m_metadataPanel)
+            m_metadataPanel->hide();
+    }
     // P0-3: keep the "图片信息" toggle in the View menu in sync so every entry
     // point (Ctrl+I, M key, ESC) agrees on the overlay's state.
     if (m_actToggleMetadata)

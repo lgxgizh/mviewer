@@ -2,6 +2,10 @@
 
 #include "core/RatingStore.h"
 #include "core/analyzer/Analyzer.h"
+#include "core/command/CommandStack.h"
+#include "core/command/FileDeleteCommand.h"
+#include "core/command/FileMoveCommand.h"
+#include "core/command/FileRenameCommand.h"
 #include "core/image/Decoder.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
@@ -10,6 +14,8 @@
 #include "core/thumbnail/ThumbnailPipeline.h"
 #include "domain/Image.h"
 #include "thumbnailcache.h"
+
+#include <memory>
 
 #include <QPointer>
 #include <algorithm>
@@ -896,10 +902,21 @@ void ThumbnailPanel::renameSelected()
     bool ok = false;
     const QString newName =
         QInputDialog::getText(this, "重命名", "新文件名:", QLineEdit::Normal, fi.fileName(), &ok);
-    if (!ok || newName.isEmpty())
+    if (!ok || newName.isEmpty() || newName == fi.fileName())
         return;
     const QString newPath = fi.absolutePath() + "/" + newName;
-    if (QFile::rename(oldPath, newPath) && !m_currentDir.isEmpty())
+
+    // A-10: reversible rename via CommandStack when available.
+    if (m_cmdStack)
+    {
+        auto cmd = std::make_unique<FileRenameCommand>(oldPath.toStdString(), newPath.toStdString());
+        m_cmdStack->execute(std::move(cmd));
+    }
+    else if (!QFile::rename(oldPath, newPath))
+    {
+        return;
+    }
+    if (!m_currentDir.isEmpty())
         setDirectory(m_currentDir);
 }
 
@@ -912,13 +929,30 @@ void ThumbnailPanel::moveToTrashSelected()
     const QString trashDir =
         QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/mviewer/trash";
     QDir().mkpath(trashDir);
+
     QStringList removed;
-    for (const QString &p : paths)
+    // A-10: reversible delete via CommandStack when available.
+    if (m_cmdStack)
     {
-        if (QFile::rename(p, trashDir + "/" + QFileInfo(p).fileName()))
-            removed.append(p);
-        else if (QFile::remove(p))
-            removed.append(p);
+        std::vector<std::string> stdPaths;
+        stdPaths.reserve(static_cast<size_t>(paths.size()));
+        for (const QString &p : paths)
+            stdPaths.push_back(p.toStdString());
+        auto cmd = std::make_unique<FileDeleteCommand>(std::move(stdPaths), trashDir.toStdString());
+        // Capture moved paths before ownership transfers.
+        m_cmdStack->execute(std::move(cmd));
+        // After execute, files are gone — treat all selected as removed.
+        removed = paths;
+    }
+    else
+    {
+        for (const QString &p : paths)
+        {
+            if (QFile::rename(p, trashDir + "/" + QFileInfo(p).fileName()))
+                removed.append(p);
+            else if (QFile::remove(p))
+                removed.append(p);
+        }
     }
     if (!m_currentDir.isEmpty())
         setDirectory(m_currentDir);
@@ -947,8 +981,22 @@ void ThumbnailPanel::moveSelectedTo()
     const QString dir = QFileDialog::getExistingDirectory(this, "移动到...");
     if (dir.isEmpty())
         return;
-    for (const QString &p : paths)
-        QFile::rename(p, dir + "/" + QFileInfo(p).fileName());
+
+    // A-10: reversible move via CommandStack when available.
+    if (m_cmdStack)
+    {
+        std::vector<std::string> stdPaths;
+        stdPaths.reserve(static_cast<size_t>(paths.size()));
+        for (const QString &p : paths)
+            stdPaths.push_back(p.toStdString());
+        auto cmd = std::make_unique<FileMoveCommand>(std::move(stdPaths), dir.toStdString());
+        m_cmdStack->execute(std::move(cmd));
+    }
+    else
+    {
+        for (const QString &p : paths)
+            QFile::rename(p, dir + "/" + QFileInfo(p).fileName());
+    }
     if (!m_currentDir.isEmpty())
         setDirectory(m_currentDir);
 }
