@@ -494,17 +494,22 @@ void CompareWorkspace::restoreNavState(const NavState &s)
     if (m_layoutCombo && s.layoutIndex >= 0 && s.layoutIndex < m_layoutCombo->count())
         m_layoutCombo->setCurrentIndex(s.layoutIndex);
     // Exclusive modes — only restore if still meaningful for image count.
+    // Apply at most one of Split/Swipe/Overlay (priority: split > swipe > overlay)
+    // so the toggled handlers do not thrash each other during restore.
     const int n = m_engine.imageCount();
     if (m_blinkChk)
         m_blinkChk->setChecked(s.blink && n >= 2);
     if (n == 2)
     {
+        const bool wantSplit = s.split;
+        const bool wantSwipe = s.swipe && !wantSplit;
+        const bool wantOverlay = s.overlay && !wantSplit && !wantSwipe;
         if (m_splitChk)
-            m_splitChk->setChecked(s.split);
+            m_splitChk->setChecked(wantSplit);
         if (m_swipeChk)
-            m_swipeChk->setChecked(s.swipe);
+            m_swipeChk->setChecked(wantSwipe);
         if (m_overlayChk)
-            m_overlayChk->setChecked(s.overlay);
+            m_overlayChk->setChecked(wantOverlay);
     }
     if (s.hasRoi)
         applySelectionToAll(s.roi);
@@ -2215,23 +2220,25 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
+    // Split / Swipe / Overlay: toggle target; exclusivity is handled by the
+    // checkbox toggled handlers (only when turning ON). Calling exclusiveMode
+    // before toggle would uncheck siblings even when turning OFF — harmless but
+    // redundant; more importantly, setChecked(true) after exclusiveMode is fine
+    // because the toggled handler also clears siblings.
     if (plain && key == Qt::Key_S && m_splitChk && m_splitChk->isEnabled())
     {
-        exclusiveMode(m_splitChk);
         m_splitChk->setChecked(!m_splitChk->isChecked());
         event->accept();
         return;
     }
     if (plain && key == Qt::Key_W && m_swipeChk && m_swipeChk->isEnabled())
     {
-        exclusiveMode(m_swipeChk);
         m_swipeChk->setChecked(!m_swipeChk->isChecked());
         event->accept();
         return;
     }
     if (plain && key == Qt::Key_O && m_overlayChk && m_overlayChk->isEnabled())
     {
-        exclusiveMode(m_overlayChk);
         m_overlayChk->setChecked(!m_overlayChk->isChecked());
         event->accept();
         return;

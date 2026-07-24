@@ -476,9 +476,18 @@ void AnalysisPanel::reanalyze()
     {
         m_statsA = AnalysisEngine::computeStatsROI(mvcore::fromQImage(m_imageA), m_roi);
         updateHistogramPage();
-        // Also publish ROI stats text when no plugin analyzer ran.
-        if (m_statsLabel)
-            publishResult(m_statsLabel->text());
+        // Publish a plain-text ROI summary (never HTML from m_statsLabel).
+        const QString plain =
+            QString("ROI %1x%2 @(%3,%4) lum=%5 r=%6 g=%7 b=%8")
+                .arg(m_roi.width)
+                .arg(m_roi.height)
+                .arg(m_roi.x)
+                .arg(m_roi.y)
+                .arg(m_statsA.lumMean, 0, 'f', 2)
+                .arg(m_statsA.rMean, 0, 'f', 2)
+                .arg(m_statsA.gMean, 0, 'f', 2)
+                .arg(m_statsA.bMean, 0, 'f', 2);
+        publishResult(plain);
     }
 }
 

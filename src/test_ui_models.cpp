@@ -38,6 +38,14 @@ int main(int, char **)
         sel.setSelection({"a.jpg", "b.jpg"}, "b.jpg");
         CHECK(sel.currentImage() == "b.jpg", "SelectionModel multi-select current");
         CHECK(sel.selection().size() == 2, "SelectionModel multi-select size 2");
+        // Moving current within multi-select must NOT collapse it.
+        sel.setCurrentImage("a.jpg");
+        CHECK(sel.currentImage() == "a.jpg", "SelectionModel multi current move");
+        CHECK(sel.selection().size() == 2, "SelectionModel multi preserved on setCurrent");
+        // Outside multi → collapses to single.
+        sel.setCurrentImage("c.jpg");
+        CHECK(sel.selection().size() == 1, "SelectionModel collapses when leaving multi");
+        CHECK(sel.currentImage() == "c.jpg", "SelectionModel new single current");
         sel.clear();
         CHECK(sel.isEmpty(), "SelectionModel cleared");
     }

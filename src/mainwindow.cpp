@@ -722,6 +722,10 @@ void MainWindow::setupUi()
             {
                 // P0-2: route selection through the shared model; all panels are
                 // updated centrally in onCurrentImageChanged().
+                // Skip while model→gallery sync is in progress (selectPaths
+                // already owns the multi-select); also skip empty paths.
+                if (m_syncingSelection || path.isEmpty() || !m_selection)
+                    return;
                 m_selection->setCurrentImage(path);
             });
     // P0-2: the single place that keeps every view in sync with the current
@@ -2069,21 +2073,26 @@ void MainWindow::syncGalleryFromSelection()
     const QString cur = m_selection->currentImage();
     // Avoid feedback when the gallery already matches (common path: user clicked
     // a thumbnail → gallery selectionChanged → setSelection → here).
-    if (sel.size() <= 1)
-    {
-        if (!cur.isEmpty())
-            m_thumbnailPanel->selectPath(cur);
-        return;
-    }
     const QStringList gallery = m_thumbnailPanel->selectedPaths();
     if (gallery == sel)
     {
+        // Selection set matches — only move focus if needed (preserve multi).
         if (!cur.isEmpty())
             m_thumbnailPanel->selectPath(cur);
         return;
     }
     m_syncingSelection = true;
-    m_thumbnailPanel->selectPaths(sel, cur);
+    if (sel.size() <= 1)
+    {
+        if (!cur.isEmpty())
+            m_thumbnailPanel->selectPath(cur);
+        else if (!sel.isEmpty())
+            m_thumbnailPanel->selectPath(sel.first());
+    }
+    else
+    {
+        m_thumbnailPanel->selectPaths(sel, cur);
+    }
     m_syncingSelection = false;
 }
 

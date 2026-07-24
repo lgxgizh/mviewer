@@ -56,7 +56,7 @@ int main()
     {
         const fs::path tmp = fs::temp_directory_path() / "mviewer_exportjob_test";
         fs::create_directories(tmp);
-        const fs::path src = tmp / "src.png";
+        const fs::path src = tmp / "photo.v2.png"; // dotted base name
         const fs::path out = tmp / "out";
         fs::create_directories(out);
 
@@ -82,7 +82,10 @@ int main()
         auto r = run(cfg);
         CHECK(r.done == 1, "convert done=1");
         CHECK(r.failed == 0, "convert failed=0");
-        CHECK(fs::exists(out / "src_exp.jpg") || !r.primaryOutput.empty(), "convert output exists");
+        // Dotted base name must be preserved (photo.v2_exp.jpg, not photo_exp.jpg).
+        CHECK(fs::exists(out / "photo.v2_exp.jpg") ||
+                  r.primaryOutput.find("photo.v2_exp") != std::string::npos,
+              "convert preserves dotted base name");
 
         std::error_code ec;
         fs::remove_all(tmp, ec);

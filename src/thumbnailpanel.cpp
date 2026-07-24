@@ -903,9 +903,21 @@ void ThumbnailPanel::selectPath(const QString &path)
     if (row < 0)
         return;
     const QModelIndex idx = m_model->index(row, 0);
-    if (currentIndex() == idx)
-        return; // already the current item — nothing to do, no scroll jank
-    setCurrentIndex(idx);
+    if (currentIndex() == idx && selectionModel() && selectionModel()->isSelected(idx))
+        return; // already the current selected item — nothing to do, no scroll jank
+    // If the path is already part of a multi-selection, only move the current
+    // focus — do NOT ClearAndSelect (that would collapse multi-select).
+    if (selectionModel() && selectionModel()->isSelected(idx))
+    {
+        selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
+        scrollTo(idx);
+        return;
+    }
+    // Single-path focus: replace selection with this item.
+    if (selectionModel())
+        selectionModel()->setCurrentIndex(idx, QItemSelectionModel::ClearAndSelect);
+    else
+        setCurrentIndex(idx);
     scrollTo(idx); // default EnsureVisible: only scrolls when off-screen
 }
 
@@ -922,11 +934,25 @@ void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &curren
         const QModelIndex idx = m_model->index(row, 0);
         sel.select(idx, idx);
     }
+    // Block currentChanged → itemClicked while we rebuild multi-select, so the
+    // focus move cannot collapse SelectionModel via setCurrentImage.
+    const bool wasBlocked = selectionModel()->blockSignals(true);
     selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect);
     const QString focus = !current.isEmpty() ? current
                                              : (paths.isEmpty() ? QString() : paths.first());
     if (!focus.isEmpty())
-        selectPath(focus);
+    {
+        const int row = m_rowByPath.value(focus, -1);
+        if (row >= 0)
+        {
+            const QModelIndex idx = m_model->index(row, 0);
+            selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
+            scrollTo(idx);
+        }
+    }
+    selectionModel()->blockSignals(wasBlocked);
+    // Emit a single selectionChanged so MainWindow can re-sync if needed.
+    emit selectionModel()->selectionChanged(selectionModel()->selection(), QItemSelection());
 }
 
 int ThumbnailPanel::scrollOffset() const
