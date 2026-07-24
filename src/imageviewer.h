@@ -12,6 +12,8 @@
 #include <memory>
 #include <optional>
 
+class QTimer;
+
 // Full-image zoomable viewer. Shown in its own window when the user
 // double-clicks a thumbnail (or single-clicks the bottom-left preview).
 // Supports wheel zoom, left-drag pan, brightness histogram overlay, and
@@ -70,7 +72,7 @@ class ImageViewer : public QWidget
     // Pixel Inspector (P1 #6): emitted on mouse move with the pixel under the
     // cursor, read directly from the ImageFrame (not QImage). x/y are image
     // pixel coordinates; valid=false when the cursor is outside the image.
-    void pixelInfo(int x, int y, int r, int g, int b, bool valid);
+    void pixelInfo(int x, int y, int r, int g, int b, int a, bool valid);
 
     // P0 #①: live zoom factor (percent) for the status bar. Emitted on wheel
     // zoom and on fit/resize.
@@ -142,6 +144,10 @@ class ImageViewer : public QWidget
     bool m_selecting = false;
     bool m_selectMode = false;
     QPoint m_selStart, m_selEnd;
+
+    // Auto-hide cursor in fullscreen after inactivity.
+    QTimer *m_cursorHideTimer = nullptr;
+    bool m_cursorHidden = false;
 
     QRect selectedRegion() const;
 };

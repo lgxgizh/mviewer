@@ -6,6 +6,35 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — 基础功能打磨第八轮 (Polish Round 8)
+
+- **中键拖拽平移:** ImageViewer 现在支持鼠标中键拖拽平移图片（与左键拖拽相同），
+  符合专业图像工具（Photoshop、GIMP）的操作习惯。(`src/imageviewer.cpp`)
+- **Ctrl+0/Ctrl+1 缩放快捷键:** 除了无修饰键的 0/1 外，Ctrl+0 重置适应窗口、
+  Ctrl+1 设置 100% 缩放也同时可用。(`src/imageviewer.cpp`)
+- **右键菜单新增三项:** "复制像素颜色 (#RRGGBB)"、"另存为..."、"框选区域 (R)"
+  切换项。(`src/imageviewer.cpp`)
+- **R 键切换选区模式:** 按 R 键可切换框选区域模式，此前该功能有实现但无 UI 入口。
+  (`src/imageviewer.cpp`)
+- **全屏光标自动隐藏:** ImageViewer 全屏模式下，鼠标静止 2.5 秒后光标自动隐藏，
+  移动后恢复。(`src/imageviewer.cpp`)
+- **幻灯片间隔可配置:** 幻灯片间隔从硬编码 3 秒改为从 QSettings 读取
+  （`slideshowInterval`，默认 3000ms，范围 500ms-60s）。(`src/mainwindow.cpp`)
+- **选区拖拽实时尺寸标注:** 框选区域时在选框右下角实时显示图像像素尺寸
+  （如 `1280×720`）。(`src/imageviewer.cpp`)
+- **像素检查器显示 Alpha 通道:** RGBA 图像（如带透明的 PNG/WebP）的像素检查器
+  现在显示 `RGBA(r,g,b,a)` 格式，光标离开图像时显示"光标不在图像上"。
+  (`src/imageviewer.cpp`, `src/mainwindow.cpp`)
+- **搜索防抖:** 搜索面板输入延迟 250ms 后才执行搜索，避免大索引下连续按键
+  导致卡顿。(`src/searchpanel.cpp`)
+- **ESC 清除搜索:** 按 ESC 键清除搜索框内容。(`src/searchpanel.cpp`)
+
+### Fixed — 基础功能打磨第八轮 (Polish Round 8)
+
+- **批量处理取消按钮空指针崩溃:** `BatchDialog::onCancel` 访问已被 `std::move`
+  的 `m_processor` 导致空指针崩溃。改用 `shared_ptr` 控制句柄 `m_activeProcessor`。
+  (`src/batchdialog.cpp/h`)
+
 ### Fixed — 基础功能打磨第七轮 (Polish Round 7)
 
 - **缩略图大小调整无效 bug (功能 bug):** `setThumbSize` 调用 `setViewMode(m_viewMode)`

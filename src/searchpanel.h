@@ -13,6 +13,7 @@ class QLineEdit;
 class QPushButton;
 class QCheckBox;
 class QLabel;
+class QTimer;
 
 namespace mviewer::domain
 {
@@ -53,9 +54,13 @@ class SearchPanel : public QWidget
     void onSearchTextChanged();
     void onResultDoubleClicked(const QModelIndex &index);
 
+  protected:
+    void keyPressEvent(QKeyEvent *event) override;
+
   private:
     void buildQuery(mviewer::domain::SearchQuery &q) const;
     QString matchTypeLabel(mviewer::domain::SearchMatch::Type type) const;
+    void performSearch();
 
     QLineEdit *m_searchEdit = nullptr;
     QCheckBox *m_chkFilename = nullptr;
@@ -65,6 +70,7 @@ class SearchPanel : public QWidget
     QLabel *m_countLabel = nullptr;
     QTableWidget *m_table = nullptr;
     QPushButton *m_reindexBtn = nullptr;
+    QTimer *m_debounceTimer = nullptr;
 
     std::shared_ptr<mviewer::core::SearchEngine> m_engine;
     std::vector<mviewer::domain::SearchResult> m_lastResults;

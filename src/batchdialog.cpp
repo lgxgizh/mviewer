@@ -269,13 +269,13 @@ void BatchDialog::onStart()
                 Qt::QueuedConnection);
         });
 
-    // Move processor ownership into a shared_ptr for the background thread;
-    // a fresh processor is created when the job finishes so the dialog can
-    // be reused.
-    std::shared_ptr<mviewer::core::BatchProcessor> proc = std::move(m_processor);
+    // Keep a shared_ptr to the processor for cancel control; the background
+    // thread also holds a copy via the lambda capture. A fresh processor is
+    // created when the job finishes so the dialog can be reused.
+    m_activeProcessor = std::shared_ptr<mviewer::core::BatchProcessor>(m_processor.release());
 
-    auto future =
-        QtConcurrent::run([proc, config = std::move(config)]() { return proc->execute(config); });
+    auto future = QtConcurrent::run(
+        [proc = m_activeProcessor, config = std::move(config)]() { return proc->execute(config); });
 
     auto *watcher = new QFutureWatcher<mviewer::domain::BatchJobResult>(this);
     connect(watcher, &QFutureWatcher<mviewer::domain::BatchJobResult>::finished, this,
@@ -309,6 +309,7 @@ void BatchDialog::onStart()
 
                 // Create a fresh processor so the dialog can be reused.
                 m_processor = std::make_unique<mviewer::core::BatchProcessor>();
+                m_activeProcessor.reset();
                 updateUiState(false);
                 watcher->deleteLater();
             });
@@ -318,7 +319,8 @@ void BatchDialog::onStart()
 
 void BatchDialog::onCancel()
 {
-    m_processor->requestCancel();
+    if (m_activeProcessor)
+        m_activeProcessor->requestCancel();
     m_statusLabel->setText("正在取消...");
 }
 

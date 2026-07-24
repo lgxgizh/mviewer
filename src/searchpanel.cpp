@@ -6,10 +6,12 @@
 #include <QCheckBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QTableWidget>
+#include <QTimer>
 #include <QVBoxLayout>
 
 SearchPanel::SearchPanel(QWidget *parent)
@@ -69,6 +71,11 @@ SearchPanel::SearchPanel(QWidget *parent)
     mainLayout->addWidget(m_table);
 
     // ── connections ─────────────────────────────────────────────────
+    m_debounceTimer = new QTimer(this);
+    m_debounceTimer->setSingleShot(true);
+    m_debounceTimer->setInterval(250);
+    connect(m_debounceTimer, &QTimer::timeout, this, &SearchPanel::performSearch);
+
     connect(m_searchEdit, &QLineEdit::textChanged, this, &SearchPanel::onSearchTextChanged);
     connect(m_table, &QTableWidget::doubleClicked, this, &SearchPanel::onResultDoubleClicked);
     connect(m_chkFilename, &QCheckBox::toggled, this, &SearchPanel::onSearchTextChanged);
@@ -93,6 +100,18 @@ void SearchPanel::setEngine(std::shared_ptr<mviewer::core::SearchEngine> engine)
     onSearchTextChanged();
 }
 
+void SearchPanel::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_Escape)
+    {
+        m_searchEdit->clear();
+        m_searchEdit->setFocus();
+        event->accept();
+        return;
+    }
+    QWidget::keyPressEvent(event);
+}
+
 void SearchPanel::focusSearch()
 {
     m_searchEdit->setFocus();
@@ -110,6 +129,13 @@ void SearchPanel::reindex(const std::vector<std::string> &paths,
 }
 
 void SearchPanel::onSearchTextChanged()
+{
+    // Debounce: restart the timer so we only search after the user pauses
+    // typing for 250ms, avoiding lag on large indexes.
+    m_debounceTimer->start();
+}
+
+void SearchPanel::performSearch()
 {
     if (!m_engine)
         return;

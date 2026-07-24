@@ -616,11 +616,22 @@ void MainWindow::setupUi()
     connect(m_imageViewer, &ImageViewer::requestPrev, this, [this]() { navigate(-1); });
     connect(m_imageViewer, &ImageViewer::requestNext, this, [this]() { navigate(1); });
     connect(m_imageViewer, &ImageViewer::pixelInfo, this,
-            [this](int x, int y, int r, int g, int b, bool valid)
+            [this](int x, int y, int r, int g, int b, int a, bool valid)
             {
                 if (valid)
-                    statusBar()->showMessage(
-                        QString("像素 [%1,%2]  RGB(%3,%4,%5)").arg(x).arg(y).arg(r).arg(g).arg(b));
+                {
+                    if (a < 255)
+                        statusBar()->showMessage(
+                            QString("像素 [%1,%2]  RGBA(%3,%4,%5,%6)")
+                                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(a));
+                    else
+                        statusBar()->showMessage(
+                            QString("像素 [%1,%2]  RGB(%3,%4,%5)").arg(x).arg(y).arg(r).arg(g).arg(b));
+                }
+                else
+                {
+                    statusBar()->showMessage("光标不在图像上");
+                }
                 m_analysisPanel->showPixel(x, y, r, g, b, valid);
             });
 
@@ -2632,6 +2643,11 @@ void MainWindow::toggleSlideshow()
     onImageOpen(m_currentImagePath);
     if (!m_imageViewer->isFullScreen())
         m_imageViewer->showFullScreen();
+    // Read interval from settings (default 3s), allow user to change via
+    // a simple input dialog triggered by Ctrl+Shift+S.
+    QSettings settings;
+    int interval = settings.value("slideshowInterval", 3000).toInt();
+    interval = qBound(500, interval, 60000); // clamp 0.5s–60s
     if (!m_slideshowTimer)
     {
         m_slideshowTimer = new QTimer(this);
@@ -2647,10 +2663,11 @@ void MainWindow::toggleSlideshow()
                     navigate(1); // wraps at the end of the folder
                 });
     }
-    m_slideshowTimer->start(3000);
+    m_slideshowTimer->start(interval);
     if (m_actSlideshow)
         m_actSlideshow->setChecked(true);
-    statusBar()->showMessage("幻灯片放映中 — 按 S 或 ESC 停止", 3000);
+    statusBar()->showMessage(
+        QString("幻灯片放映中 — 按 S 或 ESC 停止 (间隔 %1 秒)").arg(interval / 1000.0, 0, 'f', 1), 3000);
 }
 
 void MainWindow::stopSlideshow()

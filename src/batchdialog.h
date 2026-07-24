@@ -82,5 +82,6 @@ class BatchDialog : public QDialog
     QPushButton *m_openOutputBtn = nullptr; // enabled after a job finishes
 
     std::unique_ptr<mviewer::core::BatchProcessor> m_processor;
+    std::shared_ptr<mviewer::core::BatchProcessor> m_activeProcessor; // active job handle for cancel
     QString m_lastOutputDir; // set after a job finishes, drives "open output dir"
 };

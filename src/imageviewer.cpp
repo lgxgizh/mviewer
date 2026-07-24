@@ -12,6 +12,7 @@
 #include <QCloseEvent>
 #include <QContextMenuEvent>
 #include <QDir>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QKeyEvent>
 #include <QMenu>
@@ -21,6 +22,7 @@
 #include <QRect>
 #include <QResizeEvent>
 #include <QSettings>
+#include <QTimer>
 #include <QWheelEvent>
 #include <cmath>
 
@@ -58,6 +60,18 @@ ImageViewer::ImageViewer(QWidget *parent) : QWidget(parent)
         restoreGeometry(geom);
     else
         resize(900, 700);
+    // Auto-hide cursor in fullscreen after 2.5s of inactivity.
+    m_cursorHideTimer = new QTimer(this);
+    m_cursorHideTimer->setSingleShot(true);
+    m_cursorHideTimer->setInterval(2500);
+    connect(m_cursorHideTimer, &QTimer::timeout, this, [this]()
+    {
+        if (isFullScreen() && !m_dragging && !m_selecting)
+        {
+            m_cursorHidden = true;
+            setCursor(Qt::BlankCursor);
+        }
+    });
 }
 
 ImageViewer::~ImageViewer() = default;
@@ -352,6 +366,18 @@ void ImageViewer::paintEvent(QPaintEvent *event)
             painter.setPen(QPen(QColor(255, 255, 0), 1));
             painter.setBrush(QColor(255, 255, 0, 80));
             painter.drawRect(r);
+            // Show live dimensions while dragging.
+            if (m_selecting && m_pixmap.width() > 0)
+            {
+                const int imgW = static_cast<int>(r.width() / m_view.scale);
+                const int imgH = static_cast<int>(r.height() / m_view.scale);
+                const QString sizeText = QString("%1×%2").arg(imgW).arg(imgH);
+                painter.setPen(QColor(255, 255, 0));
+                QFont f = painter.font();
+                f.setBold(true);
+                painter.setFont(f);
+                painter.drawText(r.bottomRight() + QPoint(8, 14), sizeText);
+            }
             painter.restore();
         }
     }
@@ -444,9 +470,10 @@ void ImageViewer::mousePressEvent(QMouseEvent *event)
         emit requestNext();
         return;
     }
-    if (event->button() == Qt::LeftButton && !m_pixmap.isNull())
+    if ((event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton) &&
+        !m_pixmap.isNull())
     {
-        if (m_selectMode)
+        if (m_selectMode && event->button() == Qt::LeftButton)
         {
             m_selecting = true;
             m_selStart = m_selEnd = event->pos();
@@ -462,6 +489,16 @@ void ImageViewer::mousePressEvent(QMouseEvent *event)
 
 void ImageViewer::mouseMoveEvent(QMouseEvent *event)
 {
+    // Auto-hide cursor: any mouse movement restores the cursor and restarts
+    // the hide timer (fullscreen only).
+    if (m_cursorHidden)
+    {
+        m_cursorHidden = false;
+        setCursor(m_selectMode ? Qt::CrossCursor : Qt::OpenHandCursor);
+    }
+    if (isFullScreen())
+        m_cursorHideTimer->start();
+
     if (m_selecting)
     {
         m_selEnd = event->pos();
@@ -475,8 +512,8 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
     }
 
     // Pixel Inspector (P1 #6): read the pixel under the cursor directly from
-    // the ImageFrame (RGB24), using the inverse of the Viewport transform.
-    int ix = -1, iy = -1, r = 0, g = 0, b = 0;
+    // the ImageFrame (RGB24/RGBA32), using the inverse of the Viewport transform.
+    int ix = -1, iy = -1, r = 0, g = 0, b = 0, a = 255;
     bool valid = false;
     if (m_frame && !m_pixmap.isNull())
     {
@@ -498,18 +535,20 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
                 r = p[0];
                 g = p[1];
                 b = p[2];
+                if (view.channelsPerPixel() >= 4)
+                    a = p[3];
                 valid = true;
             }
         }
     }
-    emit pixelInfo(ix, iy, r, g, b, valid);
+    emit pixelInfo(ix, iy, r, g, b, a, valid);
 }
 
 void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton)
+    if (event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton)
     {
-        if (m_selecting)
+        if (m_selecting && event->button() == Qt::LeftButton)
         {
             m_selecting = false;
             const QRect r = selectedRegion();
@@ -592,6 +631,14 @@ void ImageViewer::keyPressEvent(QKeyEvent *event)
         zoomFit();
     else if (key == Qt::Key_1 && !(mods & Qt::ControlModifier))
         zoomActual();
+    // Also accept Ctrl+0 / Ctrl+1 as zoom shortcuts (widely expected by users).
+    else if (key == Qt::Key_0 && (mods & Qt::ControlModifier))
+        zoomFit();
+    else if (key == Qt::Key_1 && (mods & Qt::ControlModifier))
+        zoomActual();
+    // R toggles region-of-interest selection mode.
+    else if (key == Qt::Key_R && !mods)
+        setSelectMode(!m_selectMode);
     else if ((key == Qt::Key_F && !mods) || key == Qt::Key_F11)
     {
         if (isFullScreen())
@@ -615,11 +662,18 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QMenu menu(this);
     QAction *aCopy = menu.addAction("复制图片");
     QAction *aCopyPath = menu.addAction("复制路径");
+    QAction *aCopyColor = menu.addAction("复制像素颜色 (#RRGGBB)");
+    menu.addSeparator();
+    QAction *aSaveAs = menu.addAction("另存为...");
     menu.addSeparator();
     QAction *aZoomIn = menu.addAction("放大 (+)");
     QAction *aZoomOut = menu.addAction("缩小 (-)");
     QAction *aZoomFit = menu.addAction("适应窗口 (0)");
     QAction *aZoomActual = menu.addAction("实际大小 (1)");
+    menu.addSeparator();
+    QAction *aSelectRegion = menu.addAction("框选区域 (R)");
+    aSelectRegion->setCheckable(true);
+    aSelectRegion->setChecked(m_selectMode);
     menu.addSeparator();
     QAction *aNext = menu.addAction("下一张 (→)");
     QAction *aPrev = menu.addAction("上一张 (←)");
@@ -632,6 +686,45 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         QApplication::clipboard()->setPixmap(m_pixmap);
     else if (chosen == aCopyPath)
         QApplication::clipboard()->setText(m_currentPath);
+    else if (chosen == aCopyColor)
+    {
+        // Read pixel color at the cursor position (event->pos() in widget coords).
+        const QPoint pos = event->pos();
+        if (!m_pixmap.isNull() && m_frame)
+        {
+            const int iw = m_pixmap.width();
+            const int ih = m_pixmap.height();
+            const int ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
+            const int iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
+            if (ix >= 0 && ix < iw && iy >= 0 && iy < ih)
+            {
+                const ImageBuffer view = m_frame->pixels().view();
+                if (view.channelsPerPixel() >= 3)
+                {
+                    const uint8_t *p = view.data + static_cast<size_t>(iy) * view.stride() +
+                                       static_cast<size_t>(ix) * view.channelsPerPixel();
+                    QApplication::clipboard()->setText(
+                        QString("#%1%2%3")
+                            .arg(p[0], 2, 16, QChar('0'))
+                            .arg(p[1], 2, 16, QChar('0'))
+                            .arg(p[2], 2, 16, QChar('0')));
+                }
+            }
+        }
+    }
+    else if (chosen == aSaveAs)
+    {
+        if (!m_pixmap.isNull())
+        {
+            const QString defaultName =
+                QFileInfo(m_currentPath).completeBaseName() + "_copy.png";
+            const QString path = QFileDialog::getSaveFileName(
+                this, "另存为", defaultName,
+                "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp)");
+            if (!path.isEmpty())
+                m_pixmap.save(path);
+        }
+    }
     else if (chosen == aZoomIn)
         zoomIn();
     else if (chosen == aZoomOut)
@@ -640,6 +733,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         zoomFit();
     else if (chosen == aZoomActual)
         zoomActual();
+    else if (chosen == aSelectRegion)
+        setSelectMode(!m_selectMode);
     else if (chosen == aNext)
         emit requestNext();
     else if (chosen == aPrev)
