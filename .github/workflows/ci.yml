@@ -362,13 +362,8 @@ jobs:
           # Under clang-cl ASan, MSVC-built Qt plugin DLLs cannot be loaded,
           # causing QImageReader::read() to return empty images. These tests
           # pass in the MSVC CI job; ASan focuses on memory-safety checks.
-          $exclude = @(
-            "core_tests", "m3m4m5_tests", "m3pipeline_tests", "decoder_tests",
-            "repository_tests", "metadata_tests", "m3acceptance_tests",
-            "product_browse_tests", "product_workflow_gate"
-          )
-          $excludeArgs = ($exclude | ForEach-Object { "-E $_" }) -join " "
-          ctest --output-on-failure -j4 $excludeArgs
+          $excludeRegex = "core_tests|m3m4m5_tests|m3pipeline_tests|decoder_tests|repository_tests|metadata_tests|m3acceptance_tests|product_browse_tests|product_workflow_gate"
+          ctest --output-on-failure -j4 -E $excludeRegex
 
   # ---------------------------------------------------------------------------
   # ci-gate — aggregate required statuses for branch protection
