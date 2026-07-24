@@ -341,7 +341,7 @@ jobs:
           # QT_PLUGIN_PATH can silently fail. Copy them next to the test
           # executables so Qt finds them via the default "app-dir/imageformats"
           # search path, which is more reliable under ASan.
-          $pluginSrc = "$env:Qt6_DIR\plugins\imageformats"
+          $pluginSrc = "$env:QT_PLUGIN_PATH\imageformats"
           $pluginDst = "build_asan\bin\imageformats"
           New-Item -ItemType Directory -Force -Path $pluginDst | Out-Null
           Copy-Item "$pluginSrc\*.dll" $pluginDst -Force
