@@ -9,6 +9,7 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QCloseEvent>
 #include <QContextMenuEvent>
 #include <QDir>
 #include <QFileInfo>
@@ -19,6 +20,7 @@
 #include <QPointer>
 #include <QRect>
 #include <QResizeEvent>
+#include <QSettings>
 #include <QWheelEvent>
 #include <cmath>
 
@@ -49,9 +51,23 @@ ImageViewer::ImageViewer(QWidget *parent) : QWidget(parent)
     setMouseTracking(true);
     setCursor(Qt::OpenHandCursor);
     setMinimumSize(200, 200);
+    // Restore window geometry from the last session.
+    QSettings settings;
+    const QByteArray geom = settings.value("viewerGeometry").toByteArray();
+    if (!geom.isEmpty())
+        restoreGeometry(geom);
+    else
+        resize(900, 700);
 }
 
 ImageViewer::~ImageViewer() = default;
+
+void ImageViewer::closeEvent(QCloseEvent *event)
+{
+    QSettings settings;
+    settings.setValue("viewerGeometry", saveGeometry());
+    event->accept();
+}
 
 void ImageViewer::setImage(const QString &path)
 {
