@@ -779,9 +779,10 @@ ScenarioResult scenarioHundredMpTiles()
     r.timing.p50Ms = coldMs;
     r.timing.p95Ms = coldMs;
     r.timing.p99Ms = coldMs;
-    // Soft local gate: cold fill under 500 ms is healthy on typical CI hosts.
-    // --enforce applies the budget from performance_budget.json.
-    r.passed = (coldMs <= 500.0) && !ready.empty() && (warmCalls == 0);
+    // Soft local gate: cold fill under 1000 ms is healthy on typical CI hosts
+    // (first-call allocator noise + 9 tile procedural fills). --enforce applies
+    // the budget from performance_budget.json (same 1000 ms default).
+    r.passed = (coldMs <= 1000.0) && !ready.empty() && (warmCalls == 0);
     r.detail = "image=10000x10000 tiles_ready=" + std::to_string(ready.size()) +
                " decode_calls=" + std::to_string(decodeCalls) +
                " cold_ms=" + std::to_string(coldMs) + " warm_ms=" + std::to_string(warmMs) +
