@@ -130,7 +130,7 @@
 
 ### A-6: Workspace 恢复完善 ⭐⭐⭐
 
-**当前状态:** `AppState` 已保存 `lastDir`、`lastImage`、`lastThumbScroll`、`analysisVisible`、`analysisPage`、`navSidebarVisible`、`navHistory`。`WorkspaceSerializer` 和 `CompareSession` 已支持比较会话持久化。
+**当前状态:** `AppState` 已保存 `lastDir`、`lastImage`、`lastThumbScroll`、`analysisVisible`、`analysisPage`、`navHistory`。`WorkspaceSerializer` 和 `CompareSession` 已支持比较会话持久化。
 
 **具体行动项:**
 

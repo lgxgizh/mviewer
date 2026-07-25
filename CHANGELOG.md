@@ -120,7 +120,7 @@ All notable changes to this project are documented here. The format is based on
 
 - **菜单打开目录后目录树不更新:** 点击菜单"打开目录"选择新目录后，左侧目录树、
   面包屑导航、缩略图面板等现在会正确同步更新。新增统一的 `changeDirectory()`
-  方法，菜单打开目录、导航侧栏点击、路径输入框都走同一更新链路。
+  方法，菜单打开目录、路径输入框都走同一更新链路。
   (`src/mainwindow.cpp`, `src/mainwindow.h`)
 - **图片比较弹窗不显示对比图片:** 比较弹窗打开后图片空白，需要手动点击"左右分割"
   或"滑动对比"才能看到图片。根因是 `setImages()` 在对话框布局完成前调用，导致
