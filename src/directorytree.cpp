@@ -26,6 +26,32 @@ DirectoryProxyModel::DirectoryProxyModel(QObject *parent) : QSortFilterProxyMode
 {
 }
 
+void DirectoryProxyModel::setFilterText(const QString &text)
+{
+    m_filterText = text;
+    invalidateFilter();
+}
+
+bool DirectoryProxyModel::hasAcceptedDescendant(const QModelIndex &sourceParent) const
+{
+    QFileSystemModel *fsModel = qobject_cast<QFileSystemModel *>(sourceModel());
+    if (!fsModel)
+        return false;
+
+    const int rows = fsModel->rowCount(sourceParent);
+    for (int r = 0; r < rows; ++r)
+    {
+        const QModelIndex child = fsModel->index(r, 0, sourceParent);
+        if (!child.isValid() || !fsModel->isDir(child))
+            continue;
+        if (filterAcceptsRow(r, sourceParent))
+            return true;
+        if (hasAcceptedDescendant(child))
+            return true;
+    }
+    return false;
+}
+
 bool DirectoryProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
 {
     QFileSystemModel *fsModel = qobject_cast<QFileSystemModel *>(sourceModel());
@@ -36,12 +62,22 @@ bool DirectoryProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex &sou
     if (!index.isValid())
         return false;
 
-    // Show all directories for an Explorer-like navigation experience.
-    // Hidden files remain filtered by the model filter flags.
+    // Show only directories.
     if (!fsModel->isDir(index))
         return false;
 
-    return true;
+    // No text filter → accept all directories.
+    if (m_filterText.isEmpty())
+        return true;
+
+    // P0: Directory name text filter with ancestor-chain preservation:
+    // Accept if (a) the directory name contains the filter text, OR
+    //            (b) any descendant directory matches (preserving the path chain).
+    const QString name = fsModel->fileName(index);
+    if (name.contains(m_filterText, Qt::CaseInsensitive))
+        return true;
+
+    return hasAcceptedDescendant(index);
 }
 
 DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
@@ -96,6 +132,16 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
     m_loadingLabel = new QLabel("  加载中...", this);
     m_loadingLabel->setStyleSheet("color: #888; font-style: italic; padding: 4px;");
     m_loadingLabel->hide();
+
+    // P0: Directory name filter (placed above tree by caller via filterEdit()).
+    m_filterEdit = new QLineEdit(this);
+    m_filterEdit->setPlaceholderText("搜索目录...");
+    m_filterEdit->setClearButtonEnabled(true);
+    m_filterEdit->setStyleSheet(
+        "QLineEdit { padding: 4px 6px; border: 1px solid #555; border-radius: 3px;"
+        "            background: #222; color: #ddd; }"
+        "QLineEdit:focus { border-color: #2a82da; }");
+    connect(m_filterEdit, &QLineEdit::textChanged, m_proxy, &DirectoryProxyModel::setFilterText);
 }
 
 DirectoryTree::~DirectoryTree() = default;

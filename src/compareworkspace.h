@@ -30,6 +30,7 @@ class QTableWidget;
 class QComboBox;
 class HistogramWidget;
 class RawImageView;
+class SelectionModel;
 
 // CompareWorkspace：多图同步比较工作区
 class CompareWorkspace : public QWidget
@@ -108,6 +109,14 @@ class CompareWorkspace : public QWidget
         return m_navWindow;
     }
 
+    // P0: Inject the app-wide SelectionModel so that CompareWorkspace writes
+    // the focused/reference image back to the global current image, keeping the
+    // SSOT consistent across all panels.
+    void setSelectionModel(SelectionModel *sel);
+
+    // P1: Get the current focus image path (for triggering external analysis).
+    QString focusImagePath() const;
+
   public slots:
     void nextPair();
     void prevPair();
@@ -116,6 +125,10 @@ class CompareWorkspace : public QWidget
     void syncToggled(bool on);
     // Hover pixel read from any cell, formatted for the status bar. Empty string clears.
     void pixelInfo(const QString &text);
+    // P1 #④: Trigger analysis of the current focus image from within Compare.
+    void analyzeCurrent();
+    // P1 #④: Trigger full report export from within Compare.
+    void exportReportRequested();
 
   protected:
     void paintEvent(QPaintEvent *) override;
@@ -333,4 +346,11 @@ class CompareWorkspace : public QWidget
     // ── M16.6: swap panes ──
     QPushButton *m_swapBtn = nullptr;
     void onSwapPanes();
+
+    // P0: App-wide SelectionModel for current-image consistency.
+    SelectionModel *m_selection = nullptr;
+
+    // P1 #④: Compare → Analyze → Export workflow buttons.
+    QPushButton *m_analyzeBtn = nullptr;
+    QPushButton *m_exportReportBtn = nullptr;
 };

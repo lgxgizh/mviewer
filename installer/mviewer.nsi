@@ -30,6 +30,9 @@ InstallDirRegKey HKLM "Software\${APPNAME}" "InstallDir"
 RequestExecutionLevel admin
 Unicode True
 
+!include "LogicLib.nsh"
+!include "WinMessages.nsh"
+
 VIProductVersion "${VI_VERSION}"
 VIAddVersionKey "ProductName" "${APPNAME}"
 VIAddVersionKey "FileVersion" "${VERSION}"
@@ -55,6 +58,42 @@ Section "Install"
   ; Desktop shortcut
   CreateShortcut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\MViewer.exe"
 
+  ; ── P2 #⑩: File associations ────────────────────────────────────────
+  ; .mviewer workspace file association
+  WriteRegStr HKCR ".mviewer" "" "MViewer.Workspace"
+  WriteRegStr HKCR "MViewer.Workspace" "" "MViewer Workspace"
+  WriteRegStr HKCR "MViewer.Workspace\DefaultIcon" "" "$INSTDIR\MViewer.exe,0"
+  WriteRegStr HKCR "MViewer.Workspace\shell\open\command" "" '"$INSTDIR\MViewer.exe" "%1"'
+
+  ; Register common image extensions for Open-With context menu
+  !macro AssocExt ext
+    WriteRegStr HKCR "MViewer.${ext}" "" "MViewer 图片 (.${ext})"
+    WriteRegStr HKCR "MViewer.${ext}\shell\open" "FriendlyAppName" "MViewer"
+    WriteRegStr HKCR "MViewer.${ext}\shell\open\command" "" '"$INSTDIR\MViewer.exe" "%1"'
+    WriteRegStr HKCR ".${ext}\OpenWithProgids" "MViewer.${ext}" ""
+  !macroend
+  !insertmacro AssocExt "jpg"
+  !insertmacro AssocExt "jpeg"
+  !insertmacro AssocExt "png"
+  !insertmacro AssocExt "bmp"
+  !insertmacro AssocExt "tif"
+  !insertmacro AssocExt "tiff"
+  !insertmacro AssocExt "webp"
+  !insertmacro AssocExt "cr2"
+  !insertmacro AssocExt "nef"
+  !insertmacro AssocExt "arw"
+  !insertmacro AssocExt "dng"
+  !insertmacro AssocExt "raf"
+  !insertmacro AssocExt "rw2"
+  !insertmacro AssocExt "orf"
+  !insertmacro AssocExt "raw"
+  ; Refresh shell associations
+  ${If} ${Silent}
+    ; no-op in silent mode
+  ${Else}
+    System::Call 'shell32.dll::SHChangeNotify(i ${SHCNE_ASSOCCHANGED}, i 0, i 0, i 0)'
+  ${EndIf}
+
   ; Uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
   WriteRegStr HKLM "Software\${APPNAME}" "InstallDir" "$INSTDIR"
@@ -71,6 +110,28 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\${APPNAME}\Uninstall ${APPNAME}.lnk"
   RMDir "$SMPROGRAMS\${APPNAME}"
   Delete "$DESKTOP\${APPNAME}.lnk"
+  ; Remove file associations
+  DeleteRegKey HKCR ".mviewer"
+  DeleteRegKey HKCR "MViewer.Workspace"
+  !macro UnassocExt ext
+    DeleteRegKey HKCR "MViewer.${ext}"
+    DeleteRegValue HKCR ".${ext}\OpenWithProgids" "MViewer.${ext}"
+  !macroend
+  !insertmacro UnassocExt "jpg"
+  !insertmacro UnassocExt "jpeg"
+  !insertmacro UnassocExt "png"
+  !insertmacro UnassocExt "bmp"
+  !insertmacro UnassocExt "tif"
+  !insertmacro UnassocExt "tiff"
+  !insertmacro UnassocExt "webp"
+  !insertmacro UnassocExt "cr2"
+  !insertmacro UnassocExt "nef"
+  !insertmacro UnassocExt "arw"
+  !insertmacro UnassocExt "dng"
+  !insertmacro UnassocExt "raf"
+  !insertmacro UnassocExt "rw2"
+  !insertmacro UnassocExt "orf"
+  !insertmacro UnassocExt "raw"
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
   DeleteRegKey HKLM "Software\${APPNAME}"
 SectionEnd

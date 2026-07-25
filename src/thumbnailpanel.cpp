@@ -315,7 +315,25 @@ void ThumbnailPanel::setDirectory(const QString &path)
                 bool keep = false;
                 for (const QString &ext : m_typeFilter.split(','))
                 {
-                    if (ext == fi.suffix().toLower())
+                    const QString lowered = ext.trimmed().toLower();
+                    const QString suffix = fi.suffix().toLower();
+                    if (lowered == suffix)
+                    {
+                        keep = true;
+                        break;
+                    }
+                    // P0: Expand "raw" alias to common RAW file extensions.
+                    static const QStringList rawExts = {"cr2","cr3","nef","arw","dng",
+                                                         "raf","rw2","orf","sr2","srw",
+                                                         "pef","3fr","mef","erf","mrw",
+                                                         "dcr","kdc","mos","raw","iiq"};
+                    if (lowered == "raw" && rawExts.contains(suffix))
+                    {
+                        keep = true;
+                        break;
+                    }
+                    // P0: Expand "tiff" alias to "tif" + "tiff".
+                    if (lowered == "tiff" && (suffix == "tif" || suffix == "tiff"))
                     {
                         keep = true;
                         break;

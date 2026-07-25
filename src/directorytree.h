@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QLineEdit>
 #include <QListView>
 #include <QSortFilterProxyModel>
 #include <QTreeView>
@@ -18,9 +19,16 @@ class DirectoryProxyModel : public QSortFilterProxyModel
 
   public:
     explicit DirectoryProxyModel(QObject *parent = nullptr);
+    void setFilterText(const QString &text);
+    QString filterText() const { return m_filterText; }
 
   protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
+    // Check whether any descendant of sourceParent matches the current filter text.
+    bool hasAcceptedDescendant(const QModelIndex &sourceParent) const;
+
+  private:
+    QString m_filterText;
 };
 
 // Production-grade directory tree for image browsing.
@@ -45,6 +53,9 @@ class DirectoryTree : public QTreeView
 
     // The directory currently selected in the tree (empty if none).
     QString currentPath() const;
+
+    // Access the filter line-edit so callers can place it in a layout.
+    QLineEdit *filterEdit() const { return m_filterEdit; }
 
   public slots:
     // F5 refresh. Re-reads the currently selected folder from disk (so
@@ -87,4 +98,5 @@ class DirectoryTree : public QTreeView
     bool m_loading = false;
     QLabel *m_loadingLabel = nullptr;
     QString m_pendingFetchPath; // path currently being progressively fetched
+    QLineEdit *m_filterEdit = nullptr;
 };

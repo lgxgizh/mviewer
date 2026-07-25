@@ -37,23 +37,45 @@ BatchDialog::BatchDialog(QWidget *parent)
 
     auto *fileBtnBar = new QHBoxLayout;
     m_addBtn = new QPushButton("添加文件...");
+    m_addDirBtn = new QPushButton("添加目录...");   // P2 #⑦
     m_removeBtn = new QPushButton("移除选中");
+    m_chkRecursive = new QCheckBox("递归子目录");    // P2 #⑦
     fileBtnBar->addWidget(m_addBtn);
+    fileBtnBar->addWidget(m_addDirBtn);
     fileBtnBar->addWidget(m_removeBtn);
+    fileBtnBar->addWidget(m_chkRecursive);
     fileBtnBar->addStretch();
     fileGroup->addLayout(fileBtnBar);
     mainLayout->addLayout(fileGroup);
+
+    // ── P2 #⑦: retry params ───────────────────────────────────────
+    auto *retryRow = new QHBoxLayout;
+    retryRow->addWidget(new QLabel("重试次数:"));
+    m_retryCount = new QSpinBox;
+    m_retryCount->setRange(0, 10);
+    m_retryCount->setValue(0);
+    retryRow->addWidget(m_retryCount);
+    retryRow->addWidget(new QLabel("重试间隔 (ms):"));
+    m_retryDelay = new QSpinBox;
+    m_retryDelay->setRange(0, 30000);
+    m_retryDelay->setSingleStep(100);
+    m_retryDelay->setValue(500);
+    retryRow->addWidget(m_retryDelay);
+    retryRow->addStretch();
+    mainLayout->addLayout(retryRow);
 
     // ── operations ─────────────────────────────────────────────────
     auto *opGroup = new QHBoxLayout;
     m_chkAnalyze = new QCheckBox("分析");
     m_chkResize = new QCheckBox("缩放");
+    m_chkCrop = new QCheckBox("裁剪");   // P2 #⑦
     m_chkWatermark = new QCheckBox("水印");
     m_chkRename = new QCheckBox("重命名");
     m_chkExport = new QCheckBox("导出");
     m_chkExport->setChecked(true);
     opGroup->addWidget(m_chkAnalyze);
     opGroup->addWidget(m_chkResize);
+    opGroup->addWidget(m_chkCrop);
     opGroup->addWidget(m_chkWatermark);
     opGroup->addWidget(m_chkRename);
     opGroup->addWidget(m_chkExport);
@@ -167,6 +189,7 @@ BatchDialog::BatchDialog(QWidget *parent)
 
     // ── connections ────────────────────────────────────────────────
     connect(m_addBtn, &QPushButton::clicked, this, &BatchDialog::onAddFiles);
+    connect(m_addDirBtn, &QPushButton::clicked, this, &BatchDialog::onAddDir);  // P2 #⑦
     connect(m_removeBtn, &QPushButton::clicked, this, &BatchDialog::onRemoveSelected);
     connect(m_startBtn, &QPushButton::clicked, this, &BatchDialog::onStart);
     connect(m_pauseBtn, &QPushButton::clicked, this, &BatchDialog::onPauseResume);
@@ -188,6 +211,13 @@ void BatchDialog::onAddFiles()
         this, "选择文件", {}, "Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)");
     for (const auto &f : files)
         m_fileList->addItem(f);
+}
+
+void BatchDialog::onAddDir()    // P2 #⑦
+{
+    const auto dir = QFileDialog::getExistingDirectory(this, "选择图片目录");
+    if (!dir.isEmpty())
+        m_fileList->addItem(dir);
 }
 
 void BatchDialog::onRemoveSelected()
@@ -213,12 +243,19 @@ void BatchDialog::buildConfig(mviewer::domain::BatchJobConfig &config) const
         config.operations.push_back(mviewer::domain::BatchOp::Analyze);
     if (m_chkResize->isChecked())
         config.operations.push_back(mviewer::domain::BatchOp::Resize);
+    if (m_chkCrop->isChecked())             // P2 #⑦
+        config.operations.push_back(mviewer::domain::BatchOp::Crop);
     if (m_chkWatermark->isChecked())
         config.operations.push_back(mviewer::domain::BatchOp::Watermark);
     if (m_chkRename->isChecked())
         config.operations.push_back(mviewer::domain::BatchOp::Rename);
     if (m_chkExport->isChecked())
         config.operations.push_back(mviewer::domain::BatchOp::Export);
+
+    // P2 #⑦: retry & recursive
+    config.retryCount = m_retryCount->value();
+    config.retryDelayMs = m_retryDelay->value();
+    config.recursiveScan = m_chkRecursive->isChecked();
 
     config.resizeMaxEdge = m_resizeMaxEdge->value();
     config.watermarkText = m_watermarkText->text().toStdString();

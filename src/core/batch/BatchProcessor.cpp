@@ -10,8 +10,10 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <sstream>
+#include <thread>
 
 namespace mviewer::core
 {
@@ -135,6 +137,18 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
             break;
         }
 
+        case domain::BatchOp::Crop:
+        {
+            // P2 #⑦: Crop to the configured rectangle.
+            if (config.cropW > 0 && config.cropH > 0)
+            {
+                img = img.copy(config.cropX, config.cropY, config.cropW, config.cropH);
+                result.width = img.width;
+                result.height = img.height;
+            }
+            break;
+        }
+
         case domain::BatchOp::Resize:
         {
             img = resizeToFit(img, config.resizeMaxEdge, config.resizeMaxEdge);
@@ -205,9 +219,44 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
     m_cancelled.store(false);
     m_paused.store(false);
     domain::BatchJobResult aggregate;
-    const int total = static_cast<int>(config.inputPaths.size());
+
+    // P2 #⑦: Expand input paths with directory recursion if requested.
+    std::vector<std::string> expandedPaths = config.inputPaths;
+    if (config.recursiveScan)
+    {
+        auto collectImages = [](const std::filesystem::path &dir,
+                                 std::vector<std::string> &out)
+        {
+            for (const auto &entry : std::filesystem::recursive_directory_iterator(dir))
+            {
+                if (entry.is_regular_file())
+                {
+                    auto ext = entry.path().extension().string();
+                    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                    static const std::vector<std::string> imgExts = {
+                        ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff",
+                        ".webp", ".cr2", ".nef", ".arw", ".dng", ".raf",
+                        ".rw2", ".orf", ".raw"};
+                    if (std::find(imgExts.begin(), imgExts.end(), ext) != imgExts.end())
+                        out.push_back(entry.path().string());
+                }
+            }
+        };
+        expandedPaths.clear();
+        for (const auto &p : config.inputPaths)
+        {
+            std::filesystem::path fsp(p);
+            if (std::filesystem::is_directory(fsp))
+                collectImages(fsp, expandedPaths);
+            else
+                expandedPaths.push_back(p);
+        }
+    }
+
+    const int total = static_cast<int>(expandedPaths.size());
     aggregate.fileResults.reserve(total);
 
+    // P2 #⑦: retry counter (config.retryCount, default 0 = no retry).
     for (int i = 0; i < total; ++i)
     {
         // Honour pause between files (current file always finishes first).
@@ -216,10 +265,26 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
             break;
 
         if (m_progressCb)
-            m_progressCb(i, total, config.inputPaths[static_cast<size_t>(i)]);
+            m_progressCb(i, total, expandedPaths[static_cast<size_t>(i)]);
 
-        auto fileResult = processFile(config, config.inputPaths[static_cast<size_t>(i)], i, total);
-        if (fileResult.success)
+        domain::BatchFileResult fileResult;
+        bool succeeded = false;
+        for (int attempt = 0; attempt <= config.retryCount && !succeeded; ++attempt)
+        {
+            fileResult =
+                processFile(config, expandedPaths[static_cast<size_t>(i)], i, total);
+            if (fileResult.success)
+            {
+                succeeded = true;
+                break;
+            }
+            if (attempt < config.retryCount && config.retryDelayMs > 0)
+            {
+                std::this_thread::sleep_for(
+                    std::chrono::milliseconds(config.retryDelayMs));
+            }
+        }
+        if (succeeded || fileResult.success)
             ++aggregate.totalSucceeded;
         else
             ++aggregate.totalFailed;

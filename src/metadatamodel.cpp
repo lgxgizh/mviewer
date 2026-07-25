@@ -169,6 +169,28 @@ void MetadataModel::rebuild()
         }
         addLeaf(img, tr("方向"), orientationText(m_meta.orientation));
         addLeaf(img, tr("ICC 配置"), m_meta.hasIccProfile ? tr("已嵌入") : tr("无"));
+        // P0: GPS coordinates in the Image section.
+        if (m_meta.hasGps)
+        {
+            auto toDms = [](double dd, char pos, char neg)
+            {
+                const bool isNeg = (dd < 0);
+                double d = std::abs(dd);
+                int deg = static_cast<int>(d);
+                double m = (d - deg) * 60.0;
+                int min = static_cast<int>(m);
+                double s = (m - min) * 60.0;
+                return QString("%1°%2'%3\"%4")
+                    .arg(deg)
+                    .arg(min, 2, 10, QChar('0'))
+                    .arg(s, 2, 'f', 1)
+                    .arg(isNeg ? neg : pos);
+            };
+            addLeaf(img, tr("GPS 纬度"), toDms(m_meta.gpsLatitude, 'N', 'S'));
+            addLeaf(img, tr("GPS 经度"), toDms(m_meta.gpsLongitude, 'E', 'W'));
+            if (m_meta.gpsAltitude != 0.0)
+                addLeaf(img, tr("GPS 海拔"), QString("%1 m").arg(m_meta.gpsAltitude, 0, 'f', 1));
+        }
     }
 
     // ─── EXIF / XMP / IPTC text keys ────────────────────────────────────

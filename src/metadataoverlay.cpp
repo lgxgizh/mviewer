@@ -1,4 +1,5 @@
 #include "metadataoverlay.h"
+#include "widgets/histogramwidget.h"
 
 #include "core/image/MetadataReader.h"
 #include "core/image/RawMetadata.h"
@@ -22,6 +23,11 @@ MetadataOverlay::MetadataOverlay(QWidget *parent) : QWidget(parent)
     setFocusPolicy(Qt::StrongFocus);
     setMouseTracking(true);
     setAutoFillBackground(false);
+
+    // P0: Embedded mini histogram (rendered as overlay child widget).
+    m_histogram = new HistogramWidget(this);
+    m_histogram->setFixedHeight(kHistogramHeight);
+    m_histogram->hide();
 }
 
 void MetadataOverlay::setImage(const QString &path)
@@ -60,7 +66,37 @@ void MetadataOverlay::hide()
     QWidget::hide();
     m_lines.clear();
     m_shortName.clear();
+    if (m_histogram)
+        m_histogram->hide();
     emit visibilityChanged(false);
+}
+
+void MetadataOverlay::setHistogram(const mviewer::core::Histogram &hist)
+{
+    if (!m_histogram)
+        return;
+    if (hist.r.empty())
+    {
+        m_histogram->hide();
+        return;
+    }
+    m_histogram->setHistograms({hist});
+    m_histogram->show();
+    if (isVisible())
+        update(); // trigger paintEvent to reposition
+}
+
+void MetadataOverlay::positionHistogram(const QRect &boxRect)
+{
+    if (!m_histogram || !m_histogram->isVisible())
+        return;
+    const int padding = 12;
+    const int lineH = fontMetrics().height() + 4;
+    const int bodyEnd = (m_lines.size() + 1) * lineH + padding;
+    const int x = boxRect.x() + padding;
+    const int y = boxRect.y() + bodyEnd + 4;
+    const int w = boxRect.width() - padding * 2;
+    m_histogram->setGeometry(x, y, w, kHistogramHeight);
 }
 
 namespace
@@ -194,11 +230,29 @@ void MetadataOverlay::buildContent(const QString &path)
     else if (!meta.colorSpace.empty())
         m_lines << QString("色彩配置: %1").arg(QString::fromStdString(meta.colorSpace));
 
-    // Histogram summary (cheap: min/max/mean from MetadataReader if present;
-    // full histogram lives in AnalysisPanel — overlay only shows a one-liner).
-    if (meta.width > 0 && meta.height > 0)
-        m_lines << QString("直方图: 见分析面板 (H) · 像素 %1")
-                       .arg(static_cast<qint64>(meta.width) * meta.height);
+    // P0: GPS coordinates (decimal degrees → DMS for readability).
+    if (meta.hasGps)
+    {
+        auto toDms = [](double dd, char pos, char neg)
+        {
+            const bool isNeg = (dd < 0);
+            double d = std::abs(dd);
+            int deg = static_cast<int>(d);
+            double m = (d - deg) * 60.0;
+            int min = static_cast<int>(m);
+            double s = (m - min) * 60.0;
+            return QString("%1°%2'%3\"%4")
+                .arg(deg)
+                .arg(min, 2, 10, QChar('0'))
+                .arg(s, 2, 'f', 1)
+                .arg(isNeg ? neg : pos);
+        };
+        m_lines << QString("GPS: %1  %2")
+                       .arg(toDms(meta.gpsLatitude, 'N', 'S'),
+                            toDms(meta.gpsLongitude, 'E', 'W'));
+        if (meta.gpsAltitude != 0.0)
+            m_lines << QString("海拔: %1 m").arg(meta.gpsAltitude, 0, 'f', 1);
+    }
 
     // Modified time
     if (meta.modifiedEpochSec > 0)
@@ -206,6 +260,7 @@ void MetadataOverlay::buildContent(const QString &path)
         const auto dt = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(meta.modifiedEpochSec));
         m_lines << QString("修改: %1").arg(dt.toString("yyyy-MM-dd hh:mm:ss"));
     }
+    // P0: Histogram is rendered as a child widget (m_histogram), not in text lines.
 }
 
 void MetadataOverlay::paintEvent(QPaintEvent *)
@@ -219,7 +274,9 @@ void MetadataOverlay::paintEvent(QPaintEvent *)
     const int lineH = fontMetrics().height() + 4;
     const int padding = 12;
     const int boxW = kInfoRectWidth;
-    const int boxH = (m_lines.size() + 1) * lineH + padding * 2;
+    // P0: Reserve space for embedded histogram if it has data.
+    const int histExtra = (m_histogram && m_histogram->isVisible()) ? kHistogramHeight + padding : 0;
+    const int boxH = (m_lines.size() + 1) * lineH + padding * 2 + histExtra;
 
     const int x = width() - boxW - 20;
     const int y = 20;
@@ -254,6 +311,10 @@ void MetadataOverlay::paintEvent(QPaintEvent *)
         p.drawText(QRect(x + padding, y + padding + (i + 1) * lineH, boxW - padding * 2, lineH),
                    Qt::AlignLeft | Qt::AlignVCenter, m_lines.at(i));
     }
+
+    // P0: Position histogram widget at the bottom of the info box.
+    if (m_histogram && m_histogram->isVisible())
+        positionHistogram(boxRect);
 
     // Hint
     p.setPen(QColor(150, 150, 150, 255));

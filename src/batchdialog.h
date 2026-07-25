@@ -32,6 +32,7 @@ class BatchDialog : public QDialog
 
   private slots:
     void onAddFiles();
+    void onAddDir();      // P2 #⑦
     void onRemoveSelected();
     void onStart();
     void onCancel();
@@ -46,14 +47,21 @@ class BatchDialog : public QDialog
     // ── file list ──────────────────────────────────────────────────
     QListWidget *m_fileList = nullptr;
     QPushButton *m_addBtn = nullptr;
+    QPushButton *m_addDirBtn = nullptr;   // P2 #⑦
     QPushButton *m_removeBtn = nullptr;
+    QCheckBox *m_chkRecursive = nullptr;   // P2 #⑦
 
     // ── operations ─────────────────────────────────────────────────
     QCheckBox *m_chkAnalyze = nullptr;
     QCheckBox *m_chkResize = nullptr;
+    QCheckBox *m_chkCrop = nullptr;        // P2 #⑦
     QCheckBox *m_chkWatermark = nullptr;
     QCheckBox *m_chkRename = nullptr;
     QCheckBox *m_chkExport = nullptr;
+
+    // ── retry params ──────────────────────────────────────────────
+    QSpinBox *m_retryCount = nullptr;      // P2 #⑦
+    QSpinBox *m_retryDelay = nullptr;      // P2 #⑦
 
     // ── resize params ──────────────────────────────────────────────
     QSpinBox *m_resizeMaxEdge = nullptr;

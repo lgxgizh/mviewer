@@ -4,11 +4,15 @@
 #include <QStringList>
 #include <QWidget>
 
+#include "core/compare/Histogram.h"
+
 class QLabel;
+class HistogramWidget;
 
 /// M15 Product Shell P0: Semi-transparent metadata overlay that appears on top
 /// of the ImageViewer showing key EXIF info (filename, dimensions, size, date,
-/// camera). Toggled by 'I' key or click on image. Dismissed by ESC.
+/// camera, GPS, histogram). Toggled by 'I' key or click on image. Dismissed by
+/// ESC.
 ///
 /// Usage:
 ///   overlay->showForImage(path);  // reads metadata and shows
@@ -29,6 +33,9 @@ class MetadataOverlay : public QWidget
     /// Hide and clear.
     void hide();
 
+    /// P0: Set a single histogram from an external source (ImageViewer).
+    void setHistogram(const mviewer::core::Histogram &hist);
+
   signals:
     void visibilityChanged(bool visible);
 
@@ -40,11 +47,14 @@ class MetadataOverlay : public QWidget
 
   private:
     void buildContent(const QString &path);
+    void positionHistogram(const QRect &boxRect);
 
     QStringList m_lines;
     QString m_shortName;
+    HistogramWidget *m_histogram = nullptr;
 
     // Auto-hide delay constants
     static constexpr int kInfoRectWidth = 380;
     static constexpr int kFontSize = 12;
+    static constexpr int kHistogramHeight = 64;
 };

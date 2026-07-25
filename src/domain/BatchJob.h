@@ -11,6 +11,7 @@ namespace mviewer::domain
 enum class BatchOp : uint8_t
 {
     Analyze = 0, // run selected analyzers, collect metrics
+    Crop,        // P2 #⑦: crop to rectangle (x, y, w, h)
     Resize,      // resize to fit max edge (keeps aspect ratio)
     Watermark,   // draw text watermark
     Rename,      // apply rename pattern to output filename
@@ -57,7 +58,19 @@ struct BatchJobConfig
 
     // --- Analyze params ---
     std::vector<std::string> analyzerIds; // which analyzers to run
-};
+
+    // ─── P2 #⑦: retry & crop ────────────────────────────────────────────────
+    int retryCount = 0;    // number of retries per file on failure (0 = no retry)
+    int retryDelayMs = 500; // delay between retries in ms
+
+    // --- Crop params (used when BatchOp::Crop is in operations) ---
+    int cropX = 0;
+    int cropY = 0;
+    int cropW = 0; // 0 = no crop
+    int cropH = 0;
+
+    // --- Directory recursion ---
+    bool recursiveScan = false; // scan subdirectories for images
 
 // Aggregate result of a complete batch run.
 struct BatchJobResult

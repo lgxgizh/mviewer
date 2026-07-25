@@ -18,6 +18,7 @@
 #include "core/analyzer/SharpnessAnalyzer.h"
 
 #include <algorithm>
+#include <future>
 #include <memory>
 #include <optional>
 #include <string>
@@ -178,12 +179,31 @@ std::vector<std::string> AnalyzerRegistry::availableAnalyzers() const
 std::unordered_map<std::string, std::string>
 AnalyzerRegistry::runAnalyzer(const ImageFrame &frame) const
 {
-    std::unordered_map<std::string, std::string> results;
+    // P1 #⑤: Run all registered analyzers in parallel via std::async (one
+    // thread per analyzer). The frame is const and analyzers are read-only;
+    // factory creates an independent instance per thread, so no locks needed.
+    std::vector<std::pair<std::string, std::future<std::string>>> futures;
+    futures.reserve(m_factories.size());
+
     for (const auto &[id, factory] : m_factories)
     {
-        auto analyzer = factory();
-        if (analyzer && analyzer->analyze(frame))
-            results[id] = analyzer->resultText();
+        futures.emplace_back(id, std::async(std::launch::async,
+                                            [&factory, &frame]() -> std::string
+                                            {
+                                                auto analyzer = factory();
+                                                if (analyzer && analyzer->analyze(frame))
+                                                    return analyzer->resultText();
+                                                return {};
+                                            }));
+    }
+
+    std::unordered_map<std::string, std::string> results;
+    results.reserve(futures.size());
+    for (auto &[id, fut] : futures)
+    {
+        std::string text = fut.get();
+        if (!text.empty())
+            results[id] = std::move(text);
     }
     return results;
 }

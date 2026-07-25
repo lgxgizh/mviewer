@@ -6,6 +6,7 @@
 #include "core/workspace/WorkspaceSerializer.h"
 
 #include <QKeyEvent>
+#include <QListWidget>
 #include <QMainWindow>
 #include <QMap>
 #include <QStringList>
@@ -98,8 +99,14 @@ class MainWindow : public QMainWindow
     void rebuildRecentMenu();
     void rebuildRecentFilesMenu();
     void rebuildFavoritesMenu();
+    void rebuildFavoritesBar();
     void addFavoriteCurrent();
+    void removeFavorite(const QString &dir = {});
     void restoreLastSession();
+    // P0: Directory-level back/forward history (independent of image history).
+    void pushDirHistory(const QString &dir);
+    void goDirBack();
+    void goDirForward();
 
     // P0-3: metadata overlay — position and show the floating metadata panel.
     void showMetadataOverlay();
@@ -140,8 +147,11 @@ class MainWindow : public QMainWindow
     QAction *m_actToggleAnalysis = nullptr;
     QAction *m_actAbout = nullptr;
     QAction *m_actAddFavorite = nullptr;
+    QAction *m_actRemoveFavorite = nullptr;
     QAction *m_actHistoryBack = nullptr;
     QAction *m_actHistoryForward = nullptr;
+    QAction *m_actDirBack = nullptr;
+    QAction *m_actDirForward = nullptr;
     QAction *m_actToggleSearch = nullptr;
     QAction *m_actBatch = nullptr;
     QAction *m_actPluginSettings = nullptr;
@@ -225,6 +235,11 @@ class MainWindow : public QMainWindow
     // In-session navigation history (like a browser back/forward).
     QStringList m_history;
     int m_historyIndex = -1;
+    // P0: Directory-level back/forward history (separate from image history).
+    QStringList m_dirHistory;
+    int m_dirHistoryIndex = -1;
+    // P0: Favorites bar widget in the left sidebar.
+    QListWidget *m_favoritesBar = nullptr;
     // Persisted, cross-session app state (favorites + restore position).
     mviewer::core::RecentFiles m_recent;      // recent-folders LRU
     mviewer::core::RecentFiles m_recentFiles; // recent-files LRU (opened images)

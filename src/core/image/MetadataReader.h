@@ -22,6 +22,14 @@ class MetadataReader
     // File-level metadata: path, name, size, mtime, pixel dimensions. Does NOT
     // decode pixels; dimension is read cheaply via QImageReader::size().
     static mviewer::domain::ImageMetadata read(const std::string &filePath);
+
+  private:
+    // P0: parse GPS IFD from a JPEG file buffer. Populates hasGps, gpsLatitude,
+    // gpsLongitude, gpsAltitude on the metadata struct in-place.
+    static void readGps(mviewer::domain::ImageMetadata &meta,
+                        const std::string &filePath);
+    // Helper: convert EXIF rational (num, denom) to double degrees.
+    static double exifToDecimal(const unsigned char *buf, int offset, bool isLittle);
 };
 
 } // namespace mviewer::core

@@ -1,4 +1,5 @@
 #include "compareworkspace.h"
+#include "selectionmodel.h"
 #include "widgets/histogramwidget.h"
 #include "widgets/rawimageview.h"
 
@@ -393,6 +394,17 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     connect(m_swapBtn, &QPushButton::clicked, this, &CompareWorkspace::onSwapPanes);
     syncLayout->addWidget(m_swapBtn);
 
+    // P1 #④: Analyze & export buttons in the compare toolbar.
+    m_analyzeBtn = new QPushButton(tr("分析"), this);
+    m_analyzeBtn->setToolTip(tr("在分析面板中打开当前焦点图像"));
+    connect(m_analyzeBtn, &QPushButton::clicked, this, &CompareWorkspace::analyzeCurrent);
+    syncLayout->addWidget(m_analyzeBtn);
+
+    m_exportReportBtn = new QPushButton(tr("导出报告"), this);
+    m_exportReportBtn->setToolTip(tr("将对比结果导出为 HTML/Markdown/JSON 报告"));
+    connect(m_exportReportBtn, &QPushButton::clicked, this, &CompareWorkspace::exportReportRequested);
+    syncLayout->addWidget(m_exportReportBtn);
+
     auto *leftLay = new QVBoxLayout;
     leftLay->setContentsMargins(0, 0, 0, 0);
     leftLay->setSpacing(4);
@@ -515,6 +527,28 @@ void CompareWorkspace::restoreNavState(const NavState &s)
         applySelectionToAll(s.roi);
 }
 
+void CompareWorkspace::setSelectionModel(SelectionModel *sel)
+{
+    m_selection = sel;
+}
+
+QString CompareWorkspace::focusImagePath() const
+{
+    if (m_focusIndex >= 0)
+    {
+        const int idx = m_pairIndex + m_focusIndex;
+        if (idx >= 0 && idx < m_imagePool.size())
+            return m_imagePool[idx];
+    }
+    // Fall back to first image in the current window.
+    if (!m_imagePool.isEmpty())
+    {
+        int idx = qBound(0, m_pairIndex, m_imagePool.size() - 1);
+        return m_imagePool[idx];
+    }
+    return {};
+}
+
 void CompareWorkspace::nextPair()
 {
     if (!hasNextPair())
@@ -527,6 +561,9 @@ void CompareWorkspace::nextPair()
     setImages(win);
     restoreNavState(saved);
     updatePairButtons();
+    // P0: write the first image of the new window back to global SelectionModel.
+    if (m_selection && !win.isEmpty())
+        m_selection->setCurrentImage(win.first());
 }
 
 void CompareWorkspace::prevPair()
@@ -543,6 +580,9 @@ void CompareWorkspace::prevPair()
     setImages(win);
     restoreNavState(saved);
     updatePairButtons();
+    // P0: write the first image of the new window back to global SelectionModel.
+    if (m_selection && !win.isEmpty())
+        m_selection->setCurrentImage(win.first());
 }
 
 void CompareWorkspace::updatePairButtons()
@@ -1199,6 +1239,15 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
         m_focusBtn->setChecked(locking);
     if (m_focusLabel)
         m_focusLabel->setText(locking ? tr("基准: %1").arg(newFocus + 1) : tr("基准: —"));
+
+    // P0: Write the reference cell's image back to the global SelectionModel so
+    // the rest of the app (MetadataPanel/AnalysisPanel/Export/etc.) stays in sync.
+    if (locking && m_selection && newFocus >= 0)
+    {
+        const int poolIdx = m_pairIndex + newFocus;
+        if (poolIdx >= 0 && poolIdx < m_imagePool.size())
+            m_selection->setCurrentImage(m_imagePool[poolIdx]);
+    }
 
     const int n = m_engine.imageCount();
     for (int i = 0; i < n; ++i)

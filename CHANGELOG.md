@@ -6,6 +6,73 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — P0 Product Polish (Browser, Selection, Overlay)
+
+- **Directory tree auto-locate:** the tree now automatically expands
+  ancestors and scrolls to the image's parent folder on `currentImageChanged`
+  (no manual tree navigation needed when browsing across directories).
+- **Directory search:** `Ctrl+F` on the directory tree filters folders by
+  name in-place; matching branches keep their ancestor chain visible so the
+  tree structure remains navigable.
+- **Favorites bar:** a compact `QListWidget` in the left sidebar shows
+  pinned directories; single-click navigates, right-click removes. Synced
+  with the existing File → 收藏 directory / AppState storage.
+- **Directory-level back/forward:** `Ctrl+Alt+Left/Right` navigates directory
+  history (independent of image-level history). Automatically pushed on
+  `changeDirectory`, `onBreadcrumbPath`, and tree node clicks.
+- **RAW filter alias:** the thumbnail type filter now accepts `raw` as a
+  single token that expands to 20 common RAW extensions (cr2/nef/arw/dng/…),
+  and `tiff` expands to `tif`+`tiff`.
+- **SelectionModel unification:** `CompareWorkspace` now writes the focused
+  reference cell back to the app-wide `SelectionModel` via
+  `setSelectionModel()`, so the global "current image" stays unique. Panel
+  synchronization (`MetadataPanel` directly listens to
+  `SelectionModel::currentImageChanged`) eliminates "each widget keeps its
+  own current" copies.
+- **Metadata GPS:** `domain::ImageMetadata` gains `hasGps`,
+  `gpsLatitude/gpsLongitude/gpsAltitude`. `MetadataReader::readGps()` parses
+  the JPEG EXIF GPS IFD (tag 0x8825, no third-party lib). Overlay and
+  MetadataPanel display coordinates as D°M'S" with N/S/E/W hemispheres.
+- **Overlay mini histogram:** `MetadataOverlay` now embeds a
+  `HistogramWidget` child below the EXIF lines. Histogram is computed lazily
+  from the `ImageViewer`'s already-decoded frame on show, no extra decode.
+
+### Added — P1 Product Workflow (Compare, Analyzer, Report)
+
+- **Compare → Analyze/Export buttons (P1-④):** Two toolbar buttons
+  (分析 / 导出报告) added to `CompareWorkspace`. "Analyze" sends the
+  focused reference cell's image to the AnalysisPanel; "Export Report"
+  triggers the full export pipeline — closing the Compare→Analyze→Export
+  loop without switching windows.
+- **Analyzer parallel execution (P1-⑤):** `AnalyzerRegistry::runAnalyzer()`
+  now fans out all registered analyzers via `std::async` (one thread per
+  analyzer). For a typical run with 10+ analyzers, this reduces wall-clock
+  analysis time by 3–5× compared to the previous serial loop.
+- **Markdown report export (P1-⑥):** `exportReport()` now supports
+  `Markdown 文件 (*.md)` format. Outputs a structured `.md` file with
+  title, histogram (base64 PNG), and compare diff block.
+
+### Added — P2 Release Readiness (Batch, Plugin SDK, Dashboard, Release)
+
+- **Batch retry + recursive (P2-⑦):** `BatchProcessor` supports per-file
+  retry (`retryCount` + `retryDelayMs`) in `execute()`. Directory inputs in
+  `BatchDialog` ("添加目录...") expand via `recursive_directory_iterator`
+  when `recursiveScan` is enabled.
+- **Batch Crop operation (P2-⑦):** New `BatchOp::Crop` crops to
+  `{cropX, cropY, cropW, cropH}` before subsequent operations.
+- **Plugin SDK frozen (P2-⑧):** Decoder / Analyzer / Exporter / Importer
+  interfaces formally frozen as ABI v1. See
+  [ADR 013](docs/adr/013-p2-plugin-sdk-frozen.md).
+- **Nightly Dashboard confirmed (P2-⑨):** The existing
+  `scripts/benchmark_dashboard.ps1` generates an HTML dashboard with
+  sparklines, a 28-slot trend CSV, and CI jobs for Nightly / Release /
+  Performance Gate. No code changes needed.
+- **Auto Update Checker (P2-⑩):** New `core/update/UpdateChecker` parses
+  GitHub Releases `tag_name` and compares semver tags.
+- **NSIS file associations (P2-⑩):** Installer registers `.mviewer`
+  workspace files and 15 image extensions (jpg/png/raw/etc.) in the
+  Windows Open-With menu. Clean unregistration on uninstall.
+
 ### Removed
 
 - **NavSidebar:** removed the left-side Favorites/Recent/History tree that

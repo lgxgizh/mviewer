@@ -31,6 +31,7 @@
 #include "breadcrumbbar.h"
 #include "compareworkspace.h"
 #include "core/analyzer/AnalyzerPipeline.h"
+#include "core/compare/Histogram.h"
 #include "core/render/Viewport.h"
 #include "directorymodel.h"
 #include "directorytree.h"
@@ -202,6 +203,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 
     // P0: restore last folder + image + scroll position (deferred to event loop).
     rebuildFavoritesMenu();
+    rebuildFavoritesBar();
     rebuildRecentFilesMenu();
     restoreLastSession();
 
@@ -254,7 +256,9 @@ void MainWindow::setupUi()
     m_favMenu = fileMenu->addMenu("收藏目录(&V)");
     m_actAddFavorite = new QAction("收藏当前目录(&D)", this);
     m_actAddFavorite->setShortcut(QKeySequence("Ctrl+D")); // Ctrl+D
+    m_actRemoveFavorite = new QAction("取消收藏当前目录", this);
     fileMenu->addAction(m_actAddFavorite);
+    fileMenu->addAction(m_actRemoveFavorite);
 
     fileMenu->addSeparator();
     fileMenu->addAction(m_actSaveWorkspace);
@@ -323,9 +327,16 @@ void MainWindow::setupUi()
     m_actHistoryBack->setShortcut(QKeySequence::Back); // Alt+Left
     m_actHistoryForward = new QAction("下一步(&N)", this);
     m_actHistoryForward->setShortcut(QKeySequence::Forward); // Alt+Right
+    // P0: Directory-level back/forward (independent of image history).
+    m_actDirBack = new QAction("上一个目录", this);
+    m_actDirBack->setShortcut(QKeySequence("Ctrl+Alt+Left"));
+    m_actDirForward = new QAction("下一个目录", this);
+    m_actDirForward->setShortcut(QKeySequence("Ctrl+Alt+Right"));
     viewMenu->addAction(m_actHistoryBack);
     viewMenu->addAction(m_actHistoryForward);
     viewMenu->addSeparator();
+    viewMenu->addAction(m_actDirBack);
+    viewMenu->addAction(m_actDirForward);
     viewMenu->addAction(m_actCompare);
     viewMenu->addAction(m_actToggleAnalysis);
     m_actToggleSearch = new QAction("全局搜索(&S)", this);
@@ -446,21 +457,48 @@ void MainWindow::setupUi()
     m_pathEdit->setToolTip("输入或粘贴目录路径，按 Enter 键进入该目录（等效于菜单\"打开目录\"）。");
     m_pathEdit->setClearButtonEnabled(true);
 
-    // ----- Left column: directory tree + preview -----
+    // ----- Left column: favorites + filter + directory tree + preview -----
     auto *leftWidget = new QSplitter(Qt::Vertical, this);
     m_leftSplitter = leftWidget;
 
+    // P0: Favorites bar — quick-access pinned directories above the tree.
+    m_favoritesBar = new QListWidget(leftWidget);
+    m_favoritesBar->setMaximumHeight(100);
+    m_favoritesBar->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_favoritesBar->setStyleSheet(
+        "QListWidget { background: #1e1e1e; border: none; }"
+        "QListWidget::item { padding: 3px 8px; color: #ccc; }"
+        "QListWidget::item:hover { background: #333; }");
+    m_favoritesBar->setToolTip("收藏目录 — 右键移除，Ctrl+D 收藏当前目录");
+    connect(m_favoritesBar, &QListWidget::itemClicked, this,
+            [this](QListWidgetItem *item) { changeDirectory(item->data(Qt::UserRole).toString()); });
+    m_favoritesBar->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_favoritesBar, &QListWidget::customContextMenuRequested, this,
+            [this](const QPoint &pos)
+            {
+                auto *item = m_favoritesBar->itemAt(pos);
+                if (!item) return;
+                QMenu menu;
+                QAction *act = menu.addAction("移除收藏");
+                if (menu.exec(m_favoritesBar->mapToGlobal(pos)) == act)
+                    removeFavorite(item->data(Qt::UserRole).toString());
+            });
+    leftWidget->addWidget(m_favoritesBar);
+
+    // P0: Directory name filter (placed between favorites and tree).
     m_directoryTree = new DirectoryTree(leftWidget);
     m_directoryTree->installEventFilter(this);
+    leftWidget->addWidget(m_directoryTree->filterEdit());
+    leftWidget->addWidget(m_directoryTree);
     m_previewPanel = new PreviewPanel(leftWidget);
     m_previewPanel->installEventFilter(this);
 
-    leftWidget->addWidget(m_directoryTree);
     leftWidget->addWidget(m_previewPanel);
-    leftWidget->setStretchFactor(0, 3);
-    leftWidget->setStretchFactor(1, 2);
+    leftWidget->setStretchFactor(1, 0); // filter
+    leftWidget->setStretchFactor(2, 3); // tree
+    leftWidget->setStretchFactor(3, 2); // preview
     leftWidget->setChildrenCollapsible(false);
-    leftWidget->setSizes({320, 200});
+    leftWidget->setSizes({80, 28, 320, 200});
 
     // ----- Right column: sort bar (top) + image gallery -----
     auto *rightWidget = new QWidget(this);
@@ -709,6 +747,8 @@ void MainWindow::setupUi()
                 m_appState.addRecentFolder(path);
                 m_directory->addRecentFolder(path);
                 rebuildRecentMenu();
+                // P0: push directory-level history for back/forward navigation.
+                pushDirHistory(path);
                 const int n = m_imageList->count();
                 statusBar()->showMessage(QString("目录: %1, 图片数: %2").arg(path).arg(n));
                 // With no image selected yet, the title carries the folder.
@@ -878,6 +918,11 @@ void MainWindow::setupUi()
     // P3 tail: color label / reject / pick / recents filter.
     connect(m_flagFilter, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &MainWindow::onFlagFilterChanged);
+    // P0: MetadataPanel auto-syncs to SelectionModel (no manual push needed on image
+    // change). Editing callbacks (rating/flags/toggle) still push explicitly for
+    // immediate refresh after write — those are harmless redundancy, not SSOT drift.
+    connect(m_selection, &SelectionModel::currentImageChanged, m_metadataPanel,
+            &MetadataPanel::setImage);
     // P3 tail: a flag change in the metadata panel refreshes the gallery overlay
     // (and re-applies the active filter so list membership stays correct).
     connect(m_metadataPanel, &MetadataPanel::flagsEdited, this, &MainWindow::onFlagsEdited);
@@ -1086,8 +1131,11 @@ void MainWindow::setupUi()
 
     // P0: recent / favorites / history wiring.
     connect(m_actAddFavorite, &QAction::triggered, this, &MainWindow::addFavoriteCurrent);
+    connect(m_actRemoveFavorite, &QAction::triggered, this, [this]() { removeFavorite(); });
     connect(m_actHistoryBack, &QAction::triggered, this, [this]() { navigateHistory(-1); });
     connect(m_actHistoryForward, &QAction::triggered, this, [this]() { navigateHistory(1); });
+    connect(m_actDirBack, &QAction::triggered, this, &MainWindow::goDirBack);
+    connect(m_actDirForward, &QAction::triggered, this, &MainWindow::goDirForward);
 
     // P0 #①: real-time status bar — image count, total/selected size, viewer
     // zoom, and live cache hit-rate. Persistent (not transient showMessage).
@@ -1180,6 +1228,18 @@ void MainWindow::setupCommands()
         "file_reveal", "在资源管理器中显示 (Ctrl+E)",
         [this]() { m_thumbnailPanel->revealSelected(); },
         std::vector<CommandShortcut>{{Qt::Key_E, Qt::ControlModifier}}));
+    // P0: Ctrl+F focuses the directory-tree filter for quick folder search.
+    reg.registerCommand(std::make_unique<CallbackCommand>(
+        "dir_filter", "搜索目录 (Ctrl+F)",
+        [this]()
+        {
+            if (m_directoryTree->filterEdit())
+            {
+                m_directoryTree->filterEdit()->setFocus();
+                m_directoryTree->filterEdit()->selectAll();
+            }
+        },
+        std::vector<CommandShortcut>{{Qt::Key_F, Qt::ControlModifier}}));
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
@@ -1648,6 +1708,12 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     // Keep the thumbnail-grid highlight in lock-step (no-op if already current).
     m_thumbnailPanel->selectPath(path);
 
+    // P0: Auto-locate the directory tree to the image's parent folder (navigateTo
+    // expands ancestors & scrolls, does NOT change image selection → no loop).
+    const QString dir = fi.absolutePath();
+    if (m_directoryTree && !dir.isEmpty())
+        m_directoryTree->navigateTo(dir);
+
     mviewer::core::RatingStore::instance().addRecent(path.toStdString()); // P3 recents
 
     // Window title + status bar identity follow the current image.
@@ -1685,6 +1751,9 @@ void MainWindow::changeDirectory(const QString &dir)
     // folders, status bar, reindex, etc.) — just like clicking a tree node.
     m_directoryTree->navigateTo(dir, true);
 
+    // P0: push directory-level history for back/forward navigation.
+    pushDirHistory(dir);
+
     // Import sidecar metadata for the new directory.
     mviewer::core::SidecarStore::instance().importDirectory(dir.toStdString());
 }
@@ -1712,6 +1781,8 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     auto *layout = new QVBoxLayout(dlg);
     m_compareView = new CompareWorkspace(dlg);
     layout->addWidget(m_compareView);
+    // P0: Inject SelectionModel so CompareWorkspace writes focus back to global SSOT.
+    m_compareView->setSelectionModel(m_selection);
     m_compareView->setImages(imgs);
     // A-4.5 / M19: continuous compare — seed the pool from ImageListModel.
     ensureImageList();
@@ -1724,6 +1795,26 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
         m_workspace->setComparedImages(imgs);
     connect(m_compareView, &CompareWorkspace::pixelInfo, this,
             [this](const QString &text) { statusBar()->showMessage(text); });
+    // P1 #④: Compare → Analyze workflow (Analyze button in Compare toolbar).
+    connect(m_compareView, &CompareWorkspace::analyzeCurrent, this,
+            [this]()
+            {
+                if (m_compareView)
+                {
+                    const QString path = m_compareView->focusImagePath();
+                    if (!path.isEmpty())
+                    {
+                        m_selection->setCurrentImage(path);
+                        m_imageViewer->setImage(path);
+                        m_analysisPanel->setImageA(path);
+                    }
+                }
+                if (m_analysisPanel && !m_analysisPanel->isVisible())
+                    m_analysisPanel->show();
+            });
+    // P1 #④: Compare → Export Report workflow (Export button in Compare toolbar).
+    connect(m_compareView, &CompareWorkspace::exportReportRequested, this,
+            [this]() { exportReport(); });
 
     connect(dlg, &QDialog::destroyed, this,
             [this]()
@@ -1911,7 +2002,10 @@ void MainWindow::onBreadcrumbPath(const QString &path)
 {
     // M15 Product Shell P0: navigate the directory tree to the breadcrumb path.
     if (!path.isEmpty())
+    {
         m_directoryTree->navigateTo(path, true);
+        pushDirHistory(path);
+    }
 }
 
 void MainWindow::exportReport()
@@ -1976,7 +2070,8 @@ void MainWindow::exportReport()
     }
 
     const QString out = QFileDialog::getSaveFileName(this, tr("导出报告"), QString(),
-                                                     tr("HTML 文件 (*.html);;JSON 文件 (*.json)"));
+                                                     tr("HTML 文件 (*.html);;Markdown 文件 (*.md);;"
+                                                        "JSON 文件 (*.json)"));
     if (out.isEmpty())
         return;
     const QFileInfo fi(out);
@@ -1995,6 +2090,25 @@ void MainWindow::exportReport()
         if (ctx.hasCompare)
             json = ctx.compare.toJson();
         f.write(QByteArray::fromStdString(json));
+    }
+    else if (suffix == "md")
+    {
+        // P1 #⑥: Markdown export — simple structured report.
+        QString md;
+        md += QString("# %1\n\n").arg(QString::fromStdString(ctx.title));
+        md += QString("**图像**: `%1`\n\n").arg(QString::fromStdString(ctx.imagePath));
+        if (!ctx.histogramPng.empty())
+            md += QString("![直方图](data:image/png;base64,%1)\n\n")
+                      .arg(QString::fromStdString(ctx.histogramPng));
+        if (ctx.hasCompare)
+        {
+            md += "## 对比报告\n\n";
+            md += QString::fromStdString(ctx.compare.toJson()); // structured diff as JSON block
+            if (!ctx.compareDiffPng.empty())
+                md += QString("\n\n![Diff](data:image/png;base64,%1)\n")
+                          .arg(QString::fromStdString(ctx.compareDiffPng));
+        }
+        f.write(md.toUtf8());
     }
     else
     {
@@ -2535,6 +2649,49 @@ void MainWindow::navigateHistory(int delta)
     statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
 }
 
+// P0: Directory-level back/forward history (independent of image history).
+void MainWindow::pushDirHistory(const QString &dir)
+{
+    if (dir.isEmpty())
+        return;
+    // Prune forward entries when branching.
+    if (m_dirHistoryIndex >= 0 && m_dirHistoryIndex + 1 < m_dirHistory.size())
+        m_dirHistory.erase(m_dirHistory.begin() + m_dirHistoryIndex + 1, m_dirHistory.end());
+    // Suppress consecutive duplicates.
+    if (!m_dirHistory.isEmpty() && m_dirHistory.last() == dir)
+        return;
+    m_dirHistory.append(dir);
+    m_dirHistoryIndex = m_dirHistory.size() - 1;
+
+    // Cap history size to avoid unbounded growth.
+    constexpr int kMaxDirHistory = 50;
+    while (m_dirHistory.size() > kMaxDirHistory)
+    {
+        m_dirHistory.removeFirst();
+        --m_dirHistoryIndex;
+    }
+}
+
+void MainWindow::goDirBack()
+{
+    if (m_dirHistoryIndex <= 0)
+        return;
+    --m_dirHistoryIndex;
+    const QString dir = m_dirHistory.at(m_dirHistoryIndex);
+    // Navigate without pushing to history (changeDirectory->pushDirHistory is guarded
+    // by duplicate check). Use emitSignal=true to trigger the full update chain.
+    m_directoryTree->navigateTo(dir, true);
+}
+
+void MainWindow::goDirForward()
+{
+    if (m_dirHistoryIndex < 0 || m_dirHistoryIndex + 1 >= m_dirHistory.size())
+        return;
+    ++m_dirHistoryIndex;
+    const QString dir = m_dirHistory.at(m_dirHistoryIndex);
+    m_directoryTree->navigateTo(dir, true);
+}
+
 void MainWindow::rebuildRecentMenu()
 {
     if (!m_recentMenu)
@@ -2593,7 +2750,35 @@ void MainWindow::addFavoriteCurrent()
     m_directory->addFavorite(currentDir());
     m_appState.save();
     rebuildFavoritesMenu();
+    rebuildFavoritesBar();
     statusBar()->showMessage(QString("已收藏: %1").arg(currentDir()));
+}
+
+void MainWindow::removeFavorite(const QString &dir)
+{
+    const QString target = dir.isEmpty() ? currentDir() : dir;
+    if (target.isEmpty())
+        return;
+    m_appState.removeFavorite(target);
+    m_directory->removeFavorite(target);
+    m_appState.save();
+    rebuildFavoritesMenu();
+    rebuildFavoritesBar();
+    statusBar()->showMessage(QString("已取消收藏: %1").arg(QFileInfo(target).fileName()));
+}
+
+void MainWindow::rebuildFavoritesBar()
+{
+    if (!m_favoritesBar)
+        return;
+    m_favoritesBar->clear();
+    for (const auto &qs : m_appState.favorites)
+    {
+        auto *item = new QListWidgetItem(QFileInfo(qs).fileName());
+        item->setData(Qt::UserRole, qs);
+        item->setToolTip(qs);
+        m_favoritesBar->addItem(item);
+    }
 }
 
 void MainWindow::restoreLastSession()
@@ -3116,7 +3301,18 @@ void MainWindow::toggleMetadataOverlay()
     if (show)
     {
         if (m_metadataOverlay)
+        {
             m_metadataOverlay->showForImage(currentImagePath());
+            // P0: Compute histogram from the viewer's already-decoded frame (lazy,
+            // no extra decode) and pipe it into the overlay's mini histogram widget.
+            if (m_imageViewer)
+            {
+                auto frame = m_imageViewer->frame();
+                if (frame)
+                    m_metadataOverlay->setHistogram(
+                        mviewer::core::computeHistogram(frame->pixels()));
+            }
+        }
         if (m_metadataPanel)
         {
             m_metadataPanel->setImage(currentImagePath());
