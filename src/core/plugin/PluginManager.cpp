@@ -157,9 +157,8 @@ bool PluginManager::load(const std::string &path)
         reinterpret_cast<void (*)(IImporter *)>(dlsym(handle, "destroyImporter"));
     auto createCompareAlgorithmFn = reinterpret_cast<mviewer::core::ICompareAlgorithm *(*)()>(
         dlsym(handle, "createCompareAlgorithm"));
-    auto destroyCompareAlgorithmFn =
-        reinterpret_cast<void (*)(mviewer::core::ICompareAlgorithm *)>(
-            dlsym(handle, "destroyCompareAlgorithm"));
+    auto destroyCompareAlgorithmFn = reinterpret_cast<void (*)(mviewer::core::ICompareAlgorithm *)>(
+        dlsym(handle, "destroyCompareAlgorithm"));
     auto nameFn = reinterpret_cast<const char *(*)()>(dlsym(handle, "pluginName"));
 
     // M14.2: ABI triple gate (mirrors the Windows branch).
@@ -376,8 +375,8 @@ bool PluginManager::load(const std::string &path)
         entry.handle = handle;
         entry.loaded = true;
         m_plugins[path] = entry;
-        std::cout << "[PluginManager] Loaded: " << displayName
-                  << " (compareAlgorithm: " << algoId << ") from " << path << std::endl;
+        std::cout << "[PluginManager] Loaded: " << displayName << " (compareAlgorithm: " << algoId
+                  << ") from " << path << std::endl;
         return true;
     }
 

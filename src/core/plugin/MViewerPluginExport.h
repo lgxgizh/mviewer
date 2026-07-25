@@ -12,11 +12,11 @@
  * GCC/Clang:      __attribute__((visibility("default")))
  */
 #if defined(_WIN32) || defined(_WIN64)
-#  ifndef MVIEWER_PLUGIN_EXPORT
-#    define MVIEWER_PLUGIN_EXPORT __declspec(dllexport)
-#  endif
+#ifndef MVIEWER_PLUGIN_EXPORT
+#define MVIEWER_PLUGIN_EXPORT __declspec(dllexport)
+#endif
 #else
-#  ifndef MVIEWER_PLUGIN_EXPORT
-#    define MVIEWER_PLUGIN_EXPORT __attribute__((visibility("default")))
-#  endif
+#ifndef MVIEWER_PLUGIN_EXPORT
+#define MVIEWER_PLUGIN_EXPORT __attribute__((visibility("default")))
+#endif
 #endif

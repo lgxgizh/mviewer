@@ -30,6 +30,14 @@ struct BatchFileResult
     int height = 0;
 };
 
+// Aggregate result of a complete batch run.
+struct BatchJobResult
+{
+    std::vector<BatchFileResult> fileResults;
+    int totalSucceeded = 0;
+    int totalFailed = 0;
+};
+
 // Full configuration for a batch job.
 struct BatchJobConfig
 {
@@ -60,7 +68,7 @@ struct BatchJobConfig
     std::vector<std::string> analyzerIds; // which analyzers to run
 
     // ─── P2 #⑦: retry & crop ────────────────────────────────────────────────
-    int retryCount = 0;    // number of retries per file on failure (0 = no retry)
+    int retryCount = 0;     // number of retries per file on failure (0 = no retry)
     int retryDelayMs = 500; // delay between retries in ms
 
     // --- Crop params (used when BatchOp::Crop is in operations) ---
@@ -71,13 +79,6 @@ struct BatchJobConfig
 
     // --- Directory recursion ---
     bool recursiveScan = false; // scan subdirectories for images
-
-// Aggregate result of a complete batch run.
-struct BatchJobResult
-{
-    std::vector<BatchFileResult> fileResults;
-    int totalSucceeded = 0;
-    int totalFailed = 0;
 };
 
 } // namespace mviewer::domain

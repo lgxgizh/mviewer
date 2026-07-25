@@ -20,7 +20,10 @@ class DirectoryProxyModel : public QSortFilterProxyModel
   public:
     explicit DirectoryProxyModel(QObject *parent = nullptr);
     void setFilterText(const QString &text);
-    QString filterText() const { return m_filterText; }
+    QString filterText() const
+    {
+        return m_filterText;
+    }
 
   protected:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override;
@@ -55,7 +58,10 @@ class DirectoryTree : public QTreeView
     QString currentPath() const;
 
     // Access the filter line-edit so callers can place it in a layout.
-    QLineEdit *filterEdit() const { return m_filterEdit; }
+    QLineEdit *filterEdit() const
+    {
+        return m_filterEdit;
+    }
 
   public slots:
     // F5 refresh. Re-reads the currently selected folder from disk (so

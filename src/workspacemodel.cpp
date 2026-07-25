@@ -49,8 +49,8 @@ void WorkspaceModel::setAnalysisPage(int page)
 
 void WorkspaceModel::clear()
 {
-    const bool hadAnything = !m_rootPath.isEmpty() || !m_comparedImages.isEmpty() ||
-                             !m_compareSessionJson.isEmpty();
+    const bool hadAnything =
+        !m_rootPath.isEmpty() || !m_comparedImages.isEmpty() || !m_compareSessionJson.isEmpty();
     m_rootPath.clear();
     m_comparedImages.clear();
     m_compareSessionJson.clear();

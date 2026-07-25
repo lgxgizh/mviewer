@@ -16,10 +16,10 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QKeyEvent>
+#include <QMatrix4x4>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMouseEvent>
-#include <QMatrix4x4>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 #include <QOpenGLTextureBlitter>
@@ -72,14 +72,15 @@ ImageViewer::ImageViewer(QWidget *parent) : QOpenGLWidget(parent)
     m_cursorHideTimer = new QTimer(this);
     m_cursorHideTimer->setSingleShot(true);
     m_cursorHideTimer->setInterval(2500);
-    connect(m_cursorHideTimer, &QTimer::timeout, this, [this]()
-    {
-        if (isFullScreen() && !m_dragging && !m_selecting)
-        {
-            m_cursorHidden = true;
-            setCursor(Qt::BlankCursor);
-        }
-    });
+    connect(m_cursorHideTimer, &QTimer::timeout, this,
+            [this]()
+            {
+                if (isFullScreen() && !m_dragging && !m_selecting)
+                {
+                    m_cursorHidden = true;
+                    setCursor(Qt::BlankCursor);
+                }
+            });
 }
 
 ImageViewer::~ImageViewer()
@@ -409,8 +410,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
                     tsh = static_cast<int>(std::lround(tsh / dpr));
                 }
                 const QRect dst(tsx, tsy, tsw, tsh);
-                const QMatrix4x4 target =
-                    QOpenGLTextureBlitter::targetTransform(dst, viewportRect);
+                const QMatrix4x4 target = QOpenGLTextureBlitter::targetTransform(dst, viewportRect);
                 m_blitter.blit(static_cast<GLuint>(hnd), target,
                                QOpenGLTextureBlitter::OriginTopLeft);
             }
@@ -843,11 +843,10 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
                 {
                     const uint8_t *p = view.data + static_cast<size_t>(iy) * view.stride() +
                                        static_cast<size_t>(ix) * view.channelsPerPixel();
-                    QApplication::clipboard()->setText(
-                        QString("#%1%2%3")
-                            .arg(p[0], 2, 16, QChar('0'))
-                            .arg(p[1], 2, 16, QChar('0'))
-                            .arg(p[2], 2, 16, QChar('0')));
+                    QApplication::clipboard()->setText(QString("#%1%2%3")
+                                                           .arg(p[0], 2, 16, QChar('0'))
+                                                           .arg(p[1], 2, 16, QChar('0'))
+                                                           .arg(p[2], 2, 16, QChar('0')));
                 }
             }
         }
@@ -856,8 +855,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     {
         if (!m_pixmap.isNull())
         {
-            const QString defaultName =
-                QFileInfo(m_currentPath).completeBaseName() + "_copy.png";
+            const QString defaultName = QFileInfo(m_currentPath).completeBaseName() + "_copy.png";
             const QString path = QFileDialog::getSaveFileName(
                 this, "另存为", defaultName,
                 "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp)");

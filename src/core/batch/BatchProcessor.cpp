@@ -142,7 +142,8 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
             // P2 #⑦: Crop to the configured rectangle.
             if (config.cropW > 0 && config.cropH > 0)
             {
-                img = img.copy(config.cropX, config.cropY, config.cropW, config.cropH);
+                img = cropRegion(img, mviewer::domain::Selection{config.cropX, config.cropY,
+                                                                 config.cropW, config.cropH});
                 result.width = img.width;
                 result.height = img.height;
             }
@@ -224,8 +225,7 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
     std::vector<std::string> expandedPaths = config.inputPaths;
     if (config.recursiveScan)
     {
-        auto collectImages = [](const std::filesystem::path &dir,
-                                 std::vector<std::string> &out)
+        auto collectImages = [](const std::filesystem::path &dir, std::vector<std::string> &out)
         {
             for (const auto &entry : std::filesystem::recursive_directory_iterator(dir))
             {
@@ -234,9 +234,8 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
                     auto ext = entry.path().extension().string();
                     std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
                     static const std::vector<std::string> imgExts = {
-                        ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff",
-                        ".webp", ".cr2", ".nef", ".arw", ".dng", ".raf",
-                        ".rw2", ".orf", ".raw"};
+                        ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".cr2",
+                        ".nef", ".arw",  ".dng", ".raf", ".rw2", ".orf",  ".raw"};
                     if (std::find(imgExts.begin(), imgExts.end(), ext) != imgExts.end())
                         out.push_back(entry.path().string());
                 }
@@ -271,8 +270,7 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
         bool succeeded = false;
         for (int attempt = 0; attempt <= config.retryCount && !succeeded; ++attempt)
         {
-            fileResult =
-                processFile(config, expandedPaths[static_cast<size_t>(i)], i, total);
+            fileResult = processFile(config, expandedPaths[static_cast<size_t>(i)], i, total);
             if (fileResult.success)
             {
                 succeeded = true;
@@ -280,8 +278,7 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
             }
             if (attempt < config.retryCount && config.retryDelayMs > 0)
             {
-                std::this_thread::sleep_for(
-                    std::chrono::milliseconds(config.retryDelayMs));
+                std::this_thread::sleep_for(std::chrono::milliseconds(config.retryDelayMs));
             }
         }
         if (succeeded || fileResult.success)

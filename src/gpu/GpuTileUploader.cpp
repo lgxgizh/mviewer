@@ -27,8 +27,7 @@ bool GpuTileUploader::enabled()
     // Accept common truthy spellings.
     if (std::strcmp(env, "1") == 0 || std::strcmp(env, "true") == 0 ||
         std::strcmp(env, "TRUE") == 0 || std::strcmp(env, "yes") == 0 ||
-        std::strcmp(env, "YES") == 0 || std::strcmp(env, "on") == 0 ||
-        std::strcmp(env, "ON") == 0)
+        std::strcmp(env, "YES") == 0 || std::strcmp(env, "on") == 0 || std::strcmp(env, "ON") == 0)
         return true;
     return false;
 }

@@ -37,9 +37,9 @@ BatchDialog::BatchDialog(QWidget *parent)
 
     auto *fileBtnBar = new QHBoxLayout;
     m_addBtn = new QPushButton("添加文件...");
-    m_addDirBtn = new QPushButton("添加目录...");   // P2 #⑦
+    m_addDirBtn = new QPushButton("添加目录..."); // P2 #⑦
     m_removeBtn = new QPushButton("移除选中");
-    m_chkRecursive = new QCheckBox("递归子目录");    // P2 #⑦
+    m_chkRecursive = new QCheckBox("递归子目录"); // P2 #⑦
     fileBtnBar->addWidget(m_addBtn);
     fileBtnBar->addWidget(m_addDirBtn);
     fileBtnBar->addWidget(m_removeBtn);
@@ -68,7 +68,7 @@ BatchDialog::BatchDialog(QWidget *parent)
     auto *opGroup = new QHBoxLayout;
     m_chkAnalyze = new QCheckBox("分析");
     m_chkResize = new QCheckBox("缩放");
-    m_chkCrop = new QCheckBox("裁剪");   // P2 #⑦
+    m_chkCrop = new QCheckBox("裁剪"); // P2 #⑦
     m_chkWatermark = new QCheckBox("水印");
     m_chkRename = new QCheckBox("重命名");
     m_chkExport = new QCheckBox("导出");
@@ -189,7 +189,7 @@ BatchDialog::BatchDialog(QWidget *parent)
 
     // ── connections ────────────────────────────────────────────────
     connect(m_addBtn, &QPushButton::clicked, this, &BatchDialog::onAddFiles);
-    connect(m_addDirBtn, &QPushButton::clicked, this, &BatchDialog::onAddDir);  // P2 #⑦
+    connect(m_addDirBtn, &QPushButton::clicked, this, &BatchDialog::onAddDir); // P2 #⑦
     connect(m_removeBtn, &QPushButton::clicked, this, &BatchDialog::onRemoveSelected);
     connect(m_startBtn, &QPushButton::clicked, this, &BatchDialog::onStart);
     connect(m_pauseBtn, &QPushButton::clicked, this, &BatchDialog::onPauseResume);
@@ -213,7 +213,7 @@ void BatchDialog::onAddFiles()
         m_fileList->addItem(f);
 }
 
-void BatchDialog::onAddDir()    // P2 #⑦
+void BatchDialog::onAddDir() // P2 #⑦
 {
     const auto dir = QFileDialog::getExistingDirectory(this, "选择图片目录");
     if (!dir.isEmpty())
@@ -243,7 +243,7 @@ void BatchDialog::buildConfig(mviewer::domain::BatchJobConfig &config) const
         config.operations.push_back(mviewer::domain::BatchOp::Analyze);
     if (m_chkResize->isChecked())
         config.operations.push_back(mviewer::domain::BatchOp::Resize);
-    if (m_chkCrop->isChecked())             // P2 #⑦
+    if (m_chkCrop->isChecked()) // P2 #⑦
         config.operations.push_back(mviewer::domain::BatchOp::Crop);
     if (m_chkWatermark->isChecked())
         config.operations.push_back(mviewer::domain::BatchOp::Watermark);
@@ -316,8 +316,8 @@ void BatchDialog::onStart()
     // created when the job finishes so the dialog can be reused.
     m_activeProcessor = std::shared_ptr<mviewer::core::BatchProcessor>(m_processor.release());
 
-    auto future = QtConcurrent::run(
-        [proc = m_activeProcessor, config = std::move(config)]() { return proc->execute(config); });
+    auto future = QtConcurrent::run([proc = m_activeProcessor, config = std::move(config)]()
+                                    { return proc->execute(config); });
 
     auto *watcher = new QFutureWatcher<mviewer::domain::BatchJobResult>(this);
     connect(watcher, &QFutureWatcher<mviewer::domain::BatchJobResult>::finished, this,

@@ -46,8 +46,8 @@ class ThumbnailPanel : public QListView
         SortDate,
         SortSize,
         SortResolution,
-        SortType,   // A-2.2: sort by file extension
-        SortRating  // A-2.2: sort by star rating
+        SortType,  // A-2.2: sort by file extension
+        SortRating // A-2.2: sort by star rating
     };
 
     enum ViewMode

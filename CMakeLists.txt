@@ -10,6 +10,15 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Suppress benign warnings emitted by the MSVC 14.44 STL <atomic> header
+# (C4869: 'nodiscard' applied to non-function; C4228: qualifiers after comma).
+# These are STL-internal and break the CI zero-warnings gate for every commit;
+# they do not originate from project code. Guard to MSVC so clang builds are
+# unaffected.
+if(MSVC)
+    add_compile_options(/wd4869 /wd4228)
+endif()
+
 if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
 endif()

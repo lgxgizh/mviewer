@@ -263,35 +263,32 @@ void AnalysisPanel::buildUi()
             {
                 if (!m_pValid)
                     return;
-                QApplication::clipboard()->setText(
-                    QString("#%1%2%3")
-                        .arg(m_pR, 2, 16, QChar('0'))
-                        .arg(m_pG, 2, 16, QChar('0'))
-                        .arg(m_pB, 2, 16, QChar('0')));
+                QApplication::clipboard()->setText(QString("#%1%2%3")
+                                                       .arg(m_pR, 2, 16, QChar('0'))
+                                                       .arg(m_pG, 2, 16, QChar('0'))
+                                                       .arg(m_pB, 2, 16, QChar('0')));
             });
-    connect(btnCopyXYZ, &QPushButton::clicked, this,
-            [this]()
+    connect(
+        btnCopyXYZ, &QPushButton::clicked, this,
+        [this]()
+        {
+            if (!m_pValid)
+                return;
+            // sRGB to linear then to XYZ (D65)
+            auto srgbToLinear = [](uint8_t c) -> double
             {
-                if (!m_pValid)
-                    return;
-                // sRGB to linear then to XYZ (D65)
-                auto srgbToLinear = [](uint8_t c) -> double
-                {
-                    double v = c / 255.0;
-                    return (v <= 0.04045) ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
-                };
-                const double r = srgbToLinear(static_cast<uint8_t>(m_pR));
-                const double g = srgbToLinear(static_cast<uint8_t>(m_pG));
-                const double b = srgbToLinear(static_cast<uint8_t>(m_pB));
-                const double X = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
-                const double Y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
-                const double Z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
-                QApplication::clipboard()->setText(
-                    QString("XYZ(%1, %2, %3)")
-                        .arg(X, 0, 'f', 3)
-                        .arg(Y, 0, 'f', 3)
-                        .arg(Z, 0, 'f', 3));
-            });
+                double v = c / 255.0;
+                return (v <= 0.04045) ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+            };
+            const double r = srgbToLinear(static_cast<uint8_t>(m_pR));
+            const double g = srgbToLinear(static_cast<uint8_t>(m_pG));
+            const double b = srgbToLinear(static_cast<uint8_t>(m_pB));
+            const double X = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
+            const double Y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
+            const double Z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
+            QApplication::clipboard()->setText(
+                QString("XYZ(%1, %2, %3)").arg(X, 0, 'f', 3).arg(Y, 0, 'f', 3).arg(Z, 0, 'f', 3));
+        });
 
     m_tabs->addTab(inspectorPage, tr("Inspector"));
 
@@ -427,8 +424,8 @@ void AnalysisPanel::reanalyze()
         if (analyzer)
         {
             // Prefer ROI when set; otherwise analyze the full frame.
-            const bool ok = m_hasROI ? analyzer->analyzeRegion(*m_frameA, m_roi)
-                                     : analyzer->analyze(*m_frameA);
+            const bool ok =
+                m_hasROI ? analyzer->analyzeRegion(*m_frameA, m_roi) : analyzer->analyze(*m_frameA);
             if (ok)
             {
                 m_statsA.pixelCount = m_hasROI
@@ -477,16 +474,15 @@ void AnalysisPanel::reanalyze()
         m_statsA = AnalysisEngine::computeStatsROI(mvcore::fromQImage(m_imageA), m_roi);
         updateHistogramPage();
         // Publish a plain-text ROI summary (never HTML from m_statsLabel).
-        const QString plain =
-            QString("ROI %1x%2 @(%3,%4) lum=%5 r=%6 g=%7 b=%8")
-                .arg(m_roi.width)
-                .arg(m_roi.height)
-                .arg(m_roi.x)
-                .arg(m_roi.y)
-                .arg(m_statsA.lumMean, 0, 'f', 2)
-                .arg(m_statsA.rMean, 0, 'f', 2)
-                .arg(m_statsA.gMean, 0, 'f', 2)
-                .arg(m_statsA.bMean, 0, 'f', 2);
+        const QString plain = QString("ROI %1x%2 @(%3,%4) lum=%5 r=%6 g=%7 b=%8")
+                                  .arg(m_roi.width)
+                                  .arg(m_roi.height)
+                                  .arg(m_roi.x)
+                                  .arg(m_roi.y)
+                                  .arg(m_statsA.lumMean, 0, 'f', 2)
+                                  .arg(m_statsA.rMean, 0, 'f', 2)
+                                  .arg(m_statsA.gMean, 0, 'f', 2)
+                                  .arg(m_statsA.bMean, 0, 'f', 2);
         publishResult(plain);
     }
 }
@@ -1038,10 +1034,10 @@ void AnalysisPanel::publishResult(const QString &plainText)
 {
     if (!m_analyzerModel || plainText.isEmpty())
         return;
-    const QString path = !m_imagePath.isEmpty()
-                             ? m_imagePath
-                             : (m_frameA ? QString::fromStdString(m_frameA->metadata().filePath)
-                                         : QString());
+    const QString path =
+        !m_imagePath.isEmpty()
+            ? m_imagePath
+            : (m_frameA ? QString::fromStdString(m_frameA->metadata().filePath) : QString());
     if (path.isEmpty())
         return;
     m_analyzerModel->setResult(path, plainText);
@@ -1123,10 +1119,10 @@ void AnalysisPanel::onPinToggled()
 {
     if (!m_analyzerModel || !m_pinBtn)
         return;
-    const QString path = !m_imagePath.isEmpty()
-                             ? m_imagePath
-                             : (m_frameA ? QString::fromStdString(m_frameA->metadata().filePath)
-                                         : QString());
+    const QString path =
+        !m_imagePath.isEmpty()
+            ? m_imagePath
+            : (m_frameA ? QString::fromStdString(m_frameA->metadata().filePath) : QString());
     if (path.isEmpty())
     {
         m_pinBtn->setChecked(false);

@@ -323,10 +323,9 @@ void ThumbnailPanel::setDirectory(const QString &path)
                         break;
                     }
                     // P0: Expand "raw" alias to common RAW file extensions.
-                    static const QStringList rawExts = {"cr2","cr3","nef","arw","dng",
-                                                         "raf","rw2","orf","sr2","srw",
-                                                         "pef","3fr","mef","erf","mrw",
-                                                         "dcr","kdc","mos","raw","iiq"};
+                    static const QStringList rawExts = {
+                        "cr2", "cr3", "nef", "arw", "dng", "raf", "rw2", "orf", "sr2", "srw",
+                        "pef", "3fr", "mef", "erf", "mrw", "dcr", "kdc", "mos", "raw", "iiq"};
                     if (lowered == "raw" && rawExts.contains(suffix))
                     {
                         keep = true;
@@ -765,10 +764,10 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     // sorting changes).  Without this, setStringList() resets the entire
     // selection model and the user's multi-select is silently lost.
     const QStringList prevSelected = selectedPaths();
-    const QString prevCurrent = m_paths.isEmpty() ? QString()
-                                : (currentIndex().isValid()
-                                       ? m_paths.value(currentIndex().row())
-                                       : QString());
+    const QString prevCurrent =
+        m_paths.isEmpty()
+            ? QString()
+            : (currentIndex().isValid() ? m_paths.value(currentIndex().row()) : QString());
 
     m_paths.clear();
     m_rowByPath.clear();
@@ -793,8 +792,7 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     {
         auto it = m_rowByPath.constFind(p);
         if (it != m_rowByPath.constEnd())
-            selToRestore.select(m_model->index(it.value(), 0),
-                                m_model->index(it.value(), 0));
+            selToRestore.select(m_model->index(it.value(), 0), m_model->index(it.value(), 0));
     }
     if (!selToRestore.isEmpty())
         selectionModel()->select(selToRestore, QItemSelectionModel::ClearAndSelect);
@@ -956,8 +954,8 @@ void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &curren
     // focus move cannot collapse SelectionModel via setCurrentImage.
     const bool wasBlocked = selectionModel()->blockSignals(true);
     selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect);
-    const QString focus = !current.isEmpty() ? current
-                                             : (paths.isEmpty() ? QString() : paths.first());
+    const QString focus =
+        !current.isEmpty() ? current : (paths.isEmpty() ? QString() : paths.first());
     if (!focus.isEmpty())
     {
         const int row = m_rowByPath.value(focus, -1);
@@ -970,7 +968,7 @@ void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &curren
     }
     selectionModel()->blockSignals(wasBlocked);
     // Emit a single selectionChanged so MainWindow can re-sync if needed.
-    emit selectionModel()->selectionChanged(selectionModel()->selection(), QItemSelection());
+    emit selectionModel() -> selectionChanged(selectionModel()->selection(), QItemSelection());
 }
 
 int ThumbnailPanel::scrollOffset() const
@@ -1003,7 +1001,8 @@ void ThumbnailPanel::renameSelected()
     // A-10: reversible rename via CommandStack when available.
     if (m_cmdStack)
     {
-        auto cmd = std::make_unique<FileRenameCommand>(oldPath.toStdString(), newPath.toStdString());
+        auto cmd =
+            std::make_unique<FileRenameCommand>(oldPath.toStdString(), newPath.toStdString());
         if (!m_cmdStack->execute(std::move(cmd)))
         {
             QMessageBox::warning(this, "重命名失败",
@@ -1041,8 +1040,7 @@ void ThumbnailPanel::moveToTrashSelected()
         // Capture moved paths before ownership transfers.
         if (!m_cmdStack->execute(std::move(cmd)))
         {
-            QMessageBox::warning(this, "删除失败",
-                                 QString::fromStdString(m_cmdStack->lastError()));
+            QMessageBox::warning(this, "删除失败", QString::fromStdString(m_cmdStack->lastError()));
             return;
         }
         // After successful execute, files are gone — treat all selected as removed.
@@ -1096,8 +1094,7 @@ void ThumbnailPanel::moveSelectedTo()
         auto cmd = std::make_unique<FileMoveCommand>(std::move(stdPaths), dir.toStdString());
         if (!m_cmdStack->execute(std::move(cmd)))
         {
-            QMessageBox::warning(this, "移动失败",
-                                 QString::fromStdString(m_cmdStack->lastError()));
+            QMessageBox::warning(this, "移动失败", QString::fromStdString(m_cmdStack->lastError()));
             return;
         }
     }
@@ -1375,9 +1372,8 @@ void ThumbnailPanel::stopThumbnailWorker()
 // static
 QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode, bool ascending)
 {
-    QStringList imgExts = {"bmp", "gif", "jpg", "jpeg", "png", "tif", "tiff", "webp",
-                           "cr2", "cr3", "nef", "nrw", "arw", "dng", "orf", "rw2", "pef",
-                           "raf"};
+    QStringList imgExts = {"bmp", "gif", "jpg", "jpeg", "png", "tif", "tiff", "webp", "cr2",
+                           "cr3", "nef", "nrw", "arw",  "dng", "orf", "rw2",  "pef",  "raf"};
     QFileInfoList files = dir.entryInfoList(QDir::Files | QDir::Readable, QDir::NoSort);
     QFileInfoList out;
     for (const QFileInfo &fi : files)
@@ -1417,7 +1413,8 @@ QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode, bool
                   { return a.suffix().compare(b.suffix(), Qt::CaseInsensitive) < 0; });
         break;
     case SortRating:
-        std::sort(out.begin(), out.end(), [](const QFileInfo &a, const QFileInfo &b)
+        std::sort(out.begin(), out.end(),
+                  [](const QFileInfo &a, const QFileInfo &b)
                   {
                       const int ra = mviewer::core::RatingStore::instance().rating(
                           a.absoluteFilePath().toStdString());

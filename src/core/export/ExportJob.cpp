@@ -74,8 +74,8 @@ static ImageData maybeWatermark(const ImageData &d, const ExportJobConfig &cfg)
     if (cfg.watermarkText.empty())
         return d;
     const auto pos = static_cast<mviewer::core::WatermarkPosition>(cfg.watermarkPos);
-    return mviewer::core::addTextWatermark(d, cfg.watermarkText, pos,
-                                           cfg.watermarkOpacity / 100.0, 32);
+    return mviewer::core::addTextWatermark(d, cfg.watermarkText, pos, cfg.watermarkOpacity / 100.0,
+                                           32);
 }
 
 static std::string extensionFor(const std::string &format)
@@ -143,9 +143,8 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
         // re-introduced one (e.g. "{name}.{ext}"). Do NOT strip dots inside the
         // base name (photo.v2 → photo would be wrong).
         {
-            static const char *kImgExts[] = {".jpg",  ".jpeg", ".png", ".webp",
-                                            ".tif",  ".tiff", ".bmp", ".gif",
-                                            ".jp2",  ".jxl",  ".heic", ".avif"};
+            static const char *kImgExts[] = {".jpg", ".jpeg", ".png", ".webp", ".tif",  ".tiff",
+                                             ".bmp", ".gif",  ".jp2", ".jxl",  ".heic", ".avif"};
             for (const char *e : kImgExts)
             {
                 const size_t elen = std::char_traits<char>::length(e);
@@ -156,8 +155,10 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
                     bool match = true;
                     for (size_t k = 0; k < elen; ++k)
                     {
-                        const char a = static_cast<char>(std::tolower(static_cast<unsigned char>(tail[k])));
-                        const char b = static_cast<char>(std::tolower(static_cast<unsigned char>(e[k])));
+                        const char a =
+                            static_cast<char>(std::tolower(static_cast<unsigned char>(tail[k])));
+                        const char b =
+                            static_cast<char>(std::tolower(static_cast<unsigned char>(e[k])));
                         if (a != b)
                         {
                             match = false;

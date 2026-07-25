@@ -119,7 +119,7 @@ class MainWindow : public QMainWindow
     ImageViewer *m_imageViewer = nullptr;
     DirectoryTree *m_directoryTree = nullptr;
     BreadcrumbBar *m_breadcrumb = nullptr;
-    QLineEdit *m_pathEdit = nullptr; // Path input bar above the gallery area
+    QLineEdit *m_pathEdit = nullptr;              // Path input bar above the gallery area
     QSplitter *m_mainSplitter = nullptr;          // P1-3: central layout splitter
     QSplitter *m_leftSplitter = nullptr;          // A-6.4: nav | tree | preview heights
     MetadataOverlay *m_metadataOverlay = nullptr; // M15: semi-transparent info overlay
@@ -196,9 +196,9 @@ class MainWindow : public QMainWindow
     // P1: metadata-aware search + star-rating filter.
     QCheckBox *m_searchMeta = nullptr;
     QComboBox *m_ratingFilter = nullptr;
-    QComboBox *m_sortCombo = nullptr;  // persisted across sessions via QSettings
-    QSlider *m_thumbSizeSlider = nullptr;  // persisted across sessions via QSettings
-    QComboBox *m_flagFilter = nullptr; // P3 tail: color label / reject / pick / recents
+    QComboBox *m_sortCombo = nullptr;     // persisted across sessions via QSettings
+    QSlider *m_thumbSizeSlider = nullptr; // persisted across sessions via QSettings
+    QComboBox *m_flagFilter = nullptr;    // P3 tail: color label / reject / pick / recents
 
     // P0 #①: real-time status bar (image count / size / zoom / cache hit-rate).
     QLabel *m_lblImage = nullptr; // current image dimensions + file size

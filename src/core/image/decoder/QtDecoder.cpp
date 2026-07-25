@@ -171,8 +171,8 @@ ImageData QtDecoder::decodeFull(const std::string &path,
     const QImage img = reader.read();
     if (img.isNull())
     {
-        qWarning("QtDecoder: failed to decode \"%s\": %s",
-                 path.c_str(), qPrintable(reader.errorString()));
+        qWarning("QtDecoder: failed to decode \"%s\": %s", path.c_str(),
+                 qPrintable(reader.errorString()));
         return ImageData();
     }
 

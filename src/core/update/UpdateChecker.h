@@ -14,9 +14,9 @@ namespace mviewer::core
 struct UpdateInfo
 {
     bool hasUpdate = false;
-    std::string latestVersion;   // e.g. "v1.5.0"
-    std::string currentVersion;  // e.g. "v1.4.0"
-    std::string releaseUrl;      // browser link to the release page
+    std::string latestVersion;  // e.g. "v1.5.0"
+    std::string currentVersion; // e.g. "v1.4.0"
+    std::string releaseUrl;     // browser link to the release page
     std::string error;
 };
 

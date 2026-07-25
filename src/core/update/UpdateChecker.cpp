@@ -98,8 +98,7 @@ UpdateChecker::UpdateChecker(std::string currentVersion)
 
 void UpdateChecker::checkGitHub(const std::string &repo, UpdateCallback cb)
 {
-    const std::string url =
-        "https://api.github.com/repos/" + repo + "/releases/latest";
+    const std::string url = "https://api.github.com/repos/" + repo + "/releases/latest";
     checkUrl(url, std::move(cb));
 }
 
@@ -129,11 +128,11 @@ void UpdateChecker::checkUrl(const std::string &updateJsonUrl, UpdateCallback cb
 
     info.latestVersion = latest;
     info.hasUpdate = isNewer(latest, m_currentVersion);
-    info.releaseUrl = "https://github.com/" +
-                      updateJsonUrl.substr(updateJsonUrl.find("repos/") + 6,
-                                           updateJsonUrl.find("/releases") -
-                                               updateJsonUrl.find("repos/") - 6) +
-                      "/releases/tag/" + latest;
+    info.releaseUrl =
+        "https://github.com/" +
+        updateJsonUrl.substr(updateJsonUrl.find("repos/") + 6,
+                             updateJsonUrl.find("/releases") - updateJsonUrl.find("repos/") - 6) +
+        "/releases/tag/" + latest;
 
     if (cb)
         cb(info);

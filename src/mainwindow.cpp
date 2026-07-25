@@ -17,11 +17,11 @@
 #include "core/command/ToggleHistogramCommand.h"
 // A-10: CommandStack is included via mainwindow.h
 #include "core/export/ExportManager.h"
-#include "core/perf/MemoryTracker.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/QtConvert.h"
 #include "core/image/RawMetadata.h"
+#include "core/perf/MemoryTracker.h"
 #include "core/project/ProjectSerializer.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
@@ -289,8 +289,7 @@ void MainWindow::setupUi()
                 {
                     const std::string err = m_cmdStack.lastError();
                     if (!err.empty())
-                        QMessageBox::warning(this, "撤销失败",
-                                             QString::fromStdString(err));
+                        QMessageBox::warning(this, "撤销失败", QString::fromStdString(err));
                     updateUndoRedoActions();
                     return;
                 }
@@ -305,8 +304,7 @@ void MainWindow::setupUi()
                 {
                     const std::string err = m_cmdStack.lastError();
                     if (!err.empty())
-                        QMessageBox::warning(this, "重做失败",
-                                             QString::fromStdString(err));
+                        QMessageBox::warning(this, "重做失败", QString::fromStdString(err));
                     updateUndoRedoActions();
                     return;
                 }
@@ -465,19 +463,19 @@ void MainWindow::setupUi()
     m_favoritesBar = new QListWidget(leftWidget);
     m_favoritesBar->setMaximumHeight(100);
     m_favoritesBar->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_favoritesBar->setStyleSheet(
-        "QListWidget { background: #1e1e1e; border: none; }"
-        "QListWidget::item { padding: 3px 8px; color: #ccc; }"
-        "QListWidget::item:hover { background: #333; }");
+    m_favoritesBar->setStyleSheet("QListWidget { background: #1e1e1e; border: none; }"
+                                  "QListWidget::item { padding: 3px 8px; color: #ccc; }"
+                                  "QListWidget::item:hover { background: #333; }");
     m_favoritesBar->setToolTip("收藏目录 — 右键移除，Ctrl+D 收藏当前目录");
-    connect(m_favoritesBar, &QListWidget::itemClicked, this,
-            [this](QListWidgetItem *item) { changeDirectory(item->data(Qt::UserRole).toString()); });
+    connect(m_favoritesBar, &QListWidget::itemClicked, this, [this](QListWidgetItem *item)
+            { changeDirectory(item->data(Qt::UserRole).toString()); });
     m_favoritesBar->setContextMenuPolicy(Qt::CustomContextMenu);
     connect(m_favoritesBar, &QListWidget::customContextMenuRequested, this,
             [this](const QPoint &pos)
             {
                 auto *item = m_favoritesBar->itemAt(pos);
-                if (!item) return;
+                if (!item)
+                    return;
                 QMenu menu;
                 QAction *act = menu.addAction("移除收藏");
                 if (menu.exec(m_favoritesBar->mapToGlobal(pos)) == act)
@@ -688,9 +686,8 @@ void MainWindow::setupUi()
     m_metadataPanel->setAttribute(Qt::WA_ShowWithoutActivating, false);
     m_metadataPanel->setFixedSize(300, 480);
     m_metadataPanel->setWindowOpacity(0.92); // semi-transparent
-    m_metadataPanel->setStyleSheet(
-        "MetadataPanel { background: rgba(30,30,30,220); color: #eee; "
-        "border: 1px solid #555; border-radius: 6px; }");
+    m_metadataPanel->setStyleSheet("MetadataPanel { background: rgba(30,30,30,220); color: #eee; "
+                                   "border: 1px solid #555; border-radius: 6px; }");
     m_metadataPanel->hide();
 
     // ----- Full image viewer window -----
@@ -791,10 +788,10 @@ void MainWindow::setupUi()
                     updateSelectionActions();
                     return;
                 }
-                const QString cur = m_thumbnailPanel->currentIndex().isValid()
-                                       ? m_thumbnailPanel->pathList().value(
-                                             m_thumbnailPanel->currentIndex().row())
-                                       : paths.first();
+                const QString cur =
+                    m_thumbnailPanel->currentIndex().isValid()
+                        ? m_thumbnailPanel->pathList().value(m_thumbnailPanel->currentIndex().row())
+                        : paths.first();
                 m_selection->setSelection(paths, cur);
                 updateSelectionActions();
             });
@@ -876,25 +873,30 @@ void MainWindow::setupUi()
                 m_analysisPanel->setVisible(true);
                 m_analysisPanel->runAnalyzer(analyzerId);
             });
-    connect(m_imageViewer, &ImageViewer::pixelInfo, this,
-            [this](int x, int y, int r, int g, int b, int a, bool valid)
+    connect(
+        m_imageViewer, &ImageViewer::pixelInfo, this,
+        [this](int x, int y, int r, int g, int b, int a, bool valid)
+        {
+            if (valid)
             {
-                if (valid)
-                {
-                    if (a < 255)
-                        statusBar()->showMessage(
-                            QString("像素 [%1,%2]  RGBA(%3,%4,%5,%6)")
-                                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(a));
-                    else
-                        statusBar()->showMessage(
-                            QString("像素 [%1,%2]  RGB(%3,%4,%5)").arg(x).arg(y).arg(r).arg(g).arg(b));
-                }
+                if (a < 255)
+                    statusBar()->showMessage(QString("像素 [%1,%2]  RGBA(%3,%4,%5,%6)")
+                                                 .arg(x)
+                                                 .arg(y)
+                                                 .arg(r)
+                                                 .arg(g)
+                                                 .arg(b)
+                                                 .arg(a));
                 else
-                {
-                    statusBar()->showMessage("光标不在图像上");
-                }
-                m_analysisPanel->showPixel(x, y, r, g, b, valid);
-            });
+                    statusBar()->showMessage(
+                        QString("像素 [%1,%2]  RGB(%3,%4,%5)").arg(x).arg(y).arg(r).arg(g).arg(b));
+            }
+            else
+            {
+                statusBar()->showMessage("光标不在图像上");
+            }
+            m_analysisPanel->showPixel(x, y, r, g, b, valid);
+        });
 
     connect(sortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this, sortCombo](int)
@@ -971,8 +973,7 @@ void MainWindow::setupUi()
             [this]()
             {
                 const QString file = QFileDialog::getOpenFileName(
-                    this, "打开图片",
-                    currentDir().isEmpty() ? QString() : currentDir(),
+                    this, "打开图片", currentDir().isEmpty() ? QString() : currentDir(),
                     "图片文件 (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp"
                     " *.cr2 *.cr3 *.nef *.nrw *.arw *.dng *.orf *.rw2 *.pef *.raf);;"
                     "所有文件 (*)");
@@ -1095,8 +1096,7 @@ void MainWindow::setupUi()
             [this]()
             {
                 const QString path = QFileDialog::getSaveFileName(
-                    this, tr("导出设置"), QString(),
-                    tr("MViewer 设置文件 (*.mvs);;所有文件 (*)"));
+                    this, tr("导出设置"), QString(), tr("MViewer 设置文件 (*.mvs);;所有文件 (*)"));
                 if (path.isEmpty())
                     return;
                 std::string err;
@@ -1110,16 +1110,14 @@ void MainWindow::setupUi()
             [this]()
             {
                 const QString path = QFileDialog::getOpenFileName(
-                    this, tr("导入设置"), QString(),
-                    tr("MViewer 设置文件 (*.mvs);;所有文件 (*)"));
+                    this, tr("导入设置"), QString(), tr("MViewer 设置文件 (*.mvs);;所有文件 (*)"));
                 if (path.isEmpty())
                     return;
                 std::string err;
                 if (mviewer::core::importSettings(path.toStdString(), &err))
                 {
-                    QMessageBox::information(
-                        this, tr("导入设置"),
-                        tr("设置已导入。部分更改需要重启 MViewer 才能生效。"));
+                    QMessageBox::information(this, tr("导入设置"),
+                                             tr("设置已导入。部分更改需要重启 MViewer 才能生效。"));
                 }
                 else
                     QMessageBox::warning(this, tr("导入设置"),
@@ -1688,6 +1686,7 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     if (path.isEmpty())
         return;
 
+    const QFileInfo fi(path);
     m_previewPanel->setImage(path); // async decode (off UI thread)
     // Only decode into the viewer when it is actually on screen — avoids a
     // second decode per thumbnail while browsing with the viewer closed.
@@ -1717,7 +1716,6 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     mviewer::core::RatingStore::instance().addRecent(path.toStdString()); // P3 recents
 
     // Window title + status bar identity follow the current image.
-    const QFileInfo fi(path);
     setWindowTitle(QString("%1 - MViewer").arg(fi.fileName()));
     // Cheap header-only read (MetadataReader decodes at 1x1) for dimensions;
     // file size comes straight from the filesystem entry.
@@ -1806,7 +1804,7 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
                     {
                         m_selection->setCurrentImage(path);
                         m_imageViewer->setImage(path);
-                        m_analysisPanel->setImageA(path);
+                        m_analysisPanel->setImage(QImage(path), path);
                     }
                 }
                 if (m_analysisPanel && !m_analysisPanel->isVisible())
@@ -1957,7 +1955,8 @@ void MainWindow::showShortcutsHelp()
         "<td>Blink / Split / Swipe / Overlay</td></tr>"
         "<tr><td><kbd>H</kbd></td><td>Diff 高亮</td></tr>"
         "<tr><td><kbd>Z</kbd> / <kbd>D</kbd></td><td>同步缩放 / 同步拖动</td></tr>"
-        "<tr><td><kbd>C</kbd> / <kbd>L</kbd> / <kbd>I</kbd></td><td>准星 / 像素连线 / 侧栏</td></tr>"
+        "<tr><td><kbd>C</kbd> / <kbd>L</kbd> / <kbd>I</kbd></td><td>准星 / 像素连线 / "
+        "侧栏</td></tr>"
         "<tr><td><kbd>Ctrl+2</kbd> / <kbd>4</kbd> / <kbd>8</kbd></td><td>2/4/8 布局预设</td></tr>"
         "<tr><td><kbd>PgUp</kbd>/<kbd>PgDn</kbd> / <kbd>←</kbd>/<kbd>→</kbd></td>"
         "<td>连续导航（保留模式）</td></tr>"
@@ -2371,7 +2370,8 @@ void MainWindow::openWorkspace()
         for (const auto &img : folder.imageSet.images)
         {
             if (!img.analysis.empty())
-                m_analyzer->setResult(QString::fromStdString(img.filePath), QString::fromStdString(img.analysis));
+                m_analyzer->setResult(QString::fromStdString(img.filePath),
+                                      QString::fromStdString(img.analysis));
         }
     }
 
@@ -2566,7 +2566,8 @@ void MainWindow::openProject()
     for (const auto &folder : ws.folders)
         for (const auto &img : folder.imageSet.images)
             if (!img.analysis.empty())
-                m_analyzer->setResult(QString::fromStdString(img.filePath), QString::fromStdString(img.analysis));
+                m_analyzer->setResult(QString::fromStdString(img.filePath),
+                                      QString::fromStdString(img.analysis));
 
     std::optional<mviewer::domain::CompareSession> restoredSession;
     bool haveSession = false;
@@ -2811,8 +2812,7 @@ void MainWindow::restoreLastSession()
                 m_analysisPanel->setCurrentPage(m_appState.analysisPage);
             }
             // Restore search panel visibility.
-            const bool searchVisible =
-                settings.value("searchVisible", true).toBool();
+            const bool searchVisible = settings.value("searchVisible", true).toBool();
             if (m_searchPanel)
                 m_searchPanel->setVisible(searchVisible);
             if (m_actToggleSearch)
@@ -3251,17 +3251,17 @@ void MainWindow::updateUndoRedoActions()
     {
         m_actUndo->setEnabled(m_cmdStack.canUndo());
         const std::string label = m_cmdStack.undoLabel();
-        m_actUndo->setText(label.empty() ? QStringLiteral("撤销(&U)")
-                                         : QStringLiteral("撤销(&U) %1")
-                                               .arg(QString::fromStdString(label)));
+        m_actUndo->setText(label.empty()
+                               ? QStringLiteral("撤销(&U)")
+                               : QStringLiteral("撤销(&U) %1").arg(QString::fromStdString(label)));
     }
     if (m_actRedo)
     {
         m_actRedo->setEnabled(m_cmdStack.canRedo());
         const std::string label = m_cmdStack.redoLabel();
-        m_actRedo->setText(label.empty() ? QStringLiteral("重做(&R)")
-                                         : QStringLiteral("重做(&R) %1")
-                                               .arg(QString::fromStdString(label)));
+        m_actRedo->setText(label.empty()
+                               ? QStringLiteral("重做(&R)")
+                               : QStringLiteral("重做(&R) %1").arg(QString::fromStdString(label)));
     }
 }
 
@@ -3295,9 +3295,8 @@ void MainWindow::toggleMetadataOverlay()
     if (currentImagePath().isEmpty())
         return;
     // A-5: toggle both the viewer overlay and the floating MetadataPanel.
-    const bool show =
-        !(m_metadataOverlay && m_metadataOverlay->isVisible()) &&
-        !(m_metadataPanel && m_metadataPanel->isVisible());
+    const bool show = !(m_metadataOverlay && m_metadataOverlay->isVisible()) &&
+                      !(m_metadataPanel && m_metadataPanel->isVisible());
     if (show)
     {
         if (m_metadataOverlay)
@@ -3394,7 +3393,8 @@ void MainWindow::toggleSlideshow()
     if (m_actSlideshow)
         m_actSlideshow->setChecked(true);
     statusBar()->showMessage(
-        QString("幻灯片放映中 — 按 S 或 ESC 停止 (间隔 %1 秒)").arg(interval / 1000.0, 0, 'f', 1), 3000);
+        QString("幻灯片放映中 — 按 S 或 ESC 停止 (间隔 %1 秒)").arg(interval / 1000.0, 0, 'f', 1),
+        3000);
 }
 
 void MainWindow::stopSlideshow()

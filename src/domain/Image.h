@@ -47,9 +47,9 @@ struct ImageMetadata
 
     // ─── P0: GPS metadata (EXIF GPS IFD) ──────────────────────────────────────
     bool hasGps = false;
-    double gpsLatitude = 0.0;   // decimal degrees, positive = North
-    double gpsLongitude = 0.0;  // decimal degrees, positive = East
-    double gpsAltitude = 0.0;   // meters above sea level (0 = unknown)
+    double gpsLatitude = 0.0;  // decimal degrees, positive = North
+    double gpsLongitude = 0.0; // decimal degrees, positive = East
+    double gpsAltitude = 0.0;  // meters above sea level (0 = unknown)
 
     // ─── Session persistence (M12.1) ────────────────────────────────────────
     // ROI (in image pixel coords) captured for this image during a Compare

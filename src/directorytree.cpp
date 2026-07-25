@@ -100,9 +100,8 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
 
     // A-1.3: current-directory highlight — use a custom style so the active
     // node is visually distinct from the regular selection.
-    setStyleSheet(
-        "DirectoryTree::item:selected { background: #2a82da; color: white; }"
-        "DirectoryTree::item { padding: 2px 0; }");
+    setStyleSheet("DirectoryTree::item:selected { background: #2a82da; color: white; }"
+                  "DirectoryTree::item { padding: 2px 0; }");
 
     // A-1.4: QFileSystemWatcher for auto-refresh when the file system changes.
     m_watcher = new QFileSystemWatcher(this);

@@ -152,8 +152,7 @@ void PluginSettings::refreshList()
         m_list->addItem(item);
     }
     if (m_statusLabel)
-        m_statusLabel->setText(
-            tr("已加载 %1 个插件（启用 %2）").arg(plugins.size()).arg(enabled));
+        m_statusLabel->setText(tr("已加载 %1 个插件（启用 %2）").arg(plugins.size()).arg(enabled));
 }
 
 void PluginSettings::rescanPlugins()
@@ -175,8 +174,7 @@ void PluginSettings::rescanPlugins()
 
     refreshList();
     if (m_statusLabel)
-        m_statusLabel->setText(m_statusLabel->text() +
-                               tr(" · 本次扫描加载 %1 个").arg(total));
+        m_statusLabel->setText(m_statusLabel->text() + tr(" · 本次扫描加载 %1 个").arg(total));
     emit pluginsChanged();
 }
 

@@ -105,27 +105,28 @@ class FolderImporter : public IImporter
     }
 };
 
-extern "C" {
-
-MVIEWER_PLUGIN_EXPORT IImporter *createImporter()
+extern "C"
 {
-    return new FolderImporter();
-}
 
-MVIEWER_PLUGIN_EXPORT void destroyImporter(IImporter *p)
-{
-    delete p;
-}
+    MVIEWER_PLUGIN_EXPORT IImporter *createImporter()
+    {
+        return new FolderImporter();
+    }
 
-MVIEWER_PLUGIN_EXPORT const char *pluginName()
-{
-    return "folder-importer";
-}
+    MVIEWER_PLUGIN_EXPORT void destroyImporter(IImporter *p)
+    {
+        delete p;
+    }
 
-MVIEWER_PLUGIN_EXPORT const PluginABI *mviewer_plugin_abi()
-{
-    static const PluginABI abi;
-    return &abi;
-}
+    MVIEWER_PLUGIN_EXPORT const char *pluginName()
+    {
+        return "folder-importer";
+    }
+
+    MVIEWER_PLUGIN_EXPORT const PluginABI *mviewer_plugin_abi()
+    {
+        static const PluginABI abi;
+        return &abi;
+    }
 
 } // extern "C"

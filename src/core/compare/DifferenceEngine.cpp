@@ -144,10 +144,11 @@ ImageData DifferenceEngine::highlightMap(const ImageData &grayDiff, const ImageD
     const int cppD = grayDiff.channelsPerPixel();
     const int roD = channelOffset(grayDiff.format, 0);
 
-    const bool hasBase = !base.isNull() && base.width >= w && base.height >= h &&
-                         (base.format == PixelFormat::RGB24 || base.format == PixelFormat::BGR24 ||
-                          base.format == PixelFormat::RGBA32 || base.format == PixelFormat::BGRA32 ||
-                          base.format == PixelFormat::Grayscale8);
+    const bool hasBase =
+        !base.isNull() && base.width >= w && base.height >= h &&
+        (base.format == PixelFormat::RGB24 || base.format == PixelFormat::BGR24 ||
+         base.format == PixelFormat::RGBA32 || base.format == PixelFormat::BGRA32 ||
+         base.format == PixelFormat::Grayscale8);
     const int cppB = hasBase ? base.channelsPerPixel() : 0;
     const int roB0 = hasBase ? channelOffset(base.format, 0) : 0;
     const int roB1 = hasBase ? channelOffset(base.format, 1) : 0;

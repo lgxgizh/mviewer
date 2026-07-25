@@ -42,7 +42,8 @@ QString levelName(QtMsgType type)
 
 void messageHandler(QtMsgType type, const QMessageLogContext &ctx, const QString &msg)
 {
-    const QString ts = QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd hh:mm:ss.zzz"));
+    const QString ts =
+        QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd hh:mm:ss.zzz"));
     const QString level = levelName(type);
 
     // Build a single structured line:

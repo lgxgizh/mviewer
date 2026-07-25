@@ -213,9 +213,8 @@ void MetadataOverlay::buildContent(const QString &path)
         }
         if (raw.iso > 0)
         {
-            const bool hasIso =
-                std::any_of(m_lines.cbegin(), m_lines.cend(),
-                            [](const QString &l) { return l.startsWith(QStringLiteral("ISO:")); });
+            const bool hasIso = std::any_of(m_lines.cbegin(), m_lines.cend(), [](const QString &l)
+                                            { return l.startsWith(QStringLiteral("ISO:")); });
             if (!hasIso)
                 m_lines << QString("ISO: %1").arg(raw.iso);
         }
@@ -224,9 +223,8 @@ void MetadataOverlay::buildContent(const QString &path)
     // ICC profile
     if (meta.hasIccProfile)
         m_lines << QString("ICC 配置: 已嵌入 (%1)")
-                       .arg(meta.colorSpace.empty()
-                                ? QStringLiteral("embedded")
-                                : QString::fromStdString(meta.colorSpace));
+                       .arg(meta.colorSpace.empty() ? QStringLiteral("embedded")
+                                                    : QString::fromStdString(meta.colorSpace));
     else if (!meta.colorSpace.empty())
         m_lines << QString("色彩配置: %1").arg(QString::fromStdString(meta.colorSpace));
 
@@ -248,8 +246,7 @@ void MetadataOverlay::buildContent(const QString &path)
                 .arg(isNeg ? neg : pos);
         };
         m_lines << QString("GPS: %1  %2")
-                       .arg(toDms(meta.gpsLatitude, 'N', 'S'),
-                            toDms(meta.gpsLongitude, 'E', 'W'));
+                       .arg(toDms(meta.gpsLatitude, 'N', 'S'), toDms(meta.gpsLongitude, 'E', 'W'));
         if (meta.gpsAltitude != 0.0)
             m_lines << QString("海拔: %1 m").arg(meta.gpsAltitude, 0, 'f', 1);
     }
@@ -275,7 +272,8 @@ void MetadataOverlay::paintEvent(QPaintEvent *)
     const int padding = 12;
     const int boxW = kInfoRectWidth;
     // P0: Reserve space for embedded histogram if it has data.
-    const int histExtra = (m_histogram && m_histogram->isVisible()) ? kHistogramHeight + padding : 0;
+    const int histExtra =
+        (m_histogram && m_histogram->isVisible()) ? kHistogramHeight + padding : 0;
     const int boxH = (m_lines.size() + 1) * lineH + padding * 2 + histExtra;
 
     const int x = width() - boxW - 20;

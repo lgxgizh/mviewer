@@ -33,9 +33,8 @@ void SyncController::zoomAt(double viewX, double viewY, double factor, int excep
     if (m_sync.enabled)
     {
         const double ns = m_sync.scale * factor;
-        const Vec2 newOffset{
-            viewX - (viewX - m_sync.offset.x) * factor,
-            viewY - (viewY - m_sync.offset.y) * factor};
+        const Vec2 newOffset{viewX - (viewX - m_sync.offset.x) * factor,
+                             viewY - (viewY - m_sync.offset.y) * factor};
         for (int i = 0; i < static_cast<int>(m_cells.size()); ++i)
         {
             if (i == exceptIndex)

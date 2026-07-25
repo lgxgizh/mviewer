@@ -26,8 +26,7 @@ class MetadataReader
   private:
     // P0: parse GPS IFD from a JPEG file buffer. Populates hasGps, gpsLatitude,
     // gpsLongitude, gpsAltitude on the metadata struct in-place.
-    static void readGps(mviewer::domain::ImageMetadata &meta,
-                        const std::string &filePath);
+    static void readGps(mviewer::domain::ImageMetadata &meta, const std::string &filePath);
     // Helper: convert EXIF rational (num, denom) to double degrees.
     static double exifToDecimal(const unsigned char *buf, int offset, bool isLittle);
 };

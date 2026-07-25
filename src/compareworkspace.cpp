@@ -402,7 +402,8 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 
     m_exportReportBtn = new QPushButton(tr("导出报告"), this);
     m_exportReportBtn->setToolTip(tr("将对比结果导出为 HTML/Markdown/JSON 报告"));
-    connect(m_exportReportBtn, &QPushButton::clicked, this, &CompareWorkspace::exportReportRequested);
+    connect(m_exportReportBtn, &QPushButton::clicked, this,
+            &CompareWorkspace::exportReportRequested);
     syncLayout->addWidget(m_exportReportBtn);
 
     auto *leftLay = new QVBoxLayout;
@@ -1394,7 +1395,8 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
         else
         {
             // Zoom only the hovered cell around the cursor.
-            m_engine.zoomAt(static_cast<double>(pos.x()), static_cast<double>(pos.y()), factor, idx);
+            m_engine.zoomAt(static_cast<double>(pos.x()), static_cast<double>(pos.y()), factor,
+                            idx);
             // Clamp to a sane range to avoid runaway zoom.
             const double s = std::clamp(m_engine.cellTransform(idx).scale, 0.05, 50.0);
             m_engine.setCellScale(idx, s);

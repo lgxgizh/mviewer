@@ -213,8 +213,8 @@ class CompareWorkspace : public QWidget
 
     // A-4.5 / M20: continuous compare — walk a sliding window over the pool.
     QStringList m_imagePool;
-    int m_pairIndex = 0;  // index of the first image of the current window
-    int m_navWindow = 2;  // 2 / 4 / 8 — step size for next/prev
+    int m_pairIndex = 0; // index of the first image of the current window
+    int m_navWindow = 2; // 2 / 4 / 8 — step size for next/prev
     QPushButton *m_prevPairBtn = nullptr;
     QPushButton *m_nextPairBtn = nullptr;
     void updatePairButtons();

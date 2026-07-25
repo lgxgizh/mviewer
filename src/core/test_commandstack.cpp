@@ -135,8 +135,7 @@ static void writeFile(const std::filesystem::path &p, const std::string &content
 static std::string readFile(const std::filesystem::path &p)
 {
     std::ifstream in(p, std::ios::binary);
-    return std::string((std::istreambuf_iterator<char>(in)),
-                       std::istreambuf_iterator<char>());
+    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 }
 
 static void testFileRenameCommand()

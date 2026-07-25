@@ -155,8 +155,7 @@ double MetadataReader::exifToDecimal(const unsigned char *buf, int offset, bool 
     return static_cast<double>(num) / static_cast<double>(den);
 }
 
-void MetadataReader::readGps(mviewer::domain::ImageMetadata &meta,
-                             const std::string &filePath)
+void MetadataReader::readGps(mviewer::domain::ImageMetadata &meta, const std::string &filePath)
 {
     // Only JPEG has well-defined EXIF APP1; skip other formats.
     // Also block non-JPEG EXIF containers (PNG EXIF not supported here).
@@ -203,8 +202,8 @@ void MetadataReader::readGps(mviewer::domain::ImageMetadata &meta,
             buf = file.read(2);
             if (buf.size() < 2)
                 break;
-            int segLen = (static_cast<unsigned char>(buf[0]) << 8) |
-                         static_cast<unsigned char>(buf[1]);
+            int segLen =
+                (static_cast<unsigned char>(buf[0]) << 8) | static_cast<unsigned char>(buf[1]);
             if (segLen < 2)
                 break;
             segLen -= 2; // length includes the 2 length bytes themselves
@@ -214,8 +213,7 @@ void MetadataReader::readGps(mviewer::domain::ImageMetadata &meta,
                 // APP1 — check for "Exif\0\0" signature
                 QByteArray sig = file.read(6);
                 segLen -= 6;
-                if (sig.size() >= 6 &&
-                    sig[0] == 'E' && sig[1] == 'x' && sig[2] == 'i' &&
+                if (sig.size() >= 6 && sig[0] == 'E' && sig[1] == 'x' && sig[2] == 'i' &&
                     sig[3] == 'f' && sig[4] == 0 && sig[5] == 0)
                 {
                     exifData = file.read(segLen);

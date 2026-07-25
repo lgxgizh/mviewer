@@ -94,10 +94,9 @@ MemorySnapshot MemoryTracker::sample()
 
     // M21: stamp wall-clock ms since process start for the timeline X axis.
     static const auto kStart = std::chrono::steady_clock::now();
-    s.timestampMs = static_cast<uint64_t>(
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() -
-                                                              kStart)
-            .count());
+    s.timestampMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                              std::chrono::steady_clock::now() - kStart)
+                                              .count());
 
     // Append to the ring buffer (oldest dropped when full).
     {
