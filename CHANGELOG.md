@@ -59,6 +59,23 @@ All notable changes to this project are documented here. The format is based on
   (X/Y/W/H) applied before encode, and a 剥离元数据 (EXIF/ICC) toggle. Re-encoding
   from raw pixels already drops metadata; the flag records explicit intent.
 
+### Added — Review M14 follow-up (Browse & Inspector gaps)
+
+- **Browse — `List` view mode:** a new `List` view mode (Windows-Explorer-style
+  icon + name, wrapping into columns) joins the existing
+  Thumbnail/LargeIcon/SmallIcon/Details/Filmstrip/Compact modes. `Ctrl+1..4`
+  now map to 缩略图 / 列表 / 详情 / 胶片条; the extra 小图标 / 紧凑 modes remain
+  at `Ctrl+5/6`.
+- **Pixel Inspector — crosshair:** the inspected pixel is now marked with a
+  crosshair on the panel image, following the cursor and clearing when the
+  pointer leaves the image — so an ISP engineer can screenshot the exact
+  inspection point.
+- **Filter by Tag:** a new `TagStore` (persisted to a local `tags.txt`) plus a
+  tag filter field in the browse toolbar and a right-click “添加标签… / 移除标签”
+  menu on thumbnails. Tags combine with the other filters via AND.
+- **Compare — `Tab` toggles overlay:** `Tab` now toggles the overlay/sync mode
+  in addition to `O`, per the review's keyboard spec.
+
 ### Added — P1 Product Workflow (Compare, Analyzer, Report)
 
 - **Compare → Analyze/Export buttons (P1-④):** Two toolbar buttons

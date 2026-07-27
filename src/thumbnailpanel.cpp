@@ -33,6 +33,7 @@
 #include <QDirIterator>
 #include <QDrag>
 #include <QFile>
+#include <QInputDialog>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QImageReader>
@@ -551,6 +552,24 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         m_delegate = new ThumbDelegate(this, this);
         setItemDelegate(m_delegate);
     }
+    else if (mode == List)
+    {
+        // P0: Windows-Explorer-style list — small icon + name, wrapping into
+        // columns. Uses the lightweight ListDelegate (no resolution column).
+        QListView::setViewMode(QListView::ListMode);
+        setWrapping(true);
+        setUniformItemSizes(true);
+        setGridSize(QSize());
+        setSpacing(2);
+        setIconSize(QSize(16, 16));
+        setResizeMode(QListView::Adjust);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+        if (m_delegate)
+            delete m_delegate;
+        m_delegate = new ListDelegate(this, this);
+        setItemDelegate(m_delegate);
+    }
     else
     {
         QListView::setViewMode(QListView::IconMode);
@@ -634,6 +653,16 @@ void ThumbnailPanel::setIsoFilter(int iso)
     if (m_isoFilter == iso)
         return;
     m_isoFilter = iso;
+    if (!m_currentDir.isEmpty())
+        applyFilter();
+}
+
+void ThumbnailPanel::setTagFilter(const QString &tag)
+{
+    const QString t = tag.trimmed();
+    if (m_tagFilter == t)
+        return;
+    m_tagFilter = t;
     if (!m_currentDir.isEmpty())
         applyFilter();
 }
@@ -775,6 +804,9 @@ void ThumbnailPanel::applyFilter()
             !m_metaIndex.value(e.path).contains(m_lensFilter.toLower()))
             continue;
         if (m_isoFilter > 0 && m_metaIso.value(e.path, -1) != m_isoFilter)
+            continue;
+        if (!m_tagFilter.isEmpty() &&
+            !mviewer::core::TagStore::instance().hasTag(e.path.toStdString(), m_tagFilter.toStdString()))
             continue;
         if (!t.isEmpty())
         {
@@ -1269,6 +1301,15 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
     aCopyPath->setShortcut(QKeySequence("Ctrl+Shift+C"));
     QAction *aCompare = menu.addAction("比较");
     QAction *aAnalyze = menu.addAction("批量分析导出");
+    menu.addSeparator();
+    QAction *aAddTag = menu.addAction("添加标签…");
+    QMenu *rmTagMenu = menu.addMenu("移除标签");
+    {
+        const auto myTags = mviewer::core::TagStore::instance().tags(path.toStdString());
+        for (const auto &tg : myTags)
+            rmTagMenu->addAction(QString::fromStdString(tg));
+        rmTagMenu->setEnabled(!myTags.empty());
+    }
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;
@@ -1290,6 +1331,27 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
         onCompareClicked();
     else if (chosen == aAnalyze)
         batchAnalyzeExport();
+    else if (chosen == aAddTag)
+    {
+        bool ok = false;
+        const QString tag =
+            QInputDialog::getText(this, tr("添加标签"), tr("给所选图片添加标签："),
+                                  QLineEdit::Normal, QString(), &ok);
+        if (ok && !tag.trimmed().isEmpty())
+        {
+            mviewer::core::TagStore::instance().addTag(path.toStdString(),
+                                                       tag.trimmed().toStdString());
+            applyFilter();
+            viewport()->update();
+        }
+    }
+    else if (rmTagMenu->actions().contains(chosen))
+    {
+        mviewer::core::TagStore::instance().removeTag(path.toStdString(),
+                                                      chosen->text().toStdString());
+        applyFilter();
+        viewport()->update();
+    }
 }
 
 void ThumbnailPanel::resizeEvent(QResizeEvent *event)
@@ -1783,4 +1845,52 @@ QSize ThumbnailPanel::DetailsDelegate::sizeHint(const QStyleOptionViewItem &,
     // detailLayout() clamps the name column so all columns always fit.
     const int w = qMax(320, m_panel->viewport()->width());
     return QSize(w, 52);
+}
+
+// ---- ListDelegate ----------------------------------------------------------
+void ThumbnailPanel::ListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
+                                         const QModelIndex &index) const
+{
+    if (!index.isValid())
+    {
+        QStyledItemDelegate::paint(painter, option, index);
+        return;
+    }
+    const QStringList &paths = m_panel->pathList();
+    if (index.row() < 0 || index.row() >= paths.size())
+        return;
+    const QString path = paths.at(index.row());
+    const QString name = QFileInfo(path).fileName();
+
+    const bool sel = option.state & QStyle::State_Selected;
+    const bool hover = option.state & QStyle::State_MouseOver;
+    QColor bg = sel ? option.palette.color(QPalette::Highlight)
+                    : (hover ? option.palette.color(QPalette::Midlight)
+                             : option.palette.color(index.row() & 1 ? QPalette::AlternateBase
+                                                                  : QPalette::Base));
+    painter->fillRect(option.rect, bg);
+
+    const QRect r = option.rect.adjusted(4, 0, -4, 0);
+    const int icon = 16;
+    const QRect iconR(r.x(), r.y() + (r.height() - icon) / 2, icon, icon);
+    QPixmap pm = m_panel->thumbReady(path);
+    if (!pm.isNull())
+        painter->drawPixmap(iconR,
+                            pm.scaled(icon, icon, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    else if (m_panel->thumbFailed(path))
+        painter->fillRect(iconR, QColor(200, 200, 200));
+    else
+        painter->fillRect(iconR, QColor(228, 228, 228));
+
+    const QRect textR(iconR.right() + 6, r.y(), r.right() - iconR.right() - 6, r.height());
+    painter->setPen(sel ? option.palette.color(QPalette::HighlightedText)
+                        : option.palette.color(QPalette::Text));
+    painter->drawText(textR, Qt::AlignVCenter | Qt::TextSingleLine, name);
+}
+
+QSize ThumbnailPanel::ListDelegate::sizeHint(const QStyleOptionViewItem &,
+                                             const QModelIndex &) const
+{
+    // Fixed 220px width so items wrap into columns; single 22px row height.
+    return QSize(220, 22);
 }

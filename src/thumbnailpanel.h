@@ -18,6 +18,8 @@
 #include <QStringList>
 #include <QStyledItemDelegate>
 
+#include "core/TagStore.h"
+
 class QPushButton;
 class QContextMenuEvent;
 class QResizeEvent;
@@ -59,7 +61,8 @@ class ThumbnailPanel : public QListView
         SmallIcon,     // P0-2: small thumbnail grid
         Details,       // List view with columns
         Filmstrip,     // Horizontal strip, single row (M15)
-        Compact        // Dense grid, minimal padding (M15)
+        Compact,       // Dense grid, minimal padding (M15)
+        List           // Windows-Explorer-style icon+name wrapping list (P0)
     };
 
     explicit ThumbnailPanel(QWidget *parent = nullptr);
@@ -144,6 +147,8 @@ class ThumbnailPanel : public QListView
     void setCameraFilter(const QString &camera);
     void setLensFilter(const QString &lens);
     void setIsoFilter(int iso);
+    // P0 #①: free-form tag filter (matches images carrying this exact tag).
+    void setTagFilter(const QString &tag);
 
     // Quiesce background decode work (e.g. before a headless render where async
     // QPixmap updates are undesirable). Public so test/demo harnesses can
@@ -232,6 +237,7 @@ class ThumbnailPanel : public QListView
 
     class ThumbDelegate;
     class DetailsDelegate;
+    class ListDelegate;
 
     QStringList m_paths;                 // actual file paths, aligned with model
     QHash<QString, int> m_rowByPath;     // path -> model row (scroll / repaint)
@@ -269,6 +275,7 @@ class ThumbnailPanel : public QListView
     QString m_cameraFilter;              // P0 #①: camera make/model substring
     QString m_lensFilter;                // P0 #①: lens model substring
     int m_isoFilter = 0;                 // P0 #①: exact ISO (0 = any)
+    QString m_tagFilter;                 // P0 #①: exact tag (empty = any)
     QHash<QString, QString> m_metaIndex; // path -> lowercase searchable string
     QHash<QString, int> m_metaIso;       // path -> ISO (for exact ISO filter)
 
@@ -322,6 +329,23 @@ class ThumbnailPanel::DetailsDelegate : public QStyledItemDelegate
     {
     }
 
+    void paint(QPainter *painter, const QStyleOptionViewItem &option,
+               const QModelIndex &index) const override;
+    QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+
+  private:
+    ThumbnailPanel *m_panel;
+};
+
+// P0: Windows-Explorer-style list — a small icon plus the file name, wrapping
+// into columns. Used by ViewMode::List. Lighter than Details (no columns).
+class ThumbnailPanel::ListDelegate : public QStyledItemDelegate
+{
+  public:
+    explicit ListDelegate(ThumbnailPanel *panel, QObject *parent = nullptr)
+        : QStyledItemDelegate(parent), m_panel(panel)
+    {
+    }
     void paint(QPainter *painter, const QStyleOptionViewItem &option,
                const QModelIndex &index) const override;
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;

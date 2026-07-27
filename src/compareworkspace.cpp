@@ -2294,6 +2294,13 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
+    if (plain && key == Qt::Key_Tab && m_overlayChk && m_overlayChk->isEnabled())
+    {
+        // P1: Tab toggles overlay (in addition to O) per review spec.
+        m_overlayChk->setChecked(!m_overlayChk->isChecked());
+        event->accept();
+        return;
+    }
     if (plain && key == Qt::Key_H && m_diffHighlightChk)
     {
         m_diffHighlightChk->setChecked(!m_diffHighlightChk->isChecked());

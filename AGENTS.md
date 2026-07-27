@@ -69,6 +69,26 @@ Principles:
 - No change is merged without local build + test green (see Local Verify Policy).
 - Infrastructure/build/CI stay frozen unless the commander explicitly asks.
 
+## Strategic Direction (Product-First)
+
+**Positioning:** MViewer is a *Visual Analysis Platform for Image Algorithm
+Engineers* (Browse → Compare → Analyze → Report → Export → Workspace), not a
+high-performance image browser. Subsequent work must serve professional user
+workflows, not add more platform infrastructure.
+
+**Agent work ratio (post v1.0 review):** ~50% product experience (UI/Workflow),
+25% core functionality (Compare / Analyze / Export), 15% tests & stability,
+10% performance. Do not sink time into architecture refactoring or new
+infrastructure while product detail gaps remain.
+
+**Frozen — do not refactor or extend (mature enough):**
+`CacheManager`, `Scheduler`, `DecoderRegistry`, Build System, CI, Plugin
+Framework, Workspace base architecture, Performance Gate.
+
+**Milestone framing:** M14 Professional Browser · M15 Professional Compare ·
+M16 Professional Analysis · M17 Professional Productivity (Batch / Workspace
+enhancement / auto-recovery / release installer / crash report / auto-update).
+
 ## Git
 
 - Branch: `master`

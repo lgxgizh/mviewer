@@ -102,6 +102,25 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 4. Verify `dist/MViewer-1.0.0-portable.zip` and `dist/MViewer-1.0.0-Setup.exe`.
 5. Attach SHA256SUMS.txt (M14.8) and release notes from CHANGELOG.
 
+## Strategic milestones (post-1.0)
+
+Per the 2026-07-27 product review, the focus shifts from platform building to
+product refinement around professional workflows:
+
+- **M14 Professional Browser** — Directory tree completeness, multi-view
+  (Thumbnail / List / Details / Filmstrip), unified Selection Model, Metadata
+  Overlay, favorites / history / search / tags / ratings.
+- **M15 Professional Compare** — Blink / Swipe / Overlay, Pixel Inspector,
+  ROI sync, multi-image layouts, Compare keyboard scheme.
+- **M16 Professional Analysis** — Analyzer workflow, Analysis History, Report
+  Generator, Export pipeline, Session management.
+- **M17 Professional Productivity** — Batch, Workspace enhancement, auto-recovery,
+  release installer, crash report, auto-update.
+
+**Frozen (do not refactor/extend):** CacheManager, Scheduler, DecoderRegistry,
+Build System, CI, Plugin Framework, Workspace base, Performance Gate.
+**Agent work ratio:** ~50% product / 25% core / 15% test-stability / 10% perf.
+
 ## Status verdict
 
 The engine is release-grade. Product workflows (browse → compare → analyze → export)

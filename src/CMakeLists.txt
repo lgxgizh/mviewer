@@ -33,6 +33,7 @@ add_library(mviewer_core SHARED
     core/compare/BlinkController.cpp
     core/compare/DifferenceEngine.cpp
     core/RatingStore.cpp
+    core/TagStore.cpp
     core/SidecarStore.cpp
     core/CrashHandler.cpp
     core/Logger.cpp

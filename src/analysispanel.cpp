@@ -527,6 +527,15 @@ void AnalysisPanel::showPixel(int x, int y, int leftR, int leftG, int leftB, boo
     m_pG = leftG;
     m_pB = leftB;
     m_pValid = valid;
+    // P0/P1 #⑥: draw a crosshair on the panel image at the inspected pixel so an
+    // ISP engineer can screenshot the exact inspection point (Pixel Inspector).
+    if (m_imageView)
+    {
+        if (valid)
+            m_imageView->setCrosshair(QPointF(x + 0.5, y + 0.5));
+        else
+            m_imageView->clearCrosshair();
+    }
     updateInspectorPage();
 }
 

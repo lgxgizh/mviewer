@@ -571,6 +571,16 @@ void MainWindow::setupUi()
     connect(isoSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
             [this](int v) { m_thumbnailPanel->setIsoFilter(v); });
 
+    // P0 #①: free-form tag filter.
+    auto *tagEdit = new QLineEdit(sortBar);
+    tagEdit->setPlaceholderText("标签");
+    tagEdit->setFixedWidth(90);
+    tagEdit->setClearButtonEnabled(true);
+    tagEdit->setToolTip(tr("按标签精确过滤 (空 = 全部)"));
+    sortLayout->addWidget(tagEdit);
+    connect(tagEdit, &QLineEdit::textChanged, this,
+            [this](const QString &t) { m_thumbnailPanel->setTagFilter(t); });
+
     connect(typeFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this, typeFilterCombo]()
             {
@@ -583,6 +593,7 @@ void MainWindow::setupUi()
     viewModeCombo->addItem("网格", ThumbnailPanel::Thumbnail);
     viewModeCombo->addItem("大图标", ThumbnailPanel::LargeIcon);
     viewModeCombo->addItem("小图标", ThumbnailPanel::SmallIcon);
+    viewModeCombo->addItem("列表", ThumbnailPanel::List);
     viewModeCombo->addItem("详情", ThumbnailPanel::Details);
     viewModeCombo->addItem("胶片条", ThumbnailPanel::Filmstrip);
     viewModeCombo->addItem("紧凑", ThumbnailPanel::Compact);
@@ -1390,7 +1401,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     if ((mod & Qt::ControlModifier) && event->key() >= Qt::Key_1 && event->key() <= Qt::Key_6)
     {
         static const ThumbnailPanel::ViewMode modes[] = {
-            ThumbnailPanel::Thumbnail, ThumbnailPanel::LargeIcon, ThumbnailPanel::Details,
+            ThumbnailPanel::Thumbnail, ThumbnailPanel::List, ThumbnailPanel::Details,
             ThumbnailPanel::Filmstrip, ThumbnailPanel::SmallIcon, ThumbnailPanel::Compact};
         m_thumbnailPanel->setViewMode(modes[event->key() - Qt::Key_1]);
         event->accept();
@@ -1975,8 +1986,8 @@ void MainWindow::showShortcutsHelp()
         "<tr><th colspan='2'>视图模式</th></tr>"
         "<tr><td><kbd>G</kbd></td><td>缩略图视图</td></tr>"
         "<tr><td><kbd>D</kbd></td><td>详情视图</td></tr>"
-        "<tr><td><kbd>Ctrl+1</kbd>…<kbd>Ctrl+6</kbd></td><td>缩略图 / 大图标 / 小图标 / 详情 / "
-        "胶片 / 紧凑</td></tr>"
+        "<tr><td><kbd>Ctrl+1</kbd>…<kbd>Ctrl+4</kbd></td><td>缩略图 / 列表 / 详情 / 胶片条</td></tr>"
+        "<tr><td><kbd>Ctrl+5</kbd> / <kbd>Ctrl+6</kbd></td><td>小图标 / 紧凑</td></tr>"
         "<tr><th colspan='2'>比较（比较窗口内）</th></tr>"
         "<tr><td><kbd>C</kbd></td><td>打开比较模式</td></tr>"
         "<tr><td><kbd>Space</kbd></td><td>按住 Blink / 主窗口快速比较</td></tr>"
