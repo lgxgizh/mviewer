@@ -36,8 +36,10 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   via `AnalysisEngine`.
 - **Plugin SDK**: `AnalyzerRegistry` + `extern "C"` ABI; reference example at
   `plugins/example` (loaded and round-trip verified by `pluginregistry_tests`).
-- **Robustness**: opt-in Windows minidump crash handler (env `MVIEWER_CRASH_DUMP=1`);
-  `--selftest` headless decode→metadata gate (CTest `selftest`).
+- **Robustness**: always-on Windows minidump crash handler (`CrashHandler` installed at
+  startup; dumps land in `%APPDATA%/MViewer/crash-reports/`); on next launch a one-time
+  **崩溃报告** dialog offers to open the crash directory. `--selftest` headless
+  decode→metadata gate (CTest `selftest`).
 - **GPU Stage A**: `ImageViewer` is a `QOpenGLWidget`; `GpuTileUploader` uploads
   tiles via real `glTexImage2D` when `MVIEWER_GPU=1` and a context is current,
   then composites with `QOpenGLTextureBlitter`. `available()` probes the current
@@ -83,6 +85,8 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 | M21 Analysis+Export | ✅ | AnalysisPanel↔AnalyzerModel History/Pin；`ExportJob` Convert 统一路径；Memory Timeline；Dashboard Canvas 趋势图 |
 | Workspace 恢复 | ✅ | 布局/缩放/Compare/崩溃恢复（A-6 已落地） |
 | M17 高价值子集 | ✅ | 批量分析导出 / 插件 rescan / 评分过滤导出 |
+| M16 分析持久化 | ✅ | `AnalyzerModel` 历史/钉住/结果序列化到 `%APPDATA%/MViewer/analysis_history.json`，重启保留 |
+| M17 自动更新 | ✅ | `UpdateChecker` 接 GitHub Releases（WinHTTP），帮助菜单「检查更新」+ 启动 8s 后静默检查，新版本弹窗引导下载 |
 | 1.0 发布准备 | ✅ | 性能基线更新 + 安装包验收通过（M14.8 SHA256/notes ✅） |
 
 ## Plugin SDK (frozen)
@@ -112,10 +116,11 @@ product refinement around professional workflows:
   Overlay, favorites / history / search / tags / ratings.
 - **M15 Professional Compare** — Blink / Swipe / Overlay, Pixel Inspector,
   ROI sync, multi-image layouts, Compare keyboard scheme.
-- **M16 Professional Analysis** — Analyzer workflow, Analysis History, Report
-  Generator, Export pipeline, Session management.
+- **M16 Professional Analysis** — Analyzer workflow, Analysis History (persisted
+  across restarts), Report Generator, Export pipeline, Session management.
 - **M17 Professional Productivity** — Batch, Workspace enhancement, auto-recovery,
-  release installer, crash report, auto-update.
+  release installer, crash report (always-on + launch dialog), auto-update
+  checker (GitHub Releases).
 
 **Frozen (do not refactor/extend):** CacheManager, Scheduler, DecoderRegistry,
 Build System, CI, Plugin Framework, Workspace base, Performance Gate.

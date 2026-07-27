@@ -73,6 +73,7 @@ add_library(mviewer_core SHARED
     core/export/ExportJob.cpp
     core/search/SearchEngine.cpp
     core/batch/BatchProcessor.cpp
+    core/update/UpdateChecker.cpp
 
     core/command/CommandRegistry.cpp
     core/command/RotateCommand.cpp

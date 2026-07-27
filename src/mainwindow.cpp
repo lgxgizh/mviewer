@@ -49,6 +49,7 @@
 #include "workspacemodel.h"
 
 #include <QApplication>
+#include <QPointer>
 #include <QBuffer>
 #include <QCheckBox>
 #include <QClipboard>
@@ -89,7 +90,13 @@
 #include <QTextBrowser>
 #include <QTimer>
 #include <QUrl>
+#include <QDesktopServices>
+#include <QDir>
+#include <QFileInfo>
+#include <QDateTime>
+#include <thread>
 #include <QVBoxLayout>
+#include "core/update/UpdateChecker.h"
 #include <QWidget>
 
 #include <algorithm>
@@ -226,6 +233,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_autosaveTimer->start(30000);
     m_autosaveLoaded = false;
     restoreSessionRecovery();
+    // M17: if a previous run crashed, surface a crash-report prompt on next launch.
+    maybeShowCrashReport();
+    // M17: quiet background update check shortly after launch (only notifies on a new version).
+    QTimer::singleShot(8000, this, [this]() { checkForUpdates(true); });
 }
 
 MainWindow::~MainWindow() = default;
@@ -437,6 +448,11 @@ void MainWindow::setupUi()
 
     // ----- 帮助(&H) -----
     auto *helpMenu = menuBar->addMenu("帮助(&H)");
+    auto *actCheckUpdate = new QAction("检查更新...(&U)", this);
+    connect(actCheckUpdate, &QAction::triggered, this,
+            [this]() { checkForUpdates(false); });
+    helpMenu->addAction(actCheckUpdate);
+    helpMenu->addSeparator();
     auto *actShortcuts = new QAction("键盘快捷键(&K)", this);
     actShortcuts->setShortcut(QKeySequence(Qt::Key_F1));
     connect(actShortcuts, &QAction::triggered, this, &MainWindow::showShortcutsHelp);
@@ -2953,6 +2969,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
     m_appState.navHistoryIndex = m_historyIndex;
     m_appState.save();
 
+    // M16: persist analysis history / pinned results so they survive restart.
+    if (m_analyzer)
+        m_analyzer->save();
+
     // Normal exit: remove the crash-recovery marker so the next launch doesn't
     // prompt for a restore (only an unclean shutdown leaves it behind).
     {
@@ -3157,6 +3177,96 @@ void MainWindow::restoreSessionRecovery()
                 openCompare(cmpImgs, compareSession);
             m_autosaveLoaded = true;
         });
+}
+
+void MainWindow::checkForUpdates(bool silent)
+{
+    if (m_updateChecking)
+        return;
+    m_updateChecking = true;
+    if (!silent)
+        statusBar()->showMessage(tr("正在检查更新..."), 2000);
+
+    // checkGitHub() performs a synchronous network request; run it off the GUI
+    // thread and marshal the result back via the event loop. Guard `this` with
+    // a QPointer so a window destroyed mid-request doesn't get a dangling call.
+    QPointer<MainWindow> self(this);
+    std::thread([self, silent]() {
+        mviewer::core::UpdateChecker checker("1.0.4");
+        checker.checkGitHub("lgxgizh/mviewer",
+                            [self, silent](const mviewer::core::UpdateInfo &info) {
+            QMetaObject::invokeMethod(qApp, [self, info, silent]() {
+                if (!self)
+                    return;
+                self->m_updateChecking = false;
+                self->onUpdateChecked(info, silent);
+            });
+        });
+    }).detach();
+}
+
+void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool silent)
+{
+    if (!info.error.empty())
+    {
+        if (!silent)
+            QMessageBox::warning(this, tr("检查更新失败"),
+                                 tr("无法获取更新信息：\n%1").arg(QString::fromStdString(info.error)));
+        return;
+    }
+    if (info.hasUpdate)
+    {
+        QMessageBox box(this);
+        box.setIcon(QMessageBox::Information);
+        box.setWindowTitle(tr("发现新版本"));
+        box.setText(tr("发现新版本 %1（当前 %2）。")
+                        .arg(QString::fromStdString(info.latestVersion),
+                             QString::fromStdString(info.currentVersion)));
+        box.setInformativeText(tr("建议更新以获得最新功能与缺陷修复。"));
+        QPushButton *openBtn = box.addButton(tr("前往下载页"), QMessageBox::AcceptRole);
+        box.addButton(tr("稍后"), QMessageBox::RejectRole);
+        box.exec();
+        if (box.clickedButton() == openBtn)
+            QDesktopServices::openUrl(QUrl(QString::fromStdString(info.releaseUrl)));
+    }
+    else if (!silent)
+    {
+        QMessageBox::information(this, tr("已是最新"),
+                                 tr("当前已是最新版本（%1）。").arg(QString::fromStdString(info.currentVersion)));
+    }
+}
+
+void MainWindow::maybeShowCrashReport()
+{
+    const QString dir =
+        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/crash-reports";
+    QDir d(dir);
+    if (!d.exists())
+        return;
+    const QFileInfoList dumps = d.entryInfoList(QStringList() << "*.dmp", QDir::Files, QDir::Time);
+    if (dumps.isEmpty())
+        return;
+    const QFileInfo &newest = dumps.first();
+
+    // Only prompt once per crash dump (track last-seen mtime in QSettings).
+    QSettings settings;
+    const qint64 lastCheck = settings.value("crashReportLastCheck", 0).toLongLong();
+    const qint64 mtime = newest.lastModified().toSecsSinceEpoch();
+    if (mtime <= lastCheck)
+        return;
+    settings.setValue("crashReportLastCheck", QDateTime::currentSecsSinceEpoch());
+
+    QMessageBox box(this);
+    box.setIcon(QMessageBox::Warning);
+    box.setWindowTitle(tr("崩溃报告"));
+    box.setText(tr("检测到一次应用崩溃（%1）。\n崩溃转储已保存到：\n%2")
+                    .arg(newest.lastModified().toString(), newest.absoluteFilePath()));
+    box.setInformativeText(tr("可将此文件连同问题描述发送给开发者，以帮助定位并修复问题。"));
+    QPushButton *openBtn = box.addButton(tr("打开崩溃目录"), QMessageBox::ActionRole);
+    box.addButton(tr("忽略"), QMessageBox::RejectRole);
+    box.exec();
+    if (box.clickedButton() == openBtn)
+        QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
 }
 
 // M15: drag & drop — accept files/folders dropped onto the window.

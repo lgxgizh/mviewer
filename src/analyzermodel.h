@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QTimer>
 
 // M19: single source of truth for analysis results and analyzer selection.
 //
@@ -63,6 +64,13 @@ class AnalyzerModel : public QObject
     void unpinResult(const QString &imagePath);
     void pushHistory(const QString &imagePath);
 
+    // Persist analysis history / pinned / last results to disk so they survive
+    // restarts. save() writes immediately; load() repopulates the model;
+    // scheduleSave() debounces writes triggered by the change signals below.
+    void save();
+    void load();
+    void scheduleSave();
+
   signals:
     void currentAnalyzerChanged(const QString &id);
     void resultChanged(const QString &imagePath, const QString &text);
@@ -70,8 +78,10 @@ class AnalyzerModel : public QObject
     void pinnedChanged(const QStringList &paths);
 
   private:
+    QString storagePath() const;
     QString m_currentAnalyzer;
     QMap<QString, QString> m_results;
     QStringList m_history;
     QStringList m_pinned;
+    QTimer *m_saveTimer = nullptr;
 };

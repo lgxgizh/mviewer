@@ -6,6 +6,15 @@
 #include <string>
 #include <vector>
 
+#if defined(_WIN32)
+// MViewer targets Windows; use the OS WinHTTP API for the update check so we
+// don't pull in Qt6::Network. TLS 1.2/1.3 and timeouts are configured below.
+#define NOMINMAX
+#include <windows.h>
+#include <winhttp.h>
+#pragma comment(lib, "winhttp.lib")
+#endif
+
 namespace mviewer::core
 {
 
@@ -52,17 +61,115 @@ bool isNewer(const std::string &lhsTag, const std::string &rhsTag)
     return l.size() > r.size();
 }
 
+// Convert a UTF-8 std::string to a wide string. This SDK's winhttp.h only
+// declares the Unicode (W) entry points, so we go wide end-to-end.
+static std::wstring toWide(const std::string &s)
+{
+    if (s.empty())
+        return {};
+    const int n = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), nullptr, 0);
+    if (n <= 0)
+        return {};
+    std::wstring w(n, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), &w[0], n);
+    return w;
+}
+
 // Minimal HTTP GET wrapper that reads a URL and returns the body.
-// Uses platform-specific code paths: WinHTTP on Windows, POSIX otherwise.
+// On Windows this uses the OS WinHTTP API (TLS 1.2/1.3, with timeouts so the
+// call never hangs). Other platforms keep the harmless stub. The caller must
+// run this from a worker thread since the request is synchronous/blocking.
 std::string httpGet(const std::string &url, std::string &error)
 {
 #if defined(_WIN32)
-    // In a real product this would use WinHTTP or Qt's QNetworkAccessManager.
-    // For P2 product polish, we provide a stub that the UI layer can replace
-    // with QNetworkAccessManager::get().
-    error = "UpdateChecker: platform HTTP not implemented; use Qt QNetworkAccessManager";
-    (void)url;
-    return {};
+    const std::wstring wurl = toWide(url);
+    HINTERNET hSession = WinHttpOpen(L"MViewer-UpdateChecker/1.0",
+                                     WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                                     WINHTTP_NO_PROXY_NAME,
+                                     WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSession) {
+        error = "UpdateChecker: WinHttpOpen failed";
+        return {};
+    }
+
+    DWORD secure = WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_2 | WINHTTP_FLAG_SECURE_PROTOCOL_TLS1_3;
+    WinHttpSetOption(hSession, WINHTTP_OPTION_SECURE_PROTOCOLS, &secure, sizeof(secure));
+    // resolve, connect, send, receive timeouts (ms)
+    WinHttpSetTimeouts(hSession, 5000, 5000, 10000, 15000);
+
+    wchar_t hostBuf[256] = {0};
+    wchar_t pathBuf[2048] = {0};
+    wchar_t extraBuf[2048] = {0};
+    URL_COMPONENTSW parts = {sizeof(parts)};
+    parts.dwSchemeLength = (DWORD)-1;
+    parts.lpszHostName = hostBuf;
+    parts.dwHostNameLength = sizeof(hostBuf) / sizeof(wchar_t);
+    parts.lpszUrlPath = pathBuf;
+    parts.dwUrlPathLength = sizeof(pathBuf) / sizeof(wchar_t);
+    parts.lpszExtraInfo = extraBuf;
+    parts.dwExtraInfoLength = sizeof(extraBuf) / sizeof(wchar_t);
+
+    if (!WinHttpCrackUrl(wurl.c_str(), (DWORD)wurl.size(), 0, &parts)) {
+        WinHttpCloseHandle(hSession);
+        error = "UpdateChecker: invalid URL";
+        return {};
+    }
+
+    std::wstring host(hostBuf, parts.dwHostNameLength);
+    std::wstring path(pathBuf, parts.dwUrlPathLength);
+    if (parts.dwExtraInfoLength)
+        path.append(extraBuf, parts.dwExtraInfoLength);
+    if (path.empty())
+        path = L"/";
+    const bool https = (parts.nScheme == INTERNET_SCHEME_HTTPS);
+
+    HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), parts.nPort, 0);
+    if (!hConnect) {
+        WinHttpCloseHandle(hSession);
+        error = "UpdateChecker: connect failed";
+        return {};
+    }
+
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", path.c_str(), nullptr,
+                                            WINHTTP_NO_REFERER, nullptr,
+                                            https ? WINHTTP_FLAG_SECURE : 0);
+    if (!hRequest) {
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        error = "UpdateChecker: open request failed";
+        return {};
+    }
+
+    if (!WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, nullptr, 0, 0, 0) ||
+        !WinHttpReceiveResponse(hRequest, nullptr)) {
+        error = "UpdateChecker: request failed";
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return {};
+    }
+
+    DWORD status = 0, slen = sizeof(status);
+    if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+                            nullptr, &status, &slen, nullptr) &&
+        status != 200) {
+        error = "UpdateChecker: HTTP " + std::to_string(status);
+    }
+
+    std::string body;
+    DWORD avail = 0;
+    while (WinHttpQueryDataAvailable(hRequest, &avail) && avail > 0) {
+        std::string buf(avail, '\0');
+        DWORD read = 0;
+        if (!WinHttpReadData(hRequest, buf.data(), avail, &read) || read == 0)
+            break;
+        body.append(buf, 0, read);
+    }
+
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+    return body;
 #else
     error = "UpdateChecker: HTTP not supported on this platform";
     (void)url;

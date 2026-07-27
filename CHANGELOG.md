@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — M16 Professional Analysis & M17 Professional Productivity
+
+- **Analysis history persists across restarts:** `AnalyzerModel` now serializes
+  analysis history, pinned results, and per-image result text to
+  `%APPDATA%/MViewer/analysis_history.json`. The model loads it on startup and
+  saves (debounced) on every change, so recent analyses and pins survive a
+  restart.
+- **Auto-update checker:** `UpdateChecker` now performs a real update check
+  against GitHub Releases (via WinHTTP on Windows) instead of the previous stub.
+  Help → 检查更新… shows the result; on launch a quiet background check (8s)
+  notifies only when a newer version is available and offers to open the
+  download page.
+- **Crash report on relaunch:** after an unclean exit, a one-time 崩溃报告 dialog
+  appears on next launch offering to open the `%APPDATA%/MViewer/crash-reports`
+  directory (the always-on minidump handler already writes dumps there).
+
 ### Added — P0 Product Polish (Browser, Selection, Overlay)
 
 - **Directory tree auto-locate:** the tree now automatically expands

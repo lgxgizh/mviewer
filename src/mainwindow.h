@@ -3,6 +3,7 @@
 #include "appstate.h"
 #include "core/command/CommandRegistry.h"
 #include "core/command/CommandStack.h"
+#include "core/update/UpdateChecker.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
 #include <QKeyEvent>
@@ -271,6 +272,10 @@ class MainWindow : public QMainWindow
     // M15: crash recovery
     void autosaveSession();
     void restoreSessionRecovery();
+    void checkForUpdates(bool silent = false);
+    void onUpdateChecked(const mviewer::core::UpdateInfo &info, bool silent);
+    void maybeShowCrashReport();
+    bool m_updateChecking = false;
 
     // Shared drop handling for the main window and the thumbnail gallery:
     // ≥2 images → Compare; a directory → open folder; one image → open it.

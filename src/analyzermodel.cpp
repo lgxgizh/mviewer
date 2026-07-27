@@ -1,7 +1,22 @@
 #include "analyzermodel.h"
 
+#include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QStandardPaths>
+
 AnalyzerModel::AnalyzerModel(QObject *parent) : QObject(parent)
 {
+    m_saveTimer = new QTimer(this);
+    m_saveTimer->setSingleShot(true);
+    connect(m_saveTimer, &QTimer::timeout, this, &AnalyzerModel::save);
+    connect(this, &AnalyzerModel::resultChanged, this, &AnalyzerModel::scheduleSave);
+    connect(this, &AnalyzerModel::historyChanged, this, &AnalyzerModel::scheduleSave);
+    connect(this, &AnalyzerModel::pinnedChanged, this, &AnalyzerModel::scheduleSave);
+    connect(this, &AnalyzerModel::currentAnalyzerChanged, this, &AnalyzerModel::scheduleSave);
+    load();
 }
 
 void AnalyzerModel::setCurrentAnalyzer(const QString &id)
@@ -95,4 +110,74 @@ void AnalyzerModel::pushHistory(const QString &imagePath)
     while (m_history.size() > kMaxHistory)
         m_history.removeLast();
     emit historyChanged(m_history);
+}
+
+QString AnalyzerModel::storagePath() const
+{
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    if (!dir.isEmpty())
+        QDir().mkpath(dir);
+    return dir + "/analysis_history.json";
+}
+
+void AnalyzerModel::save()
+{
+    QJsonObject root;
+    root["currentAnalyzer"] = m_currentAnalyzer;
+
+    QJsonObject results;
+    for (auto it = m_results.begin(); it != m_results.end(); ++it)
+        results.insert(it.key(), it.value());
+    root["results"] = results;
+
+    QJsonArray history;
+    for (const QString &h : m_history)
+        history.append(h);
+    root["history"] = history;
+
+    QJsonArray pinned;
+    for (const QString &p : m_pinned)
+        pinned.append(p);
+    root["pinned"] = pinned;
+
+    QFile f(storagePath());
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        return;
+    f.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+}
+
+void AnalyzerModel::load()
+{
+    QFile f(storagePath());
+    if (!f.exists() || !f.open(QIODevice::ReadOnly))
+        return;
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    if (!doc.isObject())
+        return;
+    const QJsonObject root = doc.object();
+
+    m_currentAnalyzer = root.value("currentAnalyzer").toString();
+
+    m_results.clear();
+    const QJsonObject results = root.value("results").toObject();
+    for (auto it = results.begin(); it != results.end(); ++it)
+        m_results.insert(it.key(), it.value().toString());
+
+    m_history.clear();
+    for (const QJsonValue &v : root.value("history").toArray())
+        m_history.append(v.toString());
+
+    m_pinned.clear();
+    for (const QJsonValue &v : root.value("pinned").toArray())
+        m_pinned.append(v.toString());
+
+    emit currentAnalyzerChanged(m_currentAnalyzer);
+    emit historyChanged(m_history);
+    emit pinnedChanged(m_pinned);
+}
+
+void AnalyzerModel::scheduleSave()
+{
+    if (m_saveTimer)
+        m_saveTimer->start(500);
 }
