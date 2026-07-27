@@ -175,6 +175,7 @@ class AnalysisPanel : public QWidget
     int m_px = -1, m_py = -1;
     int m_pR = 0, m_pG = 0, m_pB = 0;
     bool m_pValid = false;
+    bool m_frozen = false; // Freeze: keep showing the last inspected pixel
 
     // M15 P0 #2: Pixel Inspector Pro — selected color space + NxN kernel.
     mviewer::core::ColorSpace m_colorSpace = mviewer::core::ColorSpace::RGB;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace mviewer::core
@@ -18,7 +19,9 @@ enum class ColorSpace
     HSV,
     Lab,
     YUV,
-    YCbCr
+    YCbCr,
+    XYZ, // CIE XYZ (D65), each channel in 0..~1.2
+    HEX  // #RRGGBB string form of RGB (display-only; see toHex)
 };
 
 // One triple in the selected color space. Channels are normalized to a
@@ -28,6 +31,8 @@ enum class ColorSpace
 //   Lab   → L 0..100, a -128..127, b -128..127
 //   YUV   → Y 0..255, U -128..127, V -128..127  (BT.601)
 //   YCbCr → Y 0..255, Cb 0..255, Cr 0..255      (BT.601, full range)
+//   XYZ   → X 0..~0.95, Y 0..1, Z 0..~1.08      (D65)
+//   HEX   → same as RGB (display formatted via toHex)
 struct ColorTriple
 {
     double c1 = 0, c2 = 0, c3 = 0;
@@ -44,6 +49,9 @@ struct NeighborhoodStats
     double min = 0;      // min luminance
     double max = 0;      // max luminance
     int count = 0;       // pixels actually sampled (clipped to image)
+    double rMean = 0;    // mean of R channel over the kernel
+    double gMean = 0;    // mean of G channel over the kernel
+    double bMean = 0;    // mean of B channel over the kernel
 };
 
 // Compute luminance statistics over an N×N neighborhood centered at (cx,cy)
@@ -55,4 +63,7 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
 
 // Convert a ColorSpace enum to its short label (e.g. "RGB", "HSV").
 const char *colorSpaceLabel(ColorSpace space);
+
+// Format an sRGB pixel as a "#RRGGBB" string.
+std::string toHex(uint8_t r, uint8_t g, uint8_t b);
 } // namespace mviewer::core

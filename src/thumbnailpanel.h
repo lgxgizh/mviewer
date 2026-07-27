@@ -47,7 +47,9 @@ class ThumbnailPanel : public QListView
         SortSize,
         SortResolution,
         SortType,  // A-2.2: sort by file extension
-        SortRating // A-2.2: sort by star rating
+        SortRating, // A-2.2: sort by star rating
+        SortCamera, // P0 #①: sort by camera make+model
+        SortLens    // P0 #①: sort by lens model
     };
 
     enum ViewMode
@@ -135,6 +137,13 @@ class ThumbnailPanel : public QListView
     void setPickFilter(bool on);
     void setRecentFilter(bool on);
     void clearFlagFilters();
+
+    // P0 #①: metadata filters. Camera/Lens match as case-insensitive substrings
+    // against the EXIF "make model lens" index; ISO matches the exact numeric
+    // value. These combine with the other filters via AND in applyFilter().
+    void setCameraFilter(const QString &camera);
+    void setLensFilter(const QString &lens);
+    void setIsoFilter(int iso);
 
     // Quiesce background decode work (e.g. before a headless render where async
     // QPixmap updates are undesirable). Public so test/demo harnesses can
@@ -257,7 +266,11 @@ class ThumbnailPanel : public QListView
     bool m_rejectFilter = false;         // show only rejected images
     bool m_pickFilter = false;           // show only picked (favorite) images
     bool m_recentFilter = false;         // show only recently-viewed images
+    QString m_cameraFilter;              // P0 #①: camera make/model substring
+    QString m_lensFilter;                // P0 #①: lens model substring
+    int m_isoFilter = 0;                 // P0 #①: exact ISO (0 = any)
     QHash<QString, QString> m_metaIndex; // path -> lowercase searchable string
+    QHash<QString, int> m_metaIso;       // path -> ISO (for exact ISO filter)
 
     void applyFilter();     // (re)build the filtered model
     void ensureMetaIndex(); // lazily index metadata for m_allEntries

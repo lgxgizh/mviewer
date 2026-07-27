@@ -78,6 +78,14 @@ class ExportDialog : public QDialog
     QSpinBox *m_colsSpin = nullptr;
     QSpinBox *m_thumbSpin = nullptr;
 
+    // P0 #⑦: crop + strip metadata
+    QCheckBox *m_cropCheck = nullptr;
+    QSpinBox *m_cropX = nullptr;
+    QSpinBox *m_cropY = nullptr;
+    QSpinBox *m_cropW = nullptr;
+    QSpinBox *m_cropH = nullptr;
+    QCheckBox *m_stripMetaCheck = nullptr;
+
     QPushButton *m_exportBtn = nullptr;
     QLabel *m_statusLabel = nullptr;
 };

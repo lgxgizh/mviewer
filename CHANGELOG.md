@@ -37,6 +37,28 @@ All notable changes to this project are documented here. The format is based on
   `HistogramWidget` child below the EXIF lines. Histogram is computed lazily
   from the `ImageViewer`'s already-decoded frame on show, no extra decode.
 
+### Added — P0 Browser & Inspector polish (review follow-up)
+
+- **View shortcuts `Ctrl+1..4`:** rebind to the four primary browse modes —
+  Thumbnail (缩略图), Large Icon (大图标), Details (详情), Filmstrip (胶片条).
+  The extra Small Icon / Compact modes remain reachable at `Ctrl+5/6`.
+- **Sort by Camera / Lens:** the sort combo gains 相机 / 镜头 entries; ordering
+  uses the EXIF make+model / lens string (resolved on demand).
+- **Metadata filters (Camera / Lens / ISO):** three compact widgets on the
+  toolbar filter the thumbnail grid — camera & lens by case-insensitive
+  substring against the EXIF index, ISO by exact value. Combine with the other
+  filters via AND.
+- **Pixel Inspector — XYZ & HEX:** the color-space combo now includes `XYZ`
+  (CIE XYZ, D65) and `HEX` (`#RRGGBB`) displays, alongside the existing
+  RGB/HSV/Lab/YUV/YCbCr.
+- **Pixel Inspector — Freeze:** a `Freeze` toggle keeps the last inspected
+  pixel on screen while the mouse moves away (useful for ISP screenshots).
+- **Pixel Inspector — ROI channel averages:** the kernel stats now also report
+  per-channel R/G/B mean, in addition to the existing luminance mean/std/min/max.
+- **Export — Crop & Strip Metadata:** the export dialog gains a 裁剪 group
+  (X/Y/W/H) applied before encode, and a 剥离元数据 (EXIF/ICC) toggle. Re-encoding
+  from raw pixels already drops metadata; the flag records explicit intent.
+
 ### Added — P1 Product Workflow (Compare, Analyzer, Report)
 
 - **Compare → Analyze/Export buttons (P1-④):** Two toolbar buttons

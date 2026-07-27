@@ -4,6 +4,7 @@
 #include "core/image/Encoder.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageTransform.h"
+#include "domain/Selection.h"
 
 #include <cctype>
 #include <filesystem>
@@ -128,7 +129,11 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
             ++r.failed;
             continue;
         }
-        data = maybeWatermark(maybeResize(data, cfg), cfg);
+        data = maybeResize(data, cfg);
+        if (cfg.cropEnabled && cfg.cropW > 0 && cfg.cropH > 0)
+            data = cropRegion(
+                data, mviewer::domain::Selection{cfg.cropX, cfg.cropY, cfg.cropW, cfg.cropH});
+        data = maybeWatermark(data, cfg);
 
         fs::path p(src);
         const std::string baseName = p.stem().string();

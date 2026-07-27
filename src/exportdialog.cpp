@@ -128,6 +128,41 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     wmLay->addRow(tr("不透明度(%):"), m_wmOpacitySpin);
     root->addWidget(wmBox);
 
+    // ---- crop (P0 #⑦) ----
+    auto *cropBox = new QGroupBox(tr("裁剪"));
+    auto *cropLay = new QFormLayout(cropBox);
+    m_cropCheck = new QCheckBox(tr("启用裁剪"), this);
+    m_cropX = new QSpinBox(this);
+    m_cropY = new QSpinBox(this);
+    m_cropW = new QSpinBox(this);
+    m_cropH = new QSpinBox(this);
+    m_cropX->setRange(0, 100000);
+    m_cropY->setRange(0, 100000);
+    m_cropW->setRange(1, 100000);
+    m_cropH->setRange(1, 100000);
+    auto *cropGrid = new QGridLayout();
+    cropGrid->addWidget(new QLabel(tr("X")), 0, 0);
+    cropGrid->addWidget(m_cropX, 0, 1);
+    cropGrid->addWidget(new QLabel(tr("Y")), 0, 2);
+    cropGrid->addWidget(m_cropY, 0, 3);
+    cropGrid->addWidget(new QLabel(tr("宽")), 1, 0);
+    cropGrid->addWidget(m_cropW, 1, 1);
+    cropGrid->addWidget(new QLabel(tr("高")), 1, 2);
+    cropGrid->addWidget(m_cropH, 1, 3);
+    cropLay->addRow(m_cropCheck);
+    cropLay->addRow(cropGrid);
+    root->addWidget(cropBox);
+
+    // ---- metadata (P0 #⑦) ----
+    auto *metaBox = new QGroupBox(tr("元数据"));
+    auto *metaLay = new QFormLayout(metaBox);
+    m_stripMetaCheck = new QCheckBox(tr("剥离元数据 (EXIF/ICC)"), this);
+    m_stripMetaCheck->setChecked(true);
+    m_stripMetaCheck->setToolTip(
+        tr("重新编码为原始像素时已默认不包含元数据；此选项记录你的明确意图。"));
+    metaLay->addRow(m_stripMetaCheck);
+    root->addWidget(metaBox);
+
     // ---- rename ----
     auto *rnBox = new QGroupBox(tr("批量重命名 (留空=原名)"));
     auto *rnLay = new QFormLayout(rnBox);
@@ -259,6 +294,13 @@ void ExportDialog::exportConvertBatch()
     cfg.watermarkText = m_watermarkEdit->text().toStdString();
     cfg.watermarkPos = m_wmPosCombo->currentIndex();
     cfg.watermarkOpacity = m_wmOpacitySpin->value();
+    // P0 #⑦: crop + strip metadata
+    cfg.cropEnabled = m_cropCheck->isChecked();
+    cfg.cropX = m_cropX->value();
+    cfg.cropY = m_cropY->value();
+    cfg.cropW = m_cropW->value();
+    cfg.cropH = m_cropH->value();
+    cfg.stripMetadata = m_stripMetaCheck->isChecked();
     const QString resizeMode = m_resizeCombo->currentData().toString();
     if (resizeMode == "fit")
     {

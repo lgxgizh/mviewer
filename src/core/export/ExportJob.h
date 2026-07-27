@@ -43,6 +43,13 @@ struct ExportJobConfig
     std::string renamePattern = "{name}_{seq:3}";
     int contactCols = 4;
     int contactThumb = 200;
+
+    // P0 #⑦: crop applied before encode (disabled when cropEnabled is false).
+    bool cropEnabled = false;
+    int cropX = 0, cropY = 0, cropW = 0, cropH = 0;
+    // P0 #⑦: strip metadata. Re-encoding from raw pixels already drops EXIF/ICC,
+    // so this is effectively always-on; the flag records explicit user intent.
+    bool stripMetadata = true;
 };
 
 struct ExportJobResult

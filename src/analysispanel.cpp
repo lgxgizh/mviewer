@@ -218,7 +218,13 @@ void AnalysisPanel::buildUi()
     csCombo->addItem(tr("Lab"), static_cast<int>(mviewer::core::ColorSpace::Lab));
     csCombo->addItem(tr("YUV"), static_cast<int>(mviewer::core::ColorSpace::YUV));
     csCombo->addItem(tr("YCbCr"), static_cast<int>(mviewer::core::ColorSpace::YCbCr));
+    csCombo->addItem(tr("XYZ"), static_cast<int>(mviewer::core::ColorSpace::XYZ));
+    csCombo->addItem(tr("HEX"), static_cast<int>(mviewer::core::ColorSpace::HEX));
     insBar->addWidget(csCombo, 1);
+    auto *freezeBtn = new QPushButton(tr("Freeze"));
+    freezeBtn->setCheckable(true);
+    freezeBtn->setToolTip(tr("Freeze the inspected pixel so it stays shown while you move the mouse"));
+    insBar->addWidget(freezeBtn);
     insBar->addWidget(new QLabel(tr("Kernel:")));
     QComboBox *kCombo = new QComboBox;
     kCombo->addItem(tr("1×1"), 1);
@@ -297,6 +303,13 @@ void AnalysisPanel::buildUi()
             {
                 m_colorSpace =
                     static_cast<mviewer::core::ColorSpace>(csCombo->currentData().toInt());
+                updateInspectorPage();
+            });
+    connect(freezeBtn, &QPushButton::toggled, this,
+            [this, freezeBtn](bool on)
+            {
+                m_frozen = on;
+                freezeBtn->setText(on ? tr("Frozen") : tr("Freeze"));
                 updateInspectorPage();
             });
     connect(kCombo, QOverload<int>::of(&QComboBox::activated), this,
@@ -506,6 +519,8 @@ void AnalysisPanel::setRegionStats(const QString &text)
 
 void AnalysisPanel::showPixel(int x, int y, int leftR, int leftG, int leftB, bool valid)
 {
+    if (m_frozen)
+        return; // keep the last inspected pixel frozen
     m_px = x;
     m_py = y;
     m_pR = leftR;
@@ -530,11 +545,28 @@ void AnalysisPanel::updateInspectorPage()
 
     QString txt = QString("<h3>Pixel Inspector — %1</h3>").arg(csLabel);
     txt += QString("pos: (%1, %2)<br>").arg(m_px).arg(m_py);
-    txt += QString("<span style='color:#e66;'>●</span> Left %2(%3, %4, %5)<br>")
-               .arg(csLabel)
-               .arg(px.c1, 0, 'f', 1)
-               .arg(px.c2, 0, 'f', 1)
-               .arg(px.c3, 0, 'f', 1);
+    if (m_colorSpace == mviewer::core::ColorSpace::HEX)
+    {
+        const QString hex = QString::fromStdString(
+            mviewer::core::toHex(static_cast<uint8_t>(m_pR), static_cast<uint8_t>(m_pG),
+                                 static_cast<uint8_t>(m_pB)));
+        txt += QString("<span style='color:#e66;'>●</span> Left HEX %1<br>").arg(hex);
+    }
+    else if (m_colorSpace == mviewer::core::ColorSpace::XYZ)
+    {
+        txt += QString("<span style='color:#e66;'>●</span> Left XYZ(%1, %2, %3)<br>")
+                   .arg(px.c1, 0, 'f', 3)
+                   .arg(px.c2, 0, 'f', 3)
+                   .arg(px.c3, 0, 'f', 3);
+    }
+    else
+    {
+        txt += QString("<span style='color:#e66;'>●</span> Left %1(%2, %3, %4)<br>")
+                   .arg(csLabel)
+                   .arg(px.c1, 0, 'f', 1)
+                   .arg(px.c2, 0, 'f', 1)
+                   .arg(px.c3, 0, 'f', 1);
+    }
 
     // NxN neighborhood luminance statistics over the left image (real pixels,
     // read from m_imageA which is Format_RGB32). Clipped to image bounds.
@@ -554,6 +586,10 @@ void AnalysisPanel::updateInspectorPage()
                        .arg(s.max, 0, 'f', 0)
                        .arg(s.variance, 0, 'f', 1)
                        .arg(s.count);
+            txt += QString("<br>ROI 通道均值: R %1  G %2  B %3")
+                       .arg(s.rMean, 0, 'f', 1)
+                       .arg(s.gMean, 0, 'f', 1)
+                       .arg(s.bMean, 0, 'f', 1);
         }
     }
 

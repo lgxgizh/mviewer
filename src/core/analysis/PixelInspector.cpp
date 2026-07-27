@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 
 namespace mviewer::core
 {
@@ -93,6 +94,25 @@ ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space)
         out.c3 = 0.5 * r - 0.418688 * g - 0.081312 * b + 128.0;
         break;
     }
+
+    case ColorSpace::XYZ:
+    {
+        // sRGB → linear → CIE XYZ (D65).
+        auto toLin = [](double c)
+        { return c <= 0.04045 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4); };
+        const double lr = toLin(R), lg = toLin(G), lb = toLin(B);
+        out.c1 = lr * 0.4124564 + lg * 0.3575761 + lb * 0.1804375; // X
+        out.c2 = lr * 0.2126729 + lg * 0.7151522 + lb * 0.0721750; // Y
+        out.c3 = lr * 0.0193339 + lg * 0.1191920 + lb * 0.9503041; // Z
+        break;
+    }
+
+    case ColorSpace::HEX:
+        // Display-only; formatted via toHex(). Fall back to raw RGB triple.
+        out.c1 = r;
+        out.c2 = g;
+        out.c3 = b;
+        break;
     }
     return out;
 }
@@ -106,6 +126,7 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
         return s;
 
     long sum = 0, sumSq = 0;
+    long rSum = 0, gSum = 0, bSum = 0;
     int mn = 255, mx = 0, count = 0;
     const int half = n / 2; // n=1→0, n=3→1, n=5→2, n=7→3
     for (int dy = -half; dy <= half; ++dy)
@@ -120,6 +141,9 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
             if (xx < 0 || xx >= width)
                 continue;
             const uint8_t *p = row + static_cast<size_t>(xx) * 3;
+            rSum += p[0];
+            gSum += p[1];
+            bSum += p[2];
             const double lum = luma(p[0], p[1], p[2]); // 0..255
             const int v = static_cast<int>(lum + 0.5);
             sum += v;
@@ -141,6 +165,9 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
     s.min = mn;
     s.max = mx;
     s.count = count;
+    s.rMean = static_cast<double>(rSum) / count;
+    s.gMean = static_cast<double>(gSum) / count;
+    s.bMean = static_cast<double>(bSum) / count;
     return s;
 }
 
@@ -158,7 +185,18 @@ const char *colorSpaceLabel(ColorSpace space)
         return "YUV";
     case ColorSpace::YCbCr:
         return "YCbCr";
+    case ColorSpace::XYZ:
+        return "XYZ";
+    case ColorSpace::HEX:
+        return "HEX";
     }
     return "RGB";
+}
+
+std::string toHex(uint8_t r, uint8_t g, uint8_t b)
+{
+    char buf[8];
+    std::snprintf(buf, sizeof(buf), "#%02X%02X%02X", r, g, b);
+    return std::string(buf);
 }
 } // namespace mviewer::core

@@ -611,6 +611,33 @@ void ThumbnailPanel::setRatingFilter(int stars)
     applyFilter();
 }
 
+void ThumbnailPanel::setCameraFilter(const QString &camera)
+{
+    if (m_cameraFilter == camera)
+        return;
+    m_cameraFilter = camera.trimmed();
+    if (!m_currentDir.isEmpty())
+        applyFilter();
+}
+
+void ThumbnailPanel::setLensFilter(const QString &lens)
+{
+    if (m_lensFilter == lens)
+        return;
+    m_lensFilter = lens.trimmed();
+    if (!m_currentDir.isEmpty())
+        applyFilter();
+}
+
+void ThumbnailPanel::setIsoFilter(int iso)
+{
+    if (m_isoFilter == iso)
+        return;
+    m_isoFilter = iso;
+    if (!m_currentDir.isEmpty())
+        applyFilter();
+}
+
 void ThumbnailPanel::setLabelFilter(int label)
 {
     m_labelFilter = qBound(0, label, 6);
@@ -670,6 +697,7 @@ void ThumbnailPanel::ensureMetaIndex()
         if (rm.iso > 0)
             parts << QString::number(rm.iso);
         m_metaIndex.insert(e.path, parts.join(' ').toLower());
+        m_metaIso.insert(e.path, rm.iso);
     }
 }
 
@@ -677,6 +705,8 @@ void ThumbnailPanel::applyFilter()
 {
     const QString t = m_filterText.trimmed().toLower();
     if (m_metaSearch && !t.isEmpty())
+        ensureMetaIndex();
+    if (!m_cameraFilter.isEmpty() || !m_lensFilter.isEmpty() || m_isoFilter > 0)
         ensureMetaIndex();
 
     QList<Entry> src = m_allEntries;
@@ -738,6 +768,14 @@ void ThumbnailPanel::applyFilter()
             if (!inRecents)
                 continue;
         }
+        if (!m_cameraFilter.isEmpty() &&
+            !m_metaIndex.value(e.path).contains(m_cameraFilter.toLower()))
+            continue;
+        if (!m_lensFilter.isEmpty() &&
+            !m_metaIndex.value(e.path).contains(m_lensFilter.toLower()))
+            continue;
+        if (m_isoFilter > 0 && m_metaIso.value(e.path, -1) != m_isoFilter)
+            continue;
         if (!t.isEmpty())
         {
             if (m_metaSearch)
@@ -1423,6 +1461,32 @@ QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode, bool
                       if (ra != rb)
                           return ra < rb;
                       return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0;
+                  });
+        break;
+    case SortCamera:
+        std::sort(out.begin(), out.end(),
+                  [](const QFileInfo &a, const QFileInfo &b)
+                  {
+                      auto cam = [](const QString &p) -> QString
+                      {
+                          const auto rm = mviewer::core::parseRawMetadata(p.toStdString());
+                          return QString::fromStdString(rm.make + " " + rm.model).toLower();
+                      };
+                      return cam(a.absoluteFilePath()).compare(cam(b.absoluteFilePath()),
+                                                              Qt::CaseInsensitive) < 0;
+                  });
+        break;
+    case SortLens:
+        std::sort(out.begin(), out.end(),
+                  [](const QFileInfo &a, const QFileInfo &b)
+                  {
+                      auto lens = [](const QString &p) -> QString
+                      {
+                          const auto rm = mviewer::core::parseRawMetadata(p.toStdString());
+                          return QString::fromStdString(rm.lens).toLower();
+                      };
+                      return lens(a.absoluteFilePath()).compare(lens(b.absoluteFilePath()),
+                                                                Qt::CaseInsensitive) < 0;
                   });
         break;
     }

@@ -516,6 +516,8 @@ void MainWindow::setupUi()
     sortCombo->addItem("分辨率", ThumbnailPanel::SortResolution);
     sortCombo->addItem("类型", ThumbnailPanel::SortType);   // A-2.2
     sortCombo->addItem("评分", ThumbnailPanel::SortRating); // A-2.2
+    sortCombo->addItem("相机", ThumbnailPanel::SortCamera);  // P0 #①
+    sortCombo->addItem("镜头", ThumbnailPanel::SortLens);    // P0 #①
     sortLayout->addWidget(sortCombo);
 
     // A-2.2: sort direction toggle (ascending / descending).
@@ -542,6 +544,33 @@ void MainWindow::setupUi()
     typeFilterCombo->addItem("RAW", "cr2,cr3,nef,nrw,arw,dng,orf,rw2,pef,raf");
     typeFilterCombo->setToolTip("按文件类型过滤");
     sortLayout->addWidget(typeFilterCombo);
+
+    // P0 #①: metadata filters — camera / lens (substring) and ISO (exact).
+    auto *camEdit = new QLineEdit(sortBar);
+    camEdit->setPlaceholderText("相机");
+    camEdit->setFixedWidth(80);
+    camEdit->setClearButtonEnabled(true);
+    camEdit->setToolTip(tr("按相机(品牌/型号)过滤，子串匹配"));
+    sortLayout->addWidget(camEdit);
+    auto *lensEdit = new QLineEdit(sortBar);
+    lensEdit->setPlaceholderText("镜头");
+    lensEdit->setFixedWidth(95);
+    lensEdit->setClearButtonEnabled(true);
+    lensEdit->setToolTip(tr("按镜头型号过滤，子串匹配"));
+    sortLayout->addWidget(lensEdit);
+    auto *isoSpin = new QSpinBox(sortBar);
+    isoSpin->setRange(0, 65535);
+    isoSpin->setSpecialValueText("ISO");
+    isoSpin->setToolTip(tr("按 ISO 精确过滤 (0 = 全部)"));
+    isoSpin->setFixedWidth(72);
+    sortLayout->addWidget(isoSpin);
+    connect(camEdit, &QLineEdit::textChanged, this,
+            [this](const QString &t) { m_thumbnailPanel->setCameraFilter(t); });
+    connect(lensEdit, &QLineEdit::textChanged, this,
+            [this](const QString &t) { m_thumbnailPanel->setLensFilter(t); });
+    connect(isoSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+            [this](int v) { m_thumbnailPanel->setIsoFilter(v); });
+
     connect(typeFilterCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this, typeFilterCombo]()
             {
@@ -1361,8 +1390,8 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     if ((mod & Qt::ControlModifier) && event->key() >= Qt::Key_1 && event->key() <= Qt::Key_6)
     {
         static const ThumbnailPanel::ViewMode modes[] = {
-            ThumbnailPanel::Thumbnail, ThumbnailPanel::LargeIcon, ThumbnailPanel::SmallIcon,
-            ThumbnailPanel::Details,   ThumbnailPanel::Filmstrip, ThumbnailPanel::Compact};
+            ThumbnailPanel::Thumbnail, ThumbnailPanel::LargeIcon, ThumbnailPanel::Details,
+            ThumbnailPanel::Filmstrip, ThumbnailPanel::SmallIcon, ThumbnailPanel::Compact};
         m_thumbnailPanel->setViewMode(modes[event->key() - Qt::Key_1]);
         event->accept();
         return;
