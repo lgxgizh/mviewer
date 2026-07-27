@@ -596,7 +596,8 @@ void CompareWorkspace::updatePairButtons()
 
 void CompareWorkspace::applyLayoutPreset(int n)
 {
-    if (n != 2 && n != 4 && n != 8)
+    // M16: number keys 1–8 select an N-up compare preset.
+    if (n < 1 || n > 8)
         return;
     m_navWindow = n;
     // Prefer pool; fall back to currently loaded images.
@@ -618,16 +619,16 @@ void CompareWorkspace::applyLayoutPreset(int n)
         return;
     const NavState saved = captureNavState();
     setImages(win);
-    // Force grid columns for the named preset.
-    // 2-up → 2 cols, 4-up → 2 cols (2×2), 8-up → 4 cols (4×2).
-    const int cols = (n == 2) ? 2 : (n == 4) ? 2 : 4;
+    // Choose a near-square column count per preset:
+    // 1 → 1, 2 → 2, 3 → 3, 4 → 2 (2×2), 5/6 → 3, 7/8 → 4.
+    const int cols = (n <= 1) ? 1 : (n == 2) ? 2 : (n == 3) ? 3
+        : (n == 4) ? 2 : (n <= 6) ? 3 : 4;
     m_engine.setColumns(cols);
     if (m_layoutCombo)
     {
-        // Map to combo: 2 cols → index 2, 4 cols → index 4.
-        const int comboIdx = (cols == 2) ? 2 : 4;
-        if (comboIdx < m_layoutCombo->count())
-            m_layoutCombo->setCurrentIndex(comboIdx);
+        // Combo indices: 单列=1, 2列=2, 3列=3, 4列=4.
+        if (cols < m_layoutCombo->count())
+            m_layoutCombo->setCurrentIndex(cols);
     }
     rebuildCells();
     fitAll();
@@ -656,7 +657,7 @@ void CompareWorkspace::showShortcutHelp()
     const QString tip =
         tr("Compare 快捷键: B Blink · Space 按住Blink · S Split · W Swipe · O Overlay · "
            "H Diff高亮 · Z/D 同步缩放/拖动 · C 准星 · L 像素连线 · "
-           "Ctrl+2/4/8 布局预设 · PgUp/PgDn 或 ←/→ 连续导航 · F Fit · X 交换 · ? 帮助 · Esc 关闭");
+           "1~8 布局预设 · PgUp/PgDn 或 ←/→ 连续导航 · F Fit · X 交换 · ? 帮助 · Esc 关闭");
     if (auto *w = window())
         w->setWindowTitle(tip);
 }
@@ -2376,30 +2377,13 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
-    // Plain 1–7 still map to the layout combo (column modes).
-    if (plain && m_layoutCombo)
+    // Plain 1–8 → N-up compare presets (M16): key N compares N images.
+    if (plain && (key >= Qt::Key_1 && key <= Qt::Key_8))
     {
-        int idx = -1;
-        if (key == Qt::Key_1)
-            idx = 0;
-        else if (key == Qt::Key_2)
-            idx = 1;
-        else if (key == Qt::Key_3)
-            idx = 2;
-        else if (key == Qt::Key_4)
-            idx = 3;
-        else if (key == Qt::Key_5)
-            idx = 4;
-        else if (key == Qt::Key_6)
-            idx = 5;
-        else if (key == Qt::Key_7)
-            idx = 6;
-        if (idx >= 0 && idx < m_layoutCombo->count())
-        {
-            m_layoutCombo->setCurrentIndex(idx);
-            event->accept();
-            return;
-        }
+        const int n = key - Qt::Key_0;  // '1'..'8' → 1..8
+        applyLayoutPreset(n);
+        event->accept();
+        return;
     }
     // ? → shortcut help (title bar tip).
     if (plain && (key == Qt::Key_Question || key == Qt::Key_Slash))

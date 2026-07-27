@@ -76,6 +76,16 @@ All notable changes to this project are documented here. The format is based on
 - **Compare — `Tab` toggles overlay:** `Tab` now toggles the overlay/sync mode
   in addition to `O`, per the review's keyboard spec.
 
+### Added — M16 Compare layout presets (1~8)
+
+- **N-up layout presets via `1`~`8`:** pressing a plain digit key `1`–`8` in
+  `CompareWorkspace` now loads an N-up compare preset — key `N` compares N
+  images — choosing a near-square grid (1→1col, 2/3/4→2/3/2col, 5/6/7/8→3/4col)
+  and syncing the 布局 combo. Replaces the previous 1–7→combo-index mapping.
+  `Ctrl+2/4/8` remain as aliases for the 2/4/8 presets.
+- **Compare shortcut help:** the `?` help and the main-window shortcut sheet now
+  document `1~8` as N-up layout presets.
+
 ### Added — P1 Product Workflow (Compare, Analyzer, Report)
 
 - **Compare → Analyze/Export buttons (P1-④):** Two toolbar buttons

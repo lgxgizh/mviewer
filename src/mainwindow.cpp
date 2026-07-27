@@ -1997,7 +1997,7 @@ void MainWindow::showShortcutsHelp()
         "<tr><td><kbd>Z</kbd> / <kbd>D</kbd></td><td>同步缩放 / 同步拖动</td></tr>"
         "<tr><td><kbd>C</kbd> / <kbd>L</kbd> / <kbd>I</kbd></td><td>准星 / 像素连线 / "
         "侧栏</td></tr>"
-        "<tr><td><kbd>Ctrl+2</kbd> / <kbd>4</kbd> / <kbd>8</kbd></td><td>2/4/8 布局预设</td></tr>"
+        "<tr><td><kbd>1</kbd>~<kbd>8</kbd></td><td>N 联布局预设（比较 N 张）</td></tr>"
         "<tr><td><kbd>PgUp</kbd>/<kbd>PgDn</kbd> / <kbd>←</kbd>/<kbd>→</kbd></td>"
         "<td>连续导航（保留模式）</td></tr>"
         "<tr><td><kbd>F</kbd> / <kbd>X</kbd> / <kbd>?</kbd></td><td>Fit / 交换窗格 / 帮助</td></tr>"
