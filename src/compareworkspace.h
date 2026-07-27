@@ -18,6 +18,7 @@
 #include <QScrollArea>
 #include <QSlider>
 #include <QSpinBox>
+#include <QResizeEvent>
 #include <QStringList>
 #include <QTimer>
 #include <QVector>
@@ -304,7 +305,7 @@ class CompareWorkspace : public QWidget
     };
     std::vector<CellAdjust> m_cellAdjusts; // per-cell adjustment state
     int m_editIdx = -1;                    // currently selected cell for editing
-    ImageData applyAdjusts(const ImageData &src, const CellAdjust &a);
+    ImageData applyAdjusts(const ImageData &src, const CellAdjust &a) const;
 
     // Edit panel widgets (inside side panel)
     QWidget *m_editPanel = nullptr;
@@ -329,6 +330,17 @@ class CompareWorkspace : public QWidget
     // ── M16.4: quick PSNR/SSIM metrics ──
     QLabel *m_metricLabel = nullptr;
     void updateMetrics();
+
+    // ── M16.7: adjusted-aware diff/metrics + per-pane histogram overlay ──
+    ImageData adjustedPixels(int cellIdx) const;
+    void refreshCellDiff(int idx);
+    void onAdjEditFinished();
+    void refreshCellHist(int idx);
+    void positionCellHists();
+    void onPaneHistOverlayToggled(bool on);
+    bool m_paneHistOverlay = false;
+    QCheckBox *m_paneHistOverlayChk = nullptr;
+    std::vector<HistogramWidget *> m_cellHists;
 
     // ── M16.5: per-pane histogram overlay toggle ──
     bool m_perPaneHist = false;

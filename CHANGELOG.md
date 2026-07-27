@@ -86,6 +86,20 @@ All notable changes to this project are documented here. The format is based on
 - **Compare shortcut help:** the `?` help and the main-window shortcut sheet now
   document `1~8` as N-up layout presets.
 
+### Added — M16 Compare editing ↔ metrics integration
+
+- **Editing now feeds reference/difference metrics:** `updateMetrics()` computes
+  PSNR/SSIM on the *adjusted* pixels of the reference and target cells, so
+  brightness/contrast/gamma/white-balance edits change the numbers (previously
+  computed only on the original decoded pixels).
+- **Editing now feeds the diff overlay:** new `refreshCellDiff()` computes the
+  per-cell difference map from adjusted pixels and overlays it, so the heatmap /
+  highlight diff reflects in-cell edits. Editing a cell refreshes its diff live;
+  editing the reference refreshes all panes on slider release (`onAdjEditFinished`).
+- **Per-pane histogram overlay:** each compare cell can show its own histogram
+  (new "每格直方图叠加" checkbox in the side panel), positioned bottom-right and
+  kept in sync with edits and window resize.
+
 ### Added — P1 Product Workflow (Compare, Analyzer, Report)
 
 - **Compare → Analyze/Export buttons (P1-④):** Two toolbar buttons

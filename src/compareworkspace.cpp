@@ -365,6 +365,12 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     connect(m_perPaneHistChk, &QCheckBox::toggled, this, &CompareWorkspace::onPerPaneHistToggled);
     sideLay->addWidget(m_perPaneHistChk);
 
+    // M16.7: per-pane histogram overlay toggle
+    m_paneHistOverlayChk = new QCheckBox(tr("每格直方图叠加"), this);
+    m_paneHistOverlayChk->setChecked(m_paneHistOverlay);
+    connect(m_paneHistOverlayChk, &QCheckBox::toggled, this, &CompareWorkspace::onPaneHistOverlayToggled);
+    sideLay->addWidget(m_paneHistOverlayChk);
+
     // M16.4: quick PSNR/SSIM metrics label
     sideLay->addWidget(new QLabel(tr("差异指标"), this));
     m_metricLabel = new QLabel(tr("PSNR: —  SSIM: —"), this);
@@ -743,6 +749,7 @@ void CompareWorkspace::rebuildCells()
     }
     m_cellLabels.clear();
     m_cellViews.clear();
+    m_cellHists.clear();
 
     const int n = m_engine.imageCount();
     // Drop a stale focus lock when the image set shrank.
@@ -777,6 +784,18 @@ void CompareWorkspace::rebuildCells()
         {
             QImage q = imageObjectToQImage(img);
             view->setImage(q);
+        }
+
+        // M16.7: per-pane histogram overlay widget (hidden until toggled).
+        {
+            QFrame *hframe = new QFrame(cellWidget);
+            hframe->setStyleSheet("background-color: rgba(15,15,15,210); border-radius:3px;");
+            hframe->setVisible(m_paneHistOverlay);
+            auto *hl = new QVBoxLayout(hframe);
+            hl->setContentsMargins(2, 2, 2, 2);
+            auto *hw = new HistogramWidget(hframe);
+            hl->addWidget(hw);
+            m_cellHists.push_back(hw);
         }
 
         // Compare mode (2+ images): request an asynchronous difference heatmap
@@ -837,38 +856,56 @@ void CompareWorkspace::rebuildCells()
         const int col = i % lay.cols;
         m_layout->addWidget(cellWidget, row, col);
     }
+    QTimer::singleShot(0, this, &CompareWorkspace::positionCellHists);
+}
+
+void CompareWorkspace::refreshCellDiff(int idx)
+{
+    if (idx < 0 || idx >= m_cellViews.size())
+        return;
+    const int baseIdx = diffBaseIndex();
+    RawImageView *view = m_cellViews[idx];
+    if (idx == baseIdx)
+    {
+        view->setOverlay(QImage(), 0.0);
+        return;
+    }
+    const ImageData basePx = adjustedPixels(baseIdx);
+    const ImageData tgtPx = adjustedPixels(idx);
+    if (basePx.isNull() || tgtPx.isNull())
+    {
+        view->setOverlay(QImage(), 0.0);
+        return;
+    }
+    const auto bv = basePx.view();
+    const auto tv = tgtPx.view();
+    if (bv.width != tv.width || bv.height != tv.height)
+    {
+        view->setOverlay(QImage(), 0.0);
+        return;
+    }
+    const ImageData diff = DifferenceEngine::differenceMap(tgtPx, basePx);
+    if (diff.isNull())
+        return;
+    const ImageData thresholded = DifferenceEngine::applyThreshold(diff, m_thresholdValue);
+    const ImageData overlayImg = m_diffHighlight
+                                      ? DifferenceEngine::highlightMap(thresholded, basePx, m_thresholdValue)
+                                      : DifferenceEngine::heatMap(thresholded);
+    if (overlayImg.isNull())
+        return;
+    view->setOverlay(mvcore::toQImage(overlayImg), m_diffHighlight ? 0.75 : 0.5);
 }
 
 void CompareWorkspace::refreshDiffOverlay()
 {
-    const DiffResult res = m_engine.lastDiff();
+    const auto res = m_engine.lastDiff();
     if (!res.valid || res.index < 0 || res.index >= m_cellViews.size())
-        return;
-    const ImageData diff = m_engine.lastDiffImage();
-    if (diff.isNull())
-        return;
-    // M15: apply threshold from UI slider
-    const ImageData thresholded = DifferenceEngine::applyThreshold(diff, m_thresholdValue);
-
-    ImageData overlayImg;
-    if (m_diffHighlight)
     {
-        // A-4.6: red diffs / gray similar, using the reference (base) image.
-        const int baseIdx = diffBaseIndex();
-        const ImageFrame *baseFrame = m_engine.imageAt(baseIdx);
-        const ImageData basePx =
-            (baseFrame && !baseFrame->pixels().isNull()) ? baseFrame->pixels() : ImageData();
-        overlayImg = DifferenceEngine::highlightMap(thresholded, basePx, m_thresholdValue);
-    }
-    else
-    {
-        overlayImg = DifferenceEngine::heatMap(thresholded);
-    }
-    if (overlayImg.isNull())
+        for (int i = 0; i < m_cellViews.size(); ++i)
+            refreshCellDiff(i);
         return;
-    // Highlight mode is denser (full-frame gray+red) so use higher alpha.
-    const double alpha = m_diffHighlight ? 0.75 : 0.5;
-    m_cellViews[res.index]->setOverlay(mvcore::toQImage(overlayImg), alpha);
+    }
+    refreshCellDiff(res.index);
     update();
 }
 
@@ -1087,6 +1124,9 @@ void CompareWorkspace::refreshHistograms()
                                 : mviewer::core::Histogram{});
         }
         m_hist->setHistograms(hists);
+        // M16.7: keep the in-cell per-pane histograms in sync.
+        for (int i = 0; i < static_cast<int>(m_cellHists.size()); ++i)
+            refreshCellHist(i);
     }
 }
 
@@ -1473,11 +1513,12 @@ void CompareWorkspace::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
     fitAll();
+    positionCellHists();
 }
 
 // ─── M16.2: Per-cell image adjustments ───────────────────────────────────────
 
-ImageData CompareWorkspace::applyAdjusts(const ImageData &src, const CellAdjust &a)
+ImageData CompareWorkspace::applyAdjusts(const ImageData &src, const CellAdjust &a) const
 {
     if (src.isNull() || a.isIdentity())
         return src;
@@ -1633,6 +1674,12 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
     connect(m_resetAdjBtn, &QPushButton::clicked, this, &CompareWorkspace::onResetAdj);
     editLay->addWidget(m_resetAdjBtn);
 
+    connect(m_brightSlider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
+    connect(m_contrastSlider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
+    connect(m_gammaSlider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
+    connect(m_rGainSlider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
+    connect(m_bGainSlider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
+
     sideLayout->addWidget(m_editPanel);
 }
 
@@ -1696,6 +1743,27 @@ void CompareWorkspace::onAdjChanged()
     a.bGain = m_bGainSlider->value() / 100.0f;
 
     applyAdjToCell(m_editIdx);
+
+    // Keep metrics, histograms and diff overlay in sync with the edit.
+    updateMetrics();
+    if (m_sideChk && m_sideChk->isChecked())
+        refreshHistograms();
+    refreshCellHist(m_editIdx);
+    if (m_engine.imageCount() >= 2 && m_editIdx >= 0
+        && m_editIdx < m_cellViews.size())
+    {
+        if (m_editIdx == diffBaseIndex())
+        {
+            for (int i = 0; i < m_cellViews.size(); ++i)
+                refreshCellDiff(i);
+        }
+        else
+        {
+            refreshCellDiff(m_editIdx);
+        }
+    }
+
+    update();
 }
 
 void CompareWorkspace::onResetAdj()
@@ -1777,24 +1845,24 @@ void CompareWorkspace::updateMetrics()
         return;
     }
 
-    const ImageFrame *baseImg = m_engine.imageAt(baseIdx);
-    const ImageFrame *tgtImg = m_engine.imageAt(targetIdx);
-    if (!baseImg || !tgtImg || baseImg->pixels().isNull() || tgtImg->pixels().isNull())
+    const ImageData basePx = adjustedPixels(baseIdx);
+    const ImageData tgtPx = adjustedPixels(targetIdx);
+    if (basePx.isNull() || tgtPx.isNull())
     {
         m_metricLabel->setText(tr("PSNR: —  SSIM: —"));
         return;
     }
 
-    const auto baseV = baseImg->pixels().view();
-    const auto tgtV = tgtImg->pixels().view();
+    const auto baseV = basePx.view();
+    const auto tgtV = tgtPx.view();
     if (baseV.width != tgtV.width || baseV.height != tgtV.height)
     {
         m_metricLabel->setText(tr("PSNR: —  SSIM: —\n(图像尺寸不一致)"));
         return;
     }
 
-    const double psnrVal = AnalysisEngine::psnr(baseImg->pixels(), tgtImg->pixels());
-    const double ssimVal = AnalysisEngine::ssim(baseImg->pixels(), tgtImg->pixels());
+    const double psnrVal = AnalysisEngine::psnr(basePx, tgtPx);
+    const double ssimVal = AnalysisEngine::ssim(basePx, tgtPx);
 
     const QString psnrStr = QString::number(psnrVal, 'f', 2) + " dB";
     const QString ssimStr = QString::number(ssimVal, 'f', 4);
@@ -1811,6 +1879,77 @@ void CompareWorkspace::onPerPaneHistToggled(bool on)
 {
     m_perPaneHist = on;
     refreshHistograms();
+}
+
+// ─── M16.7: adjusted-aware diff/metrics + per-pane histogram overlay ───────
+
+ImageData CompareWorkspace::adjustedPixels(int cellIdx) const
+{
+    if (cellIdx < 0 || cellIdx >= m_engine.imageCount())
+        return ImageData();
+    const ImageFrame *img = m_engine.imageAt(cellIdx);
+    if (!img || img->pixels().isNull())
+        return ImageData();
+    const CellAdjust a = (cellIdx >= 0 && cellIdx < static_cast<int>(m_cellAdjusts.size()))
+                             ? m_cellAdjusts[static_cast<size_t>(cellIdx)]
+                             : CellAdjust{};
+    return applyAdjusts(img->pixels(), a);
+}
+
+void CompareWorkspace::onAdjEditFinished()
+{
+    for (int i = 0; i < m_cellViews.size(); ++i)
+        refreshCellDiff(i);
+    updateMetrics();
+}
+
+void CompareWorkspace::refreshCellHist(int idx)
+{
+    if (!m_paneHistOverlay || idx < 0 || idx >= static_cast<int>(m_cellHists.size()))
+        return;
+    HistogramWidget *hw = m_cellHists[static_cast<size_t>(idx)];
+    if (!hw)
+        return;
+    const ImageData px = adjustedPixels(idx);
+    if (px.isNull())
+    {
+        hw->setHistograms({});
+        return;
+    }
+    hw->setHistograms({mviewer::core::computeHistogram(px)});
+}
+
+void CompareWorkspace::positionCellHists()
+{
+    for (size_t i = 0; i < m_cellHists.size(); ++i)
+    {
+        HistogramWidget *hw = m_cellHists[i];
+        if (!hw)
+            continue;
+        QWidget *frame = hw->parentWidget();
+        if (!frame || i >= m_cellViews.size())
+            continue;
+        const QRect r = m_cellViews[i]->geometry();
+        const int w = qMin(160, r.width() / 2);
+        const int h = 48;
+        frame->setGeometry(r.right() - w - 4, r.bottom() - h - 4, w, h);
+    }
+}
+
+void CompareWorkspace::onPaneHistOverlayToggled(bool on)
+{
+    m_paneHistOverlay = on;
+    for (HistogramWidget *hw : m_cellHists)
+    {
+        if (hw && hw->parentWidget())
+            hw->parentWidget()->setVisible(on);
+    }
+    if (on)
+    {
+        for (int i = 0; i < static_cast<int>(m_cellHists.size()); ++i)
+            refreshCellHist(i);
+        positionCellHists();
+    }
 }
 
 // ─── M16.6: Layout presets save/load ─────────────────────────────────────────

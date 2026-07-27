@@ -76,7 +76,7 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 | 工作流 | 状态 | 说明 |
 |--------|------|------|
 | A-1~A-10 对账 | ✅ | `docs/review/A_ITEMS_COMPLETION_AUDIT_2026-07-24.md` — DONE ~91% |
-| M16 Compare 收尾 | ✅ | Pixel Link / Overlay 透明度 / Diff 高亮 / 自定义网格 / 1~8 布局预设 |
+| M16 Compare 收尾 | ✅ | Pixel Link / Overlay 透明度 / Diff 高亮 / 自定义网格 / 1~8 布局预设 / 编辑↔指标联动 / 每格直方图叠加 |
 | Browse 门禁 | ✅ | Selection 统一 + 大目录渐进 fetch + 万级缩略图预测窗口 |
 | M19 UI Model 收敛 | ✅ | `DirectoryModel` / `ImageListModel` / `WorkspaceModel` / `AnalyzerModel` 落地；MainWindow 镜像状态移除；Thumbnail multi-select 双向同步；Metadata Overlay `I`/`ESC` + Lens/ICC |
 | M20 Compare 键盘流 | ✅ | Ctrl+2/4/8 布局预设；B/S/W/O/H/Z/D/C/L 模式键；连续导航保留模式/ROI；`?` 快捷键帮助 |
