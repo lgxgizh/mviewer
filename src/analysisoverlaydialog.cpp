@@ -9,25 +9,12 @@
 #include <QSlider>
 #include <QVBoxLayout>
 #include <algorithm>
-#include <cmath>
+
+#include "core/analysis/ImageOverlay.h"
+#include "core/image/QtConvert.h"
 
 namespace
 {
-
-inline int luma(QRgb c)
-{
-    return static_cast<int>(0.299 * qRed(c) + 0.587 * qGreen(c) + 0.114 * qBlue(c));
-}
-
-// Jet-style perceptual colormap for false-color display.
-QRgb jet(float t)
-{
-    t = std::clamp(t, 0.f, 1.f);
-    const float r = std::clamp(1.5f - std::fabs(4.f * t - 3.f), 0.f, 1.f);
-    const float g = std::clamp(1.5f - std::fabs(4.f * t - 2.f), 0.f, 1.f);
-    const float b = std::clamp(1.5f - std::fabs(4.f * t - 1.f), 0.f, 1.f);
-    return qRgb(static_cast<int>(255 * r), static_cast<int>(255 * g), static_cast<int>(255 * b));
-}
 
 // Scope widget: RGB-parade waveform (left) + vectorscope (right).
 class ScopeWidget : public QWidget
@@ -146,7 +133,7 @@ AnalysisOverlayDialog::AnalysisOverlayDialog(const QImage &image, QWidget *paren
     auto *ctrl = new QHBoxLayout;
     ctrl->addWidget(new QLabel(tr("叠加层：")));
     ctrl->addWidget(m_mode);
-    ctrl->addWidget(new QLabel(tr("斑马线阈值%：")));
+    ctrl->addWidget(new QLabel(tr("斑马线阈值：")));
     ctrl->addWidget(m_threshold);
     ctrl->addStretch(1);
 
@@ -165,36 +152,20 @@ void AnalysisOverlayDialog::updateOverlay()
 {
     if (m_src.isNull())
         return;
-    const int mode = m_mode->currentData().toInt();
+    const auto overlayMode = static_cast<mviewer::OverlayMode>(m_mode->currentData().toInt());
 
     // Work on a capped-size copy so even large images process instantly.
     QImage work = m_src.scaled(1024, 1024, Qt::KeepAspectRatio, Qt::SmoothTransformation)
                       .convertToFormat(QImage::Format_ARGB32);
 
-    if (mode == 1) // zebra
+    // Reuse the single overlay implementation shared with the ImageViewer's
+    // F4 live overlay (mviewer::applyOverlay) so the dialog and the live
+    // viewer can never drift in zebra / false-color behavior or appearance.
+    if (overlayMode != mviewer::OverlayMode::None)
     {
-        const int t = m_threshold->value();
-        const int lo = (t * 255) / 100;
-        const int hi = 255 - lo;
-        for (int y = 0; y < work.height(); ++y)
-            for (int x = 0; x < work.width(); ++x)
-            {
-                const int l = luma(work.pixel(x, y));
-                if (l >= hi || l <= lo)
-                {
-                    if (((x + y) % 8) < 4)
-                        work.setPixel(x, y, l >= hi ? qRgb(0, 0, 0) : qRgb(255, 255, 255));
-                }
-            }
-    }
-    else if (mode == 2) // false color
-    {
-        for (int y = 0; y < work.height(); ++y)
-            for (int x = 0; x < work.width(); ++x)
-            {
-                const int l = luma(work.pixel(x, y));
-                work.setPixel(x, y, jet(l / 255.f));
-            }
+        ImageData data = mvcore::fromQImage(work);
+        mviewer::applyOverlay(data, overlayMode, m_threshold->value());
+        work = mvcore::toQImage(data);
     }
 
     m_preview->setPixmap(QPixmap::fromImage(work).scaled(m_preview->size(), Qt::KeepAspectRatio,

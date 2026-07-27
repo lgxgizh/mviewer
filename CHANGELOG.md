@@ -22,6 +22,11 @@ All notable changes to this project are documented here. The format is based on
   right-click menu. The overlay is applied on a deep-copied tile so the
   TileCache buffer is never mutated; the standalone 分析叠加层/示波器 dialog
   keeps the waveform / vectorscope.
+- **F4 overlay unified:** the standalone dialog now reuses the same
+  `mviewer::applyOverlay` implementation as the live viewer (single source of
+  truth for zebra / false-color), removing its duplicated `luma`/`jet` code so
+  the two can never drift. Its zebra threshold now matches the viewer's
+  raw 0–255 semantics.
 
 ### Added — M16 Professional Analysis & M17 Professional Productivity
 
