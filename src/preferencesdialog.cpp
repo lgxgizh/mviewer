@@ -5,7 +5,10 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QHBoxLayout>
+#include <QLabel>
 #include <QSettings>
+#include <QSlider>
 #include <QSpinBox>
 #include <QTabWidget>
 #include <QVBoxLayout>
@@ -90,6 +93,20 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
         m_analysisOverlay->findData(s.value("defaultAnalysisOverlay", 0).toInt()));
     al->addRow(tr("默认分析叠加层"), m_analysisOverlay);
 
+    // F4 (M22): shared zebra threshold (1–40), persisted as "zebraThreshold".
+    m_zebraThreshold = new QSlider(Qt::Horizontal);
+    m_zebraThreshold->setRange(1, 40);
+    m_zebraThreshold->setValue(s.value("zebraThreshold", 2).toInt());
+    auto *zbBox = new QWidget;
+    auto *zbL = new QHBoxLayout(zbBox);
+    zbL->setContentsMargins(0, 0, 0, 0);
+    zbL->addWidget(m_zebraThreshold);
+    auto *zbVal = new QLabel(QString::number(m_zebraThreshold->value()), this);
+    zbL->addWidget(zbVal);
+    connect(m_zebraThreshold, &QSlider::valueChanged, zbVal,
+            [zbVal](int v) { zbVal->setText(QString::number(v)); });
+    al->addRow(tr("斑马线阈值（1–40）"), zbBox);
+
     tabs->addTab(general, tr("常规"));
     tabs->addTab(compare, tr("对比"));
     tabs->addTab(analysis, tr("分析"));
@@ -113,6 +130,7 @@ void PreferencesDialog::accept()
     s.setValue("confirmDelete", m_confirmDelete->isChecked());
     s.setValue("autoAlignBeforeDiff", m_autoAlign->isChecked());
     s.setValue("defaultAnalysisOverlay", m_analysisOverlay->currentData().toInt());
+    s.setValue("zebraThreshold", m_zebraThreshold->value());
     s.sync();
     emit settingsChanged();
     QDialog::accept();

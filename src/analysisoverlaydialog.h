@@ -22,6 +22,7 @@ class AnalysisOverlayDialog : public QDialog
     void updateOverlay();
 
   private:
+    void reject() override;
     QImage m_src;
     QComboBox *m_mode = nullptr;
     QSlider *m_threshold = nullptr;

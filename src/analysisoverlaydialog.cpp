@@ -116,7 +116,7 @@ AnalysisOverlayDialog::AnalysisOverlayDialog(const QImage &image, QWidget *paren
 
     m_threshold = new QSlider(Qt::Horizontal);
     m_threshold->setRange(1, 40);
-    m_threshold->setValue(2);
+    m_threshold->setValue(s.value("zebraThreshold", 2).toInt());
 
     m_preview = new QLabel;
     m_preview->setAlignment(Qt::AlignCenter);
@@ -172,4 +172,11 @@ void AnalysisOverlayDialog::updateOverlay()
                                                          Qt::SmoothTransformation));
 
     static_cast<ScopeWidget *>(m_scope)->setImage(m_src);
+}
+
+void AnalysisOverlayDialog::reject()
+{
+    QSettings s;
+    s.setValue("zebraThreshold", m_threshold->value());
+    QDialog::reject();
 }

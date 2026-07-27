@@ -3552,6 +3552,8 @@ void MainWindow::applyPreferences()
         if (m_slideshowTimer->isActive())
             m_slideshowTimer->start(interval);
     }
+    if (m_imageViewer)
+        m_imageViewer->setZebraThreshold(s.value("zebraThreshold", 2).toInt());
 }
 
 void MainWindow::openAnalysisOverlay()

@@ -27,6 +27,10 @@ All notable changes to this project are documented here. The format is based on
   truth for zebra / false-color), removing its duplicated `luma`/`jet` code so
   the two can never drift. Its zebra threshold now matches the viewer's
   raw 0–255 semantics.
+- **F4 zebra threshold shared:** the zebra threshold is now a single persisted
+  preference (`zebraThreshold`), exposed as a slider in 首选项 → 分析 and shared
+  by both the live F4 viewer and the 分析叠加层/示波器 dialog. Changing it in
+  either place re-renders the open viewer live via `ImageViewer::setZebraThreshold`.
 
 ### Added — M16 Professional Analysis & M17 Professional Productivity
 

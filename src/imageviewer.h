@@ -66,6 +66,7 @@ class ImageViewer : public QOpenGLWidget
     void zoomFit();
     void zoomActual();
     void setOverlayMode(mviewer::OverlayMode m); // F4 (M22): live zebra/false-color overlay
+    void setZebraThreshold(int t); // F4 (M22): live zebra threshold (shared with prefs/dialog)
     mviewer::OverlayMode overlayMode() const
     {
         return m_overlayMode;

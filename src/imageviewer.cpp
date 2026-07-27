@@ -750,6 +750,17 @@ void ImageViewer::setOverlayMode(mviewer::OverlayMode m)
     update();
 }
 
+void ImageViewer::setZebraThreshold(int t)
+{
+    t = qBound(1, t, 40);
+    if (m_zebraThreshold == t)
+        return;
+    m_zebraThreshold = t;
+    // Only need a repaint when an overlay is currently visible.
+    if (m_overlayMode != mviewer::OverlayMode::None)
+        update();
+}
+
 void ImageViewer::keyPressEvent(QKeyEvent *event)
 {
     const int key = event->key();
