@@ -19,7 +19,7 @@
 | B9 | baseline_return_ok | 1 | PASS | — |
 | B10 | hundred_mp_viewport_ms | 710.223 | PASS | — |
 
-### Regressions (>10%)
+## Regressions (>10%)
 
 - B2: +67.3% (10.500 -> 17.570)
 - B8: +201.4% (0.080 -> 0.241)
