@@ -33,7 +33,6 @@
 #include <QDirIterator>
 #include <QDrag>
 #include <QFile>
-#include <QInputDialog>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QImageReader>
@@ -800,13 +799,12 @@ void ThumbnailPanel::applyFilter()
         if (!m_cameraFilter.isEmpty() &&
             !m_metaIndex.value(e.path).contains(m_cameraFilter.toLower()))
             continue;
-        if (!m_lensFilter.isEmpty() &&
-            !m_metaIndex.value(e.path).contains(m_lensFilter.toLower()))
+        if (!m_lensFilter.isEmpty() && !m_metaIndex.value(e.path).contains(m_lensFilter.toLower()))
             continue;
         if (m_isoFilter > 0 && m_metaIso.value(e.path, -1) != m_isoFilter)
             continue;
-        if (!m_tagFilter.isEmpty() &&
-            !mviewer::core::TagStore::instance().hasTag(e.path.toStdString(), m_tagFilter.toStdString()))
+        if (!m_tagFilter.isEmpty() && !mviewer::core::TagStore::instance().hasTag(
+                                          e.path.toStdString(), m_tagFilter.toStdString()))
             continue;
         if (!t.isEmpty())
         {
@@ -1334,9 +1332,8 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
     else if (chosen == aAddTag)
     {
         bool ok = false;
-        const QString tag =
-            QInputDialog::getText(this, tr("添加标签"), tr("给所选图片添加标签："),
-                                  QLineEdit::Normal, QString(), &ok);
+        const QString tag = QInputDialog::getText(this, tr("添加标签"), tr("给所选图片添加标签："),
+                                                  QLineEdit::Normal, QString(), &ok);
         if (ok && !tag.trimmed().isEmpty())
         {
             mviewer::core::TagStore::instance().addTag(path.toStdString(),
@@ -1534,8 +1531,8 @@ QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode, bool
                           const auto rm = mviewer::core::parseRawMetadata(p.toStdString());
                           return QString::fromStdString(rm.make + " " + rm.model).toLower();
                       };
-                      return cam(a.absoluteFilePath()).compare(cam(b.absoluteFilePath()),
-                                                              Qt::CaseInsensitive) < 0;
+                      return cam(a.absoluteFilePath())
+                                 .compare(cam(b.absoluteFilePath()), Qt::CaseInsensitive) < 0;
                   });
         break;
     case SortLens:
@@ -1547,8 +1544,8 @@ QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode, bool
                           const auto rm = mviewer::core::parseRawMetadata(p.toStdString());
                           return QString::fromStdString(rm.lens).toLower();
                       };
-                      return lens(a.absoluteFilePath()).compare(lens(b.absoluteFilePath()),
-                                                                Qt::CaseInsensitive) < 0;
+                      return lens(a.absoluteFilePath())
+                                 .compare(lens(b.absoluteFilePath()), Qt::CaseInsensitive) < 0;
                   });
         break;
     }
@@ -1867,7 +1864,7 @@ void ThumbnailPanel::ListDelegate::paint(QPainter *painter, const QStyleOptionVi
     QColor bg = sel ? option.palette.color(QPalette::Highlight)
                     : (hover ? option.palette.color(QPalette::Midlight)
                              : option.palette.color(index.row() & 1 ? QPalette::AlternateBase
-                                                                  : QPalette::Base));
+                                                                    : QPalette::Base));
     painter->fillRect(option.rect, bg);
 
     const QRect r = option.rect.adjusted(4, 0, -4, 0);

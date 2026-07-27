@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — M22 Product Polish (F1–F4)
+
+- **F1 Centralized Preferences:** a new 首选项 dialog (Tools menu) gathers the
+  previously scattered view / sort / slideshow / compare / analysis settings and
+  applies changes live.
+- **F2 Wider decode coverage:** `QtDecoder` now claims every format Qt can
+  actually decode (WebP / GIF, and HEIF / AVIF when the platform ships the
+  plugins) with full metadata — without touching the frozen `DecoderRegistry`.
+- **F3 Compare auto-alignment:** `Aligner` registers B→A by integer translation
+  before PSNR / SSIM / diff when "auto-align before diff" is enabled in
+  Preferences (off by default — no behavior change otherwise).
+- **F4 Live analysis overlays:** zebra (over/under-exposure clip) and
+  false-color can be toggled directly on the zoomable `ImageViewer` via the
+  right-click menu. The overlay is applied on a deep-copied tile so the
+  TileCache buffer is never mutated; the standalone 分析叠加层/示波器 dialog
+  keeps the waveform / vectorscope.
+
 ### Added — M16 Professional Analysis & M17 Professional Productivity
 
 - **Analysis history persists across restarts:** `AnalyzerModel` now serializes

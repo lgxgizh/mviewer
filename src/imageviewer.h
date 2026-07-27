@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/analysis/ImageOverlay.h"
 #include "core/image/ImageFrame.h"
 #include "core/render/TileCache.h"
 #include "core/render/TileGrid.h"
@@ -64,6 +65,11 @@ class ImageViewer : public QOpenGLWidget
     void zoomOut();
     void zoomFit();
     void zoomActual();
+    void setOverlayMode(mviewer::OverlayMode m); // F4 (M22): live zebra/false-color overlay
+    mviewer::OverlayMode overlayMode() const
+    {
+        return m_overlayMode;
+    }
 
   signals:
     // Emitted when the async decode of a setImage() request fails, so the
@@ -154,6 +160,11 @@ class ImageViewer : public QOpenGLWidget
 
     int m_histogram[256] = {0};
     bool m_hasHistogram = false;
+
+    // F4 (M22): live analysis overlay (zebra / false-color) applied on a
+    // deep-copied tile so the TileCache buffer is never mutated.
+    mviewer::OverlayMode m_overlayMode = mviewer::OverlayMode::None;
+    int m_zebraThreshold = 2;
 
     bool m_selecting = false;
     bool m_selectMode = false;

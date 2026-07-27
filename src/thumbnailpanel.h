@@ -48,7 +48,7 @@ class ThumbnailPanel : public QListView
         SortDate,
         SortSize,
         SortResolution,
-        SortType,  // A-2.2: sort by file extension
+        SortType,   // A-2.2: sort by file extension
         SortRating, // A-2.2: sort by star rating
         SortCamera, // P0 #①: sort by camera make+model
         SortLens    // P0 #①: sort by lens model

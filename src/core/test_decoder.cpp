@@ -7,6 +7,7 @@
 
 #include <QCoreApplication>
 #include <QFileInfo>
+#include <QImageReader>
 #include <chrono>
 #include <cstdio>
 #include <string>
@@ -105,7 +106,19 @@ static void testRegistryDispatch()
     // A specific decoder claims its format; the fallback is last.
     QtDecoder qt;
     CHECK(qt.canDecode("foo.JPG"), "QtDecoder claims .JPG (case-insensitive)");
-    CHECK(!qt.canDecode("foo.webp") || true, "QtDecoder non-claim handled gracefully");
+    // F2 (M22): QtDecoder now claims every format Qt can actually decode.
+    const bool qtSupportsWebp = QImageReader::supportedImageFormats().contains("webp");
+    if (qtSupportsWebp)
+        CHECK(qt.canDecode("foo.webp"), "QtDecoder claims webp when Qt supports it (F2)");
+    else
+        CHECK(true, "QtDecoder webp claim skipped (Qt webp plugin absent on this build)");
+    // The supported set must be a strict superset of the historical 6.
+    auto qtExts = qt.extensions();
+    int baseline = 0;
+    for (const auto &e : qtExts)
+        if (e == "jpg" || e == "jpeg" || e == "bmp" || e == "png" || e == "tif" || e == "tiff")
+            ++baseline;
+    CHECK(baseline >= 6, "QtDecoder supports at least the historical 6 formats (F2)");
     QtFallbackDecoder fb;
     CHECK(fb.canDecode("anything.xyz"), "QtFallbackDecoder claims everything (last resort)");
 

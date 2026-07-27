@@ -32,6 +32,7 @@ add_library(mviewer_core SHARED
     core/compare/SyncController.cpp
     core/compare/BlinkController.cpp
     core/compare/DifferenceEngine.cpp
+    core/compare/Aligner.cpp
     core/RatingStore.cpp
     core/TagStore.cpp
     core/SidecarStore.cpp
@@ -135,6 +136,8 @@ add_library(mviewer_ui STATIC
     widgets/ratingwidget.cpp
     widgets/histogramwidget.cpp
     pluginsettings.cpp
+    preferencesdialog.cpp
+    analysisoverlaydialog.cpp
     gpu/GpuTileUploader.cpp
 )
 
@@ -295,7 +298,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform differenceengine blinkcontroller)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform differenceengine blinkcontroller aligner imageoverlay)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -905,6 +908,8 @@ add_test(NAME encoder_tests COMMAND test_encoder)
 add_test(NAME imagetransform_tests COMMAND test_imagetransform)
 add_test(NAME differenceengine_tests COMMAND test_differenceengine)
 add_test(NAME blinkcontroller_tests COMMAND test_blinkcontroller)
+add_test(NAME aligner_tests COMMAND test_aligner)
+add_test(NAME imageoverlay_tests COMMAND test_imageoverlay)
 # ─── M13 Phase 1: Product Workflow gate ──────────────────────────────────
 # A single ctest that runs the full user-chain in order:
 #   Browse -> Compare -> Analyzer -> Export -> Workspace

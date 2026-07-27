@@ -142,18 +142,41 @@ void fillMetadata(const QImageReader &reader, const QImage &img,
     }
 }
 
-std::vector<std::string> kExtensions = {"jpg", "jpeg", "bmp", "png", "tif", "tiff"};
+// F2 (M22): claim every format Qt can actually decode, derived from
+// QImageReader::supportedImageFormats(). This keeps WebP/GIF (and HEIF/AVIF when
+// the platform ships the plugins) first-class with full M6 metadata, without
+// touching the frozen DecoderRegistry. The historical 6 are guaranteed present.
+const std::vector<std::string> &supportedExts()
+{
+    static const std::vector<std::string> exts = []()
+    {
+        std::vector<std::string> out;
+        const auto fmts = QImageReader::supportedImageFormats();
+        out.reserve(fmts.size() + 6);
+        for (const QByteArray &f : fmts)
+            out.push_back(QString::fromLatin1(f).toLower().toStdString());
+        for (const char *b : {"jpg", "jpeg", "bmp", "png", "tif", "tiff"})
+            out.push_back(b);
+        return out;
+    }();
+    return exts;
+}
 
 } // namespace
 
 bool QtDecoder::canDecode(const std::string &path) const
 {
-    const QString ext = QFileInfo(QString::fromStdString(path)).suffix().toLower();
-    for (const auto &e : kExtensions)
-    {
-        if (ext == QString::fromStdString(e))
+    QString ext = QFileInfo(QString::fromStdString(path)).suffix().toLower();
+    // Canonical aliases so .jpg/.jpeg and .tif/.tiff both match regardless of
+    // which name QImageReader reports.
+    if (ext == "jpg")
+        ext = "jpeg";
+    else if (ext == "tif")
+        ext = "tiff";
+    const std::string e = ext.toStdString();
+    for (const auto &x : supportedExts())
+        if (x == e)
             return true;
-    }
     return false;
 }
 
@@ -200,5 +223,5 @@ ImageData QtDecoder::decodeScaled(const std::string &path, int maxEdge) const
 
 std::vector<std::string> QtDecoder::extensions() const
 {
-    return kExtensions;
+    return supportedExts();
 }

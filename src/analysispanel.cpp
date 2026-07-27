@@ -2,7 +2,9 @@
 #include "analyzermodel.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/HistogramAnalyzer.h"
+#include "core/compare/Aligner.h"
 #include "widgets/rawimageview.h"
+#include <QSettings>
 
 #include "core/image/QtConvert.h"
 
@@ -223,7 +225,8 @@ void AnalysisPanel::buildUi()
     insBar->addWidget(csCombo, 1);
     auto *freezeBtn = new QPushButton(tr("Freeze"));
     freezeBtn->setCheckable(true);
-    freezeBtn->setToolTip(tr("Freeze the inspected pixel so it stays shown while you move the mouse"));
+    freezeBtn->setToolTip(
+        tr("Freeze the inspected pixel so it stays shown while you move the mouse"));
     insBar->addWidget(freezeBtn);
     insBar->addWidget(new QLabel(tr("Kernel:")));
     QComboBox *kCombo = new QComboBox;
@@ -556,9 +559,8 @@ void AnalysisPanel::updateInspectorPage()
     txt += QString("pos: (%1, %2)<br>").arg(m_px).arg(m_py);
     if (m_colorSpace == mviewer::core::ColorSpace::HEX)
     {
-        const QString hex = QString::fromStdString(
-            mviewer::core::toHex(static_cast<uint8_t>(m_pR), static_cast<uint8_t>(m_pG),
-                                 static_cast<uint8_t>(m_pB)));
+        const QString hex = QString::fromStdString(mviewer::core::toHex(
+            static_cast<uint8_t>(m_pR), static_cast<uint8_t>(m_pG), static_cast<uint8_t>(m_pB)));
         txt += QString("<span style='color:#e66;'>●</span> Left HEX %1<br>").arg(hex);
     }
     else if (m_colorSpace == mviewer::core::ColorSpace::XYZ)
@@ -891,10 +893,30 @@ void AnalysisPanel::updateComparePage()
         m_compareLabel->setText(tr("Need two images to compare"));
         return;
     }
-    double psnr = AnalysisEngine::psnr(mvcore::fromQImage(m_imageA), mvcore::fromQImage(m_imageB));
-    double ssim = AnalysisEngine::ssim(mvcore::fromQImage(m_imageA), mvcore::fromQImage(m_imageB));
-    double noiseA = AnalysisEngine::noiseEstimate(mvcore::fromQImage(m_imageA));
-    double noiseB = AnalysisEngine::noiseEstimate(mvcore::fromQImage(m_imageB));
+    QSettings s;
+    const bool autoAlign = s.value("autoAlignBeforeDiff", false).toBool();
+
+    ImageData a = mvcore::fromQImage(m_imageA);
+    ImageData b = mvcore::fromQImage(m_imageB);
+    QPoint offset(0, 0);
+    bool aligned = false;
+    if (autoAlign)
+    {
+        // F3 (M22): register B to A before diff so PSNR/SSIM reflect signal,
+        // not mis-registration. Default off → no behavior change otherwise.
+        mviewer::AlignOffset off = mviewer::Aligner::estimate(a, b, 32);
+        offset = QPoint(off.x, off.y);
+        if (off.x != 0 || off.y != 0)
+        {
+            b = mviewer::Aligner::shift(b, off.x, off.y);
+            aligned = true;
+        }
+    }
+
+    double psnr = AnalysisEngine::psnr(a, b);
+    double ssim = AnalysisEngine::ssim(a, b);
+    double noiseA = AnalysisEngine::noiseEstimate(a);
+    double noiseB = AnalysisEngine::noiseEstimate(b);
 
     QString txt = QString("<h3>%1</h3>").arg(tr("Dual Compare"));
     txt += QString("<table>"
@@ -911,9 +933,14 @@ void AnalysisPanel::updateComparePage()
                .arg(noiseLevelText(noiseA))
                .arg(tr("Noise(B)"))
                .arg(noiseLevelText(noiseB));
+    if (aligned)
+        txt += QString("<p><b>%1</b> dx=%2 dy=%3</p>")
+                   .arg(tr("Auto-aligned before diff"))
+                   .arg(offset.x())
+                   .arg(offset.y());
     m_compareLabel->setText(txt);
 
-    QImage diff = computeDifferencePreview(m_imageA, m_imageB);
+    QImage diff = computeDifferencePreview(m_imageA, mvcore::toQImage(b));
     if (!diff.isNull())
     {
         m_diffPreview->setPixmap(QPixmap::fromImage(diff).scaled(

@@ -1,0 +1,17 @@
+#!/bin/sh
+# =============================================================================
+# MViewer pre-commit hook: block commits that introduce clang-format violations.
+#
+# This mirrors the CI "Format check" job locally, so a format break is caught
+# at commit time instead of failing the PR gate later.
+#
+# Install (one time, from repo root):
+#   git config core.hooksPath scripts/git-hooks
+#   -- or copy this file to .git/hooks/pre-commit
+#
+# To auto-fix instead of blocking, run:
+#   pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/format-check.ps1 -Fix -Staged
+#   git add -u
+# =============================================================================
+powershell -NoProfile -ExecutionPolicy Bypass -File "scripts/format-check.ps1" -Staged
+exit $?

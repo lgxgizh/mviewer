@@ -83,11 +83,11 @@ std::string httpGet(const std::string &url, std::string &error)
 {
 #if defined(_WIN32)
     const std::wstring wurl = toWide(url);
-    HINTERNET hSession = WinHttpOpen(L"MViewer-UpdateChecker/1.0",
-                                     WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
-                                     WINHTTP_NO_PROXY_NAME,
-                                     WINHTTP_NO_PROXY_BYPASS, 0);
-    if (!hSession) {
+    HINTERNET hSession =
+        WinHttpOpen(L"MViewer-UpdateChecker/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
+                    WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSession)
+    {
         error = "UpdateChecker: WinHttpOpen failed";
         return {};
     }
@@ -109,7 +109,8 @@ std::string httpGet(const std::string &url, std::string &error)
     parts.lpszExtraInfo = extraBuf;
     parts.dwExtraInfoLength = sizeof(extraBuf) / sizeof(wchar_t);
 
-    if (!WinHttpCrackUrl(wurl.c_str(), (DWORD)wurl.size(), 0, &parts)) {
+    if (!WinHttpCrackUrl(wurl.c_str(), (DWORD)wurl.size(), 0, &parts))
+    {
         WinHttpCloseHandle(hSession);
         error = "UpdateChecker: invalid URL";
         return {};
@@ -124,16 +125,18 @@ std::string httpGet(const std::string &url, std::string &error)
     const bool https = (parts.nScheme == INTERNET_SCHEME_HTTPS);
 
     HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(), parts.nPort, 0);
-    if (!hConnect) {
+    if (!hConnect)
+    {
         WinHttpCloseHandle(hSession);
         error = "UpdateChecker: connect failed";
         return {};
     }
 
-    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", path.c_str(), nullptr,
-                                            WINHTTP_NO_REFERER, nullptr,
-                                            https ? WINHTTP_FLAG_SECURE : 0);
-    if (!hRequest) {
+    HINTERNET hRequest =
+        WinHttpOpenRequest(hConnect, L"GET", path.c_str(), nullptr, WINHTTP_NO_REFERER, nullptr,
+                           https ? WINHTTP_FLAG_SECURE : 0);
+    if (!hRequest)
+    {
         WinHttpCloseHandle(hConnect);
         WinHttpCloseHandle(hSession);
         error = "UpdateChecker: open request failed";
@@ -141,7 +144,8 @@ std::string httpGet(const std::string &url, std::string &error)
     }
 
     if (!WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, nullptr, 0, 0, 0) ||
-        !WinHttpReceiveResponse(hRequest, nullptr)) {
+        !WinHttpReceiveResponse(hRequest, nullptr))
+    {
         error = "UpdateChecker: request failed";
         WinHttpCloseHandle(hRequest);
         WinHttpCloseHandle(hConnect);
@@ -152,13 +156,15 @@ std::string httpGet(const std::string &url, std::string &error)
     DWORD status = 0, slen = sizeof(status);
     if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
                             nullptr, &status, &slen, nullptr) &&
-        status != 200) {
+        status != 200)
+    {
         error = "UpdateChecker: HTTP " + std::to_string(status);
     }
 
     std::string body;
     DWORD avail = 0;
-    while (WinHttpQueryDataAvailable(hRequest, &avail) && avail > 0) {
+    while (WinHttpQueryDataAvailable(hRequest, &avail) && avail > 0)
+    {
         std::string buf(avail, '\0');
         DWORD read = 0;
         if (!WinHttpReadData(hRequest, buf.data(), avail, &read) || read == 0)

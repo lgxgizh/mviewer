@@ -29,6 +29,8 @@ class WorkspaceModel;
 class AnalyzerModel;
 class BatchDialog;
 class PluginSettings;
+class PreferencesDialog;
+class AnalysisOverlayDialog;
 class QAction;
 class QMenu;
 class QLineEdit;
@@ -114,6 +116,9 @@ class MainWindow : public QMainWindow
     void toggleMetadataOverlay();
     void copyCurrentImageToClipboard();
     void openQuickCompare();
+    void openPreferences();     // F1 (M22): centralized Preferences dialog
+    void applyPreferences();    // re-apply view/sort/slideshow after settings change
+    void openAnalysisOverlay(); // F4 (M22): zebra / false-color / scopes dialog
 
     void keyPressEvent(QKeyEvent *event) override;
 

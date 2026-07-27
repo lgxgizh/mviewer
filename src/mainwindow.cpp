@@ -25,6 +25,7 @@
 #include "core/project/ProjectSerializer.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
+#include "analysisoverlaydialog.h"
 #include "analysispanel.h"
 #include "analyzermodel.h"
 #include "batchdialog.h"
@@ -42,20 +43,22 @@
 #include "metadataoverlay.h"
 #include "metadatapanel.h"
 #include "pluginsettings.h"
+#include "preferencesdialog.h"
 #include "previewpanel.h"
 #include "searchpanel.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
 #include "workspacemodel.h"
 
+#include "core/update/UpdateChecker.h"
 #include <QApplication>
-#include <QPointer>
 #include <QBuffer>
 #include <QCheckBox>
 #include <QClipboard>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -78,6 +81,7 @@
 #include <QMimeData>
 #include <QMoveEvent>
 #include <QPainter>
+#include <QPointer>
 #include <QPushButton>
 #include <QResizeEvent>
 #include <QScreen>
@@ -90,14 +94,9 @@
 #include <QTextBrowser>
 #include <QTimer>
 #include <QUrl>
-#include <QDesktopServices>
-#include <QDir>
-#include <QFileInfo>
-#include <QDateTime>
-#include <thread>
 #include <QVBoxLayout>
-#include "core/update/UpdateChecker.h"
 #include <QWidget>
+#include <thread>
 
 #include <algorithm>
 #include <optional>
@@ -398,6 +397,15 @@ void MainWindow::setupUi()
             });
     m_actPluginSettings = new QAction("插件管理(&P)...", this);
     toolsMenu->addAction(m_actPluginSettings);
+
+    QAction *actPrefs = new QAction("首选项(&O)...", this);
+    connect(actPrefs, &QAction::triggered, this, &MainWindow::openPreferences);
+    toolsMenu->addAction(actPrefs);
+
+    QAction *actOverlay = new QAction("分析叠加层/示波器...", this);
+    connect(actOverlay, &QAction::triggered, this, &MainWindow::openAnalysisOverlay);
+    toolsMenu->addAction(actOverlay);
+
     toolsMenu->addSeparator();
     m_actExportSettings = new QAction("导出设置(&E)...", this);
     m_actImportSettings = new QAction("导入设置(&I)...", this);
@@ -449,8 +457,7 @@ void MainWindow::setupUi()
     // ----- 帮助(&H) -----
     auto *helpMenu = menuBar->addMenu("帮助(&H)");
     auto *actCheckUpdate = new QAction("检查更新...(&U)", this);
-    connect(actCheckUpdate, &QAction::triggered, this,
-            [this]() { checkForUpdates(false); });
+    connect(actCheckUpdate, &QAction::triggered, this, [this]() { checkForUpdates(false); });
     helpMenu->addAction(actCheckUpdate);
     helpMenu->addSeparator();
     auto *actShortcuts = new QAction("键盘快捷键(&K)", this);
@@ -532,8 +539,8 @@ void MainWindow::setupUi()
     sortCombo->addItem("分辨率", ThumbnailPanel::SortResolution);
     sortCombo->addItem("类型", ThumbnailPanel::SortType);   // A-2.2
     sortCombo->addItem("评分", ThumbnailPanel::SortRating); // A-2.2
-    sortCombo->addItem("相机", ThumbnailPanel::SortCamera);  // P0 #①
-    sortCombo->addItem("镜头", ThumbnailPanel::SortLens);    // P0 #①
+    sortCombo->addItem("相机", ThumbnailPanel::SortCamera); // P0 #①
+    sortCombo->addItem("镜头", ThumbnailPanel::SortLens);   // P0 #①
     sortLayout->addWidget(sortCombo);
 
     // A-2.2: sort direction toggle (ascending / descending).
@@ -1417,7 +1424,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     if ((mod & Qt::ControlModifier) && event->key() >= Qt::Key_1 && event->key() <= Qt::Key_6)
     {
         static const ThumbnailPanel::ViewMode modes[] = {
-            ThumbnailPanel::Thumbnail, ThumbnailPanel::List, ThumbnailPanel::Details,
+            ThumbnailPanel::Thumbnail, ThumbnailPanel::List,      ThumbnailPanel::Details,
             ThumbnailPanel::Filmstrip, ThumbnailPanel::SmallIcon, ThumbnailPanel::Compact};
         m_thumbnailPanel->setViewMode(modes[event->key() - Qt::Key_1]);
         event->accept();
@@ -2002,7 +2009,8 @@ void MainWindow::showShortcutsHelp()
         "<tr><th colspan='2'>视图模式</th></tr>"
         "<tr><td><kbd>G</kbd></td><td>缩略图视图</td></tr>"
         "<tr><td><kbd>D</kbd></td><td>详情视图</td></tr>"
-        "<tr><td><kbd>Ctrl+1</kbd>…<kbd>Ctrl+4</kbd></td><td>缩略图 / 列表 / 详情 / 胶片条</td></tr>"
+        "<tr><td><kbd>Ctrl+1</kbd>…<kbd>Ctrl+4</kbd></td><td>缩略图 / 列表 / 详情 / "
+        "胶片条</td></tr>"
         "<tr><td><kbd>Ctrl+5</kbd> / <kbd>Ctrl+6</kbd></td><td>小图标 / 紧凑</td></tr>"
         "<tr><th colspan='2'>比较（比较窗口内）</th></tr>"
         "<tr><td><kbd>C</kbd></td><td>打开比较模式</td></tr>"
@@ -3191,18 +3199,25 @@ void MainWindow::checkForUpdates(bool silent)
     // thread and marshal the result back via the event loop. Guard `this` with
     // a QPointer so a window destroyed mid-request doesn't get a dangling call.
     QPointer<MainWindow> self(this);
-    std::thread([self, silent]() {
-        mviewer::core::UpdateChecker checker("1.0.4");
-        checker.checkGitHub("lgxgizh/mviewer",
-                            [self, silent](const mviewer::core::UpdateInfo &info) {
-            QMetaObject::invokeMethod(qApp, [self, info, silent]() {
-                if (!self)
-                    return;
-                self->m_updateChecking = false;
-                self->onUpdateChecked(info, silent);
-            });
-        });
-    }).detach();
+    std::thread(
+        [self, silent]()
+        {
+            mviewer::core::UpdateChecker checker("1.0.4");
+            checker.checkGitHub("lgxgizh/mviewer",
+                                [self, silent](const mviewer::core::UpdateInfo &info)
+                                {
+                                    QMetaObject::invokeMethod(qApp,
+                                                              [self, info, silent]()
+                                                              {
+                                                                  if (!self)
+                                                                      return;
+                                                                  self->m_updateChecking = false;
+                                                                  self->onUpdateChecked(info,
+                                                                                        silent);
+                                                              });
+                                });
+        })
+        .detach();
 }
 
 void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool silent)
@@ -3210,8 +3225,9 @@ void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool sil
     if (!info.error.empty())
     {
         if (!silent)
-            QMessageBox::warning(this, tr("检查更新失败"),
-                                 tr("无法获取更新信息：\n%1").arg(QString::fromStdString(info.error)));
+            QMessageBox::warning(
+                this, tr("检查更新失败"),
+                tr("无法获取更新信息：\n%1").arg(QString::fromStdString(info.error)));
         return;
     }
     if (info.hasUpdate)
@@ -3231,8 +3247,9 @@ void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool sil
     }
     else if (!silent)
     {
-        QMessageBox::information(this, tr("已是最新"),
-                                 tr("当前已是最新版本（%1）。").arg(QString::fromStdString(info.currentVersion)));
+        QMessageBox::information(
+            this, tr("已是最新"),
+            tr("当前已是最新版本（%1）。").arg(QString::fromStdString(info.currentVersion)));
     }
 }
 
@@ -3499,6 +3516,54 @@ void MainWindow::toggleFullscreen()
         target->showNormal();
     else
         target->showFullScreen();
+}
+
+void MainWindow::openPreferences()
+{
+    PreferencesDialog dlg(this);
+    connect(&dlg, &PreferencesDialog::settingsChanged, this, &MainWindow::applyPreferences);
+    dlg.exec();
+}
+
+void MainWindow::applyPreferences()
+{
+    QSettings s;
+    const int vm = s.value("thumbViewMode", ThumbnailPanel::Thumbnail).toInt();
+    if (m_thumbnailPanel)
+        m_thumbnailPanel->setViewMode(static_cast<ThumbnailPanel::ViewMode>(vm));
+    const int sm = s.value("thumbSortMode", ThumbnailPanel::SortName).toInt();
+    if (m_sortCombo)
+    {
+        for (int i = 0; i < m_sortCombo->count(); ++i)
+        {
+            if (m_sortCombo->itemData(i).toInt() == sm)
+            {
+                m_sortCombo->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
+    if (m_thumbnailPanel)
+        m_thumbnailPanel->setThumbSize(s.value("thumbSize", 160).toInt());
+    if (m_slideshowTimer)
+    {
+        const int interval = s.value("slideshowInterval", 3000).toInt();
+        m_slideshowTimer->setInterval(interval);
+        if (m_slideshowTimer->isActive())
+            m_slideshowTimer->start(interval);
+    }
+}
+
+void MainWindow::openAnalysisOverlay()
+{
+    const QString path = currentImagePath();
+    if (path.isEmpty())
+        return;
+    QImage img(path);
+    if (img.isNull())
+        return;
+    AnalysisOverlayDialog dlg(img, this);
+    dlg.exec();
 }
 
 void MainWindow::toggleSlideshow()

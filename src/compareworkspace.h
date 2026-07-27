@@ -15,10 +15,10 @@
 #include <QPixmap>
 #include <QPointF>
 #include <QPushButton>
+#include <QResizeEvent>
 #include <QScrollArea>
 #include <QSlider>
 #include <QSpinBox>
-#include <QResizeEvent>
 #include <QStringList>
 #include <QTimer>
 #include <QVector>

@@ -31,6 +31,7 @@
 #include <QTimer>
 #include <QWheelEvent>
 #include <cmath>
+#include <cstring>
 
 namespace
 {
@@ -63,6 +64,9 @@ ImageViewer::ImageViewer(QWidget *parent) : QOpenGLWidget(parent)
     setUpdateBehavior(QOpenGLWidget::NoPartialUpdate);
     // Restore window geometry from the last session.
     QSettings settings;
+    m_overlayMode =
+        static_cast<mviewer::OverlayMode>(settings.value("defaultAnalysisOverlay", 0).toInt());
+    m_zebraThreshold = settings.value("zebraThreshold", 2).toInt();
     const QByteArray geom = settings.value("viewerGeometry").toByteArray();
     if (!geom.isEmpty())
         restoreGeometry(geom);
@@ -373,9 +377,23 @@ void ImageViewer::paintEvent(QPaintEvent *event)
                                        m_view.scale < 1.0 ? RenderInterp::Bilinear
                                                           : RenderInterp::Nearest);
             });
+        // F4 (M22): apply the live overlay on a deep copy so the TileCache
+        // buffer (shared via shared_ptr) is never mutated. Without the copy,
+        // toggling the overlay off would leave the cached pixels clipped.
+        if (m_overlayMode != mviewer::OverlayMode::None)
+        {
+            for (auto &rt : ready)
+            {
+                ImageData out = makeImageData(rt.data.width, rt.data.height, rt.data.format);
+                std::memcpy(out.buffer->data(), rt.data.buffer->data(), rt.data.byteSize());
+                mviewer::applyOverlay(out, m_overlayMode, m_zebraThreshold);
+                rt.data = out;
+            }
+        }
         // Stage A: QOpenGLWidget keeps a GL context current during paintEvent,
         // so GpuTileUploader::enabled() can succeed when MVIEWER_GPU=1.
-        const bool useGpu = GpuTileUploader::enabled() && m_blitterReady;
+        const bool useGpu = GpuTileUploader::enabled() && m_blitterReady &&
+                            m_overlayMode == mviewer::OverlayMode::None;
         const QRect viewportRect(0, 0, width(), height());
 
         // Upload + GPU composite phase (native GL). Must not interleave with
@@ -722,6 +740,16 @@ void ImageViewer::setSelectMode(bool on)
     update();
 }
 
+void ImageViewer::setOverlayMode(mviewer::OverlayMode m)
+{
+    if (m_overlayMode == m)
+        return;
+    m_overlayMode = m;
+    QSettings s;
+    s.setValue("defaultAnalysisOverlay", static_cast<int>(m));
+    update();
+}
+
 void ImageViewer::keyPressEvent(QKeyEvent *event)
 {
     const int key = event->key();
@@ -784,6 +812,18 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     aSelectRegion->setCheckable(true);
     aSelectRegion->setChecked(m_selectMode);
     menu.addSeparator();
+
+    // F4 (M22): live overlay toggle
+    QAction *aOvNone = menu.addAction("无叠加");
+    QAction *aOvZebra = menu.addAction("过曝/欠曝斑马线(&Z)");
+    QAction *aOvFalse = menu.addAction("伪彩色(&C)");
+    aOvNone->setCheckable(true);
+    aOvZebra->setCheckable(true);
+    aOvFalse->setCheckable(true);
+    aOvNone->setChecked(m_overlayMode == mviewer::OverlayMode::None);
+    aOvZebra->setChecked(m_overlayMode == mviewer::OverlayMode::Zebra);
+    aOvFalse->setChecked(m_overlayMode == mviewer::OverlayMode::FalseColor);
+
     // A-7.3: "分析" submenu — list every registered analyzer for one-click run.
     QMenu *analyzeMenu = menu.addMenu("分析");
     QList<QAction *> analyzeActions;
@@ -875,6 +915,12 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         setSelectMode(!m_selectMode);
     else if (chosen == aNext)
         emit requestNext();
+    else if (chosen == aOvNone)
+        setOverlayMode(mviewer::OverlayMode::None);
+    else if (chosen == aOvZebra)
+        setOverlayMode(mviewer::OverlayMode::Zebra);
+    else if (chosen == aOvFalse)
+        setOverlayMode(mviewer::OverlayMode::FalseColor);
     else if (chosen == aPrev)
         emit requestPrev();
     else if (chosen == aFullscreen)

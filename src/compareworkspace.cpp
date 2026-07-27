@@ -368,7 +368,8 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     // M16.7: per-pane histogram overlay toggle
     m_paneHistOverlayChk = new QCheckBox(tr("每格直方图叠加"), this);
     m_paneHistOverlayChk->setChecked(m_paneHistOverlay);
-    connect(m_paneHistOverlayChk, &QCheckBox::toggled, this, &CompareWorkspace::onPaneHistOverlayToggled);
+    connect(m_paneHistOverlayChk, &QCheckBox::toggled, this,
+            &CompareWorkspace::onPaneHistOverlayToggled);
     sideLay->addWidget(m_paneHistOverlayChk);
 
     // M16.4: quick PSNR/SSIM metrics label
@@ -627,8 +628,7 @@ void CompareWorkspace::applyLayoutPreset(int n)
     setImages(win);
     // Choose a near-square column count per preset:
     // 1 → 1, 2 → 2, 3 → 3, 4 → 2 (2×2), 5/6 → 3, 7/8 → 4.
-    const int cols = (n <= 1) ? 1 : (n == 2) ? 2 : (n == 3) ? 3
-        : (n == 4) ? 2 : (n <= 6) ? 3 : 4;
+    const int cols = (n <= 1) ? 1 : (n == 2) ? 2 : (n == 3) ? 3 : (n == 4) ? 2 : (n <= 6) ? 3 : 4;
     m_engine.setColumns(cols);
     if (m_layoutCombo)
     {
@@ -888,9 +888,9 @@ void CompareWorkspace::refreshCellDiff(int idx)
     if (diff.isNull())
         return;
     const ImageData thresholded = DifferenceEngine::applyThreshold(diff, m_thresholdValue);
-    const ImageData overlayImg = m_diffHighlight
-                                      ? DifferenceEngine::highlightMap(thresholded, basePx, m_thresholdValue)
-                                      : DifferenceEngine::heatMap(thresholded);
+    const ImageData overlayImg =
+        m_diffHighlight ? DifferenceEngine::highlightMap(thresholded, basePx, m_thresholdValue)
+                        : DifferenceEngine::heatMap(thresholded);
     if (overlayImg.isNull())
         return;
     view->setOverlay(mvcore::toQImage(overlayImg), m_diffHighlight ? 0.75 : 0.5);
@@ -1749,8 +1749,7 @@ void CompareWorkspace::onAdjChanged()
     if (m_sideChk && m_sideChk->isChecked())
         refreshHistograms();
     refreshCellHist(m_editIdx);
-    if (m_engine.imageCount() >= 2 && m_editIdx >= 0
-        && m_editIdx < m_cellViews.size())
+    if (m_engine.imageCount() >= 2 && m_editIdx >= 0 && m_editIdx < m_cellViews.size())
     {
         if (m_editIdx == diffBaseIndex())
         {
@@ -2519,7 +2518,7 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
     // Plain 1–8 → N-up compare presets (M16): key N compares N images.
     if (plain && (key >= Qt::Key_1 && key <= Qt::Key_8))
     {
-        const int n = key - Qt::Key_0;  // '1'..'8' → 1..8
+        const int n = key - Qt::Key_0; // '1'..'8' → 1..8
         applyLayoutPreset(n);
         event->accept();
         return;
