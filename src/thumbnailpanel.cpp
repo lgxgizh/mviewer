@@ -1,4 +1,5 @@
 #include "thumbnailpanel_p.h"
+#include "thumbnailprovider.h"
 
 // P0#3: DetailsHeader (the column-title strip above the Details list) is now
 // defined in thumbnailpanel_p.h alongside the shared DetailLayout geometry, so
@@ -85,49 +86,35 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     {
         m_pipelineWired = true;
         ThumbnailPipeline::instance().thumbSize = m_thumbSize;
-        ThumbnailPipeline::instance().setDecodeFn(
-            [this](const std::string &p, int /*size*/)
-            {
-                QString qp = QString::fromStdString(p);
-                QPixmap cached;
-                if (ThumbnailCache::instance().get(qp, cached))
-                    return mvcore::fromQImage(cached.toImage());
-                return Decoder::decodeScaled(p, m_thumbSize);
-            });
+        // Decode/scale/cache policy now lives in ThumbnailProvider; this TU only
+        // routes the finished pixmap into its own ready map and manages lifecycle.
+        ThumbnailPipeline::instance().setDecodeFn([](const std::string &p, int size)
+                                                  { return ThumbnailProvider::decode(p, size); });
         auto alive = m_alive;
         ThumbnailPipeline::instance().setResultFn(
             [this, alive](const std::string &p, const ImageData &img)
             {
                 if (!alive->load())
                     return; // panel destroyed; ignore late callback
-                QImage q = mvcore::toQImage(img);
-                if (q.isNull())
+                QString qp = QString::fromStdString(p);
+                QPixmap pm = ThumbnailProvider::produce(p, img, m_thumbSize);
+                if (pm.isNull())
                 {
                     // Record the failure so the delegate can paint a distinct
                     // "无法加载" placeholder instead of the generic loading grey.
                     {
                         QMutexLocker l(&m_thumbMtx);
-                        m_thumbFailed.insert(QString::fromStdString(p));
-                        m_thumbPending.remove(QString::fromStdString(p));
+                        m_thumbFailed.insert(qp);
+                        m_thumbPending.remove(qp);
                     }
                     QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
                     return;
                 }
-                const int s = m_thumbSize;
-                QPixmap pm(s, s);
-                pm.fill(Qt::transparent);
-                QPixmap scaled = QPixmap::fromImage(q).scaled(s, s, Qt::KeepAspectRatio,
-                                                              Qt::SmoothTransformation);
-                QPainter painter(&pm);
-                painter.drawPixmap((s - scaled.width()) / 2, (s - scaled.height()) / 2, scaled);
-                painter.end();
-                QString qp = QString::fromStdString(p);
                 {
                     QMutexLocker lk(&m_thumbMtx);
                     m_thumbReady[qp] = pm;
                     m_thumbPending.remove(qp);
                 }
-                ThumbnailCache::instance().put(qp, pm);
                 QMetaObject::invokeMethod(this, "onThumbReady", Qt::QueuedConnection,
                                           Q_ARG(QString, qp));
             });
