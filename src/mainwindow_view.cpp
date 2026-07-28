@@ -1,0 +1,485 @@
+// MainWindow view behaviors: drag&drop, overlays, fullscreen, slideshow, status (M20 P0#1).
+#include "mainwindow_p.h"
+
+// M15: drag & drop — accept files/folders dropped onto the window.
+void MainWindow::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (event->mimeData()->hasUrls())
+    {
+        event->acceptProposedAction();
+        m_dragHighlight = true;
+        update();
+    }
+    else
+        QMainWindow::dragEnterEvent(event);
+}
+
+void MainWindow::dragMoveEvent(QDragMoveEvent *event)
+{
+    // Accept moves anywhere on the window (including splitter handles and
+    // status-bar edges) so the drop cursor never flickers to "forbidden".
+    if (event->mimeData()->hasUrls())
+    {
+        event->acceptProposedAction();
+        if (!m_dragHighlight)
+        {
+            m_dragHighlight = true;
+            update();
+        }
+    }
+    else
+        QMainWindow::dragMoveEvent(event);
+}
+
+void MainWindow::dragLeaveEvent(QDragLeaveEvent *event)
+{
+    QMainWindow::dragLeaveEvent(event);
+    if (m_dragHighlight)
+    {
+        m_dragHighlight = false;
+        update();
+    }
+}
+
+void MainWindow::paintEvent(QPaintEvent *event)
+{
+    QMainWindow::paintEvent(event);
+    // Draw a translucent accent border while a drag-hover is active so the
+    // user gets visual confirmation that a drop is accepted.
+    if (m_dragHighlight)
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        const QColor accent = palette().color(QPalette::Highlight);
+        QPen pen(accent, 4);
+        p.setPen(pen);
+        p.setBrush(Qt::NoBrush);
+        p.drawRect(rect().adjusted(2, 2, -2, -2));
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent *event)
+{
+    // Drop received — turn off the drag highlight regardless of outcome.
+    if (m_dragHighlight)
+    {
+        m_dragHighlight = false;
+        update();
+    }
+    if (!event->mimeData()->hasUrls())
+    {
+        QMainWindow::dropEvent(event);
+        return;
+    }
+    const QList<QUrl> urls = event->mimeData()->urls();
+    QStringList paths;
+    for (const QUrl &url : urls)
+    {
+        const QString local = url.toLocalFile();
+        if (!local.isEmpty())
+            paths.append(local);
+    }
+    if (paths.isEmpty())
+    {
+        QMainWindow::dropEvent(event);
+        return;
+    }
+    event->acceptProposedAction();
+    handleDroppedPaths(paths);
+}
+
+void MainWindow::handleDroppedPaths(const QStringList &paths)
+{
+    if (paths.isEmpty())
+        return;
+    // P1-5: drag workflow — dropping multiple images jumps straight into Compare
+    // (no manual "add" button); a single image opens it; a directory opens the folder.
+    if (paths.size() >= 2)
+    {
+        // All dropped items must be images (not a mix of dirs + files).
+        bool allImages = true;
+        for (const QString &p : paths)
+            if (QFileInfo(p).isDir())
+            {
+                allImages = false;
+                break;
+            }
+        if (allImages)
+        {
+            openCompare(paths);
+            return;
+        }
+        // Mixed: open the first directory, ignore the rest.
+    }
+    // If first path is a directory, open it; otherwise open as images.
+    const QFileInfo fi(paths.first());
+    if (fi.isDir())
+        changeDirectory(paths.first());
+    else
+        onImageOpen(paths.first());
+}
+
+void MainWindow::showMetadataOverlay()
+{
+    if (!m_metadataOverlay || currentImagePath().isEmpty())
+        return;
+    m_metadataOverlay->showForImage(currentImagePath());
+}
+
+// A-10: refresh Undo/Redo menu labels and enabled state from CommandStack.
+void MainWindow::updateUndoRedoActions()
+{
+    if (m_actUndo)
+    {
+        m_actUndo->setEnabled(m_cmdStack.canUndo());
+        const std::string label = m_cmdStack.undoLabel();
+        m_actUndo->setText(label.empty()
+                               ? QStringLiteral("撤销(&U)")
+                               : QStringLiteral("撤销(&U) %1").arg(QString::fromStdString(label)));
+    }
+    if (m_actRedo)
+    {
+        m_actRedo->setEnabled(m_cmdStack.canRedo());
+        const std::string label = m_cmdStack.redoLabel();
+        m_actRedo->setText(label.empty()
+                               ? QStringLiteral("重做(&R)")
+                               : QStringLiteral("重做(&R) %1").arg(QString::fromStdString(label)));
+    }
+}
+
+// A-5: position the floating MetadataPanel on the right edge of the main window.
+void MainWindow::positionMetadataPanel()
+{
+    if (!m_metadataPanel)
+        return;
+    const QPoint topRight = mapToGlobal(QPoint(width(), 0));
+    const int x = topRight.x() - m_metadataPanel->width() - 16;
+    const int y = topRight.y() + 80;
+    m_metadataPanel->move(x, y);
+}
+
+void MainWindow::moveEvent(QMoveEvent *event)
+{
+    QMainWindow::moveEvent(event);
+    if (m_metadataPanel && m_metadataPanel->isVisible())
+        positionMetadataPanel();
+}
+
+void MainWindow::resizeEvent(QResizeEvent *event)
+{
+    QMainWindow::resizeEvent(event);
+    if (m_metadataPanel && m_metadataPanel->isVisible())
+        positionMetadataPanel();
+}
+
+void MainWindow::toggleMetadataOverlay()
+{
+    if (currentImagePath().isEmpty())
+        return;
+    // A-5: toggle both the viewer overlay and the floating MetadataPanel.
+    const bool show = !(m_metadataOverlay && m_metadataOverlay->isVisible()) &&
+                      !(m_metadataPanel && m_metadataPanel->isVisible());
+    if (show)
+    {
+        if (m_metadataOverlay)
+        {
+            m_metadataOverlay->showForImage(currentImagePath());
+            // P0: Compute histogram from the viewer's already-decoded frame (lazy,
+            // no extra decode) and pipe it into the overlay's mini histogram widget.
+            if (m_imageViewer)
+            {
+                auto frame = m_imageViewer->frame();
+                if (frame)
+                    m_metadataOverlay->setHistogram(
+                        mviewer::core::computeHistogram(frame->pixels()));
+            }
+        }
+        if (m_metadataPanel)
+        {
+            m_metadataPanel->setImage(currentImagePath());
+            positionMetadataPanel();
+            m_metadataPanel->show();
+            m_metadataPanel->raise();
+        }
+    }
+    else
+    {
+        if (m_metadataOverlay)
+            m_metadataOverlay->hide();
+        if (m_metadataPanel)
+            m_metadataPanel->hide();
+    }
+    // P0-3: keep the "图片信息" toggle in the View menu in sync so every entry
+    // point (Ctrl+I, M key, ESC) agrees on the overlay's state.
+    if (m_actToggleMetadata)
+        m_actToggleMetadata->setChecked(show);
+}
+
+void MainWindow::copyCurrentImageToClipboard()
+{
+    if (currentImagePath().isEmpty())
+        return;
+    const QImage img(currentImagePath());
+    if (!img.isNull())
+        QApplication::clipboard()->setImage(img);
+}
+
+void MainWindow::toggleFullscreen()
+{
+    QWidget *target = m_imageViewer->isVisible() ? (QWidget *)m_imageViewer : (QWidget *)this;
+    if (target->isFullScreen())
+        target->showNormal();
+    else
+        target->showFullScreen();
+}
+
+void MainWindow::openPreferences()
+{
+    PreferencesDialog dlg(this);
+    connect(&dlg, &PreferencesDialog::settingsChanged, this, &MainWindow::applyPreferences);
+    dlg.exec();
+}
+
+void MainWindow::applyPreferences()
+{
+    QSettings s;
+    const int vm = s.value("thumbViewMode", ThumbnailPanel::Thumbnail).toInt();
+    if (m_thumbnailPanel)
+        m_thumbnailPanel->setViewMode(static_cast<ThumbnailPanel::ViewMode>(vm));
+    const int sm = s.value("thumbSortMode", ThumbnailPanel::SortName).toInt();
+    if (m_sortCombo)
+    {
+        for (int i = 0; i < m_sortCombo->count(); ++i)
+        {
+            if (m_sortCombo->itemData(i).toInt() == sm)
+            {
+                m_sortCombo->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
+    if (m_thumbnailPanel)
+        m_thumbnailPanel->setThumbSize(s.value("thumbSize", 160).toInt());
+    if (m_slideshowTimer)
+    {
+        const int interval = s.value("slideshowInterval", 3000).toInt();
+        m_slideshowTimer->setInterval(interval);
+        if (m_slideshowTimer->isActive())
+            m_slideshowTimer->start(interval);
+    }
+    if (m_imageViewer)
+        m_imageViewer->setZebraThreshold(s.value("zebraThreshold", 2).toInt());
+}
+
+void MainWindow::openAnalysisOverlay()
+{
+    const QString path = currentImagePath();
+    if (path.isEmpty())
+        return;
+    QImage img(path);
+    if (img.isNull())
+        return;
+    AnalysisOverlayDialog dlg(img, this);
+    dlg.exec();
+}
+
+void MainWindow::toggleSlideshow()
+{
+    if (m_slideshowTimer && m_slideshowTimer->isActive())
+    {
+        stopSlideshow();
+        return;
+    }
+    if (currentImagePath().isEmpty() || currentDir().isEmpty())
+    {
+        statusBar()->showMessage("请先选择一张图片再开始幻灯片放映", 3000);
+        if (m_actSlideshow)
+            m_actSlideshow->setChecked(false);
+        return;
+    }
+    // Fullscreen the viewer for the slideshow; ESC (or S) stops it.
+    onImageOpen(currentImagePath());
+    if (!m_imageViewer->isFullScreen())
+        m_imageViewer->showFullScreen();
+    // Read interval from settings (default 3s), allow user to change via
+    // a simple input dialog triggered by Ctrl+Shift+S.
+    QSettings settings;
+    int interval = settings.value("slideshowInterval", 3000).toInt();
+    interval = qBound(500, interval, 60000); // clamp 0.5s–60s
+    if (!m_slideshowTimer)
+    {
+        m_slideshowTimer = new QTimer(this);
+        connect(m_slideshowTimer, &QTimer::timeout, this,
+                [this]()
+                {
+                    // Closing the viewer (ESC) ends the show.
+                    if (m_imageViewer->isHidden())
+                    {
+                        stopSlideshow();
+                        return;
+                    }
+                    navigate(1); // wraps at the end of the folder
+                });
+    }
+    m_slideshowTimer->start(interval);
+    if (m_actSlideshow)
+        m_actSlideshow->setChecked(true);
+    statusBar()->showMessage(
+        QString("幻灯片放映中 — 按 S 或 ESC 停止 (间隔 %1 秒)").arg(interval / 1000.0, 0, 'f', 1),
+        3000);
+}
+
+void MainWindow::stopSlideshow()
+{
+    if (m_slideshowTimer)
+        m_slideshowTimer->stop();
+    if (m_actSlideshow)
+        m_actSlideshow->setChecked(false);
+    statusBar()->showMessage("幻灯片放映已停止", 2000);
+}
+
+void MainWindow::zoomViewer(int op)
+{
+    // Zoom commands only make sense while the viewer is on screen.
+    if (m_imageViewer->isHidden())
+        return;
+    switch (op)
+    {
+    case 0:
+        m_imageViewer->zoomIn();
+        break;
+    case 1:
+        m_imageViewer->zoomOut();
+        break;
+    case 2:
+        m_imageViewer->zoomFit();
+        break;
+    case 3:
+        m_imageViewer->zoomActual();
+        break;
+    }
+}
+
+void MainWindow::openQuickCompare()
+{
+    if (currentImagePath().isEmpty())
+        return;
+    ensureImageList();
+    QStringList imgs;
+    imgs << currentImagePath();
+    const int idx = m_imageList->indexOf(currentImagePath());
+    if (idx >= 0 && idx + 1 < m_imageList->count())
+        imgs << m_imageList->pathAt(idx + 1);
+    else if (idx != 0 && !m_imageList->isEmpty())
+        imgs << m_imageList->pathAt(0);
+    openCompare(imgs);
+}
+
+// P0 #①: status bar helpers.
+
+QString MainWindow::formatBytes(qint64 bytes)
+{
+    if (bytes < 1024)
+        return QString("%1 B").arg(bytes);
+    const double kb = bytes / 1024.0;
+    if (kb < 1024.0)
+        return QString::number(kb, 'f', 1) + " KB";
+    const double mb = kb / 1024.0;
+    if (mb < 1024.0)
+        return QString::number(mb, 'f', 1) + " MB";
+    const double gb = mb / 1024.0;
+    return QString::number(gb, 'f', 2) + " GB";
+}
+
+void MainWindow::updateCacheStat()
+{
+    if (!m_lblCache)
+        return;
+    auto &cm = CacheManager::instance();
+    uint64_t hits = 0, misses = 0;
+    for (CacheLevel lvl :
+         {CacheLevel::Metadata, CacheLevel::Thumbnail, CacheLevel::Preview, CacheLevel::FullImage})
+    {
+        const CacheLevelStats s = cm.levelStats(lvl);
+        hits += s.hits;
+        misses += s.misses;
+    }
+    if (hits + misses == 0)
+        m_lblCache->setText("命中率 —");
+    else
+        m_lblCache->setText(QString("命中率 %1%").arg(int(100.0 * hits / (hits + misses))));
+}
+
+// P0-3: click / hover on the image viewer shows the metadata overlay.
+// P1-4: also forward global workflow shortcuts from child widgets.
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() == QEvent::KeyPress)
+    {
+        auto *ke = static_cast<QKeyEvent *>(event);
+        // While the viewer window has focus (e.g. slideshow fullscreen), 'S'
+        // still toggles the slideshow; the viewer itself has no such binding.
+        if (watched == m_imageViewer && ke->key() == Qt::Key_S && !ke->modifiers())
+        {
+            toggleSlideshow();
+            return true;
+        }
+        // Forward navigation / workflow shortcuts from child widgets so they work
+        // regardless of which panel has focus.
+        static const QList<int> globalKeys = {
+            Qt::Key_Space, Qt::Key_M, Qt::Key_H,    Qt::Key_G,    Qt::Key_D,      Qt::Key_F,
+            Qt::Key_Tab,   Qt::Key_C, Qt::Key_S,    Qt::Key_Plus, Qt::Key_Equal,  Qt::Key_Minus,
+            Qt::Key_0,     Qt::Key_1, Qt::Key_Home, Qt::Key_End,  Qt::Key_PageUp, Qt::Key_PageDown};
+        const bool isGlobalKey =
+            globalKeys.contains(ke->key()) ||
+            ((ke->modifiers() & Qt::ControlModifier) &&
+             (ke->key() == Qt::Key_C || (ke->key() >= Qt::Key_1 && ke->key() <= Qt::Key_6)));
+        if (isGlobalKey && watched != this)
+        {
+            // Also forward from the image viewer (it has its own keyPressEvent
+            // that handles zoom/navigation, but Home/End/PageUp/PageDown and
+            // workflow keys like C/S/Space should still reach MainWindow).
+            if (watched == m_imageViewer)
+            {
+                // Only forward keys the viewer doesn't handle itself.
+                static const QSet<int> viewerOwns = {
+                    Qt::Key_Left,  Qt::Key_Right,  Qt::Key_Plus,      Qt::Key_Equal,
+                    Qt::Key_Minus, Qt::Key_0,      Qt::Key_1,         Qt::Key_F,
+                    Qt::Key_F11,   Qt::Key_Escape, Qt::Key_Underscore};
+                if (viewerOwns.contains(ke->key()))
+                    return false; // let the viewer handle it
+            }
+            keyPressEvent(ke);
+            return true;
+        }
+    }
+
+    if (watched == m_imageViewer)
+    {
+        if (event->type() == QEvent::MouseButtonPress && !currentImagePath().isEmpty())
+        {
+            auto *me = static_cast<QMouseEvent *>(event);
+            if (me->button() == Qt::LeftButton)
+            {
+                if (m_metadataOverlay && m_metadataOverlay->isVisible())
+                    m_metadataOverlay->hide();
+                else
+                    showMetadataOverlay();
+            }
+        }
+        else if (event->type() == QEvent::HoverMove || event->type() == QEvent::MouseMove)
+        {
+            if (m_metadataHoverTimer && !currentImagePath().isEmpty())
+            {
+                m_metadataHoverTimer->stop();
+                m_metadataHoverTimer->start();
+            }
+        }
+        else if (event->type() == QEvent::Leave)
+        {
+            if (m_metadataHoverTimer)
+                m_metadataHoverTimer->stop();
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
+}

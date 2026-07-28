@@ -89,6 +89,24 @@ Framework, Workspace base architecture, Performance Gate.
 M16 Professional Analysis · M17 Professional Productivity (Batch / Workspace
 enhancement / auto-recovery / release installer / crash report / auto-update).
 
+**Post-M22 direction (2026-07 external review):** the project has left the
+architecture-exploration phase. Do NOT add new capability categories (AI, more
+plugins, more formats, more analyzers). Priorities are convergence +
+productization + performance closure, aiming Beta → RC:
+
+1. Keep UI complexity down. Hard guardrails (ADR 014): `mainwindow.cpp`
+   < 1000 lines, `compareworkspace.cpp` < 800, `thumbnailpanel.cpp` < 800.
+   New MainWindow / CompareWorkspace / ThumbnailPanel code goes into the
+   matching responsibility TU (`mainwindow_*.cpp`, `compareworkspace_*.cpp`,
+   `thumbnailpanel_*.cpp`), never back into the core file.
+2. Quality gates are part of `.\build.ps1 Test`: `golden_image` (PSNR / SSIM /
+   pixel-diff vs `golden/`), `bench_smoke`, `bench_enforce`
+   (`benchmark/performance_budget.json` + `perf_baseline.json`, ±10% hard
+   gate). A change that trips any gate does not merge.
+3. Product focus: the Browse → Thumbnail → Select → Compare → Zoom-sync →
+   ROI → Export-report flow must stay smooth (1000-image folder < 2 s to first
+   thumbnails; 8K first display < 500 ms).
+
 ## Git
 
 - Branch: `master`

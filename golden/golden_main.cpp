@@ -28,8 +28,83 @@ static bool ensureDir(const std::string &path)
     return QDir(QString::fromStdString(path)).mkpath(".");
 }
 
+// M20 P0#4: full-reference quality metrics so golden regressions are gated on
+// PSNR / SSIM / pixel-diff instead of a bare pixel count.
+struct GoldenMetrics
+{
+    double psnr = 0.0;         // dB; HUGE_VAL when identical
+    double ssim = 0.0;         // global SSIM on luma
+    double diffFraction = 0.0; // fraction of pixels beyond per-channel tolerance
+};
+
+static double lumaOf(QRgb c)
+{
+    return 0.299 * qRed(c) + 0.587 * qGreen(c) + 0.114 * qBlue(c);
+}
+
+static GoldenMetrics computeMetrics(const QImage &goldIn, const QImage &currIn,
+                                    int channelTolerance)
+{
+    const QImage gold = goldIn.convertToFormat(QImage::Format_RGB32);
+    const QImage curr = currIn.convertToFormat(QImage::Format_RGB32);
+    GoldenMetrics m;
+    const int w = gold.width(), h = gold.height();
+    const double n = static_cast<double>(w) * h;
+
+    double sumSq = 0.0;
+    long long diffs = 0;
+    double meanG = 0.0, meanC = 0.0;
+    for (int y = 0; y < h; ++y)
+    {
+        const QRgb *lg = reinterpret_cast<const QRgb *>(gold.constScanLine(y));
+        const QRgb *lc = reinterpret_cast<const QRgb *>(curr.constScanLine(y));
+        for (int x = 0; x < w; ++x)
+        {
+            const int dr = static_cast<int>(qRed(lg[x])) - qRed(lc[x]);
+            const int dg = static_cast<int>(qGreen(lg[x])) - qGreen(lc[x]);
+            const int db = static_cast<int>(qBlue(lg[x])) - qBlue(lc[x]);
+            sumSq += double(dr) * dr + double(dg) * dg + double(db) * db;
+            if (std::abs(dr) > channelTolerance || std::abs(dg) > channelTolerance ||
+                std::abs(db) > channelTolerance)
+                ++diffs;
+            meanG += lumaOf(lg[x]);
+            meanC += lumaOf(lc[x]);
+        }
+    }
+    m.diffFraction = diffs / n;
+    const double mse = sumSq / (n * 3.0);
+    m.psnr = (mse <= 0.0) ? HUGE_VAL : 10.0 * std::log10(255.0 * 255.0 / mse);
+
+    // Global SSIM on luma (single window; adequate for deterministic goldens).
+    meanG /= n;
+    meanC /= n;
+    double varG = 0.0, varC = 0.0, cov = 0.0;
+    for (int y = 0; y < h; ++y)
+    {
+        const QRgb *lg = reinterpret_cast<const QRgb *>(gold.constScanLine(y));
+        const QRgb *lc = reinterpret_cast<const QRgb *>(curr.constScanLine(y));
+        for (int x = 0; x < w; ++x)
+        {
+            const double dg = lumaOf(lg[x]) - meanG;
+            const double dc = lumaOf(lc[x]) - meanC;
+            varG += dg * dg;
+            varC += dc * dc;
+            cov += dg * dc;
+        }
+    }
+    varG /= n - 1;
+    varC /= n - 1;
+    cov /= n - 1;
+    const double c1 = (0.01 * 255) * (0.01 * 255);
+    const double c2 = (0.03 * 255) * (0.03 * 255);
+    m.ssim = ((2 * meanG * meanC + c1) * (2 * cov + c2)) /
+             ((meanG * meanG + meanC * meanC + c1) * (varG + varC + c2));
+    return m;
+}
+
 static bool compareImages(const QString &goldenPath, const QString &currentPath,
-                          double tolerance = 2.0, double maxDiffFraction = 0.01)
+                          double tolerance = 2.0, double maxDiffFraction = 0.01,
+                          double minPsnr = 45.0, double minSsim = 0.99)
 {
     QImage gold(goldenPath);
     QImage curr(currentPath);
@@ -49,29 +124,33 @@ static bool compareImages(const QString &goldenPath, const QString &currentPath,
                   << curr.width() << "x" << curr.height() << std::endl;
         return false;
     }
-    int diffs = 0;
-    const int w = gold.width(), h = gold.height();
-    for (int y = 0; y < h; ++y)
+
+    const GoldenMetrics m = computeMetrics(gold, curr, static_cast<int>(tolerance));
+    std::cout << "  metrics: PSNR=";
+    if (m.psnr == HUGE_VAL)
+        std::cout << "inf";
+    else
+        std::cout << m.psnr << " dB";
+    std::cout << "  SSIM=" << m.ssim << "  diff=" << m.diffFraction * 100 << "%" << std::endl;
+
+    bool ok = true;
+    if (m.diffFraction > maxDiffFraction)
     {
-        const QRgb *lg = reinterpret_cast<const QRgb *>(gold.constScanLine(y));
-        const QRgb *lc = reinterpret_cast<const QRgb *>(curr.constScanLine(y));
-        for (int x = 0; x < w; ++x)
-        {
-            const int dr = std::abs(static_cast<int>(qRed(lg[x])) - qRed(lc[x]));
-            const int dg = std::abs(static_cast<int>(qGreen(lg[x])) - qGreen(lc[x]));
-            const int db = std::abs(static_cast<int>(qBlue(lg[x])) - qBlue(lc[x]));
-            if (dr > tolerance || dg > tolerance || db > tolerance)
-                ++diffs;
-        }
+        std::cerr << "  FAIL pixel-diff: " << m.diffFraction * 100 << "% > "
+                  << maxDiffFraction * 100 << "%" << std::endl;
+        ok = false;
     }
-    const double frac = static_cast<double>(diffs) / (w * h);
-    if (frac > maxDiffFraction)
+    if (m.psnr < minPsnr)
     {
-        std::cerr << "  DIFF: " << diffs << " px (" << frac * 100 << "% > " << maxDiffFraction * 100
-                  << "%)" << std::endl;
-        return false;
+        std::cerr << "  FAIL PSNR: " << m.psnr << " dB < " << minPsnr << " dB" << std::endl;
+        ok = false;
     }
-    return true;
+    if (m.ssim < minSsim)
+    {
+        std::cerr << "  FAIL SSIM: " << m.ssim << " < " << minSsim << std::endl;
+        ok = false;
+    }
+    return ok;
 }
 
 QImage makeGradient(int w, int h)
@@ -133,16 +212,47 @@ int main(int argc, char **argv)
         std::string arg = argv[i];
         if (arg == "--compare")
         {
-            // Compare mode: generate current images and compare vs golden/.
+            // Compare mode: regenerate current images and gate them against
+            // golden/ with PSNR / SSIM / pixel-diff thresholds (M20 P0#4).
             std::string currentDir = std::string(MVIEWER_SOURCE_DIR) + "/tests/vision/current";
             QDir().mkpath(QString::fromStdString(currentDir));
-            QImage grad = makeGradient(256, 256);
-            grad.save(QString::fromStdString(currentDir + "/gradient_256x256.png"));
-            bool ok =
-                compareImages(QString::fromStdString(goldenDir + "/image/gradient_256x256.png"),
-                              QString::fromStdString(currentDir + "/gradient_256x256.png"));
-            std::cout << (ok ? "PASS: gradient" : "FAIL: gradient") << std::endl;
-            return ok ? 0 : 1;
+
+            struct Case
+            {
+                const char *name;
+                QImage current;
+                std::string goldenRel;
+            };
+            QImage diff(256, 256, QImage::Format_Grayscale8);
+            for (int y = 0; y < 256; ++y)
+                for (int x = 0; x < 256; ++x)
+                {
+                    const int d = std::abs((x * 255 / 256 + y * 255 / 256) / 2 - 128);
+                    diff.setPixel(x, y, qRgb(d, d, d));
+                }
+            std::vector<Case> cases;
+            cases.push_back({"gradient", makeGradient(256, 256), "/image/gradient_256x256.png"});
+            cases.push_back(
+                {"flat", makeFlat(256, 256, QColor(128, 128, 128)), "/image/flat_256x256.png"});
+            cases.push_back(
+                {"blue", makeFlat(256, 256, QColor(100, 150, 200)), "/image/blue_256x256.png"});
+            cases.push_back({"diff_gradient_vs_flat", diff, "/difference/gradient_vs_flat.png"});
+
+            int failures = 0;
+            for (const Case &c : cases)
+            {
+                const QString cur =
+                    QString::fromStdString(currentDir + "/") + c.name + QStringLiteral(".png");
+                c.current.save(cur);
+                std::cout << "CASE " << c.name << std::endl;
+                const bool ok = compareImages(QString::fromStdString(goldenDir + c.goldenRel), cur);
+                std::cout << (ok ? "PASS: " : "FAIL: ") << c.name << std::endl;
+                if (!ok)
+                    ++failures;
+            }
+            std::cout << (failures == 0 ? "GOLDEN OK" : "GOLDEN FAILED") << " (" << cases.size()
+                      << " cases, " << failures << " failed)" << std::endl;
+            return failures == 0 ? 0 : 1;
         }
         else if (arg == "--golden-dir" && i + 1 < argc)
         {

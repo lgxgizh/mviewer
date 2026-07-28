@@ -111,6 +111,12 @@ target_include_directories(mviewer_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_library(mviewer_ui STATIC
     mainwindow.cpp
+    mainwindow_ui.cpp
+    mainwindow_commands.cpp
+    mainwindow_navigation.cpp
+    mainwindow_session.cpp
+    mainwindow_export.cpp
+    mainwindow_view.cpp
     selectionmodel.cpp
     directorymodel.cpp
     imagelistmodel.cpp
@@ -122,9 +128,16 @@ add_library(mviewer_ui STATIC
     breadcrumbbar.cpp
     metadataoverlay.cpp
     thumbnailpanel.cpp
+    thumbnailpanel_filters.cpp
+    thumbnailpanel_fileops.cpp
+    thumbnailpanel_delegates.cpp
     previewpanel.cpp
     thumbnailcache.cpp
     compareworkspace.cpp
+    compareworkspace_render.cpp
+    compareworkspace_editpanel.cpp
+    compareworkspace_interact.cpp
+    compareworkspace_nav.cpp
     analysispanel.cpp
     exportdialog.cpp
     exportcommand.cpp
@@ -658,6 +671,10 @@ target_link_libraries(golden_main
 target_compile_features(golden_main PRIVATE cxx_std_20)
 target_include_directories(golden_main PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
 target_compile_definitions(golden_main PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# M20 P0#4 — Golden image regression gate: render output is compared against
+# committed references in golden/ using PSNR / SSIM / pixel-diff thresholds.
+add_test(NAME golden_image COMMAND golden_main --compare)
 
 add_executable(benchmark_scenario
     ${CMAKE_SOURCE_DIR}/benchmarks/benchmark_main.cpp

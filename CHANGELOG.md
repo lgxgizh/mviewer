@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed — M23 Code Convergence & Quality Gates (P0)
+
+- **God-object UI files split by responsibility** (ADR 014, no behavior
+  change): `mainwindow.cpp` 3770→585 lines (+6 TUs: ui / commands / navigation
+  / session / export / view), `compareworkspace.cpp` 2598→788 lines (+4 TUs:
+  render / editpanel / interact / nav), `thumbnailpanel.cpp` 1893→817 lines
+  (+3 TUs: filters / fileops / delegates). Each class now shares a private
+  `*_p.h` owning its include set and cross-TU inline helpers.
+- **Golden image regression gate:** `golden_main --compare` now scores every
+  reference image with PSNR (≥45 dB), global SSIM (≥0.99) and per-pixel diff
+  (≤1%), covers all four committed goldens, and runs in ctest as
+  `golden_image` — so `.\build.ps1 Test` fails on any render drift.
+
 ### Added — M22 Product Polish (F1–F4)
 
 - **F1 Centralized Preferences:** a new 首选项 dialog (Tools menu) gathers the
