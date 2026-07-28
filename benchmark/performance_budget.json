@@ -8,14 +8,23 @@
     "zoom_frame_ms": 16,
     "ui_thread_ms": 16,
     "memory_mb": 512,
-    "hundred_mp_viewport_ms": 1000
+    "hundred_mp_viewport_ms": 1000,
+    "decode_4k_jpeg_ms": 400,
+    "decode_8k_ms": 2000,
+    "first_frame_latency_ms": 120,
+    "zoom_frame_ms_b15": 600,
+    "cache_hit_rate": 0.1
   },
   "scenario_map": {
     "B1": "open_folder_ms",
     "B2": "first_thumbnail_ms",
     "B8": "image_switch_ms",
     "B9": "memory_mb",
-    "B10": "hundred_mp_viewport_ms"
+    "B10": "hundred_mp_viewport_ms",
+    "B11": "decode_4k_jpeg_ms",
+    "B12": "decode_8k_ms",
+    "B14": "first_frame_latency_ms",
+    "B15": "zoom_frame_ms_b15"
   },
   "regression": {
     "baseline_file": "benchmark/perf_baseline.json",

@@ -15,8 +15,10 @@
 #include <QCoreApplication>
 #include <QImage>
 #include <QImageReader>
+#include <QTemporaryDir>
 #include <algorithm>
 #include <chrono>
+#include <cstdint>
 #include <numeric>
 #include <random>
 #include <sstream>
@@ -789,6 +791,165 @@ ScenarioResult scenarioHundredMpTiles()
                " warm_decode_calls=" + std::to_string(warmCalls) +
                " cache_size=" + std::to_string(cache.size()) +
                " warm_ready=" + std::to_string(readyWarm.size());
+    return r;
+}
+
+// ─── Post-M22 named scenarios (review "性能回归" asks) ───────────────────────
+namespace
+{
+// Render a deterministic gradient + noise frame (stand-in for a real photo/RAW).
+QImage makeSyntheticFrame(int w, int h, uint32_t seed)
+{
+    QImage img(w, h, QImage::Format_RGB888);
+    std::mt19937 rng(seed ? seed : 0x9e3779b9u);
+    std::uniform_int_distribution<int> noise(0, 40);
+    for (int y = 0; y < h; ++y)
+    {
+        uchar *row = img.scanLine(y);
+        const int gy = static_cast<int>(static_cast<double>(y) / h * 255);
+        for (int x = 0; x < w; ++x)
+        {
+            const int gx = static_cast<int>(static_cast<double>(x) / w * 255);
+            const int n = noise(rng);
+            const int r = std::clamp(gx + n, 0, 255);
+            const int g = std::clamp(gy + n, 0, 255);
+            const int b = std::clamp((gx + gy) / 2 + n, 0, 255);
+            const int o = x * 3;
+            row[o] = static_cast<uchar>(r);
+            row[o + 1] = static_cast<uchar>(g);
+            row[o + 2] = static_cast<uchar>(b);
+        }
+    }
+    return img;
+}
+
+// Persist a synthesized frame to a temp file that outlives the call (QTemporaryDir
+// is held by the struct, so the file survives until the caller's scope ends).
+struct TmpAsset
+{
+    QTemporaryDir dir;
+    std::string path;
+    bool ok = false;
+};
+TmpAsset saveSynthetic(const QImage &img, const char *ext)
+{
+    TmpAsset t;
+    if (!t.dir.isValid())
+        return t;
+    t.path = std::string(t.dir.path().toUtf8()) + "/s." + ext;
+    t.ok = img.save(QString::fromStdString(t.path), ext);
+    return t;
+}
+} // namespace
+
+// B11: 4K JPEG full-res decode latency.
+ScenarioResult scenarioDecode4kJpeg()
+{
+    ScenarioResult r;
+    r.name = "B11";
+    r.metric = "decode_4k_jpeg_ms";
+    TmpAsset a = saveSynthetic(makeSyntheticFrame(3840, 2160, 1), "jpg");
+    if (!a.ok)
+    {
+        r.detail = "synthetic 4K image save failed";
+        return r;
+    }
+    std::vector<double> s;
+    s.reserve(12);
+    for (int i = 0; i < 12; ++i)
+    {
+        const double t0 = nowMs();
+        const ImageData d = Decoder::decodeScaled(a.path, 3840);
+        const double t1 = nowMs();
+        (void)d;
+        s.push_back(t1 - t0);
+    }
+    r.timing = summarize(s);
+    r.value = r.timing.p50Ms;
+    r.detail = "4K JPEG full-res decode via Decoder::decodeScaled (edge=3840)";
+    return r;
+}
+
+// B12: 8K frame decode latency. CI ships no RAW sample, so this decodes a
+// synthesized 8K RGB frame through the same ImageData pipeline a real RAW would
+// feed; point it at a .raw/.dng asset to measure the true RAW decode path.
+ScenarioResult scenarioDecode8k()
+{
+    ScenarioResult r;
+    r.name = "B12";
+    r.metric = "decode_8k_ms";
+    TmpAsset a = saveSynthetic(makeSyntheticFrame(8192, 4320, 2), "png");
+    if (!a.ok)
+    {
+        r.detail = "synthetic 8K image save failed";
+        return r;
+    }
+    std::vector<double> s;
+    s.reserve(8);
+    for (int i = 0; i < 8; ++i)
+    {
+        const double t0 = nowMs();
+        const ImageData d = Decoder::decodeScaled(a.path, 8192);
+        const double t1 = nowMs();
+        (void)d;
+        s.push_back(t1 - t0);
+    }
+    r.timing = summarize(s);
+    r.value = r.timing.p50Ms;
+    r.detail = "8K frame full-res decode (edge=8192); CI stand-in for 8K RAW";
+    return r;
+}
+
+// B13: cache hit rate (0..1). Wraps the existing B5 Zipf navigation pattern.
+ScenarioResult scenarioCacheHitRate(const Corpus &corpus)
+{
+    auto b5 = scenarioCacheHitRatio(corpus);
+    ScenarioResult r;
+    r.name = "B13";
+    r.metric = "cache_hit_rate";
+    r.value = b5.value;
+    r.timing = b5.timing;
+    r.passed = b5.passed;
+    r.detail = "wraps B5 cache_hit_ratio under Zipf navigation";
+    return r;
+}
+
+// B14: first-frame latency (ms) after opening the folder. Wraps B2's real
+// ThumbnailPipeline path.
+ScenarioResult scenarioFirstFrameLatency(const Corpus &corpus)
+{
+    auto b2 = scenarioFirstThumbnail(corpus);
+    ScenarioResult r;
+    r.name = "B14";
+    r.metric = "first_frame_latency_ms";
+    r.value = b2.value;
+    r.timing = b2.timing;
+    r.detail = "wraps B2 real ThumbnailPipeline first-thumbnail path";
+    return r;
+}
+
+// B15: per-frame zoom render cost. Proxies the hot path behind wheel/gesture
+// zoom: rescale an 8K frame down to a 1080p viewport.
+ScenarioResult scenarioZoomLatency()
+{
+    ScenarioResult r;
+    r.name = "B15";
+    r.metric = "zoom_frame_ms";
+    QImage big = makeSyntheticFrame(8192, 4320, 3);
+    QImage view(1920, 1080, QImage::Format_RGB888);
+    std::vector<double> s;
+    s.reserve(30);
+    for (int i = 0; i < 30; ++i)
+    {
+        const double t0 = nowMs();
+        QImage z = big.scaled(1920, 1080, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        view = z.copy();
+        const double t1 = nowMs();
+        s.push_back(t1 - t0);
+    }
+    r.timing = summarize(s);
+    r.value = r.timing.p50Ms;
+    r.detail = "8K->1080p SmoothTransformation rescale per frame (zoom hot-path proxy)";
     return r;
 }
 

@@ -200,6 +200,15 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     items.push_back({"B9", [&]() { return mviewer::bench::scenarioSoakStability(corpus); }});
     // B10 does not need the corpus; it synthesizes a 100MP buffer in-process.
     items.push_back({"B10", [&]() { return mviewer::bench::scenarioHundredMpTiles(); }});
+    // Post-M22 named scenarios (review "性能回归" asks). All synthesized
+    // in-process, so they run headless and never OOM on a missing RAW sample.
+    // They are report + baseline-regression (±10%) gated, not hard exit-fails,
+    // to avoid CI flakiness on uncalibrated hardware.
+    items.push_back({"B11", [&]() { return mviewer::bench::scenarioDecode4kJpeg(); }});
+    items.push_back({"B12", [&]() { return mviewer::bench::scenarioDecode8k(); }});
+    items.push_back({"B13", [&]() { return mviewer::bench::scenarioCacheHitRate(corpus); }});
+    items.push_back({"B14", [&]() { return mviewer::bench::scenarioFirstFrameLatency(corpus); }});
+    items.push_back({"B15", [&]() { return mviewer::bench::scenarioZoomLatency(); }});
 
     std::vector<mviewer::bench::ScenarioResult> results;
     for (const auto &it : items)

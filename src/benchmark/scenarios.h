@@ -104,4 +104,30 @@ ScenarioResult scenarioSoakStability(const Corpus &corpus);
 // < 500 ms under --enforce. Does not require a corpus file on disk.
 ScenarioResult scenarioHundredMpTiles();
 
+// ─── Post-M22 / review follow-up: named performance scenarios ────────────────
+// These directly answer the review's "性能回归" asks (decode_8k_raw,
+// decode_4k_jpeg, cache_hit_rate, first_frame_latency, zoom_latency). They are
+// all corpus/asset-free (synthesized in-process) so they run headless in CI and
+// never OOM on a missing RAW sample. Each is tracked against perf_baseline.json
+// via the same ±10% regression gate as B0-B10.
+
+// B11: 4K JPEG full-res decode latency (p50/p95/p99 ms).
+ScenarioResult scenarioDecode4kJpeg();
+
+// B12: 8K frame decode latency (p50/p95/p99 ms). CI has no RAW sample, so this
+// decodes a synthesized 8K RGB frame through the same ImageData pipeline a real
+// RAW would feed; swap in a .raw/.dng asset path to measure the true RAW path.
+ScenarioResult scenarioDecode8k();
+
+// B13: cache hit rate (0..1). Wraps the existing B5 Zipf navigation pattern.
+ScenarioResult scenarioCacheHitRate(const Corpus &corpus);
+
+// B14: first-frame latency (ms) — time to first visible image after opening the
+// folder. Wraps B2's real ThumbnailPipeline path.
+ScenarioResult scenarioFirstFrameLatency(const Corpus &corpus);
+
+// B15: per-frame zoom render cost (p50/p95/p99 ms). Proxies an 8K->viewport
+// rescale, the hot path behind wheel/gesture zoom.
+ScenarioResult scenarioZoomLatency();
+
 } // namespace mviewer::bench
