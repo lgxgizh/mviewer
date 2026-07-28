@@ -249,16 +249,51 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
     }
 }
 
+void CompareWorkspace::drawCellCompare(QPainter &p, int idx, const QRect &rect)
+{
+    if (idx < 0 || idx >= m_cellViews.size() || !m_cellViews[idx])
+        return;
+    const QImage &img = m_cellViews[idx]->image();
+    if (img.isNull() || rect.isEmpty())
+        return;
+
+    // H3: render with the SAME synchronized transform as Normal mode (scale + offset)
+    // so the user's zoom/pan carries over into split/swipe/overlay. The old code
+    // re-fit the image into the half, discarding the zoom/pan entirely. The offset
+    // is measured from the rect's own origin, exactly like RawImageView does for a
+    // cell widget.
+    const auto &ct = m_engine.cellTransform(idx);
+    const double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
+    const double ox = m_syncDrag ? m_engine.syncTransform().offset.x : ct.offset.x;
+    const double oy = m_syncDrag ? m_engine.syncTransform().offset.y : ct.offset.y;
+
+    p.save();
+    p.setClipRect(rect);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    const QRectF dr(rect.x() + ox, rect.y() + oy, img.width() * sc, img.height() * sc);
+    p.drawImage(dr, img);
+
+    // Diff/heatmap overlay (set per cell in refreshCellDiff). Only the non-base
+    // cell carries one, so this is a no-op for the base image — preserving the
+    // diff view the engineer had in Normal mode.
+    const QImage &ov = m_cellViews[idx]->overlay();
+    if (!ov.isNull())
+    {
+        p.setOpacity(m_cellViews[idx]->overlayOpacity());
+        p.drawImage(dr, ov);
+        p.setOpacity(1.0);
+    }
+    p.restore();
+}
+
 void CompareWorkspace::drawSplitCompare(QPainter &p)
 {
     const QRect r = rect();
-    const QRect left(r.topLeft(), QSize(r.width() / 2, r.height()));
-    const QRect right(left.topRight() + QPoint(1, 0),
-                      QSize(r.width() - left.width() - 1, r.height()));
-    const QImage &img0 = m_cellViews[0]->image();
-    const QImage &img1 = m_cellViews[1]->image();
-    drawFitImage(p, img0, left);
-    drawFitImage(p, img1, right);
+    const int midX = r.width() / 2;
+    const QRect left(r.topLeft(), QSize(midX, r.height()));
+    const QRect right(left.topRight() + QPoint(1, 0), QSize(r.width() - midX - 1, r.height()));
+    drawCellCompare(p, 0, left);
+    drawCellCompare(p, 1, right);
     p.setPen(QPen(QColor(255, 255, 255), 2));
     p.drawLine(left.topRight(), left.bottomRight());
 }
@@ -268,46 +303,47 @@ void CompareWorkspace::drawSwipeCompare(QPainter &p, int x)
     const QRect r = rect();
     const QRect left(r.topLeft(), QSize(x, r.height()));
     const QRect right(left.topRight() + QPoint(1, 0), QSize(r.width() - x, r.height()));
-    const QImage &img0 = m_cellViews[0]->image();
-    const QImage &img1 = m_cellViews[1]->image();
-    drawFitImage(p, img0, left);
-    drawFitImage(p, img1, right);
+    drawCellCompare(p, 0, left);
+    drawCellCompare(p, 1, right);
     p.setPen(QPen(QColor(255, 255, 255), 2));
     p.drawLine(QPoint(x, 0), QPoint(x, r.height()));
     p.setBrush(QColor(255, 255, 255));
     p.drawEllipse(QPoint(x, r.height() / 2), 4, 4);
 }
 
-// A-4.1: semi-transparent overlay blend of two images.
+// A-4.1 + H3: semi-transparent overlay blend of two images, drawn with the
+// synchronized transform, and with the diff overlay kept on top (the old blend
+// re-fit the images and dropped the diff overlay).
 void CompareWorkspace::drawOverlayCompare(QPainter &p)
 {
     if (m_cellViews.size() < 2)
         return;
     const QRect r = rect();
-    const QImage &img0 = m_cellViews[0]->image();
+
+    // Base image (full opacity), drawn with the synchronized transform.
+    drawCellCompare(p, 0, r);
+
     const QImage &img1 = m_cellViews[1]->image();
-
-    // Draw the base image fully opaque over the entire viewport.
-    drawFitImage(p, img0, r);
-
-    // Blend the second image on top with user-controlled opacity (A-4.1 slider).
-    const double opacity = std::clamp(m_overlayAlpha / 100.0, 0.0, 1.0);
-    p.setOpacity(opacity);
-    p.setCompositionMode(QPainter::CompositionMode_SourceOver);
-    drawFitImage(p, img1, r);
-    p.setOpacity(1.0);
-}
-
-void CompareWorkspace::drawFitImage(QPainter &p, const QImage &img, const QRect &target)
-{
-    if (img.isNull() || target.width() <= 0 || target.height() <= 0)
+    if (img1.isNull())
         return;
-    const QSizeF src(img.size());
-    const QSizeF dst(target.size());
-    const double s = qMin(dst.width() / src.width(), dst.height() / src.height());
-    const int w = int(src.width() * s);
-    const int h = int(src.height() * s);
-    const QRect dr(target.x() + (target.width() - w) / 2, target.y() + (target.height() - h) / 2, w,
-                   h);
-    p.drawImage(dr, img);
+    const auto &ct = m_engine.cellTransform(1);
+    const double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
+    const double ox = m_syncDrag ? m_engine.syncTransform().offset.x : ct.offset.x;
+    const double oy = m_syncDrag ? m_engine.syncTransform().offset.y : ct.offset.y;
+    const QRectF dr(r.x() + ox, r.y() + oy, img1.width() * sc, img1.height() * sc);
+
+    p.save();
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    // Blend the second image on top with user-controlled opacity (A-4.1 slider).
+    p.setOpacity(std::clamp(m_overlayAlpha / 100.0, 0.0, 1.0));
+    p.drawImage(dr, img1);
+    p.setOpacity(1.0);
+    // Keep the diff overlay visible on top of the blend (H3 fix).
+    const QImage &ov = m_cellViews[1]->overlay();
+    if (!ov.isNull())
+    {
+        p.setOpacity(m_cellViews[1]->overlayOpacity());
+        p.drawImage(dr, ov);
+    }
+    p.restore();
 }

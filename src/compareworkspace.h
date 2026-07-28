@@ -189,7 +189,7 @@ class CompareWorkspace : public QWidget
     void drawSplitCompare(QPainter &p);
     void drawSwipeCompare(QPainter &p, int x);
     void drawOverlayCompare(QPainter &p);
-    void drawFitImage(QPainter &p, const QImage &img, const QRect &target);
+    void drawCellCompare(QPainter &p, int idx, const QRect &rect);
 
     // A-4.3: Pixel Link — mark corresponding image-space points across cells.
     QCheckBox *m_pixelLinkChk = nullptr;

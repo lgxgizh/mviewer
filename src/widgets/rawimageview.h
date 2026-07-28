@@ -22,6 +22,16 @@ class RawImageView : public QWidget
     {
         return m_image;
     }
+    // H3: expose the diff/heatmap overlay so the workspace can re-draw it when
+    // rendering split/swipe/overlay modes (which hide the cell widgets).
+    const QImage &overlay() const
+    {
+        return m_overlay;
+    }
+    double overlayOpacity() const
+    {
+        return m_overlayAlpha;
+    }
     void setImage(const QImage &img);
     void clear();
 

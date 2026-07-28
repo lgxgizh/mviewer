@@ -91,6 +91,12 @@ All notable changes to this project are documented here. The format is based on
 - **自定义网格「行」spinbox 是无效控件 (M4).** 引擎按列填充、行数由列数自动推导，但该
   spinbox 一直禁用且不解释，容易误导。现加 tooltip 标注「行数由列数自动推导（按列填充，
   无法单独设置）」，明确它是信息性控件。
+- **Split/Swipe/Overlay 模式丢弃缩放/平移与 Diff 层 (H3).** 三种模式原本用
+  `drawFitImage` 把图像重新 fit 到半屏，导致用户在普通模式下的 zoom/pan 完全丢失，
+  且 Overlay 模式的 Diff 叠加层直接消失（算法工程师最痛的点）。现抽出 `drawCellCompare`，
+  复用与普通模式完全一致的引擎同步变换（scale+offset，受 syncZoom/syncDrag 开关控制）
+  投影到各自半区并裁剪；Overlay 模式在混合图像之上继续绘制 Diff 叠加层。`RawImageView`
+  新增 `overlay()` / `overlayOpacity()` 供对比模式复用。
 
 ### Changed — M23 Code Convergence & Quality Gates (P0)
 
