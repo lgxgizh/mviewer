@@ -36,10 +36,13 @@ file-local helpers that must be visible to more than one TU (now `inline`).
   `compareworkspace_editpanel.cpp` (adjustments, metrics, presets) ·
   `compareworkspace_interact.cpp` (keyboard / mouse / pixel link) ·
   `compareworkspace_nav.cpp` (pair navigation, layout presets, session apply).
-- `thumbnailpanel.cpp` (view core, 817 lines) +
+- `thumbnailpanel.cpp` (view core, 680 lines) +
   `thumbnailpanel_filters.cpp` (filters, sorting, metadata index) ·
   `thumbnailpanel_fileops.cpp` (rename / trash / copy / move / batch export) ·
-  `thumbnailpanel_delegates.cpp` (thumb / details / list delegates).
+  `thumbnailpanel_delegates.cpp` (thumb / details / list delegates) ·
+  `thumbnailpanel_viewmode.cpp` (the 150-line `setViewMode`, split out on the
+  M23 re-check when the core TU had crept back to 826 and breached the 800
+  guard).
 
 No public header changed; no behavior changed. The private headers are an
 implementation detail and may only be included by their class's TUs.
@@ -51,7 +54,9 @@ would churn signals/ownership for no product gain.
 
 ## Consequences
 
-- All three review targets are met (585 / 788 / 817 lines).
+- All three review targets are met (584 / 787 / 680 lines); the core
+  `thumbnailpanel.cpp` is kept strictly under the 800 guard by isolating
+  `setViewMode` in `thumbnailpanel_viewmode.cpp`.
 - Each responsibility is now independently reviewable and diffable; merge
   conflicts across unrelated features disappear.
 - The include cost of `*_p.h` is paid by every TU of that class; acceptable

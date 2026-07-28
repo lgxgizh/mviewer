@@ -9,11 +9,15 @@ All notable changes to this project are documented here. The format is based on
 ### Changed — M23 Code Convergence & Quality Gates (P0)
 
 - **God-object UI files split by responsibility** (ADR 014, no behavior
-  change): `mainwindow.cpp` 3770→585 lines (+6 TUs: ui / commands / navigation
-  / session / export / view), `compareworkspace.cpp` 2598→788 lines (+4 TUs:
-  render / editpanel / interact / nav), `thumbnailpanel.cpp` 1893→817 lines
-  (+3 TUs: filters / fileops / delegates). Each class now shares a private
-  `*_p.h` owning its include set and cross-TU inline helpers.
+  change): `mainwindow.cpp` 3770→584 lines (+6 TUs: ui / commands / navigation
+  / session / export / view), `compareworkspace.cpp` 2598→787 lines (+4 TUs:
+  render / editpanel / interact / nav), `thumbnailpanel.cpp` 1893→680 lines
+  (+4 TUs: filters / fileops / delegates / viewmode). Each class now shares a
+  private `*_p.h` owning its include set and cross-TU inline helpers.
+- **Re-check fix (M23):** `thumbnailpanel.cpp` had crept back to 826 lines
+  (breaching the <800 guard) after the first-screen async work; `setViewMode`
+  was isolated into `thumbnailpanel_viewmode.cpp`, restoring the core TU to 680
+  and keeping all three review targets strictly met (584 / 787 / 680).
 - **Golden image regression gate:** `golden_main --compare` now scores every
   reference image with PSNR (≥45 dB), global SSIM (≥0.99) and per-pixel diff
   (≤1%), covers all four committed goldens, and runs in ctest as

@@ -131,6 +131,7 @@ add_library(mviewer_ui STATIC
     thumbnailpanel_filters.cpp
     thumbnailpanel_fileops.cpp
     thumbnailpanel_delegates.cpp
+    thumbnailpanel_viewmode.cpp
     previewpanel.cpp
     thumbnailcache.cpp
     compareworkspace.cpp
