@@ -145,78 +145,104 @@ ThumbnailPanel::~ThumbnailPanel()
                                               { return Decoder::decodeScaled(p, size); });
 }
 
+namespace
+{
+// M23 P2: the type-filter rule, factored so the on-thread directory scan and the
+// off-thread enumeration share exactly one implementation.
+bool passesTypeFilter(const QString &typeFilter, const QString &suffixRaw)
+{
+    if (typeFilter.isEmpty())
+        return true;
+    const QString suffix = suffixRaw.toLower();
+    static const QStringList rawExts = {"cr2", "cr3", "nef", "arw", "dng", "raf", "rw2",
+                                        "orf", "sr2", "srw", "pef", "3fr", "mef", "erf",
+                                        "mrw", "dcr", "kdc", "mos", "raw", "iiq"};
+    for (const QString &ext : typeFilter.split(','))
+    {
+        const QString lowered = ext.trimmed().toLower();
+        if (lowered == suffix)
+            return true;
+        // P0: Expand "raw" alias to common RAW file extensions.
+        if (lowered == "raw" && rawExts.contains(suffix))
+            return true;
+        // P0: Expand "tiff" alias to "tif" + "tiff".
+        if (lowered == "tiff" && (suffix == "tif" || suffix == "tiff"))
+            return true;
+    }
+    return false;
+}
+} // namespace
+
 void ThumbnailPanel::setDirectory(const QString &path)
 {
-    // Enumerating a large folder can take a moment; give the user immediate
-    // busy feedback instead of a silently frozen cursor.
-    QApplication::setOverrideCursor(Qt::BusyCursor);
-    const auto cursorGuard = qScopeGuard([] { QApplication::restoreOverrideCursor(); });
-
     m_currentDir = path;
     m_filterText.clear();
     m_filterRecursive = false;
 
     // P0-1 (perf): a new directory generation. Any in-flight background
-    // dimension resolve from the previous folder is invalidated by the bump.
+    // dimension resolve or directory scan from the previous folder is
+    // invalidated by the bump.
     ++m_dirGen;
+    const int gen = m_dirGen;
     m_dimsResolved = false;
 
-    QList<Entry> entries;
-    QDir dir(path);
-    if (dir.exists())
-    {
-        const QFileInfoList list = sortedEntries(dir, m_sortMode, m_sortAscending);
-        for (const QFileInfo &fi : list)
-        {
-            // A-2.3: skip files whose extension is not in the type filter.
-            if (!m_typeFilter.isEmpty())
-            {
-                bool keep = false;
-                for (const QString &ext : m_typeFilter.split(','))
-                {
-                    const QString lowered = ext.trimmed().toLower();
-                    const QString suffix = fi.suffix().toLower();
-                    if (lowered == suffix)
-                    {
-                        keep = true;
-                        break;
-                    }
-                    // P0: Expand "raw" alias to common RAW file extensions.
-                    static const QStringList rawExts = {
-                        "cr2", "cr3", "nef", "arw", "dng", "raf", "rw2", "orf", "sr2", "srw",
-                        "pef", "3fr", "mef", "erf", "mrw", "dcr", "kdc", "mos", "raw", "iiq"};
-                    if (lowered == "raw" && rawExts.contains(suffix))
-                    {
-                        keep = true;
-                        break;
-                    }
-                    // P0: Expand "tiff" alias to "tif" + "tiff".
-                    if (lowered == "tiff" && (suffix == "tif" || suffix == "tiff"))
-                    {
-                        keep = true;
-                        break;
-                    }
-                }
-                if (!keep)
-                    continue;
-            }
-            // P0-1 (perf): do NOT read pixel dimensions here. Even
-            // QImageReader::size() opens the file and reads its header, so for a
-            // 10k-image folder this blocked the UI thread for seconds on every
-            // folder switch. Dimensions are only needed by the Details view, so
-            // they are resolved lazily in the background (see ensureDimensions).
-            entries.append(
-                {fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()});
-        }
-    }
-    m_allEntries = entries;
-    m_metaIndex.clear();
-    applyFilter();
+    // M23 P2 (first-screen): paint the (empty) directory shell immediately so a
+    // 1000-image folder shows its grid in well under 1s, then scan the disk off
+    // the UI thread and stream the real entries in once they are ready.
+    m_allEntries.clear();
+    m_paths.clear();
+    m_rowByPath.clear();
+    m_sizeByPath.clear();
+    m_model->setStringList({});
+    viewport()->update();
+    emit statsChanged(0, 0, 0, 0);
+    QApplication::setOverrideCursor(Qt::BusyCursor);
 
-    // Only pay the header-read cost when the Details view actually shows the
-    // resolution column.
-    if (m_viewMode == Details)
-        ensureDimensions();
+    // Snapshot the criteria the worker needs so it never reads volatile members.
+    const QString typeFilter = m_typeFilter;
+    const SortMode sortMode = m_sortMode;
+    const bool sortAscending = m_sortAscending;
+    auto alive = m_alive;
+
+    std::thread(
+        [this, gen, alive, path, typeFilter, sortMode, sortAscending]()
+        {
+            QList<Entry> entries;
+            QDir dir(path);
+            if (dir.exists())
+            {
+                const QFileInfoList list = sortedEntries(dir, sortMode, sortAscending);
+                for (const QFileInfo &fi : list)
+                {
+                    if (!passesTypeFilter(typeFilter, fi.suffix()))
+                        continue;
+                    // P0-1 (perf): no pixel dimensions here — resolved lazily in
+                    // the background for the Details view (see ensureDimensions).
+                    entries.append(
+                        {fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()});
+                }
+            }
+            QMetaObject::invokeMethod(
+                this,
+                [this, gen, alive, entries]() mutable
+                {
+                    // Always drop the busy cursor, even if superseded/destroyed.
+                    QApplication::restoreOverrideCursor();
+                    if (!alive || !*alive)
+                        return;
+                    if (gen != m_dirGen) // a newer folder superseded this scan
+                        return;
+                    m_allEntries = entries;
+                    m_metaIndex.clear();
+                    applyFilter();
+                    // Only pay the header-read cost when the Details view
+                    // actually shows the resolution column.
+                    if (m_viewMode == Details)
+                        ensureDimensions();
+                },
+                Qt::QueuedConnection);
+        })
+        .detach();
 }
 
 void ThumbnailPanel::refresh()
@@ -581,8 +607,26 @@ void ThumbnailPanel::onSelectionChanged()
     qint64 selBytes = 0;
     for (const QModelIndex &idx : sel)
         selBytes += m_sizeByPath.value(m_paths.value(idx.row()), 0);
-    m_compareBtn->setVisible(sel.size() >= 2 && sel.size() <= 8);
-    emit statsChanged(m_paths.size(), m_totalBytes, sel.size(), selBytes);
+    const int n = sel.size();
+
+    // M23 P2 (selection UX): keep the compare affordance always discoverable.
+    // It shows the live selection count, enables once 2–8 images are picked,
+    // and is hidden only when nothing is selected.
+    if (n == 0 || m_currentDir.isEmpty())
+    {
+        m_compareBtn->setVisible(false);
+    }
+    else
+    {
+        m_compareBtn->setVisible(true);
+        m_compareBtn->setText(QString("比较选中 (%1)").arg(n));
+        const bool canCompare = n >= 2 && n <= 8;
+        m_compareBtn->setEnabled(canCompare);
+        m_compareBtn->setToolTip(canCompare
+                                     ? QString("将选中的 %1 张图片送入对比").arg(n)
+                                     : QString("需要选择 2–8 张图片才能对比（当前 %1 张）").arg(n));
+    }
+    emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
 }
 
 void ThumbnailPanel::scrollToPath(const QString &path)

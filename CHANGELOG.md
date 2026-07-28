@@ -19,6 +19,20 @@ All notable changes to this project are documented here. The format is based on
   (≤1%), covers all four committed goldens, and runs in ctest as
   `golden_image` — so `.\build.ps1 Test` fails on any render drift.
 
+### Changed — M23 Product Experience (P2)
+
+- **First-screen responsiveness:** `ThumbnailPanel::setDirectory` now paints the
+  (empty) directory shell immediately and runs the disk scan + sort on a
+  background thread, streaming entries in once ready. This directly serves the
+  review's "1000-image folder < 1 s to show the directory" target; visible-range
+  thumbnail decode was already streamed and is unchanged.
+- **Selection → compare UX:** the 比较选中 button is now always discoverable —
+  it shows the live selection count (`比较选中 (N)`), enables once 2–8 images are
+  picked, and dims with a hint when fewer than 2 are selected. Native
+  Ctrl/Shift multi-select (already `ExtendedSelection`) plus the `C` shortcut and
+  status-bar "已选 N" feedback make the compare workflow the image-tool "soul" the
+  review called for.
+
 ### Added — M22 Product Polish (F1–F4)
 
 - **F1 Centralized Preferences:** a new 首选项 dialog (Tools menu) gathers the
