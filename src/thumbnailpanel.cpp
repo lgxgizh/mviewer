@@ -180,6 +180,13 @@ void ThumbnailPanel::setDirectory(const QString &path)
     m_paths.clear();
     m_rowByPath.clear();
     m_sizeByPath.clear();
+    // H2: drop the previous folder's metadata index synchronously. Without this,
+    // an active camera/lens/ISO or metadata-text filter could match stale entries
+    // from the previous directory until the new scan's completion callback runs.
+    m_metaIndex.clear();
+    m_metaIso.clear();
+    m_metaCamera.clear();
+    m_metaLens.clear();
     m_model->setStringList({});
     viewport()->update();
     emit statsChanged(0, 0, 0, 0);
@@ -389,7 +396,7 @@ void ThumbnailPanel::updateVisibleRange()
         QMutexLocker lk(&m_thumbMtx);
         for (int r = first; r <= last && r < n; ++r)
         {
-            const QString &p = m_paths.at(r);
+            const QString p = m_paths.value(r);
             if (m_thumbReady.contains(p))
                 continue;
             QPixmap pm;

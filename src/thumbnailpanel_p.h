@@ -88,14 +88,15 @@ inline std::vector<std::string> toStdPaths(const QStringList &in)
 inline constexpr int kDetailsHeaderH = 24;
 struct DetailLayout
 {
-    QRect thumb, name, res, size, date, fmt, rate, label;
+    QRect thumb, name, res, size, date, fmt, rate, label, camera, lens, iso;
 };
 inline DetailLayout detailLayout(const QRect &row)
 {
     const QRect r = row.adjusted(4, 0, -4, 0);
     const int thumbColW = 60, resW = 120, sizeW = 100, dateW = 160, fmtW = 80, rateW = 90,
-              labelW = 90, gap = 12;
-    const int fixed = thumbColW + resW + sizeW + dateW + fmtW + rateW + labelW + gap * 6;
+              labelW = 90, camW = 160, lensW = 240, isoW = 80, gap = 12;
+    const int fixed =
+        thumbColW + resW + sizeW + dateW + fmtW + rateW + labelW + camW + lensW + isoW + gap * 10;
     const int nameW = qMax(140, r.width() - fixed);
     DetailLayout L;
     int x = r.x();
@@ -114,7 +115,26 @@ inline DetailLayout detailLayout(const QRect &row)
     L.rate = QRect(x, r.y(), rateW, r.height());
     x += rateW + gap;
     L.label = QRect(x, r.y(), labelW, r.height());
+    x += labelW + gap;
+    L.camera = QRect(x, r.y(), camW, r.height());
+    x += camW + gap;
+    L.lens = QRect(x, r.y(), lensW, r.height());
+    x += lensW + gap;
+    L.iso = QRect(x, r.y(), isoW, r.height());
     return L;
+}
+
+// P0 #①: minimum content width for the Details row (every column + gaps + the
+// 140px minimum name column). Used by the delegate sizeHint so the row is always
+// wide enough to show all columns without overlap; the Details view scrolls
+// horizontally if the viewport is narrower (see setViewMode Details branch).
+inline int detailTotalWidth()
+{
+    const int thumbColW = 60, resW = 120, sizeW = 100, dateW = 160, fmtW = 80, rateW = 90,
+              labelW = 90, camW = 160, lensW = 240, isoW = 80, gap = 12;
+    const int fixed =
+        thumbColW + resW + sizeW + dateW + fmtW + rateW + labelW + camW + lensW + isoW + gap * 10;
+    return fixed + 140;
 }
 
 // P0#3: column-title strip painted above the Details list. Lives here (not in
@@ -150,5 +170,8 @@ class DetailsHeader : public QWidget
         p.drawText(L.fmt, flags, QStringLiteral("格式"));
         p.drawText(L.rate, flags, QStringLiteral("评分"));
         p.drawText(L.label, flags, QStringLiteral("标签"));
+        p.drawText(L.camera, flags, QStringLiteral("相机"));
+        p.drawText(L.lens, flags, QStringLiteral("镜头"));
+        p.drawText(L.iso, flags, QStringLiteral("ISO"));
     }
 };

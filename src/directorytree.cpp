@@ -277,8 +277,11 @@ void DirectoryTree::navigateTo(const QString &path, bool emitSignal)
 
     if (emitSignal)
     {
-        // This will trigger the directoryChanged signal just like a user click.
-        QTreeView::clicked(proxyIdx);
+        // A-1.1: programmatic navigation that should behave exactly like a user
+        // click. Emit the canonical directoryChanged signal directly instead of
+        // faking a QTreeView::clicked() (which round-tripped through the clicked
+        // handler and risked re-entrancy).
+        emit directoryChanged(normalized);
     }
     else
     {

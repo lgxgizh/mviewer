@@ -199,6 +199,29 @@ class ThumbnailPanel : public QListView
         return m_allEntries;
     }
 
+    // P0 #①: resolve an all-entries row for a *filtered* model path. The Details
+    // delegate draws by the model row (post-filter), but m_allEntries is the
+    // unfiltered source, so look the path up instead of indexing by row.
+    // Returns -1 if the path is not in the current directory.
+    int rowForPath(const QString &path) const
+    {
+        return m_rowByPath.value(path, -1);
+    }
+    // P0 #①: EXIF accessors for the Details view columns (camera / lens / ISO).
+    // Backed by the metadata index built lazily in ensureMetaIndex().
+    QString metaCameraForPath(const QString &path) const
+    {
+        return m_metaCamera.value(path);
+    }
+    QString metaLensForPath(const QString &path) const
+    {
+        return m_metaLens.value(path);
+    }
+    int metaIsoForPath(const QString &path) const
+    {
+        return m_metaIso.value(path, -1);
+    }
+
     // P1: repaint the gallery to reflect a rating change made elsewhere.
     void invalidateRatings();
 
@@ -265,19 +288,21 @@ class ThumbnailPanel : public QListView
     bool m_pipelineWired = false;
 
     // P1: filter state for metadata search + star-rating filter.
-    QList<Entry> m_allEntries;           // full listing; source for filtering
-    bool m_metaSearch = false;           // search embedded metadata, not just names
-    int m_ratingFilter = 0;              // show only images rated >= this (0 = all)
-    int m_labelFilter = 0;               // show only images with this color label (0 = any)
-    bool m_rejectFilter = false;         // show only rejected images
-    bool m_pickFilter = false;           // show only picked (favorite) images
-    bool m_recentFilter = false;         // show only recently-viewed images
-    QString m_cameraFilter;              // P0 #①: camera make/model substring
-    QString m_lensFilter;                // P0 #①: lens model substring
-    int m_isoFilter = 0;                 // P0 #①: exact ISO (0 = any)
-    QString m_tagFilter;                 // P0 #①: exact tag (empty = any)
-    QHash<QString, QString> m_metaIndex; // path -> lowercase searchable string
-    QHash<QString, int> m_metaIso;       // path -> ISO (for exact ISO filter)
+    QList<Entry> m_allEntries;            // full listing; source for filtering
+    bool m_metaSearch = false;            // search embedded metadata, not just names
+    int m_ratingFilter = 0;               // show only images rated >= this (0 = all)
+    int m_labelFilter = 0;                // show only images with this color label (0 = any)
+    bool m_rejectFilter = false;          // show only rejected images
+    bool m_pickFilter = false;            // show only picked (favorite) images
+    bool m_recentFilter = false;          // show only recently-viewed images
+    QString m_cameraFilter;               // P0 #①: camera make/model substring
+    QString m_lensFilter;                 // P0 #①: lens model substring
+    int m_isoFilter = 0;                  // P0 #①: exact ISO (0 = any)
+    QString m_tagFilter;                  // P0 #①: exact tag (empty = any)
+    QHash<QString, QString> m_metaIndex;  // path -> lowercase searchable string
+    QHash<QString, int> m_metaIso;        // path -> ISO (for exact ISO filter)
+    QHash<QString, QString> m_metaCamera; // path -> "make model" (Details EXIF column)
+    QHash<QString, QString> m_metaLens;   // path -> lens model (Details EXIF column)
 
     void applyFilter();     // (re)build the filtered model
     void ensureMetaIndex(); // lazily index metadata for m_allEntries

@@ -72,7 +72,9 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
             delete m_delegate;
         m_delegate = new DetailsDelegate(this, this);
         setItemDelegate(m_delegate);
-        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        // EXIF columns (camera/lens/ISO) can make the row wider than the viewport;
+        // allow horizontal scrolling rather than overlapping columns.
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         // Reserve space for and show the column header.
         if (!m_detailsHeader)

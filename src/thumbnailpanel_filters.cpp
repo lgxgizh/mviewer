@@ -146,6 +146,9 @@ void ThumbnailPanel::ensureMetaIndex()
             parts << QString::number(rm.iso);
         m_metaIndex.insert(e.path, parts.join(' ').toLower());
         m_metaIso.insert(e.path, rm.iso);
+        m_metaCamera.insert(e.path, QString::fromStdString(rm.make).trimmed() + " " +
+                                        QString::fromStdString(rm.model).trimmed());
+        m_metaLens.insert(e.path, QString::fromStdString(rm.lens).trimmed());
     }
 }
 

@@ -202,13 +202,17 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
     // Column 2: filename
     painter->drawText(L.name, Qt::AlignVCenter | Qt::TextSingleLine, name);
 
-    // Column 3: resolution — read from pre-populated Entry data.
+    // Column 3: resolution — read from pre-populated Entry data. Look the path up
+    // via rowForPath(): index.row() is the *filtered* model row, but m_allEntries
+    // is the unfiltered source, so indexing it by row shows the wrong image after
+    // a filter/sort (H1).
     painter->setFont(option.font);
     QString resStr = "-";
+    const int allRow = m_panel->rowForPath(path);
     const QList<Entry> &all = m_panel->entries();
-    if (index.row() < all.size())
+    if (allRow >= 0 && allRow < all.size())
     {
-        const auto &e = all.at(index.row());
+        const auto &e = all.at(allRow);
         if (e.width > 0 && e.height > 0)
             resStr = QString("%1×%2").arg(e.width).arg(e.height);
     }
@@ -274,16 +278,30 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
         painter->drawText(labelR, Qt::AlignVCenter | Qt::TextSingleLine, QStringLiteral("-"));
     }
 
+    // Columns 9-11: EXIF (camera / lens / ISO) — P0 #① professional columns for
+    // image algorithm engineers. Backed by the metadata index (ensureMetaIndex).
+    const QString cam = m_panel->metaCameraForPath(path).trimmed();
+    const QString lens = m_panel->metaLensForPath(path).trimmed();
+    const int iso = m_panel->metaIsoForPath(path);
+    painter->setFont(option.font);
+    painter->setPen(sel ? option.palette.color(QPalette::HighlightedText)
+                        : option.palette.color(QPalette::Text));
+    painter->drawText(L.camera, Qt::AlignVCenter | Qt::TextSingleLine,
+                      cam.isEmpty() ? QStringLiteral("-") : cam);
+    painter->drawText(L.lens, Qt::AlignVCenter | Qt::TextSingleLine,
+                      lens.isEmpty() ? QStringLiteral("-") : lens);
+    painter->drawText(L.iso, Qt::AlignVCenter | Qt::TextSingleLine,
+                      iso > 0 ? QString("ISO %1").arg(iso) : QStringLiteral("-"));
+
     painter->restore();
 }
 
 QSize ThumbnailPanel::DetailsDelegate::sizeHint(const QStyleOptionViewItem &,
                                                 const QModelIndex &) const
 {
-    // Match the viewport width exactly so no horizontal scrollbar appears and
-    // the header row (painted in the top margin) stays aligned with the cells.
-    // detailLayout() clamps the name column so all columns always fit.
-    const int w = qMax(320, m_panel->viewport()->width());
+    // Wide enough to show every column without overlap; the Details view scrolls
+    // horizontally when the viewport is narrower (see setViewMode Details branch).
+    const int w = qMax(detailTotalWidth(), m_panel->viewport()->width());
     return QSize(w, 52);
 }
 

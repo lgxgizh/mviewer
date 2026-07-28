@@ -55,6 +55,25 @@ All notable changes to this project are documented here. The format is based on
   drift vs the padded `perf_baseline.json`; it is non-gating and left as-is —
   recalibrating would strip the deliberate +50% padding on B11/B14/B15.)
 
+### Fixed — A-2 Browse details (产品力 #4：用得爽)
+
+- **Details 视图「分辨率」列在过滤/排序后整列错乱 (H1).** `DetailsDelegate::paint`
+  用 `entries().at(index.row())` 取分辨率，但 `index.row()` 是过滤后的模型行，而
+  `entries()` 是未过滤的全量列表，二者错位 → 过滤/排序后整列对应到错误的图。改为
+  通过 `rowForPath(path)` 按路径取回 `m_allEntries` 中正确的 `Entry`，现在分辨率始终
+  对应当前行。
+- **切换目录后相机/镜头/ISO 元数据过滤串味 (H2).** `setDirectory()` 同步清掉了
+  `m_allEntries/m_paths/m_rowByPath`，却没清 `m_metaIndex/m_metaIso`（依赖扫描完成回调
+  才清），导致切换目录且仍激活元数据过滤时短暂匹配到上一个目录的条目。`setDirectory()`
+  现在同步清空元数据索引与新增的 `m_metaCamera/m_metaLens`。
+- **`DirectoryTree::navigateTo` 用 `QTreeView::clicked()` 伪造点击 (H3).** 改为直接
+  `emit directoryChanged(normalized)`，与键盘/右键导航路径一致，消除
+  click→directoryChanged 的回环风险；`m_currentPath`/`watchPath` 在之前已设置，等价且更稳。
+- **Details 视图新增「相机 / 镜头 / ISO」EXIF 列 (产品力 #4 打磨).** 这些 EXIF 早已由
+  `ensureMetaIndex()` 采集、却只在过滤时用，从没展示出来。现在 Details 视图直接显示每张
+  图的相机机型、镜头型号与 ISO，方便图像算法工程师横向对照；列宽超出视口时视图启用横向
+  滚动而非重叠，表头同步增加三列标题。
+
 ### Changed — M23 Code Convergence & Quality Gates (P0)
 
 - **God-object UI files split by responsibility** (ADR 014, no behavior
