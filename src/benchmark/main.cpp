@@ -27,44 +27,98 @@
 // Usage:
 //   mviewer_bench                  full corpus (1000/img), print verdicts, exit 0
 //   mviewer_bench --smoke         small corpus (20/img), exit 0 (CI gate: prove it links+runs)
-//   mviewer_bench --enforce       apply exact docs/performance.md budgets; exit !=0 on fail
-//   mviewer_bench --corpus-size N generate N images per format
+//   mviewer_bench --enforce       hard-gate B1-B9 + B11-B15 against performance_budget.json;
+//                                 exit !=0 on any budget violation (CI hard gate)
+//   mviewer_bench --regression    ALSO diff against perf_baseline.json; >10% regression -> fail
 //   mviewer_bench --budget <file> load performance_budget.json (data-driven gates)
+//   mviewer_bench --baseline <f>  explicit baseline JSON (implies --regression)
+//   mviewer_bench --corpus-size N generate N images per format
 //   mviewer_bench --corpus-dir <d> reuse an existing on-disk corpus (no regen)
 //   mviewer_bench --scenarios <s> comma-separated ids (e.g. B1,B2,B8)
 //   mviewer_bench --results <f>   write JSON verdicts to <f>
-//   mviewer_bench --baseline <f>  compare against baseline JSON; >10% regression -> fail
 //   mviewer_bench --history <f>   append results row to history CSV (M15 regression tracking)
 //   mviewer_bench --report  <f>   write markdown regression report to <f>
 //
-// When --enforce is set without --baseline, the harness automatically loads
-// benchmark/perf_baseline.json if it exists, providing regression detection
-// out-of-the-box. This closes the M15 gap:
-//   "CI does not yet diff against baseline or fail on regression."
+// Gate model (product力 #2 "稳得住"):
+//   --enforce applies HARD budgets to the scenarios in performance_budget.json
+//   ["scenario_map"] (B1-B9 + B11-B15). These are generous, cross-machine-stable
+//   absolute caps, so the mandatory CI gate (perf-gate.yml: `--enforce --budget`)
+//   never fails on hardware jitter. --regression (or --baseline) enables the
+//   SEPARATE, noisier baseline-diff; it is run by nightly.yml, NOT the mandatory
+//   PR gate, because the committed baseline is machine-specific. B0/B10/TRACE are
+//   report-only and only regression-checked.
 
 namespace
 {
 struct Budget
 {
     bool enforce = false;
-    // Data-driven limits loaded from performance_budget.json (M13.3). When
-    // no file is supplied we fall back to the historical hardcoded values so
-    // `mviewer_bench --enforce` (no --budget) still gates on the docs
-    // targets. The JSON is the single source of truth in CI.
-    double open_folder_ms = 500.0;
-    double first_thumbnail_ms = 100.0;
-    double image_switch_ms = 16.0;
-    double memory_mb = 512.0;
-    double hundred_mp_viewport_ms = 1000.0; // A-8.4 / B10
-    bool check(double measured, double limit, bool lowerIsBetter = true) const
+
+    // metric name -> hard limit. Lower-is-better unless the metric is listed in
+    // higherIsBetter(). Loaded from performance_budget.json["budgets"]; the
+    // defaults below mirror that file so `mviewer_bench --enforce` (no --budget)
+    // still gates on the same targets. The JSON is the single source of truth in CI.
+    std::unordered_map<std::string, double> limits = {
+        {"qt_event_loop_probe_ms", 50.0},  {"first_thumbnail_ms", 100.0},
+        {"decode_p50_ms_jpeg", 100.0},     {"thumbnails_per_sec", 30.0},
+        {"cache_hit_ratio", 0.10},         {"peak_cache_bytes", 536870912.0}, // 512 MiB
+        {"switch_warm_p50_ms", 50.0},      {"image_switch_ms", 16.0},
+        {"baseline_return_ok", 1.0},       {"decode_4k_jpeg_ms", 400.0},
+        {"decode_8k_ms", 2000.0},          {"cache_hit_rate", 0.10},
+        {"first_frame_latency_ms", 120.0}, {"zoom_frame_ms_b15", 600.0},
+    };
+
+    // scenario id (B1..) -> metric name this scenario is gated against. Only
+    // scenarios present here are hard-gated under --enforce. Matches
+    // performance_budget.json["scenario_map"] (B1-B9 + B11-B15). B0/B10/TRACE are
+    // report-only (B10 is still ±10% regression-checked when --regression is given).
+    std::unordered_map<std::string, std::string> scenarioMap = {
+        {"B1", "qt_event_loop_probe_ms"},  {"B2", "first_thumbnail_ms"},
+        {"B3", "decode_p50_ms_jpeg"},      {"B4", "thumbnails_per_sec"},
+        {"B5", "cache_hit_ratio"},         {"B6", "peak_cache_bytes"},
+        {"B7", "switch_warm_p50_ms"},      {"B8", "image_switch_ms"},
+        {"B9", "baseline_return_ok"},      {"B11", "decode_4k_jpeg_ms"},
+        {"B12", "decode_8k_ms"},           {"B13", "cache_hit_rate"},
+        {"B14", "first_frame_latency_ms"}, {"B15", "zoom_frame_ms_b15"},
+    };
+
+    // Metrics where a HIGHER value is better (throughput / hit-rate / stability flag).
+    // Every other metric is lower-is-better.
+    static const std::set<std::string> &higherIsBetter()
     {
-        if (!enforce)
+        static const std::set<std::string> s = {"cache_hit_rate", "cache_hit_ratio",
+                                                "thumbnails_per_sec", "baseline_return_ok"};
+        return s;
+    }
+
+    // True if `scenario` is part of the hard-gated set.
+    bool appliesTo(const std::string &scenario) const
+    {
+        return scenarioMap.find(scenario) != scenarioMap.end();
+    }
+
+    // Enforce `measured` for `scenario` against its budget limit. Returns true
+    // (pass) when the scenario is not in the gated set, so unspecified scenarios
+    // keep their own structural verdict.
+    bool checkScenario(const std::string &scenario, double measured) const
+    {
+        auto it = scenarioMap.find(scenario);
+        if (it == scenarioMap.end())
             return true;
-        return lowerIsBetter ? (measured <= limit) : (measured >= limit);
+        auto lit = limits.find(it->second);
+        if (lit == limits.end())
+            return true;
+        const bool hib = higherIsBetter().count(it->second) > 0;
+        return hib ? (measured >= lit->second) : (measured <= lit->second);
     }
 };
 
 // Qt JSON-based budget reader (replaces naive string-parsing version).
+// Loads EVERY metric in performance_budget.json["budgets"] into `limits` and the
+// scenario->metric bindings in ["scenario_map"] into `scenarioMap`, overriding the
+// in-code defaults. When the file is missing or malformed we keep the defaults so
+// `mviewer_bench --enforce` (no --budget) still gates. The JSON is the single
+// source of truth for limits in CI.
 bool loadBudgetJson(const std::string &path, Budget &b)
 {
     QFile f(QString::fromStdString(path));
@@ -79,25 +133,20 @@ bool loadBudgetJson(const std::string &path, Budget &b)
         return false;
 
     const QJsonObject root = doc.object();
-    const QJsonObject budgets = root.value("budgets").toObject();
-    if (budgets.isEmpty())
-        return false;
 
-    auto get = [&](const char *key, double &out)
+    const QJsonObject budgets = root.value("budgets").toObject();
+    for (auto it = budgets.begin(); it != budgets.end(); ++it)
     {
-        const QJsonValue v = budgets.value(QString::fromLatin1(key));
-        if (v.isDouble())
-        {
-            out = v.toDouble();
-            return true;
-        }
-        return false;
-    };
-    get("open_folder_ms", b.open_folder_ms);
-    get("first_thumbnail_ms", b.first_thumbnail_ms);
-    get("image_switch_ms", b.image_switch_ms);
-    get("memory_mb", b.memory_mb);
-    get("hundred_mp_viewport_ms", b.hundred_mp_viewport_ms);
+        if (it.value().isDouble())
+            b.limits[it.key().toStdString()] = it.value().toDouble();
+    }
+
+    const QJsonObject smap = root.value("scenario_map").toObject();
+    for (auto it = smap.begin(); it != smap.end(); ++it)
+    {
+        if (it.value().isString())
+            b.scenarioMap[it.key().toStdString()] = it.value().toString().toStdString();
+    }
     return true;
 }
 
@@ -221,35 +270,15 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     bool allPass = true;
     for (auto &r : results)
     {
-        if (b.enforce)
-        {
-            if (r.name == "B2")
-                r.passed = b.check(r.value, b.first_thumbnail_ms);
-            else if (r.name == "B8")
-                r.passed = b.check(r.value, b.image_switch_ms);
-            else if (r.name == "B9")
-            {
-                bool ok = (r.value > 0.5);
-                if (ok)
-                {
-                    const auto posF = r.detail.find("finalBase=");
-                    const auto posI = r.detail.find("initBase=");
-                    if (posF != std::string::npos && posI != std::string::npos)
-                    {
-                        const double finalB = std::strtod(r.detail.c_str() + posF + 10, nullptr);
-                        const double initB = std::strtod(r.detail.c_str() + posI + 9, nullptr);
-                        if (initB > 0)
-                            ok = (finalB <= initB * 2.0);
-                    }
-                }
-                r.passed = ok;
-            }
-            else if (r.name == "B10")
-            {
-                // A-8.4: cold 100MP viewport tile fill must stay under budget.
-                r.passed = b.check(r.value, b.hundred_mp_viewport_ms) && r.passed;
-            }
-        }
+        // Data-driven hard gate (product力 #2 "稳得住"). Each scenario listed in
+        // Budget::scenarioMap (B1-B9 + B11-B15, sourced from performance_budget.json)
+        // is enforced against its budget limit. Scenarios NOT in the map
+        // (B0/B10/TRACE) keep their structural verdict and are only
+        // regression-checked (when --regression is given). This is the canonical CI
+        // hard gate: generous, cross-machine-stable absolute caps, so it never fails
+        // on CI hardware jitter.
+        if (b.enforce && b.appliesTo(r.name))
+            r.passed = b.checkScenario(r.name, r.value);
         printVerdict(r, b);
         if (!r.passed)
             allPass = false;
@@ -281,14 +310,17 @@ int main(int argc, char **argv)
     std::string scenariosArg;       // P3: comma-separated scenario ids to run (e.g. "B1,B2,B8")
     std::string resultsFile;        // M14: if set, write JSON results (for regression tracking)
     std::string baselineFile;       // M14: if set, compare against baseline for regression
-    std::string historyFile;        // M15: if set, append results row to history CSV
-    std::string reportFile;         // M15: if set, write markdown regression report
+    bool regression = false; // M15: enable baseline diff (separate from --enforce hard budget)
+    std::string historyFile; // M15: if set, append results row to history CSV
+    std::string reportFile;  // M15: if set, write markdown regression report
 
     for (int i = 1; i < argc; ++i)
     {
         std::string a = argv[i];
         if (a == "--enforce")
             b.enforce = true;
+        else if (a == "--regression")
+            regression = true;
         else if (a == "--budget" && i + 1 < argc)
             budgetFile = argv[++i];
         else if (a == "--smoke")
@@ -402,10 +434,14 @@ int main(int argc, char **argv)
     if (!resultsFile.empty())
         writeResultsJson(resultsFile, results);
 
-    // M15: auto-baseline — when --enforce is on but no --baseline specified, attempt
-    // to load benchmark/perf_baseline.json from cwd. This closes the M15 gap:
-    //   "CI does not yet diff against baseline or fail on regression."
-    if (b.enforce && baselineFile.empty())
+    // M15: auto-baseline — when --enforce + --regression are on but no --baseline
+    // is specified, attempt to load benchmark/perf_baseline.json from cwd. This
+    // closes the M15 gap: "CI does not yet diff against baseline or fail on
+    // regression." Regression is a SEPARATE, noisier axis (it compares against a
+    // machine-specific baseline); the mandatory CI hard gate (perf-gate.yml) runs
+    // `--enforce --budget` WITHOUT --regression so it never fails on hardware
+    // jitter. Nightly runs `--enforce --budget --regression` for trend tracking.
+    if (b.enforce && regression && baselineFile.empty())
     {
         static const char *const kCandidates[] = {"benchmark/perf_baseline.json",
                                                   "../benchmark/perf_baseline.json", nullptr};

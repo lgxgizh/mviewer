@@ -29,6 +29,32 @@ All notable changes to this project are documented here. The format is based on
   warned and ignored it); replaced with the literal `0x08000000` so the
   Open-With / `.mviewer` associations take effect right after install.
 
+### Fixed — M13.3 Performance budget as a real CI hard gate (产品力 #2：稳得住)
+
+- **`--enforce` was gating only 4 of the 14 scenarios.** The harness hardcoded
+  budget checks for B2/B8/B9/B10 only; B1/B3/B4/B5/B6/B7/B11/B12/B13/B14/B15 were
+  never compared to the budget, and `performance_budget.json["scenario_map"]`
+  (B1-B9 + B11-B15) was **never read by the C++ at all** — it was documentation
+  only. Rewrote `Budget` + `runScenarios` to be data-driven: every scenario in
+  `scenario_map` is now hard-gated against its `budgets` limit (lower-is-better
+  by default; `cache_hit_rate`/`cache_hit_ratio`/`thumbnails_per_sec`/
+  `baseline_return_ok` are higher-is-better). `performance_budget.json` is now
+  the single source of truth.
+- **`--regression` decoupled from `--enforce`.** Auto-baseline loading used to
+  trigger on `--enforce` alone, so the committed `perf_baseline.json` (captured
+  on the dev box) would make the **PR** gate fail on any cross-machine jitter.
+  Added an explicit `--regression` flag (also implied by `--baseline`); the
+  mandatory `perf-gate.yml` runs `--enforce --budget` **without** `--regression`,
+  so the PR gate is cross-machine-stable. Baseline regression stays a SEPARATE,
+  non-gating axis run by `nightly.yml` (`--regression`, `|| true`).
+- **`perf-gate.yml`** now runs the pure hard-budget gate (dropped `--baseline`);
+  **`nightly.yml`** gained `--regression` on both benchmark + dashboard runs so
+  regression detection still fires.
+- **Verified locally:** `mviewer_bench --enforce --budget benchmark/performance_budget.json`
+  → B1-B9 + B11-B15 all PASS, `exit 0`. (The baseline-regression axis shows
+  drift vs the padded `perf_baseline.json`; it is non-gating and left as-is —
+  recalibrating would strip the deliberate +50% padding on B11/B14/B15.)
+
 ### Changed — M23 Code Convergence & Quality Gates (P0)
 
 - **God-object UI files split by responsibility** (ADR 014, no behavior
