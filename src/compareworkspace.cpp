@@ -220,12 +220,18 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     syncLayout->addWidget(m_layoutCombo);
 
     // A-4.2: custom M×N grid spin boxes (active when layout = 自定义).
-    syncLayout->addWidget(new QLabel(tr("行"), this));
+    // A-4.2: custom M×N grid spin boxes (active when layout = 自定义).
+    // The row count is informational only — the engine packs by columns, so the
+    // 行 spin box is disabled and labeled as auto-derived to avoid a misleading UI.
+    auto *rowsLabel = new QLabel(tr("行"), this);
+    rowsLabel->setToolTip(tr("行数由列数自动推导（按列填充，无法单独设置）"));
+    syncLayout->addWidget(rowsLabel);
     m_gridRowsSpin = new QSpinBox(this);
     m_gridRowsSpin->setRange(1, 8);
     m_gridRowsSpin->setValue(2);
     m_gridRowsSpin->setEnabled(false);
     m_gridRowsSpin->setMaximumWidth(48);
+    m_gridRowsSpin->setToolTip(tr("行数由列数自动推导（按列填充，无法单独设置）"));
     connect(m_gridRowsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
             &CompareWorkspace::onCustomGridChanged);
     syncLayout->addWidget(m_gridRowsSpin);
@@ -601,6 +607,14 @@ void CompareWorkspace::rebuildCells()
         const int col = i % lay.cols;
         m_layout->addWidget(cellWidget, row, col);
     }
+
+    // M3: a layout switch / swap / preset / blink-stop destroys and recreates every
+    // cell view, which would silently drop the ROI the user drew. Re-apply the last
+    // selection so the red box survives grid re-layouts (applySelectionToAll mirrors
+    // it across all cells, exactly as when it was first drawn).
+    if (m_lastSelection.width > 0)
+        applySelectionToAll(m_lastSelection);
+
     QTimer::singleShot(0, this, &CompareWorkspace::positionCellHists);
 }
 

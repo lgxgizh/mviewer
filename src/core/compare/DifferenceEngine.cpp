@@ -65,7 +65,7 @@ ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b
                                     static_cast<int>(lb[x * cppB + roB2]));
             const uint8_t diff = static_cast<uint8_t>((dr + dg + db) / 3);
             // M15: apply threshold — only highlight pixels above threshold
-            dst[x] = (diff > threshold) ? diff : 0;
+            dst[x] = (diff >= threshold) ? diff : 0;
         }
     }
     return out;
@@ -88,7 +88,7 @@ ImageData DifferenceEngine::applyThreshold(const ImageData &gray, uint8_t thresh
         for (int x = 0; x < gray.width; ++x)
         {
             const uint8_t v = src[x * cpp + ro];
-            dst[x] = (v > threshold) ? v : 0;
+            dst[x] = (v >= threshold) ? v : 0;
         }
     }
     return out;
@@ -167,7 +167,7 @@ ImageData DifferenceEngine::highlightMap(const ImageData &grayDiff, const ImageD
         for (int x = 0; x < w; ++x)
         {
             const uint8_t v = src[x * cppD + roD];
-            if (v > threshold)
+            if (v >= threshold)
             {
                 // Difference: solid red, intensity scaled by diff magnitude.
                 const uint8_t intensity = static_cast<uint8_t>(std::min(255, 80 + v * 2));

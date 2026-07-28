@@ -120,6 +120,15 @@ class RawImageView : public QWidget
         m_linkMarkers.clear();
         update();
     }
+
+    // H1: when the workspace decides this cell's diff was skipped because its size
+    // does not match the base image, show a visible corner badge instead of letting
+    // the diff overlay silently disappear (which would read as "no difference").
+    void setSizeMismatch(bool on)
+    {
+        m_sizeMismatch = on;
+        update();
+    }
     const QVector<QPointF> &linkMarkers() const
     {
         return m_linkMarkers;
@@ -181,4 +190,7 @@ class RawImageView : public QWidget
 
     // A-4.3: pixel-link markers (image-space, top-left origin)
     QVector<QPointF> m_linkMarkers;
+
+    // H1: size-mismatch badge flag (set by CompareWorkspace::refreshCellDiff).
+    bool m_sizeMismatch = false;
 };

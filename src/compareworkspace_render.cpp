@@ -7,6 +7,8 @@ void CompareWorkspace::refreshCellDiff(int idx)
         return;
     const int baseIdx = diffBaseIndex();
     RawImageView *view = m_cellViews[idx];
+    // Clear any stale mismatch badge first; re-set below only when sizes differ.
+    view->setSizeMismatch(false);
     if (idx == baseIdx)
     {
         view->setOverlay(QImage(), 0.0);
@@ -93,12 +95,18 @@ void CompareWorkspace::applyBlink(bool state)
     if (n == 0)
         return;
 
+    // M1: honor the locked reference as the blink base. diffBaseIndex() returns 0
+    // when nothing is locked, so this is a strict superset of the old behavior and
+    // keeps blink consistent with the diff/inspector (which also use diffBaseIndex).
+    const int base = qBound(0, diffBaseIndex(), n - 1);
+
     // For exactly two images, blink looks best when the active image fills the
     // entire grid area (rather than staying in its own cell slot). We achieve
     // this by showing only the active cell and stretching it across the grid.
     if (n == 2 && m_grid && m_layout)
     {
-        const int activeIdx = state ? 1 : 0;
+        const int other = (base == 0) ? 1 : 0;
+        const int activeIdx = state ? other : base;
         for (int i = 0; i < n; ++i)
         {
             if (!m_cellViews[i])
@@ -130,7 +138,7 @@ void CompareWorkspace::applyBlink(bool state)
         {
             if (!m_cellViews[i])
                 continue;
-            if (i == 0)
+            if (i == base)
                 m_cellViews[i]->setVisible(!state);
             else
                 m_cellViews[i]->setVisible(state);

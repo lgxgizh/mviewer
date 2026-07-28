@@ -18,6 +18,7 @@ RawImageView::RawImageView(QWidget *parent) : QWidget(parent)
 void RawImageView::setImage(const QImage &img)
 {
     m_image = img;
+    m_sizeMismatch = false;
     resetFit();
     update();
 }
@@ -187,6 +188,27 @@ void RawImageView::paintEvent(QPaintEvent *)
             p.setFont(f);
             p.drawText(QRectF(wx - 10, wy - 20, 20, 14), Qt::AlignCenter, QString::number(i + 1));
         }
+    }
+
+    // H1: visible corner badge when the diff for this cell was skipped because its
+    // size does not match the base image. Without this the diff overlay silently
+    // disappears and the user may misread it as "no difference".
+    if (m_sizeMismatch)
+    {
+        p.save();
+        QFont bf = p.font();
+        bf.setBold(true);
+        bf.setPointSize(9);
+        p.setFont(bf);
+        const QString txt = tr("尺寸不匹配");
+        const int ts = p.fontMetrics().horizontalAdvance(txt);
+        const int bw = ts + 12, bh = 18;
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(200, 40, 40, 235));
+        p.drawRoundedRect(6, 6, bw, bh, 3, 3);
+        p.setPen(Qt::white);
+        p.drawText(QRect(6, 6, bw, bh), Qt::AlignCenter, txt);
+        p.restore();
     }
 }
 

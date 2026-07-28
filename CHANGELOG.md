@@ -74,6 +74,24 @@ All notable changes to this project are documented here. The format is based on
   图的相机机型、镜头型号与 ISO，方便图像算法工程师横向对照；列宽超出视口时视图启用横向
   滚动而非重叠，表头同步增加三列标题。
 
+### Fixed — A-4 Compare workspace (产品力 #4：比得准/看得清)
+
+- **ROI 在切换布局/交换/预设/停止 blink 后丢失 (M3).** `rebuildCells()` 每次销毁并重建
+  所有单元视图，导致用户画好的红色 ROI 选区消失。`rebuildCells()` 末尾现在用
+  `applySelectionToAll(m_lastSelection)` 重新套用上一次选区，ROI 在网格重排后仍保留。
+- **Diff 阈值语义与提示不符 (H2).** 阈值提示写「低于此值的像素将被隐藏」，代码却用
+  `diff > threshold` 隐藏（边界值 `diff == threshold` 被误隐藏）。改为 `>=`，与提示一致；
+  `differenceMap` / `applyThreshold` / `highlightMap` 三处一并修正。
+- **Blink 基准不尊重锁定的参考图 (M1).** `applyBlink` 硬编码以第 0 张为基准，与 Diff/
+  检查器（都用 `diffBaseIndex()`）不一致。现统一用 `diffBaseIndex()` 作为闪烁基准
+  （未锁定时回退为 0，行为兼容），2 图与 3+ 图两种情况都已修正。
+- **尺寸不符时 Diff 静默消失 (H1).** 当某格与基准图分辨率不同，`refreshCellDiff` 直接清空
+  叠加层，用户会误以为「无差异」。现改为在单元左上角显示红色「尺寸不匹配」角标，明确提示
+  Diff 因尺寸不同而跳过；`RawImageView` 新增 `setSizeMismatch()` 与角标绘制。
+- **自定义网格「行」spinbox 是无效控件 (M4).** 引擎按列填充、行数由列数自动推导，但该
+  spinbox 一直禁用且不解释，容易误导。现加 tooltip 标注「行数由列数自动推导（按列填充，
+  无法单独设置）」，明确它是信息性控件。
+
 ### Changed — M23 Code Convergence & Quality Gates (P0)
 
 - **God-object UI files split by responsibility** (ADR 014, no behavior
