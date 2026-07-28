@@ -60,18 +60,23 @@ if ((Test-Path $sqlSrc) -and -not (Test-Path (Join-Path $staging "Qt6Sql.dll")))
     Copy-Item $sqlSrc $staging | Out-Null; Write-Host "  [qt] Qt6Sql.dll (explicit)"
 }
 
-# 2) MSVC C++ runtime (matching toolset under D:/msvc/VC/Redist/MSVC) ----------
-$crtDir = Get-ChildItem -Path "D:/msvc/VC/Redist/MSVC" -Directory -ErrorAction SilentlyContinue |
-    Sort-Object Name -Descending | Select-Object -First 1
-if ($crtDir) {
-    $crt = Join-Path $crtDir.FullName "x64/Microsoft.VC140.CRT"
-    if (Test-Path $crt) {
-        foreach ($dll in @("vcruntime140.dll","vcruntime140_1.dll","msvcp140.dll","msvcp140_1.dll","msvcp140_2.dll","concrt140.dll")) {
-            $src = Join-Path $crt $dll
-            if (Test-Path $src) { Copy-Item $src $staging | Out-Null; Write-Host "  [vcrt] $dll" }
-        }
-    } else { Write-Warning "VC140.CRT not found under $($crtDir.FullName); portable zip may need vc_redist." }
-} else { Write-Warning "MSVC Redist not found; portable zip may need vc_redist installed." }
+# 2) MSVC C++ runtime (app-local deploy so the app runs on a clean Windows) ----
+#    The merge-module folder is named Microsoft.VC14x.CRT (x = toolset: 140/142/
+#    143/145...). VS2022 ships it under a *versioned* MSVC subdir, so we must
+#    glob for it rather than assume a fixed name. The DLL ABI is stable (always
+#    vcruntime140.dll / msvcp140.dll), so any matching toolset's CRT works; we
+#    prefer the toolset this project targets (v143) and fall back to the newest.
+$crtDirs = Get-ChildItem -Path "D:/msvc/VC/Redist/MSVC" -Directory -ErrorAction SilentlyContinue |
+    ForEach-Object { Get-ChildItem -Path $_.FullName -Directory -Recurse -ErrorAction SilentlyContinue } |
+    Where-Object { $_.FullName -match '\\x64\\Microsoft\.VC14\d+\.CRT$' }
+if ($crtDirs) {
+    $crt = $crtDirs | Where-Object { $_.Name -eq 'Microsoft.VC143.CRT' } | Select-Object -First 1
+    if (-not $crt) { $crt = $crtDirs | Sort-Object { $_.FullName } -Descending | Select-Object -First 1 }
+    foreach ($dll in @("vcruntime140.dll","vcruntime140_1.dll","msvcp140.dll","msvcp140_1.dll","msvcp140_2.dll","concrt140.dll")) {
+        $src = Join-Path $crt.FullName $dll
+        if (Test-Path $src) { Copy-Item $src $staging | Out-Null; Write-Host "  [vcrt] $dll" }
+    }
+} else { Write-Warning "MSVC VC14x.CRT not found under D:/msvc/VC/Redist/MSVC; clean Windows may need vc_redist installed." }
 
 # 3) App assets --------------------------------------------------------------
 Copy-Item $exe $staging | Out-Null

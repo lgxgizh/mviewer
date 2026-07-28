@@ -7,15 +7,23 @@
 #
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File test_package.ps1
-#   [ZipPath = "D:/mviewer/dist/MViewer-portable-1.0.0-rc.zip"]
+#   powershell -ExecutionPolicy Bypass -File test_package.ps1 -Version 1.0.4
+#   powershell -ExecutionPolicy Bypass -File test_package.ps1 -ZipPath "path/to/MViewer-x.y.z-portable.zip"
+# The zip path defaults to dist/MViewer-<Version>-portable.zip (Version from
+# -Version, else `git describe --tags --always`).
 
 param(
-    [string]$ZipPath = "D:/mviewer/dist/MViewer-portable-1.0.0-rc.zip",
+    [string]$Version,
+    [string]$ZipPath,
     [string]$WorkDir = "D:/mviewer/dist/_verify"
 )
 
 $ErrorActionPreference = 'Stop'
-if (-not (Test-Path $ZipPath)) { Write-Host "ERROR: $ZipPath not found — run pack_portable.ps1 first."; exit 1 }
+if (-not $ZipPath) {
+    if (-not $Version) { $Version = (git describe --tags --always 2>$null); if (-not $Version) { $Version = "0.0.0-dev" } }
+    $ZipPath = "D:/mviewer/dist/MViewer-$Version-portable.zip"
+}
+if (-not (Test-Path $ZipPath)) { Write-Host "ERROR: $ZipPath not found — run scripts/package_portable.ps1 -Version $Version first."; exit 1 }
 if (Test-Path $WorkDir) { Remove-Item -Recurse -Force $WorkDir }
 New-Item -ItemType Directory -Force -Path $WorkDir | Out-Null
 Expand-Archive -Path $ZipPath -DestinationPath $WorkDir -Force
@@ -24,6 +32,9 @@ $required = @(
     'Qt6Core.dll',
     'Qt6Gui.dll',
     'Qt6Widgets.dll',
+    'Qt6Sql.dll',
+    'msvcp140.dll',
+    'vcruntime140.dll',
     'imageformats\qtiff.dll',
     'imageformats\qjpeg.dll',
     'platforms\qwindows.dll'

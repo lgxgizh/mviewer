@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed — M17 Installer / Release Engineering (产品力 #1：装得上)
+
+- **Installer now actually builds end-to-end.** `installer/MViewer.nsi` had no
+  UTF-8 BOM, so `makensis` decoded its Chinese comments / box-drawing as the
+  system ACP (GBK) and aborted with "Bad text encoding". Added the BOM;
+  `scripts/package_release.ps1` now produces `dist/MViewer-<ver>-Setup.exe`.
+- **VC++ runtime was never bundled** (a real "装得上但起不来" bug).
+  `scripts/package_portable.ps1` looked for a fixed `x64/Microsoft.VC140.CRT`
+  folder, but VS2022 ships `Microsoft.VC143.CRT` (and `VC145.CRT`) under a
+  *versioned* `MSVC` subdir, so the copy silently failed. Switched to a glob
+  over `x64/Microsoft.VC14*.CRT` (preferring the v143 toolset); the installer
+  and portable zip now ship `vcruntime140.dll` / `msvcp140.dll` etc., so the
+  app launches on a machine with no Visual Studio installed.
+- **`test_package.ps1` was broken** — it hardcoded the stale
+  `MViewer-portable-1.0.0-rc.zip` name and ignored `-Version`, always failing.
+  It now derives the zip path from `-Version` (or `git describe`) and additionally
+  asserts the MSVC CRT + `Qt6Sql.dll` are present, closing the "clean Windows
+  can't run the app" regression (the G1 gate from M12.3).
+- **File-association refresh fixed.** `installer/MViewer.nsi` referenced an
+  undefined `${SHCNE_ASSOCCHANGED}` in the `SHChangeNotify` call (makensis
+  warned and ignored it); replaced with the literal `0x08000000` so the
+  Open-With / `.mviewer` associations take effect right after install.
+
 ### Changed — M23 Code Convergence & Quality Gates (P0)
 
 - **God-object UI files split by responsibility** (ADR 014, no behavior

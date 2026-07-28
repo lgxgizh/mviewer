@@ -1,4 +1,4 @@
-; MViewer.nsi - M11.3 Release Engineering
+﻿; MViewer.nsi - M11.3 Release Engineering
 ;
 ; NSIS installer for MViewer. Expects a pre-deployed application directory
 ; (produced by scripts/package_portable.ps1 staging: MViewer.exe + Qt DLLs +
@@ -91,7 +91,7 @@ Section "Install"
   ${If} ${Silent}
     ; no-op in silent mode
   ${Else}
-    System::Call 'shell32.dll::SHChangeNotify(i ${SHCNE_ASSOCCHANGED}, i 0, i 0, i 0)'
+    System::Call 'shell32.dll::SHChangeNotify(i 0x08000000, i 0, i 0, i 0)'
   ${EndIf}
 
   ; Uninstaller
