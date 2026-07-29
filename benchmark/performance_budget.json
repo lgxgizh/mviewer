@@ -1,11 +1,11 @@
 {
-  "_comment": "MViewer performance budget — single source of truth for `mviewer_bench --enforce --budget`. Each entry in `scenario_map` (B1-B9 + B11-B15) is a HARD gate: if the scenario's measured metric exceeds its `budgets` limit, the run FAILS (exit 1) and the PR is blocked. Lower-is-better for all latency/memory metrics; cache_hit_rate/cache_hit_ratio/thumbnails_per_sec/baseline_return_ok are higher-is-better (see mviewer::bench::Budget::higherIsBetter in src/benchmark/main.cpp). B0/B10/TRACE are intentionally report-only; B10 is still +/-10% regression-checked when --regression is given. The limits are generous, cross-machine-STABLE absolute caps, so the mandatory CI hard gate (perf-gate.yml) never fails on CI hardware jitter (product力 #2 '稳得住'). Regression-vs-baseline (perf_baseline.json) is a SEPARATE, noisier axis run via --regression in nightly.yml, NOT part of the mandatory CI gate.",
+  "_comment": "MViewer performance budget — single source of truth for `mviewer_bench --enforce --budget`. Each entry in `scenario_map` (B1-B9 + B11-B15) is a HARD gate: if the scenario's measured metric exceeds its `budgets` limit, the run FAILS (exit 1) and the PR is blocked. Lower-is-better for all latency/memory metrics; cache_hit_rate/cache_hit_ratio/thumbnails_per_sec/baseline_return_ok are higher-is-better (see mviewer::bench::Budget::higherIsBetter in src/benchmark/main.cpp). B0/B10/TRACE are intentionally report-only; B10 is still +/-10% regression-checked when --regression is given. The limits are meant to be generous, cross-machine-STABLE absolute caps so the mandatory CI hard gate (perf-gate.yml) stays green across hardware. NOTE (2026-07-29 calibration): the windows-2022 CI runner is ~6-8x slower than the dev box for decode/thumbnail work (measured B3 p50=134.8ms vs dev 16.4ms; B4=9.8 thumbs/s vs dev 62.4/s). B3 and B4 were raised to 250ms / 7 thumbs-per-sec so the gate is actually CI-stable; on the dev box these are still ~15x / ~9x under budget, so a true >=2x regression is still caught. Regression-vs-baseline (perf_baseline.json) is a SEPARATE, noisier axis run via --regression in nightly.yml, NOT part of the mandatory CI gate.",
   "schema_version": 1,
   "budgets": {
     "qt_event_loop_probe_ms": 50,
     "first_thumbnail_ms": 100,
-    "decode_p50_ms_jpeg": 100,
-    "thumbnails_per_sec": 30,
+    "decode_p50_ms_jpeg": 250,
+    "thumbnails_per_sec": 7,
     "cache_hit_ratio": 0.10,
     "peak_cache_bytes": 536870912,
     "switch_warm_p50_ms": 50,
