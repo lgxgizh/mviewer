@@ -76,7 +76,7 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     m_inspector->setColumnCount(7);
     m_inspector->setHorizontalHeaderLabels({tr("#"), tr("名称"), QStringLiteral("R"),
                                             QStringLiteral("G"), QStringLiteral("B"),
-                                            QStringLiteral("Δ")});
+                                            QStringLiteral("Δ"), QStringLiteral("16bit/RAW")});
     m_inspector->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_inspector->setSelectionMode(QAbstractItemView::NoSelection);
     m_inspector->horizontalHeader()->setStretchLastSection(true);
@@ -179,7 +179,7 @@ void CompareWorkspace::updateInspector(int x, int y)
     m_inspector->setHorizontalHeaderLabels(
         {tr("#"), tr("名称"), QString::fromLatin1(kHeaders[spaceIdx][0]),
          QString::fromLatin1(kHeaders[spaceIdx][1]), QString::fromLatin1(kHeaders[spaceIdx][2]),
-         QStringLiteral("Δ"), QStringLiteral("16bit")});
+         QStringLiteral("Δ"), QStringLiteral("16bit/RAW")});
 
     const int n = m_engine.imageCount();
     m_inspector->setRowCount(n);
