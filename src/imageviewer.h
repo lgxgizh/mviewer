@@ -85,7 +85,8 @@ class ImageViewer : public QOpenGLWidget
     // Pixel Inspector (P1 #6): emitted on mouse move with the pixel under the
     // cursor, read directly from the ImageFrame (not QImage). x/y are image
     // pixel coordinates; valid=false when the cursor is outside the image.
-    void pixelInfo(int x, int y, int r, int g, int b, int a, bool valid);
+    void pixelInfo(int x, int y, int r, int g, int b, int a, int r16, int g16, int b16, int rawKind,
+                   bool valid);
 
     // P0 #①: live zoom factor (percent) for the status bar. Emitted on wheel
     // zoom and on fit/resize.

@@ -698,30 +698,42 @@ void MainWindow::setupUi()
                 m_analysisPanel->setVisible(true);
                 m_analysisPanel->runAnalyzer(analyzerId);
             });
-    connect(
-        m_imageViewer, &ImageViewer::pixelInfo, this,
-        [this](int x, int y, int r, int g, int b, int a, bool valid)
-        {
-            if (valid)
+    connect(m_imageViewer, &ImageViewer::pixelInfo, this,
+            [this](int x, int y, int r, int g, int b, int a, int r16, int g16, int b16, int rawKind,
+                   bool valid)
             {
-                if (a < 255)
-                    statusBar()->showMessage(QString("像素 [%1,%2]  RGBA(%3,%4,%5,%6)")
-                                                 .arg(x)
-                                                 .arg(y)
-                                                 .arg(r)
-                                                 .arg(g)
-                                                 .arg(b)
-                                                 .arg(a));
+                if (valid)
+                {
+                    if (a < 255)
+                        statusBar()->showMessage(
+                            QString("像素 [%1,%2]  RGBA(%3,%4,%5,%6)  16bit(%7,%8,%9)")
+                                .arg(x)
+                                .arg(y)
+                                .arg(r)
+                                .arg(g)
+                                .arg(b)
+                                .arg(a)
+                                .arg(r16)
+                                .arg(g16)
+                                .arg(b16));
+                    else
+                        statusBar()->showMessage(
+                            QString("像素 [%1,%2]  RGB(%3,%4,%5)  16bit(%6,%7,%8)")
+                                .arg(x)
+                                .arg(y)
+                                .arg(r)
+                                .arg(g)
+                                .arg(b)
+                                .arg(r16)
+                                .arg(g16)
+                                .arg(b16));
+                }
                 else
-                    statusBar()->showMessage(
-                        QString("像素 [%1,%2]  RGB(%3,%4,%5)").arg(x).arg(y).arg(r).arg(g).arg(b));
-            }
-            else
-            {
-                statusBar()->showMessage("光标不在图像上");
-            }
-            m_analysisPanel->showPixel(x, y, r, g, b, valid);
-        });
+                {
+                    statusBar()->showMessage("光标不在图像上");
+                }
+                m_analysisPanel->showPixel(x, y, r, g, b, a, r16, g16, b16, rawKind, valid);
+            });
 
     connect(sortCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this, sortCombo](int)

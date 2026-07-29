@@ -668,7 +668,30 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
             }
         }
     }
-    emit pixelInfo(ix, iy, r, g, b, a, valid);
+    // P0-2/PixelInspector: also surface the original high-bit-depth sample when
+    // available. rawKind: 0 = 8-bit only, 1 = RAW preview (demosaic 8-bit),
+    // 2 = true 16-bit integer samples present.
+    int r16 = 0, g16 = 0, b16 = 0, rawKind = 0;
+    if (m_frame)
+    {
+        const auto &meta = m_frame->metadata();
+        if (meta.format == "RAW")
+        {
+            rawKind = 1;
+        }
+        else if (m_frame->hasRaw16() && valid)
+        {
+            uint16_t vr = 0, vg = 0, vb = 0;
+            if (m_frame->raw16At(ix, iy, vr, vg, vb))
+            {
+                r16 = vr;
+                g16 = vg;
+                b16 = vb;
+                rawKind = 2;
+            }
+        }
+    }
+    emit pixelInfo(ix, iy, r, g, b, a, r16, g16, b16, rawKind, valid);
 }
 
 void ImageViewer::mouseReleaseEvent(QMouseEvent *event)

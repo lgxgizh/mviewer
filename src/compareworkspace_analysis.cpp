@@ -73,7 +73,7 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     sideLay->addLayout(inspHeader);
 
     m_inspector = new QTableWidget(this);
-    m_inspector->setColumnCount(6);
+    m_inspector->setColumnCount(7);
     m_inspector->setHorizontalHeaderLabels({tr("#"), tr("名称"), QStringLiteral("R"),
                                             QStringLiteral("G"), QStringLiteral("B"),
                                             QStringLiteral("Δ")});
@@ -179,7 +179,7 @@ void CompareWorkspace::updateInspector(int x, int y)
     m_inspector->setHorizontalHeaderLabels(
         {tr("#"), tr("名称"), QString::fromLatin1(kHeaders[spaceIdx][0]),
          QString::fromLatin1(kHeaders[spaceIdx][1]), QString::fromLatin1(kHeaders[spaceIdx][2]),
-         QStringLiteral("Δ")});
+         QStringLiteral("Δ"), QStringLiteral("16bit")});
 
     const int n = m_engine.imageCount();
     m_inspector->setRowCount(n);
@@ -213,6 +213,20 @@ void CompareWorkspace::updateInspector(int x, int y)
             m_inspector->setItem(i, 4, new QTableWidgetItem(formatChannel(space, t.c3)));
         }
         m_inspector->setItem(i, 5, new QTableWidgetItem(QString::number(static_cast<int>(dist))));
+        // P0-2/PixelInspector: original 16-bit readout per image in the 16bit column.
+        QString raw16Text = QStringLiteral("—");
+        if (img)
+        {
+            if (img->metadata().format == "RAW")
+                raw16Text = QStringLiteral("RAW");
+            else
+            {
+                uint16_t vr = 0, vg = 0, vb = 0;
+                if (img->hasRaw16() && img->raw16At(x, y, vr, vg, vb))
+                    raw16Text = QString("%1,%2,%3").arg(vr).arg(vg).arg(vb);
+            }
+        }
+        m_inspector->setItem(i, 6, new QTableWidgetItem(raw16Text));
     }
 
     // Neighborhood statistics of the base (reference) cell around the cursor.

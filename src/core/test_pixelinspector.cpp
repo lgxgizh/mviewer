@@ -1,7 +1,12 @@
 #include "core/analysis/PixelInspector.h"
+#include "core/image/ImageBuffer.h"
+#include "core/image/ImageFrame.h"
 #include <cassert>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <memory>
+#include <vector>
 
 using namespace mviewer::core;
 
@@ -85,10 +90,63 @@ static void test_neighborhood()
     CHECK(corner.mean == 0);
 }
 
+static void test_raw16At()
+{
+    // ImageFrame::raw16At is the source of truth for the Pixel Inspector
+    // high-bit-depth readout. Build an ImageFrame from a synthetic 2x2 RGB24
+    // buffer and attach a synthetic 16-bit sample buffer.
+    std::vector<uint8_t> px(2 * 2 * 3, 0);
+    ImageData data;
+    data.width = 2;
+    data.height = 2;
+    data.format = PixelFormat::RGB24;
+    data.buffer = std::make_shared<std::vector<uint8_t>>(px);
+
+    mviewer::ImageFrame frame;
+    frame.setPixels(data);
+
+    std::vector<uint16_t> buf(2 * 2 * 3);
+    // pixel (0,0) = (100,200,300); (1,0) = (1000,2000,3000); (0,1) = (11,22,33)
+    buf[0] = 100;
+    buf[1] = 200;
+    buf[2] = 300;
+    buf[3] = 1000;
+    buf[4] = 2000;
+    buf[5] = 3000;
+    buf[6] = 11;
+    buf[7] = 22;
+    buf[8] = 33;
+    frame.setRaw16(std::make_shared<std::vector<uint16_t>>(buf), 65535, 3);
+    CHECK(frame.hasRaw16());
+    CHECK(frame.raw16Max() == 65535);
+    CHECK(frame.raw16Channels() == 3);
+
+    uint16_t r = 0, g = 0, b = 0;
+    CHECK(frame.raw16At(0, 0, r, g, b));
+    CHECK(r == 100 && g == 200 && b == 300);
+    CHECK(frame.raw16At(1, 0, r, g, b));
+    CHECK(r == 1000 && g == 2000 && b == 3000);
+    CHECK(frame.raw16At(0, 1, r, g, b));
+    CHECK(r == 11 && g == 22 && b == 33);
+
+    // out of range must be rejected
+    CHECK(!frame.raw16At(5, 5, r, g, b));
+    CHECK(!frame.raw16At(-1, 0, r, g, b));
+
+    // grayscale 16-bit (channels=1) duplicates the single sample to R/G/B
+    std::vector<uint16_t> gb(2 * 2);
+    gb[0] = 4242;
+    frame.setRaw16(std::make_shared<std::vector<uint16_t>>(gb), 65535, 1);
+    CHECK(frame.raw16Channels() == 1);
+    CHECK(frame.raw16At(0, 0, r, g, b));
+    CHECK(r == 4242 && g == 4242 && b == 4242);
+}
+
 int main()
 {
     test_color_spaces();
     test_neighborhood();
+    test_raw16At();
     if (g_failures == 0)
     {
         std::printf("PASS: pixelinspector_tests (%d checks)\n", 0);

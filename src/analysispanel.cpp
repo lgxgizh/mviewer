@@ -520,7 +520,8 @@ void AnalysisPanel::setRegionStats(const QString &text)
     m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("Region Stats")).arg(text));
 }
 
-void AnalysisPanel::showPixel(int x, int y, int leftR, int leftG, int leftB, bool valid)
+void AnalysisPanel::showPixel(int x, int y, int leftR, int leftG, int leftB, int leftA, int r16,
+                              int g16, int b16, int rawKind, bool valid)
 {
     if (m_frozen)
         return; // keep the last inspected pixel frozen
@@ -529,6 +530,12 @@ void AnalysisPanel::showPixel(int x, int y, int leftR, int leftG, int leftB, boo
     m_pR = leftR;
     m_pG = leftG;
     m_pB = leftB;
+    m_pA = leftA;
+    m_r16 = r16;
+    m_g16 = g16;
+    m_b16 = b16;
+    m_rawKind = rawKind;
+    m_rawMax = (rawKind == 2) ? 65535 : 0;
     m_pValid = valid;
     // P0/P1 #⑥: draw a crosshair on the panel image at the inspected pixel so an
     // ISP engineer can screenshot the exact inspection point (Pixel Inspector).
@@ -577,6 +584,30 @@ void AnalysisPanel::updateInspectorPage()
                    .arg(px.c1, 0, 'f', 1)
                    .arg(px.c2, 0, 'f', 1)
                    .arg(px.c3, 0, 'f', 1);
+    }
+
+    // P0-2/PixelInspector: original high-bit-depth readout.
+    txt += QString("<br><b>原始采样</b> ");
+    if (m_rawKind == 2)
+    {
+        const double n = m_rawMax > 0 ? static_cast<double>(m_rawMax) : 65535.0;
+        txt += QString("16-bit R=%1 G=%2 B=%3 (0..%4)<br>")
+                   .arg(m_r16)
+                   .arg(m_g16)
+                   .arg(m_b16)
+                   .arg(m_rawMax);
+        txt += QString("归一化 R=%1 G=%2 B=%3")
+                   .arg(m_r16 / n, 0, 'f', 4)
+                   .arg(m_g16 / n, 0, 'f', 4)
+                   .arg(m_b16 / n, 0, 'f', 4);
+    }
+    else if (m_rawKind == 1)
+    {
+        txt += QString("RAW 预览 (demosaic 8-bit)，无线性 16-bit 采样");
+    }
+    else
+    {
+        txt += QString("8-bit 源 (无高位深)");
     }
 
     // NxN neighborhood luminance statistics over the left image (real pixels,

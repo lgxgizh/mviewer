@@ -21,6 +21,21 @@ All notable changes to this project are documented here. The format is based on
   发布 `hovered`，悬停即统一到同一真源。
 - 新增单测覆盖 focused / hovered / compared 三态及 `clear()` 行为。
 
+### Added — Pixel Inspector 16-bit / RAW 原始采样读出（评审 ★★★★★ 最想做）
+
+- **真实高比特深读出**：解码管线把一切归一化到 8 位，对 16 位源（16-bit PNG/TIFF/
+  RGBX64）`ImageRepository::load` 在加载处并行捕获原始 16 位整数样本，存入
+  `ImageFrame`（新增 `hasRaw16` / `raw16At` / `raw16Max` / `raw16Channels`），
+  display 路径完全不动。经 `CacheManager` 持久化（`putRaw16` / `getRaw16`，独立对象
+  存储、上限 2000 项），重复打开仍保留高比特深读出。
+- **单图视图**：`ImageViewer` 取色处直接读 `m_frame->raw16At` 经 `pixelInfo` 传出；
+  `AnalysisPanel` 新增"原始采样"块，显示 `16-bit R/G/B (0..65535)` 与归一化值，状态栏
+  同步展示 16bit。
+- **对比视图**：`CompareWorkspace` 像素检视表新增 `16bit` 列，逐图显示原始 16 位值。
+- **RAW 诚实标注**：RAW 文件当前经预览 JPEG demosaic 为 8 位，无线性 16 位缓冲；
+  Inspector 如实标注 "RAW 预览 (demosaic 8-bit)，无线性 16-bit 采样"，不伪造数值。
+- 单测覆盖 `ImageFrame::raw16At`（RGB/灰度/越界），并入 `pixelinspector_tests`。
+
 ### Added — M23 专业分析能力（评审 P0：Pixel Inspector / Diff Engine / ROI+Histogram）
 
 - **Pixel Inspector Pro（像素检视升级）**：Compare 侧栏的像素检视表新增

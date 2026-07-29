@@ -2,6 +2,8 @@
 
 #include "core/perf/MemoryTracker.h"
 
+#include <cstdint>
+
 #include <QFileInfo>
 #include <algorithm>
 #include <cstring>
@@ -16,6 +18,32 @@ inline int toLum(uint8_t r, uint8_t g, uint8_t b)
 }
 
 } // namespace
+
+bool ImageFrame::raw16At(int x, int y, uint16_t &r, uint16_t &g, uint16_t &b) const
+{
+    if (!m_raw16 || m_raw16->empty())
+        return false;
+    const int w = m_pixels.width;
+    const int h = m_pixels.height;
+    if (x < 0 || y < 0 || x >= w || y >= h)
+        return false;
+    const int idx = (y * w + x) * m_rawCh;
+    const auto &buf = *m_raw16;
+    if (static_cast<size_t>(idx) + static_cast<size_t>(m_rawCh) > buf.size())
+        return false;
+    if (m_rawCh >= 3)
+    {
+        r = buf[idx];
+        g = buf[idx + 1];
+        b = buf[idx + 2];
+    }
+    else
+    {
+        const auto v = buf[idx];
+        r = g = b = v;
+    }
+    return true;
+}
 
 ImageFrame::ImageFrame()
 {

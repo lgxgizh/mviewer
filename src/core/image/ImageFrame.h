@@ -188,6 +188,34 @@ class ImageFrame
         b = m_histogram.bMean;
     }
 
+    // ─── Raw 16-bit samples (Pixel Inspector high-bit-depth readout) ───────
+    // Some sources (16-bit PNG/TIFF, RGBX64) carry >8 bits/channel. The display
+    // buffer is always 8-bit; when the source has more precision we keep the
+    // original 16-bit integer samples so the Pixel Inspector can show the true
+    // value. Grayscale 16-bit is stored with channels=1 (sample duplicated to
+    // R/G/B by raw16At).
+    bool hasRaw16() const
+    {
+        return m_raw16 && !m_raw16->empty();
+    }
+    uint16_t raw16Max() const
+    {
+        return m_rawMax;
+    }
+    int raw16Channels() const
+    {
+        return m_rawCh;
+    }
+    void setRaw16(std::shared_ptr<std::vector<uint16_t>> buf, uint16_t maxSample, int channels)
+    {
+        m_raw16 = std::move(buf);
+        m_rawMax = maxSample;
+        m_rawCh = channels;
+    }
+    // Read the original 16-bit sample at (x,y). Returns false if out of range or
+    // no 16-bit buffer is present. On success r/g/b are in 0..raw16Max().
+    bool raw16At(int x, int y, uint16_t &r, uint16_t &g, uint16_t &b) const;
+
   private:
     mviewer::domain::ImageMetadata m_meta;
     ImageData m_pixels;
@@ -201,4 +229,11 @@ class ImageFrame
     std::vector<std::string> m_tags;
     std::vector<AnalysisCacheEntry> m_analysisCache;
     std::vector<RenderCacheEntry> m_renderCache;
+
+    // Original 16-bit integer samples (when source bit depth > 8). Nullptr for
+    // 8-bit / RAW-preview sources. Kept alongside the 8-bit display buffer so
+    // Pixel Inspector can show the true high-bit-depth value.
+    std::shared_ptr<std::vector<uint16_t>> m_raw16;
+    uint16_t m_rawMax = 0;
+    int m_rawCh = 0;
 };

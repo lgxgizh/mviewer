@@ -34,6 +34,61 @@ mviewer::domain::ImageMetadata ImageRepository::makeMeta(const std::string &file
     return mviewer::core::MetadataReader::read(filePath);
 }
 
+namespace
+{
+// Read the original 16-bit integer samples for a high-bit-depth source.
+// Returns nullptr when the source is not 16-bit integer (e.g. 8-bit, float, or
+// RAW preview — RAW is demosaiced to 8-bit and has no linear 16-bit buffer here).
+// Only the cheap header probe (imageFormat) runs for non-16-bit sources; the
+// full decode (read) only happens for genuine 16-bit integer formats.
+// Grayscale 16-bit is unpacked as a single channel; color 16-bit as R,G,B.
+std::shared_ptr<std::vector<uint16_t>> captureRaw16(const std::string &path)
+{
+    QImageReader reader(QString::fromStdString(path));
+    const QImage::Format fmt = reader.imageFormat();
+    const bool is16 = (fmt == QImage::Format_RGBX64 || fmt == QImage::Format_RGBA64 ||
+                       fmt == QImage::Format_Grayscale16);
+    if (!is16)
+        return nullptr;
+    QImage img = reader.read();
+    if (img.isNull())
+        return nullptr;
+    if (img.format() == QImage::Format_Grayscale16)
+    {
+        const int w = img.width();
+        const int h = img.height();
+        auto buf = std::make_shared<std::vector<uint16_t>>();
+        buf->reserve(static_cast<size_t>(w) * static_cast<size_t>(h));
+        for (int y = 0; y < h; ++y)
+        {
+            const auto *row = reinterpret_cast<const uint16_t *>(img.constScanLine(y));
+            for (int x = 0; x < w; ++x)
+                buf->push_back(row[x]);
+        }
+        return buf;
+    }
+    const QImage src = img.convertToFormat(QImage::Format_RGBX64);
+    if (src.isNull())
+        return nullptr;
+    const int w = src.width();
+    const int h = src.height();
+    auto buf = std::make_shared<std::vector<uint16_t>>();
+    buf->reserve(static_cast<size_t>(w) * static_cast<size_t>(h) * 3);
+    for (int y = 0; y < h; ++y)
+    {
+        const auto *row = reinterpret_cast<const uint16_t *>(src.constScanLine(y));
+        for (int x = 0; x < w; ++x)
+        {
+            const int p = x * 4; // R,G,B + unused alpha in RGBX64
+            buf->push_back(row[p]);
+            buf->push_back(row[p + 1]);
+            buf->push_back(row[p + 2]);
+        }
+    }
+    return buf;
+}
+} // namespace
+
 ImageRepository::Result ImageRepository::load(const std::string &filePath, const LoadOptions &opts)
 {
     MV_TRACE_SCOPED("ImageRepository::load");
@@ -54,6 +109,14 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
         mviewer::domain::ImageMetadata m;
         if (CacheManager::instance().getMetadata(key, m))
             frame->setMetadata(m);
+        // P0-2/PixelInspector: restore a previously captured 16-bit sample buffer.
+        {
+            std::shared_ptr<std::vector<uint16_t>> rb;
+            int rbCh = 0;
+            uint16_t rbMax = 0;
+            if (CacheManager::instance().getRaw16(key, rb, rbCh, rbMax) && rb)
+                frame->setRaw16(rb, rbMax, rbCh);
+        }
         frame->setDecodeState(DecodeState::Decoded);
         frame->setCacheState(CacheState::Memory);
         CacheManager::instance().putMemory(CacheLevel::FullImage, key, img);
@@ -118,6 +181,28 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
             m.orientation = decodeMeta.orientation;
         m.hasIccProfile = decodeMeta.hasIccProfile;
         frame->setMetadata(m);
+    }
+    // P0-2/PixelInspector: restore a previously captured 16-bit sample buffer
+    // (so re-opening a 16-bit image keeps the high-bit-depth readout), then capture
+    // it for high-bit-depth sources (16-bit PNG/TIFF/RGBX64). RAW files are
+    // preview-only (8-bit demosaiced) and intentionally excluded — there is no
+    // linear 16-bit buffer available in the current pipeline.
+    {
+        std::shared_ptr<std::vector<uint16_t>> rb;
+        int rbCh = 0;
+        uint16_t rbMax = 0;
+        if (CacheManager::instance().getRaw16(key, rb, rbCh, rbMax) && rb)
+            frame->setRaw16(rb, rbMax, rbCh);
+    }
+    if (frame->metadata().format != "RAW" && !frame->hasRaw16())
+    {
+        auto raw = captureRaw16(filePath);
+        if (raw)
+        {
+            const int ch = (frame->metadata().channels == 1) ? 1 : 3;
+            frame->setRaw16(raw, 65535, ch);
+            CacheManager::instance().putRaw16(key, raw, ch, 65535);
+        }
     }
     if (opts.generateHistogram)
         frame->computeHistogram();

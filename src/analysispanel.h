@@ -92,7 +92,8 @@ class AnalysisPanel : public QWidget
     // `left*` are the RGB read directly from the ImageFrame (passed by the
     // viewer). When a second image is loaded, `right*` come from the compare
     // image so the panel can show Left RGB / Right RGB / Delta / Difference.
-    void showPixel(int x, int y, int leftR, int leftG, int leftB, bool valid);
+    void showPixel(int x, int y, int leftR, int leftG, int leftB, int leftA, int r16, int g16,
+                   int b16, int rawKind, bool valid);
 
     // Set the left image as an ImageFrame so ROI analysis routes through the
     // AnalyzerRegistry (Selection-based), not the legacy QImage path.
@@ -176,6 +177,11 @@ class AnalysisPanel : public QWidget
     int m_pR = 0, m_pG = 0, m_pB = 0;
     bool m_pValid = false;
     bool m_frozen = false; // Freeze: keep showing the last inspected pixel
+    // P0-2/PixelInspector: original high-bit-depth sample (from ImageViewer).
+    int m_pA = 0;
+    int m_r16 = 0, m_g16 = 0, m_b16 = 0;
+    uint16_t m_rawMax = 0;
+    int m_rawKind = 0; // 0=8-bit, 1=RAW preview, 2=true 16-bit
 
     // M15 P0 #2: Pixel Inspector Pro — selected color space + NxN kernel.
     mviewer::core::ColorSpace m_colorSpace = mviewer::core::ColorSpace::RGB;

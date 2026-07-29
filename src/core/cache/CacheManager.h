@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <functional>
 #include <list>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -82,6 +83,13 @@ class CacheManager
     bool getMetadata(const std::string &key, mviewer::domain::ImageMetadata &out) const;
     bool hasMetadata(const std::string &key) const;
 
+    // 原始 16-bit 采样缓冲缓存（Pixel Inspector 高比特深读取）。仅在源位深>8 时
+    // 存在，独立于像素池，单独上限保护内存。
+    void putRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> buf, int channels,
+                  uint16_t maxSample);
+    bool getRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> &out,
+                  int &channels, uint16_t &maxSample) const;
+
     // 管理
     void clear();
     void clearMemory();
@@ -117,4 +125,16 @@ class CacheManager
     std::unordered_map<std::string, mviewer::domain::ImageMetadata> m_metaStore;
     std::list<std::string> m_metaOrder;
     static constexpr size_t kMetaMaxEntries = 50000;
+
+    // 原始 16-bit 采样缓冲对象存储（独立于像素池）。
+    mutable std::mutex m_raw16Mutex;
+    struct Raw16Entry
+    {
+        std::shared_ptr<std::vector<uint16_t>> buf;
+        int channels = 0;
+        uint16_t maxSample = 0;
+    };
+    std::unordered_map<std::string, Raw16Entry> m_raw16Store;
+    std::list<std::string> m_raw16Order;
+    static constexpr size_t kRaw16MaxEntries = 2000;
 };

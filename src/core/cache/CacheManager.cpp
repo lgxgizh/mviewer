@@ -192,6 +192,44 @@ bool CacheManager::hasMetadata(const std::string &key) const
     return m_metaStore.find(key) != m_metaStore.end();
 }
 
+void CacheManager::putRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> buf,
+                            int channels, uint16_t maxSample)
+{
+    if (!buf || buf->empty())
+        return;
+    std::lock_guard<std::mutex> lock(m_raw16Mutex);
+    auto it = m_raw16Store.find(key);
+    if (it != m_raw16Store.end())
+    {
+        m_raw16Order.remove(key);
+    }
+    else if (m_raw16Store.size() >= kRaw16MaxEntries)
+    {
+        const std::string victim = m_raw16Order.back();
+        m_raw16Order.pop_back();
+        m_raw16Store.erase(victim);
+    }
+    Raw16Entry e;
+    e.buf = buf;
+    e.channels = channels;
+    e.maxSample = maxSample;
+    m_raw16Store[key] = std::move(e);
+    m_raw16Order.push_front(key);
+}
+
+bool CacheManager::getRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> &out,
+                            int &channels, uint16_t &maxSample) const
+{
+    std::lock_guard<std::mutex> lock(m_raw16Mutex);
+    auto it = m_raw16Store.find(key);
+    if (it == m_raw16Store.end())
+        return false;
+    out = it->second.buf;
+    channels = it->second.channels;
+    maxSample = it->second.maxSample;
+    return true;
+}
+
 void CacheManager::invalidate(const std::string &key)
 {
     ImageCache::instance().remove(ImageCache::Metadata, key);
