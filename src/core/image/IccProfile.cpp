@@ -174,12 +174,14 @@ IccProfile parseIccProfile(const unsigned char *data, size_t size)
         return info;
     info.valid = true;
 
-    // ICC version is BCD-encoded: byte8 = major, byte9 = minor (BCD),
-    // byte10 = bugfix tens (BCD), byte11 = bugfix ones (BCD).
-    const uint32_t minor = (uint32_t(data[9] >> 4) * 10) + (data[9] & 0x0F);
+    // ICC version: byte8 = major (binary); byte9 = minor in the BCD high nibble;
+    // byte10 = bugfix tens digit; byte11 = bugfix ones digit. The minor byte is
+    // BCD (e.g. 0x10 means minor 1), so only the high nibble is the minor number.
+    const uint32_t major = data[8];
+    const uint32_t minor = data[9] >> 4;
     const uint32_t bugfix = uint32_t(data[10]) * 10 + uint32_t(data[11]);
     char buf[32];
-    std::snprintf(buf, sizeof(buf), "%u.%u.%u", unsigned(data[8]), minor, bugfix);
+    std::snprintf(buf, sizeof(buf), "%u.%u.%u", major, minor, bugfix);
     info.version = buf;
     info.deviceClass = deviceClassText(sig4(data + 12));
     info.colorSpace = colorSpaceText(sig4(data + 16));

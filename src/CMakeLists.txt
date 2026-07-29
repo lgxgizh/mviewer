@@ -639,6 +639,22 @@ target_compile_definitions(test_metadatamodel PRIVATE MVIEWER_SOURCE_DIR="${CMAK
 
 add_test(NAME metadatamodel_tests COMMAND test_metadatamodel)
 
+# ─── ICC profile parser regression (parseIccProfile robustness + BCD version) ──
+add_executable(test_iccprofile
+    core/test_iccprofile.cpp
+)
+
+target_link_libraries(test_iccprofile
+    PRIVATE
+        Qt6::Widgets
+        mviewer_core
+)
+
+target_compile_features(test_iccprofile PRIVATE cxx_std_20)
+target_include_directories(test_iccprofile PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(NAME iccprofile_tests COMMAND test_iccprofile)
+
 # ─── M15 Sprint 2-1 Search (global index + query engine) ─────────────────────
 add_executable(search_tests
     test_search.cpp
