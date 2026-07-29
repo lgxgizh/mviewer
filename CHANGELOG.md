@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — M23 专业分析能力（评审 P0：Pixel Inspector / Diff Engine / ROI+Histogram）
+
+- **Pixel Inspector Pro（像素检视升级）**：Compare 侧栏的像素检视表新增
+  色彩空间选择（RGB / HEX / HSV / Lab / YUV / YCbCr / XYZ），表头随空间切换，
+  鼠标移动实时刷新；新增坐标读出 `(x, y)` 与邻域统计
+  （1×1/3×3/5×5/7×7 核，基准格亮度 μ/σ/min/max + RGB 均值）。核心数学复用
+  `core/analysis/PixelInspector`（已有单测），UI 首次接入。
+- **Checkerboard 棋盘格对比模式**：继 Blink / Side-by-side / Split / Swipe /
+  Overlay / Diff-Heatmap 之后补齐评审清单的最后一种对比模式。A/B 图像按可调
+  块大小（16–256px）交替渲染，共享同步缩放/平移变换，块缝即错位；快捷键 `K`，
+  与其他画布模式互斥，随导航状态（NavState）保存恢复。
+- **Diff 统计（DifferenceEngine::computeStats）**：差异指标面板在 PSNR/SSIM
+  之外新增量化差异统计——差异像素占比、灰度差均值、峰值（阈值感知），并在存在
+  ROI 时同时给出 ROI 内统计。核心为 Qt-free 静态函数 + 单元测试。
+- **ROI + Histogram 联动**：`computeHistogram` 新增 ROI 重载（矩形裁剪）与
+  Rec.601 亮度通道；直方图区新增 R/G/B/亮度通道开关、Log 纵轴与 "ROI" 开关。
+  勾选 ROI 后框选区域即时重算直方图（标题显示 ROI 几何），拖动新 ROI 自动刷新，
+  差异指标同步更新。
+
+### Fixed — M23
+
+- **CompareSession `uniformScale` 反序列化缺失**：`serializeCompareSession`
+  已写入 H5 统一缩放字段，但解析循环缺少对应分支，未知 key 走字符串跳过导致
+  `workspace_persist_tests` / `product_workflow_gate` 解析崩溃。补上
+  `uniformScale` 解析分支。
+- **`export_job_tests` 在本地环境稳定失败**：测试进程未创建 `QCoreApplication`，
+  Qt 无法以 exe 目录解析 imageformats 插件（qjpeg），JPEG 编码静默失败。
+  测试入口补建 app 对象。
+- **ADR 014 行数护栏回归**：`compareworkspace.cpp` 802 → 686 行。侧栏分析面板
+  迁入新职责 TU `compareworkspace_analysis.cpp`，`rebuildCells()` 迁入
+  `compareworkspace_render.cpp`。
+
 ### Fixed — M17 Installer / Release Engineering (产品力 #1：装得上)
 
 - **Installer now actually builds end-to-end.** `installer/MViewer.nsi` had no
@@ -28,6 +60,15 @@ All notable changes to this project are documented here. The format is based on
   undefined `${SHCNE_ASSOCCHANGED}` in the `SHChangeNotify` call (makensis
   warned and ignored it); replaced with the literal `0x08000000` so the
   Open-With / `.mviewer` associations take effect right after install.
+- **Dev builds now launch without DLL errors.** Running `build_msvc/bin/MViewer.exe`
+  directly used to fail with "missing DLL" (`0xc0000135`) because Qt + MSVC CRT were
+  never deployed to the build output. Now `src/CMakeLists.txt` runs `windeployqt` as a
+  `POST_BUILD` step on the `MViewer` target (Qt6 DLLs + `platforms`/`imageformats`/
+  `sqldrivers` plugins, incl. `Qt6Sql.dll` for the SQLite DiskCache) and `build.ps1`'s
+  new `Deploy-Runtime` copies the MSVC CRT (`vcruntime140`/`msvcp140`/...) into `bin/`.
+  The exe is now self-contained for every build entry point (`build.ps1`, IDE,
+  CMakePresets), and the test executables no longer need a hand-set PATH to avoid
+  `0xc0000135`.
 
 ### Fixed — M13.3 Performance budget as a real CI hard gate (产品力 #2：稳得住)
 
@@ -97,6 +138,12 @@ All notable changes to this project are documented here. The format is based on
   复用与普通模式完全一致的引擎同步变换（scale+offset，受 syncZoom/syncDrag 开关控制）
   投影到各自半区并裁剪；Overlay 模式在混合图像之上继续绘制 Diff 叠加层。`RawImageView`
   新增 `overlay()` / `overlayOpacity()` 供对比模式复用。
+- **不同分辨率图像无法 1:1 像素对齐 (H5).** `fitAll` 仅在「同步缩放」开启时才用各窗
+  最小 scale 统一倍率；若该开关关闭，每窗独立 fit 到自身单元格，导致不同分辨率图像
+  各自缩放、失去跨窗像素对应关系（算法工程师做分辨率不一致对比时最易踩坑）。现新增
+  「统一像素倍率」复选框：勾选后 `fitAll` 强制所有窗格使用同一（最小）倍率并左上角对齐，
+  与「同步缩放」相互独立；该状态写入 `CompareSession` 并随会话存档 / 恢复（序列化
+  `uniformScale` 字段），连续导航与崩溃恢复后保持一致。
 
 ### Changed — M23 Code Convergence & Quality Gates (P0)
 

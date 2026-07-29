@@ -94,6 +94,61 @@ ImageData DifferenceEngine::applyThreshold(const ImageData &gray, uint8_t thresh
     return out;
 }
 
+DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &grayDiff,
+                                                           uint8_t threshold)
+{
+    if (grayDiff.isNull())
+        return DiffStats{};
+    return computeStats(grayDiff, threshold, 0, 0, grayDiff.width, grayDiff.height);
+}
+
+DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &grayDiff,
+                                                           uint8_t threshold, int roiX, int roiY,
+                                                           int roiW, int roiH)
+{
+    DiffStats s;
+    if (grayDiff.isNull() || roiW <= 0 || roiH <= 0)
+        return s;
+
+    // Clip the ROI to the image bounds.
+    int x0 = std::max(0, roiX);
+    int y0 = std::max(0, roiY);
+    int x1 = std::min(grayDiff.width, roiX + roiW);
+    int y1 = std::min(grayDiff.height, roiY + roiH);
+    if (x0 >= x1 || y0 >= y1)
+        return s;
+
+    const int cpp = grayDiff.channelsPerPixel();
+    const int ro = channelOffset(grayDiff.format, 0);
+    // A "different" pixel must exceed the threshold and be non-zero.
+    const int minDiff = std::max<int>(threshold, 1);
+
+    long long sum = 0;
+    long long count = 0;
+    long long diffCount = 0;
+    int maxV = 0;
+    for (int y = y0; y < y1; ++y)
+    {
+        const uint8_t *src = grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
+        for (int x = x0; x < x1; ++x)
+        {
+            const int v = src[x * cpp + ro];
+            sum += v;
+            ++count;
+            if (v >= minDiff)
+                ++diffCount;
+            if (v > maxV)
+                maxV = v;
+        }
+    }
+    s.totalPixels = count;
+    s.diffPixels = diffCount;
+    s.diffRatio = count > 0 ? static_cast<double>(diffCount) / static_cast<double>(count) : 0.0;
+    s.meanDiff = count > 0 ? static_cast<double>(sum) / static_cast<double>(count) : 0.0;
+    s.maxDiff = maxV;
+    return s;
+}
+
 ImageData DifferenceEngine::heatMap(const ImageData &gray)
 {
     if (gray.isNull())

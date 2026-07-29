@@ -78,6 +78,49 @@ int main()
     Histogram hb = computeHistogram(bimg);
     CHECK(hb.r[10] == 1 && hb.g[20] == 1 && hb.b[30] == 1, "BGR channel swap correct");
 
+    // M23: luma channel (Rec.601) is computed alongside RGB.
+    {
+        std::vector<uint8_t> wp = {255, 255, 255};
+        ImageData wimg = makeRgb(1, 1, wp);
+        Histogram hw = computeHistogram(wimg);
+        CHECK(hw.luma.size() == 256, "luma has 256 bins");
+        CHECK(hw.luma[255] == 1, "white pixel -> luma 255");
+        long ls = 0;
+        for (long v : hw.luma)
+            ls += v;
+        CHECK(ls == hw.total, "luma sums to total");
+    }
+
+    // M23: ROI histogram — only pixels inside the ROI are counted.
+    {
+        // 4x1 image: two dark pixels then two bright pixels.
+        const std::vector<uint8_t> rp = {0, 0, 0, 0, 0, 0, 200, 200, 200, 200, 200, 200};
+        ImageData rimg = makeRgb(4, 1, rp);
+
+        Histogram left = computeHistogram(rimg, 0, 0, 2, 1);
+        CHECK(left.total == 2, "ROI left total = 2");
+        CHECK(left.r[0] == 2 && left.r[200] == 0, "ROI left counts only dark pixels");
+
+        Histogram right = computeHistogram(rimg, 2, 0, 2, 1);
+        CHECK(right.total == 2 && right.r[200] == 2, "ROI right counts only bright pixels");
+
+        // ROI partially outside the image is clipped.
+        Histogram clip = computeHistogram(rimg, 3, 0, 10, 10);
+        CHECK(clip.total == 1 && clip.r[200] == 1, "ROI clipped to bounds");
+
+        // Degenerate and fully-outside ROIs yield empty histograms.
+        Histogram deg = computeHistogram(rimg, 0, 0, 0, 0);
+        CHECK(deg.total == 0, "degenerate ROI total = 0");
+        Histogram off = computeHistogram(rimg, 10, 10, 2, 2);
+        CHECK(off.total == 0, "outside ROI total = 0");
+
+        // Full-rect ROI equals the whole-image histogram.
+        Histogram full = computeHistogram(rimg, 0, 0, 4, 1);
+        Histogram whole = computeHistogram(rimg);
+        CHECK(full.total == whole.total && full.r == whole.r && full.luma == whole.luma,
+              "full ROI == whole image");
+    }
+
     printf("\nhistogram_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

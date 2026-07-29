@@ -338,6 +338,13 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
+    // M23: K toggles checkerboard compare (棋盘格).
+    if (plain && key == Qt::Key_K && m_checkerChk && m_checkerChk->isEnabled())
+    {
+        m_checkerChk->setChecked(!m_checkerChk->isChecked());
+        event->accept();
+        return;
+    }
     if (plain && key == Qt::Key_Tab && m_overlayChk && m_overlayChk->isEnabled())
     {
         // P1: Tab toggles overlay (in addition to O) per review spec.

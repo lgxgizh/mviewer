@@ -69,6 +69,10 @@ struct CompareSession
     bool sidePanelVisible = false; // 检视面板开关
     int layoutIndex = 0;           // 布局下拉框选中项 (0=自动,1=单列,2=2列,3=3列,4=4列,5=一行)
 
+    // H5: "统一像素倍率" — force every pane to the same zoom so images of
+    // different resolutions line up 1:1 in pixel scale (not fitted independently).
+    bool uniformScale = false;
+
     int imageCount() const noexcept
     {
         return static_cast<int>(imageIds.size());

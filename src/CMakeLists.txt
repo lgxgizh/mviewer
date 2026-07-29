@@ -137,6 +137,7 @@ add_library(mviewer_ui STATIC
     thumbnailcache.cpp
     compareworkspace.cpp
     compareworkspace_render.cpp
+    compareworkspace_analysis.cpp
     compareworkspace_editpanel.cpp
     compareworkspace_interact.cpp
     compareworkspace_nav.cpp
@@ -198,6 +199,51 @@ target_include_directories(MViewer
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}
 )
+
+# ── Auto-deploy Qt runtime next to the executable (windeployqt) ───────────────
+# Fixes the recurring "missing DLL" (0xc0000135) errors when launching
+# build_msvc/bin/MViewer.exe directly. windeployqt copies exactly the Qt6 DLLs +
+# platform/imageformat/sqldrivers plugins the binary imports, so the exe becomes
+# self-contained (no Qt on PATH required). Runs on every build and is
+# build-frontend agnostic (build.ps1, CMakePresets, IDE). The MSVC CRT is deployed
+# separately by build.ps1 (it knows the VS redist location and is more reliable).
+if(WIN32 AND TARGET MViewer AND Qt6_FOUND)
+    get_filename_component(_qt_bin_dir "${Qt6_DIR}/../../../bin" ABSOLUTE)
+    find_program(WINDEPLOYQT_EXE NAMES windeployqt HINTS "${_qt_bin_dir}")
+    if(WINDEPLOYQT_EXE)
+        # Deploy against mviewer_core.dll too: the shared core links Qt6::Sql
+        # (SQLite DiskCache) which MViewer.exe does not import directly, so
+        # windeployqt on MViewer.exe alone can miss Qt6Sql.dll.
+        add_custom_command(TARGET MViewer POST_BUILD
+            COMMAND "${WINDEPLOYQT_EXE}" --no-translations --no-compiler-runtime "$<TARGET_FILE:MViewer>"
+            COMMAND "${WINDEPLOYQT_EXE}" --no-translations --no-compiler-runtime "$<TARGET_FILE:mviewer_core>"
+            COMMENT "Deploying Qt runtime via windeployqt"
+            VERBATIM)
+        # Safety net: ensure Qt6Sql.dll ships (DiskCache uses SQLite at runtime).
+        if(EXISTS "${_qt_bin_dir}/Qt6Sql.dll")
+            add_custom_command(TARGET MViewer POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_qt_bin_dir}/Qt6Sql.dll"
+                        "$<TARGET_FILE_DIR:mviewer_core>"
+                VERBATIM)
+        endif()
+        # Safety net: headless tests run with QT_QPA_PLATFORM=offscreen. Once
+        # windeployqt anchors Qt's prefix to bin/, the offscreen platform plugin
+        # must also live in bin/platforms or every headless GUI test aborts with
+        # "no Qt platform plugin could be initialized" (0xc0000409).
+        get_filename_component(_qt_plugin_dir "${_qt_bin_dir}/../plugins" ABSOLUTE)
+        if(EXISTS "${_qt_plugin_dir}/platforms/qoffscreen.dll")
+            add_custom_command(TARGET MViewer POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                        "${_qt_plugin_dir}/platforms/qoffscreen.dll"
+                        "$<TARGET_FILE_DIR:MViewer>/platforms"
+                VERBATIM)
+        endif()
+    else()
+        message(WARNING "windeployqt not found (expected at ${_qt_bin_dir}); "
+                        "MViewer.exe may fail to launch without Qt on PATH")
+    endif()
+endif()
 
 add_executable(core_tests
     core/test_compare.cpp

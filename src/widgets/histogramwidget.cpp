@@ -5,6 +5,8 @@
 #include "histogramwidget.h"
 
 #include <QPainter>
+#include <algorithm>
+#include <cmath>
 
 HistogramWidget::HistogramWidget(QWidget *parent) : QWidget(parent)
 {
@@ -23,6 +25,20 @@ void HistogramWidget::clear()
     update();
 }
 
+void HistogramWidget::setChannelVisible(int channel, bool on)
+{
+    if (channel < 0 || channel > 3)
+        return;
+    m_chanVisible[channel] = on;
+    update();
+}
+
+void HistogramWidget::setLogScale(bool on)
+{
+    m_logScale = on;
+    update();
+}
+
 void HistogramWidget::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
@@ -33,35 +49,64 @@ void HistogramWidget::paintEvent(QPaintEvent *)
     if (m_hists.empty() || w < 2 || h < 2)
         return;
 
-    // Shared scale across every histogram so channels/images are comparable.
-    long maxVal = 1;
-    for (const auto &hist : m_hists)
-        for (int c = 0; c < 3; ++c)
+    // Channel accessor: 0=R 1=G 2=B 3=Luma (luma may be absent on old data).
+    auto channelOf = [](const mviewer::core::Histogram &hist, int c) -> const std::vector<long> *
+    {
+        switch (c)
         {
-            const auto &ch = c == 0 ? hist.r : (c == 1 ? hist.g : hist.b);
-            for (long v : ch)
-                if (v > maxVal)
-                    maxVal = v;
+        case 0:
+            return &hist.r;
+        case 1:
+            return &hist.g;
+        case 2:
+            return &hist.b;
+        default:
+            return hist.luma.empty() ? nullptr : &hist.luma;
+        }
+    };
+
+    // Y mapping: linear or log1p (log keeps small bins visible next to peaks).
+    auto mapVal = [this](long v) -> double
+    { return m_logScale ? std::log1p(static_cast<double>(v)) : static_cast<double>(v); };
+
+    // Shared scale across every histogram so channels/images are comparable.
+    double maxVal = 1.0;
+    for (const auto &hist : m_hists)
+        for (int c = 0; c < 4; ++c)
+        {
+            if (!m_chanVisible[c])
+                continue;
+            const auto *ch = channelOf(hist, c);
+            if (!ch)
+                continue;
+            for (long v : *ch)
+                maxVal = std::max(maxVal, mapVal(v));
         }
 
     const int bins = m_hists.front().bins;
     const double dx = static_cast<double>(w) / bins;
     const double dy = static_cast<double>(h - 2) / maxVal;
 
-    // Channel colours: R, G, B. Overlay every image with low alpha fills.
-    const QColor cols[3] = {QColor(255, 70, 70), QColor(70, 220, 90), QColor(80, 140, 255)};
+    // Channel colours: R, G, B, Luma (light gray). Low-alpha overlay fills.
+    const QColor cols[4] = {QColor(255, 70, 70), QColor(70, 220, 90), QColor(80, 140, 255),
+                            QColor(225, 225, 225)};
 
     for (const auto &hist : m_hists)
     {
-        for (int c = 0; c < 3; ++c)
+        for (int c = 0; c < 4; ++c)
         {
-            const auto &ch = c == 0 ? hist.r : (c == 1 ? hist.g : hist.b);
+            if (!m_chanVisible[c])
+                continue;
+            const auto *chPtr = channelOf(hist, c);
+            if (!chPtr)
+                continue;
+            const auto &ch = *chPtr;
             QPolygonF poly;
             poly.append(QPointF(0, h));
             for (int i = 0; i < bins; ++i)
             {
                 const double x = i * dx;
-                const double y = h - 1 - ch[static_cast<size_t>(i)] * dy;
+                const double y = h - 1 - mapVal(ch[static_cast<size_t>(i)]) * dy;
                 poly.append(QPointF(x, y));
             }
             poly.append(QPointF(w, h));
@@ -80,7 +125,7 @@ void HistogramWidget::paintEvent(QPaintEvent *)
             for (int i = 0; i < bins; ++i)
             {
                 const double x = i * dx;
-                const double y = h - 1 - ch[static_cast<size_t>(i)] * dy;
+                const double y = h - 1 - mapVal(ch[static_cast<size_t>(i)]) * dy;
                 linePoly.append(QPointF(x, y));
             }
             p.drawPolyline(linePoly);

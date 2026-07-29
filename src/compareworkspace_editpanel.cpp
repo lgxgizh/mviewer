@@ -349,10 +349,33 @@ void CompareWorkspace::updateMetrics()
     const QString psnrStr = QString::number(psnrVal, 'f', 2) + " dB";
     const QString ssimStr = QString::number(ssimVal, 'f', 4);
 
-    m_metricLabel->setText(tr("PSNR: %1  SSIM: %2\n(Image #%3 vs #%4)")
-                               .arg(psnrStr, ssimStr)
-                               .arg(baseIdx + 1)
-                               .arg(targetIdx + 1));
+    QString text = tr("PSNR: %1  SSIM: %2\n(Image #%3 vs #%4)")
+                       .arg(psnrStr, ssimStr)
+                       .arg(baseIdx + 1)
+                       .arg(targetIdx + 1);
+
+    // M23: quantitative diff statistics (threshold-aware), full image + ROI.
+    const ImageData diff = DifferenceEngine::differenceMap(tgtPx, basePx);
+    if (!diff.isNull())
+    {
+        const auto st = DifferenceEngine::computeStats(diff, m_thresholdValue);
+        text += tr("\n差异: %1%  均值 %2  峰值 %3")
+                    .arg(st.diffRatio * 100.0, 0, 'f', 2)
+                    .arg(st.meanDiff, 0, 'f', 2)
+                    .arg(st.maxDiff);
+        if (!m_lastSelection.isEmpty())
+        {
+            const auto rs = DifferenceEngine::computeStats(
+                diff, m_thresholdValue, m_lastSelection.x, m_lastSelection.y, m_lastSelection.width,
+                m_lastSelection.height);
+            if (rs.totalPixels > 0)
+                text += tr("\nROI差异: %1%  均值 %2  峰值 %3")
+                            .arg(rs.diffRatio * 100.0, 0, 'f', 2)
+                            .arg(rs.meanDiff, 0, 'f', 2)
+                            .arg(rs.maxDiff);
+        }
+    }
+    m_metricLabel->setText(text);
 }
 
 // ─── M16.5: Per-pane histogram toggle ────────────────────────────────────────

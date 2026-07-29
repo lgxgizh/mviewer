@@ -79,6 +79,7 @@ class CompareWorkspace : public QWidget
         s.blinkIntervalMs = m_blinkTimer ? m_blinkTimer->interval() : 150;
         s.sidePanelVisible = m_sideChk ? m_sideChk->isChecked() : false;
         s.layoutIndex = m_layoutCombo ? m_layoutCombo->currentIndex() : 0;
+        s.uniformScale = m_uniformScale; // H5
         return s;
     }
 
@@ -150,8 +151,10 @@ class CompareWorkspace : public QWidget
     CompareEngine m_engine;
     QCheckBox *m_syncZoomChk = nullptr;
     QCheckBox *m_syncDragChk = nullptr;
+    QCheckBox *m_uniformScaleChk = nullptr; // H5: 统一像素倍率
     bool m_syncZoom = true;
     bool m_syncDrag = true;
+    bool m_uniformScale = false; // H5: force all panes to one shared zoom
     QWidget *m_grid = nullptr;
     QGridLayout *m_layout = nullptr;
     QList<QLabel *> m_cellLabels;
@@ -191,6 +194,19 @@ class CompareWorkspace : public QWidget
     void drawOverlayCompare(QPainter &p);
     void drawCellCompare(QPainter &p, int idx, const QRect &rect);
 
+    // M23: checkerboard compare mode (棋盘格) — alternating A/B blocks.
+    QCheckBox *m_checkerChk = nullptr;
+    QSlider *m_checkerSizeSlider = nullptr;
+    QLabel *m_checkerSizeLabel = nullptr;
+    int m_checkerSize = 64; // block edge length in widget pixels
+    void buildCheckerboardControls(QHBoxLayout *lay);
+    void drawCheckerboardCompare(QPainter &p);
+    bool anyCanvasCompareMode() const
+    {
+        return isSplitOrSwipe() || (m_overlayChk && m_overlayChk->isChecked()) ||
+               (m_checkerChk && m_checkerChk->isChecked());
+    }
+
     // A-4.3: Pixel Link — mark corresponding image-space points across cells.
     QCheckBox *m_pixelLinkChk = nullptr;
     QPushButton *m_clearLinksBtn = nullptr;
@@ -226,6 +242,8 @@ class CompareWorkspace : public QWidget
         bool split = false;
         bool swipe = false;
         bool overlay = false;
+        bool checker = false; // M23
+        int checkerSize = 64; // M23
         bool diffHighlight = false;
         bool syncZoom = true;
         bool syncDrag = true;
@@ -259,6 +277,21 @@ class CompareWorkspace : public QWidget
     void onSideToggled(bool on);
     void updateInspector(int x, int y);
     void refreshHistograms();
+
+    // ── M23: analysis panel (Pixel Inspector Pro + ROI histogram) ──
+    // Built in compareworkspace_analysis.cpp per ADR 014 TU split.
+    void buildAnalysisPanel(QVBoxLayout *sideLayout);
+    QComboBox *m_csCombo = nullptr;     // inspector colour space selector
+    QComboBox *m_kernelCombo = nullptr; // neighborhood kernel (1/3/5/7)
+    QLabel *m_coordLabel = nullptr;     // hovered pixel coordinate readout
+    QLabel *m_statsLabel = nullptr;     // neighborhood mean/σ of base cell
+    QLabel *m_histTitle = nullptr;      // histogram section title (ROI aware)
+    QCheckBox *m_histRChk = nullptr;
+    QCheckBox *m_histGChk = nullptr;
+    QCheckBox *m_histBChk = nullptr;
+    QCheckBox *m_histLumaChk = nullptr;
+    QCheckBox *m_histLogChk = nullptr;
+    QCheckBox *m_roiHistChk = nullptr; // limit histogram to the current ROI
 
     // M16.1: cursor-sync crosshair (n/n) + focus-lock / reference pin (n/1).
     QCheckBox *m_crosshairChk = nullptr; // 同步准星开关

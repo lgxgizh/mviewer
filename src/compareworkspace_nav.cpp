@@ -46,6 +46,8 @@ CompareWorkspace::NavState CompareWorkspace::captureNavState() const
     s.split = m_splitChk && m_splitChk->isChecked();
     s.swipe = m_swipeChk && m_swipeChk->isChecked();
     s.overlay = m_overlayChk && m_overlayChk->isChecked();
+    s.checker = m_checkerChk && m_checkerChk->isChecked(); // M23
+    s.checkerSize = m_checkerSize;                         // M23
     s.diffHighlight = m_diffHighlightChk && m_diffHighlightChk->isChecked();
     s.syncZoom = m_syncZoomChk ? m_syncZoomChk->isChecked() : true;
     s.syncDrag = m_syncDragChk ? m_syncDragChk->isChecked() : true;
@@ -80,22 +82,28 @@ void CompareWorkspace::restoreNavState(const NavState &s)
     if (m_layoutCombo && s.layoutIndex >= 0 && s.layoutIndex < m_layoutCombo->count())
         m_layoutCombo->setCurrentIndex(s.layoutIndex);
     // Exclusive modes — only restore if still meaningful for image count.
-    // Apply at most one of Split/Swipe/Overlay (priority: split > swipe > overlay)
+    // Apply at most one of Split/Swipe/Overlay/Checker (priority order below)
     // so the toggled handlers do not thrash each other during restore.
     const int n = m_engine.imageCount();
     if (m_blinkChk)
         m_blinkChk->setChecked(s.blink && n >= 2);
+    m_checkerSize = s.checkerSize; // M23
+    if (m_checkerSizeSlider)
+        m_checkerSizeSlider->setValue(s.checkerSize);
     if (n == 2)
     {
         const bool wantSplit = s.split;
         const bool wantSwipe = s.swipe && !wantSplit;
         const bool wantOverlay = s.overlay && !wantSplit && !wantSwipe;
+        const bool wantChecker = s.checker && !wantSplit && !wantSwipe && !wantOverlay; // M23
         if (m_splitChk)
             m_splitChk->setChecked(wantSplit);
         if (m_swipeChk)
             m_swipeChk->setChecked(wantSwipe);
         if (m_overlayChk)
             m_overlayChk->setChecked(wantOverlay);
+        if (m_checkerChk)
+            m_checkerChk->setChecked(wantChecker);
     }
     if (s.hasRoi)
         applySelectionToAll(s.roi);
@@ -257,6 +265,11 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
     if (m_sideChk && m_sideChk->isChecked() != s.sidePanelVisible)
         m_sideChk->setChecked(s.sidePanelVisible);
 
+    // H5: "统一像素倍率" — restore the shared-zoom alignment flag and checkbox.
+    m_uniformScale = s.uniformScale;
+    if (m_uniformScaleChk && m_uniformScaleChk->isChecked() != s.uniformScale)
+        m_uniformScaleChk->setChecked(s.uniformScale);
+
     // Blink compare: restore interval + on/off state.
     if (m_blinkChk)
     {
@@ -283,6 +296,14 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
         if (i >= m_cellViews.size() || !m_cellViews[i])
             continue;
         m_cellViews[i]->setSelection(sel);
+    }
+    // M23: ROI + Histogram 联动 — a new ROI immediately re-scopes the histogram
+    // and the ROI-aware diff metrics while the side panel is visible.
+    if (m_sidePanel && m_sidePanel->isVisible())
+    {
+        if (m_roiHistChk && m_roiHistChk->isChecked())
+            refreshHistograms();
+        updateMetrics();
     }
     update();
 }

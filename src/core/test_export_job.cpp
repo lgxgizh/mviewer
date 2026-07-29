@@ -3,6 +3,7 @@
 #include "core/image/Encoder.h"
 #include "core/image/ImageBuffer.h"
 
+#include <QCoreApplication>
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -24,8 +25,11 @@ static int g_failures = 0;
         }                                                                                          \
     } while (0)
 
-int main()
+int main(int argc, char **argv)
 {
+    // Required so Qt resolves imageformat plugins (qjpeg) relative to the test
+    // executable directory; without an app object JPEG encode fails silently.
+    QCoreApplication app(argc, argv);
     using namespace mviewer::exportjob;
 
     CHECK(modeName(Mode::Convert) == "convert", "modeName convert");

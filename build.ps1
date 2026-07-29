@@ -30,7 +30,7 @@ function Import-MSVCEnvironment {
     if (-not (Test-Path $vswhere)) { Write-Error "vswhere.exe not found"; exit 1 }
 
     $vsJson = & $vswhere -products * -format json | ConvertFrom-Json
-    $vsPath = $vsJson.installationPath
+    $vsPath = $script:vsPath = $vsJson.installationPath
     if (-not $vsPath) { Write-Error "VS Build Tools not found"; exit 1 }
 
     $vcvars = Join-Path $vsPath 'VC\Auxiliary\Build\vcvars64.bat'
@@ -47,6 +47,54 @@ function Import-MSVCEnvironment {
 }
 
 Import-MSVCEnvironment | Out-Null
+
+# ── 1b. Deploy MSVC C++ runtime next to the built exe ───────────────────────
+# windeployqt (CMake POST_BUILD) ships the Qt DLLs; this step ships the MSVC CRT
+# so MViewer.exe (and every test exe in bin/) is fully self-contained and launches
+# without the VS redistributable installed on PATH / system-wide. This directly
+# fixes the recurring "missing VCRUNTIME140.dll" / 0xc0000135 errors when running
+# the exe (or the test suite) directly.
+# Order of CRT source lookup: the active toolset's VCToolsRedistDir env var, then
+# the well-known D:\msvc layout used on this dev box, then the resolved VS path.
+function Deploy-Runtime {
+    $binDir = Join-Path $buildDir 'bin'
+    if (-not (Test-Path $binDir)) { return }
+
+    $crtRoots = @(
+        $env:VCToolsRedistDir,
+        'D:\msvc\VC\Redist\MSVC',
+        (Join-Path $script:vsPath 'VC\Redist\MSVC')
+    ) | Where-Object { $_ -and (Test-Path $_) }
+
+    $crtDir = $null
+    # Prefer the desktop v143 toolset CRT (matches the compiler), not the
+    # onecore/store variants; fall back to any VC14x CRT if it isn't present.
+    foreach ($root in $crtRoots) {
+        $crtDir = Get-ChildItem -Path $root -Directory -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '\\x64\\Microsoft\.VC143\.CRT$' -and $_.FullName -notmatch '\\onecore\\' } |
+            Select-Object -First 1
+        if ($crtDir) { break }
+    }
+    if (-not $crtDir) {
+        foreach ($root in $crtRoots) {
+            $crtDir = Get-ChildItem -Path $root -Directory -Recurse -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -match '\\x64\\Microsoft\.VC14\d+\.CRT$' -and $_.FullName -notmatch '\\onecore\\' } |
+                Select-Object -First 1
+            if ($crtDir) { break }
+        }
+    }
+
+    if ($crtDir) {
+        foreach ($dll in @('vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll',
+                            'msvcp140_1.dll', 'msvcp140_2.dll', 'concrt140.dll')) {
+            $src = Join-Path $crtDir.FullName $dll
+            if (Test-Path $src) { Copy-Item $src $binDir -Force }
+        }
+        Write-Host "[Deploy] MSVC CRT <- $($crtDir.FullName)" -ForegroundColor Green
+    } else {
+        Write-Warning "[Deploy] MSVC VC14x.CRT not found; ensure the VS redistributable is installed or on PATH."
+    }
+}
 
 # ── 2. Locate Qt (priority order: env vars > default) ────────────────────
 # install-qt-action@v4 exports QT_ROOT_DIR (already the msvc2022_64 root).
@@ -117,6 +165,9 @@ switch ($Task) {
         Write-Host "[Build] $config..." -ForegroundColor Cyan
         cmake --build . -j
         if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+        # Ship Qt (via windeployqt POST_BUILD) + MSVC CRT into bin/ so the test
+        # executables are self-contained and don't trip 0xc0000135.
+        Deploy-Runtime
         Write-Host "[Test] Running CTest..." -ForegroundColor Cyan
         # Make Qt DLLs resolvable for the test executables (avoids
         # 0xc0000135 STATUS_DLL_NOT_FOUND). Qt < 6 forbids loading from the
@@ -130,6 +181,9 @@ switch ($Task) {
         Write-Host "[Build] $config..." -ForegroundColor Cyan
         cmake --build . -j
         if ($LASTEXITCODE -ne 0) { throw "Build failed" }
+        # Deploy Qt (windeployqt POST_BUILD) + MSVC CRT into bin/ so MViewer.exe
+        # launches directly without any Qt / VS redistributable on PATH.
+        Deploy-Runtime
         Write-Host "[Build] OK - $config" -ForegroundColor Green
     }
 }

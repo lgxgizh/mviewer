@@ -207,7 +207,8 @@ struct Parser
 // Shape: {"imageIds":[...],"cells":[[s,ox,oy],...],"syncMode":N,"blink":I,
 //         "sharedScale":S,"sharedOffsetX":X,"sharedOffsetY":Y,
 //         "cols":C,"rows":R,"selection":[x,y,w,h,sync],
-//         "threshold":T,"blinkIntervalMs":B,"sidePanel":0|1,"layoutIndex":L}
+//         "threshold":T,"blinkIntervalMs":B,"sidePanel":0|1,"layoutIndex":L,
+//         "uniformScale":0|1}
 std::string serializeCompareSession(const mviewer::domain::CompareSession &s)
 {
     std::ostringstream os;
@@ -234,7 +235,7 @@ std::string serializeCompareSession(const mviewer::domain::CompareSession &s)
        << "],\"threshold\":" << static_cast<int>(s.threshold)
        << ",\"blinkIntervalMs\":" << s.blinkIntervalMs
        << ",\"sidePanel\":" << (s.sidePanelVisible ? 1 : 0) << ",\"layoutIndex\":" << s.layoutIndex
-       << "}";
+       << ",\"uniformScale\":" << (s.uniformScale ? 1 : 0) << "}";
     return os.str();
 }
 
@@ -246,7 +247,8 @@ bool parseCompareSession(const std::string &text, mviewer::domain::CompareSessio
     long long syncMode = 0, blink = -1, cols = 0, rows = 0;
     double sharedScale = 1.0, sharedOffsetX = 0.0, sharedOffsetY = 0.0;
     int sx = 0, sy = 0, sw = 0, sh = 0, ssync = 0;
-    long long threshold = 0, blinkIntervalMs = 500, sidePanel = 0, layoutIndex = 0;
+    long long threshold = 0, blinkIntervalMs = 500, sidePanel = 0, layoutIndex = 0,
+              uniformScale = 0;
     bool haveIds = false, haveCells = false;
     while (!p.peek('}'))
     {
@@ -327,6 +329,8 @@ bool parseCompareSession(const std::string &text, mviewer::domain::CompareSessio
             sidePanel = p.parseNumber();
         else if (k == "layoutIndex")
             layoutIndex = p.parseNumber();
+        else if (k == "uniformScale")
+            uniformScale = p.parseNumber();
         else
         {
             // Unknown key: skip a scalar/string value to stay forward-tolerant.
@@ -350,6 +354,7 @@ bool parseCompareSession(const std::string &text, mviewer::domain::CompareSessio
     out.blinkIntervalMs = static_cast<int>(blinkIntervalMs);
     out.sidePanelVisible = (sidePanel != 0);
     out.layoutIndex = static_cast<int>(layoutIndex);
+    out.uniformScale = (uniformScale != 0);
     return haveIds; // require at least the image list to be a valid session
 }
 

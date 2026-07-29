@@ -1,6 +1,135 @@
 // CompareWorkspace rendering: paint modes, diff overlay, blink, histograms (M20 P0#2).
 #include "compareworkspace_p.h"
 
+void CompareWorkspace::rebuildCells()
+{
+    QLayoutItem *item;
+    while ((item = m_layout->takeAt(0)))
+    {
+        if (item->widget())
+            delete item->widget();
+        delete item;
+    }
+    m_cellLabels.clear();
+    m_cellViews.clear();
+    m_cellHists.clear();
+
+    const int n = m_engine.imageCount();
+    // Drop a stale focus lock when the image set shrank.
+    if (m_focusIndex >= n)
+    {
+        m_focusIndex = -1;
+        if (m_focusBtn)
+            m_focusBtn->setChecked(false);
+        if (m_focusLabel)
+            m_focusLabel->setText(tr("基准: —"));
+    }
+    const auto &lay = m_engine.layout();
+    for (int i = 0; i < n; ++i)
+    {
+        // Each cell: a RawImageView for the image + a QLabel caption below
+        auto *cellWidget = new QWidget(m_grid);
+        auto *cellLay = new QVBoxLayout(cellWidget);
+        cellLay->setContentsMargins(0, 0, 0, 0);
+        cellLay->setSpacing(1);
+
+        auto *view = new RawImageView(cellWidget);
+        view->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+        view->setMinimumSize(64, 64);
+        view->setMouseTracking(true);
+        view->installEventFilter(this);
+        view->setCellIndex(i);
+        cellLay->addWidget(view, 1);
+        m_cellViews.push_back(view);
+
+        const ImageFrame *img = m_engine.imageAt(i);
+        if (img && !img->pixels().isNull())
+        {
+            QImage q = imageObjectToQImage(img);
+            view->setImage(q);
+        }
+
+        // M16.7: per-pane histogram overlay widget (hidden until toggled).
+        {
+            QFrame *hframe = new QFrame(cellWidget);
+            hframe->setStyleSheet("background-color: rgba(15,15,15,210); border-radius:3px;");
+            hframe->setVisible(m_paneHistOverlay);
+            auto *hl = new QVBoxLayout(hframe);
+            hl->setContentsMargins(2, 2, 2, 2);
+            auto *hw = new HistogramWidget(hframe);
+            hl->addWidget(hw);
+            m_cellHists.push_back(hw);
+        }
+
+        // Compare mode (2+ images): request an asynchronous difference heatmap
+        // (cell i vs base). The compute runs on a worker thread via JobSystem;
+        // the result is delivered through the EventBus and painted by
+        // refreshDiffOverlay() on the UI thread. The UI thread never blocks here.
+        // Skip i==0 (self-diff is all-black and overwrites the useful result).
+        if (n > 1 && img && i > 0)
+        {
+            m_engine.requestDiff(i, diffBaseIndex());
+        }
+
+        const QString cellName = img ? QString::fromStdString(img->metadata().fileName) : QString();
+        connect(view, &RawImageView::pixelInfo, this,
+                [this, cellName](int x, int y, int r, int g, int b, bool valid)
+                {
+                    if (!valid)
+                    {
+                        emit pixelInfo(QString());
+                        return;
+                    }
+                    emit pixelInfo(QString("[%1] (%2,%3) RGB(%4,%5,%6)")
+                                       .arg(cellName)
+                                       .arg(x)
+                                       .arg(y)
+                                       .arg(r)
+                                       .arg(g)
+                                       .arg(b));
+                    if (m_sidePanel && m_sidePanel->isVisible())
+                    {
+                        m_lastInspectX = x;
+                        m_lastInspectY = y;
+                        updateInspector(x, y);
+                    }
+                });
+        connect(view, &RawImageView::selectionChanged, this,
+                [this](const mviewer::domain::Selection &sel) { applySelectionToAll(sel); });
+        connect(view, &RawImageView::crosshairMoved, this,
+                [this, view](const QPointF &p) { onCrosshairMoved(view, p); });
+        connect(view, &RawImageView::focusRequested, this, &CompareWorkspace::onFocusRequested);
+
+        // A-4.3: restore any existing pixel-link markers after rebuild.
+        if (!m_linkPoints.isEmpty())
+            view->setLinkMarkers(m_linkPoints);
+
+        // Caption label
+        auto *caption = new QLabel(cellWidget);
+        caption->setAlignment(Qt::AlignCenter);
+        caption->setStyleSheet("QLabel{background:#222;color:#ccc;padding:2px;}");
+        caption->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        caption->setMinimumHeight(20);
+        if (img)
+            caption->setText(QString::fromStdString(img->metadata().fileName));
+        cellLay->addWidget(caption);
+        m_cellLabels.push_back(caption);
+
+        const int row = i / lay.cols;
+        const int col = i % lay.cols;
+        m_layout->addWidget(cellWidget, row, col);
+    }
+
+    // M3: a layout switch / swap / preset / blink-stop destroys and recreates every
+    // cell view, which would silently drop the ROI the user drew. Re-apply the last
+    // selection so the red box survives grid re-layouts (applySelectionToAll mirrors
+    // it across all cells, exactly as when it was first drawn).
+    if (m_lastSelection.width > 0)
+        applySelectionToAll(m_lastSelection);
+
+    QTimer::singleShot(0, this, &CompareWorkspace::positionCellHists);
+}
+
 void CompareWorkspace::refreshCellDiff(int idx)
 {
     if (idx < 0 || idx >= m_cellViews.size())
@@ -146,68 +275,6 @@ void CompareWorkspace::applyBlink(bool state)
     }
 }
 
-void CompareWorkspace::updateInspector(int x, int y)
-{
-    if (!m_inspector)
-        return;
-    const auto probe = m_engine.inspectPixel(x, y, diffBaseIndex());
-    if (probe.samples.empty() || !probe.samples[0].valid)
-    {
-        m_inspector->setRowCount(0);
-        return;
-    }
-    const int n = m_engine.imageCount();
-    m_inspector->setRowCount(n);
-    for (int i = 0; i < n; ++i)
-    {
-        const ImageFrame *img = m_engine.imageAt(i);
-        const QString name = img ? QString::fromStdString(img->metadata().fileName) : QString();
-        if (static_cast<size_t>(i) >= probe.samples.size())
-            continue;
-        const auto &s = probe.samples[static_cast<size_t>(i)];
-        const double dist = (static_cast<size_t>(i) < probe.deltas.size())
-                                ? probe.deltas[static_cast<size_t>(i)].dist
-                                : 0.0;
-        m_inspector->setItem(i, 0, new QTableWidgetItem(QString::number(i + 1)));
-        m_inspector->setItem(i, 1, new QTableWidgetItem(name));
-        m_inspector->setItem(i, 2, new QTableWidgetItem(QString::number(s.r)));
-        m_inspector->setItem(i, 3, new QTableWidgetItem(QString::number(s.g)));
-        m_inspector->setItem(i, 4, new QTableWidgetItem(QString::number(s.b)));
-        m_inspector->setItem(i, 5, new QTableWidgetItem(QString::number(static_cast<int>(dist))));
-    }
-}
-
-void CompareWorkspace::refreshHistograms()
-{
-    if (!m_hist)
-        return;
-    const int n = m_engine.imageCount();
-
-    if (m_perPaneHist && m_editIdx >= 0 && m_editIdx < n)
-    {
-        // Per-pane: show only the selected cell's histogram
-        const ImageFrame *img = m_engine.imageAt(m_editIdx);
-        auto h = img ? mviewer::core::computeHistogram(img->pixels()) : mviewer::core::Histogram{};
-        m_hist->setHistograms({h});
-    }
-    else
-    {
-        // Overlaid: show all
-        std::vector<mviewer::core::Histogram> hists;
-        hists.reserve(static_cast<size_t>(n));
-        for (int i = 0; i < n; ++i)
-        {
-            const ImageFrame *img = m_engine.imageAt(i);
-            hists.push_back(img ? mviewer::core::computeHistogram(img->pixels())
-                                : mviewer::core::Histogram{});
-        }
-        m_hist->setHistograms(hists);
-        // M16.7: keep the in-cell per-pane histograms in sync.
-        for (int i = 0; i < static_cast<int>(m_cellHists.size()); ++i)
-            refreshCellHist(i);
-    }
-}
-
 void CompareWorkspace::paintEvent(QPaintEvent *)
 {
     // Cells are raw QWidgets (RawImageView) that paint themselves. The workspace
@@ -227,9 +294,8 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
         m_cellViews[i]->setTransform(sc, off);
     }
 
-    // P0-4: split / swipe overlay for two images.
-    if (n == 2 && (isSplitOrSwipe() || (m_overlayChk && m_overlayChk->isChecked())) &&
-        m_cellViews.size() >= 2)
+    // P0-4 / A-4.1 / M23: split / swipe / overlay / checkerboard for two images.
+    if (n == 2 && anyCanvasCompareMode() && m_cellViews.size() >= 2)
     {
         QPainter p(this);
         p.setRenderHint(QPainter::SmoothPixmapTransform);
@@ -239,6 +305,8 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
             drawSwipeCompare(p, int(width() * m_splitPos));
         else if (m_overlayChk && m_overlayChk->isChecked())
             drawOverlayCompare(p);
+        else if (m_checkerChk && m_checkerChk->isChecked())
+            drawCheckerboardCompare(p);
     }
 
     // A-4.3: draw connecting lines between linked points across cells (2-up).
@@ -345,5 +413,101 @@ void CompareWorkspace::drawOverlayCompare(QPainter &p)
         p.setOpacity(m_cellViews[1]->overlayOpacity());
         p.drawImage(dr, ov);
     }
+    p.restore();
+}
+
+// ── M23: checkerboard compare (棋盘格) ──────────────────────────────────────
+// Alternating blocks show image A and image B under the SAME synchronized
+// transform, so block seams reveal misalignment/color shifts instantly.
+
+void CompareWorkspace::buildCheckerboardControls(QHBoxLayout *lay)
+{
+    if (!lay)
+        return;
+    m_checkerChk = new QCheckBox(tr("棋盘对比(&K)"), this);
+    m_checkerChk->setEnabled(false);
+    m_checkerChk->setToolTip(tr("棋盘格交替显示两张图像（快捷键 K），块大小可调"));
+    connect(m_checkerChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                if (on)
+                    exclusiveMode(m_checkerChk);
+                if (m_grid)
+                    m_grid->setVisible(!anyCanvasCompareMode());
+                if (m_checkerSizeSlider)
+                    m_checkerSizeSlider->setEnabled(on);
+                update();
+            });
+    lay->addWidget(m_checkerChk);
+
+    m_checkerSizeSlider = new QSlider(Qt::Horizontal, this);
+    m_checkerSizeSlider->setRange(16, 256);
+    m_checkerSizeSlider->setValue(m_checkerSize);
+    m_checkerSizeSlider->setFixedWidth(70);
+    m_checkerSizeSlider->setEnabled(false);
+    m_checkerSizeSlider->setToolTip(tr("棋盘块边长（像素）"));
+    connect(m_checkerSizeSlider, &QSlider::valueChanged, this,
+            [this](int v)
+            {
+                m_checkerSize = v;
+                if (m_checkerSizeLabel)
+                    m_checkerSizeLabel->setText(QString("%1px").arg(v));
+                if (m_checkerChk && m_checkerChk->isChecked())
+                    update();
+            });
+    lay->addWidget(m_checkerSizeSlider);
+    m_checkerSizeLabel = new QLabel(QString("%1px").arg(m_checkerSize), this);
+    m_checkerSizeLabel->setMinimumWidth(34);
+    lay->addWidget(m_checkerSizeLabel);
+}
+
+void CompareWorkspace::drawCheckerboardCompare(QPainter &p)
+{
+    if (m_cellViews.size() < 2 || !m_cellViews[0] || !m_cellViews[1])
+        return;
+    const QRect r = rect();
+
+    // Base image fills the canvas with the synchronized transform.
+    drawCellCompare(p, 0, r);
+
+    const QImage &img1 = m_cellViews[1]->image();
+    if (img1.isNull())
+        return;
+
+    // Build the clip region of "B" blocks: every block where (bx+by) is odd.
+    const int bs = std::max(4, m_checkerSize);
+    QRegion region;
+    for (int by = 0, y = 0; y < r.height(); ++by, y += bs)
+        for (int bx = 0, x = 0; x < r.width(); ++bx, x += bs)
+            if (((bx + by) & 1) != 0)
+                region += QRect(x, y, bs, bs).intersected(r);
+
+    const auto &ct = m_engine.cellTransform(1);
+    const double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
+    const double ox = m_syncDrag ? m_engine.syncTransform().offset.x : ct.offset.x;
+    const double oy = m_syncDrag ? m_engine.syncTransform().offset.y : ct.offset.y;
+    const QRectF dr(r.x() + ox, r.y() + oy, img1.width() * sc, img1.height() * sc);
+
+    p.save();
+    p.setClipRegion(region);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    p.drawImage(dr, img1);
+    // Keep the diff overlay visible inside the B blocks.
+    const QImage &ov = m_cellViews[1]->overlay();
+    if (!ov.isNull())
+    {
+        p.setOpacity(m_cellViews[1]->overlayOpacity());
+        p.drawImage(dr, ov);
+        p.setOpacity(1.0);
+    }
+    p.restore();
+
+    // Subtle block grid so the user can tell which region belongs to B.
+    p.save();
+    p.setPen(QPen(QColor(255, 255, 255, 40), 1));
+    for (int x = bs; x < r.width(); x += bs)
+        p.drawLine(x, 0, x, r.height());
+    for (int y = bs; y < r.height(); y += bs)
+        p.drawLine(0, y, r.width(), y);
     p.restore();
 }

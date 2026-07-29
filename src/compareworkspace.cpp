@@ -65,6 +65,21 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     syncLayout->addWidget(m_syncZoomChk);
     syncLayout->addWidget(m_syncDragChk);
 
+    // H5: "统一像素倍率" — align every pane at the same zoom so images of
+    // different resolutions can be compared 1:1 (pixel-corresponding). Independent
+    // of the sync-zoom toggle; when on, Fit uses the shared (minimum) scale for all.
+    m_uniformScaleChk = new QCheckBox(tr("统一像素倍率"), this);
+    m_uniformScaleChk->setChecked(false);
+    m_uniformScaleChk->setToolTip(tr("所有窗格以相同倍率显示，不同分辨率图像也能 1:1 像素对齐"));
+    connect(m_uniformScaleChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                m_uniformScale = on;
+                fitAll();
+                update();
+            });
+    syncLayout->addWidget(m_uniformScaleChk);
+
     // M14-3: blink (flicker) compare — rapid toggle between base and target.
     // Click the button (or press B) to start/stop rapid blinking.
     m_blinkChk = new QCheckBox("闪烁对比(&B)", this);
@@ -85,12 +100,10 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     connect(m_splitChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
-                if (on && m_swipeChk)
-                    m_swipeChk->setChecked(false);
-                if (on && m_overlayChk)
-                    m_overlayChk->setChecked(false);
+                if (on)
+                    exclusiveMode(m_splitChk);
                 if (m_grid)
-                    m_grid->setVisible(!isSplitOrSwipe());
+                    m_grid->setVisible(!anyCanvasCompareMode());
                 update();
             });
     syncLayout->addWidget(m_splitChk);
@@ -100,12 +113,10 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     connect(m_swipeChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
-                if (on && m_splitChk)
-                    m_splitChk->setChecked(false);
-                if (on && m_overlayChk)
-                    m_overlayChk->setChecked(false);
+                if (on)
+                    exclusiveMode(m_swipeChk);
                 if (m_grid)
-                    m_grid->setVisible(!isSplitOrSwipe());
+                    m_grid->setVisible(!anyCanvasCompareMode());
                 update();
             });
     syncLayout->addWidget(m_swipeChk);
@@ -116,12 +127,10 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     connect(m_overlayChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
-                if (on && m_splitChk)
-                    m_splitChk->setChecked(false);
-                if (on && m_swipeChk)
-                    m_swipeChk->setChecked(false);
+                if (on)
+                    exclusiveMode(m_overlayChk);
                 if (m_grid)
-                    m_grid->setVisible(!on && !isSplitOrSwipe());
+                    m_grid->setVisible(!anyCanvasCompareMode());
                 if (m_overlayAlphaSlider)
                     m_overlayAlphaSlider->setEnabled(on);
                 update();
@@ -147,6 +156,9 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     m_overlayAlphaLabel = new QLabel(QString("%1%").arg(m_overlayAlpha), this);
     m_overlayAlphaLabel->setMinimumWidth(28);
     syncLayout->addWidget(m_overlayAlphaLabel);
+
+    // M23: checkerboard compare mode (棋盘格) — alternating blocks of A/B.
+    buildCheckerboardControls(syncLayout);
 
     // A-4.5: continuous compare — walk consecutive pairs without reopening.
     m_prevPairBtn = new QPushButton("◀ 上一对", this);
@@ -297,41 +309,9 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     sideLay->setContentsMargins(4, 4, 4, 4);
     sideLay->setSpacing(6);
 
-    sideLay->addWidget(new QLabel(tr("像素检视"), this));
-    m_inspector = new QTableWidget(this);
-    m_inspector->setColumnCount(6);
-    m_inspector->setHorizontalHeaderLabels(
-        {tr("#"), tr("名称"), tr("R"), tr("G"), tr("B"), tr("Δ")});
-    m_inspector->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_inspector->setSelectionMode(QAbstractItemView::NoSelection);
-    m_inspector->horizontalHeader()->setStretchLastSection(true);
-    m_inspector->setFixedHeight(220);
-    sideLay->addWidget(m_inspector);
-
-    sideLay->addWidget(new QLabel(tr("RGB 直方图"), this));
-    m_hist = new HistogramWidget(this);
-    m_hist->setMinimumHeight(140);
-    sideLay->addWidget(m_hist, 1);
-
-    // M16.5: per-pane histogram overlay toggle
-    m_perPaneHistChk = new QCheckBox(tr("每窗格独立直方图"), this);
-    m_perPaneHistChk->setChecked(false);
-    connect(m_perPaneHistChk, &QCheckBox::toggled, this, &CompareWorkspace::onPerPaneHistToggled);
-    sideLay->addWidget(m_perPaneHistChk);
-
-    // M16.7: per-pane histogram overlay toggle
-    m_paneHistOverlayChk = new QCheckBox(tr("每格直方图叠加"), this);
-    m_paneHistOverlayChk->setChecked(m_paneHistOverlay);
-    connect(m_paneHistOverlayChk, &QCheckBox::toggled, this,
-            &CompareWorkspace::onPaneHistOverlayToggled);
-    sideLay->addWidget(m_paneHistOverlayChk);
-
-    // M16.4: quick PSNR/SSIM metrics label
-    sideLay->addWidget(new QLabel(tr("差异指标"), this));
-    m_metricLabel = new QLabel(tr("PSNR: —  SSIM: —"), this);
-    m_metricLabel->setWordWrap(true);
-    m_metricLabel->setStyleSheet("color:#888;");
-    sideLay->addWidget(m_metricLabel);
+    // M23: inspector (multi color-space) + histogram (channels/log/ROI) +
+    // metrics — built in compareworkspace_analysis.cpp (ADR 014 TU split).
+    buildAnalysisPanel(sideLay);
 
     // M16.2: per-cell image edit panel (collapsible section inside side panel)
     buildEditPanel(sideLay);
@@ -396,7 +376,7 @@ void CompareWorkspace::setSelectionModel(SelectionModel *sel)
 
 void CompareWorkspace::exclusiveMode(QCheckBox *keepOn)
 {
-    // Split / Swipe / Overlay are mutually exclusive (and only for 2 images).
+    // Split / Swipe / Overlay / Checkerboard are mutually exclusive (2 images).
     auto uncheck = [keepOn](QCheckBox *c)
     {
         if (c && c != keepOn && c->isChecked())
@@ -405,6 +385,7 @@ void CompareWorkspace::exclusiveMode(QCheckBox *keepOn)
     uncheck(m_splitChk);
     uncheck(m_swipeChk);
     uncheck(m_overlayChk);
+    uncheck(m_checkerChk);
 }
 
 void CompareWorkspace::showShortcutHelp()
@@ -413,7 +394,7 @@ void CompareWorkspace::showShortcutHelp()
     // so day-long keyboard work is not interrupted.
     const QString tip =
         tr("Compare 快捷键: B Blink · Space 按住Blink · S Split · W Swipe · O Overlay · "
-           "H Diff高亮 · Z/D 同步缩放/拖动 · C 准星 · L 像素连线 · "
+           "K 棋盘 · H Diff高亮 · Z/D 同步缩放/拖动 · C 准星 · L 像素连线 · "
            "1~8 布局预设 · PgUp/PgDn 或 ←/→ 连续导航 · F Fit · X 交换 · ? 帮助 · Esc 关闭");
     if (auto *w = window())
         w->setWindowTitle(tip);
@@ -456,6 +437,13 @@ void CompareWorkspace::setImages(const QStringList &paths)
             m_overlayChk->setChecked(false);
         m_overlayChk->setEnabled(two);
     }
+    // M23: checkerboard mode also only for two images.
+    if (m_checkerChk)
+    {
+        if (!two)
+            m_checkerChk->setChecked(false);
+        m_checkerChk->setEnabled(two);
+    }
     if (m_grid && !two)
         m_grid->setVisible(true);
     setFocus();
@@ -489,134 +477,7 @@ void CompareWorkspace::setSyncEnabled(bool on)
     m_engine.setSyncEnabled(on);
 }
 
-void CompareWorkspace::rebuildCells()
-{
-    QLayoutItem *item;
-    while ((item = m_layout->takeAt(0)))
-    {
-        if (item->widget())
-            delete item->widget();
-        delete item;
-    }
-    m_cellLabels.clear();
-    m_cellViews.clear();
-    m_cellHists.clear();
-
-    const int n = m_engine.imageCount();
-    // Drop a stale focus lock when the image set shrank.
-    if (m_focusIndex >= n)
-    {
-        m_focusIndex = -1;
-        if (m_focusBtn)
-            m_focusBtn->setChecked(false);
-        if (m_focusLabel)
-            m_focusLabel->setText(tr("基准: —"));
-    }
-    const auto &lay = m_engine.layout();
-    for (int i = 0; i < n; ++i)
-    {
-        // Each cell: a RawImageView for the image + a QLabel caption below
-        auto *cellWidget = new QWidget(m_grid);
-        auto *cellLay = new QVBoxLayout(cellWidget);
-        cellLay->setContentsMargins(0, 0, 0, 0);
-        cellLay->setSpacing(1);
-
-        auto *view = new RawImageView(cellWidget);
-        view->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-        view->setMinimumSize(64, 64);
-        view->setMouseTracking(true);
-        view->installEventFilter(this);
-        view->setCellIndex(i);
-        cellLay->addWidget(view, 1);
-        m_cellViews.push_back(view);
-
-        const ImageFrame *img = m_engine.imageAt(i);
-        if (img && !img->pixels().isNull())
-        {
-            QImage q = imageObjectToQImage(img);
-            view->setImage(q);
-        }
-
-        // M16.7: per-pane histogram overlay widget (hidden until toggled).
-        {
-            QFrame *hframe = new QFrame(cellWidget);
-            hframe->setStyleSheet("background-color: rgba(15,15,15,210); border-radius:3px;");
-            hframe->setVisible(m_paneHistOverlay);
-            auto *hl = new QVBoxLayout(hframe);
-            hl->setContentsMargins(2, 2, 2, 2);
-            auto *hw = new HistogramWidget(hframe);
-            hl->addWidget(hw);
-            m_cellHists.push_back(hw);
-        }
-
-        // Compare mode (2+ images): request an asynchronous difference heatmap
-        // (cell i vs base). The compute runs on a worker thread via JobSystem;
-        // the result is delivered through the EventBus and painted by
-        // refreshDiffOverlay() on the UI thread. The UI thread never blocks here.
-        // Skip i==0 (self-diff is all-black and overwrites the useful result).
-        if (n > 1 && img && i > 0)
-        {
-            m_engine.requestDiff(i, diffBaseIndex());
-        }
-
-        const QString cellName = img ? QString::fromStdString(img->metadata().fileName) : QString();
-        connect(view, &RawImageView::pixelInfo, this,
-                [this, cellName](int x, int y, int r, int g, int b, bool valid)
-                {
-                    if (!valid)
-                    {
-                        emit pixelInfo(QString());
-                        return;
-                    }
-                    emit pixelInfo(QString("[%1] (%2,%3) RGB(%4,%5,%6)")
-                                       .arg(cellName)
-                                       .arg(x)
-                                       .arg(y)
-                                       .arg(r)
-                                       .arg(g)
-                                       .arg(b));
-                    if (m_sidePanel && m_sidePanel->isVisible())
-                    {
-                        m_lastInspectX = x;
-                        m_lastInspectY = y;
-                        updateInspector(x, y);
-                    }
-                });
-        connect(view, &RawImageView::selectionChanged, this,
-                [this](const mviewer::domain::Selection &sel) { applySelectionToAll(sel); });
-        connect(view, &RawImageView::crosshairMoved, this,
-                [this, view](const QPointF &p) { onCrosshairMoved(view, p); });
-        connect(view, &RawImageView::focusRequested, this, &CompareWorkspace::onFocusRequested);
-
-        // A-4.3: restore any existing pixel-link markers after rebuild.
-        if (!m_linkPoints.isEmpty())
-            view->setLinkMarkers(m_linkPoints);
-
-        // Caption label
-        auto *caption = new QLabel(cellWidget);
-        caption->setAlignment(Qt::AlignCenter);
-        caption->setStyleSheet("QLabel{background:#222;color:#ccc;padding:2px;}");
-        caption->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-        caption->setMinimumHeight(20);
-        if (img)
-            caption->setText(QString::fromStdString(img->metadata().fileName));
-        cellLay->addWidget(caption);
-        m_cellLabels.push_back(caption);
-
-        const int row = i / lay.cols;
-        const int col = i % lay.cols;
-        m_layout->addWidget(cellWidget, row, col);
-    }
-
-    // M3: a layout switch / swap / preset / blink-stop destroys and recreates every
-    // cell view, which would silently drop the ROI the user drew. Re-apply the last
-    // selection so the red box survives grid re-layouts (applySelectionToAll mirrors
-    // it across all cells, exactly as when it was first drawn).
-    if (m_lastSelection.width > 0)
-        applySelectionToAll(m_lastSelection);
-
-    QTimer::singleShot(0, this, &CompareWorkspace::positionCellHists);
-}
+// rebuildCells() lives in compareworkspace_render.cpp (ADR 014 TU split).
 
 void CompareWorkspace::onLayoutChanged()
 {
@@ -695,6 +556,9 @@ void CompareWorkspace::fitAll()
     double sharedScale = 1.0;
     bool first = true;
     const int n = m_engine.imageCount();
+    // Pass 1: fit each pane to its own viewport to learn the per-image fit scale,
+    // and accumulate the shared (minimum) scale so different-resolution images can
+    // be aligned at one common zoom.
     for (int i = 0; i < n; ++i)
     {
         if (i >= m_cellViews.size() || !m_cellViews[i])
@@ -711,10 +575,30 @@ void CompareWorkspace::fitAll()
             sharedScale = m_engine.cellScale(i);
         first = false;
     }
-    if (m_syncZoom)
-        m_engine.setScale(sharedScale);
-    if (m_syncDrag)
-        m_engine.setOffset(0.0, 0.0);
+    if (!first)
+    {
+        // H5: "统一像素倍率" forces every pane to the same zoom regardless of the
+        // sync-zoom toggle, so images of different resolutions line up 1:1 (same
+        // pixel scale, top-left aligned). Without it, sync off lets each pane fit
+        // independently and lose cross-pane pixel correspondence.
+        const bool unify = m_uniformScale || m_syncZoom;
+        for (int i = 0; i < n; ++i)
+        {
+            if (i >= m_cellViews.size() || !m_cellViews[i])
+                continue;
+            if (unify)
+                m_engine.setCellScale(i, sharedScale);
+        }
+        if (unify)
+            m_engine.setScale(sharedScale);
+        if (m_uniformScale || m_syncDrag)
+        {
+            m_engine.setOffset(0.0, 0.0);
+            for (int i = 0; i < n; ++i)
+                if (i < m_cellViews.size() && m_cellViews[i])
+                    m_engine.setCellOffset(i, 0.0, 0.0);
+        }
+    }
 }
 
 void CompareWorkspace::onCrosshairMoved(RawImageView *view, const QPointF &pos)

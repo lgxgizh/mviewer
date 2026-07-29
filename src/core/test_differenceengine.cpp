@@ -137,6 +137,52 @@ int main(int argc, char **argv)
               "highlightMap similar pixel is gray");
     }
 
+    // M23: computeStats — full image
+    {
+        auto a = makeSolidRgb(10, 10, 100, 100, 100);
+        auto b = makeSolidRgb(10, 10, 100, 100, 100);
+        // Two diff pixels: (0,0) strong, (1,0) weak.
+        // Gray diff = (dr+dg+db)/3 → strong ≈ 33, weak ≈ 1.
+        (*a.buffer)[0] = 200; // R at (0,0): |200-100| = 100 → gray ≈ 33
+        (*a.buffer)[3] = 105; // R at (1,0): |105-100| = 5   → gray ≈ 1
+        auto diff = DifferenceEngine::differenceMap(a, b);
+        const auto st = DifferenceEngine::computeStats(diff);
+        CHECK(st.totalPixels == 100, "stats total = 100");
+        CHECK(st.diffPixels == 2, "stats diffPixels = 2 (threshold 0)");
+        CHECK(st.maxDiff > 0 && st.maxDiff <= 255, "stats maxDiff in range");
+        CHECK(st.meanDiff > 0.0, "stats meanDiff > 0");
+        CHECK(st.diffRatio > 0.019 && st.diffRatio < 0.021, "stats diffRatio ≈ 2%");
+
+        // Threshold filters out the weak diff pixel (gray ≈ 1 < 20 ≤ 33)
+        const auto st2 = DifferenceEngine::computeStats(diff, 20);
+        CHECK(st2.diffPixels == 1, "stats threshold=20 keeps only strong pixel");
+    }
+
+    // M23: computeStats — ROI clipping
+    {
+        auto a = makeSolidRgb(10, 10, 100, 100, 100);
+        auto b = makeSolidRgb(10, 10, 100, 100, 100);
+        (*a.buffer)[0] = 255; // diff only at (0,0)
+        auto diff = DifferenceEngine::differenceMap(a, b);
+        // ROI covering (0,0)
+        const auto in = DifferenceEngine::computeStats(diff, 0, 0, 0, 2, 2);
+        CHECK(in.totalPixels == 4 && in.diffPixels == 1, "ROI stats include diff pixel");
+        // ROI away from (0,0)
+        const auto out = DifferenceEngine::computeStats(diff, 0, 5, 5, 3, 3);
+        CHECK(out.totalPixels == 9 && out.diffPixels == 0, "ROI stats exclude diff pixel");
+        // ROI partially outside is clipped
+        const auto clip = DifferenceEngine::computeStats(diff, 0, 8, 8, 10, 10);
+        CHECK(clip.totalPixels == 4, "ROI clipped to bounds");
+        // Degenerate / fully-outside ROI
+        const auto deg = DifferenceEngine::computeStats(diff, 0, 0, 0, 0, 0);
+        CHECK(deg.totalPixels == 0 && deg.diffRatio == 0.0, "degenerate ROI = empty stats");
+        const auto off = DifferenceEngine::computeStats(diff, 0, 20, 20, 4, 4);
+        CHECK(off.totalPixels == 0, "outside ROI = empty stats");
+        // Null input
+        const auto nul = DifferenceEngine::computeStats(ImageData{});
+        CHECK(nul.totalPixels == 0, "null input = empty stats");
+    }
+
     std::cout << "\nDifferenceEngine: " << (g_fail == 0 ? "ALL PASSED" : "FAILURES") << "\n";
     return g_fail == 0 ? 0 : 1;
 }

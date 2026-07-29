@@ -25,6 +25,25 @@ class DifferenceEngine
     // Apply threshold to a grayscale image: pixels below threshold become 0 (black).
     static ImageData applyThreshold(const ImageData &gray, uint8_t threshold);
 
+    // M23: quantitative difference statistics computed over a Grayscale8 diff
+    // map (as produced by differenceMap with threshold 0).
+    struct DiffStats
+    {
+        long long totalPixels = 0; // pixels examined
+        long long diffPixels = 0;  // pixels with diff >= max(threshold, 1)
+        double diffRatio = 0.0;    // diffPixels / totalPixels (0..1)
+        double meanDiff = 0.0;     // mean gray diff over all examined pixels
+        int maxDiff = 0;           // peak gray diff
+    };
+
+    // Stats over the whole diff map. Returns default (all zero) on null input.
+    static DiffStats computeStats(const ImageData &grayDiff, uint8_t threshold = 0);
+
+    // Stats limited to a ROI (image coordinates, clipped to bounds). A ROI with
+    // w/h <= 0 or fully outside the image yields totalPixels == 0.
+    static DiffStats computeStats(const ImageData &grayDiff, uint8_t threshold, int roiX, int roiY,
+                                  int roiW, int roiH);
+
   private:
     // Returns byte offset (0=R, 1=G, 2=B) within a pixel for the given
     // pixel format.
