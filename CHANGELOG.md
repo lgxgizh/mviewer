@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — P0-2 选择状态统一（SelectionModel 收编 Focused / Hovered / Compared）
+
+- **SelectionModel 扩展三态**：在既有 Current / Selected 之上新增 `focused`
+  （对比锁定基准）、`hovered`（缩略图悬停）、`compared`（对比工作区载入的全部
+  图像）。三者均带 getter / setter / `*Changed` 信号，`clear()` 同时重置
+  focused / compared（hovered 为瞬态不随选择清空）。
+- **对比上下文收编进统一真源**：`CompareWorkspace::setImages` 装入图后立即向
+  SelectionModel 发布 `compared` 集合与 `focused` 基准；`onFocusRequested`
+  锁定时同步更新 `focused`。后续 Metadata / Analysis / Export 直接读 SelectionModel
+  即可，不再各自持有对比状态（服务于评审中的"1000 张图片管理几乎不用改 UI"）。
+- **缩略图悬停接入 SelectionModel**：`ThumbnailPanel` 新增 `hovered` 信号，由
+  `QListView::entered` 驱动，经 `setSelectionModel` 注入的 app 级 SelectionModel
+  发布 `hovered`，悬停即统一到同一真源。
+- 新增单测覆盖 focused / hovered / compared 三态及 `clear()` 行为。
+
 ### Added — M23 专业分析能力（评审 P0：Pixel Inspector / Diff Engine / ROI+Histogram）
 
 - **Pixel Inspector Pro（像素检视升级）**：Compare 侧栏的像素检视表新增

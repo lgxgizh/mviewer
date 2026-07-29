@@ -445,7 +445,8 @@ void MainWindow::setupUi()
     rightLayout->addWidget(sortBar);
 
     m_thumbnailPanel = new ThumbnailPanel(rightWidget);
-    m_thumbnailPanel->setCommandStack(&m_cmdStack); // A-10: reversible file ops
+    m_thumbnailPanel->setCommandStack(&m_cmdStack);   // A-10: reversible file ops
+    m_thumbnailPanel->setSelectionModel(m_selection); // P0-2: gallery hover -> SSOT
     m_thumbnailPanel->installEventFilter(this);
     rightLayout->addWidget(m_thumbnailPanel, 1);
 

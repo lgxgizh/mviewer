@@ -32,6 +32,22 @@ class SelectionModel : public QObject
     {
         return m_current.isEmpty();
     }
+    // P0-2: the locked reference image within a comparison (drives diff base,
+    // metadata/analysis panels). Empty when no reference is locked.
+    QString focused() const
+    {
+        return m_focused;
+    }
+    // P0-2: the image currently under the cursor in the thumbnail gallery.
+    QString hovered() const
+    {
+        return m_hovered;
+    }
+    // P0-2: the full set of images currently loaded into the compare workspace.
+    QStringList compared() const
+    {
+        return m_compared;
+    }
 
   public slots:
     // Make `path` the current image and the sole selection.
@@ -39,12 +55,22 @@ class SelectionModel : public QObject
     // Replace the multi-selection; `current` becomes the focused item.
     void setSelection(const QStringList &paths, const QString &current);
     void clear();
+    // P0-2: focus / hover / compared-set — see getters above for meaning.
+    void setFocused(const QString &path);
+    void setHovered(const QString &path);
+    void setCompared(const QStringList &paths);
 
   signals:
     void currentImageChanged(const QString &path);
     void selectionChanged(const QStringList &paths);
+    void focusedChanged(const QString &path);
+    void hoveredChanged(const QString &path);
+    void comparedChanged(const QStringList &paths);
 
   private:
     QString m_current;
     QStringList m_selection;
+    QString m_focused;
+    QString m_hovered;
+    QStringList m_compared;
 };

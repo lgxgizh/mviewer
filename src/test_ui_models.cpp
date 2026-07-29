@@ -50,6 +50,25 @@ int main(int, char **)
         CHECK(sel.isEmpty(), "SelectionModel cleared");
     }
 
+    // ---- SelectionModel P0-2: focused / hovered / compared ----
+    {
+        SelectionModel sel;
+        sel.setCompared({"a.jpg", "b.jpg", "c.jpg"});
+        CHECK(sel.compared().size() == 3, "SelectionModel compared set");
+        CHECK(sel.compared().at(1) == "b.jpg", "SelectionModel compared order");
+        sel.setFocused("b.jpg");
+        CHECK(sel.focused() == "b.jpg", "SelectionModel focused set");
+        sel.setFocused(QString());
+        CHECK(sel.focused().isEmpty(), "SelectionModel focused cleared");
+        sel.setHovered("c.jpg");
+        CHECK(sel.hovered() == "c.jpg", "SelectionModel hovered set");
+        // clear() must also reset focus + compared, but not touch transient hover.
+        sel.setCompared({"x.jpg"});
+        sel.clear();
+        CHECK(sel.compared().isEmpty(), "SelectionModel compared cleared on clear");
+        CHECK(sel.focused().isEmpty(), "SelectionModel focused cleared on clear");
+    }
+
     // ---- DirectoryModel ----
     {
         DirectoryModel dir;

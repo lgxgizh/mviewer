@@ -1,3 +1,4 @@
+#include "selectionmodel.h"
 #include "thumbnailpanel_p.h"
 #include "thumbnailprovider.h"
 
@@ -37,6 +38,19 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
 
     connect(selectionModel(), &QItemSelectionModel::selectionChanged, this,
             &ThumbnailPanel::onSelectionChanged);
+
+    // P0-2: publish gallery hover to the app-wide SelectionModel (`hovered`).
+    connect(this, &QAbstractItemView::entered, this,
+            [this](const QModelIndex &idx)
+            {
+                if (!idx.isValid() || !m_selection)
+                    return;
+                const QString p = m_paths.value(idx.row());
+                if (p.isEmpty())
+                    return;
+                m_selection->setHovered(p);
+                emit hovered(p);
+            });
 
     // Drive thumbnail decode priority from the viewport (P0 #②).
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
@@ -447,6 +461,11 @@ bool ThumbnailPanel::thumbFailed(const QString &path) const
 {
     QMutexLocker lk(&m_thumbMtx);
     return m_thumbFailed.contains(path);
+}
+
+void ThumbnailPanel::setSelectionModel(SelectionModel *sel)
+{
+    m_selection = sel;
 }
 
 void ThumbnailPanel::onSelectionChanged()

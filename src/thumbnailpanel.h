@@ -25,6 +25,7 @@ class QContextMenuEvent;
 class QResizeEvent;
 class QStringListModel;
 class CommandStack;
+class SelectionModel;
 
 // Virtualized thumbnail gallery (P0 #①/#②).
 //
@@ -83,6 +84,8 @@ class ThumbnailPanel : public QListView
     // M19: apply a multi-selection from SelectionModel onto the gallery.
     // `current` becomes the focused item; empty current falls back to paths[0].
     void selectPaths(const QStringList &paths, const QString &current = {});
+    // P0-2: inject the app-wide SelectionModel so hover events publish `hovered`.
+    void setSelectionModel(SelectionModel *sel);
     void setSortMode(SortMode mode);
     // A-2.2: toggle ascending/descending sort order.
     void setSortAscending(bool ascending);
@@ -236,6 +239,8 @@ class ThumbnailPanel : public QListView
     void pathsRemoved(const QStringList &deletedPaths);
     // P0 #①: live gallery stats for the status bar (count / sizes / selection).
     void statsChanged(int total, qint64 totalBytes, int selected, qint64 selectedBytes);
+    // P0-2: the image under the cursor (gallery hover).
+    void hovered(const QString &path);
 
   private slots:
     void onThumbReady(const QString &path);
@@ -276,7 +281,8 @@ class ThumbnailPanel : public QListView
 
     QPushButton *m_compareBtn = nullptr;
     QString m_currentDir;
-    CommandStack *m_cmdStack = nullptr; // A-10: optional reversible file ops
+    CommandStack *m_cmdStack = nullptr;    // A-10: optional reversible file ops
+    SelectionModel *m_selection = nullptr; // P0-2: hover target (not owned)
     SortMode m_sortMode = SortName;
     bool m_sortAscending = true; // A-2.2: sort direction
     QString m_typeFilter;        // A-2.3: comma-separated type filter

@@ -43,10 +43,38 @@ void SelectionModel::setSelection(const QStringList &paths, const QString &curre
 
 void SelectionModel::clear()
 {
-    if (m_current.isEmpty() && m_selection.isEmpty())
+    if (m_current.isEmpty() && m_selection.isEmpty() && m_focused.isEmpty() && m_compared.isEmpty())
         return;
     m_current.clear();
     m_selection.clear();
+    m_focused.clear();
+    m_compared.clear();
     emit currentImageChanged(m_current);
     emit selectionChanged(m_selection);
+    emit focusedChanged(m_focused);
+    emit comparedChanged(m_compared);
+}
+
+void SelectionModel::setFocused(const QString &path)
+{
+    if (m_focused == path)
+        return;
+    m_focused = path;
+    emit focusedChanged(m_focused);
+}
+
+void SelectionModel::setHovered(const QString &path)
+{
+    if (m_hovered == path)
+        return;
+    m_hovered = path;
+    emit hoveredChanged(m_hovered);
+}
+
+void SelectionModel::setCompared(const QStringList &paths)
+{
+    if (m_compared == paths)
+        return;
+    m_compared = paths;
+    emit comparedChanged(m_compared);
 }

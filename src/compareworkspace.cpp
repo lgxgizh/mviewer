@@ -447,6 +447,13 @@ void CompareWorkspace::setImages(const QStringList &paths)
     if (m_grid && !two)
         m_grid->setVisible(true);
     setFocus();
+    // P0-2: publish the compare set + reference to the app-wide SelectionModel so
+    // Metadata/Analysis/Export stay in sync with what is being compared.
+    if (m_selection)
+    {
+        m_selection->setCompared(comparedImages());
+        m_selection->setFocused(focusImagePath());
+    }
 }
 
 QStringList CompareWorkspace::comparedImages() const
@@ -651,6 +658,9 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
         if (poolIdx >= 0 && poolIdx < m_imagePool.size())
             m_selection->setCurrentImage(m_imagePool[poolIdx]);
     }
+    // P0-2: publish the locked reference to the app-wide SelectionModel.
+    if (m_selection)
+        m_selection->setFocused(locking ? focusImagePath() : QString());
 
     const int n = m_engine.imageCount();
     for (int i = 0; i < n; ++i)
