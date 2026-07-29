@@ -14,6 +14,15 @@ void CompareWorkspace::rebuildCells()
     m_cellViews.clear();
     m_cellHists.clear();
 
+    // Reset stale stretch factors from the previous layout. m_layout is reused
+    // across rebuilds, and QGridLayout keeps row/column stretch even after the
+    // widgets are removed — so switching e.g. 2x4 -> 1x2 would leave the empty
+    // row/columns still claiming half of the viewport.
+    for (int r = 0; r < m_layout->rowCount(); ++r)
+        m_layout->setRowStretch(r, 0);
+    for (int c = 0; c < m_layout->columnCount(); ++c)
+        m_layout->setColumnStretch(c, 0);
+
     const int n = m_engine.imageCount();
     // Drop a stale focus lock when the image set shrank.
     if (m_focusIndex >= n)
