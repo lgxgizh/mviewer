@@ -53,9 +53,14 @@ std::string parseTextType(const unsigned char *tagData, uint32_t tagSize)
         // mluc type: records of UTF-16BE strings.
         if (tagSize < 12)
             return {};
-        const uint32_t recCount = be32(tagData + 8);
         const uint32_t recSize = be32(tagData + 12);
-        for (uint32_t i = 0; i < recCount; ++i)
+        if (recSize < 12 || tagSize < 16 + recSize)
+            return {};
+        // Bound the record count by what the tag payload can actually hold so a
+        // hostile/malformed recCount cannot spin this loop forever (or overflow).
+        const uint32_t maxRec = (tagSize - 16) / recSize;
+        const uint32_t recCount = be32(tagData + 8);
+        for (uint32_t i = 0; i < recCount && i < maxRec; ++i)
         {
             const uint32_t recOff = 16 + i * recSize;
             if (recOff + 12 > tagSize)
@@ -169,9 +174,12 @@ IccProfile parseIccProfile(const unsigned char *data, size_t size)
         return info;
     info.valid = true;
 
+    // ICC version is BCD-encoded: byte8 = major, byte9 = minor (BCD),
+    // byte10 = bugfix tens (BCD), byte11 = bugfix ones (BCD).
+    const uint32_t minor = (uint32_t(data[9] >> 4) * 10) + (data[9] & 0x0F);
+    const uint32_t bugfix = uint32_t(data[10]) * 10 + uint32_t(data[11]);
     char buf[32];
-    std::snprintf(buf, sizeof(buf), "%u.%u.%u", unsigned(data[8]), unsigned(data[9]),
-                  unsigned(data[11]));
+    std::snprintf(buf, sizeof(buf), "%u.%u.%u", unsigned(data[8]), minor, bugfix);
     info.version = buf;
     info.deviceClass = deviceClassText(sig4(data + 12));
     info.colorSpace = colorSpaceText(sig4(data + 16));
@@ -181,11 +189,14 @@ IccProfile parseIccProfile(const unsigned char *data, size_t size)
     const uint32_t tagCount = be32(data + 128);
     for (uint32_t i = 0; i < tagCount; ++i)
     {
+        const size_t entryEnd = 132 + size_t(i) * 12 + 12;
+        if (entryEnd > size)
+            break;
         const unsigned char *e = data + 132 + i * 12;
         const std::string sig = sig4(e);
         const uint32_t off = be32(e + 4);
         const uint32_t sz = be32(e + 8);
-        if (off + sz > size || sz < 4)
+        if (sz < 4 || sz > size || off > size - sz)
             continue;
         const unsigned char *tagData = data + off;
         if (sig == "desc")
