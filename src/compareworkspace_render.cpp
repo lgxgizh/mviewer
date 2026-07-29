@@ -118,6 +118,12 @@ void CompareWorkspace::rebuildCells()
         const int row = i / lay.cols;
         const int col = i % lay.cols;
         m_layout->addWidget(cellWidget, row, col);
+        // Let every cell expand to fill the available area so image panes (not the
+        // widgets' minimum size) are what the grid lays out. Without stretch the
+        // grid collapses to the cells' minimum size and fitAll() computes a tiny
+        // shared scale, leaving compare panes blank or microscopic.
+        m_layout->setRowStretch(row, 1);
+        m_layout->setColumnStretch(col, 1);
     }
 
     // M3: a layout switch / swap / preset / blink-stop destroys and recreates every

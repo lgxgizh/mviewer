@@ -296,7 +296,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 
     // QScrollArea wraps the grid so 2×4 layouts (5-8 images) can scroll
     auto *scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(false);
+    scroll->setWidgetResizable(true);
     scroll->setWidget(m_grid);
     scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);

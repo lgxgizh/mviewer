@@ -275,27 +275,26 @@ void DirectoryTree::navigateTo(const QString &path, bool emitSignal)
     m_currentPath = normalized;
     watchPath(normalized);
 
+    // Visual sync (highlight + scroll + expand) must happen for BOTH programmatic
+    // and user navigation, so the tree always reflects the single "current
+    // directory" no matter whether the user typed a path or picked a node.
+    // setCurrentIndex is signal-blocked to avoid re-emitting directoryChanged.
+    selectionModel()->blockSignals(true);
+    setCurrentIndex(proxyIdx);
+    scrollTo(proxyIdx, PositionAtCenter);
+    expand(proxyIdx);
+    selectionModel()->blockSignals(false);
+    applyCurrentHighlight(proxyIdx);
+
     if (emitSignal)
     {
-        // A-1.1: programmatic navigation that should behave exactly like a user
-        // click. Emit the canonical directoryChanged signal directly instead of
-        // faking a QTreeView::clicked() (which round-tripped through the clicked
-        // handler and risked re-entrancy).
+        // Programmatic navigation that should behave exactly like a user click:
+        // emit the canonical directoryChanged signal directly instead of faking a
+        // QTreeView::clicked() (which round-tripped through the clicked handler
+        // and risked re-entrancy).
         emit directoryChanged(normalized);
     }
-    else
-    {
-        // Programmatic navigation: block signals to avoid re-triggering the
-        // directoryChanged → setDirectory loop.
-        selectionModel()->blockSignals(true);
-        setCurrentIndex(proxyIdx);
-        scrollTo(proxyIdx, PositionAtCenter);
-        expand(proxyIdx);
-        selectionModel()->blockSignals(false);
-    }
 
-    // A-1.3: apply visual highlight to the current directory.
-    applyCurrentHighlight(proxyIdx);
     // Keep loading indicator until progressive fetch finishes (onRowsInserted).
     if (!needsFetch)
         setLoading(false);

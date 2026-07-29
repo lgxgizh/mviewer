@@ -415,11 +415,19 @@ void ImageViewer::paintEvent(QPaintEvent *event)
                 if (hnd == 0)
                     continue;
                 int tsx, tsy, tsw, tsh;
-                tileView.imageRectToScreen(rt.key.col * m_tiles.tileSize * (1 << rt.key.lod),
-                                           rt.key.row * m_tiles.tileSize * (1 << rt.key.lod),
-                                           TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod),
-                                           TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod),
-                                           tsx, tsy, tsw, tsh);
+                // Use the ACTUAL tile extent (clamped to image bounds). The cached
+                // tile buffer only covers the real source region, so sizing the
+                // destination by the nominal lodTileSize would stretch the trailing
+                // partial tile sideways (visible as a block "extending right").
+                const int lodA = rt.key.lod;
+                const int srcXA = rt.key.col * m_tiles.tileSize * (1 << lodA);
+                const int srcYA = rt.key.row * m_tiles.tileSize * (1 << lodA);
+                const int lodSizeA = TileCache::lodTileSize(m_tiles.tileSize, lodA);
+                const int actualWA = qMin(lodSizeA, m_tiles.imageW - srcXA);
+                const int actualHA = qMin(lodSizeA, m_tiles.imageH - srcYA);
+                if (actualWA <= 0 || actualHA <= 0)
+                    continue;
+                tileView.imageRectToScreen(srcXA, srcYA, actualWA, actualHA, tsx, tsy, tsw, tsh);
                 if (dpr > 1.0)
                 {
                     tsx = static_cast<int>(std::lround(tsx / dpr));
@@ -442,11 +450,18 @@ void ImageViewer::paintEvent(QPaintEvent *event)
             if (useGpu && m_gpu.handle(rt.key) != 0)
                 continue; // already drawn via blitter
             int tsx, tsy, tsw, tsh;
-            tileView.imageRectToScreen(rt.key.col * m_tiles.tileSize * (1 << rt.key.lod),
-                                       rt.key.row * m_tiles.tileSize * (1 << rt.key.lod),
-                                       TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod),
-                                       TileCache::lodTileSize(m_tiles.tileSize, rt.key.lod), tsx,
-                                       tsy, tsw, tsh);
+            // Same clamped-extent fix as the GPU path: draw only the real tile
+            // region so the last partial tile is not stretched to fill a
+            // nominal lodTileSize destination.
+            const int lodA = rt.key.lod;
+            const int srcXA = rt.key.col * m_tiles.tileSize * (1 << lodA);
+            const int srcYA = rt.key.row * m_tiles.tileSize * (1 << lodA);
+            const int lodSizeA = TileCache::lodTileSize(m_tiles.tileSize, lodA);
+            const int actualWA = qMin(lodSizeA, m_tiles.imageW - srcXA);
+            const int actualHA = qMin(lodSizeA, m_tiles.imageH - srcYA);
+            if (actualWA <= 0 || actualHA <= 0)
+                continue;
+            tileView.imageRectToScreen(srcXA, srcYA, actualWA, actualHA, tsx, tsy, tsw, tsh);
             if (dpr > 1.0)
             {
                 tsx = static_cast<int>(std::lround(tsx / dpr));

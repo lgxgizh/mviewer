@@ -476,6 +476,23 @@ void ThumbnailPanel::onSelectionChanged()
         selBytes += m_sizeByPath.value(m_paths.value(idx.row()), 0);
     const int n = sel.size();
 
+    // M23 P2 / Code-Review #5: keep the app-wide SelectionModel (the single
+    // source of truth that Compare reads) in sync with the gallery's full
+    // multi-selection. QListView::ExtendedSelection already supports Ctrl / Shift
+    // / rubber-band multi-select, but only a plain single click pushed the path
+    // into SelectionModel before — so Compare used to receive a single (stale)
+    // image instead of the whole selection. Updating here makes the shared model
+    // reflect Ctrl/Shift/box selections uniformly.
+    if (m_selection)
+    {
+        QStringList paths;
+        paths.reserve(n);
+        for (const QModelIndex &idx : sel)
+            paths.append(m_paths.value(idx.row()));
+        const QString cur = sel.isEmpty() ? QString() : m_paths.value(sel.constLast().row());
+        m_selection->setSelection(paths, cur);
+    }
+
     // M23 P2 (selection UX): keep the compare affordance always discoverable.
     // It shows the live selection count, enables once 2–8 images are picked,
     // and is hidden only when nothing is selected.
