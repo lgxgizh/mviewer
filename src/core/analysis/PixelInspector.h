@@ -41,6 +41,13 @@ struct ColorTriple
 // Convert an sRGB pixel (0..255 each) into the requested color space.
 ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space);
 
+// Convert a high-bit-depth pixel (0..maxVal each channel) into the requested
+// color space. Used when a true 16-bit source is available so the Pixel
+// Inspector readout is not quantized to 8-bit. RGB/HEX return the integer
+// sample (RGB scaled to 8-bit for HEX display); chromaticity spaces are
+// computed from the normalized (0..1) sample and share the 8-bit output ranges.
+ColorTriple toColorSpace(uint16_t r, uint16_t g, uint16_t b, uint16_t maxVal, ColorSpace space);
+
 struct NeighborhoodStats
 {
     double mean = 0;     // mean of luminance over the kernel

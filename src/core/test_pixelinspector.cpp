@@ -142,11 +142,42 @@ static void test_raw16At()
     CHECK(r == 4242 && g == 4242 && b == 4242);
 }
 
+static void test_color_spaces_16bit()
+{
+    // RGB returns the raw 16-bit integer sample.
+    auto rgb = toColorSpace(65535, 0, 0, 65535, ColorSpace::RGB);
+    CHECK(std::abs(rgb.c1 - 65535) < 1e-6 && std::abs(rgb.c2) < 1e-6 && std::abs(rgb.c3) < 1e-6);
+
+    // Full-scale pure red matches the 8-bit pure-red readouts (hue 0, value 100).
+    auto hsv = toColorSpace(65535, 0, 0, 65535, ColorSpace::HSV);
+    CHECK(std::abs(hsv.c1) < 1e-6 && std::abs(hsv.c3 - 100) < 1e-6);
+
+    // At the same normalized level a 16-bit sample must agree with its 8-bit
+    // equivalent; the only difference is finer quantization, so a small
+    // tolerance absorbs the 8→16 upscale rounding.
+    const uint8_t v8 = 128;
+    const uint16_t v16 = static_cast<uint16_t>(std::round(v8 * 65535.0 / 255.0));
+    for (auto space :
+         {ColorSpace::HSV, ColorSpace::Lab, ColorSpace::YUV, ColorSpace::YCbCr, ColorSpace::XYZ})
+    {
+        const auto a = toColorSpace(v8, v8, v8, space);
+        const auto b = toColorSpace(v16, v16, v16, 65535, space);
+        CHECK(std::abs(a.c1 - b.c1) < 1e-1);
+        CHECK(std::abs(a.c2 - b.c2) < 1e-1);
+        CHECK(std::abs(a.c3 - b.c3) < 1e-1);
+    }
+
+    // HEX maps the 16-bit sample down to 8-bit (full-scale red → 255 channel).
+    auto hexT = toColorSpace(65535, 0, 0, 65535, ColorSpace::HEX);
+    CHECK(std::abs(hexT.c1 - 255) < 1e-6 && std::abs(hexT.c2) < 1e-6 && std::abs(hexT.c3) < 1e-6);
+}
+
 int main()
 {
     test_color_spaces();
     test_neighborhood();
     test_raw16At();
+    test_color_spaces_16bit();
     if (g_failures == 0)
     {
         std::printf("PASS: pixelinspector_tests (%d checks)\n", 0);

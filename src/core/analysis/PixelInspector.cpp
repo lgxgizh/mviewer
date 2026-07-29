@@ -20,19 +20,18 @@ inline double luma(double r, double g, double b)
 }
 } // namespace
 
-ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space)
+namespace
 {
-    const double R = r / 255.0, G = g / 255.0, B = b / 255.0;
+// Chromaticity math for HSV/Lab/YUV/YCbCr/XYZ given channels normalized to
+// 0..1. Returns each channel in the same human-readable range the 8-bit
+// front-ends use (HSV 0..360/0..100/0..100, Lab 0..100/-128..127,
+// YUV Y 0..255 / U,V -128..127, YCbCr 0..255, XYZ ~0..1). RGB/HEX are handled
+// by the public overloads because their ranges depend on the source bit depth.
+ColorTriple toColorSpaceNorm(double R, double G, double B, ColorSpace space)
+{
     ColorTriple out;
-
     switch (space)
     {
-    case ColorSpace::RGB:
-        out.c1 = r;
-        out.c2 = g;
-        out.c3 = b;
-        break;
-
     case ColorSpace::HSV:
     {
         const double mx = std::max({R, G, B});
@@ -79,19 +78,19 @@ ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space)
     {
         // BT.601, Y in 0..255, U/V in -128..127. Scaled so a neutral
         // gray (R=G=B) yields exactly U=V=0.
-        const double Y = 0.299 * r + 0.587 * g + 0.114 * b;
-        out.c1 = Y;
-        out.c2 = 0.564 * (b - Y); // 0.564 ≈ 0.5 / (1 - 0.114)
-        out.c3 = 0.713 * (r - Y); // 0.713 ≈ 0.5 / (1 - 0.299)
+        const double Y = 0.299 * R + 0.587 * G + 0.114 * B;
+        out.c1 = Y * 255.0;
+        out.c2 = 0.564 * (B - Y) * 255.0; // 0.564 ≈ 0.5 / (1 - 0.114)
+        out.c3 = 0.713 * (R - Y) * 255.0; // 0.713 ≈ 0.5 / (1 - 0.299)
         break;
     }
 
     case ColorSpace::YCbCr:
     {
         // BT.601, full range, Y/Cb/Cr in 0..255.
-        out.c1 = 0.299 * r + 0.587 * g + 0.114 * b;
-        out.c2 = -0.168736 * r - 0.331264 * g + 0.5 * b + 128.0;
-        out.c3 = 0.5 * r - 0.418688 * g - 0.081312 * b + 128.0;
+        out.c1 = (0.299 * R + 0.587 * G + 0.114 * B) * 255.0;
+        out.c2 = (-0.168736 * R - 0.331264 * G + 0.5 * B) * 255.0 + 128.0;
+        out.c3 = (0.5 * R - 0.418688 * G - 0.081312 * B) * 255.0 + 128.0;
         break;
     }
 
@@ -107,14 +106,33 @@ ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space)
         break;
     }
 
-    case ColorSpace::HEX:
-        // Display-only; formatted via toHex(). Fall back to raw RGB triple.
-        out.c1 = r;
-        out.c2 = g;
-        out.c3 = b;
+    default:
         break;
     }
     return out;
+}
+} // namespace
+
+ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space)
+{
+    if (space == ColorSpace::RGB || space == ColorSpace::HEX)
+        return {double(r), double(g), double(b)};
+    return toColorSpaceNorm(r / 255.0, g / 255.0, b / 255.0, space);
+}
+
+ColorTriple toColorSpace(uint16_t r, uint16_t g, uint16_t b, uint16_t maxVal, ColorSpace space)
+{
+    if (maxVal == 0)
+        maxVal = 1;
+    if (space == ColorSpace::RGB)
+        return {double(r), double(g), double(b)};
+    if (space == ColorSpace::HEX)
+    {
+        const auto map = [maxVal](uint16_t v)
+        { return static_cast<uint8_t>(std::min<double>(255.0, v * 255.0 / maxVal + 0.5)); };
+        return {double(map(r)), double(map(g)), double(map(b))};
+    }
+    return toColorSpaceNorm(double(r) / maxVal, double(g) / maxVal, double(b) / maxVal, space);
 }
 
 NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, int height, int cx,

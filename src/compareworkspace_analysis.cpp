@@ -205,20 +205,33 @@ void CompareWorkspace::updateInspector(int x, int y)
         }
         else
         {
-            const auto t =
-                mviewer::core::toColorSpace(static_cast<uint8_t>(s.r), static_cast<uint8_t>(s.g),
-                                            static_cast<uint8_t>(s.b), space);
+            // P0-2/PixelInspector: when a true 16-bit source is present, compute the
+            // chromaticity readout from the 16-bit sample so high-bit-depth images are
+            // not quantized to 8-bit. RGB/HEX stay at the 8-bit display value.
+            uint16_t r16 = 0, g16 = 0, b16 = 0;
+            const bool have16 = img && img->hasRaw16() && img->raw16At(x, y, r16, g16, b16);
+            mviewer::core::ColorTriple t;
+            if (have16 && space != ColorSpace::RGB && space != ColorSpace::HEX)
+                t = mviewer::core::toColorSpace(r16, g16, b16, img->raw16Max(), space);
+            else
+                t = mviewer::core::toColorSpace(static_cast<uint8_t>(s.r),
+                                                static_cast<uint8_t>(s.g),
+                                                static_cast<uint8_t>(s.b), space);
             m_inspector->setItem(i, 2, new QTableWidgetItem(formatChannel(space, t.c1)));
             m_inspector->setItem(i, 3, new QTableWidgetItem(formatChannel(space, t.c2)));
             m_inspector->setItem(i, 4, new QTableWidgetItem(formatChannel(space, t.c3)));
         }
         m_inspector->setItem(i, 5, new QTableWidgetItem(QString::number(static_cast<int>(dist))));
-        // P0-2/PixelInspector: original 16-bit readout per image in the 16bit column.
+        // P0-2/PixelInspector: true 16-bit sample in the 16bit column. Camera RAW is
+        // demosaiced to 8-bit in the current pipeline (no linear 16-bit buffer), so the
+        // demosaic preview value is reported and clearly labelled.
         QString raw16Text = QStringLiteral("—");
         if (img)
         {
             if (img->metadata().format == "RAW")
-                raw16Text = QStringLiteral("RAW");
+            {
+                raw16Text = QString("%1,%2,%3 (RAW预览)").arg(s.r).arg(s.g).arg(s.b);
+            }
             else
             {
                 uint16_t vr = 0, vg = 0, vb = 0;
