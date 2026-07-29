@@ -1,4 +1,5 @@
 #include "core/image/MetadataReader.h"
+#include "core/image/IccProfile.h"
 
 #include <QColorSpace>
 #include <QFile>
@@ -102,6 +103,20 @@ mviewer::domain::ImageMetadata MetadataReader::read(const std::string &filePath)
             if (dpmy > 0)
                 meta.dpiY = qRound(dpmy * 0.0254);
             meta.hasIccProfile = !img.colorSpace().iccProfile().isEmpty();
+            if (meta.hasIccProfile)
+            {
+                const QByteArray icc = img.colorSpace().iccProfile();
+                const auto pi =
+                    parseIccProfile(reinterpret_cast<const unsigned char *>(icc.constData()),
+                                    static_cast<size_t>(icc.size()));
+                meta.iccDescription = pi.description;
+                meta.iccCopyright = pi.copyright;
+                meta.iccColorSpace = pi.colorSpace;
+                meta.iccDeviceClass = pi.deviceClass;
+                meta.iccPcs = pi.pcs;
+                meta.iccRenderingIntent = pi.renderingIntent;
+                meta.iccVersion = pi.version;
+            }
         }
     }
 

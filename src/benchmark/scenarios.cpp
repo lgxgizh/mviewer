@@ -5,6 +5,7 @@
 #include "core/image/Decoder.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageRepository.h"
+#include "core/perf/GpuTracker.h"
 #include "core/perf/MemoryTracker.h"
 #include "core/render/TileCache.h"
 #include "core/render/TileGrid.h"
@@ -950,6 +951,90 @@ ScenarioResult scenarioZoomLatency()
     r.timing = summarize(s);
     r.value = r.timing.p50Ms;
     r.detail = "8K->1080p SmoothTransformation rescale per frame (zoom hot-path proxy)";
+    return r;
+}
+
+// B16: render throughput (fps). Synthesizes a viewport rescale loop (the hot
+// path behind continuous wheel/gesture zoom) and reports achieved FPS.
+// Report-only (machine dependent) — never blocks CI under --enforce.
+ScenarioResult scenarioRenderFps()
+{
+    ScenarioResult r;
+    r.name = "B16";
+    r.metric = "render_fps";
+    QImage big = makeSyntheticFrame(8000, 6000, 4);
+    QImage view(1920, 1080, QImage::Format_RGB888);
+    const int frames = 120;
+    const double t0 = nowMs();
+    for (int i = 0; i < frames; ++i)
+    {
+        // Vary the target size slightly to emulate continuous zoom; copy so the
+        // resize does real work every frame (worst-case continuous-zoom path).
+        const int w = 1280 + (i % 5) * 160;
+        QImage z = big.scaled(w, 720, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        view = z.copy();
+    }
+    const double t1 = nowMs();
+    const double elapsed = std::max(t1 - t0, 1e-6);
+    const double fps = frames / (elapsed / 1000.0);
+    r.value = fps;
+    r.passed = true;
+    r.detail = "frames=" + std::to_string(frames) + " elapsed_ms=" + std::to_string(elapsed);
+    return r;
+}
+
+// SCALE: corpus scaling tiers (100 / 1000 / 5000). Decodes `tierN` images
+// (capped by corpus size) and reports decode throughput (fps) plus peak cache
+// memory and GPU dedicated memory. The cache is evicted every window so peak
+// memory stays bounded even at the 5000-image tier. Report-only.
+ScenarioResult scenarioScaleTier(const Corpus &corpus, size_t tierN, const std::string &tierLabel)
+{
+    auto &repo = ImageRepository::instance();
+    auto &cm = CacheManager::instance();
+    auto &mt = mviewer::perf::MemoryTracker::instance();
+    repo.invalidateAll();
+    cm.clearMemory();
+    mt.reset();
+
+    const auto all = corpus.allPaths();
+    if (all.empty())
+        return ScenarioResult{"S" + tierLabel, "scale_decode_fps", 0, {}, "empty corpus", false};
+
+    const size_t n = std::min(tierN, all.size());
+    constexpr size_t kWindow = 64; // evict after each window to bound peak memory
+    double peakCacheBytes = 0;
+
+    const double t0 = nowMs();
+    for (size_t i = 0; i < n; ++i)
+    {
+        repo.load(all[i]);
+        peakCacheBytes = std::max(peakCacheBytes, static_cast<double>(mt.sample().cacheTotalBytes));
+        if ((i + 1) % kWindow == 0)
+        {
+            cm.clearMemory();
+            mt.reset();
+        }
+    }
+    const double t1 = nowMs();
+    const double elapsed = std::max(t1 - t0, 1e-6);
+    const double fps = n / (elapsed / 1000.0);
+
+    const auto gpu = mviewer::perf::sampleGpu();
+    const double peakCacheMB = peakCacheBytes / (1024.0 * 1024.0);
+    const double rssMB = mt.sample().processWorkingSetKB / 1024.0;
+    const double gpuMB = gpu.dedicatedVideoBytes / (1024.0 * 1024.0);
+
+    ScenarioResult r;
+    r.name = "S" + tierLabel;
+    r.metric = "scale_decode_fps";
+    r.value = fps;
+    r.passed = true; // report-only; never blocks CI
+    r.detail = "tier=" + tierLabel + " n=" + std::to_string(n) +
+               " elapsed_ms=" + std::to_string(elapsed) +
+               " peak_cache_mb=" + std::to_string(static_cast<long long>(peakCacheMB)) +
+               " rss_mb=" + std::to_string(static_cast<long long>(rssMB)) +
+               " gpu_dedicated_mb=" + std::to_string(static_cast<long long>(gpuMB)) +
+               (gpu.available ? "" : " (gpu:unavailable)");
     return r;
 }
 

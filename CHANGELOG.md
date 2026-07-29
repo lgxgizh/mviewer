@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — Metadata 面板：嵌入 ICC 配置详情展示
+
+- **ICC 配置详情解析**：`MetadataReader` 在加载处读取解码图 `QColorSpace` 的嵌入
+  ICC 字节，经新增的 `core/image/IccProfile.{h,cpp}`（纯 std、无 Qt 依赖）解析
+  头与标签目录，填充 `domain/Image.h` 的 `ImageMetadata` 新增字段（`iccDescription` /
+  `iccCopyright` / `iccColorSpace` / `iccDeviceClass` / `iccPcs` / `iccRenderingIntent`
+  / `iccVersion`）。
+- **面板新增「ICC 配置详情」分组**：`MetadataModel` 在 `hasIccProfile` 且已解析出字段时
+  新增「ICC 配置详情」分类，展示描述 / 版权 / 设备类别 / 色彩空间 / PCS / 渲染意图 /
+  版本；Image 分组下原有的「ICC 配置：已嵌入/无」叶节点保持不变。
+- 单测覆盖「ICC 配置详情」分组各叶节点，并入 `metadatamodel_tests`。
+
+### Added — Benchmark 规模化（100 / 1000 / 5000，内存 / GPU / FPS）
+
+- **规模分层场景 `scenarioScaleTier`**：`mviewer_bench --scale` 对 100 / 1000 / 5000
+  三档分别解码并报告 `scale_decode_fps`（解码吞吐），同时采样 `peak_cache_mb`（峰值缓存
+  内存）、`rss_mb`（峰值工作集）与 `gpu_dedicated_mb`（GPU 专用显存，best-effort）。每窗口
+  清缓存以限制峰值内存，避免 5000 档 OOM。三档为报告项（`report-only`），不卡 CI。
+- **渲染 FPS 场景 B16 `scenarioRenderFps`**：合成视口缩放循环，报告 `render_fps`（缩放热路径
+  帧率），报告项。
+- **GPU 探针 `core/perf/GpuTracker.{h,cpp}`**：Windows / DXGI best-effort 采样专用显存，
+  无 GPU 时数值为 0 并标注 `(gpu:unavailable)`，不中断运行。
+- 规模档上限受生成语料规模约束；如需完整 5000 档，传 `--corpus-size 1667 --scale`
+  （语料为 3 格式 ×N 张）。
+
+### Added — Release Checklist 自动跑
+
+- **`scripts/run_release_checklist.ps1`**：一键执行 `docs/release/RELEASE_CHECKLIST.md`
+  的 7 步（构建 / 核心测试 / `--selftest` / 性能门禁 `--smoke` `--enforce` / 崩溃诊断环境变量
+  / 打包 / 清单），逐步输出 `[PASS]/[FAIL]/[WARN]/[SKIP]` 并写入 `release_checklist_report.md`，
+  任一硬步骤失败以非零退出码结束。支持 `-Package` / `-SkipBench` / `-Steps` 参数。
+
 ### Added — P0-2 选择状态统一（SelectionModel 收编 Focused / Hovered / Compared）
 
 - **SelectionModel 扩展三态**：在既有 Current / Selected 之上新增 `focused`

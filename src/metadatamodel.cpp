@@ -203,6 +203,34 @@ void MetadataModel::rebuild()
         }
     }
 
+    // ─── ICC profile section (M-XX) ────────────────────────────────────────
+    // Only show the dedicated section when the embedded profile was actually
+    // parsed into detail fields (avoids an empty category when only the
+    // "已嵌入" leaf under Image is known).
+    const bool hasIccDetails =
+        m_meta.hasIccProfile && (!m_meta.iccDescription.empty() || !m_meta.iccCopyright.empty() ||
+                                 !m_meta.iccColorSpace.empty() || !m_meta.iccDeviceClass.empty() ||
+                                 !m_meta.iccPcs.empty() || !m_meta.iccRenderingIntent.empty() ||
+                                 !m_meta.iccVersion.empty());
+    if (hasIccDetails)
+    {
+        auto *icc = addCategory(tr("ICC 配置详情"));
+        if (!m_meta.iccDescription.empty())
+            addLeaf(icc, tr("描述"), toQString(m_meta.iccDescription));
+        if (!m_meta.iccCopyright.empty())
+            addLeaf(icc, tr("版权"), toQString(m_meta.iccCopyright));
+        if (!m_meta.iccDeviceClass.empty())
+            addLeaf(icc, tr("设备类别"), toQString(m_meta.iccDeviceClass));
+        if (!m_meta.iccColorSpace.empty())
+            addLeaf(icc, tr("色彩空间"), toQString(m_meta.iccColorSpace));
+        if (!m_meta.iccPcs.empty())
+            addLeaf(icc, tr("PCS"), toQString(m_meta.iccPcs));
+        if (!m_meta.iccRenderingIntent.empty())
+            addLeaf(icc, tr("渲染意图"), toQString(m_meta.iccRenderingIntent));
+        if (!m_meta.iccVersion.empty())
+            addLeaf(icc, tr("版本"), toQString(m_meta.iccVersion));
+    }
+
     // ─── RAW sensor section ─────────────────────────────────────────────
     if (m_raw.parsed)
     {

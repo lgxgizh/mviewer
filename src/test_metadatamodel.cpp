@@ -157,6 +157,39 @@ int main(int argc, char **argv)
         CHECK(leafValue(&m, raw, "原始尺寸").contains("8192"), "raw size leaf");
     }
 
+    // ── Parsed ICC profile details add the "ICC 配置详情" section (M-XX) ──────
+    {
+        mviewer::domain::ImageMetadata meta;
+        meta.fileName = "srgb.png";
+        meta.filePath = "/pics/srgb.png";
+        meta.format = "PNG";
+        meta.width = 640;
+        meta.height = 480;
+        meta.textKeys = {{"Make", "ACME"}, {"Model", "SRGBCam"}};
+        meta.hasIccProfile = true;
+        meta.iccDescription = "sRGB IEC61966-2.1";
+        meta.iccCopyright = "Public Domain";
+        meta.iccDeviceClass = "显示器";
+        meta.iccColorSpace = "RGB";
+        meta.iccPcs = "XYZ";
+        meta.iccRenderingIntent = "感知 (Perceptual)";
+        meta.iccVersion = "2.1.0";
+
+        MetadataModel m;
+        m.setImage(meta);
+
+        CHECK(m.rowCount() == 4, "file+image+exif+icc yields 4 categories");
+        QModelIndex icc = findCategory(&m, "ICC 配置详情");
+        CHECK(icc.isValid(), "ICC 配置详情 category present");
+        CHECK(leafValue(&m, icc, "描述") == "sRGB IEC61966-2.1", "icc description leaf");
+        CHECK(leafValue(&m, icc, "版权") == "Public Domain", "icc copyright leaf");
+        CHECK(leafValue(&m, icc, "设备类别") == "显示器", "icc device class leaf");
+        CHECK(leafValue(&m, icc, "色彩空间") == "RGB", "icc color space leaf");
+        CHECK(leafValue(&m, icc, "PCS") == "XYZ", "icc pcs leaf");
+        CHECK(leafValue(&m, icc, "渲染意图") == "感知 (Perceptual)", "icc rendering intent leaf");
+        CHECK(leafValue(&m, icc, "版本") == "2.1.0", "icc version leaf");
+    }
+
     // ── clear() returns to the hint state ───────────────────────────────────
     {
         mviewer::domain::ImageMetadata meta;

@@ -18,6 +18,7 @@ add_library(mviewer_core SHARED
     core/image/ImageObject.cpp
     core/image/ImageFrame.cpp
     core/image/ImageRepository.cpp
+    core/image/IccProfile.cpp
     core/image/MetadataReader.cpp
     core/image/RawMetadata.cpp
     core/image/ImageCache.cpp
@@ -251,6 +252,7 @@ add_executable(core_tests
     # M10 suites (incremental isolation)
     core/test_memorytracker.cpp
     core/test_benchmark.cpp
+    core/perf/GpuTracker.cpp
     benchmark/corpus.cpp
     benchmark/scenarios.cpp
 )
@@ -998,6 +1000,7 @@ add_executable(mviewer_bench
     benchmark/main.cpp
     benchmark/corpus.cpp
     benchmark/scenarios.cpp
+    core/perf/GpuTracker.cpp
 )
 
 target_link_libraries(mviewer_bench
@@ -1005,6 +1008,8 @@ target_link_libraries(mviewer_bench
         Qt6::Core
         Qt6::Widgets
         mviewer_core
+        dxgi
+        ole32
 )
 
 target_compile_features(mviewer_bench PRIVATE cxx_std_20)

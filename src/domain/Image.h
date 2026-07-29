@@ -37,8 +37,17 @@ struct ImageMetadata
     std::string colorSpace;     // "sRGB", "AdobeRGB", "DisplayP3", or ""/unknown
     int orientation = 1;        // EXIF orientation 1-8 (1 = normal)
     bool hasIccProfile = false; // true if an ICC profile is embedded
-    std::string format;         // container format, e.g. "JPEG","PNG","BMP","TIFF"
-    int dpiX = 0, dpiY = 0;     // physical resolution in DPI (0 = unknown)
+
+    // M-XX: parsed ICC profile details (from the embedded profile bytes).
+    std::string iccDescription;     // profile description, e.g. "sRGB IEC61966-2.1"
+    std::string iccCopyright;       // profile copyright notice
+    std::string iccColorSpace;      // profile data color space, e.g. "RGB"
+    std::string iccDeviceClass;     // profile device class, e.g. "显示器"
+    std::string iccPcs;             // profile connection space, e.g. "XYZ"
+    std::string iccRenderingIntent; // e.g. "感知 (Perceptual)"
+    std::string iccVersion;         // profile version, e.g. "2.1.0"
+    std::string format;             // container format, e.g. "JPEG","PNG","BMP","TIFF"
+    int dpiX = 0, dpiY = 0;         // physical resolution in DPI (0 = unknown)
 
     // M18: embedded text metadata (EXIF/XMP/IPTCCore keys the plugin exposes),
     // e.g. "Make", "Model", "DateTimeOriginal", "Software". Best-effort; the

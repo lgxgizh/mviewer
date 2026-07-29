@@ -130,4 +130,15 @@ ScenarioResult scenarioFirstFrameLatency(const Corpus &corpus);
 // rescale, the hot path behind wheel/gesture zoom.
 ScenarioResult scenarioZoomLatency();
 
+// B16: render throughput (frames/sec). Synthesizes a viewport rescale loop and
+// reports achieved FPS for the render/zoom hot path. Report-only (machine
+// dependent) — never blocks CI under --enforce.
+ScenarioResult scenarioRenderFps();
+
+// SCALE: corpus scaling tiers (100 / 1000 / 5000 images). Decodes `tierN` images
+// (capped by corpus size) and reports decode throughput (fps) plus peak cache
+// memory and GPU dedicated memory. Report-only; surfaces 内存/GPU/FPS at scale.
+// `tierLabel` is the human-readable tier name ("100"/"1000"/"5000").
+ScenarioResult scenarioScaleTier(const Corpus &corpus, size_t tierN, const std::string &tierLabel);
+
 } // namespace mviewer::bench

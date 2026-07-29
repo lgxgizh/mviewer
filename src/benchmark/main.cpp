@@ -33,6 +33,10 @@
 //   mviewer_bench --budget <file> load performance_budget.json (data-driven gates)
 //   mviewer_bench --baseline <f>  explicit baseline JSON (implies --regression)
 //   mviewer_bench --corpus-size N generate N images per format
+//   mviewer_bench --scale          scaling tiers 100/1000/5000: decode fps + peak
+//                                 cache memory + GPU dedicated memory (report-only)
+//   mviewer_bench --scenarios B16,S100  run a targeted set (e.g. B16 render-fps,
+//                                 S100/S1000/S5000 scaling tiers)
 //   mviewer_bench --corpus-dir <d> reuse an existing on-disk corpus (no regen)
 //   mviewer_bench --scenarios <s> comma-separated ids (e.g. B1,B2,B8)
 //   mviewer_bench --results <f>   write JSON verdicts to <f>
@@ -223,7 +227,8 @@ void printVerdict(const mviewer::bench::ScenarioResult &r, const Budget &b)
 // path so both exercise identical scenarios/printing.
 bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
                   const std::set<std::string> &runOnly = {},
-                  std::vector<mviewer::bench::ScenarioResult> *outResults = nullptr)
+                  std::vector<mviewer::bench::ScenarioResult> *outResults = nullptr,
+                  bool scaleMode = false)
 {
     const bool filter = !runOnly.empty();
     // Lazy scenario registry, filtered on the AUTHORITATIVE name BEFORE
@@ -258,6 +263,19 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     items.push_back({"B13", [&]() { return mviewer::bench::scenarioCacheHitRate(corpus); }});
     items.push_back({"B14", [&]() { return mviewer::bench::scenarioFirstFrameLatency(corpus); }});
     items.push_back({"B15", [&]() { return mviewer::bench::scenarioZoomLatency(); }});
+    // B16: render throughput (fps), report-only (machine dependent).
+    items.push_back({"B16", [&]() { return mviewer::bench::scenarioRenderFps(); }});
+    // SCALE tiers (opt-in via --scale): decode throughput (fps) plus peak cache
+    // memory and GPU dedicated memory at 100 / 1000 / 5000 images. Report-only.
+    if (scaleMode)
+    {
+        items.push_back(
+            {"S100", [&]() { return mviewer::bench::scenarioScaleTier(corpus, 100, "100"); }});
+        items.push_back(
+            {"S1000", [&]() { return mviewer::bench::scenarioScaleTier(corpus, 1000, "1000"); }});
+        items.push_back(
+            {"S5000", [&]() { return mviewer::bench::scenarioScaleTier(corpus, 5000, "5000"); }});
+    }
 
     std::vector<mviewer::bench::ScenarioResult> results;
     for (const auto &it : items)
@@ -311,6 +329,7 @@ int main(int argc, char **argv)
     std::string resultsFile;        // M14: if set, write JSON results (for regression tracking)
     std::string baselineFile;       // M14: if set, compare against baseline for regression
     bool regression = false; // M15: enable baseline diff (separate from --enforce hard budget)
+    bool scaleMode = false;  // M-XX: run the 100/1000/5000 scaling tiers
     std::string historyFile; // M15: if set, append results row to history CSV
     std::string reportFile;  // M15: if set, write markdown regression report
 
@@ -348,6 +367,13 @@ int main(int argc, char **argv)
             historyFile = argv[++i];
         else if (a == "--report" && i + 1 < argc)
             reportFile = argv[++i];
+        else if (a == "--scale")
+        {
+            scaleMode = true;
+            // Scale tiers (100/1000/5000) are capped by the available corpus.
+            // Pass --corpus-size 5000 for the full sweep; smaller sizes run the
+            // same tiers capped to the generated image count.
+        }
     }
 
     // Build the restricted scenario set (empty = run all). Normalize tokens to the
@@ -415,7 +441,7 @@ int main(int argc, char **argv)
         mviewer::bench::Corpus corpus = mviewer::bench::makeCorpusFromDir(corpusDir);
         std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
                   << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << std::endl;
-        allPass = runScenarios(corpus, b, runOnly, &results);
+        allPass = runScenarios(corpus, b, runOnly, &results, scaleMode);
         std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ===" << std::endl;
     }
     else
@@ -424,7 +450,7 @@ int main(int argc, char **argv)
         std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
                   << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << std::endl;
 
-        allPass = runScenarios(corpus, b, runOnly, &results);
+        allPass = runScenarios(corpus, b, runOnly, &results, scaleMode);
         corpus.clear();
     }
 

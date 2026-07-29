@@ -102,7 +102,7 @@ static void test_raw16At()
     data.format = PixelFormat::RGB24;
     data.buffer = std::make_shared<std::vector<uint8_t>>(px);
 
-    mviewer::ImageFrame frame;
+    ImageFrame frame;
     frame.setPixels(data);
 
     std::vector<uint16_t> buf(2 * 2 * 3);
