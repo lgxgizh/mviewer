@@ -52,10 +52,10 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   keyboard loop (Enter opens, arrows drive selection), Ctrl+wheel thumbnail sizing,
   gallery drag & drop, live window titles, status-bar image dimensions, and explicit
   decode-failure feedback (`ImageViewer::loadFailed`).
-- **CI**: `ci.yml` (gate: format+build+test+package+clazy; clang-tidy/ASan advisory),
-  `release.yml` (tag/dispatch → portable zip + NSIS installer → GitHub Release),
-  `nightly.yml` (clang-tidy / benchmark / ASan / llvm-sanitizer / dashboard),
-  `perf-gate.yml` (hard performance gate).
+- **CI**: `ci.yml` (Tier 1 PR gate: clang-format + cppcheck + clang-tidy + build/zero-warnings + CTest with the `bench_enforce` perf hard-gate + golden_image),
+  `nightly.yml` (Tier 2: ASan / UBSan / clazy / benchmark regression / Golden Image / Perfetto),
+  `release.yml` (Tier 3: perf report / UI regression / Dr.Memory / package / GitHub Release).
+  The perf hard-gate previously in `perf-gate.yml` is now enforced inside `ci.yml`'s `test` job.
 - **Packaging**: portable ZIP (`scripts/package_portable.ps1`) + NSIS installer
   (`scripts/package_release.ps1` → `installer/mviewer.nsi`). A G1 guard asserts
   `imageformats/qtiff.dll` ships, so TIFF opens on a clean Windows with no Qt.

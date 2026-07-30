@@ -1063,7 +1063,7 @@ add_test(NAME bench_smoke COMMAND mviewer_bench --smoke)
 # Runs the same binary in --enforce mode against
 # benchmark/performance_budget.json. On a budget violation the binary exits
 # non-zero and THIS ctest FAILS (so `.\build.ps1 Test` cannot go green
-# with a perf regression). The PR-level perf-gate.yml reuses the same
+# with a perf regression). The PR-level ci.yml `test` job runs this same
 # invocation against the committed baseline.
 add_test(NAME bench_enforce
     COMMAND mviewer_bench --enforce

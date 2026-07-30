@@ -28,6 +28,19 @@ All notable changes to this project are documented here. The format is based on
 - 新增 `scripts/cppcheck-suppressions.txt`：抑制系统/Qt/STL 头噪音，仅对 `src/`
   报错。
 
+### Changed — 性能门禁收编进 `ci.yml`（删除独立 `perf-gate.yml`）
+
+- 原 `perf-gate.yml`（`mviewer_bench --enforce --budget`）与 `ci.yml` 的
+  `bench_enforce` CTest **命令完全相同**，属重复；已删除该工作流，性能硬门禁现由
+  `ci.yml` 的 `test` job 通过 `bench_enforce` ctest 统一执行（单一来源）。
+- **修复 `ci.yml` 测试门禁失效**：`build.ps1 Test` 在 CTest 失败时仅 `Write-Warning`
+  而不退出非 0，导致 `test` job 即使 `bench_enforce` 越界也会判通过。`test` job 现
+  改为显式运行 `ctest` 并加 `$LASTEXITCODE` 守卫，任何单元测试或性能越界都会真正阻断
+  PR。`build` job 改为 `build.ps1 Release`（仅编译 + 零警告检查），避免 CTest 每 PR
+  跑两遍。
+- 每次 PR 到 `master` 现少一次完整 MSVC 编译（原 `perf-gate.yml` 独立一次），且 CTest
+  只执行一次，PR 门禁更快也更可信。
+
 ### Fixed — MainWindow 双重 `setupUi()` 导致重复创建 ImageViewer
 
 - **根因**：`MainWindow` 构造函数在末尾已调用 `setupUi()`，而所有调用方

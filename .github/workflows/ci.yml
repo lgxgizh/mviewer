@@ -192,12 +192,15 @@ jobs:
           modules: qtimageformats   # provides the TIFF plugin (qtiff.dll) required by M3/M5 golden tests
           cache: true
 
-      - name: Build
+      - name: Build (compile + deploy; zero-warnings gate)
         run: |
-          # Tee preserves build.log for the zero-warnings gate; the $LASTEXITCODE
-          # guard ensures a build/test failure is not masked by Tee-Object (which
-          # would otherwise report success and let a broken build pass CI).
-          powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test 2>&1 | Tee-Object -FilePath build.log
+          # `Release` compiles and deploys Qt/CRT but does NOT run CTest — the
+          # dedicated `test` job owns CTest (incl. the bench_enforce perf gate),
+          # so the suite executes exactly once per PR instead of twice. Tee
+          # preserves build.log for the zero-warnings grep below; the
+          # $LASTEXITCODE guard keeps a compile failure from being masked by
+          # Tee-Object.
+          powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release 2>&1 | Tee-Object -FilePath build.log
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Enforce zero warnings
@@ -213,10 +216,10 @@ jobs:
           }
 
   # ---------------------------------------------------------------------------
-  # test — explicit ctest job (re-runs build+test; artifacts not shared)
-  # CTest here already includes the bench_enforce perf hard-gate and the
-  # golden_image regression check, so the benchmark gate the architect asked
-  # for is enforced on every PR.
+  # test — CTest job (separate runner; artifacts not shared)
+  # Runs CTest directly with an explicit $LASTEXITCODE guard so the
+  # bench_enforce perf hard-gate and golden_image regression are ACTUALLY
+  # enforced (build.ps1 Test swallows CTest failures, so we do not use it).
   # ---------------------------------------------------------------------------
   test:
     name: Unit tests (ctest)
@@ -237,8 +240,21 @@ jobs:
           modules: qtimageformats   # provides the TIFF plugin (qtiff.dll) required by M3/M5 golden tests
           cache: true
 
-      - name: Test
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test
+      # `build.ps1 Release` recompiles on this fresh runner (job isolation);
+      # then CTest runs directly with an explicit $LASTEXITCODE guard.
+      # NOTE: build.ps1 Test swallows CTest failures (Write-Warning, no exit),
+      # so we must NOT rely on its exit code — run CTest explicitly so any unit
+      # test or bench_enforce perf-budget violation actually fails the PR.
+      - name: Build
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
+
+      - name: Test (ctest; fails on any failure, incl. perf gate)
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $env:PATH = "$env:QT_ROOT_DIR\bin" + [System.IO.Path]::PathSeparator + $env:PATH
+          cd build_msvc
+          ctest --output-on-failure --output-junit test-results.xml -j4
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload test report
         if: always()

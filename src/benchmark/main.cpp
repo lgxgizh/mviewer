@@ -46,7 +46,7 @@
 // Gate model (product力 #2 "稳得住"):
 //   --enforce applies HARD budgets to the scenarios in performance_budget.json
 //   ["scenario_map"] (B1-B9 + B11-B15). These are generous, cross-machine-stable
-//   absolute caps, so the mandatory CI gate (perf-gate.yml: `--enforce --budget`)
+//   absolute caps, so the mandatory CI gate (ci.yml `test` job via the `bench_enforce` ctest: `--enforce --budget`)
 //   never fails on hardware jitter. --regression (or --baseline) enables the
 //   SEPARATE, noisier baseline-diff; it is run by nightly.yml, NOT the mandatory
 //   PR gate, because the committed baseline is machine-specific. B0/B10/TRACE are
@@ -464,7 +464,7 @@ int main(int argc, char **argv)
     // is specified, attempt to load benchmark/perf_baseline.json from cwd. This
     // closes the M15 gap: "CI does not yet diff against baseline or fail on
     // regression." Regression is a SEPARATE, noisier axis (it compares against a
-    // machine-specific baseline); the mandatory CI hard gate (perf-gate.yml) runs
+    // machine-specific baseline); the mandatory CI hard gate (ci.yml `test` job, via the `bench_enforce` ctest) runs
     // `--enforce --budget` WITHOUT --regression so it never fails on hardware
     // jitter. Nightly runs `--enforce --budget --regression` for trend tracking.
     if (b.enforce && regression && baselineFile.empty())
