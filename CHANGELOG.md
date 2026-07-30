@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — CI 三层架构（PR / Nightly / Release）
+
+- **第一层 `ci.yml`（PR 必跑，目标 5–10 分钟，全部必须通过）**：`format`
+  （clang-format + markdownlint）、`cppcheck`（新增，warning/performance/portability
+  增量门禁）、`clang-tidy`（由 advisory 提升为**必过**，仅检查 PR 改动文件的
+  bugprone/performance/clang-analyzer 发现）、`build`（MSVC + Qt 6.8.0，零警告
+  = warnings-as-errors）、`test`（CTest，已内含 `bench_enforce` 性能硬门禁与
+  `golden_image` 回归）。`ci-gate` 聚合上述必过状态供分支保护依赖。
+- **第二层 `nightly.yml`（每日定时 + 手动，不阻塞 PR）**：`asan`（clang-cl
+  AddressSanitizer，含 LeakSanitizer）、`ubsan`（UndefinedBehaviorSanitizer）、
+  `clazy`（advisory）、`quality`（MSVC 构建 + 基准回归 vs 基线 ±10% 报警 +
+  Golden Image 回归）、`perfetto`（best-effort 采集 Chrome-trace JSON）。
+- **第三层 `release.yml`（打 `v*` 标签或手动，全量质量扫描）**：`performance-report`
+  （完整基准 + 仪表盘）、`ui-regression`（完整 Golden Image UI 回归）、`dr-memory`
+  （Windows 内存错误，best-effort）、`package`（便携 zip + NSIS 安装包）、`release`
+  （草稿 GitHub Release 汇总产物）。
+- **项目专属 Gate 复用现有 `mviewer_bench` 场景 B1–B15**（Decode / Thumbnail /
+  Cache-Hit / Compare / GPU-Upload / Memory-Peak），无需新代码；`MVIEWER_ENABLE_PERFETTO`
+  已在 core/trace 集成，供 Nightly 采集 trace。
+- 新增 `scripts/cppcheck-suppressions.txt`：抑制系统/Qt/STL 头噪音，仅对 `src/`
+  报错。
+
 ### Fixed — MainWindow 双重 `setupUi()` 导致重复创建 ImageViewer
 
 - **根因**：`MainWindow` 构造函数在末尾已调用 `setupUi()`，而所有调用方

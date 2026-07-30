@@ -1,50 +1,44 @@
 # =============================================================================
-# MViewer CI — Phase1 (PR gate) + advisory jobs
+# MViewer CI — TIER 1: Pull-Request gate (must all pass, target 5-10 min)
 # -----------------------------------------------------------------------------
-# PR gate (REQUIRED, must all pass for a mergeable PR):
-#   format | build | test | package | clazy
+# Per architect directive (2026-07-30) the single CI file is split into three
+# independently-scheduled tiers so the PR gate stays fast and the heavy
+# sanitizer / benchmark / UI-regression work does not slow down every PR.
 #
-# Advisory / non-gating signal jobs (continue-on-error: true):
-#   static-analysis (clang-tidy)  — upload findings artifact, never blocks
-#   asan (MSVC /fsanitize=address) — see docs/known_issues/MSVC_ASAN.md
+# This file (Tier 1 / PR gate) runs on every PR and on every push to master.
+# REQUIRED jobs (branch protection depends on the `ci-gate` aggregator):
+#   format    — clang-format (C++20/Qt6) + markdownlint
+#   cppcheck  — supplemental static analysis (NEW, required)
+#   clang-tidy— bug-finding static analysis, REQUIRED, PR-incremental
+#   build     — MSVC + Qt 6.8.0, zero compiler warnings (warnings-as-errors)
+#   test      — CTest (unit tests + bench_enforce perf hard-gate + golden_image)
 #
-# This is Phase-1 CI for the MViewer Qt6/MSVC C++20 image viewer.
-#
-# Phase roadmap (Architect directive 2026-07-16, refined 2026-07-20):
-#   - Phase-1 (this file, PR GATE): format, build, test, package, clazy.
-#   - Phase-2 (NIGHTLY, NOT in PR gate): clang-tidy + LLVM ASan/UBSan +
-#     benchmark + coverage. Target milestone M13. Never blocks PRs — keeps
-#     PR velocity high while raising long-term quality signal.
-#   - Phase-3 (RELEASE): tag -> package -> installer -> sign -> upload.
-# Perfetto / clazy / ASan are DEFERRED from the mandatory gate until the
-# architecture is stable; they must not add developer burden before then.
+# The Tier-2 (nightly) and Tier-3 (release) workflows live in nightly.yml and
+# release.yml respectively and intentionally do NOT block PRs.
 #
 # PR gate expectations (all must pass for a mergeable PR):
 #   * clang-format --dry-run passes (no formatting diffs)
 #   * markdownlint passes on all .md docs
+#   * cppcheck reports no warning/performance/portability findings in src/
+#   * clang-tidy reports no bugprone/performance/clang-analyzer findings in PR
+#     changed files (incremental — legacy code is not re-checked on PRs)
 #   * build succeeds on windows-2022 (MSVC + Qt 6.8.0)
-#   * unit tests (ctest) pass (31/31)
-#   * zero compiler warnings in the build log
-#   * portable zip artifact is produced
-#   * clazy (Qt-aware static analysis) passes
-#
-# Long-term CI shape (mature C++ project pattern):
-#   PR:      format | build | test | package | clazy            -> ci-gate
-#   Nightly: build -> test -> clang-tidy -> LLVM ASan/UBSan
-#             -> benchmark -> coverage -> artifact
-#   Release: tag -> package -> installer -> sign -> upload
-#
-# The `ci-gate` job aggregates all REQUIRED statuses so branch protection can
-# depend on a single check. Advisory jobs are intentionally excluded.
+#   * zero compiler warnings in the build log (warnings-as-errors)
+#   * unit tests (CTest) pass, including the bench_enforce perf hard-gate
 # =============================================================================
 
-name: CI
+name: PR Gate (Tier 1)
 
 on:
   push:
     branches: [master]
   pull_request:
     branches: [master]
+
+# Cancel superseded runs on the same ref to save CI minutes.
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -77,7 +71,108 @@ jobs:
         run: markdownlint --config .markdownlint.jsonc '**/*.md' --ignore node_modules
 
   # ---------------------------------------------------------------------------
+  # cppcheck — supplemental static analysis (ubuntu, required, NEW in Tier 1)
+  # High-signal bug/performance/portability findings only. System includes
+  # (Qt, STL) are suppressed so we only flag issues in our own src/.
+  # ---------------------------------------------------------------------------
+  cppcheck:
+    name: Static analysis (cppcheck, required)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install cppcheck + Qt6 headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck qt6-base-dev
+
+      - name: Run cppcheck (required — fails on findings)
+        run: |
+          cppcheck --enable=warning,performance,portability \
+            --std=c++20 --inline-suppr --error-exitcode=1 \
+            --suppressions-list=scripts/cppcheck-suppressions.txt \
+            -I src -I src/core -I src/benchmark -I src/ui \
+            src 2> cppcheck.txt || {
+              echo "::error:: cppcheck found warning/performance/portability issues (see artifact)"
+              cat cppcheck.txt
+              exit 1
+            }
+          echo "cppcheck clean"
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cppcheck-report
+          path: cppcheck.txt
+
+  # ---------------------------------------------------------------------------
+  # clang-tidy — bug-finding static analysis (ubuntu, REQUIRED, PR-incremental)
+  #
+  # Unlike the old advisory job, this is now a hard gate: any
+  # bugprone-/performance-/clang-analyzer- finding in the PR's *changed* files
+  # fails the build (--warnings-as-errors). Running incrementally keeps the PR
+  # fast and avoids blocking on pre-existing findings in untouched code.
+  # ---------------------------------------------------------------------------
+  clang-tidy:
+    name: Static analysis (clang-tidy, required)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install clang-tidy + clang
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang clang-tidy clang-tools cmake ninja-build
+
+      - name: Install Qt6 (headers only, for analysis)
+        run: sudo apt-get install -y qt6-base-dev
+
+      - name: Configure (export compile_commands.json)
+        run: |
+          cmake -S . -B build_sa \
+            -G Ninja \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+            -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_C_COMPILER=clang
+
+      - name: Determine changed C++ files
+        id: changed
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD \
+                     -- 'src/**/*.cpp' 'src/**/*.h')
+          else
+            FILES=$(git diff --name-only HEAD~1 HEAD \
+                     -- 'src/**/*.cpp' 'src/**/*.h')
+          fi
+          FILES=$(echo "$FILES" | grep -v -E 'build' || true)
+          echo "files<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$FILES" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "Changed files to analyze:"; echo "$FILES"
+
+      - name: Run clang-tidy (required, changed files only)
+        shell: bash
+        run: |
+          FILES="${{ steps.changed.outputs.files }}"
+          if [ -z "$FILES" ]; then
+            echo "No changed C++ files to analyze — passing."
+            exit 0
+          fi
+          echo "$FILES" | tr '\n' '\0' | xargs -0 clang-tidy -p build_sa \
+            --checks='bugprone-*,performance-*,clang-analyzer-*,cppcoreguidelines-pro-type-*,cppcoreguidelines-special-member-functions' \
+            --warnings-as-errors='bugprone-*,performance-*,clang-analyzer-*,cppcoreguidelines-pro-type-*'
+          echo "clang-tidy clean on changed files"
+
+  # ---------------------------------------------------------------------------
   # build — MSVC + Qt 6.8.0, enforce zero warnings from build log
+  # (this implements the "warnings-as-errors" PR requirement)
   # ---------------------------------------------------------------------------
   build:
     name: Build (MSVC + Qt 6.8.0)
@@ -98,7 +193,12 @@ jobs:
           cache: true
 
       - name: Build
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test 2>&1 | Tee-Object -FilePath build.log
+        run: |
+          # Tee preserves build.log for the zero-warnings gate; the $LASTEXITCODE
+          # guard ensures a build/test failure is not masked by Tee-Object (which
+          # would otherwise report success and let a broken build pass CI).
+          powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test 2>&1 | Tee-Object -FilePath build.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Enforce zero warnings
         run: |
@@ -113,7 +213,10 @@ jobs:
           }
 
   # ---------------------------------------------------------------------------
-  # test — explicit ctest job (re-runs build+test; artifacts not shared in Phase-1)
+  # test — explicit ctest job (re-runs build+test; artifacts not shared)
+  # CTest here already includes the bench_enforce perf hard-gate and the
+  # golden_image regression check, so the benchmark gate the architect asked
+  # for is enforced on every PR.
   # ---------------------------------------------------------------------------
   test:
     name: Unit tests (ctest)
@@ -137,242 +240,21 @@ jobs:
       - name: Test
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test
 
-      - name: Plugin examples (M14.3 — Analyzer/Decoder/Exporter)
-        run: |
-          $env:QT_QPA_PLATFORM = "offscreen"
-          cd build_msvc
-          ctest -R pluginexamples_tests --output-on-failure
-
-  # ---------------------------------------------------------------------------
-  # package — zip portable app, upload artifact (optional gate)
-  # ---------------------------------------------------------------------------
-  package:
-    name: Package portable zip
-    runs-on: windows-2022
-    needs: [build, test]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: 6.8.0
-          arch: win64_msvc2022_64
-          modules: qtimageformats   # provides the TIFF plugin (qtiff.dll) required by M3/M5 golden tests
-          cache: true
-
-      - name: Build
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test
-
-      - name: Package zip
-        run: |
-          try {
-            Compress-Archive -Path build_msvc/bin/*, README.md, LICENSE* -DestinationPath mviewer-win-x64.zip
-          } catch {
-            Write-Host "LICENSE not found, packaging bin + README only"
-            Compress-Archive -Path build_msvc/bin/*, README.md -DestinationPath mviewer-win-x64.zip
-          }
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: mviewer-win-x64
-          path: mviewer-win-x64.zip
-
-  # ---------------------------------------------------------------------------
-  # static-analysis — clang-tidy (ubuntu, ADVISORY Phase-2)
-  # Scoped to high-signal bug-finding checks (not style nits). Findings are
-  # uploaded as an artifact for triage. This job is ADVISORY ONLY — it must
-  # never block the gate (Architect directive: avoid premature dev burden).
-  # ---------------------------------------------------------------------------
-  static-analysis:
-    name: Static analysis (clang-tidy, advisory)
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install clang-tidy + clang
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang clang-tidy clang-tools cmake ninja-build
-
-      - name: Install Qt6
-        run: |
-          # qt6-base-dev provides the QtCore/QtGui/QtWidgets headers needed for
-          # static analysis. The qtimageformats module (TIFF plugin) is a RUNTIME
-          # dependency only; it is not required to parse/analyze the source, so we
-          # omit it here (the old 'qt6-imageformats-plugin' name does not exist on
-          # Ubuntu noble and broke the install step).
-          sudo apt-get install -y qt6-base-dev
-
-      - name: Configure (export compile_commands.json)
-        run: |
-          cmake -S . -B build_sa \
-            -G Ninja \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_C_COMPILER=clang
-
-      - name: Run clang-tidy (bug-finding checks, advisory)
-        run: |
-          find src \( -name '*.cpp' -o -name '*.h' \) \
-            -not -path '*/build*' -print0 \
-            | xargs -0 clang-tidy -p build_sa \
-                --checks='bugprone-*,performance-*,clang-analyzer-*,cppcoreguidelines-pro-type-*,cppcoreguidelines-special-member-functions' \
-            > clang-tidy.txt 2>&1 || true
-          echo "clang-tidy advisory run complete (see artifact)"
-
-      - name: Upload findings
+      - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: clang-tidy-findings
-          path: clang-tidy.txt
-
-  # ---------------------------------------------------------------------------
-  # clazy — Qt-aware static analysis (ubuntu, advisory / non-gating Phase-2)
-  # Reports Qt-specific anti-patterns; findings uploaded, never blocks the gate.
-  # ---------------------------------------------------------------------------
-  clazy:
-    name: Static analysis (clazy)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Install clazy + clang
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clazy clang clang-tools cmake ninja-build
-          # qt6-base-dev only (see static-analysis job): qtimageformats is a
-          # runtime dep, not needed for clazy source analysis; the old
-          # 'qt6-imageformats-plugin' package name does not exist on noble.
-          sudo apt-get install -y qt6-base-dev
-
-      - name: Configure (clazy build)
-        run: |
-          cmake -S . -B build_clazy \
-            -G Ninja \
-            -DCMAKE_CXX_COMPILER=clazy \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-
-      - name: Build with clazy (advisory)
-        run: |
-          cmake --build build_clazy -j 4 2> clazy.txt || true
-          echo "clazy run complete (advisory)"
-
-      - name: Upload findings
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: clazy-findings
-          path: clazy.txt
-
-  # ---------------------------------------------------------------------------
-  # asan — AddressSanitizer via clang-cl + LLVM ASan/UBSan (windows-2022)
-  #
-  # *** ADVISORY ONLY — NOT REQUIRED. DOES NOT BLOCK ci-gate. ***
-  #
-  # Replaces the previous MSVC /fsanitize=address job, which crashed on every
-  # run due to a toolchain bug in MSVC's STL shared_ptr instrumentation
-  # (access-violation at a near-null address in _Ptr_base::get()).
-  # The independent clang-cl + LLVM ASan/UBSan sanitizer was verified in the
-  # nightly job (M17, 2026-07-20) to pass the full CTest suite cleanly.
-  # Full detail: docs/known_issues/MSVC_ASAN.md
-  #
-  # Sanitizer timings are ~3-5x slower under instrumentation, so timing-based
-  # budget assertions (bench_smoke/bench_enforce) may legitimately miss; those
-  # are environment-sensitive gates, not memory bugs.
-  # ---------------------------------------------------------------------------
-  asan:
-    name: ASan (clang-cl + LLVM ASan/UBSan, ADVISORY)
-    runs-on: windows-2022
-    continue-on-error: true
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup MSVC (provides Windows headers/libs for clang-cl)
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Install LLVM (clang-cl + llvm-symbolizer)
-        id: llvm
-        uses: KyleMayes/install-llvm-action@v2
-        with:
-          version: "21"
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: 6.8.0
-          arch: win64_msvc2022_64
-          modules: qtimageformats
-          cache: true
-
-      - name: Configure (clang-cl + ASan/UBSan)
-        run: |
-          # Use the 8.3 short path to avoid space-in-path breakage in
-          # linker flags (LLVM installs to "C:\Program Files\LLVM").
-          $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
-          $asanLib = "$llvmShort/lib/clang/21/lib/windows"
-          cmake -S . -B build_asan -G Ninja `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl `
-            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
-            -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.." `
-            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib" `
-            "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib" `
-            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=address,undefined -g"
-
-      - name: Build (ASan)
-        run: cmake --build build_asan -j 4
-
-      - name: Deploy Qt image plugins for ASan tests
-        run: |
-          # Qt image format plugins (qjpeg.dll, qpng.dll, etc.) are MSVC-built
-          # DLLs. Under clang-cl ASan, Qt's dynamic plugin loading via
-          # QT_PLUGIN_PATH can silently fail. Copy them next to the test
-          # executables so Qt finds them via the default "app-dir/imageformats"
-          # search path, which is more reliable under ASan.
-          $pluginSrc = "$env:QT_PLUGIN_PATH\imageformats"
-          $pluginDst = "build_asan\bin\imageformats"
-          New-Item -ItemType Directory -Force -Path $pluginDst | Out-Null
-          Copy-Item "$pluginSrc\*.dll" $pluginDst -Force
-          Write-Host "Deployed image format plugins:"
-          Get-ChildItem $pluginDst | ForEach-Object { Write-Host "  $($_.Name)" }
-
-      - name: Test (ASan)
-        run: |
-          $env:QT_QPA_PLATFORM = "offscreen"
-          $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
-          $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\21\lib\windows;$env:PATH"
-          # Disable ODR-violation detection: the linker merges identical string
-          # literals across translation units (e.g. "-" in main.cpp and u"-" in
-          # thumbnailpanel.cpp), which is valid but trips ASan's ODR check.
-          $env:ASAN_OPTIONS = "detect_odr_violation=0"
-          cd build_asan
-          # Exclude tests that require Qt image format plugins (qjpeg.dll, etc.).
-          # Under clang-cl ASan, MSVC-built Qt plugin DLLs cannot be loaded,
-          # causing QImageReader::read() to return empty images. These tests
-          # pass in the MSVC CI job; ASan focuses on memory-safety checks.
-          $excludeRegex = "core_tests|m3m4m5_tests|m3pipeline_tests|decoder_tests|repository_tests|metadata_tests|m3acceptance_tests|product_browse_tests|product_workflow_gate"
-          ctest --output-on-failure -j4 -E $excludeRegex
+          name: test-results
+          path: build_msvc/test-results.xml
 
   # ---------------------------------------------------------------------------
   # ci-gate — aggregate required statuses for branch protection
   # ---------------------------------------------------------------------------
   ci-gate:
-    name: CI gate
+    name: CI gate (Tier 1)
     runs-on: ubuntu-latest
-    needs: [format, build, test, package, clazy]
+    needs: [format, cppcheck, clang-tidy, build, test]
     if: always()
     steps:
       - name: All required jobs passed
-        run: echo "format, build, test, package, and clazy all succeeded (clang-tidy/asan are advisory, non-gating)."
+        run: echo "format, cppcheck, clang-tidy, build, and test all succeeded (Tier-2 nightly / Tier-3 release are non-blocking for PRs)."

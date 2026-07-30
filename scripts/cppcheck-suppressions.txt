@@ -1,0 +1,26 @@
+# cppcheck suppressions for MViewer (Tier-1 PR gate)
+# Goal: only flag real issues in our own src/ — never in system/Qt/STL headers.
+#
+# How this file is used (see .github/workflows/ci.yml -> cppcheck job):
+#   cppcheck --enable=warning,performance,portability \
+#            --inline-suppr --error-exitcode=1 \
+#            --suppressions-list=scripts/cppcheck-suppressions.txt src
+#
+# Tuning: if cppcheck reports a false positive in OUR code, prefer a narrow
+# inline `// cppcheck-suppress <id>` next to the code. Use this file only for
+# system-include / global noise.
+
+# --- system includes (Qt, STL, Windows SDK) -------------------------------
+# We do not want cppcheck to analyze or flag third-party headers it follows.
+missingInclude
+missingIncludeSystem
+unmatchedSuppression
+*:/usr/include/*
+*:/usr/lib/*
+*:/usr/local/include/*
+
+# --- Qt macro parse quirks -------------------------------------------------
+# Without full Qt headers cppcheck sometimes mis-parses Qt macros; the compiler
+# and clang-tidy are the authoritative source for real parse errors.
+syntaxError
+unknownMacro

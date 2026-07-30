@@ -1,102 +1,201 @@
 # =============================================================================
-# MViewer Nightly — consolidated heavy analysis (NON-GATING)
+# MViewer CI — TIER 2: Nightly (scheduled, heavy, NON-blocking for PRs)
 # -----------------------------------------------------------------------------
-# Implements the 2026-07-18 engineering-review P4:
-#   "add a nightly workflow that runs clang-tidy / ASan / benchmark once a day,
-#    never blocking PRs."
-# Refined 2026-07-20 (Architect "A+ then evolve to B"): adds an LLVM /
-# clang-cl sanitizer job as the INDEPENDENT sanitizer needed to either close
-# docs/known_issues/MSVC_ASAN.md or surface a real defect the MSVC ASan run
-# cannot reach.
+# Runs once per day (and on manual dispatch). Covers the slow, environment-
+# sensitive checks that must NOT sit in the PR gate:
+#   * ASan  — out-of-bounds / use-after-free / heap overflow (+ leak detect)
+#   * UBSan — integer overflow / undefined behaviour / alignment
+#   * clazy — Qt-aware static analysis (advisory signal)
+#   * quality — CTest bench_* perf hard-gate + golden_image UI regression
+#   * perfetto — capture a Chrome-trace JSON under instrumentation (best-effort)
 #
-# This file is ADDITIVE and does NOT touch the frozen `ci.yml`, `build.ps1`, or
-# `CMakePresets.json` (per AGENTS.md freeze policy). It mirrors the advisory
-# jobs already present in `ci.yml` (static-analysis / clazy / asan) but runs
-# them on a daily schedule instead of on every push/PR, reducing developer
-# burden while keeping the heavy signals alive.
+# Findings here are alerts, not merge blockers. They raise long-term signal
+# without hurting PR velocity. The aggregator `qa-report` is the entry point
+# for the nightly QA summary / dashboards.
 #
-# Long-term CI shape (mature C++ project pattern):
-#   PR:      format | build | test | package | clazy            -> ci-gate
-#   Nightly: build -> test -> clang-tidy -> LLVM ASan/UBSan
-#             -> benchmark -> coverage -> artifact
-#   Release: tag -> package -> installer -> sign -> upload
-#
-# Every job uses `continue-on-error: true` so the nightly never blocks anything.
-#
-# Job inventory:
-#   clang-tidy       — LLVM clang-tidy on ubuntu (bugprone/performance/cppcore)
-#   benchmark        — mviewer_bench --enforce (surfaces perf regressions in log)
-#   asan (MSVC)     — MSVC /fsanitize=address (advisory; see known-issue doc)
-#   llvm-sanitizer  — *** PHASE-2 CONTAINER (target M13) *** clang-cl +
-#                      LLVM ASan/UBSan on windows-2022. The independent
-#                      sanitizer that cross-checks MSVC_ASAN.md. See job block
-#                      for enable/verify TODO before first production use.
-#   dashboard        — regenerate benchmark/report/{history.csv,index.html}
+# Reference docs: docs/acceptance/M13.3_perf_budget_gate.md,
+#                 docs/acceptance/M13.5_perfetto.md,
+#                 docs/known_issues/MSVC_ASAN.md
 # =============================================================================
 
-name: Nightly
+name: Nightly (Tier 2)
 
 on:
   schedule:
-    # 03:17 UTC daily — off-peak, non-round minute to avoid GitHub cron stampede.
-    - cron: '17 3 * * *'
-  workflow_dispatch: {}
+    # 02:13 UTC daily — off the top of the hour to avoid runner contention.
+    - cron: '13 2 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
 
 jobs:
   # ---------------------------------------------------------------------------
-  # clang-tidy — full tree, bug-finding + performance checks (advisory)
+  # asan — AddressSanitizer (+ LeakSanitizer is built into ASan) via clang-cl
   # ---------------------------------------------------------------------------
-  clang-tidy:
-    name: Nightly clang-tidy
+  asan:
+    name: ASan / LSan (clang-cl)
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC (Windows headers/libs for clang-cl)
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install LLVM (clang-cl + llvm-symbolizer)
+        id: llvm
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "21"
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          modules: qtimageformats
+          cache: true
+
+      - name: Configure (clang-cl + ASan)
+        run: |
+          $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
+          $asanLib = "$llvmShort/lib/clang/21/lib/windows"
+          cmake -S . -B build_asan -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
+            -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.." `
+            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib" `
+            "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=address,undefined /libpath:$asanLib clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib" `
+            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=address,undefined -g"
+
+      - name: Build (ASan)
+        run: cmake --build build_asan -j 4
+
+      - name: Deploy Qt image plugins for ASan tests
+        run: |
+          $pluginSrc = "$env:QT_PLUGIN_PATH\imageformats"
+          $pluginDst = "build_asan\bin\imageformats"
+          New-Item -ItemType Directory -Force -Path $pluginDst | Out-Null
+          Copy-Item "$pluginSrc\*.dll" $pluginDst -Force
+
+      - name: Test (ASan + LeakSanitizer)
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
+          $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\21\lib\windows;$env:PATH"
+          $env:ASAN_OPTIONS = "detect_leaks=1:detect_odr_violation=0"
+          cd build_asan
+          $excludeRegex = "core_tests|m3m4m5_tests|m3pipeline_tests|decoder_tests|repository_tests|metadata_tests|m3acceptance_tests|product_browse_tests|product_workflow_gate"
+          ctest --output-on-failure -j4 -E $excludeRegex
+
+  # ---------------------------------------------------------------------------
+  # ubsan — UndefinedBehaviorSanitizer via clang-cl
+  # ---------------------------------------------------------------------------
+  ubsan:
+    name: UBSan (clang-cl)
+    runs-on: windows-2022
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install LLVM
+        id: llvm
+        uses: KyleMayes/install-llvm-action@v2
+        with:
+          version: "21"
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.0
+          arch: win64_msvc2022_64
+          modules: qtimageformats
+          cache: true
+
+      - name: Configure (clang-cl + UBSan)
+        run: |
+          $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
+          $ubsanLib = "$llvmShort/lib/clang/21/lib/windows"
+          cmake -S . -B build_ubsan -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl `
+            -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL `
+            -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.." `
+            "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=undefined /libpath:$ubsanLib clang_rt.ubsan_standalone-x86_64.lib" `
+            "-DCMAKE_SHARED_LINKER_FLAGS=-fsanitize=undefined /libpath:$ubsanLib clang_rt.ubsan_standalone-x86_64.lib" `
+            -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=undefined -g"
+
+      - name: Build (UBSan)
+        run: cmake --build build_ubsan -j 4
+
+      - name: Deploy Qt image plugins for UBSan tests
+        run: |
+          $pluginSrc = "$env:QT_PLUGIN_PATH\imageformats"
+          $pluginDst = "build_ubsan\bin\imageformats"
+          New-Item -ItemType Directory -Force -Path $pluginDst | Out-Null
+          Copy-Item "$pluginSrc\*.dll" $pluginDst -Force
+
+      - name: Test (UBSan)
+        run: |
+          $env:QT_QPA_PLATFORM = "offscreen"
+          $llvmShort = (New-Object -ComObject Scripting.FileSystemObject).GetFolder("${{ env.LLVM_PATH }}").ShortPath
+          $env:PATH = "$llvmShort\bin;$llvmShort\lib\clang\21\lib\windows;$env:PATH"
+          $env:UBSAN_OPTIONS = "print_stacktrace=1:halt_on_error=1"
+          cd build_ubsan
+          $excludeRegex = "core_tests|m3m4m5_tests|m3pipeline_tests|decoder_tests|repository_tests|metadata_tests|m3acceptance_tests|product_browse_tests|product_workflow_gate"
+          ctest --output-on-failure -j4 -E $excludeRegex
+
+  # ---------------------------------------------------------------------------
+  # clazy — Qt-aware static analysis (ubuntu, ADVISORY signal for nightly)
+  # ---------------------------------------------------------------------------
+  clazy:
+    name: Static analysis (clazy, advisory)
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install clang-tidy + clang
+      - name: Install clazy + clang
         run: |
           sudo apt-get update
-          sudo apt-get install -y clang clang-tidy clang-tools cmake ninja-build
+          sudo apt-get install -y clazy clang clang-tools cmake ninja-build qt6-base-dev
 
-      - name: Install Qt6
+      - name: Configure (clazy build)
         run: |
-          # qt6-base-dev only (see ci.yml static-analysis): qtimageformats is a
-          # runtime dep; the old 'qt6-imageformats-plugin' name does not exist on
-          # Ubuntu noble and broke the install step.
-          sudo apt-get install -y qt6-base-dev
-
-      - name: Configure (export compile_commands.json)
-        run: |
-          cmake -S . -B build_sa \
+          cmake -S . -B build_clazy \
             -G Ninja \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_C_COMPILER=clang
+            -DCMAKE_CXX_COMPILER=clazy \
+            -DCMAKE_C_COMPILER=clang \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-      - name: Run clang-tidy
+      - name: Build with clazy (advisory)
         run: |
-          find src \( -name '*.cpp' -o -name '*.h' \) \
-            -not -path '*/build*' -print0 \
-            | xargs -0 clang-tidy -p build_sa \
-                --checks='bugprone-*,performance-*,clang-analyzer-*,cppcoreguidelines-pro-type-*,cppcoreguidelines-special-member-functions' \
-            > nightly-clang-tidy.txt 2>&1 || true
-          echo "nightly clang-tidy complete (see artifact)"
+          cmake --build build_clazy -j 4 2> clazy.txt || true
+          echo "clazy run complete (advisory)"
 
       - name: Upload findings
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nightly-clang-tidy
-          path: nightly-clang-tidy.txt
+          name: clazy-findings-nightly
+          path: clazy.txt
 
   # ---------------------------------------------------------------------------
-  # benchmark — mviewer_bench --enforce (surfaces perf regressions in log)
+  # quality — MSVC build + benchmark perf hard-gate + golden-image UI regression
+  # Covers the architect's project-specific gates (Decode / Thumbnail / Cache
+  # Hit / Compare / GPU Upload / Memory Peak) which are implemented as
+  # mviewer_bench scenarios B1-B15.
   # ---------------------------------------------------------------------------
-  benchmark:
-    name: Nightly benchmark (--enforce)
+  quality:
+    name: Benchmark + Golden Image (MSVC)
     runs-on: windows-2022
-    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -109,31 +208,40 @@ jobs:
         with:
           version: 6.8.0
           arch: win64_msvc2022_64
-          modules: qtimageformats
+          modules: qtimageformats   # qtiff.dll for golden/M3-M5 image tests
           cache: true
 
-      - name: Build + Test
+      - name: Build + Test (includes bench_enforce perf hard-gate + golden_image)
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Test
 
-      - name: Benchmark (--enforce --regression; baseline regression detection)
+      - name: Benchmark regression vs baseline (alert on >10%)
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
-          New-Item -ItemType Directory -Force -Path benchmark/report | Out-Null
-          build_msvc\bin\mviewer_bench.exe --enforce --budget benchmark/performance_budget.json --regression --results benchmark/report/results.json --history benchmark/report/history.csv --report benchmark/report/regression.md > nightly-benchmark.txt 2>&1 || true
-          echo "nightly benchmark complete (see artifact)"
+          $b = Get-ChildItem build_msvc -Recurse -Include mviewer_bench.exe,benchmark.exe | Select-Object -First 1
+          if (-not $b) { Write-Host "::error:: benchmark binary not found"; exit 1 }
+          # --enforce loads the committed baseline and enables the ±10% regression
+          # diff (main.cpp: requires --enforce AND --regression to diff baseline).
+          & $b.FullName --enforce --regression --budget benchmark/performance_budget.json 2>&1 | Tee-Object -FilePath benchmark_regression.txt
+        # Exit non-zero on >10% regression -> alerts the nightly run.
+        # (golden_image is already verified inside `build.ps1 Test` above.)
 
-      - name: Upload findings
+      - name: Upload benchmark + golden reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nightly-benchmark
-          path: nightly-benchmark.txt
+          name: nightly-quality-report
+          path: |
+            benchmark_regression.txt
+            build_msvc/benchmark_report.json
+            golden/difference/
 
   # ---------------------------------------------------------------------------
-  # asan — AddressSanitizer via MSVC /fsanitize=address (advisory)
+  # perfetto — capture a Chrome-trace JSON under instrumentation (best-effort).
+  # Best-effort: depended-on tooling/flush trigger may need follow-up tuning;
+  # it must never block the nightly aggregate.
   # ---------------------------------------------------------------------------
-  asan:
-    name: Nightly ASan (MSVC)
+  perfetto:
+    name: Perfetto trace capture (best-effort)
     runs-on: windows-2022
     continue-on-error: true
     steps:
@@ -151,159 +259,44 @@ jobs:
           modules: qtimageformats
           cache: true
 
-      - name: Configure (ASan)
-        run: cmake -S . -B build_asan -G Ninja -DCMAKE_CXX_FLAGS="/fsanitize=address /Zi"
+      - name: Configure (MVIEWER_ENABLE_PERFETTO=ON)
+        run: |
+          cmake -S . -B build_perf -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.." `
+            -DMVIEWER_ENABLE_PERFETTO=ON
 
-      - name: Build (ASan)
-        run: cmake --build build_asan -j 4 2> nightly-asan.txt || true
+      - name: Build (perfetto)
+        run: cmake --build build_perf -j 4
 
-      - name: Test (ASan)
+      - name: Run smoke + flush Chrome trace JSON
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"
-          cd build_asan
-          ctest --output-on-failure -j4 >> ../nightly-asan.txt 2>&1 || true
-          echo "nightly ASan complete (see artifact)"
+          cd build_perf
+          $b = Get-ChildItem . -Recurse -Include mviewer_bench.exe | Select-Object -First 1
+          if (-not $b) { Write-Host "mviewer_bench.exe not found"; exit 1 }
+          # --trace flushes a Chrome trace JSON at exit (only meaningful when built
+          # with MVIEWER_ENABLE_PERFETTO, which this build dir is).
+          & $b.FullName --smoke --trace mviewer_trace.json
 
-      - name: Upload findings
+      - name: Upload trace
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: nightly-asan
-          path: nightly-asan.txt
+          name: perfetto-trace
+          path: '**/mviewer_trace.json'
 
   # ---------------------------------------------------------------------------
-  # llvm-sanitizer — clang-cl + LLVM ASan/UBSan (INDEPENDENT sanitizer) [M17 ACTIVE]
-  #
-  # Purpose (Architect "A+ then evolve to B", 2026-07-20):
-  #   This is the INDEPENDENT sanitizer required to resolve
-  #   docs/known_issues/MSVC_ASAN.md. MSVC's /fsanitize=address crashes
-  #   inside STL shared_ptr instrumentation; LLVM's clang-cl ASan/UBSan is
-  #   first-class and does NOT exhibit that crash. A green run here either
-  #   (a) confirms the MSVC crash was toolchain-only (close the issue), or
-  #   (b) surfaces a real defect the MSVC run could not reach (fix it).
-  #
-  # Status (M17, 2026-07-20): ACTIVATED and verified locally on D:/LLVM 22.1.8.
-  #   - CTest suite (33 tests) runs CLEAN under ASan/UBSan (no sanitizer errors).
-  #   - `mviewer_bench --enforce` surfaced one REAL global-buffer-overflow in
-  #     main.cpp (empty-string literal in a `?:` passed to operator<<); fixed
-  #     and re-verified clean. See docs/known_issues/MSVC_ASAN.md (Resolution).
-  #
-  # Platform: windows-2022 — clang-cl compiles against the MSVC toolset
-  #   (headers/libs) while LLVM provides the sanitizer runtime. Qt is the
-  #   same 6.8.0 msvc2022_64 build used everywhere.
-  #
-  # Non-blocking by design (continue-on-error: true) — sanitizer timings are
-  # ~3-5x slower under instrumentation, so the <16ms / <100ms budget assertions
-  # legitimately miss; those are timing gates, not memory bugs.
-  #
-  # Sanitizers: -fsanitize=address,undefined (ASan + UBSan). UBSan is the
-  #   extra value LLVM adds over MSVC ASan (catches UB the MSVC run misses).
-  #
-
-  llvm-sanitizer:
-    name: Nightly LLVM sanitizer (clang-cl ASan/UBSan) [M17 ENABLED]
-    runs-on: windows-2022
-    continue-on-error: true   # non-blocking by design (Architect, 2026-07-20)
+  # qa-report — nightly aggregator / entry point for QA dashboards
+  # ---------------------------------------------------------------------------
+  qa-report:
+    name: QA report (Tier 2)
+    runs-on: ubuntu-latest
+    needs: [asan, ubsan, clazy, quality, perfetto]
+    if: always()
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup MSVC (provides Windows headers/libs for clang-cl)
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Install LLVM (clang-cl + llvm-symbolizer)
-        id: llvm
-        uses: llvm/install-llvm-action@v1
-        with:
-          version: "22"
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: 6.8.0
-          arch: win64_msvc2022_64
-          modules: qtimageformats
-          cache: true
-
-      # Release CRT (/MD) is REQUIRED — ASan rejects the debug runtime (/MDd).
-      # /EHsc enables C++ exceptions (clang-cl defaults them off, MSVC on).
-      # The clang_rt asan/ubsan libs are passed explicitly because CMake links
-      # via lld-link directly (not the clang-cl driver), so -fsanitize alone
-      # does not pull in the runtime. Validated locally on D:/LLVM 22.1.8.
-      - name: Configure (clang-cl + ASan/UBSan)
-        run: cmake -S . -B build_llvm_san -G Ninja
-          -DCMAKE_BUILD_TYPE=Release
-          -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_C_COMPILER=clang-cl
-          -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL
-          -DCMAKE_PREFIX_PATH="$Env:Qt6_DIR/../.."
-          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined /libpath:${{ steps.llvm.outputs.install-path }}/lib/clang/22/lib/windows clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib"
-          -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined /libpath:${{ steps.llvm.outputs.install-path }}/lib/clang/22/lib/windows clang_rt.asan_dynamic-x86_64.lib clang_rt.asan_dynamic_runtime_thunk-x86_64.lib clang_rt.ubsan_standalone-x86_64.lib"
-          -DCMAKE_CXX_FLAGS="/MD /EHsc -fsanitize=address,undefined -g"
-
-      - name: Build
-        run: cmake --build build_llvm_san -j 4 2> llvm-san.txt || true
-
-      - name: Test (offscreen, under ASan/UBSan)
+      - name: Nightly summary
         run: |
-          $env:QT_QPA_PLATFORM = "offscreen"
-          $env:PATH = "${{ steps.llvm.outputs.install-path }}\bin;${{ steps.llvm.outputs.install-path }}\lib\clang\22\lib\windows;$env:PATH"
-          cd build_llvm_san
-          ctest --output-on-failure -j4 >> ../llvm-san.txt 2>&1 || true
-          echo "llvm sanitizer run complete (see artifact)"
-
-      - name: Upload findings
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: nightly-llvm-sanitizer
-          path: llvm-san.txt
-
-  # ---------------------------------------------------------------------------
-  # dashboard — regenerate benchmark/report/{history.csv,index.html} from the
-  # nightly --enforce run and upload it. Implements review P3 (trend) + M13
-  # Phase 2: "can we answer 'did performance drop in the last 3 months?'"
-  # Additive; never blocks.
-  # ---------------------------------------------------------------------------
-  dashboard:
-    name: Nightly benchmark dashboard
-    runs-on: windows-2022
-    continue-on-error: true
-    needs: benchmark
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: 6.8.0
-          arch: win64_msvc2022_64
-          modules: qtimageformats
-          cache: true
-
-      - name: Build (Release)
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
-
-      - name: Benchmark (--enforce + --baseline + --history + --report)
-        run: |
-          $env:QT_QPA_PLATFORM = "offscreen"
-          $dst = "D:\mviewer_bench_data"
-          New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          New-Item -ItemType Directory -Force -Path benchmark/report | Out-Null
-          build_msvc\bin\mviewer_bench.exe --corpus-size 1000 --enforce --budget benchmark/performance_budget.json --regression --results $dst/result_medium.json --history $dst/bench_history.csv --report benchmark/report/regression.md > $dst/result_medium.txt 2>&1 || true
-          build_msvc\bin\mviewer_bench.exe --corpus-size 100  --enforce --regression --results $dst/result_small.json  --history $dst/bench_history.csv --report benchmark/report/regression.md > $dst/result_small.txt  2>&1 || true
-          echo "nightly benchmark logs written"
-
-      - name: Generate dashboard
-        run: |
-          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/benchmark_dashboard.ps1
-
-      - name: Upload dashboard
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: nightly-benchmark-dashboard
-          path: benchmark/report/
+          echo "Nightly Tier-2 completed."
+          echo "Artifacts: clang-tidy-findings (n/a), clazy-findings-nightly, nightly-quality-report, perfetto-trace"
+          echo "Check the uploaded artifacts for ASan/UBSan leaks, perf regression, golden diffs, and the Perfetto trace."
