@@ -39,7 +39,7 @@ std::string baseNameOf(const std::string &path)
     std::string fname = (sep != std::string::npos) ? path.substr(sep + 1) : path;
     const auto dot = fname.find_last_of('.');
     if (dot != std::string::npos)
-        fname = fname.substr(0, dot);
+        fname.erase(dot);
     return fname;
 }
 

@@ -515,7 +515,8 @@ int main(int argc, char **argv)
                     {
                         char buf[128];
                         std::snprintf(buf, sizeof(buf), "%s: %+.1f%% (%.3f -> %.3f)",
-                                      r.name.c_str(), delta, it->second, r.value);
+                                      r.name.c_str(), delta, it->second,
+                                      r.value); // NOLINT(cppcoreguidelines-pro-type-vararg)
                         regressionIssues.push_back(buf);
                     }
                 }
@@ -591,7 +592,8 @@ int main(int argc, char **argv)
                     {
                         double delta = ((r.value - it->second) / it->second) * 100.0;
                         char buf[64];
-                        std::snprintf(buf, sizeof(buf), "%+.1f%%", delta);
+                        std::snprintf(buf, sizeof(buf), "%+.1f%%",
+                                      delta); // NOLINT(cppcoreguidelines-pro-type-vararg)
                         regr = buf;
                     }
                 }

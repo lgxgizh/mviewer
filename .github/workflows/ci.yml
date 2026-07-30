@@ -251,6 +251,17 @@ jobs:
       - name: Build
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
 
+      - name: Generate testdata fixtures
+        # testdata/ is git-ignored by design and regenerated deterministically
+        # via testdata/generate_fixtures.py. A clean CI checkout has no golden
+        # images, so the 6 decode-dependent suites (decoder / m3pipeline /
+        # metadata / m3m4m5 / repository / core) fail with "ok=0" unless we
+        # generate them here. Pillow is required so JPEG/TIFF fixtures are real
+        # (the no-PIL fallback writes invalid placeholder JPEGs Qt cannot decode).
+        run: |
+          python -m pip install --quiet --disable-pip-version-check Pillow
+          python testdata/generate_fixtures.py --size 256x256
+
       - name: Test (ctest; fails on any failure, incl. perf gate)
         run: |
           $env:QT_QPA_PLATFORM = "offscreen"

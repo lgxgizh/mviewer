@@ -66,8 +66,13 @@ static QImage makeColorTest(int w, int h, QColor c)
 }
 
 // Budget for "non-blocking": the open() call must return well before the
-// decodes finish. 1000 synchronous decodes take far longer than this.
-static constexpr double kNonBlockingBudgetMs = 100.0;
+// decodes finish. 1000 synchronous decodes take far longer than this. The
+// original 100 ms budget was too tight for CI runners under `ctest -j`
+// concurrency (observed ~223 ms on the GitHub windows-2022 runner), so we
+// widen it to 1000 ms. This still overwhelmingly proves non-blocking: a single
+// open() returning in <1 s vs. the ~189 s a synchronous loadDirectory(1000)
+// takes is unambiguous.
+static constexpr double kNonBlockingBudgetMs = 1000.0;
 // Review target: first thumbnail within ~200 ms.
 static constexpr double kFirstThumbBudgetMs = 2000.0; // worst-case ceiling under heavy concurrency
                                                       // (e.g. 21-test ctest run). The real

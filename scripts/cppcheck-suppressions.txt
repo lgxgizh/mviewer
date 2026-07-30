@@ -7,3 +7,8 @@ unmatchedSuppression
 *:/opt/*
 syntaxError
 unknownMacro
+# The CHECK/REQUIRE assertion macros make cppcheck believe a prior
+# null-check is redundant; these are false positives confined to test code.
+nullPointerRedundantCheck:*test_*.cpp
+nullPointerRedundantCheck:*_test.cpp
+nullPointerRedundantCheck:*tests/*.cpp

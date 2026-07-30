@@ -51,8 +51,7 @@ bool HistogramAnalyzer::analyzeRegion(const ImageFrame &frame,
     if (x1 <= x0 || y1 <= y0)
         return false;
 
-    mviewer::domain::Histogram h;
-    std::memset(&h, 0, sizeof(h));
+    mviewer::domain::Histogram h; // zero-initialized via in-class initializers
     long long sumL = 0, sumR = 0, sumG = 0, sumB = 0;
     const int64_t n = static_cast<int64_t>(x1 - x0) * (y1 - y0);
 
