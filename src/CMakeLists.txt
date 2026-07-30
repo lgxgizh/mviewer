@@ -125,6 +125,8 @@ add_library(mviewer_ui STATIC
     analyzermodel.cpp
     appstate.cpp
     imageviewer.cpp
+    imageviewer_paint.cpp
+    imageviewer_contextmenu.cpp
     directorytree.cpp
     breadcrumbbar.cpp
     metadataoverlay.cpp
@@ -143,6 +145,9 @@ add_library(mviewer_ui STATIC
     compareworkspace_interact.cpp
     compareworkspace_nav.cpp
     analysispanel.cpp
+    analysispanel_buildui.cpp
+    analysispanel_pages.cpp
+    analysispanel_history.cpp
     exportdialog.cpp
     exportcommand.cpp
     metadatapanel.cpp
