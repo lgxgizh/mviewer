@@ -61,6 +61,16 @@ writer does not decide scope or merge.
   against the current ADRs and the frozen architecture. Writes code, runs the
   local build to confirm it compiles, but does **not** commit or push, and does
   **not** change scope/architecture on its own.
+- **UX Review Agent (experience reviewer)**: writes **no code**. Runs
+  `docs/beta_checklist.md` end-to-end on every PR and answers only these
+  questions: is every button necessary; does every operation match user
+  intuition; are there redundant clicks; is any state out of sync; are any
+  defaults unreasonable; are there animation / layout / zoom anomalies.
+  Verdict is 通过 / 阻塞 (with exact steps to reproduce). A PR that is 阻塞
+  does not merge, even if all automated gates are green. The automatable
+  subset of the checklist is enforced by `workflow_ux_tests` in
+  `.\build.ps1 Test`; the UX Review Agent owns everything a machine cannot
+  judge (perceived smoothness, flicker, zoom feel, long-session behavior).
 
 Principles:
 
@@ -106,6 +116,16 @@ productization + performance closure, aiming Beta → RC:
 3. Product focus: the Browse → Thumbnail → Select → Compare → Zoom-sync →
    ROI → Export-report flow must stay smooth (1000-image folder < 2 s to first
    thumbnails; 8K first display < 500 ms).
+
+**v0.9 Beta 阶段规则 (2026-07 review):** development is organized around
+complete user *workflows*, not individual bugs. The two canonical workflows
+(Browse: open dir → navigate → zoom → restore → close; Compare: select two →
+compare → switch split/overlay/blink/diff → exit → keep browsing) are encoded
+in `src/test_workflow_ux.cpp` (`workflow_ux_tests`, part of the test gate) and
+in `docs/beta_checklist.md`. Any change touching these flows must extend the
+workflow test first. Feature priority order: (1) Compare-mode polish,
+(2) Pixel Inspector, (3) Diff Engine. Ship criteria = "可长期使用的产品",
+not "开发中的 Demo".
 
 ## Git
 

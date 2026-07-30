@@ -51,7 +51,6 @@ int main(int argc, char **argv)
     const std::string sample = makeSample(tp);
 
     MainWindow w;
-    w.setupUi();
     w.resize(1040, 700);
     w.onImageOpen(QString::fromStdString(sample));
 

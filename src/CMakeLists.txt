@@ -518,6 +518,31 @@ target_include_directories(compare_session_tests PRIVATE ${CMAKE_CURRENT_SOURCE_
 target_compile_definitions(compare_session_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME compare_session_tests COMMAND compare_session_tests)
 
+# ─── Beta 回归 — 用户 Workflow 端到端测试（2026-07 外部评审）─────────────────
+# Workflow 1: 打开目录→浏览→键盘切换→放大→恢复→关闭（真实 MainWindow）
+# Workflow 2: 两图 Compare→模式切换/互斥→Esc 退出→继续浏览（真实键盘事件）
+# 映射 docs/beta_checklist.md 的 浏览体验 / Compare / View 条目。
+add_executable(workflow_ux_tests
+    test_workflow_ux.cpp
+)
+
+target_link_libraries(workflow_ux_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(workflow_ux_tests PRIVATE cxx_std_20)
+target_include_directories(workflow_ux_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(workflow_ux_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME workflow_ux_tests COMMAND workflow_ux_tests)
+# 端到端 UI 流程含真实异步解码等待，必须独占运行：
+# 与 bench_* 并行时 CPU 饱和会把"首屏 ≤ 预算"检查变成噪声。
+set_tests_properties(workflow_ux_tests PROPERTIES RUN_SERIAL TRUE)
+
 
 # ─── M9-4 Export workflow acceptance tests ────────────────────────────────
 add_executable(export_tests

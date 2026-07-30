@@ -24,7 +24,6 @@ int main(int argc, char **argv)
                                              : (std::filesystem::current_path() / "demo_assets");
 
     MainWindow w;
-    w.setupUi();
     w.resize(1280, 800);
     w.show();
     w.raise();

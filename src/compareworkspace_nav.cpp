@@ -116,6 +116,11 @@ QString CompareWorkspace::focusImagePath() const
         const int idx = m_pairIndex + m_focusIndex;
         if (idx >= 0 && idx < m_imagePool.size())
             return m_imagePool[idx];
+        // Pool not seeded yet (openCompare calls setImages before
+        // setImagePool): resolve the focused cell via the engine instead.
+        const QStringList imgs = comparedImages();
+        if (m_focusIndex < imgs.size())
+            return imgs[m_focusIndex];
     }
     // Fall back to first image in the current window.
     if (!m_imagePool.isEmpty())
@@ -123,7 +128,11 @@ QString CompareWorkspace::focusImagePath() const
         int idx = qBound(0, m_pairIndex, m_imagePool.size() - 1);
         return m_imagePool[idx];
     }
-    return {};
+    // Beta UX regression (workflow_ux_tests): a fresh compare set must always
+    // publish a non-empty default reference to the SelectionModel SSOT —
+    // otherwise Metadata/Analysis/Export see no reference until the user
+    // manually locks one. Default = first compared image.
+    return comparedImages().value(0);
 }
 
 void CompareWorkspace::nextPair()

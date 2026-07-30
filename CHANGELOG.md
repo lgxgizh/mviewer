@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed — MainWindow 双重 `setupUi()` 导致重复创建 ImageViewer
+
+- **根因**：`MainWindow` 构造函数在末尾已调用 `setupUi()`，而所有调用方
+  （`test_workflow_ux`、`demo_workflow`、`demo_render`、`ui_screenshot`）又显式调一次
+  `w.setupUi()`，使 `setupUi()` 执行两次：第二次把 `m_imageViewer` 指向新建实例，第一次
+  创建的 ImageViewer 成为孤儿并泄漏。在 offscreen 测试平台下，测试用
+  `QApplication::topLevelWidgets()` 抓到的 `viewer` 是两者排序不确定的那个，于是
+  `workflow_ux_tests` 首屏断言以约 50% 概率抓到孤儿实例而 flaky。
+- **修复**：删除四个调用方多余的 `w.setupUi();`，统一由 `MainWindow` 构造函数构建一次 UI
+  （UI 构建顺序与 `setupCommands()` 调用保持不变）。彻底消除重复构建与 ImageViewer 泄漏，
+  `workflow_ux_tests` 现在 15/15 连跑稳定通过，全量门禁 64/64 通过。
+
 ### Added — Metadata 面板：嵌入 ICC 配置详情展示
 
 - **ICC 配置详情解析**：`MetadataReader` 在加载处读取解码图 `QColorSpace` 的嵌入

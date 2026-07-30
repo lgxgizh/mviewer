@@ -45,7 +45,6 @@ int main(int argc, char **argv)
         (argc > 2) ? std::filesystem::path(argv[2]) : std::filesystem::current_path();
 
     MainWindow w;
-    w.setupUi();
     w.resize(1280, 800);
 
     auto *thumb = w.findChild<ThumbnailPanel *>();
