@@ -51,8 +51,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install clang-format
-        run: pip install clang-format
+      - name: Install clang-format (pin to local dev version)
+        # Pin to the exact version used for local `clang-format -i` so CI and
+        # dev machines agree on formatting (version drift caused spurious
+        # "code should be clang-formatted" failures).
+        run: pip install "clang-format==22.1.8"
 
       - name: clang-format (C++20 / Qt6)
         run: |

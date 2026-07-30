@@ -46,8 +46,8 @@
 // Gate model (product力 #2 "稳得住"):
 //   --enforce applies HARD budgets to the scenarios in performance_budget.json
 //   ["scenario_map"] (B1-B9 + B11-B15). These are generous, cross-machine-stable
-//   absolute caps, so the mandatory CI gate (ci.yml `test` job via the `bench_enforce` ctest: `--enforce --budget`)
-//   never fails on hardware jitter. --regression (or --baseline) enables the
+//   absolute caps, so the mandatory CI gate (ci.yml `test` job via the `bench_enforce` ctest:
+//   `--enforce --budget`) never fails on hardware jitter. --regression (or --baseline) enables the
 //   SEPARATE, noisier baseline-diff; it is run by nightly.yml, NOT the mandatory
 //   PR gate, because the committed baseline is machine-specific. B0/B10/TRACE are
 //   report-only and only regression-checked.
@@ -219,7 +219,7 @@ void printVerdict(const mviewer::bench::ScenarioResult &r, const Budget &b)
                   << " p99=" << r.timing.p99Ms << ")";
     if (!r.detail.empty())
         std::cout << "  # " << r.detail;
-    std::cout << std::endl;
+    std::cout << '\n';
 }
 
 // Build the scenario list, apply --enforce budgets, print verdicts, and return
@@ -404,7 +404,7 @@ int main(int argc, char **argv)
         }
     }
 
-    std::cout << "=== MViewer benchmark (M10) ===" << std::endl;
+    std::cout << "=== MViewer benchmark (M10) ===" << '\n';
     if (smoke)
         std::cout << "[smoke] ";
     std::cout << "corpus-size=" << corpusSize << " enforce=" << (b.enforce ? "yes" : "no");
@@ -415,7 +415,7 @@ int main(int argc, char **argv)
         else
             std::cout << " budget=LOAD-FAILED(" << budgetFile << ")";
     }
-    std::cout << std::endl;
+    std::cout << '\n';
 
     // P3 dataset emission mode: generate the corpus into emitData and stop
     // (no scenarios, no cleanup) so benchmark/data/{small,medium,large} can be
@@ -426,8 +426,8 @@ int main(int argc, char **argv)
             mviewer::bench::makeCorpus(corpusSize, 512, 512, emitData, emitFormat);
         std::cout << "emitted: jpeg=" << corpus.jpegPaths.size()
                   << " png=" << corpus.pngPaths.size() << " tiff=" << corpus.tiffPaths.size()
-                  << " dir=" << corpus.dir << std::endl;
-        std::cout << "=== EMIT DONE ===" << std::endl;
+                  << " dir=" << corpus.dir << '\n';
+        std::cout << "=== EMIT DONE ===" << '\n';
         return 0;
     }
 
@@ -440,21 +440,21 @@ int main(int argc, char **argv)
     {
         mviewer::bench::Corpus corpus = mviewer::bench::makeCorpusFromDir(corpusDir);
         std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
-                  << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << std::endl;
+                  << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << '\n';
         allPass = runScenarios(corpus, b, runOnly, &results, scaleMode);
-        std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ===" << std::endl;
+        std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ===" << '\n';
     }
     else
     {
         mviewer::bench::Corpus corpus = mviewer::bench::makeCorpus(corpusSize);
         std::cout << "corpus: jpeg=" << corpus.jpegPaths.size() << " png=" << corpus.pngPaths.size()
-                  << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << std::endl;
+                  << " tiff=" << corpus.tiffPaths.size() << " dir=" << corpus.dir << '\n';
 
         allPass = runScenarios(corpus, b, runOnly, &results, scaleMode);
         corpus.clear();
     }
 
-    std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ===" << std::endl;
+    std::cout << "=== " << (allPass ? "ALL PASS" : "SOME FAIL") << " ===" << '\n';
 
     // M14: write JSON results if --results given.
     if (!resultsFile.empty())
@@ -464,7 +464,8 @@ int main(int argc, char **argv)
     // is specified, attempt to load benchmark/perf_baseline.json from cwd. This
     // closes the M15 gap: "CI does not yet diff against baseline or fail on
     // regression." Regression is a SEPARATE, noisier axis (it compares against a
-    // machine-specific baseline); the mandatory CI hard gate (ci.yml `test` job, via the `bench_enforce` ctest) runs
+    // machine-specific baseline); the mandatory CI hard gate (ci.yml `test` job, via the
+    // `bench_enforce` ctest) runs
     // `--enforce --budget` WITHOUT --regression so it never fails on hardware
     // jitter. Nightly runs `--enforce --budget --regression` for trend tracking.
     if (b.enforce && regression && baselineFile.empty())
@@ -476,7 +477,7 @@ int main(int argc, char **argv)
             if (QFile::exists(QString::fromLatin1(kCandidates[ci])))
             {
                 baselineFile = kCandidates[ci];
-                std::cout << "auto-baseline: " << baselineFile << std::endl;
+                std::cout << "auto-baseline: " << baselineFile << '\n';
                 break;
             }
         }
@@ -489,7 +490,7 @@ int main(int argc, char **argv)
         auto baseline = loadBaselineJson(baselineFile);
         if (!baseline.empty())
         {
-            std::cout << "=== REGRESSION CHECK ===" << std::endl;
+            std::cout << "=== REGRESSION CHECK ===" << '\n';
             for (const auto &r : results)
             {
                 std::string key = r.name + "_" + r.metric;
@@ -509,7 +510,7 @@ int main(int argc, char **argv)
                     }
                     std::cout << "  " << r.name << ": current=" << r.value
                               << " baseline=" << it->second << " delta=" << delta << "%" << flag
-                              << std::endl;
+                              << '\n';
                     if (delta > 10.0)
                     {
                         char buf[128];
@@ -522,7 +523,7 @@ int main(int argc, char **argv)
         }
         else
         {
-            std::cout << "Warning: could not load baseline from " << baselineFile << std::endl;
+            std::cout << "Warning: could not load baseline from " << baselineFile << '\n';
         }
     }
 
@@ -560,7 +561,7 @@ int main(int argc, char **argv)
             }
             csv.close();
             std::cout << "history: appended " << results.size() << " rows to " << historyFile
-                      << std::endl;
+                      << '\n';
         }
     }
 
@@ -608,7 +609,7 @@ int main(int argc, char **argv)
                 rpt << "\n### No regressions detected\n";
             }
             rpt.close();
-            std::cout << "report: wrote " << reportFile << std::endl;
+            std::cout << "report: wrote " << reportFile << '\n';
         }
     }
 
@@ -620,11 +621,11 @@ int main(int argc, char **argv)
     {
         const bool ok = mviewer::trace::flush(traceFile);
         std::cout << "trace: " << (ok ? "wrote " : "FAILED to write ") << traceFile << " ("
-                  << mviewer::trace::count() << " spans)" << std::endl;
+                  << mviewer::trace::count() << " spans)" << '\n';
     }
 #else
     if (!traceFile.empty())
-        std::cout << "trace: --trace needs a build with MVIEWER_ENABLE_PERFETTO=ON" << std::endl;
+        std::cout << "trace: --trace needs a build with MVIEWER_ENABLE_PERFETTO=ON" << '\n';
 #endif
 
     // CI (--smoke) always exits 0 (proves links + runs). Local --enforce may exit 1.
