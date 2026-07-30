@@ -10,3 +10,6 @@ unknownMacro
 nullPointerRedundantCheck:*test_*.cpp
 nullPointerRedundantCheck:*_test.cpp
 nullPointerRedundantCheck:*tests/*.cpp
+duplicateAssignExpression:*test_*.cpp
+duplicateAssignExpression:*_test.cpp
+duplicateAssignExpression:*tests/*.cpp

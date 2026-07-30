@@ -135,6 +135,15 @@ ScenarioResult scenarioZoomLatency();
 // dependent) — never blocks CI under --enforce.
 ScenarioResult scenarioRenderFps();
 
+// B17: workflow soak / resource-growth stability. Repeats the canonical user
+// workflow (open window of images -> navigate -> compare two -> clear/exit)
+// for N cycles and samples process RSS and OS handle count after each cycle.
+// Reports first->last growth after a warmup cycle. A healthy build shows
+// bounded growth; unbounded RSS/handle growth = leak in the workflow loop.
+// Report-only (never blocks under --enforce) — the numbers feed the nightly
+// dashboard so drift is visible before it becomes a leak bug.
+ScenarioResult scenarioWorkflowSoak(const Corpus &corpus);
+
 // SCALE: corpus scaling tiers (100 / 1000 / 5000 images). Decodes `tierN` images
 // (capped by corpus size) and reports decode throughput (fps) plus peak cache
 // memory and GPU dedicated memory. Report-only; surfaces 内存/GPU/FPS at scale.

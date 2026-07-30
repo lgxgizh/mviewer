@@ -102,7 +102,7 @@ int main(int argc, char **argv)
     CHECK(rm.exposureSec > 0.0039 && rm.exposureSec < 0.0041, "exposure = 1/250s ~= 0.004");
     CHECK(rm.focalLength > 84.0 && rm.focalLength < 86.0, "focal = 85mm");
     CHECK(rm.make == "SONY", "make = SONY");
-    CHECK(rm.model.find("A7R") == 0, "model starts with A7R");
+    CHECK(rm.model.starts_with("A7R"), "model starts with A7R");
 
     // Non-RAW should return parsed=false
     const std::string jpgPath = tmp.path().toStdString() + "/test.jpg";

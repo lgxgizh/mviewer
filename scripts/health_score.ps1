@@ -1,0 +1,253 @@
+# M23 Build-Health — Project Health Score.
+#
+# The centerpiece of the engineering-system. It aggregates every gate into a
+# single, always-current view of project health, so every PR / nightly run can
+# prove: features did not regress, performance did not drop, architecture did
+# not rot, code quality keeps rising.
+#
+# Dimensions (each 0-100; overall = weighted mean of available dimensions):
+#   Build        build succeeded (inferred from a runnable test artifact)
+#   Unit Test    ctest pass rate
+#   Performance  benchmark hard-gate pass rate (vs performance_budget.json)
+#   Code Quality clang-tidy + cppcheck error/warning pressure
+#   Coverage     per-module line coverage (Core weighted highest)
+#   Memory       stability scenario: RSS / handle growth across N iterations
+#   Architecture layer-dependency rule violations (architecture_gate.ps1)
+#   Complexity   file-size / function-length limit violations (complexity_gate.ps1)
+#
+# The two gate scripts are ALWAYS executed (so the health job always has data);
+# the rest are read from optional artifacts supplied via parameters / discovered
+# in conventional locations. Missing artifacts are marked "n/a" (neutral) rather
+# than failing — a gate that was not run should not penalize the score.
+#
+# Output: writes docs/quality/dashboard.md (committed snapshot) and prints a
+# short summary. Exit 0 always (health is a report, never a build breaker).
+
+[CmdletBinding()]
+param(
+    [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot '..')),
+    [string]$CtestXml   = '',
+    [string]$Cppcheck   = '',
+    [string]$ClangTidy  = '',
+    [string]$BenchmarkJson = '',
+    [string]$CoverageJson   = '',
+    [string]$StabilityJson  = '',
+    [string]$Dashboard  = (Join-Path $Repo 'docs/quality/dashboard.md'),
+    [string]$OutJson    = (Join-Path $Repo 'build_health.json')
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Invoke-Gate($script) {
+    $json = & $script -Json 2>$null | Out-String
+    try { return ($json | ConvertFrom-Json) } catch { return $null }
+}
+
+# ---- always-run gates --------------------------------------------------------
+$complexity   = Invoke-Gate (Join-Path $PSScriptRoot 'complexity_gate.ps1')
+$architecture = Invoke-Gate (Join-Path $PSScriptRoot 'architecture_gate.ps1')
+
+# ---- helpers -----------------------------------------------------------------
+function SafeFile($p) { if ($p -and (Test-Path $p)) { return $p } ; return '' }
+
+# ---- Build & Unit Test (from ctest junit) -----------------------------------
+$build = $null; $tests = $null
+$ct = SafeFile $CtestXml
+if (-not $ct) {
+    $ct = Get-ChildItem -Path (Join-Path $Repo 'build_msvc') -Recurse -Filter 'test-results*.xml' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($ct) { $ct = $ct.FullName }
+}
+if ($ct) {
+    try {
+        [xml]$junit = Get-Content -Path $ct -Raw -Encoding UTF8
+        $tc = $junit.SelectNodes('//testcase')
+        $fail = 0; $err = 0
+        foreach ($c in $tc) {
+            if ($c.SelectSingleNode('./*[local-name()="failure"]')) { $fail++ }
+            if ($c.SelectSingleNode('./*[local-name()="error"]'))    { $err++ }
+        }
+        $total = $tc.Count
+        $run = $total - $fail - $err
+        $build = 100.0
+        $tests = if ($total -gt 0) { [math]::Round(100.0 * $run / $total, 1) } else { $null }
+        $testsTotal = $total; $testsFailed = ($fail + $err)
+    } catch {
+        Write-Host ("WARN: ctest xml parse failed: {0}" -f $_.Exception.Message)
+        $tests = $null; $build = $null
+    }
+}
+else { $testsTotal = $null; $testsFailed = $null }
+
+# ---- Code Quality (clang-tidy + cppcheck) -----------------------------------
+$cq = $null
+$ctErr = 0; $ctWarn = 0; $ckErr = 0; $ckWarn = 0
+$ck = SafeFile $Cppcheck
+if ($ck) {
+    Get-Content $ck | ForEach-Object {
+        if ($_ -match ':\s*(error|warning):') {
+            if ($Matches[1] -eq 'error') { $ckErr++ } else { $ckWarn++ }
+        }
+    }
+}
+$tidy = SafeFile $ClangTidy
+if ($tidy) {
+    Get-Content $tidy | ForEach-Object {
+        if ($_ -match ':\s*error:') { $ctErr++ }
+        elseif ($_ -match ':\s*warning:') { $ctWarn++ }
+    }
+}
+if (($ckErr + $ckWarn + $ctErr + $ctWarn) -gt 0) {
+    $penalty = $ctErr * 5 + $ckErr * 10 + ($ctWarn + $ckWarn) * 1
+    $cq = [math]::Max(0, 100 - $penalty)
+}
+
+# ---- Performance (benchmark hard-gate) --------------------------------------
+$perf = $null
+$bj = SafeFile $BenchmarkJson
+if ($bj) {
+    try {
+        $b = Get-Content $bj -Raw | ConvertFrom-Json
+        $passed = if ($null -ne $b.passed) { $b.passed } else { 0 }
+        $total  = if ($null -ne $b.total)  { $b.total }  else { 0 }
+        if ($total -gt 0) { $perf = [math]::Round(100.0 * $passed / $total, 1) }
+        elseif ($b.scenarios) {
+            $p = ($b.scenarios | Where-Object { $_.pass -eq $true }).Count
+            $t = $b.scenarios.Count
+            if ($t -gt 0) { $perf = [math]::Round(100.0 * $p / $t, 1) }
+        }
+    } catch {}
+}
+
+# ---- Coverage (per-module) --------------------------------------------------
+$cover = $null; $covCore = $null; $covUi = $null; $covCompare = $null
+$cj = SafeFile $CoverageJson
+if ($cj) {
+    try {
+        $c = Get-Content $cj -Raw | ConvertFrom-Json
+        $covCore    = [double]($c.core);    $covUi = [double]($c.ui)
+        $covCompare = [double]($c.compare); $cover = [double]($c.overall)
+        if (-not $cover) { $cover = [math]::Round($covCore*0.6 + $covUi*0.2 + $covCompare*0.2, 1) }
+    } catch {}
+}
+
+# ---- Memory (stability scenario) --------------------------------------------
+$mem = $null
+$sj = SafeFile $StabilityJson
+if ($sj) {
+    try {
+        $s = Get-Content $sj -Raw | ConvertFrom-Json
+        if ($s.pass -eq $false) { $mem = [math]::Max(0, 100 - [double]($s.growthPenalty)) }
+        else { $mem = 100.0 }
+    } catch {}
+}
+
+# ---- Architecture & Complexity scores ---------------------------------------
+$arch = if ($architecture) { [math]::Max(0, 100 - [math]::Min($architecture.warnings, 20) * 5) } else { $null }
+$cx = if ($complexity) {
+    [math]::Max(0, 100 - $complexity.hardFails * 15 - [math]::Min($complexity.warnings, 20) * 2)
+} else { $null }
+
+# ---- assemble dimensions -----------------------------------------------------
+$dims = [ordered]@{
+    Build        = $build
+    'Unit Test'  = $tests
+    Performance  = $perf
+    'Code Quality' = $cq
+    Coverage     = $cover
+    Memory       = $mem
+    Architecture = $arch
+    Complexity   = $cx
+}
+$weights = [ordered]@{
+    Build=10; 'Unit Test'=20; Performance=15; 'Code Quality'=15;
+    Coverage=10; Memory=10; Architecture=10; Complexity=10
+}
+$sum = 0.0; $wsum = 0.0
+foreach ($k in $dims.Keys) {
+    $v = $dims[$k]
+    if ($null -ne $v) { $sum += $v * $weights[$k]; $wsum += $weights[$k] }
+}
+$overall = if ($wsum -gt 0) { [math]::Round($sum / $wsum, 1) } else { $null }
+
+# ---- render dashboard.md -----------------------------------------------------
+$stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+$sha = (git -C $Repo rev-parse --short HEAD 2>$null) + ''
+$grade = if ($overall -ge 90) { 'A' } elseif ($overall -ge 80) { 'B' } elseif ($overall -ge 70) { 'C' } elseif ($overall -ge 60) { 'D' } else { 'F' }
+
+$sb = [System.Text.StringBuilder]::new()
+[void]$sb.AppendLine('# MViewer — Project Health Dashboard')
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('> Auto-generated by `scripts/health_score.ps1`. Snapshot: **' + $stamp + '** · commit `' + $sha + '`')
+[void]$sb.AppendLine()
+[void]$sb.AppendLine("## Health Score: $overall / 100  (grade **$grade**)")
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('| Dimension | Score | Status |')
+[void]$sb.AppendLine('|---|---:|---|')
+foreach ($k in $dims.Keys) {
+    $v = $dims[$k]
+    if ($null -eq $v) { [void]$sb.AppendLine("| $k | n/a | not measured this run |") ; continue }
+    $badge = if ($v -ge 90) { 'PASS' } elseif ($v -ge 75) { 'OK' } elseif ($v -ge 60) { 'WATCH' } else { 'FAIL' }
+    [void]$sb.AppendLine("| $k | $v | $badge |")
+}
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('## Gate Details')
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('### Complexity')
+if ($complexity) {
+    [void]$sb.AppendLine("- hard fails: **$($complexity.hardFails)** · warnings: **$($complexity.warnings)**")
+    if ($complexity.files.Count) {
+        [void]$sb.AppendLine('- files over limit:')
+        foreach ($x in $complexity.files) { [void]$sb.AppendLine('  - `' + $x.file + '` — ' + $x.lines + ' lines (cap ' + $x.cap + ', ' + $x.level + ')') }
+    }
+    if ($complexity.functions.Count) {
+        [void]$sb.AppendLine('- longest functions (top 10):')
+        foreach ($x in ($complexity.functions | Sort-Object span -Descending | Select-Object -First 10)) {
+            [void]$sb.AppendLine("  - \`$($x.file)\` L$($x.line) — $($x.span) lines")
+        }
+    }
+} else { [void]$sb.AppendLine('- not run') }
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('### Architecture')
+if ($architecture) {
+    [void]$sb.AppendLine("- advisory violations: **$($architecture.warnings)**")
+    if ($architecture.violations.Count) {
+        foreach ($v in ($architecture.violations | Sort-Object rule, file | Select-Object -First 20)) {
+            [void]$sb.AppendLine('  - [' + $v.rule + '] `' + $v.file + '` L' + $v.line + ': ' + $v.message)
+        }
+    }
+} else { [void]$sb.AppendLine('- not run') }
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('### Coverage')
+if ($null -ne $cover) {
+    [void]$sb.AppendLine("- Core **$covCore%** · UI **$covUi%** · Compare **$covCompare%** · Overall **$cover%**")
+    [void]$sb.AppendLine('- gate: Core < 85% -> FAIL (nightly)')
+} else { [void]$sb.AppendLine('- not measured this run (nightly coverage job)') }
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('### Memory / Stability')
+if ($null -ne $mem) {
+    [void]$sb.AppendLine("- stability score: **$mem**")
+} else { [void]$sb.AppendLine('- not measured this run (nightly stability scenarios B9 / B17)') }
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('---')
+[void]$sb.AppendLine('_Generated by the M23 Build-Health system. See QUALITY.md and docs/adr/ for the governing rules._')
+
+Set-Content -Path $Dashboard -Value $sb.ToString() -Encoding UTF8
+
+$result = [ordered]@{
+    overall = $overall
+    grade   = $grade
+    dimensions = $dims
+    generated = $stamp
+    commit = $sha
+}
+$result | ConvertTo-Json -Depth 6 | Set-Content -Path $OutJson -Encoding UTF8
+
+# ---- stdout summary ----------------------------------------------------------
+Write-Host "=== Project Health Score ==="
+Write-Host ("Overall: {0} (grade {1})" -f $overall, $grade)
+foreach ($k in $dims.Keys) {
+    $v = $dims[$k]
+    $vs = if ($null -eq $v) { 'n/a' } else { "$v" }
+    Write-Host ("  {0,-14} {1}" -f $k, $vs)
+}
+Write-Host "Dashboard -> $Dashboard"

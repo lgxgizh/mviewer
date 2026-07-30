@@ -265,6 +265,9 @@ bool runScenarios(const mviewer::bench::Corpus &corpus, const Budget &b,
     items.push_back({"B15", [&]() { return mviewer::bench::scenarioZoomLatency(); }});
     // B16: render throughput (fps), report-only (machine dependent).
     items.push_back({"B16", [&]() { return mviewer::bench::scenarioRenderFps(); }});
+    // B17: workflow soak — RSS / handle growth across repeated browse->compare->
+    // exit cycles. Report-only; feeds the nightly Build-Health dashboard.
+    items.push_back({"B17", [&]() { return mviewer::bench::scenarioWorkflowSoak(corpus); }});
     // SCALE tiers (opt-in via --scale): decode throughput (fps) plus peak cache
     // memory and GPU dedicated memory at 100 / 1000 / 5000 images. Report-only.
     if (scaleMode)

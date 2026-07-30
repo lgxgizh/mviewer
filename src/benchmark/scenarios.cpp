@@ -12,6 +12,11 @@
 #include "core/render/Viewport.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+
 #include <QApplication>
 #include <QCoreApplication>
 #include <QImage>
@@ -1035,6 +1040,103 @@ ScenarioResult scenarioScaleTier(const Corpus &corpus, size_t tierN, const std::
                " rss_mb=" + std::to_string(static_cast<long long>(rssMB)) +
                " gpu_dedicated_mb=" + std::to_string(static_cast<long long>(gpuMB)) +
                (gpu.available ? "" : " (gpu:unavailable)");
+    return r;
+}
+
+// ─── B17: workflow soak / resource-growth stability ──────────────────────────
+// Repeats the canonical user workflow (open a window of images -> navigate ->
+// compare two -> exit/clear) and samples process RSS + OS handle count after
+// each cycle. A healthy build shows bounded growth; unbounded growth = a leak
+// somewhere in the loop. Report-only: numbers feed the nightly dashboard.
+namespace
+{
+size_t processHandleCount()
+{
+#ifdef _WIN32
+    DWORD n = 0;
+    if (GetProcessHandleCount(GetCurrentProcess(), &n))
+        return static_cast<size_t>(n);
+#endif
+    return 0;
+}
+} // namespace
+
+ScenarioResult scenarioWorkflowSoak(const Corpus &corpus)
+{
+    auto &repo = ImageRepository::instance();
+    auto &cm = CacheManager::instance();
+    auto &mt = mviewer::perf::MemoryTracker::instance();
+    repo.invalidateAll();
+    cm.clearMemory();
+    mt.reset();
+
+    const auto all = corpus.allPaths();
+    if (all.size() < 2)
+        return ScenarioResult{"B17", "workflow_soak_rss_growth_mb", 0, {}, "corpus too small",
+                              false};
+
+    const size_t window = std::min<size_t>(all.size(), 32);
+    const int cycles = 12; // cycle 0 is warmup (caches/pools reach steady state)
+
+    double rssFirstMB = 0, rssLastMB = 0;
+    size_t handlesFirst = 0, handlesLast = 0;
+    std::ostringstream perCycle;
+
+    for (int c = 0; c < cycles; ++c)
+    {
+        // 1) Browse: load a sliding window of images.
+        const size_t off = static_cast<size_t>(c) * (window / 2) % all.size();
+        for (size_t i = 0; i < window; ++i)
+            repo.load(all[(off + i) % all.size()]);
+
+        // 2) Compare: pull two frames and walk their pixel rows (proxies the
+        //    diff / pixel-probe path without needing a QWidget).
+        const auto ra = repo.load(all[off % all.size()]);
+        const auto rb = repo.load(all[(off + 1) % all.size()]);
+        volatile uint64_t sink = 0;
+        for (const auto *res : {&ra, &rb})
+        {
+            if (!res->success())
+                continue;
+            const ImageData &img = res->frame->pixels();
+            if (img.isNull())
+                continue;
+            const auto &bytes = *img.buffer;
+            const size_t step = std::max<size_t>(1, bytes.size() / 4096);
+            for (size_t i = 0; i < bytes.size(); i += step)
+                sink += bytes[i];
+        }
+        (void)sink;
+
+        // 3) Exit: drop the session and evict caches (same as closing Compare).
+        cm.clearMemory();
+
+        const auto s = mt.sample();
+        const double rssMB = s.processWorkingSetKB / 1024.0;
+        const size_t handles = processHandleCount();
+        if (c == 1) // first post-warmup sample
+        {
+            rssFirstMB = rssMB;
+            handlesFirst = handles;
+        }
+        rssLastMB = rssMB;
+        handlesLast = handles;
+        perCycle << " c" << c << ":rss=" << static_cast<long long>(rssMB) << ",h=" << handles;
+    }
+
+    const double rssGrowthMB = rssLastMB - rssFirstMB;
+    const long long handleGrowth =
+        static_cast<long long>(handlesLast) - static_cast<long long>(handlesFirst);
+
+    ScenarioResult r;
+    r.name = "B17";
+    r.metric = "workflow_soak_rss_growth_mb";
+    r.value = rssGrowthMB;
+    r.passed = true; // report-only; the dashboard makes drift visible
+    r.detail = "cycles=" + std::to_string(cycles) + " window=" + std::to_string(window) +
+               " rss_growth_mb=" + std::to_string(static_cast<long long>(rssGrowthMB)) +
+               " handle_growth=" + std::to_string(handleGrowth) +
+               " handles_final=" + std::to_string(handlesLast) + perCycle.str();
     return r;
 }
 

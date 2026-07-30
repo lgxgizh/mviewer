@@ -41,6 +41,31 @@ See `docs/adr/001`–`010` for canonical decisions.
 - Headers **must include-guard** and **self-compiling**
 - Public API documentation (file-level or function-level comments)
 
+## Build Health (M23)
+
+Beyond the per-PR Feature Gate, the project tracks **long-term health** via an
+automated scoring system. Single entry point:
+
+```powershell
+pwsh scripts/health_score.ps1        # -> docs/quality/dashboard.md + build_health.json
+```
+
+| Dimension | Source | Gate level |
+| --- | --- | --- |
+| Build / Tests | ctest JUnit XML (`build_msvc/`) | **Hard** (ci-gate) |
+| Code Quality | cppcheck + clang-tidy CI artifacts | **Hard** (ci-gate) |
+| Complexity | `scripts/complexity_gate.ps1` — file >800 lines FAIL cap, >600 warn, function >80 warn; ADR-014 TUs use their documented caps | Advisory (`-Strict` planned once debt cleared) |
+| Architecture | `scripts/architecture_gate.ps1` — R1: UI must not include Cache; R2: Widget must not access Repository; R3: Compare must not depend on Thumbnail; plus `audit_qt_boundary.ps1` (Core/Domain Qt-free) | Advisory Warning (Reviewer arbitrates per ADR) |
+| Performance | `benchmark/perf_baseline.json` ±10% regression gate (`bench_enforce`) | **Hard** |
+| Stability | Benchmark B9 (cache soak) + B17 (workflow soak: RSS / handle growth across browse→compare→exit cycles) | Report-only → dashboard |
+| Coverage | Nightly OpenCppCoverage per-module summary; target: **Core ≥ 85%** | Advisory (nightly) |
+
+- Dashboard: `docs/quality/dashboard.md` (auto-generated — do not hand-edit)
+- CI: `build-health` job on every PR (advisory, artifact + step summary);
+  `coverage` job in nightly
+- Score weights and formula live in `scripts/health_score.ps1`
+- Architecture rule ↔ ADR mapping: `docs/adr/README.md`
+
 ## Git
 
 - Branch from `master`, submit PR

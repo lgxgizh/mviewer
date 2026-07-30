@@ -278,6 +278,44 @@ jobs:
           path: build_msvc/test-results.xml
 
   # ---------------------------------------------------------------------------
+  # build-health — M23 Build-Health system (ADVISORY, never blocks a PR).
+  # Runs the complexity gate + architecture gate + health score, publishes the
+  # generated dashboard as an artifact and prints the score into the job
+  # summary. Per product-owner directive violations are Warnings, not blockers;
+  # the score makes drift visible on every PR.
+  # ---------------------------------------------------------------------------
+  build-health:
+    name: Build health (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Complexity gate (advisory)
+        shell: pwsh
+        run: ./scripts/complexity_gate.ps1
+
+      - name: Architecture gate (advisory)
+        shell: pwsh
+        run: ./scripts/architecture_gate.ps1
+
+      - name: Health score + dashboard
+        shell: pwsh
+        run: |
+          ./scripts/health_score.ps1
+          Get-Content docs/quality/dashboard.md | Out-File -Append $env:GITHUB_STEP_SUMMARY
+
+      - name: Upload health artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-health
+          path: |
+            docs/quality/dashboard.md
+            build_health.json
+
+  # ---------------------------------------------------------------------------
   # ci-gate — aggregate required statuses for branch protection
   # ---------------------------------------------------------------------------
   ci-gate:
