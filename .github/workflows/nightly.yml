@@ -328,7 +328,9 @@ jobs:
           $env:QT_QPA_PLATFORM = "offscreen"
           $env:PATH = "$env:QT_ROOT_DIR\bin;C:\Program Files\OpenCppCoverage;" + $env:PATH
           cd build_msvc
-          OpenCppCoverage.exe --export_type cobertura:coverage.xml `
+          OpenCppCoverage.exe `
+            --export_type cobertura:coverage.xml `
+            --export_type html:coverage_html `
             --sources "$env:GITHUB_WORKSPACE\src" `
             --excluded_sources "$env:GITHUB_WORKSPACE\src\benchmark" `
             --cover_children `
@@ -372,8 +374,68 @@ jobs:
           name: nightly-coverage
           path: |
             build_msvc/coverage.xml
+            build_msvc/coverage_html
             coverage.json
             docs/quality/dashboard.md
+
+  # ---------------------------------------------------------------------------
+  # publish-health — M23: commit auto-generated quality artifacts back to master
+  # (Tier-2 enforcement tier). Runs health_score + benchmark_trend + test_matrix
+  # from the nightly quality/coverage results and COMMITS docs/quality/*,
+  # docs/test_matrix.md, docs/known_issues/*, benchmark/report/* so project
+  # health is always current without any human editing the Markdown.
+  # Only runs on the scheduled trigger and uses [skip ci] to avoid re-triggering
+  # Tier-1.
+  # ---------------------------------------------------------------------------
+  publish-health:
+    name: Publish health (auto-commit quality docs)
+    runs-on: ubuntu-latest
+    needs: [quality, coverage]
+    if: github.event_name == 'schedule'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout (push token)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download nightly quality report
+        uses: actions/download-artifact@v4
+        with:
+          name: nightly-quality-report
+          path: .
+
+      - name: Download nightly coverage
+        uses: actions/download-artifact@v4
+        with:
+          name: nightly-coverage
+          path: .
+
+      - name: Health score + dashboard
+        shell: pwsh
+        run: ./scripts/health_score.ps1 -CoverageJson coverage.json -BenchmarkJson build_msvc/benchmark_report.json
+
+      - name: Append benchmark trend + render sparklines
+        shell: pwsh
+        run: ./scripts/benchmark_trend.ps1 -BenchmarkJson build_msvc/benchmark_report.json
+
+      - name: Regenerate test matrix
+        shell: pwsh
+        run: ./scripts/test_matrix.ps1
+
+      - name: Commit generated quality artifacts
+        run: |
+          git config user.name "mviewer-bot"
+          git config user.email "bot@mviewer.local"
+          git add docs/quality/ docs/test_matrix.md docs/known_issues/
+          git add -f benchmark/report/trend.json benchmark/report/index.html
+          if git diff --cached --quiet; then
+            echo "health: nothing to commit"
+          else
+            git commit -m "auto: M23 health publish — dashboard / trend / test-matrix [skip ci]"
+            git push
+          fi
 
   # ---------------------------------------------------------------------------
   # qa-report — nightly aggregator / entry point for QA dashboards

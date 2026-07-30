@@ -41,10 +41,11 @@ See `docs/adr/001`–`010` for canonical decisions.
 - Headers **must include-guard** and **self-compiling**
 - Public API documentation (file-level or function-level comments)
 
-## Build Health (M23)
+## Build Health (M23 — Quality Automation)
 
 Beyond the per-PR Feature Gate, the project tracks **long-term health** via an
-automated scoring system. Single entry point:
+automated, self-updating system. All quality artifacts are produced by CI — they
+are **never hand-edited** (see ADR-015). Single entry point:
 
 ```powershell
 pwsh scripts/health_score.ps1        # -> docs/quality/dashboard.md + build_health.json
@@ -54,16 +55,20 @@ pwsh scripts/health_score.ps1        # -> docs/quality/dashboard.md + build_heal
 | --- | --- | --- |
 | Build / Tests | ctest JUnit XML (`build_msvc/`) | **Hard** (ci-gate) |
 | Code Quality | cppcheck + clang-tidy CI artifacts | **Hard** (ci-gate) |
-| Complexity | `scripts/complexity_gate.ps1` — file >800 lines FAIL cap, >600 warn, function >80 warn; ADR-014 TUs use their documented caps | Advisory (`-Strict` planned once debt cleared) |
-| Architecture | `scripts/architecture_gate.ps1` — R1: UI must not include Cache; R2: Widget must not access Repository; R3: Compare must not depend on Thumbnail; plus `audit_qt_boundary.ps1` (Core/Domain Qt-free) | Advisory Warning (Reviewer arbitrates per ADR) |
+| Complexity | `scripts/complexity_gate.ps1` — file >800 FAIL · function >120 lines FAIL · cyclomatic >25 FAIL · function >80 / cyclo >15 WARN · class >1000 WARN; ADR-014 TUs use documented caps | Advisory on PR (nightly `-Strict`) |
+| Architecture | `scripts/architecture_gate.ps1` R1–R4 (UI∌Cache · Widget∌Repository · Compare∌Thumbnail · Domain 0-dep) | Advisory Warning |
+| ADR | `scripts/adr_gate.ps1` — architectural PRs (Repository / Cache / Scheduler / Compare) MUST add/update an ADR | **Required** (ci-gate) |
+| Known Issues (Bug Gate) | `scripts/known_issues_gate.ps1` — every OPEN issue must link an existing regression test | **Required** (ci-gate) |
+| Test Matrix | `scripts/test_matrix.ps1` — auto-generated `docs/test_matrix.md` (Feature × Unit/Integration/Benchmark/UI/Vision) | auto (nightly) |
+| Benchmark Trend | `scripts/benchmark_trend.ps1` — rolling `benchmark/report/index.html` SVG sparklines over past runs | auto (nightly) |
 | Performance | `benchmark/perf_baseline.json` ±10% regression gate (`bench_enforce`) | **Hard** |
-| Stability | Benchmark B9 (cache soak) + B17 (workflow soak: RSS / handle growth across browse→compare→exit cycles) | Report-only → dashboard |
-| Coverage | Nightly OpenCppCoverage per-module summary; target: **Core ≥ 85%** | Advisory (nightly) |
+| Stability | B9 (cache soak) + B17 (workflow soak: RSS / handle growth across browse→compare→exit) | Report-only → dashboard |
+| Coverage | Nightly OpenCppCoverage (cobertura **+ HTML**) per-module summary; target **Core ≥ 85%** | Advisory (nightly) |
 
-- Dashboard: `docs/quality/dashboard.md` (auto-generated — do not hand-edit)
-- CI: `build-health` job on every PR (advisory, artifact + step summary);
-  `coverage` job in nightly
-- Score weights and formula live in `scripts/health_score.ps1`
+- Dashboard: `docs/quality/dashboard.md` (auto-generated, **committed nightly** by `publish-health` — do not hand-edit)
+- Failure DB: `docs/known_issues/` (`Issue-NNN.md` + `known_issues.json`, auto-linked to regression tests; see `README.md`)
+- CI: `build-health` (PR, advisory) · `adr-gate` + `known-issues` (**PR, required**) · nightly `coverage` (HTML) + `publish-health` (auto-commits dashboard / trend / matrix)
+- Score weights and formula: `scripts/health_score.ps1`
 - Architecture rule ↔ ADR mapping: `docs/adr/README.md`
 
 ## Git

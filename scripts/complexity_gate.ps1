@@ -1,28 +1,41 @@
 # M23 Build-Health — Complexity Gate.
 #
-# Enforces file-size and function-length limits so the codebase cannot silently
-# grow into unmaintainable monsters (the user's "以后：不会再出现：5000 行").
+# Enforces file-size, function-length, cyclomatic-complexity and class-size
+# limits so the codebase cannot silently grow into unmaintainable monsters
+# (the product owner's "以后：不会再出现：5000 行 MainWindow").
 #
-# Rules (configurable via -FailFileLines / -WarnFunctionLines):
+# Rules (all configurable):
 #   * Per-file line count:
-#       > FailFileLines (default 800)  -> FAIL  (hard limit; blocks PR)
-#       > WarnFileLines (default 600)  -> WARN
+#       > FailFileLines   (default 800) -> FAIL  (hard limit)
+#       > WarnFileLines   (default 600) -> WARN
 #   * Function body length (brace-span):
-#       > WarnFunctionLines (default 80) -> WARN  (advisory; never fails)
-#   * ADR-014 hard guardrails (frozen, from AGENTS.md): the core responsibility
-#     TUs must stay small; the split files (mainwindow_*.cpp etc.) keep the core
-#     file under 1000 / 800 / 800 lines:
-#       mainwindow.cpp   > 1000 -> FAIL
-#       compareworkspace.cpp > 800 -> FAIL
-#       thumbnailpanel.cpp   > 800 -> FAIL
+#       > FailFunctionLines (default 120) -> FAIL
+#       > WarnFunctionLines (default 80)  -> WARN
+#   * Cyclomatic complexity (per function):
+#       > FailCyclo (default 25) -> FAIL
+#       > WarnCyclo (default 15) -> WARN
+#   * Class / struct body length:
+#       > WarnClassLines (default 1000) -> WARN  (advisory only)
+#   * ADR-014 frozen per-file caps (frozen, from AGENTS.md): the core
+#     responsibility TUs must stay small:
+#       mainwindow.cpp        > 1000 -> FAIL
+#       compareworkspace.cpp  > 800  -> FAIL
+#       thumbnailpanel.cpp    > 800  -> FAIL
 #
-# Test files (*test*, *_test*) are exempt from the function-length WARNING only
-# (they are data-driven); file-size limits still apply to keep them honest.
+# Cyclomatic complexity is approximated by counting decision points
+# (if / else / for / while / case / catch / switch / && / || / ?:) inside each
+# function body, starting from 1. This is the standard McCabe definition
+# approximated with a brace-stack parser — good enough for a CI gate.
 #
-# Output: human-readable report to stdout; with -Json, emits a single JSON object
-# (also written to -OutJson) consumed by scripts/health_score.ps1.
+# Test files are exempt from the function-length/cyclo *warning* noise (they are
+# data-driven); file-size and class limits still apply to keep them honest.
 #
-# Exit: 0 if no hard violation; 1 if any file exceeds a FAIL threshold.
+# Output: human report to stdout; with -Json emits a single JSON object (also
+# written to -OutJson) consumed by scripts/health_score.ps1.
+#
+# Exit: 0 by default (advisory). With -Strict, exits 1 if any hard (FAIL)
+# threshold is violated — enabling this in a CI tier turns the gate from
+# "soft warning" into a real merge blocker.
 
 [CmdletBinding()]
 param(
@@ -30,6 +43,10 @@ param(
     [int]$FailFileLines = 800,
     [int]$WarnFileLines = 600,
     [int]$WarnFunctionLines = 80,
+    [int]$FailFunctionLines = 120,
+    [int]$WarnCyclo = 15,
+    [int]$FailCyclo = 25,
+    [int]$WarnClassLines = 1000,
     [switch]$Json,
     [switch]$Strict,
     [string]$OutJson = ''
@@ -43,30 +60,40 @@ $src = Get-ChildItem -Path (Join-Path $Repo 'src') -Recurse -Include *.cpp, *.h 
 
 # ---- ADR-014 frozen per-file caps --------------------------------------------
 $adr014 = @{
-    'mainwindow.cpp'        = 1000
-    'compareworkspace.cpp'  = 800
-    'thumbnailpanel.cpp'    = 800
+    'mainwindow.cpp'       = 1000
+    'compareworkspace.cpp' = 800
+    'thumbnailpanel.cpp'   = 800
 }
 
 $fails = 0
 $warns = 0
 $fileFindings = [System.Collections.Generic.List[object]]::new()
 $fnFindings = [System.Collections.Generic.List[object]]::new()
+$classFindings = [System.Collections.Generic.List[object]]::new()
+$cycloFails = 0
+$funcFails = 0
+$classWarns = 0
+
+# Count decision points on a line for cyclomatic complexity.
+function Measure-DecisionPoints([string]$line) {
+    $c = 0
+    $c += ([regex]::Matches($line, '\b(if|else|for|while|case|catch|switch)\b')).Count
+    $c += ([regex]::Matches($line, '&&|\|\|')).Count
+    $c += ([regex]::Matches($line, '\?')).Count   # ternary (colon is ambiguous, count '?')
+    return $c
+}
 
 foreach ($f in $src) {
     $rel = $f.FullName.Substring($Repo.Length).TrimStart('\', '/')
 
     # Benchmark / scripts / plugins are tooling, not product architecture —
-    # exempt them from both file-size and function-length limits.
+    # exempt them from all limits.
     if ($rel -match '[\\/](benchmark|scripts|plugins)[\\/]') { continue }
 
-    $lines = (Get-Content $f.FullName -Encoding UTF8)
+    $lines = @(Get-Content $f.FullName -Encoding UTF8)
     $n = $lines.Count
 
-    # ---- effective caps ----------------------------------------------------
-    # ADR-014 split TUs (mainwindow_*.cpp etc.) are *intentionally* separate
-    # files that keep the core responsibility file small; they get a softer cap
-    # than the generic 800 so the gate does not fight the documented split.
+    # ---- effective file caps (ADR-014) ------------------------------------
     $warnCap = $WarnFileLines
     $failCap = $FailFileLines
     if ($adr014.ContainsKey($f.Name)) {
@@ -92,46 +119,88 @@ foreach ($f in $src) {
         })
     }
 
-    # function-length rule (skip test files for the *warning* noise)
+    # ---- function / class / complexity analysis (brace-stack) -------------
     $isTest = $f.Name -match 'test' -or $f.Name -match '_test\.'
-    if (-not $isTest) {
-        $depth = 0
-        $fnStart = $null
-        for ($i = 0; $i -lt $lines.Length; $i++) {
-            $ln = $lines[$i] -replace '//.*$', ''   # drop line comments
-            $open = ([regex]::Matches($ln, '\{')).Count
-            $close = ([regex]::Matches($ln, '\}')).Count
-            $prevDepth = $depth
-            $depth += $open - $close
+    # stack frame: @{ type: 'func'|'class'|'block'; start: int; cc: int }
+    $stack = [System.Collections.Generic.List[object]]::new()
+    $prevLine = ''
 
-            # a function body starts when depth goes 0 -> 1 on a definition line
-            if ($prevDepth -eq 0 -and $depth -eq 1) {
-                $isDef = $ln -match '\(' -and $ln -notmatch '^\s*(namespace|class|struct|enum|union)\b'
-                if ($isDef) { $fnStart = $i }
-            }
-            elseif ($prevDepth -eq 1 -and $depth -eq 0 -and $null -ne $fnStart) {
-                $span = ($i - $fnStart) + 1
-                if ($span -gt $WarnFunctionLines) {
-                    $warns++
-                    $fnFindings.Add([ordered]@{
-                        file = $rel
-                        line = ($fnStart + 1)
-                        span = $span
-                    })
+    for ($i = 0; $i -lt $lines.Length; $i++) {
+        $ln = $lines[$i] -replace '//.*$', ''   # drop // comments
+        # strip block comments crudely: remove /* ... */ on the same line
+        $ln = $ln -replace '/\*.*?\*/', ''
+
+        # For CC counting, if we are currently inside a function frame, count
+        # decision points on this line.
+        if ($stack.Count -gt 0 -and $stack[-1].type -eq 'func') {
+            $stack[-1].cc += Measure-DecisionPoints $ln
+        }
+
+        # Walk braces left-to-right to keep frame pairing correct.
+        for ($p = 0; $p -lt $ln.Length; $p++) {
+            $ch = $ln[$p]
+            if ($ch -eq '{') {
+                $prefix = ($prevLine + ' ' + $ln.Substring(0, $p))
+                $type = 'block'
+                if ($prefix -match '\b(class|struct)\b') { $type = 'class' }
+                elseif ($prefix -match '\(' -and $prefix -notmatch '\b(if|for|while|switch|catch|do|else)\b\s*$') {
+                    $type = 'func'
                 }
-                $fnStart = $null
+                $frame = [ordered]@{ type = $type; start = ($i + 1); cc = 1 }
+                $stack.Add($frame)
+            }
+            elseif ($ch -eq '}') {
+                if ($stack.Count -gt 0) {
+                    $frame = $stack[-1]
+                    $stack.RemoveAt($stack.Count - 1)
+                    if ($frame.type -eq 'func') {
+                        $span = ($i + 1) - $frame.start + 1
+                        $cc = $frame.cc
+                        if (-not $isTest) {
+                            if ($cc -gt $FailCyclo) { $cycloFails++; $fails++; $warns++ }
+                            elseif ($cc -gt $WarnCyclo) { $warns++ }
+                            if ($span -gt $FailFunctionLines) { $funcFails++; $fails++; $warns++ }
+                            elseif ($span -gt $WarnFunctionLines) { $warns++ }
+                        }
+                        if (-not $isTest -and ($cc -gt $WarnCyclo -or $span -gt $WarnFunctionLines)) {
+                            $fnFindings.Add([ordered]@{
+                                file = $rel
+                                line = $frame.start
+                                span = $span
+                                cc   = $cc
+                            })
+                        }
+                    }
+                    elseif ($frame.type -eq 'class') {
+                        $span = ($i + 1) - $frame.start + 1
+                        if ($span -gt $WarnClassLines) {
+                            $classWarns++; $warns++
+                            $classFindings.Add([ordered]@{
+                                file  = $rel
+                                line  = $frame.start
+                                span  = $span
+                                limit = $WarnClassLines
+                            })
+                        }
+                    }
+                }
             }
         }
+        $prevLine = $ln
     }
 }
 
 $summary = [ordered]@{
-    gate        = 'complexity'
-    passed      = ($fails -eq 0)
-    hardFails   = $fails
-    warnings    = $warns
-    files       = $fileFindings
-    functions   = $fnFindings
+    gate           = 'complexity'
+    passed         = ($fails -eq 0)
+    hardFails      = $fails
+    warnings       = $warns
+    cycloFails     = $cycloFails
+    funcFailLines  = $funcFails
+    classWarnings  = $classWarns
+    files          = $fileFindings
+    functions      = $fnFindings
+    classes        = $classFindings
 }
 
 if ($Json) {
@@ -141,9 +210,12 @@ if ($Json) {
 }
 else {
     Write-Host "=== Complexity Gate ==="
-    Write-Host "files scanned : $($src.Count)"
-    Write-Host "hard fails    : $fails"
-    Write-Host "warnings      : $warns"
+    Write-Host "files scanned     : $($src.Count)"
+    Write-Host "hard fails (file) : $fails  (file>$($FailFileLines) / fn>$($FailFunctionLines) / cyclo>$($FailCyclo))"
+    Write-Host "cyclo > $FailCyclo    : $cycloFails"
+    Write-Host "fn    > $FailFunctionLines L : $funcFails"
+    Write-Host "class  > $WarnClassLines L : $classWarns (warn only)"
+    Write-Host "warnings          : $warns"
     if ($fileFindings.Count) {
         Write-Host "`n-- files over limit --"
         foreach ($x in $fileFindings) {
@@ -152,9 +224,15 @@ else {
         }
     }
     if ($fnFindings.Count) {
-        Write-Host "`n-- functions longer than $WarnFunctionLines lines (top 20) --"
-        foreach ($x in ($fnFindings | Sort-Object span -Descending | Select-Object -First 20)) {
-            Write-Host ("  {0,-52} L{1,-5} {2} lines" -f $x.file, $x.line, $x.span)
+        Write-Host "`n-- functions over threshold (top 25) --"
+        foreach ($x in ($fnFindings | Sort-Object cc, span -Descending | Select-Object -First 25)) {
+            Write-Host ("  {0,-50} L{1,-5} {2,4}L  CC={3}" -f $x.file, $x.line, $x.span, $x.cc)
+        }
+    }
+    if ($classFindings.Count) {
+        Write-Host "`n-- classes over $WarnClassLines lines (warn) --"
+        foreach ($x in $classFindings) {
+            Write-Host ("  {0,-54} L{1,-5} {2} lines" -f $x.file, $x.line, $x.span)
         }
     }
     if ($Strict -and $fails -gt 0) {

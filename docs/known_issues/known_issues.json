@@ -1,0 +1,23 @@
+{
+  "schema": "known-issues/v1",
+  "issues": [
+    {
+      "id": "Issue-001",
+      "title": "MSVC AddressSanitizer aborts instrumenting std::shared_ptr in mviewer_bench",
+      "component": "toolchain/benchmark",
+      "status": "resolved",
+      "root_cause": "MSVC 17.x ASan mis-instruments std::shared_ptr internals, producing a global-buffer-overflow at process startup of mviewer_bench (main.cpp). Required running the benchmark under LLVM/clang-cl sanitizers instead of MSVC ASan.",
+      "fix_milestone": "M17",
+      "regression_tests": [".github/workflows/nightly.yml"]
+    },
+    {
+      "id": "Issue-002",
+      "title": "MainWindow double setupUi() orphans ImageViewer and makes workflow_ux_tests flaky",
+      "component": "ui/mainwindow",
+      "status": "resolved",
+      "root_cause": "MainWindow's ctor already calls setupUi(); four callers called it again, constructing a SECOND ImageViewer and leaking the first. The offscreen workflow test grabbed the orphaned viewer ~50% of the time, so the Compare/Browse flow was non-deterministic.",
+      "fix_milestone": "M22",
+      "regression_tests": ["src/test_workflow_ux.cpp"]
+    }
+  ]
+}

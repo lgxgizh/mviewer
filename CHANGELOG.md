@@ -28,6 +28,35 @@ All notable changes to this project are documented here. The format is based on
 - 新增 `scripts/cppcheck-suppressions.txt`：抑制系统/Qt/STL 头噪音，仅对 `src/`
   报错。
 
+### Added — M23 质量自动化（Quality Automation）
+
+按评审方向，本阶段**不再新增业务功能**，只建设项目工程化能力（ADR-015）：
+所有质量指标都由 CI 自动产生，而非人工维护。
+
+- **`adr_gate.ps1`（必需，接入 `ci-gate`）**：任何改动
+  `src/core/{repository,cache,scheduler}` 或 `src/compare` 的 PR **必须新增或更新
+  ADR**（`docs/adr/`），否则拒绝合并，防止架构缓慢腐化。
+- **`known_issues_gate.ps1`（Bug Gate，必需，接入 `ci-gate`）**：`docs/known_issues/`
+  中每个 **open** 问题都必须关联一个**真实存在的回归测试**（或 CI 任务），否则门禁
+  失败——保证修缺陷必带回归测试。新增结构化失败库：`README.md` + `known_issues.json`
+  （`Issue-001` MSVC ASan、`Issue-002` MainWindow 双重 `setupUi` 均已落回归）。
+- **`test_matrix.ps1`（自动生成 `docs/test_matrix.md`）**：扫描 `tests/`、`src/*test*`、
+  `src/benchmark`，按 Feature × 测试类型（Unit/Integration/Benchmark/UI/Vision）生成
+  测试矩阵，不再手写。
+- **`benchmark_trend.ps1`（自动生成趋势）**：每次 nightly 将 `benchmark_report.json`
+  追加进滚动历史 `benchmark/report/trend.json`，并渲染
+  `benchmark/report/index.html` 的 SVG 迷你趋势图（Decode 120→118→… 一目了然）。
+- **复杂度门禁升级（`complexity_gate.ps1`）**：新增**圈复杂度**（>15 WARN / >25 FAIL）、
+  函数长度（>80 WARN / >120 FAIL）、类长度（>1000 WARN）；文件 >800 仍为 FAIL。Nightly
+  以 `-Strict` 运行以暴露存量债务。
+- **覆盖率报告增强（nightly `coverage`）**：OpenCppCoverage 同时导出 **cobertura +
+  HTML**，HTML 报告作为 artifact 上传，Review 可直接看到未覆盖代码。
+- **`publish-health`（nightly 自动提交）**：nightly 运行 `health_score` +
+  `benchmark_trend` + `test_matrix` 后，将 `docs/quality/*`、`docs/test_matrix.md`、
+  `docs/known_issues/*`、`benchmark/report/*` **自动提交回 master**（带 `[skip ci]`），
+  仪表盘永远最新、无需人工维护。
+- 新增 `docs/adr/ADR-015-quality-automation.md` 记录该里程碑决策。
+
 ### Changed — 性能门禁收编进 `ci.yml`（删除独立 `perf-gate.yml`）
 
 - 原 `perf-gate.yml`（`mviewer_bench --enforce --budget`）与 `ci.yml` 的

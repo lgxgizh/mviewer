@@ -316,13 +316,50 @@ jobs:
             build_health.json
 
   # ---------------------------------------------------------------------------
+  # adr-gate — M23: architectural PRs MUST add/update an ADR (REQUIRED).
+  # Blocks merge if src/core/{repository,cache,scheduler} or src/compare change
+  # without a corresponding docs/adr/* change. Prevents architecture rot — six
+  # months later the code explains WHY, not just what.
+  # ---------------------------------------------------------------------------
+  adr-gate:
+    name: ADR gate (required)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: ADR gate
+        shell: pwsh
+        run: ./scripts/adr_gate.ps1 -Strict
+
+  # ---------------------------------------------------------------------------
+  # known-issues — M23 Bug Gate (REQUIRED): every OPEN issue in
+  # docs/known_issues/known_issues.json must link an existing regression test
+  # (or CI job). Only fails when the DB itself is inconsistent — so it never
+  # blocks unrelated PRs, but permanently prevents a defect from being "fixed"
+  # without a regression test landing alongside it.
+  # ---------------------------------------------------------------------------
+  known-issues:
+    name: Known-issues (Bug) gate (required)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Known-issues (Bug) gate
+        shell: pwsh
+        run: ./scripts/known_issues_gate.ps1 -Strict
+
+  # ---------------------------------------------------------------------------
   # ci-gate — aggregate required statuses for branch protection
   # ---------------------------------------------------------------------------
   ci-gate:
     name: CI gate (Tier 1)
     runs-on: ubuntu-latest
-    needs: [format, cppcheck, clang-tidy, build, test]
+    needs: [format, cppcheck, clang-tidy, build, test, adr-gate, known-issues]
     if: always()
     steps:
       - name: All required jobs passed
-        run: echo "format, cppcheck, clang-tidy, build, and test all succeeded (Tier-2 nightly / Tier-3 release are non-blocking for PRs)."
+        run: echo "format, cppcheck, clang-tidy, build, test, adr-gate, and known-issues all succeeded (Tier-2 nightly / Tier-3 release are non-blocking for PRs)."
