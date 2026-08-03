@@ -8,13 +8,67 @@
 #include "core/compare/DifferenceEngine.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
+#include "domain/Selection.h"
 
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 namespace mviewer::core
 {
+
+// The adjustment state that produced one already-adjusted ImageFrame.  The
+// report records this provenance; it deliberately does not apply adjustments.
+struct CompareAdjustmentState
+{
+    int brightness = 0;
+    double contrast = 1.0;
+    double gamma = 1.0;
+    double redGain = 1.0;
+    double blueGain = 1.0;
+    int rotation = 0;
+    bool hasCrop = false;
+    int cropX = 0;
+    int cropY = 0;
+    int cropW = 0;
+    int cropH = 0;
+
+    bool isIdentity() const;
+};
+
+// One target-vs-reference result in a CompareReportBundle. `diffHeatmap` is
+// retained for a later UI/export boundary and is intentionally not serialized.
+struct CompareReportPair
+{
+    int index = -1;
+    std::string path;
+    int referenceIndex = -1;
+    std::string imageA;
+    bool comparable = false;
+    double psnr = 0.0;
+    double ssim = 0.0;
+    DifferenceEngine::DiffStats fullDiffStats;
+    std::optional<DifferenceEngine::DiffStats> roiDiffStats;
+    ImageData diffHeatmap;
+};
+
+// A single immutable-at-publication snapshot of one compare report. The
+// builder fills every field together so reference ordering cannot drift from
+// the metrics or the adjustment provenance.
+struct CompareReportBundle
+{
+    std::vector<std::string> images;
+    int referenceIndex = -1;
+    uint8_t threshold = 0;
+    mviewer::domain::Selection roi;
+    std::vector<CompareAdjustmentState> adjustments;
+    std::vector<CompareReportPair> targets;
+
+    std::string toJson() const;
+    std::string toCsv() const;
+};
 
 // A compare/analysis report between two images. Built by buildCompareReport().
 // Pure data + serialization; no Qt, no file I/O (the caller chooses where to
@@ -53,6 +107,13 @@ CompareReport buildCompareReport(const ImageFrame &a, const ImageFrame &b);
 // Heatmap diff image (RGB24) suitable for writing as compare_diff.png via
 // Encoder. Returns a null ImageData on invalid input.
 ImageData compareDiffImage(const ImageFrame &a, const ImageFrame &b);
+
+// Build one target pair for every non-reference image. The ImageFrames must
+// already contain the adjusted pixels; `adjustments` is provenance only.
+CompareReportBundle buildCompareReportBundle(
+    const std::vector<ImageFrame> &adjustedImages, int referenceIndex, uint8_t threshold,
+    const mviewer::domain::Selection &roi,
+    const std::vector<CompareAdjustmentState> &adjustments);
 
 // ─── M13.4 batch analyzer export ──────────────────────────────────────────
 // Tabular report of running ONE analyzer over MANY images. `columns` is the

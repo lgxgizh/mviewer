@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- **Async diff destruction:** Compare diff jobs no longer access a destroyed
+  `CompareEngine` after queued work completes.
+
+### Added — Compare report credibility
+
+- **P0 Compare report credibility:** added a Qt-free `CompareReportBundle` core
+  export model that preserves ordered adjusted images and the selected reference,
+  records per-image adjustment provenance, emits one pair per non-reference
+  image, and serializes threshold-aware full/ROI diff statistics to JSON/CSV.
+  Dimension mismatches are explicitly marked incomparable; Windows paths and
+  CSV/JSON special characters are escaped correctly. Existing two-image report
+  APIs remain compatible.
+
 ### Added — CI 三层架构（PR / Nightly / Release）
 
 - **第一层 `ci.yml`（PR 必跑，目标 5–10 分钟，全部必须通过）**：`format`

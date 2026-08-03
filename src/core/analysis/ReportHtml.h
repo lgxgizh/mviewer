@@ -18,8 +18,11 @@ struct ReportContext
     std::string histogramPng;   // base64-encoded PNG
     std::string compareDiffPng; // base64-encoded PNG (diff image)
     CompareReport compare;
+    CompareReportBundle compareBundle;
+    std::vector<std::string> compareDiffPngs; // base64 PNGs parallel to compareBundle.targets
     AnalysisBatchReport batch;
     bool hasCompare = false;
+    bool hasCompareBundle = false;
     bool hasBatch = false;
 };
 

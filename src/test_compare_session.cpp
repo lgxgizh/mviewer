@@ -10,16 +10,23 @@
 // field (ROI, layout, threshold, side panel, blink, zoom) survives the trip.
 
 #include "compareworkspace.h"
+#include "core/EventBus.h"
+#include "core/scheduler/TaskScheduler.h"
 #include "core/workspace/WorkspaceSerializer.h"
 #include "domain/CompareSession.h"
 
 #include <QApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QFile>
 
+#include <atomic>
 #include <cassert>
+#include <chrono>
 #include <iostream>
+#include <memory>
 #include <string>
+#include <thread>
 
 namespace
 {
@@ -58,15 +65,18 @@ int main(int argc, char **argv)
     producer.applySession(s);
 
     // ---- 1) Engine-level ROI capture (the previously-broken path). ----
-    assert(s.selection.w > 0 && s.selection.h > 0 &&
+    const mviewer::domain::CompareSession captured = producer.compareSession();
+    assert(captured.selection.w > 0 && captured.selection.h > 0 &&
            "CompareEngine::session() must capture the ROI/selection");
-    assert(s.selection.x == 1 && s.selection.y == 2 && s.selection.w == 4 && s.selection.h == 3 &&
+    assert(captured.selection.x == 1 && captured.selection.y == 2 && captured.selection.w == 4 &&
+           captured.selection.h == 3 &&
            "captured ROI must match applied selection");
-    std::cout << "[ok] CompareEngine::session() captures ROI (" << s.selection.x << ","
-              << s.selection.y << "," << s.selection.w << "," << s.selection.h << ")\n";
+    std::cout << "[ok] CompareEngine::session() captures ROI (" << captured.selection.x << ","
+              << captured.selection.y << "," << captured.selection.w << ","
+              << captured.selection.h << ")\n";
 
     // ---- 2) Serialize -> deserialize round-trip preserves every field. ----
-    const std::string json = mviewer::core::serializeCompareSession(s);
+    const std::string json = mviewer::core::serializeCompareSession(captured);
     const auto r = mviewer::core::deserializeCompareSession(json);
     assert(r.has_value() && "deserializeCompareSession must succeed");
     assert(r->selection.w == 4 && r->selection.h == 3 && "ROI must survive round-trip");
@@ -90,6 +100,58 @@ int main(int argc, char **argv)
     assert(after.sidePanelVisible == true && "applied session must restore side panel");
     assert(after.blinkIntervalMs == 350 && "applied session must restore blink interval");
     std::cout << "[ok] applySession fully restores Compare state on a fresh workspace\n";
+
+    // ---- 4) Regression: destroying engines while their diffs are queued must
+    //      not leave worker callbacks dereferencing the destroyed engine. ----
+    TaskScheduler &scheduler = TaskScheduler::instance();
+    assert(scheduler.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(5)) &&
+           "earlier analysis jobs must drain before the lifetime regression");
+    scheduler.setPoolMaxThreads(TaskScheduler::AnalysisPool, 1);
+
+    std::atomic<bool> blockerStarted{false};
+    std::atomic<bool> releaseBlocker{false};
+    const auto blocker = scheduler.submit(
+        TaskScheduler::Priority::Analysis,
+        [&blockerStarted, &releaseBlocker](const TaskScheduler::TaskContext &)
+        {
+            blockerStarted.store(true, std::memory_order_release);
+            while (!releaseBlocker.load(std::memory_order_acquire))
+                std::this_thread::yield();
+        });
+    assert(blocker && "analysis queue blocker must be accepted");
+
+    const auto waitDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!blockerStarted.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < waitDeadline)
+    {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 1);
+        std::this_thread::yield();
+    }
+    assert(blockerStarted.load(std::memory_order_acquire) && "analysis queue blocker must start");
+
+    std::atomic<int> diffEvents{0};
+    const int diffSubId = EventBus::instance().subscribe(
+        "CompareEngine.DiffResult",
+        [&diffEvents](void *)
+        {
+            diffEvents.fetch_add(1, std::memory_order_relaxed);
+        });
+
+    constexpr int kQueuedEngines = 32;
+    for (int i = 0; i < kQueuedEngines; ++i)
+    {
+        auto engine = std::make_unique<CompareEngine>();
+        engine->setImages({p1.toStdString(), p2.toStdString()});
+        assert(engine->requestDiff(1, 0) && "queued diff must be accepted");
+    }
+
+    releaseBlocker.store(true, std::memory_order_release);
+    assert(scheduler.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(5)) &&
+           "queued compare diffs must finish within the bounded wait");
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 1);
+    EventBus::instance().unsubscribe(diffSubId);
+    assert(diffEvents.load(std::memory_order_relaxed) == 0 &&
+           "destroyed compare engines must not publish completion events");
 
     QFile::remove(p1);
     QFile::remove(p2);

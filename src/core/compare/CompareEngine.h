@@ -8,7 +8,7 @@
 #include "domain/Selection.h"
 
 #include <algorithm>
-#include <mutex>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -179,6 +179,7 @@ class CompareEngine
 {
   public:
     CompareEngine();
+    ~CompareEngine();
     CompareEngine(const CompareEngine &) = delete;
     CompareEngine &operator=(const CompareEngine &) = delete;
 
@@ -345,6 +346,8 @@ class CompareEngine
     }
 
   private:
+    struct AsyncState;
+
     void rebuildLayout();
 
     std::vector<std::shared_ptr<ImageFrame>> m_images;
@@ -356,9 +359,5 @@ class CompareEngine
     ViewportController m_viewport;
     PixelController m_pixel;
 
-    // Async diff result storage (mutex-guarded; written on worker thread, read
-    // on UI/EventBus subscriber thread).
-    mutable std::mutex m_diffMtx;
-    DiffResult m_lastDiff;
-    ImageData m_lastDiffImage;
+    std::shared_ptr<AsyncState> m_asyncState;
 };

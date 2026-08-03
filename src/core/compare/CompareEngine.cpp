@@ -7,13 +7,31 @@
 #include "core/job/Job.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cassert>
+#include <memory>
 #include <mutex>
+
+struct CompareEngine::AsyncState
+{
+    mutable std::mutex mutex;
+    DiffResult lastDiff;
+    ImageData lastDiffImage;
+    std::atomic<CompareEngine *> owner{nullptr};
+};
 
 // ─── CompareEngine (facade) ─────────────────────────────────────────────────
 
-CompareEngine::CompareEngine() : m_layout(CompareLayout::forCount(0)), m_blink(imageCount())
+CompareEngine::CompareEngine()
+    : m_layout(CompareLayout::forCount(0)), m_blink(imageCount()),
+      m_asyncState(std::make_shared<AsyncState>())
 {
+    m_asyncState->owner.store(this, std::memory_order_release);
+}
+
+CompareEngine::~CompareEngine()
+{
+    m_asyncState->owner.store(nullptr, std::memory_order_release);
 }
 
 void CompareEngine::setImages(const std::vector<std::string> &paths)
@@ -150,6 +168,7 @@ bool CompareEngine::requestDiff(int index, int baseIndex)
     const ImageData a = m_images[baseIndex]->pixels();
     const ImageData b = m_images[index]->pixels();
     const int idx = index, base = baseIndex;
+    const std::shared_ptr<AsyncState> state = m_asyncState;
 
     mviewer::core::Job job;
     job.name = "CompareEngine.diff";
@@ -158,24 +177,26 @@ bool CompareEngine::requestDiff(int index, int baseIndex)
     job.pool = TaskScheduler::PoolType::AnalysisPool;
     job.priority = TaskScheduler::Priority::Analysis;
 
-    job.work = [a, b, idx, base, this](const TaskScheduler::TaskContext &)
+    job.work = [a, b, idx, base, state](const TaskScheduler::TaskContext &)
     {
         ImageData diff = DifferenceEngine::differenceMap(a, b);
         DiffResult res;
         res.index = idx;
         res.baseIndex = base;
         res.valid = !diff.isNull();
-        std::lock_guard<std::mutex> lock(m_diffMtx);
-        m_lastDiff = res;
-        m_lastDiffImage = diff;
+        std::lock_guard<std::mutex> lock(state->mutex);
+        state->lastDiff = res;
+        state->lastDiffImage = diff;
     };
-    job.done = [this]()
+    job.done = [state]()
     {
         // Publish on the EventBus (scope Application) so subscribers (UI) learn
         // the diff is ready. This runs on the worker thread; subscribers that
         // touch widgets must hop to the UI thread themselves (see
         // CompareWorkspace).
-        EventBus::instance().publish("CompareEngine.DiffResult", static_cast<void *>(this));
+        CompareEngine *owner = state->owner.load(std::memory_order_acquire);
+        if (owner != nullptr)
+            EventBus::instance().publish("CompareEngine.DiffResult", static_cast<void *>(owner));
     };
 
     return mviewer::core::JobSystem::instance().submit(job) != nullptr;
@@ -183,14 +204,14 @@ bool CompareEngine::requestDiff(int index, int baseIndex)
 
 DiffResult CompareEngine::lastDiff() const
 {
-    std::lock_guard<std::mutex> lock(m_diffMtx);
-    return m_lastDiff;
+    std::lock_guard<std::mutex> lock(m_asyncState->mutex);
+    return m_asyncState->lastDiff;
 }
 
 ImageData CompareEngine::lastDiffImage() const
 {
-    std::lock_guard<std::mutex> lock(m_diffMtx);
-    return m_lastDiffImage;
+    std::lock_guard<std::mutex> lock(m_asyncState->mutex);
+    return m_asyncState->lastDiffImage;
 }
 
 void CompareEngine::applySelectionToAll(const mviewer::domain::Selection &sel)

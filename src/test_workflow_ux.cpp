@@ -21,6 +21,7 @@
 #include "imageviewer.h"
 #include "mainwindow.h"
 #include "selectionmodel.h"
+#include "widgets/rawimageview.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -29,6 +30,8 @@
 #include <QElapsedTimer>
 #include <QImage>
 #include <QKeyEvent>
+#include <QMouseEvent>
+#include <QPushButton>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QThread>
@@ -104,6 +107,15 @@ QCheckBox *findChk(QWidget *root, const QString &textPrefix)
     for (QCheckBox *c : boxes)
         if (c->text().startsWith(textPrefix))
             return c;
+    return nullptr;
+}
+
+QPushButton *findBtn(QWidget *root, const QString &textPrefix)
+{
+    const auto buttons = root->findChildren<QPushButton *>();
+    for (QPushButton *button : buttons)
+        if (button->isCheckable() && button->text().startsWith(textPrefix))
+            return button;
     return nullptr;
 }
 
@@ -327,6 +339,44 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     // Compare 会话可快照（供退出→重进恢复；round-trip 细节由 compare_session_tests 覆盖）。
     const auto session = ws->compareSession();
     CHECK(session.imageIds.size() == 2, "compareSession snapshots both images before exit");
+
+    RawImageView *referenceView = nullptr;
+    for (RawImageView *view : ws->findChildren<RawImageView *>())
+    {
+        if (view && view->cellIndex() == 1)
+        {
+            referenceView = view;
+            break;
+        }
+    }
+    CHECK(referenceView != nullptr, "compare exposes the second pane as a RawImageView");
+    if (referenceView)
+    {
+        auto bundle = ws->buildReportBundle();
+        if (bundle.referenceIndex != 1)
+        {
+            const QPoint point = referenceView->rect().center();
+            QMouseEvent event(QEvent::MouseMove, QPointF(point), Qt::NoButton, Qt::NoButton,
+                              Qt::NoModifier);
+            QApplication::sendEvent(referenceView, &event);
+            pump(20);
+
+            QPushButton *lockReference = findBtn(ws, QStringLiteral("锁定基准"));
+            CHECK(lockReference != nullptr, "compare exposes the lock-reference button");
+            if (lockReference)
+                lockReference->click();
+            pump(20);
+            bundle = ws->buildReportBundle();
+        }
+
+        CHECK(bundle.referenceIndex == 1 && bundle.targets.size() == 1,
+              "report bundle locks the second pane and emits one target");
+        CHECK(bundle.images.size() == 2 && bundle.adjustments.size() == 2,
+              "report bundle retains both images and both adjustment states");
+        CHECK(bundle.images[static_cast<size_t>(bundle.referenceIndex)] == pathB.toStdString() &&
+                  bundle.targets[0].path == pathA.toStdString(),
+              "report bundle maps the locked reference to path B and target to path A");
+    }
 
     // Esc 退出 Compare（真实 QDialog::reject 路径）。
     sendKey(ws, Qt::Key_Escape);

@@ -1,15 +1,83 @@
 #include "core/analysis/ExportReport.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <sstream>
 #include <unordered_set>
+#include <utility>
 
 namespace mviewer::core
 {
 
 namespace
 {
+
+std::string jsonEscape(const std::string &s)
+{
+    std::string out;
+    out.reserve(s.size() + 2);
+    for (unsigned char c : s)
+    {
+        switch (c)
+        {
+        case '"':
+            out += "\\\"";
+            break;
+        case '\\':
+            out += "\\\\";
+            break;
+        case '\b':
+            out += "\\b";
+            break;
+        case '\f':
+            out += "\\f";
+            break;
+        case '\n':
+            out += "\\n";
+            break;
+        case '\r':
+            out += "\\r";
+            break;
+        case '\t':
+            out += "\\t";
+            break;
+        default:
+            if (c < 0x20)
+            {
+                const char hex[] = "0123456789abcdef";
+                out += "\\u00";
+                out += hex[(c >> 4) & 0x0f];
+                out += hex[c & 0x0f];
+            }
+            else
+            {
+                out += static_cast<char>(c);
+            }
+            break;
+        }
+    }
+    return out;
+}
+
+std::string csvEscape(const std::string &s)
+{
+    const bool needQuote = s.find(',') != std::string::npos || s.find('"') != std::string::npos ||
+                           s.find('\n') != std::string::npos || s.find('\r') != std::string::npos;
+    if (!needQuote)
+        return s;
+
+    std::string out = "\"";
+    for (const char c : s)
+    {
+        if (c == '"')
+            out += "\"\"";
+        else
+            out += c;
+    }
+    out += "\"";
+    return out;
+}
 
 // Scan a grayscale diff map for min/mean/max (0..255).
 void summarizeDiff(const ImageData &d, double &mn, double &mean, double &mx)
@@ -101,6 +169,258 @@ ImageData compareDiffImage(const ImageFrame &a, const ImageFrame &b)
     return DifferenceEngine::heatMap(diff);
 }
 
+bool CompareAdjustmentState::isIdentity() const
+{
+    return brightness == 0 && std::abs(contrast - 1.0) < 1e-6 && std::abs(gamma - 1.0) < 1e-6 &&
+           std::abs(redGain - 1.0) < 1e-6 && std::abs(blueGain - 1.0) < 1e-6 && rotation == 0 &&
+           !hasCrop;
+}
+
+namespace
+{
+
+void writeJsonNumber(std::ostringstream &os, double value)
+{
+    if (std::isfinite(value))
+        os << value;
+    else
+        os << "null";
+}
+
+std::string csvNumber(double value)
+{
+    if (!std::isfinite(value))
+        return {};
+    std::ostringstream os;
+    os << value;
+    return os.str();
+}
+
+void writeDiffStatsJson(std::ostringstream &os, const DifferenceEngine::DiffStats &stats)
+{
+    os << "{\"totalPixels\": " << stats.totalPixels << ", \"diffPixels\": " << stats.diffPixels
+       << ", \"diffRatio\": ";
+    writeJsonNumber(os, stats.diffRatio);
+    os << ", \"meanDiff\": ";
+    writeJsonNumber(os, stats.meanDiff);
+    os << ", \"maxDiff\": " << stats.maxDiff << "}";
+}
+
+void writeAdjustmentJson(std::ostringstream &os, const CompareAdjustmentState &adjustment)
+{
+    os << "{\"brightness\": " << adjustment.brightness << ", \"contrast\": ";
+    writeJsonNumber(os, adjustment.contrast);
+    os << ", \"gamma\": ";
+    writeJsonNumber(os, adjustment.gamma);
+    os << ", \"redGain\": ";
+    writeJsonNumber(os, adjustment.redGain);
+    os << ", \"blueGain\": ";
+    writeJsonNumber(os, adjustment.blueGain);
+    os << ", \"rotation\": " << adjustment.rotation << ", \"hasCrop\": "
+       << (adjustment.hasCrop ? "true" : "false")
+       << ", \"crop\": {\"x\": " << adjustment.cropX << ", \"y\": " << adjustment.cropY
+       << ", \"width\": " << adjustment.cropW << ", \"height\": " << adjustment.cropH << "}}";
+}
+
+void appendDiffStatsCsv(std::vector<std::string> &fields,
+                        const DifferenceEngine::DiffStats *stats)
+{
+    if (stats == nullptr)
+    {
+        fields.insert(fields.end(), 5, std::string{});
+        return;
+    }
+    fields.push_back(std::to_string(stats->totalPixels));
+    fields.push_back(std::to_string(stats->diffPixels));
+    fields.push_back(csvNumber(stats->diffRatio));
+    fields.push_back(csvNumber(stats->meanDiff));
+    fields.push_back(std::to_string(stats->maxDiff));
+}
+
+} // namespace
+
+CompareReportBundle buildCompareReportBundle(
+    const std::vector<ImageFrame> &adjustedImages, int referenceIndex, uint8_t threshold,
+    const mviewer::domain::Selection &roi,
+    const std::vector<CompareAdjustmentState> &adjustments)
+{
+    CompareReportBundle bundle;
+    bundle.referenceIndex = referenceIndex;
+    bundle.threshold = threshold;
+    bundle.roi = roi;
+    bundle.images.reserve(adjustedImages.size());
+    for (const auto &image : adjustedImages)
+        bundle.images.push_back(image.metadata().filePath);
+
+    bundle.adjustments.resize(adjustedImages.size());
+    const size_t adjustmentCount = std::min(adjustments.size(), bundle.adjustments.size());
+    for (size_t i = 0; i < adjustmentCount; ++i)
+        bundle.adjustments[i] = adjustments[i];
+
+    const bool validReference = referenceIndex >= 0 &&
+                                referenceIndex < static_cast<int>(adjustedImages.size());
+    if (validReference)
+    {
+        bundle.targets.reserve(adjustedImages.size() - 1);
+        for (size_t i = 0; i < adjustedImages.size(); ++i)
+        {
+            if (static_cast<int>(i) == referenceIndex)
+                continue;
+
+            const ImageFrame &reference = adjustedImages[static_cast<size_t>(referenceIndex)];
+            const ImageFrame &target = adjustedImages[i];
+            CompareReportPair pair;
+            pair.index = static_cast<int>(i);
+            pair.path = target.metadata().filePath;
+            pair.referenceIndex = referenceIndex;
+            pair.imageA = reference.metadata().filePath;
+
+            const bool sameSize = reference.isValid() && target.isValid() &&
+                                  reference.width() == target.width() &&
+                                  reference.height() == target.height();
+            if (sameSize)
+            {
+                const ImageData rawDiff =
+                    DifferenceEngine::differenceMap(reference.pixels(), target.pixels());
+                if (!rawDiff.isNull())
+                {
+                    pair.comparable = true;
+                    PSNRAnalyzer psnr;
+                    psnr.setReference(reference);
+                    if (psnr.analyze(target))
+                        pair.psnr = psnr.psnrValue();
+
+                    SSIMAnalyzer ssim;
+                    ssim.setReference(reference);
+                    if (ssim.analyze(target))
+                        pair.ssim = ssim.ssimValue();
+
+                    pair.fullDiffStats = DifferenceEngine::computeStats(rawDiff, threshold);
+                    if (!roi.isEmpty())
+                    {
+                        const DifferenceEngine::DiffStats roiStats = DifferenceEngine::computeStats(
+                            rawDiff, threshold, roi.x, roi.y, roi.width, roi.height);
+                        if (roiStats.totalPixels > 0)
+                            pair.roiDiffStats = roiStats;
+                    }
+                    const ImageData thresholded =
+                        DifferenceEngine::applyThreshold(rawDiff, threshold);
+                    pair.diffHeatmap = DifferenceEngine::heatMap(thresholded);
+                }
+            }
+            bundle.targets.push_back(std::move(pair));
+        }
+    }
+    else
+    {
+        bundle.targets.reserve(adjustedImages.size());
+        for (size_t i = 0; i < adjustedImages.size(); ++i)
+        {
+            CompareReportPair pair;
+            pair.index = static_cast<int>(i);
+            pair.path = adjustedImages[i].metadata().filePath;
+            pair.referenceIndex = referenceIndex;
+            bundle.targets.push_back(std::move(pair));
+        }
+    }
+    return bundle;
+}
+
+std::string CompareReportBundle::toJson() const
+{
+    std::ostringstream os;
+    os << "{\n  \"images\": [";
+    for (size_t i = 0; i < images.size(); ++i)
+    {
+        if (i != 0)
+            os << ", ";
+        os << "\"" << jsonEscape(images[i]) << "\"";
+    }
+    os << "],\n  \"referenceIndex\": " << referenceIndex << ",\n  \"threshold\": "
+       << static_cast<unsigned int>(threshold) << ",\n  \"roi\": {\"x\": " << roi.x
+       << ", \"y\": " << roi.y << ", \"width\": " << roi.width << ", \"height\": "
+       << roi.height << "},\n  \"adjustments\": [";
+    for (size_t i = 0; i < adjustments.size(); ++i)
+    {
+        if (i != 0)
+            os << ", ";
+        writeAdjustmentJson(os, adjustments[i]);
+    }
+    os << "],\n  \"targets\": [";
+    for (size_t i = 0; i < targets.size(); ++i)
+    {
+        const CompareReportPair &pair = targets[i];
+        if (i != 0)
+            os << ",";
+        os << "\n    {\"index\": " << pair.index << ", \"path\": \"" << jsonEscape(pair.path)
+           << "\", \"referenceIndex\": " << pair.referenceIndex << ", \"imageA\": \""
+           << jsonEscape(pair.imageA) << "\", \"comparable\": "
+           << (pair.comparable ? "true" : "false") << ", \"psnr_dB\": ";
+        if (pair.comparable)
+            writeJsonNumber(os, pair.psnr);
+        else
+            os << "null";
+        os << ", \"ssim\": ";
+        if (pair.comparable)
+            writeJsonNumber(os, pair.ssim);
+        else
+            os << "null";
+        os << ", \"fullDiffStats\": ";
+        if (pair.comparable)
+            writeDiffStatsJson(os, pair.fullDiffStats);
+        else
+            os << "null";
+        os << ", \"roiDiffStats\": ";
+        if (pair.comparable && pair.roiDiffStats.has_value())
+            writeDiffStatsJson(os, *pair.roiDiffStats);
+        else
+            os << "null";
+        os << "}";
+    }
+    if (!targets.empty())
+        os << "\n  ";
+    os << "]\n}\n";
+    return os.str();
+}
+
+std::string CompareReportBundle::toCsv() const
+{
+    std::ostringstream os;
+    os << "referenceIndex,imageA,index,path,comparable,psnr_dB,ssim,"
+          "full_totalPixels,full_diffPixels,full_diffRatio,full_meanDiff,full_maxDiff,"
+          "roi_totalPixels,roi_diffPixels,roi_diffRatio,roi_meanDiff,roi_maxDiff\n";
+    for (const auto &pair : targets)
+    {
+        std::vector<std::string> fields;
+        fields.reserve(17);
+        fields.push_back(std::to_string(pair.referenceIndex));
+        fields.push_back(pair.imageA);
+        fields.push_back(std::to_string(pair.index));
+        fields.push_back(pair.path);
+        fields.push_back(pair.comparable ? "true" : "false");
+        if (pair.comparable)
+        {
+            fields.push_back(csvNumber(pair.psnr));
+            fields.push_back(csvNumber(pair.ssim));
+            appendDiffStatsCsv(fields, &pair.fullDiffStats);
+            appendDiffStatsCsv(
+                fields, pair.roiDiffStats.has_value() ? &*pair.roiDiffStats : nullptr);
+        }
+        else
+        {
+            fields.insert(fields.end(), 12, std::string{});
+        }
+        for (size_t i = 0; i < fields.size(); ++i)
+        {
+            if (i != 0)
+                os << ",";
+            os << csvEscape(fields[i]);
+        }
+        os << "\n";
+    }
+    return os.str();
+}
+
 std::string CompareReport::toJson() const
 {
     std::ostringstream os;
@@ -133,59 +453,6 @@ std::string CompareReport::toCsv() const
 // ─── M13.4 batch analyzer export ──────────────────────────────────────────
 namespace
 {
-
-// Minimal JSON string escaper (quotes, backslash, control chars). Filenames
-// may contain backslashes on Windows, so this matters for valid JSON.
-std::string jsonEscape(const std::string &s)
-{
-    std::string out;
-    out.reserve(s.size() + 2);
-    for (char c : s)
-    {
-        switch (c)
-        {
-        case '"':
-            out += "\\\"";
-            break;
-        case '\\':
-            out += "\\\\";
-            break;
-        case '\n':
-            out += "\\n";
-            break;
-        case '\r':
-            out += "\\r";
-            break;
-        case '\t':
-            out += "\\t";
-            break;
-        default:
-            out += c;
-            break;
-        }
-    }
-    return out;
-}
-
-// CSV field escaper: quote if the value contains a comma, quote or newline.
-std::string csvEscape(const std::string &s)
-{
-    const bool needQuote = s.find(',') != std::string::npos || s.find('"') != std::string::npos ||
-                           s.find('\n') != std::string::npos || s.find('\r') != std::string::npos;
-    if (!needQuote)
-        return s;
-    std::string out = "\"";
-    for (char c : s)
-    {
-        if (c == '"')
-            out += "\"\"";
-        else
-            out += c;
-    }
-    out += "\"";
-    return out;
-}
-
 } // namespace
 
 AnalysisBatchReport buildBatchReport(const std::string &analyzerId,

@@ -401,6 +401,49 @@ ImageData CompareWorkspace::adjustedPixels(int cellIdx) const
     return applyAdjusts(img->pixels(), a);
 }
 
+mviewer::core::CompareReportBundle CompareWorkspace::buildReportBundle() const
+{
+    const int imageCount = m_engine.imageCount();
+    std::vector<ImageFrame> adjustedImages;
+    adjustedImages.reserve(static_cast<size_t>(imageCount));
+
+    std::vector<mviewer::core::CompareAdjustmentState> adjustments;
+    adjustments.resize(static_cast<size_t>(imageCount));
+
+    for (int i = 0; i < imageCount; ++i)
+    {
+        const ImageFrame *source = m_engine.imageAt(i);
+        mviewer::domain::ImageMetadata metadata;
+        if (source)
+            metadata = source->metadata();
+
+        const ImageData pixels = adjustedPixels(i);
+        metadata.width = pixels.width;
+        metadata.height = pixels.height;
+        adjustedImages.emplace_back(metadata, pixels);
+
+        if (i < static_cast<int>(m_cellAdjusts.size()))
+        {
+            const CellAdjust &cell = m_cellAdjusts[static_cast<size_t>(i)];
+            auto &report = adjustments[static_cast<size_t>(i)];
+            report.brightness = cell.brightness;
+            report.contrast = cell.contrast;
+            report.gamma = cell.gamma;
+            report.redGain = cell.rGain;
+            report.blueGain = cell.bGain;
+            report.rotation = cell.rotation;
+            report.hasCrop = cell.hasCrop;
+            report.cropX = cell.cropX;
+            report.cropY = cell.cropY;
+            report.cropW = cell.cropW;
+            report.cropH = cell.cropH;
+        }
+    }
+
+    return mviewer::core::buildCompareReportBundle(
+        adjustedImages, diffBaseIndex(), m_thresholdValue, m_lastSelection, adjustments);
+}
+
 void CompareWorkspace::onAdjEditFinished()
 {
     for (int i = 0; i < m_cellViews.size(); ++i)

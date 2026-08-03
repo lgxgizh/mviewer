@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/analysis/AnalysisEngine.h"
+#include "core/analysis/ExportReport.h"
 #include "core/compare/CompareEngine.h"
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
@@ -118,6 +119,9 @@ class CompareWorkspace : public QWidget
 
     // P1: Get the current focus image path (for triggering external analysis).
     QString focusImagePath() const;
+
+    // Build one immutable report snapshot from every currently compared pane.
+    mviewer::core::CompareReportBundle buildReportBundle() const;
 
   public slots:
     void nextPair();
