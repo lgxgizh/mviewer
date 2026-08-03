@@ -30,9 +30,13 @@
 #include <QDialog>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QFileInfo>
 #include <QImage>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QSettings>
@@ -40,6 +44,7 @@
 #include <QStandardPaths>
 #include <QTableWidget>
 #include <QThread>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <iostream>
@@ -160,10 +165,62 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
 {
     std::cout << "── Workflow 1: browse ──\n";
 
+    const QString recoveryPath =
+        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recovery.json";
+    QDir().mkpath(QFileInfo(recoveryPath).absolutePath());
+    QFile recoveryFile(recoveryPath);
+    CHECK(recoveryFile.open(QIODevice::WriteOnly | QIODevice::Truncate),
+          "recovery fixture is written to the test AppConfig");
+    if (recoveryFile.isOpen())
+    {
+        QJsonObject recovery;
+        recovery.insert("lastDir", dirPath);
+        recovery.insert("lastImage", paths.first());
+        recoveryFile.write(QJsonDocument(recovery).toJson());
+        recoveryFile.close();
+    }
+
+    MainWindow *window = nullptr;
+    bool recoveryPromptSeen = false;
+    bool recoveryParentVisible = false;
+    bool recoveryParentMatches = false;
+    QTimer recoveryPromptPoller;
+    recoveryPromptPoller.setInterval(10);
+    QObject::connect(&recoveryPromptPoller, &QTimer::timeout,
+                     [&]()
+                     {
+                         for (QWidget *top : QApplication::topLevelWidgets())
+                         {
+                             auto *box = qobject_cast<QMessageBox *>(top);
+                             if (!box || !box->isVisible())
+                                 continue;
+                             recoveryPromptSeen = true;
+                             recoveryParentVisible = window && window->isVisible();
+                             recoveryParentMatches = window && box->parentWidget() == window;
+                             box->done(QMessageBox::No);
+                             recoveryPromptPoller.stop();
+                             return;
+                         }
+                     });
+    recoveryPromptPoller.start();
+
+    QElapsedTimer constructionTimer;
+    constructionTimer.start();
     MainWindow w;
+    window = &w;
+    const qint64 constructionMs = constructionTimer.elapsed();
+    CHECK(constructionMs < 5000, "recovery prompt does not block MainWindow construction");
+    CHECK(QApplication::activeModalWidget() == nullptr,
+          "recovery prompt is not modal during MainWindow construction");
     w.resize(1280, 800);
     w.show();
     pump(100);
+    CHECK(recoveryPromptSeen, "recovery prompt appears after the main window is shown");
+    CHECK(recoveryParentMatches && recoveryParentVisible,
+          "recovery prompt is parented to the visible MainWindow");
+    w.activateWindow();
+    w.raise();
+    pump(10);
 
     auto *analysisPanel = w.findChild<QWidget *>("analysisPanel");
     auto *searchPanel = w.findChild<QWidget *>("searchPanel");

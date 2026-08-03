@@ -10,6 +10,9 @@ All notable changes to this project are documented here. The format is based on
 
 - **Async diff destruction:** Compare diff jobs no longer access a destroyed
   `CompareEngine` after queued work completes.
+- **Visible crash recovery:** recovery and crash-report prompts now run after
+  the main window is visible, preventing an unclean prior session from making
+  the next launch appear to hang in the background.
 - **Focused first-run browse workspace:** analysis and global-search panels now
   start collapsed, advanced metadata filters live behind one disclosure control,
   and `Tab` enters a reversible focus mode that restores and persists each

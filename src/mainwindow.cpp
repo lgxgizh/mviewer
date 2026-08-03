@@ -121,9 +121,14 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     connect(m_autosaveTimer, &QTimer::timeout, this, &MainWindow::autosaveSession);
     m_autosaveTimer->start(30000);
     m_autosaveLoaded = false;
-    restoreSessionRecovery();
-    // M17: if a previous run crashed, surface a crash-report prompt on next launch.
-    maybeShowCrashReport();
+    QTimer::singleShot(0, this,
+                       [this]()
+                       {
+                           restoreSessionRecovery();
+                           // M17: if a previous run crashed, surface a crash-report prompt
+                           // on next launch.
+                           maybeShowCrashReport();
+                       });
     // M17: quiet background update check shortly after launch (only notifies on a new version).
     QTimer::singleShot(8000, this, [this]() { checkForUpdates(true); });
 }
@@ -297,7 +302,8 @@ void MainWindow::setOpenOnLaunch(const QString &path)
     m_openOnLaunchQueued = true;
     QMetaObject::invokeMethod(
         this,
-        [this]() {
+        [this]()
+        {
             m_openOnLaunchQueued = false;
             const QString path = m_openOnLaunch;
             m_openOnLaunch.clear();
