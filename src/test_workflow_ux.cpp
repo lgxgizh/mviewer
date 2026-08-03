@@ -134,13 +134,31 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             viewer = v;
     CHECK(viewer != nullptr, "image viewer window exists after setupUi");
 
+    // 模拟 main() 的真实启动顺序：窗口先构造完成，再设置命令行/文件关联路径。
+    // 事件循环必须驱动 queued open，不能直接调用 onImageOpen 绕过回归点。
+    w.setOpenOnLaunch(paths[0]);
+    QElapsedTimer launchTimer;
+    launchTimer.start();
+    while ((sel->currentImage() != paths[0] || !viewer || !viewer->isVisible()
+             || !viewer->frame())
+           && launchTimer.elapsed() < 5000)
+        pump(25);
+    CHECK(sel->currentImage() == paths[0],
+          "post-construction setOpenOnLaunch syncs SelectionModel.currentImage");
+    CHECK(viewer && viewer->isVisible(),
+          "post-construction setOpenOnLaunch makes ImageViewer visible");
+    CHECK(viewer && viewer->frame(),
+          "post-construction setOpenOnLaunch decodes a frame within 5s");
+
     // 打开第一张图（真实产品入口 onImageOpen：双击文件 → 查看器）。
     // 注意顺序：先打开单图、等首屏，再打开目录。offscreen 测试平台不允许
     // 跨线程池并发全分辨率 QImageReader::read()（M3 已知平台限制，见
     // ImageRepository.cpp），因此测试按真实用户节奏逐步推进而不是并发轰炸。
-    w.onImageOpen(paths[0]);
+    // Launch coverage above already opened the first image through the public
+    // setter; do not call onImageOpen directly and hide a duplicate-open bug.
     pump(100);
-    CHECK(sel->currentImage() == paths[0], "onImageOpen syncs SelectionModel.currentImage");
+    CHECK(sel->currentImage() == paths[0],
+          "launch open keeps SelectionModel.currentImage synchronized");
 
     if (viewer)
     {

@@ -108,11 +108,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     rebuildRecentFilesMenu();
     restoreLastSession();
 
-    // M14-1: open the file passed on the command line (deferred to event loop).
-    if (!m_openOnLaunch.isEmpty())
-        QMetaObject::invokeMethod(
-            this, [this]() { onImageOpen(m_openOnLaunch); }, Qt::QueuedConnection);
-
     // M15: drag & drop — accept files/folders dropped onto the window.
     setAcceptDrops(true);
 
@@ -288,6 +283,28 @@ void MainWindow::toggleCurrentReject()
     statusBar()->showMessage(
         v ? QString("已拒绝 %1").arg(QFileInfo(currentImagePath()).fileName())
           : QString("已取消拒绝 %1").arg(QFileInfo(currentImagePath()).fileName()));
+}
+
+void MainWindow::setOpenOnLaunch(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+
+    m_openOnLaunch = path;
+    if (m_openOnLaunchQueued)
+        return;
+
+    m_openOnLaunchQueued = true;
+    QMetaObject::invokeMethod(
+        this,
+        [this]() {
+            m_openOnLaunchQueued = false;
+            const QString path = m_openOnLaunch;
+            m_openOnLaunch.clear();
+            if (!path.isEmpty())
+                onImageOpen(path);
+        },
+        Qt::QueuedConnection);
 }
 
 void MainWindow::onImageOpen(const QString &path)

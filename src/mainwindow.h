@@ -53,10 +53,7 @@ class MainWindow : public QMainWindow
     // the real UI and render it to a pixmap without a visible window.
     void setupUi();
     void onImageOpen(const QString &path);
-    void setOpenOnLaunch(const QString &path)
-    {
-        m_openOnLaunch = path;
-    }
+    void setOpenOnLaunch(const QString &path);
 
   protected:
     void closeEvent(QCloseEvent *event) override;
@@ -250,6 +247,7 @@ class MainWindow : public QMainWindow
     mviewer::core::RecentFiles m_recent;      // recent-folders LRU
     mviewer::core::RecentFiles m_recentFiles; // recent-files LRU (opened images)
     QString m_openOnLaunch;                   // path passed via command line
+    bool m_openOnLaunchQueued = false;
     AppState m_appState;
 
     void saveWorkspace();
