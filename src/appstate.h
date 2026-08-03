@@ -34,8 +34,8 @@ struct AppState
 
     // P1-3: restore the Analysis workspace on next launch so reopening the
     // app lands the user exactly where they left off (not just the image).
-    bool analysisVisible = true; // Analysis panel shown at shutdown? (true = prior default)
-    int analysisPage = 0;        // active Analysis sub-page (Histogram/RGB/...)
+    bool analysisVisible = false; // Analysis panel shown at shutdown?
+    int analysisPage = 0;         // active Analysis sub-page (Histogram/RGB/...)
 
     // P1-3: persist the back/forward navigation stack (browser-style) so the
     // History panel and ←/→ history work after reopening the app.

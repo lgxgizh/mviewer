@@ -169,6 +169,7 @@ void CompareWorkspace::refreshCellDiff(int idx)
     const auto tv = tgtPx.view();
     if (bv.width != tv.width || bv.height != tv.height)
     {
+        view->setSizeMismatch(true);
         view->setOverlay(QImage(), 0.0);
         return;
     }
@@ -186,14 +187,17 @@ void CompareWorkspace::refreshCellDiff(int idx)
 
 void CompareWorkspace::refreshDiffOverlay()
 {
-    const auto res = m_engine.lastDiff();
-    if (!res.valid || res.index < 0 || res.index >= m_cellViews.size())
-    {
-        for (int i = 0; i < m_cellViews.size(); ++i)
-            refreshCellDiff(i);
-        return;
-    }
-    refreshCellDiff(res.index);
+    const auto result = m_engine.lastDiff();
+    if (result.valid && result.index >= 0 && result.index < m_cellViews.size())
+        refreshCellDiff(result.index);
+    update();
+}
+
+void CompareWorkspace::refreshAllDiffOverlays()
+{
+    for (int i = 0; i < m_cellViews.size(); ++i)
+        refreshCellDiff(i);
+    updateMetrics();
     update();
 }
 

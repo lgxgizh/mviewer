@@ -15,6 +15,7 @@
 //
 // 与 docs/beta_checklist.md 的 "浏览体验 / Compare / View" 条目一一对应。
 
+#include "appstate.h"
 #include "compareworkspace.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "directorymodel.h"
@@ -23,6 +24,7 @@
 #include "selectionmodel.h"
 #include "widgets/rawimageview.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QCheckBox>
 #include <QDialog>
@@ -30,10 +32,13 @@
 #include <QElapsedTimer>
 #include <QImage>
 #include <QKeyEvent>
+#include <QLineEdit>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QSettings>
+#include <QSlider>
 #include <QStandardPaths>
+#include <QTableWidget>
 #include <QThread>
 #include <QVBoxLayout>
 
@@ -76,6 +81,18 @@ void sendKey(QWidget *w, Qt::Key key, Qt::KeyboardModifiers mods = Qt::NoModifie
     pump(20);
 }
 
+void sendFocusedKey(Qt::Key key, Qt::KeyboardModifiers mods = Qt::NoModifier)
+{
+    QWidget *target = QApplication::focusWidget();
+    if (!target)
+        return;
+    QKeyEvent press(QEvent::KeyPress, key, mods);
+    QApplication::sendEvent(target, &press);
+    QKeyEvent release(QEvent::KeyRelease, key, mods);
+    QApplication::sendEvent(target, &release);
+    pump(20);
+}
+
 // 只发 KeyPress（Space 按住场景）。
 void sendKeyPressOnly(QWidget *w, Qt::Key key)
 {
@@ -87,6 +104,25 @@ void sendKeyPressOnly(QWidget *w, Qt::Key key)
 void sendKeyReleaseOnly(QWidget *w, Qt::Key key)
 {
     QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier);
+    QApplication::sendEvent(w, &release);
+    pump(20);
+}
+
+void sendMouseMove(QWidget *w, const QPoint &point)
+{
+    QMouseEvent event(QEvent::MouseMove, QPointF(point), Qt::NoButton, Qt::NoButton,
+                      Qt::NoModifier);
+    QApplication::sendEvent(w, &event);
+    pump(20);
+}
+
+void sendLeftClick(QWidget *w, const QPoint &point)
+{
+    QMouseEvent press(QEvent::MouseButtonPress, QPointF(point), Qt::LeftButton, Qt::LeftButton,
+                      Qt::NoModifier);
+    QApplication::sendEvent(w, &press);
+    QMouseEvent release(QEvent::MouseButtonRelease, QPointF(point), Qt::LeftButton, Qt::NoButton,
+                        Qt::NoModifier);
     QApplication::sendEvent(w, &release);
     pump(20);
 }
@@ -129,6 +165,71 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     w.show();
     pump(100);
 
+    auto *analysisPanel = w.findChild<QWidget *>("analysisPanel");
+    auto *searchPanel = w.findChild<QWidget *>("searchPanel");
+    auto *navigationPanel = w.findChild<QWidget *>("navigationPanel");
+    auto *advancedFilterPanel = w.findChild<QWidget *>("advancedFilterPanel");
+    auto *advancedFilterToggle = w.findChild<QPushButton *>("advancedFilterToggle");
+    auto *analysisAction = w.findChild<QAction *>("toggleAnalysisPanelAction");
+    auto *searchAction = w.findChild<QAction *>("toggleSearchPanelAction");
+    auto *focusAction = w.findChild<QAction *>("focusBrowseAction");
+    CHECK(analysisPanel && !analysisPanel->isVisible(),
+          "clean startup keeps the analysis panel hidden");
+    CHECK(searchPanel && !searchPanel->isVisible(), "clean startup keeps the search panel hidden");
+    CHECK(advancedFilterPanel && !advancedFilterPanel->isVisible(),
+          "advanced gallery filters are hidden by default");
+    CHECK(advancedFilterToggle && advancedFilterToggle->isCheckable(),
+          "advanced filter toggle has a stable interactive control");
+
+    auto *thumbnailSizeSlider = w.findChild<QSlider *>("thumbnailSizeSlider");
+    auto *pathEdit = w.findChild<QLineEdit *>("pathEdit");
+    CHECK(thumbnailSizeSlider != nullptr, "thumbnail size slider is discoverable");
+    CHECK(pathEdit != nullptr, "directory path input is discoverable");
+
+    if (analysisAction)
+        analysisAction->trigger();
+    CHECK(analysisPanel && analysisPanel->isVisible() && analysisAction &&
+              analysisAction->isChecked(),
+          "analysis action and panel visibility stay synchronized");
+    CHECK(searchPanel && !searchPanel->isVisible(), "search panel remains independently hidden");
+
+    if (thumbnailSizeSlider)
+        thumbnailSizeSlider->setFocus(Qt::OtherFocusReason);
+    pump(10);
+    CHECK(QApplication::focusWidget() == thumbnailSizeSlider,
+          "focus can be placed on the real thumbnail size slider");
+    sendFocusedKey(Qt::Key_Tab);
+    CHECK(navigationPanel && !navigationPanel->isVisible() && analysisPanel &&
+              !analysisPanel->isVisible() && searchPanel && !searchPanel->isVisible() &&
+              focusAction && focusAction->isChecked(),
+          "plain Tab from a focused child enters focus browse");
+    CHECK(analysisAction && !analysisAction->isEnabled() && searchAction &&
+              !searchAction->isEnabled(),
+          "focus browse disables panel toggles while their state is suspended");
+
+    if (pathEdit)
+        pathEdit->setFocus(Qt::OtherFocusReason);
+    pump(10);
+    CHECK(QApplication::focusWidget() == pathEdit,
+          "focus can be placed on the real directory path input");
+    sendFocusedKey(Qt::Key_Tab);
+    CHECK(navigationPanel && navigationPanel->isVisible() && analysisPanel &&
+              analysisPanel->isVisible() && searchPanel && !searchPanel->isVisible() &&
+              focusAction && !focusAction->isChecked(),
+          "plain Tab from a focused path input exits focus browse");
+    CHECK(analysisAction && analysisAction->isEnabled() && analysisAction->isChecked() &&
+              searchAction && searchAction->isEnabled() && !searchAction->isChecked(),
+          "leaving focus browse restores action state as well as panels");
+
+    if (pathEdit)
+        pathEdit->setFocus(Qt::OtherFocusReason);
+    pump(10);
+    sendFocusedKey(Qt::Key_Tab, Qt::ShiftModifier);
+    CHECK(focusAction && !focusAction->isChecked(),
+          "Shift+Tab keeps normal focus traversal and does not enter focus browse");
+    if (analysisAction)
+        analysisAction->trigger();
+
     auto *sel = w.findChild<SelectionModel *>();
     auto *dirModel = w.findChild<DirectoryModel *>();
     CHECK(sel != nullptr, "MainWindow exposes the SelectionModel SSOT");
@@ -151,16 +252,15 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     w.setOpenOnLaunch(paths[0]);
     QElapsedTimer launchTimer;
     launchTimer.start();
-    while ((sel->currentImage() != paths[0] || !viewer || !viewer->isVisible()
-             || !viewer->frame())
-           && launchTimer.elapsed() < 5000)
+    while (
+        (sel->currentImage() != paths[0] || !viewer || !viewer->isVisible() || !viewer->frame()) &&
+        launchTimer.elapsed() < 5000)
         pump(25);
     CHECK(sel->currentImage() == paths[0],
           "post-construction setOpenOnLaunch syncs SelectionModel.currentImage");
     CHECK(viewer && viewer->isVisible(),
           "post-construction setOpenOnLaunch makes ImageViewer visible");
-    CHECK(viewer && viewer->frame(),
-          "post-construction setOpenOnLaunch decodes a frame within 5s");
+    CHECK(viewer && viewer->frame(), "post-construction setOpenOnLaunch decodes a frame within 5s");
 
     // 打开第一张图（真实产品入口 onImageOpen：双击文件 → 查看器）。
     // 注意顺序：先打开单图、等首屏，再打开目录。offscreen 测试平台不允许
@@ -249,8 +349,27 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         pump(20);
     }
 
-    // 关闭主窗口：流程收尾不崩溃。
+    // Closing while Focus Browse is active must persist the panel state from
+    // before Focus hid the panels, not the temporary hidden state.
+    if (analysisAction)
+        analysisAction->trigger();
+    if (searchAction)
+        searchAction->trigger();
+    CHECK(analysisPanel && analysisPanel->isVisible() && searchPanel && searchPanel->isVisible(),
+          "analysis panel is visible before the close-in-focus regression");
+    if (focusAction)
+        focusAction->trigger();
+    pump(10);
+    CHECK(focusAction && focusAction->isChecked() && analysisPanel && !analysisPanel->isVisible(),
+          "focus mode hides the panel before close persistence is exercised");
     w.close();
+    pump(50);
+    const AppState persisted = AppState::load();
+    QSettings persistedSettings;
+    CHECK(persisted.analysisVisible,
+          "closing in focus mode persists the pre-focus analysis visibility");
+    CHECK(persistedSettings.value("searchVisible", false).toBool(),
+          "closing in focus mode persists the pre-focus search visibility");
     pump(50);
     CHECK(true, "main window closes cleanly after the browse workflow");
 }
@@ -343,7 +462,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     RawImageView *referenceView = nullptr;
     for (RawImageView *view : ws->findChildren<RawImageView *>())
     {
-        if (view && view->cellIndex() == 1)
+        if (view && view->cellIndex() == 1 && view->isVisible() && view->isEnabled())
         {
             referenceView = view;
             break;
@@ -379,6 +498,101 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     }
 
     // Esc 退出 Compare（真实 QDialog::reject 路径）。
+    QSlider *thresholdSlider = ws->findChild<QSlider *>("diffThresholdSlider");
+    QLabel *thresholdValueLabel = ws->findChild<QLabel *>("diffThresholdValueLabel");
+    QSlider *brightnessSlider = ws->findChild<QSlider *>("brightnessSlider");
+    QPushButton *resetButton = ws->findChild<QPushButton *>("resetAdjustmentsButton");
+    QLabel *metricsLabel = ws->findChild<QLabel *>("diffMetricsLabel");
+    QCheckBox *analysisToggle = ws->findChild<QCheckBox *>("analysisPanelToggle");
+    QTableWidget *inspector = ws->findChild<QTableWidget *>("pixelInspectorTable");
+    QWidget *histogram = ws->findChild<QWidget *>("analysisHistogram");
+    CHECK(thresholdSlider && thresholdValueLabel && brightnessSlider && resetButton &&
+              metricsLabel && analysisToggle && inspector && histogram,
+          "compare analysis controls expose stable object names");
+    if (thresholdSlider && thresholdValueLabel && brightnessSlider && resetButton && metricsLabel &&
+        analysisToggle && inspector && referenceView)
+    {
+        analysisToggle->setChecked(true);
+        pump(20);
+        const QPoint paneCenter = referenceView->rect().center();
+        sendMouseMove(referenceView, paneCenter);
+        sendLeftClick(referenceView, paneCenter);
+        CHECK(inspector->rowCount() == 2,
+              "real pane click selects the edit target and populates the inspector");
+
+        referenceView->setTransform(2.0, QPointF(19.0, 23.0));
+        const double savedScale = referenceView->scale();
+        const QPointF savedOffset = referenceView->offset();
+
+        const QString initialMetrics = metricsLabel->text();
+        const QString initialInspector =
+            inspector->item(1, 2) ? inspector->item(1, 2)->text() : QString();
+
+        thresholdSlider->setValue(200);
+        pump(20);
+        const QString thresholdMetrics = metricsLabel->text();
+        const QString thresholdInspector =
+            inspector->item(1, 2) ? inspector->item(1, 2)->text() : QString();
+        const auto thresholdBundle = ws->buildReportBundle();
+        CHECK(ws->compareSession().threshold == 200 && thresholdBundle.threshold == 200,
+              "threshold slider value reaches the compare report session");
+        CHECK(thresholdValueLabel->text() == "200",
+              "threshold value label follows the slider immediately");
+        CHECK(thresholdMetrics != initialMetrics, "threshold change refreshes the report metrics");
+
+        thresholdSlider->setSliderDown(true);
+        thresholdSlider->setValue(0);
+        pump(20);
+        CHECK(thresholdValueLabel->text() == "0" && metricsLabel->text() == thresholdMetrics,
+              "threshold drag defers expensive metrics refresh");
+        thresholdSlider->setSliderDown(false);
+        pump(20);
+        CHECK(metricsLabel->text() == initialMetrics,
+              "threshold release refreshes deferred metrics");
+        thresholdSlider->setValue(200);
+        pump(20);
+
+        brightnessSlider->setValue(40);
+        pump(20);
+        const QString adjustedMetrics = metricsLabel->text();
+        const QString adjustedInspector =
+            inspector->item(1, 2) ? inspector->item(1, 2)->text() : QString();
+        const auto adjustedBundle = ws->buildReportBundle();
+        CHECK(brightnessSlider->value() == 40 && adjustedMetrics != thresholdMetrics &&
+                  adjustedInspector != thresholdInspector && adjustedInspector != initialInspector,
+              "brightness changes the selected pane metrics and Inspector RGB");
+        CHECK(adjustedBundle.adjustments.size() == 2 &&
+                  adjustedBundle.adjustments[0].brightness == 0 &&
+                  adjustedBundle.adjustments[1].brightness == 40,
+              "pane click selects the second pane as the edit target");
+        CHECK(qAbs(referenceView->scale() - savedScale) < 1e-9 &&
+                  referenceView->offset() == savedOffset,
+              "brightness adjustment preserves the pane transform");
+
+        brightnessSlider->setSliderDown(true);
+        brightnessSlider->setValue(80);
+        pump(20);
+        const QString draggingMetrics = metricsLabel->text();
+        const QString draggingInspector =
+            inspector->item(1, 2) ? inspector->item(1, 2)->text() : QString();
+        CHECK(draggingMetrics == adjustedMetrics && draggingInspector != adjustedInspector,
+              "adjustment drag updates Inspector while deferring metrics");
+        brightnessSlider->setSliderDown(false);
+        pump(20);
+        CHECK(metricsLabel->text() != draggingMetrics,
+              "adjustment release refreshes deferred metrics");
+
+        resetButton->click();
+        pump(20);
+        const QString resetInspector =
+            inspector->item(1, 2) ? inspector->item(1, 2)->text() : QString();
+        CHECK(metricsLabel->text() == thresholdMetrics && resetInspector == thresholdInspector,
+              "reset exactly restores the threshold-baseline metrics and Inspector RGB");
+        CHECK(qAbs(referenceView->scale() - savedScale) < 1e-9 &&
+                  referenceView->offset() == savedOffset,
+              "reset preserves the pane transform");
+    }
+
     sendKey(ws, Qt::Key_Escape);
     CHECK(!dlg.isVisible(), "Esc closes the Compare dialog");
 

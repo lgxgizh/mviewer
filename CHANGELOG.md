@@ -10,6 +10,19 @@ All notable changes to this project are documented here. The format is based on
 
 - **Async diff destruction:** Compare diff jobs no longer access a destroyed
   `CompareEngine` after queued work completes.
+- **Focused first-run browse workspace:** analysis and global-search panels now
+  start collapsed, advanced metadata filters live behind one disclosure control,
+  and `Tab` enters a reversible focus mode that restores and persists each
+  panel's pre-focus state.
+- **Trustworthy Compare analysis:** threshold, reference, ROI, per-pane
+  adjustments, reset, histograms, diff overlays, reports, Pixel Inspector, and
+  Pixel Link now read the same displayed pixels and refresh as one coherent
+  state. Locked non-zero references and out-of-bounds panes are handled
+  explicitly instead of showing stale or misleading values.
+- **Smooth Compare adjustment:** brightness/contrast/gamma/WB edits preserve
+  pane zoom and pan. During slider drags the image and Inspector stay live while
+  expensive multi-pane metrics, histograms, and diff maps are coalesced until
+  release. A zero diff is no longer highlighted red at threshold zero.
 
 ### Added — Compare report credibility
 

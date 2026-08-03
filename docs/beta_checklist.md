@@ -60,8 +60,8 @@ Checklist 条目凡能自动化的，已固化为回归测试，随门禁自动�
 
 | Checklist 范围 | 自动化测试（ctest） | 覆盖内容 |
 |---|---|---|
-| Workflow 1 全流程 | `workflow_ux_tests` | 真实 MainWindow：打开目录 → onImageOpen → ←/→/Home/End/PageUp/PageDown → 首屏解码 ≤ 5 s → Fit/100%/放大/恢复 → 关闭 |
-| Workflow 2 全流程 | `workflow_ux_tests` | 真实 CompareWorkspace + 真实键盘事件：默认同步开启、默认参考图非空、B/S/O/K/H 模式切换、互斥不残留、Space 临时闪烁松开必恢复、Esc 退出（QDialog reject）、退出后继续浏览 |
+| Workflow 1 全流程 | `workflow_ux_tests` | 真实 MainWindow：首屏辅助面板默认收起、高级筛选折叠、Tab 专注模式精确恢复/关闭持久化；打开目录 → onImageOpen → ←/→/Home/End/PageUp/PageDown → 首屏解码 ≤ 5 s → Fit/100%/放大/恢复 → 关闭 |
+| Workflow 2 全流程 | `workflow_ux_tests` | 真实 CompareWorkspace + 真实键鼠事件：默认同步/参考图、B/S/O/K/H 模式互斥、Space 临时闪烁、锁定基准、阈值/调整/重置后的指标与 Inspector 同步、拖动期间重计算合并、Zoom/Pan 保持、Esc 退出后继续浏览 |
 | Compare 会话恢复 | `compare_session_tests` | 布局/参考图/闪烁间隔/差异阈值 round-trip |
 | Compare 引擎语义 | `compare_workflow_tests` | 选择→比较→引擎状态机 |
 | 浏览模型 | `product_browse_tests` | 目录列表 / 导航模型 |

@@ -44,8 +44,9 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
                                                  {
                                                      if (ctx != static_cast<void *>(&m_engine))
                                                          return;
-                                                     // Repaint on the UI thread;
-                                                     // refreshDiffOverlay() reads lastDiffImage().
+                                                     // Repaint only the pane reported by the async
+                                                     // completion. User-driven state changes use
+                                                     // refreshAllDiffOverlays() instead.
                                                      QPointer<CompareWorkspace> guard(this);
                                                      QMetaObject::invokeMethod(
                                                          this,
@@ -177,6 +178,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     auto *thresholdLabel = new QLabel("阈值:", this);
     syncLayout->addWidget(thresholdLabel);
     m_thresholdSlider = new QSlider(Qt::Horizontal, this);
+    m_thresholdSlider->setObjectName("diffThresholdSlider");
     m_thresholdSlider->setRange(0, 255);
     m_thresholdSlider->setValue(0);
     m_thresholdSlider->setMaximumWidth(120);
@@ -185,10 +187,14 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
             [this](int value)
             {
                 m_thresholdValue = static_cast<uint8_t>(value);
-                refreshDiffOverlay();
+                if (!m_thresholdSlider->isSliderDown())
+                    refreshAllDiffOverlays();
             });
+    connect(m_thresholdSlider, &QSlider::sliderReleased, this,
+            &CompareWorkspace::refreshAllDiffOverlays);
     syncLayout->addWidget(m_thresholdSlider);
     m_thresholdLabel = new QLabel("0", this);
+    m_thresholdLabel->setObjectName("diffThresholdValueLabel");
     m_thresholdLabel->setMinimumWidth(24);
     connect(m_thresholdSlider, &QSlider::valueChanged, this,
             [this](int value) { m_thresholdLabel->setText(QString::number(value)); });
@@ -201,7 +207,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
             [this](bool on)
             {
                 m_diffHighlight = on;
-                refreshDiffOverlay();
+                refreshAllDiffOverlays();
             });
     syncLayout->addWidget(m_diffHighlightChk);
 
@@ -259,6 +265,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 
     // P0 #③: inspector + histogram side panel toggle.
     m_sideChk = new QCheckBox(tr("检视面板"), this);
+    m_sideChk->setObjectName("analysisPanelToggle");
     m_sideChk->setChecked(false);
     connect(m_sideChk, &QCheckBox::toggled, this, &CompareWorkspace::onSideToggled);
     syncLayout->addWidget(m_sideChk);
@@ -678,7 +685,7 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
             if (i != m_focusIndex)
                 m_engine.requestDiff(i, diffBaseIndex());
         }
-        refreshDiffOverlay();
+        refreshAllDiffOverlays();
     }
     if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0)
         updateInspector(m_lastInspectX, m_lastInspectY);

@@ -135,6 +135,11 @@ int main(int argc, char **argv)
         CHECK((*hl.buffer)[off] == (*hl.buffer)[off + 1] &&
                   (*hl.buffer)[off] == (*hl.buffer)[off + 2],
               "highlightMap similar pixel is gray");
+
+        auto hlZero = DifferenceEngine::highlightMap(diff, a, /*threshold=*/0);
+        CHECK((*hlZero.buffer)[off] == (*hlZero.buffer)[off + 1] &&
+                  (*hlZero.buffer)[off] == (*hlZero.buffer)[off + 2],
+              "highlightMap threshold zero keeps identical pixels gray");
     }
 
     // M23: computeStats — full image

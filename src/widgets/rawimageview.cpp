@@ -255,10 +255,9 @@ void RawImageView::mouseMoveEvent(QMouseEvent *ev)
         // Hover: report the image-space pixel under the cursor for the inspector.
         if (!m_image.isNull() && m_scale > 0.0)
         {
-            const double cx = width() / 2.0 + m_offset.x();
-            const double cy = height() / 2.0 + m_offset.y();
-            const int ix = qRound((ev->pos().x() - cx) / m_scale);
-            const int iy = qRound((ev->pos().y() - cy) / m_scale);
+            const QPointF imagePos = widgetToImage(ev->pos());
+            const int ix = qFloor(imagePos.x());
+            const int iy = qFloor(imagePos.y());
             if (ix >= 0 && iy >= 0 && ix < m_image.width() && iy < m_image.height())
             {
                 const QRgb c = m_image.pixel(ix, iy);

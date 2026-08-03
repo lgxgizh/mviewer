@@ -57,6 +57,7 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
         auto *row = new QHBoxLayout;
         row->addWidget(new QLabel(tr("亮度"), m_editPanel));
         m_brightSlider = new QSlider(Qt::Horizontal, m_editPanel);
+        m_brightSlider->setObjectName("brightnessSlider");
         m_brightSlider->setRange(-255, 255);
         m_brightSlider->setValue(0);
         m_brightVal = new QLabel("0", m_editPanel);
@@ -154,6 +155,7 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
 
     // Reset button
     m_resetAdjBtn = new QPushButton(tr("重置调整"), m_editPanel);
+    m_resetAdjBtn->setObjectName("resetAdjustmentsButton");
     connect(m_resetAdjBtn, &QPushButton::clicked, this, &CompareWorkspace::onResetAdj);
     editLay->addWidget(m_resetAdjBtn);
 
@@ -211,6 +213,11 @@ void CompareWorkspace::onEditCellSelected(int cellIdx)
     const ImageFrame *img = m_engine.imageAt(cellIdx);
     m_editLabel->setText(img ? QString::fromStdString(img->metadata().fileName)
                              : tr("窗格 %1").arg(cellIdx + 1));
+    // Selecting a pane does not change the cursor's sample position. Repaint the
+    // Inspector from the cached hover coordinate so a pane click immediately
+    // reflects the current adjusted display without requiring another mouse move.
+    if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0 && m_lastInspectY >= 0)
+        updateInspector(m_lastInspectX, m_lastInspectY);
 }
 
 void CompareWorkspace::onAdjChanged()
@@ -227,23 +234,17 @@ void CompareWorkspace::onAdjChanged()
 
     applyAdjToCell(m_editIdx);
 
-    // Keep metrics, histograms and diff overlay in sync with the edit.
-    updateMetrics();
-    if (m_sideChk && m_sideChk->isChecked())
-        refreshHistograms();
-    refreshCellHist(m_editIdx);
-    if (m_engine.imageCount() >= 2 && m_editIdx >= 0 && m_editIdx < m_cellViews.size())
-    {
-        if (m_editIdx == diffBaseIndex())
-        {
-            for (int i = 0; i < m_cellViews.size(); ++i)
-                refreshCellDiff(i);
-        }
-        else
-        {
-            refreshCellDiff(m_editIdx);
-        }
-    }
+    // Keep the inexpensive visual preview and Inspector live during a drag.
+    if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0 && m_lastInspectY >= 0)
+        updateInspector(m_lastInspectX, m_lastInspectY);
+
+    const bool sliderDown = (m_brightSlider && m_brightSlider->isSliderDown()) ||
+                            (m_contrastSlider && m_contrastSlider->isSliderDown()) ||
+                            (m_gammaSlider && m_gammaSlider->isSliderDown()) ||
+                            (m_rGainSlider && m_rGainSlider->isSliderDown()) ||
+                            (m_bGainSlider && m_bGainSlider->isSliderDown());
+    if (!sliderDown)
+        onAdjEditFinished();
 
     update();
 }
@@ -256,12 +257,7 @@ void CompareWorkspace::onResetAdj()
     m_cellAdjusts[static_cast<size_t>(m_editIdx)] = CellAdjust{};
     onEditCellSelected(m_editIdx); // resync sliders
 
-    // Restore original image
-    const ImageFrame *img = m_engine.imageAt(m_editIdx);
-    if (img && m_cellViews[m_editIdx])
-        m_cellViews[m_editIdx]->setImage(imageObjectToQImage(img));
-
-    update();
+    onAdjChanged();
 }
 
 void CompareWorkspace::applyAdjToCell(int cellIdx)
@@ -277,11 +273,16 @@ void CompareWorkspace::applyAdjToCell(int cellIdx)
                               ? m_cellAdjusts[static_cast<size_t>(cellIdx)]
                               : CellAdjust{};
 
+    RawImageView *view = m_cellViews[cellIdx];
+    const QSize oldSize = view ? view->image().size() : QSize();
+    const double oldScale = view ? view->scale() : 1.0;
+    const QPointF oldOffset = view ? view->offset() : QPointF();
+
     if (a.isIdentity())
     {
         // Just show original
-        if (m_cellViews[cellIdx])
-            m_cellViews[cellIdx]->setImage(imageObjectToQImage(img));
+        if (view)
+            view->setImage(imageObjectToQImage(img));
     }
     else
     {
@@ -289,9 +290,12 @@ void CompareWorkspace::applyAdjToCell(int cellIdx)
         if (adjusted.isNull())
             return;
         QImage qi = mvcore::toQImage(adjusted);
-        if (m_cellViews[cellIdx])
-            m_cellViews[cellIdx]->setImage(qi);
+        if (view)
+            view->setImage(qi);
     }
+
+    if (view && view->image().size() == oldSize && !oldSize.isEmpty())
+        view->setTransform(oldScale, oldOffset);
 
     update();
 }
@@ -302,7 +306,6 @@ void CompareWorkspace::updateMetrics()
 {
     if (!m_metricLabel)
         return;
-
     const int n = m_engine.imageCount();
     if (n < 2)
     {
@@ -440,15 +443,19 @@ mviewer::core::CompareReportBundle CompareWorkspace::buildReportBundle() const
         }
     }
 
-    return mviewer::core::buildCompareReportBundle(
-        adjustedImages, diffBaseIndex(), m_thresholdValue, m_lastSelection, adjustments);
+    return mviewer::core::buildCompareReportBundle(adjustedImages, diffBaseIndex(),
+                                                   m_thresholdValue, m_lastSelection, adjustments);
 }
 
 void CompareWorkspace::onAdjEditFinished()
 {
-    for (int i = 0; i < m_cellViews.size(); ++i)
-        refreshCellDiff(i);
-    updateMetrics();
+    // This is the sole full analysis refresh path for adjustment edits.
+    const bool analysisVisible = m_sideChk && m_sideChk->isChecked();
+    if (analysisVisible)
+        refreshHistograms();
+    if (m_paneHistOverlay && (!analysisVisible || m_perPaneHist))
+        refreshCellHist(m_editIdx);
+    refreshAllDiffOverlays();
 }
 
 void CompareWorkspace::refreshCellHist(int idx)

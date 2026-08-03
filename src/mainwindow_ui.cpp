@@ -88,9 +88,10 @@ void MainWindow::setupUi()
     // ----- 视图(&V) -----
     auto *viewMenu = menuBar->addMenu("视图(&V)");
     m_actCompare = new QAction("比较模式(&C)", this);
-    m_actToggleAnalysis = new QAction("直方图(&H)", this);
+    m_actToggleAnalysis = new QAction("分析面板(&H)", this);
+    m_actToggleAnalysis->setObjectName("toggleAnalysisPanelAction");
     m_actToggleAnalysis->setCheckable(true);
-    m_actToggleAnalysis->setChecked(true);
+    m_actToggleAnalysis->setChecked(false);
     // P0: in-session browse history (browser-style back/forward).
     m_actHistoryBack = new QAction("上一步(&B)", this);
     m_actHistoryBack->setShortcut(QKeySequence::Back); // Alt+Left
@@ -109,10 +110,18 @@ void MainWindow::setupUi()
     viewMenu->addAction(m_actCompare);
     viewMenu->addAction(m_actToggleAnalysis);
     m_actToggleSearch = new QAction("全局搜索(&S)", this);
+    m_actToggleSearch->setObjectName("toggleSearchPanelAction");
     m_actToggleSearch->setCheckable(true);
-    m_actToggleSearch->setChecked(true);
+    m_actToggleSearch->setChecked(false);
     m_actToggleSearch->setShortcut(QKeySequence("Ctrl+Shift+F"));
     viewMenu->addAction(m_actToggleSearch);
+    m_actFocusBrowse = new QAction("专注浏览模式 (Tab)", this);
+    m_actFocusBrowse->setObjectName("focusBrowseAction");
+    m_actFocusBrowse->setCheckable(true);
+    m_actFocusBrowse->setShortcut(QKeySequence(Qt::Key_Tab));
+    m_actFocusBrowse->setShortcutContext(Qt::WindowShortcut);
+    viewMenu->addAction(m_actFocusBrowse);
+    addAction(m_actFocusBrowse);
     m_actToggleMetadata = new QAction("图片信息(&I)", this);
     m_actToggleMetadata->setCheckable(true);
     m_actToggleMetadata->setChecked(false);
@@ -235,6 +244,7 @@ void MainWindow::setupUi()
 
     // ----- Path input bar (UX: type a path to jump to a directory) -----
     m_pathEdit = new QLineEdit(this);
+    m_pathEdit->setObjectName("pathEdit");
     m_pathEdit->setPlaceholderText("输入目录路径并按 Enter 切换...");
     m_pathEdit->setToolTip("输入或粘贴目录路径，按 Enter 键进入该目录（等效于菜单\"打开目录\"）。");
     m_pathEdit->setClearButtonEnabled(true);
@@ -242,6 +252,8 @@ void MainWindow::setupUi()
     // ----- Left column: favorites + filter + directory tree + preview -----
     auto *leftWidget = new QSplitter(Qt::Vertical, this);
     m_leftSplitter = leftWidget;
+    m_navigationWidget = leftWidget;
+    leftWidget->setObjectName("navigationPanel");
 
     // P0: Favorites bar — quick-access pinned directories above the tree.
     m_favoritesBar = new QListWidget(leftWidget);
@@ -289,8 +301,12 @@ void MainWindow::setupUi()
     rightLayout->setSpacing(4);
 
     auto *sortBar = new QWidget(rightWidget);
-    auto *sortLayout = new QHBoxLayout(sortBar);
+    auto *sortRootLayout = new QVBoxLayout(sortBar);
+    sortRootLayout->setContentsMargins(0, 0, 0, 0);
+    sortRootLayout->setSpacing(2);
+    auto *sortLayout = new QHBoxLayout;
     sortLayout->setContentsMargins(6, 4, 6, 4);
+    sortRootLayout->addLayout(sortLayout);
     sortLayout->addWidget(new QLabel("排序：", sortBar));
     auto *sortCombo = new QComboBox(sortBar);
     m_sortCombo = sortCombo;
@@ -329,25 +345,42 @@ void MainWindow::setupUi()
     typeFilterCombo->setToolTip("按文件类型过滤");
     sortLayout->addWidget(typeFilterCombo);
 
+    auto *advancedFilterPanel = new QWidget(sortBar);
+    advancedFilterPanel->setObjectName("advancedFilterPanel");
+    auto *advancedLayout = new QHBoxLayout(advancedFilterPanel);
+    advancedLayout->setContentsMargins(6, 2, 6, 4);
+    advancedLayout->setSpacing(6);
+    sortRootLayout->addWidget(advancedFilterPanel);
+    m_advancedFilterPanel = advancedFilterPanel;
+    auto *advancedFilterToggle = new QPushButton("高级筛选", sortBar);
+    advancedFilterToggle->setObjectName("advancedFilterToggle");
+    advancedFilterToggle->setCheckable(true);
+    advancedFilterToggle->setToolTip("显示相机、镜头、评分和元数据筛选");
+    sortLayout->addWidget(advancedFilterToggle);
+    connect(advancedFilterToggle, &QPushButton::toggled, advancedFilterPanel, &QWidget::setVisible);
+    auto *clearFilters = new QPushButton("清除筛选", sortBar);
+    clearFilters->setObjectName("clearFiltersButton");
+    sortLayout->addWidget(clearFilters);
+
     // P0 #①: metadata filters — camera / lens (substring) and ISO (exact).
     auto *camEdit = new QLineEdit(sortBar);
     camEdit->setPlaceholderText("相机");
     camEdit->setFixedWidth(80);
     camEdit->setClearButtonEnabled(true);
     camEdit->setToolTip(tr("按相机(品牌/型号)过滤，子串匹配"));
-    sortLayout->addWidget(camEdit);
+    advancedLayout->addWidget(camEdit);
     auto *lensEdit = new QLineEdit(sortBar);
     lensEdit->setPlaceholderText("镜头");
     lensEdit->setFixedWidth(95);
     lensEdit->setClearButtonEnabled(true);
     lensEdit->setToolTip(tr("按镜头型号过滤，子串匹配"));
-    sortLayout->addWidget(lensEdit);
+    advancedLayout->addWidget(lensEdit);
     auto *isoSpin = new QSpinBox(sortBar);
     isoSpin->setRange(0, 65535);
     isoSpin->setSpecialValueText("ISO");
     isoSpin->setToolTip(tr("按 ISO 精确过滤 (0 = 全部)"));
     isoSpin->setFixedWidth(72);
-    sortLayout->addWidget(isoSpin);
+    advancedLayout->addWidget(isoSpin);
     connect(camEdit, &QLineEdit::textChanged, this,
             [this](const QString &t) { m_thumbnailPanel->setCameraFilter(t); });
     connect(lensEdit, &QLineEdit::textChanged, this,
@@ -361,7 +394,7 @@ void MainWindow::setupUi()
     tagEdit->setFixedWidth(90);
     tagEdit->setClearButtonEnabled(true);
     tagEdit->setToolTip(tr("按标签精确过滤 (空 = 全部)"));
-    sortLayout->addWidget(tagEdit);
+    advancedLayout->addWidget(tagEdit);
     connect(tagEdit, &QLineEdit::textChanged, this,
             [this](const QString &t) { m_thumbnailPanel->setTagFilter(t); });
 
@@ -394,6 +427,7 @@ void MainWindow::setupUi()
     // M15: Dynamic thumbnail size slider (48–512 px)
     sortLayout->addWidget(new QLabel("缩略图：", sortBar));
     m_thumbSizeSlider = new QSlider(Qt::Horizontal, sortBar);
+    m_thumbSizeSlider->setObjectName("thumbnailSizeSlider");
     m_thumbSizeSlider->setRange(ThumbnailPanel::kMinThumbSize, ThumbnailPanel::kMaxThumbSize);
     m_thumbSizeSlider->setValue(ThumbnailPanel::kDefaultThumbSize);
     m_thumbSizeSlider->setFixedWidth(100);
@@ -405,18 +439,19 @@ void MainWindow::setupUi()
     // M18: live search bar.
     sortLayout->addWidget(new QLabel("搜索：", sortBar));
     m_searchEdit = new QLineEdit(sortBar);
+    m_searchEdit->setObjectName("searchEdit");
     m_searchEdit->setPlaceholderText("按文件名过滤...");
     m_searchEdit->setClearButtonEnabled(true);
     sortLayout->addWidget(m_searchEdit, 1);
     m_searchRecursive = new QCheckBox("包含子目录", sortBar);
-    sortLayout->addWidget(m_searchRecursive);
+    advancedLayout->addWidget(m_searchRecursive);
 
     // P1: metadata-aware search (camera / lens / ISO / date / …).
     m_searchMeta = new QCheckBox("元数据", sortBar);
-    sortLayout->addWidget(m_searchMeta);
+    advancedLayout->addWidget(m_searchMeta);
 
     // P1: star-rating filter.
-    sortLayout->addWidget(new QLabel("评分:", sortBar));
+    advancedLayout->addWidget(new QLabel("评分:", advancedFilterPanel));
     m_ratingFilter = new QComboBox(sortBar);
     m_ratingFilter->addItem("全部", 0);
     m_ratingFilter->addItem("★ 及以上", 1);
@@ -424,10 +459,10 @@ void MainWindow::setupUi()
     m_ratingFilter->addItem("★★★ 及以上", 3);
     m_ratingFilter->addItem("★★★★ 及以上", 4);
     m_ratingFilter->addItem("★★★★★", 5);
-    sortLayout->addWidget(m_ratingFilter);
+    advancedLayout->addWidget(m_ratingFilter);
 
     // P3 tail: color label / reject / pick / recents filter.
-    sortLayout->addWidget(new QLabel("标记:", sortBar));
+    advancedLayout->addWidget(new QLabel("标记:", advancedFilterPanel));
     m_flagFilter = new QComboBox(sortBar);
     m_flagFilter->addItem("全部", 0);
     m_flagFilter->addItem("已收藏", 1);
@@ -439,9 +474,24 @@ void MainWindow::setupUi()
     m_flagFilter->addItem("绿标", 14);
     m_flagFilter->addItem("蓝标", 15);
     m_flagFilter->addItem("紫标", 16);
-    sortLayout->addWidget(m_flagFilter);
+    advancedLayout->addWidget(m_flagFilter);
 
-    sortLayout->addStretch(0);
+    advancedLayout->addStretch(1);
+    advancedFilterPanel->hide();
+    connect(clearFilters, &QPushButton::clicked, this,
+            [typeFilterCombo, camEdit, lensEdit, isoSpin, tagEdit, this]()
+            {
+                typeFilterCombo->setCurrentIndex(0);
+                camEdit->clear();
+                lensEdit->clear();
+                isoSpin->setValue(0);
+                tagEdit->clear();
+                m_searchEdit->clear();
+                m_searchRecursive->setChecked(false);
+                m_searchMeta->setChecked(false);
+                m_ratingFilter->setCurrentIndex(0);
+                m_flagFilter->setCurrentIndex(0);
+            });
     rightLayout->addWidget(sortBar);
 
     m_thumbnailPanel = new ThumbnailPanel(rightWidget);
@@ -452,6 +502,7 @@ void MainWindow::setupUi()
 
     // ----- Analysis panel (rightmost) + Metadata panel (M18, between gallery & analysis) -----
     m_analysisPanel = new AnalysisPanel(this);
+    m_analysisPanel->setObjectName("analysisPanel");
     m_analysisPanel->installEventFilter(this);
     // M21: AnalysisPanel ↔ AnalyzerModel (history / pin / result SSOT).
     m_analysisPanel->setAnalyzerModel(m_analyzer);
@@ -472,6 +523,7 @@ void MainWindow::setupUi()
     connect(m_analysisPanel, &AnalysisPanel::exportRequested, this, [this]() { exportReport(); });
     m_metadataPanel = new MetadataPanel(this);
     m_searchPanel = new SearchPanel(this);
+    m_searchPanel->setObjectName("searchPanel");
     m_searchPanel->installEventFilter(this);
 
     // ----- 4-way horizontal split: left | gallery | analysis | search -----
@@ -494,6 +546,8 @@ void MainWindow::setupUi()
     rightWidget->setMinimumWidth(320);
     m_analysisPanel->setMinimumWidth(200);
     m_searchPanel->setMinimumWidth(180);
+    m_analysisPanel->hide();
+    m_searchPanel->hide();
     // ----- M15: main content wrapper (breadcrumb + splitter) -----
     auto *mainContainer = new QWidget(this);
     auto *mainLayout = new QVBoxLayout(mainContainer);
@@ -864,6 +918,7 @@ void MainWindow::setupUi()
             });
     connect(m_actToggleAnalysis, &QAction::triggered, m_analysisPanel, &QWidget::setVisible);
     connect(m_actToggleSearch, &QAction::triggered, m_searchPanel, &QWidget::setVisible);
+    connect(m_actFocusBrowse, &QAction::triggered, this, &MainWindow::toggleFocusBrowse);
     // P0-3 / A-5: metadata toggle — show both the viewer overlay AND the floating
     // MetadataPanel (positioned on the right edge of the main window).
     connect(m_actToggleMetadata, &QAction::triggered, this,

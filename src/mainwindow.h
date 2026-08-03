@@ -116,6 +116,7 @@ class MainWindow : public QMainWindow
     void openPreferences();     // F1 (M22): centralized Preferences dialog
     void applyPreferences();    // re-apply view/sort/slideshow after settings change
     void openAnalysisOverlay(); // F4 (M22): zebra / false-color / scopes dialog
+    void toggleFocusBrowse();
 
     void keyPressEvent(QKeyEvent *event) override;
 
@@ -125,6 +126,7 @@ class MainWindow : public QMainWindow
     QLineEdit *m_pathEdit = nullptr;              // Path input bar above the gallery area
     QSplitter *m_mainSplitter = nullptr;          // P1-3: central layout splitter
     QSplitter *m_leftSplitter = nullptr;          // A-6.4: nav | tree | preview heights
+    QWidget *m_navigationWidget = nullptr;        // whole browse navigation column
     MetadataOverlay *m_metadataOverlay = nullptr; // M15: semi-transparent info overlay
     ThumbnailPanel *m_thumbnailPanel = nullptr;
     PreviewPanel *m_previewPanel = nullptr;
@@ -156,6 +158,7 @@ class MainWindow : public QMainWindow
     QAction *m_actDirBack = nullptr;
     QAction *m_actDirForward = nullptr;
     QAction *m_actToggleSearch = nullptr;
+    QAction *m_actFocusBrowse = nullptr;
     QAction *m_actBatch = nullptr;
     QAction *m_actPluginSettings = nullptr;
     QAction *m_actToggleMetadata = nullptr;
@@ -202,6 +205,11 @@ class MainWindow : public QMainWindow
     QComboBox *m_sortCombo = nullptr;     // persisted across sessions via QSettings
     QSlider *m_thumbSizeSlider = nullptr; // persisted across sessions via QSettings
     QComboBox *m_flagFilter = nullptr;    // P3 tail: color label / reject / pick / recents
+    QWidget *m_advancedFilterPanel = nullptr;
+    bool m_focusBrowse = false;
+    bool m_focusNavigationVisible = true;
+    bool m_focusAnalysisVisible = false;
+    bool m_focusSearchVisible = false;
 
     // P0 #①: real-time status bar (image count / size / zoom / cache hit-rate).
     QLabel *m_lblImage = nullptr; // current image dimensions + file size

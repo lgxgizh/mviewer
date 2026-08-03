@@ -315,6 +315,8 @@ class CompareWorkspace : public QWidget
     // Paints the most recent async diff result (from the EventBus) onto the
     // matching cell. Called on the UI thread via QueuedConnection.
     void refreshDiffOverlay();
+    // Repaints every diff overlay after a user-visible compare state change.
+    void refreshAllDiffOverlays();
 
     // EventBus subscription id for "CompareEngine.DiffResult"; unsubscribed in
     // the destructor because the EventBus is a process-global singleton and a

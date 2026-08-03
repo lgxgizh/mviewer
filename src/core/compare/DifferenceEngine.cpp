@@ -208,6 +208,7 @@ ImageData DifferenceEngine::highlightMap(const ImageData &grayDiff, const ImageD
     const int roB0 = hasBase ? channelOffset(base.format, 0) : 0;
     const int roB1 = hasBase ? channelOffset(base.format, 1) : 0;
     const int roB2 = hasBase ? channelOffset(base.format, 2) : 0;
+    const int minDiff = std::max<int>(threshold, 1);
 
     ImageData out = makeImageData(w, h, PixelFormat::RGB24);
     if (out.isNull())
@@ -222,7 +223,7 @@ ImageData DifferenceEngine::highlightMap(const ImageData &grayDiff, const ImageD
         for (int x = 0; x < w; ++x)
         {
             const uint8_t v = src[x * cppD + roD];
-            if (v >= threshold)
+            if (v >= minDiff)
             {
                 // Difference: solid red, intensity scaled by diff magnitude.
                 const uint8_t intensity = static_cast<uint8_t>(std::min(255, 80 + v * 2));

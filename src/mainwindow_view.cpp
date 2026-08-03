@@ -233,6 +233,38 @@ void MainWindow::toggleFullscreen()
         target->showFullScreen();
 }
 
+void MainWindow::toggleFocusBrowse()
+{
+    if (!m_navigationWidget || !m_analysisPanel || !m_searchPanel)
+        return;
+
+    if (!m_focusBrowse)
+    {
+        m_focusNavigationVisible = m_navigationWidget->isVisible();
+        m_focusAnalysisVisible = m_analysisPanel->isVisible();
+        m_focusSearchVisible = m_searchPanel->isVisible();
+        m_focusBrowse = true;
+        m_navigationWidget->hide();
+        m_analysisPanel->hide();
+        m_searchPanel->hide();
+        m_actToggleAnalysis->setEnabled(false);
+        m_actToggleSearch->setEnabled(false);
+    }
+    else
+    {
+        m_focusBrowse = false;
+        m_navigationWidget->setVisible(m_focusNavigationVisible);
+        m_analysisPanel->setVisible(m_focusAnalysisVisible);
+        m_searchPanel->setVisible(m_focusSearchVisible);
+        m_actToggleAnalysis->setEnabled(true);
+        m_actToggleSearch->setEnabled(true);
+        m_actToggleAnalysis->setChecked(m_focusAnalysisVisible);
+        m_actToggleSearch->setChecked(m_focusSearchVisible);
+    }
+    if (m_actFocusBrowse)
+        m_actFocusBrowse->setChecked(m_focusBrowse);
+}
+
 void MainWindow::openPreferences()
 {
     PreferencesDialog dlg(this);

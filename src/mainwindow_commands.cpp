@@ -203,17 +203,6 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         event->accept();
         return;
     }
-    // P1-4: Tab toggles side panels (left + analysis + search) for a clean view.
-    if (event->key() == Qt::Key_Tab && !mod)
-    {
-        const bool visible = m_directoryTree->isVisible();
-        m_directoryTree->setVisible(!visible);
-        m_previewPanel->setVisible(!visible);
-        m_analysisPanel->setVisible(!visible);
-        m_searchPanel->setVisible(!visible);
-        event->accept();
-        return;
-    }
     // P1-4: Ctrl+C copies the current image to clipboard; Ctrl+Shift+C copies its path.
     if ((mod & Qt::ControlModifier) && event->key() == Qt::Key_C)
     {

@@ -420,7 +420,7 @@ void MainWindow::restoreLastSession()
                 m_analysisPanel->setCurrentPage(m_appState.analysisPage);
             }
             // Restore search panel visibility.
-            const bool searchVisible = settings.value("searchVisible", true).toBool();
+            const bool searchVisible = settings.value("searchVisible", false).toBool();
             if (m_searchPanel)
                 m_searchPanel->setVisible(searchVisible);
             if (m_actToggleSearch)
@@ -512,7 +512,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
     m_appState.lastThumbScroll = m_thumbnailPanel ? m_thumbnailPanel->scrollOffset() : 0;
 
     // P1-3: persist the Analysis workspace so reopening restores UI state.
-    m_appState.analysisVisible = m_analysisPanel && m_analysisPanel->isVisible();
+    // Focus Browse temporarily hides panels; persist the state from before that
+    // temporary mode so closing in Focus does not silently change preferences.
+    m_appState.analysisVisible =
+        m_focusBrowse ? m_focusAnalysisVisible : (m_analysisPanel && m_analysisPanel->isVisible());
     m_appState.analysisPage = m_analysisPanel ? m_analysisPanel->currentPage() : 0;
 
     // P1-3: persist the navigation history stack (browser back/forward + History
@@ -555,7 +558,11 @@ void MainWindow::closeEvent(QCloseEvent *event)
         if (m_mainSplitter)
             settings.setValue("splitterState", m_mainSplitter->saveState());
         if (m_searchPanel && m_actToggleSearch)
-            settings.setValue("searchVisible", m_searchPanel->isVisible());
+        {
+            const bool searchVisible =
+                m_focusBrowse ? m_focusSearchVisible : m_searchPanel->isVisible();
+            settings.setValue("searchVisible", searchVisible);
+        }
         // P1-7: persist the main viewer's zoom level + pan position so a session
         // that ended with the viewer open restores identically (scale/offset are
         // screen-space, so the viewer must have been visible to be meaningful).

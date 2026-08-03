@@ -3,8 +3,9 @@
 
 bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
 {
-    const int idx = m_cellViews.indexOf(static_cast<RawImageView *>(obj));
-    if (idx < 0)
+    auto *view = qobject_cast<RawImageView *>(obj);
+    const int idx = view ? view->cellIndex() : -1;
+    if (idx < 0 || idx >= m_cellViews.size())
         return QWidget::eventFilter(obj, event);
 
     if (event->type() == QEvent::Wheel)
@@ -160,74 +161,79 @@ void CompareWorkspace::updateLinkInfo()
         return;
     }
 
-    // Build a multi-line tooltip with per-marker RGB + delta across cells.
+    struct LinkSample
+    {
+        int r = 0;
+        int g = 0;
+        int b = 0;
+        bool valid = false;
+    };
+    const int n = m_engine.imageCount();
+    const int baseIdx = n > 0 ? qBound(0, diffBaseIndex(), n - 1) : -1;
     QStringList lines;
     lines << tr("共 %1 个标记点").arg(m_linkPoints.size());
-    const int n = m_engine.imageCount();
     for (int i = 0; i < m_linkPoints.size(); ++i)
     {
         const int x = qRound(m_linkPoints[i].x());
         const int y = qRound(m_linkPoints[i].y());
         QString line = tr("#%1 (%2,%3)").arg(i + 1).arg(x).arg(y);
-        int baseR = -1, baseG = -1, baseB = -1;
+        std::vector<LinkSample> samples(static_cast<size_t>(n));
         for (int c = 0; c < n; ++c)
         {
-            const auto probe = m_engine.inspectPixel(x, y, diffBaseIndex());
-            // inspectPixel returns all cells; sample from cell view image as fallback.
-            int r = 0, g = 0, b = 0;
-            bool ok = false;
-            if (c < m_cellViews.size() && m_cellViews[c] && !m_cellViews[c]->image().isNull())
-            {
-                const QImage &img = m_cellViews[c]->image();
-                if (x >= 0 && y >= 0 && x < img.width() && y < img.height())
-                {
-                    const QRgb px = img.pixel(x, y);
-                    r = qRed(px);
-                    g = qGreen(px);
-                    b = qBlue(px);
-                    ok = true;
-                }
-            }
-            Q_UNUSED(probe);
-            if (!ok)
+            if (c >= m_cellViews.size() || !m_cellViews[c])
                 continue;
-            if (c == 0 || c == diffBaseIndex())
+            const QImage &image = m_cellViews[c]->image();
+            if (x < 0 || y < 0 || x >= image.width() || y >= image.height())
+                continue;
+            const QRgb pixel = image.pixel(x, y);
+            samples[static_cast<size_t>(c)] = {qRed(pixel), qGreen(pixel), qBlue(pixel), true};
+        }
+        const bool baseValid = baseIdx >= 0 && samples[static_cast<size_t>(baseIdx)].valid;
+        const LinkSample base = baseValid ? samples[static_cast<size_t>(baseIdx)] : LinkSample{};
+        for (int c = 0; c < n; ++c)
+        {
+            const LinkSample &sample = samples[static_cast<size_t>(c)];
+            if (!sample.valid)
             {
-                baseR = r;
-                baseG = g;
-                baseB = b;
-                line += QString("  [%1] RGB(%2,%3,%4)").arg(c).arg(r).arg(g).arg(b);
+                line += QString("  [%1] 无效").arg(c);
             }
-            else if (baseR >= 0)
+            else if (c == baseIdx)
+            {
+                line += QString("  [%1] RGB(%2,%3,%4)")
+                            .arg(c)
+                            .arg(sample.r)
+                            .arg(sample.g)
+                            .arg(sample.b);
+            }
+            else if (baseValid)
             {
                 line += QString("  [%1] RGB(%2,%3,%4) Δ(%5,%6,%7)")
                             .arg(c)
-                            .arg(r)
-                            .arg(g)
-                            .arg(b)
-                            .arg(r - baseR)
-                            .arg(g - baseG)
-                            .arg(b - baseB);
+                            .arg(sample.r)
+                            .arg(sample.g)
+                            .arg(sample.b)
+                            .arg(sample.r - base.r)
+                            .arg(sample.g - base.g)
+                            .arg(sample.b - base.b);
             }
             else
             {
-                line += QString("  [%1] RGB(%2,%3,%4)").arg(c).arg(r).arg(g).arg(b);
+                line += QString("  [%1] RGB(%2,%3,%4) Δ无效")
+                            .arg(c)
+                            .arg(sample.r)
+                            .arg(sample.g)
+                            .arg(sample.b);
             }
         }
         lines << line;
     }
     m_linkInfoLabel->setText(tr("标记: %1").arg(m_linkPoints.size()));
     m_linkInfoLabel->setToolTip(lines.join('\n'));
-
-    // Also push a short summary to the status bar via pixelInfo.
-    if (!m_linkPoints.isEmpty())
-    {
-        const auto &last = m_linkPoints.last();
-        emit pixelInfo(tr("像素连线 #%1 @ (%2,%3) — 悬停「标记」查看全部 RGB/Δ")
-                           .arg(m_linkPoints.size())
-                           .arg(qRound(last.x()))
-                           .arg(qRound(last.y())));
-    }
+    const auto &last = m_linkPoints.last();
+    emit pixelInfo(tr("像素连线 #%1 @ (%2,%3) — 悬停“标记”查看全部 RGB/Δ")
+                       .arg(m_linkPoints.size())
+                       .arg(qRound(last.x()))
+                       .arg(qRound(last.y())));
 }
 
 void CompareWorkspace::drawPixelLinkLines(QPainter &p)
