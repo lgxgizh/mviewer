@@ -60,7 +60,7 @@ Checklist 条目凡能自动化的，已固化为回归测试，随门禁自动�
 
 | Checklist 范围 | 自动化测试（ctest） | 覆盖内容 |
 |---|---|---|
-| Workflow 1 全流程 | `workflow_ux_tests` | 真实 MainWindow：专业浏览工具栏、Folder/Preview 侧栏比例迁移、Browse 与 Tab 独立恢复、路径 Enter 不误开旧图、目录切换清理旧状态并选中新目录首图；打开目录 → onImageOpen → ←/→/Home/End/PageUp/PageDown → 首屏解码 ≤ 5 s → Fit/100%/放大/恢复 → 关闭 |
+| Workflow 1 全流程 | `workflow_ux_tests` | 真实 MainWindow：专业浏览工具栏、Folder/Preview 侧栏比例迁移、Browse 与 Tab 独立恢复、Analysis/Search 跨窗口恢复、路径 Enter 不误开旧图、跨盘精确导航并自动清除冲突目录过滤、目录切换清理旧状态并选中新目录首图、视图模式/固定尺寸/可调滑块状态同步；打开目录 → onImageOpen → ←/→/Home/End/PageUp/PageDown → 首屏解码 ≤ 5 s → Fit/100%/放大/恢复 → 关闭 |
 | Workflow 2 全流程 | `workflow_ux_tests` | 真实 CompareWorkspace + 真实键鼠事件：默认同步/参考图、B/S/O/K/H 模式互斥、Space 临时闪烁、锁定基准、阈值/调整/重置后的指标与 Inspector 同步、拖动期间重计算合并、Zoom/Pan 保持、Esc 退出后继续浏览 |
 | Compare 会话恢复 | `compare_session_tests` | 布局/参考图/闪烁间隔/差异阈值 round-trip |
 | Compare 引擎语义 | `compare_workflow_tests` | 选择→比较→引擎状态机 |

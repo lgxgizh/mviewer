@@ -330,9 +330,31 @@ void ThumbnailPanel::ensureDimensions()
 void ThumbnailPanel::setThumbSize(int size)
 {
     size = qBound(kMinThumbSize, size, kMaxThumbSize);
-    if (size == m_thumbSize)
+    if (m_viewMode == ViewMode::LargeIcon || m_viewMode == ViewMode::SmallIcon)
+    {
+        // Large/Small are product presets. Session/preferences may call this
+        // after setViewMode(), so remember the requested grid size but keep the
+        // visible preset and its slider value authoritative.
+        m_gridThumbSize = size;
+        emit thumbSizeChanged(m_thumbSize);
         return;
+    }
+    applyThumbSize(size, true);
+}
+
+void ThumbnailPanel::applyThumbSize(int size, bool rememberGridSize)
+{
+    size = qBound(kMinThumbSize, size, kMaxThumbSize);
+    if (size == m_thumbSize)
+    {
+        if (rememberGridSize)
+            m_gridThumbSize = size;
+        emit thumbSizeChanged(m_thumbSize);
+        return;
+    }
     m_thumbSize = size;
+    if (rememberGridSize)
+        m_gridThumbSize = size;
     // Update pipeline to generate thumbnails at the new size.
     ThumbnailPipeline::instance().thumbSize = size;
     // Directly update gridSize instead of calling setViewMode(m_viewMode),
@@ -360,6 +382,7 @@ void ThumbnailPanel::setThumbSize(int size)
         setGridSize(QSize(m_thumbSize + 24, m_thumbSize + 62));
     }
     viewport()->update();
+    emit thumbSizeChanged(m_thumbSize);
 }
 
 void ThumbnailPanel::buildModel(const QList<Entry> &entries)

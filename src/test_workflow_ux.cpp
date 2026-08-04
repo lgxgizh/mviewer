@@ -24,11 +24,13 @@
 #include "mainwindow.h"
 #include "previewpanel.h"
 #include "selectionmodel.h"
+#include "thumbnailpanel.h"
 #include "widgets/rawimageview.h"
 
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDialog>
 #include <QDir>
 #include <QElapsedTimer>
@@ -289,9 +291,75 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "advanced filter toggle has a stable interactive control");
 
     auto *thumbnailSizeSlider = w.findChild<QSlider *>("thumbnailSizeSlider");
+    auto *viewModeCombo = w.findChild<QComboBox *>("thumbnailViewModeCombo");
+    auto *thumbnailPanel = w.findChild<ThumbnailPanel *>();
     auto *pathEdit = w.findChild<QLineEdit *>("pathEdit");
     CHECK(thumbnailSizeSlider != nullptr, "thumbnail size slider is discoverable");
+    CHECK(viewModeCombo && thumbnailPanel,
+          "thumbnail view controls expose a stable panel and combo");
     CHECK(pathEdit != nullptr, "directory path input is discoverable");
+
+    if (thumbnailSizeSlider && viewModeCombo && thumbnailPanel)
+    {
+        thumbnailSizeSlider->setValue(180);
+        CHECK(thumbnailPanel->thumbSize() == 180 && thumbnailSizeSlider->value() == 180,
+              "standard grid remembers the user-selected 180px size");
+        auto setViewModeFromCombo = [viewModeCombo](ThumbnailPanel::ViewMode mode)
+        {
+            for (int i = 0; i < viewModeCombo->count(); ++i)
+                if (viewModeCombo->itemData(i).toInt() == static_cast<int>(mode))
+                {
+                    viewModeCombo->setCurrentIndex(i);
+                    return;
+                }
+        };
+        setViewModeFromCombo(ThumbnailPanel::LargeIcon);
+        CHECK(thumbnailPanel->viewMode() == ThumbnailPanel::LargeIcon &&
+                  viewModeCombo->currentData().toInt() == ThumbnailPanel::LargeIcon &&
+                  thumbnailSizeSlider->value() == 240,
+              "Large view synchronizes mode and slider at 240px");
+        setViewModeFromCombo(ThumbnailPanel::SmallIcon);
+        CHECK(thumbnailPanel->viewMode() == ThumbnailPanel::SmallIcon &&
+                  viewModeCombo->currentData().toInt() == ThumbnailPanel::SmallIcon &&
+                  thumbnailSizeSlider->value() == 64,
+              "Small view synchronizes mode and slider at 64px");
+        setViewModeFromCombo(ThumbnailPanel::Thumbnail);
+        CHECK(thumbnailPanel->viewMode() == ThumbnailPanel::Thumbnail &&
+                  viewModeCombo->currentData().toInt() == ThumbnailPanel::Thumbnail &&
+                  thumbnailSizeSlider->value() == 180 && thumbnailPanel->thumbSize() == 180,
+              "returning to Thumbnail restores the remembered 180px grid");
+
+        setViewModeFromCombo(ThumbnailPanel::LargeIcon);
+        thumbnailPanel->setThumbSize(192); // Restore/preferences call after the mode.
+        CHECK(thumbnailPanel->viewMode() == ThumbnailPanel::LargeIcon &&
+                  thumbnailPanel->thumbSize() == 240 && thumbnailSizeSlider->value() == 240,
+              "restore size cannot override the Large 240px preset");
+        CHECK(!thumbnailSizeSlider->isEnabled(),
+              "Large preset disables the thumbnail size slider");
+        thumbnailPanel->setViewMode(ThumbnailPanel::LargeIcon);
+        CHECK(viewModeCombo->currentData().toInt() == ThumbnailPanel::LargeIcon &&
+                  thumbnailSizeSlider->value() == 240,
+              "same-mode setViewMode re-synchronizes the effective Large size");
+        setViewModeFromCombo(ThumbnailPanel::SmallIcon);
+        CHECK(!thumbnailSizeSlider->isEnabled() && thumbnailSizeSlider->value() == 64,
+              "Small preset disables the slider and keeps its 64px value");
+
+        setViewModeFromCombo(ThumbnailPanel::Details);
+        CHECK(!thumbnailSizeSlider->isEnabled(),
+              "Details disables the thumbnail size slider because it has no visible effect");
+        thumbnailPanel->setThumbSize(196); // Preferences call while Details is active.
+        CHECK(thumbnailSizeSlider->value() == 196,
+              "Details accepts a size for the future standard grid");
+        setViewModeFromCombo(ThumbnailPanel::List);
+        CHECK(!thumbnailSizeSlider->isEnabled(),
+              "List disables the thumbnail size slider because it has no visible effect");
+        setViewModeFromCombo(ThumbnailPanel::Details);
+        setViewModeFromCombo(ThumbnailPanel::Thumbnail);
+        CHECK(thumbnailPanel->thumbSize() == 196 && thumbnailSizeSlider->value() == 196,
+              "Thumbnail restores the size remembered while Details was active");
+        CHECK(thumbnailSizeSlider->isEnabled(),
+              "Thumbnail re-enables the thumbnail size slider");
+    }
 
     if (browseWorkspaceAction)
     {
@@ -431,6 +499,26 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     directoryTree->navigateTo(dirPath, true);
     pump(250);
 
+    const QString externalDir = QDir(QStringLiteral(MVIEWER_SOURCE_DIR))
+                                    .filePath(QStringLiteral("testdata/golden/256x256"));
+    if (directoryTree->filterEdit())
+        directoryTree->filterEdit()->setText(QStringLiteral("hide-target-until-navigation"));
+    directoryTree->navigateTo(externalDir, true);
+    QElapsedTimer externalNavigationTimer;
+    externalNavigationTimer.start();
+    while (directoryTree->currentPath() != QDir::cleanPath(externalDir) &&
+           externalNavigationTimer.elapsed() < 5000)
+        pump(25);
+    CHECK(directoryTree->currentPath() == QDir::cleanPath(externalDir),
+          "directory tree navigates to an existing path outside the home directory");
+    CHECK(directoryTree->filterEdit() && directoryTree->filterEdit()->text().isEmpty(),
+          "external navigation clears a filter that would hide the target");
+    CHECK(directoryTree->currentIndex().isValid() &&
+              directoryTree->currentIndex().data(Qt::DisplayRole).toString() == "256x256",
+          "external directory navigation leaves the target visibly selected");
+    directoryTree->navigateTo(dirPath, true);
+    pump(250);
+
     if (viewer)
     {
         // 首屏：异步解码必须在 5 秒内交付（评审"有没有等待"硬上限）。
@@ -539,6 +627,64 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     QDir().rmdir(nextDir);
     pump(50);
     CHECK(true, "main window closes cleanly after the browse workflow");
+}
+
+void workflow3_session_restore(const QString &dirPath, const QString &imagePath)
+{
+    std::cout << "—— Workflow 3: session restore ——\n";
+    const QString recoveryPath =
+        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recovery.json";
+    QFile::remove(recoveryPath);
+    QSettings().clear();
+
+    AppState expected;
+    expected.lastDir = dirPath;
+    expected.lastImage = imagePath;
+    expected.analysisVisible = true;
+    CHECK(expected.save(), "cross-restart fixture saves Analysis visibility");
+    QSettings settings;
+    settings.setValue("searchVisible", true);
+    // Reproduce an older persisted session: LargeIcon is a fixed 240px preset,
+    // while the old slider value may still contain the previous 180px grid size.
+    settings.setValue("thumbViewMode", static_cast<int>(ThumbnailPanel::LargeIcon));
+    settings.setValue("thumbSize", 180);
+    settings.sync();
+
+    {
+        MainWindow w;
+        w.resize(1280, 800);
+        w.show();
+        pump(350);
+        auto *analysisPanel = w.findChild<QWidget *>("analysisPanel");
+        auto *searchPanel = w.findChild<QWidget *>("searchPanel");
+        auto *analysisAction = w.findChild<QAction *>("toggleAnalysisPanelAction");
+        auto *searchAction = w.findChild<QAction *>("toggleSearchPanelAction");
+        auto *browseAction = w.findChild<QAction *>("browseWorkspaceAction");
+        auto *thumbnailPanel = w.findChild<ThumbnailPanel *>();
+        auto *thumbnailSizeSlider = w.findChild<QSlider *>("thumbnailSizeSlider");
+        auto *viewModeCombo = w.findChild<QComboBox *>("thumbnailViewModeCombo");
+        CHECK(analysisPanel && analysisPanel->isVisible() && analysisAction &&
+                  analysisAction->isChecked(),
+              "Analysis panel and action restore together across a new MainWindow");
+        CHECK(searchPanel && searchPanel->isVisible() && searchAction && searchAction->isChecked(),
+              "Search panel and action restore together across a new MainWindow");
+        CHECK(browseAction && !browseAction->isChecked(),
+              "restored side panels keep the Browser workspace action unchecked");
+        CHECK(thumbnailPanel && thumbnailPanel->viewMode() == ThumbnailPanel::LargeIcon &&
+                  thumbnailPanel->thumbSize() == 240 && thumbnailSizeSlider &&
+                  thumbnailSizeSlider->value() == 240 && !thumbnailSizeSlider->isEnabled() &&
+                  viewModeCombo &&
+                  viewModeCombo->currentData().toInt() == ThumbnailPanel::LargeIcon,
+              "deferred restore keeps the Large preset at 240px with a disabled synchronized slider");
+        w.close();
+        pump(50);
+    }
+
+    QFile::remove(recoveryPath);
+    QSettings().clear();
+    const QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    if (!configPath.isEmpty())
+        QDir(configPath).removeRecursively();
 }
 
 // ─── Workflow 2: 两图 Compare → 模式切换 → 互斥 → 退出 → 继续浏览 ───────────
@@ -810,6 +956,7 @@ int main(int argc, char **argv)
                           colors[i]);
 
     workflow1_browse(workDir.absolutePath(), paths);
+    workflow3_session_restore(workDir.absolutePath(), paths.first());
     workflow2_compare(paths[0], paths[2]);
 
     for (const QString &p : paths)

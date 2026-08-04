@@ -409,7 +409,7 @@ void MainWindow::restoreLastSession()
             if (m_thumbnailPanel)
                 m_thumbnailPanel->setThumbSize(ts);
             if (m_thumbSizeSlider)
-                m_thumbSizeSlider->setValue(ts);
+                m_thumbSizeSlider->setValue(m_thumbnailPanel ? m_thumbnailPanel->thumbSize() : ts);
 
             // P1-3: restore the Analysis workspace so the UI reopens where left off.
             if (m_analysisPanel)

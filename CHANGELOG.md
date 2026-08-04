@@ -20,6 +20,14 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- **Reliable cross-drive folder navigation:** the folder tree now exposes every
+  available drive, resolves typed and restored paths to the exact directory,
+  and clears a name filter when it would hide a programmatic navigation target.
+- **Coherent thumbnail view controls:** view-mode presets, the toolbar selector,
+  and the size slider now stay synchronized. Large and Small use fixed sizes,
+  while returning to Grid restores the user's last adjustable thumbnail size;
+  rapid mode switching now hands delegates over safely instead of leaving
+  deferred UI work pointed at a discarded delegate.
 - **Directory-switch consistency:** changing folders immediately clears the old
   image, preview, metadata, and status identity, then selects the first image
   from the newly loaded folder exactly once.

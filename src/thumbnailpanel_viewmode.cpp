@@ -7,8 +7,26 @@
 void ThumbnailPanel::setViewMode(ViewMode mode)
 {
     if (m_viewMode == mode)
+    {
+        if (mode == LargeIcon)
+            applyThumbSize(240, false);
+        else if (mode == SmallIcon)
+            applyThumbSize(64, false);
+        else if (mode == Thumbnail)
+            applyThumbSize(m_gridThumbSize, true);
+        emit viewModeChanged(m_viewMode);
         return;
+    }
     m_viewMode = mode;
+
+    auto installDelegate = [this](QStyledItemDelegate *delegate)
+    {
+        QStyledItemDelegate *previous = m_delegate;
+        m_delegate = delegate;
+        setItemDelegate(m_delegate);
+        if (previous)
+            previous->deleteLater();
+    };
 
     // Large folders (1000+ images) scroll noticeably smoother with a larger
     // layout batch and a persistent scrollbar (no layout jump when items appear).
@@ -26,7 +44,7 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
     // P0-2: Large/Small icon modes are thumbnail grids with fixed sizes.
     if (mode == LargeIcon)
     {
-        setThumbSize(240);
+        applyThumbSize(240, false);
         QListView::setViewMode(QListView::IconMode);
         setWrapping(true);
         setUniformItemSizes(true);
@@ -35,15 +53,13 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         setResizeMode(QListView::Adjust);
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        if (m_delegate)
-            delete m_delegate;
-        m_delegate = new ThumbDelegate(this, this);
-        setItemDelegate(m_delegate);
+        installDelegate(new ThumbDelegate(this, this));
+        emit viewModeChanged(m_viewMode);
         return;
     }
     if (mode == SmallIcon)
     {
-        setThumbSize(64);
+        applyThumbSize(64, false);
         QListView::setViewMode(QListView::IconMode);
         setWrapping(true);
         setUniformItemSizes(true);
@@ -52,10 +68,8 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         setResizeMode(QListView::Adjust);
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        if (m_delegate)
-            delete m_delegate;
-        m_delegate = new ThumbDelegate(this, this);
-        setItemDelegate(m_delegate);
+        installDelegate(new ThumbDelegate(this, this));
+        emit viewModeChanged(m_viewMode);
         return;
     }
 
@@ -68,10 +82,7 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         setIconSize(QSize(48, 48));
         setSpacing(0);
         // Swap to the details delegate.
-        if (m_delegate)
-            delete m_delegate;
-        m_delegate = new DetailsDelegate(this, this);
-        setItemDelegate(m_delegate);
+        installDelegate(new DetailsDelegate(this, this));
         // EXIF columns (camera/lens/ISO) can make the row wider than the viewport;
         // allow horizontal scrolling rather than overlapping columns.
         setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
@@ -98,10 +109,7 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         setResizeMode(QListView::Fixed);
-        if (m_delegate)
-            delete m_delegate;
-        m_delegate = new ThumbDelegate(this, this);
-        setItemDelegate(m_delegate);
+        installDelegate(new ThumbDelegate(this, this));
     }
     else if (mode == Compact)
     {
@@ -115,10 +123,7 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         setResizeMode(QListView::Adjust);
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        if (m_delegate)
-            delete m_delegate;
-        m_delegate = new ThumbDelegate(this, this);
-        setItemDelegate(m_delegate);
+        installDelegate(new ThumbDelegate(this, this));
     }
     else if (mode == List)
     {
@@ -133,10 +138,7 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         setResizeMode(QListView::Adjust);
         setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
         setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        if (m_delegate)
-            delete m_delegate;
-        m_delegate = new ListDelegate(this, this);
-        setItemDelegate(m_delegate);
+        installDelegate(new ListDelegate(this, this));
     }
     else
     {
@@ -148,9 +150,9 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         setResizeMode(QListView::Adjust);
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-        if (m_delegate)
-            delete m_delegate;
-        m_delegate = new ThumbDelegate(this, this);
-        setItemDelegate(m_delegate);
+        installDelegate(new ThumbDelegate(this, this));
     }
+    if (mode == Thumbnail)
+        setThumbSize(m_gridThumbSize);
+    emit viewModeChanged(m_viewMode);
 }

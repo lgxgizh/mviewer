@@ -238,6 +238,8 @@ class ThumbnailPanel : public QListView
   signals:
     void itemClicked(const QString &path);
     void itemDoubleClicked(const QString &path);
+    void viewModeChanged(ThumbnailPanel::ViewMode mode);
+    void thumbSizeChanged(int size);
     void compareRequested(const QStringList &paths);
     // External files/folders dropped onto the gallery (forwarded to MainWindow).
     void filesDropped(const QStringList &paths);
@@ -296,6 +298,7 @@ class ThumbnailPanel : public QListView
     QString m_typeFilter;        // A-2.3: comma-separated type filter
     ViewMode m_viewMode = Thumbnail;
     int m_thumbSize = kDefaultThumbSize; // M15: dynamic thumb size
+    int m_gridThumbSize = kDefaultThumbSize; // Last user-selected standard grid size.
     QString m_filterText;
     bool m_filterRecursive = false;
     qint64 m_totalBytes = 0;
@@ -320,6 +323,7 @@ class ThumbnailPanel : public QListView
 
     void applyFilter();     // (re)build the filtered model
     void ensureMetaIndex(); // lazily index metadata for m_allEntries
+    void applyThumbSize(int size, bool rememberGridSize);
 
     // P0-1 (perf): resolve pixel dimensions off the UI thread. setDirectory no
     // longer reads image headers eagerly (that blocked folder switching on large

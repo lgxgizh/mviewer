@@ -522,6 +522,7 @@ void MainWindow::setupUi()
 
     // P0-2: View mode switcher (Grid / Large / Small / Detail / Filmstrip / Compact)
     auto *viewModeCombo = new QComboBox(sortBar);
+    viewModeCombo->setObjectName("thumbnailViewModeCombo");
     viewModeCombo->addItem("网格", ThumbnailPanel::Thumbnail);
     viewModeCombo->addItem("大图标", ThumbnailPanel::LargeIcon);
     viewModeCombo->addItem("小图标", ThumbnailPanel::SmallIcon);
@@ -529,7 +530,7 @@ void MainWindow::setupUi()
     viewModeCombo->addItem("详情", ThumbnailPanel::Details);
     viewModeCombo->addItem("胶片条", ThumbnailPanel::Filmstrip);
     viewModeCombo->addItem("紧凑", ThumbnailPanel::Compact);
-    viewModeCombo->setToolTip("切换缩略图视图模式 (Ctrl+1..6)");
+    viewModeCombo->setToolTip("切换缩略图视图模式（常用模式 Ctrl+1..6）");
     sortLayout->addWidget(viewModeCombo);
     connect(viewModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this, viewModeCombo]()
@@ -550,7 +551,6 @@ void MainWindow::setupUi()
     sortLayout->addWidget(m_thumbSizeSlider);
     connect(m_thumbSizeSlider, &QSlider::valueChanged, this,
             [this](int value) { m_thumbnailPanel->setThumbSize(value); });
-
     // M18: live search bar.
     sortLayout->addWidget(new QLabel("搜索：", sortBar));
     m_searchEdit = new QLineEdit(sortBar);
@@ -614,6 +614,32 @@ void MainWindow::setupUi()
     m_thumbnailPanel->setSelectionModel(m_selection); // P0-2: gallery hover -> SSOT
     m_thumbnailPanel->installEventFilter(this);
     rightLayout->addWidget(m_thumbnailPanel, 1);
+    connect(m_thumbnailPanel, &ThumbnailPanel::viewModeChanged, this,
+            [viewModeCombo, this](ThumbnailPanel::ViewMode mode)
+            {
+                for (int i = 0; i < viewModeCombo->count(); ++i)
+                {
+                    if (viewModeCombo->itemData(i).toInt() == static_cast<int>(mode))
+                    {
+                        const QSignalBlocker blocker(viewModeCombo);
+                        viewModeCombo->setCurrentIndex(i);
+                        break;
+                    }
+                }
+                const bool adjustable = mode == ThumbnailPanel::Thumbnail ||
+                                        mode == ThumbnailPanel::Filmstrip ||
+                                        mode == ThumbnailPanel::Compact;
+                m_thumbSizeSlider->setEnabled(adjustable);
+            });
+    connect(m_thumbnailPanel, &ThumbnailPanel::thumbSizeChanged, this,
+            [this](int size)
+            {
+                if (!m_thumbSizeSlider)
+                    return;
+                const QSignalBlocker blocker(m_thumbSizeSlider);
+                m_thumbSizeSlider->setValue(size);
+            });
+    m_thumbnailPanel->setViewMode(m_thumbnailPanel->viewMode());
 
     // ----- Analysis panel (rightmost) + Metadata panel (M18, between gallery & analysis) -----
     m_analysisPanel = new AnalysisPanel(this);

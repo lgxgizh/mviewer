@@ -4,6 +4,7 @@
 #include <QClipboard>
 #include <QContextMenuEvent>
 #include <QDir>
+#include <QFileInfo>
 #include <QFileSystemModel>
 #include <QFileSystemWatcher>
 #include <QLabel>
@@ -11,6 +12,7 @@
 #include <QPainter>
 #include <QProcess>
 #include <QStyleOptionViewItem>
+#include <QSignalBlocker>
 #include <QTimer>
 
 namespace
@@ -20,6 +22,20 @@ const QStringList kImageExtensions = {".jpg",  ".jpeg", ".bmp", ".png", ".tif", 
 
 // Threshold above which we show a brief loading indicator while expanding.
 constexpr int kLargeDirThreshold = 500;
+constexpr int kMaxNavigationRetries = 8;
+constexpr int kInitialNavigationRetryDelayMs = 50;
+constexpr int kMaxNavigationRetryDelayMs = 1000;
+
+bool equivalentPath(const QString &left, const QString &right)
+{
+    const QString normalizedLeft = QDir::cleanPath(QDir::fromNativeSeparators(left));
+    const QString normalizedRight = QDir::cleanPath(QDir::fromNativeSeparators(right));
+#ifdef Q_OS_WIN
+    return normalizedLeft.compare(normalizedRight, Qt::CaseInsensitive) == 0;
+#else
+    return normalizedLeft == normalizedRight;
+#endif
+}
 } // namespace
 
 DirectoryProxyModel::DirectoryProxyModel(QObject *parent) : QSortFilterProxyModel(parent)
@@ -83,14 +99,16 @@ bool DirectoryProxyModel::filterAcceptsRow(int sourceRow, const QModelIndex &sou
 DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
 {
     m_model = new QFileSystemModel(this);
-    m_model->setRootPath(QDir::homePath());
     m_model->setFilter(QDir::Dirs | QDir::Drives | QDir::NoDotAndDotDot);
+    // An empty root exposes the computer level on Windows, including every
+    // available drive, instead of pinning the tree to the user's home path.
+    m_model->setRootPath(QString());
 
     m_proxy = new DirectoryProxyModel(this);
     m_proxy->setSourceModel(m_model);
 
     setModel(m_proxy);
-    setRootIndex(m_proxy->mapFromSource(m_model->index(QDir::homePath())));
+    setRootIndex(QModelIndex());
     setHeaderHidden(true);
     setColumnHidden(1, true);
     setColumnHidden(2, true);
@@ -100,13 +118,16 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
 
     // A-1.3: current-directory highlight — use a custom style so the active
     // node is visually distinct from the regular selection.
-    setStyleSheet("DirectoryTree::item:selected { background: #2a82da; color: white; }"
-                  "DirectoryTree::item { padding: 2px 0; }");
+    // Keep selection colors owned by the active Qt palette so light and dark
+    // application themes remain legible.
+    setStyleSheet("DirectoryTree::item { padding: 2px 0; }");
 
     // A-1.4: QFileSystemWatcher for auto-refresh when the file system changes.
     m_watcher = new QFileSystemWatcher(this);
     connect(m_watcher, &QFileSystemWatcher::directoryChanged, this,
             &DirectoryTree::onDirectoryChanged);
+    connect(m_model, &QFileSystemModel::directoryLoaded, this,
+            &DirectoryTree::onDirectoryLoaded);
 
     // A-1.5: when rows are inserted (model fetched children), clear loading.
     connect(m_model, &QFileSystemModel::rowsInserted, this, &DirectoryTree::onRowsInserted);
@@ -121,6 +142,7 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
                 const QString path = m_model->filePath(source);
                 if (m_model->isDir(source))
                 {
+                    cancelPendingNavigation();
                     m_currentPath = path;
                     watchPath(path);
                     emit directoryChanged(path);
@@ -136,11 +158,13 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
     m_filterEdit = new QLineEdit(this);
     m_filterEdit->setPlaceholderText("搜索目录...");
     m_filterEdit->setClearButtonEnabled(true);
-    m_filterEdit->setStyleSheet(
-        "QLineEdit { padding: 4px 6px; border: 1px solid #555; border-radius: 3px;"
-        "            background: #222; color: #ddd; }"
-        "QLineEdit:focus { border-color: #2a82da; }");
+    m_filterEdit->setTextMargins(6, 4, 6, 4);
     connect(m_filterEdit, &QLineEdit::textChanged, m_proxy, &DirectoryProxyModel::setFilterText);
+
+    m_navigationRetryTimer = new QTimer(this);
+    m_navigationRetryTimer->setSingleShot(true);
+    connect(m_navigationRetryTimer, &QTimer::timeout, this,
+            [this]() { tryNavigateToPending(m_navigationRequestId); });
 }
 
 DirectoryTree::~DirectoryTree() = default;
@@ -177,6 +201,7 @@ void DirectoryTree::keyPressEvent(QKeyEvent *event)
         const QString path = currentPath();
         if (!path.isEmpty())
         {
+            cancelPendingNavigation();
             m_currentPath = path;
             watchPath(path);
             emit directoryChanged(path);
@@ -211,6 +236,7 @@ void DirectoryTree::contextMenuEvent(QContextMenuEvent *event)
         return;
     if (chosen == aOpen)
     {
+        cancelPendingNavigation();
         m_currentPath = path;
         watchPath(path);
         emit directoryChanged(path);
@@ -226,34 +252,62 @@ void DirectoryTree::contextMenuEvent(QContextMenuEvent *event)
 
 void DirectoryTree::navigateTo(const QString &path, bool emitSignal)
 {
-    if (path.isEmpty() || !QDir(path).exists())
+    if (path.isEmpty())
+        return;
+    const QString normalized = QDir::fromNativeSeparators(QDir::cleanPath(path));
+    if (normalized.isEmpty() || !QFileInfo(normalized).isDir())
         return;
 
-    // Normalize to forward slashes so path parsing works on every platform.
-    const QString normalized = QDir::fromNativeSeparators(QDir::cleanPath(path));
+    cancelPendingNavigation();
+    m_pendingNavigationPath = normalized;
+    m_pendingNavigationEmitSignal = emitSignal;
 
-    // Walk up the directory hierarchy to find the deepest existing source index.
-    QString current = normalized;
-    QModelIndex sourceIdx;
-    while (!current.isEmpty())
+    // Programmatic navigation must remain possible even while a name filter is
+    // active. Clearing it avoids selecting a visible ancestor while hiding the
+    // requested directory.
+    if (!m_filterEdit->text().isEmpty())
+        m_filterEdit->clear();
+
+    tryNavigateToPending(m_navigationRequestId);
+}
+
+void DirectoryTree::onDirectoryLoaded(const QString &path)
+{
+    Q_UNUSED(path);
+    if (!m_pendingNavigationPath.isEmpty())
+        tryNavigateToPending(m_navigationRequestId);
+}
+
+void DirectoryTree::tryNavigateToPending(quint64 requestId)
+{
+    if (requestId != m_navigationRequestId || m_pendingNavigationPath.isEmpty())
+        return;
+
+    const QString targetPath = m_pendingNavigationPath;
+    const QModelIndex sourceIdx = sourceIndexForPath(targetPath);
+    const QString indexedPath = sourceIdx.isValid() ? QDir::fromNativeSeparators(
+                                                       m_model->filePath(sourceIdx))
+                                                   : QString();
+    if (!sourceIdx.isValid() || !m_model->isDir(sourceIdx) ||
+        !equivalentPath(indexedPath, targetPath))
     {
-        sourceIdx = m_model->index(current);
-        if (sourceIdx.isValid())
-            break;
-        int slash = current.lastIndexOf('/');
-        if (slash <= 0)
-            break;
-        current = current.left(slash);
+        scheduleNavigationRetry(requestId);
+        return;
     }
 
-    if (!sourceIdx.isValid())
+    // A filtered proxy may not expose an otherwise valid source index. The
+    // caller normally clears the filter before reaching here; retrying keeps
+    // this safe if the model is still processing that invalidation.
+    const QModelIndex proxyIdx = m_proxy->mapFromSource(sourceIdx);
+    if (!proxyIdx.isValid())
+    {
+        scheduleNavigationRetry(requestId);
         return;
+    }
 
-    // A-1.2: expand all ancestors so the target node is visible.
+    m_navigationRetryTimer->stop();
     expandAncestors(sourceIdx);
 
-    // A-1.5: for large / not-yet-populated directories, show loading and fetch
-    // progressively so the UI stays responsive (yields via QTimer).
     const int rowCount = m_model->rowCount(sourceIdx);
     const bool needsFetch =
         rowCount >= kLargeDirThreshold || (rowCount == 0 && m_model->canFetchMore(sourceIdx));
@@ -263,41 +317,62 @@ void DirectoryTree::navigateTo(const QString &path, bool emitSignal)
         scheduleFetchMore(sourceIdx);
     }
 
-    const QModelIndex proxyIdx = m_proxy->mapFromSource(sourceIdx);
-    if (!proxyIdx.isValid())
-    {
-        if (!needsFetch)
-            setLoading(false);
-        return;
-    }
+    m_currentPath = targetPath;
+    watchPath(targetPath);
 
-    // A-1.1: auto-sync — update the current path and highlight.
-    m_currentPath = normalized;
-    watchPath(normalized);
-
-    // Visual sync (highlight + scroll + expand) must happen for BOTH programmatic
-    // and user navigation, so the tree always reflects the single "current
-    // directory" no matter whether the user typed a path or picked a node.
-    // setCurrentIndex is signal-blocked to avoid re-emitting directoryChanged.
-    selectionModel()->blockSignals(true);
+    // setCurrentIndex is signal-blocked to avoid turning programmatic sync
+    // into a second directoryChanged/navigation cycle.
+    QSignalBlocker selectionBlocker(selectionModel());
     setCurrentIndex(proxyIdx);
     scrollTo(proxyIdx, PositionAtCenter);
     expand(proxyIdx);
-    selectionModel()->blockSignals(false);
+    selectionBlocker.unblock();
     applyCurrentHighlight(proxyIdx);
 
-    if (emitSignal)
-    {
-        // Programmatic navigation that should behave exactly like a user click:
-        // emit the canonical directoryChanged signal directly instead of faking a
-        // QTreeView::clicked() (which round-tripped through the clicked handler
-        // and risked re-entrancy).
-        emit directoryChanged(normalized);
-    }
+    const bool shouldEmit = m_pendingNavigationEmitSignal;
+    m_pendingNavigationPath.clear();
+    m_pendingNavigationEmitSignal = false;
+    if (shouldEmit)
+        emit directoryChanged(targetPath);
 
-    // Keep loading indicator until progressive fetch finishes (onRowsInserted).
     if (!needsFetch)
         setLoading(false);
+}
+
+void DirectoryTree::scheduleNavigationRetry(quint64 requestId)
+{
+    if (requestId != m_navigationRequestId || m_pendingNavigationPath.isEmpty())
+        return;
+    if (!QFileInfo(m_pendingNavigationPath).isDir())
+    {
+        m_pendingNavigationPath.clear();
+        m_pendingNavigationEmitSignal = false;
+        m_navigationRetryTimer->stop();
+        return;
+    }
+    if (!m_navigationRetryTimer->isActive())
+    {
+        if (m_navigationRetryCount >= kMaxNavigationRetries)
+        {
+            m_pendingNavigationPath.clear();
+            m_pendingNavigationEmitSignal = false;
+            return;
+        }
+        ++m_navigationRetryCount;
+        const int backoff = kInitialNavigationRetryDelayMs
+                            << qMin(m_navigationRetryCount - 1, 4);
+        m_navigationRetryTimer->start(qMin(backoff, kMaxNavigationRetryDelayMs));
+    }
+}
+
+void DirectoryTree::cancelPendingNavigation()
+{
+    ++m_navigationRequestId;
+    m_pendingNavigationPath.clear();
+    m_pendingNavigationEmitSignal = false;
+    m_navigationRetryCount = 0;
+    if (m_navigationRetryTimer)
+        m_navigationRetryTimer->stop();
 }
 
 void DirectoryTree::onDirectoryChanged(const QString &path)
@@ -309,7 +384,7 @@ void DirectoryTree::onDirectoryChanged(const QString &path)
         m_model->fetchMore(source);
         // If the changed directory is the current one, re-emit so the gallery
         // reloads.
-        if (path == m_currentPath)
+        if (equivalentPath(path, m_currentPath))
             emit directoryChanged(path);
     }
 }
@@ -361,9 +436,11 @@ void DirectoryTree::onRowsInserted(const QModelIndex &parent, int first, int las
     if (m_loading && m_pendingFetchPath.isEmpty())
     {
         const QString parentPath = m_model->filePath(parent);
-        if (parentPath == m_currentPath || parentPath == m_watchedPath)
+        if (equivalentPath(parentPath, m_currentPath) || equivalentPath(parentPath, m_watchedPath))
             setLoading(false);
     }
+    if (!m_pendingNavigationPath.isEmpty())
+        tryNavigateToPending(m_navigationRequestId);
 }
 
 void DirectoryTree::onExpanded(const QModelIndex &index)
@@ -394,7 +471,7 @@ void DirectoryTree::watchPath(const QString &path)
 {
     // A-1.4: add the path to the file system watcher so we get notified when
     // Explorer creates/deletes subdirectories.
-    if (path.isEmpty() || path == m_watchedPath)
+    if (path.isEmpty() || equivalentPath(path, m_watchedPath))
         return;
     if (!m_watchedPath.isEmpty())
         m_watcher->removePath(m_watchedPath);
@@ -460,11 +537,12 @@ void DirectoryTree::drawRow(QPainter *painter, const QStyleOptionViewItem &optio
     if (source.isValid())
     {
         const QString path = m_model->filePath(source);
-        if (path == m_currentPath && !m_currentPath.isEmpty())
+        if (equivalentPath(path, m_currentPath) && !m_currentPath.isEmpty())
         {
             // Draw accent background.
             painter->save();
-            QColor accent(42, 130, 218, 40); // semi-transparent blue
+            QColor accent = palette().color(QPalette::Highlight);
+            accent.setAlpha(40);
             painter->fillRect(option.rect, accent);
             painter->restore();
 

@@ -12,6 +12,7 @@ class QContextMenuEvent;
 class QKeyEvent;
 class QPainter;
 class QStyleOptionViewItem;
+class QTimer;
 
 class DirectoryProxyModel : public QSortFilterProxyModel
 {
@@ -84,6 +85,7 @@ class DirectoryTree : public QTreeView
 
   private slots:
     void onDirectoryChanged(const QString &path);
+    void onDirectoryLoaded(const QString &path);
     void onRowsInserted(const QModelIndex &parent, int first, int last);
     void onExpanded(const QModelIndex &index);
 
@@ -93,6 +95,9 @@ class DirectoryTree : public QTreeView
     void applyCurrentHighlight(const QModelIndex &proxyIdx);
     QModelIndex sourceIndexForPath(const QString &path) const;
     void expandAncestors(const QModelIndex &sourceIdx);
+    void tryNavigateToPending(quint64 requestId);
+    void scheduleNavigationRetry(quint64 requestId);
+    void cancelPendingNavigation();
     // A-1.5: progressive fetchMore for large directories (yields to event loop).
     void scheduleFetchMore(const QModelIndex &sourceIdx);
 
@@ -105,4 +110,9 @@ class DirectoryTree : public QTreeView
     QLabel *m_loadingLabel = nullptr;
     QString m_pendingFetchPath; // path currently being progressively fetched
     QLineEdit *m_filterEdit = nullptr;
+    QTimer *m_navigationRetryTimer = nullptr;
+    QString m_pendingNavigationPath;
+    bool m_pendingNavigationEmitSignal = false;
+    quint64 m_navigationRequestId = 0;
+    int m_navigationRetryCount = 0;
 };
