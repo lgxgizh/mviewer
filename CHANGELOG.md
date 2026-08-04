@@ -6,8 +6,26 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — Professional browser workspace
+
+- **FastStone-inspired browser shell:** added a compact navigation toolbar, a
+  single editable path row, explicit Folder/Preview sidebar sections, and a
+  one-click Browse workspace that gives the gallery the available width while
+  keeping Analysis and Search independently accessible.
+- **Information-rich gallery cards:** thumbnail cards now show resolution,
+  format, and an elided filename with palette-aware hover/selection styling;
+  dimensions are resolved in the background after the first thumbnail burst.
+- **Safe sidebar upgrade:** legacy splitter state is migrated once to a useful
+  Folder/Preview ratio, then subsequent user resizing continues to persist.
+
 ### Fixed
 
+- **Directory-switch consistency:** changing folders immediately clears the old
+  image, preview, metadata, and status identity, then selects the first image
+  from the newly loaded folder exactly once.
+- **Path Enter behavior:** confirming an editable path no longer bubbles into
+  the window-level quick-preview shortcut and opens the previously selected
+  image.
 - **Async diff destruction:** Compare diff jobs no longer access a destroyed
   `CompareEngine` after queued work completes.
 - **Visible crash recovery:** recovery and crash-report prompts now run after

@@ -18,9 +18,11 @@
 #include "appstate.h"
 #include "compareworkspace.h"
 #include "core/scheduler/TaskScheduler.h"
+#include "directorytree.h"
 #include "directorymodel.h"
 #include "imageviewer.h"
 #include "mainwindow.h"
+#include "previewpanel.h"
 #include "selectionmodel.h"
 #include "widgets/rawimageview.h"
 
@@ -41,10 +43,12 @@
 #include <QPushButton>
 #include <QSettings>
 #include <QSlider>
+#include <QSplitter>
 #include <QStandardPaths>
 #include <QTableWidget>
 #include <QThread>
 #include <QTimer>
+#include <QToolBar>
 #include <QVBoxLayout>
 
 #include <iostream>
@@ -163,7 +167,29 @@ QPushButton *findBtn(QWidget *root, const QString &textPrefix)
 // ─── Workflow 1: 打开目录 → 浏览 → 键盘切换 → 放大 → 恢复 → 关闭 ─────────────
 void workflow1_browse(const QString &dirPath, const QStringList &paths)
 {
+    // Reproduce the real upgrade path: the former sidebar persisted a splitter
+    // with six independent children. Qt may partially apply that byte array to
+    // the new three-section splitter unless the one-time migration replaces it.
+    QSettings settings;
+    settings.remove("browserSidebarLayoutVersion");
+    {
+        QSplitter legacySidebar(Qt::Vertical);
+        for (int i = 0; i < 6; ++i)
+            legacySidebar.addWidget(new QWidget(&legacySidebar));
+        legacySidebar.resize(300, 700);
+        legacySidebar.setSizes({20, 320, 160, 20, 20, 500});
+        settings.setValue("leftSplitterState", legacySidebar.saveState());
+    }
+
     std::cout << "── Workflow 1: browse ──\n";
+
+    // A second folder makes the directory-switch contract observable: the
+    // old selection must clear before the asynchronous first row arrives.
+    QDir sourceDir(dirPath);
+    const QString nextDir = sourceDir.filePath(QStringLiteral("wf_next"));
+    sourceDir.mkpath(QStringLiteral("wf_next"));
+    const QString nextPath =
+        writePng(QDir(nextDir), QStringLiteral("next.png"), QColor(80, 120, 220));
 
     const QString recoveryPath =
         QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recovery.json";
@@ -230,6 +256,30 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     auto *analysisAction = w.findChild<QAction *>("toggleAnalysisPanelAction");
     auto *searchAction = w.findChild<QAction *>("toggleSearchPanelAction");
     auto *focusAction = w.findChild<QAction *>("focusBrowseAction");
+    auto *browserToolBar = w.findChild<QToolBar *>("browserToolBar");
+    auto *browseWorkspaceAction = w.findChild<QAction *>("browseWorkspaceAction");
+    auto *foldersSection = w.findChild<QWidget *>("foldersSection");
+    auto *previewSection = w.findChild<QWidget *>("previewSection");
+    auto *directoryTree = w.findChild<DirectoryTree *>();
+    auto *previewPanel = w.findChild<PreviewPanel *>();
+    CHECK(browserToolBar != nullptr, "professional browser toolbar has a stable object name");
+    CHECK(browserToolBar && browserToolBar->actions().size() >= 8,
+          "browser toolbar exposes the high-frequency browse commands");
+    CHECK(browseWorkspaceAction && browseWorkspaceAction->isCheckable(),
+          "browse layout action is a stable checkable command");
+    CHECK(foldersSection && previewSection,
+          "navigation sidebar exposes stable folders and preview sections");
+    CHECK(settings.value("browserSidebarLayoutVersion").toInt() == 1,
+          "legacy navigation sidebar layout is migrated exactly once");
+    CHECK(foldersSection && previewSection && foldersSection->height() > previewSection->height(),
+          "migrated sidebar gives the folder section the larger 60/40 share");
+    CHECK(directoryTree && directoryTree->filterEdit() &&
+              directoryTree->filterEdit()->height() <= 40,
+          "directory filter keeps a normal editor height after layout restore");
+    CHECK(directoryTree && directoryTree->isVisible() && directoryTree->height() >= 40,
+          "directory tree remains visible with usable height");
+    CHECK(previewPanel && previewPanel->isVisible() && previewPanel->height() >= 80,
+          "preview panel remains visible with usable height");
     CHECK(analysisPanel && !analysisPanel->isVisible(),
           "clean startup keeps the analysis panel hidden");
     CHECK(searchPanel && !searchPanel->isVisible(), "clean startup keeps the search panel hidden");
@@ -242,6 +292,29 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     auto *pathEdit = w.findChild<QLineEdit *>("pathEdit");
     CHECK(thumbnailSizeSlider != nullptr, "thumbnail size slider is discoverable");
     CHECK(pathEdit != nullptr, "directory path input is discoverable");
+
+    if (browseWorkspaceAction)
+    {
+        browseWorkspaceAction->setChecked(false);
+        if (analysisAction && !analysisAction->isChecked())
+            analysisAction->trigger();
+        if (searchAction && searchAction->isChecked())
+            searchAction->trigger();
+        browseWorkspaceAction->setChecked(true);
+        pump(10);
+        CHECK(navigationPanel && navigationPanel->isVisible() && analysisPanel &&
+                  !analysisPanel->isVisible() && searchPanel && !searchPanel->isVisible() &&
+                  browseWorkspaceAction->isChecked(),
+              "browse layout keeps navigation and gives the gallery the available space");
+        browseWorkspaceAction->trigger();
+        pump(10);
+        CHECK(analysisPanel && analysisPanel->isVisible() && searchPanel &&
+                  !searchPanel->isVisible() && browseWorkspaceAction &&
+                  !browseWorkspaceAction->isChecked(),
+              "leaving browse layout strictly restores the recorded panel state");
+        browseWorkspaceAction->trigger();
+        pump(10);
+    }
 
     if (analysisAction)
         analysisAction->trigger();
@@ -291,7 +364,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     auto *dirModel = w.findChild<DirectoryModel *>();
     CHECK(sel != nullptr, "MainWindow exposes the SelectionModel SSOT");
     CHECK(dirModel != nullptr, "MainWindow exposes the DirectoryModel SSOT");
-    if (!sel || !dirModel)
+    CHECK(directoryTree != nullptr, "directory navigation tree is discoverable");
+    if (!sel || !dirModel || !directoryTree)
         return;
 
     // ImageViewer 是独立的顶层窗口（MainWindow::setupUi 创建，onImageOpen 时 show）。
@@ -327,7 +401,35 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     // setter; do not call onImageOpen directly and hide a duplicate-open bug.
     pump(100);
     CHECK(sel->currentImage() == paths[0],
-          "launch open keeps SelectionModel.currentImage synchronized");
+           "launch open keeps SelectionModel.currentImage synchronized");
+
+    // Return in the editable path field must navigate without invoking the
+    // window-level quick-preview command or reopening the old image.
+    if (viewer)
+        viewer->close();
+    if (pathEdit)
+    {
+        pathEdit->setText(nextDir);
+        pathEdit->setFocus(Qt::OtherFocusReason);
+        sendFocusedKey(Qt::Key_Return);
+        CHECK(viewer && !viewer->isVisible(),
+              "Return with a path editor focused does not quick-preview the old image");
+    }
+
+    // Directory switch: clear stale SSOT selection synchronously, then select
+    // the first new gallery item once the asynchronous scan publishes rows.
+    sel->setCurrentImage(paths[0]);
+    directoryTree->navigateTo(nextDir, true);
+    CHECK(sel->currentImage().isEmpty(),
+          "directory change clears the previous current image before scanning");
+    QElapsedTimer firstSelectionTimer;
+    firstSelectionTimer.start();
+    while (sel->currentImage() != nextPath && firstSelectionTimer.elapsed() < 5000)
+        pump(25);
+    CHECK(sel->currentImage() == nextPath,
+          "first item in a newly loaded directory is selected exactly through the SSOT");
+    directoryTree->navigateTo(dirPath, true);
+    pump(250);
 
     if (viewer)
     {
@@ -409,9 +511,15 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     // Closing while Focus Browse is active must persist the panel state from
     // before Focus hid the panels, not the temporary hidden state.
     if (analysisAction)
+    {
+        analysisAction->setChecked(false);
         analysisAction->trigger();
+    }
     if (searchAction)
+    {
+        searchAction->setChecked(false);
         searchAction->trigger();
+    }
     CHECK(analysisPanel && analysisPanel->isVisible() && searchPanel && searchPanel->isVisible(),
           "analysis panel is visible before the close-in-focus regression");
     if (focusAction)
@@ -427,6 +535,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "closing in focus mode persists the pre-focus analysis visibility");
     CHECK(persistedSettings.value("searchVisible", false).toBool(),
           "closing in focus mode persists the pre-focus search visibility");
+    QFile::remove(nextPath);
+    QDir().rmdir(nextDir);
     pump(50);
     CHECK(true, "main window closes cleanly after the browse workflow");
 }

@@ -30,7 +30,7 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         QListView::setViewMode(QListView::IconMode);
         setWrapping(true);
         setUniformItemSizes(true);
-        setGridSize(QSize(m_thumbSize + 16, m_thumbSize + 34));
+        setGridSize(QSize(m_thumbSize + 24, m_thumbSize + 62));
         setSpacing(8);
         setResizeMode(QListView::Adjust);
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -143,7 +143,7 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
         QListView::setViewMode(QListView::IconMode);
         setWrapping(true);
         setUniformItemSizes(true);
-        setGridSize(QSize(m_thumbSize + 16, m_thumbSize + 34));
+        setGridSize(QSize(m_thumbSize + 24, m_thumbSize + 62));
         setSpacing(6);
         setResizeMode(QListView::Adjust);
         setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);

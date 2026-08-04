@@ -17,7 +17,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     setWrapping(true);
     setUniformItemSizes(true); // all cells identical -> cheap layout for huge lists
     setSpacing(6);
-    setGridSize(QSize(m_thumbSize + 16, m_thumbSize + 34));
+    setGridSize(QSize(m_thumbSize + 24, m_thumbSize + 62));
     setSelectionMode(QAbstractItemView::ExtendedSelection);
     setTextElideMode(Qt::ElideRight);
     setEditTriggers(QAbstractItemView::NoEditTriggers);
@@ -193,6 +193,7 @@ void ThumbnailPanel::setDirectory(const QString &path)
     m_allEntries.clear();
     m_paths.clear();
     m_rowByPath.clear();
+    m_sourceRowByPath.clear();
     m_sizeByPath.clear();
     // H2: drop the previous folder's metadata index synchronously. Without this,
     // an active camera/lens/ISO or metadata-text filter could match stale entries
@@ -241,12 +242,32 @@ void ThumbnailPanel::setDirectory(const QString &path)
                     if (gen != m_dirGen) // a newer folder superseded this scan
                         return;
                     m_allEntries = entries;
+                    m_sourceRowByPath.clear();
+                    m_sourceRowByPath.reserve(m_allEntries.size());
+                    for (int i = 0; i < m_allEntries.size(); ++i)
+                        m_sourceRowByPath.insert(m_allEntries.at(i).path, i);
                     m_metaIndex.clear();
                     applyFilter();
                     // Only pay the header-read cost when the Details view
                     // actually shows the resolution column.
                     if (m_viewMode == Details)
                         ensureDimensions();
+                    else if (m_viewMode == Thumbnail || m_viewMode == LargeIcon)
+                    {
+                        // Keep the first thumbnail burst ahead of metadata
+                        // reads. The generation guard also makes a delayed
+                        // callback harmless when the user changes folders.
+                        const int dimensionGen = m_dirGen;
+                        QTimer::singleShot(
+                            350, this,
+                            [this, dimensionGen]
+                            {
+                                if (dimensionGen != m_dirGen)
+                                    return;
+                                if (m_viewMode == Thumbnail || m_viewMode == LargeIcon)
+                                    ensureDimensions();
+                            });
+                    }
                 },
                 Qt::QueuedConnection);
         })
@@ -316,14 +337,27 @@ void ThumbnailPanel::setThumbSize(int size)
     ThumbnailPipeline::instance().thumbSize = size;
     // Directly update gridSize instead of calling setViewMode(m_viewMode),
     // because setViewMode early-returns when the mode hasn't changed.
-    if (m_viewMode == ViewMode::Compact)
+    if (m_viewMode == ViewMode::Thumbnail || m_viewMode == ViewMode::LargeIcon)
+    {
+        setGridSize(QSize(m_thumbSize + 24, m_thumbSize + 62));
+    }
+    else if (m_viewMode == ViewMode::SmallIcon)
+    {
+        setGridSize(QSize(m_thumbSize + 12, m_thumbSize + 30));
+    }
+    else if (m_viewMode == ViewMode::Filmstrip)
+    {
+        const int stripH = qMax(m_thumbSize, 64) + 18;
+        setGridSize(QSize(stripH, stripH));
+    }
+    else if (m_viewMode == ViewMode::Compact)
     {
         const int compactS = qMax(m_thumbSize / 3, 32);
         setGridSize(QSize(compactS + 4, compactS + 14));
     }
-    else
+    else if (m_viewMode != ViewMode::Details && m_viewMode != ViewMode::List)
     {
-        setGridSize(QSize(m_thumbSize + 16, m_thumbSize + 34));
+        setGridSize(QSize(m_thumbSize + 24, m_thumbSize + 62));
     }
     viewport()->update();
 }

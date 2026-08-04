@@ -1,6 +1,10 @@
 // MainWindow UI construction: widgets, menus, docks, status bar (M20 P0#1).
 #include "mainwindow_p.h"
 
+#include <QSignalBlocker>
+#include <QStyle>
+#include <QToolBar>
+
 void MainWindow::setupUi()
 {
     auto *menuBar = new QMenuBar(this);
@@ -122,6 +126,12 @@ void MainWindow::setupUi()
     m_actFocusBrowse->setShortcutContext(Qt::WindowShortcut);
     viewMenu->addAction(m_actFocusBrowse);
     addAction(m_actFocusBrowse);
+    m_actBrowseWorkspace = new QAction(tr("浏览布局"), this);
+    m_actBrowseWorkspace->setObjectName("browseWorkspaceAction");
+    m_actBrowseWorkspace->setCheckable(true);
+    m_actBrowseWorkspace->setChecked(true);
+    m_actBrowseWorkspace->setToolTip(tr("隐藏分析和搜索面板，保留文件夹与预览导航"));
+    viewMenu->addAction(m_actBrowseWorkspace);
     m_actToggleMetadata = new QAction("图片信息(&I)", this);
     m_actToggleMetadata->setCheckable(true);
     m_actToggleMetadata->setChecked(false);
@@ -239,8 +249,45 @@ void MainWindow::setupUi()
 
     setMenuBar(menuBar);
 
+    // FastStone-inspired browser shell: a compact, stable command strip sits
+    // above the single editable path expression. The actions remain available
+    // in menus as well, so the toolbar is an accelerator rather than a second
+    // command model.
+    m_actDirUp = new QAction(tr("上一级"), this);
+    m_actDirUp->setObjectName("directoryUpAction");
+    m_actRefresh = new QAction(tr("刷新"), this);
+    m_actRefresh->setObjectName("refreshDirectoryAction");
+    auto *browserToolBar = new QToolBar(tr("浏览工具栏"), this);
+    addToolBar(Qt::TopToolBarArea, browserToolBar);
+    browserToolBar->setObjectName("browserToolBar");
+    browserToolBar->setMovable(false);
+    browserToolBar->setFloatable(false);
+    browserToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
+    browserToolBar->setIconSize(QSize(18, 18));
+    auto addBrowserAction = [this, browserToolBar](QAction *action, QStyle::StandardPixmap icon)
+    {
+        action->setIcon(style()->standardIcon(icon));
+        browserToolBar->addAction(action);
+    };
+    addBrowserAction(m_actOpenDir, QStyle::SP_DialogOpenButton);
+    addBrowserAction(m_actDirBack, QStyle::SP_ArrowBack);
+    addBrowserAction(m_actDirForward, QStyle::SP_ArrowForward);
+    addBrowserAction(m_actDirUp, QStyle::SP_ArrowUp);
+    addBrowserAction(m_actRefresh, QStyle::SP_BrowserReload);
+    browserToolBar->addSeparator();
+    addBrowserAction(m_actAddFavorite, QStyle::SP_DialogYesButton);
+    addBrowserAction(m_actCompare, QStyle::SP_FileDialogDetailedView);
+    addBrowserAction(m_actToggleAnalysis, QStyle::SP_FileDialogContentsView);
+    addBrowserAction(m_actToggleSearch, QStyle::SP_FileDialogListView);
+    browserToolBar->addSeparator();
+    addBrowserAction(m_actBrowseWorkspace, QStyle::SP_DesktopIcon);
+
     // ----- Breadcrumb navigation bar (M15 Product Shell P0) -----
     m_breadcrumb = new BreadcrumbBar(this);
+    // Keep the signal path for breadcrumb navigation, but do not spend a full
+    // row duplicating the editable path field in the default browser shell.
+    m_breadcrumb->setObjectName("breadcrumbBar");
+    m_breadcrumb->hide();
 
     // ----- Path input bar (UX: type a path to jump to a directory) -----
     m_pathEdit = new QLineEdit(this);
@@ -258,6 +305,7 @@ void MainWindow::setupUi()
     // P0: Favorites bar — quick-access pinned directories above the tree.
     m_favoritesBar = new QListWidget(leftWidget);
     m_favoritesBar->setMaximumHeight(100);
+    m_favoritesBar->hide();
     m_favoritesBar->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_favoritesBar->setStyleSheet("QListWidget { background: #1e1e1e; border: none; }"
                                   "QListWidget::item { padding: 3px 8px; color: #ccc; }"
@@ -277,22 +325,88 @@ void MainWindow::setupUi()
                 if (menu.exec(m_favoritesBar->mapToGlobal(pos)) == act)
                     removeFavorite(item->data(Qt::UserRole).toString());
             });
+    auto updateFavoritesVisibility = [this]()
+    {
+        if (m_favoritesBar)
+            m_favoritesBar->setVisible(m_favoritesBar->count() > 0);
+    };
+    connect(m_favoritesBar->model(), &QAbstractItemModel::rowsInserted, this,
+            [updateFavoritesVisibility]() { updateFavoritesVisibility(); });
+    connect(m_favoritesBar->model(), &QAbstractItemModel::rowsRemoved, this,
+            [updateFavoritesVisibility]() { updateFavoritesVisibility(); });
     leftWidget->addWidget(m_favoritesBar);
 
-    // P0: Directory name filter (placed between favorites and tree).
-    m_directoryTree = new DirectoryTree(leftWidget);
-    m_directoryTree->installEventFilter(this);
-    leftWidget->addWidget(m_directoryTree->filterEdit());
-    leftWidget->addWidget(m_directoryTree);
-    m_previewPanel = new PreviewPanel(leftWidget);
-    m_previewPanel->installEventFilter(this);
+    // The vertical splitter owns only complete sections. Section internals use
+    // layouts so a persisted splitter state can never stretch the filter edit
+    // or either fixed-height title into a large blank area.
+    auto *foldersSection = new QWidget(leftWidget);
+    foldersSection->setObjectName("foldersSection");
+    auto *foldersLayout = new QVBoxLayout(foldersSection);
+    foldersLayout->setContentsMargins(0, 0, 0, 0);
+    foldersLayout->setSpacing(2);
+    auto *foldersLabel = new QLabel(tr("文件夹"), foldersSection);
+    foldersLabel->setObjectName("foldersSectionLabel");
+    foldersLabel->setProperty("sectionHeader", true);
+    foldersLabel->setFixedHeight(24);
+    foldersLayout->addWidget(foldersLabel);
 
-    leftWidget->addWidget(m_previewPanel);
-    leftWidget->setStretchFactor(1, 0); // filter
-    leftWidget->setStretchFactor(2, 3); // tree
-    leftWidget->setStretchFactor(3, 2); // preview
+    // P0: Directory name filter (placed between the section label and tree).
+    m_directoryTree = new DirectoryTree(foldersSection);
+    m_directoryTree->installEventFilter(this);
+    m_directoryTree->filterEdit()->setMinimumHeight(26);
+    m_directoryTree->filterEdit()->setMaximumHeight(34);
+    foldersLayout->addWidget(m_directoryTree->filterEdit());
+    foldersLayout->addWidget(m_directoryTree, 1);
+    leftWidget->addWidget(foldersSection);
+
+    auto *previewSection = new QWidget(leftWidget);
+    previewSection->setObjectName("previewSection");
+    auto *previewLayout = new QVBoxLayout(previewSection);
+    previewLayout->setContentsMargins(0, 0, 0, 0);
+    previewLayout->setSpacing(2);
+    auto *previewLabel = new QLabel(tr("预览"), previewSection);
+    previewLabel->setObjectName("previewSectionLabel");
+    previewLabel->setProperty("sectionHeader", true);
+    previewLabel->setFixedHeight(24);
+    previewLayout->addWidget(previewLabel);
+    m_previewPanel = new PreviewPanel(previewSection);
+    m_previewPanel->installEventFilter(this);
+    previewLayout->addWidget(m_previewPanel, 1);
+    leftWidget->addWidget(previewSection);
+
+    leftWidget->setStretchFactor(0, 0); // optional favorites
+    leftWidget->setStretchFactor(1, 3); // folders section
+    leftWidget->setStretchFactor(2, 2); // preview section
     leftWidget->setChildrenCollapsible(false);
-    leftWidget->setSizes({80, 28, 320, 200});
+    leftWidget->setSizes({0, 390, 260});
+
+    // The pre-professional-browser sidebar persisted a splitter with more
+    // children. Qt can partially restore that state into the new three-section
+    // splitter, producing a tiny folder tree and an oversized preview. Run once
+    // after MainWindow's synchronous settings restore, then leave subsequent
+    // user-adjusted proportions untouched.
+    QTimer::singleShot(0, this,
+                       [this]()
+                       {
+                           constexpr int currentLayoutVersion = 1;
+                           QSettings settings;
+                           if (settings.value("browserSidebarLayoutVersion", 0).toInt() >=
+                               currentLayoutVersion)
+                           {
+                               return;
+                           }
+
+                           if (m_leftSplitter)
+                           {
+                               const bool showFavorites =
+                                   m_favoritesBar && m_favoritesBar->count() > 0 &&
+                                   !m_favoritesBar->isHidden();
+                               m_leftSplitter->setSizes(
+                                   {showFavorites ? 80 : 0, 390, 260});
+                           }
+                           settings.setValue("browserSidebarLayoutVersion",
+                                             currentLayoutVersion);
+                       });
 
     // ----- Right column: sort bar (top) + image gallery -----
     auto *rightWidget = new QWidget(this);
@@ -336,6 +450,7 @@ void MainWindow::setupUi()
 
     // A-2.3: file-type quick filter buttons.
     auto *typeFilterCombo = new QComboBox(sortBar);
+    typeFilterCombo->setObjectName("typeFilterCombo");
     typeFilterCombo->addItem("全部类型", "");
     typeFilterCombo->addItem("JPG", "jpg,jpeg");
     typeFilterCombo->addItem("PNG", "png");
@@ -343,7 +458,6 @@ void MainWindow::setupUi()
     typeFilterCombo->addItem("WebP", "webp");
     typeFilterCombo->addItem("RAW", "cr2,cr3,nef,nrw,arw,dng,orf,rw2,pef,raf");
     typeFilterCombo->setToolTip("按文件类型过滤");
-    sortLayout->addWidget(typeFilterCombo);
 
     auto *advancedFilterPanel = new QWidget(sortBar);
     advancedFilterPanel->setObjectName("advancedFilterPanel");
@@ -352,6 +466,7 @@ void MainWindow::setupUi()
     advancedLayout->setSpacing(6);
     sortRootLayout->addWidget(advancedFilterPanel);
     m_advancedFilterPanel = advancedFilterPanel;
+    advancedLayout->addWidget(typeFilterCombo);
     auto *advancedFilterToggle = new QPushButton("高级筛选", sortBar);
     advancedFilterToggle->setObjectName("advancedFilterToggle");
     advancedFilterToggle->setCheckable(true);
@@ -360,7 +475,7 @@ void MainWindow::setupUi()
     connect(advancedFilterToggle, &QPushButton::toggled, advancedFilterPanel, &QWidget::setVisible);
     auto *clearFilters = new QPushButton("清除筛选", sortBar);
     clearFilters->setObjectName("clearFiltersButton");
-    sortLayout->addWidget(clearFilters);
+    advancedLayout->addWidget(clearFilters);
 
     // P0 #①: metadata filters — camera / lens (substring) and ISO (exact).
     auto *camEdit = new QLineEdit(sortBar);
@@ -607,6 +722,14 @@ void MainWindow::setupUi()
     connect(m_directoryTree, &DirectoryTree::directoryChanged, this,
             [this](const QString &path)
             {
+                // The old gallery can still be visible while the new folder
+                // scans on a worker thread. Clear the SSOT first so no stale
+                // preview, status identity, or quick-preview target leaks
+                // across folders. The stats callback below selects the first
+                // new item exactly once after the scan has produced rows.
+                m_autoSelectFirstPending = true;
+                if (m_selection)
+                    m_selection->clear();
                 m_breadcrumb->setPath(path); // M15: update breadcrumb bar
                 if (m_pathEdit)
                     m_pathEdit->setText(QDir::toNativeSeparators(path));
@@ -633,6 +756,24 @@ void MainWindow::setupUi()
                 scheduleReindex();
             });
 
+    connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
+            [this](int total, qint64, int, qint64)
+            {
+                if (!m_autoSelectFirstPending || total <= 0 || !m_selection ||
+                    !m_thumbnailPanel)
+                    return;
+                if (!m_selection->currentImage().isEmpty())
+                {
+                    m_autoSelectFirstPending = false;
+                    return;
+                }
+                const QString first = m_thumbnailPanel->pathList().value(0);
+                if (first.isEmpty())
+                    return;
+                m_autoSelectFirstPending = false;
+                m_selection->setCurrentImage(first);
+            });
+
     connect(m_thumbnailPanel, &ThumbnailPanel::itemClicked, this,
             [this](const QString &path)
             {
@@ -649,6 +790,23 @@ void MainWindow::setupUi()
     // regardless of the source (thumbnail click, keyboard nav, open, restore).
     connect(m_selection, &SelectionModel::currentImageChanged, this,
             &MainWindow::onCurrentImageChanged);
+    connect(m_selection, &SelectionModel::currentImageChanged, this,
+            [this](const QString &path)
+            {
+                if (!path.isEmpty())
+                    return;
+                if (m_previewPanel)
+                    m_previewPanel->setImage({});
+                if (m_metadataPanel)
+                    m_metadataPanel->setImage({});
+                if (m_metadataOverlay)
+                    m_metadataOverlay->hide();
+                if (m_actToggleMetadata)
+                    m_actToggleMetadata->setChecked(false);
+                if (m_lblImage)
+                    m_lblImage->setText(tr("未选择图像"));
+                updateSelectionActions();
+            });
     connect(m_thumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
             [this](const QString &path) { onImageOpen(path); });
     connect(m_thumbnailPanel, &ThumbnailPanel::compareRequested, this,
@@ -750,6 +908,8 @@ void MainWindow::setupUi()
                 if (!m_analysisPanel)
                     return;
                 m_analysisPanel->setVisible(true);
+                if (m_actToggleAnalysis)
+                    m_actToggleAnalysis->setChecked(true);
                 m_analysisPanel->runAnalyzer(analyzerId);
             });
     connect(m_imageViewer, &ImageViewer::pixelInfo, this,
@@ -839,6 +999,24 @@ void MainWindow::setupUi()
                 if (!dir.isEmpty())
                     changeDirectory(dir);
             });
+    connect(m_actDirUp, &QAction::triggered, this,
+            [this]()
+            {
+                QDir parent(currentDir());
+                if (!currentDir().isEmpty() && parent.cdUp())
+                    changeDirectory(parent.absolutePath());
+            });
+    connect(m_actRefresh, &QAction::triggered, this,
+            [this]()
+            {
+                if (m_directoryTree)
+                    m_directoryTree->refresh();
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->refresh();
+                if (m_imageList)
+                    m_imageList->markDirty();
+                scheduleReindex();
+            });
 
     // Path input bar: pressing Enter navigates to the typed directory.
     connect(m_pathEdit, &QLineEdit::returnPressed, this,
@@ -916,8 +1094,63 @@ void MainWindow::setupUi()
                 if (!imgs.isEmpty())
                     openCompare(imgs);
             });
-    connect(m_actToggleAnalysis, &QAction::triggered, m_analysisPanel, &QWidget::setVisible);
-    connect(m_actToggleSearch, &QAction::triggered, m_searchPanel, &QWidget::setVisible);
+    auto syncBrowseWorkspaceAction = [this]()
+    {
+        if (m_actBrowseWorkspace && m_analysisPanel && m_searchPanel)
+            m_actBrowseWorkspace->setChecked(!m_analysisPanel->isVisible() &&
+                                              !m_searchPanel->isVisible());
+    };
+    connect(m_actToggleAnalysis, &QAction::toggled, this,
+            [this, syncBrowseWorkspaceAction](bool visible)
+            {
+                m_analysisPanel->setVisible(visible);
+                if (!visible && !m_searchPanel->isVisible())
+                    syncBrowseWorkspaceAction();
+                else if (m_actBrowseWorkspace)
+                {
+                    // Opening a panel is an explicit exit from Browse. Update
+                    // the action state without replaying Browse's old restore
+                    // snapshot over the user's newly opened panel.
+                    const QSignalBlocker blocker(m_actBrowseWorkspace);
+                    m_actBrowseWorkspace->setChecked(false);
+                }
+            });
+    connect(m_actToggleSearch, &QAction::toggled, this,
+            [this, syncBrowseWorkspaceAction](bool visible)
+            {
+                m_searchPanel->setVisible(visible);
+                if (!visible && !m_analysisPanel->isVisible())
+                    syncBrowseWorkspaceAction();
+                else if (m_actBrowseWorkspace)
+                {
+                    const QSignalBlocker blocker(m_actBrowseWorkspace);
+                    m_actBrowseWorkspace->setChecked(false);
+                }
+            });
+    connect(m_actBrowseWorkspace, &QAction::toggled, this,
+            [this](bool browse)
+            {
+                if (browse)
+                {
+                    m_browseAnalysisVisible = m_analysisPanel->isVisible();
+                    m_browseSearchVisible = m_searchPanel->isVisible();
+                    m_analysisPanel->hide();
+                    m_searchPanel->hide();
+                    m_actToggleAnalysis->setChecked(false);
+                    m_actToggleSearch->setChecked(false);
+                }
+                else
+                {
+                    m_analysisPanel->setVisible(m_browseAnalysisVisible);
+                    m_searchPanel->setVisible(m_browseSearchVisible);
+                    m_actToggleAnalysis->setChecked(m_browseAnalysisVisible);
+                    m_actToggleSearch->setChecked(m_browseSearchVisible);
+                }
+            });
+    // restoreLastSession applies persisted panel visibility on a queued turn.
+    // Re-sync after that turn so the browser action never lies about the shell.
+    QTimer::singleShot(0, this, syncBrowseWorkspaceAction);
+    QTimer::singleShot(250, this, syncBrowseWorkspaceAction);
     connect(m_actFocusBrowse, &QAction::triggered, this, &MainWindow::toggleFocusBrowse);
     // P0-3 / A-5: metadata toggle — show both the viewer overlay AND the floating
     // MetadataPanel (positioned on the right edge of the main window).

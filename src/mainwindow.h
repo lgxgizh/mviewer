@@ -40,6 +40,7 @@ class QTimer;
 class QComboBox;
 class QSplitter;
 class QSlider;
+class QToolBar;
 
 class MainWindow : public QMainWindow
 {
@@ -159,6 +160,9 @@ class MainWindow : public QMainWindow
     QAction *m_actDirForward = nullptr;
     QAction *m_actToggleSearch = nullptr;
     QAction *m_actFocusBrowse = nullptr;
+    QAction *m_actBrowseWorkspace = nullptr;
+    QAction *m_actDirUp = nullptr;
+    QAction *m_actRefresh = nullptr;
     QAction *m_actBatch = nullptr;
     QAction *m_actPluginSettings = nullptr;
     QAction *m_actToggleMetadata = nullptr;
@@ -210,6 +214,13 @@ class MainWindow : public QMainWindow
     bool m_focusNavigationVisible = true;
     bool m_focusAnalysisVisible = false;
     bool m_focusSearchVisible = false;
+    // Browse workspace is independent from Tab focus mode. Mixing these
+    // snapshots makes one mode restore the other mode's panel state.
+    bool m_browseAnalysisVisible = false;
+    bool m_browseSearchVisible = false;
+    // A directory switch clears the old selection immediately, then selects
+    // exactly one first item when the new asynchronous gallery scan arrives.
+    bool m_autoSelectFirstPending = false;
 
     // P0 #①: real-time status bar (image count / size / zoom / cache hit-rate).
     QLabel *m_lblImage = nullptr; // current image dimensions + file size

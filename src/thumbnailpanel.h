@@ -202,13 +202,20 @@ class ThumbnailPanel : public QListView
         return m_allEntries;
     }
 
-    // P0 #①: resolve an all-entries row for a *filtered* model path. The Details
-    // delegate draws by the model row (post-filter), but m_allEntries is the
-    // unfiltered source, so look the path up instead of indexing by row.
-    // Returns -1 if the path is not in the current directory.
+    // Resolve a path to the current filtered model row (scroll / repaint).
+    // This row must never be used to index m_allEntries.
     int rowForPath(const QString &path) const
     {
         return m_rowByPath.value(path, -1);
+    }
+    // Read-only path lookup for delegates. The gallery model may be filtered,
+    // so a model row is not necessarily the same as the row in m_allEntries.
+    // The returned pointer is valid until the panel rebuilds its directory
+    // model; delegates only use it during one paint call.
+    const Entry *entryForPath(const QString &path) const
+    {
+        const int row = m_sourceRowByPath.value(path, -1);
+        return row >= 0 && row < m_allEntries.size() ? &m_allEntries.at(row) : nullptr;
     }
     // P0 #①: EXIF accessors for the Details view columns (camera / lens / ISO).
     // Backed by the metadata index built lazily in ensureMetaIndex().
@@ -269,6 +276,7 @@ class ThumbnailPanel : public QListView
 
     QStringList m_paths;                 // actual file paths, aligned with model
     QHash<QString, int> m_rowByPath;     // path -> model row (scroll / repaint)
+    QHash<QString, int> m_sourceRowByPath; // path -> m_allEntries row (metadata)
     QHash<QString, qint64> m_sizeByPath; // path -> byte size (selection stats)
     QStringListModel *m_model = nullptr;
     QStyledItemDelegate *m_delegate = nullptr;

@@ -71,6 +71,19 @@ void MainWindow::setupCommands()
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
     const auto mod = event->modifiers();
+    // Return is a text-editing/navigation key when an editor owns focus. Do
+    // not let the window-level quick-preview command open the previous image
+    // while the user is committing a path, search query, or text field.
+    if (!mod && (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter))
+    {
+        QWidget *focus = QApplication::focusWidget();
+        if (focus && (focus->inherits("QLineEdit") || focus->inherits("QTextEdit") ||
+                      focus->inherits("QPlainTextEdit")))
+        {
+            event->accept();
+            return;
+        }
+    }
     // P0-1: F5 refreshes the directory tree and the gallery from disk.
     if (event->key() == Qt::Key_F5 && !mod)
     {

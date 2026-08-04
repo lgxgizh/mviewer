@@ -5,6 +5,7 @@
 
 #include <QFileInfo>
 #include <QMetaObject>
+#include <QPalette>
 #include <QPainter>
 #include <QResizeEvent>
 #include <algorithm>
@@ -17,6 +18,26 @@ PreviewPanel::PreviewPanel(QWidget *parent) : QWidget(parent)
 void PreviewPanel::setImage(const QString &path)
 {
     m_path = path;
+    if (path.isEmpty())
+    {
+        // Clear synchronously when a folder changes. This prevents an old
+        // decoded frame from remaining visible while the next directory is
+        // still being scanned asynchronously.
+        m_full = QPixmap();
+        m_scaled = QPixmap();
+        m_hasImage = false;
+        m_imgW = 0;
+        m_imgH = 0;
+        m_fileSize = 0;
+        m_lumMean = 0.0;
+        m_rMean = m_gMean = m_bMean = 0;
+        update();
+        return;
+    }
+    m_full = QPixmap();
+    m_scaled = QPixmap();
+    m_hasImage = false;
+    update();
     // Decode off the UI thread (ImageRepository::loadAsync -> DecodePool) so the
     // bottom-left preview never blocks browsing. Compute stats on the worker
     // thread; only the cheap rebuild()/update() run on the UI thread.
@@ -121,11 +142,16 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
     QPainter painter(this);
-    painter.fillRect(rect(), QColor(30, 30, 30));
+    const QPalette pal = palette();
+    const QColor base = pal.color(QPalette::Base);
+    const QColor well = pal.color(QPalette::AlternateBase);
+    const QColor text = pal.color(QPalette::Text);
+    const QColor secondary = pal.color(QPalette::Mid);
+    painter.fillRect(rect(), base);
 
     if (!m_hasImage)
     {
-        painter.setPen(Qt::gray);
+        painter.setPen(secondary);
         QFont f = font();
         f.setItalic(true);
         painter.setFont(f);
@@ -140,13 +166,14 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
     {
         const int x = imgArea.x() + (imgArea.width() - m_scaled.width()) / 2;
         const int y = imgArea.y() + (imgArea.height() - m_scaled.height()) / 2;
-        painter.setPen(QColor(0, 0, 0));
+        painter.fillRect(QRect(x, y, m_scaled.width(), m_scaled.height()), well);
+        painter.setPen(pal.color(QPalette::Mid));
         painter.drawRect(x - 1, y - 1, m_scaled.width() + 1, m_scaled.height() + 1);
         painter.drawPixmap(x, y, m_scaled);
     }
 
     const QRect txtArea(8, height() - txtH - 4, width() - 16, txtH);
-    painter.setPen(Qt::white);
+    painter.setPen(text);
     QFont f = painter.font();
     f.setPointSize(9);
     painter.setFont(f);
@@ -154,7 +181,7 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
     painter.drawText(txtArea, Qt::AlignTop | Qt::AlignLeft,
                      name + "\n" + QString::number(m_imgW) + "×" + QString::number(m_imgH) + "  " +
                          QString::number(m_fileSize / 1024) + " KB");
-    painter.setPen(QColor(180, 180, 180));
+    painter.setPen(secondary);
     painter.drawText(txtArea.adjusted(0, 36, 0, 0), Qt::AlignTop | Qt::AlignLeft,
                      QString("亮度 %1   RGB(%2,%3,%4)")
                          .arg(m_lumMean, 0, 'f', 1)
