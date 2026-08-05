@@ -119,6 +119,48 @@ foreach ($f in $sources) {
     [void]$sb.AppendLine("| ``$rel`` | $type | $($tags -join ', ') |")
 }
 [void]$sb.AppendLine()
+
+# M24: CTest inventory — registered tests, their executables, and runtime
+# characteristics, parsed from src/CMakeLists.txt so it cannot rot.
+[void]$sb.AppendLine('## CTest Inventory')
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('| CTest name | Command | RUN_SERIAL | UI-linked |')
+[void]$sb.AppendLine('|---|---|---|---|')
+$cmake = Get-Content (Join-Path $Repo 'src/CMakeLists.txt')
+$uiTargets = [System.Collections.Generic.HashSet[string]]::new()
+$uiLibs = @()
+# Collect targets that link mviewer_ui (display-capable executables).
+for ($i = 0; $i -lt $cmake.Count; $i++) {
+    if ($cmake[$i] -match 'add_executable\((\w+)') {
+        $t = $Matches[1]
+        $block = ($cmake[$i..([Math]::Min($i + 14, $cmake.Count - 1))] -join "`n")
+        if ($block -match 'mviewer_ui') { [void]$uiTargets.Add($t) }
+    }
+}
+$serial = [System.Collections.Generic.HashSet[string]]::new()
+for ($i = 0; $i -lt $cmake.Count; $i++) {
+    if ($cmake[$i] -match 'add_test\(NAME (\w+)') {
+        $name = $Matches[1]
+        $next = $cmake[$i]
+        $block = ''
+        for ($j = $i; $j -lt [Math]::Min($i + 6, $cmake.Count); $j++) { $block += $cmake[$j] }
+        if ($block -match 'set_tests_properties\(' -and $block -match 'RUN_SERIAL') {
+            [void]$serial.Add($name)
+        }
+    }
+}
+# Map test NAME -> executable: the command token right after add_test(NAME <n> COMMAND <exe>.
+for ($i = 0; $i -lt $cmake.Count; $i++) {
+    if ($cmake[$i] -match 'add_test\(NAME (\w+) COMMAND ([A-Za-z0-9_]+)') {
+        $name = $Matches[1]; $exe = $Matches[2]
+        $isSerial = if ($serial.Contains($name)) { 'yes' } else { '-' }
+        $isUi = if ($uiTargets.Contains($exe)) { 'yes' } else { '-' }
+        [void]$sb.AppendLine("| $name | ``$exe`` | $isSerial | $isUi |")
+    }
+}
+[void]$sb.AppendLine()
+[void]$sb.AppendLine('`UI-linked` = the executable links `mviewer_ui` and therefore needs a Qt platform (offscreen works; a real display for pixel-level UX review). `RUN_SERIAL` = must not run in parallel with bench/other UI tests (CI applies this automatically).')
+[void]$sb.AppendLine()
 [void]$sb.AppendLine('---')
 [void]$sb.AppendLine('_This matrix is regenerated automatically. The M23 policy: every shipped feature MUST have at least one regression test — add the test, then this matrix updates itself._')
 
