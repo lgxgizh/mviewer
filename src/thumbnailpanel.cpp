@@ -1,4 +1,4 @@
-#include "selectionmodel.h"
+﻿#include "selectionmodel.h"
 #include "thumbnailpanel_p.h"
 #include "thumbnailprovider.h"
 
@@ -21,6 +21,12 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     QListView::setViewMode(QListView::IconMode);
     setMovement(QListView::Static);
     setResizeMode(QListView::Adjust);
+    // M24 (S3): a 10000-row directory insert must not stall the UI thread for
+    // seconds with one synchronous Adjust layout. Batched mode processes the
+    // layout in chunks through the event loop, keeping the UI responsive while
+    // entries stream in.
+    setLayoutMode(QListView::Batched);
+    setBatchSize(512);
     setWrapping(true);
     setUniformItemSizes(true); // all cells identical -> cheap layout for huge lists
     setSpacing(6);
@@ -39,7 +45,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     m_delegate = new ThumbDelegate(this, this);
     setItemDelegate(m_delegate);
 
-    m_compareBtn = new QPushButton("比较选中", this);
+    m_compareBtn = new QPushButton("姣旇緝閫変腑", this);
     m_compareBtn->setVisible(false);
     connect(m_compareBtn, &QPushButton::clicked, this, &ThumbnailPanel::onCompareClicked);
 
@@ -59,7 +65,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                 emit hovered(p);
             });
 
-    // Drive thumbnail decode priority from the viewport (P0 #②).
+    // Drive thumbnail decode priority from the viewport (P0 #鈶?.
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
             &ThumbnailPanel::updateVisibleRange);
     connect(horizontalScrollBar(), &QScrollBar::valueChanged, this,
@@ -82,8 +88,8 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     // Keyboard parity: Enter opens the viewer (same as double-click), and
     // moving the current item with the arrow keys drives the shared selection
     // model so the preview/status bar follow without a mouse. The central
-    // SelectionModel no-ops on a same-path set, so selectPath() → currentChanged
-    // → itemClicked cannot loop.
+    // SelectionModel no-ops on a same-path set, so selectPath() 鈫?currentChanged
+    // 鈫?itemClicked cannot loop.
     connect(this, &QAbstractItemView::activated, this,
             [this](const QModelIndex &idx)
             {
@@ -147,7 +153,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                         if (pm.isNull())
                         {
                             // Record the failure so the delegate can paint a distinct
-                            // "无法加载" placeholder instead of the generic loading grey.
+                            // "鏃犳硶鍔犺浇" placeholder instead of the generic loading grey.
                             {
                                 QMutexLocker l(&panel->m_thumbMtx);
                                 panel->m_thumbFailed.insert(qp);
@@ -278,7 +284,7 @@ void ThumbnailPanel::setDirectory(const QString &path)
                     const QFileInfo &fi = list.at(i);
                     if (!passesTypeFilter(typeFilter, fi.suffix()))
                         continue;
-                    // P0-1 (perf): no pixel dimensions here — resolved lazily in
+                    // P0-1 (perf): no pixel dimensions here 鈥?resolved lazily in
                     // the background for the Details view (see ensureDimensions).
                     entries.append({fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0,
                                     fi.lastModified()});
@@ -356,7 +362,7 @@ void ThumbnailPanel::ensureDimensions()
             for (int i = 0; i < paths.size(); ++i)
             {
                 if (!alive->load())
-                    return; // panel destroyed / folder superseded — abort fast
+                    return; // panel destroyed / folder superseded 鈥?abort fast
                 QImageReader reader(paths.at(i));
                 reader.setAutoTransform(true);
                 sizes.append(reader.size());
@@ -495,7 +501,7 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     ThumbnailPipeline::instance().setSources(toStdPaths(m_paths));
 
     // M24 (A#8): apply a selection that was requested while this model was
-    // still being rebuilt (e.g. rename → async rescan → re-select new name).
+    // still being rebuilt (e.g. rename 鈫?async rescan 鈫?re-select new name).
     if (!m_pendingSelect.isEmpty() && m_rowByPath.contains(m_pendingSelect))
     {
         selectPath(m_pendingSelect);
@@ -518,10 +524,20 @@ void ThumbnailPanel::updateVisibleRange()
     if (viewport()->width() < 10 || viewport()->height() < 10)
         return;
 
-    const QModelIndex firstIdx = indexAt(QPoint(2, 2));
-    const QModelIndex lastIdx = indexAt(QPoint(viewport()->width() - 2, viewport()->height() - 2));
-    int first = firstIdx.isValid() ? firstIdx.row() : 0;
-    int last = lastIdx.isValid() ? lastIdx.row() : n - 1;
+    // M24 (S3): compute the visible row range arithmetically instead of via
+    // indexAt(). On a 10000-row IconMode list indexAt() forces a full layout
+    // pass (the view's geometry is stale right after buildModel, and Batched
+    // mode defers it) — a multi-second UI stall on each new directory. With
+    // uniform grid geometry the range is exact.
+    const QSize cell = gridSize();
+    const int cellW = qMax(1, cell.width());
+    const int cellH = qMax(1, cell.height());
+    const int cols = qMax(1, viewport()->width() / cellW);
+    const int firstRow = verticalScrollBar()->value() / cellH;
+    int first = firstRow * cols;
+    int last = first + cols * qMax(1, viewport()->height() / cellH);
+    if (last >= n)
+        last = n - 1;
     if (last < first)
         last = first;
 
@@ -552,7 +568,7 @@ void ThumbnailPanel::updateVisibleRange()
         }
     }
 
-    // P0 #② / A-2.5: visible range at Thumbnail priority, then predictive
+    // P0 #鈶?/ A-2.5: visible range at Thumbnail priority, then predictive
     // neighbors. Scale the predictive window with directory size so 10k-image
     // folders still feel snappy when scrolling, without over-scheduling tiny
     // folders.
@@ -564,11 +580,27 @@ void ThumbnailPanel::updateVisibleRange()
 
 void ThumbnailPanel::onThumbReady(const QString &path)
 {
-    const int row = m_rowByPath.value(path, -1);
-    if (row < 0)
+    // M24 (S3): coalesce dataChanged. Emitting per decoded thumbnail triggers
+    // a QListView layout pass per item; on a 10000-row gallery the per-item
+    // emits stall the UI thread for seconds while thumbnails stream in. One
+    // batched emit per event-loop turn keeps the view correct at ~30x less
+    // layout work.
+    if (!m_thumbDirty)
+    {
+        m_thumbDirty = true;
+        QTimer::singleShot(0, this, [this]() { flushThumbUpdates(); });
+    }
+}
+
+void ThumbnailPanel::flushThumbUpdates()
+{
+    m_thumbDirty = false;
+    const int rows = m_model->rowCount();
+    if (rows <= 0)
         return;
-    const QModelIndex idx = m_model->index(row, 0);
-    emit dataChanged(idx, idx, {Qt::DecorationRole});
+    // One broad DecorationRole change is correct: the delegate paints from
+    // thumbReady(path) at paint time, so stale geometry never leaks through.
+    emit dataChanged(m_model->index(0, 0), m_model->index(rows - 1, 0), {Qt::DecorationRole});
 }
 
 QPixmap ThumbnailPanel::thumbReady(const QString &path) const
@@ -601,7 +633,7 @@ void ThumbnailPanel::onSelectionChanged()
     // source of truth that Compare reads) in sync with the gallery's full
     // multi-selection. QListView::ExtendedSelection already supports Ctrl / Shift
     // / rubber-band multi-select, but only a plain single click pushed the path
-    // into SelectionModel before — so Compare used to receive a single (stale)
+    // into SelectionModel before 鈥?so Compare used to receive a single (stale)
     // image instead of the whole selection. Updating here makes the shared model
     // reflect Ctrl/Shift/box selections uniformly.
     if (m_selection)
@@ -615,7 +647,7 @@ void ThumbnailPanel::onSelectionChanged()
     }
 
     // M23 P2 (selection UX): keep the compare affordance always discoverable.
-    // It shows the live selection count, enables once 2–8 images are picked,
+    // It shows the live selection count, enables once 2鈥? images are picked,
     // and is hidden only when nothing is selected.
     if (n == 0 || m_currentDir.isEmpty())
     {
@@ -624,12 +656,12 @@ void ThumbnailPanel::onSelectionChanged()
     else
     {
         m_compareBtn->setVisible(true);
-        m_compareBtn->setText(QString("比较选中 (%1)").arg(n));
+        m_compareBtn->setText(QString("姣旇緝閫変腑 (%1)").arg(n));
         const bool canCompare = n >= 2 && n <= 8;
         m_compareBtn->setEnabled(canCompare);
         m_compareBtn->setToolTip(canCompare
-                                     ? QString("将选中的 %1 张图片送入对比").arg(n)
-                                     : QString("需要选择 2–8 张图片才能对比（当前 %1 张）").arg(n));
+                                     ? QString("灏嗛€変腑鐨?%1 寮犲浘鐗囬€佸叆瀵规瘮").arg(n)
+                                     : QString("闇€瑕侀€夋嫨 2鈥? 寮犲浘鐗囨墠鑳藉姣旓紙褰撳墠 %1 寮狅級").arg(n));
     }
     emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
 }
@@ -659,9 +691,9 @@ void ThumbnailPanel::selectPath(const QString &path)
     }
     const QModelIndex idx = m_model->index(row, 0);
     if (currentIndex() == idx && selectionModel() && selectionModel()->isSelected(idx))
-        return; // already the current selected item — nothing to do, no scroll jank
+        return; // already the current selected item 鈥?nothing to do, no scroll jank
     // If the path is already part of a multi-selection, only move the current
-    // focus — do NOT ClearAndSelect (that would collapse multi-select).
+    // focus 鈥?do NOT ClearAndSelect (that would collapse multi-select).
     if (selectionModel() && selectionModel()->isSelected(idx))
     {
         selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
@@ -689,7 +721,7 @@ void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &curren
         const QModelIndex idx = m_model->index(row, 0);
         sel.select(idx, idx);
     }
-    // Block currentChanged → itemClicked while we rebuild multi-select, so the
+    // Block currentChanged 鈫?itemClicked while we rebuild multi-select, so the
     // focus move cannot collapse SelectionModel via setCurrentImage.
     const bool wasBlocked = selectionModel()->blockSignals(true);
     selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect);
@@ -837,3 +869,4 @@ void ThumbnailPanel::stopThumbnailWorker()
     m_thumbPending.clear();
     m_thumbFailed.clear();
 }
+

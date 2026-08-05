@@ -894,6 +894,22 @@ target_link_libraries(benchmark_scenario
         mviewer_core
 )
 
+# M24 Phase 7: real-scale soak / resource-stability tool. NOT a CTest gate
+# (keeps CI fast); run manually or on nightly:
+#   build_msvc\bin\mviewer_m24_soak.exe [--out results.json]
+add_executable(mviewer_m24_soak
+    ${CMAKE_SOURCE_DIR}/benchmarks/m24_soak_main.cpp
+)
+
+target_link_libraries(mviewer_m24_soak
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
 # ─── Testdata regression ───────────────────────────────────────────────
 
 add_executable(testdata_regression

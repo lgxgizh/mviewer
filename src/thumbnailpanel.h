@@ -254,6 +254,8 @@ class ThumbnailPanel : public QListView
 
   private slots:
     void onThumbReady(const QString &path);
+    // M24: coalesced dataChanged flush (see onThumbReady).
+    void flushThumbUpdates();
     void onSelectionChanged();
 
   private:
@@ -299,6 +301,8 @@ class ThumbnailPanel : public QListView
     // can never grow thread count without bound, and destruction waits for
     // in-flight tasks (which abort early via m_alive).
     QThreadPool m_scanPool;
+    // M24 (S3): one pending coalesced DecorationRole flush per event-loop turn.
+    bool m_thumbDirty = false;
     // M24 (A#8): single-path selection requested while the directory model is
     // still being rebuilt asynchronously (e.g. rename→rescan). Applied by
     // buildModel once the path is present; cleared when applied.
