@@ -641,6 +641,23 @@ target_compile_features(analyze_acceptance_tests PRIVATE cxx_std_20)
 target_include_directories(analyze_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME analyze_acceptance_tests COMMAND analyze_acceptance_tests)
 
+# ─── M24: Export workflow acceptance (format fidelity, atomic writes,
+# cancellation, degraded output dirs) ────────────────────────────────────────
+add_executable(export_acceptance_tests
+    test_export_acceptance.cpp
+)
+
+target_link_libraries(export_acceptance_tests
+    PRIVATE
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+
+target_compile_features(export_acceptance_tests PRIVATE cxx_std_20)
+target_include_directories(export_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME export_acceptance_tests COMMAND export_acceptance_tests)
+
 
 # ─── M9-4 Export workflow acceptance tests ────────────────────────────────
 add_executable(export_tests

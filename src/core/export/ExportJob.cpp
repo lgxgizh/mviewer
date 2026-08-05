@@ -9,6 +9,7 @@
 #include <cctype>
 #include <filesystem>
 #include <sstream>
+#include <unordered_set>
 
 namespace fs = std::filesystem;
 
@@ -114,12 +115,29 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
     fs::create_directories(cfg.outDir, ec);
 
     const std::string ext = extensionFor(cfg.format);
+    // M24 (D#2): validate the requested format up front — an unknown format id
+    // must fail loudly instead of silently encoding a different format.
+    static const std::unordered_set<std::string> kKnownFormats = {
+        "jpeg", "jpg", "png", "webp", "tiff", "tif", "bmp"};
+    if (!kKnownFormats.count(cfg.format))
+    {
+        r.failed = r.total;
+        r.message = "unsupported format: " + cfg.format;
+        return r;
+    }
     Encoder::Params params;
     params.quality = cfg.quality;
 
     for (int i = 0; i < r.total; ++i)
     {
         const std::string &src = cfg.sources[static_cast<size_t>(i)];
+        // M24 (D#3): cooperative cancellation between items.
+        if (cfg.cancel && cfg.cancel->load(std::memory_order_relaxed))
+        {
+            r.message = "cancelled after " + std::to_string(r.done) + " / " +
+                        std::to_string(r.total);
+            return r;
+        }
         if (progress)
             progress(i, r.total, src);
 
@@ -179,14 +197,37 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
             }
         }
         const fs::path dst = fs::path(cfg.outDir) / (outBase + ext);
-        if (Encoder::encode(data, dst.string(), params))
+        // M24 (D#8): encode to a temp file and atomically rename into place, so
+        // an interrupted/failed encode never leaves a partial file at the final
+        // name that looks like a successful export. The temp name keeps the
+        // REAL extension (".mviewer-tmp-<dst>") because Encoder::encode derives
+        // the format from the file suffix.
+        const fs::path tmp = dst.parent_path() / (".mviewer-tmp-" + dst.filename().string());
+        if (Encoder::encode(data, tmp.string(), params))
         {
-            ++r.done;
-            if (r.primaryOutput.empty())
-                r.primaryOutput = dst.string();
+            std::error_code tec;
+            fs::rename(tmp, dst, tec);
+            if (tec)
+            {
+                // Windows rename does not overwrite an existing target.
+                fs::remove(dst, tec);
+                fs::rename(tmp, dst, tec);
+            }
+            if (tec)
+            {
+                fs::remove(tmp, tec);
+                ++r.failed;
+            }
+            else
+            {
+                ++r.done;
+                if (r.primaryOutput.empty())
+                    r.primaryOutput = dst.string();
+            }
         }
         else
         {
+            fs::remove(tmp, ec); // best-effort cleanup of the partial temp file
             ++r.failed;
         }
     }

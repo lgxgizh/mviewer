@@ -6,12 +6,16 @@
 
 #include <QStringList>
 
+#include <atomic>
+#include <memory>
+
 class QLineEdit;
 class QComboBox;
 class QSpinBox;
 class QCheckBox;
 class QPushButton;
 class QLabel;
+class QProgressDialog;
 
 // Batch / single image export dialog. Supports format conversion, resizing,
 // text watermarking, batch rename, contact-sheet generation and PDF export.
@@ -88,4 +92,9 @@ class ExportDialog : public QDialog
 
     QPushButton *m_exportBtn = nullptr;
     QLabel *m_statusLabel = nullptr;
+
+    // M24 (D#3/D#7): async batch-convert — cancellation token, progress dialog,
+    // and the dialog's UI-thread guard for the worker callback.
+    std::shared_ptr<std::atomic<bool>> m_cancelFlag;
+    QProgressDialog *m_progress = nullptr;
 };

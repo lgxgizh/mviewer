@@ -3,7 +3,9 @@
 // so Convert / Contact / CSV / JSON / HTML share one execution path.
 #pragma once
 
+#include <atomic>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -50,6 +52,10 @@ struct ExportJobConfig
     // P0 #⑦: strip metadata. Re-encoding from raw pixels already drops EXIF/ICC,
     // so this is effectively always-on; the flag records explicit user intent.
     bool stripMetadata = true;
+
+    // M24 (D#3): optional cancellation token. run() checks it between items and
+    // stops early, reporting what already completed. Never dereferenced if null.
+    std::shared_ptr<std::atomic<bool>> cancel;
 };
 
 struct ExportJobResult

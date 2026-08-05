@@ -15,14 +15,18 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
+#include <QFutureWatcher>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QImage>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QPointer>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QSpinBox>
+#include <QtConcurrent/QtConcurrent>
 #include <QTextStream>
 #include <QVBoxLayout>
 
@@ -318,8 +322,59 @@ void ExportDialog::exportConvertBatch()
         cfg.sources.push_back(src.toStdString());
     }
 
-    const auto result = mviewer::exportjob::run(cfg);
-    m_statusLabel->setText(QString::fromStdString(result.message));
+    // M24 (D#3/D#7): run the batch off the UI thread with progress + cancel.
+    // The dialog may be closed mid-run; every UI touch is QPointer-guarded and
+    // marshaled through qApp. The cancel token bounds the worker's lifetime.
+    m_cancelFlag = std::make_shared<std::atomic<bool>>(false);
+    cfg.cancel = m_cancelFlag;
+    m_exportBtn->setEnabled(false);
+    if (!m_progress)
+    {
+        m_progress = new QProgressDialog(tr("正在导出..."), tr("取消"), 0, 0, this);
+        m_progress->setWindowModality(Qt::WindowModal);
+        m_progress->setAutoClose(true);
+        m_progress->setMinimumDuration(0);
+        connect(m_progress, &QProgressDialog::canceled, this,
+                [this]()
+                {
+                    if (m_cancelFlag)
+                        m_cancelFlag->store(true, std::memory_order_relaxed);
+                });
+    }
+    m_progress->setRange(0, static_cast<int>(cfg.sources.size()));
+    m_progress->setValue(0);
+    m_progress->show();
+
+    const QPointer<ExportDialog> self(this);
+    auto *watcher = new QFutureWatcher<mviewer::exportjob::ExportJobResult>(this);
+    connect(watcher, &QFutureWatcher<mviewer::exportjob::ExportJobResult>::finished, this,
+            [this, watcher]()
+            {
+                const auto result = watcher->result();
+                watcher->deleteLater();
+                if (m_progress)
+                    m_progress->close();
+                m_exportBtn->setEnabled(true);
+                m_statusLabel->setText(QString::fromStdString(result.message));
+            });
+    watcher->setFuture(QtConcurrent::run(
+        [cfg, self]() -> mviewer::exportjob::ExportJobResult
+        {
+            return mviewer::exportjob::run(
+                cfg,
+                [self](int done, int total, const std::string &)
+                {
+                    QMetaObject::invokeMethod(
+                        qApp,
+                        [self, done, total]()
+                        {
+                            if (!self || !self->m_progress)
+                                return;
+                            self->m_progress->setMaximum(total);
+                            self->m_progress->setValue(done);
+                        });
+                });
+        }));
 }
 
 void ExportDialog::exportContactSheet()
