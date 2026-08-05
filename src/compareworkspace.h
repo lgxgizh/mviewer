@@ -131,6 +131,10 @@ class CompareWorkspace : public QWidget
     void syncToggled(bool on);
     // Hover pixel read from any cell, formatted for the status bar. Empty string clears.
     void pixelInfo(const QString &text);
+    // M24 (B#7): some of the requested images could not be loaded (missing /
+    // corrupt / unsupported); the workspace kept the loadable ones. Text is a
+    // user-facing explanation for the status bar.
+    void loadWarning(const QString &text);
     // P1 #④: Trigger analysis of the current focus image from within Compare.
     void analyzeCurrent();
     // P1 #④: Trigger full report export from within Compare.

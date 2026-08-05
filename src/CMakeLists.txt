@@ -602,6 +602,26 @@ target_include_directories(browse_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOURC
 add_test(NAME browse_acceptance_tests COMMAND browse_acceptance_tests)
 set_tests_properties(browse_acceptance_tests PROPERTIES RUN_SERIAL TRUE)
 
+# ─── M24: Compare workflow acceptance (multi-image entry, mode-preserved
+# state, continuous pair navigation, degraded images) ────────────────────────
+add_executable(compare_acceptance_tests
+    test_compare_acceptance.cpp
+)
+
+target_link_libraries(compare_acceptance_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(compare_acceptance_tests PRIVATE cxx_std_20)
+target_include_directories(compare_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_acceptance_tests COMMAND compare_acceptance_tests)
+set_tests_properties(compare_acceptance_tests PROPERTIES RUN_SERIAL TRUE)
+
 
 # ─── M9-4 Export workflow acceptance tests ────────────────────────────────
 add_executable(export_tests

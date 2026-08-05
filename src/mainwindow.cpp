@@ -456,6 +456,9 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
         m_workspace->setComparedImages(imgs);
     connect(m_compareView, &CompareWorkspace::pixelInfo, this,
             [this](const QString &text) { statusBar()->showMessage(text); });
+    // M24 (B#7): failed compare loads surface in the status bar (non-modal).
+    connect(m_compareView, &CompareWorkspace::loadWarning, this,
+            [this](const QString &text) { statusBar()->showMessage(text, 10000); });
     // P1 #④: Compare → Analyze workflow (Analyze button in Compare toolbar).
     connect(m_compareView, &CompareWorkspace::analyzeCurrent, this,
             [this]()

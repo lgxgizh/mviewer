@@ -98,6 +98,8 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     // P0-4: split / swipe compare for exactly two images.
     m_splitChk = new QCheckBox("左右分割(&S)", this);
     m_splitChk->setEnabled(false);
+    // M24 (B#8): a disabled control must say why it is unavailable.
+    m_splitChk->setToolTip(tr("仅 2 张图片时可用：左右并排对比（快捷键: S）"));
     connect(m_splitChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -111,6 +113,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 
     m_swipeChk = new QCheckBox("滑动对比(&W)", this);
     m_swipeChk->setEnabled(false);
+    m_swipeChk->setToolTip(tr("仅 2 张图片时可用：滑动分割线对比（快捷键: W）"));
     connect(m_swipeChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -125,6 +128,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     // A-4.1: Overlay compare mode — semi-transparent blend of the two images.
     m_overlayChk = new QCheckBox("叠加对比(&O)", this);
     m_overlayChk->setEnabled(false);
+    m_overlayChk->setToolTip(tr("仅 2 张图片时可用：半透明叠加对比（快捷键: O）"));
     connect(m_overlayChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
@@ -413,7 +417,18 @@ void CompareWorkspace::setImages(const QStringList &paths)
     stdPaths.reserve(paths.size());
     for (const QString &p : paths)
         stdPaths.push_back(p.toStdString());
+    const int requested = static_cast<int>(paths.size());
     m_engine.setImages(stdPaths);
+    // M24 (B#7): failed loads are dropped by the engine — tell the user why
+    // the grid has fewer cells than requested instead of silently shrinking.
+    const int loaded = m_engine.imageCount();
+    if (loaded < requested)
+    {
+        emit loadWarning(
+            tr("%1 张图片无法加载（文件损坏、缺失或不支持），已保留 %2 张可用的进行对比。")
+                .arg(requested - loaded)
+                .arg(loaded));
+    }
     // A-4: loading a fresh comparison set should not inherit adjustments from
     // the previous session; applySession will repopulate persisted values.
     m_cellAdjusts.clear();
