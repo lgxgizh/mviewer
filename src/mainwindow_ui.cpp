@@ -1276,7 +1276,13 @@ void MainWindow::setupUi()
             });
     connect(
         m_actAbout, &QAction::triggered, this, [this]()
-        { QMessageBox::about(this, "关于 MViewer", "MViewer\n\n一个简单的图片查看与分析工具。"); });
+        {
+            QMessageBox::about(
+                this, "关于 MViewer",
+                tr("MViewer %1\n\n图像算法工程师的可视化分析平台：浏览、对比、分析、导出。\n\n构建: %2")
+                    .arg(QStringLiteral(MVIEWER_VERSION_STRING),
+                         QStringLiteral(MVIEWER_VERSION_FULL)));
+        });
 
     // P0: recent / favorites / history wiring.
     connect(m_actAddFavorite, &QAction::triggered, this, &MainWindow::addFavoriteCurrent);

@@ -30,11 +30,20 @@ if (-not (Test-Path $exe)) {
     Write-Error "MViewer.exe not found at $exe. Build Release first (build.ps1 Release)."
 }
 
-# --- version (git describe, else fallback) -----------------------------------
+# --- version (CMake SSOT, else git describe fallback) -------------------------
 if (-not $Version) {
-    $Version = (git describe --tags --always 2>$null)
-    if (-not $Version) { $Version = "0.0.0-dev" }
-    $Version = $Version.TrimStart("v")
+    # M24: the version must come from the same source as the app (CMake
+    # project(VERSION) -> build_msvc/version_info.txt), never from git alone.
+    $verFile = Join-Path $root (Join-Path $BuildDir "version_info.txt")
+    if (Test-Path $verFile) {
+        $verLine = Get-Content $verFile | Where-Object { $_ -match '^MVIEWER_VERSION=' } | Select-Object -First 1
+        if ($verLine) { $Version = $verLine.Substring("MVIEWER_VERSION=".Length).Trim() }
+    }
+    if (-not $Version) {
+        $Version = (git describe --tags --always 2>$null)
+        if (-not $Version) { $Version = "0.0.0-dev" }
+        $Version = $Version.TrimStart("v")
+    }
 }
 
 $windeployqt = Join-Path $QtDir "bin/windeployqt.exe"

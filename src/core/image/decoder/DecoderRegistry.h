@@ -9,7 +9,10 @@
 // DecoderRegistry: owns the ordered list of decoders and dispatches a file to
 // the first decoder whose canDecode() returns true (specific decoders first,
 // fallback last). Header is Qt-free; decoders may use Qt internally.
-// RAW (libraw) is intentionally NOT supported yet — see TODO(M7): RAW.
+// RAW status (M24-verified): RawDecoder ships and serves the embedded-JPEG
+// preview for CR2/CR3/NEF/ARW/DNG/ORF/RW2/PEF/RAF etc., with graceful fallback
+// to QtFallbackDecoder when no preview exists. Full demosaic (libraw) is
+// deferred (M18) — see docs/roadmap.md.
 class DecoderRegistry
 {
   public:
@@ -26,7 +29,7 @@ class DecoderRegistry
     std::vector<std::string> available() const;
 
     // Decode via the first claiming decoder. Returns empty ImageData if no
-    // decoder can handle the file (graceful — no crash). TODO(M7): RAW support.
+    // decoder can handle the file (graceful — no crash).
     ImageData decodeFull(const std::string &path) const;
     ImageData decodeScaled(const std::string &path, int maxEdge) const;
 

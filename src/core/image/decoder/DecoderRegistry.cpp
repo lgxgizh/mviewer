@@ -80,7 +80,7 @@ ImageData DecoderRegistry::decodeFull(const std::string &path,
         }
     }
     // No decoder claimed the file (or all failed). Graceful: empty ImageData.
-    // TODO(M7): RAW — return a decode-failure marker for unsupported formats.
+    // (RAW preview support is handled by RawDecoder; see DecoderRegistry.h.)
     return ImageData();
 }
 

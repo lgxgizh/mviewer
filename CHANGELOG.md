@@ -63,6 +63,24 @@ All notable changes to this project are documented here. The format is based on
   CSV/JSON special characters are escaped correctly. Existing two-image report
   APIs remain compatible.
 
+### M24 — 版本单一来源 (Version SSOT)
+
+- **One version source:** `CMakeLists.txt` `project(VERSION)` (now 1.0.6)
+  generates `build/generated/MViewerVersion.h` consumed by the About dialog,
+  UpdateChecker, workspace `appVersion`, log banner, and
+  `app.setApplicationVersion()`. Hard-coded `"1.0.4"` in the update checker and
+  `"1.0.0"` workspace literals are gone.
+- **Packages follow the app version:** portable ZIP / installer names now come
+  from `build_msvc/version_info.txt` (CMake), not `git describe`.
+- **New CTest gate `version_consistency`:** fails on any hard-coded version
+  literal in `src/`, or when STATUS / packaging scripts / generated file
+  disagree with CMake.
+- **STATUS.md rewritten** to describe only current facts (v1.0.6 in
+  development, last tag v1.0.5); roadmap M17/M18 status reconciled with the
+  code (RAW preview is shipped via `RawDecoder`; demosaic deferred to M18).
+- **About dialog** now shows the real version and the product positioning
+  instead of "a simple image viewer".
+
 ### Added — CI 三层架构（PR / Nightly / Release）
 
 - **第一层 `ci.yml`（PR 必跑，目标 5–10 分钟，全部必须通过）**：`format`

@@ -1,3 +1,4 @@
+#include "MViewerVersion.h" // M24 version SSOT (generated from CMake project VERSION)
 #include "core/project/ProjectSerializer.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
@@ -9,7 +10,7 @@ int main()
 {
     mviewer::domain::Project p;
     p.name = "ISP eval";
-    p.appVersion = "1.0.0";
+    p.appVersion = MVIEWER_VERSION_STRING;
     p.createdIso = "2026-07-22T00:00:00Z";
     p.datasetRoots = {"/data/set1", "/data/set2"};
     p.analyzerPipeline = {"histogram", "noise", "psnr"};
@@ -36,6 +37,7 @@ int main()
     mviewer::domain::Project out;
     assert(mviewer::core::deserializeProject(json, out));
     assert(out.name == "ISP eval");
+    assert(out.appVersion == MVIEWER_VERSION_STRING && "appVersion must round-trip");
     assert(out.datasetRoots.size() == 2);
     assert(out.analyzerPipeline.size() == 3);
     assert(out.analyzerPipeline[0] == "histogram");

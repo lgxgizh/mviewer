@@ -388,6 +388,18 @@ add_test(NAME selftest COMMAND MViewer --selftest)
 set_tests_properties(selftest PROPERTIES
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
+# M24: version-consistency gate — CMake project(VERSION) is the single source
+# of truth; fails if the generated version file, hard-coded literals, packaging
+# scripts, or STATUS.md disagree with it.
+add_test(NAME version_consistency
+    COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+            -File ${CMAKE_SOURCE_DIR}/scripts/version_gate.ps1
+            -SourceDir ${CMAKE_SOURCE_DIR}
+            -BuildDir ${CMAKE_BINARY_DIR}
+            -Version ${PROJECT_VERSION})
+set_tests_properties(version_consistency PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # ─── M3 Phase-1 pipeline acceptance tests ───────────────────────────────
 add_executable(m3pipeline_tests
     core/test_m3_pipeline.cpp

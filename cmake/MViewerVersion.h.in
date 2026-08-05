@@ -1,0 +1,16 @@
+#pragma once
+
+// MViewerVersion.h — GENERATED from CMake project(VERSION) at configure time
+// (M24 version SSOT). Do not edit by hand; bump CMakeLists.txt project(VERSION)
+// and re-run cmake. The matching machine-readable build/version_info.txt is
+// written next to the generated header and consumed by packaging scripts.
+
+#define MVIEWER_VERSION_MAJOR @PROJECT_VERSION_MAJOR@
+#define MVIEWER_VERSION_MINOR @PROJECT_VERSION_MINOR@
+#define MVIEWER_VERSION_PATCH @PROJECT_VERSION_PATCH@
+
+// Numeric-only release version, e.g. "1.0.6" (same as the git tag vX.Y.Z).
+#define MVIEWER_VERSION_STRING "@PROJECT_VERSION@"
+
+// Full display version: release + git describe suffix (e.g. "1.0.6 (v1.0.5-21-g28c1a44)").
+#define MVIEWER_VERSION_FULL "@PROJECT_VERSION@ (@MVIEWER_GIT_DESCRIBE@)"

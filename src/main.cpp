@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 
+#include "MViewerVersion.h"
 #include "application/Startup.h"
 #include "core/CrashHandler.h"
 #include "core/Logger.h"
@@ -18,6 +19,7 @@ int main(int argc, char *argv[])
     QApplication app(argc, argv);
     app.setApplicationName("MViewer");
     app.setOrganizationName("MViewer");
+    app.setApplicationVersion(QStringLiteral(MVIEWER_VERSION_STRING));
 
     // Structured file logging (AppData/logs/mviewer-YYYYMMDD.log).
     mviewer::core::installFileLogger("MViewer");

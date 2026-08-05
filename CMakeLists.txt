@@ -1,10 +1,32 @@
 cmake_minimum_required(VERSION 3.22)
 
 project(MViewer
-    VERSION 1.0.4
+    VERSION 1.0.6
     DESCRIPTION "A Qt 6 based image viewer"
     LANGUAGES CXX
 )
+
+# ── Version SSOT (M24) ───────────────────────────────────────────────────────
+# project(VERSION) above is the SINGLE source of truth. Everything that needs
+# the version (About dialog, UpdateChecker, workspace appVersion, log header,
+# package/installer naming) consumes the generated header / version_info.txt.
+# Add a new release by bumping project(VERSION) and tagging vX.Y.Z.
+set(MVIEWER_GIT_DESCRIBE "unknown")
+find_package(Git QUIET)
+if(GIT_FOUND)
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} describe --tags --always --dirty
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE MVIEWER_GIT_DESCRIBE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+endif()
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/MViewerVersion.h.in
+               ${CMAKE_BINARY_DIR}/generated/MViewerVersion.h @ONLY)
+file(WRITE ${CMAKE_BINARY_DIR}/version_info.txt
+     "MVIEWER_VERSION=${PROJECT_VERSION}\nMVIEWER_GIT_DESCRIBE=${MVIEWER_GIT_DESCRIBE}\n")
+include_directories(${CMAKE_BINARY_DIR}/generated)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

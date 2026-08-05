@@ -19,9 +19,18 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = (Get-Location).Path
 if (-not $Version) {
-    $Version = (git describe --tags --always 2>$null)
-    if (-not $Version) { $Version = "0.0.0-dev" }
-    $Version = $Version.TrimStart("v")
+    # M24 version SSOT: read from the CMake-generated file; git describe only
+    # as a fallback so the installer name always matches the app version.
+    $verFile = Join-Path $root "build_msvc/version_info.txt"
+    if (Test-Path $verFile) {
+        $verLine = Get-Content $verFile | Where-Object { $_ -match '^MVIEWER_VERSION=' } | Select-Object -First 1
+        if ($verLine) { $Version = $verLine.Substring("MVIEWER_VERSION=".Length).Trim() }
+    }
+    if (-not $Version) {
+        $Version = (git describe --tags --always 2>$null)
+        if (-not $Version) { $Version = "0.0.0-dev" }
+        $Version = $Version.TrimStart("v")
+    }
 }
 
 # 1) Optional Release build

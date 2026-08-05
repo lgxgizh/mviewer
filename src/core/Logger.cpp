@@ -1,5 +1,7 @@
 #include "core/Logger.h"
 
+#include "MViewerVersion.h" // M24 version SSOT (generated from CMake project VERSION)
+
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -107,7 +109,9 @@ void installFileLogger(const std::string &appName)
     qInstallMessageHandler(messageHandler);
 
     // Emit a startup banner so the log always has a clear session boundary.
-    qInfo("=== %s session start ===", appName.c_str());
+    // M24: version comes from the CMake-generated header (single source).
+    qInfo("=== %s %s session start (build %s) ===", appName.c_str(), MVIEWER_VERSION_STRING,
+          MVIEWER_VERSION_FULL);
     qInfo("log file: %s", qPrintable(g_logPath));
 }
 

@@ -266,7 +266,7 @@ void MainWindow::saveProject()
     mviewer::domain::Project proj;
     proj.name = QFileInfo(filePath).baseName().toStdString();
     proj.filePath = filePath.toStdString();
-    proj.appVersion = "1.0.0";
+    proj.appVersion = MVIEWER_VERSION_STRING;
     proj.createdIso = QDateTime::currentDateTimeUtc().toString(Qt::ISODate).toStdString();
     proj.modifiedIso = proj.createdIso;
     proj.workspace = ws;
@@ -745,7 +745,7 @@ void MainWindow::checkForUpdates(bool silent)
     std::thread(
         [self, silent]()
         {
-            mviewer::core::UpdateChecker checker("1.0.4");
+            mviewer::core::UpdateChecker checker(MVIEWER_VERSION_STRING);
             checker.checkGitHub("lgxgizh/mviewer",
                                 [self, silent](const mviewer::core::UpdateInfo &info)
                                 {

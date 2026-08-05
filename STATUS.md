@@ -1,8 +1,10 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-07-24 · Target: **v1.0.0 Release Candidate** (Beta → 1.0)
+> Snapshot: 2026-08-05 · Version: **1.0.6 (in development)** · Last release tag: **v1.0.5** (2026-07-29)
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
+> Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md` (clean
+> build + 64/64 CTest green + launch + package verification) and `.\build.ps1 Test`.
 
 ## Positioning
 
@@ -10,6 +12,19 @@ A **visual analysis platform for image algorithm engineers** — compare, valida
 and analyze image-processing outputs (camera ISP, CV pipelines, SDK versions).
 The core workflow is **compare → analyze**; browsing is only the entry point.
 This is **not** a general-purpose image viewer.
+
+## Version (single source)
+
+- `CMakeLists.txt` `project(VERSION)` is the **only** version source (M24).
+- Consumers of the same source: About dialog, UpdateChecker, workspace
+  `appVersion`, session-start log banner, `app.setApplicationVersion()`,
+  `build_msvc/version_info.txt` → portable ZIP / installer naming.
+- Generated at configure time: `build/generated/MViewerVersion.h`
+  (`MVIEWER_VERSION_STRING`, `MVIEWER_VERSION_FULL`).
+- Gate: CTest `version_consistency` fails if code hard-codes a version literal,
+  or STATUS/installer/package scripts disagree with CMake.
+- Release process: bump `project(VERSION)` → tag `vX.Y.Z` → `release.yml` builds,
+  packages, and attaches artifacts; local equivalent `scripts/package_release.ps1`.
 
 ## Architecture (frozen)
 
@@ -21,73 +36,93 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 - **Core**: Qt-free headers; `mviewer_core` is a **SHARED** library (one vtable
   shared host↔plugin, required by the Plugin ABI). `.cpp` internals may use Qt.
 - **UI**: Qt 6 Widgets boundary only (no D3D11/Vulkan direct compositing).
-- **Build**: `build.ps1` (CMake + Ninja, MSVC). Never invoke cmake/ninja/cl directly.
+- **Build**: `build.ps1` (CMake + Ninja, MSVC 2022). Never invoke
+  cmake/ninja/cl directly. Qt 6.10.x / MSVC 19.44 verified on the dev machine.
 
-## Shipped capabilities (v1.0.0)
+## Shipped capabilities (1.0.x, CTest-verified)
 
 - **Decode**: `DecoderRegistry` dispatches to `QtDecoder` (JPEG/PNG/BMP/TIFF/…),
-  `RawDecoder` (embedded-JPEG preview for CR2/CR3/NEF/ARW/DNG/ORF/RW2/PEF/RAF/…;
-  graceful fallthrough), and `QtFallbackDecoder`.
-- **Cache**: 5-level (disk/memory/…) + predictive preload; >90% memory hit ratio.
+  `RawDecoder` (embedded-JPEG preview for CR2/CR3/NEF/ARW/DNG/ORF/RW2/PEF/RAF/…,
+  graceful fallthrough), and `QtFallbackDecoder`. RAW = **preview-only**, no
+  demosaic (libraw deferred — M18).
+- **Cache**: 5-level (disk/memory/…) + predictive preload.
 - **Scheduler**: `TaskScheduler` + `DecodePool`; background async decode, UI never blocks.
-- **Compare**: 2–8 images, synchronized zoom/pan/selection, blink, difference maps.
+- **Compare**: 2–8 images, synchronized zoom/pan/selection, blink, swipe, split,
+  overlay, difference maps, layout presets, pixel inspector, session
+  persistence (incl. blink state — M24 fix).
 - **Analyze**: histogram, RGB mean, PSNR, SSIM, noise estimation, entropy,
   sharpness, MTF50, dead-pixel detection, ColorChecker Δ-E, ROI statistics —
-  via `AnalysisEngine`.
-- **Plugin SDK**: `AnalyzerRegistry` + `extern "C"` ABI; reference example at
-  `plugins/example` (loaded and round-trip verified by `pluginregistry_tests`).
-- **Robustness**: always-on Windows minidump crash handler (`CrashHandler` installed at
-  startup; dumps land in `%APPDATA%/MViewer/crash-reports/`); on next launch a one-time
-  **崩溃报告** dialog offers to open the crash directory. `--selftest` headless
-  decode→metadata gate (CTest `selftest`).
-- **GPU Stage A**: `ImageViewer` is a `QOpenGLWidget`; `GpuTileUploader` uploads
-  tiles via real `glTexImage2D` when `MVIEWER_GPU=1` and a context is current,
-  then composites with `QOpenGLTextureBlitter`. `available()` probes the current
-  GL context (false under headless/`QCoreApplication`); CPU `drawImage` remains
-  the verified default when GPU is off or upload fails.
-- **UX polish (2026-07-23)**: viewer zoom command system (`+`/`-`/`0`/`1`, double-click
-  fit↔100%, fit-follows-resize), ESC/F11 fullscreen handling, mouse back/forward
-  navigation, wrap-around prev/next, slideshow (`S`, 3 s loop), open-file dialog
-  (`Ctrl+Shift+O`), full shortcut coverage (`Ctrl+O`/`Ctrl+Q`/`C`/F11), gallery
-  keyboard loop (Enter opens, arrows drive selection), Ctrl+wheel thumbnail sizing,
-  gallery drag & drop, live window titles, status-bar image dimensions, and explicit
-  decode-failure feedback (`ImageViewer::loadFailed`).
-- **CI**: `ci.yml` (Tier 1 PR gate: clang-format + cppcheck + clang-tidy + build/zero-warnings + CTest with the `bench_enforce` perf hard-gate + golden_image),
-  `nightly.yml` (Tier 2: ASan / UBSan / clazy / benchmark regression / Golden Image / Perfetto),
-  `release.yml` (Tier 3: perf report / UI regression / Dr.Memory / package / GitHub Release).
-  The perf hard-gate previously in `perf-gate.yml` is now enforced inside `ci.yml`'s `test` job.
-- **Packaging**: portable ZIP (`scripts/package_portable.ps1`) + NSIS installer
-  (`scripts/package_release.ps1` → `installer/mviewer.nsi`). A G1 guard asserts
-  `imageformats/qtiff.dll` ships, so TIFF opens on a clean Windows with no Qt.
+  via `AnalysisEngine`; History + Pinned results persist across restarts.
+- **Plugin SDK**: `AnalyzerRegistry` + `extern "C"` ABI (`apiVersion=1` /
+  `abiVersion=1` / `sdkVersion=10000`, M14.2); kinds: Analyzer, Decoder,
+  Exporter, Importer; reference examples in `plugins/example` (round-trip
+  verified by `pluginregistry_tests`).
+- **Robustness**: always-on Windows minidump crash handler (`CrashHandler`;
+  dumps in `%APPDATA%/MViewer/crash-reports/`); one-time 崩溃报告 dialog on
+  next launch; `--selftest` headless decode→metadata gate (CTest `selftest`).
+- **Update check**: `UpdateChecker` (WinHTTP, GitHub Releases), Help menu
+  「检查更新」 + silent check 8 s after startup; current version from
+  `MViewerVersion.h` (M24).
+- **Browse**: Directory tree + breadcrumb + recent/favorites/history,
+  filter/sort/search, Thumbnail/List/Detail/Filmstrip views, unified Selection
+  Model, Metadata overlay (`I`/`ESC`), batch rename/move/delete,
+  rating store.
+- **Export**: PNG/JPEG/TIFF/CSV/HTML/Report via unified `ExportJob`; batch
+  export with progress/cancel; atomic temp-file replace (see Phase 4D notes).
+- **Workspace**: `.mvws`/`.mvproj` persistence incl. compare session, ROI,
+  analysis text; crash-recovery autosave.
+- **UX**: viewer zoom command system, fullscreen, mouse back/forward, slideshow,
+  gallery keyboard loop, Ctrl+wheel thumbnail sizing, drag & drop, status-bar
+  dimensions, decode-failure feedback.
+- **GPU Stage A (opt-in)**: `ImageViewer` is a `QOpenGLWidget`;
+  `GpuTileUploader` uploads tiles via `glTexImage2D` when `MVIEWER_GPU=1`;
+  CPU `drawImage` is the verified default.
+- **CI**: `ci.yml` (PR gate: clang-format + cppcheck + clang-tidy +
+  build/zero-warnings + CTest incl. `bench_enforce` + `golden_image`),
+  `nightly.yml` (ASan/UBSan/clazy/benchmark regression/golden/Perfetto),
+  `release.yml` (perf report / UI regression / Dr.Memory / package / release).
+- **Packaging**: portable ZIP + NSIS installer; SHA256SUMS + auto release
+  notes (`scripts/release_manifest.ps1`); both artifacts launch on a clean
+  Windows (PATH stripped) — verified 2026-08-05.
 
-## Deferred / future (not in v1.0.0)
+## Deferred / future (not shipping now)
 
-- Full RAW demosaic (libraw).
-- GPU Stage C/D: D3D11/Vulkan direct compositing (UI boundary frozen).
-- Linux/macOS native installers (Linux CI artifacts build; only Windows ships an installer).
-- GPU Stage B/C/D: custom shaders, multi-pass, D3D11/Vulkan (UI boundary frozen).
+- Full RAW demosaic (libraw) — M18.
+- GPU Stage C/D: custom shaders, multi-pass, D3D11/Vulkan direct compositing
+  (UI boundary frozen).
+- Linux/macOS native installers (Linux CI artifacts build; only Windows ships
+  an installer).
+- AI workflows (captioning, embeddings, similarity search) — M18, planned.
 
-## Known gaps
+## Known gaps (honest, not hidden)
 
-- RAW = preview-only (no demosaic); some large/edge RAW containers may fall through to the fallback decoder.
-- GPU Stage A is opt-in (`MVIEWER_GPU=1`); default remains CPU tile path + HiDPI decode.
-- ~~**M14.8**: release pipeline SHA256 manifest + auto-generated changelog~~ ✅ (`scripts/release_manifest.ps1`).
+- RAW = preview-only (no demosaic); some large/edge RAW containers fall
+  through to the fallback decoder.
+- GPU Stage A is opt-in (`MVIEWER_GPU=1`); default is the CPU tile path.
+- 100 MP first-viewport fill measured 1480 ms on a 2-core Xeon VM (vs 392.8 ms
+  on the 2026-07-24 baseline box) — B10 is report-only by design
+  (`performance_budget.json`); regression axis is `--regression`.
+- C4819 warnings in a few sources (UTF-8 without BOM) and C4530 in some
+  test/bench TUs are tracked in Phase 6 of M24.
+- Installer/portable ship no `plugins/` directory; app logs a benign
+  "Plugin directory not found" message (Phase 8 item).
 
-## Product-force progress (2026-07-24)
+## Product-force progress (2026-08-05 state)
 
-| 工作流 | 状态 | 说明 |
+| 工作项 | 状态 | 说明 |
 |--------|------|------|
-| A-1~A-10 对账 | ✅ | `docs/review/A_ITEMS_COMPLETION_AUDIT_2026-07-24.md` — DONE ~91% |
-| M16 Compare 收尾 | ✅ | Pixel Link / Overlay 透明度 / Diff 高亮 / 自定义网格 / 1~8 布局预设 / 编辑↔指标联动 / 每格直方图叠加 |
+| A-1~A-10 对账 | ✅ | `docs/review/A_ITEMS_COMPLETION_AUDIT_2026-07-24.md` (~91%) |
+| M16 Compare 收尾 | ✅ | Pixel Link / Overlay 透明度 / Diff 高亮 / 1~8 布局预设 / 编辑↔指标联动 / 每格直方图叠加 |
 | Browse 门禁 | ✅ | Selection 统一 + 大目录渐进 fetch + 万级缩略图预测窗口 |
-| M19 UI Model 收敛 | ✅ | `DirectoryModel` / `ImageListModel` / `WorkspaceModel` / `AnalyzerModel` 落地；MainWindow 镜像状态移除；Thumbnail multi-select 双向同步；Metadata Overlay `I`/`ESC` + Lens/ICC |
+| M19 UI Model 收敛 | ✅ | `DirectoryModel` / `ImageListModel` / `WorkspaceModel` / `AnalyzerModel`；Metadata Overlay `I`/`ESC` + Lens/ICC |
 | M20 Compare 键盘流 | ✅ | Ctrl+2/4/8 布局预设；B/S/W/O/H/Z/D/C/L 模式键；连续导航保留模式/ROI；`?` 快捷键帮助 |
-| M21 Analysis+Export | ✅ | AnalysisPanel↔AnalyzerModel History/Pin；`ExportJob` Convert 统一路径；Memory Timeline；Dashboard Canvas 趋势图 |
+| M21 Analysis+Export | ✅ | AnalysisPanel↔AnalyzerModel History/Pin；`ExportJob` 统一路径；Memory Timeline；Dashboard |
 | Workspace 恢复 | ✅ | 布局/缩放/Compare/崩溃恢复（A-6 已落地） |
-| M17 高价值子集 | ✅ | 批量分析导出 / 插件 rescan / 评分过滤导出 |
-| M16 分析持久化 | ✅ | `AnalyzerModel` 历史/钉住/结果序列化到 `%APPDATA%/MViewer/analysis_history.json`，重启保留 |
-| M17 自动更新 | ✅ | `UpdateChecker` 接 GitHub Releases（WinHTTP），帮助菜单「检查更新」+ 启动 8s 后静默检查，新版本弹窗引导下载 |
-| 1.0 发布准备 | ✅ | 性能基线更新 + 安装包验收通过（M14.8 SHA256/notes ✅） |
+| M17 高价值子项 | ✅ | 批量分析导出 / 插件 rescan / 评分过滤导出 |
+| M16 分析持久化 | ✅ | `AnalyzerModel` 历史/钉住/结果序列化，重启保留 |
+| M17 自动更新 | ✅ | `UpdateChecker`（GitHub Releases，WinHTTP），版本来自 CMake SSOT（M24） |
+| M23 质量自动化 | ✅ | ADR/Bug 门禁、自动 dashboard、test matrix、benchmark trend（ADR-015） |
+| M24 稳定性收敛 | 🔄 进行中 | 基线 2026-08-05 已验证（构建/测试/启动/打包）；异步生命周期、工作流验收、测试可信度、性能、RC 验证 |
 
 ## Plugin SDK (frozen)
 
@@ -95,40 +130,25 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 - Plugin kinds: Analyzer, Decoder, Exporter, **Importer** (A-9.3).
 - Examples: `plugins/example/{ExampleAnalyzer,ExampleDecoder,ExampleExporter,ExampleImporter}Plugin.cpp`.
 - Docs: `docs/sdk/PLUGIN_SDK.md`, `docs/sdk/PLUGIN_ABI.md`.
+- Per-analyzer metadata version (`0.1.0`) is a plugin component version, not the
+  app version; the app version is `MVIEWER_VERSION_STRING` only.
 
-## Release process (v1.0.0)
+## Release process (current)
 
-1. Bump `CMakeLists.txt` `VERSION` — the single source of version.
-2. `.\build.ps1 Test` must be green. The asset-independent CTest subset is the
-   default gate; full assets acceptance needs the ~15 GB corpus + a real display.
-3. Tag `v1.0.0` → `release.yml` builds, packages, and attaches artifacts to the
-   GitHub Release.
-4. Verify `dist/MViewer-1.0.0-portable.zip` and `dist/MViewer-1.0.0-Setup.exe`.
-5. Attach SHA256SUMS.txt (M14.8) and release notes from CHANGELOG.
-
-## Strategic milestones (post-1.0)
-
-Per the 2026-07-27 product review, the focus shifts from platform building to
-product refinement around professional workflows:
-
-- **M14 Professional Browser** — Directory tree completeness, multi-view
-  (Thumbnail / List / Details / Filmstrip), unified Selection Model, Metadata
-  Overlay, favorites / history / search / tags / ratings.
-- **M15 Professional Compare** — Blink / Swipe / Overlay, Pixel Inspector,
-  ROI sync, multi-image layouts, Compare keyboard scheme.
-- **M16 Professional Analysis** — Analyzer workflow, Analysis History (persisted
-  across restarts), Report Generator, Export pipeline, Session management.
-- **M17 Professional Productivity** — Batch, Workspace enhancement, auto-recovery,
-  release installer, crash report (always-on + launch dialog), auto-update
-  checker (GitHub Releases).
-
-**Frozen (do not refactor/extend):** CacheManager, Scheduler, DecoderRegistry,
-Build System, CI, Plugin Framework, Workspace base, Performance Gate.
-**Agent work ratio:** ~50% product / 25% core / 15% test-stability / 10% perf.
+1. Bump `CMakeLists.txt` `project(VERSION)` — the single source of version.
+2. `.\build.ps1 Test` must be green (64 tests incl. `version_consistency`,
+   `bench_enforce`, `golden_image`).
+3. Tag `vX.Y.Z`; `release.yml` builds, packages, attaches artifacts.
+4. Verify `dist/MViewer-<X.Y.Z>-portable.zip` and `dist/MViewer-<X.Y.Z>-Setup.exe`.
+5. Attach `SHA256SUMS.txt` (M14.8) and release notes from CHANGELOG.
 
 ## Status verdict
 
-The engine is release-grade. Product workflows (browse → compare → analyze → export)
-are closed for Beta. **1.0 release preparation is complete**: performance baseline
-recorded (2026-07-24, all scenarios PASS), portable zip + NSIS installer verified,
-SHA256SUMS + RELEASE_NOTES generated. Ready for v1.0.0 tag.
+Beta-quality, mid-stability pass (M24). Verified 2026-08-05: clean build from
+scratch (474/474 targets), 64/64 CTest green, real-display launch + graceful
+exit, portable ZIP and NSIS installer launch on a PATH-stripped clean
+environment, SHA256 manifests generated. Product workflows are exercised by
+`product_workflow_gate` / `workflow_ux_tests` / `compare_session_tests`;
+full manual acceptance + async/lifetime hardening + RC verification are in
+progress under M24 (see `docs/review/M24_BASELINE_2026-08-05.md`). Not yet
+recommended for a release tag; final verdict pending M24 phases 3–8.

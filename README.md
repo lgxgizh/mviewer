@@ -239,13 +239,16 @@ Build everything in one step:
 
 ```powershell
 # Release build + portable zip + installer
-powershell -ExecutionPolicy Bypass -File scripts/package_release.ps1 -Build -Version 1.0.0
+# (version comes from CMakeLists.txt project(VERSION) automatically)
+powershell -ExecutionPolicy Bypass -File scripts/package_release.ps1 -Build
 ```
 
 `scripts/package_portable.ps1` uses Qt's official `windeployqt` to gather exactly the
 DLLs/plugins `MViewer.exe` imports, then bundles the matching MSVC C++ runtime
-so the archive runs on a clean Windows install. Prereqs: Qt 6.11.1
-(`msvc2022_64`), `windeployqt`, and `makensis` (NSIS) on `PATH`.
+so the archive runs on a clean Windows install. Prereqs: Qt 6.10.x
+(`msvc2022_64`), `windeployqt`, and `makensis` (NSIS) on `PATH`. The package
+version is read from `build_msvc/version_info.txt` (generated from the CMake
+`project(VERSION)` — the single version source).
 
 > **Screenshot / demo GIF**: Generated from the real UI (no mock) via
 > `scripts/record_demo.ps1`, which renders the actual `MainWindow` offscreen
