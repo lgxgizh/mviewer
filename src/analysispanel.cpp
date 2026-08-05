@@ -160,23 +160,29 @@ void AnalysisPanel::reanalyze()
 
     if (m_frameA && !m_frameA->pixels().isNull() && !id.isEmpty())
     {
-        auto analyzer = (m_pipeline ? m_pipeline->create(id.toStdString())
-                                    : AnalyzerRegistry::instance().create(id.toStdString()));
-        if (analyzer)
+        // M24 (C#7): a failing/throwing analyzer must degrade to an error note
+        // instead of taking down the panel or the application.
+        bool ran = false;
+        try
         {
-            // Prefer ROI when set; otherwise analyze the full frame.
-            const bool ok =
-                m_hasROI ? analyzer->analyzeRegion(*m_frameA, m_roi) : analyzer->analyze(*m_frameA);
-            if (ok)
+            auto analyzer = (m_pipeline ? m_pipeline->create(id.toStdString())
+                                        : AnalyzerRegistry::instance().create(id.toStdString()));
+            if (analyzer)
             {
-                m_statsA.pixelCount = m_hasROI
-                                          ? std::max(0, m_roi.width) * std::max(0, m_roi.height)
-                                          : m_frameA->width() * m_frameA->height();
-                const std::string text = analyzer->resultText();
-                const auto metrics = analyzer->resultMetrics();
-                const auto *hist = dynamic_cast<const HistogramAnalyzer *>(analyzer.get());
-                if (hist)
+                // Prefer ROI when set; otherwise analyze the full frame.
+                const bool ok = m_hasROI ? analyzer->analyzeRegion(*m_frameA, m_roi)
+                                         : analyzer->analyze(*m_frameA);
+                if (ok)
                 {
+                    ran = true;
+                    m_statsA.pixelCount = m_hasROI
+                                              ? std::max(0, m_roi.width) * std::max(0, m_roi.height)
+                                              : m_frameA->width() * m_frameA->height();
+                    const std::string text = analyzer->resultText();
+                    const auto metrics = analyzer->resultMetrics();
+                    const auto *hist = dynamic_cast<const HistogramAnalyzer *>(analyzer.get());
+                    if (hist)
+                    {
                     const auto &h = hist->result();
                     m_statsA.lumMean = h.lumMean;
                     m_statsA.rMean = h.rMean;
@@ -207,6 +213,20 @@ void AnalysisPanel::reanalyze()
                 publishResult(QString::fromStdString(text));
                 return;
             }
+        }
+        }
+        catch (...)
+        {
+            // M24 (C#7): analyzer failure (e.g. buggy plugin) — surface a
+            // graceful note instead of propagating an exception into the UI.
+            const QString err = tr("分析器执行失败（%1）。").arg(id);
+            m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>")
+                                      .arg(QStringLiteral("分析失败"))
+                                      .arg(err));
+            if (m_pluginResult)
+                m_pluginResult->setText(err);
+            publishResult(err);
+            return;
         }
     }
 

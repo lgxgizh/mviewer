@@ -622,6 +622,25 @@ target_include_directories(compare_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOUR
 add_test(NAME compare_acceptance_tests COMMAND compare_acceptance_tests)
 set_tests_properties(compare_acceptance_tests PROPERTIES RUN_SERIAL TRUE)
 
+# ─── M24: Analyze workflow acceptance (throwing-analyzer isolation, result
+# currency per image, history/pin persistence) ───────────────────────────────
+add_executable(analyze_acceptance_tests
+    test_analyze_acceptance.cpp
+)
+
+target_link_libraries(analyze_acceptance_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(analyze_acceptance_tests PRIVATE cxx_std_20)
+target_include_directories(analyze_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME analyze_acceptance_tests COMMAND analyze_acceptance_tests)
+
 
 # ─── M9-4 Export workflow acceptance tests ────────────────────────────────
 add_executable(export_tests

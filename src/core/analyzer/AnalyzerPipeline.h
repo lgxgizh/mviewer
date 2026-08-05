@@ -37,16 +37,24 @@ class AnalyzerPipeline
 
     // Run a single analyzer (by id) over a rectangular region of the frame.
     // Returns the human-readable result, or empty if the id is unknown or the
-    // analysis fails.
+    // analysis fails. M24 (C#7): a throwing analyzer yields an empty result
+    // instead of propagating into the UI thread.
     std::string runRegion(const ImageFrame &frame, const mviewer::domain::Selection &region,
                           const std::string &id) const
     {
-        auto a = AnalyzerRegistry::instance().create(id);
-        if (!a)
+        try
+        {
+            auto a = AnalyzerRegistry::instance().create(id);
+            if (!a)
+                return {};
+            if (!a->analyzeRegion(frame, region))
+                return {};
+            return a->resultText();
+        }
+        catch (...)
+        {
             return {};
-        if (!a->analyzeRegion(frame, region))
-            return {};
-        return a->resultText();
+        }
     }
 
     // Ids of every analyzer currently registered in the pipeline.

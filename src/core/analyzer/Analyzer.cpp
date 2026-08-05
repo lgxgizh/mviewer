@@ -190,9 +190,19 @@ AnalyzerRegistry::runAnalyzer(const ImageFrame &frame) const
         futures.emplace_back(id, std::async(std::launch::async,
                                             [&factory, &frame]() -> std::string
                                             {
-                                                auto analyzer = factory();
-                                                if (analyzer && analyzer->analyze(frame))
-                                                    return analyzer->resultText();
+                                                try
+                                                {
+                                                    auto analyzer = factory();
+                                                    if (analyzer && analyzer->analyze(frame))
+                                                        return analyzer->resultText();
+                                                }
+                                                catch (...)
+                                                {
+                                                    // M24 (C#7): a throwing analyzer
+                                                    // (e.g. a buggy plugin) must be
+                                                    // isolated — the whole batch must
+                                                    // not crash the application.
+                                                }
                                                 return {};
                                             }));
     }
@@ -201,7 +211,15 @@ AnalyzerRegistry::runAnalyzer(const ImageFrame &frame) const
     results.reserve(futures.size());
     for (auto &[id, fut] : futures)
     {
-        std::string text = fut.get();
+        std::string text;
+        try
+        {
+            text = fut.get();
+        }
+        catch (...)
+        {
+            text = {};
+        }
         if (!text.empty())
             results[id] = std::move(text);
     }
