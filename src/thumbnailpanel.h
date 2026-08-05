@@ -299,6 +299,10 @@ class ThumbnailPanel : public QListView
     // can never grow thread count without bound, and destruction waits for
     // in-flight tasks (which abort early via m_alive).
     QThreadPool m_scanPool;
+    // M24 (A#8): single-path selection requested while the directory model is
+    // still being rebuilt asynchronously (e.g. rename→rescan). Applied by
+    // buildModel once the path is present; cleared when applied.
+    QString m_pendingSelect;
     SortMode m_sortMode = SortName;
     bool m_sortAscending = true; // A-2.2: sort direction
     QString m_typeFilter;        // A-2.3: comma-separated type filter

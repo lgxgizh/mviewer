@@ -173,6 +173,14 @@ struct ThumbnailPipeline
                         if (result)
                             result(path, thumb);
                     }
+                    else if (result)
+                    {
+                        // M24: surface decode FAILURES to the consumer (null
+                        // thumb) so the UI can mark the cell as failed instead
+                        // of showing an eternal loading state. The consumer
+                        // decides whether/how to cache the failure.
+                        result(path, ImageData{});
+                    }
                 }
             });
         if (handle)

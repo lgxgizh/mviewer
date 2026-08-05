@@ -32,7 +32,12 @@ void ThumbnailPanel::renameSelected()
         return;
     }
     if (!m_currentDir.isEmpty())
+    {
         setDirectory(m_currentDir);
+        // M24 (A#8): keep the renamed file selected — Explorer/FastStone
+        // parity. Without this the rescan drops the selection entirely.
+        selectPath(newPath);
+    }
 }
 
 void ThumbnailPanel::moveToTrashSelected()

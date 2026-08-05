@@ -582,6 +582,26 @@ target_include_directories(async_lifetime_tests PRIVATE ${CMAKE_CURRENT_SOURCE_D
 add_test(NAME async_lifetime_tests COMMAND async_lifetime_tests)
 set_tests_properties(async_lifetime_tests PROPERTIES RUN_SERIAL TRUE)
 
+# ─── M24: Browse workflow acceptance (view modes / selection / filter / file
+# ops / degraded inputs / metadata overlay currency) ─────────────────────────
+add_executable(browse_acceptance_tests
+    test_browse_acceptance.cpp
+)
+
+target_link_libraries(browse_acceptance_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(browse_acceptance_tests PRIVATE cxx_std_20)
+target_include_directories(browse_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME browse_acceptance_tests COMMAND browse_acceptance_tests)
+set_tests_properties(browse_acceptance_tests PROPERTIES RUN_SERIAL TRUE)
+
 
 # ─── M9-4 Export workflow acceptance tests ────────────────────────────────
 add_executable(export_tests

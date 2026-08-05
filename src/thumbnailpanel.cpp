@@ -130,6 +130,19 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                             return;
                         ThumbnailPanel *panel = self.data();
                         const QString qp = QString::fromStdString(p);
+                        // M24: the pipeline now reports failed decodes as null
+                        // ImageData so the panel can mark the cell failed.
+                        if (img.isNull())
+                        {
+                            QMutexLocker l(&panel->m_thumbMtx);
+                            panel->m_thumbFailed.insert(qp);
+                            panel->m_thumbPending.remove(qp);
+                            // Repaint only: do NOT reschedule (the failed path
+                            // is not cacheable; rescheduling would re-decode it
+                            // on every repaint in a tight loop).
+                            panel->viewport()->update();
+                            return;
+                        }
                         QPixmap pm = ThumbnailProvider::produce(p, img, panel->m_thumbSize);
                         if (pm.isNull())
                         {
@@ -140,7 +153,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                                 panel->m_thumbFailed.insert(qp);
                                 panel->m_thumbPending.remove(qp);
                             }
-                            panel->updateVisibleRange();
+                            panel->viewport()->update();
                             return;
                         }
                         {
@@ -481,6 +494,14 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     }
     ThumbnailPipeline::instance().setSources(toStdPaths(m_paths));
 
+    // M24 (A#8): apply a selection that was requested while this model was
+    // still being rebuilt (e.g. rename → async rescan → re-select new name).
+    if (!m_pendingSelect.isEmpty() && m_rowByPath.contains(m_pendingSelect))
+    {
+        selectPath(m_pendingSelect);
+        m_pendingSelect.clear();
+    }
+
     emit statsChanged(m_paths.size(), m_totalBytes, 0, 0);
     // Defer priority scheduling until layout/geometry is ready (avoids
     // scheduling the whole directory before the viewport is laid out).
@@ -627,7 +648,15 @@ void ThumbnailPanel::selectPath(const QString &path)
 {
     const int row = m_rowByPath.value(path, -1);
     if (row < 0)
+    {
+        // M24 (A#8): the path may belong to an async directory rescan that has
+        // not landed yet (rename/refresh/restore). Park it: buildModel applies
+        // it when the model containing the path arrives. If the path never
+        // appears, the next successful selectPath() overwrites it.
+        if (!path.isEmpty())
+            m_pendingSelect = path;
         return;
+    }
     const QModelIndex idx = m_model->index(row, 0);
     if (currentIndex() == idx && selectionModel() && selectionModel()->isSelected(idx))
         return; // already the current selected item — nothing to do, no scroll jank
