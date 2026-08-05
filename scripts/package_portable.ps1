@@ -66,9 +66,33 @@ if ((Test-Path $sqlSrc) -and -not (Test-Path (Join-Path $staging "Qt6Sql.dll")))
 #    glob for it rather than assume a fixed name. The DLL ABI is stable (always
 #    vcruntime140.dll / msvcp140.dll), so any matching toolset's CRT works; we
 #    prefer the toolset this project targets (v143) and fall back to the newest.
-$crtDirs = Get-ChildItem -Path "D:/msvc/VC/Redist/MSVC" -Directory -ErrorAction SilentlyContinue |
-    ForEach-Object { Get-ChildItem -Path $_.FullName -Directory -Recurse -ErrorAction SilentlyContinue } |
-    Where-Object { $_.FullName -match '\\x64\\Microsoft\.VC14\d+\.CRT$' }
+#    M24: the root is no longer hard-coded to D:/msvc — resolve it from the
+#    active toolset env var, the installed VS (vswhere), then the legacy path.
+$crtRoot = $null
+if ($env:VCToolsRedistDir) {
+    $cand = Split-Path $env:VCToolsRedistDir -Parent
+    if (Test-Path $cand) { $crtRoot = $cand }
+}
+if (-not $crtRoot) {
+    $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
+    if (Test-Path $vswhere) {
+        $vsJson = & $vswhere -products * -format json | ConvertFrom-Json
+        if ($vsJson) {
+            $installs = @($vsJson) | Sort-Object installationVersion -Descending
+            $pref = $installs | Where-Object { $_.installationVersion -match '^17\.' } | Select-Object -First 1
+            if (-not $pref) { $pref = $installs[0] }
+            $cand = Join-Path $pref.installationPath 'VC\Redist\MSVC'
+            if (Test-Path $cand) { $crtRoot = $cand }
+        }
+    }
+}
+if (-not $crtRoot -and (Test-Path 'D:/msvc/VC/Redist/MSVC')) { $crtRoot = 'D:/msvc/VC/Redist/MSVC' }
+$crtDirs = @()
+if ($crtRoot) {
+    $crtDirs = Get-ChildItem -Path $crtRoot -Directory -ErrorAction SilentlyContinue |
+        ForEach-Object { Get-ChildItem -Path $_.FullName -Directory -Recurse -ErrorAction SilentlyContinue } |
+        Where-Object { $_.FullName -match '\\x64\\Microsoft\.VC14\d+\.CRT$' }
+}
 if ($crtDirs) {
     $crt = $crtDirs | Where-Object { $_.Name -eq 'Microsoft.VC143.CRT' } | Select-Object -First 1
     if (-not $crt) { $crt = $crtDirs | Sort-Object { $_.FullName } -Descending | Select-Object -First 1 }
@@ -76,7 +100,7 @@ if ($crtDirs) {
         $src = Join-Path $crt.FullName $dll
         if (Test-Path $src) { Copy-Item $src $staging | Out-Null; Write-Host "  [vcrt] $dll" }
     }
-} else { Write-Warning "MSVC VC14x.CRT not found under D:/msvc/VC/Redist/MSVC; clean Windows may need vc_redist installed." }
+} else { Write-Warning "MSVC VC14x.CRT not found (searched VCToolsRedistDir / vswhere VS root / D:/msvc); clean Windows may need vc_redist installed." }
 
 # 3) App assets --------------------------------------------------------------
 Copy-Item $exe $staging | Out-Null

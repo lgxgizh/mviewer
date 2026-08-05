@@ -220,12 +220,14 @@ void CompareWorkspace::startBlink(int intervalMs)
     m_blinkTimer->start(intervalMs);
     m_blinkState = false;
     applyBlink(m_blinkState);
+    syncEngineBlink();
 }
 
 void CompareWorkspace::stopBlink()
 {
     if (m_blinkTimer)
         m_blinkTimer->stop();
+    m_engine.clearBlink(); // M24: capture must report "blink off" after stopping
     // restore all cells visible
     for (auto *v : m_cellViews)
         if (v)
@@ -235,6 +237,23 @@ void CompareWorkspace::stopBlink()
     rebuildCells();
     fitAll();
     update();
+}
+
+// M24: drive the engine's BlinkController from the workspace blink state. The
+// engine is the single source for CompareEngine::session(), so without this the
+// persisted CompareSession never carried the blink target (always -1).
+void CompareWorkspace::syncEngineBlink()
+{
+    const int n = m_engine.imageCount();
+    if (n >= 2)
+    {
+        const int base = qBound(0, diffBaseIndex(), n - 1);
+        m_engine.setBlinkIndex(base == 0 ? 1 : 0);
+    }
+    else
+    {
+        m_engine.clearBlink();
+    }
 }
 
 void CompareWorkspace::applyBlink(bool state)

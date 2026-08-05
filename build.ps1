@@ -29,17 +29,31 @@ function Import-MSVCEnvironment {
     $vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
     if (-not (Test-Path $vswhere)) { Write-Error "vswhere.exe not found"; exit 1 }
 
-    $vsJson = & $vswhere -products * -format json | ConvertFrom-Json
-    $vsPath = $script:vsPath = $vsJson.installationPath
-    if (-not $vsPath) { Write-Error "VS Build Tools not found"; exit 1 }
+    # Multi-install safe: prefer an explicit VCVARS override, else the newest
+    # VS2022 (17.x) install (matches the project's MSVC 2022 toolchain), else
+    # the newest install overall. vswhere can return several VS editions on
+    # one machine, and picking the raw .installationPath array breaks Join-Path.
+    $script:vcvars64 = $null
+    if ($env:VCVARS -and (Test-Path $env:VCVARS)) {
+        $script:vcvars64 = $env:VCVARS
+        $script:vsPath = Split-Path (Split-Path (Split-Path (Split-Path $env:VCVARS)))
+        Write-Host "[VS] VCVARS override: $env:VCVARS" -ForegroundColor Cyan
+    }
+    else {
+        $vsJson = & $vswhere -products * -format json | ConvertFrom-Json
+        if (-not $vsJson) { Write-Error "VS Build Tools not found"; exit 1 }
+        $installs = @($vsJson) | Sort-Object installationVersion -Descending
+        $preferred = $installs | Where-Object { $_.installationVersion -match '^17\.' } | Select-Object -First 1
+        if (-not $preferred) { $preferred = $installs[0] }
+        $script:vsPath = $preferred.installationPath
+        $script:vcvars64 = Join-Path $script:vsPath 'VC\Auxiliary\Build\vcvars64.bat'
+    }
+    if (-not (Test-Path $script:vcvars64)) { Write-Error "vcvars64.bat not found: $script:vcvars64"; exit 1 }
 
-    $vcvars = Join-Path $vsPath 'VC\Auxiliary\Build\vcvars64.bat'
-    if (-not (Test-Path $vcvars)) { Write-Error "vcvars64.bat not found"; exit 1 }
-
-    Write-Host "[VS] $vsPath" -ForegroundColor Cyan
+    Write-Host "[VS] $script:vsPath" -ForegroundColor Cyan
     Write-Host "[VS] Initializing environment..." -ForegroundColor Cyan
 
-    cmd /c "`"$vcvars`" x64 && set" | ForEach-Object {
+    cmd /c "`"$script:vcvars64`" x64 && set" | ForEach-Object {
         if ($_ -match '^([^=]+)=(.*)$') {
             [System.Environment]::SetEnvironmentVariable($Matches[1], $Matches[2])
         }
@@ -60,11 +74,11 @@ function Deploy-Runtime {
     $binDir = Join-Path $buildDir 'bin'
     if (-not (Test-Path $binDir)) { return }
 
-    $crtRoots = @(
-        $env:VCToolsRedistDir,
-        'D:\msvc\VC\Redist\MSVC',
-        (Join-Path $script:vsPath 'VC\Redist\MSVC')
-    ) | Where-Object { $_ -and (Test-Path $_) }
+    $crtRoots = @(@($env:VCToolsRedistDir, 'D:\msvc\VC\Redist\MSVC') | Where-Object { $_ -and (Test-Path $_) })
+    if ($script:vsPath) {
+        $vsRedist = Join-Path $script:vsPath 'VC\Redist\MSVC'
+        if (Test-Path $vsRedist) { $crtRoots = @($crtRoots) + $vsRedist }
+    }
 
     $crtDir = $null
     # Prefer the desktop v143 toolset CRT (matches the compiler), not the

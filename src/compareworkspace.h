@@ -178,6 +178,9 @@ class CompareWorkspace : public QWidget
     void applyBlink(bool state);
     void startBlink(int intervalMs);
     void stopBlink();
+    // M24: mirror the blink target into the engine's BlinkController so the
+    // captured CompareSession carries the blink state (round-trip persistence).
+    void syncEngineBlink();
     bool isSplitOrSwipe() const
     {
         return (m_splitChk && m_splitChk->isChecked()) || (m_swipeChk && m_swipeChk->isChecked());
