@@ -2,6 +2,8 @@
 #include "thumbnailpanel_p.h"
 #include "thumbnailprovider.h"
 
+#include <QtConcurrent/QtConcurrent>
+
 // P0#3: DetailsHeader (the column-title strip above the Details list) is now
 // defined in thumbnailpanel_p.h alongside the shared DetailLayout geometry, so
 // it stays in sync with the delegate cells and keeps this TU lean.
@@ -10,6 +12,11 @@
 
 ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
 {
+    // M24: bounded background workers (directory scan + dimension resolve).
+    // Two threads keep first-screen scans fast without unbounded growth when
+    // the user switches folders rapidly.
+    m_scanPool.setMaxThreadCount(2);
+
     // QListView:: prefix disambiguates from our own ThumbnailPanel::setViewMode().
     QListView::setViewMode(QListView::IconMode);
     setMovement(QListView::Static);
@@ -104,33 +111,45 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
         // routes the finished pixmap into its own ready map and manages lifecycle.
         ThumbnailPipeline::instance().setDecodeFn([](const std::string &p, int size)
                                                   { return ThumbnailProvider::decode(p, size); });
+        // M24 lifetime hardening: the pipeline calls this fn on ITS worker
+        // thread, so the fn itself must never touch panel members. It only
+        // marshal-protects a QPointer + alive token and hops to the UI thread;
+        // all panel access then happens UI-side after a live-object check.
         auto alive = m_alive;
+        const QPointer<ThumbnailPanel> self(this);
         ThumbnailPipeline::instance().setResultFn(
-            [this, alive](const std::string &p, const ImageData &img)
+            [alive, self](const std::string &p, const ImageData &img)
             {
-                if (!alive->load())
+                if (!alive->load() || !self)
                     return; // panel destroyed; ignore late callback
-                QString qp = QString::fromStdString(p);
-                QPixmap pm = ThumbnailProvider::produce(p, img, m_thumbSize);
-                if (pm.isNull())
-                {
-                    // Record the failure so the delegate can paint a distinct
-                    // "无法加载" placeholder instead of the generic loading grey.
+                QMetaObject::invokeMethod(
+                    qApp,
+                    [alive, self, p, img]()
                     {
-                        QMutexLocker l(&m_thumbMtx);
-                        m_thumbFailed.insert(qp);
-                        m_thumbPending.remove(qp);
-                    }
-                    QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
-                    return;
-                }
-                {
-                    QMutexLocker lk(&m_thumbMtx);
-                    m_thumbReady[qp] = pm;
-                    m_thumbPending.remove(qp);
-                }
-                QMetaObject::invokeMethod(this, "onThumbReady", Qt::QueuedConnection,
-                                          Q_ARG(QString, qp));
+                        if (!alive->load() || !self)
+                            return;
+                        ThumbnailPanel *panel = self.data();
+                        const QString qp = QString::fromStdString(p);
+                        QPixmap pm = ThumbnailProvider::produce(p, img, panel->m_thumbSize);
+                        if (pm.isNull())
+                        {
+                            // Record the failure so the delegate can paint a distinct
+                            // "无法加载" placeholder instead of the generic loading grey.
+                            {
+                                QMutexLocker l(&panel->m_thumbMtx);
+                                panel->m_thumbFailed.insert(qp);
+                                panel->m_thumbPending.remove(qp);
+                            }
+                            panel->updateVisibleRange();
+                            return;
+                        }
+                        {
+                            QMutexLocker lk(&panel->m_thumbMtx);
+                            panel->m_thumbReady[qp] = pm;
+                            panel->m_thumbPending.remove(qp);
+                        }
+                        panel->onThumbReady(qp);
+                    });
             });
     }
 }
@@ -139,6 +158,10 @@ ThumbnailPanel::~ThumbnailPanel()
 {
     if (m_alive)
         *m_alive = false;
+    // M24: drop queued scan/dimension tasks; in-flight ones abort at their next
+    // m_alive check, so destruction waits only a bounded time for the current
+    // QDir sort (typically < 100 ms even for 10k-image folders).
+    m_scanPool.clear();
     // Detach from the shared pipeline so its worker thread can't call back into
     // a destroyed panel (and restore the default decode for the next panel).
     ThumbnailPipeline::instance().setResultFn([](const std::string &, const ImageData &) {});
@@ -212,66 +235,83 @@ void ThumbnailPanel::setDirectory(const QString &path)
     const SortMode sortMode = m_sortMode;
     const bool sortAscending = m_sortAscending;
     auto alive = m_alive;
+    const QPointer<ThumbnailPanel> self(this);
 
-    std::thread(
-        [this, gen, alive, path, typeFilter, sortMode, sortAscending]()
+    // M24: bounded pool + QPointer marshal. The worker never touches `this`
+    // directly; the completion lambda runs on the UI thread and re-checks the
+    // object is still alive. The busy cursor is restored unconditionally (it
+    // is app-global and ref-counted) so a destroyed/superseded scan can never
+    // leave the whole application with a stuck override cursor.
+    QtConcurrent::run(
+        &m_scanPool,
+        [self, alive, gen, path, typeFilter, sortMode, sortAscending]()
         {
             QList<Entry> entries;
             QDir dir(path);
             if (dir.exists())
             {
                 const QFileInfoList list = sortedEntries(dir, sortMode, sortAscending);
-                for (const QFileInfo &fi : list)
+                for (int i = 0; i < list.size(); ++i)
                 {
+                    if (!alive->load())
+                    {
+                        // Aborted (panel destroyed / folder superseded). The
+                        // completion lambda below will never run, so restore the
+                        // app-global busy cursor here, marshaled to the UI thread.
+                        QMetaObject::invokeMethod(
+                            qApp, []() { QApplication::restoreOverrideCursor(); });
+                        return;
+                    }
+                    const QFileInfo &fi = list.at(i);
                     if (!passesTypeFilter(typeFilter, fi.suffix()))
                         continue;
                     // P0-1 (perf): no pixel dimensions here — resolved lazily in
                     // the background for the Details view (see ensureDimensions).
-                    entries.append(
-                        {fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()});
+                    entries.append({fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0,
+                                    fi.lastModified()});
                 }
             }
             QMetaObject::invokeMethod(
-                this,
-                [this, gen, alive, entries]() mutable
+                qApp,
+                [self, alive, gen, entries]() mutable
                 {
                     // Always drop the busy cursor, even if superseded/destroyed.
                     QApplication::restoreOverrideCursor();
-                    if (!alive || !*alive)
+                    if (!alive->load() || !self)
                         return;
-                    if (gen != m_dirGen) // a newer folder superseded this scan
+                    ThumbnailPanel *panel = self.data();
+                    if (gen != panel->m_dirGen) // a newer folder superseded this scan
                         return;
-                    m_allEntries = entries;
-                    m_sourceRowByPath.clear();
-                    m_sourceRowByPath.reserve(m_allEntries.size());
-                    for (int i = 0; i < m_allEntries.size(); ++i)
-                        m_sourceRowByPath.insert(m_allEntries.at(i).path, i);
-                    m_metaIndex.clear();
-                    applyFilter();
+                    panel->m_allEntries = entries;
+                    panel->m_sourceRowByPath.clear();
+                    panel->m_sourceRowByPath.reserve(panel->m_allEntries.size());
+                    for (int i = 0; i < panel->m_allEntries.size(); ++i)
+                        panel->m_sourceRowByPath.insert(panel->m_allEntries.at(i).path, i);
+                    panel->m_metaIndex.clear();
+                    panel->applyFilter();
                     // Only pay the header-read cost when the Details view
                     // actually shows the resolution column.
-                    if (m_viewMode == Details)
-                        ensureDimensions();
-                    else if (m_viewMode == Thumbnail || m_viewMode == LargeIcon)
+                    if (panel->m_viewMode == Details)
+                        panel->ensureDimensions();
+                    else if (panel->m_viewMode == Thumbnail || panel->m_viewMode == LargeIcon)
                     {
                         // Keep the first thumbnail burst ahead of metadata
                         // reads. The generation guard also makes a delayed
                         // callback harmless when the user changes folders.
-                        const int dimensionGen = m_dirGen;
+                        const int dimensionGen = panel->m_dirGen;
                         QTimer::singleShot(
-                            350, this,
-                            [this, dimensionGen]
+                            350, panel,
+                            [panel, dimensionGen]
                             {
-                                if (dimensionGen != m_dirGen)
+                                if (dimensionGen != panel->m_dirGen)
                                     return;
-                                if (m_viewMode == Thumbnail || m_viewMode == LargeIcon)
-                                    ensureDimensions();
+                                if (panel->m_viewMode == Thumbnail ||
+                                    panel->m_viewMode == LargeIcon)
+                                    panel->ensureDimensions();
                             });
                     }
-                },
-                Qt::QueuedConnection);
-        })
-        .detach();
+                });
+        });
 }
 
 void ThumbnailPanel::refresh()
@@ -293,35 +333,38 @@ void ThumbnailPanel::ensureDimensions()
         paths.append(e.path);
 
     auto alive = m_alive;
-    std::thread(
-        [this, gen, paths, alive]()
+    const QPointer<ThumbnailPanel> self(this);
+    QtConcurrent::run(
+        &m_scanPool,
+        [self, alive, gen, paths]()
         {
             QVector<QSize> sizes;
             sizes.reserve(paths.size());
-            for (const QString &p : paths)
+            for (int i = 0; i < paths.size(); ++i)
             {
-                QImageReader reader(p);
+                if (!alive->load())
+                    return; // panel destroyed / folder superseded — abort fast
+                QImageReader reader(paths.at(i));
                 reader.setAutoTransform(true);
                 sizes.append(reader.size());
             }
             QMetaObject::invokeMethod(
-                this,
-                [this, gen, sizes, alive]()
+                qApp,
+                [self, alive, gen, sizes]()
                 {
-                    if (!alive || !*alive)
+                    if (!alive->load() || !self)
                         return;
-                    if (gen != m_dirGen) // folder changed while resolving
+                    ThumbnailPanel *panel = self.data();
+                    if (gen != panel->m_dirGen) // folder changed while resolving
                         return;
-                    for (int i = 0; i < sizes.size() && i < m_allEntries.size(); ++i)
+                    for (int i = 0; i < sizes.size() && i < panel->m_allEntries.size(); ++i)
                     {
-                        m_allEntries[i].width = sizes[i].width();
-                        m_allEntries[i].height = sizes[i].height();
+                        panel->m_allEntries[i].width = sizes[i].width();
+                        panel->m_allEntries[i].height = sizes[i].height();
                     }
-                    viewport()->update();
-                },
-                Qt::QueuedConnection);
-        })
-        .detach();
+                    panel->viewport()->update();
+                });
+        });
 }
 
 // M23 re-check: setViewMode now lives in thumbnailpanel_viewmode.cpp to keep

@@ -1,6 +1,9 @@
 // MainWindow workspace/project persistence, session autosave and recovery (M20 P0#1).
 #include "mainwindow_p.h"
 
+#include <QtConcurrent/QtConcurrent>
+#include <QThreadPool>
+
 void MainWindow::saveWorkspace()
 {
     if (currentDir().isEmpty())
@@ -738,11 +741,16 @@ void MainWindow::checkForUpdates(bool silent)
     if (!silent)
         statusBar()->showMessage(tr("正在检查更新..."), 2000);
 
-    // checkGitHub() performs a synchronous network request; run it off the GUI
-    // thread and marshal the result back via the event loop. Guard `this` with
-    // a QPointer so a window destroyed mid-request doesn't get a dangling call.
+    // M24: bounded pool (max 1 thread) instead of a detached std::thread.
+    // checkGitHub() performs a synchronous network request (WinHttp timeouts
+    // bound it to ~35 s worst case); the result is marshaled back via qApp and
+    // guarded with QPointer so a window destroyed mid-request never gets a
+    // dangling call. The pool waits at app exit, so no worker survives teardown.
+    static QThreadPool s_updatePool;
+    s_updatePool.setMaxThreadCount(1);
     QPointer<MainWindow> self(this);
-    std::thread(
+    QtConcurrent::run(
+        &s_updatePool,
         [self, silent]()
         {
             mviewer::core::UpdateChecker checker(MVIEWER_VERSION_STRING);
@@ -759,8 +767,7 @@ void MainWindow::checkForUpdates(bool silent)
                                                                                         silent);
                                                               });
                                 });
-        })
-        .detach();
+        });
 }
 
 void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool silent)

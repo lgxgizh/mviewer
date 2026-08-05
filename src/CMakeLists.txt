@@ -560,6 +560,28 @@ add_test(NAME workflow_ux_tests COMMAND workflow_ux_tests)
 # 与 bench_* 并行时 CPU 饱和会把"首屏 ≤ 预算"检查变成噪声。
 set_tests_properties(workflow_ux_tests PROPERTIES RUN_SERIAL TRUE)
 
+# ─── M24: async lifetime & concurrency regressions ─────────────────────────
+# Covers the ThumbnailPanel bounded-pool redesign: destroy-mid-scan, 50 rapid
+# folder switches, widget-tree teardown during a large scan, view switch during
+# dimension resolve, out-of-order completion, and pool quiescence.
+add_executable(async_lifetime_tests
+    test_async_lifetime.cpp
+)
+
+target_link_libraries(async_lifetime_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(async_lifetime_tests PRIVATE cxx_std_20)
+target_include_directories(async_lifetime_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME async_lifetime_tests COMMAND async_lifetime_tests)
+set_tests_properties(async_lifetime_tests PROPERTIES RUN_SERIAL TRUE)
+
 
 # ─── M9-4 Export workflow acceptance tests ────────────────────────────────
 add_executable(export_tests

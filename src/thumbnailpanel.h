@@ -17,6 +17,7 @@
 #include <QSize>
 #include <QStringList>
 #include <QStyledItemDelegate>
+#include <QThreadPool>
 
 #include "core/TagStore.h"
 
@@ -293,6 +294,11 @@ class ThumbnailPanel : public QListView
     QString m_currentDir;
     CommandStack *m_cmdStack = nullptr;    // A-10: optional reversible file ops
     SelectionModel *m_selection = nullptr; // P0-2: hover target (not owned)
+    // M24: bounded worker pool for the directory scan / dimension resolve
+    // tasks (max 2). Replaces detached std::thread so rapid folder switching
+    // can never grow thread count without bound, and destruction waits for
+    // in-flight tasks (which abort early via m_alive).
+    QThreadPool m_scanPool;
     SortMode m_sortMode = SortName;
     bool m_sortAscending = true; // A-2.2: sort direction
     QString m_typeFilter;        // A-2.3: comma-separated type filter

@@ -20,6 +20,15 @@
 #include <QVBoxLayout>
 #include <QtConcurrent/QtConcurrent>
 
+BatchDialog::~BatchDialog()
+{
+    // Bound the QtConcurrent worker: cancel flags are atomic in the processor,
+    // so in-flight work stops at its next checkpoint; the stored progress
+    // callback is QPointer-guarded and can no longer touch this dialog.
+    if (m_activeProcessor)
+        m_activeProcessor->requestCancel();
+}
+
 BatchDialog::BatchDialog(QWidget *parent)
     : QDialog(parent), m_processor(std::make_unique<mviewer::core::BatchProcessor>())
 {
@@ -293,22 +302,27 @@ void BatchDialog::onStart()
     // Progress callback runs on the worker thread → post updates to the UI
     // thread via invokeMethod so widget access is always safe.
     m_processor->setProgressCallback(
-        [this](int current, int total, const std::string &path)
+        [self = QPointer<BatchDialog>(this)](int current, int total, const std::string &path)
         {
+            // M24 lifetime hardening: the processor runs on a QtConcurrent
+            // worker; the stored callback must not capture raw `this` (a dialog
+            // closed mid-batch would leave a dangling pointer). Marshal through
+            // qApp and re-check the dialog is still alive before touching it.
             QMetaObject::invokeMethod(
-                this,
-                [this, current, total, path]()
+                qApp,
+                [self, current, total, path]()
                 {
-                    m_progress->setValue(current);
+                    if (!self)
+                        return;
+                    self->m_progress->setValue(current);
                     if (!path.empty())
                     {
-                        m_statusLabel->setText(QString("处理中 (%1/%2): %3")
-                                                   .arg(current + 1)
-                                                   .arg(total)
-                                                   .arg(QString::fromStdString(path)));
+                        self->m_statusLabel->setText(QString("处理中 (%1/%2): %3")
+                                                         .arg(current + 1)
+                                                         .arg(total)
+                                                         .arg(QString::fromStdString(path)));
                     }
-                },
-                Qt::QueuedConnection);
+                });
         });
 
     // Keep a shared_ptr to the processor for cancel control; the background

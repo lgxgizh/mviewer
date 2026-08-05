@@ -26,6 +26,9 @@ class BatchDialog : public QDialog
     Q_OBJECT
   public:
     explicit BatchDialog(QWidget *parent = nullptr);
+    // M24: request cancellation of any in-flight batch so a closed dialog
+    // cannot leave a worker writing to a destroyed dialog's callbacks.
+    ~BatchDialog() override;
 
     // Pre-fill the file list with the given paths.
     void setInputFiles(const QStringList &paths);
