@@ -90,6 +90,40 @@ sleep-based race found. New M24 tests follow the same bounded-pump pattern.
   top-level CMakeLists or toolchain) and re-measure the warning count; CI
   parity must be verified before merging such a change.
 
+### 8a. Resolution (2026-08-05, Phase 8 clean rebuild)
+
+The Phase-8 clean configure restored the standard MSVC release defaults:
+`/DWIN32 /D_WINDOWS /EHsc /O2 /Ob2 /DNDEBUG` are now in every compile line
+(no explicit CMake change was made; the Phase-1 environment had stripped the
+defaults). Verified effects on the clean build:
+
+- **C4530 warnings: 47 → 0** (unwind semantics restored).
+- The /EHsc question above is therefore resolved on this machine; CI parity
+  should be re-verified by the commander against the committed CI workflow.
+
+### 8b. Follow-up finding: empty AnalyzerDeleter → std::bad_function_call (fixed)
+
+While validating the RC build, `analyze_acceptance_tests` fail-fasted
+(0xc0000409, 100% reproducible after the clean rebuild). Root cause, via a
+minimal repro + cdb (stack: `RaiseException(0xe06d7363)` → `terminate` →
+`abort` → `FAST_FAIL_FATAL_APP_EXIT`):
+
+- The test's analyzer factories constructed
+  `std::unique_ptr<Analyzer, AnalyzerDeleter>(new X())` **without the
+  deleter**. `AnalyzerDeleter` is a `std::function`; the default-constructed
+  deleter is empty, so destroying the analyzer called an **empty
+  std::function → std::bad_function_call thrown in the task epilogue, outside
+  any catch → terminate**. The builtin factories always pass an explicit
+  deleter; the M24 test factories did not.
+- Secondary (pre-existing) defect found on the way: `runAnalyzer`'s
+  `std::async` lambdas captured `factory` from a structured binding **by
+  reference** — a local that dies at the end of each loop iteration
+  (dangling-reference UB, timing-dependent). Rewritten onto the bounded
+  `TaskScheduler` AnalysisPool (one task per analyzer, drained with a 10 s
+  cap) — also aligns with the M24 Phase-3 mandate (no unbounded
+  spawn-per-item threads).
+- Both fixed; `analyze_acceptance_tests` passes 5/5 on the clean build.
+
 ## 9. Full-suite evidence this phase
 
 Two full `ctest -j4` runs this session: baseline 64/64 after Phase 1 fixes;

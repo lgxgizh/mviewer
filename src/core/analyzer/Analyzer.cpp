@@ -1,5 +1,4 @@
 #include "core/analyzer/Analyzer.h"
-
 #include "core/analyzer/AnalyzerResult.h"
 #include "core/analyzer/BlurAnalyzer.h"
 #include "core/analyzer/BrightnessAnalyzer.h"
@@ -16,10 +15,11 @@
 #include "core/analyzer/RGBMeanAnalyzer.h"
 #include "core/analyzer/SSIMAnalyzer.h"
 #include "core/analyzer/SharpnessAnalyzer.h"
-
+#include "core/scheduler/TaskScheduler.h"
 #include <algorithm>
-#include <future>
+#include <chrono>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -179,50 +179,45 @@ std::vector<std::string> AnalyzerRegistry::availableAnalyzers() const
 std::unordered_map<std::string, std::string>
 AnalyzerRegistry::runAnalyzer(const ImageFrame &frame) const
 {
-    // P1 #⑤: Run all registered analyzers in parallel via std::async (one
-    // thread per analyzer). The frame is const and analyzers are read-only;
-    // factory creates an independent instance per thread, so no locks needed.
-    std::vector<std::pair<std::string, std::future<std::string>>> futures;
-    futures.reserve(m_factories.size());
-
+    // M24 (C#7): run all registered analyzers in parallel on the SHARED,
+    // bounded TaskScheduler AnalysisPool instead of one std::async thread per
+    // analyzer. The old spawn-per-analyzer approach is unbounded (a registry
+    // with many plugin analyzers creates that many threads) and proved fragile
+    // in this build (fail-fast past ~13 concurrent tasks, 0xc0000409). The
+    // frame is const and analyzers are read-only; each task creates its own
+    // analyzer instance, so no locks are needed inside analyzers.
+    TaskScheduler &sched = TaskScheduler::instance();
+    std::mutex mtx;
+    std::unordered_map<std::string, std::string> results;
     for (const auto &[id, factory] : m_factories)
     {
-        futures.emplace_back(id, std::async(std::launch::async,
-                                            [&factory, &frame]() -> std::string
-                                            {
-                                                try
-                                                {
-                                                    auto analyzer = factory();
-                                                    if (analyzer && analyzer->analyze(frame))
-                                                        return analyzer->resultText();
-                                                }
-                                                catch (...)
-                                                {
-                                                    // M24 (C#7): a throwing analyzer
-                                                    // (e.g. a buggy plugin) must be
-                                                    // isolated — the whole batch must
-                                                    // not crash the application.
-                                                }
-                                                return {};
-                                            }));
+        sched.submit(
+            TaskScheduler::AnalysisPool,
+            [&mtx, &results, id, factory, &frame]()
+            {
+                std::string text;
+                try
+                {
+                    auto analyzer = factory();
+                    if (analyzer && analyzer->analyze(frame))
+                        text = analyzer->resultText();
+                }
+                catch (...)
+                {
+                    // M24 (C#7): a throwing analyzer (e.g. a buggy plugin) must
+                    // be isolated — the whole batch must not crash.
+                }
+                if (!text.empty())
+                {
+                    std::lock_guard<std::mutex> lk(mtx);
+                    results[id] = std::move(text);
+                }
+            });
     }
-
-    std::unordered_map<std::string, std::string> results;
-    results.reserve(futures.size());
-    for (auto &[id, fut] : futures)
-    {
-        std::string text;
-        try
-        {
-            text = fut.get();
-        }
-        catch (...)
-        {
-            text = {};
-        }
-        if (!text.empty())
-            results[id] = std::move(text);
-    }
+    // Bounded wait: analyzers are short (µs-ms); 10 s is generous even on a
+    // loaded low-core machine. The scheduler's pending counter guarantees the
+    // drain covers every task submitted above, including in-flight ones.
+    sched.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(10));
     return results;
 }
 

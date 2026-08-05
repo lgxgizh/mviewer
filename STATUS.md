@@ -3,8 +3,10 @@
 > Snapshot: 2026-08-05 · Version: **1.0.6 (in development)** · Last release tag: **v1.0.5** (2026-07-29)
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
-> Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md` (clean
-> build + 64/64 CTest green + launch + package verification) and `.\build.ps1 Test`.
+> Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
+> `docs/review/M24_TEST_CREDIBILITY_2026-08-05.md`,
+> `docs/review/M24_PERFORMANCE_2026-08-05.md`,
+> `docs/review/M24_FINAL_VERDICT_2026-08-05.md` and `.\build.ps1 Test`.
 
 ## Positioning
 
@@ -136,19 +138,30 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 ## Release process (current)
 
 1. Bump `CMakeLists.txt` `project(VERSION)` — the single source of version.
-2. `.\build.ps1 Test` must be green (64 tests incl. `version_consistency`,
-   `bench_enforce`, `golden_image`).
+2. `.\build.ps1 Test` must be green (70 tests incl. `version_consistency`,
+   `bench_enforce`, `golden_image`, the four M24 workflow acceptance suites).
 3. Tag `vX.Y.Z`; `release.yml` builds, packages, attaches artifacts.
 4. Verify `dist/MViewer-<X.Y.Z>-portable.zip` and `dist/MViewer-<X.Y.Z>-Setup.exe`.
 5. Attach `SHA256SUMS.txt` (M14.8) and release notes from CHANGELOG.
 
 ## Status verdict
 
-Beta-quality, mid-stability pass (M24). Verified 2026-08-05: clean build from
-scratch (474/474 targets), 64/64 CTest green, real-display launch + graceful
-exit, portable ZIP and NSIS installer launch on a PATH-stripped clean
-environment, SHA256 manifests generated. Product workflows are exercised by
-`product_workflow_gate` / `workflow_ux_tests` / `compare_session_tests`;
-full manual acceptance + async/lifetime hardening + RC verification are in
-progress under M24 (see `docs/review/M24_BASELINE_2026-08-05.md`). Not yet
-recommended for a release tag; final verdict pending M24 phases 3–8.
+**M24 (Product Reality & Stability Convergence) complete — 2026-08-05.**
+Verified: clean build from scratch (497.6 s, 0 errors, C4530 warnings 47 → 0
+after the MSVC defaults were restored), **70/70 CTest green**, real-display
+launch + graceful exit, portable ZIP and NSIS installer both launch on a
+PATH-stripped clean environment and the installer uninstalls cleanly, SHA256
+manifests generated. All detached UI workers removed (bounded pools +
+QPointer marshaling); large-folder UI stall fixed (2.7 s → 184 ms on
+10 000-image folders); Browse/Compare/Analyze/Export workflows exercised by
+four new acceptance suites; version is a single source; STATUS/roadmap/
+installer/code agree.
+
+Open items (non-blocking, see the M24 verdict doc): 24 MP JPEG cold decode
+~3.5 s and 4 K TIFF ~2.1 s on the 2-core VM (single-threaded decode);
+C4819 warnings in 6 UTF-8-without-BOM sources; installer/portable ship no
+`plugins/` dir (benign startup log message); in-process throw isolation for
+plugin analyzers requires /EHsc (now restored on this machine) plus a
+subprocess runner for hard crashes. Verdict:
+**READY WITH DOCUMENTED NON-BLOCKING LIMITATIONS** — see
+`docs/review/M24_FINAL_VERDICT_2026-08-05.md`.

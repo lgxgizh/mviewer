@@ -81,6 +81,37 @@ All notable changes to this project are documented here. The format is based on
 - **About dialog** now shows the real version and the product positioning
   instead of "a simple image viewer".
 
+### M24 — 稳定性与工作流收敛 (Stability & Workflow Convergence)
+
+- **异步生命周期:** ThumbnailPanel 的 detached `std::thread`（目录扫描、尺寸
+  解析）全部替换为有界 `QThreadPool`（max 2）+ `QPointer`/alive-token 经
+  `qApp` 回传；忙碌光标在扫描中止路径也保证恢复；UpdateChecker 改用单线程
+  有界池；BatchDialog 进度回调改为 QPointer 保护并在析构时请求取消。新增
+  `async_lifetime_tests`（创建即销毁、50 次快速切目录、大目录扫描中关窗、
+  尺寸解析中切换视图、乱序完成、线程池收敛）。
+- **大目录卡顿修复（P1）:** `updateVisibleRange` 原先在 `buildModel` 后立即
+  调用 `indexAt()`，在 10000 行 IconMode 视图上强制全量布局，每次进目录 UI
+  卡死约 2.7 秒；改为按网格几何直接计算可见区间后，10000 图目录加载
+  3.6s → 1.1s，UI 最长 stall 2753ms → 184ms（新增非门禁 soak 工具
+  `mviewer_m24_soak` 可复测）。缩略图 `dataChanged` 合并为每事件循环一次。
+- **浏览工作流（A#8/A#9）:** 重命名后选择跟随新文件（pending-select 机制，
+  顺带修复会话恢复竞态）；损坏文件不再永远显示“加载中”——管线会回传失败
+  结果并绘制占位符（修复了失效的失败占位机制）。
+- **Compare 工作流（B#7/B#8）:** 无法加载的图片不再静默缩水——状态栏明确
+  提示失败数量；split/swipe/overlay 禁用时以 tooltip 说明仅 2 图可用。
+- **Analyze 工作流（C#7）:** `runAnalyzer` 从每分析器一个 `std::async` 线程
+  改为有界 `TaskScheduler` AnalysisPool（同时修复 async lambda 按引用捕获
+  结构化绑定导致的悬垂引用）；失败/抛异常的分析器被隔离，不再拖垮应用。
+- **Export 工作流（D#2/D#3/D#7/D#8）:** 导出改为临时文件 + 原子替换，失败
+  不再留下看似成功的半成品；未知格式显式报错（原为静默转 PNG）；批量转换
+  移出 UI 线程（QProgressDialog + 取消 token）。
+- **UI 减法:** 元数据面板与图库的 Ctrl+Shift+C 冲突收敛为单一入口；DPI
+  100/125/150/200% 渲染验证通过。
+- **测试可信度:** `docs/test_matrix.md` 生成器新增 CTest 清单
+  （name/command/RUN_SERIAL/UI-linked）；删除未被引用的伪 UI golden
+  （`golden/ui/main_window_default.png`）；Phase 8 干净重建后 C4530 警告
+  47 → 0（MSVC 默认 /EHsc 恢复）。
+
 ### Added — CI 三层架构（PR / Nightly / Release）
 
 - **第一层 `ci.yml`（PR 必跑，目标 5–10 分钟，全部必须通过）**：`format`
