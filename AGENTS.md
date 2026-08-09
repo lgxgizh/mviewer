@@ -48,19 +48,17 @@ UI (Qt Widgets) → Application → Core → Domain
 
 ## Agent Role Division
 
-This project is developed by a two-agent team. The division is by *role*, not
-by task — the commander does not write the bulk of the implementation, and the
-writer does not decide scope or merge.
+This project is developed by a single-agent team. OpenCode owns the full loop:
+product direction, milestone planning, architecture freezes, implementation,
+code review, build+test verification, and commit/push. Every change is
+reviewed (self-review of the diff) and verified locally before it lands;
+nothing merges that breaks `.\build.ps1 Test`.
 
-- **Hermes (commander / reviewer)**: owns product direction, milestone
-  planning (roadmap M3/M4/M5 with acceptance criteria), architecture freezes,
-  code review, build+test verification, and commit/push. Delegates implementation
-  to OpenCode; reviews the diff before it lands; never lets a change merge that
-  breaks `.\build.ps1 Test`.
-- **OpenCode (code writer)**: implements the specific change Hermes delegates,
-  against the current ADRs and the frozen architecture. Writes code, runs the
-  local build to confirm it compiles, but does **not** commit or push, and does
-  **not** change scope/architecture on its own.
+- **OpenCode (commander + writer + reviewer)**: implements changes against the
+  current ADRs and the frozen architecture, runs the local build and tests to
+  verify, reviews the diff before committing, and never lets a change merge
+  that breaks `.\build.ps1 Test`. Scope and architecture stay frozen unless
+  deliberately changed.
 - **UX Review Agent (experience reviewer)**: writes **no code**. Runs
   `docs/beta_checklist.md` end-to-end on every PR and answers only these
   questions: is every button necessary; does every operation match user
@@ -74,10 +72,11 @@ writer does not decide scope or merge.
 
 Principles:
 
-- Roadmap and ADRs are the source of truth. A writer that finds a missing
-  capability must surface it to the commander; it must not silently expand scope.
+- Roadmap and ADRs are the source of truth. A change that needs a missing
+  capability or scope expansion is surfaced before implementation; scope is
+  never silently expanded.
 - No change is merged without local build + test green (see Local Verify Policy).
-- Infrastructure/build/CI stay frozen unless the commander explicitly asks.
+- Infrastructure/build/CI stay frozen unless explicitly asked to change.
 
 ## Strategic Direction (Product-First)
 

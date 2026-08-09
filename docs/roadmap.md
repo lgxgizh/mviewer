@@ -50,6 +50,7 @@
 | M23 | **质量自动化** — ADR/Bug 门禁、自动 dashboard、test matrix、benchmark trend | ✅ Done (ADR-015). Wired ADR/Bug gates, auto dashboard, test matrix, benchmark trend into the test pipeline. |
 | M24 | **Product Reality & Stability Convergence** — 真实基线 / 版本 SSOT / 异步生命周期 / 工作流验收 / 测试可信度 / 性能 / RC 验证 | ✅ Done (2026-08-05). 70/70 CTest green, clean-env packages verified; verdict `docs/review/M24_FINAL_VERDICT_2026-08-05.md` = READY WITH DOCUMENTED NON-BLOCKING LIMITATIONS. |
 | M25 | **RC Experience & Product Convergence** — 工作流打磨 / 压力稳定性 / 复杂度收敛 / 性能收口 / RC 验收 | 🔄 Automated portion DONE (2026-08-09). Compare toolbar fits 1100 px; `thumbnailpanel.cpp` at 682 lines (ADR-014 guard); UpdateChecker offline-tested + link-safe; Export authoritative-directory + conflict preflight; **Browse data-pipeline convergence**: thumbnail cache identity (size+schema), generation-scoped cancellation, worker QImage-only + no UI-thread disk I/O, format SSOT (RAW/WebP/GIF consistent everywhere), shared async MetadataIndexer, once-per-file sort keys, field-scoped Camera/Lens/ISO filters, Browse close persistence, mojibake fixes. 73/73 local gate (incl. new `browse_convergence_tests` / `browse_convergence_ui_tests`) + S1–S9 & T1–T4 Release soak pass in both scheduler configs. Verdict `docs/review/M25_RC_CONVERGENCE_2026-08-09.md` = AUTOMATED RC READY — TARGET HARDWARE / HUMAN UX SIGN-OFF PENDING. |
+| M26 | **RC Reliability Closure** — 异步正确性 / 生命周期 / 长会话稳定性收口 | ✅ Automated portion DONE (2026-08-09). No new features. TaskScheduler exactly-once finalize for every terminal path (deadline / cancelTree / deferred / rejection), reverse-dependency cancelTree (transitive dependents), metrics can no longer underflow or silently reject later submissions, worker-thread callback contract documented; MetadataIndexer per-consumer request ownership (search re-index + gallery filters never cancel each other), bounded FIFO cache, value-semantics reads; ThumbnailPipeline obsolete-generation cancellation before decode, generation-safe pending/handle bookkeeping; ImageRepository exactly-once aggregate completion under saturation + bounded sync load (no global queue-depth mutation); Preview full-image statistics moved off the UI thread (`ImageStats`). 78/78 local gate green incl. 5 new `m26_*` suites + `workflow_ux_tests` Workflow 6 dual-consumer regression; golden/benchmark gates unchanged. Verdict `docs/review/M26_RC_RELIABILITY_2026-08-09.md` = AUTOMATED RC READY — TARGET HARDWARE / HUMAN UX SIGN-OFF PENDING. |
 
 ### M25 closure addendum (2026-08-09)
 
@@ -73,6 +74,19 @@
   filters are field-scoped and ISO reads the real sensor value; closing inside
   the Browse workspace persists the pre-Browse panel state; 4 user-visible
   mojibake strings fixed. See `docs/review/M25_RC_CONVERGENCE_2026-08-09.md`.
+
+### M26 closure addendum (2026-08-09)
+
+- **RC Reliability Closure (automated part).** Every async lifecycle bug found
+  in the Phase-0 baseline (`docs/review/M26_ASYNC_BASELINE_2026-08-09.md`) was
+  reproduced with failing tests first, then fixed and pinned: scheduler
+  deadline finalize, dependency/cancelTree direction, metric underflow (and
+  the silent-rejection + use-after-free it caused), MetadataIndexer
+  dual-consumer mutual cancellation, ThumbnailPipeline obsolete-work/pending/
+  handle lifecycle, ImageRepository saturation completion + bounded sync load,
+  Preview UI-thread pixel loops. Full gate 78/78 green; M25 S1–S9/T1–T4 soak
+  re-run (see `docs/review/M26_RC_RELIABILITY_2026-08-09.md`). Remaining
+  sign-off: target-hardware stress and the human UX Review Agent signature.
 
 ## Public versioning (M13+)
 

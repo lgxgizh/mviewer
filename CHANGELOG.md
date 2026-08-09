@@ -6,6 +6,48 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed — RC reliability closure (M26)
+
+- **Scheduler lifecycle exactly-once (M26):** every task now finalizes through
+  exactly one terminal path — completion, cancellation, or deadline expiry. A
+  task whose deadline has already passed when it starts never runs its work but
+  still releases its handle, returns the pool counters to zero and increments
+  the `deadline_exceeded` metric. `pending`/`active_tasks`/`queue_depth` can no
+  longer underflow; after `cancelTree` of a waiting task, later submissions are
+  no longer silently rejected by poisoned metrics (which previously broke every
+  subsequent submit on that pool).
+- **Dependency-cancellation direction fixed (M26):** `cancelTree(root)` cancels
+  the root plus all transitive *dependents*; it no longer cancels the root's
+  own prerequisites, and it no longer leaves stale deferred work that a later
+  submit could release and run with dead captures (use-after-free).
+- **Callback thread contract pinned (M26):** `done`/`onProgress` callbacks run
+  on the scheduler worker thread by contract (previously the spec claimed the
+  main thread while the code already ran on the worker). UI consumers marshal
+  themselves; the spec and contracts documents now match the implementation.
+- **Concurrent metadata indexing (M26):** the shared MetadataIndexer no longer
+  cancels one consumer's request when another consumer starts. MainWindow's
+  search re-index and the gallery's Camera/Lens/ISO filter index now run
+  concurrently — the gallery filter can no longer stay stuck in "indexing"
+  forever when the search re-index fires mid-pass. Each consumer supersedes
+  only its own stale request; the metadata cache is bounded (FIFO budget) and
+  read via value semantics (no dangling pointers into the cache map).
+- **Thumbnail pipeline lifecycle closure (M26):** changing the source listing
+  now truly cancels the obsolete generation's queued work (it stops before
+  decoding, not after), a path visible in both generations is still delivered
+  for the current one, a scheduler-rejected submit leaves the key schedulable
+  again, and completed handles leave the pipeline bookkeeping so it never grows
+  with the whole browse history.
+- **Repository completion under pressure (M26):** `loadDirectoryAsync` fires
+  its aggregate callback exactly once even when the decode pool is saturated —
+  rejected submissions become explicit failure results instead of silently
+  disappearing. The synchronous `loadDirectory` no longer busy-waits forever
+  and no longer flips the global queue-depth configuration (a caller-set
+  `setMaxQueueDepth` value is preserved).
+- **Preview statistics off the UI thread (M26):** the preview panel's
+  luminance/RGB means are computed on the worker from the decoded pixel buffer;
+  the UI thread only applies the small result and paints. Full-image
+  QPixmap→QImage conversions were removed from the ROI-stats path as well.
+
 ### Added — Professional browser workspace
 
 - **FastStone-inspired browser shell:** added a compact navigation toolbar, a

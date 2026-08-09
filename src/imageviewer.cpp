@@ -4,6 +4,7 @@
 #include "core/analyzer/Analyzer.h"
 #include "core/image/ImageFormats.h"
 #include "core/image/ImageRepository.h"
+#include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
 #include "core/trace/Trace.h"
@@ -497,27 +498,32 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
             const QRect r = selectedRegion();
             if (r.width() > 5 && r.height() > 5)
             {
-                QImage img = m_pixmap.toImage().convertToFormat(QImage::Format_RGB32);
+                // M26: compute ROI statistics directly from the decoded
+                // ImageData (worker-side helper) — no full-image
+                // QPixmap->QImage conversion on the UI thread.
                 const QRect imgRect =
                     QRect(static_cast<int>(std::floor((r.x() - m_view.offsetX) / m_view.scale)),
                           static_cast<int>(std::floor((r.y() - m_view.offsetY) / m_view.scale)),
                           static_cast<int>(std::round(r.width() / m_view.scale)),
                           static_cast<int>(std::round(r.height() / m_view.scale)))
                         .normalized();
-                const QRect valid = imgRect.intersected(QRect(0, 0, img.width(), img.height()));
-                if (!valid.isEmpty())
+                const QRect valid =
+                    imgRect.intersected(QRect(0, 0, m_pixmap.width(), m_pixmap.height()));
+                if (!valid.isEmpty() && m_frame)
                 {
-                    const ImageStats stats =
-                        AnalysisEngine::computeStats(mvcore::fromQImage(img.copy(valid)));
+                    const mviewer::domain::Selection sel{valid.x(), valid.y(), valid.width(),
+                                                         valid.height()};
+                    const auto stats = mviewer::core::computePreviewStats(
+                        cropRegion(m_frame->pixels(), sel));
                     const QString text = QString("框选 [%1,%2,%3,%4]: 亮度=%5, R=%6,G=%7,B=%8")
                                              .arg(valid.x())
                                              .arg(valid.y())
                                              .arg(valid.width())
                                              .arg(valid.height())
                                              .arg(stats.lumMean, 0, 'f', 1)
-                                             .arg(stats.rMean, 0, 'f', 1)
-                                             .arg(stats.gMean, 0, 'f', 1)
-                                             .arg(stats.bMean, 0, 'f', 1);
+                                             .arg(static_cast<double>(stats.rMean), 0, 'f', 1)
+                                             .arg(static_cast<double>(stats.gMean), 0, 'f', 1)
+                                             .arg(static_cast<double>(stats.bMean), 0, 'f', 1);
                     emit regionStats(text);
                     emit selectionChanged(valid); // new: live ROI stats
                 }

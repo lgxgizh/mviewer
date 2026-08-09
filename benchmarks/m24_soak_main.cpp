@@ -24,7 +24,9 @@
 #include "compareworkspace.h"
 #include "core/filesystem/FileSystem.h"
 #include "core/image/ImageRepository.h"
+#include "core/metadata/MetadataIndexer.h"
 #include "core/scheduler/TaskScheduler.h"
+#include "core/thumbnail/ThumbnailPipeline.h"
 #include "core/workspace/WorkspaceSerializer.h"
 #include "domain/CompareSession.h"
 #include "domain/Workspace.h"
@@ -875,6 +877,390 @@ int main(int argc, char **argv)
                       << " recursive=" << recursiveFound << ")\n";
             soakOk = false;
         }
+    }
+
+    // ── T5: Scheduler dependency/cancel/deadline churn ───────────────────────
+    // Every lifecycle path (success, cancelTree subtree, deadline expiry,
+    // deferred release) exercised in a loop; every pool must converge to zero
+    // pending/waiting/active/queue_depth after each drain.
+    {
+        constexpr int kIterations = 120;
+        auto &sched = TaskScheduler::instance();
+        int convergeFailures = 0;
+        int deadlocks = 0;
+        for (int i = 0; i < kIterations; ++i)
+        {
+            switch (i % 4)
+            {
+            case 0: // dependency chain
+            {
+                std::atomic<bool> c1{false}, c2{false};
+                auto a = sched.submit(TaskScheduler::Priority::Background,
+                                      [](const TaskScheduler::TaskContext &) {});
+                auto b = sched.submit(TaskScheduler::Priority::Background,
+                                      [&](const TaskScheduler::TaskContext &) { c1 = true; },
+                                      {a->id});
+                auto c = sched.submit(TaskScheduler::Priority::Background,
+                                      [&](const TaskScheduler::TaskContext &) { c2 = true; },
+                                      {b->id});
+                if (!sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(5)))
+                    ++deadlocks;
+                if (!c1.load() || !c2.load())
+                    ++convergeFailures;
+                break;
+            }
+            case 1: // cancelTree subtree while running
+            {
+                std::atomic<bool> leafRan{false};
+                auto a = sched.submit(
+                    TaskScheduler::Priority::Background,
+                    [](const TaskScheduler::TaskContext &ctx)
+                    {
+                        for (int k = 0; k < 1000 && !ctx.isCancelled(); ++k)
+                            std::this_thread::sleep_for(std::chrono::microseconds(200));
+                    });
+                auto b = sched.submit(TaskScheduler::Priority::Background,
+                                      [](const TaskScheduler::TaskContext &) {},
+                                      {a->id});
+                auto c = sched.submit(TaskScheduler::Priority::Background,
+                                      [&](const TaskScheduler::TaskContext &) { leafRan = true; },
+                                      {b->id});
+                TaskScheduler::cancelTree(a->id);
+                if (!sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(5)))
+                    ++deadlocks;
+                if (leafRan.load())
+                    ++convergeFailures;
+                break;
+            }
+            case 2: // deadline expired before start
+            {
+                std::atomic<bool> ran{false};
+                auto h = sched.submit(
+                    TaskScheduler::Priority::Background,
+                    [&](const TaskScheduler::TaskContext &) { ran = true; },
+                    {},
+                    std::chrono::steady_clock::now() - std::chrono::seconds(1));
+                if (!sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(5)))
+                    ++deadlocks;
+                if (ran.load())
+                    ++convergeFailures;
+                break;
+            }
+            case 3: // deferred released at submit time + immediate reuse
+            {
+                auto a = sched.submit(TaskScheduler::Priority::Background,
+                                      [](const TaskScheduler::TaskContext &) {});
+                sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(5));
+                auto b = sched.submit(TaskScheduler::Priority::Background,
+                                      [](const TaskScheduler::TaskContext &) {},
+                                      {a->id});
+                if (!sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(5)))
+                    ++deadlocks;
+                break;
+            }
+            }
+            // Post-drain convergence on the pool that was exercised.
+            const auto m = sched.metrics(TaskScheduler::MetadataPool);
+            if (m.pending != 0 || m.waiting != 0 || m.active_tasks != 0 || m.queue_depth != 0)
+                ++convergeFailures;
+        }
+        samples.append({"T5_scheduler_churn_converge_failures", double(convergeFailures)});
+        samples.append({"T5_scheduler_churn_drain_timeouts", double(deadlocks)});
+        if (convergeFailures != 0 || deadlocks != 0)
+            soakOk = false;
+    }
+
+    // ── T6: Scheduler saturation / rejection / drain ─────────────────────────
+    // A low queue-depth pool under flood: submissions must be rejected cleanly
+    // (no pending residue), and drain must stay bounded afterwards.
+    {
+        auto &sched = TaskScheduler::instance();
+        sched.setPoolMaxThreads(TaskScheduler::DecodePool, 2);
+        sched.setMaxQueueDepth(TaskScheduler::DecodePool, 4);
+        uint64_t rejected = 0;
+        for (int round = 0; round < 20; ++round)
+        {
+            // Occupy both threads so the flood hits the depth cap.
+            std::atomic<int> blockers{0};
+            std::mutex bm;
+            std::condition_variable bc;
+            for (int k = 0; k < 2; ++k)
+                sched.submit(TaskScheduler::Priority::Decode,
+                             [&](const TaskScheduler::TaskContext &)
+                             {
+                                 {
+                                     std::lock_guard<std::mutex> lk(bm);
+                                     blockers++;
+                                 }
+                                 bc.notify_all();
+                                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                             });
+            {
+                std::unique_lock<std::mutex> lk(bm);
+                bc.wait(lk, [&] { return blockers == 2; });
+            }
+            for (int k = 0; k < 200; ++k)
+            {
+                auto h = sched.submit(TaskScheduler::Priority::Decode,
+                                      [](const TaskScheduler::TaskContext &) {});
+                if (!h)
+                    ++rejected;
+            }
+            if (!sched.drain(TaskScheduler::DecodePool, std::chrono::seconds(10)))
+            {
+                soakOk = false;
+                samples.append({"T6_saturation_drain_timeout", 1.0});
+                break;
+            }
+        }
+        const auto m = sched.metrics(TaskScheduler::DecodePool);
+        samples.append({"T6_saturation_rejected", double(rejected)});
+        samples.append({"T6_saturation_pending_after", double(m.pending)});
+        samples.append({"T6_saturation_active_after", double(m.active_tasks)});
+        samples.append({"T6_saturation_depth_after", double(m.queue_depth)});
+        if (rejected == 0 || m.pending != 0 || m.active_tasks != 0 || m.queue_depth != 0)
+            soakOk = false;
+        sched.setMaxQueueDepth(TaskScheduler::DecodePool, 1000);
+        sched.setPoolMaxThreads(TaskScheduler::DecodePool, qMax(1, QThread::idealThreadCount()));
+    }
+
+    // ── T7: MetadataIndexer dual-consumer race ───────────────────────────────
+    // MainWindow-style search re-index and gallery-filter-style indexing race
+    // on the same directory repeatedly; both must always complete and the
+    // shared cache must stay within its bound.
+    {
+        const QString dir = QDir::tempPath() + "/mviewer_soak_t7_" +
+                            QString::number(QCoreApplication::applicationPid());
+        QDir().mkpath(dir);
+        std::vector<std::string> paths;
+        constexpr int kFiles = 1500;
+        for (int i = 0; i < kFiles; ++i)
+        {
+            const QString p = dir + QString("/f_%1.dng").arg(i, 5, 10, QChar('0'));
+            QFile f(p);
+            f.open(QIODevice::WriteOnly);
+            f.close();
+            paths.push_back(p.toStdString());
+        }
+        auto &indexer = mviewer::core::MetadataIndexer::instance();
+        indexer.cancel();
+        const size_t savedLimit = indexer.cacheLimit();
+        indexer.setCacheLimit(3000); // bounded: > one directory's working set
+
+        int racesWon = 0;
+        constexpr int kRounds = 6;
+        for (int round = 0; round < kRounds; ++round)
+        {
+            std::atomic<bool> searchDone{false};
+            std::atomic<int> filterEntries{0};
+            std::atomic<bool> filterDone{false};
+            const uint64_t r1 = indexer.index(paths, {}, [&]() { searchDone = true; });
+            const uint64_t r2 = indexer.index(
+                paths,
+                [&](const mviewer::core::MetadataIndexEntry &) { filterEntries.fetch_add(1); },
+                [&]() { filterDone = true; });
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+            while ((!searchDone.load() || !filterDone.load()) &&
+                   std::chrono::steady_clock::now() < deadline)
+                pump(5);
+            if (searchDone.load() && filterDone.load() &&
+                filterEntries.load() == kFiles)
+                ++racesWon;
+        }
+        samples.append({"T7_dual_consumer_races_won", double(racesWon)});
+        samples.append({"T7_cache_size", double(indexer.size())});
+        if (racesWon != kRounds)
+            soakOk = false;
+        if (indexer.size() > indexer.cacheLimit())
+            soakOk = false;
+        indexer.setCacheLimit(savedLimit);
+        indexer.cancel();
+        QDir(dir).removeRecursively();
+    }
+
+    // ── T8: Thumbnail rapid generation churn + real backpressure ─────────────
+    {
+        auto &sched = TaskScheduler::instance();
+        sched.setPoolMaxThreads(TaskScheduler::ThumbnailPool, 1);
+        const size_t savedDepth = sched.maxQueueDepth(TaskScheduler::ThumbnailPool);
+        sched.setMaxQueueDepth(TaskScheduler::ThumbnailPool, 2); // force real backpressure
+
+        ThumbnailPipeline pipe;
+        // Slow-ish decode keeps the single worker busy so the depth-2 cap
+        // produces real backpressure across the whole churn; the pump between
+        // sweeps paces the harness like human scrolling.
+        pipe.setDecodeFn([](const std::string &, int size) -> ImageData
+                         {
+                             std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                             return makeImageData(size, size, PixelFormat::RGB24);
+                         });
+        std::atomic<int> delivered{0};
+        pipe.setResultFn([&](const std::string &, int, const ImageData &) { delivered.fetch_add(1); });
+
+        constexpr int kDirs = 6;
+        constexpr int kPerDir = 500;
+        for (int d = 0; d < kDirs; ++d)
+        {
+            std::vector<std::string> src;
+            for (int i = 0; i < kPerDir; ++i)
+                src.push_back("t8dir" + std::to_string(d) + "/img" + std::to_string(i) + ".jpg");
+            pipe.setSources(src);
+            for (size_t i = 0; i + 20 <= 500; i += 20)
+            {
+                pipe.setVisibleRange(i, i + 20);
+                pump(1);
+            }
+        }
+        // Settle: re-request the current visible window so keys rejected under
+        // backpressure get their retry, then let the pool finish.
+        pipe.setVisibleRange(0, 20);
+        sched.drain(TaskScheduler::ThumbnailPool, std::chrono::seconds(30));
+        const size_t pendingAfter = pipe.pendingCount();
+        const size_t handlesAfter = pipe.handlesCount();
+        samples.append({"T8_thumbnail_churn_delivered", double(delivered.load())});
+        samples.append({"T8_thumbnail_pending_after", double(pendingAfter)});
+        samples.append({"T8_thumbnail_handles_after", double(handlesAfter)});
+        if (pendingAfter != 0 || handlesAfter > 64 || delivered.load() < 20)
+            soakOk = false;
+        sched.setMaxQueueDepth(TaskScheduler::ThumbnailPool, savedDepth);
+        sched.setPoolMaxThreads(TaskScheduler::ThumbnailPool, qMax(2, QThread::idealThreadCount()));
+    }
+
+    // ── T9: Repository saturated async completion at scale ───────────────────
+    {
+        auto &sched = TaskScheduler::instance();
+        sched.setPoolMaxThreads(TaskScheduler::DecodePool, 1);
+        const size_t savedDepth = sched.maxQueueDepth(TaskScheduler::DecodePool);
+        sched.setMaxQueueDepth(TaskScheduler::DecodePool, 2);
+
+        const QString dir = QDir::tempPath() + "/mviewer_soak_t9_" +
+                            QString::number(QCoreApplication::applicationPid());
+        QDir().mkpath(dir);
+        for (int i = 0; i < 40; ++i)
+        {
+            QImage img(16, 16, QImage::Format_RGB32);
+            img.fill(QColor((i * 7) % 256, 90, 150));
+            img.save(dir + QString("/i_%1.png").arg(i, 3, 10, QChar('0')), "PNG");
+        }
+        std::atomic<bool> blockerDone{false};
+        // Two blockers fill the depth-2 cap so every directory submission is
+        // rejected (the "1 accepted task waits forever" case is covered by the
+        // M26 unit tests with an unblockable pool); the aggregate must fire
+        // exactly once per round, instantly, with explicit failures.
+        for (int k = 0; k < 2; ++k)
+            sched.submit(TaskScheduler::Priority::Decode,
+                         [&](const TaskScheduler::TaskContext &)
+                         {
+                             while (!blockerDone.load())
+                                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                         });
+        int completedRounds = 0;
+        constexpr int kRounds = 8;
+        for (int round = 0; round < kRounds; ++round)
+        {
+            std::atomic<int> calls{0};
+            std::atomic<int> resultsOk{0};
+            ImageRepository::instance().loadDirectoryAsync(
+                dir.toStdString(),
+                [&](std::vector<ImageRepository::Result> r)
+                {
+                    calls.fetch_add(1);
+                    int fail = 0;
+                    for (const auto &res : r)
+                        if (!res.success())
+                            ++fail;
+                    resultsOk.store(fail >= 38 ? 1 : 0); // most rejected -> explicit failures
+                });
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+            while (calls.load() == 0 && std::chrono::steady_clock::now() < deadline)
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            if (calls.load() == 1 && resultsOk.load() == 1)
+                ++completedRounds;
+        }
+        blockerDone = true;
+        samples.append({"T9_repository_saturated_rounds_ok", double(completedRounds)});
+        if (completedRounds != kRounds)
+            soakOk = false;
+        sched.drain(TaskScheduler::DecodePool, std::chrono::seconds(20));
+        sched.setMaxQueueDepth(TaskScheduler::DecodePool, savedDepth);
+        sched.setPoolMaxThreads(TaskScheduler::DecodePool, qMax(1, QThread::idealThreadCount()));
+        QDir(dir).removeRecursively();
+    }
+
+    // ── T10: long-session resource trend ─────────────────────────────────────
+    // Repeated browse cycles (list -> pipeline churn -> index) with resource
+    // samples at the start and end: RSS, OS handles, scheduler handles,
+    // pipeline bookkeeping, metadata cache.
+    {
+        auto &sched = TaskScheduler::instance();
+        ThumbnailPipeline &pipe = ThumbnailPipeline::instance();
+        pipe.clear();
+        pipe.setDecodeFn([](const std::string &, int size) -> ImageData
+                         { return makeImageData(size, size, PixelFormat::RGB24); });
+
+        const QString dir = QDir::tempPath() + "/mviewer_soak_t10_" +
+                            QString::number(QCoreApplication::applicationPid());
+        QDir().mkpath(dir);
+        std::vector<std::string> paths;
+        for (int i = 0; i < 800; ++i)
+        {
+            const QString p = dir + QString("/g_%1.dng").arg(i, 4, 10, QChar('0'));
+            QFile f(p);
+            f.open(QIODevice::WriteOnly);
+            f.close();
+            paths.push_back(p.toStdString());
+        }
+        auto &indexer = mviewer::core::MetadataIndexer::instance();
+        indexer.cancel();
+
+        auto report = [&]() -> double
+        {
+            double schedulerHandles = 0;
+            for (int p = 0; p < 5; ++p)
+                schedulerHandles += 0; // live handles are per-pool metrics below
+            const auto bg = sched.metrics(TaskScheduler::MetadataPool);
+            const auto th = sched.metrics(TaskScheduler::ThumbnailPool);
+            return bg.pending + th.pending;
+        };
+
+        const ProcessResources warm = processResources();
+        for (int cycle = 0; cycle < 12; ++cycle)
+        {
+            std::vector<std::string> src;
+            for (int i = 0; i < 800; ++i)
+                src.push_back("t10/img" + std::to_string(i) + ".jpg");
+            pipe.setSources(src);
+            for (size_t i = 0; i + 30 <= 800; i += 30)
+                pipe.setVisibleRange(i, i + 30);
+            std::atomic<bool> done{false};
+            indexer.index(paths, {}, [&]() { done = true; });
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(20);
+            while (!done.load() && std::chrono::steady_clock::now() < deadline)
+                pump(5);
+            sched.drain(TaskScheduler::ThumbnailPool, std::chrono::seconds(20));
+            sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(20));
+        }
+        const ProcessResources final = processResources();
+        const auto bg = sched.metrics(TaskScheduler::MetadataPool);
+        const auto th = sched.metrics(TaskScheduler::ThumbnailPool);
+        const double rssGrowth = (warm.valid && final.valid) ? final.rssMB - warm.rssMB : -1.0;
+        const double handleGrowth = (warm.valid && final.valid) ? final.handles - warm.handles : -1.0;
+        samples.append({"T10_rss_growth_mb", rssGrowth});
+        samples.append({"T10_os_handle_growth", handleGrowth});
+        samples.append({"T10_scheduler_pending_after", double(bg.pending + th.pending)});
+        samples.append({"T10_scheduler_active_after", double(bg.active_tasks + th.active_tasks)});
+        samples.append({"T10_thumbnail_pending_after", double(pipe.pendingCount())});
+        samples.append({"T10_thumbnail_handles_after", double(pipe.handlesCount())});
+        samples.append({"T10_metadata_cache_after", double(indexer.size())});
+        // Convergence requirements: no accumulated scheduler/pipeline state;
+        // metadata cache bounded by its limit; RSS growth bounded over 12 cycles.
+        if (bg.pending != 0 || th.pending != 0 || bg.active_tasks != 0 || th.active_tasks != 0 ||
+            pipe.pendingCount() != 0 || pipe.handlesCount() > 64 ||
+            indexer.size() > indexer.cacheLimit() || rssGrowth > 60.0)
+            soakOk = false;
+        pipe.clear();
+        indexer.cancel();
+        QDir(dir).removeRecursively();
     }
 
     // ── S9: Workspace disk serialize/deserialize round-trip ──────────────────

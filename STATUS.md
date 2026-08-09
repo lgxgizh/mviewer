@@ -128,6 +128,7 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 | M23 质量自动化 | ✅ | ADR/Bug 门禁、自动 dashboard、test matrix、benchmark trend（ADR-015） |
 | M24 稳定性收敛 | ✅ | 2026-08-05 完成：70/70 CTest、干净环境打包、异步生命周期/工作流验收/测试可信度/性能/RC 验证（verdict: READY WITH NON-BLOCKING LIMITATIONS） |
 | M25 RC 收敛 | 🔄 进行中（自动化完成） | Compare 顶栏三行防溢出；`thumbnailpanel.cpp` 682 行（ADR-014 内）；S1–S9 + T1–T4 Release 压测双配置 PASS；73/73 本地门禁（新增 `browse_convergence_tests` / `browse_convergence_ui_tests`）；缩略图缓存身份（path+mtime+size+requestedSize+schema）、generation 级取消、worker 纯 QImage、UI 线程零缩略图磁盘 I/O；格式 SSOT 统一（RAW/WebP/GIF 全链路一致）；MetadataIndexer 异步索引 + 排序键单次计算 + 字段级 Camera/Lens/ISO 过滤；Browse 关闭持久化；乱码修复。**剩余：目标硬件与人工 UX 签名**（见 `docs/review/M25_RC_CONVERGENCE_2026-08-09.md`） |
+| M26 RC 可靠性收口 | ✅ 自动化完成 | 2026-08-09 完成：**78/78 CTest 全绿**。TaskScheduler exactly-once finalize（deadline/cancel/deferred/reject 全路径）、依赖反向图 cancelTree（transitive dependents）、metrics 无 underflow（修复后不再静默拒绝后续提交）、callback 线程契约 worker-thread 并文档化；MetadataIndexer per-request ownership（搜索重建与 Camera/Lens 过滤并发互不取消）、bounded cache、value-semantics cache 读取；ThumbnailPipeline 切换代际真正取消 + pending/handle 有界；ImageRepository 饱和/拒绝下 exactly-once 回调 + 有界同步加载（不再改全局 queue depth）；Preview 全图统计移出 UI 线程（worker-side `ImageStats`）。见 `docs/review/M26_RC_RELIABILITY_2026-08-09.md` |
 
 ### M25 closure addendum (2026-08-09)
 
@@ -150,8 +151,29 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   and compared in memory; recursive filename search runs off the UI thread.
   Camera/Lens filters are field-scoped and ISO reads the real sensor value.
   Closing inside the Browse workspace persists the pre-Browse panel state.
-  Verdict: `AUTOMATED RC READY — TARGET HARDWARE / HUMAN UX SIGN-OFF PENDING`
-  (see `docs/review/M25_RC_CONVERGENCE_2026-08-09.md`).
+   Verdict: `AUTOMATED RC READY — TARGET HARDWARE / HUMAN UX SIGN-OFF PENDING`
+   (see `docs/review/M25_RC_CONVERGENCE_2026-08-09.md`).
+
+### M26 closure addendum (2026-08-09)
+
+- **M26 — RC Reliability Closure (automated part).** No new features; the
+  async runtime was hardened and every claim is pinned by new regression tests
+  (`m26_scheduler_tests`, `m26_metadata_tests`, `m26_thumbnail_tests`,
+  `m26_repository_tests`, `m26_stats_tests`, plus `workflow_ux_tests`
+  Workflow 6) — **78/78 CTest green**, golden/benchmark hard gates unchanged.
+  Baseline bugs that were reproduced first and then fixed: scheduler
+  deadline tasks never finalized (stuck pending/handles), deferred-task
+  counter underflow poisoning later submissions (silent rejection), cancelTree
+  walked prerequisites instead of dependents (also enabled a use-after-free of
+  stale deferred captures), MetadataIndexer single-generation mutual
+  cancellation (stuck gallery filters when the search re-index runs),
+  ThumbnailPipeline obsolete-work decode waste + permanent pending/handle
+  growth, ImageRepository silently-dropped submissions (aggregate callback
+  could never fire under saturation) + infinite sync busy-wait + global
+  queue-depth clobbering, Preview full-image statistics on the UI thread.
+  Verdict: `AUTOMATED RC READY` — remaining sign-off is target-hardware
+  stress re-run and the human UX Review Agent signature
+  (see `docs/review/M26_RC_RELIABILITY_2026-08-09.md`).
 
 ## Plugin SDK (frozen)
 
@@ -165,10 +187,10 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 ## Release process (current)
 
 1. Bump `CMakeLists.txt` `project(VERSION)` — the single source of version.
-2. `.\build.ps1 Test` must be green (73 registered CTest tests incl.
+2. `.\build.ps1 Test` must be green (78 registered CTest tests incl.
    `version_consistency`, `updatechecker_tests`, `browse_convergence_tests`,
-   `browse_convergence_ui_tests`, `bench_enforce`, `golden_image`, and the four
-   M24 workflow acceptance suites).
+   `browse_convergence_ui_tests`, `m26_*_tests`, `bench_enforce`,
+   `golden_image`, and the four M24 workflow acceptance suites).
 3. Tag `vX.Y.Z`; `release.yml` builds, packages, attaches artifacts.
 4. Verify `dist/MViewer-<X.Y.Z>-portable.zip` and `dist/MViewer-<X.Y.Z>-Setup.exe`.
 5. Attach `SHA256SUMS.txt` (M14.8) and release notes from CHANGELOG.

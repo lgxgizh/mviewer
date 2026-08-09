@@ -1,21 +1,27 @@
 #pragma once
 // M25: generation-scoped asynchronous metadata indexing for the Browse
-// workflow.
+// workflow. M26: per-request ownership — independent consumers (MainWindow
+// search re-index, ThumbnailPanel camera/lens/ISO filters) no longer cancel
+// each other; a consumer supersedes ONLY its own stale request.
 //
 // Before this service, MainWindow's search re-index and ThumbnailPanel's
 // camera/lens/ISO index each walked the whole directory and parsed every
 // file's metadata synchronously ON THE UI THREAD — duplicated work plus
 // multi-second freezes on large folders. MetadataIndexer is the single
-// authoritative index: one background pass per directory generation, with
-// per-path cache reuse and cancellation.
+// authoritative index: one background pass per request, with per-path cache
+// reuse, per-request cancellation and value-semantics cache reads.
 //
 // Qt-free header; the .cpp may use Qt and the TaskScheduler.
 
 #include "core/scheduler/TaskScheduler.h"
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
+#include <list>
+#include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -44,31 +50,48 @@ class MetadataIndexer
 
     static MetadataIndexer &instance();
 
-    // Index `paths` off the UI thread. `onEntry` fires per file, `onDone`
-    // once at the end — both marshaled to the main thread. Each call starts
-    // a NEW generation and cancels the previous one. Returns the generation
-    // token (0 never returned).
+    // Index `paths` off the UI thread. `onEntry` fires per file, `onDone` once
+    // at the end — both marshaled to the main thread. Requests are
+    // independent: starting one does NOT cancel another consumer's request.
+    // Returns the request id (never 0), or 0 when the scheduler rejected the
+    // submission (caller must not wait for callbacks in that case).
     uint64_t index(const std::vector<std::string> &paths, EntryCallback onEntry,
                    DoneCallback onDone);
 
-    // Cancel the current generation; its callbacks are never delivered.
+    // Supersede ONE request (its owner's stale work). Its callbacks are never
+    // delivered after this point. No-op for unknown/already-finished ids.
+    void cancelRequest(uint64_t requestId);
+
+    // Cancel all in-flight requests (shutdown / full reset).
     void cancel();
 
-    // Synchronous no-I/O lookup honoring file identity (mtime/size). Returns
-    // nullptr when the file is not indexed or has changed on disk.
-    const Entry *cached(const std::string &path) const;
+    // Synchronous no-I/O lookup honoring file identity (mtime/size). Returns a
+    // COPY of the entry — safe to keep across later index passes (no dangling
+    // pointer into the internal map). nullopt when the file is not indexed or
+    // has changed on disk.
+    std::optional<Entry> cached(const std::string &path) const;
 
     size_t size() const;
+
+    // Bounded cache: entries beyond the limit are evicted FIFO (oldest indexed
+    // paths first). The default keeps a multi-directory working set without
+    // retaining the whole session history.
+    size_t cacheLimit() const;
+    void setCacheLimit(size_t n);
 
   private:
     MetadataIndexer() = default;
     static std::string fileIdentity(const std::string &path);
+    void eraseRequestLocked(uint64_t requestId);
 
     mutable std::mutex m_mtx;
-    uint64_t m_gen = 0;
-    TaskScheduler::TaskHandle m_handle;
+    uint64_t m_nextRequestId = 0;
+    size_t m_cacheLimit = 100000;
+    // Per-request cancellation token; erased when the request finishes.
+    std::unordered_map<uint64_t, std::shared_ptr<std::atomic<bool>>> m_requestCancel;
     std::unordered_map<std::string, Entry> m_cache;
     std::unordered_map<std::string, std::string> m_identity; // path -> identity
+    std::list<std::string> m_cacheOrder;                     // FIFO eviction order
 };
 
 } // namespace mviewer::core

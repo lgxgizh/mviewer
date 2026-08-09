@@ -202,6 +202,9 @@ class MainWindow : public QMainWindow
     // M25: generation guard for the async search re-index (a late completion
     // from a previous directory is dropped).
     uint64_t m_reindexGen = 0;
+    // M26: the MetadataIndexer request owned by the search re-index — a newer
+    // reindex supersedes ONLY this request, never the gallery's index.
+    uint64_t m_reindexRequestId = 0;
 
     // M18: gallery search bar.
     QLineEdit *m_searchEdit = nullptr;

@@ -248,33 +248,57 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
     std::vector<Result> results(n);
     std::atomic<int> completed{0};
 
-    // Bulk directory load must submit ALL n decode tasks and wait for every
-    // one to finish. The TaskScheduler enforces max_queue_depth (default 1000);
-    // if the pool is already busy (e.g. tasks from earlier work in flight),
-    // submits that exceed the cap are SILENTLY DROPPED (submit returns nullptr
-    // and the task never runs). A dropped task would never increment
-    // `completed`, so the busy-wait below would spin forever. Relax the cap to
-    // unlimited for this bulk load so no task is lost.
-    TaskScheduler::instance().setMaxQueueDepth(TaskScheduler::DecodePool, 0);
-
+    // M26: every submission is accounted for — a task that the scheduler
+    // REJECTS (saturated / paused pool) becomes an explicit failure Result
+    // instead of a silently dropped submission. No global queue-depth
+    // mutation is needed and none is performed: the caller's scheduler
+    // configuration stays untouched.
     for (int i = 0; i < n; ++i)
     {
-        TaskScheduler::instance().submit(
+        auto handle = TaskScheduler::instance().submit(
             TaskScheduler::Priority::Decode,
             [this, &files, &results, &completed, n, i](const TaskScheduler::TaskContext &)
             {
-                results[i] = load(files[i]);
+                try
+                {
+                    results[i] = load(files[i]);
+                }
+                catch (...)
+                {
+                    Result err;
+                    err.error = "load threw for: " + files[i];
+                    results[i] = err;
+                }
                 completed.fetch_add(1, std::memory_order_release);
             });
+        if (!handle)
+        {
+            Result err;
+            err.error = "scheduler rejected submission for: " + files[i];
+            results[i] = std::move(err);
+            completed.fetch_add(1, std::memory_order_release);
+        }
     }
 
-    while (completed.load(std::memory_order_acquire) < n)
+    // Bounded wait: accepted tasks either run to completion or are terminal;
+    // the overall budget is a defensive cap against a hung decode so this call
+    // can never busy-wait forever (e.g. while the pool is paused/shut down).
+    constexpr auto kSyncLoadBudget = std::chrono::minutes(5);
+    const auto deadline = std::chrono::steady_clock::now() + kSyncLoadBudget;
+    while (completed.load(std::memory_order_acquire) < n &&
+           std::chrono::steady_clock::now() < deadline)
     {
-        std::this_thread::sleep_for(std::chrono::microseconds(100));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-    // Restore the default queue depth limit so subsequent submissions are
-    // subject to normal back-pressure.
-    TaskScheduler::instance().setMaxQueueDepth(TaskScheduler::DecodePool, 1000);
+    for (int i = 0; i < n; ++i)
+    {
+        if (!results[i].frame && results[i].error.empty())
+        {
+            Result err;
+            err.error = "loadDirectory timed out for: " + files[i];
+            results[i] = std::move(err);
+        }
+    }
     return results;
 }
 
@@ -304,11 +328,24 @@ void ImageRepository::loadDirectoryAsyncImpl(const std::string &dirPath,
     auto callbackPtr =
         std::make_shared<std::function<void(std::vector<Result>)>>(std::move(callback));
 
+    // Fire the aggregate exactly once when the last item is accounted for
+    // (whether it ran or was rejected at submit time).
+    auto finishIfLast = [results, completed, n, callbackPtr](int idx)
+    {
+        const int prev = completed->fetch_add(1, std::memory_order_acq_rel);
+        if (prev + 1 == n)
+        {
+            auto cb = *callbackPtr;
+            auto resultCopy = *results;
+            cb(resultCopy);
+        }
+    };
+
     for (int i = 0; i < n; ++i)
     {
-        TaskScheduler::instance().submit(
+        auto handle = TaskScheduler::instance().submit(
             TaskScheduler::Priority::Decode,
-            [this, files, results, completed, n, i, callbackPtr](const TaskScheduler::TaskContext &)
+            [this, files, results, n, i, finishIfLast](const TaskScheduler::TaskContext &)
             {
                 try
                 {
@@ -347,17 +384,21 @@ void ImageRepository::loadDirectoryAsyncImpl(const std::string &dirPath,
                     err.error = "decode threw for: " + (*files)[i];
                     (*results)[i] = std::move(err);
                 }
-                int prev = completed->fetch_add(1, std::memory_order_acq_rel);
-                if (prev + 1 == n)
-                {
-                    auto cb = *callbackPtr;
-                    auto resultCopy = *results;
-                    cb(resultCopy);
-                }
+                finishIfLast(i);
             },
             {},                                           // deps
             std::chrono::steady_clock::time_point::max(), // deadline
             [] {}); // done callback (required for drain tracking)
+        if (!handle)
+        {
+            // M26: a rejected submission must NOT silently disappear — the
+            // aggregate callback still fires exactly once, and this item
+            // carries an explicit failure.
+            Result err;
+            err.error = "scheduler rejected submission for: " + (*files)[i];
+            (*results)[i] = std::move(err);
+            finishIfLast(i);
+        }
     }
 }
 

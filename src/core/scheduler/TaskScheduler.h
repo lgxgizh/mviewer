@@ -88,8 +88,14 @@ class TaskScheduler
         uint64_t total_latency_ns{0};
         size_t active_tasks{0};
         size_t queue_depth{0};
+        // waiting = tasks submitted with dependencies that have not yet been
+        // released to a pool (deferred). Tracked so cancelTree and the
+        // lifecycle metrics match the real state without counting a waiting
+        // task as either queued or active.
+        size_t waiting{0};
         // pending = tasks submitted but not yet observed complete. Incremented in
-        // submit() BEFORE start(); decremented in onTaskComplete(). Lets
+        // submit() for EVERY accepted task (deferred or not); decremented exactly
+        // once on the terminal transition (onTaskComplete or cancelTree). Lets
         // waitForPoolDrained() block until EVERY submitted task (including ones
         // submitted concurrently with the drain) has finished, not just until the
         // pool is momentarily idle (which QThreadPool::waitForDone can miss
@@ -160,7 +166,12 @@ class TaskScheduler
     Impl *m_impl = nullptr;
 
     static std::atomic<uint64_t> s_nextId;
+    // Prerequisite map: taskId -> taskIds it waits for (releaseReadyTasks).
     std::unordered_map<TaskId, std::vector<TaskId>> m_depGraph;
+    // Reverse-dependency map: taskId -> taskIds waiting on it. cancelTree BFS
+    // walks THIS map so it cancels transitive DEPENDENTS and never the
+    // prerequisites of the cancelled task.
+    std::unordered_map<TaskId, std::vector<TaskId>> m_dependents;
     std::unordered_map<TaskId, TaskHandle> m_handles;
     std::unordered_map<TaskId, Priority> m_taskPriomap;
     mutable std::mutex m_graphMtx;
@@ -205,5 +216,5 @@ class TaskScheduler
     }
 
     void releaseReadyTasks(std::vector<std::pair<Priority, void *>> &out);
-    void onTaskComplete(TaskId id, Priority prio);
+    void onTaskComplete(TaskId id, Priority prio, bool deadlineExceeded);
 };

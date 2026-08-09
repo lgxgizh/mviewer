@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 
 #include <QDate>
@@ -324,6 +325,10 @@ class ThumbnailPanel : public QListView
     // M25: async metadata indexing (shared MetadataIndexer) + recursive scan
     // state — both generation-scoped so directory switches cancel them.
     bool m_metaIndexing = false;
+    // M26: the MetadataIndexer request owned by this panel's filter index — a
+    // new filter/directory request supersedes ONLY this request, never the
+    // MainWindow search re-index.
+    uint64_t m_metaRequestId = 0;
     bool m_recursiveSearching = false;
     QList<Entry> m_recursiveHits;  // recursive filename-search results (merged by applyFilter)
     QString m_recursiveHitsFor;    // the filter text the current hits belong to

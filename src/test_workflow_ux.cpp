@@ -18,6 +18,7 @@
 #include "appstate.h"
 #include "compareworkspace.h"
 #include "core/image/Decoder.h"
+#include "core/metadata/MetadataIndexer.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
 #include "directorytree.h"
@@ -154,6 +155,47 @@ QString writePng(const QDir &dir, const QString &name, QColor color)
     img.fill(color);
     img.save(path, "PNG");
     return path;
+}
+
+// Minimal little-endian TIFF (DNG-like) carrying ISO/Make/Model/LensModel so
+// parseRawMetadata extracts real camera/lens/ISO fields.
+bool writeFakeDng(const std::string &path, const std::string &make,
+                  const std::string &model, const std::string &lens, uint16_t iso)
+{
+    FILE *f = std::fopen(path.c_str(), "wb");
+    if (!f)
+        return false;
+    uint8_t hdr[8] = {'I', 'I', 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00};
+    std::fwrite(hdr, 1, 8, f);
+    const uint16_t count = 4;
+    std::fwrite(&count, 2, 1, f);
+    const long ifdStart = 8;
+    long dataOffset = ifdStart + 2 + count * 12 + 4;
+    const long makeOff = dataOffset;
+    const long modelOff = makeOff + static_cast<long>(make.size()) + 1;
+    const long lensOff = modelOff + static_cast<long>(model.size()) + 1;
+    auto writeEntry = [&](uint16_t tag, uint16_t type, uint32_t cnt, uint32_t val)
+    {
+        std::fwrite(&tag, 2, 1, f);
+        std::fwrite(&type, 2, 1, f);
+        std::fwrite(&cnt, 4, 1, f);
+        std::fwrite(&val, 4, 1, f);
+    };
+    writeEntry(0x8827, 3, 1, iso);                                       // ISO (SHORT inline)
+    writeEntry(0x010F, 2, static_cast<uint32_t>(make.size()) + 1,
+               static_cast<uint32_t>(makeOff)); // Make (ASCII)
+    writeEntry(0x0110, 2, static_cast<uint32_t>(model.size()) + 1,
+               static_cast<uint32_t>(modelOff)); // Model (ASCII)
+    writeEntry(0xA434, 2, static_cast<uint32_t>(lens.size()) + 1,
+               static_cast<uint32_t>(lensOff)); // LensModel (ASCII)
+    uint32_t nextIfd = 0;
+    std::fwrite(&nextIfd, 4, 1, f);
+    std::fseek(f, makeOff, SEEK_SET);
+    std::fwrite(make.c_str(), 1, make.size() + 1, f);
+    std::fwrite(model.c_str(), 1, model.size() + 1, f);
+    std::fwrite(lens.c_str(), 1, lens.size() + 1, f);
+    std::fclose(f);
+    return true;
 }
 
 // 按文本前缀查找 CompareWorkspace 的模式复选框（成员是私有的，文本是公共 UI 契约）。
@@ -1104,6 +1146,94 @@ void workflow5_export_current_output_directory(const QString &rootDir)
     sourceDir.removeRecursively();
     outputDir.removeRecursively();
 }
+
+// ─── Workflow 6: MetadataIndexer 双消费者（搜索重建 + Camera filter）────────
+// 打开大目录后 MainWindow 在 500ms 后触发搜索重建（reindexSearch），同时
+// ThumbnailPanel 的 Camera filter 也触发自己的元数据索引。两个真实消费者
+// 共用 MetadataIndexer：任何一方的新请求都不得静默取消另一方。
+// 回归点：面板索引在途时被 MainWindow 重建取消 → m_metaIndexing 永远 true →
+// Camera filter 永不生效（永久 loading）。
+void workflow6_metadata_dual_consumer(const QString &rootDir)
+{
+    std::cout << "── Workflow 6: metadata dual-consumer (search + camera filter) ──\n";
+    const QString dirPath = QDir(rootDir).filePath(QStringLiteral("dual_meta"));
+    QDir().mkpath(dirPath);
+    QDir dir(dirPath);
+    // 4000 fake DNGs: 2000 SONY + 2000 NIKON. Enough that the panel's metadata
+    // index is still in flight when MainWindow's 500ms re-index fires.
+    bool fixturesReady = true;
+    for (int i = 0; i < 4000; ++i)
+    {
+        const std::string p =
+            dir.filePath(QStringLiteral("d_%1.dng").arg(i, 4, 10, QChar('0'))).toStdString();
+        if (!writeFakeDng(p, (i % 2 == 0) ? "SONY" : "NIKON",
+                          QString("BODY%1").arg(i % 5).toStdString(),
+                          QString("LENS%1").arg(i % 7).toStdString(),
+                          static_cast<uint16_t>(100 * (1 + i % 20))))
+        {
+            fixturesReady = false;
+            break;
+        }
+    }
+    CHECK(fixturesReady, "dual-consumer fixture writes 4000 fake DNGs");
+
+    // Clean session: no recovery prompt, no leftover session state.
+    QFile::remove(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) +
+                  "/recovery.json");
+
+    MainWindow w;
+    w.resize(1280, 800);
+    w.show();
+    pump(100);
+    auto *thumbnailPanel = w.findChild<ThumbnailPanel *>();
+    auto *directoryTree = w.findChild<DirectoryTree *>();
+    CHECK(thumbnailPanel != nullptr, "MainWindow exposes the gallery panel");
+    CHECK(directoryTree != nullptr, "MainWindow exposes the directory tree");
+    if (!thumbnailPanel || !directoryTree)
+    {
+        dir.removeRecursively();
+        return;
+    }
+
+    // Real SSOT path: the tree broadcasts directoryChanged -> panel scan +
+    // MainWindow re-index scheduling (500ms debounce).
+    directoryTree->navigateTo(dirPath, true);
+    QElapsedTimer entriesTimer;
+    entriesTimer.start();
+    while (thumbnailPanel->entries().size() < 4000 && entriesTimer.elapsed() < 30000)
+        pump(25);
+    std::cout << "    gallery entries after scan: " << thumbnailPanel->entries().size() << " ("
+              << entriesTimer.elapsed() << " ms)\n";
+    CHECK(thumbnailPanel->entries().size() == 4000, "gallery shows all 4000 rows");
+
+    // Panel filter first: the panel's metadata index must be in flight before
+    // MainWindow's 500ms re-index timer fires (folder-load → statsChanged).
+    thumbnailPanel->setCameraFilter(QStringLiteral("sony"));
+
+    // Confirm the panel index has genuinely started (shared cache begins
+    // filling) before the MainWindow re-index supersedes it.
+    QElapsedTimer startTimer;
+    startTimer.start();
+    while (mviewer::core::MetadataIndexer::instance().size() == 0 &&
+           startTimer.elapsed() < 4000)
+        pump(10);
+
+    // Now wait out MainWindow's re-index window, then require the camera filter
+    // to have applied (exactly the 2000 SONY rows).
+    QElapsedTimer filterTimer;
+    filterTimer.start();
+    while (thumbnailPanel->pathList().size() != 2000 && filterTimer.elapsed() < 20000)
+        pump(25);
+    CHECK(thumbnailPanel->pathList().size() == 2000,
+          "camera filter 'sony' applies while MainWindow re-index runs concurrently "
+          "(panel index was NOT silently cancelled)");
+    CHECK(mviewer::core::MetadataIndexer::instance().size() >= 2000,
+          "shared metadata cache holds the indexed entries");
+
+    w.close();
+    pump(100);
+    dir.removeRecursively();
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -1151,6 +1281,7 @@ int main(int argc, char **argv)
     workflow2_compare(paths[0], paths[2]);
     workflow5_export_current_output_directory(workDir.absolutePath());
     workflow4_list_scaling(workDir.absolutePath());
+    workflow6_metadata_dual_consumer(workDir.absolutePath());
 
     for (const QString &p : paths)
         QFile::remove(p);

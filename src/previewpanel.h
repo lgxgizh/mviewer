@@ -22,7 +22,6 @@ class PreviewPanel : public QWidget
 
   private:
     void rebuild();
-    void computeStats(const QPixmap &pm);
 
     QString m_path;
     QPixmap m_full;   // full image (for accurate stats)

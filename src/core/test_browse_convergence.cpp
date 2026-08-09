@@ -180,7 +180,7 @@ static void testMetadataIndexer()
     // Cache reuse: a second index of the same files must not re-read metadata
     // (verify via cached() being populated without a new pass).
     for (const auto &p : paths)
-        CHECK(indexer.cached(p) != nullptr, "cached entry available after indexing");
+        CHECK(indexer.cached(p).has_value(), "cached entry available after indexing");
 
     // Cancellation: start a big job, cancel it, and verify the cancelled
     // generation never delivers a late completion.

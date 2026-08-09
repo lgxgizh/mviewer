@@ -47,10 +47,28 @@
 | `id` | `uint64_t` (auto-inc) | Unique per task |
 | `cancel` | `shared_ptr<atomic<bool>>` | Task-local cancel; TaskHandle crosses threads |
 | `progress` | `shared_ptr<atomic<int>>` | 0-100 |
-| `onProgress` | `function<void(int)>` | UI callback |
-| `dependencies` | `vector<TaskId>` | Poll-based waiter inside LambdaTask |
+| `onProgress` | `function<void(int)>` | Invoked on the worker thread |
+| `dependencies` | `vector<TaskId>` | Prerequisites; the task waits in a deferred map until all deps finish |
+| `deadline` | `steady_clock::time_point` | Expired at start => work skipped, task still finalizes |
+| `deadline_exceeded` | `atomic<bool>` | Set when the deadline path fired |
 
-**Cancel propagation:** `cancel(task)` cancels own token. `cancelTree(id)` BFS-walks dep graph and cancels all descendants.
+**Lifecycle metrics (M26):** `pending` is incremented for EVERY accepted task at
+submit and decremented exactly once at the terminal transition (completion,
+cancelTree, or deadline expiry). `waiting` counts deferred (unreleased) tasks,
+`active_tasks` tasks handed to a pool, `queue_depth` the transient pool queue.
+All counters return to zero after `drain()`; none can underflow.
+
+**Dependency graph (M26):** `m_depGraph` stores prerequisites (taskId -> deps it
+waits on) for release logic. `m_dependents` stores the REVERSE edges (taskId ->
+tasks waiting on it). `cancelTree(id)` BFS-walks `m_dependents`, so it cancels
+root + all transitive DEPENDENTS and never the root's own prerequisites.
+
+**Cancel propagation:** `cancel(task)` cancels own token (task still finalizes
+and `done` still fires). `cancelTree(id)` cancels root + transitive dependents;
+cancelled tasks never run and their `done` never fires.
+
+**Callback threads (M26):** `done`/`onProgress` run on the worker thread that
+executed the task; UI consumers marshal to the UI thread themselves.
 
 ---
 

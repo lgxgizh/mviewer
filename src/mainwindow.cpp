@@ -174,7 +174,12 @@ void MainWindow::reindexSearch()
     ++m_reindexGen;
     const uint64_t gen = m_reindexGen;
     auto alive = std::make_shared<std::atomic<bool>>(true);
-    mviewer::core::MetadataIndexer::instance().index(
+    // M26: requests are per-consumer — supersede ONLY our own stale request
+    // (never another consumer's in-flight index, e.g. the gallery's metadata
+    // filter). A rejected submission (0) means no callbacks will arrive.
+    if (m_reindexRequestId != 0)
+        mviewer::core::MetadataIndexer::instance().cancelRequest(m_reindexRequestId);
+    const uint64_t requestId = mviewer::core::MetadataIndexer::instance().index(
         paths,
         [](const mviewer::core::MetadataIndexer::Entry &) {},
         [this, alive, gen]()
@@ -193,7 +198,7 @@ void MainWindow::reindexSearch()
                     entries.reserve(static_cast<size_t>(cur.size()));
                     for (const QString &p : cur)
                     {
-                        const auto *e = mviewer::core::MetadataIndexer::instance().cached(
+                        const auto e = mviewer::core::MetadataIndexer::instance().cached(
                             p.toStdString());
                         if (e)
                             entries.push_back(*e);
@@ -201,6 +206,7 @@ void MainWindow::reindexSearch()
                     m_searchPanel->reindexEntries(entries);
                 });
         });
+    m_reindexRequestId = requestId;
 }
 
 void MainWindow::onRatingFilterChanged(int)

@@ -1,6 +1,7 @@
 #include "previewpanel.h"
 
 #include "core/image/ImageRepository.h"
+#include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
 
 #include <QFileInfo>
@@ -38,15 +39,23 @@ void PreviewPanel::setImage(const QString &path)
     m_scaled = QPixmap();
     m_hasImage = false;
     update();
-    // Decode off the UI thread (ImageRepository::loadAsync -> DecodePool) so the
-    // bottom-left preview never blocks browsing. Compute stats on the worker
-    // thread; only the cheap rebuild()/update() run on the UI thread.
+    // Decode off the UI thread (ImageRepository::loadAsync -> DecodePool) so
+    // the bottom-left preview never blocks browsing. M26: the full-image
+    // statistics are computed on the WORKER thread from the frame's pixel
+    // buffer (computePreviewStats over ImageData) — the UI thread only
+    // receives the small stats struct, creates the QPixmap and repaints.
+    // QPixmap creation stays on the UI thread (GUI resource).
     ImageRepository::instance().loadAsync(path.toStdString(),
                                           [this, path](const ImageRepository::Result &res)
                                           {
+                                              const mviewer::core::PreviewStats stats =
+                                                  (res.success() && res.frame)
+                                                      ? mviewer::core::computePreviewStats(
+                                                            res.frame->pixels())
+                                                      : mviewer::core::PreviewStats{};
                                               QMetaObject::invokeMethod(
                                                   this,
-                                                  [this, res, path]()
+                                                  [this, res, path, stats]()
                                                   {
                                                       // Stale-callback guard: if the user has
                                                       // already clicked another image, discard
@@ -69,7 +78,18 @@ void PreviewPanel::setImage(const QString &path)
                                                           return;
                                                       }
                                                       m_hasImage = true;
-                                                      computeStats(m_full);
+                                                      if (stats.valid)
+                                                      {
+                                                          m_lumMean = stats.lumMean;
+                                                          m_rMean = stats.rMean;
+                                                          m_gMean = stats.gMean;
+                                                          m_bMean = stats.bMean;
+                                                      }
+                                                      else
+                                                      {
+                                                          m_lumMean = 0.0;
+                                                          m_rMean = m_gMean = m_bMean = 0;
+                                                      }
                                                       m_imgW = m_full.width();
                                                       m_imgH = m_full.height();
                                                       m_fileSize = QFileInfo(path).size();
@@ -77,38 +97,6 @@ void PreviewPanel::setImage(const QString &path)
                                                       update();
                                                   });
                                           });
-}
-
-void PreviewPanel::computeStats(const QPixmap &pm)
-{
-    const QImage img = pm.toImage().convertToFormat(QImage::Format_RGB32);
-    if (img.isNull())
-    {
-        m_lumMean = 0;
-        m_rMean = m_gMean = m_bMean = 0;
-        return;
-    }
-    const int w = img.width();
-    const int h = img.height();
-    long long sumL = 0, sumR = 0, sumG = 0, sumB = 0;
-    const long long n = static_cast<long long>(w) * h;
-    for (int y = 0; y < h; ++y)
-    {
-        const QRgb *line = reinterpret_cast<const QRgb *>(img.scanLine(y));
-        for (int x = 0; x < w; ++x)
-        {
-            const QRgb c = line[x];
-            const int r = qRed(c), g = qGreen(c), b = qBlue(c);
-            sumR += r;
-            sumG += g;
-            sumB += b;
-            sumL += static_cast<long long>(0.299 * r + 0.587 * g + 0.114 * b);
-        }
-    }
-    m_lumMean = static_cast<double>(sumL) / n;
-    m_rMean = static_cast<int>(sumR / n);
-    m_gMean = static_cast<int>(sumG / n);
-    m_bMean = static_cast<int>(sumB / n);
 }
 
 void PreviewPanel::rebuild()

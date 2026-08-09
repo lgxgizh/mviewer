@@ -158,7 +158,11 @@ void ThumbnailPanel::ensureMetaIndex()
     for (const Entry &e : m_allEntries)
         paths.push_back(e.path.toStdString());
 
-    mviewer::core::MetadataIndexer::instance().index(
+    // M26: supersede ONLY this panel's own previous request — never the
+    // MainWindow search re-index running concurrently on the same directory.
+    if (m_metaRequestId != 0)
+        mviewer::core::MetadataIndexer::instance().cancelRequest(m_metaRequestId);
+    const uint64_t requestId = mviewer::core::MetadataIndexer::instance().index(
         paths,
         [alive, self, gen](const mviewer::core::MetadataIndexer::Entry &e)
         {
@@ -197,6 +201,14 @@ void ThumbnailPanel::ensureMetaIndex()
                     panel->applyFilter(); // index complete: re-run the pending filter
                 });
         });
+    // A rejected submission means no callbacks will ever arrive — do not leave
+    // the panel stuck in the indexing state.
+    if (requestId == 0)
+    {
+        m_metaIndexing = false;
+        return;
+    }
+    m_metaRequestId = requestId;
 }
 
 void ThumbnailPanel::applyFilter()

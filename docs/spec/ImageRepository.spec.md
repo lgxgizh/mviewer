@@ -20,6 +20,8 @@ public:
     Result load(const std::string& filePath, const LoadOptions& opts = kDefaultLoadOptions);
     void loadAsync(const std::string& filePath, std::function<void(const Result&)> callback, const LoadOptions& opts = kDefaultLoadOptions);
     std::vector<Result> loadDirectory(const std::string& dirPath, int maxImages = 1000);
+    void loadDirectoryAsync(const std::string& dirPath, std::function<void(std::vector<Result>)> callback, int maxImages = 1000);
+    void prefetchVisible(const std::vector<std::string>& visiblePaths, const std::vector<std::string>& adjacentPaths = {});
     void prefetch(const std::string& filePath, const LoadOptions& opts = kDefaultLoadOptions);
     void release(const std::string& filePath);
     mviewer::domain::ImageMetadata metadata(const std::string& filePath) const;
@@ -46,14 +48,27 @@ public:
 | Method | Return | Semantics |
 | -------- | -------- | ----------- |
 | `load` | `Result` | `success()` true on valid frame; `error` set on failure |
-| `loadAsync` | `void` | Callback invoked on UI thread with Result |
-| `loadDirectory` | `vector<Result>` | One entry per file, in sorted order |
+| `loadAsync` | `void` | Callback invoked on the WORKER thread with Result; UI consumers marshal |
+| `loadDirectory` | `vector<Result>` | One entry per file, in sorted order; every submission accounted for |
+| `loadDirectoryAsync` | `void` | Aggregate callback fires EXACTLY once with one Result per file |
 | `prefetch` | `void` | Non-blocking; populates cache in background |
 | `release` | `void` | Erases all caches for the given path |
 | `metadata` | `ImageMetadata` | File-level info without decoding pixels |
 | `cacheToDisk` | `void` | Forces disk cache write |
 | `invalidate(path)` | `void` | Purges specific path from all layers |
 | `invalidateAll()` | `void` | Full cache purge |
+
+## Async completion contract (M26)
+
+- `loadDirectoryAsync` never drops a submission silently: when the scheduler
+  rejects a task (saturated / paused pool), that item becomes an explicit
+  failure `Result` (`error` = "scheduler rejected submission for: ...") and
+  still counts toward completion. The aggregate callback therefore fires
+  exactly once, carrying one Result per file, in every scheduler state.
+- `loadDirectory` (sync) does the same and never busy-waits forever: rejected
+  items fail fast, and a defensive overall budget converts stragglers into
+  timeout errors. It does NOT modify global scheduler queue-depth configuration
+  (a caller's `setMaxQueueDepth` value survives the call).
 
 ## Ownership
 
@@ -67,8 +82,9 @@ public:
 | Method | Thread | Mechanism |
 | -------- | -------- | ----------- |
 | `load` | Any thread | CacheManager per-pool mutex |
-| `loadAsync` | Any thread submit; UI thread callback | TaskScheduler LambdaTask + QueuedConnection |
-| `loadDirectory` | Any thread | spawns N async tasks |
+| `loadAsync` | Any thread submit; WORKER thread callback | TaskScheduler LambdaTask |
+| `loadDirectory` | Any thread | spawns N async tasks; bounded wait |
+| `loadDirectoryAsync` | Any thread; callback on worker or submitter | atomic completion counter |
 | `prefetch` | Background only | TaskScheduler Background queue |
 | `release` | Any thread | CacheManager invalidate (mutex) |
 | `metadata` | Any thread | CacheManager metadata mutex |

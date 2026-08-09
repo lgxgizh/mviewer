@@ -28,6 +28,7 @@ add_library(mviewer_core SHARED
     core/image/ImageFormats.cpp
     core/image/ImageTransform.cpp
     core/image/QtConvert.cpp
+    core/image/ImageStats.cpp
     core/filesystem/FileSystem.cpp
     core/scheduler/TaskScheduler.cpp
     core/compare/CompareEngine.cpp
@@ -372,7 +373,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform differenceengine blinkcontroller aligner imageoverlay browse_convergence)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform differenceengine blinkcontroller aligner imageoverlay browse_convergence m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -1085,6 +1086,11 @@ add_test(NAME decoder_tests    COMMAND test_decoder)
 add_test(NAME cache_tests      COMMAND test_cache)
 add_test(NAME repository_tests COMMAND test_repository)
 add_test(NAME scheduler_tests  COMMAND test_scheduler)
+add_test(NAME m26_scheduler_tests COMMAND test_m26_scheduler)
+add_test(NAME m26_metadata_tests COMMAND test_m26_metadata)
+add_test(NAME m26_thumbnail_tests COMMAND test_m26_thumbnail)
+add_test(NAME m26_repository_tests COMMAND test_m26_repository)
+add_test(NAME m26_stats_tests COMMAND test_m26_stats)
 add_test(NAME metadata_tests   COMMAND test_metadata)
 add_test(NAME filesystem_tests COMMAND test_filesystem)
 add_test(NAME eventbus_tests   COMMAND test_eventbus)

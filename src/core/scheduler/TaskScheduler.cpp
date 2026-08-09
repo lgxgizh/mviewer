@@ -27,11 +27,18 @@ class LambdaTask : public QRunnable
 
     void run() override
     {
+        // M26: every terminal path must finalize exactly once. A task whose
+        // deadline already expired when it reaches a worker skips its work but
+        // still reports the terminal transition (m_done -> onTaskComplete ->
+        // metrics + user callback), so the pool can never be left with a stuck
+        // pending/active counter or a leaked handle.
         if (m_ctx->deadline != std::chrono::steady_clock::time_point::max() &&
             std::chrono::steady_clock::now() > m_ctx->deadline)
         {
             m_ctx->deadline_exceeded.store(true, std::memory_order_relaxed);
             m_ctx->reportProgress(0);
+            if (m_done)
+                m_done();
             return;
         }
 
@@ -47,13 +54,11 @@ class LambdaTask : public QRunnable
             m_work(*m_ctx);
         m_ctx->reportProgress(100);
 
-        // HACK: The original code queued m_done via QMetaObject::invokeMethod,
-        // which requires the main thread's event loop to pump — but drain()
-        // blocks the main thread, so the done callback never fired and
-        // active_tasks never decremented. Call m_done() directly on the
-        // worker thread so onTaskComplete runs immediately and drain() can
-        // observe active_tasks hitting 0. Skip the broken operator bool and
-        // use try/catch to handle the empty-function case.
+        // M26: the done callback runs on this worker thread by contract (see
+        // docs/spec/TaskScheduler.spec.md); UI callers marshal to the UI
+        // thread themselves. Calling it here (instead of queueing a main-thread
+        // metainvoke) keeps scheduler bookkeeping timely so drain() can observe
+        // active_tasks hitting 0 without depending on the main event loop.
         auto done = std::move(m_done);
         try
         {
@@ -161,15 +166,39 @@ size_t TaskScheduler::maxQueueDepth(PoolType pool) const
 
 void TaskScheduler::submit(PoolType pool, void *runnable)
 {
+    // M26: the legacy QRunnable path gets the same lifecycle as every other
+    // task so its metrics converge (pending/active return to zero, drain is
+    // bounded). The handle is registered but never returned to the caller.
     auto prio = toPriority(pool);
     auto idx = static_cast<int>(prio);
-    m_impl->priorityQueues[idx].start(static_cast<QRunnable *>(runnable));
-    // P0-1 fix: metrics must be updated under m_graphMtx to avoid data race
-    // with onTaskComplete() and submit(Priority,...) which both modify the
-    // same non-atomic PoolMetrics fields under the lock.
+    auto ctx = std::make_shared<TaskContext>();
+    ctx->id = s_nextId.fetch_add(1);
+    ctx->priority = prio;
+    ctx->pool = pool;
+    const TaskId ctx_id = ctx->id;
+    auto *wrapped = new LambdaTask(
+        ctx, [runnable](const TaskContext &)
+        {
+            auto *r = static_cast<QRunnable *>(runnable);
+            r->run();
+            // Preserve the QThreadPool::start ownership contract: auto-delete
+            // runnables are freed by the executor after run().
+            if (r->autoDelete())
+                delete r;
+        },
+        [this, ctx_id, prio]()
+        {
+            onTaskComplete(ctx_id, prio, false);
+            // No user done callback exists for this legacy path.
+        });
     std::lock_guard<std::mutex> lock(m_graphMtx);
     m_poolState[idx].metrics.submitted++;
     m_poolState[idx].metrics.pending++;
+    m_handles[ctx_id] = ctx;
+    m_taskPriomap[ctx_id] = prio;
+    m_poolState[idx].metrics.queue_depth++;
+    m_impl->priorityQueues[idx].start(wrapped);
+    m_poolState[idx].metrics.queue_depth--;
     m_poolState[idx].metrics.active_tasks++;
 }
 
@@ -181,23 +210,36 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
     const int pIdx = static_cast<int>(prio);
     assert(pIdx >= 0 && pIdx < 5);
 
-    // Back-pressure check
+    // Back-pressure check. The user handler must run OUTSIDE the lock (it may
+    // call back into the scheduler).
     {
-        std::lock_guard<std::mutex> lock(m_graphMtx);
-        if (m_poolState[pIdx].paused)
+        PoolType backpressurePool = MetadataPool;
+        bool rejected = false;
         {
-            m_poolState[pIdx].metrics.backpressure_rejected++;
-            if (m_backpressure)
-                m_backpressure(poolFromPriority(prio));
-            return nullptr;
+            std::lock_guard<std::mutex> lock(m_graphMtx);
+            if (m_poolState[pIdx].paused)
+            {
+                m_poolState[pIdx].metrics.backpressure_rejected++;
+                rejected = true;
+                backpressurePool = poolFromPriority(prio);
+            }
+            else
+            {
+                const size_t md = m_poolState[pIdx].metrics.queue_depth +
+                                  m_poolState[pIdx].metrics.active_tasks;
+                if (m_poolState[pIdx].max_queue_depth > 0 &&
+                    md >= m_poolState[pIdx].max_queue_depth)
+                {
+                    m_poolState[pIdx].metrics.backpressure_rejected++;
+                    rejected = true;
+                    backpressurePool = poolFromPriority(prio);
+                }
+            }
         }
-        const size_t md =
-            m_poolState[pIdx].metrics.queue_depth + m_poolState[pIdx].metrics.active_tasks;
-        if (m_poolState[pIdx].max_queue_depth > 0 && md >= m_poolState[pIdx].max_queue_depth)
+        if (rejected)
         {
-            m_poolState[pIdx].metrics.backpressure_rejected++;
             if (m_backpressure)
-                m_backpressure(poolFromPriority(prio));
+                m_backpressure(backpressurePool);
             return nullptr;
         }
     }
@@ -211,9 +253,11 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
 
     const TaskId ctx_id = ctx->id;
     auto *runnable = new LambdaTask(ctx, std::move(work),
-                                    [this, done = std::move(done), ctx_id, prio]()
+                                    [this, done = std::move(done), ctx, prio]()
                                     {
-                                        onTaskComplete(ctx_id, prio);
+                                        onTaskComplete(ctx->id, prio,
+                                                       ctx->deadline_exceeded.load(
+                                                           std::memory_order_relaxed));
                                         if (done)
                                             done();
                                     });
@@ -227,18 +271,30 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
         m_taskPriomap[ctx_id] = prio;
         if (!ctx->dependencies.empty())
         {
+            // Waiting state: counted in pending + waiting, not active/queued.
+            m_poolState[pIdx].metrics.pending++;
+            m_poolState[pIdx].metrics.waiting++;
             m_depGraph[ctx_id] = ctx->dependencies;
+            for (TaskId dep : ctx->dependencies)
+                m_dependents[dep].push_back(ctx_id);
             m_deferred[ctx_id] = DeferredEntry{prio, runnable, deadline};
-            // If any deps already finished, launch ready deferred tasks
+            // If any deps already finished, launch ready deferred tasks.
             std::vector<std::pair<Priority, void *>> ready;
             releaseReadyTasks(ready);
             for (auto &[p, r] : ready)
-                m_impl->priorityQueues[static_cast<int>(p)].start(static_cast<QRunnable *>(r));
+            {
+                const int rpIdx = static_cast<int>(p);
+                m_poolState[rpIdx].metrics.queue_depth++;
+                m_impl->priorityQueues[rpIdx].start(static_cast<QRunnable *>(r));
+                m_poolState[rpIdx].metrics.queue_depth--;
+                m_poolState[rpIdx].metrics.active_tasks++;
+            }
         }
         else
         {
-            m_poolState[pIdx].metrics.queue_depth++;
+            // Queued -> active transition.
             m_poolState[pIdx].metrics.pending++;
+            m_poolState[pIdx].metrics.queue_depth++;
             m_impl->priorityQueues[pIdx].start(runnable);
             m_poolState[pIdx].metrics.queue_depth--;
             m_poolState[pIdx].metrics.active_tasks++;
@@ -298,6 +354,25 @@ void TaskScheduler::releaseReadyTasks(std::vector<std::pair<Priority, void *>> &
         }
         if (all_done)
         {
+            const TaskId id = it->first;
+            const int pIdx = static_cast<int>(it->second.prio);
+            // Waiting -> running transition (pending unchanged until terminal).
+            if (m_poolState[pIdx].metrics.waiting > 0)
+                m_poolState[pIdx].metrics.waiting--;
+            // The released task no longer waits on its prerequisites; drop the
+            // reverse edges so a later cancelTree of a prerequisite cannot
+            // touch a task that has already moved on.
+            auto depsIt = m_depGraph.find(id);
+            if (depsIt != m_depGraph.end())
+            {
+                for (TaskId dep : depsIt->second)
+                {
+                    auto &followers = m_dependents[dep];
+                    followers.erase(std::remove(followers.begin(), followers.end(), id),
+                                    followers.end());
+                }
+                m_depGraph.erase(depsIt);
+            }
             out.push_back({it->second.prio, it->second.runnable});
             it = m_deferred.erase(it);
         }
@@ -308,7 +383,7 @@ void TaskScheduler::releaseReadyTasks(std::vector<std::pair<Priority, void *>> &
     }
 }
 
-void TaskScheduler::onTaskComplete(TaskId id, Priority prio)
+void TaskScheduler::onTaskComplete(TaskId id, Priority prio, bool deadlineExceeded)
 {
     std::vector<std::pair<Priority, void *>> ready;
     {
@@ -323,8 +398,16 @@ void TaskScheduler::onTaskComplete(TaskId id, Priority prio)
         m_depGraph.erase(id);
         const int pIdx = static_cast<int>(prio);
         m_poolState[pIdx].metrics.completed++;
-        m_poolState[pIdx].metrics.pending--;
-        m_poolState[pIdx].metrics.active_tasks--;
+        if (deadlineExceeded)
+            m_poolState[pIdx].metrics.deadline_exceeded++;
+        // Terminal transition: exactly one decrement of each counter.
+        if (m_poolState[pIdx].metrics.pending > 0)
+            m_poolState[pIdx].metrics.pending--;
+        if (m_poolState[pIdx].metrics.active_tasks > 0)
+            m_poolState[pIdx].metrics.active_tasks--;
+        // Drop this task from the prerequisite edges of its dependents is not
+        // needed: dependents keep their m_depGraph entries and depDone() treats
+        // a missing handle as done, which is exactly the release condition.
         releaseReadyTasks(ready);
         for (auto &[p, r] : ready)
         {
@@ -342,6 +425,9 @@ void TaskScheduler::cancelTree(TaskId rootId)
     auto &sched = instance();
     std::lock_guard<std::mutex> lock(sched.m_graphMtx);
 
+    // M26: walk the REVERSE map — m_dependents[id] lists the tasks waiting on
+    // id — so cancelTree(root) cancels root plus all transitive DEPENDENTS
+    // and never touches root's own prerequisites.
     std::vector<TaskId> stack;
     std::vector<TaskId> victims;
     stack.push_back(rootId);
@@ -352,35 +438,61 @@ void TaskScheduler::cancelTree(TaskId rootId)
         if (std::find(victims.begin(), victims.end(), cur) != victims.end())
             continue;
         victims.push_back(cur);
-        auto it = sched.m_depGraph.find(cur);
-        if (it != sched.m_depGraph.end())
+        auto it = sched.m_dependents.find(cur);
+        if (it != sched.m_dependents.end())
         {
-            for (auto child : it->second)
-                stack.push_back(child);
+            for (TaskId dependent : it->second)
+                stack.push_back(dependent);
         }
     }
-    for (auto it = victims.rbegin(); it != victims.rend(); ++it)
+    for (TaskId vic : victims)
     {
-        auto pit = sched.m_taskPriomap.find(*it);
+        auto pit = sched.m_taskPriomap.find(vic);
         Priority prio = (pit != sched.m_taskPriomap.end()) ? pit->second : Priority::Background;
         const int pIdx = static_cast<int>(prio);
-        auto hit = sched.m_handles.find(*it);
-        if (hit != sched.m_handles.end())
-        {
-            hit->second->requestCancel();
-            sched.m_handles.erase(hit);
-            sched.m_poolState[pIdx].metrics.cancelled++;
-            sched.m_poolState[pIdx].metrics.active_tasks--;
-        }
-        auto dit = sched.m_deferred.find(*it);
+        auto dit = sched.m_deferred.find(vic);
         if (dit != sched.m_deferred.end())
         {
+            // Waiting (deferred) task: never started, owned by m_deferred.
+            // It holds pending + waiting, not active.
+            auto hit = sched.m_handles.find(vic);
+            if (hit != sched.m_handles.end())
+                hit->second->requestCancel(); // observers see isCancelled()
             delete static_cast<QRunnable *>(dit->second.runnable);
             sched.m_deferred.erase(dit);
-            sched.m_poolState[pIdx].metrics.queue_depth--;
+            sched.m_poolState[pIdx].metrics.cancelled++;
+            if (sched.m_poolState[pIdx].metrics.waiting > 0)
+                sched.m_poolState[pIdx].metrics.waiting--;
+            if (sched.m_poolState[pIdx].metrics.pending > 0)
+                sched.m_poolState[pIdx].metrics.pending--;
+            sched.m_handles.erase(vic);
+            sched.m_taskPriomap.erase(vic);
+        }
+        else
+        {
+            // Live task (running or queued): it still holds active + pending.
+            auto hit = sched.m_handles.find(vic);
+            if (hit != sched.m_handles.end())
+            {
+                hit->second->requestCancel();
+                sched.m_handles.erase(hit);
+                sched.m_taskPriomap.erase(vic);
+                sched.m_poolState[pIdx].metrics.cancelled++;
+                if (sched.m_poolState[pIdx].metrics.active_tasks > 0)
+                    sched.m_poolState[pIdx].metrics.active_tasks--;
+                if (sched.m_poolState[pIdx].metrics.pending > 0)
+                    sched.m_poolState[pIdx].metrics.pending--;
+            }
+        }
+        sched.m_depGraph.erase(vic);
+        sched.m_dependents.erase(vic);
+        // Remove this victim from every other task's dependents list so no
+        // edge to it survives (a cancelled dep must never gate a release).
+        for (auto &[follower, deps] : sched.m_depGraph)
+        {
+            deps.erase(std::remove(deps.begin(), deps.end(), vic), deps.end());
         }
     }
-    sched.m_depGraph.erase(rootId);
 }
 
 TaskScheduler::TaskHandle TaskScheduler::handle(TaskId id)

@@ -57,12 +57,17 @@ struct ThumbnailPipeline
     }
 
     // Full directory listing (image paths, in display order). Starts a new
-    // generation: any in-flight work from the previous listing is invalidated.
+    // generation: in-flight work from the previous listing is CANCELLED (queued
+    // tasks stop before decoding) and the pending bookkeeping is reset so no
+    // stale key can block the new listing. The consumer re-schedules via
+    // setVisibleRange() once the model is built.
     void setSources(const std::vector<std::string> &paths)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         ++m_gen;
+        cancelHandlesLocked();
         m_sources = paths;
+        m_pending.clear();
     }
 
     // The currently visible item range [begin, end). Visible items are decoded
@@ -109,9 +114,7 @@ struct ThumbnailPipeline
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         ++m_gen;
-        for (auto &kv : m_handles)
-            TaskScheduler::cancel(kv.second);
-        m_handles.clear();
+        cancelHandlesLocked();
         m_memCache.clear();
         m_lru.clear();
         m_sources.clear();
@@ -122,6 +125,20 @@ struct ThumbnailPipeline
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         return m_memCache.size();
+    }
+
+    // M26: test observability — number of keys with an outstanding scheduler
+    // handle (must return to ~0 after completion) and keys awaiting/decoding
+    // (must return to 0 when the pipeline is idle).
+    size_t handlesCount() const
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        return m_handles.size();
+    }
+    size_t pendingCount() const
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        return m_pending.size();
     }
 
     // The generation counter — bumped by setSources()/clear(). Consumers may
@@ -148,6 +165,12 @@ struct ThumbnailPipeline
     static std::string key(const std::string &path, int size)
     {
         return path + "\x1f" + std::to_string(size);
+    }
+    // Handle-map key: (path, size, generation) so an old-generation task can
+    // remove exactly its own handle without ever clobbering a newer one.
+    static std::string handleKey(const std::string &k, uint64_t gen)
+    {
+        return k + "\x1e" + std::to_string(gen);
     }
 
     // Must hold m_mtx. Enqueues visible items (Thumbnail prio) then predictive
@@ -185,9 +208,12 @@ struct ThumbnailPipeline
     {
         const int size = thumbSize;
         const std::string k = key(path, size);
-        if (m_memCache.count(k) || m_pending.count(k))
+        if (m_memCache.count(k))
             return;
-        m_pending.insert(k);
+        auto pit = m_pending.find(k);
+        if (pit != m_pending.end() && pit->second == m_gen)
+            return; // already owned by the current generation
+        m_pending[k] = m_gen;
         DecodeFn decode = m_decode;
         ResultFn result = m_result;
         const uint64_t gen = m_gen;
@@ -195,18 +221,21 @@ struct ThumbnailPipeline
             prio,
             [this, path, size, k, gen, decode, result](const TaskScheduler::TaskContext &ctx)
             {
-                // Stop stale queued work BEFORE decoding (rapid directory
-                // switch: cancelled tasks no longer waste decode time).
+                // Stop stale queued work BEFORE decoding. The generation that
+                // owned this key already cleared/repurposed the bookkeeping in
+                // setSources()/clear(); touching m_pending here could erase the
+                // NEW generation's ownership of the same key.
                 if (ctx.isCancelled())
-                {
-                    std::lock_guard<std::mutex> lk(m_mtx);
-                    m_pending.erase(k);
                     return;
-                }
                 ImageData thumb = decode(path, size);
                 {
                     std::lock_guard<std::mutex> lk(m_mtx);
-                    m_pending.erase(k);
+                    // Remove this task's own bookkeeping only — the key may
+                    // belong to a newer generation by now.
+                    auto pendIt = m_pending.find(k);
+                    if (pendIt != m_pending.end() && pendIt->second == gen)
+                        m_pending.erase(pendIt);
+                    m_handles.erase(handleKey(k, gen));
                     // Superseded generation: drop everything (no cache, no
                     // delivery) so old directories can never pollute the
                     // current one.
@@ -230,7 +259,29 @@ struct ThumbnailPipeline
                 }
             });
         if (handle)
-            m_handles[k] = handle;
+        {
+            m_handles[handleKey(k, gen)] = handle;
+        }
+        else
+        {
+            // Scheduler rejected the submission (paused / saturated): the key
+            // must remain schedulable — a later setVisibleRange/request will
+            // retry it.
+            auto pendIt = m_pending.find(k);
+            if (pendIt != m_pending.end() && pendIt->second == gen)
+                m_pending.erase(pendIt);
+        }
+    }
+
+    // Must hold m_mtx. Cancels every outstanding pipeline task (sets its
+    // scheduler cancel token) and drops the pipeline bookkeeping for them.
+    // Queued tasks still run on the pool but exit before decoding; in-flight
+    // decodes finish and are dropped by the generation guard.
+    void cancelHandlesLocked()
+    {
+        for (auto &kv : m_handles)
+            TaskScheduler::cancel(kv.second);
+        m_handles.clear();
     }
 
     void cacheLocked(const std::string &k, const std::string &path, const ImageData &data)
@@ -259,6 +310,11 @@ struct ThumbnailPipeline
     ResultFn m_result;
     std::unordered_map<std::string, MemEntry> m_memCache;
     std::list<std::string> m_lru;
+    // Outstanding scheduler handles, keyed by (path, size, generation). Tasks
+    // remove their own entry on completion; setSources()/clear() cancel + drop
+    // them wholesale — the map never accumulates the browse history.
     std::unordered_map<std::string, TaskScheduler::TaskHandle> m_handles;
-    std::unordered_set<std::string> m_pending;
+    // Pending keys: (path, size) -> generation that owns the request. An
+    // obsolete generation can never block or erase a newer generation's key.
+    std::unordered_map<std::string, uint64_t> m_pending;
 };
