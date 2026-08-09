@@ -48,7 +48,17 @@
 | M21 | **Analysis + Export Workflow** — Result Model / ExportJob / observability | ✅ Done. Analysis History + Pinned Result UI; unified `ExportJob` Convert path; Memory Timeline ring + Tools menu; Nightly HTML sparklines. |
 | M22 | **2026-07 产品评审与方向收敛** | ✅ Done. External review adopted as the product-first direction (AGENTS.md §Strategic Direction): no new capability categories; convergence + productization + performance closure. |
 | M23 | **质量自动化** — ADR/Bug 门禁、自动 dashboard、test matrix、benchmark trend | ✅ Done (ADR-015). Wired ADR/Bug gates, auto dashboard, test matrix, benchmark trend into the test pipeline. |
-| M24 | **Product Reality & Stability Convergence** — 真实基线 / 版本 SSOT / 异步生命周期 / 工作流验收 / 测试可信度 / 性能 / RC 验证 | 🔄 In progress (2026-08-05). Baseline verified (64/64 tests, clean-env packages); see `docs/review/M24_BASELINE_2026-08-05.md`. |
+| M24 | **Product Reality & Stability Convergence** — 真实基线 / 版本 SSOT / 异步生命周期 / 工作流验收 / 测试可信度 / 性能 / RC 验证 | ✅ Done (2026-08-05). 70/70 CTest green, clean-env packages verified; verdict `docs/review/M24_FINAL_VERDICT_2026-08-05.md` = READY WITH DOCUMENTED NON-BLOCKING LIMITATIONS. |
+| M25 | **RC Experience & Product Convergence** — 工作流打磨 / 压力稳定性 / 复杂度收敛 / 性能收口 / RC 验收 | 🔄 In progress (2026-08-09). Compare toolbar fits the 1100 px workflow window; `thumbnailpanel.cpp` is back under the ADR-014 guard at 682 lines; S1–S9 Release stress and the 71/71 local gate pass, including offline `updatechecker_tests`; the 10K List UI gap fell from about 2.01 s to 336 ms. Export now treats the edited directory as authoritative and rejects source aliases, hard links, and duplicate destinations before writing. Target-hardware and human UX sign-off remain. |
+
+### M25 closure addendum (2026-08-09)
+
+- Compare histogram consistency: pane overlays repopulate after layout,
+  navigation, pane swaps, and Blink rebuilds. Blink hides whole pane containers
+  while engine/UI state remains synchronized, and main/pane histograms share
+  adjusted-image and ROI scope even when the side panel is hidden or per-pane
+  overlays are enabled. Direct `compare_acceptance_tests` regressions close the
+  baseline's partially asserted overlay gap.
 
 ## Public versioning (M13+)
 
@@ -617,9 +627,12 @@ end-to-end workflow and UX polish.
   point in every cell; inspector samples all cells at the synced point.
 - ✅ **focus-lock / reference pin (n/1)** — double-click (or 「锁定基准」按钮)
   pins a reference cell; diff overlay + inspector delta use it as base.
-- ⬜ Editing within compare (brightness/contrast/gamma/WB/crop/rotate) — pending.
-- ⬜ Reference/difference metrics (PSNR/SSIM quick) + per-pane histogram overlay — pending.
-- ⬜ Layout presets save/load + per-pane overlay toggles + swap panes — pending.
+- ✅ Editing within compare (brightness/contrast/gamma/WB per-cell + reset;
+  crop/rotate NOT implemented in-compare) — verified M24/M25, `compareworkspace_editpanel.cpp`.
+- ✅ Reference/difference metrics (PSNR/SSIM quick) + per-pane histogram overlay
+  (incl. ROI-scoped histogram) — verified M24/M25.
+- ✅ Layout presets save/load (`.mvc`) + swap panes + per-pane overlay toggles —
+  verified M24/M25.
 
 ---
 

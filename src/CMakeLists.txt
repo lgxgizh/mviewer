@@ -131,6 +131,8 @@ add_library(mviewer_ui STATIC
     breadcrumbbar.cpp
     metadataoverlay.cpp
     thumbnailpanel.cpp
+    thumbnailpanel_selection.cpp
+    thumbnailpanel_pipeline.cpp
     thumbnailpanel_filters.cpp
     thumbnailpanel_fileops.cpp
     thumbnailpanel_delegates.cpp
@@ -812,6 +814,16 @@ target_compile_features(search_tests PRIVATE cxx_std_20)
 target_include_directories(search_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(search_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME search_tests COMMAND search_tests)
+
+# M25: offline update-checker reliability and endpoint policy regressions.
+add_executable(test_updatechecker
+    test_updatechecker.cpp
+)
+
+target_link_libraries(test_updatechecker PRIVATE mviewer_core)
+target_compile_features(test_updatechecker PRIVATE cxx_std_20)
+target_include_directories(test_updatechecker PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME updatechecker_tests COMMAND test_updatechecker)
 
 # ─── M15 Sprint 2-2 Batch Workflow (batch processor + dialog) ────────────────
 add_executable(batch_tests

@@ -15,6 +15,7 @@
 #include "core/export/ExportJob.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QImage>
 #include <QTemporaryDir>
 
@@ -22,7 +23,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -51,6 +54,193 @@ QString writeSeedPng(const QString &dir, const QString &name, int w, int h)
             img.setPixel(x, y, QColor((x * 3) & 0xFF, (y * 5) & 0xFF, 128).rgb());
     img.save(path, "PNG");
     return path;
+}
+
+std::vector<char> readBytes(const fs::path &path)
+{
+    std::ifstream file(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+}
+
+bool hasExportTemp(const fs::path &dir)
+{
+    std::error_code ec;
+    fs::directory_iterator it(dir, ec);
+    const fs::directory_iterator end;
+    for (; !ec && it != end; it.increment(ec))
+    {
+        if (it->path().filename().string().find(".mviewer-tmp") != std::string::npos)
+            return true;
+    }
+    return false;
+}
+
+void testSourceDestinationConflict(QTemporaryDir &tmp)
+{
+    std::cout << "-- Export safety: source/destination conflict --\n";
+    QDir dir(tmp.filePath("same-path"));
+    dir.mkpath(".");
+    const QString source = writeSeedPng(dir.absolutePath(), "source.png", 37, 29);
+    const std::vector<char> beforeBytes = readBytes(source.toStdString());
+    const QImage beforeImage(source);
+
+    mviewer::exportjob::ExportJobConfig cfg;
+    cfg.outDir = dir.absolutePath().toStdString();
+    cfg.format = "png";
+    cfg.renamePattern = "{name}";
+    cfg.sources = {source.toStdString()};
+
+    const auto result = mviewer::exportjob::run(cfg);
+    CHECK(result.done == 0 && result.failed == result.total,
+          "source/destination conflict rejects the whole job");
+    CHECK(result.message.find("source") != std::string::npos &&
+              result.message.find("destination") != std::string::npos &&
+              result.message.find("conflict") != std::string::npos,
+          "source/destination conflict is reported clearly");
+    CHECK(readBytes(source.toStdString()) == beforeBytes,
+          "source/destination conflict preserves source bytes");
+
+    const QImage afterImage(source);
+    CHECK(!afterImage.isNull() && afterImage.size() == beforeImage.size() &&
+              afterImage == beforeImage,
+          "source/destination conflict preserves dimensions and pixels");
+    CHECK(!hasExportTemp(dir.absolutePath().toStdString()),
+          "source/destination conflict leaves no temp file");
+}
+
+void testDuplicateDestinations(QTemporaryDir &tmp)
+{
+    std::cout << "-- Export safety: duplicate destinations --\n";
+    QDir in(tmp.filePath("duplicate-in"));
+    in.mkpath(".");
+    QDir out(tmp.filePath("duplicate-out"));
+    out.mkpath(".");
+    const QString first = writeSeedPng(in.absolutePath(), "first.png", 31, 23);
+    const QString second = writeSeedPng(in.absolutePath(), "second.png", 47, 19);
+
+    mviewer::exportjob::ExportJobConfig cfg;
+    cfg.outDir = out.absolutePath().toStdString();
+    cfg.format = "png";
+    cfg.renamePattern = "constant";
+    cfg.sources = {first.toStdString(), second.toStdString()};
+
+    const auto result = mviewer::exportjob::run(cfg);
+    CHECK(result.done == 0 && result.failed == 2,
+          "duplicate destinations reject the whole batch");
+    CHECK(result.message.find("duplicate") != std::string::npos ||
+              result.message.find("conflict") != std::string::npos,
+          "duplicate destination conflict is reported clearly");
+    CHECK(!fs::exists(out.filePath("constant.png").toStdString()),
+          "duplicate destination conflict creates no final output");
+    CHECK(!hasExportTemp(out.absolutePath().toStdString()),
+          "duplicate destination conflict leaves no temp file");
+}
+
+#ifdef _WIN32
+void testWindowsOrdinalDestinationCollisions(QTemporaryDir &tmp)
+{
+    std::cout << "-- Export safety: Windows ordinal path collisions --\n";
+    QDir upperDir(tmp.filePath("ordinal-upper"));
+    upperDir.mkpath(".");
+    QDir lowerDir(tmp.filePath("ordinal-lower"));
+    lowerDir.mkpath(".");
+
+    const auto runCollision = [&](const QString &upperName, const QString &lowerName,
+                                  const QString &outputName, const char *message)
+    {
+        const QString upper = writeSeedPng(upperDir.absolutePath(), upperName, 21, 17);
+        const QString lower = writeSeedPng(lowerDir.absolutePath(), lowerName, 25, 19);
+        QDir out(tmp.filePath(outputName));
+        out.mkpath(".");
+
+        mviewer::exportjob::ExportJobConfig cfg;
+        cfg.outDir = out.absolutePath().toStdString();
+        cfg.format = "png";
+        cfg.renamePattern = "{name}";
+        cfg.sources = {upper.toStdString(), lower.toStdString()};
+        const auto result = mviewer::exportjob::run(cfg);
+
+        CHECK(result.done == 0 && result.failed == 2, message);
+        CHECK(result.message == "duplicate destination conflict",
+              "ordinal collision is rejected by destination preflight");
+    };
+
+    runCollision("I.png", "i.png", "ordinal-ascii-out",
+                 "CompareStringOrdinal rejects ASCII I/i destination collision");
+    runCollision(QString::fromUtf8("\xC3\x84.png"), QString::fromUtf8("\xC3\xA4.png"),
+                 "ordinal-unicode-out",
+                 "CompareStringOrdinal rejects Unicode upper/lower destination collision");
+}
+
+void testWindowsUnicodeExportSuccess(QTemporaryDir &tmp)
+{
+    std::cout << "-- Export safety: Windows Unicode success path --\n";
+    QDir in(tmp.filePath("unicode-success-in"));
+    in.mkpath(".");
+    const QString sourceName = QString::fromUtf8("source_\xC3\x84.png");
+    const QString source = writeSeedPng(in.absolutePath(), sourceName, 43, 31);
+    const QString outputDirName = QString::fromUtf8("\xE8\xBE\x93\xE5\x87\xBA");
+    const QString outputDir = tmp.filePath(outputDirName);
+    const QString suffix = QString::fromUtf8("\xE7\xBB\x93\xE6\x9E\x9C");
+
+    mviewer::exportjob::ExportJobConfig cfg;
+    cfg.outDir = outputDir.toStdString();
+    cfg.format = "png";
+    cfg.renamePattern = (QString("{name}_") + suffix).toStdString();
+    cfg.sources = {source.toStdString()};
+    const auto result = mviewer::exportjob::run(cfg);
+
+    const QString expectedName = QString("source_") + QString::fromUtf8("\xC3\x84_") +
+                                 suffix + ".png";
+    const QString expected = QDir(outputDir).filePath(expectedName);
+    CHECK(result.done == 1 && result.failed == 0,
+          "Unicode source and destination export succeeds");
+    const QImage reopened(expected);
+    CHECK(!reopened.isNull() && reopened.width() == 43 && reopened.height() == 31,
+          "Unicode destination reopens with the expected dimensions");
+    CHECK(QDir::cleanPath(QString::fromStdString(result.primaryOutput)) ==
+              QDir::cleanPath(expected),
+          "primaryOutput preserves the UTF-8 destination path");
+    const QStringList temps = QDir(outputDir).entryList(
+        QStringList{".mviewer-tmp*"}, QDir::Files | QDir::Hidden);
+    CHECK(temps.isEmpty(), "Unicode success leaves no temp file");
+}
+#endif
+
+void testHardLinkConflict(QTemporaryDir &tmp)
+{
+    std::cout << "-- Export safety: hard-linked source/destination conflict --\n";
+    QDir in(tmp.filePath("hard-link-in"));
+    in.mkpath(".");
+    QDir out(tmp.filePath("hard-link-out"));
+    out.mkpath(".");
+    const QString source = writeSeedPng(in.absolutePath(), "linked.png", 41, 27);
+    const fs::path destination = out.filePath("linked.png").toStdString();
+
+    std::error_code linkError;
+    fs::create_hard_link(source.toStdString(), destination, linkError);
+    if (linkError)
+    {
+        std::cout << "[skip] hard-link conflict test: " << linkError.message() << "\n";
+        return;
+    }
+
+    const std::vector<char> beforeBytes = readBytes(source.toStdString());
+    mviewer::exportjob::ExportJobConfig cfg;
+    cfg.outDir = out.absolutePath().toStdString();
+    cfg.format = "png";
+    cfg.renamePattern = "{name}";
+    cfg.sources = {source.toStdString()};
+
+    const auto result = mviewer::exportjob::run(cfg);
+    CHECK(result.done == 0 && result.failed == 1,
+          "hard-linked source/destination rejects the whole job");
+    CHECK(result.message.find("source/destination conflict") != std::string::npos,
+          "hard-linked source/destination conflict is reported clearly");
+    CHECK(readBytes(source.toStdString()) == beforeBytes,
+          "hard-linked source/destination preserves source bytes");
+    CHECK(!hasExportTemp(out.absolutePath().toStdString()),
+          "hard-linked source/destination leaves no temp file");
 }
 
 void testD5D6Formats(QTemporaryDir &tmp)
@@ -184,13 +374,14 @@ void testD4DegradedDirs(QTemporaryDir &tmp)
     QDir in(tmp.filePath("in4"));
     in.mkpath(".");
     const QString seed = writeSeedPng(in.absolutePath(), "a.png", 24, 24);
+    const QString secondSeed = writeSeedPng(in.absolutePath(), "b.png", 24, 24);
 
     // Invalid output directory (illegal path chars): every item fails cleanly.
     mviewer::exportjob::ExportJobConfig cfg;
     cfg.outDir = tmp.filePath("bad dir \u0001<>:\"").toStdString();
     cfg.format = "png";
     cfg.renamePattern = "{name}";
-    cfg.sources = {seed.toStdString(), seed.toStdString()};
+    cfg.sources = {seed.toStdString(), secondSeed.toStdString()};
     const auto r = mviewer::exportjob::run(cfg);
     CHECK(r.failed == 2 && r.done == 0,
           "D#4: unwritable output dir yields per-item failures, no crash");
@@ -217,6 +408,13 @@ int main(int argc, char **argv)
     if (!tmp.isValid())
         return 1;
 
+    testSourceDestinationConflict(tmp);
+    testDuplicateDestinations(tmp);
+#ifdef _WIN32
+    testWindowsOrdinalDestinationCollisions(tmp);
+    testWindowsUnicodeExportSuccess(tmp);
+#endif
+    testHardLinkConflict(tmp);
     testD5D6Formats(tmp);
     testD8AtomicReplace(tmp);
     testD3Cancel(tmp);

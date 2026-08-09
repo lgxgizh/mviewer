@@ -3,6 +3,7 @@
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/ExportReport.h"
 #include "core/compare/CompareEngine.h"
+#include "core/compare/Histogram.h"
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
 
@@ -379,6 +380,7 @@ class CompareWorkspace : public QWidget
 
     // ── M16.7: adjusted-aware diff/metrics + per-pane histogram overlay ──
     ImageData adjustedPixels(int cellIdx) const;
+    mviewer::core::Histogram histogramForImage(int idx) const;
     void refreshCellDiff(int idx);
     void onAdjEditFinished();
     void refreshCellHist(int idx);

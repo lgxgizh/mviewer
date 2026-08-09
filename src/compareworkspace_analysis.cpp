@@ -196,6 +196,7 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     histOpts->addWidget(m_histLogChk);
 
     m_roiHistChk = new QCheckBox(QStringLiteral("ROI"), this);
+    m_roiHistChk->setObjectName("roiHistogramToggle");
     m_roiHistChk->setToolTip(tr("仅统计当前 ROI 选区内的像素（先在图像上框选 ROI）"));
     connect(m_roiHistChk, &QCheckBox::toggled, this, [this](bool) { refreshHistograms(); });
     histOpts->addWidget(m_roiHistChk);
@@ -209,12 +210,14 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
 
     // M16.5: per-pane histogram toggle
     m_perPaneHistChk = new QCheckBox(tr("每窗格独立直方图"), this);
+    m_perPaneHistChk->setObjectName("perPaneHistogramToggle");
     m_perPaneHistChk->setChecked(false);
     connect(m_perPaneHistChk, &QCheckBox::toggled, this, &CompareWorkspace::onPerPaneHistToggled);
     sideLay->addWidget(m_perPaneHistChk);
 
     // M16.7: per-pane histogram overlay toggle
     m_paneHistOverlayChk = new QCheckBox(tr("每格直方图叠加"), this);
+    m_paneHistOverlayChk->setObjectName("paneHistogramOverlayToggle");
     m_paneHistOverlayChk->setChecked(m_paneHistOverlay);
     connect(m_paneHistOverlayChk, &QCheckBox::toggled, this,
             &CompareWorkspace::onPaneHistOverlayToggled);
@@ -352,6 +355,19 @@ void CompareWorkspace::updateInspector(int x, int y)
     }
 }
 
+mviewer::core::Histogram CompareWorkspace::histogramForImage(int idx) const
+{
+    const ImageData pixels = adjustedPixels(idx);
+    if (pixels.isNull())
+        return mviewer::core::Histogram{};
+
+    const bool useRoi = m_roiHistChk && m_roiHistChk->isChecked() && !m_lastSelection.isEmpty();
+    if (useRoi)
+        return mviewer::core::computeHistogram(pixels, m_lastSelection.x, m_lastSelection.y,
+                                               m_lastSelection.width, m_lastSelection.height);
+    return mviewer::core::computeHistogram(pixels);
+}
+
 void CompareWorkspace::refreshHistograms()
 {
     if (!m_hist)
@@ -361,16 +377,6 @@ void CompareWorkspace::refreshHistograms()
     // M23: ROI + Histogram 联动 — when the ROI toggle is on and a selection
     // exists, every histogram is computed over the ROI only.
     const bool useRoi = m_roiHistChk && m_roiHistChk->isChecked() && !m_lastSelection.isEmpty();
-    auto histOf = [this, useRoi](int idx) -> mviewer::core::Histogram
-    {
-        const ImageData pixels = adjustedPixels(idx);
-        if (pixels.isNull())
-            return mviewer::core::Histogram{};
-        if (useRoi)
-            return mviewer::core::computeHistogram(pixels, m_lastSelection.x, m_lastSelection.y,
-                                                   m_lastSelection.width, m_lastSelection.height);
-        return mviewer::core::computeHistogram(pixels);
-    };
 
     if (m_histTitle)
     {
@@ -387,7 +393,7 @@ void CompareWorkspace::refreshHistograms()
     if (m_perPaneHist && m_editIdx >= 0 && m_editIdx < n)
     {
         // Per-pane: show only the selected cell's histogram
-        m_hist->setHistograms({histOf(m_editIdx)});
+        m_hist->setHistograms({histogramForImage(m_editIdx)});
     }
     else
     {
@@ -395,10 +401,12 @@ void CompareWorkspace::refreshHistograms()
         std::vector<mviewer::core::Histogram> hists;
         hists.reserve(static_cast<size_t>(n));
         for (int i = 0; i < n; ++i)
-            hists.push_back(histOf(i));
+            hists.push_back(histogramForImage(i));
         m_hist->setHistograms(hists);
-        // M16.7: keep the in-cell per-pane histograms in sync.
-        for (int i = 0; i < static_cast<int>(m_cellHists.size()); ++i)
-            refreshCellHist(i);
     }
+
+    // Pane overlays are their own presentation surface: keep them current even
+    // when the side panel is hidden or its main histogram is in per-pane mode.
+    for (int i = 0; i < static_cast<int>(m_cellHists.size()); ++i)
+        refreshCellHist(i);
 }

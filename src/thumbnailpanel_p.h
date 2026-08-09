@@ -1,9 +1,12 @@
 // M20 P0#3: shared private header for the ThumbnailPanel implementation,
 // which is split across several translation units by responsibility:
-//   thumbnailpanel.cpp           core view (model, pipeline, view modes)
+//   thumbnailpanel.cpp           core view / model / directory scan
 //   thumbnailpanel_filters.cpp   filtering / sorting / metadata index
 //   thumbnailpanel_fileops.cpp   rename / trash / copy / move / batch export
 //   thumbnailpanel_delegates.cpp thumb / details / list item delegates
+//   thumbnailpanel_viewmode.cpp  view-mode configuration
+//   thumbnailpanel_selection.cpp selection / path navigation
+//   thumbnailpanel_pipeline.cpp  visible-range scheduling / thumbnail delivery
 // Only ThumbnailPanel TUs may include this header.
 #pragma once
 
@@ -86,6 +89,9 @@ inline std::vector<std::string> toStdPaths(const QStringList &in)
 // P0-4: shared column geometry for the Details view so the delegate cells and
 // the header row stay perfectly aligned.
 inline constexpr int kDetailsHeaderH = 24;
+inline constexpr int kListItemWidth = 220;
+inline constexpr int kListItemHeight = 22;
+inline constexpr int kDetailsItemHeight = 52;
 struct DetailLayout
 {
     QRect thumb, name, res, size, date, fmt, rate, label, camera, lens, iso;

@@ -1,5 +1,7 @@
 #include "compareworkspace_p.h"
 
+#include <utility>
+
 CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 {
     setMouseTracking(true);
@@ -59,12 +61,27 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
                                                          Qt::QueuedConnection);
                                                  });
 
-    auto *syncBar = new QWidget(this);
-    auto *syncLayout = new QHBoxLayout(syncBar);
-    syncLayout->setContentsMargins(0, 0, 0, 0);
-    syncLayout->setSpacing(12);
-    syncLayout->addWidget(m_syncZoomChk);
-    syncLayout->addWidget(m_syncDragChk);
+    auto *toolbarContainer = new QWidget(this);
+    auto *toolbarLayout = new QVBoxLayout(toolbarContainer);
+    toolbarLayout->setContentsMargins(0, 0, 0, 0);
+    toolbarLayout->setSpacing(4);
+    auto makeToolbar = [toolbarContainer](const char *name)
+    {
+        auto *bar = new QWidget(toolbarContainer);
+        bar->setObjectName(name);
+        auto *layout = new QHBoxLayout(bar);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(6);
+        return std::pair{bar, layout};
+    };
+    auto [modeBar, modeLayout] = makeToolbar("compareModeToolbar");
+    auto [viewBar, viewLayout] = makeToolbar("compareViewToolbar");
+    auto [toolBar, toolLayout] = makeToolbar("compareToolToolbar");
+    toolbarLayout->addWidget(modeBar);
+    toolbarLayout->addWidget(viewBar);
+    toolbarLayout->addWidget(toolBar);
+    viewLayout->addWidget(m_syncZoomChk);
+    viewLayout->addWidget(m_syncDragChk);
 
     // H5: "统一像素倍率" — align every pane at the same zoom so images of
     // different resolutions can be compared 1:1 (pixel-corresponding). Independent
@@ -79,7 +96,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
                 fitAll();
                 update();
             });
-    syncLayout->addWidget(m_uniformScaleChk);
+    viewLayout->addWidget(m_uniformScaleChk);
 
     // M14-3: blink (flicker) compare — rapid toggle between base and target.
     // Click the button (or press B) to start/stop rapid blinking.
@@ -93,7 +110,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
                 else
                     stopBlink();
             });
-    syncLayout->addWidget(m_blinkChk);
+    modeLayout->addWidget(m_blinkChk);
 
     // P0-4: split / swipe compare for exactly two images.
     m_splitChk = new QCheckBox("左右分割(&S)", this);
@@ -109,7 +126,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
                     m_grid->setVisible(!anyCanvasCompareMode());
                 update();
             });
-    syncLayout->addWidget(m_splitChk);
+    modeLayout->addWidget(m_splitChk);
 
     m_swipeChk = new QCheckBox("滑动对比(&W)", this);
     m_swipeChk->setEnabled(false);
@@ -123,7 +140,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
                     m_grid->setVisible(!anyCanvasCompareMode());
                 update();
             });
-    syncLayout->addWidget(m_swipeChk);
+    modeLayout->addWidget(m_swipeChk);
 
     // A-4.1: Overlay compare mode — semi-transparent blend of the two images.
     m_overlayChk = new QCheckBox("叠加对比(&O)", this);
@@ -140,7 +157,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
                     m_overlayAlphaSlider->setEnabled(on);
                 update();
             });
-    syncLayout->addWidget(m_overlayChk);
+    modeLayout->addWidget(m_overlayChk);
 
     // A-4.1: overlay opacity slider (0–100%).
     m_overlayAlphaSlider = new QSlider(Qt::Horizontal, this);
@@ -157,30 +174,31 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
                     m_overlayAlphaLabel->setText(QString("%1%").arg(v));
                 update();
             });
-    syncLayout->addWidget(m_overlayAlphaSlider);
+    modeLayout->addWidget(m_overlayAlphaSlider);
     m_overlayAlphaLabel = new QLabel(QString("%1%").arg(m_overlayAlpha), this);
     m_overlayAlphaLabel->setMinimumWidth(28);
-    syncLayout->addWidget(m_overlayAlphaLabel);
+    modeLayout->addWidget(m_overlayAlphaLabel);
 
     // M23: checkerboard compare mode (棋盘格) — alternating blocks of A/B.
-    buildCheckerboardControls(syncLayout);
+    buildCheckerboardControls(modeLayout);
 
     // A-4.5: continuous compare — walk consecutive pairs without reopening.
     m_prevPairBtn = new QPushButton("◀ 上一对", this);
     m_prevPairBtn->setToolTip(tr("比较上一对图片 (PageUp)"));
     m_prevPairBtn->setEnabled(false);
     connect(m_prevPairBtn, &QPushButton::clicked, this, &CompareWorkspace::prevPair);
-    syncLayout->addWidget(m_prevPairBtn);
+    modeLayout->addWidget(m_prevPairBtn);
 
     m_nextPairBtn = new QPushButton("下一对 ▶", this);
     m_nextPairBtn->setToolTip(tr("比较下一对图片 (PageDown)"));
     m_nextPairBtn->setEnabled(false);
     connect(m_nextPairBtn, &QPushButton::clicked, this, &CompareWorkspace::nextPair);
-    syncLayout->addWidget(m_nextPairBtn);
+    modeLayout->addWidget(m_nextPairBtn);
+    modeLayout->addStretch(1);
 
     // M15: threshold slider for difference heatmap (0-255).
     auto *thresholdLabel = new QLabel("阈值:", this);
-    syncLayout->addWidget(thresholdLabel);
+    toolLayout->addWidget(thresholdLabel);
     m_thresholdSlider = new QSlider(Qt::Horizontal, this);
     m_thresholdSlider->setObjectName("diffThresholdSlider");
     m_thresholdSlider->setRange(0, 255);
@@ -196,13 +214,13 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
             });
     connect(m_thresholdSlider, &QSlider::sliderReleased, this,
             &CompareWorkspace::refreshAllDiffOverlays);
-    syncLayout->addWidget(m_thresholdSlider);
+    toolLayout->addWidget(m_thresholdSlider);
     m_thresholdLabel = new QLabel("0", this);
     m_thresholdLabel->setObjectName("diffThresholdValueLabel");
     m_thresholdLabel->setMinimumWidth(24);
     connect(m_thresholdSlider, &QSlider::valueChanged, this,
             [this](int value) { m_thresholdLabel->setText(QString::number(value)); });
-    syncLayout->addWidget(m_thresholdLabel);
+    toolLayout->addWidget(m_thresholdLabel);
 
     // A-4.6: Diff highlight mode (red diffs / gray similar).
     m_diffHighlightChk = new QCheckBox(tr("高亮差异"), this);
@@ -213,33 +231,33 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
                 m_diffHighlight = on;
                 refreshAllDiffOverlays();
             });
-    syncLayout->addWidget(m_diffHighlightChk);
+    toolLayout->addWidget(m_diffHighlightChk);
 
     // A-4.3: Pixel Link — mark corresponding points across cells.
     m_pixelLinkChk = new QCheckBox(tr("像素连线"), this);
     m_pixelLinkChk->setToolTip(tr("开启后点击图片添加标记点，显示各图 RGB 与差值"));
     connect(m_pixelLinkChk, &QCheckBox::toggled, this, &CompareWorkspace::onPixelLinkToggled);
-    syncLayout->addWidget(m_pixelLinkChk);
+    toolLayout->addWidget(m_pixelLinkChk);
     m_clearLinksBtn = new QPushButton(tr("清除标记"), this);
     m_clearLinksBtn->setEnabled(false);
     m_clearLinksBtn->setToolTip(tr("清除全部像素连线标记"));
     connect(m_clearLinksBtn, &QPushButton::clicked, this, &CompareWorkspace::clearLinkPoints);
-    syncLayout->addWidget(m_clearLinksBtn);
+    toolLayout->addWidget(m_clearLinksBtn);
     m_linkInfoLabel = new QLabel(tr("标记: 0"), this);
     m_linkInfoLabel->setMinimumWidth(48);
     m_linkInfoLabel->setStyleSheet("color:#aaa;");
-    syncLayout->addWidget(m_linkInfoLabel);
+    toolLayout->addWidget(m_linkInfoLabel);
 
     // P0 #③: explicit multi-layout selector (auto / single / 2-4 columns / row).
     auto *layoutLabel = new QLabel(tr("布局:"), this);
-    syncLayout->addWidget(layoutLabel);
+    viewLayout->addWidget(layoutLabel);
     m_layoutCombo = new QComboBox(this);
     m_layoutCombo->addItems(
         {tr("自动"), tr("单列"), tr("2 列"), tr("3 列"), tr("4 列"), tr("一行"), tr("自定义")});
     m_layoutCombo->setCurrentIndex(0);
     connect(m_layoutCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             &CompareWorkspace::onLayoutChanged);
-    syncLayout->addWidget(m_layoutCombo);
+    viewLayout->addWidget(m_layoutCombo);
 
     // A-4.2: custom M×N grid spin boxes (active when layout = 自定义).
     // A-4.2: custom M×N grid spin boxes (active when layout = 自定义).
@@ -247,7 +265,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     // 行 spin box is disabled and labeled as auto-derived to avoid a misleading UI.
     auto *rowsLabel = new QLabel(tr("行"), this);
     rowsLabel->setToolTip(tr("行数由列数自动推导（按列填充，无法单独设置）"));
-    syncLayout->addWidget(rowsLabel);
+    viewLayout->addWidget(rowsLabel);
     m_gridRowsSpin = new QSpinBox(this);
     m_gridRowsSpin->setRange(1, 8);
     m_gridRowsSpin->setValue(2);
@@ -256,8 +274,8 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     m_gridRowsSpin->setToolTip(tr("行数由列数自动推导（按列填充，无法单独设置）"));
     connect(m_gridRowsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
             &CompareWorkspace::onCustomGridChanged);
-    syncLayout->addWidget(m_gridRowsSpin);
-    syncLayout->addWidget(new QLabel(tr("列"), this));
+    viewLayout->addWidget(m_gridRowsSpin);
+    viewLayout->addWidget(new QLabel(tr("列"), this));
     m_gridColsSpin = new QSpinBox(this);
     m_gridColsSpin->setRange(1, 8);
     m_gridColsSpin->setValue(2);
@@ -265,21 +283,21 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     m_gridColsSpin->setMaximumWidth(48);
     connect(m_gridColsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
             &CompareWorkspace::onCustomGridChanged);
-    syncLayout->addWidget(m_gridColsSpin);
+    viewLayout->addWidget(m_gridColsSpin);
 
     // P0 #③: inspector + histogram side panel toggle.
     m_sideChk = new QCheckBox(tr("检视面板"), this);
     m_sideChk->setObjectName("analysisPanelToggle");
     m_sideChk->setChecked(false);
     connect(m_sideChk, &QCheckBox::toggled, this, &CompareWorkspace::onSideToggled);
-    syncLayout->addWidget(m_sideChk);
+    viewLayout->addWidget(m_sideChk);
 
     // M16.1: cursor-sync crosshair (n/n). When on, hovering any cell draws a
     // crosshair at the same image-space point across all compared cells, and the
     // inspector samples every cell at that point.
     m_crosshairChk = new QCheckBox(tr("同步准星"), this);
     m_crosshairChk->setChecked(false);
-    syncLayout->addWidget(m_crosshairChk);
+    viewLayout->addWidget(m_crosshairChk);
 
     // M16.1: focus-lock / reference pin (n/1). Locks a cell as the comparison
     // reference; diff overlays and inspector deltas use it as the base.
@@ -293,12 +311,12 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
                 const int idx = (on && m_hoverIdx >= 0) ? m_hoverIdx : (on ? 0 : m_focusIndex);
                 onFocusRequested(on ? idx : -1);
             });
-    syncLayout->addWidget(m_focusBtn);
+    viewLayout->addWidget(m_focusBtn);
     m_focusLabel = new QLabel(tr("基准: —"), this);
     m_focusLabel->setMinimumWidth(60);
-    syncLayout->addWidget(m_focusLabel);
+    viewLayout->addWidget(m_focusLabel);
 
-    syncLayout->addStretch(1);
+    viewLayout->addStretch(1);
 
     m_grid = new QWidget;
     m_layout = new QGridLayout(m_grid);
@@ -333,35 +351,36 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     m_savePresetBtn = new QPushButton(tr("存储布局"), this);
     m_savePresetBtn->setToolTip(tr("将当前布局存储为预设"));
     connect(m_savePresetBtn, &QPushButton::clicked, this, &CompareWorkspace::onSavePreset);
-    syncLayout->addWidget(m_savePresetBtn);
+    toolLayout->addWidget(m_savePresetBtn);
 
     m_loadPresetBtn = new QPushButton(tr("读取布局"), this);
     m_loadPresetBtn->setToolTip(tr("从预设文件中读取布局"));
     connect(m_loadPresetBtn, &QPushButton::clicked, this, &CompareWorkspace::onLoadPreset);
-    syncLayout->addWidget(m_loadPresetBtn);
+    toolLayout->addWidget(m_loadPresetBtn);
 
     m_swapBtn = new QPushButton(tr("交换窗格"), this);
     m_swapBtn->setToolTip(tr("交换选中的两个窗格"));
     m_swapBtn->setEnabled(false);
     connect(m_swapBtn, &QPushButton::clicked, this, &CompareWorkspace::onSwapPanes);
-    syncLayout->addWidget(m_swapBtn);
+    toolLayout->addWidget(m_swapBtn);
 
     // P1 #④: Analyze & export buttons in the compare toolbar.
     m_analyzeBtn = new QPushButton(tr("分析"), this);
     m_analyzeBtn->setToolTip(tr("在分析面板中打开当前焦点图像"));
     connect(m_analyzeBtn, &QPushButton::clicked, this, &CompareWorkspace::analyzeCurrent);
-    syncLayout->addWidget(m_analyzeBtn);
+    toolLayout->addWidget(m_analyzeBtn);
 
     m_exportReportBtn = new QPushButton(tr("导出报告"), this);
     m_exportReportBtn->setToolTip(tr("将对比结果导出为 HTML/Markdown/JSON 报告"));
     connect(m_exportReportBtn, &QPushButton::clicked, this,
             &CompareWorkspace::exportReportRequested);
-    syncLayout->addWidget(m_exportReportBtn);
+    toolLayout->addWidget(m_exportReportBtn);
+    toolLayout->addStretch(1);
 
     auto *leftLay = new QVBoxLayout;
     leftLay->setContentsMargins(0, 0, 0, 0);
     leftLay->setSpacing(4);
-    leftLay->addWidget(syncBar);
+    leftLay->addWidget(toolbarContainer);
     leftLay->addWidget(scroll, 1);
 
     auto *root = new QHBoxLayout(this);

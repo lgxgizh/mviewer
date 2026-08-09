@@ -465,13 +465,7 @@ void CompareWorkspace::refreshCellHist(int idx)
     HistogramWidget *hw = m_cellHists[static_cast<size_t>(idx)];
     if (!hw)
         return;
-    const ImageData px = adjustedPixels(idx);
-    if (px.isNull())
-    {
-        hw->setHistograms({});
-        return;
-    }
-    hw->setHistograms({mviewer::core::computeHistogram(px)});
+    hw->setHistograms({histogramForImage(idx)});
 }
 
 void CompareWorkspace::positionCellHists()

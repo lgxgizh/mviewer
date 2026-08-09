@@ -20,6 +20,32 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- **Safe export destinations:** the export dialog now uses the directory currently shown to the
+  user instead of a stale constructor value. Image export preflights the whole batch before any
+  write, rejects source/destination aliases, hard links, and duplicate names (including Windows
+  ordinal case collisions), preserves UTF-8 source/output names across Windows filesystem calls,
+  and replaces existing outputs without deleting the old file before a successful atomic commit.
+- **Reliable update checks:** standard GitHub release JSON now parses correctly, escaped
+  `html_url` values are honored, numeric version overflow cannot terminate the check, and custom
+  endpoints no longer produce fabricated or unsafe non-HTTPS release links. Offline
+  `updatechecker_tests` cover URL construction, JSON escapes, version ordering and overflow,
+  transport failures, callback delivery, and release-link safety without network access.
+- **Responsive large-folder List view:** thumbnail scheduling now uses
+  mode-specific visible-window geometry for List, Details, Filmstrip, and icon
+  grids instead of treating a missing grid size as a 1 px cell. In the 10,000
+  image Release soak, the worst List-view UI gap fell from about 2.01 s to
+  336 ms while keeping predictive loading.
+- **Readable Compare controls:** the previously overlong single-row Compare
+  toolbar is grouped into three compact rows for modes, view/layout, and
+  measurement/output. All controls and shortcuts remain directly available,
+  and the toolbar now fits the standard 1100 px workflow window without
+  horizontal clipping.
+- **M25 Compare histogram consistency:** pane overlays repopulate after layout,
+  navigation, pane swaps, and Blink rebuilds. Blink hides whole pane containers
+  and keeps engine/UI state synchronized during active rebuilds. Main and
+  per-pane histograms now share adjusted-image and ROI scope even with the side
+  panel hidden or per-pane overlays enabled; direct `compare_acceptance_tests`
+  regressions close the baseline's partially asserted overlay gap.
 - **Reliable cross-drive folder navigation:** the folder tree now exposes every
   available drive, resolves typed and restored paths to the exact directory,
   and clears a name filter when it would hide a programmatic navigation target.

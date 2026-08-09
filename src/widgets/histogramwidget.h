@@ -21,6 +21,17 @@ class HistogramWidget : public QWidget
     void setHistograms(const std::vector<mviewer::core::Histogram> &hists);
     void clear();
 
+    int histogramCount() const noexcept
+    {
+        return static_cast<int>(m_hists.size());
+    }
+    long histogramTotal(int index) const noexcept
+    {
+        if (index < 0 || index >= histogramCount())
+            return 0;
+        return m_hists[static_cast<size_t>(index)].total;
+    }
+
     // M23: channel visibility (R/G/B/Luma) and log-scale Y axis.
     // Defaults keep the historical look: RGB on, luma off, linear scale.
     void setChannelVisible(int channel, bool on); // 0=R 1=G 2=B 3=Luma

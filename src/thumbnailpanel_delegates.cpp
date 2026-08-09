@@ -412,7 +412,7 @@ QSize ThumbnailPanel::DetailsDelegate::sizeHint(const QStyleOptionViewItem &,
     // Wide enough to show every column without overlap; the Details view scrolls
     // horizontally when the viewport is narrower (see setViewMode Details branch).
     const int w = qMax(detailTotalWidth(), m_panel->viewport()->width());
-    return QSize(w, 52);
+    return QSize(w, kDetailsItemHeight);
 }
 
 // ---- ListDelegate ----------------------------------------------------------
@@ -459,6 +459,6 @@ void ThumbnailPanel::ListDelegate::paint(QPainter *painter, const QStyleOptionVi
 QSize ThumbnailPanel::ListDelegate::sizeHint(const QStyleOptionViewItem &,
                                              const QModelIndex &) const
 {
-    // Fixed 220px width so items wrap into columns; single 22px row height.
-    return QSize(220, 22);
+    // Fixed width so items wrap into columns; single compact row height.
+    return QSize(kListItemWidth, kListItemHeight);
 }

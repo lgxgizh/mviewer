@@ -3,6 +3,16 @@
 
 void CompareWorkspace::rebuildCells()
 {
+    // Two-image Blink detaches the inactive pane so the active one can span the
+    // grid. Reattach every tracked pane before draining the layout, otherwise a
+    // rebuild triggered by layout/navigation would leave that pane orphaned.
+    for (RawImageView *view : m_cellViews)
+    {
+        QWidget *pane = view ? view->parentWidget() : nullptr;
+        if (pane && m_layout->indexOf(pane) < 0)
+            m_layout->addWidget(pane);
+    }
+
     QLayoutItem *item;
     while ((item = m_layout->takeAt(0)))
     {
@@ -38,6 +48,7 @@ void CompareWorkspace::rebuildCells()
     {
         // Each cell: a RawImageView for the image + a QLabel caption below
         auto *cellWidget = new QWidget(m_grid);
+        cellWidget->setObjectName(QString("comparePane%1").arg(i));
         auto *cellLay = new QVBoxLayout(cellWidget);
         cellLay->setContentsMargins(0, 0, 0, 0);
         cellLay->setSpacing(1);
@@ -61,11 +72,13 @@ void CompareWorkspace::rebuildCells()
         // M16.7: per-pane histogram overlay widget (hidden until toggled).
         {
             QFrame *hframe = new QFrame(cellWidget);
+            hframe->setObjectName(QString("paneHistogramFrame%1").arg(i));
             hframe->setStyleSheet("background-color: rgba(15,15,15,210); border-radius:3px;");
             hframe->setVisible(m_paneHistOverlay);
             auto *hl = new QVBoxLayout(hframe);
             hl->setContentsMargins(2, 2, 2, 2);
             auto *hw = new HistogramWidget(hframe);
+            hw->setObjectName(QString("paneHistogram%1").arg(i));
             hl->addWidget(hw);
             m_cellHists.push_back(hw);
         }
@@ -115,6 +128,7 @@ void CompareWorkspace::rebuildCells()
 
         // Caption label
         auto *caption = new QLabel(cellWidget);
+        caption->setObjectName(QString("paneCaption%1").arg(i));
         caption->setAlignment(Qt::AlignCenter);
         caption->setStyleSheet("QLabel{background:#222;color:#ccc;padding:2px;}");
         caption->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
@@ -141,6 +155,18 @@ void CompareWorkspace::rebuildCells()
     // it across all cells, exactly as when it was first drawn).
     if (m_lastSelection.width > 0)
         applySelectionToAll(m_lastSelection);
+
+    // Rebuilds create fresh overlay widgets. Repopulate them immediately from
+    // the same adjusted/ROI-aware histogram path used by the side panel.
+    if (m_paneHistOverlay)
+        for (int i = 0; i < static_cast<int>(m_cellHists.size()); ++i)
+            refreshCellHist(i);
+
+    if (m_blinkTimer && m_blinkTimer->isActive())
+    {
+        syncEngineBlink();
+        applyBlink(m_blinkState);
+    }
 
     QTimer::singleShot(0, this, &CompareWorkspace::positionCellHists);
 }
@@ -228,10 +254,18 @@ void CompareWorkspace::stopBlink()
     if (m_blinkTimer)
         m_blinkTimer->stop();
     m_engine.clearBlink(); // M24: capture must report "blink off" after stopping
-    // restore all cells visible
+
+    // Restore visibility before rebuilding the normal grid. rebuildCells()
+    // centrally reattaches any pane detached by two-image Blink.
     for (auto *v : m_cellViews)
-        if (v)
-            v->setVisible(true);
+    {
+        if (!v)
+            continue;
+        QWidget *pane = v->parentWidget();
+        if (!pane)
+            continue;
+        pane->setVisible(true);
+    }
     // Rebuild the grid layout to restore proper cell positions after blink
     // may have repositioned cells.
     rebuildCells();
@@ -278,7 +312,9 @@ void CompareWorkspace::applyBlink(bool state)
         {
             if (!m_cellViews[i])
                 continue;
-            m_cellViews[i]->setVisible(i == activeIdx);
+            QWidget *pane = m_cellViews[i]->parentWidget();
+            if (pane)
+                pane->setVisible(i == activeIdx);
         }
         // Reposition the active cell to span the entire grid area.
         for (int i = 0; i < m_layout->count(); ++i)
@@ -295,8 +331,12 @@ void CompareWorkspace::applyBlink(bool state)
         {
             auto *cellWidget = m_cellViews[activeIdx]->parentWidget();
             if (cellWidget)
+            {
+                cellWidget->setVisible(true);
                 m_layout->addWidget(cellWidget, 0, 0, -1, -1);
+            }
         }
+        QTimer::singleShot(0, this, &CompareWorkspace::positionCellHists);
     }
     else
     {
@@ -305,10 +345,13 @@ void CompareWorkspace::applyBlink(bool state)
         {
             if (!m_cellViews[i])
                 continue;
+            QWidget *pane = m_cellViews[i]->parentWidget();
+            if (!pane)
+                continue;
             if (i == base)
-                m_cellViews[i]->setVisible(!state);
+                pane->setVisible(!state);
             else
-                m_cellViews[i]->setVisible(state);
+                pane->setVisible(state);
         }
     }
 }

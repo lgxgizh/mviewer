@@ -8,26 +8,37 @@
 //   S5  4000x4000 TIFF full decode (cold)
 //   S6  corrupt-mixed 1000-image directory: full browse + clean exit
 //   S7  steady-state memory / thread / handle counts + exit time
+//   S8  50-cycle Compare UI mode/session loop + resource-growth report
+//   S9  500-cycle Workspace disk serialize/deserialize round-trip
 //
 // NOT a CTest gate (keeps CI fast); run manually / nightly:
 //   build_msvc\bin\mviewer_m24_soak.exe [--out results.json]
 // Exit code 0 = all scenarios completed without crash.
 
+#include "compareworkspace.h"
 #include "core/image/ImageRepository.h"
 #include "core/scheduler/TaskScheduler.h"
+#include "core/workspace/WorkspaceSerializer.h"
+#include "domain/CompareSession.h"
+#include "domain/Workspace.h"
 #include "thumbnailpanel.h"
 
 #include <QApplication>
+#include <QByteArray>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeyEvent>
+#include <QTemporaryDir>
 #include <QTimer>
 
 #include <cstdio>
 #include <iostream>
+#include <optional>
 #include <string>
 
 #ifdef _WIN32
@@ -106,6 +117,73 @@ void waitForEntryCount(ThumbnailPanel &panel, int expected, int timeoutMs)
     }
 }
 
+void sendKey(QWidget *target, Qt::Key key)
+{
+    QKeyEvent press(QEvent::KeyPress, key, Qt::NoModifier);
+    QApplication::sendEvent(target, &press);
+    QKeyEvent release(QEvent::KeyRelease, key, Qt::NoModifier);
+    QApplication::sendEvent(target, &release);
+    pump(25);
+}
+
+struct ProcessResources
+{
+    double rssMB = 0.0;
+    double handles = 0.0;
+    bool valid = false;
+};
+
+ProcessResources processResources()
+{
+    ProcessResources result;
+#ifdef _WIN32
+    PROCESS_MEMORY_COUNTERS counters{};
+    counters.cb = sizeof(counters);
+    DWORD handles = 0;
+    const bool memoryOk = GetProcessMemoryInfo(GetCurrentProcess(), &counters, sizeof(counters));
+    const bool handlesOk = GetProcessHandleCount(GetCurrentProcess(), &handles);
+    result.rssMB = counters.WorkingSetSize / (1024.0 * 1024.0);
+    result.handles = static_cast<double>(handles);
+    result.valid = memoryOk && handlesOk;
+#endif
+    return result;
+}
+
+bool workspaceRoundTripMatches(const mviewer::domain::Workspace &expected,
+                               const std::optional<mviewer::domain::Workspace> &actual)
+{
+    if (!actual || actual->rootPath != expected.rootPath || actual->folders.size() != 1 ||
+        actual->comparedImages != expected.comparedImages ||
+        actual->compareSessionJson.empty())
+        return false;
+    const auto &expectedFolder = expected.folders.front();
+    const auto &folder = actual->folders.front();
+    if (folder.path != expectedFolder.path || folder.name != expectedFolder.name ||
+        folder.imageSet.images.size() != expectedFolder.imageSet.images.size())
+        return false;
+    for (size_t i = 0; i < expectedFolder.imageSet.images.size(); ++i)
+    {
+        const auto &want = expectedFolder.imageSet.images[i];
+        const auto &got = folder.imageSet.images[i];
+        if (got.filePath != want.filePath || got.fileName != want.fileName ||
+            got.width != want.width || got.height != want.height || got.roiX != want.roiX ||
+            got.roiY != want.roiY || got.roiW != want.roiW || got.roiH != want.roiH ||
+            got.analysis != want.analysis)
+            return false;
+    }
+    const auto session = mviewer::core::deserializeCompareSession(actual->compareSessionJson);
+    return session && session->isValid() && session->imageIds == expected.comparedImages &&
+           session->cells.size() == expected.comparedImages.size() && session->cols == 2 &&
+           session->rows == 1 && session->syncMode == mviewer::domain::SyncMode::All &&
+           session->sharedScale == 1.25 && session->sharedOffsetX == 3.0 &&
+           session->sharedOffsetY == -2.0 && session->selection.active &&
+           session->selection.synced &&
+           session->selection.x == 10 && session->selection.y == 12 &&
+           session->selection.w == 64 && session->selection.h == 48 &&
+           session->threshold == 23 && session->blinkIntervalMs == 175 &&
+           session->sidePanelVisible && session->layoutIndex == 2 && session->uniformScale;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -131,6 +209,7 @@ int main(int argc, char **argv)
         std::cout << "[soak] timing instrumentation on\n";
 
     QList<Sample> samples;
+    bool soakOk = true;
 
     // 鈹€鈹€ S1: 10000-image first-screen 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
     {
@@ -390,6 +469,157 @@ int main(int argc, char **argv)
 #endif
     }
 
+    // ── S8: Compare UI create/mode/session/destroy loop ──────────────────────
+    {
+        constexpr int kIterations = 50;
+        constexpr int kWarmupIterations = 5;
+        const QString dir = synthDir("s8", 8, 256, 256);
+        const QDir imageDir(dir);
+        QStringList paths;
+        for (const QString &name : imageDir.entryList({"*.png"}, QDir::Files, QDir::Name))
+            paths.append(imageDir.filePath(name));
+
+        int completed = 0;
+        double worstMs = 0.0;
+        ProcessResources warmResources;
+        for (int i = 0; i < kIterations && paths.size() >= 2; ++i)
+        {
+            QElapsedTimer round;
+            round.start();
+            bool valid = false;
+            {
+                CompareWorkspace workspace;
+                workspace.resize(1100, 750);
+                workspace.show();
+                pump(30);
+                workspace.setImages({paths[0], paths[1]});
+                pump(30);
+                for (Qt::Key key : {Qt::Key_S, Qt::Key_O, Qt::Key_K, Qt::Key_H, Qt::Key_B})
+                    sendKey(&workspace, key);
+                const auto session = workspace.compareSession();
+                workspace.applySession(session);
+                pump(30);
+                valid = workspace.comparedImageCount() == 2 && session.isValid() &&
+                        workspace.compareSession().isValid();
+                workspace.close();
+                pump(20);
+            }
+            // Drain queued diff completions only after the workspace subscription
+            // and blink timer have been destroyed.
+            pump(50);
+            worstMs = qMax(worstMs, double(round.elapsed()));
+            if (valid)
+                ++completed;
+            if (i == kWarmupIterations - 1)
+                warmResources = processResources();
+        }
+        const ProcessResources finalResources = processResources();
+        samples.append({"S8_compare_completed", double(completed)});
+        samples.append({"S8_compare_worst_ms", worstMs});
+        samples.append({"S8_compare_rss_growth_mb",
+                        warmResources.valid && finalResources.valid
+                            ? finalResources.rssMB - warmResources.rssMB
+                            : -1.0});
+        samples.append({"S8_compare_handle_growth",
+                        warmResources.valid && finalResources.valid
+                            ? finalResources.handles - warmResources.handles
+                            : -1.0});
+        if (completed != kIterations)
+            soakOk = false;
+        QDir(dir).removeRecursively();
+        pump(100);
+    }
+
+    // ── S9: Workspace disk serialize/deserialize round-trip ──────────────────
+    {
+        constexpr int kIterations = 500;
+        QTemporaryDir tempDir(QDir::tempPath() + "/mviewer_soak_s9_XXXXXX");
+        const QString workspacePath = tempDir.filePath("roundtrip.mvws");
+
+        mviewer::domain::Workspace source;
+        source.rootPath = tempDir.path().toStdString();
+        mviewer::domain::Folder folder;
+        folder.path = source.rootPath + "/images";
+        folder.name = "images";
+        folder.imageSet.folderPath = folder.path;
+        mviewer::domain::ImageMetadata first;
+        first.filePath = folder.path + "/left.png";
+        first.fileName = "left.png";
+        first.width = 256;
+        first.height = 256;
+        first.roiX = 10;
+        first.roiY = 12;
+        first.roiW = 64;
+        first.roiH = 48;
+        first.analysis = "mean=127.5; psnr=42.0";
+        mviewer::domain::ImageMetadata second = first;
+        second.filePath = folder.path + "/right.png";
+        second.fileName = "right.png";
+        second.analysis = "mean=129.0; psnr=41.5";
+        folder.imageSet.images = {first, second};
+        source.folders.push_back(folder);
+        source.comparedImages = {first.filePath, second.filePath};
+
+        mviewer::domain::CompareSession session;
+        session.imageIds = source.comparedImages;
+        session.cells = {{1.25, 3.0, -2.0}, {1.25, -4.0, 5.0}};
+        session.syncMode = mviewer::domain::SyncMode::All;
+        session.sharedScale = 1.25;
+        session.sharedOffsetX = 3.0;
+        session.sharedOffsetY = -2.0;
+        session.cols = 2;
+        session.rows = 1;
+        session.selection = {10, 12, 64, 48, true, true};
+        session.threshold = 23;
+        session.blinkIntervalMs = 175;
+        session.sidePanelVisible = true;
+        session.layoutIndex = 2;
+        session.uniformScale = true;
+        source.compareSessionJson = mviewer::core::serializeCompareSession(session);
+
+        int completed = 0;
+        double worstMs = 0.0;
+        QElapsedTimer total;
+        total.start();
+        for (int i = 0; i < kIterations && tempDir.isValid(); ++i)
+        {
+            QElapsedTimer round;
+            round.start();
+            bool valid = true;
+            const QByteArray bytes =
+                QByteArray::fromStdString(mviewer::core::serializeWorkspace(source));
+            QFile file(workspacePath);
+            if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate) ||
+                file.write(bytes) != bytes.size())
+                valid = false;
+            file.close();
+
+            std::optional<mviewer::domain::Workspace> restored;
+            if (valid && file.open(QIODevice::ReadOnly))
+                restored = mviewer::core::deserializeWorkspace(file.readAll().toStdString());
+            else
+                valid = false;
+            file.close();
+            valid = valid && workspaceRoundTripMatches(source, restored);
+            worstMs = qMax(worstMs, double(round.elapsed()));
+            if (valid)
+                ++completed;
+        }
+        const double totalMs = total.elapsed();
+        samples.append({"S9_workspace_completed", double(completed)});
+        samples.append({"S9_workspace_total_ms", totalMs});
+        samples.append({"S9_workspace_worst_ms", worstMs});
+        if (completed != kIterations)
+            soakOk = false;
+        const bool fileRemoved = !QFile::exists(workspacePath) || QFile::remove(workspacePath);
+        const bool dirRemoved = tempDir.remove();
+        if (!fileRemoved || !dirRemoved)
+        {
+            std::cerr << "S9 cleanup failed: " << tempDir.path().toStdString() << "\n";
+            soakOk = false;
+        }
+    }
+
     QElapsedTimer exitT;
     exitT.start();
     QTimer::singleShot(0, &app, [&]() { app.quit(); });
@@ -397,8 +627,9 @@ int main(int argc, char **argv)
     samples.append({"S7_exit_ms", double(exitT.elapsed())});
 
     report(samples);
-    std::cout << "m24_soak: " << (rc == 0 ? "PASS" : "FAIL") << "\n";
-    return rc;
+    const bool passed = rc == 0 && soakOk;
+    std::cout << "m24_soak: " << (passed ? "PASS" : "FAIL") << "\n";
+    return passed ? 0 : 1;
 }
 
 

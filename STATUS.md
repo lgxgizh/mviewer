@@ -70,7 +70,9 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   Model, Metadata overlay (`I`/`ESC`), batch rename/move/delete,
   rating store.
 - **Export**: PNG/JPEG/TIFF/CSV/HTML/Report via unified `ExportJob`; batch
-  export with progress/cancel; atomic temp-file replace (see Phase 4D notes).
+  export with progress/cancel; edited output-directory state is authoritative; whole-batch
+  destination conflict/hard-link checks and atomic replacement prevent source or prior-output
+  loss; UTF-8 paths round-trip safely through native Windows filesystem calls (see Phase 4D notes).
 - **Workspace**: `.mvws`/`.mvproj` persistence incl. compare session, ROI,
   analysis text; crash-recovery autosave.
 - **UX**: viewer zoom command system, fullscreen, mouse back/forward, slideshow,
@@ -122,9 +124,19 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 | Workspace 恢复 | ✅ | 布局/缩放/Compare/崩溃恢复（A-6 已落地） |
 | M17 高价值子项 | ✅ | 批量分析导出 / 插件 rescan / 评分过滤导出 |
 | M16 分析持久化 | ✅ | `AnalyzerModel` 历史/钉住/结果序列化，重启保留 |
-| M17 自动更新 | ✅ | `UpdateChecker`（GitHub Releases，WinHTTP），版本来自 CMake SSOT（M24） |
+| M17 自动更新 | ✅ | `UpdateChecker`（GitHub Releases，WinHTTP），版本来自 CMake SSOT（M24）；离线 `updatechecker_tests` 覆盖 JSON、点分版本、传输错误与安全下载链接策略 |
 | M23 质量自动化 | ✅ | ADR/Bug 门禁、自动 dashboard、test matrix、benchmark trend（ADR-015） |
-| M24 稳定性收敛 | 🔄 进行中 | 基线 2026-08-05 已验证（构建/测试/启动/打包）；异步生命周期、工作流验收、测试可信度、性能、RC 验证 |
+| M24 稳定性收敛 | ✅ | 2026-08-05 完成：70/70 CTest、干净环境打包、异步生命周期/工作流验收/测试可信度/性能/RC 验证（verdict: READY WITH NON-BLOCKING LIMITATIONS） |
+| M25 RC 收敛 | 🔄 进行中 | Compare 顶栏已完成三行防溢出收敛；`thumbnailpanel.cpp` 已回到 682 行并关闭 ADR-014 硬阻塞；S1–S9 Release 压测与 71/71 本地门禁通过，10K List UI 最长阻塞由约 2.01 s 降至 336 ms；UpdateChecker 已完成离线可测与链接安全收敛；Export 已关闭输出目录错位、源/目标别名、批内重名和非安全覆盖风险；目标硬件 / 人工 UX 签名待完成 |
+
+### M25 closure addendum (2026-08-09)
+
+- Compare histogram consistency is closed: pane overlays repopulate after layout,
+  navigation, pane swaps, and Blink rebuilds. Blink hides whole pane containers
+  and synchronizes engine/UI state while rebuilding; main and pane histograms
+  share adjusted-image and ROI scope even with the side panel hidden or per-pane
+  overlays enabled. Direct `compare_acceptance_tests` regressions close the
+  baseline's partially asserted overlay gap.
 
 ## Plugin SDK (frozen)
 
@@ -138,8 +150,9 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 ## Release process (current)
 
 1. Bump `CMakeLists.txt` `project(VERSION)` — the single source of version.
-2. `.\build.ps1 Test` must be green (70 tests incl. `version_consistency`,
-   `bench_enforce`, `golden_image`, the four M24 workflow acceptance suites).
+2. `.\build.ps1 Test` must be green (71 registered CTest tests incl.
+   `version_consistency`, `updatechecker_tests`, `bench_enforce`, `golden_image`,
+   and the four M24 workflow acceptance suites).
 3. Tag `vX.Y.Z`; `release.yml` builds, packages, attaches artifacts.
 4. Verify `dist/MViewer-<X.Y.Z>-portable.zip` and `dist/MViewer-<X.Y.Z>-Setup.exe`.
 5. Attach `SHA256SUMS.txt` (M14.8) and release notes from CHANGELOG.

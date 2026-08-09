@@ -1,9 +1,21 @@
 #include "core/update/UpdateChecker.h"
 
+#include <QByteArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
+#include <QString>
+#include <QUrl>
+
 #include <algorithm>
 #include <cctype>
-#include <sstream>
+#include <cstdint>
+#include <exception>
+#include <limits>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #if defined(_WIN32)
@@ -21,44 +33,61 @@ namespace mviewer::core
 namespace
 {
 
-// Split "v1.2.3" → {1, 2, 3}.  Non-semver inputs return empty.
-std::vector<int> parseSemver(const std::string &tag)
+// Parse a dotted numeric release version such as "v1.2.3" into {1, 2, 3}.
+std::optional<std::vector<uint64_t>> parseSemver(const std::string &tag)
 {
-    std::vector<int> parts;
     if (tag.empty())
-        return parts;
+        return std::nullopt;
+
+    std::vector<uint64_t> parts;
     size_t i = (tag[0] == 'v' || tag[0] == 'V') ? 1 : 0;
-    std::string num;
-    for (; i < tag.size(); ++i)
+    if (i == tag.size())
+        return std::nullopt;
+
+    while (i < tag.size())
     {
-        if (std::isdigit(static_cast<unsigned char>(tag[i])))
-            num += tag[i];
-        else if (tag[i] == '.' && !num.empty())
+        if (!std::isdigit(static_cast<unsigned char>(tag[i])))
+            return std::nullopt;
+
+        uint64_t value = 0;
+        do
         {
-            parts.push_back(std::stoi(num));
-            num.clear();
-        }
-        else
-            return {}; // invalid char
+            const uint64_t digit = static_cast<uint64_t>(tag[i] - '0');
+            if (value > (std::numeric_limits<uint64_t>::max() - digit) / 10)
+                return std::nullopt;
+            value = value * 10 + digit;
+            ++i;
+        } while (i < tag.size() && std::isdigit(static_cast<unsigned char>(tag[i])));
+        parts.push_back(value);
+
+        if (i == tag.size())
+            break;
+        if (tag[i] != '.' || ++i == tag.size())
+            return std::nullopt;
     }
-    if (!num.empty())
-        parts.push_back(std::stoi(num));
-    return parts.size() >= 2 ? parts : std::vector<int>{};
+
+    if (parts.size() < 2)
+        return std::nullopt;
+    return parts;
 }
 
-// Return true if lhs semver is strictly greater than rhs.
-bool isNewer(const std::string &lhsTag, const std::string &rhsTag)
+// Return -1, 0, or 1. Missing trailing components compare as zero.
+std::optional<int> compareSemver(const std::string &lhsTag, const std::string &rhsTag)
 {
-    auto l = parseSemver(lhsTag);
-    auto r = parseSemver(rhsTag);
-    if (l.empty() || r.empty())
-        return false;
-    for (size_t i = 0; i < std::min(l.size(), r.size()); ++i)
+    const auto lhs = parseSemver(lhsTag);
+    const auto rhs = parseSemver(rhsTag);
+    if (!lhs || !rhs)
+        return std::nullopt;
+
+    const size_t componentCount = std::max(lhs->size(), rhs->size());
+    for (size_t i = 0; i < componentCount; ++i)
     {
-        if (l[i] != r[i])
-            return l[i] > r[i];
+        const uint64_t left = i < lhs->size() ? (*lhs)[i] : 0;
+        const uint64_t right = i < rhs->size() ? (*rhs)[i] : 0;
+        if (left != right)
+            return left > right ? 1 : -1;
     }
-    return l.size() > r.size();
+    return 0;
 }
 
 // Convert a UTF-8 std::string to a wide string. This SDK's winhttp.h only
@@ -183,29 +212,94 @@ std::string httpGet(const std::string &url, std::string &error)
 #endif
 }
 
-// Crude JSON extraction: find "tag_name":"value" in raw text.
-std::string extractTagName(const std::string &json)
+// Parse the release fields with Qt JSON so whitespace, ordering, and escapes
+// follow JSON rules without leaking Qt types into the public core header.
+struct ReleasePayload
 {
-    const std::string key = "\"tag_name\"";
-    auto pos = json.find(key);
-    if (pos == std::string::npos)
+    std::string tagName;
+    std::string htmlUrl;
+};
+
+std::optional<ReleasePayload> parseReleasePayload(const std::string &json, std::string &error)
+{
+    QJsonParseError parseError;
+    const QByteArray bytes(json.data(), static_cast<qsizetype>(json.size()));
+    const QJsonDocument document = QJsonDocument::fromJson(bytes, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject())
+    {
+        error = "UpdateChecker: invalid release JSON";
+        return std::nullopt;
+    }
+
+    const QJsonObject object = document.object();
+    const auto tagValue = object.value(QStringLiteral("tag_name"));
+    if (!tagValue.isString() || tagValue.toString().isEmpty())
+    {
+        error = "UpdateChecker: could not parse tag_name from response";
+        return std::nullopt;
+    }
+
+    ReleasePayload payload;
+    payload.tagName = tagValue.toString().toStdString();
+    const auto htmlValue = object.value(QStringLiteral("html_url"));
+    if (htmlValue.isString())
+        payload.htmlUrl = htmlValue.toString().toStdString();
+    return payload;
+}
+
+bool isGitHubComponent(const std::string &component)
+{
+    if (component.empty() || component == "." || component == "..")
+        return false;
+    return std::all_of(component.begin(), component.end(),
+                       [](unsigned char c)
+                       {
+                           return std::isalnum(c) || c == '-' || c == '_' || c == '.';
+                       });
+}
+
+std::string deriveGitHubReleaseUrl(const std::string &apiUrl, const std::string &tag)
+{
+    constexpr std::string_view prefix = "https://api.github.com/repos/";
+    constexpr std::string_view suffix = "/releases/latest";
+    if (!apiUrl.starts_with(prefix) || !apiUrl.ends_with(suffix) ||
+        apiUrl.size() <= prefix.size() + suffix.size())
+    {
         return {};
-    pos = json.find('"', pos + key.size());
-    if (pos == std::string::npos)
+    }
+
+    const std::string repo =
+        apiUrl.substr(prefix.size(), apiUrl.size() - prefix.size() - suffix.size());
+    const size_t slash = repo.find('/');
+    if (slash == std::string::npos || repo.find('/', slash + 1) != std::string::npos ||
+        !isGitHubComponent(repo.substr(0, slash)) || !isGitHubComponent(repo.substr(slash + 1)))
+    {
         return {};
-    pos = json.find('"', pos + 1);
-    if (pos == std::string::npos)
-        return {};
-    size_t end = json.find('"', pos + 1);
-    if (end == std::string::npos)
-        return {};
-    return json.substr(pos + 1, end - pos - 1);
+    }
+    return "https://github.com/" + repo + "/releases/tag/" + tag;
+}
+
+bool isValidHttpsUrl(const std::string &candidate)
+{
+    if (candidate.empty())
+        return false;
+
+    const QUrl url(QString::fromStdString(candidate), QUrl::StrictMode);
+    const QString scheme = url.scheme();
+    return url.isValid() && !url.isRelative() && !url.host().isEmpty() &&
+           scheme.compare(QStringLiteral("https"), Qt::CaseInsensitive) == 0;
+}
+
+std::string validatedReleaseUrl(const std::string &candidate)
+{
+    return isValidHttpsUrl(candidate) ? candidate : std::string{};
 }
 
 } // namespace
 
-UpdateChecker::UpdateChecker(std::string currentVersion)
-    : m_currentVersion(std::move(currentVersion))
+UpdateChecker::UpdateChecker(std::string currentVersion, FetchFn fetchFn)
+    : m_currentVersion(std::move(currentVersion)),
+      m_fetchFn(fetchFn ? std::move(fetchFn) : FetchFn(httpGet))
 {
 }
 
@@ -220,8 +314,28 @@ void UpdateChecker::checkUrl(const std::string &updateJsonUrl, UpdateCallback cb
     UpdateInfo info;
     info.currentVersion = m_currentVersion;
 
+    if (!isValidHttpsUrl(updateJsonUrl))
+    {
+        info.error = "UpdateChecker: update endpoint must be an absolute HTTPS URL";
+        if (cb)
+            cb(info);
+        return;
+    }
+
     std::string error;
-    const std::string body = httpGet(updateJsonUrl, error);
+    std::string body;
+    try
+    {
+        body = m_fetchFn(updateJsonUrl, error);
+    }
+    catch (const std::exception &exception)
+    {
+        error = "UpdateChecker: fetch failed: " + std::string(exception.what());
+    }
+    catch (...)
+    {
+        error = "UpdateChecker: fetch failed with an unknown exception";
+    }
     if (!error.empty())
     {
         info.error = error;
@@ -230,22 +344,28 @@ void UpdateChecker::checkUrl(const std::string &updateJsonUrl, UpdateCallback cb
         return;
     }
 
-    std::string latest = extractTagName(body);
-    if (latest.empty())
+    const auto payload = parseReleasePayload(body, error);
+    if (!payload)
     {
-        info.error = "UpdateChecker: could not parse tag_name from response";
+        info.error = error;
         if (cb)
             cb(info);
         return;
     }
 
-    info.latestVersion = latest;
-    info.hasUpdate = isNewer(latest, m_currentVersion);
-    info.releaseUrl =
-        "https://github.com/" +
-        updateJsonUrl.substr(updateJsonUrl.find("repos/") + 6,
-                             updateJsonUrl.find("/releases") - updateJsonUrl.find("repos/") - 6) +
-        "/releases/tag/" + latest;
+    info.latestVersion = payload->tagName;
+    const auto versionOrder = compareSemver(payload->tagName, m_currentVersion);
+    if (!versionOrder)
+    {
+        info.error = "UpdateChecker: invalid dotted numeric release or current version";
+        if (cb)
+            cb(info);
+        return;
+    }
+    info.hasUpdate = *versionOrder > 0;
+    info.releaseUrl = validatedReleaseUrl(payload->htmlUrl);
+    if (info.releaseUrl.empty())
+        info.releaseUrl = deriveGitHubReleaseUrl(updateJsonUrl, payload->tagName);
 
     if (cb)
         cb(info);

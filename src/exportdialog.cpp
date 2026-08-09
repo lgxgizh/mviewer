@@ -60,6 +60,7 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     // ---- output directory ----
     auto *dirRow = new QHBoxLayout();
     m_dirEdit = new QLineEdit(this);
+    m_dirEdit->setObjectName(QStringLiteral("exportOutputDirectoryEdit"));
     m_browseBtn = new QPushButton(tr("浏览..."), this);
     dirRow->addWidget(new QLabel(tr("输出目录:")));
     dirRow->addWidget(m_dirEdit, 1);
@@ -70,6 +71,7 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     auto *modeBox = new QGroupBox(tr("导出模式"));
     auto *modeLay = new QFormLayout(modeBox);
     m_modeCombo = new QComboBox(this);
+    m_modeCombo->setObjectName(QStringLiteral("exportModeCombo"));
     m_modeCombo->addItem(tr("转换 / 批量"), "convert");
     m_modeCombo->addItem(tr("联系表 (Contact Sheet)"), "contact");
     m_modeCombo->addItem(tr("PDF 文档"), "pdf");
@@ -261,6 +263,12 @@ void ExportDialog::onExportClicked()
         QMessageBox::warning(this, tr("导出"), tr("请先选择有效的输出目录。"));
         return;
     }
+
+    const QDir validatedDir(outDir);
+    m_outDir = validatedDir.canonicalPath();
+    if (m_outDir.isEmpty())
+        m_outDir = validatedDir.absolutePath();
+    m_dirEdit->setText(m_outDir);
 
     const QString mode = m_modeCombo->currentData().toString();
     if (mode == "contact")

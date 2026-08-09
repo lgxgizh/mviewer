@@ -14,6 +14,7 @@
 #include "compareworkspace.h"
 #include "core/compare/CompareEngine.h"
 #include "selectionmodel.h"
+#include "widgets/histogramwidget.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -241,7 +242,111 @@ void testContinuousNav(const QStringList &paths6)
     CHECK(!ws->focusImagePath().isEmpty(), "B#6: focus image defined after navigation");
 }
 
-// ─── B#7: mismatched resolutions + corrupt image ────────────────────────────
+// P1: pane histogram consistency across ROI, rebuilds, and Blink.
+void testPaneHistogramConsistency(const QString &a, const QString &b)
+{
+    std::cout << "--- Compare P1: pane histogram consistency ---\n";
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    ws->setImages({a, b});
+    dlg.resize(1100, 750);
+    dlg.show();
+    pump(80);
+
+    auto *perPane = ws->findChild<QCheckBox *>("perPaneHistogramToggle");
+    auto *overlay = ws->findChild<QCheckBox *>("paneHistogramOverlayToggle");
+    auto *roi = ws->findChild<QCheckBox *>("roiHistogramToggle");
+    auto *blink = findChk(ws, QStringLiteral("闪烁对比"));
+    CHECK(perPane && overlay && roi && blink, "P1: histogram and blink controls are discoverable");
+    if (!perPane || !overlay || !roi || !blink)
+        return;
+
+    perPane->setChecked(true);
+    overlay->setChecked(true);
+    pump(30);
+
+    auto paneHist = [ws](int index)
+    { return ws->findChild<HistogramWidget *>(QString("paneHistogram%1").arg(index)); };
+    HistogramWidget *hist0 = paneHist(0);
+    HistogramWidget *hist1 = paneHist(1);
+    CHECK(hist0 && hist1, "P1: both pane histogram widgets exist");
+    if (!hist0 || !hist1)
+        return;
+    CHECK(hist0->histogramCount() == 1 && hist0->histogramTotal(0) > 0 &&
+              hist1->histogramCount() == 1 && hist1->histogramTotal(0) > 0,
+          "P1: independent pane overlays are populated");
+
+    blink->setChecked(true);
+    pump(30);
+    auto *pane0 = ws->findChild<QWidget *>("comparePane0");
+    auto *pane1 = ws->findChild<QWidget *>("comparePane1");
+    auto *frame0 = ws->findChild<QWidget *>("paneHistogramFrame0");
+    auto *frame1 = ws->findChild<QWidget *>("paneHistogramFrame1");
+    auto *caption0 = ws->findChild<QLabel *>("paneCaption0");
+    auto *caption1 = ws->findChild<QLabel *>("paneCaption1");
+    CHECK(pane0 && pane1 && pane0->isVisible() && !pane1->isVisible(),
+          "P1: Blink shows only the active pane container");
+    CHECK(frame0 && frame1 && frame0->isVisible() && !frame1->isVisible(),
+          "P1: Blink hides the inactive pane histogram frame");
+    CHECK(caption0 && caption1 && caption0->isVisible() && !caption1->isVisible(),
+          "P1: Blink hides the inactive pane caption");
+
+    // Exercise a timer tick too: exactly one whole pane remains visible when the
+    // active image flips, and its overlay/caption visibility follows the pane.
+    pump(170);
+    CHECK(pane0->isVisible() != pane1->isVisible(),
+          "P1: repeated Blink ticks keep exactly one pane container visible");
+    CHECK(frame0->isVisible() == pane0->isVisible() &&
+              frame1->isVisible() == pane1->isVisible(),
+          "P1: pane histogram frames follow the active Blink pane");
+    CHECK(caption0->isVisible() == pane0->isVisible() &&
+              caption1->isVisible() == pane1->isVisible(),
+          "P1: pane captions follow the active Blink pane");
+
+    // A rebuild while Blink has detached one pane must delete both old panes,
+    // preserve Blink visibility, and populate the new overlay widgets.
+    ws->setImages({a, b});
+    pump(30);
+    const auto panes0 = ws->findChildren<QWidget *>("comparePane0");
+    const auto panes1 = ws->findChildren<QWidget *>("comparePane1");
+    CHECK(panes0.size() == 1 && panes1.size() == 1,
+          "P1: Blink-active rebuild leaves no stale pane containers");
+    CHECK(!panes0.isEmpty() && !panes1.isEmpty() &&
+              panes0.front()->isVisible() != panes1.front()->isVisible(),
+          "P1: Blink-active rebuild retains one active pane");
+    CHECK(ws->engine().blinkController().isBlinking(),
+          "P1: Blink-active rebuild restores engine Blink state");
+    hist0 = paneHist(0);
+    hist1 = paneHist(1);
+    CHECK(hist0 && hist1 && hist0->histogramTotal(0) > 0 && hist1->histogramTotal(0) > 0,
+          "P1: Blink-active rebuild repopulates pane histograms");
+
+    blink->setChecked(false);
+    pump(50);
+    hist0 = paneHist(0);
+    hist1 = paneHist(1);
+    CHECK(hist0 && hist1 && hist0->histogramCount() == 1 && hist0->histogramTotal(0) > 0 &&
+              hist1->histogramCount() == 1 && hist1->histogramTotal(0) > 0,
+          "P1: Blink stop rebuild retains populated pane histograms");
+
+    roi->setChecked(true);
+    ws->applyROI({0, 0, 32, 32});
+    pump(40);
+    auto *mainHist = ws->findChild<HistogramWidget *>("analysisHistogram");
+    hist0 = paneHist(0);
+    hist1 = paneHist(1);
+    CHECK(mainHist && mainHist->histogramCount() > 0 && mainHist->histogramTotal(0) == 1024,
+          "P1: main histogram uses the 32x32 ROI total");
+    CHECK(hist0 && hist1 && hist0->histogramTotal(0) == 1024 &&
+              hist1->histogramTotal(0) == 1024,
+          "P1: pane histograms use the same 32x32 ROI total");
+}
+
+// B#7: mismatched resolutions and corrupt image handling.
 void testDegradedImages(const QDir &dir)
 {
     std::cout << "── Compare B#7: mismatched + corrupt images ──\n";
@@ -311,6 +416,7 @@ int main(int argc, char **argv)
     testMultiImageEntry(paths8);
     testModePreservesState(paths8[0], paths8[1]);
     testContinuousNav(paths6);
+    testPaneHistogramConsistency(paths8[0], paths8[1]);
     testDegradedImages(dir);
 
     if (g_failures > 0)

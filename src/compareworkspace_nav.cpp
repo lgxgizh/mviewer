@@ -306,12 +306,14 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
             continue;
         m_cellViews[i]->setSelection(sel);
     }
-    // M23: ROI + Histogram 联动 — a new ROI immediately re-scopes the histogram
-    // and the ROI-aware diff metrics while the side panel is visible.
+    // M23: ROI + Histogram 联动 — histogram surfaces keep their ROI scope
+    // even when the analysis side panel is collapsed.
+    if (m_roiHistChk && m_roiHistChk->isChecked())
+        refreshHistograms();
+
+    // Metrics remain side-panel-only because they have no independent overlay.
     if (m_sidePanel && m_sidePanel->isVisible())
     {
-        if (m_roiHistChk && m_roiHistChk->isChecked())
-            refreshHistograms();
         updateMetrics();
     }
     update();

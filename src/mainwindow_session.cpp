@@ -749,7 +749,7 @@ void MainWindow::checkForUpdates(bool silent)
     static QThreadPool s_updatePool;
     s_updatePool.setMaxThreadCount(1);
     QPointer<MainWindow> self(this);
-    QtConcurrent::run(
+    auto updateFuture = QtConcurrent::run(
         &s_updatePool,
         [self, silent]()
         {
@@ -768,6 +768,7 @@ void MainWindow::checkForUpdates(bool silent)
                                                               });
                                 });
         });
+    Q_UNUSED(updateFuture);
 }
 
 void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool silent)

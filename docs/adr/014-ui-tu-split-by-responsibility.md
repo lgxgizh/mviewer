@@ -36,7 +36,9 @@ file-local helpers that must be visible to more than one TU (now `inline`).
   `compareworkspace_editpanel.cpp` (adjustments, metrics, presets) ·
   `compareworkspace_interact.cpp` (keyboard / mouse / pixel link) ·
   `compareworkspace_nav.cpp` (pair navigation, layout presets, session apply).
-- `thumbnailpanel.cpp` (view core, 670 lines) +
+- `thumbnailpanel.cpp` (view core, 682 lines) +
+  `thumbnailpanel_selection.cpp` (selection / focus / scrolling) ·
+  `thumbnailpanel_pipeline.cpp` (visible-range scheduling / thumbnail delivery) ·
   `thumbnailpanel_filters.cpp` (filters, sorting, metadata index) ·
   `thumbnailpanel_fileops.cpp` (rename / trash / copy / move / batch export) ·
   `thumbnailpanel_delegates.cpp` (thumb / details / list delegates) ·
@@ -62,9 +64,10 @@ would churn signals/ownership for no product gain.
 
 ## Consequences
 
-- All three review targets are met (584 / 787 / 670 lines); the core
-  `thumbnailpanel.cpp` is kept strictly under the 800 guard by isolating
-  `setViewMode` in `thumbnailpanel_viewmode.cpp`.
+- All three review targets are met (610 / 731 / 682 physical lines as of M25).
+  The core `thumbnailpanel.cpp` returned below the 800 guard by keeping
+  `setViewMode` in `thumbnailpanel_viewmode.cpp` and selection/navigation in
+  `thumbnailpanel_selection.cpp`.
 - Phase 2 has begun incrementally (per the reviewer's "abc 都需要" directive):
   `ThumbnailProvider` is the first real class extracted from a god object, not
   just a TU split. It removes the thumbnail-production knowledge (decode,

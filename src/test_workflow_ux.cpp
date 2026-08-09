@@ -17,9 +17,12 @@
 
 #include "appstate.h"
 #include "compareworkspace.h"
+#include "core/image/Decoder.h"
 #include "core/scheduler/TaskScheduler.h"
+#include "core/thumbnail/ThumbnailPipeline.h"
 #include "directorytree.h"
 #include "directorymodel.h"
+#include "exportdialog.h"
 #include "imageviewer.h"
 #include "mainwindow.h"
 #include "previewpanel.h"
@@ -34,6 +37,7 @@
 #include <QDialog>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QFileInfo>
 #include <QImage>
 #include <QJsonDocument>
@@ -41,6 +45,7 @@
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QMetaObject>
 #include <QMouseEvent>
 #include <QPushButton>
 #include <QSettings>
@@ -53,7 +58,11 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 
+#include <atomic>
 #include <iostream>
+#include <memory>
+#include <mutex>
+#include <unordered_set>
 
 namespace
 {
@@ -705,6 +714,23 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     dlg.show();
     pump(100);
 
+    QWidget *modeToolbar = ws->findChild<QWidget *>("compareModeToolbar");
+    QWidget *viewToolbar = ws->findChild<QWidget *>("compareViewToolbar");
+    QWidget *toolToolbar = ws->findChild<QWidget *>("compareToolToolbar");
+    const int availableToolbarWidth = ws->contentsRect().width();
+    CHECK(modeToolbar && viewToolbar && toolToolbar && modeToolbar->isVisible() &&
+              viewToolbar->isVisible() && toolToolbar->isVisible(),
+          "compare exposes three visible semantic toolbars");
+    CHECK(modeToolbar && modeToolbar->width() <= availableToolbarWidth &&
+              modeToolbar->sizeHint().width() <= availableToolbarWidth,
+          "compare mode toolbar fits the standard 1100px workspace width");
+    CHECK(viewToolbar && viewToolbar->width() <= availableToolbarWidth &&
+              viewToolbar->sizeHint().width() <= availableToolbarWidth,
+          "compare view toolbar fits the standard 1100px workspace width");
+    CHECK(toolToolbar && toolToolbar->width() <= availableToolbarWidth &&
+              toolToolbar->sizeHint().width() <= availableToolbarWidth,
+          "compare tool toolbar fits the standard 1100px workspace width");
+
     // 默认状态（评审"默认值不合理"检查）。
     CHECK(ws->comparedImageCount() == 2, "two images loaded into Compare");
     CHECK(ws->isSyncEnabled(), "sync zoom/pan is ON by default");
@@ -713,9 +739,14 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
 
     QCheckBox *blink = findChk(ws, QStringLiteral("闪烁对比"));
     QCheckBox *split = findChk(ws, QStringLiteral("左右分割"));
+    QCheckBox *swipe = findChk(ws, QStringLiteral("滑动对比"));
     QCheckBox *overlay = findChk(ws, QStringLiteral("叠加对比"));
     QCheckBox *checker = findChk(ws, QStringLiteral("棋盘"));
     CHECK(blink && split && overlay, "mode checkboxes exist (blink/split/overlay)");
+    CHECK(blink && split && swipe && overlay && checker && blink->isVisible() &&
+              split->isVisible() && swipe->isVisible() && overlay->isVisible() &&
+              checker->isVisible(),
+          "all key compare mode controls remain visible at 1100x750");
     if (!blink || !split || !overlay)
         return;
     CHECK(split->isEnabled() && overlay->isEnabled(),
@@ -833,7 +864,12 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         CHECK(inspector->rowCount() == 2,
               "real pane click selects the edit target and populates the inspector");
 
-        referenceView->setTransform(2.0, QPointF(19.0, 23.0));
+        // CompareEngine is the viewport SSOT. Establish zoom/pan through the same
+        // state path used by real wheel/drag input before testing image replacement.
+        ws->engine().setScale(2.0);
+        ws->engine().setOffset(19.0, 23.0);
+        ws->update();
+        pump(20);
         const double savedScale = referenceView->scale();
         const QPointF savedOffset = referenceView->offset();
 
@@ -913,6 +949,124 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     sel.setCurrentImage(pathA);
     CHECK(sel.currentImage() == pathA, "browsing continues after leaving Compare");
 }
+
+// ─── Workflow 4: List 首屏只调度可见窗口，不能把全目录送入解码 ────────────────
+void workflow4_list_scaling(const QString &rootDir)
+{
+    std::cout << "── Workflow 4: list scaling ──\n";
+    const QString dirPath = QDir(rootDir).filePath(QStringLiteral("list_scaling"));
+    QDir().mkpath(dirPath);
+    QDir dir(dirPath);
+    bool fixturesReady = true;
+    for (int i = 0; i < 600; ++i)
+    {
+        QFile file(dir.filePath(QStringLiteral("empty_%1.png").arg(i, 3, 10, QChar('0'))));
+        if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+        {
+            fixturesReady = false;
+            break;
+        }
+    }
+    CHECK(fixturesReady, "List scaling creates 600 empty PNG fixtures");
+
+    auto &pipeline = ThumbnailPipeline::instance();
+    pipeline.clear();
+    const auto totalDecodeStarts = std::make_shared<std::atomic<int>>(0);
+    const auto decodePaths = std::make_shared<std::unordered_set<std::string>>();
+    const auto decodePathsMutex = std::make_shared<std::mutex>();
+    {
+        ThumbnailPanel panel;
+        panel.setViewMode(ThumbnailPanel::List);
+        panel.resize(1200, 800);
+        panel.show();
+        pump(30);
+        pipeline.setDecodeFn([totalDecodeStarts, decodePaths, decodePathsMutex](
+                                 const std::string &path, int)
+                             {
+                                 totalDecodeStarts->fetch_add(1, std::memory_order_relaxed);
+                                 const std::lock_guard<std::mutex> lock(*decodePathsMutex);
+                                 decodePaths->insert(path);
+                                 return ImageData{};
+                             });
+        panel.setDirectory(dirPath);
+        QElapsedTimer entriesTimer;
+        entriesTimer.start();
+        while (panel.entries().size() < 600 && entriesTimer.elapsed() < 5000)
+            pump(25);
+        pump(500);
+        size_t uniqueDecodePaths = 0;
+        {
+            const std::lock_guard<std::mutex> lock(*decodePathsMutex);
+            uniqueDecodePaths = decodePaths->size();
+        }
+        std::cout << "    List decode starts: "
+                  << totalDecodeStarts->load(std::memory_order_relaxed)
+                  << " total, " << uniqueDecodePaths << " unique paths\n";
+        CHECK(panel.entries().size() == 600, "List scaling loads all 600 model entries");
+        CHECK(uniqueDecodePaths < 400,
+              "List first screen schedules a bounded window instead of all 600 entries");
+        pipeline.clear();
+    }
+    pipeline.clear();
+    pipeline.setDecodeFn([](const std::string &path, int size)
+                         { return Decoder::decodeScaled(path, size); });
+    pump(100);
+    dir.removeRecursively();
+}
+
+// ─── Workflow 5: Export must use the directory currently shown in the dialog ───
+void workflow5_export_current_output_directory(const QString &rootDir)
+{
+    std::cout << "── Workflow 5: export current output directory ──\n";
+    const QString sourceDirPath = QDir(rootDir).filePath(QStringLiteral("export_source"));
+    const QString outputDirPath = QDir(rootDir).filePath(QStringLiteral("export_output"));
+    QDir().mkpath(sourceDirPath);
+    QDir().mkpath(outputDirPath);
+
+    QDir sourceDir(sourceDirPath);
+    QDir outputDir(outputDirPath);
+    const QString sourcePath = writePng(sourceDir, QStringLiteral("export_source.png"),
+                                        QColor(80, 120, 180));
+    const QString sourceReport = sourceDir.filePath(QStringLiteral("export_report.csv"));
+    const QString outputReport = outputDir.filePath(QStringLiteral("export_report.csv"));
+    QFile::remove(sourceReport);
+    QFile::remove(outputReport);
+
+    {
+        ExportDialog dialog(QStringList{sourcePath});
+        auto *dirEdit =
+            dialog.findChild<QLineEdit *>(QStringLiteral("exportOutputDirectoryEdit"));
+        auto *modeCombo = dialog.findChild<QComboBox *>(QStringLiteral("exportModeCombo"));
+        CHECK(dirEdit && modeCombo, "export exposes stable output directory and mode controls");
+        if (dirEdit && modeCombo)
+        {
+            dirEdit->setText(outputDir.absolutePath());
+            const int csvIndex = modeCombo->findData(QStringLiteral("csv"));
+            CHECK(csvIndex >= 0, "export offers CSV mode");
+            if (csvIndex >= 0)
+            {
+                modeCombo->setCurrentIndex(csvIndex);
+                CHECK(modeCombo->currentData().toString() == QStringLiteral("csv"),
+                      "export CSV mode is selected");
+                CHECK(QMetaObject::invokeMethod(&dialog, "onExportClicked", Qt::DirectConnection),
+                      "export dispatches synchronously");
+                const bool outputExists = QFileInfo::exists(outputReport);
+                const bool sourceExists = QFileInfo::exists(sourceReport);
+                CHECK(outputExists,
+                      std::string("CSV report is written to the edited output directory: ") +
+                          outputReport.toStdString());
+                CHECK(!sourceExists,
+                      std::string("CSV report is not written to the stale source directory: ") +
+                          sourceReport.toStdString());
+            }
+        }
+    }
+
+    QFile::remove(sourceReport);
+    QFile::remove(outputReport);
+    sourceDir.removeRecursively();
+    outputDir.removeRecursively();
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -958,6 +1112,8 @@ int main(int argc, char **argv)
     workflow1_browse(workDir.absolutePath(), paths);
     workflow3_session_restore(workDir.absolutePath(), paths.first());
     workflow2_compare(paths[0], paths[2]);
+    workflow5_export_current_output_directory(workDir.absolutePath());
+    workflow4_list_scaling(workDir.absolutePath());
 
     for (const QString &p : paths)
         QFile::remove(p);

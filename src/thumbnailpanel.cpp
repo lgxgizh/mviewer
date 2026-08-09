@@ -35,6 +35,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     setTextElideMode(Qt::ElideRight);
     setEditTriggers(QAbstractItemView::NoEditTriggers);
     setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    setHorizontalScrollMode(QAbstractItemView::ScrollPerPixel);
     setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     viewport()->setAttribute(Qt::WA_Hover);
     viewport()->setMouseTracking(true);
@@ -514,108 +515,6 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
 }
 
-void ThumbnailPanel::updateVisibleRange()
-{
-    const int n = m_model->rowCount();
-    if (n == 0)
-        return;
-    // Geometry may not be ready yet (panel not shown / zero-size). Wait for
-    // showEvent / resizeEvent before scheduling.
-    if (viewport()->width() < 10 || viewport()->height() < 10)
-        return;
-
-    // M24 (S3): compute the visible row range arithmetically instead of via
-    // indexAt(). On a 10000-row IconMode list indexAt() forces a full layout
-    // pass (the view's geometry is stale right after buildModel, and Batched
-    // mode defers it) — a multi-second UI stall on each new directory. With
-    // uniform grid geometry the range is exact.
-    const QSize cell = gridSize();
-    const int cellW = qMax(1, cell.width());
-    const int cellH = qMax(1, cell.height());
-    const int cols = qMax(1, viewport()->width() / cellW);
-    const int firstRow = verticalScrollBar()->value() / cellH;
-    int first = firstRow * cols;
-    int last = first + cols * qMax(1, viewport()->height() / cellH);
-    if (last >= n)
-        last = n - 1;
-    if (last < first)
-        last = first;
-
-    // Prime instantly-available disk-cached thumbs for the visible window so a
-    // revisited folder paints at once instead of waiting for a decode.
-    {
-        QMutexLocker lk(&m_thumbMtx);
-        for (int r = first; r <= last && r < n; ++r)
-        {
-            const QString p = m_paths.value(r);
-            if (m_thumbReady.contains(p))
-                continue;
-            QPixmap pm;
-            if (ThumbnailCache::instance().get(p, pm))
-            {
-                m_thumbReady.insert(p, pm);
-                QPointer<ThumbnailPanel> guard(this);
-                QMetaObject::invokeMethod(
-                    this,
-                    [guard, p]()
-                    {
-                        if (!guard)
-                            return;
-                        guard->onThumbReady(p);
-                    },
-                    Qt::QueuedConnection);
-            }
-        }
-    }
-
-    // P0 #鈶?/ A-2.5: visible range at Thumbnail priority, then predictive
-    // neighbors. Scale the predictive window with directory size so 10k-image
-    // folders still feel snappy when scrolling, without over-scheduling tiny
-    // folders.
-    ThumbnailPipeline::instance().setVisibleRange(static_cast<size_t>(first),
-                                                  static_cast<size_t>(last + 1));
-    const int predictive = n > 2000 ? 96 : (n > 500 ? 64 : 48);
-    ThumbnailPipeline::instance().setPredictiveCount(static_cast<size_t>(predictive));
-}
-
-void ThumbnailPanel::onThumbReady(const QString &path)
-{
-    // M24 (S3): coalesce dataChanged. Emitting per decoded thumbnail triggers
-    // a QListView layout pass per item; on a 10000-row gallery the per-item
-    // emits stall the UI thread for seconds while thumbnails stream in. One
-    // batched emit per event-loop turn keeps the view correct at ~30x less
-    // layout work.
-    if (!m_thumbDirty)
-    {
-        m_thumbDirty = true;
-        QTimer::singleShot(0, this, [this]() { flushThumbUpdates(); });
-    }
-}
-
-void ThumbnailPanel::flushThumbUpdates()
-{
-    m_thumbDirty = false;
-    const int rows = m_model->rowCount();
-    if (rows <= 0)
-        return;
-    // One broad DecorationRole change is correct: the delegate paints from
-    // thumbReady(path) at paint time, so stale geometry never leaks through.
-    emit dataChanged(m_model->index(0, 0), m_model->index(rows - 1, 0), {Qt::DecorationRole});
-}
-
-QPixmap ThumbnailPanel::thumbReady(const QString &path) const
-{
-    QMutexLocker lk(&m_thumbMtx);
-    auto it = m_thumbReady.constFind(path);
-    return it == m_thumbReady.constEnd() ? QPixmap() : it.value();
-}
-
-bool ThumbnailPanel::thumbFailed(const QString &path) const
-{
-    QMutexLocker lk(&m_thumbMtx);
-    return m_thumbFailed.contains(path);
-}
-
 void ThumbnailPanel::setSelectionModel(SelectionModel *sel)
 {
     m_selection = sel;
@@ -664,95 +563,6 @@ void ThumbnailPanel::onSelectionChanged()
                                      : QString("闇€瑕侀€夋嫨 2鈥? 寮犲浘鐗囨墠鑳藉姣旓紙褰撳墠 %1 寮狅級").arg(n));
     }
     emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
-}
-
-void ThumbnailPanel::scrollToPath(const QString &path)
-{
-    const int row = m_rowByPath.value(path, -1);
-    if (row < 0)
-        return;
-    const QModelIndex idx = m_model->index(row, 0);
-    setCurrentIndex(idx);
-    scrollTo(idx, PositionAtCenter);
-}
-
-void ThumbnailPanel::selectPath(const QString &path)
-{
-    const int row = m_rowByPath.value(path, -1);
-    if (row < 0)
-    {
-        // M24 (A#8): the path may belong to an async directory rescan that has
-        // not landed yet (rename/refresh/restore). Park it: buildModel applies
-        // it when the model containing the path arrives. If the path never
-        // appears, the next successful selectPath() overwrites it.
-        if (!path.isEmpty())
-            m_pendingSelect = path;
-        return;
-    }
-    const QModelIndex idx = m_model->index(row, 0);
-    if (currentIndex() == idx && selectionModel() && selectionModel()->isSelected(idx))
-        return; // already the current selected item 鈥?nothing to do, no scroll jank
-    // If the path is already part of a multi-selection, only move the current
-    // focus 鈥?do NOT ClearAndSelect (that would collapse multi-select).
-    if (selectionModel() && selectionModel()->isSelected(idx))
-    {
-        selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
-        scrollTo(idx);
-        return;
-    }
-    // Single-path focus: replace selection with this item.
-    if (selectionModel())
-        selectionModel()->setCurrentIndex(idx, QItemSelectionModel::ClearAndSelect);
-    else
-        setCurrentIndex(idx);
-    scrollTo(idx); // default EnsureVisible: only scrolls when off-screen
-}
-
-void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &current)
-{
-    if (!selectionModel() || !m_model)
-        return;
-    QItemSelection sel;
-    for (const QString &p : paths)
-    {
-        const int row = m_rowByPath.value(p, -1);
-        if (row < 0)
-            continue;
-        const QModelIndex idx = m_model->index(row, 0);
-        sel.select(idx, idx);
-    }
-    // Block currentChanged 鈫?itemClicked while we rebuild multi-select, so the
-    // focus move cannot collapse SelectionModel via setCurrentImage.
-    const bool wasBlocked = selectionModel()->blockSignals(true);
-    selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect);
-    const QString focus =
-        !current.isEmpty() ? current : (paths.isEmpty() ? QString() : paths.first());
-    if (!focus.isEmpty())
-    {
-        const int row = m_rowByPath.value(focus, -1);
-        if (row >= 0)
-        {
-            const QModelIndex idx = m_model->index(row, 0);
-            selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
-            scrollTo(idx);
-        }
-    }
-    selectionModel()->blockSignals(wasBlocked);
-    // Emit a single selectionChanged so MainWindow can re-sync if needed.
-    emit selectionModel() -> selectionChanged(selectionModel()->selection(), QItemSelection());
-}
-
-int ThumbnailPanel::scrollOffset() const
-{
-    return verticalScrollBar()->value();
-}
-
-QStringList ThumbnailPanel::selectedPaths() const
-{
-    QStringList r;
-    for (const QModelIndex &idx : selectionModel()->selectedIndexes())
-        r.append(m_paths.value(idx.row()));
-    return r;
 }
 
 void ThumbnailPanel::resizeEvent(QResizeEvent *event)
