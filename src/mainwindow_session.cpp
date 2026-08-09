@@ -517,8 +517,15 @@ void MainWindow::closeEvent(QCloseEvent *event)
     // P1-3: persist the Analysis workspace so reopening restores UI state.
     // Focus Browse temporarily hides panels; persist the state from before that
     // temporary mode so closing in Focus does not silently change preferences.
+    // M25: same rule for the Browse workspace — closing while Browse is active
+    // must restore the analysis/search state the user had BEFORE entering
+    // Browse, not the hidden Browse layout.
+    const bool inBrowseWorkspace = m_actBrowseWorkspace && m_actBrowseWorkspace->isChecked();
     m_appState.analysisVisible =
-        m_focusBrowse ? m_focusAnalysisVisible : (m_analysisPanel && m_analysisPanel->isVisible());
+        inBrowseWorkspace
+            ? m_browseAnalysisVisible
+            : (m_focusBrowse ? m_focusAnalysisVisible
+                             : (m_analysisPanel && m_analysisPanel->isVisible()));
     m_appState.analysisPage = m_analysisPanel ? m_analysisPanel->currentPage() : 0;
 
     // P1-3: persist the navigation history stack (browser back/forward + History
@@ -563,7 +570,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
         if (m_searchPanel && m_actToggleSearch)
         {
             const bool searchVisible =
-                m_focusBrowse ? m_focusSearchVisible : m_searchPanel->isVisible();
+                inBrowseWorkspace
+                    ? m_browseSearchVisible
+                    : (m_focusBrowse ? m_focusSearchVisible : m_searchPanel->isVisible());
             settings.setValue("searchVisible", searchVisible);
         }
         // P1-7: persist the main viewer's zoom level + pan position so a session

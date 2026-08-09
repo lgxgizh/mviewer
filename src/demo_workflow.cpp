@@ -6,6 +6,8 @@
 #include "mainwindow.h"
 #include "thumbnailpanel.h"
 
+#include "core/image/ImageFormats.h"
+
 #include <QApplication>
 #include <QDir>
 #include <QFileInfo>
@@ -34,8 +36,10 @@ int main(int argc, char **argv)
     auto *search = w.findChild<QLineEdit *>();
 
     const QString dir = QString::fromStdString(assets.string());
-    const QFileInfoList files = QDir(dir).entryInfoList(
-        {"*.jpg", "*.jpeg", "*.png", "*.bmp", "*.tif", "*.tiff"}, QDir::Files, QDir::Name);
+    QStringList filters;
+    for (const auto &f : mviewer::core::ImageFormats::wildcardFilters())
+        filters << QString::fromStdString(f);
+    const QFileInfoList files = QDir(dir).entryInfoList(filters, QDir::Files, QDir::Name);
 
     // Step 1 (t=1.0s): open the demo directory.
     QTimer::singleShot(1000, &app,

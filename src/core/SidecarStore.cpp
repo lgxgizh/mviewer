@@ -1,7 +1,7 @@
 // M17: SidecarStore implementation — per-image .xmp sidecar file I/O.
 #include "SidecarStore.h"
 #include "RatingStore.h"
-
+#include "core/image/ImageFormats.h"
 #include <algorithm>
 #include <ctime>
 #include <filesystem>
@@ -246,10 +246,16 @@ int SidecarStore::exportDirectory(const std::string &dirPath)
     auto &rs = RatingStore::instance();
     std::error_code ec;
 
-    // Walk directory for all image files with known extensions
-    const std::set<std::string> imgExts = {".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tiff",
-                                           ".tif", ".gif", ".tga",  ".ppm", ".pgm",  ".exr",
-                                           ".hdr", ".dds", ".psd",  ".svg"};
+    // Walk directory for all image files with known extensions (M25: the
+    // shipped-format SSOT decides what counts as an image).
+    auto isImageFile = [](const std::filesystem::path &p)
+    {
+        const std::string ext = p.extension().string();
+        std::string lowerExt = ext;
+        std::transform(lowerExt.begin(), lowerExt.end(), lowerExt.begin(),
+                       [](char c) { return static_cast<char>(std::tolower(c)); });
+        return mviewer::core::ImageFormats::isSupportedSuffix(lowerExt);
+    };
 
     for (const auto &entry : std::filesystem::directory_iterator(dirPath, ec))
     {
@@ -257,11 +263,7 @@ int SidecarStore::exportDirectory(const std::string &dirPath)
             break;
         if (!entry.is_regular_file())
             continue;
-        const std::string ext = entry.path().extension().string();
-        std::string lowerExt = ext;
-        std::transform(lowerExt.begin(), lowerExt.end(), lowerExt.begin(),
-                       [](char c) { return static_cast<char>(std::tolower(c)); });
-        if (imgExts.count(lowerExt) == 0)
+        if (!isImageFile(entry.path()))
             continue;
 
         const std::string imgPath = entry.path().string();

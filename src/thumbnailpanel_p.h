@@ -20,6 +20,7 @@
 #include "core/command/FileMoveCommand.h"
 #include "core/command/FileRenameCommand.h"
 #include "core/image/Decoder.h"
+#include "core/image/ImageFormats.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/QtConvert.h"
@@ -71,10 +72,13 @@
 
 #include <thread>
 
+// M25: the shipped-format SSOT (decoder registry) decides what is an image —
+// RAW/WebP/GIF are listed exactly like the historical six formats.
 inline bool isImageSuffix(const QString &suffix)
 {
-    static const QStringList exts = {"bmp", "gif", "jpg", "jpeg", "png", "tif", "tiff", "webp"};
-    return exts.contains(suffix);
+    if (suffix.isEmpty())
+        return false;
+    return mviewer::core::ImageFormats::isSupportedSuffix(suffix.toStdString());
 }
 
 inline std::vector<std::string> toStdPaths(const QStringList &in)

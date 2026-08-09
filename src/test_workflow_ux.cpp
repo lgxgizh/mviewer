@@ -605,6 +605,43 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         pump(20);
     }
 
+    // M25: closing while the BROWSE WORKSPACE is active must behave like the
+    // focus-mode case — persist the state from before Browse hid the panels,
+    // not the temporary hidden Browse layout. Exercised FIRST (window open),
+    // then the window is re-shown for the existing focus-mode regression.
+    if (analysisAction)
+    {
+        analysisAction->setChecked(false);
+        analysisAction->trigger();
+    }
+    if (searchAction)
+    {
+        searchAction->setChecked(false);
+        searchAction->trigger();
+    }
+    pump(10);
+    CHECK(analysisPanel && analysisPanel->isVisible() && searchPanel && searchPanel->isVisible(),
+          "analysis + search panels are visible before the close-in-browse regression");
+    if (browseWorkspaceAction)
+        browseWorkspaceAction->trigger(); // enter Browse: panels hide temporarily
+    pump(10);
+    CHECK(browseWorkspaceAction && browseWorkspaceAction->isChecked() && analysisPanel &&
+              !analysisPanel->isVisible(),
+          "browse workspace hides the panels before close persistence is exercised");
+    w.close();
+    pump(50);
+    const AppState persistedAfterBrowse = AppState::load();
+    QSettings persistedSettings2;
+    CHECK(persistedAfterBrowse.analysisVisible,
+          "closing inside the Browse workspace persists the pre-Browse analysis visibility");
+    CHECK(persistedSettings2.value("searchVisible", false).toBool(),
+          "closing inside the Browse workspace persists the pre-Browse search visibility");
+    w.show();
+    pump(50);
+    if (browseWorkspaceAction)
+        browseWorkspaceAction->trigger(); // exit Browse: panels restored
+    pump(10);
+
     // Closing while Focus Browse is active must persist the panel state from
     // before Focus hid the panels, not the temporary hidden state.
     if (analysisAction)

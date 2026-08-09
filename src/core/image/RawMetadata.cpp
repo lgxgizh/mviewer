@@ -186,7 +186,14 @@ static void parseIfd(FILE *f, bool le, uint32_t ifdOffset, RawMetadata &rm)
             break;
         case 0x8827:
             if (e.type == 3 && e.count >= 1)
+            {
                 rm.isoSpeed = readTagU16(f, le, e.value, e.type, e.count);
+                // M25: `iso` is the canonical field the UI filters/details use;
+                // it was never populated, so ISO filters and the Details ISO
+                // column silently read 0.
+                if (rm.iso == 0)
+                    rm.iso = rm.isoSpeed;
+            }
             break;
         case 0x9003:
             if (e.type == 2 && e.count > 0 && rm.dateTimeOriginal.empty())

@@ -49,7 +49,7 @@ int main()
     std::vector<std::string> order;
     std::mutex orderMtx;
     pipe.setResultFn(
-        [&](const std::string &p, const ImageData &)
+        [&](const std::string &p, int, const ImageData &)
         {
             std::lock_guard<std::mutex> lk(orderMtx);
             order.push_back(p);
@@ -103,7 +103,7 @@ int main()
         printf("\n[cache hit]\n");
         fflush(stdout);
         size_t before = order.size();
-        ImageData hit = pipe.request(src[0]);
+        ImageData hit = pipe.request(src[0], pipe.thumbSize);
         TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool,
                                         std::chrono::milliseconds(1000));
         size_t after = order.size();

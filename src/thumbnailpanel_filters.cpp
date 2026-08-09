@@ -1,5 +1,16 @@
-// ThumbnailPanel filtering & sorting: filters, metadata index, sorted entries (M20 P0#3).
+// ThumbnailPanel filtering & sorting: filters, metadata index, sorted entries
+// (M20 P0#3). M25: metadata indexing moved off the UI thread into the shared
+// MetadataIndexer; Camera/Lens filters are field-scoped; sort keys are
+// computed once per file and compared in pure memory.
 #include "thumbnailpanel_p.h"
+
+#include "core/image/ImageSortKeys.h"
+#include "core/metadata/MetadataIndexer.h"
+#include "core/search/MetadataFilter.h"
+
+#include <QtConcurrent/QtConcurrent>
+
+#include <algorithm>
 
 void ThumbnailPanel::setSortMode(SortMode mode)
 {
@@ -126,58 +137,159 @@ void ThumbnailPanel::invalidateRatings()
 
 void ThumbnailPanel::ensureMetaIndex()
 {
+    if (m_metaIndexing || m_allEntries.isEmpty())
+        return;
+    // A camera/lens/ISO or metadata-text filter needs the whole-directory
+    // metadata index. Build it OFF the UI thread through the shared
+    // MetadataIndexer (which also serves MainWindow's search re-index), scoped
+    // to the current directory generation so a folder switch cancels it.
     if (!m_metaIndex.isEmpty())
         return;
+
+    m_metaIndexing = true;
+    const int gen = m_dirGen;
+    auto alive = m_alive;
+    const QPointer<ThumbnailPanel> self(this);
+    // Index the FULL directory listing, not the currently filtered m_paths —
+    // a camera/lens filter must be able to evaluate every candidate, and a
+    // filter change may re-add previously filtered-out files.
+    std::vector<std::string> paths;
+    paths.reserve(static_cast<size_t>(m_allEntries.size()));
     for (const Entry &e : m_allEntries)
-    {
-        const mviewer::domain::ImageMetadata meta =
-            mviewer::core::MetadataReader::read(e.path.toStdString());
-        const mviewer::core::RawMetadata rm = mviewer::core::parseRawMetadata(e.path.toStdString());
-        QStringList parts;
-        parts << QString::fromStdString(meta.fileName) << QString::fromStdString(meta.filePath)
-              << QString::fromStdString(meta.format);
-        for (const auto &[k, v] : meta.textKeys)
+        paths.push_back(e.path.toStdString());
+
+    mviewer::core::MetadataIndexer::instance().index(
+        paths,
+        [alive, self, gen](const mviewer::core::MetadataIndexer::Entry &e)
         {
-            parts << QString::fromStdString(k) << QString::fromStdString(v);
-        }
-        parts << QString::fromStdString(rm.make) << QString::fromStdString(rm.model)
-              << QString::fromStdString(rm.lens);
-        if (rm.iso > 0)
-            parts << QString::number(rm.iso);
-        m_metaIndex.insert(e.path, parts.join(' ').toLower());
-        m_metaIso.insert(e.path, rm.iso);
-        m_metaCamera.insert(e.path, QString::fromStdString(rm.make).trimmed() + " " +
-                                        QString::fromStdString(rm.model).trimmed());
-        m_metaLens.insert(e.path, QString::fromStdString(rm.lens).trimmed());
-    }
+            if (!alive->load() || !self)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [alive, self, gen, e]()
+                {
+                    if (!alive->load() || !self)
+                        return;
+                    ThumbnailPanel *panel = self.data();
+                    if (gen != panel->m_dirGen)
+                        return; // superseded directory: drop
+                    const QString p = QString::fromStdString(e.path);
+                    panel->m_metaIndex.insert(p, QString::fromStdString(e.searchBlob));
+                    panel->m_metaIso.insert(p, e.iso);
+                    panel->m_metaCamera.insert(p, QString::fromStdString(e.camera).trimmed());
+                    panel->m_metaLens.insert(p, QString::fromStdString(e.lens).trimmed());
+                });
+        },
+        [alive, self, gen]()
+        {
+            if (!alive->load() || !self)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [alive, self, gen]()
+                {
+                    if (!alive->load() || !self)
+                        return;
+                    ThumbnailPanel *panel = self.data();
+                    if (gen != panel->m_dirGen)
+                        return;
+                    panel->m_metaIndexing = false;
+                    panel->applyFilter(); // index complete: re-run the pending filter
+                });
+        });
 }
 
 void ThumbnailPanel::applyFilter()
 {
     const QString t = m_filterText.trimmed().toLower();
-    if (m_metaSearch && !t.isEmpty())
+    const bool needMeta = (m_metaSearch && !t.isEmpty()) || !m_cameraFilter.isEmpty() ||
+                          !m_lensFilter.isEmpty() || m_isoFilter > 0;
+    if (needMeta)
+    {
         ensureMetaIndex();
-    if (!m_cameraFilter.isEmpty() || !m_lensFilter.isEmpty() || m_isoFilter > 0)
-        ensureMetaIndex();
+        // Progressively apply as entries land: if the index is still filling,
+        // wait for its completion callback to re-run applyFilter.
+        if (m_metaIndexing && m_metaIndex.size() < static_cast<int>(m_allEntries.size()))
+            return;
+    }
 
     QList<Entry> src = m_allEntries;
 
-    // Optional recursive subfolder scan (filename search only).
+    // Optional recursive subfolder scan (filename search only). Runs off the
+    // UI thread (M25) — a recursive walk of a deep tree used to block the
+    // main thread on every keystroke. State machine:
+    //   * hits current for this text  -> merge and fall through to the loop
+    //   * scan in flight             -> wait (completion re-runs applyFilter)
+    //   * otherwise                  -> launch the scan for the current text
+    // A completed scan must NOT relaunch itself (the completion callback
+    // re-enters applyFilter with m_recursiveHits current).
     if (m_filterRecursive && !t.isEmpty() && !m_metaSearch && !m_currentDir.isEmpty())
     {
-        QDirIterator it(m_currentDir, QDir::Files | QDir::Readable | QDir::NoDotAndDotDot,
-                        QDirIterator::Subdirectories);
-        while (it.hasNext())
+        if (m_recursiveHitsFor == t && !m_recursiveSearching)
         {
-            it.next();
-            const QFileInfo fi = it.fileInfo();
-            if (!isImageSuffix(fi.suffix().toLower()))
-                continue;
-            if (!fi.fileName().toLower().contains(t))
-                continue;
-            const QString sub = QDir(m_currentDir).relativeFilePath(fi.absolutePath());
-            src.append({fi.absoluteFilePath(), fi.fileName() + " [" + sub + "]", fi.size()});
+            src.append(m_recursiveHits);
         }
+        else if (m_recursiveSearching)
+        {
+            return; // scan in flight: its completion re-runs this filter
+        }
+        else
+        {
+            const QString currentDir = m_currentDir;
+            auto alive = m_alive;
+            const QPointer<ThumbnailPanel> self(this);
+            const int gen = m_dirGen;
+            m_recursiveSearching = true;
+            m_recursiveHitsFor.clear(); // not current until the scan completes
+            QtConcurrent::run(
+                &m_scanPool,
+                [self, alive, gen, currentDir, t]() mutable
+                {
+                    QList<Entry> found;
+                    QDirIterator it(currentDir,
+                                    QDir::Files | QDir::Readable | QDir::NoDotAndDotDot,
+                                    QDirIterator::Subdirectories);
+                    while (it.hasNext())
+                    {
+                        if (!alive->load())
+                            return;
+                        it.next();
+                        const QFileInfo fi = it.fileInfo();
+                        const QString suffix = fi.suffix().toLower();
+                        if (suffix.isEmpty() ||
+                            !mviewer::core::ImageFormats::isSupportedSuffix(
+                                suffix.toStdString()))
+                            continue;
+                        if (!fi.fileName().toLower().contains(t))
+                            continue;
+                        const QString sub =
+                            QDir(currentDir).relativeFilePath(fi.absolutePath());
+                        found.append(
+                            {fi.absoluteFilePath(), fi.fileName() + " [" + sub + "]", fi.size()});
+                    }
+                    QMetaObject::invokeMethod(
+                        qApp,
+                        [self, alive, gen, found, t]()
+                        {
+                            if (!alive->load() || !self)
+                                return;
+                            ThumbnailPanel *panel = self.data();
+                            panel->m_recursiveSearching = false;
+                            if (gen != panel->m_dirGen)
+                                return;
+                            panel->m_recursiveHits = found;
+                            panel->m_recursiveHitsFor = t;
+                            panel->applyFilter(); // merge the hits and re-filter
+                        });
+                });
+            return; // completion callback rebuilds the model
+        }
+    }
+    else
+    {
+        m_recursiveSearching = false;
+        m_recursiveHitsFor.clear();
+        m_recursiveHits.clear();
     }
 
     // Build a fuzzy/wildcard regex when the search text contains * or ?.
@@ -219,10 +331,14 @@ void ThumbnailPanel::applyFilter()
             if (!inRecents)
                 continue;
         }
+        // M25: Camera / Lens filters match THEIR OWN fields only — never the
+        // concatenated search blob (a camera filter must not hit a lens-only
+        // string and vice versa).
         if (!m_cameraFilter.isEmpty() &&
-            !m_metaIndex.value(e.path).contains(m_cameraFilter.toLower()))
+            !m_metaCamera.value(e.path).toLower().contains(m_cameraFilter.toLower()))
             continue;
-        if (!m_lensFilter.isEmpty() && !m_metaIndex.value(e.path).contains(m_lensFilter.toLower()))
+        if (!m_lensFilter.isEmpty() &&
+            !m_metaLens.value(e.path).toLower().contains(m_lensFilter.toLower()))
             continue;
         if (m_isoFilter > 0 && m_metaIso.value(e.path, -1) != m_isoFilter)
             continue;
@@ -252,91 +368,108 @@ void ThumbnailPanel::applyFilter()
 // static
 QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode, bool ascending)
 {
-    QStringList imgExts = {"bmp", "gif", "jpg", "jpeg", "png", "tif", "tiff", "webp", "cr2",
-                           "cr3", "nef", "nrw", "arw",  "dng", "orf", "rw2",  "pef",  "raf"};
+    // M25: the directory scan already runs off the UI thread; it now computes
+    // ONE sort key per file up front (O(N) reads, not O(N log N)) and then
+    // sorts in pure memory — no file I/O inside a comparator.
     QFileInfoList files = dir.entryInfoList(QDir::Files | QDir::Readable, QDir::NoSort);
     QFileInfoList out;
     for (const QFileInfo &fi : files)
-        if (imgExts.contains(fi.suffix().toLower()))
+    {
+        const QString suffix = fi.suffix().toLower();
+        if (!suffix.isEmpty() &&
+            mviewer::core::ImageFormats::isSupportedSuffix(suffix.toStdString()))
             out.append(fi);
+    }
+    if (out.size() < 2)
+        return out;
 
+    mviewer::core::SortField field = mviewer::core::SortField::Name;
     switch (mode)
     {
     case SortName:
-        std::sort(out.begin(), out.end(), [](const QFileInfo &a, const QFileInfo &b)
-                  { return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0; });
+        field = mviewer::core::SortField::Name;
         break;
     case SortDate:
-        std::sort(out.begin(), out.end(), [](const QFileInfo &a, const QFileInfo &b)
-                  { return a.lastModified() > b.lastModified(); });
+        field = mviewer::core::SortField::Date;
         break;
     case SortSize:
-        std::sort(out.begin(), out.end(),
-                  [](const QFileInfo &a, const QFileInfo &b) { return a.size() > b.size(); });
+        field = mviewer::core::SortField::Size;
         break;
     case SortResolution:
-        std::sort(out.begin(), out.end(),
-                  [](const QFileInfo &a, const QFileInfo &b)
-                  {
-                      auto readSize = [](const QString &path) -> qint64
-                      {
-                          QImageReader reader(path);
-                          reader.setAutoTransform(true);
-                          const QSize s = reader.size();
-                          return static_cast<qint64>(s.width()) * s.height();
-                      };
-                      return readSize(a.absoluteFilePath()) > readSize(b.absoluteFilePath());
-                  });
+        field = mviewer::core::SortField::Resolution;
         break;
     case SortType:
-        std::sort(out.begin(), out.end(), [](const QFileInfo &a, const QFileInfo &b)
-                  { return a.suffix().compare(b.suffix(), Qt::CaseInsensitive) < 0; });
+        field = mviewer::core::SortField::Type;
         break;
     case SortRating:
-        std::sort(out.begin(), out.end(),
-                  [](const QFileInfo &a, const QFileInfo &b)
-                  {
-                      const int ra = mviewer::core::RatingStore::instance().rating(
-                          a.absoluteFilePath().toStdString());
-                      const int rb = mviewer::core::RatingStore::instance().rating(
-                          b.absoluteFilePath().toStdString());
-                      if (ra != rb)
-                          return ra < rb;
-                      return a.fileName().compare(b.fileName(), Qt::CaseInsensitive) < 0;
-                  });
+        field = mviewer::core::SortField::Rating;
         break;
     case SortCamera:
-        std::sort(out.begin(), out.end(),
-                  [](const QFileInfo &a, const QFileInfo &b)
-                  {
-                      auto cam = [](const QString &p) -> QString
-                      {
-                          const auto rm = mviewer::core::parseRawMetadata(p.toStdString());
-                          return QString::fromStdString(rm.make + " " + rm.model).toLower();
-                      };
-                      return cam(a.absoluteFilePath())
-                                 .compare(cam(b.absoluteFilePath()), Qt::CaseInsensitive) < 0;
-                  });
+        field = mviewer::core::SortField::Camera;
         break;
     case SortLens:
-        std::sort(out.begin(), out.end(),
-                  [](const QFileInfo &a, const QFileInfo &b)
-                  {
-                      auto lens = [](const QString &p) -> QString
-                      {
-                          const auto rm = mviewer::core::parseRawMetadata(p.toStdString());
-                          return QString::fromStdString(rm.lens).toLower();
-                      };
-                      return lens(a.absoluteFilePath())
-                                 .compare(lens(b.absoluteFilePath()), Qt::CaseInsensitive) < 0;
-                  });
+        field = mviewer::core::SortField::Lens;
         break;
     }
 
+    std::vector<std::string> paths;
+    paths.reserve(static_cast<size_t>(out.size()));
+    for (const QFileInfo &fi : out)
+        paths.push_back(fi.absoluteFilePath().toStdString());
+
+    const auto keys = mviewer::core::computeSortKeys(paths, field);
+
+    // Pure-memory sort over precomputed keys.
+    std::vector<int> order(static_cast<size_t>(out.size()));
+    for (size_t i = 0; i < order.size(); ++i)
+        order[i] = static_cast<int>(i);
+    std::sort(order.begin(), order.end(),
+              [&](int a, int b)
+              {
+                  const auto &ka = keys[static_cast<size_t>(a)];
+                  const auto &kb = keys[static_cast<size_t>(b)];
+                  switch (mode)
+                  {
+                  case SortName:
+                      return ka.path < kb.path;
+                  case SortDate:
+                      if (ka.mtimeSec != kb.mtimeSec)
+                          return ka.mtimeSec > kb.mtimeSec;
+                      return ka.path < kb.path;
+                  case SortSize:
+                      if (ka.size != kb.size)
+                          return ka.size > kb.size;
+                      return ka.path < kb.path;
+                  case SortResolution:
+                      if (ka.resolution != kb.resolution)
+                          return ka.resolution > kb.resolution;
+                      return ka.path < kb.path;
+                  case SortType:
+                      if (ka.suffix != kb.suffix)
+                          return ka.suffix < kb.suffix;
+                      return ka.path < kb.path;
+                  case SortRating:
+                      if (ka.rating != kb.rating)
+                          return ka.rating < kb.rating;
+                      return ka.path < kb.path;
+                  case SortCamera:
+                      if (ka.camera != kb.camera)
+                          return ka.camera < kb.camera;
+                      return ka.path < kb.path;
+                  case SortLens:
+                      if (ka.lens != kb.lens)
+                          return ka.lens < kb.lens;
+                      return ka.path < kb.path;
+                  }
+                  return ka.path < kb.path;
+              });
+
+    QFileInfoList sorted;
+    sorted.reserve(out.size());
+    for (int i : order)
+        sorted.append(out.at(i));
     // A-2.2: apply sort direction (reverse if descending).
     if (!ascending)
-        std::reverse(out.begin(), out.end());
-    return out;
+        std::reverse(sorted.begin(), sorted.end());
+    return sorted;
 }
-
-// ---- ThumbDelegate ----------------------------------------------------------

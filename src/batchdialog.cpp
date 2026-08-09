@@ -1,5 +1,7 @@
 #include "batchdialog.h"
 
+#include "core/image/ImageFormats.h"
+
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>
@@ -216,8 +218,12 @@ void BatchDialog::setInputFiles(const QStringList &paths)
 
 void BatchDialog::onAddFiles()
 {
-    const auto files = QFileDialog::getOpenFileNames(
-        this, "选择文件", {}, "Images (*.png *.jpg *.jpeg *.bmp *.tif *.tiff *.webp)");
+    // M25: the file-picker filter follows the shipped-format SSOT.
+    QString filter = "Images (";
+    for (const auto &w : mviewer::core::ImageFormats::wildcardFilters())
+        filter += QString::fromStdString(w) + " ";
+    filter = filter.trimmed() + ")";
+    const auto files = QFileDialog::getOpenFileNames(this, "选择文件", {}, filter);
     for (const auto &f : files)
         m_fileList->addItem(f);
 }

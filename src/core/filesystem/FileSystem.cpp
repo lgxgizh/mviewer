@@ -1,5 +1,7 @@
 #include "core/filesystem/FileSystem.h"
 
+#include "core/image/ImageFormats.h"
+
 #include <QDir>
 #include <QFileInfo>
 #include <QString>
@@ -7,14 +9,9 @@
 
 std::vector<std::string> FileSystem::imageFilters()
 {
-    QStringList filters{"*.jpg", "*.jpeg", "*.bmp", "*.png", "*.tif", "*.tiff"};
-    std::vector<std::string> result;
-    result.reserve(filters.size());
-    for (const QString &f : filters)
-    {
-        result.push_back(f.toStdString());
-    }
-    return result;
+    // M25: single source of truth — the decoder registry's format set, in the
+    // Qt "*.ext" wildcard convention (RAW/WebP/GIF included).
+    return mviewer::core::ImageFormats::wildcardFilters();
 }
 
 std::vector<std::string> FileSystem::listImages(const std::string &dir, int max)
@@ -22,7 +19,13 @@ std::vector<std::string> FileSystem::listImages(const std::string &dir, int max)
     QDir d(QString::fromStdString(dir));
     if (!d.exists())
         return {};
-    QStringList filters{"*.jpg", "*.jpeg", "*.bmp", "*.png", "*.tif", "*.tiff"};
+    const QStringList filters = [&]()
+    {
+        QStringList f;
+        for (const auto &w : mviewer::core::ImageFormats::wildcardFilters())
+            f << QString::fromStdString(w);
+        return f;
+    }();
     QFileInfoList entries = d.entryInfoList(filters, QDir::Files, QDir::Name);
     std::vector<std::string> result;
     result.reserve(std::min(static_cast<int>(entries.size()), max));
@@ -38,7 +41,5 @@ std::vector<std::string> FileSystem::listImages(const std::string &dir, int max)
 
 bool FileSystem::isImage(const std::string &path)
 {
-    const QString suffix = QFileInfo(QString::fromStdString(path)).suffix().toLower();
-    return suffix == "jpg" || suffix == "jpeg" || suffix == "bmp" || suffix == "png" ||
-           suffix == "tif" || suffix == "tiff";
+    return mviewer::core::ImageFormats::isSupportedPath(path);
 }

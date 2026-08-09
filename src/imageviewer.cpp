@@ -2,6 +2,7 @@
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/Analyzer.h"
+#include "core/image/ImageFormats.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
@@ -35,8 +36,17 @@
 
 namespace
 {
-const QStringList kImageExtensions = {"*.jpg", "*.jpeg", "*.bmp",  "*.png",
-                                      "*.tif", "*.tiff", "*.webp", "*.gif"};
+// M25: the shipped-format SSOT drives the viewer's own directory navigation
+// (RAW/WebP/GIF included — the viewer must see the same images as the gallery).
+// LAZY on purpose: building it at static-init time would query the Qt image
+// format plugins before QCoreApplication exists and cache an incomplete set.
+QStringList imageExtensionFilters()
+{
+    QStringList filters;
+    for (const auto &w : mviewer::core::ImageFormats::wildcardFilters())
+        filters << QString::fromStdString(w);
+    return filters;
+}
 const double kZoomStep = 1.15;
 } // namespace
 
@@ -46,7 +56,7 @@ QStringList ImageViewer::listImages(const QString &dirPath)
     if (!dir.exists())
         return {};
 
-    QFileInfoList entries = dir.entryInfoList(kImageExtensions, QDir::Files, QDir::Name);
+    QFileInfoList entries = dir.entryInfoList(imageExtensionFilters(), QDir::Files, QDir::Name);
     QStringList result;
     result.reserve(entries.size());
     for (const QFileInfo &info : entries)

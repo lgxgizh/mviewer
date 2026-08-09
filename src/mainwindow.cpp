@@ -161,23 +161,46 @@ void MainWindow::reindexSearch()
     if (!m_searchPanel)
         return;
 
+    // M25: the search index is built OFF the UI thread by the shared
+    // MetadataIndexer (the same index the gallery filters reuse). Before this,
+    // the whole directory's metadata was read + parsed synchronously on the
+    // UI thread on every folder change — a multi-second freeze on 10k folders.
     std::vector<std::string> paths;
-    std::vector<mviewer::domain::ImageMetadata> metas;
-    std::vector<mviewer::core::RawMetadata> raws;
+    const QStringList listPaths = m_imageList->paths();
+    paths.reserve(static_cast<size_t>(listPaths.size()));
+    for (const QString &p : listPaths)
+        paths.push_back(p.toStdString());
 
-    for (const QString &p : m_imageList->paths())
-    {
-        const std::string sp = p.toStdString();
-        paths.push_back(sp);
-
-        auto meta = mviewer::core::MetadataReader::read(sp);
-        metas.push_back(meta);
-
-        auto raw = mviewer::core::parseRawMetadata(sp);
-        raws.push_back(raw);
-    }
-
-    m_searchPanel->reindex(paths, metas, raws);
+    ++m_reindexGen;
+    const uint64_t gen = m_reindexGen;
+    auto alive = std::make_shared<std::atomic<bool>>(true);
+    mviewer::core::MetadataIndexer::instance().index(
+        paths,
+        [](const mviewer::core::MetadataIndexer::Entry &) {},
+        [this, alive, gen]()
+        {
+            if (!alive->load())
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [this, alive, gen]()
+                {
+                    if (!alive->load() || gen != m_reindexGen || !m_searchPanel)
+                        return;
+                    // Collect the freshly indexed entries (no I/O — cached).
+                    std::vector<mviewer::core::MetadataIndexEntry> entries;
+                    const QStringList cur = m_imageList->paths();
+                    entries.reserve(static_cast<size_t>(cur.size()));
+                    for (const QString &p : cur)
+                    {
+                        const auto *e = mviewer::core::MetadataIndexer::instance().cached(
+                            p.toStdString());
+                        if (e)
+                            entries.push_back(*e);
+                    }
+                    m_searchPanel->reindexEntries(entries);
+                });
+        });
 }
 
 void MainWindow::onRatingFilterChanged(int)

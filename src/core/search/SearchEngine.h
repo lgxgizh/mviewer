@@ -14,6 +14,7 @@ struct ImageMetadata;
 namespace mviewer::core
 {
 struct RawMetadata;
+struct MetadataIndexEntry;
 
 // Forward declare: callback that provides analyzer result text for a given path.
 using AnalysisTextProvider = std::function<std::string(const std::string &path)>;
@@ -49,6 +50,9 @@ class SearchIndex
     search(const domain::SearchQuery &query,
            const AnalysisTextProvider &analysisProvider = {}) const;
 
+    // Add or update the raw searchable blob for a path (used by indexEntry).
+    void indexBlob(const std::string &path, const std::string &blob);
+
   private:
     struct Entry
     {
@@ -77,6 +81,12 @@ class SearchEngine
 
     // Remove all entries and providers.
     void reset();
+
+    // Rebuild the index from the shared MetadataIndexer's already-built
+    // entries (M25: the search panel and the gallery filters reuse one async
+    // indexing pass instead of parsing every file twice on the UI thread).
+    void indexEntry(const MetadataIndexEntry &entry);
+    void indexEntries(const std::vector<MetadataIndexEntry> &entries);
 
     // Return ranked results for the given query.
     std::vector<domain::SearchResult> search(const domain::SearchQuery &query) const;

@@ -1,6 +1,7 @@
 #include "core/search/SearchEngine.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/RawMetadata.h"
+#include "core/metadata/MetadataIndexer.h"
 #include "domain/Image.h"
 
 #include <algorithm>
@@ -116,6 +117,19 @@ void SearchIndex::indexFile(const std::string &path, const domain::ImageMetadata
     m_blobs.push_back({path, buildBlob(meta, raw, analysisText)});
 }
 
+void SearchIndex::indexBlob(const std::string &path, const std::string &blob)
+{
+    for (auto &e : m_blobs)
+    {
+        if (e.path == path)
+        {
+            e.blob = blob;
+            return;
+        }
+    }
+    m_blobs.push_back({path, blob});
+}
+
 void SearchIndex::removeFile(const std::string &path)
 {
     m_blobs.erase(std::remove_if(m_blobs.begin(), m_blobs.end(),
@@ -221,6 +235,18 @@ void SearchEngine::reset()
 {
     m_index.clear();
     m_analysisProvider = {};
+}
+
+void SearchEngine::indexEntry(const MetadataIndexEntry &entry)
+{
+    m_index.indexBlob(entry.path, entry.searchBlob);
+}
+
+void SearchEngine::indexEntries(const std::vector<MetadataIndexEntry> &entries)
+{
+    m_index.clear();
+    for (const auto &e : entries)
+        m_index.indexBlob(e.path, e.searchBlob);
 }
 
 std::vector<domain::SearchResult> SearchEngine::search(const domain::SearchQuery &query) const

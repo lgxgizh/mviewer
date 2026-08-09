@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/image/RawMetadata.h"
+#include "core/metadata/MetadataIndexer.h"
 #include "domain/Image.h"
 #include "domain/SearchResult.h"
 
@@ -45,6 +46,10 @@ class SearchPanel : public QWidget
     void reindex(const std::vector<std::string> &paths,
                  const std::vector<mviewer::domain::ImageMetadata> &metas,
                  const std::vector<mviewer::core::RawMetadata> &raws);
+
+    // Re-index from the shared MetadataIndexer's already-built entries (M25:
+    // no UI-thread metadata I/O — MainWindow feeds this after the async index).
+    void reindexEntries(const std::vector<mviewer::core::MetadataIndexEntry> &entries);
 
   signals:
     // Emitted when the user clicks a result row; the caller opens the image.

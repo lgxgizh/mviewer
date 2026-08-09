@@ -209,7 +209,7 @@ ThumbnailBreakdown measureFirstThumbnail(const Corpus &corpus)
         });
 
     pipe.setResultFn(
-        [st](const std::string &, const ImageData &)
+        [st](const std::string &, int, const ImageData &)
         {
             const double now = nowMs();
             double expect = -1.0;
@@ -348,7 +348,7 @@ ScenarioResult scenarioPipelinePriority(const Corpus &corpus)
             return Decoder::decodeScaled(p, size);
         });
     pipe.setResultFn(
-        [&](const std::string &p, const ImageData &)
+        [&](const std::string &p, int, const ImageData &)
         {
             const double ms = nowMs() - tAnchorTrace;
             std::lock_guard<std::mutex> lk(trMtx);

@@ -1,0 +1,178 @@
+[
+    {
+        "ms": 1078,
+        "name": "S1_10000_scan_ms"
+    },
+    {
+        "ms": 731,
+        "name": "S1_10000_first_entries_ms"
+    },
+    {
+        "ms": 417,
+        "name": "S2_switch_worst_ms"
+    },
+    {
+        "ms": 0,
+        "name": "S3_setdir_return_ms"
+    },
+    {
+        "ms": 721,
+        "name": "S3_first_entries_ms"
+    },
+    {
+        "ms": 741,
+        "name": "S3_full_entries_ms"
+    },
+    {
+        "ms": 3741,
+        "name": "S3_settle_ms"
+    },
+    {
+        "ms": 26.3129,
+        "name": "S3_ui_stall_max_ms"
+    },
+    {
+        "ms": 705,
+        "name": "S3b_list_full_entries_ms"
+    },
+    {
+        "ms": 36.0645,
+        "name": "S3b_list_ui_stall_max_ms"
+    },
+    {
+        "ms": 727,
+        "name": "S3c_zeroview_full_entries_ms"
+    },
+    {
+        "ms": 15.8569,
+        "name": "S3c_zeroview_ui_stall_max_ms"
+    },
+    {
+        "ms": 960,
+        "name": "S4_24mp_jpeg_decode_ms"
+    },
+    {
+        "ms": 1,
+        "name": "S4_24mp_jpeg_ok"
+    },
+    {
+        "ms": 410,
+        "name": "S5_4k_tiff_decode_ms"
+    },
+    {
+        "ms": 1,
+        "name": "S5_4k_tiff_ok"
+    },
+    {
+        "ms": 3106,
+        "name": "S6_corrupt_mixed_browse_ms"
+    },
+    {
+        "ms": 87.734375,
+        "name": "S7_steady_rss_mb"
+    },
+    {
+        "ms": 480,
+        "name": "S7_handles"
+    },
+    {
+        "ms": 50,
+        "name": "S8_compare_completed"
+    },
+    {
+        "ms": 1037,
+        "name": "S8_compare_worst_ms"
+    },
+    {
+        "ms": 0.00390625,
+        "name": "S8_compare_rss_growth_mb"
+    },
+    {
+        "ms": -4,
+        "name": "S8_compare_handle_growth"
+    },
+    {
+        "ms": 847,
+        "name": "T1_size_churn_total_ms"
+    },
+    {
+        "ms": 37.2374,
+        "name": "T1_size_churn_worst_ui_stall_ms"
+    },
+    {
+        "ms": 0,
+        "name": "T1_stale_sized_ready_thumbs"
+    },
+    {
+        "ms": 6.328125,
+        "name": "T1_rss_growth_mb"
+    },
+    {
+        "ms": 122,
+        "name": "T2_switch_worst_first_entries_ms"
+    },
+    {
+        "ms": 42,
+        "name": "T2_switch_worst_full_ms"
+    },
+    {
+        "ms": 0,
+        "name": "T2_stale_rows_from_old_dir"
+    },
+    {
+        "ms": 300,
+        "name": "T3_raw_gallery_count"
+    },
+    {
+        "ms": 300,
+        "name": "T3_raw_fs_count"
+    },
+    {
+        "ms": 300,
+        "name": "T3_mixed_gallery_count"
+    },
+    {
+        "ms": 300,
+        "name": "T3_mixed_fs_count"
+    },
+    {
+        "ms": 10919,
+        "name": "T4_metadata_work_total_ms"
+    },
+    {
+        "ms": 28.2875,
+        "name": "T4_worst_ui_stall_ms"
+    },
+    {
+        "ms": 500,
+        "name": "T4_camera_filter_count"
+    },
+    {
+        "ms": 143,
+        "name": "T4_lens_filter_count"
+    },
+    {
+        "ms": 100,
+        "name": "T4_iso_filter_count"
+    },
+    {
+        "ms": 50,
+        "name": "T4_recursive_search_count"
+    },
+    {
+        "ms": 500,
+        "name": "S9_workspace_completed"
+    },
+    {
+        "ms": 211,
+        "name": "S9_workspace_total_ms"
+    },
+    {
+        "ms": 1,
+        "name": "S9_workspace_worst_ms"
+    },
+    {
+        "ms": 0,
+        "name": "S7_exit_ms"
+    }
+]

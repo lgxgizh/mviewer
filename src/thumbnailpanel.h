@@ -321,6 +321,12 @@ class ThumbnailPanel : public QListView
     // P1: filter state for metadata search + star-rating filter.
     QList<Entry> m_allEntries;            // full listing; source for filtering
     bool m_metaSearch = false;            // search embedded metadata, not just names
+    // M25: async metadata indexing (shared MetadataIndexer) + recursive scan
+    // state — both generation-scoped so directory switches cancel them.
+    bool m_metaIndexing = false;
+    bool m_recursiveSearching = false;
+    QList<Entry> m_recursiveHits;  // recursive filename-search results (merged by applyFilter)
+    QString m_recursiveHitsFor;    // the filter text the current hits belong to
     int m_ratingFilter = 0;               // show only images rated >= this (0 = all)
     int m_labelFilter = 0;                // show only images with this color label (0 = any)
     bool m_rejectFilter = false;          // show only rejected images

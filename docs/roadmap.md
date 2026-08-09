@@ -49,7 +49,7 @@
 | M22 | **2026-07 产品评审与方向收敛** | ✅ Done. External review adopted as the product-first direction (AGENTS.md §Strategic Direction): no new capability categories; convergence + productization + performance closure. |
 | M23 | **质量自动化** — ADR/Bug 门禁、自动 dashboard、test matrix、benchmark trend | ✅ Done (ADR-015). Wired ADR/Bug gates, auto dashboard, test matrix, benchmark trend into the test pipeline. |
 | M24 | **Product Reality & Stability Convergence** — 真实基线 / 版本 SSOT / 异步生命周期 / 工作流验收 / 测试可信度 / 性能 / RC 验证 | ✅ Done (2026-08-05). 70/70 CTest green, clean-env packages verified; verdict `docs/review/M24_FINAL_VERDICT_2026-08-05.md` = READY WITH DOCUMENTED NON-BLOCKING LIMITATIONS. |
-| M25 | **RC Experience & Product Convergence** — 工作流打磨 / 压力稳定性 / 复杂度收敛 / 性能收口 / RC 验收 | 🔄 In progress (2026-08-09). Compare toolbar fits the 1100 px workflow window; `thumbnailpanel.cpp` is back under the ADR-014 guard at 682 lines; S1–S9 Release stress and the 71/71 local gate pass, including offline `updatechecker_tests`; the 10K List UI gap fell from about 2.01 s to 336 ms. Export now treats the edited directory as authoritative and rejects source aliases, hard links, and duplicate destinations before writing. Target-hardware and human UX sign-off remain. |
+| M25 | **RC Experience & Product Convergence** — 工作流打磨 / 压力稳定性 / 复杂度收敛 / 性能收口 / RC 验收 | 🔄 Automated portion DONE (2026-08-09). Compare toolbar fits 1100 px; `thumbnailpanel.cpp` at 682 lines (ADR-014 guard); UpdateChecker offline-tested + link-safe; Export authoritative-directory + conflict preflight; **Browse data-pipeline convergence**: thumbnail cache identity (size+schema), generation-scoped cancellation, worker QImage-only + no UI-thread disk I/O, format SSOT (RAW/WebP/GIF consistent everywhere), shared async MetadataIndexer, once-per-file sort keys, field-scoped Camera/Lens/ISO filters, Browse close persistence, mojibake fixes. 73/73 local gate (incl. new `browse_convergence_tests` / `browse_convergence_ui_tests`) + S1–S9 & T1–T4 Release soak pass in both scheduler configs. Verdict `docs/review/M25_RC_CONVERGENCE_2026-08-09.md` = AUTOMATED RC READY — TARGET HARDWARE / HUMAN UX SIGN-OFF PENDING. |
 
 ### M25 closure addendum (2026-08-09)
 
@@ -59,6 +59,20 @@
   adjusted-image and ROI scope even when the side panel is hidden or per-pane
   overlays are enabled. Direct `compare_acceptance_tests` regressions close the
   baseline's partially asserted overlay gap.
+- **Browse data-pipeline convergence** (Phase 2, this milestone): thumbnail
+  cache identity covers path + mtime + size + requested size + schema version
+  (no 64→240 stale reuse); thumbnail decode/encode/cache I/O is QImage-only on
+  the worker and the UI thread performs no thumbnail disk I/O (visible-range
+  probe removed); every scheduled thumbnail carries its directory generation so
+  rapid switching cancels queued work and drops stale results. Shipped formats
+  have one SSOT (`ImageFormats` over the decoder registry) across directory
+  listing / gallery / viewer navigation / recursive search / file dialogs /
+  sidecars. Metadata indexing is one shared background, cancellable,
+  generation-scoped pass; sort keys are computed once per file and compared in
+  pure memory; recursive filename search runs off the UI thread; Camera/Lens
+  filters are field-scoped and ISO reads the real sensor value; closing inside
+  the Browse workspace persists the pre-Browse panel state; 4 user-visible
+  mojibake strings fixed. See `docs/review/M25_RC_CONVERGENCE_2026-08-09.md`.
 
 ## Public versioning (M13+)
 

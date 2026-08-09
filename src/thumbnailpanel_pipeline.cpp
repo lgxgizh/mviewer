@@ -62,32 +62,12 @@ void ThumbnailPanel::updateVisibleRange()
     first = qBound(0, first, n - 1);
     last = qBound(first, last, n - 1);
 
-    // Prime instantly-available disk-cached thumbs for the visible window so a
-    // revisited folder paints at once instead of waiting for a decode.
-    {
-        QMutexLocker lk(&m_thumbMtx);
-        for (int r = first; r <= last; ++r)
-        {
-            const QString p = m_paths.value(r);
-            if (m_thumbReady.contains(p))
-                continue;
-            QPixmap pm;
-            if (ThumbnailCache::instance().get(p, pm))
-            {
-                m_thumbReady.insert(p, pm);
-                QPointer<ThumbnailPanel> guard(this);
-                QMetaObject::invokeMethod(
-                    this,
-                    [guard, p]()
-                    {
-                        if (!guard)
-                            return;
-                        guard->onThumbReady(p);
-                    },
-                    Qt::QueuedConnection);
-            }
-        }
-    }
+    // M25: the visible-range disk probe is GONE. It used to synchronously
+    // stat + PNG-load every visible cell ON THE GUI THREAD, and it duplicated
+    // the pipeline's own cache read (two cache paths could disagree on what
+    // "cached" means). ThumbnailProvider::produce() on the worker is now the
+    // single authoritative disk-cache path: warm folders paint as soon as the
+    // worker's cache load lands (async, no UI-thread I/O).
 
     // P0 #鈶?/ A-2.5: visible range at Thumbnail priority, then predictive
     // neighbors. Scale the predictive window with directory size so 10k-image

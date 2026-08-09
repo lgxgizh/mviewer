@@ -127,7 +127,7 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 | M17 自动更新 | ✅ | `UpdateChecker`（GitHub Releases，WinHTTP），版本来自 CMake SSOT（M24）；离线 `updatechecker_tests` 覆盖 JSON、点分版本、传输错误与安全下载链接策略 |
 | M23 质量自动化 | ✅ | ADR/Bug 门禁、自动 dashboard、test matrix、benchmark trend（ADR-015） |
 | M24 稳定性收敛 | ✅ | 2026-08-05 完成：70/70 CTest、干净环境打包、异步生命周期/工作流验收/测试可信度/性能/RC 验证（verdict: READY WITH NON-BLOCKING LIMITATIONS） |
-| M25 RC 收敛 | 🔄 进行中 | Compare 顶栏已完成三行防溢出收敛；`thumbnailpanel.cpp` 已回到 682 行并关闭 ADR-014 硬阻塞；S1–S9 Release 压测与 71/71 本地门禁通过，10K List UI 最长阻塞由约 2.01 s 降至 336 ms；UpdateChecker 已完成离线可测与链接安全收敛；Export 已关闭输出目录错位、源/目标别名、批内重名和非安全覆盖风险；目标硬件 / 人工 UX 签名待完成 |
+| M25 RC 收敛 | 🔄 进行中（自动化完成） | Compare 顶栏三行防溢出；`thumbnailpanel.cpp` 682 行（ADR-014 内）；S1–S9 + T1–T4 Release 压测双配置 PASS；73/73 本地门禁（新增 `browse_convergence_tests` / `browse_convergence_ui_tests`）；缩略图缓存身份（path+mtime+size+requestedSize+schema）、generation 级取消、worker 纯 QImage、UI 线程零缩略图磁盘 I/O；格式 SSOT 统一（RAW/WebP/GIF 全链路一致）；MetadataIndexer 异步索引 + 排序键单次计算 + 字段级 Camera/Lens/ISO 过滤；Browse 关闭持久化；乱码修复。**剩余：目标硬件与人工 UX 签名**（见 `docs/review/M25_RC_CONVERGENCE_2026-08-09.md`） |
 
 ### M25 closure addendum (2026-08-09)
 
@@ -137,6 +137,21 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   share adjusted-image and ROI scope even with the side panel hidden or per-pane
   overlays enabled. Direct `compare_acceptance_tests` regressions close the
   baseline's partially asserted overlay gap.
+- **M25 Phase 2 — Browse data-pipeline convergence closed (automated part).**
+  Thumbnail cache identity now covers path + mtime + size + requested thumbnail
+  size + schema version (no 64→240 stale reuse); thumbnail work is QImage-only
+  on the worker (PNG encode/write and cache reads off the UI thread, the
+  visible-range disk probe removed); scheduled thumbnails carry their directory
+  generation so switches cancel queued work and drop stale results. The shipped
+  formats have one SSOT (`ImageFormats` over the decoder registry) across
+  listing / gallery / viewer / recursive search / file dialogs / sidecars.
+  Metadata indexing is one shared background, cancellable, generation-scoped
+  pass (search panel + gallery filters); sort keys are computed once per file
+  and compared in memory; recursive filename search runs off the UI thread.
+  Camera/Lens filters are field-scoped and ISO reads the real sensor value.
+  Closing inside the Browse workspace persists the pre-Browse panel state.
+  Verdict: `AUTOMATED RC READY — TARGET HARDWARE / HUMAN UX SIGN-OFF PENDING`
+  (see `docs/review/M25_RC_CONVERGENCE_2026-08-09.md`).
 
 ## Plugin SDK (frozen)
 
@@ -150,9 +165,10 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 ## Release process (current)
 
 1. Bump `CMakeLists.txt` `project(VERSION)` — the single source of version.
-2. `.\build.ps1 Test` must be green (71 registered CTest tests incl.
-   `version_consistency`, `updatechecker_tests`, `bench_enforce`, `golden_image`,
-   and the four M24 workflow acceptance suites).
+2. `.\build.ps1 Test` must be green (73 registered CTest tests incl.
+   `version_consistency`, `updatechecker_tests`, `browse_convergence_tests`,
+   `browse_convergence_ui_tests`, `bench_enforce`, `golden_image`, and the four
+   M24 workflow acceptance suites).
 3. Tag `vX.Y.Z`; `release.yml` builds, packages, attaches artifacts.
 4. Verify `dist/MViewer-<X.Y.Z>-portable.zip` and `dist/MViewer-<X.Y.Z>-Setup.exe`.
 5. Attach `SHA256SUMS.txt` (M14.8) and release notes from CHANGELOG.

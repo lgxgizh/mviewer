@@ -23,11 +23,22 @@
 //
 // Work is submitted to the shared TaskScheduler (ThumbnailPool), reusing the
 // priority/cancel machinery instead of spinning up a private worker thread.
+//
+// M25 identity & lifecycle contract:
+//   * the in-memory cache is keyed by (path, requested size) — a 64px result
+//     can never satisfy a 240px request;
+//   * every scheduled task carries the generation it was born in; setSources()
+//     and clear() bump the generation, and any result from a superseded
+//     generation is dropped (never cached, never delivered) — so rapid
+//     directory switches cannot pollute the current folder;
+//   * cancelled tasks check the scheduler's cancel flag BEFORE decoding, so
+//     stale queued work stops instead of merely being discarded afterwards.
 
 struct ThumbnailPipeline
 {
     using DecodeFn = std::function<ImageData(const std::string &path, int size)>;
-    using ResultFn = std::function<void(const std::string &path, const ImageData &thumb)>;
+    using ResultFn =
+        std::function<void(const std::string &path, int size, const ImageData &thumb)>;
 
     int thumbSize = 256;
     size_t memCacheMax = 512; // hot thumbnails retained in memory (LRU)
@@ -35,18 +46,22 @@ struct ThumbnailPipeline
     // Inject the decode step (default: Decoder::decodeScaled). Tests inject a fake.
     void setDecodeFn(DecodeFn fn)
     {
+        std::lock_guard<std::mutex> lk(m_mtx);
         m_decode = std::move(fn);
     }
     // Deliver decoded thumbnails here (called on the scheduler worker thread).
     void setResultFn(ResultFn fn)
     {
+        std::lock_guard<std::mutex> lk(m_mtx);
         m_result = std::move(fn);
     }
 
-    // Full directory listing (image paths, in display order).
+    // Full directory listing (image paths, in display order). Starts a new
+    // generation: any in-flight work from the previous listing is invalidated.
     void setSources(const std::vector<std::string> &paths)
     {
         std::lock_guard<std::mutex> lk(m_mtx);
+        ++m_gen;
         m_sources = paths;
     }
 
@@ -68,13 +83,14 @@ struct ThumbnailPipeline
         m_predictive = n;
     }
 
-    // Synchronous cache probe: returns the cached thumbnail if present, else
-    // null and kicks an async decode (respecting visible/predictive ordering).
-    ImageData request(const std::string &path)
+    // Synchronous cache probe: returns the cached thumbnail at `size` if
+    // present, else null and kicks an async decode (respecting
+    // visible/predictive ordering).
+    ImageData request(const std::string &path, int size)
     {
         {
             std::lock_guard<std::mutex> lk(m_mtx);
-            auto it = m_memCache.find(path);
+            auto it = m_memCache.find(key(path, size));
             if (it != m_memCache.end())
             {
                 m_lru.splice(m_lru.begin(), m_lru, it->second.lruIt);
@@ -87,10 +103,12 @@ struct ThumbnailPipeline
         return ImageData{};
     }
 
-    // Cancel all outstanding thumbnail tasks (e.g. on directory switch).
+    // Cancel all outstanding thumbnail tasks (e.g. on directory switch) and
+    // start a new generation so late results are dropped.
     void clear()
     {
         std::lock_guard<std::mutex> lk(m_mtx);
+        ++m_gen;
         for (auto &kv : m_handles)
             TaskScheduler::cancel(kv.second);
         m_handles.clear();
@@ -106,6 +124,14 @@ struct ThumbnailPipeline
         return m_memCache.size();
     }
 
+    // The generation counter — bumped by setSources()/clear(). Consumers may
+    // observe it to validate their own deferred work.
+    uint64_t generation() const
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        return m_gen;
+    }
+
     static ThumbnailPipeline &instance()
     {
         static ThumbnailPipeline inst;
@@ -118,6 +144,11 @@ struct ThumbnailPipeline
         ImageData data;
         std::list<std::string>::iterator lruIt;
     };
+
+    static std::string key(const std::string &path, int size)
+    {
+        return path + "\x1f" + std::to_string(size);
+    }
 
     // Must hold m_mtx. Enqueues visible items (Thumbnail prio) then predictive
     // neighbors (also Thumbnail prio, enqueued AFTER visible).
@@ -152,26 +183,41 @@ struct ThumbnailPipeline
 
     void enqueueLocked(const std::string &path, TaskScheduler::Priority prio)
     {
-        if (m_memCache.count(path) || m_pending.count(path))
-            return;
-        m_pending.insert(path);
         const int size = thumbSize;
+        const std::string k = key(path, size);
+        if (m_memCache.count(k) || m_pending.count(k))
+            return;
+        m_pending.insert(k);
         DecodeFn decode = m_decode;
         ResultFn result = m_result;
+        const uint64_t gen = m_gen;
         auto handle = TaskScheduler::instance().submit(
             prio,
-            [this, path, size, decode, result](const TaskScheduler::TaskContext &)
+            [this, path, size, k, gen, decode, result](const TaskScheduler::TaskContext &ctx)
             {
+                // Stop stale queued work BEFORE decoding (rapid directory
+                // switch: cancelled tasks no longer waste decode time).
+                if (ctx.isCancelled())
+                {
+                    std::lock_guard<std::mutex> lk(m_mtx);
+                    m_pending.erase(k);
+                    return;
+                }
                 ImageData thumb = decode(path, size);
                 {
                     std::lock_guard<std::mutex> lk(m_mtx);
-                    m_pending.erase(path);
+                    m_pending.erase(k);
+                    // Superseded generation: drop everything (no cache, no
+                    // delivery) so old directories can never pollute the
+                    // current one.
+                    if (gen != m_gen || ctx.isCancelled())
+                        return;
                     if (!thumb.isNull())
                     {
-                        cacheLocked(path, thumb);
+                        cacheLocked(k, path, thumb);
                         // result callback may run on worker thread; caller adapts.
                         if (result)
-                            result(path, thumb);
+                            result(path, size, thumb);
                     }
                     else if (result)
                     {
@@ -179,21 +225,21 @@ struct ThumbnailPipeline
                         // thumb) so the UI can mark the cell as failed instead
                         // of showing an eternal loading state. The consumer
                         // decides whether/how to cache the failure.
-                        result(path, ImageData{});
+                        result(path, size, ImageData{});
                     }
                 }
             });
         if (handle)
-            m_handles[path] = handle;
+            m_handles[k] = handle;
     }
 
-    void cacheLocked(const std::string &path, const ImageData &data)
+    void cacheLocked(const std::string &k, const std::string &path, const ImageData &data)
     {
         MemEntry e;
         e.data = data;
-        m_lru.push_front(path);
+        m_lru.push_front(k);
         e.lruIt = m_lru.begin();
-        m_memCache[path] = e;
+        m_memCache[k] = e;
         while (m_memCache.size() > memCacheMax)
         {
             const std::string &back = m_lru.back();
@@ -207,6 +253,7 @@ struct ThumbnailPipeline
     size_t m_visibleBegin = 0;
     size_t m_visibleEnd = 0;
     size_t m_predictive = 16;
+    uint64_t m_gen = 0;
     DecodeFn m_decode = [](const std::string &path, int size)
     { return Decoder::decodeScaled(path, size); };
     ResultFn m_result;

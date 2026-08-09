@@ -128,6 +128,14 @@ void SearchPanel::reindex(const std::vector<std::string> &paths,
     onSearchTextChanged();
 }
 
+void SearchPanel::reindexEntries(const std::vector<mviewer::core::MetadataIndexEntry> &entries)
+{
+    if (!m_engine)
+        return;
+    m_engine->indexEntries(entries);
+    onSearchTextChanged();
+}
+
 void SearchPanel::onSearchTextChanged()
 {
     // Debounce: restart the timer so we only search after the user pauses

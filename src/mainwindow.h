@@ -199,6 +199,9 @@ class MainWindow : public QMainWindow
     // (re)built shortly after the user settles on a directory.
     QTimer *m_reindexTimer = nullptr;
     void scheduleReindex();
+    // M25: generation guard for the async search re-index (a late completion
+    // from a previous directory is dropped).
+    uint64_t m_reindexGen = 0;
 
     // M18: gallery search bar.
     QLineEdit *m_searchEdit = nullptr;

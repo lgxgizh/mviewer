@@ -181,7 +181,7 @@ static void testFirstThumbnailLatency()
     std::chrono::steady_clock::time_point tAnchor;
 
     pipe.setResultFn(
-        [&](const std::string &, const ImageData &)
+        [&](const std::string &, int, const ImageData &)
         {
             const double ms = std::chrono::duration<double, std::milli>(
                                   std::chrono::steady_clock::now() - tAnchor)

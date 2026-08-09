@@ -1067,11 +1067,14 @@ void MainWindow::setupUi()
     connect(m_actOpenFile, &QAction::triggered, this,
             [this]()
             {
+                // M25: the Open File filter is built from the format SSOT so it
+                // can never drift from what the gallery/navigation list.
+                QString filter = "图片文件 (";
+                for (const auto &w : mviewer::core::ImageFormats::wildcardFilters())
+                    filter += QString::fromStdString(w) + " ";
+                filter = filter.trimmed() + ");;所有文件 (*)";
                 const QString file = QFileDialog::getOpenFileName(
-                    this, "打开图片", currentDir().isEmpty() ? QString() : currentDir(),
-                    "图片文件 (*.jpg *.jpeg *.png *.bmp *.tif *.tiff *.webp"
-                    " *.cr2 *.cr3 *.nef *.nrw *.arw *.dng *.orf *.rw2 *.pef *.raf);;"
-                    "所有文件 (*)");
+                    this, "打开图片", currentDir().isEmpty() ? QString() : currentDir(), filter);
                 if (!file.isEmpty())
                     onImageOpen(file);
             });

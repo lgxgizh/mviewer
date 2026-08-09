@@ -57,6 +57,49 @@ All notable changes to this project are documented here. The format is based on
 - **Directory-switch consistency:** changing folders immediately clears the old
   image, preview, metadata, and status identity, then selects the first image
   from the newly loaded folder exactly once.
+- **True thumbnail cache identity (M25):** the on-disk thumbnail cache key now
+  includes the requested thumbnail size and a schema version (in addition to
+  source path, mtime and size). A 64 px thumbnail can never be served to a
+  240 px request — no upscaled "cache hits" masquerading as higher-resolution
+  thumbnails, and schema changes invalidate stale entries. Switching thumbnail
+  sizes drops stale ready pixmaps, rejects old-size results still in flight,
+  and re-requests the visible cells at the new size.
+- **Generation-scoped thumbnail cancellation (M25):** every scheduled thumbnail
+  carries the directory generation it was born in; changing folders cancels the
+  old generation's queued work before it decodes, and results from a superseded
+  folder are never cached or painted. Rapid A→B→C switching can no longer let
+  old-folder work delay or pollute the current folder.
+- **No GUI-thread disk I/O in the gallery (M25):** thumbnail decode, PNG
+  encode/write and cache reads all run on the worker threads (QImage payloads
+  end to end; QPixmap is only materialized on the GUI thread for painting).
+  The old visible-range disk probe — which synchronously stat'ed and PNG-loaded
+  every visible cell on the UI thread — is gone; the worker's cache path is now
+  the single authoritative one.
+- **One supported-format source of truth (M25):** the decoder registry's
+  format set now drives directory listing, the gallery, the viewer's own
+  navigation, recursive filename search, the Open-File dialog, batch file
+  picking and sidecar export. RAW-only and RAW/JPEG/WebP/GIF mixed directories
+  are counted, browsed, searched and compared identically everywhere — the
+  gallery count, status-bar count, navigation model and Compare seed now agree.
+- **Asynchronous metadata indexing (M25):** the search index and the gallery's
+  Camera/Lens/ISO filters share one background, cancellable, generation-scoped
+  metadata pass instead of each re-reading and re-parsing every file on the UI
+  thread. Camera/Lens filters match their own fields only (a camera filter can
+  no longer hit a lens-only string), ISO filters read the real sensor ISO (the
+  parser previously never populated it), and recursive filename search runs
+  off the UI thread and no longer re-launches itself in a loop.
+- **Memory-only gallery sorting (M25):** Resolution/Camera/Lens sorts compute
+  one key per file up front and compare keys in pure memory — no more O(N log N)
+  header parses and metadata reads inside `std::sort` comparators.
+- **Browse workspace close persistence (M25):** closing while the Browse
+  workspace is active saves the Analysis/Search state from before Browse hid
+  the panels — matching the Focus-Browse temporary-mode semantics — so a normal
+  close no longer silently pins the panels hidden for next launch.
+- **Filter/search rebuild flicker reduction (M25):** ready thumbnails survive
+  model rebuilds for files that stay visible; only paths that leave the view
+  drop their pixmaps.
+- **Garbled UI strings fixed (M25):** the Compare selection button label,
+  tooltip and failure-placeholder text are correct Chinese again.
 - **Path Enter behavior:** confirming an editable path no longer bubbles into
   the window-level quick-preview shortcut and opens the previously selected
   image.

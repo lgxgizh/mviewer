@@ -162,7 +162,7 @@ static void testFirstThumbnailLatency()
     std::chrono::steady_clock::time_point tAnchor;
 
     pipe.setResultFn(
-        [&](const std::string &, const ImageData &)
+        [&](const std::string &, int, const ImageData &)
         {
             const double ms = std::chrono::duration<double, std::milli>(
                                   std::chrono::steady_clock::now() - tAnchor)
@@ -225,7 +225,8 @@ static void testNavigateWorkflow()
     pipe.setDecodeFn([](const std::string &p, int size) { return Decoder::decodeScaled(p, size); });
 
     std::atomic<int> thumbCount{0};
-    pipe.setResultFn([&](const std::string &, const ImageData &) { thumbCount.fetch_add(1); });
+    pipe.setResultFn(
+        [&](const std::string &, int, const ImageData &) { thumbCount.fetch_add(1); });
 
     pipe.setSources(paths);
 
