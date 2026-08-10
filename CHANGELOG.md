@@ -21,6 +21,20 @@ All notable changes to this project are documented here. The format is based on
   compare acceptance/session/UX/lifecycle suites now wait deterministically
   for async delivery.
 
+### Changed — tile rendering is now O(tile), not O(full image) (M28 P1-03)
+
+- `SoftwareRenderer::scaleRegion()` used to convert the WHOLE source image to
+  a `QImage` before copying the requested region, so every missing viewer tile
+  (paint-time, UI thread) paid O(full image) — an 8K/100MP image was
+  rasterized in full for each new tile during pan/zoom.
+- New non-owning `mvcore::toQImageRef()` maps the `ImageData` buffer directly
+  to a Qt format when the byte order matches (RGB24→RGB888, BGR24→BGR888,
+  BGRA32→ARGB32, Grayscale8→Grayscale8); `scaleRegion()`/`scale()` now copy
+  only the region (O(region)), with a copying fallback for RGBA32.
+- Regression coverage (written before the fix): `test_m3m4m5` pins exact
+  nearest-region sampling and pixel-identical equivalence with
+  crop-then-scale for every supported pixel format.
+
 ### Added — M27 async-lifetime regression suites
 
 - **Scheduler fault-injection suite (`m27_scheduler_tests`):** throwing `work` /

@@ -23,6 +23,7 @@
 #include <QCoreApplication>
 #include <QImage>
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 #ifndef MVIEWER_SOURCE_DIR
@@ -378,6 +379,95 @@ static void testSharpness()
     CHECK(sa.sharpnessValue() == 0.0, "sharpness uniform = 0");
 }
 
+// M28 P1-03: scaleRegion must scale ONLY the requested source region.
+// Regression: SoftwareRenderer::scaleRegion converted the WHOLE source image
+// to QImage first (O(full image)) and then copied the region — every missing
+// viewer tile paid O(N). These tests pin the semantics the region-direct fast
+// path must preserve: exact nearest sampling and pixel-identical equivalence
+// with crop-then-scale across every supported pixel format.
+static ImageData makePattern(int w, int h, PixelFormat fmt)
+{
+    ImageData d = makeImageData(w, h, fmt);
+    if (d.isNull())
+        return d;
+    const int cpp = d.channelsPerPixel();
+    uint8_t *p = d.buffer->data();
+    for (int y = 0; y < h; ++y)
+    {
+        for (int x = 0; x < w; ++x)
+        {
+            uint8_t *px = p + (static_cast<size_t>(y) * w + x) * cpp;
+            px[0] = static_cast<uint8_t>(x & 0xFF);
+            px[1] = static_cast<uint8_t>(y & 0xFF);
+            px[2] = static_cast<uint8_t>((x ^ y) & 0xFF);
+            if (cpp == 4)
+                px[3] = 255;
+        }
+    }
+    return d;
+}
+
+static void testScaleRegionRegionDirect()
+{
+    printf("\n[scaleRegion region-direct (M28 P1-03)]\n");
+    fflush(stdout);
+    RenderEngine &engine = RenderEngine::instance();
+
+    // 2048x2048 source with an x/y-encoding pattern; scale the 256x256 region
+    // starting at (100,100) down to 64x64 with nearest sampling.
+    const ImageData src = makePattern(2048, 2048, PixelFormat::RGB24);
+    const RenderRect region{100, 100, 256, 256};
+    const RenderSize target{64, 64};
+    const ImageData out = engine.scaleRegion(src, region, target, RenderInterp::Nearest);
+    CHECK(!out.isNull() && out.width == 64 && out.height == 64, "region scale returns 64x64");
+
+    // Nearest sampling: dst(ox,oy) <- src(100 + ox*4, 100 + oy*4).
+    bool ok = true;
+    for (int oy = 0; oy < 8 && ok; ++oy)
+    {
+        for (int ox = 0; ox < 8; ++ox)
+        {
+            const int sx = 100 + ox * 4;
+            const int sy = 100 + oy * 4;
+            const uint8_t *d =
+                out.buffer->data() + (static_cast<size_t>(oy) * 64 + ox) * 3;
+            if (d[0] != static_cast<uint8_t>(sx & 0xFF) ||
+                d[1] != static_cast<uint8_t>(sy & 0xFF) ||
+                d[2] != static_cast<uint8_t>((sx ^ sy) & 0xFF))
+            {
+                ok = false;
+                break;
+            }
+        }
+    }
+    CHECK(ok, "nearest region sampling maps to the correct source pixels");
+
+    // Equivalence: scaleRegion(region) == scale(crop(region)) for every
+    // supported format — the fast path must be pixel-identical to the old
+    // crop-then-scale semantics.
+    for (PixelFormat fmt : {PixelFormat::RGB24, PixelFormat::Grayscale8,
+                            PixelFormat::BGRA32, PixelFormat::RGBA32})
+    {
+        const ImageData s = makePattern(512, 512, fmt);
+        const RenderRect r{64, 64, 128, 128};
+        const RenderSize tgt{32, 32};
+        const ImageData direct = engine.scaleRegion(s, r, tgt, RenderInterp::Bilinear);
+        const ImageData crop = cropRegion(s, {64, 64, 128, 128});
+        const ImageData ref = engine.scale(crop, tgt, RenderInterp::Bilinear);
+        const int f = static_cast<int>(fmt);
+        CHECK(!direct.isNull() && !ref.isNull() && direct.width == ref.width &&
+                  direct.height == ref.height,
+              ("region scale non-null for format " + std::to_string(f)).c_str());
+        if (direct.isNull() || ref.isNull() || direct.width != ref.width ||
+            direct.height != ref.height || direct.channelsPerPixel() != ref.channelsPerPixel())
+            continue;
+        const size_t n = static_cast<size_t>(direct.width) * direct.height *
+                         direct.channelsPerPixel();
+        const bool same = std::memcmp(direct.buffer->data(), ref.buffer->data(), n) == 0;
+        CHECK(same, ("scaleRegion equals crop-then-scale (format " + std::to_string(f) + ")").c_str());
+    }
+}
+
 static void testRenderEngine()
 {
     printf("\n[RenderEngine]\n");
@@ -572,6 +662,7 @@ int main(int argc, char **argv)
     testSSIM();
     testEntropy();
     testSharpness();
+    testScaleRegionRegionDirect();
     testRenderEngine();
     testCompareControllers();
     testCompareSession();

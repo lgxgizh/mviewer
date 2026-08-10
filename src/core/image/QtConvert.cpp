@@ -80,6 +80,29 @@ QImage toQImage(const ImageData &src)
     }
 }
 
+QImage toQImageRef(const ImageData &src)
+{
+    if (src.isNull() || !src.buffer)
+        return QImage();
+    const ImageBuffer v = src.view();
+    switch (src.format)
+    {
+    case PixelFormat::RGB24:
+        return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_RGB888);
+    case PixelFormat::BGR24:
+        return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_BGR888);
+    case PixelFormat::BGRA32:
+        // BGRA byte order == ARGB32 on little-endian (0xAARRGGBB stored BB GG RR AA).
+        return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_ARGB32);
+    case PixelFormat::Grayscale8:
+        return QImage(v.data, v.width, v.height, v.stride(), QImage::Format_Grayscale8);
+    case PixelFormat::RGBA32:
+        // R,G,B,A order does not map to any Qt format without a channel swap.
+        return QImage();
+    }
+    return QImage();
+}
+
 ImageData fromQImage(const QImage &src)
 {
     if (src.isNull())

@@ -264,7 +264,12 @@ ImageData SoftwareRenderer::scale(const ImageData &src, const RenderSize &target
 {
     if (src.isNull() || !target.isValid())
         return ImageData();
-    const QImage q = scaleQ(mvcore::toQImage(src), QSize(target.width, target.height), mode);
+    // M28 P1-03: use a non-owning view when the byte order matches, avoiding
+    // the full-image copy for the dominant RGB24/Grayscale8/BGRA32 formats.
+    QImage qsrc = mvcore::toQImageRef(src);
+    if (qsrc.isNull())
+        qsrc = mvcore::toQImage(src);
+    const QImage q = scaleQ(qsrc, QSize(target.width, target.height), mode);
     return mvcore::fromQImage(q);
 }
 
@@ -300,7 +305,13 @@ ImageData SoftwareRenderer::scaleRegion(const ImageData &src, const RenderRect &
 {
     if (src.isNull() || !region.isValid())
         return ImageData();
-    const QImage full = mvcore::toQImage(src);
+    // M28 P1-03: the OLD path converted the ENTIRE source to QImage before
+    // copying the region, so every missing viewer tile paid O(full image) on
+    // the UI thread. With the non-owning alias the region copy is O(region):
+    // an 8K/100MP image is now rasterized a tile at a time as designed.
+    QImage full = mvcore::toQImageRef(src);
+    if (full.isNull())
+        full = mvcore::toQImage(src); // fallback for RGBA32 (byte order swap)
     const QImage sub = full.copy(QRect(region.x, region.y, region.width, region.height));
     const QImage q = scaleQ(sub, QSize(target.width, target.height), mode);
     return mvcore::fromQImage(q);
