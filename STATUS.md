@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-08-05 · Version: **1.0.6 (in development)** · Last release tag: **v1.0.5** (2026-07-29)
+> Snapshot: 2026-08-10 · Version: **1.0.6 (in development)** · Last release tag: **v1.0.5** (2026-07-29)
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -128,8 +128,9 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 | M17 自动更新 | ✅ | `UpdateChecker`（GitHub Releases，WinHTTP），版本来自 CMake SSOT（M24）；离线 `updatechecker_tests` 覆盖 JSON、点分版本、传输错误与安全下载链接策略 |
 | M23 质量自动化 | ✅ | ADR/Bug 门禁、自动 dashboard、test matrix、benchmark trend（ADR-015） |
 | M24 稳定性收敛 | ✅ | 2026-08-05 完成：70/70 CTest、干净环境打包、异步生命周期/工作流验收/测试可信度/性能/RC 验证（verdict: READY WITH NON-BLOCKING LIMITATIONS） |
-| M25 RC 收敛 | 🔄 进行中（自动化完成） | Compare 顶栏三行防溢出；`thumbnailpanel.cpp` 682 行（ADR-014 内）；S1–S9 + T1–T4 Release 压测双配置 PASS；73/73 本地门禁（新增 `browse_convergence_tests` / `browse_convergence_ui_tests`）；缩略图缓存身份（path+mtime+size+requestedSize+schema）、generation 级取消、worker 纯 QImage、UI 线程零缩略图磁盘 I/O；格式 SSOT 统一（RAW/WebP/GIF 全链路一致）；MetadataIndexer 异步索引 + 排序键单次计算 + 字段级 Camera/Lens/ISO 过滤；Browse 关闭持久化；乱码修复。**剩余：目标硬件与人工 UX 签名**（见 `docs/review/M25_RC_CONVERGENCE_2026-08-09.md`） |
+| M25 RC 收敛 | ✅ 完成（2026-08-09） | Compare 顶栏三行防溢出；`thumbnailpanel.cpp` 682 行（ADR-014 内）；S1–S9 + T1–T4 Release 压测双配置 PASS；73/73 本地门禁（新增 `browse_convergence_tests` / `browse_convergence_ui_tests`）；缩略图缓存身份（path+mtime+size+requestedSize+schema）、generation 级取消、worker 纯 QImage、UI 线程零缩略图磁盘 I/O；格式 SSOT 统一（RAW/WebP/GIF 全链路一致）；MetadataIndexer 异步索引 + 排序键单次计算 + 字段级 Camera/Lens/ISO 过滤；Browse 关闭持久化；乱码修复。**剩余：目标硬件与人工 UX 签名**（见 `docs/review/M25_RC_CONVERGENCE_2026-08-09.md`） |
 | M26 RC 可靠性收口 | ✅ 自动化完成 | 2026-08-09 完成：**78/78 CTest 全绿**。TaskScheduler exactly-once finalize（deadline/cancel/deferred/reject 全路径）、依赖反向图 cancelTree（transitive dependents）、metrics 无 underflow（修复后不再静默拒绝后续提交）、callback 线程契约 worker-thread 并文档化；MetadataIndexer per-request ownership（搜索重建与 Camera/Lens 过滤并发互不取消）、bounded cache、value-semantics cache 读取；ThumbnailPipeline 切换代际真正取消 + pending/handle 有界；ImageRepository 饱和/拒绝下 exactly-once 回调 + 有界同步加载（不再改全局 queue depth）；Preview 全图统计移出 UI 线程（worker-side `ImageStats`）。见 `docs/review/M26_RC_RELIABILITY_2026-08-09.md` |
+| M27 异步生命周期收尾 | ✅ 自动化完成 | 2026-08-10 完成：**84/84 CTest 全绿**。TaskScheduler 故障注入（work/onProgress/done 异常不外逃、空 work 拒绝、cancelTree 抑制 done、drain 墙钟、graphMetrics、execution/callback failures）；ImageRepository 拒绝 exactly-once + 同步预算超时安全；QObject 析构时序（子进程崩溃检测、A→B→A、24MP UI 延迟）；100 轮生命周期压力（RSS/句柄/线程泄漏检查）。另含 UX 收尾：空状态/空文件夹提示、缩放中心回归、快捷键速查表与 Ctrl+C 双绑定修复、比较 2-8 守卫。 |
 
 ### M25 closure addendum (2026-08-09)
 
