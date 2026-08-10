@@ -116,14 +116,13 @@ static void testSortKeysOncePerFile()
     {
         dimReads = 0;
         metaReads = 0;
-        const auto keys =
-            mviewer::core::computeSortKeys(paths, field, dimReader, metaReader);
+        const auto keys = mviewer::core::computeSortKeys(paths, field, dimReader, metaReader);
         CHECK(keys.size() == paths.size(), "one key per file");
         const int expectedDim = (field == mviewer::core::SortField::Resolution) ? 50 : 0;
-        const int expectedMeta = (field == mviewer::core::SortField::Camera ||
-                                  field == mviewer::core::SortField::Lens)
-                                     ? 50
-                                     : 0;
+        const int expectedMeta =
+            (field == mviewer::core::SortField::Camera || field == mviewer::core::SortField::Lens)
+                ? 50
+                : 0;
         CHECK(dimReads == expectedDim, "dimension reads happen once per file, only when needed");
         CHECK(metaReads == expectedMeta, "metadata parses happen once per file, only when needed");
     }
@@ -190,8 +189,7 @@ static void testMetadataIndexer()
     int cancelledDelivered = 0;
     bool cancelledDone = false;
     indexer.index(
-        big,
-        [&](const mviewer::core::MetadataIndexer::Entry &) { ++cancelledDelivered; },
+        big, [&](const mviewer::core::MetadataIndexer::Entry &) { ++cancelledDelivered; },
         [&]() { cancelledDone = true; });
     indexer.cancel();
     t.restart();
