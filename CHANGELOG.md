@@ -39,6 +39,9 @@ All notable changes to this project are documented here. The format is based on
   drag-drop hint) instead of a blank canvas; it hides automatically once a
   directory is opened. Covered by `workflow_ux_tests` (visible at clean
   startup, hidden after navigation).
+- **Metadata-overlay toggle regression (`workflow_ux_tests`):** the I/ESC
+  show/hide cycle for the image-information overlay was untested at the
+  key level; now machine-locked (I shows, ESC hides).
 - **Mouse side-button navigation regression (`workflow_ux_tests`):** the
   cheat-sheet-documented “鼠标侧键” prev/next gesture had no coverage; now
   machine-locked (back button goes to the previous image, forward returns).

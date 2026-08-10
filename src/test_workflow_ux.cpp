@@ -26,6 +26,7 @@
 #include "exportdialog.h"
 #include "imageviewer.h"
 #include "mainwindow.h"
+#include "metadataoverlay.h"
 #include "searchpanel.h"
 #include "previewpanel.h"
 #include "selectionmodel.h"
@@ -760,6 +761,29 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 pump(100);
                 CHECK(sel->currentImage() == beforeNav,
                       "mouse forward button navigates back to the original image");
+            }
+
+            // I toggles the metadata overlay for the current image; ESC
+            // hides it (cheat sheet “I/M → 图片信息浮层，ESC 关闭”).
+            {
+                // The viewer (and its overlay) are a top-level window.
+                MetadataOverlay *overlay = nullptr;
+                for (QWidget *top : QApplication::topLevelWidgets())
+                {
+                    overlay = top->findChild<MetadataOverlay *>();
+                    if (overlay)
+                        break;
+                }
+                CHECK(overlay != nullptr, "metadata overlay exists");
+                if (overlay && !overlay->isVisible())
+                {
+                    sendKey(&w, Qt::Key_I);
+                    pump(50);
+                    CHECK(overlay->isVisible(), "I shows the metadata overlay");
+                }
+                sendKey(&w, Qt::Key_Escape);
+                pump(50);
+                CHECK(overlay && !overlay->isVisible(), "ESC hides the metadata overlay");
             }
         }
         viewer->close();
