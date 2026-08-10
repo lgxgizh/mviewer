@@ -39,6 +39,10 @@ All notable changes to this project are documented here. The format is based on
   drag-drop hint) instead of a blank canvas; it hides automatically once a
   directory is opened. Covered by `workflow_ux_tests` (visible at clean
   startup, hidden after navigation).
+- **Global search end-to-end regression (`workflow_ux_tests`):** query a
+  filename fragment in the search panel, assert the result row names the
+  file, and double-click it to open the image — the full shipped search
+  chain (index → query → result → open) now machine-locked.
 - **Double-click zoom regression coverage (`workflow_ux_tests`):** the
   standard fit↔100%↔fit double-click gesture was untested; now
   machine-locked (beta checklist “双击放大→恢复”).

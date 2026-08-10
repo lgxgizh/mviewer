@@ -26,6 +26,7 @@
 #include "exportdialog.h"
 #include "imageviewer.h"
 #include "mainwindow.h"
+#include "searchpanel.h"
 #include "previewpanel.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
@@ -770,6 +771,47 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         CHECK(!compareOpened, "Compare does not open with fewer than two images");
         directoryTree->navigateTo(dirPath, true);
         pump(200);
+    }
+
+    // Global search end-to-end: query a filename fragment, get results,
+    // and double-click a row to open the image (shipped feature, full chain).
+    {
+        if (searchAction)
+            searchAction->trigger();
+        pump(50);
+        auto *searchPanelWidget = w.findChild<SearchPanel *>();
+        auto *searchEdit =
+            searchPanelWidget ? searchPanelWidget->findChild<QLineEdit *>() : nullptr;
+        auto *resultTable =
+            searchPanelWidget ? searchPanelWidget->findChild<QTableWidget *>() : nullptr;
+        CHECK(searchPanelWidget != nullptr, "global search panel is discoverable");
+        CHECK(searchEdit != nullptr, "search panel exposes a query input");
+        CHECK(resultTable != nullptr, "search panel exposes a results table");
+        if (searchEdit && resultTable)
+        {
+            searchEdit->setText(QStringLiteral("wf_001"));
+            QElapsedTimer searchTimer;
+            searchTimer.start();
+            while (resultTable->rowCount() == 0 && searchTimer.elapsed() < 10000)
+                pump(50);
+            CHECK(resultTable->rowCount() >= 1, "search returns a result for a filename fragment");
+            bool named = false;
+            for (int r = 0; r < resultTable->rowCount(); ++r)
+                if (resultTable->item(r, 1) && resultTable->item(r, 1)->text().contains("wf_001"))
+                    named = true;
+            CHECK(named, "search result names the matched file");
+            if (resultTable->rowCount() > 0)
+            {
+                resultTable->doubleClicked(resultTable->model()->index(0, 0));
+                pump(300);
+                CHECK(sel->currentImage().contains("wf_001"),
+                      "double-clicking a search result opens the image");
+            }
+            searchEdit->clear();
+        }
+        if (searchAction)
+            searchAction->trigger(); // hide the panel again
+        pump(50);
     }
 
     // M25: closing while the BROWSE WORKSPACE is active must behave like the
