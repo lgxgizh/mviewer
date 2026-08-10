@@ -615,6 +615,8 @@ void MainWindow::setupUi()
     m_thumbnailPanel->installEventFilter(this);
     rightLayout->addWidget(m_thumbnailPanel, 1);
 
+    // NOTE: clang-format 22.1.8 mis-parses the HTML '>" at a line break; the
+    // text blocks below are format-guarded.
     // Empty-state hint: friendly call-to-action shown until the first
     // directory is opened (first-run guidance; hidden as soon as browsing
     // starts). Pure overlay: transparent for mouse events, so the gallery
@@ -624,13 +626,32 @@ void MainWindow::setupUi()
     m_emptyState->setAlignment(Qt::AlignCenter);
     m_emptyState->setWordWrap(true);
     m_emptyState->setTextFormat(Qt::RichText);
-    // clang-format off (formatter 22.1.8 mis-parses the HTML '>" at a line break)
+    // clang-format off
     m_emptyState->setText(tr("<div style='color:#9aa0a6; font-size:16px;'>\u6253\u5f00\u4e00\u4e2a\u6587\u4ef6\u5939\u4ee5\u5f00\u59cb\u6d4f\u89c8</div>"
                              "<div style='color:#b0b4b8; font-size:12px; margin-top:8px;'>Ctrl+O \u6253\u5f00\u76ee\u5f55 \u00b7 \u4e5f\u53ef\u5c06\u56fe\u7247\u6216\u6587\u4ef6\u5939\u62d6\u5165\u7a97\u53e3</div>"));
     // clang-format on
     m_emptyState->setAttribute(Qt::WA_TransparentForMouseEvents);
     m_emptyState->show();
     updateEmptyState();
+
+    // Empty-folder hint: a directory is open but nothing is displayable
+    // (no image files, or every entry is hidden by filters). Deferred via
+    // a short timer so the transient pre-scan zero cannot flash it.
+    m_emptyFolderLabel = new QLabel(m_thumbnailPanel);
+    m_emptyFolderLabel->setObjectName(QStringLiteral("emptyFolderLabel"));
+    m_emptyFolderLabel->setAlignment(Qt::AlignCenter);
+    m_emptyFolderLabel->setWordWrap(true);
+    m_emptyFolderLabel->setTextFormat(Qt::RichText);
+    // clang-format off
+    m_emptyFolderLabel->setText(tr("<div style='color:#9aa0a6; font-size:15px;'>\u6b64\u6587\u4ef6\u5939\u4e2d\u6ca1\u6709\u53ef\u663e\u793a\u7684\u56fe\u7247</div>"
+                                 "<div style='color:#b0b4b8; font-size:12px; margin-top:8px;'>\u5c1d\u8bd5\u6e05\u9664\u7b5b\u9009\u6216\u6362\u4e00\u4e2a\u6587\u4ef6\u5939</div>"));
+    // clang-format on
+    m_emptyFolderLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_emptyFolderLabel->hide();
+    m_emptyFolderTimer = new QTimer(this);
+    m_emptyFolderTimer->setSingleShot(true);
+    m_emptyFolderTimer->setInterval(600);
+    connect(m_emptyFolderTimer, &QTimer::timeout, this, &MainWindow::updateEmptyFolderState);
     connect(m_thumbnailPanel, &ThumbnailPanel::viewModeChanged, this,
             [viewModeCombo, this](ThumbnailPanel::ViewMode mode)
             {
@@ -797,12 +818,31 @@ void MainWindow::setupUi()
                 if (currentImagePath().isEmpty())
                     setWindowTitle(QString("%1 - MViewer").arg(QDir(path).dirName()));
                 scheduleReindex();
+                if (m_emptyFolderTimer)
+                    m_emptyFolderTimer->stop();
+                if (m_emptyFolderLabel)
+                    m_emptyFolderLabel->hide();
                 updateEmptyState();
             });
 
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
             [this](int total, qint64, int, qint64)
             {
+                // Empty-folder feedback: once the gallery settles with
+                // zero displayable entries, defer showing the hint past the
+                // transient pre-scan zero; any real content cancels it.
+                if (total > 0)
+                {
+                    if (m_emptyFolderTimer)
+                        m_emptyFolderTimer->stop();
+                    if (m_emptyFolderLabel && m_emptyFolderLabel->isVisible())
+                        m_emptyFolderLabel->hide();
+                }
+                else if (m_emptyFolderTimer && m_emptyFolderLabel &&
+                         !m_emptyFolderLabel->isVisible())
+                {
+                    m_emptyFolderTimer->start();
+                }
                 if (!m_autoSelectFirstPending || total <= 0 || !m_selection ||
                     !m_thumbnailPanel)
                     return;
@@ -1348,4 +1388,14 @@ void MainWindow::updateEmptyState()
     m_emptyState->setVisible(show);
     if (show)
         m_emptyState->setGeometry(m_thumbnailPanel->rect());
+}
+
+void MainWindow::updateEmptyFolderState()
+{
+    if (!m_emptyFolderLabel || !m_thumbnailPanel)
+        return;
+    const bool show = !currentDir().isEmpty() && m_thumbnailPanel->pathList().isEmpty();
+    m_emptyFolderLabel->setVisible(show);
+    if (show)
+        m_emptyFolderLabel->setGeometry(m_thumbnailPanel->rect());
 }

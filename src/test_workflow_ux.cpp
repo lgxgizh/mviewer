@@ -351,7 +351,9 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "thumbnail view controls expose a stable panel and combo");
     CHECK(pathEdit != nullptr, "directory path input is discoverable");
     auto *emptyState = w.findChild<QLabel *>("emptyStateLabel");
+    auto *emptyFolder = w.findChild<QLabel *>("emptyFolderLabel");
     CHECK(emptyState != nullptr, "empty-state hint has a stable object name");
+    CHECK(emptyFolder != nullptr, "empty-folder hint has a stable object name");
     CHECK(emptyState && emptyState->isVisible(),
           "empty-state hint is shown when no directory is open");
 
@@ -574,8 +576,21 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(directoryTree->currentIndex().isValid() &&
               directoryTree->currentIndex().data(Qt::DisplayRole).toString() == "256x256",
           "external directory navigation leaves the target visibly selected");
+
+    // Empty-folder feedback: a directory without image files must show the
+    // no-images hint, and it must disappear once a real folder is opened.
+    const QString emptyDir = sourceDir.filePath(QStringLiteral("wf_empty"));
+    QDir().mkpath(emptyDir);
+    directoryTree->navigateTo(emptyDir, true);
+    QElapsedTimer emptyDirTimer;
+    emptyDirTimer.start();
+    while ((!emptyFolder || !emptyFolder->isVisible()) && emptyDirTimer.elapsed() < 5000)
+        pump(25);
+    CHECK(emptyFolder && emptyFolder->isVisible(), "empty folder shows the no-images hint");
     directoryTree->navigateTo(dirPath, true);
-    pump(250);
+    pump(300);
+    CHECK(emptyFolder && !emptyFolder->isVisible(),
+          "no-images hint hides once a folder with images is opened");
 
     if (viewer)
     {

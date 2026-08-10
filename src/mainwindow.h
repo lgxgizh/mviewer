@@ -89,6 +89,8 @@ class MainWindow : public QMainWindow
     void changeDirectory(const QString &dir);
     // Shows/hides the gallery empty-state hint (no directory open yet).
     void updateEmptyState();
+    // Shows/hides the gallery empty-folder hint (directory open, no images).
+    void updateEmptyFolderState();
     // Toggles fullscreen on the image viewer when it is visible, else on the
     // main window itself. Shared by the F command, F11 and the View menu.
     void toggleFullscreen();
@@ -133,6 +135,8 @@ class MainWindow : public QMainWindow
     MetadataOverlay *m_metadataOverlay = nullptr; // M15: semi-transparent info overlay
     ThumbnailPanel *m_thumbnailPanel = nullptr;
     QLabel *m_emptyState = nullptr; // gallery empty-state hint (objectName: emptyStateLabel)
+    QLabel *m_emptyFolderLabel = nullptr; // gallery empty-folder hint (objectName: emptyFolderLabel)
+    QTimer *m_emptyFolderTimer = nullptr; // defers the hint past the pre-scan zero
     PreviewPanel *m_previewPanel = nullptr;
 
     AnalysisPanel *m_analysisPanel = nullptr;

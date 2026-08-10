@@ -39,6 +39,13 @@ All notable changes to this project are documented here. The format is based on
   drag-drop hint) instead of a blank canvas; it hides automatically once a
   directory is opened. Covered by `workflow_ux_tests` (visible at clean
   startup, hidden after navigation).
+- **Gallery empty-folder hint:** when a directory is open but nothing is
+  displayable (no image files, or every entry is hidden by filters), the
+  gallery shows a “此文件夹中没有可显示的图片” hint instead of a
+  silent blank grid. The hint is deferred past the pre-scan zero so it
+  never flashes during a normal scan, and it clears as soon as content
+  arrives or the directory changes. Covered by `workflow_ux_tests`
+  (empty folder shows the hint; a real folder clears it).
 
 ### Fixed
 
