@@ -8,8 +8,8 @@
 //      generation cancellation (old-directory results never delivered).
 //   3. ThumbnailPanel — size change drops stale ready pixmaps, camera/lens
 //      filters are field-scoped, filter rebuild preserves ready thumbnails.
-#include "core/thumbnail/ThumbnailPipeline.h"
 #include "core/filesystem/FileSystem.h"
+#include "core/thumbnail/ThumbnailPipeline.h"
 #include "thumbnailcache.h"
 #include "thumbnailpanel.h"
 
@@ -57,8 +57,8 @@ void pump(int ms = 30)
 
 // Minimal little-endian TIFF (DNG-like) carrying ISO/Make/Model/LensModel so
 // parseRawMetadata can extract real camera/lens fields for the filter tests.
-static bool writeFakeDng(const std::string &path, const std::string &make,
-                         const std::string &model, const std::string &lens, uint16_t iso)
+static bool writeFakeDng(const std::string &path, const std::string &make, const std::string &model,
+                         const std::string &lens, uint16_t iso)
 {
     FILE *f = std::fopen(path.c_str(), "wb");
     if (!f)
@@ -79,7 +79,7 @@ static bool writeFakeDng(const std::string &path, const std::string &make,
         std::fwrite(&cnt, 4, 1, f);
         std::fwrite(&val, 4, 1, f);
     };
-    writeEntry(0x8827, 3, 1, iso);                                       // ISO (SHORT inline)
+    writeEntry(0x8827, 3, 1, iso); // ISO (SHORT inline)
     writeEntry(0x010F, 2, static_cast<uint32_t>(make.size()) + 1,
                static_cast<uint32_t>(makeOff)); // Make (ASCII)
     writeEntry(0x0110, 2, static_cast<uint32_t>(model.size()) + 1,
@@ -132,8 +132,8 @@ static void testThumbnailCacheIdentity()
     QFileInfo fi(path);
     const QDateTime newTime = fi.lastModified().addSecs(60);
     QFile f(path);
-    f.open(QIODevice::Append);
-    f.write("\x01", 1);
+    (void)f.open(QIODevice::Append); // C4834: QIODevice::open is [[nodiscard]] on Qt 6.10
+    (void)f.write("\x01", 1);
     f.close();
     CHECK(QFileInfo(path).lastModified() >= newTime || true, "fixture file touched");
     CHECK(!cache.get(path, 64, out), "file identity change invalidates the cache entry");
@@ -147,26 +147,28 @@ static void testPipelineSizeAndGeneration()
 
     ThumbnailPipeline pipe;
     std::mutex mtx;
-    std::vector<std::pair<std::string, int>> decoded;  // (path, size) from DecodeFn
+    std::vector<std::pair<std::string, int>> decoded;   // (path, size) from DecodeFn
     std::vector<std::pair<std::string, int>> delivered; // (path, size) from ResultFn
 
-    pipe.setDecodeFn([&](const std::string &p, int size) -> ImageData
-                     {
-                         {
-                             std::lock_guard<std::mutex> lk(mtx);
-                             decoded.emplace_back(p, size);
-                         }
-                         // Long enough that directory switches catch tasks in
-                         // flight (the generation-cancellation scenario below
-                         // relies on B-tasks being mid-decode at clear()).
-                         std::this_thread::sleep_for(std::chrono::milliseconds(80));
-                         return makeImageData(size, size, PixelFormat::RGB24);
-                     });
-    pipe.setResultFn([&](const std::string &p, int size, const ImageData &)
-                     {
-                         std::lock_guard<std::mutex> lk(mtx);
-                         delivered.emplace_back(p, size);
-                     });
+    pipe.setDecodeFn(
+        [&](const std::string &p, int size) -> ImageData
+        {
+            {
+                std::lock_guard<std::mutex> lk(mtx);
+                decoded.emplace_back(p, size);
+            }
+            // Long enough that directory switches catch tasks in
+            // flight (the generation-cancellation scenario below
+            // relies on B-tasks being mid-decode at clear()).
+            std::this_thread::sleep_for(std::chrono::milliseconds(80));
+            return makeImageData(size, size, PixelFormat::RGB24);
+        });
+    pipe.setResultFn(
+        [&](const std::string &p, int size, const ImageData &)
+        {
+            std::lock_guard<std::mutex> lk(mtx);
+            delivered.emplace_back(p, size);
+        });
 
     std::vector<std::string> src;
     for (int i = 0; i < 8; ++i)
@@ -321,11 +323,11 @@ static void testPanelMixedFormatListing(const QString &dirPath)
     QDir dir(dirPath);
     // RAW files need no decode for LISTING; name-suffix membership is the
     // contract under test.
-    for (const QString &name : {"mix_a.jpg", "mix_b.cr2", "mix_c.webp", "mix_d.gif",
-                                "mix_e.dng", "mix_f.txt"})
+    for (const QString &name :
+         {"mix_a.jpg", "mix_b.cr2", "mix_c.webp", "mix_d.gif", "mix_e.dng", "mix_f.txt"})
     {
         QFile f(dir.filePath(name));
-        f.open(QIODevice::WriteOnly);
+        (void)f.open(QIODevice::WriteOnly); // C4834: QIODevice::open is [[nodiscard]] on Qt 6.10
         f.close();
     }
 

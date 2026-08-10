@@ -131,52 +131,52 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
             {
                 if (!alive->load() || !self)
                     return; // panel destroyed; ignore late callback
-                QMetaObject::invokeMethod(
-                    qApp,
-                    [alive, self, p, size, img]()
-                    {
-                        if (!alive->load() || !self)
-                            return;
-                        ThumbnailPanel *panel = self.data();
-                        const QString qp = QString::fromStdString(p);
-                        // M25: a result born at another thumbnail size (size
-                        // switched while the decode was in flight) is stale —
-                        // never store or paint it.
-                        if (size != panel->m_thumbSize)
-                            return;
-                        // M24: the pipeline now reports failed decodes as null
-                        // ImageData so the panel can mark the cell failed.
-                        if (img.isNull())
-                        {
-                            QMutexLocker l(&panel->m_thumbMtx);
-                            panel->m_thumbFailed.insert(qp);
-                            panel->m_thumbPending.remove(qp);
-                            // Repaint only: do NOT reschedule (the failed path
-                            // is not cacheable; rescheduling would re-decode it
-                            // on every repaint in a tight loop).
-                            panel->viewport()->update();
-                            return;
-                        }
-                        const QImage q = mvcore::toQImage(img);
-                        if (q.isNull())
-                        {
-                            {
-                                QMutexLocker l(&panel->m_thumbMtx);
-                                panel->m_thumbFailed.insert(qp);
-                                panel->m_thumbPending.remove(qp);
-                            }
-                            panel->viewport()->update();
-                            return;
-                        }
-                        {
-                            QMutexLocker lk(&panel->m_thumbMtx);
-                            // QPixmap is materialized HERE, on the GUI thread —
-                            // the only place the GUI resource is legal.
-                            panel->m_thumbReady[qp] = QPixmap::fromImage(q);
-                            panel->m_thumbPending.remove(qp);
-                        }
-                        panel->onThumbReady(qp);
-                    });
+                QMetaObject::invokeMethod(qApp,
+                                          [alive, self, p, size, img]()
+                                          {
+                                              if (!alive->load() || !self)
+                                                  return;
+                                              ThumbnailPanel *panel = self.data();
+                                              const QString qp = QString::fromStdString(p);
+                                              // M25: a result born at another thumbnail size (size
+                                              // switched while the decode was in flight) is stale —
+                                              // never store or paint it.
+                                              if (size != panel->m_thumbSize)
+                                                  return;
+                                              // M24: the pipeline now reports failed decodes as
+                                              // null ImageData so the panel can mark the cell
+                                              // failed.
+                                              if (img.isNull())
+                                              {
+                                                  QMutexLocker l(&panel->m_thumbMtx);
+                                                  panel->m_thumbFailed.insert(qp);
+                                                  panel->m_thumbPending.remove(qp);
+                                                  // Repaint only: do NOT reschedule (the failed
+                                                  // path is not cacheable; rescheduling would
+                                                  // re-decode it on every repaint in a tight loop).
+                                                  panel->viewport()->update();
+                                                  return;
+                                              }
+                                              const QImage q = mvcore::toQImage(img);
+                                              if (q.isNull())
+                                              {
+                                                  {
+                                                      QMutexLocker l(&panel->m_thumbMtx);
+                                                      panel->m_thumbFailed.insert(qp);
+                                                      panel->m_thumbPending.remove(qp);
+                                                  }
+                                                  panel->viewport()->update();
+                                                  return;
+                                              }
+                                              {
+                                                  QMutexLocker lk(&panel->m_thumbMtx);
+                                                  // QPixmap is materialized HERE, on the GUI thread
+                                                  // — the only place the GUI resource is legal.
+                                                  panel->m_thumbReady[qp] = QPixmap::fromImage(q);
+                                                  panel->m_thumbPending.remove(qp);
+                                              }
+                                              panel->onThumbReady(qp);
+                                          });
             });
     }
 }
@@ -276,7 +276,7 @@ void ThumbnailPanel::setDirectory(const QString &path)
     // object is still alive. The busy cursor is restored unconditionally (it
     // is app-global and ref-counted) so a destroyed/superseded scan can never
     // leave the whole application with a stuck override cursor.
-    QtConcurrent::run(
+    (void)QtConcurrent::run(
         &m_scanPool,
         [self, alive, gen, path, typeFilter, sortMode, sortAscending]()
         {
@@ -292,8 +292,8 @@ void ThumbnailPanel::setDirectory(const QString &path)
                         // Aborted (panel destroyed / folder superseded). The
                         // completion lambda below will never run, so restore the
                         // app-global busy cursor here, marshaled to the UI thread.
-                        QMetaObject::invokeMethod(
-                            qApp, []() { QApplication::restoreOverrideCursor(); });
+                        QMetaObject::invokeMethod(qApp,
+                                                  []() { QApplication::restoreOverrideCursor(); });
                         return;
                     }
                     const QFileInfo &fi = list.at(i);
@@ -301,8 +301,8 @@ void ThumbnailPanel::setDirectory(const QString &path)
                         continue;
                     // P0-1 (perf): no pixel dimensions here 鈥?resolved lazily in
                     // the background for the Details view (see ensureDimensions).
-                    entries.append({fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0,
-                                    fi.lastModified()});
+                    entries.append(
+                        {fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()});
                 }
             }
             QMetaObject::invokeMethod(
@@ -333,16 +333,15 @@ void ThumbnailPanel::setDirectory(const QString &path)
                         // reads. The generation guard also makes a delayed
                         // callback harmless when the user changes folders.
                         const int dimensionGen = panel->m_dirGen;
-                        QTimer::singleShot(
-                            350, panel,
-                            [panel, dimensionGen]
-                            {
-                                if (dimensionGen != panel->m_dirGen)
-                                    return;
-                                if (panel->m_viewMode == Thumbnail ||
-                                    panel->m_viewMode == LargeIcon)
-                                    panel->ensureDimensions();
-                            });
+                        QTimer::singleShot(350, panel,
+                                           [panel, dimensionGen]
+                                           {
+                                               if (dimensionGen != panel->m_dirGen)
+                                                   return;
+                                               if (panel->m_viewMode == Thumbnail ||
+                                                   panel->m_viewMode == LargeIcon)
+                                                   panel->ensureDimensions();
+                                           });
                     }
                 });
         });
@@ -368,7 +367,7 @@ void ThumbnailPanel::ensureDimensions()
 
     auto alive = m_alive;
     const QPointer<ThumbnailPanel> self(this);
-    QtConcurrent::run(
+    (void)QtConcurrent::run(
         &m_scanPool,
         [self, alive, gen, paths]()
         {
@@ -600,9 +599,9 @@ void ThumbnailPanel::onSelectionChanged()
         m_compareBtn->setText(QStringLiteral("比较选中 (%1)").arg(n));
         const bool canCompare = n >= 2 && n <= 8;
         m_compareBtn->setEnabled(canCompare);
-        m_compareBtn->setToolTip(canCompare
-                                     ? QStringLiteral("将选中的 %1 张图片送入对比").arg(n)
-                                     : QStringLiteral("需要选择 2-8 张图片才能对比（当前 %1 张）").arg(n));
+        m_compareBtn->setToolTip(
+            canCompare ? QStringLiteral("将选中的 %1 张图片送入对比").arg(n)
+                       : QStringLiteral("需要选择 2-8 张图片才能对比（当前 %1 张）").arg(n));
     }
     emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
 }
@@ -721,4 +720,3 @@ void ThumbnailPanel::stopThumbnailWorker()
     m_thumbPending.clear();
     m_thumbFailed.clear();
 }
-

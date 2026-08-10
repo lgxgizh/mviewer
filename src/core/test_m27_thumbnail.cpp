@@ -65,15 +65,16 @@ struct DeadlockWatchdog
 
     explicit DeadlockWatchdog(int seconds = 20)
     {
-        thread = std::thread([this, seconds]()
-                             {
-                                 std::this_thread::sleep_for(std::chrono::seconds(seconds));
-                                 if (!finished.load())
-                                 {
-                                     fprintf(stderr, "  WATCHDOG: deadlock detected, aborting\n");
-                                     std::abort();
-                                 }
-                             });
+        thread = std::thread(
+            [this, seconds]()
+            {
+                std::this_thread::sleep_for(std::chrono::seconds(seconds));
+                if (!finished.load())
+                {
+                    fprintf(stderr, "  WATCHDOG: deadlock detected, aborting\n");
+                    std::abort();
+                }
+            });
     }
     ~DeadlockWatchdog()
     {
@@ -106,19 +107,21 @@ void testCallbackReentersRequest()
     ThumbnailPipeline pipe;
     std::atomic<int> delivered{0};
     std::atomic<bool> reentered{false};
-    pipe.setDecodeFn([](const std::string &, int size) { return makeImageData(size, size, PixelFormat::RGB24); });
-    pipe.setResultFn([&](const std::string &p, int size, const ImageData &)
-                     {
-                         if (delivered.fetch_add(1) == 0)
-                         {
-                             // Re-enter from inside the callback: a cache miss
-                             // for a NEW key kicks scheduleLocked() (submits a
-                             // new task), which pre-fix deadlocks on the
-                             // pipeline mutex.
-                             pipe.request("reentrant/new.png", size);
-                             reentered = true;
-                         }
-                     });
+    pipe.setDecodeFn([](const std::string &, int size)
+                     { return makeImageData(size, size, PixelFormat::RGB24); });
+    pipe.setResultFn(
+        [&](const std::string &p, int size, const ImageData &)
+        {
+            if (delivered.fetch_add(1) == 0)
+            {
+                // Re-enter from inside the callback: a cache miss
+                // for a NEW key kicks scheduleLocked() (submits a
+                // new task), which pre-fix deadlocks on the
+                // pipeline mutex.
+                pipe.request("reentrant/new.png", size);
+                reentered = true;
+            }
+        });
     {
         DeadlockWatchdog watchdog;
         pipe.setSources({"a/img0.png", "a/img1.png"});
@@ -143,16 +146,18 @@ void testCallbackReentersSetSources()
     ThumbnailPipeline pipe;
     std::atomic<int> delivered{0};
     std::atomic<bool> switched{false};
-    pipe.setDecodeFn([](const std::string &, int size) { return makeImageData(size, size, PixelFormat::RGB24); });
-    pipe.setResultFn([&](const std::string &, int, const ImageData &)
-                     {
-                         if (delivered.fetch_add(1) == 0)
-                         {
-                             pipe.setSources({"b/img0.png", "b/img1.png"});
-                             pipe.setVisibleRange(0, 2);
-                             switched = true;
-                         }
-                     });
+    pipe.setDecodeFn([](const std::string &, int size)
+                     { return makeImageData(size, size, PixelFormat::RGB24); });
+    pipe.setResultFn(
+        [&](const std::string &, int, const ImageData &)
+        {
+            if (delivered.fetch_add(1) == 0)
+            {
+                pipe.setSources({"b/img0.png", "b/img1.png"});
+                pipe.setVisibleRange(0, 2);
+                switched = true;
+            }
+        });
     {
         DeadlockWatchdog watchdog;
         pipe.setSources({"a/img0.png", "a/img1.png"});
@@ -177,15 +182,17 @@ void testCallbackReentersClear()
     ThumbnailPipeline pipe;
     std::atomic<int> delivered{0};
     std::atomic<bool> cleared{false};
-    pipe.setDecodeFn([](const std::string &, int size) { return makeImageData(size, size, PixelFormat::RGB24); });
-    pipe.setResultFn([&](const std::string &, int, const ImageData &)
-                     {
-                         if (delivered.fetch_add(1) == 0)
-                         {
-                             pipe.clear();
-                             cleared = true;
-                         }
-                     });
+    pipe.setDecodeFn([](const std::string &, int size)
+                     { return makeImageData(size, size, PixelFormat::RGB24); });
+    pipe.setResultFn(
+        [&](const std::string &, int, const ImageData &)
+        {
+            if (delivered.fetch_add(1) == 0)
+            {
+                pipe.clear();
+                cleared = true;
+            }
+        });
     {
         DeadlockWatchdog watchdog;
         pipe.setSources({"a/img0.png", "a/img1.png"});
@@ -209,12 +216,14 @@ void testThrowingResultCallback()
 
     ThumbnailPipeline pipe;
     std::atomic<int> deliveries{0};
-    pipe.setDecodeFn([](const std::string &, int size) { return makeImageData(size, size, PixelFormat::RGB24); });
-    pipe.setResultFn([&](const std::string &, int, const ImageData &)
-                     {
-                         deliveries.fetch_add(1);
-                         throw std::runtime_error("result callback boom");
-                     });
+    pipe.setDecodeFn([](const std::string &, int size)
+                     { return makeImageData(size, size, PixelFormat::RGB24); });
+    pipe.setResultFn(
+        [&](const std::string &, int, const ImageData &)
+        {
+            deliveries.fetch_add(1);
+            throw std::runtime_error("result callback boom");
+        });
     pipe.setSources({"a/img0.png", "a/img1.png"});
     pipe.setVisibleRange(0, 2);
     sched.drain(PoolType::ThumbnailPool, kDrain);
@@ -234,17 +243,19 @@ void testThrowingDecoder()
     ThumbnailPipeline pipe;
     std::atomic<int> decodes{0};
     std::atomic<int> deliveries{0};
-    pipe.setDecodeFn([&](const std::string &, int size) -> ImageData
-                     {
-                         if (decodes.fetch_add(1) == 0)
-                             throw std::runtime_error("decode boom");
-                         return makeImageData(size, size, PixelFormat::RGB24);
-                     });
-    pipe.setResultFn([&](const std::string &, int, const ImageData &img)
-                     {
-                         if (!img.isNull())
-                             deliveries.fetch_add(1);
-                     });
+    pipe.setDecodeFn(
+        [&](const std::string &, int size) -> ImageData
+        {
+            if (decodes.fetch_add(1) == 0)
+                throw std::runtime_error("decode boom");
+            return makeImageData(size, size, PixelFormat::RGB24);
+        });
+    pipe.setResultFn(
+        [&](const std::string &, int, const ImageData &img)
+        {
+            if (!img.isNull())
+                deliveries.fetch_add(1);
+        });
     pipe.setSources({"a/img0.png"});
     pipe.setVisibleRange(0, 1);
     sched.drain(PoolType::ThumbnailPool, kDrain);
@@ -255,8 +266,7 @@ void testThrowingDecoder()
     pipe.setVisibleRange(0, 1);
     sched.drain(PoolType::ThumbnailPool, kDrain);
     CHECK(deliveries.load() >= 1, "the same key decodes successfully on retry");
-    CHECK(pipe.pendingCount() == 0 && pipe.handlesCount() == 0,
-          "converges after the retry too");
+    CHECK(pipe.pendingCount() == 0 && pipe.handlesCount() == 0, "converges after the retry too");
 }
 
 // ─── 6. generation switch while the decoder throws ─────────────────────────
@@ -270,19 +280,21 @@ void testGenerationSwitchWithThrowingDecoder()
     ThumbnailPipeline pipe;
     std::atomic<int> decodes{0};
     std::atomic<int> deliveries{0};
-    pipe.setDecodeFn([&](const std::string &p, int size) -> ImageData
-                     {
-                         if (p.find("bad/") == 0)
-                             throw std::runtime_error("decode boom");
-                         if (p.find("slow/") == 0)
-                             std::this_thread::sleep_for(std::chrono::milliseconds(300));
-                         return makeImageData(size, size, PixelFormat::RGB24);
-                     });
-    pipe.setResultFn([&](const std::string &, int, const ImageData &img)
-                     {
-                         if (!img.isNull())
-                             deliveries.fetch_add(1);
-                     });
+    pipe.setDecodeFn(
+        [&](const std::string &p, int size) -> ImageData
+        {
+            if (p.starts_with("bad/"))
+                throw std::runtime_error("decode boom");
+            if (p.starts_with("slow/"))
+                std::this_thread::sleep_for(std::chrono::milliseconds(300));
+            return makeImageData(size, size, PixelFormat::RGB24);
+        });
+    pipe.setResultFn(
+        [&](const std::string &, int, const ImageData &img)
+        {
+            if (!img.isNull())
+                deliveries.fetch_add(1);
+        });
 
     // Gen A: slow task in flight, then a throwing task queued behind it.
     pipe.setSources({"slow/img0.png", "bad/img1.png"});

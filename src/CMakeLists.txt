@@ -1076,14 +1076,26 @@ target_include_directories(test_assets_acceptance PRIVATE ${CMAKE_CURRENT_SOURCE
 target_compile_definitions(test_assets_acceptance PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
 
-# ─── Clang-Tidy (optional) ──────────────────────────────────────────────────
+# ─── Clang-Tidy (opt-in) ────────────────────────────────────────────────────
+# M28 CI fix: auto-enabling CMAKE_CXX_CLANG_TIDY whenever clang-tidy happens
+# to be on PATH made the Windows build depend on runner-local tooling
+# (clang-tidy found inside VS -> every TU ran with MSVC flags and failed on
+# M27 try blocks with "cannot use 'try' with exceptions disabled"; machines
+# without clang-tidy built fine). Inline clang-tidy is now an explicit opt-in
+# (MVIEWER_ENABLE_CLANG_TIDY=ON); the separate CI clang-tidy job
+# (compile_commands + changed files) is unaffected.
 
-find_program(CLANG_TIDY_EXE NAMES clang-tidy)
-if(CLANG_TIDY_EXE)
-    set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE}")
-    message(STATUS "clang-tidy found: ${CLANG_TIDY_EXE}")
-else()
-    message(STATUS "clang-tidy not found; skipping")
+option(MVIEWER_ENABLE_CLANG_TIDY
+       "Run clang-tidy inline on every TU (opt-in; the CI clang-tidy job is the default gate)"
+       OFF)
+if(MVIEWER_ENABLE_CLANG_TIDY)
+    find_program(CLANG_TIDY_EXE NAMES clang-tidy)
+    if(CLANG_TIDY_EXE)
+        set(CMAKE_CXX_CLANG_TIDY "${CLANG_TIDY_EXE}")
+        message(STATUS "clang-tidy inline: ${CLANG_TIDY_EXE}")
+    else()
+        message(WARNING "MVIEWER_ENABLE_CLANG_TIDY=ON but clang-tidy not found; inline checks disabled")
+    endif()
 endif()
 
 # ─── ctest registration ──────────────────────────────────────────────────────

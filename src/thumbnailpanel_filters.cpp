@@ -253,13 +253,12 @@ void ThumbnailPanel::applyFilter()
             const int gen = m_dirGen;
             m_recursiveSearching = true;
             m_recursiveHitsFor.clear(); // not current until the scan completes
-            QtConcurrent::run(
+            (void)QtConcurrent::run(
                 &m_scanPool,
                 [self, alive, gen, currentDir, t]() mutable
                 {
                     QList<Entry> found;
-                    QDirIterator it(currentDir,
-                                    QDir::Files | QDir::Readable | QDir::NoDotAndDotDot,
+                    QDirIterator it(currentDir, QDir::Files | QDir::Readable | QDir::NoDotAndDotDot,
                                     QDirIterator::Subdirectories);
                     while (it.hasNext())
                     {
@@ -269,13 +268,11 @@ void ThumbnailPanel::applyFilter()
                         const QFileInfo fi = it.fileInfo();
                         const QString suffix = fi.suffix().toLower();
                         if (suffix.isEmpty() ||
-                            !mviewer::core::ImageFormats::isSupportedSuffix(
-                                suffix.toStdString()))
+                            !mviewer::core::ImageFormats::isSupportedSuffix(suffix.toStdString()))
                             continue;
                         if (!fi.fileName().toLower().contains(t))
                             continue;
-                        const QString sub =
-                            QDir(currentDir).relativeFilePath(fi.absolutePath());
+                        const QString sub = QDir(currentDir).relativeFilePath(fi.absolutePath());
                         found.append(
                             {fi.absoluteFilePath(), fi.fileName() + " [" + sub + "]", fi.size()});
                     }

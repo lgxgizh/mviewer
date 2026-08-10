@@ -25,8 +25,8 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QImage>
-#include <QThread>
 #include <QTemporaryDir>
+#include <QThread>
 
 #include <atomic>
 #include <chrono>
@@ -66,8 +66,7 @@ std::string makeDir(int count)
     {
         QImage img(16, 16, QImage::Format_RGB32);
         img.fill(QColor((i * 7) % 256, (i * 13) % 256, (i * 29) % 256));
-        const std::string path =
-            tmp.path().toStdString() + "/img_" + std::to_string(i) + ".png";
+        const std::string path = tmp.path().toStdString() + "/img_" + std::to_string(i) + ".png";
         Encoder::encode(mvcore::fromQImage(img), path, Encoder::Params{});
     }
     return tmp.path().toStdString();
@@ -126,15 +125,14 @@ void testSaturatedAsyncCompletes()
     std::vector<ImageRepository::Result> results;
     std::atomic<bool> resultsReady{false};
 
-    repo.loadDirectoryAsync(
-        dir,
-        [&](std::vector<ImageRepository::Result> r)
-        {
-            callCount.fetch_add(1);
-            results = std::move(r);
-            resultsReady = true;
-            called = true;
-        });
+    repo.loadDirectoryAsync(dir,
+                            [&](std::vector<ImageRepository::Result> r)
+                            {
+                                callCount.fetch_add(1);
+                                results = std::move(r);
+                                resultsReady = true;
+                                called = true;
+                            });
 
     // The aggregate callback must fire (exactly once) even though the pool is
     // saturated and 7 of 8 submissions are rejected. The one accepted task is
@@ -239,7 +237,8 @@ void testEmptyDirCallbackOnce()
     ImageRepository &repo = ImageRepository::instance();
 
     std::atomic<int> calls{0};
-    repo.loadDirectoryAsync(dir, [&](std::vector<ImageRepository::Result> r)
+    repo.loadDirectoryAsync(dir,
+                            [&](const std::vector<ImageRepository::Result> &r)
                             {
                                 calls.fetch_add(1);
                                 CHECK(r.empty(), "empty directory yields empty results");
