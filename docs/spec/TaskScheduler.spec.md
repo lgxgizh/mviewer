@@ -29,6 +29,29 @@ submitted ──(no deps)──> queued ──> active(running) ──> terminal
   removed, `pending`/`active_tasks` return to zero and the `done` callback runs.
 - No counter can underflow: each is only modified at its owning transition.
 
+## Fault containment & observability (M27)
+
+- **User callbacks are contained.** `work`, `onProgress` and `done` are wrapped:
+  an exception thrown by any of them never escapes the worker thread (pre-M27 an
+  uncaught `work` exception terminated the whole process) and never escapes
+  `submit` (back-pressure handler).
+- **Failure counters.** `PoolMetrics::execution_failures` counts tasks whose
+  `work` threw; `PoolMetrics::callback_failures` counts `done` callbacks that
+  threw. Both are observable after `drain()`.
+- **Empty work is rejected** at `submit(Priority, ...)`: returns `nullptr`
+  before any bookkeeping (never a `bad_function_call` on a Release worker).
+- **cancelTree suppresses `done` for queued and running victims too.** The
+  terminal transition is finalized by `cancelTree` itself; a late worker
+  completion observes the finalized state and skips the user `done` callback
+  (deferred victims never start). `cancel(handle)` still delivers `done`.
+- **`graphMetrics()`** reports the live dependency-graph working set
+  (`handles`, `deferred`, `dep_graph_entries`, `dependents_entries`); all four
+  must return to zero when idle. Reverse edges are dropped when their last
+  follower is released or cancelled.
+- **`drain(timeout)` honors the wall clock**: only the remaining budget is
+  passed to the underlying `waitForDone`, so a stuck task cannot stretch the
+  call to ~2x the timeout.
+
 ## API
 
 ```cpp

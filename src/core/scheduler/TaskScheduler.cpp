@@ -50,8 +50,19 @@ class LambdaTask : public QRunnable
         // not a runtime safety mechanism.
         // Empty task is programmer error. Runtime path assumes valid callable.
         assert(m_work.target_type() != typeid(void));
-        if (!m_ctx->isCancelled())
-            m_work(*m_ctx);
+        // M27: user work is contained. A throwing task must never escape the
+        // worker (pre-fix an uncaught exception terminated the whole process).
+        // The failure is recorded on the context and surfaced through
+        // PoolMetrics::execution_failures at the terminal transition.
+        try
+        {
+            if (!m_ctx->isCancelled())
+                m_work(*m_ctx);
+        }
+        catch (...)
+        {
+            m_ctx->execution_failed.store(true, std::memory_order_relaxed);
+        }
         m_ctx->reportProgress(100);
 
         // M26: the done callback runs on this worker thread by contract (see
@@ -186,9 +197,10 @@ void TaskScheduler::submit(PoolType pool, void *runnable)
             if (r->autoDelete())
                 delete r;
         },
-        [this, ctx_id, prio]()
+        [this, ctx, ctx_id, prio]()
         {
-            onTaskComplete(ctx_id, prio, false);
+            onTaskComplete(ctx_id, prio, false,
+                           ctx->execution_failed.load(std::memory_order_relaxed));
             // No user done callback exists for this legacy path.
         });
     std::lock_guard<std::mutex> lock(m_graphMtx);
@@ -209,6 +221,12 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
 {
     const int pIdx = static_cast<int>(prio);
     assert(pIdx >= 0 && pIdx < 5);
+
+    // M27: an empty work callable is a contract violation, not a runtime
+    // condition. Reject it before any bookkeeping so the caller receives
+    // nullptr (never a bad_function_call on a Release worker).
+    if (!work)
+        return nullptr;
 
     // Back-pressure check. The user handler must run OUTSIDE the lock (it may
     // call back into the scheduler).
@@ -238,8 +256,18 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
         }
         if (rejected)
         {
+            // M27: the backpressure handler is a user callback; a throw must
+            // not escape submit. The rejection decision is already made.
             if (m_backpressure)
-                m_backpressure(backpressurePool);
+            {
+                try
+                {
+                    m_backpressure(backpressurePool);
+                }
+                catch (...)
+                {
+                }
+            }
             return nullptr;
         }
     }
@@ -252,15 +280,31 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
     ctx->priority = prio;
 
     const TaskId ctx_id = ctx->id;
-    auto *runnable = new LambdaTask(ctx, std::move(work),
-                                    [this, done = std::move(done), ctx, prio]()
-                                    {
-                                        onTaskComplete(ctx->id, prio,
-                                                       ctx->deadline_exceeded.load(
-                                                           std::memory_order_relaxed));
-                                        if (done)
-                                            done();
-                                    });
+    auto *runnable = new LambdaTask(
+        ctx, std::move(work),
+        [this, done = std::move(done), ctx, prio]()
+        {
+            // M27: cancelTree() erases the handle and finalizes the metrics
+            // itself; when onTaskComplete reports "already finalized" the
+            // user done callback must be suppressed (cancelTree contract: a
+            // victim never observes done). A throwing user done is contained
+            // and counted as a callback failure.
+            const bool finalized = onTaskComplete(
+                ctx->id, prio, ctx->deadline_exceeded.load(std::memory_order_relaxed),
+                ctx->execution_failed.load(std::memory_order_relaxed));
+            if (!finalized)
+                return;
+            try
+            {
+                if (done)
+                    done();
+            }
+            catch (...)
+            {
+                std::lock_guard<std::mutex> lock(m_graphMtx);
+                m_poolState[static_cast<int>(prio)].metrics.callback_failures++;
+            }
+        });
 
     {
         // P0-1 fix: submitted++ moved inside the lock to avoid data race
@@ -370,6 +414,11 @@ void TaskScheduler::releaseReadyTasks(std::vector<std::pair<Priority, void *>> &
                     auto &followers = m_dependents[dep];
                     followers.erase(std::remove(followers.begin(), followers.end(), id),
                                     followers.end());
+                    // M27: drop the now-empty reverse edge so the dependency
+                    // graph's working set returns to zero when idle (observable
+                    // via graphMetrics().dependents_entries).
+                    if (followers.empty())
+                        m_dependents.erase(dep);
                 }
                 m_depGraph.erase(depsIt);
             }
@@ -383,7 +432,8 @@ void TaskScheduler::releaseReadyTasks(std::vector<std::pair<Priority, void *>> &
     }
 }
 
-void TaskScheduler::onTaskComplete(TaskId id, Priority prio, bool deadlineExceeded)
+bool TaskScheduler::onTaskComplete(TaskId id, Priority prio, bool deadlineExceeded,
+                                   bool executionFailed)
 {
     std::vector<std::pair<Priority, void *>> ready;
     {
@@ -392,7 +442,7 @@ void TaskScheduler::onTaskComplete(TaskId id, Priority prio, bool deadlineExceed
         // active_tasks/pending, skip the metrics update to avoid double-decrement.
         auto it = m_handles.find(id);
         if (it == m_handles.end())
-            return; // already cancelled/removed — metrics already adjusted
+            return false; // cancelTree() already finalized — caller suppresses done
         m_handles.erase(it);
         m_taskPriomap.erase(id);
         m_depGraph.erase(id);
@@ -400,6 +450,8 @@ void TaskScheduler::onTaskComplete(TaskId id, Priority prio, bool deadlineExceed
         m_poolState[pIdx].metrics.completed++;
         if (deadlineExceeded)
             m_poolState[pIdx].metrics.deadline_exceeded++;
+        if (executionFailed)
+            m_poolState[pIdx].metrics.execution_failures++;
         // Terminal transition: exactly one decrement of each counter.
         if (m_poolState[pIdx].metrics.pending > 0)
             m_poolState[pIdx].metrics.pending--;
@@ -418,6 +470,7 @@ void TaskScheduler::onTaskComplete(TaskId id, Priority prio, bool deadlineExceed
             m_poolState[rpIdx].metrics.active_tasks++;
         }
     }
+    return true;
 }
 
 void TaskScheduler::cancelTree(TaskId rootId)
@@ -484,6 +537,21 @@ void TaskScheduler::cancelTree(TaskId rootId)
                     sched.m_poolState[pIdx].metrics.pending--;
             }
         }
+        // If the victim itself was waiting on prerequisites, drop it from
+        // their reverse-edge lists first (m_dependents[dep] must not retain a
+        // follower that will never run). Erase empty entries so the graph
+        // working set returns to zero when idle.
+        if (auto depIt = sched.m_depGraph.find(vic); depIt != sched.m_depGraph.end())
+        {
+            for (TaskId dep : depIt->second)
+            {
+                auto &followers = sched.m_dependents[dep];
+                followers.erase(std::remove(followers.begin(), followers.end(), vic),
+                                followers.end());
+                if (followers.empty())
+                    sched.m_dependents.erase(dep);
+            }
+        }
         sched.m_depGraph.erase(vic);
         sched.m_dependents.erase(vic);
         // Remove this victim from every other task's dependents list so no
@@ -509,6 +577,17 @@ TaskScheduler::PoolMetrics TaskScheduler::metrics(PoolType pool) const
     auto idx = static_cast<int>(toPriority(pool));
     std::lock_guard<std::mutex> lock(m_graphMtx);
     return m_poolState[idx].metrics;
+}
+
+TaskScheduler::GraphMetrics TaskScheduler::graphMetrics() const
+{
+    std::lock_guard<std::mutex> lock(m_graphMtx);
+    GraphMetrics g;
+    g.handles = m_handles.size();
+    g.deferred = m_deferred.size();
+    g.dep_graph_entries = m_depGraph.size();
+    g.dependents_entries = m_dependents.size();
+    return g;
 }
 
 bool TaskScheduler::isSaturated(PoolType pool) const
@@ -550,18 +629,26 @@ bool TaskScheduler::waitForPoolDrained(int idx, std::chrono::milliseconds timeou
     // -> deadlock. Instead, read the pending/active snapshot under the lock,
     // release it, then call waitForDone() unlocked.
     const auto deadline = std::chrono::steady_clock::now() + timeout;
-    while (std::chrono::steady_clock::now() < deadline)
+    while (true)
     {
         {
             std::lock_guard<std::mutex> lock(m_graphMtx);
             if (m_poolState[idx].metrics.pending == 0 && m_poolState[idx].metrics.active_tasks == 0)
                 break; // pool is idle — exit loop to do a final waitForDone unlocked
         }
+        if (std::chrono::steady_clock::now() >= deadline)
+            break;
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
+    // M27: pass only the REMAINING budget to waitForDone(). Previously the
+    // full timeout was passed again after the polling loop, so drain(timeout)
+    // could block ~2x the requested time on a stuck task.
+    const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+        deadline - std::chrono::steady_clock::now());
+    const int remainingMs = std::max(0, static_cast<int>(remaining.count()));
     // Call waitForDone() WITHOUT holding the lock so worker threads can acquire
     // m_graphMtx in onTaskComplete() and decrement pending/active_tasks.
-    return m_impl->priorityQueues[idx].waitForDone(static_cast<int>(timeout.count()));
+    return m_impl->priorityQueues[idx].waitForDone(remainingMs);
 }
 
 bool TaskScheduler::drain(PoolType pool, std::chrono::milliseconds timeout)

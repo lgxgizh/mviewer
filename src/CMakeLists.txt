@@ -373,7 +373,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform differenceengine blinkcontroller aligner imageoverlay browse_convergence m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform differenceengine blinkcontroller aligner imageoverlay browse_convergence m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -1093,6 +1093,8 @@ add_test(NAME m26_repository_tests COMMAND test_m26_repository)
 add_test(NAME m26_stats_tests COMMAND test_m26_stats)
 add_test(NAME m27_thumbnail_tests COMMAND test_m27_thumbnail)
 add_test(NAME m27_eventbus_tests COMMAND test_m27_eventbus)
+add_test(NAME m27_scheduler_tests COMMAND test_m27_scheduler)
+add_test(NAME m27_repository_tests COMMAND test_m27_repository)
 add_test(NAME metadata_tests   COMMAND test_metadata)
 add_test(NAME filesystem_tests COMMAND test_filesystem)
 add_test(NAME eventbus_tests   COMMAND test_eventbus)
@@ -1194,6 +1196,47 @@ target_compile_features(browse_convergence_ui_tests PRIVATE cxx_std_20)
 target_include_directories(browse_convergence_ui_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME browse_convergence_ui_tests COMMAND browse_convergence_ui_tests)
 set_tests_properties(browse_convergence_ui_tests PROPERTIES RUN_SERIAL TRUE)
+
+# --- M27: QObject async lifetime closure regression (UI level) ---
+# Child-process destroy-mid-decode crash detection (PreviewPanel / ImageViewer),
+# A->B->A newest-generation delivery, rejection terminal state, and the P9 24MP
+# UI completion-latency bounds. Heavy but bounded; runs serial.
+add_executable(m27_lifetime_tests
+    test_m27_lifetime.cpp
+)
+target_link_libraries(m27_lifetime_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m27_lifetime_tests PRIVATE cxx_std_20)
+target_include_directories(m27_lifetime_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m27_lifetime_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m27_lifetime_tests COMMAND m27_lifetime_tests)
+set_tests_properties(m27_lifetime_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
+
+# --- M27: close/shutdown lifecycle torture (100 rounds) ---
+# Real MainWindow open -> browse -> viewer A/B/A -> compare diff -> destroy,
+# with per-round subsystem convergence and RSS/handle/thread leak checks.
+add_executable(m27_lifecycle_torture
+    test_m27_lifecycle.cpp
+)
+target_link_libraries(m27_lifecycle_torture
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m27_lifecycle_torture PRIVATE cxx_std_20)
+target_include_directories(m27_lifecycle_torture PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m27_lifecycle_torture PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m27_lifecycle_torture COMMAND m27_lifecycle_torture)
+set_tests_properties(m27_lifecycle_torture PROPERTIES RUN_SERIAL TRUE TIMEOUT 1800)
 # ─── M13 Phase 1: Product Workflow gate ──────────────────────────────────
 # A single ctest that runs the full user-chain in order:
 #   Browse -> Compare -> Analyzer -> Export -> Workspace

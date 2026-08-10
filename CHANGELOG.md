@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — M27 async-lifetime regression suites
+
+- **Scheduler fault-injection suite (`m27_scheduler_tests`):** throwing `work` /
+  `onProgress` / `done` callbacks are contained in the worker (previously an
+  uncaught work exception terminated the process); empty work is rejected at
+  submit; `cancelTree` victims never observe `done` (queued, running and
+  waiting); soft cancel still delivers `done`; the dependency graph's working
+  set returns to zero after heavy churn; `drain(timeout)` respects the wall
+  clock instead of blocking up to ~2x; a throwing back-pressure handler cannot
+  escape `submit`. New `PoolMetrics::execution_failures` /
+  `callback_failures` counters and `graphMetrics()` make the contracts
+  observable.
+- **Repository timeout/rejection suite (`m27_repository_tests`):** rejected
+  `loadAsync` fires its callback exactly once with an explicit rejection error;
+  `loadDirectory` honors its sync budget and cancels outstanding work without
+  late stack writes; normal loads still complete.
+- **QObject lifetime suite (`m27_lifetime_tests`):** destroy-mid-decode crash
+  detection for PreviewPanel / ImageViewer in child processes, A→B→A
+  newest-generation delivery, rejection terminal state, and the P9 24MP UI
+  completion-latency bounds.
+- **Close/shutdown torture (`m27_lifecycle_torture`):** 100 real MainWindow
+  lifecycle rounds (browse → viewer A/B/A → compare diff → destroy) with
+  per-round scheduler/thumbnail-pipeline convergence and RSS / handle / thread
+  leak checks (RSS bound is hybrid: 10% of steady state or a 12 MB floor, so
+  allocator working-set noise does not fail the gate).
+
 ### Changed — RC reliability closure (M26)
 
 - **Scheduler lifecycle exactly-once (M26):** every task now finalizes through

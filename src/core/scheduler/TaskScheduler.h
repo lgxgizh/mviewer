@@ -47,6 +47,9 @@ class TaskScheduler
         std::chrono::steady_clock::time_point deadline =
             std::chrono::steady_clock::time_point::max();
         std::atomic<bool> deadline_exceeded{false};
+        // M27: set by the worker when user work throws; surfaced through
+        // PoolMetrics::execution_failures at the terminal transition.
+        std::atomic<bool> execution_failed{false};
 
         Priority priority = Priority::Background;
         PoolType pool = MetadataPool;
@@ -67,8 +70,21 @@ class TaskScheduler
         {
             const int v = p < 0 ? 0 : (p > 100 ? 100 : p);
             progress->store(v, std::memory_order_relaxed);
+            // M27: a throwing onProgress callback must never escape the worker
+            // (the deadline path also reports progress before the terminal
+            // transition). Progress callbacks are contained by contract; the
+            // done-path counterpart is observable via
+            // PoolMetrics::callback_failures.
             if (onProgress)
-                onProgress(v);
+            {
+                try
+                {
+                    onProgress(v);
+                }
+                catch (...)
+                {
+                }
+            }
         }
         bool isExpired() const
         {
@@ -101,6 +117,23 @@ class TaskScheduler
         // pool is momentarily idle (which QThreadPool::waitForDone can miss
         // under a submitting producer on another thread -> use-after-free).
         size_t pending{0};
+        // M27: user work threw inside a worker (contained; the process must
+        // survive). Observable so fault injection can be verified.
+        uint64_t execution_failures{0};
+        // M27: the user done callback threw (contained; the process must
+        // survive).
+        uint64_t callback_failures{0};
+    };
+
+    // M27: live dependency-graph working set. All counters must return to
+    // zero when the scheduler is idle; a nonzero value means bookkeeping
+    // leaked (handles/deferred/dependency edges outliving their tasks).
+    struct GraphMetrics
+    {
+        size_t handles{0};
+        size_t deferred{0};
+        size_t dep_graph_entries{0};
+        size_t dependents_entries{0};
     };
 
     static TaskScheduler &instance();
@@ -133,6 +166,9 @@ class TaskScheduler
     TaskHandle handle(TaskId id);
 
     PoolMetrics metrics(PoolType pool) const;
+
+    // Live dependency-graph working set (see GraphMetrics).
+    GraphMetrics graphMetrics() const;
     bool isSaturated(PoolType pool) const;
     size_t queueDepth(PoolType pool) const;
     size_t activeTaskCount(PoolType pool) const;
@@ -216,5 +252,9 @@ class TaskScheduler
     }
 
     void releaseReadyTasks(std::vector<std::pair<Priority, void *>> &out);
-    void onTaskComplete(TaskId id, Priority prio, bool deadlineExceeded);
+    // Returns false when the task was already finalized by cancelTree() (the
+    // caller must then suppress the user done callback). executionFailed feeds
+    // PoolMetrics::execution_failures.
+    bool onTaskComplete(TaskId id, Priority prio, bool deadlineExceeded,
+                        bool executionFailed = false);
 };
