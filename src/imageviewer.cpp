@@ -184,9 +184,10 @@ void ImageViewer::setImage(const QString &path)
                         gen != viewer->m_requestGen)
                         return; // widget destroyed or user navigated away
                     viewer->m_frame = res.frame;
-                    viewer->m_pixmap =
-                        QPixmap::fromImage(mvcore::toQImage(viewer->m_frame->pixels()));
-                    if (viewer->m_pixmap.isNull())
+                    // M28 P1-02: no full-size QPixmap materialization on the UI
+                    // thread — the paint path renders tiles from the frame, and
+                    // the histogram comes from the frame's cached luminance pass.
+                    if (!viewer->m_frame || viewer->m_frame->pixels().isNull())
                     {
                         viewer->m_hasHistogram = false;
                         viewer->setWindowTitle(
@@ -195,18 +196,19 @@ void ImageViewer::setImage(const QString &path)
                         emit viewer->loadFailed(path);
                         return;
                     }
-                    viewer->computeHistogram(viewer->m_pixmap);
+                    viewer->computeHistogram();
                     const QFileInfo info(path);
                     viewer->m_fileList = listImages(info.absolutePath());
                     viewer->m_currentIndex =
                         static_cast<int>(viewer->m_fileList.indexOf(path));
                     // Build the render pipeline state (tile grid + fitted Viewport)
                     // exactly as before — now applied on the UI thread post-decode.
-                    viewer->m_tiles = TileGrid(viewer->m_pixmap.width(), viewer->m_pixmap.height(),
-                                               256);
+                    viewer->m_tiles = TileGrid(viewer->m_frame->width(),
+                                               viewer->m_frame->height(), 256);
                     viewer->m_view.screenW = viewer->width();
                     viewer->m_view.screenH = viewer->height();
-                    viewer->m_view.fit(viewer->m_pixmap.width(), viewer->m_pixmap.height(), 0.95);
+                    viewer->m_view.fit(viewer->m_frame->width(), viewer->m_frame->height(),
+                                       0.95);
                     viewer->m_fitMode = true;
                     const QString position =
                         viewer->m_currentIndex >= 0
@@ -215,8 +217,8 @@ void ImageViewer::setImage(const QString &path)
                             : QString();
                     viewer->setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
                                                .arg(info.fileName())
-                                               .arg(viewer->m_pixmap.width())
-                                               .arg(viewer->m_pixmap.height())
+                                               .arg(viewer->m_frame->width())
+                                               .arg(viewer->m_frame->height())
                                                .arg(position));
                     // P1-7: if a session-restore zoom/pan was requested before the
                     // async decode finished, apply it now. Only reuse the saved pan
@@ -286,19 +288,19 @@ void ImageViewer::emitZoom()
 
 void ImageViewer::fitToWidget()
 {
-    if (m_pixmap.isNull())
+    if (!m_frame || m_frame->pixels().isNull())
         return;
     // Delegate the fit math to Viewport; keep the Widget free of scale/offset.
     m_view.screenW = width();
     m_view.screenH = height();
-    m_view.fit(m_pixmap.width(), m_pixmap.height(), 0.95);
+    m_view.fit(m_frame->width(), m_frame->height(), 0.95);
     m_fitMode = true;
     emitZoom();
 }
 
 void ImageViewer::zoomIn()
 {
-    if (m_pixmap.isNull())
+    if (!m_frame || m_frame->pixels().isNull())
         return;
     m_view.screenW = width();
     m_view.screenH = height();
@@ -310,7 +312,7 @@ void ImageViewer::zoomIn()
 
 void ImageViewer::zoomOut()
 {
-    if (m_pixmap.isNull())
+    if (!m_frame || m_frame->pixels().isNull())
         return;
     m_view.screenW = width();
     m_view.screenH = height();
@@ -328,7 +330,7 @@ void ImageViewer::zoomFit()
 
 void ImageViewer::zoomActual()
 {
-    if (m_pixmap.isNull())
+    if (!m_frame || m_frame->pixels().isNull())
         return;
     // Keep the current view center stable while restoring 100%.
     m_view.screenW = width();
@@ -339,9 +341,20 @@ void ImageViewer::zoomActual()
     update();
 }
 
-void ImageViewer::computeHistogram(const QPixmap &pixmap)
+QImage ImageViewer::currentImage() const
 {
-    Q_UNUSED(pixmap);
+    if (!m_frame || m_frame->pixels().isNull())
+        return QImage();
+    // Zero-copy alias when the byte order matches; the caller (copy/save) owns
+    // the result, so this is safe.
+    QImage img = mvcore::toQImageRef(m_frame->pixels());
+    if (img.isNull())
+        img = mvcore::toQImage(m_frame->pixels()); // RGBA32 fallback
+    return img;
+}
+
+void ImageViewer::computeHistogram()
+{
     std::fill(std::begin(m_histogram), std::end(m_histogram), 0);
 
     // Reuse the ImageFrame's cached luminance histogram (computed once on
@@ -359,7 +372,7 @@ void ImageViewer::computeHistogram(const QPixmap &pixmap)
 
 void ImageViewer::wheelEvent(QWheelEvent *event)
 {
-    if (m_pixmap.isNull())
+    if (!m_frame || m_frame->pixels().isNull())
         return;
 
     m_view.screenW = width();
@@ -376,7 +389,7 @@ void ImageViewer::mouseDoubleClickEvent(QMouseEvent *event)
 {
     // Double-click toggles between fit-to-window and 100% at the cursor —
     // the standard image-viewer zoom gesture.
-    if (event->button() != Qt::LeftButton || m_pixmap.isNull())
+    if (event->button() != Qt::LeftButton || !m_frame || m_frame->pixels().isNull())
     {
         QWidget::mouseDoubleClickEvent(event);
         return;
@@ -411,7 +424,7 @@ void ImageViewer::mousePressEvent(QMouseEvent *event)
         return;
     }
     if ((event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton) &&
-        !m_pixmap.isNull())
+        m_frame && m_frame->isValid())
     {
         if (m_selectMode && event->button() == Qt::LeftButton)
         {
@@ -455,7 +468,7 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
     // the ImageFrame (RGB24/RGBA32), using the inverse of the Viewport transform.
     int ix = -1, iy = -1, r = 0, g = 0, b = 0, a = 255;
     bool valid = false;
-    if (m_frame && !m_pixmap.isNull())
+    if (m_frame && m_frame->isValid())
     {
         m_view.screenW = width();
         m_view.screenH = height();
@@ -463,8 +476,8 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
         const double imgY = (event->pos().y() - m_view.offsetY) / m_view.scale;
         ix = static_cast<int>(std::floor(imgX));
         iy = static_cast<int>(std::floor(imgY));
-        const int iw = m_pixmap.width();
-        const int ih = m_pixmap.height();
+        const int iw = m_frame->width();
+        const int ih = m_frame->height();
         if (ix >= 0 && ix < iw && iy >= 0 && iy < ih)
         {
             const ImageBuffer view = m_frame->pixels().view();
@@ -526,8 +539,10 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
                           static_cast<int>(std::round(r.width() / m_view.scale)),
                           static_cast<int>(std::round(r.height() / m_view.scale)))
                         .normalized();
-                const QRect valid =
-                    imgRect.intersected(QRect(0, 0, m_pixmap.width(), m_pixmap.height()));
+                const QRect valid = m_frame
+                                         ? imgRect.intersected(QRect(0, 0, m_frame->width(),
+                                                                     m_frame->height()))
+                                         : QRect();
                 if (!valid.isEmpty() && m_frame)
                 {
                     const mviewer::domain::Selection sel{valid.x(), valid.y(), valid.width(),
@@ -565,7 +580,7 @@ void ImageViewer::resizeEvent(QResizeEvent *event)
     QWidget::resizeEvent(event);
     // Keep the image fitted across window resizes while in fit mode; an
     // explicit zoom (wheel/keyboard/double-click) opts out of re-fitting.
-    if (m_fitMode && !m_pixmap.isNull())
+    if (m_fitMode && m_frame && m_frame->isValid())
         fitToWidget();
 }
 

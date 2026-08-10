@@ -25,6 +25,7 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QEventLoop>
 #include <QImage>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -204,6 +205,26 @@ void testC6PersistenceRoundTrip()
     QFile::remove(file);
 }
 
+// M28 P1-02: a HIDDEN AnalysisPanel must not materialize full-size QImage
+// buffers on the UI thread (regression: setFrame() unconditionally converted
+// the whole frame + ran stats on every viewer image open, even when the panel
+// was never shown). The deferred contract is observable: hasLoadedImage()
+// stays false while hidden and becomes true once the panel is shown.
+void testM28HiddenPanelDefersConversion()
+{
+    std::cout << "-- Analyze M28 P1-02: hidden panel defers materialization --\n";
+    AnalysisPanel panel; // hidden by default
+    const auto frame = makeFrame(512, 512, QColor(30, 200, 90));
+    panel.setFrame(frame);
+    QApplication::processEvents(QEventLoop::AllEvents, 50);
+    CHECK(!panel.hasLoadedImage(),
+          "hidden panel does not materialize a full-size QImage on the UI thread");
+
+    panel.show();
+    QApplication::processEvents(QEventLoop::AllEvents, 50);
+    CHECK(panel.hasLoadedImage(), "visible panel materializes the frame for display");
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -213,6 +234,7 @@ int main(int argc, char **argv)
     QCoreApplication::setOrganizationName("mviewer-analyze-acceptance-test");
     QCoreApplication::setApplicationName("mviewer-analyze-acceptance-test");
 
+    testM28HiddenPanelDefersConversion();
     testC7FailingAnalyzer();
     testC2C4C5PanelAndModel("/tmp/m24_ana_a.png", "/tmp/m24_ana_b.png");
     testC6PersistenceRoundTrip();

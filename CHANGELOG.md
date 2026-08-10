@@ -35,6 +35,25 @@ All notable changes to this project are documented here. The format is based on
   nearest-region sampling and pixel-identical equivalence with
   crop-then-scale for every supported pixel format.
 
+### Changed — viewer/analysis no longer convert full images on the UI thread (M28 P1-02)
+
+- `ImageViewer` no longer materializes a full-size `QPixmap` when a decode
+  completes: the paint path already renders from `ImageFrame` tiles, so the
+  redundant full-image `QImage` copy + `QPixmap` upload on the UI thread is
+  gone. Copy/save (explicit user actions) build the display image on demand
+  via the zero-copy `toQImageRef()` alias.
+- `AnalysisPanel::setFrame()` defers materialization: a hidden panel (the
+  common case while browsing) stores the frame only — no full-size `QImage`
+  conversion and no full-image stats per viewer open. The frame materializes
+  once via `showEvent` / a deferred turn when the panel is actually visible,
+  with a single RGB32 conversion (`applyFrameImage`).
+- Compare → Analyze no longer decodes the image a second time with a
+  synchronous `QImage(path)` on the UI thread; it relies on the viewer's
+  async `imageReady` -> `setFrame` path.
+- Regression coverage (written before the fix): `analyze_acceptance_tests`
+  asserts a hidden panel does not materialize (`hasLoadedImage() == false`)
+  and materializes after `show()`.
+
 ### Added — M27 async-lifetime regression suites
 
 - **Scheduler fault-injection suite (`m27_scheduler_tests`):** throwing `work` /

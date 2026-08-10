@@ -1,5 +1,8 @@
 #include "analysispanel.h"
 #include "analyzermodel.h"
+
+#include <QShowEvent>
+#include <QTimer>
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/HistogramAnalyzer.h"
 #include "core/compare/Aligner.h"
@@ -63,7 +66,13 @@ void AnalysisPanel::setImage(const QImage &img, const QString &path)
         clear();
         return;
     }
-    m_imageA = img.convertToFormat(QImage::Format_RGB32);
+    applyFrameImage(img.convertToFormat(QImage::Format_RGB32), path);
+}
+
+void AnalysisPanel::applyFrameImage(const QImage &rgb32, const QString &path)
+{
+    // M28 P1-02: caller already provides RGB32 — no second conversion here.
+    m_imageA = rgb32;
     m_imagePath = path;
     m_hasA = true;
     m_hasB = false;
@@ -251,12 +260,52 @@ void AnalysisPanel::reanalyze()
 void AnalysisPanel::setFrame(std::shared_ptr<ImageFrame> frame)
 {
     m_frameA = std::move(frame);
-    if (m_frameA && m_frameA->isValid())
+    if (!m_frameA || !m_frameA->isValid())
     {
-        const QImage img =
-            mvcore::toQImage(m_frameA->pixels()).convertToFormat(QImage::Format_RGB32);
-        setImage(img, QString::fromStdString(m_frameA->metadata().filePath));
+        clear();
+        return;
     }
+    // M28 P1-02: materialization is deferred. A HIDDEN panel (the common case
+    // while browsing) stores the frame only — no full-size QImage conversion
+    // and no full-image stats on the UI thread. The frame materializes when
+    // the panel is visible (showEvent) or on the next event-loop turn if it
+    // is already on screen.
+    m_frameDirty = true;
+    if (isVisible())
+    {
+        QTimer::singleShot(0, this, [this]()
+                           {
+                               if (m_frameDirty)
+                                   refreshFromFrame();
+                           });
+    }
+}
+
+void AnalysisPanel::showEvent(QShowEvent *event)
+{
+    QWidget::showEvent(event);
+    if (m_frameDirty && m_frameA && m_frameA->isValid())
+        refreshFromFrame();
+}
+
+void AnalysisPanel::refreshFromFrame()
+{
+    if (!m_frameA || !m_frameA->isValid())
+        return;
+    m_frameDirty = false;
+    // One materialization: non-owning alias where possible, then a single
+    // convert to RGB32 (the display copy is unavoidable once visible, but it
+    // happens exactly once and never while the panel is hidden).
+    QImage img = mvcore::toQImageRef(m_frameA->pixels());
+    if (img.isNull())
+        img = mvcore::toQImage(m_frameA->pixels()); // RGBA32 fallback
+    img = img.convertToFormat(QImage::Format_RGB32);
+    if (img.isNull())
+    {
+        clear();
+        return;
+    }
+    applyFrameImage(img, QString::fromStdString(m_frameA->metadata().filePath));
     reanalyze();
 }
 

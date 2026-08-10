@@ -535,8 +535,7 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
                     if (!path.isEmpty())
                     {
                         m_selection->setCurrentImage(path);
-                        m_imageViewer->setImage(path);
-                        m_analysisPanel->setImage(QImage(path), path);
+                        m_imageViewer->setImage(path); // imageReady -> AnalysisPanel::setFrame (async, visibility-gated)
                     }
                 }
                 if (m_analysisPanel && !m_analysisPanel->isVisible())

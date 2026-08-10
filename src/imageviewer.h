@@ -7,6 +7,7 @@
 #include "core/render/Viewport.h"
 #include "gpu/GpuTileUploader.h"
 
+#include <QImage>
 #include <QOpenGLTextureBlitter>
 #include <QOpenGLWidget>
 #include <QPixmap>
@@ -115,11 +116,14 @@ class ImageViewer : public QOpenGLWidget
     void fitToWidget();
     void preloadNeighbors(const QString &path);
     void drawHistogram(QPainter &painter) const;
-    void computeHistogram(const QPixmap &pixmap);
+    void computeHistogram();
+    // M28 P1-02: build the display QImage on demand (user-triggered copy/save
+    // only) — the paint path renders from the ImageFrame tiles and never
+    // materializes a full-size QPixmap on the UI thread.
+    QImage currentImage() const;
 
     static QStringList listImages(const QString &dirPath);
 
-    QPixmap m_pixmap;
     QString m_currentPath;
     QStringList m_fileList;
     int m_currentIndex = -1;

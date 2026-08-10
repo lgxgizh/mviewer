@@ -53,6 +53,14 @@ class AnalysisPanel : public QWidget
 
     void setImage(const QImage &img);
     void setImage(const QImage &img, const QString &path);
+    // M28 P1-02: true when the panel has materialized the frame into its
+    // display/analysis buffers. A hidden panel defers this to showEvent, so
+    // opening the viewer no longer pays full-image conversions for a panel
+    // the user cannot see.
+    bool hasLoadedImage() const
+    {
+        return m_hasA && !m_imageA.isNull();
+    }
     void setImages(const QImage &a, const QImage &b);
     void clear();
 
@@ -113,6 +121,8 @@ class AnalysisPanel : public QWidget
     void historyImageRequested(const QString &path);
 
   protected:
+    // M28 P1-02: materialize a deferred frame when the panel becomes visible.
+    void showEvent(QShowEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
     void renderHistogramPixmap();
     void renderHistogramPixmap(const mviewer::domain::Histogram &hist);
@@ -170,6 +180,11 @@ class AnalysisPanel : public QWidget
     ImageStats m_statsB;
     mviewer::domain::Selection m_roi;
     bool m_hasROI = false;
+    // M28 P1-02: deferred frame materialization (hidden panel skips the
+    // full-size QImage conversion until the user actually sees the panel).
+    bool m_frameDirty = false;
+    void refreshFromFrame();
+    void applyFrameImage(const QImage &rgb32, const QString &path);
     std::shared_ptr<ImageFrame> m_frameA; // left image frame for ROI analysis
 
     // Pixel Inspector last sample

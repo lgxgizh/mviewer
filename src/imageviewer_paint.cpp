@@ -45,7 +45,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
     // each visible region from the ImageFrame pixels — never decoding, never
     // rasterizing the whole image into one bitmap. This is what makes 100MP/
     // RAW rendering feasible later.
-    if (!m_pixmap.isNull() && m_frame)
+    if (m_frame && m_frame->isValid())
     {
         MV_TRACE_SCOPED("ImageViewer::paint");
         // Keep Viewport in *logical* widget pixels so mouse pan/zoom math stays
@@ -215,7 +215,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
             painter.setBrush(QColor(255, 255, 0, 80));
             painter.drawRect(r);
             // Show live dimensions while dragging.
-            if (m_selecting && m_pixmap.width() > 0)
+            if (m_selecting && m_frame && m_frame->width() > 0)
             {
                 const int imgW = static_cast<int>(r.width() / m_view.scale);
                 const int imgH = static_cast<int>(r.height() / m_view.scale);

@@ -102,17 +102,23 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         return;
     }
     if (chosen == aCopy)
-        QApplication::clipboard()->setPixmap(m_pixmap);
+    {
+        // User-triggered copy: materialize the display image on demand (this
+        // is an explicit action, not the browse path).
+        const QPixmap pm = QPixmap::fromImage(currentImage());
+        if (!pm.isNull())
+            QApplication::clipboard()->setPixmap(pm);
+    }
     else if (chosen == aCopyPath)
         QApplication::clipboard()->setText(m_currentPath);
     else if (chosen == aCopyColor)
     {
         // Read pixel color at the cursor position (event->pos() in widget coords).
         const QPoint pos = event->pos();
-        if (!m_pixmap.isNull() && m_frame)
+        if (m_frame && m_frame->isValid())
         {
-            const int iw = m_pixmap.width();
-            const int ih = m_pixmap.height();
+            const int iw = m_frame->width();
+            const int ih = m_frame->height();
             const int ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
             const int iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
             if (ix >= 0 && ix < iw && iy >= 0 && iy < ih)
@@ -132,14 +138,14 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     }
     else if (chosen == aSaveAs)
     {
-        if (!m_pixmap.isNull())
+        if (m_frame && m_frame->isValid())
         {
             const QString defaultName = QFileInfo(m_currentPath).completeBaseName() + "_copy.png";
             const QString path = QFileDialog::getSaveFileName(
                 this, "另存为", defaultName,
                 "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp)");
             if (!path.isEmpty())
-                m_pixmap.save(path);
+                currentImage().save(path);
         }
     }
     else if (chosen == aZoomIn)
