@@ -39,6 +39,9 @@ All notable changes to this project are documented here. The format is based on
   drag-drop hint) instead of a blank canvas; it hides automatically once a
   directory is opened. Covered by `workflow_ux_tests` (visible at clean
   startup, hidden after navigation).
+- **Slideshow regression coverage (`workflow_ux_tests`):** the shipped
+  slideshow workflow (S starts, S stops, timer advances through the folder)
+  previously had no tests; now machine-locked with a min-interval run.
 - **Zoom-at-cursor regression coverage (`workflow_ux_tests`):** the viewer's
   wheel zoom now asserts the beta-checklist invariant that the image point
   under the mouse cursor stays stationary while the scale grows.

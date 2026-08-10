@@ -703,6 +703,23 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             pump(20);
             CHECK(!QApplication::clipboard()->image().isNull(),
                   "Ctrl+C copies the current image to the clipboard");
+
+            // Slideshow (S): starts a timer that advances through the folder;
+            // S again stops it. Settings drive the interval (min 500 ms).
+            {
+                QSettings slideshowSettings;
+                slideshowSettings.setValue("slideshowInterval", 500);
+                const QString beforeSlideshow = sel->currentImage();
+                sendKey(&w, Qt::Key_S);
+                pump(1200);
+                const QString afterAdvance = sel->currentImage();
+                CHECK(!afterAdvance.isEmpty() && afterAdvance != beforeSlideshow,
+                      "S starts slideshow and advances to the next image");
+                sendKey(&w, Qt::Key_S);
+                pump(700);
+                CHECK(sel->currentImage() == afterAdvance,
+                      "S again stops slideshow (no further advance)");
+            }
         }
         viewer->close();
         pump(20);
