@@ -128,7 +128,7 @@ QString synthDir(const QString &tag, int count, int w, int h, int corruptEvery =
         if (corruptEvery > 0 && (i % corruptEvery) == 0)
         {
             QFile f(dir + "/" + name);
-            f.open(QIODevice::WriteOnly);
+            (void)f.open(QIODevice::WriteOnly);
             f.write("\x89PNG\r\n\x1a\n not a real png", 24);
             continue;
         }
@@ -783,18 +783,18 @@ int main(int argc, char **argv)
         for (int i = 0; i < 300; ++i)
         {
             QFile f(rawDir + QString("/r_%1.%2").arg(i).arg(rawExts[i % rawExts.size()]));
-            f.open(QIODevice::WriteOnly);
+            (void)f.open(QIODevice::WriteOnly);
             f.close();
             const QString ext = (i % 5 == 0) ? "jpg" : (i % 5 == 1) ? "webp" : (i % 5 == 2) ? "gif"
                                       : (i % 5 == 3)   ? "dng"
                                                        : "png";
             QFile g(mixedDir + QString("/m_%1.%2").arg(i).arg(ext));
-            g.open(QIODevice::WriteOnly);
+            (void)g.open(QIODevice::WriteOnly);
             g.close();
         }
         // 300 txt decoys must be excluded by the SSOT.
         QFile decoy(rawDir + "/decoys.txt");
-        decoy.open(QIODevice::WriteOnly);
+        (void)decoy.open(QIODevice::WriteOnly);
         decoy.close();
 
         const int fsRawCount = static_cast<int>(
@@ -1112,7 +1112,7 @@ int main(int argc, char **argv)
         {
             const QString p = dir + QString("/f_%1.dng").arg(i, 5, 10, QChar('0'));
             QFile f(p);
-            f.open(QIODevice::WriteOnly);
+            (void)f.open(QIODevice::WriteOnly);
             f.close();
             paths.push_back(p.toStdString());
         }
@@ -1294,7 +1294,7 @@ int main(int argc, char **argv)
         {
             const QString p = dir + QString("/g_%1.dng").arg(i, 4, 10, QChar('0'));
             QFile f(p);
-            f.open(QIODevice::WriteOnly);
+            (void)f.open(QIODevice::WriteOnly);
             f.close();
             paths.push_back(p.toStdString());
         }

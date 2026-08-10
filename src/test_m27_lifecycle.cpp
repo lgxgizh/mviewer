@@ -118,7 +118,7 @@ RoundDirs makeDirs()
     // A corrupt "image" that decoders must fail on cleanly.
     {
         QFile f(base + "/corrupt.jpg");
-        f.open(QIODevice::WriteOnly);
+        (void)f.open(QIODevice::WriteOnly);
         f.write("this is not a jpeg at all \x00\x01\x02\xFF garbage");
         f.close();
     }
