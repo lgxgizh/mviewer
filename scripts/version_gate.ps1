@@ -26,7 +26,7 @@ function Ok([string]$msg) { Write-Host "ok: $msg" }
 # 1) generated version_info.txt
 $verFile = Join-Path $BuildDir 'version_info.txt'
 if (-not (Test-Path $verFile)) {
-    Fail "generated $verFile missing — run CMake configure first"
+    Fail "generated $verFile missing - run CMake configure first"
 } else {
     $line = (Get-Content $verFile | Where-Object { $_ -match '^MVIEWER_VERSION=' } | Select-Object -First 1)
     if ($line -and ($line.Trim() -eq "MVIEWER_VERSION=$Version")) { Ok "version_info.txt == $Version" }

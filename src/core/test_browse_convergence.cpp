@@ -29,12 +29,12 @@ static int g_fail = 0;
     {                                                                                              \
         if (cond)                                                                                  \
         {                                                                                          \
-            std::cout << "  PASS: " << msg << "\n";                                                \
+            std::cout << "  PASS: " << (msg) << "\n";                                              \
             g_pass++;                                                                              \
         }                                                                                          \
         else                                                                                       \
         {                                                                                          \
-            std::cout << "  FAIL: " << msg << "\n";                                                \
+            std::cout << "  FAIL: " << (msg) << "\n";                                              \
             g_fail++;                                                                              \
         }                                                                                          \
     } while (0)

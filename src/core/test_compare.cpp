@@ -12,6 +12,18 @@
 #include <thread>
 #include <vector>
 
+#ifndef MVIEWER_SOURCE_DIR
+static std::string srcRootFromThisFile()
+{
+    std::string f = __FILE__;
+    auto p = f.find("/src/core/test_compare.cpp");
+    if (p == std::string::npos)
+        p = f.find("\\src\\core\\test_compare.cpp");
+    return p == std::string::npos ? "." : f.substr(0, p);
+}
+#define MVIEWER_SOURCE_DIR srcRootFromThisFile().c_str()
+#endif
+
 int m10_tests(); // defined in test_m10.cpp (MemoryTracker + benchmark suites)
 
 int main(int argc, char **argv)
@@ -20,6 +32,9 @@ int main(int argc, char **argv)
     std::fflush(stderr);
     QCoreApplication app(argc, argv);
     int fails = 0;
+    // M28 CI fix: the historical D:/photos fixtures only exist on the dev
+    // machine; use the committed/regenerated testdata corpus instead.
+    const std::string base = std::string(MVIEWER_SOURCE_DIR) + "/testdata/golden/256x256/";
 
     // 1) Layout rules
     {
@@ -79,8 +94,8 @@ int main(int argc, char **argv)
     {
         CompareEngine eng;
         std::vector<std::string> paths;
-        paths.push_back("D:/photos/pixnio-4080x3072.jpg");
-        paths.push_back("D:/photos/pixnio-6000x4000.jpg");
+        paths.push_back(base + "checker_256x256.jpg");
+        paths.push_back(base + "flat_color_256x256.jpg");
         eng.setImages(paths);
         if (eng.imageCount() != 2)
         {
@@ -146,8 +161,8 @@ int main(int argc, char **argv)
     {
         CompareEngine eng2;
         std::vector<std::string> paths2;
-        paths2.push_back("D:/photos/pixnio-4080x3072.jpg");
-        paths2.push_back("D:/photos/pixnio-6000x4000.jpg");
+        paths2.push_back(base + "checker_256x256.jpg");
+        paths2.push_back(base + "flat_color_256x256.jpg");
         eng2.setImages(paths2);
         if (eng2.imageCount() != 2)
         {
