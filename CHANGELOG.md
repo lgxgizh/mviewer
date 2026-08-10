@@ -85,10 +85,12 @@ All notable changes to this project are documented here. The format is based on
   cheat sheet via F1 and asserts those rows exist, so the sheet can no
   longer drift from the registered commands.
 - **Deterministic metadata supersede test (`m26_metadata_tests`):** the
-  cancelRequest isolation check now creates both fixture sets before
-  submitting, so the stale request is genuinely in flight when cancelled
-  (previously the second fixture was written between submit and cancel,
-  letting the worker finish first and failing spuriously under load).
+  cancelRequest isolation check now holds the single Background worker with a
+  release-gated blocker (submitted after the fixtures, released only after
+  the stale request is cancelled), so both index requests are guaranteed to
+  be queued when cancelRequest runs — no wall-clock assumptions. The
+  previous time-based blocker could expire under parallel CTest load and
+  still failed spuriously.
 - **Plugin home self-heal:** on first run the app creates the `plugins/`
   directory next to the executable instead of printing “Plugin directory
   not found”, so portable/installer installs are quiet and third-party

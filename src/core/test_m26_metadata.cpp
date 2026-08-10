@@ -207,37 +207,66 @@ void testCancelRequestIsolation()
     auto &indexer = mviewer::core::MetadataIndexer::instance();
     indexer.cancel();
 
-    // Make the supersede timing DETERMINISTIC: pin the Background pool to
-    // one worker, occupy it with a short blocker, and cancel the stale
-    // request while both index requests are guaranteed to be queued (not
-    // finished). Under parallel CTest load the previous wall-clock race
-    // (cancel after the worker already completed) failed spuriously.
+    // Make the supersede timing DETERMINISTIC (no wall-clock assumptions):
+    // pin the Background pool to one worker and occupy it with a blocker that
+    // only returns after this test releases it. Both index requests are then
+    // guaranteed to be queued (never started) when cancelRequest(stale) runs,
+    // so its token is observed before the worker can deliver a completion.
+    // Under parallel CTest load the previous time-based blocker (300 ms)
+    // could expire while the 1000-file fixture set was still being written,
+    // letting the stale request finish first and fail spuriously.
     auto &sched = TaskScheduler::instance();
     // Background pool default is max(1, idealThreadCount / 2); pin to one
     // worker for this test and restore afterwards.
     const int restoreThreads = std::max(1, QThread::idealThreadCount() / 2);
     sched.setPoolMaxThreads(TaskScheduler::PoolType::MetadataPool, 1);
-    sched.submit(TaskScheduler::Priority::Background, [](const TaskScheduler::TaskContext &)
-                 { std::this_thread::sleep_for(std::chrono::milliseconds(300)); });
 
+    // Fixtures FIRST — the slow part must not run while the worker is
+    // supposed to be occupied by the blocker.
     QTemporaryDir tmp;
     const std::vector<std::string> a = makeDngs(tmp, 500);
     QTemporaryDir tmp2;
     const std::vector<std::string> b = makeDngs(tmp2, 500);
 
+    std::atomic<bool> blockerStarted{false};
+    std::atomic<bool> releaseBlocker{false};
+    const auto blocker = sched.submit(
+        TaskScheduler::Priority::Background,
+        [&blockerStarted, &releaseBlocker](const TaskScheduler::TaskContext &)
+        {
+            blockerStarted.store(true, std::memory_order_release);
+            while (!releaseBlocker.load(std::memory_order_acquire))
+                std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        });
+    if (!blocker)
+    {
+        CHECK(false, "blocker accepted (Background pool not paused/saturated)");
+        sched.setPoolMaxThreads(TaskScheduler::PoolType::MetadataPool, restoreThreads);
+        return;
+    }
+    // Wait until the blocker genuinely owns the single worker.
+    const auto startedDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!blockerStarted.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < startedDeadline)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    CHECK(blockerStarted.load(std::memory_order_acquire), "blocker occupies the single worker");
+
     std::atomic<bool> staleDone{false};
     const uint64_t stale = indexer.index(a, {}, [&]() { staleDone = true; });
+    CHECK(stale != 0, "stale request accepted");
 
     // A concurrent INDEPENDENT consumer (different directory) must complete.
     std::atomic<bool> otherDone{false};
     const uint64_t other = indexer.index(b, {}, [&]() { otherDone = true; });
     CHECK(other != 0, "independent request accepted");
 
-    // The blocker still owns the only worker, so both requests are queued.
-    // Supersede ONLY the stale request; the token is observed when its
-    // task eventually starts, so its completion can never fire.
-    std::this_thread::sleep_for(std::chrono::milliseconds(80));
+    // The blocker still owns the only worker, so BOTH requests are queued.
+    // Supersede ONLY the stale request; its token is observed before the
+    // worker ever starts it, so its completion can never fire.
     indexer.cancelRequest(stale);
+    releaseBlocker.store(true, std::memory_order_release);
     CHECK(waitFor(otherDone, 15000), "independent consumer completes despite the cancel");
     pump(1500);
     CHECK(!staleDone.load(), "superseded request never delivers its completion");
