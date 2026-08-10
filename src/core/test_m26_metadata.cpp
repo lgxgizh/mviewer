@@ -12,13 +12,16 @@
 // consumer A's in-flight request, and A's onDone is silently dropped.
 
 #include "core/metadata/MetadataIndexer.h"
+#include "core/scheduler/TaskScheduler.h"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QTemporaryDir>
+#include <QThread>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -204,24 +207,42 @@ void testCancelRequestIsolation()
     auto &indexer = mviewer::core::MetadataIndexer::instance();
     indexer.cancel();
 
+    // Make the supersede timing DETERMINISTIC: pin the Background pool to
+    // one worker, occupy it with a short blocker, and cancel the stale
+    // request while both index requests are guaranteed to be queued (not
+    // finished). Under parallel CTest load the previous wall-clock race
+    // (cancel after the worker already completed) failed spuriously.
+    auto &sched = TaskScheduler::instance();
+    // Background pool default is max(1, idealThreadCount / 2); pin to one
+    // worker for this test and restore afterwards.
+    const int restoreThreads = std::max(1, QThread::idealThreadCount() / 2);
+    sched.setPoolMaxThreads(TaskScheduler::PoolType::MetadataPool, 1);
+    sched.submit(TaskScheduler::Priority::Background, [](const TaskScheduler::TaskContext &)
+                 { std::this_thread::sleep_for(std::chrono::milliseconds(300)); });
+
     QTemporaryDir tmp;
     const std::vector<std::string> a = makeDngs(tmp, 500);
+    QTemporaryDir tmp2;
+    const std::vector<std::string> b = makeDngs(tmp2, 500);
 
     std::atomic<bool> staleDone{false};
     const uint64_t stale = indexer.index(a, {}, [&]() { staleDone = true; });
 
     // A concurrent INDEPENDENT consumer (different directory) must complete.
-    QTemporaryDir tmp2;
-    const std::vector<std::string> b = makeDngs(tmp2, 500);
     std::atomic<bool> otherDone{false};
     const uint64_t other = indexer.index(b, {}, [&]() { otherDone = true; });
     CHECK(other != 0, "independent request accepted");
 
-    // Supersede ONLY the stale request.
+    // The blocker still owns the only worker, so both requests are queued.
+    // Supersede ONLY the stale request; the token is observed when its
+    // task eventually starts, so its completion can never fire.
+    std::this_thread::sleep_for(std::chrono::milliseconds(80));
     indexer.cancelRequest(stale);
     CHECK(waitFor(otherDone, 15000), "independent consumer completes despite the cancel");
     pump(1500);
     CHECK(!staleDone.load(), "superseded request never delivers its completion");
+
+    sched.setPoolMaxThreads(TaskScheduler::PoolType::MetadataPool, restoreThreads);
 }
 
 // ─── Bounded cache + value-semantics reads ──────────────────────────────────

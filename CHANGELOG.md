@@ -32,6 +32,18 @@ All notable changes to this project are documented here. The format is based on
   leak checks (RSS bound is hybrid: 10% of steady state or a 12 MB floor, so
   allocator working-set noise does not fail the gate).
 
+### Fixed
+
+- **Deterministic metadata supersede test (`m26_metadata_tests`):** the
+  cancelRequest isolation check now creates both fixture sets before
+  submitting, so the stale request is genuinely in flight when cancelled
+  (previously the second fixture was written between submit and cancel,
+  letting the worker finish first and failing spuriously under load).
+- **Plugin home self-heal:** on first run the app creates the `plugins/`
+  directory next to the executable instead of printing “Plugin directory
+  not found”, so portable/installer installs are quiet and third-party
+  plugins have a documented drop-in location.
+
 ### Changed — RC reliability closure (M26)
 
 - **Scheduler lifecycle exactly-once (M26):** every task now finalizes through

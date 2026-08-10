@@ -108,8 +108,9 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   (`performance_budget.json`); regression axis is `--regression`.
 - C4819 warnings in a few sources (UTF-8 without BOM) and C4530 in some
   test/bench TUs are tracked in Phase 6 of M24.
-- Installer/portable ship no `plugins/` directory; app logs a benign
-  "Plugin directory not found" message (Phase 8 item).
+- Installer/portable ship no `plugins/` directory; on first run the app now
+  creates an empty plugin home next to the executable (third-party
+  plugins can be dropped in later; startup log stays informative).
 
 ## Product-force progress (2026-08-05 state)
 
