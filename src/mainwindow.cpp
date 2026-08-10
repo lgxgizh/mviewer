@@ -507,8 +507,10 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     m_compareView = new CompareWorkspace(dlg);
     layout->addWidget(m_compareView);
     // P0: Inject SelectionModel so CompareWorkspace writes focus back to global SSOT.
+    // M28 P1-01: setImages() is async and is invoked once below (after the
+    // dialog is shown and laid out) — the old pre-show call decoded every
+    // image synchronously on the UI thread AND duplicated the load.
     m_compareView->setSelectionModel(m_selection);
-    m_compareView->setImages(imgs);
     // A-4.5 / M19: continuous compare — seed the pool from ImageListModel.
     ensureImageList();
     if (m_imageList && !m_imageList->isEmpty())

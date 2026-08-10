@@ -48,6 +48,19 @@ void CompareEngine::setImages(const std::vector<std::string> &paths)
     m_blink.clearBlink();
 }
 
+void CompareEngine::setFrames(std::vector<std::shared_ptr<ImageFrame>> frames)
+{
+    m_images.clear();
+    m_images.reserve(frames.size());
+    for (auto &f : frames)
+    {
+        if (f && !f->pixels().isNull())
+            m_images.push_back(std::move(f));
+    }
+    rebuildLayout();
+    m_blink.clearBlink();
+}
+
 void CompareEngine::addImage(const std::string &path)
 {
     auto r = ImageRepository::instance().load(path);

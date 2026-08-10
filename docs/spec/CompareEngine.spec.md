@@ -10,6 +10,24 @@ CompareEngine is the facade that owns comparison state (CompareSession) and rout
 
 ## API
 
+## Async loading (M28 P1-01)
+
+CompareWorkspace::setImages() performs image loading **asynchronously**:
+
+- Every requested path is submitted to the DecodePool via
+  `ImageRepository::loadAsync` with `generateHistogram=false` (histograms are
+  computed lazily by the UI).
+- `setImages()` returns immediately; no frame is applied synchronously.
+- When every request in the batch completes, the frames are delivered to the
+  UI thread (QPointer + generation guard) and `CompareEngine::setFrames()` is
+  invoked — the engine is mutated only on the UI thread, preserving the
+  single-threaded ownership contract.
+- A newer `setImages()` supersedes an in-flight batch (generation counter), so
+  stale completions can never overwrite the current compare set (A -> B -> A is
+  safe).
+- `applySession()` called while a load is in flight is deferred and replayed by
+  `finishLoad()` once the frames land (openCompare -> setImages -> applySession).
+
 ```cpp
 // Core structures (declared in CompareEngine.h)
 struct CellPoint { int x = 0; int y = 0; };
@@ -40,6 +58,11 @@ public:
 
     // Image management
     void setImages(const std::vector<std::string>& paths);
+    // Adopt already-decoded frames (produced off the UI thread by the
+    // CompareWorkspace async load path). Invalid/null frames are dropped,
+    // matching setImages() semantics. Engine state is NOT thread-safe: call
+    // this on the thread that owns the engine (the UI thread).
+    void setFrames(std::vector<std::shared_ptr<ImageFrame>> frames);
     void addImage(const std::string& path);
     void removeImage(int index);
     void clear();

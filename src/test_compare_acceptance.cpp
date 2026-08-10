@@ -59,6 +59,25 @@ void pump(int ms = 30)
     } while (t.elapsed() < ms);
 }
 
+// M28 P1-01: Compare loads are asynchronous - pump until the engine reports the
+// requested frame count (or the timeout expires). Deterministic waits replace
+// bare pump() calls that could race the async delivery.
+void waitForCompareCount(CompareWorkspace *ws, int expected, int timeoutMs = 15000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (ws->comparedImageCount() != expected && t.elapsed() < timeoutMs)
+        pump(25);
+}
+
+void waitForCompareAtLeast(CompareWorkspace *ws, int minimum, int timeoutMs = 15000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (ws->comparedImageCount() < minimum && t.elapsed() < timeoutMs)
+        pump(25);
+}
+
 QString writePng(const QDir &dir, const QString &name, int w, int h, QColor c)
 {
     const QString path = dir.filePath(name);
@@ -94,7 +113,7 @@ void testMultiImageEntry(const QStringList &paths8)
     // 4-up from a 6-image selection.
     ws->setImagePool(paths8.mid(0, 6));
     ws->applyLayoutPreset(4);
-    pump(50);
+    waitForCompareCount(ws, 4);
     CHECK(ws->comparedImageCount() == 4, "B#1: 4-image compare entry loads 4 images");
 
     QCheckBox *split = findChk(ws, QStringLiteral("左右分割"));
@@ -113,7 +132,7 @@ void testMultiImageEntry(const QStringList &paths8)
     // 8-up (4×2) from the full selection.
     ws->setImagePool(paths8);
     ws->applyLayoutPreset(8);
-    pump(50);
+    waitForCompareCount(ws, 8);
     CHECK(ws->comparedImageCount() == 8, "B#1: 8-image compare entry loads 8 images");
     CHECK(!ws->engine().layout().cols == false || ws->engine().layout().cols >= 2,
           "B#2: 8-up produces a multi-column grid");
@@ -124,7 +143,7 @@ void testMultiImageEntry(const QStringList &paths8)
 
     // 2-up back.
     ws->applyLayoutPreset(2);
-    pump(50);
+    waitForCompareCount(ws, 2);
     CHECK(ws->comparedImageCount() == 2, "B#1: back to 2-image compare");
     if (split && overlay)
     {
@@ -146,7 +165,7 @@ void testModePreservesState(const QString &a, const QString &b)
     ws->setImages({a, b});
     dlg.resize(1100, 750);
     dlg.show();
-    pump(80);
+    waitForCompareCount(ws, 2);
 
     // Establish a non-trivial zoom + a ROI.
     const double zoom = 2.5;
@@ -221,7 +240,7 @@ void testContinuousNav(const QStringList &paths6)
     while (ws->hasNextPair())
     {
         ws->nextPair();
-        pump(40);
+        waitForCompareCount(ws, 2);
         ++pairs;
         if (!overlay->isChecked())
             break;
@@ -234,7 +253,7 @@ void testContinuousNav(const QStringList &paths6)
     while (ws->hasPrevPair() && back < 4)
     {
         ws->prevPair();
-        pump(40);
+        waitForCompareCount(ws, 2);
         ++back;
     }
     CHECK(back >= 2, "B#6: prev-pair walks back");
@@ -255,7 +274,7 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
     ws->setImages({a, b});
     dlg.resize(1100, 750);
     dlg.show();
-    pump(80);
+    waitForCompareCount(ws, 2);
 
     auto *perPane = ws->findChild<QCheckBox *>("perPaneHistogramToggle");
     auto *overlay = ws->findChild<QCheckBox *>("paneHistogramOverlayToggle");
@@ -310,7 +329,7 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
     // A rebuild while Blink has detached one pane must delete both old panes,
     // preserve Blink visibility, and populate the new overlay widgets.
     ws->setImages({a, b});
-    pump(30);
+    waitForCompareCount(ws, 2);
     const auto panes0 = ws->findChildren<QWidget *>("comparePane0");
     const auto panes1 = ws->findChildren<QWidget *>("comparePane1");
     CHECK(panes0.size() == 1 && panes1.size() == 1,
@@ -355,8 +374,10 @@ void testDegradedImages(const QDir &dir)
     const QString portrait = writePng(dir, "cmp_portrait.png", 48, 64, QColor(30, 30, 30));
     const QString corrupt = dir.filePath("cmp_bad.png");
     QFile f(corrupt);
-    f.open(QIODevice::WriteOnly);
-    f.write("\x89PNG\r\n\x1a\n definitely not a png", 32);
+    const bool opened = f.open(QIODevice::WriteOnly);
+    Q_UNUSED(opened); // C4834: QIODevice::open is [[nodiscard]] on Qt 6.10 headers
+    const qint64 written = f.write("\x89PNG\r\n\x1a\n definitely not a png", 32);
+    Q_UNUSED(written); // C4834: QIODevice::write is [[nodiscard]] on Qt 6.10 headers
     f.close();
 
     SelectionModel sel;
@@ -371,7 +392,7 @@ void testDegradedImages(const QDir &dir)
     ws->setImages({small, large, portrait, corrupt});
     dlg.resize(1100, 750);
     dlg.show();
-    pump(400);
+    waitForCompareCount(ws, 3);
 
     CHECK(ws->comparedImageCount() == 3,
           "B#7: corrupt image is excluded from compare without crashing");
@@ -389,11 +410,48 @@ void testDegradedImages(const QDir &dir)
     ws->setImagePool({small, large, portrait, corrupt});
     ws->setNavWindow(2);
     ws->nextPair();
-    pump(80);
+    waitForCompareAtLeast(ws, 1);
     ws->nextPair();
-    pump(80);
+    waitForCompareAtLeast(ws, 1);
     CHECK(ws->comparedImageCount() >= 1, "B#7: navigation over degraded pool keeps a grid");
     (void)corrupt;
+}
+
+// --- M28 P1-01: Compare open must NOT decode on the UI thread ---------------
+// Regression: CompareWorkspace::setImages() used to call
+// CompareEngine::setImages() -> ImageRepository::load() synchronously, so
+// opening Compare froze the UI for every decoded frame. The async contract:
+//   * setImages() returns immediately (submits decode work to the pool);
+//   * no frames are applied synchronously (count == 0 right after the call);
+//   * frames arrive asynchronously and the engine ends up fully populated.
+void testCompareLoadIsAsync(const QDir &dir)
+{
+    std::cout << "-- Compare M28 P1-01: async load (no UI-thread decode) --\n";
+    // A 6000x4000 PNG takes far longer than 250ms to decode on CI hardware;
+    // the synchronous implementation froze the UI for that long (or worse).
+    const QString big = writePng(dir, "cmp_async_big.png", 6000, 4000, QColor(200, 120, 40));
+    const QString small = writePng(dir, "cmp_async_small.png", 8, 8, QColor(40, 120, 200));
+
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    dlg.resize(1100, 750);
+    dlg.show();
+
+    QElapsedTimer t;
+    t.start();
+    ws->setImages({big, small});
+    const qint64 setupMs = t.elapsed();
+    CHECK(setupMs < 250, "setImages returns without decoding on the UI thread");
+    CHECK(ws->comparedImageCount() == 0,
+          "frames are delivered asynchronously, never synchronously applied");
+
+    waitForCompareCount(ws, 2);
+    CHECK(ws->comparedImageCount() == 2, "async compare load delivers all frames");
+    dlg.close();
 }
 
 } // namespace
@@ -418,6 +476,7 @@ int main(int argc, char **argv)
     testContinuousNav(paths6);
     testPaneHistogramConsistency(paths8[0], paths8[1]);
     testDegradedImages(dir);
+    testCompareLoadIsAsync(dir);
 
     if (g_failures > 0)
     {

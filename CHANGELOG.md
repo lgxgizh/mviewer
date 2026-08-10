@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed — Compare opens without freezing the UI (M28 P1-01)
+
+- `CompareWorkspace::setImages()` now loads every image on the decode worker
+  pool instead of decoding synchronously on the UI thread; the first
+  `setImages()` call in `MainWindow::openCompare()` (which ran before the
+  dialog was shown and duplicated the load) was removed.
+- New `CompareEngine::setFrames()` adopts worker-produced frames; engine state
+  is mutated only on the UI thread.
+- `applySession()` defers until the async load completes, so workspace /
+  crash-recovery compare sessions still restore correctly.
+- Regression coverage: `test_compare_acceptance_tests` asserts `setImages()`
+  returns without decoding and that frames are delivered asynchronously; all
+  compare acceptance/session/UX/lifecycle suites now wait deterministically
+  for async delivery.
+
 ### Added — M27 async-lifetime regression suites
 
 - **Scheduler fault-injection suite (`m27_scheduler_tests`):** throwing `work` /

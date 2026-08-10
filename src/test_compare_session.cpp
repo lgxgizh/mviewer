@@ -17,6 +17,7 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
 
@@ -39,6 +40,17 @@ QString writeTempPng(const std::string &name)
     img.save(path, "PNG");
     return path;
 }
+
+// M28 P1-01: Compare loads are asynchronous; pump until frames land (or timeout).
+void pumpUntilCompareCount(CompareWorkspace *ws, int expected, int timeoutMs = 10000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (ws->comparedImageCount() != expected && t.elapsed() < timeoutMs)
+    {
+        QApplication::processEvents(QEventLoop::AllEvents, 10);
+    }
+}
 } // namespace
 
 int main(int argc, char **argv)
@@ -53,6 +65,7 @@ int main(int argc, char **argv)
     //      applySession() path (the same path a Workspace load uses). ----
     CompareWorkspace producer;
     producer.setImages(paths);
+    pumpUntilCompareCount(&producer, 2);
 
     mviewer::domain::CompareSession s;
     s.imageIds = {p1.toStdString(), p2.toStdString()};
@@ -91,6 +104,7 @@ int main(int argc, char **argv)
     // ---- 3) applySession on a fresh workspace restores the state. ----
     CompareWorkspace consumer;
     consumer.setImages(paths); // engine must own frames before applySession
+    pumpUntilCompareCount(&consumer, 2);
     consumer.applySession(*r);
 
     mviewer::domain::CompareSession after = consumer.compareSession();

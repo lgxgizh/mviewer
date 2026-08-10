@@ -435,14 +435,76 @@ void CompareWorkspace::showShortcutHelp()
 
 void CompareWorkspace::setImages(const QStringList &paths)
 {
+    // M28 P1-01: Compare loads are ASYNC. Decoding happens on the DecodePool,
+    // never on the UI thread: setImages() returns immediately, and the frames
+    // are applied by finishLoad() on the UI thread when every request in this
+    // batch completes. A newer setImages() supersedes an in-flight batch via
+    // the generation counter, so stale completions can never overwrite the
+    // current compare set (A -> B -> A is safe).
+    const uint64_t gen = ++m_loadGen;
+    m_loadInFlight = true;
+    // A newer load supersedes a session that was pending on the older one.
+    m_pendingSession.reset();
+
     std::vector<std::string> stdPaths;
     stdPaths.reserve(paths.size());
     for (const QString &p : paths)
         stdPaths.push_back(p.toStdString());
     const int requested = static_cast<int>(paths.size());
-    m_engine.setImages(stdPaths);
+    if (requested == 0)
+    {
+        finishLoad({}, 0);
+        return;
+    }
+
+    auto frames = std::make_shared<std::vector<std::shared_ptr<ImageFrame>>>(requested);
+    auto remaining = std::make_shared<std::atomic<int>>(requested);
+    auto failed = std::make_shared<std::atomic<int>>(0);
+    QPointer<CompareWorkspace> self(this);
+    // Histogram is computed lazily by the UI (histogramForImage); the worker
+    // path stays decode-only so the UI thread never pays for a full scan.
+    const ImageLoadOptions opts{true, false, 256};
+
+    for (int i = 0; i < requested; ++i)
+    {
+        ImageRepository::instance().loadAsync(
+            stdPaths[i],
+            [self, gen, frames, remaining, failed, i](const ImageRepository::Result &res)
+            {
+                if (res.success() && res.frame)
+                    (*frames)[i] = res.frame;
+                else
+                    failed->fetch_add(1, std::memory_order_relaxed);
+                if (remaining->fetch_sub(1, std::memory_order_acq_rel) == 1)
+                {
+                    // Last completion: hop to the UI thread. QPointer + the
+                    // generation check drop stale/destroyed deliveries.
+                    QMetaObject::invokeMethod(
+                        qApp,
+                        [self, gen, frames, failed]()
+                        {
+                            CompareWorkspace *ws = self.data();
+                            if (!ws || gen != ws->m_loadGen)
+                                return;
+                            ws->finishLoad(*frames, failed->load(std::memory_order_relaxed));
+                        },
+                        Qt::QueuedConnection);
+                }
+            },
+            opts);
+    }
+}
+
+void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames,
+                                  int failedCount)
+{
+    Q_UNUSED(failedCount);
+    m_loadInFlight = false;
+    m_engine.setFrames(frames);
+
     // M24 (B#7): failed loads are dropped by the engine — tell the user why
     // the grid has fewer cells than requested instead of silently shrinking.
+    const int requested = static_cast<int>(frames.size());
     const int loaded = m_engine.imageCount();
     if (loaded < requested)
     {
@@ -497,6 +559,14 @@ void CompareWorkspace::setImages(const QStringList &paths)
     {
         m_selection->setCompared(comparedImages());
         m_selection->setFocused(focusImagePath());
+    }
+
+    // M28 P1-01: a session that was applied while the load was in flight is
+    // replayed once the frames exist (openCompare -> setImages -> applySession).
+    if (m_pendingSession)
+    {
+        applySession(*m_pendingSession);
+        m_pendingSession.reset();
     }
 }
 
@@ -617,10 +687,11 @@ void CompareWorkspace::fitAll()
         const ImageFrame *img = m_engine.imageAt(i);
         const QSize qs = m_cellViews[i]->size();
         const CellSize cell{qs.width(), qs.height()};
-        QPixmap pm = QPixmap::fromImage(imageObjectToQImage(img));
-        if (pm.isNull() || cell.w <= 0 || cell.h <= 0)
+        // M28 P1-01: the frame dims are authoritative; do NOT build a full
+        // QPixmap just to read the image size (redundant O(image) conversion).
+        if (!img || img->pixels().isNull() || cell.w <= 0 || cell.h <= 0)
             continue;
-        CellSize imgSize{pm.width(), pm.height()};
+        CellSize imgSize{img->width(), img->height()};
         m_engine.fitCell(i, cell, imgSize);
         if (first || m_engine.cellScale(i) < sharedScale)
             sharedScale = m_engine.cellScale(i);

@@ -1030,7 +1030,13 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     ws->setImages({pathA, pathB});
     dlg.resize(1100, 750);
     dlg.show();
-    pump(100);
+    // M28 P1-01: compare loads are async; wait for both frames deterministically.
+    {
+        QElapsedTimer cmpLoad;
+        cmpLoad.start();
+        while (ws->comparedImageCount() != 2 && cmpLoad.elapsed() < 5000)
+            pump(25);
+    }
 
     QWidget *modeToolbar = ws->findChild<QWidget *>("compareModeToolbar");
     QWidget *viewToolbar = ws->findChild<QWidget *>("compareViewToolbar");

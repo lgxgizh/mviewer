@@ -25,7 +25,9 @@
 #include <QTimer>
 #include <QVector>
 #include <QWidget>
+#include <atomic>
 #include <memory>
+#include <optional>
 #include <vector>
 
 class QScrollArea;
@@ -158,6 +160,15 @@ class CompareWorkspace : public QWidget
     void applySelectionToAll(const mviewer::domain::Selection &sel);
 
     CompareEngine m_engine;
+
+    // M28 P1-01: async image loading (decode happens on the DecodePool, never
+    // on the UI thread). m_loadGen supersedes stale batches; a session applied
+    // while a load is in flight is deferred until finishLoad().
+    uint64_t m_loadGen = 0;
+    bool m_loadInFlight = false;
+    std::optional<mviewer::domain::CompareSession> m_pendingSession;
+    void finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames,
+                    int failedCount);
     QCheckBox *m_syncZoomChk = nullptr;
     QCheckBox *m_syncDragChk = nullptr;
     QCheckBox *m_uniformScaleChk = nullptr; // H5: 统一像素倍率

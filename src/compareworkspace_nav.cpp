@@ -223,6 +223,15 @@ void CompareWorkspace::applyLayoutPreset(int n)
 
 void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
 {
+    // M28 P1-01: with async loading the engine may not own the frames yet
+    // (openCompare -> setImages -> applySession runs before the decode batch
+    // lands). Defer the session and replay it inside finishLoad().
+    if (m_loadInFlight)
+    {
+        m_pendingSession = s;
+        return;
+    }
+
     // Sync mode: All == both zoom+drag synced; Off == neither. (The CompareSession
     // only stores All/Off for the persisted snapshot; per-axis toggles default
     // to the synced state.)
