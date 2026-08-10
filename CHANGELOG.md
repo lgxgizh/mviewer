@@ -32,6 +32,14 @@ All notable changes to this project are documented here. The format is based on
   leak checks (RSS bound is hybrid: 10% of steady state or a 12 MB floor, so
   allocator working-set noise does not fail the gate).
 
+### Added
+
+- **Gallery empty-state hint:** with no directory open, the gallery shows a
+  centered call-to-action (“打开一个文件夹以开始浏览” + Ctrl+O /
+  drag-drop hint) instead of a blank canvas; it hides automatically once a
+  directory is opened. Covered by `workflow_ux_tests` (visible at clean
+  startup, hidden after navigation).
+
 ### Fixed
 
 - **Deterministic metadata supersede test (`m26_metadata_tests`):** the

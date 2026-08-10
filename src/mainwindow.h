@@ -87,6 +87,8 @@ class MainWindow : public QMainWindow
     // folders, status bar, etc. Used by the menu "Open Directory" action, the
     // path input bar, and breadcrumb navigation.
     void changeDirectory(const QString &dir);
+    // Shows/hides the gallery empty-state hint (no directory open yet).
+    void updateEmptyState();
     // Toggles fullscreen on the image viewer when it is visible, else on the
     // main window itself. Shared by the F command, F11 and the View menu.
     void toggleFullscreen();
@@ -130,6 +132,7 @@ class MainWindow : public QMainWindow
     QWidget *m_navigationWidget = nullptr;        // whole browse navigation column
     MetadataOverlay *m_metadataOverlay = nullptr; // M15: semi-transparent info overlay
     ThumbnailPanel *m_thumbnailPanel = nullptr;
+    QLabel *m_emptyState = nullptr; // gallery empty-state hint (objectName: emptyStateLabel)
     PreviewPanel *m_previewPanel = nullptr;
 
     AnalysisPanel *m_analysisPanel = nullptr;

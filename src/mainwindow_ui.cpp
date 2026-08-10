@@ -614,6 +614,23 @@ void MainWindow::setupUi()
     m_thumbnailPanel->setSelectionModel(m_selection); // P0-2: gallery hover -> SSOT
     m_thumbnailPanel->installEventFilter(this);
     rightLayout->addWidget(m_thumbnailPanel, 1);
+
+    // Empty-state hint: friendly call-to-action shown until the first
+    // directory is opened (first-run guidance; hidden as soon as browsing
+    // starts). Pure overlay: transparent for mouse events, so the gallery
+    // beneath stays fully interactive.
+    m_emptyState = new QLabel(m_thumbnailPanel);
+    m_emptyState->setObjectName(QStringLiteral("emptyStateLabel"));
+    m_emptyState->setAlignment(Qt::AlignCenter);
+    m_emptyState->setWordWrap(true);
+    m_emptyState->setTextFormat(Qt::RichText);
+    // clang-format off (formatter 22.1.8 mis-parses the HTML '>" at a line break)
+    m_emptyState->setText(tr("<div style='color:#9aa0a6; font-size:16px;'>\u6253\u5f00\u4e00\u4e2a\u6587\u4ef6\u5939\u4ee5\u5f00\u59cb\u6d4f\u89c8</div>"
+                             "<div style='color:#b0b4b8; font-size:12px; margin-top:8px;'>Ctrl+O \u6253\u5f00\u76ee\u5f55 \u00b7 \u4e5f\u53ef\u5c06\u56fe\u7247\u6216\u6587\u4ef6\u5939\u62d6\u5165\u7a97\u53e3</div>"));
+    // clang-format on
+    m_emptyState->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_emptyState->show();
+    updateEmptyState();
     connect(m_thumbnailPanel, &ThumbnailPanel::viewModeChanged, this,
             [viewModeCombo, this](ThumbnailPanel::ViewMode mode)
             {
@@ -780,6 +797,7 @@ void MainWindow::setupUi()
                 if (currentImagePath().isEmpty())
                     setWindowTitle(QString("%1 - MViewer").arg(QDir(path).dirName()));
                 scheduleReindex();
+                updateEmptyState();
             });
 
     connect(m_thumbnailPanel, &ThumbnailPanel::statsChanged, this,
@@ -1320,4 +1338,14 @@ void MainWindow::setupUi()
     updateSelectionActions();
 
     statusBar()->showMessage("就绪");
+}
+
+void MainWindow::updateEmptyState()
+{
+    if (!m_emptyState || !m_thumbnailPanel)
+        return;
+    const bool show = currentDir().isEmpty();
+    m_emptyState->setVisible(show);
+    if (show)
+        m_emptyState->setGeometry(m_thumbnailPanel->rect());
 }

@@ -513,5 +513,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
                 m_metadataHoverTimer->stop();
         }
     }
+    // Keep the gallery empty-state hint sized to the panel as the window
+    // (and therefore the gallery) resizes.
+    if (watched == m_thumbnailPanel && event->type() == QEvent::Resize && m_emptyState)
+        m_emptyState->setGeometry(m_thumbnailPanel->rect());
     return QMainWindow::eventFilter(watched, event);
 }

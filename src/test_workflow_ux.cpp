@@ -44,6 +44,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QKeyEvent>
+#include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QMetaObject>
@@ -349,6 +350,10 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(viewModeCombo && thumbnailPanel,
           "thumbnail view controls expose a stable panel and combo");
     CHECK(pathEdit != nullptr, "directory path input is discoverable");
+    auto *emptyState = w.findChild<QLabel *>("emptyStateLabel");
+    CHECK(emptyState != nullptr, "empty-state hint has a stable object name");
+    CHECK(emptyState && emptyState->isVisible(),
+          "empty-state hint is shown when no directory is open");
 
     if (thumbnailSizeSlider && viewModeCombo && thumbnailPanel)
     {
@@ -547,6 +552,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         pump(25);
     CHECK(sel->currentImage() == nextPath,
           "first item in a newly loaded directory is selected exactly through the SSOT");
+    CHECK(emptyState && !emptyState->isVisible(),
+          "empty-state hint hides once a directory is open");
     directoryTree->navigateTo(dirPath, true);
     pump(250);
 
