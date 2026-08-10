@@ -39,6 +39,9 @@ All notable changes to this project are documented here. The format is based on
   drag-drop hint) instead of a blank canvas; it hides automatically once a
   directory is opened. Covered by `workflow_ux_tests` (visible at clean
   startup, hidden after navigation).
+- **Double-click zoom regression coverage (`workflow_ux_tests`):** the
+  standard fit↔100%↔fit double-click gesture was untested; now
+  machine-locked (beta checklist “双击放大→恢复”).
 - **Slideshow regression coverage (`workflow_ux_tests`):** the shipped
   slideshow workflow (S starts, S stops, timer advances through the folder)
   previously had no tests; now machine-locked with a min-interval run.

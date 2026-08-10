@@ -720,6 +720,26 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 CHECK(sel->currentImage() == afterAdvance,
                       "S again stops slideshow (no further advance)");
             }
+
+            // Double-click toggles fit <-> 100% at the cursor (beta
+            // checklist "双击放大 -> 恢复").
+            {
+                viewer->zoomFit();
+                pump(20);
+                const double fitScale = viewer->viewTransform().scale;
+                const QPointF dcPos(300.0, 200.0);
+                QMouseEvent dbl(QEvent::MouseButtonDblClick, dcPos,
+                                viewer->mapToGlobal(dcPos.toPoint()), Qt::LeftButton,
+                                Qt::LeftButton, Qt::NoModifier);
+                QApplication::sendEvent(viewer, &dbl);
+                pump(20);
+                CHECK(qAbs(viewer->viewTransform().scale - 1.0) < 1e-9,
+                      "double-click zooms to 100%");
+                QApplication::sendEvent(viewer, &dbl);
+                pump(20);
+                CHECK(qAbs(viewer->viewTransform().scale - fitScale) < 1e-6,
+                      "second double-click restores Fit");
+            }
         }
         viewer->close();
         pump(20);
