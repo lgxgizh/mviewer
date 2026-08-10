@@ -785,6 +785,34 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 pump(50);
                 CHECK(overlay && !overlay->isVisible(), "ESC hides the metadata overlay");
             }
+
+            // F toggles fullscreen: the visible viewer, or the main window
+            // when the viewer is hidden (cheat sheet “F / F11 → 全屏切换”).
+            {
+                if (viewer->isFullScreen())
+                {
+                    sendKey(&w, Qt::Key_F);
+                    pump(20);
+                }
+                CHECK(!viewer->isFullScreen(), "viewer starts in normal state");
+                sendKey(&w, Qt::Key_F);
+                pump(50);
+                CHECK(viewer->isFullScreen(), "F fullscreens the visible viewer");
+                sendKey(&w, Qt::Key_F);
+                pump(50);
+                CHECK(!viewer->isFullScreen(), "F again exits fullscreen");
+
+                viewer->hide();
+                pump(20);
+                sendKey(&w, Qt::Key_F);
+                pump(50);
+                CHECK(w.isFullScreen(), "F fullscreens the main window when the viewer is hidden");
+                sendKey(&w, Qt::Key_F);
+                pump(50);
+                CHECK(!w.isFullScreen(), "F again exits the main-window fullscreen");
+                viewer->show();
+                pump(20);
+            }
         }
         viewer->close();
         pump(20);

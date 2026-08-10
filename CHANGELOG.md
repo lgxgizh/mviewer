@@ -45,6 +45,10 @@ All notable changes to this project are documented here. The format is based on
 - **Mouse side-button navigation regression (`workflow_ux_tests`):** the
   cheat-sheet-documented “鼠标侧键” prev/next gesture had no coverage; now
   machine-locked (back button goes to the previous image, forward returns).
+- **Fullscreen toggle regression (`workflow_ux_tests`):** the cheat-sheet
+  documented F / F11 fullscreen switch (the visible viewer, or the main
+  window when the viewer is hidden) was untested; now machine-locked
+  (F enters and exits fullscreen for both targets).
 - **Global search end-to-end regression (`workflow_ux_tests`):** query a
   filename fragment in the search panel, assert the result row names the
   file, and double-click it to open the image — the full shipped search
