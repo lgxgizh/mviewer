@@ -593,6 +593,13 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(emptyFolder && !emptyFolder->isVisible(),
           "no-images hint hides once a folder with images is opened");
 
+    // The F1 cheat sheet must stay in sync with the registered keyboard
+    // commands (regression: Ctrl+F directory filter and F1 help were
+    // missing from the sheet).
+    const QString helpHtml = MainWindow::shortcutsHelpHtml();
+    CHECK(helpHtml.contains("Ctrl+F"),
+          "cheat sheet documents the Ctrl+F directory-filter shortcut");
+    CHECK(helpHtml.contains("F1"), "cheat sheet documents the F1 help shortcut");
     if (viewer)
     {
         // 首屏：异步解码必须在 5 秒内交付（评审"有没有等待"硬上限）。

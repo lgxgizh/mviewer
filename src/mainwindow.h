@@ -56,6 +56,10 @@ class MainWindow : public QMainWindow
     void onImageOpen(const QString &path);
     void setOpenOnLaunch(const QString &path);
 
+    // The shortcut cheat-sheet HTML (single source of truth for the F1 help;
+    // public so tests can verify it stays in sync with registered commands).
+    static QString shortcutsHelpHtml();
+
   protected:
     void closeEvent(QCloseEvent *event) override;
     // M15: drag & drop support

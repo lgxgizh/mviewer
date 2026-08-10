@@ -325,10 +325,10 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     QMainWindow::keyPressEvent(event);
 }
 
-void MainWindow::showShortcutsHelp()
+QString MainWindow::shortcutsHelpHtml()
 {
     // P1-8: a single, authoritative cheat sheet so users never have to guess.
-    const QString html = QStringLiteral(
+    return QStringLiteral(
         "<style>td{padding:2px 14px 2px 0;} th{text-align:left;padding-top:8px;}"
         "kbd{background:#333;color:#fff;border-radius:3px;padding:1px 5px;}</style>"
         "<table>"
@@ -337,6 +337,8 @@ void MainWindow::showShortcutsHelp()
         "<tr><td><kbd>Ctrl+V</kbd></td><td>从剪贴板粘贴图片（截图后直接查看）</td></tr>"
         "<tr><td><kbd>Ctrl+D</kbd></td><td>收藏当前目录</td></tr>"
         "<tr><td><kbd>Ctrl+Shift+F</kbd></td><td>全局搜索</td></tr>"
+        "<tr><td><kbd>Ctrl+F</kbd></td><td>聚焦目录树过滤框（快速查找文件夹）</td></tr>"
+        "<tr><td><kbd>F1</kbd></td><td>快捷键帮助</td></tr>"
         "<tr><td><kbd>Ctrl+Q</kbd></td><td>退出</td></tr>"
         "<tr><th colspan='2'>浏览</th></tr>"
         "<tr><td><kbd>←</kbd> / <kbd>→</kbd> / 鼠标侧键</td><td>上一张 / 下一张（循环）</td></tr>"
@@ -396,13 +398,16 @@ void MainWindow::showShortcutsHelp()
         "<tr><td><kbd>Ctrl+E</kbd></td><td>在资源管理器中显示</td></tr>"
         "<tr><td><kbd>Ctrl+Shift+B</kbd></td><td>批量处理</td></tr>"
         "</table>");
+}
 
+void MainWindow::showShortcutsHelp()
+{
     QDialog dlg(this);
     dlg.setWindowTitle(QStringLiteral("键盘快捷键"));
     dlg.resize(480, 560);
     auto *lay = new QVBoxLayout(&dlg);
     auto *browser = new QTextBrowser(&dlg);
-    browser->setHtml(html);
+    browser->setHtml(shortcutsHelpHtml());
     browser->setOpenExternalLinks(false);
     lay->addWidget(browser);
     auto *box = new QDialogButtonBox(QDialogButtonBox::Close, &dlg);

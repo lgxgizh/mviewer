@@ -52,6 +52,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- **Shortcut cheat sheet drift:** the F1 help now documents the `Ctrl+F`
+  directory-tree-filter shortcut and the `F1` help trigger itself (both
+  were working but missing from the sheet). `workflow_ux_tests` opens the
+  cheat sheet via F1 and asserts those rows exist, so the sheet can no
+  longer drift from the registered commands.
 - **Deterministic metadata supersede test (`m26_metadata_tests`):** the
   cancelRequest isolation check now creates both fixture sets before
   submitting, so the stale request is genuinely in flight when cancelled
