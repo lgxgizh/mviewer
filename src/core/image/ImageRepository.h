@@ -4,6 +4,8 @@
 #include "ImageFrame.h"
 #include "domain/Workspace.h"
 
+#include <atomic>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
@@ -103,7 +105,21 @@ class ImageRepository
     std::string makeKey(const std::string &filePath) const;
     mviewer::domain::ImageMetadata makeMeta(const std::string &filePath) const;
 
+    // M27: defensive budget for the synchronous loadDirectory(). Default is 5
+    // minutes; tests shrink it to exercise the timeout path without waiting.
+    // When the budget expires, outstanding accepted tasks are cancelled and
+    // their slots become explicit "timed out" failure Results.
+    void setSyncLoadBudget(std::chrono::milliseconds budget)
+    {
+        m_syncLoadBudgetMs.store(budget.count());
+    }
+    std::chrono::milliseconds syncLoadBudget() const
+    {
+        return std::chrono::milliseconds(m_syncLoadBudgetMs.load());
+    }
+
   private:
+    std::atomic<std::chrono::milliseconds::rep> m_syncLoadBudgetMs{5 * 60 * 1000};
     // Non-template implementation backing the public loadDirectoryAsync.
     // Invokes the callback directly (never checks operator bool — broken on
     // this toolchain).

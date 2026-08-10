@@ -882,21 +882,10 @@ void MainWindow::setupUi()
                 navigate(1);
             });
 
-    // EventBus (decoupled, dual-mode) subscriptions.
-    EventBus::instance().subscribe("image.open",
-                                   [this](void *ctx)
-                                   {
-                                       auto *path = static_cast<QString *>(ctx);
-                                       if (path)
-                                           onImageOpen(*path);
-                                   });
-    EventBus::instance().subscribe("compare.requested",
-                                   [this](void *ctx)
-                                   {
-                                       auto *paths = static_cast<QStringList *>(ctx);
-                                       if (paths)
-                                           openCompare(*paths);
-                                   });
+    // M27: the previous EventBus subscriptions ("image.open" / "compare.requested")
+    // had NO publishers anywhere in the codebase — dead code. Removed; the
+    // UI signals (thumbnail double-click, menu actions) drive these paths
+    // directly via MainWindow's own slots.
 
     connect(m_imageViewer, &ImageViewer::regionStats, m_analysisPanel,
             &AnalysisPanel::setRegionStats);

@@ -133,7 +133,28 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     QTimer::singleShot(8000, this, [this]() { checkForUpdates(true); });
 }
 
-MainWindow::~MainWindow() = default;
+MainWindow::~MainWindow()
+{
+    // M27 lifetime closure: stop the async search re-index immediately. The
+    // worker callback checks the alive token before marshaling, and the queued
+    // UI lambda checks it again before touching any member — without this, a
+    // re-index that completes after the window is destroyed dereferences freed
+    // MainWindow state (the alive token also gates the MetadataIndexer's
+    // worker-side deliveries for this request).
+    if (m_reindexAlive)
+        *m_reindexAlive = false;
+    if (m_reindexRequestId != 0)
+        mviewer::core::MetadataIndexer::instance().cancelRequest(m_reindexRequestId);
+    // M27: the ImageViewer is a parentless top-level window (mainwindow_ui.cpp
+    // creates it with nullptr) — nothing owns it, so it must be deleted here.
+    // Without this, every MainWindow create/destroy leaks the viewer window
+    // (GL surface, backing store, tile cache, decoded pixmap) — measured at
+    // ~100 MB RSS + ~50 OS handles per lifecycle in the close/shutdown
+    // torture. The viewer's async deliveries are QPointer-guarded, so deleting
+    // it while a decode is in flight is safe.
+    delete m_imageViewer;
+    m_imageViewer = nullptr;
+}
 
 void MainWindow::onSearchMetaToggled(bool on)
 {
@@ -173,7 +194,9 @@ void MainWindow::reindexSearch()
 
     ++m_reindexGen;
     const uint64_t gen = m_reindexGen;
-    auto alive = std::make_shared<std::atomic<bool>>(true);
+    // M27: the alive token is a member so the destructor can flip it — a local
+    // token would keep the queued lambda alive past destruction.
+    auto alive = m_reindexAlive = std::make_shared<std::atomic<bool>>(true);
     // M26: requests are per-consumer — supersede ONLY our own stale request
     // (never another consumer's in-flight index, e.g. the gallery's metadata
     // filter). A rejected submission (0) means no callbacks will arrive.

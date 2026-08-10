@@ -205,6 +205,10 @@ class MainWindow : public QMainWindow
     // M26: the MetadataIndexer request owned by the search re-index — a newer
     // reindex supersedes ONLY this request, never the gallery's index.
     uint64_t m_reindexRequestId = 0;
+    // M27: alive token for the in-flight re-index request; the destructor flips
+    // it (and cancels the request) so late completions can never touch freed
+    // MainWindow state.
+    std::shared_ptr<std::atomic<bool>> m_reindexAlive;
 
     // M18: gallery search bar.
     QLineEdit *m_searchEdit = nullptr;

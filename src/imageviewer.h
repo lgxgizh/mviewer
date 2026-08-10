@@ -123,6 +123,10 @@ class ImageViewer : public QOpenGLWidget
     QString m_currentPath;
     QStringList m_fileList;
     int m_currentIndex = -1;
+    // M27: request generation — bumped on every setImage() so a late delivery
+    // from an older request can never overwrite the current image, even for
+    // the same path (A -> B -> A where the first A completes last).
+    uint64_t m_requestGen = 0;
 
     // View transform (pan/zoom). The math lives in the domain-free Viewport
     // (core/render); the Widget only stores it and feeds screen geometry.

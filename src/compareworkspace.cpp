@@ -41,25 +41,28 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     // thread and publishes "CompareEngine.DiffResult" on the EventBus from that
     // thread. We hop to the UI thread before repainting (the engine pointer in
     // ctx identifies which CompareEngine produced it).
-    m_diffSubId = EventBus::instance().subscribe("CompareEngine.DiffResult",
-                                                 [this](void *ctx)
-                                                 {
-                                                     if (ctx != static_cast<void *>(&m_engine))
-                                                         return;
-                                                     // Repaint only the pane reported by the async
-                                                     // completion. User-driven state changes use
-                                                     // refreshAllDiffOverlays() instead.
-                                                     QPointer<CompareWorkspace> guard(this);
-                                                     QMetaObject::invokeMethod(
-                                                         this,
-                                                         [guard]()
-                                                         {
-                                                             if (!guard)
-                                                                 return;
-                                                             guard->refreshDiffOverlay();
-                                                         },
-                                                         Qt::QueuedConnection);
-                                                 });
+    // M27 lifetime closure: the handler captures a QPointer and marshals via
+    // qApp (never via `this` as the invoke target — the workspace may already
+    // be destroyed when a slow diff completes).
+    m_diffSubId = EventBus::instance().subscribe(
+        "CompareEngine.DiffResult",
+        [this](void *ctx)
+        {
+            if (ctx != static_cast<void *>(&m_engine))
+                return;
+            // Repaint only the pane reported by the async completion.
+            // User-driven state changes use refreshAllDiffOverlays() instead.
+            QPointer<CompareWorkspace> guard(this);
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard]()
+                {
+                    if (!guard)
+                        return;
+                    guard->refreshDiffOverlay();
+                },
+                Qt::QueuedConnection);
+        });
 
     auto *toolbarContainer = new QWidget(this);
     auto *toolbarLayout = new QVBoxLayout(toolbarContainer);

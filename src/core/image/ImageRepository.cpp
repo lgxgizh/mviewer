@@ -227,26 +227,44 @@ void ImageRepository::loadAsync(const std::string &filePath,
                                 const LoadOptions &opts)
 {
     auto out = std::make_shared<Result>();
-    TaskScheduler::instance().submit(
+    auto handle = TaskScheduler::instance().submit(
         TaskScheduler::DecodePool, [this, filePath, opts, out]() { *out = load(filePath, opts); },
         [callback, out]()
         {
             if (callback)
                 callback(*out);
         });
+    if (!handle && callback)
+    {
+        // M27: a rejected submission must not silently lose the request — the
+        // caller must never have to infer failure from a missing callback.
+        // The callback fires EXACTLY ONCE, here on the calling thread, with an
+        // explicit rejection error (the worker-thread delivery path covers the
+        // accepted case).
+        Result err;
+        err.error = "scheduler rejected submission for: " + filePath;
+        callback(err);
+    }
 }
 
 std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::string &dirPath,
                                                                     int maxImages)
 {
     MV_TRACE_SCOPED("ImageRepository::loadDirectory");
-    const std::vector<std::string> files = FileSystem::listImages(dirPath, maxImages);
-    if (files.empty())
+    // M27: every piece of worker state lives in shared ownership. The previous
+    // implementation captured STACK references (files/results/completed); if an
+    // accepted task outlived the defensive timeout, a late worker wrote freed
+    // stack memory after this function returned. Nothing here may outlive the
+    // call except through shared_ptr.
+    auto files =
+        std::make_shared<std::vector<std::string>>(FileSystem::listImages(dirPath, maxImages));
+    if (files->empty())
         return {};
 
-    const int n = static_cast<int>(files.size());
-    std::vector<Result> results(n);
-    std::atomic<int> completed{0};
+    const int n = static_cast<int>(files->size());
+    auto results = std::make_shared<std::vector<Result>>(n);
+    auto completed = std::make_shared<std::atomic<int>>(0);
+    auto handles = std::make_shared<std::vector<TaskScheduler::TaskHandle>>(n);
 
     // M26: every submission is accounted for — a task that the scheduler
     // REJECTS (saturated / paused pool) becomes an explicit failure Result
@@ -257,49 +275,77 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
     {
         auto handle = TaskScheduler::instance().submit(
             TaskScheduler::Priority::Decode,
-            [this, &files, &results, &completed, n, i](const TaskScheduler::TaskContext &)
+            [this, files, results, completed, n, i](const TaskScheduler::TaskContext &ctx)
             {
                 try
                 {
-                    results[i] = load(files[i]);
+                    if (ctx.isCancelled())
+                    {
+                        // M27: the defensive timeout cancelled this task while
+                        // it was still queued — report an explicit timeout
+                        // failure instead of decoding into a superseded load.
+                        Result err;
+                        err.error = "loadDirectory timed out for: " + (*files)[i];
+                        (*results)[i] = std::move(err);
+                    }
+                    else
+                    {
+                        (*results)[i] = load((*files)[i]);
+                    }
                 }
                 catch (...)
                 {
                     Result err;
-                    err.error = "load threw for: " + files[i];
-                    results[i] = err;
+                    err.error = "load threw for: " + (*files)[i];
+                    (*results)[i] = err;
                 }
-                completed.fetch_add(1, std::memory_order_release);
+                completed->fetch_add(1, std::memory_order_release);
             });
         if (!handle)
         {
             Result err;
-            err.error = "scheduler rejected submission for: " + files[i];
-            results[i] = std::move(err);
-            completed.fetch_add(1, std::memory_order_release);
+            err.error = "scheduler rejected submission for: " + (*files)[i];
+            (*results)[i] = std::move(err);
+            completed->fetch_add(1, std::memory_order_release);
+        }
+        else
+        {
+            (*handles)[i] = handle;
         }
     }
 
     // Bounded wait: accepted tasks either run to completion or are terminal;
     // the overall budget is a defensive cap against a hung decode so this call
     // can never busy-wait forever (e.g. while the pool is paused/shut down).
-    constexpr auto kSyncLoadBudget = std::chrono::minutes(5);
-    const auto deadline = std::chrono::steady_clock::now() + kSyncLoadBudget;
-    while (completed.load(std::memory_order_acquire) < n &&
+    const auto deadline = std::chrono::steady_clock::now() + syncLoadBudget();
+    while (completed->load(std::memory_order_acquire) < n &&
            std::chrono::steady_clock::now() < deadline)
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
-    for (int i = 0; i < n; ++i)
+    if (completed->load(std::memory_order_acquire) < n)
     {
-        if (!results[i].frame && results[i].error.empty())
+        // M27: actively cancel the outstanding work. Queued tasks observe the
+        // token (see the isCancelled branch above) and exit with an explicit
+        // timeout result; a decoder that cannot be interrupted mid-flight is
+        // still safe because every worker state handle is shared_owned. Late
+        // completions never touch freed memory.
+        for (auto &h : *handles)
         {
-            Result err;
-            err.error = "loadDirectory timed out for: " + files[i];
-            results[i] = std::move(err);
+            if (h)
+                TaskScheduler::cancel(h);
         }
     }
-    return results;
+    for (int i = 0; i < n; ++i)
+    {
+        if (!(*results)[i].frame && (*results)[i].error.empty())
+        {
+            Result err;
+            err.error = "loadDirectory timed out for: " + (*files)[i];
+            (*results)[i] = std::move(err);
+        }
+    }
+    return *results;
 }
 
 void ImageRepository::loadDirectoryAsync(const std::string &dirPath,
@@ -405,6 +451,9 @@ void ImageRepository::loadDirectoryAsyncImpl(const std::string &dirPath,
 void ImageRepository::prefetchVisible(const std::vector<std::string> &visiblePaths,
                                       const std::vector<std::string> &adjacentPaths)
 {
+    // M27: prefetch is documented as best-effort — a scheduler rejection
+    // (paused/saturated pool) is an explicit no-op for that path; the caller
+    // is not waiting on a callback, so there is no lost-request hazard.
     for (const auto &p : visiblePaths)
     {
         TaskScheduler::instance().submit(TaskScheduler::Priority::UI,

@@ -8,6 +8,7 @@
 #include <QMetaObject>
 #include <QPalette>
 #include <QPainter>
+#include <QPointer>
 #include <QResizeEvent>
 #include <algorithm>
 
@@ -45,58 +46,73 @@ void PreviewPanel::setImage(const QString &path)
     // buffer (computePreviewStats over ImageData) — the UI thread only
     // receives the small stats struct, creates the QPixmap and repaints.
     // QPixmap creation stays on the UI thread (GUI resource).
-    ImageRepository::instance().loadAsync(path.toStdString(),
-                                          [this, path](const ImageRepository::Result &res)
-                                          {
-                                              const mviewer::core::PreviewStats stats =
-                                                  (res.success() && res.frame)
-                                                      ? mviewer::core::computePreviewStats(
-                                                            res.frame->pixels())
-                                                      : mviewer::core::PreviewStats{};
-                                              QMetaObject::invokeMethod(
-                                                  this,
-                                                  [this, res, path, stats]()
-                                                  {
-                                                      // Stale-callback guard: if the user has
-                                                      // already clicked another image, discard
-                                                      // this result so a slow decode of an older
-                                                      // path cannot overwrite the newer preview.
-                                                      if (path != m_path)
-                                                          return;
-                                                      if (!res.success() || !res.frame)
-                                                      {
-                                                          m_hasImage = false;
-                                                          update();
-                                                          return;
-                                                      }
-                                                      m_full = QPixmap::fromImage(
-                                                          mvcore::toQImage(res.frame->pixels()));
-                                                      if (m_full.isNull())
-                                                      {
-                                                          m_hasImage = false;
-                                                          update();
-                                                          return;
-                                                      }
-                                                      m_hasImage = true;
-                                                      if (stats.valid)
-                                                      {
-                                                          m_lumMean = stats.lumMean;
-                                                          m_rMean = stats.rMean;
-                                                          m_gMean = stats.gMean;
-                                                          m_bMean = stats.bMean;
-                                                      }
-                                                      else
-                                                      {
-                                                          m_lumMean = 0.0;
-                                                          m_rMean = m_gMean = m_bMean = 0;
-                                                      }
-                                                      m_imgW = m_full.width();
-                                                      m_imgH = m_full.height();
-                                                      m_fileSize = QFileInfo(path).size();
-                                                      rebuild();
-                                                      update();
-                                                  });
-                                          });
+    //
+    // M27 lifetime closure: the worker callback captures a QPointer (never a
+    // raw `this`), checks it before ANY use, and marshals to the UI thread
+    // through qApp (which outlives every panel) instead of through `this` as
+    // the invoke target. The queued lambda re-checks the guard AND the request
+    // generation, so a panel destroyed mid-decode or superseded by a newer
+    // setImage() (even A -> B -> A) can never be touched by an old delivery.
+    const uint64_t gen = ++m_requestGen;
+    QPointer<PreviewPanel> guard(this);
+    ImageRepository::instance().loadAsync(
+        path.toStdString(),
+        [path, gen, guard](const ImageRepository::Result &res)
+        {
+            const mviewer::core::PreviewStats stats =
+                (res.success() && res.frame)
+                    ? mviewer::core::computePreviewStats(res.frame->pixels())
+                    : mviewer::core::PreviewStats{};
+            if (!guard)
+                return; // panel destroyed mid-decode — drop the result
+            QMetaObject::invokeMethod(
+                qApp,
+                [path, gen, guard, res, stats]()
+                {
+                    PreviewPanel *panel = guard.data();
+                    if (!panel)
+                        return;
+                    // Stale-callback guard: discard deliveries from superseded
+                    // requests (different path OR an older generation of the
+                    // same path, i.e. A -> B -> A where the first A completes
+                    // last). Without the generation check, the path-only guard
+                    // lets an old A overwrite a newer A of the same path.
+                    if (path != panel->m_path || gen != panel->m_requestGen)
+                        return;
+                    if (!res.success() || !res.frame)
+                    {
+                        panel->m_hasImage = false;
+                        panel->update();
+                        return;
+                    }
+                    panel->m_full = QPixmap::fromImage(
+                        mvcore::toQImage(res.frame->pixels()));
+                    if (panel->m_full.isNull())
+                    {
+                        panel->m_hasImage = false;
+                        panel->update();
+                        return;
+                    }
+                    panel->m_hasImage = true;
+                    if (stats.valid)
+                    {
+                        panel->m_lumMean = stats.lumMean;
+                        panel->m_rMean = stats.rMean;
+                        panel->m_gMean = stats.gMean;
+                        panel->m_bMean = stats.bMean;
+                    }
+                    else
+                    {
+                        panel->m_lumMean = 0.0;
+                        panel->m_rMean = panel->m_gMean = panel->m_bMean = 0;
+                    }
+                    panel->m_imgW = panel->m_full.width();
+                    panel->m_imgH = panel->m_full.height();
+                    panel->m_fileSize = QFileInfo(path).size();
+                    panel->rebuild();
+                    panel->update();
+                });
+        });
 }
 
 void PreviewPanel::rebuild()

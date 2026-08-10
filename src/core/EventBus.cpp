@@ -36,11 +36,28 @@ void EventBus::unsubscribe(int id)
 
 void EventBus::publish(const std::string &event, void *ctx)
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    auto it = m_subs.find(event);
-    if (it == m_subs.end())
-        return;
-    for (const auto &sub : it->second)
-        if (sub.h)
-            sub.h(ctx);
+    // M27: handlers run OUTSIDE the lock. The lock only snapshots the
+    // subscriber list; user code (subscribe / unsubscribe / nested publish /
+    // destruction) can then run freely inside a handler without deadlocking.
+    // Each in-flight handler holds its own copy of the std::function, so a
+    // concurrent unsubscribe() cannot destroy a handler that is executing.
+    // NOTE: snapshot semantics — a subscriber that unsubscribes during the
+    // same publish may still receive that publish (its entry was already
+    // copied). Consumers that capture raw pointers must guard them (QPointer
+    // etc.) exactly because of this delivery-vs-destruction race.
+    std::vector<Handler> snapshot;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        auto it = m_subs.find(event);
+        if (it == m_subs.end())
+            return;
+        snapshot.reserve(it->second.size());
+        for (const auto &sub : it->second)
+            snapshot.push_back(sub.h);
+    }
+    for (const auto &h : snapshot)
+    {
+        if (h)
+            h(ctx);
+    }
 }

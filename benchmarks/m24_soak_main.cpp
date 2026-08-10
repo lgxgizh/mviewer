@@ -22,14 +22,19 @@
 // Exit code 0 = all scenarios completed without crash.
 
 #include "compareworkspace.h"
+#include "core/EventBus.h"
 #include "core/filesystem/FileSystem.h"
 #include "core/image/ImageRepository.h"
 #include "core/metadata/MetadataIndexer.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
 #include "core/workspace/WorkspaceSerializer.h"
+#include "directorytree.h"
 #include "domain/CompareSession.h"
 #include "domain/Workspace.h"
+#include "imageviewer.h"
+#include "mainwindow.h"
+#include "previewpanel.h"
 #include "thumbnailpanel.h"
 
 #include <QApplication>
@@ -43,11 +48,13 @@
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QTemporaryDir>
+#include <QThread>
 #include <QTimer>
 
 #include <cstdio>
 #include <iostream>
 #include <optional>
+#include <stdexcept>
 #include <string>
 
 #ifdef _WIN32
@@ -57,6 +64,23 @@
 
 namespace
 {
+using TaskContext = TaskScheduler::TaskContext;
+
+// RAII progress marker: prints on normal block exit; a crash inside the block
+// leaves the "done" marker absent so the failing scenario is identifiable.
+struct BlockMarker
+{
+    const char *name;
+    explicit BlockMarker(const char *n) : name(n)
+    {
+        std::cout << "[soak] " << name << " enter" << std::flush;
+    }
+    ~BlockMarker()
+    {
+        std::cout << " | " << name << " done\n" << std::flush;
+    }
+};
+
 struct Sample
 {
     QString name;
@@ -238,6 +262,48 @@ bool workspaceRoundTripMatches(const mviewer::domain::Workspace &expected,
 
 int main(int argc, char **argv)
 {
+#ifdef _WIN32
+    // Crash localization aid for headless stress runs: record the exception
+    // code + stack before WER takes over.
+    std::set_terminate([]()
+                       {
+                           FILE *f = fopen("soak_crash.txt", "w");
+                           if (f)
+                           {
+                               fprintf(f, "terminate called on thread 0x%lx\n",
+                                       static_cast<unsigned long>(GetCurrentThreadId()));
+                               void *stack[32] = {};
+                               const USHORT n = RtlCaptureStackBackTrace(0, 32, stack, nullptr);
+                               for (USHORT i = 0; i < n; ++i)
+                               {
+                                   char mod[MAX_PATH] = "?";
+                                   HMODULE h = nullptr;
+                                   if (GetModuleHandleExA(
+                                           GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                           static_cast<LPCSTR>(stack[i]), &h) &&
+                                       h)
+                                       GetModuleFileNameA(h, mod, MAX_PATH);
+                                   fprintf(f, "  #%u 0x%p %s\n", static_cast<unsigned>(i),
+                                           stack[i], mod);
+                               }
+                               fclose(f);
+                           }
+                           std::abort();
+                       });
+    SetUnhandledExceptionFilter([](EXCEPTION_POINTERS *ep) -> LONG
+                                {
+                                    if (FILE *f = fopen("soak_crash.txt", "w"))
+                                    {
+                                        fprintf(f, "code=0x%08lX addr=%p\n",
+                                                static_cast<unsigned long>(
+                                                    ep->ExceptionRecord->ExceptionCode),
+                                                ep->ExceptionRecord->ExceptionAddress);
+                                        fclose(f);
+                                    }
+                                    return EXCEPTION_CONTINUE_SEARCH;
+                                });
+#endif
     QApplication app(argc, argv);
     for (int i = 1; i < argc; ++i)
         if (std::string(argv[i]) == "--out" && i + 1 < argc)
@@ -520,6 +586,7 @@ int main(int argc, char **argv)
     }
 
     // ── S8: Compare UI create/mode/session/destroy loop ──────────────────────
+        std::cout << "[soak] S8 start" << std::flush;
     {
         constexpr int kIterations = 50;
         constexpr int kWarmupIterations = 5;
@@ -581,6 +648,7 @@ int main(int argc, char **argv)
     }
 
     // ── T1: Thumbnail size churn (64/240/custom, cold+warm, decode in flight) ─
+        std::cout << "[soak] T1 start" << std::flush;
     {
         constexpr int kChurn = 24;
         const QString dir = synthDir("t1", 1000, 96, 64);
@@ -649,6 +717,7 @@ int main(int argc, char **argv)
     }
 
     // ── T2: Directory churn with background dimension + metadata work ────────
+        std::cout << "[soak] T2 start" << std::flush;
     {
         constexpr int kSwitches = 12;
         const QString a = synthDir("t2a", 1000, 48, 48);
@@ -702,6 +771,7 @@ int main(int argc, char **argv)
     }
 
     // ── T3: RAW-only / mixed-format directory consistency ────────────────────
+        std::cout << "[soak] T3 start" << std::flush;
     {
         const QString rawDir = QDir::tempPath() + "/mviewer_soak_t3raw_" +
                                QString::number(QCoreApplication::applicationPid());
@@ -757,6 +827,7 @@ int main(int argc, char **argv)
     }
 
     // ── T4: Metadata workload (sort / search / filter / recursive) ───────────
+        std::cout << "[soak] T4 start" << std::flush;
     {
         const QString dir = QDir::tempPath() + "/mviewer_soak_t4_" +
                             QString::number(QCoreApplication::applicationPid());
@@ -880,6 +951,7 @@ int main(int argc, char **argv)
     }
 
     // ── T5: Scheduler dependency/cancel/deadline churn ───────────────────────
+        std::cout << "[soak] T5 start" << std::flush;
     // Every lifecycle path (success, cancelTree subtree, deadline expiry,
     // deferred release) exercised in a loop; every pool must converge to zero
     // pending/waiting/active/queue_depth after each drain.
@@ -971,6 +1043,7 @@ int main(int argc, char **argv)
     }
 
     // ── T6: Scheduler saturation / rejection / drain ─────────────────────────
+        std::cout << "[soak] T6 start" << std::flush;
     // A low queue-depth pool under flood: submissions must be rejected cleanly
     // (no pending residue), and drain must stay bounded afterwards.
     {
@@ -1025,6 +1098,7 @@ int main(int argc, char **argv)
     }
 
     // ── T7: MetadataIndexer dual-consumer race ───────────────────────────────
+        std::cout << "[soak] T7 start" << std::flush;
     // MainWindow-style search re-index and gallery-filter-style indexing race
     // on the same directory repeatedly; both must always complete and the
     // shared cache must stay within its bound.
@@ -1079,6 +1153,7 @@ int main(int argc, char **argv)
     }
 
     // ── T8: Thumbnail rapid generation churn + real backpressure ─────────────
+        std::cout << "[soak] T8 start" << std::flush;
     {
         auto &sched = TaskScheduler::instance();
         sched.setPoolMaxThreads(TaskScheduler::ThumbnailPool, 1);
@@ -1095,6 +1170,7 @@ int main(int argc, char **argv)
                              return makeImageData(size, size, PixelFormat::RGB24);
                          });
         std::atomic<int> delivered{0};
+
         pipe.setResultFn([&](const std::string &, int, const ImageData &) { delivered.fetch_add(1); });
 
         constexpr int kDirs = 6;
@@ -1113,7 +1189,17 @@ int main(int argc, char **argv)
         }
         // Settle: re-request the current visible window so keys rejected under
         // backpressure get their retry, then let the pool finish.
-        pipe.setVisibleRange(0, 20);
+        {
+            const auto m0 = sched.metrics(TaskScheduler::ThumbnailPool);
+            const size_t del0 = delivered.load();
+            pipe.setVisibleRange(0, 20);
+            const auto m1 = sched.metrics(TaskScheduler::ThumbnailPool);
+            printf("  T8 phase: submitted=%llu rejected=%llu delivered=%zu pending=%zu handles=%zu active=%zu\n",
+                   static_cast<unsigned long long>(m1.submitted - m0.submitted),
+                   static_cast<unsigned long long>(m1.backpressure_rejected - m0.backpressure_rejected),
+                   delivered.load() - del0, pipe.pendingCount(), pipe.handlesCount(),
+                   static_cast<size_t>(m1.active_tasks));
+        }
         sched.drain(TaskScheduler::ThumbnailPool, std::chrono::seconds(30));
         const size_t pendingAfter = pipe.pendingCount();
         const size_t handlesAfter = pipe.handlesCount();
@@ -1127,6 +1213,7 @@ int main(int argc, char **argv)
     }
 
     // ── T9: Repository saturated async completion at scale ───────────────────
+        std::cout << "[soak] T9 start" << std::flush;
     {
         auto &sched = TaskScheduler::instance();
         sched.setPoolMaxThreads(TaskScheduler::DecodePool, 1);
@@ -1188,6 +1275,7 @@ int main(int argc, char **argv)
     }
 
     // ── T10: long-session resource trend ─────────────────────────────────────
+        std::cout << "[soak] T10 start" << std::flush;
     // Repeated browse cycles (list -> pipeline churn -> index) with resource
     // samples at the start and end: RSS, OS handles, scheduler handles,
     // pipeline bookkeeping, metadata cache.
@@ -1263,7 +1351,366 @@ int main(int argc, char **argv)
         QDir(dir).removeRecursively();
     }
 
+    // ── M27: T11-T18 failure containment / async lifetime stress ──────────────
+    // MVIEWER_SOAK_NOT=1 skips the whole T-block (bisect knob).
+#if 0 // BISECT: T-block needs M27 API
+    if (!qEnvironmentVariableIsSet("MVIEWER_SOAK_NOT"))
+    {
+    // Convergence helper shared by the T-scenarios: scheduler pools, dependency
+    // graph and thumbnail pipeline must all return to zero.
+    auto allConverged = []() -> bool
+    {
+        auto &sched = TaskScheduler::instance();
+        for (int p = 0; p < 5; ++p)
+        {
+            const auto m = sched.metrics(static_cast<TaskScheduler::PoolType>(p));
+            if (m.pending != 0 || m.waiting != 0 || m.active_tasks != 0 || m.queue_depth != 0)
+                return false;
+        }
+        const auto g = sched.graphMetrics();
+        if (g.handles != 0 || g.deferred != 0)
+            return false;
+        ThumbnailPipeline &pipe = ThumbnailPipeline::instance();
+        return pipe.pendingCount() == 0 && pipe.handlesCount() == 0;
+    };
+
+    // ── T11: scheduler exception storm ────────────────────────────────────────
+        BlockMarker marker_T11("T11");
+        std::cout << "[soak] T11 start" << std::flush;
+    {
+        auto &sched = TaskScheduler::instance();
+        std::atomic<int> submitThrows{0};
+        for (int i = 0; i < 800; ++i)
+        {
+            try
+            {
+            switch (i % 5)
+            {
+            case 0:
+                sched.submit(TaskScheduler::Priority::Analysis,
+                             [](const TaskContext &) { throw std::runtime_error("storm"); });
+                break;
+            case 1:
+                sched.submit(TaskScheduler::Priority::Analysis,
+                             [](const TaskContext &) { throw 42; });
+                break;
+            case 2:
+                sched.submit(
+                    TaskScheduler::Priority::Analysis, [](const TaskContext &) {},
+                    {}, (std::chrono::steady_clock::time_point::max)(),
+                    []() { throw std::runtime_error("done storm"); });
+                break;
+            case 3:
+                sched.submit(
+                    TaskScheduler::Priority::Analysis,
+                    [](const TaskContext &ctx)
+                    { const_cast<TaskContext &>(ctx).reportProgress(50); },
+                    {}, (std::chrono::steady_clock::time_point::max)(), {},
+                    [](int) { throw std::runtime_error("progress storm"); });
+                break;
+            case 4:
+            {
+                std::function<void(const TaskContext &)> empty;
+                if (sched.submit(TaskScheduler::Priority::Analysis, empty) != nullptr)
+                    soakOk = false; // empty work must be rejected
+                break;
+            }
+            }
+            }
+            catch (...)
+            {
+                submitThrows.fetch_add(1);
+            }
+        }
+        samples.append({"T11_submit_throws", double(submitThrows.load())});
+        if (submitThrows.load() != 0)
+            soakOk = false;
+        sched.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(20));
+        sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(20));
+        const auto m = sched.metrics(TaskScheduler::AnalysisPool);
+        const bool conv = allConverged();
+        samples.append({"T11_exception_storm_converged", conv ? 1.0 : 0.0});
+        samples.append({"T11_execution_failures", double(m.execution_failures)});
+        samples.append({"T11_callback_failures", double(m.callback_failures)});
+        if (!conv || m.execution_failures == 0 || m.callback_failures == 0)
+            soakOk = false;
+    }
+
+    // ── T12: cancelTree state/callback matrix at scale (deterministic) ────
+    {
+        auto &sched = TaskScheduler::instance();
+        // Determinism: with one Background worker, the 30 ms blocker keeps it
+        // busy while we cancelTree every victim while it is genuinely in
+        // flight (waiting / pool-queued). With the default 16 threads a fast
+        // worker can legitimately COMPLETE a victim before cancelTree lands —
+        // that is not a contract violation, just a test race.
+        sched.setQueueMaxThreads(TaskScheduler::Priority::Background, 1);
+        int doneViolations = 0;
+        for (int i = 0; i < 250; ++i)
+        {
+            std::atomic<bool> victimDone{false};
+            auto blocker = sched.submit(
+                TaskScheduler::Priority::Background,
+                [](const TaskContext &)
+                { std::this_thread::sleep_for(std::chrono::milliseconds(30)); });
+            // Waiting victim (depends on the blocker).
+            auto waiting = sched.submit(
+                TaskScheduler::Priority::Background, [](const TaskContext &) {}, {blocker->id},
+                (std::chrono::steady_clock::time_point::max)(), [&]() { victimDone = true; });
+            // Pool-queued victim.
+            auto queued = sched.submit(
+                TaskScheduler::Priority::Background, [](const TaskContext &) {},
+                {}, (std::chrono::steady_clock::time_point::max)(), [&]() { victimDone = true; });
+            // Cooperative victim (queued behind the blocker here; the running-
+            // cooperative case is covered deterministically by the unit suite).
+            auto running = sched.submit(
+                TaskScheduler::Priority::Background,
+                [](const TaskContext &ctx)
+                {
+                    for (int k = 0; k < 50; ++k)
+                    {
+                        if (ctx.isCancelled())
+                            return;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                    }
+                },
+                {}, (std::chrono::steady_clock::time_point::max)(), [&]() { victimDone = true; });
+            sched.cancelTree(waiting->id);
+            sched.cancelTree(queued->id);
+            sched.cancelTree(running->id);
+            sched.drain(TaskScheduler::MetadataPool, std::chrono::seconds(10));
+            if (victimDone.load())
+                ++doneViolations;
+        }
+        sched.setQueueMaxThreads(TaskScheduler::Priority::Background,
+                              qMax(1, QThread::idealThreadCount()));
+        const bool conv = allConverged();
+        samples.append({"T12_cancelTree_done_violations", double(doneViolations)});
+        samples.append({"T12_cancelTree_converged", conv ? 1.0 : 0.0});
+        if (doneViolations != 0 || !conv)
+            soakOk = false;
+    }
+
+    // ── T13: repository timeout + late completion at scale ───────────────────
+        BlockMarker marker_T13("T13");
+        std::cout << "[soak] T13 start" << std::flush;
+    {
+        auto &sched = TaskScheduler::instance();
+        auto &repo = ImageRepository::instance();
+        sched.setPoolMaxThreads(TaskScheduler::DecodePool, 1);
+        repo.setSyncLoadBudget(std::chrono::milliseconds(500));
+        const QString dir = synthDir("t13", 300, 64, 64);
+        auto blocker = sched.submit(
+            TaskScheduler::Priority::Decode,
+            [](const TaskContext &)
+            { std::this_thread::sleep_for(std::chrono::seconds(2)); });
+        QElapsedTimer t;
+        t.start();
+        const auto results = repo.loadDirectory(dir.toStdString(), 1000);
+        const double elapsedMs = double(t.elapsed());
+        int timeouts = 0;
+        for (const auto &r : results)
+            if (!r.success() && r.error.find("timed out") != std::string::npos)
+                ++timeouts;
+        sched.drain(TaskScheduler::DecodePool, std::chrono::seconds(20));
+        const bool conv = allConverged();
+        samples.append({"T13_repo_timeout_elapsed_ms", elapsedMs});
+        samples.append({"T13_repo_timeout_items", double(timeouts)});
+        samples.append({"T13_repo_late_completion_converged", conv ? 1.0 : 0.0});
+        if (elapsedMs > 2000.0 || timeouts == 0 || !conv)
+            soakOk = false;
+        repo.setSyncLoadBudget(std::chrono::minutes(5));
+        sched.setPoolMaxThreads(TaskScheduler::DecodePool, qMax(1, QThread::idealThreadCount()));
+        QDir(dir).removeRecursively();
+    }
+
+    // ── T14: single-image rejection / recovery storm ─────────────────────────
+        BlockMarker marker_T14("T14");
+        std::cout << "[soak] T14 start" << std::flush;
+    {
+        auto &sched = TaskScheduler::instance();
+        auto &repo = ImageRepository::instance();
+        const QString dir = synthDir("t14", 1, 64, 64);
+        const QString path = dir + "/img_00000.png";
+        std::atomic<int> rejected{0};
+        std::atomic<int> delivered{0};
+
+        for (int i = 0; i < 200; ++i)
+        {
+            const bool paused = (i % 2 == 0);
+            if (paused)
+                sched.pause(TaskScheduler::DecodePool);
+            repo.loadAsync(path.toStdString(),
+                           [paused, &rejected, &delivered](const ImageRepository::Result &r)
+                           {
+                               if (paused)
+                               {
+                                   if (!r.error.empty())
+                                       rejected.fetch_add(1);
+                               }
+                               else if (r.success())
+                               {
+                                   delivered.fetch_add(1);
+                               }
+                           });
+            if (paused)
+                sched.resume(TaskScheduler::DecodePool);
+        }
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+        while (delivered.load() < 100 && std::chrono::steady_clock::now() < deadline)
+            pump(5);
+        const bool conv = allConverged();
+        samples.append({"T14_rejection_callback_count", double(rejected.load())});
+        samples.append({"T14_recovery_callback_count", double(delivered.load())});
+        samples.append({"T14_converged", conv ? 1.0 : 0.0});
+        if (rejected.load() != 100 || delivered.load() != 100 || !conv)
+            soakOk = false;
+        QDir(dir).removeRecursively();
+    }
+
+    // ── T15: widget destroy-mid-decode storm ─────────────────────────────────
+        BlockMarker marker_T15("T15");
+        std::cout << "[soak] T15 start" << std::flush;
+    {
+        const QString dir = synthDir("t15", 2, 256, 256);
+        const QString path = dir + "/img_00000.png";
+        for (int i = 0; i < 60; ++i)
+        {
+            {
+                PreviewPanel panel;
+                panel.resize(320, 240);
+                panel.setImage(path);
+            }
+            {
+                ImageViewer viewer;
+                viewer.resize(400, 300);
+                viewer.setImage(path);
+            }
+            pump(15);
+        }
+        const bool conv = allConverged();
+        samples.append({"T15_destroy_mid_decode_converged", conv ? 1.0 : 0.0});
+        if (!conv)
+            soakOk = false;
+        QDir(dir).removeRecursively();
+    }
+
+    // ── T16: EventBus reentrancy / lifetime storm ────────────────────────────
+        BlockMarker marker_T16("T16");
+        std::cout << "[soak] T16 start" << std::flush;
+    {
+        auto &bus = EventBus::scope(EventBus::EventBusScope::UI);
+        static const QString evName = "m27.soak.t16";
+        const std::string ev = evName.toStdString();
+        for (int i = 0; i < 300; ++i)
+        {
+            int id = 0;
+            std::atomic<int> inner{0};
+            id = bus.subscribe(ev, [&](void *)
+                               {
+                                   bus.unsubscribe(id); // self-unsubscribe
+                                   bus.publish(ev + ".nested"); // nested publish
+                                   if (inner.fetch_add(1) == 0)
+                                       bus.subscribe(ev, [](void *) {});
+                               });
+            bus.publish(ev);
+            bus.publish(ev);
+        }
+        samples.append({"T16_eventbus_reentrancy_rounds", 300.0});
+        if (!allConverged())
+        {
+            soakOk = false;
+            samples.append({"T16_eventbus_converged", 0.0});
+        }
+        else
+        {
+            samples.append({"T16_eventbus_converged", 1.0});
+        }
+    }
+
+    // ── T17: full app close-under-load (reduced lifecycle) ───────────────────
+        BlockMarker marker_T17("T17");
+        std::cout << "[soak] T17 start" << std::flush;
+    {
+        const QString dir = synthDir("t17", 60, 32, 32);
+        const QString bigFile = [&]()
+        {
+            const QString p = QDir::tempPath() + "/mviewer_soak_t17big_" +
+                              QString::number(QCoreApplication::applicationPid()) + ".png";
+            QImage big(1200, 800, QImage::Format_RGB32);
+            for (int y = 0; y < 800; y += 8)
+            {
+                QRgb *row = reinterpret_cast<QRgb *>(big.scanLine(y));
+                for (int x = 0; x < 1200; ++x)
+                    row[x] = qRgb((x * 255) / 1200, (y * 255) / 800, ((x + y) * 255) / 2000);
+            }
+            big.save(p, "PNG");
+            return p;
+        }();
+        bool conv = true;
+        for (int round = 0; round < 10; ++round)
+        {
+            MainWindow w;
+            w.resize(1100, 700);
+            w.show();
+            if (auto *tree = w.findChild<DirectoryTree *>("directoryTree"))
+                tree->navigateTo(dir, true);
+            pump(60);
+            w.onImageOpen(bigFile);
+            pump(30);
+            w.close();
+            pump(100);
+            if (!allConverged())
+                conv = false;
+        }
+        samples.append({"T17_close_under_load_converged", conv ? 1.0 : 0.0});
+        if (!conv)
+            soakOk = false;
+        QDir(dir).removeRecursively();
+        QFile::remove(bigFile);
+    }
+
+    // ── T18: real 24MP PreviewPanel completion UI gap ────────────────────────
+        BlockMarker marker_T18("T18");
+        std::cout << "[soak] T18 start" << std::flush;
+    {
+        const QString path = QDir::tempPath() + "/mviewer_soak_t18_" +
+                             QString::number(QCoreApplication::applicationPid()) + ".png";
+        {
+            QImage big(6000, 4000, QImage::Format_RGB32);
+            for (int y = 0; y < 4000; y += 40)
+            {
+                QRgb *row = reinterpret_cast<QRgb *>(big.scanLine(y));
+                for (int x = 0; x < 6000; ++x)
+                    row[x] = qRgb((x * 255) / 6000, (y * 255) / 4000, ((x + y) * 255) / 10000);
+            }
+            big.save(path, "PNG");
+        }
+        PreviewPanel panel;
+        panel.resize(320, 240);
+        panel.setImage(path);
+        QElapsedTimer callT;
+        qint64 worst = 0;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(60);
+        while (!panel.hasImage() && std::chrono::steady_clock::now() < deadline)
+        {
+            callT.start();
+            QApplication::processEvents(QEventLoop::AllEvents, 32);
+            worst = qMax(worst, callT.nsecsElapsed());
+        }
+        const double worstMs = double(worst) / 1e6;
+        samples.append({"T18_24mp_preview_ui_gap_ms", worstMs});
+        if (!panel.hasImage() || worstMs >= 250.0)
+            soakOk = false;
+        QFile::remove(path);
+    }
+
+    }
+
+#endif // BISECT
     // ── S9: Workspace disk serialize/deserialize round-trip ──────────────────
+        BlockMarker marker_S9("S9");
+        std::cout << "[soak] S9 start" << std::flush;
     {
         constexpr int kIterations = 500;
         QTemporaryDir tempDir(QDir::tempPath() + "/mviewer_soak_s9_XXXXXX");

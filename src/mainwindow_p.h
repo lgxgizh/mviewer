@@ -16,7 +16,6 @@
 
 #include "application/OpenDirectoryUseCase.h"
 #include "appstate.h"
-#include "core/EventBus.h"
 #include "core/RatingStore.h"
 #include "core/SettingsIO.h"
 #include "core/SidecarStore.h"

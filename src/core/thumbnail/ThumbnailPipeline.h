@@ -227,7 +227,21 @@ struct ThumbnailPipeline
                 // NEW generation's ownership of the same key.
                 if (ctx.isCancelled())
                     return;
-                ImageData thumb = decode(path, size);
+                // M27: a throwing decoder must not leak the pipeline
+                // bookkeeping (m_pending / m_handles). It is treated as a
+                // decode failure — the null-thumb branch below cleans up under
+                // the lock and surfaces the failure to the consumer.
+                ImageData thumb;
+                try
+                {
+                    thumb = decode(path, size);
+                }
+                catch (...)
+                {
+                    thumb = ImageData{};
+                }
+                ImageData deliver;
+                ResultFn cb;
                 {
                     std::lock_guard<std::mutex> lk(m_mtx);
                     // Remove this task's own bookkeeping only — the key may
@@ -244,17 +258,37 @@ struct ThumbnailPipeline
                     if (!thumb.isNull())
                     {
                         cacheLocked(k, path, thumb);
-                        // result callback may run on worker thread; caller adapts.
-                        if (result)
-                            result(path, size, thumb);
+                        // Result callback is delivered OUTSIDE the lock (M27):
+                        // a callback that re-enters request()/setSources()/
+                        // clear() must never deadlock against the pipeline
+                        // mutex. The state mutations above are done; only the
+                        // user-visible delivery remains.
+                        deliver = thumb;
+                        cb = result;
                     }
-                    else if (result)
+                    else
                     {
                         // M24: surface decode FAILURES to the consumer (null
                         // thumb) so the UI can mark the cell as failed instead
                         // of showing an eternal loading state. The consumer
                         // decides whether/how to cache the failure.
-                        result(path, size, ImageData{});
+                        deliver = ImageData{};
+                        cb = result;
+                    }
+                }
+                if (cb)
+                {
+                    // M27: the result callback is user code running on the
+                    // worker — a throw must never escape the pool (an uncaught
+                    // exception in a worker thread terminates the process).
+                    // Bookkeeping was already cleaned under the lock before
+                    // delivery, so a throw here leaves zero residue.
+                    try
+                    {
+                        cb(path, size, deliver);
+                    }
+                    catch (...)
+                    {
                     }
                 }
             });

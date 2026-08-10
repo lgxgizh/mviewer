@@ -37,3 +37,6 @@ tests/vision/current/
 release_checklist_report.md
 
 .codebuddy/
+
+# Local code-graph index (SQLite + logs) — machine-local, never commit
+.codegraph/
