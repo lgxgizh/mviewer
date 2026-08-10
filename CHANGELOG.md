@@ -39,6 +39,9 @@ All notable changes to this project are documented here. The format is based on
   drag-drop hint) instead of a blank canvas; it hides automatically once a
   directory is opened. Covered by `workflow_ux_tests` (visible at clean
   startup, hidden after navigation).
+- **Zoom-at-cursor regression coverage (`workflow_ux_tests`):** the viewer's
+  wheel zoom now asserts the beta-checklist invariant that the image point
+  under the mouse cursor stays stationary while the scale grows.
 - **Gallery empty-folder hint:** when a directory is open but nothing is
   displayable (no image files, or every entry is hidden by filters), the
   gallery shows a “此文件夹中没有可显示的图片” hint instead of a

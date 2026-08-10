@@ -59,6 +59,7 @@
 #include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
+#include <QWheelEvent>
 
 #include <atomic>
 #include <iostream>
@@ -664,6 +665,27 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             pump(20);
             CHECK(qAbs(viewer->viewTransform().scale - fitScale) < 1e-6,
                   "restore (Fit) returns to the original fit scale");
+
+            // Wheel zoom keeps the image point under the cursor stationary
+            // (beta checklist “缩放中心：以鼠标点为中心”).
+            {
+                viewer->zoomFit();
+                pump(20);
+                const auto before = viewer->viewTransform();
+                const QPointF cursor(220.0, 160.0);
+                const double imgX = (cursor.x() - before.offsetX) / before.scale;
+                const double imgY = (cursor.y() - before.offsetY) / before.scale;
+                QWheelEvent wheel(cursor, viewer->mapToGlobal(cursor.toPoint()), QPoint(0, 0),
+                                  QPoint(0, 120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase,
+                                  false);
+                QApplication::sendEvent(viewer, &wheel);
+                pump(20);
+                const auto after = viewer->viewTransform();
+                CHECK(after.scale > before.scale, "wheel zoom-in grows the scale");
+                const double drift = qAbs((cursor.x() - after.offsetX) / after.scale - imgX) +
+                                     qAbs((cursor.y() - after.offsetY) / after.scale - imgY);
+                CHECK(drift < 0.5, "wheel zoom keeps the image point under the cursor fixed");
+            }
         }
         viewer->close();
         pump(20);
