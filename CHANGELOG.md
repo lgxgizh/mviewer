@@ -55,6 +55,11 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- **Compare input guard:** pressing C with fewer than two images used to
+  open a degenerate one-pane compare dialog (or silently do nothing);
+  oversized folder fallbacks could exceed the documented 2-8 image range.
+  openCompare now trims to the first 8 and shows a status-bar message
+  when <2 images are available. Covered by workflow_ux_tests.
 - **Ctrl+C double binding:** the gallery context menu and the command
   registry advertised “Ctrl+C = 复制文件对话框”, but the global
   binding actually copies the current image to the clipboard (handled

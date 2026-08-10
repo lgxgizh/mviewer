@@ -725,6 +725,33 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         pump(20);
     }
 
+    // Compare requires 2-8 images: a single-image folder must not open a
+    // degenerate one-pane compare dialog (user gets feedback instead).
+    {
+        const QString singleDir = sourceDir.filePath(QStringLiteral("wf_single"));
+        QDir().mkpath(singleDir);
+        const QString singlePath =
+            writePng(QDir(singleDir), QStringLiteral("only.png"), QColor(200, 100, 50));
+        directoryTree->navigateTo(singleDir, true);
+        pump(200);
+        sel->setCurrentImage(singlePath);
+        sendKey(&w, Qt::Key_C);
+        pump(100);
+        bool compareOpened = false;
+        for (QWidget *top : QApplication::topLevelWidgets())
+        {
+            auto *dlg = qobject_cast<QDialog *>(top);
+            if (dlg && dlg->isVisible() && dlg->windowTitle().contains("比较模式"))
+            {
+                compareOpened = true;
+                break;
+            }
+        }
+        CHECK(!compareOpened, "Compare does not open with fewer than two images");
+        directoryTree->navigateTo(dirPath, true);
+        pump(200);
+    }
+
     // M25: closing while the BROWSE WORKSPACE is active must behave like the
     // focus-mode case — persist the state from before Browse hid the panels,
     // not the temporary hidden Browse layout. Exercised FIRST (window open),

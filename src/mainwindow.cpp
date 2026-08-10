@@ -484,8 +484,20 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
         ensureImageList();
         imgs = m_imageList ? m_imageList->paths() : QStringList();
     }
-    if (imgs.isEmpty())
+    // Compare sessions are documented for 2-8 images: trim oversized
+    // fallbacks to the supported range and refuse to open a degenerate
+    // single-image “compare” (with user feedback instead of a silent no-op
+    // or a one-pane dialog).
+    if (imgs.size() > 8)
+    {
+        imgs = imgs.mid(0, 8);
+        statusBar()->showMessage(tr("最多支持 8 张图片对比，已使用前 8 张"), 5000);
+    }
+    if (imgs.size() < 2)
+    {
+        statusBar()->showMessage(tr("需要至少两张图片才能比较"), 5000);
         return;
+    }
 
     auto *dlg = new QDialog(this);
     dlg->setWindowTitle("比较模式 - MViewer");
