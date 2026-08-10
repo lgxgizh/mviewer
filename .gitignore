@@ -1,4 +1,4 @@
-# Benchmark test output artifacts
+﻿# Benchmark test output artifacts
 benchmark/report/last_run.json
 perf_regression_*.ps1
 bench_*.ps1
@@ -21,7 +21,11 @@ benchmark/report/*.json
 
 # Generated test/benchmark data
 demo_assets/
-testdata/
+# Generated test/benchmark data — the corpus is deterministic output of the
+# tracked generator. testdata/* stays ignored; ONLY the generator script is
+# committed so a clean checkout / CI runner can rebuild the fixtures (P0-01).
+testdata/*
+!testdata/generate_fixtures.py
 asan_log.txt
 
 asan_log*.txt

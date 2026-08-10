@@ -1,4 +1,4 @@
-# ─── M13 Phase 5: optional Perfetto-style trace instrumentation ────────────
+﻿# ─── M13 Phase 5: optional Perfetto-style trace instrumentation ────────────
 # OFF by default: the MV_TRACE_* macros compile to no-ops and the green build
 # gains no dependency. When ON, hot-path spans are recorded and can be flushed
 # to a Chrome trace JSON (openable in ui.perfetto.dev / chrome://tracing) via
@@ -943,6 +943,18 @@ target_link_libraries(testdata_regression
 target_compile_features(testdata_regression PRIVATE cxx_std_20)
 target_include_directories(testdata_regression PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
 target_compile_definitions(testdata_regression PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+
+# M28 P0-01: clean-checkout reproducibility gate. testdata/ is git-ignored
+# except for the tracked generator; this CTest proves a fresh checkout can
+# rebuild and validate the fixture corpus (and that the script was not
+# re-ignored). Skips only when no Python interpreter is available.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME testdata_generator_gate
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/testdata/generate_fixtures.py --ensure --size 256)
+    set_tests_properties(testdata_generator_gate PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+endif()
 
 target_compile_features(benchmark_scenario PRIVATE cxx_std_20)
 target_include_directories(benchmark_scenario PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR})
