@@ -741,6 +741,26 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 CHECK(qAbs(viewer->viewTransform().scale - fitScale) < 1e-6,
                       "second double-click restores Fit");
             }
+
+            // Mouse side buttons navigate prev/next (cheat sheet
+            // "← / → / 鼠标侧键").
+            {
+                const QString beforeNav = sel->currentImage();
+                QMouseEvent back(QEvent::MouseButtonPress, QPointF(10, 10),
+                                 viewer->mapToGlobal(QPoint(10, 10)), Qt::BackButton,
+                                 Qt::BackButton, Qt::NoModifier);
+                QApplication::sendEvent(viewer, &back);
+                pump(100);
+                CHECK(!sel->currentImage().isEmpty() && sel->currentImage() != beforeNav,
+                      "mouse back button navigates to the previous image");
+                QMouseEvent fwd(QEvent::MouseButtonPress, QPointF(10, 10),
+                                viewer->mapToGlobal(QPoint(10, 10)), Qt::ForwardButton,
+                                Qt::ForwardButton, Qt::NoModifier);
+                QApplication::sendEvent(viewer, &fwd);
+                pump(100);
+                CHECK(sel->currentImage() == beforeNav,
+                      "mouse forward button navigates back to the original image");
+            }
         }
         viewer->close();
         pump(20);

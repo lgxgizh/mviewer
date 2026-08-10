@@ -39,6 +39,9 @@ All notable changes to this project are documented here. The format is based on
   drag-drop hint) instead of a blank canvas; it hides automatically once a
   directory is opened. Covered by `workflow_ux_tests` (visible at clean
   startup, hidden after navigation).
+- **Mouse side-button navigation regression (`workflow_ux_tests`):** the
+  cheat-sheet-documented “鼠标侧键” prev/next gesture had no coverage; now
+  machine-locked (back button goes to the previous image, forward returns).
 - **Global search end-to-end regression (`workflow_ux_tests`):** query a
   filename fragment in the search panel, assert the result row names the
   file, and double-click it to open the image — the full shipped search
