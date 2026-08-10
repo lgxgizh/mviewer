@@ -45,8 +45,10 @@ void MainWindow::setupCommands()
         [this]() { m_thumbnailPanel->moveToTrashSelected(); },
         std::vector<CommandShortcut>{{Qt::Key_Delete, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "file_copy", "复制到... (Ctrl+C)", [this]() { m_thumbnailPanel->copySelectedTo(); },
-        std::vector<CommandShortcut>{{Qt::Key_C, Qt::ControlModifier}}));
+        "file_copy", "复制到...", [this]() { m_thumbnailPanel->copySelectedTo(); },
+        // No shortcut: global Ctrl+C copies the image to the clipboard
+        // (handled before registry dispatch); binding it here too would be dead.
+        std::vector<CommandShortcut>{}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
         "file_move", "移动到... (Ctrl+M)", [this]() { m_thumbnailPanel->moveSelectedTo(); },
         std::vector<CommandShortcut>{{Qt::Key_M, Qt::ControlModifier}}));

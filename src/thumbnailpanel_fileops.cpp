@@ -241,8 +241,10 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
     aOpen->setShortcut(QKeySequence(Qt::Key_Return));
     QAction *aRename = menu.addAction("重命名");
     aRename->setShortcut(QKeySequence(Qt::Key_F2));
+    // NOTE: no Ctrl+C here — the global binding copies the current image to
+    // the clipboard; advertising the file-copy dialog on the same key would
+    // be misleading (the dialog stays reachable via the menu item).
     QAction *aCopy = menu.addAction("复制...");
-    aCopy->setShortcut(QKeySequence("Ctrl+C"));
     QAction *aMove = menu.addAction("移动...");
     aMove->setShortcut(QKeySequence("Ctrl+M"));
     QAction *aTrash = menu.addAction("移到回收站");

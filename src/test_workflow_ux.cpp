@@ -34,6 +34,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QCheckBox>
+#include <QClipboard>
 #include <QComboBox>
 #include <QDialog>
 #include <QDir>
@@ -693,6 +694,15 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                                      qAbs((cursor.y() - after.offsetY) / after.scale - imgY);
                 CHECK(drift < 0.5, "wheel zoom keeps the image point under the cursor fixed");
             }
+
+            // Ctrl+C copies the current image to the clipboard. It must NEVER
+            // open the file-copy dialog (the context menu no longer advertises
+            // Ctrl+C for that action — same key, different behavior).
+            QApplication::clipboard()->clear();
+            sendKey(&w, Qt::Key_C, Qt::ControlModifier);
+            pump(20);
+            CHECK(!QApplication::clipboard()->image().isNull(),
+                  "Ctrl+C copies the current image to the clipboard");
         }
         viewer->close();
         pump(20);

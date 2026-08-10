@@ -52,6 +52,12 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- **Ctrl+C double binding:** the gallery context menu and the command
+  registry advertised “Ctrl+C = 复制文件对话框”, but the global
+  binding actually copies the current image to the clipboard (handled
+  before registry dispatch). Removed the misleading shortcut from both
+  places; workflow_ux_tests now asserts Ctrl+C puts an image on the
+  clipboard and never opens a file dialog.
 - **Shortcut cheat sheet drift:** the F1 help now documents the `Ctrl+F`
   directory-tree-filter shortcut and the `F1` help trigger itself (both
   were working but missing from the sheet). `workflow_ux_tests` opens the
