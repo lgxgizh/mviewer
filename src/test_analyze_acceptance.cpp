@@ -14,8 +14,8 @@
 // (Registry-level numeric correctness is covered by analyzer_pipeline_tests /
 // test_analyzer_pipeline / analysis_panel_tests.)
 
-#include "analyzermodel.h"
 #include "analysispanel.h"
+#include "analyzermodel.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/analyzer/AnalyzerPipeline.h"
 #include "core/image/ImageFrame.h"
@@ -96,9 +96,12 @@ void testC7FailingAnalyzer()
     // std::function deleter is empty, and destroying the unique_ptr then
     // throws std::bad_function_call (uncaught in the scheduler worker ->
     // terminate). The builtin factories all pass an explicit deleter.
-    reg.registerAnalyzer("m24_failing", []()
-                         { return std::unique_ptr<Analyzer, AnalyzerDeleter>(
-                               new FailingAnalyzer(), [](Analyzer *p) { delete p; }); });
+    reg.registerAnalyzer("m24_failing",
+                         []()
+                         {
+                             return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                                 new FailingAnalyzer(), [](Analyzer *p) { delete p; });
+                         });
 
     const auto frame = makeFrame(64, 64, QColor(12, 34, 56));
 
@@ -197,10 +200,8 @@ void testC6PersistenceRoundTrip()
               "C#6: second result reloads for its own path");
         CHECK(model.resultText("/data/other.png").isEmpty(),
               "C#6: no phantom result for an unrelated path");
-        CHECK(model.pinned().contains("/data/img_b.png"),
-              "C#6: pinned state survives restart");
-        CHECK(model.history().contains("/data/img_a.png"),
-              "C#6: history survives restart");
+        CHECK(model.pinned().contains("/data/img_b.png"), "C#6: pinned state survives restart");
+        CHECK(model.history().contains("/data/img_a.png"), "C#6: history survives restart");
     }
     QFile::remove(file);
 }
@@ -247,6 +248,3 @@ int main(int argc, char **argv)
     std::cout << "analyze_acceptance_tests: PASS\n";
     return 0;
 }
-
-
-

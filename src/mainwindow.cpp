@@ -203,8 +203,7 @@ void MainWindow::reindexSearch()
     if (m_reindexRequestId != 0)
         mviewer::core::MetadataIndexer::instance().cancelRequest(m_reindexRequestId);
     const uint64_t requestId = mviewer::core::MetadataIndexer::instance().index(
-        paths,
-        [](const mviewer::core::MetadataIndexer::Entry &) {},
+        paths, [](const mviewer::core::MetadataIndexer::Entry &) {},
         [this, alive, gen]()
         {
             if (!alive->load())
@@ -221,8 +220,8 @@ void MainWindow::reindexSearch()
                     entries.reserve(static_cast<size_t>(cur.size()));
                     for (const QString &p : cur)
                     {
-                        const auto e = mviewer::core::MetadataIndexer::instance().cached(
-                            p.toStdString());
+                        const auto e =
+                            mviewer::core::MetadataIndexer::instance().cached(p.toStdString());
                         if (e)
                             entries.push_back(*e);
                     }
@@ -526,21 +525,23 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     connect(m_compareView, &CompareWorkspace::loadWarning, this,
             [this](const QString &text) { statusBar()->showMessage(text, 10000); });
     // P1 #④: Compare → Analyze workflow (Analyze button in Compare toolbar).
-    connect(m_compareView, &CompareWorkspace::analyzeCurrent, this,
-            [this]()
+    connect(
+        m_compareView, &CompareWorkspace::analyzeCurrent, this,
+        [this]()
+        {
+            if (m_compareView)
             {
-                if (m_compareView)
+                const QString path = m_compareView->focusImagePath();
+                if (!path.isEmpty())
                 {
-                    const QString path = m_compareView->focusImagePath();
-                    if (!path.isEmpty())
-                    {
-                        m_selection->setCurrentImage(path);
-                        m_imageViewer->setImage(path); // imageReady -> AnalysisPanel::setFrame (async, visibility-gated)
-                    }
+                    m_selection->setCurrentImage(path);
+                    m_imageViewer->setImage(
+                        path); // imageReady -> AnalysisPanel::setFrame (async, visibility-gated)
                 }
-                if (m_analysisPanel && !m_analysisPanel->isVisible())
-                    m_analysisPanel->show();
-            });
+            }
+            if (m_analysisPanel && !m_analysisPanel->isVisible())
+                m_analysisPanel->show();
+        });
     // P1 #④: Compare → Export Report workflow (Export button in Compare toolbar).
     connect(m_compareView, &CompareWorkspace::exportReportRequested, this,
             [this]() { exportReport(); });

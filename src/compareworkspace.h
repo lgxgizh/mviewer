@@ -167,8 +167,7 @@ class CompareWorkspace : public QWidget
     uint64_t m_loadGen = 0;
     bool m_loadInFlight = false;
     std::optional<mviewer::domain::CompareSession> m_pendingSession;
-    void finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames,
-                    int failedCount);
+    void finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames, int failedCount);
     QCheckBox *m_syncZoomChk = nullptr;
     QCheckBox *m_syncDragChk = nullptr;
     QCheckBox *m_uniformScaleChk = nullptr; // H5: 统一像素倍率

@@ -429,8 +429,7 @@ static void testScaleRegionRegionDirect()
         {
             const int sx = 100 + ox * 4;
             const int sy = 100 + oy * 4;
-            const uint8_t *d =
-                out.buffer->data() + (static_cast<size_t>(oy) * 64 + ox) * 3;
+            const uint8_t *d = out.buffer->data() + (static_cast<size_t>(oy) * 64 + ox) * 3;
             if (d[0] != static_cast<uint8_t>(sx & 0xFF) ||
                 d[1] != static_cast<uint8_t>(sy & 0xFF) ||
                 d[2] != static_cast<uint8_t>((sx ^ sy) & 0xFF))
@@ -445,8 +444,8 @@ static void testScaleRegionRegionDirect()
     // Equivalence: scaleRegion(region) == scale(crop(region)) for every
     // supported format — the fast path must be pixel-identical to the old
     // crop-then-scale semantics.
-    for (PixelFormat fmt : {PixelFormat::RGB24, PixelFormat::Grayscale8,
-                            PixelFormat::BGRA32, PixelFormat::RGBA32})
+    for (PixelFormat fmt :
+         {PixelFormat::RGB24, PixelFormat::Grayscale8, PixelFormat::BGRA32, PixelFormat::RGBA32})
     {
         const ImageData s = makePattern(512, 512, fmt);
         const RenderRect r{64, 64, 128, 128};
@@ -461,10 +460,11 @@ static void testScaleRegionRegionDirect()
         if (direct.isNull() || ref.isNull() || direct.width != ref.width ||
             direct.height != ref.height || direct.channelsPerPixel() != ref.channelsPerPixel())
             continue;
-        const size_t n = static_cast<size_t>(direct.width) * direct.height *
-                         direct.channelsPerPixel();
+        const size_t n =
+            static_cast<size_t>(direct.width) * direct.height * direct.channelsPerPixel();
         const bool same = std::memcmp(direct.buffer->data(), ref.buffer->data(), n) == 0;
-        CHECK(same, ("scaleRegion equals crop-then-scale (format " + std::to_string(f) + ")").c_str());
+        CHECK(same,
+              ("scaleRegion equals crop-then-scale (format " + std::to_string(f) + ")").c_str());
     }
 }
 

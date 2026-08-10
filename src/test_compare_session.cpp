@@ -82,11 +82,10 @@ int main(int argc, char **argv)
     assert(captured.selection.w > 0 && captured.selection.h > 0 &&
            "CompareEngine::session() must capture the ROI/selection");
     assert(captured.selection.x == 1 && captured.selection.y == 2 && captured.selection.w == 4 &&
-           captured.selection.h == 3 &&
-           "captured ROI must match applied selection");
+           captured.selection.h == 3 && "captured ROI must match applied selection");
     std::cout << "[ok] CompareEngine::session() captures ROI (" << captured.selection.x << ","
-              << captured.selection.y << "," << captured.selection.w << ","
-              << captured.selection.h << ")\n";
+              << captured.selection.y << "," << captured.selection.w << "," << captured.selection.h
+              << ")\n";
 
     // ---- 2) Serialize -> deserialize round-trip preserves every field. ----
     const std::string json = mviewer::core::serializeCompareSession(captured);
@@ -124,14 +123,14 @@ int main(int argc, char **argv)
 
     std::atomic<bool> blockerStarted{false};
     std::atomic<bool> releaseBlocker{false};
-    const auto blocker = scheduler.submit(
-        TaskScheduler::Priority::Analysis,
-        [&blockerStarted, &releaseBlocker](const TaskScheduler::TaskContext &)
-        {
-            blockerStarted.store(true, std::memory_order_release);
-            while (!releaseBlocker.load(std::memory_order_acquire))
-                std::this_thread::yield();
-        });
+    const auto blocker =
+        scheduler.submit(TaskScheduler::Priority::Analysis,
+                         [&blockerStarted, &releaseBlocker](const TaskScheduler::TaskContext &)
+                         {
+                             blockerStarted.store(true, std::memory_order_release);
+                             while (!releaseBlocker.load(std::memory_order_acquire))
+                                 std::this_thread::yield();
+                         });
     assert(blocker && "analysis queue blocker must be accepted");
 
     const auto waitDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
@@ -144,12 +143,9 @@ int main(int argc, char **argv)
     assert(blockerStarted.load(std::memory_order_acquire) && "analysis queue blocker must start");
 
     std::atomic<int> diffEvents{0};
-    const int diffSubId = EventBus::instance().subscribe(
-        "CompareEngine.DiffResult",
-        [&diffEvents](void *)
-        {
-            diffEvents.fetch_add(1, std::memory_order_relaxed);
-        });
+    const int diffSubId =
+        EventBus::instance().subscribe("CompareEngine.DiffResult", [&diffEvents](void *)
+                                       { diffEvents.fetch_add(1, std::memory_order_relaxed); });
 
     constexpr int kQueuedEngines = 32;
     for (int i = 0; i < kQueuedEngines; ++i)

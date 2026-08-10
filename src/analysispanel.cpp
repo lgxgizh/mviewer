@@ -1,13 +1,13 @@
 #include "analysispanel.h"
 #include "analyzermodel.h"
 
-#include <QShowEvent>
-#include <QTimer>
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/HistogramAnalyzer.h"
 #include "core/compare/Aligner.h"
 #include "widgets/rawimageview.h"
 #include <QSettings>
+#include <QShowEvent>
+#include <QTimer>
 
 #include "core/image/QtConvert.h"
 
@@ -192,46 +192,45 @@ void AnalysisPanel::reanalyze()
                     const auto *hist = dynamic_cast<const HistogramAnalyzer *>(analyzer.get());
                     if (hist)
                     {
-                    const auto &h = hist->result();
-                    m_statsA.lumMean = h.lumMean;
-                    m_statsA.rMean = h.rMean;
-                    m_statsA.gMean = h.gMean;
-                    m_statsA.bMean = h.bMean;
-                    renderHistogramPixmap(h);
-                }
-                // Unified result surface: Histogram stats + Plugin tab.
-                const QString html = QString("<h3>%1</h3><p>%2</p>")
-                                         .arg(QString::fromStdString(analyzer->name()))
-                                         .arg(QString::fromStdString(text));
-                m_statsLabel->setText(html);
-                if (m_pluginResult)
-                {
-                    QString pluginHtml = html;
-                    if (!metrics.empty())
-                    {
-                        pluginHtml += "<table>";
-                        for (const auto &[k, v] : metrics)
-                            pluginHtml += QString("<tr><td>%1</td><td>%2</td></tr>")
-                                              .arg(QString::fromStdString(k))
-                                              .arg(v, 0, 'f', 4);
-                        pluginHtml += "</table>";
+                        const auto &h = hist->result();
+                        m_statsA.lumMean = h.lumMean;
+                        m_statsA.rMean = h.rMean;
+                        m_statsA.gMean = h.gMean;
+                        m_statsA.bMean = h.bMean;
+                        renderHistogramPixmap(h);
                     }
-                    m_pluginResult->setText(pluginHtml);
+                    // Unified result surface: Histogram stats + Plugin tab.
+                    const QString html = QString("<h3>%1</h3><p>%2</p>")
+                                             .arg(QString::fromStdString(analyzer->name()))
+                                             .arg(QString::fromStdString(text));
+                    m_statsLabel->setText(html);
+                    if (m_pluginResult)
+                    {
+                        QString pluginHtml = html;
+                        if (!metrics.empty())
+                        {
+                            pluginHtml += "<table>";
+                            for (const auto &[k, v] : metrics)
+                                pluginHtml += QString("<tr><td>%1</td><td>%2</td></tr>")
+                                                  .arg(QString::fromStdString(k))
+                                                  .arg(v, 0, 'f', 4);
+                            pluginHtml += "</table>";
+                        }
+                        m_pluginResult->setText(pluginHtml);
+                    }
+                    // M21: publish plain result into AnalyzerModel (history + pin SSOT).
+                    publishResult(QString::fromStdString(text));
+                    return;
                 }
-                // M21: publish plain result into AnalyzerModel (history + pin SSOT).
-                publishResult(QString::fromStdString(text));
-                return;
             }
-        }
         }
         catch (...)
         {
             // M24 (C#7): analyzer failure (e.g. buggy plugin) — surface a
             // graceful note instead of propagating an exception into the UI.
             const QString err = tr("分析器执行失败（%1）。").arg(id);
-            m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>")
-                                      .arg(QStringLiteral("分析失败"))
-                                      .arg(err));
+            m_statsLabel->setText(
+                QString("<h3>%1</h3><p>%2</p>").arg(QStringLiteral("分析失败")).arg(err));
             if (m_pluginResult)
                 m_pluginResult->setText(err);
             publishResult(err);
@@ -273,7 +272,8 @@ void AnalysisPanel::setFrame(std::shared_ptr<ImageFrame> frame)
     m_frameDirty = true;
     if (isVisible())
     {
-        QTimer::singleShot(0, this, [this]()
+        QTimer::singleShot(0, this,
+                           [this]()
                            {
                                if (m_frameDirty)
                                    refreshFromFrame();

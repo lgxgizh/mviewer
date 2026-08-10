@@ -124,8 +124,7 @@ void testMultiImageEntry(const QStringList &paths8)
     {
         CHECK(!split->isEnabled() && !overlay->isEnabled(),
               "B#8: split/overlay disabled for 4 images");
-        const bool hasExplain =
-            !split->toolTip().isEmpty() && split->toolTip().contains("2");
+        const bool hasExplain = !split->toolTip().isEmpty() && split->toolTip().contains("2");
         CHECK(hasExplain, "B#8: disabled split control explains its 2-image requirement");
     }
 
@@ -319,8 +318,7 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
     pump(170);
     CHECK(pane0->isVisible() != pane1->isVisible(),
           "P1: repeated Blink ticks keep exactly one pane container visible");
-    CHECK(frame0->isVisible() == pane0->isVisible() &&
-              frame1->isVisible() == pane1->isVisible(),
+    CHECK(frame0->isVisible() == pane0->isVisible() && frame1->isVisible() == pane1->isVisible(),
           "P1: pane histogram frames follow the active Blink pane");
     CHECK(caption0->isVisible() == pane0->isVisible() &&
               caption1->isVisible() == pane1->isVisible(),
@@ -360,8 +358,7 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
     hist1 = paneHist(1);
     CHECK(mainHist && mainHist->histogramCount() > 0 && mainHist->histogramTotal(0) == 1024,
           "P1: main histogram uses the 32x32 ROI total");
-    CHECK(hist0 && hist1 && hist0->histogramTotal(0) == 1024 &&
-              hist1->histogramTotal(0) == 1024,
+    CHECK(hist0 && hist1 && hist0->histogramTotal(0) == 1024 && hist1->histogramTotal(0) == 1024,
           "P1: pane histograms use the same 32x32 ROI total");
 }
 

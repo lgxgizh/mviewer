@@ -21,14 +21,14 @@
 #include "core/metadata/MetadataIndexer.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
-#include "directorytree.h"
 #include "directorymodel.h"
+#include "directorytree.h"
 #include "exportdialog.h"
 #include "imageviewer.h"
 #include "mainwindow.h"
 #include "metadataoverlay.h"
-#include "searchpanel.h"
 #include "previewpanel.h"
+#include "searchpanel.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
 #include "widgets/rawimageview.h"
@@ -164,8 +164,8 @@ QString writePng(const QDir &dir, const QString &name, QColor color)
 
 // Minimal little-endian TIFF (DNG-like) carrying ISO/Make/Model/LensModel so
 // parseRawMetadata extracts real camera/lens/ISO fields.
-bool writeFakeDng(const std::string &path, const std::string &make,
-                  const std::string &model, const std::string &lens, uint16_t iso)
+bool writeFakeDng(const std::string &path, const std::string &make, const std::string &model,
+                  const std::string &lens, uint16_t iso)
 {
     FILE *f = std::fopen(path.c_str(), "wb");
     if (!f)
@@ -186,7 +186,7 @@ bool writeFakeDng(const std::string &path, const std::string &make,
         std::fwrite(&cnt, 4, 1, f);
         std::fwrite(&val, 4, 1, f);
     };
-    writeEntry(0x8827, 3, 1, iso);                                       // ISO (SHORT inline)
+    writeEntry(0x8827, 3, 1, iso); // ISO (SHORT inline)
     writeEntry(0x010F, 2, static_cast<uint32_t>(make.size()) + 1,
                static_cast<uint32_t>(makeOff)); // Make (ASCII)
     writeEntry(0x0110, 2, static_cast<uint32_t>(model.size()) + 1,
@@ -396,8 +396,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         CHECK(thumbnailPanel->viewMode() == ThumbnailPanel::LargeIcon &&
                   thumbnailPanel->thumbSize() == 240 && thumbnailSizeSlider->value() == 240,
               "restore size cannot override the Large 240px preset");
-        CHECK(!thumbnailSizeSlider->isEnabled(),
-              "Large preset disables the thumbnail size slider");
+        CHECK(!thumbnailSizeSlider->isEnabled(), "Large preset disables the thumbnail size slider");
         thumbnailPanel->setViewMode(ThumbnailPanel::LargeIcon);
         CHECK(viewModeCombo->currentData().toInt() == ThumbnailPanel::LargeIcon &&
                   thumbnailSizeSlider->value() == 240,
@@ -419,8 +418,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         setViewModeFromCombo(ThumbnailPanel::Thumbnail);
         CHECK(thumbnailPanel->thumbSize() == 196 && thumbnailSizeSlider->value() == 196,
               "Thumbnail restores the size remembered while Details was active");
-        CHECK(thumbnailSizeSlider->isEnabled(),
-              "Thumbnail re-enables the thumbnail size slider");
+        CHECK(thumbnailSizeSlider->isEnabled(), "Thumbnail re-enables the thumbnail size slider");
     }
 
     if (browseWorkspaceAction)
@@ -531,7 +529,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     // setter; do not call onImageOpen directly and hide a duplicate-open bug.
     pump(100);
     CHECK(sel->currentImage() == paths[0],
-           "launch open keeps SelectionModel.currentImage synchronized");
+          "launch open keeps SelectionModel.currentImage synchronized");
 
     // Return in the editable path field must navigate without invoking the
     // window-level quick-preview command or reopening the old image.
@@ -997,12 +995,12 @@ void workflow3_session_restore(const QString &dirPath, const QString &imagePath)
               "Search panel and action restore together across a new MainWindow");
         CHECK(browseAction && !browseAction->isChecked(),
               "restored side panels keep the Browser workspace action unchecked");
-        CHECK(thumbnailPanel && thumbnailPanel->viewMode() == ThumbnailPanel::LargeIcon &&
-                  thumbnailPanel->thumbSize() == 240 && thumbnailSizeSlider &&
-                  thumbnailSizeSlider->value() == 240 && !thumbnailSizeSlider->isEnabled() &&
-                  viewModeCombo &&
-                  viewModeCombo->currentData().toInt() == ThumbnailPanel::LargeIcon,
-              "deferred restore keeps the Large preset at 240px with a disabled synchronized slider");
+        CHECK(
+            thumbnailPanel && thumbnailPanel->viewMode() == ThumbnailPanel::LargeIcon &&
+                thumbnailPanel->thumbSize() == 240 && thumbnailSizeSlider &&
+                thumbnailSizeSlider->value() == 240 && !thumbnailSizeSlider->isEnabled() &&
+                viewModeCombo && viewModeCombo->currentData().toInt() == ThumbnailPanel::LargeIcon,
+            "deferred restore keeps the Large preset at 240px with a disabled synchronized slider");
         w.close();
         pump(50);
     }
@@ -1304,14 +1302,14 @@ void workflow4_list_scaling(const QString &rootDir)
         panel.resize(1200, 800);
         panel.show();
         pump(30);
-        pipeline.setDecodeFn([totalDecodeStarts, decodePaths, decodePathsMutex](
-                                 const std::string &path, int)
-                             {
-                                 totalDecodeStarts->fetch_add(1, std::memory_order_relaxed);
-                                 const std::lock_guard<std::mutex> lock(*decodePathsMutex);
-                                 decodePaths->insert(path);
-                                 return ImageData{};
-                             });
+        pipeline.setDecodeFn(
+            [totalDecodeStarts, decodePaths, decodePathsMutex](const std::string &path, int)
+            {
+                totalDecodeStarts->fetch_add(1, std::memory_order_relaxed);
+                const std::lock_guard<std::mutex> lock(*decodePathsMutex);
+                decodePaths->insert(path);
+                return ImageData{};
+            });
         panel.setDirectory(dirPath);
         QElapsedTimer entriesTimer;
         entriesTimer.start();
@@ -1324,8 +1322,8 @@ void workflow4_list_scaling(const QString &rootDir)
             uniqueDecodePaths = decodePaths->size();
         }
         std::cout << "    List decode starts: "
-                  << totalDecodeStarts->load(std::memory_order_relaxed)
-                  << " total, " << uniqueDecodePaths << " unique paths\n";
+                  << totalDecodeStarts->load(std::memory_order_relaxed) << " total, "
+                  << uniqueDecodePaths << " unique paths\n";
         CHECK(panel.entries().size() == 600, "List scaling loads all 600 model entries");
         CHECK(uniqueDecodePaths < 400,
               "List first screen schedules a bounded window instead of all 600 entries");
@@ -1349,8 +1347,8 @@ void workflow5_export_current_output_directory(const QString &rootDir)
 
     QDir sourceDir(sourceDirPath);
     QDir outputDir(outputDirPath);
-    const QString sourcePath = writePng(sourceDir, QStringLiteral("export_source.png"),
-                                        QColor(80, 120, 180));
+    const QString sourcePath =
+        writePng(sourceDir, QStringLiteral("export_source.png"), QColor(80, 120, 180));
     const QString sourceReport = sourceDir.filePath(QStringLiteral("export_report.csv"));
     const QString outputReport = outputDir.filePath(QStringLiteral("export_report.csv"));
     QFile::remove(sourceReport);
@@ -1358,8 +1356,7 @@ void workflow5_export_current_output_directory(const QString &rootDir)
 
     {
         ExportDialog dialog(QStringList{sourcePath});
-        auto *dirEdit =
-            dialog.findChild<QLineEdit *>(QStringLiteral("exportOutputDirectoryEdit"));
+        auto *dirEdit = dialog.findChild<QLineEdit *>(QStringLiteral("exportOutputDirectoryEdit"));
         auto *modeCombo = dialog.findChild<QComboBox *>(QStringLiteral("exportModeCombo"));
         CHECK(dirEdit && modeCombo, "export exposes stable output directory and mode controls");
         if (dirEdit && modeCombo)
@@ -1459,8 +1456,7 @@ void workflow6_metadata_dual_consumer(const QString &rootDir)
     // filling) before the MainWindow re-index supersedes it.
     QElapsedTimer startTimer;
     startTimer.start();
-    while (mviewer::core::MetadataIndexer::instance().size() == 0 &&
-           startTimer.elapsed() < 4000)
+    while (mviewer::core::MetadataIndexer::instance().size() == 0 && startTimer.elapsed() < 4000)
         pump(10);
 
     // Now wait out MainWindow's re-index window, then require the camera filter

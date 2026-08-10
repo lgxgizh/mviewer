@@ -164,8 +164,7 @@ void ImageViewer::setImage(const QString &path)
                     [path, gen, guard]()
                     {
                         ImageViewer *viewer = guard.data();
-                        if (!viewer || path != viewer->m_currentPath ||
-                            gen != viewer->m_requestGen)
+                        if (!viewer || path != viewer->m_currentPath || gen != viewer->m_requestGen)
                             return;
                         viewer->m_hasHistogram = false;
                         viewer->setWindowTitle(
@@ -180,8 +179,7 @@ void ImageViewer::setImage(const QString &path)
                 [res, path, gen, guard]()
                 {
                     ImageViewer *viewer = guard.data();
-                    if (!viewer || path != viewer->m_currentPath ||
-                        gen != viewer->m_requestGen)
+                    if (!viewer || path != viewer->m_currentPath || gen != viewer->m_requestGen)
                         return; // widget destroyed or user navigated away
                     viewer->m_frame = res.frame;
                     // M28 P1-02: no full-size QPixmap materialization on the UI
@@ -199,22 +197,20 @@ void ImageViewer::setImage(const QString &path)
                     viewer->computeHistogram();
                     const QFileInfo info(path);
                     viewer->m_fileList = listImages(info.absolutePath());
-                    viewer->m_currentIndex =
-                        static_cast<int>(viewer->m_fileList.indexOf(path));
+                    viewer->m_currentIndex = static_cast<int>(viewer->m_fileList.indexOf(path));
                     // Build the render pipeline state (tile grid + fitted Viewport)
                     // exactly as before — now applied on the UI thread post-decode.
-                    viewer->m_tiles = TileGrid(viewer->m_frame->width(),
-                                               viewer->m_frame->height(), 256);
+                    viewer->m_tiles =
+                        TileGrid(viewer->m_frame->width(), viewer->m_frame->height(), 256);
                     viewer->m_view.screenW = viewer->width();
                     viewer->m_view.screenH = viewer->height();
-                    viewer->m_view.fit(viewer->m_frame->width(), viewer->m_frame->height(),
-                                       0.95);
+                    viewer->m_view.fit(viewer->m_frame->width(), viewer->m_frame->height(), 0.95);
                     viewer->m_fitMode = true;
-                    const QString position =
-                        viewer->m_currentIndex >= 0
-                            ? QString(" [%1/%2]").arg(viewer->m_currentIndex + 1)
-                                    .arg(viewer->m_fileList.size())
-                            : QString();
+                    const QString position = viewer->m_currentIndex >= 0
+                                                 ? QString(" [%1/%2]")
+                                                       .arg(viewer->m_currentIndex + 1)
+                                                       .arg(viewer->m_fileList.size())
+                                                 : QString();
                     viewer->setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
                                                .arg(info.fileName())
                                                .arg(viewer->m_frame->width())
@@ -237,7 +233,8 @@ void ImageViewer::setImage(const QString &path)
                         }
                         viewer->m_pendingView.reset();
                         viewer->m_fitMode = false; // restored zoom is explicit, not fit
-                        emit viewer->zoomChanged(static_cast<int>(viewer->m_view.scale * 100.0 + 0.5));
+                        emit viewer->zoomChanged(
+                            static_cast<int>(viewer->m_view.scale * 100.0 + 0.5));
                     }
                     viewer->m_tileCache.clear(); // drop tiles from any previously viewed image
                     // Stage A: drop GPU textures for the previous image while
@@ -423,8 +420,8 @@ void ImageViewer::mousePressEvent(QMouseEvent *event)
         emit requestNext();
         return;
     }
-    if ((event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton) &&
-        m_frame && m_frame->isValid())
+    if ((event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton) && m_frame &&
+        m_frame->isValid())
     {
         if (m_selectMode && event->button() == Qt::LeftButton)
         {
@@ -539,16 +536,15 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
                           static_cast<int>(std::round(r.width() / m_view.scale)),
                           static_cast<int>(std::round(r.height() / m_view.scale)))
                         .normalized();
-                const QRect valid = m_frame
-                                         ? imgRect.intersected(QRect(0, 0, m_frame->width(),
-                                                                     m_frame->height()))
-                                         : QRect();
+                const QRect valid =
+                    m_frame ? imgRect.intersected(QRect(0, 0, m_frame->width(), m_frame->height()))
+                            : QRect();
                 if (!valid.isEmpty() && m_frame)
                 {
                     const mviewer::domain::Selection sel{valid.x(), valid.y(), valid.width(),
                                                          valid.height()};
-                    const auto stats = mviewer::core::computePreviewStats(
-                        cropRegion(m_frame->pixels(), sel));
+                    const auto stats =
+                        mviewer::core::computePreviewStats(cropRegion(m_frame->pixels(), sel));
                     const QString text = QString("框选 [%1,%2,%3,%4]: 亮度=%5, R=%6,G=%7,B=%8")
                                              .arg(valid.x())
                                              .arg(valid.y())
