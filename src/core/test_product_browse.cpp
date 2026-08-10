@@ -153,6 +153,7 @@ static void testFirstThumbnailLatency()
     write1000(tempDir);
 
     std::vector<std::string> paths;
+    paths.reserve(1000);
     for (int i = 0; i < 1000; ++i)
         paths.push_back((tempDir / ("img_" + std::to_string(i) + ".png")).string());
 
@@ -223,6 +224,7 @@ static void testNavigateWorkflow()
     write1000(tempDir);
 
     std::vector<std::string> paths;
+    paths.reserve(1000);
     for (int i = 0; i < 1000; ++i)
         paths.push_back((tempDir / ("img_" + std::to_string(i) + ".png")).string());
 
