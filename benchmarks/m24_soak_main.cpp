@@ -1353,7 +1353,6 @@ int main(int argc, char **argv)
 
     // ── M27: T11-T18 failure containment / async lifetime stress ──────────────
     // MVIEWER_SOAK_NOT=1 skips the whole T-block (bisect knob).
-#if 0 // BISECT: T-block needs M27 API
     if (!qEnvironmentVariableIsSet("MVIEWER_SOAK_NOT"))
     {
     // Convergence helper shared by the T-scenarios: scheduler pools, dependency
@@ -1707,7 +1706,6 @@ int main(int argc, char **argv)
 
     }
 
-#endif // BISECT
     // ── S9: Workspace disk serialize/deserialize round-trip ──────────────────
         BlockMarker marker_S9("S9");
         std::cout << "[soak] S9 start" << std::flush;
