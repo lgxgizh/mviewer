@@ -16,8 +16,8 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QTemporaryDir>
-#include <cstdio>
 #include <cstdint>
+#include <iostream>
 #include <string>
 #include <vector>
 
@@ -29,12 +29,12 @@ static int g_fail = 0;
     {                                                                                              \
         if (cond)                                                                                  \
         {                                                                                          \
-            printf("  PASS: %s\n", msg);                                                           \
+            std::cout << "  PASS: " << msg << "\n";                                                \
             g_pass++;                                                                              \
         }                                                                                          \
         else                                                                                       \
         {                                                                                          \
-            printf("  FAIL: %s\n", msg);                                                           \
+            std::cout << "  FAIL: " << msg << "\n";                                                \
             g_fail++;                                                                              \
         }                                                                                          \
     } while (0)
@@ -44,7 +44,7 @@ using mviewer::core::RawMetadata;
 // ─── 1. MetadataFilter field semantics ──────────────────────────────────────
 static void testMetadataFilterFields()
 {
-    printf("\n[MetadataFilter field semantics]\n");
+    std::cout << "\n[MetadataFilter field semantics]\n";
     RawMetadata raw;
     raw.make = "SONY";
     raw.model = "ILCE-7RM4";
@@ -78,7 +78,7 @@ static void testMetadataFilterFields()
 // ─── 2. Sort keys computed once per file ────────────────────────────────────
 static void testSortKeysOncePerFile()
 {
-    printf("\n[Sort keys: one metadata/dimension pass per file]\n");
+    std::cout << "\n[Sort keys: one metadata/dimension pass per file]\n";
     QTemporaryDir tmp;
     std::vector<std::string> paths;
     for (int i = 0; i < 50; ++i)
@@ -139,7 +139,7 @@ static void testSortKeysOncePerFile()
 // ─── 3. MetadataIndexer async / cancellable / generation-scoped ─────────────
 static void testMetadataIndexer()
 {
-    printf("\n[MetadataIndexer: async, cancellable, progressive]\n");
+    std::cout << "\n[MetadataIndexer: async, cancellable, progressive]\n";
     QTemporaryDir tmp;
     std::vector<std::string> paths;
     for (int i = 0; i < 8; ++i)
@@ -206,14 +206,14 @@ static void testMetadataIndexer()
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
-    printf("=== Browse pipeline convergence tests (M25 phase 1, core) ===\n");
+    std::cout << "=== Browse pipeline convergence tests (M25 phase 1, core) ===\n";
     fflush(stdout);
 
     testMetadataFilterFields();
     testSortKeysOncePerFile();
     testMetadataIndexer();
 
-    printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
+    std::cout << "\n=== Results: " << g_pass << " passed, " << g_fail << " failed ===\n";
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;
 }

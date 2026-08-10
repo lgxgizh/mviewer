@@ -311,20 +311,20 @@ Compare 打开:
 2. P1-05: build.ps1 Test 失败退出码(顺手, 5 分钟)。
 
 ### P1 - 下一阶段(2-3 周)
-3. P1-01: Compare 异步化(先写"openCompare UI gap < 预算"回归测试, 再改实现)。
-4. P1-02: AnalysisPanel/ImageViewer UI 线程全图转换移除。
-5. P1-03: scaleRegion 区域直缩放(消除每 tile O(全图))。
-6. P1-04: 真实路径 benchmark + RUN_SERIAL + 回归轴进 PR。
+1. P1-01: Compare 异步化(先写"openCompare UI gap < 预算"回归测试, 再改实现)。
+2. P1-02: AnalysisPanel/ImageViewer UI 线程全图转换移除。
+3. P1-03: scaleRegion 区域直缩放(消除每 tile O(全图))。
+4. P1-04: 真实路径 benchmark + RUN_SERIAL + 回归轴进 PR。
 
 ### P2 - 后续优化(1 个月窗口内)
-7. P2-01 DiskCache 重构(缩略图/预览优先、容量对齐)。
-8. P2-02/03 调度全局上限 + 邻居预取取消。
-9. P2-04/05 Raw16 与 ThumbnailCache 字节上限。
-10. P2-06/07/08 分析器异步化、QImage(path) 消除、Compare 渲染 LOD。
-11. P2-09/10 CI 收紧与版本一致性。
+1. P2-01 DiskCache 重构(缩略图/预览优先、容量对齐)。
+2. P2-02/03 调度全局上限 + 邻居预取取消。
+3. P2-04/05 Raw16 与 ThumbnailCache 字节上限。
+4. P2-06/07/08 分析器异步化、QImage(path) 消除、Compare 渲染 LOD。
+5. P2-09/10 CI 收紧与版本一致性。
 
 ### P3 - Nice to Have(v1.0 之后)
-12. P3 清单全部 + MainWindow Controller 提取(按需求触发, 不主动做)。
+1. P3 清单全部 + MainWindow Controller 提取(按需求触发, 不主动做)。
 
 ## 15. 必须回答的问题
 

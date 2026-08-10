@@ -21,6 +21,7 @@ dimension mismatch, or write failure).
 
 import argparse
 import os
+import re
 import sys
 
 # Required fixtures: relative path -> (width, height)
@@ -148,7 +149,15 @@ def generate(root: str, size: int) -> bool:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description="MViewer test-data generator")
-    ap.add_argument("--size", type=int, default=256)
+
+    def parse_size(text):
+        # Accept both "256" and the CI-invoked "256x256" (legacy form).
+        m = re.match(r"(\d+)", str(text))
+        if not m:
+            raise argparse.ArgumentTypeError("invalid size %r" % (text,))
+        return int(m.group(1))
+
+    ap.add_argument("--size", type=parse_size, default=256)
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--ensure", action="store_true")
     args = ap.parse_args()

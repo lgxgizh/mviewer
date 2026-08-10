@@ -164,5 +164,5 @@ for ($i = 0; $i -lt $cmake.Count; $i++) {
 [void]$sb.AppendLine('---')
 [void]$sb.AppendLine('_This matrix is regenerated automatically. The M23 policy: every shipped feature MUST have at least one regression test — add the test, then this matrix updates itself._')
 
-Set-Content -Path $Out -Value $sb.ToString() -Encoding UTF8
+Set-Content -Path $Out -Value $sb.ToString().TrimEnd("`n", "`r") -Encoding UTF8
 Write-Host "test_matrix: wrote $($sources.Count) test sources -> $Out"
