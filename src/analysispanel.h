@@ -5,6 +5,7 @@
 #include "core/analyzer/Analyzer.h"
 #include "core/analyzer/AnalyzerPipeline.h"
 #include "core/image/ImageFrame.h"
+#include "core/scheduler/TaskScheduler.h"
 #include "domain/Selection.h"
 
 #include <QComboBox>
@@ -16,12 +17,16 @@
 #include <QTabWidget>
 #include <QWidget>
 
+#include <cstdint>
 #include <memory>
 
 class RawImageView;
 class AnalyzerModel;
 class QListWidget;
 class QPushButton;
+
+// Complete type is defined in analysispanel.cpp (worker payload).
+struct AutoAnalysisResult;
 
 // AnalysisPanel: multi-mode analysis panel
 //  - Histogram + stats (single image)
@@ -35,6 +40,7 @@ class AnalysisPanel : public QWidget
 
   public:
     explicit AnalysisPanel(QWidget *parent = nullptr);
+    ~AnalysisPanel() override;
 
     // M15 P0#3: inject the analyzer pipeline (orchestration layer over the
     // AnalyzerRegistry). The panel routes all analyzer creation/execution
@@ -180,12 +186,35 @@ class AnalysisPanel : public QWidget
     ImageStats m_statsB;
     mviewer::domain::Selection m_roi;
     bool m_hasROI = false;
-    // M28 P1-02: deferred frame materialization (hidden panel skips the
-    // full-size QImage conversion until the user actually sees the panel).
+    // M28 P1-02/P1-04: deferred frame materialization (hidden panel skips the
+    // full-size QImage conversion until the user actually sees the panel) with
+    // ASYNC automatic-frame analysis. setFrame while hidden only stores the
+    // shared frame + marks it dirty; showing (or a visible panel's next event-
+    // loop turn) schedules exactly one cancellable, latest-wins AnalysisPool
+    // task. The worker materializes the RGB32 image, computes base stats + the
+    // noise estimate, and executes the selected analyzer OFF the UI thread; the
+    // queued delivery applies only cheap UI rendering, starting with the base
+    // pages from the full-image stats (so the Histogram page is populated for
+    // every accepted frame regardless of analyzer). Legacy explicit paths
+    // (setImage/setImages/reanalyze) stay synchronous but cancel/invalidate any
+    // automatic-frame task so a stale async delivery can never overwrite them.
+    // An explicit reanalyze() while a job is pending reschedules that job
+    // latest-wins with the current analyzer/ROI snapshot instead of analyzing
+    // an unmaterialized frame.
     bool m_frameDirty = false;
-    void refreshFromFrame();
+    void invalidateAutoAnalysis();
+    void scheduleAutoAnalysis();
+    void applyAutoAnalysisResult(const AutoAnalysisResult &result);
+    void resetImagePresentation();
     void applyFrameImage(const QImage &rgb32, const QString &path);
     std::shared_ptr<ImageFrame> m_frameA; // left image frame for ROI analysis
+    TaskScheduler::TaskHandle m_autoTask; // owned handle of the automatic frame job
+    uint64_t m_autoGen = 0;               // monotonically increasing generation (latest-wins)
+    // Cached noise estimate so updateFocusPage never re-scans the image. The
+    // async worker and the legacy synchronous paths both populate it before the
+    // cheap page updates run.
+    double m_noiseA = 0.0;
+    bool m_noiseValid = false;
 
     // Pixel Inspector last sample
     int m_px = -1, m_py = -1;

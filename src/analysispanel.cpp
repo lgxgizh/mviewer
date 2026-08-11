@@ -4,7 +4,9 @@
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/HistogramAnalyzer.h"
 #include "core/compare/Aligner.h"
+#include "core/scheduler/TaskScheduler.h"
 #include "widgets/rawimageview.h"
+#include <QPointer>
 #include <QSettings>
 #include <QShowEvent>
 #include <QTimer>
@@ -21,13 +23,180 @@
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 
+#include <cstdio>
 #include <cmath>
+#include <string>
+#include <unordered_map>
+
+// ── Automatic-frame analysis worker payload ────────────────────────────────
+// Everything the Analysis worker needs, snapshot BY VALUE on the UI thread.
+// The worker only touches these captures (plus the TaskContext) — never the
+// panel, model, widgets, registry, pipeline, or any QObject.
+struct AutoAnalysisInput
+{
+    std::shared_ptr<ImageFrame> frame;   // holds the pixel buffer alive
+    std::string path;
+    bool hasROI = false;
+    mviewer::domain::Selection roi;
+    std::string id;                      // selected analyzer id (empty = none)
+    uint64_t generation = 0;
+    std::shared_ptr<Analyzer> analyzer;  // created on the UI thread, worker-owned
+    bool creationFailed = false;         // pipeline/registry create() threw (M24 C#7)
+};
+
+// ── Worker output, marshalled to the UI thread via qApp ───────────────────
+// Copyable by design so the queued delivery lambda can capture it by value.
+// (Global scope: AnalysisPanel::applyAutoAnalysisResult is declared with a
+// forward-declared `struct AutoAnalysisResult;` in the header.)
+struct AutoAnalysisResult
+{
+    uint64_t generation = 0;
+    std::shared_ptr<ImageFrame> frame;   // identity check on the UI thread
+    QImage image;                        // RGB32 (null = nothing to present)
+    std::string path;
+    std::string id;
+    ImageStats stats;
+    ImageStats roiStats;   // legacy ROI-fallback stats, kept separate from stats
+    bool hasRoiStats = false;
+    double noise = 0.0;
+    bool noiseValid = false;
+
+    bool isBuiltinCompare = false;
+    bool analyzerOk = false;
+    bool analyzerFailed = false;         // analyzer threw (M24 C#7 degrade)
+    bool roiFallback = false;            // no analyzer result + ROI set (legacy fallback)
+    std::string analyzerName;
+    std::string resultText;
+    std::unordered_map<std::string, double> metrics;
+    mviewer::domain::Histogram histogram; // populated for HistogramAnalyzer
+    bool hasHistogram = false;
+    int pixelCount = 0;
+    std::string plainResult;             // plain ROI summary to publish
+};
+
+namespace
+{
+// Run the whole automatic-frame analysis in one AnalysisPool worker job, with
+// cancellation checks between the expensive stages. Qt is used here only for
+// local image math (QImage/ImageData) exactly as the built-in analyzers do.
+AutoAnalysisResult runAutoAnalysis(const AutoAnalysisInput &in,
+                                   const TaskScheduler::TaskContext &ctx)
+{
+    AutoAnalysisResult r;
+    r.generation = in.generation;
+    r.frame = in.frame;
+    r.path = in.path;
+    r.id = in.id;
+    r.isBuiltinCompare = (in.id == "builtin_compare");
+
+    // 1. Materialize the RGB32 display copy (mirrors the old refreshFromFrame).
+    QImage img = mvcore::toQImageRef(in.frame->pixels());
+    if (img.isNull())
+        img = mvcore::toQImage(in.frame->pixels()); // RGBA32 fallback
+    img = img.convertToFormat(QImage::Format_RGB32);
+    if (ctx.isCancelled())
+        return r;
+    if (img.isNull())
+        return r; // nothing to present — the panel stays empty
+    r.image = img;
+
+    // 2. Base stats + noise estimate (full-image).
+    const ImageData data = mvcore::fromQImage(img);
+    r.stats = AnalysisEngine::computeStats(data);
+    if (ctx.isCancelled())
+        return r;
+    r.noise = AnalysisEngine::noiseEstimate(data);
+    r.noiseValid = true;
+    if (ctx.isCancelled())
+        return r;
+
+    // 3. builtin_compare: the one-frame path keeps the cheap 'Need two images'
+    //    behavior (compare itself stays a legacy synchronous two-image path).
+    if (r.isBuiltinCompare)
+        return r;
+
+    // 3b. Analyzer creation failure on the UI thread is surfaced as an execution
+    //     error (M24 C#7 parity), never silently degraded into the base-stats /
+    //     ROI fallback below. Base stats above still reach the delivery, exactly
+    //     like the legacy applyFrameImage -> reanalyze error path.
+    if (in.creationFailed)
+    {
+        r.analyzerFailed = true;
+        return r;
+    }
+
+    // 4. Execute the selected non-builtin analyzer over the frame (full or ROI,
+    //    exactly matching the current reanalyze() semantics).
+    if (in.analyzer)
+    {
+        try
+        {
+            const bool ok = in.hasROI ? in.analyzer->analyzeRegion(*in.frame, in.roi)
+                                      : in.analyzer->analyze(*in.frame);
+            if (ctx.isCancelled())
+                return r;
+            if (ok)
+            {
+                r.analyzerOk = true;
+                r.analyzerName = in.analyzer->name();
+                r.resultText = in.analyzer->resultText();
+                r.metrics = in.analyzer->resultMetrics();
+                r.pixelCount = in.hasROI
+                                   ? std::max(0, in.roi.width) * std::max(0, in.roi.height)
+                                   : in.frame->width() * in.frame->height();
+                const auto *hist = dynamic_cast<const HistogramAnalyzer *>(in.analyzer.get());
+                if (hist)
+                {
+                    r.histogram = hist->result();
+                    r.hasHistogram = true;
+                }
+                return r;
+            }
+        }
+        catch (...)
+        {
+            if (ctx.isCancelled())
+                return r;
+            // M24 (C#7): a failing/throwing analyzer degrades to an error note
+            // instead of taking down the panel or the application. The
+            // localized message is built on the UI thread at delivery.
+            r.analyzerFailed = true;
+            return r;
+        }
+    }
+
+    // 5. Legacy ROI fallback: no analyzer ran successfully and an ROI is set.
+    //    stats stays the FULL-image stats (the delivery renders RGB/Exposure/
+    //    base pages from it first); only roiStats feeds the Histogram page, so
+    //    the fallback changes exactly the same surfaces as the legacy path.
+    if (in.hasROI)
+    {
+        r.roiFallback = true;
+        r.roiStats = AnalysisEngine::computeStatsROI(data, in.roi);
+        r.hasRoiStats = true;
+        char buf[128];
+        std::snprintf(buf, sizeof(buf), "ROI %dx%d @(%d,%d) lum=%.2f r=%.2f g=%.2f b=%.2f",
+                      in.roi.width, in.roi.height, in.roi.x, in.roi.y, r.roiStats.lumMean,
+                      r.roiStats.rMean, r.roiStats.gMean, r.roiStats.bMean);
+        r.plainResult = buf;
+    }
+    return r;
+}
+
+} // namespace
 
 AnalysisPanel::AnalysisPanel(QWidget *parent) : QWidget(parent)
 {
     buildUi();
     setMinimumWidth(360);
     setMinimumHeight(480);
+}
+
+AnalysisPanel::~AnalysisPanel()
+{
+    // Cancel any in-flight automatic-frame task; its queued delivery is guarded
+    // by a QPointer so it can never touch this panel after destruction.
+    invalidateAutoAnalysis();
 }
 
 // A-7.2: rebuild the analyzer combo from the live registry/pipeline.
@@ -66,6 +235,11 @@ void AnalysisPanel::setImage(const QImage &img, const QString &path)
         clear();
         return;
     }
+    // Explicit legacy API: cancel any automatic-frame task so a stale async
+    // delivery can never overwrite this explicit image. There is no pending
+    // frame left to auto-analyze either.
+    invalidateAutoAnalysis();
+    m_frameDirty = false;
     applyFrameImage(img.convertToFormat(QImage::Format_RGB32), path);
 }
 
@@ -77,6 +251,10 @@ void AnalysisPanel::applyFrameImage(const QImage &rgb32, const QString &path)
     m_hasA = true;
     m_hasB = false;
     m_statsA = AnalysisEngine::computeStats(mvcore::fromQImage(m_imageA));
+    // Cache the noise estimate so the cheap page updates never re-scan the
+    // image (updateFocusPage reads this cache).
+    m_noiseA = AnalysisEngine::noiseEstimate(mvcore::fromQImage(m_imageA));
+    m_noiseValid = true;
     updateHistogramPage();
     updateRgbPage();
     updateExposurePage();
@@ -88,6 +266,10 @@ void AnalysisPanel::setImages(const QImage &a, const QImage &b)
 {
     if (a.isNull() || b.isNull())
         return;
+    // Explicit legacy API: a stale automatic-frame delivery must never overwrite
+    // the explicit compare state.
+    invalidateAutoAnalysis();
+    m_frameDirty = false;
     m_imageA = a.convertToFormat(QImage::Format_RGB32);
     m_imageB = b.convertToFormat(QImage::Format_RGB32);
     m_hasA = m_hasB = true;
@@ -98,9 +280,13 @@ void AnalysisPanel::setImages(const QImage &a, const QImage &b)
 
 void AnalysisPanel::clear()
 {
+    invalidateAutoAnalysis();
+    m_frameDirty = false;
     m_imageA = m_imageB = QImage();
     m_hasA = m_hasB = false;
     m_statsA = m_statsB = ImageStats();
+    m_noiseA = 0.0;
+    m_noiseValid = false;
     m_hasROI = false;
     m_statsLabel->clear();
     m_compareLabel->clear();
@@ -152,6 +338,22 @@ void AnalysisPanel::runAnalyzer(const QString &id)
 // AnalyzerPipeline so the panel never touches the registry directly (M15 P0#3).
 void AnalysisPanel::reanalyze()
 {
+    // A pending automatic-frame job means the current frame is not yet
+    // materialized. Never invalidate it and then synchronously analyze an
+    // unmaterialized frame; instead reschedule the automatic latest-wins job
+    // with the current analyzer/ROI snapshot (visible) or stay deferred
+    // (hidden). Once automatic materialization has landed (m_frameDirty false),
+    // explicit reanalyze stays fully synchronous exactly as before.
+    if (m_frameDirty && m_frameA && m_frameA->isValid())
+    {
+        if (isVisible())
+            scheduleAutoAnalysis();
+        return;
+    }
+    // Explicit path with a materialized frame: cancel/invalidate any automatic
+    // task so a stale async delivery can never overwrite the explicit result.
+    invalidateAutoAnalysis();
+
     const QString id = m_analyzerCombo ? m_analyzerCombo->currentData().toString() : QString();
 
     // Dual-image comparison is a built-in composite view, not a single registry analyzer.
@@ -258,25 +460,33 @@ void AnalysisPanel::reanalyze()
 
 void AnalysisPanel::setFrame(std::shared_ptr<ImageFrame> frame)
 {
+    // A new frame must immediately prevent the old result/image from being
+    // presented as current: cancel the previous automatic task and bump the
+    // generation so any in-flight delivery is discarded.
+    invalidateAutoAnalysis();
     m_frameA = std::move(frame);
     if (!m_frameA || !m_frameA->isValid())
     {
         clear();
         return;
     }
-    // M28 P1-02: materialization is deferred. A HIDDEN panel (the common case
-    // while browsing) stores the frame only — no full-size QImage conversion
-    // and no full-image stats on the UI thread. The frame materializes when
-    // the panel is visible (showEvent) or on the next event-loop turn if it
-    // is already on screen.
+    // M28 P1-02/P1-04: materialization + analysis are deferred AND async. A
+    // HIDDEN panel (the common case while browsing) stores the frame only — no
+    // full-size QImage conversion and no Analysis task until it is shown. A
+    // visible panel schedules exactly one cancellable, latest-wins AnalysisPool
+    // task on the next event-loop turn (rapid frames cancel the previous task).
     m_frameDirty = true;
+    // While the newest automatic result is pending, the previous image/stats/
+    // result must not be presented as current.
+    if (m_hasA)
+        resetImagePresentation();
     if (isVisible())
     {
         QTimer::singleShot(0, this,
                            [this]()
                            {
                                if (m_frameDirty)
-                                   refreshFromFrame();
+                                   scheduleAutoAnalysis();
                            });
     }
 }
@@ -284,29 +494,219 @@ void AnalysisPanel::setFrame(std::shared_ptr<ImageFrame> frame)
 void AnalysisPanel::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
+    // Submits the deferred automatic-frame job; the worker runs all heavy work,
+    // this only schedules (never blocks on conversion/stats/analyzer).
     if (m_frameDirty && m_frameA && m_frameA->isValid())
-        refreshFromFrame();
+        scheduleAutoAnalysis();
 }
 
-void AnalysisPanel::refreshFromFrame()
+void AnalysisPanel::invalidateAutoAnalysis()
+{
+    if (m_autoTask)
+        TaskScheduler::cancel(m_autoTask);
+    m_autoTask.reset();
+    ++m_autoGen;
+}
+
+// Schedule exactly one latest-wins AnalysisPool task for the current frame.
+// Snapshot only plain/copyable data the worker needs; create any Analyzer on
+// the UI thread (never touch the registry from the worker).
+void AnalysisPanel::scheduleAutoAnalysis()
 {
     if (!m_frameA || !m_frameA->isValid())
         return;
-    m_frameDirty = false;
-    // One materialization: non-owning alias where possible, then a single
-    // convert to RGB32 (the display copy is unavoidable once visible, but it
-    // happens exactly once and never while the panel is hidden).
-    QImage img = mvcore::toQImageRef(m_frameA->pixels());
-    if (img.isNull())
-        img = mvcore::toQImage(m_frameA->pixels()); // RGBA32 fallback
-    img = img.convertToFormat(QImage::Format_RGB32);
-    if (img.isNull())
+    // Latest-wins: cancel any in-flight task before starting a new generation.
+    if (m_autoTask)
+        TaskScheduler::cancel(m_autoTask);
+    m_autoTask.reset();
+    const uint64_t gen = ++m_autoGen;
+
+    const std::shared_ptr<ImageFrame> frame = m_frameA; // holds pixels alive in the worker
+    AutoAnalysisInput in;
+    in.frame = frame;
+    in.path = frame->metadata().filePath;
+    in.hasROI = m_hasROI;
+    in.roi = m_roi;
+    in.generation = gen;
+    if (m_analyzerCombo)
+        in.id = m_analyzerCombo->currentData().toString().toStdString();
+    QPointer<AnalysisPanel> guard(this);
+
+    // Create the selected analyzer on the UI thread, preserving its custom
+    // AnalyzerDeleter for safe (plugin-module) destruction on the worker.
+    if (!in.id.empty() && in.id != "builtin_compare")
     {
-        clear();
+        try
+        {
+            auto created = m_pipeline ? m_pipeline->create(in.id)
+                                      : AnalyzerRegistry::instance().create(in.id);
+            if (created)
+                in.analyzer = std::move(created); // shared_ptr adopts the deleter
+        }
+        catch (...)
+        {
+            // M24 (C#7): a throwing create() is carried into the worker result
+            // and surfaced as an execution error at delivery — it must never
+            // silently degrade into the base-stats / ROI fallback.
+            in.creationFailed = true;
+        }
+    }
+
+    auto handle = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Analysis,
+        [in, guard](const TaskScheduler::TaskContext &ctx)
+        {
+            if (ctx.isCancelled())
+                return; // superseded while queued
+            AutoAnalysisResult r = runAutoAnalysis(in, ctx);
+            if (ctx.isCancelled())
+                return; // superseded during an expensive stage
+            // Marshal to the UI thread through qApp (outlives the panel). The
+            // queued lambda re-checks the guard, generation, and frame identity.
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, r]()
+                {
+                    AnalysisPanel *panel = guard.data();
+                    if (!panel)
+                        return;
+                    panel->applyAutoAnalysisResult(r);
+                },
+                Qt::QueuedConnection);
+        });
+    if (!handle)
+    {
+        // Submission rejected (pool paused / back-pressured): stay dirty and
+        // retryable — never fall back to synchronous work on the UI thread and
+        // never present stale data.
         return;
     }
-    applyFrameImage(img, QString::fromStdString(m_frameA->metadata().filePath));
-    reanalyze();
+    m_autoTask = handle;
+}
+
+// Presentation-time reset: the previous image/stats/results must not be shown
+// as current while a newer automatic result is pending. Keeps the ROI state.
+void AnalysisPanel::resetImagePresentation()
+{
+    m_imageA = m_imageB = QImage();
+    m_hasA = m_hasB = false;
+    m_statsA = m_statsB = ImageStats();
+    m_noiseA = 0.0;
+    m_noiseValid = false;
+    m_statsLabel->clear();
+    m_compareLabel->clear();
+    m_diffPreview->clear();
+    m_pluginResult->clear();
+    m_histogramLabel->clear();
+    m_rgbLabel->clear();
+    m_rgbStatsLabel->clear();
+    m_exposureLabel->clear();
+    m_focusLabel->clear();
+    m_metaLabel->clear();
+}
+
+// Accept a worker-computed automatic-frame result on the UI thread. Only cheap
+// UI rendering runs here; the heavy stages all happened in the worker.
+void AnalysisPanel::applyAutoAnalysisResult(const AutoAnalysisResult &r)
+{
+    if (r.generation != m_autoGen)
+        return; // superseded (latest-wins)
+    if (m_frameA.get() != r.frame.get())
+        return; // stale frame identity
+    m_autoTask.reset(); // release the completed payload handle
+    m_frameDirty = false;
+
+    if (r.image.isNull())
+        return; // nothing to present (e.g. materialization failed)
+
+    m_imageA = r.image;
+    m_imagePath = QString::fromStdString(r.path);
+    m_hasA = true;
+    m_hasB = false;
+    m_statsA = r.stats; // full-image stats, mirroring applyFrameImage
+    m_noiseA = r.noise;
+    m_noiseValid = r.noiseValid;
+
+    // Cheap page updates shared by every outcome, rendered from the full-image
+    // stats (mirrors applyFrameImage before the old reanalyze). The base
+    // Histogram page is populated for every accepted frame regardless of the
+    // selected analyzer; analyzer-specific branches override it below.
+    updateHistogramPage();
+    updateRgbPage();
+    updateExposurePage();
+    updateFocusPage();
+    updateMetadataPage();
+
+    if (r.isBuiltinCompare)
+    {
+        updateComparePage(); // one-frame path: cheap 'Need two images to compare'
+        if (m_tabs && m_compareLabel)
+        {
+            const int tab = m_tabs->indexOf(m_compareLabel);
+            if (tab >= 0)
+                m_tabs->setCurrentIndex(tab);
+        }
+        return;
+    }
+
+    if (r.analyzerFailed)
+    {
+        // M24 (C#7): analyzer failure -> graceful error note (same shape as the
+        // synchronous reanalyze() error path).
+        const QString id = QString::fromStdString(r.id);
+        const QString err = tr("分析器执行失败（%1）。").arg(id);
+        m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("分析失败")).arg(err));
+        if (m_pluginResult)
+            m_pluginResult->setText(err);
+        publishResult(err);
+        return;
+    }
+
+    if (r.analyzerOk)
+    {
+        // Same result surface as reanalyze(): Histogram stats + Plugin tab.
+        m_statsA.pixelCount = r.pixelCount;
+        if (r.hasHistogram)
+        {
+            m_statsA.lumMean = r.histogram.lumMean;
+            m_statsA.rMean = r.histogram.rMean;
+            m_statsA.gMean = r.histogram.gMean;
+            m_statsA.bMean = r.histogram.bMean;
+            renderHistogramPixmap(r.histogram);
+        }
+        const QString name = QString::fromStdString(r.analyzerName);
+        const QString text = QString::fromStdString(r.resultText);
+        const QString html = QString("<h3>%1</h3><p>%2</p>").arg(name).arg(text);
+        m_statsLabel->setText(html);
+        if (m_pluginResult)
+        {
+            QString pluginHtml = html;
+            if (!r.metrics.empty())
+            {
+                pluginHtml += "<table>";
+                for (const auto &[k, v] : r.metrics)
+                    pluginHtml += QString("<tr><td>%1</td><td>%2</td></tr>")
+                                      .arg(QString::fromStdString(k))
+                                      .arg(v, 0, 'f', 4);
+                pluginHtml += "</table>";
+            }
+            m_pluginResult->setText(pluginHtml);
+        }
+        // M21: publish exactly once for the current path.
+        publishResult(text);
+        return;
+    }
+
+    // No analyzer ran successfully: the shared base pages above already show
+    // the full-image stats. The legacy ROI fallback changes only the same
+    // Histogram/result surfaces as the old applyFrameImage -> reanalyze order.
+    if (r.roiFallback)
+    {
+        if (r.hasRoiStats)
+            m_statsA = r.roiStats;
+        updateHistogramPage();
+        publishResult(QString::fromStdString(r.plainResult));
+    }
 }
 
 void AnalysisPanel::setRegionStats(const QString &text)
@@ -541,7 +941,11 @@ void AnalysisPanel::updateFocusPage()
         m_focusLabel->setText(tr("No image selected"));
         return;
     }
-    const double noise = AnalysisEngine::noiseEstimate(mvcore::fromQImage(m_imageA));
+    // M28 P1-04: noise is precomputed (async worker or legacy applyFrameImage)
+    // and cached; updateFocusPage must not re-scan the image. The fallback
+    // keeps the page correct for any path that did not populate the cache.
+    const double noise =
+        m_noiseValid ? m_noiseA : AnalysisEngine::noiseEstimate(mvcore::fromQImage(m_imageA));
 
     QString txt = QString("<h3>%1</h3>").arg(tr("Focus / Sharpness"));
     txt += QString("<table>"

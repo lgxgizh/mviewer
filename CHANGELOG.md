@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed — AnalysisPanel automatic frame refresh is async and cancellation-safe
+
+- Opening images and showing the Analysis panel no longer block on large-image
+  analysis: the frame is materialized and analyzed on a cancellable, latest-wins
+  AnalysisPool task, so rapid A→B navigation never freezes the UI or records a
+  stale A result as B.
+- Results stay path-keyed and current even when you switch analyzer or ROI while
+  a refresh is pending: the pending job is superseded and the current frame is
+  always materialized, so the panel never shows a stale or blank state. Hidden
+  panels still submit no work until shown.
+
 ### Changed — metadata overlay histogram is async and navigation-safe
 
 - The metadata-overlay mini histogram is now computed only on the Analysis pool
