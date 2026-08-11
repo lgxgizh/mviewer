@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed — Compare Pixel Inspector hover renders coalesce and reuse table cells
+
+- Hovering inside Compare no longer re-renders the whole inspector table once
+  per mouse move: rapid hover events coalesce into at most one render per
+  event-loop turn using the latest coordinate, and enabling the synced
+  crosshair no longer double-renders a single hover through both its
+  `pixelInfo` and `crosshairMoved` signals.
+- Ordinary hover renders reuse the existing table items (updating text in
+  place and only resizing rows when the image count changes) instead of
+  clearing and reallocating every cell; the horizontal header is only reset
+  when the selected color space changes. RGB/HEX/HSV/Lab/YUV/YCbCr/XYZ, delta,
+  RAW16/preview, invalid-coordinate, base/reference, and neighborhood-stat
+  readouts are unchanged.
+- Color-space, kernel, focus/reference, delivered-display, and edit-target
+  changes still refresh the current coordinate deterministically, and a queued
+  render is lifetime-safe (dropped automatically when the workspace closes).
+- Double-clicking a Compare pane now locks it as the reference base exactly
+  once (the lock-reference button stays in sync); double-clicking the locked
+  pane again unlocks it.
+- Regression coverage: `compare_acceptance_tests` adds a deterministic
+  coalescing suite observing the render count, item-pointer stability, and
+  semantic refresh behavior.
+
 ### Changed — AnalysisPanel automatic frame refresh is async and cancellation-safe
 
 - Opening images and showing the Analysis panel no longer block on large-image

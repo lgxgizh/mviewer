@@ -27,13 +27,17 @@
 #include <QFile>
 #include <QImage>
 #include <QLabel>
+#include <QMouseEvent>
+#include <QPushButton>
 #include <QSlider>
+#include <QTableWidget>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QVBoxLayout>
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstdio>
 #include <cstdint>
@@ -685,6 +689,278 @@ void testCompareLoadIsAsync(const QDir &dir)
     dlg.close();
 }
 
+// ─── M30: Pixel Inspector hover coalescing ──────────────────────
+// The Compare inspector table is fed by up to two hover signals per mouse move
+// when the synced crosshair is enabled (RawImageView::pixelInfo plus
+// crosshairMoved), and every hover used to re-render the whole table by
+// destroying and reallocating its QTableWidgetItems. The coalescer contract:
+//   (a) a burst of hovers inside one event-loop turn renders exactly once,
+//       with the latest coordinate;
+//   (b) the pixelInfo + crosshairMoved pair of one physical hover renders
+//       once, never twice;
+//   (c) ordinary re-renders reuse the existing QTableWidgetItem objects;
+//   (d) color-space / kernel / focus semantic changes refresh the current
+//       coordinate correctly;
+//   (e) a queued render is receiver-bound to the workspace, so destroying the
+//       workspace with work pending is safe.
+// The actual render count is surfaced as the dynamic QObject property
+// "inspectorRenderCount" (narrowly scoped internal diagnostic, documented in
+// compareworkspace.h) so the tests observe coalescing without widening the
+// public API.
+void testInspectorCoalescing(const QString &a, const QString &b)
+{
+    std::cout << "-- Compare M30: inspector hover coalescing --\n";
+
+    QWidget host;
+    auto *hostLay = new QVBoxLayout(&host);
+    auto *ws = new CompareWorkspace(&host);
+    hostLay->addWidget(ws);
+    SelectionModel sel;
+    ws->setSelectionModel(&sel);
+    ws->setImages({a, b});
+    host.resize(1100, 750);
+    host.show();
+    waitForCompareCount(ws, 2);
+
+    auto *analysisToggle = ws->findChild<QCheckBox *>("analysisPanelToggle");
+    auto *inspector = ws->findChild<QTableWidget *>("pixelInspectorTable");
+    CHECK(analysisToggle && inspector, "M30: analysis toggle and inspector are discoverable");
+    if (!analysisToggle || !inspector)
+        return;
+    analysisToggle->setChecked(true);
+    pump(50);
+
+    RawImageView *view0 = nullptr;
+    RawImageView *view1 = nullptr;
+    for (RawImageView *v : ws->findChildren<RawImageView *>())
+    {
+        if (!v)
+            continue;
+        if (v->cellIndex() == 0)
+            view0 = v;
+        else if (v->cellIndex() == 1)
+            view1 = v;
+    }
+    {
+        QElapsedTimer t;
+        t.start();
+        while ((!view0 || view0->image().isNull() || !view1 || view1->image().isNull()) &&
+               t.elapsed() < 8000)
+            pump(25);
+    }
+    CHECK(view0 && !view0->image().isNull() && view1 && !view1->image().isNull(),
+          "M30: both panes materialize before hover testing");
+    if (!view0 || view0->image().isNull() || !view1 || view1->image().isNull())
+        return;
+
+    // Deterministic transform so widget->image mapping is exact: at scale 1.0
+    // with zero offset, a widget point near the center maps to a known image
+    // pixel. All burst points stay inside the decoded pane image.
+    ws->engine().setScale(1.0);
+    ws->engine().setOffset(0.0, 0.0);
+    ws->update();
+    pump(30);
+
+    auto renderCount = [ws]() { return ws->property("inspectorRenderCount").toULongLong(); };
+    auto hoverAt = [view0](int dx, int dy)
+    {
+        const QPoint pt = view0->rect().center() + QPoint(dx, dy);
+        QMouseEvent event(QEvent::MouseMove, QPointF(pt), Qt::NoButton, Qt::NoButton,
+                          Qt::NoModifier);
+        QApplication::sendEvent(view0, &event);
+    };
+
+    // (a) A burst of hovers inside one event-loop turn: exactly one render,
+    // using the latest coordinate.
+    const quint64 burstBase = renderCount();
+    const int burstDx[] = {0, 3, 6, 9, 2, 7};
+    const int burstDy[] = {0, 1, 2, 3, 5, 4};
+    for (int k = 0; k < 6; ++k)
+        hoverAt(burstDx[k], burstDy[k]);
+    CHECK(renderCount() == burstBase,
+          "M30(a): the hover burst performs no synchronous render");
+    pump(60);
+    CHECK(renderCount() == burstBase + 1,
+          "M30(a): a hover burst renders the inspector exactly once");
+    QLabel *coord = ws->findChild<QLabel *>("pixelInspectorCoordLabel");
+    if (coord)
+    {
+        const QPointF lastImg = view0->widgetToImage(view0->rect().center() + QPoint(7, 4));
+        const QString expectedLast = QStringLiteral("(%1, %2)")
+                                         .arg(static_cast<int>(std::floor(lastImg.x())))
+                                         .arg(static_cast<int>(std::floor(lastImg.y())));
+        CHECK(coord->text() == expectedLast,
+              "M30(a): the single render uses the latest hover coordinate");
+    }
+    else
+    {
+        CHECK(false, "M30(a): coordinate label is discoverable");
+    }
+
+    // (b) One physical hover with the synced crosshair ON emits both pixelInfo
+    // and crosshairMoved; the pair must render the inspector exactly once.
+    QCheckBox *crosshair = findChk(ws, QStringLiteral("同步准星"));
+    CHECK(crosshair != nullptr, "M30: synced crosshair toggle is discoverable");
+    if (crosshair)
+    {
+        const quint64 beforeToggle = renderCount();
+        crosshair->setChecked(true);
+        pump(20);
+        CHECK(renderCount() == beforeToggle,
+              "M30(b): enabling the crosshair alone does not render");
+        const quint64 beforePair = renderCount();
+        hoverAt(4, 4);
+        pump(60);
+        CHECK(renderCount() == beforePair + 1,
+              "M30(b): the pixelInfo + crosshairMoved pair renders once, not twice");
+        crosshair->setChecked(false);
+        pump(20);
+    }
+
+    // (c) Ordinary re-renders reuse the existing QTableWidgetItem objects.
+    {
+        const QTableWidgetItem *cell00 = inspector->item(0, 0);
+        const QTableWidgetItem *cell12 = inspector->item(1, 2);
+        CHECK(cell00 && cell12 && !cell12->text().isEmpty(),
+              "M30(c): inspector cells are populated before the re-render");
+        const quint64 before = renderCount();
+        hoverAt(1, 1);
+        pump(60);
+        CHECK(renderCount() == before + 1, "M30(c): a new hover re-renders");
+        CHECK(inspector->item(0, 0) == cell00 && inspector->item(1, 2) == cell12,
+              "M30(c): table item objects are reused across ordinary renders");
+    }
+
+    // (d) Semantic control changes refresh the current coordinate correctly.
+    QComboBox *csCombo = ws->findChild<QComboBox *>("pixelInspectorColorSpaceCombo");
+    QComboBox *kernelCombo = ws->findChild<QComboBox *>("pixelInspectorKernelCombo");
+    QLabel *statsLabel = ws->findChild<QLabel *>("pixelInspectorStatsLabel");
+    CHECK(csCombo && kernelCombo && statsLabel,
+          "M30: color-space / kernel / stats controls are discoverable");
+    if (csCombo)
+    {
+        const QString beforeText = inspector->item(1, 2)->text();
+        csCombo->setCurrentIndex(2); // HSV
+        pump(60);
+        const QString hsvText = inspector->item(1, 2)->text();
+        bool numeric = false;
+        hsvText.toDouble(&numeric);
+        CHECK(hsvText != beforeText && numeric,
+              "M30(d): color-space change refreshes the current pixel readout");
+        CHECK(inspector->horizontalHeaderItem(2) &&
+                  inspector->horizontalHeaderItem(2)->text() == QStringLiteral("H"),
+              "M30(d): header labels follow the selected color space");
+        csCombo->setCurrentIndex(0); // RGB
+        pump(60);
+        CHECK(inspector->item(1, 2)->text() == beforeText,
+              "M30(d): returning to RGB restores the original readout");
+    }
+    if (kernelCombo && statsLabel)
+    {
+        const QString beforeStats = statsLabel->text();
+        CHECK(!beforeStats.isEmpty(), "M30(d): stats label is populated at the hover point");
+        kernelCombo->setCurrentIndex(2); // 5×5
+        pump(60);
+        const QString afterStats = statsLabel->text();
+        CHECK(afterStats != beforeStats && afterStats.contains(QStringLiteral("5×5")),
+              "M30(d): kernel change refreshes the neighborhood stats");
+        kernelCombo->setCurrentIndex(1); // back to 3×3
+        pump(60);
+    }
+    {
+        // Focus/reference change via the real pane double-click path (M30
+        // review): RawImageView::mouseDoubleClickEvent emits focusRequested, and
+        // onFocusRequested must lock the double-clicked pane as the reference
+        // exactly once — the button is synchronized without re-entering through
+        // its toggled handler and immediately toggling the lock back off.
+        const QPoint hovPt = view1->rect().center();
+        QMouseEvent hov(QEvent::MouseMove, QPointF(hovPt), Qt::NoButton, Qt::NoButton,
+                        Qt::NoModifier);
+        QApplication::sendEvent(view1, &hov);
+        pump(60);
+        QPushButton *lockReference = nullptr;
+        for (QPushButton *b : ws->findChildren<QPushButton *>())
+            if (b->isCheckable() && b->text().startsWith(QStringLiteral("锁定基准")))
+                lockReference = b;
+        CHECK(lockReference != nullptr, "M30: lock-reference button is discoverable");
+        if (!lockReference)
+            return;
+        auto doubleClick = [](RawImageView *v, const QPoint &pt)
+        {
+            QMouseEvent event(QEvent::MouseButtonDblClick, QPointF(pt), Qt::LeftButton,
+                              Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(v, &event);
+        };
+        // First double-click locks pane 1 (m_focusIndex 1, button checked, and
+        // the inspector refreshes with a zero delta on the reference row).
+        const quint64 before = renderCount();
+        doubleClick(view1, hovPt);
+        pump(60);
+        CHECK(renderCount() > before,
+              "M30(d): pane double-click re-renders the inspector at the current coordinate");
+        CHECK(lockReference->isChecked(),
+              "M30(d): pane double-click locks the reference button");
+        CHECK(ws->focusImagePath() == b,
+              "M30(d): the workspace reference path is the locked pane");
+        CHECK(sel.focused() == b,
+              "M30(d): the SelectionModel focused path follows the locked reference");
+        CHECK(inspector->item(1, 5) && inspector->item(1, 5)->text() == QStringLiteral("0"),
+              "M30(d): the locked reference pane shows a zero delta");
+        CHECK(inspector->rowCount() == 2 && inspector->item(0, 2) &&
+                  !inspector->item(0, 2)->text().isEmpty(),
+              "M30(d): the inspector stays fully populated after the focus change");
+        // Second double-click on the same pane unlocks it and the button follows.
+        doubleClick(view1, hovPt);
+        pump(60);
+        CHECK(!lockReference->isChecked(),
+              "M30(d): double-clicking the locked pane again unlocks the reference");
+        CHECK(sel.focused().isEmpty(),
+              "M30(d): unlocking clears the SelectionModel focused path");
+    }
+
+    // (e) A queued render must be lifetime-safe: destroying the workspace with
+    // a pending inspector render never acts on the destroyed object.
+    {
+        auto *sub = new QWidget;
+        auto *subLay = new QVBoxLayout(sub);
+        auto *subWs = new CompareWorkspace(sub);
+        subLay->addWidget(subWs);
+        SelectionModel subSel;
+        subWs->setSelectionModel(&subSel);
+        subWs->setImages({a, b});
+        sub->resize(900, 600);
+        sub->show();
+        waitForCompareCount(subWs, 2);
+        QCheckBox *subToggle = subWs->findChild<QCheckBox *>("analysisPanelToggle");
+        RawImageView *subView = nullptr;
+        for (RawImageView *v : subWs->findChildren<RawImageView *>())
+            if (v && v->cellIndex() == 0)
+                subView = v;
+        if (subToggle && subView)
+        {
+            subToggle->setChecked(true);
+            pump(30);
+            {
+                QElapsedTimer t;
+                t.start();
+                while (subView->image().isNull() && t.elapsed() < 8000)
+                    pump(25);
+            }
+            const QPoint pt = subView->rect().center();
+            QMouseEvent event(QEvent::MouseMove, QPointF(pt), Qt::NoButton, Qt::NoButton,
+                              Qt::NoModifier);
+            QApplication::sendEvent(subView, &event); // schedules a queued render
+            delete sub; // destroys subWs while the queued render is still pending
+        }
+        else
+        {
+            delete sub;
+        }
+        pump(80); // the dropped queued render must not touch the destroyed workspace
+        CHECK(true, "M30(e): destroying a workspace with a pending inspector render is safe");
+    }
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -708,6 +984,7 @@ int main(int argc, char **argv)
     testPaneHistogramConsistency(paths8[0], paths8[1]);
     testDegradedImages(dir);
     testCompareLoadIsAsync(dir);
+    testInspectorCoalescing(paths8[0], paths8[1]);
 
     if (g_failures > 0)
     {

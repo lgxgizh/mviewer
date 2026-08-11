@@ -216,8 +216,9 @@ void CompareWorkspace::onEditCellSelected(int cellIdx)
     // Selecting a pane does not change the cursor's sample position. Repaint the
     // Inspector from the cached hover coordinate so a pane click immediately
     // reflects the current adjusted display without requiring another mouse move.
+    // M30: coalesced with any pending hover render.
     if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0 && m_lastInspectY >= 0)
-        updateInspector(m_lastInspectX, m_lastInspectY);
+        requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
 }
 
 void CompareWorkspace::onAdjChanged()

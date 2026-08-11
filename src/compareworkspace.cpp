@@ -733,13 +733,11 @@ void CompareWorkspace::onCrosshairMoved(RawImageView *view, const QPointF &pos)
         else
             m_cellViews[i]->clearCrosshair();
     }
-    // Sample every cell at the synced image-space point.
+    // Sample every cell at the synced image-space point. M30: route through the
+    // coalescer so this crosshair path cannot double-render the inspector that
+    // the same hover's pixelInfo signal already requested.
     if (valid && m_sidePanel && m_sidePanel->isVisible())
-    {
-        m_lastInspectX = qRound(pos.x());
-        m_lastInspectY = qRound(pos.y());
-        updateInspector(m_lastInspectX, m_lastInspectY);
-    }
+        requestInspectorUpdate(qRound(pos.x()), qRound(pos.y()));
 }
 
 void CompareWorkspace::onFocusRequested(int cellIndex)
@@ -750,7 +748,13 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
 
     m_focusIndex = newFocus;
     if (m_focusBtn)
+    {
+        // Sync the button without emitting toggled: the button's toggled handler
+        // re-enters onFocusRequested and would immediately clear/replace the
+        // requested focus (visible when a pane double-click drives this path).
+        const QSignalBlocker blocker(m_focusBtn);
         m_focusBtn->setChecked(locking);
+    }
     if (m_focusLabel)
         m_focusLabel->setText(locking ? tr("基准: %1").arg(newFocus + 1) : tr("基准: —"));
 
@@ -777,7 +781,7 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
     // Recompute all diff overlays against the new base (async batch, latest-wins).
     refreshAllDiffOverlays();
     if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0)
-        updateInspector(m_lastInspectX, m_lastInspectY);
+        requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
     update();
 }
 

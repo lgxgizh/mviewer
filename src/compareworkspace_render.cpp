@@ -101,12 +101,11 @@ void CompareWorkspace::rebuildCells()
                                        .arg(r)
                                        .arg(g)
                                        .arg(b));
+                    // M30: route the high-frequency hover through the coalescer
+                    // so the sync-crosshair pixelInfo + crosshairMoved pair and
+                    // rapid hovers render the inspector at most once per turn.
                     if (m_sidePanel && m_sidePanel->isVisible())
-                    {
-                        m_lastInspectX = x;
-                        m_lastInspectY = y;
-                        updateInspector(x, y);
-                    }
+                        requestInspectorUpdate(x, y);
                 });
         connect(view, &RawImageView::selectionChanged, this,
                 [this](const mviewer::domain::Selection &sel) { applySelectionToAll(sel); });
@@ -339,7 +338,7 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
     // panel and a sample position are active. Committed metrics stay deferred:
     // they are driven by the separate diff batch on slider release.
     if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0 && m_lastInspectY >= 0)
-        updateInspector(m_lastInspectX, m_lastInspectY);
+        requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
 
     update();
 }

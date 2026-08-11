@@ -107,6 +107,24 @@ mviewer::core::NeighborhoodStats neighborhoodStatsFromDisplayImage(const QImage 
     stats.bMean = static_cast<double>(bSum) / stats.count;
     return stats;
 }
+
+// M30: write a cell's text into the existing QTableWidgetItem, lazily creating
+// it on first use. Ordinary inspector renders update text in place instead of
+// destroying and reallocating every cell (the old clearContents + new-item
+// path churned the item heap on every hover). Only setText when the text
+// actually changed, so stable index/name cells skip the model data-change and
+// repaint work.
+void setCellText(QTableWidget *table, int row, int col, const QString &text)
+{
+    QTableWidgetItem *item = table->item(row, col);
+    if (!item)
+    {
+        item = new QTableWidgetItem;
+        table->setItem(row, col, item);
+    }
+    if (item->text() != text)
+        item->setText(text);
+}
 } // namespace
 
 void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
@@ -115,11 +133,13 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     auto *inspHeader = new QHBoxLayout();
     inspHeader->addWidget(new QLabel(tr("像素检视"), this));
     m_coordLabel = new QLabel(QStringLiteral("(—, —)"), this);
+    m_coordLabel->setObjectName("pixelInspectorCoordLabel");
     m_coordLabel->setStyleSheet("color:#888;");
     inspHeader->addWidget(m_coordLabel);
     inspHeader->addStretch(1);
 
     m_csCombo = new QComboBox(this);
+    m_csCombo->setObjectName("pixelInspectorColorSpaceCombo");
     m_csCombo->addItems({QStringLiteral("RGB"), QStringLiteral("HEX"), QStringLiteral("HSV"),
                          QStringLiteral("Lab"), QStringLiteral("YUV"), QStringLiteral("YCbCr"),
                          QStringLiteral("XYZ")});
@@ -128,11 +148,12 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
             [this](int)
             {
                 if (m_lastInspectX >= 0 && m_lastInspectY >= 0)
-                    updateInspector(m_lastInspectX, m_lastInspectY);
+                    requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
             });
     inspHeader->addWidget(m_csCombo);
 
     m_kernelCombo = new QComboBox(this);
+    m_kernelCombo->setObjectName("pixelInspectorKernelCombo");
     m_kernelCombo->addItems({QStringLiteral("1×1"), QStringLiteral("3×3"), QStringLiteral("5×5"),
                              QStringLiteral("7×7")});
     m_kernelCombo->setCurrentIndex(1); // 3×3 by default
@@ -141,7 +162,7 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
             [this](int)
             {
                 if (m_lastInspectX >= 0 && m_lastInspectY >= 0)
-                    updateInspector(m_lastInspectX, m_lastInspectY);
+                    requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
             });
     inspHeader->addWidget(m_kernelCombo);
     sideLay->addLayout(inspHeader);
@@ -159,6 +180,7 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     sideLay->addWidget(m_inspector);
 
     m_statsLabel = new QLabel(tr("邻域统计: —"), this);
+    m_statsLabel->setObjectName("pixelInspectorStatsLabel");
     m_statsLabel->setWordWrap(true);
     m_statsLabel->setStyleSheet("color:#888;");
     sideLay->addWidget(m_statsLabel);
@@ -233,10 +255,40 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     sideLay->addWidget(m_metricLabel);
 }
 
+void CompareWorkspace::requestInspectorUpdate(int x, int y)
+{
+    if (x < 0 || y < 0)
+        return;
+    m_lastInspectX = x;
+    m_lastInspectY = y;
+    if (m_inspectQueued)
+        return; // one queued render per event-loop turn is already scheduled
+    m_inspectQueued = true;
+    // Queued on `this`: if the workspace is destroyed before the event runs, Qt
+    // drops it (receiver lifetime semantics) — no stale render, no use-after-free.
+    // The callback renders the CURRENT m_lastInspectX/Y with the CURRENT semantic
+    // state, so an older queued request can never overwrite newer state.
+    QMetaObject::invokeMethod(
+        this,
+        [this]()
+        {
+            m_inspectQueued = false;
+            if (m_lastInspectX >= 0 && m_lastInspectY >= 0)
+                updateInspector(m_lastInspectX, m_lastInspectY);
+        },
+        Qt::QueuedConnection);
+}
+
 void CompareWorkspace::updateInspector(int x, int y)
 {
     if (!m_inspector)
         return;
+    // M30 diagnostic: expose the actual render count as a dynamic QObject
+    // property so the deterministic regression tests can observe coalescing
+    // without widening the public API.
+    ++m_inspectorRenderCount;
+    setProperty("inspectorRenderCount", m_inspectorRenderCount);
+
     m_lastInspectX = x;
     m_lastInspectY = y;
     if (m_coordLabel)
@@ -244,10 +296,16 @@ void CompareWorkspace::updateInspector(int x, int y)
 
     const int spaceIdx = m_csCombo ? std::clamp(m_csCombo->currentIndex(), 0, 6) : 0;
     const ColorSpace space = kSpaces[spaceIdx];
-    m_inspector->setHorizontalHeaderLabels(
-        {tr("#"), tr("名称"), QString::fromLatin1(kHeaders[spaceIdx][0]),
-         QString::fromLatin1(kHeaders[spaceIdx][1]), QString::fromLatin1(kHeaders[spaceIdx][2]),
-         QStringLiteral("Δ"), QStringLiteral("16bit/RAW")});
+    // Only touch the horizontal header when the selected color space changed;
+    // ordinary hovers never rebuild it.
+    if (spaceIdx != m_inspectorSpaceIdx)
+    {
+        m_inspector->setHorizontalHeaderLabels(
+            {tr("#"), tr("名称"), QString::fromLatin1(kHeaders[spaceIdx][0]),
+             QString::fromLatin1(kHeaders[spaceIdx][1]), QString::fromLatin1(kHeaders[spaceIdx][2]),
+             QStringLiteral("Δ"), QStringLiteral("16bit/RAW")});
+        m_inspectorSpaceIdx = spaceIdx;
+    }
 
     const int n = m_engine.imageCount();
     const int baseIdx = diffBaseIndex();
@@ -258,44 +316,46 @@ void CompareWorkspace::updateInspector(int x, int y)
             samples[static_cast<size_t>(i)] = sampleDisplayImage(m_cellViews[i]->image(), x, y);
     }
 
-    m_inspector->clearContents();
-    m_inspector->setRowCount(n);
+    // Reuse existing QTableWidgetItem objects across ordinary hovers: only
+    // resize the row count when it actually changed and update text in place,
+    // so successive renders do not destroy/reallocate every cell.
+    if (m_inspector->rowCount() != n)
+        m_inspector->setRowCount(n);
+
     for (int i = 0; i < n; ++i)
     {
         const ImageFrame *img = m_engine.imageAt(i);
         const QString name = img ? QString::fromStdString(img->metadata().fileName) : QString();
         const DisplaySample &sample = samples[static_cast<size_t>(i)];
-        m_inspector->setItem(i, 0, new QTableWidgetItem(QString::number(i + 1)));
-        m_inspector->setItem(i, 1, new QTableWidgetItem(name));
+        setCellText(m_inspector, i, 0, QString::number(i + 1));
+        setCellText(m_inspector, i, 1, name);
 
         if (!sample.valid)
         {
             const QString invalid = QStringLiteral("无效");
-            m_inspector->setItem(i, 2, new QTableWidgetItem(invalid));
-            m_inspector->setItem(
-                i, 3,
-                new QTableWidgetItem(space == ColorSpace::HEX ? QStringLiteral("—") : invalid));
-            m_inspector->setItem(
-                i, 4,
-                new QTableWidgetItem(space == ColorSpace::HEX ? QStringLiteral("—") : invalid));
+            setCellText(m_inspector, i, 2, invalid);
+            setCellText(m_inspector, i, 3,
+                        space == ColorSpace::HEX ? QStringLiteral("—") : invalid);
+            setCellText(m_inspector, i, 4,
+                        space == ColorSpace::HEX ? QStringLiteral("—") : invalid);
         }
         else if (space == ColorSpace::HEX)
         {
             const auto hex =
                 mviewer::core::toHex(static_cast<uint8_t>(sample.r), static_cast<uint8_t>(sample.g),
                                      static_cast<uint8_t>(sample.b));
-            m_inspector->setItem(i, 2, new QTableWidgetItem(QString::fromStdString(hex)));
-            m_inspector->setItem(i, 3, new QTableWidgetItem(QStringLiteral("—")));
-            m_inspector->setItem(i, 4, new QTableWidgetItem(QStringLiteral("—")));
+            setCellText(m_inspector, i, 2, QString::fromStdString(hex));
+            setCellText(m_inspector, i, 3, QStringLiteral("—"));
+            setCellText(m_inspector, i, 4, QStringLiteral("—"));
         }
         else
         {
             const auto color = mviewer::core::toColorSpace(static_cast<uint8_t>(sample.r),
                                                            static_cast<uint8_t>(sample.g),
                                                            static_cast<uint8_t>(sample.b), space);
-            m_inspector->setItem(i, 2, new QTableWidgetItem(formatChannel(space, color.c1)));
-            m_inspector->setItem(i, 3, new QTableWidgetItem(formatChannel(space, color.c2)));
-            m_inspector->setItem(i, 4, new QTableWidgetItem(formatChannel(space, color.c3)));
+            setCellText(m_inspector, i, 2, formatChannel(space, color.c1));
+            setCellText(m_inspector, i, 3, formatChannel(space, color.c2));
+            setCellText(m_inspector, i, 4, formatChannel(space, color.c3));
         }
 
         QString delta = QStringLiteral("无效");
@@ -309,7 +369,7 @@ void CompareWorkspace::updateInspector(int x, int y)
             const double dist = std::sqrt(static_cast<double>(dr * dr + dg * dg + db * db));
             delta = (i == baseIdx) ? QStringLiteral("0") : QString::number(dist, 'f', 0);
         }
-        m_inspector->setItem(i, 5, new QTableWidgetItem(delta));
+        setCellText(m_inspector, i, 5, delta);
 
         QString raw16 = QStringLiteral("无效");
         if (sample.valid)
@@ -326,7 +386,7 @@ void CompareWorkspace::updateInspector(int x, int y)
                             .arg(sample.b)
                             .arg(identity ? QStringLiteral("预览") : QStringLiteral("已调整预览"));
         }
-        m_inspector->setItem(i, 6, new QTableWidgetItem(raw16));
+        setCellText(m_inspector, i, 6, raw16);
     }
 
     if (m_statsLabel)

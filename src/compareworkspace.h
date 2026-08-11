@@ -302,6 +302,25 @@ class CompareWorkspace : public QWidget
     HistogramWidget *m_hist = nullptr;
     void onSideToggled(bool on);
     void updateInspector(int x, int y);
+    // ── M30: coalesced Pixel Inspector hover path ──
+    // High-frequency hover requests (RawImageView::pixelInfo plus the synced
+    // crosshair pair) funnel into requestInspectorUpdate(): it stores the
+    // latest coordinate immediately and schedules at most ONE zero-delay queued
+    // render per event-loop turn. The queued callback is receiver-bound to
+    // `this`, so it is dropped when the workspace is destroyed (no stale render
+    // / use-after-free), and it always renders the CURRENT m_lastInspectX/Y
+    // with the CURRENT semantic state — an old request can never overwrite
+    // newer state. Low-frequency semantic changes (color space, kernel, focus,
+    // delivered display image, edit target) funnel through the same coalescer
+    // and are deterministically refreshed on the next event-loop turn.
+    void requestInspectorUpdate(int x, int y);
+    bool m_inspectQueued = false; // coalescing flag: one queued render at a time
+    int m_inspectorSpaceIdx = -1; // last color-space index whose headers were set
+    // M30 diagnostic render counter, exposed as the dynamic QObject property
+    // "inspectorRenderCount" so the deterministic regression tests can observe
+    // coalescing without widening the public API. Unsigned 64-bit: a very long
+    // session must not let the counter sign-overflow.
+    quint64 m_inspectorRenderCount = 0;
     void refreshHistograms();
 
     // ── M23: analysis panel (Pixel Inspector Pro + ROI histogram) ──
