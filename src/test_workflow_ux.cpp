@@ -1401,6 +1401,98 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
               "report bundle maps the locked reference to path B and target to path A");
     }
 
+    // ── Cache gate: Compare hover smoothness ──
+    // Hover annotations (synced crosshair, ROI, focus border, link markers,
+    // size-mismatch badge) must only repaint the live vector layer on top of a
+    // viewport-bounded cached base surface — never re-scale the full source
+    // image. Each pane reports how many times it actually re-rasterized that
+    // surface through the diagnostic QObject property baseSurfaceRenderCount
+    // (a dynamic property, not a public API change).
+    {
+        RawImageView *pane0 = nullptr;
+        RawImageView *pane1 = nullptr;
+        for (RawImageView *v : ws->findChildren<RawImageView *>())
+        {
+            if (!v || !v->isVisible() || !v->isEnabled())
+                continue;
+            if (v->cellIndex() == 0)
+                pane0 = v;
+            else if (v->cellIndex() == 1)
+                pane1 = v;
+        }
+        CHECK(pane0 != nullptr && pane1 != nullptr,
+              "cache gate: normal grid exposes both RawImageView panes");
+        if (!pane0 || !pane1)
+            return;
+        auto renderCount = [](RawImageView *v)
+        {
+            return v->property("baseSurfaceRenderCount").toULongLong();
+        };
+        {
+            QElapsedTimer t;
+            t.start();
+            while ((pane0->image().isNull() || pane1->image().isNull()) && t.elapsed() < 5000)
+                pump(25);
+        }
+        pump(50);
+        const quint64 first0 = renderCount(pane0);
+        const quint64 first1 = renderCount(pane1);
+        CHECK(first0 > 0 && first1 > 0,
+              "cache gate: each pane rasterized its base surface on first paint");
+
+        // Enable the real synced-crosshair control, then drive real hover moves
+        // that are each processed through separate event-loop turns. Every move
+        // repaints the live crosshair; none may re-rasterize the source image.
+        quint64 before0 = first0;
+        quint64 before1 = first1;
+        QCheckBox *crosshairChk = findChk(ws, QStringLiteral("同步准星"));
+        CHECK(crosshairChk != nullptr, "cache gate: synced-crosshair control is discoverable");
+        if (crosshairChk)
+        {
+            crosshairChk->setChecked(true);
+            pump(50);
+            before0 = renderCount(pane0);
+            before1 = renderCount(pane1);
+            const QPoint a(pane0->width() / 2 - 5, pane0->height() / 2 - 5);
+            const QPoint b(pane0->width() / 2 + 5, pane0->height() / 2 + 5);
+            for (int i = 0; i < 4; ++i)
+            {
+                // Each synthetic move is processed through its own event-loop
+                // turn (pump after every move, not once after all moves) so the
+                // repaint it triggers is delivered before the next move — no
+                // repaint coalescing can hide a re-rasterization in between.
+                sendMouseMove(pane0, a);
+                pump(25);
+                sendMouseMove(pane0, b);
+                pump(25);
+            }
+            CHECK(pane0->hasCrosshair() && pane1->hasCrosshair(),
+                  "cache gate: synced crosshair is live on both panes");
+            CHECK(renderCount(pane0) == before0 && renderCount(pane1) == before1,
+                  "cache gate: crosshair repaints reuse the cached base surface");
+            crosshairChk->setChecked(false);
+            pump(30);
+        }
+
+        // An authoritative transform change rebuilds every affected pane
+        // surface; a repeated identical push invalidates and repaints nothing.
+        ws->engine().setScale(2.0);
+        ws->engine().setOffset(19.0, 23.0);
+        ws->update();
+        pump(60);
+        const quint64 rebuilt0 = renderCount(pane0);
+        const quint64 rebuilt1 = renderCount(pane1);
+        CHECK(rebuilt0 > before0 && rebuilt1 > before1,
+              "cache gate: authoritative scale/offset change rebuilds the pane surfaces");
+        CHECK(qAbs(pane0->scale() - 2.0) < 1e-9 && qAbs(pane1->scale() - 2.0) < 1e-9,
+              "cache gate: the authoritative scale reaches both panes");
+
+        ws->update();
+        pump(60);
+        CHECK(renderCount(pane0) == rebuilt0 && renderCount(pane1) == rebuilt1,
+              "cache gate: repeated identical transform push neither invalidates nor repaints");
+    }
+
     // Esc 退出 Compare（真实 QDialog::reject 路径）。
     QSlider *thresholdSlider = ws->findChild<QSlider *>("diffThresholdSlider");
     QLabel *thresholdValueLabel = ws->findChild<QLabel *>("diffThresholdValueLabel");

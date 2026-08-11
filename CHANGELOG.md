@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed — Compare annotation repaints reuse a viewport-bounded base surface
+
+- Compare panes no longer re-scale the full source image on every repaint.
+  `RawImageView` rasterizes the transformed base image (plus the optional
+  diff/heatmap overlay) into a viewport-bounded cached surface on the UI thread,
+  then blits it and paints the live annotations — ROI selection, synced
+  crosshair, focus border, pixel-link markers, size-mismatch badge — on top.
+  Synced-crosshair hover tracking across normal-grid panes stays smooth even
+  with 24MP sources.
+- The cached surface is rebuilt only when an input actually changes: the base
+  image, the overlay image or opacity, scale, pan offset, viewport size, or the
+  device pixel ratio. Rebuilding after a 50x zoom still allocates viewport
+  pixels, never the scaled image dimensions, and a repeated identical transform
+  push (CompareWorkspace re-syncs every pane on each of its own repaints) is a
+  no-op — it neither invalidates the cache nor schedules another pane repaint.
+- The cache stays entirely on the GUI thread, is released when the image is
+  cleared, and falls back to the previous direct-draw path if the allocation is
+  unavailable, so a pane can never go blank. Zoom/pan/fit geometry, overlay
+  opacity and placement, ROI and crosshair coordinate mapping, HiDPI sharpness,
+  and the empty-image background render exactly as before; split/swipe/overlay/
+  checkerboard canvas modes are untouched.
+- Regression coverage: `workflow_ux_tests` Workflow 2 asserts each pane
+  rasterizes its base surface once, that real synced-crosshair hover moves
+  repaint without re-rasterizing (tracked via the diagnostic
+  `baseSurfaceRenderCount` dynamic property), and that an authoritative
+  transform change rebuilds the surfaces while a repeated identical push does
+  not.
+
 ### Changed — Compare Pixel Inspector hover renders coalesce and reuse table cells
 
 - Hovering inside Compare no longer re-renders the whole inspector table once

@@ -4,8 +4,11 @@
 
 #include <QImage>
 #include <QPointF>
+#include <QSize>
 #include <QVector>
 #include <QWidget>
+
+#include <cstdint>
 
 // RawImageView holds a QImage and renders it scaled to fit the widget
 // size.  Supports zoom/pan via QPainter transforms in paintEvent:
@@ -178,6 +181,17 @@ class RawImageView : public QWidget
   private:
     void computeFit();
     void drawCrosshair(QPainter &p, double cx, double cy, double dw, double dh) const;
+    // Viewport-bounded cached base+overlay surface (UI thread only). Holds the
+    // transformed base image plus the optional diff overlay so annotation-only
+    // repaints (ROI, crosshair, focus border, link markers, size-mismatch badge)
+    // never re-scale the full source image. Bounded by widget viewport pixels,
+    // never by scaled source dimensions (50x zoom still allocates viewport size).
+    void ensureBaseSurface();
+    // Single source of truth for base image + diff overlay geometry; used by the
+    // cached surface and by the direct-draw fallback (allocation failure or
+    // pathological geometry).
+    void drawBaseLayer(QPainter &p);
+    void releaseBaseSurface();
 
     QImage m_image;
     double m_scale = 1.0;
@@ -191,6 +205,22 @@ class RawImageView : public QWidget
     QPointF m_selectStart;
     QImage m_overlay;
     double m_overlayAlpha = 0.5;
+
+    // Cached base surface: rebuilt only when its rendering inputs change.
+    QImage m_baseSurface;
+    bool m_baseSurfaceValid = false;
+    // Diagnostic (dynamic QObject property baseSurfaceRenderCount) incremented
+    // whenever the cached surface is actually re-rasterized. Tests distinguish
+    // annotation repaints from source rasterization through it.
+    uint64_t m_baseSurfaceRenderCount = 0;
+    // Cache key inputs the current surface was rasterized from.
+    qint64 m_cachedImageKey = -1;
+    qint64 m_cachedOverlayKey = -1;
+    double m_cachedOverlayAlpha = -1.0;
+    double m_cachedScale = 0.0;
+    QPointF m_cachedOffset;
+    QSize m_cachedViewport;
+    qreal m_cachedDpr = 0.0;
 
     // M16.1 sync crosshair state (image-space position)
     bool m_crosshairOn = false;
