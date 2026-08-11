@@ -382,6 +382,12 @@ CompareWorkspace::~CompareWorkspace()
         TaskScheduler::cancel(m_displayTask);
     m_displayTask.reset();
     ++m_displayGen;
+
+    // Same lifetime handling for the async pane-histogram batch.
+    if (m_histTask)
+        TaskScheduler::cancel(m_histTask);
+    m_histTask.reset();
+    ++m_histGen;
 }
 
 void CompareWorkspace::setSelectionModel(SelectionModel *sel)
@@ -443,8 +449,9 @@ void CompareWorkspace::setImages(const QStringList &paths)
     auto remaining = std::make_shared<std::atomic<int>>(requested);
     auto failed = std::make_shared<std::atomic<int>>(0);
     QPointer<CompareWorkspace> self(this);
-    // Histogram is computed lazily by the UI (histogramForImage); the worker
-    // path stays decode-only so the UI thread never pays for a full scan.
+    // Histograms are computed by the async Compare histogram batch on the
+    // AnalysisPool; this decode path stays histogram-free so the UI thread
+    // never pays for a full scan.
     const ImageLoadOptions opts{true, false, 256};
 
     for (int i = 0; i < requested; ++i)

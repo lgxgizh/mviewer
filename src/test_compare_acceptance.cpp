@@ -86,6 +86,40 @@ void waitForCompareAtLeast(CompareWorkspace *ws, int minimum, int timeoutMs = 15
         pump(25);
 }
 
+// P1 (async histogram contract): wait until a histogram widget carries at least
+// one non-empty histogram. Polls widget state while pumping events so queued
+// Analysis delivery reaches the UI; never uses fixed sleeps as correctness
+// synchronization.
+void waitForHistogramPopulated(CompareWorkspace *ws, const QString &objectName,
+                               int timeoutMs = 15000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (t.elapsed() < timeoutMs)
+    {
+        HistogramWidget *hw = ws->findChild<HistogramWidget *>(objectName);
+        if (hw && hw->histogramCount() > 0 && hw->histogramTotal(0) > 0)
+            return;
+        pump(25);
+    }
+}
+
+// P1 (async histogram contract): wait until a histogram widget's first entry
+// reports exactly the expected pixel total (e.g. an ROI-restricted 32x32).
+void waitForHistogramTotal(CompareWorkspace *ws, const QString &objectName, long expectedTotal,
+                           int timeoutMs = 15000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (t.elapsed() < timeoutMs)
+    {
+        HistogramWidget *hw = ws->findChild<HistogramWidget *>(objectName);
+        if (hw && hw->histogramCount() > 0 && hw->histogramTotal(0) == expectedTotal)
+            return;
+        pump(25);
+    }
+}
+
 QString writePng(const QDir &dir, const QString &name, int w, int h, QColor c)
 {
     const QString path = dir.filePath(name);
@@ -291,9 +325,13 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
     if (!perPane || !overlay || !roi || !blink)
         return;
 
-    perPane->setChecked(true);
-    overlay->setChecked(true);
-    pump(30);
+    // P1 async histogram contract: histogram delivery is an Analysis batch,
+    // never a synchronous compute on the UI thread. Drain whatever the load
+    // generation queued so the release-gated blocker below is the only work in
+    // front of the histogram submissions.
+    auto &sched = TaskScheduler::instance();
+    sched.drain(TaskScheduler::PoolType::AnalysisPool, std::chrono::seconds(10));
+    pump(50);
 
     auto paneHist = [ws](int index)
     { return ws->findChild<HistogramWidget *>(QString("paneHistogram%1").arg(index)); };
@@ -302,7 +340,85 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
     CHECK(hist0 && hist1, "P1: both pane histogram widgets exist");
     if (!hist0 || !hist1)
         return;
-    CHECK(hist0->histogramCount() == 1 && hist0->histogramTotal(0) > 0 &&
+
+    // perPane populates the main analysis histogram asynchronously. The pane
+    // overlays must stay empty while their own toggle is off.
+    perPane->setChecked(true);
+    waitForHistogramPopulated(ws, QStringLiteral("analysisHistogram"));
+    CHECK(hist0->histogramCount() == 0 && hist1->histogramCount() == 0,
+          "P1: pane overlays stay empty while the overlay toggle is off");
+
+    // Occupy the single Analysis worker with a release-gated blocker (the M29
+    // gate pattern from test_workflow_ux.cpp) so the overlay toggle's one
+    // histogram batch stays observable instead of racing the UI thread.
+    sched.setQueueMaxThreads(TaskScheduler::Priority::Analysis, 1);
+    struct RestoreAnalysisThreads
+    {
+        ~RestoreAnalysisThreads()
+        {
+            TaskScheduler::instance().setQueueMaxThreads(
+                TaskScheduler::Priority::Analysis, std::max(1, QThread::idealThreadCount() / 2));
+        }
+    } restoreAnalysis;
+
+    std::mutex gateMtx;
+    std::condition_variable gateCv;
+    bool gateReleased = false;
+    auto blocker = sched.submit(
+        TaskScheduler::Priority::Analysis,
+        [&gateMtx, &gateCv, &gateReleased](const TaskScheduler::TaskContext &)
+        {
+            std::unique_lock<std::mutex> lk(gateMtx);
+            gateCv.wait(lk, [&gateReleased] { return gateReleased; });
+        });
+    struct ReleaseGateGuard
+    {
+        std::mutex &mtx;
+        std::condition_variable &cv;
+        bool &released;
+        ~ReleaseGateGuard()
+        {
+            std::lock_guard<std::mutex> lk(mtx);
+            released = true;
+            cv.notify_all();
+        }
+    } releaseGate{gateMtx, gateCv, gateReleased};
+    {
+        QElapsedTimer wt;
+        wt.start();
+        while (sched.metrics(TaskScheduler::PoolType::AnalysisPool).active_tasks < 1 &&
+               wt.elapsed() < 5000)
+            pump(10);
+    }
+    CHECK(sched.metrics(TaskScheduler::PoolType::AnalysisPool).active_tasks >= 1,
+          "P1: release-gated blocker occupies the Analysis worker");
+    const uint64_t submittedBefore =
+        sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+
+    // The overlay toggle submits exactly ONE Analysis batch for all pane
+    // histograms; while the worker is blocked the panes stay empty because the
+    // delivery is asynchronous, never a synchronous UI-thread refresh.
+    overlay->setChecked(true);
+    const uint64_t submittedAfter =
+        sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+    CHECK(submittedAfter == submittedBefore + 1,
+          "P1: overlay toggle submits exactly one Analysis histogram batch");
+    CHECK(hist0->histogramCount() == 0 && hist1->histogramCount() == 0,
+          "P1: pane histograms stay empty while the Analysis worker is blocked");
+
+    // Release the gate and drain: both pane overlays must be delivered.
+    {
+        std::lock_guard<std::mutex> lk(gateMtx);
+        gateReleased = true;
+    }
+    gateCv.notify_all();
+    CHECK(sched.drain(TaskScheduler::PoolType::AnalysisPool, std::chrono::seconds(15)),
+          "P1: Analysis pool drains after the histogram gate release");
+    waitForHistogramPopulated(ws, QStringLiteral("paneHistogram0"));
+    waitForHistogramPopulated(ws, QStringLiteral("paneHistogram1"));
+    hist0 = paneHist(0);
+    hist1 = paneHist(1);
+    CHECK(hist0 && hist1 && hist0->histogramCount() == 1 && hist0->histogramTotal(0) > 0 &&
               hist1->histogramCount() == 1 && hist1->histogramTotal(0) > 0,
           "P1: independent pane overlays are populated");
 
@@ -345,6 +461,8 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
           "P1: Blink-active rebuild retains one active pane");
     CHECK(ws->engine().blinkController().isBlinking(),
           "P1: Blink-active rebuild restores engine Blink state");
+    waitForHistogramPopulated(ws, QStringLiteral("paneHistogram0"));
+    waitForHistogramPopulated(ws, QStringLiteral("paneHistogram1"));
     hist0 = paneHist(0);
     hist1 = paneHist(1);
     CHECK(hist0 && hist1 && hist0->histogramTotal(0) > 0 && hist1->histogramTotal(0) > 0,
@@ -352,6 +470,8 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
 
     blink->setChecked(false);
     pump(50);
+    waitForHistogramPopulated(ws, QStringLiteral("paneHistogram0"));
+    waitForHistogramPopulated(ws, QStringLiteral("paneHistogram1"));
     hist0 = paneHist(0);
     hist1 = paneHist(1);
     CHECK(hist0 && hist1 && hist0->histogramCount() == 1 && hist0->histogramTotal(0) > 0 &&
@@ -360,7 +480,9 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
 
     roi->setChecked(true);
     ws->applyROI({0, 0, 32, 32});
-    pump(40);
+    waitForHistogramTotal(ws, QStringLiteral("analysisHistogram"), 1024);
+    waitForHistogramTotal(ws, QStringLiteral("paneHistogram0"), 1024);
+    waitForHistogramTotal(ws, QStringLiteral("paneHistogram1"), 1024);
     auto *mainHist = ws->findChild<HistogramWidget *>("analysisHistogram");
     hist0 = paneHist(0);
     hist1 = paneHist(1);

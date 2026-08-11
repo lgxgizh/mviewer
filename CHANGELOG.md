@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed — Compare histogram refresh is async, cancellable, and de-duplicated
+
+- Compare histograms (main analysis histogram + per-pane overlays) now compute
+  on a single cancellable, latest-wins Analysis-pool batch per logical refresh
+  instead of synchronously on the UI thread. The main surface and every pane
+  overlay share one adjusted/ROI-aware histogram per image, so the adjusted
+  pixels are never computed twice within a refresh.
+- Toggling the pane overlay, rebuilding the grid, or finishing an adjustment
+  each submit exactly one histogram batch; a newer request cancels the previous
+  one, stale generations never overwrite the widgets, and canceling an
+  initial/rebuild batch cannot strand empty overlay panes. UI histogram widgets
+  keep their previous contents while work is pending and a rejected submission
+  never falls back to synchronous UI-thread computation.
+- Per-pane main mode, ROI-restricted totals, Blink/rebuild, preset/swap, and
+  adjustment-release behavior are preserved.
+
 ### Changed — Compare panes materialize asynchronously (no UI-thread conversion)
 
 - Compare pane materialization is now a cancellable, latest-wins async batch on

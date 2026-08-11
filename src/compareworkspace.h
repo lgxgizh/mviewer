@@ -447,12 +447,45 @@ class CompareWorkspace : public QWidget
 
     // ── M16.7: adjusted-aware diff/metrics + per-pane histogram overlay ──
     ImageData adjustedPixels(int cellIdx) const;
-    mviewer::core::Histogram histogramForImage(int idx) const;
     void onAdjEditFinished();
     void refreshCellHist(int idx);
     void positionCellHists();
     void onPaneHistOverlayToggled(bool on);
     bool m_paneHistOverlay = false;
+
+    // Async batch histogram refresh: the per-pane overlays and the main analysis
+    // histogram are computed by ONE cancellable Analysis-pool task per logical
+    // refresh and delivered to the UI thread via qApp. Value/POD data only — no
+    // widget, QObject, ImageFrame, or CompareEngine reference crosses the thread
+    // boundary. Latest-wins: a newer schedule cancels the previous task and bumps
+    // the generation; delivery re-checks both. Independent of the display
+    // (m_displayGen/m_displayTask) and diff (m_diffGen/m_diffTask) batches.
+    struct HistogramBatchResult
+    {
+        uint64_t generation = 0;
+        int paneCount = 0;
+        bool updateMain = false;
+        // M23: value-only main-title state captured at schedule time, so the
+        // title and the histogram data are delivered as one coherent pair —
+        // a pending/rejected batch can never show a new ROI title over old data.
+        bool roiEnabled = false;
+        mviewer::domain::Selection roi;
+        std::vector<mviewer::core::Histogram> main; // main surface, in main order
+
+        struct CellHist
+        {
+            int index = -1;
+            mviewer::core::Histogram hist;
+        };
+        std::vector<CellHist> panes; // pane overlay widgets keyed by index
+    };
+    void scheduleHistogramRefresh(bool includeMain, const std::vector<int> &paneIndices);
+    void applyHistogramBatchResult(const HistogramBatchResult &result);
+    // M23: the histogram section title text for the given ROI/full state.
+    QString histogramTitleText(bool roiEnabled, const mviewer::domain::Selection &roi) const;
+
+    uint64_t m_histGen = 0;
+    TaskScheduler::TaskHandle m_histTask;
     QCheckBox *m_paneHistOverlayChk = nullptr;
     std::vector<HistogramWidget *> m_cellHists;
 

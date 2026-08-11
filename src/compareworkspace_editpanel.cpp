@@ -340,11 +340,14 @@ mviewer::core::CompareReportBundle CompareWorkspace::buildReportBundle() const
 
 void CompareWorkspace::onAdjEditFinished()
 {
-    // This is the sole full analysis refresh path for adjustment edits.
+    // This is the sole full analysis refresh path for adjustment edits. When
+    // the side panel is visible one includeMain batch also covers the pane
+    // overlays; when it is hidden only the edited pane is refreshed (any
+    // still-empty overlays are coalesced into the same batch by scheduling).
     const bool analysisVisible = m_sideChk && m_sideChk->isChecked();
     if (analysisVisible)
         refreshHistograms();
-    if (m_paneHistOverlay && (!analysisVisible || m_perPaneHist))
+    else if (m_paneHistOverlay)
         refreshCellHist(m_editIdx);
     refreshAllDiffOverlays();
 }
@@ -353,10 +356,7 @@ void CompareWorkspace::refreshCellHist(int idx)
 {
     if (!m_paneHistOverlay || idx < 0 || idx >= static_cast<int>(m_cellHists.size()))
         return;
-    HistogramWidget *hw = m_cellHists[static_cast<size_t>(idx)];
-    if (!hw)
-        return;
-    hw->setHistograms({histogramForImage(idx)});
+    scheduleHistogramRefresh(false, {idx});
 }
 
 void CompareWorkspace::positionCellHists()
@@ -386,8 +386,12 @@ void CompareWorkspace::onPaneHistOverlayToggled(bool on)
     }
     if (on)
     {
-        for (int i = 0; i < static_cast<int>(m_cellHists.size()); ++i)
-            refreshCellHist(i);
+        std::vector<int> all;
+        const int n = static_cast<int>(m_cellHists.size());
+        all.reserve(static_cast<size_t>(n));
+        for (int i = 0; i < n; ++i)
+            all.push_back(i);
+        scheduleHistogramRefresh(false, all);
         positionCellHists();
     }
 }

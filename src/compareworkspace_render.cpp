@@ -148,11 +148,18 @@ void CompareWorkspace::rebuildCells()
     if (m_lastSelection.width > 0)
         applySelectionToAll(m_lastSelection);
 
-    // Rebuilds create fresh overlay widgets. Repopulate them immediately from
-    // the same adjusted/ROI-aware histogram path used by the side panel.
+    // Rebuilds create fresh overlay widgets. Request every pane histogram in
+    // ONE async batch from the same adjusted/ROI-aware path used by the side
+    // panel — never an N-call loop.
     if (m_paneHistOverlay)
-        for (int i = 0; i < static_cast<int>(m_cellHists.size()); ++i)
-            refreshCellHist(i);
+    {
+        std::vector<int> all;
+        const int n = static_cast<int>(m_cellHists.size());
+        all.reserve(static_cast<size_t>(n));
+        for (int i = 0; i < n; ++i)
+            all.push_back(i);
+        scheduleHistogramRefresh(false, all);
+    }
 
     if (m_blinkTimer && m_blinkTimer->isActive())
     {
