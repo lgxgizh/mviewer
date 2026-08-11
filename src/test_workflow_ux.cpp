@@ -37,6 +37,7 @@
 #include "searchpanel.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
+#include "widgets/histogramwidget.h"
 #include "widgets/rawimageview.h"
 
 #include <QAction>
@@ -186,6 +187,41 @@ void waitForAnalysisIdle(int timeoutMs = 8000)
     }
 }
 
+// Release-gated Analysis blocker: occupies the single Analysis worker until
+// the destructor releases it. The task captures only the shared release state
+// (the Control), never this helper — so there is no ownership cycle.
+struct AnalysisBlocker
+{
+    struct Control
+    {
+        std::mutex mtx;
+        std::condition_variable cv;
+        bool released = false;
+    };
+    std::shared_ptr<Control> control = std::make_shared<Control>();
+    TaskScheduler::TaskHandle task;
+
+    AnalysisBlocker()
+    {
+        auto c = control;
+        task = TaskScheduler::instance().submit(
+            TaskScheduler::Priority::Analysis,
+            [c](const TaskScheduler::TaskContext &)
+            {
+                std::unique_lock<std::mutex> lk(c->mtx);
+                c->cv.wait(lk, [c] { return c->released; });
+            });
+    }
+    ~AnalysisBlocker()
+    {
+        std::lock_guard<std::mutex> lk(control->mtx);
+        control->released = true;
+        control->cv.notify_all();
+    }
+    AnalysisBlocker(const AnalysisBlocker &) = delete;
+    AnalysisBlocker &operator=(const AnalysisBlocker &) = delete;
+};
+
 QString waitForMetricsChange(QLabel *label, const QString &previous, int timeoutMs = 8000)
 {
     QElapsedTimer t;
@@ -203,10 +239,11 @@ void waitForMetricsText(QLabel *label, const QString &expected, int timeoutMs = 
         pump(25);
 }
 
-QString writePng(const QDir &dir, const QString &name, QColor color)
+QString writePng(const QDir &dir, const QString &name, QColor color, int width = 32,
+                 int height = 32)
 {
     const QString path = dir.filePath(name);
-    QImage img(32, 32, QImage::Format_RGB32);
+    QImage img(width, height, QImage::Format_RGB32);
     img.fill(color);
     img.save(path, "PNG");
     return path;
@@ -832,6 +869,157 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 sendKey(&w, Qt::Key_Escape);
                 pump(50);
                 CHECK(overlay && !overlay->isVisible(), "ESC hides the metadata overlay");
+            }
+
+            // M-viewer P0-3 async metadata-overlay histogram contract: showing
+            // the overlay schedules exactly ONE Analysis batch that arrives
+            // asynchronously (never blocking the toggle), a current-image change
+            // clears the old histogram IMMEDIATELY through the synchronous SSOT
+            // signals, and a fresh histogram for the new dimensions replaces it.
+            // A release-gated blocker pins the single Analysis worker so the
+            // queued batch and the immediate clear are observable.
+            {
+                auto *toggleAction = w.findChild<QAction *>("toggleMetadataAction");
+                MetadataOverlay *overlay =
+                    viewer ? viewer->findChild<MetadataOverlay *>() : nullptr;
+                HistogramWidget *hist = overlay ? overlay->findChild<HistogramWidget *>() : nullptr;
+                CHECK(toggleAction != nullptr, "metadata toggle action is discoverable");
+                CHECK(overlay != nullptr, "metadata overlay is discoverable on the viewer");
+                CHECK(hist != nullptr, "metadata overlay owns a histogram widget");
+
+                auto &sched = TaskScheduler::instance();
+                const QString imgA = sel->currentImage();
+                {
+                    QElapsedTimer syncFrame;
+                    syncFrame.start();
+                    while ((!viewer->frame() ||
+                            QString::fromStdString(viewer->frame()->metadata().filePath) != imgA) &&
+                           syncFrame.elapsed() < 8000)
+                        pump(25);
+                }
+                waitForAnalysisIdle();
+                sched.setQueueMaxThreads(TaskScheduler::Priority::Analysis, 1);
+                struct RestoreAnalysisThreads
+                {
+                    ~RestoreAnalysisThreads()
+                    {
+                        TaskScheduler::instance().setQueueMaxThreads(
+                            TaskScheduler::Priority::Analysis,
+                            std::max(1, QThread::idealThreadCount() / 2));
+                    }
+                } restoreAnalysis;
+
+                if (toggleAction && overlay && hist)
+                {
+                    const int64_t srcPixels =
+                        viewer->frame()
+                            ? static_cast<int64_t>(viewer->frame()->width()) *
+                                  viewer->frame()->height()
+                            : 0;
+                    {
+                        AnalysisBlocker blocker;
+                        {
+                            QElapsedTimer t;
+                            t.start();
+                            while (sched.metrics(TaskScheduler::PoolType::AnalysisPool)
+                                       .active_tasks < 1 &&
+                                   t.elapsed() < 5000)
+                                pump(10);
+                        }
+                        CHECK(sched.metrics(TaskScheduler::PoolType::AnalysisPool)
+                                  .active_tasks >= 1,
+                              "metadata gate: blocker occupies the single Analysis worker");
+
+                        const uint64_t submittedBefore =
+                            sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+                        {
+                            QElapsedTimer prompt;
+                            prompt.start();
+                            toggleAction->trigger();
+                            pump(20);
+                            CHECK(prompt.elapsed() < 2000,
+                                  "metadata gate: toggle returns without sync histogram compute");
+                        }
+                        const uint64_t submittedAfter =
+                            sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+                        CHECK(submittedAfter == submittedBefore + 1,
+                              "metadata gate: showing schedules exactly one Analysis batch");
+                        CHECK(overlay->isVisible(),
+                              "metadata gate: overlay is visible after the toggle");
+                        CHECK(toggleAction->isChecked(),
+                              "metadata gate: toggle action is checked with the overlay");
+                        CHECK(hist->histogramCount() == 0,
+                              "metadata gate: no histogram while the Analysis worker is blocked");
+                    }
+
+                    CHECK(sched.drain(TaskScheduler::PoolType::AnalysisPool,
+                                      std::chrono::seconds(15)),
+                          "metadata gate: Analysis pool drains after the blocker release");
+                    {
+                        QElapsedTimer t;
+                        t.start();
+                        while (hist->histogramCount() == 0 && t.elapsed() < 8000)
+                            pump(25);
+                    }
+                    CHECK(hist->histogramCount() == 1,
+                          "metadata gate: async histogram arrives for the current image");
+                    const long srcTotal = hist->histogramTotal(0);
+                    CHECK(srcTotal == srcPixels,
+                          "metadata gate: histogram total equals the frame pixel count");
+
+                    const QString target = (imgA == paths[4]) ? paths[0] : paths[4];
+                    CHECK(target != imgA, "metadata gate: target image has different dimensions");
+
+                    const uint64_t submittedBefore2 =
+                        sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+                    sel->setCurrentImage(target);
+                    CHECK(hist->histogramCount() == 0,
+                          "metadata gate: image change clears the old histogram immediately");
+                    CHECK(overlay->isVisible(),
+                          "metadata gate: overlay stays visible across the image change");
+                    {
+                        QElapsedTimer t;
+                        t.start();
+                        while ((!viewer->frame() ||
+                                QString::fromStdString(viewer->frame()->metadata().filePath) !=
+                                    target) &&
+                               t.elapsed() < 8000)
+                            pump(25);
+                    }
+                    {
+                        QElapsedTimer t;
+                        t.start();
+                        while (hist->histogramCount() == 0 && t.elapsed() < 8000)
+                            pump(25);
+                    }
+                    const uint64_t submittedAfter2 =
+                        sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+                    CHECK(submittedAfter2 == submittedBefore2 + 1,
+                          "metadata gate: the new image schedules exactly one fresh batch");
+                    const long targetTotal = hist->histogramTotal(0);
+                    const int64_t targetPixels =
+                        viewer->frame()
+                            ? static_cast<int64_t>(viewer->frame()->width()) *
+                                  viewer->frame()->height()
+                            : 0;
+                    CHECK(targetTotal == targetPixels && targetTotal != srcTotal,
+                          "metadata gate: fresh histogram has the new dimensions");
+
+                    sendKey(&w, Qt::Key_Escape);
+                    pump(50);
+                    CHECK(!overlay->isVisible(), "metadata gate: ESC hides the overlay");
+                    sel->setCurrentImage(imgA);
+                    {
+                        QElapsedTimer t;
+                        t.start();
+                        while ((!viewer->frame() ||
+                                QString::fromStdString(viewer->frame()->metadata().filePath) !=
+                                    imgA) &&
+                               t.elapsed() < 8000)
+                            pump(25);
+                    }
+                    waitForAnalysisIdle();
+                }
             }
 
             // F toggles fullscreen: the visible viewer, or the main window
@@ -2253,8 +2441,15 @@ int main(int argc, char **argv)
                                   QColor(200, 200, 40), QColor(40, 200, 200)};
     QStringList paths;
     for (int i = 0; i < colors.size(); ++i)
+    {
+        // paths[4] is intentionally non-square (19x13) so the Workflow 1
+        // metadata-histogram regression can compare two gallery images of
+        // different dimensions; paths[0] and paths[2] stay 32x32 for Workflow 2.
+        const int w = i == 4 ? 19 : 32;
+        const int h = i == 4 ? 13 : 32;
         paths << writePng(workDir, QStringLiteral("wf_%1.png").arg(i, 3, 10, QChar('0')),
-                          colors[i]);
+                          colors[i], w, h);
+    }
 
     workflow1_browse(workDir.absolutePath(), paths);
     workflow3_session_restore(workDir.absolutePath(), paths.first());

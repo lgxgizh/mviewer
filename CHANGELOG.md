@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed — metadata overlay histogram is async and navigation-safe
+
+- The metadata-overlay mini histogram is now computed only on the Analysis pool
+  via one cancellable, latest-wins `MainWindow`-owned task, replacing the old
+  synchronous UI-thread compute from the toggle path only.
+- The worker snapshots pixels by value and re-validates generation, path,
+  visibility, and frame identity before delivering; navigating cancels the
+  in-flight task, clears the old histogram, and the new frame's `imageReady`
+  schedules a fresh delivery. Hiding the overlay or closing the window cancels
+  work and invalidates the generation.
+- Regression coverage: `workflow_ux_tests` Workflow 1 adds a release-gated
+  gate asserting prompt entry, one submission per show, clear-on-navigation,
+  and latest-wins delivery.
+
 ### Changed — Compare histogram refresh is async, cancellable, and de-duplicated
 
 - Compare histograms (main analysis histogram + per-pane overlays) now compute

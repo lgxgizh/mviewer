@@ -67,7 +67,13 @@ void MetadataOverlay::hide()
     m_lines.clear();
     m_shortName.clear();
     if (m_histogram)
+    {
+        // Drop any rendered histogram data too — re-showing the overlay must
+        // not resurrect the previous image's histogram before the fresh async
+        // delivery arrives.
+        m_histogram->clear();
         m_histogram->hide();
+    }
     emit visibilityChanged(false);
 }
 
@@ -77,6 +83,7 @@ void MetadataOverlay::setHistogram(const mviewer::core::Histogram &hist)
         return;
     if (hist.r.empty())
     {
+        m_histogram->clear();
         m_histogram->hide();
         return;
     }

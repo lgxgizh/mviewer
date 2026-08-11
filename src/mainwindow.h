@@ -3,6 +3,7 @@
 #include "appstate.h"
 #include "core/command/CommandRegistry.h"
 #include "core/command/CommandStack.h"
+#include "core/scheduler/TaskScheduler.h"
 #include "core/update/UpdateChecker.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
@@ -12,7 +13,10 @@
 #include <QMap>
 #include <QStringList>
 
+#include <memory>
+
 class ImageViewer;
+class ImageFrame;
 class DirectoryTree;
 class BreadcrumbBar;
 class MetadataOverlay;
@@ -41,6 +45,11 @@ class QComboBox;
 class QSplitter;
 class QSlider;
 class QToolBar;
+
+namespace mviewer::core
+{
+class Histogram;
+}
 
 class MainWindow : public QMainWindow
 {
@@ -120,6 +129,26 @@ class MainWindow : public QMainWindow
     // P0-3: metadata overlay — position and show the floating metadata panel.
     void showMetadataOverlay();
     void toggleMetadataOverlay();
+    // P0-3: async metadata-overlay histogram. The full-image histogram is
+    // computed ONLY on the Analysis pool (never the UI thread), latest-wins and
+    // cancellable. Every show path funnels through scheduleMetadataHistogram();
+    // navigation/hide/destruction cancel the in-flight task and invalidate the
+    // generation so a late delivery can never touch a stale or freed overlay.
+    void cancelMetadataHistogram();
+    void scheduleMetadataHistogram();
+    void applyMetadataHistogram(uint64_t gen, const QString &path,
+                                const mviewer::core::Histogram &hist);
+    TaskScheduler::TaskHandle m_metadataHistTask; // newest owned Analysis task
+    uint64_t m_metadataHistGen = 0;               // generation guard (latest-wins)
+    QString m_metadataHistPath;                   // image the newest task targets
+    std::weak_ptr<ImageFrame> m_metadataHistFrame; // frame identity token
+    // Post-delivery dedup: once a histogram lands, the completed task handle is
+    // released and this flag records that the CURRENT path+frame is already
+    // delivered. Repeated show notifications (hover, action, imageReady) for the
+    // SAME already-delivered frame then short-circuit without resubmitting; a new
+    // path/frame, hide, navigation, or cancellation clears it so a genuinely new
+    // request still runs.
+    bool m_metadataHistDelivered = false;
     void copyCurrentImageToClipboard();
     void openQuickCompare();
     void openPreferences();     // F1 (M22): centralized Preferences dialog

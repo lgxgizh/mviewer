@@ -133,6 +133,7 @@ void MainWindow::setupUi()
     m_actBrowseWorkspace->setToolTip(tr("隐藏分析和搜索面板，保留文件夹与预览导航"));
     viewMenu->addAction(m_actBrowseWorkspace);
     m_actToggleMetadata = new QAction("图片信息(&I)", this);
+    m_actToggleMetadata->setObjectName("toggleMetadataAction"); // stable test discovery
     m_actToggleMetadata->setCheckable(true);
     m_actToggleMetadata->setChecked(false);
     m_actToggleMetadata->setShortcut(QKeySequence("Ctrl+I"));
@@ -758,10 +759,15 @@ void MainWindow::setupUi()
     // P0-3: the overlay can close itself (ESC / I / M / click). Mirror any
     // visibility change back into the "图片信息" menu toggle so all entry points
     // stay consistent and a closed overlay does not silently re-open on the next
-    // image selection.
+    // image selection. Every show/hide also drives the async histogram task:
+    // showing schedules (once, latest-wins), hiding cancels the in-flight work.
     connect(m_metadataOverlay, &MetadataOverlay::visibilityChanged, this,
             [this](bool visible)
             {
+                if (visible)
+                    scheduleMetadataHistogram();
+                else
+                    cancelMetadataHistogram();
                 if (m_actToggleMetadata)
                     m_actToggleMetadata->setChecked(visible);
             });
@@ -951,6 +957,16 @@ void MainWindow::setupUi()
     // load completes (no re-decode on the UI thread). This replaces the old
     // synchronous QImage(path) decode that blocked browsing.
     connect(m_imageViewer, &ImageViewer::imageReady, m_analysisPanel, &AnalysisPanel::setFrame);
+    // P0-3: an active metadata overlay follows the freshly decoded frame — its
+    // histogram is computed on the Analysis pool only after the frame is ready
+    // (navigating while the overlay is visible must never show the old image's
+    // histogram; the delivery is also generation/path/frame-guarded).
+    connect(m_imageViewer, &ImageViewer::imageReady, this,
+            [this](const std::shared_ptr<ImageFrame> &)
+            {
+                if (m_metadataOverlay && m_metadataOverlay->isVisible())
+                    scheduleMetadataHistogram();
+            });
     // M12.2 (G2-ext): also record each image's analysis result per-path so the
     // whole compare session's analysis context can be persisted into the .mvws.
     connect(m_imageViewer, &ImageViewer::regionStats, this,

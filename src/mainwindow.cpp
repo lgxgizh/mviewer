@@ -145,6 +145,10 @@ MainWindow::~MainWindow()
         *m_reindexAlive = false;
     if (m_reindexRequestId != 0)
         mviewer::core::MetadataIndexer::instance().cancelRequest(m_reindexRequestId);
+    // P0-3: cancel the in-flight metadata-overlay histogram and invalidate its
+    // generation. The queued delivery is additionally QPointer-guarded, so a
+    // late completion can never touch freed MainWindow/overlay state.
+    cancelMetadataHistogram();
     // M27: the ImageViewer is a parentless top-level window (mainwindow_ui.cpp
     // creates it with nullptr) — nothing owns it, so it must be deleted here.
     // Without this, every MainWindow create/destroy leaks the viewer window
@@ -408,10 +412,15 @@ void MainWindow::onCurrentImageChanged(const QString &path)
         m_imageViewer->setImage(path);
 
     // Metadata: the overlay follows its toggle; the (usually hidden) tool panel
-    // is refreshed only when visible so rapid browsing stays cheap.
+    // is refreshed only when visible so rapid browsing stays cheap. A current
+    // image change also cancels the in-flight histogram and immediately clears
+    // the old image's histogram so a stale delivery can never land on the new
+    // image's overlay (the fresh histogram arrives via imageReady).
     if (m_metadataOverlay)
     {
+        cancelMetadataHistogram();
         m_metadataOverlay->setImage(path);
+        m_metadataOverlay->setHistogram(mviewer::core::Histogram());
         if (m_actToggleMetadata && m_actToggleMetadata->isChecked())
             m_metadataOverlay->showForImage(path);
     }

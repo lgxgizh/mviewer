@@ -126,6 +126,106 @@ void MainWindow::showMetadataOverlay()
     m_metadataOverlay->showForImage(currentImagePath());
 }
 
+// P0-3: cancel the in-flight metadata-histogram task and invalidate the
+// generation so any already-queued delivery is dropped by applyMetadataHistogram.
+// This is the single logical invalidation: it bumps the generation once, clears
+// the path/frame identity, and forgets any delivered state. Every schedule for a
+// genuinely new request starts by canceling (which hands out the fresh gen).
+void MainWindow::cancelMetadataHistogram()
+{
+    TaskScheduler::cancel(m_metadataHistTask);
+    m_metadataHistTask.reset();
+    ++m_metadataHistGen; // invalidate all prior deliveries
+    m_metadataHistPath.clear();
+    m_metadataHistFrame.reset();
+    m_metadataHistDelivered = false;
+}
+
+// P0-3: snapshot the viewer's current frame (pixels by value — a cheap shared
+// buffer) and the expected path, then compute the full-image histogram on the
+// Analysis pool. The worker only touches captured values (pixels/path/gen; the
+// QPointer is a mere delivery token, never dereferenced off the UI thread); the
+// UI delivery is queued through qApp and re-validated on the main thread.
+void MainWindow::scheduleMetadataHistogram()
+{
+    if (!m_metadataOverlay || !m_metadataOverlay->isVisible() || !m_imageViewer)
+        return;
+    auto frame = m_imageViewer->frame();
+    if (!frame || frame->pixels().isNull())
+        return; // no decoded frame yet; imageReady drives the schedule later
+    const QString path = currentImagePath();
+    if (path.isEmpty())
+        return;
+    // The frame must belong to the CURRENT image. While a new decode is in
+    // flight the viewer still holds the previous frame; scheduling it now would
+    // compute the wrong pixels (and the imageReady delivery re-schedules).
+    if (QString::fromStdString(frame->metadata().filePath) != path)
+        return;
+    // Already delivered for this exact path+frame: repeated visibility
+    // notifications (hover, action, imageReady) must not resubmit.
+    if (m_metadataHistDelivered && m_metadataHistPath == path &&
+        m_metadataHistFrame.lock() == frame)
+        return;
+    // Latest-wins dedup: an in-flight request for the same path+frame is already
+    // the newest work — do not stack a second Analysis task for one show.
+    if (m_metadataHistTask && m_metadataHistPath == path &&
+        m_metadataHistFrame.lock() == frame)
+        return;
+
+    // A new request supersedes whatever was in flight or already delivered;
+    // cancel hands out the fresh generation (one bump, no double increments).
+    cancelMetadataHistogram();
+    const uint64_t gen = m_metadataHistGen;
+    m_metadataHistPath = path;
+    m_metadataHistFrame = frame; // identity token (weak; viewer owns the frame)
+    const ImageData pixels = frame->pixels();
+    const QString expectedPath = path;
+
+    QPointer<MainWindow> guard(this);
+    auto task = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Analysis,
+        [pixels, expectedPath, gen, guard](const TaskScheduler::TaskContext &ctx)
+        {
+            if (ctx.isCancelled())
+                return;
+            const mviewer::core::Histogram hist = mviewer::core::computeHistogram(pixels);
+            if (ctx.isCancelled())
+                return; // superseded mid-computation — never deliver stale work
+            QMetaObject::invokeMethod(
+                qApp,
+                [gen, expectedPath, hist, guard]()
+                {
+                    MainWindow *win = guard.data();
+                    if (!win)
+                        return; // MainWindow destroyed while computing
+                    win->applyMetadataHistogram(gen, expectedPath, hist);
+                },
+                Qt::QueuedConnection);
+        });
+    if (!task)
+        return; // back-pressure/rejected: never fall back to synchronous compute
+    m_metadataHistTask = task;
+}
+
+// P0-3: apply a computed histogram only when it is still the newest request for
+// the overlay's current image. Runs on the UI thread via a queued qApp lambda.
+void MainWindow::applyMetadataHistogram(uint64_t gen, const QString &path,
+                                        const mviewer::core::Histogram &hist)
+{
+    if (gen != m_metadataHistGen || path != currentImagePath())
+        return; // superseded by a newer request or a different image
+    if (!m_metadataOverlay || !m_metadataOverlay->isVisible())
+        return; // overlay dismissed while computing
+    if (m_metadataHistFrame.lock() != (m_imageViewer ? m_imageViewer->frame() : nullptr))
+        return; // the viewer replaced the frame (e.g. a reload of the same path)
+    m_metadataOverlay->setHistogram(hist);
+    // Delivery succeeded: release the completed scheduler handle so the task
+    // graph stays clean, and remember that this exact path+frame is delivered so
+    // repeated show notifications short-circuit in scheduleMetadataHistogram.
+    m_metadataHistTask.reset();
+    m_metadataHistDelivered = true;
+}
+
 // A-10: refresh Undo/Redo menu labels and enabled state from CommandStack.
 void MainWindow::updateUndoRedoActions()
 {
@@ -182,18 +282,7 @@ void MainWindow::toggleMetadataOverlay()
     if (show)
     {
         if (m_metadataOverlay)
-        {
             m_metadataOverlay->showForImage(currentImagePath());
-            // P0: Compute histogram from the viewer's already-decoded frame (lazy,
-            // no extra decode) and pipe it into the overlay's mini histogram widget.
-            if (m_imageViewer)
-            {
-                auto frame = m_imageViewer->frame();
-                if (frame)
-                    m_metadataOverlay->setHistogram(
-                        mviewer::core::computeHistogram(frame->pixels()));
-            }
-        }
         if (m_metadataPanel)
         {
             m_metadataPanel->setImage(currentImagePath());
