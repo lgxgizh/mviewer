@@ -16,6 +16,13 @@ All notable changes to this project are documented here. The format is based on
   a refresh is pending: the pending job is superseded and the current frame is
   always materialized, so the panel never shows a stale or blank state. Hidden
   panels still submit no work until shown.
+- On an already loaded frame, switching analyzer or ROI, the context-menu
+  "分析" run, and the manual reanalyze are non-blocking and latest-wins as well:
+  the selected analyzer (and any legacy ROI fallback) runs on the Analysis pool
+  without re-materializing the image or recomputing the base stats/noise, the
+  call returns immediately, and a stale result never overwrites the current
+  one — the result surface shows a pending state until the accepted outcome
+  lands.
 
 ### Changed — metadata overlay histogram is async and navigation-safe
 

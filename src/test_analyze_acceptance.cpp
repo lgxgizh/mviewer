@@ -144,14 +144,38 @@ class GateOpener
     std::shared_ptr<Gate> m_gate;
 };
 
+// RAII safety net for pausing a pool: resumes it on scope exit, so even a
+// failing CHECK (CHECK only counts failures and continues) or an early return
+// can never leave a pool refusing submissions for later tests.
+class PoolPauseGuard
+{
+  public:
+    explicit PoolPauseGuard(TaskScheduler::PoolType pool) : m_pool(pool)
+    {
+        TaskScheduler::instance().pause(m_pool);
+    }
+    ~PoolPauseGuard()
+    {
+        TaskScheduler::instance().resume(m_pool);
+    }
+
+  private:
+    TaskScheduler::PoolType m_pool;
+};
+
 // An analyzer whose analysis blocks on a Gate until the test releases it. The
 // gate state is captured by value (shared_ptr) in the factory, so the instance
 // created on the UI thread and executed on the Analysis pool never touches the
-// registry or any QObject.
+// registry or any QObject. `result` selects what analyze()/analyzeRegion()
+// return after the gate opens — a false-returning variant lets a test drive
+// the legacy ROI-fallback branch that runs after a no-result analyzer.
 class GatedAnalyzer : public Analyzer
 {
   public:
-    explicit GatedAnalyzer(std::shared_ptr<Gate> gate) : m_gate(std::move(gate)) {}
+    explicit GatedAnalyzer(std::shared_ptr<Gate> gate, bool result = true)
+        : m_gate(std::move(gate)), m_result(result)
+    {
+    }
     std::string name() const override
     {
         return "m28_gated";
@@ -177,20 +201,22 @@ class GatedAnalyzer : public Analyzer
     bool run(const std::string &path)
     {
         if (!m_gate->shouldBlock(path))
-            return true;
+            return m_result;
         // A correct implementation only ever runs this analyzer on the
         // Analysis pool. If it runs on the UI thread (regression: the old
-        // synchronous refreshFromFrame), refuse to block — return failure so
-        // the test fails cleanly instead of deadlocking the whole suite.
+        // synchronous refreshFromFrame/reanalyze), refuse to block — return
+        // failure so the test fails cleanly instead of deadlocking the whole
+        // suite.
         if (QCoreApplication::instance() &&
             QThread::currentThread() == QCoreApplication::instance()->thread())
             return false;
         m_gate->started.fetch_add(1, std::memory_order_relaxed);
         std::unique_lock<std::mutex> lk(m_gate->m);
         m_gate->cv.wait(lk, [this]() { return m_gate->open; });
-        return true;
+        return m_result;
     }
     std::shared_ptr<Gate> m_gate;
+    bool m_result = true;
 };
 
 // Pump the event loop for `ms` so queued deliveries / timers can run.
@@ -219,20 +245,21 @@ bool waitForLoaded(AnalysisPanel &panel, int ms)
     return waitFor([&panel]() { return panel.hasLoadedImage(); }, ms);
 }
 
-void registerGatedAnalyzer(const std::shared_ptr<Gate> &gate)
+void registerGatedAnalyzer(const std::shared_ptr<Gate> &gate, const std::string &id = "m28_gated",
+                           bool result = true)
 {
     AnalyzerRegistry::instance().registerAnalyzer(
-        "m28_gated",
-        [gate]()
+        id,
+        [gate, result]()
         {
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new GatedAnalyzer(gate),
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(new GatedAnalyzer(gate, result),
                                                               [](Analyzer *p) { delete p; });
         });
 }
 
-void unregisterGatedAnalyzer()
+void unregisterGatedAnalyzer(const std::string &id = "m28_gated")
 {
-    AnalyzerRegistry::instance().unregister("m28_gated");
+    AnalyzerRegistry::instance().unregister(id);
 }
 
 QString historyStoragePath()
@@ -310,9 +337,15 @@ void testC2C4C5PanelAndModel(const QString &pathA, const QString &pathB)
     panel.setImage(mvcore::toQImage(frameA->pixels()), pathA);
     panel.selectAnalyzer("histogram");
     panel.reanalyze();
+    // On a loaded frame reanalyze() schedules the analyzer on the Analysis pool
+    // and returns immediately; the result is delivered asynchronously.
+    CHECK(waitFor([&model, &pathA]() { return !model.resultText(pathA).isEmpty(); }, 5000),
+          "C#4: analysis result for image A delivered asynchronously");
     panel.setFrame(frameB);
     panel.setImage(mvcore::toQImage(frameB->pixels()), pathB);
     panel.reanalyze();
+    CHECK(waitFor([&model, &pathB]() { return !model.resultText(pathB).isEmpty(); }, 5000),
+          "C#4: analysis result for image B delivered asynchronously");
 
     const QString resA = model.resultText(pathA);
     const QString resB = model.resultText(pathB);
@@ -326,6 +359,9 @@ void testC2C4C5PanelAndModel(const QString &pathA, const QString &pathB)
     model.pinResult(pathA);
     CHECK(model.pinned().contains(pathA), "C#5: pinned results tracked in the model");
     CHECK(!model.pinned().contains(pathB), "C#5: only explicitly pinned results pinned");
+
+    TaskScheduler::instance().drain(TaskScheduler::AnalysisPool,
+                                    std::chrono::milliseconds(5000));
 }
 
 void testC6PersistenceRoundTrip()
@@ -571,6 +607,303 @@ void testM28AsyncPanelDestruction()
                                     std::chrono::milliseconds(5000));
 }
 
+// ── M28: manual single-frame analysis on an ALREADY MATERIALIZED panel ─────
+//
+// Once a frame is loaded (materialized + base stats/noise done), a
+// user-triggered single-frame analysis (analyzer switch / ROI change /
+// context-menu runAnalyzer / manual reanalyze) must run the selected analyzer
+// — and any legacy ROI fallback — on the Analysis pool, never on the UI
+// thread, without re-materializing the image or recomputing the base stats/
+// noise. A release-gated analyzer proves the call returns while its worker is
+// blocked and hasLoadedImage stays true.
+void testManualAnalyzerRunAsync()
+{
+    std::cout << "-- Analyze: manual analyzer run is async on a loaded frame --\n";
+
+    auto gate = std::make_shared<Gate>();
+    GateOpener opener{gate};
+    registerGatedAnalyzer(gate);
+
+    AnalyzerModel model;
+    AnalysisPanel panel;
+    panel.setAnalyzerModel(&model);
+    panel.selectAnalyzer("histogram");
+    panel.show();
+    const QString path = "/tmp/m28_manual_run.png";
+    panel.setFrame(makeFrameWithPath(path, 256, 256, QColor(200, 30, 30)));
+
+    // Materialize fully with the fast analyzer and wait for completion.
+    CHECK(waitForLoaded(panel, 5000), "fast analyzer materializes the frame");
+    CHECK(gate->started.load() == 0, "materialization ran the fast analyzer, not the gate");
+
+    // Manual run of the gated analyzer: the call must return while the worker
+    // is blocked, and the materialized image/base pages must stay loaded.
+    panel.selectAnalyzer("m28_gated");
+    panel.reanalyze();
+    CHECK(waitFor([gate]() { return gate->started.load() >= 1; }, 5000),
+          "manual analyzer run is submitted to the Analysis pool");
+    CHECK(panel.hasLoadedImage(),
+          "manual analysis keeps the materialized image loaded");
+    CHECK(!model.resultText(path).contains("m28 gated result"),
+          "stale gated result is not shown while the worker is blocked");
+
+    opener.open();
+    CHECK(waitFor([&model, &path]() { return model.resultText(path).contains("m28 gated result"); },
+                  5000),
+          "manual analyzer result is delivered and path-keyed");
+    CHECK(panel.hasLoadedImage(), "image stays loaded after the manual result");
+    unregisterGatedAnalyzer();
+    TaskScheduler::instance().drain(TaskScheduler::AnalysisPool,
+                                    std::chrono::milliseconds(5000));
+}
+
+// Changing the analyzer while a manual gated job is blocked must supersede it
+// (latest-wins): the replacement fast job completes before the stale gate is
+// released, is path-current, and the stale gated result never publishes.
+void testManualAnalyzerLatestWins()
+{
+    std::cout << "-- Analyze: manual analyzer change on a loaded frame is latest-wins --\n";
+
+    auto gate = std::make_shared<Gate>();
+    GateOpener opener{gate};
+    registerGatedAnalyzer(gate);
+
+    AnalyzerModel model;
+    AnalysisPanel panel;
+    panel.setAnalyzerModel(&model);
+    panel.selectAnalyzer("histogram");
+    panel.show();
+    const QString path = "/tmp/m28_manual_lw.png";
+    panel.setFrame(makeFrameWithPath(path, 256, 256, QColor(30, 200, 90)));
+    CHECK(waitForLoaded(panel, 5000), "fast analyzer materializes the frame");
+
+    // A gated manual job blocks on the pool.
+    panel.selectAnalyzer("m28_gated");
+    panel.reanalyze();
+    CHECK(waitFor([gate]() { return gate->started.load() >= 1; }, 5000),
+          "gated manual job started and is blocked");
+    CHECK(panel.hasLoadedImage(), "image stays loaded while the gated job runs");
+
+    // Switch to a fast analyzer while the stale gated job is still blocked.
+    panel.runAnalyzer("brightness");
+    CHECK(waitFor([&model, &path]() { return model.resultText(path).contains("Lum: avg"); }, 5000),
+          "replacement fast analyzer completes while the stale job is gated");
+    CHECK(!model.resultText(path).contains("m28 gated result"),
+          "stale gated result not published before the gate opens");
+
+    opener.open();
+    pump(300); // let any stale queued delivery attempt and be discarded
+    CHECK(!model.resultText(path).contains("m28 gated result"),
+          "stale gated result never publishes after the gate opens");
+    CHECK(model.resultText(path).contains("Lum: avg"),
+          "current-path result stays the replacement brightness result");
+    CHECK(panel.hasLoadedImage(), "image stays loaded across the analyzer switch");
+    unregisterGatedAnalyzer();
+    TaskScheduler::instance().drain(TaskScheduler::AnalysisPool,
+                                    std::chrono::milliseconds(5000));
+}
+
+// Setting an ROI on an already materialized frame must schedule WORKER work
+// (analyzer + legacy ROI fallback), never compute ROI stats on the UI thread.
+// The gated analyzer blocks on the pool (proving the analyzer ran off the UI
+// thread) and returns false after release, so the worker also computes the ROI
+// fallback stats and publishes the plain ROI summary.
+void testManualRoiChangeAsync()
+{
+    std::cout << "-- Analyze: manual ROI change on a loaded frame runs on the pool --\n";
+
+    auto gate = std::make_shared<Gate>();
+    GateOpener opener{gate};
+    registerGatedAnalyzer(gate, "m28_gated_fail", false);
+
+    AnalyzerModel model;
+    AnalysisPanel panel;
+    panel.setAnalyzerModel(&model);
+    panel.selectAnalyzer("histogram");
+    panel.show();
+    const QString path = "/tmp/m28_manual_roi.png";
+    panel.setFrame(makeFrameWithPath(path, 256, 256, QColor(200, 30, 90)));
+    CHECK(waitForLoaded(panel, 5000), "fast analyzer materializes the frame");
+
+    panel.selectAnalyzer("m28_gated_fail");
+    panel.setROI({16, 16, 64, 64});
+    CHECK(waitFor([gate]() { return gate->started.load() >= 1; }, 5000),
+          "ROI change submits analyzer-only work to the Analysis pool");
+    CHECK(panel.hasLoadedImage(), "image/base pages stay loaded during ROI analysis");
+
+    opener.open();
+    CHECK(waitFor([&model, &path]() { return model.resultText(path).startsWith("ROI "); }, 5000),
+          "ROI fallback result is delivered from the worker");
+    CHECK(panel.hasLoadedImage(), "image stays loaded after ROI fallback");
+    unregisterGatedAnalyzer("m28_gated_fail");
+    TaskScheduler::instance().drain(TaskScheduler::AnalysisPool,
+                                    std::chrono::milliseconds(5000));
+}
+
+// A rejected replacement submission (AnalysisPool paused) must terminate the
+// pending state of the superseded accepted job with an explicit retryable
+// unavailable message: the image stays loaded, no fabricated AnalyzerModel
+// success publishes, and the stale accepted job can never overwrite the
+// rejected terminal UI/model state after the pool is resumed and the gate
+// opened.
+void testManualRejectedReplacement()
+{
+    std::cout << "-- Analyze: rejected manual replacement clears pending state --\n";
+
+    auto gate = std::make_shared<Gate>();
+    GateOpener opener{gate}; // RAII: can never leave the pool blocked
+    registerGatedAnalyzer(gate);
+
+    AnalyzerModel model;
+    AnalysisPanel panel;
+    panel.setAnalyzerModel(&model);
+    panel.selectAnalyzer("histogram");
+    panel.show();
+    const QString path = "/tmp/m28_manual_reject.png";
+    panel.setFrame(makeFrameWithPath(path, 256, 256, QColor(200, 30, 30)));
+    CHECK(waitForLoaded(panel, 5000), "fast analyzer materializes the frame");
+
+    // The materialized fast-analyzer result is fully delivered; it must remain
+    // exactly the model state through the rejected replacement and drain.
+    const QString materializedResult = model.resultText(path);
+
+    // Start an ACCEPTED gated manual job: its worker blocks and the result
+    // surface shows a pending state.
+    panel.selectAnalyzer("m28_gated");
+    panel.reanalyze();
+    CHECK(waitFor([gate]() { return gate->started.load() >= 1; }, 5000),
+          "accepted gated manual job started and is blocked");
+    CHECK(panel.hasLoadedImage(), "image stays loaded while the gated job runs");
+    CHECK(panel.analysisText().contains("分析中"),
+          "accepted manual job shows a pending state");
+
+    // A replacement submitted while the pool is paused is REJECTED: the
+    // superseded pending state must be replaced by an explicit retryable
+    // unavailable message and no success may be fabricated.
+    {
+        PoolPauseGuard paused{TaskScheduler::AnalysisPool};
+        panel.runAnalyzer("brightness");
+        CHECK(panel.hasLoadedImage(),
+              "image stays loaded after the rejected replacement");
+        CHECK(!panel.analysisText().contains("分析中"),
+              "rejected replacement clears the pending state");
+        CHECK(panel.analysisText().contains("请稍后重试"),
+              "rejected replacement shows an explicit retryable unavailable message");
+        CHECK(!model.resultText(path).contains("m28 gated result"),
+              "no gated success published by the rejected replacement");
+        CHECK(!model.resultText(path).contains("Lum: avg"),
+              "no fabricated brightness success published for the rejected job");
+        CHECK(model.resultText(path) == materializedResult,
+              "rejected replacement leaves the model result exactly unchanged");
+    } // pool resumed here (RAII)
+
+    // Resume + release: the stale accepted job finishes, is discarded by
+    // cancellation/generation, and must not overwrite the rejected terminal
+    // UI/model state.
+    opener.open();
+    const bool drained = TaskScheduler::instance().drain(TaskScheduler::AnalysisPool,
+                                                         std::chrono::milliseconds(5000));
+    CHECK(drained, "Analysis pool drains after the rejected replacement");
+    pump(300); // let any stale queued delivery attempt and be discarded
+    CHECK(panel.analysisText().contains("请稍后重试"),
+          "stale accepted job never overwrites the rejected unavailable state");
+    CHECK(!model.resultText(path).contains("m28 gated result"),
+          "stale accepted job never publishes its gated result");
+    CHECK(model.resultText(path) == materializedResult,
+          "stale accepted job leaves the model result exactly unchanged");
+    CHECK(panel.hasLoadedImage(), "image stays loaded after drain");
+    unregisterGatedAnalyzer();
+    TaskScheduler::instance().drain(TaskScheduler::AnalysisPool,
+                                    std::chrono::milliseconds(5000));
+}
+
+// A manual analyzer that returns false with no ROI must reach an explicit
+// terminal no-result state: the pending text is replaced by the localized
+// no-result note and no successful model result is fabricated.
+void testManualNoResultTerminal()
+{
+    std::cout << "-- Analyze: manual no-result analyzer reaches an explicit terminal --\n";
+
+    auto gate = std::make_shared<Gate>();
+    GateOpener opener{gate};
+    registerGatedAnalyzer(gate, "m28_gated_none", false);
+
+    AnalyzerModel model;
+    AnalysisPanel panel;
+    panel.setAnalyzerModel(&model);
+    panel.selectAnalyzer("histogram");
+    panel.show();
+    const QString path = "/tmp/m28_manual_noresult.png";
+    panel.setFrame(makeFrameWithPath(path, 256, 256, QColor(60, 60, 200)));
+    CHECK(waitForLoaded(panel, 5000), "fast analyzer materializes the frame");
+
+    // The materialized fast-analyzer result is fully delivered; it must remain
+    // exactly the model state through the no-result terminal.
+    const QString materializedResult = model.resultText(path);
+
+    panel.selectAnalyzer("m28_gated_none");
+    panel.reanalyze();
+    CHECK(waitFor([gate]() { return gate->started.load() >= 1; }, 5000),
+          "no-result analyzer run submitted to the Analysis pool");
+    CHECK(panel.analysisText().contains("分析中"),
+          "pending state shown while the no-result analyzer is blocked");
+
+    opener.open();
+    CHECK(waitFor([&panel]() { return !panel.analysisText().contains("分析中"); }, 5000),
+          "pending state is replaced by an explicit terminal");
+    CHECK(panel.analysisText().contains("未产生结果"),
+          "analysis surface shows the explicit no-result message");
+    CHECK(panel.hasLoadedImage(), "image stays loaded after the no-result terminal");
+    CHECK(!model.resultText(path).contains("m28 gated result"),
+          "no fabricated model success from a no-result analyzer");
+    CHECK(model.resultText(path) == materializedResult,
+          "no-result terminal leaves the model result exactly unchanged");
+    unregisterGatedAnalyzer("m28_gated_none");
+    TaskScheduler::instance().drain(TaskScheduler::AnalysisPool,
+                                    std::chrono::milliseconds(5000));
+}
+
+// Destroying the panel while an analyzer-only (manual) task is blocked must
+// not crash, touch freed memory, or leave the Analysis pool undrainable.
+void testManualDestructionPending()
+{
+    std::cout << "-- Analyze: destruction with a manual analyzer task pending --\n";
+
+    auto gate = std::make_shared<Gate>();
+    GateOpener opener{gate};
+    registerGatedAnalyzer(gate);
+
+    AnalyzerModel model;
+    auto *panel = new AnalysisPanel;
+    panel->setAnalyzerModel(&model);
+    panel->selectAnalyzer("histogram");
+    panel->show();
+    const auto frame = makeFrame(128, 128, QColor(120, 90, 200));
+    panel->setFrame(frame);
+    CHECK(waitForLoaded(*panel, 5000), "panel materialized before the manual run");
+    panel->selectAnalyzer("m28_gated");
+    panel->reanalyze();
+    CHECK(waitFor([gate]() { return gate->started.load() >= 1; }, 5000),
+          "manual worker started before destruction");
+    CHECK(panel->hasLoadedImage(), "image loaded before destruction");
+    delete panel; // destroyed while the analyzer-only worker is blocked
+    opener.open(); // let the cancelled worker finish and try to deliver
+    const bool drained = TaskScheduler::instance().drain(TaskScheduler::AnalysisPool,
+                                                         std::chrono::milliseconds(5000));
+    CHECK(drained, "Analysis pool drains after destroying a panel with a manual task pending");
+    unregisterGatedAnalyzer();
+
+    // The scheduler must still deliver to a fresh panel (no wedged state).
+    AnalysisPanel panel2;
+    panel2.setAnalyzerModel(&model);
+    panel2.setFrame(makeFrame(64, 64, QColor(10, 10, 10)));
+    panel2.show();
+    CHECK(waitForLoaded(panel2, 5000),
+          "a fresh panel still analyzes after a manual-task panel is destroyed");
+    TaskScheduler::instance().drain(TaskScheduler::AnalysisPool,
+                                    std::chrono::milliseconds(5000));
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -585,6 +918,12 @@ int main(int argc, char **argv)
     testM28AsyncPanelDestruction();
     testM28PendingAnalyzerChange();
     testM28PendingRoiChange();
+    testManualAnalyzerRunAsync();
+    testManualAnalyzerLatestWins();
+    testManualRoiChangeAsync();
+    testManualRejectedReplacement();
+    testManualNoResultTerminal();
+    testManualDestructionPending();
     testC7FailingAnalyzer();
     testC2C4C5PanelAndModel("/tmp/m24_ana_a.png", "/tmp/m24_ana_b.png");
     testC6PersistenceRoundTrip();
