@@ -20,6 +20,7 @@
 #include "core/cache/CacheManager.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/image/Decoder.h"
+#include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
@@ -1244,6 +1245,13 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         const double savedScale = referenceView->scale();
         const QPointF savedOffset = referenceView->offset();
 
+        // Deterministic inspected coordinate: under the fixed transform (scale
+        // 2.0, offset (19,23)) the widget point (width/2-12, height/2-8) maps to
+        // image pixel (0,0) for any pane geometry, so the Inspector samples a
+        // known pixel of the displayed pane image throughout this section.
+        sendMouseMove(referenceView,
+                      QPoint(referenceView->width() / 2 - 12, referenceView->height() / 2 - 8));
+
         // M29: diff overlays + metrics are computed asynchronously as ONE batch
         // per refresh request on the AnalysisPool. Every assertion below waits
         // for the delivery instead of assuming a synchronous refresh.
@@ -1411,17 +1419,129 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
                   referenceView->offset() == savedOffset,
               "brightness adjustment preserves the pane transform");
 
-        brightnessSlider->setSliderDown(true);
-        brightnessSlider->setValue(80);
+        // ── Async latest-wins display gate ─────────────────────────────────────
+        // Contract: each live brightness adjustment schedules ONE cancellable
+        // AnalysisPool display batch; the old pane image stays until delivery,
+        // stale generations never land, committed metrics stay deferred while the
+        // slider is held down, and the Pixel Inspector refreshes when the newest
+        // display lands. Return to identity so the gated drag applies exactly two
+        // fresh generations (40 then 80).
+        brightnessSlider->setValue(0);
         pump(20);
-        const QString draggingMetrics = metricsLabel->text();
-        const QString draggingInspector =
-            inspector->item(1, 2) ? inspector->item(1, 2)->text() : QString();
-        CHECK(draggingMetrics == adjustedMetrics && draggingInspector != adjustedInspector,
-              "adjustment drag updates Inspector while deferring metrics");
+        waitForMetricsText(metricsLabel, thresholdMetrics);
+        const QString deferredMetrics = metricsLabel->text();
+        {
+            auto &sched = TaskScheduler::instance();
+            sched.setQueueMaxThreads(TaskScheduler::Priority::Analysis, 1);
+            struct RestoreAnalysisThreads
+            {
+                ~RestoreAnalysisThreads()
+                {
+                    TaskScheduler::instance().setQueueMaxThreads(
+                        TaskScheduler::Priority::Analysis,
+                        std::max(1, QThread::idealThreadCount() / 2));
+                }
+            } restoreAnalysis;
+
+            // Expected displays from the same production helpers the pane uses: a
+            // brightness-only adjustment is exactly adjustBrightness + toQImage.
+            const ImageData basePx = ws->engine().imageAt(1)->pixels();
+            const QImage expectedBright40 = mvcore::toQImage(adjustBrightness(basePx, 40));
+            const QImage expectedBright80 = mvcore::toQImage(adjustBrightness(basePx, 80));
+
+            waitForAnalysisIdle();
+            const QImage oldPaneImage = referenceView->image();
+
+            // Release-gated blocker occupies the single Analysis worker so the
+            // two display batches are observed queued, never delivered.
+            std::mutex gateMtx;
+            std::condition_variable gateCv;
+            bool gateReleased = false;
+            auto blocker = sched.submit(
+                TaskScheduler::Priority::Analysis,
+                [&gateMtx, &gateCv, &gateReleased](const TaskScheduler::TaskContext &)
+                {
+                    std::unique_lock<std::mutex> lk(gateMtx);
+                    gateCv.wait(lk, [&gateReleased] { return gateReleased; });
+                });
+            struct ReleaseGateGuard
+            {
+                std::mutex &mtx;
+                std::condition_variable &cv;
+                bool &released;
+                ~ReleaseGateGuard()
+                {
+                    std::lock_guard<std::mutex> lk(mtx);
+                    released = true;
+                    cv.notify_all();
+                }
+            } releaseGate{gateMtx, gateCv, gateReleased};
+            {
+                QElapsedTimer t;
+                t.start();
+                while (sched.metrics(TaskScheduler::PoolType::AnalysisPool).active_tasks < 1 &&
+                       t.elapsed() < 5000)
+                    pump(10);
+            }
+            CHECK(sched.metrics(TaskScheduler::PoolType::AnalysisPool).active_tasks >= 1,
+                  "display gate: release-gated blocker occupies the Analysis worker");
+
+            const uint64_t submittedBefore =
+                sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+            brightnessSlider->setSliderDown(true);
+            brightnessSlider->setValue(40);
+            brightnessSlider->setValue(80);
+            pump(20);
+            const uint64_t submittedAfter =
+                sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+            CHECK(submittedAfter == submittedBefore + 2,
+                  "display gate: each live brightness adjustment schedules exactly one "
+                  "Analysis display batch");
+            CHECK(referenceView->image() == oldPaneImage,
+                  "display gate: old pane image remains until the display batch delivers");
+            CHECK(metricsLabel->text() == deferredMetrics,
+                  "display gate: committed metrics stay deferred while the slider is held down");
+
+            {
+                std::lock_guard<std::mutex> lk(gateMtx);
+                gateReleased = true;
+            }
+            gateCv.notify_all();
+            CHECK(sched.drain(TaskScheduler::PoolType::AnalysisPool,
+                              std::chrono::seconds(15)),
+                  "display gate: Analysis pool drains after the gate release");
+            {
+                QElapsedTimer t;
+                t.start();
+                while (referenceView->image() != expectedBright80 && t.elapsed() < 5000)
+                    pump(25);
+            }
+            CHECK(referenceView->image() == expectedBright80,
+                  "display gate: final brightness-80 display lands (latest-wins)");
+            CHECK(referenceView->image() != expectedBright40,
+                  "display gate: stale brightness-40 display never lands");
+            CHECK(metricsLabel->text() == deferredMetrics,
+                  "display gate: metrics stay deferred while the slider is still held down");
+            {
+                const QString expectedR = QString::number(qRed(expectedBright80.pixel(0, 0)));
+                QElapsedTimer t;
+                t.start();
+                while ((inspector->item(1, 2) ? inspector->item(1, 2)->text() : QString()) !=
+                           expectedR &&
+                       t.elapsed() < 5000)
+                    pump(25);
+            }
+            CHECK((inspector->item(1, 2) ? inspector->item(1, 2)->text() : QString()) ==
+                      QString::number(qRed(expectedBright80.pixel(0, 0))),
+                  "display gate: Pixel Inspector refreshes to the new displayed pixel value");
+            CHECK(sched.metrics(TaskScheduler::PoolType::AnalysisPool).pending == 0,
+                  "display gate: Analysis scheduler converges after rapid adjustments");
+            CHECK(sched.graphMetrics().handles == 0,
+                  "display gate: no live scheduler handles after rapid adjustments");
+        }
         brightnessSlider->setSliderDown(false);
-        waitForMetricsChange(metricsLabel, draggingMetrics);
-        CHECK(metricsLabel->text() != draggingMetrics,
+        waitForMetricsChange(metricsLabel, deferredMetrics);
+        CHECK(metricsLabel->text() != deferredMetrics,
               "adjustment release refreshes deferred metrics");
 
         resetButton->click();

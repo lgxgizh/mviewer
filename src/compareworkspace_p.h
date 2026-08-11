@@ -48,11 +48,3 @@
 #include <QWheelEvent>
 #include <algorithm>
 #include <vector>
-
-// UI 边界转换：核心层 ImageFrame -> Qt QImage，复用 mvcore::toQImage。
-inline QImage imageObjectToQImage(const ImageFrame *img)
-{
-    if (!img)
-        return QImage();
-    return mvcore::toQImage(img->pixels());
-}

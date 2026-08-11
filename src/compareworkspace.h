@@ -374,6 +374,31 @@ class CompareWorkspace : public QWidget
     // window (avoids a duplicate batch submission).
     bool m_rebuildingCells = false;
 
+    // M28 P1-01: async pane materialization. rebuildCells() and live adjustment
+    // previews schedule ONE cancellable Analysis-pool task per request that
+    // applies the captured CellAdjust and converts the owned result to QImage
+    // off the UI thread, then marshals a value-only batch back to the UI thread
+    // via qApp. Latest-wins: a newer schedule cancels the previous display task
+    // and bumps the generation; the delivery is also guarded by generation and
+    // pane count. Independent of the diff batch (m_diffGen/m_diffTask).
+    struct DisplayBatchResult
+    {
+        uint64_t generation = 0;
+        int paneCount = 0;
+
+        struct CellImage
+        {
+            int index = -1;
+            QImage image;
+        };
+        std::vector<CellImage> cells;
+    };
+    void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes);
+    void applyDisplayBatchResult(const DisplayBatchResult &result);
+
+    uint64_t m_displayGen = 0;
+    TaskScheduler::TaskHandle m_displayTask;
+
     // ── M16.2: per-cell image adjustments ──
     struct CellAdjust
     {

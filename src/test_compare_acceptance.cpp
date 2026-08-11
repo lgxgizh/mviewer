@@ -13,8 +13,10 @@
 
 #include "compareworkspace.h"
 #include "core/compare/CompareEngine.h"
+#include "core/scheduler/TaskScheduler.h"
 #include "selectionmodel.h"
 #include "widgets/histogramwidget.h"
+#include "widgets/rawimageview.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -27,10 +29,16 @@
 #include <QLabel>
 #include <QSlider>
 #include <QTemporaryDir>
+#include <QThread>
 #include <QVBoxLayout>
 
+#include <algorithm>
+#include <chrono>
+#include <condition_variable>
 #include <cstdio>
+#include <cstdint>
 #include <iostream>
+#include <mutex>
 #include <string>
 
 namespace
@@ -421,6 +429,12 @@ void testDegradedImages(const QDir &dir)
 //   * setImages() returns immediately (submits decode work to the pool);
 //   * no frames are applied synchronously (count == 0 right after the call);
 //   * frames arrive asynchronously and the engine ends up fully populated.
+//
+// Contract: the panes themselves materialize asynchronously too.
+// rebuildCells() submits ONE AnalysisPool display-materialization batch per
+// load generation, alongside the existing diff-analysis batch. While Analysis
+// work is deliberately blocked the decoded panes stay blank, and each load
+// generation submits exactly those two Analysis batches.
 void testCompareLoadIsAsync(const QDir &dir)
 {
     std::cout << "-- Compare M28 P1-01: async load (no UI-thread decode) --\n";
@@ -438,6 +452,57 @@ void testCompareLoadIsAsync(const QDir &dir)
     dlg.resize(1100, 750);
     dlg.show();
 
+    // ── P1-01: pane materialization is asynchronous. Occupy the single
+    // Analysis worker with a release-gated blocker (the M29 gate pattern from
+    // test_workflow_ux.cpp) so every Analysis submission of this load queues
+    // and stays observable instead of racing the UI thread. Drain first so the
+    // blocker deterministically is the only task in front of this load.
+    auto &sched = TaskScheduler::instance();
+    sched.drain(TaskScheduler::PoolType::AnalysisPool, std::chrono::seconds(10));
+    sched.setQueueMaxThreads(TaskScheduler::Priority::Analysis, 1);
+    struct RestoreAnalysisThreads
+    {
+        ~RestoreAnalysisThreads()
+        {
+            TaskScheduler::instance().setQueueMaxThreads(
+                TaskScheduler::Priority::Analysis, std::max(1, QThread::idealThreadCount() / 2));
+        }
+    } restoreAnalysis;
+
+    std::mutex gateMtx;
+    std::condition_variable gateCv;
+    bool gateReleased = false;
+    auto blocker = sched.submit(
+        TaskScheduler::Priority::Analysis,
+        [&gateMtx, &gateCv, &gateReleased](const TaskScheduler::TaskContext &)
+        {
+            std::unique_lock<std::mutex> lk(gateMtx);
+            gateCv.wait(lk, [&gateReleased] { return gateReleased; });
+        });
+    struct ReleaseGateGuard
+    {
+        std::mutex &mtx;
+        std::condition_variable &cv;
+        bool &released;
+        ~ReleaseGateGuard()
+        {
+            std::lock_guard<std::mutex> lk(mtx);
+            released = true;
+            cv.notify_all();
+        }
+    } releaseGate{gateMtx, gateCv, gateReleased};
+    {
+        QElapsedTimer wt;
+        wt.start();
+        while (sched.metrics(TaskScheduler::PoolType::AnalysisPool).active_tasks < 1 &&
+               wt.elapsed() < 5000)
+            pump(10);
+    }
+    CHECK(sched.metrics(TaskScheduler::PoolType::AnalysisPool).active_tasks >= 1,
+          "P1-01: release-gated blocker occupies the Analysis worker");
+    const uint64_t submittedBefore =
+        sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+
     QElapsedTimer t;
     t.start();
     ws->setImages({big, small});
@@ -448,6 +513,53 @@ void testCompareLoadIsAsync(const QDir &dir)
 
     waitForCompareCount(ws, 2);
     CHECK(ws->comparedImageCount() == 2, "async compare load delivers all frames");
+
+    // Decode has reached the UI (finishLoad -> rebuildCells ran on the UI
+    // thread) but the Analysis worker is still gate-blocked: both panes must
+    // be blank, because their materialization is an Analysis batch, never a
+    // synchronous ImageData -> QImage conversion inside rebuildCells().
+    RawImageView *view0 = nullptr;
+    RawImageView *view1 = nullptr;
+    for (RawImageView *v : ws->findChildren<RawImageView *>())
+    {
+        if (!v)
+            continue;
+        if (v->cellIndex() == 0)
+            view0 = v;
+        else if (v->cellIndex() == 1)
+            view1 = v;
+    }
+    CHECK(view0 && view1, "P1-01: two decoded panes exist after the async load");
+    if (view0 && view1)
+    {
+        CHECK(view0->image().isNull() && view1->image().isNull(),
+              "P1-01: decoded panes stay blank while Analysis materialization is blocked");
+    }
+
+    // Exactly two Analysis submissions for this load generation: the future
+    // display-materialization batch plus the existing diff-analysis batch.
+    const uint64_t submittedAfter =
+        sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+    CHECK(submittedAfter == submittedBefore + 2,
+          "P1-01: load generation submits one display batch + one diff batch");
+
+    // Release the gate and drain: both panes must materialize.
+    {
+        std::lock_guard<std::mutex> lk(gateMtx);
+        gateReleased = true;
+    }
+    gateCv.notify_all();
+    CHECK(sched.drain(TaskScheduler::PoolType::AnalysisPool, std::chrono::seconds(15)),
+          "P1-01: Analysis pool drains after the gate release");
+    {
+        QElapsedTimer wt;
+        wt.start();
+        while ((!view0 || view0->image().isNull() || !view1 || view1->image().isNull()) &&
+               wt.elapsed() < 5000)
+            pump(25);
+    }
+    CHECK(view0 && view1 && !view0->image().isNull() && !view1->image().isNull(),
+          "P1-01: panes materialize once Analysis work drains");
     dlg.close();
 }
 

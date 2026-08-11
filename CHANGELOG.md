@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed — Compare panes materialize asynchronously (no UI-thread conversion)
+
+- Compare pane materialization is now a cancellable, latest-wins async batch on
+  the AnalysisPool. `rebuildCells()` creates blank panes and schedules exactly
+  one display batch per rebuild (plus the existing terminal diff batch), so the
+  UI thread never performs a full `ImageData → QImage` conversion — opening or
+  re-laying out Compare no longer freezes on large images.
+- Live per-pane adjustment previews (brightness/contrast/gamma/WB/reset) submit
+  one cancellable display batch per change instead of converting synchronously:
+  rapid slider drags keep the previous pane image until the newest display
+  lands, stale generations never overwrite it, canceled initial work cannot
+  strand blank panes, and the pane transform is preserved when the image size
+  is unchanged. The Pixel Inspector refreshes once the newest display lands;
+  committed metrics stay slider-release driven.
+
 ### Changed — shared format-aware pixel sampler; Pixel Inspector invalidates on load/leave/close
 
 - `ImageBuffer::samplePixel` is the single format-aware sampler behind the Pixel

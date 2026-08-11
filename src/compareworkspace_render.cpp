@@ -66,12 +66,10 @@ void CompareWorkspace::rebuildCells()
         cellLay->addWidget(view, 1);
         m_cellViews.push_back(view);
 
+        // M28 P1-01: panes start BLANK. ImageData -> QImage materialization is
+        // one async Analysis batch scheduled below, never a synchronous
+        // conversion on the UI thread.
         const ImageFrame *img = m_engine.imageAt(i);
-        if (img && !img->pixels().isNull())
-        {
-            QImage q = imageObjectToQImage(img);
-            view->setImage(q);
-        }
 
         // M16.7: per-pane histogram overlay widget (hidden until toggled).
         {
@@ -162,6 +160,17 @@ void CompareWorkspace::rebuildCells()
         applyBlink(m_blinkState);
     }
 
+    // M28 P1-01: every pane was recreated, so materialize all pane images in ONE
+    // async display batch (latest-wins generation). This is independent of the
+    // terminal diff batch below: each rebuild submits exactly two Analysis tasks.
+    {
+        std::vector<int> all;
+        all.reserve(m_cellViews.size());
+        for (int i = 0; i < static_cast<int>(m_cellViews.size()); ++i)
+            all.push_back(i);
+        scheduleDisplayMaterialization(all);
+    }
+
     // Every pane was recreated, so recompute all diff overlays + metrics in a
     // single async batch (latest-wins generation). This is the one terminal
     // refresh for the rebuild state transition.
@@ -169,6 +178,163 @@ void CompareWorkspace::rebuildCells()
     m_rebuildingCells = false;
 
     QTimer::singleShot(0, this, &CompareWorkspace::positionCellHists);
+}
+
+// M28 P1-01: schedule an async pane-materialization batch for the given panes
+// (plus every pane currently showing a null image, so canceling an initial
+// all-pane batch with a later single-pane adjustment never strands blank
+// panes). One Analysis-priority task per call; never a synchronous fallback.
+void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes)
+{
+    // Latest-wins: cancel any in-flight batch and start a fresh generation.
+    // Cancellation alone is not enough — a task may already be past its final
+    // check when a newer request arrives, so the delivery is also guarded by
+    // the generation and pane count on the UI thread.
+    if (m_displayTask)
+        TaskScheduler::cancel(m_displayTask);
+    m_displayTask.reset();
+    ++m_displayGen;
+
+    // Normalize/deduplicate the requested indices and include every current
+    // pane whose image is still null.
+    const int paneCount = static_cast<int>(m_cellViews.size());
+    std::vector<int> panes;
+    panes.reserve(static_cast<size_t>(paneCount));
+    auto add = [&panes, paneCount](int idx)
+    {
+        if (idx < 0 || idx >= paneCount)
+            return;
+        if (std::find(panes.cbegin(), panes.cend(), idx) != panes.cend())
+            return;
+        panes.push_back(idx);
+    };
+    for (int i = 0; i < paneCount; ++i)
+        if (m_cellViews[i] && m_cellViews[i]->image().isNull())
+            add(i);
+    for (int idx : dirtyPanes)
+        add(idx);
+    if (panes.empty())
+        return; // nothing to materialize; the stale task is already cancelled
+
+    // Snapshot everything the worker needs BY VALUE. The worker only touches
+    // these captures — no `this`, no QObject/QWidget. ImageData copies share
+    // their pixel buffers, so the worker holds the pixels alive cheaply.
+    std::vector<ImageData> pixels;
+    pixels.reserve(static_cast<size_t>(paneCount));
+    for (int i = 0; i < paneCount; ++i)
+    {
+        const ImageFrame *img = m_engine.imageAt(i);
+        pixels.push_back(img ? img->pixels() : ImageData());
+    }
+    std::vector<CellAdjust> adjusts = m_cellAdjusts;
+    const uint64_t gen = m_displayGen;
+    QPointer<CompareWorkspace> guard(this);
+
+    auto handle = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Analysis,
+        [pixels, adjusts, panes, paneCount, gen, guard](const TaskScheduler::TaskContext &ctx)
+        {
+            if (ctx.isCancelled())
+                return; // superseded while queued — stop before any work
+
+            DisplayBatchResult r;
+            r.generation = gen;
+            r.paneCount = paneCount;
+            r.cells.reserve(panes.size());
+
+            const auto adjustFor = [&adjusts](int idx) -> CellAdjust
+            {
+                if (idx >= 0 && idx < static_cast<int>(adjusts.size()))
+                    return adjusts[idx];
+                return CellAdjust{};
+            };
+
+            for (int idx : panes)
+            {
+                if (ctx.isCancelled())
+                    return; // before pane materialization
+                if (idx < 0 || idx >= static_cast<int>(pixels.size()))
+                    continue;
+                const ImageData &src = pixels[static_cast<size_t>(idx)];
+                if (src.isNull())
+                    continue; // no source data yet — the pane stays blank
+                const ImageData adjusted = CompareWorkspace::applyAdjusts(src, adjustFor(idx));
+                if (ctx.isCancelled())
+                    return; // after adjustment
+                if (adjusted.isNull())
+                    continue; // failed adjustment must not clear the last valid preview
+                DisplayBatchResult::CellImage cell;
+                cell.index = idx;
+                cell.image = mvcore::toQImage(adjusted);
+                if (ctx.isCancelled())
+                    return; // after conversion
+                if (cell.image.isNull())
+                    continue; // failed conversion must not clear the last valid preview
+                r.cells.push_back(std::move(cell));
+            }
+
+            if (ctx.isCancelled())
+                return;
+
+            // Marshal to the UI thread through qApp (outlives this workspace).
+            // The queued lambda re-checks the guard AND the generation/pane-count
+            // match before touching any widget.
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, r]()
+                {
+                    CompareWorkspace *ws = guard.data();
+                    if (!ws)
+                        return;
+                    ws->applyDisplayBatchResult(r);
+                },
+                Qt::QueuedConnection);
+        });
+    if (!handle)
+    {
+        // submit() refused the task (pool paused / back-pressured). Keep the
+        // last delivered pane images — never fall back to synchronous
+        // conversion on the UI thread. The generation already advanced, so a
+        // later schedule supersedes this state.
+        return;
+    }
+    m_displayTask = handle;
+}
+
+void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
+{
+    if (r.generation != m_displayGen)
+        return; // superseded by a newer batch
+    if (r.paneCount != static_cast<int>(m_cellViews.size()))
+        return; // the pane layout changed while the batch was in flight
+
+    // This is the current generation's terminal delivery: release the handle.
+    m_displayTask.reset();
+
+    for (const auto &cell : r.cells)
+    {
+        if (cell.index < 0 || cell.index >= static_cast<int>(m_cellViews.size()))
+            continue;
+        RawImageView *view = m_cellViews[static_cast<size_t>(cell.index)];
+        if (!view)
+            continue;
+        const QSize oldSize = view->image().size();
+        const double oldScale = view->scale();
+        const QPointF oldOffset = view->offset();
+        view->setImage(cell.image);
+        // M15: setImage() re-fits by default; keep the pane transform when the
+        // displayed image did not change dimensions.
+        if (!oldSize.isEmpty() && view->image().size() == oldSize)
+            view->setTransform(oldScale, oldOffset);
+    }
+
+    // Refresh the Pixel Inspector once after the newest display lands when its
+    // panel and a sample position are active. Committed metrics stay deferred:
+    // they are driven by the separate diff batch on slider release.
+    if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0 && m_lastInspectY >= 0)
+        updateInspector(m_lastInspectX, m_lastInspectY);
+
+    update();
 }
 
 void CompareWorkspace::refreshAllDiffOverlays()

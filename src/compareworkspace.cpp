@@ -376,6 +376,12 @@ CompareWorkspace::~CompareWorkspace()
         TaskScheduler::cancel(m_diffTask);
     m_diffTask.reset();
     ++m_diffGen;
+
+    // Same lifetime handling for the async pane-materialization batch.
+    if (m_displayTask)
+        TaskScheduler::cancel(m_displayTask);
+    m_displayTask.reset();
+    ++m_displayGen;
 }
 
 void CompareWorkspace::setSelectionModel(SelectionModel *sel)

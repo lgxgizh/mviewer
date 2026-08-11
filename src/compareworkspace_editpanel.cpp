@@ -234,10 +234,6 @@ void CompareWorkspace::onAdjChanged()
 
     applyAdjToCell(m_editIdx);
 
-    // Keep the inexpensive visual preview and Inspector live during a drag.
-    if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0 && m_lastInspectY >= 0)
-        updateInspector(m_lastInspectX, m_lastInspectY);
-
     const bool sliderDown = (m_brightSlider && m_brightSlider->isSliderDown()) ||
                             (m_contrastSlider && m_contrastSlider->isSliderDown()) ||
                             (m_gammaSlider && m_gammaSlider->isSliderDown()) ||
@@ -269,35 +265,11 @@ void CompareWorkspace::applyAdjToCell(int cellIdx)
     if (!img || img->pixels().isNull())
         return;
 
-    const CellAdjust &a = (cellIdx < static_cast<int>(m_cellAdjusts.size()))
-                              ? m_cellAdjusts[static_cast<size_t>(cellIdx)]
-                              : CellAdjust{};
-
-    RawImageView *view = m_cellViews[cellIdx];
-    const QSize oldSize = view ? view->image().size() : QSize();
-    const double oldScale = view ? view->scale() : 1.0;
-    const QPointF oldOffset = view ? view->offset() : QPointF();
-
-    if (a.isIdentity())
-    {
-        // Just show original
-        if (view)
-            view->setImage(imageObjectToQImage(img));
-    }
-    else
-    {
-        ImageData adjusted = applyAdjusts(img->pixels(), a);
-        if (adjusted.isNull())
-            return;
-        QImage qi = mvcore::toQImage(adjusted);
-        if (view)
-            view->setImage(qi);
-    }
-
-    if (view && view->image().size() == oldSize && !oldSize.isEmpty())
-        view->setTransform(oldScale, oldOffset);
-
-    update();
+    // M28 P1-01: live adjustment previews are async and cancellable. The old
+    // synchronous applyAdjusts + toQImage now runs on an Analysis worker; this
+    // method only requests a display batch for the one pane. The transform is
+    // preserved on delivery (applyDisplayBatchResult) when dimensions match.
+    scheduleDisplayMaterialization({cellIdx});
 }
 
 // ─── M16.5: Per-pane histogram toggle ────────────────────────────────────────
@@ -564,6 +536,13 @@ void CompareWorkspace::onLoadPreset()
             m_perPaneHistChk->setChecked(ph);
     }
 
+    // Checkpoint before session/layout restoration: if applySession or the
+    // layout combo restore below triggers rebuildCells() (layout changes are a
+    // rebuild trigger), that rebuild already schedules the single all-pane
+    // display batch with the loaded m_cellAdjusts. Only schedule explicitly
+    // when no display generation was scheduled during that restoration.
+    const uint64_t displayGenBeforeRestore = m_displayGen;
+
     // Restore session settings inline
     if (root.contains("session") && root["session"].isObject())
     {
@@ -592,20 +571,26 @@ void CompareWorkspace::onLoadPreset()
         applySession(sess);
     }
 
-    // Apply adjustments to all cells
-    for (size_t i = 0; i < m_cellAdjusts.size(); ++i)
-    {
-        const int idx = static_cast<int>(i);
-        if (idx < m_engine.imageCount())
-            applyAdjToCell(idx);
-    }
-
     // Restore layout combo
     if (root.contains("layoutIndex") && m_layoutCombo)
     {
         const int li = root["layoutIndex"].toInt(0);
         if (li >= 0 && li < m_layoutCombo->count())
             m_layoutCombo->setCurrentIndex(li);
+    }
+
+    // Apply adjustments to all cells in ONE display batch (a per-cell loop would
+    // submit N cancellable tasks for the same state; schedule once, latest-wins).
+    // Loaded adjustments are parsed before this checkpoint, so a rebuild during
+    // the restoration above already captured them in its all-pane display batch.
+    if (m_displayGen == displayGenBeforeRestore)
+    {
+        std::vector<int> all;
+        const int n = m_engine.imageCount();
+        all.reserve(static_cast<size_t>(n));
+        for (int i = 0; i < n; ++i)
+            all.push_back(i);
+        scheduleDisplayMaterialization(all);
     }
 
     // All m_cellAdjusts (and any session/layout restoration) are now applied:
@@ -640,11 +625,10 @@ void CompareWorkspace::onSwapPanes()
     if (static_cast<size_t>(std::max(a, b)) < m_cellAdjusts.size())
         std::swap(m_cellAdjusts[static_cast<size_t>(a)], m_cellAdjusts[static_cast<size_t>(b)]);
 
+    // M28 P1-01: rebuildCells() schedules the single all-pane display batch with
+    // the already-swapped frames + adjustments, so no post-rebuild applyAdjToCell
+    // calls are needed here (they would cancel it into a near-empty request).
     rebuildCells();
-
-    // Re-apply adjustments to swapped positions
-    applyAdjToCell(a);
-    applyAdjToCell(b);
 
     fitAll();
     update();
