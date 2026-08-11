@@ -256,23 +256,33 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
         m_engine.setCellOffset(idx, s.cells[i].offsetX, s.cells[i].offsetY);
     }
 
-    // ROI / selection (synchronized across cells).
-    if (s.selection.w > 0 && s.selection.h > 0)
-    {
-        applySelectionToAll(
-            mviewer::domain::Selection{s.selection.x, s.selection.y, s.selection.w, s.selection.h});
-    }
-
     // M15 P0#1: replay the UI-only state so the reopened view is identical.
-    // HeatMap / Diff threshold.
+    // HeatMap / Diff threshold. Block the slider's valueChanged handler (which
+    // would schedule its own batch refresh) so the threshold restore below
+    // contributes exactly one logical refresh.
     m_thresholdValue = s.threshold;
     if (m_thresholdSlider)
     {
+        const QSignalBlocker blocker(m_thresholdSlider);
         m_thresholdSlider->setValue(static_cast<int>(s.threshold));
         if (m_thresholdLabel)
             m_thresholdLabel->setText(QString::number(static_cast<int>(s.threshold)));
     }
-    refreshDiffOverlay();
+
+    // ROI / selection (synchronized across cells). Applying the selection
+    // schedules the single refreshAllDiffOverlays() (ROI + threshold are both
+    // restored by now); without a saved ROI the threshold restore needs one
+    // refresh explicitly.
+    const bool hasRoi = (s.selection.w > 0 && s.selection.h > 0);
+    if (hasRoi)
+    {
+        applySelectionToAll(
+            mviewer::domain::Selection{s.selection.x, s.selection.y, s.selection.w, s.selection.h});
+    }
+    else
+    {
+        refreshAllDiffOverlays();
+    }
 
     // Layout combo (0=auto,1=single-col,2=2col,3=3col,4=4col,5=one-row). Setting
     // the index triggers onLayoutChanged which drives the engine's column count.
@@ -320,10 +330,10 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
     if (m_roiHistChk && m_roiHistChk->isChecked())
         refreshHistograms();
 
-    // Metrics remain side-panel-only because they have no independent overlay.
-    if (m_sidePanel && m_sidePanel->isVisible())
-    {
-        updateMetrics();
-    }
+    // The ROI feeds the diff overlays + metrics on the async batch path. Skip
+    // the refresh while rebuildCells() is in progress — its single terminal
+    // refreshAllDiffOverlays() already covers the restored ROI.
+    if (!m_rebuildingCells)
+        refreshAllDiffOverlays();
     update();
 }

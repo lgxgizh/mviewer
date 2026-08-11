@@ -140,6 +140,79 @@ inline ImageData makeImageData(int w, int h, PixelFormat fmt)
     return d;
 }
 
+// Canonical RGBA value of a single pixel. `valid` is false when the sample is
+// out of bounds, the image is null, or the backing buffer is truncated — the
+// sampler never dereferences memory in those cases.
+struct PixelRGBA
+{
+    uint8_t r = 0;
+    uint8_t g = 0;
+    uint8_t b = 0;
+    uint8_t a = 0;
+    bool valid = false;
+};
+
+// Format-aware single-pixel sampler. Reads the pixel at (x,y) and canonicalises
+// it to RGBA regardless of the storage format:
+//   RGB24     r=p[0] g=p[1] b=p[2] a=255
+//   RGBA32    r=p[0] g=p[1] b=p[2] a=p[3]
+//   BGR24     r=p[2] g=p[1] b=p[0] a=255
+//   BGRA32    r=p[2] g=p[1] b=p[0] a=p[3]
+//   Grayscale8 r=g=b=p[0] a=255
+// Validates null image, negative / out-of-range coordinates, and that the whole
+// pixel actually fits in the backing vector (so a malformed/truncated buffer
+// yields valid=false instead of an out-of-bounds read). O(1), no allocations.
+inline PixelRGBA samplePixel(const ImageData &img, int x, int y) noexcept
+{
+    PixelRGBA out;
+    if (img.isNull() || x < 0 || y < 0 || x >= img.width || y >= img.height)
+        return out;
+    const int cpp = img.channelsPerPixel();
+    const size_t idx =
+        static_cast<size_t>(y) * static_cast<size_t>(img.width) * static_cast<size_t>(cpp) +
+        static_cast<size_t>(x) * static_cast<size_t>(cpp);
+    if (idx + static_cast<size_t>(cpp) > img.buffer->size())
+        return out;
+    const uint8_t *p = img.buffer->data() + idx;
+    switch (img.format)
+    {
+    case PixelFormat::RGB24:
+        out.r = p[0];
+        out.g = p[1];
+        out.b = p[2];
+        out.a = 255;
+        break;
+    case PixelFormat::RGBA32:
+        out.r = p[0];
+        out.g = p[1];
+        out.b = p[2];
+        out.a = p[3];
+        break;
+    case PixelFormat::BGR24:
+        out.r = p[2];
+        out.g = p[1];
+        out.b = p[0];
+        out.a = 255;
+        break;
+    case PixelFormat::BGRA32:
+        out.r = p[2];
+        out.g = p[1];
+        out.b = p[0];
+        out.a = p[3];
+        break;
+    case PixelFormat::Grayscale8:
+        out.r = p[0];
+        out.g = p[0];
+        out.b = p[0];
+        out.a = 255;
+        break;
+    default:
+        return out;
+    }
+    out.valid = true;
+    return out;
+}
+
 inline int luminance(uint8_t r, uint8_t g, uint8_t b)
 {
     return (int)(0.299 * r + 0.587 * g + 0.114 * b);

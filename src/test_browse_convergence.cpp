@@ -14,6 +14,7 @@
 #include "thumbnailpanel.h"
 
 #include <QApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
@@ -465,6 +466,212 @@ static void testPanelFieldScopedFilters(const QString &dirPath)
           "ISO filter matches the 6400-ISO file (sensor ISO populated)");
 }
 
+// M29/P2-05 — ThumbnailCache bounded-LRU capacity contract. Runs LAST so it
+// can freely clear/resize the shared singleton cache without disturbing the
+// earlier suites.
+static void testThumbnailCacheCapacity()
+{
+    std::printf("\n── ThumbnailCache capacity (M29/P2-05) ──\n");
+    auto &cache = ThumbnailCache::instance();
+    const quint64 savedCap = cache.maxBytes();
+    cache.clear();
+    CHECK(cache.maxBytes() == ThumbnailCache::kDefaultMaxBytes, "default budget is 512 MiB");
+    CHECK(cache.totalBytes() == 0, "clear leaves zero accounted bytes");
+
+    QTemporaryDir srcDir;
+    const QString base = srcDir.path();
+    auto fixture = [&](const QString &name) -> QString
+    {
+        const QString p = base + "/" + name + ".png";
+        QImage src(64, 64, QImage::Format_RGB32);
+        src.fill(Qt::darkGray);
+        src.save(p, "PNG");
+        return p;
+    };
+    const QString a = fixture("a");
+    const QString b = fixture("b");
+    const QString c = fixture("c");
+    const QString d = fixture("d");
+
+    QImage thumb(64, 64, QImage::Format_RGB32);
+    thumb.fill(Qt::lightGray);
+
+    // Calibrate with a single entry (identical pixels -> identical PNG size).
+    cache.put(a, 64, thumb);
+    const quint64 one = cache.totalBytes();
+    CHECK(one > 0, "one entry accounts its on-disk byte size");
+    QImage out;
+    CHECK(cache.get(a, 64, out) && out.size() == QSize(64, 64), "entry retrievable after put");
+
+    // Cap sized for exactly two entries.
+    cache.setMaxBytes(2 * one + 1);
+    cache.clear();
+    CHECK(cache.maxBytes() == 2 * one + 1, "setMaxBytes stores the new budget");
+    CHECK(cache.totalBytes() == 0, "clear resets usage after calibration");
+
+    cache.put(a, 64, thumb);
+    cache.put(b, 64, thumb);
+    CHECK(cache.get(a, 64, out) && cache.get(b, 64, out), "first two entries fit under the cap");
+    CHECK(cache.totalBytes() <= cache.maxBytes(), "usage stays within the cap");
+
+    cache.put(c, 64, thumb); // evicts the oldest entry (a)
+    CHECK(cache.totalBytes() <= cache.maxBytes(), "usage stays within the cap after eviction");
+    CHECK(!cache.get(a, 64, out), "oldest entry is evicted on overflow");
+    CHECK(cache.get(b, 64, out) && cache.get(c, 64, out), "newer entries survive the eviction");
+
+    // Touching b makes it the newest, so inserting d evicts c instead.
+    CHECK(cache.get(b, 64, out), "recently touched entry re-read");
+    cache.put(d, 64, thumb);
+    CHECK(cache.totalBytes() <= cache.maxBytes(), "usage stays within the cap after touch");
+    CHECK(!cache.get(c, 64, out), "least-recently-used entry evicted after a touch");
+    CHECK(cache.get(b, 64, out) && cache.get(d, 64, out),
+          "recently touched and newest entries survive");
+
+    // Overwriting the same key must not double-count its bytes.
+    QImage big(160, 160, QImage::Format_RGB32);
+    big.fill(Qt::darkCyan);
+    cache.setMaxBytes(ThumbnailCache::kDefaultMaxBytes);
+    cache.clear();
+    const QString e = fixture("e");
+    cache.put(e, 64, big);
+    const quint64 bigSize = cache.totalBytes();
+    CHECK(bigSize > one, "larger payload accounts more bytes");
+    cache.put(e, 64, big); // same key, replaced payload
+    CHECK(cache.totalBytes() == bigSize, "overwrite keeps single-entry accounting");
+    CHECK(cache.get(e, 64, out) && out.size() == QSize(160, 160), "overwritten payload served");
+
+    // An entry larger than the whole budget is evicted immediately.
+    cache.setMaxBytes(1);
+    cache.put(e, 64, big);
+    CHECK(cache.totalBytes() == 0, "oversized entry evicted, usage returns to zero");
+    CHECK(!cache.get(e, 64, out), "oversized entry is never served");
+
+    // Zero budget: nothing is persisted.
+    cache.setMaxBytes(0);
+    cache.put(b, 64, thumb);
+    CHECK(cache.totalBytes() == 0, "zero budget persists nothing");
+    CHECK(!cache.get(b, 64, out), "zero budget serves nothing");
+
+    // Existing *.png files written by an earlier process count toward the
+    // budget once the lazy startup scan runs on first access.
+    const QString thumbDir =
+        QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/thumbnails";
+    CHECK(QDir().mkpath(thumbDir), "thumbnail folder reachable in test mode");
+
+    // Restore a sufficient cap BEFORE clearing/writing the historical files,
+    // so the re-scan can index them without immediately pruning them away.
+    cache.setMaxBytes(ThumbnailCache::kDefaultMaxBytes);
+    cache.clear(); // wipe the folder + reset the index so the next access re-scans
+
+    // Write three historical cache files with known, distinct mtimes so the
+    // LRU seeding (oldest mtime first) is deterministic; different fills give
+    // different on-disk sizes.
+    struct PreFile
+    {
+        QString key;
+        quint64 bytes = 0;
+    };
+    std::vector<PreFile> pre;
+    quint64 preTotal = 0;
+    for (int i = 0; i < 3; ++i)
+    {
+        const QString p = fixture(QString("pre%1").arg(i));
+        const QString k = ThumbnailCache::keyFor(p, 64);
+        const QString cf = thumbDir + "/" + k + ".png";
+        QImage im(48, 48, QImage::Format_RGB32);
+        im.fill(QColor(10 + i * 40, 20, 30));
+        CHECK(im.save(cf, "PNG"), "pre-existing cache file written");
+        QFile stamp(cf);
+        CHECK(stamp.open(QIODevice::ReadWrite), "historical cache file opened for mtime stamp");
+        CHECK(stamp.setFileTime(QDateTime(QDate(2024, 1, 1), QTime(0, 0)).addSecs(i),
+                                QFileDevice::FileModificationTime),
+              "distinct mtime stamped on historical file");
+        stamp.close();
+        pre.push_back({k, static_cast<quint64>(QFileInfo(cf).size())});
+        preTotal += pre.back().bytes;
+    }
+    CHECK(preTotal > 0, "pre-existing cache files have real byte sizes");
+
+    // First access is totalBytes(): it runs the lazy startup scan exactly once
+    // and the pre-existing bytes are accounted for.
+    CHECK(cache.totalBytes() == preTotal, "first totalBytes() exercises the lazy scan");
+    CHECK(cache.totalBytes() == preTotal, "second totalBytes() does not re-count (single scan)");
+    CHECK(!cache.get(a, 64, out), "cold miss on a key with no cache file");
+    CHECK(cache.totalBytes() == preTotal, "cold miss leaves historical accounting intact");
+
+    // Lowering the cap prunes the oldest historical file first and usage stays
+    // at or below the new budget.
+    cache.setMaxBytes(pre[1].bytes + pre[2].bytes); // pre[0] (oldest mtime) must go
+    CHECK(cache.totalBytes() == pre[1].bytes + pre[2].bytes,
+          "oldest historical file evicted by lower cap");
+    CHECK(!QFile::exists(thumbDir + "/" + pre[0].key + ".png"),
+          "evicted oldest file removed from disk");
+    cache.setMaxBytes(pre[2].bytes); // pre[1] must go next
+    CHECK(cache.totalBytes() == pre[2].bytes, "second-oldest historical file evicted");
+    CHECK(!QFile::exists(thumbDir + "/" + pre[1].key + ".png"),
+          "evicted second file removed from disk");
+    CHECK(QFile::exists(thumbDir + "/" + pre[2].key + ".png"),
+          "newest historical file survives the lowered cap");
+    CHECK(cache.totalBytes() <= cache.maxBytes(), "usage stays within the lowered cap");
+
+    // External/multi-process drift: a valid file that appears after the index
+    // was built is picked up and counted by get().
+    cache.setMaxBytes(ThumbnailCache::kDefaultMaxBytes);
+    cache.clear();
+    const QString extSrc = fixture("ext");
+    const QString extKey = ThumbnailCache::keyFor(extSrc, 64);
+    CHECK(cache.totalBytes() == 0, "index rebuilt over an empty folder");
+    const QString extFile = thumbDir + "/" + extKey + ".png";
+    QImage extImg(32, 32, QImage::Format_RGB32);
+    extImg.fill(Qt::green);
+    CHECK(extImg.save(extFile, "PNG"), "external cache file written behind the cache's back");
+    const quint64 extSize = static_cast<quint64>(QFileInfo(extFile).size());
+    CHECK(cache.get(extSrc, 64, out) && out.size() == QSize(32, 32),
+          "get() serves an externally-added file");
+    CHECK(cache.totalBytes() == extSize, "externally-added file is counted by get()");
+
+    // A corrupt payload is dropped and its bytes un-accounted.
+    const QString badSrc = fixture("bad");
+    const QString badKey = ThumbnailCache::keyFor(badSrc, 64);
+    const QString badFile = thumbDir + "/" + badKey + ".png";
+    QFile badf(badFile);
+    CHECK(badf.open(QIODevice::WriteOnly), "corrupt cache file created");
+    CHECK(badf.write("not a png at all") == 16, "corrupt payload written");
+    badf.close();
+    CHECK(!cache.get(badSrc, 64, out), "corrupt payload misses and is dropped");
+    CHECK(!QFile::exists(badFile), "corrupt cache file removed best-effort");
+    CHECK(cache.totalBytes() == extSize, "corrupt bytes un-accounted after removal");
+
+    // External overwrite: replacing a cache file behind the cache's back must
+    // re-account the new byte size before it is served.
+    cache.setMaxBytes(ThumbnailCache::kDefaultMaxBytes);
+    cache.clear();
+    const QString ovSrc = fixture("ov");
+    const QString ovKey = ThumbnailCache::keyFor(ovSrc, 64);
+    CHECK(cache.totalBytes() == 0, "index rebuilt before external overwrite test");
+    const QString ovFile = thumbDir + "/" + ovKey + ".png";
+    QImage ovSmall(32, 32, QImage::Format_RGB32);
+    ovSmall.fill(Qt::darkYellow);
+    CHECK(ovSmall.save(ovFile, "PNG"), "small external cache file written");
+    const quint64 ovSmallSize = static_cast<quint64>(QFileInfo(ovFile).size());
+    CHECK(cache.get(ovSrc, 64, out) && out.size() == QSize(32, 32), "small external file served");
+    CHECK(cache.totalBytes() == ovSmallSize, "small external file accounted");
+    QImage ovBig(320, 320, QImage::Format_RGB32);
+    ovBig.fill(Qt::red);
+    CHECK(ovBig.save(ovFile, "PNG"), "external overwrite written with a much larger payload");
+    const quint64 ovBigSize = static_cast<quint64>(QFileInfo(ovFile).size());
+    CHECK(ovBigSize > ovSmallSize, "overwrite payload is materially larger");
+    CHECK(cache.get(ovSrc, 64, out) && out.size() == QSize(320, 320),
+          "overwritten external file served");
+    CHECK(cache.totalBytes() == ovBigSize, "external overwrite re-accounted to the new size");
+
+    // Restore the default budget and leave no state for later suites.
+    cache.clear();
+    cache.setMaxBytes(savedCap);
+    CHECK(cache.maxBytes() == savedCap, "default budget restored");
+    CHECK(cache.totalBytes() == 0, "cache left clean after capacity tests");
+}
+
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
@@ -486,6 +693,7 @@ int main(int argc, char **argv)
     testPanelSizeSwitch(sizeDir);
     testPanelMixedFormatListing(mixedDir);
     testPanelFieldScopedFilters(filterDir);
+    testThumbnailCacheCapacity();
 
     std::printf("\n=== Results: %d failed ===\n", g_failures);
     fflush(stdout);

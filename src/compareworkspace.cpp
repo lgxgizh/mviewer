@@ -37,33 +37,6 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
                 applySync(on);
             });
 
-    // Async diff result delivery. requestDiff() computes the diff on a worker
-    // thread and publishes "CompareEngine.DiffResult" on the EventBus from that
-    // thread. We hop to the UI thread before repainting (the engine pointer in
-    // ctx identifies which CompareEngine produced it).
-    // M27 lifetime closure: the handler captures a QPointer and marshals via
-    // qApp (never via `this` as the invoke target — the workspace may already
-    // be destroyed when a slow diff completes).
-    m_diffSubId = EventBus::instance().subscribe("CompareEngine.DiffResult",
-                                                 [this](void *ctx)
-                                                 {
-                                                     if (ctx != static_cast<void *>(&m_engine))
-                                                         return;
-                                                     // Repaint only the pane reported by the async
-                                                     // completion. User-driven state changes use
-                                                     // refreshAllDiffOverlays() instead.
-                                                     QPointer<CompareWorkspace> guard(this);
-                                                     QMetaObject::invokeMethod(
-                                                         qApp,
-                                                         [guard]()
-                                                         {
-                                                             if (!guard)
-                                                                 return;
-                                                             guard->refreshDiffOverlay();
-                                                         },
-                                                         Qt::QueuedConnection);
-                                                 });
-
     auto *toolbarContainer = new QWidget(this);
     auto *toolbarLayout = new QVBoxLayout(toolbarContainer);
     toolbarLayout->setContentsMargins(0, 0, 0, 0);
@@ -395,11 +368,14 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 
 CompareWorkspace::~CompareWorkspace()
 {
-    // The EventBus is a process-global singleton. If we don't unsubscribe, a
-    // pending "CompareEngine.DiffResult" could fire into this (now destroyed)
-    // widget and crash. The subscription id is stored in m_diffSubId.
-    if (m_diffSubId != 0)
-        EventBus::instance().unsubscribe(m_diffSubId);
+    // Invalidate the in-flight async diff batch. The worker marshals its
+    // result via qApp and re-checks the generation, which we bump here, so a
+    // completion that is already queued cannot paint into a destroyed widget
+    // (the QPointer guard covers the destroyed-owner case).
+    if (m_diffTask)
+        TaskScheduler::cancel(m_diffTask);
+    m_diffTask.reset();
+    ++m_diffGen;
 }
 
 void CompareWorkspace::setSelectionModel(SelectionModel *sel)
@@ -667,7 +643,7 @@ void CompareWorkspace::onSideToggled(bool on)
     if (on)
     {
         refreshHistograms();
-        updateMetrics();
+        refreshAllDiffOverlays();
     }
     update();
 }
@@ -785,16 +761,8 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
         m_cellViews[i]->setFocused(i == m_focusIndex);
     }
 
-    // Re-request diffs against the new base and refresh the inspector deltas.
-    if (n > 1)
-    {
-        for (int i = 0; i < n; ++i)
-        {
-            if (i != m_focusIndex)
-                m_engine.requestDiff(i, diffBaseIndex());
-        }
-        refreshAllDiffOverlays();
-    }
+    // Recompute all diff overlays against the new base (async batch, latest-wins).
+    refreshAllDiffOverlays();
     if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0)
         updateInspector(m_lastInspectX, m_lastInspectY);
     update();

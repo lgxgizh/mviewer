@@ -137,6 +137,35 @@ class ViewportController { /* fit-to-cell math */ };
 | `image(int)` | `const ImageFrame&` | Direct access; UB if index invalid |
 | `imageAt(int)` | `const ImageFrame*` | Null if index invalid |
 
+## Pixel Controller sampling contract
+
+`PixelController::probe()` and `inspect()` sample every frame at the shared
+image-space point through the single `samplePixel()` helper in
+`core/image/ImageBuffer.h`, which canonicalises the stored pixel to RGBA
+regardless of format (`p[i]` = i-th byte of the pixel in memory):
+
+| PixelFormat   | r         | g         | b         | a         |
+| ------------- | --------- | --------- | --------- | --------- |
+| `RGB24`       | `p[0]`    | `p[1]`    | `p[2]`    | `255`     |
+| `RGBA32`      | `p[0]`    | `p[1]`    | `p[2]`    | `p[3]`    |
+| `BGR24`       | `p[2]`    | `p[1]`    | `p[0]`    | `255`     |
+| `BGRA32`      | `p[2]`    | `p[1]`    | `p[0]`    | `p[3]`    |
+| `Grayscale8`  | `p[0]`    | `p[0]`    | `p[0]`    | `255`     |
+
+- **Grayscale replication**: a grayscale pixel stores one byte; the sample
+  replicates it across r = g = b.
+- **Alpha**: non-alpha formats always canonicalise to `a=255`; alpha formats
+  surface the stored alpha byte.
+- **Invalid result**: `PixelRGBA::valid` is `false` (RGB/A zeroed) when the
+  image is null, the backing buffer is null or truncated so the pixel does not
+  fully fit, or the coordinate is out of bounds. The sampler never dereferences
+  memory in those cases — no out-of-bounds read.
+- **One sample per frame**: `probe()` returns exactly one `PixelSample` per
+  frame, in frame order; `inspect()` pairs them with per-cell
+  `PixelDelta` against the base cell (index 0 by default). Delta semantics are
+  unchanged: `dr/dg/db` = sample − base and `dist` = Euclidean distance in RGB
+  space, defined only when both the base and the cell sample are valid.
+
 ## Ownership
 
 - CompareEngine **owns** CompareSession (mutable container).

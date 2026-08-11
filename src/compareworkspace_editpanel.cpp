@@ -1,7 +1,7 @@
 // CompareWorkspace edit panel: adjustments, metrics, per-pane histograms, presets (M20 P0#2).
 #include "compareworkspace_p.h"
 
-ImageData CompareWorkspace::applyAdjusts(const ImageData &src, const CellAdjust &a) const
+ImageData CompareWorkspace::applyAdjusts(const ImageData &src, const CellAdjust &a)
 {
     if (src.isNull() || a.isIdentity())
         return src;
@@ -298,87 +298,6 @@ void CompareWorkspace::applyAdjToCell(int cellIdx)
         view->setTransform(oldScale, oldOffset);
 
     update();
-}
-
-// ─── M16.4: Quick PSNR/SSIM metrics ─────────────────────────────────────────
-
-void CompareWorkspace::updateMetrics()
-{
-    if (!m_metricLabel)
-        return;
-    const int n = m_engine.imageCount();
-    if (n < 2)
-    {
-        m_metricLabel->setText(tr("PSNR: —  SSIM: —"));
-        return;
-    }
-
-    const int baseIdx = diffBaseIndex();
-    // Pick the first non-base cell
-    int targetIdx = -1;
-    for (int i = 0; i < n; ++i)
-    {
-        if (i != baseIdx)
-        {
-            targetIdx = i;
-            break;
-        }
-    }
-    if (targetIdx < 0)
-    {
-        m_metricLabel->setText(tr("PSNR: —  SSIM: —"));
-        return;
-    }
-
-    const ImageData basePx = adjustedPixels(baseIdx);
-    const ImageData tgtPx = adjustedPixels(targetIdx);
-    if (basePx.isNull() || tgtPx.isNull())
-    {
-        m_metricLabel->setText(tr("PSNR: —  SSIM: —"));
-        return;
-    }
-
-    const auto baseV = basePx.view();
-    const auto tgtV = tgtPx.view();
-    if (baseV.width != tgtV.width || baseV.height != tgtV.height)
-    {
-        m_metricLabel->setText(tr("PSNR: —  SSIM: —\n(图像尺寸不一致)"));
-        return;
-    }
-
-    const double psnrVal = AnalysisEngine::psnr(basePx, tgtPx);
-    const double ssimVal = AnalysisEngine::ssim(basePx, tgtPx);
-
-    const QString psnrStr = QString::number(psnrVal, 'f', 2) + " dB";
-    const QString ssimStr = QString::number(ssimVal, 'f', 4);
-
-    QString text = tr("PSNR: %1  SSIM: %2\n(Image #%3 vs #%4)")
-                       .arg(psnrStr, ssimStr)
-                       .arg(baseIdx + 1)
-                       .arg(targetIdx + 1);
-
-    // M23: quantitative diff statistics (threshold-aware), full image + ROI.
-    const ImageData diff = DifferenceEngine::differenceMap(tgtPx, basePx);
-    if (!diff.isNull())
-    {
-        const auto st = DifferenceEngine::computeStats(diff, m_thresholdValue);
-        text += tr("\n差异: %1%  均值 %2  峰值 %3")
-                    .arg(st.diffRatio * 100.0, 0, 'f', 2)
-                    .arg(st.meanDiff, 0, 'f', 2)
-                    .arg(st.maxDiff);
-        if (!m_lastSelection.isEmpty())
-        {
-            const auto rs = DifferenceEngine::computeStats(
-                diff, m_thresholdValue, m_lastSelection.x, m_lastSelection.y, m_lastSelection.width,
-                m_lastSelection.height);
-            if (rs.totalPixels > 0)
-                text += tr("\nROI差异: %1%  均值 %2  峰值 %3")
-                            .arg(rs.diffRatio * 100.0, 0, 'f', 2)
-                            .arg(rs.meanDiff, 0, 'f', 2)
-                            .arg(rs.maxDiff);
-        }
-    }
-    m_metricLabel->setText(text);
 }
 
 // ─── M16.5: Per-pane histogram toggle ────────────────────────────────────────
@@ -689,11 +608,13 @@ void CompareWorkspace::onLoadPreset()
             m_layoutCombo->setCurrentIndex(li);
     }
 
+    // All m_cellAdjusts (and any session/layout restoration) are now applied:
+    // one terminal async refresh captures the final adjustment state. It may
+    // cancel an earlier session/layout refresh, but the final state must land.
+    refreshAllDiffOverlays();
+
     if (m_sidePanel && m_sidePanel->isVisible())
-    {
         refreshHistograms();
-        updateMetrics();
-    }
     update();
 }
 
@@ -729,10 +650,7 @@ void CompareWorkspace::onSwapPanes()
     update();
 
     if (m_sidePanel && m_sidePanel->isVisible())
-    {
         refreshHistograms();
-        updateMetrics();
-    }
 }
 
 // ─── A-4.3: Pixel Link ───────────────────────────────────────────────────────

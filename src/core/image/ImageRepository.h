@@ -54,6 +54,39 @@ class ImageRepository
     void loadAsync(const std::string &filePath, std::function<void(const Result &)> callback,
                    const LoadOptions &opts = kDefaultLoadOptions);
 
+    // M29 cancellable loads. AsyncRequestState is opaque (defined in the .cpp):
+    // UI callers hold an AsyncRequestHandle and call cancelAsync() — they never
+    // depend on TaskScheduler types. A cancelled request never fires its client
+    // callback; a rejected (non-cancelled) submission still reports exactly once
+    // with an explicit error (same contract as loadAsync).
+    class AsyncRequestState;
+    using AsyncRequestHandle = std::shared_ptr<AsyncRequestState>;
+
+    // Cancellable foreground load: same semantics as loadAsync, but returns an
+    // opaque handle that cancelAsync() can use to drop obsolete work early.
+    AsyncRequestHandle loadAsyncCancellable(const std::string &filePath,
+                                            std::function<void(const Result &)> callback,
+                                            const LoadOptions &opts = kDefaultLoadOptions);
+
+    // Low-priority neighbor preload (Background pool, disk cache allowed, no
+    // histogram, no client callback). Best-effort: queued work may be skipped
+    // by cancelAsync(); an already-running decode may finish and safely warm
+    // the cache. Returns nullptr on scheduler rejection.
+    AsyncRequestHandle preloadAsync(const std::string &filePath);
+
+    // Consumes a preload handle: queued work is resubmitted at Decode priority,
+    // running work is reused, finished work falls back to cache. nullptr is a
+    // no-op.
+    AsyncRequestHandle promotePreloadAsync(AsyncRequestHandle &preload,
+                                           std::function<void(const Result &)> callback);
+
+    // Mark the request cancelled (best-effort), soft-cancel the scheduler
+    // handle, and clear the caller's handle. May be called from any thread, but
+    // only when the caller has exclusive access to that handle variable (the
+    // normal C++ shared_ptr object rules apply; it must not race another thread
+    // that reads or writes the same shared_ptr). A null handle is a no-op.
+    void cancelAsync(AsyncRequestHandle &handle);
+
     // Parallel directory load: dispatches each file to DecodePool using
     // TaskScheduler. This is synchronous (blocks until all done) but parallel
     // across all files.

@@ -2,6 +2,7 @@
 
 #include "core/analysis/ImageOverlay.h"
 #include "core/image/ImageFrame.h"
+#include "core/image/ImageRepository.h"
 #include "core/render/TileCache.h"
 #include "core/render/TileGrid.h"
 #include "core/render/Viewport.h"
@@ -14,7 +15,9 @@
 #include <QStringList>
 #include <memory>
 #include <optional>
+#include <vector>
 
+class QEvent;
 class QTimer;
 
 // Full-image zoomable viewer. Shown in its own window when the user
@@ -110,6 +113,7 @@ class ImageViewer : public QOpenGLWidget
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     void contextMenuEvent(QContextMenuEvent *event) override;
     void closeEvent(QCloseEvent *event) override;
+    void leaveEvent(QEvent *event) override;
 
   private:
     void emitZoom();
@@ -117,6 +121,20 @@ class ImageViewer : public QOpenGLWidget
     void preloadNeighbors(const QString &path);
     void drawHistogram(QPainter &painter) const;
     void computeHistogram();
+    // M29: cancel the outstanding foreground load and any neighbor preloads.
+    // Called at the start of setImage() and from closeEvent()/the destructor so
+    // obsolete full-resolution work from a superseded navigation is dropped.
+    void cancelCurrentLoad();
+    void cancelPreloads();
+    // Pixel Inspector lifecycle: emit a single pixelInfo with valid=false
+    // (x/y=-1, zero channels) so a stale sample never lingers. Called
+    // synchronously at the top of setImage() and closeEvent(), and from
+    // leaveEvent(); never emitted from the destructor.
+    void clearPixelInfo();
+    // Preload promotion: consume the neighbor preload handle that matches
+    // `path` and cancel all others, so a navigation back to a preloaded
+    // neighbor can be promoted to the foreground decode without re-queuing.
+    ImageRepository::AsyncRequestHandle takeMatchingPreload(const QString &path);
     // M28 P1-02: build the display QImage on demand (user-triggered copy/save
     // only) — the paint path renders from the ImageFrame tiles and never
     // materializes a full-size QPixmap on the UI thread.
@@ -131,6 +149,22 @@ class ImageViewer : public QOpenGLWidget
     // from an older request can never overwrite the current image, even for
     // the same path (A -> B -> A where the first A completes last).
     uint64_t m_requestGen = 0;
+
+    // M29: cancellable request handles. m_foregroundRequest tracks the current
+    // setImage() decode; m_neighborPreloads tracks at most the previous/next
+    // preloads, each bound to the path it prefetches so the same path can be
+    // promoted to the foreground decode on navigation. Navigation cancels the
+    // foreground request and every nonmatching neighbor preload, while a
+    // matching neighbor may be promoted; close / destruction cancel all. A
+    // cancelled request's transient Result is released, and decoded frame cache
+    // ownership remains budgeted by CacheManager.
+    struct NeighborPreload
+    {
+        QString path;
+        ImageRepository::AsyncRequestHandle handle;
+    };
+    ImageRepository::AsyncRequestHandle m_foregroundRequest;
+    std::vector<NeighborPreload> m_neighborPreloads;
 
     // View transform (pan/zoom). The math lives in the domain-free Viewport
     // (core/render); the Widget only stores it and feeds screen geometry.

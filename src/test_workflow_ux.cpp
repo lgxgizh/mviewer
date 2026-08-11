@@ -17,7 +17,12 @@
 
 #include "appstate.h"
 #include "compareworkspace.h"
+#include "core/cache/CacheManager.h"
+#include "core/compare/DifferenceEngine.h"
 #include "core/image/Decoder.h"
+#include "core/image/ImageBuffer.h"
+#include "core/image/ImageRepository.h"
+#include "core/image/QtConvert.h"
 #include "core/metadata/MetadataIndexer.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
@@ -63,11 +68,17 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWheelEvent>
+#include <QtMath>
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstdint>
 #include <iostream>
 #include <memory>
 #include <mutex>
+#include <thread>
 #include <unordered_set>
 
 namespace
@@ -151,6 +162,44 @@ void sendLeftClick(QWidget *w, const QPoint &point)
                         Qt::NoModifier);
     QApplication::sendEvent(w, &release);
     pump(20);
+}
+
+// ── M29: Compare diff overlays + metrics are computed asynchronously as ONE
+// AnalysisPool batch per refresh request. These helpers wait for the delivery
+// to settle so the assertions observe delivered state, never in-flight work.
+void waitForAnalysisIdle(int timeoutMs = 8000)
+{
+    QElapsedTimer t;
+    t.start();
+    for (;;)
+    {
+        pump(10);
+        const auto m = TaskScheduler::instance().metrics(TaskScheduler::PoolType::AnalysisPool);
+        if (m.pending == 0 && m.active_tasks == 0 && m.queue_depth == 0)
+        {
+            pump(30); // apply any diff delivery already queued for the UI thread
+            return;
+        }
+        if (t.elapsed() >= timeoutMs)
+            return;
+    }
+}
+
+QString waitForMetricsChange(QLabel *label, const QString &previous, int timeoutMs = 8000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (label->text() == previous && t.elapsed() < timeoutMs)
+        pump(25);
+    return label->text();
+}
+
+void waitForMetricsText(QLabel *label, const QString &expected, int timeoutMs = 8000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (label->text() != expected && t.elapsed() < timeoutMs)
+        pump(25);
 }
 
 QString writePng(const QDir &dir, const QString &name, QColor color)
@@ -1195,13 +1244,17 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         const double savedScale = referenceView->scale();
         const QPointF savedOffset = referenceView->offset();
 
+        // M29: diff overlays + metrics are computed asynchronously as ONE batch
+        // per refresh request on the AnalysisPool. Every assertion below waits
+        // for the delivery instead of assuming a synchronous refresh.
+        waitForAnalysisIdle();
         const QString initialMetrics = metricsLabel->text();
         const QString initialInspector =
             inspector->item(1, 2) ? inspector->item(1, 2)->text() : QString();
 
         thresholdSlider->setValue(200);
-        pump(20);
-        const QString thresholdMetrics = metricsLabel->text();
+        waitForAnalysisIdle();
+        const QString thresholdMetrics = waitForMetricsChange(metricsLabel, initialMetrics);
         const QString thresholdInspector =
             inspector->item(1, 2) ? inspector->item(1, 2)->text() : QString();
         const auto thresholdBundle = ws->buildReportBundle();
@@ -1217,15 +1270,133 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         CHECK(thresholdValueLabel->text() == "0" && metricsLabel->text() == thresholdMetrics,
               "threshold drag defers expensive metrics refresh");
         thresholdSlider->setSliderDown(false);
-        pump(20);
+        waitForMetricsText(metricsLabel, initialMetrics);
         CHECK(metricsLabel->text() == initialMetrics,
               "threshold release refreshes deferred metrics");
         thresholdSlider->setValue(200);
-        pump(20);
+        waitForAnalysisIdle();
+
+        // ── M29 gate: rapid threshold changes schedule ONE Analysis batch per
+        // refresh request (never recompute inline on the UI thread), and only
+        // the FINAL threshold may land on the overlay (latest-wins). A
+        // release-gated blocker occupies the single Analysis worker so the two
+        // queued batches are observed deterministically.
+        {
+            auto &sched = TaskScheduler::instance();
+            sched.setQueueMaxThreads(TaskScheduler::Priority::Analysis, 1);
+            struct RestoreAnalysisThreads
+            {
+                ~RestoreAnalysisThreads()
+                {
+                    TaskScheduler::instance().setQueueMaxThreads(
+                        TaskScheduler::Priority::Analysis,
+                        std::max(1, QThread::idealThreadCount() / 2));
+                }
+            } restoreAnalysis;
+
+            // The reference pane was locked to pane 2 earlier, so pane 0 is the
+            // target and pane 1 the base. Confirm the delivered overlay equals
+            // the threshold-200 heatmap before gating.
+            RawImageView *targetView = nullptr;
+            for (RawImageView *v : ws->findChildren<RawImageView *>())
+                if (v && v->cellIndex() == 0)
+                    targetView = v;
+            CHECK(targetView != nullptr, "gate test: target pane (0) is a RawImageView");
+            if (targetView)
+            {
+                const int targetBase = 1;
+                const uint8_t finalThreshold = 180;
+                const ImageData basePx = ws->engine().imageAt(targetBase)->pixels();
+                const ImageData tgtPx = ws->engine().imageAt(0)->pixels();
+                const auto expectedHeat = [&](uint8_t t) {
+                    return mvcore::toQImage(DifferenceEngine::heatMap(
+                        DifferenceEngine::applyThreshold(
+                            DifferenceEngine::differenceMap(tgtPx, basePx), t)));
+                };
+                const QImage expectedBaseline = expectedHeat(200);
+                const QImage expectedFinal = expectedHeat(finalThreshold);
+                waitForAnalysisIdle();
+                CHECK(targetView->overlay() == expectedBaseline,
+                      "gate test: baseline overlay matches the threshold-200 heatmap");
+
+                // Release-gated blocker: predicate wait on a condition variable
+                // (no busy 1ms sleep). The RAII guard releases on every path so
+                // the single Analysis worker can never stay blocked.
+                std::mutex gateMtx;
+                std::condition_variable gateCv;
+                bool gateReleased = false;
+                auto blocker = sched.submit(
+                    TaskScheduler::Priority::Analysis,
+                    [&gateMtx, &gateCv, &gateReleased](const TaskScheduler::TaskContext &)
+                    {
+                        std::unique_lock<std::mutex> lk(gateMtx);
+                        gateCv.wait(lk, [&gateReleased] { return gateReleased; });
+                    });
+                struct ReleaseGateGuard
+                {
+                    std::mutex &mtx;
+                    std::condition_variable &cv;
+                    bool &released;
+                    ~ReleaseGateGuard()
+                    {
+                        std::lock_guard<std::mutex> lk(mtx);
+                        released = true;
+                        cv.notify_all();
+                    }
+                } releaseGate{gateMtx, gateCv, gateReleased};
+                {
+                    QElapsedTimer t;
+                    t.start();
+                    while (sched.metrics(TaskScheduler::PoolType::AnalysisPool).active_tasks < 1 &&
+                           t.elapsed() < 5000)
+                        pump(10);
+                }
+                CHECK(sched.metrics(TaskScheduler::PoolType::AnalysisPool).active_tasks >= 1,
+                      "gate test: release-gated blocker occupies the Analysis worker");
+
+                const uint64_t submittedBefore =
+                    sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+                thresholdSlider->setValue(120);
+                thresholdSlider->setValue(finalThreshold);
+                pump(20);
+                const uint64_t submittedAfter =
+                    sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
+                CHECK(submittedAfter == submittedBefore + 2,
+                      "gate test: each threshold change schedules exactly one Analysis "
+                      "batch, not inline compute");
+                CHECK(targetView->overlay() == expectedBaseline,
+                      "gate test: overlay keeps the old state while the batch is queued");
+
+                {
+                    std::lock_guard<std::mutex> lk(gateMtx);
+                    gateReleased = true;
+                }
+                gateCv.notify_all();
+                CHECK(sched.drain(TaskScheduler::PoolType::AnalysisPool,
+                                  std::chrono::seconds(15)),
+                      "gate test: Analysis pool drains after the gate release");
+                {
+                    QElapsedTimer t;
+                    t.start();
+                    while (targetView->overlay() != expectedFinal && t.elapsed() < 5000)
+                        pump(25);
+                }
+                CHECK(targetView->overlay() == expectedFinal,
+                      "gate test: final threshold lands on the overlay (latest-wins)");
+                CHECK(sched.metrics(TaskScheduler::PoolType::AnalysisPool).pending == 0,
+                      "gate test: Analysis scheduler converges after rapid changes");
+                CHECK(sched.graphMetrics().handles == 0,
+                      "gate test: no live scheduler handles after rapid changes");
+
+                // Restore the 200 threshold baseline for the sections below.
+                thresholdSlider->setValue(200);
+                waitForAnalysisIdle();
+            }
+        }
 
         brightnessSlider->setValue(40);
-        pump(20);
-        const QString adjustedMetrics = metricsLabel->text();
+        waitForAnalysisIdle();
+        const QString adjustedMetrics = waitForMetricsChange(metricsLabel, thresholdMetrics);
         const QString adjustedInspector =
             inspector->item(1, 2) ? inspector->item(1, 2)->text() : QString();
         const auto adjustedBundle = ws->buildReportBundle();
@@ -1249,14 +1420,15 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         CHECK(draggingMetrics == adjustedMetrics && draggingInspector != adjustedInspector,
               "adjustment drag updates Inspector while deferring metrics");
         brightnessSlider->setSliderDown(false);
-        pump(20);
+        waitForMetricsChange(metricsLabel, draggingMetrics);
         CHECK(metricsLabel->text() != draggingMetrics,
               "adjustment release refreshes deferred metrics");
 
         resetButton->click();
-        pump(20);
+        waitForAnalysisIdle();
         const QString resetInspector =
             inspector->item(1, 2) ? inspector->item(1, 2)->text() : QString();
+        waitForMetricsText(metricsLabel, thresholdMetrics);
         CHECK(metricsLabel->text() == thresholdMetrics && resetInspector == thresholdInspector,
               "reset exactly restores the threshold-baseline metrics and Inspector RGB");
         CHECK(qAbs(referenceView->scale() - savedScale) < 1e-9 &&
@@ -1475,6 +1647,453 @@ void workflow6_metadata_dual_consumer(const QString &rootDir)
     pump(100);
     dir.removeRecursively();
 }
+
+// ─── Workflow 7: rapid navigation cancels stale preloads, promotes the ──────
+// matching neighbor preload to a foreground decode
+// Regression for the M29 cancellable viewer loads. Uses the REAL ImageViewer +
+// TaskScheduler metrics, deterministic (no wall-clock-only waits): a
+// release-gated blocker occupies the single Background (MetadataPool) worker;
+// opening the middle image queues its two neighbor preloads behind the blocker.
+// Navigating to the LAST image consumes the queued p2 neighbor preload and
+// promotes it to the foreground decode — exactly one new DecodePool submission
+// (a single foreground escalation, not a re-queue) — while soft-cancelling the
+// stale pre_0 preload so its work never runs.
+void workflow7_stale_preload_cancellation(const QString &rootDir)
+{
+    std::cout << "── Workflow 7: stale preload cancellation + matching-neighbor promotion ──\n";
+
+    auto &sched = TaskScheduler::instance();
+    auto &repo = ImageRepository::instance();
+
+    // Fresh folder: these paths have never been decoded anywhere in the suite.
+    const QString dirPath = QDir(rootDir).filePath(QStringLiteral("wf_preload"));
+    QDir().mkpath(dirPath);
+    QDir dir(dirPath);
+    const QString p0 = writePng(dir, QStringLiteral("pre_0.png"), QColor(210, 40, 40));
+    const QString p1 = writePng(dir, QStringLiteral("pre_1.png"), QColor(40, 210, 40));
+    const QString p2 = writePng(dir, QStringLiteral("pre_2.png"), QColor(40, 40, 210));
+
+    // Single Background worker (main() already pins it to 1).
+    sched.setQueueMaxThreads(TaskScheduler::Priority::Background, 1);
+
+    MainWindow w;
+    w.resize(1280, 800);
+    w.show();
+    pump(100);
+
+    ImageViewer *viewer = nullptr;
+    for (QWidget *top : QApplication::topLevelWidgets())
+        if (auto *v = qobject_cast<ImageViewer *>(top))
+            viewer = v;
+    CHECK(viewer != nullptr, "preload test: real viewer window exists");
+    if (!viewer)
+    {
+        w.close();
+        dir.removeRecursively();
+        return;
+    }
+
+    // Drain first so no prior workflow's or MainWindow-startup Background work
+    // is in flight before the gate is closed.
+    CHECK(sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15)),
+          "preload test: Background pool drained before gating");
+
+    // Occupy the single Background worker with a release-gated blocker.
+    std::atomic<bool> gate{false};
+    auto blocker = sched.submit(TaskScheduler::Priority::Background,
+                                [&gate](const TaskScheduler::TaskContext &)
+                                {
+                                    while (!gate.load(std::memory_order_acquire))
+                                        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                                });
+    {
+        QElapsedTimer t;
+        t.start();
+        while (sched.metrics(TaskScheduler::PoolType::MetadataPool).active_tasks < 1 &&
+               t.elapsed() < 5000)
+            pump(10);
+    }
+    CHECK(sched.metrics(TaskScheduler::PoolType::MetadataPool).active_tasks >= 1,
+          "preload test: release-gated blocker occupies the Background worker");
+
+    // Open the middle image through the real viewer. Its foreground decode runs
+    // on DecodePool and delivers on the UI thread; the delivery schedules the
+    // two neighbor preloads (pre_0, pre_2) at Background priority -> queued.
+    viewer->setImage(p1);
+    {
+        QElapsedTimer t;
+        t.start();
+        while ((!viewer->frame() || viewer->frame()->metadata().filePath != p1.toStdString()) &&
+               t.elapsed() < 5000)
+            pump(25);
+    }
+    CHECK(viewer->frame() && viewer->frame()->metadata().filePath == p1.toStdString(),
+          "preload test: middle image displayed");
+
+    // The two neighbor preloads must be queued behind the blocker: pending stays
+    // >= 3 (blocker + pre_0 + pre_2) and neither has run yet (no cache warm).
+    {
+        QElapsedTimer t;
+        t.start();
+        while (sched.metrics(TaskScheduler::PoolType::MetadataPool).pending < 3 &&
+               t.elapsed() < 5000)
+            pump(10);
+    }
+    const auto gated = sched.metrics(TaskScheduler::PoolType::MetadataPool);
+    CHECK(gated.pending >= 3, "preload test: both neighbor preloads are queued behind the blocker");
+    {
+        ImageData probe;
+        CHECK(!CacheManager::instance().getMemory(CacheLevel::FullImage,
+                                                  repo.makeKey(p0.toStdString()), probe),
+              "preload test: queued neighbor preloads have not run (cache not warmed)");
+    }
+
+    // Rapid navigation: open the LAST image while Background is still gated.
+    // setImage must consume the queued p2 neighbor preload and promote it to
+    // the foreground decode (one DecodePool escalation), while soft-cancelling
+    // the stale pre_0 preload. Snapshot DecodePool submissions before the
+    // navigation so the promotion costs exactly one submission, measured
+    // deterministically (not by wall-clock timing).
+    const uint64_t decodeSubmittedBefore =
+        sched.metrics(TaskScheduler::PoolType::DecodePool).submitted;
+    viewer->setImage(p2);
+    {
+        QElapsedTimer t;
+        t.start();
+        while ((!viewer->frame() || viewer->frame()->metadata().filePath != p2.toStdString()) &&
+               t.elapsed() < 5000)
+            pump(25);
+    }
+    CHECK(viewer->frame() && viewer->frame()->metadata().filePath == p2.toStdString(),
+          "preload test: latest navigation target displayed");
+
+    // p2 was delivered through the normal foreground onLoaded path (the promoted
+    // preload is not a special display mode), so its frame must carry a
+    // histogram even though p2 arrived as a Background preload first.
+    CHECK(viewer->frame() && viewer->frame()->hasHistogram(),
+          "preload test: promoted neighbor displays with a histogram (foreground contract)");
+    CHECK(sched.metrics(TaskScheduler::PoolType::DecodePool).submitted == decodeSubmittedBefore + 1,
+          "preload test: matching-neighbor promotion causes exactly one DecodePool submission");
+
+    // Release the gate and drain: pre_0 was ONLY ever a stale queued preload —
+    // if rapid navigation did not cancel it, its work would now warm the cache.
+    gate.store(true, std::memory_order_release);
+    CHECK(sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15)),
+          "preload test: Background drains after the gate release");
+
+    {
+        ImageData probe;
+        const bool staleCached = CacheManager::instance().getMemory(
+            CacheLevel::FullImage, repo.makeKey(p0.toStdString()), probe);
+        CHECK(!staleCached,
+              "rapid navigation cancels stale neighbor preload work (never warms FullImage)");
+    }
+    const auto m = sched.metrics(TaskScheduler::PoolType::MetadataPool);
+    CHECK(m.pending == 0 && m.active_tasks == 0 && m.queue_depth == 0,
+          "preload test: Background scheduler converges after rapid navigation");
+    const auto g = sched.graphMetrics();
+    CHECK(g.handles == 0, "preload test: no live scheduler handles after rapid navigation");
+
+    // Restore the default Background thread count and close.
+    sched.setQueueMaxThreads(TaskScheduler::Priority::Background,
+                             std::max(1, QThread::idealThreadCount() / 2));
+    viewer->close();
+    pump(50);
+    w.close();
+    pump(50);
+    dir.removeRecursively();
+}
+
+// ─── Workflow 8: PreviewPanel serves a SCALED preview through the ──────────
+// Thumbnail pool, never the Decode pool. A real >512 image keeps its source
+// dimensions while the held preview pixmap is capped at a 512 max edge, and
+// the scaled result lands in the Preview cache without ever warming the
+// FullImage cache (regression: the preview used to run a full DecodePool
+// loadAsync decode, duplicate ImageViewer decode, and retain a full QPixmap).
+void workflow8_preview_scaled_load(const QString &rootDir)
+{
+    std::cout << "── Workflow 8: preview scaled/cancellable load ──\n";
+
+    const QString dirPath = QDir(rootDir).filePath(QStringLiteral("wf_preview"));
+    QDir().mkpath(dirPath);
+    QDir dir(dirPath);
+    const QString path = dir.filePath(QStringLiteral("preview_big.png"));
+    {
+        QImage big(1024, 768, QImage::Format_RGB32);
+        for (int y = 0; y < 768; y += 8)
+        {
+            QRgb *row = reinterpret_cast<QRgb *>(big.scanLine(y));
+            for (int x = 0; x < 1024; ++x)
+                row[x] = qRgb((x * 255) / 1024, (y * 255) / 768, ((x + y) * 255) / 1792);
+        }
+        CHECK(big.save(path, "PNG"), "preview workflow writes a real 1024x768 PNG");
+    }
+
+    auto &sched = TaskScheduler::instance();
+    auto &repo = ImageRepository::instance();
+    const std::string key = repo.makeKey(path.toStdString());
+
+    CHECK(sched.drain(TaskScheduler::PoolType::ThumbnailPool, std::chrono::seconds(15)),
+          "preview workflow: Thumbnail pool drained before measuring");
+    CHECK(sched.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(15)),
+          "preview workflow: Decode pool drained before measuring");
+    const uint64_t thumbSubmittedBefore =
+        sched.metrics(TaskScheduler::PoolType::ThumbnailPool).submitted;
+    const uint64_t decodeSubmittedBefore =
+        sched.metrics(TaskScheduler::PoolType::DecodePool).submitted;
+    {
+        ImageData probe;
+        CHECK(!CacheManager::instance().getMemory(CacheLevel::FullImage, key, probe),
+              "preview workflow: FullImage cache does not hold the key beforehand");
+    }
+
+    {
+        PreviewPanel panel;
+        panel.resize(320, 240);
+        panel.setImage(path);
+        QElapsedTimer t;
+        t.start();
+        while (!panel.hasImage() && t.elapsed() < 10000)
+            pump(25);
+
+        CHECK(panel.hasImage(), "preview workflow: scaled preview is delivered");
+        CHECK(sched.metrics(TaskScheduler::PoolType::ThumbnailPool).submitted ==
+                  thumbSubmittedBefore + 1,
+              "preview workflow: exactly one Thumbnail task serves the preview");
+        CHECK(sched.metrics(TaskScheduler::PoolType::DecodePool).submitted == decodeSubmittedBefore,
+              "preview workflow: zero Decode tasks serve the preview");
+        {
+            ImageData fullProbe;
+            CHECK(!CacheManager::instance().getMemory(CacheLevel::FullImage, key, fullProbe),
+                  "preview workflow: FullImage cache is never touched");
+            ImageData previewProbe;
+            CHECK(CacheManager::instance().getMemory(
+                      CacheLevel::Preview, PreviewPanel::previewCacheKey(path.toStdString()),
+                      previewProbe),
+                  "preview workflow: scaled result lands in the Preview cache");
+        }
+        CHECK(panel.sourceImageSize() == QSize(1024, 768),
+              "preview workflow: source dimensions are preserved");
+        const QSize previewSize = panel.previewPixelSize();
+        CHECK(previewSize.width() > 0 && previewSize.height() > 0 &&
+                  std::max(previewSize.width(), previewSize.height()) <= 512,
+              "preview workflow: preview pixmap is capped at a 512 max edge");
+
+        // Re-selecting the same image reuses the Preview cache: still exactly
+        // one Thumbnail submission, zero Decode work, dimensions preserved.
+        const uint64_t thumbBeforeSecond =
+            sched.metrics(TaskScheduler::PoolType::ThumbnailPool).submitted;
+        const uint64_t decodeBeforeSecond =
+            sched.metrics(TaskScheduler::PoolType::DecodePool).submitted;
+        panel.setImage(path);
+        QElapsedTimer t2;
+        t2.start();
+        while (!panel.hasImage() && t2.elapsed() < 10000)
+            pump(25);
+        CHECK(panel.hasImage(), "preview workflow: re-selected preview is delivered");
+        CHECK(sched.metrics(TaskScheduler::PoolType::ThumbnailPool).submitted ==
+                  thumbBeforeSecond + 1,
+              "preview workflow: re-select submits exactly one Thumbnail task");
+        CHECK(sched.metrics(TaskScheduler::PoolType::DecodePool).submitted == decodeBeforeSecond,
+              "preview workflow: re-select still does zero Decode work");
+        CHECK(panel.sourceImageSize() == QSize(1024, 768),
+              "preview workflow: re-select preserves source dimensions");
+    }
+
+    // Scheduler convergence after the second (cache-hit) selection: every
+    // preview task — including the delivered one whose handle was released on
+    // the UI thread — must drain to zero pending/active/queued work and leave
+    // the dependency graph with no live handles before the fixture directory
+    // is deleted.
+    CHECK(sched.drain(TaskScheduler::PoolType::ThumbnailPool, std::chrono::seconds(15)),
+          "preview workflow: Thumbnail pool drains after the cache re-select");
+    {
+        const TaskScheduler::PoolMetrics pm = sched.metrics(TaskScheduler::PoolType::ThumbnailPool);
+        CHECK(pm.pending == 0, "preview workflow: Thumbnail pool has zero pending tasks");
+        CHECK(pm.active_tasks == 0, "preview workflow: Thumbnail pool has zero active tasks");
+        CHECK(pm.queue_depth == 0, "preview workflow: Thumbnail pool queue is empty");
+        CHECK(sched.graphMetrics().handles == 0,
+              "preview workflow: scheduler dependency graph has no live handles");
+    }
+
+    dir.removeRecursively();
+}
+
+// ─── Workflow 9: Pixel Inspector lifecycle ─────────────────────────────────
+// Real ImageViewer + real pixelInfo signal over a real decoded ImageFrame.
+// QtDecoder normalizes a grayscale PNG to RGB24 (equal channels); moving the
+// mouse onto image pixel (3,4) must report valid=true with that exact gray
+// value. Every transition away from a live sample — setImage(), Leave, close —
+// must synchronously invalidate the inspector (valid=false, x/y=-1): the
+// emission count must grow and the last sample must flip to invalid.
+void workflow9_pixel_inspector_lifecycle(const QString &rootDir)
+{
+    std::cout << "── Workflow 9: pixel inspector lifecycle ──\n";
+
+    const QString dirPath = QDir(rootDir).filePath(QStringLiteral("wf_pixel"));
+    QDir().mkpath(dirPath);
+    QDir dir(dirPath);
+    const QString grayPath = dir.filePath(QStringLiteral("gray.png"));
+    const QString otherPath = dir.filePath(QStringLiteral("other.png"));
+    {
+        QImage gray(8, 8, QImage::Format_Grayscale8);
+        gray.fill(QColor(73, 73, 73)); // nontrivial gray, never black/white
+        CHECK(gray.save(grayPath, "PNG"), "pixel workflow writes a grayscale PNG");
+        QImage other(8, 8, QImage::Format_RGB32);
+        other.fill(qRgb(200, 100, 50));
+        CHECK(other.save(otherPath, "PNG"), "pixel workflow writes a second PNG");
+    }
+
+    ImageViewer viewer;
+    viewer.resize(320, 240);
+    viewer.show();
+    pump(50);
+
+    // Capture every pixelInfo emission before the first setImage.
+    struct PixelProbe
+    {
+        int emissions = 0;
+        int x = -1;
+        int y = -1;
+        int r = -1;
+        int g = -1;
+        int b = -1;
+        int a = -1;
+        int rawKind = -1;
+        bool valid = false;
+    };
+    PixelProbe probe;
+    QObject::connect(
+        &viewer, &ImageViewer::pixelInfo, &viewer,
+        [&probe](int x, int y, int r, int g, int b, int a, int, int, int, int rawKind, bool valid)
+        {
+            ++probe.emissions;
+            probe.x = x;
+            probe.y = y;
+            probe.r = r;
+            probe.g = g;
+            probe.b = b;
+            probe.a = a;
+            probe.rawKind = rawKind;
+            probe.valid = valid;
+        });
+
+    viewer.setImage(grayPath);
+    {
+        QElapsedTimer t;
+        t.start();
+        while ((!viewer.frame() || viewer.frame()->metadata().filePath != grayPath.toStdString()) &&
+               t.elapsed() < 5000)
+            pump(25);
+    }
+    std::shared_ptr<ImageFrame> decodedFrame = viewer.frame();
+    CHECK(decodedFrame && decodedFrame->metadata().filePath == grayPath.toStdString(),
+          "pixel workflow: grayscale image decodes");
+    CHECK(decodedFrame && decodedFrame->width() == 8 && decodedFrame->height() == 8,
+          "pixel workflow: decoded frame keeps the 8x8 dimensions");
+    // QtDecoder converts the source to RGB888 and stores it as RGB24 ImageData
+    // (see toImageData in QtDecoder.cpp), so a grayscale PNG yields equal
+    // channels. Sample pixel (3,4) via samplePixel, which canonicalises the
+    // format and reports invalid on null/truncated buffers instead of reading
+    // out of bounds.
+    CHECK(decodedFrame && decodedFrame->pixels().format == PixelFormat::RGB24,
+          "pixel workflow: QtDecoder normalizes grayscale PNG to RGB24");
+    const PixelRGBA decodedSample =
+        decodedFrame ? samplePixel(decodedFrame->pixels(), 3, 4) : PixelRGBA{};
+    CHECK(decodedSample.valid, "pixel workflow: decoded sample at (3,4) is readable");
+    CHECK(decodedSample.r == decodedSample.g && decodedSample.g == decodedSample.b,
+          "pixel workflow: decoded sample channels are equal (gray normalization)");
+    const int expectedGray = decodedSample.r;
+    CHECK(expectedGray > 0 && expectedGray < 255,
+          "pixel workflow: decoded gray value is nontrivial (not black/white)");
+    std::cout << "    decoded gray sample: " << expectedGray << "\n";
+
+    // Deterministic transform: zoomActual gives exactly 100% with an integer
+    // center offset (156,116) at 320x240. The pixel center (offset+(coord+0.5)
+    // *scale) sits on a half-pixel; rounding it up would land on the pixel
+    // boundary, so floor keeps the point inside pixel (3,4).
+    viewer.zoomActual();
+    pump(20);
+    CHECK(qAbs(viewer.viewTransform().scale - 1.0) < 1e-9,
+          "pixel workflow: zoomActual restores exactly 100%");
+    auto screenForPixel = [&viewer](int px, int py)
+    {
+        const auto v = viewer.viewTransform();
+        return QPoint(qFloor(v.offsetX + (px + 0.5) * v.scale),
+                      qFloor(v.offsetY + (py + 0.5) * v.scale));
+    };
+    sendMouseMove(&viewer, screenForPixel(3, 4));
+    CHECK(probe.emissions >= 1 && probe.valid && probe.x == 3 && probe.y == 4,
+          "pixel workflow: mouse over image pixel (3,4) reports a valid sample");
+    CHECK(probe.r == expectedGray && probe.g == expectedGray && probe.b == expectedGray,
+          "pixel workflow: pixelInfo channels match the decoded gray sample");
+    CHECK(probe.a == 255 && probe.rawKind == 0,
+          "pixel workflow: RGB24 sample reports opaque alpha and 8-bit kind");
+
+    // Switching images must synchronously invalidate the inspector: the new
+    // load emits a cleared sample before the next decode runs, so a stale
+    // pixel never lingers while the new image loads.
+    const int beforeSwitch = probe.emissions;
+    viewer.setImage(otherPath);
+    CHECK(probe.emissions > beforeSwitch && !probe.valid,
+          "pixel workflow: setImage synchronously invalidates the inspector");
+    {
+        QElapsedTimer t;
+        t.start();
+        while (
+            (!viewer.frame() || viewer.frame()->metadata().filePath != otherPath.toStdString()) &&
+            t.elapsed() < 5000)
+            pump(25);
+    }
+    CHECK(viewer.frame() && viewer.frame()->metadata().filePath == otherPath.toStdString(),
+          "pixel workflow: second image decodes");
+
+    // Re-open the gray image and confirm the inspector recovers.
+    viewer.setImage(grayPath);
+    {
+        QElapsedTimer t;
+        t.start();
+        while ((!viewer.frame() || viewer.frame()->metadata().filePath != grayPath.toStdString()) &&
+               t.elapsed() < 5000)
+            pump(25);
+    }
+    CHECK(viewer.frame() && viewer.frame()->metadata().filePath == grayPath.toStdString(),
+          "pixel workflow: gray image is restored");
+    viewer.zoomActual();
+    pump(20);
+    sendMouseMove(&viewer, screenForPixel(3, 4));
+    CHECK(probe.valid && probe.x == 3 && probe.y == 4,
+          "pixel workflow: inspector recovers after re-opening the image");
+
+    // Cursor leaving the view must invalidate the inspector so the panel stops
+    // showing the last hovered pixel.
+    const int beforeLeave = probe.emissions;
+    QEvent leaveEvent(QEvent::Leave);
+    QApplication::sendEvent(&viewer, &leaveEvent);
+    CHECK(probe.emissions > beforeLeave && !probe.valid,
+          "pixel workflow: Leave invalidates the inspector");
+
+    // Closing the viewer must invalidate it too: the last sample must not
+    // outlive the window.
+    sendMouseMove(&viewer, screenForPixel(3, 4));
+    CHECK(probe.valid && probe.x == 3 && probe.y == 4,
+          "pixel workflow: sample is valid again before close");
+    const int beforeClose = probe.emissions;
+    viewer.close();
+    CHECK(probe.emissions > beforeClose && !probe.valid,
+          "pixel workflow: close invalidates the inspector");
+    pump(50);
+
+    // Drain the pools the real viewer uses (foreground Decode + Background
+    // neighbor preloads) before deleting the fixture directory.
+    auto &sched = TaskScheduler::instance();
+    CHECK(sched.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(15)),
+          "pixel workflow: Decode pool drains before fixture removal");
+    CHECK(sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15)),
+          "pixel workflow: Background pool drains before fixture removal");
+    dir.removeRecursively();
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -1523,6 +2142,9 @@ int main(int argc, char **argv)
     workflow5_export_current_output_directory(workDir.absolutePath());
     workflow4_list_scaling(workDir.absolutePath());
     workflow6_metadata_dual_consumer(workDir.absolutePath());
+    workflow7_stale_preload_cancellation(workDir.absolutePath());
+    workflow8_preview_scaled_load(workDir.absolutePath());
+    workflow9_pixel_inspector_lifecycle(workDir.absolutePath());
 
     for (const QString &p : paths)
         QFile::remove(p);

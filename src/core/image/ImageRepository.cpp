@@ -17,6 +17,7 @@
 #include <filesystem>
 #include <future>
 #include <map>
+#include <mutex>
 
 ImageRepository &ImageRepository::instance()
 {
@@ -89,6 +90,40 @@ std::shared_ptr<std::vector<uint16_t>> captureRaw16(const std::string &path)
 }
 } // namespace
 
+// M29: opaque cancellable-request state. Defined here (not in the header)
+// so UI code only ever holds the shared_ptr handle and never touches
+// TaskScheduler types. The state is kept alive by the worker closures (work +
+// done) for the lifetime of the request. Every mutable field (kind/phase/path/
+// callback/result/handle) is guarded by mtx; the client callback is NEVER
+// invoked while holding mtx. cancelled is atomic so cancellation is observable
+// without locking. Declared `class` in the header; the out-of-line definition
+// matches with an explicit public section.
+class ImageRepository::AsyncRequestState
+{
+  public:
+    enum class Kind
+    {
+        Foreground,
+        Preload
+    };
+    enum class Phase
+    {
+        Queued,
+        Running,
+        Finished,
+        Cancelled
+    };
+
+    std::mutex mtx;
+    Kind kind = Kind::Foreground;
+    Phase phase = Phase::Queued;
+    std::string path;
+    std::function<void(const Result &)> callback;
+    TaskScheduler::TaskHandle handle;
+    std::atomic<bool> cancelled{false};
+    ImageRepository::Result result;
+};
+
 ImageRepository::Result ImageRepository::load(const std::string &filePath, const LoadOptions &opts)
 {
     MV_TRACE_SCOPED("ImageRepository::load");
@@ -117,6 +152,11 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
             if (CacheManager::instance().getRaw16(key, rb, rbCh, rbMax) && rb)
                 frame->setRaw16(rb, rbMax, rbCh);
         }
+        // M29: honor generateHistogram on the memory fast path too. A
+        // histogram-free preload (preloadAsync) may have warmed this entry, so
+        // the later normal viewer load must still produce a histogram.
+        if (opts.generateHistogram)
+            frame->computeHistogram();
         frame->setDecodeState(DecodeState::Decoded);
         frame->setCacheState(CacheState::Memory);
         CacheManager::instance().putMemory(CacheLevel::FullImage, key, img);
@@ -226,25 +266,259 @@ void ImageRepository::loadAsync(const std::string &filePath,
                                 std::function<void(const Result &)> callback,
                                 const LoadOptions &opts)
 {
-    auto out = std::make_shared<Result>();
+    // M29: keep the legacy entry point as a thin wrapper so existing callers
+    // keep their exact source/API behavior and exactly-once delivery for
+    // non-cancelled requests. The returned handle is discarded; the request
+    // state is kept alive by the worker closures.
+    loadAsyncCancellable(filePath, std::move(callback), opts);
+}
+
+ImageRepository::AsyncRequestHandle
+ImageRepository::loadAsyncCancellable(const std::string &filePath,
+                                      std::function<void(const Result &)> callback,
+                                      const LoadOptions &opts)
+{
+    auto state = std::make_shared<AsyncRequestState>();
+    {
+        std::lock_guard<std::mutex> lk(state->mtx);
+        state->kind = AsyncRequestState::Kind::Foreground;
+        state->phase = AsyncRequestState::Phase::Queued;
+        state->path = filePath;
+        state->callback = std::move(callback);
+    }
     auto handle = TaskScheduler::instance().submit(
-        TaskScheduler::DecodePool, [this, filePath, opts, out]() { *out = load(filePath, opts); },
-        [callback, out]()
+        TaskScheduler::DecodePool,
+        [this, filePath, opts, state]()
         {
-            if (callback)
-                callback(*out);
+            {
+                std::lock_guard<std::mutex> lk(state->mtx);
+                if (state->cancelled.load(std::memory_order_acquire) ||
+                    state->phase != AsyncRequestState::Phase::Queued)
+                    return;
+                state->phase = AsyncRequestState::Phase::Running;
+            }
+            // Decode outside the lock; only a Running, uncancelled request may
+            // publish its transient result.
+            Result res = load(filePath, opts);
+            {
+                std::lock_guard<std::mutex> lk(state->mtx);
+                if (state->cancelled.load(std::memory_order_acquire) ||
+                    state->phase != AsyncRequestState::Phase::Running)
+                    return;
+                state->result = std::move(res);
+            }
+        },
+        [state]()
+        {
+            // Terminal transition: mark Finished, move the result/callback out,
+            // and clear the transient Result (never retained after terminal
+            // done). The client callback is invoked outside the lock, exactly
+            // once, only when the request was not cancelled.
+            Result res;
+            std::function<void(const Result &)> cb;
+            bool deliver = false;
+            {
+                std::lock_guard<std::mutex> lk(state->mtx);
+                state->phase = AsyncRequestState::Phase::Finished;
+                if (!state->cancelled.load(std::memory_order_acquire))
+                {
+                    deliver = true;
+                    res = std::move(state->result);
+                    cb = std::move(state->callback);
+                }
+                state->result = {};
+                state->callback = {};
+            }
+            if (deliver && cb && !state->cancelled.load(std::memory_order_acquire))
+                cb(res);
         });
-    if (!handle && callback)
+    if (!handle)
     {
         // M27: a rejected submission must not silently lose the request — the
         // caller must never have to infer failure from a missing callback.
         // The callback fires EXACTLY ONCE, here on the calling thread, with an
         // explicit rejection error (the worker-thread delivery path covers the
         // accepted case).
-        Result err;
-        err.error = "scheduler rejected submission for: " + filePath;
-        callback(err);
+        std::function<void(const Result &)> cb;
+        {
+            std::lock_guard<std::mutex> lk(state->mtx);
+            cb = std::move(state->callback);
+        }
+        if (cb)
+        {
+            Result err;
+            err.error = "scheduler rejected submission for: " + filePath;
+            cb(err);
+        }
+        return nullptr;
     }
+    {
+        std::lock_guard<std::mutex> lk(state->mtx);
+        state->handle = handle;
+    }
+    return state;
+}
+
+ImageRepository::AsyncRequestHandle ImageRepository::preloadAsync(const std::string &filePath)
+{
+    auto state = std::make_shared<AsyncRequestState>();
+    {
+        std::lock_guard<std::mutex> lk(state->mtx);
+        state->kind = AsyncRequestState::Kind::Preload;
+        state->phase = AsyncRequestState::Phase::Queued;
+        state->path = filePath;
+    }
+    LoadOptions opts;
+    opts.useDiskCache = true;
+    opts.generateHistogram = false;
+    auto handle = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Background,
+        [this, filePath, opts, state](const TaskScheduler::TaskContext &)
+        {
+            {
+                std::lock_guard<std::mutex> lk(state->mtx);
+                if (state->cancelled.load(std::memory_order_acquire) ||
+                    state->phase != AsyncRequestState::Phase::Queued)
+                    return;
+                state->phase = AsyncRequestState::Phase::Running;
+            }
+            // Best-effort cache warm only: the transient frame is stored so a
+            // concurrent promotion can deliver it; a pure preload releases it
+            // at completion (the FullImage memory cache populated by load() is
+            // the only observable effect).
+            Result res = load(filePath, opts);
+            {
+                std::lock_guard<std::mutex> lk(state->mtx);
+                if (state->cancelled.load(std::memory_order_acquire) ||
+                    state->phase != AsyncRequestState::Phase::Running)
+                    return;
+                state->result = std::move(res);
+            }
+        },
+        {},                                           // deps
+        std::chrono::steady_clock::time_point::max(), // deadline
+        [state]()
+        {
+            // Terminal transition. A preload promoted to Foreground while
+            // running delivers to the promoted callback (computing the
+            // histogram the preload skipped); a pure preload releases its
+            // transient Result and finishes with no delivery. The callback is
+            // never invoked while holding the state mutex.
+            bool promoted = false;
+            bool cancelled = false;
+            Result res;
+            std::function<void(const Result &)> cb;
+            {
+                std::lock_guard<std::mutex> lk(state->mtx);
+                state->phase = AsyncRequestState::Phase::Finished;
+                cancelled = state->cancelled.load(std::memory_order_acquire);
+                promoted = state->kind == AsyncRequestState::Kind::Foreground;
+                if (promoted && !cancelled)
+                {
+                    res = std::move(state->result);
+                    cb = std::move(state->callback);
+                }
+                state->result = {};
+                state->callback = {};
+            }
+            if (!promoted || cancelled || !cb)
+                return;
+            if (res.success() && res.frame)
+                res.frame->computeHistogram();
+            // Re-check cancellation: the histogram pass took time and the
+            // request may have been cancelled since the terminal transition.
+            if (state->cancelled.load(std::memory_order_acquire))
+                return;
+            cb(res);
+        });
+    if (!handle)
+        return nullptr;
+    {
+        std::lock_guard<std::mutex> lk(state->mtx);
+        state->handle = handle;
+    }
+    return state;
+}
+
+ImageRepository::AsyncRequestHandle
+ImageRepository::promotePreloadAsync(AsyncRequestHandle &preload,
+                                     std::function<void(const Result &)> callback)
+{
+    // Consumes the preload handle; nullptr is a no-op. The client callback is
+    // never invoked and scheduler/loadAsync are never touched while holding the
+    // state mutex.
+    if (!preload)
+        return nullptr;
+    std::string path;
+    TaskScheduler::TaskHandle staleHandle;
+    AsyncRequestHandle promoted;
+    {
+        std::lock_guard<std::mutex> lk(preload->mtx);
+        if (preload->kind != AsyncRequestState::Kind::Preload)
+            return nullptr;
+        if (preload->phase == AsyncRequestState::Phase::Running)
+        {
+            // Reuse the running decode: promote the kind and stash the callback.
+            // The preload's terminal done path then delivers to this callback —
+            // a running promotion never submits a second decode. Keep a local
+            // copy of the state so the caller's handle can be consumed (reset)
+            // only after the mutex guard is released.
+            preload->kind = AsyncRequestState::Kind::Foreground;
+            preload->callback = std::move(callback);
+            promoted = preload;
+        }
+        else
+        {
+            if (preload->phase == AsyncRequestState::Phase::Queued)
+            {
+                // Queued: suppress the stale Background preload and resubmit at
+                // Decode priority so the foreground request is not starved
+                // behind other background work.
+                preload->cancelled.store(true, std::memory_order_release);
+                preload->phase = AsyncRequestState::Phase::Cancelled;
+                staleHandle = preload->handle;
+                preload->handle = {};
+                preload->callback = {};
+                preload->result = {};
+            }
+            path = preload->path;
+        }
+    }
+    if (promoted)
+    {
+        preload.reset();
+        return promoted;
+    }
+    if (staleHandle)
+        TaskScheduler::cancel(staleHandle);
+    // Finished/Cancelled: resubmit at Decode priority; a finished preload
+    // already warmed the cache, so the foreground load resolves from cache.
+    preload.reset();
+    return loadAsyncCancellable(path, std::move(callback));
+}
+
+void ImageRepository::cancelAsync(AsyncRequestHandle &handle)
+{
+    if (!handle)
+        return;
+    // M29: best-effort cancellation. The atomic flag suppresses the client
+    // callback; the scheduler soft-cancel skips queued work (a running QImage
+    // decode is non-interruptible and may finish safely, merely warming cache).
+    // Phase/fields are updated under the mutex; the callback and transient
+    // Result are dropped and never delivered.
+    TaskScheduler::TaskHandle staleHandle;
+    {
+        std::lock_guard<std::mutex> lk(handle->mtx);
+        handle->cancelled.store(true, std::memory_order_release);
+        handle->phase = AsyncRequestState::Phase::Cancelled;
+        handle->callback = {};
+        handle->result = {};
+        staleHandle = handle->handle;
+        handle->handle = {};
+    }
+    if (staleHandle)
+        TaskScheduler::cancel(staleHandle);
+    handle.reset();
 }
 
 std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::string &dirPath,

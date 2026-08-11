@@ -100,6 +100,12 @@ ImageViewer::ImageViewer(QWidget *parent) : QOpenGLWidget(parent)
 
 ImageViewer::~ImageViewer()
 {
+    // M29: drop any in-flight foreground decode / neighbor preload before
+    // tearing down the GL context. A worker callback that lands after teardown
+    // is harmless (the QPointer/path/generation guards suppress delivery), but
+    // cancelling first also removes the wasted full-resolution decode work.
+    cancelCurrentLoad();
+    cancelPreloads();
     // Stage A: free GPU textures + blitter while the GL context is still current.
     // Skip if the widget never created a context (never shown).
     if (context())
@@ -131,18 +137,53 @@ void ImageViewer::initializeGL()
 
 void ImageViewer::closeEvent(QCloseEvent *event)
 {
+    // Pixel Inspector lifecycle: drop any stale sample before the decode work
+    // is cancelled and the window goes away.
+    clearPixelInfo();
+    // M29: stop stale decode/preload work before persisting geometry — a decode
+    // callback already in flight must not repopulate preloads after close. The
+    // QPointer/path/generation guards would still suppress UI delivery, but the
+    // obsolete full-resolution work is dropped here.
+    ++m_requestGen;
+    cancelCurrentLoad();
+    cancelPreloads();
     QSettings settings;
     settings.setValue("viewerGeometry", saveGeometry());
     event->accept();
 }
 
+void ImageViewer::leaveEvent(QEvent *event)
+{
+    // Pixel Inspector lifecycle: the cursor left the view, so drop the hovered
+    // sample. Base first (default no-op), then invalidate.
+    QOpenGLWidget::leaveEvent(event);
+    clearPixelInfo();
+}
+
+void ImageViewer::clearPixelInfo()
+{
+    emit pixelInfo(-1, -1, 0, 0, 0, 0, 0, 0, 0, 0, false);
+}
+
 void ImageViewer::setImage(const QString &path)
 {
+    // Pixel Inspector lifecycle: invalidate synchronously on every new load so
+    // the previous image's sample never lingers while the next decode runs —
+    // including for empty/failing requests that never deliver a frame.
+    clearPixelInfo();
     m_currentPath = path;
-    // Decode off the UI thread: ImageRepository::loadAsync dispatches to the
-    // DecodePool, so first-open / next-prev never block the UI thread (keeps
-    // within the performance budget: first <100ms, switch <20ms). The decoded
-    // frame is applied back on the UI thread via QMetaObject::invokeMethod.
+    // M29: drop the prior foreground decode BEFORE scheduling the new load, and
+    // consume any neighbor preload that already targets `path` so it can be
+    // promoted to the foreground decode below. Every nonmatching preload is
+    // soft-cancelled here too, so obsolete queued Background work from the
+    // previous navigation is skipped before it wastes CPU/I/O or re-warms the
+    // cache for a superseded image.
+    cancelCurrentLoad();
+    auto matchingPreload = takeMatchingPreload(path);
+    // Decode off the UI thread: ImageRepository::loadAsyncCancellable dispatches
+    // to the DecodePool, so first-open / next-prev never block the UI thread
+    // (keeps within the performance budget: first <100ms, switch <20ms). The
+    // decoded frame is applied back on the UI thread via QMetaObject::invokeMethod.
     //
     // M27 lifetime closure: the worker callback captures a QPointer and checks
     // it BEFORE any use — including the invokeMethod target, which is qApp
@@ -151,105 +192,116 @@ void ImageViewer::setImage(const QString &path)
     // completes last must not overwrite the newer A).
     const uint64_t gen = ++m_requestGen;
     QPointer<ImageViewer> guard(this);
-    ImageRepository::instance().loadAsync(
-        path.toStdString(),
-        [path, gen, guard](const ImageRepository::Result &res)
+    auto onLoaded = [path, gen, guard](const ImageRepository::Result &res)
+    {
+        if (!guard)
+            return; // viewer destroyed mid-decode
+        if (!res.success())
         {
-            if (!guard)
-                return; // viewer destroyed mid-decode
-            if (!res.success())
-            {
-                QMetaObject::invokeMethod(
-                    qApp,
-                    [path, gen, guard]()
-                    {
-                        ImageViewer *viewer = guard.data();
-                        if (!viewer || path != viewer->m_currentPath || gen != viewer->m_requestGen)
-                            return;
-                        viewer->m_hasHistogram = false;
-                        viewer->setWindowTitle(
-                            QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
-                        viewer->update();
-                        emit viewer->loadFailed(path);
-                    });
-                return;
-            }
             QMetaObject::invokeMethod(
                 qApp,
-                [res, path, gen, guard]()
+                [path, gen, guard]()
                 {
                     ImageViewer *viewer = guard.data();
                     if (!viewer || path != viewer->m_currentPath || gen != viewer->m_requestGen)
-                        return; // widget destroyed or user navigated away
-                    viewer->m_frame = res.frame;
-                    // M28 P1-02: no full-size QPixmap materialization on the UI
-                    // thread — the paint path renders tiles from the frame, and
-                    // the histogram comes from the frame's cached luminance pass.
-                    if (!viewer->m_frame || viewer->m_frame->pixels().isNull())
-                    {
-                        viewer->m_hasHistogram = false;
-                        viewer->setWindowTitle(
-                            QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
-                        viewer->update();
-                        emit viewer->loadFailed(path);
                         return;
-                    }
-                    viewer->computeHistogram();
-                    const QFileInfo info(path);
-                    viewer->m_fileList = listImages(info.absolutePath());
-                    viewer->m_currentIndex = static_cast<int>(viewer->m_fileList.indexOf(path));
-                    // Build the render pipeline state (tile grid + fitted Viewport)
-                    // exactly as before — now applied on the UI thread post-decode.
-                    viewer->m_tiles =
-                        TileGrid(viewer->m_frame->width(), viewer->m_frame->height(), 256);
-                    viewer->m_view.screenW = viewer->width();
-                    viewer->m_view.screenH = viewer->height();
-                    viewer->m_view.fit(viewer->m_frame->width(), viewer->m_frame->height(), 0.95);
-                    viewer->m_fitMode = true;
-                    const QString position = viewer->m_currentIndex >= 0
-                                                 ? QString(" [%1/%2]")
-                                                       .arg(viewer->m_currentIndex + 1)
-                                                       .arg(viewer->m_fileList.size())
-                                                 : QString();
-                    viewer->setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
-                                               .arg(info.fileName())
-                                               .arg(viewer->m_frame->width())
-                                               .arg(viewer->m_frame->height())
-                                               .arg(position));
-                    // P1-7: if a session-restore zoom/pan was requested before the
-                    // async decode finished, apply it now. Only reuse the saved pan
-                    // offsets when the window size matches (offsets are screen-space);
-                    // otherwise keep the fitted pan and just restore the zoom level.
-                    if (viewer->m_pendingView)
-                    {
-                        viewer->m_view.scale = viewer->m_pendingView->scale;
-                        if (std::fabs(viewer->m_view.screenW - viewer->m_pendingView->screenW) <
-                                2.0 &&
-                            std::fabs(viewer->m_view.screenH - viewer->m_pendingView->screenH) <
-                                2.0)
-                        {
-                            viewer->m_view.offsetX = viewer->m_pendingView->offsetX;
-                            viewer->m_view.offsetY = viewer->m_pendingView->offsetY;
-                        }
-                        viewer->m_pendingView.reset();
-                        viewer->m_fitMode = false; // restored zoom is explicit, not fit
-                        emit viewer->zoomChanged(
-                            static_cast<int>(viewer->m_view.scale * 100.0 + 0.5));
-                    }
-                    viewer->m_tileCache.clear(); // drop tiles from any previously viewed image
-                    // Stage A: drop GPU textures for the previous image while
-                    // the GL context is current (UI thread only).
-                    if (viewer->context())
-                    {
-                        viewer->makeCurrent();
-                        viewer->m_gpu.clear();
-                        viewer->doneCurrent();
-                    }
-                    viewer->preloadNeighbors(path);
+                    viewer->m_foregroundRequest.reset();
+                    viewer->m_hasHistogram = false;
+                    viewer->setWindowTitle(
+                        QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
                     viewer->update();
-                    emit viewer->imageReady(viewer->m_frame);
+                    emit viewer->loadFailed(path);
                 });
-        });
+            return;
+        }
+        QMetaObject::invokeMethod(
+            qApp,
+            [res, path, gen, guard]()
+            {
+                ImageViewer *viewer = guard.data();
+                if (!viewer || path != viewer->m_currentPath || gen != viewer->m_requestGen)
+                    return; // widget destroyed or user navigated away
+                viewer->m_foregroundRequest.reset();
+                viewer->m_frame = res.frame;
+                // M28 P1-02: no full-size QPixmap materialization on the UI
+                // thread — the paint path renders tiles from the frame, and
+                // the histogram comes from the frame's cached luminance pass.
+                if (!viewer->m_frame || viewer->m_frame->pixels().isNull())
+                {
+                    viewer->m_hasHistogram = false;
+                    viewer->setWindowTitle(
+                        QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
+                    viewer->update();
+                    emit viewer->loadFailed(path);
+                    return;
+                }
+                viewer->computeHistogram();
+                const QFileInfo info(path);
+                viewer->m_fileList = listImages(info.absolutePath());
+                viewer->m_currentIndex = static_cast<int>(viewer->m_fileList.indexOf(path));
+                // Build the render pipeline state (tile grid + fitted Viewport)
+                // exactly as before — now applied on the UI thread post-decode.
+                viewer->m_tiles =
+                    TileGrid(viewer->m_frame->width(), viewer->m_frame->height(), 256);
+                viewer->m_view.screenW = viewer->width();
+                viewer->m_view.screenH = viewer->height();
+                viewer->m_view.fit(viewer->m_frame->width(), viewer->m_frame->height(), 0.95);
+                viewer->m_fitMode = true;
+                const QString position = viewer->m_currentIndex >= 0
+                                             ? QString(" [%1/%2]")
+                                                   .arg(viewer->m_currentIndex + 1)
+                                                   .arg(viewer->m_fileList.size())
+                                             : QString();
+                viewer->setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
+                                           .arg(info.fileName())
+                                           .arg(viewer->m_frame->width())
+                                           .arg(viewer->m_frame->height())
+                                           .arg(position));
+                // P1-7: if a session-restore zoom/pan was requested before the
+                // async decode finished, apply it now. Only reuse the saved pan
+                // offsets when the window size matches (offsets are screen-space);
+                // otherwise keep the fitted pan and just restore the zoom level.
+                if (viewer->m_pendingView)
+                {
+                    viewer->m_view.scale = viewer->m_pendingView->scale;
+                    if (std::fabs(viewer->m_view.screenW - viewer->m_pendingView->screenW) < 2.0 &&
+                        std::fabs(viewer->m_view.screenH - viewer->m_pendingView->screenH) < 2.0)
+                    {
+                        viewer->m_view.offsetX = viewer->m_pendingView->offsetX;
+                        viewer->m_view.offsetY = viewer->m_pendingView->offsetY;
+                    }
+                    viewer->m_pendingView.reset();
+                    viewer->m_fitMode = false; // restored zoom is explicit, not fit
+                    emit viewer->zoomChanged(static_cast<int>(viewer->m_view.scale * 100.0 + 0.5));
+                }
+                viewer->m_tileCache.clear(); // drop tiles from any previously viewed image
+                // Stage A: drop GPU textures for the previous image while
+                // the GL context is current (UI thread only).
+                if (viewer->context())
+                {
+                    viewer->makeCurrent();
+                    viewer->m_gpu.clear();
+                    viewer->doneCurrent();
+                }
+                viewer->preloadNeighbors(path);
+                viewer->update();
+                emit viewer->imageReady(viewer->m_frame);
+            });
+    };
+    // M29 preload promotion: if the previous navigation preloaded this exact
+    // path, promote the matching neighbor preload to the foreground decode — a
+    // queued match escalates to Decode priority, a running match reuses the
+    // in-flight decode, and a finished/cancelled match resubmits at Decode
+    // priority (already cache-warm). Other preloads were cancelled by
+    // takeMatchingPreload above. A promotion that returns nullptr has already
+    // delivered its explicit rejection error through the callback, so never
+    // silently fall back to a second submission.
+    if (matchingPreload)
+        m_foregroundRequest =
+            ImageRepository::instance().promotePreloadAsync(matchingPreload, std::move(onLoaded));
+    else
+        m_foregroundRequest = ImageRepository::instance().loadAsyncCancellable(path.toStdString(),
+                                                                               std::move(onLoaded));
 }
 
 void ImageViewer::setViewTransform(const Viewport &v)
@@ -264,6 +316,10 @@ void ImageViewer::preloadNeighbors(const QString &path)
     if (m_currentIndex < 0)
         return;
 
+    // M29: drop any preloads still tracked from the previous navigation so the
+    // vector holds at most the previous/next pair of the CURRENT image.
+    cancelPreloads();
+
     for (int delta = -1; delta <= 1; ++delta)
     {
         const int i = m_currentIndex + delta;
@@ -271,11 +327,48 @@ void ImageViewer::preloadNeighbors(const QString &path)
             continue;
         if (m_fileList[i] == path)
             continue;
-        // Warm the cache only (off UI thread). Do NOT call loadPixmap(): it
-        // assigns m_frame, which would race with the UI thread's frame() read.
-        ImageRepository::instance().loadAsync(m_fileList[i].toStdString(),
-                                              [](const ImageRepository::Result &) {});
+        // Warm the cache only (off UI thread, Background priority, no histogram).
+        // Do NOT call loadPixmap(): it assigns m_frame, which would race with
+        // the UI thread's frame() read. Best-effort: a queued preload may be
+        // skipped by the next navigation; a running decode may finish and
+        // safely warm the cache. At most two handles are retained, each bound
+        // to the path it prefetches so a navigation back to a neighbor can
+        // promote this handle to the foreground decode (takeMatchingPreload).
+        ImageRepository::AsyncRequestHandle h =
+            ImageRepository::instance().preloadAsync(m_fileList[i].toStdString());
+        if (h)
+            m_neighborPreloads.push_back({m_fileList[i], std::move(h)});
     }
+}
+
+void ImageViewer::cancelCurrentLoad()
+{
+    ImageRepository::instance().cancelAsync(m_foregroundRequest);
+}
+
+void ImageViewer::cancelPreloads()
+{
+    for (auto &p : m_neighborPreloads)
+        ImageRepository::instance().cancelAsync(p.handle);
+    m_neighborPreloads.clear();
+}
+
+ImageRepository::AsyncRequestHandle ImageViewer::takeMatchingPreload(const QString &path)
+{
+    // Consume the first tracked preload that exactly matches `path` and cancel
+    // every other tracked preload, so a navigation back to a preloaded neighbor
+    // can be promoted to the foreground decode instead of being re-queued. The
+    // vector is emptied; at most one match is ever retained.
+    ImageRepository::AsyncRequestHandle match;
+    for (auto &p : m_neighborPreloads)
+    {
+        if (!match && p.path == path)
+            match = std::move(p.handle);
+        else
+            ImageRepository::instance().cancelAsync(p.handle);
+    }
+    m_neighborPreloads.clear();
+    return match;
 }
 
 void ImageViewer::emitZoom()
@@ -461,8 +554,11 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
         update();
     }
 
-    // Pixel Inspector (P1 #6): read the pixel under the cursor directly from
-    // the ImageFrame (RGB24/RGBA32), using the inverse of the Viewport transform.
+    // Pixel Inspector (P1 #6): read the pixel under the cursor from the shared
+    // format-aware sampler (core/image/ImageBuffer.h), using the inverse of the
+    // Viewport transform. samplePixel canonicalises RGB/RGBA/BGR/BGRA/grayscale
+    // to RGBA and reports invalid (never an out-of-bounds read) for out-of-range
+    // or truncated buffers.
     int ix = -1, iy = -1, r = 0, g = 0, b = 0, a = 255;
     bool valid = false;
     if (m_frame && m_frame->isValid())
@@ -473,23 +569,12 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
         const double imgY = (event->pos().y() - m_view.offsetY) / m_view.scale;
         ix = static_cast<int>(std::floor(imgX));
         iy = static_cast<int>(std::floor(imgY));
-        const int iw = m_frame->width();
-        const int ih = m_frame->height();
-        if (ix >= 0 && ix < iw && iy >= 0 && iy < ih)
-        {
-            const ImageBuffer view = m_frame->pixels().view();
-            if (view.channelsPerPixel() >= 3)
-            {
-                const uint8_t *p = view.data + static_cast<size_t>(iy) * view.stride() +
-                                   static_cast<size_t>(ix) * view.channelsPerPixel();
-                r = p[0];
-                g = p[1];
-                b = p[2];
-                if (view.channelsPerPixel() >= 4)
-                    a = p[3];
-                valid = true;
-            }
-        }
+        const PixelRGBA px = samplePixel(m_frame->pixels(), ix, iy);
+        r = px.r;
+        g = px.g;
+        b = px.b;
+        a = px.a;
+        valid = px.valid;
     }
     // P0-2/PixelInspector: also surface the original high-bit-depth sample when
     // available. rawKind: 0 = 8-bit only, 1 = RAW preview (demosaic 8-bit),

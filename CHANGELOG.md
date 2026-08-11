@@ -6,6 +6,122 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed — shared format-aware pixel sampler; Pixel Inspector invalidates on load/leave/close
+
+- `ImageBuffer::samplePixel` is the single format-aware sampler behind the Pixel
+  Inspector: it canonicalises RGB24 / RGBA32 / BGR24 / BGRA32 / Grayscale8 to
+  RGBA from one source of truth and reports `valid=false` (never an
+  out-of-bounds read) on null, out-of-range or truncated buffers.
+- `ImageViewer` now samples through `samplePixel()` instead of its own
+  channels-based pointer arithmetic, so every format the decoder can produce is
+  read correctly.
+- The Pixel Inspector status is invalidated synchronously at the three
+  user-observable lifecycle boundaries: a new `setImage()` (before the next
+  decode runs), cursor `Leave`, and window close — the stale sample no longer
+  lingers between images.
+- Regression coverage: `test_pixelcontroller` core checks + `workflow_ux_tests`
+  Workflow 9 proves the grayscale value/coordinate reads and the synchronous
+  invalidation at load / leave / close.
+
+### Changed — PreviewPanel loads a scaled, cancellable preview (no more duplicate full decode)
+
+- `PreviewPanel` no longer runs a full `ImageRepository::loadAsync` / DecodePool
+  decode that duplicated `ImageViewer` work and retained a full `QPixmap`. It
+  now submits a SINGLE scaled decode (max edge 512) at Thumbnail priority: the
+  scaled result is cached in the existing `CacheLevel::Preview` layer (keyed by
+  `ImageRepository::makeKey(path)` plus the max edge), and the UI thread only
+  ever materializes a small (≤ 512) `QPixmap`.
+- Every `setImage()` cancels and releases the previous Thumbnail task and
+  increments the request generation, so queued stale preview work is dropped
+  before decoding and a superseded delivery can never overwrite the current
+  preview (A → B → A safe). The destructor soft-cancels the in-flight task, and
+  every accepted terminal delivery releases the matching completed handle
+  (success or failure), so a finished task is never retained until the next
+  request or destruction.
+- The worker computes the preview stats (sample means over the scaled buffer),
+  reads the original dimensions via `QImageReader` (applying the EXIF
+  orientation — width/height are swapped for 90° rotations because
+  `QImageReader::size()` reports the encoded size) and the file size, falling
+  back to the decoded scaled dimensions when header probing fails, checks
+  `TaskContext` cancellation before and after the work, and marshals an owned
+  `QImage` + stats + metadata to the UI thread through `qApp` with `QPointer` /
+  path / generation guards (lifetime closure unchanged).
+  A scheduler rejection stays no-image (terminal state).
+- New observability for tests/embedding: `sourceImageSize()`, `previewPixelSize()`
+  and `previewCacheKey()`.
+- Regression coverage: `workflow_ux_tests` (Workflow 8) proves the preview uses
+  exactly one Thumbnail task and zero Decode tasks, preserves source
+  dimensions, caps the preview pixmap at a 512 max edge, lands in the Preview
+  cache and never warms the FullImage cache (including on a cache re-select);
+  `m27_lifetime_tests` gates/drains the Thumbnail pool for the preview lifetime
+  and rejection cases (viewer stays on DecodePool) and pins the same
+  deterministic pool/cache/size checks on the real 24MP preview.
+
+### Changed — rapid navigation cancels obsolete full-resolution loads (M29 cancellable preloads)
+
+- `ImageViewer` now cancels the previous foreground decode and any nonmatching
+  neighbor preloads at the start of every `setImage()` (and cancels everything
+  on close / destroy); a neighbor preload that matches the new path is promoted
+  to the foreground decode instead of being cancelled. Rapid browsing no longer
+  leaves queued obsolete full-resolution work behind: superseded queued decodes
+  are dropped instead of running.
+- Neighbor preloads run at Background priority (never Decode) via the new
+  additive `ImageRepository::preloadAsync()` — disk cache on, no histogram,
+  best-effort cancellation — and at most the previous/next handles are retained.
+- New additive opaque async API: `loadAsyncCancellable()` / `preloadAsync()`
+  return an `AsyncRequestHandle`, and `cancelAsync(handle&)` soft-cancels the
+  scheduler task, suppresses the client callback of a cancelled request, and
+  clears the caller's handle. `loadAsync()` and its exactly-once rejection
+  contract are unchanged (a thin wrapper), so existing callbacks stay compatible.
+- Same-path promotion (`promotePreloadAsync()`): navigating to a path that is
+  still being preloaded promotes that neighbor request instead of blindly
+  cancelling it — a running preload is reused in place (one decode total), a
+  queued preload escalates to Decode priority, and a finished preload
+  resubmits and resolves from the already-warm FullImage cache.
+- `ImageRepository::load()` honors `generateHistogram` on the FullImage memory
+  fast path, so a histogram-free preload no longer strips the histogram from the
+  later normal viewer load.
+- Regression coverage: `workflow_ux_tests` (Workflow 7) proves rapid navigation
+  deterministically cancels stale queued neighbor preload work and promotes the
+  matching neighbor to the foreground decode (release-gated Background blocker
+  + scheduler metrics + cache probe + exactly-one DecodePool submission);
+  `m27_repository_tests` adds cancelled queued foreground / Background preload
+  suites (no callback, no cache warm, scheduler + graph convergence),
+  histogram preservation, and a promotion suite pinning queued escalation and
+  in-place reuse.
+
+### Changed — ThumbnailCache is now a bounded 512 MiB LRU cache (M29 P2-05)
+
+- `ThumbnailCache` keeps the on-disk `thumbnails/` folder at or below
+  `maxBytes()` (default 512 MiB), tracking the actual file sizes in an
+  in-memory index lazily built once on first access, so thumbnails written by
+  an earlier process already count against the budget.
+- `put()` persists via `QSaveFile` (atomic replacement, never a torn PNG), then
+  evicts least-recently-used entries — seeded from file mtime on startup,
+  refreshed by in-session hits, stable filename tie-break — until usage fits
+  the cap; a zero budget persists nothing, and an entry larger than the whole
+  budget is evicted immediately.
+- New thread-safe `maxBytes()`, `setMaxBytes()`, `totalBytes()`, `clear()`;
+  `setMaxBytes()` prunes immediately, and the first `totalBytes()`/`get()`
+  call lazily scans existing files and enforces the current cap. `get()`
+  re-accounts a file that appeared or was overwritten (with a different size)
+  after the index was built — before decoding it — drops accounting + file
+  (best-effort) for corrupt or externally-removed entries, and refreshes
+  recency on a hit.
+- The cap is best-effort under filesystem errors: if a file cannot be deleted
+  (e.g. an OS lock), its bytes stay accounted and pruning skips it rather than
+  looping, so reported usage stays accurate while the disk resists.
+- Regression coverage: `testThumbnailCacheCapacity` in
+  `src/test_browse_convergence.cpp` pins the bounded-bytes contract,
+  deterministic old-vs-recent eviction, clear = 0, default-budget restore,
+  the lazy startup scan, prune-on-lower-cap, external-file drift, and
+  external-overwrite re-accounting.
+
+### Changed — Compare diff overlays/metrics run as cancellable latest-wins Analysis batches
+
+- Compare diff overlays and metrics now run as cancellable latest-wins Analysis
+  batches, keeping threshold / highlight / base changes responsive and correct.
+
 ### Changed — Compare opens without freezing the UI (M28 P1-01)
 
 - `CompareWorkspace::setImages()` now loads every image on the decode worker

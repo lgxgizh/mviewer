@@ -1,10 +1,15 @@
 #pragma once
 
+#include <QHash>
 #include <QImage>
 #include <QMutex>
 #include <QString>
 
+#include <set>
+#include <utility>
+
 // M25: on-disk thumbnail cache with a real cache identity.
+// M29/P2-05: bounded, thread-safe, approximately-LRU on-disk thumbnail cache.
 //
 // The key covers source path + source modification identity (mtime, size) +
 // REQUESTED THUMBNAIL SIZE + a schema version, so:
@@ -12,29 +17,85 @@
 //     "cache hits" masquerading as higher-resolution thumbnails);
 //   * a schema change (new algorithm / payload format) invalidates old files.
 //
-// Thread-safe: the worker threads read and write through here (QImage payload
-// is safe off the GUI thread; QPixmap is not).
+// Capacity model: the thumbnail folder is kept at or below maxBytes() (default
+// 512 MiB). Usage is tracked from the ACTUAL on-disk file sizes in an in-memory
+// index that is lazily built once from the existing *.png files on the first
+// public access (get/put/totalBytes/setMaxBytes/clear), so files left behind
+// by an earlier process already count against the budget; that same first
+// access enforces the current cap. put() evicts the least-recently-used
+// entries until usage fits the cap; a successful get() refreshes in-memory
+// recency and best-effort bumps the file mtime so the LRU order also survives
+// process restarts. A file another process adds after the index was built is
+// picked up and counted by get(). The cap is best-effort: if a file cannot be
+// deleted (e.g. an OS lock), its bytes stay counted and pruning moves on
+// instead of looping.
+//
+// Thread-safe: the thumbnail worker threads read and write through here
+// (QImage payload is safe off the GUI thread; QPixmap is not). All disk I/O
+// happens on the caller's thread — nothing here runs on the GUI thread.
 class ThumbnailCache
 {
   public:
     // Bump when the payload format or the key semantics change.
     static constexpr int kSchemaVersion = 2;
 
+    // Default budget for the on-disk thumbnail folder: 512 MiB.
+    static constexpr quint64 kDefaultMaxBytes = 512ULL * 1024ULL * 1024ULL;
+
     static ThumbnailCache &instance();
 
     // Returns true and fills `out` when a cache entry exists for `path` at
-    // `size` (and the source file identity still matches).
+    // `size` (and the source file identity still matches). A hit refreshes
+    // recency and counts the file if it appeared after indexing; a corrupt
+    // entry is removed best-effort.
     bool get(const QString &path, int size, QImage &out);
 
-    // Persists `img` (a thumbnail) for `path` at `size`.
+    // Persists `img` (a thumbnail) for `path` at `size`, then evicts
+    // least-recently-used entries while total usage exceeds `maxBytes()`.
     void put(const QString &path, int size, const QImage &img);
 
     // The identity key used for `path` at `size` (public for tests).
     static QString keyFor(const QString &path, int size);
 
+    // Current byte budget for the on-disk thumbnail folder.
+    quint64 maxBytes() const;
+
+    // On-disk bytes currently accounted for (actual file sizes, not pixel
+    // payloads). Always <= maxBytes() after put()/setMaxBytes(). The first
+    // call lazily indexes the existing *.png files and enforces the cap.
+    quint64 totalBytes();
+
+    // Sets the byte budget and prunes immediately so usage falls to <= `n`.
+    void setMaxBytes(quint64 n);
+
+    // Deletes every cached thumbnail best-effort and resets usage to zero;
+    // bytes the filesystem refuses to remove stay accounted.
+    void clear();
+
   private:
+    struct Entry
+    {
+        quint64 fileSize = 0; // on-disk byte size of the *.png file
+        quint64 recency = 0;  // monotonic LRU clock; larger = more recent
+    };
+
     ThumbnailCache() = default;
     QString cacheDir() const;
 
-    QMutex m_mutex;
+    void ensureIndexed();
+    void ensureReady();
+    void insertEntry(const QString &key, quint64 fileSize);
+    void touchEntry(const QString &key);
+    void dropEntry(const QString &key);
+    void removeKey(const QString &key, const QString &file);
+    void pruneToCap();
+    static bool writeFileAtomically(const QString &file, const QImage &img);
+
+    mutable QMutex m_mutex;
+    QHash<QString, Entry> m_entries;
+    std::set<std::pair<quint64, QString>> m_lru; // (recency, key), oldest first
+    quint64 m_clock = 0;
+    quint64 m_totalBytes = 0;
+    quint64 m_maxBytes = kDefaultMaxBytes;
+    bool m_indexed = false;
 };

@@ -18,6 +18,8 @@
 #include "imageviewer.h"
 #include "previewpanel.h"
 
+#include "core/cache/CacheManager.h"
+#include "core/image/ImageRepository.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QApplication>
@@ -29,6 +31,7 @@
 #include <QThread>
 #include <QWidget>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <cstdio>
@@ -94,21 +97,22 @@ void churnStack()
 int childPreviewDestroy()
 {
     auto &sched = TaskScheduler::instance();
-    sched.setQueueMaxThreads(Priority::Decode, 1);
+    sched.setQueueMaxThreads(Priority::Thumbnail, 1);
     const QString dir = makeImageDir("preview", 1);
     const QString path = dir + "/img_00000.png";
 
-    // Occupy the single Decode worker: the panel's loadAsync task is ACCEPTED
+    // Occupy the single Thumbnail worker: the panel's preview task is ACCEPTED
     // but cannot run until after the panel is destroyed.
-    auto blocker = sched.submit(Priority::Decode, [](const TaskContext &)
+    auto blocker = sched.submit(Priority::Thumbnail, [](const TaskContext &)
                                 { std::this_thread::sleep_for(std::chrono::milliseconds(1200)); });
     {
         PreviewPanel panel;
         panel.resize(320, 240);
         panel.setImage(path);
-        // panel destroyed here — decode still queued.
+        // panel destroyed here — preview task still queued.
     }
-    // The decode now runs and its worker callback fires on a destroyed panel.
+    // The preview task now runs and its worker callback fires on a destroyed
+    // panel (the destructor cancelled it, so the worker exits before decoding).
     const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(3);
     while (std::chrono::steady_clock::now() < until)
     {
@@ -116,8 +120,8 @@ int childPreviewDestroy()
             churnStack(); // reuse the freed stack region while late callbacks fire
         pump(5);
     }
-    sched.drain(PoolType::DecodePool, std::chrono::seconds(15));
-    const auto m = sched.metrics(PoolType::DecodePool);
+    sched.drain(PoolType::ThumbnailPool, std::chrono::seconds(15));
+    const auto m = sched.metrics(PoolType::ThumbnailPool);
     if (m.pending != 0 || m.active_tasks != 0)
         return 2;
     QDir qdir(dir);
@@ -194,14 +198,14 @@ void testPreviewABA()
     printf("\n[2. PreviewPanel A->B->A: newest generation wins]\n");
     fflush(stdout);
     auto &sched = TaskScheduler::instance();
-    sched.setQueueMaxThreads(Priority::Decode, 1);
+    sched.setQueueMaxThreads(Priority::Thumbnail, 1);
 
     const QString dir = makeImageDir("aba", 3);
     const QString a1 = dir + "/img_00000.png";
     const QString b = dir + "/img_00001.png";
     const QString a2 = dir + "/img_00000.png"; // same path as A1 on purpose
 
-    auto blocker = sched.submit(Priority::Decode, [](const TaskContext &)
+    auto blocker = sched.submit(Priority::Thumbnail, [](const TaskContext &)
                                 { std::this_thread::sleep_for(std::chrono::milliseconds(800)); });
 
     PreviewPanel panel;
@@ -211,13 +215,13 @@ void testPreviewABA()
     panel.setImage(a2); // queued (gen 3) — same path as the first request
     CHECK(!panel.hasImage(), "no preview while decodes are still queued");
 
-    sched.drain(PoolType::DecodePool, std::chrono::seconds(15));
+    sched.drain(PoolType::ThumbnailPool, std::chrono::seconds(15));
     pump(1000); // let the marshaled deliveries run
     CHECK(panel.hasImage(), "newest generation delivered");
     pump(1500);
     CHECK(panel.hasImage(), "no stale overwrite after settlement");
-    const auto m = sched.metrics(PoolType::DecodePool);
-    CHECK(m.pending == 0 && m.active_tasks == 0, "pools converge after A->B->A");
+    const auto m = sched.metrics(PoolType::ThumbnailPool);
+    CHECK(m.pending == 0 && m.active_tasks == 0, "Thumbnail pool converges after A->B->A");
     CHECK(sched.graphMetrics().handles == 0, "no handle residue after A->B->A");
 
     QDir qdir(dir);
@@ -258,16 +262,16 @@ void testViewerABA()
 }
 
 // ─── 4. P5: rejected requests must reach a terminal UI state ───────────────
-// A paused DecodePool rejects loadAsync submissions. The panel/viewer must
-// NOT sit in an eternal loading state: the panel shows no-image, the viewer
-// shows the failure title.
+// A paused ThumbnailPool rejects preview submissions; a paused DecodePool
+// rejects viewer submissions. The panel/viewer must NOT sit in an eternal
+// loading state: the panel shows no-image, the viewer shows the failure title.
 void testRejectionReachesTerminalState()
 {
     printf("\n[4. rejected requests reach a terminal UI state]\n");
     fflush(stdout);
     auto &sched = TaskScheduler::instance();
 
-    sched.pause(PoolType::DecodePool);
+    sched.pause(PoolType::ThumbnailPool);
     {
         PreviewPanel panel;
         panel.resize(320, 240);
@@ -275,18 +279,28 @@ void testRejectionReachesTerminalState()
         pump(300);
         CHECK(!panel.hasImage(),
               "rejected preview request leaves no-image state (no eternal loading)");
+        CHECK(panel.sourceImageSize().isEmpty(),
+              "rejected preview request exposes an empty source size");
+        CHECK(panel.previewPixelSize().isEmpty(),
+              "rejected preview request exposes an empty preview size");
     }
+    sched.resume(PoolType::ThumbnailPool);
     {
+        sched.pause(PoolType::DecodePool);
         ImageViewer viewer;
         viewer.resize(400, 300);
         viewer.setImage("C:/definitely/missing/viewer.png");
         pump(300);
         CHECK(viewer.windowTitle().contains("无法加载"),
               "rejected viewer request reaches the failure title (terminal state)");
+        sched.resume(PoolType::DecodePool);
     }
-    sched.resume(PoolType::DecodePool);
+    const auto mt = sched.metrics(PoolType::ThumbnailPool);
+    CHECK(mt.pending == 0 && mt.active_tasks == 0,
+          "Thumbnail pool converges after rejected preview request");
     const auto m = sched.metrics(PoolType::DecodePool);
-    CHECK(m.pending == 0 && m.active_tasks == 0, "pools converge after rejected UI requests");
+    CHECK(m.pending == 0 && m.active_tasks == 0,
+          "Decode pool converges after rejected viewer request");
 }
 
 // ─── 5. P9: real 24MP UI completion latency ────────────────────────────────
@@ -326,7 +340,7 @@ void testPreviewUILatency24MP()
     printf("\n[5. P9: 24MP preview completion UI event gap]\n");
     fflush(stdout);
     auto &sched = TaskScheduler::instance();
-    sched.setQueueMaxThreads(Priority::Decode, 1);
+    sched.setQueueMaxThreads(Priority::Thumbnail, 1);
 
     const QString dir = QDir::tempPath() + "/mviewer_m27_24mp_" +
                         QString::number(QCoreApplication::applicationPid());
@@ -343,6 +357,20 @@ void testPreviewUILatency24MP()
         big.save(path, "PNG");
     }
 
+    auto &repo = ImageRepository::instance();
+    const std::string key = repo.makeKey(path.toStdString());
+    CHECK(sched.drain(PoolType::ThumbnailPool, std::chrono::seconds(15)),
+          "24MP preview: Thumbnail pool drained before measuring");
+    CHECK(sched.drain(PoolType::DecodePool, std::chrono::seconds(15)),
+          "24MP preview: Decode pool drained before measuring");
+    const uint64_t thumbSubmittedBefore = sched.metrics(PoolType::ThumbnailPool).submitted;
+    const uint64_t decodeSubmittedBefore = sched.metrics(PoolType::DecodePool).submitted;
+    {
+        ImageData probe;
+        CHECK(!CacheManager::instance().getMemory(CacheLevel::FullImage, key, probe),
+              "24MP preview: FullImage cache does not hold the key beforehand");
+    }
+
     PreviewPanel panel;
     panel.resize(320, 240);
     panel.setImage(path);
@@ -354,9 +382,28 @@ void testPreviewUILatency24MP()
            meter.calls);
     CHECK(panel.hasImage(), "24MP preview delivered");
     // The preview completion must not stall the UI thread for a quarter
-    // second. If this ever trips, move the fit-scale + pixmap materialization
-    // to the worker (the frame is already off-thread).
+    // second. The scaled decode runs on the Thumbnail worker; the UI thread
+    // only materializes the <=512 QPixmap.
     CHECK(worstMs < 250.0, "24MP preview completion UI gap < 250 ms");
+
+    CHECK(sched.metrics(PoolType::ThumbnailPool).submitted == thumbSubmittedBefore + 1,
+          "24MP preview: exactly one Thumbnail task serves the preview");
+    CHECK(sched.metrics(PoolType::DecodePool).submitted == decodeSubmittedBefore,
+          "24MP preview: zero Decode tasks serve the preview");
+    {
+        ImageData probe;
+        CHECK(!CacheManager::instance().getMemory(CacheLevel::FullImage, key, probe),
+              "24MP preview: FullImage cache is never touched");
+        CHECK(CacheManager::instance().getMemory(
+                  CacheLevel::Preview, PreviewPanel::previewCacheKey(path.toStdString()), probe),
+              "24MP preview: scaled result lands in the Preview cache");
+    }
+    CHECK(panel.sourceImageSize() == QSize(6000, 4000),
+          "24MP preview: source dimensions are preserved");
+    const QSize previewSize = panel.previewPixelSize();
+    CHECK(previewSize.width() > 0 && previewSize.height() > 0 &&
+              std::max(previewSize.width(), previewSize.height()) <= 512,
+          "24MP preview: preview pixmap is capped at a 512 max edge");
 
     QDir qdir(dir);
     qdir.removeRecursively();
@@ -428,7 +475,9 @@ int main(int argc, char **argv)
 
     auto &sched = TaskScheduler::instance();
     sched.resume(PoolType::DecodePool);
+    sched.resume(PoolType::ThumbnailPool);
     sched.setPoolMaxThreads(PoolType::DecodePool, qMax(1, QThread::idealThreadCount()));
+    sched.setPoolMaxThreads(PoolType::ThumbnailPool, qMax(1, QThread::idealThreadCount()));
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);

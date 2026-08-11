@@ -38,7 +38,10 @@ struct PixelDelta
 struct PixelController
 {
     // Read the pixel at (imgX,imgY) from each frame's full-res pixels.
-    // Returns one PixelSample per frame (valid=false if out of bounds).
+    // Returns one PixelSample per frame (valid=false if out of bounds or the
+    // frame's buffer is truncated). Sampling goes through the shared
+    // samplePixel() helper, so every PixelFormat is canonicalised to RGB and
+    // no out-of-bounds read can occur.
     std::vector<PixelSample> probe(const std::vector<ImageData> &frames, int imgX, int imgY) const
     {
         std::vector<PixelSample> out;
@@ -49,18 +52,11 @@ struct PixelController
             s.cellIndex = static_cast<int>(i);
             s.x = imgX;
             s.y = imgY;
-            const ImageData &f = frames[i];
-            if (!f.isNull() && imgX >= 0 && imgY >= 0 && imgX < f.width && imgY < f.height)
-            {
-                const ImageBuffer v = f.view();
-                const uint8_t *p = v.data +
-                                   static_cast<size_t>(imgY) * static_cast<size_t>(v.stride()) +
-                                   static_cast<size_t>(imgX) * v.channelsPerPixel();
-                s.r = p[0];
-                s.g = p[1];
-                s.b = p[2];
-                s.valid = true;
-            }
+            const PixelRGBA px = samplePixel(frames[i], imgX, imgY);
+            s.r = px.r;
+            s.g = px.g;
+            s.b = px.b;
+            s.valid = px.valid;
             out.push_back(s);
         }
         return out;

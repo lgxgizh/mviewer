@@ -3,14 +3,17 @@
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/ExportReport.h"
 #include "core/compare/CompareEngine.h"
+#include "core/compare/DifferenceEngine.h"
 #include "core/compare/Histogram.h"
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
+#include "core/scheduler/TaskScheduler.h"
 
 #include <QCheckBox>
 #include <QComboBox>
 #include <QGridLayout>
 #include <QHBoxLayout>
+#include <QImage>
 #include <QLabel>
 #include <QMap>
 #include <QMouseEvent>
@@ -26,6 +29,7 @@
 #include <QVector>
 #include <QWidget>
 #include <atomic>
+#include <cstdint>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -330,16 +334,45 @@ class CompareWorkspace : public QWidget
         return m_focusIndex >= 0 ? m_focusIndex : 0;
     }
 
-    // Paints the most recent async diff result (from the EventBus) onto the
-    // matching cell. Called on the UI thread via QueuedConnection.
-    void refreshDiffOverlay();
     // Repaints every diff overlay after a user-visible compare state change.
     void refreshAllDiffOverlays();
 
-    // EventBus subscription id for "CompareEngine.DiffResult"; unsubscribed in
-    // the destructor because the EventBus is a process-global singleton and a
-    // live subscription into a destroyed widget would crash.
-    int m_diffSubId = 0;
+    // M29: async batch diff result — computed by a single Analysis-pool task
+    // and delivered to the UI thread via qApp. Value/POD data only (QImage is
+    // implicitly shared; no widget is referenced).
+    struct DiffBatchResult
+    {
+        uint64_t generation = 0;
+        int baseIdx = 0;
+        int targetIdx = -1;
+        bool sizeMismatch = false; // first non-base cell differs in size
+        bool metricsValid = false;
+        double psnr = 0.0;
+        double ssim = 0.0;
+        bool hasStats = false;
+        DifferenceEngine::DiffStats stats;
+        bool hasRoiStats = false;
+        DifferenceEngine::DiffStats roiStats;
+
+        struct CellOverlay
+        {
+            int index = -1;
+            bool sizeMismatch = false;
+            QImage overlay;
+            double opacity = 0.5;
+        };
+        std::vector<CellOverlay> overlays;
+    };
+    void applyDiffBatchResult(const DiffBatchResult &result);
+
+    // M29: latest-wins generation + handle of the in-flight batch diff task.
+    uint64_t m_diffGen = 0;
+    TaskScheduler::TaskHandle m_diffTask;
+    // True while rebuildCells() is draining/recreating the panes. The terminal
+    // refreshAllDiffOverlays() at the end of rebuildCells() covers the restored
+    // ROI, so applySelectionToAll() skips scheduling its own refresh in that
+    // window (avoids a duplicate batch submission).
+    bool m_rebuildingCells = false;
 
     // ── M16.2: per-cell image adjustments ──
     struct CellAdjust
@@ -362,7 +395,7 @@ class CompareWorkspace : public QWidget
     };
     std::vector<CellAdjust> m_cellAdjusts; // per-cell adjustment state
     int m_editIdx = -1;                    // currently selected cell for editing
-    ImageData applyAdjusts(const ImageData &src, const CellAdjust &a) const;
+    static ImageData applyAdjusts(const ImageData &src, const CellAdjust &a);
 
     // Edit panel widgets (inside side panel)
     QWidget *m_editPanel = nullptr;
@@ -386,12 +419,10 @@ class CompareWorkspace : public QWidget
 
     // ── M16.4: quick PSNR/SSIM metrics ──
     QLabel *m_metricLabel = nullptr;
-    void updateMetrics();
 
     // ── M16.7: adjusted-aware diff/metrics + per-pane histogram overlay ──
     ImageData adjustedPixels(int cellIdx) const;
     mviewer::core::Histogram histogramForImage(int idx) const;
-    void refreshCellDiff(int idx);
     void onAdjEditFinished();
     void refreshCellHist(int idx);
     void positionCellHists();
