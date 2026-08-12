@@ -188,11 +188,13 @@ jobs:
 
       - name: Package portable zip
         run: |
-          $payload = & ./.github/scripts/release_payload.ps1 -BinDir build_msvc/bin
+          $payload = @(& ./.github/scripts/release_payload.ps1 -BinDir build_msvc/bin)
           try {
-            Compress-Archive -Path $payload, README.md, LICENSE* -DestinationPath mviewer-win-x64.zip
+            $files = @($payload) + @('README.md') + @(Get-ChildItem LICENSE* -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+            Compress-Archive -Path $files -DestinationPath mviewer-win-x64.zip
           } catch {
-            Compress-Archive -Path $payload, README.md -DestinationPath mviewer-win-x64.zip
+            $files = @($payload) + @('README.md')
+            Compress-Archive -Path $files -DestinationPath mviewer-win-x64.zip
           }
 
       - name: Stage installer files
