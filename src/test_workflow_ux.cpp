@@ -1493,6 +1493,186 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
               "cache gate: repeated identical transform push neither invalidates nor repaints");
     }
 
+    // ── Wheel-zoom anchor regression ─────────────────────────────────────────
+    // CompareWorkspace anchors wheel zoom in CENTER-RELATIVE coordinates
+    // (RawImageView interprets offset as a pan delta from the widget center),
+    // so the wheel position must be converted to center-relative before
+    // applying the transform. Off-center wheel zoom must keep the same
+    // image-space point under the cursor in the synchronized, the independent,
+    // and both per-axis mixed modes, and a limit hit must derive the offset
+    // from the effective (clamped) factor instead of re-scaling after the
+    // offset was already computed.
+    {
+        RawImageView *pane0 = nullptr;
+        RawImageView *pane1 = nullptr;
+        for (RawImageView *v : ws->findChildren<RawImageView *>())
+        {
+            if (!v || !v->isVisible() || !v->isEnabled())
+                continue;
+            if (v->cellIndex() == 0)
+                pane0 = v;
+            else if (v->cellIndex() == 1)
+                pane1 = v;
+        }
+        CHECK(pane0 != nullptr && pane1 != nullptr,
+              "wheel gate: normal grid exposes both RawImageView panes");
+        if (pane0 && pane1)
+        {
+            // Deterministic 40x transform: the 32x32 source (1280px) overflows
+            // every pane dimension, so any cursor position maps inside the image
+            // and the anchor math is not perturbed by offset clamping.
+            const double kScale = 40.0;
+            ws->engine().setScale(kScale);
+            ws->engine().setOffset(12.0, -7.0);
+            ws->update();
+            pump(60);
+            const QPoint cursor(pane0->width() * 3 / 4, pane0->height() / 4);
+            auto wheelDrift = [pane0, cursor](int dy)
+            {
+                const QPointF before = pane0->widgetToImage(cursor);
+                QWheelEvent ev(QPointF(cursor), pane0->mapToGlobal(cursor), QPoint(0, 0),
+                               QPoint(0, dy), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase,
+                               false);
+                QApplication::sendEvent(pane0, &ev);
+                pump(30);
+                const QPointF after = pane0->widgetToImage(cursor);
+                return qAbs(after.x() - before.x()) + qAbs(after.y() - before.y());
+            };
+
+            // Synchronized path: one wheel must keep the image point under the
+            // off-center cursor fixed and push the same transform to both panes.
+            CHECK(wheelDrift(120) < 0.2,
+                  "wheel gate: sync wheel zoom keeps the image point under the cursor");
+            CHECK(qAbs(pane0->scale() - pane1->scale()) < 1e-9 &&
+                      pane0->offset() == pane1->offset(),
+                  "wheel gate: synchronized wheel zoom updates all panes uniformly");
+            CHECK(qAbs(pane0->scale() - ws->engine().syncTransform().scale) < 1e-9,
+                  "wheel gate: pane scale matches the engine sync scale after wheel");
+
+            // Independent path: only the hovered pane changes, with the same
+            // center-relative anchor semantics.
+            ws->setSyncEnabled(false);
+            pump(20);
+            ws->engine().setCellScale(0, kScale);
+            ws->engine().setCellOffset(0, 12.0, -7.0);
+            ws->engine().setCellScale(1, kScale);
+            ws->engine().setCellOffset(1, -9.0, 5.0);
+            ws->update();
+            pump(60);
+            const double p1Scale = pane1->scale();
+            const QPointF p1Off = pane1->offset();
+            CHECK(wheelDrift(120) < 0.2,
+                  "wheel gate: independent wheel zoom keeps the image point under the cursor");
+            CHECK(pane0->scale() > kScale,
+                  "wheel gate: independent wheel zoom grows the hovered pane");
+            CHECK(qAbs(pane1->scale() - p1Scale) < 1e-9 && pane1->offset() == p1Off,
+                  "wheel gate: independent wheel zoom leaves the other pane untouched");
+
+            // Upper limit: a wheel past 50x must clamp to the ceiling and keep
+            // the anchor (offset derived from the effective factor, not a post-zoom
+            // clamp that would recompute the offset with the unclamped factor).
+            ws->setSyncEnabled(true);
+            pump(20);
+            ws->engine().setScale(48.0);
+            ws->engine().setOffset(12.0, -7.0);
+            ws->update();
+            pump(60);
+            CHECK(wheelDrift(120) < 0.2,
+                  "wheel gate: sync wheel zoom keeps the anchor at the 50x ceiling");
+            CHECK(qAbs(pane0->scale() - 50.0) < 1e-9,
+                  "wheel gate: sync wheel zoom clamps to the 50x ceiling");
+            const QPointF limOff = pane0->offset();
+            const quint64 ceilingRenders =
+                pane0->property("baseSurfaceRenderCount").toULongLong();
+            CHECK(wheelDrift(120) < 0.2,
+                  "wheel gate: further wheel at the ceiling keeps the anchor");
+            CHECK(qAbs(pane0->scale() - 50.0) < 1e-9 && pane0->offset() == limOff,
+                  "wheel gate: scale stays at 50x with an identical transform");
+            CHECK(pane0->property("baseSurfaceRenderCount").toULongLong() == ceilingRenders,
+                  "wheel gate: ceiling no-op schedules no pane re-rasterization");
+
+            // Zero wheel delta is ignored: no transform change, no repaint request.
+            const double scaleBefore = pane0->scale();
+            const QPointF offBefore = pane0->offset();
+            const quint64 rendersBefore =
+                pane0->property("baseSurfaceRenderCount").toULongLong();
+            QWheelEvent zev(QPointF(cursor), pane0->mapToGlobal(cursor), QPoint(0, 0),
+                            QPoint(0, 0), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+            QApplication::sendEvent(pane0, &zev);
+            pump(30);
+            CHECK(pane0->scale() == scaleBefore && pane0->offset() == offBefore,
+                  "wheel gate: zero wheel delta produces no transform change");
+            CHECK(pane0->property("baseSurfaceRenderCount").toULongLong() == rendersBefore,
+                  "wheel gate: zero wheel delta produces no repaint request");
+
+            // Per-axis mixed sync modes drive paintEvent's per-axis selection
+            // (scale from the shared transform when zoom sync is on, offset from
+            // the shared transform when drag sync is on), so the wheel must honor
+            // each toggle independently through the real checkbox controls.
+            QCheckBox *zoomSyncChk = findChk(ws, QStringLiteral("同步缩放"));
+            QCheckBox *dragSyncChk = findChk(ws, QStringLiteral("同步拖动"));
+            CHECK(zoomSyncChk != nullptr && dragSyncChk != nullptr,
+                  "wheel gate: both per-axis sync controls must exist for the mixed-mode gate");
+            if (zoomSyncChk && dragSyncChk)
+            {
+                // Zoom sync ON, drag sync OFF: every pane scales together through
+                // the shared scale, but each pane keeps its own independently
+                // zoomed offset.
+                zoomSyncChk->setChecked(true);
+                dragSyncChk->setChecked(false);
+                pump(30);
+                ws->engine().setScale(kScale);
+                ws->engine().setOffset(12.0, -7.0);
+                ws->engine().setCellOffset(0, 12.0, -7.0);
+                ws->engine().setCellOffset(1, -9.0, 5.0);
+                ws->update();
+                pump(60);
+                const double mixAScale = pane0->scale();
+                const QPointF mixAOff0 = pane0->offset();
+                const QPointF mixAOff1 = pane1->offset();
+                CHECK(mixAOff0 != mixAOff1,
+                      "wheel gate: mixed-A baseline keeps distinct per-pane offsets");
+                CHECK(wheelDrift(120) < 0.2,
+                      "wheel gate: mixed-A wheel keeps the image point under the cursor");
+                CHECK(pane0->scale() > mixAScale && qAbs(pane0->scale() - pane1->scale()) < 1e-9,
+                      "wheel gate: mixed-A wheel scales both panes together");
+                CHECK(pane0->offset() != mixAOff0 && pane1->offset() != mixAOff1 &&
+                          pane0->offset() != pane1->offset(),
+                      "wheel gate: mixed-A wheel zooms each pane's own offset independently");
+
+                // Zoom sync OFF, drag sync ON: only the hovered pane's scale
+                // changes while both rendered offsets follow the shared
+                // (drag-synced) offset.
+                zoomSyncChk->setChecked(false);
+                dragSyncChk->setChecked(true);
+                pump(30);
+                ws->engine().setScale(kScale);
+                ws->engine().setOffset(12.0, -7.0);
+                ws->engine().setCellScale(0, kScale);
+                ws->engine().setCellScale(1, kScale);
+                ws->update();
+                pump(60);
+                const double mixBScale1 = pane1->scale();
+                const QPointF mixBOff = pane0->offset();
+                CHECK(mixBOff == pane1->offset(),
+                      "wheel gate: mixed-B baseline shares one offset across panes");
+                CHECK(wheelDrift(120) < 0.2,
+                      "wheel gate: mixed-B wheel keeps the image point under the cursor");
+                CHECK(pane0->scale() > kScale,
+                      "wheel gate: mixed-B wheel grows only the hovered pane");
+                CHECK(qAbs(pane1->scale() - mixBScale1) < 1e-9,
+                      "wheel gate: mixed-B wheel leaves the other pane's scale");
+                CHECK(pane0->offset() == pane1->offset() && pane0->offset() != mixBOff,
+                      "wheel gate: mixed-B wheel pans both panes through the shared offset");
+
+                // Restore both sync toggles for the rest of the workflow.
+                zoomSyncChk->setChecked(true);
+                dragSyncChk->setChecked(true);
+                pump(30);
+            }
+        }
+    }
+
     // Esc 退出 Compare（真实 QDialog::reject 路径）。
     QSlider *thresholdSlider = ws->findChild<QSlider *>("diffThresholdSlider");
     QLabel *thresholdValueLabel = ws->findChild<QLabel *>("diffThresholdValueLabel");

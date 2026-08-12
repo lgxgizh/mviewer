@@ -1,6 +1,8 @@
 // CompareWorkspace interaction: keyboard, mouse, event filter, pixel link (M20 P0#2).
 #include "compareworkspace_p.h"
 
+#include <cmath>
+
 bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
 {
     auto *view = qobject_cast<RawImageView *>(obj);
@@ -11,20 +13,76 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
     if (event->type() == QEvent::Wheel)
     {
         auto *we = static_cast<QWheelEvent *>(event);
-        const double factor = we->angleDelta().y() > 0 ? 1.15 : 1.0 / 1.15;
+        const int wheelDelta = we->angleDelta().y();
+        if (wheelDelta == 0)
+            return true; // horizontal-only wheel: consume without zooming
+        const double factor = wheelDelta > 0 ? 1.15 : 1.0 / 1.15;
+        // The transform anchors in CENTER-RELATIVE coordinates (RawImageView
+        // stores offset as a pan delta from the pane center), so convert the
+        // widget-local cursor position before applying the zoom.
         const QPoint pos = we->position().toPoint();
+        const double anchorX = pos.x() - view->width() / 2.0;
+        const double anchorY = pos.y() - view->height() / 2.0;
+        // Clamp the TARGET scale to [0.05, 50.0] and derive the effective
+        // factor from that clamped target, so a limit hit derives the offset
+        // from the clamped factor instead of recomputing it after the offset
+        // was already applied.
+        const double currentScale =
+            m_syncZoom ? m_engine.syncTransform().scale : m_engine.cellTransform(idx).scale;
+        if (!(currentScale > 0.0) || !std::isfinite(currentScale))
+            return true; // invalid baseline: consume without zooming
+        const double targetScale = std::clamp(currentScale * factor, 0.05, 50.0);
+        const double effectiveFactor = targetScale / currentScale;
+        if (effectiveFactor == 1.0)
+            return true; // at a clamp: no transform change, no repaint
+        // Keep the image point under the cursor fixed: the new offset zooms the
+        // old offset around the anchor by the effective factor.
+        const auto zoomedOffset = [effectiveFactor](double anchor, double oldOffset)
+        {
+            return anchor - (anchor - oldOffset) * effectiveFactor;
+        };
+        // Core's SyncController is enabled only when zoom AND drag sync are
+        // both on, so for the mixed modes apply the transform paintEvent
+        // renders with the plain setters instead of relying on zoomAt dispatch.
+        const int count = m_engine.imageCount();
         if (m_syncZoom)
         {
-            m_engine.zoomAt(static_cast<double>(pos.x()), static_cast<double>(pos.y()), factor);
+            m_engine.setScale(targetScale);
+            for (int i = 0; i < count; ++i)
+                m_engine.setCellScale(i, targetScale);
         }
         else
         {
-            // Zoom only the hovered cell around the cursor.
-            m_engine.zoomAt(static_cast<double>(pos.x()), static_cast<double>(pos.y()), factor,
-                            idx);
-            // Clamp to a sane range to avoid runaway zoom.
-            const double s = std::clamp(m_engine.cellTransform(idx).scale, 0.05, 50.0);
-            m_engine.setCellScale(idx, s);
+            m_engine.setCellScale(idx, targetScale);
+        }
+        if (m_syncDrag)
+        {
+            const Vec2 o = m_engine.syncTransform().offset;
+            const double ox = zoomedOffset(anchorX, o.x);
+            const double oy = zoomedOffset(anchorY, o.y);
+            m_engine.setOffset(ox, oy);
+            for (int i = 0; i < count; ++i)
+                m_engine.setCellOffset(i, ox, oy);
+        }
+        else if (m_syncZoom)
+        {
+            // Zoom sync on, drag sync off: zoom every cell's own offset
+            // independently around the anchor, then refresh the shared offset
+            // from the hovered cell without overwriting the cells (the
+            // controller is disabled because drag sync is off).
+            for (int i = 0; i < count; ++i)
+            {
+                const Vec2 o = m_engine.cellTransform(i).offset;
+                m_engine.setCellOffset(i, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
+            }
+            const Vec2 h = m_engine.cellTransform(idx).offset;
+            m_engine.setOffset(h.x, h.y);
+        }
+        else
+        {
+            // Fully independent: zoom only the hovered cell's own offset.
+            const Vec2 o = m_engine.cellTransform(idx).offset;
+            m_engine.setCellOffset(idx, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
         }
         update();
         return true;
