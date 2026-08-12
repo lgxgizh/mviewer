@@ -6,6 +6,53 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed — MetadataIndexer queued callbacks stay cancellable until delivered
+
+- `MetadataIndexer::index` no longer erases a finished request from its
+  cancellation map on the worker thread. Completion and request bookkeeping
+  release now happen in a single final main-thread closure queued after every
+  per-entry delivery, so a `cancelRequest()` that lands after the worker finishes
+  but before the queued callbacks execute still marks the request cancelled and
+  suppresses every pending entry/done callback. Previously the erased request was
+  invisible to `cancelRequest()`, letting still-queued closures run against
+  consumer state that may already be gone (the reproducible `m26_metadata_tests`
+  concurrency flake).
+- Cancellation and scheduler-context cancellation paths set the request token so
+  already-queued entry closures observe it and drop, then release request
+  bookkeeping safely. Successful requests keep entry-before-done ordering,
+  release bookkeeping even with an empty `onDone`, and never invoke user
+  callbacks while holding the internal mutex.
+- Regression coverage: `test_m26_metadata` adds a deterministic
+  cancel-after-worker-finishes-but-before-delivery test, and the reverse
+  dual-consumer test now waits for both independent completions instead of
+  sampling one.
+
+### Fixed — Compare wheel zoom keeps the image point under the cursor
+
+- Wheel-zooming in the Compare normal grid no longer drifts when the cursor is
+  off-center. `CompareWorkspace` now converts the cursor to the pane's
+  center-relative coordinate system (matching how `RawImageView` stores the pan
+  offset) before computing the new transform, so the same image-space point
+  stays under the cursor while zooming.
+- The target scale is clamped to [0.05, 50.0] and the effective factor is
+  derived from that clamped target, so hitting the limit keeps the anchor
+  instead of re-scaling after the offset was computed. A zero vertical wheel
+  delta is ignored entirely (no transform change, no repaint), and a zoom that
+  is already at a clamp is a no-op (no repaint requested).
+- The zoom/pan sync toggles now apply per axis, as the Compare render path
+  already selected them: zoom sync on scales every pane together (each pane
+  keeps its own independently zoomed offset when drag sync is off), and drag
+  sync on pans every pane together (only the hovered pane's scale changes when
+  zoom sync is off). The core sync controller stays disabled for mixed modes,
+  so `CompareWorkspace` applies the transform directly through the per-cell
+  setters.
+- Regression coverage: `workflow_ux_tests` asserts off-center wheel zoom
+  preserves the cursor's image point in sync, independent, and both mixed
+  (zoom-on/drag-off, zoom-off/drag-on) modes, clamps to the 50x ceiling, and
+  ignores zero wheel deltas. The 0.05x lower floor is not asserted for anchor
+  stability because small images are intentionally centered by the
+  `RawImageView` offset clamp.
+
 ### Changed — Compare annotation repaints reuse a viewport-bounded base surface
 
 - Compare panes no longer re-scale the full source image on every repaint.

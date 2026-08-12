@@ -168,7 +168,10 @@ void testDualConsumerReverseOrder()
 
     const bool aFinished = waitFor(aDone, 15000);
     CHECK(aFinished, "consumer A receives its own completion");
-    CHECK(bDone.load(), "consumer B completion NOT silently dropped by A's request");
+    // Wait for B as well — never return from the test with B's queued
+    // callbacks still in flight against this stack frame.
+    const bool bFinished = waitFor(bDone, 15000);
+    CHECK(bFinished, "consumer B completion NOT silently dropped by A's request");
     CHECK(bEntries.load() == 1200, "consumer B receives exactly its 1200 entries");
 }
 
@@ -274,6 +277,43 @@ void testCancelRequestIsolation()
     sched.setPoolMaxThreads(TaskScheduler::PoolType::MetadataPool, restoreThreads);
 }
 
+// The worker has FINISHED (all callbacks marshaled to the main-thread queue)
+// but none has been DELIVERED yet. cancelRequest() in that window must
+// suppress every queued callback: the old code erased the request on the
+// worker right after posting, so cancelRequest() found nothing and the stale
+// closures fired against the (potentially gone) consumer state.
+void testCancelAfterWorkerBeforeDelivery()
+{
+    printf("\n[cancel after worker finished but before queued delivery]\n");
+    fflush(stdout);
+    auto &indexer = mviewer::core::MetadataIndexer::instance();
+    indexer.cancel();
+    auto &sched = TaskScheduler::instance();
+
+    QTemporaryDir tmp;
+    const std::vector<std::string> a = makeDngs(tmp, 20);
+
+    std::atomic<int> entries{0};
+    std::atomic<bool> done{false};
+    const uint64_t req = indexer.index(
+        a,
+        [&](const Entry &) { entries.fetch_add(1); },
+        [&]() { done = true; });
+    CHECK(req != 0, "request accepted");
+
+    // Let the worker run to completion WITHOUT pumping the Qt event loop, so
+    // every onEntry/onDone is queued but not one is delivered.
+    CHECK(sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15)),
+          "worker drains within timeout");
+
+    // The request is finished but its queued callbacks are still pending:
+    // cancelling now must drop ALL of them (no stale consumer state).
+    indexer.cancelRequest(req);
+    pump(1500);
+    CHECK(entries.load() == 0, "no queued entry callbacks fire after cancel");
+    CHECK(!done.load(), "queued completion never fires after cancel");
+}
+
 // ─── Bounded cache + value-semantics reads ──────────────────────────────────
 void testCacheBoundAndValueSemantics()
 {
@@ -327,6 +367,7 @@ int main(int argc, char **argv)
     testDualConsumerReverseOrder();
     testSameConsumerSupersedeCompletes();
     testCancelRequestIsolation();
+    testCancelAfterWorkerBeforeDelivery();
     testCacheBoundAndValueSemantics();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

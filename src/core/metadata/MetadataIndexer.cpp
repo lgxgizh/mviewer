@@ -182,11 +182,65 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, EntryCall
                     deliver([onEntry, copy]() { onEntry(copy); });
                 }
             }
-            if (!cancelToken->load() && !ctx.isCancelled() && onDone)
-                deliver([onDone]() { onDone(); });
+            // Cancelled (own token or scheduler context): mark the token so
+            // every already-queued entry closure observes it and drops, then
+            // release bookkeeping. cancelRequest()/cancel() may already have
+            // done both (the erase is then a no-op).
+            if (cancelToken->load() || ctx.isCancelled())
             {
+                cancelToken->store(true);
                 std::lock_guard<std::mutex> lk(m_mtx);
                 eraseRequestLocked(requestId);
+                return;
+            }
+
+            // Successful run: hand completion + bookkeeping release to ONE final
+            // main-thread closure queued AFTER every per-entry delivery, so the
+            // request stays cancellable until its queued callbacks actually run
+            // — a late cancelRequest() (worker done, callbacks still queued)
+            // must still suppress the whole tail. The erase is token-guarded so
+            // it can only ever release THIS request.
+            auto finalize = [this, requestId, cancelToken, onDone]()
+            {
+                // Claiming the request and authorizing onDone are ONE
+                // mutex-protected decision for the exact token, and the entry is
+                // erased BEFORE any user callback so bookkeeping is released
+                // even if onDone never returns. Once erased, cancelRequest()
+                // sees the request as finished and can no longer reach this
+                // token.
+                bool doneAuthorized = false;
+                {
+                    std::lock_guard<std::mutex> lk(m_mtx);
+                    auto it = m_requestCancel.find(requestId);
+                    if (it == m_requestCancel.end() || it->second != cancelToken)
+                        return; // cancelled / superseded: cleanup already done
+                    doneAuthorized = !cancelToken->load();
+                    eraseRequestLocked(requestId);
+                }
+                if (doneAuthorized && onDone)
+                    onDone();
+            };
+            if (QCoreApplication::instance())
+            {
+                const bool queued = QMetaObject::invokeMethod(
+                    QCoreApplication::instance(),
+                    [finalize]() { finalize(); },
+                    Qt::QueuedConnection);
+                if (!queued)
+                {
+                    // The event loop is closing: the queued closure will never
+                    // run. Converge cleanup here on the worker, but never call
+                    // onDone on a worker thread.
+                    cancelToken->store(true);
+                    std::lock_guard<std::mutex> lk(m_mtx);
+                    auto it = m_requestCancel.find(requestId);
+                    if (it != m_requestCancel.end() && it->second == cancelToken)
+                        eraseRequestLocked(requestId);
+                }
+            }
+            else
+            {
+                finalize(); // no event loop: deliver synchronously
             }
         });
     if (!handle)
