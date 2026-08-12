@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added — Dedicated compare canvas page (split / swipe / overlay / checkerboard)
+
+- Compare canvas modes now render on a dedicated `compareCanvas` widget shown via
+  a stacked layout that swaps it with the normal `compareGridPage`. Canvas modes
+  are no longer painted on the workspace underneath the `QScrollArea` (where they
+  were obscured), and the hidden `RawImageView`s no longer swallow wheel/drag
+  input while a canvas mode is active.
+- Canvas rendering uses the canvas rect only, with center-relative geometry:
+  image center = target rect center + transform offset, top-left = center minus
+  half the scaled size. Split centers each image in its own half-pane; Swipe
+  draws both images on the same full-canvas geometry revealed by complementary
+  clips at the divider; Overlay/Checker share the full-canvas anchor. Diff
+  overlays and opacity are preserved.
+- The canvas owns its input: wheel zoom clamps to [0.05, 50.0] and anchors
+  center-relative to the half-pane under the cursor (Split) or the full canvas
+  (other modes) across all four syncZoom/syncDrag combinations; left-drag pans
+  the shared offset; in Swipe a press within 12 px of the divider drags the
+  divider, elsewhere it pans. Toggling a canvas mode switches the exact page and
+  preserves the shared zoom/pan; leaving canvas modes (or loading a non-two-image
+  set) restores the grid page.
+
 ### Fixed — MetadataIndexer queued callbacks stay cancellable until delivered
 
 - `MetadataIndexer::index` no longer erases a finished request from its

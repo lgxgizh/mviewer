@@ -1,6 +1,121 @@
 // CompareWorkspace rendering: paint modes, diff overlay, blink, histograms (M20 P0#2).
 #include "compareworkspace_p.h"
 
+#include <cmath>
+
+// M34: the dedicated compare canvas page. The normal grid scrolls inside
+// "compareGridPage"; split/swipe/overlay/checker render on the sibling
+// "compareCanvas" widget. A stacked layout shows exactly one page, so canvas
+// modes are never obscured by the QScrollArea and hidden RawImageViews never
+// own wheel/drag input while a canvas mode is active.
+QStackedLayout *CompareWorkspace::buildCanvasPage()
+{
+    m_compareGridPage = new QWidget(this);
+    m_compareGridPage->setObjectName("compareGridPage");
+    auto *gridLay = new QVBoxLayout(m_compareGridPage);
+    gridLay->setContentsMargins(0, 0, 0, 0);
+
+    auto *scroll = new QScrollArea(m_compareGridPage);
+    scroll->setWidgetResizable(true);
+    scroll->setWidget(m_grid);
+    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    scroll->setFrameShape(QFrame::NoFrame);
+    gridLay->addWidget(scroll);
+
+    m_compareCanvas = new QWidget(this);
+    m_compareCanvas->setObjectName("compareCanvas");
+    m_compareCanvas->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_compareCanvas->setMinimumSize(64, 64);
+    m_compareCanvas->setMouseTracking(true);
+    m_compareCanvas->setFocusPolicy(Qt::StrongFocus);
+    m_compareCanvas->installEventFilter(this);
+
+    m_pageStack = new QStackedLayout;
+    m_pageStack->setContentsMargins(0, 0, 0, 0);
+    m_pageStack->addWidget(m_compareGridPage);
+    m_pageStack->addWidget(m_compareCanvas);
+    m_pageStack->setCurrentWidget(m_compareGridPage);
+    return m_pageStack;
+}
+
+// Central page transition: canvas modes (split / swipe / overlay / checker) are
+// only meaningful for exactly two images and switch the visible page to the
+// canvas; any other state (or a non-two-image load) restores the grid page.
+void CompareWorkspace::updateCanvasModeVisibility()
+{
+    if (!m_pageStack || !m_compareCanvas || !m_compareGridPage)
+        return;
+    const bool canvasMode = m_engine.imageCount() == 2 && anyCanvasCompareMode();
+    m_pageStack->setCurrentWidget(canvasMode ? static_cast<QWidget *>(m_compareCanvas)
+                                             : static_cast<QWidget *>(m_compareGridPage));
+    if (canvasMode)
+        m_compareCanvas->update();
+    update();
+}
+
+QRect CompareWorkspace::canvasRect() const
+{
+    return m_compareCanvas ? m_compareCanvas->rect() : rect();
+}
+
+// M34: deterministic split geometry contract. The two rects are adjacent and
+// cover the whole canvas exactly: left = [0, midX), right = [midX, width). For
+// an even width the halves are equal; for an odd width they differ by at most
+// one column. No state — drawSplitCompare and the workflow test share it.
+QPair<QRect, QRect> CompareWorkspace::splitRects(const QRect &canvas)
+{
+    const int midX = canvas.width() / 2;
+    const QRect left(canvas.left(), canvas.top(), midX, canvas.height());
+    const QRect right(canvas.left() + midX, canvas.top(), canvas.width() - midX, canvas.height());
+    return {left, right};
+}
+
+// Center-relative destination helper: image center = target rect center + the
+// selected transform offset; top-left = center - scaled image size / 2. This
+// matches RawImageView's offset semantics (a pan delta from the pane center).
+QRectF CompareWorkspace::cellDestRect(int idx, const QRectF &geom) const
+{
+    if (idx < 0 || idx >= m_cellViews.size() || !m_cellViews[idx])
+        return {};
+    const QImage &img = m_cellViews[idx]->image();
+    if (img.isNull() || geom.isEmpty())
+        return {};
+    const auto &ct = m_engine.cellTransform(idx);
+    const double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
+    if (!(sc > 0.0) || !std::isfinite(sc))
+        return {};
+    const double ox = m_syncDrag ? m_engine.syncTransform().offset.x : ct.offset.x;
+    const double oy = m_syncDrag ? m_engine.syncTransform().offset.y : ct.offset.y;
+    const double dw = img.width() * sc;
+    const double dh = img.height() * sc;
+    const QPointF center(geom.x() + geom.width() / 2.0 + ox, geom.y() + geom.height() / 2.0 + oy);
+    return QRectF(center.x() - dw / 2.0, center.y() - dh / 2.0, dw, dh);
+}
+
+// Canvas paint entry — invoked from the canvas event path (Paint event via the
+// workspace event filter). Renders with the canvas rect only, never the parent.
+void CompareWorkspace::paintCompareCanvas()
+{
+    QWidget *cv = m_compareCanvas;
+    if (!cv)
+        return;
+    QPainter p(cv);
+    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    const QRect r = cv->rect();
+    p.fillRect(r, palette().color(QPalette::Dark));
+    if (m_engine.imageCount() != 2 || m_cellViews.size() < 2 || !anyCanvasCompareMode())
+        return;
+    if (m_splitChk && m_splitChk->isChecked())
+        drawSplitCompare(p);
+    else if (m_swipeChk && m_swipeChk->isChecked())
+        drawSwipeCompare(p, int(r.width() * m_splitPos));
+    else if (m_overlayChk && m_overlayChk->isChecked())
+        drawOverlayCompare(p);
+    else if (m_checkerChk && m_checkerChk->isChecked())
+        drawCheckerboardCompare(p);
+}
+
 void CompareWorkspace::rebuildCells()
 {
     // The terminal refreshAllDiffOverlays() at the end of this function covers
@@ -778,20 +893,11 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
         m_cellViews[i]->setTransform(sc, off);
     }
 
-    // P0-4 / A-4.1 / M23: split / swipe / overlay / checkerboard for two images.
-    if (n == 2 && anyCanvasCompareMode() && m_cellViews.size() >= 2)
-    {
-        QPainter p(this);
-        p.setRenderHint(QPainter::SmoothPixmapTransform);
-        if (m_splitChk && m_splitChk->isChecked())
-            drawSplitCompare(p);
-        else if (m_swipeChk && m_swipeChk->isChecked())
-            drawSwipeCompare(p, int(width() * m_splitPos));
-        else if (m_overlayChk && m_overlayChk->isChecked())
-            drawOverlayCompare(p);
-        else if (m_checkerChk && m_checkerChk->isChecked())
-            drawCheckerboardCompare(p);
-    }
+    // M34: canvas modes paint on the dedicated compareCanvas widget. Forward any
+    // parent repaint to the canvas so engine transform / overlay changes that
+    // only call update() on the parent still refresh the visible canvas page.
+    if (m_compareCanvas && n == 2 && anyCanvasCompareMode())
+        m_compareCanvas->update();
 
     // A-4.3: draw connecting lines between linked points across cells (2-up).
     if (m_pixelLinkChk && m_pixelLinkChk->isChecked() && !m_linkPoints.isEmpty() && n >= 2)
@@ -801,28 +907,25 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
     }
 }
 
-void CompareWorkspace::drawCellCompare(QPainter &p, int idx, const QRect &rect)
+void CompareWorkspace::drawCellCompare(QPainter &p, int idx, const QRect &clipRect,
+                                       const QRectF &geomRect)
 {
     if (idx < 0 || idx >= m_cellViews.size() || !m_cellViews[idx])
         return;
     const QImage &img = m_cellViews[idx]->image();
-    if (img.isNull() || rect.isEmpty())
+    if (img.isNull() || clipRect.isEmpty() || geomRect.isEmpty())
+        return;
+    const QRectF dr = cellDestRect(idx, geomRect);
+    if (dr.isEmpty())
         return;
 
-    // H3: render with the SAME synchronized transform as Normal mode (scale + offset)
-    // so the user's zoom/pan carries over into split/swipe/overlay. The old code
-    // re-fit the image into the half, discarding the zoom/pan entirely. The offset
-    // is measured from the rect's own origin, exactly like RawImageView does for a
-    // cell widget.
-    const auto &ct = m_engine.cellTransform(idx);
-    const double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
-    const double ox = m_syncDrag ? m_engine.syncTransform().offset.x : ct.offset.x;
-    const double oy = m_syncDrag ? m_engine.syncTransform().offset.y : ct.offset.y;
-
+    // H3: render with the SAME synchronized transform as Normal mode (scale +
+    // offset) so the user's zoom/pan carries over into split/swipe/overlay.
+    // The offset is a pan delta from the target rect's center (center-relative),
+    // exactly like RawImageView stores it for a cell widget.
     p.save();
-    p.setClipRect(rect);
+    p.setClipRect(clipRect);
     p.setRenderHint(QPainter::SmoothPixmapTransform);
-    const QRectF dr(rect.x() + ox, rect.y() + oy, img.width() * sc, img.height() * sc);
     p.drawImage(dr, img);
 
     // Diff/heatmap overlay (set per cell by the async batch result). Only the
@@ -840,27 +943,43 @@ void CompareWorkspace::drawCellCompare(QPainter &p, int idx, const QRect &rect)
 
 void CompareWorkspace::drawSplitCompare(QPainter &p)
 {
-    const QRect r = rect();
-    const int midX = r.width() / 2;
-    const QRect left(r.topLeft(), QSize(midX, r.height()));
-    const QRect right(left.topRight() + QPoint(1, 0), QSize(r.width() - midX - 1, r.height()));
-    drawCellCompare(p, 0, left);
-    drawCellCompare(p, 1, right);
+    const QRect r = canvasRect();
+    const auto halves = splitRects(r);
+    const QRect left = halves.first;
+    const QRect right = halves.second;
+    // Split: each half is both the clip and the geometry, so every image is
+    // centered in its own half-pane (symmetric halves). The divider is drawn at
+    // the shared boundary (the right half's left edge), matching Swipe's
+    // complementary-clip convention.
+    drawCellCompare(p, 0, left, QRectF(left));
+    drawCellCompare(p, 1, right, QRectF(right));
     p.setPen(QPen(QColor(255, 255, 255), 2));
-    p.drawLine(left.topRight(), left.bottomRight());
+    p.drawLine(QPoint(right.left(), r.top()), QPoint(right.left(), r.bottom()));
 }
 
 void CompareWorkspace::drawSwipeCompare(QPainter &p, int x)
 {
-    const QRect r = rect();
-    const QRect left(r.topLeft(), QSize(x, r.height()));
-    const QRect right(left.topRight() + QPoint(1, 0), QSize(r.width() - x, r.height()));
-    drawCellCompare(p, 0, left);
-    drawCellCompare(p, 1, right);
+    const QRect r = canvasRect();
+    const int divX = qBound(0, x, r.width());
+    const QRect leftClip(r.topLeft(), QSize(divX, r.height()));
+    const QRect rightClip(leftClip.topRight() + QPoint(1, 0), QSize(r.width() - divX, r.height()));
+
+    // Both images share the FULL-canvas geometry (same center + shared offset),
+    // revealed by complementary clips at the divider — so the two halves always
+    // align on the same shared zoom/pan.
+    p.save();
+    p.setClipRect(leftClip);
+    drawCellCompare(p, 0, leftClip, QRectF(r));
+    p.restore();
+    p.save();
+    p.setClipRect(rightClip);
+    drawCellCompare(p, 1, rightClip, QRectF(r));
+    p.restore();
+
     p.setPen(QPen(QColor(255, 255, 255), 2));
-    p.drawLine(QPoint(x, 0), QPoint(x, r.height()));
+    p.drawLine(QPoint(divX, 0), QPoint(divX, r.height()));
     p.setBrush(QColor(255, 255, 255));
-    p.drawEllipse(QPoint(x, r.height() / 2), 4, 4);
+    p.drawEllipse(QPoint(divX, r.height() / 2), 4, 4);
 }
 
 // A-4.1 + H3: semi-transparent overlay blend of two images, drawn with the
@@ -870,21 +989,20 @@ void CompareWorkspace::drawOverlayCompare(QPainter &p)
 {
     if (m_cellViews.size() < 2)
         return;
-    const QRect r = rect();
+    const QRect r = canvasRect();
 
     // Base image (full opacity), drawn with the synchronized transform.
-    drawCellCompare(p, 0, r);
+    drawCellCompare(p, 0, r, QRectF(r));
 
     const QImage &img1 = m_cellViews[1]->image();
     if (img1.isNull())
         return;
-    const auto &ct = m_engine.cellTransform(1);
-    const double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
-    const double ox = m_syncDrag ? m_engine.syncTransform().offset.x : ct.offset.x;
-    const double oy = m_syncDrag ? m_engine.syncTransform().offset.y : ct.offset.y;
-    const QRectF dr(r.x() + ox, r.y() + oy, img1.width() * sc, img1.height() * sc);
+    const QRectF dr = cellDestRect(1, QRectF(r));
+    if (dr.isEmpty())
+        return;
 
     p.save();
+    p.setClipRect(r);
     p.setRenderHint(QPainter::SmoothPixmapTransform);
     // Blend the second image on top with user-controlled opacity (A-4.1 slider).
     p.setOpacity(std::clamp(m_overlayAlpha / 100.0, 0.0, 1.0));
@@ -896,6 +1014,7 @@ void CompareWorkspace::drawOverlayCompare(QPainter &p)
     {
         p.setOpacity(m_cellViews[1]->overlayOpacity());
         p.drawImage(dr, ov);
+        p.setOpacity(1.0);
     }
     p.restore();
 }
@@ -916,11 +1035,9 @@ void CompareWorkspace::buildCheckerboardControls(QHBoxLayout *lay)
             {
                 if (on)
                     exclusiveMode(m_checkerChk);
-                if (m_grid)
-                    m_grid->setVisible(!anyCanvasCompareMode());
+                updateCanvasModeVisibility();
                 if (m_checkerSizeSlider)
                     m_checkerSizeSlider->setEnabled(on);
-                update();
             });
     lay->addWidget(m_checkerChk);
 
@@ -936,8 +1053,8 @@ void CompareWorkspace::buildCheckerboardControls(QHBoxLayout *lay)
                 m_checkerSize = v;
                 if (m_checkerSizeLabel)
                     m_checkerSizeLabel->setText(QString("%1px").arg(v));
-                if (m_checkerChk && m_checkerChk->isChecked())
-                    update();
+                if (m_checkerChk && m_checkerChk->isChecked() && m_compareCanvas)
+                    m_compareCanvas->update();
             });
     lay->addWidget(m_checkerSizeSlider);
     m_checkerSizeLabel = new QLabel(QString("%1px").arg(m_checkerSize), this);
@@ -949,13 +1066,16 @@ void CompareWorkspace::drawCheckerboardCompare(QPainter &p)
 {
     if (m_cellViews.size() < 2 || !m_cellViews[0] || !m_cellViews[1])
         return;
-    const QRect r = rect();
+    const QRect r = canvasRect();
 
     // Base image fills the canvas with the synchronized transform.
-    drawCellCompare(p, 0, r);
+    drawCellCompare(p, 0, r, QRectF(r));
 
     const QImage &img1 = m_cellViews[1]->image();
     if (img1.isNull())
+        return;
+    const QRectF dr = cellDestRect(1, QRectF(r));
+    if (dr.isEmpty())
         return;
 
     // Build the clip region of "B" blocks: every block where (bx+by) is odd.
@@ -965,12 +1085,6 @@ void CompareWorkspace::drawCheckerboardCompare(QPainter &p)
         for (int bx = 0, x = 0; x < r.width(); ++bx, x += bs)
             if (((bx + by) & 1) != 0)
                 region += QRect(x, y, bs, bs).intersected(r);
-
-    const auto &ct = m_engine.cellTransform(1);
-    const double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
-    const double ox = m_syncDrag ? m_engine.syncTransform().offset.x : ct.offset.x;
-    const double oy = m_syncDrag ? m_engine.syncTransform().offset.y : ct.offset.y;
-    const QRectF dr(r.x() + ox, r.y() + oy, img1.width() * sc, img1.height() * sc);
 
     p.save();
     p.setClipRegion(region);

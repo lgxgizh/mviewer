@@ -2024,6 +2024,206 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(sel.currentImage() == pathA, "browsing continues after leaving Compare");
 }
 
+// ─── Workflow 10: Compare canvas page visibility + interaction ───────────────
+// The planned Compare refactor exposes two stable, discoverable widgets:
+//   - "compareCanvas":  the interactive page owning wheel/drag while a canvas
+//     compare mode (split / swipe / overlay / checkerboard) is active.
+//   - "compareGridPage": the normal grid page, hidden in canvas modes.
+// Hidden RawImageViews cannot receive wheel/drag, so in every canvas mode the
+// canvas must be the visible+enabled page. Wheel zoom anchors CENTER-RELATIVE
+// to the half-pane under the cursor (split/swipe) or the canvas (overlay);
+// left-drag pans the shared offset by the mouse delta; switching canvas modes
+// preserves that shared zoom/pan on the same canvas. Red-fails on current code
+// because "compareCanvas" does not exist yet.
+void workflow10_compare_canvas(const QString &pathA, const QString &pathB)
+{
+    std::cout << "── Workflow 10: compare canvas visibility + interaction ──\n";
+
+    // Same synthetic two-image setup as Workflow 2.
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    ws->setImages({pathA, pathB});
+    dlg.resize(1100, 750);
+    dlg.show();
+    {
+        QElapsedTimer cmpLoad;
+        cmpLoad.start();
+        while (ws->comparedImageCount() != 2 && cmpLoad.elapsed() < 5000)
+            pump(25);
+    }
+    CHECK(ws->comparedImageCount() == 2, "canvas workflow: two images loaded into Compare");
+
+    QWidget *canvas = ws->findChild<QWidget *>("compareCanvas");
+    QWidget *gridPage = ws->findChild<QWidget *>("compareGridPage");
+    QCheckBox *split = findChk(ws, QStringLiteral("左右分割"));
+    QCheckBox *swipe = findChk(ws, QStringLiteral("滑动对比"));
+    QCheckBox *overlay = findChk(ws, QStringLiteral("叠加对比"));
+    QCheckBox *checker = findChk(ws, QStringLiteral("棋盘对比"));
+    CHECK(canvas != nullptr, "canvas workflow: compare exposes the compareCanvas widget");
+    if (!canvas || !split || !swipe || !overlay || !checker)
+        return; // planned canvas contract is absent — the check above is the red gate
+    CHECK(gridPage != nullptr, "canvas workflow: compare exposes the compareGridPage widget");
+    if (!gridPage)
+        return;
+
+    // Default state: the grid page owns the area, the canvas stays out of it.
+    CHECK(gridPage->isVisible() && !canvas->isVisible(),
+          "canvas workflow: the normal grid page is the visible page by default");
+
+    // Split ON → the canvas becomes the visible interactive page.
+    split->setChecked(true);
+    pump(20);
+    CHECK(split->isChecked() && canvas->isVisible() && canvas->isEnabled() && gridPage->isHidden(),
+          "canvas workflow: split shows the canvas and hides the grid page");
+    CHECK(canvas->width() > 0 && canvas->height() > 0,
+          "canvas workflow: the canvas occupies a real layout area");
+
+    // M34: deterministic split geometry contract — the halves must cover the
+    // whole canvas with no right-edge or seam gap. This is pure geometry (the
+    // exact helper drawSplitCompare paints with), so it does not depend on image
+    // aspect ratio, Fit letterboxing, or async pane materialization.
+    {
+        const QRect cv = canvas->rect();
+        const auto halves = CompareWorkspace::splitRects(cv);
+        const QRect left = halves.first;
+        const QRect right = halves.second;
+        CHECK(!left.isEmpty() && !right.isEmpty(),
+              "canvas workflow: split halves are non-empty for a real canvas");
+        CHECK(left.left() == cv.left() && left.top() == cv.top() && left.bottom() == cv.bottom(),
+              "canvas workflow: split left half matches the canvas on left/top/bottom");
+        CHECK(right.right() == cv.right() && right.top() == cv.top() &&
+                  right.bottom() == cv.bottom(),
+              "canvas workflow: split right half matches the canvas on right/top/bottom");
+        CHECK(left.right() + 1 == right.left(),
+              "canvas workflow: split halves are adjacent at the shared boundary");
+        CHECK(left.united(right) == cv,
+              "canvas workflow: split halves united cover the whole canvas");
+        CHECK(qAbs(left.width() - right.width()) <= 1,
+              "canvas workflow: split halves differ in width by at most 1");
+    }
+
+    // Split OFF → the grid page returns.
+    split->setChecked(false);
+    pump(20);
+    CHECK(!split->isChecked() && gridPage->isVisible() && !canvas->isVisible(),
+          "canvas workflow: leaving split restores the grid page");
+
+    // ── Cursor-anchored wheel zoom on the canvas ──
+    // Split draws one half-pane per image; the shared offset is a pan delta
+    // from the HALF-PANE center (not the full canvas center), so the wheel
+    // anchor must be the cursor position in half-pane center-relative terms.
+    split->setChecked(true);
+    pump(20);
+    const double baseScale = ws->engine().syncTransform().scale;
+    const Vec2 baseOffset = ws->engine().syncTransform().offset;
+    const int splitMidX = canvas->width() / 2;
+    const QPoint cursor(canvas->width() / 6, canvas->height() / 4); // left half-pane
+    const double anchorX = cursor.x() - splitMidX / 2.0;
+    const double anchorY = cursor.y() - canvas->height() / 2.0;
+    QWheelEvent wheel(QPointF(cursor), canvas->mapToGlobal(cursor), QPoint(0, 0), QPoint(0, 120),
+                      Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+    QApplication::sendEvent(canvas, &wheel);
+    pump(20);
+    const double zoomedScale = ws->engine().syncTransform().scale;
+    const Vec2 zoomedOffset = ws->engine().syncTransform().offset;
+    CHECK(zoomedScale > baseScale, "canvas workflow: wheel on the canvas zooms in");
+    {
+        const double factor = zoomedScale / baseScale;
+        const double expectX = anchorX - (anchorX - baseOffset.x) * factor;
+        const double expectY = anchorY - (anchorY - baseOffset.y) * factor;
+        CHECK(qAbs(zoomedOffset.x - expectX) < 0.5 && qAbs(zoomedOffset.y - expectY) < 0.5,
+              "canvas workflow: canvas wheel keeps the image point under the cursor "
+              "(center-relative anchor math)");
+    }
+
+    // ── Left-drag pans the shared offset by the mouse delta ──
+    {
+        const Vec2 offBefore = ws->engine().syncTransform().offset;
+        const QPoint p0 = canvas->rect().center() - QPoint(40, 30);
+        const QPoint p1 = canvas->rect().center() + QPoint(60, 20);
+        QMouseEvent press(QEvent::MouseButtonPress, QPointF(p0), canvas->mapToGlobal(p0),
+                          Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(canvas, &press);
+        QMouseEvent move(QEvent::MouseMove, QPointF(p1), canvas->mapToGlobal(p1), Qt::NoButton,
+                         Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(canvas, &move);
+        QMouseEvent release(QEvent::MouseButtonRelease, QPointF(p1), canvas->mapToGlobal(p1),
+                            Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(canvas, &release);
+        pump(20);
+        const Vec2 offAfter = ws->engine().syncTransform().offset;
+        CHECK(qAbs(offAfter.x - (offBefore.x + p1.x() - p0.x())) < 1e-6 &&
+                  qAbs(offAfter.y - (offBefore.y + p1.y() - p0.y())) < 1e-6,
+              "canvas workflow: left-drag on the canvas pans the shared offset by the mouse "
+              "delta");
+    }
+
+    // ── Canvas modes preserve the shared zoom/pan on the SAME canvas ──
+    {
+        const double keptScale = ws->engine().syncTransform().scale;
+        const Vec2 keptOffset = ws->engine().syncTransform().offset;
+
+        overlay->setChecked(true);
+        pump(20);
+        CHECK(overlay->isChecked() && !split->isChecked(),
+              "canvas workflow: overlay replaces split (mutually exclusive)");
+        CHECK(canvas->isVisible() && gridPage->isHidden(),
+              "canvas workflow: overlay keeps the canvas as the visible page");
+        CHECK(qAbs(ws->engine().syncTransform().scale - keptScale) < 1e-9 &&
+                  qAbs(ws->engine().syncTransform().offset.x - keptOffset.x) < 1e-9 &&
+                  qAbs(ws->engine().syncTransform().offset.y - keptOffset.y) < 1e-9,
+              "canvas workflow: overlay preserves the shared zoom/pan from split");
+
+        checker->setChecked(true);
+        pump(20);
+        CHECK(checker->isChecked() && !overlay->isChecked(),
+              "canvas workflow: checkerboard replaces overlay (mutually exclusive)");
+        CHECK(canvas->isVisible() && gridPage->isHidden(),
+              "canvas workflow: checkerboard keeps the canvas as the visible page");
+        CHECK(qAbs(ws->engine().syncTransform().scale - keptScale) < 1e-9 &&
+                  qAbs(ws->engine().syncTransform().offset.x - keptOffset.x) < 1e-9 &&
+                  qAbs(ws->engine().syncTransform().offset.y - keptOffset.y) < 1e-9,
+              "canvas workflow: checkerboard preserves the shared zoom/pan across modes");
+
+        swipe->setChecked(true);
+        pump(20);
+        CHECK(swipe->isChecked() && !checker->isChecked(),
+              "canvas workflow: swipe replaces checkerboard (mutually exclusive)");
+        CHECK(canvas->isVisible() && gridPage->isHidden(),
+              "canvas workflow: swipe keeps the canvas as the visible page");
+        CHECK(qAbs(ws->engine().syncTransform().scale - keptScale) < 1e-9 &&
+                  qAbs(ws->engine().syncTransform().offset.x - keptOffset.x) < 1e-9 &&
+                  qAbs(ws->engine().syncTransform().offset.y - keptOffset.y) < 1e-9,
+              "canvas workflow: swipe preserves the shared zoom/pan across modes");
+
+        // The SAME canvas stays the interactive page after the mode switches.
+        // Cursor stays far from the swipe divider (default 50% x), so the wheel
+        // zooms instead of being treated as divider drag.
+        const double swipeScale = ws->engine().syncTransform().scale;
+        const QPoint swipeCursor(canvas->width() / 4, canvas->height() * 3 / 4);
+        QWheelEvent swipeWheel(QPointF(swipeCursor), canvas->mapToGlobal(swipeCursor), QPoint(0, 0),
+                               QPoint(0, 120), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase,
+                               false);
+        QApplication::sendEvent(canvas, &swipeWheel);
+        pump(20);
+        CHECK(ws->engine().syncTransform().scale > swipeScale,
+              "canvas workflow: wheel still zooms on the same canvas in swipe mode");
+    }
+
+    // Exit every canvas mode → the grid page returns.
+    swipe->setChecked(false);
+    pump(20);
+    CHECK(!split->isChecked() && !overlay->isChecked() && !checker->isChecked() &&
+              !swipe->isChecked(),
+          "canvas workflow: all canvas compare modes are off");
+    CHECK(gridPage->isVisible() && !canvas->isVisible(),
+          "canvas workflow: leaving canvas modes restores the grid page");
+}
+
 // ─── Workflow 4: List 首屏只调度可见窗口，不能把全目录送入解码 ────────────────
 void workflow4_list_scaling(const QString &rootDir)
 {
@@ -2726,6 +2926,7 @@ int main(int argc, char **argv)
     workflow1_browse(workDir.absolutePath(), paths);
     workflow3_session_restore(workDir.absolutePath(), paths.first());
     workflow2_compare(paths[0], paths[2]);
+    workflow10_compare_canvas(paths[0], paths[2]);
     workflow5_export_current_output_directory(workDir.absolutePath());
     workflow4_list_scaling(workDir.absolutePath());
     workflow6_metadata_dual_consumer(workDir.absolutePath());

@@ -98,9 +98,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
             {
                 if (on)
                     exclusiveMode(m_splitChk);
-                if (m_grid)
-                    m_grid->setVisible(!anyCanvasCompareMode());
-                update();
+                updateCanvasModeVisibility();
             });
     modeLayout->addWidget(m_splitChk);
 
@@ -112,9 +110,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
             {
                 if (on)
                     exclusiveMode(m_swipeChk);
-                if (m_grid)
-                    m_grid->setVisible(!anyCanvasCompareMode());
-                update();
+                updateCanvasModeVisibility();
             });
     modeLayout->addWidget(m_swipeChk);
 
@@ -127,11 +123,9 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
             {
                 if (on)
                     exclusiveMode(m_overlayChk);
-                if (m_grid)
-                    m_grid->setVisible(!anyCanvasCompareMode());
+                updateCanvasModeVisibility();
                 if (m_overlayAlphaSlider)
                     m_overlayAlphaSlider->setEnabled(on);
-                update();
             });
     modeLayout->addWidget(m_overlayChk);
 
@@ -299,13 +293,10 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     m_layout->setSpacing(2);
     m_layout->setContentsMargins(0, 0, 0, 0);
 
-    // QScrollArea wraps the grid so 2×4 layouts (5-8 images) can scroll
-    auto *scroll = new QScrollArea(this);
-    scroll->setWidgetResizable(true);
-    scroll->setWidget(m_grid);
-    scroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scroll->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
-    scroll->setFrameShape(QFrame::NoFrame);
+    // M34: the grid scrolls inside "compareGridPage"; a stacked layout swaps it
+    // with the dedicated "compareCanvas" widget in split/swipe/overlay/checker
+    // modes. Construction lives in the render TU (ADR 014).
+    auto *pages = buildCanvasPage();
 
     // P0 #③: right-side inspector/histogram panel (collapsible).
     m_sidePanel = new QWidget(this);
@@ -357,7 +348,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     leftLay->setContentsMargins(0, 0, 0, 0);
     leftLay->setSpacing(4);
     leftLay->addWidget(toolbarContainer);
-    leftLay->addWidget(scroll, 1);
+    leftLay->addLayout(pages, 1);
 
     auto *root = new QHBoxLayout(this);
     root->setContentsMargins(4, 4, 4, 4);
@@ -541,6 +532,7 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     }
     if (m_grid && !two)
         m_grid->setVisible(true);
+    updateCanvasModeVisibility();
     setFocus();
     // P0-2: publish the compare set + reference to the app-wide SelectionModel so
     // Metadata/Analysis/Export stay in sync with what is being compared.

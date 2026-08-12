@@ -5,6 +5,12 @@
 
 bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
 {
+    // M34: the dedicated compareCanvas owns its own input while a canvas mode
+    // (split / swipe / overlay / checkerboard) is active. Hidden RawImageViews
+    // cannot receive wheel/drag, so route canvas events here instead.
+    if (obj == m_compareCanvas)
+        return canvasEventFilter(event);
+
     auto *view = qobject_cast<RawImageView *>(obj);
     const int idx = view ? view->cellIndex() : -1;
     if (idx < 0 || idx >= m_cellViews.size())
@@ -21,69 +27,7 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
         // stores offset as a pan delta from the pane center), so convert the
         // widget-local cursor position before applying the zoom.
         const QPoint pos = we->position().toPoint();
-        const double anchorX = pos.x() - view->width() / 2.0;
-        const double anchorY = pos.y() - view->height() / 2.0;
-        // Clamp the TARGET scale to [0.05, 50.0] and derive the effective
-        // factor from that clamped target, so a limit hit derives the offset
-        // from the clamped factor instead of recomputing it after the offset
-        // was already applied.
-        const double currentScale =
-            m_syncZoom ? m_engine.syncTransform().scale : m_engine.cellTransform(idx).scale;
-        if (!(currentScale > 0.0) || !std::isfinite(currentScale))
-            return true; // invalid baseline: consume without zooming
-        const double targetScale = std::clamp(currentScale * factor, 0.05, 50.0);
-        const double effectiveFactor = targetScale / currentScale;
-        if (effectiveFactor == 1.0)
-            return true; // at a clamp: no transform change, no repaint
-        // Keep the image point under the cursor fixed: the new offset zooms the
-        // old offset around the anchor by the effective factor.
-        const auto zoomedOffset = [effectiveFactor](double anchor, double oldOffset)
-        {
-            return anchor - (anchor - oldOffset) * effectiveFactor;
-        };
-        // Core's SyncController is enabled only when zoom AND drag sync are
-        // both on, so for the mixed modes apply the transform paintEvent
-        // renders with the plain setters instead of relying on zoomAt dispatch.
-        const int count = m_engine.imageCount();
-        if (m_syncZoom)
-        {
-            m_engine.setScale(targetScale);
-            for (int i = 0; i < count; ++i)
-                m_engine.setCellScale(i, targetScale);
-        }
-        else
-        {
-            m_engine.setCellScale(idx, targetScale);
-        }
-        if (m_syncDrag)
-        {
-            const Vec2 o = m_engine.syncTransform().offset;
-            const double ox = zoomedOffset(anchorX, o.x);
-            const double oy = zoomedOffset(anchorY, o.y);
-            m_engine.setOffset(ox, oy);
-            for (int i = 0; i < count; ++i)
-                m_engine.setCellOffset(i, ox, oy);
-        }
-        else if (m_syncZoom)
-        {
-            // Zoom sync on, drag sync off: zoom every cell's own offset
-            // independently around the anchor, then refresh the shared offset
-            // from the hovered cell without overwriting the cells (the
-            // controller is disabled because drag sync is off).
-            for (int i = 0; i < count; ++i)
-            {
-                const Vec2 o = m_engine.cellTransform(i).offset;
-                m_engine.setCellOffset(i, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
-            }
-            const Vec2 h = m_engine.cellTransform(idx).offset;
-            m_engine.setOffset(h.x, h.y);
-        }
-        else
-        {
-            // Fully independent: zoom only the hovered cell's own offset.
-            const Vec2 o = m_engine.cellTransform(idx).offset;
-            m_engine.setCellOffset(idx, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
-        }
+        applyAnchorZoom(idx, pos.x() - view->width() / 2.0, pos.y() - view->height() / 2.0, factor);
         update();
         return true;
     }
@@ -149,6 +93,219 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
     }
 
     return QWidget::eventFilter(obj, event);
+}
+
+// M34: wheel + mouse input for the dedicated compareCanvas page. All canvas
+// events are consumed here — the canvas owns interaction while a canvas mode
+// is active, so nothing leaks to the hidden grid cells.
+bool CompareWorkspace::canvasEventFilter(QEvent *event)
+{
+    // Canvas paint is handled through the event path so the parent's paintEvent
+    // stays a pure transform pusher (M34; see compareworkspace_render.cpp).
+    if (event->type() == QEvent::Paint)
+    {
+        paintCompareCanvas();
+        return true;
+    }
+
+    if (event->type() == QEvent::Wheel)
+    {
+        auto *we = static_cast<QWheelEvent *>(event);
+        const int wheelDelta = we->angleDelta().y();
+        if (wheelDelta == 0)
+            return true; // horizontal-only wheel: consume without zooming
+        const double factor = wheelDelta > 0 ? 1.15 : 1.0 / 1.15;
+        const QRect cr = canvasRect();
+        const QPoint pos = we->position().toPoint();
+        // Split draws one half-pane per image; the shared offset is a pan delta
+        // from the HALF-PANE center, so the wheel anchor must be center-relative
+        // to the half under the cursor. Other modes anchor on the full canvas.
+        double anchorX = pos.x() - cr.width() / 2.0;
+        double anchorY = pos.y() - cr.height() / 2.0;
+        if (m_splitChk && m_splitChk->isChecked())
+        {
+            const int midX = cr.width() / 2;
+            const bool left = pos.x() < midX;
+            const QRect half =
+                left ? QRect(cr.left(), cr.top(), midX, cr.height())
+                     : QRect(cr.left() + midX, cr.top(), cr.width() - midX, cr.height());
+            anchorX = pos.x() - (half.x() + half.width() / 2.0);
+            anchorY = pos.y() - (half.y() + half.height() / 2.0);
+            applyAnchorZoom(left ? 0 : 1, anchorX, anchorY, factor);
+        }
+        else
+        {
+            applyAnchorZoom(0, anchorX, anchorY, factor);
+        }
+        if (m_compareCanvas)
+            m_compareCanvas->update();
+        update();
+        return true;
+    }
+
+    if (event->type() == QEvent::MouseButtonPress)
+    {
+        auto *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::LeftButton)
+        {
+            const QRect cr = canvasRect();
+            const bool swipe = m_swipeChk && m_swipeChk->isChecked();
+            const int divX = int(cr.width() * m_splitPos);
+            if (swipe && std::abs(me->pos().x() - divX) < 12)
+            {
+                // Hit within 12px of the divider: drag the swipe divider.
+                m_splitDragging = true;
+                m_splitPos = std::clamp(me->pos().x() / double(cr.width()), 0.05, 0.95);
+                if (m_compareCanvas)
+                    m_compareCanvas->update();
+                return true;
+            }
+            m_dragging = true;
+            m_lastMouse = me->pos();
+            m_dragStartPos = me->pos();
+            m_dragIdx = canvasRefCellAt(me->pos());
+        }
+        return true; // consume — the canvas owns mouse input
+    }
+
+    if (event->type() == QEvent::MouseMove)
+    {
+        auto *me = static_cast<QMouseEvent *>(event);
+        const QRect cr = canvasRect();
+        if (m_splitDragging && m_swipeChk && m_swipeChk->isChecked())
+        {
+            m_splitPos = std::clamp(me->pos().x() / double(cr.width()), 0.05, 0.95);
+            if (m_compareCanvas)
+                m_compareCanvas->update();
+            return true;
+        }
+        if (m_swipeChk && m_swipeChk->isChecked() && m_compareCanvas)
+        {
+            const int divX = int(cr.width() * m_splitPos);
+            m_compareCanvas->setCursor(std::abs(me->pos().x() - divX) < 12 ? Qt::SplitHCursor
+                                                                           : Qt::ArrowCursor);
+        }
+        if (m_dragging)
+        {
+            const QPoint delta = me->pos() - m_lastMouse;
+            m_lastMouse = me->pos();
+            if (m_syncDrag)
+            {
+                const Vec2 o = m_engine.syncTransform().offset;
+                m_engine.setOffset(o.x + delta.x(), o.y + delta.y());
+            }
+            else
+            {
+                const Vec2 oldOff = m_engine.cellTransform(m_dragIdx).offset;
+                m_engine.setCellOffset(m_dragIdx, oldOff.x + delta.x(), oldOff.y + delta.y());
+            }
+            if (m_compareCanvas)
+                m_compareCanvas->update();
+            update();
+        }
+        return true;
+    }
+
+    if (event->type() == QEvent::MouseButtonRelease)
+    {
+        auto *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::LeftButton)
+        {
+            m_splitDragging = false;
+            m_dragging = false;
+            if (m_compareCanvas)
+                m_compareCanvas->update();
+        }
+        return true;
+    }
+
+    if (event->type() == QEvent::Leave)
+    {
+        // The mouse left the canvas: drop any in-progress drag and restore the
+        // normal cursor (mirrors the old workspace-level leaveEvent behavior).
+        m_splitDragging = false;
+        m_dragging = false;
+        if (m_compareCanvas)
+            m_compareCanvas->setCursor(Qt::ArrowCursor);
+        return true;
+    }
+
+    return QWidget::eventFilter(m_compareCanvas, event);
+}
+
+// Canvas interaction cell: in Split the hovered half maps to its image; every
+// other canvas mode uses the stable reference cell 0.
+int CompareWorkspace::canvasRefCellAt(const QPoint &pos) const
+{
+    if (m_splitChk && m_splitChk->isChecked())
+    {
+        const QRect cr = canvasRect();
+        return pos.x() < cr.width() / 2 ? 0 : 1;
+    }
+    return 0;
+}
+
+// Shared anchored-zoom transform. Clamps the TARGET scale to [0.05, 50.0] and
+// derives the effective factor from that clamped target, so a limit hit derives
+// the offset from the clamped factor instead of recomputing it after the offset
+// was already applied. Respects all four syncZoom / syncDrag combinations.
+void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor)
+{
+    const double currentScale =
+        m_syncZoom ? m_engine.syncTransform().scale : m_engine.cellTransform(refIdx).scale;
+    if (!(currentScale > 0.0) || !std::isfinite(currentScale))
+        return; // invalid baseline: consume without zooming
+    const double targetScale = std::clamp(currentScale * factor, 0.05, 50.0);
+    const double effectiveFactor = targetScale / currentScale;
+    if (effectiveFactor == 1.0)
+        return; // at a clamp: no transform change, no repaint
+    // Keep the image point under the cursor fixed: the new offset zooms the
+    // old offset around the anchor by the effective factor.
+    const auto zoomedOffset = [effectiveFactor](double anchor, double oldOffset)
+    { return anchor - (anchor - oldOffset) * effectiveFactor; };
+    // Core's SyncController is enabled only when zoom AND drag sync are
+    // both on, so for the mixed modes apply the transform paintEvent
+    // renders with the plain setters instead of relying on zoomAt dispatch.
+    const int count = m_engine.imageCount();
+    if (m_syncZoom)
+    {
+        m_engine.setScale(targetScale);
+        for (int i = 0; i < count; ++i)
+            m_engine.setCellScale(i, targetScale);
+    }
+    else
+    {
+        m_engine.setCellScale(refIdx, targetScale);
+    }
+    if (m_syncDrag)
+    {
+        const Vec2 o = m_engine.syncTransform().offset;
+        const double ox = zoomedOffset(anchorX, o.x);
+        const double oy = zoomedOffset(anchorY, o.y);
+        m_engine.setOffset(ox, oy);
+        for (int i = 0; i < count; ++i)
+            m_engine.setCellOffset(i, ox, oy);
+    }
+    else if (m_syncZoom)
+    {
+        // Zoom sync on, drag sync off: zoom every cell's own offset
+        // independently around the anchor, then refresh the shared offset
+        // from the hovered cell without overwriting the cells (the
+        // controller is disabled because drag sync is off).
+        for (int i = 0; i < count; ++i)
+        {
+            const Vec2 o = m_engine.cellTransform(i).offset;
+            m_engine.setCellOffset(i, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
+        }
+        const Vec2 h = m_engine.cellTransform(refIdx).offset;
+        m_engine.setOffset(h.x, h.y);
+    }
+    else
+    {
+        // Fully independent: zoom only the hovered cell's own offset.
+        const Vec2 o = m_engine.cellTransform(refIdx).offset;
+        m_engine.setCellOffset(refIdx, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
+    }
 }
 
 void CompareWorkspace::onPixelLinkToggled(bool on)
@@ -520,55 +677,4 @@ void CompareWorkspace::keyReleaseEvent(QKeyEvent *event)
         return;
     }
     QWidget::keyReleaseEvent(event);
-}
-
-// P0-4: swipe divider drag. In split mode the divider is fixed; in swipe mode it follows the
-// cursor.
-void CompareWorkspace::mousePressEvent(QMouseEvent *event)
-{
-    if (event->button() == Qt::LeftButton && m_swipeChk && m_swipeChk->isChecked())
-    {
-        const int x = int(width() * m_splitPos);
-        if (std::abs(event->pos().x() - x) < 12)
-        {
-            m_splitDragging = true;
-            m_splitPos = std::clamp(event->pos().x() / double(width()), 0.05, 0.95);
-            update();
-            return;
-        }
-    }
-    QWidget::mousePressEvent(event);
-}
-
-void CompareWorkspace::mouseMoveEvent(QMouseEvent *event)
-{
-    if (m_splitDragging && m_swipeChk && m_swipeChk->isChecked())
-    {
-        m_splitPos = std::clamp(event->pos().x() / double(width()), 0.05, 0.95);
-        update();
-        return;
-    }
-    if (m_swipeChk && m_swipeChk->isChecked())
-    {
-        const int x = int(width() * m_splitPos);
-        setCursor(std::abs(event->pos().x() - x) < 12 ? Qt::SplitHCursor : Qt::ArrowCursor);
-    }
-    QWidget::mouseMoveEvent(event);
-}
-
-void CompareWorkspace::mouseReleaseEvent(QMouseEvent *event)
-{
-    if (event->button() == Qt::LeftButton && m_splitDragging)
-    {
-        m_splitDragging = false;
-        update();
-        return;
-    }
-    QWidget::mouseReleaseEvent(event);
-}
-
-void CompareWorkspace::leaveEvent(QEvent *)
-{
-    m_splitDragging = false;
-    setCursor(Qt::ArrowCursor);
 }

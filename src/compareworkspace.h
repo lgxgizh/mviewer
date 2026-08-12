@@ -17,6 +17,7 @@
 #include <QLabel>
 #include <QMap>
 #include <QMouseEvent>
+#include <QPair>
 #include <QPixmap>
 #include <QPointF>
 #include <QPushButton>
@@ -35,6 +36,7 @@
 #include <vector>
 
 class QScrollArea;
+class QStackedLayout;
 class QTableWidget;
 class QComboBox;
 class HistogramWidget;
@@ -49,6 +51,12 @@ class CompareWorkspace : public QWidget
   public:
     explicit CompareWorkspace(QWidget *parent = nullptr);
     ~CompareWorkspace();
+
+    // M34: deterministic split geometry contract — the canvas divides into two
+    // adjacent rects (left = [0, midX), right = [midX, width)) that cover it
+    // exactly, with no right-edge or seam gap. Stateless; drawSplitCompare and
+    // the workflow test both consume this exact helper.
+    static QPair<QRect, QRect> splitRects(const QRect &canvas);
 
     void setImages(const QStringList &paths);
 
@@ -153,10 +161,6 @@ class CompareWorkspace : public QWidget
     void resizeEvent(QResizeEvent *) override;
     void keyPressEvent(QKeyEvent *) override;
     void keyReleaseEvent(QKeyEvent *) override;
-    void mousePressEvent(QMouseEvent *) override;
-    void mouseMoveEvent(QMouseEvent *) override;
-    void mouseReleaseEvent(QMouseEvent *) override;
-    void leaveEvent(QEvent *) override;
 
   private:
     void rebuildCells();
@@ -180,6 +184,14 @@ class CompareWorkspace : public QWidget
     bool m_uniformScale = false; // H5: force all panes to one shared zoom
     QWidget *m_grid = nullptr;
     QGridLayout *m_layout = nullptr;
+    // M34: dedicated compare canvas page. Split / swipe / overlay / checkerboard
+    // render on this widget (never obscured by the scroll area) and it owns
+    // wheel/drag input while a canvas mode is active. The normal grid lives in
+    // the sibling compareGridPage; a stacked layout switches between the two.
+    QWidget *m_compareCanvas = nullptr;
+    QWidget *m_compareGridPage = nullptr;
+    QStackedLayout *m_pageStack = nullptr;
+    QStackedLayout *buildCanvasPage();
     QList<QLabel *> m_cellLabels;
     QList<RawImageView *> m_cellViews;
     bool m_dragging = false;
@@ -205,6 +217,17 @@ class CompareWorkspace : public QWidget
         return (m_splitChk && m_splitChk->isChecked()) || (m_swipeChk && m_swipeChk->isChecked());
     }
 
+    // M34: page visibility + canvas paint/input contract. updateCanvasModeVisibility
+    // switches the stacked page (canvas vs grid); paintCompareCanvas draws the canvas
+    // modes; canvasEventFilter owns wheel/drag on the canvas.
+    void updateCanvasModeVisibility();
+    void paintCompareCanvas();
+    QRect canvasRect() const;
+    bool canvasEventFilter(QEvent *event);
+    int canvasRefCellAt(const QPoint &pos) const;
+    void applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor);
+    QRectF cellDestRect(int idx, const QRectF &geom) const;
+
     // P0-4: split / swipe compare (only meaningful for exactly two images).
     QCheckBox *m_splitChk = nullptr;
     QCheckBox *m_swipeChk = nullptr;
@@ -218,7 +241,7 @@ class CompareWorkspace : public QWidget
     void drawSplitCompare(QPainter &p);
     void drawSwipeCompare(QPainter &p, int x);
     void drawOverlayCompare(QPainter &p);
-    void drawCellCompare(QPainter &p, int idx, const QRect &rect);
+    void drawCellCompare(QPainter &p, int idx, const QRect &clipRect, const QRectF &geomRect);
 
     // M23: checkerboard compare mode (棋盘格) — alternating A/B blocks.
     QCheckBox *m_checkerChk = nullptr;

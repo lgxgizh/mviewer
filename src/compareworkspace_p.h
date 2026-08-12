@@ -41,6 +41,7 @@
 #include <QPainter>
 #include <QScrollArea>
 #include <QSignalBlocker>
+#include <QStackedLayout>
 #include <QStandardPaths>
 #include <QTableWidget>
 #include <QTimer>
