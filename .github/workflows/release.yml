@@ -188,10 +188,11 @@ jobs:
 
       - name: Package portable zip
         run: |
+          $payload = & ./.github/scripts/release_payload.ps1 -BinDir build_msvc/bin
           try {
-            Compress-Archive -Path build_msvc/bin/*, README.md, LICENSE* -DestinationPath mviewer-win-x64.zip
+            Compress-Archive -Path $payload, README.md, LICENSE* -DestinationPath mviewer-win-x64.zip
           } catch {
-            Compress-Archive -Path build_msvc/bin/*, README.md -DestinationPath mviewer-win-x64.zip
+            Compress-Archive -Path $payload, README.md -DestinationPath mviewer-win-x64.zip
           }
 
       - name: Stage installer files
@@ -199,14 +200,10 @@ jobs:
           $ver = "${{ github.ref_name }}".TrimStart('v')
           if (-not $ver) { $ver = "0.0.0" }
           New-Item -ItemType Directory -Force -Path dist/staging/MViewer | Out-Null
-          Copy-Item build_msvc/bin/* dist/staging/MViewer/ -Recurse -Force
+          $payload = & ./.github/scripts/release_payload.ps1 -BinDir build_msvc/bin
+          Copy-Item $payload dist/staging/MViewer/ -Recurse -Force
           # Deploy Qt runtime + imageformat plugin next to the main executable.
-          $main = Get-ChildItem dist/staging/MViewer -Filter *.exe |
-                  Where-Object { $_.Name -notmatch '_tests|core_tests|selftest|golden|bench|mviewer_demo|ui_screenshot' } |
-                  Select-Object -First 1
-          if ($main) {
-            windeployqt --release --no-translations --no-opengl-sw $main.FullName
-          }
+          windeployqt --release --no-translations --no-opengl-sw dist/staging/MViewer/MViewer.exe
           echo "MVIEWER_VERSION=$ver" >> $env:GITHUB_ENV
 
       - name: Build installer (NSIS, best-effort)
