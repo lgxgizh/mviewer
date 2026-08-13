@@ -4,7 +4,11 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.9] - 2026-08-13
+
+### Changed — Release v1.0.9
+
+- Version bump 1.0.7 → 1.0.9 for release build.
 
 ### Fixed — M35 Compare visual correctness and Browse responsiveness
 
