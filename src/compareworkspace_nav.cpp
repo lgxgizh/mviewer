@@ -232,15 +232,19 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
         return;
     }
 
-    // Sync mode: All == both zoom+drag synced; Off == neither. (The CompareSession
-    // only stores All/Off for the persisted snapshot; per-axis toggles default
-    // to the synced state.)
-    const bool syncOn = (s.syncMode != mviewer::domain::SyncMode::Off);
-    m_syncZoom = syncOn;
-    m_syncDrag = syncOn;
-    m_syncZoomChk->setChecked(syncOn);
-    m_syncDragChk->setChecked(syncOn);
-    m_engine.setSyncEnabled(syncOn);
+    // Restore the two independent axes. SyncMode is not collapsed to a
+    // boolean: Zoom-only and Drag-only sessions must survive reopen.
+    m_syncZoom = s.syncMode == mviewer::domain::SyncMode::Zoom ||
+                 s.syncMode == mviewer::domain::SyncMode::All;
+    m_syncDrag = s.syncMode == mviewer::domain::SyncMode::Drag ||
+                 s.syncMode == mviewer::domain::SyncMode::All;
+    {
+        const QSignalBlocker zoomBlocker(m_syncZoomChk);
+        const QSignalBlocker dragBlocker(m_syncDragChk);
+        m_syncZoomChk->setChecked(m_syncZoom);
+        m_syncDragChk->setChecked(m_syncDrag);
+    }
+    m_engine.setSyncMode(m_syncZoom, m_syncDrag);
 
     // M35: sharedScale is the zoom ratio relative to each pane's own Fit.
     m_sharedZoomRatio = s.sharedScale > 0.0 ? s.sharedScale : 1.0;
@@ -256,6 +260,7 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
         m_engine.setCellScale(idx, s.cells[i].scale);
         m_engine.setCellOffset(idx, s.cells[i].offsetX, s.cells[i].offsetY);
     }
+    const bool syncOn = m_syncZoom && m_syncDrag;
     if (syncOn && !s.uniformScale && m_fitScales.size() == m_engine.imageCount())
     {
         for (int i = 0; i < m_engine.imageCount(); ++i)

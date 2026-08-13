@@ -24,6 +24,8 @@ class RawDecoder : public IDecoder
     bool canDecode(const std::string &path) const override;
     ImageData decodeFull(const std::string &path) const override;
     ImageData decodeScaled(const std::string &path, int maxEdge) const override;
+    ImageData decodeScaled(const std::string &path, int maxEdge,
+                           mviewer::domain::ImageMetadata &outMeta) const override;
     ImageData decodeFull(const std::string &path,
                          mviewer::domain::ImageMetadata &outMeta) const override;
     std::vector<std::string> extensions() const override;

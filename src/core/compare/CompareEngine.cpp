@@ -139,7 +139,14 @@ mviewer::domain::CompareSession CompareEngine::session() const
         s.cells[i].offsetX = cells[i].offset.x;
         s.cells[i].offsetY = cells[i].offset.y;
     }
-    s.syncMode = m_sync.enabled() ? mviewer::domain::SyncMode::All : mviewer::domain::SyncMode::Off;
+    if (!m_sync.zoomEnabled() && !m_sync.dragEnabled())
+        s.syncMode = mviewer::domain::SyncMode::Off;
+    else if (m_sync.zoomEnabled() && m_sync.dragEnabled())
+        s.syncMode = mviewer::domain::SyncMode::All;
+    else if (m_sync.zoomEnabled())
+        s.syncMode = mviewer::domain::SyncMode::Zoom;
+    else
+        s.syncMode = mviewer::domain::SyncMode::Drag;
     s.blinkIndex = m_blink.blinkIndex();
     s.sharedScale = m_sync.scale();
     s.sharedOffsetX = m_sync.offset().x;

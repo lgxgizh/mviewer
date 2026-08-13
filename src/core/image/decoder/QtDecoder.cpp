@@ -214,18 +214,46 @@ ImageData QtDecoder::decodeFull(const std::string &path,
 
 ImageData QtDecoder::decodeScaled(const std::string &path, int maxEdge) const
 {
+    mviewer::domain::ImageMetadata meta;
+    return decodeScaled(path, maxEdge, meta);
+}
+
+ImageData QtDecoder::decodeScaled(const std::string &path, int maxEdge,
+                                  mviewer::domain::ImageMetadata &outMeta) const
+{
     QImageReader reader(QString::fromStdString(path));
     reader.setAutoTransform(true);
     const QSize full = reader.size();
     if (!full.isValid() || full.isEmpty())
         return ImageData();
-    if (full.width() <= maxEdge && full.height() <= maxEdge)
-        return toImageData(reader.read()); // 本身已够小，直接解
-
-    const double ratio = static_cast<double>(maxEdge) / std::max(full.width(), full.height());
-    reader.setScaledSize(
-        QSize(static_cast<int>(full.width() * ratio), static_cast<int>(full.height() * ratio)));
-    return toImageData(reader.read());
+    if (outMeta.filePath.empty())
+        outMeta.filePath = path;
+    outMeta.fileSize = QFileInfo(QString::fromStdString(path)).size();
+    if (full.width() > maxEdge || full.height() > maxEdge)
+    {
+        const double ratio = static_cast<double>(maxEdge) /
+                             std::max(full.width(), full.height());
+        reader.setScaledSize(QSize(static_cast<int>(full.width() * ratio),
+                                   static_cast<int>(full.height() * ratio)));
+    }
+    const QImage img = reader.read();
+    if (img.isNull())
+        return ImageData();
+    const int sourceWidth = full.width();
+    const int sourceHeight = full.height();
+    fillMetadata(reader, img, outMeta);
+    // QImageReader::read() returns the scaled image, so restore the source
+    // dimensions for presentation metadata. EXIF auto-transform rotates the
+    // displayed geometry and must be reflected in the reported aspect.
+    outMeta.width = sourceWidth;
+    outMeta.height = sourceHeight;
+    const auto transform = reader.transformation();
+    if (transform == QImageIOHandler::TransformationRotate90 ||
+        transform == QImageIOHandler::TransformationRotate270 ||
+        transform == QImageIOHandler::TransformationMirrorAndRotate90 ||
+        transform == QImageIOHandler::TransformationFlipAndRotate90)
+        std::swap(outMeta.width, outMeta.height);
+    return toImageData(img);
 }
 
 std::vector<std::string> QtDecoder::extensions() const

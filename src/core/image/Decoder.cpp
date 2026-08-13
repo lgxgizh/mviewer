@@ -21,6 +21,13 @@ ImageData Decoder::decodeScaled(const std::string &path, int maxEdge)
     return DecoderRegistry::instance().decodeScaled(path, maxEdge);
 }
 
+ImageData Decoder::decodeScaled(const std::string &path, int maxEdge,
+                                mviewer::domain::ImageMetadata &outMeta)
+{
+    MV_TRACE_SCOPED("Decoder::decodeScaledWithMetadata");
+    return DecoderRegistry::instance().decodeScaled(path, maxEdge, outMeta);
+}
+
 std::vector<std::string> Decoder::supportedExtensions()
 {
     // Preserve the legacy "*.ext" wildcard form used by the UI filter and the

@@ -79,6 +79,7 @@ add_library(mviewer_core SHARED
     core/search/MetadataFilter.h
     core/image/ImageSortKeys.cpp
     core/metadata/MetadataIndexer.cpp
+    core/metadata/MetadataPresentationService.cpp
     core/batch/BatchProcessor.cpp
     core/update/UpdateChecker.cpp
 
@@ -811,6 +812,26 @@ target_compile_features(test_iccprofile PRIVATE cxx_std_20)
 target_include_directories(test_iccprofile PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(NAME iccprofile_tests COMMAND test_iccprofile)
+
+# M36: display materialization contracts. Keeps analysis-domain bytes intact
+# while asserting the CPU/GPU tile and ICC presentation helpers agree.
+add_executable(test_m36_display
+    core/test_m36_display.cpp
+)
+target_link_libraries(test_m36_display PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core mviewer_core)
+target_compile_features(test_m36_display PRIVATE cxx_std_20)
+target_include_directories(test_m36_display PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m36_display_tests COMMAND test_m36_display)
+
+# M36: real QListView Ctrl/Shift selection and SelectionModel integration.
+add_executable(m36_browse_tests
+    core/test_m36_browse.cpp
+)
+target_link_libraries(m36_browse_tests PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core mviewer_core mviewer_ui)
+target_compile_features(m36_browse_tests PRIVATE cxx_std_20)
+target_include_directories(m36_browse_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m36_browse_tests COMMAND m36_browse_tests)
+set_tests_properties(m36_browse_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
 # ─── M15 Sprint 2-1 Search (global index + query engine) ─────────────────────
 add_executable(search_tests

@@ -17,6 +17,8 @@ class Decoder
 
     // 缩放到 maxEdge 以内的解码（保持比例）
     static ImageData decodeScaled(const std::string &path, int maxEdge);
+    static ImageData decodeScaled(const std::string &path, int maxEdge,
+                                  mviewer::domain::ImageMetadata &outMeta);
 
     // 全图解码并填充元数据（M6 扩展）
     static ImageData decodeFull(const std::string &path, mviewer::domain::ImageMetadata &outMeta);

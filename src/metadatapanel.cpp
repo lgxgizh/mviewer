@@ -10,13 +10,18 @@
 #include <QComboBox>
 #include <QFileInfo>
 #include <QHeaderView>
+#include <QHideEvent>
 #include <QLabel>
 #include <QPushButton>
+#include <QPointer>
 #include <QTreeView>
 #include <QVBoxLayout>
 
+#include <cstdint>
+
 MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
 {
+    m_consumerId = "metadata-panel-" + std::to_string(reinterpret_cast<std::uintptr_t>(this));
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(6, 6, 6, 6);
     layout->setSpacing(4);
@@ -132,9 +137,22 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
     m_model->clear();
 }
 
+MetadataPanel::~MetadataPanel()
+{
+    mviewer::core::MetadataPresentationService::instance().cancel(m_consumerId);
+}
+
+void MetadataPanel::hideEvent(QHideEvent *event)
+{
+    mviewer::core::MetadataPresentationService::instance().cancel(m_consumerId);
+    ++m_requestGeneration;
+    QWidget::hideEvent(event);
+}
+
 void MetadataPanel::setImage(const QString &path)
 {
     m_currentPath = path;
+    ++m_requestGeneration;
 
     auto &rs = mviewer::core::RatingStore::instance();
     m_rating->setRating(rs.rating(path.toStdString()));
@@ -148,6 +166,50 @@ void MetadataPanel::setImage(const QString &path)
         return;
     }
 
+    if (!isVisible())
+    {
+        // SelectionModel notifies this panel even while it is hidden. Do not
+        // keep an older presentation flight alive just because the hidden
+        // widget recorded a newer identity.
+        mviewer::core::MetadataPresentationService::instance().cancel(m_consumerId);
+        m_model->clear();
+        return;
+    }
+    requestMetadata();
+}
+
+void MetadataPanel::requestMetadata()
+{
+    const QString path = m_currentPath;
+    const uint64_t generation = m_requestGeneration;
+    QPointer<MetadataPanel> guard(this);
+    mviewer::core::MetadataPresentationService::instance().request(
+        path.toStdString(), m_consumerId,
+        [guard, path, generation](const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
+        {
+            if (!guard || !guard->isVisible() || guard->m_currentPath != path ||
+                guard->m_requestGeneration != generation)
+                return;
+            const auto &meta = snapshot.metadata;
+            if (meta.filePath.empty())
+            {
+                guard->m_model->clear();
+                guard->m_model->setImage(meta);
+                return;
+            }
+            guard->m_model->setImage(meta);
+            guard->m_model->setRaw(snapshot.raw);
+            guard->m_tree->expandAll();
+            guard->m_tree->setColumnWidth(0, 130);
+        });
+}
+
+/*
+    The presentation service owns the single background read. Keep the old
+    model update shape below only in the service callback above.
+    The panel itself never opens the image path.
+*/
+/*
     const mviewer::domain::ImageMetadata meta =
         mviewer::core::MetadataReader::read(path.toStdString());
     if (meta.filePath.empty())
@@ -166,10 +228,12 @@ void MetadataPanel::setImage(const QString &path)
 
     m_tree->expandAll();
     m_tree->setColumnWidth(0, 130);
-}
+*/
 
 void MetadataPanel::clear()
 {
+    mviewer::core::MetadataPresentationService::instance().cancel(m_consumerId);
+    ++m_requestGeneration;
     m_currentPath.clear();
     m_model->clear();
     m_rating->setRating(0);

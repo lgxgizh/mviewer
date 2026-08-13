@@ -156,7 +156,12 @@ header boundary.
 3. `mvcore::toDisplayQImage` materializes a display-only copy, applies the
    embedded source profile, and converts that copy to sRGB. Invalid or missing
    profiles deterministically fall back to sRGB-assumed values.
-4. Compare panes use the same display materializer. Display conversion is not
+4. Thumbnail workers convert before square-fit and persist display-ready PNGs
+   (ThumbnailCache schema 3). Preview scaled decodes carry source dimensions,
+   file identity and profile metadata from the same decoder pass; cached
+   previews are display-ready. ImageViewer CPU tiles and GPU uploads share the
+   same display-ready tile materialization, so repaint does not repeat ICC work.
+5. Compare panes use the same display materializer. Display conversion is not
    used by export/analysis paths unless their contract explicitly requests it.
 
 ### EXIF Orientation
@@ -174,7 +179,7 @@ header boundary.
 
 | Operation | When | Where |
 | ----------- | ------ | ------- |
-| Color space conversion | Display-copy materialization | Qt color pipeline |
+| Color space conversion | Worker/display-cache materialization | Qt color pipeline |
 | EXIF orientation | During decode | CPU (SIMD) |
 | Demosaicing (RAW) | N/A — RAW out of scope | — |
 | Resize (thumbnail) | After decode | CPU (SIMD) or GPU |

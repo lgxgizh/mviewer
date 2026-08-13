@@ -448,6 +448,9 @@ void CompareWorkspace::onSavePreset()
     // Save session settings (includes engine state + UI state)
     const mviewer::domain::CompareSession sess = compareSession();
     QJsonObject sessionObj;
+    // M36: retain the independent Zoom/Drag axes. `synced` remains for
+    // backwards compatibility with older preset files.
+    sessionObj["syncMode"] = static_cast<int>(sess.syncMode);
     sessionObj["synced"] = (sess.syncMode != mviewer::domain::SyncMode::Off);
     sessionObj["sharedScale"] = sess.sharedScale;
     sessionObj["sharedOffsetX"] = sess.sharedOffsetX;
@@ -553,8 +556,16 @@ void CompareWorkspace::onLoadPreset()
     {
         const QJsonObject s = root["session"].toObject();
         mviewer::domain::CompareSession sess;
-        sess.syncMode = s["synced"].toBool(false) ? mviewer::domain::SyncMode::All
-                                                  : mviewer::domain::SyncMode::Off;
+        if (s.contains("syncMode"))
+        {
+            const int mode = qBound(0, s["syncMode"].toInt(), 3);
+            sess.syncMode = static_cast<mviewer::domain::SyncMode>(mode);
+        }
+        else
+        {
+            sess.syncMode = s["synced"].toBool(false) ? mviewer::domain::SyncMode::All
+                                                      : mviewer::domain::SyncMode::Off;
+        }
         sess.sharedScale = s["sharedScale"].toDouble(1.0);
         sess.sharedOffsetX = s["sharedOffsetX"].toDouble(0.0);
         sess.sharedOffsetY = s["sharedOffsetY"].toDouble(0.0);

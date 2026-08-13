@@ -24,6 +24,14 @@ class IDecoder
     // Scaled decode: longest edge clamped to maxEdge, keeping aspect ratio.
     virtual ImageData decodeScaled(const std::string &path, int maxEdge) const = 0;
 
+    // Presentation consumers can obtain source metadata from the same reader
+    // pass. The default keeps existing plug-ins and test decoders compatible.
+    virtual ImageData decodeScaled(const std::string &path, int maxEdge,
+                                   mviewer::domain::ImageMetadata &outMeta) const
+    {
+        return decodeScaled(path, maxEdge);
+    }
+
     // Decode + metadata in one pass (avoids re-opening the file). Decoders that
     // cannot determine a field leave it at its default. Never throws.
     virtual ImageData decodeFull(const std::string &path,

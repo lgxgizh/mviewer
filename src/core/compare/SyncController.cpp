@@ -12,7 +12,7 @@ CellState kDefaultCell{};
 void SyncController::setScale(double s)
 {
     m_sync.scale = s;
-    if (m_sync.enabled)
+    if (m_sync.zoomEnabled)
         for (auto &c : m_cells)
             c.scale = s;
 }
@@ -20,7 +20,7 @@ void SyncController::setScale(double s)
 void SyncController::setOffset(double ox, double oy)
 {
     m_sync.offset = Vec2{ox, oy};
-    if (m_sync.enabled)
+    if (m_sync.dragEnabled)
         for (auto &c : m_cells)
         {
             c.offset.x = ox;
@@ -30,7 +30,7 @@ void SyncController::setOffset(double ox, double oy)
 
 void SyncController::zoomAt(double viewX, double viewY, double factor, int exceptIndex)
 {
-    if (m_sync.enabled)
+    if (m_sync.zoomEnabled || m_sync.dragEnabled)
     {
         const double ns = m_sync.scale * factor;
         const Vec2 newOffset{viewX - (viewX - m_sync.offset.x) * factor,
@@ -39,11 +39,15 @@ void SyncController::zoomAt(double viewX, double viewY, double factor, int excep
         {
             if (i == exceptIndex)
                 continue;
-            m_cells[i].scale = ns;
-            m_cells[i].offset = newOffset;
+            if (m_sync.zoomEnabled)
+                m_cells[i].scale = ns;
+            if (m_sync.dragEnabled)
+                m_cells[i].offset = newOffset;
         }
-        m_sync.scale = ns;
-        m_sync.offset = newOffset;
+        if (m_sync.zoomEnabled)
+            m_sync.scale = ns;
+        if (m_sync.dragEnabled)
+            m_sync.offset = newOffset;
     }
     else if (exceptIndex >= 0 && exceptIndex < static_cast<int>(m_cells.size()))
     {

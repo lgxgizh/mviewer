@@ -79,9 +79,10 @@ void ImageViewer::paintEvent(QPaintEvent *event)
             {
                 const RenderRect region{sx, sy, sw, sh};
                 const RenderSize tgt{tw, th};
-                return eng.scaleRegion(m_frame->pixels(), region, tgt,
-                                       m_view.scale < 1.0 ? RenderInterp::Bilinear
-                                                          : RenderInterp::Nearest);
+                const ImageData raw = eng.scaleRegion(m_frame->pixels(), region, tgt,
+                                                      m_view.scale < 1.0 ? RenderInterp::Bilinear
+                                                                         : RenderInterp::Nearest);
+                return mvcore::toDisplayImageData(raw, m_frame->metadata());
             });
         // F4 (M22): apply the live overlay on a deep copy so the TileCache
         // buffer (shared via shared_ptr) is never mutated. Without the copy,

@@ -2,6 +2,8 @@
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
+    m_statusMetadataConsumer =
+        "mainwindow-status-" + std::to_string(reinterpret_cast<std::uintptr_t>(this));
     // M19: UI models — single source of truth for Current / Selection /
     // Directory / ImageList / Workspace / Analyzer. Every panel reacts to these
     // instead of tracking its own copy of the same state.
@@ -149,6 +151,7 @@ MainWindow::~MainWindow()
     // generation. The queued delivery is additionally QPointer-guarded, so a
     // late completion can never touch freed MainWindow/overlay state.
     cancelMetadataHistogram();
+    mviewer::core::MetadataPresentationService::instance().cancel(m_statusMetadataConsumer);
     // M27: the ImageViewer is a parentless top-level window (mainwindow_ui.cpp
     // creates it with nullptr) — nothing owns it, so it must be deleted here.
     // Without this, every MainWindow create/destroy leaks the viewer window
@@ -404,19 +407,25 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     if (path.isEmpty())
         return;
 
-    const QFileInfo fi(path);
     const QPixmap warmThumbnail = m_thumbnailPanel ? m_thumbnailPanel->thumbReady(path) : QPixmap();
-    m_previewPanel->setImage(path, warmThumbnail); // immediate thumbnail + async upgrade
+    QSize knownSourceSize;
+    qint64 knownFileSize = -1;
+    if (m_thumbnailPanel)
+    {
+        if (const auto *entry = m_thumbnailPanel->entryForPath(path))
+        {
+            knownSourceSize = QSize(entry->width, entry->height);
+            knownFileSize = entry->size;
+        }
+    }
+    m_previewPanel->setImage(path, warmThumbnail, knownSourceSize, knownFileSize);
     // Only decode into the viewer when it is actually on screen — avoids a
     // second decode per thumbnail while browsing with the viewer closed.
     if (!m_imageViewer->isHidden())
         m_imageViewer->setImage(path);
 
-    // Metadata: the overlay follows its toggle; the (usually hidden) tool panel
-    // is refreshed only when visible so rapid browsing stays cheap. A current
-    // image change also cancels the in-flight histogram and immediately clears
-    // the old image's histogram so a stale delivery can never land on the new
-    // image's overlay (the fresh histogram arrives via imageReady).
+    // Metadata presentation is memory-first. Hidden consumers only record the
+    // identity; visible consumers share one background single-flight request.
     if (m_metadataOverlay)
     {
         cancelMetadataHistogram();
@@ -431,25 +440,48 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     // Keep the thumbnail-grid highlight in lock-step (no-op if already current).
     m_thumbnailPanel->selectPath(path);
 
-    // P0: Auto-locate the directory tree to the image's parent folder (navigateTo
-    // expands ancestors & scrolls, does NOT change image selection → no loop).
-    const QString dir = fi.absolutePath();
+    // P0: Auto-locate the directory tree to the image's parent folder. The tree
+    // itself short-circuits an already-selected directory before QFileInfo or
+    // QFileSystemModel work, so rapid same-folder selection is memory-only.
+    const int slash = path.lastIndexOf(QChar('/'));
+    const int backslash = path.lastIndexOf(QChar('\\'));
+    const int separator = qMax(slash, backslash);
+    const QString dir = separator > 0 ? path.left(separator) : QString();
     if (m_directoryTree && !dir.isEmpty())
         m_directoryTree->navigateTo(dir);
 
     mviewer::core::RatingStore::instance().addRecent(path.toStdString()); // P3 recents
 
-    // Window title + status bar identity follow the current image.
-    setWindowTitle(QString("%1 - MViewer").arg(fi.fileName()));
-    // Cheap header-only read (MetadataReader decodes at 1x1) for dimensions;
-    // file size comes straight from the filesystem entry.
-    const auto meta = mviewer::core::MetadataReader::read(path.toStdString());
-    if (meta.width > 0 && meta.height > 0)
-        m_lblImage->setText(
-            QString("%1x%2 · %3").arg(meta.width).arg(meta.height).arg(formatBytes(fi.size())));
-    else
-        m_lblImage->setText(formatBytes(fi.size()));
-    statusBar()->showMessage(QString("当前: %1").arg(fi.fileName()));
+    // Window title + status bar identity follow the current image. Dimensions
+    // arrive from the shared metadata presentation service; never re-read the
+    // file synchronously from the selection signal handler.
+    const QString fileName = separator >= 0 ? path.mid(separator + 1) : path;
+    setWindowTitle(QString("%1 - MViewer").arg(fileName));
+    m_lblImage->setText(fileName);
+    statusBar()->showMessage(QString("当前: %1").arg(fileName));
+
+    ++m_statusMetadataGeneration;
+    const uint64_t generation = m_statusMetadataGeneration;
+    const QString requestedPath = path;
+    QPointer<MainWindow> guard(this);
+    mviewer::core::MetadataPresentationService::instance().request(
+        path.toStdString(), m_statusMetadataConsumer,
+        [guard, requestedPath, generation](
+            const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
+        {
+            if (!guard || generation != guard->m_statusMetadataGeneration ||
+                !guard->m_selection || guard->m_selection->currentImage() != requestedPath)
+                return;
+            const auto &meta = snapshot.metadata;
+            if (meta.width > 0 && meta.height > 0)
+            {
+                guard->m_lblImage->setText(
+                    QString("%1x%2 · %3")
+                        .arg(meta.width)
+                        .arg(meta.height)
+                        .arg(MainWindow::formatBytes(meta.fileSize)));
+            }
+        });
 }
 
 void MainWindow::openDirectory(const QString &dir)
@@ -482,6 +514,16 @@ void MainWindow::changeDirectory(const QString &dir)
 
 void MainWindow::openCompare(const QStringList &images, const QString &sessionJson)
 {
+    // Product contract: one Compare host per MainWindow. Close the old host
+    // before creating the replacement so no global pointer can represent two
+    // sessions at once. Queued work below is guarded by the concrete dialog and
+    // workspace it belongs to, not by m_compareView.
+    if (m_compareHost)
+    {
+        m_compareHost->close();
+        m_compareHost = nullptr;
+        m_compareView = nullptr;
+    }
     QStringList imgs = images;
     // A-3: prefer the shared SelectionModel multi-selection when the caller
     // didn't pass an explicit list (e.g. menu "比较模式").
@@ -509,11 +551,14 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     }
 
     auto *dlg = new QDialog(this);
+    m_compareHost = dlg;
     dlg->setObjectName("compareDialog");
     dlg->setWindowTitle("比较模式 - MViewer");
 
     auto *layout = new QVBoxLayout(dlg);
     m_compareView = new CompareWorkspace(dlg);
+    QPointer<CompareWorkspace> viewGuard(m_compareView);
+    QPointer<QDialog> dialogGuard(dlg);
     layout->addWidget(m_compareView);
     // P0: Inject SelectionModel so CompareWorkspace writes focus back to global SSOT.
     // M28 P1-01: setImages() is async and is invoked once below (after the
@@ -537,11 +582,11 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     // P1 #④: Compare → Analyze workflow (Analyze button in Compare toolbar).
     connect(
         m_compareView, &CompareWorkspace::analyzeCurrent, this,
-        [this]()
+        [this, viewGuard]()
         {
-            if (m_compareView)
+            if (viewGuard)
             {
-                const QString path = m_compareView->focusImagePath();
+                const QString path = viewGuard->focusImagePath();
                 if (!path.isEmpty())
                 {
                     m_selection->setCurrentImage(path);
@@ -557,10 +602,13 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
             [this]() { exportReport(); });
 
     connect(dlg, &QDialog::destroyed, this,
-            [this]()
+            [this, viewGuard, dialogGuard]()
             {
-                m_compareView = nullptr;
-                disconnect(m_compareDestroyConnection);
+                if (m_compareHost == dialogGuard)
+                {
+                    m_compareView = nullptr;
+                    m_compareHost = nullptr;
+                }
             });
 
     dlg->setAttribute(Qt::WA_DeleteOnClose);
@@ -579,21 +627,21 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     // view appears blank.
     const QStringList imgsFinal = imgs;
     const QString sessionFinal = sessionJson;
-    QTimer::singleShot(0, this,
-                       [this, imgsFinal, sessionFinal]()
+    QTimer::singleShot(0, dlg,
+                       [dialogGuard, viewGuard, imgsFinal, sessionFinal]()
                        {
-                           if (!m_compareView)
+                           if (!dialogGuard || !viewGuard)
                                return;
-                           m_compareView->setImages(imgsFinal);
+                           viewGuard->setImages(imgsFinal);
 
                            // M15 P0#1: restore persisted compare session after images
                            // are loaded.
                            if (!sessionFinal.isEmpty())
                            {
-                               const auto session =
-                                   decodeCompareSession(sessionFinal.toStdString());
-                               if (session)
-                                   m_compareView->applySession(*session);
+                                const auto session =
+                                    decodeCompareSession(sessionFinal.toStdString());
+                                if (session)
+                                    viewGuard->applySession(*session);
                            }
                        });
 }

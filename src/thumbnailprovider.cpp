@@ -28,10 +28,11 @@ ImageData ThumbnailProvider::produce(const std::string &path, int size)
     if (ThumbnailCache::instance().get(qp, size, cached))
         return mvcore::fromQImage(cached);
 
-    const ImageData decoded = Decoder::decodeScaled(path, size);
+    mviewer::domain::ImageMetadata meta;
+    const ImageData decoded = Decoder::decodeScaled(path, size, meta);
     if (decoded.isNull())
         return {};
-    const QImage q = mvcore::toQImage(decoded);
+    const QImage q = mvcore::toDisplayQImage(decoded, meta);
     if (q.isNull())
         return {};
     const QImage fitted = squareFitImage(q, size);

@@ -127,6 +127,11 @@ QImage toDisplayQImage(const ImageData &src, const mviewer::domain::ImageMetadat
     return out;
 }
 
+ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageMetadata &meta)
+{
+    return fromQImage(toDisplayQImage(src, meta));
+}
+
 ImageData fromQImage(const QImage &src)
 {
     if (src.isNull())

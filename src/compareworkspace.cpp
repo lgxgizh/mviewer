@@ -13,27 +13,19 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     m_syncDragChk = new QCheckBox("同步拖动(&D)", this);
     m_syncDragChk->setChecked(true);
 
-    auto applySync = [this](bool)
-    {
-        if (!m_syncZoom || !m_syncDrag)
-        {
-            // 关闭任一同步时,用当前 fit 结果初始化每张图的独立变换
-            fitAll();
-        }
-        update();
-    };
+    auto applySync = [this](bool) { update(); };
     connect(m_syncZoomChk, &QCheckBox::toggled, this,
             [this, applySync](bool on)
             {
                 m_syncZoom = on;
-                m_engine.setSyncEnabled(m_syncZoom && m_syncDrag);
+                m_engine.setSyncMode(m_syncZoom, m_syncDrag);
                 applySync(on);
             });
     connect(m_syncDragChk, &QCheckBox::toggled, this,
             [this, applySync](bool on)
             {
                 m_syncDrag = on;
-                m_engine.setSyncEnabled(m_syncZoom && m_syncDrag);
+                m_engine.setSyncMode(m_syncZoom, m_syncDrag);
                 applySync(on);
             });
 
@@ -588,7 +580,7 @@ QStringList CompareWorkspace::comparedImages() const
 
 bool CompareWorkspace::isSyncEnabled() const
 {
-    return m_syncZoom && m_syncDrag;
+    return m_syncZoom || m_syncDrag;
 }
 
 void CompareWorkspace::setSyncEnabled(bool on)
@@ -597,7 +589,7 @@ void CompareWorkspace::setSyncEnabled(bool on)
     m_syncDrag = on;
     m_syncZoomChk->setChecked(on);
     m_syncDragChk->setChecked(on);
-    m_engine.setSyncEnabled(on);
+    m_engine.setSyncMode(on, on);
 }
 
 // rebuildCells() lives in compareworkspace_render.cpp (ADR 014 TU split).

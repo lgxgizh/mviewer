@@ -28,6 +28,18 @@ RatingStore::RatingStore()
     load();
     m_flagsPath = flagsPath();
     loadFlags();
+    m_flagsWorker = std::thread([this]() { flagsWorkerLoop(); });
+}
+
+RatingStore::~RatingStore()
+{
+    {
+        std::lock_guard<std::mutex> lk(m_flagsWorkerMutex);
+        m_flagsWorkerStop = true;
+    }
+    m_flagsWorkerCv.notify_one();
+    if (m_flagsWorker.joinable())
+        m_flagsWorker.join();
 }
 
 RatingStore &RatingStore::instance()
@@ -186,7 +198,10 @@ void RatingStore::addRecent(const std::string &path)
         while (static_cast<int>(m_recents.size()) > kMaxRecents)
             m_recents.pop_back();
     }
-    saveFlags();
+    // Recents are browse telemetry, not an explicit edit. Keep the memory
+    // order immediate and coalesce the compatible flags.txt write in a single
+    // owned worker. Explicit rating/flag edits retain their synchronous save.
+    scheduleFlagsSave();
 }
 
 std::vector<std::string> RatingStore::favorites() const
@@ -197,6 +212,11 @@ std::vector<std::string> RatingStore::favorites() const
 
 void RatingStore::setFilePath(const std::string &path)
 {
+    flushFlagsSave();
+    {
+        std::lock_guard<std::mutex> workerLock(m_flagsWorkerMutex);
+        m_flagsDirty = false;
+    }
     m_filePath = path;
     m_flagsPath = flagsPath();
     load();
@@ -205,24 +225,91 @@ void RatingStore::setFilePath(const std::string &path)
 
 void RatingStore::saveFlags() const
 {
-    std::lock_guard<std::mutex> lk(m_mutex);
+    std::lock_guard<std::mutex> writeLock(m_flagsWriteMutex);
+    saveFlagsSnapshot();
+}
+
+void RatingStore::flushFlagsSave()
+{
+    {
+        std::lock_guard<std::mutex> lk(m_flagsWorkerMutex);
+        if (!m_flagsDirty)
+            return;
+        m_flagsDirty = false;
+    }
+    std::lock_guard<std::mutex> writeLock(m_flagsWriteMutex);
+    saveFlagsSnapshot();
+}
+
+void RatingStore::saveFlagsSnapshot() const
+{
+    std::string flagsPath;
+    std::map<std::string, int> labels;
+    std::set<std::string> rejected;
+    std::set<std::string> picked;
+    std::vector<std::string> recents;
+    {
+        std::lock_guard<std::mutex> lk(m_mutex);
+        flagsPath = m_flagsPath;
+        labels = m_colorLabels;
+        rejected = m_rejected;
+        picked = m_picked;
+        recents = m_recents;
+    }
     std::error_code ec;
-    const auto dir = std::filesystem::path(m_flagsPath).parent_path();
+    const auto dir = std::filesystem::path(flagsPath).parent_path();
     if (!dir.empty())
         std::filesystem::create_directories(dir, ec);
 
-    std::ofstream out(m_flagsPath, std::ios::trunc);
+    std::ofstream out(flagsPath, std::ios::trunc);
     if (!out)
         return;
-    for (const auto &[p, n] : m_colorLabels)
+    for (const auto &[p, n] : labels)
         if (n > 0)
             out << "L|" << p << '|' << n << '\n';
-    for (const auto &p : m_rejected)
+    for (const auto &p : rejected)
         out << "X|" << p << '\n';
-    for (const auto &p : m_picked)
+    for (const auto &p : picked)
         out << "K|" << p << '\n';
-    for (const auto &p : m_recents)
+    for (const auto &p : recents)
         out << "N|" << p << '\n';
+}
+
+void RatingStore::scheduleFlagsSave()
+{
+    {
+        std::lock_guard<std::mutex> lk(m_flagsWorkerMutex);
+        m_flagsDirty = true;
+    }
+    m_flagsWorkerCv.notify_one();
+}
+
+void RatingStore::flagsWorkerLoop()
+{
+    std::unique_lock<std::mutex> lk(m_flagsWorkerMutex);
+    for (;;)
+    {
+        if (!m_flagsDirty && !m_flagsWorkerStop)
+            m_flagsWorkerCv.wait(lk, [this] { return m_flagsDirty || m_flagsWorkerStop; });
+        if (m_flagsWorkerStop && !m_flagsDirty)
+            return;
+
+        // Debounce a burst of A -> B -> C selections. A new selection restarts
+        // the quiet period without creating another worker or disk write.
+        if (!m_flagsWorkerStop)
+        {
+            m_flagsWorkerCv.wait_for(lk, std::chrono::milliseconds(100));
+            if (m_flagsDirty && !m_flagsWorkerStop)
+                continue;
+        }
+        m_flagsDirty = false;
+        lk.unlock();
+        {
+            std::lock_guard<std::mutex> writeLock(m_flagsWriteMutex);
+            saveFlagsSnapshot();
+        }
+        lk.lock();
+    }
 }
 
 void RatingStore::loadFlags()

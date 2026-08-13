@@ -168,6 +168,24 @@ ImageData RawDecoder::decodeScaled(const std::string &path, int maxEdge) const
     return extractPreview(path, maxEdge);
 }
 
+ImageData RawDecoder::decodeScaled(const std::string &path, int maxEdge,
+                                   mviewer::domain::ImageMetadata &outMeta) const
+{
+    ImageData d = extractPreview(path, maxEdge);
+    if (!d.isNull())
+    {
+        const QFileInfo fi(QString::fromStdString(path));
+        outMeta.filePath = path;
+        outMeta.fileName = fi.fileName().toStdString();
+        outMeta.fileSize = static_cast<uint64_t>(qMax<qint64>(0, fi.size()));
+        outMeta.width = d.width;
+        outMeta.height = d.height;
+        outMeta.format = "RAW";
+        outMeta.channels = 3;
+    }
+    return d;
+}
+
 ImageData RawDecoder::decodeFull(const std::string &path,
                                  mviewer::domain::ImageMetadata &outMeta) const
 {

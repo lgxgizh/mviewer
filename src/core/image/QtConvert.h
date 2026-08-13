@@ -25,6 +25,11 @@ QImage toQImageRef(const ImageData &src);
 // ICC is applied to the copy; the source ImageData bytes are never modified.
 QImage toDisplayQImage(const ImageData &src, const mviewer::domain::ImageMetadata &meta);
 
+// Materialize the same display transform into an ImageData tile. This keeps
+// CPU QPainter and GPU upload paths byte-equivalent while preserving the
+// source ImageFrame as analysis-domain data.
+ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageMetadata &meta);
+
 // QImage -> ImageData（格式感知：Grayscale8 保留为灰度，其余转 RGB24）
 ImageData fromQImage(const QImage &src);
 

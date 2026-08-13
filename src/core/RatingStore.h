@@ -14,9 +14,11 @@
 #pragma once
 
 #include <map>
+#include <condition_variable>
 #include <mutex>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace mviewer::core
@@ -27,6 +29,7 @@ class RatingStore
   public:
     // Process-wide singleton backed by a platform data directory.
     static RatingStore &instance();
+    ~RatingStore();
 
     // ---- star rating: 0 = unrated; 1..5 = stars ----
     int rating(const std::string &path) const;
@@ -66,6 +69,10 @@ class RatingStore
     std::string normalize(const std::string &path) const;
 
     void saveFlags() const;
+    void scheduleFlagsSave();
+    void flushFlagsSave();
+    void flagsWorkerLoop();
+    void saveFlagsSnapshot() const;
     void loadFlags();
 
     mutable std::mutex m_mutex;
@@ -76,6 +83,12 @@ class RatingStore
     std::vector<std::string> m_recents; // most recent first
     std::string m_filePath;
     std::string m_flagsPath;
+    mutable std::mutex m_flagsWriteMutex;
+    std::mutex m_flagsWorkerMutex;
+    std::condition_variable m_flagsWorkerCv;
+    bool m_flagsDirty = false;
+    bool m_flagsWorkerStop = false;
+    std::thread m_flagsWorker;
 };
 
 } // namespace mviewer::core

@@ -136,11 +136,12 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, EntryCall
 
                 Entry e;
                 bool fromCache = false;
+                const std::string currentIdentity = fileIdentity(p);
                 {
                     std::lock_guard<std::mutex> lk(m_mtx);
                     auto it = m_cache.find(p);
                     if (it != m_cache.end() && m_identity.count(p) &&
-                        m_identity.at(p) == fileIdentity(p))
+                        m_identity.at(p) == currentIdentity)
                     {
                         e = it->second;
                         fromCache = true;
@@ -160,7 +161,10 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, EntryCall
                             break;
                         const bool wasAbsent = m_cache.find(p) == m_cache.end();
                         m_cache[p] = e;
-                        m_identity[p] = fileIdentity(p);
+                        // The identity was resolved before taking m_mtx. No
+                        // filesystem validation is performed while holding
+                        // the global metadata mutex.
+                        m_identity[p] = currentIdentity;
                         if (wasAbsent)
                             m_cacheOrder.push_back(p);
                         // Bounded cache: evict the oldest indexed paths once
@@ -283,9 +287,8 @@ std::optional<MetadataIndexer::Entry> MetadataIndexer::cached(const std::string 
     auto it = m_cache.find(path);
     if (it == m_cache.end())
         return std::nullopt;
-    auto idIt = m_identity.find(path);
-    if (idIt == m_identity.end() || idIt->second != fileIdentity(path))
-        return std::nullopt;
+    // Contract: cached() is a memory snapshot lookup. File identity
+    // validation belongs to index(), which runs on the background path.
     return it->second; // value copy: safe against concurrent rehash
 }
 

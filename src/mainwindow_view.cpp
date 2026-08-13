@@ -285,10 +285,12 @@ void MainWindow::toggleMetadataOverlay()
             m_metadataOverlay->showForImage(currentImagePath());
         if (m_metadataPanel)
         {
-            m_metadataPanel->setImage(currentImagePath());
-            positionMetadataPanel();
             m_metadataPanel->show();
             m_metadataPanel->raise();
+            positionMetadataPanel();
+            // Showing before setImage lets the panel request metadata through
+            // the shared service. Hidden panel updates remain zero-work.
+            m_metadataPanel->setImage(currentImagePath());
         }
     }
     else

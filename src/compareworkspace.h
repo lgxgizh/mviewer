@@ -91,6 +91,14 @@ class CompareWorkspace : public QWidget
     mviewer::domain::CompareSession compareSession() const
     {
         mviewer::domain::CompareSession s = m_engine.session();
+        if (m_syncZoom && m_syncDrag)
+            s.syncMode = mviewer::domain::SyncMode::All;
+        else if (m_syncZoom)
+            s.syncMode = mviewer::domain::SyncMode::Zoom;
+        else if (m_syncDrag)
+            s.syncMode = mviewer::domain::SyncMode::Drag;
+        else
+            s.syncMode = mviewer::domain::SyncMode::Off;
         s.threshold = m_thresholdValue;
         s.blinkIntervalMs = m_blinkTimer ? m_blinkTimer->interval() : 150;
         s.sidePanelVisible = m_sideChk ? m_sideChk->isChecked() : false;

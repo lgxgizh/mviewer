@@ -255,7 +255,11 @@ void DirectoryTree::navigateTo(const QString &path, bool emitSignal)
     if (path.isEmpty())
         return;
     const QString normalized = QDir::fromNativeSeparators(QDir::cleanPath(path));
-    if (normalized.isEmpty() || !QFileInfo(normalized).isDir())
+    if (normalized.isEmpty())
+        return;
+    if (equivalentPath(m_currentPath, normalized) && m_pendingNavigationPath.isEmpty())
+        return;
+    if (!QFileInfo(normalized).isDir())
         return;
 
     cancelPendingNavigation();

@@ -3,6 +3,7 @@
 #include <QWidget>
 
 #include "core/image/RawMetadata.h"
+#include "core/metadata/MetadataPresentationService.h"
 #include "domain/Image.h"
 
 class QTreeView;
@@ -10,6 +11,7 @@ class MetadataModel;
 class RatingWidget;
 class QComboBox;
 class QPushButton;
+class QHideEvent;
 
 // M15 P0#4 Metadata Center: the metadata table is now rendered by a single
 // unified MetadataModel + QTreeView. The rating / color-label / reject / pick
@@ -21,6 +23,7 @@ class MetadataPanel : public QWidget
 
   public:
     explicit MetadataPanel(QWidget *parent = nullptr);
+    ~MetadataPanel() override;
 
   public slots:
     void setImage(const QString &path);
@@ -34,8 +37,10 @@ class MetadataPanel : public QWidget
 
   private slots:
     void copyAll();
+    void requestMetadata();
 
   private:
+    void hideEvent(QHideEvent *event) override;
     QTreeView *m_tree = nullptr;
     MetadataModel *m_model = nullptr;
     RatingWidget *m_rating = nullptr;   // P1: 0-5 star editor
@@ -43,4 +48,6 @@ class MetadataPanel : public QWidget
     QPushButton *m_rejectBtn = nullptr; // P3 tail: reject toggle
     QPushButton *m_pickBtn = nullptr;   // P3 tail: pick/favorite toggle
     QString m_currentPath;              // P1: tracks the rated image
+    uint64_t m_requestGeneration = 0;
+    std::string m_consumerId;
 };

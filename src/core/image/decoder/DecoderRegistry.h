@@ -32,6 +32,8 @@ class DecoderRegistry
     // decoder can handle the file (graceful — no crash).
     ImageData decodeFull(const std::string &path) const;
     ImageData decodeScaled(const std::string &path, int maxEdge) const;
+    ImageData decodeScaled(const std::string &path, int maxEdge,
+                           mviewer::domain::ImageMetadata &outMeta) const;
 
     // Decode and populate metadata in a single pass.
     ImageData decodeFull(const std::string &path, mviewer::domain::ImageMetadata &outMeta) const;

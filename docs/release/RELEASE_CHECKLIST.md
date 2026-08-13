@@ -22,6 +22,12 @@ The canonical command builds and runs the complete CTest gate and propagates
 any failing CTest exit code. Do not package after a non-zero result. Asset- and
 real-display UX sign-off still run separately where required.
 
+For M36, local evidence must also include `m36_display_tests`, ICC/profile
+parity, Compare lifetime/session tests, and bounded batch-analysis
+cancellation/lifecycle checks. Run both `MVIEWER_GPU=0` and `MVIEWER_GPU=1`
+when a GPU-capable host is available; CPU/GPU tile materialization must use
+identical display-ready bytes.
+
 ## 3. Headless self-test (the one-command release smoke)
 
 ```powershell

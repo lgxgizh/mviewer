@@ -39,7 +39,8 @@ class PreviewPanel : public QWidget
     };
 
   public slots:
-    void setImage(const QString &path, const QPixmap &warmThumbnail = QPixmap());
+    void setImage(const QString &path, const QPixmap &warmThumbnail = QPixmap(),
+                  const QSize &knownSourceSize = QSize(), qint64 knownFileSize = -1);
 
     // Test/embedding observability: whether a preview is currently shown.
     bool hasImage() const
@@ -64,7 +65,7 @@ class PreviewPanel : public QWidget
     // preview cap.
     QSize sourceImageSize() const
     {
-        return QSize(m_imgW, m_imgH);
+        return m_sourceDimensionsKnown ? QSize(m_imgW, m_imgH) : QSize();
     }
 
     // Pixel size of the preview pixmap actually held (max edge <= kPreviewMaxEdge).
@@ -99,6 +100,8 @@ class PreviewPanel : public QWidget
     int m_previewW = 0;
     int m_previewH = 0;
     qint64 m_fileSize = 0;
+    bool m_sourceDimensionsKnown = false;
+    bool m_fileSizeKnown = false;
     double m_lumMean = 0.0;
     int m_rMean = 0;
     int m_gMean = 0;

@@ -114,17 +114,45 @@ ImageData QtFallbackDecoder::decodeFull(const std::string &path,
 
 ImageData QtFallbackDecoder::decodeScaled(const std::string &path, int maxEdge) const
 {
+    mviewer::domain::ImageMetadata meta;
+    return decodeScaled(path, maxEdge, meta);
+}
+
+ImageData QtFallbackDecoder::decodeScaled(const std::string &path, int maxEdge,
+                                          mviewer::domain::ImageMetadata &outMeta) const
+{
     QImageReader reader(QString::fromStdString(path));
     reader.setAutoTransform(true);
     const QSize full = reader.size();
     if (!full.isValid() || full.isEmpty())
         return ImageData();
+    if (outMeta.filePath.empty())
+        outMeta.filePath = path;
+    outMeta.fileSize = QFileInfo(QString::fromStdString(path)).size();
+    QImage img;
     if (full.width() <= maxEdge && full.height() <= maxEdge)
-        return toImageData(reader.read());
-    const double ratio = static_cast<double>(maxEdge) / std::max(full.width(), full.height());
-    reader.setScaledSize(
-        QSize(static_cast<int>(full.width() * ratio), static_cast<int>(full.height() * ratio)));
-    return toImageData(reader.read());
+        img = reader.read();
+    else
+    {
+        const double ratio = static_cast<double>(maxEdge) / std::max(full.width(), full.height());
+        reader.setScaledSize(
+            QSize(static_cast<int>(full.width() * ratio), static_cast<int>(full.height() * ratio)));
+        img = reader.read();
+    }
+    if (img.isNull())
+        return ImageData();
+    const int sourceWidth = full.width();
+    const int sourceHeight = full.height();
+    fillMeta(reader, img, outMeta);
+    outMeta.width = sourceWidth;
+    outMeta.height = sourceHeight;
+    const auto transform = reader.transformation();
+    if (transform == QImageIOHandler::TransformationRotate90 ||
+        transform == QImageIOHandler::TransformationRotate270 ||
+        transform == QImageIOHandler::TransformationMirrorAndRotate90 ||
+        transform == QImageIOHandler::TransformationFlipAndRotate90)
+        std::swap(outMeta.width, outMeta.height);
+    return toImageData(img);
 }
 
 std::vector<std::string> QtFallbackDecoder::extensions() const

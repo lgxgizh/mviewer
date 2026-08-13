@@ -76,6 +76,8 @@ struct SyncTransform
     double scale = 1.0;
     Vec2 offset;
     bool enabled = true;
+    bool zoomEnabled = true;
+    bool dragEnabled = true;
 };
 
 // Per-cell view state. Named CellState inside controllers; CellTransform is

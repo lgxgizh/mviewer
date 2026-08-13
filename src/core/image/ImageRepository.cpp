@@ -25,9 +25,40 @@ ImageRepository &ImageRepository::instance()
     return inst;
 }
 
+void ImageRepository::setSyncLoadBudget(std::chrono::milliseconds budget)
+{
+    m_syncLoadBudgetMs.store(budget.count());
+}
+
+std::chrono::milliseconds ImageRepository::syncLoadBudget() const
+{
+    return std::chrono::milliseconds(m_syncLoadBudgetMs.load());
+}
+
 std::string ImageRepository::makeKey(const std::string &filePath) const
 {
-    return mviewer::core::MetadataReader::key(filePath);
+    const std::string key = mviewer::core::MetadataReader::key(filePath);
+    rememberKey(filePath, key);
+    return key;
+}
+
+std::string ImageRepository::cachedKeyForPath(const std::string &filePath) const
+{
+    std::lock_guard<std::mutex> lock(m_keyMtx);
+    const auto it = m_keyByPath.find(filePath);
+    return it == m_keyByPath.end() ? std::string() : it->second;
+}
+
+void ImageRepository::rememberKey(const std::string &filePath, const std::string &key) const
+{
+    std::lock_guard<std::mutex> lock(m_keyMtx);
+    m_keyByPath[filePath] = key;
+}
+
+void ImageRepository::forgetKey(const std::string &filePath) const
+{
+    std::lock_guard<std::mutex> lock(m_keyMtx);
+    m_keyByPath.erase(filePath);
 }
 
 mviewer::domain::ImageMetadata ImageRepository::makeMeta(const std::string &filePath) const
@@ -128,7 +159,13 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
 {
     MV_TRACE_SCOPED("ImageRepository::load");
     Result res;
-    const std::string key = makeKey(filePath);
+    // Warm navigation uses the last validated identity key from memory. If no
+    // warm snapshot exists, makeKey() performs the explicit filesystem
+    // validation/update needed by a cold load.
+    std::string key = cachedKeyForPath(filePath);
+    const bool hadCachedKey = !key.empty();
+    if (key.empty())
+        key = makeKey(filePath);
 
     ImageData img;
     bool fromCache = false;
@@ -140,10 +177,18 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
     // p95/p99 tail spikes caused by DiskCache::get / allocator contention.
     if (CacheManager::instance().getMemory(CacheLevel::FullImage, key, img))
     {
-        auto frame = std::make_shared<ImageFrame>(ImageFrame::create(filePath, img));
         mviewer::domain::ImageMetadata m;
-        if (CacheManager::instance().getMetadata(key, m))
-            frame->setMetadata(m);
+        // The metadata cache is the identity snapshot for this path. Do not
+        // fall back to ImageFrame::create() here: it calls QFileInfo and turns
+        // a warm selection into synchronous filesystem work. A warm cache hit
+        // must be memory-only; stale/missing identity is repaired by the cold
+        // decode/update path below.
+        if (!CacheManager::instance().getMetadata(key, m))
+        {
+            res.error = "memory cache entry has no metadata: " + filePath;
+            return res;
+        }
+        auto frame = std::make_shared<ImageFrame>(m, img);
         // P0-2/PixelInspector: restore a previously captured 16-bit sample buffer.
         {
             std::shared_ptr<std::vector<uint16_t>> rb;
@@ -163,6 +208,16 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
         res.frame = frame;
         res.fromCache = true;
         return res;
+    }
+
+    // A stale/missing warm entry must revalidate the identity before falling
+    // through to disk; this keeps file-modification correctness without adding
+    // filesystem work to a successful warm-memory hit.
+    if (hadCachedKey)
+    {
+        const std::string validated = makeKey(filePath);
+        if (validated != key)
+            key = validated;
     }
 
     if (opts.useDiskCache && DiskCache::instance().get(key, img))
@@ -584,7 +639,14 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
                     }
                     else
                     {
-                        (*results)[i] = load((*files)[i]);
+                        Result loaded = load((*files)[i]);
+                        // A timeout can race a decode that was already
+                        // running. Do not publish a late result into the
+                        // shared vector after the caller has begun returning;
+                        // the timeout path below owns the terminal failure
+                        // value for any unfinished slot.
+                        if (!ctx.isCancelled())
+                            (*results)[i] = std::move(loaded);
                     }
                 }
                 catch (...)
@@ -621,13 +683,16 @@ std::vector<ImageRepository::Result> ImageRepository::loadDirectory(const std::s
     {
         // M27: actively cancel the outstanding work. Queued tasks observe the
         // token (see the isCancelled branch above) and exit with an explicit
-        // timeout result; a decoder that cannot be interrupted mid-flight is
-        // still safe because every worker state handle is shared_owned. Late
-        // completions never touch freed memory.
+        // timeout result. Use cancelTree rather than the scheduler's soft
+        // cancel so queued work is finalized immediately instead of remaining
+        // behind a blocked worker until that worker happens to drain. A
+        // decoder that cannot be interrupted mid-flight is still safe because
+        // every worker state handle is shared-owned; late completions never
+        // touch freed memory.
         for (auto &h : *handles)
         {
             if (h)
-                TaskScheduler::cancel(h);
+                TaskScheduler::cancelTree(h->id);
         }
     }
     for (int i = 0; i < n; ++i)
@@ -803,12 +868,15 @@ void ImageRepository::cacheToDisk(const std::string &filePath)
 void ImageRepository::invalidate(const std::string &filePath)
 {
     CacheManager::instance().invalidate(makeKey(filePath));
+    forgetKey(filePath);
 }
 
 void ImageRepository::invalidateAll()
 {
     DiskCache::instance().clear();
     CacheManager::instance().clearMemory();
+    std::lock_guard<std::mutex> lock(m_keyMtx);
+    m_keyByPath.clear();
 }
 
 mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string &rootPath,

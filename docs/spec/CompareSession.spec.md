@@ -207,9 +207,15 @@ TEST(CompareSession, ViewportMath) {
 
 Not a hot-path concern; session copy costs ~0.01 ms for 8 images.
 
+## M36 persistence contract
+
+`SyncMode::Off`, `Zoom`, `Drag`, and `All` are serialized as distinct values.
+Preset JSON also writes `syncMode`; readers accept the legacy `synced` boolean
+when that field is absent. A sync toggle never changes the saved/current
+viewport transform by fitting or recentering it.
+
 ## Future Extension
 
-- Per-cell SyncMode override (zoom-sync on, drag-sync off independently)
 - Session history (undo/redo stack for transforms)
 - Named-presets ("side-by-side", "triple", "quad")
 - Per-session color-profile (sRGB/AdobeRGB/Display P3)

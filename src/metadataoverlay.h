@@ -5,9 +5,11 @@
 #include <QWidget>
 
 #include "core/compare/Histogram.h"
+#include "core/metadata/MetadataPresentationService.h"
 
 class QLabel;
 class HistogramWidget;
+class QHideEvent;
 
 /// M15 Product Shell P0: Semi-transparent metadata overlay that appears on top
 /// of the ImageViewer showing key EXIF info (filename, dimensions, size, date,
@@ -24,7 +26,7 @@ class MetadataOverlay : public QWidget
   public:
     explicit MetadataOverlay(QWidget *parent = nullptr);
 
-    /// Build metadata for the given image path without changing visibility.
+    /// Record the current image. Hidden overlays do no metadata work.
     void setImage(const QString &path);
     /// Show metadata for the given image path.
     void showForImage(const QString &path);
@@ -44,14 +46,20 @@ class MetadataOverlay : public QWidget
     void mousePressEvent(QMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
 
   private:
-    void buildContent(const QString &path);
+    void requestMetadata();
+    void buildContent(const mviewer::core::MetadataPresentationService::Snapshot &snapshot);
     void positionHistogram(const QRect &boxRect);
 
     QStringList m_lines;
     QString m_shortName;
     HistogramWidget *m_histogram = nullptr;
+    QString m_requestedPath;
+    uint64_t m_requestGeneration = 0;
+    bool m_requestActive = false;
+    std::string m_consumerId;
 
     // Auto-hide delay constants
     static constexpr int kInfoRectWidth = 380;

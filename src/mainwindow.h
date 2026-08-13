@@ -11,6 +11,7 @@
 #include <QListWidget>
 #include <QMainWindow>
 #include <QMap>
+#include <QPointer>
 #include <QStringList>
 
 #include <memory>
@@ -149,6 +150,8 @@ class MainWindow : public QMainWindow
     // path/frame, hide, navigation, or cancellation clears it so a genuinely new
     // request still runs.
     bool m_metadataHistDelivered = false;
+    uint64_t m_statusMetadataGeneration = 0;
+    std::string m_statusMetadataConsumer;
     void copyCurrentImageToClipboard();
     void openQuickCompare();
     void openPreferences();     // F1 (M22): centralized Preferences dialog
@@ -178,7 +181,7 @@ class MainWindow : public QMainWindow
     BatchDialog *m_batchDialog = nullptr;
     PluginSettings *m_pluginSettings = nullptr;
     CompareWorkspace *m_compareView = nullptr;
-    QMetaObject::Connection m_compareDestroyConnection; // guard WA_DeleteOnClose
+    QPointer<QDialog> m_compareHost;
 
     QAction *m_actOpenDir = nullptr;
     QAction *m_actOpenFile = nullptr;

@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [1.0.9] - 2026-08-13
 
+### Fixed — M36 Browse hot path and display fidelity
+
+- Selection changes now update memory-first and share one asynchronous metadata
+  request across the overlay, metadata panel and status bar. Hidden metadata
+  panels do no presentation work; recents persistence is debounced and flushed
+  safely on shutdown.
+- Thumbnail, Preview, ImageViewer CPU/GPU tiles and Compare now share the ICC
+  display-copy contract. Display-ready thumbnail caches use schema 3, while
+  analysis pixels remain unchanged for metrics and export.
+- Compare queued loads are bound to their own host, sync persistence retains
+  Off/Zoom/Drag/All, and sync toggles no longer reset the viewport.
+- Batch Analysis runs sequentially in a cancellable background workflow with
+  bounded full-frame lifetime and deterministic report order.
+
 ### Changed — Release v1.0.9
 
 - Version bump 1.0.7 → 1.0.9 for release build.

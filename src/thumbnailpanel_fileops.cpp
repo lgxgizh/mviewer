@@ -186,6 +186,11 @@ void ThumbnailPanel::batchAnalyzeExport()
     if (out.isEmpty())
         return;
 
+    runBatchAnalyzeExportAsync(paths, analyzerId, out);
+    return;
+}
+
+#if 0 // legacy synchronous implementation retained only as a migration note
     QApplication::setOverrideCursor(Qt::BusyCursor);
     const auto cursorGuard = qScopeGuard([] { QApplication::restoreOverrideCursor(); });
 
@@ -218,6 +223,159 @@ void ThumbnailPanel::batchAnalyzeExport()
     f.close();
     QMessageBox::information(this, tr("批量分析导出"),
                              tr("已导出 %1 条结果 → %2").arg(results.size()).arg(out));
+#endif
+
+void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
+                                                 const std::string &analyzerId,
+                                                 const QString &output)
+{
+    if (m_batchTask)
+    {
+        QMessageBox::information(this, tr("批量分析导出"), tr("已有批量分析正在运行。"));
+        return;
+    }
+
+    if (!m_batchProgress)
+    {
+        m_batchProgress = new QProgressDialog(tr("正在批量分析..."), tr("取消"), 0, 100, this);
+        m_batchProgress->setWindowModality(Qt::WindowModal);
+        m_batchProgress->setAutoClose(false);
+        m_batchProgress->setMinimumDuration(0);
+        connect(m_batchProgress, &QProgressDialog::canceled, this,
+                [this]()
+                {
+                    if (m_batchTask)
+                        TaskScheduler::cancel(m_batchTask);
+                });
+    }
+    m_batchProgress->setValue(0);
+    m_batchProgress->show();
+
+    struct State
+    {
+        std::mutex mutex;
+        QString output;
+        std::string analyzerId;
+        QStringList paths;
+        std::string body;
+        size_t resultCount = 0;
+        bool cancelled = false;
+        bool writeOk = false;
+    };
+    const auto state = std::make_shared<State>();
+    state->output = output;
+    state->analyzerId = analyzerId;
+    state->paths = paths;
+    const QPointer<ThumbnailPanel> guard(this);
+    const bool asJson = output.endsWith(".json", Qt::CaseInsensitive);
+
+    m_batchTask = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Background,
+        [state, asJson](const TaskScheduler::TaskContext &ctx)
+        {
+            std::vector<mviewer::analyzer::AnalyzerResult> results;
+            results.reserve(static_cast<size_t>(state->paths.size()));
+            AnalyzerRegistry &registry = AnalyzerRegistry::instance();
+            for (int i = 0; i < state->paths.size(); ++i)
+            {
+                if (ctx.isCancelled())
+                {
+                    std::lock_guard<std::mutex> lock(state->mutex);
+                    state->cancelled = true;
+                    return;
+                }
+
+                const QString &path = state->paths.at(i);
+                const auto loaded = ImageRepository::instance().load(path.toStdString());
+                // `loaded` and the analyzer are iteration-local. No vector of
+                // full-resolution frames is retained across the batch.
+                if (loaded.frame)
+                {
+                    auto analyzer = registry.create(state->analyzerId);
+                    if (analyzer && analyzer->analyze(*loaded.frame))
+                        results.push_back({path.toStdString(), analyzer->resultMetrics(),
+                                           analyzer->resultText()});
+                }
+                const_cast<TaskScheduler::TaskContext &>(ctx).reportProgress(
+                    (i + 1) * 100 / qMax(1, state->paths.size()));
+            }
+            const auto report = mviewer::core::buildBatchReport(state->analyzerId, results);
+            const size_t resultCount = results.size();
+            const std::string body = asJson ? report.toJson() : report.toCsv();
+            bool writeOk = false;
+            QFile file(state->output);
+            if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
+            {
+                const QByteArray bytes = QByteArray::fromStdString(body);
+                writeOk = file.write(bytes) == bytes.size();
+                file.close();
+            }
+            std::lock_guard<std::mutex> lock(state->mutex);
+            state->resultCount = resultCount;
+            state->body = body;
+            state->writeOk = writeOk;
+        },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, state]()
+        {
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, state]()
+                {
+                    if (!guard)
+                        return;
+                    guard->m_batchTask.reset();
+                    if (guard->m_batchProgress)
+                        guard->m_batchProgress->close();
+                    bool cancelled = false;
+                    bool writeOk = false;
+                    size_t resultCount = 0;
+                    QString output;
+                    {
+                        std::lock_guard<std::mutex> lock(state->mutex);
+                        cancelled = state->cancelled;
+                        writeOk = state->writeOk;
+                        resultCount = state->resultCount;
+                        output = state->output;
+                    }
+                    if (cancelled)
+                    {
+                        QMessageBox::information(guard, QObject::tr("批量分析导出"),
+                                                 QObject::tr("批量分析已取消。"));
+                    }
+                    else if (!writeOk)
+                    {
+                        QMessageBox::critical(guard, QObject::tr("批量分析导出"),
+                                               QObject::tr("无法写入：%1").arg(state->output));
+                    }
+                    else
+                    {
+                        QMessageBox::information(
+                            guard, QObject::tr("批量分析导出"),
+                            QObject::tr("已导出 %1 条结果 → %2")
+                                .arg(static_cast<qlonglong>(resultCount))
+                                .arg(output));
+                    }
+                },
+                Qt::QueuedConnection);
+        },
+        [guard](int progress)
+        {
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, progress]()
+                {
+                    if (guard && guard->m_batchProgress)
+                        guard->m_batchProgress->setValue(progress);
+                },
+                Qt::QueuedConnection);
+        });
+
+    if (!m_batchTask)
+    {
+        m_batchProgress->close();
+        QMessageBox::warning(this, tr("批量分析导出"), tr("后台任务被调度器拒绝。"));
+    }
 }
 
 void ThumbnailPanel::onCompareClicked()

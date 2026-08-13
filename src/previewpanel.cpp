@@ -33,7 +33,8 @@ std::string PreviewPanel::previewCacheKey(const std::string &path)
     return ImageRepository::instance().makeKey(path) + "#preview" + std::to_string(kPreviewMaxEdge);
 }
 
-void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail)
+void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
+                            const QSize &knownSourceSize, qint64 knownFileSize)
 {
     m_requestedPath = path;
     cancelPending();
@@ -53,6 +54,8 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail)
         m_imgW = 0;
         m_imgH = 0;
         m_fileSize = 0;
+        m_sourceDimensionsKnown = false;
+        m_fileSizeKnown = false;
         m_lumMean = 0.0;
         m_rMean = m_gMean = m_bMean = 0;
         update();
@@ -70,9 +73,11 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail)
         m_preview = warmThumbnail;
         m_previewW = m_preview.width();
         m_previewH = m_preview.height();
-        m_imgW = m_previewW;
-        m_imgH = m_previewH;
-        m_fileSize = 0; // populated by Stage 2; Stage 1 must remain memory-only
+        m_imgW = knownSourceSize.width() > 0 ? knownSourceSize.width() : m_previewW;
+        m_imgH = knownSourceSize.height() > 0 ? knownSourceSize.height() : m_previewH;
+        m_fileSize = knownFileSize >= 0 ? knownFileSize : 0;
+        m_sourceDimensionsKnown = knownSourceSize.width() > 0 && knownSourceSize.height() > 0;
+        m_fileSizeKnown = knownFileSize >= 0;
         m_lumMean = 0.0;
         m_rMean = m_gMean = m_bMean = 0;
         m_hasImage = true;
@@ -97,12 +102,16 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail)
     // delivery. The destructor additionally soft-cancels the task so queued
     // stale work exits before decoding.
     const uint64_t gen = m_requestGen;
+    const int knownW = knownSourceSize.width();
+    const int knownH = knownSourceSize.height();
+    const qint64 knownSize = knownFileSize;
     QPointer<PreviewPanel> guard(this);
     const std::string stdPath = path.toStdString();
 
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Thumbnail,
-        [stdPath, path, gen, guard](const TaskScheduler::TaskContext &ctx)
+        [stdPath, path, gen, guard, knownW, knownH, knownSize](
+            const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
                 return; // queued stale task — stop before any work
@@ -111,7 +120,10 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail)
             QImage qimg;
             int srcW = 0;
             int srcH = 0;
-            qint64 fileSize = 0;
+            qint64 fileSize = knownSize >= 0 ? knownSize : 0;
+            bool sourceKnown = knownW > 0 && knownH > 0;
+            bool fileSizeKnown = knownSize >= 0;
+            mviewer::domain::ImageMetadata meta;
             ImageData img;
             if (CacheManager::instance().getMemory(CacheLevel::Preview, cacheKey, img))
             {
@@ -120,9 +132,10 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail)
             }
             else
             {
-                img = Decoder::decodeScaled(stdPath, kPreviewMaxEdge);
-                if (!img.isNull())
-                    CacheManager::instance().putMemory(CacheLevel::Preview, cacheKey, img);
+                    ImageData decoded = Decoder::decodeScaled(stdPath, kPreviewMaxEdge, meta);
+                    img = mvcore::toDisplayImageData(decoded, meta);
+                    if (!img.isNull())
+                        CacheManager::instance().putMemory(CacheLevel::Preview, cacheKey, img);
             }
             if (!img.isNull())
             {
@@ -132,41 +145,61 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail)
                 // QImageReader::size() is the ENCODED (raw) size even after
                 // setAutoTransform(true); the 90-degree EXIF rotations swap the
                 // axes, so apply reader.transformation() before reporting.
-                QImageReader reader(QString::fromStdString(stdPath));
-                reader.setAutoTransform(true);
-                QSize src = reader.size();
-                if (src.isValid())
+                QSize src(meta.width, meta.height);
+                if (!src.isValid())
                 {
-                    switch (reader.transformation())
+                    // A display-ready preview cache stores pixels only. A
+                    // cache hit therefore performs a cheap header probe on the
+                    // worker when the caller did not already provide source
+                    // identity; it never decodes the full image.
+                    QImageReader reader(QString::fromStdString(stdPath));
+                    reader.setAutoTransform(true);
+                    src = reader.size();
+                    if (src.isValid())
                     {
-                    case QImageIOHandler::TransformationRotate90:
-                    case QImageIOHandler::TransformationRotate270:
-                    case QImageIOHandler::TransformationMirrorAndRotate90:
-                    case QImageIOHandler::TransformationFlipAndRotate90:
-                        src = src.transposed();
-                        break;
-                    default:
-                        break;
+                        switch (reader.transformation())
+                        {
+                        case QImageIOHandler::TransformationRotate90:
+                        case QImageIOHandler::TransformationRotate270:
+                        case QImageIOHandler::TransformationMirrorAndRotate90:
+                        case QImageIOHandler::TransformationFlipAndRotate90:
+                            src = src.transposed();
+                            break;
+                        default:
+                            break;
+                        }
                     }
-                    srcW = src.width();
-                    srcH = src.height();
+                }
+                if (!src.isValid())
+                {
+                    // Header probing failed (the decoder still produced a
+                    // buffer, e.g. via a fallback path): keep dimensions
+                    // unknown instead of presenting scaled pixels as source
+                    // dimensions.
+                    srcW = knownW > 0 ? knownW : img.width;
+                    srcH = knownH > 0 ? knownH : img.height;
                 }
                 else
                 {
-                    // Header probing failed (the decoder still produced a
-                    // buffer, e.g. via a fallback path): report the decoded
-                    // scaled dimensions rather than a 0x0 preview size.
-                    srcW = img.width;
-                    srcH = img.height;
+                    srcW = src.width();
+                    srcH = src.height();
+                    sourceKnown = true;
                 }
             }
-            fileSize = QFileInfo(QString::fromStdString(stdPath)).size();
+            if (fileSize == 0)
+                fileSize = static_cast<qint64>(meta.fileSize);
+            if (fileSize == 0)
+                fileSize = QFileInfo(QString::fromStdString(stdPath)).size();
+            fileSizeKnown = fileSize > 0;
             if (ctx.isCancelled())
                 return; // superseded while decoding — drop before delivery
             if (!img.isNull())
+                // Preview cache payloads are already display-ready. A cache hit
+                // has no need to re-run ICC conversion.
                 qimg = mvcore::toQImage(img);
             QMetaObject::invokeMethod(qApp,
-                                      [path, gen, guard, qimg, stats, srcW, srcH, fileSize]()
+                                      [path, gen, guard, qimg, stats, srcW, srcH, fileSize,
+                                       sourceKnown, fileSizeKnown]()
                                       {
                                           PreviewPanel *panel = guard.data();
                                           if (!panel)
@@ -216,6 +249,8 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail)
                                           panel->m_previewW = panel->m_preview.width();
                                           panel->m_previewH = panel->m_preview.height();
                                           panel->m_fileSize = fileSize;
+                                          panel->m_sourceDimensionsKnown = sourceKnown;
+                                          panel->m_fileSizeKnown = fileSizeKnown;
                                           panel->rebuild();
                                           panel->update();
                                       });
@@ -313,9 +348,13 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
     f.setPointSize(9);
     painter.setFont(f);
     const QString name = QFileInfo(m_presentedPath).fileName();
-    painter.drawText(txtArea, Qt::AlignTop | Qt::AlignLeft,
-                     name + "\n" + QString::number(m_imgW) + "×" + QString::number(m_imgH) + "  " +
-                         QString::number(m_fileSize / 1024) + " KB");
+    QString identity = name;
+    if (m_sourceDimensionsKnown)
+        identity += "\n" + QString::number(m_imgW) + "×" + QString::number(m_imgH);
+    if (m_fileSizeKnown)
+        identity += (m_sourceDimensionsKnown ? "  " : "\n") +
+                    QString::number(m_fileSize / 1024) + " KB";
+    painter.drawText(txtArea, Qt::AlignTop | Qt::AlignLeft, identity);
     // The brightness/RGB figures are sample means computed over the scaled
     // preview buffer, not the full image.
     painter.setPen(secondary);

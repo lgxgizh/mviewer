@@ -45,6 +45,8 @@ struct SyncTransform {
     double scale = 1.0;
     Vec2 offset;
     bool enabled = true;
+    bool zoomEnabled = true;
+    bool dragEnabled = true;
 };
 
 struct CellTransform {
@@ -199,6 +201,19 @@ regardless of format (`p[i]` = i-th byte of the pixel in memory):
   requires equal absolute effective scales across panes.
 - Rebuilt panes receive one coalesced next-event-loop Fit after layout settles.
   The MainWindow Compare host opens fullscreen before the single async load.
+
+## M36 host and sync lifecycle semantics
+
+`MainWindow` owns one Compare host (Option A). Opening Compare while another
+host exists closes/replaces the old host. Each queued load captures its own
+dialog and workspace; destruction of an old host cannot clear or redirect the
+new host, and a MainWindow destruction safely drops queued work.
+
+Sync persistence is four-state: `Off`, `Zoom`, `Drag`, and `All`. The two UI
+axes are independent. Toggling either axis changes only future transform
+propagation; it does not call `fitAll()` or reset the current viewport. Fit is
+reserved for explicit Fit, first-load layout adaptation, or a required layout
+rebuild.
 
 ## Performance
 

@@ -7,7 +7,9 @@
 > `docs/review/M24_TEST_CREDIBILITY_2026-08-05.md`,
 > `docs/review/M24_PERFORMANCE_2026-08-05.md`,
 > `docs/review/M24_FINAL_VERDICT_2026-08-05.md`,
-> `docs/review/M35_COMPARE_BROWSE_CONVERGENCE_2026-08-13.md` and `.\build.ps1 Test`.
+> `docs/review/M35_COMPARE_BROWSE_CONVERGENCE_2026-08-13.md`,
+> `docs/review/M36_BROWSE_HOTPATH_DISPLAY_FIDELITY_2026-08-13.md` and
+> `.\build.ps1 Test`.
 
 ## Positioning
 
@@ -60,6 +62,28 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   the same display materializer.
 - `build.ps1 Test` propagates the original non-zero CTest exit code; CTest
   includes `build_test_exit_gate` to prevent warning-only regressions.
+
+### M36 Browse hot path & display fidelity closure (2026-08-13)
+
+- Selection fan-out is memory-first: warm thumbnails and known gallery identity
+  are reused synchronously; preview, viewer, metadata and status upgrades are
+  generation-guarded background work. Hidden metadata consumers do no
+  presentation build.
+- MetadataOverlay, MetadataPanel and status share the single-flight
+  `MetadataPresentationService`; `MetadataIndexer::cached()` is memory-only;
+  same-directory tree navigation short-circuits; recents persistence is
+  debounced/coalesced with shutdown flush.
+- Thumbnail schema 3, Preview scaled metadata, ImageViewer CPU/GPU tile
+  materialization and Compare use one ICC display-copy contract. Analysis
+  pixels remain unchanged. `m36_display_tests` covers sRGB, AdobeRGB,
+  Display-P3 and no-profile samples.
+- Compare has one host per MainWindow with host-bound queued loads. Sync
+  persistence retains Off/Zoom/Drag/All and toggles no longer Fit/reset the
+  viewport. Batch analysis runs sequentially in a cancellable bounded worker.
+- Current generated CTest registration is **88 tests**. The local focused gate
+  passes the M36 display, Compare, lifetime and RatingStore suites. The full
+  baseline remains environment-blocked by restricted temporary/cache file
+  writes in existing workflow/cache tests; see the M36 evidence report.
 
 - **Decode**: `DecoderRegistry` dispatches to `QtDecoder` (JPEG/PNG/BMP/TIFF/…),
   `RawDecoder` (embedded-JPEG preview for CR2/CR3/NEF/ARW/DNG/ORF/RW2/PEF/RAF/…,
@@ -180,7 +204,7 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   async runtime was hardened and every claim is pinned by new regression tests
   (`m26_scheduler_tests`, `m26_metadata_tests`, `m26_thumbnail_tests`,
   `m26_repository_tests`, `m26_stats_tests`, plus `workflow_ux_tests`
-  Workflow 6) — **78/78 CTest green**, golden/benchmark hard gates unchanged.
+  Workflow 6) — **historical 78/78 CTest green**, golden/benchmark hard gates unchanged.
   Baseline bugs that were reproduced first and then fixed: scheduler
   deadline tasks never finalized (stuck pending/handles), deferred-task
   counter underflow poisoning later submissions (silent rejection), cancelTree
@@ -207,7 +231,7 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 ## Release process (current)
 
 1. Bump `CMakeLists.txt` `project(VERSION)` — the single source of version.
-2. `.\build.ps1 Test` must be green (78 registered CTest tests incl.
+2. `.\build.ps1 Test` must be green (currently 88 registered CTest tests incl.
    `version_consistency`, `updatechecker_tests`, `browse_convergence_tests`,
    `browse_convergence_ui_tests`, `m26_*_tests`, `bench_enforce`,
    `golden_image`, and the four M24 workflow acceptance suites).

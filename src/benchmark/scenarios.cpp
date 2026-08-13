@@ -615,8 +615,14 @@ ScenarioResult scenarioSwitchLatency(const Corpus &corpus)
     // (all 10000 at large scale) blows the cache budget for no measurement
     // benefit.
     const size_t m = std::min<size_t>(all.size(), 50);
+    // B8 measures the preloaded display switch, not analysis work. Histogram
+    // generation is O(image-data) and belongs to the analysis pipeline; doing
+    // it for every navigation would make this gate measure the very blocking
+    // work M36 removes from the browse hot path.
+    ImageRepository::LoadOptions displayOpts;
+    displayOpts.generateHistogram = false;
     for (size_t i = 0; i < m; ++i)
-        repo.load(all[i]);
+        repo.load(all[i], displayOpts);
     // Timed pass: 200 forward/back switches (all cache hits). Measure the
     // frame-to-frame navigation time the UI would incur (repo.load path).
     std::vector<double> sw;
@@ -624,8 +630,8 @@ ScenarioResult scenarioSwitchLatency(const Corpus &corpus)
     {
         const size_t i = k % (m - 1);
         const double a = nowMs();
-        repo.load(all[i]);     // hit
-        repo.load(all[i + 1]); // step forward
+        repo.load(all[i], displayOpts);     // hit
+        repo.load(all[i + 1], displayOpts); // step forward
         const double b = nowMs();
         sw.push_back(b - a);
     }

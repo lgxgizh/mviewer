@@ -8,7 +8,9 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // ImageRepository: abstraction over image lifecycle.
@@ -142,16 +144,20 @@ class ImageRepository
     // minutes; tests shrink it to exercise the timeout path without waiting.
     // When the budget expires, outstanding accepted tasks are cancelled and
     // their slots become explicit "timed out" failure Results.
-    void setSyncLoadBudget(std::chrono::milliseconds budget)
-    {
-        m_syncLoadBudgetMs.store(budget.count());
-    }
-    std::chrono::milliseconds syncLoadBudget() const
-    {
-        return std::chrono::milliseconds(m_syncLoadBudgetMs.load());
-    }
+    void setSyncLoadBudget(std::chrono::milliseconds budget);
+    std::chrono::milliseconds syncLoadBudget() const;
 
   private:
+    // Memory-only path -> identity-key snapshot used by the warm load path.
+    // The key is refreshed by makeKey(), which is the explicit filesystem
+    // validation/update path. A warm selection must not call QFileInfo just to
+    // reconstruct a key that is already known in memory.
+    std::string cachedKeyForPath(const std::string &filePath) const;
+    void rememberKey(const std::string &filePath, const std::string &key) const;
+    void forgetKey(const std::string &filePath) const;
+
+    mutable std::mutex m_keyMtx;
+    mutable std::unordered_map<std::string, std::string> m_keyByPath;
     std::atomic<std::chrono::milliseconds::rep> m_syncLoadBudgetMs{5 * 60 * 1000};
     // Non-template implementation backing the public loadDirectoryAsync.
     // Invokes the callback directly (never checks operator bool — broken on

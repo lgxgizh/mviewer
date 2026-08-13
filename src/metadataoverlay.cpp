@@ -9,15 +9,19 @@
 #include <QDateTime>
 #include <QFileInfo>
 #include <QKeyEvent>
+#include <QHideEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPointer>
 #include <QResizeEvent>
 
 #include <algorithm>
+#include <cstdint>
 
 MetadataOverlay::MetadataOverlay(QWidget *parent) : QWidget(parent)
 {
+    m_consumerId = "metadata-overlay-" + std::to_string(reinterpret_cast<std::uintptr_t>(this));
     setVisible(false);
     setAttribute(Qt::WA_TransparentForMouseEvents, false);
     setFocusPolicy(Qt::StrongFocus);
@@ -32,20 +36,31 @@ MetadataOverlay::MetadataOverlay(QWidget *parent) : QWidget(parent)
 
 void MetadataOverlay::setImage(const QString &path)
 {
-    buildContent(path);
+    m_requestedPath = path;
+    ++m_requestGeneration;
+    m_requestActive = false;
+    if (isVisible())
+        requestMetadata();
 }
 
 void MetadataOverlay::showForImage(const QString &path)
 {
-    buildContent(path);
-    if (m_lines.isEmpty())
+    if (path.isEmpty())
+    {
+        mviewer::core::MetadataPresentationService::instance().cancel(m_consumerId);
+        m_requestActive = false;
         return;
+    }
+    if (m_requestedPath != path)
+        setImage(path);
     if (parentWidget())
         setGeometry(parentWidget()->rect());
     show();
     raise();
     setFocus();
     emit visibilityChanged(true);
+    if (!m_requestActive)
+        requestMetadata();
 }
 
 void MetadataOverlay::toggle()
@@ -58,11 +73,16 @@ void MetadataOverlay::toggle()
         show();
         raise();
         setFocus();
+        if (!m_requestActive)
+            requestMetadata();
     }
 }
 
 void MetadataOverlay::hide()
 {
+    mviewer::core::MetadataPresentationService::instance().cancel(m_consumerId);
+    m_requestActive = false;
+    ++m_requestGeneration;
     QWidget::hide();
     m_lines.clear();
     m_shortName.clear();
@@ -75,6 +95,17 @@ void MetadataOverlay::hide()
         m_histogram->hide();
     }
     emit visibilityChanged(false);
+}
+
+void MetadataOverlay::hideEvent(QHideEvent *event)
+{
+    // Parent/window visibility changes do not necessarily pass through the
+    // public hide() helper. Invalidate the consumer in that path too, so a
+    // hidden overlay never keeps metadata presentation work alive.
+    mviewer::core::MetadataPresentationService::instance().cancel(m_consumerId);
+    ++m_requestGeneration;
+    m_requestActive = false;
+    QWidget::hideEvent(event);
 }
 
 void MetadataOverlay::setHistogram(const mviewer::core::Histogram &hist)
@@ -126,11 +157,31 @@ QString lookup(const std::map<std::string, std::string> &m, const char *key)
 }
 } // namespace
 
-void MetadataOverlay::buildContent(const QString &path)
+void MetadataOverlay::requestMetadata()
+{
+    const QString path = m_requestedPath;
+    const uint64_t generation = m_requestGeneration;
+    QPointer<MetadataOverlay> guard(this);
+    m_requestActive = true;
+    mviewer::core::MetadataPresentationService::instance().request(
+        path.toStdString(), m_consumerId,
+        [guard, path, generation](const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
+        {
+            if (!guard || !guard->isVisible() || guard->m_requestedPath != path ||
+                guard->m_requestGeneration != generation)
+                return;
+            guard->m_requestActive = false;
+            guard->buildContent(snapshot);
+            guard->update();
+        });
+}
+
+void MetadataOverlay::buildContent(
+    const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
 {
     m_lines.clear();
 
-    const auto meta = mviewer::core::MetadataReader::read(path.toStdString());
+    const auto &meta = snapshot.metadata;
 
     m_shortName = QString::fromStdString(meta.fileName);
 
@@ -195,7 +246,7 @@ void MetadataOverlay::buildContent(const QString &path)
 
     // RAW sidecar EXIF (camera / lens) when the generic textKeys path is empty.
     {
-        const auto raw = mviewer::core::parseRawMetadata(path.toStdString());
+        const auto &raw = snapshot.raw;
         if (!raw.make.empty() || !raw.model.empty())
         {
             const bool hasCameraLine =

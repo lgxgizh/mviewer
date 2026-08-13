@@ -58,6 +58,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QProcess>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QRegularExpression>
 #include <QResizeEvent>

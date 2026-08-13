@@ -21,6 +21,7 @@
 #include <QThreadPool>
 
 #include "core/TagStore.h"
+#include "core/scheduler/TaskScheduler.h"
 
 class QPushButton;
 class QContextMenuEvent;
@@ -28,6 +29,7 @@ class QResizeEvent;
 class QStringListModel;
 class CommandStack;
 class SelectionModel;
+class QProgressDialog;
 
 // Virtualized thumbnail gallery (P0 #①/#②).
 //
@@ -269,6 +271,7 @@ class ThumbnailPanel : public QListView
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     // Ctrl+wheel adjusts the thumbnail size (Explorer/FastStone parity).
     void wheelEvent(QWheelEvent *event) override;
     // External drag & drop of files/folders onto the gallery.
@@ -314,6 +317,10 @@ class ThumbnailPanel : public QListView
     ViewMode m_viewMode = Thumbnail;
     int m_thumbSize = kDefaultThumbSize; // M15: dynamic thumb size
     int m_gridThumbSize = kDefaultThumbSize; // Last user-selected standard grid size.
+    // A Ctrl/Shift selection gesture changes the selection without opening a
+    // single image. Keep this set through the mouse release because Qt emits
+    // clicked/currentChanged while the gesture is being processed.
+    bool m_selectionGesture = false;
     QString m_filterText;
     bool m_filterRecursive = false;
     qint64 m_totalBytes = 0;
@@ -349,6 +356,8 @@ class ThumbnailPanel : public QListView
     void applyFilter();     // (re)build the filtered model
     void ensureMetaIndex(); // lazily index metadata for m_allEntries
     void applyThumbSize(int size, bool rememberGridSize);
+    void runBatchAnalyzeExportAsync(const QStringList &paths, const std::string &analyzerId,
+                                    const QString &output);
 
     // P0-1 (perf): resolve pixel dimensions off the UI thread. setDirectory no
     // longer reads image headers eagerly (that blocked folder switching on large
@@ -366,6 +375,8 @@ class ThumbnailPanel : public QListView
     // Guards against the shared pipeline's worker thread calling back into a
     // destroyed panel after the destructor runs.
     std::shared_ptr<std::atomic<bool>> m_alive;
+    TaskScheduler::TaskHandle m_batchTask;
+    QProgressDialog *m_batchProgress = nullptr;
 };
 
 // Paints only the visible cells: a (cached/decoded) thumbnail + filename. No

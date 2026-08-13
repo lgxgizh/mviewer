@@ -24,10 +24,28 @@ class SyncController
     void setEnabled(bool on)
     {
         m_sync.enabled = on;
+        m_sync.zoomEnabled = on;
+        m_sync.dragEnabled = on;
     }
     bool enabled() const
     {
         return m_sync.enabled;
+    }
+    void setZoomEnabled(bool on)
+    {
+        m_sync.zoomEnabled = on;
+    }
+    void setDragEnabled(bool on)
+    {
+        m_sync.dragEnabled = on;
+    }
+    bool zoomEnabled() const
+    {
+        return m_sync.zoomEnabled;
+    }
+    bool dragEnabled() const
+    {
+        return m_sync.dragEnabled;
     }
     void setCellCount(int n)
     {
@@ -224,6 +242,12 @@ class CompareEngine
     void setSyncEnabled(bool on)
     {
         m_sync.setEnabled(on);
+    }
+    void setSyncMode(bool zoom, bool drag)
+    {
+        m_sync.setEnabled(zoom || drag);
+        m_sync.setZoomEnabled(zoom);
+        m_sync.setDragEnabled(drag);
     }
     bool syncEnabled() const
     {

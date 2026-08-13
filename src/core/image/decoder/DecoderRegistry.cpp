@@ -86,11 +86,18 @@ ImageData DecoderRegistry::decodeFull(const std::string &path,
 
 ImageData DecoderRegistry::decodeScaled(const std::string &path, int maxEdge) const
 {
+    mviewer::domain::ImageMetadata meta;
+    return decodeScaled(path, maxEdge, meta);
+}
+
+ImageData DecoderRegistry::decodeScaled(const std::string &path, int maxEdge,
+                                        mviewer::domain::ImageMetadata &outMeta) const
+{
     for (const auto &d : m_decoders)
     {
         if (d->canDecode(path))
         {
-            ImageData out = d->decodeScaled(path, maxEdge);
+            ImageData out = d->decodeScaled(path, maxEdge, outMeta);
             if (!out.isNull())
                 return out;
         }

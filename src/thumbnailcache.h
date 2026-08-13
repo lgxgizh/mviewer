@@ -37,7 +37,9 @@ class ThumbnailCache
 {
   public:
     // Bump when the payload format or the key semantics change.
-    static constexpr int kSchemaVersion = 2;
+    // M36: cached payloads are display-ready (ICC converted), so invalidate
+    // the pre-M36 analysis-domain PNGs.
+    static constexpr int kSchemaVersion = 3;
 
     // Default budget for the on-disk thumbnail folder: 512 MiB.
     static constexpr quint64 kDefaultMaxBytes = 512ULL * 1024ULL * 1024ULL;

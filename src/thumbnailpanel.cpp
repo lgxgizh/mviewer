@@ -77,7 +77,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     connect(this, &QAbstractItemView::clicked, this,
             [this](const QModelIndex &idx)
             {
-                if (idx.isValid())
+                if (idx.isValid() && !m_selectionGesture)
                     emit itemClicked(m_paths.value(idx.row()));
             });
     connect(this, &QAbstractItemView::doubleClicked, this,
@@ -100,7 +100,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     connect(selectionModel(), &QItemSelectionModel::currentChanged, this,
             [this](const QModelIndex &current, const QModelIndex &)
             {
-                if (current.isValid())
+                if (current.isValid() && !m_selectionGesture)
                     emit itemClicked(m_paths.value(current.row()));
             });
 
@@ -183,6 +183,10 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
 
 ThumbnailPanel::~ThumbnailPanel()
 {
+    if (m_batchTask)
+        TaskScheduler::cancel(m_batchTask);
+    if (m_batchProgress)
+        m_batchProgress->close();
     if (m_alive)
         *m_alive = false;
     // M24: drop queued scan/dimension tasks; in-flight ones abort at their next
@@ -689,6 +693,9 @@ void ThumbnailPanel::showEvent(QShowEvent *event)
 
 void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
 {
+    m_selectionGesture = event->button() == Qt::LeftButton &&
+                          (event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier));
+
     // P0: Enforce single-selection on plain left-click (no modifier keys).
     // ExtendedSelection normally handles this, but in IconMode with certain Qt
     // builds the selection is not reliably cleared. We make it explicit.
@@ -711,6 +718,13 @@ void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
         return;
     }
     QListView::mousePressEvent(event);
+}
+
+void ThumbnailPanel::mouseReleaseEvent(QMouseEvent *event)
+{
+    QListView::mouseReleaseEvent(event);
+    if (event->button() == Qt::LeftButton)
+        m_selectionGesture = false;
 }
 
 void ThumbnailPanel::stopThumbnailWorker()

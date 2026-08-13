@@ -51,6 +51,16 @@
 | M24 | **Product Reality & Stability Convergence** — 真实基线 / 版本 SSOT / 异步生命周期 / 工作流验收 / 测试可信度 / 性能 / RC 验证 | ✅ Done (2026-08-05). 70/70 CTest green, clean-env packages verified; verdict `docs/review/M24_FINAL_VERDICT_2026-08-05.md` = READY WITH DOCUMENTED NON-BLOCKING LIMITATIONS. |
 | M25 | **RC Experience & Product Convergence** — 工作流打磨 / 压力稳定性 / 复杂度收敛 / 性能收口 / RC 验收 | 🔄 Automated portion DONE (2026-08-09). Compare toolbar fits 1100 px; `thumbnailpanel.cpp` at 682 lines (ADR-014 guard); UpdateChecker offline-tested + link-safe; Export authoritative-directory + conflict preflight; **Browse data-pipeline convergence**: thumbnail cache identity (size+schema), generation-scoped cancellation, worker QImage-only + no UI-thread disk I/O, format SSOT (RAW/WebP/GIF consistent everywhere), shared async MetadataIndexer, once-per-file sort keys, field-scoped Camera/Lens/ISO filters, Browse close persistence, mojibake fixes. 73/73 local gate (incl. new `browse_convergence_tests` / `browse_convergence_ui_tests`) + S1–S9 & T1–T4 Release soak pass in both scheduler configs. Verdict `docs/review/M25_RC_CONVERGENCE_2026-08-09.md` = AUTOMATED RC READY — TARGET HARDWARE / HUMAN UX SIGN-OFF PENDING. |
 | M26 | **RC Reliability Closure** — 异步正确性 / 生命周期 / 长会话稳定性收口 | ✅ Automated portion DONE (2026-08-09). No new features. TaskScheduler exactly-once finalize for every terminal path (deadline / cancelTree / deferred / rejection), reverse-dependency cancelTree (transitive dependents), metrics can no longer underflow or silently reject later submissions, worker-thread callback contract documented; MetadataIndexer per-consumer request ownership (search re-index + gallery filters never cancel each other), bounded FIFO cache, value-semantics reads; ThumbnailPipeline obsolete-generation cancellation before decode, generation-safe pending/handle bookkeeping; ImageRepository exactly-once aggregate completion under saturation + bounded sync load (no global queue-depth mutation); Preview full-image statistics moved off the UI thread (`ImageStats`). 78/78 local gate green incl. 5 new `m26_*` suites + `workflow_ux_tests` Workflow 6 dual-consumer regression; golden/benchmark gates unchanged. Verdict `docs/review/M26_RC_RELIABILITY_2026-08-09.md` = AUTOMATED RC READY — TARGET HARDWARE / HUMAN UX SIGN-OFF PENDING. |
+| M27 | **Async lifetime closure** — QObject/task teardown and long-session safety | ✅ Automated portion DONE (2026-08-10). 84-test historical gate; retained as regression baseline. |
+| M28 | **Async Compare loading** — background frame adoption and stale-batch rejection | ✅ Complete; retained in current Compare workflow and session tests. |
+| M29 | **Bounded thumbnail cache** — schema/size identity and LRU budget | ✅ Complete; current cache tests remain a gate. |
+| M30 | **Product workflow convergence** — Browse/Compare/Analyze/Export contracts | ✅ Complete; workflow UX remains a gate. |
+| M31 | **Compare visual convergence** — fullscreen, Fit and display-mode correctness | ✅ Complete; superseded by M35/M36 evidence. |
+| M32 | **Browse/Compare stability follow-up** | ✅ Complete; no new capability category. |
+| M33 | **Preview and metadata responsiveness** | ✅ Complete; preview generation and worker stats retained. |
+| M34 | **Release hardening follow-up** | ✅ Complete; build and CI remain frozen. |
+| M35 | **Compare / Browse convergence** — fullscreen Compare, relative Sync Zoom, default display semantics, two-stage Preview | ✅ Complete (2026-08-13); see `docs/review/M35_COMPARE_BROWSE_CONVERGENCE_2026-08-13.md`. |
+| M36 | **Browse hot path & display fidelity closure** — memory-first selection, metadata single-flight, ICC parity, Compare lifetime/sync and bounded Batch Analysis | 🔄 Implementation complete for focused contracts; full gate still blocked by restricted-environment cache/temp-file writes. See `docs/review/M36_BROWSE_HOTPATH_DISPLAY_FIDELITY_2026-08-13.md`. |
 
 ### M25 closure addendum (2026-08-09)
 
@@ -84,7 +94,7 @@
   the silent-rejection + use-after-free it caused), MetadataIndexer
   dual-consumer mutual cancellation, ThumbnailPipeline obsolete-work/pending/
   handle lifecycle, ImageRepository saturation completion + bounded sync load,
-  Preview UI-thread pixel loops. Full gate 78/78 green; M25 S1–S9/T1–T4 soak
+  Preview UI-thread pixel loops. Historical full gate 78/78 green; M25 S1–S9/T1–T4 soak
   re-run (see `docs/review/M26_RC_RELIABILITY_2026-08-09.md`). Remaining
   sign-off: target-hardware stress and the human UX Review Agent signature.
 

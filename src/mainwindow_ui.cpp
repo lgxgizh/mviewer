@@ -1257,10 +1257,14 @@ void MainWindow::setupUi()
                         m_metadataOverlay->showForImage(currentImagePath());
                     if (m_metadataPanel)
                     {
-                        m_metadataPanel->setImage(currentImagePath());
                         positionMetadataPanel();
                         m_metadataPanel->show();
                         m_metadataPanel->raise();
+                        // The panel is visibility-gated: show it before
+                        // submitting the shared metadata request. A hidden
+                        // panel records identity only and deliberately does no
+                        // presentation work.
+                        m_metadataPanel->setImage(currentImagePath());
                     }
                 }
                 else
