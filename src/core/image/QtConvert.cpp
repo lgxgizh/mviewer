@@ -1,5 +1,7 @@
 #include "core/image/QtConvert.h"
 
+#include <QByteArray>
+#include <QColorSpace>
 #include <cstring>
 
 namespace mvcore
@@ -101,6 +103,28 @@ QImage toQImageRef(const ImageData &src)
         return QImage();
     }
     return QImage();
+}
+
+QImage toDisplayQImage(const ImageData &src, const mviewer::domain::ImageMetadata &meta)
+{
+    QImage out = toQImage(src);
+    if (out.isNull())
+        return out;
+
+    QColorSpace source;
+    const auto profileIt = meta.textKeys.find("MViewer.DisplayICC.Base64");
+    if (profileIt != meta.textKeys.end() && !profileIt->second.empty())
+    {
+        const QByteArray encoded(profileIt->second.data(),
+                                 static_cast<qsizetype>(profileIt->second.size()));
+        source = QColorSpace::fromIccProfile(QByteArray::fromBase64(encoded));
+    }
+    if (!source.isValid())
+        source = QColorSpace::SRgb;
+    out.setColorSpace(source);
+    if (source != QColorSpace::SRgb)
+        out.convertToColorSpace(QColorSpace::SRgb);
+    return out;
 }
 
 ImageData fromQImage(const QImage &src)

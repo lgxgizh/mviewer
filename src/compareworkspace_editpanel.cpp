@@ -634,8 +634,7 @@ void CompareWorkspace::onSwapPanes()
     // the already-swapped frames + adjustments, so no post-rebuild applyAdjToCell
     // calls are needed here (they would cancel it into a near-empty request).
     rebuildCells();
-
-    fitAll();
+    schedulePostLayoutFit();
     update();
 
     if (m_sidePanel && m_sidePanel->isVisible())

@@ -189,7 +189,11 @@ switch ($Task) {
         $env:PATH = "$qtPath\bin" + [System.IO.Path]::PathSeparator + $env:PATH
         $env:QT_QPA_PLATFORM = 'offscreen'
         ctest --output-on-failure --output-junit test-results.xml -j4
-        if ($LASTEXITCODE -ne 0) { Write-Warning "Tests failed" }
+        $testExitCode = $LASTEXITCODE
+        if ($testExitCode -ne 0) {
+            Write-Warning "Tests failed (CTest exit code $testExitCode)"
+            exit $testExitCode
+        }
     }
     default {
         Write-Host "[Build] $config..." -ForegroundColor Cyan

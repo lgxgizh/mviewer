@@ -43,11 +43,11 @@
 | 步骤 | 检查点 | 通过标准 |
 |---|---|---|
 | 选择两张 | Ctrl/Shift 多选、框选 | 多选用 `blockSignals` 守卫，无回环；选择序正确 |
-| Compare | 默认布局、自动适配窗口 | 默认布局铺满视口，无空白（stretch 已重置）；窗口缩放时自适应 |
+| Compare | 全屏、默认布局、自动适配窗口 | 首帧直接全屏；每图按自身窗格 Fit，铺满视口且无空白；窗口缩放时自适应 |
 | 切换：左右 | 并排几何 | 左右布局对称，缩放同步 |
 | 切换：覆盖 | 叠加对齐 | 两图按相同锚点对齐，无偏移 |
 | 切换：闪烁 | 闪烁节奏、无撕裂 | 固定节奏交替，无撕裂/卡顿 |
-| 切换：Diff | 差值/热力图 | 差值正确，热力图配色可读 |
+| 切换：Diff | 差值/热力图 | 默认无染色；显式开启“显示差异”后差值正确、热力图配色可读 |
 | 退出 Compare | 回到浏览、状态一致 | 退出后主视图与缩略图选择保持同步，无空白 cell |
 | 继续浏览 | 无残留 | 后续切换流畅，比较期间的状态不污染浏览模式 |
 
@@ -61,7 +61,7 @@ Checklist 条目凡能自动化的，已固化为回归测试，随门禁自动�
 | Checklist 范围 | 自动化测试（ctest） | 覆盖内容 |
 |---|---|---|
 | Workflow 1 全流程 | `workflow_ux_tests` | 真实 MainWindow：专业浏览工具栏、Folder/Preview 侧栏比例迁移、Browse 与 Tab 独立恢复、Analysis/Search 跨窗口恢复、路径 Enter 不误开旧图、跨盘精确导航并自动清除冲突目录过滤、目录切换清理旧状态并选中新目录首图、视图模式/固定尺寸/可调滑块状态同步；打开目录 → onImageOpen → ←/→/Home/End/PageUp/PageDown → 首屏解码 ≤ 5 s → Fit/100%/放大/恢复 → 关闭 |
-| Workflow 2 全流程 | `workflow_ux_tests` | 真实 CompareWorkspace + 真实键鼠事件：默认同步/参考图、B/S/O/K/H 模式互斥、Space 临时闪烁、锁定基准、阈值/调整/重置后的指标与 Inspector 同步、拖动期间重计算合并、Zoom/Pan 保持、Esc 退出后继续浏览 |
+| Workflow 2 全流程 | `workflow_ux_tests` | 真实 MainWindow 全屏 Compare + 真实键鼠事件：默认无 Diff 染色、按窗格 Fit + 相对同步缩放、B/S/O/K/H 模式互斥、Space 临时闪烁、锁定基准、阈值/调整/重置后的指标与 Inspector 同步、拖动期间重计算合并、Esc 退出后继续浏览 |
 | Compare 会话恢复 | `compare_session_tests` | 布局/参考图/闪烁间隔/差异阈值 round-trip |
 | Compare 引擎语义 | `compare_workflow_tests` | 选择→比较→引擎状态机 |
 | 浏览模型 | `product_browse_tests` | 目录列表 / 导航模型 |

@@ -100,6 +100,10 @@ void fillMetadata(const QImageReader &reader, const QImage &img,
     if (cs.isValid())
     {
         meta.hasIccProfile = !cs.iccProfile().isEmpty();
+        const QByteArray profile = cs.iccProfile();
+        const QByteArray encoded = profile.toBase64();
+        meta.textKeys["MViewer.DisplayICC.Base64"] =
+            std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
         switch (cs.primaries())
         {
         case QColorSpace::Primaries::SRgb:
@@ -107,6 +111,9 @@ void fillMetadata(const QImageReader &reader, const QImage &img,
             break;
         case QColorSpace::Primaries::AdobeRgb:
             meta.colorSpace = "AdobeRGB";
+            break;
+        case QColorSpace::Primaries::DciP3D65:
+            meta.colorSpace = "DisplayP3";
             break;
         default:
             meta.colorSpace = "unknown";

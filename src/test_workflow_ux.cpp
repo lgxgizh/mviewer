@@ -1344,7 +1344,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
           "all exclusive modes are OFF after the round-trip (grid restored)");
 
     // 差异高亮（H）独立开关，不干扰其他模式。
-    QCheckBox *diffHl = findChk(ws, QStringLiteral("差异高亮"));
+    QCheckBox *diffHl = findChk(ws, QStringLiteral("高亮差异"));
+    CHECK(diffHl != nullptr, "diff-highlight control is discoverable for the H shortcut");
     if (diffHl)
     {
         sendKey(ws, Qt::Key_H);
@@ -1546,8 +1547,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
             CHECK(qAbs(pane0->scale() - pane1->scale()) < 1e-9 &&
                       pane0->offset() == pane1->offset(),
                   "wheel gate: synchronized wheel zoom updates all panes uniformly");
-            CHECK(qAbs(pane0->scale() - ws->engine().syncTransform().scale) < 1e-9,
-                  "wheel gate: pane scale matches the engine sync scale after wheel");
+            CHECK(ws->engine().syncTransform().scale > 1.0,
+                  "wheel gate: engine shared transform records a relative zoom ratio");
 
             // Independent path: only the hovered pane changes, with the same
             // center-relative anchor semantics.
@@ -1772,6 +1773,14 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
             CHECK(targetView != nullptr, "gate test: target pane (0) is a RawImageView");
             if (targetView)
             {
+                QCheckBox *diffOverlay = ws->findChild<QCheckBox *>("diffOverlayToggle");
+                CHECK(diffOverlay != nullptr,
+                      "gate test: explicit diff visualization control is discoverable");
+                CHECK(targetView->overlay().isNull(),
+                      "gate test: ordinary Compare presents the source image without an overlay");
+                if (diffOverlay)
+                    diffOverlay->setChecked(true);
+                waitForAnalysisIdle();
                 const int targetBase = 1;
                 const uint8_t finalThreshold = 180;
                 const ImageData basePx = ws->engine().imageAt(targetBase)->pixels();
@@ -1903,11 +1912,15 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
                 }
             } restoreAnalysis;
 
-            // Expected displays from the same production helpers the pane uses: a
-            // brightness-only adjustment is exactly adjustBrightness + toQImage.
+            // Expected displays from the same production helpers the pane uses:
+            // adjustments stay in analysis space, then the display-only copy is
+            // materialized through the frame's color profile.
             const ImageData basePx = ws->engine().imageAt(1)->pixels();
-            const QImage expectedBright40 = mvcore::toQImage(adjustBrightness(basePx, 40));
-            const QImage expectedBright80 = mvcore::toQImage(adjustBrightness(basePx, 80));
+            const auto &baseMeta = ws->engine().imageAt(1)->metadata();
+            const QImage expectedBright40 =
+                mvcore::toDisplayQImage(adjustBrightness(basePx, 40), baseMeta);
+            const QImage expectedBright80 =
+                mvcore::toDisplayQImage(adjustBrightness(basePx, 80), baseMeta);
 
             waitForAnalysisIdle();
             const QImage oldPaneImage = referenceView->image();
@@ -2022,6 +2035,111 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     // 退出后继续浏览：SSOT 仍然可用且信号正常。
     sel.setCurrentImage(pathA);
     CHECK(sel.currentImage() == pathA, "browsing continues after leaving Compare");
+}
+
+void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
+{
+    std::cout << "── Workflow 11: real MainWindow Compare fullscreen contract ──\n";
+    MainWindow w;
+    w.resize(1000, 700);
+    w.show();
+    pump(50);
+    auto *gallery = w.findChild<ThumbnailPanel *>();
+    CHECK(gallery != nullptr, "fullscreen workflow: MainWindow exposes ThumbnailPanel");
+    if (!gallery)
+        return;
+    gallery->setDirectory(QFileInfo(pathA).absolutePath());
+    pump(250);
+    gallery->selectPaths(QStringList{pathA, pathB}, pathA);
+    pump(20);
+    SelectionModel *sel = w.findChild<SelectionModel *>();
+    CHECK(sel != nullptr, "fullscreen workflow: MainWindow exposes SelectionModel");
+    if (!sel)
+        return;
+    const QStringList expectedSelection{pathA, pathB};
+    CHECK(sel->selection() == expectedSelection,
+          "fullscreen workflow: two-image selection remains authoritative");
+    QAction *compareAction = nullptr;
+    for (QAction *action : w.findChildren<QAction *>())
+        if (action && action->text().startsWith(QStringLiteral("比较模式")))
+            compareAction = action;
+    CHECK(compareAction != nullptr, "fullscreen workflow: Compare action is discoverable");
+    if (!compareAction)
+        return;
+    compareAction->trigger();
+    pump(300);
+    QDialog *compareDialog = w.findChild<QDialog *>("compareDialog");
+    CHECK(compareDialog != nullptr && compareDialog->isVisible(),
+          "fullscreen workflow: visible Compare dialog is discoverable");
+    CHECK(compareDialog && compareDialog->property("mviewerFullscreenRequested").toBool(),
+          "fullscreen workflow: real Compare requests fullscreen before its first frame");
+    if (QGuiApplication::platformName() != "offscreen")
+        CHECK(compareDialog && compareDialog->isFullScreen(),
+              "fullscreen workflow: native Compare opens directly fullscreen");
+    if (compareDialog)
+    {
+        sendKey(compareDialog, Qt::Key_Escape);
+        pump(50);
+        CHECK(!compareDialog->isVisible(), "fullscreen workflow: Escape closes fullscreen Compare");
+    }
+    w.close();
+    pump(20);
+}
+
+void workflow12_compare_mixed_fit(const QString &dirPath)
+{
+    std::cout << "── Workflow 12: mixed-size per-pane Fit contract ──\n";
+    QDir dir(dirPath);
+    const QString wide = writePng(dir, "m35_wide.png", QColor(180, 80, 30), 800, 100);
+    const QString portrait = writePng(dir, "m35_portrait.png", QColor(30, 100, 180), 100, 500);
+    QDialog dlg;
+    auto *layout = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    layout->addWidget(ws);
+    dlg.resize(1000, 700);
+    dlg.show();
+    ws->setImages({wide, portrait});
+    QElapsedTimer timer;
+    timer.start();
+    while (ws->comparedImageCount() != 2 && timer.elapsed() < 5000)
+        pump(25);
+    pump(100);
+
+    RawImageView *pane0 = nullptr;
+    RawImageView *pane1 = nullptr;
+    for (RawImageView *pane : ws->findChildren<RawImageView *>())
+        if (pane && pane->isVisible())
+            (pane->cellIndex() == 0 ? pane0 : pane1) = pane;
+    CHECK(pane0 && pane1, "mixed-fit workflow exposes both panes");
+    if (pane0 && pane1)
+    {
+        const double fit0 = std::min(double(pane0->width()) / 800.0,
+                                     double(pane0->height()) / 100.0);
+        const double fit1 = std::min(double(pane1->width()) / 100.0,
+                                     double(pane1->height()) / 500.0);
+        CHECK(qAbs(pane0->scale() - fit0) < 0.02 && qAbs(pane1->scale() - fit1) < 0.02,
+              "mixed-fit workflow fits each image to its own final pane geometry");
+        CHECK(qAbs(pane0->scale() / fit0 - pane1->scale() / fit1) < 0.02,
+              "mixed-fit workflow starts with one shared relative zoom ratio");
+
+        QCheckBox *uniform = findChk(ws, QStringLiteral("统一像素倍率"));
+        CHECK(uniform != nullptr, "mixed-fit workflow exposes Uniform Pixel Scale");
+        if (uniform)
+        {
+            uniform->setChecked(true);
+            pump(50);
+            CHECK(qAbs(pane0->scale() - pane1->scale()) < 1e-9,
+                  "Uniform Pixel Scale alone opts into equal absolute scales");
+            uniform->setChecked(false);
+            pump(50);
+            CHECK(qAbs(pane0->scale() / fit0 - pane1->scale() / fit1) < 0.02,
+                  "disabling Uniform restores per-pane Fit semantics");
+        }
+    }
+    dlg.close();
+    pump(20);
+    QFile::remove(wide);
+    QFile::remove(portrait);
 }
 
 // ─── Workflow 10: Compare canvas page visibility + interaction ───────────────
@@ -2630,13 +2748,21 @@ void workflow8_preview_scaled_load(const QString &rootDir)
     {
         PreviewPanel panel;
         panel.resize(320, 240);
-        panel.setImage(path);
+        QPixmap warm(140, 105);
+        warm.fill(QColor(24, 80, 160));
+        panel.setImage(path, warm);
+        CHECK(panel.hasImage() && panel.presentedPath() == path &&
+                  panel.presentationQuality() == PreviewPanel::PresentationQuality::Thumbnail,
+              "preview workflow: warm thumbnail is usable synchronously without an event-loop hop");
         QElapsedTimer t;
         t.start();
-        while (!panel.hasImage() && t.elapsed() < 10000)
+        while (panel.presentationQuality() != PreviewPanel::PresentationQuality::Preview &&
+               t.elapsed() < 10000)
             pump(25);
 
-        CHECK(panel.hasImage(), "preview workflow: scaled preview is delivered");
+        CHECK(panel.hasImage() && panel.presentedPath() == path &&
+                  panel.presentationQuality() == PreviewPanel::PresentationQuality::Preview,
+              "preview workflow: scaled preview atomically upgrades the warm thumbnail");
         CHECK(sched.metrics(TaskScheduler::PoolType::ThumbnailPool).submitted ==
                   thumbSubmittedBefore + 1,
               "preview workflow: exactly one Thumbnail task serves the preview");
@@ -2925,6 +3051,8 @@ int main(int argc, char **argv)
 
     workflow1_browse(workDir.absolutePath(), paths);
     workflow3_session_restore(workDir.absolutePath(), paths.first());
+    workflow11_compare_fullscreen(paths[0], paths[2]);
+    workflow12_compare_mixed_fit(workDir.absolutePath());
     workflow2_compare(paths[0], paths[2]);
     workflow10_compare_canvas(paths[0], paths[2]);
     workflow5_export_current_output_directory(workDir.absolutePath());

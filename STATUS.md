@@ -1,12 +1,13 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-08-10 · Version: **1.0.7 (in development)** · Last release tag: **v1.0.5** (2026-07-29)
+> Snapshot: 2026-08-13 · Version: **1.0.7 (in development)** · Last release tag: **v1.0.5** (2026-07-29)
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
 > `docs/review/M24_TEST_CREDIBILITY_2026-08-05.md`,
 > `docs/review/M24_PERFORMANCE_2026-08-05.md`,
-> `docs/review/M24_FINAL_VERDICT_2026-08-05.md` and `.\build.ps1 Test`.
+> `docs/review/M24_FINAL_VERDICT_2026-08-05.md`,
+> `docs/review/M35_COMPARE_BROWSE_CONVERGENCE_2026-08-13.md` and `.\build.ps1 Test`.
 
 ## Positioning
 
@@ -42,6 +43,23 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   cmake/ninja/cl directly. Qt 6.10.x / MSVC 19.44 verified on the dev machine.
 
 ## Shipped capabilities (1.0.x, CTest-verified)
+
+### M35 Compare / Browse convergence (2026-08-13)
+
+- Ordinary Compare presents source images without an implicit heatmap;
+  PSNR/SSIM/statistics still run asynchronously, while the explicit
+  `显示差异` state controls visualization.
+- Compare opens fullscreen and performs one coalesced post-layout Fit. Each
+  pane fits its own viewport; synchronized zoom shares the relative ratio to
+  Fit, while Uniform Pixel Scale remains an explicit independent mode.
+- Browse preview is two-stage: an already materialized gallery thumbnail is
+  shown synchronously and a <=512 px preview replaces it atomically. Existing
+  generation/cancellation/QPointer latest-wins guards remain authoritative.
+- Analysis pixels remain decoded numeric values. Embedded ICC is retained as a
+  frame metadata sidecar and applied only to display copies; Compare panes use
+  the same display materializer.
+- `build.ps1 Test` propagates the original non-zero CTest exit code; CTest
+  includes `build_test_exit_gate` to prevent warning-only regressions.
 
 - **Decode**: `DecoderRegistry` dispatches to `QtDecoder` (JPEG/PNG/BMP/TIFF/…),
   `RawDecoder` (embedded-JPEG preview for CR2/CR3/NEF/ARW/DNG/ORF/RW2/PEF/RAF/…,

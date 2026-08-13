@@ -5,6 +5,7 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QImageReader>
+#include <QColorSpace>
 #include <QString>
 #include <cmath>
 #include <cstring>
@@ -59,7 +60,27 @@ void fillMeta(const QImageReader &reader, const QImage &img, mviewer::domain::Im
         else if (!ext.isEmpty())
             meta.format = ext.toUpper().toStdString();
     }
-    meta.colorSpace = "unknown";
+    const QColorSpace cs = img.colorSpace();
+    if (cs.isValid())
+    {
+        const QByteArray profile = cs.iccProfile();
+        meta.hasIccProfile = !profile.isEmpty();
+        const QByteArray encoded = profile.toBase64();
+        meta.textKeys["MViewer.DisplayICC.Base64"] =
+            std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
+        if (cs.primaries() == QColorSpace::Primaries::SRgb)
+            meta.colorSpace = "sRGB";
+        else if (cs.primaries() == QColorSpace::Primaries::AdobeRgb)
+            meta.colorSpace = "AdobeRGB";
+        else if (cs.primaries() == QColorSpace::Primaries::DciP3D65)
+            meta.colorSpace = "DisplayP3";
+        else
+            meta.colorSpace = "unknown";
+    }
+    else
+    {
+        meta.colorSpace = "unknown";
+    }
     meta.orientation = 1;
 }
 

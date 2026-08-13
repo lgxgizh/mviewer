@@ -407,6 +407,16 @@ add_test(NAME version_consistency
 set_tests_properties(version_consistency PROPERTIES
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 
+# M35: the canonical local Test entry point must never turn a failing CTest
+# run into a successful process exit. Keep this static contract in CTest so a
+# future build-script edit cannot silently weaken every downstream gate.
+add_test(NAME build_test_exit_gate
+    COMMAND powershell -NoProfile -ExecutionPolicy Bypass
+            -File ${CMAKE_SOURCE_DIR}/scripts/build_test_exit_gate.ps1
+            -SourceDir ${CMAKE_SOURCE_DIR})
+set_tests_properties(build_test_exit_gate PROPERTIES
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+
 # ─── M3 Phase-1 pipeline acceptance tests ───────────────────────────────
 add_executable(m3pipeline_tests
     core/test_m3_pipeline.cpp

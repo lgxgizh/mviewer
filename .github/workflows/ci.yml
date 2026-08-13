@@ -220,9 +220,8 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # test — CTest job (separate runner; artifacts not shared)
-  # Runs CTest directly with an explicit $LASTEXITCODE guard so the
-  # bench_enforce perf hard-gate and golden_image regression are ACTUALLY
-  # enforced (build.ps1 Test swallows CTest failures, so we do not use it).
+  # Runs CTest directly so this job can publish its own JUnit artifact. The
+  # canonical build.ps1 Test gate also propagates CTest failures (M35).
   # ---------------------------------------------------------------------------
   test:
     name: Unit tests (ctest)
@@ -244,10 +243,7 @@ jobs:
           cache: true
 
       # `build.ps1 Release` recompiles on this fresh runner (job isolation);
-      # then CTest runs directly with an explicit $LASTEXITCODE guard.
-      # NOTE: build.ps1 Test swallows CTest failures (Write-Warning, no exit),
-      # so we must NOT rely on its exit code — run CTest explicitly so any unit
-      # test or bench_enforce perf-budget violation actually fails the PR.
+      # CTest remains explicit here to keep report generation local to the job.
       - name: Build
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
 

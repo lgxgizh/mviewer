@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed — M35 Compare visual correctness and Browse responsiveness
+
+- Compare opens fullscreen, fits every image to its own final pane geometry,
+  and synchronizes zoom as a ratio relative to each pane's Fit. Uniform Pixel
+  Scale remains a separate opt-in absolute-scale mode.
+- Difference metrics no longer imply a visible heatmap. Ordinary Compare shows
+  original display pixels; users explicitly enable `显示差异` for heatmap or
+  highlight visualization, with latest-wins cancellation preserved.
+- Preview selection no longer clears the pane before the next decode. A warm
+  gallery thumbnail is usable synchronously and the background <=512 px result
+  upgrades it atomically without stale delivery.
+- Embedded ICC profiles are retained beside analysis pixels and applied only
+  when a display copy is materialized. Analysis bytes and metrics are unchanged.
+- The canonical `build.ps1 Test` entry point now returns a non-zero CTest exit
+  code on any test failure, guarded by `build_test_exit_gate`.
+
 ### Added — Dedicated compare canvas page (split / swipe / overlay / checkerboard)
 
 - Compare canvas modes now render on a dedicated `compareCanvas` widget shown via

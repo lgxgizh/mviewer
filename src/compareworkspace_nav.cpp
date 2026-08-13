@@ -215,7 +215,7 @@ void CompareWorkspace::applyLayoutPreset(int n)
             m_layoutCombo->setCurrentIndex(cols);
     }
     rebuildCells();
-    fitAll();
+    schedulePostLayoutFit();
     restoreNavState(saved);
     updatePairButtons();
     update();
@@ -242,8 +242,9 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
     m_syncDragChk->setChecked(syncOn);
     m_engine.setSyncEnabled(syncOn);
 
-    // Shared transform (used when sync is on).
-    m_engine.setScale(s.sharedScale);
+    // M35: sharedScale is the zoom ratio relative to each pane's own Fit.
+    m_sharedZoomRatio = s.sharedScale > 0.0 ? s.sharedScale : 1.0;
+    m_engine.setScale(m_sharedZoomRatio);
     m_engine.setOffset(s.sharedOffsetX, s.sharedOffsetY);
 
     // Per-cell independent transforms (used when sync is off).
@@ -254,6 +255,11 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
             break;
         m_engine.setCellScale(idx, s.cells[i].scale);
         m_engine.setCellOffset(idx, s.cells[i].offsetX, s.cells[i].offsetY);
+    }
+    if (syncOn && !s.uniformScale && m_fitScales.size() == m_engine.imageCount())
+    {
+        for (int i = 0; i < m_engine.imageCount(); ++i)
+            m_engine.setCellScale(i, m_fitScales[i] * m_sharedZoomRatio);
     }
 
     // M15 P0#1: replay the UI-only state so the reopened view is identical.

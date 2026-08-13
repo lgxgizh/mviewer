@@ -1649,16 +1649,24 @@ int main(int argc, char **argv)
         bool conv = true;
         for (int round = 0; round < 10; ++round)
         {
-            MainWindow w;
-            w.resize(1100, 700);
-            w.show();
-            if (auto *tree = w.findChild<DirectoryTree *>("directoryTree"))
-                tree->navigateTo(dir, true);
-            pump(60);
-            w.onImageOpen(bigFile);
-            pump(30);
-            w.close();
-            pump(100);
+            {
+                MainWindow w;
+                w.resize(1100, 700);
+                w.show();
+                if (auto *tree = w.findChild<DirectoryTree *>("directoryTree"))
+                    tree->navigateTo(dir, true);
+                pump(60);
+                w.onImageOpen(bigFile);
+                pump(30);
+                w.close();
+            }
+            // `close()` only hides a stack-owned widget; destruction is what
+            // invalidates its scan/preview/viewer work. Check convergence after
+            // that lifecycle boundary and allow cooperative in-flight decodes a
+            // short, bounded drain instead of sampling one arbitrary 100 ms tick.
+            const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+            while (!allConverged() && std::chrono::steady_clock::now() < deadline)
+                pump(10);
             if (!allConverged())
                 conv = false;
         }

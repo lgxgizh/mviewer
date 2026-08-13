@@ -251,8 +251,7 @@ int CompareWorkspace::canvasRefCellAt(const QPoint &pos) const
 // was already applied. Respects all four syncZoom / syncDrag combinations.
 void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor)
 {
-    const double currentScale =
-        m_syncZoom ? m_engine.syncTransform().scale : m_engine.cellTransform(refIdx).scale;
+    const double currentScale = m_engine.cellTransform(refIdx).scale;
     if (!(currentScale > 0.0) || !std::isfinite(currentScale))
         return; // invalid baseline: consume without zooming
     const double targetScale = std::clamp(currentScale * factor, 0.05, 50.0);
@@ -269,9 +268,14 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
     const int count = m_engine.imageCount();
     if (m_syncZoom)
     {
-        m_engine.setScale(targetScale);
+        QVector<double> oldScales;
+        oldScales.reserve(count);
         for (int i = 0; i < count; ++i)
-            m_engine.setCellScale(i, targetScale);
+            oldScales.push_back(m_engine.cellTransform(i).scale);
+        m_sharedZoomRatio *= effectiveFactor;
+        m_engine.setScale(m_sharedZoomRatio);
+        for (int i = 0; i < count; ++i)
+            m_engine.setCellScale(i, oldScales[i] * effectiveFactor);
     }
     else
     {

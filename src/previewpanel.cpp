@@ -33,30 +33,52 @@ std::string PreviewPanel::previewCacheKey(const std::string &path)
     return ImageRepository::instance().makeKey(path) + "#preview" + std::to_string(kPreviewMaxEdge);
 }
 
-void PreviewPanel::setImage(const QString &path)
+void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail)
 {
-    m_path = path;
+    m_requestedPath = path;
     cancelPending();
     ++m_requestGen;
-    m_preview = QPixmap();
-    m_scaled = QPixmap();
-    m_hasImage = false;
-    m_previewW = 0;
-    m_previewH = 0;
-    m_imgW = 0;
-    m_imgH = 0;
-    m_fileSize = 0;
-    m_lumMean = 0.0;
-    m_rMean = m_gMean = m_bMean = 0;
     if (path.isEmpty())
     {
         // Clear synchronously when a folder changes. This prevents an old
         // decoded frame from remaining visible while the next directory is
         // still being scanned asynchronously.
+        m_presentedPath.clear();
+        m_quality = PresentationQuality::None;
+        m_preview = QPixmap();
+        m_scaled = QPixmap();
+        m_hasImage = false;
+        m_previewW = 0;
+        m_previewH = 0;
+        m_imgW = 0;
+        m_imgH = 0;
+        m_fileSize = 0;
+        m_lumMean = 0.0;
+        m_rMean = m_gMean = m_bMean = 0;
         update();
         return;
     }
-    update();
+
+    // Stage 1: present an already-materialized gallery thumbnail immediately.
+    // This is a UI-thread-only implicit QPixmap copy: no disk access, decode, or
+    // scheduler hop. On a cold miss keep the prior presented frame until the
+    // requested preview is ready, avoiding a visible blank flash.
+    if (!warmThumbnail.isNull())
+    {
+        m_presentedPath = path;
+        m_quality = PresentationQuality::Thumbnail;
+        m_preview = warmThumbnail;
+        m_previewW = m_preview.width();
+        m_previewH = m_preview.height();
+        m_imgW = m_previewW;
+        m_imgH = m_previewH;
+        m_fileSize = 0; // populated by Stage 2; Stage 1 must remain memory-only
+        m_lumMean = 0.0;
+        m_rMean = m_gMean = m_bMean = 0;
+        m_hasImage = true;
+        rebuild();
+        update();
+    }
 
     // A SINGLE scaled decode on the Thumbnail pool (never DecodePool, never
     // ImageRepository::loadAsync): the preview duplicates nothing and the UI
@@ -155,7 +177,8 @@ void PreviewPanel::setImage(const QString &path)
                                           // first A completes last). Without the generation check,
                                           // the path-only guard lets an old A overwrite a newer A
                                           // of the same path.
-                                          if (path != panel->m_path || gen != panel->m_requestGen)
+                                          if (path != panel->m_requestedPath ||
+                                              gen != panel->m_requestGen)
                                               return;
                                           // Every accepted terminal delivery releases the
                                           // matching completed handle — success OR failure —
@@ -164,17 +187,17 @@ void PreviewPanel::setImage(const QString &path)
                                           panel->resetMatchingHandle(gen);
                                           if (qimg.isNull())
                                           {
-                                              panel->m_hasImage = false;
-                                              panel->update();
+                                              // Preserve either the target thumbnail or the
+                                              // preceding frame; a failed upgrade must not flash.
                                               return;
                                           }
                                           panel->m_preview = QPixmap::fromImage(qimg);
                                           if (panel->m_preview.isNull())
                                           {
-                                              panel->m_hasImage = false;
-                                              panel->update();
                                               return;
                                           }
+                                          panel->m_presentedPath = path;
+                                          panel->m_quality = PresentationQuality::Preview;
                                           panel->m_hasImage = true;
                                           if (stats.valid)
                                           {
@@ -203,10 +226,8 @@ void PreviewPanel::setImage(const QString &path)
     }
     else
     {
-        // Scheduler rejected the submission (paused / saturated): terminal
-        // no-image state, exactly like a failed decode.
-        m_hasImage = false;
-        update();
+        // A rejected background upgrade leaves the current usable presentation
+        // intact. A later selection/request may retry without a blank flash.
     }
 }
 
@@ -291,7 +312,7 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
     QFont f = painter.font();
     f.setPointSize(9);
     painter.setFont(f);
-    const QString name = QFileInfo(m_path).fileName();
+    const QString name = QFileInfo(m_presentedPath).fileName();
     painter.drawText(txtArea, Qt::AlignTop | Qt::AlignLeft,
                      name + "\n" + QString::number(m_imgW) + "×" + QString::number(m_imgH) + "  " +
                          QString::number(m_fileSize / 1024) + " KB");

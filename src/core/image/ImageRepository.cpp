@@ -168,6 +168,9 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
     if (opts.useDiskCache && DiskCache::instance().get(key, img))
     {
         fromCache = true;
+        // Pixel cache schema stays frozen. Recover the small display-profile
+        // sidecar from the source header so fresh and disk-hit display agree.
+        decodeMeta = makeMeta(filePath);
     }
     else
     {
@@ -220,6 +223,23 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
         if (decodeMeta.orientation >= 1 && decodeMeta.orientation <= 8)
             m.orientation = decodeMeta.orientation;
         m.hasIccProfile = decodeMeta.hasIccProfile;
+        const auto displayIcc = decodeMeta.textKeys.find("MViewer.DisplayICC.Base64");
+        if (displayIcc != decodeMeta.textKeys.end())
+            m.textKeys[displayIcc->first] = displayIcc->second;
+        if (!decodeMeta.iccDescription.empty())
+            m.iccDescription = decodeMeta.iccDescription;
+        if (!decodeMeta.iccCopyright.empty())
+            m.iccCopyright = decodeMeta.iccCopyright;
+        if (!decodeMeta.iccColorSpace.empty())
+            m.iccColorSpace = decodeMeta.iccColorSpace;
+        if (!decodeMeta.iccDeviceClass.empty())
+            m.iccDeviceClass = decodeMeta.iccDeviceClass;
+        if (!decodeMeta.iccPcs.empty())
+            m.iccPcs = decodeMeta.iccPcs;
+        if (!decodeMeta.iccRenderingIntent.empty())
+            m.iccRenderingIntent = decodeMeta.iccRenderingIntent;
+        if (!decodeMeta.iccVersion.empty())
+            m.iccVersion = decodeMeta.iccVersion;
         frame->setMetadata(m);
     }
     // P0-2/PixelInspector: restore a previously captured 16-bit sample buffer

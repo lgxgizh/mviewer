@@ -187,6 +187,19 @@ regardless of format (`p[i]` = i-th byte of the pixel in memory):
 | `differenceMap` | `w*h*3` bytes (output ImageData) |
 | `setImages(n)` | n × ImageFrame stored by value (frames are lightweight handles; pixel data is shared) |
 
+## M35 display and transform semantics
+
+- Metrics calculation and difference visualization are independent product
+  states. Metrics may run in the background at all times; ordinary Compare has
+  no overlay. Heatmap/highlight is rendered only after explicit opt-in.
+- Fit is per pane: `fitScale[i] = min(viewportW/imageW, viewportH/imageH)`.
+  Synchronized zoom applies one relative `zoomRatio` so
+  `effectiveScale[i] = fitScale[i] * zoomRatio`.
+- Uniform Pixel Scale is a separate opt-in mode and is the only state that
+  requires equal absolute effective scales across panes.
+- Rebuilt panes receive one coalesced next-event-loop Fit after layout settles.
+  The MainWindow Compare host opens fullscreen before the single async load.
+
 ## Performance
 
 | Scenario | Budget | Baseline |

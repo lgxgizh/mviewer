@@ -133,18 +133,12 @@ struct DecodeParams {
 };
 ```
 
-### Decode Output
+### Decode Output (current M35 contract)
 
-```cpp
-struct DecodedImage {
-    int width;
-    int height;
-    PixelFormat format;           // RGBA8, RGB16, etc.
-    std::vector<std::byte> data;  // Pixel buffer
-    ColorSpace colorSpace;
-    std::optional<IccProfile> iccProfile;
-};
-```
+`ImageFrame` contains an `ImageData` analysis buffer plus `ImageMetadata`.
+Embedded ICC bytes are retained in the frame metadata sidecar under the
+reserved key `MViewer.DisplayICC.Base64`; no Qt type crosses the domain/core
+header boundary.
 
 ### Pixel Format Strategy
 
@@ -155,10 +149,15 @@ struct DecodedImage {
 
 ### Color Space Handling
 
-1. Read ICC profile from file metadata (if present)
-2. If no ICC profile, assume sRGB
-3. Convert to sRGB for display
-4. Store original ICC profile for metadata panel display
+1. Decode and orient the image into 8-bit `ImageData`. These numeric values are
+   the analysis domain used by Pixel Inspector, Histogram, Diff, PSNR, SSIM and ROI.
+2. Retain a valid embedded ICC profile in the metadata sidecar; never rewrite
+   the analysis buffer for display color management.
+3. `mvcore::toDisplayQImage` materializes a display-only copy, applies the
+   embedded source profile, and converts that copy to sRGB. Invalid or missing
+   profiles deterministically fall back to sRGB-assumed values.
+4. Compare panes use the same display materializer. Display conversion is not
+   used by export/analysis paths unless their contract explicitly requests it.
 
 ### EXIF Orientation
 
@@ -175,7 +174,7 @@ struct DecodedImage {
 
 | Operation | When | Where |
 | ----------- | ------ | ------- |
-| Color space conversion | During decode | CPU (SIMD) |
+| Color space conversion | Display-copy materialization | Qt color pipeline |
 | EXIF orientation | During decode | CPU (SIMD) |
 | Demosaicing (RAW) | N/A — RAW out of scope | — |
 | Resize (thumbnail) | After decode | CPU (SIMD) or GPU |

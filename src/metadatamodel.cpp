@@ -196,9 +196,13 @@ void MetadataModel::rebuild()
     // ─── EXIF / XMP / IPTC text keys ────────────────────────────────────
     if (!m_meta.textKeys.empty())
     {
-        auto *exif = addCategory(tr("EXIF / 元数据"));
+        Node *exif = nullptr;
         for (const auto &kv : m_meta.textKeys)
         {
+            if (kv.first.starts_with("MViewer."))
+                continue; // internal display/profile sidecars are not user metadata
+            if (!exif)
+                exif = addCategory(tr("EXIF / 元数据"));
             addLeaf(exif, toQString(kv.first), toQString(kv.second));
         }
     }

@@ -218,6 +218,9 @@ void testPreviewABA()
     sched.drain(PoolType::ThumbnailPool, std::chrono::seconds(15));
     pump(1000); // let the marshaled deliveries run
     CHECK(panel.hasImage(), "newest generation delivered");
+    CHECK(panel.presentedPath() == a2 &&
+              panel.presentationQuality() == PreviewPanel::PresentationQuality::Preview,
+          "newest generation owns the presented path and upgraded quality");
     pump(1500);
     CHECK(panel.hasImage(), "no stale overwrite after settlement");
     const auto m = sched.metrics(PoolType::ThumbnailPool);

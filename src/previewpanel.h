@@ -31,13 +31,33 @@ class PreviewPanel : public QWidget
     explicit PreviewPanel(QWidget *parent = nullptr);
     ~PreviewPanel() override;
 
+    enum class PresentationQuality
+    {
+        None,
+        Thumbnail,
+        Preview
+    };
+
   public slots:
-    void setImage(const QString &path);
+    void setImage(const QString &path, const QPixmap &warmThumbnail = QPixmap());
 
     // Test/embedding observability: whether a preview is currently shown.
     bool hasImage() const
     {
         return m_hasImage;
+    }
+
+    QString requestedPath() const
+    {
+        return m_requestedPath;
+    }
+    QString presentedPath() const
+    {
+        return m_presentedPath;
+    }
+    PresentationQuality presentationQuality() const
+    {
+        return m_quality;
     }
 
     // Original source dimensions (post-orientation), independent of the
@@ -66,7 +86,9 @@ class PreviewPanel : public QWidget
     void resetMatchingHandle(uint64_t gen);
     void rebuild();
 
-    QString m_path;
+    QString m_requestedPath;
+    QString m_presentedPath;
+    PresentationQuality m_quality = PresentationQuality::None;
     // Cancellable scaled-preview task (Thumbnail pool). UI-thread-owned; the
     // worker only observes its TaskContext cancel flag.
     TaskScheduler::TaskHandle m_task;

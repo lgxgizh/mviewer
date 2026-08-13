@@ -193,6 +193,18 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     toolLayout->addWidget(m_thresholdLabel);
 
     // A-4.6: Diff highlight mode (red diffs / gray similar).
+    m_diffOverlayChk = new QCheckBox(tr("显示差异"), this);
+    m_diffOverlayChk->setObjectName("diffOverlayToggle");
+    m_diffOverlayChk->setChecked(false);
+    m_diffOverlayChk->setToolTip(tr("显式叠加差异热力图；普通 Compare 始终显示原图"));
+    connect(m_diffOverlayChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                m_diffOverlayVisible = on;
+                refreshAllDiffOverlays();
+            });
+    toolLayout->addWidget(m_diffOverlayChk);
+
     m_diffHighlightChk = new QCheckBox(tr("高亮差异"), this);
     m_diffHighlightChk->setToolTip(tr("差异区域红色高亮，相似区域灰度显示"));
     connect(m_diffHighlightChk, &QCheckBox::toggled, this,
@@ -497,7 +509,7 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     // the previous session; applySession will repopulate persisted values.
     m_cellAdjusts.clear();
     rebuildCells();
-    fitAll();
+    schedulePostLayoutFit();
     update();
     if (m_sidePanel && m_sidePanel->isVisible())
         refreshHistograms();
@@ -546,8 +558,17 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     // replayed once the frames exist (openCompare -> setImages -> applySession).
     if (m_pendingSession)
     {
-        applySession(*m_pendingSession);
+        const auto session = *m_pendingSession;
         m_pendingSession.reset();
+        QPointer<CompareWorkspace> guard(this);
+        // schedulePostLayoutFit() was queued first. Replay persisted transforms
+        // after that settled-geometry Fit so it cannot reset the saved ratio.
+        QTimer::singleShot(0, this,
+                           [guard, session]()
+                           {
+                               if (guard)
+                                   guard->applySession(session);
+                           });
     }
 }
 
@@ -620,7 +641,7 @@ void CompareWorkspace::onLayoutChanged()
     }
     m_engine.setColumns(cols);
     rebuildCells();
-    fitAll();
+    schedulePostLayoutFit();
     refreshLinkMarkers();
     update();
     if (m_sidePanel && m_sidePanel->isVisible())
@@ -635,7 +656,7 @@ void CompareWorkspace::onCustomGridChanged()
     const int cols = m_gridColsSpin ? m_gridColsSpin->value() : 2;
     m_engine.setColumns(cols);
     rebuildCells();
-    fitAll();
+    schedulePostLayoutFit();
     refreshLinkMarkers();
     update();
 }
@@ -651,57 +672,6 @@ void CompareWorkspace::onSideToggled(bool on)
         refreshAllDiffOverlays();
     }
     update();
-}
-
-void CompareWorkspace::fitAll()
-{
-    double sharedScale = 1.0;
-    bool first = true;
-    const int n = m_engine.imageCount();
-    // Pass 1: fit each pane to its own viewport to learn the per-image fit scale,
-    // and accumulate the shared (minimum) scale so different-resolution images can
-    // be aligned at one common zoom.
-    for (int i = 0; i < n; ++i)
-    {
-        if (i >= m_cellViews.size() || !m_cellViews[i])
-            continue;
-        const ImageFrame *img = m_engine.imageAt(i);
-        const QSize qs = m_cellViews[i]->size();
-        const CellSize cell{qs.width(), qs.height()};
-        // M28 P1-01: the frame dims are authoritative; do NOT build a full
-        // QPixmap just to read the image size (redundant O(image) conversion).
-        if (!img || img->pixels().isNull() || cell.w <= 0 || cell.h <= 0)
-            continue;
-        CellSize imgSize{img->width(), img->height()};
-        m_engine.fitCell(i, cell, imgSize);
-        if (first || m_engine.cellScale(i) < sharedScale)
-            sharedScale = m_engine.cellScale(i);
-        first = false;
-    }
-    if (!first)
-    {
-        // H5: "统一像素倍率" forces every pane to the same zoom regardless of the
-        // sync-zoom toggle, so images of different resolutions line up 1:1 (same
-        // pixel scale, top-left aligned). Without it, sync off lets each pane fit
-        // independently and lose cross-pane pixel correspondence.
-        const bool unify = m_uniformScale || m_syncZoom;
-        for (int i = 0; i < n; ++i)
-        {
-            if (i >= m_cellViews.size() || !m_cellViews[i])
-                continue;
-            if (unify)
-                m_engine.setCellScale(i, sharedScale);
-        }
-        if (unify)
-            m_engine.setScale(sharedScale);
-        if (m_uniformScale || m_syncDrag)
-        {
-            m_engine.setOffset(0.0, 0.0);
-            for (int i = 0; i < n; ++i)
-                if (i < m_cellViews.size() && m_cellViews[i])
-                    m_engine.setCellOffset(i, 0.0, 0.0);
-        }
-    }
 }
 
 void CompareWorkspace::onCrosshairMoved(RawImageView *view, const QPointF &pos)

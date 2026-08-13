@@ -15,13 +15,12 @@ compile end-to-end.
 ## 2. Unit + integration tests
 
 ```powershell
-cd build_msvc
-ctest -R "rawdecode_tests|crashhandler_tests|gputile_tests|raw_metadata_tests|decoder_tests|selftest|export_pipeline_tests|flags_tests|analyzer_registry_tests"
+powershell -ExecutionPolicy Bypass -File D:\mviewer\build.ps1 Test
 ```
 
-All listed suites must pass. (Asset- and display-gated suites such as
-`assets_acceptance` / `product_workflow_gate` run separately and need the full
-test corpus + a real display.)
+The canonical command builds and runs the complete CTest gate and propagates
+any failing CTest exit code. Do not package after a non-zero result. Asset- and
+real-display UX sign-off still run separately where required.
 
 ## 3. Headless self-test (the one-command release smoke)
 

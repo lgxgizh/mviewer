@@ -8,6 +8,7 @@
 #include "core/image/QtConvert.h"
 
 #include <QColor>
+#include <QColorSpace>
 #include <QCoreApplication>
 #include <QImage>
 #include <chrono>
@@ -53,6 +54,45 @@ static QImage makeColorTest(int w, int h, QColor c)
         for (int x = 0; x < w; ++x)
             img.setPixel(x, y, c.rgb());
     return img;
+}
+
+static void testDiskHitRestoresDisplayProfile()
+{
+    printf("\n[Disk-hit ICC display sidecar (M35)]\n");
+    namespace fs = std::filesystem;
+    CacheManager &mgr = CacheManager::instance();
+    DiskCache &disk = DiskCache::instance();
+    mgr.clear();
+    disk.clear();
+
+    const fs::path path = fs::temp_directory_path() / "mviewer_m35_adobe.png";
+    QImage image(4, 4, QImage::Format_RGB888);
+    image.fill(QColor(180, 90, 40));
+    image.setColorSpace(QColorSpace::AdobeRgb);
+    CHECK(image.save(QString::fromStdString(path.string())), "AdobeRGB PNG fixture is written");
+
+    ImageRepository &repo = ImageRepository::instance();
+    const auto fresh = repo.load(path.string());
+    CHECK(fresh.success() && fresh.frame->metadata().hasIccProfile,
+          "fresh repository load retains embedded ICC");
+    mgr.clearMemory();
+    const auto cached = repo.load(path.string());
+    CHECK(cached.success() && cached.fromCache, "second repository load hits disk cache");
+    if (cached.success())
+    {
+        const auto &keys = cached.frame->metadata().textKeys;
+        const auto key = keys.find("MViewer.DisplayICC.Base64");
+        CHECK(key != keys.end() && !key->second.empty(),
+              "disk hit reconstructs the ICC display sidecar from the source header");
+    }
+    else
+    {
+        CHECK(false, "disk hit reconstructs the ICC display sidecar from the source header");
+    }
+
+    mgr.clear();
+    disk.clear();
+    fs::remove(path);
 }
 
 static void testPredictivePreload()
@@ -185,6 +225,7 @@ int main(int argc, char **argv)
     fflush(stdout);
 
     testPredictivePreload();
+    testDiskHitRestoresDisplayProfile();
     test1000ImageNonBlocking();
     testImageFrameExtras();
 

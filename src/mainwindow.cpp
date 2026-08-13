@@ -405,7 +405,8 @@ void MainWindow::onCurrentImageChanged(const QString &path)
         return;
 
     const QFileInfo fi(path);
-    m_previewPanel->setImage(path); // async decode (off UI thread)
+    const QPixmap warmThumbnail = m_thumbnailPanel ? m_thumbnailPanel->thumbReady(path) : QPixmap();
+    m_previewPanel->setImage(path, warmThumbnail); // immediate thumbnail + async upgrade
     // Only decode into the viewer when it is actually on screen — avoids a
     // second decode per thumbnail while browsing with the viewer closed.
     if (!m_imageViewer->isHidden())
@@ -508,8 +509,8 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     }
 
     auto *dlg = new QDialog(this);
+    dlg->setObjectName("compareDialog");
     dlg->setWindowTitle("比较模式 - MViewer");
-    dlg->resize(1000, 700);
 
     auto *layout = new QVBoxLayout(dlg);
     m_compareView = new CompareWorkspace(dlg);
@@ -563,7 +564,12 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
             });
 
     dlg->setAttribute(Qt::WA_DeleteOnClose);
-    dlg->show();
+    // Set the state before show so the first native frame is fullscreen.
+    // The property is the platform-independent contract for headless Qt,
+    // whose offscreen plugin intentionally discards fullscreen window state.
+    dlg->setProperty("mviewerFullscreenRequested", true);
+    dlg->setWindowState(dlg->windowState() | Qt::WindowFullScreen);
+    dlg->showFullScreen();
 
     // Load images *after* the dialog has been shown AND the event loop has
     // processed the layout pass, so that cell widgets have valid geometry when

@@ -6,6 +6,10 @@
 //  - extraction of desc / cprt text tags
 //  - robustness against truncated and malformed input (no crash / no hang)
 #include "core/image/IccProfile.h"
+#include "core/image/QtConvert.h"
+
+#include <QColorSpace>
+#include <QImage>
 
 #include <cstdint>
 #include <cstring>
@@ -177,6 +181,40 @@ int main()
         CHECK(info.valid, "header-only buffer (140 bytes) reports valid=true");
         CHECK(info.description.empty(),
               "huge tag count with small buffer yields no desc (bounds-checked)");
+    }
+
+    // 5) Display conversion consumes ICC on a copy and never mutates analysis bytes.
+    {
+        ImageData pixels = makeImageData(1, 1, PixelFormat::RGB24);
+        (*pixels.buffer)[0] = 180;
+        (*pixels.buffer)[1] = 90;
+        (*pixels.buffer)[2] = 40;
+        const std::vector<uint8_t> before = *pixels.buffer;
+        mviewer::domain::ImageMetadata meta;
+        const QByteArray adobe = QColorSpace(QColorSpace::AdobeRgb).iccProfile();
+        const QByteArray encoded = adobe.toBase64();
+        meta.textKeys["MViewer.DisplayICC.Base64"] =
+            std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
+        meta.hasIccProfile = true;
+
+        QImage expected(1, 1, QImage::Format_RGB888);
+        expected.setPixelColor(0, 0, QColor(180, 90, 40));
+        expected.setColorSpace(QColorSpace::AdobeRgb);
+        expected.convertToColorSpace(QColorSpace::SRgb);
+        const QImage actual = mvcore::toDisplayQImage(pixels, meta);
+        CHECK(!actual.isNull() && actual.colorSpace() == QColorSpace::SRgb,
+              "display copy is tagged/converted to sRGB");
+        CHECK(actual.pixelColor(0, 0) == expected.pixelColor(0, 0),
+              "embedded AdobeRGB display conversion matches Qt reference");
+        CHECK(*pixels.buffer == before, "display conversion leaves analysis-domain bytes unchanged");
+
+        meta.textKeys.erase("MViewer.DisplayICC.Base64");
+        meta.hasIccProfile = false;
+        const QImage unprofiled = mvcore::toDisplayQImage(pixels, meta);
+        CHECK(unprofiled.colorSpace() == QColorSpace::SRgb,
+              "unprofiled images use deterministic sRGB display fallback");
+        CHECK(unprofiled.pixelColor(0, 0) == QColor(180, 90, 40),
+              "unprofiled fallback preserves decoded numeric values");
     }
 
     printf("\nIccProfile tests: %d passed, %d failed\n", g_pass, g_fail);

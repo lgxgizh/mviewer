@@ -182,6 +182,10 @@ class CompareWorkspace : public QWidget
     bool m_syncZoom = true;
     bool m_syncDrag = true;
     bool m_uniformScale = false; // H5: force all panes to one shared zoom
+    QVector<double> m_fitScales;
+    double m_sharedZoomRatio = 1.0;
+    bool m_postLayoutFitPending = false;
+    void schedulePostLayoutFit();
     QWidget *m_grid = nullptr;
     QGridLayout *m_layout = nullptr;
     // M34: dedicated compare canvas page. Split / swipe / overlay / checkerboard
@@ -270,6 +274,8 @@ class CompareWorkspace : public QWidget
 
     // A-4.6: Diff highlight mode (red diffs / gray similar) vs heatmap.
     QCheckBox *m_diffHighlightChk = nullptr;
+    QCheckBox *m_diffOverlayChk = nullptr;
+    bool m_diffOverlayVisible = false;
     bool m_diffHighlight = false;
 
     // A-4.2: custom M×N grid (spin boxes; 0 = use layout combo).

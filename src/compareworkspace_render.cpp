@@ -82,7 +82,12 @@ QRectF CompareWorkspace::cellDestRect(int idx, const QRectF &geom) const
     if (img.isNull() || geom.isEmpty())
         return {};
     const auto &ct = m_engine.cellTransform(idx);
-    const double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
+    double sc = ct.scale;
+    if (!m_uniformScale && m_syncZoom)
+    {
+        const double canvasFit = std::min(geom.width() / img.width(), geom.height() / img.height());
+        sc = canvasFit * m_sharedZoomRatio;
+    }
     if (!(sc > 0.0) || !std::isfinite(sc))
         return {};
     const double ox = m_syncDrag ? m_engine.syncTransform().offset.x : ct.offset.x;
@@ -91,6 +96,67 @@ QRectF CompareWorkspace::cellDestRect(int idx, const QRectF &geom) const
     const double dh = img.height() * sc;
     const QPointF center(geom.x() + geom.width() / 2.0 + ox, geom.y() + geom.height() / 2.0 + oy);
     return QRectF(center.x() - dw / 2.0, center.y() - dh / 2.0, dw, dh);
+}
+
+void CompareWorkspace::fitAll()
+{
+    double sharedScale = 1.0;
+    bool first = true;
+    const int n = m_engine.imageCount();
+    m_fitScales.fill(1.0, n);
+    m_sharedZoomRatio = 1.0;
+    for (int i = 0; i < n; ++i)
+    {
+        if (i >= m_cellViews.size() || !m_cellViews[i])
+            continue;
+        const ImageFrame *img = m_engine.imageAt(i);
+        const QSize qs = m_cellViews[i]->size();
+        const CellSize cell{qs.width(), qs.height()};
+        if (!img || img->pixels().isNull() || cell.w <= 0 || cell.h <= 0)
+            continue;
+        const CellSize imgSize{img->width(), img->height()};
+        m_engine.fitCell(i, cell, imgSize);
+        m_fitScales[i] = m_engine.cellScale(i);
+        if (first || m_engine.cellScale(i) < sharedScale)
+            sharedScale = m_engine.cellScale(i);
+        first = false;
+    }
+    if (first)
+        return;
+
+    m_engine.setScale(m_sharedZoomRatio);
+    for (int i = 0; i < n; ++i)
+    {
+        if (i >= m_cellViews.size() || !m_cellViews[i])
+            continue;
+        const double effective = m_uniformScale ? sharedScale : m_fitScales.value(i, 1.0);
+        m_engine.setCellScale(i, effective);
+    }
+    if (m_uniformScale || m_syncDrag)
+    {
+        m_engine.setOffset(0.0, 0.0);
+        for (int i = 0; i < n; ++i)
+            if (i < m_cellViews.size() && m_cellViews[i])
+                m_engine.setCellOffset(i, 0.0, 0.0);
+    }
+}
+
+void CompareWorkspace::schedulePostLayoutFit()
+{
+    if (m_postLayoutFitPending)
+        return;
+    m_postLayoutFitPending = true;
+    QPointer<CompareWorkspace> guard(this);
+    QTimer::singleShot(0, this,
+                       [guard]()
+                       {
+                           CompareWorkspace *ws = guard.data();
+                           if (!ws)
+                               return;
+                           ws->m_postLayoutFitPending = false;
+                           ws->fitAll();
+                           ws->update();
+                       });
 }
 
 // Canvas paint entry — invoked from the canvas event path (Paint event via the
@@ -341,11 +407,14 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
     // these captures — no `this`, no QObject/QWidget. ImageData copies share
     // their pixel buffers, so the worker holds the pixels alive cheaply.
     std::vector<ImageData> pixels;
+    std::vector<mviewer::domain::ImageMetadata> metadata;
     pixels.reserve(static_cast<size_t>(paneCount));
+    metadata.reserve(static_cast<size_t>(paneCount));
     for (int i = 0; i < paneCount; ++i)
     {
         const ImageFrame *img = m_engine.imageAt(i);
         pixels.push_back(img ? img->pixels() : ImageData());
+        metadata.push_back(img ? img->metadata() : mviewer::domain::ImageMetadata{});
     }
     std::vector<CellAdjust> adjusts = m_cellAdjusts;
     const uint64_t gen = m_displayGen;
@@ -353,7 +422,8 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
 
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, adjusts, panes, paneCount, gen, guard](const TaskScheduler::TaskContext &ctx)
+        [pixels, metadata, adjusts, panes, paneCount, gen, guard](
+            const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
                 return; // superseded while queued — stop before any work
@@ -386,7 +456,7 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
                     continue; // failed adjustment must not clear the last valid preview
                 DisplayBatchResult::CellImage cell;
                 cell.index = idx;
-                cell.image = mvcore::toQImage(adjusted);
+                cell.image = mvcore::toDisplayQImage(adjusted, metadata[static_cast<size_t>(idx)]);
                 if (ctx.isCancelled())
                     return; // after conversion
                 if (cell.image.isNull())
@@ -471,6 +541,17 @@ void CompareWorkspace::refreshAllDiffOverlays()
     m_diffTask.reset();
     ++m_diffGen;
 
+    // Visibility is a product state independent of metrics. Turning the
+    // visualization off restores every source image immediately; the batch
+    // below still computes PSNR/SSIM/stats and its generation prevents an old
+    // in-flight heatmap from reappearing.
+    if (!m_diffOverlayVisible)
+    {
+        for (RawImageView *view : m_cellViews)
+            if (view)
+                view->setOverlay(QImage(), 0.0);
+    }
+
     // 0/1 panes: nothing to compare. Clear overlays and metrics synchronously
     // (cheap). For 2+ panes the previous target overlays stay visible while
     // the new batch is in flight.
@@ -504,13 +585,14 @@ void CompareWorkspace::refreshAllDiffOverlays()
     std::vector<CellAdjust> adjusts = m_cellAdjusts;
     const uint8_t threshold = m_thresholdValue;
     const bool highlight = m_diffHighlight;
+    const bool visualize = m_diffOverlayVisible;
     const mviewer::domain::Selection roi = m_lastSelection;
     const uint64_t gen = m_diffGen;
     QPointer<CompareWorkspace> guard(this);
 
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, adjusts, baseIdx, threshold, highlight, roi, paneCount, gen, guard](
+        [pixels, adjusts, baseIdx, threshold, highlight, visualize, roi, paneCount, gen, guard](
             const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
@@ -589,19 +671,21 @@ void CompareWorkspace::refreshAllDiffOverlays()
                         firstTgt = tgtPx;
                         firstDiff = diff;
                     }
-                    const ImageData thresholded = DifferenceEngine::applyThreshold(diff, threshold);
-                    const ImageData overlayImg =
-                        highlight ? DifferenceEngine::highlightMap(thresholded, basePx, threshold)
-                                  : DifferenceEngine::heatMap(thresholded);
-                    if (ctx.isCancelled())
-                        return; // after threshold/map conversion
-                    if (overlayImg.isNull())
+                    if (visualize)
                     {
-                        r.overlays.push_back(std::move(ov));
-                        continue;
+                        const ImageData thresholded =
+                            DifferenceEngine::applyThreshold(diff, threshold);
+                        const ImageData overlayImg =
+                            highlight ? DifferenceEngine::highlightMap(thresholded, basePx, threshold)
+                                      : DifferenceEngine::heatMap(thresholded);
+                        if (ctx.isCancelled())
+                            return; // after threshold/map conversion
+                        if (!overlayImg.isNull())
+                        {
+                            ov.overlay = mvcore::toQImage(overlayImg);
+                            ov.opacity = highlight ? 0.75 : 0.5;
+                        }
                     }
-                    ov.overlay = mvcore::toQImage(overlayImg);
-                    ov.opacity = highlight ? 0.75 : 0.5;
                     r.overlays.push_back(std::move(ov));
                 }
 
@@ -787,7 +871,7 @@ void CompareWorkspace::stopBlink()
     // Rebuild the grid layout to restore proper cell positions after blink
     // may have repositioned cells.
     rebuildCells();
-    fitAll();
+    schedulePostLayoutFit();
     update();
 }
 
@@ -886,7 +970,7 @@ void CompareWorkspace::paintEvent(QPaintEvent *)
         if (i >= m_cellViews.size() || !m_cellViews[i])
             continue;
         const auto &ct = m_engine.cellTransform(i);
-        const double sc = m_syncZoom ? m_engine.syncTransform().scale : ct.scale;
+        const double sc = ct.scale;
         const QPointF off = m_syncDrag ? QPointF(m_engine.syncTransform().offset.x,
                                                  m_engine.syncTransform().offset.y)
                                        : QPointF(ct.offset.x, ct.offset.y);

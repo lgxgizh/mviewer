@@ -88,6 +88,7 @@ int main(int argc, char **argv)
         meta.hasIccProfile = true;
         meta.textKeys["Make"] = "CameraCo";
         meta.textKeys["Model"] = "X100";
+        meta.textKeys["MViewer.DisplayICC.Base64"] = "internal";
 
         MetadataModel m;
         m.setImage(meta);
@@ -115,6 +116,8 @@ int main(int argc, char **argv)
         CHECK(exif.isValid(), "EXIF category present");
         CHECK(leafValue(&m, exif, "Make") == "CameraCo", "exif make leaf");
         CHECK(leafValue(&m, exif, "Model") == "X100", "exif model leaf");
+        CHECK(leafValue(&m, exif, "MViewer.DisplayICC.Base64").startsWith("<missing:"),
+              "internal ICC sidecar is hidden from user metadata");
     }
 
     // ── RAW metadata adds the RAW sensor section ────────────────────────────

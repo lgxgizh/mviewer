@@ -106,6 +106,9 @@ mviewer::domain::ImageMetadata MetadataReader::read(const std::string &filePath)
             if (meta.hasIccProfile)
             {
                 const QByteArray icc = img.colorSpace().iccProfile();
+                const QByteArray encoded = icc.toBase64();
+                meta.textKeys["MViewer.DisplayICC.Base64"] =
+                    std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
                 const auto pi =
                     parseIccProfile(reinterpret_cast<const unsigned char *>(icc.constData()),
                                     static_cast<size_t>(icc.size()));
