@@ -106,6 +106,29 @@ void testFormatsAgree()
     CHECK(!mviewer::core::computePreviewStats(null).valid, "null image -> invalid stats");
 }
 
+void testRegionDoesNotCopy()
+{
+    printf("\n[region-aware ROI statistics]\n");
+    fflush(stdout);
+    ImageData d = makeImageData(10, 10, PixelFormat::RGB24);
+    fill(d, 10, 20, 30);
+    const auto before = d.buffer;
+    const auto roi = mviewer::core::computePreviewStatsROI(
+        d, mviewer::domain::Selection{2, 3, 4, 5});
+    CHECK(roi.valid && roi.rMean == 10 && roi.gMean == 20 && roi.bMean == 30 &&
+              roi.lumMean >= 17.99 && roi.lumMean <= 18.01,
+          "small ROI statistics are correct");
+    CHECK(d.buffer == before, "ROI statistics retain the original ImageData buffer");
+
+    const auto clipped = mviewer::core::computePreviewStatsROI(
+        d, mviewer::domain::Selection{-4, -4, 6, 6});
+    CHECK(clipped.valid, "partially outside ROI is clipped without a crop allocation");
+    CHECK(!mviewer::core::computePreviewStatsROI(
+                d, mviewer::domain::Selection{100, 100, 4, 4})
+                .valid,
+          "fully outside ROI returns an invalid result");
+}
+
 void test24MpBudget()
 {
     printf("\n[24 MP fixture: stats complete fast (worker-side budget)]\n");
@@ -134,6 +157,7 @@ int main()
 
     testSolidColor();
     testFormatsAgree();
+    testRegionDoesNotCopy();
     test24MpBudget();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

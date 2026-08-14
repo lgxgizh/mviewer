@@ -425,16 +425,35 @@ std::string CompareReport::toJson() const
 {
     std::ostringstream os;
     os << "{\n";
-    os << "  \"imageA\": \"" << imageA << "\",\n";
-    os << "  \"imageB\": \"" << imageB << "\",\n";
-    os << "  \"psnr_dB\": " << psnr << ",\n";
-    os << "  \"ssim\": " << ssim << ",\n";
-    os << "  \"meanRGB_A\": [" << meanR_A << ", " << meanG_A << ", " << meanB_A << "],\n";
-    os << "  \"meanRGB_B\": [" << meanR_B << ", " << meanG_B << ", " << meanB_B << "],\n";
-    os << "  \"noise_A\": " << noiseA << ",\n";
-    os << "  \"noise_B\": " << noiseB << ",\n";
-    os << "  \"diff\": { \"min\": " << diffMin << ", \"mean\": " << diffMean
-       << ", \"max\": " << diffMax << " }\n";
+    os << "  \"imageA\": \"" << jsonEscape(imageA) << "\",\n";
+    os << "  \"imageB\": \"" << jsonEscape(imageB) << "\",\n";
+    os << "  \"psnr_dB\": ";
+    writeJsonNumber(os, psnr);
+    os << ",\n  \"ssim\": ";
+    writeJsonNumber(os, ssim);
+    os << ",\n  \"meanRGB_A\": [";
+    writeJsonNumber(os, meanR_A);
+    os << ", ";
+    writeJsonNumber(os, meanG_A);
+    os << ", ";
+    writeJsonNumber(os, meanB_A);
+    os << "],\n  \"meanRGB_B\": [";
+    writeJsonNumber(os, meanR_B);
+    os << ", ";
+    writeJsonNumber(os, meanG_B);
+    os << ", ";
+    writeJsonNumber(os, meanB_B);
+    os << "],\n  \"noise_A\": ";
+    writeJsonNumber(os, noiseA);
+    os << ",\n  \"noise_B\": ";
+    writeJsonNumber(os, noiseB);
+    os << ",\n  \"diff\": { \"min\": ";
+    writeJsonNumber(os, diffMin);
+    os << ", \"mean\": ";
+    writeJsonNumber(os, diffMean);
+    os << ", \"max\": ";
+    writeJsonNumber(os, diffMax);
+    os << " }\n";
     os << "}\n";
     return os.str();
 }
@@ -444,9 +463,11 @@ std::string CompareReport::toCsv() const
     std::ostringstream os;
     os << "imageA,imageB,psnr_dB,ssim,meanR_A,meanG_A,meanB_A,"
           "meanR_B,meanG_B,meanB_B,noise_A,noise_B,diff_min,diff_mean,diff_max\n";
-    os << imageA << "," << imageB << "," << psnr << "," << ssim << "," << meanR_A << "," << meanG_A
-       << "," << meanB_A << "," << meanR_B << "," << meanG_B << "," << meanB_B << "," << noiseA
-       << "," << noiseB << "," << diffMin << "," << diffMean << "," << diffMax << "\n";
+    os << csvEscape(imageA) << "," << csvEscape(imageB) << "," << csvNumber(psnr) << ","
+       << csvNumber(ssim) << "," << csvNumber(meanR_A) << "," << csvNumber(meanG_A) << ","
+       << csvNumber(meanB_A) << "," << csvNumber(meanR_B) << "," << csvNumber(meanG_B) << ","
+       << csvNumber(meanB_B) << "," << csvNumber(noiseA) << "," << csvNumber(noiseB) << ","
+       << csvNumber(diffMin) << "," << csvNumber(diffMean) << "," << csvNumber(diffMax) << "\n";
     return os.str();
 }
 

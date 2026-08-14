@@ -17,6 +17,7 @@ class AsyncTileRequestManager
 {
   public:
     using ReadyCallback = std::function<void(const TileKey &)>;
+    using DerivedDecodeFn = std::function<ImageData(const TileKey &, const ImageData &)>;
 
     struct VisibleTiles
     {
@@ -48,6 +49,14 @@ class AsyncTileRequestManager
                                 const TileGrid &grid, int renderScalePercent,
                                 uint64_t generation, TileDecodeFn decode,
                                 ReadyCallback onReady);
+
+    // Schedule a derived value (for example an overlay tile) without doing
+    // the materialization in a GUI paint callback. The source is a cheap
+    // ImageData value snapshot; the transform runs on the Decode pool and is
+    // de-duplicated by the canonical key.
+    ImageData requestDerived(const TileKey &key, const ImageData &source,
+                             uint64_t generation, DerivedDecodeFn decode,
+                             ReadyCallback onReady);
 
     size_t pendingCount() const;
     uint64_t generation() const;

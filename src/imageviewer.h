@@ -136,7 +136,8 @@ class ImageViewer : public QOpenGLWidget
 
   private:
     void emitZoom();
-    void advanceViewGeneration();
+    void advanceViewportRevision();
+    void beginImageGeneration();
     void fitToWidget();
     void preloadNeighbors(const QString &path);
     void drawHistogram(QPainter &painter) const;
@@ -151,6 +152,8 @@ class ImageViewer : public QOpenGLWidget
     // synchronously at the top of setImage() and closeEvent(), and from
     // leaveEvent(); never emitted from the destructor.
     void clearPixelInfo();
+    void cancelRoiStats();
+    void scheduleRoiStats(const QRect &selection);
     // Preload promotion: consume the neighbor preload handle that matches
     // `path` and cancel all others, so a navigation back to a preloaded
     // neighbor can be promoted to the foreground decode without re-queuing.
@@ -165,7 +168,13 @@ class ImageViewer : public QOpenGLWidget
     // from an older request can never overwrite the current image, even for
     // the same path (A -> B -> A where the first A completes last).
     uint64_t m_requestGen = 0;
-    uint64_t m_viewGeneration = 0;
+    // Image lifetime and viewport churn are deliberately separate. A pan,
+    // zoom or resize changes presentation geometry but must not invalidate
+    // reusable in-flight tile work for the same image.
+    uint64_t m_imageGeneration = 0;
+    uint64_t m_viewRevision = 0;
+    uint64_t m_roiRevision = 0;
+    uint64_t m_overlayGeneration = 0;
 
     // M29: cancellable request handles. m_foregroundRequest tracks the current
     // setImage() decode; m_neighborPreloads tracks at most the previous/next
@@ -197,10 +206,11 @@ class ImageViewer : public QOpenGLWidget
     // views cheap. No decode happens in the Widget — the cache's decode
     // callback calls RenderEngine (core/), never QWidget.
     TileCache m_tileCache;
-    AsyncTileRequestManager m_tileRequests;
     // Derived overlay tiles are separate from the display base cache and are
     // invalidated whenever the overlay policy changes.
     TileCache m_overlayCache;
+    AsyncTileRequestManager m_tileRequests;
+    AsyncTileRequestManager m_overlayRequests;
 
     // Warm thumbnail shown while the full frame and first visible tiles arrive.
     // This display-only surface is never exposed as m_frame.
@@ -209,6 +219,7 @@ class ImageViewer : public QOpenGLWidget
     QSize m_provisionalSourceSize;
     bool m_tileRepaintQueued = false;
     bool m_loading = false;
+    TaskScheduler::TaskHandle m_roiStatsRequest;
 
     // M16 / Stage A: GPU upload tier (opt-in, capability-gated). When enabled
     // (real GL context + MVIEWER_GPU=1), decoded tiles are uploaded to

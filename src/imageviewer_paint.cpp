@@ -84,7 +84,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
         const qreal dpr = devicePixelRatioF();
         const int renderScalePercent =
             std::max(100, static_cast<int>(std::lround(std::max<qreal>(1.0, dpr) * 100.0)));
-        const uint64_t generation = m_viewGeneration;
+        const uint64_t generation = m_imageGeneration;
         const ImageData source = m_frame->pixels();
         const auto metadata = m_frame->metadata();
         QPointer<ImageViewer> guard(this);
@@ -106,7 +106,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
                     [guard, generation]()
                     {
                         ImageViewer *viewer = guard.data();
-                        if (!viewer || generation != viewer->m_viewGeneration ||
+                        if (!viewer || generation != viewer->m_imageGeneration ||
                             viewer->m_tileRepaintQueued)
                             return;
                         viewer->m_tileRepaintQueued = true;
@@ -118,7 +118,7 @@ void ImageViewer::paintEvent(QPaintEvent *event)
                                 if (!current)
                                     return;
                                 current->m_tileRepaintQueued = false;
-                                if (generation != current->m_viewGeneration)
+                                if (generation != current->m_imageGeneration)
                                     return;
                                 current->update();
                             });
@@ -139,9 +139,9 @@ void ImageViewer::paintEvent(QPaintEvent *event)
         }
         const Viewport tileView = m_view;
 
-        // F4 (M22): apply the live overlay on a deep copy so the TileCache
-        // buffer (shared via shared_ptr) is never mutated. Without the copy,
-        // toggling the overlay off would leave the cached pixels clipped.
+        // F4/M39: derived overlay pixels are materialized off the GUI thread.
+        // The paint path only consumes a ready derived tile and draws the base
+        // tile provisionally while the bounded async request is in flight.
         if (m_overlayMode != mviewer::OverlayMode::None)
         {
             for (auto &rt : ready)
@@ -149,12 +149,55 @@ void ImageViewer::paintEvent(QPaintEvent *event)
                 ImageData derived = m_overlayCache.get(rt.key);
                 if (derived.isNull())
                 {
-                    derived = makeImageData(rt.data.width, rt.data.height, rt.data.format);
-                    std::memcpy(derived.buffer->data(), rt.data.buffer->data(), rt.data.byteSize());
-                    mviewer::applyOverlay(derived, m_overlayMode, m_zebraThreshold);
-                    m_overlayCache.put(rt.key, derived);
+                    const auto mode = m_overlayMode;
+                    const int threshold = m_zebraThreshold;
+                    QPointer<ImageViewer> guard(this);
+                    m_overlayRequests.requestDerived(
+                        rt.key, rt.data, m_overlayGeneration,
+                        [mode, threshold](const TileKey &, const ImageData &source)
+                        {
+                            ImageData value =
+                                makeImageData(source.width, source.height, source.format);
+                            if (value.isNull())
+                                return value;
+                            std::memcpy(value.buffer->data(), source.buffer->data(),
+                                        source.byteSize());
+                            mviewer::applyOverlay(value, mode, threshold);
+                            return value;
+                        },
+                        [guard, generation = m_overlayGeneration](const TileKey &)
+                        {
+                            if (!guard || !qApp)
+                                return;
+                            QMetaObject::invokeMethod(
+                                qApp,
+                                [guard, generation]()
+                                {
+                                    ImageViewer *viewer = guard.data();
+                                    if (!viewer || generation != viewer->m_overlayGeneration ||
+                                        viewer->m_tileRepaintQueued)
+                                        return;
+                                    viewer->m_tileRepaintQueued = true;
+                                    QTimer::singleShot(
+                                        0, viewer,
+                                        [guard, generation]()
+                                        {
+                                            ImageViewer *current = guard.data();
+                                            if (!current)
+                                                return;
+                                            current->m_tileRepaintQueued = false;
+                                            if (generation != current->m_overlayGeneration)
+                                                return;
+                                            current->update();
+                                        });
+                                },
+                                Qt::QueuedConnection);
+                        });
                 }
-                rt.data = derived;
+                else
+                {
+                    rt.data = std::move(derived);
+                }
             }
         }
         // Stage A: QOpenGLWidget keeps a GL context current during paintEvent,
@@ -222,7 +265,13 @@ void ImageViewer::paintEvent(QPaintEvent *event)
             if (actualWA <= 0 || actualHA <= 0)
                 continue;
             tileView.imageRectToScreen(srcXA, srcYA, actualWA, actualHA, tsx, tsy, tsw, tsh);
-            QImage q = mvcore::toQImage(rt.data);
+            // ReadyTile owns the shared ImageData for the duration of this
+            // draw call, so supported byte layouts can be exposed as a
+            // non-owning QImage view. RGBA32 (and any future unsupported
+            // layout) keeps the explicit owned-conversion fallback.
+            QImage q = mvcore::toQImageRef(rt.data);
+            if (q.isNull())
+                q = mvcore::toQImage(rt.data);
             if (q.isNull())
                 continue;
             painter.drawImage(QRect(tsx, tsy, tsw, tsh), q);

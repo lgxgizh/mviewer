@@ -2,6 +2,7 @@
 
 #include <QDialog>
 
+#include "core/export/ExportJob.h"
 #include "core/image/ImageBuffer.h"
 
 #include <QStringList>
@@ -61,6 +62,8 @@ class ExportDialog : public QDialog
     void exportJson();
     void exportHtmlReport();
     void exportClipboard();
+    void exportUnifiedMode(mviewer::exportjob::Mode mode);
+    void startExportJob(mviewer::exportjob::ExportJobConfig cfg);
 
     QString m_path;
     QString m_outDir;

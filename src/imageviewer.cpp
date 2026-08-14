@@ -35,7 +35,8 @@
 
 const double kZoomStep = 1.15;
 
-ImageViewer::ImageViewer(QWidget *parent) : QOpenGLWidget(parent), m_tileRequests(m_tileCache)
+ImageViewer::ImageViewer(QWidget *parent)
+    : QOpenGLWidget(parent), m_tileRequests(m_tileCache), m_overlayRequests(m_overlayCache)
 {
     setWindowTitle("图片查看");
     setMouseTracking(true);
@@ -76,6 +77,7 @@ ImageViewer::~ImageViewer()
     // cancelling first also removes the wasted full-resolution decode work.
     cancelCurrentLoad();
     cancelPreloads();
+    cancelRoiStats();
     // Stage A: free GPU textures + blitter while the GL context is still current.
     // Skip if the widget never created a context (never shown).
     if (context())
@@ -146,7 +148,7 @@ void ImageViewer::showBrowseFullscreen()
                                                              : guard->m_provisionalImage.size();
                                    guard->m_view.fit(source.width(), source.height(),
                                                      FitPolicy::MaximizeClient);
-                                   guard->advanceViewGeneration();
+                                   guard->advanceViewportRevision();
                                    guard->emitZoom();
                                }
                            }
@@ -159,6 +161,8 @@ void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
 {
     if (path.isEmpty() || image.isNull())
         return;
+    if (m_currentPath != path)
+        beginImageGeneration();
     m_currentPath = path;
     m_provisionalPath = path;
     m_provisionalImage = image;
@@ -170,7 +174,7 @@ void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
             ? FitPolicy::MaximizeClient
             : FitPolicy::Comfortable;
     m_view.fit(m_provisionalSourceSize.width(), m_provisionalSourceSize.height(), fitPolicy);
-    advanceViewGeneration();
+    advanceViewportRevision();
     m_fitMode = true;
     emitZoom();
     update();
@@ -200,7 +204,7 @@ void ImageViewer::closeEvent(QCloseEvent *event)
     // QPointer/path/generation guards would still suppress UI delivery, but the
     // obsolete full-resolution work is dropped here.
     ++m_requestGen;
-    advanceViewGeneration();
+    beginImageGeneration();
     cancelCurrentLoad();
     cancelPreloads();
     QSettings settings;
@@ -222,9 +226,74 @@ void ImageViewer::clearPixelInfo()
     emit pixelInfo(-1, -1, 0, 0, 0, 0, 0, 0, 0, 0, false);
 }
 
-void ImageViewer::advanceViewGeneration()
+void ImageViewer::cancelRoiStats()
 {
-    m_tileRequests.reset(++m_viewGeneration);
+    ++m_roiRevision;
+    TaskScheduler::cancel(m_roiStatsRequest);
+    m_roiStatsRequest.reset();
+}
+
+void ImageViewer::scheduleRoiStats(const QRect &selection)
+{
+    cancelRoiStats();
+    if (!m_frame || selection.isEmpty())
+        return;
+
+    const auto frame = m_frame;
+    const auto path = m_currentPath;
+    const uint64_t revision = m_roiRevision;
+    const mviewer::domain::Selection region{selection.x(), selection.y(), selection.width(),
+                                             selection.height()};
+    const auto result = std::make_shared<mviewer::core::PreviewStats>();
+    QPointer<ImageViewer> guard(this);
+    m_roiStatsRequest = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Analysis,
+        [frame, region, result](const TaskScheduler::TaskContext &ctx)
+        {
+            if (!ctx.isCancelled())
+                *result = mviewer::core::computePreviewStatsROI(frame->pixels(), region);
+        },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, frame, path, region, revision, result]()
+        {
+            if (!guard || !qApp)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, frame, path, region, revision, result]()
+                {
+                    ImageViewer *viewer = guard.data();
+                    if (!viewer || viewer->m_roiRevision != revision || viewer->m_frame != frame ||
+                        viewer->m_currentPath != path || !result->valid)
+                        return;
+                    const QString text =
+                        QString("ROI [%1,%2,%3,%4]: lum=%5, R=%6,G=%7,B=%8")
+                            .arg(region.x)
+                            .arg(region.y)
+                            .arg(region.width)
+                            .arg(region.height)
+                            .arg(result->lumMean, 0, 'f', 1)
+                            .arg(result->rMean)
+                            .arg(result->gMean)
+                            .arg(result->bMean);
+                    emit viewer->regionStats(text);
+                },
+                Qt::QueuedConnection);
+        });
+}
+
+void ImageViewer::advanceViewportRevision()
+{
+    ++m_viewRevision;
+}
+
+void ImageViewer::beginImageGeneration()
+{
+    ++m_imageGeneration;
+    ++m_overlayGeneration;
+    m_tileRequests.reset(m_imageGeneration);
+    m_overlayRequests.reset(m_overlayGeneration);
+    cancelRoiStats();
 }
 
 void ImageViewer::setImage(const QString &path)
@@ -246,7 +315,7 @@ void ImageViewer::setImage(const QString &path)
     cancelCurrentLoad();
     auto matchingPreload = takeMatchingPreload(path);
     const uint64_t gen = ++m_requestGen;
-    advanceViewGeneration();
+    beginImageGeneration();
     m_tileCache.clear();
     m_overlayCache.clear();
     m_frame.reset();
@@ -498,7 +567,7 @@ void ImageViewer::fitToWidget()
                isFullScreen() || property("mviewerFullscreenRequested").toBool()
                    ? FitPolicy::MaximizeClient
                    : FitPolicy::Comfortable);
-    advanceViewGeneration();
+    advanceViewportRevision();
     m_fitMode = true;
     emitZoom();
 }
@@ -510,7 +579,7 @@ void ImageViewer::zoomIn()
     m_view.screenW = width();
     m_view.screenH = height();
     m_view.zoomAt(width() / 2.0, height() / 2.0, kZoomStep);
-    advanceViewGeneration();
+    advanceViewportRevision();
     m_fitMode = false;
     emitZoom();
     update();
@@ -523,7 +592,7 @@ void ImageViewer::zoomOut()
     m_view.screenW = width();
     m_view.screenH = height();
     m_view.zoomAt(width() / 2.0, height() / 2.0, 1.0 / kZoomStep);
-    advanceViewGeneration();
+    advanceViewportRevision();
     m_fitMode = false;
     emitZoom();
     update();
@@ -543,7 +612,7 @@ void ImageViewer::zoomActual()
     m_view.screenW = width();
     m_view.screenH = height();
     m_view.zoomAt(width() / 2.0, height() / 2.0, 1.0 / m_view.scale);
-    advanceViewGeneration();
+    advanceViewportRevision();
     m_fitMode = false;
     emitZoom();
     update();
@@ -585,7 +654,7 @@ void ImageViewer::wheelEvent(QWheelEvent *event)
     const QPointF mouse = event->position();
     const double factor = event->angleDelta().y() > 0 ? kZoomStep : 1.0 / kZoomStep;
     m_view.zoomAt(mouse.x(), mouse.y(), factor);
-    advanceViewGeneration();
+    advanceViewportRevision();
     m_fitMode = false;
     emitZoom();
     update();
@@ -606,7 +675,7 @@ void ImageViewer::mouseDoubleClickEvent(QMouseEvent *event)
         m_view.screenH = height();
         const QPointF p = event->position();
         m_view.zoomAt(p.x(), p.y(), 1.0 / m_view.scale);
-        advanceViewGeneration();
+        advanceViewportRevision();
         m_fitMode = false;
         emitZoom();
     }
@@ -635,6 +704,7 @@ void ImageViewer::mousePressEvent(QMouseEvent *event)
     {
         if (m_selectMode && event->button() == Qt::LeftButton)
         {
+            cancelRoiStats();
             m_selecting = true;
             m_selStart = m_selEnd = event->pos();
         }
@@ -667,7 +737,7 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
     else if (m_dragging)
     {
         m_view.pan(event->pos().x() - m_lastMousePos.x(), event->pos().y() - m_lastMousePos.y());
-        advanceViewGeneration();
+        advanceViewportRevision();
         m_lastMousePos = event->pos();
         update();
     }
@@ -744,6 +814,7 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
                             : QRect();
                 if (!valid.isEmpty() && m_frame)
                 {
+#if 0
                     const mviewer::domain::Selection sel{valid.x(), valid.y(), valid.width(),
                                                          valid.height()};
                     const auto stats =
@@ -760,8 +831,13 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
                     emit regionStats(text);
                     emit selectionChanged(valid); // new: live ROI stats
                 }
+ #endif
+                    scheduleRoiStats(valid);
+                    emit selectionChanged(valid);
+                }
                 else
                 {
+                    cancelRoiStats();
                     emit selectionChanged(QRect());
                 }
             }
@@ -792,7 +868,7 @@ void ImageViewer::resizeEvent(QResizeEvent *event)
                 ? FitPolicy::MaximizeClient
                 : FitPolicy::Comfortable;
         m_view.fit(source.width(), source.height(), fitPolicy);
-        advanceViewGeneration();
+        advanceViewportRevision();
         emitZoom();
     }
 }
@@ -814,6 +890,8 @@ void ImageViewer::setOverlayMode(mviewer::OverlayMode m)
     if (m_overlayMode == m)
         return;
     m_overlayMode = m;
+    ++m_overlayGeneration;
+    m_overlayRequests.reset(m_overlayGeneration);
     m_overlayCache.clear();
     QSettings s;
     s.setValue("defaultAnalysisOverlay", static_cast<int>(m));
@@ -826,6 +904,8 @@ void ImageViewer::setZebraThreshold(int t)
     if (m_zebraThreshold == t)
         return;
     m_zebraThreshold = t;
+    ++m_overlayGeneration;
+    m_overlayRequests.reset(m_overlayGeneration);
     m_overlayCache.clear();
     // Only need a repaint when an overlay is currently visible.
     if (m_overlayMode != mviewer::OverlayMode::None)
@@ -860,10 +940,27 @@ void ImageViewer::keyPressEvent(QKeyEvent *event)
         setSelectMode(!m_selectMode);
     else if ((key == Qt::Key_F && !mods) || key == Qt::Key_F11)
     {
-        if (isFullScreen())
+        const bool fullscreen = isFullScreen() || property("mviewerFullscreenRequested").toBool();
+        if (fullscreen)
+        {
+            setProperty("mviewerFullscreenRequested", false);
             showNormal();
+            QPointer<ImageViewer> guard(this);
+            QTimer::singleShot(0, this,
+                               [guard]()
+                               {
+                                   if (!guard)
+                                       return;
+                                   if (guard->m_fitMode && guard->m_frame)
+                                       guard->fitToWidget();
+                                   guard->update();
+                               });
+        }
         else
+        {
+            setProperty("mviewerFullscreenRequested", true);
             showFullScreen();
+        }
     }
     else if (key == Qt::Key_Escape)
         close();

@@ -9,7 +9,8 @@
 > `docs/review/M24_FINAL_VERDICT_2026-08-05.md`,
 > `docs/review/M35_COMPARE_BROWSE_CONVERGENCE_2026-08-13.md`,
 > `docs/review/M36_BROWSE_HOTPATH_DISPLAY_FIDELITY_2026-08-13.md`,
-> `docs/review/M38_VIEWER_RENDER_CONVERGENCE_2026-08-14.md` and
+> `docs/review/M38_VIEWER_RENDER_CONVERGENCE_2026-08-14.md`,
+> `docs/review/M39_REALWORLD_RELIABILITY_2026-08-14.md` and
 > `.\build.ps1 Test`.
 
 ## Positioning
@@ -46,6 +47,21 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   cmake/ninja/cl directly. Qt 6.10.x / MSVC 19.44 verified on the dev machine.
 
 ## Shipped capabilities (1.0.x, CTest-verified)
+
+### M39 Real-world reliability & export convergence (2026-08-14)
+
+- Scheduler-rejected tiles remain pending and retry with bounded backoff, with
+  separate image generations and viewport revisions.
+- ImageViewer paint consumes zero-copy tile views, while derived overlays and
+  ROI statistics stay asynchronous and latest-wins guarded.
+- All export modes share cancellable asynchronous ExportJob execution. CSV,
+  JSON and HTML are escaped/parseable and committed atomically; directory
+  enumeration is worker-side rather than UI-side.
+- Fullscreen requested state is safe across repeated F/F11 transitions.
+- M39 focused and lifecycle suites pass. The default managed-desktop gate is
+  environment-blocked by seven AppConfig/cache/repository/temp write tests; an
+  explicit writable-runtime run reached 87/88 with one native QSettings
+  sidebar-migration observation remaining.
 
 ### M35 Compare / Browse convergence (2026-08-13)
 

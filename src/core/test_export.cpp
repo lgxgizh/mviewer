@@ -14,6 +14,8 @@
 
 #include <QColor>
 #include <QCoreApplication>
+#include <QJsonDocument>
+#include <QJsonParseError>
 #include <QImage>
 
 #include <cstdint>
@@ -166,6 +168,32 @@ int main(int argc, char **argv)
         while (std::getline(cf, ln))
             ++lines;
         CHECK(lines == 2, "CSV has header + one data row");
+    }
+
+    // M39 adversarial identity round-trip: structured serializers must not
+    // emit malformed output for quotes, commas, newlines, HTML delimiters or
+    // backslashes in user/file-derived names.
+    {
+        mviewer::core::CompareReport adversarial = report;
+        adversarial.imageA = "a\"b,\n\xE4\xB8\xAD.png";
+        adversarial.imageB = "<test>&\\capture.png";
+        const QByteArray json = QByteArray::fromStdString(adversarial.toJson());
+        QJsonParseError parseError;
+        const QJsonDocument parsed = QJsonDocument::fromJson(json, &parseError);
+        CHECK(parseError.error == QJsonParseError::NoError && parsed.isObject(),
+              "adversarial CompareReport JSON parses as structured JSON");
+        const std::string csv = adversarial.toCsv();
+        const size_t firstData = csv.find('\n');
+        CHECK(firstData != std::string::npos && csvColumnCount(csv.substr(firstData + 1)) == 15,
+              "adversarial CompareReport CSV remains parseable with quoted identity fields");
+
+        mviewer::core::ReportContext htmlAdversarial;
+        htmlAdversarial.title = "<Report & \"review\">";
+        htmlAdversarial.imagePath = adversarial.imageB;
+        const std::string html = mviewer::core::buildReportHtml(htmlAdversarial);
+        CHECK(html.find("&lt;Report &amp; &quot;review&quot;&gt;") != std::string::npos &&
+                  html.find("&lt;test&gt;&amp;\\capture.png") != std::string::npos,
+              "adversarial report HTML escapes user-derived text");
     }
 
     // Diff PNG.

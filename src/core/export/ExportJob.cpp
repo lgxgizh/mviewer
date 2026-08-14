@@ -1,5 +1,6 @@
 #include "core/export/ExportJob.h"
 
+#include "core/analysis/AnalysisEngine.h"
 #include "core/image/Decoder.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageBuffer.h"
@@ -7,10 +8,14 @@
 #include "domain/Selection.h"
 
 #include <atomic>
+#include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <limits>
 #include <optional>
 #include <set>
@@ -105,6 +110,158 @@ static std::string extensionFor(const std::string &format)
     if (format == "jpeg")
         return ".jpg";
     return "." + format;
+}
+
+static fs::path pathFromUtf8(const std::string &value);
+static std::string pathToUtf8(const fs::path &path);
+static fs::path uniqueTempPath(const fs::path &destination);
+static bool commitTempFile(const fs::path &temporary, const fs::path &destination,
+                           std::error_code &error);
+
+struct ReportRow
+{
+    std::string name;
+    int width = 0;
+    int height = 0;
+    double lumMean = 0.0;
+    double rMean = 0.0;
+    double gMean = 0.0;
+    double bMean = 0.0;
+};
+
+static std::string csvEscape(const std::string &value)
+{
+    if (value.find_first_of(",\"\r\n") == std::string::npos)
+        return value;
+    std::string out = "\"";
+    for (const char c : value)
+        out += c == '"' ? "\"\"" : std::string(1, c);
+    out += '"';
+    return out;
+}
+
+static std::string jsonEscape(const std::string &value)
+{
+    std::string out;
+    out.reserve(value.size() + 2);
+    for (const unsigned char c : value)
+    {
+        switch (c)
+        {
+        case '"':
+            out += "\\\"";
+            break;
+        case '\\':
+            out += "\\\\";
+            break;
+        case '\n':
+            out += "\\n";
+            break;
+        case '\r':
+            out += "\\r";
+            break;
+        case '\t':
+            out += "\\t";
+            break;
+        default:
+            if (c < 0x20)
+            {
+                const char hex[] = "0123456789abcdef";
+                out += "\\u00";
+                out += hex[c >> 4];
+                out += hex[c & 0x0f];
+            }
+            else
+                out += static_cast<char>(c);
+            break;
+        }
+    }
+    return out;
+}
+
+static std::string htmlEscape(const std::string &value)
+{
+    std::string out;
+    for (const char c : value)
+    {
+        switch (c)
+        {
+        case '&':
+            out += "&amp;";
+            break;
+        case '<':
+            out += "&lt;";
+            break;
+        case '>':
+            out += "&gt;";
+            break;
+        case '"':
+            out += "&quot;";
+            break;
+        case '\'':
+            out += "&#39;";
+            break;
+        default:
+            out += c;
+            break;
+        }
+    }
+    return out;
+}
+
+static std::string fixedNumber(double value)
+{
+    if (!std::isfinite(value))
+        return {};
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(2) << value;
+    return out.str();
+}
+
+static std::string jsonNumber(double value)
+{
+    const std::string number = fixedNumber(value);
+    return number.empty() ? "null" : number;
+}
+
+static std::optional<ReportRow> analyzeSource(const fs::path &path)
+{
+    ImageData image = Decoder::decodeFull(pathToUtf8(path));
+    if (image.isNull())
+        return std::nullopt;
+    const ImageStats stats = AnalysisEngine::computeStats(image);
+    ReportRow row;
+    row.name = pathToUtf8(path.filename());
+    row.width = image.width;
+    row.height = image.height;
+    row.lumMean = stats.lumMean;
+    row.rMean = stats.rMean;
+    row.gMean = stats.gMean;
+    row.bMean = stats.bMean;
+    return row;
+}
+
+static bool writeTextAtomically(const fs::path &destination, const std::string &contents)
+{
+    const fs::path temporary = uniqueTempPath(destination);
+    {
+        std::ofstream file(temporary, std::ios::binary);
+        if (!file)
+            return false;
+        file.write(contents.data(), static_cast<std::streamsize>(contents.size()));
+        if (!file)
+        {
+            std::error_code cleanup;
+            fs::remove(temporary, cleanup);
+            return false;
+        }
+    }
+    std::error_code error;
+    if (commitTempFile(temporary, destination, error))
+        return true;
+    std::error_code cleanup;
+    fs::remove(temporary, cleanup);
+    return false;
 }
 
 static fs::path pathFromUtf8(const std::string &value)
@@ -333,25 +490,260 @@ static bool commitTempFile(const fs::path &temporary, const fs::path &destinatio
 
 ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
 {
-    ExportJobResult r;
-    r.total = static_cast<int>(cfg.sources.size());
+    std::vector<std::string> sources = cfg.sources;
+    if (sources.empty() && !cfg.sourceDirectory.empty())
+    {
+        try
+        {
+            const fs::path sourceDirectory = pathFromUtf8(cfg.sourceDirectory);
+            std::error_code listingError;
+            for (fs::directory_iterator it(sourceDirectory, listingError), end;
+                 !listingError && it != end; it.increment(listingError))
+            {
+                std::error_code typeError;
+                if (!it->is_regular_file(typeError) || typeError)
+                    continue;
+                std::string extension = pathToUtf8(it->path().extension());
+                std::transform(extension.begin(), extension.end(), extension.begin(),
+                               [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                static const std::unordered_set<std::string> imageExtensions = {
+                    ".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff"};
+                if (imageExtensions.count(extension) != 0)
+                    sources.push_back(pathToUtf8(it->path()));
+            }
+            std::sort(sources.begin(), sources.end());
+        }
+        catch (const std::exception &error)
+        {
+            ExportJobResult failed;
+            failed.message = "source directory enumeration failed: " +
+                             std::string(error.what());
+            return failed;
+        }
+    }
 
-    if (cfg.sources.empty())
+    ExportJobResult r;
+    r.total = static_cast<int>(sources.size());
+
+    if (sources.empty())
     {
         r.message = "no sources";
         return r;
     }
-    if (cfg.outDir.empty())
+    if (cfg.outDir.empty() && cfg.mode != Mode::Clipboard)
     {
         r.message = "no output directory";
         return r;
     }
 
-    // Convert is the unified path. Other modes are still handled by ExportDialog
-    // specialized methods; report them as delegated so callers can fall back.
-    if (cfg.mode != Mode::Convert)
+    fs::path outputDirectory;
+    try
     {
-        r.message = "delegated:" + modeName(cfg.mode);
+        if (!cfg.outDir.empty())
+            outputDirectory = pathFromUtf8(cfg.outDir);
+    }
+    catch (const std::exception &error)
+    {
+        r.failed = r.total;
+        r.message = "invalid path encoding: " + std::string(error.what());
+        return r;
+    }
+
+    if (cfg.mode == Mode::Clipboard)
+    {
+        if (progress)
+            progress(0, r.total, sources.front());
+        r.clipboardImage = Decoder::decodeFull(sources.front());
+        if (r.clipboardImage.isNull())
+        {
+            r.failed = 1;
+            r.message = "clipboard source decode failed";
+            return r;
+        }
+        r.done = 1;
+        r.message = "clipboard image ready";
+        if (progress)
+            progress(1, r.total, {});
+        return r;
+    }
+
+    std::error_code outputError;
+    fs::create_directories(outputDirectory, outputError);
+    if (outputError)
+    {
+        r.failed = r.total;
+        r.message = "cannot create output directory: " + outputError.message();
+        return r;
+    }
+
+    if (cfg.mode == Mode::ContactSheet || cfg.mode == Mode::Pdf)
+    {
+        // Contact/PDF materialize bounded scaled pages, never a vector of
+        // full-resolution source frames. The final writer runs only after all
+        // worker-side decode work succeeds or has been accounted for.
+        std::vector<ImageData> images;
+        images.reserve(sources.size());
+        const int maxEdge = cfg.mode == Mode::ContactSheet
+                                ? std::clamp(cfg.contactThumb, 16, 2000)
+                                : std::clamp(std::max(cfg.contactThumb, 512), 256, 2048);
+        for (int i = 0; i < r.total; ++i)
+        {
+            if (cfg.cancel && cfg.cancel->load(std::memory_order_relaxed))
+            {
+                r.message = "cancelled after " + std::to_string(i) + " / " +
+                            std::to_string(r.total);
+                return r;
+            }
+            if (progress)
+                progress(i, r.total, sources[static_cast<size_t>(i)]);
+            ImageData image = Decoder::decodeScaled(sources[static_cast<size_t>(i)], maxEdge);
+            if (image.isNull())
+            {
+                ++r.failed;
+                continue;
+            }
+            images.push_back(std::move(image));
+        }
+        if (images.empty())
+        {
+            r.message = "no source image decoded";
+            return r;
+        }
+
+        const fs::path destination = outputDirectory /
+                                     pathFromUtf8(cfg.mode == Mode::ContactSheet
+                                                       ? "contact_sheet.png"
+                                                       : "export.pdf");
+        const fs::path temporary = uniqueTempPath(destination);
+        bool written = false;
+        if (cfg.mode == Mode::ContactSheet)
+        {
+            const ImageData sheet =
+                mviewer::core::makeContactSheet(images, std::clamp(cfg.contactCols, 1, 20),
+                                                 std::clamp(cfg.contactThumb, 16, 2000));
+            written = !sheet.isNull() &&
+                      Encoder::encode(sheet, pathToUtf8(temporary), Encoder::Params{cfg.quality});
+        }
+        else
+        {
+            written = mviewer::core::writePdf(pathToUtf8(temporary), images, cfg.quality);
+        }
+        if (!written)
+        {
+            std::error_code cleanup;
+            fs::remove(temporary, cleanup);
+            r.message = "output generation failed";
+            return r;
+        }
+        std::error_code commitError;
+        if (!commitTempFile(temporary, destination, commitError))
+        {
+            std::error_code cleanup;
+            fs::remove(temporary, cleanup);
+            r.message = "output commit failed: " + commitError.message();
+            return r;
+        }
+        r.done = 1;
+        r.primaryOutput = pathToUtf8(destination);
+        if (progress)
+            progress(r.total, r.total, {});
+        r.message = std::string("done 1 output") + (r.failed ? " (some sources failed)" : "");
+        return r;
+    }
+
+    if (cfg.mode == Mode::Csv || cfg.mode == Mode::Json || cfg.mode == Mode::HtmlReport)
+    {
+        std::vector<ReportRow> rows;
+        rows.reserve(sources.size());
+        for (int i = 0; i < r.total; ++i)
+        {
+            if (cfg.cancel && cfg.cancel->load(std::memory_order_relaxed))
+            {
+                r.message = "cancelled after " + std::to_string(i) + " / " +
+                            std::to_string(r.total);
+                return r;
+            }
+            if (progress)
+                progress(i, r.total, sources[static_cast<size_t>(i)]);
+            try
+            {
+                const auto row = analyzeSource(pathFromUtf8(sources[static_cast<size_t>(i)]));
+                if (row)
+                    rows.push_back(*row);
+                else
+                    ++r.failed;
+            }
+            catch (...)
+            {
+                ++r.failed;
+            }
+        }
+        if (rows.empty())
+        {
+            r.message = "no source image decoded";
+            return r;
+        }
+
+        std::string body;
+        std::string extension;
+        if (cfg.mode == Mode::Csv)
+        {
+            extension = ".csv";
+            std::ostringstream out;
+            out << "Name,Width,Height,LumMean,RMean,GMean,BMean\n";
+            for (const auto &row : rows)
+                out << csvEscape(row.name) << "," << row.width << "," << row.height << ","
+                    << fixedNumber(row.lumMean) << "," << fixedNumber(row.rMean) << ","
+                    << fixedNumber(row.gMean) << "," << fixedNumber(row.bMean) << "\n";
+            body = out.str();
+        }
+        else if (cfg.mode == Mode::Json)
+        {
+            extension = ".json";
+            std::ostringstream out;
+            out << "{\n  \"images\": [";
+            for (size_t i = 0; i < rows.size(); ++i)
+            {
+                if (i)
+                    out << ",";
+                const auto &row = rows[i];
+                out << "\n    {\"name\":\"" << jsonEscape(row.name) << "\",\"width\":"
+                    << row.width << ",\"height\":" << row.height << ",\"lumMean\":"
+                    << jsonNumber(row.lumMean) << ",\"rMean\":" << jsonNumber(row.rMean)
+                    << ",\"gMean\":" << jsonNumber(row.gMean) << ",\"bMean\":"
+                    << jsonNumber(row.bMean) << "}";
+            }
+            out << "\n  ]\n}\n";
+            body = out.str();
+        }
+        else
+        {
+            extension = ".html";
+            std::ostringstream out;
+            out << "<!doctype html><html><head><meta charset=\"utf-8\"><title>Export "
+                   "Report</title></head><body><h1>Export Report</h1><table><tr>"
+                   "<th>Name</th><th>Width</th><th>Height</th><th>LumMean</th><th>R</th>"
+                   "<th>G</th><th>B</th></tr>\n";
+            for (const auto &row : rows)
+                out << "<tr><td>" << htmlEscape(row.name) << "</td><td>" << row.width
+                    << "</td><td>" << row.height << "</td><td>" << fixedNumber(row.lumMean)
+                    << "</td><td>" << fixedNumber(row.rMean) << "</td><td>"
+                    << fixedNumber(row.gMean) << "</td><td>" << fixedNumber(row.bMean)
+                    << "</td></tr>\n";
+            out << "</table></body></html>\n";
+            body = out.str();
+        }
+        const fs::path destination = outputDirectory / pathFromUtf8("export_report" + extension);
+        if (!writeTextAtomically(destination, body))
+        {
+            r.message = "report write failed";
+            return r;
+        }
+        r.done = 1;
+        r.primaryOutput = pathToUtf8(destination);
+        if (progress)
+            progress(r.total, r.total, {});
+        r.message = std::string("done 1 report") + (r.failed ? " (some sources failed)" : "");
         return r;
     }
 
@@ -367,17 +759,16 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
         return r;
     }
 
-    fs::path outputDirectory;
     std::vector<fs::path> sourcePaths;
     std::vector<fs::path> destinations;
     try
     {
         outputDirectory = pathFromUtf8(cfg.outDir);
-        sourcePaths.reserve(cfg.sources.size());
-        destinations.reserve(cfg.sources.size());
+        sourcePaths.reserve(sources.size());
+        destinations.reserve(sources.size());
         for (int i = 0; i < r.total; ++i)
         {
-            sourcePaths.push_back(pathFromUtf8(cfg.sources[static_cast<size_t>(i)]));
+            sourcePaths.push_back(pathFromUtf8(sources[static_cast<size_t>(i)]));
             const std::string baseName =
                 outputBaseName(cfg, sourcePaths.back(), i, r.total);
             destinations.push_back(outputDirectory / pathFromUtf8(baseName + ext));
@@ -392,7 +783,7 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
 
     PathKeySet sourceKeys;
 #ifndef _WIN32
-    sourceKeys.reserve(cfg.sources.size());
+    sourceKeys.reserve(sources.size());
 #endif
     for (const fs::path &source : sourcePaths)
     {
@@ -474,7 +865,7 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
 
     for (int i = 0; i < r.total; ++i)
     {
-        const std::string &src = cfg.sources[static_cast<size_t>(i)];
+        const std::string &src = sources[static_cast<size_t>(i)];
         // M24 (D#3): cooperative cancellation between items.
         if (cfg.cancel && cfg.cancel->load(std::memory_order_relaxed))
         {

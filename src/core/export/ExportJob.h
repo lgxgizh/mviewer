@@ -3,6 +3,8 @@
 // so Convert / Contact / CSV / JSON / HTML share one execution path.
 #pragma once
 
+#include "core/image/ImageBuffer.h"
+
 #include <atomic>
 #include <functional>
 #include <memory>
@@ -34,6 +36,9 @@ struct ExportJobConfig
 {
     Mode mode = Mode::Convert;
     std::vector<std::string> sources;
+    // Optional legacy batch source directory. Enumeration belongs to the
+    // worker-side ExportJob, never to the Qt dialog thread.
+    std::string sourceDirectory;
     std::string outDir;
     std::string format = "jpeg"; // jpeg / png / webp / tiff / bmp
     int quality = 90;
@@ -65,6 +70,9 @@ struct ExportJobResult
     int failed = 0;
     std::string message;
     std::string primaryOutput; // e.g. contact sheet path / report path
+    // Clipboard ownership is transferred as a value-owned core image. The
+    // final QClipboard::setImage() remains a GUI-thread operation.
+    ImageData clipboardImage;
 };
 
 // Progress: (done, total, currentSourcePath)

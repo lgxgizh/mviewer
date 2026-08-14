@@ -415,7 +415,9 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "browse layout action is a stable checkable command");
     CHECK(foldersSection && previewSection,
           "navigation sidebar exposes stable folders and preview sections");
-    CHECK(settings.value("browserSidebarLayoutVersion").toInt() == 1,
+    QSettings migratedSettings;
+    migratedSettings.sync();
+    CHECK(migratedSettings.value("browserSidebarLayoutVersion").toInt() == 1,
           "legacy navigation sidebar layout is migrated exactly once");
     CHECK(foldersSection && previewSection && foldersSection->height() > previewSection->height(),
           "migrated sidebar gives the folder section the larger 60/40 share");
@@ -2476,7 +2478,11 @@ void workflow5_export_current_output_directory(const QString &rootDir)
                 CHECK(modeCombo->currentData().toString() == QStringLiteral("csv"),
                       "export CSV mode is selected");
                 CHECK(QMetaObject::invokeMethod(&dialog, "onExportClicked", Qt::DirectConnection),
-                      "export dispatches synchronously");
+                      "export dispatches asynchronously");
+                QElapsedTimer exportTimer;
+                exportTimer.start();
+                while (!QFileInfo::exists(outputReport) && exportTimer.elapsed() < 5000)
+                    pump(25);
                 const bool outputExists = QFileInfo::exists(outputReport);
                 const bool sourceExists = QFileInfo::exists(sourceReport);
                 CHECK(outputExists,

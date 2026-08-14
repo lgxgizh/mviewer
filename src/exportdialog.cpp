@@ -1,8 +1,6 @@
 #include "exportdialog.h"
 
-#include "core/analysis/AnalysisEngine.h"
 #include "core/export/ExportJob.h"
-#include "core/image/Encoder.h"
 #include "core/image/ImageTransform.h"
 #include "core/image/QtConvert.h"
 
@@ -12,8 +10,8 @@
 #include <QComboBox>
 #include <QDialogButtonBox>
 #include <QDir>
-#include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFormLayout>
 #include <QFutureWatcher>
 #include <QGroupBox>
@@ -27,10 +25,7 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QtConcurrent/QtConcurrent>
-#include <QTextStream>
 #include <QVBoxLayout>
-
-#include <vector>
 
 void ExportDialog::setOutputDir(const QString &dir)
 {
@@ -209,11 +204,6 @@ QStringList ExportDialog::collectSources() const
 {
     if (!m_sources.isEmpty())
         return m_sources;
-    // Legacy: batch over the output directory.
-    if (!m_outDir.isEmpty())
-        return QDir(m_outDir).entryList(
-            {"*.png", "*.jpg", "*.jpeg", "*.bmp", "*.webp", "*.tiff", "*.tif"}, QDir::Files,
-            QDir::Name);
     if (!m_path.isEmpty())
         return {m_path};
     return {};
@@ -252,6 +242,13 @@ void ExportDialog::onBrowse()
 
 void ExportDialog::onExportClicked()
 {
+    const QString mode = m_modeCombo->currentData().toString();
+    if (mode == "clipboard")
+    {
+        exportUnifiedMode(mviewer::exportjob::Mode::Clipboard);
+        return;
+    }
+
     QString outDir = m_dirEdit->text();
     if (outDir.isEmpty() || !QDir(outDir).exists())
     {
@@ -270,19 +267,16 @@ void ExportDialog::onExportClicked()
         m_outDir = validatedDir.absolutePath();
     m_dirEdit->setText(m_outDir);
 
-    const QString mode = m_modeCombo->currentData().toString();
     if (mode == "contact")
-        exportContactSheet();
+        exportUnifiedMode(mviewer::exportjob::Mode::ContactSheet);
     else if (mode == "pdf")
-        exportPdf();
+        exportUnifiedMode(mviewer::exportjob::Mode::Pdf);
     else if (mode == "csv")
-        exportCsv();
+        exportUnifiedMode(mviewer::exportjob::Mode::Csv);
     else if (mode == "json")
-        exportJson();
+        exportUnifiedMode(mviewer::exportjob::Mode::Json);
     else if (mode == "html")
-        exportHtmlReport();
-    else if (mode == "clipboard")
-        exportClipboard();
+        exportUnifiedMode(mviewer::exportjob::Mode::HtmlReport);
     else
         exportConvertBatch();
 }
@@ -291,7 +285,7 @@ void ExportDialog::exportConvertBatch()
 {
     // M21: route Convert through the unified ExportJob runner.
     const QStringList files = collectSources();
-    if (files.isEmpty())
+    if (files.isEmpty() && m_outDir.isEmpty())
     {
         m_statusLabel->setText(tr("没有可导出的图片。"));
         return;
@@ -300,6 +294,8 @@ void ExportDialog::exportConvertBatch()
     mviewer::exportjob::ExportJobConfig cfg;
     cfg.mode = mviewer::exportjob::Mode::Convert;
     cfg.outDir = m_outDir.toStdString();
+    if (files.isEmpty())
+        cfg.sourceDirectory = m_outDir.toStdString();
     cfg.format = m_formatCombo->currentData().toString().toStdString();
     cfg.quality = m_qualitySpin->value();
     cfg.renamePattern = m_renameEdit->text().toStdString();
@@ -372,6 +368,98 @@ void ExportDialog::exportConvertBatch()
                 cfg,
                 [self](int done, int total, const std::string &)
                 {
+                    if (!qApp)
+                        return;
+                    QMetaObject::invokeMethod(
+                        qApp,
+                        [self, done, total]()
+                        {
+                            if (!self || !self->m_progress)
+                                return;
+                            self->m_progress->setMaximum(total);
+                            self->m_progress->setValue(done);
+                        });
+                });
+        }));
+}
+
+void ExportDialog::exportUnifiedMode(mviewer::exportjob::Mode mode)
+{
+    const QStringList files = collectSources();
+    if (files.isEmpty() && m_outDir.isEmpty())
+    {
+        m_statusLabel->setText(tr("没有可导出的图片。"));
+        return;
+    }
+
+    mviewer::exportjob::ExportJobConfig cfg;
+    cfg.mode = mode;
+    cfg.outDir = m_outDir.toStdString();
+    if (files.isEmpty())
+        cfg.sourceDirectory = m_outDir.toStdString();
+    cfg.quality = m_qualitySpin->value();
+    cfg.contactCols = m_colsSpin->value();
+    cfg.contactThumb = m_thumbSpin->value();
+    for (const QString &f : files)
+    {
+        const QString source = m_sources.isEmpty() ? QDir(m_outDir).filePath(f) : f;
+        cfg.sources.push_back(source.toStdString());
+    }
+    startExportJob(std::move(cfg));
+}
+
+void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
+{
+    m_cancelFlag = std::make_shared<std::atomic<bool>>(false);
+    cfg.cancel = m_cancelFlag;
+    m_exportBtn->setEnabled(false);
+    if (!m_progress)
+    {
+        m_progress = new QProgressDialog(tr("正在导出..."), tr("取消"), 0, 0, this);
+        m_progress->setWindowModality(Qt::WindowModal);
+        m_progress->setAutoClose(true);
+        m_progress->setMinimumDuration(0);
+        connect(m_progress, &QProgressDialog::canceled, this,
+                [this]()
+                {
+                    if (m_cancelFlag)
+                        m_cancelFlag->store(true, std::memory_order_relaxed);
+                });
+    }
+    m_progress->setRange(0, static_cast<int>(cfg.sources.size()));
+    m_progress->setValue(0);
+    m_progress->show();
+
+    const QPointer<ExportDialog> self(this);
+    auto *watcher = new QFutureWatcher<mviewer::exportjob::ExportJobResult>(this);
+    connect(watcher, &QFutureWatcher<mviewer::exportjob::ExportJobResult>::finished, this,
+            [this, watcher, mode = cfg.mode]()
+            {
+                const auto result = watcher->result();
+                watcher->deleteLater();
+                if (m_progress)
+                    m_progress->close();
+                m_exportBtn->setEnabled(true);
+                if (mode == mviewer::exportjob::Mode::Clipboard &&
+                    !result.clipboardImage.isNull())
+                {
+                    QImage clipboard = mvcore::toQImageRef(result.clipboardImage);
+                    if (clipboard.isNull())
+                        clipboard = mvcore::toQImage(result.clipboardImage);
+                    if (!clipboard.isNull())
+                        QApplication::clipboard()->setImage(clipboard);
+                }
+                m_statusLabel->setText(QString::fromStdString(result.message));
+            });
+    watcher->setFuture(QtConcurrent::run(
+        [cfg, self]() -> mviewer::exportjob::ExportJobResult
+        {
+            return mviewer::exportjob::run(
+                cfg,
+                [self](int done, int total, const std::string &)
+                {
+                    if (!qApp)
+                        return;
                     QMetaObject::invokeMethod(
                         qApp,
                         [self, done, total]()
@@ -387,214 +475,30 @@ void ExportDialog::exportConvertBatch()
 
 void ExportDialog::exportContactSheet()
 {
-    const QStringList files = collectSources();
-    if (files.isEmpty())
-    {
-        m_statusLabel->setText(tr("没有可导出的图片。"));
-        return;
-    }
-    std::vector<ImageData> imgs;
-    for (const QString &f : files)
-    {
-        const QString src = m_sources.isEmpty() ? (m_outDir + "/" + f) : f;
-        QImage img(src);
-        if (!img.isNull())
-            imgs.push_back(mvcore::fromQImage(img));
-    }
-    if (imgs.empty())
-    {
-        m_statusLabel->setText(tr("没有可导出的图片。"));
-        return;
-    }
-    const ImageData sheet =
-        mviewer::core::makeContactSheet(imgs, m_colsSpin->value(), m_thumbSpin->value());
-    const QString dst = QDir(m_outDir).absoluteFilePath("contact_sheet.png");
-    if (Encoder::encode(sheet, dst.toStdString(), Encoder::Params{100}))
-        m_statusLabel->setText(tr("联系表已生成: %1").arg(dst));
-    else
-        m_statusLabel->setText(tr("联系表生成失败。"));
+    exportUnifiedMode(mviewer::exportjob::Mode::ContactSheet);
 }
 
 void ExportDialog::exportPdf()
 {
-    const QStringList files = collectSources();
-    if (files.isEmpty())
-    {
-        m_statusLabel->setText(tr("没有可导出的图片。"));
-        return;
-    }
-    std::vector<ImageData> imgs;
-    for (const QString &f : files)
-    {
-        const QString src = m_sources.isEmpty() ? (m_outDir + "/" + f) : f;
-        QImage img(src);
-        if (!img.isNull())
-            imgs.push_back(mvcore::fromQImage(img));
-    }
-    if (imgs.empty())
-    {
-        m_statusLabel->setText(tr("没有可导出的图片。"));
-        return;
-    }
-    const QString dst = QDir(m_outDir).absoluteFilePath("export.pdf");
-    if (mviewer::core::writePdf(dst.toStdString(), imgs, m_qualitySpin->value()))
-        m_statusLabel->setText(tr("PDF 已生成: %1").arg(dst));
-    else
-        m_statusLabel->setText(tr("PDF 生成失败。"));
+    exportUnifiedMode(mviewer::exportjob::Mode::Pdf);
 }
-
-namespace
-{
-struct ExportRow
-{
-    QString name;
-    int width = 0;
-    int height = 0;
-    double lumMean = 0.0;
-    double rMean = 0.0;
-    double gMean = 0.0;
-    double bMean = 0.0;
-};
-
-ExportRow analyzePath(const QString &path)
-{
-    ExportRow row;
-    row.name = QFileInfo(path).fileName();
-    QImage img(path);
-    if (img.isNull())
-        return row;
-    row.width = img.width();
-    row.height = img.height();
-    const auto s = AnalysisEngine::computeStats(mvcore::fromQImage(img));
-    row.lumMean = s.lumMean;
-    row.rMean = s.rMean;
-    row.gMean = s.gMean;
-    row.bMean = s.bMean;
-    return row;
-}
-
-QVector<ExportRow> collectRows(const QStringList &files)
-{
-    QVector<ExportRow> rows;
-    rows.reserve(files.size());
-    for (const QString &f : files)
-        rows.append(analyzePath(f));
-    return rows;
-}
-} // namespace
 
 void ExportDialog::exportCsv()
 {
-    const QStringList files = collectSources();
-    if (files.isEmpty())
-    {
-        m_statusLabel->setText(tr("没有可导出的图片。"));
-        return;
-    }
-    const auto rows = collectRows(files);
-    const QString dst = QDir(m_outDir).absoluteFilePath("export_report.csv");
-    QFile f(dst);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
-    {
-        m_statusLabel->setText(tr("CSV 打开失败。"));
-        return;
-    }
-    QTextStream out(&f);
-    out.setEncoding(QStringConverter::Utf8);
-    out << "Name,Width,Height,LumMean,RMean,GMean,BMean\n";
-    for (const auto &r : rows)
-    {
-        out << "\"" << r.name << "\"," << r.width << "," << r.height << ","
-            << QString::number(r.lumMean, 'f', 2) << "," << QString::number(r.rMean, 'f', 2) << ","
-            << QString::number(r.gMean, 'f', 2) << "," << QString::number(r.bMean, 'f', 2) << "\n";
-    }
-    m_statusLabel->setText(tr("CSV 已生成: %1").arg(dst));
+    exportUnifiedMode(mviewer::exportjob::Mode::Csv);
 }
 
 void ExportDialog::exportJson()
 {
-    const QStringList files = collectSources();
-    if (files.isEmpty())
-    {
-        m_statusLabel->setText(tr("没有可导出的图片。"));
-        return;
-    }
-    const auto rows = collectRows(files);
-    const QString dst = QDir(m_outDir).absoluteFilePath("export_report.json");
-    QFile f(dst);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
-    {
-        m_statusLabel->setText(tr("JSON 打开失败。"));
-        return;
-    }
-    QTextStream out(&f);
-    out.setEncoding(QStringConverter::Utf8);
-    out << "{\n  \"images\": [\n";
-    for (int i = 0; i < rows.size(); ++i)
-    {
-        const auto &r = rows[i];
-        out << "    {"
-            << "\"name\":\"" << r.name << "\","
-            << "\"width\":" << r.width << ","
-            << "\"height\":" << r.height << ","
-            << "\"lumMean\":" << QString::number(r.lumMean, 'f', 2) << ","
-            << "\"rMean\":" << QString::number(r.rMean, 'f', 2) << ","
-            << "\"gMean\":" << QString::number(r.gMean, 'f', 2) << ","
-            << "\"bMean\":" << QString::number(r.bMean, 'f', 2) << "}";
-        out << (i + 1 < rows.size() ? ",\n" : "\n");
-    }
-    out << "  ]\n}\n";
-    m_statusLabel->setText(tr("JSON 已生成: %1").arg(dst));
+    exportUnifiedMode(mviewer::exportjob::Mode::Json);
 }
 
 void ExportDialog::exportHtmlReport()
 {
-    const QStringList files = collectSources();
-    if (files.isEmpty())
-    {
-        m_statusLabel->setText(tr("没有可导出的图片。"));
-        return;
-    }
-    const auto rows = collectRows(files);
-    const QString dst = QDir(m_outDir).absoluteFilePath("export_report.html");
-    QFile f(dst);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
-    {
-        m_statusLabel->setText(tr("HTML 打开失败。"));
-        return;
-    }
-    QTextStream out(&f);
-    out.setEncoding(QStringConverter::Utf8);
-    out << "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>Export "
-           "Report</title></head><body>\n";
-    out << "<h1>Export Report</h1><table border=\"1\" cellpadding=\"4\">\n";
-    out << "<tr><th>Name</th><th>Width</th><th>Height</th><th>LumMean</th><th>R</th><th>G</"
-           "th><th>B</th></tr>\n";
-    for (const auto &r : rows)
-    {
-        out << "<tr><td>" << r.name << "</td><td>" << r.width << "</td><td>" << r.height
-            << "</td><td>" << QString::number(r.lumMean, 'f', 2) << "</td><td>"
-            << QString::number(r.rMean, 'f', 2) << "</td><td>" << QString::number(r.gMean, 'f', 2)
-            << "</td><td>" << QString::number(r.bMean, 'f', 2) << "</td></tr>\n";
-    }
-    out << "</table></body></html>\n";
-    m_statusLabel->setText(tr("HTML 报告已生成: %1").arg(dst));
+    exportUnifiedMode(mviewer::exportjob::Mode::HtmlReport);
 }
 
 void ExportDialog::exportClipboard()
 {
-    const QStringList files = collectSources();
-    if (files.isEmpty())
-    {
-        m_statusLabel->setText(tr("没有可复制的图片。"));
-        return;
-    }
-    const QImage img(files.first());
-    if (img.isNull())
-    {
-        m_statusLabel->setText(tr("无法读取图片。"));
-        return;
-    }
-    QApplication::clipboard()->setImage(img);
-    m_statusLabel->setText(tr("已复制 %1 到剪贴板").arg(QFileInfo(files.first()).fileName()));
+    exportUnifiedMode(mviewer::exportjob::Mode::Clipboard);
 }

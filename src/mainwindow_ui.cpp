@@ -407,6 +407,7 @@ void MainWindow::setupUi()
                            }
                            settings.setValue("browserSidebarLayoutVersion",
                                              currentLayoutVersion);
+                           settings.sync();
                        });
 
     // ----- Right column: sort bar (top) + image gallery -----

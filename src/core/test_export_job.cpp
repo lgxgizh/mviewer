@@ -46,14 +46,15 @@ int main(int argc, char **argv)
         CHECK(r.message.find("no sources") != std::string::npos, "empty sources message");
     }
 
-    // Non-convert modes are delegated (UI still owns specialized paths).
+    // Non-convert modes now share the same worker-side ExportJob entry point.
     {
         ExportJobConfig cfg;
         cfg.mode = Mode::Csv;
         cfg.sources = {"a.jpg"};
         cfg.outDir = ".";
         auto r = run(cfg);
-        CHECK(r.message.find("delegated") != std::string::npos, "csv delegated");
+        CHECK(r.message.find("delegated") == std::string::npos,
+              "csv is handled by the unified job path");
     }
 
     // Convert smoke: write a tiny PNG source, re-export as JPEG via ExportJob.
@@ -90,6 +91,28 @@ int main(int argc, char **argv)
         CHECK(fs::exists(out / "photo.v2_exp.jpg") ||
                   r.primaryOutput.find("photo.v2_exp") != std::string::npos,
               "convert preserves dotted base name");
+
+        ExportJobConfig directoryCfg;
+        directoryCfg.mode = Mode::Csv;
+        directoryCfg.sourceDirectory = tmp.string();
+        directoryCfg.outDir = out.string();
+        const auto directoryResult = run(directoryCfg);
+        CHECK(directoryResult.done == 1 && directoryResult.failed == 0,
+              "worker-side source directory enumeration completes");
+
+        for (const Mode mode : {Mode::ContactSheet, Mode::Pdf, Mode::Csv, Mode::Json,
+                                Mode::HtmlReport})
+        {
+            ExportJobConfig reportCfg;
+            reportCfg.mode = mode;
+            reportCfg.sources = {src.string()};
+            reportCfg.outDir = out.string();
+            reportCfg.contactCols = 1;
+            reportCfg.contactThumb = 32;
+            const auto reportResult = run(reportCfg);
+            CHECK(reportResult.done == 1 && reportResult.failed == 0,
+                  "all export modes complete through ExportJob");
+        }
 
         std::error_code ec;
         fs::remove_all(tmp, ec);

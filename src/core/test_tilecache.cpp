@@ -10,6 +10,8 @@
 #include <chrono>
 #include <cstdio>
 #include <functional>
+#include <condition_variable>
+#include <mutex>
 #include <thread>
 
 static int g_pass = 0;
@@ -217,6 +219,36 @@ static void testAsyncTileManager()
     CHECK(manager.pendingCount() == 0 && cache.size() == 1,
           "current generation reaches Ready and caches exactly one tile");
     CHECK(readyCalls.load() == 1, "only the current generation delivers a callback");
+
+    // M39: a scheduler rejection is a transient state, not a lost visible
+    // tile. The manager must keep the request pending and retry only after a
+    // bounded delay; this condition variable makes the test deterministic
+    // without a polling sleep.
+    manager.reset(4);
+    cache.clear();
+    std::mutex readyMutex;
+    std::condition_variable readyCv;
+    const int readyBeforeReject = readyCalls.load();
+    scheduler.pause(TaskScheduler::DecodePool);
+    const auto rejected = manager.requestVisible(
+        "rejected", vp, grid, 100, 4, decode,
+        [&](const TileKey &)
+        {
+            ++readyCalls;
+            readyCv.notify_all();
+        });
+    CHECK(rejected.pending == 1 && manager.pendingCount() == 1,
+          "scheduler rejection retains a bounded Pending tile for retry");
+    scheduler.resume(TaskScheduler::DecodePool);
+    {
+        std::unique_lock<std::mutex> lk(readyMutex);
+        CHECK(readyCv.wait_for(lk, std::chrono::seconds(3),
+                               [&]() { return readyCalls.load() > readyBeforeReject; }),
+              "rejected tile eventually retries after scheduler recovery");
+    }
+    scheduler.drain(TaskScheduler::DecodePool, std::chrono::seconds(5));
+    CHECK(manager.pendingCount() == 0 && cache.get({"rejected", 0, 0, 0, 100}).buffer,
+          "retry converges to Ready without a pending leak");
 }
 
 static void test100MpVisibleOnly()

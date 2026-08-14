@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased] — M39 real-world reliability and export convergence
+
+### Fixed
+
+- Scheduler-rejected tiles now retry with bounded backoff, with separate image
+  and viewport generations to keep pan/zoom work stable.
+- Viewer paint avoids per-tile deep copies; derived overlays and ROI statistics
+  are asynchronous and latest-wins guarded.
+- Contact Sheet, PDF, CSV, JSON, HTML and Clipboard exports now share one
+  cancellable asynchronous ExportJob path with parser-safe escaped reports and
+  atomic output commits.
+- Export directory enumeration moved off the UI thread, and fullscreen exit
+  clears sticky requested state.
+
 ## [Unreleased] — M38 ImageViewer render pipeline closure
 
 ### Fixed

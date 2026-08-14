@@ -6,6 +6,7 @@
 // worker; the UI thread only receives the small result struct.
 
 #include "core/image/ImageBuffer.h"
+#include "domain/Selection.h"
 
 #include <cstdint>
 
@@ -27,5 +28,10 @@ struct PreviewStats
 // means. Handles RGB24/RGBA32/BGR24/BGRA32/Grayscale8. Returns
 // PreviewStats{valid=false} for null input.
 PreviewStats computePreviewStats(const ImageData &img);
+
+// Region-aware variant used by interactive ROI selection. It scans the
+// clipped source stride directly and never allocates a cropped ImageData.
+PreviewStats computePreviewStatsROI(const ImageData &img,
+                                    const mviewer::domain::Selection &region);
 
 } // namespace mviewer::core
