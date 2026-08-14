@@ -12,12 +12,15 @@ void MainWindow::navigate(int delta)
     if (list.isEmpty())
         return;
 
-    int idx = list.indexOf(currentImagePath());
-    if (idx < 0)
-        idx = 0;
+    const int idx = list.indexOf(currentImagePath());
     // Wrap around at both ends (FastStone/ImageGlass parity; also keeps the
     // slideshow advancing past the last image).
-    const int next = (idx + delta + list.size()) % list.size();
+    // A filter may remove the currently displayed image. The next navigation
+    // action must enter the current visible sequence, not skip its first item
+    // by pretending the removed image was row zero.
+    const int next = idx < 0
+                         ? (delta < 0 ? list.size() - 1 : 0)
+                         : (idx + delta + list.size()) % list.size();
 
     const QString path = list.at(next);
     // P0-2: single source of truth. onCurrentImageChanged() now also keeps the

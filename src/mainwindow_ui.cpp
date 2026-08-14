@@ -788,6 +788,21 @@ void MainWindow::setupUi()
     // ----- Signals -----
     connect(m_directoryTree, &DirectoryTree::directoryChanged, m_thumbnailPanel,
             &ThumbnailPanel::setDirectory);
+    // M37: the asynchronous gallery scan publishes the final visible sequence
+    // into the single navigation model. Viewer, keyboard navigation, Compare
+    // and preload all consume this same ordered list.
+    connect(m_thumbnailPanel, &ThumbnailPanel::sequenceChanged, this,
+            [this](const QString &directory, const QStringList &paths)
+            {
+                if (!m_imageList)
+                    return;
+                m_imageList->setPaths(paths, directory);
+                if (m_directory && m_directory->currentDirectory() == directory)
+                    statusBar()->showMessage(
+                        QStringLiteral("Browse: %1, %2 images").arg(directory).arg(paths.size()));
+            });
+    connect(m_imageList, &ImageListModel::pathsChanged, m_imageViewer,
+            &ImageViewer::setBrowseSequence);
     connect(m_breadcrumb, &BreadcrumbBar::pathSelected, this, &MainWindow::onBreadcrumbPath);
     connect(m_directoryTree, &DirectoryTree::directoryChanged, this,
             [this](const QString &path)
@@ -806,10 +821,8 @@ void MainWindow::setupUi()
                 // M19: DirectoryModel + ImageListModel are the SSOT.
                 m_directory->setCurrentDirectory(path);
                 m_workspace->setRootPath(path);
-                QStringList paths;
-                for (const auto &p : OpenDirectoryUseCase::execute(path.toStdString()).imagePaths)
-                    paths.append(QString::fromStdString(p));
-                m_imageList->setPaths(paths, path);
+                // ThumbnailPanel clears and later publishes the final sequence.
+                // Do not enumerate the directory synchronously here.
                 // P0-1: record this folder in the recent-folders LRU + repopulate
                 // the Recent menu.
                 m_recent.add(path.toStdString());
@@ -818,8 +831,7 @@ void MainWindow::setupUi()
                 rebuildRecentMenu();
                 // P0: push directory-level history for back/forward navigation.
                 pushDirHistory(path);
-                const int n = m_imageList->count();
-                statusBar()->showMessage(QString("目录: %1, 图片数: %2").arg(path).arg(n));
+                statusBar()->showMessage(QStringLiteral("Browse: %1, scanning…").arg(path));
                 // With no image selected yet, the title carries the folder.
                 if (currentImagePath().isEmpty())
                     setWindowTitle(QString("%1 - MViewer").arg(QDir(path).dirName()));
@@ -990,6 +1002,16 @@ void MainWindow::setupUi()
             });
     connect(m_imageViewer, &ImageViewer::requestPrev, this, [this]() { navigate(-1); });
     connect(m_imageViewer, &ImageViewer::requestNext, this, [this]() { navigate(1); });
+    connect(m_imageViewer, &ImageViewer::viewerClosed, this,
+            [this]()
+            {
+                if (!isVisible())
+                    return;
+                raise();
+                activateWindow();
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->setFocus(Qt::OtherFocusReason);
+            });
     // A-7.3: viewer context-menu "分析" → show panel + run through unified entry.
     connect(m_imageViewer, &ImageViewer::analysisRequested, this,
             [this](const QString &analyzerId)

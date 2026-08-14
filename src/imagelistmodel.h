@@ -4,16 +4,11 @@
 #include <QString>
 #include <QStringList>
 
-// M19: single source of truth for the image path list of the active directory.
-//
-// Before this class the same list lived in three places:
-//   MainWindow::m_cachedImagePaths, ThumbnailPanel::m_paths (unfiltered source),
-//   ImageViewer::m_fileList. Navigation, Compare pool seeding and status-bar
-//   counts each re-scanned or re-copied independently.
-//
-// This model holds the *directory listing* (unfiltered). ThumbnailPanel may
-// still maintain a filtered presentation list derived from filters/sort — that
-// is view state, not a second source of "what images are in this folder".
+// M37: single source of truth for the visible Browse sequence of the active
+// directory. ThumbnailPanel owns the asynchronous scan/filter/sort work and
+// publishes its final presentation order here. Navigation, Compare pool
+// seeding, Viewer position/preload and status-bar counts consume this sequence;
+// none of them re-enumerate the directory.
 //
 // Intentionally tiny: holds state and emits change signals.
 class ImageListModel : public QObject

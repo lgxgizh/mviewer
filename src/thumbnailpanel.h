@@ -254,6 +254,8 @@ class ThumbnailPanel : public QListView
     void statsChanged(int total, qint64 totalBytes, int selected, qint64 selectedBytes);
     // P0-2: the image under the cursor (gallery hover).
     void hovered(const QString &path);
+    // M37: final visible order after the async scan and active sort/filters.
+    void sequenceChanged(const QString &directory, const QStringList &paths);
 
   private slots:
     void onThumbReady(const QString &path);

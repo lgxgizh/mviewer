@@ -265,6 +265,9 @@ void ThumbnailPanel::setDirectory(const QString &path)
     m_recursiveHitsFor.clear();
     m_model->setStringList({});
     viewport()->update();
+    // Publish the empty shell immediately so consumers drop the previous
+    // directory sequence before this directory's worker result arrives.
+    emit sequenceChanged(m_currentDir, {});
     emit statsChanged(0, 0, 0, 0);
     QApplication::setOverrideCursor(Qt::BusyCursor);
 
@@ -545,6 +548,9 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
         m_thumbFailed.clear();
     }
     ThumbnailPipeline::instance().setSources(toStdPaths(m_paths));
+    // M37: publish the exact order displayed by the gallery. Sort/filter
+    // rebuilds also pass through here, keeping navigation and preload aligned.
+    emit sequenceChanged(m_currentDir, m_paths);
 
     // M24 (A#8): apply a selection that was requested while this model was
     // still being rebuilt (e.g. rename 鈫?async rescan 鈫?re-select new name).

@@ -13,6 +13,7 @@
 //
 #pragma once
 
+#include <cstdint>
 #include <map>
 #include <condition_variable>
 #include <mutex>
@@ -88,6 +89,7 @@ class RatingStore
     std::condition_variable m_flagsWorkerCv;
     bool m_flagsDirty = false;
     bool m_flagsWorkerStop = false;
+    uint64_t m_flagsChangeSerial = 0;
     std::thread m_flagsWorker;
 };
 

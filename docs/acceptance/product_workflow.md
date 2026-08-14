@@ -35,12 +35,13 @@ Tile Render needs a formal RFC (foundation exists in M7: `Viewport`/`TileCache`)
 
 ```
 OpenDirectoryCommand
-   └─ OpenDirectoryUseCase::execute(dir)  → FileSystem::listImages (cap 2000)
-        └─ DirectoryTree (QFileSystemModel, async)        [left panel]
+   └─ DirectoryTree (QFileSystemModel, async)              [left panel]
         └─ ThumbnailPanel::setDirectory(dir)
-             └─ ThumbnailPipeline (visible=Thumbnail prio, neighbors=Thumbnail prio,
-                                   after visible; B2-scan ~5-8ms, first thumb 11-20ms)
-                  └─ ThumbnailPanel cells (LRU, UI update on callback)
+             └─ worker scan/sort/filter (the only directory enumeration)
+                  └─ sequenceChanged → ImageListModel (Browse Sequence SSOT)
+                       └─ ThumbnailPipeline (visible=Thumbnail prio, neighbors=Thumbnail prio,
+                                             after visible; B2-scan ~5-8ms, first thumb 11-20ms)
+                            └─ ThumbnailPanel cells (LRU, UI update on callback)
    thumbnail clicked  → PreviewPanel + AnalysisPanel::setImage/setFrame
    thumbnail dbl-click→ ImageViewer (zoom/pan/ROI/pixelInfo)  [separate window]
    thumbnail compareRequested → CompareWorkspace (sync zoom/pan/ROI/blink/diff, EventBus async diff)

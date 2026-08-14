@@ -381,7 +381,16 @@ void MainWindow::onImageOpen(const QString &path)
     // image explicitly below.
     m_selection->setCurrentImage(path);
     if (wasHidden)
+    {
+        // Gallery double-clicks already belong to the published sequence. A
+        // direct recent-file open may not, so keep that standalone viewer
+        // request navigable without touching the Browse SSOT or scanning disk.
+        QStringList sequence = m_imageList ? m_imageList->paths() : QStringList();
+        if (!sequence.contains(path))
+            sequence = {path};
+        m_imageViewer->setBrowseSequence(sequence);
         m_imageViewer->setImage(path); // async; imageReady() feeds AnalysisPanel
+    }
 
     // --- "open" extras (only meaningful for an explicit open, not selection) ---
     pushHistory(path); // P0: in-session browse history
@@ -395,7 +404,7 @@ void MainWindow::onImageOpen(const QString &path)
     if (!savedAnalysis.isEmpty())
         m_analysisPanel->setRegionStats(savedAnalysis);
     if (wasHidden)
-        m_imageViewer->show();
+        m_imageViewer->showBrowseFullscreen();
     m_imageViewer->raise();
     m_imageViewer->activateWindow();
 }
@@ -699,12 +708,11 @@ void MainWindow::ensureImageList()
     const QString dir = m_directory->currentDirectory();
     if (dir.isEmpty())
         return;
-    if (!m_imageList->isDirty() && m_imageList->directory() == dir && !m_imageList->isEmpty())
-        return;
-    QStringList paths;
-    for (const auto &p : OpenDirectoryUseCase::execute(dir.toStdString()).imagePaths)
-        paths.append(QString::fromStdString(p));
-    m_imageList->setPaths(paths, dir);
+    // M37: ThumbnailPanel is the only owner of directory scan/sort/filter.
+    // This helper remains for callers that need to assert the active directory,
+    // but it must never synchronously enumerate the filesystem on the UI thread.
+    if (m_imageList->directory() != dir)
+        m_imageList->setPaths({}, dir);
 }
 
 void MainWindow::syncGalleryFromSelection()

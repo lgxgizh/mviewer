@@ -2,7 +2,6 @@
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/Analyzer.h"
-#include "core/image/ImageFormats.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
@@ -14,7 +13,6 @@
 #include <QClipboard>
 #include <QCloseEvent>
 #include <QContextMenuEvent>
-#include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QKeyEvent>
@@ -35,35 +33,7 @@
 #include <cmath>
 #include <cstring>
 
-namespace
-{
-// M25: the shipped-format SSOT drives the viewer's own directory navigation
-// (RAW/WebP/GIF included — the viewer must see the same images as the gallery).
-// LAZY on purpose: building it at static-init time would query the Qt image
-// format plugins before QCoreApplication exists and cache an incomplete set.
-QStringList imageExtensionFilters()
-{
-    QStringList filters;
-    for (const auto &w : mviewer::core::ImageFormats::wildcardFilters())
-        filters << QString::fromStdString(w);
-    return filters;
-}
 const double kZoomStep = 1.15;
-} // namespace
-
-QStringList ImageViewer::listImages(const QString &dirPath)
-{
-    QDir dir(dirPath);
-    if (!dir.exists())
-        return {};
-
-    QFileInfoList entries = dir.entryInfoList(imageExtensionFilters(), QDir::Files, QDir::Name);
-    QStringList result;
-    result.reserve(entries.size());
-    for (const QFileInfo &info : entries)
-        result.append(info.absoluteFilePath());
-    return result;
-}
 
 ImageViewer::ImageViewer(QWidget *parent) : QOpenGLWidget(parent)
 {
@@ -121,6 +91,54 @@ ImageViewer::~ImageViewer()
     }
 }
 
+void ImageViewer::setBrowseSequence(const QStringList &paths)
+{
+    m_fileList = paths;
+    m_currentIndex = m_fileList.indexOf(m_currentPath);
+
+    if (!m_frame || m_currentPath.isEmpty())
+        return;
+
+    if (m_currentIndex >= 0)
+        preloadNeighbors(m_currentPath);
+    else
+        cancelPreloads();
+
+    const QFileInfo info(m_currentPath);
+    const QString position =
+        m_currentIndex >= 0
+            ? QString(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
+            : QString();
+    setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
+                       .arg(info.fileName())
+                       .arg(m_frame->width())
+                       .arg(m_frame->height())
+                       .arg(position));
+}
+
+void ImageViewer::showBrowseFullscreen()
+{
+    // Set the native state before showing the top-level widget. The property is
+    // also the deterministic contract for headless/offscreen Qt platforms,
+    // which may report isFullScreen() as false after the request.
+    setProperty("mviewerFullscreenRequested", true);
+    setWindowState(windowState() | Qt::WindowFullScreen);
+    showFullScreen();
+    raise();
+    activateWindow();
+
+    QPointer<ImageViewer> guard(this);
+    QTimer::singleShot(0, this,
+                       [guard]()
+                       {
+                           if (!guard)
+                               return;
+                           if (guard->isFullScreen() && guard->m_fitMode)
+                               guard->fitToWidget();
+                           guard->update();
+                       });
+}
+
 void ImageViewer::initializeGL()
 {
     // Context is now current — capability probe can succeed when MVIEWER_GPU=1.
@@ -150,6 +168,7 @@ void ImageViewer::closeEvent(QCloseEvent *event)
     QSettings settings;
     settings.setValue("viewerGeometry", saveGeometry());
     event->accept();
+    emit viewerClosed();
 }
 
 void ImageViewer::leaveEvent(QEvent *event)
@@ -172,6 +191,7 @@ void ImageViewer::setImage(const QString &path)
     // including for empty/failing requests that never deliver a frame.
     clearPixelInfo();
     m_currentPath = path;
+    m_currentIndex = m_fileList.indexOf(path);
     // M29: drop the prior foreground decode BEFORE scheduling the new load, and
     // consume any neighbor preload that already targets `path` so it can be
     // promoted to the foreground decode below. Every nonmatching preload is
@@ -237,7 +257,6 @@ void ImageViewer::setImage(const QString &path)
                 }
                 viewer->computeHistogram();
                 const QFileInfo info(path);
-                viewer->m_fileList = listImages(info.absolutePath());
                 viewer->m_currentIndex = static_cast<int>(viewer->m_fileList.indexOf(path));
                 // Build the render pipeline state (tile grid + fitted Viewport)
                 // exactly as before — now applied on the UI thread post-decode.
@@ -286,6 +305,21 @@ void ImageViewer::setImage(const QString &path)
                 viewer->preloadNeighbors(path);
                 viewer->update();
                 emit viewer->imageReady(viewer->m_frame);
+                // Fullscreen layout can settle one event-loop turn after the
+                // async decode delivery. Re-fit against the final geometry so
+                // the first observable Browse frame is not based on the old
+                // normal-window size.
+                QTimer::singleShot(0, viewer,
+                                   [guard, path, gen]()
+                                   {
+                                       ImageViewer *current = guard.data();
+                                       if (!current || current->m_currentPath != path ||
+                                           current->m_requestGen != gen)
+                                           return;
+                                       if (current->isFullScreen() && current->m_fitMode)
+                                           current->fitToWidget();
+                                       current->update();
+                                   });
             });
     };
     // M29 preload promotion: if the previous navigation preloaded this exact
@@ -732,12 +766,7 @@ void ImageViewer::keyPressEvent(QKeyEvent *event)
             showFullScreen();
     }
     else if (key == Qt::Key_Escape)
-    {
-        if (isFullScreen())
-            showNormal();
-        else
-            close();
-    }
+        close();
     else
         QWidget::keyPressEvent(event);
 }

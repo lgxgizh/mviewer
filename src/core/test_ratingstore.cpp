@@ -8,6 +8,10 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <thread>
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -33,6 +37,31 @@ int main()
 {
     auto &s = RatingStore::instance();
     s.setFilePath("test_ratings_tmp.txt");
+
+    // Regression: recents are worker-debounced and must persist even when no
+    // later setFilePath()/destructor flush is available to hide a broken timer.
+    const std::filesystem::path recentDir =
+        std::filesystem::temp_directory_path() / "mviewer_ratingstore_recent_test";
+    std::error_code recentEc;
+    std::filesystem::create_directories(recentDir, recentEc);
+    const auto recentRatings = recentDir / "ratings.txt";
+    const auto recentFlags = recentDir / "flags.txt";
+    std::filesystem::remove(recentRatings, recentEc);
+    std::filesystem::remove(recentFlags, recentEc);
+    s.setFilePath(recentRatings.string());
+    s.addRecent("debounced.png");
+    std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    bool recentWritten = false;
+    {
+        std::ifstream flags(recentFlags);
+        std::string line;
+        while (std::getline(flags, line))
+            recentWritten = recentWritten || line == "N|debounced.png";
+    }
+    CHECK(recentWritten, "recent is written after the debounce quiet period");
+    s.setFilePath(recentRatings.string());
+    CHECK(!s.recents().empty() && s.recents().front() == "debounced.png",
+          "debounced recent reloads from disk");
 
     s.setRating("a.jpg", 3);
     CHECK(s.rating("a.jpg") == 3, "rating set to 3");
@@ -62,6 +91,8 @@ int main()
     std::remove("test_ratings_a.txt");
     std::remove("test_ratings_b.txt");
     std::remove("test_ratings_tmp.txt");
+    std::filesystem::remove(recentRatings, recentEc);
+    std::filesystem::remove(recentFlags, recentEc);
     printf("\nratingstore_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

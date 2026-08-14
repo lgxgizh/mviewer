@@ -37,6 +37,19 @@ class ImageViewer : public QOpenGLWidget
     explicit ImageViewer(QWidget *parent = nullptr);
     ~ImageViewer() override;
 
+    // Consume the Browse sequence published by ThumbnailPanel/ImageListModel.
+    // The viewer never enumerates the filesystem to infer neighbors.
+    void setBrowseSequence(const QStringList &paths);
+    QStringList browseSequence() const
+    {
+        return m_fileList;
+    }
+    int browseIndex() const
+    {
+        return m_currentIndex;
+    }
+    // Open from Browse with the first native presentation already fullscreen.
+    void showBrowseFullscreen();
     void setImage(const QString &path);
 
     // P1-7: serialize/restore the current view transform (scale + pan). Used to
@@ -59,6 +72,7 @@ class ImageViewer : public QOpenGLWidget
     // Emitted on the UI thread once an async load (setImage) completes. Carries
     // the decoded ImageFrame so the analysis panel can run without re-decoding.
     void imageReady(std::shared_ptr<ImageFrame> frame);
+    void viewerClosed();
 
   public slots:
     void setSelectMode(bool on);
@@ -139,8 +153,6 @@ class ImageViewer : public QOpenGLWidget
     // only) — the paint path renders from the ImageFrame tiles and never
     // materializes a full-size QPixmap on the UI thread.
     QImage currentImage() const;
-
-    static QStringList listImages(const QString &dirPath);
 
     QString m_currentPath;
     QStringList m_fileList;

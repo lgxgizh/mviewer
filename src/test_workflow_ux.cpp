@@ -31,6 +31,7 @@
 #include "directorytree.h"
 #include "exportdialog.h"
 #include "imageviewer.h"
+#include "imagelistmodel.h"
 #include "mainwindow.h"
 #include "metadataoverlay.h"
 #include "previewpanel.h"
@@ -606,6 +607,9 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "post-construction setOpenOnLaunch syncs SelectionModel.currentImage");
     CHECK(viewer && viewer->isVisible(),
           "post-construction setOpenOnLaunch makes ImageViewer visible");
+    CHECK(viewer && (viewer->isFullScreen() ||
+                     viewer->property("mviewerFullscreenRequested").toBool()),
+          "Browse open requests fullscreen before the first viewer presentation");
     CHECK(viewer && viewer->frame(), "post-construction setOpenOnLaunch decodes a frame within 5s");
 
     // 打开第一张图（真实产品入口 onImageOpen：双击文件 → 查看器）。
@@ -621,7 +625,12 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     // Return in the editable path field must navigate without invoking the
     // window-level quick-preview command or reopening the old image.
     if (viewer)
-        viewer->close();
+    {
+        sendKey(viewer, Qt::Key_Escape);
+        CHECK(!viewer->isVisible(), "Escape closes the default fullscreen Viewer in one step");
+        CHECK(sel->currentImage() == paths[0],
+              "Escape returns to Browse without changing the current selection");
+    }
     if (pathEdit)
     {
         pathEdit->setText(nextDir);
@@ -704,6 +713,33 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     pump(100);
     CHECK(dirModel->currentDirectory() == dirPath, "open directory lands in DirectoryModel");
     pump(400); // 5 张 32x32 缩略图解码窗口
+
+    auto *imageList = w.findChild<ImageListModel *>();
+    CHECK(imageList && thumbnailPanel && imageList->paths() == thumbnailPanel->pathList(),
+          "ImageListModel publishes the same ordered sequence as the gallery");
+    CHECK(viewer && imageList && viewer->browseSequence() == imageList->paths(),
+          "Viewer consumes the Browse sequence SSOT for neighbors and position");
+
+    // Sort/filter rebuilds must republish the order that is actually visible;
+    // navigation consumers must never fall back to a filename scan.
+    thumbnailPanel->setSortMode(ThumbnailPanel::SortName);
+    thumbnailPanel->setSortAscending(false);
+    pump(50);
+    const QStringList descending = imageList ? imageList->paths() : QStringList();
+    CHECK(imageList && thumbnailPanel && descending == thumbnailPanel->pathList(),
+          "descending gallery sort republishes the visible Browse sequence");
+    CHECK(viewer && imageList && viewer->browseSequence() == descending,
+          "Viewer sequence follows descending gallery sort");
+    thumbnailPanel->setFilter(QFileInfo(paths[1]).completeBaseName());
+    pump(50);
+    CHECK(imageList && thumbnailPanel && imageList->paths() == thumbnailPanel->pathList() &&
+              imageList->paths() == QStringList{paths[1]},
+          "filename filter republishes the filtered Browse sequence");
+    thumbnailPanel->setFilter({});
+    thumbnailPanel->setSortAscending(true);
+    pump(50);
+    if (sel)
+        sel->setCurrentImage(paths.first());
 
     // 键盘浏览：→ → ← （评审"滚轮切换"的键盘等价路径 navigate()）。
     sendKey(&w, Qt::Key_Right);
@@ -1030,7 +1066,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                     sendKey(&w, Qt::Key_F);
                     pump(20);
                 }
-                CHECK(!viewer->isFullScreen(), "viewer starts in normal state");
+                CHECK(!viewer->isFullScreen(), "F exits the default Browse fullscreen state");
                 sendKey(&w, Qt::Key_F);
                 pump(50);
                 CHECK(viewer->isFullScreen(), "F fullscreens the visible viewer");
@@ -2615,8 +2651,10 @@ void workflow7_stale_preload_cancellation(const QString &rootDir)
           "preload test: release-gated blocker occupies the Background worker");
 
     // Open the middle image through the real viewer. Its foreground decode runs
-    // on DecodePool and delivers on the UI thread; the delivery schedules the
-    // two neighbor preloads (pre_0, pre_2) at Background priority -> queued.
+    // on DecodePool and delivers on the UI thread; the published Browse
+    // sequence drives the two neighbor preloads (pre_0, pre_2) at Background
+    // priority -> queued.
+    viewer->setBrowseSequence({p0, p1, p2});
     viewer->setImage(p1);
     {
         QElapsedTimer t;

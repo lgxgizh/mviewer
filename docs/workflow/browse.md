@@ -11,7 +11,7 @@
 | Step | Action | UI surface |
 |------|--------|-----------|
 | 1 | Launch MViewer | — |
-| 2 | Click "Open Folder" / use DirectoryTree | `DirectoryTree` → `OpenDirectoryUseCase` |
+| 2 | Click "Open Folder" / use DirectoryTree | `DirectoryTree` → `ThumbnailPanel` worker |
 | 3 | Select a directory containing images | file dialog |
 | 4 | Wait for thumbnails to stream in | `ThumbnailPanel` |
 | 5 | Scroll the thumbnail grid | `ThumbnailPanel` |
@@ -23,6 +23,19 @@
 - The **first thumbnail** of the visible range appears within the review budget.
 - All images in the directory are decoded and thumbnails produced.
 - Scrolling stays responsive (thumbnails load on demand for the visible range).
+
+### M37 single-image Viewer contract
+
+- A gallery double-click opens the independent `ImageViewer` with its first
+  native presentation requested fullscreen; Fit is calculated again after the
+  fullscreen geometry settles and preserves the source aspect ratio.
+- Viewer double-click remains Fit ↔ 100% at the cursor. `Esc` closes the Viewer
+  in one step and returns focus to Browse without changing SelectionModel state.
+- Left/Right, Home/End, PageUp/PageDown, slideshow, Viewer position and
+  neighbor preload all consume the same ordered sequence published by
+  `ThumbnailPanel` into `ImageListModel`.
+- Directory changes publish an empty Browse shell immediately; only the
+  ThumbnailPanel worker enumerates, sorts and filters the directory.
 
 ## 3. Acceptance criteria
 

@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased] — M37 Browse Viewer closure
+
+### Fixed
+
+- Browse double-click now opens the ImageViewer fullscreen on its first native
+  presentation, fits after fullscreen geometry settles, and returns to Browse
+  with one Esc press while preserving selection.
+- ThumbnailPanel publishes the final sort/filter order to ImageListModel;
+  Viewer navigation, preload, slideshow and Compare no longer rebuild a folder
+  sequence independently or enumerate the filesystem on image decode.
+- RatingStore recents now use a real quiet-period debounce and persist after the
+  debounce interval without relying on a later path switch or destruction.
+
 ## [1.0.9] - 2026-08-13
 
 ### Fixed — M36 Browse hot path and display fidelity
