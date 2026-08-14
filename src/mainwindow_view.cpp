@@ -310,18 +310,21 @@ void MainWindow::copyCurrentImageToClipboard()
 {
     if (currentImagePath().isEmpty())
         return;
-    const QImage img(currentImagePath());
-    if (!img.isNull())
-        QApplication::clipboard()->setImage(img);
+    // Keep MainWindow and the viewer on one Copy Image pipeline. The worker
+    // performs repository decode + ICC/display conversion; only the final
+    // QClipboard assignment returns to the GUI thread.
+    if (m_imageViewer)
+        m_imageViewer->copyToClipboard(currentImagePath());
 }
 
 void MainWindow::toggleFullscreen()
 {
-    QWidget *target = m_imageViewer->isVisible() ? (QWidget *)m_imageViewer : (QWidget *)this;
-    if (target->isFullScreen())
-        target->showNormal();
+    if (m_imageViewer && m_imageViewer->isVisible())
+        m_imageViewer->toggleFullscreen();
+    else if (isFullScreen())
+        showNormal();
     else
-        target->showFullScreen();
+        showFullScreen();
 }
 
 void MainWindow::toggleFocusBrowse()
@@ -422,8 +425,8 @@ void MainWindow::toggleSlideshow()
     }
     // Fullscreen the viewer for the slideshow; ESC (or S) stops it.
     onImageOpen(currentImagePath());
-    if (!m_imageViewer->isFullScreen())
-        m_imageViewer->showFullScreen();
+    if (!m_imageViewer->property("mviewerFullscreenRequested").toBool())
+        m_imageViewer->setFullscreenRequested(true);
     // Read interval from settings (default 3s), allow user to change via
     // a simple input dialog triggered by Ctrl+Shift+S.
     QSettings settings;

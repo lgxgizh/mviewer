@@ -707,6 +707,74 @@ void testCompareLoadIsAsync(const QDir &dir)
 // "inspectorRenderCount" (narrowly scoped internal diagnostic, documented in
 // compareworkspace.h) so the tests observe coalescing without widening the
 // public API.
+// M40: a superseded Compare batch must cancel queued repository requests and
+// still converge its completion bookkeeping. This uses a release gate instead
+// of wall-clock ordering so A -> B and scheduler rejection are deterministic.
+void testCompareLoadCancellation(const QDir &dir)
+{
+    std::cout << "-- Compare M40: cancellable load batches --\n";
+    const QString a = writePng(dir, "m40_cancel_a.png", 120, 80, QColor(220, 40, 40));
+    const QString b = writePng(dir, "m40_cancel_b.png", 120, 80, QColor(40, 220, 40));
+    const QString c = writePng(dir, "m40_cancel_c.png", 120, 80, QColor(40, 40, 220));
+    const QString d = writePng(dir, "m40_cancel_d.png", 120, 80, QColor(220, 220, 40));
+
+    auto &scheduler = TaskScheduler::instance();
+    scheduler.drain(TaskScheduler::DecodePool, std::chrono::seconds(10));
+    scheduler.setQueueMaxThreads(TaskScheduler::Priority::Decode, 1);
+    struct RestoreDecodeThreads
+    {
+        ~RestoreDecodeThreads()
+        {
+            TaskScheduler::instance().setQueueMaxThreads(
+                TaskScheduler::Priority::Decode,
+                std::max(1, QThread::idealThreadCount() / 2));
+        }
+    } restoreThreads;
+
+    std::mutex gateMutex;
+    std::condition_variable gateCv;
+    bool released = false;
+    auto blocker = scheduler.submit(
+        TaskScheduler::Priority::Decode,
+        [&gateMutex, &gateCv, &released](const TaskScheduler::TaskContext &)
+        {
+            std::unique_lock<std::mutex> lk(gateMutex);
+            gateCv.wait(lk, [&released] { return released; });
+        });
+    while (scheduler.activeTaskCount(TaskScheduler::DecodePool) < 1)
+        pump(10);
+
+    QDialog host;
+    auto *layout = new QVBoxLayout(&host);
+    auto *ws = new CompareWorkspace(&host);
+    layout->addWidget(ws);
+    host.show();
+    ws->setImages({a, b});
+    ws->setImages({c, d});
+
+    {
+        std::lock_guard<std::mutex> lk(gateMutex);
+        released = true;
+    }
+    gateCv.notify_all();
+    CHECK(scheduler.drain(TaskScheduler::DecodePool, std::chrono::seconds(15)),
+          "M40: gated DecodePool drains after superseding a batch");
+    QElapsedTimer wait;
+    wait.start();
+    while (ws->comparedImageCount() != 2 && wait.elapsed() < 5000)
+        pump(25);
+    CHECK(ws->comparedImages() == QStringList({c, d}),
+          "M40: newest compare set wins after A -> B queued cancellation");
+
+    scheduler.pause(TaskScheduler::DecodePool);
+    ws->setImages({a, b});
+    pump(80);
+    CHECK(ws->comparedImageCount() == 0,
+          "M40: scheduler rejection does not hang batch completion");
+    scheduler.resume(TaskScheduler::DecodePool);
+    (void)blocker;
+}
+
 void testInspectorCoalescing(const QString &a, const QString &b)
 {
     std::cout << "-- Compare M30: inspector hover coalescing --\n";
@@ -974,8 +1042,10 @@ int main(int argc, char **argv)
     dir.mkpath(".");
     QStringList paths8;
     for (int i = 0; i < 8; ++i)
+    {
         paths8 << writePng(dir, QString("cmp_%1.png").arg(i), 160 + i * 8, 120 + i * 4,
                            QColor(20 * i, 40, 255 - 20 * i));
+    }
     const QStringList paths6 = paths8.mid(0, 6);
 
     testMultiImageEntry(paths8);
@@ -984,6 +1054,7 @@ int main(int argc, char **argv)
     testPaneHistogramConsistency(paths8[0], paths8[1]);
     testDegradedImages(dir);
     testCompareLoadIsAsync(dir);
+    testCompareLoadCancellation(dir);
     testInspectorCoalescing(paths8[0], paths8[1]);
 
     if (g_failures > 0)

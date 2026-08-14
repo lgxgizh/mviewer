@@ -102,13 +102,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         return;
     }
     if (chosen == aCopy)
-    {
-        // User-triggered copy: materialize the display image on demand (this
-        // is an explicit action, not the browse path).
-        const QPixmap pm = QPixmap::fromImage(currentImage());
-        if (!pm.isNull())
-            QApplication::clipboard()->setPixmap(pm);
-    }
+        copyToClipboard();
     else if (chosen == aCopyPath)
         QApplication::clipboard()->setText(m_currentPath);
     else if (chosen == aCopyColor)
@@ -144,7 +138,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
                 this, "另存为", defaultName,
                 "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp)");
             if (!path.isEmpty())
-                currentImage().save(path);
+                saveToPath(path);
         }
     }
     else if (chosen == aZoomIn)
@@ -168,5 +162,5 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     else if (chosen == aPrev)
         emit requestPrev();
     else if (chosen == aFullscreen)
-        isFullScreen() ? showNormal() : showFullScreen();
+        toggleFullscreen();
 }

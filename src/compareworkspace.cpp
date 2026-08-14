@@ -363,6 +363,19 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 
 CompareWorkspace::~CompareWorkspace()
 {
+    // A batch completion is bookkeeping, not cancellation. Every request is
+    // accounted exactly once when a batch is superseded so a cancelled queued
+    // decode cannot leave `remaining` permanently non-zero. The generation
+    // bump below remains the final stale-delivery guard for callbacks that were
+    // already queued on qApp.
+    ++m_loadGen;
+    if (m_loadBatch)
+    {
+        cancelLoadBatch(m_loadBatch);
+        m_loadBatch.reset();
+    }
+    m_loadInFlight = false;
+
     // Invalidate the in-flight async diff batch. The worker marshals its
     // result via qApp and re-checks the generation, which we bump here, so a
     // completion that is already queued cannot paint into a destroyed widget
@@ -425,6 +438,11 @@ void CompareWorkspace::setImages(const QStringList &paths)
     // the generation counter, so stale completions can never overwrite the
     // current compare set (A -> B -> A is safe).
     const uint64_t gen = ++m_loadGen;
+    if (m_loadBatch)
+    {
+        cancelLoadBatch(m_loadBatch);
+        m_loadBatch.reset();
+    }
     m_loadInFlight = true;
     // A newer load supersedes a session that was pending on the older one.
     m_pendingSession.reset();
@@ -440,10 +458,16 @@ void CompareWorkspace::setImages(const QStringList &paths)
         return;
     }
 
-    auto frames = std::make_shared<std::vector<std::shared_ptr<ImageFrame>>>(requested);
-    auto remaining = std::make_shared<std::atomic<int>>(requested);
-    auto failed = std::make_shared<std::atomic<int>>(0);
-    QPointer<CompareWorkspace> self(this);
+    auto batch = std::make_shared<LoadBatch>();
+    batch->generation = gen;
+    batch->frames = std::make_shared<std::vector<std::shared_ptr<ImageFrame>>>(requested);
+    batch->remaining = std::make_shared<std::atomic<int>>(requested);
+    batch->failed = std::make_shared<std::atomic<int>>(0);
+    batch->requests.reserve(static_cast<size_t>(requested));
+    for (int i = 0; i < requested; ++i)
+        batch->requests.push_back(std::make_unique<LoadRequest>());
+    m_loadBatch = batch;
+    auto self = std::make_shared<QPointer<CompareWorkspace>>(this);
     // Histograms are computed by the async Compare histogram batch on the
     // AnalysisPool; this decode path stays histogram-free so the UI thread
     // never pays for a full scan.
@@ -451,31 +475,67 @@ void CompareWorkspace::setImages(const QStringList &paths)
 
     for (int i = 0; i < requested; ++i)
     {
-        ImageRepository::instance().loadAsync(
+        auto &request = *batch->requests[static_cast<size_t>(i)];
+        auto handle = ImageRepository::instance().loadAsyncCancellable(
             stdPaths[i],
-            [self, gen, frames, remaining, failed, i](const ImageRepository::Result &res)
+            [self, batch, i](const ImageRepository::Result &res)
             {
-                if (res.success() && res.frame)
-                    (*frames)[i] = res.frame;
-                else
-                    failed->fetch_add(1, std::memory_order_relaxed);
-                if (remaining->fetch_sub(1, std::memory_order_acq_rel) == 1)
-                {
-                    // Last completion: hop to the UI thread. QPointer + the
-                    // generation check drop stale/destroyed deliveries.
-                    QMetaObject::invokeMethod(
-                        qApp,
-                        [self, gen, frames, failed]()
-                        {
-                            CompareWorkspace *ws = self.data();
-                            if (!ws || gen != ws->m_loadGen)
-                                return;
-                            ws->finishLoad(*frames, failed->load(std::memory_order_relaxed));
-                        },
-                        Qt::QueuedConnection);
-                }
+                if (!CompareWorkspace::accountLoadRequest(batch, static_cast<size_t>(i), &res) ||
+                    !qApp)
+                    return;
+                QMetaObject::invokeMethod(
+                    qApp,
+                    [self, batch]()
+                    {
+                        CompareWorkspace *ws = self->data();
+                        if (!ws || batch->generation != ws->m_loadGen)
+                            return;
+                        ws->finishLoad(*batch->frames,
+                                       batch->failed->load(std::memory_order_relaxed));
+                    },
+                    Qt::QueuedConnection);
             },
             opts);
+        {
+            std::lock_guard<std::mutex> lk(batch->handlesMutex);
+            request.handle = std::move(handle);
+        }
+    }
+}
+
+bool CompareWorkspace::accountLoadRequest(const std::shared_ptr<LoadBatch> &batch, size_t index,
+                                          const ImageRepository::Result *result)
+{
+    if (!batch || index >= batch->requests.size())
+        return false;
+    auto &request = *batch->requests[index];
+    if (request.accounted.exchange(true, std::memory_order_acq_rel))
+        return false;
+
+    if (result && result->success() && result->frame)
+        (*batch->frames)[index] = result->frame;
+    else
+        batch->failed->fetch_add(1, std::memory_order_relaxed);
+
+    return batch->remaining->fetch_sub(1, std::memory_order_acq_rel) == 1;
+}
+
+void CompareWorkspace::cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch)
+{
+    if (!batch)
+        return;
+    for (size_t i = 0; i < batch->requests.size(); ++i)
+    {
+        ImageRepository::AsyncRequestHandle handle;
+        {
+            std::lock_guard<std::mutex> lk(batch->handlesMutex);
+            handle = std::move(batch->requests[i]->handle);
+        }
+        ImageRepository::instance().cancelAsync(handle);
+        // ImageRepository deliberately suppresses callbacks after cancel. Do
+        // the batch's exactly-once accounting locally so cancellation cannot
+        // strand the terminal completion on a queued request.
+        accountLoadRequest(batch, i, nullptr);
     }
 }
 
@@ -484,6 +544,7 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
 {
     Q_UNUSED(failedCount);
     m_loadInFlight = false;
+    m_loadBatch.reset();
     m_engine.setFrames(frames);
 
     // M24 (B#7): failed loads are dropped by the engine — tell the user why

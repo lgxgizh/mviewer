@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased] — M40 interaction cancellation and UI-thread purity closure
+
+### Fixed
+
+- Compare image batches now cancel queued repository work, account every
+  request exactly once, and reject stale generations during teardown.
+- ImageViewer fullscreen now has one authoritative requested-state API;
+  Copy Image and Save As run decode, display conversion and encoding through
+  worker-side ExportJob execution.
+- All ExportDialog modes share cancellable async execution with stale-progress
+  suppression across cancel, close, reject and destruction.
+- Tile retry no longer uses detached threads, and Contact/PDF staging has a
+  bounded memory budget.
+
 ## [Unreleased] — M39 real-world reliability and export convergence
 
 ### Fixed

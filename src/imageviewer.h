@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/export/ExportJob.h"
 #include "core/analysis/ImageOverlay.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageRepository.h"
@@ -16,6 +17,7 @@
 #include <QStringList>
 #include <memory>
 #include <optional>
+#include <atomic>
 #include <vector>
 
 class QEvent;
@@ -80,6 +82,15 @@ class ImageViewer : public QOpenGLWidget
     void viewerClosed();
 
   public slots:
+    // Single source of truth for every ImageViewer fullscreen entry point.
+    // The requested property is the deterministic contract on headless Qt;
+    // native window state is updated as a side effect, never independently.
+    void setFullscreenRequested(bool requested);
+    void toggleFullscreen();
+    // Copy/save dispatch the worker-side ExportJob. The GUI thread only starts
+    // the job and receives the final clipboard/result presentation.
+    void copyToClipboard(const QString &path = {});
+    void saveToPath(const QString &path);
     void setSelectMode(bool on);
     // Zoom commands (keyboard / menu driven). zoomIn/zoomOut zoom around the
     // widget center; zoomFit fits the whole image into the window and keeps
@@ -99,6 +110,7 @@ class ImageViewer : public QOpenGLWidget
     // Emitted when the async decode of a setImage() request fails, so the
     // host can surface the failure (status bar) instead of it being silent.
     void loadFailed(const QString &path);
+    void exportFinished(bool success, const QString &message);
 
     void regionStats(const QString &text);
     void selectionChanged(const QRect &sel); // image coords (may be null rect)
@@ -147,6 +159,9 @@ class ImageViewer : public QOpenGLWidget
     // obsolete full-resolution work from a superseded navigation is dropped.
     void cancelCurrentLoad();
     void cancelPreloads();
+    void cancelExportJob();
+    void startExportJob(mviewer::exportjob::ExportJobConfig cfg, bool clipboard,
+                        const QString &destination = {});
     // Pixel Inspector lifecycle: emit a single pixelInfo with valid=false
     // (x/y=-1, zero channels) so a stale sample never lingers. Called
     // synchronously at the top of setImage() and closeEvent(), and from
@@ -158,9 +173,6 @@ class ImageViewer : public QOpenGLWidget
     // `path` and cancel all others, so a navigation back to a preloaded
     // neighbor can be promoted to the foreground decode without re-queuing.
     ImageRepository::AsyncRequestHandle takeMatchingPreload(const QString &path);
-    // Build the display QImage on demand for explicit copy/save actions only.
-    QImage currentImage() const;
-
     QString m_currentPath;
     QStringList m_fileList;
     int m_currentIndex = -1;
@@ -220,6 +232,9 @@ class ImageViewer : public QOpenGLWidget
     bool m_tileRepaintQueued = false;
     bool m_loading = false;
     TaskScheduler::TaskHandle m_roiStatsRequest;
+    uint64_t m_exportGeneration = 0;
+    TaskScheduler::TaskHandle m_exportTask;
+    std::shared_ptr<std::atomic<bool>> m_exportCancel;
 
     // M16 / Stage A: GPU upload tier (opt-in, capability-gated). When enabled
     // (real GL context + MVIEWER_GPU=1), decoded tiles are uploaded to

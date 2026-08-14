@@ -61,7 +61,8 @@ ImageViewer::ImageViewer(QWidget *parent)
     connect(m_cursorHideTimer, &QTimer::timeout, this,
             [this]()
             {
-                if (isFullScreen() && !m_dragging && !m_selecting)
+                if (property("mviewerFullscreenRequested").toBool() && !m_dragging &&
+                    !m_selecting)
                 {
                     m_cursorHidden = true;
                     setCursor(Qt::BlankCursor);
@@ -78,6 +79,7 @@ ImageViewer::~ImageViewer()
     cancelCurrentLoad();
     cancelPreloads();
     cancelRoiStats();
+    cancelExportJob();
     // Stage A: free GPU textures + blitter while the GL context is still current.
     // Skip if the widget never created a context (never shown).
     if (context())
@@ -120,40 +122,59 @@ void ImageViewer::setBrowseSequence(const QStringList &paths)
 
 void ImageViewer::showBrowseFullscreen()
 {
-    // Set the native state before showing the top-level widget. The property is
-    // also the deterministic contract for headless/offscreen Qt platforms,
-    // which may report isFullScreen() as false after the request.
-    setProperty("mviewerFullscreenRequested", true);
-    setWindowState(windowState() | Qt::WindowFullScreen);
-    showFullScreen();
+    setFullscreenRequested(true);
     raise();
     activateWindow();
+}
 
-    QPointer<ImageViewer> guard(this);
+void ImageViewer::setFullscreenRequested(bool requested)
+{
+    // This property is authoritative even when the offscreen platform cannot
+    // report a reliable native isFullScreen() value.
+    setProperty("mviewerFullscreenRequested", requested);
+    if (requested)
+    {
+        setWindowState(windowState() | Qt::WindowFullScreen);
+        showFullScreen();
+    }
+    else
+    {
+        setWindowState(windowState() & ~Qt::WindowFullScreen);
+        showNormal();
+    }
+
+    auto guard = std::make_shared<QPointer<ImageViewer>>(this);
     QTimer::singleShot(0, this,
-                       [guard]()
+                       [guard, requested]()
                        {
-                           if (!guard)
+                           ImageViewer *viewer = guard ? guard->data() : nullptr;
+                           if (!viewer)
                                return;
-                           if (guard->isFullScreen() && guard->m_fitMode)
+                           if (viewer->m_fitMode)
                            {
-                               if (guard->m_frame && guard->m_frame->isValid())
-                                   guard->fitToWidget();
-                               else if (!guard->m_provisionalImage.isNull())
+                               if (viewer->m_frame && viewer->m_frame->isValid())
+                                   viewer->fitToWidget();
+                               else if (!viewer->m_provisionalImage.isNull())
                                {
-                                   guard->m_view.screenW = guard->width();
-                                   guard->m_view.screenH = guard->height();
-                                   const QSize source = guard->m_provisionalSourceSize.isValid()
-                                                             ? guard->m_provisionalSourceSize
-                                                             : guard->m_provisionalImage.size();
-                                   guard->m_view.fit(source.width(), source.height(),
-                                                     FitPolicy::MaximizeClient);
-                                   guard->advanceViewportRevision();
-                                   guard->emitZoom();
+                                   viewer->m_view.screenW = viewer->width();
+                                   viewer->m_view.screenH = viewer->height();
+                                   const QSize source = viewer->m_provisionalSourceSize.isValid()
+                                                             ? viewer->m_provisionalSourceSize
+                                                             : viewer->m_provisionalImage.size();
+                                   viewer->m_view.fit(source.width(), source.height(),
+                                                     requested ? FitPolicy::MaximizeClient
+                                                               : FitPolicy::Comfortable);
+                                   viewer->advanceViewportRevision();
+                                   viewer->emitZoom();
                                }
                            }
-                           guard->update();
+                           viewer->update();
                        });
+}
+
+void ImageViewer::toggleFullscreen()
+{
+    setFullscreenRequested(!property("mviewerFullscreenRequested").toBool());
 }
 
 void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
@@ -170,9 +191,8 @@ void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
     m_view.screenW = width();
     m_view.screenH = height();
     const FitPolicy fitPolicy =
-        isFullScreen() || property("mviewerFullscreenRequested").toBool()
-            ? FitPolicy::MaximizeClient
-            : FitPolicy::Comfortable;
+        property("mviewerFullscreenRequested").toBool() ? FitPolicy::MaximizeClient
+                                                         : FitPolicy::Comfortable;
     m_view.fit(m_provisionalSourceSize.width(), m_provisionalSourceSize.height(), fitPolicy);
     advanceViewportRevision();
     m_fitMode = true;
@@ -207,6 +227,7 @@ void ImageViewer::closeEvent(QCloseEvent *event)
     beginImageGeneration();
     cancelCurrentLoad();
     cancelPreloads();
+    cancelExportJob();
     QSettings settings;
     settings.setValue("viewerGeometry", saveGeometry());
     event->accept();
@@ -245,7 +266,7 @@ void ImageViewer::scheduleRoiStats(const QRect &selection)
     const mviewer::domain::Selection region{selection.x(), selection.y(), selection.width(),
                                              selection.height()};
     const auto result = std::make_shared<mviewer::core::PreviewStats>();
-    QPointer<ImageViewer> guard(this);
+    auto guard = std::make_shared<QPointer<ImageViewer>>(this);
     m_roiStatsRequest = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
         [frame, region, result](const TaskScheduler::TaskContext &ctx)
@@ -262,7 +283,7 @@ void ImageViewer::scheduleRoiStats(const QRect &selection)
                 qApp,
                 [guard, frame, path, region, revision, result]()
                 {
-                    ImageViewer *viewer = guard.data();
+                    ImageViewer *viewer = guard->data();
                     if (!viewer || viewer->m_roiRevision != revision || viewer->m_frame != frame ||
                         viewer->m_currentPath != path || !result->valid)
                         return;
@@ -350,7 +371,7 @@ void ImageViewer::setImage(const QString &path)
     // (always alive) rather than this. The queued lambda re-checks the guard,
     // the path AND the request generation (A -> B -> A: an older A request that
     // completes last must not overwrite the newer A).
-    QPointer<ImageViewer> guard(this);
+    auto guard = std::make_shared<QPointer<ImageViewer>>(this);
     auto onLoaded = [path, gen, guard](const ImageRepository::Result &res)
     {
         if (!guard)
@@ -361,7 +382,7 @@ void ImageViewer::setImage(const QString &path)
                 qApp,
                 [path, gen, guard]()
                 {
-                    ImageViewer *viewer = guard.data();
+                    ImageViewer *viewer = guard->data();
                     if (!viewer || path != viewer->m_currentPath || gen != viewer->m_requestGen)
                         return;
                     viewer->m_foregroundRequest.reset();
@@ -378,7 +399,7 @@ void ImageViewer::setImage(const QString &path)
             qApp,
             [res, path, gen, guard]()
             {
-                ImageViewer *viewer = guard.data();
+                ImageViewer *viewer = guard->data();
                 if (!viewer || path != viewer->m_currentPath || gen != viewer->m_requestGen)
                     return; // widget destroyed or user navigated away
                 viewer->m_foregroundRequest.reset();
@@ -406,8 +427,7 @@ void ImageViewer::setImage(const QString &path)
                 viewer->m_view.screenW = viewer->width();
                 viewer->m_view.screenH = viewer->height();
                 const FitPolicy fitPolicy =
-                    viewer->isFullScreen() ||
-                            viewer->property("mviewerFullscreenRequested").toBool()
+                    viewer->property("mviewerFullscreenRequested").toBool()
                         ? FitPolicy::MaximizeClient
                         : FitPolicy::Comfortable;
                 viewer->m_view.fit(viewer->m_frame->width(), viewer->m_frame->height(), fitPolicy);
@@ -458,11 +478,13 @@ void ImageViewer::setImage(const QString &path)
                 QTimer::singleShot(0, viewer,
                                    [guard, path, gen]()
                                    {
-                                       ImageViewer *current = guard.data();
+                                       ImageViewer *current = guard->data();
                                        if (!current || current->m_currentPath != path ||
                                            current->m_requestGen != gen)
                                            return;
-                                       if (current->isFullScreen() && current->m_fitMode)
+                                       const bool fullscreenRequested =
+                                           current->property("mviewerFullscreenRequested").toBool();
+                                       if (fullscreenRequested && current->m_fitMode)
                                            current->fitToWidget();
                                        current->update();
                                    });
@@ -533,6 +555,97 @@ void ImageViewer::cancelPreloads()
     m_neighborPreloads.clear();
 }
 
+void ImageViewer::cancelExportJob()
+{
+    ++m_exportGeneration;
+    if (m_exportCancel)
+        m_exportCancel->store(true, std::memory_order_release);
+    TaskScheduler::cancel(m_exportTask);
+    m_exportTask.reset();
+    m_exportCancel.reset();
+}
+
+void ImageViewer::startExportJob(mviewer::exportjob::ExportJobConfig cfg, bool clipboard,
+                                 const QString &destination)
+{
+    cancelExportJob();
+    if (cfg.sources.empty())
+        return;
+
+    auto cancel = std::make_shared<std::atomic<bool>>(false);
+    cfg.cancel = cancel;
+    auto result = std::make_shared<mviewer::exportjob::ExportJobResult>();
+    const uint64_t generation = m_exportGeneration;
+    auto guard = std::make_shared<QPointer<ImageViewer>>(this);
+    m_exportCancel = cancel;
+    m_exportTask = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Background,
+        [cfg, result](const TaskScheduler::TaskContext &ctx)
+        {
+            if (!ctx.isCancelled())
+                *result = mviewer::exportjob::run(cfg);
+        },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, result, cancel, generation, clipboard, destination]()
+        {
+            if (cancel->load(std::memory_order_acquire) || !qApp)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, result, cancel, generation, clipboard, destination]()
+                {
+                    ImageViewer *viewer = guard ? guard->data() : nullptr;
+                    if (!viewer || generation != viewer->m_exportGeneration ||
+                        cancel->load(std::memory_order_acquire))
+                        return;
+                    viewer->m_exportTask.reset();
+                    viewer->m_exportCancel.reset();
+                    if (clipboard && result->done > 0 && !result->clipboardImage.isNull())
+                    {
+                        QImage image = mvcore::toQImageRef(result->clipboardImage);
+                        if (image.isNull())
+                            image = mvcore::toQImage(result->clipboardImage);
+                        if (!image.isNull())
+                            QApplication::clipboard()->setImage(image);
+                    }
+                    emit viewer->exportFinished(result->failed == 0 && result->done > 0,
+                                                QString::fromStdString(result->message));
+                    Q_UNUSED(destination);
+                },
+                Qt::QueuedConnection);
+        });
+}
+
+void ImageViewer::copyToClipboard(const QString &path)
+{
+    const QString source = path.isEmpty() ? m_currentPath : path;
+    if (source.isEmpty())
+        return;
+    mviewer::exportjob::ExportJobConfig cfg;
+    cfg.mode = mviewer::exportjob::Mode::Clipboard;
+    cfg.sources.push_back(source.toStdString());
+    cfg.preserveDisplayAppearance = true;
+    startExportJob(std::move(cfg), true);
+}
+
+void ImageViewer::saveToPath(const QString &path)
+{
+    if (path.isEmpty() || m_currentPath.isEmpty())
+        return;
+    const QFileInfo info(path);
+    QString format = info.suffix().toLower();
+    if (format == "jpg")
+        format = "jpeg";
+    mviewer::exportjob::ExportJobConfig cfg;
+    cfg.mode = mviewer::exportjob::Mode::Convert;
+    cfg.sources.push_back(m_currentPath.toStdString());
+    cfg.outDir = info.absolutePath().toStdString();
+    cfg.destinationPath = path.toStdString();
+    cfg.format = format.toStdString();
+    cfg.preserveDisplayAppearance = true;
+    startExportJob(std::move(cfg), false, path);
+}
+
 ImageRepository::AsyncRequestHandle ImageViewer::takeMatchingPreload(const QString &path)
 {
     // Consume the first tracked preload that exactly matches `path` and cancel
@@ -564,9 +677,8 @@ void ImageViewer::fitToWidget()
     m_view.screenW = width();
     m_view.screenH = height();
     m_view.fit(m_frame->width(), m_frame->height(),
-               isFullScreen() || property("mviewerFullscreenRequested").toBool()
-                   ? FitPolicy::MaximizeClient
-                   : FitPolicy::Comfortable);
+               property("mviewerFullscreenRequested").toBool() ? FitPolicy::MaximizeClient
+                                                                 : FitPolicy::Comfortable);
     advanceViewportRevision();
     m_fitMode = true;
     emitZoom();
@@ -616,15 +728,6 @@ void ImageViewer::zoomActual()
     m_fitMode = false;
     emitZoom();
     update();
-}
-
-QImage ImageViewer::currentImage() const
-{
-    if (!m_frame || m_frame->pixels().isNull())
-        return QImage();
-    // Copy/save means what the user sees. Materialize the display-only sRGB
-    // contract (including embedded ICC) without modifying analysis pixels.
-    return mvcore::toDisplayQImage(m_frame->pixels(), m_frame->metadata());
 }
 
 void ImageViewer::computeHistogram()
@@ -726,7 +829,7 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
         m_cursorHidden = false;
         setCursor(m_selectMode ? Qt::CrossCursor : Qt::OpenHandCursor);
     }
-    if (isFullScreen())
+    if (property("mviewerFullscreenRequested").toBool())
         m_cursorHideTimer->start();
 
     if (m_selecting)
@@ -864,9 +967,8 @@ void ImageViewer::resizeEvent(QResizeEvent *event)
         const QSize source = m_provisionalSourceSize.isValid() ? m_provisionalSourceSize
                                                                 : m_provisionalImage.size();
         const FitPolicy fitPolicy =
-            isFullScreen() || property("mviewerFullscreenRequested").toBool()
-                ? FitPolicy::MaximizeClient
-                : FitPolicy::Comfortable;
+        property("mviewerFullscreenRequested").toBool() ? FitPolicy::MaximizeClient
+                                                         : FitPolicy::Comfortable;
         m_view.fit(source.width(), source.height(), fitPolicy);
         advanceViewportRevision();
         emitZoom();
@@ -939,29 +1041,7 @@ void ImageViewer::keyPressEvent(QKeyEvent *event)
     else if (key == Qt::Key_R && !mods)
         setSelectMode(!m_selectMode);
     else if ((key == Qt::Key_F && !mods) || key == Qt::Key_F11)
-    {
-        const bool fullscreen = isFullScreen() || property("mviewerFullscreenRequested").toBool();
-        if (fullscreen)
-        {
-            setProperty("mviewerFullscreenRequested", false);
-            showNormal();
-            QPointer<ImageViewer> guard(this);
-            QTimer::singleShot(0, this,
-                               [guard]()
-                               {
-                                   if (!guard)
-                                       return;
-                                   if (guard->m_fitMode && guard->m_frame)
-                                       guard->fitToWidget();
-                                   guard->update();
-                               });
-        }
-        else
-        {
-            setProperty("mviewerFullscreenRequested", true);
-            showFullScreen();
-        }
-    }
+        toggleFullscreen();
     else if (key == Qt::Key_Escape)
         close();
     else

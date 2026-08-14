@@ -4,6 +4,7 @@
 #include "core/image/ImageBuffer.h"
 
 #include <QCoreApplication>
+#include <atomic>
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -91,6 +92,51 @@ int main(int argc, char **argv)
         CHECK(fs::exists(out / "photo.v2_exp.jpg") ||
                   r.primaryOutput.find("photo.v2_exp") != std::string::npos,
               "convert preserves dotted base name");
+
+        // M40: viewer Save As uses an explicit destination but still runs
+        // through the worker-side Convert contract.
+        ExportJobConfig explicitCfg;
+        explicitCfg.mode = Mode::Convert;
+        explicitCfg.sources = {src.string()};
+        explicitCfg.outDir = out.string();
+        explicitCfg.destinationPath = (out / "explicit-save.png").string();
+        explicitCfg.format = "png";
+        explicitCfg.preserveDisplayAppearance = true;
+        const auto explicitResult = run(explicitCfg);
+        CHECK(explicitResult.done == 1 && fs::exists(out / "explicit-save.png"),
+              "M40: explicit Save As destination is handled off the UI path");
+
+        ExportJobConfig clipboardCfg;
+        clipboardCfg.mode = Mode::Clipboard;
+        clipboardCfg.sources = {src.string()};
+        clipboardCfg.preserveDisplayAppearance = true;
+        const auto clipboardResult = run(clipboardCfg);
+        CHECK(clipboardResult.done == 1 && !clipboardResult.clipboardImage.isNull(),
+              "M40: clipboard job returns a display-ready worker image");
+
+        auto alreadyCancelled = std::make_shared<std::atomic<bool>>(true);
+        ExportJobConfig cancelledCfg;
+        cancelledCfg.mode = Mode::Convert;
+        cancelledCfg.sources = {src.string()};
+        cancelledCfg.outDir = out.string();
+        cancelledCfg.format = "png";
+        cancelledCfg.cancel = alreadyCancelled;
+        cancelledCfg.renamePattern = "cancelled-output";
+        const auto cancelledResult = run(cancelledCfg);
+        CHECK(cancelledResult.done == 0 &&
+                  cancelledResult.message.find("cancelled") != std::string::npos,
+              "M40: pre-cancelled ExportJob produces no stale output");
+
+        ExportJobConfig budgetCfg;
+        budgetCfg.mode = Mode::ContactSheet;
+        budgetCfg.sources = {src.string()};
+        budgetCfg.outDir = out.string();
+        budgetCfg.contactThumb = 32;
+        budgetCfg.stagingMemoryBudgetBytes = 1;
+        const auto budgetResult = run(budgetCfg);
+        CHECK(budgetResult.done == 0 &&
+                  budgetResult.message.find("staging memory budget") != std::string::npos,
+              "M40: Contact/PDF staging memory has a hard bounded contract");
 
         ExportJobConfig directoryCfg;
         directoryCfg.mode = Mode::Csv;

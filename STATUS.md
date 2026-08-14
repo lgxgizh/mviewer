@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-08-13 · Version: **1.0.9 (in development)** · Last release tag: **v1.0.5** (2026-07-29)
+> Snapshot: 2026-08-15 · Version: **1.0.9 (in development)** · Last release tag: **v1.0.5** (2026-07-29)
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -10,7 +10,8 @@
 > `docs/review/M35_COMPARE_BROWSE_CONVERGENCE_2026-08-13.md`,
 > `docs/review/M36_BROWSE_HOTPATH_DISPLAY_FIDELITY_2026-08-13.md`,
 > `docs/review/M38_VIEWER_RENDER_CONVERGENCE_2026-08-14.md`,
-> `docs/review/M39_REALWORLD_RELIABILITY_2026-08-14.md` and
+> `docs/review/M39_REALWORLD_RELIABILITY_2026-08-14.md`,
+> `docs/review/M40_INTERACTION_CANCELLATION_CLOSURE_2026-08-15.md` and
 > `.\build.ps1 Test`.
 
 ## Positioning
@@ -100,6 +101,21 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 
 The full M38 evidence, including the canonical gate result and remaining
 environment blockers, is recorded in `docs/review/M38_VIEWER_RENDER_CONVERGENCE_2026-08-14.md`.
+
+### M40 Interaction cancellation & UI-thread purity closure (2026-08-15)
+
+- Compare loading owns cancellable repository handles and exactly-once batch
+  accounting; superseded and destroyed work cannot adopt frames.
+- ImageViewer fullscreen has one authoritative requested-state API/property.
+  Copy and Save As use worker-side ExportJob decode, display conversion and
+  encoding; MainWindow no longer materializes a full image synchronously.
+- ExportDialog modes share one cancellable runner with generation/lifetime
+  guards. Tile retry uses one stoppable worker, and Contact/PDF staging has a
+  bounded memory contract.
+- Focused M40 verification is green, including Compare cancellation, retry
+  teardown and ExportJob budget cases. The clean-build full gate reached 82/88;
+  its six exact failures (workflow UX plus analysis/AppState persistence and
+  managed-runtime disk/cache writes) are recorded in the M40 review report.
 
 ### M36 Browse hot path & display fidelity closure (2026-08-13)
 

@@ -6,6 +6,7 @@
 
 #include <QApplication>
 #include <QCheckBox>
+#include <QCloseEvent>
 #include <QClipboard>
 #include <QComboBox>
 #include <QDialogButtonBox>
@@ -200,6 +201,18 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     connect(box, &QDialogButtonBox::rejected, this, &QDialog::reject);
 }
 
+void ExportDialog::reject()
+{
+    cancelActiveExport();
+    QDialog::reject();
+}
+
+void ExportDialog::closeEvent(QCloseEvent *event)
+{
+    cancelActiveExport();
+    QDialog::closeEvent(event);
+}
+
 QStringList ExportDialog::collectSources() const
 {
     if (!m_sources.isEmpty())
@@ -326,61 +339,9 @@ void ExportDialog::exportConvertBatch()
         cfg.sources.push_back(src.toStdString());
     }
 
-    // M24 (D#3/D#7): run the batch off the UI thread with progress + cancel.
-    // The dialog may be closed mid-run; every UI touch is QPointer-guarded and
-    // marshaled through qApp. The cancel token bounds the worker's lifetime.
-    m_cancelFlag = std::make_shared<std::atomic<bool>>(false);
-    cfg.cancel = m_cancelFlag;
-    m_exportBtn->setEnabled(false);
-    if (!m_progress)
-    {
-        m_progress = new QProgressDialog(tr("正在导出..."), tr("取消"), 0, 0, this);
-        m_progress->setWindowModality(Qt::WindowModal);
-        m_progress->setAutoClose(true);
-        m_progress->setMinimumDuration(0);
-        connect(m_progress, &QProgressDialog::canceled, this,
-                [this]()
-                {
-                    if (m_cancelFlag)
-                        m_cancelFlag->store(true, std::memory_order_relaxed);
-                });
-    }
-    m_progress->setRange(0, static_cast<int>(cfg.sources.size()));
-    m_progress->setValue(0);
-    m_progress->show();
+    startExportJob(std::move(cfg));
+    return;
 
-    const QPointer<ExportDialog> self(this);
-    auto *watcher = new QFutureWatcher<mviewer::exportjob::ExportJobResult>(this);
-    connect(watcher, &QFutureWatcher<mviewer::exportjob::ExportJobResult>::finished, this,
-            [this, watcher]()
-            {
-                const auto result = watcher->result();
-                watcher->deleteLater();
-                if (m_progress)
-                    m_progress->close();
-                m_exportBtn->setEnabled(true);
-                m_statusLabel->setText(QString::fromStdString(result.message));
-            });
-    watcher->setFuture(QtConcurrent::run(
-        [cfg, self]() -> mviewer::exportjob::ExportJobResult
-        {
-            return mviewer::exportjob::run(
-                cfg,
-                [self](int done, int total, const std::string &)
-                {
-                    if (!qApp)
-                        return;
-                    QMetaObject::invokeMethod(
-                        qApp,
-                        [self, done, total]()
-                        {
-                            if (!self || !self->m_progress)
-                                return;
-                            self->m_progress->setMaximum(total);
-                            self->m_progress->setValue(done);
-                        });
-                });
-        }));
 }
 
 void ExportDialog::exportUnifiedMode(mviewer::exportjob::Mode mode)
@@ -410,6 +371,8 @@ void ExportDialog::exportUnifiedMode(mviewer::exportjob::Mode mode)
 
 void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
 {
+    cancelActiveExport();
+    const uint64_t generation = m_exportGeneration;
     m_cancelFlag = std::make_shared<std::atomic<bool>>(false);
     cfg.cancel = m_cancelFlag;
     m_exportBtn->setEnabled(false);
@@ -420,26 +383,25 @@ void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
         m_progress->setAutoClose(true);
         m_progress->setMinimumDuration(0);
         connect(m_progress, &QProgressDialog::canceled, this,
-                [this]()
-                {
-                    if (m_cancelFlag)
-                        m_cancelFlag->store(true, std::memory_order_relaxed);
-                });
+                [this]() { cancelActiveExport(); });
     }
     m_progress->setRange(0, static_cast<int>(cfg.sources.size()));
     m_progress->setValue(0);
     m_progress->show();
 
-    const QPointer<ExportDialog> self(this);
+    auto self = std::make_shared<QPointer<ExportDialog>>(this);
     auto *watcher = new QFutureWatcher<mviewer::exportjob::ExportJobResult>(this);
     connect(watcher, &QFutureWatcher<mviewer::exportjob::ExportJobResult>::finished, this,
-            [this, watcher, mode = cfg.mode]()
+            [self, watcher, generation, mode = cfg.mode]()
             {
                 const auto result = watcher->result();
                 watcher->deleteLater();
-                if (m_progress)
-                    m_progress->close();
-                m_exportBtn->setEnabled(true);
+                ExportDialog *dialog = self->data();
+                if (!dialog || generation != dialog->m_exportGeneration)
+                    return;
+                if (dialog->m_progress)
+                    dialog->m_progress->close();
+                dialog->m_exportBtn->setEnabled(true);
                 if (mode == mviewer::exportjob::Mode::Clipboard &&
                     !result.clipboardImage.isNull())
                 {
@@ -449,28 +411,42 @@ void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
                     if (!clipboard.isNull())
                         QApplication::clipboard()->setImage(clipboard);
                 }
-                m_statusLabel->setText(QString::fromStdString(result.message));
+                dialog->m_statusLabel->setText(QString::fromStdString(result.message));
             });
     watcher->setFuture(QtConcurrent::run(
-        [cfg, self]() -> mviewer::exportjob::ExportJobResult
+        [cfg, self, generation]() -> mviewer::exportjob::ExportJobResult
         {
             return mviewer::exportjob::run(
                 cfg,
-                [self](int done, int total, const std::string &)
+                [self, generation](int done, int total, const std::string &)
                 {
                     if (!qApp)
                         return;
                     QMetaObject::invokeMethod(
                         qApp,
-                        [self, done, total]()
+                        [self, done, total, generation]()
                         {
-                            if (!self || !self->m_progress)
+                            ExportDialog *dialog = self->data();
+                            if (!dialog || generation != dialog->m_exportGeneration ||
+                                !dialog->m_progress)
                                 return;
-                            self->m_progress->setMaximum(total);
-                            self->m_progress->setValue(done);
+                            dialog->m_progress->setMaximum(total);
+                            dialog->m_progress->setValue(done);
                         });
                 });
         }));
+}
+
+void ExportDialog::cancelActiveExport()
+{
+    ++m_exportGeneration;
+    if (m_cancelFlag)
+        m_cancelFlag->store(true, std::memory_order_release);
+    m_cancelFlag.reset();
+    if (m_progress)
+        m_progress->close();
+    if (m_exportBtn)
+        m_exportBtn->setEnabled(true);
 }
 
 void ExportDialog::exportContactSheet()

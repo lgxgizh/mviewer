@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <thread>
 #include <unordered_map>
 #include <utility>
@@ -44,6 +45,10 @@ struct AsyncTileRequestManager::Impl
     std::unordered_map<TileKey, std::shared_ptr<PendingTile>, TileKeyHash> pending;
     uint64_t nextSerial = 0;
     bool retryScheduled = false;
+    bool retryStop = false;
+    std::chrono::milliseconds retryDelay{50};
+    std::condition_variable_any retryCv;
+    std::jthread retryWorker;
 };
 
 namespace
@@ -64,57 +69,9 @@ void scheduleRetry(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
         if (!impl->accepting || impl->pending.empty() || impl->retryScheduled)
             return;
         impl->retryScheduled = true;
+        impl->retryDelay = delay;
     }
-    const std::weak_ptr<AsyncTileRequestManager::Impl> weakImpl = impl;
-    std::thread([weakImpl, delay]()
-                {
-                    std::this_thread::sleep_for(delay);
-                    const auto impl = weakImpl.lock();
-                    if (!impl)
-                        return;
-
-                    std::vector<std::shared_ptr<PendingTile>> candidates;
-                    {
-                        std::lock_guard<std::mutex> lk(impl->mtx);
-                        impl->retryScheduled = false;
-                        if (!impl->accepting)
-                            return;
-                        candidates.reserve(32);
-                        for (const auto &[key, pending] : impl->pending)
-                        {
-                            (void)key;
-                            if (!pending->handle &&
-                                !pending->cancelled.load(std::memory_order_acquire))
-                                candidates.push_back(pending);
-                            if (candidates.size() == 32)
-                                break;
-                        }
-                    }
-
-                    bool rejected = false;
-                    for (const auto &pending : candidates)
-                        if (!submitPending(impl, pending))
-                            rejected = true;
-
-                    bool stillPending = false;
-                    {
-                        std::lock_guard<std::mutex> lk(impl->mtx);
-                        for (const auto &[key, pending] : impl->pending)
-                        {
-                            (void)key;
-                            if (!pending->handle &&
-                                !pending->cancelled.load(std::memory_order_acquire))
-                            {
-                                stillPending = true;
-                                break;
-                            }
-                        }
-                    }
-                    if (stillPending)
-                        scheduleRetry(impl, rejected ? std::chrono::milliseconds(100)
-                                                     : std::chrono::milliseconds(50));
-                })
-        .detach();
+    impl->retryCv.notify_one();
 }
 
 bool submitPending(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
@@ -168,6 +125,70 @@ bool submitPending(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
     return true;
 }
 
+void retryLoop(const std::weak_ptr<AsyncTileRequestManager::Impl> &weakImpl,
+               std::stop_token stopToken)
+{
+    for (;;)
+    {
+        const auto impl = weakImpl.lock();
+        if (!impl)
+            return;
+
+        std::unique_lock<std::mutex> lk(impl->mtx);
+        impl->retryCv.wait(lk, [&]()
+                           { return stopToken.stop_requested() || impl->retryStop ||
+                                    impl->retryScheduled; });
+        if (stopToken.stop_requested() || impl->retryStop)
+            return;
+
+        const auto delay = impl->retryDelay;
+        // reset() cancels a pending retry by clearing retryScheduled and
+        // notifying this wait. Destruction uses retryStop/request_stop, so the
+        // worker never makes teardown wait for a blind sleep interval.
+        if (impl->retryCv.wait_for(lk, delay, [&]()
+                                   { return stopToken.stop_requested() || impl->retryStop ||
+                                            !impl->retryScheduled; }))
+            continue;
+
+        impl->retryScheduled = false;
+        if (!impl->accepting)
+            continue;
+
+        std::vector<std::shared_ptr<PendingTile>> candidates;
+        candidates.reserve(32);
+        for (const auto &[key, pending] : impl->pending)
+        {
+            (void)key;
+            if (!pending->handle && !pending->cancelled.load(std::memory_order_acquire))
+                candidates.push_back(pending);
+            if (candidates.size() == 32)
+                break;
+        }
+        lk.unlock();
+
+        bool rejected = false;
+        for (const auto &pending : candidates)
+            if (!submitPending(impl, pending))
+                rejected = true;
+
+        lk.lock();
+        bool stillPending = false;
+        for (const auto &[key, pending] : impl->pending)
+        {
+            (void)key;
+            if (!pending->handle && !pending->cancelled.load(std::memory_order_acquire))
+            {
+                stillPending = true;
+                break;
+            }
+        }
+        lk.unlock();
+        if (stillPending)
+            scheduleRetry(impl, rejected ? std::chrono::milliseconds(100)
+                                         : std::chrono::milliseconds(50));
+    }
+}
+
 void finishPending(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
                    const std::shared_ptr<PendingTile> &pending)
 {
@@ -204,50 +225,60 @@ void finishPending(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
 AsyncTileRequestManager::AsyncTileRequestManager(TileCache &cache)
     : m_impl(std::make_shared<Impl>(cache))
 {
+    const std::weak_ptr<Impl> weakImpl = m_impl;
+    m_impl->retryWorker = std::jthread(
+        [weakImpl](std::stop_token stopToken) { retryLoop(weakImpl, stopToken); });
 }
 
 AsyncTileRequestManager::~AsyncTileRequestManager()
 {
     const auto impl = m_impl;
-    std::vector<std::shared_ptr<PendingTile>> stale;
+    std::vector<TaskScheduler::TaskHandle> stale;
     {
         std::lock_guard<std::mutex> lk(impl->mtx);
         impl->accepting = false;
         impl->retryScheduled = false;
+        impl->retryStop = true;
         for (auto &[key, request] : impl->pending)
         {
             (void)key;
-            stale.push_back(std::move(request));
+            request->cancelled.store(true, std::memory_order_release);
+            if (request->handle)
+                stale.push_back(std::move(request->handle));
         }
         impl->pending.clear();
     }
-    for (const auto &request : stale)
+    impl->retryWorker.request_stop();
+    impl->retryCv.notify_all();
+    if (impl->retryWorker.joinable())
+        impl->retryWorker.join();
+    for (auto &handle : stale)
     {
-        request->cancelled.store(true, std::memory_order_release);
-        if (request->handle)
-            TaskScheduler::cancel(request->handle);
+        TaskScheduler::cancel(handle);
     }
 }
 
 void AsyncTileRequestManager::reset(uint64_t generation)
 {
     const auto impl = m_impl;
-    std::vector<std::shared_ptr<PendingTile>> stale;
+    std::vector<TaskScheduler::TaskHandle> stale;
     {
         std::lock_guard<std::mutex> lk(impl->mtx);
         impl->generation = generation;
+        impl->retryScheduled = false;
         for (auto &[key, request] : impl->pending)
         {
             (void)key;
-            stale.push_back(std::move(request));
+            request->cancelled.store(true, std::memory_order_release);
+            if (request->handle)
+                stale.push_back(std::move(request->handle));
         }
         impl->pending.clear();
     }
-    for (const auto &request : stale)
+    impl->retryCv.notify_all();
+    for (auto &handle : stale)
     {
-        request->cancelled.store(true, std::memory_order_release);
-        if (request->handle)
-            TaskScheduler::cancel(request->handle);
+        TaskScheduler::cancel(handle);
     }
 }
 
@@ -322,7 +353,7 @@ AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisible(
     // Repeated pan/zoom keeps useful in-flight work, but obsolete work is
     // bounded. Only the oldest non-visible requests are cancelled; visible
     // requests and recently-created work remain eligible for reuse.
-    std::vector<std::shared_ptr<PendingTile>> evicted;
+    std::vector<TaskScheduler::TaskHandle> evicted;
     {
         std::lock_guard<std::mutex> lk(impl->mtx);
         if (impl->pending.size() > kMaxPendingTiles)
@@ -339,20 +370,21 @@ AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisible(
                 {
                     if (visibleKeys.count(it->first) != 0)
                         continue;
-                    if (victim == impl->pending.end() || it->second->serial < victim->second->serial)
+                    if (victim == impl->pending.end() ||
+                        it->second->serial < victim->second->serial)
                         victim = it;
                 }
                 if (victim == impl->pending.end())
                     break;
                 victim->second->cancelled.store(true, std::memory_order_release);
-                evicted.push_back(victim->second);
+                if (victim->second->handle)
+                    evicted.push_back(std::move(victim->second->handle));
                 impl->pending.erase(victim);
             }
         }
     }
-    for (const auto &request : evicted)
-        if (request->handle)
-            TaskScheduler::cancel(request->handle);
+    for (auto &handle : evicted)
+        TaskScheduler::cancel(handle);
     return result;
 }
 
@@ -378,7 +410,7 @@ ImageData AsyncTileRequestManager::requestDerived(const TileKey &key, const Imag
     pending->source = source;
     pending->derivedDecode = std::move(decode);
     pending->onReady = std::move(onReady);
-    std::vector<std::shared_ptr<PendingTile>> evicted;
+    std::vector<TaskScheduler::TaskHandle> evicted;
     {
         std::lock_guard<std::mutex> lk(impl->mtx);
         const auto [it, inserted] = impl->pending.emplace(key, pending);
@@ -400,13 +432,13 @@ ImageData AsyncTileRequestManager::requestDerived(const TileKey &key, const Imag
             if (victim == impl->pending.end())
                 break;
             victim->second->cancelled.store(true, std::memory_order_release);
-            evicted.push_back(victim->second);
+            if (victim->second->handle)
+                evicted.push_back(std::move(victim->second->handle));
             impl->pending.erase(victim);
         }
     }
-    for (const auto &request : evicted)
-        if (request->handle)
-            TaskScheduler::cancel(request->handle);
+    for (auto &handle : evicted)
+        TaskScheduler::cancel(handle);
     if (!submitPending(impl, pending))
         scheduleRetry(impl);
     return {};

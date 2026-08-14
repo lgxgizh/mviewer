@@ -8,6 +8,7 @@
 #include <QStringList>
 
 #include <atomic>
+#include <cstdint>
 #include <memory>
 
 class QLineEdit;
@@ -17,6 +18,7 @@ class QCheckBox;
 class QPushButton;
 class QLabel;
 class QProgressDialog;
+class QCloseEvent;
 
 // Batch / single image export dialog. Supports format conversion, resizing,
 // text watermarking, batch rename, contact-sheet generation and PDF export.
@@ -26,6 +28,11 @@ class ExportDialog : public QDialog
 
   public:
     explicit ExportDialog(QWidget *parent = nullptr);
+    ~ExportDialog() override
+    {
+        if (m_cancelFlag)
+            m_cancelFlag->store(true, std::memory_order_release);
+    }
     // Backward-compatible constructor: takes an explicit source list and
     // pre-selects the output directory to the first image's folder.
     explicit ExportDialog(const QStringList &sources, QWidget *parent = nullptr);
@@ -48,6 +55,10 @@ class ExportDialog : public QDialog
   private slots:
     void onBrowse();
     void onExportClicked();
+    void reject() override;
+
+  protected:
+    void closeEvent(QCloseEvent *event) override;
 
   private:
     QStringList collectSources() const;
@@ -63,6 +74,7 @@ class ExportDialog : public QDialog
     void exportHtmlReport();
     void exportClipboard();
     void exportUnifiedMode(mviewer::exportjob::Mode mode);
+    void cancelActiveExport();
     void startExportJob(mviewer::exportjob::ExportJobConfig cfg);
 
     QString m_path;
@@ -100,4 +112,5 @@ class ExportDialog : public QDialog
     // and the dialog's UI-thread guard for the worker callback.
     std::shared_ptr<std::atomic<bool>> m_cancelFlag;
     QProgressDialog *m_progress = nullptr;
+    uint64_t m_exportGeneration = 0;
 };

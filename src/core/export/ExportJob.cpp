@@ -4,7 +4,9 @@
 #include "core/image/Decoder.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/ImageRepository.h"
 #include "core/image/ImageTransform.h"
+#include "core/image/QtConvert.h"
 #include "domain/Selection.h"
 
 #include <atomic>
@@ -110,6 +112,21 @@ static std::string extensionFor(const std::string &format)
     if (format == "jpeg")
         return ".jpg";
     return "." + format;
+}
+
+static ImageData decodeSource(const std::string &path, const ExportJobConfig &cfg)
+{
+    if (!cfg.preserveDisplayAppearance)
+        return Decoder::decodeFull(path);
+
+    // The repository path preserves the viewer's decode + metadata contract;
+    // the ICC/display conversion is deliberately performed on this worker,
+    // never by a QAction, QWidget, or clipboard callback on the GUI thread.
+    const ImageLoadOptions opts{true, false, 256};
+    const auto loaded = ImageRepository::instance().load(path, opts);
+    if (!loaded.success() || !loaded.frame)
+        return {};
+    return mvcore::toDisplayImageData(loaded.frame->pixels(), loaded.frame->metadata());
 }
 
 static fs::path pathFromUtf8(const std::string &value);
@@ -553,7 +570,7 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
     {
         if (progress)
             progress(0, r.total, sources.front());
-        r.clipboardImage = Decoder::decodeFull(sources.front());
+        r.clipboardImage = decodeSource(sources.front(), cfg);
         if (r.clipboardImage.isNull())
         {
             r.failed = 1;
@@ -583,6 +600,7 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
         // worker-side decode work succeeds or has been accounted for.
         std::vector<ImageData> images;
         images.reserve(sources.size());
+        std::size_t stagedBytes = 0;
         const int maxEdge = cfg.mode == Mode::ContactSheet
                                 ? std::clamp(cfg.contactThumb, 16, 2000)
                                 : std::clamp(std::max(cfg.contactThumb, 512), 256, 2048);
@@ -602,6 +620,14 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
                 ++r.failed;
                 continue;
             }
+            if (stagedBytes > cfg.stagingMemoryBudgetBytes ||
+                image.byteSize() > cfg.stagingMemoryBudgetBytes - stagedBytes)
+            {
+                r.failed = r.total;
+                r.message = "staging memory budget exceeded";
+                return r;
+            }
+            stagedBytes += image.byteSize();
             images.push_back(std::move(image));
         }
         if (images.empty())
@@ -766,12 +792,22 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
         outputDirectory = pathFromUtf8(cfg.outDir);
         sourcePaths.reserve(sources.size());
         destinations.reserve(sources.size());
+        if (!cfg.destinationPath.empty() && r.total != 1)
+        {
+            r.failed = r.total;
+            r.message = "explicit destination requires one source";
+            return r;
+        }
         for (int i = 0; i < r.total; ++i)
         {
             sourcePaths.push_back(pathFromUtf8(sources[static_cast<size_t>(i)]));
-            const std::string baseName =
-                outputBaseName(cfg, sourcePaths.back(), i, r.total);
-            destinations.push_back(outputDirectory / pathFromUtf8(baseName + ext));
+            if (!cfg.destinationPath.empty())
+                destinations.push_back(pathFromUtf8(cfg.destinationPath));
+            else
+            {
+                const std::string baseName = outputBaseName(cfg, sourcePaths.back(), i, r.total);
+                destinations.push_back(outputDirectory / pathFromUtf8(baseName + ext));
+            }
         }
     }
     catch (const std::exception &error)
@@ -876,7 +912,7 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
         if (progress)
             progress(i, r.total, src);
 
-        ImageData data = Decoder::decodeFull(src);
+        ImageData data = decodeSource(src, cfg);
         if (data.isNull())
         {
             ++r.failed;

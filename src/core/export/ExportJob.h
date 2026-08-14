@@ -6,6 +6,7 @@
 #include "core/image/ImageBuffer.h"
 
 #include <atomic>
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <string>
@@ -40,6 +41,10 @@ struct ExportJobConfig
     // worker-side ExportJob, never to the Qt dialog thread.
     std::string sourceDirectory;
     std::string outDir;
+    // Optional explicit destination for a single-image Convert request. This
+    // keeps Save As on the same worker-side runner without making the UI
+    // synthesize a rename pattern or encode pixels itself.
+    std::string destinationPath;
     std::string format = "jpeg"; // jpeg / png / webp / tiff / bmp
     int quality = 90;
     ResizeMode resizeMode = ResizeMode::None;
@@ -57,6 +62,16 @@ struct ExportJobConfig
     // P0 #⑦: strip metadata. Re-encoding from raw pixels already drops EXIF/ICC,
     // so this is effectively always-on; the flag records explicit user intent.
     bool stripMetadata = true;
+
+    // Viewer Copy/Save uses the same display/ICC materialization as the
+    // rendered frame. Ordinary batch conversion retains its historical raw
+    // decode contract unless this flag is explicitly enabled.
+    bool preserveDisplayAppearance = false;
+
+    // Contact/PDF staging contract. The writer API is currently batch-shaped,
+    // so bound scaled staging rather than allowing source-count-linear memory
+    // growth without a hard limit.
+    std::size_t stagingMemoryBudgetBytes = 512ULL * 1024ULL * 1024ULL;
 
     // M24 (D#3): optional cancellation token. run() checks it between items and
     // stops early, reporting what already completed. Never dereferenced if null.
@@ -78,8 +93,8 @@ struct ExportJobResult
 // Progress: (done, total, currentSourcePath)
 using ProgressFn = std::function<void(int, int, const std::string &)>;
 
-// Run a job. Convert mode is fully implemented here; other modes may return a
-// "delegated" result so the UI can keep its specialized path until fully moved.
+// Run a job. Every mode is executed by this worker-side runner; UI callers only
+// submit the config and present the value-owned result.
 ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress = {});
 
 // Helpers used by ExportDialog / tests.

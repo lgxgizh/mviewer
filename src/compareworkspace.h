@@ -7,6 +7,7 @@
 #include "core/compare/Histogram.h"
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/ImageRepository.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QCheckBox>
@@ -32,6 +33,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -183,6 +185,24 @@ class CompareWorkspace : public QWidget
     uint64_t m_loadGen = 0;
     bool m_loadInFlight = false;
     std::optional<mviewer::domain::CompareSession> m_pendingSession;
+    struct LoadRequest
+    {
+        std::atomic<bool> accounted{false};
+        ImageRepository::AsyncRequestHandle handle;
+    };
+    struct LoadBatch
+    {
+        uint64_t generation = 0;
+        std::shared_ptr<std::vector<std::shared_ptr<ImageFrame>>> frames;
+        std::shared_ptr<std::atomic<int>> remaining;
+        std::shared_ptr<std::atomic<int>> failed;
+        std::vector<std::unique_ptr<LoadRequest>> requests;
+        std::mutex handlesMutex;
+    };
+    std::shared_ptr<LoadBatch> m_loadBatch;
+    static bool accountLoadRequest(const std::shared_ptr<LoadBatch> &batch, size_t index,
+                                   const ImageRepository::Result *result);
+    void cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch);
     void finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames, int failedCount);
     QCheckBox *m_syncZoomChk = nullptr;
     QCheckBox *m_syncDragChk = nullptr;

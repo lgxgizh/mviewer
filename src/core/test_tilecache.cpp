@@ -249,6 +249,30 @@ static void testAsyncTileManager()
     scheduler.drain(TaskScheduler::DecodePool, std::chrono::seconds(5));
     CHECK(manager.pendingCount() == 0 && cache.get({"rejected", 0, 0, 0, 100}).buffer,
           "retry converges to Ready without a pending leak");
+
+    // M40: reset and destruction must wake the owned retry worker immediately;
+    // neither path waits for an uninterruptible detached sleep.
+    manager.reset(5);
+    scheduler.pause(TaskScheduler::DecodePool);
+    const auto waiting = manager.requestVisible(
+        "reset-while-retrying", vp, grid, 100, 5, decode, [&](const TileKey &) { ++readyCalls; });
+    CHECK(waiting.pending == 1 && manager.pendingCount() == 1,
+          "M40: rejected tile enters the owned retry state");
+    manager.reset(6);
+    CHECK(manager.pendingCount() == 0,
+          "M40: reset cancels retry-waiting work and converges pending count");
+    {
+        AsyncTileRequestManager destroyed(cache);
+        destroyed.reset(7);
+        destroyed.requestVisible("destroy-while-retrying", vp, grid, 100, 7, decode,
+                                 [&](const TileKey &) { ++readyCalls; });
+        CHECK(destroyed.pendingCount() == 1,
+              "M40: destruction scenario has a retry-waiting request");
+    }
+    scheduler.resume(TaskScheduler::DecodePool);
+    scheduler.drain(TaskScheduler::DecodePool, std::chrono::seconds(5));
+    CHECK(manager.pendingCount() == 0,
+          "M40: retry teardown does not resubmit stale tiles after reset/destruction");
 }
 
 static void test100MpVisibleOnly()

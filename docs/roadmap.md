@@ -61,6 +61,10 @@
 | M34 | **Release hardening follow-up** | ✅ Complete; build and CI remain frozen. |
 | M35 | **Compare / Browse convergence** — fullscreen Compare, relative Sync Zoom, default display semantics, two-stage Preview | ✅ Complete (2026-08-13); see `docs/review/M35_COMPARE_BROWSE_CONVERGENCE_2026-08-13.md`. |
 | M36 | **Browse hot path & display fidelity closure** — memory-first selection, metadata single-flight, ICC parity, Compare lifetime/sync and bounded Batch Analysis | 🔄 Implementation complete for focused contracts; full gate still blocked by restricted-environment cache/temp-file writes. See `docs/review/M36_BROWSE_HOTPATH_DISPLAY_FIDELITY_2026-08-13.md`. |
+| M37 | **Browse Viewer closure** — fullscreen entry, selection continuity and persisted navigation state | ✅ Complete (2026-08-14); retained in the canonical Browse workflow. |
+| M38 | **ImageViewer render pipeline closure** — async tiles, bounded cache and display-fidelity handoff | ✅ Complete (2026-08-14); see `docs/review/M38_VIEWER_RENDER_CONVERGENCE_2026-08-14.md`. |
+| M39 | **Real-world reliability & export convergence** — retry recovery, unified ExportJob and report safety | ✅ Complete (2026-08-14); see `docs/review/M39_REALWORLD_RELIABILITY_2026-08-14.md`. |
+| M40 | **Interaction cancellation & UI-thread purity closure** — Compare cancellation, authoritative fullscreen, async Copy/Save/Export, retry teardown and export memory bounds | 🔄 Implementation complete; focused M40 contracts pass, while the clean-build full gate is 82/88 with documented workflow/persistence follow-ups in `docs/review/M40_INTERACTION_CANCELLATION_CLOSURE_2026-08-15.md`. |
 
 ### M25 closure addendum (2026-08-09)
 
