@@ -17,6 +17,7 @@
 #include <QFileInfo>
 #include <QKeyEvent>
 #include <QMatrix4x4>
+#include <QMetaObject>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMouseEvent>
@@ -40,6 +41,26 @@ void ImageViewer::paintEvent(QPaintEvent *event)
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);
 
+    const auto drawProvisional = [&]()
+    {
+        if (m_provisionalImage.isNull())
+            return;
+        const int sourceW = m_provisionalSourceSize.width() > 0
+                                ? m_provisionalSourceSize.width()
+                                : m_provisionalImage.width();
+        const int sourceH = m_provisionalSourceSize.height() > 0
+                                ? m_provisionalSourceSize.height()
+                                : m_provisionalImage.height();
+        int sx = 0, sy = 0, sw = 0, sh = 0;
+        m_view.imageRectToScreen(0, 0, sourceW, sourceH, sx, sy, sw, sh);
+        if (sw <= 0 || sh <= 0)
+            return;
+        painter.save();
+        painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+        painter.drawImage(QRect(sx, sy, sw, sh), m_provisionalImage);
+        painter.restore();
+    };
+
     // Render Pipeline (P1-①): the Widget is the Viewport owner. It asks the
     // TileGrid which source tiles are visible, then asks the Renderer to scale
     // each visible region from the ImageFrame pixels — never decoding, never
@@ -53,37 +74,71 @@ void ImageViewer::paintEvent(QPaintEvent *event)
         // resolution (see dpr scale below) without changing interaction space.
         m_view.screenW = width();
         m_view.screenH = height();
-        const qreal dpr = devicePixelRatioF();
-        if (dpr > 1.0)
-            painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-        RenderEngine &eng = RenderEngine::instance();
+        drawProvisional();
+        painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
         // Render Pipeline (P1-①): ask the TileCache for the visible tiles at
         // the LOD chosen for the current zoom. Only missing tiles are decoded
         // (via RenderEngine::scaleRegion in core/), then cached. The Widget
         // never decodes and never rasterizes the whole image.
         const std::string id = m_frame->id().hash;
-        // A-8.3: on HiDPI, request tiles at device-pixel size so the blit is
-        // sharp when Qt scales the widget. Interaction coords stay logical.
-        Viewport tileView = m_view;
-        if (dpr > 1.0)
+        const qreal dpr = devicePixelRatioF();
+        const int renderScalePercent =
+            std::max(100, static_cast<int>(std::lround(std::max<qreal>(1.0, dpr) * 100.0)));
+        const uint64_t generation = m_viewGeneration;
+        const ImageData source = m_frame->pixels();
+        const auto metadata = m_frame->metadata();
+        QPointer<ImageViewer> guard(this);
+        const auto decode = [source, metadata](const std::string &, int sx, int sy, int sw,
+                                                int sh, int tw, int th) -> ImageData
         {
-            tileView.screenW = static_cast<int>(std::lround(m_view.screenW * dpr));
-            tileView.screenH = static_cast<int>(std::lround(m_view.screenH * dpr));
-            tileView.scale = m_view.scale * dpr;
-            tileView.offsetX = m_view.offsetX * dpr;
-            tileView.offsetY = m_view.offsetY * dpr;
-        }
-        auto ready = m_tileCache.request(
-            id, tileView, m_tiles,
-            [&](const std::string &, int sx, int sy, int sw, int sh, int tw, int th) -> ImageData
+            const ImageData raw = RenderEngine::scaleRegionStatic(
+                source, RenderRect{sx, sy, sw, sh}, RenderSize{tw, th}, RenderInterp::Bilinear);
+            return mvcore::toDisplayImageData(raw, metadata);
+        };
+        const auto visible = m_tileRequests.requestVisible(
+            id, m_view, m_tiles, renderScalePercent, generation, decode,
+            [guard, generation](const TileKey &)
             {
-                const RenderRect region{sx, sy, sw, sh};
-                const RenderSize tgt{tw, th};
-                const ImageData raw = eng.scaleRegion(m_frame->pixels(), region, tgt,
-                                                      m_view.scale < 1.0 ? RenderInterp::Bilinear
-                                                                         : RenderInterp::Nearest);
-                return mvcore::toDisplayImageData(raw, m_frame->metadata());
+                if (!guard || !qApp)
+                    return;
+                QMetaObject::invokeMethod(
+                    qApp,
+                    [guard, generation]()
+                    {
+                        ImageViewer *viewer = guard.data();
+                        if (!viewer || generation != viewer->m_viewGeneration ||
+                            viewer->m_tileRepaintQueued)
+                            return;
+                        viewer->m_tileRepaintQueued = true;
+                        QTimer::singleShot(
+                            0, viewer,
+                            [guard, generation]()
+                            {
+                                ImageViewer *current = guard.data();
+                                if (!current)
+                                    return;
+                                current->m_tileRepaintQueued = false;
+                                if (generation != current->m_viewGeneration)
+                                    return;
+                                current->update();
+                            });
+                    },
+                    Qt::QueuedConnection);
             });
+        if (visible.complete() && !m_provisionalImage.isNull())
+        {
+            m_provisionalPath.clear();
+            m_provisionalImage = QImage();
+            m_provisionalSourceSize = QSize();
+        }
+        std::vector<TileCache::ReadyTile> ready = visible.ready;
+        if (ready.empty() && visible.pending > 0 && m_provisionalImage.isNull())
+        {
+            painter.setPen(QColor(180, 180, 180));
+            painter.drawText(rect(), Qt::AlignCenter, "Loading...");
+        }
+        const Viewport tileView = m_view;
+
         // F4 (M22): apply the live overlay on a deep copy so the TileCache
         // buffer (shared via shared_ptr) is never mutated. Without the copy,
         // toggling the overlay off would leave the cached pixels clipped.
@@ -91,10 +146,15 @@ void ImageViewer::paintEvent(QPaintEvent *event)
         {
             for (auto &rt : ready)
             {
-                ImageData out = makeImageData(rt.data.width, rt.data.height, rt.data.format);
-                std::memcpy(out.buffer->data(), rt.data.buffer->data(), rt.data.byteSize());
-                mviewer::applyOverlay(out, m_overlayMode, m_zebraThreshold);
-                rt.data = out;
+                ImageData derived = m_overlayCache.get(rt.key);
+                if (derived.isNull())
+                {
+                    derived = makeImageData(rt.data.width, rt.data.height, rt.data.format);
+                    std::memcpy(derived.buffer->data(), rt.data.buffer->data(), rt.data.byteSize());
+                    mviewer::applyOverlay(derived, m_overlayMode, m_zebraThreshold);
+                    m_overlayCache.put(rt.key, derived);
+                }
+                rt.data = derived;
             }
         }
         // Stage A: QOpenGLWidget keeps a GL context current during paintEvent,
@@ -135,13 +195,6 @@ void ImageViewer::paintEvent(QPaintEvent *event)
                 if (actualWA <= 0 || actualHA <= 0)
                     continue;
                 tileView.imageRectToScreen(srcXA, srcYA, actualWA, actualHA, tsx, tsy, tsw, tsh);
-                if (dpr > 1.0)
-                {
-                    tsx = static_cast<int>(std::lround(tsx / dpr));
-                    tsy = static_cast<int>(std::lround(tsy / dpr));
-                    tsw = static_cast<int>(std::lround(tsw / dpr));
-                    tsh = static_cast<int>(std::lround(tsh / dpr));
-                }
                 const QRect dst(tsx, tsy, tsw, tsh);
                 const QMatrix4x4 target = QOpenGLTextureBlitter::targetTransform(dst, viewportRect);
                 m_blitter.blit(static_cast<GLuint>(hnd), target,
@@ -169,21 +222,22 @@ void ImageViewer::paintEvent(QPaintEvent *event)
             if (actualWA <= 0 || actualHA <= 0)
                 continue;
             tileView.imageRectToScreen(srcXA, srcYA, actualWA, actualHA, tsx, tsy, tsw, tsh);
-            if (dpr > 1.0)
-            {
-                tsx = static_cast<int>(std::lround(tsx / dpr));
-                tsy = static_cast<int>(std::lround(tsy / dpr));
-                tsw = static_cast<int>(std::lround(tsw / dpr));
-                tsh = static_cast<int>(std::lround(tsh / dpr));
-            }
             QImage q = mvcore::toQImage(rt.data);
             if (q.isNull())
                 continue;
-            // Tile pixels are at device resolution; target rect is logical.
-            // QPainter scales the denser source into the logical rect → sharp
-            // on HiDPI without setDevicePixelRatio (which would double-scale).
             painter.drawImage(QRect(tsx, tsy, tsw, tsh), q);
         }
+    }
+    else if (!m_provisionalImage.isNull())
+    {
+        m_view.screenW = width();
+        m_view.screenH = height();
+        drawProvisional();
+    }
+    else if (m_loading)
+    {
+        painter.setPen(QColor(180, 180, 180));
+        painter.drawText(rect(), Qt::AlignCenter, "加载中…");
     }
     else if (!m_currentPath.isEmpty())
     {

@@ -35,7 +35,7 @@
 
 const double kZoomStep = 1.15;
 
-ImageViewer::ImageViewer(QWidget *parent) : QOpenGLWidget(parent)
+ImageViewer::ImageViewer(QWidget *parent) : QOpenGLWidget(parent), m_tileRequests(m_tileCache)
 {
     setWindowTitle("图片查看");
     setMouseTracking(true);
@@ -134,9 +134,46 @@ void ImageViewer::showBrowseFullscreen()
                            if (!guard)
                                return;
                            if (guard->isFullScreen() && guard->m_fitMode)
-                               guard->fitToWidget();
+                           {
+                               if (guard->m_frame && guard->m_frame->isValid())
+                                   guard->fitToWidget();
+                               else if (!guard->m_provisionalImage.isNull())
+                               {
+                                   guard->m_view.screenW = guard->width();
+                                   guard->m_view.screenH = guard->height();
+                                   const QSize source = guard->m_provisionalSourceSize.isValid()
+                                                             ? guard->m_provisionalSourceSize
+                                                             : guard->m_provisionalImage.size();
+                                   guard->m_view.fit(source.width(), source.height(),
+                                                     FitPolicy::MaximizeClient);
+                                   guard->advanceViewGeneration();
+                                   guard->emitZoom();
+                               }
+                           }
                            guard->update();
                        });
+}
+
+void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
+                                      const QSize &sourceSize)
+{
+    if (path.isEmpty() || image.isNull())
+        return;
+    m_currentPath = path;
+    m_provisionalPath = path;
+    m_provisionalImage = image;
+    m_provisionalSourceSize = sourceSize.isValid() ? sourceSize : image.size();
+    m_view.screenW = width();
+    m_view.screenH = height();
+    const FitPolicy fitPolicy =
+        isFullScreen() || property("mviewerFullscreenRequested").toBool()
+            ? FitPolicy::MaximizeClient
+            : FitPolicy::Comfortable;
+    m_view.fit(m_provisionalSourceSize.width(), m_provisionalSourceSize.height(), fitPolicy);
+    advanceViewGeneration();
+    m_fitMode = true;
+    emitZoom();
+    update();
 }
 
 void ImageViewer::initializeGL()
@@ -163,6 +200,7 @@ void ImageViewer::closeEvent(QCloseEvent *event)
     // QPointer/path/generation guards would still suppress UI delivery, but the
     // obsolete full-resolution work is dropped here.
     ++m_requestGen;
+    advanceViewGeneration();
     cancelCurrentLoad();
     cancelPreloads();
     QSettings settings;
@@ -184,12 +222,19 @@ void ImageViewer::clearPixelInfo()
     emit pixelInfo(-1, -1, 0, 0, 0, 0, 0, 0, 0, 0, false);
 }
 
+void ImageViewer::advanceViewGeneration()
+{
+    m_tileRequests.reset(++m_viewGeneration);
+}
+
 void ImageViewer::setImage(const QString &path)
 {
     // Pixel Inspector lifecycle: invalidate synchronously on every new load so
     // the previous image's sample never lingers while the next decode runs —
     // including for empty/failing requests that never deliver a frame.
     clearPixelInfo();
+    const bool keepProvisional = !path.isEmpty() && path == m_provisionalPath &&
+                                 !m_provisionalImage.isNull();
     m_currentPath = path;
     m_currentIndex = m_fileList.indexOf(path);
     // M29: drop the prior foreground decode BEFORE scheduling the new load, and
@@ -200,6 +245,32 @@ void ImageViewer::setImage(const QString &path)
     // cache for a superseded image.
     cancelCurrentLoad();
     auto matchingPreload = takeMatchingPreload(path);
+    const uint64_t gen = ++m_requestGen;
+    advanceViewGeneration();
+    m_tileCache.clear();
+    m_overlayCache.clear();
+    m_frame.reset();
+    m_tiles = TileGrid();
+    m_hasHistogram = false;
+    m_loading = !path.isEmpty();
+    m_pendingView.reset();
+    if (!keepProvisional)
+    {
+        m_provisionalPath.clear();
+        m_provisionalImage = QImage();
+        m_provisionalSourceSize = QSize();
+    }
+    if (context())
+    {
+        makeCurrent();
+        m_gpu.clear();
+        doneCurrent();
+    }
+    if (path.isEmpty())
+    {
+        update();
+        return;
+    }
     // Decode off the UI thread: ImageRepository::loadAsyncCancellable dispatches
     // to the DecodePool, so first-open / next-prev never block the UI thread
     // (keeps within the performance budget: first <100ms, switch <20ms). The
@@ -210,7 +281,6 @@ void ImageViewer::setImage(const QString &path)
     // (always alive) rather than this. The queued lambda re-checks the guard,
     // the path AND the request generation (A -> B -> A: an older A request that
     // completes last must not overwrite the newer A).
-    const uint64_t gen = ++m_requestGen;
     QPointer<ImageViewer> guard(this);
     auto onLoaded = [path, gen, guard](const ImageRepository::Result &res)
     {
@@ -226,6 +296,7 @@ void ImageViewer::setImage(const QString &path)
                     if (!viewer || path != viewer->m_currentPath || gen != viewer->m_requestGen)
                         return;
                     viewer->m_foregroundRequest.reset();
+                    viewer->m_loading = false;
                     viewer->m_hasHistogram = false;
                     viewer->setWindowTitle(
                         QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
@@ -242,6 +313,7 @@ void ImageViewer::setImage(const QString &path)
                 if (!viewer || path != viewer->m_currentPath || gen != viewer->m_requestGen)
                     return; // widget destroyed or user navigated away
                 viewer->m_foregroundRequest.reset();
+                viewer->m_loading = false;
                 viewer->m_frame = res.frame;
                 // M28 P1-02: no full-size QPixmap materialization on the UI
                 // thread — the paint path renders tiles from the frame, and
@@ -264,7 +336,12 @@ void ImageViewer::setImage(const QString &path)
                     TileGrid(viewer->m_frame->width(), viewer->m_frame->height(), 256);
                 viewer->m_view.screenW = viewer->width();
                 viewer->m_view.screenH = viewer->height();
-                viewer->m_view.fit(viewer->m_frame->width(), viewer->m_frame->height(), 0.95);
+                const FitPolicy fitPolicy =
+                    viewer->isFullScreen() ||
+                            viewer->property("mviewerFullscreenRequested").toBool()
+                        ? FitPolicy::MaximizeClient
+                        : FitPolicy::Comfortable;
+                viewer->m_view.fit(viewer->m_frame->width(), viewer->m_frame->height(), fitPolicy);
                 viewer->m_fitMode = true;
                 const QString position = viewer->m_currentIndex >= 0
                                              ? QString(" [%1/%2]")
@@ -293,7 +370,7 @@ void ImageViewer::setImage(const QString &path)
                     viewer->m_fitMode = false; // restored zoom is explicit, not fit
                     emit viewer->zoomChanged(static_cast<int>(viewer->m_view.scale * 100.0 + 0.5));
                 }
-                viewer->m_tileCache.clear(); // drop tiles from any previously viewed image
+                viewer->m_overlayCache.clear();
                 // Stage A: drop GPU textures for the previous image while
                 // the GL context is current (UI thread only).
                 if (viewer->context())
@@ -417,7 +494,11 @@ void ImageViewer::fitToWidget()
     // Delegate the fit math to Viewport; keep the Widget free of scale/offset.
     m_view.screenW = width();
     m_view.screenH = height();
-    m_view.fit(m_frame->width(), m_frame->height(), 0.95);
+    m_view.fit(m_frame->width(), m_frame->height(),
+               isFullScreen() || property("mviewerFullscreenRequested").toBool()
+                   ? FitPolicy::MaximizeClient
+                   : FitPolicy::Comfortable);
+    advanceViewGeneration();
     m_fitMode = true;
     emitZoom();
 }
@@ -429,6 +510,7 @@ void ImageViewer::zoomIn()
     m_view.screenW = width();
     m_view.screenH = height();
     m_view.zoomAt(width() / 2.0, height() / 2.0, kZoomStep);
+    advanceViewGeneration();
     m_fitMode = false;
     emitZoom();
     update();
@@ -441,6 +523,7 @@ void ImageViewer::zoomOut()
     m_view.screenW = width();
     m_view.screenH = height();
     m_view.zoomAt(width() / 2.0, height() / 2.0, 1.0 / kZoomStep);
+    advanceViewGeneration();
     m_fitMode = false;
     emitZoom();
     update();
@@ -460,6 +543,7 @@ void ImageViewer::zoomActual()
     m_view.screenW = width();
     m_view.screenH = height();
     m_view.zoomAt(width() / 2.0, height() / 2.0, 1.0 / m_view.scale);
+    advanceViewGeneration();
     m_fitMode = false;
     emitZoom();
     update();
@@ -469,12 +553,9 @@ QImage ImageViewer::currentImage() const
 {
     if (!m_frame || m_frame->pixels().isNull())
         return QImage();
-    // Zero-copy alias when the byte order matches; the caller (copy/save) owns
-    // the result, so this is safe.
-    QImage img = mvcore::toQImageRef(m_frame->pixels());
-    if (img.isNull())
-        img = mvcore::toQImage(m_frame->pixels()); // RGBA32 fallback
-    return img;
+    // Copy/save means what the user sees. Materialize the display-only sRGB
+    // contract (including embedded ICC) without modifying analysis pixels.
+    return mvcore::toDisplayQImage(m_frame->pixels(), m_frame->metadata());
 }
 
 void ImageViewer::computeHistogram()
@@ -504,6 +585,7 @@ void ImageViewer::wheelEvent(QWheelEvent *event)
     const QPointF mouse = event->position();
     const double factor = event->angleDelta().y() > 0 ? kZoomStep : 1.0 / kZoomStep;
     m_view.zoomAt(mouse.x(), mouse.y(), factor);
+    advanceViewGeneration();
     m_fitMode = false;
     emitZoom();
     update();
@@ -524,6 +606,7 @@ void ImageViewer::mouseDoubleClickEvent(QMouseEvent *event)
         m_view.screenH = height();
         const QPointF p = event->position();
         m_view.zoomAt(p.x(), p.y(), 1.0 / m_view.scale);
+        advanceViewGeneration();
         m_fitMode = false;
         emitZoom();
     }
@@ -584,6 +667,7 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
     else if (m_dragging)
     {
         m_view.pan(event->pos().x() - m_lastMousePos.x(), event->pos().y() - m_lastMousePos.y());
+        advanceViewGeneration();
         m_lastMousePos = event->pos();
         update();
     }
@@ -697,6 +781,20 @@ void ImageViewer::resizeEvent(QResizeEvent *event)
     // explicit zoom (wheel/keyboard/double-click) opts out of re-fitting.
     if (m_fitMode && m_frame && m_frame->isValid())
         fitToWidget();
+    else if (m_fitMode && !m_provisionalImage.isNull())
+    {
+        m_view.screenW = width();
+        m_view.screenH = height();
+        const QSize source = m_provisionalSourceSize.isValid() ? m_provisionalSourceSize
+                                                                : m_provisionalImage.size();
+        const FitPolicy fitPolicy =
+            isFullScreen() || property("mviewerFullscreenRequested").toBool()
+                ? FitPolicy::MaximizeClient
+                : FitPolicy::Comfortable;
+        m_view.fit(source.width(), source.height(), fitPolicy);
+        advanceViewGeneration();
+        emitZoom();
+    }
 }
 
 QRect ImageViewer::selectedRegion() const
@@ -716,6 +814,7 @@ void ImageViewer::setOverlayMode(mviewer::OverlayMode m)
     if (m_overlayMode == m)
         return;
     m_overlayMode = m;
+    m_overlayCache.clear();
     QSettings s;
     s.setValue("defaultAnalysisOverlay", static_cast<int>(m));
     update();
@@ -727,6 +826,7 @@ void ImageViewer::setZebraThreshold(int t)
     if (m_zebraThreshold == t)
         return;
     m_zebraThreshold = t;
+    m_overlayCache.clear();
     // Only need a repaint when an overlay is currently visible.
     if (m_overlayMode != mviewer::OverlayMode::None)
         update();

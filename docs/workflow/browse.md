@@ -37,6 +37,20 @@
 - Directory changes publish an empty Browse shell immediately; only the
   ThumbnailPanel worker enumerates, sorts and filters the directory.
 
+### M38 render-pipeline contract
+
+- A double-click with a ready gallery thumbnail shows that display-only image
+  immediately in fullscreen; a cold miss shows a lightweight loading state and
+  never performs a synchronous thumbnail decode in the UI thread.
+- FullImage decode is cancellable/latest-wins. Visible tiles transition through
+  Missing → Pending → Ready, while tile scaling and ICC display conversion run
+  on DecodePool and the UI only uploads/draws Ready payloads.
+- Continuous zoom and pan reuse canonical LOD tiles. DPR is part of the render
+  resolution policy, the byte-budgeted cache converges after storms, and stale
+  generations cannot overwrite the current image.
+- Copy Image and Save As export the current display materialization; analysis
+  pixels remain unchanged.
+
 ## 3. Acceptance criteria
 
 | ID | Criterion | Target |

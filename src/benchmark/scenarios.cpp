@@ -733,8 +733,8 @@ ScenarioResult scenarioHundredMpTiles()
     TileCache cache;
     cache.maxTiles = 512;
 
-    auto decode = [&](const std::string & /*id*/, int sx, int sy, int sw, int sh, int /*dw*/,
-                      int /*dh*/) -> ImageData
+    auto decode = [&](const std::string & /*id*/, int sx, int sy, int sw, int sh, int dw,
+                      int dh) -> ImageData
     {
         if (sx < 0)
             sx = 0;
@@ -746,19 +746,26 @@ ScenarioResult scenarioHundredMpTiles()
             sh = kH - sy;
         if (sw <= 0 || sh <= 0)
             return ImageData{};
-        ImageData tile = makeImageData(sw, sh, PixelFormat::RGBA32);
+        // Materialize the canonical output resolution requested by TileCache.
+        // This keeps the synthetic benchmark aligned with the byte-budgeted
+        // render path instead of returning the full source region.
+        if (dw <= 0 || dh <= 0)
+            return ImageData{};
+        ImageData tile = makeImageData(dw, dh, PixelFormat::RGBA32);
         if (tile.isNull() || !tile.buffer)
             return ImageData{};
         // Deterministic procedural fill — cheap stand-in for a region decode.
         auto &buf = *tile.buffer;
-        for (int y = 0; y < sh; ++y)
+        for (int y = 0; y < dh; ++y)
         {
-            for (int x = 0; x < sw; ++x)
+            for (int x = 0; x < dw; ++x)
             {
-                const size_t i = (static_cast<size_t>(y) * sw + x) * 4;
-                buf[i + 0] = static_cast<uint8_t>((sx + x) & 0xFF);
-                buf[i + 1] = static_cast<uint8_t>((sy + y) & 0xFF);
-                buf[i + 2] = static_cast<uint8_t>(((sx + x) ^ (sy + y)) & 0xFF);
+                const int sourceX = sx + (x * sw) / dw;
+                const int sourceY = sy + (y * sh) / dh;
+                const size_t i = (static_cast<size_t>(y) * dw + x) * 4;
+                buf[i + 0] = static_cast<uint8_t>(sourceX & 0xFF);
+                buf[i + 1] = static_cast<uint8_t>(sourceY & 0xFF);
+                buf[i + 2] = static_cast<uint8_t>((sourceX ^ sourceY) & 0xFF);
                 buf[i + 3] = 255;
             }
         }

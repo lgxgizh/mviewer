@@ -8,7 +8,8 @@
 > `docs/review/M24_PERFORMANCE_2026-08-05.md`,
 > `docs/review/M24_FINAL_VERDICT_2026-08-05.md`,
 > `docs/review/M35_COMPARE_BROWSE_CONVERGENCE_2026-08-13.md`,
-> `docs/review/M36_BROWSE_HOTPATH_DISPLAY_FIDELITY_2026-08-13.md` and
+> `docs/review/M36_BROWSE_HOTPATH_DISPLAY_FIDELITY_2026-08-13.md`,
+> `docs/review/M38_VIEWER_RENDER_CONVERGENCE_2026-08-14.md` and
 > `.\build.ps1 Test`.
 
 ## Positioning
@@ -62,6 +63,23 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   the same display materializer.
 - `build.ps1 Test` propagates the original non-zero CTest exit code; CTest
   includes `build_test_exit_gate` to prevent warning-only regressions.
+
+### M38 ImageViewer render pipeline closure (2026-08-14)
+
+- Viewer paint no longer materializes missing tiles synchronously. A dedicated
+  async tile manager de-duplicates canonical requests, tracks image/view
+  generations, drops stale results and marshals one coalesced repaint per burst.
+- TileKey is stable across continuous zoom and includes a render-resolution/DPR
+  policy. TileCache now tracks bytes and applies an LRU byte budget with hit,
+  miss and eviction diagnostics.
+- Browse double-click can present the ready gallery thumbnail immediately while
+  cancellable FullImage decode and DecodePool tile scaling/ICC conversion run in
+  the background. Analysis still consumes only the FullImage frame.
+- Fullscreen max-fit, format-aware Copy Color, display-correct Copy/Save and
+  derived overlay caching are covered by focused deterministic tests.
+
+The full M38 evidence, including the canonical gate result and remaining
+environment blockers, is recorded in `docs/review/M38_VIEWER_RENDER_CONVERGENCE_2026-08-14.md`.
 
 ### M36 Browse hot path & display fidelity closure (2026-08-13)
 

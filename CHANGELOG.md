@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased] — M38 ImageViewer render pipeline closure
+
+### Fixed
+
+- ImageViewer now presents warm Browse thumbnails immediately, then upgrades
+  through cancellable FullImage decode and asynchronous canonical tiles without
+  synchronous tile scaling or ICC conversion in `paintEvent()`.
+- Tile requests use Missing/Pending/Ready lifecycle, de-duplication and image/
+  view generations so stale A→B→A, zoom and pan work is discarded safely.
+- Tile identity includes a stable render-resolution/DPR policy and TileCache
+  enforces a byte budget with observable hit/miss/eviction diagnostics.
+- Fullscreen Fit uses the complete client area while preserving aspect ratio;
+  Copy Image, Save As and Copy Color follow the display color contract.
+- Live overlay tiles use a bounded derived cache instead of recomputing on every
+  GUI paint.
+
 All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/), and this project adheres to
 [Semantic Versioning](https://semver.org/).

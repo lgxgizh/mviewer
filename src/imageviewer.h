@@ -3,6 +3,7 @@
 #include "core/analysis/ImageOverlay.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageRepository.h"
+#include "core/render/AsyncTileRequestManager.h"
 #include "core/render/TileCache.h"
 #include "core/render/TileGrid.h"
 #include "core/render/Viewport.h"
@@ -50,6 +51,10 @@ class ImageViewer : public QOpenGLWidget
     }
     // Open from Browse with the first native presentation already fullscreen.
     void showBrowseFullscreen();
+    // Display-only warm thumbnail used while the full frame and first visible
+    // tiles arrive. It is never used as an analysis/ROI source.
+    void setProvisionalImage(const QString &path, const QImage &image,
+                             const QSize &sourceSize = QSize());
     void setImage(const QString &path);
 
     // P1-7: serialize/restore the current view transform (scale + pan). Used to
@@ -131,6 +136,7 @@ class ImageViewer : public QOpenGLWidget
 
   private:
     void emitZoom();
+    void advanceViewGeneration();
     void fitToWidget();
     void preloadNeighbors(const QString &path);
     void drawHistogram(QPainter &painter) const;
@@ -149,9 +155,7 @@ class ImageViewer : public QOpenGLWidget
     // `path` and cancel all others, so a navigation back to a preloaded
     // neighbor can be promoted to the foreground decode without re-queuing.
     ImageRepository::AsyncRequestHandle takeMatchingPreload(const QString &path);
-    // M28 P1-02: build the display QImage on demand (user-triggered copy/save
-    // only) — the paint path renders from the ImageFrame tiles and never
-    // materializes a full-size QPixmap on the UI thread.
+    // Build the display QImage on demand for explicit copy/save actions only.
     QImage currentImage() const;
 
     QString m_currentPath;
@@ -161,6 +165,7 @@ class ImageViewer : public QOpenGLWidget
     // from an older request can never overwrite the current image, even for
     // the same path (A -> B -> A where the first A completes last).
     uint64_t m_requestGen = 0;
+    uint64_t m_viewGeneration = 0;
 
     // M29: cancellable request handles. m_foregroundRequest tracks the current
     // setImage() decode; m_neighborPreloads tracks at most the previous/next
@@ -192,6 +197,18 @@ class ImageViewer : public QOpenGLWidget
     // views cheap. No decode happens in the Widget — the cache's decode
     // callback calls RenderEngine (core/), never QWidget.
     TileCache m_tileCache;
+    AsyncTileRequestManager m_tileRequests;
+    // Derived overlay tiles are separate from the display base cache and are
+    // invalidated whenever the overlay policy changes.
+    TileCache m_overlayCache;
+
+    // Warm thumbnail shown while the full frame and first visible tiles arrive.
+    // This display-only surface is never exposed as m_frame.
+    QString m_provisionalPath;
+    QImage m_provisionalImage;
+    QSize m_provisionalSourceSize;
+    bool m_tileRepaintQueued = false;
+    bool m_loading = false;
 
     // M16 / Stage A: GPU upload tier (opt-in, capability-gated). When enabled
     // (real GL context + MVIEWER_GPU=1), decoded tiles are uploaded to

@@ -123,15 +123,14 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
             const int iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
             if (ix >= 0 && ix < iw && iy >= 0 && iy < ih)
             {
-                const ImageBuffer view = m_frame->pixels().view();
-                if (view.channelsPerPixel() >= 3)
+                const PixelRGBA px = samplePixel(m_frame->pixels(), ix, iy);
+                if (px.valid)
                 {
-                    const uint8_t *p = view.data + static_cast<size_t>(iy) * view.stride() +
-                                       static_cast<size_t>(ix) * view.channelsPerPixel();
-                    QApplication::clipboard()->setText(QString("#%1%2%3")
-                                                           .arg(p[0], 2, 16, QChar('0'))
-                                                           .arg(p[1], 2, 16, QChar('0'))
-                                                           .arg(p[2], 2, 16, QChar('0')));
+                    QApplication::clipboard()->setText(
+                        QString("#%1%2%3")
+                            .arg(px.r, 2, 16, QChar('0'))
+                            .arg(px.g, 2, 16, QChar('0'))
+                            .arg(px.b, 2, 16, QChar('0')));
                 }
             }
         }

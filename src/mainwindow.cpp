@@ -389,6 +389,15 @@ void MainWindow::onImageOpen(const QString &path)
         if (!sequence.contains(path))
             sequence = {path};
         m_imageViewer->setBrowseSequence(sequence);
+        if (m_thumbnailPanel)
+        {
+            const QPixmap warm = m_thumbnailPanel->thumbReady(path);
+            QSize knownSize;
+            if (const auto *entry = m_thumbnailPanel->entryForPath(path))
+                knownSize = QSize(entry->width, entry->height);
+            if (!warm.isNull())
+                m_imageViewer->setProvisionalImage(path, warm.toImage(), knownSize);
+        }
         m_imageViewer->setImage(path); // async; imageReady() feeds AnalysisPanel
     }
 
@@ -431,7 +440,11 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     // Only decode into the viewer when it is actually on screen — avoids a
     // second decode per thumbnail while browsing with the viewer closed.
     if (!m_imageViewer->isHidden())
+    {
+        if (!warmThumbnail.isNull())
+            m_imageViewer->setProvisionalImage(path, warmThumbnail.toImage(), knownSourceSize);
         m_imageViewer->setImage(path);
+    }
 
     // Metadata presentation is memory-first. Hidden consumers only record the
     // identity; visible consumers share one background single-flight request.

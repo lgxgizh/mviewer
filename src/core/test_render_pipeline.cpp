@@ -38,6 +38,32 @@ static void testViewportFit()
     CHECK(std::abs(vp.offsetY) < 1e-6, "fit centers vertically (offsetY ~0)");
 }
 
+static void testFullscreenFitGeometry()
+{
+    printf("\n[Viewport::fullscreen fit geometry]\n");
+    fflush(stdout);
+    struct Case
+    {
+        int w;
+        int h;
+    };
+    for (const auto &c : {Case{1600, 900}, Case{900, 1600}, Case{1000, 1000},
+                          Case{2400, 400}, Case{400, 2400}})
+    {
+        Viewport vp(1200, 800, 1.0, 0.0, 0.0);
+        vp.fit(c.w, c.h, FitPolicy::MaximizeClient);
+        const double dw = c.w * vp.scale;
+        const double dh = c.h * vp.scale;
+        CHECK(dw <= vp.screenW + 1e-6 && dh <= vp.screenH + 1e-6,
+              "max-fit stays inside the fullscreen client area");
+        CHECK(std::abs(dw / dh - static_cast<double>(c.w) / c.h) < 1e-9,
+              "max-fit preserves the source aspect ratio");
+        CHECK(std::abs(vp.offsetX - (vp.screenW - dw) / 2.0) < 1e-9 &&
+                  std::abs(vp.offsetY - (vp.screenH - dh) / 2.0) < 1e-9,
+              "max-fit centers the image");
+    }
+}
+
 static void testViewportZoomAt()
 {
     printf("\n[Viewport::zoomAt]\n");
@@ -120,6 +146,7 @@ int main()
     printf("=== Render Pipeline foundation tests (M7) ===\n");
     fflush(stdout);
     testViewportFit();
+    testFullscreenFitGeometry();
     testViewportZoomAt();
     testViewportVisibleRect();
     testTileGrid();

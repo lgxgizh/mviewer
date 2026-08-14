@@ -14,6 +14,18 @@
 // into one bitmap; the Viewport decides which source tiles are on screen and
 // the Renderer draws only those.
 
+enum class FitPolicy
+{
+    // Browse fullscreen presentation: use every available client pixel in the
+    // limiting dimension while preserving the source aspect ratio.
+    MaximizeClient,
+    // Normal-window presentation: retain a small visual breathing room.
+    Comfortable,
+};
+
+inline constexpr double kMaxFitMargin = 1.0;
+inline constexpr double kComfortFitMargin = 0.95;
+
 struct Viewport
 {
     // Screen-space size of the viewport (widget client area), in pixels.
@@ -34,7 +46,15 @@ struct Viewport
     }
 
     // Fit an (iw x ih) image centered inside the screen with `margin` padding.
-    void fit(int imageW, int imageH, double margin = 0.95)
+    void fit(int imageW, int imageH, FitPolicy policy)
+    {
+        fit(imageW, imageH,
+            policy == FitPolicy::MaximizeClient ? kMaxFitMargin : kComfortFitMargin);
+    }
+
+    // Numeric overload retained for core callers/tests that intentionally
+    // specify a custom margin. UI presentation code should use FitPolicy.
+    void fit(int imageW, int imageH, double margin = kComfortFitMargin)
     {
         if (imageW <= 0 || imageH <= 0 || screenW <= 0 || screenH <= 0)
         {
