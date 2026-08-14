@@ -225,7 +225,10 @@ jobs:
           if (-not $b) { Write-Host "::error:: benchmark binary not found"; exit 1 }
           # --enforce loads the committed baseline and enables the ±10% regression
           # diff (main.cpp: requires --enforce AND --regression to diff baseline).
-          & $b.FullName --enforce --regression --budget benchmark/performance_budget.json 2>&1 | Tee-Object -FilePath benchmark_regression.txt
+          # Nightly compares against the committed CI-profile baseline. The PR
+          # gate uses --profile auto, while this trend job remains stable when
+          # the hosted runner's exposed core count changes.
+          & $b.FullName --enforce --regression --profile ci --budget benchmark/performance_budget.json 2>&1 | Tee-Object -FilePath benchmark_regression.txt
         # Exit non-zero on >10% regression -> alerts the nightly run.
         # (golden_image is already verified inside `build.ps1 Test` above.)
 

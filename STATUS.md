@@ -58,6 +58,10 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   JSON and HTML are escaped/parseable and committed atomically; directory
   enumeration is worker-side rather than UI-side.
 - Fullscreen requested state is safe across repeated F/F11 transitions.
+- Performance enforcement now uses an explicit CPU-aware profile: local `auto`
+  adapts CPU-sensitive latency/throughput budgets on <=4 logical-core hosts,
+  while nightly regression remains pinned to the `ci` profile. CTest leaves one
+  logical core available and benchmark tests run serially.
 - M39 focused and lifecycle suites pass. The default managed-desktop gate is
   environment-blocked by seven AppConfig/cache/repository/temp write tests; an
   explicit writable-runtime run reached 87/88 with one native QSettings

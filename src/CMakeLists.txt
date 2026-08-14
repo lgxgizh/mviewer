@@ -1342,7 +1342,14 @@ add_test(NAME bench_smoke COMMAND mviewer_bench --smoke)
 # invocation against the committed baseline.
 add_test(NAME bench_enforce
     COMMAND mviewer_bench --enforce
+            --profile auto
             --budget ${CMAKE_SOURCE_DIR}/benchmark/performance_budget.json)
+
+# Benchmark timings must not share CPU time with other CTest cases. The
+# profile adapts the budget for small local machines; RUN_SERIAL keeps the
+# enforced measurement itself free from test-suite contention. The smoke test
+# remains parallelizable because it only proves the harness can execute.
+set_tests_properties(bench_enforce PROPERTIES RUN_SERIAL TRUE)
 
 # ─── Format target ──────────────────────────────────────────────────────────
 

@@ -19,6 +19,7 @@
 #include <iostream>
 #include <set>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -31,6 +32,7 @@
 //                                 exit !=0 on any budget violation (CI hard gate)
 //   mviewer_bench --regression    ALSO diff against perf_baseline.json; >10% regression -> fail
 //   mviewer_bench --budget <file> load performance_budget.json (data-driven gates)
+//   mviewer_bench --profile <name> hardware profile: auto, base, low-core, or ci
 //   mviewer_bench --baseline <f>  explicit baseline JSON (implies --regression)
 //   mviewer_bench --corpus-size N generate N images per format
 //   mviewer_bench --scale          scaling tiers 100/1000/5000: decode fps + peak
@@ -45,18 +47,38 @@
 //
 // Gate model (product力 #2 "稳得住"):
 //   --enforce applies HARD budgets to the scenarios in performance_budget.json
-//   ["scenario_map"] (B1-B9 + B11-B15). These are generous, cross-machine-stable
-//   absolute caps, so the mandatory CI gate (ci.yml `test` job via the `bench_enforce` ctest:
-//   `--enforce --budget`) never fails on hardware jitter. --regression (or --baseline) enables the
-//   SEPARATE, noisier baseline-diff; it is run by nightly.yml, NOT the mandatory
-//   PR gate, because the committed baseline is machine-specific. B0/B10/TRACE are
-//   report-only and only regression-checked.
+//   ["scenario_map"] (B1-B9 + B11-B15). The default `auto` profile applies a
+//   small CPU-only adjustment on <=4 logical-core hosts; `base`/`ci` keep the
+//   cross-machine-stable caps. --regression (or --baseline) enables the
+//   SEPARATE, noisier baseline-diff; it is only comparable within the same
+//   profile. B0/B10/TRACE are report-only and only regression-checked.
 
 namespace
 {
+struct HardwareProfile
+{
+    std::string name;
+    double latencyMultiplier = 1.0;
+    double throughputMultiplier = 1.0;
+};
+
 struct Budget
 {
     bool enforce = false;
+    unsigned logicalCores = 1;
+    unsigned autoLowCoreMax = 4;
+    std::string profileName = "base";
+    std::unordered_map<std::string, HardwareProfile> profiles = {
+        {"base", {"base", 1.0, 1.0}},
+        {"low-core", {"low-core", 1.25, 0.80}},
+        {"ci", {"ci", 1.0, 1.0}},
+    };
+    std::set<std::string> scalableLatencyMetrics = {
+        "first_thumbnail_ms", "decode_p50_ms_jpeg", "switch_warm_p50_ms",
+        "image_switch_ms",    "decode_4k_jpeg_ms",  "decode_8k_ms",
+        "first_frame_latency_ms", "zoom_frame_ms_b15",
+    };
+    std::set<std::string> scalableThroughputMetrics = {"thumbnails_per_sec"};
 
     // metric name -> hard limit. Lower-is-better unless the metric is listed in
     // higherIsBetter(). Loaded from performance_budget.json["budgets"]; the
@@ -95,6 +117,31 @@ struct Budget
         return s;
     }
 
+    bool configureProfile(const std::string &requested)
+    {
+        const unsigned detected = std::thread::hardware_concurrency();
+        logicalCores = detected == 0 ? 1 : detected;
+
+        if (requested == "auto")
+            profileName = logicalCores <= autoLowCoreMax ? "low-core" : "base";
+        else
+            profileName = requested;
+
+        return profiles.find(profileName) != profiles.end();
+    }
+
+    double effectiveLimit(const std::string &metric, double limit) const
+    {
+        const auto profile = profiles.find(profileName);
+        if (profile == profiles.end())
+            return limit;
+        if (scalableLatencyMetrics.count(metric) > 0)
+            return limit * profile->second.latencyMultiplier;
+        if (scalableThroughputMetrics.count(metric) > 0)
+            return limit * profile->second.throughputMultiplier;
+        return limit;
+    }
+
     // True if `scenario` is part of the hard-gated set.
     bool appliesTo(const std::string &scenario) const
     {
@@ -113,7 +160,8 @@ struct Budget
         if (lit == limits.end())
             return true;
         const bool hib = higherIsBetter().count(it->second) > 0;
-        return hib ? (measured >= lit->second) : (measured <= lit->second);
+        const double limit = effectiveLimit(it->second, lit->second);
+        return hib ? (measured >= limit) : (measured <= limit);
     }
 };
 
@@ -151,6 +199,41 @@ bool loadBudgetJson(const std::string &path, Budget &b)
         if (it.value().isString())
             b.scenarioMap[it.key().toStdString()] = it.value().toString().toStdString();
     }
+
+    const QJsonObject scaling = root.value("hardware_scaling").toObject();
+    if (scaling.value("auto_low_core_max").isDouble())
+        b.autoLowCoreMax = static_cast<unsigned>(
+            std::max(1.0, scaling.value("auto_low_core_max").toDouble()));
+
+    const QJsonArray latencyMetrics = scaling.value("latency_metrics").toArray();
+    if (!latencyMetrics.isEmpty())
+        b.scalableLatencyMetrics.clear();
+    for (const auto &value : latencyMetrics)
+    {
+        if (value.isString())
+            b.scalableLatencyMetrics.insert(value.toString().toStdString());
+    }
+
+    const QJsonArray throughputMetrics = scaling.value("throughput_metrics").toArray();
+    if (!throughputMetrics.isEmpty())
+        b.scalableThroughputMetrics.clear();
+    for (const auto &value : throughputMetrics)
+    {
+        if (value.isString())
+            b.scalableThroughputMetrics.insert(value.toString().toStdString());
+    }
+
+    const QJsonObject profiles = scaling.value("profiles").toObject();
+    for (auto it = profiles.begin(); it != profiles.end(); ++it)
+    {
+        const QJsonObject profile = it.value().toObject();
+        HardwareProfile parsed{it.key().toStdString(), 1.0, 1.0};
+        if (profile.value("latency_multiplier").isDouble())
+            parsed.latencyMultiplier = profile.value("latency_multiplier").toDouble();
+        if (profile.value("throughput_multiplier").isDouble())
+            parsed.throughputMultiplier = profile.value("throughput_multiplier").toDouble();
+        b.profiles[it.key().toStdString()] = parsed;
+    }
     return true;
 }
 
@@ -183,9 +266,22 @@ std::unordered_map<std::string, double> loadBaselineJson(const std::string &path
     return m;
 }
 
+std::string loadBaselineProfile(const std::string &path)
+{
+    QFile f(QString::fromStdString(path));
+    if (!f.open(QIODevice::ReadOnly))
+        return {};
+    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    f.close();
+    if (!doc.isObject())
+        return {};
+    return doc.object().value("hardware_profile").toString().toStdString();
+}
+
 // Write results to a JSON file.
 void writeResultsJson(const std::string &path,
-                      const std::vector<mviewer::bench::ScenarioResult> &results)
+                      const std::vector<mviewer::bench::ScenarioResult> &results,
+                      const Budget &budget)
 {
     QJsonArray arr;
     for (const auto &r : results)
@@ -199,6 +295,8 @@ void writeResultsJson(const std::string &path,
     }
     QJsonObject root;
     root.insert("results", arr);
+    root.insert("hardware_profile", QString::fromStdString(budget.profileName));
+    root.insert("logical_cores", static_cast<int>(budget.logicalCores));
     root.insert("timestamp", QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
 
     QJsonDocument doc(root);
@@ -327,6 +425,7 @@ int main(int argc, char **argv)
     std::string emitFormat = "all"; // P3: "all" or "jpeg" (10000-jpeg large tier)
     std::string traceFile;          // M13.5: if set, flush a Chrome trace JSON at exit
     std::string budgetFile;         // M13.3: performance_budget.json (data-driven gates)
+    std::string profileArg = "auto"; // CPU-aware budget profile; CI may pin this to `ci`
     std::string corpusDir;          // P3: if set, reuse an existing on-disk corpus dir
     std::string scenariosArg;       // P3: comma-separated scenario ids to run (e.g. "B1,B2,B8")
     std::string resultsFile;        // M14: if set, write JSON results (for regression tracking)
@@ -345,6 +444,8 @@ int main(int argc, char **argv)
             regression = true;
         else if (a == "--budget" && i + 1 < argc)
             budgetFile = argv[++i];
+        else if (a == "--profile" && i + 1 < argc)
+            profileArg = argv[++i];
         else if (a == "--smoke")
         {
             smoke = true;
@@ -410,14 +511,23 @@ int main(int argc, char **argv)
     std::cout << "=== MViewer benchmark (M10) ===" << '\n';
     if (smoke)
         std::cout << "[smoke] ";
-    std::cout << "corpus-size=" << corpusSize << " enforce=" << (b.enforce ? "yes" : "no");
+    bool budgetLoaded = false;
     if (!budgetFile.empty())
     {
-        if (loadBudgetJson(budgetFile, b))
-            std::cout << " budget=" << budgetFile;
-        else
-            std::cout << " budget=LOAD-FAILED(" << budgetFile << ")";
+        budgetLoaded = loadBudgetJson(budgetFile, b);
+        if (!budgetLoaded)
+            std::cout << "budget=LOAD-FAILED(" << budgetFile << ")" << '\n';
     }
+    if (!b.configureProfile(profileArg))
+    {
+        std::cerr << "Unknown hardware profile: " << profileArg
+                  << " (expected auto, base, low-core, or ci)\n";
+        return 2;
+    }
+    std::cout << "corpus-size=" << corpusSize << " enforce=" << (b.enforce ? "yes" : "no")
+              << " logical-cores=" << b.logicalCores << " profile=" << b.profileName;
+    if (budgetLoaded)
+        std::cout << " budget=" << budgetFile;
     std::cout << '\n';
 
     // P3 dataset emission mode: generate the corpus into emitData and stop
@@ -461,7 +571,7 @@ int main(int argc, char **argv)
 
     // M14: write JSON results if --results given.
     if (!resultsFile.empty())
-        writeResultsJson(resultsFile, results);
+        writeResultsJson(resultsFile, results, b);
 
     // M15: auto-baseline — when --enforce + --regression are on but no --baseline
     // is specified, attempt to load benchmark/perf_baseline.json from cwd. This
@@ -490,8 +600,19 @@ int main(int argc, char **argv)
     std::vector<std::string> regressionIssues; // { "B2: +12.3%", ... }
     if (!baselineFile.empty())
     {
-        auto baseline = loadBaselineJson(baselineFile);
-        if (!baseline.empty())
+        const std::string baselineProfile = loadBaselineProfile(baselineFile);
+        if (baselineProfile.empty())
+        {
+            std::cout << "Warning: baseline has no hardware_profile; skipping regression "
+                         "comparison.\n";
+        }
+        else if (baselineProfile != b.profileName)
+        {
+            std::cout << "Warning: baseline profile '" << baselineProfile
+                      << "' differs from active profile '" << b.profileName
+                      << "'; skipping regression comparison.\n";
+        }
+        else if (auto baseline = loadBaselineJson(baselineFile); !baseline.empty())
         {
             std::cout << "=== REGRESSION CHECK ===" << '\n';
             for (const auto &r : results)
@@ -501,20 +622,23 @@ int main(int argc, char **argv)
                 if (it != baseline.end() && it->second > 0.0)
                 {
                     double delta = ((r.value - it->second) / it->second) * 100.0;
+                    const bool higherIsBetter = Budget::higherIsBetter().count(r.metric) > 0;
+                    const bool regression = higherIsBetter ? delta < -10.0 : delta > 10.0;
+                    const bool warning = higherIsBetter ? delta < -5.0 : delta > 5.0;
                     const char *flag = "";
-                    if (delta > 10.0)
+                    if (regression)
                     {
                         flag = " *** REGRESSION >10% ***";
                         allPass = false;
                     }
-                    else if (delta > 5.0)
+                    else if (warning)
                     {
                         flag = " * WARN >5%";
                     }
                     std::cout << "  " << r.name << ": current=" << r.value
                               << " baseline=" << it->second << " delta=" << delta << "%" << flag
                               << '\n';
-                    if (delta > 10.0)
+                    if (regression)
                     {
                         char buf[128];
                         std::snprintf(buf, sizeof(buf), "%s: %+.1f%% (%.3f -> %.3f)",

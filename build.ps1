@@ -188,7 +188,14 @@ switch ($Task) {
         # working directory, so an explicit PATH entry is required.
         $env:PATH = "$qtPath\bin" + [System.IO.Path]::PathSeparator + $env:PATH
         $env:QT_QPA_PLATFORM = 'offscreen'
-        ctest --output-on-failure --output-junit test-results.xml -j4
+        $logicalCores = [Environment]::ProcessorCount
+        # Leave one logical core for the OS and Qt helper threads on small
+        # machines, while retaining the historical four-way cap on larger
+        # hosts. Benchmark tests are RUN_SERIAL in CMake, so their measurements
+        # are not polluted by other CTest cases.
+        $testJobs = [Math]::Max(1, [Math]::Min(4, $logicalCores - 1))
+        Write-Host "[Test] CTest parallelism: -j$testJobs (logical cores=$logicalCores)" -ForegroundColor Cyan
+        ctest --output-on-failure --output-junit test-results.xml "-j$testJobs"
         $testExitCode = $LASTEXITCODE
         if ($testExitCode -ne 0) {
             Write-Warning "Tests failed (CTest exit code $testExitCode)"

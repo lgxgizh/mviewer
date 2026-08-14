@@ -263,7 +263,10 @@ jobs:
           $env:QT_QPA_PLATFORM = "offscreen"
           $env:PATH = "$env:QT_ROOT_DIR\bin" + [System.IO.Path]::PathSeparator + $env:PATH
           cd build_msvc
-          ctest --output-on-failure --output-junit test-results.xml -j4
+          $logicalCores = [Environment]::ProcessorCount
+          $testJobs = [Math]::Max(1, [Math]::Min(4, $logicalCores - 1))
+          Write-Host "CTest parallelism: -j$testJobs (logical cores=$logicalCores)"
+          ctest --output-on-failure --output-junit test-results.xml "-j$testJobs"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload test report

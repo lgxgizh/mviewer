@@ -12,7 +12,7 @@ if (-not (Test-Path -LiteralPath $buildScript)) {
 }
 
 $content = Get-Content -Raw -LiteralPath $buildScript
-$contract = '(?s)ctest\s+--output-on-failure\s+--output-junit\s+test-results\.xml\s+-j4\s*' +
+$contract = '(?s)ctest\s+--output-on-failure\s+--output-junit\s+test-results\.xml\s+"-j\$testJobs"\s*' +
             '\$testExitCode\s*=\s*\$LASTEXITCODE\s*' +
             'if\s*\(\s*\$testExitCode\s+-ne\s+0\s*\)\s*\{[^}]*' +
             'exit\s+\$testExitCode\s*\}'

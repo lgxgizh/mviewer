@@ -1,8 +1,9 @@
 {
   "_comment": "MViewer performance baseline — committed known-good numbers for THIS machine. perf-gate compares current runs against this; regression >10% fails PR. Recalibrate when hardware changes. RECALIBRATED 2026-07-28 on the dev machine (prior baseline a930682 was captured on a faster host, so cross-machine numbers naturally differed and tripped the gate). New B11-B15 named scenarios (review '性能回归' asks) added. Noisy metrics (B11/B14/B15) are seeded at a padded value so run-to-run jitter stays under the 10% gate.",
-  "schema_version": 1,
+  "schema_version": 2,
   "date": "2026-07-28",
   "commit": "post-m22-named-scenarios",
+  "hardware_profile": "ci",
   "metrics": {
     "B0_cold_start_to_thumbnail_ms": 9.448,
     "B1_qt_event_loop_probe_ms": 0.0139,

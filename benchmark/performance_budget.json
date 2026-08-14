@@ -1,6 +1,6 @@
 {
   "_comment": "MViewer performance budget — single source of truth for `mviewer_bench --enforce --budget`. Each entry in `scenario_map` (B1-B9 + B11-B15) is a HARD gate: if the scenario's measured metric exceeds its `budgets` limit, the run FAILS (exit 1) and the PR is blocked. Lower-is-better for all latency/memory metrics; cache_hit_rate/cache_hit_ratio/thumbnails_per_sec/baseline_return_ok are higher-is-better (see mviewer::bench::Budget::higherIsBetter in src/benchmark/main.cpp). B0/B10/TRACE are intentionally report-only; B10 is still +/-10% regression-checked when --regression is given. The limits are meant to be generous, cross-machine-STABLE absolute caps so the mandatory CI hard gate (perf-gate.yml) stays green across hardware. NOTE (2026-07-29 calibration): the windows-2022 CI runner is ~6-8x slower than the dev box for decode/thumbnail work (measured B3 p50=134.8ms vs dev 16.4ms; B4=9.8 thumbs/s vs dev 62.4/s). B3 and B4 were raised to 250ms / 7 thumbs-per-sec so the gate is actually CI-stable; on the dev box these are still ~15x / ~9x under budget, so a true >=2x regression is still caught. Regression-vs-baseline (perf_baseline.json) is a SEPARATE, noisier axis run via --regression in nightly.yml, NOT part of the mandatory CI gate.",
-  "schema_version": 1,
+  "schema_version": 2,
   "budgets": {
     "qt_event_loop_probe_ms": 50,
     "first_thumbnail_ms": 100,
@@ -37,5 +37,35 @@
     "baseline_file": "benchmark/perf_baseline.json",
     "max_regression_pct": 10,
     "fail_on_regression": true
+  },
+  "hardware_scaling": {
+    "auto_low_core_max": 4,
+    "latency_metrics": [
+      "first_thumbnail_ms",
+      "decode_p50_ms_jpeg",
+      "switch_warm_p50_ms",
+      "image_switch_ms",
+      "decode_4k_jpeg_ms",
+      "decode_8k_ms",
+      "first_frame_latency_ms",
+      "zoom_frame_ms_b15"
+    ],
+    "throughput_metrics": [
+      "thumbnails_per_sec"
+    ],
+    "profiles": {
+      "base": {
+        "latency_multiplier": 1.0,
+        "throughput_multiplier": 1.0
+      },
+      "low-core": {
+        "latency_multiplier": 1.25,
+        "throughput_multiplier": 0.80
+      },
+      "ci": {
+        "latency_multiplier": 1.0,
+        "throughput_multiplier": 1.0
+      }
+    }
   }
 }

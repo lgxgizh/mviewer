@@ -13,6 +13,9 @@
   atomic output commits.
 - Export directory enumeration moved off the UI thread, and fullscreen exit
   clears sticky requested state.
+- Performance gates now select a low-core profile on <=4 logical-core hosts,
+  record hardware metadata, and keep nightly baseline comparisons pinned to the
+  CI profile.
 
 ## [Unreleased] — M38 ImageViewer render pipeline closure
 
