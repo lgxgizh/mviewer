@@ -1,6 +1,8 @@
 // ThumbnailPanel file operations: rename, trash, copy/move, batch export, context menu (M20 P0#3).
 #include "thumbnailpanel_p.h"
 
+#include "runtime_storage.h"
+
 void ThumbnailPanel::renameSelected()
 {
     const QStringList paths = selectedPaths();
@@ -46,9 +48,14 @@ void ThumbnailPanel::moveToTrashSelected()
     if (paths.isEmpty())
         return;
     // Qt6 removed QStandardPaths::TrashLocation; emulate a per-user trash dir.
-    const QString trashDir =
-        QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/mviewer/trash";
-    QDir().mkpath(trashDir);
+    const QString dataDir =
+        mviewer::runtime::writableDirectory(QStandardPaths::GenericDataLocation);
+    const QString trashDir = dataDir.isEmpty() ? QString() : QDir(dataDir).filePath("trash");
+    if (trashDir.isEmpty() || !QDir().mkpath(trashDir))
+    {
+        QMessageBox::warning(this, tr("删除失败"), tr("无法创建回收目录。"));
+        return;
+    }
 
     QStringList removed;
     // A-10: reversible delete via CommandStack when available.

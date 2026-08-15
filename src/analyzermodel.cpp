@@ -1,10 +1,13 @@
 #include "analyzermodel.h"
 
+#include "runtime_storage.h"
+
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSaveFile>
 #include <QStandardPaths>
 
 AnalyzerModel::AnalyzerModel(QObject *parent) : QObject(parent)
@@ -114,10 +117,8 @@ void AnalyzerModel::pushHistory(const QString &imagePath)
 
 QString AnalyzerModel::storagePath() const
 {
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    if (!dir.isEmpty())
-        QDir().mkpath(dir);
-    return dir + "/analysis_history.json";
+    return mviewer::runtime::filePath(QStandardPaths::AppDataLocation,
+                                      QStringLiteral("analysis_history.json"));
 }
 
 void AnalyzerModel::save()
@@ -140,15 +141,22 @@ void AnalyzerModel::save()
         pinned.append(p);
     root["pinned"] = pinned;
 
-    QFile f(storagePath());
+    const QString path = storagePath();
+    if (path.isEmpty())
+        return;
+    QSaveFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
         return;
-    f.write(QJsonDocument(root).toJson(QJsonDocument::Compact));
+    if (f.write(QJsonDocument(root).toJson(QJsonDocument::Compact)) >= 0)
+        (void)f.commit();
 }
 
 void AnalyzerModel::load()
 {
-    QFile f(storagePath());
+    const QString path = storagePath();
+    if (path.isEmpty())
+        return;
+    QFile f(path);
     if (!f.exists() || !f.open(QIODevice::ReadOnly))
         return;
     const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());

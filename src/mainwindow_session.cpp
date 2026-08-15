@@ -1,8 +1,21 @@
 // MainWindow workspace/project persistence, session autosave and recovery (M20 P0#1).
 #include "mainwindow_p.h"
 
+#include "runtime_storage.h"
+
 #include <QtConcurrent/QtConcurrent>
+#include <QSaveFile>
 #include <QThreadPool>
+
+namespace
+{
+
+QString appConfigFile(const QString &name)
+{
+    return mviewer::runtime::filePath(QStandardPaths::AppConfigLocation, name);
+}
+
+} // namespace
 
 void MainWindow::saveWorkspace()
 {
@@ -72,8 +85,9 @@ void MainWindow::saveWorkspace()
     }
 
     const std::string json = mviewer::core::serializeWorkspace(ws);
-    QFile f(filePath);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text) || f.write(json.c_str()) < 0)
+    QSaveFile f(filePath);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text) || f.write(QByteArray::fromStdString(json)) < 0 ||
+        !f.commit())
     {
         QMessageBox::critical(this, "保存工作区", "无法写入文件：" + filePath);
         return;
@@ -280,8 +294,9 @@ void MainWindow::saveProject()
         proj.analyzerPipeline.push_back(a);
 
     const std::string json = mviewer::core::serializeProject(proj);
-    QFile f(filePath);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text) || f.write(json.c_str()) < 0)
+    QSaveFile f(filePath);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text) || f.write(QByteArray::fromStdString(json)) < 0 ||
+        !f.commit())
     {
         QMessageBox::critical(this, "保存项目", "无法写入文件：" + filePath);
         return;
@@ -541,17 +556,18 @@ void MainWindow::closeEvent(QCloseEvent *event)
     // Normal exit: remove the crash-recovery marker so the next launch doesn't
     // prompt for a restore (only an unclean shutdown leaves it behind).
     {
-        const QString recoveryPath =
-            QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recovery.json";
+        const QString recoveryPath = appConfigFile(QStringLiteral("recovery.json"));
         QFile::remove(recoveryPath);
     }
 
     // Persist the recent-folders LRU alongside app state.
-    const QString recentPath =
-        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recent.json";
-    QFile rf(recentPath);
-    if (rf.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        rf.write(QByteArray::fromStdString(m_recent.serialize()));
+    const QString recentPath = appConfigFile(QStringLiteral("recent.json"));
+    QSaveFile rf(recentPath);
+    if (!recentPath.isEmpty() && rf.open(QIODevice::WriteOnly | QIODevice::Truncate))
+    {
+        if (rf.write(QByteArray::fromStdString(m_recent.serialize())) >= 0)
+            (void)rf.commit();
+    }
 
     // M13.5 / P1-3: persist window geometry/layout (QSettings, independent of workspace).
     {
@@ -614,6 +630,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
         // A-6.4: persist vertical proportions of the left sidebar independently.
         if (m_leftSplitter)
             settings.setValue("leftSplitterState", m_leftSplitter->saveState());
+        settings.sync();
     }
 
     QMainWindow::closeEvent(event);
@@ -624,9 +641,10 @@ void MainWindow::autosaveSession()
 {
     if (currentDir().isEmpty() && currentImagePath().isEmpty())
         return;
-    const QString recoveryPath =
-        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recovery.json";
-    QFile f(recoveryPath);
+    const QString recoveryPath = appConfigFile(QStringLiteral("recovery.json"));
+    if (recoveryPath.isEmpty())
+        return;
+    QSaveFile f(recoveryPath);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
         return;
     // Simple JSON: lastDir, lastImage, lastThumbScroll, compare (M15 P0#1)
@@ -650,15 +668,16 @@ void MainWindow::autosaveSession()
 
     obj.insert("timestamp", QDateTime::currentDateTimeUtc().toString(Qt::ISODate));
     QJsonDocument doc(obj);
-    f.write(doc.toJson());
-    f.close();
+    if (f.write(doc.toJson()) >= 0)
+        (void)f.commit();
 }
 
 // M15: crash recovery — restore session from recovery file if it exists.
 void MainWindow::restoreSessionRecovery()
 {
-    const QString recoveryPath =
-        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recovery.json";
+    const QString recoveryPath = appConfigFile(QStringLiteral("recovery.json"));
+    if (recoveryPath.isEmpty())
+        return;
     QFile f(recoveryPath);
     if (!f.exists() || !f.open(QIODevice::ReadOnly))
         return;
@@ -815,8 +834,10 @@ void MainWindow::onUpdateChecked(const mviewer::core::UpdateInfo &info, bool sil
 
 void MainWindow::maybeShowCrashReport()
 {
-    const QString dir =
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/crash-reports";
+    const QString base = mviewer::runtime::writableDirectory(QStandardPaths::AppDataLocation);
+    if (base.isEmpty())
+        return;
+    const QString dir = QDir(base).filePath(QStringLiteral("crash-reports"));
     QDir d(dir);
     if (!d.exists())
         return;

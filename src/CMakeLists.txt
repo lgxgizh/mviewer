@@ -9,6 +9,7 @@ if(MVIEWER_ENABLE_PERFETTO)
 endif()
 
 add_library(mviewer_core SHARED
+    runtime_storage.cpp
     core/EventBus.cpp
     core/image/Decoder.cpp
     core/image/decoder/QtDecoder.cpp
@@ -312,6 +313,7 @@ target_include_directories(test_appstate PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 # M19: UI models (Selection / Directory / ImageList / Workspace / Analyzer) headless unit test.
 add_executable(test_ui_models
     test_ui_models.cpp
+    runtime_storage.cpp
     selectionmodel.cpp
     directorymodel.cpp
     imagelistmodel.cpp
@@ -390,6 +392,10 @@ foreach(_t decoder cache repository scheduler metadata filesystem eventbus rende
     target_include_directories(test_${_t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_definitions(test_${_t} PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 endforeach()
+
+# M41 cache thread-affinity regression inspects the process-wide Qt SQL
+# connection registry directly.
+target_link_libraries(test_cache PRIVATE Qt6::Sql)
 
 # P5: headless release self-test gate. Runs the full application with --selftest,
 # which decodes a generated image through the real product path and exits 0/1.
@@ -1350,6 +1356,29 @@ add_test(NAME bench_enforce
 # enforced measurement itself free from test-suite contention. The smoke test
 # remains parallelizable because it only proves the harness can execute.
 set_tests_properties(bench_enforce PROPERTIES RUN_SERIAL TRUE)
+
+# M41: every CTest process gets a fresh, per-test runtime root before Qt or
+# QStandardPaths is initialized. The random configure id makes repeated
+# `build.ps1 Test` runs independent, while the test name prevents parallel
+# processes from sharing AppData, CacheLocation, SQLite, or TEMP files.
+string(RANDOM LENGTH 12 ALPHABET 0123456789abcdef MVIEWER_TEST_RUN_ID)
+set(MVIEWER_TEST_RUNTIME_BASE "${CMAKE_CURRENT_BINARY_DIR}/test-runtime/${MVIEWER_TEST_RUN_ID}")
+file(REMOVE_RECURSE "${CMAKE_CURRENT_BINARY_DIR}/test-runtime")
+get_property(MVIEWER_REGISTERED_TESTS DIRECTORY PROPERTY TESTS)
+foreach(_mviewer_test IN LISTS MVIEWER_REGISTERED_TESTS)
+    string(MAKE_C_IDENTIFIER "${_mviewer_test}" _mviewer_test_id)
+    set(_mviewer_root "${MVIEWER_TEST_RUNTIME_BASE}/${_mviewer_test_id}")
+    file(MAKE_DIRECTORY
+        "${_mviewer_root}/appdata"
+        "${_mviewer_root}/localappdata"
+        "${_mviewer_root}/temp"
+        "${_mviewer_root}/config"
+        "${_mviewer_root}/data"
+        "${_mviewer_root}/cache")
+    set_tests_properties(${_mviewer_test} PROPERTIES
+        ENVIRONMENT
+        "MVIEWER_TEST_RUNTIME_ROOT=${_mviewer_root};APPDATA=${_mviewer_root}/appdata;LOCALAPPDATA=${_mviewer_root}/localappdata;TEMP=${_mviewer_root}/temp;TMP=${_mviewer_root}/temp;XDG_CONFIG_HOME=${_mviewer_root}/config;XDG_DATA_HOME=${_mviewer_root}/data;XDG_CACHE_HOME=${_mviewer_root}/cache")
+endforeach()
 
 # ─── Format target ──────────────────────────────────────────────────────────
 

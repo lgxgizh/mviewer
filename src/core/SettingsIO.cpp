@@ -1,9 +1,10 @@
 #include "core/SettingsIO.h"
 
-#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSaveFile>
+#include <QFile>
 #include <QSettings>
 #include <QVariant>
 
@@ -119,15 +120,14 @@ bool exportSettings(const std::string &path, std::string *errorOut)
     root[QStringLiteral("settingsSchemaVersion")] = kSettingsSchemaVersion;
     root[QStringLiteral("schema")] = QStringLiteral("mviewer.settings");
 
-    QFile f(QString::fromStdString(path));
+    QSaveFile f(QString::fromStdString(path));
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         if (errorOut)
             *errorOut = "cannot open file for writing: " + path;
         return false;
     }
-    f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-    return true;
+    return f.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) >= 0 && f.commit();
 }
 
 bool importSettings(const std::string &path, std::string *errorOut)

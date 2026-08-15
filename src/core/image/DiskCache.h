@@ -2,6 +2,7 @@
 
 #include "core/image/ImageBuffer.h"
 
+#include <atomic>
 #include <mutex>
 #include <set>
 #include <string>
@@ -29,29 +30,17 @@ class DiskCache
     // Number of cached entries.
     size_t entryCount() const;
 
-    // Total bytes consumed by all cached blobs (approximate).
+    // Total bytes consumed by all cached blobs (exact payload bytes).
     size_t totalBytes() const;
 
     // Soft cap on entry count; enforced lazily on put() by dropping oldest.
-    void setMaxEntries(int n)
-    {
-        m_maxEntries = n;
-    }
-    int maxEntries() const
-    {
-        return m_maxEntries;
-    }
+    void setMaxEntries(int n);
+    int maxEntries() const;
 
     // Soft cap on total bytes consumed; enforced lazily on put() by dropping
     // oldest entries until totalBytes() falls below this value.
-    void setMaxBytes(size_t n)
-    {
-        m_maxBytes = n;
-    }
-    size_t maxBytes() const
-    {
-        return m_maxBytes;
-    }
+    void setMaxBytes(size_t n);
+    size_t maxBytes() const;
 
     // Clear all cached entries.
     void clear();
@@ -77,6 +66,7 @@ class DiskCache
 
     void ensureTable();
     void openDb();
+    void enforceLimits(const QSqlDatabase &db);
 
     // Returns a QSqlDatabase connection owned by the *current* thread, opened
     // against the same SQLite file as the main-thread template connection.
@@ -101,7 +91,7 @@ class DiskCache
     // per AGENTS.md; the .cpp still uses QMutex/QMutexLocker for the per-thread
     // connection-creation lock where Qt is allowed.
     mutable std::recursive_mutex m_mutex;
-    bool m_enabled = true;
+    std::atomic_bool m_enabled{true};
     std::string m_dbPath;
     int m_maxEntries = 100000;
     size_t m_maxBytes = 2147483648ULL; // 2 GB default cap

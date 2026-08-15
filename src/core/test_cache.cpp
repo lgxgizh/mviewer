@@ -7,8 +7,13 @@
 #include <QColor>
 #include <QCoreApplication>
 #include <QImage>
+#include <QSqlDatabase>
+#include <barrier>
+#include <atomic>
 #include <cstdio>
 #include <string>
+#include <thread>
+#include <vector>
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -124,6 +129,56 @@ static void testCacheManagerM5()
     disk.clear();
 }
 
+static void testDiskCacheThreadAffinityAndStress()
+{
+    printf("\n[DiskCache M41 — thread affinity and stress]\n");
+    DiskCache &disk = DiskCache::instance();
+    disk.clear();
+
+    constexpr int workerCount = 8;
+    constexpr int rounds = 160;
+    std::barrier start(workerCount);
+    std::atomic<int> failures{0};
+    std::vector<std::thread> workers;
+    workers.reserve(workerCount);
+
+    for (int worker = 0; worker < workerCount; ++worker)
+    {
+        workers.emplace_back(
+            [&, worker]
+            {
+                start.arrive_and_wait();
+                for (int round = 0; round < rounds; ++round)
+                {
+                    const std::string key = "m41-thread-" + std::to_string(worker) + "-" +
+                                             std::to_string(round);
+                    const QImage image(8 + (worker % 3), 8 + (round % 3), QImage::Format_RGB32);
+                    ImageData data = mvcore::fromQImage(image);
+                    disk.put(key, data);
+                    ImageData out;
+                    if (!disk.get(key, out) || out.width != image.width() ||
+                        out.height != image.height())
+                        failures.fetch_add(1, std::memory_order_relaxed);
+                }
+            });
+    }
+    for (auto &worker : workers)
+        worker.join();
+
+    CHECK(failures.load(std::memory_order_relaxed) == 0,
+          "8 workers complete 1280 put/get operations without data loss");
+
+    int workerConnections = 0;
+    for (const QString &name : QSqlDatabase::connectionNames())
+        if (name.startsWith(QStringLiteral("mviewer_disk_cache_worker_")))
+            ++workerConnections;
+    CHECK(workerConnections >= workerCount,
+          "each worker owns a distinct process-wide Qt SQL connection");
+
+    disk.clear();
+    CHECK(disk.entryCount() == 0, "stress cleanup leaves no disk-cache entries");
+}
+
 static void testCacheConfig()
 {
     printf("\n[CacheConfig]\n");
@@ -135,9 +190,12 @@ static void testCacheConfig()
     cfg.thumbnailCacheSize = 2048;
     cfg.previewCacheSize = 4096;
     cfg.viewerCacheSize = 8192;
+    cfg.diskCacheSize = 12345;
     cfg.maxDiskCacheEntries = 100;
     mgr.configure(cfg);
     CHECK(mgr.config().viewerCacheSize == 8192, "CacheConfig applied");
+    CHECK(DiskCache::instance().maxBytes() == cfg.diskCacheSize,
+          "CacheConfig diskCacheSize is wired to DiskCache maxBytes");
 
     CacheLevelStats s = mgr.levelStats(CacheLevel::FullImage);
     CHECK(s.bytes == 0, "Empty stats show 0 bytes");
@@ -216,6 +274,7 @@ int main(int argc, char **argv)
 
     testCacheManager();
     testCacheManagerM5();
+    testDiskCacheThreadAffinityAndStress();
     testCacheConfig();
     testCacheLruEviction();
 

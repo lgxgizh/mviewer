@@ -80,7 +80,7 @@ int main()
 
     // P6: capability probe is callable headless and never lies about a context.
     const bool avail = GpuTileUploader::available();
-    CHECK(avail == true || avail == false, "available() probe is callable");
+    CHECK(GpuTileUploader::available() == avail, "available() probe is stable");
     CHECK(!GpuTileUploader::enabled() || GpuTileUploader::available(),
           "enabled() implies available() (no GPU without a context)");
 

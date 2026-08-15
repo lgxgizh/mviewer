@@ -35,6 +35,7 @@
 #include "mainwindow.h"
 #include "metadataoverlay.h"
 #include "previewpanel.h"
+#include "runtime_storage.h"
 #include "searchpanel.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
@@ -87,6 +88,11 @@
 namespace
 {
 int g_failures = 0;
+
+QString appConfigFile(const QString &name)
+{
+    return mviewer::runtime::filePath(QStandardPaths::AppConfigLocation, name);
+}
 
 #define CHECK(cond, msg)                                                                           \
     do                                                                                             \
@@ -325,6 +331,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         legacySidebar.resize(300, 700);
         legacySidebar.setSizes({20, 320, 160, 20, 20, 500});
         settings.setValue("leftSplitterState", legacySidebar.saveState());
+        settings.sync();
     }
 
     std::cout << "── Workflow 1: browse ──\n";
@@ -337,8 +344,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     const QString nextPath =
         writePng(QDir(nextDir), QStringLiteral("next.png"), QColor(80, 120, 220));
 
-    const QString recoveryPath =
-        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recovery.json";
+    const QString recoveryPath = appConfigFile(QStringLiteral("recovery.json"));
     QDir().mkpath(QFileInfo(recoveryPath).absolutePath());
     QFile recoveryFile(recoveryPath);
     CHECK(recoveryFile.open(QIODevice::WriteOnly | QIODevice::Truncate),
@@ -834,6 +840,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             {
                 QSettings slideshowSettings;
                 slideshowSettings.setValue("slideshowInterval", 500);
+                slideshowSettings.sync();
                 const QString beforeSlideshow = sel->currentImage();
                 sendKey(&w, Qt::Key_S);
                 pump(1200);
@@ -1227,14 +1234,13 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     QFile::remove(nextPath);
     QDir().rmdir(nextDir);
     pump(50);
-    CHECK(true, "main window closes cleanly after the browse workflow");
+    CHECK(!w.isVisible(), "main window closes cleanly after the browse workflow");
 }
 
 void workflow3_session_restore(const QString &dirPath, const QString &imagePath)
 {
     std::cout << "—— Workflow 3: session restore ——\n";
-    const QString recoveryPath =
-        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recovery.json";
+    const QString recoveryPath = appConfigFile(QStringLiteral("recovery.json"));
     QFile::remove(recoveryPath);
     QSettings().clear();
 
@@ -1283,7 +1289,7 @@ void workflow3_session_restore(const QString &dirPath, const QString &imagePath)
 
     QFile::remove(recoveryPath);
     QSettings().clear();
-    const QString configPath = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    const QString configPath = mviewer::runtime::writableDirectory(QStandardPaths::AppConfigLocation);
     if (!configPath.isEmpty())
         QDir(configPath).removeRecursively();
 }
@@ -2532,8 +2538,7 @@ void workflow6_metadata_dual_consumer(const QString &rootDir)
     CHECK(fixturesReady, "dual-consumer fixture writes 4000 fake DNGs");
 
     // Clean session: no recovery prompt, no leftover session state.
-    QFile::remove(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) +
-                  "/recovery.json");
+    QFile::remove(appConfigFile(QStringLiteral("recovery.json")));
 
     MainWindow w;
     w.resize(1280, 800);
@@ -3057,9 +3062,10 @@ int main(int argc, char **argv)
     QStandardPaths::setTestModeEnabled(true);
     QCoreApplication::setOrganizationName("mviewer-workflow-ux-test");
     QCoreApplication::setApplicationName("mviewer-workflow-ux-test");
+    mviewer::runtime::configureSettings();
     QSettings().clear();
     {
-        const QString cfg = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+        const QString cfg = mviewer::runtime::writableDirectory(QStandardPaths::AppConfigLocation);
         if (!cfg.isEmpty())
             QDir(cfg).removeRecursively();
     }

@@ -1,5 +1,7 @@
 #include "thumbnailcache.h"
 
+#include "runtime_storage.h"
+
 #include "core/trace/Trace.h"
 
 #include <QCryptographicHash>
@@ -21,10 +23,11 @@ ThumbnailCache &ThumbnailCache::instance()
 
 QString ThumbnailCache::cacheDir() const
 {
-    const QString dir =
-        QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/thumbnails";
-    QDir().mkpath(dir);
-    return dir;
+    const QString base = mviewer::runtime::writableDirectory(QStandardPaths::CacheLocation);
+    if (base.isEmpty())
+        return QString();
+    const QString dir = QDir(base).filePath(QStringLiteral("thumbnails"));
+    return QDir().mkpath(dir) ? dir : QString();
 }
 
 QString ThumbnailCache::keyFor(const QString &path, int size)
@@ -47,7 +50,10 @@ void ThumbnailCache::ensureIndexed()
     if (m_indexed)
         return;
     m_indexed = true;
-    QFileInfoList infos = QDir(cacheDir())
+    const QString dir = cacheDir();
+    if (dir.isEmpty())
+        return;
+    QFileInfoList infos = QDir(dir)
                               .entryInfoList(QStringList{QStringLiteral("*.png")},
                                              QDir::Files | QDir::NoDotAndDotDot);
     std::sort(infos.begin(), infos.end(),
@@ -125,11 +131,14 @@ void ThumbnailCache::pruneToCap()
     // cannot be deleted (e.g. an OS lock), its bytes stay counted and the
     // entry is rotated to the back of the LRU so the pass can try younger
     // entries and still terminate: a full lap without progress ends the pass.
+    const QString dir = cacheDir();
+    if (dir.isEmpty())
+        return;
     std::size_t blockedInRow = 0;
     while (m_totalBytes > m_maxBytes && !m_lru.empty())
     {
         const QString key = m_lru.begin()->second;
-        const QString file = cacheDir() + "/" + key + ".png";
+        const QString file = QDir(dir).filePath(key + ".png");
         if (QFile::remove(file) || !QFile::exists(file))
         {
             dropEntry(key);
@@ -165,8 +174,11 @@ bool ThumbnailCache::get(const QString &path, int size, QImage &out)
     MV_TRACE_SCOPED("ThumbnailCache::get");
     QMutexLocker lock(&m_mutex);
     ensureReady();
+    const QString dir = cacheDir();
+    if (dir.isEmpty())
+        return false;
     const QString key = keyFor(path, size);
-    const QString file = cacheDir() + "/" + key + ".png";
+    const QString file = QDir(dir).filePath(key + ".png");
     if (QFile::exists(file))
     {
         // Stat before decoding so an external add/overwrite is accounted and
@@ -219,8 +231,11 @@ void ThumbnailCache::put(const QString &path, int size, const QImage &img)
         return;
     QMutexLocker lock(&m_mutex);
     ensureReady();
+    const QString dir = cacheDir();
+    if (dir.isEmpty())
+        return;
     const QString key = keyFor(path, size);
-    const QString file = cacheDir() + "/" + key + ".png";
+    const QString file = QDir(dir).filePath(key + ".png");
 
     if (m_maxBytes == 0)
     {
@@ -274,12 +289,20 @@ void ThumbnailCache::clear()
     QMutexLocker lock(&m_mutex);
     ensureIndexed();
     const QString dir = cacheDir();
+    if (dir.isEmpty())
+    {
+        m_entries.clear();
+        m_lru.clear();
+        m_totalBytes = 0;
+        m_clock = 0;
+        return;
+    }
     // Delete every known file; entries the filesystem refuses to delete keep
     // their accounting so totalBytes() stays accurate.
     QHash<QString, Entry> surviving;
     for (auto it = m_entries.cbegin(); it != m_entries.cend(); ++it)
     {
-        const QString file = dir + "/" + it.key() + ".png";
+        const QString file = QDir(dir).filePath(it.key() + ".png");
         if (!QFile::remove(file) && QFile::exists(file))
         {
             surviving.insert(it.key(), it.value());

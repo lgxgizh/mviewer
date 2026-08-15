@@ -53,7 +53,8 @@ int main(int argc, char **argv)
     // Installing the handler must be safe to call repeatedly (idempotent).
     mviewer::core::installCrashHandler("MViewer");
     mviewer::core::installCrashHandler("MViewer");
-    CHECK(true, "installCrashHandler() callable without crashing");
+    CHECK(mviewer::core::crashReportPath() == path,
+          "installCrashHandler() is idempotent and preserves the crash path contract");
 
     printf("\n==== CrashHandler test: %d passed, %d failed ====\n", g_pass, g_fail);
     fflush(stdout);

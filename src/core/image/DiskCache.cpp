@@ -1,11 +1,14 @@
 #include "core/image/DiskCache.h"
 
+#include "runtime_storage.h"
+
 #include <QBuffer>
 #include <QByteArray>
 #include <QDataStream>
 #include <QDateTime>
 #include <QDebug>
 #include <QDir>
+#include <QFileInfo>
 #include <QMutex>
 #include <QSqlDatabase>
 #include <QSqlError>
@@ -14,7 +17,23 @@
 #include <QThread>
 #include <QVariant>
 #include <cstring>
+#include <atomic>
 #include <memory>
+
+namespace
+{
+
+std::atomic_uint64_t g_connectionSerial{0};
+
+struct ThreadConnectionState
+{
+    QString name;
+    bool initialized = false;
+};
+
+thread_local ThreadConnectionState g_threadConnection;
+
+} // namespace
 
 class DiskCache::Impl
 {
@@ -24,11 +43,14 @@ class DiskCache::Impl
     // QSqlDatabase is bound to the thread that opened it; it must NEVER be used
     // from another thread. All runtime access goes through connectionForThread().
     QSqlDatabase db;
+    QThread *ownerThread = nullptr;
+    std::set<std::string> workerConnectionNames;
 };
 
 DiskCache::DiskCache()
 {
     m_impl = new Impl();
+    m_impl->ownerThread = QThread::currentThread();
     openDb();
     ensureTable();
 }
@@ -37,7 +59,22 @@ DiskCache::~DiskCache()
 {
     if (m_impl)
     {
+        std::lock_guard<std::recursive_mutex> lock(m_mutex);
+        for (const std::string &name : m_impl->workerConnectionNames)
+        {
+            const QString qname = QString::fromStdString(name);
+            if (!QSqlDatabase::contains(qname))
+                continue;
+            QSqlDatabase db = QSqlDatabase::database(qname, false);
+            db.close();
+            db = QSqlDatabase();
+            QSqlDatabase::removeDatabase(qname);
+        }
+        m_impl->workerConnectionNames.clear();
         m_impl->db.close();
+        m_impl->db = QSqlDatabase();
+        if (QSqlDatabase::contains(QStringLiteral("mviewer_disk_cache")))
+            QSqlDatabase::removeDatabase(QStringLiteral("mviewer_disk_cache"));
         delete m_impl;
     }
 }
@@ -50,11 +87,18 @@ DiskCache &DiskCache::instance()
 
 void DiskCache::openDb()
 {
-    QString cacheDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
-    QDir().mkpath(cacheDir);
-    m_dbPath = (cacheDir + "/mviewer_disk.db").toStdString();
+    const QString cacheDir = mviewer::runtime::writableDirectory(QStandardPaths::CacheLocation);
+    if (cacheDir.isEmpty())
+    {
+        qWarning() << "DiskCache: no writable cache directory; disk tier disabled";
+        m_enabled = false;
+        return;
+    }
+
+    const QString dbPath = QDir(cacheDir).filePath(QStringLiteral("mviewer_disk.db"));
+    m_dbPath = dbPath.toStdString();
     m_impl->db = QSqlDatabase::addDatabase("QSQLITE", "mviewer_disk_cache");
-    m_impl->db.setDatabaseName(cacheDir + "/mviewer_disk.db");
+    m_impl->db.setDatabaseName(dbPath);
     if (!m_impl->db.open())
     {
         qWarning() << "DiskCache: Failed to open DB:" << m_impl->db.lastError().text();
@@ -80,13 +124,14 @@ void DiskCache::ensureTable()
 QSqlDatabase DiskCache::connectionForThread() const
 {
     // One QSqlDatabase per thread, each bound to the same SQLite file. The
-    // connection name must be unique process-wide, so derive it from the
-    // thread id. The main thread keeps the "mviewer_disk_cache" name created in
-    // openDb(); reuse it there to avoid a second handle to the same file.
-    const Qt::HANDLE tid = QThread::currentThreadId();
-    static thread_local QSqlDatabase tlConn;
-    static thread_local bool tlInitialized = false;
-    if (!tlInitialized)
+    // owner-thread comparison must use the captured owner QThread; comparing
+    // currentThreadId() with itself would make every worker look like the
+    // owner. A monotonic serial, rather than only the OS thread id, prevents a
+    // recycled thread id from reusing a process-global Qt connection name.
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    if (!m_enabled || m_dbPath.empty())
+        return QSqlDatabase();
+    if (!g_threadConnection.initialized)
     {
         // QSqlDatabase::addDatabase() mutates a process-global connection
         // registry that is NOT thread-safe. TaskScheduler runs decode tasks on
@@ -96,23 +141,84 @@ QSqlDatabase DiskCache::connectionForThread() const
         // creation so only one connection is registered at a time.
         static QMutex s_createMutex;
         QMutexLocker createLock(&s_createMutex);
-        const QString name =
-            (tid == QThread::currentThreadId())
-                ? QStringLiteral("mviewer_disk_cache")
-                : QString("mviewer_disk_cache_t%1").arg(reinterpret_cast<quintptr>(tid));
-        if (name != QStringLiteral("mviewer_disk_cache"))
+        if (QThread::currentThread() == m_impl->ownerThread)
         {
-            tlConn = QSqlDatabase::addDatabase("QSQLITE", name);
-            tlConn.setDatabaseName(QString::fromStdString(m_dbPath));
-            tlConn.open();
+            g_threadConnection.name = QStringLiteral("mviewer_disk_cache");
         }
         else
         {
-            tlConn = m_impl->db; // main thread: reuse the already-open connection
+            const auto serial = g_connectionSerial.fetch_add(1, std::memory_order_relaxed);
+            g_threadConnection.name =
+                QStringLiteral("mviewer_disk_cache_worker_%1").arg(serial);
+            QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", g_threadConnection.name);
+            db.setDatabaseName(QString::fromStdString(m_dbPath));
+            if (!db.open())
+            {
+                qWarning() << "DiskCache: worker connection failed:" << db.lastError().text();
+                db = QSqlDatabase();
+                QSqlDatabase::removeDatabase(g_threadConnection.name);
+                g_threadConnection.name.clear();
+            }
+            else
+            {
+                m_impl->workerConnectionNames.insert(g_threadConnection.name.toStdString());
+            }
         }
-        tlInitialized = true;
+        g_threadConnection.initialized = true;
     }
-    return tlConn;
+    return g_threadConnection.name.isEmpty()
+               ? QSqlDatabase()
+               : QSqlDatabase::database(g_threadConnection.name, false);
+}
+
+void DiskCache::setMaxEntries(int n)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    m_maxEntries = n;
+    if (m_enabled)
+        enforceLimits(connectionForThread());
+}
+
+int DiskCache::maxEntries() const
+{
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    return m_maxEntries;
+}
+
+void DiskCache::setMaxBytes(size_t n)
+{
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    m_maxBytes = n;
+    if (m_enabled)
+        enforceLimits(connectionForThread());
+}
+
+size_t DiskCache::maxBytes() const
+{
+    std::lock_guard<std::recursive_mutex> lock(m_mutex);
+    return m_maxBytes;
+}
+
+void DiskCache::enforceLimits(const QSqlDatabase &db)
+{
+    if (!db.isOpen())
+        return;
+    while (true)
+    {
+        QSqlQuery count(db);
+        if (!count.exec("SELECT COUNT(*), COALESCE(SUM(LENGTH(data)), 0) FROM blobs") ||
+            !count.next())
+            return;
+        const auto entries = count.value(0).toLongLong();
+        const auto bytes = count.value(1).toLongLong();
+        if (!((m_maxEntries > 0 && entries > m_maxEntries) ||
+              (m_maxBytes > 0 && bytes > static_cast<qint64>(m_maxBytes))))
+            return;
+        QSqlQuery del(db);
+        if (!del.exec("DELETE FROM blobs WHERE key = "
+                     "(SELECT key FROM blobs ORDER BY ts ASC, key ASC LIMIT 1)"))
+            return;
+    }
 }
 
 bool DiskCache::get(const std::string &key, ImageData &out)
@@ -157,24 +263,13 @@ void DiskCache::put(const std::string &key, const ImageData &img)
                               static_cast<int>(img.byteSize())));
     q.exec();
 
-    // 容量限制：超出任一上限时删除最旧条目，直到两个指标都达标。
-    bool pruned = false;
-    while ((m_maxEntries > 0 && static_cast<int>(entryCount()) > m_maxEntries) ||
-           (m_maxBytes > 0 && totalBytes() > m_maxBytes))
-    {
-        QSqlQuery dq(connectionForThread());
-        dq.prepare("DELETE FROM blobs WHERE key = "
-                   "(SELECT key FROM blobs ORDER BY ts ASC LIMIT 1)");
-        if (!dq.exec())
-            break;
-        pruned = true;
-    }
-    if (pruned)
-        qDebug() << "DiskCache: pruned to" << entryCount() << "entries," << totalBytes() << "bytes";
+    enforceLimits(connectionForThread());
 }
 
 void DiskCache::remove(const std::string &key)
 {
+    if (!m_enabled)
+        return;
     if (!connectionForThread().isOpen())
         return;
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
@@ -186,6 +281,8 @@ void DiskCache::remove(const std::string &key)
 
 size_t DiskCache::entryCount() const
 {
+    if (!m_enabled)
+        return 0;
     if (!connectionForThread().isOpen())
         return 0;
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
@@ -198,13 +295,13 @@ size_t DiskCache::entryCount() const
 
 size_t DiskCache::totalBytes() const
 {
+    if (!m_enabled)
+        return 0;
     if (!connectionForThread().isOpen())
         return 0;
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QSqlQuery q(connectionForThread());
-    // Approximate: width * height * 3 bytes per entry (RGB24)
-    q.exec("SELECT COALESCE(SUM(CAST(w AS INTEGER) * CAST(h AS INTEGER) * 3), 0) "
-           "FROM blobs");
+    q.exec("SELECT COALESCE(SUM(LENGTH(data)), 0) FROM blobs");
     if (q.next())
         return static_cast<size_t>(q.value(0).toLongLong());
     return 0;
@@ -212,6 +309,8 @@ size_t DiskCache::totalBytes() const
 
 void DiskCache::clear()
 {
+    if (!m_enabled)
+        return;
     if (!connectionForThread().isOpen())
         return;
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
@@ -221,6 +320,8 @@ void DiskCache::clear()
 
 void DiskCache::prune(const std::set<std::string> &validKeys)
 {
+    if (!m_enabled)
+        return;
     if (!connectionForThread().isOpen())
         return;
     std::lock_guard<std::recursive_mutex> lock(m_mutex);

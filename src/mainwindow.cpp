@@ -1,7 +1,13 @@
 #include "mainwindow_p.h"
 
+#include "runtime_storage.h"
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
+    // Library/test hosts may construct MainWindow without going through the
+    // production main(). Establish the same file-backed QSettings contract at
+    // the UI boundary before any settings are read.
+    mviewer::runtime::configureSettings();
     m_statusMetadataConsumer =
         "mainwindow-status-" + std::to_string(reinterpret_cast<std::uintptr_t>(this));
     // M19: UI models — single source of truth for Current / Selection /
@@ -20,7 +26,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_workspace->setAnalysisVisible(m_appState.analysisVisible);
     m_workspace->setAnalysisPage(m_appState.analysisPage);
     const QString recentPath =
-        QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation) + "/recent.json";
+        mviewer::runtime::filePath(QStandardPaths::AppConfigLocation, QStringLiteral("recent.json"));
     {
         QFile rf(recentPath);
         if (rf.open(QIODevice::ReadOnly))

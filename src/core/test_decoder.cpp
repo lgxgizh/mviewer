@@ -111,7 +111,8 @@ static void testRegistryDispatch()
     if (qtSupportsWebp)
         CHECK(qt.canDecode("foo.webp"), "QtDecoder claims webp when Qt supports it (F2)");
     else
-        CHECK(true, "QtDecoder webp claim skipped (Qt webp plugin absent on this build)");
+        CHECK(!qt.canDecode("foo.webp"),
+              "QtDecoder does not claim webp when the Qt webp plugin is absent");
     // The supported set must be a strict superset of the historical 6.
     auto qtExts = qt.extensions();
     int baseline = 0;

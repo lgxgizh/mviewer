@@ -16,6 +16,7 @@
 
 #include "analysispanel.h"
 #include "analyzermodel.h"
+#include "runtime_storage.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/analyzer/AnalyzerPipeline.h"
 #include "core/image/ImageFrame.h"
@@ -264,8 +265,8 @@ void unregisterGatedAnalyzer(const std::string &id = "m28_gated")
 
 QString historyStoragePath()
 {
-    return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
-           "/analysis_history.json";
+    return mviewer::runtime::filePath(QStandardPaths::AppDataLocation,
+                                      QStringLiteral("analysis_history.json"));
 }
 
 void testC7FailingAnalyzer()
@@ -912,6 +913,7 @@ int main(int argc, char **argv)
     QStandardPaths::setTestModeEnabled(true);
     QCoreApplication::setOrganizationName("mviewer-analyze-acceptance-test");
     QCoreApplication::setApplicationName("mviewer-analyze-acceptance-test");
+    mviewer::runtime::configureSettings();
 
     testM28HiddenPanelDefersConversion();
     testM28AsyncLatestWins();

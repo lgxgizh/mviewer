@@ -64,7 +64,9 @@
 | M37 | **Browse Viewer closure** — fullscreen entry, selection continuity and persisted navigation state | ✅ Complete (2026-08-14); retained in the canonical Browse workflow. |
 | M38 | **ImageViewer render pipeline closure** — async tiles, bounded cache and display-fidelity handoff | ✅ Complete (2026-08-14); see `docs/review/M38_VIEWER_RENDER_CONVERGENCE_2026-08-14.md`. |
 | M39 | **Real-world reliability & export convergence** — retry recovery, unified ExportJob and report safety | ✅ Complete (2026-08-14); see `docs/review/M39_REALWORLD_RELIABILITY_2026-08-14.md`. |
-| M40 | **Interaction cancellation & UI-thread purity closure** — Compare cancellation, authoritative fullscreen, async Copy/Save/Export, retry teardown and export memory bounds | 🔄 Implementation complete; focused M40 contracts pass, while the clean-build full gate is 82/88 with documented workflow/persistence follow-ups in `docs/review/M40_INTERACTION_CANCELLATION_CLOSURE_2026-08-15.md`. |
+| M40 | **Interaction cancellation & UI-thread purity closure** — Compare cancellation, authoritative fullscreen, async Copy/Save/Export, retry teardown and export memory bounds | Complete (2026-08-15); focused M40 contracts remain green, and the historical 82/88 storage/runtime follow-up is closed by M41. See `docs/review/M40_INTERACTION_CANCELLATION_CLOSURE_2026-08-15.md`. |
+
+| M41 | **Storage / runtime / test credibility closure** - DiskCache thread affinity and limits, writable runtime paths, atomic persistence, hermetic CTest, and assertion audit | Complete (2026-08-15); 88/88 full CTest passed three consecutive times, including golden-image, benchmark, lifecycle, workflow, Browse, and Compare gates. See `docs/review/M41_STORAGE_RUNTIME_TEST_CREDIBILITY_CLOSURE_2026-08-15.md`. |
 
 ### M25 closure addendum (2026-08-09)
 

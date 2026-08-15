@@ -19,6 +19,7 @@ void CacheManager::configure(const CacheConfig &cfg)
     ImageCache::instance().setCapacity(ImageCache::Preview, cfg.previewCacheSize);
     ImageCache::instance().setCapacity(ImageCache::Viewer, cfg.viewerCacheSize);
     DiskCache::instance().setMaxEntries(cfg.maxDiskCacheEntries);
+    DiskCache::instance().setMaxBytes(cfg.diskCacheSize);
 }
 
 ImageCache::Level CacheManager::toImageCacheLevel(CacheLevel level) const

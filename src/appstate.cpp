@@ -1,6 +1,9 @@
 #include "appstate.h"
 
+#include "runtime_storage.h"
+
 #include <QJsonArray>
+#include <QSaveFile>
 
 namespace
 {
@@ -8,11 +11,8 @@ namespace
 QString configPath()
 {
     // Per-user, non-roaming config dir (e.g. %AppData%/mviewer on Windows).
-    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-    if (dir.isEmpty())
-        return QString();
-    QDir().mkpath(dir);
-    return dir + "/mviewer.json";
+    return mviewer::runtime::filePath(QStandardPaths::AppConfigLocation,
+                                      QStringLiteral("mviewer.json"));
 }
 
 } // namespace
@@ -103,10 +103,12 @@ bool AppState::save() const
     o["navHistory"] = nav;
     o["navHistoryIndex"] = navHistoryIndex;
 
-    QFile f(path);
+    QSaveFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
         return false;
-    return f.write(QJsonDocument(o).toJson(QJsonDocument::Indented)) >= 0;
+    if (f.write(QJsonDocument(o).toJson(QJsonDocument::Indented)) < 0)
+        return false;
+    return f.commit();
 }
 
 void AppState::addFavorite(const QString &dir)

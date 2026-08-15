@@ -6,6 +6,7 @@
 #include "core/Logger.h"
 #include "core/SelfTest.h"
 #include "core/SettingsIO.h"
+#include "runtime_storage.h"
 
 #include <QApplication>
 
@@ -20,6 +21,7 @@ int main(int argc, char *argv[])
     app.setApplicationName("MViewer");
     app.setOrganizationName("MViewer");
     app.setApplicationVersion(QStringLiteral(MVIEWER_VERSION_STRING));
+    mviewer::runtime::configureSettings();
 
     // Structured file logging (AppData/logs/mviewer-YYYYMMDD.log).
     mviewer::core::installFileLogger("MViewer");

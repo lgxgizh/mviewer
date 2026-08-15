@@ -10,6 +10,7 @@
 //      filters are field-scoped, filter rebuild preserves ready thumbnails.
 #include "core/filesystem/FileSystem.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
+#include "runtime_storage.h"
 #include "thumbnailcache.h"
 #include "thumbnailpanel.h"
 
@@ -554,8 +555,8 @@ static void testThumbnailCacheCapacity()
 
     // Existing *.png files written by an earlier process count toward the
     // budget once the lazy startup scan runs on first access.
-    const QString thumbDir =
-        QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + "/thumbnails";
+    const QString cacheBase = mviewer::runtime::writableDirectory(QStandardPaths::CacheLocation);
+    const QString thumbDir = cacheBase.isEmpty() ? QString() : QDir(cacheBase).filePath("thumbnails");
     CHECK(QDir().mkpath(thumbDir), "thumbnail folder reachable in test mode");
 
     // Restore a sufficient cap BEFORE clearing/writing the historical files,

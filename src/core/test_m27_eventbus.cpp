@@ -204,8 +204,11 @@ void testNoSubscriptionLeak()
     static const std::string ev = "m27.churn";
     for (int i = 0; i < 2000; ++i)
         b.unsubscribe(b.subscribe(ev, [](void *) {}));
-    b.publish(ev); // must not crash; nothing left to call
-    CHECK(true, "2000 subscribe/unsubscribe cycles complete without growth");
+    int residualCalls = 0;
+    const int probe = b.subscribe(ev, [&residualCalls](void *) { ++residualCalls; });
+    b.publish(ev);
+    b.unsubscribe(probe);
+    CHECK(residualCalls == 1, "2000 subscribe/unsubscribe cycles leave no stale handlers");
 }
 
 } // namespace

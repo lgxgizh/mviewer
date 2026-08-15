@@ -22,6 +22,7 @@
 #include "core/command/FileRenameCommand.h"
 #include "mainwindow.h"
 #include "metadataoverlay.h"
+#include "runtime_storage.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
 
@@ -309,7 +310,7 @@ void testDegradedInputs(QTemporaryDir &tmp)
         while (t.elapsed() < 3000)
             pump(50);
         CHECK(panel.thumbFailed(bad), "A#9: corrupt file recorded as failed (placeholder)");
-        CHECK(panel.thumbReady(good).isNull() || !panel.thumbReady(good).isNull(),
+        CHECK(!panel.thumbFailed(good),
               "A#9: healthy file unaffected by corrupt sibling");
     }
 
@@ -342,7 +343,7 @@ void testMetadataOverlayCurrent(const QString &dirPath, const QStringList &paths
 
     QSettings settings;
     settings.clear();
-    const QString cfg = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
+    const QString cfg = mviewer::runtime::writableDirectory(QStandardPaths::AppConfigLocation);
     if (!cfg.isEmpty())
         QDir(cfg).removeRecursively();
 
@@ -372,8 +373,8 @@ void testMetadataOverlayCurrent(const QString &dirPath, const QStringList &paths
     overlay->showForImage(paths[1]);
     overlay->hide();
     overlay->showForImage(paths[2]);
-    const bool noStale = !overlay->isVisible() || overlay->isVisible();
-    CHECK(noStale, "A#10: overlay show/hide cycles do not crash");
+    CHECK(!overlay->currentImagePath().isEmpty() && overlay->currentImagePath() == paths[2],
+          "A#10: overlay follows the latest image after show/hide cycles");
 
     // Overlay toggle is idempotent and safe to spam.
     for (int i = 0; i < 5; ++i)
@@ -390,6 +391,7 @@ int main(int argc, char **argv)
     QStandardPaths::setTestModeEnabled(true);
     QCoreApplication::setOrganizationName("mviewer-browse-acceptance-test");
     QCoreApplication::setApplicationName("mviewer-browse-acceptance-test");
+    mviewer::runtime::configureSettings();
     QSettings().clear();
 
     QTemporaryDir tmp;

@@ -1,5 +1,7 @@
 #include "core/Logger.h"
 
+#include "runtime_storage.h"
+
 #include "MViewerVersion.h" // M24 version SSOT (generated from CMake project VERSION)
 
 #include <QDateTime>
@@ -85,14 +87,15 @@ void installFileLogger(const std::string &appName)
     g_installed = true;
 
     // Prefer the platform app-data location; fall back to temp if unavailable.
-    QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QString base = mviewer::runtime::writableDirectory(QStandardPaths::AppDataLocation);
     if (base.isEmpty())
-        base = QDir::tempPath();
+        return;
 
     // AppDataLocation already includes the org/app name set on QCoreApplication,
     // but we still append "logs" so the directory layout is predictable.
-    g_logDir = base + QStringLiteral("/logs");
-    QDir().mkpath(g_logDir);
+    g_logDir = QDir(base).filePath(QStringLiteral("logs"));
+    if (!QDir().mkpath(g_logDir) || !QFileInfo(g_logDir).isWritable())
+        return;
 
     const QString date = QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd"));
     g_logPath = g_logDir + QStringLiteral("/mviewer-") + date + QStringLiteral(".log");

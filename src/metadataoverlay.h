@@ -30,6 +30,8 @@ class MetadataOverlay : public QWidget
     void setImage(const QString &path);
     /// Show metadata for the given image path.
     void showForImage(const QString &path);
+    /// Image path currently represented by the overlay request.
+    QString currentImagePath() const { return m_requestedPath; }
     /// Toggle visibility.
     void toggle();
     /// Hide and clear.

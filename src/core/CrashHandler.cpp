@@ -1,5 +1,7 @@
 #include "core/CrashHandler.h"
 
+#include "runtime_storage.h"
+
 #include <QDateTime>
 #include <QDir>
 #include <QStandardPaths>
@@ -22,15 +24,16 @@ static QString crashDir()
 {
     // Prefer the platform app-data location so crash reports survive temp cleanup
     // and are easy for users to find when filing a bug report.
-    QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    if (base.isEmpty())
-        base = QDir::tempPath();
-    return base + "/crash-reports";
+    const QString base = mviewer::runtime::writableDirectory(QStandardPaths::AppDataLocation);
+    return base.isEmpty() ? QString() : QDir(base).filePath(QStringLiteral("crash-reports"));
 }
 
 std::string crashReportPath()
 {
-    const QString base = crashDir() + "/" + QString::fromStdString(g_appName) + "-" +
+    const QString dir = crashDir();
+    if (dir.isEmpty())
+        return {};
+    const QString base = dir + "/" + QString::fromStdString(g_appName) + "-" +
                          QDateTime::currentDateTime().toString("yyyyMMdd-hhmmss");
     return (base + ".dmp").toStdString();
 }
@@ -41,6 +44,8 @@ static QString g_crashDir;
 
 static LONG WINAPI crashExceptionFilter(EXCEPTION_POINTERS *ep)
 {
+    if (g_crashDir.isEmpty())
+        return EXCEPTION_EXECUTE_HANDLER;
     QDir().mkpath(g_crashDir);
 
     const QString base = g_crashDir + "/" + QString::fromStdString(g_appName) + "-" +

@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased] — M41 storage / runtime / test credibility closure
+
+### Fixed
+
+- DiskCache now has thread-affine SQLite connections, exact blob-byte limits,
+  safe runtime initialization, deterministic teardown, and wired disk-size
+  configuration.
+- Runtime data, config, cache, temporary fallback, QSettings INI storage, and
+  atomic state rewrites now share one writable-path contract.
+
+### Tests
+
+- Hermetic per-test runtime roots and environment isolation close the managed
+  desktop write failures. The full 88-test CTest matrix passed 88/88 in three
+  consecutive runs, including golden-image, benchmark, lifecycle, workflow,
+  Browse, and Compare gates; weak assertions in the touched paths were audited.
+
 ## [Unreleased] — M40 interaction cancellation and UI-thread purity closure
 
 ### Fixed

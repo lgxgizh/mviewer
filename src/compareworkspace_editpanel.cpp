@@ -1,6 +1,10 @@
 // CompareWorkspace edit panel: adjustments, metrics, per-pane histograms, presets (M20 P0#2).
 #include "compareworkspace_p.h"
 
+#include "runtime_storage.h"
+
+#include <QSaveFile>
+
 ImageData CompareWorkspace::applyAdjusts(const ImageData &src, const CellAdjust &a)
 {
     if (src.isNull() || a.isIdentity())
@@ -404,9 +408,12 @@ void CompareWorkspace::ensurePresetDir()
     if (!m_presetDir.isEmpty())
         return;
     // Store presets under the app's cache/config directory
-    m_presetDir =
-        QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/compare_presets";
-    QDir().mkpath(m_presetDir);
+    const QString base = mviewer::runtime::writableDirectory(QStandardPaths::AppDataLocation);
+    if (base.isEmpty())
+        return;
+    m_presetDir = QDir(base).filePath(QStringLiteral("compare_presets"));
+    if (!QDir().mkpath(m_presetDir))
+        m_presetDir.clear();
 }
 
 void CompareWorkspace::onSavePreset()
@@ -478,14 +485,14 @@ void CompareWorkspace::onSavePreset()
         pathArray.append(p);
     root["paths"] = pathArray;
 
-    QFile f(fileName);
+    QSaveFile f(fileName);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         QMessageBox::warning(this, tr("存储失败"), tr("无法写入文件:\n%1").arg(fileName));
         return;
     }
-    f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-    f.close();
+    if (f.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0 || !f.commit())
+        QMessageBox::warning(this, tr("存储失败"), tr("无法提交文件:\n%1").arg(fileName));
 }
 
 void CompareWorkspace::onLoadPreset()

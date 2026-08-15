@@ -11,7 +11,8 @@
 > `docs/review/M36_BROWSE_HOTPATH_DISPLAY_FIDELITY_2026-08-13.md`,
 > `docs/review/M38_VIEWER_RENDER_CONVERGENCE_2026-08-14.md`,
 > `docs/review/M39_REALWORLD_RELIABILITY_2026-08-14.md`,
-> `docs/review/M40_INTERACTION_CANCELLATION_CLOSURE_2026-08-15.md` and
+> `docs/review/M40_INTERACTION_CANCELLATION_CLOSURE_2026-08-15.md`,
+> `docs/review/M41_STORAGE_RUNTIME_TEST_CREDIBILITY_CLOSURE_2026-08-15.md` and
 > `.\build.ps1 Test`.
 
 ## Positioning
@@ -49,6 +50,24 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 
 ## Shipped capabilities (1.0.x, CTest-verified)
 
+### M41 Storage / runtime / test credibility closure (2026-08-15)
+
+- DiskCache now uses unique per-thread SQLite connections, exact blob-byte
+  accounting, enforced entry/byte limits, safe initialization failure, and
+  deterministic connection teardown. `CacheConfig::diskCacheSize` is wired to
+  the disk byte limit, and the concurrent cache stress test covers eight
+  threads and 1,280 operations.
+- Runtime storage has one writable-path contract with a per-run temporary
+  fallback. QSettings is explicitly INI-backed under the runtime config path,
+  and state rewrites use QSaveFile with commit checks.
+- CTest assigns each registered test an isolated runtime root and relevant
+  environment variables. Weak assertions in the touched test paths now observe
+  real state rather than tautologies.
+- The complete 88-test matrix passed **88/88 in three consecutive runs**,
+  including golden-image, benchmark-enforcement, lifecycle, workflow, Browse,
+  and Compare acceptance gates. Full evidence is recorded in
+  `docs/review/M41_STORAGE_RUNTIME_TEST_CREDIBILITY_CLOSURE_2026-08-15.md`.
+
 ### M39 Real-world reliability & export convergence (2026-08-14)
 
 - Scheduler-rejected tiles remain pending and retry with bounded backoff, with
@@ -63,10 +82,9 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   adapts CPU-sensitive latency/throughput budgets on <=4 logical-core hosts,
   while nightly regression remains pinned to the `ci` profile. CTest leaves one
   logical core available and benchmark tests run serially.
-- M39 focused and lifecycle suites pass. The default managed-desktop gate is
-  environment-blocked by seven AppConfig/cache/repository/temp write tests; an
-  explicit writable-runtime run reached 87/88 with one native QSettings
-  sidebar-migration observation remaining.
+- The historical M39 managed-runtime write restriction was closed by the M41
+  runtime-path and hermetic-test work; the original M39 behavior and evidence
+  remain documented in its review report.
 
 ### M35 Compare / Browse convergence (2026-08-13)
 
@@ -112,10 +130,10 @@ environment blockers, is recorded in `docs/review/M38_VIEWER_RENDER_CONVERGENCE_
 - ExportDialog modes share one cancellable runner with generation/lifetime
   guards. Tile retry uses one stoppable worker, and Contact/PDF staging has a
   bounded memory contract.
-- Focused M40 verification is green, including Compare cancellation, retry
-  teardown and ExportJob budget cases. The clean-build full gate reached 82/88;
-  its six exact failures (workflow UX plus analysis/AppState persistence and
-  managed-runtime disk/cache writes) are recorded in the M40 review report.
+- Focused M40 verification remains green, including Compare cancellation,
+  retry teardown and ExportJob budget cases. Its 82/88 clean-build result was
+  the baseline for M41's storage/runtime closure; the follow-ups are now
+  closed by the M41 evidence above.
 
 ### M36 Browse hot path & display fidelity closure (2026-08-13)
 

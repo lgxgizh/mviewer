@@ -1,5 +1,6 @@
 // MainWindow command registration and keyboard dispatch (M20 P0#1).
 #include "mainwindow_p.h"
+#include "runtime_storage.h"
 
 void MainWindow::setupCommands()
 {
@@ -246,9 +247,15 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             {
                 // Persist to a temp file so ImageViewer can load it via its
                 // normal async path (keeps decode/histogram consistent).
-                const QString tmpDir =
-                    QStandardPaths::writableLocation(QStandardPaths::TempLocation) +
-                    "/mviewer-clip-paste";
+                const QString tempRoot =
+                    mviewer::runtime::writableDirectory(QStandardPaths::TempLocation);
+                if (tempRoot.isEmpty())
+                {
+                    statusBar()->showMessage("无法创建剪贴板临时文件", 3000);
+                    event->accept();
+                    return;
+                }
+                const QString tmpDir = QDir(tempRoot).filePath("mviewer-clip-paste");
                 QDir().mkpath(tmpDir);
                 const QString tmpPath = tmpDir + "/paste_" +
                                         QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") +

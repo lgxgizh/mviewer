@@ -29,6 +29,7 @@
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPushButton>
+#include <QPointer>
 #include <QSlider>
 #include <QTableWidget>
 #include <QTemporaryDir>
@@ -179,8 +180,8 @@ void testMultiImageEntry(const QStringList &paths8)
     ws->applyLayoutPreset(8);
     waitForCompareCount(ws, 8);
     CHECK(ws->comparedImageCount() == 8, "B#1: 8-image compare entry loads 8 images");
-    CHECK(!ws->engine().layout().cols == false || ws->engine().layout().cols >= 2,
-          "B#2: 8-up produces a multi-column grid");
+    CHECK(ws->engine().layout().cols >= 2 && ws->engine().layout().rows >= 2,
+          "B#2: 8-up produces a multi-row, multi-column grid");
 
     // Reference/focus must stay well-defined at any count.
     CHECK(sel.focused().isEmpty() || !ws->focusImagePath().isEmpty(),
@@ -1018,14 +1019,17 @@ void testInspectorCoalescing(const QString &a, const QString &b)
             QMouseEvent event(QEvent::MouseMove, QPointF(pt), Qt::NoButton, Qt::NoButton,
                               Qt::NoModifier);
             QApplication::sendEvent(subView, &event); // schedules a queued render
+            QPointer<CompareWorkspace> destroyed = subWs;
             delete sub; // destroys subWs while the queued render is still pending
+            CHECK(destroyed.isNull(), "M30(e): workspace is destroyed before queued render drains");
         }
         else
         {
             delete sub;
         }
         pump(80); // the dropped queued render must not touch the destroyed workspace
-        CHECK(true, "M30(e): destroying a workspace with a pending inspector render is safe");
+        CHECK(QApplication::closingDown() == false,
+              "M30(e): pending inspector render does not close the application");
     }
 }
 
