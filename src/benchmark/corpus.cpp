@@ -7,6 +7,8 @@
 #include <QImageWriter>
 #include <QString>
 #include <QTemporaryDir>
+#include <QThread>
+#include <QUuid>
 
 #include <algorithm>
 #include <chrono>
@@ -61,17 +63,31 @@ std::vector<std::string> Corpus::allPaths() const
 
 void Corpus::clear() const
 {
-    QDir d(QString::fromStdString(dir));
-    d.removeRecursively();
+    const QString target = QDir::cleanPath(QString::fromStdString(dir));
+    if (target.isEmpty() || target == QStringLiteral(".") || target == QStringLiteral(".."))
+        return;
+
+    const QString absolute = QFileInfo(target).absoluteFilePath();
+    if (absolute == QDir::currentPath() || absolute == QDir::rootPath())
+        return;
+
+    for (int attempt = 0; attempt < 5; ++attempt)
+    {
+        QDir directory(absolute);
+        if (!directory.exists() || directory.removeRecursively())
+            return;
+        QThread::msleep(100);
+    }
 }
 
 Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &outDir,
                   const std::string &format)
 {
     Corpus c;
-    // Corpus lives on disk; default QTemporaryDir uses the system TEMP which on
-    // this machine is the starved C: system drive. Allow redirecting to a large
-    // data disk via MVIEWER_BENCH_TMP (benchmark-only, no product impact).
+    // Corpus lives on disk; on Windows prefer the D: data disk so the large
+    // generated corpus does not consume the system TEMP drive. Allow an
+    // explicit override via MVIEWER_BENCH_TMP (benchmark-only, no product
+    // impact); non-Windows platforms retain the system TEMP fallback.
     // If an explicit outDir is given (P3 tier generator), emit there directly
     // and keep the files (no auto-remove, no clear) so they persist as a
     // reusable dataset.
@@ -84,19 +100,32 @@ Corpus makeCorpus(size_t totalImages, int jpegW, int jpegH, const std::string &o
     }
     else
     {
-        const QString envTmp = qEnvironmentVariable("MVIEWER_BENCH_TMP");
+        QString envTmp = qEnvironmentVariable("MVIEWER_BENCH_TMP");
+#ifdef Q_OS_WIN
+        if (envTmp.isEmpty() && QDir(QStringLiteral("D:/")).exists())
+            envTmp = QStringLiteral("D:/mviewer/benchmark_tmp");
+#endif
         if (!envTmp.isEmpty())
         {
-            QDir().mkpath(envTmp);
-            tmp = std::make_unique<QTemporaryDir>(envTmp + QDir::separator());
+            const QString uniqueName = QStringLiteral("mviewer_bench-%1").arg(
+                QUuid::createUuid().toString(QUuid::WithoutBraces));
+            const QString uniqueDir = QDir(envTmp).filePath(uniqueName);
+            if (QDir().mkpath(uniqueDir))
+                c.dir = QFileInfo(uniqueDir).absoluteFilePath().toStdString();
         }
         else
         {
             tmp = std::make_unique<QTemporaryDir>();
+            if (tmp->isValid())
+            {
+                tmp->setAutoRemove(false);
+                c.dir = tmp->path().toStdString();
+            }
         }
-        tmp->setAutoRemove(false);
-        c.dir = tmp->path().toStdString();
     }
+
+    if (c.dir.empty())
+        return c;
 
     QDir().mkpath(QString::fromStdString(c.dir));
 

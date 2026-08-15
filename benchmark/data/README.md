@@ -26,8 +26,10 @@ generate the 10000-image tier (~2 GB). Output location is configurable via
 
 ## Use a tier as the benchmark corpus
 
-The benchmark harness writes its runtime corpus to `MVIEWER_BENCH_TMP`. Point it
-at a generated tier to benchmark against a fixed, reproducible dataset:
+On Windows, the benchmark harness writes its generated runtime corpus under
+`D:/mviewer/benchmark_tmp/` by default. Set `MVIEWER_BENCH_TMP` to point at a
+generated tier when benchmarking against a fixed, reproducible dataset (or to
+override the default location):
 
 ```powershell
 $env:MVIEWER_BENCH_TMP = "D:/mviewer_bench_data/medium"
