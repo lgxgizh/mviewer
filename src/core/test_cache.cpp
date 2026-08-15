@@ -2,7 +2,9 @@
 #include "core/cache/CacheManager.h"
 #include "core/image/DiskCache.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/ImageFrame.h"
 #include "core/image/QtConvert.h"
+#include "core/perf/MemoryTracker.h"
 
 #include <QColor>
 #include <QCoreApplication>
@@ -266,6 +268,120 @@ static void testCacheLruEviction()
     cache.clear();
 }
 
+static std::shared_ptr<std::vector<uint16_t>> makeRaw16(size_t samples, uint16_t value)
+{
+    return std::make_shared<std::vector<uint16_t>>(samples, value);
+}
+
+static void testRaw16CacheM42()
+{
+    printf("\n[Raw16 cache M42]\n");
+    CacheManager &mgr = CacheManager::instance();
+    mgr.clear();
+    CacheConfig cfg = mgr.config();
+    cfg.raw16CacheSize = 100;
+    mgr.configure(cfg);
+
+    auto a = makeRaw16(20, 17); // 40 bytes
+    mgr.putRaw16("raw-a", a, 1, 65535);
+    CHECK(mgr.raw16UsageBytes() == 40, "Raw16 put reports exact byte accounting");
+    CHECK(mgr.memoryUsageBytes() >= 40, "memoryUsageBytes includes Raw16 bytes");
+    const auto memorySample = mviewer::perf::MemoryTracker::instance().sample();
+    CHECK(memorySample.raw16CacheBytes == 40 && memorySample.cacheTotalBytes >= 40,
+          "MemoryTracker observes Raw16 cache bytes");
+
+    mgr.clearMemory();
+    CHECK(mgr.raw16UsageBytes() == 0, "clearMemory clears Raw16 cache usage");
+
+    std::weak_ptr<std::vector<uint16_t>> released;
+    {
+        auto owned = makeRaw16(20, 23);
+        released = owned;
+        mgr.putRaw16("raw-release", owned, 1, 65535);
+        owned.reset();
+    }
+    mgr.clearMemory();
+    CHECK(released.expired(), "clearing Raw16 storage releases its last shared owner");
+
+    mgr.putRaw16("raw-erase", a, 1, 65535);
+    mgr.erase("raw-erase");
+    std::shared_ptr<std::vector<uint16_t>> out;
+    int channels = 0;
+    uint16_t maxSample = 0;
+    CHECK(!mgr.getRaw16("raw-erase", out, channels, maxSample),
+          "erase removes the Raw16 key");
+
+    mgr.putRaw16("raw-invalidate", a, 1, 65535);
+    mgr.invalidate("raw-invalidate");
+    CHECK(!mgr.getRaw16("raw-invalidate", out, channels, maxSample),
+          "invalidate removes the Raw16 key");
+
+    // Three 40-byte entries exceed the 100-byte budget; the least-recently-used
+    // entry must be evicted, not retained because an entry-count cap was not hit.
+    mgr.putRaw16("raw-0", makeRaw16(20, 0), 1, 65535);
+    mgr.putRaw16("raw-1", makeRaw16(20, 1), 1, 65535);
+    mgr.putRaw16("raw-2", makeRaw16(20, 2), 1, 65535);
+    CHECK(mgr.raw16UsageBytes() <= cfg.raw16CacheSize,
+          "Raw16 total usage stays within byte budget");
+    CHECK(!mgr.getRaw16("raw-0", out, channels, maxSample),
+          "Raw16 budget evicts the oldest entry");
+
+    auto tooLarge = makeRaw16(60, 99); // 120 bytes > 100-byte budget
+    mgr.putRaw16("raw-too-large", tooLarge, 1, 65535);
+    CHECK(!mgr.getRaw16("raw-too-large", out, channels, maxSample),
+          "single Raw16 entry larger than budget is not cached");
+    ImageData pixels = makeImageData(2, 2, PixelFormat::RGB24);
+    ImageFrame frame({}, pixels);
+    frame.setRaw16(tooLarge, 65535, 1);
+    uint16_t r = 0, g = 0, b = 0;
+    CHECK(frame.raw16At(1, 1, r, g, b) && r == 99 && g == 99 && b == 99,
+          "uncached Raw16 remains available through the owning ImageFrame");
+
+    auto reservedTooLarge = std::make_shared<std::vector<uint16_t>>();
+    reservedTooLarge->reserve(60); // capacity is 120 bytes although only one sample is live
+    reservedTooLarge->push_back(101);
+    mgr.putRaw16("raw-reserved-too-large", reservedTooLarge, 1, 65535);
+    CHECK(!mgr.getRaw16("raw-reserved-too-large", out, channels, maxSample),
+          "Raw16 allocated capacity, not only size, is bounded");
+
+    mgr.clear();
+    cfg.raw16CacheSize = 64 * 1024;
+    mgr.configure(cfg);
+    std::atomic<int> failures{0};
+    std::barrier start(8);
+    std::vector<std::thread> workers;
+    for (int t = 0; t < 8; ++t)
+        workers.emplace_back([&, t]
+                             {
+                                 start.arrive_and_wait();
+                                 for (int i = 0; i < 80; ++i)
+                                 {
+                                     const std::string key = "raw-thread-" + std::to_string(t) +
+                                                             "-" + std::to_string(i);
+                                     mgr.putRaw16(key, makeRaw16(32, static_cast<uint16_t>(i)), 1,
+                                                  65535);
+                                     if (i % 3 == 0)
+                                     {
+                                         std::shared_ptr<std::vector<uint16_t>> localOut;
+                                         int localChannels = 0;
+                                         uint16_t localMax = 0;
+                                         const bool hit = mgr.getRaw16(key, localOut, localChannels,
+                                                                        localMax);
+                                         if (hit && (!localOut || localOut->size() != 32 ||
+                                                     localChannels != 1 || localMax != 65535))
+                                             failures.fetch_add(1, std::memory_order_relaxed);
+                                     }
+                                 }
+                             });
+    for (auto &worker : workers)
+        worker.join();
+    CHECK(failures.load() == 0 && mgr.raw16UsageBytes() <= cfg.raw16CacheSize,
+          "concurrent Raw16 put/get preserves bounded accounting");
+
+    mgr.clear();
+    mgr.configure(CacheConfig{});
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -277,6 +393,7 @@ int main(int argc, char **argv)
     testDiskCacheThreadAffinityAndStress();
     testCacheConfig();
     testCacheLruEviction();
+    testRaw16CacheM42();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

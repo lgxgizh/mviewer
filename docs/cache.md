@@ -1,5 +1,12 @@
 # MViewer Cache Specification
 
+Runtime cache limits are byte budgets. The Pixel Inspector's Raw16 store is
+independently LRU-evicted by the exact allocated `uint16_t` buffer capacity, rejects a
+single entry larger than its budget, and is included in
+`CacheManager::memoryUsageBytes()` and `MemoryTracker` samples. The disk
+cache likewise enforces its configured limit from SQLite blob byte lengths;
+it is not a soft cap.
+
 ## Overview
 
 The cache system is a critical performance component. It provides multiple layers of caching to minimize redundant I/O, decoding, and GPU operations. The cache hierarchy is designed to provide predictable memory usage with maximum hit rates.

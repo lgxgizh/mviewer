@@ -35,7 +35,16 @@ class RawImageView : public QWidget
     {
         return m_overlayAlpha;
     }
+    // Keep the original overload as an ABI/source-compatibility seam for the
+    // single-image analysis view. Compare passes sourceSize when its display
+    // image is an LOD rather than a full-resolution raster.
     void setImage(const QImage &img);
+    void setImage(const QImage &img, const QSize &sourceSize);
+    QSize sourceSize() const
+    {
+        return m_sourceSize;
+    }
+    QPoint displayPointForSource(int x, int y) const;
     void clear();
 
     // Difference/heatmap overlay (compare mode). The workspace computes the overlay
@@ -194,6 +203,7 @@ class RawImageView : public QWidget
     void releaseBaseSurface();
 
     QImage m_image;
+    QSize m_sourceSize;
     double m_scale = 1.0;
     double m_fitScale = 1.0;
     QPointF m_offset;

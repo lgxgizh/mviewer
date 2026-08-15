@@ -2,6 +2,7 @@
 
 #include "core/image/decoder/IDecoder.h"
 
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -21,6 +22,11 @@
 class RawDecoder : public IDecoder
 {
   public:
+    // M42 diagnostic seam: bytes copied into a second full-file scan buffer by
+    // the most recent preview decode. The pre-fix implementation reports the
+    // full RAW size; the bounded span implementation must report zero.
+    static size_t lastPreviewFullFileCopyBytes();
+
     bool canDecode(const std::string &path) const override;
     ImageData decodeFull(const std::string &path) const override;
     ImageData decodeScaled(const std::string &path, int maxEdge) const override;

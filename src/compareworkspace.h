@@ -466,14 +466,19 @@ class CompareWorkspace : public QWidget
         {
             int index = -1;
             QImage image;
+            QSize sourceSize;
         };
         std::vector<CellImage> cells;
     };
+    QSize displayLodTarget(int idx, const ImageData &source) const;
+    void scheduleDisplayLodRefresh(int idx = -1);
     void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes);
     void applyDisplayBatchResult(const DisplayBatchResult &result);
 
     uint64_t m_displayGen = 0;
     TaskScheduler::TaskHandle m_displayTask;
+    bool m_displayLodRefreshPending = false;
+    int m_displayLodRefreshPane = -1;
 
     // ── M16.2: per-cell image adjustments ──
     struct CellAdjust

@@ -20,6 +20,7 @@
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
+#include "core/render/RenderEngine.h"
 
 #include <QCheckBox>
 #include <QComboBox>

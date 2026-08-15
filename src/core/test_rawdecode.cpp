@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <fstream>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -60,6 +61,18 @@ static std::vector<uint8_t> makeFakeRaw(const QByteArray &jpeg)
     return v;
 }
 
+static std::vector<uint8_t> joinRawParts(std::initializer_list<QByteArray> parts)
+{
+    std::vector<uint8_t> v;
+    for (const QByteArray &part : parts)
+    {
+        v.insert(v.end(), reinterpret_cast<const uint8_t *>(part.constData()),
+                 reinterpret_cast<const uint8_t *>(part.constData()) + part.size());
+        v.insert(v.end(), 37, static_cast<uint8_t>(v.size() & 0xff));
+    }
+    return v;
+}
+
 static void writeFile(const std::string &path, const std::vector<uint8_t> &data)
 {
     std::ofstream f(path, std::ios::binary);
@@ -89,6 +102,8 @@ int main(int argc, char **argv)
     ImageData d = DecoderRegistry::instance().decodeFull(rawPath);
     CHECK(!d.isNull(), "RAW decoded to non-null ImageData");
     CHECK(d.width == 48 && d.height == 32, "decoded dims match embedded preview (48x32)");
+    CHECK(RawDecoder::lastPreviewFullFileCopyBytes() == 0,
+          "RAW preview scan does not allocate a second full-file copy");
 
     // Scaled decode clamps to maxEdge.
     ImageData ds = DecoderRegistry::instance().decodeScaled(rawPath, 16);
@@ -103,6 +118,29 @@ int main(int argc, char **argv)
     writeFile(brokenPath, junk);
     ImageData d2 = DecoderRegistry::instance().decodeFull(brokenPath);
     CHECK(d2.isNull(), "preview-less RAW returns empty (graceful fallthrough)");
+    CHECK(RawDecoder::lastPreviewFullFileCopyBytes() == 0,
+          "malformed/preview-less RAW scan does not copy the full file");
+
+    // Cameras may carry several previews. The scanner must ignore the
+    // truncated candidate and select the largest complete embedded JPEG.
+    const QByteArray smallJpeg = makeJpegBytes(12, 8);
+    const QByteArray largeJpeg = makeJpegBytes(64, 40);
+    std::vector<uint8_t> multi = joinRawParts({smallJpeg, largeJpeg});
+    const std::string multiPath = tmp.path().toStdString() + "/multi.nef";
+    writeFile(multiPath, multi);
+    ImageData multiImage = DecoderRegistry::instance().decodeFull(multiPath);
+    CHECK(!multiImage.isNull() && multiImage.width == 64 && multiImage.height == 40,
+          "multiple embedded JPEGs choose the largest complete preview");
+
+    std::vector<uint8_t> truncated;
+    truncated.insert(truncated.end(), 64, 0x5a);
+    const int truncatedSize = largeJpeg.size() > 19 ? largeJpeg.size() - 19 : 0;
+    truncated.insert(truncated.end(), reinterpret_cast<const uint8_t *>(largeJpeg.constData()),
+                     reinterpret_cast<const uint8_t *>(largeJpeg.constData()) + truncatedSize);
+    const std::string truncatedPath = tmp.path().toStdString() + "/truncated.arw";
+    writeFile(truncatedPath, truncated);
+    ImageData truncatedImage = DecoderRegistry::instance().decodeFull(truncatedPath);
+    CHECK(truncatedImage.isNull(), "truncated embedded JPEG is rejected without a partial image");
 
     // Normal JPEG flow still works (RawDecoder must not steal non-RAW).
     const std::string jpgPath = tmp.path().toStdString() + "/normal.jpg";

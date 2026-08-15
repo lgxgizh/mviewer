@@ -4,10 +4,10 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta**
+## Where we are now — **Beta / 1.0.9 hardening**
 
-MViewer is in **Beta**. Everything below is already built and verified, not
-planned:
+MViewer remains in **Beta** on the post-`v1.0.9` hardening line. The product
+loop below is built and verified; packaging and final human review remain:
 
 - **Browse** — open a 1000-image directory without UI freeze; thumbnails stream
   in; first thumbnail < ~35 ms (cold).
@@ -35,13 +35,13 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **Beta** (current) | Product loop closed + perf proven + SDK + installer | 🔵 In Beta |
-| **1.0** | First non-prerelease: signed installer, docs site, stable plugin ABI | ⬜ Next |
+| **1.0.9** (current line) | Product loop closed + perf proven + SDK + installer | 🔵 Beta hardening |
+| **1.0** | First non-prerelease: signed installer, docs site, stable plugin ABI | ⬜ Release work |
 | **1.1** | Large-image depth: 100 MP / tiled decode, compare of huge images | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The earlier `v1.0.0-rc` tag was an **internal** pre-release. The real **1.0**
-is what this Beta produces.
+The repository verifies a real `v1.0.9` release tag; no newer Git tag is
+claimed here. The remaining 1.0 work is productization and release review.
 
 ## What's planned, in priority order
 

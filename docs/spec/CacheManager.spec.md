@@ -18,7 +18,8 @@ struct CacheConfig {
     size_t thumbnailCacheSize = 64 * 1024 * 1024;     // 64 MB
     size_t previewCacheSize   = 256 * 1024 * 1024;    // 256 MB
     size_t viewerCacheSize    = 512 * 1024 * 1024;    // 512 MB
-    size_t diskCacheSize      = 1024 * 1024 * 1024;   // 1 GB (soft cap)
+    size_t raw16CacheSize     = 256 * 1024 * 1024;   // 256 MB, byte-bounded
+    size_t diskCacheSize      = 1024 * 1024 * 1024;   // 1 GB, exact blob-byte cap
     int    maxDiskCacheEntries = 100000;
 };
 
@@ -60,11 +61,20 @@ public:
     bool getMetadata(const std::string& key, mviewer::domain::ImageMetadata& out) const;
     bool hasMetadata(const std::string& key) const;
 
+    // Pixel Inspector's original 16-bit samples. Independently byte-bounded
+    // LRU storage; an entry larger than raw16CacheSize is not cached.
+    void putRaw16(const std::string& key, std::shared_ptr<std::vector<uint16_t>> buf,
+                  int channels, uint16_t maxSample);
+    bool getRaw16(const std::string& key, std::shared_ptr<std::vector<uint16_t>>& out,
+                  int& channels, uint16_t& maxSample) const;
+
     // Management
     void clear();
     void clearMemory();
     void clearDisk();
     size_t memoryUsageBytes() const;
+    size_t raw16UsageBytes() const;
+    size_t raw16EntryCount() const;
     size_t diskUsageBytes() const;
 
     // Prefetch: warm given keys into specified memory level (FullImage default)
@@ -98,7 +108,7 @@ public:
 
 ## Ownership
 
-- CacheManager **owns** all cache storage (ImageCache instances + DiskCache + metadata store).
+- CacheManager **owns** all cache storage (ImageCache instances + DiskCache + metadata and Raw16 stores).
 - Callers receive `ImageData` by value (copy on get); no shared ownership.
 - `CacheConfig` is owned by CacheManager (mutable via `configure`).
 
@@ -106,10 +116,10 @@ public:
 
 | Method | Thread | Mechanism |
 | -------- | -------- | ----------- |
-| `get/put/erase/invalidate` | Any thread | Per-pool mutex (ImageCache) + atomic hit/miss counters |
+| `get/put/erase/invalidate` | Any thread | Per-pool mutex (ImageCache/Raw16) + atomic hit/miss counters |
 | `getMetadata/putMetadata` | Any thread | `m_metaMutex` |
 | `prefetch` | Background only | Queues to TaskScheduler |
-| `configure` | Main thread only | Not thread-safe; call once at startup |
+| `configure` | Main thread only | Startup-time; Raw16 budget changes trim under its mutex |
 
 ## Memory
 
@@ -119,7 +129,8 @@ public:
 | Thumbnail | 64 MB | 256×256 RGB thumbnails |
 | Preview | 256 MB | 1024×1024 preview images |
 | FullImage | 512 MB | Full-resolution frames |
-| Disk | 1 GB (soft) | SQLite blobs; `maxDiskCacheEntries` hard cap |
+| Raw16 inspector | 256 MB | Exact allocated `uint16_t` capacity bytes; LRU; oversized entry rejected |
+| Disk | 1 GB (exact) | SQLite `LENGTH(data)` bytes; `maxDiskCacheEntries` hard cap |
 
 ## Performance
 

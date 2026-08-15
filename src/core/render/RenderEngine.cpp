@@ -367,6 +367,48 @@ ImageData RenderEngine::scaleStatic(const ImageData &src, const RenderSize &targ
     return instance().scale(src, target, mode);
 }
 
+ImageData RenderEngine::scaleBoundedStatic(const ImageData &src, const RenderSize &target)
+{
+    if (src.isNull() || !target.isValid())
+        return ImageData();
+
+    ImageData out = makeImageData(target.width, target.height, PixelFormat::RGB24);
+    ImageBuffer dst = out.view();
+    const double rx = static_cast<double>(src.width) / target.width;
+    const double ry = static_cast<double>(src.height) / target.height;
+    for (int y = 0; y < target.height; ++y)
+    {
+        const double sy = (y + 0.5) * ry - 0.5;
+        const int sy0 = std::clamp(static_cast<int>(std::floor(sy)), 0, src.height - 1);
+        const int sy1 = std::min(src.height - 1, sy0 + 1);
+        const double fy = std::clamp(sy - std::floor(sy), 0.0, 1.0);
+        uint8_t *line = dst.data + static_cast<size_t>(y) * dst.stride();
+        for (int x = 0; x < target.width; ++x)
+        {
+            const double sx = (x + 0.5) * rx - 0.5;
+            const int sx0 = std::clamp(static_cast<int>(std::floor(sx)), 0, src.width - 1);
+            const int sx1 = std::min(src.width - 1, sx0 + 1);
+            const double fx = std::clamp(sx - std::floor(sx), 0.0, 1.0);
+            const PixelRGBA p00 = samplePixel(src, sx0, sy0);
+            const PixelRGBA p10 = samplePixel(src, sx1, sy0);
+            const PixelRGBA p01 = samplePixel(src, sx0, sy1);
+            const PixelRGBA p11 = samplePixel(src, sx1, sy1);
+            auto lerp = [fx, fy](uint8_t a, uint8_t b, uint8_t c, uint8_t d)
+            {
+                const double top = a + (b - a) * fx;
+                const double bottom = c + (d - c) * fx;
+                return static_cast<uint8_t>(std::clamp(
+                    static_cast<int>(std::lround(top + (bottom - top) * fy)), 0, 255));
+            };
+            uint8_t *pixel = line + static_cast<size_t>(x) * 3;
+            pixel[0] = lerp(p00.r, p10.r, p01.r, p11.r);
+            pixel[1] = lerp(p00.g, p10.g, p01.g, p11.g);
+            pixel[2] = lerp(p00.b, p10.b, p01.b, p11.b);
+        }
+    }
+    return out;
+}
+
 ImageData RenderEngine::overlayDifferenceStatic(const ImageData &base, const ImageData &diff,
                                                 double alpha)
 {

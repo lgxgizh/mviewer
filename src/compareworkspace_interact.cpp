@@ -1,6 +1,18 @@
 // CompareWorkspace interaction: keyboard, mouse, event filter, pixel link (M20 P0#2).
 #include "compareworkspace_p.h"
 
+void CompareWorkspace::showShortcutHelp()
+{
+    // Lightweight status-bar style tip via window title flash — no modal dialog
+    // so day-long keyboard work is not interrupted.
+    const QString tip =
+        tr("Compare 快捷键: B Blink · Space 按住Blink · S Split · W Swipe · O Overlay · "
+           "K 棋盘 · H Diff高亮 · Z/D 同步缩放/拖动 · C 准星 · L 像素连线 · "
+           "1~8 布局预设 · PgUp/PgDn 或 ←/→ 连续导航 · F Fit · X 交换 · ? 帮助 · Esc 关闭");
+    if (auto *w = window())
+        w->setWindowTitle(tip);
+}
+
 #include <cmath>
 
 bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
@@ -310,6 +322,7 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
         const Vec2 o = m_engine.cellTransform(refIdx).offset;
         m_engine.setCellOffset(refIdx, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
     }
+    scheduleDisplayLodRefresh(refIdx);
 }
 
 void CompareWorkspace::onPixelLinkToggled(bool on)

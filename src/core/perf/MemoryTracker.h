@@ -35,6 +35,7 @@ enum class MemLevel : int
 struct MemorySnapshot
 {
     size_t cacheTotalBytes = 0;             // CacheManager::memoryUsageBytes()
+    size_t raw16CacheBytes = 0;             // CacheManager Raw16 inspector store
     size_t cacheByLevel[4] = {0, 0, 0, 0};  // per MemLevel
     uint64_t cacheHits[4] = {0, 0, 0, 0};   // per MemLevel (from levelStats)
     uint64_t cacheMisses[4] = {0, 0, 0, 0}; // per MemLevel

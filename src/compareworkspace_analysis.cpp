@@ -313,7 +313,11 @@ void CompareWorkspace::updateInspector(int x, int y)
     for (int i = 0; i < n; ++i)
     {
         if (i < m_cellViews.size() && m_cellViews[i])
-            samples[static_cast<size_t>(i)] = sampleDisplayImage(m_cellViews[i]->image(), x, y);
+        {
+            const QPoint displayPoint = m_cellViews[i]->displayPointForSource(x, y);
+            samples[static_cast<size_t>(i)] =
+                sampleDisplayImage(m_cellViews[i]->image(), displayPoint.x(), displayPoint.y());
+        }
     }
 
     // Reuse existing QTableWidgetItem objects across ordinary hovers: only
@@ -397,8 +401,14 @@ void CompareWorkspace::updateInspector(int x, int y)
         const QImage *baseImage = nullptr;
         if (baseIdx >= 0 && baseIdx < m_cellViews.size() && m_cellViews[baseIdx])
             baseImage = &m_cellViews[baseIdx]->image();
-        const auto stats = baseImage ? neighborhoodStatsFromDisplayImage(*baseImage, x, y, kernel)
-                                     : mviewer::core::NeighborhoodStats{};
+        const QPoint displayPoint = (baseIdx >= 0 && baseIdx < m_cellViews.size() &&
+                                     m_cellViews[baseIdx])
+                                        ? m_cellViews[baseIdx]->displayPointForSource(x, y)
+                                        : QPoint();
+        const auto stats = baseImage
+                               ? neighborhoodStatsFromDisplayImage(*baseImage, displayPoint.x(),
+                                                                   displayPoint.y(), kernel)
+                               : mviewer::core::NeighborhoodStats{};
         if (stats.count > 0)
         {
             m_statsLabel->setText(tr("邻域 %1×%1: 亮度 μ=%2 σ=%3 [%4, %5] · RGB均值(%6, %7, %8)")

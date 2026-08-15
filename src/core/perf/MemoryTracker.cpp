@@ -72,6 +72,7 @@ MemorySnapshot MemoryTracker::sample()
     auto &cm = CacheManager::instance();
 
     s.cacheTotalBytes = cm.memoryUsageBytes();
+    s.raw16CacheBytes = cm.raw16UsageBytes();
     for (int i = 0; i < 4; ++i)
     {
         const CacheLevel lvl = static_cast<CacheLevel>(i);

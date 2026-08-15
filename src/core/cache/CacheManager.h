@@ -35,7 +35,8 @@ struct CacheConfig
     size_t thumbnailCacheSize = 64 * 1024 * 1024; // 64MB
     size_t previewCacheSize = 256 * 1024 * 1024;  // 256MB
     size_t viewerCacheSize = 512 * 1024 * 1024;   // 512MB
-    size_t diskCacheSize = 1024 * 1024 * 1024;    // 1GB（软上限，目前未严格计量）
+    size_t raw16CacheSize = 256 * 1024 * 1024;    // 256MB (16-bit inspector samples)
+    size_t diskCacheSize = 1024 * 1024 * 1024;    // 1GB（精确 byte 上限）
     int maxDiskCacheEntries = 100000;
 };
 
@@ -84,7 +85,7 @@ class CacheManager
     bool hasMetadata(const std::string &key) const;
 
     // 原始 16-bit 采样缓冲缓存（Pixel Inspector 高比特深读取）。仅在源位深>8 时
-    // 存在，独立于像素池，单独上限保护内存。
+    // 存在，独立于像素池，按 vector 已分配 capacity 单独上限保护内存。
     void putRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> buf, int channels,
                   uint16_t maxSample);
     bool getRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> &out,
@@ -97,6 +98,8 @@ class CacheManager
     // 移除某 key 在全部层级（内存像素池 + 元数据对象 + 磁盘）的缓存。
     void invalidate(const std::string &key);
     size_t memoryUsageBytes() const;
+    size_t raw16UsageBytes() const;
+    size_t raw16EntryCount() const;
     size_t diskUsageBytes() const;
 
     // 预取：把给定 key 预热到指定内存级（默认 FullImage）。
@@ -135,6 +138,10 @@ class CacheManager
         uint16_t maxSample = 0;
     };
     std::unordered_map<std::string, Raw16Entry> m_raw16Store;
-    std::list<std::string> m_raw16Order;
-    static constexpr size_t kRaw16MaxEntries = 2000;
+    mutable std::list<std::string> m_raw16Order;
+    size_t m_raw16Bytes = 0;
+    size_t m_raw16BudgetBytes = 256 * 1024 * 1024;
+
+    void eraseRaw16Locked(const std::string &key);
+    void trimRaw16Locked();
 };

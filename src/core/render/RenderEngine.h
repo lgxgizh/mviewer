@@ -194,6 +194,10 @@ class RenderEngine
 
     static ImageData scaleStatic(const ImageData &src, const RenderSize &target,
                                  RenderInterp mode = RenderInterp::Bilinear);
+    // Bounded display materialization: scales directly from ImageData into a
+    // target-sized buffer without first creating a full-resolution QImage.
+    // Analysis callers should continue to use the full-resolution source.
+    static ImageData scaleBoundedStatic(const ImageData &src, const RenderSize &target);
     static ImageData overlayDifferenceStatic(const ImageData &base, const ImageData &diff,
                                              double alpha = 0.5);
     static ImageData scaleRegionStatic(const ImageData &src, const RenderRect &region,

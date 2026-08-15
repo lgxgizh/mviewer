@@ -27,7 +27,13 @@ RawImageView::RawImageView(QWidget *parent) : QWidget(parent)
 
 void RawImageView::setImage(const QImage &img)
 {
+    setImage(img, {});
+}
+
+void RawImageView::setImage(const QImage &img, const QSize &sourceSize)
+{
     m_image = img;
+    m_sourceSize = sourceSize.isValid() ? sourceSize : img.size();
     m_sizeMismatch = false;
     releaseBaseSurface();
     resetFit();
@@ -37,6 +43,7 @@ void RawImageView::setImage(const QImage &img)
 void RawImageView::clear()
 {
     m_image = QImage();
+    m_sourceSize = {};
     m_scale = m_fitScale = 1.0;
     m_offset = {};
     releaseBaseSurface();
@@ -70,14 +77,14 @@ void RawImageView::setTransform(double scale, const QPointF &offset)
 
 void RawImageView::clampOffset()
 {
-    if (m_image.isNull())
+    if (m_image.isNull() || !m_sourceSize.isValid())
     {
         m_offset = {};
         return;
     }
     // Allow panning within a reasonable range
-    const double maxOffX = qMax(0.0, m_image.width() * m_scale) / 2.0 + width();
-    const double maxOffY = qMax(0.0, m_image.height() * m_scale) / 2.0 + height();
+    const double maxOffX = qMax(0.0, m_sourceSize.width() * m_scale) / 2.0 + width();
+    const double maxOffY = qMax(0.0, m_sourceSize.height() * m_scale) / 2.0 + height();
     m_offset.setX(qBound(-maxOffX, m_offset.x(), maxOffX));
     m_offset.setY(qBound(-maxOffY, m_offset.y(), maxOffY));
 }
@@ -119,8 +126,13 @@ void RawImageView::computeFit()
         m_fitScale = 1.0;
         return;
     }
-    m_fitScale = std::min(static_cast<double>(width()) / m_image.width(),
-                          static_cast<double>(height()) / m_image.height());
+    if (!m_sourceSize.isValid())
+    {
+        m_fitScale = 1.0;
+        return;
+    }
+    m_fitScale = std::min(static_cast<double>(width()) / m_sourceSize.width(),
+                          static_cast<double>(height()) / m_sourceSize.height());
     m_scale = m_fitScale;
     m_offset = {};
 }
@@ -144,14 +156,14 @@ void RawImageView::paintEvent(QPaintEvent *)
     // Geometry for the live annotation layer below (same transform as the image).
     const double cx = width() / 2.0 + m_offset.x();
     const double cy = height() / 2.0 + m_offset.y();
-    const int dw = qRound(m_image.width() * m_scale);
-    const int dh = qRound(m_image.height() * m_scale);
+    const int dw = qRound(m_sourceSize.width() * m_scale);
+    const int dh = qRound(m_sourceSize.height() * m_scale);
 
     // ROI selection box (image coords -> widget coords, same transform as the image)
     if (!m_selection.isEmpty())
     {
-        const double sx = static_cast<double>(dw) / m_image.width();
-        const double sy = static_cast<double>(dh) / m_image.height();
+        const double sx = static_cast<double>(dw) / m_sourceSize.width();
+        const double sy = static_cast<double>(dh) / m_sourceSize.height();
         const QRect box(qRound(cx - dw / 2.0 + m_selection.x * sx),
                         qRound(cy - dh / 2.0 + m_selection.y * sy), qRound(m_selection.width * sx),
                         qRound(m_selection.height * sy));
@@ -303,8 +315,8 @@ void RawImageView::drawBaseLayer(QPainter &p)
     // Center in widget, then apply pan offset, then scale.
     const double cx = width() / 2.0 + m_offset.x();
     const double cy = height() / 2.0 + m_offset.y();
-    const int dw = qRound(m_image.width() * m_scale);
-    const int dh = qRound(m_image.height() * m_scale);
+    const int dw = qRound(m_sourceSize.width() * m_scale);
+    const int dh = qRound(m_sourceSize.height() * m_scale);
     p.drawImage(QRectF(cx - dw / 2.0, cy - dh / 2.0, dw, dh), m_image);
 
     // Difference/heatmap overlay (compare mode): same transform as the base image
@@ -312,13 +324,12 @@ void RawImageView::drawBaseLayer(QPainter &p)
     // data (DifferenceEngine::heatMap) — RawImageView performs no decoding here.
     if (!m_overlay.isNull())
     {
-        const int ow = qRound(m_overlay.width() * m_scale);
-        const int oh = qRound(m_overlay.height() * m_scale);
         p.save();
         p.setOpacity(m_overlayAlpha);
-        p.drawImage(QRect(cx - dw / 2 + static_cast<int>((dw - ow) / 2.0),
-                          cy - dh / 2 + static_cast<int>((dh - oh) / 2.0), ow, oh),
-                    m_overlay);
+        // The overlay is a display LOD of the same source geometry. Draw it
+        // into the base destination so a smaller materialization remains
+        // registered instead of being centered as a smaller image.
+        p.drawImage(QRectF(cx - dw / 2.0, cy - dh / 2.0, dw, dh), m_overlay);
         p.restore();
     }
 }
@@ -376,9 +387,9 @@ void RawImageView::mouseMoveEvent(QMouseEvent *ev)
             const QPointF imagePos = widgetToImage(ev->pos());
             const int ix = qFloor(imagePos.x());
             const int iy = qFloor(imagePos.y());
-            if (ix >= 0 && iy >= 0 && ix < m_image.width() && iy < m_image.height())
+            if (ix >= 0 && iy >= 0 && ix < m_sourceSize.width() && iy < m_sourceSize.height())
             {
-                const QRgb c = m_image.pixel(ix, iy);
+                const QRgb c = m_image.pixel(displayPointForSource(ix, iy));
                 emit pixelInfo(ix, iy, qRed(c), qGreen(c), qBlue(c), true);
                 // M16.1 (n/n crosshair): mirror the cursor position to all cells.
                 emit crosshairMoved(QPointF(ix, iy));
@@ -463,9 +474,19 @@ QPointF RawImageView::widgetToImage(const QPoint &pos) const
         return {};
     const double cx = width() / 2.0 + m_offset.x();
     const double cy = height() / 2.0 + m_offset.y();
-    const double dw = m_image.width() * m_scale;
-    const double dh = m_image.height() * m_scale;
+    const double dw = m_sourceSize.width() * m_scale;
+    const double dh = m_sourceSize.height() * m_scale;
     const double imgLeft = cx - dw / 2.0;
     const double imgTop = cy - dh / 2.0;
     return QPointF((pos.x() - imgLeft) / m_scale, (pos.y() - imgTop) / m_scale);
+}
+
+QPoint RawImageView::displayPointForSource(int x, int y) const
+{
+    if (m_image.isNull() || !m_sourceSize.isValid())
+        return {};
+    const double sx = static_cast<double>(m_image.width()) / m_sourceSize.width();
+    const double sy = static_cast<double>(m_image.height()) / m_sourceSize.height();
+    return QPoint(qBound(0, qFloor(x * sx), m_image.width() - 1),
+                  qBound(0, qFloor(y * sy), m_image.height() - 1));
 }

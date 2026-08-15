@@ -13,6 +13,7 @@
 
 #include "compareworkspace.h"
 #include "core/compare/CompareEngine.h"
+#include "core/perf/MemoryTracker.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "selectionmodel.h"
 #include "widgets/histogramwidget.h"
@@ -690,6 +691,95 @@ void testCompareLoadIsAsync(const QDir &dir)
     dlg.close();
 }
 
+// M42 P0/P1: real Compare display materialization must be viewport/LOD bounded.
+// The source frames remain full resolution for diff/metrics, but a Fit-state
+// pane must not retain a second QImage at the source dimensions.
+void testLargeCompareDisplayBounded(const QDir &dir)
+{
+    std::cout << "-- Compare M42: 8-image display memory bounded --\n";
+    QStringList largePaths;
+    for (int i = 0; i < 8; ++i)
+        largePaths << writePng(dir, QString("m42_large_%1.png").arg(i), 2400, 1600,
+                               QColor(20 + i * 20, 40 + i * 10, 180 - i * 10));
+
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    dlg.resize(1200, 800);
+    dlg.show();
+    const auto rssBefore = mviewer::perf::MemoryTracker::instance().sample();
+    ws->setImages(largePaths);
+    waitForCompareCount(ws, 8, 30000);
+
+    QElapsedTimer paneTimer;
+    paneTimer.start();
+    QList<RawImageView *> panes;
+    while (paneTimer.elapsed() < 30000)
+    {
+        panes = ws->findChildren<RawImageView *>();
+        if (panes.size() >= 8)
+        {
+            bool ready = true;
+            for (RawImageView *pane : panes)
+                ready = ready && pane && !pane->image().isNull() && pane->image().width() < 2400 &&
+                        pane->image().height() < 1600;
+            if (ready)
+                break;
+        }
+        pump(25);
+    }
+    CHECK(ws->comparedImageCount() == 8 && panes.size() >= 8,
+          "M42: 8-image Compare reaches the real pane path");
+
+    size_t sourceBytes = 0;
+    for (int i = 0; i < ws->engine().imageCount(); ++i)
+    {
+        const ImageFrame *frame = ws->engine().imageAt(i);
+        if (frame)
+            sourceBytes += frame->pixels().byteSize();
+    }
+    size_t displayBytes = 0;
+    bool everyPaneIsLod = true;
+    for (RawImageView *pane : panes)
+    {
+        if (!pane)
+            continue;
+        displayBytes += static_cast<size_t>(pane->image().sizeInBytes());
+        everyPaneIsLod = everyPaneIsLod && pane->image().width() < 2400 &&
+                         pane->image().height() < 1600;
+    }
+    CHECK(everyPaneIsLod, "M42: Fit panes use a display LOD below source dimensions");
+    CHECK(sourceBytes > 0 && displayBytes * 2 < sourceBytes,
+          "M42: 8-pane display bytes are materially below a second full-resolution copy");
+    const auto rss = mviewer::perf::MemoryTracker::instance().sample();
+    std::cout << "   source bytes=" << sourceBytes << " display bytes=" << displayBytes
+              << " working-set KB before=" << rssBefore.processWorkingSetKB
+              << " after=" << rss.processWorkingSetKB << "\n";
+
+    // Exercise the real continuation path: zoom/pan, explicit diff, then close.
+    if (!panes.isEmpty() && panes.first())
+        panes.first()->zoom(2.0, QPointF(panes.first()->width() / 2.0,
+                                         panes.first()->height() / 2.0));
+    if (QCheckBox *diff = findChk(ws, QStringLiteral("显示差异")))
+        diff->setChecked(true);
+    pump(100);
+    dlg.close();
+    auto &scheduler = TaskScheduler::instance();
+    CHECK(scheduler.drain(TaskScheduler::PoolType::AnalysisPool, std::chrono::seconds(20)),
+          "M42: Compare zoom/diff/exit drains Analysis work");
+    const auto analysisMetrics = scheduler.metrics(TaskScheduler::PoolType::AnalysisPool);
+    const auto graphMetrics = scheduler.graphMetrics();
+    CHECK(analysisMetrics.pending == 0 && analysisMetrics.active_tasks == 0 &&
+              analysisMetrics.queue_depth == 0,
+          "M42: Compare Analysis pending/active/queue counters converge to zero");
+    CHECK(graphMetrics.handles == 0 && graphMetrics.deferred == 0 &&
+              graphMetrics.dep_graph_entries == 0 && graphMetrics.dependents_entries == 0,
+          "M42: Compare scheduler handles and dependency graph converge to zero");
+}
+
 // ─── M30: Pixel Inspector hover coalescing ──────────────────────
 // The Compare inspector table is fed by up to two hover signals per mouse move
 // when the synced crosshair is enabled (RawImageView::pixelInfo plus
@@ -1037,6 +1127,7 @@ void testInspectorCoalescing(const QString &a, const QString &b)
 
 int main(int argc, char **argv)
 {
+    setvbuf(stdout, nullptr, _IONBF, 0);
     QApplication app(argc, argv);
 
     QTemporaryDir tmp;
@@ -1058,6 +1149,7 @@ int main(int argc, char **argv)
     testPaneHistogramConsistency(paths8[0], paths8[1]);
     testDegradedImages(dir);
     testCompareLoadIsAsync(dir);
+    testLargeCompareDisplayBounded(dir);
     testCompareLoadCancellation(dir);
     testInspectorCoalescing(paths8[0], paths8[1]);
 

@@ -8,12 +8,15 @@
 #include <QImage>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstring>
-#include <vector>
+#include <span>
 
 namespace
 {
+
+std::atomic<size_t> g_lastPreviewFullFileCopyBytes{0};
 
 // RAW container extensions we attempt to preview-decode. This list is
 // intentionally broad: every entry embeds at least a thumbnail/preview JPEG,
@@ -26,7 +29,7 @@ const char *kRawExts[] = {"cr2", "cr3", "nef", "nrw", "arw", "dng", "orf",
 // Walk a single JPEG starting at FFD8, returning the index just past EOI
 // (FFD9), or -1 if the stream is malformed/truncated. Length fields of marker
 // segments are honoured so we do not stop early at a stray FFD9 inside data.
-long jpegEnd(const std::vector<uint8_t> &b, long start)
+long jpegEnd(std::span<const uint8_t> b, long start)
 {
     const long n = static_cast<long>(b.size());
     if (start < 0 || start + 2 > n)
@@ -66,7 +69,7 @@ long jpegEnd(const std::vector<uint8_t> &b, long start)
 
 // Find the largest embedded JPEG preview in the buffer (cameras often store
 // several; we want the highest-resolution one).
-QByteArray extractLargestJpeg(const std::vector<uint8_t> &b)
+QByteArray extractLargestJpeg(std::span<const uint8_t> b)
 {
     const long n = static_cast<long>(b.size());
     long bestStart = -1;
@@ -92,7 +95,8 @@ QByteArray extractLargestJpeg(const std::vector<uint8_t> &b)
     }
     if (bestStart < 0)
         return QByteArray();
-    return QByteArray(reinterpret_cast<const char *>(b.data() + bestStart), bestEnd - bestStart);
+    return QByteArray::fromRawData(reinterpret_cast<const char *>(b.data() + bestStart),
+                                   static_cast<qsizetype>(bestEnd - bestStart));
 }
 
 ImageData toImageData(const QImage &src)
@@ -128,8 +132,14 @@ bool RawDecoder::canDecode(const std::string &path) const
     return false;
 }
 
+size_t RawDecoder::lastPreviewFullFileCopyBytes()
+{
+    return g_lastPreviewFullFileCopyBytes.load(std::memory_order_relaxed);
+}
+
 ImageData RawDecoder::extractPreview(const std::string &path, int maxEdge) const
 {
+    g_lastPreviewFullFileCopyBytes.store(0, std::memory_order_relaxed);
     QFile f(QString::fromStdString(path));
     if (!f.open(QIODevice::ReadOnly))
         return ImageData();
@@ -138,9 +148,9 @@ ImageData RawDecoder::extractPreview(const std::string &path, int maxEdge) const
     if (raw.isEmpty())
         return ImageData();
 
-    std::vector<uint8_t> buf(reinterpret_cast<const uint8_t *>(raw.constData()),
-                             reinterpret_cast<const uint8_t *>(raw.constData()) + raw.size());
-    const QByteArray jpeg = extractLargestJpeg(buf);
+    const auto bytes = std::span<const uint8_t>(
+        reinterpret_cast<const uint8_t *>(raw.constData()), static_cast<size_t>(raw.size()));
+    const QByteArray jpeg = extractLargestJpeg(bytes);
     if (jpeg.isEmpty())
         return ImageData();
 

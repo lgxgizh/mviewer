@@ -11,6 +11,9 @@
 #include <QColorSpace>
 #include <QCoreApplication>
 #include <QImage>
+#include <QTemporaryDir>
+#include <QStringList>
+#include <QtGui/qrgba64.h>
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
@@ -218,6 +221,60 @@ static void testImageFrameExtras()
           "Render cache cleared");
 }
 
+static void testRaw16ImageSoak()
+{
+    printf("\n[16-bit PNG/TIFF cache bounded soak (M42)]\n");
+    CacheManager &mgr = CacheManager::instance();
+    DiskCache &disk = DiskCache::instance();
+    mgr.clear();
+    disk.clear();
+    CacheConfig cfg = mgr.config();
+    const size_t perImage = 96u * 72u * 3u * sizeof(uint16_t);
+    cfg.raw16CacheSize = perImage * 2;
+    mgr.configure(cfg);
+
+    QTemporaryDir dir;
+    CHECK(dir.isValid(), "temporary 16-bit soak directory is available");
+    if (!dir.isValid())
+        return;
+
+    QStringList paths;
+    for (int i = 0; i < 3; ++i)
+    {
+        QImage image(96, 72, QImage::Format_RGBX64);
+        const QColor color = QColor::fromRgba64(static_cast<quint16>(1000 + i * 1000),
+                                                 static_cast<quint16>(2000 + i * 1000),
+                                                 static_cast<quint16>(3000 + i * 1000), 65535);
+        image.fill(color);
+        const QString png = dir.filePath(QString("m42_%1.png").arg(i));
+        const QString tif = dir.filePath(QString("m42_%1.tiff").arg(i));
+        CHECK(image.save(png), "16-bit PNG fixture is written");
+        CHECK(image.save(tif), "16-bit TIFF fixture is written");
+        paths << png << tif;
+    }
+
+    ImageRepository &repo = ImageRepository::instance();
+    bool allLoaded = true;
+    for (const QString &path : paths)
+    {
+        const auto result = repo.load(path.toStdString());
+        allLoaded = allLoaded && result.success() && result.frame && result.frame->hasRaw16();
+        if (result.success() && result.frame)
+        {
+            uint16_t r = 0, g = 0, b = 0;
+            allLoaded = allLoaded && result.frame->raw16At(0, 0, r, g, b);
+        }
+        CHECK(mgr.raw16UsageBytes() <= cfg.raw16CacheSize,
+              "16-bit PNG/TIFF soak stays within the Raw16 byte budget");
+    }
+    CHECK(allLoaded, "continuous 16-bit PNG/TIFF loads retain Pixel Inspector samples");
+
+    mgr.clearMemory();
+    CHECK(mgr.raw16UsageBytes() == 0, "16-bit soak clear converges Raw16 usage to zero");
+    mgr.clear();
+    mgr.configure(CacheConfig{});
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -228,6 +285,7 @@ int main(int argc, char **argv)
     testDiskHitRestoresDisplayProfile();
     test1000ImageNonBlocking();
     testImageFrameExtras();
+    testRaw16ImageSoak();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

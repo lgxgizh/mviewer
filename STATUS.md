@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-08-15 · Version: **1.0.9 (in development)** · Last release tag: **v1.0.5** (2026-07-29)
+> Snapshot: 2026-08-15 · Version: **1.0.9 release line** · Verified release tag: **v1.0.9**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -12,7 +12,8 @@
 > `docs/review/M38_VIEWER_RENDER_CONVERGENCE_2026-08-14.md`,
 > `docs/review/M39_REALWORLD_RELIABILITY_2026-08-14.md`,
 > `docs/review/M40_INTERACTION_CANCELLATION_CLOSURE_2026-08-15.md`,
-> `docs/review/M41_STORAGE_RUNTIME_TEST_CREDIBILITY_CLOSURE_2026-08-15.md` and
+> `docs/review/M41_STORAGE_RUNTIME_TEST_CREDIBILITY_CLOSURE_2026-08-15.md`,
+> `docs/review/M42_REALWORLD_RESOURCE_BOUNDEDNESS_2026-08-15.md` and
 > `.\build.ps1 Test`.
 
 ## Positioning
@@ -49,6 +50,17 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   cmake/ninja/cl directly. Qt 6.10.x / MSVC 19.44 verified on the dev machine.
 
 ## Shipped capabilities (1.0.x, CTest-verified)
+
+### M42 Real-world resource boundedness & large-image Compare closure (2026-08-15)
+
+- Raw16 Pixel Inspector buffers are byte-bounded, included in deterministic
+  memory accounting, and cleared by all cache lifecycle operations.
+- Compare Fit-state panes use viewport-sized display LODs while full-resolution
+  ImageFrames remain the source for analysis, diff, ROI, and Pixel Inspector.
+- RAW preview scanning uses an immutable span over `QByteArray` without a
+  second full-file vector copy.
+- Focused and full-gate evidence is recorded in
+  `docs/review/M42_REALWORLD_RESOURCE_BOUNDEDNESS_2026-08-15.md`.
 
 ### M41 Storage / runtime / test credibility closure (2026-08-15)
 

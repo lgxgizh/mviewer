@@ -3,6 +3,12 @@
 
 #include <cmath>
 
+namespace
+{
+constexpr double kDisplayLodOverscan = 1.25;
+constexpr double kDisplayLodBucketSteps = 16.0;
+}
+
 // M34: the dedicated compare canvas page. The normal grid scrolls inside
 // "compareGridPage"; split/swipe/overlay/checker render on the sibling
 // "compareCanvas" widget. A stacked layout shows exactly one page, so canvas
@@ -79,23 +85,59 @@ QRectF CompareWorkspace::cellDestRect(int idx, const QRectF &geom) const
     if (idx < 0 || idx >= m_cellViews.size() || !m_cellViews[idx])
         return {};
     const QImage &img = m_cellViews[idx]->image();
-    if (img.isNull() || geom.isEmpty())
+    const QSize sourceSize = m_cellViews[idx]->sourceSize();
+    if (img.isNull() || !sourceSize.isValid() || geom.isEmpty())
         return {};
     const auto &ct = m_engine.cellTransform(idx);
     double sc = ct.scale;
     if (!m_uniformScale && m_syncZoom)
     {
-        const double canvasFit = std::min(geom.width() / img.width(), geom.height() / img.height());
+        const double canvasFit = std::min(geom.width() / sourceSize.width(),
+                                          geom.height() / sourceSize.height());
         sc = canvasFit * m_sharedZoomRatio;
     }
     if (!(sc > 0.0) || !std::isfinite(sc))
         return {};
     const double ox = m_syncDrag ? m_engine.syncTransform().offset.x : ct.offset.x;
     const double oy = m_syncDrag ? m_engine.syncTransform().offset.y : ct.offset.y;
-    const double dw = img.width() * sc;
-    const double dh = img.height() * sc;
+    const double dw = sourceSize.width() * sc;
+    const double dh = sourceSize.height() * sc;
     const QPointF center(geom.x() + geom.width() / 2.0 + ox, geom.y() + geom.height() / 2.0 + oy);
     return QRectF(center.x() - dw / 2.0, center.y() - dh / 2.0, dw, dh);
+}
+
+QSize CompareWorkspace::displayLodTarget(int idx, const ImageData &source) const
+{
+    if (source.isNull() || idx < 0 || idx >= m_cellViews.size() || !m_cellViews[idx])
+        return {};
+    const QSize viewport = m_cellViews[idx]->size();
+    if (!viewport.isValid() || viewport.width() <= 0 || viewport.height() <= 0)
+        return QSize(source.width, source.height);
+
+    const double dpr = std::max(1.0, m_cellViews[idx]->devicePixelRatioF());
+    const double logicalFit = std::min(static_cast<double>(viewport.width()) / source.width,
+                                       static_cast<double>(viewport.height()) / source.height);
+    const double physicalFit = logicalFit * dpr;
+    double requested = logicalFit;
+    if (idx < m_engine.imageCount())
+        requested = std::max(requested, m_engine.cellTransform(idx).scale);
+    if (!m_cellViews[idx]->image().isNull())
+        requested = std::max(requested, m_cellViews[idx]->scale());
+    if (!(requested > 0.0) || !std::isfinite(requested))
+        requested = logicalFit;
+    // Round the requested source-pixel density to a stable bucket. This keeps
+    // wheel bursts from producing a new raster size on every fractional tick,
+    // while DPR keeps the Fit raster dense enough for the physical viewport.
+    const double bucketed =
+        std::ceil(requested * dpr * kDisplayLodOverscan * kDisplayLodBucketSteps) /
+        kDisplayLodBucketSteps;
+    // Never upscale a source that already fits inside the viewport. Avoid
+    // passing an inverted [physicalFit, 1.0] interval to std::clamp for thumbnails.
+    const double factor = physicalFit >= 1.0
+                              ? 1.0
+                              : std::clamp(std::max(physicalFit, bucketed), physicalFit, 1.0);
+    return QSize(std::max(1, static_cast<int>(std::ceil(source.width * factor))),
+                 std::max(1, static_cast<int>(std::ceil(source.height * factor))));
 }
 
 void CompareWorkspace::fitAll()
@@ -154,9 +196,94 @@ void CompareWorkspace::schedulePostLayoutFit()
                            if (!ws)
                                return;
                            ws->m_postLayoutFitPending = false;
+                           const double requestedScale = ws->m_engine.syncTransform().scale;
+                           const double requestedRatio = ws->m_sharedZoomRatio;
+                           const bool preserveZoom =
+                               (std::isfinite(requestedScale) &&
+                                std::abs(requestedScale - 1.0) > 1e-9) ||
+                               (std::isfinite(requestedRatio) &&
+                                std::abs(requestedRatio - 1.0) > 1e-9);
                            ws->fitAll();
+                           if (preserveZoom)
+                           {
+                               const double ratio =
+                                   std::abs(requestedRatio - 1.0) > 1e-9 ? requestedRatio
+                                                                         : requestedScale;
+                               double commonFit = 1.0;
+                               bool firstFit = true;
+                               for (double fit : ws->m_fitScales)
+                               {
+                                   if (firstFit || fit < commonFit)
+                                       commonFit = fit;
+                                   firstFit = false;
+                               }
+                               ws->m_sharedZoomRatio = ratio;
+                               ws->m_engine.setScale(ratio);
+                               for (int i = 0; i < ws->m_engine.imageCount(); ++i)
+                               {
+                                   if (i >= ws->m_cellViews.size() || !ws->m_cellViews[i])
+                                       continue;
+                                   const double fit = ws->m_uniformScale
+                                                           ? commonFit
+                                                           : ws->m_fitScales.value(i, 1.0);
+                                   ws->m_engine.setCellScale(i, fit * ratio);
+                               }
+                           }
+                           ws->scheduleDisplayLodRefresh();
                            ws->update();
                        });
+}
+
+void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
+{
+    // Keep the latest pane request while the debounce timer is pending. This
+    // matters when independent-pane zoom switches panes faster than the timer.
+    m_displayLodRefreshPane = idx;
+    if (m_displayLodRefreshPending)
+        return;
+    m_displayLodRefreshPending = true;
+    QPointer<CompareWorkspace> guard(this);
+    QTimer::singleShot(70, this,
+                       [guard]()
+                       {
+                           CompareWorkspace *ws = guard.data();
+                           if (!ws)
+                               return;
+                           ws->m_displayLodRefreshPending = false;
+                           const int requestedPane = ws->m_displayLodRefreshPane;
+                           ws->m_displayLodRefreshPane = -1;
+                           std::vector<int> dirty;
+                           auto addIfNeeded = [&dirty, ws](int pane)
+                           {
+                               if (pane < 0 || pane >= ws->m_cellViews.size() ||
+                                   !ws->m_cellViews[pane])
+                                   return;
+                               const ImageFrame *frame = ws->m_engine.imageAt(pane);
+                               if (!frame || frame->pixels().isNull() ||
+                                   ws->m_cellViews[pane]->image().isNull() ||
+                                   ws->m_cellViews[pane]->image().size() !=
+                                       ws->displayLodTarget(pane, frame->pixels()))
+                                   dirty.push_back(pane);
+                           };
+                           if (requestedPane >= 0 && !ws->m_syncZoom)
+                               addIfNeeded(requestedPane);
+                           else
+                           {
+                               dirty.reserve(ws->m_cellViews.size());
+                               for (int i = 0; i < ws->m_cellViews.size(); ++i)
+                                   addIfNeeded(i);
+                           }
+                           if (!dirty.empty())
+                               ws->scheduleDisplayMaterialization(dirty);
+                       });
+}
+
+void CompareWorkspace::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    fitAll();
+    positionCellHists();
+    scheduleDisplayLodRefresh();
 }
 
 // Canvas paint entry — invoked from the canvas event path (Paint event via the
@@ -246,6 +373,8 @@ void CompareWorkspace::rebuildCells()
         view->setCellIndex(i);
         cellLay->addWidget(view, 1);
         m_cellViews.push_back(view);
+        connect(view, &RawImageView::scaleChanged, this,
+                [this, view](double) { scheduleDisplayLodRefresh(view->cellIndex()); });
 
         // M28 P1-01: panes start BLANK. ImageData -> QImage materialization is
         // one async Analysis batch scheduled below, never a synchronous
@@ -408,13 +537,16 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
     // their pixel buffers, so the worker holds the pixels alive cheaply.
     std::vector<ImageData> pixels;
     std::vector<mviewer::domain::ImageMetadata> metadata;
+    std::vector<QSize> displayTargets;
     pixels.reserve(static_cast<size_t>(paneCount));
     metadata.reserve(static_cast<size_t>(paneCount));
+    displayTargets.reserve(static_cast<size_t>(paneCount));
     for (int i = 0; i < paneCount; ++i)
     {
         const ImageFrame *img = m_engine.imageAt(i);
         pixels.push_back(img ? img->pixels() : ImageData());
         metadata.push_back(img ? img->metadata() : mviewer::domain::ImageMetadata{});
+        displayTargets.push_back(img ? displayLodTarget(i, img->pixels()) : QSize());
     }
     std::vector<CellAdjust> adjusts = m_cellAdjusts;
     const uint64_t gen = m_displayGen;
@@ -422,7 +554,7 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
 
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, metadata, adjusts, panes, paneCount, gen, guard](
+        [pixels, metadata, displayTargets, adjusts, panes, paneCount, gen, guard](
             const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
@@ -449,14 +581,42 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
                 const ImageData &src = pixels[static_cast<size_t>(idx)];
                 if (src.isNull())
                     continue; // no source data yet — the pane stays blank
-                const ImageData adjusted = CompareWorkspace::applyAdjusts(src, adjustFor(idx));
+                const CellAdjust sourceAdjust = adjustFor(idx);
+                const QSize target = displayTargets[static_cast<size_t>(idx)];
+                const ImageData lod = target.isValid()
+                                          ? RenderEngine::scaleBoundedStatic(
+                                                src, RenderSize{target.width(), target.height()})
+                                          : ImageData();
                 if (ctx.isCancelled())
-                    return; // after adjustment
+                    return; // after bounded scale
+                if (lod.isNull())
+                    continue;
+
+                // Point-wise adjustments commute with downsampling. Crop
+                // coordinates are mapped into the display LOD before applying
+                // the remaining transform, preserving adjusted-pane geometry
+                // without allocating a full-resolution display copy.
+                CellAdjust displayAdjust = sourceAdjust;
+                if (displayAdjust.hasCrop && src.width > 0 && src.height > 0)
+                {
+                    const double sx = static_cast<double>(lod.width) / src.width;
+                    const double sy = static_cast<double>(lod.height) / src.height;
+                    displayAdjust.cropX = static_cast<int>(std::lround(displayAdjust.cropX * sx));
+                    displayAdjust.cropY = static_cast<int>(std::lround(displayAdjust.cropY * sy));
+                    displayAdjust.cropW = static_cast<int>(std::lround(displayAdjust.cropW * sx));
+                    displayAdjust.cropH = static_cast<int>(std::lround(displayAdjust.cropH * sy));
+                }
+                const ImageData adjusted = CompareWorkspace::applyAdjusts(lod, displayAdjust);
+                if (ctx.isCancelled())
+                    return; // after bounded adjustment
                 if (adjusted.isNull())
                     continue; // failed adjustment must not clear the last valid preview
                 DisplayBatchResult::CellImage cell;
                 cell.index = idx;
                 cell.image = mvcore::toDisplayQImage(adjusted, metadata[static_cast<size_t>(idx)]);
+                cell.sourceSize = (sourceAdjust.hasCrop || sourceAdjust.rotation != 0)
+                                      ? QSize(adjusted.width, adjusted.height)
+                                      : QSize(src.width, src.height);
                 if (ctx.isCancelled())
                     return; // after conversion
                 if (cell.image.isNull())
@@ -510,12 +670,14 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
         if (!view)
             continue;
         const QSize oldSize = view->image().size();
+        const QSize oldSourceSize = view->sourceSize();
         const double oldScale = view->scale();
         const QPointF oldOffset = view->offset();
-        view->setImage(cell.image);
+        view->setImage(cell.image, cell.sourceSize);
         // M15: setImage() re-fits by default; keep the pane transform when the
         // displayed image did not change dimensions.
-        if (!oldSize.isEmpty() && view->image().size() == oldSize)
+        if (!oldSize.isEmpty() && view->image().size() == oldSize &&
+            view->sourceSize() == oldSourceSize)
             view->setTransform(oldScale, oldOffset);
     }
 
@@ -576,11 +738,14 @@ void CompareWorkspace::refreshAllDiffOverlays()
     // these captures — no `this`, no QObject/QWidget. ImageData copies share
     // their pixel buffers, so the worker holds the pixels alive cheaply.
     std::vector<ImageData> pixels;
+    std::vector<QSize> displayTargets;
     pixels.reserve(paneCount);
+    displayTargets.reserve(paneCount);
     for (int i = 0; i < paneCount; ++i)
     {
         const ImageFrame *img = m_engine.imageAt(i);
         pixels.push_back(img ? img->pixels() : ImageData());
+        displayTargets.push_back(img ? displayLodTarget(i, img->pixels()) : QSize());
     }
     std::vector<CellAdjust> adjusts = m_cellAdjusts;
     const uint8_t threshold = m_thresholdValue;
@@ -592,8 +757,8 @@ void CompareWorkspace::refreshAllDiffOverlays()
 
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, adjusts, baseIdx, threshold, highlight, visualize, roi, paneCount, gen, guard](
-            const TaskScheduler::TaskContext &ctx)
+        [pixels, displayTargets, adjusts, baseIdx, threshold, highlight, visualize, roi, paneCount,
+         gen, guard](const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
                 return; // superseded while queued — stop before any work
@@ -682,7 +847,23 @@ void CompareWorkspace::refreshAllDiffOverlays()
                             return; // after threshold/map conversion
                         if (!overlayImg.isNull())
                         {
-                            ov.overlay = mvcore::toQImage(overlayImg);
+                            ImageData displayOverlay = overlayImg;
+                            const QSize target = displayTargets[static_cast<size_t>(i)];
+                            if (target.isValid() &&
+                                (target.width() < overlayImg.width ||
+                                 target.height() < overlayImg.height))
+                            {
+                                const double factor = std::min(
+                                    static_cast<double>(target.width()) / pixels[i].width,
+                                    static_cast<double>(target.height()) / pixels[i].height);
+                                const QSize overlayTarget(
+                                    std::max(1, static_cast<int>(std::ceil(overlayImg.width * factor))),
+                                    std::max(1, static_cast<int>(std::ceil(overlayImg.height * factor))));
+                                displayOverlay = RenderEngine::scaleBoundedStatic(
+                                    overlayImg,
+                                    RenderSize{overlayTarget.width(), overlayTarget.height()});
+                            }
+                            ov.overlay = mvcore::toQImage(displayOverlay);
                             ov.opacity = highlight ? 0.75 : 0.5;
                         }
                     }

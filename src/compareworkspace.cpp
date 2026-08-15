@@ -417,18 +417,6 @@ void CompareWorkspace::exclusiveMode(QCheckBox *keepOn)
     uncheck(m_checkerChk);
 }
 
-void CompareWorkspace::showShortcutHelp()
-{
-    // Lightweight status-bar style tip via window title flash — no modal dialog
-    // so day-long keyboard work is not interrupted.
-    const QString tip =
-        tr("Compare 快捷键: B Blink · Space 按住Blink · S Split · W Swipe · O Overlay · "
-           "K 棋盘 · H Diff高亮 · Z/D 同步缩放/拖动 · C 准星 · L 像素连线 · "
-           "1~8 布局预设 · PgUp/PgDn 或 ←/→ 连续导航 · F Fit · X 交换 · ? 帮助 · Esc 关闭");
-    if (auto *w = window())
-        w->setWindowTitle(tip);
-}
-
 void CompareWorkspace::setImages(const QStringList &paths)
 {
     // M28 P1-01: Compare loads are ASYNC. Decoding happens on the DecodePool,
@@ -798,13 +786,6 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
     if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0)
         requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
     update();
-}
-
-void CompareWorkspace::resizeEvent(QResizeEvent *event)
-{
-    QWidget::resizeEvent(event);
-    fitAll();
-    positionCellHists();
 }
 
 // ─── M16.2: Per-cell image adjustments ───────────────────────────────────────

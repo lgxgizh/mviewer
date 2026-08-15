@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased] — M42 real-world resource boundedness / large Compare closure
+
+### Fixed
+
+- Raw16 Pixel Inspector buffers now use an exact byte-bounded LRU budget,
+  participate in memory accounting, and are cleared by all cache lifecycle
+  operations. An oversized buffer remains available through its owning frame
+  but is not retained by the cache.
+- Compare Fit-state panes now materialize viewport-sized display LODs while
+  keeping full-resolution frames for analysis, diff metrics, ROI, and pixel
+  inspection. LOD refreshes are debounced and latest-generation wins.
+- RAW embedded-JPEG preview scanning now uses an immutable byte span instead of
+  making a second full-file `std::vector<uint8_t>` copy.
+
+### Tests
+
+- Added Raw16 byte-budget, lifecycle, concurrency, and 16-bit PNG/TIFF soak
+  regressions, plus an 8-image real Compare display-memory acceptance path.
+
 ## [Unreleased] — M41 storage / runtime / test credibility closure
 
 ### Fixed

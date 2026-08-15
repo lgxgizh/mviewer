@@ -1,10 +1,23 @@
 #include "core/cache/CacheManager.h"
 
+#include <limits>
+
 CacheManager &CacheManager::instance()
 {
     static CacheManager inst;
     return inst;
 }
+
+namespace
+{
+bool raw16ByteSize(const std::vector<uint16_t> &buf, size_t &bytes)
+{
+    if (buf.capacity() > (std::numeric_limits<size_t>::max() / sizeof(uint16_t)))
+        return false;
+    bytes = buf.capacity() * sizeof(uint16_t);
+    return true;
+}
+} // namespace
 
 CacheManager::CacheManager()
 {
@@ -14,6 +27,11 @@ CacheManager::CacheManager()
 void CacheManager::configure(const CacheConfig &cfg)
 {
     m_config = cfg;
+    {
+        std::lock_guard<std::mutex> lock(m_raw16Mutex);
+        m_raw16BudgetBytes = cfg.raw16CacheSize;
+        trimRaw16Locked();
+    }
     ImageCache::instance().setCapacity(ImageCache::Metadata, cfg.metadataCacheSize);
     ImageCache::instance().setCapacity(ImageCache::Thumbnail, cfg.thumbnailCacheSize);
     ImageCache::instance().setCapacity(ImageCache::Preview, cfg.previewCacheSize);
@@ -130,6 +148,10 @@ void CacheManager::erase(const std::string &key)
         m_metaStore.erase(key);
         m_metaOrder.remove(key);
     }
+    {
+        std::lock_guard<std::mutex> lock(m_raw16Mutex);
+        eraseRaw16Locked(key);
+    }
     DiskCache::instance().remove(key);
 }
 
@@ -142,6 +164,10 @@ void CacheManager::clear()
 void CacheManager::clearMemory()
 {
     ImageCache::instance().clear();
+    std::lock_guard<std::mutex> lock(m_raw16Mutex);
+    m_raw16Store.clear();
+    m_raw16Order.clear();
+    m_raw16Bytes = 0;
 }
 
 void CacheManager::clearDisk()
@@ -151,7 +177,19 @@ void CacheManager::clearDisk()
 
 size_t CacheManager::memoryUsageBytes() const
 {
-    return ImageCache::instance().totalUsedBytes();
+    return ImageCache::instance().totalUsedBytes() + raw16UsageBytes();
+}
+
+size_t CacheManager::raw16UsageBytes() const
+{
+    std::lock_guard<std::mutex> lock(m_raw16Mutex);
+    return m_raw16Bytes;
+}
+
+size_t CacheManager::raw16EntryCount() const
+{
+    std::lock_guard<std::mutex> lock(m_raw16Mutex);
+    return m_raw16Store.size();
 }
 
 size_t CacheManager::diskUsageBytes() const
@@ -198,17 +236,17 @@ void CacheManager::putRaw16(const std::string &key, std::shared_ptr<std::vector<
 {
     if (!buf || buf->empty())
         return;
+    size_t bytes = 0;
+    if (!raw16ByteSize(*buf, bytes))
+        return;
     std::lock_guard<std::mutex> lock(m_raw16Mutex);
-    auto it = m_raw16Store.find(key);
-    if (it != m_raw16Store.end())
-    {
-        m_raw16Order.remove(key);
-    }
-    else if (m_raw16Store.size() >= kRaw16MaxEntries)
+    eraseRaw16Locked(key);
+    if (m_raw16BudgetBytes == 0 || bytes > m_raw16BudgetBytes)
+        return;
+    while (!m_raw16Order.empty() && m_raw16Bytes > m_raw16BudgetBytes - bytes)
     {
         const std::string victim = m_raw16Order.back();
-        m_raw16Order.pop_back();
-        m_raw16Store.erase(victim);
+        eraseRaw16Locked(victim);
     }
     Raw16Entry e;
     e.buf = buf;
@@ -216,6 +254,7 @@ void CacheManager::putRaw16(const std::string &key, std::shared_ptr<std::vector<
     e.maxSample = maxSample;
     m_raw16Store[key] = std::move(e);
     m_raw16Order.push_front(key);
+    m_raw16Bytes += bytes;
 }
 
 bool CacheManager::getRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> &out,
@@ -228,6 +267,8 @@ bool CacheManager::getRaw16(const std::string &key, std::shared_ptr<std::vector<
     out = it->second.buf;
     channels = it->second.channels;
     maxSample = it->second.maxSample;
+    m_raw16Order.remove(key);
+    m_raw16Order.push_front(key);
     return true;
 }
 
@@ -242,7 +283,36 @@ void CacheManager::invalidate(const std::string &key)
         m_metaStore.erase(key);
         m_metaOrder.remove(key);
     }
+    {
+        std::lock_guard<std::mutex> lock(m_raw16Mutex);
+        eraseRaw16Locked(key);
+    }
     DiskCache::instance().remove(key);
+}
+
+void CacheManager::eraseRaw16Locked(const std::string &key)
+{
+    const auto it = m_raw16Store.find(key);
+    if (it == m_raw16Store.end())
+        return;
+    if (it->second.buf)
+    {
+        size_t bytes = 0;
+        if (!raw16ByteSize(*it->second.buf, bytes))
+            bytes = m_raw16Bytes;
+        m_raw16Bytes = bytes > m_raw16Bytes ? 0 : m_raw16Bytes - bytes;
+    }
+    m_raw16Store.erase(it);
+    m_raw16Order.remove(key);
+}
+
+void CacheManager::trimRaw16Locked()
+{
+    while (!m_raw16Order.empty() && m_raw16Bytes > m_raw16BudgetBytes)
+    {
+        const std::string victim = m_raw16Order.back();
+        eraseRaw16Locked(victim);
+    }
 }
 
 void CacheManager::prefetch(std::function<std::vector<std::string>()> nextKeys, CacheLevel level)
