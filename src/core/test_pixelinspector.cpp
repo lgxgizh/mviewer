@@ -1,5 +1,6 @@
 #include "core/analysis/PixelInspector.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/ImageAdjust.h"
 #include "core/image/ImageFrame.h"
 #include <cassert>
 #include <cmath>
@@ -90,6 +91,111 @@ static void test_neighborhood()
     CHECK(corner.mean == 0);
 }
 
+static void setRgb(ImageData &image, int x, int y, int r, int g, int b)
+{
+    ImageBuffer view = image.view();
+    uint8_t *pixel = view.data + static_cast<size_t>(y) * view.stride() +
+                     static_cast<size_t>(x) * view.channelsPerPixel();
+    pixel[0] = static_cast<uint8_t>(r);
+    pixel[1] = static_cast<uint8_t>(g);
+    pixel[2] = static_cast<uint8_t>(b);
+}
+
+static int coordinateValue(int x, int y)
+{
+    return 10 + x * 3 + y * 30;
+}
+
+static void checkSourceSample(const ImageData &image, const AnalysisAdjustment &adjustment, int x,
+                              int y, int sourceX, int sourceY)
+{
+    const auto actual = sampleAnalysisPixel(image, adjustment, x, y);
+    const int value = coordinateValue(sourceX, sourceY);
+    CHECK(actual.valid && actual.r == value && actual.g == value + 1 && actual.b == value + 2);
+}
+
+static void test_source_backed_analysis()
+{
+    // A coordinate-coded 3x2 source makes crop and rotation inverse mappings
+    // observable without depending on any widget or display-scale behavior.
+    ImageData source = makeImageData(3, 2, PixelFormat::RGB24);
+    for (int y = 0; y < source.height; ++y)
+        for (int x = 0; x < source.width; ++x)
+        {
+            const int value = coordinateValue(x, y);
+            setRgb(source, x, y, value, value + 1, value + 2);
+        }
+
+    AnalysisAdjustment identity;
+    checkSourceSample(source, identity, 2, 1, 2, 1);
+    CHECK(!sampleAnalysisPixel(source, identity, 3, 0).valid);
+
+    AnalysisAdjustment crop = identity;
+    crop.hasCrop = true;
+    crop.cropX = 1;
+    crop.cropY = 0;
+    crop.cropW = 2;
+    crop.cropH = 2;
+    checkSourceSample(source, crop, 0, 0, 1, 0);
+    checkSourceSample(source, crop, 1, 1, 2, 1);
+
+    crop.rotation = 90;
+    checkSourceSample(source, crop, 0, 0, 1, 1);
+    checkSourceSample(source, crop, 1, 0, 1, 0);
+    checkSourceSample(source, crop, 0, 1, 2, 1);
+    checkSourceSample(source, crop, 1, 1, 2, 0);
+    crop.rotation = 180;
+    checkSourceSample(source, crop, 0, 0, 2, 1);
+    crop.rotation = 270;
+    checkSourceSample(source, crop, 0, 0, 2, 0);
+
+    ImageData adjustedSource = makeImageData(1, 1, PixelFormat::RGB24);
+    setRgb(adjustedSource, 0, 0, 90, 140, 210);
+    AnalysisAdjustment adjustment;
+    adjustment.brightness = 17;
+    adjustment.contrast = 1.25;
+    adjustment.gamma = 1.4;
+    adjustment.redGain = 1.3;
+    adjustment.blueGain = 0.8;
+    const ImageData expected = adjustWhiteBalance(
+        adjustGamma(adjustContrast(adjustBrightness(adjustedSource, adjustment.brightness),
+                                   static_cast<float>(adjustment.contrast)),
+                    static_cast<float>(adjustment.gamma)),
+        static_cast<float>(adjustment.redGain), static_cast<float>(adjustment.blueGain));
+    const auto expectedPixel = samplePixel(expected, 0, 0);
+    const auto actualPixel = sampleAnalysisPixel(adjustedSource, adjustment, 0, 0);
+    CHECK(actualPixel.valid && actualPixel.r == expectedPixel.r && actualPixel.g == expectedPixel.g &&
+          actualPixel.b == expectedPixel.b);
+
+    ImageData grayscale = makeImageData(1, 1, PixelFormat::Grayscale8);
+    grayscale.buffer->at(0) = 120;
+    adjustment = AnalysisAdjustment{};
+    adjustment.redGain = 2.0;
+    adjustment.blueGain = 0.5;
+    const auto grayscalePixel = sampleAnalysisPixel(grayscale, adjustment, 0, 0);
+    CHECK(grayscalePixel.valid && grayscalePixel.r == 120 && grayscalePixel.g == 120 &&
+          grayscalePixel.b == 120);
+
+    ImageData neighborhood = makeImageData(9, 9, PixelFormat::Grayscale8);
+    for (int y = 0; y < neighborhood.height; ++y)
+        for (int x = 0; x < neighborhood.width; ++x)
+            neighborhood.buffer->at(static_cast<size_t>(y) * neighborhood.width + x) =
+                static_cast<uint8_t>(y * neighborhood.width + x);
+
+    for (const int kernel : {1, 3, 5, 7})
+    {
+        const auto stats = neighborhoodStats(neighborhood, identity, 4, 4, kernel);
+        long long expectedSum = 0;
+        const int half = kernel / 2;
+        for (int y = 4 - half; y <= 4 + half; ++y)
+            for (int x = 4 - half; x <= 4 + half; ++x)
+                expectedSum += y * neighborhood.width + x;
+        CHECK(stats.count == kernel * kernel);
+        CHECK(std::abs(stats.mean - static_cast<double>(expectedSum) / stats.count) < 1e-9);
+    }
+    CHECK(neighborhoodStats(neighborhood, identity, 0, 0, 7).count == 16);
+}
+
 static void test_raw16At()
 {
     // ImageFrame::raw16At is the source of truth for the Pixel Inspector
@@ -176,6 +282,7 @@ int main()
 {
     test_color_spaces();
     test_neighborhood();
+    test_source_backed_analysis();
     test_raw16At();
     test_color_spaces_16bit();
     if (g_failures == 0)

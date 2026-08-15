@@ -10,6 +10,19 @@
 > - 无缩放错误（no zoom error）：Fit/100%/200%/自由缩放在任意比例下画面几何正确、未被拉伸或错位。
 > - 无状态不同步（no state desync）：目录树、缩略图、主视图、状态栏、工具栏对"当前图片/当前目录"的认知始终一致。
 
+## M43 fidelity review snapshot (2026-08-15)
+
+- Automated source/display fidelity: **通过** — `pixelinspector_tests` and
+  `compare_acceptance_tests` pass; canonical `build.ps1 Test` is 88/88 in
+  three consecutive runs. Coverage includes high-frequency source-vs-LOD
+  Inspector RGB, exact 1×1/3×3/5×5/7×7 neighborhoods, LOD replacement
+  stability, crop/rotation/adjustment semantics, M42 bounded-memory and
+  cancellation/lifetime gates.
+- Human UX review: **MANUAL PENDING / NOT AVAILABLE** — native Windows
+  mixed-DPI, physical embedded ICC, long-session zoom/flicker feel, and
+  hardware RAW16 checks were not performed in the offscreen environment.
+- Full evidence: `docs/review/M43_COMPARE_ANALYSIS_FIDELITY_2026-08-15.md`.
+
 ---
 
 ## 角色：UX Review Agent

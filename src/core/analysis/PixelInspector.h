@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "core/image/ImageBuffer.h"
+
 namespace mviewer::core
 {
 // Pixel Inspector math — Qt-free, std-only so it is unit-testable without
@@ -60,6 +62,48 @@ struct NeighborhoodStats
     double gMean = 0;    // mean of G channel over the kernel
     double bMean = 0;    // mean of B channel over the kernel
 };
+
+// Coordinate-space adjustment state used by source-backed analysis. The
+// adjusted coordinate is in the crop-then-rotate output space, while pixels
+// are sampled lazily from the original ImageData. This keeps Inspector and
+// neighborhood analysis exact without materializing a full-resolution QImage.
+struct AnalysisAdjustment
+{
+    int brightness = 0;
+    double contrast = 1.0;
+    double gamma = 1.0;
+    double redGain = 1.0;
+    double blueGain = 1.0;
+    int rotation = 0;
+    bool hasCrop = false;
+    int cropX = 0;
+    int cropY = 0;
+    int cropW = 0;
+    int cropH = 0;
+};
+
+struct AnalysisPixel
+{
+    int r = 0;
+    int g = 0;
+    int b = 0;
+    bool valid = false;
+};
+
+// Sample one exact pixel from the original source in adjusted-pane
+// coordinates. The operation order matches ImageAdjust/applyAdjusts:
+// brightness → contrast → gamma → white balance → crop → rotation in the
+// coordinate mapping (point operations are evaluated at the inverse-mapped
+// source pixel). No display QImage or full-resolution adjusted copy is made.
+AnalysisPixel sampleAnalysisPixel(const ImageData &source, const AnalysisAdjustment &adjustment,
+                                  int adjustedX, int adjustedY);
+
+// Compute an exact N×N neighborhood over source-backed adjusted pixels.
+// Out-of-bounds samples are clipped; n=1,3,5,7 are the supported Inspector
+// kernels used by the UI.
+NeighborhoodStats neighborhoodStats(const ImageData &source,
+                                    const AnalysisAdjustment &adjustment, int adjustedX,
+                                    int adjustedY, int n);
 
 // Compute luminance statistics over an N×N neighborhood centered at (cx,cy)
 // in an RGB24 buffer laid out row-major with the given stride (bytes/row).

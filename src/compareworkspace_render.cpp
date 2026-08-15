@@ -397,9 +397,23 @@ void CompareWorkspace::rebuildCells()
 
         const QString cellName = img ? QString::fromStdString(img->metadata().fileName) : QString();
         connect(view, &RawImageView::pixelInfo, this,
-                [this, cellName](int x, int y, int r, int g, int b, bool valid)
+                [this, cellName, cellIndex = i](int x, int y, int, int, int, bool valid)
                 {
                     if (!valid)
+                    {
+                        emit pixelInfo(QString());
+                        return;
+                    }
+                    const ImageFrame *frame = m_engine.imageAt(cellIndex);
+                    const CellAdjust adjust =
+                        cellIndex >= 0 && cellIndex < static_cast<int>(m_cellAdjusts.size())
+                            ? m_cellAdjusts[static_cast<size_t>(cellIndex)]
+                            : CellAdjust{};
+                    const auto sample = frame
+                                            ? mviewer::core::sampleAnalysisPixel(
+                                                  frame->pixels(), analysisAdjustment(adjust), x, y)
+                                            : mviewer::core::AnalysisPixel{};
+                    if (!sample.valid)
                     {
                         emit pixelInfo(QString());
                         return;
@@ -408,9 +422,9 @@ void CompareWorkspace::rebuildCells()
                                        .arg(cellName)
                                        .arg(x)
                                        .arg(y)
-                                       .arg(r)
-                                       .arg(g)
-                                       .arg(b));
+                                       .arg(sample.r)
+                                       .arg(sample.g)
+                                       .arg(sample.b));
                     // M30: route the high-frequency hover through the coalescer
                     // so the sync-crosshair pixelInfo + crosshairMoved pair and
                     // rapid hovers render the inspector at most once per turn.
@@ -592,10 +606,11 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
                 if (lod.isNull())
                     continue;
 
-                // Point-wise adjustments commute with downsampling. Crop
-                // coordinates are mapped into the display LOD before applying
-                // the remaining transform, preserving adjusted-pane geometry
-                // without allocating a full-resolution display copy.
+                // This is a bounded visual-preview approximation: nonlinear
+                // point operations (especially gamma and clipping) do not
+                // strictly commute with downsampling. Analysis never consumes
+                // this LOD; it maps the hover coordinate back to source pixels
+                // and applies point-wise adjustments without a full-res QImage.
                 CellAdjust displayAdjust = sourceAdjust;
                 if (displayAdjust.hasCrop && src.width > 0 && src.height > 0)
                 {

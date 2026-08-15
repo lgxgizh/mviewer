@@ -164,6 +164,25 @@ header boundary.
 5. Compare panes use the same display materializer. Display conversion is not
    used by export/analysis paths unless their contract explicitly requests it.
 
+### Compare source truth versus display LOD
+
+Compare has two deliberately separate representations:
+
+- `ImageFrame::pixels()` / `ImageData` is the source of truth for Pixel
+  Inspector RGB, 1×1/3×3/5×5/7×7 neighborhoods, ROI histograms, Diff, PSNR,
+  SSIM and report/export inputs. Inspector sampling maps the adjusted-pane
+  coordinate back through crop and rotation, then applies point adjustments
+  without constructing a full-resolution `QImage`.
+- `RawImageView::image()` is a bounded, viewport-oriented display LOD. It is
+  used for painting and interaction geometry only. Its nonlinear preview
+  operations (gamma and clipping in particular) are an approximation and must
+  never become analysis input.
+- ICC conversion remains display-only. An ICC profile can change the rendered
+  display pixel without changing the numeric source sample used by analysis.
+- An identity, untransformed source with an available RAW16 plane may expose
+  the exact 16-bit sample. Adjusted/cropped/rotated samples are reported from
+  the adjusted 8-bit analysis path and are labeled as such in the Inspector.
+
 ### EXIF Orientation
 
 - Read orientation tag during decode

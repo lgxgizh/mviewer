@@ -45,69 +45,6 @@ struct DisplaySample
     bool valid = false;
 };
 
-DisplaySample sampleDisplayImage(const QImage &image, int x, int y)
-{
-    if (image.isNull() || x < 0 || y < 0 || x >= image.width() || y >= image.height())
-        return {};
-    const QRgb pixel = image.pixel(x, y);
-    return {qRed(pixel), qGreen(pixel), qBlue(pixel), true};
-}
-
-mviewer::core::NeighborhoodStats neighborhoodStatsFromDisplayImage(const QImage &image, int cx,
-                                                                   int cy, int n)
-{
-    mviewer::core::NeighborhoodStats stats;
-    if (image.isNull() || cx < 0 || cy < 0 || cx >= image.width() || cy >= image.height())
-        return stats;
-
-    const int half = n / 2;
-    long long sum = 0;
-    long long sumSq = 0;
-    long long rSum = 0;
-    long long gSum = 0;
-    long long bSum = 0;
-    int minValue = 255;
-    int maxValue = 0;
-    for (int dy = -half; dy <= half; ++dy)
-    {
-        const int y = cy + dy;
-        if (y < 0 || y >= image.height())
-            continue;
-        for (int dx = -half; dx <= half; ++dx)
-        {
-            const int x = cx + dx;
-            if (x < 0 || x >= image.width())
-                continue;
-            const QRgb pixel = image.pixel(x, y);
-            const int r = qRed(pixel);
-            const int g = qGreen(pixel);
-            const int b = qBlue(pixel);
-            const int luminance = static_cast<int>(0.2126 * r + 0.7152 * g + 0.0722 * b + 0.5);
-            sum += luminance;
-            sumSq += static_cast<long long>(luminance) * luminance;
-            rSum += r;
-            gSum += g;
-            bSum += b;
-            minValue = std::min(minValue, luminance);
-            maxValue = std::max(maxValue, luminance);
-            ++stats.count;
-        }
-    }
-    if (stats.count == 0)
-        return stats;
-
-    stats.mean = static_cast<double>(sum) / stats.count;
-    const double variance = static_cast<double>(sumSq) / stats.count - stats.mean * stats.mean;
-    stats.variance = std::max(0.0, variance);
-    stats.stdDev = std::sqrt(stats.variance);
-    stats.min = minValue;
-    stats.max = maxValue;
-    stats.rMean = static_cast<double>(rSum) / stats.count;
-    stats.gMean = static_cast<double>(gSum) / stats.count;
-    stats.bMean = static_cast<double>(bSum) / stats.count;
-    return stats;
-}
-
 // M30: write a cell's text into the existing QTableWidgetItem, lazily creating
 // it on first use. Ordinary inspector renders update text in place instead of
 // destroying and reallocating every cell (the old clearContents + new-item
@@ -126,6 +63,23 @@ void setCellText(QTableWidget *table, int row, int col, const QString &text)
         item->setText(text);
 }
 } // namespace
+
+mviewer::core::AnalysisAdjustment CompareWorkspace::analysisAdjustment(const CellAdjust &adjust)
+{
+    mviewer::core::AnalysisAdjustment result;
+    result.brightness = adjust.brightness;
+    result.contrast = adjust.contrast;
+    result.gamma = adjust.gamma;
+    result.redGain = adjust.rGain;
+    result.blueGain = adjust.bGain;
+    result.rotation = adjust.rotation;
+    result.hasCrop = adjust.hasCrop;
+    result.cropX = adjust.cropX;
+    result.cropY = adjust.cropY;
+    result.cropW = adjust.cropW;
+    result.cropH = adjust.cropH;
+    return result;
+}
 
 void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
 {
@@ -312,12 +266,16 @@ void CompareWorkspace::updateInspector(int x, int y)
     std::vector<DisplaySample> samples(static_cast<size_t>(n));
     for (int i = 0; i < n; ++i)
     {
-        if (i < m_cellViews.size() && m_cellViews[i])
-        {
-            const QPoint displayPoint = m_cellViews[i]->displayPointForSource(x, y);
-            samples[static_cast<size_t>(i)] =
-                sampleDisplayImage(m_cellViews[i]->image(), displayPoint.x(), displayPoint.y());
-        }
+        const ImageFrame *img = m_engine.imageAt(i);
+        if (!img)
+            continue;
+        const CellAdjust adjust =
+            i < static_cast<int>(m_cellAdjusts.size()) ? m_cellAdjusts[static_cast<size_t>(i)]
+                                                       : CellAdjust{};
+        const auto sourceSample =
+            mviewer::core::sampleAnalysisPixel(img->pixels(), analysisAdjustment(adjust), x, y);
+        samples[static_cast<size_t>(i)] = {
+            sourceSample.r, sourceSample.g, sourceSample.b, sourceSample.valid};
     }
 
     // Reuse existing QTableWidgetItem objects across ordinary hovers: only
@@ -398,16 +356,15 @@ void CompareWorkspace::updateInspector(int x, int y)
         static const int kKernels[] = {1, 3, 5, 7};
         const int kernelIndex = m_kernelCombo ? std::clamp(m_kernelCombo->currentIndex(), 0, 3) : 1;
         const int kernel = kKernels[kernelIndex];
-        const QImage *baseImage = nullptr;
-        if (baseIdx >= 0 && baseIdx < m_cellViews.size() && m_cellViews[baseIdx])
-            baseImage = &m_cellViews[baseIdx]->image();
-        const QPoint displayPoint = (baseIdx >= 0 && baseIdx < m_cellViews.size() &&
-                                     m_cellViews[baseIdx])
-                                        ? m_cellViews[baseIdx]->displayPointForSource(x, y)
-                                        : QPoint();
-        const auto stats = baseImage
-                               ? neighborhoodStatsFromDisplayImage(*baseImage, displayPoint.x(),
-                                                                   displayPoint.y(), kernel)
+        const ImageFrame *baseFrame = m_engine.imageAt(baseIdx);
+        const CellAdjust baseAdjust =
+            baseIdx >= 0 && baseIdx < static_cast<int>(m_cellAdjusts.size())
+                ? m_cellAdjusts[static_cast<size_t>(baseIdx)]
+                : CellAdjust{};
+        const auto stats = baseFrame
+                               ? mviewer::core::neighborhoodStats(
+                                     baseFrame->pixels(), analysisAdjustment(baseAdjust), x, y,
+                                     kernel)
                                : mviewer::core::NeighborhoodStats{};
         if (stats.count > 0)
         {

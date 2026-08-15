@@ -13,7 +13,8 @@
 > `docs/review/M39_REALWORLD_RELIABILITY_2026-08-14.md`,
 > `docs/review/M40_INTERACTION_CANCELLATION_CLOSURE_2026-08-15.md`,
 > `docs/review/M41_STORAGE_RUNTIME_TEST_CREDIBILITY_CLOSURE_2026-08-15.md`,
-> `docs/review/M42_REALWORLD_RESOURCE_BOUNDEDNESS_2026-08-15.md` and
+> `docs/review/M42_REALWORLD_RESOURCE_BOUNDEDNESS_2026-08-15.md`,
+> `docs/review/M43_COMPARE_ANALYSIS_FIDELITY_2026-08-15.md` and
 > `.\build.ps1 Test`.
 
 ## Positioning
@@ -61,6 +62,21 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   second full-file vector copy.
 - Focused and full-gate evidence is recorded in
   `docs/review/M42_REALWORLD_RESOURCE_BOUNDEDNESS_2026-08-15.md`.
+
+### M43 Compare analysis fidelity & pixel-accurate inspection closure (2026-08-15)
+
+- Pixel Inspector and 1×1/3×3/5×5/7×7 neighborhoods now read exact source
+  `ImageFrame::pixels()` samples rather than bounded display LOD pixels.
+- Crop/rotation inverse mapping and brightness/contrast/gamma/white-balance
+  semantics are centralized in the Qt-free `PixelInspector` sampler; ICC
+  remains display-only, and identity RAW16 reads remain exact.
+- Adversarial high-frequency source-vs-LOD Compare acceptance coverage and
+  source-backed core tests are green. Canonical CTest run #1 passed 88/88;
+  runs #2 and #3 also passed 88/88; three-run evidence is maintained in the
+  M43 review report.
+- Manual Windows mixed-DPI, physical ICC and long-session UX review remains
+  **PENDING** in this offscreen environment.
+- Evidence: `docs/review/M43_COMPARE_ANALYSIS_FIDELITY_2026-08-15.md`.
 
 ### M41 Storage / runtime / test credibility closure (2026-08-15)
 

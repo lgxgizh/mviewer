@@ -135,6 +135,45 @@ QString writePng(const QDir &dir, const QString &name, int w, int h, QColor c)
     return path;
 }
 
+QColor highFrequencyPixel(int x, int y)
+{
+    // Three-channel, one-pixel-period fixture: every source coordinate carries
+    // a deterministic value, so a display LOD sample cannot masquerade as the
+    // source pixel. The formula is intentionally not a flat fill or a smooth
+    // low-frequency gradient.
+    return QColor((x * 37 + y * 17 + 11) & 0xFF, (x * 13 + y * 53 + 29) & 0xFF,
+                  (x * 71 + y * 7 + 43) & 0xFF);
+}
+
+QString writeHighFrequencyPng(const QDir &dir, const QString &name, int w, int h)
+{
+    const QString path = dir.filePath(name);
+    QImage img(w, h, QImage::Format_RGB32);
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
+            img.setPixelColor(x, y, highFrequencyPixel(x, y));
+    img.save(path, "PNG");
+    return path;
+}
+
+double highFrequencyNeighborhoodMean(int cx, int cy, int kernel)
+{
+    long long sum = 0;
+    int count = 0;
+    const int half = kernel / 2;
+    for (int dy = -half; dy <= half; ++dy)
+    {
+        for (int dx = -half; dx <= half; ++dx)
+        {
+            const QColor pixel = highFrequencyPixel(cx + dx, cy + dy);
+            sum += static_cast<int>(0.2126 * pixel.red() + 0.7152 * pixel.green() +
+                                    0.0722 * pixel.blue() + 0.5);
+            ++count;
+        }
+    }
+    return static_cast<double>(sum) / count;
+}
+
 QCheckBox *findChk(QWidget *root, const QString &textPrefix)
 {
     const auto boxes = root->findChildren<QCheckBox *>();
@@ -780,6 +819,135 @@ void testLargeCompareDisplayBounded(const QDir &dir)
           "M42: Compare scheduler handles and dependency graph converge to zero");
 }
 
+// M43 P0: the Inspector must sample the full-resolution ImageFrame, not the
+// viewport-sized display QImage. This is deliberately an adversarial fixture:
+// the source is much larger than the pane and its pixel values vary at every
+// coordinate. The mismatch coordinate is discovered from the actual delivered
+// LOD so the regression remains valid for different bounded target sizes.
+void testInspectorUsesFullResolutionSource(const QDir &dir)
+{
+    std::cout << "-- Compare M43: Inspector source truth vs display LOD --\n";
+    constexpr int sourceWidth = 2400;
+    constexpr int sourceHeight = 1600;
+    const QString path = writeHighFrequencyPng(dir, "m43_high_frequency.png", sourceWidth,
+                                                sourceHeight);
+
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    dlg.resize(1000, 700);
+    dlg.show();
+    ws->setImages({path});
+    waitForCompareCount(ws, 1, 30000);
+
+    RawImageView *view = nullptr;
+    QElapsedTimer ready;
+    ready.start();
+    while (ready.elapsed() < 30000)
+    {
+        const auto panes = ws->findChildren<RawImageView *>();
+        if (!panes.isEmpty() && panes.front() && !panes.front()->image().isNull())
+        {
+            view = panes.front();
+            break;
+        }
+        pump(25);
+    }
+    CHECK(view != nullptr, "M43: high-frequency Compare pane materializes");
+    if (!view)
+        return;
+
+    QElapsedTimer lodReady;
+    lodReady.start();
+    while (lodReady.elapsed() < 30000 &&
+           (view->image().width() >= sourceWidth || view->image().height() >= sourceHeight))
+        pump(25);
+
+    CHECK(view->image().width() < sourceWidth && view->image().height() < sourceHeight,
+          "M43: high-frequency fixture is represented by a bounded display LOD");
+
+    QPoint sourcePoint(-1, -1);
+    for (int y = 17; y < sourceHeight - 17 && sourcePoint.x() < 0; ++y)
+    {
+        for (int x = 23; x < sourceWidth - 23; ++x)
+        {
+            const QPoint displayPoint = view->displayPointForSource(x, y);
+            const QRgb source = highFrequencyPixel(x, y).rgb();
+            if (view->image().pixel(displayPoint) != source)
+            {
+                sourcePoint = QPoint(x, y);
+                break;
+            }
+        }
+    }
+    CHECK(sourcePoint.x() >= 0,
+          "M43: adversarial fixture finds a source/LOD RGB mismatch coordinate");
+    if (sourcePoint.x() < 0)
+        return;
+
+    auto *sideToggle = ws->findChild<QCheckBox *>("analysisPanelToggle");
+    auto *table = ws->findChild<QTableWidget *>("pixelInspectorTable");
+    CHECK(sideToggle && table, "M43: Pixel Inspector controls are discoverable");
+    if (!sideToggle || !table)
+        return;
+    sideToggle->setChecked(true);
+    pump(50);
+
+    // Drive the same RawImageView pixelInfo boundary with a deterministic
+    // source coordinate. The widget's real mouse path supplies these x/y
+    // values; the direct signal invocation avoids rounding a sub-pixel source
+    // coordinate when the Fit scale is below 1.
+    auto inspectR = [&]()
+    {
+        QMetaObject::invokeMethod(view, "pixelInfo", Qt::DirectConnection,
+                                  Q_ARG(int, sourcePoint.x()), Q_ARG(int, sourcePoint.y()),
+                                  Q_ARG(int, 0), Q_ARG(int, 0), Q_ARG(int, 0), Q_ARG(bool, true));
+        pump(80);
+        return table->item(0, 2) ? table->item(0, 2)->text() : QString();
+    };
+    const QString exactR = inspectR();
+
+    const QColor expected = highFrequencyPixel(sourcePoint.x(), sourcePoint.y());
+    CHECK(exactR == QString::number(expected.red()),
+          "M43: Inspector RGB is sampled from the exact full-resolution source pixel");
+    CHECK(exactR != QString::number(qRed(view->image().pixel(
+                      view->displayPointForSource(sourcePoint.x(), sourcePoint.y())))),
+          "M43: Inspector RGB is not the display LOD sample");
+
+    auto *kernel = ws->findChild<QComboBox *>("pixelInspectorKernelCombo");
+    auto *stats = ws->findChild<QLabel *>("pixelInspectorStatsLabel");
+    CHECK(kernel && stats, "M43: source-neighborhood controls are discoverable");
+    if (kernel && stats)
+    {
+        kernel->setCurrentIndex(3); // 7×7
+        pump(80);
+        const QString expectedMean =
+            QString::number(highFrequencyNeighborhoodMean(sourcePoint.x(), sourcePoint.y(), 7),
+                            'f', 1);
+        CHECK(stats->text().contains(QStringLiteral("μ=") + expectedMean),
+              "M43: 7x7 neighborhood stats use full-resolution source pixels");
+    }
+
+    // The display representation may be replaced as zoom changes. The same
+    // source coordinate must remain the same analysis value at 100%, 200%, and
+    // after returning to Fit.
+    view->zoom(2.0);
+    pump(250);
+    CHECK(inspectR() == QString::number(expected.red()),
+          "M43: Inspector is stable after a zoom-driven LOD replacement");
+    view->zoom(2.0);
+    pump(250);
+    CHECK(inspectR() == QString::number(expected.red()),
+          "M43: Inspector is stable at a second zoom level");
+    view->resetFit();
+    pump(250);
+    CHECK(inspectR() == QString::number(expected.red()),
+          "M43: Inspector returns unchanged after Fit restoration");
+}
+
 // ─── M30: Pixel Inspector hover coalescing ──────────────────────
 // The Compare inspector table is fed by up to two hover signals per mouse move
 // when the synced crosshair is enabled (RawImageView::pixelInfo plus
@@ -1150,6 +1318,7 @@ int main(int argc, char **argv)
     testDegradedImages(dir);
     testCompareLoadIsAsync(dir);
     testLargeCompareDisplayBounded(dir);
+    testInspectorUsesFullResolutionSource(dir);
     testCompareLoadCancellation(dir);
     testInspectorCoalescing(paths8[0], paths8[1]);
 

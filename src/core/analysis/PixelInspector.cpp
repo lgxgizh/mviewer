@@ -135,6 +135,178 @@ ColorTriple toColorSpace(uint16_t r, uint16_t g, uint16_t b, uint16_t maxVal, Co
     return toColorSpaceNorm(double(r) / maxVal, double(g) / maxVal, double(b) / maxVal, space);
 }
 
+namespace
+{
+struct CropBounds
+{
+    int x = 0;
+    int y = 0;
+    int width = 0;
+    int height = 0;
+};
+
+CropBounds analysisCropBounds(const ImageData &source, const AnalysisAdjustment &adjustment)
+{
+    CropBounds bounds{0, 0, source.width, source.height};
+    if (!adjustment.hasCrop || adjustment.cropW <= 0 || adjustment.cropH <= 0)
+        return bounds;
+
+    const auto clampCoordinate = [](long long value, int limit)
+    { return static_cast<int>(std::clamp(value, 0LL, static_cast<long long>(limit))); };
+    bounds.x = clampCoordinate(adjustment.cropX, source.width);
+    bounds.y = clampCoordinate(adjustment.cropY, source.height);
+    const int right = clampCoordinate(static_cast<long long>(adjustment.cropX) + adjustment.cropW,
+                                      source.width);
+    const int bottom = clampCoordinate(static_cast<long long>(adjustment.cropY) + adjustment.cropH,
+                                       source.height);
+    bounds.width = right - bounds.x;
+    bounds.height = bottom - bounds.y;
+    return bounds;
+}
+
+int normalizedRotation(int rotation)
+{
+    rotation %= 360;
+    if (rotation < 0)
+        rotation += 360;
+    return rotation;
+}
+
+int adjustAnalysisChannel(int value, const AnalysisAdjustment &adjustment)
+{
+    if (adjustment.brightness != 0)
+        value = std::clamp(value + std::clamp(adjustment.brightness, -255, 255), 0, 255);
+
+    const float contrast = static_cast<float>(adjustment.contrast);
+    if (std::abs(contrast - 1.0f) >= 1e-6f)
+    {
+        const float v = (static_cast<float>(value) - 128.0f) * std::max(contrast, 0.0f) + 128.0f;
+        value = std::clamp(static_cast<int>(std::lroundf(v)), 0, 255);
+    }
+
+    const float gamma = static_cast<float>(adjustment.gamma);
+    if (std::abs(gamma - 1.0f) >= 1e-6f)
+    {
+        const float clampedGamma = std::clamp(gamma, 0.05f, 8.0f);
+        const float corrected =
+            std::pow(static_cast<float>(value) / 255.0f, 1.0f / clampedGamma);
+        value = static_cast<int>(std::lroundf(corrected * 255.0f));
+    }
+    return std::clamp(value, 0, 255);
+}
+} // namespace
+
+AnalysisPixel sampleAnalysisPixel(const ImageData &source, const AnalysisAdjustment &adjustment,
+                                  int adjustedX, int adjustedY)
+{
+    AnalysisPixel result;
+    if (source.isNull())
+        return result;
+
+    const CropBounds crop = analysisCropBounds(source, adjustment);
+    if (crop.width <= 0 || crop.height <= 0)
+        return result;
+
+    const int rotation = normalizedRotation(adjustment.rotation);
+    const int outputWidth = (rotation == 90 || rotation == 270) ? crop.height : crop.width;
+    const int outputHeight = (rotation == 90 || rotation == 270) ? crop.width : crop.height;
+    if (adjustedX < 0 || adjustedY < 0 || adjustedX >= outputWidth || adjustedY >= outputHeight)
+        return result;
+
+    int croppedX = adjustedX;
+    int croppedY = adjustedY;
+    switch (rotation)
+    {
+    case 90:
+        croppedX = adjustedY;
+        croppedY = crop.height - 1 - adjustedX;
+        break;
+    case 180:
+        croppedX = crop.width - 1 - adjustedX;
+        croppedY = crop.height - 1 - adjustedY;
+        break;
+    case 270:
+        croppedX = crop.width - 1 - adjustedY;
+        croppedY = adjustedX;
+        break;
+    default:
+        break;
+    }
+
+    const PixelRGBA sourcePixel = samplePixel(source, crop.x + croppedX, crop.y + croppedY);
+    if (!sourcePixel.valid)
+        return result;
+
+    result.r = adjustAnalysisChannel(sourcePixel.r, adjustment);
+    result.g = adjustAnalysisChannel(sourcePixel.g, adjustment);
+    result.b = adjustAnalysisChannel(sourcePixel.b, adjustment);
+    if (source.format != PixelFormat::Grayscale8)
+    {
+        if (std::abs(static_cast<float>(adjustment.redGain) - 1.0f) >= 1e-6f)
+            result.r = std::clamp(static_cast<int>(std::lroundf(
+                                     static_cast<float>(result.r) *
+                                     std::max(static_cast<float>(adjustment.redGain), 0.01f))),
+                                  0, 255);
+        if (std::abs(static_cast<float>(adjustment.blueGain) - 1.0f) >= 1e-6f)
+            result.b = std::clamp(static_cast<int>(std::lroundf(
+                                     static_cast<float>(result.b) *
+                                     std::max(static_cast<float>(adjustment.blueGain), 0.01f))),
+                                  0, 255);
+    }
+    result.valid = true;
+    return result;
+}
+
+NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjustment &adjustment,
+                                    int adjustedX, int adjustedY, int n)
+{
+    NeighborhoodStats stats;
+    if (source.isNull() || n < 1)
+        return stats;
+
+    long long sum = 0;
+    long long sumSq = 0;
+    long long rSum = 0;
+    long long gSum = 0;
+    long long bSum = 0;
+    int minValue = 255;
+    int maxValue = 0;
+    const int half = n / 2;
+    for (int dy = -half; dy <= half; ++dy)
+    {
+        for (int dx = -half; dx <= half; ++dx)
+        {
+            const AnalysisPixel pixel =
+                sampleAnalysisPixel(source, adjustment, adjustedX + dx, adjustedY + dy);
+            if (!pixel.valid)
+                continue;
+            const int luminance = static_cast<int>(0.2126 * pixel.r + 0.7152 * pixel.g +
+                                                   0.0722 * pixel.b + 0.5);
+            sum += luminance;
+            sumSq += static_cast<long long>(luminance) * luminance;
+            rSum += pixel.r;
+            gSum += pixel.g;
+            bSum += pixel.b;
+            minValue = std::min(minValue, luminance);
+            maxValue = std::max(maxValue, luminance);
+            ++stats.count;
+        }
+    }
+    if (stats.count == 0)
+        return stats;
+
+    stats.mean = static_cast<double>(sum) / stats.count;
+    const double variance = static_cast<double>(sumSq) / stats.count - stats.mean * stats.mean;
+    stats.variance = std::max(0.0, variance);
+    stats.stdDev = std::sqrt(stats.variance);
+    stats.min = minValue;
+    stats.max = maxValue;
+    stats.rMean = static_cast<double>(rSum) / stats.count;
+    stats.gMean = static_cast<double>(gSum) / stats.count;
+    stats.bMean = static_cast<double>(bSum) / stats.count;
+    return stats;
+}
+
 NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, int height, int cx,
                                     int cy, int n)
 {

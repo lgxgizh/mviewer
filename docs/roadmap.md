@@ -67,6 +67,7 @@
 | M40 | **Interaction cancellation & UI-thread purity closure** — Compare cancellation, authoritative fullscreen, async Copy/Save/Export, retry teardown and export memory bounds | Complete (2026-08-15); focused M40 contracts remain green, and the historical 82/88 storage/runtime follow-up is closed by M41. See `docs/review/M40_INTERACTION_CANCELLATION_CLOSURE_2026-08-15.md`. |
 
 | M41 | **Storage / runtime / test credibility closure** - DiskCache thread affinity and limits, writable runtime paths, atomic persistence, hermetic CTest, and assertion audit | Complete (2026-08-15); 88/88 full CTest passed three consecutive times, including golden-image, benchmark, lifecycle, workflow, Browse, and Compare gates. See `docs/review/M41_STORAGE_RUNTIME_TEST_CREDIBILITY_CLOSURE_2026-08-15.md`. |
+| M43 | **Compare analysis fidelity & pixel-accurate inspection closure** — source-backed Inspector/neighborhoods, crop/rotation/adjustment coordinate semantics, display-LOD separation, ICC/RAW16 contract audit, and adversarial regressions | Complete (2026-08-15); source-backed analysis and bounded display separation are implemented. Focused M43/core tests and canonical CTest passed 88/88 in three consecutive runs; manual Windows/DPR/ICC review is recorded as pending in `docs/review/M43_COMPARE_ANALYSIS_FIDELITY_2026-08-15.md`. |
 
 ### M25 closure addendum (2026-08-09)
 

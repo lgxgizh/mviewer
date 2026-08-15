@@ -389,8 +389,10 @@ void RawImageView::mouseMoveEvent(QMouseEvent *ev)
             const int iy = qFloor(imagePos.y());
             if (ix >= 0 && iy >= 0 && ix < m_sourceSize.width() && iy < m_sourceSize.height())
             {
-                const QRgb c = m_image.pixel(displayPointForSource(ix, iy));
-                emit pixelInfo(ix, iy, qRed(c), qGreen(c), qBlue(c), true);
+                // The pane image is a bounded display LOD. It is intentionally
+                // not an analysis source, so the legacy RGB payload is left
+                // empty; CompareWorkspace re-samples the ImageFrame by (ix,iy).
+                emit pixelInfo(ix, iy, 0, 0, 0, true);
                 // M16.1 (n/n crosshair): mirror the cursor position to all cells.
                 emit crosshairMoved(QPointF(ix, iy));
             }

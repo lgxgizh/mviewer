@@ -2,6 +2,7 @@
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/ExportReport.h"
+#include "core/analysis/PixelInspector.h"
 #include "core/compare/CompareEngine.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/compare/Histogram.h"
@@ -502,6 +503,11 @@ class CompareWorkspace : public QWidget
     std::vector<CellAdjust> m_cellAdjusts; // per-cell adjustment state
     int m_editIdx = -1;                    // currently selected cell for editing
     static ImageData applyAdjusts(const ImageData &src, const CellAdjust &a);
+
+    // Analysis samples deliberately bypass RawImageView::image(). That image
+    // is a bounded display LOD; this conversion feeds the Qt-free source
+    // sampler with the current adjusted-pane coordinate space.
+    static mviewer::core::AnalysisAdjustment analysisAdjustment(const CellAdjust &adjust);
 
     // Edit panel widgets (inside side panel)
     QWidget *m_editPanel = nullptr;
