@@ -160,3 +160,15 @@ Checklist 条目凡能自动化的，已固化为回归测试，随门禁自动�
 | UX Review Agent | |
 | 结果 | □ 通过 □ 阻塞 |
 | 阻塞项 | |
+## M45 qualification notes (2026-08-16)
+
+- Automated coverage includes CommandStack callback re-entry, unresolved and
+  ordinary command failures, transfer cancellation safety, and clipboard PNG
+  generation/lifecycle. The full local Release gate passed **90/90**.
+- Delete is currently labeled **MViewer 回收站** and stages files under the
+  per-user application data directory. It is not Windows Explorer's native
+  Recycle Bin.
+- Native Release GUI evidence for ICC, 100/125/150/200 DPI and mixed-DPI
+  monitors, two physical volumes, native file dialogs, and long-session soak
+  is still **MANUAL / BLOCKED** in the M45 review until target hardware is
+  available.

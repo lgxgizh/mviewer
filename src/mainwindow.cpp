@@ -66,13 +66,19 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     QTimer::singleShot(0, this,
                        [this]()
                        {
+                           if (qEnvironmentVariableIsSet("MVIEWER_DISABLE_RECOVERY_PROMPTS"))
+                               return;
                            restoreSessionRecovery();
                            // M17: if a previous run crashed, surface a crash-report prompt
                            // on next launch.
                            maybeShowCrashReport();
                        });
     // M17: quiet background update check shortly after launch (only notifies on a new version).
-    QTimer::singleShot(8000, this, [this]() { checkForUpdates(true); });
+    // Acceptance harnesses can disable this unrelated network activity so
+    // teardown remains deterministic; production keeps the normal check.
+    if (!qEnvironmentVariableIsSet("MVIEWER_DISABLE_UPDATE_CHECK"))
+        QTimer::singleShot(8000, this, [this]() { checkForUpdates(true); });
+    cleanupClipboardPasteTemps();
 }
 
 void MainWindow::restoreWindowSettings()
@@ -142,6 +148,7 @@ void MainWindow::restoreNavigationSettings(const QSettings &settings)
 
 MainWindow::~MainWindow()
 {
+    cancelClipboardPaste();
     cancelReportExport();
     cancelBackgroundPersistence();
     // M27 lifetime closure: stop the async search re-index immediately. The
@@ -168,6 +175,9 @@ MainWindow::~MainWindow()
     // it while a decode is in flight is safe.
     delete m_imageViewer;
     m_imageViewer = nullptr;
+    if (!m_clipboardPastePath.isEmpty())
+        QFile::remove(m_clipboardPastePath);
+    cleanupClipboardPasteTemps();
 }
 
 void MainWindow::onSearchMetaToggled(bool on)

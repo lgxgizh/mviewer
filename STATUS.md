@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-08-15 · Version: **1.0.9 release line** · Verified release tag: **v1.0.9**
+> Snapshot: 2026-08-16 · Version: **1.0.9 release line** · Verified release tag: **v1.0.9**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -15,8 +15,26 @@
 > `docs/review/M41_STORAGE_RUNTIME_TEST_CREDIBILITY_CLOSURE_2026-08-15.md`,
 > `docs/review/M42_REALWORLD_RESOURCE_BOUNDEDNESS_2026-08-15.md`,
 > `docs/review/M43_COMPARE_ANALYSIS_FIDELITY_2026-08-15.md`,
-> `docs/review/M44_RELEASE_READINESS_STRUCTURAL_CONVERGENCE_2026-08-15.md` and
+> `docs/review/M44_RELEASE_READINESS_STRUCTURAL_CONVERGENCE_2026-08-15.md`,
+> `docs/review/M45_NATIVE_WINDOWS_PRODUCT_QUALIFICATION_2026-08-16.md` and
 > `.\build.ps1 Test`.
+
+## M45 — Native Windows qualification (2026-08-16)
+
+- **Automated:** CommandStack callback re-entry is watchdog-safe; callbacks
+  run outside the state mutex, file transfers report progress/cancellation,
+  and PNG clipboard encoding is off the UI key handler with generation and
+  temporary-file guards. Core regression: **54/54**; callback probe: pass;
+  the full Release gate passed **90/90**. Architecture gate: **0 warnings**;
+  complexity strict gate: **0 hard failures**.
+- **Production UI:** MainWindow Undo/Redo registration, rename/undo/redo,
+  and asynchronous clipboard paste are covered by the isolated UI acceptance.
+- **Delete semantics:** the current implementation is explicitly **MViewer
+  回收站**, a per-user reversible staging directory. Native Windows Recycle Bin
+  integration is not claimed.
+- **Manual sign-off:** Native Release GUI, physical ICC, mixed DPI, two-volume
+  behavior, native dialogs, and long-session observations remain **MANUAL /
+  BLOCKED** until run on the target Windows desktop hardware.
 
 ## Positioning
 

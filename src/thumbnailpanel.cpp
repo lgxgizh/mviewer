@@ -4,6 +4,7 @@
 
 #include <QtConcurrent/QtConcurrent>
 
+
 // P0#3: DetailsHeader (the column-title strip above the Details list) is now
 // defined in thumbnailpanel_p.h alongside the shared DetailLayout geometry, so
 // it stays in sync with the delegate cells and keeps this TU lean.
@@ -166,8 +167,13 @@ ThumbnailPanel::~ThumbnailPanel()
 {
     if (m_batchTask)
         TaskScheduler::cancel(m_batchTask);
+    if (m_fileOperationTask)
+        TaskScheduler::cancel(m_fileOperationTask);
     if (m_batchProgress)
         m_batchProgress->close();
+    if (m_fileProgress)
+        m_fileProgress->close();
+    ++m_fileOperationGeneration;
     if (m_alive)
         *m_alive = false;
     // M24: drop queued scan/dimension tasks; in-flight ones abort at their next

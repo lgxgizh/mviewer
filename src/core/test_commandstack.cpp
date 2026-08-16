@@ -148,7 +148,9 @@ class FaultFileSystem final : public mviewer::core::FileSystemAdapter
     int failRemoveAt = 0;
     int renameCalls = 0;
     int removeCalls = 0;
+    int copyProgressCalls = 0;
     bool failAsCrossVolume = false;
+    bool incrementalCopy = false;
 
     bool exists(const std::filesystem::path &path, std::error_code &ec) const override
     {
@@ -184,6 +186,65 @@ class FaultFileSystem final : public mviewer::core::FileSystemAdapter
     {
         return base()->copyFile(from, to, ec);
     }
+    bool copyFileWithProgress(const std::filesystem::path &from,
+                              const std::filesystem::path &to,
+                              const TransferObserver &observer,
+                              std::error_code &ec) override
+    {
+        if (!incrementalCopy)
+            return FileSystemAdapter::copyFileWithProgress(from, to, observer, ec);
+
+        const uintmax_t total = base()->fileSize(from, ec);
+        if (ec)
+            return false;
+        if (observer && !observer(0, total))
+        {
+            ec = std::make_error_code(std::errc::operation_canceled);
+            return false;
+        }
+
+        std::ifstream input(from, std::ios::binary);
+        std::ofstream output(to, std::ios::binary | std::ios::trunc);
+        if (!input || !output)
+        {
+            ec = std::make_error_code(std::errc::io_error);
+            return false;
+        }
+        std::vector<char> buffer(4096);
+        uintmax_t copied = 0;
+        while (input)
+        {
+            input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+            const std::streamsize count = input.gcount();
+            if (count <= 0)
+                continue;
+            output.write(buffer.data(), count);
+            if (!output)
+            {
+                ec = std::make_error_code(std::errc::io_error);
+                return false;
+            }
+            copied += static_cast<uintmax_t>(count);
+            ++copyProgressCalls;
+            if (observer && !observer(copied, total))
+            {
+                ec = std::make_error_code(std::errc::operation_canceled);
+                return false;
+            }
+        }
+        if (input.bad())
+        {
+            ec = std::make_error_code(std::errc::io_error);
+            return false;
+        }
+        output.close();
+        if (!output)
+        {
+            ec = std::make_error_code(std::errc::io_error);
+            return false;
+        }
+        return true;
+    }
     bool remove(const std::filesystem::path &path, std::error_code &ec) override
     {
         ++removeCalls;
@@ -205,6 +266,94 @@ class FaultFileSystem final : public mviewer::core::FileSystemAdapter
         return mviewer::core::defaultFileSystemAdapter();
     }
 };
+
+class ScriptedFailureCommand final : public ICommand
+{
+  public:
+    explicit ScriptedFailureCommand(bool unresolved) : m_unresolved(unresolved)
+    {
+    }
+
+    std::string id() const override
+    {
+        return "scripted_failure";
+    }
+    std::string description() const override
+    {
+        return "Scripted failure";
+    }
+    void execute() override
+    {
+        m_error = m_unresolved ? "partial state" : "deterministic failure";
+    }
+    void undo() override
+    {
+        m_error.clear();
+        m_unresolved = false;
+    }
+    bool canUndo() const override
+    {
+        return m_unresolved;
+    }
+    std::string lastError() const override
+    {
+        return m_error;
+    }
+    bool hasUnresolvedState() const override
+    {
+        return m_unresolved;
+    }
+
+  private:
+    bool m_unresolved = false;
+    std::string m_error;
+};
+
+static void testCommandStackChangeCallback()
+{
+    printf("\n[CommandStack callback contract]\n");
+    fflush(stdout);
+    CommandStack stack;
+    int callbackCount = 0;
+    bool callbackQueriesWereSafe = true;
+    stack.setChangeCallback(
+        [&]()
+        {
+            ++callbackCount;
+            // This is the exact MainWindow query set. It must be safe while
+            // execute/undo/redo/clear has just completed.
+            const bool canUndo = stack.canUndo();
+            (void)canUndo;
+            (void)stack.undoLabel();
+            (void)stack.canRedo();
+            (void)stack.redoLabel();
+            (void)stack.undoDepth();
+            (void)stack.redoDepth();
+            (void)stack.lastError();
+        });
+
+    auto frame = std::make_shared<ImageData>();
+    *frame = makeRGB(2, 2, 1, 2, 3);
+    auto image = std::make_shared<ImageFrame>(ImageFrame::create("callback.jpg", *frame));
+    CHECK(stack.execute(std::make_unique<LabelCommand>(image, "callback", LabelCommand::Mode::Add)),
+          "execute completes with a callback that queries stack state");
+    CHECK(stack.undo(), "undo completes with a callback that queries stack state");
+    CHECK(stack.redo(), "redo completes with a callback that queries stack state");
+    stack.clear();
+    CHECK(stack.undoDepth() == 0 && stack.redoDepth() == 0,
+          "clear completes and leaves both histories empty");
+    CHECK(callbackCount == 4 && callbackQueriesWereSafe,
+          "execute/undo/redo/clear each notify outside the state mutex");
+
+    CHECK(!stack.execute(std::make_unique<ScriptedFailureCommand>(false)) &&
+              stack.undoDepth() == 0 && !stack.lastError().empty(),
+          "ordinary failure reports an error without adding history");
+    CHECK(!stack.execute(std::make_unique<ScriptedFailureCommand>(true)) &&
+              stack.undoDepth() == 1 && stack.canUndo(),
+          "unresolved failure remains recoverable in history");
+    CHECK(stack.undo() && stack.undoDepth() == 0 && stack.redoDepth() == 1,
+          "unresolved state can be recovered through undo");
+}
 
 static void testFileRenameCommand()
 {
@@ -401,21 +550,145 @@ static void testFileOperationSafety()
     CHECK(!samePath.lastError().empty() && fs::exists(first),
           "source equals destination directory is rejected explicitly");
 
+    const fs::path cancelledSource = dir / "source" / "cancelled.txt";
+    writeFile(cancelledSource, "cancel me");
+    int cancelObservations = 0;
+    FileMoveCommand cancelled({cancelledSource.string()}, (dir / "destination").string(),
+                               crossVolume);
+    cancelled.setTransferObserver(
+        [&](uintmax_t, uintmax_t)
+        {
+            ++cancelObservations;
+            return false;
+        });
+    cancelled.execute();
+    CHECK(cancelObservations > 0 && !cancelled.lastError().empty() &&
+              fs::exists(cancelledSource) && !fs::exists(dir / "destination" / "cancelled.txt"),
+          "cancelled transfer leaves source and destination in a safe state");
+
     fs::remove_all(dir);
 }
 
-int main()
+static void testFileTransferProgressAndCancellation()
 {
+    printf("\n[M45 transfer progress + cancellation]\n");
+    fflush(stdout);
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "mviewer_test_m45_transfer";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "source");
+    fs::create_directories(dir / "destination");
+
+    const std::string payload(3 * 1024 * 1024 + 17, 'x');
+    const fs::path source = dir / "source" / "payload.bin";
+    const fs::path destination = dir / "destination" / "payload.bin";
+    writeFile(source, payload);
+    auto progressive = std::make_shared<FaultFileSystem>();
+    progressive->incrementalCopy = true;
+
+    int progressCalls = 0;
+    const auto copied = mviewer::core::copyFileAtomically(
+        source, destination, progressive,
+        [&](uintmax_t bytes, uintmax_t total)
+        {
+            ++progressCalls;
+            return bytes <= total;
+        });
+    CHECK(copied.state == mviewer::core::FileTransferState::Succeeded &&
+              readFile(destination) == payload && progressCalls > 3,
+          "atomic copy reports real incremental progress and verifies the destination");
+
+    int batchSuccess = 0;
+    for (int i = 0; i < 101; ++i)
+    {
+        const fs::path batchSource = dir / "source" / ("batch_" + std::to_string(i) + ".bin");
+        const fs::path batchDestination = dir / "destination" / ("batch_" + std::to_string(i) +
+                                                                    ".bin");
+        writeFile(batchSource, "batch-" + std::to_string(i));
+        const auto result = mviewer::core::copyFileAtomically(batchSource, batchDestination,
+                                                               progressive);
+        if (result.state == mviewer::core::FileTransferState::Succeeded &&
+            readFile(batchDestination) == "batch-" + std::to_string(i))
+            ++batchSuccess;
+    }
+    CHECK(batchSuccess == 101, "101-file copy batch preserves atomic copy semantics");
+
+    const fs::path earlySource = dir / "source" / "cancel-before-first.bin";
+    const fs::path earlyDestination = dir / "destination" / "cancel-before-first.bin";
+    writeFile(earlySource, "cancel before first");
+    int earlyObservations = 0;
+    const auto early = mviewer::core::copyFileAtomically(
+        earlySource, earlyDestination, progressive,
+        [&](uintmax_t, uintmax_t)
+        {
+            ++earlyObservations;
+            return false;
+        });
+    CHECK(early.state == mviewer::core::FileTransferState::Failed && earlyObservations == 1 &&
+              fs::exists(earlySource) && !fs::exists(earlyDestination),
+          "cancellation before the first byte leaves source and destination safe");
+
+    const fs::path halfwaySource = dir / "source" / "cancel-halfway.bin";
+    const fs::path halfwayDestination = dir / "destination" / "cancel-halfway.bin";
+    writeFile(halfwaySource, payload);
+    uintmax_t cancelledAt = 0;
+    const auto halfway = mviewer::core::copyFileAtomically(
+        halfwaySource, halfwayDestination, progressive,
+        [&](uintmax_t bytes, uintmax_t total)
+        {
+            cancelledAt = bytes;
+            return total == 0 || bytes < total / 2;
+        });
+    const std::string halfwayTempPrefix = halfwayDestination.string() + ".mviewer-part-";
+    bool temporaryRemains = false;
+    for (const auto &entry : fs::directory_iterator(halfwayDestination.parent_path()))
+    {
+        if (entry.path().string().rfind(halfwayTempPrefix, 0) == 0)
+            temporaryRemains = true;
+    }
+    CHECK(halfway.state == mviewer::core::FileTransferState::Failed && cancelledAt > 0 &&
+              fs::exists(halfwaySource) && !fs::exists(halfwayDestination) && !temporaryRemains,
+          "halfway cancellation removes the partial file and preserves the source");
+
+    fs::remove_all(dir);
+}
+
+int main(int argc, char **argv)
+{
+    if (argc > 1 && std::string(argv[1]) == "--callback-probe")
+    {
+        // Watchdog-safe regression mode. Before the M45 fix the callback
+        // re-enters canUndo() while execute() owns the same non-recursive
+        // mutex, so CTest's timeout terminates this child instead of hanging
+        // the full suite forever.
+        CommandStack stack;
+        stack.setChangeCallback(
+            [&stack]()
+            {
+                (void)stack.canUndo();
+                (void)stack.undoLabel();
+                (void)stack.canRedo();
+                (void)stack.redoLabel();
+            });
+        auto frame = std::make_shared<ImageData>();
+        *frame = makeRGB(1, 1, 1, 1, 1);
+        auto image = std::make_shared<ImageFrame>(ImageFrame::create("probe.jpg", *frame));
+        return stack.execute(std::make_unique<LabelCommand>(image, "probe", LabelCommand::Mode::Add))
+                   ? 0
+                   : 1;
+    }
     printf("=== CommandStack + Rotate/Label tests (M7 ④) ===\n");
     fflush(stdout);
     testRotateCommand();
     testLabelCommand();
     testCommandStack();
+    testCommandStackChangeCallback();
     testFileRenameCommand();
     testFileDeleteCommand();
     testFileMoveCommand();
     testCommandStackReportsErrors();
     testFileOperationSafety();
+    testFileTransferProgressAndCancellation();
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

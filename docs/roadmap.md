@@ -790,3 +790,11 @@ enough that target users can actually use RAW files end-to-end. GPU acceleration
 - [ ] No image-decoding logic in the `QWidget` layer (verified by code review).
 - [ ] `CHANGELOG.md` and `STATUS.md` updated.
 - [ ] Code reviewed; no new clang-tidy warnings introduced.
+## M45 — Native Windows Product Qualification & Desktop Workflow Convergence
+
+Status: automated closure complete (2026-08-16); target-hardware manual
+sign-off remains blocked. The Release gate passed **90/90** and the milestone
+closes the CommandStack callback contract, cancellable file-transfer lifecycle,
+clipboard paste lifecycle, and honest Windows delete semantics. Native Windows
+GUI, ICC/DPI, multi-volume, native-dialog, and long-session evidence still
+requires the target desktop.

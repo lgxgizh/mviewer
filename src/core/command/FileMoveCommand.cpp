@@ -53,7 +53,10 @@ void FileMoveCommand::execute()
     }
 
     std::vector<std::pair<fs::path, fs::path>> plan;
+    std::vector<uintmax_t> planSizes;
     plan.reserve(m_paths.size());
+    planSizes.reserve(m_paths.size());
+    uintmax_t totalBytes = 0;
     for (const auto &path : m_paths)
     {
         const fs::path source = mviewer::core::pathFromUtf8(path);
@@ -71,15 +74,38 @@ void FileMoveCommand::execute()
             return;
         }
         plan.emplace_back(source, destination);
+        const uintmax_t size = m_fileSystem->fileSize(source, ec);
+        if (ec)
+        {
+            setFailure("Cannot inspect source size: " + path + ": " + ec.message());
+            return;
+        }
+        planSizes.push_back(size);
+        totalBytes += size;
     }
 
-    for (const auto &[source, destination] : plan)
+    uintmax_t completedBytes = 0;
+    for (size_t index = 0; index < plan.size(); ++index)
     {
-        const auto result = mviewer::core::moveFileSafely(source, destination, m_fileSystem);
+        const auto &[source, destination] = plan[index];
+        mviewer::core::FileSystemAdapter::TransferObserver observer;
+        if (m_transferObserver)
+        {
+            observer = [this, completedBytes, totalBytes](uintmax_t copied, uintmax_t total)
+            {
+                const uintmax_t fileTotal = total == 0 ? 0 : total;
+                const uintmax_t batchTotal = totalBytes == 0 ? 0 : totalBytes;
+                return m_transferObserver(completedBytes + copied,
+                                          batchTotal == 0 ? fileTotal : batchTotal);
+            };
+        }
+        const auto result =
+            mviewer::core::moveFileSafely(source, destination, m_fileSystem, observer);
         if (result.state == mviewer::core::FileTransferState::Succeeded)
         {
             m_moved.emplace_back(mviewer::core::pathToUtf8(source),
                                  mviewer::core::pathToUtf8(destination));
+            completedBytes += planSizes[index];
             continue;
         }
 

@@ -52,6 +52,7 @@ class QSlider;
 class QToolBar;
 class QProgressDialog;
 class QSettings;
+class QImage;
 
 namespace mviewer::core
 {
@@ -126,6 +127,9 @@ class MainWindow : public QMainWindow
     bool handleMetadataKey(QKeyEvent *event);
     bool handleViewModeKey(QKeyEvent *event);
     bool handleClipboardKey(QKeyEvent *event);
+    void startClipboardPaste(const QImage &image);
+    void cancelClipboardPaste();
+    void cleanupClipboardPasteTemps();
     bool handleViewerKey(QKeyEvent *event);
     void openCompare(const QStringList &images = {}, const QString &sessionJson = {});
     void showCompareDialog(const QStringList &images, const QString &sessionJson);
@@ -260,6 +264,14 @@ class MainWindow : public QMainWindow
     QAction *m_actRedo = nullptr;
     CommandStack m_cmdStack;
     void updateUndoRedoActions();
+
+    // Clipboard paste encoding runs off the UI thread. The generation/alive
+    // pair prevents a late worker completion from reopening a destroyed or
+    // superseded viewer request.
+    TaskScheduler::TaskHandle m_clipboardPasteTask;
+    std::shared_ptr<std::atomic<bool>> m_clipboardPasteAlive;
+    uint64_t m_clipboardPasteGeneration = 0;
+    QString m_clipboardPastePath;
     void positionMetadataPanel();
     // Zoom / fullscreen view commands (forwarded to the image viewer).
     QAction *m_actZoomIn = nullptr;

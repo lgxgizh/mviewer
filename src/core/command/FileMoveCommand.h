@@ -42,6 +42,14 @@ class FileMoveCommand : public ICommand
         return m_lastError;
     }
 
+    // Configured by the UI before a worker executes the command. Returning
+    // false requests cancellation; the command still rolls back completed
+    // files through its existing recovery path.
+    void setTransferObserver(mviewer::core::FileSystemAdapter::TransferObserver observer)
+    {
+        m_transferObserver = std::move(observer);
+    }
+
     bool hasUnresolvedState() const override
     {
         return m_unresolved;
@@ -75,5 +83,6 @@ class FileMoveCommand : public ICommand
     bool m_unresolved = false;
     State m_state = State::Idle;
     std::shared_ptr<mviewer::core::FileSystemAdapter> m_fileSystem;
+    mviewer::core::FileSystemAdapter::TransferObserver m_transferObserver;
     std::string m_lastError;
 };

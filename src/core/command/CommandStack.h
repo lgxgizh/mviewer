@@ -6,6 +6,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 // ─── CommandStack ────────────────────────────────────────────────────────────
@@ -15,7 +16,11 @@
 // can reverse it. Domain-free (core/command, no Qt).
 //
 // Bounded: `maxDepth` limits retained history (oldest undos are dropped).
-// A change callback lets the UI refresh its Undo/Redo menu state.
+// A change callback lets the UI refresh its Undo/Redo menu state. The callback
+// is invoked synchronously on the thread that completed the mutating call, but
+// never while the internal state mutex is held. UI-owned stacks must therefore
+// be mutated on the UI thread; worker code must marshal its final state
+// transition to the UI thread before calling execute/undo/redo/clear.
 
 class CommandStack
 {
@@ -30,81 +35,219 @@ class CommandStack
     // added to the undo history so it cannot be half-undone.
     bool execute(std::unique_ptr<ICommand> cmd)
     {
-        std::lock_guard<std::mutex> lk(m_mtx);
-        if (!cmd || !cmd->canExecute())
+        std::unique_lock<std::mutex> operationLock(m_operationMtx);
+        if (!cmd)
         {
-            m_lastError = "Command cannot be executed.";
+            const auto callback = setErrorAndGetCallback("Command cannot be executed.");
+            operationLock.unlock();
+            invokeCallback(callback);
             return false;
         }
-        cmd->execute();
-        if (!cmd->lastError().empty())
+
+        bool executable = false;
+        try
         {
-            m_lastError = cmd->lastError();
-            if (cmd->hasUnresolvedState())
+            executable = cmd->canExecute();
+        }
+        catch (...)
+        {
+            executable = false;
+        }
+        if (!executable)
+        {
+            const auto callback = setErrorAndGetCallback("Command cannot be executed.");
+            operationLock.unlock();
+            invokeCallback(callback);
+            return false;
+        }
+
+        std::string error;
+        try
+        {
+            // ICommand::execute() may perform real filesystem work. It is
+            // serialized against other stack mutations, but deliberately does
+            // not hold m_mtx, so readers and callbacks cannot self-deadlock.
+            cmd->execute();
+            error = cmd->lastError();
+        }
+        catch (...)
+        {
+            error = "Command execution threw an exception.";
+        }
+
+        std::function<void()> callback;
+        {
+            std::lock_guard<std::mutex> stateLock(m_mtx);
+            m_lastError = error;
+            if (error.empty())
             {
                 m_undo.push_back(std::move(cmd));
-                while (m_undo.size() > m_maxDepth)
-                    m_undo.erase(m_undo.begin());
+                trimUndoLocked();
                 m_redo.clear();
             }
-            notify();
+            else if (cmd && cmd->hasUnresolvedState())
+            {
+                // Preserve a command that still owns recoverable disk state.
+                m_undo.push_back(std::move(cmd));
+                trimUndoLocked();
+                m_redo.clear();
+            }
+            callback = m_onChange;
+        }
+        operationLock.unlock();
+        invokeCallback(callback);
+        return error.empty();
+    }
+
+    // Record a command whose execute() already completed on a worker. The
+    // caller must marshal this call to the owner/UI thread; this method only
+    // performs the short history transition and never runs ICommand code.
+    // Failed commands are retained only when they report unresolved state.
+    bool recordExecuted(std::unique_ptr<ICommand> cmd)
+    {
+        std::unique_lock<std::mutex> operationLock(m_operationMtx);
+        if (!cmd)
+        {
+            const auto callback = setErrorAndGetCallback("Command cannot be recorded.");
+            operationLock.unlock();
+            invokeCallback(callback);
             return false;
         }
-        m_undo.push_back(std::move(cmd));
-        while (m_undo.size() > m_maxDepth)
-            m_undo.erase(m_undo.begin());
-        m_redo.clear();
-        m_lastError.clear();
-        notify();
-        return true;
+
+        std::string error;
+        try
+        {
+            error = cmd->lastError();
+        }
+        catch (...)
+        {
+            error = "Command state inspection threw an exception.";
+        }
+
+        std::function<void()> callback;
+        {
+            std::lock_guard<std::mutex> stateLock(m_mtx);
+            m_lastError = error;
+            if (error.empty() || cmd->hasUnresolvedState())
+            {
+                m_undo.push_back(std::move(cmd));
+                trimUndoLocked();
+                m_redo.clear();
+            }
+            callback = m_onChange;
+        }
+        operationLock.unlock();
+        invokeCallback(callback);
+        return error.empty();
     }
 
     // Reverse the most recent command. Moves it to the redo stack on success.
     bool undo()
     {
-        std::lock_guard<std::mutex> lk(m_mtx);
-        if (m_undo.empty() || !m_undo.back()->canUndo())
+        std::unique_lock<std::mutex> operationLock(m_operationMtx);
+        std::unique_ptr<ICommand> cmd;
+        std::function<void()> callback;
         {
-            m_lastError = "Nothing to undo.";
+            std::lock_guard<std::mutex> stateLock(m_mtx);
+            if (m_undo.empty() || !m_undo.back()->canUndo())
+            {
+                m_lastError = "Nothing to undo.";
+                callback = m_onChange;
+            }
+            else
+            {
+                // Remove the command while it runs so getters never inspect a
+                // command whose internal state is being changed by undo().
+                cmd = std::move(m_undo.back());
+                m_undo.pop_back();
+            }
+        }
+
+        if (!cmd)
+        {
+            operationLock.unlock();
+            invokeCallback(callback);
             return false;
         }
-        auto &cmd = m_undo.back();
-        cmd->undo();
-        if (!cmd->lastError().empty())
+
+        std::string error;
+        try
         {
-            m_lastError = cmd->lastError();
-            notify();
-            return false;
+            cmd->undo();
+            error = cmd->lastError();
         }
-        m_redo.push_back(std::move(cmd));
-        m_undo.pop_back();
-        m_lastError.clear();
-        notify();
-        return true;
+        catch (...)
+        {
+            error = "Command undo threw an exception.";
+        }
+
+        {
+            std::lock_guard<std::mutex> stateLock(m_mtx);
+            m_lastError = error;
+            if (error.empty())
+                m_redo.push_back(std::move(cmd));
+            else
+                m_undo.push_back(std::move(cmd));
+            callback = m_onChange;
+        }
+        operationLock.unlock();
+        invokeCallback(callback);
+        return error.empty();
     }
 
     // Re-apply the most recently undone command.
     bool redo()
     {
-        std::lock_guard<std::mutex> lk(m_mtx);
-        if (m_redo.empty())
+        std::unique_lock<std::mutex> operationLock(m_operationMtx);
+        std::unique_ptr<ICommand> cmd;
+        std::function<void()> callback;
         {
-            m_lastError = "Nothing to redo.";
+            std::lock_guard<std::mutex> stateLock(m_mtx);
+            if (m_redo.empty())
+            {
+                m_lastError = "Nothing to redo.";
+                callback = m_onChange;
+            }
+            else
+            {
+                cmd = std::move(m_redo.back());
+                m_redo.pop_back();
+            }
+        }
+
+        if (!cmd)
+        {
+            operationLock.unlock();
+            invokeCallback(callback);
             return false;
         }
-        auto &cmd = m_redo.back();
-        cmd->execute();
-        if (!cmd->lastError().empty())
+
+        std::string error;
+        try
         {
-            m_lastError = cmd->lastError();
-            notify();
-            return false;
+            cmd->execute();
+            error = cmd->lastError();
         }
-        m_undo.push_back(std::move(cmd));
-        m_redo.pop_back();
-        m_lastError.clear();
-        notify();
-        return true;
+        catch (...)
+        {
+            error = "Command execution threw an exception.";
+        }
+
+        {
+            std::lock_guard<std::mutex> stateLock(m_mtx);
+            m_lastError = error;
+            if (error.empty())
+            {
+                m_undo.push_back(std::move(cmd));
+                trimUndoLocked();
+            }
+            else
+                m_redo.push_back(std::move(cmd));
+            callback = m_onChange;
+        }
+        operationLock.unlock();
+        invokeCallback(callback);
+        return error.empty();
     }
 
     bool canUndo() const
@@ -131,14 +274,24 @@ class CommandStack
 
     void clear()
     {
-        std::lock_guard<std::mutex> lk(m_mtx);
-        m_undo.clear();
-        m_redo.clear();
-        notify();
+        std::unique_lock<std::mutex> operationLock(m_operationMtx);
+        std::vector<std::unique_ptr<ICommand>> oldUndo;
+        std::vector<std::unique_ptr<ICommand>> oldRedo;
+        std::function<void()> callback;
+        {
+            std::lock_guard<std::mutex> stateLock(m_mtx);
+            oldUndo.swap(m_undo);
+            oldRedo.swap(m_redo);
+            m_lastError.clear();
+            callback = m_onChange;
+        }
+        operationLock.unlock();
+        invokeCallback(callback);
     }
 
     void setChangeCallback(std::function<void()> cb)
     {
+        std::lock_guard<std::mutex> stateLock(m_mtx);
         m_onChange = std::move(cb);
     }
 
@@ -161,12 +314,30 @@ class CommandStack
     }
 
   private:
-    void notify()
+    std::function<void()> setErrorAndGetCallback(const std::string &error)
     {
-        if (m_onChange)
-            m_onChange();
+        std::lock_guard<std::mutex> stateLock(m_mtx);
+        m_lastError = error;
+        return m_onChange;
     }
 
+    void trimUndoLocked()
+    {
+        while (m_undo.size() > m_maxDepth)
+            m_undo.erase(m_undo.begin());
+    }
+
+    static void invokeCallback(const std::function<void()> &callback)
+    {
+        if (callback)
+            callback();
+    }
+
+    // m_mtx protects the observable history/error/callback state. This second
+    // mutex serializes ICommand transitions without making readers wait on
+    // filesystem I/O and without allowing two transitions to move the same
+    // history entry concurrently.
+    mutable std::mutex m_operationMtx;
     mutable std::mutex m_mtx;
     std::vector<std::unique_ptr<ICommand>> m_undo;
     std::vector<std::unique_ptr<ICommand>> m_redo;

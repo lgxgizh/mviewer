@@ -414,7 +414,7 @@ QMainWindow
 │   ├── ThumbnailScrollArea
 │   │   └── ThumbnailListWidget (custom)
 │   ├── ImageCanvas (custom QWidget)
-│   │   └── [D3D11/GL surface]
+│   │   └── [Qt 6 QWidget paint surface]
 │   └── MetadataPanel (custom QWidget)
 │       └── QScrollArea
 │           └── QTreeWidget / QFormLayout
@@ -425,7 +425,14 @@ QMainWindow
 
 | Widget | Parent | Purpose |
 | -------- | -------- | --------- |
-| `ImageCanvas` | QWidget | Image display with GPU rendering |
+| `ImageCanvas` | QWidget | Image display through the Qt render pipeline |
 | `ThumbnailListWidget` | QWidget | Virtualized thumbnail grid |
 | `ThumbnailScrollArea` | QScrollArea | Scrollable thumbnail container |
 | `MetadataPanel` | QWidget | Collapsible metadata display |
+### M45 UI convergence notes
+
+Long-running file operations show cancellable progress and complete through a
+generation-guarded UI handoff. Ctrl+V accepts an image immediately while PNG
+encoding runs in the I/O scheduler. Delete actions are labeled **移到 MViewer
+回收站** to distinguish the current per-user staging semantics from Windows'
+native Recycle Bin.

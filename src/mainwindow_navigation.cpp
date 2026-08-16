@@ -166,6 +166,14 @@ void MainWindow::rebuildRecentFilesMenu()
 {
     if (!m_recentFileMenu)
         return;
+    // Initial construction already creates an empty QMenu. Avoid a native
+    // QMenu::clear() during headless/early-window setup; on some Windows Qt
+    // styles that path waits for menu teardown before the first event loop.
+    if (m_recentFiles.items().empty() && m_recentFileMenu->actions().isEmpty())
+    {
+        m_recentFileMenu->addAction("(无)")->setEnabled(false);
+        return;
+    }
     m_recentFileMenu->clear();
     for (const auto &p : m_recentFiles.items())
     {

@@ -1,5 +1,27 @@
 # Changelog
 
+## [Unreleased] — M45 native Windows qualification and desktop workflow convergence
+
+### Fixed
+
+- CommandStack callbacks now run after the history mutex is released, while
+  command mutations remain serialized; worker-completed file commands have an
+  explicit UI-thread history commit.
+- Copy, move, and MViewer-trash operations now use cancellable background
+  transfers with progress, atomic verification, rollback, and lifecycle guards.
+- Clipboard image paste encodes PNG off the UI thread with generation-safe
+  delivery and bounded temporary-file cleanup.
+- Delete UI text now says **MViewer 回收站**; native Windows Recycle Bin
+  semantics are not claimed by this release line.
+
+### Tests
+
+- Release build and full local CTest passed **90/90**, including the callback
+  watchdog, production MainWindow command-surface acceptance, golden-image,
+  Browse/Compare workflow, lifecycle, and benchmark-enforcement gates.
+- Native Windows GUI, physical ICC, mixed-DPI, two-volume, native-dialog, and
+  long-session evidence remains MANUAL/BLOCKED until target hardware is run.
+
 ## [Unreleased] — M44 release readiness, data safety and structural convergence
 
 ### Fixed

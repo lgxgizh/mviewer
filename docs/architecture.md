@@ -121,3 +121,14 @@ Task Scheduler
 - `cache.md` — 缓存体系详细设计
 - `ui.md` — UI 层规范
 - `plugin.md` — Analyzer 插件体系规范
+## M45 lifecycle contracts
+
+CommandStack owns a short operation mutex for serializing mutations, while its
+state mutex protects only history snapshots. `ICommand` execute/undo/redo work
+does not run under the state mutex, and change callbacks are copied and invoked
+after unlocking it. UI-owned stacks complete worker operations by marshalling a
+short `recordExecuted` transition to the UI thread.
+
+File operations use `TaskScheduler` with `FileSystemAdapter` progress/cancel
+observers. The UI owns generation/alive guards and never lets a worker callback
+touch a widget. Clipboard PNG encoding follows the same worker-to-UI handoff.

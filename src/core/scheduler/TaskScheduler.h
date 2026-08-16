@@ -68,7 +68,7 @@ class TaskScheduler
         {
             return progress->load(std::memory_order_relaxed);
         }
-        void reportProgress(int p)
+        void reportProgress(int p) const
         {
             const int v = p < 0 ? 0 : (p > 100 ? 100 : p);
             progress->store(v, std::memory_order_relaxed);

@@ -2,6 +2,15 @@
 #include "mainwindow_p.h"
 #include "runtime_storage.h"
 
+namespace
+{
+struct ClipboardPasteState
+{
+    std::atomic<bool> saved{false};
+    std::atomic<bool> cancelled{false};
+};
+} // namespace
+
 void MainWindow::setupCommands()
 {
     auto &reg = CommandRegistry::instance();
@@ -42,7 +51,7 @@ void MainWindow::setupCommands()
         "file_rename", "重命名 (F2)", [this]() { m_thumbnailPanel->renameSelected(); },
         std::vector<CommandShortcut>{{Qt::Key_F2, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "file_delete", "删除到回收站 (Delete)",
+        "file_delete", "删除到 MViewer 回收站 (Delete)",
         [this]() { m_thumbnailPanel->moveToTrashSelected(); },
         std::vector<CommandShortcut>{{Qt::Key_Delete, 0}}));
     reg.registerCommand(std::make_unique<CallbackCommand>(
@@ -278,30 +287,7 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
         {
             const QImage img = qvariant_cast<QImage>(md->imageData());
             if (!img.isNull())
-            {
-                // Persist to a temp file so ImageViewer can load it via its
-                // normal async path (keeps decode/histogram consistent).
-                const QString tempRoot =
-                    mviewer::runtime::writableDirectory(QStandardPaths::TempLocation);
-                if (tempRoot.isEmpty())
-                {
-                    statusBar()->showMessage("无法创建剪贴板临时文件", 3000);
-                    event->accept();
-                    return true;
-                }
-                const QString tmpDir = QDir(tempRoot).filePath("mviewer-clip-paste");
-                QDir().mkpath(tmpDir);
-                const QString tmpPath = tmpDir + "/paste_" +
-                                        QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss") +
-                                        ".png";
-                if (img.save(tmpPath, "PNG"))
-                {
-                    onImageOpen(tmpPath);
-                    statusBar()->showMessage("已从剪贴板粘贴图片", 3000);
-                }
-                else
-                    statusBar()->showMessage("无法保存剪贴板图片", 3000);
-            }
+                startClipboardPaste(img);
             else
                 statusBar()->showMessage("剪贴板中无图片数据", 3000);
         }
@@ -311,6 +297,123 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
         return true;
     }
     return false;
+}
+
+void MainWindow::startClipboardPaste(const QImage &img)
+{
+    // Persist to a temp file so ImageViewer can load it via its normal async
+    // path (keeps decode/histogram consistent).
+    const QString tempRoot =
+        mviewer::runtime::writableDirectory(QStandardPaths::TempLocation);
+    if (tempRoot.isEmpty())
+    {
+        statusBar()->showMessage("无法创建剪贴板临时文件", 3000);
+        return;
+    }
+    const QString tmpDir = QDir(tempRoot).filePath("mviewer-clip-paste");
+    if (!QDir().mkpath(tmpDir))
+    {
+        statusBar()->showMessage("无法创建剪贴板临时目录", 3000);
+        return;
+    }
+
+    cancelClipboardPaste();
+    cleanupClipboardPasteTemps();
+    const QString tmpPath =
+        QDir(tmpDir).filePath(QStringLiteral("paste_%1.png").arg(
+            QUuid::createUuid().toString(QUuid::WithoutBraces)));
+    const uint64_t generation = ++m_clipboardPasteGeneration;
+    const auto alive = m_clipboardPasteAlive = std::make_shared<std::atomic<bool>>(true);
+    const QPointer<MainWindow> guard(this);
+    const auto state = std::make_shared<ClipboardPasteState>();
+
+    m_clipboardPasteTask = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::UI,
+        [img, tmpPath, state](const TaskScheduler::TaskContext &ctx)
+        {
+            if (ctx.isCancelled())
+            {
+                state->cancelled.store(true, std::memory_order_relaxed);
+                return;
+            }
+            const bool saved = img.save(tmpPath, "PNG");
+            if (!saved || ctx.isCancelled())
+            {
+                state->cancelled.store(ctx.isCancelled(), std::memory_order_relaxed);
+                QFile::remove(tmpPath);
+                return;
+            }
+            state->saved.store(true, std::memory_order_release);
+        },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, alive, generation, state, tmpPath]()
+        {
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, alive, generation, state, tmpPath]()
+                {
+                    if (!alive->load(std::memory_order_relaxed) || !guard ||
+                        generation != guard->m_clipboardPasteGeneration)
+                    {
+                        if (state->saved.load(std::memory_order_acquire))
+                            QFile::remove(tmpPath);
+                        return;
+                    }
+                    MainWindow *window = guard.data();
+                    window->m_clipboardPasteTask.reset();
+                    if (state->saved.load(std::memory_order_acquire))
+                    {
+                        window->m_clipboardPastePath = tmpPath;
+                        window->onImageOpen(tmpPath);
+                        window->statusBar()->showMessage("已从剪贴板粘贴图片", 3000);
+                    }
+                    else
+                    {
+                        QFile::remove(tmpPath);
+                        window->statusBar()->showMessage(
+                            state->cancelled.load(std::memory_order_relaxed)
+                                ? "剪贴板粘贴已取消"
+                                : "无法保存剪贴板图片",
+                            3000);
+                    }
+                },
+                Qt::QueuedConnection);
+        });
+
+    if (!m_clipboardPasteTask)
+    {
+        alive->store(false, std::memory_order_relaxed);
+        QFile::remove(tmpPath);
+        statusBar()->showMessage("剪贴板粘贴无法排队", 3000);
+    }
+}
+
+void MainWindow::cancelClipboardPaste()
+{
+    ++m_clipboardPasteGeneration;
+    if (m_clipboardPasteAlive)
+        m_clipboardPasteAlive->store(false, std::memory_order_relaxed);
+    if (m_clipboardPasteTask)
+        TaskScheduler::cancel(m_clipboardPasteTask);
+    m_clipboardPasteTask.reset();
+}
+
+void MainWindow::cleanupClipboardPasteTemps()
+{
+    const QString tempRoot =
+        mviewer::runtime::writableDirectory(QStandardPaths::TempLocation);
+    if (tempRoot.isEmpty())
+        return;
+    const QDir dir(QDir(tempRoot).filePath(QStringLiteral("mviewer-clip-paste")));
+    if (!dir.exists())
+        return;
+    const QDateTime cutoff = QDateTime::currentDateTime().addDays(-1);
+    for (const QFileInfo &info : dir.entryInfoList(QStringList() << QStringLiteral("paste_*.png"),
+                                                    QDir::Files))
+    {
+        if (info.absoluteFilePath() != m_clipboardPastePath && info.lastModified() < cutoff)
+            QFile::remove(info.absoluteFilePath());
+    }
 }
 
 bool MainWindow::handleViewerKey(QKeyEvent *event)
@@ -434,7 +537,7 @@ QString MainWindow::shortcutsHelpHtml()
         "<tr><td><kbd>Ctrl+C</kbd> / <kbd>Ctrl+Shift+C</kbd></td><td>复制图片 / 复制路径</td></tr>"
         "<tr><th colspan='2'>文件操作</th></tr>"
         "<tr><td><kbd>F2</kbd></td><td>重命名选中图片</td></tr>"
-        "<tr><td><kbd>Delete</kbd></td><td>删除到回收站</td></tr>"
+        "<tr><td><kbd>Delete</kbd></td><td>删除到 MViewer 回收站</td></tr>"
         "<tr><td><kbd>Ctrl+M</kbd></td><td>移动到...</td></tr>"
         "<tr><td><kbd>Ctrl+E</kbd></td><td>在资源管理器中显示</td></tr>"
         "<tr><td><kbd>Ctrl+Shift+B</kbd></td><td>批量处理</td></tr>"

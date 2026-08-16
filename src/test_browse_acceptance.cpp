@@ -388,6 +388,8 @@ void testMetadataOverlayCurrent(const QString &dirPath, const QStringList &paths
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
+    qputenv("MVIEWER_DISABLE_UPDATE_CHECK", "1");
+    qputenv("MVIEWER_DISABLE_RECOVERY_PROMPTS", "1");
     QStandardPaths::setTestModeEnabled(true);
     QCoreApplication::setOrganizationName("mviewer-browse-acceptance-test");
     QCoreApplication::setApplicationName("mviewer-browse-acceptance-test");

@@ -3,6 +3,345 @@
 
 #include "runtime_storage.h"
 
+namespace
+{
+struct AsyncCommandState
+{
+    explicit AsyncCommandState(std::unique_ptr<ICommand> value) : command(std::move(value))
+    {
+    }
+
+    std::unique_ptr<ICommand> command;
+    bool succeeded = false;
+    bool cancelled = false;
+};
+
+struct AsyncCopyState
+{
+    int copied = 0;
+    bool cancelled = false;
+    QStringList failures;
+};
+
+int transferPercent(uintmax_t copied, uintmax_t total)
+{
+    if (total == 0)
+        return copied == 0 ? 0 : 100;
+    const auto ratio = static_cast<double>(copied) / static_cast<double>(total);
+    return std::clamp(static_cast<int>(ratio * 100.0), 0, 100);
+}
+} // namespace
+
+void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command,
+                                                const QStringList &paths, const QString &label)
+{
+    if (!command || paths.isEmpty() || m_fileOperationBusy)
+        return;
+
+    m_fileOperationBusy = true;
+    const uint64_t generation = ++m_fileOperationGeneration;
+    const auto alive = m_alive;
+    const QPointer<ThumbnailPanel> guard(this);
+    auto state = std::make_shared<AsyncCommandState>(std::move(command));
+
+    m_fileProgress = new QProgressDialog(label + QStringLiteral("…"), QStringLiteral("取消"), 0,
+                                         100, this);
+    m_fileProgress->setWindowModality(Qt::WindowModal);
+    m_fileProgress->setAutoClose(false);
+    m_fileProgress->setAutoReset(false);
+    m_fileProgress->setMinimumDuration(0);
+    m_fileProgress->setValue(0);
+    connect(m_fileProgress, &QProgressDialog::canceled, this,
+            [this, generation]()
+            {
+                if (generation == m_fileOperationGeneration && m_fileOperationTask)
+                    TaskScheduler::cancel(m_fileOperationTask);
+            });
+    m_fileProgress->show();
+
+    auto lastProgress = std::make_shared<std::atomic<int>>(-1);
+    const auto onProgress = [guard, alive, generation, lastProgress](int value)
+    {
+        if (!alive->load(std::memory_order_relaxed) || !guard)
+            return;
+        if (lastProgress->exchange(value, std::memory_order_relaxed) == value)
+            return;
+        QMetaObject::invokeMethod(
+            qApp,
+            [guard, alive, generation, value]()
+            {
+                if (!alive->load(std::memory_order_relaxed) || !guard ||
+                    generation != guard->m_fileOperationGeneration)
+                    return;
+                if (guard->m_fileProgress)
+                    guard->m_fileProgress->setValue(value);
+            },
+            Qt::QueuedConnection);
+    };
+
+    m_fileOperationTask = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::UI,
+        [state](const TaskScheduler::TaskContext &ctx)
+        {
+            const auto observer = [&ctx](uintmax_t copied, uintmax_t total)
+            {
+                if (ctx.isCancelled())
+                    return false;
+                ctx.reportProgress(transferPercent(copied, total));
+                return !ctx.isCancelled();
+            };
+            if (auto *move = dynamic_cast<FileMoveCommand *>(state->command.get()))
+                move->setTransferObserver(observer);
+            else if (auto *del = dynamic_cast<FileDeleteCommand *>(state->command.get()))
+                del->setTransferObserver(observer);
+
+            try
+            {
+                state->command->execute();
+            }
+            catch (...)
+            {
+                if (auto *move = dynamic_cast<FileMoveCommand *>(state->command.get()))
+                    move->setTransferObserver({});
+                else if (auto *del = dynamic_cast<FileDeleteCommand *>(state->command.get()))
+                    del->setTransferObserver({});
+                throw;
+            }
+            // The command is retained for Undo/Redo. Do not retain the worker
+            // callback, whose TaskContext is only valid for this execution.
+            if (auto *move = dynamic_cast<FileMoveCommand *>(state->command.get()))
+                move->setTransferObserver({});
+            else if (auto *del = dynamic_cast<FileDeleteCommand *>(state->command.get()))
+                del->setTransferObserver({});
+            state->succeeded = state->command->lastError().empty();
+            state->cancelled = ctx.isCancelled();
+        },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, alive, generation, state, paths, label]() mutable
+        {
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, alive, generation, state, paths, label]() mutable
+                {
+                    if (!alive->load(std::memory_order_relaxed) || !guard ||
+                        generation != guard->m_fileOperationGeneration)
+                        return;
+
+                    ThumbnailPanel *panel = guard.data();
+                    panel->m_fileOperationBusy = false;
+                    panel->m_fileOperationTask.reset();
+                    if (panel->m_fileProgress)
+                    {
+                        panel->m_fileProgress->close();
+                        panel->m_fileProgress->deleteLater();
+                        panel->m_fileProgress = nullptr;
+                    }
+
+                    const std::string error =
+                        state->command ? state->command->lastError() : "Command was lost.";
+                    const bool unresolved =
+                        state->command && state->command->hasUnresolvedState();
+                    if (panel->m_cmdStack)
+                        panel->m_cmdStack->recordExecuted(std::move(state->command));
+
+                    if (!state->succeeded)
+                    {
+                        const QString detail = QString::fromUtf8(error.c_str());
+                        QMessageBox::warning(
+                            panel, label,
+                            state->cancelled ? label + QStringLiteral("已取消。\n") + detail
+                                             : label + QStringLiteral("失败。\n") + detail);
+                    }
+
+                    if (!panel->m_currentDir.isEmpty())
+                        panel->setDirectory(panel->m_currentDir);
+
+                    QStringList removed;
+                    for (const QString &path : paths)
+                    {
+                        if (!QFileInfo::exists(path))
+                            removed.append(path);
+                    }
+                    if (!removed.isEmpty())
+                        emit panel->pathsRemoved(removed);
+
+                    // Keep this local so the result is explicit in a debugger
+                    // and the unresolved command is still owned by the stack.
+                    (void)unresolved;
+                },
+                Qt::QueuedConnection);
+        },
+        onProgress);
+
+    if (!m_fileOperationTask)
+    {
+        m_fileOperationBusy = false;
+        if (m_fileProgress)
+        {
+            m_fileProgress->close();
+            m_fileProgress->deleteLater();
+            m_fileProgress = nullptr;
+        }
+        QMessageBox::warning(this, label, label + QStringLiteral("无法排队：后台任务队列已满。"));
+    }
+}
+
+void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
+                                             const QString &destinationDirectory)
+{
+    if (paths.isEmpty() || destinationDirectory.isEmpty() || m_fileOperationBusy)
+        return;
+
+    m_fileOperationBusy = true;
+    const uint64_t generation = ++m_fileOperationGeneration;
+    const auto alive = m_alive;
+    const QPointer<ThumbnailPanel> guard(this);
+    auto state = std::make_shared<AsyncCopyState>();
+    const auto fileSystem = mviewer::core::defaultFileSystemAdapter();
+
+    m_fileProgress = new QProgressDialog(QStringLiteral("复制中…"), QStringLiteral("取消"), 0,
+                                         100, this);
+    m_fileProgress->setWindowModality(Qt::WindowModal);
+    m_fileProgress->setAutoClose(false);
+    m_fileProgress->setAutoReset(false);
+    m_fileProgress->setMinimumDuration(0);
+    m_fileProgress->setValue(0);
+    connect(m_fileProgress, &QProgressDialog::canceled, this,
+            [this, generation]()
+            {
+                if (generation == m_fileOperationGeneration && m_fileOperationTask)
+                    TaskScheduler::cancel(m_fileOperationTask);
+            });
+    m_fileProgress->show();
+
+    auto lastProgress = std::make_shared<std::atomic<int>>(-1);
+    const auto onProgress = [guard, alive, generation, lastProgress](int value)
+    {
+        if (!alive->load(std::memory_order_relaxed) || !guard)
+            return;
+        if (lastProgress->exchange(value, std::memory_order_relaxed) == value)
+            return;
+        QMetaObject::invokeMethod(
+            qApp,
+            [guard, alive, generation, value]()
+            {
+                if (!alive->load(std::memory_order_relaxed) || !guard ||
+                    generation != guard->m_fileOperationGeneration)
+                    return;
+                if (guard->m_fileProgress)
+                    guard->m_fileProgress->setValue(value);
+            },
+            Qt::QueuedConnection);
+    };
+
+    m_fileOperationTask = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::UI,
+        [state, paths, destinationDirectory, fileSystem](const TaskScheduler::TaskContext &ctx)
+        {
+            const auto destinationDir =
+                mviewer::core::pathFromUtf8(destinationDirectory.toUtf8().toStdString());
+            for (int index = 0; index < paths.size(); ++index)
+            {
+                if (ctx.isCancelled())
+                {
+                    state->cancelled = true;
+                    break;
+                }
+
+                const QString &path = paths.at(index);
+                const auto source = mviewer::core::pathFromUtf8(path.toUtf8().toStdString());
+                std::string destinationError;
+                const auto destination = mviewer::core::collisionFreeDestination(
+                    source, destinationDir, fileSystem, destinationError);
+                if (destination.empty())
+                {
+                    state->failures.append(path + ": " +
+                                           QString::fromUtf8(destinationError.c_str()));
+                    continue;
+                }
+
+                const int base = (index * 100) / paths.size();
+                const int span = ((index + 1) * 100) / paths.size() - base;
+                const auto result = mviewer::core::copyFileAtomically(
+                    source, destination, fileSystem,
+                    [&ctx, base, span](uintmax_t copied, uintmax_t total)
+                    {
+                        if (ctx.isCancelled())
+                            return false;
+                        const int local = transferPercent(copied, total);
+                        ctx.reportProgress(base + (local * span) / 100);
+                        return !ctx.isCancelled();
+                    });
+                if (result.state == mviewer::core::FileTransferState::Succeeded)
+                    ++state->copied;
+                else
+                {
+                    state->failures.append(path + ": " +
+                                           QString::fromUtf8(result.error.c_str()));
+                    if (ctx.isCancelled())
+                    {
+                        state->cancelled = true;
+                        break;
+                    }
+                }
+            }
+            if (!ctx.isCancelled() && state->failures.isEmpty())
+                ctx.reportProgress(100);
+            else if (ctx.isCancelled())
+                state->cancelled = true;
+        },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, alive, generation, state]()
+        {
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, alive, generation, state]()
+                {
+                    if (!alive->load(std::memory_order_relaxed) || !guard ||
+                        generation != guard->m_fileOperationGeneration)
+                        return;
+                    ThumbnailPanel *panel = guard.data();
+                    panel->m_fileOperationBusy = false;
+                    panel->m_fileOperationTask.reset();
+                    if (panel->m_fileProgress)
+                    {
+                        panel->m_fileProgress->close();
+                        panel->m_fileProgress->deleteLater();
+                        panel->m_fileProgress = nullptr;
+                    }
+                    const QString summary =
+                        QStringLiteral("复制完成：成功 %1，失败 %2。%3")
+                            .arg(state->copied)
+                            .arg(state->failures.size())
+                            .arg(state->failures.isEmpty()
+                                     ? QString()
+                                     : QStringLiteral("\n") + state->failures.join("\n"));
+                    if (state->cancelled)
+                        QMessageBox::warning(panel, QStringLiteral("复制"),
+                                             QStringLiteral("复制已取消。\n") + summary);
+                    else if (state->failures.isEmpty())
+                        QMessageBox::information(panel, QStringLiteral("复制"), summary);
+                    else
+                        QMessageBox::warning(panel, QStringLiteral("复制"), summary);
+                },
+                Qt::QueuedConnection);
+        },
+        onProgress);
+
+    if (!m_fileOperationTask)
+    {
+        m_fileOperationBusy = false;
+        if (m_fileProgress)
+        {
+            m_fileProgress->close();
+            m_fileProgress->deleteLater();
+            m_fileProgress = nullptr;
+        }
+        QMessageBox::warning(this, QStringLiteral("复制"),
+                             QStringLiteral("复制无法排队：后台任务队列已满。"));
+    }
+}
+
 void ThumbnailPanel::renameSelected()
 {
     const QStringList paths = selectedPaths();
@@ -53,9 +392,12 @@ void ThumbnailPanel::renameSelected()
 void ThumbnailPanel::moveToTrashSelected()
 {
     const QStringList paths = selectedPaths();
-    if (paths.isEmpty())
+    if (paths.isEmpty() || m_fileOperationBusy)
         return;
-    // Qt6 removed QStandardPaths::TrashLocation; emulate a per-user trash dir.
+    // Qt6 removed QStandardPaths::TrashLocation. Until a native Windows
+    // Shell recycle-bin adapter is available, use and label an explicit
+    // per-user MViewer trash staging area so users are not promised native
+    // Recycle Bin semantics.
     const QString dataDir =
         mviewer::runtime::writableDirectory(QStandardPaths::GenericDataLocation);
     const QString trashDir = dataDir.isEmpty() ? QString() : QDir(dataDir).filePath("trash");
@@ -65,112 +407,32 @@ void ThumbnailPanel::moveToTrashSelected()
         return;
     }
 
-    QStringList removed;
-    // A-10: reversible delete via CommandStack when available.
-    if (m_cmdStack)
-    {
-        std::vector<std::string> stdPaths;
-        stdPaths.reserve(static_cast<size_t>(paths.size()));
-        for (const QString &p : paths)
-            stdPaths.push_back(p.toUtf8().toStdString());
-        auto cmd = std::make_unique<FileDeleteCommand>(std::move(stdPaths), trashDir.toStdString());
-        // Capture moved paths before ownership transfers.
-        if (!m_cmdStack->execute(std::move(cmd)))
-        {
-            QMessageBox::warning(this, "删除失败", QString::fromStdString(m_cmdStack->lastError()));
-        }
-        for (const QString &p : paths)
-            if (!QFileInfo::exists(p))
-                removed.append(p);
-    }
-    else
-    {
-        auto cmd = std::make_unique<FileDeleteCommand>(toStdPaths(paths), trashDir.toUtf8().toStdString());
-        cmd->execute();
-        if (!cmd->lastError().empty())
-            QMessageBox::warning(this, tr("删除失败"), QString::fromUtf8(cmd->lastError().c_str()));
-        for (const QString &p : paths)
-            if (!QFileInfo::exists(p))
-                removed.append(p);
-    }
-    if (!m_currentDir.isEmpty())
-        setDirectory(m_currentDir);
-    // Let the host advance the viewer if the current image was just deleted.
-    if (!removed.isEmpty())
-        emit pathsRemoved(removed);
+    auto cmd = std::make_unique<FileDeleteCommand>(toStdPaths(paths), trashDir.toUtf8().toStdString());
+    startCommandFileOperation(std::move(cmd), paths, QStringLiteral("删除"));
 }
 
 void ThumbnailPanel::copySelectedTo()
 {
     const QStringList paths = selectedPaths();
-    if (paths.isEmpty())
+    if (paths.isEmpty() || m_fileOperationBusy)
         return;
     const QString dir = QFileDialog::getExistingDirectory(this, "复制到...");
     if (dir.isEmpty())
         return;
-    const auto fileSystem = mviewer::core::defaultFileSystemAdapter();
-    size_t copied = 0;
-    QStringList failures;
-    for (const QString &p : paths)
-    {
-        const auto source = mviewer::core::pathFromUtf8(p.toUtf8().toStdString());
-        std::string destinationError;
-        const auto destination = mviewer::core::collisionFreeDestination(
-            source, mviewer::core::pathFromUtf8(dir.toUtf8().toStdString()), fileSystem,
-            destinationError);
-        if (destination.empty())
-        {
-            failures.append(p + ": " + QString::fromUtf8(destinationError.c_str()));
-            continue;
-        }
-        const auto result = mviewer::core::copyFileAtomically(source, destination, fileSystem);
-        if (result.state == mviewer::core::FileTransferState::Succeeded)
-            ++copied;
-        else
-            failures.append(p + ": " + QString::fromUtf8(result.error.c_str()));
-    }
-    const QString summary = tr("复制完成：成功 %1，失败 %2。%3")
-                                 .arg(static_cast<qlonglong>(copied))
-                                 .arg(failures.size())
-                                 .arg(failures.isEmpty() ? QString() : "\n" + failures.join("\n"));
-    if (failures.isEmpty())
-        QMessageBox::information(this, tr("复制"), summary);
-    else
-        QMessageBox::warning(this, tr("复制"), summary);
+    startCopyFileOperation(paths, dir);
 }
 
 void ThumbnailPanel::moveSelectedTo()
 {
     const QStringList paths = selectedPaths();
-    if (paths.isEmpty())
+    if (paths.isEmpty() || m_fileOperationBusy)
         return;
     const QString dir = QFileDialog::getExistingDirectory(this, "移动到...");
     if (dir.isEmpty())
         return;
 
-    // A-10: reversible move via CommandStack when available.
-    if (m_cmdStack)
-    {
-        std::vector<std::string> stdPaths;
-        stdPaths.reserve(static_cast<size_t>(paths.size()));
-        for (const QString &p : paths)
-            stdPaths.push_back(p.toUtf8().toStdString());
-        auto cmd = std::make_unique<FileMoveCommand>(std::move(stdPaths), dir.toUtf8().toStdString());
-        if (!m_cmdStack->execute(std::move(cmd)))
-        {
-            QMessageBox::warning(this, "移动失败", QString::fromStdString(m_cmdStack->lastError()));
-            return;
-        }
-    }
-    else
-    {
-        auto cmd = std::make_unique<FileMoveCommand>(toStdPaths(paths), dir.toUtf8().toStdString());
-        cmd->execute();
-        if (!cmd->lastError().empty())
-            QMessageBox::warning(this, tr("移动失败"), QString::fromUtf8(cmd->lastError().c_str()));
-    }
-    if (!m_currentDir.isEmpty())
-        setDirectory(m_currentDir);
+    auto cmd = std::make_unique<FileMoveCommand>(toStdPaths(paths), dir.toUtf8().toStdString());
+    startCommandFileOperation(std::move(cmd), paths, QStringLiteral("移动"));
 }
 
 void ThumbnailPanel::revealSelected()
@@ -414,7 +676,7 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
     QAction *aCopy = menu.addAction("复制...");
     QAction *aMove = menu.addAction("移动...");
     aMove->setShortcut(QKeySequence("Ctrl+M"));
-    QAction *aTrash = menu.addAction("移到回收站");
+    QAction *aTrash = menu.addAction("移到 MViewer 回收站");
     aTrash->setShortcut(QKeySequence(Qt::Key_Delete));
     QAction *aReveal = menu.addAction("在资源管理器中显示");
     aReveal->setShortcut(QKeySequence("Ctrl+E"));

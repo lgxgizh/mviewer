@@ -2,9 +2,14 @@
 
 ## Project Overview
 
-**MViewer** is an open-source, high-performance desktop image viewer designed for users who browse large image collections.
+**MViewer** is an open-source visual analysis platform for image algorithm
+engineers. Browsing is the entry point; Compare → Analyze → Report/Export is the
+professional workflow. It is not positioned as a general-purpose high-performance
+image browser.
 
-The project is inspired by FastStone Image Viewer, IrfanView, and ImageGlass, but is built with a modern C++ architecture, excellent maintainability, and outstanding performance.
+The product borrows useful desktop interaction patterns from mature image
+viewers, but its current source of truth is the Qt Widgets workflow and the
+algorithm-engineering analysis surface.
 
 The primary goal is to provide an image viewing experience that feels **instant**, **smooth**, and **responsive**, even when browsing folders containing tens of thousands of images.
 
@@ -26,7 +31,9 @@ The project prioritizes:
 - Clean modular architecture
 - Long-term maintainability
 
-Performance always has higher priority than adding more features.
+Product workflow correctness and long-session usability take priority over new
+capability categories. Performance budgets remain hard gates for the shipped
+Browse → Compare → Analyze → Export path.
 
 ---
 
@@ -78,16 +85,10 @@ Requirements:
 
 ## Rendering
 
-Windows:
-
-- Direct3D 11
-- Direct2D
-
-Linux:
-
-- OpenGL
-
-Rendering should be abstracted behind a renderer interface so additional backends can be added later.
+The current product uses Qt 6 Widgets with the existing ImageViewer and Compare
+render pipeline. Direct D3D11/Direct2D or Vulkan compositing is not a current UI
+contract; the older backend exploration text is superseded by the frozen
+Qt-Widgets boundary in `docs/architecture.md`.
 
 ---
 
@@ -403,4 +404,13 @@ When generating code:
 
 Whenever multiple implementations are possible, choose the simplest solution that satisfies the performance requirements.
 
-The long-term goal is to build the fastest and most maintainable open-source desktop image viewer, with code quality comparable to mature open-source C++ projects.
+The long-term goal is to build a maintainable open-source desktop visual
+analysis platform for image algorithm engineers, with code quality comparable
+to mature open-source C++ projects.
+### M45 product qualification boundary
+
+MViewer's desktop workflow is qualified as Browse → Viewer → Compare → Analyze
+→ Export → File Operations only where the evidence says so. Automated tests do
+not substitute for native Windows DPI, ICC, multi-volume, dialog, or long-
+session evidence. Deletion is presented honestly as the reversible **MViewer
+回收站** staging area until native Shell Recycle Bin integration is qualified.

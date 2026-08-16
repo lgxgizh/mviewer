@@ -2,13 +2,13 @@
 
 ## 项目背景
 
-程序员日常工作中需要快速对比多张图片（如前后效果图、算法输出对比等），并测量特定区域的亮度和 RGB 通道统计数据。现有工具要么快但不支持框选统计（如 FastStone），要么支持框选统计但太慢（公司内部工具）。本项目旨在开发一款**既快又支持框选统计**的看图分析工具。
+图像算法工程师需要快速对比多张图片（如前后效果图、算法输出对比等），并测量特定区域的亮度、RGB 通道和像素统计数据。本项目旨在提供一款**以 Compare → Analyze → Export 为核心**的视觉分析平台。
 
 ---
 
 ## 1. 项目概述
 
-开发一款 Windows 平台下的图像查看与分析软件，核心参考 FastStone Image Viewer。支持高效浏览目录中的图片、多图并排比较、亮度直方图显示、以及框选区域统计功能。
+开发一款 Windows 平台下、面向图像算法工程师的视觉分析平台。支持高效浏览目录中的图片、多图并排比较、亮度直方图显示、像素/ROI 分析、报告与结果导出。
 
 **技术栈**：C++ / Qt 6 Widgets
 
@@ -53,8 +53,7 @@
 
 ### 3.3 图片查看
 
-- 支持格式：JPEG、BMP、PNG
-- 不支持 RAW、GIF
+- 支持格式：JPEG、BMP、PNG、TIFF、WebP、GIF 以及当前已接入的 RAW 格式
 - 默认显示：适应窗口大小
 - 缩放：鼠标滚轮
 - 拖动：鼠标左键按住拖动
@@ -130,11 +129,11 @@ UI 上有一个勾选框，控制同步状态：
 
 | 操作 | 说明 |
 | ----- | ------ |
-| 删除 | 移入回收站 |
+| 删除 | 移入 **MViewer 回收站**，支持可恢复 Undo；不等同于 Windows 系统回收站 |
 | 重命名 | 弹出对话框修改文件名 |
-| 复制 | 不支持 |
-| 移动 | 不支持 |
-| 拖拽打开 | 不支持 |
+| 复制 | 支持后台、可取消、带进度的原子复制 |
+| 移动 | 支持同卷移动与跨卷安全 fallback，可撤销 |
+| 拖拽打开 | 支持将文件/目录拖入主窗口 |
 
 ---
 
@@ -144,9 +143,9 @@ UI 上有一个勾选框，控制同步状态：
 | ----- | ------ |
 | 界面语言 | 中文 |
 | 多显示器 | 支持跨显示器 |
-| GIF | 不支持 |
-| 截图保存 | 不支持 |
-| 导出统计 | 不支持 |
+| GIF | 支持 |
+| 截图保存 | 支持通过 Copy Image / Save As / Export 工作流完成 |
+| 导出统计 | 支持 CSV、JSON、HTML 与报告导出 |
 
 ---
 
@@ -157,3 +156,13 @@ UI 上有一个勾选框，控制同步状态：
 - GUI：Qt 6 Widgets
 - 编译：CMake + Ninja
 - 编译器：MSVC（Windows）
+### M45 qualification requirements
+
+- CommandStack callbacks must be safe for immediate state queries and must not
+  execute under the internal history mutex.
+- File copy/move/delete operations must be cancellable, progress-reporting,
+  lifecycle-guarded, and retain recoverable state on partial failure.
+- Clipboard image paste must encode PNG off the UI thread and discard stale
+  generations safely.
+- Product copy must call the current delete destination **MViewer 回收站**;
+  native Windows Recycle Bin behavior requires a separate qualified adapter.

@@ -636,6 +636,25 @@ target_include_directories(browse_acceptance_tests PRIVATE ${CMAKE_CURRENT_SOURC
 add_test(NAME browse_acceptance_tests COMMAND browse_acceptance_tests)
 set_tests_properties(browse_acceptance_tests PROPERTIES RUN_SERIAL TRUE)
 
+# ─── M45: real MainWindow CommandStack callback + async file-op surface ─────
+add_executable(mainwindow_commandstack_acceptance
+    test_mainwindow_commandstack.cpp
+)
+
+target_link_libraries(mainwindow_commandstack_acceptance
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(mainwindow_commandstack_acceptance PRIVATE cxx_std_20)
+target_include_directories(mainwindow_commandstack_acceptance PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME mainwindow_commandstack_acceptance COMMAND mainwindow_commandstack_acceptance)
+set_tests_properties(mainwindow_commandstack_acceptance PROPERTIES RUN_SERIAL TRUE TIMEOUT 12)
+
 # ─── M24: Compare workflow acceptance (multi-image entry, mode-preserved
 # state, continuous pair navigation, degraded images) ────────────────────────
 add_executable(compare_acceptance_tests
@@ -1176,6 +1195,11 @@ add_test(NAME rawdecode_tests COMMAND test_rawdecode)
 add_test(NAME pixelcontroller_tests COMMAND test_pixelcontroller)
 add_test(NAME thumbnailpipeline_tests COMMAND test_thumbnailpipeline)
 add_test(NAME commandstack_tests COMMAND test_commandstack)
+add_test(NAME commandstack_callback_regression
+    COMMAND test_commandstack --callback-probe)
+set_tests_properties(commandstack_callback_regression PROPERTIES
+    RUN_SERIAL TRUE
+    TIMEOUT 3)
 add_test(NAME crop_tests COMMAND test_crop)
 add_test(NAME job_tests COMMAND test_job)
 add_test(NAME datamodel_tests COMMAND test_datamodel)

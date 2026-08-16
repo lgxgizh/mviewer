@@ -1,7 +1,9 @@
 #include "FileSystemAdapter.h"
 
 #include <atomic>
+#include <fstream>
 #include <system_error>
+#include <vector>
 
 namespace fs = std::filesystem;
 
@@ -44,6 +46,67 @@ class StdFileSystemAdapter final : public FileSystemAdapter
         return fs::copy_file(from, to, fs::copy_options::none, ec);
     }
 
+    bool copyFileWithProgress(const fs::path &from, const fs::path &to,
+                              const TransferObserver &observer, std::error_code &ec) override
+    {
+        std::error_code sizeError;
+        const uintmax_t total = fs::file_size(from, sizeError);
+        if (sizeError)
+        {
+            ec = sizeError;
+            return false;
+        }
+        if (observer && !observer(0, total))
+        {
+            ec = std::make_error_code(std::errc::operation_canceled);
+            return false;
+        }
+
+        std::ifstream input(from, std::ios::binary);
+        std::ofstream output(to, std::ios::binary | std::ios::trunc);
+        if (!input || !output)
+        {
+            ec = std::make_error_code(std::errc::io_error);
+            return false;
+        }
+
+        constexpr std::size_t kChunkSize = 1024 * 1024;
+        std::vector<char> buffer(kChunkSize);
+        uintmax_t copied = 0;
+        while (input)
+        {
+            input.read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+            const std::streamsize count = input.gcount();
+            if (count > 0)
+            {
+                output.write(buffer.data(), count);
+                if (!output)
+                {
+                    ec = std::make_error_code(std::errc::io_error);
+                    return false;
+                }
+                copied += static_cast<uintmax_t>(count);
+                if (observer && !observer(copied, total))
+                {
+                    ec = std::make_error_code(std::errc::operation_canceled);
+                    return false;
+                }
+            }
+        }
+        if (input.bad())
+        {
+            ec = std::make_error_code(std::errc::io_error);
+            return false;
+        }
+        output.close();
+        if (!output)
+        {
+            ec = std::make_error_code(std::errc::io_error);
+            return false;
+        }
+        return true;
+    }
+
     bool remove(const fs::path &path, std::error_code &ec) override
     {
         return fs::remove(path, ec);
@@ -78,6 +141,32 @@ std::string describeError(const std::string &operation, const fs::path &path,
 }
 
 } // namespace
+
+bool FileSystemAdapter::copyFileWithProgress(const fs::path &from, const fs::path &to,
+                                              const TransferObserver &observer,
+                                              std::error_code &ec)
+{
+    std::error_code sizeError;
+    const uintmax_t total = fileSize(from, sizeError);
+    if (sizeError)
+    {
+        ec = sizeError;
+        return false;
+    }
+    if (observer && !observer(0, total))
+    {
+        ec = std::make_error_code(std::errc::operation_canceled);
+        return false;
+    }
+    if (!copyFile(from, to, ec))
+        return false;
+    if (observer && !observer(total, total))
+    {
+        ec = std::make_error_code(std::errc::operation_canceled);
+        return false;
+    }
+    return true;
+}
 
 fs::path pathFromUtf8(const std::string &path)
 {
@@ -170,6 +259,13 @@ fs::path collisionFreeDestination(const fs::path &source, const fs::path &direct
 FileTransferResult copyFileAtomically(const fs::path &source, const fs::path &destination,
                                       const std::shared_ptr<FileSystemAdapter> &adapter)
 {
+    return copyFileAtomically(source, destination, adapter, {});
+}
+
+FileTransferResult copyFileAtomically(const fs::path &source, const fs::path &destination,
+                                      const std::shared_ptr<FileSystemAdapter> &adapter,
+                                      const FileSystemAdapter::TransferObserver &observer)
+{
     std::error_code ec;
     if (adapter->exists(destination, ec))
         return {FileTransferState::Failed,
@@ -179,13 +275,15 @@ FileTransferResult copyFileAtomically(const fs::path &source, const fs::path &de
                 describeError("Cannot inspect destination", destination, ec)};
 
     const fs::path temporary = temporaryPathFor(destination);
-    if (!adapter->copyFile(source, temporary, ec))
+    if (!adapter->copyFileWithProgress(source, temporary, observer, ec))
     {
         std::error_code cleanup;
         adapter->remove(temporary, cleanup);
         if (cleanup)
             return {FileTransferState::Partial,
                     describeError("Copy failed and temporary cleanup failed", temporary, cleanup)};
+        if (ec == std::make_error_code(std::errc::operation_canceled))
+            return {FileTransferState::Failed, "Copy cancelled."};
         return {FileTransferState::Failed, describeError("Copy failed", source, ec)};
     }
 
@@ -223,7 +321,16 @@ FileTransferResult copyFileAtomically(const fs::path &source, const fs::path &de
 FileTransferResult moveFileSafely(const fs::path &source, const fs::path &destination,
                                   const std::shared_ptr<FileSystemAdapter> &adapter)
 {
+    return moveFileSafely(source, destination, adapter, {});
+}
+
+FileTransferResult moveFileSafely(const fs::path &source, const fs::path &destination,
+                                  const std::shared_ptr<FileSystemAdapter> &adapter,
+                                  const FileSystemAdapter::TransferObserver &observer)
+{
     std::error_code ec;
+    if (observer && !observer(0, 0))
+        return {FileTransferState::Failed, "Move cancelled."};
     if (samePath(source, destination, adapter))
         return {FileTransferState::Failed,
                 "Source and destination are the same path: " + pathToUtf8(source)};
@@ -239,13 +346,27 @@ FileTransferResult moveFileSafely(const fs::path &source, const fs::path &destin
                 describeError("Cannot inspect destination", destination, ec)};
 
     if (adapter->rename(source, destination, ec))
+    {
+        if (observer && !observer(1, 1))
+            return {FileTransferState::Succeeded, {}};
         return {FileTransferState::Succeeded, {}};
+    }
     if (!isCrossVolume(ec))
         return {FileTransferState::Failed, describeError("Move failed", source, ec)};
 
-    const FileTransferResult copied = copyFileAtomically(source, destination, adapter);
+    const FileTransferResult copied = copyFileAtomically(source, destination, adapter, observer);
     if (copied.state != FileTransferState::Succeeded)
         return copied;
+
+    if (observer && !observer(1, 1))
+    {
+        std::error_code cleanup;
+        adapter->remove(destination, cleanup);
+        if (!cleanup)
+            return {FileTransferState::Failed, "Move cancelled."};
+        return {FileTransferState::Partial,
+                "Move cancelled and destination cleanup failed: " + cleanup.message()};
+    }
 
     if (adapter->remove(source, ec))
         return {FileTransferState::Succeeded, {}};

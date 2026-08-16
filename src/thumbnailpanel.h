@@ -28,6 +28,7 @@ class QContextMenuEvent;
 class QResizeEvent;
 class QStringListModel;
 class CommandStack;
+class ICommand;
 class SelectionModel;
 class QProgressDialog;
 class QRegularExpression;
@@ -374,6 +375,9 @@ class ThumbnailPanel : public QListView
     void applyThumbSize(int size, bool rememberGridSize);
     void runBatchAnalyzeExportAsync(const QStringList &paths, const std::string &analyzerId,
                                     const QString &output);
+    void startCommandFileOperation(std::unique_ptr<ICommand> command,
+                                   const QStringList &paths, const QString &label);
+    void startCopyFileOperation(const QStringList &paths, const QString &destinationDirectory);
 
     // P0-1 (perf): resolve pixel dimensions off the UI thread. setDirectory no
     // longer reads image headers eagerly (that blocked folder switching on large
@@ -393,6 +397,10 @@ class ThumbnailPanel : public QListView
     std::shared_ptr<std::atomic<bool>> m_alive;
     TaskScheduler::TaskHandle m_batchTask;
     QProgressDialog *m_batchProgress = nullptr;
+    TaskScheduler::TaskHandle m_fileOperationTask;
+    QProgressDialog *m_fileProgress = nullptr;
+    uint64_t m_fileOperationGeneration = 0;
+    bool m_fileOperationBusy = false;
 };
 
 // Paints only the visible cells: a (cached/decoded) thumbnail + filename. No

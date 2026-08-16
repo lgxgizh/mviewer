@@ -109,6 +109,7 @@
 #include <QTextBrowser>
 #include <QTimer>
 #include <QUrl>
+#include <QUuid>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <thread>
