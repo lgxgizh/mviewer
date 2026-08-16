@@ -228,49 +228,8 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
     if (!work)
         return nullptr;
 
-    // Back-pressure check. The user handler must run OUTSIDE the lock (it may
-    // call back into the scheduler).
-    {
-        PoolType backpressurePool = MetadataPool;
-        bool rejected = false;
-        {
-            std::lock_guard<std::mutex> lock(m_graphMtx);
-            if (m_poolState[pIdx].paused)
-            {
-                m_poolState[pIdx].metrics.backpressure_rejected++;
-                rejected = true;
-                backpressurePool = poolFromPriority(prio);
-            }
-            else
-            {
-                const size_t md = m_poolState[pIdx].metrics.queue_depth +
-                                  m_poolState[pIdx].metrics.active_tasks;
-                if (m_poolState[pIdx].max_queue_depth > 0 &&
-                    md >= m_poolState[pIdx].max_queue_depth)
-                {
-                    m_poolState[pIdx].metrics.backpressure_rejected++;
-                    rejected = true;
-                    backpressurePool = poolFromPriority(prio);
-                }
-            }
-        }
-        if (rejected)
-        {
-            // M27: the backpressure handler is a user callback; a throw must
-            // not escape submit. The rejection decision is already made.
-            if (m_backpressure)
-            {
-                try
-                {
-                    m_backpressure(backpressurePool);
-                }
-                catch (...)
-                {
-                }
-            }
-            return nullptr;
-        }
-    }
+    if (rejectBackpressure(prio))
+        return nullptr;
 
     auto ctx = std::make_shared<TaskContext>();
     ctx->id = s_nextId.fetch_add(1);
@@ -306,45 +265,73 @@ TaskScheduler::submit(Priority prio, std::function<void(const TaskContext &)> wo
             }
         });
 
+    enqueueTask(prio, ctx, runnable);
+    return ctx;
+}
+
+bool TaskScheduler::rejectBackpressure(Priority prio)
+{
+    const int pIdx = static_cast<int>(prio);
+    PoolType pool = MetadataPool;
+    bool rejected = false;
     {
-        // P0-1 fix: submitted++ moved inside the lock to avoid data race
-        // with submit(PoolType, void*) and onTaskComplete().
         std::lock_guard<std::mutex> lock(m_graphMtx);
-        m_poolState[pIdx].metrics.submitted++;
-        m_handles[ctx_id] = ctx;
-        m_taskPriomap[ctx_id] = prio;
-        if (!ctx->dependencies.empty())
+        const size_t depth = m_poolState[pIdx].metrics.queue_depth +
+                             m_poolState[pIdx].metrics.active_tasks;
+        if (m_poolState[pIdx].paused ||
+            (m_poolState[pIdx].max_queue_depth > 0 &&
+             depth >= m_poolState[pIdx].max_queue_depth))
         {
-            // Waiting state: counted in pending + waiting, not active/queued.
-            m_poolState[pIdx].metrics.pending++;
-            m_poolState[pIdx].metrics.waiting++;
-            m_depGraph[ctx_id] = ctx->dependencies;
-            for (TaskId dep : ctx->dependencies)
-                m_dependents[dep].push_back(ctx_id);
-            m_deferred[ctx_id] = DeferredEntry{prio, runnable, deadline};
-            // If any deps already finished, launch ready deferred tasks.
-            std::vector<std::pair<Priority, void *>> ready;
-            releaseReadyTasks(ready);
-            for (auto &[p, r] : ready)
-            {
-                const int rpIdx = static_cast<int>(p);
-                m_poolState[rpIdx].metrics.queue_depth++;
-                m_impl->priorityQueues[rpIdx].start(static_cast<QRunnable *>(r));
-                m_poolState[rpIdx].metrics.queue_depth--;
-                m_poolState[rpIdx].metrics.active_tasks++;
-            }
-        }
-        else
-        {
-            // Queued -> active transition.
-            m_poolState[pIdx].metrics.pending++;
-            m_poolState[pIdx].metrics.queue_depth++;
-            m_impl->priorityQueues[pIdx].start(runnable);
-            m_poolState[pIdx].metrics.queue_depth--;
-            m_poolState[pIdx].metrics.active_tasks++;
+            m_poolState[pIdx].metrics.backpressure_rejected++;
+            pool = poolFromPriority(prio);
+            rejected = true;
         }
     }
-    return ctx;
+    if (!rejected || !m_backpressure)
+        return rejected;
+    try
+    {
+        m_backpressure(pool);
+    }
+    catch (...)
+    {
+    }
+    return true;
+}
+
+void TaskScheduler::enqueueTask(Priority prio, const std::shared_ptr<TaskContext> &ctx,
+                                QRunnable *runnable)
+{
+    const int pIdx = static_cast<int>(prio);
+    std::lock_guard<std::mutex> lock(m_graphMtx);
+    m_poolState[pIdx].metrics.submitted++;
+    m_handles[ctx->id] = ctx;
+    m_taskPriomap[ctx->id] = prio;
+    if (!ctx->dependencies.empty())
+    {
+        m_poolState[pIdx].metrics.pending++;
+        m_poolState[pIdx].metrics.waiting++;
+        m_depGraph[ctx->id] = ctx->dependencies;
+        for (TaskId dep : ctx->dependencies)
+            m_dependents[dep].push_back(ctx->id);
+        m_deferred[ctx->id] = DeferredEntry{prio, runnable, ctx->deadline};
+        std::vector<std::pair<Priority, void *>> ready;
+        releaseReadyTasks(ready);
+        for (auto &[p, r] : ready)
+        {
+            const int readyIdx = static_cast<int>(p);
+            m_poolState[readyIdx].metrics.queue_depth++;
+            m_impl->priorityQueues[readyIdx].start(static_cast<QRunnable *>(r));
+            m_poolState[readyIdx].metrics.queue_depth--;
+            m_poolState[readyIdx].metrics.active_tasks++;
+        }
+        return;
+    }
+    m_poolState[pIdx].metrics.pending++;
+    m_poolState[pIdx].metrics.queue_depth++;
+    m_impl->priorityQueues[pIdx].start(runnable);
+    m_poolState[pIdx].metrics.queue_depth--;
+    m_poolState[pIdx].metrics.active_tasks++;
 }
 
 TaskScheduler::TaskHandle TaskScheduler::submit(PoolType pool, std::function<void()> work,

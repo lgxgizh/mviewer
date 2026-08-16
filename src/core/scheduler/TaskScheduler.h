@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+class QRunnable;
+
 class TaskScheduler
 {
   public:
@@ -252,6 +254,8 @@ class TaskScheduler
     }
 
     void releaseReadyTasks(std::vector<std::pair<Priority, void *>> &out);
+    bool rejectBackpressure(Priority prio);
+    void enqueueTask(Priority prio, const std::shared_ptr<TaskContext> &ctx, QRunnable *runnable);
     // Returns false when the task was already finalized by cancelTree() (the
     // caller must then suppress the user done callback). executionFailed feeds
     // PoolMetrics::execution_failures.

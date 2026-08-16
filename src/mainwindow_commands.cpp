@@ -73,6 +73,22 @@ void MainWindow::setupCommands()
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
+    if (handleWindowKey(event) || handleMetadataKey(event) ||
+        handleViewModeKey(event) || handleClipboardKey(event) || handleViewerKey(event))
+        return;
+    ICommand *cmd = CommandRegistry::instance().findByShortcut(
+        event->key(), static_cast<int>(event->modifiers()));
+    if (cmd)
+    {
+        cmd->execute();
+        event->accept();
+        return;
+    }
+    QMainWindow::keyPressEvent(event);
+}
+
+bool MainWindow::handleWindowKey(QKeyEvent *event)
+{
     const auto mod = event->modifiers();
     // Return is a text-editing/navigation key when an editor owns focus. Do
     // not let the window-level quick-preview command open the previous image
@@ -84,7 +100,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
                       focus->inherits("QPlainTextEdit")))
         {
             event->accept();
-            return;
+            return true;
         }
     }
     // P0-1: F5 refreshes the directory tree and the gallery from disk.
@@ -95,7 +111,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         m_imageList->markDirty();
         scheduleReindex();
         event->accept();
-        return;
+        return true;
     }
     // P0-3 / A-5: ESC dismisses the metadata overlay AND the floating panel
     // (keeps the image area maximal for browsing).
@@ -117,7 +133,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             if (m_actToggleMetadata)
                 m_actToggleMetadata->setChecked(false);
             event->accept();
-            return;
+            return true;
         }
     }
     // ESC exits fullscreen when the main window itself is fullscreen.
@@ -125,14 +141,14 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     {
         showNormal();
         event->accept();
-        return;
+        return true;
     }
     // P1-8: F1 shows the keyboard-shortcut cheat sheet.
     if (event->key() == Qt::Key_F1 && !mod)
     {
         showShortcutsHelp();
         event->accept();
-        return;
+        return true;
     }
     // P1-8: Home/End jump to the first/last image; PageUp/PageDown jump a page.
     if (!mod && (event->key() == Qt::Key_Home || event->key() == Qt::Key_End ||
@@ -140,8 +156,14 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     {
         navigatePage(event->key());
         event->accept();
-        return;
+        return true;
     }
+    return false;
+}
+
+bool MainWindow::handleMetadataKey(QKeyEvent *event)
+{
+    const auto mod = event->modifiers();
     // P3 tail: Ctrl+Shift+1..6 set a color label; Ctrl+Shift+0 clears it;
     // Ctrl+Shift+P toggles pick; Ctrl+Shift+X toggles reject.
     // Alt+0..6 sets color labels (moved from Ctrl+Shift+0..6 to free those for
@@ -153,7 +175,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         {
             setCurrentColorLabel(event->key() - Qt::Key_0);
             event->accept();
-            return;
+            return true;
         }
     }
     if ((mod & Qt::ControlModifier) && (mod & Qt::ShiftModifier))
@@ -162,13 +184,13 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         {
             toggleCurrentPick();
             event->accept();
-            return;
+            return true;
         }
         if (event->key() == Qt::Key_X)
         {
             toggleCurrentReject();
             event->accept();
-            return;
+            return true;
         }
     }
     // P1: Ctrl+Shift+0..5 rate the current image; Ctrl+Shift+0 clears.
@@ -179,7 +201,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     {
         rateCurrentImage(event->key() - Qt::Key_0);
         event->accept();
-        return;
+        return true;
     }
     // P0-3 / P1-4 / M19: 'I' or 'M' toggles the metadata overlay (I is the
     // product-facing shortcut; M kept for muscle memory).
@@ -187,20 +209,26 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     {
         toggleMetadataOverlay();
         event->accept();
-        return;
+        return true;
     }
+    return false;
+}
+
+bool MainWindow::handleViewModeKey(QKeyEvent *event)
+{
+    const auto mod = event->modifiers();
     // P0-2 / P1-4: view-mode shortcuts.
     if (event->key() == Qt::Key_G && !mod)
     {
         m_thumbnailPanel->setViewMode(ThumbnailPanel::Thumbnail);
         event->accept();
-        return;
+        return true;
     }
     if (event->key() == Qt::Key_D && !mod)
     {
         m_thumbnailPanel->setViewMode(ThumbnailPanel::Details);
         event->accept();
-        return;
+        return true;
     }
     if ((mod & Qt::ControlModifier) && event->key() >= Qt::Key_1 && event->key() <= Qt::Key_6)
     {
@@ -209,7 +237,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             ThumbnailPanel::Filmstrip, ThumbnailPanel::SmallIcon, ThumbnailPanel::Compact};
         m_thumbnailPanel->setViewMode(modes[event->key() - Qt::Key_1]);
         event->accept();
-        return;
+        return true;
     }
     // P1-4: 'H' toggles the analysis (histogram) panel.
     if (event->key() == Qt::Key_H && !mod)
@@ -217,8 +245,14 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         if (m_actToggleAnalysis)
             m_actToggleAnalysis->trigger();
         event->accept();
-        return;
+        return true;
     }
+    return false;
+}
+
+bool MainWindow::handleClipboardKey(QKeyEvent *event)
+{
+    const auto mod = event->modifiers();
     // P1-4: Ctrl+C copies the current image to clipboard; Ctrl+Shift+C copies its path.
     if ((mod & Qt::ControlModifier) && event->key() == Qt::Key_C)
     {
@@ -232,7 +266,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             copyCurrentImageToClipboard();
         }
         event->accept();
-        return;
+        return true;
     }
     // Ctrl+V: paste an image from the clipboard (e.g. after a screenshot) and
     // view it directly — common screenshot-to-viewer workflow.
@@ -253,7 +287,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
                 {
                     statusBar()->showMessage("无法创建剪贴板临时文件", 3000);
                     event->accept();
-                    return;
+                    return true;
                 }
                 const QString tmpDir = QDir(tempRoot).filePath("mviewer-clip-paste");
                 QDir().mkpath(tmpDir);
@@ -274,14 +308,20 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         else
             statusBar()->showMessage("剪贴板中无图片数据", 3000);
         event->accept();
-        return;
+        return true;
     }
+    return false;
+}
+
+bool MainWindow::handleViewerKey(QKeyEvent *event)
+{
+    const auto mod = event->modifiers();
     // P0-4 / P1-4: Space triggers compare for the current + next image.
     if (event->key() == Qt::Key_Space && !mod)
     {
         openQuickCompare();
         event->accept();
-        return;
+        return true;
     }
     // Compare mode on a plain 'C' — same style as G/D/H/M above. (A QAction
     // plain-key shortcut would shadow text entry in the search box.)
@@ -289,49 +329,41 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     {
         m_actCompare->trigger();
         event->accept();
-        return;
+        return true;
     }
     // 'S' toggles the slideshow (same plain-key rationale as 'C').
     if (event->key() == Qt::Key_S && !mod)
     {
         toggleSlideshow();
         event->accept();
-        return;
+        return true;
     }
     // Viewer zoom keys: plain +/-/0/1 (forwarded to the viewer when visible).
     if (!mod && (event->key() == Qt::Key_Plus || event->key() == Qt::Key_Equal))
     {
         zoomViewer(0);
         event->accept();
-        return;
+        return true;
     }
     if (!mod && event->key() == Qt::Key_Minus)
     {
         zoomViewer(1);
         event->accept();
-        return;
+        return true;
     }
     if (!mod && event->key() == Qt::Key_0)
     {
         zoomViewer(2);
         event->accept();
-        return;
+        return true;
     }
     if (!mod && event->key() == Qt::Key_1)
     {
         zoomViewer(3);
         event->accept();
-        return;
+        return true;
     }
-    ICommand *cmd = CommandRegistry::instance().findByShortcut(
-        event->key(), static_cast<int>(event->modifiers()));
-    if (cmd)
-    {
-        cmd->execute();
-        event->accept();
-        return;
-    }
-    QMainWindow::keyPressEvent(event);
+    return false;
 }
 
 QString MainWindow::shortcutsHelpHtml()

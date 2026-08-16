@@ -2,6 +2,7 @@
 // with real undo. Domain-free; no display.
 #include "core/command/CommandStack.h"
 #include "core/command/FileDeleteCommand.h"
+#include "core/command/FileSystemAdapter.h"
 #include "core/command/FileMoveCommand.h"
 #include "core/command/FileRenameCommand.h"
 #include "core/command/LabelCommand.h"
@@ -13,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <system_error>
 #include <vector>
 
 static int g_pass = 0;
@@ -138,6 +140,72 @@ static std::string readFile(const std::filesystem::path &p)
     return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 }
 
+class FaultFileSystem final : public mviewer::core::FileSystemAdapter
+{
+  public:
+    int failRenameAt = 0;
+    int failRenameAt2 = 0;
+    int failRemoveAt = 0;
+    int renameCalls = 0;
+    int removeCalls = 0;
+    bool failAsCrossVolume = false;
+
+    bool exists(const std::filesystem::path &path, std::error_code &ec) const override
+    {
+        return base()->exists(path, ec);
+    }
+    bool isDirectory(const std::filesystem::path &path, std::error_code &ec) const override
+    {
+        return base()->isDirectory(path, ec);
+    }
+    bool isRegularFile(const std::filesystem::path &path, std::error_code &ec) const override
+    {
+        return base()->isRegularFile(path, ec);
+    }
+    bool createDirectories(const std::filesystem::path &path, std::error_code &ec) override
+    {
+        return base()->createDirectories(path, ec);
+    }
+    bool rename(const std::filesystem::path &from, const std::filesystem::path &to,
+                std::error_code &ec) override
+    {
+        ++renameCalls;
+        if ((failRenameAt > 0 && renameCalls == failRenameAt) ||
+            (failRenameAt2 > 0 && renameCalls == failRenameAt2))
+        {
+            ec = std::make_error_code(failAsCrossVolume ? std::errc::cross_device_link
+                                                         : std::errc::permission_denied);
+            return false;
+        }
+        return base()->rename(from, to, ec);
+    }
+    bool copyFile(const std::filesystem::path &from, const std::filesystem::path &to,
+                  std::error_code &ec) override
+    {
+        return base()->copyFile(from, to, ec);
+    }
+    bool remove(const std::filesystem::path &path, std::error_code &ec) override
+    {
+        ++removeCalls;
+        if (failRemoveAt > 0 && removeCalls == failRemoveAt)
+        {
+            ec = std::make_error_code(std::errc::permission_denied);
+            return false;
+        }
+        return base()->remove(path, ec);
+    }
+    uintmax_t fileSize(const std::filesystem::path &path, std::error_code &ec) const override
+    {
+        return base()->fileSize(path, ec);
+    }
+
+  private:
+    static std::shared_ptr<mviewer::core::FileSystemAdapter> base()
+    {
+        return mviewer::core::defaultFileSystemAdapter();
+    }
+};
+
 static void testFileRenameCommand()
 {
     printf("\n[FileRenameCommand + undo]\n");
@@ -243,6 +311,99 @@ static void testCommandStackReportsErrors()
     fs::remove_all(dir);
 }
 
+static void testFileOperationSafety()
+{
+    printf("\n[M44 file operation safety]\n");
+    fflush(stdout);
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "mviewer_test_m44_fileops";
+    fs::remove_all(dir);
+    fs::create_directories(dir / "source");
+    fs::create_directories(dir / "destination");
+
+    const fs::path first = dir / "source" / "same.txt";
+    const fs::path second = dir / "source" / "second.txt";
+    writeFile(first, "first");
+    writeFile(second, "second");
+    writeFile(dir / "destination" / "same.txt", "existing");
+    FileMoveCommand collision({first.string()}, (dir / "destination").string());
+    collision.execute();
+    CHECK(collision.lastError().empty() && fs::exists(dir / "destination" / "same_1.txt"),
+          "collision chooses a new destination without overwriting");
+    collision.undo();
+    CHECK(collision.lastError().empty() && fs::exists(first), "collision move remains undoable");
+
+    auto crossVolume = std::make_shared<FaultFileSystem>();
+    crossVolume->failRenameAt = 1;
+    crossVolume->failAsCrossVolume = true;
+    const fs::path crossSource = dir / "source" / "cross.txt";
+    writeFile(crossSource, "cross-volume fallback");
+    FileMoveCommand cross({crossSource.string()}, (dir / "destination").string(), crossVolume);
+    cross.execute();
+    CHECK(cross.lastError().empty() && !fs::exists(crossSource) &&
+              fs::exists(dir / "destination" / "cross.txt"),
+          "cross-volume rename failure uses verified copy then source removal");
+    cross.undo();
+    CHECK(cross.lastError().empty() && fs::exists(crossSource),
+          "cross-volume fallback remains reversible");
+
+    auto rollbackOk = std::make_shared<FaultFileSystem>();
+    rollbackOk->failRenameAt = 2;
+    const fs::path batchA = dir / "source" / "batch-a.txt";
+    const fs::path batchB = dir / "source" / "batch-b.txt";
+    writeFile(batchA, "a");
+    writeFile(batchB, "b");
+    FileMoveCommand partial({batchA.string(), batchB.string()}, (dir / "destination").string(),
+                            rollbackOk);
+    partial.execute();
+    CHECK(partial.state() == FileMoveCommand::State::RolledBack && fs::exists(batchA) &&
+              fs::exists(batchB),
+          "partial batch failure rolls completed moves back");
+    CHECK(!partial.hasUnresolvedState() && partial.moved().empty(),
+          "successful rollback clears only fully resolved bookkeeping");
+
+    auto rollbackFail = std::make_shared<FaultFileSystem>();
+    rollbackFail->failRenameAt = 2;
+    rollbackFail->failRenameAt2 = 3;
+    const fs::path stuckA = dir / "source" / "stuck-a.txt";
+    const fs::path stuckB = dir / "source" / "stuck-b.txt";
+    writeFile(stuckA, "a");
+    writeFile(stuckB, "b");
+    FileMoveCommand stuck({stuckA.string(), stuckB.string()}, (dir / "destination").string(),
+                          rollbackFail);
+    stuck.execute();
+    CHECK(stuck.state() == FileMoveCommand::State::RollbackFailed && stuck.hasUnresolvedState() &&
+              stuck.canUndo(),
+          "rollback failure retains recoverable command state");
+    rollbackFail->failRenameAt = 0;
+    stuck.undo();
+    CHECK(stuck.lastError().empty() && fs::exists(stuckA) && fs::exists(stuckB),
+          "retained partial state can be recovered by undo");
+
+    const std::string unicodeDirUtf8 =
+        mviewer::core::pathToUtf8(dir) + "/中文目录-😀";
+    const fs::path unicodeDir = mviewer::core::pathFromUtf8(unicodeDirUtf8);
+    fs::create_directories(unicodeDir);
+    const fs::path unicodeSource = unicodeDir / mviewer::core::pathFromUtf8("文件-😀.txt");
+    const fs::path unicodeRenamed = unicodeDir / mviewer::core::pathFromUtf8("重命名-😀.txt");
+    writeFile(unicodeSource, "unicode");
+    FileRenameCommand unicode(mviewer::core::pathToUtf8(unicodeSource),
+                              mviewer::core::pathToUtf8(unicodeRenamed));
+    unicode.execute();
+    CHECK(unicode.lastError().empty() && fs::exists(unicodeRenamed),
+          "Unicode directory, Chinese filename, and emoji round-trip");
+    unicode.undo();
+    CHECK(unicode.lastError().empty() && fs::exists(unicodeSource),
+          "Unicode rename undo restores the original path");
+
+    FileMoveCommand samePath({first.string()}, (dir / "source").string());
+    samePath.execute();
+    CHECK(!samePath.lastError().empty() && fs::exists(first),
+          "source equals destination directory is rejected explicitly");
+
+    fs::remove_all(dir);
+}
+
 int main()
 {
     printf("=== CommandStack + Rotate/Label tests (M7 ④) ===\n");
@@ -254,6 +415,7 @@ int main()
     testFileDeleteCommand();
     testFileMoveCommand();
     testCommandStackReportsErrors();
+    testFileOperationSafety();
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

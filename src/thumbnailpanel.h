@@ -30,6 +30,7 @@ class QStringListModel;
 class CommandStack;
 class SelectionModel;
 class QProgressDialog;
+class QRegularExpression;
 
 // Virtualized thumbnail gallery (P0 #①/#②).
 //
@@ -264,6 +265,14 @@ class ThumbnailPanel : public QListView
     void onSelectionChanged();
 
   private:
+    void replaceDelegate(QStyledItemDelegate *delegate);
+    void configureLargeIconMode();
+    void configureSmallIconMode();
+    void configureDetailsMode();
+    void configureFilmstripMode();
+    void configureCompactMode();
+    void configureListMode();
+    void configureThumbnailMode();
     void buildModel(const QList<Entry> &entries);
     void updateVisibleRange();
     void onCompareClicked();
@@ -327,6 +336,8 @@ class ThumbnailPanel : public QListView
     bool m_filterRecursive = false;
     qint64 m_totalBytes = 0;
     bool m_pipelineWired = false;
+    void wireThumbnailPipeline();
+    void resetDirectoryState();
 
     // P1: filter state for metadata search + star-rating filter.
     QList<Entry> m_allEntries;            // full listing; source for filtering
@@ -356,6 +367,9 @@ class ThumbnailPanel : public QListView
     QHash<QString, QString> m_metaLens;   // path -> lens model (Details EXIF column)
 
     void applyFilter();     // (re)build the filtered model
+    bool prepareFilterSource(const QString &text, QList<Entry> &source);
+    bool matchesFilter(const Entry &entry, const QString &text, bool useFuzzy,
+                       const QRegularExpression &fuzzy) const;
     void ensureMetaIndex(); // lazily index metadata for m_allEntries
     void applyThumbSize(int size, bool rememberGridSize);
     void runBatchAnalyzeExportAsync(const QStringList &paths, const std::string &analyzerId,

@@ -42,73 +42,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     resize(1280, 800);
     setMinimumSize(800, 500); // prevent layout collapse at tiny sizes
 
-    // M13.5: restore persisted window geometry/layout (QSettings, independent of workspace).
-    {
-        QSettings settings;
-        if (settings.contains("geometry"))
-        {
-            restoreGeometry(settings.value("geometry").toByteArray());
-            // If the restored window is entirely off-screen (e.g. the second
-            // monitor was disconnected), re-center it on the primary screen.
-            const QRect wr = frameGeometry();
-            bool onAnyScreen = false;
-            for (QScreen *scr : QGuiApplication::screens())
-            {
-                if (scr->availableGeometry().intersects(wr))
-                {
-                    onAnyScreen = true;
-                    break;
-                }
-            }
-            if (!onAnyScreen)
-            {
-                const QRect ag = QGuiApplication::primaryScreen()->availableGeometry();
-                move(ag.center() - QPoint(width() / 2, height() / 2));
-            }
-        }
-        if (settings.contains("windowState"))
-            restoreState(settings.value("windowState").toByteArray());
-        // P1-7: closeEvent() already persists the splitter layout and the
-        // thumbnail view mode, but they were never restored on launch — recover
-        // them here so the panel widths and list style survive a restart exactly.
-        if (m_mainSplitter && settings.contains("splitterState"))
-            m_mainSplitter->restoreState(settings.value("splitterState").toByteArray());
-        // A-6.4: restore left-sidebar width independently of the full splitter
-        // state so a narrow/wide nav preference survives analysis/search toggles.
-        if (m_mainSplitter && settings.contains("navSidebarWidth"))
-        {
-            const int navW = settings.value("navSidebarWidth").toInt();
-            if (navW > 40)
-            {
-                QList<int> sizes = m_mainSplitter->sizes();
-                if (!sizes.isEmpty())
-                {
-                    const int delta = navW - sizes[0];
-                    sizes[0] = navW;
-                    if (sizes.size() > 1)
-                        sizes[1] = qMax(100, sizes[1] - delta);
-                    m_mainSplitter->setSizes(sizes);
-                }
-            }
-        }
-        // A-6.4: restore vertical proportions inside the left sidebar.
-        if (m_leftSplitter && settings.contains("leftSplitterState"))
-            m_leftSplitter->restoreState(settings.value("leftSplitterState").toByteArray());
-        if (m_thumbnailPanel && settings.contains("thumbViewMode"))
-            m_thumbnailPanel->setViewMode(
-                static_cast<ThumbnailPanel::ViewMode>(settings.value("thumbViewMode").toInt()));
-        // Restore the last-used sort mode (Name/Date/Size/Resolution).
-        if (m_sortCombo && settings.contains("thumbSortMode"))
-        {
-            const int sm = settings.value("thumbSortMode").toInt();
-            for (int i = 0; i < m_sortCombo->count(); ++i)
-                if (m_sortCombo->itemData(i).toInt() == sm)
-                {
-                    m_sortCombo->setCurrentIndex(i);
-                    break;
-                }
-        }
-    }
+    restoreWindowSettings();
 
     // P0: restore last folder + image + scroll position (deferred to event loop).
     rebuildFavoritesMenu();
@@ -141,8 +75,75 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     QTimer::singleShot(8000, this, [this]() { checkForUpdates(true); });
 }
 
+void MainWindow::restoreWindowSettings()
+{
+    QSettings settings;
+    if (settings.contains("geometry"))
+    {
+        restoreGeometry(settings.value("geometry").toByteArray());
+        const QRect wr = frameGeometry();
+        bool onAnyScreen = false;
+        for (QScreen *screen : QGuiApplication::screens())
+        {
+            if (screen->availableGeometry().intersects(wr))
+            {
+                onAnyScreen = true;
+                break;
+            }
+        }
+        if (!onAnyScreen)
+        {
+            const QRect available = QGuiApplication::primaryScreen()->availableGeometry();
+            move(available.center() - QPoint(width() / 2, height() / 2));
+        }
+    }
+    if (settings.contains("windowState"))
+        restoreState(settings.value("windowState").toByteArray());
+    if (m_mainSplitter && settings.contains("splitterState"))
+        m_mainSplitter->restoreState(settings.value("splitterState").toByteArray());
+    restoreNavigationSettings(settings);
+}
+
+void MainWindow::restoreNavigationSettings(const QSettings &settings)
+{
+    if (m_mainSplitter && settings.contains("navSidebarWidth"))
+    {
+        const int navWidth = settings.value("navSidebarWidth").toInt();
+        if (navWidth > 40)
+        {
+            QList<int> sizes = m_mainSplitter->sizes();
+            if (!sizes.isEmpty())
+            {
+                const int delta = navWidth - sizes[0];
+                sizes[0] = navWidth;
+                if (sizes.size() > 1)
+                    sizes[1] = qMax(100, sizes[1] - delta);
+                m_mainSplitter->setSizes(sizes);
+            }
+        }
+    }
+    if (m_leftSplitter && settings.contains("leftSplitterState"))
+        m_leftSplitter->restoreState(settings.value("leftSplitterState").toByteArray());
+    if (m_thumbnailPanel && settings.contains("thumbViewMode"))
+        m_thumbnailPanel->setViewMode(
+            static_cast<ThumbnailPanel::ViewMode>(settings.value("thumbViewMode").toInt()));
+    if (!m_sortCombo || !settings.contains("thumbSortMode"))
+        return;
+    const int sortMode = settings.value("thumbSortMode").toInt();
+    for (int i = 0; i < m_sortCombo->count(); ++i)
+    {
+        if (m_sortCombo->itemData(i).toInt() == sortMode)
+        {
+            m_sortCombo->setCurrentIndex(i);
+            break;
+        }
+    }
+}
+
 MainWindow::~MainWindow()
 {
+    cancelReportExport();
+    cancelBackgroundPersistence();
     // M27 lifetime closure: stop the async search re-index immediately. The
     // worker callback checks the alive token before marshaling, and the queued
     // UI lambda checks it again before touching any member — without this, a
@@ -577,7 +578,11 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
         statusBar()->showMessage(tr("需要至少两张图片才能比较"), 5000);
         return;
     }
+    showCompareDialog(imgs, sessionJson);
+}
 
+void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessionJson)
+{
     auto *dlg = new QDialog(this);
     m_compareHost = dlg;
     dlg->setObjectName("compareDialog");
@@ -673,7 +678,6 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
                            }
                        });
 }
-
 QStringList MainWindow::resolveSelectedPaths(bool preferMulti) const
 {
     // A-3: single source of truth — SelectionModel first, then gallery.

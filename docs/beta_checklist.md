@@ -10,6 +10,24 @@
 > - 无缩放错误（no zoom error）：Fit/100%/200%/自由缩放在任意比例下画面几何正确、未被拉伸或错位。
 > - 无状态不同步（no state desync）：目录树、缩略图、主视图、状态栏、工具栏对"当前图片/当前目录"的认知始终一致。
 
+## M44 release-candidate review snapshot (2026-08-15)
+
+- Automated workflow and release gates: **通过** — final Release build and
+  full `.\build.ps1 Test` passed **88/88**, including `workflow_ux_tests`,
+  Browse/Compare/export acceptance, `golden_image`, `bench_smoke`,
+  `bench_enforce`, and async lifetime gates.
+- Data-safety and persistence contracts: **通过** — command/file-operation
+  regressions cover collision, partial batch, rollback failure, Unicode paths,
+  cross-volume fallback, and atomic export/persistence paths.
+- Native UX review: **MANUAL PENDING / NOT AVAILABLE** — this run did not have
+  an executable native Release GUI review environment. Do not treat the
+  offscreen workflow tests as a substitute.
+- Pending manual scope: Browse/Compare long-session feel, real 1000+ image
+  directory, repeated export/cancel, physical ICC, Windows 100/125/150/200%
+  DPI and mixed-DPI movement, real two-volume operations, and native Unicode
+  dialogs.
+- Full evidence: `docs/review/M44_RELEASE_READINESS_STRUCTURAL_CONVERGENCE_2026-08-15.md`.
+
 ## M43 fidelity review snapshot (2026-08-15)
 
 - Automated source/display fidelity: **通过** — `pixelinspector_tests` and

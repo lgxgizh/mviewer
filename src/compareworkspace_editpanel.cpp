@@ -117,59 +117,47 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
                 });
     }
 
-    // White balance: R gain [1..500] → float [0.01..5.0]; 100=identity
+    buildSecondaryEditControls(editLay);
+
+    sideLayout->addWidget(m_editPanel);
+}
+
+void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
+{
+    auto addGain = [this, editLay](const QString &label, QSlider *&slider, QLabel *&value,
+                                   auto callback)
     {
         auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(tr("WB R"), m_editPanel));
-        m_rGainSlider = new QSlider(Qt::Horizontal, m_editPanel);
-        m_rGainSlider->setRange(1, 500);
-        m_rGainSlider->setValue(100);
-        m_rGainVal = new QLabel("1.00", m_editPanel);
-        m_rGainVal->setMinimumWidth(30);
-        row->addWidget(m_rGainSlider);
-        row->addWidget(m_rGainVal);
+        row->addWidget(new QLabel(label, m_editPanel));
+        slider = new QSlider(Qt::Horizontal, m_editPanel);
+        slider->setRange(1, 500);
+        slider->setValue(100);
+        value = new QLabel("1.00", m_editPanel);
+        value->setMinimumWidth(30);
+        row->addWidget(slider);
+        row->addWidget(value);
         editLay->addLayout(row);
-        connect(m_rGainSlider, &QSlider::valueChanged, this,
-                [this](int v)
-                {
-                    m_rGainVal->setText(QString::number(v / 100.0, 'f', 2));
-                    onAdjChanged();
-                });
-    }
-
-    // White balance: B gain [1..500] → float [0.01..5.0]; 100=identity
-    {
-        auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel(tr("WB B"), m_editPanel));
-        m_bGainSlider = new QSlider(Qt::Horizontal, m_editPanel);
-        m_bGainSlider->setRange(1, 500);
-        m_bGainSlider->setValue(100);
-        m_bGainVal = new QLabel("1.00", m_editPanel);
-        m_bGainVal->setMinimumWidth(30);
-        row->addWidget(m_bGainSlider);
-        row->addWidget(m_bGainVal);
-        editLay->addLayout(row);
-        connect(m_bGainSlider, &QSlider::valueChanged, this,
-                [this](int v)
-                {
-                    m_bGainVal->setText(QString::number(v / 100.0, 'f', 2));
-                    onAdjChanged();
-                });
-    }
-
-    // Reset button
+        connect(slider, &QSlider::valueChanged, this, callback);
+    };
+    addGain(tr("WB R"), m_rGainSlider, m_rGainVal,
+            [this](int v)
+            {
+                m_rGainVal->setText(QString::number(v / 100.0, 'f', 2));
+                onAdjChanged();
+            });
+    addGain(tr("WB B"), m_bGainSlider, m_bGainVal,
+            [this](int v)
+            {
+                m_bGainVal->setText(QString::number(v / 100.0, 'f', 2));
+                onAdjChanged();
+            });
     m_resetAdjBtn = new QPushButton(tr("重置调整"), m_editPanel);
     m_resetAdjBtn->setObjectName("resetAdjustmentsButton");
     connect(m_resetAdjBtn, &QPushButton::clicked, this, &CompareWorkspace::onResetAdj);
     editLay->addWidget(m_resetAdjBtn);
-
-    connect(m_brightSlider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
-    connect(m_contrastSlider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
-    connect(m_gammaSlider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
-    connect(m_rGainSlider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
-    connect(m_bGainSlider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
-
-    sideLayout->addWidget(m_editPanel);
+    for (QSlider *slider : {m_brightSlider, m_contrastSlider, m_gammaSlider, m_rGainSlider,
+                            m_bGainSlider})
+        connect(slider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
 }
 
 void CompareWorkspace::onEditCellSelected(int cellIdx)
@@ -602,10 +590,11 @@ void CompareWorkspace::onLoadPreset()
             m_layoutCombo->setCurrentIndex(li);
     }
 
-    // Apply adjustments to all cells in ONE display batch (a per-cell loop would
-    // submit N cancellable tasks for the same state; schedule once, latest-wins).
-    // Loaded adjustments are parsed before this checkpoint, so a rebuild during
-    // the restoration above already captured them in its all-pane display batch.
+    finishPresetRestore(displayGenBeforeRestore);
+}
+
+void CompareWorkspace::finishPresetRestore(uint64_t displayGenBeforeRestore)
+{
     if (m_displayGen == displayGenBeforeRestore)
     {
         std::vector<int> all;
@@ -615,12 +604,7 @@ void CompareWorkspace::onLoadPreset()
             all.push_back(i);
         scheduleDisplayMaterialization(all);
     }
-
-    // All m_cellAdjusts (and any session/layout restoration) are now applied:
-    // one terminal async refresh captures the final adjustment state. It may
-    // cancel an earlier session/layout refresh, but the final state must land.
     refreshAllDiffOverlays();
-
     if (m_sidePanel && m_sidePanel->isVisible())
         refreshHistograms();
     update();

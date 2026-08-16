@@ -1,6 +1,123 @@
 // MainWindow report and image export (M20 P0#1).
 #include "mainwindow_p.h"
 
+namespace
+{
+
+struct ReportExportState
+{
+    mviewer::core::ReportContext context;
+    QImage histogram;
+    std::string output;
+    std::string suffix;
+    std::string body;
+    std::string error;
+    bool cancelled = false;
+    bool success = false;
+};
+
+std::string markdownReport(const mviewer::core::ReportContext &ctx)
+{
+    std::string md;
+    md += "# " + ctx.title + "\n\n";
+    md += "**Image**: `" + ctx.imagePath + "`\n\n";
+    if (!ctx.histogramPng.empty())
+        md += "![Histogram](data:image/png;base64," + ctx.histogramPng + ")\n\n";
+    if (ctx.hasCompareBundle)
+    {
+        md += "## Compare Report Bundle\n\n```json\n";
+        md += ctx.compareBundle.toJson();
+        md += "\n```\n\n";
+        for (size_t i = 0; i < ctx.compareBundle.targets.size(); ++i)
+        {
+            if (i >= ctx.compareDiffPngs.size() || ctx.compareDiffPngs[i].empty())
+                continue;
+            md += "### Diff: " + ctx.compareBundle.targets[i].path +
+                  "\n\n![Diff](data:image/png;base64," + ctx.compareDiffPngs[i] + ")\n\n";
+        }
+    }
+    else if (ctx.hasCompare)
+    {
+        md += "## Compare Report\n\n```json\n";
+        md += ctx.compare.toJson();
+        md += "\n```\n";
+        if (!ctx.compareDiffPng.empty())
+            md += "\n![Diff](data:image/png;base64," + ctx.compareDiffPng + ")\n";
+    }
+    return md;
+}
+
+std::string buildReportBody(const mviewer::core::ReportContext &ctx, const std::string &suffix)
+{
+    if (suffix == "json")
+    {
+        if (ctx.hasCompareBundle)
+            return ctx.compareBundle.toJson();
+        if (ctx.hasCompare)
+            return ctx.compare.toJson();
+        return R"({"error":"no compare data"})";
+    }
+    if (suffix == "csv")
+    {
+        if (ctx.hasCompareBundle)
+            return ctx.compareBundle.toCsv();
+        return "error\nno compare data\n";
+    }
+    if (suffix == "md")
+        return markdownReport(ctx);
+    return mviewer::core::buildReportHtml(ctx);
+}
+
+void encodeReportImages(ReportExportState &state, const TaskScheduler::TaskContext &ctx)
+{
+    if (!state.histogram.isNull())
+    {
+        QByteArray bytes;
+        QBuffer stream(&bytes);
+        if (state.histogram.save(&stream, "PNG"))
+            state.context.histogramPng = bytes.toBase64().toStdString();
+    }
+    if (state.context.hasCompareBundle)
+    {
+        state.context.compareDiffPngs.resize(state.context.compareBundle.targets.size());
+        for (size_t i = 0; i < state.context.compareBundle.targets.size(); ++i)
+        {
+            if (ctx.isCancelled())
+            {
+                state.cancelled = true;
+                return;
+            }
+            const ImageData &diff = state.context.compareBundle.targets[i].diffHeatmap;
+            if (diff.isNull())
+                continue;
+            const QImage image = mvcore::toQImage(diff);
+            if (image.isNull())
+                continue;
+            QByteArray bytes;
+            QBuffer stream(&bytes);
+            if (image.save(&stream, "PNG"))
+                state.context.compareDiffPngs[i] = bytes.toBase64().toStdString();
+            const_cast<TaskScheduler::TaskContext &>(ctx).reportProgress(
+                static_cast<int>((i + 1) * 70 / qMax<size_t>(1, state.context.compareBundle.targets.size())));
+        }
+    }
+}
+
+} // namespace
+
+void MainWindow::cancelReportExport()
+{
+    ++m_reportGeneration;
+    TaskScheduler::cancel(m_reportTask);
+    m_reportTask.reset();
+    if (m_reportProgress)
+    {
+        m_reportProgress->close();
+        m_reportProgress->deleteLater();
+        m_reportProgress = nullptr;
+    }
+}
+
 void MainWindow::exportReport()
 {
     mviewer::core::ReportContext ctx;
@@ -44,112 +161,119 @@ void MainWindow::exportReport()
         return;
     }
 
-    if (!ctx.hasCompareBundle && m_analysisPanel)
-    {
-        QPixmap hist = m_analysisPanel->histogramPixmap();
-        if (!hist.isNull())
-        {
-            QByteArray buf;
-            QBuffer stream(&buf);
-            hist.save(&stream, "PNG");
-            ctx.histogramPng = buf.toBase64().toStdString();
-        }
-    }
-
-    if (ctx.hasCompareBundle)
-    {
-        ctx.compareDiffPngs.resize(ctx.compareBundle.targets.size());
-        for (size_t i = 0; i < ctx.compareBundle.targets.size(); ++i)
-        {
-            const ImageData &diffImg = ctx.compareBundle.targets[i].diffHeatmap;
-            if (diffImg.isNull())
-                continue;
-            QImage q = mvcore::toQImage(diffImg);
-            QByteArray buf;
-            QBuffer stream(&buf);
-            q.save(&stream, "PNG");
-            ctx.compareDiffPngs[i] = buf.toBase64().toStdString();
-        }
-    }
-
-    const std::string html = mviewer::core::buildReportHtml(ctx);
-    if (html.empty())
-    {
-        QMessageBox::warning(this, tr("导出报告"), tr("报告内容为空。"));
-        return;
-    }
-
     const QString out = QFileDialog::getSaveFileName(
         this, tr("导出报告"), QString(),
         tr("HTML 文件 (*.html);;Markdown 文件 (*.md);;JSON 文件 (*.json);;CSV 文件 (*.csv)"));
     if (out.isEmpty())
         return;
     const QFileInfo fi(out);
-    const QString suffix = fi.suffix().toLower();
-
-    QFile f(out);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
-    {
-        QMessageBox::critical(this, tr("错误"), tr("无法写入：%1").arg(out));
-        return;
-    }
-    if (suffix == "json")
-    {
-        std::string json = "{\"error\":\"no compare data\"}";
-        if (ctx.hasCompareBundle)
-            json = ctx.compareBundle.toJson();
-        else if (ctx.hasCompare)
-            json = ctx.compare.toJson();
-        f.write(QByteArray::fromStdString(json));
-    }
-    else if (suffix == "csv")
-    {
-        if (ctx.hasCompareBundle)
-            f.write(QByteArray::fromStdString(ctx.compareBundle.toCsv()));
-        else
-            f.write("error\nno compare data\n");
-    }
-    else if (suffix == "md")
-    {
-        QString md;
-        md += QString("# %1\n\n").arg(QString::fromStdString(ctx.title));
-        md += QString("**Image**: `%1`\n\n").arg(QString::fromStdString(ctx.imagePath));
-        if (!ctx.histogramPng.empty())
-            md += QString("![Histogram](data:image/png;base64,%1)\n\n")
-                      .arg(QString::fromStdString(ctx.histogramPng));
-        if (ctx.hasCompareBundle)
-        {
-            md += "## Compare Report Bundle\n\n```json\n";
-            md += QString::fromStdString(ctx.compareBundle.toJson());
-            md += "\n```\n\n";
-            for (size_t i = 0; i < ctx.compareBundle.targets.size(); ++i)
-            {
-                if (i >= ctx.compareDiffPngs.size() || ctx.compareDiffPngs[i].empty())
-                    continue;
-                md += QString("### Diff: %1\n\n![Diff](data:image/png;base64,%2)\n\n")
-                          .arg(QString::fromStdString(ctx.compareBundle.targets[i].path),
-                               QString::fromStdString(ctx.compareDiffPngs[i]));
-            }
-        }
-        else if (ctx.hasCompare)
-        {
-            md += "## Compare Report\n\n```json\n";
-            md += QString::fromStdString(ctx.compare.toJson());
-            md += "\n```\n";
-            if (!ctx.compareDiffPng.empty())
-                md += QString("\n![Diff](data:image/png;base64,%1)\n")
-                          .arg(QString::fromStdString(ctx.compareDiffPng));
-        }
-        f.write(md.toUtf8());
-    }
-    else
-    {
-        f.write(QByteArray::fromStdString(html));
-    }
-    f.close();
-    QMessageBox::information(this, tr("导出报告"), tr("已导出：%1").arg(out));
+    const std::string suffix = fi.suffix().toLower().toUtf8().toStdString();
+    startReportExport(std::move(ctx), out, suffix);
 }
 
+void MainWindow::startReportExport(mviewer::core::ReportContext ctx, const QString &out,
+                                      std::string suffix)
+{
+    cancelReportExport();
+    auto state = std::make_shared<ReportExportState>();
+    state->context = std::move(ctx);
+    state->histogram = m_analysisPanel ? m_analysisPanel->histogramPixmap().toImage() : QImage();
+    state->output = out.toUtf8().toStdString();
+    state->suffix = suffix;
+    const uint64_t generation = ++m_reportGeneration;
+    QPointer<MainWindow> guard(this);
+    m_reportProgress = new QProgressDialog(tr("正在生成报告…"), tr("取消"), 0, 100, this);
+    m_reportProgress->setWindowModality(Qt::WindowModal);
+    m_reportProgress->setAutoClose(false);
+    m_reportProgress->setMinimumDuration(0);
+    connect(m_reportProgress, &QProgressDialog::canceled, this, &MainWindow::cancelReportExport);
+    m_reportProgress->show();
+    m_reportTask = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Background,
+        [state](const TaskScheduler::TaskContext &task)
+        {
+            if (task.isCancelled())
+            {
+                state->cancelled = true;
+                return;
+            }
+            encodeReportImages(*state, task);
+            if (state->cancelled || task.isCancelled())
+            {
+                state->cancelled = true;
+                return;
+            }
+            state->body = buildReportBody(state->context, state->suffix);
+            if (state->body.empty())
+            {
+                state->error = "报告内容为空。";
+                return;
+            }
+            if (task.isCancelled())
+            {
+                state->cancelled = true;
+                return;
+            }
+            if (!mviewer::exportjob::writeTextAtomically(state->output, state->body))
+            {
+                state->error = "无法原子写入目标文件。";
+                return;
+            }
+            state->success = true;
+        },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, state, generation, out]()
+        {
+            if (!qApp)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, state, generation, out]()
+                {
+                    MainWindow *window = guard.data();
+                    if (!window || generation != window->m_reportGeneration)
+                        return;
+                    if (window->m_reportProgress)
+                    {
+                        window->m_reportProgress->close();
+                        window->m_reportProgress->deleteLater();
+                        window->m_reportProgress = nullptr;
+                    }
+                    window->m_reportTask.reset();
+                    if (state->cancelled)
+                        return;
+                    if (!state->success)
+                    {
+                        QMessageBox::critical(window, QObject::tr("导出报告"),
+                                              QString::fromUtf8(state->error.c_str()));
+                        return;
+                    }
+                    QMessageBox::information(window, QObject::tr("导出报告"),
+                                             QObject::tr("已导出：%1").arg(out));
+                },
+                Qt::QueuedConnection);
+        },
+        [guard, generation](int progress)
+        {
+            if (!qApp)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, generation, progress]()
+                {
+                    MainWindow *window = guard.data();
+                    if (window && generation == window->m_reportGeneration &&
+                        window->m_reportProgress)
+                        window->m_reportProgress->setValue(progress);
+                },
+                Qt::QueuedConnection);
+        });
+    if (!m_reportTask)
+    {
+        cancelReportExport();
+        QMessageBox::warning(this, tr("导出报告"), tr("后台任务被调度器拒绝。"));
+    }
+}
 void MainWindow::exportImages()
 {
     // A-3 / M17: SelectionModel → gallery selection → filtered (rating/flag) set

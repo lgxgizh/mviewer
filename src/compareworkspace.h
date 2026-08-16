@@ -174,7 +174,23 @@ class CompareWorkspace : public QWidget
     void keyReleaseEvent(QKeyEvent *) override;
 
   private:
+    void buildSyncControls();
+    QWidget *buildToolbarContainer(QHBoxLayout *&modeLayout, QHBoxLayout *&viewLayout,
+                                   QHBoxLayout *&toolLayout);
+    void buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *viewLayout);
+    void buildDiffControls(QHBoxLayout *toolLayout);
+    void buildViewControls(QHBoxLayout *viewLayout);
+    void buildToolbarActions(QHBoxLayout *toolLayout);
+
+    bool handleBasicCompareKey(QKeyEvent *event);
+    bool handleBasicCompareSpace(QKeyEvent *event);
+    bool handleBasicCompareEscape(QKeyEvent *event);
+    bool handleBasicCompareNavigation(QKeyEvent *event);
+    bool handleModeCompareKey(QKeyEvent *event);
+    bool handleSyncCompareKey(QKeyEvent *event);
+    bool handleAdvancedCompareKey(QKeyEvent *event);
     void rebuildCells();
+    void buildCompareCells(int count, int columns);
     void fitAll();
     void applySelectionToAll(const mviewer::domain::Selection &sel);
 
@@ -203,6 +219,8 @@ class CompareWorkspace : public QWidget
     std::shared_ptr<LoadBatch> m_loadBatch;
     static bool accountLoadRequest(const std::shared_ptr<LoadBatch> &batch, size_t index,
                                    const ImageRepository::Result *result);
+    void queueLoadRequests(const std::shared_ptr<LoadBatch> &batch,
+                           const std::vector<std::string> &paths);
     void cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch);
     void finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames, int failedCount);
     QCheckBox *m_syncZoomChk = nullptr;
@@ -257,6 +275,11 @@ class CompareWorkspace : public QWidget
     void paintCompareCanvas();
     QRect canvasRect() const;
     bool canvasEventFilter(QEvent *event);
+    bool handleCanvasWheel(QEvent *event);
+    bool handleCanvasPress(QEvent *event);
+    bool handleCanvasMove(QEvent *event);
+    bool handleCanvasRelease(QEvent *event);
+    bool handleCanvasLeave(QEvent *event);
     int canvasRefCellAt(const QPoint &pos) const;
     void applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor);
     QRectF cellDestRect(int idx, const QRectF &geom) const;
@@ -360,6 +383,16 @@ class CompareWorkspace : public QWidget
     HistogramWidget *m_hist = nullptr;
     void onSideToggled(bool on);
     void updateInspector(int x, int y);
+    struct InspectorSample
+    {
+        int r = 0;
+        int g = 0;
+        int b = 0;
+        bool valid = false;
+    };
+    void updateInspectorRows(const std::vector<InspectorSample> &samples,
+                             mviewer::core::ColorSpace space,
+                             int baseIndex, int x, int y);
     // ── M30: coalesced Pixel Inspector hover path ──
     // High-frequency hover requests (RawImageView::pixelInfo plus the synced
     // crosshair pair) funnel into requestInspectorUpdate(): it stores the
@@ -384,6 +417,9 @@ class CompareWorkspace : public QWidget
     // ── M23: analysis panel (Pixel Inspector Pro + ROI histogram) ──
     // Built in compareworkspace_analysis.cpp per ADR 014 TU split.
     void buildAnalysisPanel(QVBoxLayout *sideLayout);
+    void buildHistogramPanel(QVBoxLayout *sideLayout);
+    void buildSecondaryEditControls(QVBoxLayout *editLayout);
+    void finishPresetRestore(uint64_t displayGenBeforeRestore);
     QComboBox *m_csCombo = nullptr;     // inspector colour space selector
     QComboBox *m_kernelCombo = nullptr; // neighborhood kernel (1/3/5/7)
     QLabel *m_coordLabel = nullptr;     // hovered pixel coordinate readout
@@ -417,6 +453,7 @@ class CompareWorkspace : public QWidget
     // M29: async batch diff result — computed by a single Analysis-pool task
     // and delivered to the UI thread via qApp. Value/POD data only (QImage is
     // implicitly shared; no widget is referenced).
+    struct CellAdjust;
     struct DiffBatchResult
     {
         uint64_t generation = 0;
@@ -440,6 +477,32 @@ class CompareWorkspace : public QWidget
         };
         std::vector<CellOverlay> overlays;
     };
+    struct DiffSources
+    {
+        int targetIndex = -1;
+        ImageData target;
+        ImageData diff;
+        bool sizeMismatch = false;
+    };
+    static DiffSources buildDiffOverlays(
+        DiffBatchResult &result, const std::vector<ImageData> &pixels,
+        const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
+        int baseIndex, uint8_t threshold, bool highlight, bool visualize,
+        const ImageData &basePixels, const TaskScheduler::TaskContext &context);
+    static void computeDiffMetrics(DiffBatchResult &result, const DiffSources &sources,
+                                   const ImageData &basePixels, uint8_t threshold,
+                                   const mviewer::domain::Selection &roi,
+                                   const TaskScheduler::TaskContext &context);
+    static DiffBatchResult computeDiffBatch(
+        const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
+        const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, bool highlight,
+        bool visualize, const mviewer::domain::Selection &roi, int paneCount, uint64_t generation,
+        const TaskScheduler::TaskContext &context);
+    TaskScheduler::TaskHandle startDiffBatch(
+        const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
+        const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, bool highlight,
+        bool visualize, const mviewer::domain::Selection &roi, int paneCount, uint64_t generation,
+        const QPointer<CompareWorkspace> &guard);
     void applyDiffBatchResult(const DiffBatchResult &result);
 
     // M29: latest-wins generation + handle of the in-flight batch diff task.
@@ -474,6 +537,12 @@ class CompareWorkspace : public QWidget
     QSize displayLodTarget(int idx, const ImageData &source) const;
     void scheduleDisplayLodRefresh(int idx = -1);
     void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes);
+    TaskScheduler::TaskHandle startDisplayMaterialization(
+        const std::vector<ImageData> &pixels,
+        const std::vector<mviewer::domain::ImageMetadata> &metadata,
+        const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
+        const std::vector<int> &panes, int paneCount, uint64_t generation,
+        const QPointer<CompareWorkspace> &guard);
     void applyDisplayBatchResult(const DisplayBatchResult &result);
 
     uint64_t m_displayGen = 0;

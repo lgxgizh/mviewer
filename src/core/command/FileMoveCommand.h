@@ -1,7 +1,9 @@
 #pragma once
 
 #include "ICommand.h"
+#include "FileSystemAdapter.h"
 
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -11,7 +13,8 @@
 class FileMoveCommand : public ICommand
 {
   public:
-    FileMoveCommand(std::vector<std::string> paths, std::string destDir);
+    FileMoveCommand(std::vector<std::string> paths, std::string destDir,
+                    std::shared_ptr<mviewer::core::FileSystemAdapter> fileSystem = {});
 
     std::string id() const override
     {
@@ -22,7 +25,7 @@ class FileMoveCommand : public ICommand
     void undo() override;
     bool canUndo() const override
     {
-        return m_executed && !m_moved.empty();
+        return (m_executed || m_unresolved) && !m_moved.empty();
     }
     bool canExecute() const override
     {
@@ -39,13 +42,38 @@ class FileMoveCommand : public ICommand
         return m_lastError;
     }
 
+    bool hasUnresolvedState() const override
+    {
+        return m_unresolved;
+    }
+
+    enum class State
+    {
+        Idle,
+        Succeeded,
+        Failed,
+        RolledBack,
+        RollbackFailed,
+        Undone
+    };
+
+    State state() const
+    {
+        return m_state;
+    }
+
   private:
     void rollback();
+    bool restoreMovedPaths(const char *operation);
+    void setFailure(const std::string &message);
 
     std::vector<std::string> m_paths;
     std::string m_destDir;
     // (originalPath, newPath) for each successfully moved file.
     std::vector<std::pair<std::string, std::string>> m_moved;
     bool m_executed = false;
+    bool m_unresolved = false;
+    State m_state = State::Idle;
+    std::shared_ptr<mviewer::core::FileSystemAdapter> m_fileSystem;
     std::string m_lastError;
 };

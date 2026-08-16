@@ -239,123 +239,169 @@ std::string serializeCompareSession(const mviewer::domain::CompareSession &s)
     return os.str();
 }
 
+struct CompareParseState
+{
+    long long syncMode = 0;
+    long long blink = -1;
+    long long cols = 0;
+    long long rows = 0;
+    double sharedScale = 1.0;
+    double sharedOffsetX = 0.0;
+    double sharedOffsetY = 0.0;
+    int sx = 0;
+    int sy = 0;
+    int sw = 0;
+    int sh = 0;
+    int ssync = 0;
+    long long threshold = 0;
+    long long blinkIntervalMs = 500;
+    long long sidePanel = 0;
+    long long layoutIndex = 0;
+    long long uniformScale = 0;
+    bool haveIds = false;
+    bool haveCells = false;
+};
+
+static bool parseCompareCollections(Parser &p, const std::string &key,
+                                    mviewer::domain::CompareSession &out,
+                                    CompareParseState &state)
+{
+    if (key == "imageIds")
+    {
+        state.haveIds = true;
+        if (!p.eat('['))
+            return false;
+        while (!p.eat(']'))
+        {
+            if (!out.imageIds.empty())
+                p.eat(',');
+            out.imageIds.push_back(p.parseString());
+        }
+        return true;
+    }
+    if (key == "cells")
+    {
+        state.haveCells = true;
+        if (!p.eat('['))
+            return false;
+        while (!p.eat(']'))
+        {
+            if (!out.cells.empty())
+                p.eat(',');
+            if (!p.eat('['))
+                return false;
+            mviewer::domain::CellTransform ct;
+            ct.scale = static_cast<double>(p.parseDouble());
+            p.eat(',');
+            ct.offsetX = static_cast<double>(p.parseDouble());
+            p.eat(',');
+            ct.offsetY = static_cast<double>(p.parseDouble());
+            if (!p.eat(']'))
+                return false;
+            out.cells.push_back(ct);
+        }
+        return true;
+    }
+    if (key == "selection")
+    {
+        if (!p.eat('['))
+            return false;
+        state.sx = static_cast<int>(p.parseNumber());
+        p.eat(',');
+        state.sy = static_cast<int>(p.parseNumber());
+        p.eat(',');
+        state.sw = static_cast<int>(p.parseNumber());
+        p.eat(',');
+        state.sh = static_cast<int>(p.parseNumber());
+        p.eat(',');
+        state.ssync = static_cast<int>(p.parseNumber());
+        return p.eat(']');
+    }
+    return false;
+}
+
+static bool parseCompareTransform(Parser &p, const std::string &key, CompareParseState &state)
+{
+    if (key == "syncMode")
+        state.syncMode = p.parseNumber();
+    else if (key == "blink")
+        state.blink = p.parseNumber();
+    else if (key == "sharedScale")
+        state.sharedScale = p.parseDouble();
+    else if (key == "sharedOffsetX")
+        state.sharedOffsetX = p.parseDouble();
+    else if (key == "sharedOffsetY")
+        state.sharedOffsetY = p.parseDouble();
+    else if (key == "cols")
+        state.cols = p.parseNumber();
+    else if (key == "rows")
+        state.rows = p.parseNumber();
+    else
+        return false;
+    return true;
+}
+
+static bool parseComparePresentation(Parser &p, const std::string &key,
+                                     CompareParseState &state)
+{
+    if (key == "threshold")
+        state.threshold = p.parseNumber();
+    else if (key == "blinkIntervalMs")
+        state.blinkIntervalMs = p.parseNumber();
+    else if (key == "sidePanel")
+        state.sidePanel = p.parseNumber();
+    else if (key == "layoutIndex")
+        state.layoutIndex = p.parseNumber();
+    else if (key == "uniformScale")
+        state.uniformScale = p.parseNumber();
+    else
+        return false;
+    return true;
+}
+
+static void applyCompareParseState(const CompareParseState &state,
+                                   mviewer::domain::CompareSession &out)
+{
+    out.syncMode = static_cast<mviewer::domain::SyncMode>(state.syncMode);
+    out.blinkIndex = static_cast<int>(state.blink);
+    out.sharedScale = state.sharedScale;
+    out.sharedOffsetX = state.sharedOffsetX;
+    out.sharedOffsetY = state.sharedOffsetY;
+    out.cols = static_cast<int>(state.cols);
+    out.rows = static_cast<int>(state.rows);
+    out.selection = {state.sx, state.sy, state.sw, state.sh,
+                     (state.sw > 0 && state.sh > 0), state.ssync != 0};
+    out.threshold = static_cast<uint8_t>(state.threshold);
+    out.blinkIntervalMs = static_cast<int>(state.blinkIntervalMs);
+    out.sidePanelVisible = (state.sidePanel != 0);
+    out.layoutIndex = static_cast<int>(state.layoutIndex);
+    out.uniformScale = (state.uniformScale != 0);
+}
+
 bool parseCompareSession(const std::string &text, mviewer::domain::CompareSession &out)
 {
     Parser p(text);
     if (!p.eat('{'))
         return false;
-    long long syncMode = 0, blink = -1, cols = 0, rows = 0;
-    double sharedScale = 1.0, sharedOffsetX = 0.0, sharedOffsetY = 0.0;
-    int sx = 0, sy = 0, sw = 0, sh = 0, ssync = 0;
-    long long threshold = 0, blinkIntervalMs = 500, sidePanel = 0, layoutIndex = 0,
-              uniformScale = 0;
-    bool haveIds = false, haveCells = false;
+    CompareParseState state;
     while (!p.peek('}'))
     {
-        if (!out.imageIds.empty() || haveIds || haveCells)
+        if (!out.imageIds.empty() || state.haveIds || state.haveCells)
             p.eat(',');
         const std::string k = p.parseString();
         if (!p.eat(':'))
             return false;
-        if (k == "imageIds")
-        {
-            haveIds = true;
-            if (!p.eat('['))
-                return false;
-            while (!p.eat(']'))
-            {
-                if (!out.imageIds.empty())
-                    p.eat(',');
-                out.imageIds.push_back(p.parseString());
-            }
-        }
-        else if (k == "cells")
-        {
-            haveCells = true;
-            if (!p.eat('['))
-                return false;
-            while (!p.eat(']'))
-            {
-                if (!out.cells.empty())
-                    p.eat(',');
-                if (!p.eat('['))
-                    return false;
-                mviewer::domain::CellTransform ct;
-                ct.scale = static_cast<double>(p.parseDouble());
-                p.eat(',');
-                ct.offsetX = static_cast<double>(p.parseDouble());
-                p.eat(',');
-                ct.offsetY = static_cast<double>(p.parseDouble());
-                if (!p.eat(']'))
-                    return false;
-                out.cells.push_back(ct);
-            }
-        }
-        else if (k == "syncMode")
-            syncMode = p.parseNumber();
-        else if (k == "blink")
-            blink = p.parseNumber();
-        else if (k == "sharedScale")
-            sharedScale = p.parseDouble();
-        else if (k == "sharedOffsetX")
-            sharedOffsetX = p.parseDouble();
-        else if (k == "sharedOffsetY")
-            sharedOffsetY = p.parseDouble();
-        else if (k == "cols")
-            cols = p.parseNumber();
-        else if (k == "rows")
-            rows = p.parseNumber();
-        else if (k == "selection")
-        {
-            if (!p.eat('['))
-                return false;
-            sx = static_cast<int>(p.parseNumber());
-            p.eat(',');
-            sy = static_cast<int>(p.parseNumber());
-            p.eat(',');
-            sw = static_cast<int>(p.parseNumber());
-            p.eat(',');
-            sh = static_cast<int>(p.parseNumber());
-            p.eat(',');
-            ssync = static_cast<int>(p.parseNumber());
-            if (!p.eat(']'))
-                return false;
-        }
-        else if (k == "threshold")
-            threshold = p.parseNumber();
-        else if (k == "blinkIntervalMs")
-            blinkIntervalMs = p.parseNumber();
-        else if (k == "sidePanel")
-            sidePanel = p.parseNumber();
-        else if (k == "layoutIndex")
-            layoutIndex = p.parseNumber();
-        else if (k == "uniformScale")
-            uniformScale = p.parseNumber();
-        else
-        {
-            // Unknown key: skip a scalar/string value to stay forward-tolerant.
-            p.parseString();
-        }
+        if (parseCompareCollections(p, k, out, state))
+            continue;
+        if (parseCompareTransform(p, k, state) || parseComparePresentation(p, k, state))
+            continue;
+        // Unknown key: skip a scalar/string value to stay forward-tolerant.
+        p.parseString();
     }
     if (!p.eat('}'))
         return false;
-    out.syncMode = static_cast<mviewer::domain::SyncMode>(syncMode);
-    out.blinkIndex = static_cast<int>(blink);
-    out.sharedScale = sharedScale;
-    out.sharedOffsetX = sharedOffsetX;
-    out.sharedOffsetY = sharedOffsetY;
-    out.cols = static_cast<int>(cols);
-    out.rows = static_cast<int>(rows);
-    // CompareSelection field order is {x,y,w,h,active,synced}. The JSON
-    // stores [x,y,w,h,synced] (5 values), so map the 5th to synced and
-    // derive active from a non-empty region.
-    out.selection = {sx, sy, sw, sh, (sw > 0 && sh > 0), ssync != 0};
-    out.threshold = static_cast<uint8_t>(threshold);
-    out.blinkIntervalMs = static_cast<int>(blinkIntervalMs);
-    out.sidePanelVisible = (sidePanel != 0);
-    out.layoutIndex = static_cast<int>(layoutIndex);
-    out.uniformScale = (uniformScale != 0);
-    return haveIds; // require at least the image list to be a valid session
+    applyCompareParseState(state, out);
+    return state.haveIds; // require at least the image list to be a valid session
 }
 
 // M15: workspace version for forward/backward compatibility.
@@ -416,6 +462,107 @@ std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
     return os.str();
 }
 
+static bool parseWorkspaceImage(Parser &p, mviewer::domain::Folder &folder)
+{
+    mviewer::domain::ImageMetadata m;
+    if (!p.eat('{') || !p.memberStr("filePath", m.filePath))
+        return false;
+    if (!p.eat(',') || !p.memberStr("fileName", m.fileName) || !p.eat(','))
+        return false;
+    long long w = 0;
+    long long h = 0;
+    if (!p.memberNum("width", w) || !p.eat(',') || !p.memberNum("height", h))
+        return false;
+    m.width = static_cast<int>(w);
+    m.height = static_cast<int>(h);
+    if (p.peek(','))
+    {
+        p.eat(',');
+        if (p.parseString() != "roi" || !p.eat(':') || !p.eat('['))
+            return false;
+        m.roiX = static_cast<int>(p.parseNumber());
+        p.eat(',');
+        m.roiY = static_cast<int>(p.parseNumber());
+        p.eat(',');
+        m.roiW = static_cast<int>(p.parseNumber());
+        p.eat(',');
+        m.roiH = static_cast<int>(p.parseNumber());
+        if (!p.eat(']') || !p.eat(',') || p.parseString() != "analysis" || !p.eat(':'))
+            return false;
+        m.analysis = p.parseString();
+    }
+    folder.imageSet.images.push_back(m);
+    p.eat('}');
+    return true;
+}
+
+static bool parseWorkspaceFolder(Parser &p, mviewer::domain::Workspace &out)
+{
+    mviewer::domain::Folder folder;
+    if (!p.eat('{') || !p.memberStr("path", folder.path))
+        return false;
+    if (!p.eat(',') || !p.memberStr("name", folder.name))
+        return false;
+    if (!p.eat(',') || p.parseString() != "images" || !p.eat(':') || !p.eat('['))
+        return false;
+    while (!p.eat(']'))
+    {
+        if (!folder.imageSet.images.empty())
+            p.eat(',');
+        if (!parseWorkspaceImage(p, folder))
+            return false;
+    }
+    p.eat('}');
+    out.folders.push_back(folder);
+    return true;
+}
+
+static bool parseWorkspaceFolders(Parser &p, mviewer::domain::Workspace &out)
+{
+    if (!p.eat('['))
+        return false;
+    out.folders.clear();
+    while (!p.eat(']'))
+    {
+        if (!out.folders.empty())
+            p.eat(',');
+        if (!parseWorkspaceFolder(p, out))
+            return false;
+    }
+    return true;
+}
+
+static bool parseWorkspaceOptionalFields(Parser &p, mviewer::domain::Workspace &out)
+{
+    while (p.peek(','))
+    {
+        p.eat(',');
+        const std::string key = p.parseString();
+        if (!p.eat(':'))
+            return false;
+        if (key == "comparedImages")
+        {
+            if (!p.eat('['))
+                return false;
+            while (!p.eat(']'))
+            {
+                if (!out.comparedImages.empty())
+                    p.eat(',');
+                out.comparedImages.push_back(p.parseString());
+            }
+        }
+        else if (key == "compareSession")
+        {
+            out.compareSessionJson = p.parseString();
+        }
+        else
+        {
+            p.parseString();
+        }
+    }
+    return true;
+}
+
 bool parseWorkspace(const std::string &text, mviewer::domain::Workspace &out)
 {
     Parser p(text);
@@ -441,119 +588,8 @@ bool parseWorkspace(const std::string &text, mviewer::domain::Workspace &out)
         return false;
     if (p.parseString() != "folders" || !p.eat(':'))
         return false;
-    if (!p.eat('['))
+    if (!parseWorkspaceFolders(p, out) || !parseWorkspaceOptionalFields(p, out))
         return false;
-
-    out.folders.clear();
-    while (!p.eat(']'))
-    {
-        if (!out.folders.empty())
-            p.eat(',');
-        mviewer::domain::Folder folder;
-        if (!p.eat('{'))
-            return false;
-        if (!p.memberStr("path", folder.path))
-            return false;
-        if (!p.eat(','))
-            return false;
-        if (!p.memberStr("name", folder.name))
-            return false;
-        if (!p.eat(','))
-            return false;
-        if (p.parseString() != "images" || !p.eat(':'))
-            return false;
-        if (!p.eat('['))
-            return false;
-        while (!p.eat(']'))
-        {
-            if (!folder.imageSet.images.empty())
-                p.eat(',');
-            mviewer::domain::ImageMetadata m;
-            if (!p.eat('{'))
-                return false;
-            if (!p.memberStr("filePath", m.filePath))
-                return false;
-            if (!p.eat(','))
-                return false;
-            if (!p.memberStr("fileName", m.fileName))
-                return false;
-            if (!p.eat(','))
-                return false;
-            long long w = 0, h = 0;
-            if (!p.memberNum("width", w))
-                return false;
-            if (!p.eat(','))
-                return false;
-            if (!p.memberNum("height", h))
-                return false;
-            m.width = static_cast<int>(w);
-            m.height = static_cast<int>(h);
-            // M12.1: optional roi + analysis (absent in older files).
-            if (p.peek(','))
-            {
-                p.eat(',');
-                if (p.parseString() != "roi" || !p.eat(':') || !p.eat('['))
-                    return false;
-                m.roiX = static_cast<int>(p.parseNumber());
-                p.eat(',');
-                m.roiY = static_cast<int>(p.parseNumber());
-                p.eat(',');
-                m.roiW = static_cast<int>(p.parseNumber());
-                p.eat(',');
-                m.roiH = static_cast<int>(p.parseNumber());
-                p.eat(']');
-                if (!p.eat(','))
-                    return false;
-                if (p.parseString() != "analysis" || !p.eat(':'))
-                    return false;
-                m.analysis = p.parseString();
-            }
-            folder.imageSet.images.push_back(m);
-            p.eat('}');
-        }
-        p.eat('}');
-        out.folders.push_back(folder);
-    }
-    // M12.2 (review fix): optional explicit compare-session image list.
-    // Absent in legacy files, so tolerate its absence.
-    if (p.peek(','))
-    {
-        p.eat(',');
-        if (p.parseString() == "comparedImages" && p.eat(':'))
-        {
-            if (!p.eat('['))
-                return false;
-            while (!p.eat(']'))
-            {
-                if (!out.comparedImages.empty())
-                    p.eat(',');
-                out.comparedImages.push_back(p.parseString());
-            }
-        }
-        else if (p.parseString() == "compareSession" && p.eat(':'))
-        {
-            out.compareSessionJson = p.parseString();
-        }
-    }
-    // M15: also tolerate the case where compareSession appears after
-    // comparedImages (order-independent; only one optional comma consumed above).
-    if (p.peek(','))
-    {
-        p.eat(',');
-        if (p.parseString() == "compareSession" && p.eat(':'))
-            out.compareSessionJson = p.parseString();
-        else if (p.parseString() == "comparedImages" && p.eat(':'))
-        {
-            if (!p.eat('['))
-                return false;
-            while (!p.eat(']'))
-            {
-                if (!out.comparedImages.empty())
-                    p.eat(',');
-                out.comparedImages.push_back(p.parseString());
-            }
-        }
-    }
     p.eat('}'); // close root object
     return true;
 }

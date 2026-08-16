@@ -19,6 +19,7 @@ class QPushButton;
 class QLabel;
 class QProgressDialog;
 class QCloseEvent;
+class QVBoxLayout;
 
 // Batch / single image export dialog. Supports format conversion, resizing,
 // text watermarking, batch rename, contact-sheet generation and PDF export.
@@ -62,6 +63,17 @@ class ExportDialog : public QDialog
 
   private:
     QStringList collectSources() const;
+
+    void buildOutputSection(QVBoxLayout *root);
+    void buildModeSection(QVBoxLayout *root);
+    void buildFormatSection(QVBoxLayout *root);
+    void buildResizeSection(QVBoxLayout *root);
+    void buildWatermarkSection(QVBoxLayout *root);
+    void buildCropSection(QVBoxLayout *root);
+    void buildMetadataSection(QVBoxLayout *root);
+    void buildRenameSection(QVBoxLayout *root);
+    void buildContactSection(QVBoxLayout *root);
+    void buildButtonSection(QVBoxLayout *root);
 
     ImageData applyResize(const ImageData &d) const;
     ImageData applyWatermark(const ImageData &d) const;

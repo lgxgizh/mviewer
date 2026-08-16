@@ -1,0 +1,17 @@
+{
+  "overall": 92.7,
+  "grade": "A",
+  "dimensions": {
+    "Build": 100.0,
+    "Unit Test": 100.0,
+    "Performance": null,
+    "Code Quality": null,
+    "Coverage": null,
+    "Memory": null,
+    "Architecture": 100,
+    "Complexity": 60,
+    "Regression": 100.0
+  },
+  "generated": "2026-08-15 23:35:48",
+  "commit": "db18bd6"
+}

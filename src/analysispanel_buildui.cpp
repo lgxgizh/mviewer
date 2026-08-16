@@ -22,84 +22,86 @@
 
 void AnalysisPanel::buildUi()
 {
-    QVBoxLayout *mainLay = new QVBoxLayout(this);
-    mainLay->setContentsMargins(6, 6, 6, 6);
-    mainLay->setSpacing(4);
+    auto *mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(6, 6, 6, 6);
+    mainLayout->setSpacing(4);
+    buildAnalyzerSection(*mainLayout);
+    buildHistorySection(*mainLayout);
+    buildResultTabs(*mainLayout);
+    buildInspectorTab();
+    m_analyzerCombo->setCurrentIndex(0);
+    onAnalyzerSelected(0);
+}
 
-    // Plugin selector — every analyzer is reachable through the AnalyzerPipeline
-    // (the orchestration layer over the AnalyzerRegistry). The combo items carry
-    // the pipeline id as user data so switching the active analyzer routes
-    // through the pipeline, never the registry directly (M15 P0#3).
-    QHBoxLayout *plugBar = new QHBoxLayout;
-    plugBar->addWidget(new QLabel(tr("Analyzer:")));
+void AnalysisPanel::buildAnalyzerSection(QVBoxLayout &layout)
+{
+    auto *bar = new QHBoxLayout;
+    bar->addWidget(new QLabel(tr("Analyzer:")));
     m_analyzerCombo = new QComboBox;
-    auto &reg = m_pipeline ? m_pipeline->registry() : AnalyzerRegistry::instance();
-    m_pluginIds = reg.availableAnalyzers();
+    auto &registry = m_pipeline ? m_pipeline->registry() : AnalyzerRegistry::instance();
+    m_pluginIds = registry.availableAnalyzers();
     for (const auto &id : m_pluginIds)
     {
-        const auto info = reg.infoFor(id);
-        const QString label =
-            info ? QString::fromStdString(info->name) : QString::fromStdString(id);
+        const auto info = registry.infoFor(id);
+        const QString label = info ? QString::fromStdString(info->name) : QString::fromStdString(id);
         m_analyzerCombo->addItem(label, QString::fromStdString(id));
     }
-    // Dual-image comparison (PSNR/SSIM) is a built-in composite view, not a single
-    // registry analyzer, so it stays as an extra option.
     m_analyzerCombo->addItem(tr("Dual Compare (PSNR/SSIM)"), QString("builtin_compare"));
-    plugBar->addWidget(m_analyzerCombo, 1);
-    // A-7.1: explicit Run button so the unified analyzer entry is discoverable
-    // without relying solely on combo activation.
-    auto *runBtn = new QPushButton(tr("运行"));
-    runBtn->setToolTip(tr("对当前图片运行所选分析器"));
-    connect(runBtn, &QPushButton::clicked, this, &AnalysisPanel::reanalyze);
-    plugBar->addWidget(runBtn);
+    bar->addWidget(m_analyzerCombo, 1);
 
-    // P1-6: one-click export of the current analysis report, so the analyzer
-    // workflow (Image -> pipeline -> result panel -> export) stays inside the panel
-    // instead of forcing a trip to the File menu.
-    auto *exportBtn = new QPushButton(tr("导出报告"));
-    connect(exportBtn, &QPushButton::clicked, this, &AnalysisPanel::exportRequested);
-    plugBar->addWidget(exportBtn);
-    // M21: pin current result so AnalyzerModel never evicts it.
+    auto *runButton = new QPushButton(tr("运行"));
+    runButton->setToolTip(tr("对当前图片运行所选分析器"));
+    connect(runButton, &QPushButton::clicked, this, &AnalysisPanel::reanalyze);
+    bar->addWidget(runButton);
+
+    auto *exportButton = new QPushButton(tr("导出报告"));
+    connect(exportButton, &QPushButton::clicked, this, &AnalysisPanel::exportRequested);
+    bar->addWidget(exportButton);
     m_pinBtn = new QPushButton(tr("钉住"));
     m_pinBtn->setCheckable(true);
     m_pinBtn->setToolTip(tr("钉住当前分析结果（History 中保留，不被淘汰）"));
     connect(m_pinBtn, &QPushButton::clicked, this, &AnalysisPanel::onPinToggled);
-    plugBar->addWidget(m_pinBtn);
-    mainLay->addLayout(plugBar);
+    bar->addWidget(m_pinBtn);
+    layout.addLayout(bar);
+}
 
-    // M21: History + Pinned lists (compact, under the toolbar).
-    auto *histRow = new QHBoxLayout;
-    m_historyList = new QListWidget;
-    m_historyList->setMaximumHeight(72);
-    m_historyList->setToolTip(tr("分析历史（最近 50 条）— 双击打开图片并恢复结果"));
-    connect(m_historyList, &QListWidget::itemDoubleClicked, this,
+void AnalysisPanel::buildHistorySection(QVBoxLayout &layout)
+{
+    auto *history = new QListWidget;
+    m_historyList = history;
+    history->setMaximumHeight(72);
+    history->setToolTip(tr("分析历史（最近 50 条）— 双击打开图片并恢复结果"));
+    connect(history, &QListWidget::itemDoubleClicked, this,
             [this](QListWidgetItem *) { onHistoryActivated(); });
-    m_pinnedList = new QListWidget;
-    m_pinnedList->setMaximumHeight(72);
-    m_pinnedList->setToolTip(tr("钉住的分析结果 — 双击打开"));
-    connect(m_pinnedList, &QListWidget::itemDoubleClicked, this,
-            [this](QListWidgetItem *) { onPinnedActivated(); });
-    auto *histCol = new QVBoxLayout;
-    histCol->addWidget(new QLabel(tr("历史")));
-    histCol->addWidget(m_historyList);
-    auto *pinCol = new QVBoxLayout;
-    pinCol->addWidget(new QLabel(tr("钉住")));
-    pinCol->addWidget(m_pinnedList);
-    histRow->addLayout(histCol, 1);
-    histRow->addLayout(pinCol, 1);
-    mainLay->addLayout(histRow);
 
+    auto *pinned = new QListWidget;
+    m_pinnedList = pinned;
+    pinned->setMaximumHeight(72);
+    pinned->setToolTip(tr("钉住的分析结果 — 双击打开"));
+    connect(pinned, &QListWidget::itemDoubleClicked, this,
+            [this](QListWidgetItem *) { onPinnedActivated(); });
+
+    auto *row = new QHBoxLayout;
+    auto *historyColumn = new QVBoxLayout;
+    historyColumn->addWidget(new QLabel(tr("历史")));
+    historyColumn->addWidget(history);
+    auto *pinnedColumn = new QVBoxLayout;
+    pinnedColumn->addWidget(new QLabel(tr("钉住")));
+    pinnedColumn->addWidget(pinned);
+    row->addLayout(historyColumn, 1);
+    row->addLayout(pinnedColumn, 1);
+    layout.addLayout(row);
     connect(m_analyzerCombo, QOverload<int>::of(&QComboBox::activated), this,
             &AnalysisPanel::onAnalyzerSelected);
+}
 
+void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
+{
     m_tabs = new QTabWidget;
-
     m_imageView = std::make_unique<RawImageView>(this);
-    mainLay->addWidget(m_imageView.get(), 2);
+    layout.addWidget(m_imageView.get(), 2);
+    layout.addWidget(m_tabs, 1);
 
-    mainLay->addWidget(m_tabs, 1);
-
-    // P1-1: Histogram tab: viz + stats text
     m_histogramLabel = new QLabel;
     m_histogramLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_histogramLabel->setStyleSheet("QLabel{background:#141414;}");
@@ -107,15 +109,14 @@ void AnalysisPanel::buildUi()
     m_statsLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_statsLabel->setWordWrap(true);
     m_statsLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
-    auto *histPage = new QWidget;
-    auto *histLay = new QVBoxLayout(histPage);
-    histLay->setContentsMargins(0, 0, 0, 0);
-    histLay->setSpacing(4);
-    histLay->addWidget(m_histogramLabel, 1);
-    histLay->addWidget(m_statsLabel);
-    m_tabs->addTab(histPage, tr("Histogram"));
+    auto *histogramPage = new QWidget;
+    auto *histogramLayout = new QVBoxLayout(histogramPage);
+    histogramLayout->setContentsMargins(0, 0, 0, 0);
+    histogramLayout->setSpacing(4);
+    histogramLayout->addWidget(m_histogramLabel, 1);
+    histogramLayout->addWidget(m_statsLabel);
+    m_tabs->addTab(histogramPage, tr("Histogram"));
 
-    // P1-1: RGB tab
     m_rgbLabel = new QLabel;
     m_rgbLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_rgbLabel->setStyleSheet("QLabel{background:#141414;}");
@@ -124,111 +125,123 @@ void AnalysisPanel::buildUi()
     m_rgbStatsLabel->setWordWrap(true);
     m_rgbStatsLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
     auto *rgbPage = new QWidget;
-    auto *rgbLay = new QVBoxLayout(rgbPage);
-    rgbLay->setContentsMargins(0, 0, 0, 0);
-    rgbLay->setSpacing(4);
-    rgbLay->addWidget(m_rgbLabel, 1);
-    rgbLay->addWidget(m_rgbStatsLabel);
+    auto *rgbLayout = new QVBoxLayout(rgbPage);
+    rgbLayout->setContentsMargins(0, 0, 0, 0);
+    rgbLayout->setSpacing(4);
+    rgbLayout->addWidget(m_rgbLabel, 1);
+    rgbLayout->addWidget(m_rgbStatsLabel);
     m_tabs->addTab(rgbPage, tr("RGB"));
 
-    // P1-1: Exposure tab
     m_exposureLabel = new QLabel;
     m_exposureLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_exposureLabel->setWordWrap(true);
     m_exposureLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
     m_tabs->addTab(m_exposureLabel, tr("Exposure"));
-
-    // P1-1: Focus tab
     m_focusLabel = new QLabel;
     m_focusLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_focusLabel->setWordWrap(true);
     m_focusLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
     m_tabs->addTab(m_focusLabel, tr("Focus"));
-
-    // P1-1: Metadata tab (inside the analysis workspace)
     m_metaLabel = new QLabel;
     m_metaLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_metaLabel->setWordWrap(true);
     m_metaLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
     m_tabs->addTab(m_metaLabel, tr("Metadata"));
-
-    // Compare tab
     m_compareLabel = new QLabel;
     m_compareLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_compareLabel->setWordWrap(true);
     m_compareLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
     m_tabs->addTab(m_compareLabel, tr("Compare"));
-
-    // Diff preview
     m_diffPreview = new QLabel;
     m_diffPreview->setMinimumHeight(kPreviewSize);
     m_diffPreview->setAlignment(Qt::AlignCenter);
     m_diffPreview->setStyleSheet("QLabel{background:#1e1e1e;}");
     m_tabs->addTab(m_diffPreview, tr("Diff Map"));
-
-    // Plugin tab
     m_pluginResult = new QLabel;
     m_pluginResult->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_pluginResult->setWordWrap(true);
     m_pluginResult->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
     m_tabs->addTab(m_pluginResult, tr("Plugin"));
+}
 
-    // Pixel Inspector tab (M3 Phase-2, upgraded to Pro in M15 P0 #2)
-    auto *inspectorPage = new QWidget;
-    auto *insLay = new QVBoxLayout(inspectorPage);
-    insLay->setContentsMargins(0, 0, 0, 0);
-    insLay->setSpacing(4);
+void AnalysisPanel::buildInspectorTab()
+{
+    auto *page = new QWidget;
+    auto *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
 
-    // Color-space + kernel selectors (cheap; changing them just re-renders the
-    // inspector text — no histogram recompute, so mouse-move stays smooth).
-    QHBoxLayout *insBar = new QHBoxLayout;
-    insBar->addWidget(new QLabel(tr("Space:")));
-    QComboBox *csCombo = new QComboBox;
-    csCombo->addItem(tr("RGB"), static_cast<int>(mviewer::core::ColorSpace::RGB));
-    csCombo->addItem(tr("HSV"), static_cast<int>(mviewer::core::ColorSpace::HSV));
-    csCombo->addItem(tr("Lab"), static_cast<int>(mviewer::core::ColorSpace::Lab));
-    csCombo->addItem(tr("YUV"), static_cast<int>(mviewer::core::ColorSpace::YUV));
-    csCombo->addItem(tr("YCbCr"), static_cast<int>(mviewer::core::ColorSpace::YCbCr));
-    csCombo->addItem(tr("XYZ"), static_cast<int>(mviewer::core::ColorSpace::XYZ));
-    csCombo->addItem(tr("HEX"), static_cast<int>(mviewer::core::ColorSpace::HEX));
-    insBar->addWidget(csCombo, 1);
-    auto *freezeBtn = new QPushButton(tr("Freeze"));
-    freezeBtn->setCheckable(true);
-    freezeBtn->setToolTip(
-        tr("Freeze the inspected pixel so it stays shown while you move the mouse"));
-    insBar->addWidget(freezeBtn);
-    insBar->addWidget(new QLabel(tr("Kernel:")));
-    QComboBox *kCombo = new QComboBox;
-    kCombo->addItem(tr("1×1"), 1);
-    kCombo->addItem(tr("3×3"), 3);
-    kCombo->addItem(tr("5×5"), 5);
-    kCombo->addItem(tr("7×7"), 7);
-    insBar->addWidget(kCombo, 1);
-    insLay->addLayout(insBar);
+    auto *bar = new QHBoxLayout;
+    bar->addWidget(new QLabel(tr("Space:")));
+    auto *colorSpace = new QComboBox;
+    colorSpace->addItem(tr("RGB"), static_cast<int>(mviewer::core::ColorSpace::RGB));
+    colorSpace->addItem(tr("HSV"), static_cast<int>(mviewer::core::ColorSpace::HSV));
+    colorSpace->addItem(tr("Lab"), static_cast<int>(mviewer::core::ColorSpace::Lab));
+    colorSpace->addItem(tr("YUV"), static_cast<int>(mviewer::core::ColorSpace::YUV));
+    colorSpace->addItem(tr("YCbCr"), static_cast<int>(mviewer::core::ColorSpace::YCbCr));
+    colorSpace->addItem(tr("XYZ"), static_cast<int>(mviewer::core::ColorSpace::XYZ));
+    colorSpace->addItem(tr("HEX"), static_cast<int>(mviewer::core::ColorSpace::HEX));
+    bar->addWidget(colorSpace, 1);
+
+    auto *freeze = new QPushButton(tr("Freeze"));
+    freeze->setCheckable(true);
+    freeze->setToolTip(tr("Freeze the inspected pixel so it stays shown while you move the mouse"));
+    bar->addWidget(freeze);
+    bar->addWidget(new QLabel(tr("Kernel:")));
+    auto *kernel = new QComboBox;
+    kernel->addItem(tr("1×1"), 1);
+    kernel->addItem(tr("3×3"), 3);
+    kernel->addItem(tr("5×5"), 5);
+    kernel->addItem(tr("7×7"), 7);
+    bar->addWidget(kernel, 1);
+    layout->addLayout(bar);
 
     m_inspectorLabel = new QLabel;
     m_inspectorLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_inspectorLabel->setWordWrap(true);
-    m_inspectorLabel->setStyleSheet(
-        "QLabel{background:#1e1e1e;color:#eee;padding:8px;font-family:monospace;}");
+    m_inspectorLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;font-family:monospace;}");
     m_inspectorLabel->setText(tr("Move the mouse over an image to inspect pixels."));
-    insLay->addWidget(m_inspectorLabel, 1);
+    layout->addWidget(m_inspectorLabel, 1);
+    buildInspectorActions(*layout);
+    m_tabs->addTab(page, tr("Inspector"));
 
-    // Copy buttons for RGB / HEX / XYZ (Pixel Inspector enhancement)
-    auto *copyBar = new QHBoxLayout;
-    auto *btnCopyRGB = new QPushButton(tr("Copy RGB"));
-    auto *btnCopyHEX = new QPushButton(tr("Copy HEX"));
-    auto *btnCopyXYZ = new QPushButton(tr("Copy XYZ"));
-    btnCopyRGB->setToolTip(tr("Copy current pixel RGB to clipboard"));
-    btnCopyHEX->setToolTip(tr("Copy current pixel HEX color to clipboard"));
-    btnCopyXYZ->setToolTip(tr("Copy current pixel XYZ to clipboard"));
-    copyBar->addWidget(btnCopyRGB);
-    copyBar->addWidget(btnCopyHEX);
-    copyBar->addWidget(btnCopyXYZ);
-    copyBar->addStretch();
-    insLay->addLayout(copyBar);
+    connect(colorSpace, QOverload<int>::of(&QComboBox::activated), this,
+            [this, colorSpace](int)
+            {
+                m_colorSpace = static_cast<mviewer::core::ColorSpace>(
+                    colorSpace->currentData().toInt());
+                updateInspectorPage();
+            });
+    connect(freeze, &QPushButton::toggled, this,
+            [this, freeze](bool on)
+            {
+                m_frozen = on;
+                freeze->setText(on ? tr("Frozen") : tr("Freeze"));
+                updateInspectorPage();
+            });
+    connect(kernel, QOverload<int>::of(&QComboBox::activated), this,
+            [this, kernel](int)
+            {
+                m_kernel = kernel->currentData().toInt();
+                updateInspectorPage();
+            });
+}
+void AnalysisPanel::buildInspectorActions(QVBoxLayout &layout)
+{
+    auto *bar = new QHBoxLayout;
+    auto *copyRgb = new QPushButton(tr("Copy RGB"));
+    auto *copyHex = new QPushButton(tr("Copy HEX"));
+    auto *copyXyz = new QPushButton(tr("Copy XYZ"));
+    copyRgb->setToolTip(tr("Copy current pixel RGB to clipboard"));
+    copyHex->setToolTip(tr("Copy current pixel HEX color to clipboard"));
+    copyXyz->setToolTip(tr("Copy current pixel XYZ to clipboard"));
+    bar->addWidget(copyRgb);
+    bar->addWidget(copyHex);
+    bar->addWidget(copyXyz);
+    bar->addStretch();
+    layout.addLayout(bar);
 
-    connect(btnCopyRGB, &QPushButton::clicked, this,
+    connect(copyRgb, &QPushButton::clicked, this,
             [this]()
             {
                 if (!m_pValid)
@@ -236,7 +249,7 @@ void AnalysisPanel::buildUi()
                 QApplication::clipboard()->setText(
                     QString("RGB(%1, %2, %3)").arg(m_pR).arg(m_pG).arg(m_pB));
             });
-    connect(btnCopyHEX, &QPushButton::clicked, this,
+    connect(copyHex, &QPushButton::clicked, this,
             [this]()
             {
                 if (!m_pValid)
@@ -246,51 +259,28 @@ void AnalysisPanel::buildUi()
                                                        .arg(m_pG, 2, 16, QChar('0'))
                                                        .arg(m_pB, 2, 16, QChar('0')));
             });
-    connect(
-        btnCopyXYZ, &QPushButton::clicked, this,
-        [this]()
-        {
-            if (!m_pValid)
-                return;
-            // sRGB to linear then to XYZ (D65)
-            auto srgbToLinear = [](uint8_t c) -> double
+    connect(copyXyz, &QPushButton::clicked, this,
+            [this]()
             {
-                double v = c / 255.0;
-                return (v <= 0.04045) ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
-            };
-            const double r = srgbToLinear(static_cast<uint8_t>(m_pR));
-            const double g = srgbToLinear(static_cast<uint8_t>(m_pG));
-            const double b = srgbToLinear(static_cast<uint8_t>(m_pB));
-            const double X = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
-            const double Y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
-            const double Z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
-            QApplication::clipboard()->setText(
-                QString("XYZ(%1, %2, %3)").arg(X, 0, 'f', 3).arg(Y, 0, 'f', 3).arg(Z, 0, 'f', 3));
-        });
-
-    m_tabs->addTab(inspectorPage, tr("Inspector"));
-
-    connect(csCombo, QOverload<int>::of(&QComboBox::activated), this,
-            [this, csCombo](int)
-            {
-                m_colorSpace =
-                    static_cast<mviewer::core::ColorSpace>(csCombo->currentData().toInt());
-                updateInspectorPage();
+                if (!m_pValid)
+                    return;
+                auto toLinear = [](uint8_t c) -> double
+                {
+                    const double value = c / 255.0;
+                    return value <= 0.04045
+                               ? value / 12.92
+                               : std::pow((value + 0.055) / 1.055, 2.4);
+                };
+                const double r = toLinear(static_cast<uint8_t>(m_pR));
+                const double g = toLinear(static_cast<uint8_t>(m_pG));
+                const double b = toLinear(static_cast<uint8_t>(m_pB));
+                const double x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
+                const double y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
+                const double z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
+                QApplication::clipboard()->setText(
+                    QString("XYZ(%1, %2, %3)")
+                        .arg(x, 0, 'f', 3)
+                        .arg(y, 0, 'f', 3)
+                        .arg(z, 0, 'f', 3));
             });
-    connect(freezeBtn, &QPushButton::toggled, this,
-            [this, freezeBtn](bool on)
-            {
-                m_frozen = on;
-                freezeBtn->setText(on ? tr("Frozen") : tr("Freeze"));
-                updateInspectorPage();
-            });
-    connect(kCombo, QOverload<int>::of(&QComboBox::activated), this,
-            [this, kCombo](int)
-            {
-                m_kernel = kCombo->currentData().toInt();
-                updateInspectorPage();
-            });
-
-    m_analyzerCombo->setCurrentIndex(0);
-    onAnalyzerSelected(0);
 }

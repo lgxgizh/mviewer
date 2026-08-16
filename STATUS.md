@@ -14,7 +14,8 @@
 > `docs/review/M40_INTERACTION_CANCELLATION_CLOSURE_2026-08-15.md`,
 > `docs/review/M41_STORAGE_RUNTIME_TEST_CREDIBILITY_CLOSURE_2026-08-15.md`,
 > `docs/review/M42_REALWORLD_RESOURCE_BOUNDEDNESS_2026-08-15.md`,
-> `docs/review/M43_COMPARE_ANALYSIS_FIDELITY_2026-08-15.md` and
+> `docs/review/M43_COMPARE_ANALYSIS_FIDELITY_2026-08-15.md`,
+> `docs/review/M44_RELEASE_READINESS_STRUCTURAL_CONVERGENCE_2026-08-15.md` and
 > `.\build.ps1 Test`.
 
 ## Positioning
@@ -51,6 +52,28 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   cmake/ninja/cl directly. Qt 6.10.x / MSVC 19.44 verified on the dev machine.
 
 ## Shipped capabilities (1.0.x, CTest-verified)
+
+### M44 Release readiness, data safety & structural convergence (2026-08-15)
+
+- File rename/move/delete commands now have collision preflight, verified
+  cross-volume fallback, injectable fault handling, explicit rollback state,
+  and Unicode-path regression coverage. CommandStack preserves unresolved
+  disk state instead of reporting a misleading clean failure.
+- User-triggered report, workspace, project, batch-analysis, Copy, and Save
+  persistence paths use the cancellable worker-side/atomic ExportJob contract
+  with generation and lifetime guards; the obsolete ThumbnailPanel sync
+  export path is gone.
+- Preview/viewer loading is behind thin Application/Core facades, reducing UI
+  knowledge of CacheManager and ImageRepository policy. Architecture warnings
+  are **0**.
+- Production and acceptance-suite responsibility splits bring
+  `complexity_gate.ps1 -Strict` to **0 hard failures** (92 advisory warnings).
+- Final Release build and full CTest are green: **88/88**, including golden,
+  benchmark-enforcement, workflow, Browse/Compare acceptance, and async
+  lifetime gates. Health score is **92.7 / A**.
+- Native Release GUI, physical ICC, mixed-DPI, long-session, and real
+  multi-volume validation remain **MANUAL PENDING**; see the full evidence in
+  `docs/review/M44_RELEASE_READINESS_STRUCTURAL_CONVERGENCE_2026-08-15.md`.
 
 ### M42 Real-world resource boundedness & large-image Compare closure (2026-08-15)
 

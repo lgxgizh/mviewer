@@ -37,14 +37,6 @@ QString formatChannel(ColorSpace space, double v)
     }
 }
 
-struct DisplaySample
-{
-    int r = 0;
-    int g = 0;
-    int b = 0;
-    bool valid = false;
-};
-
 // M30: write a cell's text into the existing QTableWidgetItem, lazily creating
 // it on first use. Ordinary inspector renders update text in place instead of
 // destroying and reallocating every cell (the old clearContents + new-item
@@ -139,6 +131,11 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     m_statsLabel->setStyleSheet("color:#888;");
     sideLay->addWidget(m_statsLabel);
 
+    buildHistogramPanel(sideLay);
+}
+
+void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
+{
     // ── Histogram (channels / log / ROI) ─────────────────────────────────
     m_histTitle = new QLabel(tr("直方图（全图）"), this);
     sideLay->addWidget(m_histTitle);
@@ -207,6 +204,7 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     m_metricLabel->setWordWrap(true);
     m_metricLabel->setStyleSheet("color:#888;");
     sideLay->addWidget(m_metricLabel);
+
 }
 
 void CompareWorkspace::requestInspectorUpdate(int x, int y)
@@ -263,7 +261,7 @@ void CompareWorkspace::updateInspector(int x, int y)
 
     const int n = m_engine.imageCount();
     const int baseIdx = diffBaseIndex();
-    std::vector<DisplaySample> samples(static_cast<size_t>(n));
+    std::vector<InspectorSample> samples(static_cast<size_t>(n));
     for (int i = 0; i < n; ++i)
     {
         const ImageFrame *img = m_engine.imageAt(i);
@@ -284,11 +282,49 @@ void CompareWorkspace::updateInspector(int x, int y)
     if (m_inspector->rowCount() != n)
         m_inspector->setRowCount(n);
 
+    updateInspectorRows(samples, space, baseIdx, x, y);
+
+    if (m_statsLabel)
+    {
+        static const int kKernels[] = {1, 3, 5, 7};
+        const int kernelIndex = m_kernelCombo ? std::clamp(m_kernelCombo->currentIndex(), 0, 3) : 1;
+        const int kernel = kKernels[kernelIndex];
+        const ImageFrame *baseFrame = m_engine.imageAt(baseIdx);
+        const CellAdjust baseAdjust =
+            baseIdx >= 0 && baseIdx < static_cast<int>(m_cellAdjusts.size())
+                ? m_cellAdjusts[static_cast<size_t>(baseIdx)]
+                : CellAdjust{};
+        const auto stats = baseFrame
+                               ? mviewer::core::neighborhoodStats(
+                                     baseFrame->pixels(), analysisAdjustment(baseAdjust), x, y,
+                                     kernel)
+                               : mviewer::core::NeighborhoodStats{};
+        if (stats.count > 0)
+        {
+            m_statsLabel->setText(tr("邻域 %1×%1: 亮度 μ=%2 σ=%3 [%4, %5] · RGB均值(%6, %7, %8)")
+                                      .arg(kernel)
+                                      .arg(stats.mean, 0, 'f', 1)
+                                      .arg(stats.stdDev, 0, 'f', 1)
+                                      .arg(static_cast<int>(stats.min))
+                                      .arg(static_cast<int>(stats.max))
+                                      .arg(stats.rMean, 0, 'f', 1)
+                                      .arg(stats.gMean, 0, 'f', 1)
+                                      .arg(stats.bMean, 0, 'f', 1));
+        }
+        else
+            m_statsLabel->setText(tr("邻域统计: —"));
+    }
+}
+
+void CompareWorkspace::updateInspectorRows(
+    const std::vector<InspectorSample> &samples, ColorSpace space, int baseIdx, int x, int y)
+{
+    const int n = static_cast<int>(samples.size());
     for (int i = 0; i < n; ++i)
     {
         const ImageFrame *img = m_engine.imageAt(i);
         const QString name = img ? QString::fromStdString(img->metadata().fileName) : QString();
-        const DisplaySample &sample = samples[static_cast<size_t>(i)];
+        const InspectorSample &sample = samples[static_cast<size_t>(i)];
         setCellText(m_inspector, i, 0, QString::number(i + 1));
         setCellText(m_inspector, i, 1, name);
 
@@ -324,7 +360,7 @@ void CompareWorkspace::updateInspector(int x, int y)
         if (sample.valid && baseIdx >= 0 && baseIdx < n &&
             samples[static_cast<size_t>(baseIdx)].valid)
         {
-            const DisplaySample &base = samples[static_cast<size_t>(baseIdx)];
+            const InspectorSample &base = samples[static_cast<size_t>(baseIdx)];
             const int dr = sample.r - base.r;
             const int dg = sample.g - base.g;
             const int db = sample.b - base.b;
@@ -351,38 +387,7 @@ void CompareWorkspace::updateInspector(int x, int y)
         setCellText(m_inspector, i, 6, raw16);
     }
 
-    if (m_statsLabel)
-    {
-        static const int kKernels[] = {1, 3, 5, 7};
-        const int kernelIndex = m_kernelCombo ? std::clamp(m_kernelCombo->currentIndex(), 0, 3) : 1;
-        const int kernel = kKernels[kernelIndex];
-        const ImageFrame *baseFrame = m_engine.imageAt(baseIdx);
-        const CellAdjust baseAdjust =
-            baseIdx >= 0 && baseIdx < static_cast<int>(m_cellAdjusts.size())
-                ? m_cellAdjusts[static_cast<size_t>(baseIdx)]
-                : CellAdjust{};
-        const auto stats = baseFrame
-                               ? mviewer::core::neighborhoodStats(
-                                     baseFrame->pixels(), analysisAdjustment(baseAdjust), x, y,
-                                     kernel)
-                               : mviewer::core::NeighborhoodStats{};
-        if (stats.count > 0)
-        {
-            m_statsLabel->setText(tr("邻域 %1×%1: 亮度 μ=%2 σ=%3 [%4, %5] · RGB均值(%6, %7, %8)")
-                                      .arg(kernel)
-                                      .arg(stats.mean, 0, 'f', 1)
-                                      .arg(stats.stdDev, 0, 'f', 1)
-                                      .arg(static_cast<int>(stats.min))
-                                      .arg(static_cast<int>(stats.max))
-                                      .arg(stats.rMean, 0, 'f', 1)
-                                      .arg(stats.gMean, 0, 'f', 1)
-                                      .arg(stats.bMean, 0, 'f', 1));
-        }
-        else
-            m_statsLabel->setText(tr("邻域统计: —"));
-    }
 }
-
 QString CompareWorkspace::histogramTitleText(bool roiEnabled,
                                              const mviewer::domain::Selection &roi) const
 {

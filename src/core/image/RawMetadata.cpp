@@ -150,6 +150,283 @@ static double readRational(FILE *f, bool le, uint32_t offset)
     return den == 0 ? 0.0 : static_cast<double>(num) / static_cast<double>(den);
 }
 
+static bool parseCameraIdentityTag(FILE *f, bool le, const IfdEntry &e, RawMetadata &rm)
+{
+    switch (e.tag)
+    {
+    case 0x010F:
+        if (e.type == 2 && e.count > 0)
+            rm.make = readString(f, le, e.value, e.count);
+        return true;
+    case 0x0110:
+        if (e.type == 2 && e.count > 0)
+            rm.model = readString(f, le, e.value, e.count);
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool parseDescriptionDateTag(FILE *f, bool le, const IfdEntry &e, RawMetadata &rm)
+{
+    switch (e.tag)
+    {
+    case 0x010E:
+        if (e.type == 2 && e.count > 0 && rm.description.empty())
+            rm.description = readString(f, le, e.value, e.count);
+        return true;
+    case 0x0132:
+        if (e.type == 2 && e.count > 0 && rm.dateTime.empty())
+            rm.dateTime = readString(f, le, e.value, e.count);
+        return true;
+    case 0x9003:
+        if (e.type == 2 && e.count > 0 && rm.dateTimeOriginal.empty())
+            rm.dateTimeOriginal = readString(f, le, e.value, e.count);
+        return true;
+    case 0x9286:
+        if (e.type == 7 && e.count > 0 && rm.description.empty())
+            rm.description = readString(f, le, e.value, e.count);
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool parseLensIdentityTag(FILE *f, bool le, const IfdEntry &e, RawMetadata &rm)
+{
+    switch (e.tag)
+    {
+    case 0xA431:
+        if (e.type == 2 && e.count > 0)
+            rm.lens = readString(f, le, e.value, e.count);
+        return true;
+    case 0xA433:
+        if (e.type == 2 && e.count > 0)
+            rm.lensMaker = readString(f, le, e.value, e.count);
+        return true;
+    case 0xA434:
+        if (e.type == 2 && e.count > 0 && rm.lens.empty())
+            rm.lens = readString(f, le, e.value, e.count);
+        return true;
+    case 0xA435:
+        if (e.type == 2 && e.count > 0)
+            rm.serialNumber = readString(f, le, e.value, e.count);
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool parseIdentityTag(FILE *f, bool le, const IfdEntry &e, RawMetadata &rm)
+{
+    return parseCameraIdentityTag(f, le, e, rm) ||
+           parseDescriptionDateTag(f, le, e, rm) || parseLensIdentityTag(f, le, e, rm);
+}
+
+static bool parseExposureRationalTag(FILE *f, bool le, const IfdEntry &e, RawMetadata &rm)
+{
+    switch (e.tag)
+    {
+    case 0x829A:
+        if (e.type == 5 && e.count == 1)
+            rm.exposureSec = readRational(f, le, e.value);
+        return true;
+    case 0x829D:
+        if (e.type == 5 && e.count == 1)
+            rm.fNumber = readRational(f, le, e.value);
+        return true;
+    case 0x9201:
+        if (e.type == 5 && e.count == 1)
+        {
+            double sv = readRational(f, le, e.value);
+            if (sv > 0.0)
+                rm.shutterSpeedValue = sv;
+        }
+        return true;
+    case 0x9202:
+        if (e.type == 5 && e.count == 1)
+            rm.apertureValue = readRational(f, le, e.value);
+        return true;
+    case 0x9203:
+        if (e.type == 5 && e.count == 1)
+            rm.brightnessValue = readRational(f, le, e.value);
+        return true;
+    case 0x9204:
+        if (e.type == 5 && e.count == 1)
+            rm.exposureCompensation = readRational(f, le, e.value);
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool parseExposureAuxTag(FILE *f, bool le, const IfdEntry &e, RawMetadata &rm)
+{
+    switch (e.tag)
+    {
+    case 0x8827:
+        if (e.type == 3 && e.count >= 1)
+        {
+            rm.isoSpeed = readTagU16(f, le, e.value, e.type, e.count);
+            if (rm.iso == 0)
+                rm.iso = rm.isoSpeed;
+        }
+        return true;
+    case 0x920A:
+        if (e.type == 5 && e.count == 1)
+            rm.focalLength = readRational(f, le, e.value);
+        return true;
+    case 0xA405:
+        if (e.type == 3 && e.count == 1)
+            rm.focalLength35mm =
+                static_cast<double>(readTagU16(f, le, e.value, e.type, e.count));
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool parseExposureTag(FILE *f, bool le, const IfdEntry &e, RawMetadata &rm)
+{
+    return parseExposureRationalTag(f, le, e, rm) || parseExposureAuxTag(f, le, e, rm);
+}
+
+static bool parseModeTag(FILE *f, bool le, const IfdEntry &e, RawMetadata &rm)
+{
+    switch (e.tag)
+    {
+    case 0x9207:
+        if (e.type == 3 && e.count == 1)
+        {
+            switch (readTagU16(f, le, e.value, e.type, e.count))
+            {
+            case 1:
+                rm.meteringMode = "Average";
+                break;
+            case 2:
+                rm.meteringMode = "Center-weighted average";
+                break;
+            case 3:
+                rm.meteringMode = "Spot";
+                break;
+            case 4:
+                rm.meteringMode = "Multi-spot";
+                break;
+            case 5:
+                rm.meteringMode = "Multi-segment";
+                break;
+            case 6:
+                rm.meteringMode = "Partial";
+                break;
+            case 255:
+                rm.meteringMode = "Other";
+                break;
+            default:
+                rm.meteringMode = "Unknown";
+                break;
+            }
+        }
+        return true;
+    case 0x9208:
+        if (e.type == 3 && e.count == 1)
+        {
+            const uint16_t value = readTagU16(f, le, e.value, e.type, e.count);
+            rm.flash = (value & 1) ? "Fired" : "Did not fire";
+        }
+        return true;
+    case 0xA217:
+        if (e.type == 3 && e.count == 1)
+        {
+            const uint16_t value = readTagU16(f, le, e.value, e.type, e.count);
+            if (value == 2)
+                rm.sensorType = "Color Filter Array";
+            else if (value == 3)
+                rm.sensorType = "Color Filter Array (single-chip)";
+            else if (value == 1)
+                rm.sensorType = "Not defined";
+            else
+                rm.sensorType = "Other";
+        }
+        return true;
+    case 0xA402:
+        if (e.type == 3 && e.count == 1)
+        {
+            switch (readTagU16(f, le, e.value, e.type, e.count))
+            {
+            case 0:
+                rm.exposureProgram = "Auto";
+                break;
+            case 1:
+                rm.exposureProgram = "Manual";
+                break;
+            case 2:
+                rm.exposureProgram = "Auto bracket";
+                break;
+            default:
+                rm.exposureProgram = "Unknown";
+                break;
+            }
+        }
+        return true;
+    case 0xA403:
+        if (e.type == 3 && e.count == 1)
+        {
+            switch (readTagU16(f, le, e.value, e.type, e.count))
+            {
+            case 0:
+                rm.whiteBalance = "Auto";
+                break;
+            case 1:
+                rm.whiteBalance = "Manual";
+                break;
+            default:
+                rm.whiteBalance = "Unknown";
+                break;
+            }
+        }
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool parseCalibrationTag(FILE *f, bool le, const IfdEntry &e, RawMetadata &rm)
+{
+    switch (e.tag)
+    {
+    case 0xC614:
+        if (e.type == 5 && e.count <= 12)
+        {
+            for (uint32_t k = 0; k < e.count && k < 12; ++k)
+            {
+                long cur = std::ftell(f);
+                rm.colorMatrix[k] = readRational(f, le, e.value + k * 8);
+                seek(f, cur);
+            }
+            rm.colorMatrixCount = (e.count < 12u) ? e.count : 12u;
+        }
+        return true;
+    case 0xC61A:
+        if (e.type == 3 && e.count >= 1)
+            rm.blackLevel = readTagU16(f, le, e.value, e.type, e.count);
+        return true;
+    case 0xC61B:
+        if (e.type == 3 && e.count >= 1)
+            rm.whiteLevel = readTagU16(f, le, e.value, e.type, e.count);
+        return true;
+    case 0xC628:
+        if (e.type == 5 && e.count <= 4)
+        {
+            for (uint32_t k = 0; k < e.count && k < 4; ++k)
+                rm.whiteBalanceRGGB[k] = readRational(f, le, e.value + k * 8);
+            rm.whiteBalanceCount = (e.count < 4u) ? e.count : 4u;
+        }
+        return true;
+    default:
+        return false;
+    }
+}
+
 static void parseIfd(FILE *f, bool le, uint32_t ifdOffset, RawMetadata &rm)
 {
     if (!seek(f, ifdOffset))
@@ -158,223 +435,8 @@ static void parseIfd(FILE *f, bool le, uint32_t ifdOffset, RawMetadata &rm)
     for (uint16_t i = 0; i < count; ++i)
     {
         auto e = readEntry(f, le);
-        switch (e.tag)
-        {
-        case 0x010E:
-            if (e.type == 2 && e.count > 0 && rm.description.empty())
-                rm.description = readString(f, le, e.value, e.count);
-            break;
-        case 0x010F:
-            if (e.type == 2 && e.count > 0)
-                rm.make = readString(f, le, e.value, e.count);
-            break;
-        case 0x0110:
-            if (e.type == 2 && e.count > 0)
-                rm.model = readString(f, le, e.value, e.count);
-            break;
-        case 0x0132:
-            if (e.type == 2 && e.count > 0 && rm.dateTime.empty())
-                rm.dateTime = readString(f, le, e.value, e.count);
-            break;
-        case 0x829A:
-            if (e.type == 5 && e.count == 1)
-                rm.exposureSec = readRational(f, le, e.value);
-            break;
-        case 0x829D:
-            if (e.type == 5 && e.count == 1)
-                rm.fNumber = readRational(f, le, e.value);
-            break;
-        case 0x8827:
-            if (e.type == 3 && e.count >= 1)
-            {
-                rm.isoSpeed = readTagU16(f, le, e.value, e.type, e.count);
-                // M25: `iso` is the canonical field the UI filters/details use;
-                // it was never populated, so ISO filters and the Details ISO
-                // column silently read 0.
-                if (rm.iso == 0)
-                    rm.iso = rm.isoSpeed;
-            }
-            break;
-        case 0x9003:
-            if (e.type == 2 && e.count > 0 && rm.dateTimeOriginal.empty())
-                rm.dateTimeOriginal = readString(f, le, e.value, e.count);
-            break;
-        case 0x9201:
-            if (e.type == 5 && e.count == 1)
-            {
-                double sv = readRational(f, le, e.value);
-                if (sv > 0.0)
-                    rm.shutterSpeedValue = sv;
-            }
-            break;
-        case 0x9202:
-            if (e.type == 5 && e.count == 1)
-                rm.apertureValue = readRational(f, le, e.value);
-            break;
-        case 0x9203:
-            if (e.type == 5 && e.count == 1)
-                rm.brightnessValue = readRational(f, le, e.value);
-            break;
-        case 0x9204:
-            if (e.type == 5 && e.count == 1)
-                rm.exposureCompensation = readRational(f, le, e.value);
-            break;
-        case 0x9207:
-            if (e.type == 3 && e.count == 1)
-            {
-                uint16_t v = readTagU16(f, le, e.value, e.type, e.count);
-                switch (v)
-                {
-                case 1:
-                    rm.meteringMode = "Average";
-                    break;
-                case 2:
-                    rm.meteringMode = "Center-weighted average";
-                    break;
-                case 3:
-                    rm.meteringMode = "Spot";
-                    break;
-                case 4:
-                    rm.meteringMode = "Multi-spot";
-                    break;
-                case 5:
-                    rm.meteringMode = "Multi-segment";
-                    break;
-                case 6:
-                    rm.meteringMode = "Partial";
-                    break;
-                case 255:
-                    rm.meteringMode = "Other";
-                    break;
-                default:
-                    rm.meteringMode = "Unknown";
-                    break;
-                }
-            }
-            break;
-        case 0x9208:
-            if (e.type == 3 && e.count == 1)
-            {
-                uint16_t v = readTagU16(f, le, e.value, e.type, e.count);
-                if (v & 1)
-                    rm.flash = "Fired";
-                else
-                    rm.flash = "Did not fire";
-            }
-            break;
-        case 0x920A:
-            if (e.type == 5 && e.count == 1)
-                rm.focalLength = readRational(f, le, e.value);
-            break;
-        case 0x9286:
-            if (e.type == 7 && e.count > 0 && rm.description.empty())
-                rm.description = readString(f, le, e.value, e.count);
-            break;
-        case 0xA217:
-            if (e.type == 3 && e.count == 1)
-            {
-                uint16_t v = readTagU16(f, le, e.value, e.type, e.count);
-                if (v == 2)
-                    rm.sensorType = "Color Filter Array";
-                else if (v == 3)
-                    rm.sensorType = "Color Filter Array (single-chip)";
-                else if (v == 1)
-                    rm.sensorType = "Not defined";
-                else
-                    rm.sensorType = "Other";
-            }
-            break;
-        case 0xA402:
-            if (e.type == 3 && e.count == 1)
-            {
-                uint16_t v = readTagU16(f, le, e.value, e.type, e.count);
-                switch (v)
-                {
-                case 0:
-                    rm.exposureProgram = "Auto";
-                    break;
-                case 1:
-                    rm.exposureProgram = "Manual";
-                    break;
-                case 2:
-                    rm.exposureProgram = "Auto bracket";
-                    break;
-                default:
-                    rm.exposureProgram = "Unknown";
-                    break;
-                }
-            }
-            break;
-        case 0xA403:
-            if (e.type == 3 && e.count == 1)
-            {
-                uint16_t v = readTagU16(f, le, e.value, e.type, e.count);
-                switch (v)
-                {
-                case 0:
-                    rm.whiteBalance = "Auto";
-                    break;
-                case 1:
-                    rm.whiteBalance = "Manual";
-                    break;
-                default:
-                    rm.whiteBalance = "Unknown";
-                    break;
-                }
-            }
-            break;
-        case 0xA405:
-            if (e.type == 3 && e.count == 1)
-                rm.focalLength35mm =
-                    static_cast<double>(readTagU16(f, le, e.value, e.type, e.count));
-            break;
-        case 0xA431:
-            if (e.type == 2 && e.count > 0)
-                rm.lens = readString(f, le, e.value, e.count);
-            break;
-        case 0xA433:
-            if (e.type == 2 && e.count > 0)
-                rm.lensMaker = readString(f, le, e.value, e.count);
-            break;
-        case 0xA434:
-            if (e.type == 2 && e.count > 0 && rm.lens.empty())
-                rm.lens = readString(f, le, e.value, e.count);
-            break;
-        case 0xA435:
-            if (e.type == 2 && e.count > 0)
-                rm.serialNumber = readString(f, le, e.value, e.count);
-            break;
-        case 0xC614:
-            if (e.type == 5 && e.count <= 12)
-            {
-                for (uint32_t k = 0; k < e.count && k < 12; ++k)
-                {
-                    long cur = std::ftell(f);
-                    rm.colorMatrix[k] = readRational(f, le, e.value + k * 8);
-                    seek(f, cur);
-                }
-                rm.colorMatrixCount = (e.count < 12u) ? e.count : 12u;
-            }
-            break;
-        case 0xC61A:
-            if (e.type == 3 && e.count >= 1)
-                rm.blackLevel = readTagU16(f, le, e.value, e.type, e.count);
-            break;
-        case 0xC61B:
-            if (e.type == 3 && e.count >= 1)
-                rm.whiteLevel = readTagU16(f, le, e.value, e.type, e.count);
-            break;
-        case 0xC628:
-            if (e.type == 5 && e.count <= 4)
-            {
-                for (uint32_t k = 0; k < e.count && k < 4; ++k)
-                    rm.whiteBalanceRGGB[k] = readRational(f, le, e.value + k * 8);
-                rm.whiteBalanceCount = (e.count < 4u) ? e.count : 4u;
-            }
-            break;
-        default:
-            break;
-        }
+        parseIdentityTag(f, le, e, rm) || parseExposureTag(f, le, e, rm) ||
+            parseModeTag(f, le, e, rm) || parseCalibrationTag(f, le, e, rm);
     }
     rm.parsed = true;
 }

@@ -66,328 +66,282 @@ std::vector<std::string> PluginManager::scanDirectory(const std::string &dirPath
     return candidates;
 }
 
-bool PluginManager::load(const std::string &path)
+
+namespace
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
+using AbiFn = const PluginABI *(*)();
+using VersionFn = int (*)();
+using AnalyzerCreateFn = Analyzer *(*)();
+using AnalyzerDestroyFn = void (*)(Analyzer *);
+using DecoderCreateFn = IDecoder *(*)();
+using DecoderDestroyFn = void (*)(IDecoder *);
+using ExporterCreateFn = IExporter *(*)();
+using ExporterDestroyFn = void (*)(IExporter *);
+using ImporterCreateFn = IImporter *(*)();
+using ImporterDestroyFn = void (*)(IImporter *);
+using CompareCreateFn = mviewer::core::ICompareAlgorithm *(*)();
+using CompareDestroyFn = void (*)(mviewer::core::ICompareAlgorithm *);
+using NameFn = const char *(*)();
 
-    // Already loaded?
-    if (m_plugins.count(path))
-    {
-        m_lastError = "already loaded: " + path;
-        return false;
-    }
+struct PluginSymbols
+{
+    AbiFn abi = nullptr;
+    VersionFn version = nullptr;
+    AnalyzerCreateFn createAnalyzer = nullptr;
+    AnalyzerDestroyFn destroyAnalyzer = nullptr;
+    DecoderCreateFn createDecoder = nullptr;
+    DecoderDestroyFn destroyDecoder = nullptr;
+    ExporterCreateFn createExporter = nullptr;
+    ExporterDestroyFn destroyExporter = nullptr;
+    ImporterCreateFn createImporter = nullptr;
+    ImporterDestroyFn destroyImporter = nullptr;
+    CompareCreateFn createCompare = nullptr;
+    CompareDestroyFn destroyCompare = nullptr;
+    NameFn name = nullptr;
+};
 
+struct OpenPlugin
+{
+    PluginHandle handle = nullptr;
+    PluginSymbols symbols;
+};
+
+template <typename Fn>
+Fn lookupSymbol(PluginHandle handle, const char *name)
+{
 #ifdef _WIN32
-    HMODULE handle = LoadLibraryA(path.c_str());
+    return reinterpret_cast<Fn>(GetProcAddress(static_cast<HMODULE>(handle), name));
+#else
+    return reinterpret_cast<Fn>(dlsym(handle, name));
+#endif
+}
+
+void closePluginHandle(PluginHandle handle)
+{
     if (!handle)
-    {
-        m_lastError = "LoadLibrary failed: " + std::to_string(GetLastError());
-        return false;
-    }
-
-    auto abiFn =
-        reinterpret_cast<const PluginABI *(*)()>(GetProcAddress(handle, "mviewer_plugin_abi"));
-    auto versionFn =
-        reinterpret_cast<int (*)()>(GetProcAddress(handle, "mviewer_plugin_api_version"));
-    auto createAnalyzerFn =
-        reinterpret_cast<Analyzer *(*)()>(GetProcAddress(handle, "createAnalyzer"));
-    auto destroyAnalyzerFn =
-        reinterpret_cast<void (*)(Analyzer *)>(GetProcAddress(handle, "destroyAnalyzer"));
-    auto createDecoderFn =
-        reinterpret_cast<IDecoder *(*)()>(GetProcAddress(handle, "createDecoder"));
-    auto destroyDecoderFn =
-        reinterpret_cast<void (*)(IDecoder *)>(GetProcAddress(handle, "destroyDecoder"));
-    auto createExporterFn =
-        reinterpret_cast<IExporter *(*)()>(GetProcAddress(handle, "createExporter"));
-    auto destroyExporterFn =
-        reinterpret_cast<void (*)(IExporter *)>(GetProcAddress(handle, "destroyExporter"));
-    auto createImporterFn =
-        reinterpret_cast<IImporter *(*)()>(GetProcAddress(handle, "createImporter"));
-    auto destroyImporterFn =
-        reinterpret_cast<void (*)(IImporter *)>(GetProcAddress(handle, "destroyImporter"));
-    auto createCompareAlgorithmFn = reinterpret_cast<mviewer::core::ICompareAlgorithm *(*)()>(
-        GetProcAddress(handle, "createCompareAlgorithm"));
-    auto destroyCompareAlgorithmFn = reinterpret_cast<void (*)(mviewer::core::ICompareAlgorithm *)>(
-        GetProcAddress(handle, "destroyCompareAlgorithm"));
-    auto nameFn = reinterpret_cast<const char *(*)()>(GetProcAddress(handle, "pluginName"));
-
-    // M14.2: ABI triple gate (frozen for v1.x). Reject before probing an instance.
-    if (abiFn)
-    {
-        const PluginABI *pabi = abiFn();
-        if (!pluginABICompatible(hostPluginABI(), *pabi))
-        {
-            m_lastError =
-                "plugin ABI incompatible: host abi=" + std::to_string(hostPluginABI().abiVersion) +
-                " api=" + std::to_string(hostPluginABI().apiVersion) +
-                ", plugin abi=" + std::to_string(pabi->abiVersion) +
-                " api=" + std::to_string(pabi->apiVersion);
-            FreeLibrary(handle);
-            return false;
-        }
-        std::string warn = pluginABIWarnings(hostPluginABI(), *pabi);
-        if (!warn.empty())
-            std::cout << "[PluginManager] Warning: " << warn << std::endl;
-    }
-    else if (versionFn && versionFn() != MVIEWER_PLUGIN_API_VERSION)
-    {
-        m_lastError = "plugin API version mismatch (legacy export)";
-        return false;
-    }
-#else
-    void *handle = dlopen(path.c_str(), RTLD_LAZY);
-    if (!handle)
-    {
-        m_lastError = "dlopen failed: " + std::string(dlerror());
-        return false;
-    }
-
-    auto abiFn = reinterpret_cast<const PluginABI *(*)()>(dlsym(handle, "mviewer_plugin_abi"));
-    auto versionFn = reinterpret_cast<int (*)()>(dlsym(handle, "mviewer_plugin_api_version"));
-    auto createAnalyzerFn = reinterpret_cast<Analyzer *(*)()>(dlsym(handle, "createAnalyzer"));
-    auto destroyAnalyzerFn =
-        reinterpret_cast<void (*)(Analyzer *)>(dlsym(handle, "destroyAnalyzer"));
-    auto createDecoderFn = reinterpret_cast<IDecoder *(*)()>(dlsym(handle, "createDecoder"));
-    auto destroyDecoderFn = reinterpret_cast<void (*)(IDecoder *)>(dlsym(handle, "destroyDecoder"));
-    auto createExporterFn = reinterpret_cast<IExporter *(*)()>(dlsym(handle, "createExporter"));
-    auto destroyExporterFn =
-        reinterpret_cast<void (*)(IExporter *)>(dlsym(handle, "destroyExporter"));
-    auto createImporterFn = reinterpret_cast<IImporter *(*)()>(dlsym(handle, "createImporter"));
-    auto destroyImporterFn =
-        reinterpret_cast<void (*)(IImporter *)>(dlsym(handle, "destroyImporter"));
-    auto createCompareAlgorithmFn = reinterpret_cast<mviewer::core::ICompareAlgorithm *(*)()>(
-        dlsym(handle, "createCompareAlgorithm"));
-    auto destroyCompareAlgorithmFn = reinterpret_cast<void (*)(mviewer::core::ICompareAlgorithm *)>(
-        dlsym(handle, "destroyCompareAlgorithm"));
-    auto nameFn = reinterpret_cast<const char *(*)()>(dlsym(handle, "pluginName"));
-
-    // M14.2: ABI triple gate (mirrors the Windows branch).
-    if (abiFn)
-    {
-        const PluginABI *pabi = abiFn();
-        if (!pluginABICompatible(hostPluginABI(), *pabi))
-        {
-            m_lastError =
-                "plugin ABI incompatible: host abi=" + std::to_string(hostPluginABI().abiVersion) +
-                " api=" + std::to_string(hostPluginABI().apiVersion) +
-                ", plugin abi=" + std::to_string(pabi->abiVersion) +
-                " api=" + std::to_string(pabi->apiVersion);
-            return false;
-        }
-        std::string warn = pluginABIWarnings(hostPluginABI(), *pabi);
-        if (!warn.empty())
-            std::cout << "[PluginManager] Warning: " << warn << std::endl;
-    }
-#endif
-
-    const std::string displayName = nameFn ? nameFn() : std::filesystem::path(path).stem().string();
-
-    // --- Analyzer plugin (existing contract) ---
-    if (createAnalyzerFn)
-    {
-        Analyzer *analyzer = createAnalyzerFn();
-        if (!analyzer)
-        {
-            m_lastError = "createAnalyzer returned null for " + path;
-#ifdef _WIN32
-            FreeLibrary(static_cast<HMODULE>(handle));
-#else
-            dlclose(handle);
-#endif
-            return false;
-        }
-        const std::string analyzerId = analyzer->name();
-        delete analyzer;
-
-        AnalyzerRegistry::instance().registerAnalyzer(
-            analyzerId,
-            [createAnalyzerFn, destroyAnalyzerFn]() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-            {
-                Analyzer *a = createAnalyzerFn();
-                if (!a)
-                    return nullptr;
-                if (destroyAnalyzerFn)
-                    return std::unique_ptr<Analyzer, AnalyzerDeleter>(
-                        a,
-                        [destroyAnalyzerFn](Analyzer *p)
-                        {
-                            if (p)
-                                destroyAnalyzerFn(p);
-                        });
-                return std::unique_ptr<Analyzer, AnalyzerDeleter>(a, [](Analyzer *p) { delete p; });
-            });
-
-        PluginEntry entry;
-        entry.path = path;
-        entry.name = displayName;
-        entry.analyzerId = analyzerId;
-        entry.handle = handle;
-        entry.loaded = true;
-        m_plugins[path] = entry;
-        std::cout << "[PluginManager] Loaded: " << displayName << " (analyzer: " << analyzerId
-                  << ") from " << path << std::endl;
-        return true;
-    }
-
-    // --- Decoder plugin (M14.3 unified loader) ---
-    if (createDecoderFn)
-    {
-        IDecoder *dec = createDecoderFn();
-        if (!dec)
-        {
-            m_lastError = "createDecoder returned null for " + path;
-#ifdef _WIN32
-            FreeLibrary(static_cast<HMODULE>(handle));
-#else
-            dlclose(handle);
-#endif
-            return false;
-        }
-        const std::string decoderId = dec->name();
-        auto decPtr = destroyDecoderFn
-                          ? std::shared_ptr<IDecoder>(dec,
-                                                      [destroyDecoderFn](IDecoder *p)
-                                                      {
-                                                          if (p)
-                                                              destroyDecoderFn(p);
-                                                      })
-                          : std::shared_ptr<IDecoder>(dec, [](IDecoder *p) { delete p; });
-        dec = nullptr;
-        DecoderRegistry::instance().registerDecoder(decPtr);
-
-        PluginEntry entry;
-        entry.path = path;
-        entry.name = displayName;
-        entry.decoderId = decoderId;
-        entry.handle = handle;
-        entry.loaded = true;
-        m_plugins[path] = entry;
-        std::cout << "[PluginManager] Loaded: " << displayName << " (decoder: " << decoderId
-                  << ") from " << path << std::endl;
-        return true;
-    }
-
-    // --- Exporter plugin (M14.3 unified loader) ---
-    if (createExporterFn)
-    {
-        IExporter *exp = createExporterFn();
-        if (!exp)
-        {
-            m_lastError = "createExporter returned null for " + path;
-#ifdef _WIN32
-            FreeLibrary(static_cast<HMODULE>(handle));
-#else
-            dlclose(handle);
-#endif
-            return false;
-        }
-        const std::string exporterId = exp->name();
-        auto expPtr = destroyExporterFn
-                          ? std::shared_ptr<IExporter>(exp,
-                                                       [destroyExporterFn](IExporter *p)
-                                                       {
-                                                           if (p)
-                                                               destroyExporterFn(p);
-                                                       })
-                          : std::shared_ptr<IExporter>(exp, [](IExporter *p) { delete p; });
-        exp = nullptr;
-        ExporterRegistry::instance().registerExporter(expPtr);
-
-        PluginEntry entry;
-        entry.path = path;
-        entry.name = displayName;
-        entry.exporterId = exporterId;
-        entry.handle = handle;
-        entry.loaded = true;
-        m_plugins[path] = entry;
-        std::cout << "[PluginManager] Loaded: " << displayName << " (exporter: " << exporterId
-                  << ") from " << path << std::endl;
-        return true;
-    }
-
-    // --- Importer plugin (A-9.3) ---
-    if (createImporterFn)
-    {
-        IImporter *imp = createImporterFn();
-        if (!imp)
-        {
-            m_lastError = "createImporter returned null for " + path;
-#ifdef _WIN32
-            FreeLibrary(static_cast<HMODULE>(handle));
-#else
-            dlclose(handle);
-#endif
-            return false;
-        }
-        const std::string importerId = imp->name();
-        auto impPtr = destroyImporterFn
-                          ? std::shared_ptr<IImporter>(imp,
-                                                       [destroyImporterFn](IImporter *p)
-                                                       {
-                                                           if (p)
-                                                               destroyImporterFn(p);
-                                                       })
-                          : std::shared_ptr<IImporter>(imp, [](IImporter *p) { delete p; });
-        imp = nullptr;
-        ImporterRegistry::instance().registerImporter(impPtr);
-
-        PluginEntry entry;
-        entry.path = path;
-        entry.name = displayName;
-        entry.importerId = importerId;
-        entry.handle = handle;
-        entry.loaded = true;
-        m_plugins[path] = entry;
-        std::cout << "[PluginManager] Loaded: " << displayName << " (importer: " << importerId
-                  << ") from " << path << std::endl;
-        return true;
-    }
-
-    // --- Compare Algorithm plugin ---
-    // Third-party compare algorithms are discovered and held by PluginManager.
-    // The host can query loadedPlugins() for compareAlgorithmId and instantiate
-    // via createCompareAlgorithm when needed. Full registry integration is
-    // deferred until CompareWorkspace exposes a plugin-algorithm picker.
-    if (createCompareAlgorithmFn)
-    {
-        mviewer::core::ICompareAlgorithm *algo = createCompareAlgorithmFn();
-        if (!algo)
-        {
-            m_lastError = "createCompareAlgorithm returned null for " + path;
-#ifdef _WIN32
-            FreeLibrary(static_cast<HMODULE>(handle));
-#else
-            dlclose(handle);
-#endif
-            return false;
-        }
-        const std::string algoId = algo->name();
-        // Destroy the probe instance; the host will re-create when needed.
-        if (destroyCompareAlgorithmFn)
-            destroyCompareAlgorithmFn(algo);
-        else
-            delete algo;
-
-        PluginEntry entry;
-        entry.path = path;
-        entry.name = displayName;
-        entry.compareAlgorithmId = algoId;
-        entry.handle = handle;
-        entry.loaded = true;
-        m_plugins[path] = entry;
-        std::cout << "[PluginManager] Loaded: " << displayName << " (compareAlgorithm: " << algoId
-                  << ") from " << path << std::endl;
-        return true;
-    }
-
-    m_lastError = "plugin exposes no supported create* export "
-                  "(analyzer/decoder/exporter/importer/compareAlgorithm)";
+        return;
 #ifdef _WIN32
     FreeLibrary(static_cast<HMODULE>(handle));
 #else
     dlclose(handle);
 #endif
+}
+
+bool openPlugin(const std::string &path, OpenPlugin &plugin, std::string &error)
+{
+#ifdef _WIN32
+    plugin.handle = reinterpret_cast<PluginHandle>(LoadLibraryA(path.c_str()));
+    if (!plugin.handle)
+    {
+        error = "LoadLibrary failed: " + std::to_string(GetLastError());
+        return false;
+    }
+#else
+    plugin.handle = dlopen(path.c_str(), RTLD_LAZY);
+    if (!plugin.handle)
+    {
+        error = "dlopen failed: " + std::string(dlerror());
+        return false;
+    }
+#endif
+    auto &s = plugin.symbols;
+    s.abi = lookupSymbol<AbiFn>(plugin.handle, "mviewer_plugin_abi");
+    s.version = lookupSymbol<VersionFn>(plugin.handle, "mviewer_plugin_api_version");
+    s.createAnalyzer = lookupSymbol<AnalyzerCreateFn>(plugin.handle, "createAnalyzer");
+    s.destroyAnalyzer = lookupSymbol<AnalyzerDestroyFn>(plugin.handle, "destroyAnalyzer");
+    s.createDecoder = lookupSymbol<DecoderCreateFn>(plugin.handle, "createDecoder");
+    s.destroyDecoder = lookupSymbol<DecoderDestroyFn>(plugin.handle, "destroyDecoder");
+    s.createExporter = lookupSymbol<ExporterCreateFn>(plugin.handle, "createExporter");
+    s.destroyExporter = lookupSymbol<ExporterDestroyFn>(plugin.handle, "destroyExporter");
+    s.createImporter = lookupSymbol<ImporterCreateFn>(plugin.handle, "createImporter");
+    s.destroyImporter = lookupSymbol<ImporterDestroyFn>(plugin.handle, "destroyImporter");
+    s.createCompare = lookupSymbol<CompareCreateFn>(plugin.handle, "createCompareAlgorithm");
+    s.destroyCompare = lookupSymbol<CompareDestroyFn>(plugin.handle, "destroyCompareAlgorithm");
+    s.name = lookupSymbol<NameFn>(plugin.handle, "pluginName");
+
+    if (s.abi)
+    {
+        const PluginABI *abi = s.abi();
+        if (!pluginABICompatible(hostPluginABI(), *abi))
+        {
+            error = "plugin ABI incompatible: host abi=" +
+                    std::to_string(hostPluginABI().abiVersion) +
+                    " api=" + std::to_string(hostPluginABI().apiVersion) +
+                    ", plugin abi=" + std::to_string(abi->abiVersion) +
+                    " api=" + std::to_string(abi->apiVersion);
+            closePluginHandle(plugin.handle);
+            plugin.handle = nullptr;
+            return false;
+        }
+        const std::string warning = pluginABIWarnings(hostPluginABI(), *abi);
+        if (!warning.empty())
+            std::cout << "[PluginManager] Warning: " << warning << std::endl;
+    }
+#ifdef _WIN32
+    else if (s.version && s.version() != MVIEWER_PLUGIN_API_VERSION)
+    {
+        error = "plugin API version mismatch (legacy export)";
+        closePluginHandle(plugin.handle);
+        plugin.handle = nullptr;
+        return false;
+    }
+#endif
+    return true;
+}
+
+void recordPlugin(const std::string &path, const std::string &displayName, PluginHandle handle,
+                  const std::string &kind, const std::string &id,
+                  std::string PluginManager::PluginEntry::*slot,
+                  std::unordered_map<std::string, PluginManager::PluginEntry> &plugins)
+{
+    PluginManager::PluginEntry entry;
+    entry.path = path;
+    entry.name = displayName;
+    entry.*slot = id;
+    entry.handle = handle;
+    entry.loaded = true;
+    plugins[path] = entry;
+    std::cout << "[PluginManager] Loaded: " << displayName << " (" << kind << ": " << id
+              << ") from " << path << std::endl;
+}
+
+bool registerAnalyzerPlugin(const std::string &path, const std::string &displayName,
+                            OpenPlugin &plugin,
+                            std::unordered_map<std::string, PluginManager::PluginEntry> &plugins,
+                            std::string &error)
+{
+    Analyzer *probe = plugin.symbols.createAnalyzer();
+    if (!probe)
+    {
+        error = "createAnalyzer returned null for " + path;
+        closePluginHandle(plugin.handle);
+        return false;
+    }
+    const std::string id = probe->name();
+    delete probe;
+    const auto create = plugin.symbols.createAnalyzer;
+    const auto destroy = plugin.symbols.destroyAnalyzer;
+    AnalyzerRegistry::instance().registerAnalyzer(
+        id,
+        [create, destroy]() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
+            Analyzer *analyzer = create();
+            if (!analyzer)
+                return nullptr;
+            if (destroy)
+                return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                    analyzer,
+                    [destroy](Analyzer *value)
+                    {
+                        if (value)
+                            destroy(value);
+                    });
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(
+                analyzer, [](Analyzer *value) { delete value; });
+        });
+    recordPlugin(path, displayName, plugin.handle, "analyzer", id,
+                 &PluginManager::PluginEntry::analyzerId, plugins);
+    return true;
+}
+
+template <typename Interface, typename CreateFn, typename DestroyFn, typename RegisterFn>
+bool registerSharedPlugin(const std::string &path, const std::string &displayName,
+                          OpenPlugin &plugin, const char *kind,
+                          CreateFn create, DestroyFn destroy, RegisterFn registerFn,
+                          std::string PluginManager::PluginEntry::*slot,
+                          std::unordered_map<std::string, PluginManager::PluginEntry> &plugins,
+                          std::string &error)
+{
+    Interface *object = create();
+    if (!object)
+    {
+        error = std::string("create") + kind + " returned null for " + path;
+        closePluginHandle(plugin.handle);
+        return false;
+    }
+    const std::string id = object->name();
+    std::shared_ptr<Interface> owned =
+        destroy
+            ? std::shared_ptr<Interface>(object, [destroy](Interface *value)
+                                         {
+                                             if (value)
+                                                 destroy(value);
+                                         })
+            : std::shared_ptr<Interface>(object, [](Interface *value) { delete value; });
+    registerFn(owned);
+    recordPlugin(path, displayName, plugin.handle, kind, id, slot, plugins);
+    return true;
+}
+
+bool registerComparePlugin(const std::string &path, const std::string &displayName,
+                           OpenPlugin &plugin,
+                           std::unordered_map<std::string, PluginManager::PluginEntry> &plugins,
+                           std::string &error)
+{
+    auto *algorithm = plugin.symbols.createCompare();
+    if (!algorithm)
+    {
+        error = "createCompareAlgorithm returned null for " + path;
+        closePluginHandle(plugin.handle);
+        return false;
+    }
+    const std::string id = algorithm->name();
+    if (plugin.symbols.destroyCompare)
+        plugin.symbols.destroyCompare(algorithm);
+    else
+        delete algorithm;
+    recordPlugin(path, displayName, plugin.handle, "compareAlgorithm", id,
+                 &PluginManager::PluginEntry::compareAlgorithmId, plugins);
+    return true;
+}
+
+bool finishPluginLoad(const std::string &path, OpenPlugin &plugin,
+                      std::unordered_map<std::string, PluginManager::PluginEntry> &plugins,
+                      std::string &error)
+{
+    const std::string displayName =
+        plugin.symbols.name ? plugin.symbols.name() : std::filesystem::path(path).stem().string();
+    if (plugin.symbols.createAnalyzer)
+        return registerAnalyzerPlugin(path, displayName, plugin, plugins, error);
+    if (plugin.symbols.createDecoder)
+        return registerSharedPlugin<IDecoder>(
+            path, displayName, plugin, "Decoder", plugin.symbols.createDecoder,
+            plugin.symbols.destroyDecoder, [](std::shared_ptr<IDecoder> value)
+            { DecoderRegistry::instance().registerDecoder(std::move(value)); },
+            &PluginManager::PluginEntry::decoderId, plugins, error);
+    if (plugin.symbols.createExporter)
+        return registerSharedPlugin<IExporter>(
+            path, displayName, plugin, "Exporter", plugin.symbols.createExporter,
+            plugin.symbols.destroyExporter, [](std::shared_ptr<IExporter> value)
+            { ExporterRegistry::instance().registerExporter(std::move(value)); },
+            &PluginManager::PluginEntry::exporterId, plugins, error);
+    if (plugin.symbols.createImporter)
+        return registerSharedPlugin<IImporter>(
+            path, displayName, plugin, "Importer", plugin.symbols.createImporter,
+            plugin.symbols.destroyImporter, [](std::shared_ptr<IImporter> value)
+            { ImporterRegistry::instance().registerImporter(std::move(value)); },
+            &PluginManager::PluginEntry::importerId, plugins, error);
+    if (plugin.symbols.createCompare)
+        return registerComparePlugin(path, displayName, plugin, plugins, error);
+    error = "plugin exposes no supported create* export "
+            "(analyzer/decoder/exporter/importer/compareAlgorithm)";
+    closePluginHandle(plugin.handle);
     return false;
+}
+} // namespace
+
+bool PluginManager::load(const std::string &path)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_plugins.count(path))
+    {
+        m_lastError = "already loaded: " + path;
+        return false;
+    }
+    OpenPlugin plugin;
+    if (!openPlugin(path, plugin, m_lastError))
+        return false;
+    return finishPluginLoad(path, plugin, m_plugins, m_lastError);
 }
 
 int PluginManager::loadDirectory(const std::string &dirPath)

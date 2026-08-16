@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased] — M44 release readiness, data safety and structural convergence
+
+### Fixed
+
+- File rename/move/delete commands now preflight collisions, support verified
+  cross-volume fallback, preserve unresolved rollback state, and round-trip
+  Unicode paths through an injectable filesystem seam.
+- Report, workspace, project, batch-analysis, Copy and Save persistence paths
+  now use cancellable worker-side execution with atomic final commits,
+  cleanup, progress/result ownership and lifetime-safe delivery.
+- Preview/viewer loading now crosses the UI/Core boundary through thin loading
+  facades; the architecture gate reports zero advisory violations.
+- Oversized production and acceptance translation units were responsibility-
+  split without changing the public product workflow. The strict complexity
+  gate now has zero hard failures.
+
+### Tests
+
+- Added deterministic data-safety coverage for collisions, partial batches,
+  rollback success/failure, cross-volume fallback and Chinese/emoji paths.
+- Final local Release build and CTest gate pass 88/88, including golden-image,
+  benchmark-enforcement, Browse/Compare workflow, export and async-lifetime
+  gates. Native Windows UX/ICC/DPI/multi-volume review remains pending.
+
 ## [Unreleased] — M42 real-world resource boundedness / large Compare closure
 
 ### Fixed

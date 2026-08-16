@@ -17,6 +17,8 @@
 #include "core/analyzer/Analyzer.h"
 #include "core/command/CommandStack.h"
 #include "core/command/FileDeleteCommand.h"
+#include "core/command/FileSystemAdapter.h"
+#include "core/export/ExportJob.h"
 #include "core/command/FileMoveCommand.h"
 #include "core/command/FileRenameCommand.h"
 #include "core/image/Decoder.h"
@@ -87,7 +89,7 @@ inline std::vector<std::string> toStdPaths(const QStringList &in)
     std::vector<std::string> out;
     out.reserve(static_cast<size_t>(in.size()));
     for (const QString &s : in)
-        out.push_back(s.toStdString());
+        out.push_back(s.toUtf8().toStdString());
     return out;
 }
 

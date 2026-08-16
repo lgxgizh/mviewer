@@ -97,6 +97,11 @@ using ProgressFn = std::function<void(int, int, const std::string &)>;
 // submit the config and present the value-owned result.
 ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress = {});
 
+// Shared atomic text writer for report-like UI entry points that already have
+// a value-owned snapshot. It uses the same temporary-file and final-commit
+// contract as run().
+bool writeTextAtomically(const std::string &destination, const std::string &contents);
+
 // Helpers used by ExportDialog / tests.
 std::string modeName(Mode m);
 Mode modeFromName(const std::string &name);

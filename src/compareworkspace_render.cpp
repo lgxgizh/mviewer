@@ -355,7 +355,60 @@ void CompareWorkspace::rebuildCells()
         if (m_focusLabel)
             m_focusLabel->setText(tr("基准: —"));
     }
-    const auto &lay = m_engine.layout();
+    buildCompareCells(n, m_engine.layout().cols);
+
+    // M3: a layout switch / swap / preset / blink-stop destroys and recreates every
+    // cell view, which would silently drop the ROI the user drew. Re-apply the last
+    // selection so the red box survives grid re-layouts (applySelectionToAll mirrors
+    // it across all cells, exactly as when it was first drawn).
+    if (m_lastSelection.width > 0)
+        applySelectionToAll(m_lastSelection);
+
+    // Rebuilds create fresh overlay widgets. Request every pane histogram in
+    // ONE async batch from the same adjusted/ROI-aware path used by the side
+    // panel — never an N-call loop.
+    if (m_paneHistOverlay)
+    {
+        std::vector<int> all;
+        const int n = static_cast<int>(m_cellHists.size());
+        all.reserve(static_cast<size_t>(n));
+        for (int i = 0; i < n; ++i)
+            all.push_back(i);
+        scheduleHistogramRefresh(false, all);
+    }
+
+    if (m_blinkTimer && m_blinkTimer->isActive())
+    {
+        syncEngineBlink();
+        applyBlink(m_blinkState);
+    }
+
+    // M28 P1-01: every pane was recreated, so materialize all pane images in ONE
+    // async display batch (latest-wins generation). This is independent of the
+    // terminal diff batch below: each rebuild submits exactly two Analysis tasks.
+    {
+        std::vector<int> all;
+        all.reserve(m_cellViews.size());
+        for (int i = 0; i < static_cast<int>(m_cellViews.size()); ++i)
+            all.push_back(i);
+        scheduleDisplayMaterialization(all);
+    }
+
+    // Every pane was recreated, so recompute all diff overlays + metrics in a
+    // single async batch (latest-wins generation). This is the one terminal
+    // refresh for the rebuild state transition.
+    refreshAllDiffOverlays();
+    m_rebuildingCells = false;
+
+    QTimer::singleShot(0, this, &CompareWorkspace::positionCellHists);
+}
+
+// M28 P1-01: schedule an async pane-materialization batch for the given panes
+// (plus every pane currently showing a null image, so canceling an initial
+// all-pane batch with a later single-pane adjustment never strands blank
+// panes). One Analysis-priority task per call; never a synchronous fallback.
+void CompareWorkspace::buildCompareCells(int n, int columns)
+{
     for (int i = 0; i < n; ++i)
     {
         // Each cell: a RawImageView for the image + a QLabel caption below
@@ -453,8 +506,8 @@ void CompareWorkspace::rebuildCells()
         cellLay->addWidget(caption);
         m_cellLabels.push_back(caption);
 
-        const int row = i / lay.cols;
-        const int col = i % lay.cols;
+        const int row = i / columns;
+        const int col = i % columns;
         m_layout->addWidget(cellWidget, row, col);
         // Let every cell expand to fill the available area so image panes (not the
         // widgets' minimum size) are what the grid lays out. Without stretch the
@@ -464,109 +517,15 @@ void CompareWorkspace::rebuildCells()
         m_layout->setColumnStretch(col, 1);
     }
 
-    // M3: a layout switch / swap / preset / blink-stop destroys and recreates every
-    // cell view, which would silently drop the ROI the user drew. Re-apply the last
-    // selection so the red box survives grid re-layouts (applySelectionToAll mirrors
-    // it across all cells, exactly as when it was first drawn).
-    if (m_lastSelection.width > 0)
-        applySelectionToAll(m_lastSelection);
-
-    // Rebuilds create fresh overlay widgets. Request every pane histogram in
-    // ONE async batch from the same adjusted/ROI-aware path used by the side
-    // panel — never an N-call loop.
-    if (m_paneHistOverlay)
-    {
-        std::vector<int> all;
-        const int n = static_cast<int>(m_cellHists.size());
-        all.reserve(static_cast<size_t>(n));
-        for (int i = 0; i < n; ++i)
-            all.push_back(i);
-        scheduleHistogramRefresh(false, all);
-    }
-
-    if (m_blinkTimer && m_blinkTimer->isActive())
-    {
-        syncEngineBlink();
-        applyBlink(m_blinkState);
-    }
-
-    // M28 P1-01: every pane was recreated, so materialize all pane images in ONE
-    // async display batch (latest-wins generation). This is independent of the
-    // terminal diff batch below: each rebuild submits exactly two Analysis tasks.
-    {
-        std::vector<int> all;
-        all.reserve(m_cellViews.size());
-        for (int i = 0; i < static_cast<int>(m_cellViews.size()); ++i)
-            all.push_back(i);
-        scheduleDisplayMaterialization(all);
-    }
-
-    // Every pane was recreated, so recompute all diff overlays + metrics in a
-    // single async batch (latest-wins generation). This is the one terminal
-    // refresh for the rebuild state transition.
-    refreshAllDiffOverlays();
-    m_rebuildingCells = false;
-
-    QTimer::singleShot(0, this, &CompareWorkspace::positionCellHists);
 }
 
-// M28 P1-01: schedule an async pane-materialization batch for the given panes
-// (plus every pane currently showing a null image, so canceling an initial
-// all-pane batch with a later single-pane adjustment never strands blank
-// panes). One Analysis-priority task per call; never a synchronous fallback.
-void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes)
+TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
+    const std::vector<ImageData> &pixels, const std::vector<mviewer::domain::ImageMetadata> &metadata,
+    const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
+    const std::vector<int> &panes, int paneCount, uint64_t gen,
+    const QPointer<CompareWorkspace> &guard)
 {
-    // Latest-wins: cancel any in-flight batch and start a fresh generation.
-    // Cancellation alone is not enough — a task may already be past its final
-    // check when a newer request arrives, so the delivery is also guarded by
-    // the generation and pane count on the UI thread.
-    if (m_displayTask)
-        TaskScheduler::cancel(m_displayTask);
-    m_displayTask.reset();
-    ++m_displayGen;
-
-    // Normalize/deduplicate the requested indices and include every current
-    // pane whose image is still null.
-    const int paneCount = static_cast<int>(m_cellViews.size());
-    std::vector<int> panes;
-    panes.reserve(static_cast<size_t>(paneCount));
-    auto add = [&panes, paneCount](int idx)
-    {
-        if (idx < 0 || idx >= paneCount)
-            return;
-        if (std::find(panes.cbegin(), panes.cend(), idx) != panes.cend())
-            return;
-        panes.push_back(idx);
-    };
-    for (int i = 0; i < paneCount; ++i)
-        if (m_cellViews[i] && m_cellViews[i]->image().isNull())
-            add(i);
-    for (int idx : dirtyPanes)
-        add(idx);
-    if (panes.empty())
-        return; // nothing to materialize; the stale task is already cancelled
-
-    // Snapshot everything the worker needs BY VALUE. The worker only touches
-    // these captures — no `this`, no QObject/QWidget. ImageData copies share
-    // their pixel buffers, so the worker holds the pixels alive cheaply.
-    std::vector<ImageData> pixels;
-    std::vector<mviewer::domain::ImageMetadata> metadata;
-    std::vector<QSize> displayTargets;
-    pixels.reserve(static_cast<size_t>(paneCount));
-    metadata.reserve(static_cast<size_t>(paneCount));
-    displayTargets.reserve(static_cast<size_t>(paneCount));
-    for (int i = 0; i < paneCount; ++i)
-    {
-        const ImageFrame *img = m_engine.imageAt(i);
-        pixels.push_back(img ? img->pixels() : ImageData());
-        metadata.push_back(img ? img->metadata() : mviewer::domain::ImageMetadata{});
-        displayTargets.push_back(img ? displayLodTarget(i, img->pixels()) : QSize());
-    }
-    std::vector<CellAdjust> adjusts = m_cellAdjusts;
-    const uint64_t gen = m_displayGen;
-    QPointer<CompareWorkspace> guard(this);
-
-    auto handle = TaskScheduler::instance().submit(
+    return TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
         [pixels, metadata, displayTargets, adjusts, panes, paneCount, gen, guard](
             const TaskScheduler::TaskContext &ctx)
@@ -656,6 +615,62 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
                 },
                 Qt::QueuedConnection);
         });
+}
+
+void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes)
+{
+    // Latest-wins: cancel any in-flight batch and start a fresh generation.
+    // Cancellation alone is not enough — a task may already be past its final
+    // check when a newer request arrives, so the delivery is also guarded by
+    // the generation and pane count on the UI thread.
+    if (m_displayTask)
+        TaskScheduler::cancel(m_displayTask);
+    m_displayTask.reset();
+    ++m_displayGen;
+
+    // Normalize/deduplicate the requested indices and include every current
+    // pane whose image is still null.
+    const int paneCount = static_cast<int>(m_cellViews.size());
+    std::vector<int> panes;
+    panes.reserve(static_cast<size_t>(paneCount));
+    auto add = [&panes, paneCount](int idx)
+    {
+        if (idx < 0 || idx >= paneCount)
+            return;
+        if (std::find(panes.cbegin(), panes.cend(), idx) != panes.cend())
+            return;
+        panes.push_back(idx);
+    };
+    for (int i = 0; i < paneCount; ++i)
+        if (m_cellViews[i] && m_cellViews[i]->image().isNull())
+            add(i);
+    for (int idx : dirtyPanes)
+        add(idx);
+    if (panes.empty())
+        return; // nothing to materialize; the stale task is already cancelled
+
+    // Snapshot everything the worker needs BY VALUE. The worker only touches
+    // these captures — no `this`, no QObject/QWidget. ImageData copies share
+    // their pixel buffers, so the worker holds the pixels alive cheaply.
+    std::vector<ImageData> pixels;
+    std::vector<mviewer::domain::ImageMetadata> metadata;
+    std::vector<QSize> displayTargets;
+    pixels.reserve(static_cast<size_t>(paneCount));
+    metadata.reserve(static_cast<size_t>(paneCount));
+    displayTargets.reserve(static_cast<size_t>(paneCount));
+    for (int i = 0; i < paneCount; ++i)
+    {
+        const ImageFrame *img = m_engine.imageAt(i);
+        pixels.push_back(img ? img->pixels() : ImageData());
+        metadata.push_back(img ? img->metadata() : mviewer::domain::ImageMetadata{});
+        displayTargets.push_back(img ? displayLodTarget(i, img->pixels()) : QSize());
+    }
+    std::vector<CellAdjust> adjusts = m_cellAdjusts;
+    const uint64_t gen = m_displayGen;
+    QPointer<CompareWorkspace> guard(this);
+
+    auto handle = startDisplayMaterialization(
+        pixels, metadata, displayTargets, adjusts, panes, paneCount, gen, guard);
     if (!handle)
     {
         // submit() refused the task (pool paused / back-pressured). Keep the
@@ -703,6 +718,205 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
         requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
 
     update();
+}
+
+
+CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
+    DiffBatchResult &result, const std::vector<ImageData> &pixels,
+    const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
+    int baseIndex, uint8_t threshold, bool highlight, bool visualize,
+    const ImageData &basePixels, const TaskScheduler::TaskContext &context)
+{
+    DiffSources sources;
+    result.overlays.reserve(pixels.size());
+    const auto adjustFor = [&adjusts](int index) -> CellAdjust
+    {
+        if (index >= 0 && index < static_cast<int>(adjusts.size()))
+            return adjusts[static_cast<size_t>(index)];
+        return CellAdjust{};
+    };
+    for (int i = 0; i < static_cast<int>(pixels.size()); ++i)
+    {
+        if (context.isCancelled())
+            return sources;
+        DiffBatchResult::CellOverlay overlay;
+        overlay.index = i;
+        if (i == baseIndex)
+        {
+            result.overlays.push_back(std::move(overlay));
+            continue;
+        }
+        if (sources.targetIndex < 0)
+            sources.targetIndex = i;
+        const ImageData target = CompareWorkspace::applyAdjusts(pixels[i], adjustFor(i));
+        if (context.isCancelled())
+            return sources;
+        if (target.isNull())
+        {
+            result.overlays.push_back(std::move(overlay));
+            continue;
+        }
+        if (target.width != basePixels.width || target.height != basePixels.height)
+        {
+            overlay.sizeMismatch = true;
+            if (sources.targetIndex == i)
+            {
+                sources.target = target;
+                sources.sizeMismatch = true;
+            }
+            result.overlays.push_back(std::move(overlay));
+            continue;
+        }
+        const ImageData diff = DifferenceEngine::differenceMap(target, basePixels);
+        if (context.isCancelled())
+            return sources;
+        if (diff.isNull())
+        {
+            result.overlays.push_back(std::move(overlay));
+            continue;
+        }
+        if (sources.targetIndex == i)
+        {
+            sources.target = target;
+            sources.diff = diff;
+        }
+        if (visualize)
+        {
+            const ImageData thresholded = DifferenceEngine::applyThreshold(diff, threshold);
+            const ImageData overlayImage =
+                highlight ? DifferenceEngine::highlightMap(thresholded, basePixels, threshold)
+                          : DifferenceEngine::heatMap(thresholded);
+            if (context.isCancelled())
+                return sources;
+            if (!overlayImage.isNull())
+            {
+                ImageData displayOverlay = overlayImage;
+                const QSize targetSize = displayTargets[static_cast<size_t>(i)];
+                if (targetSize.isValid() &&
+                    (targetSize.width() < overlayImage.width ||
+                     targetSize.height() < overlayImage.height))
+                {
+                    const double factor = std::min(
+                        static_cast<double>(targetSize.width()) / pixels[i].width,
+                        static_cast<double>(targetSize.height()) / pixels[i].height);
+                    const QSize overlayTarget(
+                        std::max(1, static_cast<int>(std::ceil(overlayImage.width * factor))),
+                        std::max(1, static_cast<int>(std::ceil(overlayImage.height * factor))));
+                    displayOverlay = RenderEngine::scaleBoundedStatic(
+                        overlayImage, RenderSize{overlayTarget.width(), overlayTarget.height()});
+                }
+                overlay.overlay = mvcore::toQImage(displayOverlay);
+                overlay.opacity = highlight ? 0.75 : 0.5;
+            }
+        }
+        result.overlays.push_back(std::move(overlay));
+    }
+    return sources;
+}
+
+void CompareWorkspace::computeDiffMetrics(DiffBatchResult &result, const DiffSources &sources,
+                                          const ImageData &basePixels, uint8_t threshold,
+                                          const mviewer::domain::Selection &roi,
+                                          const TaskScheduler::TaskContext &context)
+{
+    if (sources.targetIndex < 0)
+        return;
+    result.targetIdx = sources.targetIndex;
+    if (sources.target.isNull())
+        return;
+    if (sources.sizeMismatch)
+    {
+        result.sizeMismatch = true;
+        return;
+    }
+    if (sources.diff.isNull())
+        return;
+    if (context.isCancelled())
+        return;
+    result.psnr = AnalysisEngine::psnr(basePixels, sources.target);
+    if (context.isCancelled())
+        return;
+    result.ssim = AnalysisEngine::ssim(basePixels, sources.target);
+    result.metricsValid = true;
+    if (context.isCancelled())
+        return;
+    result.stats = DifferenceEngine::computeStats(sources.diff, threshold);
+    result.hasStats = true;
+    if (!roi.isEmpty())
+    {
+        if (context.isCancelled())
+            return;
+        result.roiStats = DifferenceEngine::computeStats(
+            sources.diff, threshold, roi.x, roi.y, roi.width, roi.height);
+        result.hasRoiStats = result.roiStats.totalPixels > 0;
+    }
+}
+
+CompareWorkspace::DiffBatchResult CompareWorkspace::computeDiffBatch(
+    const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
+    const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, bool highlight,
+    bool visualize, const mviewer::domain::Selection &roi, int paneCount, uint64_t generation,
+    const TaskScheduler::TaskContext &context)
+{
+    DiffBatchResult result;
+    result.generation = generation;
+    result.baseIdx = baseIndex;
+    const auto adjustFor = [&adjusts](int index) -> CellAdjust
+    {
+        if (index >= 0 && index < static_cast<int>(adjusts.size()))
+            return adjusts[static_cast<size_t>(index)];
+        return CellAdjust{};
+    };
+    const ImageData basePixels = CompareWorkspace::applyAdjusts(
+        pixels[static_cast<size_t>(baseIndex)], adjustFor(baseIndex));
+    if (context.isCancelled())
+        return result;
+    if (basePixels.isNull())
+    {
+        for (int i = 0; i < paneCount; ++i)
+        {
+            DiffBatchResult::CellOverlay overlay;
+            overlay.index = i;
+            result.overlays.push_back(std::move(overlay));
+        }
+        return result;
+    }
+    const DiffSources sources = buildDiffOverlays(
+        result, pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize,
+        basePixels, context);
+    if (!context.isCancelled())
+        computeDiffMetrics(result, sources, basePixels, threshold, roi, context);
+    return result;
+}
+
+TaskScheduler::TaskHandle CompareWorkspace::startDiffBatch(
+    const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
+    const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, bool highlight,
+    bool visualize, const mviewer::domain::Selection &roi, int paneCount, uint64_t generation,
+    const QPointer<CompareWorkspace> &guard)
+{
+    return TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Analysis,
+        [pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize, roi, paneCount,
+         generation, guard](const TaskScheduler::TaskContext &context)
+        {
+            if (context.isCancelled())
+                return;
+            const DiffBatchResult result = CompareWorkspace::computeDiffBatch(
+                pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize, roi,
+                paneCount, generation, context);
+            if (context.isCancelled())
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, result]()
+                {
+                    CompareWorkspace *workspace = guard.data();
+                    if (workspace)
+                        workspace->applyDiffBatchResult(result);
+                },
+                Qt::QueuedConnection);
+        });
 }
 
 void CompareWorkspace::refreshAllDiffOverlays()
@@ -770,193 +984,9 @@ void CompareWorkspace::refreshAllDiffOverlays()
     const uint64_t gen = m_diffGen;
     QPointer<CompareWorkspace> guard(this);
 
-    auto handle = TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Analysis,
-        [pixels, displayTargets, adjusts, baseIdx, threshold, highlight, visualize, roi, paneCount,
-         gen, guard](const TaskScheduler::TaskContext &ctx)
-        {
-            if (ctx.isCancelled())
-                return; // superseded while queued — stop before any work
-
-            const auto adjustFor = [&adjusts](int idx) -> CellAdjust
-            {
-                if (idx >= 0 && idx < static_cast<int>(adjusts.size()))
-                    return adjusts[idx];
-                return CellAdjust{};
-            };
-
-            DiffBatchResult r;
-            r.generation = gen;
-            r.baseIdx = baseIdx;
-
-            // The base is adjusted exactly once and reused for every pane.
-            const ImageData basePx =
-                CompareWorkspace::applyAdjusts(pixels[baseIdx], adjustFor(baseIdx));
-            if (ctx.isCancelled())
-                return; // after base adjustment
-            if (!basePx.isNull())
-            {
-                r.overlays.reserve(paneCount);
-                int firstTarget = -1;
-                // Adjusted target / difference map of the first non-base pane,
-                // captured during the loop so each adjustment and diff runs
-                // exactly once (shared between the overlay and the metrics).
-                ImageData firstTgt;
-                ImageData firstDiff;
-                bool firstMismatch = false;
-                for (int i = 0; i < paneCount; ++i)
-                {
-                    if (ctx.isCancelled())
-                        return; // before target adjustment
-                    DiffBatchResult::CellOverlay ov;
-                    ov.index = i;
-                    if (i == baseIdx)
-                    {
-                        r.overlays.push_back(std::move(ov));
-                        continue;
-                    }
-                    if (firstTarget < 0)
-                        firstTarget = i;
-
-                    const ImageData tgtPx =
-                        CompareWorkspace::applyAdjusts(pixels[i], adjustFor(i));
-                    if (ctx.isCancelled())
-                        return; // after target adjustment
-                    if (tgtPx.isNull())
-                    {
-                        r.overlays.push_back(std::move(ov));
-                        continue;
-                    }
-                    if (tgtPx.width != basePx.width || tgtPx.height != basePx.height)
-                    {
-                        ov.sizeMismatch = true;
-                        if (firstTarget == i)
-                        {
-                            firstTgt = tgtPx;
-                            firstMismatch = true;
-                        }
-                        r.overlays.push_back(std::move(ov));
-                        continue;
-                    }
-                    const ImageData diff = DifferenceEngine::differenceMap(tgtPx, basePx);
-                    if (ctx.isCancelled())
-                        return; // after differenceMap
-                    if (diff.isNull())
-                    {
-                        r.overlays.push_back(std::move(ov));
-                        continue;
-                    }
-                    if (firstTarget == i)
-                    {
-                        firstTgt = tgtPx;
-                        firstDiff = diff;
-                    }
-                    if (visualize)
-                    {
-                        const ImageData thresholded =
-                            DifferenceEngine::applyThreshold(diff, threshold);
-                        const ImageData overlayImg =
-                            highlight ? DifferenceEngine::highlightMap(thresholded, basePx, threshold)
-                                      : DifferenceEngine::heatMap(thresholded);
-                        if (ctx.isCancelled())
-                            return; // after threshold/map conversion
-                        if (!overlayImg.isNull())
-                        {
-                            ImageData displayOverlay = overlayImg;
-                            const QSize target = displayTargets[static_cast<size_t>(i)];
-                            if (target.isValid() &&
-                                (target.width() < overlayImg.width ||
-                                 target.height() < overlayImg.height))
-                            {
-                                const double factor = std::min(
-                                    static_cast<double>(target.width()) / pixels[i].width,
-                                    static_cast<double>(target.height()) / pixels[i].height);
-                                const QSize overlayTarget(
-                                    std::max(1, static_cast<int>(std::ceil(overlayImg.width * factor))),
-                                    std::max(1, static_cast<int>(std::ceil(overlayImg.height * factor))));
-                                displayOverlay = RenderEngine::scaleBoundedStatic(
-                                    overlayImg,
-                                    RenderSize{overlayTarget.width(), overlayTarget.height()});
-                            }
-                            ov.overlay = mvcore::toQImage(displayOverlay);
-                            ov.opacity = highlight ? 0.75 : 0.5;
-                        }
-                    }
-                    r.overlays.push_back(std::move(ov));
-                }
-
-                // Metrics for the first non-base cell, mirroring updateMetrics().
-                // Reuses the tgtPx/diff captured above. A null first target shows
-                // generic empty metrics (never a size mismatch); only a valid
-                // non-null target of unequal size reports one.
-                if (firstTarget >= 0)
-                {
-                    r.targetIdx = firstTarget;
-                    if (firstTgt.isNull())
-                    {
-                        // No usable target pixels: keep generic "PSNR/SSIM: —".
-                    }
-                    else if (firstMismatch)
-                    {
-                        r.sizeMismatch = true;
-                    }
-                    else if (!firstDiff.isNull())
-                    {
-                        if (ctx.isCancelled())
-                            return; // before PSNR
-                        r.psnr = AnalysisEngine::psnr(basePx, firstTgt);
-                        if (ctx.isCancelled())
-                            return; // before SSIM
-                        r.ssim = AnalysisEngine::ssim(basePx, firstTgt);
-                        r.metricsValid = true;
-
-                        if (ctx.isCancelled())
-                            return; // before full stats
-                        r.stats = DifferenceEngine::computeStats(firstDiff, threshold);
-                        r.hasStats = true;
-                        if (!roi.isEmpty())
-                        {
-                            if (ctx.isCancelled())
-                                return; // before ROI stats
-                            r.roiStats = DifferenceEngine::computeStats(
-                                firstDiff, threshold, roi.x, roi.y, roi.width, roi.height);
-                            if (r.roiStats.totalPixels > 0)
-                                r.hasRoiStats = true;
-                        }
-                        if (ctx.isCancelled())
-                            return; // after stats
-                    }
-                }
-            }
-            else
-            {
-                // Base image unavailable: deliver empty overlays so the UI clears
-                // stale state exactly like the synchronous path did.
-                for (int i = 0; i < paneCount; ++i)
-                {
-                    DiffBatchResult::CellOverlay ov;
-                    ov.index = i;
-                    r.overlays.push_back(std::move(ov));
-                }
-            }
-
-            if (ctx.isCancelled())
-                return;
-
-            // Marshal to the UI thread through qApp (outlives this workspace).
-            // The queued lambda re-checks the guard AND the generation/base/pane
-            // match before touching any widget.
-            QMetaObject::invokeMethod(
-                qApp,
-                [guard, r]()
-                {
-                    CompareWorkspace *ws = guard.data();
-                    if (!ws)
-                        return;
-                    ws->applyDiffBatchResult(r);
-                },
-                Qt::QueuedConnection);
-        });
+    auto handle = startDiffBatch(
+        pixels, displayTargets, adjusts, baseIdx, threshold, highlight, visualize, roi,
+        paneCount, gen, guard);
     if (!handle)
     {
         // submit() refused the task (pool paused / back-pressured). Leave

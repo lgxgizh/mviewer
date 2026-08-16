@@ -50,9 +50,20 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
 {
     setWindowTitle(tr("导出图片"));
     resize(460, 520);
-
     auto *root = new QVBoxLayout(this);
-
+    buildOutputSection(root);
+    buildModeSection(root);
+    buildFormatSection(root);
+    buildResizeSection(root);
+    buildWatermarkSection(root);
+    buildCropSection(root);
+    buildMetadataSection(root);
+    buildRenameSection(root);
+    buildContactSection(root);
+    buildButtonSection(root);
+}
+void ExportDialog::buildOutputSection(QVBoxLayout *root)
+{
     // ---- output directory ----
     auto *dirRow = new QHBoxLayout();
     m_dirEdit = new QLineEdit(this);
@@ -62,7 +73,10 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     dirRow->addWidget(m_dirEdit, 1);
     dirRow->addWidget(m_browseBtn);
     root->addLayout(dirRow);
+}
 
+void ExportDialog::buildModeSection(QVBoxLayout *root)
+{
     // ---- mode ----
     auto *modeBox = new QGroupBox(tr("导出模式"));
     auto *modeLay = new QFormLayout(modeBox);
@@ -77,7 +91,10 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     m_modeCombo->addItem(tr("复制到剪贴板"), "clipboard");
     modeLay->addRow(tr("模式:"), m_modeCombo);
     root->addWidget(modeBox);
+}
 
+void ExportDialog::buildFormatSection(QVBoxLayout *root)
+{
     // ---- format ----
     auto *fmtBox = new QGroupBox(tr("格式"));
     auto *fmtLay = new QFormLayout(fmtBox);
@@ -96,7 +113,10 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     fmtLay->addRow(tr("质量:"), m_qualitySpin);
     fmtLay->addRow(m_batchCheck);
     root->addWidget(fmtBox);
+}
 
+void ExportDialog::buildResizeSection(QVBoxLayout *root)
+{
     // ---- resize ----
     auto *rsBox = new QGroupBox(tr("缩放"));
     auto *rsLay = new QFormLayout(rsBox);
@@ -110,7 +130,10 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     rsLay->addRow(tr("方式:"), m_resizeCombo);
     rsLay->addRow(tr("数值:"), m_resizeSpin);
     root->addWidget(rsBox);
+}
 
+void ExportDialog::buildWatermarkSection(QVBoxLayout *root)
+{
     // ---- watermark ----
     auto *wmBox = new QGroupBox(tr("水印"));
     auto *wmLay = new QFormLayout(wmBox);
@@ -129,7 +152,10 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     wmLay->addRow(tr("位置:"), m_wmPosCombo);
     wmLay->addRow(tr("不透明度(%):"), m_wmOpacitySpin);
     root->addWidget(wmBox);
+}
 
+void ExportDialog::buildCropSection(QVBoxLayout *root)
+{
     // ---- crop (P0 #⑦) ----
     auto *cropBox = new QGroupBox(tr("裁剪"));
     auto *cropLay = new QFormLayout(cropBox);
@@ -154,7 +180,10 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     cropLay->addRow(m_cropCheck);
     cropLay->addRow(cropGrid);
     root->addWidget(cropBox);
+}
 
+void ExportDialog::buildMetadataSection(QVBoxLayout *root)
+{
     // ---- metadata (P0 #⑦) ----
     auto *metaBox = new QGroupBox(tr("元数据"));
     auto *metaLay = new QFormLayout(metaBox);
@@ -164,7 +193,10 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
         tr("重新编码为原始像素时已默认不包含元数据；此选项记录你的明确意图。"));
     metaLay->addRow(m_stripMetaCheck);
     root->addWidget(metaBox);
+}
 
+void ExportDialog::buildRenameSection(QVBoxLayout *root)
+{
     // ---- rename ----
     auto *rnBox = new QGroupBox(tr("批量重命名 (留空=原名)"));
     auto *rnLay = new QFormLayout(rnBox);
@@ -173,7 +205,10 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     rnLay->addRow(tr("模式:"), m_renameEdit);
     rnLay->addRow(new QLabel(tr("可用: {name} {ext} {n} {total} {seq:W}")));
     root->addWidget(rnBox);
+}
 
+void ExportDialog::buildContactSection(QVBoxLayout *root)
+{
     // ---- contact sheet / pdf ----
     auto *csBox = new QGroupBox(tr("联系表 / PDF 选项"));
     auto *csLay = new QFormLayout(csBox);
@@ -186,7 +221,10 @@ ExportDialog::ExportDialog(QWidget *parent) : QDialog(parent)
     csLay->addRow(tr("列数:"), m_colsSpin);
     csLay->addRow(tr("缩略图边长(px):"), m_thumbSpin);
     root->addWidget(csBox);
+}
 
+void ExportDialog::buildButtonSection(QVBoxLayout *root)
+{
     // ---- buttons ----
     auto *box = new QDialogButtonBox(this);
     m_exportBtn = box->addButton(tr("导出"), QDialogButtonBox::AcceptRole);

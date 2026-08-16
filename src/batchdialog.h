@@ -17,6 +17,7 @@ class QPushButton;
 class QProgressBar;
 class QTextEdit;
 class QLabel;
+class QVBoxLayout;
 
 // BatchDialog is a modal dialog for configuring and running batch processing
 // jobs. The user adds files, selects operations (resize, watermark, analyze,
@@ -44,6 +45,11 @@ class BatchDialog : public QDialog
     void onOpenOutputDir();
 
   private:
+    void buildFileControls(QVBoxLayout &mainLayout);
+    void buildOperationControls(QVBoxLayout &mainLayout);
+    void buildParameterControls(QVBoxLayout &mainLayout);
+    void buildProgressControls(QVBoxLayout &mainLayout);
+    void connectControls();
     void buildConfig(mviewer::domain::BatchJobConfig &config) const;
     void updateUiState(bool running);
 

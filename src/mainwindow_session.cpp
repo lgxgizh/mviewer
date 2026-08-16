@@ -7,6 +7,8 @@
 #include <QSaveFile>
 #include <QThreadPool>
 
+#include <unordered_map>
+
 namespace
 {
 
@@ -15,7 +17,139 @@ QString appConfigFile(const QString &name)
     return mviewer::runtime::filePath(QStandardPaths::AppConfigLocation, name);
 }
 
+struct PersistenceSnapshot
+{
+    std::string rootPath;
+    std::string outputPath;
+    std::vector<std::string> comparedImages;
+    std::string compareSessionJson;
+    mviewer::domain::Selection roi;
+    std::unordered_map<std::string, std::string> analysisByPath;
+    bool project = false;
+    std::string projectName;
+    std::string createdIso;
+    std::vector<std::string> analyzerPipeline;
+};
+
+struct PersistenceResult
+{
+    bool cancelled = false;
+    bool success = false;
+    std::string error;
+    size_t imageCount = 0;
+    size_t folderCount = 0;
+};
+
+bool cancelled(const TaskScheduler::TaskContext &ctx,
+               const std::shared_ptr<std::atomic<bool>> &cancel)
+{
+    return ctx.isCancelled() || (cancel && cancel->load(std::memory_order_acquire));
+}
+
+void applyPersistedCompareContext(mviewer::domain::Workspace &ws,
+                                   const PersistenceSnapshot &snapshot)
+{
+    for (const std::string &path : snapshot.comparedImages)
+        ws.comparedImages.push_back(path);
+    ws.compareSessionJson = snapshot.compareSessionJson;
+
+    for (auto &folder : ws.folders)
+    {
+        for (auto &image : folder.imageSet.images)
+        {
+            const auto it = snapshot.analysisByPath.find(image.filePath);
+            if (it != snapshot.analysisByPath.end())
+                image.analysis = it->second;
+            if (std::find(snapshot.comparedImages.begin(), snapshot.comparedImages.end(),
+                          image.filePath) != snapshot.comparedImages.end() &&
+                !snapshot.roi.isEmpty())
+            {
+                image.roiX = snapshot.roi.x;
+                image.roiY = snapshot.roi.y;
+                image.roiW = snapshot.roi.width;
+                image.roiH = snapshot.roi.height;
+            }
+        }
+    }
+}
+
+void runPersistence(const PersistenceSnapshot &snapshot, const TaskScheduler::TaskContext &ctx,
+                    const std::shared_ptr<std::atomic<bool>> &cancel, PersistenceResult &result)
+{
+    try
+    {
+        if (cancelled(ctx, cancel))
+        {
+            result.cancelled = true;
+            return;
+        }
+        mviewer::domain::Workspace ws =
+            ImageRepository::instance().loadWorkspace(snapshot.rootPath);
+        if (ws.empty())
+        {
+            result.error = "当前目录没有可保存的图片。";
+            return;
+        }
+        applyPersistedCompareContext(ws, snapshot);
+        if (cancelled(ctx, cancel))
+        {
+            result.cancelled = true;
+            return;
+        }
+
+        std::string body;
+        if (!snapshot.project)
+        {
+            body = mviewer::core::serializeWorkspace(ws);
+        }
+        else
+        {
+            mviewer::domain::Project project;
+            project.name = snapshot.projectName;
+            project.filePath = snapshot.outputPath;
+            project.appVersion = MVIEWER_VERSION_STRING;
+            project.createdIso = snapshot.createdIso;
+            project.modifiedIso = snapshot.createdIso;
+            project.workspace = ws;
+            project.datasetRoots = {snapshot.rootPath};
+            project.analyzerPipeline = snapshot.analyzerPipeline;
+            body = mviewer::core::serializeProject(project);
+        }
+        if (cancelled(ctx, cancel))
+        {
+            result.cancelled = true;
+            return;
+        }
+        if (!mviewer::exportjob::writeTextAtomically(snapshot.outputPath, body))
+        {
+            result.error = "无法原子写入目标文件。";
+            return;
+        }
+        result.imageCount = ws.imageCount();
+        result.folderCount = ws.folderCount();
+        result.success = true;
+    }
+    catch (const std::exception &error)
+    {
+        result.error = error.what();
+    }
+    catch (...)
+    {
+        result.error = "后台持久化任务失败。";
+    }
+}
+
 } // namespace
+
+void MainWindow::cancelBackgroundPersistence()
+{
+    ++m_persistenceGeneration;
+    if (m_persistenceCancel)
+        m_persistenceCancel->store(true, std::memory_order_release);
+    TaskScheduler::cancel(m_persistenceTask);
+    m_persistenceTask.reset();
+    m_persistenceCancel.reset();
+}
 
 void MainWindow::saveWorkspace()
 {
@@ -29,73 +163,79 @@ void MainWindow::saveWorkspace()
     if (filePath.isEmpty())
         return;
 
-    // Build the domain model from the real directory (recursive, no pixel
-    // decode) using the existing, tested ImageRepository::loadWorkspace.
-    mviewer::domain::Workspace ws =
-        ImageRepository::instance().loadWorkspace(currentDir().toStdString());
-    if (ws.empty())
-    {
-        QMessageBox::warning(this, "保存工作区", "当前目录没有可保存的图片。");
-        return;
-    }
-
-    // M12.2 (G2-ext): persist every compared image's session context (ROI from
-    // Compare + last analysis result) into the model before serializing, so
-    // reopening restores the full compare session, not just the active image.
-    // The compare ROI is synchronized across cells, so currentROI() is the same
-    // region for all compared images; we still write it per-image into each
-    // ImageMetadata so the .mvws carries each image's own ROI/analysis fields.
-    mviewer::domain::Selection roi;
-    QStringList compared;
+    cancelBackgroundPersistence();
+    PersistenceSnapshot snapshot;
+    snapshot.rootPath = currentDir().toUtf8().toStdString();
+    snapshot.outputPath = filePath.toUtf8().toStdString();
     if (m_compareView)
     {
-        roi = m_compareView->currentROI();
-        compared = m_compareView->comparedImages();
-        // M12.2 (review fix): persist the explicit compared-image list so a compare
-        // session with neither ROI nor analysis still reopens correctly.
-        for (const QString &cpath : compared)
-            ws.comparedImages.push_back(cpath.toStdString());
-        // M15: persist the full compare-session snapshot (sync mode, zoom/pan, ROI)
-        // so reopening restores the entire compare view, not just the image list.
+        const QStringList compared = m_compareView->comparedImages();
+        for (const QString &path : compared)
+            snapshot.comparedImages.push_back(path.toUtf8().toStdString());
+        snapshot.roi = m_compareView->currentROI();
         if (m_compareView->compareSession().isValid())
-            ws.compareSessionJson =
+            snapshot.compareSessionJson =
                 mviewer::core::serializeCompareSession(m_compareView->compareSession());
     }
-    for (const QString &cpath : compared)
+    for (const std::string &path : snapshot.comparedImages)
     {
-        const std::string key = cpath.toStdString();
-        const std::string analysis = m_analyzer->resultText(cpath).toStdString();
-        if (roi.isEmpty() && analysis.empty())
-            continue;
-        for (auto &folder : ws.folders)
-        {
-            for (auto &img : folder.imageSet.images)
-            {
-                if (img.filePath == key)
-                {
-                    img.roiX = roi.x;
-                    img.roiY = roi.y;
-                    img.roiW = roi.width;
-                    img.roiH = roi.height;
-                    img.analysis = analysis;
-                    break;
-                }
-            }
-        }
+        const QString qpath = QString::fromUtf8(path.c_str());
+        const std::string analysis = m_analyzer->resultText(qpath).toUtf8().toStdString();
+        if (!analysis.empty())
+            snapshot.analysisByPath[path] = analysis;
     }
 
-    const std::string json = mviewer::core::serializeWorkspace(ws);
-    QSaveFile f(filePath);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text) || f.write(QByteArray::fromStdString(json)) < 0 ||
-        !f.commit())
+    // Compare-session JSON is a value snapshot too; it is applied to the
+    // workspace after directory enumeration, entirely on the worker.
+    snapshot.compareSessionJson = m_compareView && m_compareView->compareSession().isValid()
+                                      ? mviewer::core::serializeCompareSession(
+                                            m_compareView->compareSession())
+                                      : std::string();
+
+    auto state = std::make_shared<PersistenceResult>();
+    auto cancel = m_persistenceCancel = std::make_shared<std::atomic<bool>>(false);
+    const uint64_t generation = ++m_persistenceGeneration;
+    QPointer<MainWindow> guard(this);
+    statusBar()->showMessage(QStringLiteral("正在后台保存工作区…"));
+    m_persistenceTask = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Background,
+        [snapshot, cancel, state](const TaskScheduler::TaskContext &ctx)
+        { runPersistence(snapshot, ctx, cancel, *state); },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, state, cancel, generation, filePath]()
+        {
+            if (!qApp)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, state, cancel, generation, filePath]()
+                {
+                    MainWindow *window = guard.data();
+                    if (!window || generation != window->m_persistenceGeneration)
+                        return;
+                    window->m_persistenceTask.reset();
+                    window->m_persistenceCancel.reset();
+                    if (state->cancelled)
+                        return;
+                    if (!state->success)
+                    {
+                        QMessageBox::critical(window, "保存工作区",
+                                              QString::fromUtf8(state->error.c_str()));
+                        return;
+                    }
+                    window->statusBar()->showMessage(
+                        QString("工作区已保存: %1 (%2 张图片, %3 个目录)")
+                            .arg(QFileInfo(filePath).fileName())
+                            .arg(static_cast<int>(state->imageCount))
+                            .arg(static_cast<int>(state->folderCount)));
+                },
+                Qt::QueuedConnection);
+        });
+    if (!m_persistenceTask)
     {
-        QMessageBox::critical(this, "保存工作区", "无法写入文件：" + filePath);
-        return;
+        m_persistenceCancel.reset();
+        QMessageBox::warning(this, "保存工作区", "后台保存任务被调度器拒绝。");
     }
-    statusBar()->showMessage(QString("工作区已保存: %1 (%2 张图片, %3 个目录)")
-                                 .arg(QFileInfo(filePath).fileName())
-                                 .arg(static_cast<int>(ws.imageCount()))
-                                 .arg(static_cast<int>(ws.folderCount())));
 }
 
 void MainWindow::openWorkspace()
@@ -119,7 +259,13 @@ void MainWindow::openWorkspace()
         QMessageBox::critical(this, "打开工作区", "工作区文件无效或为空。");
         return;
     }
-    mviewer::domain::Workspace ws = std::move(*maybeWs);
+    restoreWorkspaceState(*maybeWs, filePath);
+}
+
+void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspace,
+                                       const QString &filePath)
+{
+    const auto &ws = workspace;
 
     // Restore the browsing view: load the workspace root back into the gallery.
     // changeDirectory drives DirectoryModel + ImageListModel + tree + gallery.
@@ -223,7 +369,6 @@ void MainWindow::openWorkspace()
                                  .arg(static_cast<int>(ws.imageCount()))
                                  .arg(static_cast<int>(ws.folderCount())));
 }
-
 void MainWindow::saveProject()
 {
     if (currentDir().isEmpty())
@@ -236,75 +381,77 @@ void MainWindow::saveProject()
     if (filePath.isEmpty())
         return;
 
-    // Build the workspace exactly like saveWorkspace (datasets + compared images
-    // + compare-session snapshot + per-image ROI/analysis).
-    mviewer::domain::Workspace ws =
-        ImageRepository::instance().loadWorkspace(currentDir().toStdString());
-    if (ws.empty())
-    {
-        QMessageBox::warning(this, "保存项目", "当前目录没有可保存的图片。");
-        return;
-    }
-
-    mviewer::domain::Selection roi;
-    QStringList compared;
+    cancelBackgroundPersistence();
+    PersistenceSnapshot snapshot;
+    snapshot.project = true;
+    snapshot.rootPath = currentDir().toUtf8().toStdString();
+    snapshot.outputPath = filePath.toUtf8().toStdString();
+    snapshot.projectName = QFileInfo(filePath).baseName().toUtf8().toStdString();
+    snapshot.createdIso = QDateTime::currentDateTimeUtc().toString(Qt::ISODate).toUtf8().toStdString();
     if (m_compareView)
     {
-        roi = m_compareView->currentROI();
-        compared = m_compareView->comparedImages();
-        for (const QString &cpath : compared)
-            ws.comparedImages.push_back(cpath.toStdString());
+        for (const QString &path : m_compareView->comparedImages())
+            snapshot.comparedImages.push_back(path.toUtf8().toStdString());
+        snapshot.roi = m_compareView->currentROI();
         if (m_compareView->compareSession().isValid())
-            ws.compareSessionJson =
+            snapshot.compareSessionJson =
                 mviewer::core::serializeCompareSession(m_compareView->compareSession());
     }
-    for (const QString &cpath : compared)
+    for (const std::string &path : snapshot.comparedImages)
     {
-        const std::string key = cpath.toStdString();
-        const std::string analysis = m_analyzer->resultText(cpath).toStdString();
-        if (roi.isEmpty() && analysis.empty())
-            continue;
-        for (auto &folder : ws.folders)
-            for (auto &img : folder.imageSet.images)
-                if (img.filePath == key)
-                {
-                    img.roiX = roi.x;
-                    img.roiY = roi.y;
-                    img.roiW = roi.width;
-                    img.roiH = roi.height;
-                    img.analysis = analysis;
-                    break;
-                }
+        const QString qpath = QString::fromUtf8(path.c_str());
+        const std::string analysis = m_analyzer->resultText(qpath).toUtf8().toStdString();
+        if (!analysis.empty())
+            snapshot.analysisByPath[path] = analysis;
     }
-
-    // M15 (Project): wrap the workspace in a Project that also captures the
-    // analyzer pipeline and forward-compatible export/review/benchmark config,
-    // so reopening the .mvproj restores the whole evaluation environment.
-    mviewer::domain::Project proj;
-    proj.name = QFileInfo(filePath).baseName().toStdString();
-    proj.filePath = filePath.toStdString();
-    proj.appVersion = MVIEWER_VERSION_STRING;
-    proj.createdIso = QDateTime::currentDateTimeUtc().toString(Qt::ISODate).toStdString();
-    proj.modifiedIso = proj.createdIso;
-    proj.workspace = ws;
-    proj.datasetRoots = {currentDir().toStdString()};
-    // M15 P0#3: list analyzers through the pipeline, not the registry directly.
     const AnalyzerPipeline pipeline;
-    for (const auto &a : pipeline.analyzerIds())
-        proj.analyzerPipeline.push_back(a);
+    for (const auto &id : pipeline.analyzerIds())
+        snapshot.analyzerPipeline.push_back(id);
 
-    const std::string json = mviewer::core::serializeProject(proj);
-    QSaveFile f(filePath);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Text) || f.write(QByteArray::fromStdString(json)) < 0 ||
-        !f.commit())
+    auto state = std::make_shared<PersistenceResult>();
+    auto cancel = m_persistenceCancel = std::make_shared<std::atomic<bool>>(false);
+    const uint64_t generation = ++m_persistenceGeneration;
+    QPointer<MainWindow> guard(this);
+    statusBar()->showMessage(QStringLiteral("正在后台保存项目…"));
+    m_persistenceTask = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Background,
+        [snapshot, cancel, state](const TaskScheduler::TaskContext &ctx)
+        { runPersistence(snapshot, ctx, cancel, *state); },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, state, generation, filePath]()
+        {
+            if (!qApp)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, state, generation, filePath]()
+                {
+                    MainWindow *window = guard.data();
+                    if (!window || generation != window->m_persistenceGeneration)
+                        return;
+                    window->m_persistenceTask.reset();
+                    window->m_persistenceCancel.reset();
+                    if (state->cancelled)
+                        return;
+                    if (!state->success)
+                    {
+                        QMessageBox::critical(window, "保存项目",
+                                              QString::fromUtf8(state->error.c_str()));
+                        return;
+                    }
+                    window->statusBar()->showMessage(
+                        QString("项目已保存: %1 (%2 张图片, %3 个目录)")
+                            .arg(QFileInfo(filePath).fileName())
+                            .arg(static_cast<int>(state->imageCount))
+                            .arg(static_cast<int>(state->folderCount)));
+                },
+                Qt::QueuedConnection);
+        });
+    if (!m_persistenceTask)
     {
-        QMessageBox::critical(this, "保存项目", "无法写入文件：" + filePath);
-        return;
+        m_persistenceCancel.reset();
+        QMessageBox::warning(this, "保存项目", "后台保存任务被调度器拒绝。");
     }
-    statusBar()->showMessage(QString("项目已保存: %1 (%2 张图片, %3 个目录)")
-                                 .arg(QFileInfo(filePath).fileName())
-                                 .arg(static_cast<int>(ws.imageCount()))
-                                 .arg(static_cast<int>(ws.folderCount())));
 }
 
 void MainWindow::openProject()

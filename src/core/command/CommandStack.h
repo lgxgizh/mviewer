@@ -40,6 +40,13 @@ class CommandStack
         if (!cmd->lastError().empty())
         {
             m_lastError = cmd->lastError();
+            if (cmd->hasUnresolvedState())
+            {
+                m_undo.push_back(std::move(cmd));
+                while (m_undo.size() > m_maxDepth)
+                    m_undo.erase(m_undo.begin());
+                m_redo.clear();
+            }
             notify();
             return false;
         }

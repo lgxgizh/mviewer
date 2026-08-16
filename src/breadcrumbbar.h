@@ -39,6 +39,10 @@ class BreadcrumbBar : public QWidget
 
   private:
     void rebuild();
+    void clearButtons();
+    void parseSegments();
+    void addOverflowButton(int firstVisible);
+    void addVisibleSegments(int firstVisible);
 
     QHBoxLayout *m_layout = nullptr;
     QString m_currentPath;

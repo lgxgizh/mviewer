@@ -45,4 +45,12 @@ class ICommand
     {
         return {};
     }
+
+    // A failed command may still own a recoverable on-disk partial state. The
+    // CommandStack retains such a command so its bookkeeping is not destroyed
+    // while the disk is in a state that still needs undo/recovery.
+    virtual bool hasUnresolvedState() const
+    {
+        return false;
+    }
 };

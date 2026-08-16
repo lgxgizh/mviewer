@@ -1,9 +1,9 @@
 #pragma once
 
+#include "application/ImageLoadingService.h"
 #include "core/export/ExportJob.h"
 #include "core/analysis/ImageOverlay.h"
 #include "core/image/ImageFrame.h"
-#include "core/image/ImageRepository.h"
 #include "core/render/AsyncTileRequestManager.h"
 #include "core/render/TileCache.h"
 #include "core/render/TileGrid.h"
@@ -13,14 +13,19 @@
 #include <QImage>
 #include <QOpenGLTextureBlitter>
 #include <QOpenGLWidget>
+#include <QPointer>
 #include <QPixmap>
 #include <QStringList>
 #include <memory>
 #include <optional>
 #include <atomic>
+#include <functional>
 #include <vector>
 
 class QEvent;
+class QAction;
+class QContextMenuEvent;
+class QPainter;
 class QTimer;
 
 // Full-image zoomable viewer. Shown in its own window when the user
@@ -147,6 +152,10 @@ class ImageViewer : public QOpenGLWidget
     void leaveEvent(QEvent *event) override;
 
   private:
+    using ImageLoadResult = mviewer::application::ImageLoadingService::Result;
+    using ImageLoadGuard = std::shared_ptr<QPointer<ImageViewer>>;
+    using ImageLoadCallback = std::function<void(const ImageLoadResult &)>;
+
     void emitZoom();
     void advanceViewportRevision();
     void beginImageGeneration();
@@ -169,10 +178,41 @@ class ImageViewer : public QOpenGLWidget
     void clearPixelInfo();
     void cancelRoiStats();
     void scheduleRoiStats(const QRect &selection);
+    ImageLoadCallback makeImageLoadCallback(const QString &path, uint64_t generation);
+    void queueImageLoadFailure(const QString &path, uint64_t generation,
+                               const ImageLoadGuard &guard);
+    void queueLoadedImage(const QString &path, uint64_t generation,
+                          const ImageLoadGuard &guard, const ImageLoadResult &result);
+    void applyLoadedImage(const QString &path, const ImageLoadResult &result);
+    void applyPendingView();
+    void clearLoadedGpu();
+    void scheduleLoadedRefit(const QString &path, uint64_t generation,
+                             const ImageLoadGuard &guard);
+    void drawProvisional(QPainter &painter) const;
+    AsyncTileRequestManager::VisibleTiles requestVisibleTiles();
+    void scheduleOverlayTiles(std::vector<TileCache::ReadyTile> &ready);
+    void drawGpuTiles(QPainter &painter, const std::vector<TileCache::ReadyTile> &ready,
+                      const Viewport &tileView);
+    void drawCpuTiles(QPainter &painter, const std::vector<TileCache::ReadyTile> &ready,
+                      const Viewport &tileView);
+    void drawEmptyState(QPainter &painter);
+    void drawSelection(QPainter &painter);
+    bool handleNavigationKey(int key);
+    bool handleZoomKey(int key, Qt::KeyboardModifiers modifiers);
+    bool handleModeKey(int key, Qt::KeyboardModifiers modifiers);
+    bool handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
+                                 QAction *copyColor, QContextMenuEvent *event);
+    bool handleContextImageAction(QAction *chosen, QAction *saveAs, QAction *zoomInAction,
+                                  QAction *zoomOutAction, QAction *zoomFitAction,
+                                  QAction *zoomActualAction, QAction *selectRegion);
+    bool handleContextNavigationAction(QAction *chosen, QAction *next, QAction *prev,
+                                       QAction *overlayNone, QAction *overlayZebra,
+                                       QAction *overlayFalse, QAction *fullscreen);
     // Preload promotion: consume the neighbor preload handle that matches
     // `path` and cancel all others, so a navigation back to a preloaded
     // neighbor can be promoted to the foreground decode without re-queuing.
-    ImageRepository::AsyncRequestHandle takeMatchingPreload(const QString &path);
+    mviewer::application::ImageLoadingService::AsyncRequestHandle takeMatchingPreload(
+        const QString &path);
     QString m_currentPath;
     QStringList m_fileList;
     int m_currentIndex = -1;
@@ -199,9 +239,9 @@ class ImageViewer : public QOpenGLWidget
     struct NeighborPreload
     {
         QString path;
-        ImageRepository::AsyncRequestHandle handle;
+        mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
     };
-    ImageRepository::AsyncRequestHandle m_foregroundRequest;
+    mviewer::application::ImageLoadingService::AsyncRequestHandle m_foregroundRequest;
     std::vector<NeighborPreload> m_neighborPreloads;
 
     // View transform (pan/zoom). The math lives in the domain-free Viewport

@@ -66,60 +66,15 @@ mviewer::domain::ImageMetadata ImageRepository::makeMeta(const std::string &file
     return mviewer::core::MetadataReader::read(filePath);
 }
 
-namespace
+bool ImageRepository::getPreviewCache(const std::string &key, ImageData &out) const
 {
-// Read the original 16-bit integer samples for a high-bit-depth source.
-// Returns nullptr when the source is not 16-bit integer (e.g. 8-bit, float, or
-// RAW preview — RAW is demosaiced to 8-bit and has no linear 16-bit buffer here).
-// Only the cheap header probe (imageFormat) runs for non-16-bit sources; the
-// full decode (read) only happens for genuine 16-bit integer formats.
-// Grayscale 16-bit is unpacked as a single channel; color 16-bit as R,G,B.
-std::shared_ptr<std::vector<uint16_t>> captureRaw16(const std::string &path)
-{
-    QImageReader reader(QString::fromStdString(path));
-    const QImage::Format fmt = reader.imageFormat();
-    const bool is16 = (fmt == QImage::Format_RGBX64 || fmt == QImage::Format_RGBA64 ||
-                       fmt == QImage::Format_Grayscale16);
-    if (!is16)
-        return nullptr;
-    QImage img = reader.read();
-    if (img.isNull())
-        return nullptr;
-    if (img.format() == QImage::Format_Grayscale16)
-    {
-        const int w = img.width();
-        const int h = img.height();
-        auto buf = std::make_shared<std::vector<uint16_t>>();
-        buf->reserve(static_cast<size_t>(w) * static_cast<size_t>(h));
-        for (int y = 0; y < h; ++y)
-        {
-            const auto *row = reinterpret_cast<const uint16_t *>(img.constScanLine(y));
-            for (int x = 0; x < w; ++x)
-                buf->push_back(row[x]);
-        }
-        return buf;
-    }
-    const QImage src = img.convertToFormat(QImage::Format_RGBX64);
-    if (src.isNull())
-        return nullptr;
-    const int w = src.width();
-    const int h = src.height();
-    auto buf = std::make_shared<std::vector<uint16_t>>();
-    buf->reserve(static_cast<size_t>(w) * static_cast<size_t>(h) * 3);
-    for (int y = 0; y < h; ++y)
-    {
-        const auto *row = reinterpret_cast<const uint16_t *>(src.constScanLine(y));
-        for (int x = 0; x < w; ++x)
-        {
-            const int p = x * 4; // R,G,B + unused alpha in RGBX64
-            buf->push_back(row[p]);
-            buf->push_back(row[p + 1]);
-            buf->push_back(row[p + 2]);
-        }
-    }
-    return buf;
+    return CacheManager::instance().getMemory(CacheLevel::Preview, key, out);
 }
-} // namespace
+
+void ImageRepository::putPreviewCache(const std::string &key, const ImageData &image)
+{
+    CacheManager::instance().putMemory(CacheLevel::Preview, key, image);
+}
 
 // M29: opaque cancellable-request state. Defined here (not in the header)
 // so UI code only ever holds the shared_ptr handle and never touches
@@ -159,56 +114,12 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
 {
     MV_TRACE_SCOPED("ImageRepository::load");
     Result res;
-    // Warm navigation uses the last validated identity key from memory. If no
-    // warm snapshot exists, makeKey() performs the explicit filesystem
-    // validation/update needed by a cold load.
     std::string key = cachedKeyForPath(filePath);
     const bool hadCachedKey = !key.empty();
     if (key.empty())
         key = makeKey(filePath);
-
-    ImageData img;
-    bool fromCache = false;
-    mviewer::domain::ImageMetadata decodeMeta;
-
-    // P0/B8: in-memory LRU fast-path. A preloaded image switch (the common case
-    // for navigating an already-open folder) must be a PURE in-memory hit: no
-    // disk I/O, no ImageFrame reallocation, no metadata re-parse. This avoids the
-    // p95/p99 tail spikes caused by DiskCache::get / allocator contention.
-    if (CacheManager::instance().getMemory(CacheLevel::FullImage, key, img))
-    {
-        mviewer::domain::ImageMetadata m;
-        // The metadata cache is the identity snapshot for this path. Do not
-        // fall back to ImageFrame::create() here: it calls QFileInfo and turns
-        // a warm selection into synchronous filesystem work. A warm cache hit
-        // must be memory-only; stale/missing identity is repaired by the cold
-        // decode/update path below.
-        if (!CacheManager::instance().getMetadata(key, m))
-        {
-            res.error = "memory cache entry has no metadata: " + filePath;
-            return res;
-        }
-        auto frame = std::make_shared<ImageFrame>(m, img);
-        // P0-2/PixelInspector: restore a previously captured 16-bit sample buffer.
-        {
-            std::shared_ptr<std::vector<uint16_t>> rb;
-            int rbCh = 0;
-            uint16_t rbMax = 0;
-            if (CacheManager::instance().getRaw16(key, rb, rbCh, rbMax) && rb)
-                frame->setRaw16(rb, rbMax, rbCh);
-        }
-        // M29: honor generateHistogram on the memory fast path too. A
-        // histogram-free preload (preloadAsync) may have warmed this entry, so
-        // the later normal viewer load must still produce a histogram.
-        if (opts.generateHistogram)
-            frame->computeHistogram();
-        frame->setDecodeState(DecodeState::Decoded);
-        frame->setCacheState(CacheState::Memory);
-        CacheManager::instance().putMemory(CacheLevel::FullImage, key, img);
-        res.frame = frame;
-        res.fromCache = true;
+    if (loadMemoryHit(filePath, key, opts, res))
         return res;
-    }
 
     // A stale/missing warm entry must revalidate the identity before falling
     // through to disk; this keeps file-modification correctness without adding
@@ -220,122 +131,26 @@ ImageRepository::Result ImageRepository::load(const std::string &filePath, const
             key = validated;
     }
 
-    if (opts.useDiskCache && DiskCache::instance().get(key, img))
-    {
-        fromCache = true;
-        // Pixel cache schema stays frozen. Recover the small display-profile
-        // sidecar from the source header so fresh and disk-hit display agree.
-        decodeMeta = makeMeta(filePath);
-    }
-    else
-    {
-        img = Decoder::decodeFull(filePath, decodeMeta);
-        if (img.isNull())
-        {
-            res.error = "decode failed: " + filePath;
-            return res;
-        }
-        if (opts.useDiskCache)
-            DiskCache::instance().put(key, img);
-    }
+    ImageData pixels;
+    bool fromCache = false;
+    mviewer::domain::ImageMetadata decodeMeta;
+    if (!loadPixels(filePath, key, opts, pixels, fromCache, decodeMeta, res.error))
+        return res;
 
-    auto frame = std::make_shared<ImageFrame>(ImageFrame::create(filePath, img));
-
-    // Enrich the frame metadata with decode-time fields (bitDepth, channels,
-    // colorSpace, orientation, format). The file-level fields were already set
-    // by ImageFrame::create. These are populated from the decoded pixels (always
-    // available, whether served from cache or freshly decoded) so the metadata
-    // is correct even on a disk-cache hit. Values the decoder can only determine
-    // on a fresh decode (orientation, ICC) are taken from decodeMeta when present.
-    {
-        mviewer::domain::ImageMetadata m = frame->metadata();
-        // format: derive from the file extension (covers all cached/uncached paths).
-        if (m.format.empty())
-        {
-            const QString ext = QFileInfo(QString::fromStdString(filePath)).suffix().toLower();
-            if (ext == "jpg" || ext == "jpeg")
-                m.format = "JPEG";
-            else if (ext == "png")
-                m.format = "PNG";
-            else if (ext == "bmp")
-                m.format = "BMP";
-            else if (ext == "tif" || ext == "tiff")
-                m.format = "TIFF";
-            else if (!ext.isEmpty())
-                m.format = ext.toUpper().toStdString();
-        }
-        // channels / bitDepth from the actual RGB24 pixel buffer we hold.
-        m.channels = img.channelsPerPixel();
-        m.bitDepth = 8;
-        if (!decodeMeta.format.empty())
-            m.format = decodeMeta.format;
-        if (decodeMeta.channels > 0)
-            m.channels = decodeMeta.channels;
-        if (decodeMeta.bitDepth > 0)
-            m.bitDepth = decodeMeta.bitDepth;
-        if (!decodeMeta.colorSpace.empty())
-            m.colorSpace = decodeMeta.colorSpace;
-        if (decodeMeta.orientation >= 1 && decodeMeta.orientation <= 8)
-            m.orientation = decodeMeta.orientation;
-        m.hasIccProfile = decodeMeta.hasIccProfile;
-        const auto displayIcc = decodeMeta.textKeys.find("MViewer.DisplayICC.Base64");
-        if (displayIcc != decodeMeta.textKeys.end())
-            m.textKeys[displayIcc->first] = displayIcc->second;
-        if (!decodeMeta.iccDescription.empty())
-            m.iccDescription = decodeMeta.iccDescription;
-        if (!decodeMeta.iccCopyright.empty())
-            m.iccCopyright = decodeMeta.iccCopyright;
-        if (!decodeMeta.iccColorSpace.empty())
-            m.iccColorSpace = decodeMeta.iccColorSpace;
-        if (!decodeMeta.iccDeviceClass.empty())
-            m.iccDeviceClass = decodeMeta.iccDeviceClass;
-        if (!decodeMeta.iccPcs.empty())
-            m.iccPcs = decodeMeta.iccPcs;
-        if (!decodeMeta.iccRenderingIntent.empty())
-            m.iccRenderingIntent = decodeMeta.iccRenderingIntent;
-        if (!decodeMeta.iccVersion.empty())
-            m.iccVersion = decodeMeta.iccVersion;
-        frame->setMetadata(m);
-    }
-    // P0-2/PixelInspector: restore a previously captured 16-bit sample buffer
-    // (so re-opening a 16-bit image keeps the high-bit-depth readout), then capture
-    // it for high-bit-depth sources (16-bit PNG/TIFF/RGBX64). RAW files are
-    // preview-only (8-bit demosaiced) and intentionally excluded — there is no
-    // linear 16-bit buffer available in the current pipeline.
-    {
-        std::shared_ptr<std::vector<uint16_t>> rb;
-        int rbCh = 0;
-        uint16_t rbMax = 0;
-        if (CacheManager::instance().getRaw16(key, rb, rbCh, rbMax) && rb)
-            frame->setRaw16(rb, rbMax, rbCh);
-    }
-    if (frame->metadata().format != "RAW" && !frame->hasRaw16())
-    {
-        auto raw = captureRaw16(filePath);
-        if (raw)
-        {
-            const int ch = (frame->metadata().channels == 1) ? 1 : 3;
-            frame->setRaw16(raw, 65535, ch);
-            CacheManager::instance().putRaw16(key, raw, ch, 65535);
-        }
-    }
+    auto frame = std::make_shared<ImageFrame>(ImageFrame::create(filePath, pixels));
+    enrichFrame(*frame, filePath, pixels, decodeMeta);
+    restoreRaw16(*frame, filePath, key);
     if (opts.generateHistogram)
         frame->computeHistogram();
     frame->setDecodeState(DecodeState::Decoded);
     frame->setCacheState(fromCache ? CacheState::Disk : CacheState::None);
-
-    // P0: keep the decoded pixels in the in-memory Viewer/FullImage LRU so that
-    // switching to an adjacent image is instant after the first decode. Without
-    // this, every navigation re-decodes from disk/DiskCache.
-    if (!img.isNull())
-        CacheManager::instance().put(CacheLevel::FullImage, key, img);
-
+    CacheManager::instance().putMemory(CacheLevel::FullImage, key, pixels);
     CacheManager::instance().putMetadata(key, frame->metadata());
-
     res.frame = frame;
     res.fromCache = fromCache;
     return res;
 }
+
 
 void ImageRepository::loadAsync(const std::string &filePath,
                                 std::function<void(const Result &)> callback,

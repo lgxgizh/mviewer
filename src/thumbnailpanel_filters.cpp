@@ -225,26 +225,39 @@ void ThumbnailPanel::applyFilter()
             return;
     }
 
-    QList<Entry> src = m_allEntries;
+    QList<Entry> src;
+    if (!prepareFilterSource(t, src))
+        return;
 
-    // Optional recursive subfolder scan (filename search only). Runs off the
-    // UI thread (M25) — a recursive walk of a deep tree used to block the
-    // main thread on every keystroke. State machine:
-    //   * hits current for this text  -> merge and fall through to the loop
-    //   * scan in flight             -> wait (completion re-runs applyFilter)
-    //   * otherwise                  -> launch the scan for the current text
-    // A completed scan must NOT relaunch itself (the completion callback
-    // re-enters applyFilter with m_recursiveHits current).
+    // Build a fuzzy/wildcard regex when the search text contains * or ?.
+    // Otherwise fall back to the fast substring match.
+    QRegularExpression fuzzyRe;
+    const bool useFuzzy = !t.isEmpty() && !m_metaSearch && (t.contains('*') || t.contains('?'));
+    if (useFuzzy)
+    {
+        // Convert glob pattern to regex: * → .*, ? → ., escape everything else.
+        QString pattern = QRegularExpression::escape(t);
+        pattern.replace("\\*", ".*").replace("\\?", ".");
+        fuzzyRe.setPattern(pattern);
+        fuzzyRe.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
+    }
+
+    QList<Entry> out;
+    for (const Entry &e : src)
+        if (matchesFilter(e, t, useFuzzy, fuzzyRe))
+            out.append(e);
+    buildModel(out);
+}
+
+bool ThumbnailPanel::prepareFilterSource(const QString &t, QList<Entry> &src)
+{
+    src = m_allEntries;
     if (m_filterRecursive && !t.isEmpty() && !m_metaSearch && !m_currentDir.isEmpty())
     {
         if (m_recursiveHitsFor == t && !m_recursiveSearching)
-        {
             src.append(m_recursiveHits);
-        }
         else if (m_recursiveSearching)
-        {
-            return; // scan in flight: its completion re-runs this filter
-        }
+            return false;
         else
         {
             const QString currentDir = m_currentDir;
@@ -252,7 +265,7 @@ void ThumbnailPanel::applyFilter()
             const QPointer<ThumbnailPanel> self(this);
             const int gen = m_dirGen;
             m_recursiveSearching = true;
-            m_recursiveHitsFor.clear(); // not current until the scan completes
+            m_recursiveHitsFor.clear();
             (void)QtConcurrent::run(
                 &m_scanPool,
                 [self, alive, gen, currentDir, t]() mutable
@@ -268,9 +281,8 @@ void ThumbnailPanel::applyFilter()
                         const QFileInfo fi = it.fileInfo();
                         const QString suffix = fi.suffix().toLower();
                         if (suffix.isEmpty() ||
-                            !mviewer::core::ImageFormats::isSupportedSuffix(suffix.toStdString()))
-                            continue;
-                        if (!fi.fileName().toLower().contains(t))
+                            !mviewer::core::ImageFormats::isSupportedSuffix(suffix.toStdString()) ||
+                            !fi.fileName().toLower().contains(t))
                             continue;
                         const QString sub = QDir(currentDir).relativeFilePath(fi.absolutePath());
                         found.append(
@@ -288,10 +300,10 @@ void ThumbnailPanel::applyFilter()
                                 return;
                             panel->m_recursiveHits = found;
                             panel->m_recursiveHitsFor = t;
-                            panel->applyFilter(); // merge the hits and re-filter
+                            panel->applyFilter();
                         });
                 });
-            return; // completion callback rebuilds the model
+            return false;
         }
     }
     else
@@ -300,78 +312,46 @@ void ThumbnailPanel::applyFilter()
         m_recursiveHitsFor.clear();
         m_recursiveHits.clear();
     }
+    return true;
+}
 
-    // Build a fuzzy/wildcard regex when the search text contains * or ?.
-    // Otherwise fall back to the fast substring match.
-    QRegularExpression fuzzyRe;
-    const bool useFuzzy = !t.isEmpty() && !m_metaSearch && (t.contains('*') || t.contains('?'));
+bool ThumbnailPanel::matchesFilter(const Entry &e, const QString &t, bool useFuzzy,
+                                   const QRegularExpression &fuzzy) const
+{
+    const std::string ep = e.path.toStdString();
+    auto &rs = mviewer::core::RatingStore::instance();
+    if (m_ratingFilter > 0 && rs.rating(ep) < m_ratingFilter)
+        return false;
+    if (m_labelFilter > 0 && rs.colorLabel(ep) != m_labelFilter)
+        return false;
+    if (m_rejectFilter && !rs.rejected(ep))
+        return false;
+    if (m_pickFilter && !rs.picked(ep))
+        return false;
+    if (m_recentFilter)
+    {
+        const auto recents = rs.recents();
+        if (std::find(recents.begin(), recents.end(), ep) == recents.end())
+            return false;
+    }
+    if (!m_cameraFilter.isEmpty() &&
+        !m_metaCamera.value(e.path).toLower().contains(m_cameraFilter.toLower()))
+        return false;
+    if (!m_lensFilter.isEmpty() &&
+        !m_metaLens.value(e.path).toLower().contains(m_lensFilter.toLower()))
+        return false;
+    if (m_isoFilter > 0 && m_metaIso.value(e.path, -1) != m_isoFilter)
+        return false;
+    if (!m_tagFilter.isEmpty() && !mviewer::core::TagStore::instance().hasTag(
+                                       ep, m_tagFilter.toStdString()))
+        return false;
+    if (t.isEmpty())
+        return true;
+    if (m_metaSearch)
+        return m_metaIndex.value(e.path).contains(t);
     if (useFuzzy)
-    {
-        // Convert glob pattern to regex: * → .*, ? → ., escape everything else.
-        QString pattern = QRegularExpression::escape(t);
-        pattern.replace("\\*", ".*").replace("\\?", ".");
-        fuzzyRe.setPattern(pattern);
-        fuzzyRe.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
-    }
-
-    QList<Entry> out;
-    for (const Entry &e : src)
-    {
-        if (m_ratingFilter > 0 &&
-            mviewer::core::RatingStore::instance().rating(e.path.toStdString()) < m_ratingFilter)
-            continue;
-        const std::string ep = e.path.toStdString();
-        auto &rs = mviewer::core::RatingStore::instance();
-        if (m_labelFilter > 0 && rs.colorLabel(ep) != m_labelFilter)
-            continue;
-        if (m_rejectFilter && !rs.rejected(ep))
-            continue;
-        if (m_pickFilter && !rs.picked(ep))
-            continue;
-        if (m_recentFilter)
-        {
-            bool inRecents = false;
-            for (const auto &r : rs.recents())
-                if (r == ep)
-                {
-                    inRecents = true;
-                    break;
-                }
-            if (!inRecents)
-                continue;
-        }
-        // M25: Camera / Lens filters match THEIR OWN fields only — never the
-        // concatenated search blob (a camera filter must not hit a lens-only
-        // string and vice versa).
-        if (!m_cameraFilter.isEmpty() &&
-            !m_metaCamera.value(e.path).toLower().contains(m_cameraFilter.toLower()))
-            continue;
-        if (!m_lensFilter.isEmpty() &&
-            !m_metaLens.value(e.path).toLower().contains(m_lensFilter.toLower()))
-            continue;
-        if (m_isoFilter > 0 && m_metaIso.value(e.path, -1) != m_isoFilter)
-            continue;
-        if (!m_tagFilter.isEmpty() && !mviewer::core::TagStore::instance().hasTag(
-                                          e.path.toStdString(), m_tagFilter.toStdString()))
-            continue;
-        if (!t.isEmpty())
-        {
-            if (m_metaSearch)
-            {
-                if (!m_metaIndex.value(e.path).contains(t))
-                    continue;
-            }
-            else if (useFuzzy)
-            {
-                if (!fuzzyRe.match(e.name).hasMatch())
-                    continue;
-            }
-            else if (!e.name.toLower().contains(t))
-                continue;
-        }
-        out.append(e);
-    }
-    buildModel(out);
+        return fuzzy.match(e.name).hasMatch();
+    return e.name.toLower().contains(t);
 }
 
 // static

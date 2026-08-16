@@ -80,27 +80,8 @@ std::string formatAdjustment(const CompareAdjustmentState &adjustment)
     return os.str();
 }
 
-} // namespace
-
-std::string buildReportHtml(const ReportContext &ctx)
+void appendImageHtml(std::ostringstream &os, const ReportContext &ctx)
 {
-    std::ostringstream os;
-    os << "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>" << escapeHtml(ctx.title)
-       << "</title>\n"
-       << "<style>\n"
-       << "body{font-family:sans-serif;max-width:960px;margin:24px auto;padding:0 "
-          "16px;color:#222;}\n"
-       << "h1{color:#1a73e8;border-bottom:2px solid #1a73e8;padding-bottom:8px;}\n"
-       << "h2{color:#555;margin-top:32px;}\n"
-       << "table{border-collapse:collapse;width:100%;margin:12px 0;}\n"
-       << "th,td{border:1px solid #ddd;padding:8px;text-align:left;}\n"
-       << "th{background:#1a73e8;color:#fff;}\n"
-       << "img{max-width:100%;border:1px solid #ddd;margin:8px 0;}\n"
-       << ".metric{color:#666;font-size:14px;}\n"
-       << "</style></head><body>\n";
-
-    os << "<h1>" << escapeHtml(ctx.title) << "</h1>\n";
-
     if (!ctx.imagePath.empty())
         os << tag("h2", "Image") << "<p class='metric'>" << escapeHtml(ctx.imagePath) << "</p>\n";
 
@@ -109,7 +90,10 @@ std::string buildReportHtml(const ReportContext &ctx)
         os << tag("h2", "Histogram") << "<img src=\"data:image/png;base64," << ctx.histogramPng
            << "\" alt=\"histogram\">\n";
     }
+}
 
+void appendCompareHtml(std::ostringstream &os, const ReportContext &ctx)
+{
     if (ctx.hasCompareBundle)
     {
         os << tag("h2", "Compare Bundle") << "\n";
@@ -197,7 +181,10 @@ std::string buildReportHtml(const ReportContext &ctx)
         if (!ctx.compareDiffPng.empty())
             os << "<img src=\"data:image/png;base64," << ctx.compareDiffPng << "\" alt=\"diff\">\n";
     }
+}
 
+void appendBatchHtml(std::ostringstream &os, const ReportContext &ctx)
+{
     if (ctx.hasBatch)
     {
         os << tag("h2", "Analyzer: " + escapeHtml(ctx.batch.analyzerId))
@@ -220,9 +207,31 @@ std::string buildReportHtml(const ReportContext &ctx)
         }
         os << "</table>\n";
     }
+}
+} // namespace
 
+std::string buildReportHtml(const ReportContext &ctx)
+{
+    std::ostringstream os;
+    os << "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>" << escapeHtml(ctx.title)
+       << "</title>\n"
+       << "<style>\n"
+       << "body{font-family:sans-serif;max-width:960px;margin:24px auto;padding:0 "
+          "16px;color:#222;}\n"
+       << "h1{color:#1a73e8;border-bottom:2px solid #1a73e8;padding-bottom:8px;}\n"
+       << "h2{color:#555;margin-top:32px;}\n"
+       << "table{border-collapse:collapse;width:100%;margin:12px 0;}\n"
+       << "th,td{border:1px solid #ddd;padding:8px;text-align:left;}\n"
+       << "th{background:#1a73e8;color:#fff;}\n"
+       << "img{max-width:100%;border:1px solid #ddd;margin:8px 0;}\n"
+       << ".metric{color:#666;font-size:14px;}\n"
+       << "</style></head><body>\n";
+    os << "<h1>" << escapeHtml(ctx.title) << "</h1>\n";
+    appendImageHtml(os, ctx);
+    if (ctx.hasCompareBundle || ctx.hasCompare)
+        appendCompareHtml(os, ctx);
+    appendBatchHtml(os, ctx);
     os << "</body></html>\n";
     return os.str();
 }
-
 } // namespace mviewer::core

@@ -3,6 +3,7 @@
 #include "appstate.h"
 #include "core/command/CommandRegistry.h"
 #include "core/command/CommandStack.h"
+#include "core/analysis/ReportHtml.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/update/UpdateChecker.h"
 #include "core/workspace/WorkspaceSerializer.h"
@@ -14,6 +15,7 @@
 #include <QPointer>
 #include <QStringList>
 
+#include <atomic>
 #include <memory>
 
 class ImageViewer;
@@ -38,14 +40,18 @@ class PreferencesDialog;
 class AnalysisOverlayDialog;
 class QAction;
 class QMenu;
+class QMenuBar;
 class QLineEdit;
 class QCheckBox;
 class QLabel;
+class QHBoxLayout;
 class QTimer;
 class QComboBox;
 class QSplitter;
 class QSlider;
 class QToolBar;
+class QProgressDialog;
+class QSettings;
 
 namespace mviewer::core
 {
@@ -85,8 +91,44 @@ class MainWindow : public QMainWindow
     bool eventFilter(QObject *watched, QEvent *event) override;
 
   private:
+    void buildMenus();
+    void buildFileMenu(QMenuBar *menuBar);
+    void buildEditMenu(QMenuBar *menuBar);
+    void buildViewMenu(QMenuBar *menuBar);
+    void buildToolsHelpMenus(QMenuBar *menuBar);
+    void buildBrowserShell();
+    QWidget *buildNavigationPanel();
+    QWidget *buildGalleryPanel();
+    QWidget *buildSortBar(QWidget *parent);
+    void buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLayout);
+    void buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sortLayout,
+                                     QWidget *advancedFilterPanel, QHBoxLayout *advancedLayout);
+    void buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
+                             QWidget *advancedFilterPanel, QHBoxLayout *advancedLayout);
+    void buildAnalysisAndSearchPanels();
+    void buildCentralContainer(QWidget *leftWidget, QWidget *rightWidget);
+    void buildMetadataPanelUi();
+    void buildImageViewerUi();
+    void connectUiSignals();
+    void connectNavigationSignals();
+    void connectGallerySignals();
+    void connectSelectionSignals();
+    void connectViewerSignals();
+    void connectFilterSignals();
+    void connectMenuSignals();
+    void connectWorkspaceSignals();
+    void connectPanelSignals();
+    void connectSettingsSignals();
+    void buildStatusBarUi();
+
     void setupCommands();
+    bool handleWindowKey(QKeyEvent *event);
+    bool handleMetadataKey(QKeyEvent *event);
+    bool handleViewModeKey(QKeyEvent *event);
+    bool handleClipboardKey(QKeyEvent *event);
+    bool handleViewerKey(QKeyEvent *event);
     void openCompare(const QStringList &images = {}, const QString &sessionJson = {});
+    void showCompareDialog(const QStringList &images, const QString &sessionJson);
     void navigate(int delta);
     // P1-8: Home/End/PageUp/PageDown navigation within the current folder.
     void navigatePage(int key);
@@ -121,6 +163,8 @@ class MainWindow : public QMainWindow
     void rebuildFavoritesBar();
     void addFavoriteCurrent();
     void removeFavorite(const QString &dir = {});
+    void restoreWindowSettings();
+    void restoreNavigationSettings(const QSettings &settings);
     void restoreLastSession();
     // P0: Directory-level back/forward history (independent of image history).
     void pushDirHistory(const QString &dir);
@@ -260,6 +304,7 @@ class MainWindow : public QMainWindow
     QCheckBox *m_searchMeta = nullptr;
     QComboBox *m_ratingFilter = nullptr;
     QComboBox *m_sortCombo = nullptr;     // persisted across sessions via QSettings
+    QComboBox *m_viewModeCombo = nullptr;
     QSlider *m_thumbSizeSlider = nullptr; // persisted across sessions via QSettings
     QComboBox *m_flagFilter = nullptr;    // P3 tail: color label / reject / pick / recents
     QWidget *m_advancedFilterPanel = nullptr;
@@ -323,13 +368,19 @@ class MainWindow : public QMainWindow
     AppState m_appState;
 
     void saveWorkspace();
+    void cancelBackgroundPersistence();
     void openWorkspace();
+    void restoreWorkspaceState(const mviewer::domain::Workspace &workspace,
+                               const QString &filePath);
     // M15 (Project): persist / restore the full evaluation environment as a
     // self-contained .mvproj file (datasets + compare session + analysis +
     // analyzer pipeline + export/review/benchmark config).
     void saveProject();
     void openProject();
     void exportReport();
+    void startReportExport(mviewer::core::ReportContext context, const QString &output,
+                           std::string suffix);
+    void cancelReportExport();
     // P4: batch export pipeline entry point.
     void exportImages();
     // A-3: resolve paths for Export/Batch/Compare from SelectionModel first,
@@ -355,6 +406,16 @@ class MainWindow : public QMainWindow
     // Shared drop handling for the main window and the thumbnail gallery:
     // ≥2 images → Compare; a directory → open folder; one image → open it.
     void handleDroppedPaths(const QStringList &paths);
+
+    // M44: long-running persistence/report work is owned by the window and
+    // invalidated before destruction.  The worker only receives value-owned
+    // snapshots; UI delivery is generation guarded.
+    TaskScheduler::TaskHandle m_persistenceTask;
+    std::shared_ptr<std::atomic<bool>> m_persistenceCancel;
+    uint64_t m_persistenceGeneration = 0;
+    TaskScheduler::TaskHandle m_reportTask;
+    QProgressDialog *m_reportProgress = nullptr;
+    uint64_t m_reportGeneration = 0;
 
     // Slideshow: auto-advance through the current folder on a timer.
     void toggleSlideshow();

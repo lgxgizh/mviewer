@@ -19,6 +19,7 @@ add_library(mviewer_core SHARED
     core/image/ImageObject.cpp
     core/image/ImageFrame.cpp
     core/image/ImageRepository.cpp
+    core/image/ImageRepository_load.cpp
     core/image/IccProfile.cpp
     core/image/MetadataReader.cpp
     core/image/RawMetadata.cpp
@@ -77,6 +78,7 @@ add_library(mviewer_core SHARED
     core/import/ImporterRegistry.cpp
     core/export/ExportManager.cpp
     core/export/ExportJob.cpp
+    core/export/ExportJob_run.cpp
     core/search/SearchEngine.cpp
     core/search/MetadataFilter.h
     core/image/ImageSortKeys.cpp
@@ -96,6 +98,7 @@ add_library(mviewer_core SHARED
     core/command/FileDeleteCommand.cpp
     core/command/FileRenameCommand.cpp
     core/command/FileMoveCommand.cpp
+    core/command/FileSystemAdapter.cpp
     core/command/ToggleHistogramCommand.cpp
     core/command/CallbackCommand.cpp
     core/benchmark/Benchmark.cpp
@@ -121,6 +124,8 @@ target_include_directories(mviewer_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 add_library(mviewer_ui STATIC
     mainwindow.cpp
     mainwindow_ui.cpp
+    mainwindow_ui_layout.cpp
+    mainwindow_ui_connections.cpp
     mainwindow_commands.cpp
     mainwindow_navigation.cpp
     mainwindow_session.cpp
@@ -133,6 +138,7 @@ add_library(mviewer_ui STATIC
     analyzermodel.cpp
     appstate.cpp
     imageviewer.cpp
+    imageviewer_loading.cpp
     imageviewer_paint.cpp
     imageviewer_contextmenu.cpp
     directorytree.cpp
@@ -149,12 +155,15 @@ add_library(mviewer_ui STATIC
     previewpanel.cpp
     thumbnailcache.cpp
     compareworkspace.cpp
+    compareworkspace_controls.cpp
     compareworkspace_render.cpp
     compareworkspace_analysis.cpp
     compareworkspace_editpanel.cpp
     compareworkspace_interact.cpp
     compareworkspace_nav.cpp
     analysispanel.cpp
+    analysispanel_analysis.cpp
+    analysispanel_actions.cpp
     analysispanel_buildui.cpp
     analysispanel_pages.cpp
     analysispanel_history.cpp

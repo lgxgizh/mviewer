@@ -52,6 +52,11 @@ class MetadataModel : public QAbstractItemModel
 
     void clearNodes();
     void rebuild();
+    void buildFileSection();
+    void buildImageSection();
+    void buildTextSection();
+    void buildIccSection();
+    void buildRawSection();
     Node *addCategory(const QString &title);
     void addLeaf(Node *cat, const QString &key, const QString &value);
 

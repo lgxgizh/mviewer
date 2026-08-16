@@ -2,7 +2,7 @@
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/Analyzer.h"
-#include "core/image/ImageRepository.h"
+#include "application/ImageLoadingService.h"
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
@@ -95,82 +95,8 @@ ImageViewer::~ImageViewer()
     }
 }
 
-void ImageViewer::setBrowseSequence(const QStringList &paths)
-{
-    m_fileList = paths;
-    m_currentIndex = m_fileList.indexOf(m_currentPath);
 
-    if (!m_frame || m_currentPath.isEmpty())
-        return;
 
-    if (m_currentIndex >= 0)
-        preloadNeighbors(m_currentPath);
-    else
-        cancelPreloads();
-
-    const QFileInfo info(m_currentPath);
-    const QString position =
-        m_currentIndex >= 0
-            ? QString(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
-            : QString();
-    setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
-                       .arg(info.fileName())
-                       .arg(m_frame->width())
-                       .arg(m_frame->height())
-                       .arg(position));
-}
-
-void ImageViewer::showBrowseFullscreen()
-{
-    setFullscreenRequested(true);
-    raise();
-    activateWindow();
-}
-
-void ImageViewer::setFullscreenRequested(bool requested)
-{
-    // This property is authoritative even when the offscreen platform cannot
-    // report a reliable native isFullScreen() value.
-    setProperty("mviewerFullscreenRequested", requested);
-    if (requested)
-    {
-        setWindowState(windowState() | Qt::WindowFullScreen);
-        showFullScreen();
-    }
-    else
-    {
-        setWindowState(windowState() & ~Qt::WindowFullScreen);
-        showNormal();
-    }
-
-    auto guard = std::make_shared<QPointer<ImageViewer>>(this);
-    QTimer::singleShot(0, this,
-                       [guard, requested]()
-                       {
-                           ImageViewer *viewer = guard ? guard->data() : nullptr;
-                           if (!viewer)
-                               return;
-                           if (viewer->m_fitMode)
-                           {
-                               if (viewer->m_frame && viewer->m_frame->isValid())
-                                   viewer->fitToWidget();
-                               else if (!viewer->m_provisionalImage.isNull())
-                               {
-                                   viewer->m_view.screenW = viewer->width();
-                                   viewer->m_view.screenH = viewer->height();
-                                   const QSize source = viewer->m_provisionalSourceSize.isValid()
-                                                             ? viewer->m_provisionalSourceSize
-                                                             : viewer->m_provisionalImage.size();
-                                   viewer->m_view.fit(source.width(), source.height(),
-                                                     requested ? FitPolicy::MaximizeClient
-                                                               : FitPolicy::Comfortable);
-                                   viewer->advanceViewportRevision();
-                                   viewer->emitZoom();
-                               }
-                           }
-                           viewer->update();
-                       });
-}
 
 void ImageViewer::toggleFullscreen()
 {
@@ -317,243 +243,10 @@ void ImageViewer::beginImageGeneration()
     cancelRoiStats();
 }
 
-void ImageViewer::setImage(const QString &path)
-{
-    // Pixel Inspector lifecycle: invalidate synchronously on every new load so
-    // the previous image's sample never lingers while the next decode runs —
-    // including for empty/failing requests that never deliver a frame.
-    clearPixelInfo();
-    const bool keepProvisional = !path.isEmpty() && path == m_provisionalPath &&
-                                 !m_provisionalImage.isNull();
-    m_currentPath = path;
-    m_currentIndex = m_fileList.indexOf(path);
-    // M29: drop the prior foreground decode BEFORE scheduling the new load, and
-    // consume any neighbor preload that already targets `path` so it can be
-    // promoted to the foreground decode below. Every nonmatching preload is
-    // soft-cancelled here too, so obsolete queued Background work from the
-    // previous navigation is skipped before it wastes CPU/I/O or re-warms the
-    // cache for a superseded image.
-    cancelCurrentLoad();
-    auto matchingPreload = takeMatchingPreload(path);
-    const uint64_t gen = ++m_requestGen;
-    beginImageGeneration();
-    m_tileCache.clear();
-    m_overlayCache.clear();
-    m_frame.reset();
-    m_tiles = TileGrid();
-    m_hasHistogram = false;
-    m_loading = !path.isEmpty();
-    m_pendingView.reset();
-    if (!keepProvisional)
-    {
-        m_provisionalPath.clear();
-        m_provisionalImage = QImage();
-        m_provisionalSourceSize = QSize();
-    }
-    if (context())
-    {
-        makeCurrent();
-        m_gpu.clear();
-        doneCurrent();
-    }
-    if (path.isEmpty())
-    {
-        update();
-        return;
-    }
-    // Decode off the UI thread: ImageRepository::loadAsyncCancellable dispatches
-    // to the DecodePool, so first-open / next-prev never block the UI thread
-    // (keeps within the performance budget: first <100ms, switch <20ms). The
-    // decoded frame is applied back on the UI thread via QMetaObject::invokeMethod.
-    //
-    // M27 lifetime closure: the worker callback captures a QPointer and checks
-    // it BEFORE any use — including the invokeMethod target, which is qApp
-    // (always alive) rather than this. The queued lambda re-checks the guard,
-    // the path AND the request generation (A -> B -> A: an older A request that
-    // completes last must not overwrite the newer A).
-    auto guard = std::make_shared<QPointer<ImageViewer>>(this);
-    auto onLoaded = [path, gen, guard](const ImageRepository::Result &res)
-    {
-        if (!guard)
-            return; // viewer destroyed mid-decode
-        if (!res.success())
-        {
-            QMetaObject::invokeMethod(
-                qApp,
-                [path, gen, guard]()
-                {
-                    ImageViewer *viewer = guard->data();
-                    if (!viewer || path != viewer->m_currentPath || gen != viewer->m_requestGen)
-                        return;
-                    viewer->m_foregroundRequest.reset();
-                    viewer->m_loading = false;
-                    viewer->m_hasHistogram = false;
-                    viewer->setWindowTitle(
-                        QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
-                    viewer->update();
-                    emit viewer->loadFailed(path);
-                });
-            return;
-        }
-        QMetaObject::invokeMethod(
-            qApp,
-            [res, path, gen, guard]()
-            {
-                ImageViewer *viewer = guard->data();
-                if (!viewer || path != viewer->m_currentPath || gen != viewer->m_requestGen)
-                    return; // widget destroyed or user navigated away
-                viewer->m_foregroundRequest.reset();
-                viewer->m_loading = false;
-                viewer->m_frame = res.frame;
-                // M28 P1-02: no full-size QPixmap materialization on the UI
-                // thread — the paint path renders tiles from the frame, and
-                // the histogram comes from the frame's cached luminance pass.
-                if (!viewer->m_frame || viewer->m_frame->pixels().isNull())
-                {
-                    viewer->m_hasHistogram = false;
-                    viewer->setWindowTitle(
-                        QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
-                    viewer->update();
-                    emit viewer->loadFailed(path);
-                    return;
-                }
-                viewer->computeHistogram();
-                const QFileInfo info(path);
-                viewer->m_currentIndex = static_cast<int>(viewer->m_fileList.indexOf(path));
-                // Build the render pipeline state (tile grid + fitted Viewport)
-                // exactly as before — now applied on the UI thread post-decode.
-                viewer->m_tiles =
-                    TileGrid(viewer->m_frame->width(), viewer->m_frame->height(), 256);
-                viewer->m_view.screenW = viewer->width();
-                viewer->m_view.screenH = viewer->height();
-                const FitPolicy fitPolicy =
-                    viewer->property("mviewerFullscreenRequested").toBool()
-                        ? FitPolicy::MaximizeClient
-                        : FitPolicy::Comfortable;
-                viewer->m_view.fit(viewer->m_frame->width(), viewer->m_frame->height(), fitPolicy);
-                viewer->m_fitMode = true;
-                const QString position = viewer->m_currentIndex >= 0
-                                             ? QString(" [%1/%2]")
-                                                   .arg(viewer->m_currentIndex + 1)
-                                                   .arg(viewer->m_fileList.size())
-                                             : QString();
-                viewer->setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
-                                           .arg(info.fileName())
-                                           .arg(viewer->m_frame->width())
-                                           .arg(viewer->m_frame->height())
-                                           .arg(position));
-                // P1-7: if a session-restore zoom/pan was requested before the
-                // async decode finished, apply it now. Only reuse the saved pan
-                // offsets when the window size matches (offsets are screen-space);
-                // otherwise keep the fitted pan and just restore the zoom level.
-                if (viewer->m_pendingView)
-                {
-                    viewer->m_view.scale = viewer->m_pendingView->scale;
-                    if (std::fabs(viewer->m_view.screenW - viewer->m_pendingView->screenW) < 2.0 &&
-                        std::fabs(viewer->m_view.screenH - viewer->m_pendingView->screenH) < 2.0)
-                    {
-                        viewer->m_view.offsetX = viewer->m_pendingView->offsetX;
-                        viewer->m_view.offsetY = viewer->m_pendingView->offsetY;
-                    }
-                    viewer->m_pendingView.reset();
-                    viewer->m_fitMode = false; // restored zoom is explicit, not fit
-                    emit viewer->zoomChanged(static_cast<int>(viewer->m_view.scale * 100.0 + 0.5));
-                }
-                viewer->m_overlayCache.clear();
-                // Stage A: drop GPU textures for the previous image while
-                // the GL context is current (UI thread only).
-                if (viewer->context())
-                {
-                    viewer->makeCurrent();
-                    viewer->m_gpu.clear();
-                    viewer->doneCurrent();
-                }
-                viewer->preloadNeighbors(path);
-                viewer->update();
-                emit viewer->imageReady(viewer->m_frame);
-                // Fullscreen layout can settle one event-loop turn after the
-                // async decode delivery. Re-fit against the final geometry so
-                // the first observable Browse frame is not based on the old
-                // normal-window size.
-                QTimer::singleShot(0, viewer,
-                                   [guard, path, gen]()
-                                   {
-                                       ImageViewer *current = guard->data();
-                                       if (!current || current->m_currentPath != path ||
-                                           current->m_requestGen != gen)
-                                           return;
-                                       const bool fullscreenRequested =
-                                           current->property("mviewerFullscreenRequested").toBool();
-                                       if (fullscreenRequested && current->m_fitMode)
-                                           current->fitToWidget();
-                                       current->update();
-                                   });
-            });
-    };
-    // M29 preload promotion: if the previous navigation preloaded this exact
-    // path, promote the matching neighbor preload to the foreground decode — a
-    // queued match escalates to Decode priority, a running match reuses the
-    // in-flight decode, and a finished/cancelled match resubmits at Decode
-    // priority (already cache-warm). Other preloads were cancelled by
-    // takeMatchingPreload above. A promotion that returns nullptr has already
-    // delivered its explicit rejection error through the callback, so never
-    // silently fall back to a second submission.
-    if (matchingPreload)
-        m_foregroundRequest =
-            ImageRepository::instance().promotePreloadAsync(matchingPreload, std::move(onLoaded));
-    else
-        m_foregroundRequest = ImageRepository::instance().loadAsyncCancellable(path.toStdString(),
-                                                                               std::move(onLoaded));
-}
 
-void ImageViewer::setViewTransform(const Viewport &v)
-{
-    // Store until the async load of the current image completes; the callback
-    // in setImage() applies it once screen geometry is known.
-    m_pendingView = v;
-}
 
-void ImageViewer::preloadNeighbors(const QString &path)
-{
-    if (m_currentIndex < 0)
-        return;
 
-    // M29: drop any preloads still tracked from the previous navigation so the
-    // vector holds at most the previous/next pair of the CURRENT image.
-    cancelPreloads();
 
-    for (int delta = -1; delta <= 1; ++delta)
-    {
-        const int i = m_currentIndex + delta;
-        if (i < 0 || i >= m_fileList.size())
-            continue;
-        if (m_fileList[i] == path)
-            continue;
-        // Warm the cache only (off UI thread, Background priority, no histogram).
-        // Do NOT call loadPixmap(): it assigns m_frame, which would race with
-        // the UI thread's frame() read. Best-effort: a queued preload may be
-        // skipped by the next navigation; a running decode may finish and
-        // safely warm the cache. At most two handles are retained, each bound
-        // to the path it prefetches so a navigation back to a neighbor can
-        // promote this handle to the foreground decode (takeMatchingPreload).
-        ImageRepository::AsyncRequestHandle h =
-            ImageRepository::instance().preloadAsync(m_fileList[i].toStdString());
-        if (h)
-            m_neighborPreloads.push_back({m_fileList[i], std::move(h)});
-    }
-}
-
-void ImageViewer::cancelCurrentLoad()
-{
-    ImageRepository::instance().cancelAsync(m_foregroundRequest);
-}
-
-void ImageViewer::cancelPreloads()
-{
-    for (auto &p : m_neighborPreloads)
-        ImageRepository::instance().cancelAsync(p.handle);
-    m_neighborPreloads.clear();
-}
 
 void ImageViewer::cancelExportJob()
 {
@@ -646,23 +339,6 @@ void ImageViewer::saveToPath(const QString &path)
     startExportJob(std::move(cfg), false, path);
 }
 
-ImageRepository::AsyncRequestHandle ImageViewer::takeMatchingPreload(const QString &path)
-{
-    // Consume the first tracked preload that exactly matches `path` and cancel
-    // every other tracked preload, so a navigation back to a preloaded neighbor
-    // can be promoted to the foreground decode instead of being re-queued. The
-    // vector is emptied; at most one match is ever retained.
-    ImageRepository::AsyncRequestHandle match;
-    for (auto &p : m_neighborPreloads)
-    {
-        if (!match && p.path == path)
-            match = std::move(p.handle);
-        else
-            ImageRepository::instance().cancelAsync(p.handle);
-    }
-    m_neighborPreloads.clear();
-    return match;
-}
 
 void ImageViewer::emitZoom()
 {
@@ -1018,32 +694,47 @@ void ImageViewer::keyPressEvent(QKeyEvent *event)
 {
     const int key = event->key();
     const auto mods = event->modifiers();
+    if (handleNavigationKey(key) || handleZoomKey(key, mods) || handleModeKey(key, mods))
+        return;
+    QWidget::keyPressEvent(event);
+}
+
+bool ImageViewer::handleNavigationKey(int key)
+{
     if (key == Qt::Key_Left)
         emit requestPrev();
     else if (key == Qt::Key_Right)
         emit requestNext();
-    // Home/End/PageUp/PageDown are handled via eventFilter → MainWindow's
-    // keyPressEvent, so they work identically in the viewer and the gallery.
-    else if (key == Qt::Key_Plus || key == Qt::Key_Equal)
+    else
+        return false;
+    return true;
+}
+
+bool ImageViewer::handleZoomKey(int key, Qt::KeyboardModifiers modifiers)
+{
+    if (key == Qt::Key_Plus || key == Qt::Key_Equal)
         zoomIn();
     else if (key == Qt::Key_Minus || key == Qt::Key_Underscore)
         zoomOut();
-    else if (key == Qt::Key_0 && !(mods & Qt::ControlModifier))
+    else if (key == Qt::Key_0)
         zoomFit();
-    else if (key == Qt::Key_1 && !(mods & Qt::ControlModifier))
+    else if (key == Qt::Key_1)
         zoomActual();
-    // Also accept Ctrl+0 / Ctrl+1 as zoom shortcuts (widely expected by users).
-    else if (key == Qt::Key_0 && (mods & Qt::ControlModifier))
-        zoomFit();
-    else if (key == Qt::Key_1 && (mods & Qt::ControlModifier))
-        zoomActual();
-    // R toggles region-of-interest selection mode.
-    else if (key == Qt::Key_R && !mods)
+    else
+        return false;
+    Q_UNUSED(modifiers); // Ctrl+0/Ctrl+1 intentionally share the same zoom action.
+    return true;
+}
+
+bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
+{
+    if (key == Qt::Key_R && !modifiers)
         setSelectMode(!m_selectMode);
-    else if ((key == Qt::Key_F && !mods) || key == Qt::Key_F11)
+    else if ((key == Qt::Key_F && !modifiers) || key == Qt::Key_F11)
         toggleFullscreen();
     else if (key == Qt::Key_Escape)
         close();
     else
-        QWidget::keyPressEvent(event);
+        return false;
+    return true;
 }

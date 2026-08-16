@@ -132,158 +132,154 @@ void MetadataModel::rebuild()
         return;
     }
 
-    // ─── File section ───────────────────────────────────────────────────
-    {
-        auto *file = addCategory(tr("文件信息"));
-        addLeaf(file, tr("文件名"), toQString(m_meta.fileName));
-        addLeaf(file, tr("路径"), toQString(m_meta.filePath));
-        addLeaf(file, tr("大小"),
-                m_meta.fileSize > 0 ? QString("%1 字节").arg(m_meta.fileSize) : tr("未知"));
-        if (m_meta.modifiedEpochSec > 0)
-        {
-            QDateTime t;
-            t.setSecsSinceEpoch(static_cast<qint64>(m_meta.modifiedEpochSec));
-            addLeaf(file, tr("修改时间"), t.toString("yyyy-MM-dd HH:mm:ss"));
-        }
-    }
-
-    // ─── Image section ──────────────────────────────────────────────────
-    {
-        auto *img = addCategory(tr("图像信息"));
-        addLeaf(img, tr("格式"), toQString(m_meta.format));
-        if (m_meta.width > 0 && m_meta.height > 0)
-        {
-            const double mp = m_meta.width * m_meta.height / 1000000.0;
-            addLeaf(img, tr("尺寸"), QString("%1 × %2 像素").arg(m_meta.width).arg(m_meta.height));
-            addLeaf(img, tr("长宽比"), ratioText(m_meta.width, m_meta.height));
-            addLeaf(img, tr("像素量"), QString("%1 MP").arg(mp, 0, 'f', 2));
-        }
-        addLeaf(img, tr("位深"),
-                m_meta.bitDepth > 0 ? QString("%1 位").arg(m_meta.bitDepth) : tr("未知"));
-        addLeaf(img, tr("通道数"),
-                m_meta.channels > 0 ? QString::number(m_meta.channels) : tr("未知"));
-        addLeaf(img, tr("色彩空间"), colorSpaceText(toQString(m_meta.colorSpace)));
-        if (m_meta.dpiX > 0 || m_meta.dpiY > 0)
-        {
-            addLeaf(img, tr("分辨率 (DPI)"), QString("%1 × %2").arg(m_meta.dpiX).arg(m_meta.dpiY));
-        }
-        addLeaf(img, tr("方向"), orientationText(m_meta.orientation));
-        addLeaf(img, tr("ICC 配置"), m_meta.hasIccProfile ? tr("已嵌入") : tr("无"));
-        // P0: GPS coordinates in the Image section.
-        if (m_meta.hasGps)
-        {
-            auto toDms = [](double dd, char pos, char neg)
-            {
-                const bool isNeg = (dd < 0);
-                double d = std::abs(dd);
-                int deg = static_cast<int>(d);
-                double m = (d - deg) * 60.0;
-                int min = static_cast<int>(m);
-                double s = (m - min) * 60.0;
-                return QString("%1°%2'%3\"%4")
-                    .arg(deg)
-                    .arg(min, 2, 10, QChar('0'))
-                    .arg(s, 2, 'f', 1)
-                    .arg(isNeg ? neg : pos);
-            };
-            addLeaf(img, tr("GPS 纬度"), toDms(m_meta.gpsLatitude, 'N', 'S'));
-            addLeaf(img, tr("GPS 经度"), toDms(m_meta.gpsLongitude, 'E', 'W'));
-            if (m_meta.gpsAltitude != 0.0)
-                addLeaf(img, tr("GPS 海拔"), QString("%1 m").arg(m_meta.gpsAltitude, 0, 'f', 1));
-        }
-    }
-
-    // ─── EXIF / XMP / IPTC text keys ────────────────────────────────────
-    if (!m_meta.textKeys.empty())
-    {
-        Node *exif = nullptr;
-        for (const auto &kv : m_meta.textKeys)
-        {
-            if (kv.first.starts_with("MViewer."))
-                continue; // internal display/profile sidecars are not user metadata
-            if (!exif)
-                exif = addCategory(tr("EXIF / 元数据"));
-            addLeaf(exif, toQString(kv.first), toQString(kv.second));
-        }
-    }
-
-    // ─── ICC profile section (M-XX) ────────────────────────────────────────
-    // Only show the dedicated section when the embedded profile was actually
-    // parsed into detail fields (avoids an empty category when only the
-    // "已嵌入" leaf under Image is known).
-    const bool hasIccDetails =
-        m_meta.hasIccProfile && (!m_meta.iccDescription.empty() || !m_meta.iccCopyright.empty() ||
-                                 !m_meta.iccColorSpace.empty() || !m_meta.iccDeviceClass.empty() ||
-                                 !m_meta.iccPcs.empty() || !m_meta.iccRenderingIntent.empty() ||
-                                 !m_meta.iccVersion.empty());
-    if (hasIccDetails)
-    {
-        auto *icc = addCategory(tr("ICC 配置详情"));
-        if (!m_meta.iccDescription.empty())
-            addLeaf(icc, tr("描述"), toQString(m_meta.iccDescription));
-        if (!m_meta.iccCopyright.empty())
-            addLeaf(icc, tr("版权"), toQString(m_meta.iccCopyright));
-        if (!m_meta.iccDeviceClass.empty())
-            addLeaf(icc, tr("设备类别"), toQString(m_meta.iccDeviceClass));
-        if (!m_meta.iccColorSpace.empty())
-            addLeaf(icc, tr("色彩空间"), toQString(m_meta.iccColorSpace));
-        if (!m_meta.iccPcs.empty())
-            addLeaf(icc, tr("PCS"), toQString(m_meta.iccPcs));
-        if (!m_meta.iccRenderingIntent.empty())
-            addLeaf(icc, tr("渲染意图"), toQString(m_meta.iccRenderingIntent));
-        if (!m_meta.iccVersion.empty())
-            addLeaf(icc, tr("版本"), toQString(m_meta.iccVersion));
-    }
-
-    // ─── RAW sensor section ─────────────────────────────────────────────
-    if (m_raw.parsed)
-    {
-        auto *raw = addCategory(tr("RAW 传感器"));
-        if (!m_raw.make.empty())
-            addLeaf(raw, tr("相机厂商"), toQString(m_raw.make));
-        if (!m_raw.model.empty())
-            addLeaf(raw, tr("相机型号"), toQString(m_raw.model));
-        if (!m_raw.lens.empty())
-            addLeaf(raw, tr("镜头"), toQString(m_raw.lens));
-        if (m_raw.iso > 0)
-            addLeaf(raw, tr("ISO"), QString::number(m_raw.iso));
-        if (m_raw.exposureSec > 0.0)
-        {
-            if (m_raw.exposureSec >= 1.0)
-                addLeaf(raw, tr("曝光时间"), QString("%1 s").arg(m_raw.exposureSec, 0, 'f', 2));
-            else
-                addLeaf(raw, tr("曝光时间"),
-                        QString("1/%1 s").arg(qRound(1.0 / m_raw.exposureSec)));
-        }
-        if (m_raw.fNumber > 0.0)
-            addLeaf(raw, tr("光圈"), QString("f/%1").arg(m_raw.fNumber, 0, 'f', 1));
-        if (m_raw.focalLength > 0.0)
-        {
-            addLeaf(raw, tr("焦距"), QString("%1 mm").arg(m_raw.focalLength, 0, 'f', 1));
-        }
-        if (m_raw.focalLength35mm > 0.0)
-        {
-            addLeaf(raw, tr("等效焦距"), QString("%1 mm").arg(m_raw.focalLength35mm, 0, 'f', 1));
-        }
-        if (!m_raw.bayerPattern.empty())
-            addLeaf(raw, tr("Bayer 阵列"), toQString(m_raw.bayerPattern));
-        if (m_raw.blackLevel > 0)
-            addLeaf(raw, tr("黑电平"), QString::number(m_raw.blackLevel));
-        if (m_raw.whiteLevel > 0)
-            addLeaf(raw, tr("白电平"), QString::number(m_raw.whiteLevel));
-        if (!m_raw.whiteBalance.empty())
-            addLeaf(raw, tr("白平衡"), toQString(m_raw.whiteBalance));
-        if (m_raw.bitsPerSample > 0)
-            addLeaf(raw, tr("采样位深"), QString("%1 位").arg(m_raw.bitsPerSample));
-        if (m_raw.width > 0 && m_raw.height > 0)
-        {
-            addLeaf(raw, tr("原始尺寸"), QString("%1 × %2").arg(m_raw.width).arg(m_raw.height));
-        }
-        if (!m_raw.colorSpace.empty())
-            addLeaf(raw, tr("色彩空间"), toQString(m_raw.colorSpace));
-    }
-
+    buildFileSection();
+    buildImageSection();
+    buildTextSection();
+    buildIccSection();
+    buildRawSection();
     endResetModel();
+}
+
+void MetadataModel::buildFileSection()
+{
+    auto *file = addCategory(tr("文件信息"));
+    addLeaf(file, tr("文件名"), toQString(m_meta.fileName));
+    addLeaf(file, tr("路径"), toQString(m_meta.filePath));
+    addLeaf(file, tr("大小"),
+            m_meta.fileSize > 0 ? QString("%1 字节").arg(m_meta.fileSize) : tr("未知"));
+    if (m_meta.modifiedEpochSec > 0)
+    {
+        QDateTime t;
+        t.setSecsSinceEpoch(static_cast<qint64>(m_meta.modifiedEpochSec));
+        addLeaf(file, tr("修改时间"), t.toString("yyyy-MM-dd HH:mm:ss"));
+    }
+}
+
+void MetadataModel::buildImageSection()
+{
+    auto *img = addCategory(tr("图像信息"));
+    addLeaf(img, tr("格式"), toQString(m_meta.format));
+    if (m_meta.width > 0 && m_meta.height > 0)
+    {
+        const double mp = m_meta.width * m_meta.height / 1000000.0;
+        addLeaf(img, tr("尺寸"), QString("%1 × %2 像素").arg(m_meta.width).arg(m_meta.height));
+        addLeaf(img, tr("长宽比"), ratioText(m_meta.width, m_meta.height));
+        addLeaf(img, tr("像素量"), QString("%1 MP").arg(mp, 0, 'f', 2));
+    }
+    addLeaf(img, tr("位深"),
+            m_meta.bitDepth > 0 ? QString("%1 位").arg(m_meta.bitDepth) : tr("未知"));
+    addLeaf(img, tr("通道数"),
+            m_meta.channels > 0 ? QString::number(m_meta.channels) : tr("未知"));
+    addLeaf(img, tr("色彩空间"), colorSpaceText(toQString(m_meta.colorSpace)));
+    if (m_meta.dpiX > 0 || m_meta.dpiY > 0)
+        addLeaf(img, tr("分辨率 (DPI)"), QString("%1 × %2").arg(m_meta.dpiX).arg(m_meta.dpiY));
+    addLeaf(img, tr("方向"), orientationText(m_meta.orientation));
+    addLeaf(img, tr("ICC 配置"), m_meta.hasIccProfile ? tr("已嵌入") : tr("无"));
+    if (!m_meta.hasGps)
+        return;
+    auto toDms = [](double dd, char pos, char neg)
+    {
+        const bool isNeg = (dd < 0);
+        const double d = std::abs(dd);
+        const int deg = static_cast<int>(d);
+        const double m = (d - deg) * 60.0;
+        const int min = static_cast<int>(m);
+        const double s = (m - min) * 60.0;
+        return QString("%1°%2'%3\"%4")
+            .arg(deg)
+            .arg(min, 2, 10, QChar('0'))
+            .arg(s, 2, 'f', 1)
+            .arg(isNeg ? neg : pos);
+    };
+    addLeaf(img, tr("GPS 纬度"), toDms(m_meta.gpsLatitude, 'N', 'S'));
+    addLeaf(img, tr("GPS 经度"), toDms(m_meta.gpsLongitude, 'E', 'W'));
+    if (m_meta.gpsAltitude != 0.0)
+        addLeaf(img, tr("GPS 海拔"), QString("%1 m").arg(m_meta.gpsAltitude, 0, 'f', 1));
+}
+
+void MetadataModel::buildTextSection()
+{
+    if (m_meta.textKeys.empty())
+        return;
+    Node *exif = nullptr;
+    for (const auto &kv : m_meta.textKeys)
+    {
+        if (kv.first.starts_with("MViewer."))
+            continue;
+        if (!exif)
+            exif = addCategory(tr("EXIF / 元数据"));
+        addLeaf(exif, toQString(kv.first), toQString(kv.second));
+    }
+}
+
+void MetadataModel::buildIccSection()
+{
+    const bool hasIccDetails =
+        m_meta.hasIccProfile &&
+        (!m_meta.iccDescription.empty() || !m_meta.iccCopyright.empty() ||
+         !m_meta.iccColorSpace.empty() || !m_meta.iccDeviceClass.empty() ||
+         !m_meta.iccPcs.empty() || !m_meta.iccRenderingIntent.empty() ||
+         !m_meta.iccVersion.empty());
+    if (!hasIccDetails)
+        return;
+    auto *icc = addCategory(tr("ICC 配置详情"));
+    if (!m_meta.iccDescription.empty())
+        addLeaf(icc, tr("描述"), toQString(m_meta.iccDescription));
+    if (!m_meta.iccCopyright.empty())
+        addLeaf(icc, tr("版权"), toQString(m_meta.iccCopyright));
+    if (!m_meta.iccDeviceClass.empty())
+        addLeaf(icc, tr("设备类别"), toQString(m_meta.iccDeviceClass));
+    if (!m_meta.iccColorSpace.empty())
+        addLeaf(icc, tr("色彩空间"), toQString(m_meta.iccColorSpace));
+    if (!m_meta.iccPcs.empty())
+        addLeaf(icc, tr("PCS"), toQString(m_meta.iccPcs));
+    if (!m_meta.iccRenderingIntent.empty())
+        addLeaf(icc, tr("渲染意图"), toQString(m_meta.iccRenderingIntent));
+    if (!m_meta.iccVersion.empty())
+        addLeaf(icc, tr("版本"), toQString(m_meta.iccVersion));
+}
+
+void MetadataModel::buildRawSection()
+{
+    if (!m_raw.parsed)
+        return;
+    auto *raw = addCategory(tr("RAW 传感器"));
+    if (!m_raw.make.empty())
+        addLeaf(raw, tr("相机厂商"), toQString(m_raw.make));
+    if (!m_raw.model.empty())
+        addLeaf(raw, tr("相机型号"), toQString(m_raw.model));
+    if (!m_raw.lens.empty())
+        addLeaf(raw, tr("镜头"), toQString(m_raw.lens));
+    if (m_raw.iso > 0)
+        addLeaf(raw, tr("ISO"), QString::number(m_raw.iso));
+    if (m_raw.exposureSec > 0.0)
+    {
+        if (m_raw.exposureSec >= 1.0)
+            addLeaf(raw, tr("曝光时间"), QString("%1 s").arg(m_raw.exposureSec, 0, 'f', 2));
+        else
+            addLeaf(raw, tr("曝光时间"),
+                    QString("1/%1 s").arg(qRound(1.0 / m_raw.exposureSec)));
+    }
+    if (m_raw.fNumber > 0.0)
+        addLeaf(raw, tr("光圈"), QString("f/%1").arg(m_raw.fNumber, 0, 'f', 1));
+    if (m_raw.focalLength > 0.0)
+        addLeaf(raw, tr("焦距"), QString("%1 mm").arg(m_raw.focalLength, 0, 'f', 1));
+    if (m_raw.focalLength35mm > 0.0)
+        addLeaf(raw, tr("等效焦距"), QString("%1 mm").arg(m_raw.focalLength35mm, 0, 'f', 1));
+    if (!m_raw.bayerPattern.empty())
+        addLeaf(raw, tr("Bayer 阵列"), toQString(m_raw.bayerPattern));
+    if (m_raw.blackLevel > 0)
+        addLeaf(raw, tr("黑电平"), QString::number(m_raw.blackLevel));
+    if (m_raw.whiteLevel > 0)
+        addLeaf(raw, tr("白电平"), QString::number(m_raw.whiteLevel));
+    if (!m_raw.whiteBalance.empty())
+        addLeaf(raw, tr("白平衡"), toQString(m_raw.whiteBalance));
+    if (m_raw.bitsPerSample > 0)
+        addLeaf(raw, tr("采样位深"), QString("%1 位").arg(m_raw.bitsPerSample));
+    if (m_raw.width > 0 && m_raw.height > 0)
+        addLeaf(raw, tr("原始尺寸"), QString("%1 × %2").arg(m_raw.width).arg(m_raw.height));
+    if (!m_raw.colorSpace.empty())
+        addLeaf(raw, tr("色彩空间"), toQString(m_raw.colorSpace));
 }
 
 QModelIndex MetadataModel::index(int row, int column, const QModelIndex &parent) const

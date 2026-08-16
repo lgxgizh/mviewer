@@ -110,141 +110,142 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
 // M34: wheel + mouse input for the dedicated compareCanvas page. All canvas
 // events are consumed here — the canvas owns interaction while a canvas mode
 // is active, so nothing leaks to the hidden grid cells.
-bool CompareWorkspace::canvasEventFilter(QEvent *event)
+bool CompareWorkspace::handleCanvasWheel(QEvent *event)
 {
-    // Canvas paint is handled through the event path so the parent's paintEvent
-    // stays a pure transform pusher (M34; see compareworkspace_render.cpp).
-    if (event->type() == QEvent::Paint)
-    {
-        paintCompareCanvas();
+    auto *we = static_cast<QWheelEvent *>(event);
+    const int delta = we->angleDelta().y();
+    if (delta == 0)
         return true;
-    }
-
-    if (event->type() == QEvent::Wheel)
+    const double factor = delta > 0 ? 1.15 : 1.0 / 1.15;
+    const QRect cr = canvasRect();
+    const QPoint pos = we->position().toPoint();
+    double anchorX = pos.x() - cr.width() / 2.0;
+    double anchorY = pos.y() - cr.height() / 2.0;
+    if (m_splitChk && m_splitChk->isChecked())
     {
-        auto *we = static_cast<QWheelEvent *>(event);
-        const int wheelDelta = we->angleDelta().y();
-        if (wheelDelta == 0)
-            return true; // horizontal-only wheel: consume without zooming
-        const double factor = wheelDelta > 0 ? 1.15 : 1.0 / 1.15;
+        const int midX = cr.width() / 2;
+        const bool left = pos.x() < midX;
+        const QRect half = left ? QRect(cr.left(), cr.top(), midX, cr.height())
+                                : QRect(cr.left() + midX, cr.top(), cr.width() - midX, cr.height());
+        anchorX = pos.x() - (half.x() + half.width() / 2.0);
+        anchorY = pos.y() - (half.y() + half.height() / 2.0);
+        applyAnchorZoom(left ? 0 : 1, anchorX, anchorY, factor);
+    }
+    else
+    {
+        applyAnchorZoom(0, anchorX, anchorY, factor);
+    }
+    if (m_compareCanvas)
+        m_compareCanvas->update();
+    update();
+    return true;
+}
+
+bool CompareWorkspace::handleCanvasPress(QEvent *event)
+{
+    auto *me = static_cast<QMouseEvent *>(event);
+    if (me->button() == Qt::LeftButton)
+    {
         const QRect cr = canvasRect();
-        const QPoint pos = we->position().toPoint();
-        // Split draws one half-pane per image; the shared offset is a pan delta
-        // from the HALF-PANE center, so the wheel anchor must be center-relative
-        // to the half under the cursor. Other modes anchor on the full canvas.
-        double anchorX = pos.x() - cr.width() / 2.0;
-        double anchorY = pos.y() - cr.height() / 2.0;
-        if (m_splitChk && m_splitChk->isChecked())
+        const bool swipe = m_swipeChk && m_swipeChk->isChecked();
+        const int divider = int(cr.width() * m_splitPos);
+        if (swipe && std::abs(me->pos().x() - divider) < 12)
         {
-            const int midX = cr.width() / 2;
-            const bool left = pos.x() < midX;
-            const QRect half =
-                left ? QRect(cr.left(), cr.top(), midX, cr.height())
-                     : QRect(cr.left() + midX, cr.top(), cr.width() - midX, cr.height());
-            anchorX = pos.x() - (half.x() + half.width() / 2.0);
-            anchorY = pos.y() - (half.y() + half.height() / 2.0);
-            applyAnchorZoom(left ? 0 : 1, anchorX, anchorY, factor);
-        }
-        else
-        {
-            applyAnchorZoom(0, anchorX, anchorY, factor);
-        }
-        if (m_compareCanvas)
-            m_compareCanvas->update();
-        update();
-        return true;
-    }
-
-    if (event->type() == QEvent::MouseButtonPress)
-    {
-        auto *me = static_cast<QMouseEvent *>(event);
-        if (me->button() == Qt::LeftButton)
-        {
-            const QRect cr = canvasRect();
-            const bool swipe = m_swipeChk && m_swipeChk->isChecked();
-            const int divX = int(cr.width() * m_splitPos);
-            if (swipe && std::abs(me->pos().x() - divX) < 12)
-            {
-                // Hit within 12px of the divider: drag the swipe divider.
-                m_splitDragging = true;
-                m_splitPos = std::clamp(me->pos().x() / double(cr.width()), 0.05, 0.95);
-                if (m_compareCanvas)
-                    m_compareCanvas->update();
-                return true;
-            }
-            m_dragging = true;
-            m_lastMouse = me->pos();
-            m_dragStartPos = me->pos();
-            m_dragIdx = canvasRefCellAt(me->pos());
-        }
-        return true; // consume — the canvas owns mouse input
-    }
-
-    if (event->type() == QEvent::MouseMove)
-    {
-        auto *me = static_cast<QMouseEvent *>(event);
-        const QRect cr = canvasRect();
-        if (m_splitDragging && m_swipeChk && m_swipeChk->isChecked())
-        {
+            m_splitDragging = true;
             m_splitPos = std::clamp(me->pos().x() / double(cr.width()), 0.05, 0.95);
             if (m_compareCanvas)
                 m_compareCanvas->update();
             return true;
         }
-        if (m_swipeChk && m_swipeChk->isChecked() && m_compareCanvas)
-        {
-            const int divX = int(cr.width() * m_splitPos);
-            m_compareCanvas->setCursor(std::abs(me->pos().x() - divX) < 12 ? Qt::SplitHCursor
+        m_dragging = true;
+        m_lastMouse = me->pos();
+        m_dragStartPos = me->pos();
+        m_dragIdx = canvasRefCellAt(me->pos());
+    }
+    return true;
+}
+
+bool CompareWorkspace::handleCanvasMove(QEvent *event)
+{
+    auto *me = static_cast<QMouseEvent *>(event);
+    const QRect cr = canvasRect();
+    if (m_splitDragging && m_swipeChk && m_swipeChk->isChecked())
+    {
+        m_splitPos = std::clamp(me->pos().x() / double(cr.width()), 0.05, 0.95);
+        if (m_compareCanvas)
+            m_compareCanvas->update();
+        return true;
+    }
+    if (m_swipeChk && m_swipeChk->isChecked() && m_compareCanvas)
+    {
+        const int divider = int(cr.width() * m_splitPos);
+        m_compareCanvas->setCursor(std::abs(me->pos().x() - divider) < 12 ? Qt::SplitHCursor
                                                                            : Qt::ArrowCursor);
-        }
-        if (m_dragging)
-        {
-            const QPoint delta = me->pos() - m_lastMouse;
-            m_lastMouse = me->pos();
-            if (m_syncDrag)
-            {
-                const Vec2 o = m_engine.syncTransform().offset;
-                m_engine.setOffset(o.x + delta.x(), o.y + delta.y());
-            }
-            else
-            {
-                const Vec2 oldOff = m_engine.cellTransform(m_dragIdx).offset;
-                m_engine.setCellOffset(m_dragIdx, oldOff.x + delta.x(), oldOff.y + delta.y());
-            }
-            if (m_compareCanvas)
-                m_compareCanvas->update();
-            update();
-        }
-        return true;
     }
-
-    if (event->type() == QEvent::MouseButtonRelease)
+    if (m_dragging)
     {
-        auto *me = static_cast<QMouseEvent *>(event);
-        if (me->button() == Qt::LeftButton)
+        const QPoint delta = me->pos() - m_lastMouse;
+        m_lastMouse = me->pos();
+        if (m_syncDrag)
         {
-            m_splitDragging = false;
-            m_dragging = false;
-            if (m_compareCanvas)
-                m_compareCanvas->update();
+            const Vec2 offset = m_engine.syncTransform().offset;
+            m_engine.setOffset(offset.x + delta.x(), offset.y + delta.y());
         }
-        return true;
+        else
+        {
+            const Vec2 oldOffset = m_engine.cellTransform(m_dragIdx).offset;
+            m_engine.setCellOffset(m_dragIdx, oldOffset.x + delta.x(), oldOffset.y + delta.y());
+        }
+        if (m_compareCanvas)
+            m_compareCanvas->update();
+        update();
     }
+    return true;
+}
 
-    if (event->type() == QEvent::Leave)
+bool CompareWorkspace::handleCanvasRelease(QEvent *event)
+{
+    auto *me = static_cast<QMouseEvent *>(event);
+    if (me->button() == Qt::LeftButton)
     {
-        // The mouse left the canvas: drop any in-progress drag and restore the
-        // normal cursor (mirrors the old workspace-level leaveEvent behavior).
         m_splitDragging = false;
         m_dragging = false;
         if (m_compareCanvas)
-            m_compareCanvas->setCursor(Qt::ArrowCursor);
+            m_compareCanvas->update();
+    }
+    return true;
+}
+
+bool CompareWorkspace::handleCanvasLeave(QEvent *)
+{
+    m_splitDragging = false;
+    m_dragging = false;
+    if (m_compareCanvas)
+        m_compareCanvas->setCursor(Qt::ArrowCursor);
+    return true;
+}
+
+bool CompareWorkspace::canvasEventFilter(QEvent *event)
+{
+    if (event->type() == QEvent::Paint)
+    {
+        paintCompareCanvas();
         return true;
     }
-
+    if (event->type() == QEvent::Wheel)
+        return handleCanvasWheel(event);
+    if (event->type() == QEvent::MouseButtonPress)
+        return handleCanvasPress(event);
+    if (event->type() == QEvent::MouseMove)
+        return handleCanvasMove(event);
+    if (event->type() == QEvent::MouseButtonRelease)
+        return handleCanvasRelease(event);
+    if (event->type() == QEvent::Leave)
+        return handleCanvasLeave(event);
     return QWidget::eventFilter(m_compareCanvas, event);
 }
 
+//
 // Canvas interaction cell: in Split the hovered half maps to its image; every
 // other canvas mode uses the stable reference cell 0.
 int CompareWorkspace::canvasRefCellAt(const QPoint &pos) const
@@ -509,145 +510,161 @@ void CompareWorkspace::drawPixelLinkLines(QPainter &p)
 // P0-4 / M20: keyboard-first compare — day-long work without the mouse.
 void CompareWorkspace::keyPressEvent(QKeyEvent *event)
 {
+    if (handleBasicCompareKey(event) || handleModeCompareKey(event) ||
+        handleSyncCompareKey(event) || handleAdvancedCompareKey(event))
+        return;
+    QWidget::keyPressEvent(event);
+}
+
+bool CompareWorkspace::handleBasicCompareKey(QKeyEvent *event)
+{
+    return handleBasicCompareSpace(event) || handleBasicCompareEscape(event) ||
+           handleBasicCompareNavigation(event);
+}
+
+bool CompareWorkspace::handleBasicCompareSpace(QKeyEvent *event)
+{
+    if (event->key() != Qt::Key_Space || event->isAutoRepeat())
+        return false;
+    if (m_blinkChk && m_blinkChk->isEnabled() && !m_blinkChk->isChecked())
+    {
+        m_tempBlinking = true;
+        m_blinkChk->setChecked(true);
+    }
+    event->accept();
+    return true;
+}
+
+bool CompareWorkspace::handleBasicCompareEscape(QKeyEvent *event)
+{
+    if (event->key() != Qt::Key_Escape)
+        return false;
+    event->accept();
+    if (auto *dlg = qobject_cast<QDialog *>(window()))
+        dlg->reject();
+    return true;
+}
+
+bool CompareWorkspace::handleBasicCompareNavigation(QKeyEvent *event)
+{
+    if (event->modifiers() != Qt::NoModifier)
+        return false;
+    if (event->key() == Qt::Key_PageDown || event->key() == Qt::Key_Right ||
+        event->key() == Qt::Key_N)
+        nextPair();
+    else if (event->key() == Qt::Key_PageUp || event->key() == Qt::Key_Left ||
+             event->key() == Qt::Key_P)
+        prevPair();
+    else
+        return false;
+    event->accept();
+    return true;
+}
+
+bool CompareWorkspace::handleModeCompareKey(QKeyEvent *event)
+{
+    const int key = event->key();
+    if (event->modifiers() != Qt::NoModifier)
+        return false;
+    QCheckBox *target = nullptr;
+    switch (key)
+    {
+    case Qt::Key_B:
+        target = m_blinkChk;
+        break;
+    case Qt::Key_S:
+        target = m_splitChk;
+        break;
+    case Qt::Key_W:
+        target = m_swipeChk;
+        break;
+    case Qt::Key_O:
+    case Qt::Key_Tab:
+        target = m_overlayChk;
+        break;
+    case Qt::Key_K:
+        target = m_checkerChk;
+        break;
+    case Qt::Key_H:
+        target = m_diffHighlightChk;
+        break;
+    default:
+        return false;
+    }
+    if (!target || (target != m_diffHighlightChk && !target->isEnabled()))
+        return false;
+    target->setChecked(!target->isChecked());
+    event->accept();
+    return true;
+}
+
+bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
+{
     const int key = event->key();
     const auto mods = event->modifiers();
     const bool plain = (mods == Qt::NoModifier);
     const bool ctrl = (mods == Qt::ControlModifier);
-
-    // Space hold → temporary Blink.
-    if (key == Qt::Key_Space && !event->isAutoRepeat())
-    {
-        if (m_blinkChk && m_blinkChk->isEnabled() && !m_blinkChk->isChecked())
-        {
-            m_tempBlinking = true;
-            m_blinkChk->setChecked(true);
-        }
-        event->accept();
-        return;
-    }
-    // ESC closes the Compare dialog.
-    if (key == Qt::Key_Escape)
-    {
-        event->accept();
-        if (auto *dlg = qobject_cast<QDialog *>(window()))
-            dlg->reject();
-        return;
-    }
-    // Continuous navigation: PageUp/Down + Left/Right arrows.
-    if (plain && (key == Qt::Key_PageDown || key == Qt::Key_Right || key == Qt::Key_N))
-    {
-        nextPair();
-        event->accept();
-        return;
-    }
-    if (plain && (key == Qt::Key_PageUp || key == Qt::Key_Left || key == Qt::Key_P))
-    {
-        prevPair();
-        event->accept();
-        return;
-    }
-    // Mode toggles (explicit keyPressEvent — not Alt mnemonics).
-    if (plain && key == Qt::Key_B && m_blinkChk && m_blinkChk->isEnabled())
-    {
-        m_blinkChk->setChecked(!m_blinkChk->isChecked());
-        event->accept();
-        return;
-    }
-    // Split / Swipe / Overlay: toggle target; exclusivity is handled by the
-    // checkbox toggled handlers (only when turning ON). Calling exclusiveMode
-    // before toggle would uncheck siblings even when turning OFF — harmless but
-    // redundant; more importantly, setChecked(true) after exclusiveMode is fine
-    // because the toggled handler also clears siblings.
-    if (plain && key == Qt::Key_S && m_splitChk && m_splitChk->isEnabled())
-    {
-        m_splitChk->setChecked(!m_splitChk->isChecked());
-        event->accept();
-        return;
-    }
-    if (plain && key == Qt::Key_W && m_swipeChk && m_swipeChk->isEnabled())
-    {
-        m_swipeChk->setChecked(!m_swipeChk->isChecked());
-        event->accept();
-        return;
-    }
-    if (plain && key == Qt::Key_O && m_overlayChk && m_overlayChk->isEnabled())
-    {
-        m_overlayChk->setChecked(!m_overlayChk->isChecked());
-        event->accept();
-        return;
-    }
-    // M23: K toggles checkerboard compare (棋盘格).
-    if (plain && key == Qt::Key_K && m_checkerChk && m_checkerChk->isEnabled())
-    {
-        m_checkerChk->setChecked(!m_checkerChk->isChecked());
-        event->accept();
-        return;
-    }
-    if (plain && key == Qt::Key_Tab && m_overlayChk && m_overlayChk->isEnabled())
-    {
-        // P1: Tab toggles overlay (in addition to O) per review spec.
-        m_overlayChk->setChecked(!m_overlayChk->isChecked());
-        event->accept();
-        return;
-    }
-    if (plain && key == Qt::Key_H && m_diffHighlightChk)
-    {
-        m_diffHighlightChk->setChecked(!m_diffHighlightChk->isChecked());
-        event->accept();
-        return;
-    }
     // Sync toggles.
     if (plain && key == Qt::Key_Z && m_syncZoomChk)
     {
         m_syncZoomChk->setChecked(!m_syncZoomChk->isChecked());
         event->accept();
-        return;
+        return true;
     }
     if (plain && key == Qt::Key_D && m_syncDragChk)
     {
         m_syncDragChk->setChecked(!m_syncDragChk->isChecked());
         event->accept();
-        return;
+        return true;
     }
     // Crosshair / Pixel Link / Side panel.
     if (plain && key == Qt::Key_C && m_crosshairChk)
     {
         m_crosshairChk->setChecked(!m_crosshairChk->isChecked());
         event->accept();
-        return;
+        return true;
     }
     if (plain && key == Qt::Key_L && m_pixelLinkChk)
     {
         m_pixelLinkChk->setChecked(!m_pixelLinkChk->isChecked());
         event->accept();
-        return;
+        return true;
     }
     if (plain && key == Qt::Key_I && m_sideChk)
     {
         m_sideChk->setChecked(!m_sideChk->isChecked());
         event->accept();
-        return;
+        return true;
     }
     // Fit all / Swap panes.
     if (plain && key == Qt::Key_F)
     {
         fitAll();
         event->accept();
-        return;
+        return true;
     }
     if (plain && key == Qt::Key_X)
     {
         onSwapPanes();
         event->accept();
-        return;
+        return true;
     }
+    return false;
+}
+
+bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
+{
+    const int key = event->key();
+    const auto mods = event->modifiers();
+    const bool plain = (mods == Qt::NoModifier);
+    const bool ctrl = (mods == Qt::ControlModifier);
     // Diff threshold ± ( [ / ] ).
     if (plain && (key == Qt::Key_BracketLeft || key == Qt::Key_BracketRight) && m_thresholdSlider)
     {
         const int step = (key == Qt::Key_BracketRight) ? 5 : -5;
         m_thresholdSlider->setValue(qBound(0, m_thresholdSlider->value() + step, 255));
         event->accept();
-        return;
+        return true;
     }
     // Overlay alpha ± ( , / . ).
     if (plain && (key == Qt::Key_Comma || key == Qt::Key_Period) && m_overlayAlphaSlider)
@@ -655,7 +672,7 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
         const int step = (key == Qt::Key_Period) ? 5 : -5;
         m_overlayAlphaSlider->setValue(qBound(0, m_overlayAlphaSlider->value() + step, 100));
         event->accept();
-        return;
+        return true;
     }
     // M20: Ctrl+2 / Ctrl+4 / Ctrl+8 → named layout presets.
     if (ctrl && (key == Qt::Key_2 || key == Qt::Key_4 || key == Qt::Key_8))
@@ -663,7 +680,7 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
         const int n = (key == Qt::Key_2) ? 2 : (key == Qt::Key_4) ? 4 : 8;
         applyLayoutPreset(n);
         event->accept();
-        return;
+        return true;
     }
     // Plain 1–8 → N-up compare presets (M16): key N compares N images.
     if (plain && (key >= Qt::Key_1 && key <= Qt::Key_8))
@@ -671,16 +688,16 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
         const int n = key - Qt::Key_0; // '1'..'8' → 1..8
         applyLayoutPreset(n);
         event->accept();
-        return;
+        return true;
     }
     // ? → shortcut help (title bar tip).
     if (plain && (key == Qt::Key_Question || key == Qt::Key_Slash))
     {
         showShortcutHelp();
         event->accept();
-        return;
+        return true;
     }
-    QWidget::keyPressEvent(event);
+    return false;
 }
 
 void CompareWorkspace::keyReleaseEvent(QKeyEvent *event)

@@ -41,6 +41,83 @@ std::vector<std::string> PluginLoader::scanDirectory(const std::string &dirPath)
     return candidates;
 }
 
+using CreateAnalyzerFn = Analyzer *(*)();
+using DestroyAnalyzerFn = void (*)(Analyzer *);
+using PluginNameFn = const char *(*)();
+
+void closePluginHandle(void *handle)
+{
+#ifdef _WIN32
+    FreeLibrary(static_cast<HMODULE>(handle));
+#else
+    dlclose(handle);
+#endif
+}
+
+PluginLoader::LoadedPlugin finishLoadedPlugin(const std::string &path, void *handle,
+                                              CreateAnalyzerFn createFn,
+                                              DestroyAnalyzerFn destroyFn, PluginNameFn nameFn)
+{
+    PluginLoader::LoadedPlugin result;
+    result.path = path;
+    // Use the plugin name or fallback to filename
+    if (nameFn)
+    {
+        result.name = nameFn();
+    }
+    else
+    {
+        result.name = std::filesystem::path(path).stem().string();
+    }
+
+    // Create instance and register
+    Analyzer *analyzer = createFn();
+    if (!analyzer)
+    {
+        result.error = "createAnalyzer returned null";
+        s_lastError = result.error;
+#ifdef _WIN32
+        FreeLibrary(static_cast<HMODULE>(handle));
+#else
+        dlclose(handle);
+#endif
+        return result;
+    }
+
+    // Register with the analyzer registry using the plugin's destroyAnalyzer
+    // as the deleter so allocation AND deallocation stay in the plugin's heap.
+    std::string id = analyzer->name();
+    AnalyzerRegistry::instance().registerAnalyzer(
+        id,
+        [createFn, destroyFn]() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
+        {
+            Analyzer *a = createFn();
+            if (!a)
+                return nullptr;
+            if (destroyFn)
+                return std::unique_ptr<Analyzer, AnalyzerDeleter>(a,
+                                                                  [destroyFn](Analyzer *p)
+                                                                  {
+                                                                      if (p)
+                                                                          destroyFn(p);
+                                                                  });
+            return std::unique_ptr<Analyzer, AnalyzerDeleter>(a, [](Analyzer *p) { delete p; });
+        });
+
+    result.loaded = true;
+    std::cout << "[PluginLoader] Loaded plugin: " << result.name << " (analyzer: " << id
+              << ") from " << path << std::endl;
+
+// Note: handle is intentionally leaked for lifetime of the loaded library.
+// In production, store handles in a plugin manager for proper cleanup.
+#ifdef _WIN32
+    // handle kept open
+#else
+    // handle kept open
+#endif
+
+    return result;
+}
 PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
 {
     LoadedPlugin result;
@@ -109,6 +186,7 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
 
     auto createFn = reinterpret_cast<Analyzer *(*)()>(dlsym(handle, "createAnalyzer"));
     auto nameFn = reinterpret_cast<const char *(*)()>(dlsym(handle, "pluginName"));
+    auto destroyFn = reinterpret_cast<void (*)(Analyzer *)>(dlsym(handle, "destroyAnalyzer"));
 
     if (!createFn)
     {
@@ -139,65 +217,12 @@ PluginLoader::LoadedPlugin PluginLoader::loadPlugin(const std::string &path)
     }
 #endif
 
-    // Use the plugin name or fallback to filename
-    if (nameFn)
-    {
-        result.name = nameFn();
-    }
-    else
-    {
-        result.name = std::filesystem::path(path).stem().string();
-    }
-
-    // Create instance and register
-    Analyzer *analyzer = createFn();
-    if (!analyzer)
-    {
-        result.error = "createAnalyzer returned null";
-        s_lastError = result.error;
 #ifdef _WIN32
-        FreeLibrary(handle);
+    return finishLoadedPlugin(path, reinterpret_cast<void *>(handle), createFn, destroyFn, nameFn);
 #else
-        dlclose(handle);
+    return finishLoadedPlugin(path, handle, createFn, destroyFn, nameFn);
 #endif
-        return result;
-    }
-
-    // Register with the analyzer registry using the plugin's destroyAnalyzer
-    // as the deleter so allocation AND deallocation stay in the plugin's heap.
-    std::string id = analyzer->name();
-    AnalyzerRegistry::instance().registerAnalyzer(
-        id,
-        [createFn, destroyFn]() -> std::unique_ptr<Analyzer, AnalyzerDeleter>
-        {
-            Analyzer *a = createFn();
-            if (!a)
-                return nullptr;
-            if (destroyFn)
-                return std::unique_ptr<Analyzer, AnalyzerDeleter>(a,
-                                                                  [destroyFn](Analyzer *p)
-                                                                  {
-                                                                      if (p)
-                                                                          destroyFn(p);
-                                                                  });
-            return std::unique_ptr<Analyzer, AnalyzerDeleter>(a, [](Analyzer *p) { delete p; });
-        });
-
-    result.loaded = true;
-    std::cout << "[PluginLoader] Loaded plugin: " << result.name << " (analyzer: " << id
-              << ") from " << path << std::endl;
-
-// Note: handle is intentionally leaked for lifetime of the loaded library.
-// In production, store handles in a plugin manager for proper cleanup.
-#ifdef _WIN32
-    // handle kept open
-#else
-    // handle kept open
-#endif
-
-    return result;
 }
-
 std::vector<PluginLoader::LoadedPlugin> PluginLoader::loadFromDirectory(const std::string &dirPath)
 {
     std::vector<LoadedPlugin> results;

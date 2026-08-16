@@ -25,6 +25,7 @@ class RawImageView;
 class AnalyzerModel;
 class QListWidget;
 class QPushButton;
+class QVBoxLayout;
 
 // Complete types are defined in analysispanel.cpp (worker payload).
 struct AnalysisInput;
@@ -137,6 +138,11 @@ class AnalysisPanel : public QWidget
 
   private:
     void buildUi();
+    void buildAnalyzerSection(QVBoxLayout &layout);
+    void buildHistorySection(QVBoxLayout &layout);
+    void buildResultTabs(QVBoxLayout &layout);
+    void buildInspectorTab();
+    void buildInspectorActions(QVBoxLayout &layout);
     void updateHistogramPage();
     void updateComparePage();
     void updatePluginPage();
@@ -145,6 +151,8 @@ class AnalysisPanel : public QWidget
     void updateExposurePage();
     void updateFocusPage();
     void updateMetadataPage();
+    bool runLegacyAnalyzer(const QString &id);
+    void runRoiAnalysis();
     void renderChannel(QLabel *label, const int *hist, const QColor &color);
     QImage computeDifferencePreview(const QImage &a, const QImage &b);
     QString noiseLevelText(double variance);

@@ -2,7 +2,6 @@
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/Analyzer.h"
-#include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
 #include "core/trace/Trace.h"
@@ -101,35 +100,48 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         emit analysisRequested(chosen->data().toString());
         return;
     }
-    if (chosen == aCopy)
+    if (handleContextCopyAction(chosen, aCopy, aCopyPath, aCopyColor, event) ||
+        handleContextImageAction(chosen, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
+                                  aSelectRegion))
+        return;
+    handleContextNavigationAction(chosen, aNext, aPrev, aOvNone, aOvZebra, aOvFalse,
+                                  aFullscreen);
+}
+
+bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
+                                          QAction *copyColor, QContextMenuEvent *event)
+{
+    if (chosen == copy)
         copyToClipboard();
-    else if (chosen == aCopyPath)
+    else if (chosen == copyPath)
         QApplication::clipboard()->setText(m_currentPath);
-    else if (chosen == aCopyColor)
+    else if (chosen == copyColor)
     {
-        // Read pixel color at the cursor position (event->pos() in widget coords).
         const QPoint pos = event->pos();
-        if (m_frame && m_frame->isValid())
-        {
-            const int iw = m_frame->width();
-            const int ih = m_frame->height();
-            const int ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
-            const int iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
-            if (ix >= 0 && ix < iw && iy >= 0 && iy < ih)
-            {
-                const PixelRGBA px = samplePixel(m_frame->pixels(), ix, iy);
-                if (px.valid)
-                {
-                    QApplication::clipboard()->setText(
-                        QString("#%1%2%3")
-                            .arg(px.r, 2, 16, QChar('0'))
-                            .arg(px.g, 2, 16, QChar('0'))
-                            .arg(px.b, 2, 16, QChar('0')));
-                }
-            }
-        }
+        if (!m_frame || !m_frame->isValid())
+            return true;
+        const int ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
+        const int iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
+        if (ix < 0 || ix >= m_frame->width() || iy < 0 || iy >= m_frame->height())
+            return true;
+        const PixelRGBA px = samplePixel(m_frame->pixels(), ix, iy);
+        if (px.valid)
+            QApplication::clipboard()->setText(
+                QString("#%1%2%3")
+                    .arg(px.r, 2, 16, QChar('0'))
+                    .arg(px.g, 2, 16, QChar('0'))
+                    .arg(px.b, 2, 16, QChar('0')));
     }
-    else if (chosen == aSaveAs)
+    else
+        return false;
+    return true;
+}
+
+bool ImageViewer::handleContextImageAction(QAction *chosen, QAction *saveAs, QAction *zoomInAction,
+                                           QAction *zoomOutAction, QAction *zoomFitAction,
+                                           QAction *zoomActualAction, QAction *selectRegion)
+{
+    if (chosen == saveAs)
     {
         if (m_frame && m_frame->isValid())
         {
@@ -141,26 +153,38 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
                 saveToPath(path);
         }
     }
-    else if (chosen == aZoomIn)
+    else if (chosen == zoomInAction)
         zoomIn();
-    else if (chosen == aZoomOut)
+    else if (chosen == zoomOutAction)
         zoomOut();
-    else if (chosen == aZoomFit)
+    else if (chosen == zoomFitAction)
         zoomFit();
-    else if (chosen == aZoomActual)
+    else if (chosen == zoomActualAction)
         zoomActual();
-    else if (chosen == aSelectRegion)
+    else if (chosen == selectRegion)
         setSelectMode(!m_selectMode);
-    else if (chosen == aNext)
+    else
+        return false;
+    return true;
+}
+
+bool ImageViewer::handleContextNavigationAction(QAction *chosen, QAction *next, QAction *prev,
+                                                QAction *overlayNone, QAction *overlayZebra,
+                                                QAction *overlayFalse, QAction *fullscreen)
+{
+    if (chosen == next)
         emit requestNext();
-    else if (chosen == aOvNone)
-        setOverlayMode(mviewer::OverlayMode::None);
-    else if (chosen == aOvZebra)
-        setOverlayMode(mviewer::OverlayMode::Zebra);
-    else if (chosen == aOvFalse)
-        setOverlayMode(mviewer::OverlayMode::FalseColor);
-    else if (chosen == aPrev)
+    else if (chosen == prev)
         emit requestPrev();
-    else if (chosen == aFullscreen)
+    else if (chosen == overlayNone)
+        setOverlayMode(mviewer::OverlayMode::None);
+    else if (chosen == overlayZebra)
+        setOverlayMode(mviewer::OverlayMode::Zebra);
+    else if (chosen == overlayFalse)
+        setOverlayMode(mviewer::OverlayMode::FalseColor);
+    else if (chosen == fullscreen)
         toggleFullscreen();
+    else
+        return false;
+    return true;
 }

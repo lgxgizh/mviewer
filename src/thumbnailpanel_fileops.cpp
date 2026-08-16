@@ -20,8 +20,8 @@ void ThumbnailPanel::renameSelected()
     // A-10: reversible rename via CommandStack when available.
     if (m_cmdStack)
     {
-        auto cmd =
-            std::make_unique<FileRenameCommand>(oldPath.toStdString(), newPath.toStdString());
+        auto cmd = std::make_unique<FileRenameCommand>(oldPath.toUtf8().toStdString(),
+                                                       newPath.toUtf8().toStdString());
         if (!m_cmdStack->execute(std::move(cmd)))
         {
             QMessageBox::warning(this, "重命名失败",
@@ -29,9 +29,17 @@ void ThumbnailPanel::renameSelected()
             return;
         }
     }
-    else if (!QFile::rename(oldPath, newPath))
+    else
     {
-        return;
+        auto cmd = std::make_unique<FileRenameCommand>(oldPath.toUtf8().toStdString(),
+                                                       newPath.toUtf8().toStdString());
+        cmd->execute();
+        if (!cmd->lastError().empty())
+        {
+            QMessageBox::warning(this, tr("重命名失败"),
+                                 QString::fromUtf8(cmd->lastError().c_str()));
+            return;
+        }
     }
     if (!m_currentDir.isEmpty())
     {
@@ -64,26 +72,26 @@ void ThumbnailPanel::moveToTrashSelected()
         std::vector<std::string> stdPaths;
         stdPaths.reserve(static_cast<size_t>(paths.size()));
         for (const QString &p : paths)
-            stdPaths.push_back(p.toStdString());
+            stdPaths.push_back(p.toUtf8().toStdString());
         auto cmd = std::make_unique<FileDeleteCommand>(std::move(stdPaths), trashDir.toStdString());
         // Capture moved paths before ownership transfers.
         if (!m_cmdStack->execute(std::move(cmd)))
         {
             QMessageBox::warning(this, "删除失败", QString::fromStdString(m_cmdStack->lastError()));
-            return;
         }
-        // After successful execute, files are gone — treat all selected as removed.
-        removed = paths;
+        for (const QString &p : paths)
+            if (!QFileInfo::exists(p))
+                removed.append(p);
     }
     else
     {
+        auto cmd = std::make_unique<FileDeleteCommand>(toStdPaths(paths), trashDir.toUtf8().toStdString());
+        cmd->execute();
+        if (!cmd->lastError().empty())
+            QMessageBox::warning(this, tr("删除失败"), QString::fromUtf8(cmd->lastError().c_str()));
         for (const QString &p : paths)
-        {
-            if (QFile::rename(p, trashDir + "/" + QFileInfo(p).fileName()))
+            if (!QFileInfo::exists(p))
                 removed.append(p);
-            else if (QFile::remove(p))
-                removed.append(p);
-        }
     }
     if (!m_currentDir.isEmpty())
         setDirectory(m_currentDir);
@@ -100,8 +108,35 @@ void ThumbnailPanel::copySelectedTo()
     const QString dir = QFileDialog::getExistingDirectory(this, "复制到...");
     if (dir.isEmpty())
         return;
+    const auto fileSystem = mviewer::core::defaultFileSystemAdapter();
+    size_t copied = 0;
+    QStringList failures;
     for (const QString &p : paths)
-        QFile::copy(p, dir + "/" + QFileInfo(p).fileName());
+    {
+        const auto source = mviewer::core::pathFromUtf8(p.toUtf8().toStdString());
+        std::string destinationError;
+        const auto destination = mviewer::core::collisionFreeDestination(
+            source, mviewer::core::pathFromUtf8(dir.toUtf8().toStdString()), fileSystem,
+            destinationError);
+        if (destination.empty())
+        {
+            failures.append(p + ": " + QString::fromUtf8(destinationError.c_str()));
+            continue;
+        }
+        const auto result = mviewer::core::copyFileAtomically(source, destination, fileSystem);
+        if (result.state == mviewer::core::FileTransferState::Succeeded)
+            ++copied;
+        else
+            failures.append(p + ": " + QString::fromUtf8(result.error.c_str()));
+    }
+    const QString summary = tr("复制完成：成功 %1，失败 %2。%3")
+                                 .arg(static_cast<qlonglong>(copied))
+                                 .arg(failures.size())
+                                 .arg(failures.isEmpty() ? QString() : "\n" + failures.join("\n"));
+    if (failures.isEmpty())
+        QMessageBox::information(this, tr("复制"), summary);
+    else
+        QMessageBox::warning(this, tr("复制"), summary);
 }
 
 void ThumbnailPanel::moveSelectedTo()
@@ -119,8 +154,8 @@ void ThumbnailPanel::moveSelectedTo()
         std::vector<std::string> stdPaths;
         stdPaths.reserve(static_cast<size_t>(paths.size()));
         for (const QString &p : paths)
-            stdPaths.push_back(p.toStdString());
-        auto cmd = std::make_unique<FileMoveCommand>(std::move(stdPaths), dir.toStdString());
+            stdPaths.push_back(p.toUtf8().toStdString());
+        auto cmd = std::make_unique<FileMoveCommand>(std::move(stdPaths), dir.toUtf8().toStdString());
         if (!m_cmdStack->execute(std::move(cmd)))
         {
             QMessageBox::warning(this, "移动失败", QString::fromStdString(m_cmdStack->lastError()));
@@ -129,8 +164,10 @@ void ThumbnailPanel::moveSelectedTo()
     }
     else
     {
-        for (const QString &p : paths)
-            QFile::rename(p, dir + "/" + QFileInfo(p).fileName());
+        auto cmd = std::make_unique<FileMoveCommand>(toStdPaths(paths), dir.toUtf8().toStdString());
+        cmd->execute();
+        if (!cmd->lastError().empty())
+            QMessageBox::warning(this, tr("移动失败"), QString::fromUtf8(cmd->lastError().c_str()));
     }
     if (!m_currentDir.isEmpty())
         setDirectory(m_currentDir);
@@ -196,41 +233,6 @@ void ThumbnailPanel::batchAnalyzeExport()
     runBatchAnalyzeExportAsync(paths, analyzerId, out);
     return;
 }
-
-#if 0 // legacy synchronous implementation retained only as a migration note
-    QApplication::setOverrideCursor(Qt::BusyCursor);
-    const auto cursorGuard = qScopeGuard([] { QApplication::restoreOverrideCursor(); });
-
-    std::vector<std::pair<std::string, std::shared_ptr<ImageFrame>>> frames;
-    frames.reserve(static_cast<size_t>(paths.size()));
-    for (const QString &p : paths)
-    {
-        auto res = ImageRepository::instance().load(p.toStdString());
-        if (res.frame)
-            frames.emplace_back(p.toStdString(), res.frame);
-    }
-    if (frames.empty())
-    {
-        QMessageBox::warning(this, tr("批量分析导出"), tr("所选图片均无法解码。"));
-        return;
-    }
-
-    const auto results = reg.runBatch(frames, analyzerId);
-    const auto report = mviewer::core::buildBatchReport(analyzerId, results);
-    const bool asJson = out.endsWith(".json", Qt::CaseInsensitive);
-    const std::string body = asJson ? report.toJson() : report.toCsv();
-
-    QFile f(out);
-    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate))
-    {
-        QMessageBox::critical(this, tr("批量分析导出"), tr("无法写入：%1").arg(out));
-        return;
-    }
-    f.write(QByteArray::fromStdString(body));
-    f.close();
-    QMessageBox::information(this, tr("批量分析导出"),
-                             tr("已导出 %1 条结果 → %2").arg(results.size()).arg(out));
-#endif
 
 void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
                                                  const std::string &analyzerId,
@@ -306,17 +308,17 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
                 const_cast<TaskScheduler::TaskContext &>(ctx).reportProgress(
                     (i + 1) * 100 / qMax(1, state->paths.size()));
             }
+            if (ctx.isCancelled())
+            {
+                std::lock_guard<std::mutex> lock(state->mutex);
+                state->cancelled = true;
+                return;
+            }
             const auto report = mviewer::core::buildBatchReport(state->analyzerId, results);
             const size_t resultCount = results.size();
             const std::string body = asJson ? report.toJson() : report.toCsv();
-            bool writeOk = false;
-            QFile file(state->output);
-            if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))
-            {
-                const QByteArray bytes = QByteArray::fromStdString(body);
-                writeOk = file.write(bytes) == bytes.size();
-                file.close();
-            }
+            const bool writeOk = mviewer::exportjob::writeTextAtomically(
+                state->output.toUtf8().toStdString(), body);
             std::lock_guard<std::mutex> lock(state->mutex);
             state->resultCount = resultCount;
             state->body = body;

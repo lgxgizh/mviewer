@@ -36,10 +36,16 @@ BatchDialog::BatchDialog(QWidget *parent)
 {
     setWindowTitle("批量处理");
     setMinimumSize(640, 600);
+    QVBoxLayout mainLayout(this);
+    buildFileControls(mainLayout);
+    buildOperationControls(mainLayout);
+    buildParameterControls(mainLayout);
+    buildProgressControls(mainLayout);
+    connectControls();
+}
 
-    auto *mainLayout = new QVBoxLayout(this);
-
-    // ── file list ──────────────────────────────────────────────────
+void BatchDialog::buildFileControls(QVBoxLayout &mainLayout)
+{
     auto *fileGroup = new QVBoxLayout;
     fileGroup->addWidget(new QLabel("文件列表:"));
     m_fileList = new QListWidget;
@@ -48,18 +54,17 @@ BatchDialog::BatchDialog(QWidget *parent)
 
     auto *fileBtnBar = new QHBoxLayout;
     m_addBtn = new QPushButton("添加文件...");
-    m_addDirBtn = new QPushButton("添加目录..."); // P2 #⑦
+    m_addDirBtn = new QPushButton("添加目录...");
     m_removeBtn = new QPushButton("移除选中");
-    m_chkRecursive = new QCheckBox("递归子目录"); // P2 #⑦
+    m_chkRecursive = new QCheckBox("递归子目录");
     fileBtnBar->addWidget(m_addBtn);
     fileBtnBar->addWidget(m_addDirBtn);
     fileBtnBar->addWidget(m_removeBtn);
     fileBtnBar->addWidget(m_chkRecursive);
     fileBtnBar->addStretch();
     fileGroup->addLayout(fileBtnBar);
-    mainLayout->addLayout(fileGroup);
+    mainLayout.addLayout(fileGroup);
 
-    // ── P2 #⑦: retry params ───────────────────────────────────────
     auto *retryRow = new QHBoxLayout;
     retryRow->addWidget(new QLabel("重试次数:"));
     m_retryCount = new QSpinBox;
@@ -73,13 +78,15 @@ BatchDialog::BatchDialog(QWidget *parent)
     m_retryDelay->setValue(500);
     retryRow->addWidget(m_retryDelay);
     retryRow->addStretch();
-    mainLayout->addLayout(retryRow);
+    mainLayout.addLayout(retryRow);
+}
 
-    // ── operations ─────────────────────────────────────────────────
+void BatchDialog::buildOperationControls(QVBoxLayout &mainLayout)
+{
     auto *opGroup = new QHBoxLayout;
     m_chkAnalyze = new QCheckBox("分析");
     m_chkResize = new QCheckBox("缩放");
-    m_chkCrop = new QCheckBox("裁剪"); // P2 #⑦
+    m_chkCrop = new QCheckBox("裁剪");
     m_chkWatermark = new QCheckBox("水印");
     m_chkRename = new QCheckBox("重命名");
     m_chkExport = new QCheckBox("导出");
@@ -91,93 +98,83 @@ BatchDialog::BatchDialog(QWidget *parent)
     opGroup->addWidget(m_chkRename);
     opGroup->addWidget(m_chkExport);
     opGroup->addStretch();
-    mainLayout->addLayout(opGroup);
+    mainLayout.addLayout(opGroup);
+}
 
-    // ── params grid ────────────────────────────────────────────────
+void BatchDialog::buildParameterControls(QVBoxLayout &mainLayout)
+{
     auto *paramLayout = new QVBoxLayout;
+    auto *resizeRow = new QHBoxLayout;
+    resizeRow->addWidget(new QLabel("缩放最大边:"));
+    m_resizeMaxEdge = new QSpinBox;
+    m_resizeMaxEdge->setRange(64, 32768);
+    m_resizeMaxEdge->setValue(1920);
+    resizeRow->addWidget(m_resizeMaxEdge);
+    resizeRow->addStretch();
+    paramLayout->addLayout(resizeRow);
 
-    // resize
-    {
-        auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel("缩放最大边:"));
-        m_resizeMaxEdge = new QSpinBox;
-        m_resizeMaxEdge->setRange(64, 32768);
-        m_resizeMaxEdge->setValue(1920);
-        row->addWidget(m_resizeMaxEdge);
-        row->addStretch();
-        paramLayout->addLayout(row);
-    }
-    // watermark
-    {
-        auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel("水印文字:"));
-        m_watermarkText = new QLineEdit;
-        m_watermarkText->setPlaceholderText("© 2025");
-        row->addWidget(m_watermarkText);
-        m_watermarkPos = new QComboBox;
-        m_watermarkPos->addItems({"左上", "右上", "左下", "右下", "居中", "平铺"});
-        m_watermarkPos->setCurrentIndex(4);
-        row->addWidget(m_watermarkPos);
-        m_watermarkOpacity = new QDoubleSpinBox;
-        m_watermarkOpacity->setRange(0.0, 1.0);
-        m_watermarkOpacity->setSingleStep(0.05);
-        m_watermarkOpacity->setValue(0.3);
-        row->addWidget(m_watermarkOpacity);
-        m_watermarkFontSize = new QSpinBox;
-        m_watermarkFontSize->setRange(8, 200);
-        m_watermarkFontSize->setValue(24);
-        row->addWidget(m_watermarkFontSize);
-        paramLayout->addLayout(row);
-    }
-    // rename
-    {
-        auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel("重命名模式:"));
-        m_renamePattern = new QLineEdit;
-        m_renamePattern->setPlaceholderText("{name}_batched_{seq:3}");
-        row->addWidget(m_renamePattern);
-        paramLayout->addLayout(row);
-    }
-    // export
-    {
-        auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel("导出格式:"));
-        m_exportFormat = new QComboBox;
-        m_exportFormat->addItems({"png", "jpg", "bmp", "webp"});
-        row->addWidget(m_exportFormat);
-        row->addWidget(new QLabel("质量:"));
-        m_exportQuality = new QSpinBox;
-        m_exportQuality->setRange(1, 100);
-        m_exportQuality->setValue(90);
-        row->addWidget(m_exportQuality);
-        paramLayout->addLayout(row);
-    }
-    {
-        auto *row = new QHBoxLayout;
-        row->addWidget(new QLabel("输出目录:"));
-        m_outputDir = new QLineEdit;
-        m_outputDir->setPlaceholderText("(留空=原目录)");
-        row->addWidget(m_outputDir);
-        m_browseBtn = new QPushButton("浏览...");
-        row->addWidget(m_browseBtn);
-        paramLayout->addLayout(row);
-    }
-    mainLayout->addLayout(paramLayout);
+    auto *watermarkRow = new QHBoxLayout;
+    watermarkRow->addWidget(new QLabel("水印文字:"));
+    m_watermarkText = new QLineEdit;
+    m_watermarkText->setPlaceholderText("© 2025");
+    watermarkRow->addWidget(m_watermarkText);
+    m_watermarkPos = new QComboBox;
+    m_watermarkPos->addItems({"左上", "右上", "左下", "右下", "居中", "平铺"});
+    m_watermarkPos->setCurrentIndex(4);
+    watermarkRow->addWidget(m_watermarkPos);
+    m_watermarkOpacity = new QDoubleSpinBox;
+    m_watermarkOpacity->setRange(0.0, 1.0);
+    m_watermarkOpacity->setSingleStep(0.05);
+    m_watermarkOpacity->setValue(0.3);
+    watermarkRow->addWidget(m_watermarkOpacity);
+    m_watermarkFontSize = new QSpinBox;
+    m_watermarkFontSize->setRange(8, 200);
+    m_watermarkFontSize->setValue(24);
+    watermarkRow->addWidget(m_watermarkFontSize);
+    paramLayout->addLayout(watermarkRow);
 
-    // ── progress + log ────────────────────────────────────────────
+    auto *renameRow = new QHBoxLayout;
+    renameRow->addWidget(new QLabel("重命名模式:"));
+    m_renamePattern = new QLineEdit;
+    m_renamePattern->setPlaceholderText("{name}_batched_{seq:3}");
+    renameRow->addWidget(m_renamePattern);
+    paramLayout->addLayout(renameRow);
+
+    auto *exportRow = new QHBoxLayout;
+    exportRow->addWidget(new QLabel("导出格式:"));
+    m_exportFormat = new QComboBox;
+    m_exportFormat->addItems({"png", "jpg", "bmp", "webp"});
+    exportRow->addWidget(m_exportFormat);
+    exportRow->addWidget(new QLabel("质量:"));
+    m_exportQuality = new QSpinBox;
+    m_exportQuality->setRange(1, 100);
+    m_exportQuality->setValue(90);
+    exportRow->addWidget(m_exportQuality);
+    paramLayout->addLayout(exportRow);
+
+    auto *outputRow = new QHBoxLayout;
+    outputRow->addWidget(new QLabel("输出目录:"));
+    m_outputDir = new QLineEdit;
+    m_outputDir->setPlaceholderText("(留空=原目录)");
+    outputRow->addWidget(m_outputDir);
+    m_browseBtn = new QPushButton("浏览...");
+    outputRow->addWidget(m_browseBtn);
+    paramLayout->addLayout(outputRow);
+    mainLayout.addLayout(paramLayout);
+}
+
+void BatchDialog::buildProgressControls(QVBoxLayout &mainLayout)
+{
     m_progress = new QProgressBar;
     m_progress->setFormat(tr("%p%"));
-    mainLayout->addWidget(m_progress);
-
+    mainLayout.addWidget(m_progress);
     m_statusLabel = new QLabel("就绪");
-    mainLayout->addWidget(m_statusLabel);
-
+    mainLayout.addWidget(m_statusLabel);
     m_log = new QTextEdit;
     m_log->setReadOnly(true);
     m_log->setMaximumHeight(150);
-    mainLayout->addWidget(m_log);
+    mainLayout.addWidget(m_log);
 
-    // ── buttons ───────────────────────────────────────────────────
     auto *btnBar = new QHBoxLayout;
     m_startBtn = new QPushButton("开始");
     m_pauseBtn = new QPushButton("暂停");
@@ -196,11 +193,13 @@ BatchDialog::BatchDialog(QWidget *parent)
     btnBar->addWidget(m_pauseBtn);
     btnBar->addWidget(m_cancelBtn);
     btnBar->addWidget(m_closeBtn);
-    mainLayout->addLayout(btnBar);
+    mainLayout.addLayout(btnBar);
+}
 
-    // ── connections ────────────────────────────────────────────────
+void BatchDialog::connectControls()
+{
     connect(m_addBtn, &QPushButton::clicked, this, &BatchDialog::onAddFiles);
-    connect(m_addDirBtn, &QPushButton::clicked, this, &BatchDialog::onAddDir); // P2 #⑦
+    connect(m_addDirBtn, &QPushButton::clicked, this, &BatchDialog::onAddDir);
     connect(m_removeBtn, &QPushButton::clicked, this, &BatchDialog::onRemoveSelected);
     connect(m_startBtn, &QPushButton::clicked, this, &BatchDialog::onStart);
     connect(m_pauseBtn, &QPushButton::clicked, this, &BatchDialog::onPauseResume);

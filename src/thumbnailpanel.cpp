@@ -104,81 +104,62 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                     emit itemClicked(m_paths.value(current.row()));
             });
 
-    // Wire the shared pipeline ONCE. The decode step is disk-cache-aware (so a
-    // previously visited folder loads instantly without re-decoding), and the
-    // result callback lands the QPixmap into our ready map + repaints the cell.
-    // The pipeline is a singleton used only by the gallery, so configuring it
-    // here is safe.
+    wireThumbnailPipeline();
+}
+
+void ThumbnailPanel::wireThumbnailPipeline()
+{
+    // Wire the shared pipeline once. Worker callbacks only marshal value data
+    // back to the owning panel's GUI thread.
     m_alive = std::make_shared<std::atomic<bool>>(true);
-    if (!m_pipelineWired)
-    {
-        m_pipelineWired = true;
-        ThumbnailPipeline::instance().thumbSize = m_thumbSize;
-        // Decode/scale/cache policy lives in ThumbnailProvider; this TU only
-        // routes the finished image into its own ready map and manages lifecycle.
-        // The worker path is QImage-based end to end (no QPixmap off the GUI
-        // thread, PNG encode/write happens on the worker).
-        ThumbnailPipeline::instance().setDecodeFn([](const std::string &p, int size)
-                                                  { return ThumbnailProvider::produce(p, size); });
-        // M24 lifetime hardening: the pipeline calls this fn on ITS worker
-        // thread, so the fn itself must never touch panel members. It only
-        // marshal-protects a QPointer + alive token and hops to the UI thread;
-        // all panel access then happens UI-side after a live-object check.
-        auto alive = m_alive;
-        const QPointer<ThumbnailPanel> self(this);
-        ThumbnailPipeline::instance().setResultFn(
-            [alive, self](const std::string &p, int size, const ImageData &img)
-            {
-                if (!alive->load() || !self)
-                    return; // panel destroyed; ignore late callback
-                QMetaObject::invokeMethod(qApp,
-                                          [alive, self, p, size, img]()
-                                          {
-                                              if (!alive->load() || !self)
-                                                  return;
-                                              ThumbnailPanel *panel = self.data();
-                                              const QString qp = QString::fromStdString(p);
-                                              // M25: a result born at another thumbnail size (size
-                                              // switched while the decode was in flight) is stale —
-                                              // never store or paint it.
-                                              if (size != panel->m_thumbSize)
-                                                  return;
-                                              // M24: the pipeline now reports failed decodes as
-                                              // null ImageData so the panel can mark the cell
-                                              // failed.
-                                              if (img.isNull())
-                                              {
-                                                  QMutexLocker l(&panel->m_thumbMtx);
-                                                  panel->m_thumbFailed.insert(qp);
-                                                  panel->m_thumbPending.remove(qp);
-                                                  // Repaint only: do NOT reschedule (the failed
-                                                  // path is not cacheable; rescheduling would
-                                                  // re-decode it on every repaint in a tight loop).
-                                                  panel->viewport()->update();
-                                                  return;
-                                              }
-                                              const QImage q = mvcore::toQImage(img);
-                                              if (q.isNull())
-                                              {
-                                                  {
-                                                      QMutexLocker l(&panel->m_thumbMtx);
-                                                      panel->m_thumbFailed.insert(qp);
-                                                      panel->m_thumbPending.remove(qp);
-                                                  }
-                                                  panel->viewport()->update();
-                                                  return;
-                                              }
-                                              {
-                                                  QMutexLocker lk(&panel->m_thumbMtx);
-                                                  // QPixmap is materialized HERE, on the GUI thread
-                                                  // — the only place the GUI resource is legal.
-                                                  panel->m_thumbReady[qp] = QPixmap::fromImage(q);
-                                                  panel->m_thumbPending.remove(qp);
-                                              }
-                                              panel->onThumbReady(qp);
-                                          });
-            });
-    }
+    if (m_pipelineWired)
+        return;
+    m_pipelineWired = true;
+    ThumbnailPipeline::instance().thumbSize = m_thumbSize;
+    ThumbnailPipeline::instance().setDecodeFn(
+        [](const std::string &p, int size) { return ThumbnailProvider::produce(p, size); });
+    auto alive = m_alive;
+    const QPointer<ThumbnailPanel> self(this);
+    ThumbnailPipeline::instance().setResultFn(
+        [alive, self](const std::string &p, int size, const ImageData &img)
+        {
+            if (!alive->load() || !self)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [alive, self, p, size, img]()
+                {
+                    if (!alive->load() || !self)
+                        return;
+                    ThumbnailPanel *panel = self.data();
+                    const QString qp = QString::fromStdString(p);
+                    if (size != panel->m_thumbSize)
+                        return;
+                    if (img.isNull())
+                    {
+                        QMutexLocker l(&panel->m_thumbMtx);
+                        panel->m_thumbFailed.insert(qp);
+                        panel->m_thumbPending.remove(qp);
+                        panel->viewport()->update();
+                        return;
+                    }
+                    const QImage q = mvcore::toQImage(img);
+                    if (q.isNull())
+                    {
+                        QMutexLocker l(&panel->m_thumbMtx);
+                        panel->m_thumbFailed.insert(qp);
+                        panel->m_thumbPending.remove(qp);
+                        panel->viewport()->update();
+                        return;
+                    }
+                    {
+                        QMutexLocker lk(&panel->m_thumbMtx);
+                        panel->m_thumbReady[qp] = QPixmap::fromImage(q);
+                        panel->m_thumbPending.remove(qp);
+                    }
+                    panel->onThumbReady(qp);
+                });
+        });
 }
 
 ThumbnailPanel::~ThumbnailPanel()
@@ -244,25 +225,7 @@ void ThumbnailPanel::setDirectory(const QString &path)
     // M23 P2 (first-screen): paint the (empty) directory shell immediately so a
     // 1000-image folder shows its grid in well under 1s, then scan the disk off
     // the UI thread and stream the real entries in once they are ready.
-    m_allEntries.clear();
-    m_paths.clear();
-    m_rowByPath.clear();
-    m_sourceRowByPath.clear();
-    m_sizeByPath.clear();
-    // H2: drop the previous folder's metadata index synchronously. Without this,
-    // an active camera/lens/ISO or metadata-text filter could match stale entries
-    // from the previous directory until the new scan's completion callback runs.
-    m_metaIndex.clear();
-    m_metaIso.clear();
-    m_metaCamera.clear();
-    m_metaLens.clear();
-    // M25: the previous directory's async indexing / recursive scan is
-    // superseded by the generation bump above — reset their bookkeeping so a
-    // new filter run for THIS directory starts a fresh job.
-    m_metaIndexing = false;
-    m_recursiveSearching = false;
-    m_recursiveHits.clear();
-    m_recursiveHitsFor.clear();
+    resetDirectoryState();
     m_model->setStringList({});
     viewport()->update();
     // Publish the empty shell immediately so consumers drop the previous
@@ -352,6 +315,23 @@ void ThumbnailPanel::setDirectory(const QString &path)
                     }
                 });
         });
+}
+
+void ThumbnailPanel::resetDirectoryState()
+{
+    m_allEntries.clear();
+    m_paths.clear();
+    m_rowByPath.clear();
+    m_sourceRowByPath.clear();
+    m_sizeByPath.clear();
+    m_metaIndex.clear();
+    m_metaIso.clear();
+    m_metaCamera.clear();
+    m_metaLens.clear();
+    m_metaIndexing = false;
+    m_recursiveSearching = false;
+    m_recursiveHits.clear();
+    m_recursiveHitsFor.clear();
 }
 
 void ThumbnailPanel::refresh()

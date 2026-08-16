@@ -28,6 +28,7 @@
 #include "core/command/RenameCommand.h"
 #include "core/command/ToggleHistogramCommand.h"
 #include "core/export/ExportManager.h"
+#include "core/export/ExportJob.h"
 #include "core/image/ImageFormats.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
@@ -96,6 +97,7 @@
 #include <QPainter>
 #include <QPointer>
 #include <QPushButton>
+#include <QProgressDialog>
 #include <QResizeEvent>
 #include <QScreen>
 #include <QScrollBar>

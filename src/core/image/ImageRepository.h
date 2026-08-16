@@ -140,6 +140,11 @@ class ImageRepository
     std::string makeKey(const std::string &filePath) const;
     mviewer::domain::ImageMetadata makeMeta(const std::string &filePath) const;
 
+    // UI preview boundary: cache ownership stays inside the repository/cache
+    // stack, while the PreviewPanel only sees a value-owned ImageData payload.
+    bool getPreviewCache(const std::string &key, ImageData &out) const;
+    void putPreviewCache(const std::string &key, const ImageData &image);
+
     // M27: defensive budget for the synchronous loadDirectory(). Default is 5
     // minutes; tests shrink it to exercise the timeout path without waiting.
     // When the budget expires, outstanding accepted tasks are cancelled and
@@ -155,6 +160,15 @@ class ImageRepository
     std::string cachedKeyForPath(const std::string &filePath) const;
     void rememberKey(const std::string &filePath, const std::string &key) const;
     void forgetKey(const std::string &filePath) const;
+
+    bool loadMemoryHit(const std::string &filePath, const std::string &key,
+                       const LoadOptions &opts, Result &result) const;
+    bool loadPixels(const std::string &filePath, const std::string &key,
+                    const LoadOptions &opts, ImageData &pixels, bool &fromCache,
+                    mviewer::domain::ImageMetadata &decodeMeta, std::string &error) const;
+    void enrichFrame(ImageFrame &frame, const std::string &filePath, const ImageData &pixels,
+                     const mviewer::domain::ImageMetadata &decodeMeta) const;
+    void restoreRaw16(ImageFrame &frame, const std::string &filePath, const std::string &key) const;
 
     mutable std::mutex m_keyMtx;
     mutable std::unordered_map<std::string, std::string> m_keyByPath;

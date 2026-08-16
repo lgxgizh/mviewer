@@ -1,6 +1,5 @@
 #include "previewpanel.h"
 
-#include "core/cache/CacheManager.h"
 #include "core/image/Decoder.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/ImageStats.h"
@@ -125,7 +124,7 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
             bool fileSizeKnown = knownSize >= 0;
             mviewer::domain::ImageMetadata meta;
             ImageData img;
-            if (CacheManager::instance().getMemory(CacheLevel::Preview, cacheKey, img))
+            if (ImageRepository::instance().getPreviewCache(cacheKey, img))
             {
                 // Warm scaled preview — reuse it, still recompute the stats on
                 // the worker from the cached buffer.
@@ -135,7 +134,7 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
                     ImageData decoded = Decoder::decodeScaled(stdPath, kPreviewMaxEdge, meta);
                     img = mvcore::toDisplayImageData(decoded, meta);
                     if (!img.isNull())
-                        CacheManager::instance().putMemory(CacheLevel::Preview, cacheKey, img);
+                        ImageRepository::instance().putPreviewCache(cacheKey, img);
             }
             if (!img.isNull())
             {
