@@ -19,7 +19,7 @@
 ## 2. Expected result
 
 - The workspace JSON captures: open directory, compare session (images +
-  ROI), and per-image analysis text.
+  ROI), and per-image analysis text with its optional producer analyzer id.
 - After restart, restoring the workspace returns the app to the same state:
   directory re-opened, compare session rebuilt (even with **no ROI / no
   analysis**), per-image analysis reattached.
@@ -31,7 +31,7 @@
 | W-1 | Save captures directory + comparedImages + ROI + analysis | round-trips |
 | W-2 | Restore reopens the directory | exact path |
 | W-3 | Restore rebuilds the compare session (incl. no-ROI/no-analysis edge) | exact set |
-| W-4 | Restore reattaches per-image analysis text | exact |
+| W-4 | Restore reattaches per-image analysis text and producer id | exact |
 | W-5 | Legacy workspace files (no `comparedImages` key) still load | tolerant |
 
 ## 4. Automated test
@@ -40,8 +40,8 @@
 **Source:** `src/core/test_workspace_persist.cpp`
 **What it drives (REAL path, not faked):**
 - Serializes a `Workspace` (domain object) via `WorkspaceSerializer`, then
-  deserializes — asserts directory / `comparedImages` / ROI[4] / analysis
-  survive (W-1, W-2, W-3, W-4).
+  deserializes — asserts directory / `comparedImages` / ROI[4] / analysis and
+  producer id survive (W-1, W-2, W-3, W-4).
 - **Edge case (review P0):** a compare session with **no ROI and no analysis**
   round-trips via the explicit `comparedImages` array (W-3).
 - **Legacy tolerance (W-5):** a JSON missing `comparedImages` defaults to empty

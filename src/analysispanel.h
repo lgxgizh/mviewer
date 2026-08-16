@@ -42,6 +42,19 @@ class AnalysisPanel : public QWidget
     Q_OBJECT
 
   public:
+    // The report boundary must distinguish a result produced by the current
+    // request from an older result retained by AnalyzerModel for history.  In
+    // particular, NoResult and Unavailable are terminal states that must not
+    // fall back to that retained text during export.
+    enum class ReportAnalysisState
+    {
+        Unset,
+        Pending,
+        Available,
+        NoResult,
+        Unavailable
+    };
+
     explicit AnalysisPanel(QWidget *parent = nullptr);
     ~AnalysisPanel() override;
 
@@ -103,6 +116,19 @@ class AnalysisPanel : public QWidget
     QString analysisText() const
     {
         return m_pluginResult ? m_pluginResult->text() : QString();
+    }
+
+    ReportAnalysisState reportAnalysisState() const
+    {
+        return m_reportAnalysisState;
+    }
+    bool reportAnalysisPending() const
+    {
+        return m_reportAnalysisState == ReportAnalysisState::Pending;
+    }
+    QString reportAnalyzerId() const
+    {
+        return m_reportAnalyzerId;
     }
 
     // Pixel Inspector (M3 Phase-2): live readout of the hovered pixel.
@@ -231,6 +257,7 @@ class AnalysisPanel : public QWidget
     void renderAnalysisUnavailable();
     void clearAnalyzerResultSurface();
     void showAnalysisPending();
+    void setReportAnalysisState(ReportAnalysisState state, const QString &producerAnalyzerId = {});
     // Submit a snapshot to the Analysis pool and marshal the worker result back
     // onto the UI thread (defined in analysispanel.cpp next to runAnalysis).
     static TaskScheduler::TaskHandle submitAnalysisJob(const AnalysisInput &in,
@@ -273,12 +300,15 @@ class AnalysisPanel : public QWidget
     QListWidget *m_historyList = nullptr;
     QListWidget *m_pinnedList = nullptr;
     QPushButton *m_pinBtn = nullptr;
+    QPushButton *m_exportButton = nullptr;
+    ReportAnalysisState m_reportAnalysisState = ReportAnalysisState::Unset;
+    QString m_reportAnalyzerId;
     void refreshHistoryUi();
     void refreshPinnedUi();
     void onHistoryActivated();
     void onPinnedActivated();
     void onPinToggled();
-    void publishResult(const QString &plainText);
+    void publishResult(const QString &plainText, const QString &producerAnalyzerId = {});
 
     static constexpr int kPreviewSize = 192;
 };

@@ -73,6 +73,7 @@ void testC2C4C5PanelAndModel(const QString &pathA, const QString &pathB)
           "C#4: analysis result for image A delivered asynchronously");
     panel.setFrame(frameB);
     panel.setImage(mvcore::toQImage(frameB->pixels()), pathB);
+    panel.selectAnalyzer("brightness");
     panel.reanalyze();
     CHECK(waitFor([&model, &pathB]() { return !model.resultText(pathB).isEmpty(); }, 5000),
           "C#4: analysis result for image B delivered asynchronously");
@@ -81,6 +82,10 @@ void testC2C4C5PanelAndModel(const QString &pathA, const QString &pathB)
     const QString resB = model.resultText(pathB);
     CHECK(!resA.isEmpty(), "C#4: analysis result recorded for image A");
     CHECK(!resB.isEmpty(), "C#4: analysis result recorded for image B");
+    CHECK(model.resultAnalyzerId(pathA) == "histogram",
+          "C#4: image A retains the analyzer id that produced its result");
+    CHECK(model.resultAnalyzerId(pathB) == "brightness",
+          "C#4: image B retains its distinct producer analyzer id");
     const QStringList hist = model.history();
     CHECK(hist.contains(pathA) && hist.contains(pathB),
           "C#4: history tracks exactly the analyzed images");
@@ -103,8 +108,8 @@ void testC6PersistenceRoundTrip()
 
     {
         AnalyzerModel model;
-        model.setResult("/data/img_a.png", "histogram lum=120.5");
-        model.setResult("/data/img_b.png", "histogram lum=80.0");
+        model.setResult("/data/img_a.png", "histogram lum=120.5", "histogram");
+        model.setResult("/data/img_b.png", "brightness lum=80.0", "brightness");
         model.pinResult("/data/img_b.png");
         model.save();
         CHECK(QFile::exists(file), "C#6: analysis history persisted to disk");
@@ -117,10 +122,30 @@ void testC6PersistenceRoundTrip()
               "C#6: result reloads for the correct path");
         CHECK(model.resultText("/data/img_b.png").contains("80.0"),
               "C#6: second result reloads for its own path");
+        CHECK(model.resultAnalyzerId("/data/img_a.png") == "histogram" &&
+                  model.resultAnalyzerId("/data/img_b.png") == "brightness",
+              "C#6: producer analyzer ids persist per image path");
         CHECK(model.resultText("/data/other.png").isEmpty(),
               "C#6: no phantom result for an unrelated path");
         CHECK(model.pinned().contains("/data/img_b.png"), "C#6: pinned state survives restart");
         CHECK(model.history().contains("/data/img_a.png"), "C#6: history survives restart");
+    }
+
+    // Results-only files from the pre-id format remain readable, but expose no
+    // guessed analyzer identity.
+    {
+        QFile legacy(file);
+        CHECK(legacy.open(QIODevice::WriteOnly | QIODevice::Truncate),
+              "C#6: legacy results-only fixture can be written");
+        legacy.write("{\"currentAnalyzer\":\"brightness\","
+                     "\"results\":{\"/legacy/a.png\":\"old result\"},"
+                     "\"history\":[\"/legacy/a.png\"],\"pinned\":[]}");
+        legacy.close();
+        AnalyzerModel model;
+        CHECK(model.resultText("/legacy/a.png") == "old result",
+              "C#6: legacy results-only persistence remains readable");
+        CHECK(model.resultAnalyzerId("/legacy/a.png").isEmpty(),
+              "C#6: legacy result without producer id is not mislabelled");
     }
     QFile::remove(file);
 }
@@ -365,6 +390,9 @@ void testManualAnalyzerRunAsync()
     // Materialize fully with the fast analyzer and wait for completion.
     CHECK(waitForLoaded(panel, 5000), "fast analyzer materializes the frame");
     CHECK(gate->started.load() == 0, "materialization ran the fast analyzer, not the gate");
+    QPushButton *exportButton = reportButton(panel);
+    CHECK(exportButton && exportButton->isEnabled(),
+          "report export is available after the prior analysis completes");
 
     // Manual run of the gated analyzer: the call must return while the worker
     // is blocked, and the materialized image/base pages must stay loaded.
@@ -374,6 +402,8 @@ void testManualAnalyzerRunAsync()
           "manual analyzer run is submitted to the Analysis pool");
     CHECK(panel.hasLoadedImage(),
           "manual analysis keeps the materialized image loaded");
+    CHECK(exportButton && !exportButton->isEnabled() && panel.reportAnalysisPending(),
+          "report export is disabled while the replacement analyzer is pending");
     CHECK(!model.resultText(path).contains("m28 gated result"),
           "stale gated result is not shown while the worker is blocked");
 
@@ -381,6 +411,12 @@ void testManualAnalyzerRunAsync()
     CHECK(waitFor([&model, &path]() { return model.resultText(path).contains("m28 gated result"); },
                   5000),
           "manual analyzer result is delivered and path-keyed");
+    CHECK(exportButton && exportButton->isEnabled() &&
+              panel.reportAnalysisState() == AnalysisPanel::ReportAnalysisState::Available &&
+              panel.reportAnalyzerId() == "m28_gated",
+          "report export is restored with the new producer identity after success");
+    CHECK(model.resultAnalyzerId(path) == "m28_gated",
+          "AnalyzerModel stores the producer id that created the current result");
     CHECK(panel.hasLoadedImage(), "image stays loaded after the manual result");
     unregisterGatedAnalyzer();
     TaskScheduler::instance().drain(TaskScheduler::AnalysisPool,
@@ -506,6 +542,9 @@ void testManualRejectedReplacement()
     CHECK(panel.hasLoadedImage(), "image stays loaded while the gated job runs");
     CHECK(panel.analysisText().contains("分析中"),
           "accepted manual job shows a pending state");
+    QPushButton *exportButton = reportButton(panel);
+    CHECK(exportButton && !exportButton->isEnabled(),
+          "report export is disabled for the accepted pending request");
 
     // A replacement submitted while the pool is paused is REJECTED: the
     // superseded pending state must be replaced by an explicit retryable
@@ -519,6 +558,9 @@ void testManualRejectedReplacement()
               "rejected replacement clears the pending state");
         CHECK(panel.analysisText().contains("请稍后重试"),
               "rejected replacement shows an explicit retryable unavailable message");
+        CHECK(exportButton && exportButton->isEnabled() &&
+                  panel.reportAnalysisState() == AnalysisPanel::ReportAnalysisState::Unavailable,
+              "queue-unavailable terminal restores export without reusing old text");
         CHECK(!model.resultText(path).contains("m28 gated result"),
               "no gated success published by the rejected replacement");
         CHECK(!model.resultText(path).contains("Lum: avg"),
@@ -577,12 +619,19 @@ void testManualNoResultTerminal()
           "no-result analyzer run submitted to the Analysis pool");
     CHECK(panel.analysisText().contains("分析中"),
           "pending state shown while the no-result analyzer is blocked");
+    QPushButton *exportButton = reportButton(panel);
+    CHECK(exportButton && !exportButton->isEnabled(),
+          "report export is disabled while the no-result request is pending");
 
     opener.open();
     CHECK(waitFor([&panel]() { return !panel.analysisText().contains("分析中"); }, 5000),
           "pending state is replaced by an explicit terminal");
     CHECK(panel.analysisText().contains("未产生结果"),
           "analysis surface shows the explicit no-result message");
+    CHECK(exportButton && exportButton->isEnabled() &&
+              panel.reportAnalysisState() == AnalysisPanel::ReportAnalysisState::NoResult &&
+              panel.reportAnalyzerId().isEmpty(),
+          "no-result terminal restores export without exposing the retained old producer");
     CHECK(panel.hasLoadedImage(), "image stays loaded after the no-result terminal");
     CHECK(!model.resultText(path).contains("m28 gated result"),
           "no fabricated model success from a no-result analyzer");

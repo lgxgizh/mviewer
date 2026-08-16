@@ -134,6 +134,46 @@ struct AnalysisBatchReport
     std::string toJson() const;
 };
 
+// A single-image analysis snapshot.  The analyzer id is captured from the
+// producer that generated resultText; callers must not infer it from a global
+// "current analyzer" selection after the fact.
+struct AnalysisReport
+{
+    std::string analyzerId;
+    std::string resultText;
+
+    std::string toJson() const;
+    std::string toCsv() const;
+};
+
+// Format-independent report snapshot shared by the UI export boundary and
+// the Qt-free renderers below.  Binary previews remain optional base64 fields
+// populated by the existing worker-side image encoder.
+struct ReportContext
+{
+    std::string title = "MViewer Analysis Report";
+    std::string imagePath;
+    std::string histogramPng;   // base64-encoded PNG
+    std::string compareDiffPng; // base64-encoded PNG (diff image)
+    CompareReport compare;
+    CompareReportBundle compareBundle;
+    std::vector<std::string> compareDiffPngs; // base64 PNGs parallel to targets
+    AnalysisReport analysis;
+    AnalysisBatchReport batch;
+    bool hasCompare = false;
+    bool hasCompareBundle = false;
+    bool hasAnalysis = false;
+    bool hasBatch = false;
+};
+
+// Build format-specific report bodies from one captured snapshot.  Compare
+// JSON/CSV outputs intentionally retain the established CompareReport and
+// CompareReportBundle serializers byte-for-byte; single-image reports use a
+// stable imagePath + analysis shape even when no analysis result exists.
+std::string buildReportJson(const ReportContext &ctx);
+std::string buildReportCsv(const ReportContext &ctx);
+std::string buildReportMarkdown(const ReportContext &ctx);
+
 // Assemble an AnalysisBatchReport from the raw per-image AnalyzerResults
 // produced by AnalyzerRegistry::runBatch().
 AnalysisBatchReport buildBatchReport(const std::string &analyzerId,

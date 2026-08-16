@@ -13,6 +13,16 @@
   delivery and bounded temporary-file cleanup.
 - Delete UI text now says **MViewer 回收站**; native Windows Recycle Bin
   semantics are not claimed by this release line.
+- Analyze → Report export now captures the per-image producer analyzer id and
+  result text from `AnalyzerModel`, with valid single-image JSON/CSV output
+  even before an analysis result exists.
+- JSON, CSV, Markdown, and HTML report rendering now share the Qt-free report
+  snapshot; analysis text is escaped/fenced safely and legacy Compare output
+  remains compatible. Analyzer producer ids persist per image while old
+  results-only history files remain readable without guessed labels.
+- Analyze report export now rejects an in-flight single-image request instead
+  of exporting retained stale text; no-result and unavailable terminals emit a
+  report without analysis. Workspace/project restore preserves the producer id.
 
 ### Tests
 
@@ -21,6 +31,9 @@
   Browse/Compare workflow, lifecycle, and benchmark-enforcement gates.
 - Native Windows GUI, physical ICC, mixed-DPI, two-volume, native-dialog, and
   long-session evidence remains MANUAL/BLOCKED until target hardware is run.
+- Core export and AnalyzerModel regressions cover analyzed and unanalyzed
+  single-image reports, special-character escaping, Compare compatibility,
+  per-path analyzer identity, and legacy persistence loading.
 
 ## [Unreleased] — M44 release readiness, data safety and structural convergence
 

@@ -95,6 +95,7 @@ int main(int argc, char **argv)
         ws.folders[0].imageSet.images[0].roiW = 256;
         ws.folders[0].imageSet.images[0].roiH = 128;
         ws.folders[0].imageSet.images[0].analysis = "PSNR=42.1dB SSIM=0.99";
+        ws.folders[0].imageSet.images[0].analysisAnalyzerId = "psnr";
         const std::string json2 = mviewer::core::serializeWorkspace(ws);
         auto maybeBack3 = mviewer::core::deserializeWorkspace(json2);
         CHECK(maybeBack3.has_value(), "workspace with ROI+analysis deserialized");
@@ -104,6 +105,7 @@ int main(int argc, char **argv)
         CHECK(ri.roiX == 12 && ri.roiY == 34 && ri.roiW == 256 && ri.roiH == 128,
               "ROI round-trips");
         CHECK(ri.analysis == "PSNR=42.1dB SSIM=0.99", "analysis text round-trips");
+        CHECK(ri.analysisAnalyzerId == "psnr", "analysis producer id round-trips");
 
         // M12.2 (G2-ext): multiple images each carry their OWN ROI + analysis
         // (a multi-image compare session), not just the active one.
@@ -112,6 +114,7 @@ int main(int argc, char **argv)
         ws.folders[0].imageSet.images[1].roiW = 100;
         ws.folders[0].imageSet.images[1].roiH = 80;
         ws.folders[0].imageSet.images[1].analysis = "PSNR=38.0dB SSIM=0.97";
+        ws.folders[0].imageSet.images[1].analysisAnalyzerId = "ssim";
         const std::string json3 = mviewer::core::serializeWorkspace(ws);
         auto maybeBack4 = mviewer::core::deserializeWorkspace(json3);
         CHECK(maybeBack4.has_value(), "workspace with per-image ROI+analysis deserialized");
@@ -123,6 +126,7 @@ int main(int argc, char **argv)
               "image[0] ROI+analysis round-trips");
         CHECK(r1.roiX == 5 && r1.roiW == 100 && r1.analysis == "PSNR=38.0dB SSIM=0.97",
               "image[1] independent ROI+analysis round-trips");
+        CHECK(r1.analysisAnalyzerId == "ssim", "image[1] producer id stays path-bound");
 
         // M12.2 (review fix): a compare session with NO ROI and NO analysis must
         // still round-trip via the explicit comparedImages list. This is the
@@ -156,6 +160,8 @@ int main(int argc, char **argv)
             maybeLeg ? std::move(*maybeLeg) : mviewer::domain::Workspace{};
         CHECK(leg.folders[0].imageSet.images[0].roiW == 0, "legacy ROI defaults to 0");
         CHECK(leg.folders[0].imageSet.images[0].analysis.empty(), "legacy analysis defaults empty");
+        CHECK(leg.folders[0].imageSet.images[0].analysisAnalyzerId.empty(),
+              "legacy producer id defaults empty");
     }
     else
     {

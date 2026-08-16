@@ -62,11 +62,14 @@ struct ImageMetadata
 
     // ─── Session persistence (M12.1) ────────────────────────────────────────
     // ROI (in image pixel coords) captured for this image during a Compare
-    // session, and the last analysis result text. Round-tripped by
-    // WorkspaceSerializer so a saved .mvws restores compare/analysis context.
-    // Zero ROI = no selection saved; empty analysis = none saved.
+    // session, and the last analysis result text plus its producer identity.
+    // Round-tripped by WorkspaceSerializer so a saved .mvws restores
+    // compare/analysis context without relabeling a result with the current
+    // analyzer selection. Zero ROI = no selection saved; empty analysis =
+    // none saved. The analyzer id is optional for legacy workspace files.
     int roiX = 0, roiY = 0, roiW = 0, roiH = 0;
     std::string analysis;
+    std::string analysisAnalyzerId;
 };
 
 // Domain-level image identifier (value type)

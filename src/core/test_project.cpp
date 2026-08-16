@@ -27,6 +27,7 @@ int main()
     img.roiW = 10;
     img.roiH = 10;
     img.analysis = "peak=0.9";
+    img.analysisAnalyzerId = "brightness";
     folder.imageSet.images.push_back(img);
     ws.folders.push_back(folder);
     ws.comparedImages.push_back("/data/set1/a.png");
@@ -43,6 +44,8 @@ int main()
     assert(out.analyzerPipeline[0] == "histogram");
     assert(out.workspace.imageCount() == 1);
     assert(out.workspace.folders.front().imageSet.images.front().analysis == "peak=0.9");
+    assert(out.workspace.folders.front().imageSet.images.front().analysisAnalyzerId ==
+           "brightness");
     assert(!out.workspace.compareSessionJson.empty());
 
     // Negative cases must fail cleanly (no throw, false return).

@@ -72,6 +72,7 @@ void AnalysisPanel::setImage(const QImage &img, const QString &path)
     // replacement while applyFrameImage renders the new base image.
     clearAnalyzerResultSurface();
     m_frameDirty = false;
+    setReportAnalysisState(ReportAnalysisState::Unset);
     applyFrameImage(img.convertToFormat(QImage::Format_RGB32), path);
 }
 
@@ -105,6 +106,7 @@ void AnalysisPanel::setImages(const QImage &a, const QImage &b)
     // the compare state.
     clearAnalyzerResultSurface();
     m_frameDirty = false;
+    setReportAnalysisState(ReportAnalysisState::Unset);
     m_imageA = a.convertToFormat(QImage::Format_RGB32);
     m_imageB = b.convertToFormat(QImage::Format_RGB32);
     m_hasA = m_hasB = true;
@@ -117,6 +119,7 @@ void AnalysisPanel::clear()
 {
     invalidateAnalysis();
     m_frameDirty = false;
+    setReportAnalysisState(ReportAnalysisState::Unset);
     m_imageA = m_imageB = QImage();
     m_hasA = m_hasB = false;
     m_statsA = m_statsB = ImageStats();

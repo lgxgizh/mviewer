@@ -79,6 +79,32 @@ std::string csvEscape(const std::string &s)
     return out;
 }
 
+std::string markdownFence(const std::string &content, const std::string &language = {})
+{
+    size_t longestRun = 0;
+    size_t currentRun = 0;
+    for (const char c : content)
+    {
+        if (c == '`')
+        {
+            ++currentRun;
+            longestRun = std::max(longestRun, currentRun);
+        }
+        else
+        {
+            currentRun = 0;
+        }
+    }
+
+    const std::string fence(std::max<size_t>(3, longestRun + 1), '`');
+    std::string out = fence + language + "\n" + content;
+    if (content.empty() || content.back() != '\n')
+        out.push_back('\n');
+    out += fence;
+    out.push_back('\n');
+    return out;
+}
+
 // Scan a grayscale diff map for min/mean/max (0..255).
 void summarizeDiff(const ImageData &d, double &mn, double &mean, double &mx)
 {
@@ -469,6 +495,107 @@ std::string CompareReport::toCsv() const
        << csvNumber(meanB_B) << "," << csvNumber(noiseA) << "," << csvNumber(noiseB) << ","
        << csvNumber(diffMin) << "," << csvNumber(diffMean) << "," << csvNumber(diffMax) << "\n";
     return os.str();
+}
+
+std::string AnalysisReport::toJson() const
+{
+    std::ostringstream os;
+    os << "{\"analyzerId\": \"" << jsonEscape(analyzerId)
+       << "\", \"resultText\": \"" << jsonEscape(resultText) << "\"}";
+    return os.str();
+}
+
+std::string AnalysisReport::toCsv() const
+{
+    std::ostringstream os;
+    os << "analyzerId,resultText\n" << csvEscape(analyzerId) << "," << csvEscape(resultText)
+       << "\n";
+    return os.str();
+}
+
+std::string buildReportJson(const ReportContext &ctx)
+{
+    if (ctx.hasCompareBundle)
+        return ctx.compareBundle.toJson();
+    if (ctx.hasCompare)
+        return ctx.compare.toJson();
+    if (ctx.hasBatch)
+        return ctx.batch.toJson();
+
+    std::ostringstream os;
+    os << "{\n  \"imagePath\": \"" << jsonEscape(ctx.imagePath) << "\",\n  \"analysis\": ";
+    if (ctx.hasAnalysis)
+        os << ctx.analysis.toJson();
+    else
+        os << "null";
+    os << "\n}\n";
+    return os.str();
+}
+
+std::string buildReportCsv(const ReportContext &ctx)
+{
+    if (ctx.hasCompareBundle)
+        return ctx.compareBundle.toCsv();
+    if (ctx.hasCompare)
+        return ctx.compare.toCsv();
+    if (ctx.hasBatch)
+        return ctx.batch.toCsv();
+
+    const std::string analyzerId = ctx.hasAnalysis ? ctx.analysis.analyzerId : std::string{};
+    const std::string resultText = ctx.hasAnalysis ? ctx.analysis.resultText : std::string{};
+    std::ostringstream os;
+    os << "imagePath,analyzerId,resultText\n" << csvEscape(ctx.imagePath) << ","
+       << csvEscape(analyzerId) << "," << csvEscape(resultText) << "\n";
+    return os.str();
+}
+
+std::string buildReportMarkdown(const ReportContext &ctx)
+{
+    std::string md;
+    md += "# MViewer Analysis Report\n\n";
+    md += "## Title\n\n" + markdownFence(ctx.title) + "\n";
+    md += "## Image\n\n" + markdownFence(ctx.imagePath) + "\n";
+    if (!ctx.histogramPng.empty())
+        md += "![Histogram](data:image/png;base64," + ctx.histogramPng + ")\n\n";
+
+    if (ctx.hasAnalysis)
+    {
+        md += "## Analysis\n\n";
+        md += "### Analyzer ID\n\n" + markdownFence(ctx.analysis.analyzerId) + "\n";
+        md += "### Result\n\n" + markdownFence(ctx.analysis.resultText) + "\n";
+    }
+    else if (!ctx.hasCompareBundle && !ctx.hasCompare && !ctx.hasBatch)
+    {
+        md += "## Analysis\n\n";
+        md += "No analyzer result was captured.\n\n";
+    }
+
+    if (ctx.hasCompareBundle)
+    {
+        md += "## Compare Report Bundle\n\n";
+        md += markdownFence(ctx.compareBundle.toJson(), "json") + "\n";
+        for (size_t i = 0; i < ctx.compareBundle.targets.size(); ++i)
+        {
+            if (i >= ctx.compareDiffPngs.size() || ctx.compareDiffPngs[i].empty())
+                continue;
+            md += "### Diff\n\nTarget path:\n\n";
+            md += markdownFence(ctx.compareBundle.targets[i].path) + "\n";
+            md += "![Diff](data:image/png;base64," + ctx.compareDiffPngs[i] + ")\n\n";
+        }
+    }
+    else if (ctx.hasCompare)
+    {
+        md += "## Compare Report\n\n";
+        md += markdownFence(ctx.compare.toJson(), "json") + "\n";
+        if (!ctx.compareDiffPng.empty())
+            md += "![Diff](data:image/png;base64," + ctx.compareDiffPng + ")\n\n";
+    }
+    if (ctx.hasBatch)
+    {
+        md += "## Batch Analysis\n\n";
+        md += markdownFence(ctx.batch.toJson(), "json") + "\n";
+    }
+    return md;
 }
 
 // ─── M13.4 batch analyzer export ──────────────────────────────────────────

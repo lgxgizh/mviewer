@@ -15,6 +15,7 @@
 #include <QColor>
 #include <QCoreApplication>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QJsonParseError>
 #include <QImage>
 
@@ -196,6 +197,73 @@ int main(int argc, char **argv)
               "adversarial report HTML escapes user-derived text");
     }
 
+    // Single-image Analyze -> Report contract: all renderers consume the same
+    // Qt-free snapshot, preserve special characters, and remain valid when no
+    // analyzer result has been captured yet.
+    {
+        mviewer::core::ReportContext analysisContext;
+        analysisContext.title = "Review <& \"title\">";
+        analysisContext.imagePath = "C:\\captures\\one,\"<image>.png";
+        analysisContext.analysis.analyzerId = "brightness\"<&";
+        analysisContext.analysis.resultText = "mean=1,2\n``` <tag> & \"quoted\"";
+        analysisContext.hasAnalysis = true;
+
+        const std::string analysisJson = mviewer::core::buildReportJson(analysisContext);
+        QJsonParseError analysisParseError;
+        const QJsonDocument analysisParsed =
+            QJsonDocument::fromJson(QByteArray::fromStdString(analysisJson), &analysisParseError);
+        CHECK(analysisParseError.error == QJsonParseError::NoError && analysisParsed.isObject(),
+              "single-image analysis JSON parses as structured JSON");
+        const QJsonObject analysisObject = analysisParsed.object();
+        CHECK(analysisObject.value("imagePath").toString() ==
+                  QString::fromStdString(analysisContext.imagePath),
+              "single-image JSON retains the source path");
+        CHECK(analysisObject.value("analysis").toObject().value("analyzerId").toString() ==
+                  QString::fromStdString(analysisContext.analysis.analyzerId) &&
+                  analysisObject.value("analysis").toObject().value("resultText").toString() ==
+                      QString::fromStdString(analysisContext.analysis.resultText),
+              "single-image JSON retains analyzer id and result text");
+
+        const std::string analysisCsv = mviewer::core::buildReportCsv(analysisContext);
+        const size_t analysisCsvBreak = analysisCsv.find('\n');
+        CHECK(analysisCsvBreak != std::string::npos &&
+                  csvColumnCount(analysisCsv.substr(0, analysisCsvBreak)) == 3 &&
+                  csvColumnCount(analysisCsv.substr(analysisCsvBreak + 1)) == 3,
+              "single-image CSV keeps a stable three-column shape with quoted text");
+        CHECK(analysisCsv.find("brightness\"\"<&") != std::string::npos,
+              "single-image CSV quotes analyzer identity special characters");
+
+        const std::string analysisMarkdown =
+            mviewer::core::buildReportMarkdown(analysisContext);
+        CHECK(analysisMarkdown.find("## Analysis") != std::string::npos &&
+                  analysisMarkdown.find("Analyzer ID") != std::string::npos &&
+                  analysisMarkdown.find("mean=1,2") != std::string::npos &&
+                  analysisMarkdown.find("````") != std::string::npos,
+              "single-image Markdown renders analysis in safe fenced blocks");
+
+        const std::string analysisHtml = mviewer::core::buildReportHtml(analysisContext);
+        CHECK(analysisHtml.find("<h2>Analysis</h2>") != std::string::npos &&
+                  analysisHtml.find("brightness&quot;&lt;&amp;") != std::string::npos &&
+                  analysisHtml.find("mean=1,2") != std::string::npos &&
+                  analysisHtml.find("&lt;tag&gt; &amp; &quot;quoted&quot;") != std::string::npos,
+              "single-image HTML renders and escapes the analysis section");
+
+        mviewer::core::ReportContext noAnalysis;
+        noAnalysis.imagePath = "C:\\captures\\pending.png";
+        const std::string noAnalysisJson = mviewer::core::buildReportJson(noAnalysis);
+        QJsonParseError noAnalysisParseError;
+        const QJsonDocument noAnalysisParsed = QJsonDocument::fromJson(
+            QByteArray::fromStdString(noAnalysisJson), &noAnalysisParseError);
+        CHECK(noAnalysisParseError.error == QJsonParseError::NoError &&
+                  noAnalysisParsed.object().value("analysis").isNull() &&
+                  noAnalysisJson.find("no compare data") == std::string::npos,
+              "single-image JSON without analysis remains valid and non-error-shaped");
+        const std::string noAnalysisCsv = mviewer::core::buildReportCsv(noAnalysis);
+        CHECK(noAnalysisCsv.find("imagePath,analyzerId,resultText") == 0 &&
+                  noAnalysisCsv.find("pending.png") != std::string::npos,
+              "single-image CSV without analysis still identifies the image");
+    }
+
     // Diff PNG.
     const ImageData diffImg = mviewer::core::compareDiffImage(fa, fb);
     CHECK(!diffImg.isNull(), "diff heatmap produced");
@@ -360,6 +428,27 @@ int main(int argc, char **argv)
     CHECK(bundleHtml.find("data:image/png;base64,cmVm") != std::string::npos &&
               bundleHtml.find("data:image/png;base64,dGFyZ2V0") != std::string::npos,
           "bundle HTML embeds each available pair diff PNG");
+
+    CHECK(mviewer::core::buildReportJson(htmlContext) == bundle.toJson(),
+          "public report JSON renderer preserves Compare bundle output semantics");
+    CHECK(mviewer::core::buildReportCsv(htmlContext) == bundle.toCsv(),
+          "public report CSV renderer preserves Compare bundle output semantics");
+    const std::string bundleMarkdown = mviewer::core::buildReportMarkdown(htmlContext);
+    CHECK(bundleMarkdown.find("## Compare Report Bundle") != std::string::npos &&
+              bundleMarkdown.find("referenceIndex") != std::string::npos &&
+              bundleMarkdown.find("C:\\captures\\target,one.png") != std::string::npos &&
+              bundleMarkdown.find("data:image/png;base64,cmVm") != std::string::npos &&
+              bundleMarkdown.find("data:image/png;base64,dGFyZ2V0") != std::string::npos &&
+              bundleMarkdown.find("No analyzer result was captured") == std::string::npos,
+          "Compare Markdown keeps bundle data/diffs without a misleading analysis section");
+
+    mviewer::core::ReportContext legacyCompareContext;
+    legacyCompareContext.compare = report;
+    legacyCompareContext.hasCompare = true;
+    CHECK(mviewer::core::buildReportJson(legacyCompareContext) == report.toJson(),
+          "public report JSON renderer preserves legacy Compare output semantics");
+    CHECK(mviewer::core::buildReportCsv(legacyCompareContext) == report.toCsv(),
+          "public report CSV renderer preserves legacy Compare output semantics");
 
     fs::remove_all(outDir, ec);
 

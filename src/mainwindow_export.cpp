@@ -16,58 +16,6 @@ struct ReportExportState
     bool success = false;
 };
 
-std::string markdownReport(const mviewer::core::ReportContext &ctx)
-{
-    std::string md;
-    md += "# " + ctx.title + "\n\n";
-    md += "**Image**: `" + ctx.imagePath + "`\n\n";
-    if (!ctx.histogramPng.empty())
-        md += "![Histogram](data:image/png;base64," + ctx.histogramPng + ")\n\n";
-    if (ctx.hasCompareBundle)
-    {
-        md += "## Compare Report Bundle\n\n```json\n";
-        md += ctx.compareBundle.toJson();
-        md += "\n```\n\n";
-        for (size_t i = 0; i < ctx.compareBundle.targets.size(); ++i)
-        {
-            if (i >= ctx.compareDiffPngs.size() || ctx.compareDiffPngs[i].empty())
-                continue;
-            md += "### Diff: " + ctx.compareBundle.targets[i].path +
-                  "\n\n![Diff](data:image/png;base64," + ctx.compareDiffPngs[i] + ")\n\n";
-        }
-    }
-    else if (ctx.hasCompare)
-    {
-        md += "## Compare Report\n\n```json\n";
-        md += ctx.compare.toJson();
-        md += "\n```\n";
-        if (!ctx.compareDiffPng.empty())
-            md += "\n![Diff](data:image/png;base64," + ctx.compareDiffPng + ")\n";
-    }
-    return md;
-}
-
-std::string buildReportBody(const mviewer::core::ReportContext &ctx, const std::string &suffix)
-{
-    if (suffix == "json")
-    {
-        if (ctx.hasCompareBundle)
-            return ctx.compareBundle.toJson();
-        if (ctx.hasCompare)
-            return ctx.compare.toJson();
-        return R"({"error":"no compare data"})";
-    }
-    if (suffix == "csv")
-    {
-        if (ctx.hasCompareBundle)
-            return ctx.compareBundle.toCsv();
-        return "error\nno compare data\n";
-    }
-    if (suffix == "md")
-        return markdownReport(ctx);
-    return mviewer::core::buildReportHtml(ctx);
-}
-
 void encodeReportImages(ReportExportState &state, const TaskScheduler::TaskContext &ctx)
 {
     if (!state.histogram.isNull())
@@ -120,10 +68,21 @@ void MainWindow::cancelReportExport()
 
 void MainWindow::exportReport()
 {
+    const bool hasCompare = m_compareView && m_compareView->comparedImageCount() >= 2;
+    // The AnalyzerModel intentionally retains the previous result for history
+    // when a newer request is pending.  A single-image export must not expose
+    // that retained text as if it belonged to the in-flight request. Compare
+    // reports are an independent snapshot and remain exportable meanwhile.
+    if (!hasCompare && m_analysisPanel && m_analysisPanel->reportAnalysisPending())
+    {
+        QMessageBox::information(this, tr("导出报告"), tr("分析仍在进行，请完成后再导出报告。"));
+        return;
+    }
+
     mviewer::core::ReportContext ctx;
     ctx.title = "MViewer Analysis Report";
 
-    if (m_compareView && m_compareView->comparedImageCount() >= 2)
+    if (hasCompare)
     {
         // Capture the compare state once. Every output format reads this snapshot.
         ctx.compareBundle = m_compareView->buildReportBundle();
@@ -138,7 +97,29 @@ void MainWindow::exportReport()
             return;
         }
 
-        ctx.imagePath = currentImagePath().toStdString();
+        const QString path = currentImagePath();
+        ctx.imagePath = path.toStdString();
+        if (m_analyzer)
+        {
+            const AnalysisPanel::ReportAnalysisState state =
+                m_analysisPanel ? m_analysisPanel->reportAnalysisState()
+                                 : AnalysisPanel::ReportAnalysisState::Unset;
+            const bool mayUseStoredResult =
+                state == AnalysisPanel::ReportAnalysisState::Unset ||
+                state == AnalysisPanel::ReportAnalysisState::Available;
+            const QString result = mayUseStoredResult ? m_analyzer->resultText(path) : QString();
+            const QString producerId = mayUseStoredResult ? m_analyzer->resultAnalyzerId(path)
+                                                          : QString();
+            const bool producerMatches =
+                state != AnalysisPanel::ReportAnalysisState::Available ||
+                !m_analysisPanel || m_analysisPanel->reportAnalyzerId() == producerId;
+            if (!result.isEmpty() && producerMatches)
+            {
+                ctx.analysis.analyzerId = producerId.toStdString();
+                ctx.analysis.resultText = result.toStdString();
+                ctx.hasAnalysis = true;
+            }
+        }
     }
     else
     {
@@ -203,7 +184,14 @@ void MainWindow::startReportExport(mviewer::core::ReportContext ctx, const QStri
                 state->cancelled = true;
                 return;
             }
-            state->body = buildReportBody(state->context, state->suffix);
+            if (state->suffix == "json")
+                state->body = mviewer::core::buildReportJson(state->context);
+            else if (state->suffix == "csv")
+                state->body = mviewer::core::buildReportCsv(state->context);
+            else if (state->suffix == "md")
+                state->body = mviewer::core::buildReportMarkdown(state->context);
+            else
+                state->body = mviewer::core::buildReportHtml(state->context);
             if (state->body.empty())
             {
                 state->error = "报告内容为空。";

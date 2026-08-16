@@ -54,9 +54,10 @@ void AnalysisPanel::buildAnalyzerSection(QVBoxLayout &layout)
     connect(runButton, &QPushButton::clicked, this, &AnalysisPanel::reanalyze);
     bar->addWidget(runButton);
 
-    auto *exportButton = new QPushButton(tr("导出报告"));
-    connect(exportButton, &QPushButton::clicked, this, &AnalysisPanel::exportRequested);
-    bar->addWidget(exportButton);
+    m_exportButton = new QPushButton(tr("导出报告"));
+    m_exportButton->setObjectName(QStringLiteral("analysisExportReportButton"));
+    connect(m_exportButton, &QPushButton::clicked, this, &AnalysisPanel::exportRequested);
+    bar->addWidget(m_exportButton);
     m_pinBtn = new QPushButton(tr("钉住"));
     m_pinBtn->setCheckable(true);
     m_pinBtn->setToolTip(tr("钉住当前分析结果（History 中保留，不被淘汰）"));

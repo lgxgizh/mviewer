@@ -405,8 +405,9 @@ bool parseCompareSession(const std::string &text, mviewer::domain::CompareSessio
 }
 
 // M15: workspace version for forward/backward compatibility.
-// Version 1 = legacy (no version field). Version 2 = current.
-static constexpr int kWorkspaceVersion = 2;
+// Version 1 = legacy (no version field). Version 2 added CompareSession;
+// version 3 adds the optional per-image analysis producer id.
+static constexpr int kWorkspaceVersion = 3;
 
 std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
 {
@@ -439,6 +440,8 @@ std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
             os << ",\"roi\":[" << m.roiX << ',' << m.roiY << ',' << m.roiW << ',' << m.roiH << ']';
             os << ",\"analysis\":";
             esc(os, m.analysis);
+            os << ",\"analysisAnalyzerId\":";
+            esc(os, m.analysisAnalyzerId);
             os << '}';
         }
         os << "]}";
@@ -490,6 +493,13 @@ static bool parseWorkspaceImage(Parser &p, mviewer::domain::Folder &folder)
         if (!p.eat(']') || !p.eat(',') || p.parseString() != "analysis" || !p.eat(':'))
             return false;
         m.analysis = p.parseString();
+        if (p.peek(','))
+        {
+            p.eat(',');
+            if (p.parseString() != "analysisAnalyzerId" || !p.eat(':'))
+                return false;
+            m.analysisAnalyzerId = p.parseString();
+        }
     }
     folder.imageSet.images.push_back(m);
     p.eat('}');

@@ -51,3 +51,67 @@ quoting with doubled quotes.
 
 The existing two-image `CompareReport`, `buildCompareReport`, and
 `compareDiffImage` APIs remain available and unchanged.
+
+## Single-image Analyze report
+
+`ReportContext` can carry an `AnalysisReport` snapshot for the currently
+exported image. `AnalysisReport::analyzerId` is the producer id captured when
+the result was published and `resultText` is the plain-text result shown by
+the Analysis panel. The UI must read both values from the per-image
+`AnalyzerModel` state; the global current analyzer selection must not be used
+to relabel an older result. Results loaded from the legacy results-only
+persistence format remain valid with an empty `analyzerId`.
+
+`hasAnalysis` is true only when a non-empty result exists. A single-image
+report without a result is still a valid report and never uses the old
+`no compare data` error payload.
+
+Report export follows the current Analysis request state. While an accepted
+analyzer job is `Pending`, the Analysis-panel action is disabled and other
+single-image report entry points reject the request with an explicit message,
+so retained text from the previous producer cannot be exported as current.
+`NoResult` and `Unavailable` are terminal states: export remains available for
+the image, but the retained `AnalyzerModel` text is omitted and `hasAnalysis`
+is false. Compare exports remain available while a single-image Analysis job
+is pending because they use their own snapshot.
+
+Workspace/project persistence stores the producer id beside each saved
+analysis result (`analysisAnalyzerId`). Older results-only/workspace files may
+omit that field and are still readable with an empty producer id; no current
+analyzer selection is used to relabel such legacy text.
+
+### JSON
+
+When no Compare result is present, JSON has this stable shape:
+
+```json
+{
+  "imagePath": "...",
+  "analysis": {
+    "analyzerId": "...",
+    "resultText": "..."
+  }
+}
+```
+
+`analysis` is `null` when `hasAnalysis` is false. Paths and result text use
+JSON escaping for quotes, backslashes, newlines, control characters, and
+other delimiters. Compare bundle and legacy Compare contexts continue to use
+their established serializers unchanged.
+
+### CSV
+
+Single-image CSV uses the stable header
+`imagePath,analyzerId,resultText` and one data row. Empty analyzer/result
+cells represent a report without an analysis result. Fields containing
+commas, quotes, or line breaks use standard CSV quoting. Compare contexts
+continue to use their established headers and rows.
+
+### Markdown and HTML
+
+Markdown renders image paths, analyzer ids, and result text in dynamically sized
+fenced code blocks so backticks, headings, newlines, and other user text
+cannot break the document structure. HTML renders an Analysis section with
+escaped analyzer id and a preformatted, escaped result body. Histogram and
+Compare diff PNGs remain worker-encoded base64 assets; no new UI-thread image
+recomputation is introduced.

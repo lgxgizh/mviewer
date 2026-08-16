@@ -2,8 +2,8 @@
 //
 // Maps the M24 Workflow C acceptance items that are automatable headless:
 //   C#2  analyzer list, execution status, and result meaning are explicit
-//   C#4  results stay keyed to the image they were computed for (no stale
-//        result silently attached to a different image)
+//   C#4  results and producer analyzer ids stay keyed to the image they were
+//        computed for (no stale result silently attached to a different image)
 //   C#5  Analysis History and pinned results are consistent with the model
 //   C#6  persisted history round-trips and stays path-keyed across restart
 //   C#7  a failing analyzer (buggy plugin) cannot take down the app: batch
@@ -29,6 +29,7 @@
 #include <QDir>
 #include <QEventLoop>
 #include <QImage>
+#include <QPushButton>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QThread>
@@ -244,6 +245,11 @@ bool waitFor(const std::function<bool()> &pred, int ms)
 bool waitForLoaded(AnalysisPanel &panel, int ms)
 {
     return waitFor([&panel]() { return panel.hasLoadedImage(); }, ms);
+}
+
+QPushButton *reportButton(AnalysisPanel &panel)
+{
+    return panel.findChild<QPushButton *>(QStringLiteral("analysisExportReportButton"));
 }
 
 void registerGatedAnalyzer(const std::shared_ptr<Gate> &gate, const std::string &id = "m28_gated",

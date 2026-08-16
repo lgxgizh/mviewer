@@ -92,6 +92,17 @@ void appendImageHtml(std::ostringstream &os, const ReportContext &ctx)
     }
 }
 
+void appendAnalysisHtml(std::ostringstream &os, const ReportContext &ctx)
+{
+    if (!ctx.hasAnalysis)
+        return;
+
+    os << tag("h2", "Analysis") << "\n<table>\n"
+          "<tr><th>Analyzer ID</th><th>Result</th></tr>\n<tr><td>"
+       << escapeHtml(ctx.analysis.analyzerId) << "</td><td><pre>"
+       << escapeHtml(ctx.analysis.resultText) << "</pre></td></tr>\n</table>\n";
+}
+
 void appendCompareHtml(std::ostringstream &os, const ReportContext &ctx)
 {
     if (ctx.hasCompareBundle)
@@ -224,10 +235,12 @@ std::string buildReportHtml(const ReportContext &ctx)
        << "th,td{border:1px solid #ddd;padding:8px;text-align:left;}\n"
        << "th{background:#1a73e8;color:#fff;}\n"
        << "img{max-width:100%;border:1px solid #ddd;margin:8px 0;}\n"
+       << "pre{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;}\n"
        << ".metric{color:#666;font-size:14px;}\n"
        << "</style></head><body>\n";
     os << "<h1>" << escapeHtml(ctx.title) << "</h1>\n";
     appendImageHtml(os, ctx);
+    appendAnalysisHtml(os, ctx);
     if (ctx.hasCompareBundle || ctx.hasCompare)
         appendCompareHtml(os, ctx);
     appendBatchHtml(os, ctx);

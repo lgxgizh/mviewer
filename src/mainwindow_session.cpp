@@ -25,6 +25,7 @@ struct PersistenceSnapshot
     std::string compareSessionJson;
     mviewer::domain::Selection roi;
     std::unordered_map<std::string, std::string> analysisByPath;
+    std::unordered_map<std::string, std::string> analysisAnalyzerByPath;
     bool project = false;
     std::string projectName;
     std::string createdIso;
@@ -46,6 +47,18 @@ bool cancelled(const TaskScheduler::TaskContext &ctx,
     return ctx.isCancelled() || (cancel && cancel->load(std::memory_order_acquire));
 }
 
+void captureAnalysis(PersistenceSnapshot &snapshot, AnalyzerModel *model, const QString &qpath)
+{
+    if (!model || qpath.isEmpty())
+        return;
+    const std::string path = qpath.toUtf8().toStdString();
+    const QString text = model->resultText(qpath);
+    if (text.isEmpty())
+        return;
+    snapshot.analysisByPath[path] = text.toUtf8().toStdString();
+    snapshot.analysisAnalyzerByPath[path] = model->resultAnalyzerId(qpath).toUtf8().toStdString();
+}
+
 void applyPersistedCompareContext(mviewer::domain::Workspace &ws,
                                    const PersistenceSnapshot &snapshot)
 {
@@ -60,6 +73,9 @@ void applyPersistedCompareContext(mviewer::domain::Workspace &ws,
             const auto it = snapshot.analysisByPath.find(image.filePath);
             if (it != snapshot.analysisByPath.end())
                 image.analysis = it->second;
+            const auto analyzerIt = snapshot.analysisAnalyzerByPath.find(image.filePath);
+            if (analyzerIt != snapshot.analysisAnalyzerByPath.end())
+                image.analysisAnalyzerId = analyzerIt->second;
             if (std::find(snapshot.comparedImages.begin(), snapshot.comparedImages.end(),
                           image.filePath) != snapshot.comparedImages.end() &&
                 !snapshot.roi.isEmpty())
@@ -178,12 +194,8 @@ void MainWindow::saveWorkspace()
                 mviewer::core::serializeCompareSession(m_compareView->compareSession());
     }
     for (const std::string &path : snapshot.comparedImages)
-    {
-        const QString qpath = QString::fromUtf8(path.c_str());
-        const std::string analysis = m_analyzer->resultText(qpath).toUtf8().toStdString();
-        if (!analysis.empty())
-            snapshot.analysisByPath[path] = analysis;
-    }
+        captureAnalysis(snapshot, m_analyzer, QString::fromUtf8(path.c_str()));
+    captureAnalysis(snapshot, m_analyzer, currentImagePath());
 
     // Compare-session JSON is a value snapshot too; it is applied to the
     // workspace after directory enumeration, entirely on the worker.
@@ -303,7 +315,8 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
         {
             if (!img.analysis.empty())
                 m_analyzer->setResult(QString::fromStdString(img.filePath),
-                                      QString::fromStdString(img.analysis));
+                                      QString::fromStdString(img.analysis),
+                                      QString::fromStdString(img.analysisAnalyzerId));
         }
     }
 
@@ -398,12 +411,8 @@ void MainWindow::saveProject()
                 mviewer::core::serializeCompareSession(m_compareView->compareSession());
     }
     for (const std::string &path : snapshot.comparedImages)
-    {
-        const QString qpath = QString::fromUtf8(path.c_str());
-        const std::string analysis = m_analyzer->resultText(qpath).toUtf8().toStdString();
-        if (!analysis.empty())
-            snapshot.analysisByPath[path] = analysis;
-    }
+        captureAnalysis(snapshot, m_analyzer, QString::fromUtf8(path.c_str()));
+    captureAnalysis(snapshot, m_analyzer, currentImagePath());
     const AnalyzerPipeline pipeline;
     for (const auto &id : pipeline.analyzerIds())
         snapshot.analyzerPipeline.push_back(id);
@@ -501,7 +510,8 @@ void MainWindow::openProject()
         for (const auto &img : folder.imageSet.images)
             if (!img.analysis.empty())
                 m_analyzer->setResult(QString::fromStdString(img.filePath),
-                                      QString::fromStdString(img.analysis));
+                                      QString::fromStdString(img.analysis),
+                                      QString::fromStdString(img.analysisAnalyzerId));
 
     std::optional<mviewer::domain::CompareSession> restoredSession;
     bool haveSession = false;

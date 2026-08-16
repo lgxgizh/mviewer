@@ -39,7 +39,7 @@ void AnalysisPanel::setAnalyzerModel(AnalyzerModel *model)
     refreshPinnedUi();
 }
 
-void AnalysisPanel::publishResult(const QString &plainText)
+void AnalysisPanel::publishResult(const QString &plainText, const QString &producerAnalyzerId)
 {
     if (!m_analyzerModel || plainText.isEmpty())
         return;
@@ -49,13 +49,15 @@ void AnalysisPanel::publishResult(const QString &plainText)
             : (m_frameA ? QString::fromStdString(m_frameA->metadata().filePath) : QString());
     if (path.isEmpty())
         return;
-    m_analyzerModel->setResult(path, plainText);
-    if (m_analyzerCombo)
-    {
-        const QString id = m_analyzerCombo->currentData().toString();
-        if (!id.isEmpty())
-            m_analyzerModel->setCurrentAnalyzer(id);
-    }
+    QString analyzerId = producerAnalyzerId;
+    if (analyzerId.isEmpty() && m_analyzerCombo)
+        analyzerId = m_analyzerCombo->currentData().toString();
+    // Publish text and its producer identity in one model operation.  The
+    // fallback to the combo is only for legacy synchronous paths; accepted
+    // worker results pass their captured request id explicitly.
+    m_analyzerModel->setResult(path, plainText, analyzerId);
+    if (!analyzerId.isEmpty())
+        m_analyzerModel->setCurrentAnalyzer(analyzerId);
     if (m_pinBtn)
         m_pinBtn->setChecked(m_analyzerModel->isPinned(path));
 }
@@ -140,7 +142,10 @@ void AnalysisPanel::onPinToggled()
     // Ensure there is a result to pin (use current plugin text if needed).
     if (m_analyzerModel->resultText(path).isEmpty() && m_pluginResult &&
         !m_pluginResult->text().isEmpty())
-        m_analyzerModel->setResult(path, m_pluginResult->text());
+    {
+        const QString id = m_analyzerCombo ? m_analyzerCombo->currentData().toString() : QString();
+        m_analyzerModel->setResult(path, m_pluginResult->text(), id);
+    }
     if (m_pinBtn->isChecked())
         m_analyzerModel->pinResult(path);
     else

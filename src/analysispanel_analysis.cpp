@@ -285,6 +285,7 @@ void AnalysisPanel::reanalyze()
     {
         invalidateAnalysis();
         clearAnalyzerResultSurface();
+        setReportAnalysisState(ReportAnalysisState::NoResult);
         updateComparePage();
         if (m_tabs && m_compareLabel)
         {
@@ -363,6 +364,7 @@ bool AnalysisPanel::runLegacyAnalyzer(const QString &id)
                     }
                     // M21: publish plain result into AnalyzerModel (history + pin SSOT).
                     publishResult(QString::fromStdString(text));
+                    setReportAnalysisState(ReportAnalysisState::Available, id);
                     return true;
                 }
             }
@@ -377,6 +379,7 @@ bool AnalysisPanel::runLegacyAnalyzer(const QString &id)
             if (m_pluginResult)
                 m_pluginResult->setText(err);
             publishResult(err);
+            setReportAnalysisState(ReportAnalysisState::Available, id);
             return true;
         }
     }
@@ -401,6 +404,8 @@ void AnalysisPanel::runRoiAnalysis()
                                   .arg(m_statsA.gMean, 0, 'f', 2)
                                   .arg(m_statsA.bMean, 0, 'f', 2);
         publishResult(plain);
+        const QString id = m_analyzerCombo ? m_analyzerCombo->currentData().toString() : QString();
+        setReportAnalysisState(ReportAnalysisState::Available, id);
     }
 }
 
@@ -416,6 +421,10 @@ void AnalysisPanel::setFrame(std::shared_ptr<ImageFrame> frame)
         clear();
         return;
     }
+    // Merely selecting/storing a frame does not mean a report-producing job
+    // has been accepted. Hidden panels defer materialization until shown, so
+    // keep export available until scheduleAnalysis() accepts the worker job.
+    setReportAnalysisState(ReportAnalysisState::Unset);
     // M28 P1-02/P1-04: materialization + analysis are deferred AND async. A
     // HIDDEN panel (the common case while browsing) stores the frame only — no
     // full-size QImage conversion and no Analysis task until it is shown. A
@@ -505,9 +514,11 @@ void AnalysisPanel::scheduleAnalysis()
         // Submission rejected (pool paused / back-pressured): stay dirty and
         // retryable — never fall back to synchronous work on the UI thread and
         // never present stale data.
+        renderAnalysisUnavailable();
         return;
     }
     m_task = handle;
+    setReportAnalysisState(ReportAnalysisState::Pending, QString::fromStdString(in.id));
 }
 
 // Schedule an analyzer-only rerun over the ALREADY materialized frame. The
@@ -636,7 +647,10 @@ void AnalysisPanel::applyAnalysisResult(const AnalysisResult &r)
     if (r.materialize)
     {
         if (r.image.isNull())
+        {
+            renderAnalysisUnavailable();
             return; // nothing to present (e.g. materialization failed)
+        }
         m_imageA = r.image;
         m_imagePath = QString::fromStdString(r.path);
         m_hasA = true;
@@ -665,6 +679,7 @@ void AnalysisPanel::applyAnalysisResult(const AnalysisResult &r)
                 if (tab >= 0)
                     m_tabs->setCurrentIndex(tab);
             }
+            setReportAnalysisState(ReportAnalysisState::NoResult);
             return;
         }
     }
@@ -678,7 +693,8 @@ void AnalysisPanel::applyAnalysisResult(const AnalysisResult &r)
         m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("分析失败")).arg(err));
         if (m_pluginResult)
             m_pluginResult->setText(err);
-        publishResult(err);
+        publishResult(err, QString::fromStdString(r.id));
+        setReportAnalysisState(ReportAnalysisState::Available, QString::fromStdString(r.id));
         return;
     }
 
@@ -687,14 +703,16 @@ void AnalysisPanel::applyAnalysisResult(const AnalysisResult &r)
         // Same result surface as the legacy reanalyze(): Histogram + Plugin tab.
         renderAnalyzerOutcome(r);
         // M21: publish exactly once for the current path.
-        publishResult(QString::fromStdString(r.resultText));
+        publishResult(QString::fromStdString(r.resultText), QString::fromStdString(r.id));
+        setReportAnalysisState(ReportAnalysisState::Available, QString::fromStdString(r.id));
         return;
     }
 
     if (r.roiFallback)
     {
         renderRoiOutcome(r);
-        publishResult(QString::fromStdString(r.plainResult));
+        publishResult(QString::fromStdString(r.plainResult), QString::fromStdString(r.id));
+        setReportAnalysisState(ReportAnalysisState::Available, QString::fromStdString(r.id));
         return;
     }
 
@@ -703,7 +721,9 @@ void AnalysisPanel::applyAnalysisResult(const AnalysisResult &r)
         // Analyzer produced no result and no ROI fallback applies: show an
         // explicit note without fabricating a successful model result.
         renderNoResult();
+        return;
     }
+    renderAnalysisUnavailable();
 }
 
 // The path results are keyed to: the explicit setImage(path) wins, otherwise
@@ -766,6 +786,7 @@ void AnalysisPanel::renderNoResult()
     m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("无结果")).arg(msg));
     if (m_pluginResult)
         m_pluginResult->setText(msg);
+    setReportAnalysisState(ReportAnalysisState::NoResult);
 }
 
 // Explicit queue-unavailable note for a REJECTED analyzer-only submission (the
@@ -778,6 +799,7 @@ void AnalysisPanel::renderAnalysisUnavailable()
     m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("分析暂不可用")).arg(msg));
     if (m_pluginResult)
         m_pluginResult->setText(msg);
+    setReportAnalysisState(ReportAnalysisState::Unavailable);
 }
 
 // Clear the single-frame analyzer result surface (stats label + Plugin tab) so
@@ -797,4 +819,14 @@ void AnalysisPanel::showAnalysisPending()
     m_statsLabel->setText(QString("<h3>%1</h3><p>%2</p>").arg(tr("分析中")).arg(msg));
     if (m_pluginResult)
         m_pluginResult->setText(msg);
+    setReportAnalysisState(ReportAnalysisState::Pending);
+}
+
+void AnalysisPanel::setReportAnalysisState(ReportAnalysisState state,
+                                            const QString &producerAnalyzerId)
+{
+    m_reportAnalysisState = state;
+    m_reportAnalyzerId = state == ReportAnalysisState::Available ? producerAnalyzerId : QString();
+    if (m_exportButton)
+        m_exportButton->setEnabled(state != ReportAnalysisState::Pending);
 }

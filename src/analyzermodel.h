@@ -15,7 +15,7 @@
 //
 // This model owns:
 //   * current analyzer id (registry key)
-//   * per-image result text (capped)
+//   * per-image result text + producer analyzer id (capped)
 //   * recent analysis history (image paths, most-recent first)
 //   * pinned results (image paths the user wants to keep)
 //
@@ -38,6 +38,13 @@ class AnalyzerModel : public QObject
     {
         return m_results.value(imagePath);
     }
+    // Analyzer identity is stored per path with the result producer.  A
+    // global current selection is not sufficient: revisiting an older image
+    // after changing analyzers must never relabel its result.
+    QString resultAnalyzerId(const QString &imagePath) const
+    {
+        return m_resultAnalyzers.value(imagePath);
+    }
     QMap<QString, QString> allResults() const
     {
         return m_results;
@@ -58,6 +65,7 @@ class AnalyzerModel : public QObject
   public slots:
     void setCurrentAnalyzer(const QString &id);
     void setResult(const QString &imagePath, const QString &text);
+    void setResult(const QString &imagePath, const QString &text, const QString &analyzerId);
     void clearResult(const QString &imagePath);
     void clearAllResults();
     void pinResult(const QString &imagePath);
@@ -81,6 +89,7 @@ class AnalyzerModel : public QObject
     QString storagePath() const;
     QString m_currentAnalyzer;
     QMap<QString, QString> m_results;
+    QMap<QString, QString> m_resultAnalyzers;
     QStringList m_history;
     QStringList m_pinned;
     QTimer *m_saveTimer = nullptr;

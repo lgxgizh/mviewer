@@ -32,6 +32,15 @@ void AnalyzerModel::setCurrentAnalyzer(const QString &id)
 
 void AnalyzerModel::setResult(const QString &imagePath, const QString &text)
 {
+    // Legacy callers do not know the producer id. Clear it rather than
+    // retaining an identity from a previous result, which could mislabel a
+    // newly-published text after the user switches analyzers.
+    setResult(imagePath, text, QString());
+}
+
+void AnalyzerModel::setResult(const QString &imagePath, const QString &text,
+                              const QString &analyzerId)
+{
     if (imagePath.isEmpty())
         return;
     // Cap growth across long browse sessions (same hygiene as the old map).
@@ -63,11 +72,13 @@ void AnalyzerModel::setResult(const QString &imagePath, const QString &text)
         if (dropKey.isEmpty())
             return; // all pinned at capacity — keep existing results
         m_results.remove(dropKey);
+        m_resultAnalyzers.remove(dropKey);
         emit resultChanged(dropKey, QString());
     }
-    if (m_results.value(imagePath) == text)
+    if (m_results.value(imagePath) == text && m_resultAnalyzers.value(imagePath) == analyzerId)
         return;
     m_results.insert(imagePath, text);
+    m_resultAnalyzers.insert(imagePath, analyzerId);
     emit resultChanged(imagePath, text);
     pushHistory(imagePath);
 }
@@ -76,6 +87,7 @@ void AnalyzerModel::clearResult(const QString &imagePath)
 {
     if (!m_results.remove(imagePath))
         return;
+    m_resultAnalyzers.remove(imagePath);
     emit resultChanged(imagePath, QString());
 }
 
@@ -85,6 +97,7 @@ void AnalyzerModel::clearAllResults()
         return;
     const QStringList keys = m_results.keys();
     m_results.clear();
+    m_resultAnalyzers.clear();
     for (const QString &k : keys)
         emit resultChanged(k, QString());
 }
@@ -131,6 +144,14 @@ void AnalyzerModel::save()
         results.insert(it.key(), it.value());
     root["results"] = results;
 
+    QJsonObject resultAnalyzers;
+    for (auto it = m_resultAnalyzers.begin(); it != m_resultAnalyzers.end(); ++it)
+    {
+        if (m_results.contains(it.key()))
+            resultAnalyzers.insert(it.key(), it.value());
+    }
+    root["resultAnalyzers"] = resultAnalyzers;
+
     QJsonArray history;
     for (const QString &h : m_history)
         history.append(h);
@@ -170,6 +191,16 @@ void AnalyzerModel::load()
     const QJsonObject results = root.value("results").toObject();
     for (auto it = results.begin(); it != results.end(); ++it)
         m_results.insert(it.key(), it.value().toString());
+
+    // `resultAnalyzers` was added after the original results-only format.
+    // Missing data is intentionally accepted and leaves the identity empty.
+    m_resultAnalyzers.clear();
+    const QJsonObject resultAnalyzers = root.value("resultAnalyzers").toObject();
+    for (auto it = resultAnalyzers.begin(); it != resultAnalyzers.end(); ++it)
+    {
+        if (m_results.contains(it.key()))
+            m_resultAnalyzers.insert(it.key(), it.value().toString());
+    }
 
     m_history.clear();
     for (const QJsonValue &v : root.value("history").toArray())
