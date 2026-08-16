@@ -8,9 +8,11 @@
 #include "core/compare/DifferenceEngine.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
+#include "domain/Image.h"
 #include "domain/Selection.h"
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -36,6 +38,43 @@ struct CompareAdjustmentState
     int cropH = 0;
 
     bool isIdentity() const;
+};
+
+// Apply the same full-resolution Compare transform used by the UI preview.
+// The source buffer is never mutated; the operation order is brightness,
+// contrast, gamma, white balance, crop, then rotation.
+ImageData applyCompareAdjustments(
+    const ImageData &src, const CompareAdjustmentState &adjustment,
+    const std::function<bool()> &cancelled = {});
+
+// One value-only source entry captured at the UI boundary. ImageData copies
+// retain the published pixel buffers through shared ownership; no QObject,
+// CompareEngine, or ImageFrame pointer crosses into a report worker.
+struct CompareReportSource
+{
+    mviewer::domain::ImageMetadata metadata;
+    ImageData pixels;
+    CompareAdjustmentState adjustment;
+};
+
+// Immutable-at-publication source snapshot for a Compare report. Each image's
+// metadata, pixels, and adjustment provenance travel together so a malformed
+// or partially captured parallel vector cannot change report ordering.
+struct CompareReportInput
+{
+    std::vector<CompareReportSource> images;
+    int referenceIndex = -1;
+    uint8_t threshold = 0;
+    mviewer::domain::Selection roi;
+};
+
+// Generic callbacks keep core independent from TaskScheduler. `cancelled`
+// may short-circuit between panes and expensive report stages; `progress` is
+// reported in the builder's 0..100 range when present.
+struct ReportBuildCallbacks
+{
+    std::function<bool()> cancelled;
+    std::function<void(int)> progress;
 };
 
 // One target-vs-reference result in a CompareReportBundle. `diffHeatmap` is
@@ -113,7 +152,14 @@ ImageData compareDiffImage(const ImageFrame &a, const ImageFrame &b);
 CompareReportBundle buildCompareReportBundle(
     const std::vector<ImageFrame> &adjustedImages, int referenceIndex, uint8_t threshold,
     const mviewer::domain::Selection &roi,
-    const std::vector<CompareAdjustmentState> &adjustments);
+    const std::vector<CompareAdjustmentState> &adjustments,
+    const ReportBuildCallbacks &callbacks = {});
+
+// Build the report from an immutable source snapshot. Full-resolution
+// adjustments and all compare analysis happen in the caller's worker thread;
+// this overload preserves the adjusted-image builder above for compatibility.
+CompareReportBundle buildCompareReportBundle(const CompareReportInput &input,
+                                             const ReportBuildCallbacks &callbacks = {});
 
 // ─── M13.4 batch analyzer export ──────────────────────────────────────────
 // Tabular report of running ONE analyzer over MANY images. `columns` is the

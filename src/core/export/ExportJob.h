@@ -99,8 +99,11 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress = {});
 
 // Shared atomic text writer for report-like UI entry points that already have
 // a value-owned snapshot. It uses the same temporary-file and final-commit
-// contract as run().
+// contract as run(). The optional callback is checked after the temporary file
+// is fully written and immediately before the final atomic commit.
 bool writeTextAtomically(const std::string &destination, const std::string &contents);
+bool writeTextAtomically(const std::string &destination, const std::string &contents,
+                         const std::function<bool()> &cancelled);
 
 // Helpers used by ExportDialog / tests.
 std::string modeName(Mode m);

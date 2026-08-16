@@ -7,6 +7,8 @@
 #include <atomic>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 
 namespace fs = std::filesystem;
@@ -126,6 +128,38 @@ int main(int argc, char **argv)
         CHECK(cancelledResult.done == 0 &&
                   cancelledResult.message.find("cancelled") != std::string::npos,
               "M40: pre-cancelled ExportJob produces no stale output");
+
+        // M45: report writes observe cancellation after the temporary file is
+        // complete, so a cancelled export cannot replace an existing report
+        // or leave a .mviewer-tmp artifact behind.
+        const fs::path atomicDestination = out / "atomic-cancel.txt";
+        {
+            std::ofstream sentinel(atomicDestination, std::ios::binary);
+            sentinel << "sentinel";
+        }
+        int cancellationChecks = 0;
+        const bool atomicWrite = writeTextAtomically(
+            atomicDestination.string(), "replacement",
+            [&cancellationChecks]()
+            {
+                ++cancellationChecks;
+                return true;
+            });
+        std::ifstream readSentinel(atomicDestination, std::ios::binary);
+        const std::string sentinel((std::istreambuf_iterator<char>(readSentinel)), {});
+        bool hasTempArtifact = false;
+        for (const auto &entry : fs::directory_iterator(out))
+        {
+            const std::string name = entry.path().filename().string();
+            if (name.rfind(".mviewer-tmp-", 0) == 0)
+            {
+                hasTempArtifact = true;
+                break;
+            }
+        }
+        CHECK(!atomicWrite && cancellationChecks > 0 && sentinel == "sentinel" &&
+                  !hasTempArtifact,
+              "M45: cancelled atomic report write preserves destination and cleans temp");
 
         ExportJobConfig budgetCfg;
         budgetCfg.mode = Mode::ContactSheet;

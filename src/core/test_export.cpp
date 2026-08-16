@@ -27,6 +27,7 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 static int g_pass = 0;
@@ -77,6 +78,14 @@ static ImageFrame makeAdjustedFrame(const std::string &path, int width, int heig
     metadata.width = width;
     metadata.height = height;
     return ImageFrame(metadata, pixels);
+}
+
+static bool sameImageData(const ImageData &a, const ImageData &b)
+{
+    if (a.isNull() || b.isNull())
+        return a.isNull() && b.isNull();
+    return a.width == b.width && a.height == b.height && a.format == b.format && a.buffer &&
+           b.buffer && *a.buffer == *b.buffer;
 }
 
 static int csvColumnCount(const std::string &line)
@@ -400,6 +409,154 @@ int main(int argc, char **argv)
             adjustedImages, 2, 3, mviewer::domain::Selection{99, 99, 2, 2}, adjustments);
     CHECK(!outsideRoiBundle.targets[0].roiDiffStats.has_value(),
           "fully clipped ROI does not produce ROI stats");
+
+    // M45 worker-boundary contract: a value-only source snapshot must produce
+    // the same adjusted pixels, metrics, heatmaps, and serializers as the
+    // compatibility builder that receives already-adjusted frames.
+    {
+        std::vector<mviewer::core::CompareAdjustmentState> snapshotAdjustments = adjustments;
+        const mviewer::domain::Selection crop{1, 1, 6, 6};
+        snapshotAdjustments[0].contrast = 1.15;
+        snapshotAdjustments[0].gamma = 1.2;
+        snapshotAdjustments[0].redGain = 1.1;
+        snapshotAdjustments[0].blueGain = 0.9;
+        snapshotAdjustments[0].hasCrop = true;
+        snapshotAdjustments[0].cropX = crop.x;
+        snapshotAdjustments[0].cropY = crop.y;
+        snapshotAdjustments[0].cropW = crop.width;
+        snapshotAdjustments[0].cropH = crop.height;
+        snapshotAdjustments[1].hasCrop = true;
+        snapshotAdjustments[1].cropX = crop.x;
+        snapshotAdjustments[1].cropY = crop.y;
+        snapshotAdjustments[1].cropW = crop.width;
+        snapshotAdjustments[1].cropH = crop.height;
+        snapshotAdjustments[2].hasCrop = true;
+        snapshotAdjustments[2].cropX = crop.x;
+        snapshotAdjustments[2].cropY = crop.y;
+        snapshotAdjustments[2].cropW = crop.width;
+        snapshotAdjustments[2].cropH = crop.height;
+
+        mviewer::core::CompareReportInput input;
+        input.referenceIndex = 2;
+        input.threshold = 3;
+        input.roi = roi;
+        input.images.reserve(adjustedImages.size());
+        for (size_t i = 0; i < adjustedImages.size(); ++i)
+        {
+            mviewer::core::CompareReportSource source;
+            source.metadata = adjustedImages[i].metadata();
+            source.pixels = adjustedImages[i].pixels();
+            source.adjustment = snapshotAdjustments[i];
+            input.images.push_back(std::move(source));
+        }
+
+        std::vector<ImageFrame> expectedAdjusted;
+        expectedAdjusted.reserve(input.images.size());
+        for (const auto &source : input.images)
+        {
+            const ImageData pixels = mviewer::core::applyCompareAdjustments(
+                source.pixels, source.adjustment);
+            auto metadata = source.metadata;
+            metadata.width = pixels.width;
+            metadata.height = pixels.height;
+            expectedAdjusted.emplace_back(metadata, pixels);
+        }
+        const auto expected = mviewer::core::buildCompareReportBundle(
+            expectedAdjusted, input.referenceIndex, input.threshold, input.roi,
+            snapshotAdjustments);
+        const auto actual = mviewer::core::buildCompareReportBundle(input);
+
+        CHECK(actual.toJson() == expected.toJson() && actual.toCsv() == expected.toCsv(),
+              "source snapshot preserves Compare JSON/CSV semantics");
+        bool pairsMatch = actual.targets.size() == expected.targets.size();
+        if (pairsMatch)
+        {
+            auto sameStats = [](const DifferenceEngine::DiffStats &a,
+                                const DifferenceEngine::DiffStats &b)
+            {
+                return a.totalPixels == b.totalPixels && a.diffPixels == b.diffPixels &&
+                       a.diffRatio == b.diffRatio && a.meanDiff == b.meanDiff &&
+                       a.maxDiff == b.maxDiff;
+            };
+            for (size_t i = 0; i < actual.targets.size() && pairsMatch; ++i)
+            {
+                const auto &a = actual.targets[i];
+                const auto &b = expected.targets[i];
+                pairsMatch = a.index == b.index && a.path == b.path &&
+                             a.referenceIndex == b.referenceIndex && a.imageA == b.imageA &&
+                             a.comparable == b.comparable && a.psnr == b.psnr &&
+                             a.ssim == b.ssim && sameStats(a.fullDiffStats, b.fullDiffStats) &&
+                             a.roiDiffStats.has_value() == b.roiDiffStats.has_value() &&
+                             (!a.roiDiffStats.has_value() ||
+                              sameStats(*a.roiDiffStats, *b.roiDiffStats)) &&
+                             sameImageData(a.diffHeatmap, b.diffHeatmap);
+            }
+        }
+        CHECK(pairsMatch, "source snapshot preserves metrics and diff heatmaps");
+
+        auto makeBundleContext = [](const mviewer::core::CompareReportBundle &value)
+        {
+            mviewer::core::ReportContext context;
+            context.title = "Snapshot parity";
+            context.compareBundle = value;
+            context.compareDiffPngs = {"cmVm", "", "dGFyZ2V0"};
+            context.hasCompareBundle = true;
+            return context;
+        };
+        const auto expectedContext = makeBundleContext(expected);
+        const auto actualContext = makeBundleContext(actual);
+        CHECK(mviewer::core::buildReportMarkdown(actualContext) ==
+                  mviewer::core::buildReportMarkdown(expectedContext),
+              "source snapshot preserves Markdown renderer semantics");
+        CHECK(mviewer::core::buildReportHtml(actualContext) ==
+                  mviewer::core::buildReportHtml(expectedContext),
+              "source snapshot preserves HTML renderer semantics");
+
+        int stageChecks = 0;
+        const auto cancelledPixels = mviewer::core::applyCompareAdjustments(
+            adjustedImages[0].pixels(), snapshotAdjustments[0],
+            [&stageChecks]()
+            {
+                ++stageChecks;
+                return stageChecks >= 2;
+            });
+        CHECK(cancelledPixels.isNull() && stageChecks >= 2,
+              "adjustment cancellation short-circuits between expensive stages");
+
+        int identityCancelChecks = 0;
+        const auto cancelledIdentity = mviewer::core::applyCompareAdjustments(
+            adjustedImages[0].pixels(), mviewer::core::CompareAdjustmentState{},
+            [&identityCancelChecks]()
+            {
+                ++identityCancelChecks;
+                return true;
+            });
+        CHECK(cancelledIdentity.isNull() && identityCancelChecks > 0,
+              "identity adjustment honors pre-cancel before fast path");
+
+        bool cancelDuringMetrics = false;
+        int bundleCancelChecks = 0;
+        int lastCancelProgress = -1;
+        mviewer::core::ReportBuildCallbacks cancelledCallbacks;
+        cancelledCallbacks.cancelled = [&bundleCancelChecks, &cancelDuringMetrics]()
+        {
+            ++bundleCancelChecks;
+            return cancelDuringMetrics;
+        };
+        cancelledCallbacks.progress = [&cancelDuringMetrics, &lastCancelProgress](int value)
+        {
+            lastCancelProgress = value;
+            // The first target completes before the next cancellation check;
+            // this proves cancellation is not only a pre-flight short circuit.
+            if (value >= 56)
+                cancelDuringMetrics = true;
+        };
+        const auto cancelledBundle =
+            mviewer::core::buildCompareReportBundle(input, cancelledCallbacks);
+        CHECK(bundleCancelChecks > 0 && lastCancelProgress >= 56 &&
+                  cancelledBundle.images.empty() && cancelledBundle.targets.empty(),
+              "source snapshot builder returns no partial bundle after staged cancellation");
+    }
 
     mviewer::core::ReportContext htmlContext;
     htmlContext.title = "Bundle <Report>";

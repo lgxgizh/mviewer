@@ -5,44 +5,27 @@
 
 #include <QSaveFile>
 
+mviewer::core::CompareAdjustmentState
+CompareWorkspace::reportAdjustment(const CellAdjust &adjust)
+{
+    mviewer::core::CompareAdjustmentState report;
+    report.brightness = adjust.brightness;
+    report.contrast = adjust.contrast;
+    report.gamma = adjust.gamma;
+    report.redGain = adjust.rGain;
+    report.blueGain = adjust.bGain;
+    report.rotation = adjust.rotation;
+    report.hasCrop = adjust.hasCrop;
+    report.cropX = adjust.cropX;
+    report.cropY = adjust.cropY;
+    report.cropW = adjust.cropW;
+    report.cropH = adjust.cropH;
+    return report;
+}
+
 ImageData CompareWorkspace::applyAdjusts(const ImageData &src, const CellAdjust &a)
 {
-    if (src.isNull() || a.isIdentity())
-        return src;
-
-    ImageData cur = src;
-
-    // Order: brightness → contrast → gamma → white balance
-    if (a.brightness != 0)
-        cur = adjustBrightness(cur, a.brightness);
-    if (std::abs(a.contrast - 1.0f) >= 1e-6f)
-        cur = adjustContrast(cur, a.contrast);
-    if (std::abs(a.gamma - 1.0f) >= 1e-6f)
-        cur = adjustGamma(cur, a.gamma);
-    if (std::abs(a.rGain - 1.0f) >= 1e-6f || std::abs(a.bGain - 1.0f) >= 1e-6f)
-        cur = adjustWhiteBalance(cur, a.rGain, a.bGain);
-
-    // Crop
-    if (a.hasCrop && a.cropW > 0 && a.cropH > 0)
-    {
-        const mviewer::domain::Selection sel{a.cropX, a.cropY, a.cropW, a.cropH};
-        cur = cropRegion(cur, sel);
-    }
-
-    // Rotation (apply after crop)
-    if (a.rotation != 0)
-    {
-        int rot = a.rotation % 360;
-        if (rot < 0)
-            rot += 360;
-        while (rot > 0)
-        {
-            cur = rotate90CW(cur);
-            rot -= 90;
-        }
-    }
-
-    return cur;
+    return mviewer::core::applyCompareAdjustments(src, reportAdjustment(a));
 }
 
 void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
@@ -288,47 +271,35 @@ ImageData CompareWorkspace::adjustedPixels(int cellIdx) const
     return applyAdjusts(img->pixels(), a);
 }
 
-mviewer::core::CompareReportBundle CompareWorkspace::buildReportBundle() const
+mviewer::core::CompareReportInput CompareWorkspace::captureReportInput() const
 {
     const int imageCount = m_engine.imageCount();
-    std::vector<ImageFrame> adjustedImages;
-    adjustedImages.reserve(static_cast<size_t>(imageCount));
-
-    std::vector<mviewer::core::CompareAdjustmentState> adjustments;
-    adjustments.resize(static_cast<size_t>(imageCount));
+    mviewer::core::CompareReportInput input;
+    input.images.resize(static_cast<size_t>(imageCount));
+    input.referenceIndex = diffBaseIndex();
+    input.threshold = m_thresholdValue;
+    input.roi = m_lastSelection;
 
     for (int i = 0; i < imageCount; ++i)
     {
+        auto &entry = input.images[static_cast<size_t>(i)];
         const ImageFrame *source = m_engine.imageAt(i);
-        mviewer::domain::ImageMetadata metadata;
         if (source)
-            metadata = source->metadata();
-
-        const ImageData pixels = adjustedPixels(i);
-        metadata.width = pixels.width;
-        metadata.height = pixels.height;
-        adjustedImages.emplace_back(metadata, pixels);
+        {
+            entry.metadata = source->metadata();
+            entry.pixels = source->pixels();
+        }
 
         if (i < static_cast<int>(m_cellAdjusts.size()))
-        {
-            const CellAdjust &cell = m_cellAdjusts[static_cast<size_t>(i)];
-            auto &report = adjustments[static_cast<size_t>(i)];
-            report.brightness = cell.brightness;
-            report.contrast = cell.contrast;
-            report.gamma = cell.gamma;
-            report.redGain = cell.rGain;
-            report.blueGain = cell.bGain;
-            report.rotation = cell.rotation;
-            report.hasCrop = cell.hasCrop;
-            report.cropX = cell.cropX;
-            report.cropY = cell.cropY;
-            report.cropW = cell.cropW;
-            report.cropH = cell.cropH;
-        }
+            entry.adjustment = reportAdjustment(m_cellAdjusts[static_cast<size_t>(i)]);
     }
 
-    return mviewer::core::buildCompareReportBundle(adjustedImages, diffBaseIndex(),
-                                                   m_thresholdValue, m_lastSelection, adjustments);
+    return input;
+}
+
+mviewer::core::CompareReportBundle CompareWorkspace::buildReportBundle() const
+{
+    return mviewer::core::buildCompareReportBundle(captureReportInput());
 }
 
 void CompareWorkspace::onAdjEditFinished()

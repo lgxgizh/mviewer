@@ -11,6 +11,13 @@ Contact Sheet, PDF, CSV, JSON, HTML and Clipboard modes.
 - Clipboard ownership is GUI-only; decode, display conversion and encoding are
   worker operations.
 
+`writeTextAtomically(destination, contents, cancelled)` provides the same
+atomic destination contract for value-owned report bodies. The optional
+cancellation callback is checked after the temporary file is fully written and
+immediately before the final rename/replace; cancellation removes the
+temporary file and never replaces an existing destination. Existing two-argument
+callers retain the original behavior.
+
 ## Display fidelity
 
 `preserveDisplayAppearance` requests repository-backed decode plus the display

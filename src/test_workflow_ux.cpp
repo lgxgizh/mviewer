@@ -51,6 +51,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileDialog>
 #include <QFileInfo>
 #include <QImage>
 #include <QJsonDocument>
@@ -61,6 +62,8 @@
 #include <QMessageBox>
 #include <QMetaObject>
 #include <QMouseEvent>
+#include <QPointer>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QSettings>
 #include <QSlider>
@@ -229,6 +232,77 @@ struct AnalysisBlocker
     AnalysisBlocker &operator=(const AnalysisBlocker &) = delete;
 };
 
+// Release-gated Background blocker used by the real MainWindow report export
+// workflow.  The test keeps the only Background worker occupied so the report
+// task is provably queued before the cancel button is pressed.
+struct BackgroundBlocker
+{
+    struct Control
+    {
+        std::mutex mtx;
+        std::condition_variable cv;
+        bool released = false;
+        std::atomic<bool> entered{false};
+    };
+
+    std::shared_ptr<Control> control = std::make_shared<Control>();
+    TaskScheduler::TaskHandle task;
+
+    BackgroundBlocker()
+    {
+        auto c = control;
+        task = TaskScheduler::instance().submit(
+            TaskScheduler::Priority::Background,
+            [c](const TaskScheduler::TaskContext &)
+            {
+                c->entered.store(true, std::memory_order_release);
+                std::unique_lock<std::mutex> lk(c->mtx);
+                c->cv.wait(lk, [c] { return c->released; });
+            });
+    }
+
+    void release()
+    {
+        std::lock_guard<std::mutex> lk(control->mtx);
+        control->released = true;
+        control->cv.notify_all();
+    }
+
+    ~BackgroundBlocker()
+    {
+        release();
+    }
+    BackgroundBlocker(const BackgroundBlocker &) = delete;
+    BackgroundBlocker &operator=(const BackgroundBlocker &) = delete;
+};
+
+// The offscreen Qt platform cannot safely re-enter QProgressDialog's private
+// button connection. The test still locates that real button, then cancels the
+// exact queued report handle after exercising the public canceled state.
+TaskScheduler::TaskHandle newestBackgroundTask(TaskScheduler::TaskId excludedId)
+{
+    auto &sched = TaskScheduler::instance();
+    uint64_t submitted = 0;
+    for (const TaskScheduler::PoolType pool : {TaskScheduler::MetadataPool,
+                                               TaskScheduler::DecodePool,
+                                               TaskScheduler::ThumbnailPool,
+                                               TaskScheduler::AnalysisPool,
+                                               TaskScheduler::IOPool})
+        submitted += sched.metrics(pool).submitted;
+
+    TaskScheduler::TaskHandle newest;
+    for (TaskScheduler::TaskId id = 1; id <= submitted + 32; ++id)
+    {
+        const auto handle = sched.handle(id);
+        if (!handle || handle->id == excludedId ||
+            handle->priority != TaskScheduler::Priority::Background)
+            continue;
+        if (!newest || handle->id > newest->id)
+            newest = handle;
+    }
+    return newest;
+}
+
 QString waitForMetricsChange(QLabel *label, const QString &previous, int timeoutMs = 8000)
 {
     QElapsedTimer t;
@@ -320,6 +394,10 @@ QPushButton *findBtn(QWidget *root, const QString &textPrefix)
 #include "test_workflow_ux_cases.inc"
 int main(int argc, char **argv)
 {
+    // Force QFileDialog::getSaveFileName through Qt's event-loop-backed dialog
+    // so the report workflow can deterministically observe nested-loop UI
+    // heartbeats in the headless acceptance run.
+    QApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
     QApplication app(argc, argv);
 
     // 状态隔离：MainWindow 启动会执行 restoreLastSession()（QSettings +
@@ -378,6 +456,10 @@ int main(int argc, char **argv)
     workflow7_stale_preload_cancellation(workDir.absolutePath());
     workflow8_preview_scaled_load(workDir.absolutePath());
     workflow9_pixel_inspector_lifecycle(workDir.absolutePath());
+    // Keep the report workflow terminal: Qt's offscreen QFileDialog leaves
+    // internal modal widgets that deadlock MainWindow destruction. The test
+    // closes its window and lets process teardown reclaim it after assertions.
+    workflow13_compare_report_export_nonblocking(workDir.absolutePath());
 
     for (const QString &p : paths)
         QFile::remove(p);

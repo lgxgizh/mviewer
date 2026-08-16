@@ -146,7 +146,14 @@ class CompareWorkspace : public QWidget
     // P1: Get the current focus image path (for triggering external analysis).
     QString focusImagePath() const;
 
-    // Build one immutable report snapshot from every currently compared pane.
+    // Capture only value-owned report inputs from every currently compared pane.
+    // ImageData copies retain shared published pixels; no full-resolution work
+    // is performed here. The report worker consumes this snapshot later.
+    mviewer::core::CompareReportInput captureReportInput() const;
+
+    // Build one immutable report snapshot synchronously for existing workflow
+    // callers/tests. Production report export captures inputs and builds on a
+    // TaskScheduler worker instead.
     mviewer::core::CompareReportBundle buildReportBundle() const;
 
   public slots:
@@ -571,6 +578,7 @@ class CompareWorkspace : public QWidget
     };
     std::vector<CellAdjust> m_cellAdjusts; // per-cell adjustment state
     int m_editIdx = -1;                    // currently selected cell for editing
+    static mviewer::core::CompareAdjustmentState reportAdjustment(const CellAdjust &adjust);
     static ImageData applyAdjusts(const ImageData &src, const CellAdjust &a);
 
     // Analysis samples deliberately bypass RawImageView::image(). That image

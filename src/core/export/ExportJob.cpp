@@ -132,9 +132,15 @@ ImageData decodeSource(const std::string &path, const ExportJobConfig &cfg)
 
 bool writeTextAtomically(const std::string &destination, const std::string &contents)
 {
+    return writeTextAtomically(destination, contents, {});
+}
+
+bool writeTextAtomically(const std::string &destination, const std::string &contents,
+                         const std::function<bool()> &cancelled)
+{
     try
     {
-        return writeTextAtomically(pathFromUtf8(destination), contents);
+        return writeTextAtomically(pathFromUtf8(destination), contents, cancelled);
     }
     catch (const std::exception &)
     {
@@ -258,6 +264,12 @@ std::optional<ReportRow> analyzeSource(const fs::path &path)
 
 bool writeTextAtomically(const fs::path &destination, const std::string &contents)
 {
+    return writeTextAtomically(destination, contents, {});
+}
+
+bool writeTextAtomically(const fs::path &destination, const std::string &contents,
+                         const std::function<bool()> &cancelled)
+{
     const fs::path temporary = uniqueTempPath(destination);
     {
         std::ofstream file(temporary, std::ios::binary);
@@ -270,6 +282,12 @@ bool writeTextAtomically(const fs::path &destination, const std::string &content
             fs::remove(temporary, cleanup);
             return false;
         }
+    }
+    if (cancelled && cancelled())
+    {
+        std::error_code cleanup;
+        fs::remove(temporary, cleanup);
+        return false;
     }
     std::error_code error;
     if (commitTempFile(temporary, destination, error))

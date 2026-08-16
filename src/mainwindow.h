@@ -17,6 +17,7 @@
 
 #include <atomic>
 #include <memory>
+#include <optional>
 
 class ImageViewer;
 class ImageFrame;
@@ -390,8 +391,9 @@ class MainWindow : public QMainWindow
     void saveProject();
     void openProject();
     void exportReport();
-    void startReportExport(mviewer::core::ReportContext context, const QString &output,
-                           std::string suffix);
+    void startReportExport(mviewer::core::ReportContext context,
+                           std::optional<mviewer::core::CompareReportInput> compareInput,
+                           const QString &output, std::string suffix);
     void cancelReportExport();
     // P4: batch export pipeline entry point.
     void exportImages();

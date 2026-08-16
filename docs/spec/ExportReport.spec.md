@@ -3,22 +3,33 @@
 ## Scope
 
 `CompareReportBundle` is the Qt-free core snapshot used to export a trusted
-multi-image Compare result. It describes the exact ordered `ImageFrame` list
-that was supplied to the builder. The frames are expected to already contain
-their per-image adjustments; adjustment values are recorded as provenance and
-are not applied by the builder.
+multi-image Compare result. Production UI export first captures a
+`CompareReportInput`: each cohesive `CompareReportSource` contains one image's
+metadata, shared `ImageData` pixel handle, and `CompareAdjustmentState`, while
+the input also carries the reference index, threshold, and ROI. Capturing is
+O(pane count) and does not scan pixels. The worker-side source overload applies
+the adjustments before building the bundle; the adjusted-frame overload below
+remains available for compatibility and tests.
 
 ## Construction
 
+`buildCompareReportBundle(input)` applies each source adjustment in the fixed
+order brightness → contrast → gamma → white balance → crop → rotation, then
+emits one `CompareReportPair` for every image except `referenceIndex`.
 `buildCompareReportBundle(adjustedImages, referenceIndex, threshold, roi,
-adjustments)` emits one `CompareReportPair` for every image except
-`referenceIndex`. Each pair stores the target index/path, the reference index
-and path (`imageA`), comparability, PSNR, SSIM, threshold-aware full-image
+adjustments)` emits the same pairs when its frames are already adjusted.
+Each pair stores the target index/path, the reference index and path (`imageA`),
+comparability, PSNR, SSIM, threshold-aware full-image
 `DifferenceEngine::DiffStats`, and optional ROI stats. A pair is comparable only
-when both frames are valid, have identical dimensions, and produce a valid
-diff map. Dimension mismatches are retained as explicit `comparable: false`
-pairs and do not receive misleading metrics. ROI stats are retained only when
-the clipped ROI contains at least one pixel.
+when both frames are valid, have identical dimensions, and produce a valid diff
+map. Dimension mismatches are retained as explicit `comparable: false` pairs
+and do not receive misleading metrics. ROI stats are retained only when the
+clipped ROI contains at least one pixel.
+
+Both builders accept optional `ReportBuildCallbacks`. The cancellation callback
+is checked between panes and each expensive adjustment/report stage; a
+cancelled source build returns no successful bundle. Progress is reported in
+the 0–100 range. Core remains independent of `TaskScheduler`.
 
 The bundle retains a diff heatmap in memory for a later UI or encoder boundary;
 binary image data is never written by `toJson()` or `toCsv()`.

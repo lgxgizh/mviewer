@@ -35,6 +35,8 @@ std::string pathToUtf8(const std::filesystem::path &path);
 std::string outputBaseName(const ExportJobConfig &cfg, const std::filesystem::path &source,
                            int index, int total);
 bool writeTextAtomically(const std::filesystem::path &destination, const std::string &contents);
+bool writeTextAtomically(const std::filesystem::path &destination, const std::string &contents,
+                         const std::function<bool()> &cancelled);
 std::filesystem::path uniqueTempPath(const std::filesystem::path &destination);
 bool commitTempFile(const std::filesystem::path &temporary,
                     const std::filesystem::path &destination, std::error_code &error);

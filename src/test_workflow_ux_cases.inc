@@ -1811,6 +1811,322 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
     pump(20);
 }
 
+// ─── Workflow 13: real Compare report export stays responsive and cancellable ─
+// The save dialog is deliberately held open for one watchdog sample.  That
+// makes the assertion independent of total action time: a nested Qt dialog
+// loop must service the 1ms heartbeat before the full-resolution report build
+// is allowed to start on the Background worker.
+void workflow13_compare_report_export_nonblocking(const QString &rootDir)
+{
+    std::cout << "── Workflow 13: Compare report export responsiveness/cancel ──\n";
+    const QString reportDirPath =
+        QDir(rootDir).filePath(QStringLiteral("compare_report_nonblocking"));
+    QDir reportDir(reportDirPath);
+    if (reportDir.exists())
+        reportDir.removeRecursively();
+    CHECK(QDir().mkpath(reportDirPath),
+          "report workflow creates its isolated large-image fixture directory");
+
+    constexpr int kLargeEdge = 4096;
+    const QString pathA = writePng(reportDir, QStringLiteral("report_a.png"),
+                                   QColor(180, 40, 40), kLargeEdge, kLargeEdge);
+    const QString pathB = writePng(reportDir, QStringLiteral("report_b.png"),
+                                   QColor(40, 40, 180), kLargeEdge, kLargeEdge);
+    CHECK(QFileInfo::exists(pathA) && QFileInfo::exists(pathB),
+          "report workflow writes two same-size 4096x4096 fixtures");
+
+    const QString outputPath = reportDir.filePath(QStringLiteral("cancelled_report.json"));
+    QFile::remove(outputPath);
+
+    auto &sched = TaskScheduler::instance();
+    const bool metadataIdle = sched.drain(TaskScheduler::PoolType::MetadataPool,
+                                          std::chrono::seconds(15));
+    CHECK(metadataIdle, "report workflow starts with an idle Background pool");
+
+    {
+        // The real save dialog is nested and leaves Qt's offscreen modal
+        // internals attached to this parent. Keep this terminal fixture window
+        // alive until process teardown; deleting it here deadlocks Qt 6.10's
+        // offscreen plugin after the dialog returns.
+        MainWindow *ownedWindow = new MainWindow;
+        MainWindow &w = *ownedWindow;
+        w.resize(1200, 800);
+        w.show();
+        pump(75);
+
+        auto *gallery = w.findChild<ThumbnailPanel *>();
+        CHECK(gallery != nullptr, "report workflow exposes the real gallery");
+        if (!gallery)
+        {
+            w.close();
+            pump(20);
+            reportDir.removeRecursively();
+            return;
+        }
+
+        gallery->setDirectory(reportDirPath);
+        QElapsedTimer galleryTimer;
+        galleryTimer.start();
+        while ((!gallery->pathList().contains(pathA) || !gallery->pathList().contains(pathB)) &&
+               galleryTimer.elapsed() < 8000)
+            pump(25);
+        CHECK(gallery->pathList().contains(pathA) && gallery->pathList().contains(pathB),
+              "report workflow discovers both large Compare inputs");
+        gallery->selectPaths(QStringList{pathA, pathB}, pathA);
+        pump(25);
+
+        QAction *compareAction = nullptr;
+        for (QAction *action : w.findChildren<QAction *>())
+        {
+            if (action && action->text().startsWith(QStringLiteral("比较模式")))
+            {
+                compareAction = action;
+                break;
+            }
+        }
+        CHECK(compareAction != nullptr, "report workflow finds the real Compare action");
+        if (!compareAction)
+        {
+            w.close();
+            pump(20);
+            reportDir.removeRecursively();
+            return;
+        }
+        compareAction->trigger();
+
+        QDialog *compareDialog = nullptr;
+        CompareWorkspace *workspace = nullptr;
+        QElapsedTimer compareTimer;
+        compareTimer.start();
+        while (compareTimer.elapsed() < 12000)
+        {
+            compareDialog = w.findChild<QDialog *>(QStringLiteral("compareDialog"));
+            workspace = compareDialog ? compareDialog->findChild<CompareWorkspace *>() : nullptr;
+            if (compareDialog && compareDialog->isVisible() && workspace &&
+                workspace->comparedImageCount() == 2)
+                break;
+            pump(25);
+        }
+        CHECK(compareDialog && compareDialog->isVisible(),
+              "report workflow opens the real Compare dialog");
+        CHECK(workspace && workspace->comparedImageCount() == 2,
+              "report workflow waits for both full-resolution Compare frames");
+        if (!compareDialog || !workspace || workspace->comparedImageCount() != 2)
+        {
+            if (compareDialog)
+                compareDialog->close();
+            w.close();
+            pump(20);
+            reportDir.removeRecursively();
+            return;
+        }
+
+        // Compare's own AnalysisPool work is not part of this regression.  Let
+        // it settle, then drain any MainWindow metadata debounce before the
+        // release-gated Background blocker is installed.
+        waitForAnalysisIdle(15000);
+        const bool idleAfterCompare = sched.drain(TaskScheduler::PoolType::MetadataPool,
+                                                  std::chrono::seconds(15));
+        CHECK(idleAfterCompare, "report workflow drains pre-existing Background work");
+
+        BackgroundBlocker blocker;
+        bool blockerActive = false;
+        QElapsedTimer blockerTimer;
+        blockerTimer.start();
+        while (blockerTimer.elapsed() < 3000)
+        {
+            pump(5);
+            const auto metrics = sched.metrics(TaskScheduler::PoolType::MetadataPool);
+            if (blocker.task && blocker.control->entered.load(std::memory_order_acquire) &&
+                metrics.active_tasks > 0)
+            {
+                blockerActive = true;
+                break;
+            }
+        }
+        CHECK(blockerActive, "report workflow confirms the sole Background worker is occupied");
+
+        QPushButton *reportButton = nullptr;
+        for (QPushButton *button : compareDialog->findChildren<QPushButton *>())
+        {
+            if (button && button->text().startsWith(QStringLiteral("导出报告")))
+            {
+                reportButton = button;
+                break;
+            }
+        }
+        CHECK(reportButton != nullptr && reportButton->isEnabled(),
+              "report workflow finds an enabled real Compare export button");
+        if (!reportButton)
+        {
+            blocker.release();
+            CHECK(sched.drain(TaskScheduler::PoolType::MetadataPool,
+                              std::chrono::seconds(15)),
+                  "report workflow drains Background blocker after missing export button");
+            compareDialog->close();
+            w.close();
+            pump(20);
+            reportDir.removeRecursively();
+            return;
+        }
+
+        std::atomic<uint64_t> heartbeatTicks{0};
+        std::atomic<bool> actionStarted{false};
+        std::atomic<bool> watchdogSawHeartbeat{false};
+        QTimer heartbeat;
+        heartbeat.setInterval(1);
+        QObject::connect(&heartbeat, &QTimer::timeout, &heartbeat,
+                         [&heartbeatTicks]()
+                         { heartbeatTicks.fetch_add(1, std::memory_order_relaxed); });
+        heartbeat.start();
+
+        std::atomic<bool> saveDialogSeen{false};
+        bool saveDialogAccepted = false;
+        QTimer dialogPoll;
+        dialogPoll.setInterval(1);
+        QObject::connect(&dialogPoll, &QTimer::timeout, &dialogPoll,
+                         [&dialogPoll, &saveDialogSeen, &saveDialogAccepted, outputPath]()
+                         {
+                             for (QWidget *top : QApplication::topLevelWidgets())
+                             {
+                                 auto *dialog = qobject_cast<QFileDialog *>(top);
+                                 if (!dialog || !dialog->isVisible())
+                                     continue;
+                                 if (saveDialogSeen.exchange(true, std::memory_order_acq_rel))
+                                     return;
+                                 dialog->selectFile(outputPath);
+                                 dialogPoll.stop();
+                                 QPointer<QFileDialog> guard(dialog);
+                                 QTimer::singleShot(
+                                     300, dialog,
+                                     [guard, &saveDialogAccepted]()
+                                     {
+                                         if (!guard)
+                                             return;
+                                         saveDialogAccepted = true;
+                                         QMetaObject::invokeMethod(guard.data(), "accept",
+                                                                   Qt::DirectConnection);
+                                     });
+                                 return;
+                             }
+                         });
+
+        // A missing non-native dialog must fail the assertions without leaving
+        // a modal loop hanging forever on a different Qt platform plugin.
+        QTimer dialogTimeout;
+        dialogTimeout.setSingleShot(true);
+        QObject::connect(&dialogTimeout, &QTimer::timeout, &dialogTimeout,
+                         []()
+                         {
+                             for (QWidget *top : QApplication::topLevelWidgets())
+                             {
+                                 if (auto *dialog = qobject_cast<QFileDialog *>(top))
+                                 {
+                                     dialog->reject();
+                                     return;
+                                 }
+                             }
+                         });
+
+        dialogPoll.start();
+        dialogTimeout.start(5000);
+        heartbeatTicks.store(0, std::memory_order_relaxed);
+        std::thread watchdog(
+            [&actionStarted, &heartbeatTicks, &watchdogSawHeartbeat]()
+            {
+                while (!actionStarted.load(std::memory_order_acquire))
+                    std::this_thread::yield();
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                watchdogSawHeartbeat.store(heartbeatTicks.load(std::memory_order_acquire) > 0,
+                                           std::memory_order_release);
+            });
+        actionStarted.store(true, std::memory_order_release);
+        reportButton->click();
+        if (watchdog.joinable())
+            watchdog.join();
+        heartbeat.stop();
+        dialogPoll.stop();
+        dialogTimeout.stop();
+
+        CHECK(saveDialogSeen.load(std::memory_order_acquire) && saveDialogAccepted,
+              "report workflow accepts the real non-native save dialog");
+        CHECK(watchdogSawHeartbeat.load(std::memory_order_acquire),
+              "report export services UI heartbeat before full-resolution work");
+
+        QPointer<QProgressDialog> progress = w.findChild<QProgressDialog *>();
+        CHECK(progress && progress->isVisible(),
+              "report export shows a cancellable progress dialog while Background is blocked");
+        const auto queuedReport = sched.metrics(TaskScheduler::PoolType::MetadataPool);
+        CHECK(queuedReport.pending >= 2,
+              "report export remains queued behind the release-gated Background task");
+
+        QPushButton *cancelButton = nullptr;
+        if (progress)
+        {
+            for (QPushButton *button : progress->findChildren<QPushButton *>())
+            {
+                if (button && button->text().startsWith(QStringLiteral("取消")))
+                {
+                    cancelButton = button;
+                    break;
+                }
+            }
+        }
+        CHECK(cancelButton != nullptr, "report progress exposes the real 取消 button");
+        const TaskScheduler::TaskId blockerId = blocker.task ? blocker.task->id : 0;
+        auto reportHandle = newestBackgroundTask(blockerId);
+        CHECK(reportHandle != nullptr,
+              "report workflow identifies the queued MainWindow Background report task");
+        if (progress)
+        {
+            // The offscreen Qt platform deadlocks when the private button
+            // connection re-enters close(). Exercise the public canceled state
+            // and emit the production canceled signal directly; this invokes
+            // MainWindow::cancelReportExport without a platform re-entry.
+            progress->cancel();
+            const int canceledSignal =
+                QProgressDialog::staticMetaObject.indexOfSignal("canceled()");
+            if (canceledSignal >= 0)
+                QMetaObject::activate(progress.data(), &QProgressDialog::staticMetaObject,
+                                       canceledSignal, nullptr);
+        }
+        if (reportHandle)
+            TaskScheduler::cancel(reportHandle);
+
+        CHECK(!progress || !progress->isVisible(), "report progress closes after cancellation");
+        CHECK(progress && progress->wasCanceled(),
+              "report progress records cancellation from its real cancel state");
+        blocker.release();
+        const bool drained = sched.drain(TaskScheduler::PoolType::MetadataPool,
+                                          std::chrono::seconds(15));
+        CHECK(drained, "report cancellation drains the Background pool");
+
+        CHECK(!QFileInfo::exists(outputPath),
+              "cancelled Compare report does not publish the requested output file");
+        const QStringList remaining =
+            reportDir.entryList(QDir::Files | QDir::Hidden | QDir::NoDotAndDotDot);
+        QStringList unexpected;
+        for (const QString &name : remaining)
+        {
+            if (name != QFileInfo(pathA).fileName() && name != QFileInfo(pathB).fileName())
+                unexpected << name;
+        }
+        CHECK(unexpected.isEmpty(),
+              "cancelled Compare report leaves no report or .mviewer-tmp-* artifact");
+        const auto finalMetrics = sched.metrics(TaskScheduler::PoolType::MetadataPool);
+        const auto graph = sched.graphMetrics();
+        CHECK(finalMetrics.pending == 0 && finalMetrics.active_tasks == 0 &&
+                  finalMetrics.queue_depth == 0,
+              "report cancellation converges Background pending/active/queue metrics");
+        CHECK(graph.handles == 0, "report cancellation releases scheduler graph handles");
+
+        compareDialog->close();
+        w.close();
+    }
+
+    reportDir.removeRecursively();
+}
+
 void workflow12_compare_mixed_fit(const QString &dirPath)
 {
     std::cout << "── Workflow 12: mixed-size per-pane Fit contract ──\n";

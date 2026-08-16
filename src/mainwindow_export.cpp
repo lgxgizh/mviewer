@@ -7,6 +7,7 @@ namespace
 struct ReportExportState
 {
     mviewer::core::ReportContext context;
+    std::optional<mviewer::core::CompareReportInput> compareInput;
     QImage histogram;
     std::string output;
     std::string suffix;
@@ -18,16 +19,28 @@ struct ReportExportState
 
 void encodeReportImages(ReportExportState &state, const TaskScheduler::TaskContext &ctx)
 {
+    if (ctx.isCancelled())
+    {
+        state.cancelled = true;
+        return;
+    }
     if (!state.histogram.isNull())
     {
         QByteArray bytes;
         QBuffer stream(&bytes);
         if (state.histogram.save(&stream, "PNG"))
             state.context.histogramPng = bytes.toBase64().toStdString();
+        if (ctx.isCancelled())
+        {
+            state.cancelled = true;
+            return;
+        }
+        ctx.reportProgress(60);
     }
     if (state.context.hasCompareBundle)
     {
         state.context.compareDiffPngs.resize(state.context.compareBundle.targets.size());
+        const size_t targetCount = state.context.compareBundle.targets.size();
         for (size_t i = 0; i < state.context.compareBundle.targets.size(); ++i)
         {
             if (ctx.isCancelled())
@@ -45,10 +58,11 @@ void encodeReportImages(ReportExportState &state, const TaskScheduler::TaskConte
             QBuffer stream(&bytes);
             if (image.save(&stream, "PNG"))
                 state.context.compareDiffPngs[i] = bytes.toBase64().toStdString();
-            const_cast<TaskScheduler::TaskContext &>(ctx).reportProgress(
-                static_cast<int>((i + 1) * 70 / qMax<size_t>(1, state.context.compareBundle.targets.size())));
+            ctx.reportProgress(60 + static_cast<int>((i + 1) * 20 /
+                                                     qMax<size_t>(1, targetCount)));
         }
     }
+    ctx.reportProgress(80);
 }
 
 } // namespace
@@ -81,15 +95,29 @@ void MainWindow::exportReport()
 
     mviewer::core::ReportContext ctx;
     ctx.title = "MViewer Analysis Report";
+    std::optional<mviewer::core::CompareReportInput> compareInput;
 
     if (hasCompare)
     {
-        // Capture the compare state once. Every output format reads this snapshot.
-        ctx.compareBundle = m_compareView->buildReportBundle();
-        ctx.hasCompareBundle = true;
+        // Capture only value-owned source inputs. Full-resolution adjustment,
+        // diff, metrics, and heatmap work is performed by startReportExport's
+        // worker after the save path is accepted.
+        compareInput = m_compareView->captureReportInput();
+        const auto &input = *compareInput;
+        const bool validReference = input.referenceIndex >= 0 &&
+                                     input.referenceIndex <
+                                         static_cast<int>(input.images.size());
+        if (validReference)
+        {
+            ctx.imagePath =
+                input.images[static_cast<size_t>(input.referenceIndex)].metadata.filePath;
+        }
+        else if (m_compareView)
+        {
+            ctx.imagePath = m_compareView->focusImagePath().toStdString();
+        }
     }
-
-    if (!ctx.hasCompareBundle)
+    else
     {
         if (currentImagePath().isEmpty())
         {
@@ -121,21 +149,6 @@ void MainWindow::exportReport()
             }
         }
     }
-    else
-    {
-        const bool validReference = ctx.compareBundle.referenceIndex >= 0 &&
-                                    ctx.compareBundle.referenceIndex <
-                                        static_cast<int>(ctx.compareBundle.images.size());
-        if (validReference)
-        {
-            ctx.imagePath =
-                ctx.compareBundle.images[static_cast<size_t>(ctx.compareBundle.referenceIndex)];
-        }
-        else if (m_compareView)
-        {
-            ctx.imagePath = m_compareView->focusImagePath().toStdString();
-        }
-    }
     if (ctx.imagePath.empty())
     {
         QMessageBox::information(this, tr("导出报告"), tr("请先打开一张图片。"));
@@ -149,15 +162,18 @@ void MainWindow::exportReport()
         return;
     const QFileInfo fi(out);
     const std::string suffix = fi.suffix().toLower().toUtf8().toStdString();
-    startReportExport(std::move(ctx), out, suffix);
+    startReportExport(std::move(ctx), std::move(compareInput), out, suffix);
 }
 
-void MainWindow::startReportExport(mviewer::core::ReportContext ctx, const QString &out,
-                                      std::string suffix)
+void MainWindow::startReportExport(
+    mviewer::core::ReportContext ctx,
+    std::optional<mviewer::core::CompareReportInput> compareInput, const QString &out,
+    std::string suffix)
 {
     cancelReportExport();
     auto state = std::make_shared<ReportExportState>();
     state->context = std::move(ctx);
+    state->compareInput = std::move(compareInput);
     state->histogram = m_analysisPanel ? m_analysisPanel->histogramPixmap().toImage() : QImage();
     state->output = out.toUtf8().toStdString();
     state->suffix = suffix;
@@ -178,6 +194,29 @@ void MainWindow::startReportExport(mviewer::core::ReportContext ctx, const QStri
                 state->cancelled = true;
                 return;
             }
+
+            if (state->compareInput.has_value())
+            {
+                mviewer::core::ReportBuildCallbacks callbacks;
+                callbacks.cancelled = [&task]() { return task.isCancelled(); };
+                callbacks.progress = [&task](int value)
+                {
+                    // The source/analysis phase occupies the first 55% of
+                    // the report job; encoding/rendering use the remainder.
+                    task.reportProgress(5 + value * 50 / 100);
+                };
+                state->context.compareBundle = mviewer::core::buildCompareReportBundle(
+                    *state->compareInput, callbacks);
+                if (task.isCancelled())
+                {
+                    state->cancelled = true;
+                    return;
+                }
+                state->context.hasCompareBundle = true;
+                state->compareInput.reset();
+            }
+
+            task.reportProgress(55);
             encodeReportImages(*state, task);
             if (state->cancelled || task.isCancelled())
             {
@@ -192,6 +231,7 @@ void MainWindow::startReportExport(mviewer::core::ReportContext ctx, const QStri
                 state->body = mviewer::core::buildReportMarkdown(state->context);
             else
                 state->body = mviewer::core::buildReportHtml(state->context);
+            task.reportProgress(85);
             if (state->body.empty())
             {
                 state->error = "报告内容为空。";
@@ -202,12 +242,18 @@ void MainWindow::startReportExport(mviewer::core::ReportContext ctx, const QStri
                 state->cancelled = true;
                 return;
             }
-            if (!mviewer::exportjob::writeTextAtomically(state->output, state->body))
+            task.reportProgress(95);
+            if (!mviewer::exportjob::writeTextAtomically(
+                    state->output, state->body, [&task]() { return task.isCancelled(); }))
             {
-                state->error = "无法原子写入目标文件。";
+                if (task.isCancelled())
+                    state->cancelled = true;
+                else
+                    state->error = "无法原子写入目标文件。";
                 return;
             }
             state->success = true;
+            task.reportProgress(100);
         },
         {}, std::chrono::steady_clock::time_point::max(),
         [guard, state, generation, out]()

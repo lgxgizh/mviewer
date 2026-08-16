@@ -23,6 +23,11 @@
 - Analyze report export now rejects an in-flight single-image request instead
   of exporting retained stale text; no-result and unavailable terminals emit a
   report without analysis. Workspace/project restore preserves the producer id.
+- Compare report export now captures a value-only per-pane source snapshot and
+  performs full-resolution adjustments, diff metrics, ROI statistics, heatmaps,
+  and rendering inputs on a cancellable background worker. UI preview and
+  report export share the same adjustment order, and cancelled atomic writes
+  preserve the destination without leaving temporary files.
 
 ### Tests
 
@@ -34,6 +39,9 @@
 - Core export and AnalyzerModel regressions cover analyzed and unanalyzed
   single-image reports, special-character escaping, Compare compatibility,
   per-path analyzer identity, and legacy persistence loading.
+- Compare source-vs-adjusted report parity now covers JSON/CSV/Markdown/HTML,
+  metrics, heatmaps, staged adjustment cancellation, and atomic-write
+  destination safety.
 
 ## [Unreleased] — M44 release readiness, data safety and structural convergence
 

@@ -1,5 +1,7 @@
 #include "core/analysis/ExportReport.h"
 
+#include "core/image/ImageAdjust.h"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -202,8 +204,82 @@ bool CompareAdjustmentState::isIdentity() const
            !hasCrop;
 }
 
+ImageData applyCompareAdjustments(const ImageData &src,
+                                  const CompareAdjustmentState &adjustment,
+                                  const std::function<bool()> &cancelled)
+{
+    const auto shouldCancel = [&cancelled]()
+    {
+        return cancelled && cancelled();
+    };
+    if (shouldCancel())
+        return {};
+    if (src.isNull() || adjustment.isIdentity())
+        return src;
+
+    ImageData cur = src;
+    if (adjustment.brightness != 0)
+        cur = adjustBrightness(cur, adjustment.brightness);
+    if (shouldCancel())
+        return {};
+    if (std::abs(adjustment.contrast - 1.0) >= 1e-6)
+        cur = adjustContrast(cur, static_cast<float>(adjustment.contrast));
+    if (shouldCancel())
+        return {};
+    if (std::abs(adjustment.gamma - 1.0) >= 1e-6)
+        cur = adjustGamma(cur, static_cast<float>(adjustment.gamma));
+    if (shouldCancel())
+        return {};
+    if (std::abs(adjustment.redGain - 1.0) >= 1e-6 ||
+        std::abs(adjustment.blueGain - 1.0) >= 1e-6)
+    {
+        cur = adjustWhiteBalance(cur, static_cast<float>(adjustment.redGain),
+                                 static_cast<float>(adjustment.blueGain));
+    }
+    if (shouldCancel())
+        return {};
+
+    if (adjustment.hasCrop && adjustment.cropW > 0 && adjustment.cropH > 0)
+    {
+        const mviewer::domain::Selection selection{adjustment.cropX, adjustment.cropY,
+                                                   adjustment.cropW, adjustment.cropH};
+        cur = cropRegion(cur, selection);
+    }
+    if (shouldCancel())
+        return {};
+
+    if (adjustment.rotation != 0)
+    {
+        int rotation = adjustment.rotation % 360;
+        if (rotation < 0)
+            rotation += 360;
+        while (rotation > 0)
+        {
+            if (shouldCancel())
+                return {};
+            cur = rotate90CW(cur);
+            rotation -= 90;
+        }
+    }
+    if (shouldCancel())
+        return {};
+    return cur;
+}
+
 namespace
 {
+
+bool reportCancelled(const ReportBuildCallbacks &callbacks)
+{
+    return callbacks.cancelled && callbacks.cancelled();
+}
+
+void reportProgress(const ReportBuildCallbacks &callbacks, int value)
+{
+    if (!callbacks.progress)
+        return;
+    callbacks.progress(std::clamp(value, 0, 100));
+}
 
 void writeJsonNumber(std::ostringstream &os, double value)
 {
@@ -268,12 +344,14 @@ void appendDiffStatsCsv(std::vector<std::string> &fields,
 CompareReportBundle buildCompareReportBundle(
     const std::vector<ImageFrame> &adjustedImages, int referenceIndex, uint8_t threshold,
     const mviewer::domain::Selection &roi,
-    const std::vector<CompareAdjustmentState> &adjustments)
+    const std::vector<CompareAdjustmentState> &adjustments,
+    const ReportBuildCallbacks &callbacks)
 {
     CompareReportBundle bundle;
     bundle.referenceIndex = referenceIndex;
     bundle.threshold = threshold;
     bundle.roi = roi;
+    reportProgress(callbacks, 0);
     bundle.images.reserve(adjustedImages.size());
     for (const auto &image : adjustedImages)
         bundle.images.push_back(image.metadata().filePath);
@@ -288,10 +366,14 @@ CompareReportBundle buildCompareReportBundle(
     if (validReference)
     {
         bundle.targets.reserve(adjustedImages.size() - 1);
+        const size_t targetCount = adjustedImages.size() - 1;
+        size_t completedTargets = 0;
         for (size_t i = 0; i < adjustedImages.size(); ++i)
         {
             if (static_cast<int>(i) == referenceIndex)
                 continue;
+            if (reportCancelled(callbacks))
+                return bundle;
 
             const ImageFrame &reference = adjustedImages[static_cast<size_t>(referenceIndex)];
             const ImageFrame &target = adjustedImages[i];
@@ -308,6 +390,8 @@ CompareReportBundle buildCompareReportBundle(
             {
                 const ImageData rawDiff =
                     DifferenceEngine::differenceMap(reference.pixels(), target.pixels());
+                if (reportCancelled(callbacks))
+                    return bundle;
                 if (!rawDiff.isNull())
                 {
                     pair.comparable = true;
@@ -315,13 +399,19 @@ CompareReportBundle buildCompareReportBundle(
                     psnr.setReference(reference);
                     if (psnr.analyze(target))
                         pair.psnr = psnr.psnrValue();
+                    if (reportCancelled(callbacks))
+                        return bundle;
 
                     SSIMAnalyzer ssim;
                     ssim.setReference(reference);
                     if (ssim.analyze(target))
                         pair.ssim = ssim.ssimValue();
+                    if (reportCancelled(callbacks))
+                        return bundle;
 
                     pair.fullDiffStats = DifferenceEngine::computeStats(rawDiff, threshold);
+                    if (reportCancelled(callbacks))
+                        return bundle;
                     if (!roi.isEmpty())
                     {
                         const DifferenceEngine::DiffStats roiStats = DifferenceEngine::computeStats(
@@ -329,26 +419,97 @@ CompareReportBundle buildCompareReportBundle(
                         if (roiStats.totalPixels > 0)
                             pair.roiDiffStats = roiStats;
                     }
+                    if (reportCancelled(callbacks))
+                        return bundle;
                     const ImageData thresholded =
                         DifferenceEngine::applyThreshold(rawDiff, threshold);
+                    if (reportCancelled(callbacks))
+                        return bundle;
                     pair.diffHeatmap = DifferenceEngine::heatMap(thresholded);
+                    if (reportCancelled(callbacks))
+                        return bundle;
                 }
             }
             bundle.targets.push_back(std::move(pair));
+            ++completedTargets;
+            const int targetProgress =
+                targetCount == 0 ? 100 : static_cast<int>(completedTargets * 100 / targetCount);
+            reportProgress(callbacks, targetProgress);
         }
     }
     else
     {
         bundle.targets.reserve(adjustedImages.size());
+        const size_t targetCount = adjustedImages.size();
         for (size_t i = 0; i < adjustedImages.size(); ++i)
         {
+            if (reportCancelled(callbacks))
+                return bundle;
             CompareReportPair pair;
             pair.index = static_cast<int>(i);
             pair.path = adjustedImages[i].metadata().filePath;
             pair.referenceIndex = referenceIndex;
             bundle.targets.push_back(std::move(pair));
+            reportProgress(callbacks, targetCount == 0
+                                             ? 100
+                                             : static_cast<int>((i + 1) * 100 / targetCount));
         }
     }
+    reportProgress(callbacks, 100);
+    return bundle;
+}
+
+CompareReportBundle buildCompareReportBundle(const CompareReportInput &input,
+                                             const ReportBuildCallbacks &callbacks)
+{
+    reportProgress(callbacks, 0);
+    std::vector<ImageFrame> adjustedImages;
+    adjustedImages.reserve(input.images.size());
+    std::vector<CompareAdjustmentState> adjustments;
+    adjustments.reserve(input.images.size());
+
+    for (size_t i = 0; i < input.images.size(); ++i)
+    {
+        if (reportCancelled(callbacks))
+            return {};
+
+        const CompareReportSource &source = input.images[i];
+        const CompareAdjustmentState &adjustment = source.adjustment;
+        const ImageData pixels = applyCompareAdjustments(source.pixels, adjustment,
+                                                          callbacks.cancelled);
+        if (reportCancelled(callbacks))
+            return {};
+
+        mviewer::domain::ImageMetadata metadata = source.metadata;
+        metadata.width = pixels.width;
+        metadata.height = pixels.height;
+        adjustedImages.emplace_back(metadata, pixels);
+        adjustments.push_back(adjustment);
+        reportProgress(callbacks, input.images.empty()
+                                         ? 35
+                                         : static_cast<int>((i + 1) * 35 / input.images.size()));
+    }
+
+    if (reportCancelled(callbacks))
+        return {};
+
+    // Keep the core API independent from TaskScheduler while mapping the
+    // bundle stage into the final 35..100% report-worker progress range.
+    ReportBuildCallbacks metricsCallbacks = callbacks;
+    const std::function<void(int)> progress = callbacks.progress;
+    metricsCallbacks.progress = [progress](int value)
+    {
+        if (progress)
+            progress(35 + value * 65 / 100);
+    };
+    CompareReportBundle bundle = buildCompareReportBundle(
+        adjustedImages, input.referenceIndex, input.threshold, input.roi, adjustments,
+        metricsCallbacks);
+    // The compatibility builder intentionally preserves its historical
+    // partial-result behavior. A source snapshot, however, is the worker's
+    // success boundary and must never publish a half-built bundle.
+    if (reportCancelled(callbacks))
+        return {};
     return bundle;
 }
 
