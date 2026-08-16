@@ -1,5 +1,7 @@
 #pragma once
 
+#include "application/ImageLoadingService.h"
+#include "core/async/AsyncLifetimeToken.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QPixmap>
@@ -111,4 +113,8 @@ class PreviewPanel : public QWidget
     // from an older request can never overwrite the current one, even for the
     // same path (e.g. A -> B -> A where the first A completes last).
     uint64_t m_requestGen = 0;
+    // M46: consumer-lifetime token, invalidated in the destructor. The worker
+    // delivery (which marshals through qApp) re-checks it, so a panel
+    // destroyed mid-decode can never start a delivery that touches it.
+    std::shared_ptr<mviewer::core::AsyncLifetimeToken> m_lifetime;
 };

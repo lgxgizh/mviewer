@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <functional>
 #include <memory>
 
 #include <QDate>
@@ -164,13 +165,41 @@ class ThumbnailPanel : public QListView
     // quiesce the panel.
     void stopThumbnailWorker();
 
+    // M46 deterministic-test instrumentation: called on the worker at every
+    // scan/dimension iteration. Empty in production; tests install it to prove
+    // a superseded scan aborts after a bounded number of iterations.
+    static void setScanIterationProbe(const std::function<void()> &probe);
+    // M46 test observability: the shared scan-generation token. Tests read it
+    // from the iteration probe to attribute iterations to a directory
+    // generation. Production code never needs it.
+    std::shared_ptr<std::atomic<uint64_t>> scanGenTokenForTest() const
+    {
+        return m_scanGenToken;
+    }
+
+    // Paths of the currently selected gallery rows (in model order). Public:
+    // MainWindow and acceptance tests consume the selection.
+    QStringList selectedPaths() const;
+
+  private:
+    // M46 async-scan internals (defined in thumbnailpanel_async.cpp):
+    // exception-safe probe invocation; UI-side busy-cursor refcount helpers
+    // (restoreBusyCursorOnce must run on the GUI thread).
+    static void invokeScanProbe();
+    static void restoreBusyCursorOnce(const std::shared_ptr<std::atomic<int>> &refs);
+    static void marshalBusyRestore(const std::shared_ptr<std::atomic<int>> &refs);
+    // M46: publish a completed scan's entries on the UI thread (extracted from
+    // setDirectory's completion lambda so the scanning TU stays under the
+    // function-length gate). Runs on the GUI thread; re-checks the generation.
+    void applyScanResult(int gen, const QList<Entry> &entries);
+
+  public:
+
     // Scroll the grid so the item for `path` is visible and select it. Used by
     // browse-position restore (reopen last image after launch).
     void scrollToPath(const QString &path);
     // Current vertical scroll offset of the thumbnail grid (for persistence).
     int scrollOffset() const;
-
-    QStringList selectedPaths() const;
 
     void renameSelected();
     void moveToTrashSelected();
@@ -216,12 +245,18 @@ class ThumbnailPanel : public QListView
     }
     // Read-only path lookup for delegates. The gallery model may be filtered,
     // so a model row is not necessarily the same as the row in m_allEntries.
-    // The returned pointer is valid until the panel rebuilds its directory
-    // model; delegates only use it during one paint call.
+    // M46: the displayed entries (m_displayEntries, rebuilt by buildModel) are
+    // the authoritative paint-time data source — size/date are scan-cached and
+    // the delegate NEVER queries the filesystem for them. The returned pointer
+    // is valid until the panel rebuilds its model; delegates only use it
+    // during one paint call.
     const Entry *entryForPath(const QString &path) const
     {
-        const int row = m_sourceRowByPath.value(path, -1);
-        return row >= 0 && row < m_allEntries.size() ? &m_allEntries.at(row) : nullptr;
+        const int row = m_displayEntryRow.value(path, -1);
+        if (row >= 0 && row < m_displayEntries.size())
+            return &m_displayEntries.at(row);
+        const int srcRow = m_sourceRowByPath.value(path, -1);
+        return srcRow >= 0 && srcRow < m_allEntries.size() ? &m_allEntries.at(srcRow) : nullptr;
     }
     // P0 #①: EXIF accessors for the Details view columns (camera / lens / ISO).
     // Backed by the metadata index built lazily in ensureMetaIndex().
@@ -342,6 +377,12 @@ class ThumbnailPanel : public QListView
 
     // P1: filter state for metadata search + star-rating filter.
     QList<Entry> m_allEntries;            // full listing; source for filtering
+    // M46: the entries currently DISPLAYED (post-filter, post-recursive-hit).
+    // The delegates paint exclusively from this list via entryForPath(), so
+    // size/mtime never need a filesystem query at paint time. Rebuilt by
+    // buildModel(); kept in sync with m_paths.
+    QList<Entry> m_displayEntries;
+    QHash<QString, int> m_displayEntryRow; // path -> row in m_displayEntries
     bool m_metaSearch = false;            // search embedded metadata, not just names
     // M25: async metadata indexing (shared MetadataIndexer) + recursive scan
     // state — both generation-scoped so directory switches cancel them.
@@ -386,6 +427,19 @@ class ThumbnailPanel : public QListView
     void ensureDimensions();
     int m_dirGen = 0;
     bool m_dimsResolved = false;
+    // M46: directory-generation token shared with the scan/dimension/recursive
+    // workers. setDirectory() stores the new generation here; every worker
+    // loop re-checks it (alongside m_alive) so superseded walking, sorting and
+    // dimension probing stop cooperatively instead of running to completion
+    // only to be discarded on the UI thread.
+    std::shared_ptr<std::atomic<uint64_t>> m_scanGenToken;
+    // M46: app-global busy-cursor refcount, owned UI-side. setDirectory()
+    // increments it before launching the scan; every scan completion or abort
+    // decrements it (marshaled to the UI thread), and the destructor drains
+    // any refs whose worker was dropped by m_scanPool.clear(). This makes
+    // setOverrideCursor()/restoreOverrideCursor() provably balanced: no queued
+    // job being cleared/cancelled can strand the whole app with a busy cursor.
+    std::shared_ptr<std::atomic<int>> m_busyCursorRefs;
 
     // P0-4: column-title header row shown only in the Details view. Positioned in
     // the reserved viewport top margin so it lines up with the delegate columns.

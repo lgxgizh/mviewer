@@ -38,6 +38,7 @@ const double kZoomStep = 1.15;
 ImageViewer::ImageViewer(QWidget *parent)
     : QOpenGLWidget(parent), m_tileRequests(m_tileCache), m_overlayRequests(m_overlayCache)
 {
+    m_lifetime = mviewer::core::AsyncLifetimeToken::create();
     setWindowTitle("图片查看");
     setMouseTracking(true);
     setCursor(Qt::OpenHandCursor);
@@ -72,6 +73,13 @@ ImageViewer::ImageViewer(QWidget *parent)
 
 ImageViewer::~ImageViewer()
 {
+    // M46: invalidate the consumer-lifetime token FIRST. Every request this
+    // viewer owns holds only a weak_ptr to it; once invalidated, the
+    // repository suppresses any late client delivery before it can start. The
+    // cancels below then also wait (bounded) for a delivery that already
+    // started, so after this destructor returns no callback is running or will
+    // run against this viewer.
+    m_lifetime->invalidate();
     // M29: drop any in-flight foreground decode / neighbor preload before
     // tearing down the GL context. A worker callback that lands after teardown
     // is harmless (the QPointer/path/generation guards suppress delivery), but

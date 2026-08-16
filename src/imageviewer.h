@@ -1,6 +1,7 @@
 #pragma once
 
 #include "application/ImageLoadingService.h"
+#include "core/async/AsyncLifetimeToken.h"
 #include "core/export/ExportJob.h"
 #include "core/analysis/ImageOverlay.h"
 #include "core/image/ImageFrame.h"
@@ -179,10 +180,14 @@ class ImageViewer : public QOpenGLWidget
     void cancelRoiStats();
     void scheduleRoiStats(const QRect &selection);
     ImageLoadCallback makeImageLoadCallback(const QString &path, uint64_t generation);
-    void queueImageLoadFailure(const QString &path, uint64_t generation,
-                               const ImageLoadGuard &guard);
-    void queueLoadedImage(const QString &path, uint64_t generation,
-                          const ImageLoadGuard &guard, const ImageLoadResult &result);
+    // M46: static delivery helpers. They marshal the load outcome to the UI
+    // thread through the QPointer guard and never touch `this`, so the
+    // worker-thread completion lambda captures NO raw `this` — a late
+    // completion can never begin a viewer-visible access.
+    static void queueImageLoadFailure(const QString &path, uint64_t generation,
+                                      const ImageLoadGuard &guard);
+    static void queueLoadedImage(const QString &path, uint64_t generation,
+                                 const ImageLoadGuard &guard, const ImageLoadResult &result);
     void applyLoadedImage(const QString &path, const ImageLoadResult &result);
     void applyPendingView();
     void clearLoadedGpu();
@@ -243,6 +248,13 @@ class ImageViewer : public QOpenGLWidget
     };
     mviewer::application::ImageLoadingService::AsyncRequestHandle m_foregroundRequest;
     std::vector<NeighborPreload> m_neighborPreloads;
+    // M46: consumer-lifetime token. Created in the constructor, invalidated in
+    // the destructor BEFORE the outstanding requests are cancelled, and passed
+    // to every async load/preload. The repository suppresses the client
+    // callback of any request whose token is dead, so a worker completion that
+    // races viewer destruction can never begin a new callback that touches
+    // this viewer.
+    std::shared_ptr<mviewer::core::AsyncLifetimeToken> m_lifetime;
 
     // View transform (pan/zoom). The math lives in the domain-free Viewport
     // (core/render); the Widget only stores it and feeds screen geometry.

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/async/AsyncLifetimeToken.h"
 #include "core/image/ImageRepository.h"
 
 #include <functional>
@@ -24,23 +25,30 @@ class ImageLoadingFacade
         return facade;
     }
 
+    // M46: `lifetime` is the consumer's AsyncLifetimeToken. The request layer
+    // holds a weak_ptr; once the consumer invalidates/expires the token, any
+    // late completion is suppressed BEFORE the client callback starts.
     ImageAsyncRequestHandle loadAsyncCancellable(
         const std::string &path, std::function<void(const ImageLoadResult &)> callback,
-        const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions)
+        const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions,
+        std::weak_ptr<AsyncLifetimeToken> lifetime = {})
     {
-        return ImageRepository::instance().loadAsyncCancellable(path, std::move(callback), options);
+        return ImageRepository::instance().loadAsyncCancellable(
+            path, std::move(callback), options, std::move(lifetime));
     }
 
-    ImageAsyncRequestHandle preloadAsync(const std::string &path)
+    ImageAsyncRequestHandle preloadAsync(
+        const std::string &path, std::weak_ptr<AsyncLifetimeToken> lifetime = {})
     {
-        return ImageRepository::instance().preloadAsync(path);
+        return ImageRepository::instance().preloadAsync(path, std::move(lifetime));
     }
 
     ImageAsyncRequestHandle promotePreloadAsync(
-        ImageAsyncRequestHandle &preload,
-        std::function<void(const ImageLoadResult &)> callback)
+        ImageAsyncRequestHandle &preload, std::function<void(const ImageLoadResult &)> callback,
+        std::weak_ptr<AsyncLifetimeToken> lifetime = {})
     {
-        return ImageRepository::instance().promotePreloadAsync(preload, std::move(callback));
+        return ImageRepository::instance().promotePreloadAsync(preload, std::move(callback),
+                                                               std::move(lifetime));
     }
 
     void cancelAsync(ImageAsyncRequestHandle &handle)
@@ -51,6 +59,18 @@ class ImageLoadingFacade
     std::string makeKey(const std::string &path) const
     {
         return ImageRepository::instance().makeKey(path);
+    }
+
+    // UI preview boundary: cache ownership stays inside the repository/cache
+    // stack, while the PreviewPanel only sees a value-owned ImageData payload.
+    bool getPreviewCache(const std::string &key, ImageData &out) const
+    {
+        return ImageRepository::instance().getPreviewCache(key, out);
+    }
+
+    void putPreviewCache(const std::string &key, const ImageData &image)
+    {
+        ImageRepository::instance().putPreviewCache(key, image);
     }
 
   private:

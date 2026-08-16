@@ -58,8 +58,15 @@ class RatingStore
     // ---- favorites == picked set ----
     std::vector<std::string> favorites() const;
 
-    // Persistence. save()/load() use the current file path.
-    bool save() const;
+    // Persistence. M46: user edits are coalesced on an owned worker thread
+    // (reads stay immediate); save() is the explicit flush boundary — it
+    // drains pending work and writes the LATEST snapshot synchronously, so a
+    // caller (tests, setFilePath, shutdown) can rely on the complete current
+    // state being on disk when it returns. Every file write goes through the
+    // crash-safe atomic replace helper: a failed write leaves the previous
+    // official file intact.
+    bool save();
+    void flushSave();
     bool load();
     void setFilePath(const std::string &path);
 
@@ -69,11 +76,9 @@ class RatingStore
     std::string flagsPath() const;
     std::string normalize(const std::string &path) const;
 
-    void saveFlags() const;
-    void scheduleFlagsSave();
-    void flushFlagsSave();
+    void scheduleSave();
     void flagsWorkerLoop();
-    void saveFlagsSnapshot() const;
+    bool saveSnapshot() const;
     void loadFlags();
 
     mutable std::mutex m_mutex;

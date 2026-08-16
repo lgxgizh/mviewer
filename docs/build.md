@@ -50,7 +50,8 @@ env var.
 
 **Local (Windows, developer machine):**
 
-- Install Qt 6.11.1 for `msvc2022_64` via the Qt online installer.
+- Install Qt 6 (current dev machine: **6.10.3**) for `msvc2022_64` via the Qt
+  online installer.
 - Default expected location: `D:\QT\6.11.1\msvc2022_64`
   (only used as a last-resort fallback; prefer env vars).
 
@@ -60,10 +61,13 @@ env var.
   (currently **6.8.0**, `win64_msvc2022_64`). The runner sets `Qt6_DIR`
   automatically, so no hard-coded path is needed.
 
-> **Version note:** local uses 6.11.x, CI uses 6.8.x. This is intentional
-> (different install mechanisms) and is fine — both expose the same CMake
-> package layout that `CMAKE_PREFIX_PATH` consumes. Do **not** try to force a
-> single version across both; keep the env-var lookup and they stay decoupled.
+> **Version note (M46 reconciliation):** CI builds/tests with **6.8.0**
+> (minimum supported), the developer machine verifies the full gate with
+> **6.10.3** (recommended/dev-verified). The README carries the same matrix —
+> there is no "6.11" claim anywhere. Newer 6.x releases are expected to work
+> but are not continuously verified. The `D:\QT\6.11.1` fallback path in
+> `build.ps1` is a legacy default; export `QT_ROOT_DIR`/`Qt6_DIR` to point the
+> build at your actual install.
 
 To point the build at a custom Qt without moving it:
 

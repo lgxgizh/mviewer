@@ -3,7 +3,7 @@
 **Visual analysis platform for image algorithm engineers** — compare, validate, and analyze image processing algorithm outputs.
 
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://isocpp.org/)
-[![Qt](https://img.shields.io/badge/Qt-6.11_Widgets-green.svg)](https://www.qt.io/)
+[![Qt](https://img.shields.io/badge/Qt-6.8%2B_Widgets-green.svg)](https://www.qt.io/)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![CI](https://github.com/lgxgizh/mviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/lgxgizh/mviewer/actions)
@@ -59,7 +59,7 @@ MViewer is **not a general-purpose image viewer** — it is a **visual analysis 
 | Component | Choice |
 | ----------- | -------- |
 | Language | C++20 |
-| GUI | Qt 6.11 Widgets |
+| GUI | Qt 6 Widgets (see the [Qt version matrix](#qt-version-matrix)) |
 | Build | CMake + Ninja |
 | Compiler | MSVC 2022 (primary), Clang/GCC (CI / Linux) |
 | Cache | SQLite (disk) + LRU (memory) |
@@ -72,16 +72,30 @@ MViewer is **not a general-purpose image viewer** — it is a **visual analysis 
 ### Prerequisites
 
 - A C++20 compiler (MSVC 2022, or recent Clang/GCC)
-- Qt 6.11.x (`msvc2022_64` on Windows, or system Qt on Linux/macOS)
+- Qt 6 (`msvc2022_64` on Windows, or system Qt on Linux/macOS) — see below
 - CMake 3.22+
 - Ninja (recommended)
+
+### Qt version matrix (M46, single source of truth)
+
+| Role | Version | Where |
+| ----- | ------- | ----- |
+| **Minimum supported** | Qt 6.8 | the CI PR gate builds and tests with 6.8.0 (`ci.yml`) |
+| **CI tested** | 6.8.0 | `.github/workflows/ci.yml` (windows-2022, MSVC 2022) |
+| **Recommended / dev-verified** | 6.10.x | the dev machine builds and runs the full gate with 6.10.3 |
+
+Newer 6.x releases are expected to work (no 6.8-specific API usage), but only
+6.8.0 (CI) and 6.10.3 (dev) are continuously verified. `build.ps1` detects Qt
+in this order: `QT_ROOT_DIR` → `Qt6_DIR` → `QT_ROOT` → `D:\QT\6.11.1` (legacy
+fallback) → user/Program Files installs; point it at your install via
+`QT_ROOT_DIR` or `Qt6_DIR` rather than relying on the legacy fallback path.
 
 ### Build Commands
 
 ```bash
 # Configure — point CMAKE_PREFIX_PATH at your Qt installation
 cmake -B build -G Ninja \
-  -DCMAKE_PREFIX_PATH="<path-to-Qt>/6.11.1/msvc2022_64"
+  -DCMAKE_PREFIX_PATH="<path-to-Qt>/msvc2022_64"
 
 # Build
 cmake --build build
@@ -214,7 +228,20 @@ PluginManager::instance().loadDirectory("<path-to-plugins>");
 
 ## Performance Targets
 
-| Operation | Target |
+> **Three different numbers, deliberately kept separate (M46 reconciliation):**
+>
+> | Level | What it is | Where |
+> | ----- | ---------- | ----- |
+> | **Automated gate (CI/Release)** | generous, cross-machine-stable absolute caps enforced by `mviewer_bench --enforce` against `benchmark/performance_budget.json` (`bench_enforce` is a hard CTest gate) | `benchmark/performance_budget.json` |
+> | **Regression axis** | ±10% vs `benchmark/perf_baseline.json`, run on the nightly regression profile — separate from the absolute caps | `benchmark/perf_baseline.json`, `nightly.yml` |
+> | **Manual product targets** | aspirational, developer-machine expectations for interactive feel — NOT enforced by any gate | the table below |
+>
+> The table below is the *product* (manual) target list, measured on the
+> developer machine; the automated gate's numbers are deliberately looser so
+> the mandatory CI gate stays green across heterogeneous runners (see the
+> calibration note in `performance_budget.json`).
+
+| Operation | Manual product target (dev machine) |
 | ----------- | -------- |
 | Cold start | < 300ms |
 | Warm start | < 100ms |
@@ -222,6 +249,10 @@ PluginManager::instance().loadDirectory("<path-to-plugins>");
 | JPEG decode (24MP) | < 50ms |
 | Zoom/pan | 60fps sustained |
 | Cache hit ratio (memory) | > 90% |
+| First thumbnails, 1000-image folder | < 2 s |
+
+Measured M24-era results (2-core VM vs dev box) and the budget-vs-target gaps
+are documented in `docs/performance.md` and the M24/M46 review reports.
 
 ---
 

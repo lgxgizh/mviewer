@@ -131,18 +131,25 @@ void ImageViewer::setImage(const QString &path)
     if (matchingPreload)
         m_foregroundRequest =
             mviewer::application::ImageLoadingService::instance().promotePreloadAsync(
-                matchingPreload, std::move(onLoaded));
+                matchingPreload, std::move(onLoaded), m_lifetime);
     else
         m_foregroundRequest =
             mviewer::application::ImageLoadingService::instance().loadAsyncCancellable(
-                path.toUtf8().toStdString(), std::move(onLoaded));
+                path.toUtf8().toStdString(), std::move(onLoaded), ImageRepository::kDefaultLoadOptions,
+                m_lifetime);
 }
 
 ImageViewer::ImageLoadCallback ImageViewer::makeImageLoadCallback(const QString &path,
                                                                   uint64_t generation)
 {
+    // M46 strict lifetime contract: the completion lambda captures NO raw
+    // `this` — only the QPointer guard (which is dereferenced exclusively on
+    // the UI thread inside queueLoadedImage/queueImageLoadFailure), the path,
+    // the generation and the shared lifetime token. The repository itself
+    // already refuses to invoke this callback once the token is dead, so a
+    // late completion is a no-op before any viewer-visible code runs.
     auto guard = std::make_shared<QPointer<ImageViewer>>(this);
-    return [this, path, generation, guard](const ImageLoadResult &result)
+    return [path, generation, guard](const ImageLoadResult &result)
     {
         if (!guard)
             return;
@@ -305,7 +312,7 @@ void ImageViewer::preloadNeighbors(const QString &path)
         // promote this handle to the foreground decode (takeMatchingPreload).
         mviewer::application::ImageLoadingService::AsyncRequestHandle h =
             mviewer::application::ImageLoadingService::instance().preloadAsync(
-                m_fileList[i].toUtf8().toStdString());
+                m_fileList[i].toUtf8().toStdString(), m_lifetime);
         if (h)
             m_neighborPreloads.push_back({m_fileList[i], std::move(h)});
     }

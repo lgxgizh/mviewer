@@ -1,4 +1,5 @@
 #pragma once
+#include "core/async/AsyncLifetimeToken.h"
 #include "core/cache/CacheManager.h"
 
 #include "ImageFrame.h"
@@ -66,21 +67,28 @@ class ImageRepository
 
     // Cancellable foreground load: same semantics as loadAsync, but returns an
     // opaque handle that cancelAsync() can use to drop obsolete work early.
+    // `lifetime` is the M46 consumer-lifetime token: when it is expired or
+    // invalidated before delivery, the client callback is never invoked (the
+    // late completion becomes a no-op). The request keeps only a weak_ptr, so
+    // the consumer's token outlives the request unless the consumer dies.
     AsyncRequestHandle loadAsyncCancellable(const std::string &filePath,
                                             std::function<void(const Result &)> callback,
-                                            const LoadOptions &opts = kDefaultLoadOptions);
+                                            const LoadOptions &opts = kDefaultLoadOptions,
+                                            std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {});
 
     // Low-priority neighbor preload (Background pool, disk cache allowed, no
     // histogram, no client callback). Best-effort: queued work may be skipped
     // by cancelAsync(); an already-running decode may finish and safely warm
     // the cache. Returns nullptr on scheduler rejection.
-    AsyncRequestHandle preloadAsync(const std::string &filePath);
+    AsyncRequestHandle preloadAsync(const std::string &filePath,
+                                    std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {});
 
     // Consumes a preload handle: queued work is resubmitted at Decode priority,
     // running work is reused, finished work falls back to cache. nullptr is a
     // no-op.
     AsyncRequestHandle promotePreloadAsync(AsyncRequestHandle &preload,
-                                           std::function<void(const Result &)> callback);
+                                           std::function<void(const Result &)> callback,
+                                           std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {});
 
     // Mark the request cancelled (best-effort), soft-cancel the scheduler
     // handle, and clear the caller's handle. May be called from any thread, but
@@ -151,6 +159,22 @@ class ImageRepository
     // their slots become explicit "timed out" failure Results.
     void setSyncLoadBudget(std::chrono::milliseconds budget);
     std::chrono::milliseconds syncLoadBudget() const;
+
+    // M46 deterministic-test instrumentation. The callbacks run on the worker
+    // thread at fixed points of the terminal delivery protocol so tests can
+    // construct exact interleavings (decode done vs cancel vs consumer death)
+    // without sleep-based timing:
+    //   onBeforeDelivery  — after the delivery gate passed and before the
+    //                       client callback is invoked;
+    //   onAfterDelivery   — after the client callback returned.
+    // They must be installed/reset by the test itself; production code leaves
+    // them empty.
+    struct TestHooks
+    {
+        std::function<void()> onBeforeDelivery;
+        std::function<void()> onAfterDelivery;
+    };
+    static TestHooks &testHooks();
 
   private:
     // Memory-only path -> identity-key snapshot used by the warm load path.

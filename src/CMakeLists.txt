@@ -1,4 +1,4 @@
-﻿# ─── M13 Phase 5: optional Perfetto-style trace instrumentation ────────────
+# ─── M13 Phase 5: optional Perfetto-style trace instrumentation ────────────
 # OFF by default: the MV_TRACE_* macros compile to no-ops and the green build
 # gains no dependency. When ON, hot-path spans are recorded and can be flushed
 # to a Chrome trace JSON (openable in ui.perfetto.dev / chrome://tracing) via
@@ -19,6 +19,8 @@ add_library(mviewer_core SHARED
     core/image/ImageObject.cpp
     core/image/ImageFrame.cpp
     core/image/ImageRepository.cpp
+    core/image/ImageRepository_async.cpp
+    core/image/ImageRepository_dir.cpp
     core/image/ImageRepository_load.cpp
     core/image/IccProfile.cpp
     core/image/MetadataReader.cpp
@@ -32,6 +34,7 @@ add_library(mviewer_core SHARED
     core/image/QtConvert.cpp
     core/image/ImageStats.cpp
     core/filesystem/FileSystem.cpp
+    core/filesystem/AtomicFile.cpp
     core/scheduler/TaskScheduler.cpp
     core/compare/CompareEngine.cpp
     core/compare/SyncController.cpp
@@ -48,6 +51,7 @@ add_library(mviewer_core SHARED
     core/analysis/AnalysisEngine.cpp
     core/analysis/PixelInspector.cpp
     core/analysis/ExportReport.cpp
+    core/analysis/ExportReport_serialize.cpp
     core/analysis/ReportHtml.cpp
     core/workspace/WorkspaceSerializer.cpp
     core/project/ProjectSerializer.cpp
@@ -145,6 +149,7 @@ add_library(mviewer_ui STATIC
     breadcrumbbar.cpp
     metadataoverlay.cpp
     thumbnailpanel.cpp
+    thumbnailpanel_async.cpp
     thumbnailpanel_selection.cpp
     thumbnailpanel_pipeline.cpp
     thumbnailpanel_filters.cpp
@@ -163,6 +168,7 @@ add_library(mviewer_ui STATIC
     compareworkspace_nav.cpp
     analysispanel.cpp
     analysispanel_analysis.cpp
+    analysispanel_analysis_worker.cpp
     analysispanel_actions.cpp
     analysispanel_buildui.cpp
     analysispanel_pages.cpp
@@ -1332,6 +1338,108 @@ target_include_directories(m27_lifecycle_torture PRIVATE ${CMAKE_CURRENT_SOURCE_
 target_compile_definitions(m27_lifecycle_torture PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME m27_lifecycle_torture COMMAND m27_lifecycle_torture)
 set_tests_properties(m27_lifecycle_torture PROPERTIES RUN_SERIAL TRUE TIMEOUT 1800)
+
+# ─── M46: async lifetime / cancellation delivery-gate contract (core) ──────
+# Deterministic interleavings (decode-done vs cancel vs consumer-death) built
+# with latches + the repository delivery-gate hooks, never sleep-based timing.
+add_executable(m46_repository_tests
+    core/test_m46_repository.cpp
+)
+target_link_libraries(m46_repository_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(m46_repository_tests PRIVATE cxx_std_20)
+target_include_directories(m46_repository_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m46_repository_tests COMMAND m46_repository_tests)
+set_tests_properties(m46_repository_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+
+# ─── M46: ThumbnailPipeline mid-flight resize supersession (core) ───────────
+add_executable(m46_thumbnail_tests
+    core/test_m46_thumbnail.cpp
+)
+target_link_libraries(m46_thumbnail_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(m46_thumbnail_tests PRIVATE cxx_std_20)
+target_include_directories(m46_thumbnail_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m46_thumbnail_tests COMMAND m46_thumbnail_tests)
+set_tests_properties(m46_thumbnail_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+
+# ─── M46: Browse real-world reliability (UI level) ──────────────────────────
+# Paint-path filesystem freedom (render-identical after source deletion),
+# scan/dimension supersession bounds, busy-cursor ownership, and deterministic
+# viewer/compare destroy + A->B->A races.
+add_executable(m46_browse_tests
+    test_m46_browse.cpp
+)
+target_link_libraries(m46_browse_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m46_browse_tests PRIVATE cxx_std_20)
+target_include_directories(m46_browse_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m46_browse_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m46_browse_tests COMMAND m46_browse_tests)
+set_tests_properties(m46_browse_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
+
+# ─── M46: crash-safe persistence (atomic replace + fault injection) ─────────
+add_executable(m46_persistence_tests
+    core/test_m46_persistence.cpp
+)
+target_link_libraries(m46_persistence_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(m46_persistence_tests PRIVATE cxx_std_20)
+target_include_directories(m46_persistence_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m46_persistence_tests COMMAND m46_persistence_tests)
+set_tests_properties(m46_persistence_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+
+# ─── M46: architecture gate regression ──────────────────────────────────────
+# Proves the gate flags a direct Repository include from a UI/Compare TU and
+# that the current tree reports zero warnings (the stale imageviewer/preview
+# loading-boundary exemption is gone — loading converges on the facade).
+add_test(NAME architecture_gate_regression
+    COMMAND powershell -ExecutionPolicy Bypass -File
+        ${CMAKE_SOURCE_DIR}/scripts/architecture_gate_test.ps1
+        ${CMAKE_SOURCE_DIR})
+set_tests_properties(architecture_gate_regression PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
+# ─── M46: real-workflow soak (short CI form; --extended for Release) ────────
+# One workload driver, two durations: the CTest here runs the short form; the
+# extended manual qualification uses --extended (see benchmarks/m46_workflow_soak_main.cpp).
+add_executable(mviewer_m46_workflow_soak
+    ${CMAKE_SOURCE_DIR}/benchmarks/m46_workflow_soak_main.cpp
+)
+target_link_libraries(mviewer_m46_workflow_soak
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(mviewer_m46_workflow_soak PRIVATE cxx_std_20)
+target_include_directories(mviewer_m46_workflow_soak PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(mviewer_m46_workflow_soak PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m46_workflow_soak COMMAND mviewer_m46_workflow_soak --iterations 8)
+set_tests_properties(m46_workflow_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
+
 # ─── M13 Phase 1: Product Workflow gate ──────────────────────────────────
 # A single ctest that runs the full user-chain in order:
 #   Browse -> Compare -> Analyzer -> Export -> Workspace

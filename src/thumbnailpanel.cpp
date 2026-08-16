@@ -1,9 +1,6 @@
-﻿#include "selectionmodel.h"
+#include "selectionmodel.h"
 #include "thumbnailpanel_p.h"
 #include "thumbnailprovider.h"
-
-#include <QtConcurrent/QtConcurrent>
-
 
 // P0#3: DetailsHeader (the column-title strip above the Details list) is now
 // defined in thumbnailpanel_p.h alongside the shared DetailLayout geometry, so
@@ -13,6 +10,8 @@
 
 ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
 {
+    m_scanGenToken = std::make_shared<std::atomic<uint64_t>>(0);
+    m_busyCursorRefs = std::make_shared<std::atomic<int>>(0);
     // M24: bounded background workers (directory scan + dimension resolve).
     // Two threads keep first-screen scans fast without unbounded growth when
     // the user switches folders rapidly.
@@ -47,7 +46,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     m_delegate = new ThumbDelegate(this, this);
     setItemDelegate(m_delegate);
 
-    m_compareBtn = new QPushButton(QStringLiteral("比较选中"), this);
+    m_compareBtn = new QPushButton(QStringLiteral("姣旇緝閫変腑"), this);
     m_compareBtn->setVisible(false);
     connect(m_compareBtn, &QPushButton::clicked, this, &ThumbnailPanel::onCompareClicked);
 
@@ -67,7 +66,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                 emit hovered(p);
             });
 
-    // Drive thumbnail decode priority from the viewport (P0 #鈶?.
+    // Drive thumbnail decode priority from the viewport (P0 #閳?.
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
             &ThumbnailPanel::updateVisibleRange);
     connect(horizontalScrollBar(), &QScrollBar::valueChanged, this,
@@ -90,8 +89,8 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     // Keyboard parity: Enter opens the viewer (same as double-click), and
     // moving the current item with the arrow keys drives the shared selection
     // model so the preview/status bar follow without a mouse. The central
-    // SelectionModel no-ops on a same-path set, so selectPath() 鈫?currentChanged
-    // 鈫?itemClicked cannot loop.
+    // SelectionModel no-ops on a same-path set, so selectPath() 閳?currentChanged
+    // 閳?itemClicked cannot loop.
     connect(this, &QAbstractItemView::activated, this,
             [this](const QModelIndex &idx)
             {
@@ -180,6 +179,13 @@ ThumbnailPanel::~ThumbnailPanel()
     // m_alive check, so destruction waits only a bounded time for the current
     // QDir sort (typically < 100 ms even for 10k-image folders).
     m_scanPool.clear();
+    // M46: queued scans dropped by clear() never run their completion, so
+    // their busy-cursor refs would leak. Drain them here; a scan that was
+    // still RUNNING marshals its own restore later, which becomes a no-op
+    // because the refcount is already zero 鈥?the cursor stays balanced in
+    // every interleaving.
+    while (m_busyCursorRefs && m_busyCursorRefs->load(std::memory_order_acquire) > 0)
+        restoreBusyCursorOnce(m_busyCursorRefs);
     // Detach from the shared pipeline so its worker thread can't call back into
     // a destroyed panel (and restore the default decode for the next panel).
     ThumbnailPipeline::instance().setResultFn([](const std::string &, int, const ImageData &) {});
@@ -187,141 +193,7 @@ ThumbnailPanel::~ThumbnailPanel()
                                               { return Decoder::decodeScaled(p, size); });
 }
 
-namespace
-{
-// M23 P2: the type-filter rule, factored so the on-thread directory scan and the
-// off-thread enumeration share exactly one implementation.
-bool passesTypeFilter(const QString &typeFilter, const QString &suffixRaw)
-{
-    if (typeFilter.isEmpty())
-        return true;
-    const QString suffix = suffixRaw.toLower();
-    static const QStringList rawExts = {"cr2", "cr3", "nef", "arw", "dng", "raf", "rw2",
-                                        "orf", "sr2", "srw", "pef", "3fr", "mef", "erf",
-                                        "mrw", "dcr", "kdc", "mos", "raw", "iiq"};
-    for (const QString &ext : typeFilter.split(','))
-    {
-        const QString lowered = ext.trimmed().toLower();
-        if (lowered == suffix)
-            return true;
-        // P0: Expand "raw" alias to common RAW file extensions.
-        if (lowered == "raw" && rawExts.contains(suffix))
-            return true;
-        // P0: Expand "tiff" alias to "tif" + "tiff".
-        if (lowered == "tiff" && (suffix == "tif" || suffix == "tiff"))
-            return true;
-    }
-    return false;
-}
-} // namespace
 
-void ThumbnailPanel::setDirectory(const QString &path)
-{
-    m_currentDir = path;
-    m_filterText.clear();
-    m_filterRecursive = false;
-
-    // P0-1 (perf): a new directory generation. Any in-flight background
-    // dimension resolve or directory scan from the previous folder is
-    // invalidated by the bump.
-    ++m_dirGen;
-    const int gen = m_dirGen;
-    m_dimsResolved = false;
-
-    // M23 P2 (first-screen): paint the (empty) directory shell immediately so a
-    // 1000-image folder shows its grid in well under 1s, then scan the disk off
-    // the UI thread and stream the real entries in once they are ready.
-    resetDirectoryState();
-    m_model->setStringList({});
-    viewport()->update();
-    // Publish the empty shell immediately so consumers drop the previous
-    // directory sequence before this directory's worker result arrives.
-    emit sequenceChanged(m_currentDir, {});
-    emit statsChanged(0, 0, 0, 0);
-    QApplication::setOverrideCursor(Qt::BusyCursor);
-
-    // Snapshot the criteria the worker needs so it never reads volatile members.
-    const QString typeFilter = m_typeFilter;
-    const SortMode sortMode = m_sortMode;
-    const bool sortAscending = m_sortAscending;
-    auto alive = m_alive;
-    const QPointer<ThumbnailPanel> self(this);
-
-    // M24: bounded pool + QPointer marshal. The worker never touches `this`
-    // directly; the completion lambda runs on the UI thread and re-checks the
-    // object is still alive. The busy cursor is restored unconditionally (it
-    // is app-global and ref-counted) so a destroyed/superseded scan can never
-    // leave the whole application with a stuck override cursor.
-    (void)QtConcurrent::run(
-        &m_scanPool,
-        [self, alive, gen, path, typeFilter, sortMode, sortAscending]()
-        {
-            QList<Entry> entries;
-            QDir dir(path);
-            if (dir.exists())
-            {
-                const QFileInfoList list = sortedEntries(dir, sortMode, sortAscending);
-                for (int i = 0; i < list.size(); ++i)
-                {
-                    if (!alive->load())
-                    {
-                        // Aborted (panel destroyed / folder superseded). The
-                        // completion lambda below will never run, so restore the
-                        // app-global busy cursor here, marshaled to the UI thread.
-                        QMetaObject::invokeMethod(qApp,
-                                                  []() { QApplication::restoreOverrideCursor(); });
-                        return;
-                    }
-                    const QFileInfo &fi = list.at(i);
-                    if (!passesTypeFilter(typeFilter, fi.suffix()))
-                        continue;
-                    // P0-1 (perf): no pixel dimensions here 鈥?resolved lazily in
-                    // the background for the Details view (see ensureDimensions).
-                    entries.append(
-                        {fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()});
-                }
-            }
-            QMetaObject::invokeMethod(
-                qApp,
-                [self, alive, gen, entries]() mutable
-                {
-                    // Always drop the busy cursor, even if superseded/destroyed.
-                    QApplication::restoreOverrideCursor();
-                    if (!alive->load() || !self)
-                        return;
-                    ThumbnailPanel *panel = self.data();
-                    if (gen != panel->m_dirGen) // a newer folder superseded this scan
-                        return;
-                    panel->m_allEntries = entries;
-                    panel->m_sourceRowByPath.clear();
-                    panel->m_sourceRowByPath.reserve(panel->m_allEntries.size());
-                    for (int i = 0; i < panel->m_allEntries.size(); ++i)
-                        panel->m_sourceRowByPath.insert(panel->m_allEntries.at(i).path, i);
-                    panel->m_metaIndex.clear();
-                    panel->applyFilter();
-                    // Only pay the header-read cost when the Details view
-                    // actually shows the resolution column.
-                    if (panel->m_viewMode == Details)
-                        panel->ensureDimensions();
-                    else if (panel->m_viewMode == Thumbnail || panel->m_viewMode == LargeIcon)
-                    {
-                        // Keep the first thumbnail burst ahead of metadata
-                        // reads. The generation guard also makes a delayed
-                        // callback harmless when the user changes folders.
-                        const int dimensionGen = panel->m_dirGen;
-                        QTimer::singleShot(350, panel,
-                                           [panel, dimensionGen]
-                                           {
-                                               if (dimensionGen != panel->m_dirGen)
-                                                   return;
-                                               if (panel->m_viewMode == Thumbnail ||
-                                                   panel->m_viewMode == LargeIcon)
-                                                   panel->ensureDimensions();
-                                           });
-                    }
-                });
-        });
-}
 
 void ThumbnailPanel::resetDirectoryState()
 {
@@ -330,6 +202,8 @@ void ThumbnailPanel::resetDirectoryState()
     m_rowByPath.clear();
     m_sourceRowByPath.clear();
     m_sizeByPath.clear();
+    m_displayEntries.clear();
+    m_displayEntryRow.clear();
     m_metaIndex.clear();
     m_metaIso.clear();
     m_metaCamera.clear();
@@ -346,52 +220,6 @@ void ThumbnailPanel::refresh()
         setDirectory(m_currentDir);
 }
 
-void ThumbnailPanel::ensureDimensions()
-{
-    if (m_dimsResolved || m_allEntries.isEmpty())
-        return;
-    m_dimsResolved = true; // mark up-front so we launch the worker only once
-
-    const int gen = m_dirGen;
-    QStringList paths;
-    paths.reserve(m_allEntries.size());
-    for (const Entry &e : m_allEntries)
-        paths.append(e.path);
-
-    auto alive = m_alive;
-    const QPointer<ThumbnailPanel> self(this);
-    (void)QtConcurrent::run(
-        &m_scanPool,
-        [self, alive, gen, paths]()
-        {
-            QVector<QSize> sizes;
-            sizes.reserve(paths.size());
-            for (int i = 0; i < paths.size(); ++i)
-            {
-                if (!alive->load())
-                    return; // panel destroyed / folder superseded 鈥?abort fast
-                QImageReader reader(paths.at(i));
-                reader.setAutoTransform(true);
-                sizes.append(reader.size());
-            }
-            QMetaObject::invokeMethod(
-                qApp,
-                [self, alive, gen, sizes]()
-                {
-                    if (!alive->load() || !self)
-                        return;
-                    ThumbnailPanel *panel = self.data();
-                    if (gen != panel->m_dirGen) // folder changed while resolving
-                        return;
-                    for (int i = 0; i < sizes.size() && i < panel->m_allEntries.size(); ++i)
-                    {
-                        panel->m_allEntries[i].width = sizes[i].width();
-                        panel->m_allEntries[i].height = sizes[i].height();
-                    }
-                    panel->viewport()->update();
-                });
-        });
-}
 
 // M23 re-check: setViewMode now lives in thumbnailpanel_viewmode.cpp to keep
 // this TU under the 800-line guard.
@@ -424,9 +252,13 @@ void ThumbnailPanel::applyThumbSize(int size, bool rememberGridSize)
     m_thumbSize = size;
     if (rememberGridSize)
         m_gridThumbSize = size;
-    // Update pipeline to generate thumbnails at the new size.
-    ThumbnailPipeline::instance().thumbSize = size;
-    // M25: the ready cache and in-flight pending set belong to the OLD size —
+    // M46: the pipeline treats a size change as a supersession boundary 鈥?it
+    // cancels in-flight old-size decodes and drops the old-size memory cache
+    // and pending keys, so a slider drag cannot keep an unbounded old-size
+    // workload running (previously only the ready map here was cleared and
+    // old-size decodes kept decoding to completion).
+    ThumbnailPipeline::instance().setThumbSize(size);
+    // M25: the ready cache and in-flight pending set belong to the OLD size 鈥?
     // a stale 64px pixmap must never masquerade as the new 240px cell, and an
     // old-size result still in flight must not land in the ready map (the
     // result callback re-checks the size, so dropping the pending marker here
@@ -485,10 +317,17 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     QStringList names;
     names.reserve(entries.size());
     qint64 total = 0;
+    // M46: the display-entry index is the delegates' paint-time data source.
+    // It mirrors EXACTLY what buildModel shows (including recursive-search
+    // hits), so size/date never need a filesystem query at paint time.
+    m_displayEntries = entries;
+    m_displayEntryRow.clear();
+    m_displayEntryRow.reserve(static_cast<int>(entries.size()));
     for (int i = 0; i < entries.size(); ++i)
     {
         m_paths.append(entries.at(i).path);
         m_rowByPath.insert(entries.at(i).path, i);
+        m_displayEntryRow.insert(entries.at(i).path, i);
         m_sizeByPath.insert(entries.at(i).path, entries.at(i).size);
         names.append(entries.at(i).name);
         total += entries.at(i).size;
@@ -516,7 +355,7 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     {
         QMutexLocker lk(&m_thumbMtx);
         // M25: keep ready thumbnails for paths that are still in the filtered
-        // model (a search/filter/sort rebuild must not blank the whole grid —
+        // model (a search/filter/sort rebuild must not blank the whole grid 鈥?
         // that caused full-screen flicker). Drop only paths that left the view
         // and all pending markers (their scheduled size may be stale).
         QSet<QString> keep;
@@ -539,7 +378,7 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     emit sequenceChanged(m_currentDir, m_paths);
 
     // M24 (A#8): apply a selection that was requested while this model was
-    // still being rebuilt (e.g. rename 鈫?async rescan 鈫?re-select new name).
+    // still being rebuilt (e.g. rename 閳?async rescan 閳?re-select new name).
     if (!m_pendingSelect.isEmpty() && m_rowByPath.contains(m_pendingSelect))
     {
         selectPath(m_pendingSelect);
@@ -569,7 +408,7 @@ void ThumbnailPanel::onSelectionChanged()
     // source of truth that Compare reads) in sync with the gallery's full
     // multi-selection. QListView::ExtendedSelection already supports Ctrl / Shift
     // / rubber-band multi-select, but only a plain single click pushed the path
-    // into SelectionModel before 鈥?so Compare used to receive a single (stale)
+    // into SelectionModel before 閳?so Compare used to receive a single (stale)
     // image instead of the whole selection. Updating here makes the shared model
     // reflect Ctrl/Shift/box selections uniformly.
     if (m_selection)
@@ -583,7 +422,7 @@ void ThumbnailPanel::onSelectionChanged()
     }
 
     // M23 P2 (selection UX): keep the compare affordance always discoverable.
-    // It shows the live selection count, enables once 2鈥? images are picked,
+    // It shows the live selection count, enables once 2閳? images are picked,
     // and is hidden only when nothing is selected.
     if (n == 0 || m_currentDir.isEmpty())
     {
@@ -592,12 +431,12 @@ void ThumbnailPanel::onSelectionChanged()
     else
     {
         m_compareBtn->setVisible(true);
-        m_compareBtn->setText(QStringLiteral("比较选中 (%1)").arg(n));
+        m_compareBtn->setText(QStringLiteral("姣旇緝閫変腑 (%1)").arg(n));
         const bool canCompare = n >= 2 && n <= 8;
         m_compareBtn->setEnabled(canCompare);
         m_compareBtn->setToolTip(
-            canCompare ? QStringLiteral("将选中的 %1 张图片送入对比").arg(n)
-                       : QStringLiteral("需要选择 2-8 张图片才能对比（当前 %1 张）").arg(n));
+            canCompare ? QStringLiteral("灏嗛€変腑鐨?%1 寮犲浘鐗囬€佸叆瀵规瘮").arg(n)
+                       : QStringLiteral("闇€瑕侀€夋嫨 2-8 寮犲浘鐗囨墠鑳藉姣旓紙褰撳墠 %1 寮狅級").arg(n));
     }
     emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
 }

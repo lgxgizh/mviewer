@@ -4,6 +4,8 @@
 //
 #include "RatingStore.h"
 
+#include "core/filesystem/AtomicFile.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
@@ -104,7 +106,11 @@ void RatingStore::setRating(const std::string &path, int stars)
         else
             m_ratings[key] = stars;
     }
-    save();
+    // M46: user edits are coalesced on the owned worker (same debounce as
+    // flags/recents) instead of a synchronous full-file rewrite on the calling
+    // (UI) thread. Reads are still immediate; flushSave()/the destructor own
+    // the explicit flush boundary, so no last edit is ever lost.
+    scheduleSave();
 }
 
 void RatingStore::clearRating(const std::string &path)
@@ -135,7 +141,7 @@ void RatingStore::setColorLabel(const std::string &path, int label)
         else
             m_colorLabels[key] = label;
     }
-    saveFlags();
+    scheduleSave();
 }
 
 void RatingStore::clearColorLabel(const std::string &path)
@@ -159,7 +165,7 @@ void RatingStore::setRejected(const std::string &path, bool v)
         else
             m_rejected.erase(key);
     }
-    saveFlags();
+    scheduleSave();
 }
 
 bool RatingStore::picked(const std::string &path) const
@@ -178,7 +184,7 @@ void RatingStore::setPicked(const std::string &path, bool v)
         else
             m_picked.erase(key);
     }
-    saveFlags();
+    scheduleSave();
 }
 
 std::vector<std::string> RatingStore::recents() const
@@ -200,9 +206,9 @@ void RatingStore::addRecent(const std::string &path)
             m_recents.pop_back();
     }
     // Recents are browse telemetry, not an explicit edit. Keep the memory
-    // order immediate and coalesce the compatible flags.txt write in a single
-    // owned worker. Explicit rating/flag edits retain their synchronous save.
-    scheduleFlagsSave();
+    // order immediate and coalesce the compatible write in a single owned
+    // worker. Explicit rating/flag edits share the same coalesced path.
+    scheduleSave();
 }
 
 std::vector<std::string> RatingStore::favorites() const
@@ -213,7 +219,7 @@ std::vector<std::string> RatingStore::favorites() const
 
 void RatingStore::setFilePath(const std::string &path)
 {
-    flushFlagsSave();
+    flushSave();
     {
         std::lock_guard<std::mutex> workerLock(m_flagsWorkerMutex);
         m_flagsDirty = false;
@@ -224,14 +230,11 @@ void RatingStore::setFilePath(const std::string &path)
     loadFlags();
 }
 
-void RatingStore::saveFlags() const
+bool RatingStore::save()
 {
-    std::lock_guard<std::mutex> writeLock(m_flagsWriteMutex);
-    saveFlagsSnapshot();
-}
-
-void RatingStore::flushFlagsSave()
-{
+    // M46: explicit flush boundary. Drains any pending worker write and
+    // writes the LATEST snapshot synchronously — the caller can rely on the
+    // complete current state being on disk when this returns.
     bool shouldWrite = false;
     {
         std::lock_guard<std::mutex> lk(m_flagsWorkerMutex);
@@ -239,53 +242,72 @@ void RatingStore::flushFlagsSave()
         if (shouldWrite)
         {
             m_flagsDirty = false;
-            // Wake a worker that is inside the quiet period so it cannot write
-            // the old target after setFilePath() changes m_flagsPath.
+            // Wake a worker that is inside the quiet period so it cannot
+            // write a stale snapshot after this flush.
             m_flagsWorkerCv.notify_all();
         }
     }
-    // Also wait for a worker write already in progress. This makes the
-    // setFilePath() boundary a real flush boundary, not just a dirty-bit test.
+    // Also wait for a worker write already in progress. This makes the flush
+    // boundary a real boundary, not just a dirty-bit test.
     std::lock_guard<std::mutex> writeLock(m_flagsWriteMutex);
     if (shouldWrite)
-        saveFlagsSnapshot();
+        return saveSnapshot();
+    return true;
 }
 
-void RatingStore::saveFlagsSnapshot() const
+void RatingStore::flushSave()
 {
+    (void)save();
+}
+
+bool RatingStore::saveSnapshot() const
+{
+    // Snapshot the complete state under the state mutex, then write each
+    // file through the crash-safe atomic replace helper (temp -> flush/close
+    // -> replace). A failed write leaves the previous official file intact;
+    // both files are individually atomic, and the snapshot is a consistent
+    // point-in-time view of every field.
+    std::string ratingsPath;
     std::string flagsPath;
     std::map<std::string, int> labels;
     std::set<std::string> rejected;
     std::set<std::string> picked;
     std::vector<std::string> recents;
+    std::map<std::string, int> ratings;
     {
         std::lock_guard<std::mutex> lk(m_mutex);
+        ratingsPath = m_filePath;
         flagsPath = m_flagsPath;
         labels = m_colorLabels;
         rejected = m_rejected;
         picked = m_picked;
         recents = m_recents;
+        ratings = m_ratings;
     }
-    std::error_code ec;
-    const auto dir = std::filesystem::path(flagsPath).parent_path();
-    if (!dir.empty())
-        std::filesystem::create_directories(dir, ec);
 
-    std::ofstream out(flagsPath, std::ios::trunc);
-    if (!out)
-        return;
+    std::ostringstream flagsBuf;
     for (const auto &[p, n] : labels)
         if (n > 0)
-            out << "L|" << p << '|' << n << '\n';
+            flagsBuf << "L|" << p << '|' << n << '\n';
     for (const auto &p : rejected)
-        out << "X|" << p << '\n';
+        flagsBuf << "X|" << p << '\n';
     for (const auto &p : picked)
-        out << "K|" << p << '\n';
+        flagsBuf << "K|" << p << '\n';
     for (const auto &p : recents)
-        out << "N|" << p << '\n';
+        flagsBuf << "N|" << p << '\n';
+
+    std::ostringstream ratingsBuf;
+    for (const auto &[p, s] : ratings)
+        ratingsBuf << s << '|' << p << '\n';
+
+    std::string error;
+    bool ok = atomicWriteFile(ratingsPath, ratingsBuf.str(), &error);
+    if (!atomicWriteFile(flagsPath, flagsBuf.str(), &error) && ok)
+        ok = false;
+    return ok;
 }
 
-void RatingStore::scheduleFlagsSave()
+void RatingStore::scheduleSave()
 {
     {
         std::lock_guard<std::mutex> lk(m_flagsWorkerMutex);
@@ -306,9 +328,9 @@ void RatingStore::flagsWorkerLoop()
             return;
 
         // Debounce a burst of A -> B -> C selections. Keep the dirty bit set
-        // while waiting so flushFlagsSave() can synchronously cancel this
-        // quiet period; the serial distinguishes a new change from the
-        // notification generated by the flush itself.
+        // while waiting so flushSave() can synchronously cancel this quiet
+        // period; the serial distinguishes a new change from the notification
+        // generated by the flush itself.
         uint64_t observed = m_flagsChangeSerial;
         bool write = m_flagsWorkerStop;
         while (!write && m_flagsDirty)
@@ -331,20 +353,34 @@ void RatingStore::flagsWorkerLoop()
                 break;
             }
             if (!m_flagsDirty)
-                break; // flushFlagsSave() owns the write
+                break; // flushSave() owns the write
             observed = m_flagsChangeSerial; // restart the quiet period
         }
         if (!write)
             continue;
         m_flagsDirty = false;
         lk.unlock();
+        bool ok = false;
         {
             std::lock_guard<std::mutex> writeLock(m_flagsWriteMutex);
-            saveFlagsSnapshot();
+            ok = saveSnapshot();
         }
         lk.lock();
-        if (m_flagsWorkerStop && !m_flagsDirty)
+        if (m_flagsWorkerStop)
+        {
+            // Shutdown: one final write attempt was made; leave even on
+            // failure (the official file was never corrupted, and the caller
+            // can observe the failure through save()).
+            m_flagsDirty = false;
             return;
+        }
+        if (!ok)
+        {
+            // M46: a failed write must NEVER silently drop the latest user
+            // state. Re-arm the dirty bit so the next quiet period retries;
+            // the retry cadence is the same 100 ms debounce.
+            m_flagsDirty = true;
+        }
     }
 }
 
@@ -428,22 +464,6 @@ bool RatingStore::load()
         if (!p.empty())
             m_ratings[p] = stars;
     }
-    return true;
-}
-
-bool RatingStore::save() const
-{
-    std::lock_guard<std::mutex> lk(m_mutex);
-    std::error_code ec;
-    const auto dir = std::filesystem::path(m_filePath).parent_path();
-    if (!dir.empty())
-        std::filesystem::create_directories(dir, ec);
-
-    std::ofstream out(m_filePath, std::ios::trunc);
-    if (!out)
-        return false;
-    for (const auto &[p, s] : m_ratings)
-        out << s << '|' << p << '\n';
     return true;
 }
 

@@ -6,8 +6,11 @@
 #   R1  UI / Application layer must NOT include Cache headers directly
 #       (e.g. ThumbnailCache / CacheManager / ImageCache). Cache is an
 #       infrastructure concern; UI should reach pixels through Repository/Domain.
-#   R2  Widget (UI) layer must NOT include the Repository header directly
-#       (ImageRepository). It should go through the Application layer.
+#   R2  Widget (UI), Application and Compare layers must NOT include the
+#       Repository header directly (ImageRepository). They go through the
+#       Application-layer ImageLoadingService / Core ImageLoadingFacade
+#       (M44/M46: the loading facade exists and every product loading access
+#       converges on it — there is no sanctioned direct-Repository exception).
 #   R3  Compare module must NOT depend on the Thumbnail module
 #       (ThumbnailPanel / ThumbnailProvider / ThumbnailCache). Coupling these
 #       two view modules is the classic source of sync bugs.
@@ -21,6 +24,8 @@
 #
 # Output: human report to stdout; with -Json emits a JSON object (also to
 # -OutJson) consumed by scripts/health_score.ps1. Exit code is always 0.
+# The M46 regression test (architecture_gate_test.ps1) proves both directions:
+# a planted violation is flagged, and the real tree reports 0 warnings.
 
 [CmdletBinding()]
 param(
@@ -66,11 +71,11 @@ foreach ($f in $src) {
     elseif ($rel -match '[\\/]widgets[\\/]') { $layer = 'ui' }
     elseif ($rel -match '^[\\/]?src[\\/][^\\/]+\.') { $layer = 'ui' }  # src root TU (mainwindow.cpp etc.)
 
-    # View widgets that are the image-loading boundary: presenting decoded
-    # pixels to the user is their core responsibility, and the project currently
-    # has no Application-layer image-loading facade. They are the sanctioned
-    # Repository-access edge (R2) until such a facade is introduced.
-    $isViewLoader = ($f.Name -eq 'imageviewer.cpp' -or $f.Name -eq 'previewpanel.cpp')
+    # M46: the historical imageviewer.cpp / previewpanel.cpp exemption is
+    # GONE — the Application/Core loading facades exist and Preview/Viewer/
+    # Compare all load through them, so a direct Repository include anywhere
+    # in UI/Application/Compare is a real layering violation, not a sanctioned
+    # boundary.
 
     # only UI/Application/Compare/other can violate R1-R3; domain R4 checked below
     $lines = Get-Content $f.FullName -Encoding UTF8
@@ -84,17 +89,14 @@ foreach ($f in $src) {
         $ownBase = $f.BaseName
         if ($incBase -eq $ownBase) { continue }
 
-        if ($layer -in @('ui', 'application')) {
+        if ($layer -in @('ui', 'application', 'compare')) {
             if (Test-Forbidden $inc '(?i)(cachemanager|thumbnailcache|imagecache|^cache\.h$)') {
                 $violations.Add([ordered]@{ file=$rel; line=($i+1); include=$inc; rule='R1';
                     message='UI/Application references Cache directly (use Repository/Domain)' })
             }
             if (Test-Forbidden $inc '(?i)(repository|imagerepository)') {
-                # imageviewer / previewpanel are the sanctioned loading boundary
-                if (-not $isViewLoader) {
-                    $violations.Add([ordered]@{ file=$rel; line=($i+1); include=$inc; rule='R2';
-                        message='Widget accesses Repository directly (go through Application layer)' })
-                }
+                $violations.Add([ordered]@{ file=$rel; line=($i+1); include=$inc; rule='R2';
+                    message='Widget/Compare accesses Repository directly (go through the ImageLoading facade)' })
             }
         }
         if ($layer -eq 'compare') {

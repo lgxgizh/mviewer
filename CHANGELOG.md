@@ -1,5 +1,52 @@
 # Changelog
 
+## [Unreleased] — M46 real-world workflow reliability & long-session release qualification
+
+### Fixed
+
+- **Async lifetime contract (P0):** image loads now enforce a strict
+  cancellation/delivery contract. `ImageRepository` gained a delivery gate and
+  an optional consumer `AsyncLifetimeToken`; `cancelAsync()` returns only after
+  any already-started client delivery finishes, so after a cancel (or a
+  destroyed consumer) no new callback can start. The ImageViewer completion
+  path no longer captures a raw `this`. Deterministic race tests cover
+  decode-done vs destroy, cancel during terminal delivery, re-entrant cancel,
+  A→B→A, and 300-cycle churn (`m46_repository_tests`).
+- **Browse paint path (P0):** the Details/Thumbnail/List delegates and the
+  Preview panel paint exclusively from scan-cached entry data — no
+  `QFileInfo` size/mtime queries on the paint path (regression proves
+  pixel-identical renders after the source files are deleted).
+- **Browse latest-intent priority (P0):** superseded directory scans,
+  dimension probes and recursive walks stop cooperatively via a shared
+  generation token; the app-global busy cursor is ref-counted UI-side so
+  dropped/cancelled queued scans can never strand it; thumbnail size changes
+  are a real supersession boundary (old-size in-flight decodes are cancelled,
+  not decoded to completion).
+- **Crash-safe persistence (P1):** Rating/Tag/Sidecar stores now write through
+  a Qt-free atomic-replace helper (temp → flush/close → replace). Failed
+  writes leave the previous official file intact; RatingStore edits coalesce
+  on its owned worker with an explicit flush boundary and retry-on-failure.
+  Fault-injection regressions cover temp/write/replace failures, stale temps,
+  rapid updates and shutdown flush (`m46_persistence_tests`).
+- **Architecture gate honesty (P2):** the stale imageviewer/preview
+  loading-boundary exemption is removed; R2 now also covers the Compare layer;
+  Preview and Compare load through the Application/Core loading facades. A new
+  regression plants violations and asserts the real tree reports 0 warnings.
+- **Performance/Qt claim reconciliation (P2):** README now separates the
+  automated budget gate from the manual product targets, and the Qt matrix is
+  explicit: minimum/CI 6.8.0, dev-verified 6.10.3 (no stray 6.11 claims).
+
+### Added
+
+- `mviewer_m46_workflow_soak` — real product-loop soak (Browse → scroll/size
+  churn → Viewer → next/prev → zoom → Compare → pair change → Analyze →
+  Export/cancel → directory switch) with warm-up → steady → idle-convergence
+  verdicts (pools/pipeline → 0, cache obeys caps, RSS ≤ max(128 MiB, 15%),
+  handles ≤ +64, no temp growth). Short form is a CTest; `--extended` for the
+  manual Release qualification.
+- `architecture_gate_regression`, `m46_repository_tests`, `m46_thumbnail_tests`,
+  `m46_browse_tests`, `m46_persistence_tests`, `m46_workflow_soak` CTest gates.
+
 ## [Unreleased] — M45 native Windows qualification and desktop workflow convergence
 
 ### Fixed

@@ -13,7 +13,6 @@
 #include <QContextMenuEvent>
 #include <QDir>
 #include <QFileDialog>
-#include <QFileInfo>
 #include <QKeyEvent>
 #include <QMatrix4x4>
 #include <QMetaObject>

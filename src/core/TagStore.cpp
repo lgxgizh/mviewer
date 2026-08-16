@@ -4,6 +4,8 @@
 //
 #include "TagStore.h"
 
+#include "core/filesystem/AtomicFile.h"
+
 #include <algorithm>
 #include <cstdlib>
 #include <filesystem>
@@ -170,19 +172,16 @@ bool TagStore::load()
 
 bool TagStore::save() const
 {
+    // M46: crash-safe atomic replace (temp -> flush/close -> replace). A
+    // failed write leaves the previous official tags file intact; the file
+    // can never be observed half-written.
     std::lock_guard<std::mutex> lk(m_mutex);
-    std::error_code ec;
-    const auto dir = std::filesystem::path(m_filePath).parent_path();
-    if (!dir.empty())
-        std::filesystem::create_directories(dir, ec);
-
-    std::ofstream out(m_filePath, std::ios::trunc);
-    if (!out)
-        return false;
+    std::ostringstream buf;
     for (const auto &[p, ts] : m_tags)
         for (const auto &t : ts)
-            out << t << '|' << p << '\n';
-    return true;
+            buf << t << '|' << p << '\n';
+    std::string error;
+    return atomicWriteFile(m_filePath, buf.str(), &error);
 }
 
 } // namespace mviewer::core

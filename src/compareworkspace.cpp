@@ -4,6 +4,7 @@
 
 CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 {
+    m_lifetime = mviewer::core::AsyncLifetimeToken::create();
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
 
@@ -56,6 +57,11 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 
 CompareWorkspace::~CompareWorkspace()
 {
+    // M46: invalidate the consumer-lifetime token first so the repository
+    // suppresses every not-yet-started client delivery for this workspace.
+    // The batch cancellation below then also waits for any delivery that
+    // already started, closing the decode-done vs destruction race.
+    m_lifetime->invalidate();
     // A batch completion is bookkeeping, not cancellation. Every request is
     // accounted exactly once when a batch is superseded so a cancelled queued
     // decode cannot leave `remaining` permanently non-zero. The generation
@@ -155,13 +161,14 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
                                          const std::vector<std::string> &paths)
 {
     auto self = std::make_shared<QPointer<CompareWorkspace>>(this);
+    auto lifetime = m_lifetime;
     const ImageLoadOptions opts{true, false, 256};
     for (size_t i = 0; i < paths.size(); ++i)
     {
         auto &request = *batch->requests[i];
-        auto handle = ImageRepository::instance().loadAsyncCancellable(
+        auto handle = mviewer::application::ImageLoadingService::instance().loadAsyncCancellable(
             paths[i],
-            [self, batch, i](const ImageRepository::Result &res)
+            [self, batch, i](const mviewer::application::ImageLoadingService::Result &res)
             {
                 if (!CompareWorkspace::accountLoadRequest(batch, i, &res) || !qApp)
                     return;
@@ -177,14 +184,14 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
                     },
                     Qt::QueuedConnection);
             },
-            opts);
+            opts, lifetime);
         std::lock_guard<std::mutex> lk(batch->handlesMutex);
         request.handle = std::move(handle);
     }
 }
 
 bool CompareWorkspace::accountLoadRequest(const std::shared_ptr<LoadBatch> &batch, size_t index,
-                                          const ImageRepository::Result *result)
+                                          const mviewer::application::ImageLoadingService::Result *result)
 {
     if (!batch || index >= batch->requests.size())
         return false;
@@ -206,12 +213,12 @@ void CompareWorkspace::cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch)
         return;
     for (size_t i = 0; i < batch->requests.size(); ++i)
     {
-        ImageRepository::AsyncRequestHandle handle;
+        mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
         {
             std::lock_guard<std::mutex> lk(batch->handlesMutex);
             handle = std::move(batch->requests[i]->handle);
         }
-        ImageRepository::instance().cancelAsync(handle);
+        mviewer::application::ImageLoadingService::instance().cancelAsync(handle);
         // ImageRepository deliberately suppresses callbacks after cancel. Do
         // the batch's exactly-once accounting locally so cancellation cannot
         // strand the terminal completion on a queued request.

@@ -262,20 +262,25 @@ bool ThumbnailPanel::prepareFilterSource(const QString &t, QList<Entry> &src)
         {
             const QString currentDir = m_currentDir;
             auto alive = m_alive;
+            auto genToken = m_scanGenToken;
             const QPointer<ThumbnailPanel> self(this);
             const int gen = m_dirGen;
             m_recursiveSearching = true;
             m_recursiveHitsFor.clear();
             (void)QtConcurrent::run(
                 &m_scanPool,
-                [self, alive, gen, currentDir, t]() mutable
+                [self, alive, gen, genToken, currentDir, t]() mutable
                 {
                     QList<Entry> found;
                     QDirIterator it(currentDir, QDir::Files | QDir::Readable | QDir::NoDotAndDotDot,
                                     QDirIterator::Subdirectories);
                     while (it.hasNext())
                     {
-                        if (!alive->load())
+                        // M46: cooperative stop on panel death or directory
+                        // supersession — a stale recursive walk must not keep
+                        // enumerating the new folder's tree.
+                        if (!alive->load() ||
+                            genToken->load(std::memory_order_acquire) != static_cast<uint64_t>(gen))
                             return;
                         it.next();
                         const QFileInfo fi = it.fileInfo();
@@ -285,8 +290,10 @@ bool ThumbnailPanel::prepareFilterSource(const QString &t, QList<Entry> &src)
                             !fi.fileName().toLower().contains(t))
                             continue;
                         const QString sub = QDir(currentDir).relativeFilePath(fi.absolutePath());
-                        found.append(
-                            {fi.absoluteFilePath(), fi.fileName() + " [" + sub + "]", fi.size()});
+                        // M46: the Entry carries scan-time size AND mtime so the
+                        // Details delegate can paint from cache only.
+                        found.append({fi.absoluteFilePath(), fi.fileName() + " [" + sub + "]",
+                                      fi.size(), 0, 0, fi.lastModified()});
                     }
                     QMetaObject::invokeMethod(
                         qApp,

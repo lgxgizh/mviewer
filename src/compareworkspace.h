@@ -1,14 +1,15 @@
 #pragma once
 
+#include "application/ImageLoadingService.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/ExportReport.h"
 #include "core/analysis/PixelInspector.h"
+#include "core/async/AsyncLifetimeToken.h"
 #include "core/compare/CompareEngine.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/compare/Histogram.h"
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
-#include "core/image/ImageRepository.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QCheckBox>
@@ -205,14 +206,19 @@ class CompareWorkspace : public QWidget
 
     // M28 P1-01: async image loading (decode happens on the DecodePool, never
     // on the UI thread). m_loadGen supersedes stale batches; a session applied
-    // while a load is in flight is deferred until finishLoad().
+    // while a load is in flight is deferred until finishLoad(). M46: loading
+    // goes through the Application-layer ImageLoadingService and every request
+    // carries this workspace's lifetime token, invalidated in the destructor —
+    // a batch completion that races workspace destruction is suppressed before
+    // its client callback starts.
     uint64_t m_loadGen = 0;
     bool m_loadInFlight = false;
+    std::shared_ptr<mviewer::core::AsyncLifetimeToken> m_lifetime;
     std::optional<mviewer::domain::CompareSession> m_pendingSession;
     struct LoadRequest
     {
         std::atomic<bool> accounted{false};
-        ImageRepository::AsyncRequestHandle handle;
+        mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
     };
     struct LoadBatch
     {
@@ -225,7 +231,7 @@ class CompareWorkspace : public QWidget
     };
     std::shared_ptr<LoadBatch> m_loadBatch;
     static bool accountLoadRequest(const std::shared_ptr<LoadBatch> &batch, size_t index,
-                                   const ImageRepository::Result *result);
+                                   const mviewer::application::ImageLoadingService::Result *result);
     void queueLoadRequests(const std::shared_ptr<LoadBatch> &batch,
                            const std::vector<std::string> &paths);
     void cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch);

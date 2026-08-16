@@ -88,6 +88,27 @@ struct ThumbnailPipeline
         m_predictive = n;
     }
 
+    // M46: thumbnail-size change is a REAL supersession boundary. In-flight
+    // decodes at the old size are cancelled (their handles are dropped and the
+    // generation is bumped, so a late old-size result is neither cached nor
+    // delivered), the old-size memory cache and pending keys are dropped, and
+    // the caller re-schedules the visible window at the new size. Previously a
+    // size change only re-queued the new size while old-size decodes kept
+    // running and repopulated the cache — stale workload stayed unbounded
+    // during a drag of the size slider.
+    void setThumbSize(int size)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        if (size == thumbSize)
+            return;
+        thumbSize = size;
+        ++m_gen;
+        cancelHandlesLocked();
+        m_memCache.clear();
+        m_lru.clear();
+        m_pending.clear();
+    }
+
     // Synchronous cache probe: returns the cached thumbnail at `size` if
     // present, else null and kicks an async decode (respecting
     // visible/predictive ordering).

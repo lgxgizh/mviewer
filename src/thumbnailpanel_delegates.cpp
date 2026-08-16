@@ -23,17 +23,41 @@ QColor blended(const QColor &base, const QColor &accent, int alpha)
     return result;
 }
 
-QString thumbInfoText(const ThumbnailPanel::Entry *entry, const QFileInfo &fileInfo)
+// M46: paint-path helpers are STRICTLY lexical. No QFileInfo is constructed in
+// any delegate paint call, so scrolling/repaint can never stall on disk, NAS,
+// file locks or antivirus metadata queries. Size/mtime come from the
+// scan-cached Entry; the suffix/fileName helpers below only split the path
+// string (QFileInfo::fileName()/suffix() are lexical, but keeping them out of
+// the hot path makes the "paint does no filesystem work" property structural).
+
+QString fileSuffixFromPath(const QString &path)
 {
-    const QString format = fileInfo.suffix().isEmpty() ? QStringLiteral("IMAGE")
-                                                        : fileInfo.suffix().toUpper();
+    const int slash = qMax(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+    const QString base = slash >= 0 ? path.mid(slash + 1) : path;
+    const int dot = base.lastIndexOf('.');
+    if (dot <= 0 || dot == base.size() - 1)
+        return QString();
+    return base.mid(dot + 1);
+}
+
+QString fileNameFromPath(const QString &path)
+{
+    const int slash = qMax(path.lastIndexOf('/'), path.lastIndexOf('\\'));
+    return slash >= 0 ? path.mid(slash + 1) : path;
+}
+
+QString thumbInfoText(const ThumbnailPanel::Entry *entry, const QString &suffix)
+{
+    const QString format = suffix.isEmpty() ? QStringLiteral("IMAGE") : suffix.toUpper();
     if (entry && entry->width > 0 && entry->height > 0)
         return QStringLiteral("%1 × %2 · %3")
             .arg(entry->width)
             .arg(entry->height)
             .arg(format);
 
-    const qint64 bytes = entry ? entry->size : fileInfo.size();
+    // M46: byte count comes from the scan-cached Entry; a missing entry shows
+    // "0 B" instead of stat()ing the file during paint.
+    const qint64 bytes = entry ? entry->size : 0;
     return format + QStringLiteral(" · ") + formatFileSize(bytes);
 }
 } // namespace
@@ -47,7 +71,8 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
 
     const QString path = paths.at(index.row());
     const QString name = index.data(Qt::DisplayRole).toString();
-    const QFileInfo fileInfo(path);
+    // M46: paint reads ONLY scan-cached entry data — no QFileInfo here.
+    const ThumbnailPanel::Entry *entry = m_panel->entryForPath(path);
     const bool selected = option.state & QStyle::State_Selected;
     const bool hovered = option.state & QStyle::State_MouseOver;
     const ThumbnailPanel::ViewMode mode = m_panel->viewMode();
@@ -118,7 +143,7 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
         infoFont.setPointSize(qMax(7, infoFont.pointSize() - 1));
         painter->setFont(infoFont);
         painter->setPen(option.palette.color(QPalette::Text));
-        const QString info = thumbInfoText(m_panel->entryForPath(path), fileInfo);
+        const QString info = thumbInfoText(entry, fileSuffixFromPath(path));
         const QString infoText =
             painter->fontMetrics().elidedText(info, Qt::ElideRight, infoRect.width());
         painter->drawText(infoRect, Qt::AlignLeft | Qt::AlignVCenter | Qt::TextSingleLine,
@@ -262,7 +287,15 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
         return;
     const QString path = paths.at(index.row());
     const QString name = index.data(Qt::DisplayRole).toString();
-    const QFileInfo fi(path);
+    // M46: the Details row paints EXCLUSIVELY from scan-cached Entry data.
+    // Constructing QFileInfo here and calling size()/lastModified() performed
+    // two filesystem stats per row per repaint (stalls on NAS/network/locked
+    // files); size/mtime are now captured once by the directory scan and the
+    // suffix is parsed lexically.
+    const ThumbnailPanel::Entry *entry = m_panel->entryForPath(path);
+    const qint64 cachedSize = entry ? entry->size : -1;
+    const QDateTime cachedMtime = entry ? entry->date : QDateTime();
+    const QString cachedSuffix = fileSuffixFromPath(path);
 
     const bool sel = option.state & QStyle::State_Selected;
     const bool hover = option.state & QStyle::State_MouseOver;
@@ -321,22 +354,23 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
     // to the filtered model and cannot index m_allEntries.
     painter->setFont(option.font);
     QString resStr = "-";
-    if (const Entry *entry = m_panel->entryForPath(path))
-    {
-        if (entry->width > 0 && entry->height > 0)
-            resStr = QString("%1×%2").arg(entry->width).arg(entry->height);
-    }
+    if (entry && entry->width > 0 && entry->height > 0)
+        resStr = QString("%1×%2").arg(entry->width).arg(entry->height);
     painter->drawText(L.res, Qt::AlignVCenter | Qt::TextSingleLine, resStr);
 
-    // Column 4: file size
-    painter->drawText(L.size, Qt::AlignVCenter | Qt::TextSingleLine, formatFileSize(fi.size()));
+    // Column 4: file size (scan-cached; "-" when the entry is unknown).
+    painter->drawText(L.size, Qt::AlignVCenter | Qt::TextSingleLine,
+                      cachedSize >= 0 ? formatFileSize(cachedSize) : QStringLiteral("-"));
 
-    // Column 5: modified date
+    // Column 5: modified date (scan-cached).
     painter->drawText(L.date, Qt::AlignVCenter | Qt::TextSingleLine,
-                      fi.lastModified().toString("yyyy-MM-dd hh:mm:ss"));
+                      cachedMtime.isValid()
+                          ? cachedMtime.toString("yyyy-MM-dd hh:mm:ss")
+                          : QStringLiteral("-"));
 
-    // Column 6: format
-    painter->drawText(L.fmt, Qt::AlignVCenter | Qt::TextSingleLine, fi.suffix().toUpper());
+    // Column 6: format (lexical suffix, never a filesystem query).
+    painter->drawText(L.fmt, Qt::AlignVCenter | Qt::TextSingleLine,
+                      cachedSuffix.isEmpty() ? QStringLiteral("IMAGE") : cachedSuffix.toUpper());
 
     // Column 7: rating (P0-4). Draw filled/empty stars from the RatingStore.
     const auto &rs = mviewer::core::RatingStore::instance();
@@ -428,7 +462,8 @@ void ThumbnailPanel::ListDelegate::paint(QPainter *painter, const QStyleOptionVi
     if (index.row() < 0 || index.row() >= paths.size())
         return;
     const QString path = paths.at(index.row());
-    const QString name = QFileInfo(path).fileName();
+    // M46: lexical fileName only — no QFileInfo on the paint path.
+    const QString name = fileNameFromPath(path);
 
     const bool sel = option.state & QStyle::State_Selected;
     const bool hover = option.state & QStyle::State_MouseOver;

@@ -1,7 +1,6 @@
 #include "previewpanel.h"
 
 #include "core/image/Decoder.h"
-#include "core/image/ImageRepository.h"
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
 
@@ -19,17 +18,20 @@
 
 PreviewPanel::PreviewPanel(QWidget *parent) : QWidget(parent)
 {
+    m_lifetime = mviewer::core::AsyncLifetimeToken::create();
     setMinimumSize(220, 220);
 }
 
 PreviewPanel::~PreviewPanel()
 {
+    m_lifetime->invalidate();
     cancelPending();
 }
 
 std::string PreviewPanel::previewCacheKey(const std::string &path)
 {
-    return ImageRepository::instance().makeKey(path) + "#preview" + std::to_string(kPreviewMaxEdge);
+    return mviewer::application::ImageLoadingService::instance().makeKey(path) + "#preview" +
+           std::to_string(kPreviewMaxEdge);
 }
 
 void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
@@ -105,11 +107,12 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
     const int knownH = knownSourceSize.height();
     const qint64 knownSize = knownFileSize;
     QPointer<PreviewPanel> guard(this);
+    auto lifetime = m_lifetime;
     const std::string stdPath = path.toStdString();
 
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Thumbnail,
-        [stdPath, path, gen, guard, knownW, knownH, knownSize](
+        [stdPath, path, gen, guard, lifetime, knownW, knownH, knownSize](
             const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
@@ -124,7 +127,8 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
             bool fileSizeKnown = knownSize >= 0;
             mviewer::domain::ImageMetadata meta;
             ImageData img;
-            if (ImageRepository::instance().getPreviewCache(cacheKey, img))
+            if (mviewer::application::ImageLoadingService::instance().getPreviewCache(cacheKey,
+                                                                                       img))
             {
                 // Warm scaled preview — reuse it, still recompute the stats on
                 // the worker from the cached buffer.
@@ -134,7 +138,8 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
                     ImageData decoded = Decoder::decodeScaled(stdPath, kPreviewMaxEdge, meta);
                     img = mvcore::toDisplayImageData(decoded, meta);
                     if (!img.isNull())
-                        ImageRepository::instance().putPreviewCache(cacheKey, img);
+                        mviewer::application::ImageLoadingService::instance().putPreviewCache(
+                            cacheKey, img);
             }
             if (!img.isNull())
             {
@@ -197,11 +202,17 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
                 // has no need to re-run ICC conversion.
                 qimg = mvcore::toQImage(img);
             QMetaObject::invokeMethod(qApp,
-                                      [path, gen, guard, qimg, stats, srcW, srcH, fileSize,
-                                       sourceKnown, fileSizeKnown]()
+                                      [path, gen, guard, lifetime, qimg, stats, srcW, srcH,
+                                       fileSize, sourceKnown, fileSizeKnown]()
                                       {
                                           PreviewPanel *panel = guard.data();
                                           if (!panel)
+                                              return;
+                                          // M46: the panel's lifetime token is
+                                          // invalidated in its destructor before
+                                          // the QPointer guard clears — either
+                                          // check alone stops a stale delivery.
+                                          if (!lifetime->isAlive())
                                               return;
                                           // Stale-callback guard: discard deliveries from
                                           // superseded requests (different path OR an older
@@ -346,7 +357,10 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
     QFont f = painter.font();
     f.setPointSize(9);
     painter.setFont(f);
-    const QString name = QFileInfo(m_presentedPath).fileName();
+    // M46: lexical fileName — paint never constructs QFileInfo.
+    const QString pathStr = m_presentedPath;
+    const int slash = qMax(pathStr.lastIndexOf('/'), pathStr.lastIndexOf('\\'));
+    const QString name = slash >= 0 ? pathStr.mid(slash + 1) : pathStr;
     QString identity = name;
     if (m_sourceDimensionsKnown)
         identity += "\n" + QString::number(m_imgW) + "×" + QString::number(m_imgH);

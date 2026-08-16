@@ -18,7 +18,6 @@
 #include "core/compare/DifferenceEngine.h"
 #include "core/compare/Histogram.h"
 #include "core/image/ImageBuffer.h"
-#include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
 

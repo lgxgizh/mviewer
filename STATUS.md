@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-08-16 · Version: **1.0.9 release line** · Verified release tag: **v1.0.9**
+> Snapshot: 2026-08-17 · Version: **1.0.9 release line** · Verified release tag: **v1.0.9**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -16,8 +16,52 @@
 > `docs/review/M42_REALWORLD_RESOURCE_BOUNDEDNESS_2026-08-15.md`,
 > `docs/review/M43_COMPARE_ANALYSIS_FIDELITY_2026-08-15.md`,
 > `docs/review/M44_RELEASE_READINESS_STRUCTURAL_CONVERGENCE_2026-08-15.md`,
-> `docs/review/M45_NATIVE_WINDOWS_PRODUCT_QUALIFICATION_2026-08-16.md` and
+> `docs/review/M45_NATIVE_WINDOWS_PRODUCT_QUALIFICATION_2026-08-16.md`,
+> `docs/review/M46_RELIABILITY_SOAK_2026-08-17.md`,
+> `docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md` and
 > `.\build.ps1 Test`.
+
+## M46 — Real-world workflow reliability & long-session release qualification (2026-08-17)
+
+- **Async lifetime contract:** ImageRepository now enforces a strict
+  cancellation/delivery contract — consumer `AsyncLifetimeToken` (Qt-free,
+  invalidated in the owner destructor), a delivery gate that makes
+  `cancelAsync()` wait for an already-started delivery (so after cancel
+  returns no callback is running or will start), and no raw-`this` captures in
+  the ImageViewer completion path. Deterministic latch/barrier tests cover
+  decode-done vs destroy, cancel during terminal delivery, re-entrant cancel,
+  A→B→A, queued/running cancel and 300-cycle churn (`m46_repository_tests`).
+- **Browse latest-intent priority:** Details/Thumbnail delegates paint
+  EXCLUSIVELY from scan-cached Entry data (no `QFileInfo` size/mtime in any
+  paint path — proven by pixel-identical renders after the source files are
+  deleted). Directory scans, dimension probes and recursive walks stop
+  cooperatively on supersession (shared generation token; bounded-iteration
+  probes), the busy cursor is ref-counted UI-side (balanced even when queued
+  scans are dropped by destruction), and `ThumbnailPipeline::setThumbSize()`
+  makes a size change a real supersession boundary (old-size in-flight work is
+  cancelled, not decoded to completion).
+- **Persistence crash safety:** new Qt-free `AtomicFile` helper
+  (temp → flush/close → atomic replace on Windows via MoveFileExW); failed
+  writes leave the previous official file byte-identical. RatingStore edits
+  coalesce on its owned worker with an explicit `save()` flush boundary and a
+  retry-on-failure policy; TagStore/SidecarStore use atomic replace. Fault
+  injection covers temp-create/write/replace failures, stale temps, rapid
+  updates and the shutdown flush (`m46_persistence_tests`).
+- **Workflow soak:** `mviewer_m46_workflow_soak` drives the real product loop
+  (Browse → scroll/size churn → Viewer → next/prev → zoom → Compare → pair
+  change → Analyze → Export/cancel → directory switch) with
+  warm-up → steady → idle-convergence verdicts: pools/dependency graph/
+  pipeline → 0, cache obeys caps, RSS ≤ max(128 MiB, 15%), handles ≤ +64, no
+  temp growth. Short form is a CTest; `--extended` is the manual Release form.
+- **Architecture gate:** the stale imageviewer/preview loading-boundary
+  exemption is removed; R2 now covers the Compare layer too; Preview/Compare
+  load through the Application/Core facades. The gate's 0 warnings is backed
+  by a regression test that plants violations and checks the real tree
+  (`architecture_gate_regression`). Qt claims reconciled in README/docs
+  (min 6.8 CI / dev-verified 6.10.3).
+- **Manual sign-off:** interactive GUI, physical ICC, mixed-DPI, two-volume,
+  native dialogs, long-path/special-filename and multi-hour soak remain
+  **MANUAL / BLOCKED** — see `docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md`.
 
 ## M45 — Native Windows qualification (2026-08-16)
 

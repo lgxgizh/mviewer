@@ -1,6 +1,7 @@
 // M17: SidecarStore implementation — per-image .xmp sidecar file I/O.
 #include "SidecarStore.h"
 #include "RatingStore.h"
+#include "core/filesystem/AtomicFile.h"
 #include "core/image/ImageFormats.h"
 #include <algorithm>
 #include <ctime>
@@ -184,16 +185,10 @@ bool SidecarStore::writeSidecar(const std::string &imagePath)
     }
 
     const std::string spath = sidecarPath(imagePath);
-    std::error_code ec;
-    const auto dir = std::filesystem::path(spath).parent_path();
-    if (!dir.empty())
-        std::filesystem::create_directories(dir, ec);
-
-    std::ofstream out(spath, std::ios::trunc);
-    if (!out)
-        return false;
-    out << toJson(imagePath);
-    return true;
+    // M46: crash-safe atomic replace — a failed sidecar write leaves the
+    // previous .xmp intact and can never leave a half-written JSON file.
+    std::string error;
+    return atomicWriteFile(spath, toJson(imagePath), &error);
 }
 
 bool SidecarStore::readSidecar(const std::string &imagePath)
