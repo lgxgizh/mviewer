@@ -18,6 +18,7 @@ Fixture matrix (M47 Phase 0):
   high_compression.jpg    6000x4000 JPEG at quality 4 (heavy artifacts)
   exif_orientation6.jpg   4096x4096 JPEG with EXIF orientation 6 (rotate 90 CW)
   exif_orientation8.jpg   4096x4096 JPEG with EXIF orientation 8 (rotate 270 CW)
+  exif_orientation6_wide.jpg 4000x2000 JPEG with EXIF orientation 6 (displayed 2000x4000)
   icc_adobe.jpg           2048x2048 JPEG with an embedded AdobeRGB ICC profile
   extreme_wide.jpg        20000x400 JPEG (extreme aspect, landscape)
   extreme_tall.jpg        400x20000 JPEG (extreme aspect, portrait)
@@ -53,6 +54,7 @@ REQUIRED = {
     "high_compression.jpg": (6000, 4000, 100_000),
     "exif_orientation6.jpg": (4096, 4096, 100_000),
     "exif_orientation8.jpg": (4096, 4096, 100_000),
+    "exif_orientation6_wide.jpg": (4000, 2000, 100_000),
     "icc_adobe.jpg": (2048, 2048, 50_000),
     "extreme_wide.jpg": (20000, 400, 100_000),
     "extreme_tall.jpg": (400, 20000, 100_000),
@@ -175,6 +177,15 @@ def generate(root: str) -> None:
         ex[_ORIENTATION_TAG] = 8
         img.save(path("exif_orientation8.jpg"), "JPEG", quality=80, exif=ex.tobytes())
         print("generated exif_orientation8.jpg")
+
+    if want("exif_orientation6_wide.jpg"):
+        # Non-square oriented fixture: the probe must report the DISPLAYED
+        # geometry (2000x4000), not the raw 4000x2000, for orientation 6.
+        img = make_pattern(4000, 2000)
+        ex = Image.Exif()
+        ex[_ORIENTATION_TAG] = 6
+        img.save(path("exif_orientation6_wide.jpg"), "JPEG", quality=80, exif=ex.tobytes())
+        print("generated exif_orientation6_wide.jpg")
 
     if want("icc_adobe.jpg"):
         img = make_pattern(2048, 2048)

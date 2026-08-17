@@ -22,6 +22,7 @@ add_library(mviewer_core SHARED
     core/image/ImageRepository_async.cpp
     core/image/ImageRepository_dir.cpp
     core/image/ImageRepository_load.cpp
+    core/image/SourceImage.cpp
     core/image/IccProfile.cpp
     core/image/MetadataReader.cpp
     core/image/RawMetadata.cpp
@@ -1378,6 +1379,25 @@ target_compile_features(m46_thumbnail_tests PRIVATE cxx_std_20)
 target_include_directories(m46_thumbnail_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME m46_thumbnail_tests COMMAND m46_thumbnail_tests)
 set_tests_properties(m46_thumbnail_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+
+# ─── M47 Phase 1: source-backed image abstraction ────────────────────────────
+# Capability contract (probe without decode, native-LOD, bounded region,
+# native-vs-fallback classification) over the deterministic large corpus.
+add_executable(m47_source_tests
+    core/test_m47_source.cpp
+)
+target_link_libraries(m47_source_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(m47_source_tests PRIVATE cxx_std_20)
+target_include_directories(m47_source_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m47_source_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m47_source_tests COMMAND m47_source_tests)
+set_tests_properties(m47_source_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 
 # ─── M46: Browse real-world reliability (UI level) ──────────────────────────
 # Paint-path filesystem freedom (render-identical after source deletion),

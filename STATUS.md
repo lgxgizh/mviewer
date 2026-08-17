@@ -51,6 +51,32 @@
     pipelines → exact-source consumers → transactional Workspace/Project
     restore → large-image gates → qualification.
 
+## M47 — Production-scale data path hardening (2026-08-17, in progress)
+
+- **Phase 1 complete — source-backed image abstraction:**
+  - New Qt-free capability interface `ISourceImageCapabilities` (probe without
+    pixel decode, native-LOD, bounded region decode) discovered by
+    `dynamic_cast` — the frozen `DecoderRegistry`/`IDecoder`/plugin ABI is
+    untouched; non-capability decoders fall back cleanly.
+  - `SourceImage` (`core/image/SourceImage.{h,cpp}`) represents a file as
+    metadata + capability handle; opening never decodes pixels. Every
+    operation records its RFC classification (`NativeLod` / `BoundedRasterRegion`
+    / `FullDecodeScaled` / `FullDecodeCrop` / `ProbeMetadata`) plus raw
+    full-decode counts in `SourceDecodeStats` — tests can prove which path ran.
+  - `QtDecoder` implements the interface: JPEG advertises `NativeLod`
+    (evidence-based from Phase 0), TIFF honestly does not; region decode uses
+    the bounded-memory clipRect path classified `BoundedRasterRegion`, never
+    claimed as native.
+  - Measured (test-verified): 100 MP JPEG probes without decoding, LOD(256)
+    succeeds as NativeLod with `fullDecode==0`; a 512×512 region of the 100 MP
+    JPEG succeeds (bounded memory) where full decode is rejected by Qt's
+    256 MB limit; TIFF LOD fails today with the honest fallback classification;
+    clip-path region is pixel-identical to the full-decode crop; EXIF-oriented
+    probe/LOD report the rotated geometry.
+  - New CTest `m47_source_tests` (8 groups); full gate 99/99 green.
+  - Next: Phase 2 Viewer large-image pipeline (viewport LOD/tile over
+    `SourceImage`).
+
 ## M46 — Real-world workflow reliability & long-session release qualification (2026-08-17)
 
 - **Async lifetime contract:** ImageRepository now enforces a strict

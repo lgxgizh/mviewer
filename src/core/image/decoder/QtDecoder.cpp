@@ -33,6 +33,58 @@ ImageData toImageData(const QImage &src)
     return out;
 }
 
+// Map the QImageIOHandler transformation bitmask to the EXIF orientation 1-8
+// constant (same mapping as the historical fillMetadata).
+int orientationFromTransform(QImageIOHandler::Transformations t)
+{
+    if (t == QImageIOHandler::TransformationNone)
+        return 1;
+    if (t == QImageIOHandler::TransformationRotate90)
+        return 6;
+    if (t == QImageIOHandler::TransformationRotate180)
+        return 3;
+    if (t == QImageIOHandler::TransformationRotate270)
+        return 8;
+    if (t == QImageIOHandler::TransformationMirror)
+        return 2;
+    if (t == QImageIOHandler::TransformationMirrorAndRotate90)
+        return 5;
+    if (t == QImageIOHandler::TransformationFlipAndRotate90)
+        return 7;
+    if (t == (QImageIOHandler::TransformationMirror | QImageIOHandler::TransformationFlip))
+        return 4;
+    return 1;
+}
+
+bool transformSwapsDimensions(QImageIOHandler::Transformations t)
+{
+    return t == QImageIOHandler::TransformationRotate90 ||
+           t == QImageIOHandler::TransformationRotate270 ||
+           t == QImageIOHandler::TransformationMirrorAndRotate90 ||
+           t == QImageIOHandler::TransformationFlipAndRotate90;
+}
+
+// Container format: prefer the reader's reported format; fall back to the file
+// extension (QImageReader leaves format() empty for some formats, e.g. BMP).
+std::string formatName(const QImageReader &reader)
+{
+    const QByteArray fmt = reader.format();
+    if (!fmt.isEmpty())
+        return QString::fromLatin1(fmt).toUpper().toStdString();
+    const QString ext = QFileInfo(reader.fileName()).suffix().toLower();
+    if (ext == "jpg" || ext == "jpeg")
+        return "JPEG";
+    if (ext == "png")
+        return "PNG";
+    if (ext == "bmp")
+        return "BMP";
+    if (ext == "tif" || ext == "tiff")
+        return "TIFF";
+    if (!ext.isEmpty())
+        return ext.toUpper().toStdString();
+    return std::string();
+}
+
 // Populate the M6 metadata fields from a decoded QImage + its reader. Any
 // field that cannot be determined is left at its default. Never throws.
 void fillMetadata(const QImageReader &reader, const QImage &img,
@@ -73,27 +125,7 @@ void fillMetadata(const QImageReader &reader, const QImage &img,
     if (meta.bitDepth <= 0)
         meta.bitDepth = img.depth();
 
-    // EXIF orientation (1-8). Qt exposes a transformation bitmask; map the
-    // common masks to their EXIF orientation constant when determinable.
-    const QImageIOHandler::Transformations t = reader.transformation();
-    if (t == QImageIOHandler::TransformationNone)
-        meta.orientation = 1;
-    else if (t == QImageIOHandler::TransformationRotate90)
-        meta.orientation = 6;
-    else if (t == QImageIOHandler::TransformationRotate180)
-        meta.orientation = 3;
-    else if (t == QImageIOHandler::TransformationRotate270)
-        meta.orientation = 8;
-    else if (t == QImageIOHandler::TransformationMirror)
-        meta.orientation = 2;
-    else if (t == QImageIOHandler::TransformationMirrorAndRotate90)
-        meta.orientation = 5;
-    else if (t == QImageIOHandler::TransformationFlipAndRotate90)
-        meta.orientation = 7;
-    else if (t == (QImageIOHandler::TransformationMirror | QImageIOHandler::TransformationFlip))
-        meta.orientation = 4;
-    else
-        meta.orientation = 1;
+    meta.orientation = orientationFromTransform(reader.transformation());
 
     // Color space (if the decoded image carries one).
     const QColorSpace cs = img.colorSpace();
@@ -125,28 +157,7 @@ void fillMetadata(const QImageReader &reader, const QImage &img,
         meta.colorSpace = "unknown";
     }
 
-    // Container format: prefer the reader's reported format; fall back to the
-    // file extension (QImageReader leaves format() empty for some formats, e.g.
-    // BMP, which are detected by content rather than a named plugin).
-    const QByteArray fmt = reader.format();
-    if (!fmt.isEmpty())
-    {
-        meta.format = QString::fromLatin1(fmt).toUpper().toStdString();
-    }
-    else
-    {
-        const QString ext = QFileInfo(reader.fileName()).suffix().toLower();
-        if (ext == "jpg" || ext == "jpeg")
-            meta.format = "JPEG";
-        else if (ext == "png")
-            meta.format = "PNG";
-        else if (ext == "bmp")
-            meta.format = "BMP";
-        else if (ext == "tif" || ext == "tiff")
-            meta.format = "TIFF";
-        else if (!ext.isEmpty())
-            meta.format = ext.toUpper().toStdString();
-    }
+    meta.format = formatName(reader);
 }
 
 // F2 (M22): claim every format Qt can actually decode, derived from
@@ -221,6 +232,67 @@ ImageData QtDecoder::decodeScaled(const std::string &path, int maxEdge) const
 ImageData QtDecoder::decodeScaled(const std::string &path, int maxEdge,
                                   mviewer::domain::ImageMetadata &outMeta) const
 {
+    return decodeLod(path, maxEdge, outMeta);
+}
+
+std::vector<std::string> QtDecoder::extensions() const
+{
+    return supportedExts();
+}
+
+// ── M47 source-backed capabilities ───────────────────────────────────────────
+
+bool QtDecoder::canProbe(const std::string &path) const
+{
+    return canDecode(path);
+}
+
+bool QtDecoder::probeMetadata(const std::string &path,
+                              mviewer::domain::ImageMetadata &meta) const
+{
+    QImageReader reader(QString::fromStdString(path));
+    reader.setAutoTransform(true);
+    const QSize full = reader.size();
+    if (!full.isValid() || full.isEmpty())
+        return false;
+    if (meta.filePath.empty())
+        meta.filePath = path;
+    meta.fileSize = QFileInfo(QString::fromStdString(path)).size();
+    meta.width = full.width();
+    meta.height = full.height();
+    // Report the DISPLAYED geometry (EXIF applied), matching the decodeFull /
+    // decodeLod metadata semantics.
+    const auto t = reader.transformation();
+    if (transformSwapsDimensions(t))
+        std::swap(meta.width, meta.height);
+    meta.orientation = orientationFromTransform(t);
+    meta.format = formatName(reader);
+    return true;
+}
+
+bool QtDecoder::canNativeLod(const std::string &path) const
+{
+    // Evidence-based (M47 Phase-0 baseline): QImageReader::setScaledSize on
+    // JPEG decodes at reduced DCT scale without materializing the full raster
+    // (a 100 MP JPEG scales to 256 px while full decode is rejected by Qt's
+    // 256 MB allocation limit). Other formats are NOT claimed: TIFF scaled
+    // decode still rasterizes fully (measured failure at the same limit).
+    const QString ext = QFileInfo(QString::fromStdString(path)).suffix().toLower();
+    return ext == "jpg" || ext == "jpeg";
+}
+
+bool QtDecoder::canNativeRegion(const std::string &path) const
+{
+    (void)path;
+    // Qt offers no true random-access tile decode. decodeRegion() is the
+    // bounded-memory clipRect path, classified BoundedRasterRegion by the
+    // provider — never claimed as native.
+    return false;
+}
+
+ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
+                               mviewer::domain::ImageMetadata &outMeta) const
+{
     QImageReader reader(QString::fromStdString(path));
     reader.setAutoTransform(true);
     const QSize full = reader.size();
@@ -248,15 +320,35 @@ ImageData QtDecoder::decodeScaled(const std::string &path, int maxEdge,
     outMeta.width = sourceWidth;
     outMeta.height = sourceHeight;
     const auto transform = reader.transformation();
-    if (transform == QImageIOHandler::TransformationRotate90 ||
-        transform == QImageIOHandler::TransformationRotate270 ||
-        transform == QImageIOHandler::TransformationMirrorAndRotate90 ||
-        transform == QImageIOHandler::TransformationFlipAndRotate90)
+    if (transformSwapsDimensions(transform))
         std::swap(outMeta.width, outMeta.height);
     return toImageData(img);
 }
 
-std::vector<std::string> QtDecoder::extensions() const
+ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, int h,
+                                  int targetW, int targetH,
+                                  mviewer::domain::ImageMetadata &meta) const
 {
-    return supportedExts();
+    QImageReader reader(QString::fromStdString(path));
+    reader.setAutoTransform(true);
+    const QSize full = reader.size();
+    if (!full.isValid() || full.isEmpty() || w <= 0 || h <= 0)
+        return ImageData();
+    // The clip rect is in source (pre-transform) coordinates per Qt semantics.
+    reader.setClipRect(QRect(x, y, w, h));
+    if (targetW > 0 && targetH > 0)
+        reader.setScaledSize(QSize(targetW, targetH));
+    const QImage img = reader.read();
+    if (img.isNull())
+        return ImageData();
+    if (meta.filePath.empty())
+        meta.filePath = path;
+    meta.width = full.width();
+    meta.height = full.height();
+    const auto t = reader.transformation();
+    if (transformSwapsDimensions(t))
+        std::swap(meta.width, meta.height);
+    meta.orientation = orientationFromTransform(t);
+    meta.format = formatName(reader);
+    return toImageData(img);
 }

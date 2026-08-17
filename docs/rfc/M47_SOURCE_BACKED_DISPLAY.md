@@ -83,11 +83,19 @@ Every decode is classified into exactly one `SourceDecodePath`:
 - `NativeLod` — backend scaled decode (e.g. Qt `setScaledSize` for JPEG).
 - `NativeRegion` — backend true region decode (strip/tile-aware TIFF, JPEG
   DCT-position crop) — **only claimed when actually reliable**.
+- `BoundedRasterRegion` — bounded-memory partial raster during decode (e.g.
+  Qt `setClipRect`: the allocation is bounded by the region, the CPU may still
+  walk the full image). NOT a true native region decode; the source pixel
+  values are only guaranteed for the region itself.
 - `FullDecodeScaled` — full decode then client-scale (fallback LOD).
 - `FullDecodeCrop` — full decode then crop (fallback region).
 
-Tests must be able to observe which path ran (a counters/hooks facade on the
-provider), so a claim like "no full decode for Fit-to-window" is checkable.
+Classifications are recorded as ATTEMPTS (a failed attempt still shows which
+path was taken, plus the `failed` counter); the provider also counts raw
+`fullDecode` calls so "number of full-resolution decodes" is directly
+observable. Tests must be able to observe which path ran (the
+`SourceDecodeStats` counters facade), so a claim like "no full decode for
+Fit-to-window" is checkable.
 
 ### 3.2 Honest format claims
 
