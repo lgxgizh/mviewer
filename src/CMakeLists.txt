@@ -144,6 +144,7 @@ add_library(mviewer_ui STATIC
     appstate.cpp
     imageviewer.cpp
     imageviewer_loading.cpp
+    imageviewer_lod.cpp
     imageviewer_paint.cpp
     imageviewer_contextmenu.cpp
     directorytree.cpp
@@ -1398,6 +1399,27 @@ target_include_directories(m47_source_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(m47_source_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME m47_source_tests COMMAND m47_source_tests)
 set_tests_properties(m47_source_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+
+# ─── M47 Phase 2: Viewer LOD-first display (UI level) ─────────────────────────
+# Large sources display through bounded LOD/region rasters (no full-resolution
+# materialization for fit-to-window), with supersession/destroy safety and
+# idle convergence; the small-image fast path is preserved.
+add_executable(m47_viewer_lod_tests
+    test_m47_viewer_lod.cpp
+)
+target_link_libraries(m47_viewer_lod_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m47_viewer_lod_tests PRIVATE cxx_std_20)
+target_include_directories(m47_viewer_lod_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m47_viewer_lod_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m47_viewer_lod_tests COMMAND m47_viewer_lod_tests)
+set_tests_properties(m47_viewer_lod_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
 
 # ─── M46: Browse real-world reliability (UI level) ──────────────────────────
 # Paint-path filesystem freedom (render-identical after source deletion),

@@ -38,7 +38,19 @@ void ImageViewer::paintEvent(QPaintEvent *event)
     QPainter painter(this);
     painter.fillRect(rect(), Qt::black);
 
-    if (m_frame && m_frame->isValid())
+    // M47: LOD-first display — a large source draws through the bounded
+    // display raster (viewport LOD / visible region), never through a full
+    // resolution frame. The raster is already near the screen density, so
+    // this paint is cheap (no full-frame scaling on the UI thread).
+    if (m_lodMode && !m_raster.image.isNull())
+    {
+        m_view.screenW = width();
+        m_view.screenH = height();
+        drawDisplayRaster(painter);
+        if (displayNeedsUpgrade() && !m_displayUpgradeScheduled)
+            scheduleDisplayUpgrade();
+    }
+    else if (m_frame && m_frame->isValid())
     {
         m_view.screenW = width();
         m_view.screenH = height();

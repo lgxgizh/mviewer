@@ -5,6 +5,7 @@
 #include "core/export/ExportJob.h"
 #include "core/analysis/ImageOverlay.h"
 #include "core/image/ImageFrame.h"
+#include "core/image/SourceImage.h"
 #include "core/render/AsyncTileRequestManager.h"
 #include "core/render/TileCache.h"
 #include "core/render/TileGrid.h"
@@ -64,6 +65,17 @@ class ImageViewer : public QOpenGLWidget
     void setProvisionalImage(const QString &path, const QImage &image,
                              const QSize &sourceSize = QSize());
     void setImage(const QString &path);
+    // M47: setImage body with a caller-side exception guard (an unexpected
+    // error must never escape into the Qt event loop).
+    void setImageImpl(const QString &path);
+
+    // M47: true when the current image displays through the LOD/region raster
+    // path (large source; the full-resolution frame is then only the analysis
+    // source, never the display precondition).
+    bool isLodDisplay() const
+    {
+        return m_lodMode && !m_raster.image.isNull();
+    }
 
     // P1-7: serialize/restore the current view transform (scale + pan). Used to
     // restore the viewer's zoom level and pan position across sessions. Viewport
@@ -86,6 +98,10 @@ class ImageViewer : public QOpenGLWidget
     // the decoded ImageFrame so the analysis panel can run without re-decoding.
     void imageReady(std::shared_ptr<ImageFrame> frame);
     void viewerClosed();
+    // M47: emitted once the LOD-first display shows a usable raster for the
+    // current source (large images; carries the full source dimensions). The
+    // full-resolution frame may still be loading for analysis consumers.
+    void displayReady(const QSize &sourceSize);
 
   public slots:
     // Single source of truth for every ImageViewer fullscreen entry point.
@@ -160,6 +176,18 @@ class ImageViewer : public QOpenGLWidget
     void emitZoom();
     void advanceViewportRevision();
     void beginImageGeneration();
+    // M47: true when the viewer has something to display/zoom (a valid full
+    // frame OR an active LOD/region raster). All zoom/pan/fit entry points use
+    // this instead of the bare m_frame check so large images remain fully
+    // interactive while their raster path is active.
+    bool hasDisplayImage() const;
+    QSize displaySize() const; // full source dimensions of the current image
+    // M47: the raster-path verdict decides whether an analysis-support full
+    // frame load is issued (see applyDisplayRaster). Small sources keep the
+    // fast path; large feasible sources load the full frame for analysis
+    // consumers; infeasible sources (> Qt's allocation limit) skip the load
+    // until Phase 4's explicit source materialization.
+    void issueAnalysisLoad(const QString &path, uint64_t generation);
     void fitToWidget();
     void preloadNeighbors(const QString &path);
     void drawHistogram(QPainter &painter) const;
@@ -193,6 +221,35 @@ class ImageViewer : public QOpenGLWidget
     void clearLoadedGpu();
     void scheduleLoadedRefit(const QString &path, uint64_t generation,
                              const ImageLoadGuard &guard);
+    // ── M47 LOD-first display (defined in imageviewer_lod.cpp) ──────────────
+    // A large source displays through a bounded display raster: a viewport LOD
+    // while zoomed out and a visible-region raster while zoomed in. The
+    // full-resolution frame (when it loads) is the analysis source only.
+    void startLodDisplay(const QString &path, uint64_t generation);
+    void cancelDisplayRequest();
+    void scheduleDisplayUpgrade();
+    bool displayNeedsUpgrade() const;
+    void requestDisplayRaster();
+    void requestDisplayRasterImpl();
+    // M47: worker -> UI-thread marshal for display raster results (static so
+    // the worker lambda captures no raw `this`; the QPointer guard is checked
+    // on the UI thread before any viewer access).
+    static void marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewer>> &guard,
+                                     const QString &path, uint64_t generation,
+                                     std::shared_ptr<mviewer::core::SourceImage> source,
+                                     QImage image, QRect sourceRect, QSize sourceSize,
+                                     double density);
+    // M47: the raster worker body (probe -> classify -> decodeLod/decodeRegion
+    // -> marshal). Runs inside the submit lambda; an unexpected decoder
+    // exception is caught at the call site so it can never escape the worker.
+    static void runRasterWorker(const struct RasterRequest &req,
+                                const TaskScheduler::TaskContext &ctx,
+                                const std::shared_ptr<QPointer<ImageViewer>> &guard);
+    void applyDisplayRaster(const QString &path, uint64_t generation,
+                            std::shared_ptr<mviewer::core::SourceImage> source,
+                            QImage image, QRect sourceRect, QSize sourceSize, double density);
+    void runAnalysisLoadDecision(bool sourceValid, const QSize &sourceSize);
+    void drawDisplayRaster(QPainter &painter) const;
     void drawProvisional(QPainter &painter) const;
     AsyncTileRequestManager::VisibleTiles requestVisibleTiles();
     void scheduleOverlayTiles(std::vector<TileCache::ReadyTile> &ready);
@@ -247,6 +304,10 @@ class ImageViewer : public QOpenGLWidget
         mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
     };
     mviewer::application::ImageLoadingService::AsyncRequestHandle m_foregroundRequest;
+    // M47: a neighbor preload matching the current path, retained until the
+    // raster-path verdict decides whether an analysis full load is issued
+    // (promoted by issueAnalysisLoad or dropped).
+    mviewer::application::ImageLoadingService::AsyncRequestHandle m_pendingAnalysisPreload;
     std::vector<NeighborPreload> m_neighborPreloads;
     // M46: consumer-lifetime token. Created in the constructor, invalidated in
     // the destructor BEFORE the outstanding requests are cancelled, and passed
@@ -308,6 +369,27 @@ class ImageViewer : public QOpenGLWidget
     // ImageFrame backing the current view. The QWidget itself never decodes;
     // it only renders the QPixmap produced by ImageRepository.
     std::shared_ptr<ImageFrame> m_frame;
+
+    // ── M47 LOD-first display state ──────────────────────────────────────────
+    struct DisplayRaster
+    {
+        QImage image;         // display raster (RGB), may be null
+        QRect sourceRect;     // source pixels covered by the raster
+        QSize sourceSize;     // full source dimensions
+        double density = 1.0; // source pixels per raster pixel
+    };
+    bool m_lodMode = false; // current image displays via the raster path
+    // True between startLodDisplay and the first raster-path verdict (probe
+    // only / raster / probe failure). While set, the analysis-support full
+    // load's failure is suppressed — the raster path owns the verdict.
+    bool m_largeSourcePending = false;
+    // True once the analysis-support full load was issued for the current
+    // image (at most one per image; the display never waits for it).
+    bool m_analysisLoadIssued = false;
+    std::shared_ptr<mviewer::core::SourceImage> m_sourceImage; // no pixels held
+    DisplayRaster m_raster;
+    TaskScheduler::TaskHandle m_displayRequest; // in-flight raster worker
+    bool m_displayUpgradeScheduled = false;
 
     int m_histogram[256] = {0};
     bool m_hasHistogram = false;

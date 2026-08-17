@@ -85,6 +85,19 @@ void ImageViewer::setFullscreenRequested(bool requested)
 
 void ImageViewer::setImage(const QString &path)
 {
+    try
+    {
+        setImageImpl(path);
+    }
+    catch (...)
+    {
+        // An unexpected error must never escape into the Qt event loop; the
+        // viewer stays in its current state and the host can retry.
+    }
+}
+
+void ImageViewer::setImageImpl(const QString &path)
+{
     // Pixel Inspector lifecycle: invalidate synchronously on every new load so
     // the previous image's sample never lingers while the next decode runs —
     // including for empty/failing requests that never deliver a frame.
@@ -110,6 +123,17 @@ void ImageViewer::setImage(const QString &path)
     m_hasHistogram = false;
     m_loading = !path.isEmpty();
     m_pendingView.reset();
+    // M47: reset the LOD-first display state for the new request. Any
+    // in-flight raster worker is cancelled; its (bounded) completion is
+    // discarded by the generation guard. The matching preload (if any) is
+    // retained for the raster-path verdict's analysis load decision.
+    cancelDisplayRequest();
+    m_lodMode = false;
+    m_largeSourcePending = false;
+    m_analysisLoadIssued = false;
+    m_sourceImage.reset();
+    m_raster = DisplayRaster{};
+    m_pendingAnalysisPreload = std::move(matchingPreload);
     if (!keepProvisional)
     {
         m_provisionalPath.clear();
@@ -124,19 +148,39 @@ void ImageViewer::setImage(const QString &path)
     }
     if (path.isEmpty())
     {
+        m_pendingAnalysisPreload.reset();
         update();
         return;
     }
-    auto onLoaded = makeImageLoadCallback(path, gen);
-    if (matchingPreload)
+    // M47: the raster-path verdict decides the full-frame load. The probe
+    // worker reports small-vs-large; small sources keep the existing fast
+    // path, large feasible sources get the analysis-support full load, and
+    // infeasible sources (> Qt's allocation limit) skip it until Phase 4's
+    // explicit source materialization. The display never waits for it.
+    startLodDisplay(path, gen);
+}
+
+// M47: issue the analysis-support full-frame load (promoting a matching
+// neighbor preload when one was retained). Runs on the UI thread from the
+// raster-path verdict; the load itself is async + cancellable + lifetime-safe
+// exactly as the pre-M47 foreground load was.
+void ImageViewer::issueAnalysisLoad(const QString &path, uint64_t generation)
+{
+    auto onLoaded = makeImageLoadCallback(path, generation);
+    if (m_pendingAnalysisPreload)
+    {
         m_foregroundRequest =
             mviewer::application::ImageLoadingService::instance().promotePreloadAsync(
-                matchingPreload, std::move(onLoaded), m_lifetime);
+                m_pendingAnalysisPreload, std::move(onLoaded), m_lifetime);
+        m_pendingAnalysisPreload.reset();
+    }
     else
+    {
         m_foregroundRequest =
             mviewer::application::ImageLoadingService::instance().loadAsyncCancellable(
-                path.toUtf8().toStdString(), std::move(onLoaded), ImageRepository::kDefaultLoadOptions,
-                m_lifetime);
+                path.toUtf8().toStdString(), std::move(onLoaded),
+                ImageRepository::kDefaultLoadOptions, m_lifetime);
+    }
 }
 
 ImageViewer::ImageLoadCallback ImageViewer::makeImageLoadCallback(const QString &path,
@@ -173,6 +217,27 @@ void ImageViewer::queueImageLoadFailure(const QString &path, uint64_t generation
                                   viewer->m_foregroundRequest.reset();
                                   viewer->m_loading = false;
                                   viewer->m_hasHistogram = false;
+                                  // M47: while the raster-path verdict for a
+                                  // large source is still pending, suppress the
+                                  // analysis-support full-frame failure (the
+                                  // 100 MP full decode fails fast, the LOD
+                                  // arrives later — the display owns the
+                                  // verdict).
+                                  if (viewer->m_largeSourcePending)
+                                  {
+                                      viewer->update();
+                                      return;
+                                  }
+                                  // M47: in LOD-first display the image IS on
+                                  // screen (the raster path); only the
+                                  // analysis-support full frame failed (e.g.
+                                  // > Qt's allocation limit). Do not clobber
+                                  // the successful display with a failure.
+                                  if (viewer->m_lodMode && !viewer->m_raster.image.isNull())
+                                  {
+                                      viewer->update();
+                                      return;
+                                  }
                                   viewer->setWindowTitle(
                                       QString("无法加载 - %1 - MViewer")
                                           .arg(QFileInfo(path).fileName()));
@@ -205,6 +270,13 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
     if (!m_frame || m_frame->pixels().isNull())
     {
         m_hasHistogram = false;
+        // M47: a failing analysis-support full frame must not clobber a
+        // successful LOD-first display (same guard as queueImageLoadFailure).
+        if (m_lodMode && !m_raster.image.isNull())
+        {
+            update();
+            return;
+        }
         setWindowTitle(QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
         update();
         emit loadFailed(path);
@@ -215,6 +287,16 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
     const QFileInfo info(path);
     m_currentIndex = static_cast<int>(m_fileList.indexOf(path));
     m_tiles = TileGrid(m_frame->width(), m_frame->height(), 256);
+    // M47: in LOD-first display the full frame is the analysis/Inspector
+    // source only — the display keeps the bounded raster (no re-fit that would
+    // drop the user's zoom, no UI-thread scaling of the full frame).
+    if (m_lodMode)
+    {
+        preloadNeighbors(path);
+        update();
+        emit imageReady(m_frame);
+        return;
+    }
     m_view.screenW = width();
     m_view.screenH = height();
     const FitPolicy fitPolicy = property("mviewerFullscreenRequested").toBool()

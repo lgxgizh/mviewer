@@ -88,6 +88,10 @@ ImageViewer::~ImageViewer()
     cancelPreloads();
     cancelRoiStats();
     cancelExportJob();
+    // M47: drop any in-flight LOD/region display raster request (queued work
+    // never starts; an already-running decode finishes bounded and its
+    // delivery is suppressed by the QPointer/lifetime guards).
+    cancelDisplayRequest();
     // Stage A: free GPU textures + blitter while the GL context is still current.
     // Skip if the widget never created a context (never shown).
     if (context())
@@ -240,6 +244,11 @@ void ImageViewer::scheduleRoiStats(const QRect &selection)
 void ImageViewer::advanceViewportRevision()
 {
     ++m_viewRevision;
+    // M47: any pan/zoom/fit/resize may invalidate the current display raster's
+    // coverage or density; the (debounced) upgrade check runs on the next
+    // event-loop turn.
+    if (m_lodMode)
+        scheduleDisplayUpgrade();
 }
 
 void ImageViewer::beginImageGeneration()
@@ -353,14 +362,29 @@ void ImageViewer::emitZoom()
     emit zoomChanged(static_cast<int>(m_view.scale * 100.0 + 0.5));
 }
 
+bool ImageViewer::hasDisplayImage() const
+{
+    return (m_frame && m_frame->isValid()) || (m_lodMode && !m_raster.image.isNull());
+}
+
+QSize ImageViewer::displaySize() const
+{
+    if (m_frame && m_frame->isValid())
+        return QSize(m_frame->width(), m_frame->height());
+    if (m_lodMode && !m_raster.image.isNull())
+        return m_raster.sourceSize;
+    return QSize();
+}
+
 void ImageViewer::fitToWidget()
 {
-    if (!m_frame || m_frame->pixels().isNull())
+    if (!hasDisplayImage())
         return;
     // Delegate the fit math to Viewport; keep the Widget free of scale/offset.
     m_view.screenW = width();
     m_view.screenH = height();
-    m_view.fit(m_frame->width(), m_frame->height(),
+    const QSize size = displaySize();
+    m_view.fit(size.width(), size.height(),
                property("mviewerFullscreenRequested").toBool() ? FitPolicy::MaximizeClient
                                                                  : FitPolicy::Comfortable);
     advanceViewportRevision();
@@ -370,7 +394,7 @@ void ImageViewer::fitToWidget()
 
 void ImageViewer::zoomIn()
 {
-    if (!m_frame || m_frame->pixels().isNull())
+    if (!hasDisplayImage())
         return;
     m_view.screenW = width();
     m_view.screenH = height();
@@ -383,7 +407,7 @@ void ImageViewer::zoomIn()
 
 void ImageViewer::zoomOut()
 {
-    if (!m_frame || m_frame->pixels().isNull())
+    if (!hasDisplayImage())
         return;
     m_view.screenW = width();
     m_view.screenH = height();
@@ -402,7 +426,7 @@ void ImageViewer::zoomFit()
 
 void ImageViewer::zoomActual()
 {
-    if (!m_frame || m_frame->pixels().isNull())
+    if (!hasDisplayImage())
         return;
     // Keep the current view center stable while restoring 100%.
     m_view.screenW = width();
@@ -433,7 +457,7 @@ void ImageViewer::computeHistogram()
 
 void ImageViewer::wheelEvent(QWheelEvent *event)
 {
-    if (!m_frame || m_frame->pixels().isNull())
+    if (!hasDisplayImage())
         return;
 
     m_view.screenW = width();
@@ -451,7 +475,7 @@ void ImageViewer::mouseDoubleClickEvent(QMouseEvent *event)
 {
     // Double-click toggles between fit-to-window and 100% at the cursor —
     // the standard image-viewer zoom gesture.
-    if (event->button() != Qt::LeftButton || !m_frame || m_frame->pixels().isNull())
+    if (event->button() != Qt::LeftButton || !hasDisplayImage())
     {
         QWidget::mouseDoubleClickEvent(event);
         return;
@@ -486,8 +510,8 @@ void ImageViewer::mousePressEvent(QMouseEvent *event)
         emit requestNext();
         return;
     }
-    if ((event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton) && m_frame &&
-        m_frame->isValid())
+    if ((event->button() == Qt::LeftButton || event->button() == Qt::MiddleButton) &&
+        hasDisplayImage())
     {
         if (m_selectMode && event->button() == Qt::LeftButton)
         {
