@@ -41,6 +41,59 @@ struct PersistenceResult
     size_t folderCount = 0;
 };
 
+// M47: async workspace/project restore result. The worker ONLY reads and
+// deserializes (no UI state); the UI applies the parsed document atomically on
+// the current generation, so a failed or superseded open never touches the
+// live session.
+struct RestoreFileResult
+{
+    bool ok = false;
+    mviewer::domain::Workspace workspace;
+    QString filePath; // original path, for UI messages
+    QString error;    // UI-facing failure reason
+};
+
+void runRestoreFile(const QString &filePath, bool project, const TaskScheduler::TaskContext &ctx,
+                    RestoreFileResult &result)
+{
+    if (ctx.isCancelled())
+        return;
+    result.filePath = filePath;
+    QFile f(filePath);
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        result.error = QStringLiteral("无法读取文件：%1").arg(filePath);
+        return;
+    }
+    const QByteArray data = f.readAll();
+    if (ctx.isCancelled())
+        return;
+    if (!project)
+    {
+        auto ws =
+            mviewer::core::deserializeWorkspace(std::string(data.constData(), data.size()));
+        if (!ws || ws->empty())
+        {
+            result.error = QStringLiteral("工作区文件无效或为空。");
+            return;
+        }
+        result.workspace = std::move(*ws);
+    }
+    else
+    {
+        mviewer::domain::Project proj;
+        if (!mviewer::core::deserializeProject(std::string(data.constData(), data.size()),
+                                               proj) ||
+            proj.workspace.empty())
+        {
+            result.error = QStringLiteral("项目文件无效或为空。");
+            return;
+        }
+        result.workspace = std::move(proj.workspace);
+    }
+    result.ok = true;
+}
+
 bool cancelled(const TaskScheduler::TaskContext &ctx,
                const std::shared_ptr<std::atomic<bool>> &cancel)
 {
@@ -256,22 +309,7 @@ void MainWindow::openWorkspace()
         QFileDialog::getOpenFileName(this, "打开工作区", QString(), "MViewer 工作区 (*.mvws)");
     if (filePath.isEmpty())
         return;
-
-    QFile f(filePath);
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        QMessageBox::critical(this, "打开工作区", "无法读取文件：" + filePath);
-        return;
-    }
-    const QByteArray data = f.readAll();
-    const auto maybeWs =
-        mviewer::core::deserializeWorkspace(std::string(data.constData(), data.size()));
-    if (!maybeWs || maybeWs->empty())
-    {
-        QMessageBox::critical(this, "打开工作区", "工作区文件无效或为空。");
-        return;
-    }
-    restoreWorkspaceState(*maybeWs, filePath);
+    openWorkspaceFile(filePath);
 }
 
 void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspace,
@@ -469,98 +507,113 @@ void MainWindow::openProject()
         QFileDialog::getOpenFileName(this, "打开项目", QString(), "MViewer 项目 (*.mvproj)");
     if (filePath.isEmpty())
         return;
+    openProjectFile(filePath);
+}
 
-    QFile f(filePath);
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        QMessageBox::critical(this, "打开项目", "无法读取文件：" + filePath);
+void MainWindow::openWorkspaceFile(const QString &filePath)
+{
+    if (filePath.isEmpty())
         return;
-    }
-    const QByteArray data = f.readAll();
-    mviewer::domain::Project proj;
-    if (!mviewer::core::deserializeProject(std::string(data.constData(), data.size()), proj) ||
-        proj.workspace.empty())
-    {
-        QMessageBox::critical(this, "打开项目", "项目文件无效或为空。");
-        return;
-    }
-
-    // Reuse the workspace-restore path from openWorkspace() so the browsing view
-    // + compare session + per-image ROI/analysis all come back from the .mvproj.
-    const mviewer::domain::Workspace &ws = proj.workspace;
-    const QString root = QString::fromStdString(ws.rootPath);
-    changeDirectory(root);
-    if (m_workspace)
-    {
-        m_workspace->setRootPath(root);
-        QStringList cmp;
-        for (const auto &p : ws.comparedImages)
-            cmp.append(QString::fromStdString(p));
-        m_workspace->setComparedImages(cmp);
-        m_workspace->setCompareSessionJson(QString::fromStdString(ws.compareSessionJson));
-    }
-
-    QStringList comparePaths;
-    comparePaths.reserve(static_cast<int>(ws.comparedImages.size()));
-    for (const auto &p : ws.comparedImages)
-        comparePaths.push_back(QString::fromStdString(p));
-
-    m_analyzer->clearAllResults();
-    for (const auto &folder : ws.folders)
-        for (const auto &img : folder.imageSet.images)
-            if (!img.analysis.empty())
-                m_analyzer->setResult(QString::fromStdString(img.filePath),
-                                      QString::fromStdString(img.analysis),
-                                      QString::fromStdString(img.analysisAnalyzerId));
-
-    std::optional<mviewer::domain::CompareSession> restoredSession;
-    bool haveSession = false;
-    if (!ws.compareSessionJson.empty())
-    {
-        restoredSession = mviewer::core::deserializeCompareSession(ws.compareSessionJson);
-        haveSession = restoredSession.has_value();
-    }
-    if (!comparePaths.isEmpty())
-    {
-        openCompare(comparePaths);
-        if (haveSession && m_compareView)
-            m_compareView->applySession(*restoredSession);
-    }
-
-    std::string restoredPath;
-    mviewer::domain::Selection restoredRoi;
-    std::string restoredAnalysis;
-    for (const auto &folder : ws.folders)
-        for (const auto &img : folder.imageSet.images)
-            if (restoredPath.empty() && (img.roiW > 0 || img.roiH > 0 || !img.analysis.empty()))
-            {
-                restoredRoi = {img.roiX, img.roiY, img.roiW, img.roiH};
-                restoredAnalysis = img.analysis;
-                restoredPath = img.filePath;
-            }
-    if (restoredPath.empty() && !comparePaths.isEmpty())
-        restoredPath = comparePaths.first().toStdString();
-    else if (restoredPath.empty() && ws.imageCount() > 0)
-        restoredPath = ws.folders.front().imageSet.images.front().filePath;
-
-    if (!restoredPath.empty())
-    {
-        m_selection->setCurrentImage(QString::fromStdString(restoredPath));
-        if (m_imageViewer)
+    // M47: the file read + JSON deserialize run on a background worker; the UI
+    // only applies the parsed document atomically for the CURRENT generation.
+    // A newer open supersedes an in-flight one (its delivery is dropped even
+    // if the worker already finished); a read/parse failure never touches the
+    // live session — the error is reported and the current state stays.
+    TaskScheduler::cancel(m_restoreTask);
+    m_restoreTask.reset();
+    const uint64_t generation = ++m_restoreGeneration;
+    auto result = std::make_shared<RestoreFileResult>();
+    QPointer<MainWindow> guard(this);
+    statusBar()->showMessage(QStringLiteral("正在打开工作区…"));
+    auto handle = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Background,
+        [filePath, result](const TaskScheduler::TaskContext &ctx)
+        { runRestoreFile(filePath, false, ctx, *result); },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, result, generation]()
         {
-            m_imageViewer->setImage(currentImagePath());
-            m_previewPanel->setImage(currentImagePath());
-        }
-        if (!restoredAnalysis.empty())
-            m_analysisPanel->setRegionStats(QString::fromStdString(restoredAnalysis));
-        if (!restoredRoi.isEmpty() && m_compareView)
-            m_compareView->applyROI(restoredRoi);
+            if (!qApp)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, result, generation]()
+                {
+                    MainWindow *window = guard.data();
+                    if (!window || generation != window->m_restoreGeneration)
+                        return; // superseded or destroyed — never touch the session
+                    window->m_restoreTask.reset();
+                    if (!result->ok)
+                    {
+                        QMessageBox::critical(window, "打开工作区", result->error);
+                        window->statusBar()->showMessage(
+                            QStringLiteral("打开工作区失败: %1").arg(result->error));
+                        return; // the live session is untouched
+                    }
+                    window->restoreWorkspaceState(result->workspace, result->filePath);
+                },
+                Qt::QueuedConnection);
+        });
+    if (!handle)
+    {
+        // submit() refused the task (pool paused / back-pressured): keep the
+        // current session untouched and tell the user.
+        QMessageBox::warning(this, "打开工作区", "后台打开任务被调度器拒绝。");
+        return;
     }
+    m_restoreTask = handle;
+}
 
-    statusBar()->showMessage(QString("项目已打开: %1 (%2 张图片, %3 个目录)")
-                                 .arg(QFileInfo(filePath).fileName())
-                                 .arg(static_cast<int>(ws.imageCount()))
-                                 .arg(static_cast<int>(ws.folderCount())));
+void MainWindow::openProjectFile(const QString &filePath)
+{
+    if (filePath.isEmpty())
+        return;
+    // Same async contract as openWorkspaceFile(); the project's embedded
+    // workspace restores through the shared workspace-apply path.
+    TaskScheduler::cancel(m_restoreTask);
+    m_restoreTask.reset();
+    const uint64_t generation = ++m_restoreGeneration;
+    auto result = std::make_shared<RestoreFileResult>();
+    QPointer<MainWindow> guard(this);
+    statusBar()->showMessage(QStringLiteral("正在打开项目…"));
+    auto handle = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Background,
+        [filePath, result](const TaskScheduler::TaskContext &ctx)
+        { runRestoreFile(filePath, true, ctx, *result); },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, result, generation]()
+        {
+            if (!qApp)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, result, generation]()
+                {
+                    MainWindow *window = guard.data();
+                    if (!window || generation != window->m_restoreGeneration)
+                        return; // superseded or destroyed — never touch the session
+                    window->m_restoreTask.reset();
+                    if (!result->ok)
+                    {
+                        QMessageBox::critical(window, "打开项目", result->error);
+                        window->statusBar()->showMessage(
+                            QStringLiteral("打开项目失败: %1").arg(result->error));
+                        return; // the live session is untouched
+                    }
+                    window->restoreWorkspaceState(result->workspace, result->filePath);
+                    window->statusBar()->showMessage(
+                        QString("项目已打开: %1 (%2 张图片, %3 个目录)")
+                            .arg(QFileInfo(result->filePath).fileName())
+                            .arg(static_cast<int>(result->workspace.imageCount()))
+                            .arg(static_cast<int>(result->workspace.folderCount())));
+                },
+                Qt::QueuedConnection);
+        });
+    if (!handle)
+    {
+        QMessageBox::warning(this, "打开项目", "后台打开任务被调度器拒绝。");
+        return;
+    }
+    m_restoreTask = handle;
 }
 
 // ─── P0: product browse state (recent / favorites / history / restore) ────────

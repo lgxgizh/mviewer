@@ -21,11 +21,20 @@
   diff/PSNR/SSIM degrade to "—" on an all-infeasible pair without any decode;
   report export records placeholder pairs non-comparable in the requested pane
   order without ever materializing the infeasible source.
+- **Transactional async Workspace/Project restore (P1):** opening a `.mvws`
+  workspace or `.mvproj` project reads + deserializes the file on a background
+  worker and applies the parsed document atomically for the current request
+  only. A newer open supersedes an in-flight one (stale deliveries are
+  dropped), a missing/corrupt file reports an error without touching the live
+  directory or compare session, and closing the window mid-restore is safe.
+  The dialog-free `openWorkspaceFile`/`openProjectFile` entries are public for
+  tests, drop targets, and CLI callers.
 - `m47_source_tests` (8 groups), `m47_viewer_lod_tests` (6 groups),
-  `m47_compare_lod_tests` (6 groups), `m47_exact_source_tests` (3 groups)
-  CTest gates covering probe-without-decode, native/fallback classification
-  counters, bounded RSS, supersession, destroy safety, failure-vs-skip
-  accounting, and exact-source integrity with LOD panes present.
+  `m47_compare_lod_tests` (6 groups), `m47_exact_source_tests` (3 groups),
+  `m47_restore_tests` (5 groups) CTest gates covering probe-without-decode,
+  native/fallback classification counters, bounded RSS, supersession, destroy
+  safety, failure-vs-skip accounting, exact-source integrity with LOD panes
+  present, and transactional async workspace/project restore.
 
 ### Changed
 

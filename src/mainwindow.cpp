@@ -151,6 +151,11 @@ MainWindow::~MainWindow()
     cancelClipboardPaste();
     cancelReportExport();
     cancelBackgroundPersistence();
+    // M47: cancel an in-flight workspace/project restore; the delivery is
+    // additionally QPointer- and generation-guarded, so a late completion can
+    // never touch freed MainWindow state.
+    TaskScheduler::cancel(m_restoreTask);
+    m_restoreTask.reset();
     // M27 lifetime closure: stop the async search re-index immediately. The
     // worker callback checks the alive token before marshaling, and the queued
     // UI lambda checks it again before touching any member — without this, a

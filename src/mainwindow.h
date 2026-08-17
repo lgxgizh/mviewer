@@ -74,6 +74,14 @@ class MainWindow : public QMainWindow
     void onImageOpen(const QString &path);
     void setOpenOnLaunch(const QString &path);
 
+    // M47: dialog-free workspace/project restore. The file is read and
+    // deserialized on a background worker; the UI applies the parsed document
+    // atomically and only for the latest request (a newer open supersedes an
+    // in-flight one; a failed open never touches the live session). Public so
+    // tests, drop targets, and CLI callers can restore without a file dialog.
+    void openWorkspaceFile(const QString &filePath);
+    void openProjectFile(const QString &filePath);
+
     // The shortcut cheat-sheet HTML (single source of truth for the F1 help;
     // public so tests can verify it stays in sync with registered commands).
     static QString shortcutsHelpHtml();
@@ -427,6 +435,10 @@ class MainWindow : public QMainWindow
     TaskScheduler::TaskHandle m_persistenceTask;
     std::shared_ptr<std::atomic<bool>> m_persistenceCancel;
     uint64_t m_persistenceGeneration = 0;
+    // M47: async workspace/project restore — latest-intent generation guard
+    // (a newer open supersedes an in-flight one), cancelled on destruction.
+    TaskScheduler::TaskHandle m_restoreTask;
+    uint64_t m_restoreGeneration = 0;
     TaskScheduler::TaskHandle m_reportTask;
     QProgressDialog *m_reportProgress = nullptr;
     uint64_t m_reportGeneration = 0;
