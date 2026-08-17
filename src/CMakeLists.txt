@@ -1443,6 +1443,28 @@ target_compile_definitions(m47_compare_lod_tests PRIVATE MVIEWER_SOURCE_DIR="${C
 add_test(NAME m47_compare_lod_tests COMMAND m47_compare_lod_tests)
 set_tests_properties(m47_compare_lod_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
 
+# ─── M47 Phase 4: exact-source consumers with source-backed panes ────────────
+# Inspector / diff / PSNR / SSIM / export keep full-resolution correctness when
+# source-backed (LOD) panes are present: they never sample the display LOD and
+# never trigger implicit materialization; infeasible panes degrade to invalid /
+# non-comparable states instead.
+add_executable(m47_exact_source_tests
+    test_m47_exact_source.cpp
+)
+target_link_libraries(m47_exact_source_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m47_exact_source_tests PRIVATE cxx_std_20)
+target_include_directories(m47_exact_source_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m47_exact_source_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m47_exact_source_tests COMMAND m47_exact_source_tests)
+set_tests_properties(m47_exact_source_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
+
 # ─── M46: Browse real-world reliability (UI level) ──────────────────────────
 # Paint-path filesystem freedom (render-identical after source deletion),
 # scan/dimension supersession bounds, busy-cursor ownership, and deterministic

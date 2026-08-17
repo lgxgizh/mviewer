@@ -15,10 +15,17 @@
   index, and process RSS stays bounded (a 100 MP pair displays with tens of MB
   instead of a rejected ~286 MB full decode). Formats without a native LOD
   (e.g. large TIFF) honestly stay blank until full materialization is feasible.
+- **Exact-source consumers stay full-resolution (P0):** with source-backed
+  panes present, the Pixel Inspector still samples the exact full-resolution
+  source pixel (never the display LOD) and reports 无效 for infeasible panes;
+  diff/PSNR/SSIM degrade to "—" on an all-infeasible pair without any decode;
+  report export records placeholder pairs non-comparable in the requested pane
+  order without ever materializing the infeasible source.
 - `m47_source_tests` (8 groups), `m47_viewer_lod_tests` (6 groups),
-  `m47_compare_lod_tests` (6 groups) CTest gates covering probe-without-decode,
-  native/fallback classification counters, bounded RSS, supersession, destroy
-  safety, and failure-vs-skip accounting.
+  `m47_compare_lod_tests` (6 groups), `m47_exact_source_tests` (3 groups)
+  CTest gates covering probe-without-decode, native/fallback classification
+  counters, bounded RSS, supersession, destroy safety, failure-vs-skip
+  accounting, and exact-source integrity with LOD panes present.
 
 ### Changed
 
