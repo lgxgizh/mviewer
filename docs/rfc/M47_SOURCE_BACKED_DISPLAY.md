@@ -1,6 +1,6 @@
 # M47 — Source-Backed Display Contract (RFC)
 
-Date: 2026-08-17 · Milestone: M47 · Status: accepted (Phase 0 contract)
+Date: 2026-08-17 · Milestone: M47 · Status: accepted (Phase 0 contract) — **implemented through Phase 6** (Viewer LOD-first display, Compare source-backed panes, exact-source consumers, transactional async restore, soak + benchmark evidence; full CTest gate 104/104). This document remains the normative contract for the display-representation != analysis-source separation; implementation evidence lives in `docs/review/M47_SOURCE_BACKED_DISPLAY_2026-08-17.md`.
 
 ## 1. Problem statement
 

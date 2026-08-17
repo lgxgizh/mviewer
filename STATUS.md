@@ -19,7 +19,8 @@
 > `docs/review/M45_NATIVE_WINDOWS_PRODUCT_QUALIFICATION_2026-08-16.md`,
 > `docs/review/M46_RELIABILITY_SOAK_2026-08-17.md`,
 > `docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md`,
-> `docs/review/M47_PHASE0_BASELINE_2026-08-17.md` and
+> `docs/review/M47_PHASE0_BASELINE_2026-08-17.md`,
+> `docs/review/M47_SOURCE_BACKED_DISPLAY_2026-08-17.md` and
 > `.\build.ps1 Test`.
 
 ## M47 — Production-scale data path hardening (2026-08-17, in progress)
