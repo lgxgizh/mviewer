@@ -98,6 +98,44 @@
   - Next: Phase 2 Viewer large-image pipeline (viewport LOD/tile over
     `SourceImage`).
 
+## M47 Phases 3–6 complete (2026-08-17) — Compare source-backed display, exact-source consumers, transactional restore, soak & benchmark evidence
+
+- **Phase 3 — Compare source-backed display:** infeasible sources (> 60 MP,
+  full RGB beyond Qt's 256 MB limit) skip the full load; a metadata-only
+  placeholder frame keeps the requested pane index in the engine, so the grid
+  keeps every requested pane and skips never count as load failures (duplicate
+  paths accounted per request). Panes display through bounded per-pane
+  viewport LOD rasters over `SourceImage` (native LOD for JPEG, honest blank
+  fallback for TIFF); wheel-zoom re-materializes at a denser edge with no full
+  decode. New CTest `m47_compare_lod_tests` (6 groups); gate 101/101.
+- **Phase 4 — exact-source consumers:** with source-backed panes present, the
+  Pixel Inspector reports the exact full-resolution pixel for feasible panes
+  and 无效 (never the display LOD) for infeasible ones; diff/PSNR/SSIM on an
+  all-infeasible pair degrade to "—" with zero decodes; report export records
+  placeholder pairs non-comparable in the requested pane order without
+  materializing the infeasible source. New CTest `m47_exact_source_tests`
+  (3 groups); gate 102/102.
+- **Phase 5 — transactional async Workspace/Project restore:** `.mvws` /
+  `.mvproj` opens read + deserialize on a background worker; the UI applies the
+  parsed document atomically for the current generation only. A newer open
+  supersedes an in-flight one (stale deliveries dropped), missing/corrupt
+  files report without touching the live session, and closing mid-restore is
+  safe. Dialog-free `openWorkspaceFile`/`openProjectFile` are public; the
+  duplicated inline project restore is removed. New CTest `m47_restore_tests`
+  (5 groups); gate 103/103.
+- **Phase 6 — deterministic soak & benchmark evidence:** `m47_large_soak`
+  (6 rounds of Viewer/Compare 100 MP display churn: open → zoom → A→B→A
+  supersede → destroy mid-request, per-round pool drain, zero full-decode
+  fallbacks, bounded + plateau-stable RSS, converged scheduler graph). The
+  baseline recorder gained the post-Phase-2 100 MP viewer display section and a
+  Compare source-backed section. Measured: **100 MP JPEG opens to display in
+  ~0.5 s with +53 MB RSS (Phase 0: cannot open at all); a 100 MP compare pair
+  displays both panes with +82 MB and zero full decodes**. Gate 104/104.
+- Remaining: Phase 7 release-evidence convergence (this file, roadmap,
+  test matrix, review docs) and Phase 8 final qualification (3 consecutive
+  full-gate runs); native hardware rows stay MANUAL/BLOCKED per the M46
+  qualification doc.
+
 ## M46 — Real-world workflow reliability & long-session release qualification (2026-08-17)
 
 - **Async lifetime contract:** ImageRepository now enforces a strict
