@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/image/ExifOrientation.h"
 #include "core/image/ISourceImageCapabilities.h"
 #include "core/image/ImageBuffer.h"
 #include "core/image/decoder/IDecoder.h"
@@ -82,6 +83,19 @@ class SourceDecodeStats
 // one, otherwise through the compatible full-decode fallback. Every operation
 // records its classification in SourceDecodeStats.
 //
+// M48 Phase 1: every decode returns an atomic SourceRasterResult — the pixels
+// AND the complete metadata (ICC, orientation, dims) as-of-this-decode travel
+// together, so a consumer never has to read mutable metadata before/after a
+// decode and guess whether it changed. SourceImage NEVER mutates its own probe
+// metadata on decode (no implicit metadata mutation); the result carries the
+// authoritative metadata.
+//
+// Coordinate contract: decodeRegion() consumes RAW source coordinates (pre
+// EXIF transform); the result's coveredRect is in the declared source space.
+// See ExifOrientation.h for the single mapping between raw and displayed
+// coordinates (EXIF orientation 1-8). decodeLod() always covers the FULL
+// oriented source.
+//
 // By design SourceImage retains NO pixel buffers: the display pipeline decides
 // what to keep (viewport LOD/tile), the analysis pipeline decides when to
 // materialize full source. This is the RFC's display/analysis separation.
@@ -121,15 +135,52 @@ class SourceImage
         return m_caps != nullptr;
     }
 
-    // Viewport LOD: longest edge <= maxEdge, aspect preserved, EXIF applied.
-    // Never materializes more than ~maxEdge^2*3 bytes on the native path.
-    ImageData decodeLod(int maxEdge);
+    // The RAW source dimensions (pre EXIF transform) and the displayed ones.
+    int rawWidth() const
+    {
+        return m_rawW;
+    }
+    int rawHeight() const
+    {
+        return m_rawH;
+    }
+    int displayWidth() const
+    {
+        return m_meta.width;
+    }
+    int displayHeight() const
+    {
+        return m_meta.height;
+    }
+    int orientation() const
+    {
+        return m_meta.orientation;
+    }
 
-    // Bounded region: source rect scaled to target size. Exact pixel values
-    // are only guaranteed when hasNativeRegion(); otherwise the result is a
+    // M48: decoded-pixel + authoritative-metadata result, returned atomically.
+    struct RasterResult
+    {
+        bool ok = false;
+        SourceDecodePath decodePath = SourceDecodePath::ProbeMetadata;
+        ImageData pixels;                    // never the full source unless explicitly asked
+        mviewer::domain::ImageMetadata metadata; // complete as of THIS decode (ICC, orientation,
+                                                 // dims); independent of the live probe metadata
+        SourceRect coveredRect;              // in `space` coordinates
+        SourceCoordinateSpace space = SourceCoordinateSpace::Raw;
+    };
+
+    // Viewport LOD over the FULL oriented source: longest edge <= maxEdge,
+    // aspect preserved, EXIF applied. Never materializes more than
+    // ~maxEdge^2*3 bytes on the native path. Result.coveredRect is the full
+    // raw source; space = Raw.
+    RasterResult decodeLod(int maxEdge);
+
+    // Bounded region decode of the RAW source rect (pre-EXIF coordinates),
+    // EXIF-applied output scaled to (targetW,targetH). Exact pixel values are
+    // only guaranteed when hasNativeRegion(); otherwise the result is a
     // display representation (see RFC) — exact-source consumers must NOT use
-    // this path.
-    ImageData decodeRegion(int x, int y, int w, int h, int targetW, int targetH);
+    // this path. Result.coveredRect is the clamped raw rect; space = Raw.
+    RasterResult decodeRegion(const SourceRect &rawRect, int targetW, int targetH);
 
     // The classification recorded by the most recent decodeLod/decodeRegion.
     SourceDecodePath lastPath() const
@@ -143,12 +194,14 @@ class SourceImage
     }
 
   private:
-    SourceImage(std::string path, bool valid, mviewer::domain::ImageMetadata meta,
-                std::shared_ptr<IDecoder> decoder, ISourceImageCapabilities *caps);
+    SourceImage(std::string path, bool valid, mviewer::domain::ImageMetadata meta, int rawW,
+                int rawH, std::shared_ptr<IDecoder> decoder, ISourceImageCapabilities *caps);
 
     std::string m_path;
     bool m_valid = false;
     mviewer::domain::ImageMetadata m_meta;
+    int m_rawW = 0;
+    int m_rawH = 0;
     std::shared_ptr<IDecoder> m_decoder; // keeps the decoder alive (may be null)
     ISourceImageCapabilities *m_caps = nullptr; // owned by m_decoder when set
     SourceDecodePath m_lastPath = SourceDecodePath::ProbeMetadata;

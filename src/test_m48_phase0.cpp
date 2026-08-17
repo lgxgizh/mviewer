@@ -48,6 +48,7 @@
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QImageReader>
+#include <QMouseEvent>
 #include <QSize>
 #include <QTimer>
 #include <QWheelEvent>
@@ -450,20 +451,33 @@ int main(int argc, char **argv)
               "B1: orientation-6 non-square opens");
         CHECK(readySize == QSize(4000, 6000),
               "B1: probe reports the DISPLAYED geometry (4000x6000)");
-        // Zoom to 100% and pan so the displayed top-left corner is at the
-        // widget origin; the region request must cover it.
+        // Zoom to 100% then PAN to the displayed top-left corner via the
+        // viewer's own drag handlers (m_view.pan + advanceViewportRevision),
+        // bringing displayed (0,0) to the widget origin. The visible-region
+        // request must then cover it.
         viewer.zoomActual();
-        viewer.setViewTransform(Viewport(viewer.width(), viewer.height(), 1.0, 0.0, 0.0));
+        const Viewport before = viewer.viewTransform();
+        const QPoint p0(50, 50);
+        QMouseEvent press(QEvent::MouseButtonPress, QPointF(p0), Qt::LeftButton, Qt::LeftButton,
+                          Qt::NoModifier);
+        QApplication::sendEvent(&viewer, &press);
+        QMouseEvent move(QEvent::MouseMove,
+                         QPointF(p0 + QPoint(qRound(-before.offsetX), qRound(-before.offsetY))),
+                         Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&viewer, &move);
+        QMouseEvent release(QEvent::MouseButtonRelease, QPointF(p0), Qt::LeftButton, Qt::NoButton,
+                            Qt::NoModifier);
+        QApplication::sendEvent(&viewer, &release);
         viewer.update();
         CHECK(waitTrue(
                   [&]
                   {
                       const auto &c = SourceDecodeStats::instance().counters();
-                      return c.boundedRegion.load() >= 1;
+                      return c.boundedRegion.load() >= 2;
                   },
                   60000),
-              "B1: a visible-region raster is requested after pan");
-        pump(500);
+              "B1: the panned visible-region raster is requested");
+        pump(800);
         const QImage raster = viewer.displayRaster();
         // Displayed TL under orientation 6 (90 deg CW) = RAW bottom-left = the
         // BLUE corner marker of the fixture pattern.
@@ -496,17 +510,28 @@ int main(int argc, char **argv)
         viewer.setImage(qfix("exif_orient2_non_square.jpg"));
         CHECK(waitTrue([&] { return ready; }, 60000), "B2: orientation-2 opens");
         viewer.zoomActual();
-        viewer.setViewTransform(Viewport(viewer.width(), viewer.height(), 1.0, 0.0, 0.0));
+        const Viewport beforeB = viewer.viewTransform();
+        const QPoint p0b(50, 50);
+        QMouseEvent pressB(QEvent::MouseButtonPress, QPointF(p0b), Qt::LeftButton, Qt::LeftButton,
+                           Qt::NoModifier);
+        QApplication::sendEvent(&viewer, &pressB);
+        QMouseEvent moveB(QEvent::MouseMove,
+                          QPointF(p0b + QPoint(qRound(-beforeB.offsetX), qRound(-beforeB.offsetY))),
+                          Qt::NoButton, Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&viewer, &moveB);
+        QMouseEvent releaseB(QEvent::MouseButtonRelease, QPointF(p0b), Qt::LeftButton, Qt::NoButton,
+                             Qt::NoModifier);
+        QApplication::sendEvent(&viewer, &releaseB);
         viewer.update();
         CHECK(waitTrue(
                   [&]
                   {
                       const auto &c = SourceDecodeStats::instance().counters();
-                      return c.boundedRegion.load() >= 1;
+                      return c.boundedRegion.load() >= 2;
                   },
                   60000),
-              "B2: visible-region raster requested");
-        pump(500);
+              "B2: the panned visible-region raster is requested");
+        pump(800);
         const QImage raster = viewer.displayRaster();
         // Displayed TL under orientation 2 (mirror horizontal) = RAW top-right
         // = the GREEN corner marker.
@@ -670,6 +695,54 @@ int main(int argc, char **argv)
             CHECK(m.textKeys.count("MViewer.DisplayICC.Base64") != 0,
                   "E: display ICC metadata is present on the placeholder (RED today)");
         }
+    }
+
+    // ── B4: EXIF coordinate contract round-trips + atomic result metadata ───
+    {
+        MARK("B4 start");
+        installDefaults();
+        for (int orient = 1; orient <= 8; ++orient)
+        {
+            const int rawW = 6000;
+            const int rawH = 4000;
+            const mviewer::core::SourceRect sample{123, 234, 800, 500};
+            // Raw rect -> displayed -> raw must round-trip to the same rect.
+            const mviewer::core::SourceRect displayed =
+                mviewer::core::rawRectToOriented(sample, rawW, rawH, orient);
+            const mviewer::core::SourceRect again =
+                mviewer::core::orientedRectToRaw(displayed, rawW, rawH, orient);
+            CHECK(again.x >= 3 && again.x <= 123 && again.y >= 4 && again.y <= 234 &&
+                      again.w >= 798 && again.w <= 800 && again.h >= 498 && again.h <= 500,
+                  "B4: EXIF oriented<->raw rect round-trips for every orientation");
+        }
+
+        // The decode result carries COMPLETE authoritative metadata (ICC etc.)
+        // and decoding never mutates the probe metadata (M48 atomic contract).
+        const std::string adobe100p = fixture("icc_adobe_100mp.jpg");
+        auto src = mviewer::core::SourceImage::open(adobe100p);
+        CHECK(src != nullptr, "B4: AdobeRGB 100MP opens");
+        if (src)
+        {
+            const auto probeBefore = src->metadata();
+            const auto r = src->decodeLod(64);
+            CHECK(r.ok && r.decodePath == mviewer::core::SourceDecodePath::NativeLod,
+                  "B4: LOD decodes as NativeLod");
+            CHECK(r.metadata.textKeys.count("MViewer.DisplayICC.Base64") != 0,
+                  "B4: the decode result carries the display ICC metadata");
+            CHECK(!r.metadata.fileName.empty() && r.metadata.modifiedEpochSec > 0,
+                  "B4: the decode result metadata is complete (fileName/modified)");
+            CHECK(src->metadata().width == probeBefore.width &&
+                      src->metadata().fileName == probeBefore.fileName &&
+                      src->metadata().textKeys.size() == probeBefore.textKeys.size(),
+                  "B4: decoding did NOT mutate the probe metadata (no implicit mutation)");
+            CHECK(src->rawWidth() == 12000 && src->rawHeight() == 8333,
+                  "B4: raw geometry is reported for a non-swapped source");
+        }
+        // Swap-oriented source: raw dims are the transposed display dims.
+        auto oriented = mviewer::core::SourceImage::open(fixture("exif_orient6_non_square.jpg"));
+        CHECK(oriented && oriented->rawWidth() == 6000 && oriented->rawHeight() == 4000 &&
+                  oriented->displayWidth() == 4000 && oriented->displayHeight() == 6000,
+              "B4: raw/displayed geometry split is authoritative for swaps");
     }
 
     // ── F1: a throwing probe must not escape CompareWorkspace::setImages (RED)

@@ -611,7 +611,10 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                     // M47: source-backed display — bounded viewport LOD from
                     // the source (native where available, e.g. JPEG). The pane
                     // never waits for a full frame; the full frame, when
-                    // loaded, remains the analysis source.
+                    // loaded, remains the analysis source. M48 Phase 1: the
+                    // decode returns an atomic pixels+metadata result, so the
+                    // display conversion uses the authoritative metadata AS OF
+                    // this decode (ICC included), never a pre-decode snapshot.
                     if (idx >= static_cast<int>(paths.size()) ||
                         paths[static_cast<size_t>(idx)].empty())
                         continue;
@@ -622,10 +625,13 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                     sourceDims = QSize(source->metadata().width, source->metadata().height);
                     if (sourceDims.isEmpty())
                         continue;
-                    convMeta = source->metadata();
                     const QSize target = displayTargets[static_cast<size_t>(idx)];
                     const int edge = std::max(target.width(), target.height());
-                    lod = source->decodeLod(edge > 0 ? edge : 1024);
+                    const auto result = source->decodeLod(edge > 0 ? edge : 1024);
+                    if (!result.ok)
+                        continue;
+                    lod = result.pixels;
+                    convMeta = result.metadata;
                 }
                 if (ctx.isCancelled())
                     return; // after bounded scale

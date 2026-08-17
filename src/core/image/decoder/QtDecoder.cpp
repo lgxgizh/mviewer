@@ -34,25 +34,28 @@ ImageData toImageData(const QImage &src)
 }
 
 // Map the QImageIOHandler transformation bitmask to the EXIF orientation 1-8
-// constant (same mapping as the historical fillMetadata).
+// constant (the SINGLE authoritative Qt<->EXIF mapping; every consumer of the
+// orientation field depends on it — M48 B3 regression pins 4/5/7). Qt 6.10
+// encodes: Mirror=1, Flip=2, Rotate180=Mirror|Flip=3, Rotate90=4,
+// MirrorAndRotate90=5 (EXIF 7), FlipAndRotate90=6 (EXIF 5), Rotate270=7.
 int orientationFromTransform(QImageIOHandler::Transformations t)
 {
     if (t == QImageIOHandler::TransformationNone)
         return 1;
-    if (t == QImageIOHandler::TransformationRotate90)
-        return 6;
-    if (t == QImageIOHandler::TransformationRotate180)
-        return 3;
-    if (t == QImageIOHandler::TransformationRotate270)
-        return 8;
     if (t == QImageIOHandler::TransformationMirror)
         return 2;
-    if (t == QImageIOHandler::TransformationMirrorAndRotate90)
-        return 5;
-    if (t == QImageIOHandler::TransformationFlipAndRotate90)
-        return 7;
-    if (t == (QImageIOHandler::TransformationMirror | QImageIOHandler::TransformationFlip))
+    if (t == QImageIOHandler::TransformationRotate180)
+        return 3;
+    if (t == QImageIOHandler::TransformationFlip)
         return 4;
+    if (t == QImageIOHandler::TransformationFlipAndRotate90)
+        return 5; // EXIF transpose
+    if (t == QImageIOHandler::TransformationRotate90)
+        return 6;
+    if (t == QImageIOHandler::TransformationMirrorAndRotate90)
+        return 7; // EXIF transverse
+    if (t == QImageIOHandler::TransformationRotate270)
+        return 8;
     return 1;
 }
 
@@ -255,9 +258,12 @@ bool QtDecoder::probeMetadata(const std::string &path,
     const QSize full = reader.size();
     if (!full.isValid() || full.isEmpty())
         return false;
+    const QFileInfo info(QString::fromStdString(path));
     if (meta.filePath.empty())
         meta.filePath = path;
-    meta.fileSize = QFileInfo(QString::fromStdString(path)).size();
+    meta.fileName = info.fileName().toStdString();
+    meta.fileSize = info.size();
+    meta.modifiedEpochSec = info.lastModified().toSecsSinceEpoch();
     meta.width = full.width();
     meta.height = full.height();
     // Report the DISPLAYED geometry (EXIF applied), matching the decodeFull /
@@ -267,6 +273,30 @@ bool QtDecoder::probeMetadata(const std::string &path,
         std::swap(meta.width, meta.height);
     meta.orientation = orientationFromTransform(t);
     meta.format = formatName(reader);
+
+    // M48 Phase 1: the display ICC metadata must be stable on the probe (the
+    // placeholder carries it), not only on a decode. A tiny scaled read pulls
+    // the ICC out of the container header without materializing pixels. This
+    // is only attempted for formats whose scaled read is truly bounded (JPEG
+    // DCT); for others the profile is discovered at decode time instead.
+    const QString ext = info.suffix().toLower();
+    if (ext == "jpg" || ext == "jpeg" || ext == "png")
+    {
+        QImageReader iccReader(QString::fromStdString(path));
+        iccReader.setScaledSize(QSize(1, 1));
+        QImage tiny;
+        if (iccReader.read(&tiny) && tiny.colorSpace().isValid())
+        {
+            const QByteArray icc = tiny.colorSpace().iccProfile();
+            if (!icc.isEmpty())
+            {
+                meta.hasIccProfile = true;
+                const QByteArray encoded = icc.toBase64();
+                meta.textKeys["MViewer.DisplayICC.Base64"] =
+                    std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
+            }
+        }
+    }
     return true;
 }
 

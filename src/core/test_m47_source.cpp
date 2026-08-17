@@ -180,11 +180,12 @@ int main(int argc, char **argv)
         CHECK(src && src->hasNativeLod(), "T2: JPEG advertises native LOD");
         if (src)
         {
-            ImageData lod = src->decodeLod(256);
-            CHECK(!lod.isNull(), "T2: 100MP JPEG LOD(256) succeeds");
+            auto lodR = src->decodeLod(256);
+            ImageData lod = lodR.pixels;
+            CHECK(lodR.ok && !lod.isNull(), "T2: 100MP JPEG LOD(256) succeeds");
             CHECK(lod.width == 256 && lod.height == 177,
                   "T2: LOD output is 256x177 (aspect preserved)");
-            CHECK(src->lastPath() == SourceDecodePath::NativeLod,
+            CHECK(lodR.decodePath == SourceDecodePath::NativeLod,
                   "T2: classified NativeLod (no full raster)");
         }
         const auto &c = SourceDecodeStats::instance().counters();
@@ -202,12 +203,13 @@ int main(int argc, char **argv)
         CHECK(src && !src->hasNativeLod(), "T3: TIFF does NOT advertise native LOD");
         if (src)
         {
-            ImageData lod = src->decodeLod(256);
+            auto lodR = src->decodeLod(256);
+            ImageData lod = lodR.pixels;
             // Current reality: Qt's TIFF scaled decode still rasterizes fully
             // and hits the 256 MB allocation limit. The classification must be
             // the honest fallback, and the failure must be recorded, not crash.
             CHECK(lod.isNull(), "T3: 100MP TIFF LOD(256) fails today (Qt full raster limit)");
-            CHECK(src->lastPath() == SourceDecodePath::FullDecodeScaled,
+            CHECK(lodR.decodePath == SourceDecodePath::FullDecodeScaled,
                   "T3: classified FullDecodeScaled (cannot prove native)");
         }
         const auto &c = SourceDecodeStats::instance().counters();
@@ -223,11 +225,13 @@ int main(int argc, char **argv)
         CHECK(src && !src->hasNativeRegion(), "T4: no native-region claim (honest)");
         if (src)
         {
-            ImageData region = src->decodeRegion(1000, 1000, 512, 512, 512, 512);
-            CHECK(!region.isNull(), "T4: 100MP JPEG region(512x512) succeeds (bounded memory)");
+            auto regionR = src->decodeRegion({1000, 1000, 512, 512}, 512, 512);
+            ImageData region = regionR.pixels;
+            CHECK(regionR.ok && !region.isNull(),
+                  "T4: 100MP JPEG region(512x512) succeeds (bounded memory)");
             CHECK(region.width == 512 && region.height == 512,
                   "T4: region output is 512x512");
-            CHECK(src->lastPath() == SourceDecodePath::BoundedRasterRegion,
+            CHECK(regionR.decodePath == SourceDecodePath::BoundedRasterRegion,
                   "T4: classified BoundedRasterRegion (clip path, not native)");
         }
         const auto &c = SourceDecodeStats::instance().counters();
@@ -248,8 +252,9 @@ int main(int argc, char **argv)
         if (src)
         {
             // Bounded clip path.
-            ImageData region = src->decodeRegion(50, 50, 100, 80, 100, 80);
-            CHECK(!region.isNull(), "T5: region decode succeeds");
+            auto regionR = src->decodeRegion({50, 50, 100, 80}, 100, 80);
+            ImageData region = regionR.pixels;
+            CHECK(regionR.ok && !region.isNull(), "T5: region decode succeeds");
             // Reference: full decode + cropRegion (exact source semantics).
             mviewer::domain::ImageMetadata meta;
             ImageData full = Decoder::decodeFull(path, meta);
@@ -306,14 +311,17 @@ int main(int argc, char **argv)
         CHECK(src && !src->hasCapabilities(), "T6: no capability interface on the claimer");
         if (src)
         {
-            ImageData lod = src->decodeLod(128);
-            CHECK(!lod.isNull(), "T6: fallback LOD succeeds via decodeScaled");
-            CHECK(src->lastPath() == SourceDecodePath::FullDecodeScaled,
+            auto lodR = src->decodeLod(128);
+            ImageData lod = lodR.pixels;
+            CHECK(lodR.ok && !lod.isNull(), "T6: fallback LOD succeeds via decodeScaled");
+            CHECK(lodR.decodePath == SourceDecodePath::FullDecodeScaled,
                   "T6: fallback LOD classified FullDecodeScaled");
-            ImageData region = src->decodeRegion(10, 10, 64, 64, 64, 64);
-            CHECK(!region.isNull(), "T6: fallback region succeeds via decodeFull+crop");
-            CHECK(region.width == 64 && region.height == 64, "T6: fallback region dims");
-            CHECK(src->lastPath() == SourceDecodePath::FullDecodeCrop,
+            auto regionR = src->decodeRegion({10, 10, 64, 64}, 64, 64);
+            CHECK(regionR.ok && !regionR.pixels.isNull(),
+                  "T6: fallback region succeeds via decodeFull+crop");
+            CHECK(regionR.pixels.width == 64 && regionR.pixels.height == 64,
+                  "T6: fallback region dims");
+            CHECK(regionR.decodePath == SourceDecodePath::FullDecodeCrop,
                   "T6: fallback region classified FullDecodeCrop");
         }
         const auto &c = SourceDecodeStats::instance().counters();
@@ -335,7 +343,8 @@ int main(int argc, char **argv)
         // recorded when it occurs.
         if (src)
         {
-            ImageData lod = src->decodeLod(256);
+            auto lodR = src->decodeLod(256);
+            ImageData lod = lodR.pixels;
             CHECK(!lod.isNull() || SourceDecodeStats::instance().counters().failed.load() >= 1,
                   "T7: truncated image LOD is graceful (partial image OR recorded failure)");
         }
@@ -360,8 +369,9 @@ int main(int argc, char **argv)
             CHECK(src->metadata().width == 2000 && src->metadata().height == 4000,
                   "T8: probe reports the DISPLAYED 2000x4000 geometry for orientation 6");
             CHECK(src->metadata().orientation == 6, "T8: orientation field == 6");
-            ImageData lod = src->decodeLod(128);
-            CHECK(!lod.isNull(), "T8: oriented LOD decodes");
+            auto lodR = src->decodeLod(128);
+            ImageData lod = lodR.pixels;
+            CHECK(lodR.ok && !lod.isNull(), "T8: oriented LOD decodes");
             if (!lod.isNull())
             {
                 // Displayed geometry is 2000x4000; a max-edge-128 LOD of the

@@ -87,17 +87,35 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
     double density = 1.0;
     if (req.fullLod)
     {
-        pixels = source->decodeLod(req.maxEdge);
+        mviewer::core::SourceImage::RasterResult r = source->decodeLod(req.maxEdge);
+        if (r.ok)
+            pixels = r.pixels;
+        // LOD raster covers the full source in DISPLAYED coordinates.
         covered = QRect(0, 0, srcSize.width(), srcSize.height());
         if (!pixels.isNull())
             density = static_cast<double>(srcSize.width()) / pixels.width;
     }
     else
     {
-        pixels = source->decodeRegion(req.rx, req.ry, req.rw, req.rh, req.tw, req.th);
-        covered = QRect(req.rx, req.ry, req.rw, req.rh);
+        // The visible rect is in DISPLAYED (oriented) coordinates; decodeRegion
+        // consumes RAW (pre-EXIF) coordinates. Map through the single
+        // authoritative contract (M48 B1/B2) so transformed sources decode the
+        // correct region.
+        const int orientation = source->orientation();
+        const mviewer::core::SourceRect raw =
+            mviewer::core::orientedRectToRaw({req.rx, req.ry, req.rw, req.rh},
+                                             source->rawWidth(), source->rawHeight(),
+                                             orientation);
+        mviewer::core::SourceImage::RasterResult r = source->decodeRegion(raw, req.tw, req.th);
+        if (r.ok)
+            pixels = r.pixels;
+        // Report the covered area back in DISPLAYED coordinates for drawing.
+        const mviewer::core::SourceRect coveredD =
+            mviewer::core::rawRectToOriented(r.coveredRect, source->rawWidth(),
+                                             source->rawHeight(), orientation);
+        covered = QRect(coveredD.x, coveredD.y, coveredD.w, coveredD.h);
         if (!pixels.isNull())
-            density = static_cast<double>(req.rw) / pixels.width;
+            density = static_cast<double>(raw.w) / pixels.width;
     }
     if (ctx.isCancelled())
         return; // superseded during the decode
