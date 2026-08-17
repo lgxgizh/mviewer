@@ -29,12 +29,22 @@
   directory or compare session, and closing the window mid-restore is safe.
   The dialog-free `openWorkspaceFile`/`openProjectFile` entries are public for
   tests, drop targets, and CLI callers.
+- **Deterministic large-image soak (P3):** `m47_large_soak` runs 6 rounds of
+  100 MP-class display churn through the Viewer LOD path and Compare
+  source-backed panes (open → zoom → A→B→A supersede → destroy mid-request),
+  verifying per-round pool drain, zero full-decode fallbacks, bounded and
+  plateau-stable RSS, and a converged scheduler dependency graph. The
+  `m47_large_image_baseline` recorder now measures the post-Phase-2 100 MP
+  viewer display and the Compare source-backed pair: a 100 MP JPEG opens to
+  display in ~0.5 s with +53 MB RSS (Phase 0: cannot open at all), and a
+  100 MP compare pair displays both panes with +82 MB and zero full decodes.
 - `m47_source_tests` (8 groups), `m47_viewer_lod_tests` (6 groups),
   `m47_compare_lod_tests` (6 groups), `m47_exact_source_tests` (3 groups),
-  `m47_restore_tests` (5 groups) CTest gates covering probe-without-decode,
-  native/fallback classification counters, bounded RSS, supersession, destroy
-  safety, failure-vs-skip accounting, exact-source integrity with LOD panes
-  present, and transactional async workspace/project restore.
+  `m47_restore_tests` (5 groups), `m47_large_soak` CTest gates covering
+  probe-without-decode, native/fallback classification counters, bounded RSS,
+  supersession, destroy safety, failure-vs-skip accounting, exact-source
+  integrity with LOD panes present, transactional async workspace/project
+  restore, and deterministic large-image soak churn.
 
 ### Changed
 

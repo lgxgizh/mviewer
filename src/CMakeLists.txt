@@ -1487,6 +1487,28 @@ target_compile_definitions(m47_restore_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE
 add_test(NAME m47_restore_tests COMMAND m47_restore_tests)
 set_tests_properties(m47_restore_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 
+# ─── M47 Phase 6: deterministic large-image soak (UI level) ──────────────────
+# Repeated 100MP-class display churn through the Viewer LOD-first path and the
+# Compare source-backed panes: open -> ready -> zoom churn -> A/B/A supersede,
+# destroy mid-request on alternating rounds, per-round pool drain + bounded
+# RSS, zero full-decode fallbacks, and a converged scheduler dependency graph.
+add_executable(m47_large_soak
+    test_m47_large_soak.cpp
+)
+target_link_libraries(m47_large_soak
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m47_large_soak PRIVATE cxx_std_20)
+target_include_directories(m47_large_soak PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m47_large_soak PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m47_large_soak COMMAND m47_large_soak)
+set_tests_properties(m47_large_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
+
 # ─── M46: Browse real-world reliability (UI level) ──────────────────────────
 # Paint-path filesystem freedom (render-identical after source deletion),
 # scan/dimension supersession bounds, busy-cursor ownership, and deterministic

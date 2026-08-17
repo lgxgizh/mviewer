@@ -11,9 +11,13 @@
 //      full reload for the 100 MP JPEG. Reports which decoder entry points ran
 //      (decodeFull vs decodeScaled) via a counting decoder.
 //   B) Viewer data path       File -> ImageRepository -> ImageViewer
-//      opens the 100 MP JPEG through a real ImageViewer and reports the wall
-//      time to first usable frame plus the frame dimensions (proves whether the
-//      current path requires a full-resolution ImageFrame).
+//      opens the 100 MP JPEG through a real ImageViewer and records the LOD
+//      display result (post-Phase 2): latency to displayReady, source dims,
+//      bounded-raster mode, RSS delta, and the SourceDecodeStats
+//      classification counters (NativeLod, no full-decode fallback).
+//   C) Compare data path      CompareWorkspace source-backed panes
+//      a two-pane compare of the 100 MP source records time-to-both-panes,
+//      raster/source geometry, RSS delta and the classification counters.
 //
 // Instrumentation is benchmark-local and does not touch production code: a
 // CountingDecoder is registered ahead of a fresh QtDecoder (the process's
@@ -27,14 +31,17 @@
 // measurement could not be produced. No pass/fail threshold is enforced here —
 // it is a baseline recorder, not a gate (Phase 6 gates enforce the target).
 
+#include "compareworkspace.h"
 #include "core/image/Decoder.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/ImageRepository.h"
+#include "core/image/SourceImage.h"
 #include "core/image/decoder/DecoderRegistry.h"
 #include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/QtFallbackDecoder.h"
 #include "core/perf/MemoryTracker.h"
 #include "imageviewer.h"
+#include "widgets/rawimageview.h"
 
 #include <QApplication>
 #include <QDir>
@@ -61,6 +68,8 @@
 
 namespace
 {
+
+using mviewer::core::SourceDecodeStats;
 
 struct Options
 {
@@ -331,6 +340,124 @@ ViewerMeasure viewerOpen(const QString &path, int waitMs = 120000)
     return v;
 }
 
+// ── M47 Phase 6: 100MP viewer LOD display (section B2, post-Phase 2) ────────
+// The 100 MP JPEG now displays through the source-backed LOD raster path
+// (displayReady, bounded raster, no full frame). Records the display latency,
+// source dims, RSS delta and the SourceDecodeStats classification counters.
+struct LODViewerMeasure
+{
+    double latencyMs = 0.0;
+    bool ready = false;
+    bool lodMode = false;
+    bool frameMaterialized = false; // a full ImageFrame exists
+    QSize sourceDims;
+    double rssDeltaMB = 0.0;
+    uint64_t nativeLod = 0;
+    uint64_t fullDecodeScaled = 0;
+    uint64_t fullDecodeCrop = 0;
+    uint64_t fullDecode = 0;
+};
+
+LODViewerMeasure viewerLodOpen(const QString &path, int waitMs = 120000)
+{
+    LODViewerMeasure v;
+    SourceDecodeStats::instance().counters().reset();
+    const double rssBefore = rssMB();
+    ImageViewer viewer;
+    viewer.resize(1280, 800);
+    viewer.show();
+    viewer.setBrowseSequence({path});
+    QSize readySize;
+    bool ready = false;
+    QObject::connect(&viewer, &ImageViewer::displayReady, &viewer,
+                     [&](const QSize &s)
+                     {
+                         readySize = s;
+                         ready = true;
+                     });
+    const double t0 = nowMs();
+    viewer.setImage(path);
+    const double deadline = nowMs() + waitMs;
+    while (!ready && nowMs() < deadline)
+        pump(1);
+    v.latencyMs = nowMs() - t0;
+    v.ready = ready;
+    v.lodMode = viewer.isLodDisplay();
+    v.sourceDims = readySize;
+    const std::shared_ptr<ImageFrame> frame = viewer.frame();
+    v.frameMaterialized = frame && frame->isValid();
+    const auto &c = SourceDecodeStats::instance().counters();
+    v.nativeLod = c.nativeLod.load();
+    v.fullDecodeScaled = c.fullDecodeScaled.load();
+    v.fullDecodeCrop = c.fullDecodeCrop.load();
+    v.fullDecode = c.fullDecode.load();
+    v.rssDeltaMB = rssMB() - rssBefore;
+    return v;
+}
+
+// ── M47 Phase 6: Compare source-backed panes (section C) ────────────────────
+// A two-pane compare of infeasible sources displays through per-pane viewport
+// LOD rasters (no full frame, no full decode). Records time-to-both-panes,
+// RSS delta and the classification counters.
+struct CompareMeasure
+{
+    double latencyMs = 0.0;
+    bool panesReady = false;
+    int paneCount = 0;
+    QSize pane0Raster;
+    QSize pane0Source;
+    double rssDeltaMB = 0.0;
+    uint64_t nativeLod = 0;
+    uint64_t fullDecodeScaled = 0;
+    uint64_t fullDecodeCrop = 0;
+    uint64_t fullDecode = 0;
+};
+
+CompareMeasure comparePairOpen(const QString &a, const QString &b, int waitMs = 120000)
+{
+    CompareMeasure m;
+    SourceDecodeStats::instance().counters().reset();
+    const double rssBefore = rssMB();
+    CompareWorkspace ws;
+    ws.resize(1280, 800);
+    ws.show();
+    const double t0 = nowMs();
+    ws.setImages({a, b});
+    auto panesReady = [&]()
+    {
+        if (ws.comparedImageCount() != 2)
+            return false;
+        int nonNull = 0;
+        for (RawImageView *v : ws.findChildren<RawImageView *>())
+        {
+            if (v && v->cellIndex() >= 0 && v->cellIndex() < 2 && !v->image().isNull())
+                ++nonNull;
+        }
+        return nonNull == 2;
+    };
+    const double deadline = nowMs() + waitMs;
+    while (!panesReady() && nowMs() < deadline)
+        pump(1);
+    m.latencyMs = nowMs() - t0;
+    m.panesReady = panesReady();
+    m.paneCount = ws.comparedImageCount();
+    for (RawImageView *v : ws.findChildren<RawImageView *>())
+    {
+        if (v && v->cellIndex() == 0)
+        {
+            m.pane0Raster = v->image().size();
+            m.pane0Source = v->sourceSize();
+        }
+    }
+    const auto &c = SourceDecodeStats::instance().counters();
+    m.nativeLod = c.nativeLod.load();
+    m.fullDecodeScaled = c.fullDecodeScaled.load();
+    m.fullDecodeCrop = c.fullDecodeCrop.load();
+    m.fullDecode = c.fullDecode.load();
+    m.rssDeltaMB = rssMB() - rssBefore;
+    return m;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -434,20 +561,62 @@ int main(int argc, char **argv)
         ++g_failures;
         printf("  [baseline] MISSING fixture: %s\n", qPrintable(viewerPath));
     }
-    // B2: the 100 MP JPEG — CURRENT reproduction: Qt's 256 MB QImage allocation
-    // limit rejects the full decode, so the current viewer cannot open it at
-    // all (the scaled-256 path above is the only working preview today).
-    // This is an expected baseline FINDING, not a harness failure.
+    // B2 (post-Phase 2): the 100 MP JPEG opens through the source-backed LOD
+    // display path — displayReady with the full source dims, a bounded raster,
+    // NO full ImageFrame and NO full-decode classification. (Phase 0 recorded
+    // this as "cannot open at all"; Phase 2 fixed it via LOD-first display.)
     const QString viewer100 = root + "/large_jpeg_100mp.jpg";
     if (QFileInfo::exists(viewer100))
     {
-        ViewerMeasure v = viewerOpen(viewer100, 8000);
-        printf("  viewer open-to-first-frame (100MP): %.1f ms  frame=%dx%d  fullDecode=%d  "
-               "=> %s\n",
-               v.latencyMs, v.frameW, v.frameH, g_counter ? g_counter->fullCalls.load() : 0,
-               (v.frameW == 0 && v.frameH == 0)
-                   ? "REPRODUCTION: cannot open (Qt 256 MB allocation limit)"
-                   : "opened (unexpected at baseline)");
+        LODViewerMeasure v = viewerLodOpen(viewer100);
+        printf("  viewer open-to-display (100MP): %.1f ms  ready=%d lod=%d  source=%dx%d  "
+               "frame=%d  rss+%.1f MB  nativeLod=%llu fullDecodeScaled=%llu fullDecodeCrop=%llu "
+               "fullDecode=%llu\n",
+               v.latencyMs, v.ready ? 1 : 0, v.lodMode ? 1 : 0, v.sourceDims.width(),
+               v.sourceDims.height(), v.frameMaterialized ? 1 : 0, v.rssDeltaMB,
+               static_cast<unsigned long long>(v.nativeLod),
+               static_cast<unsigned long long>(v.fullDecodeScaled),
+               static_cast<unsigned long long>(v.fullDecodeCrop),
+               static_cast<unsigned long long>(v.fullDecode));
+        if (v.ready && v.sourceDims != QSize(12000, 8333))
+            fail("100MP displayReady did not carry the full source dimensions");
+        if (v.ready && !v.lodMode)
+            fail("100MP viewer is not in LOD display mode");
+        if (v.ready && v.frameMaterialized)
+            fail("100MP display materialized a full ImageFrame (LOD contract)");
+        // The counting-decoder instrumentation masks the Qt capability
+        // interface, so the classification here is the honest bounded fallback
+        // (JPEG DCT-scaled decode) — the MEMORY bound is what must hold: no
+        // full decode, no full-decode-crop fallback, and a bounded RSS delta.
+        if (v.ready && v.fullDecode + v.fullDecodeCrop != 0)
+            fail("100MP display path ran a full-resolution decode");
+        if (v.ready && v.rssDeltaMB > 150.0)
+            fail("100MP display RSS delta exceeds the bounded-raster budget");
+    }
+
+    printf("\n-- C) Compare data path: CompareWorkspace source-backed panes --\n");
+    // C1: a two-pane compare of the SAME infeasible 100 MP source: both panes
+    // display via per-pane viewport LOD rasters with no full materialization.
+    if (QFileInfo::exists(viewer100))
+    {
+        CompareMeasure c = comparePairOpen(viewer100, viewer100);
+        printf("  compare pair (100MP x2): %.1f ms  panes=%d ready=%d  pane0 raster=%dx%d "
+               "source=%dx%d  rss+%.1f MB  nativeLod=%llu fullDecodeScaled=%llu "
+               "fullDecodeCrop=%llu fullDecode=%llu\n",
+               c.latencyMs, c.paneCount, c.panesReady ? 1 : 0, c.pane0Raster.width(),
+               c.pane0Raster.height(), c.pane0Source.width(), c.pane0Source.height(),
+               c.rssDeltaMB, static_cast<unsigned long long>(c.nativeLod),
+               static_cast<unsigned long long>(c.fullDecodeScaled),
+               static_cast<unsigned long long>(c.fullDecodeCrop),
+               static_cast<unsigned long long>(c.fullDecode));
+        if (!c.panesReady || c.paneCount != 2)
+            fail("compare pair did not materialize both panes");
+        if (c.pane0Source != QSize(12000, 8333))
+            fail("compare pane did not carry the full source geometry");
+        if (c.fullDecode + c.fullDecodeCrop != 0)
+            fail("compare display path ran a full-resolution decode");
+        if (c.rssDeltaMB > 200.0)
+            fail("compare pair RSS delta exceeds the bounded-raster budget");
     }
 
     printf("\n=== baseline summary: %d failure(s) ===\n", g_failures);
@@ -472,7 +641,7 @@ int main(int argc, char **argv)
         }
         QJsonObject root2;
         root2["milestone"] = "M47";
-        root2["phase"] = "0-baseline";
+        root2["phase"] = "phases-0-6";
         root2["fixture_root"] = root;
         root2["measures"] = arr;
         QFile f(g_opts.outFile);
