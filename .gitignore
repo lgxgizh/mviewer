@@ -1,4 +1,4 @@
-﻿# Benchmark test output artifacts
+# Benchmark test output artifacts
 benchmark/report/last_run.json
 perf_regression_*.ps1
 bench_*.ps1
@@ -27,6 +27,7 @@ benchmark_tmp/
 # committed so a clean checkout / CI runner can rebuild the fixtures (P0-01).
 testdata/*
 !testdata/generate_fixtures.py
+!testdata/generate_large_fixtures.py
 asan_log.txt
 
 asan_log*.txt

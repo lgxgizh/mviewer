@@ -1026,6 +1026,12 @@ if(Python3_Interpreter_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/testdata/generate_fixtures.py --ensure --size 256)
     set_tests_properties(testdata_generator_gate PROPERTIES
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
+    # M47 Phase 0: deterministic large-image fixture corpus must exist with the
+    # exact dimensions (generator is tracked; binaries stay git-ignored).
+    add_test(NAME large_fixture_gate
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/testdata/generate_large_fixtures.py --check)
+    set_tests_properties(large_fixture_gate PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} TIMEOUT 900)
 endif()
 
 target_compile_features(benchmark_scenario PRIVATE cxx_std_20)
@@ -1439,6 +1445,30 @@ target_include_directories(mviewer_m46_workflow_soak PRIVATE ${CMAKE_CURRENT_SOU
 target_compile_definitions(mviewer_m46_workflow_soak PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME m46_workflow_soak COMMAND mviewer_m46_workflow_soak --iterations 8)
 set_tests_properties(m46_workflow_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
+
+# ─── M47 Phase 0: large-image data-path BASELINE recorder ───────────────────
+# Records the pre-Phase-1 behavior of the current data path (decode entry
+# points, latency, materialized bytes, RSS) for the large fixture corpus.
+# No pass/fail thresholds here — it produces the baseline that Phase 6 gates
+# will compare against (see benchmarks/m47_large_image_baseline_main.cpp).
+add_executable(m47_large_image_baseline
+    ${CMAKE_SOURCE_DIR}/benchmarks/m47_large_image_baseline_main.cpp
+)
+target_link_libraries(m47_large_image_baseline
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m47_large_image_baseline PRIVATE cxx_std_20)
+target_include_directories(m47_large_image_baseline PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m47_large_image_baseline PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m47_large_image_baseline
+    COMMAND m47_large_image_baseline
+            --out ${CMAKE_SOURCE_DIR}/benchmark/report/large_image_baseline_phase0.json)
+set_tests_properties(m47_large_image_baseline PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
 
 # ─── M13 Phase 1: Product Workflow gate ──────────────────────────────────
 # A single ctest that runs the full user-chain in order:

@@ -18,8 +18,38 @@
 > `docs/review/M44_RELEASE_READINESS_STRUCTURAL_CONVERGENCE_2026-08-15.md`,
 > `docs/review/M45_NATIVE_WINDOWS_PRODUCT_QUALIFICATION_2026-08-16.md`,
 > `docs/review/M46_RELIABILITY_SOAK_2026-08-17.md`,
-> `docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md` and
+> `docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md`,
+> `docs/review/M47_PHASE0_BASELINE_2026-08-17.md` and
 > `.\build.ps1 Test`.
+
+## M47 — Production-scale data path hardening (2026-08-17, in progress)
+
+- **Phase 0 complete — baseline, contract & failure reproduction:**
+  - **Reproduction (measured):** 100 MP JPEG/TIFF **cannot be opened at all**
+    by the current Viewer/Repository path — Qt 6.10's 256 MB QImage allocation
+    limit rejects the full decode (`decodeFull` returns null). The 100 MP JPEG
+    *scaled* decode (256 px) works in ~112 ms; the 100 MP TIFF scaled decode
+    also fails.
+  - **Measured:** 24 MP JPEG open = 811–978 ms decode; viewer first usable
+    frame 1020–1030 ms with a full 6000×4000 frame retained (+243.6 MB RSS
+    while held); every fit/100%/zoom repaint stalls the UI thread 126–164 ms
+    (full-frame scaling on the paint path); repeated open/close ~1 s each with
+    cache retention.
+  - **Audit:** every current display path (Viewer `TileGrid` crop, Compare
+    per-pane display LOD) is a client-side operation over an already
+    materialized full-resolution RGB frame. `loadPixels()` always calls
+    `decodeFull`.
+  - **Contract:** `docs/rfc/M47_SOURCE_BACKED_DISPLAY.md` fixes that display
+    representation != analysis source, with an additive capability model that
+    does not touch the frozen DecoderRegistry/plugin ABI.
+  - **Tooling:** deterministic large-image corpus
+    (`testdata/generate_large_fixtures.py`, CTest `large_fixture_gate`),
+    baseline recorder (`benchmarks/m47_large_image_baseline_main.cpp`, CTest
+    `m47_large_image_baseline`), evidence
+    `docs/review/M47_PHASE0_BASELINE_2026-08-17.md`.
+  - Next phases: source-backed image abstraction → Viewer/Compare LOD/tile
+    pipelines → exact-source consumers → transactional Workspace/Project
+    restore → large-image gates → qualification.
 
 ## M46 — Real-world workflow reliability & long-session release qualification (2026-08-17)
 
