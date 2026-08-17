@@ -19,11 +19,21 @@ Fixture matrix (M47 Phase 0):
   exif_orientation6.jpg   4096x4096 JPEG with EXIF orientation 6 (rotate 90 CW)
   exif_orientation8.jpg   4096x4096 JPEG with EXIF orientation 8 (rotate 270 CW)
   exif_orientation6_wide.jpg 4000x2000 JPEG with EXIF orientation 6 (displayed 2000x4000)
-  icc_adobe.jpg           2048x2048 JPEG with an embedded AdobeRGB ICC profile
+  icc_adobe.jpg           2048x2048 JPEG with an embedded sRGB ICC profile (legacy)
   extreme_wide.jpg        20000x400 JPEG (extreme aspect, landscape)
   extreme_tall.jpg        400x20000 JPEG (extreme aspect, portrait)
   truncated_large.jpg     a valid 6000x4000 JPEG truncated at ~55% (corrupt input)
   truncated_large.tiff    a valid 4000x4000 TIFF truncated at ~50% (corrupt input)
+
+M48 Phase 0 additions (real non-sRGB + orientation + deep-zoom):
+  icc_adobe_12mp.jpg      4000x3000 JPEG embedding a CONSTRUCTED AdobeRGB1998
+                          ICC (offline, parametric TRC) + a flat in-gamut patch
+  icc_adobe_100mp.jpg     12000x8333 JPEG, same profile + patch
+  exif_orient2..8_non_square.jpg  6000x4000 JPEGs, EXIF orientation 2..8
+                          (raw pixels + corner markers, non-square so coordinate
+                          confusion is detectable)
+  deepzoom_hf_72mp.jpg    9000x8000 JPEG with 1px-period high-frequency detail
+                          (deep-zoom density tests; ~53 MB)
 
 Usage:
   python testdata/generate_large_fixtures.py [--check] [--ensure] [--force]
@@ -56,6 +66,19 @@ REQUIRED = {
     "exif_orientation8.jpg": (4096, 4096, 100_000),
     "exif_orientation6_wide.jpg": (4000, 2000, 100_000),
     "icc_adobe.jpg": (2048, 2048, 50_000),
+    # M48 Phase 0: REAL non-sRGB fixtures (AdobeRGB1998 profile constructed
+    # offline — never an sRGB profile wearing an AdobeRGB name), orientation
+    # 2..8 NON-SQUARE with corner markers, and a >60MP 1px-period pattern.
+    "icc_adobe_12mp.jpg": (4000, 3000, 200_000),
+    "icc_adobe_100mp.jpg": (12000, 8333, 1_000_000),
+    "exif_orient2_non_square.jpg": (6000, 4000, 100_000),
+    "exif_orient3_non_square.jpg": (6000, 4000, 100_000),
+    "exif_orient4_non_square.jpg": (6000, 4000, 100_000),
+    "exif_orient5_non_square.jpg": (6000, 4000, 100_000),
+    "exif_orient6_non_square.jpg": (6000, 4000, 100_000),
+    "exif_orient7_non_square.jpg": (6000, 4000, 100_000),
+    "exif_orient8_non_square.jpg": (6000, 4000, 100_000),
+    "deepzoom_hf_72mp.jpg": (9000, 8000, 800_000),
     "extreme_wide.jpg": (20000, 400, 100_000),
     "extreme_tall.jpg": (400, 20000, 100_000),
     "truncated_large.jpg": (6000, 4000, 100_000),
@@ -64,6 +87,113 @@ REQUIRED = {
 
 # EXIF orientation tag constants (Pillow Image.Exif tag 274).
 _ORIENTATION_TAG = 274
+
+
+def build_adobe_rgb_1998_profile() -> bytes:
+    """Deterministic AdobeRGB1998-compatible ICC profile (constructed, offline).
+
+    Built from the documented AdobeRGB1998 primaries / D65 -> D50-adapted
+    matrix columns and the 2.2 TRC — no external binary blob, no network. The
+    canonical matrix values are the widely published D50-adapted ones used by
+    every ICC implementation. lcms (Pillow/Qt) parses and transforms this
+    profile; the test suite verifies the transform numerically.
+    """
+    import struct
+
+    def s15f16(v: float) -> int:  # float -> signed 15.16 fixed point
+        return int(round(v * 65536.0)) & 0xFFFFFFFF
+
+    # AdobeRGB1998 (D65 primaries) -> D50-adapted XYZ matrix columns, and the
+    # canonical Bradford D50 -> D65 adaptation (the inverse) used by real
+    # profiles whose PCS is D50 while the primaries are D65-defined.
+    rXYZ = (0.60974, 0.31111, 0.01947)
+    gXYZ = (0.20528, 0.62567, 0.06087)
+    bXYZ = (0.14919, 0.06322, 0.74457)
+    wtpt = (0.9642, 1.0, 0.8249)
+    d50_to_d65 = (1.04788, 0.02292, -0.0502, 0.0296, 0.9905, -0.0171, -0.0093, 0.0151, 0.7517)
+
+    def xyz_tag(values) -> bytes:
+        # TYPED v4 XYZType: 'XYZ ' + reserved + 3 x s15Fixed16 (20 bytes). Qt's
+        # qicc rejects the classic 12-byte v2 form ("Undersized XYZ tag").
+        return struct.pack(">4sI3I", b"XYZ ", 0, *(s15f16(v) for v in values))
+
+    def chad_tag() -> bytes:
+        # s15Fixed16ArrayType ('sf32') — Qt's qicc rejects any other type for
+        # the chromatic-adaptation tag ("bad chad data type").
+        out = struct.pack(">4sI", b"sf32", 0)
+        for v in d50_to_d65:
+            out += struct.pack(">I", s15f16(v))
+        return out
+
+    def trc_tag() -> bytes:
+        # Parametric gamma (function type 0 = gamma, g as s15Fixed16). A plain
+        # 'curv' gamma is rejected by lcms for transforms in this profile
+        # shape (measured); the parametric form is accepted and equivalent.
+        return struct.pack(">III", 0x70617261, 0, 0) + struct.pack(">I", s15f16(2.2))
+
+    def mluc_tag(text: str) -> bytes:
+        utf16 = text.encode("utf-16-be")
+        # 'mluc' | reserved | recordCount | recordSize | records | text
+        body = struct.pack(">IIII", 0x6D6C7563, 0, 1, 12) + struct.pack(
+            ">2s2sII", b"en", b"US", len(utf16), 28
+        ) + utf16
+        return body
+
+    def text_tag(text: str) -> bytes:
+        raw = text.encode("ascii")
+        return struct.pack(">II", 0x74657874, len(raw)) + raw
+
+    tags = [
+        (b"desc", mluc_tag("AdobeRGB1998 compatible (constructed)")),
+        (b"cprt", text_tag("MViewer fixture generator")),
+        (b"wtpt", xyz_tag(wtpt)),
+        (b"chad", chad_tag()),
+        (b"rXYZ", xyz_tag(rXYZ)),
+        (b"gXYZ", xyz_tag(gXYZ)),
+        (b"bXYZ", xyz_tag(bXYZ)),
+        (b"rTRC", trc_tag()),
+        (b"gTRC", trc_tag()),
+        (b"bTRC", trc_tag()),
+    ]
+
+    def pad4(b: bytes) -> bytes:
+        return b + b"\x00" * ((4 - len(b) % 4) % 4)
+
+    header_size = 128
+    tag_table_size = 4 + 12 * len(tags)
+    offset = header_size + tag_table_size
+    table = struct.pack(">I", len(tags))
+    payload = b""
+    for sig, data in tags:
+        table += sig + struct.pack(">II", offset, len(data))
+        payload += pad4(data)
+        offset += len(pad4(data))
+
+    size = header_size + tag_table_size + len(payload)
+    header = struct.pack(
+        ">I4sI4s4s4s6H4s4sIII8sI3II",
+        size,
+        b"lcms",
+        0x02100000,
+        b"mntr",
+        b"RGB ",
+        b"XYZ ",
+        2000, 1, 1, 0, 0, 0,  # datetime (UTC 2000-01-01 00:00:00)
+        b"acsp",
+        b"MSFT",
+        0,  # flags
+        0,  # manufacturer
+        0,  # model
+        b"\x00" * 8,  # attributes
+        0,  # rendering intent (perceptual)
+        s15f16(0.9642), s15f16(1.0), s15f16(0.8249),  # D50 illuminant
+        0,  # creator
+    )
+    # ICC.1 header is 128 bytes: the fields above fill 84, the remainder is a
+    # reserved section that must be zero.
+    assert len(header) == 84, len(header)
+    header += b"\x00" * (header_size - len(header))
+    return header + table + payload
 
 
 def root_dir() -> str:
@@ -138,7 +268,7 @@ def _ensure_jpeg_exif_orientation(exif: bytes, tag_value: int) -> bytes:
 
 
 def generate(root: str) -> None:
-    from PIL import Image
+    from PIL import Image, ImageDraw
 
     os.makedirs(os.path.join(root, "large"), exist_ok=True)
 
@@ -198,6 +328,72 @@ def generate(root: str) -> None:
         except Exception as exc:  # noqa: BLE001 - littlecms2 may be absent
             img.save(path("icc_adobe.jpg"), "JPEG", quality=90)
             print("generated icc_adobe.jpg (ICC embed unavailable: %s)" % exc)
+
+    # M48 Phase 0: a REAL AdobeRGB1998 profile (constructed deterministically,
+    # verified by lcms at generation time) embedded into 12MP and 100MP JPEGs.
+    # A solid green patch is drawn over the pattern so display-pipeline tests
+    # can sample a flat region whose expected sRGB value is known analytically.
+    adobe_profile = build_adobe_rgb_1998_profile()
+    try:
+        from PIL import ImageCms
+        import io as _io
+
+        ImageCms.ImageCmsProfile(_io.BytesIO(adobe_profile))  # lcms parse check
+    except Exception as exc:  # pragma: no cover - generator self-check
+        raise SystemExit("constructed AdobeRGB1998 profile failed lcms parse: %s" % exc)
+
+    def save_adobe_jpeg(name, w, h, quality, patch):
+        if not want(name):
+            return
+        img = make_pattern(w, h)
+        d = ImageDraw.Draw(img)
+        x0, y0, pw, ph = patch
+        # In-gamut yellowish-green: under the AdobeRGB1998 matrix its sRGB
+        # display value differs strongly from the raw RGB (measured delta >100
+        # in one channel), so display-pipeline tests can detect a skipped ICC
+        # conversion.
+        d.rectangle([x0, y0, x0 + pw - 1, y0 + ph - 1], fill=(128, 224, 0))
+        img.save(path(name), "JPEG", quality=quality, icc_profile=adobe_profile,
+                 optimize=False)
+        print("generated %s (constructed AdobeRGB1998 ICC embedded)" % name)
+
+    save_adobe_jpeg("icc_adobe_12mp.jpg", 4000, 3000, 92, (1952, 1452, 96, 96))
+    save_adobe_jpeg("icc_adobe_100mp.jpg", 12000, 8333, 85, (6020, 4200, 160, 160))
+
+    # M48 Phase 0: NON-SQUARE EXIF orientation 2..8 fixtures with corner
+    # markers (the base pattern's TL/TR/BL/BR blocks stay at raw corners) at
+    # 24 MP so the Viewer LOD/region path (which only engages > 16 MP) is
+    # exercised. The pixels are saved RAW; the EXIF tag declares the transform.
+    for orient in range(2, 9):
+        name = "exif_orient%d_non_square.jpg" % orient
+        if not want(name):
+            continue
+        img = make_pattern(6000, 4000)
+        ex = Image.Exif()
+        ex[_ORIENTATION_TAG] = orient
+        img.save(path(name), "JPEG", quality=80, exif=ex.tobytes())
+        print("generated %s (EXIF orientation %d)" % (name, orient))
+
+    # M48 Phase 0: >60MP 1px-period high-frequency pattern (72 MP). Built as a
+    # 1000x1000 tile via frombytes (C-speed paste of a 9x8 grid; per-pixel
+    # formula only fills 1M pixels once).
+    if want("deepzoom_hf_72mp.jpg"):
+        tile_w, tile_h = 1000, 1000
+        buf = bytearray(tile_w * tile_h * 3)
+        i = 0
+        for y in range(tile_h):
+            for x in range(tile_w):
+                buf[i] = (x * 37 + y * 17 + 11) & 0xFF
+                buf[i + 1] = (x * 13 + y * 53 + 29) & 0xFF
+                buf[i + 2] = (x * 71 + y * 7 + 43) & 0xFF
+                i += 3
+        tile = Image.frombytes("RGB", (tile_w, tile_h), bytes(buf))
+        img = Image.new("RGB", (9000, 8000))
+        for ty in range(8):
+            for tx in range(9):
+                img.paste(tile, (tx * tile_w, ty * tile_h))
+        img.save(path("deepzoom_hf_72mp.jpg"), "JPEG", quality=85, optimize=False)
+        print("generated deepzoom_hf_72mp.jpg (1px-period, 72MP)")
 
     if want("extreme_wide.jpg"):
         img = make_pattern(20000, 400)

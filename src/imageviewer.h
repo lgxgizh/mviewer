@@ -77,6 +77,14 @@ class ImageViewer : public QOpenGLWidget
         return m_lodMode && !m_raster.image.isNull();
     }
 
+    // M48: the currently displayed LOD/region raster (display-only — analysis
+    // consumers never use it). Null when the raster path is inactive. Public
+    // so tests and display-inspection callers can verify what is painted.
+    QImage displayRaster() const
+    {
+        return m_raster.image;
+    }
+
     // P1-7: serialize/restore the current view transform (scale + pan). Used to
     // restore the viewer's zoom level and pan position across sessions. Viewport
     // is domain-free (core/render), so it carries no Qt types.

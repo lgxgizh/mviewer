@@ -1509,6 +1509,34 @@ target_compile_definitions(m47_large_soak PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SO
 add_test(NAME m47_large_soak COMMAND m47_large_soak)
 set_tests_properties(m47_large_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
 
+# ─── M48 Phase 0: deterministic RED regressions (UI level) ───────────────────
+# Freeze the M48 contracts BEFORE implementation: ICC display fidelity across
+# full-frame / viewer-LOD / compare source-backed paths, EXIF orientation
+# region-coordinate correctness (oriented vs raw), LOD-only resize/fullscreen,
+# Compare deep-zoom density (no whole-image LOD ceiling), placeholder metadata
+# completeness, and decoder exception terminal states. Cases are expected to
+# FAIL until the corresponding M48 Phase 1/2 fixes land.
+add_executable(m48_phase0_regressions
+    test_m48_phase0.cpp
+)
+target_link_libraries(m48_phase0_regressions
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m48_phase0_regressions PRIVATE cxx_std_20)
+target_include_directories(m48_phase0_regressions PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m48_phase0_regressions PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m48_phase0_regressions COMMAND m48_phase0_regressions)
+# Frozen RED: the cases FAIL against the current M47 code by design and must
+# only turn green after the corresponding M48 Phase 1/2 fix. WILL_FAIL keeps
+# the gate green while documenting the expected failures; flip it OFF once the
+# suite is green.
+set_tests_properties(m48_phase0_regressions PROPERTIES RUN_SERIAL TRUE TIMEOUT 900 WILL_FAIL TRUE)
+
 # ─── M46: Browse real-world reliability (UI level) ──────────────────────────
 # Paint-path filesystem freedom (render-identical after source deletion),
 # scan/dimension supersession bounds, busy-cursor ownership, and deterministic
