@@ -1421,6 +1421,28 @@ target_compile_definitions(m47_viewer_lod_tests PRIVATE MVIEWER_SOURCE_DIR="${CM
 add_test(NAME m47_viewer_lod_tests COMMAND m47_viewer_lod_tests)
 set_tests_properties(m47_viewer_lod_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
 
+# ─── M47 Phase 3: Compare source-backed display (UI level) ───────────────────
+# Infeasible sources (full RGB > the analysis limit) keep their pane via a
+# metadata-only placeholder and display through the source-backed LOD path;
+# failures vs skips are accounted separately; zoom re-materializes at a denser
+# edge; TIFF honesty and destroy safety are covered.
+add_executable(m47_compare_lod_tests
+    test_m47_compare_lod.cpp
+)
+target_link_libraries(m47_compare_lod_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m47_compare_lod_tests PRIVATE cxx_std_20)
+target_include_directories(m47_compare_lod_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m47_compare_lod_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m47_compare_lod_tests COMMAND m47_compare_lod_tests)
+set_tests_properties(m47_compare_lod_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
+
 # ─── M46: Browse real-world reliability (UI level) ──────────────────────────
 # Paint-path filesystem freedom (render-identical after source deletion),
 # scan/dimension supersession bounds, busy-cursor ownership, and deterministic

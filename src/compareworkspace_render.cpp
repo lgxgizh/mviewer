@@ -1,12 +1,36 @@
 // CompareWorkspace rendering: paint modes, diff overlay, blink, histograms (M20 P0#2).
 #include "compareworkspace_p.h"
 
+#include "core/image/SourceImage.h"
+
 #include <cmath>
 
 namespace
 {
 constexpr double kDisplayLodOverscan = 1.25;
 constexpr double kDisplayLodBucketSteps = 16.0;
+// M47: bound for a source-backed pane LOD raster (longest edge).
+constexpr int kMaxCompareLodEdge = 4096;
+}
+
+// M47: the display-target edge for a SOURCE-BACKED pane (no full frame):
+// pane viewport x dpr x pane scale x overscan, bounded. The worker decodes a
+// viewport LOD at this edge; zooming re-materializes at a denser edge.
+int CompareWorkspace::sourceLodEdge(int pane) const
+{
+    if (pane < 0 || pane >= static_cast<int>(m_cellViews.size()) || !m_cellViews[pane])
+        return 0;
+    const QSize viewport = m_cellViews[pane]->size();
+    if (!viewport.isValid() || viewport.width() <= 0 || viewport.height() <= 0)
+        return 0;
+    const double dpr = std::max(1.0, m_cellViews[pane]->devicePixelRatioF());
+    double scale = 1.0;
+    if (pane < m_engine.imageCount())
+        scale = std::max(1.0, m_engine.cellTransform(pane).scale);
+    const double edge =
+        std::ceil(std::max(viewport.width(), viewport.height()) * dpr * scale *
+                  kDisplayLodOverscan);
+    return std::max(64, std::min(static_cast<int>(edge), kMaxCompareLodEdge));
 }
 
 // M34: the dedicated compare canvas page. The normal grid scrolls inside
@@ -259,8 +283,23 @@ void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
                                    !ws->m_cellViews[pane])
                                    return;
                                const ImageFrame *frame = ws->m_engine.imageAt(pane);
-                               if (!frame || frame->pixels().isNull() ||
-                                   ws->m_cellViews[pane]->image().isNull() ||
+                               if (!frame || frame->pixels().isNull())
+                               {
+                                   // M47: source-backed pane (no full frame —
+                                   // e.g. an infeasible source): refresh when
+                                   // its LOD raster is stale (zoom/pan/scale).
+                                   if (pane < static_cast<int>(ws->m_comparePaths.size()) &&
+                                       !ws->m_comparePaths[static_cast<size_t>(pane)].empty())
+                                   {
+                                       const QSize cur = ws->m_cellViews[pane]->image().size();
+                                       const int edge = ws->sourceLodEdge(pane);
+                                       if (cur.isNull() || cur.width() <= 0 ||
+                                           std::max(cur.width(), cur.height()) != edge)
+                                           dirty.push_back(pane);
+                                   }
+                                   return;
+                               }
+                               if (ws->m_cellViews[pane]->image().isNull() ||
                                    ws->m_cellViews[pane]->image().size() !=
                                        ws->displayLodTarget(pane, frame->pixels()))
                                    dirty.push_back(pane);
@@ -523,11 +562,11 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
     const std::vector<ImageData> &pixels, const std::vector<mviewer::domain::ImageMetadata> &metadata,
     const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
     const std::vector<int> &panes, int paneCount, uint64_t gen,
-    const QPointer<CompareWorkspace> &guard)
+    const std::vector<std::string> &paths, const QPointer<CompareWorkspace> &guard)
 {
     return TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, metadata, displayTargets, adjusts, panes, paneCount, gen, guard](
+        [pixels, metadata, displayTargets, adjusts, panes, paneCount, gen, paths, guard](
             const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
@@ -552,29 +591,59 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                 if (idx < 0 || idx >= static_cast<int>(pixels.size()))
                     continue;
                 const ImageData &src = pixels[static_cast<size_t>(idx)];
-                if (src.isNull())
-                    continue; // no source data yet — the pane stays blank
-                const CellAdjust sourceAdjust = adjustFor(idx);
-                const QSize target = displayTargets[static_cast<size_t>(idx)];
-                const ImageData lod = target.isValid()
-                                          ? RenderEngine::scaleBoundedStatic(
-                                                src, RenderSize{target.width(), target.height()})
-                                          : ImageData();
+                QSize sourceDims;
+                mviewer::domain::ImageMetadata convMeta;
+                ImageData lod;
+                if (!src.isNull())
+                {
+                    // Full frame available: bounded client-side display LOD
+                    // from the frame pixels (existing path).
+                    sourceDims = QSize(src.width, src.height);
+                    convMeta = metadata[static_cast<size_t>(idx)];
+                    const QSize target = displayTargets[static_cast<size_t>(idx)];
+                    lod = target.isValid()
+                              ? RenderEngine::scaleBoundedStatic(
+                                    src, RenderSize{target.width(), target.height()})
+                              : ImageData();
+                }
+                else
+                {
+                    // M47: source-backed display — bounded viewport LOD from
+                    // the source (native where available, e.g. JPEG). The pane
+                    // never waits for a full frame; the full frame, when
+                    // loaded, remains the analysis source.
+                    if (idx >= static_cast<int>(paths.size()) ||
+                        paths[static_cast<size_t>(idx)].empty())
+                        continue;
+                    auto source = mviewer::core::SourceImage::open(
+                        paths[static_cast<size_t>(idx)]);
+                    if (!source)
+                        continue;
+                    sourceDims = QSize(source->metadata().width, source->metadata().height);
+                    if (sourceDims.isEmpty())
+                        continue;
+                    convMeta = source->metadata();
+                    const QSize target = displayTargets[static_cast<size_t>(idx)];
+                    const int edge = std::max(target.width(), target.height());
+                    lod = source->decodeLod(edge > 0 ? edge : 1024);
+                }
                 if (ctx.isCancelled())
                     return; // after bounded scale
                 if (lod.isNull())
                     continue;
+                if (sourceDims.isEmpty())
+                    sourceDims = QSize(lod.width, lod.height);
 
                 // This is a bounded visual-preview approximation: nonlinear
                 // point operations (especially gamma and clipping) do not
                 // strictly commute with downsampling. Analysis never consumes
                 // this LOD; it maps the hover coordinate back to source pixels
                 // and applies point-wise adjustments without a full-res QImage.
-                CellAdjust displayAdjust = sourceAdjust;
-                if (displayAdjust.hasCrop && src.width > 0 && src.height > 0)
+                CellAdjust displayAdjust = adjustFor(idx);
+                if (displayAdjust.hasCrop && sourceDims.width() > 0 && sourceDims.height() > 0)
                 {
-                    const double sx = static_cast<double>(lod.width) / src.width;
-                    const double sy = static_cast<double>(lod.height) / src.height;
+                    const double sx = static_cast<double>(lod.width) / sourceDims.width();
+                    const double sy = static_cast<double>(lod.height) / sourceDims.height();
                     displayAdjust.cropX = static_cast<int>(std::lround(displayAdjust.cropX * sx));
                     displayAdjust.cropY = static_cast<int>(std::lround(displayAdjust.cropY * sy));
                     displayAdjust.cropW = static_cast<int>(std::lround(displayAdjust.cropW * sx));
@@ -587,10 +656,10 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                     continue; // failed adjustment must not clear the last valid preview
                 DisplayBatchResult::CellImage cell;
                 cell.index = idx;
-                cell.image = mvcore::toDisplayQImage(adjusted, metadata[static_cast<size_t>(idx)]);
-                cell.sourceSize = (sourceAdjust.hasCrop || sourceAdjust.rotation != 0)
+                cell.image = mvcore::toDisplayQImage(adjusted, convMeta);
+                cell.sourceSize = (displayAdjust.hasCrop || displayAdjust.rotation != 0)
                                       ? QSize(adjusted.width, adjusted.height)
-                                      : QSize(src.width, src.height);
+                                      : sourceDims;
                 if (ctx.isCancelled())
                     return; // after conversion
                 if (cell.image.isNull())
@@ -663,14 +732,30 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
         const ImageFrame *img = m_engine.imageAt(i);
         pixels.push_back(img ? img->pixels() : ImageData());
         metadata.push_back(img ? img->metadata() : mviewer::domain::ImageMetadata{});
-        displayTargets.push_back(img ? displayLodTarget(i, img->pixels()) : QSize());
+        if (img && !img->pixels().isNull())
+        {
+            displayTargets.push_back(displayLodTarget(i, img->pixels()));
+        }
+        else if (i < static_cast<int>(m_comparePaths.size()) &&
+                 !m_comparePaths[static_cast<size_t>(i)].empty())
+        {
+            // M47: source-backed pane — the display target is the bounded
+            // viewport LOD edge (the worker decodes at that edge).
+            const int edge = sourceLodEdge(i);
+            displayTargets.push_back(edge > 0 ? QSize(edge, edge) : QSize());
+        }
+        else
+        {
+            displayTargets.push_back(QSize());
+        }
     }
     std::vector<CellAdjust> adjusts = m_cellAdjusts;
     const uint64_t gen = m_displayGen;
     QPointer<CompareWorkspace> guard(this);
 
     auto handle = startDisplayMaterialization(
-        pixels, metadata, displayTargets, adjusts, panes, paneCount, gen, guard);
+        pixels, metadata, displayTargets, adjusts, panes, paneCount, gen, m_comparePaths,
+        guard);
     if (!handle)
     {
         // submit() refused the task (pool paused / back-pressured). Keep the

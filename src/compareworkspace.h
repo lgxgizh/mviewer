@@ -230,8 +230,18 @@ class CompareWorkspace : public QWidget
         std::mutex handlesMutex;
     };
     std::shared_ptr<LoadBatch> m_loadBatch;
-    static bool accountLoadRequest(const std::shared_ptr<LoadBatch> &batch, size_t index,
-                                   const mviewer::application::ImageLoadingService::Result *result);
+    static bool accountLoadRequest(
+        const std::shared_ptr<LoadBatch> &batch, size_t index,
+        const mviewer::application::ImageLoadingService::Result *result, bool countAsFailure = true);
+    // M47: paths of the current load batch (parallel to pane indices) — the
+    // display materialization uses them for the source-backed LOD fallback.
+    std::vector<std::string> m_comparePaths;
+    // M47: count of load requests skipped as infeasible (full-frame
+    // materialization > the 256 MB allocation limit). Their panes display via
+    // the source-backed LOD path and must not count as load failures. A
+    // counter (not a set) so a duplicated path in one compare set still
+    // accounts exactly once per request.
+    int m_infeasibleCount = 0;
     void queueLoadRequests(const std::shared_ptr<LoadBatch> &batch,
                            const std::vector<std::string> &paths);
     void cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch);
@@ -550,12 +560,15 @@ class CompareWorkspace : public QWidget
     QSize displayLodTarget(int idx, const ImageData &source) const;
     void scheduleDisplayLodRefresh(int idx = -1);
     void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes);
+    // M47: bounded per-pane display-target edge for a source-backed pane (no
+    // full frame): pane viewport x dpr x pane scale x overscan, capped.
+    int sourceLodEdge(int pane) const;
     TaskScheduler::TaskHandle startDisplayMaterialization(
         const std::vector<ImageData> &pixels,
         const std::vector<mviewer::domain::ImageMetadata> &metadata,
         const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
         const std::vector<int> &panes, int paneCount, uint64_t generation,
-        const QPointer<CompareWorkspace> &guard);
+        const std::vector<std::string> &paths, const QPointer<CompareWorkspace> &guard);
     void applyDisplayBatchResult(const DisplayBatchResult &result);
 
     uint64_t m_displayGen = 0;

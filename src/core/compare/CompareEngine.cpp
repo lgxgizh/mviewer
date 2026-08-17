@@ -54,7 +54,13 @@ void CompareEngine::setFrames(std::vector<std::shared_ptr<ImageFrame>> frames)
     m_images.reserve(frames.size());
     for (auto &f : frames)
     {
-        if (f && !f->pixels().isNull())
+        if (!f)
+            continue;
+        // M47: keep metadata-only placeholder frames (infeasible sources that
+        // display through the source-backed LOD path) so pane indices stay
+        // aligned with the requested paths. True load failures (null frame)
+        // still drop and shrink the grid (B#7).
+        if (!f->pixels().isNull() || !f->metadata().filePath.empty())
             m_images.push_back(std::move(f));
     }
     rebuildLayout();

@@ -1,6 +1,15 @@
 #include "compareworkspace_p.h"
 
+#include "core/image/ImageFrame.h"
+#include "core/image/SourceImage.h"
+
 #include <utility>
+
+// M47: Compare analysis-support full frames are only loaded when the source's
+// RGB materialization fits comfortably under Qt's 256 MB allocation limit
+// (60 MP * 3 B = 180 MB, leaving headroom for QImage copies). Infeasible
+// sources display through the source-backed LOD path only.
+constexpr qint64 kCompareAnalysisFeasiblePixels = 60 * 1000 * 1000; // 60 MP
 
 CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 {
@@ -163,9 +172,56 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
     auto self = std::make_shared<QPointer<CompareWorkspace>>(this);
     auto lifetime = m_lifetime;
     const ImageLoadOptions opts{true, false, 256};
+    // M47: the pane display no longer depends on the full frame. Sources whose
+    // full-resolution materialization is infeasible (RGB > Qt's 256 MB
+    // allocation limit) skip the full load entirely — their panes display
+    // through the source-backed LOD path, and they must not count as load
+    // failures. The probe is a cheap header read (never a decode).
+    m_infeasibleCount = 0;
+    m_comparePaths = paths;
     for (size_t i = 0; i < paths.size(); ++i)
     {
         auto &request = *batch->requests[i];
+        bool infeasible = false;
+        std::shared_ptr<mviewer::core::SourceImage> source;
+        {
+            source = mviewer::core::SourceImage::open(paths[i]);
+            if (source)
+            {
+                const qint64 px =
+                    static_cast<qint64>(source->metadata().width) * source->metadata().height;
+                infeasible = px > kCompareAnalysisFeasiblePixels;
+            }
+        }
+        if (infeasible && source)
+        {
+            ++m_infeasibleCount;
+            // Keep the pane: a metadata-only placeholder frame preserves the
+            // requested pane index in the engine (so the LOD display worker's
+            // pane/path mapping stays aligned). The pane displays through the
+            // source-backed LOD path; this is a skip, not a failure — it must
+            // not count as a load failure and must not shrink the grid.
+            (*batch->frames)[i] =
+                std::make_shared<ImageFrame>(source->metadata(), ImageData());
+            if (accountLoadRequest(batch, i, nullptr, false))
+            {
+                // The last request was accounted synchronously (an all-
+                // infeasible set has no async callbacks to deliver the
+                // terminal load) — queue it like the async path does.
+                QMetaObject::invokeMethod(
+                    qApp,
+                    [self, batch]()
+                    {
+                        CompareWorkspace *ws = self->data();
+                        if (!ws || batch->generation != ws->m_loadGen)
+                            return;
+                        ws->finishLoad(*batch->frames,
+                                       batch->failed->load(std::memory_order_relaxed));
+                    },
+                    Qt::QueuedConnection);
+            }
+            continue;
+        }
         auto handle = mviewer::application::ImageLoadingService::instance().loadAsyncCancellable(
             paths[i],
             [self, batch, i](const mviewer::application::ImageLoadingService::Result &res)
@@ -190,8 +246,9 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
     }
 }
 
-bool CompareWorkspace::accountLoadRequest(const std::shared_ptr<LoadBatch> &batch, size_t index,
-                                          const mviewer::application::ImageLoadingService::Result *result)
+bool CompareWorkspace::accountLoadRequest(
+    const std::shared_ptr<LoadBatch> &batch, size_t index,
+    const mviewer::application::ImageLoadingService::Result *result, bool countAsFailure)
 {
     if (!batch || index >= batch->requests.size())
         return false;
@@ -201,7 +258,7 @@ bool CompareWorkspace::accountLoadRequest(const std::shared_ptr<LoadBatch> &batc
 
     if (result && result->success() && result->frame)
         (*batch->frames)[index] = result->frame;
-    else
+    else if (countAsFailure)
         batch->failed->fetch_add(1, std::memory_order_relaxed);
 
     return batch->remaining->fetch_sub(1, std::memory_order_acq_rel) == 1;
@@ -229,20 +286,24 @@ void CompareWorkspace::cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch)
 void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames,
                                   int failedCount)
 {
-    Q_UNUSED(failedCount);
     m_loadInFlight = false;
     m_loadBatch.reset();
     m_engine.setFrames(frames);
 
     // M24 (B#7): failed loads are dropped by the engine — tell the user why
     // the grid has fewer cells than requested instead of silently shrinking.
+    // M47: sources skipped as analysis-infeasible display through the source-
+    // backed LOD path (their panes are NOT empty; the engine holds a
+    // metadata-only placeholder for them) and are excluded from the failure
+    // accounting above, so `failedCount` here is exactly the real failure
+    // count and the placeholder panes never trigger a warning.
     const int requested = static_cast<int>(frames.size());
-    const int loaded = m_engine.imageCount();
-    if (loaded < requested)
+    const int loaded = m_engine.imageCount() - m_infeasibleCount;
+    if (failedCount > 0)
     {
         emit loadWarning(
             tr("%1 张图片无法加载（文件损坏、缺失或不支持），已保留 %2 张可用的进行对比。")
-                .arg(requested - loaded)
+                .arg(failedCount)
                 .arg(loaded));
     }
     // A-4: loading a fresh comparison set should not inherit adjustments from

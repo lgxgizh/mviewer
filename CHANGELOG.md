@@ -1,5 +1,31 @@
 # Changelog
 
+## [Unreleased] — M47 production-scale data path hardening
+
+### Added
+
+- **Source-backed display (P0):** images now display through a bounded,
+  probe-driven path instead of requiring a full-resolution RGB frame. The
+  Viewer opens 100 MP-class sources with a fit-to-window LOD raster and issues
+  bounded region rasters as you zoom; the Compare grid keeps a pane for every
+  requested source — including sources whose full materialization is
+  infeasible (JPEG > 60 MP, TIFF > 60 MP) — and displays those panes via
+  viewport-sized source LOD rasters that re-materialize at a denser edge on
+  zoom. Skips are never reported as load failures, panes keep their requested
+  index, and process RSS stays bounded (a 100 MP pair displays with tens of MB
+  instead of a rejected ~286 MB full decode). Formats without a native LOD
+  (e.g. large TIFF) honestly stay blank until full materialization is feasible.
+- `m47_source_tests` (8 groups), `m47_viewer_lod_tests` (6 groups),
+  `m47_compare_lod_tests` (6 groups) CTest gates covering probe-without-decode,
+  native/fallback classification counters, bounded RSS, supersession, destroy
+  safety, and failure-vs-skip accounting.
+
+### Changed
+
+- `CompareEngine::setFrames` keeps metadata-only placeholder frames so an
+  infeasible (skipped) source still occupies its requested pane; true load
+  failures continue to drop and shrink the grid (B#7 behavior unchanged).
+
 ## [Unreleased] — M46 real-world workflow reliability & long-session release qualification
 
 ### Fixed
