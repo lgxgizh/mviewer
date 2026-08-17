@@ -137,6 +137,21 @@
   full-gate runs); native hardware rows stay MANUAL/BLOCKED per the M46
   qualification doc.
 
+## M47 — COMPLETE (2026-08-17)
+
+- **Phase 7 complete — release-evidence convergence:** the auto test matrix
+  was regenerated (103 test sources incl. all M47 suites), the source-backed
+  display RFC is marked implemented through Phase 6, the Phase 1–6 evidence
+  review was added (`docs/review/M47_SOURCE_BACKED_DISPLAY_2026-08-17.md`),
+  and this file/roadmap/changelog converge on the final code.
+- **Phase 8 complete — final qualification:** `.\build.ps1 Test` passed
+  **104/104 three consecutive times** (runs 756.9 s / 734.9 s / 749.7 s),
+  including golden-image, `bench_enforce`, workflow, Browse/Compare
+  acceptance, all M47 suites, soak gates and the architecture gate (0
+  violations); complexity strict gate 0 hard failures. Native hardware rows
+  (physical ICC, mixed-DPI, long-session GUI) remain **MANUAL / BLOCKED** —
+  see `docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md`.
+
 ## M46 — Real-world workflow reliability & long-session release qualification (2026-08-17)
 
 - **Async lifetime contract:** ImageRepository now enforces a strict
