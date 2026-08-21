@@ -246,7 +246,7 @@ class ImageViewer : public QOpenGLWidget
                                      const QString &path, uint64_t generation,
                                      std::shared_ptr<mviewer::core::SourceImage> source,
                                      QImage image, QRect sourceRect, QSize sourceSize,
-                                     double density);
+                                     double density, bool failed = false);
     // M47: the raster worker body (probe -> classify -> decodeLod/decodeRegion
     // -> marshal). Runs inside the submit lambda; an unexpected decoder
     // exception is caught at the call site so it can never escape the worker.
@@ -254,8 +254,9 @@ class ImageViewer : public QOpenGLWidget
                                 const TaskScheduler::TaskContext &ctx,
                                 const std::shared_ptr<QPointer<ImageViewer>> &guard);
     void applyDisplayRaster(const QString &path, uint64_t generation,
-                            std::shared_ptr<mviewer::core::SourceImage> source,
-                            QImage image, QRect sourceRect, QSize sourceSize, double density);
+                            std::shared_ptr<mviewer::core::SourceImage> source, QImage image,
+                            QRect sourceRect, QSize sourceSize, double density,
+                            bool failed);
     void runAnalysisLoadDecision(bool sourceValid, const QSize &sourceSize);
     void drawDisplayRaster(QPainter &painter) const;
     void drawProvisional(QPainter &painter) const;
@@ -391,6 +392,11 @@ class ImageViewer : public QOpenGLWidget
     // only / raster / probe failure). While set, the analysis-support full
     // load's failure is suppressed — the raster path owns the verdict.
     bool m_largeSourcePending = false;
+    // M48 Phase 2: the raster pipeline hit a terminal decode failure (thrown
+    // probe/LOD/region). The display keeps any current good raster but stops
+    // re-requesting upgrades until a new image (or a successful raster) resets
+    // it — no infinite request loop, no permanently-stuck loading state.
+    bool m_displayDegraded = false;
     // True once the analysis-support full load was issued for the current
     // image (at most one per image; the display never waits for it).
     bool m_analysisLoadIssued = false;

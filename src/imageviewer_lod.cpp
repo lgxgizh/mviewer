@@ -29,7 +29,6 @@
 
 #include <algorithm>
 #include <cmath>
-
 // Sources with at most this many pixels keep the existing full-frame fast
 // path (no probe-driven display change). constexpr at global scope: they are
 // file-local (internal linkage) and shared by the worker + the viewer members.
@@ -64,11 +63,39 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
 {
     if (ctx.isCancelled())
         return; // superseded while queued
-    auto source = mviewer::core::SourceImage::open(req.path.toStdString());
+    std::shared_ptr<mviewer::core::SourceImage> source;
+    bool failed = false;
+    try
+    {
+        source = mviewer::core::SourceImage::open(req.path.toStdString());
+    }
+    catch (...)
+    {
+        // A throwing probe is a TERMINAL failure: it must reach the viewer as
+        // loadFailed, never get stuck with a pending loading state (M48 F).
+        failed = true;
+    }
+    // A viewport request can be superseded while the probe is running. A
+    // cancelled request is not a decode failure: do not let its late terminal
+    // result degrade the replacement request for the same image generation.
+    if (ctx.isCancelled())
+        return;
+    if (failed)
+    {
+        // A throwing capability probe is different from a source that simply
+        // cannot be represented by SourceImage (for example a legacy/plugin
+        // decoder without probe metadata). Only the former is terminal.
+        ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
+                                          QImage(), QRect(), QSize(), 1.0, true);
+        return;
+    }
     if (!source)
     {
+        // Preserve the pre-M47 fallback: an unavailable capability probe lets
+        // the existing full-frame ImageLoadingService path decide whether the
+        // decoder can load the image. Do not surface this as loadFailed here.
         ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, nullptr, QImage(),
-                                          QRect(), QSize(), 1.0);
+                                          QRect(), QSize(), 1.0, false);
         return;
     }
     const QSize srcSize(source->metadata().width, source->metadata().height);
@@ -82,62 +109,74 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
     }
     if (ctx.isCancelled())
         return; // superseded during the probe
-    ImageData pixels;
+    mviewer::core::SourceImage::RasterResult r;
     QRect covered;
     double density = 1.0;
-    if (req.fullLod)
+    bool decodeFailed = false;
+    try
     {
-        mviewer::core::SourceImage::RasterResult r = source->decodeLod(req.maxEdge);
-        if (r.ok)
-            pixels = r.pixels;
-        // LOD raster covers the full source in DISPLAYED coordinates.
-        covered = QRect(0, 0, srcSize.width(), srcSize.height());
-        if (!pixels.isNull())
-            density = static_cast<double>(srcSize.width()) / pixels.width;
+        if (req.fullLod)
+        {
+            r = source->decodeLod(req.maxEdge);
+            // LOD raster covers the full source in DISPLAYED coordinates.
+            covered = QRect(0, 0, srcSize.width(), srcSize.height());
+            if (r.ok && !r.pixels.isNull())
+                density = static_cast<double>(srcSize.width()) / r.pixels.width;
+        }
+        else
+        {
+            // The visible rect is in DISPLAYED (oriented) coordinates;
+            // decodeRegion consumes RAW (pre-EXIF) coordinates. Map through the
+            // single authoritative contract (M48 B1/B2) so transformed sources
+            // decode the correct region.
+            const int orientation = source->orientation();
+            const mviewer::core::SourceRect raw =
+                mviewer::core::orientedRectToRaw({req.rx, req.ry, req.rw, req.rh},
+                                                 source->rawWidth(), source->rawHeight(),
+                                                 orientation);
+            r = source->decodeRegion(raw, req.tw, req.th);
+            // Report the covered area back in DISPLAYED coordinates for drawing.
+            const mviewer::core::SourceRect coveredD =
+                mviewer::core::rawRectToOriented(r.coveredRect, source->rawWidth(),
+                                                 source->rawHeight(), orientation);
+            covered = QRect(coveredD.x, coveredD.y, coveredD.w, coveredD.h);
+            if (r.ok && !r.pixels.isNull())
+                density = static_cast<double>(raw.w) / r.pixels.width;
+        }
     }
-    else
+    catch (...)
     {
-        // The visible rect is in DISPLAYED (oriented) coordinates; decodeRegion
-        // consumes RAW (pre-EXIF) coordinates. Map through the single
-        // authoritative contract (M48 B1/B2) so transformed sources decode the
-        // correct region.
-        const int orientation = source->orientation();
-        const mviewer::core::SourceRect raw =
-            mviewer::core::orientedRectToRaw({req.rx, req.ry, req.rw, req.rh},
-                                             source->rawWidth(), source->rawHeight(),
-                                             orientation);
-        mviewer::core::SourceImage::RasterResult r = source->decodeRegion(raw, req.tw, req.th);
-        if (r.ok)
-            pixels = r.pixels;
-        // Report the covered area back in DISPLAYED coordinates for drawing.
-        const mviewer::core::SourceRect coveredD =
-            mviewer::core::rawRectToOriented(r.coveredRect, source->rawWidth(),
-                                             source->rawHeight(), orientation);
-        covered = QRect(coveredD.x, coveredD.y, coveredD.w, coveredD.h);
-        if (!pixels.isNull())
-            density = static_cast<double>(raw.w) / pixels.width;
+        // A throwing decoder is a terminal failure for this request; the
+        // viewer keeps any current good raster and is told via loadFailed.
+        decodeFailed = true;
     }
     if (ctx.isCancelled())
         return; // superseded during the decode
+    decodeFailed = decodeFailed || !r.ok || r.pixels.isNull();
     QImage raster;
-    if (!pixels.isNull())
-        raster = mvcore::toQImage(pixels);
+    if (!decodeFailed)
+    {
+        // M48 Phase 2: source-backed display goes through the SAME display
+        // conversion as the full-frame path (ICC applied) using the decoded
+        // result's authoritative metadata.
+        raster = mvcore::toDisplayQImage(r.pixels, r.metadata);
+    }
     ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
-                                      std::move(raster), covered, srcSize, density);
+                                      std::move(raster), covered, srcSize, density, decodeFailed);
 }
 
 void ImageViewer::marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewer>> &guard,
                                        const QString &path, uint64_t generation,
                                        std::shared_ptr<mviewer::core::SourceImage> source,
                                        QImage image, QRect sourceRect, QSize sourceSize,
-                                       double density)
+                                       double density, bool failed)
 {
     if (!qApp)
         return; // app teardown
     QMetaObject::invokeMethod(
         qApp,
         [guard, path, generation, source = std::move(source), image = std::move(image),
-         sourceRect, sourceSize, density]() mutable
+         sourceRect, sourceSize, density, failed]() mutable
         {
             try
             {
@@ -145,7 +184,8 @@ void ImageViewer::marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewe
                 if (!viewer)
                     return; // viewer destroyed; never touch it
                 viewer->applyDisplayRaster(path, generation, std::move(source),
-                                           std::move(image), sourceRect, sourceSize, density);
+                                           std::move(image), sourceRect, sourceSize, density,
+                                           failed);
             }
             catch (...)
             {
@@ -164,6 +204,7 @@ void ImageViewer::startLodDisplay(const QString &path, uint64_t generation)
     // (probe-only for small sources, a raster for large ones, or a probe
     // failure) lands in applyDisplayRaster.
     m_largeSourcePending = true;
+    m_displayDegraded = false; // a new image resets any prior terminal failure
     // The first raster request is issued immediately; the worker probes the
     // source, decides small-vs-large, and either returns the probe-only result
     // (small: the fast path owns the display) or the first viewport LOD.
@@ -179,7 +220,7 @@ void ImageViewer::cancelDisplayRequest()
 
 void ImageViewer::scheduleDisplayUpgrade()
 {
-    if (m_displayUpgradeScheduled || !m_lodMode)
+    if (m_displayUpgradeScheduled || !m_lodMode || m_displayDegraded)
         return;
     m_displayUpgradeScheduled = true;
     QTimer::singleShot(0, this, &ImageViewer::requestDisplayRaster);
@@ -189,6 +230,8 @@ bool ImageViewer::displayNeedsUpgrade() const
 {
     if (!m_lodMode || m_raster.image.isNull())
         return false; // upgrades only apply once the raster path is active
+    if (m_displayDegraded)
+        return false; // M48 Phase 2: a terminal decode failure stops the loop
     const int sw = m_raster.sourceSize.width();
     const int sh = m_raster.sourceSize.height();
     if (sw <= 0 || sh <= 0)
@@ -214,6 +257,14 @@ bool ImageViewer::displayNeedsUpgrade() const
 
 void ImageViewer::requestDisplayRaster()
 {
+    // A queued singleShot may outlive the request that scheduled it. Once a
+    // decode has reached the terminal degraded state, discard that callback as
+    // well as future viewport-triggered upgrades until setImage() resets it.
+    if (m_displayDegraded)
+    {
+        m_displayUpgradeScheduled = false;
+        return;
+    }
     try
     {
         requestDisplayRasterImpl();
@@ -229,7 +280,7 @@ void ImageViewer::requestDisplayRaster()
 void ImageViewer::requestDisplayRasterImpl()
 {
     m_displayUpgradeScheduled = false;
-    if (m_currentPath.isEmpty())
+    if (m_currentPath.isEmpty() || m_displayDegraded)
         return;
     const bool firstRequest = !m_lodMode && m_raster.image.isNull();
     const int sw = m_sourceImage ? m_sourceImage->metadata().width
@@ -309,25 +360,46 @@ void ImageViewer::requestDisplayRasterImpl()
         [req, guard](const TaskScheduler::TaskContext &ctx)
         {
             // An unexpected decoder exception must never escape into the
-            // scheduler (it would terminate the process).
+            // scheduler (it would terminate the process). It is still a
+            // terminal display failure unless this request was superseded.
             try
             {
                 runRasterWorker(req, ctx, guard);
             }
             catch (...)
             {
-                // An unexpected decoder exception must never escape into the
-                // scheduler (it would terminate the process). The display
-                // keeps the current raster; the next upgrade retries.
+                if (!ctx.isCancelled())
+                {
+                    try
+                    {
+                        marshalDisplayRaster(guard, req.path, req.generation, nullptr, QImage(),
+                                             QRect(), QSize(), 1.0, true);
+                    }
+                    catch (...)
+                    {
+                        // Keep the scheduler worker noexcept even if the
+                        // terminal delivery itself cannot be allocated during
+                        // teardown. The lifetime/generation guards still make
+                        // a missing late delivery safe for the viewer.
+                    }
+                }
             }
         },
         {}, std::chrono::steady_clock::time_point::max(), [] {});
+    if (!m_displayRequest)
+    {
+        // A rejected display probe must still reach the pre-M47 full-frame
+        // terminal path. In particular, a paused ThumbnailPool must not leave
+        // m_largeSourcePending/m_loading set forever.
+        m_largeSourcePending = false;
+        runAnalysisLoadDecision(false, QSize());
+    }
 }
 
 void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
                                      std::shared_ptr<mviewer::core::SourceImage> source,
                                      QImage image, QRect sourceRect, QSize sourceSize,
-                                     double density)
+                                     double density, bool failed)
 {
     if (path != m_currentPath || generation != m_requestGen)
         return; // superseded (A -> B -> A) or stale request
@@ -341,6 +413,23 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
         m_sourceImage = std::move(source);
     const bool firstRaster = m_raster.image.isNull();
 
+    if (failed)
+    {
+        // M48 Phase 2 terminal: a probe/LOD/region decode threw or returned
+        // nothing usable. Reach an observable failed state (loadFailed), keep
+        // any current good raster, and mark the display DEGRADED so the
+        // upgrade path stops requesting (no infinite loop, no stuck pending).
+        m_displayDegraded = true;
+        if (firstRaster)
+        {
+            m_largeSourcePending = false;
+            m_loading = false;
+        }
+        emit loadFailed(m_currentPath);
+        update();
+        return;
+    }
+
     if (image.isNull())
     {
         // No raster delivered: a probe-only small-source verdict, a probe
@@ -352,6 +441,7 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
         return;
     }
 
+    m_displayDegraded = false; // a successful raster clears the degraded state
     m_raster = DisplayRaster{std::move(image), sourceRect, sourceSize, density};
     if (firstRaster)
     {

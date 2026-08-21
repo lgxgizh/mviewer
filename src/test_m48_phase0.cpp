@@ -26,8 +26,9 @@
 //       UI thread (RED: SourceImage::open throws inside queueLoadRequests).
 //   F2  a throwing decodeLod reaches an observable terminal (loadFailed) and
 //       pools drain (RED: the contained worker failure never marshals).
-//   F3  a throwing decodeRegion keeps the current raster and reaches the same
-//       terminal contract (RED for the terminal signal; raster-keep is green).
+//   F3  a throwing decodeRegion keeps the current raster, reaches the same
+//       terminal contract, and does not retry upgrades (RED for the terminal
+//       signal/no-retry; raster-keep is green).
 
 #include "compareworkspace.h"
 #include "core/compare/CompareEngine.h"
@@ -820,7 +821,16 @@ int main(int argc, char **argv)
               "F3: the current good raster is kept when the upgrade fails");
         CHECK(failed,
               "F3: the failed region upgrade reaches the loadFailed terminal (RED today)");
+        const int regionCallsAfterFailure = g_throwing->regionCalls.load();
+        // A terminal display failure must not be retried by a later viewport
+        // revision. This also covers an upgrade singleShot that was queued
+        // before the failure was delivered.
+        viewer.zoomIn();
+        viewer.update();
+        pump(500);
         CHECK(waitTrue(schedulerIdle, 20000), "F3: pools drain");
+        CHECK(g_throwing->regionCalls.load() == regionCallsAfterFailure,
+              "F3: a degraded display does not retry region upgrades");
     }
 
     std::printf("=== M48 Phase 0 regressions: %s (RED cases must fail until fixed) ===\n",
