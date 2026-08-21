@@ -39,6 +39,7 @@
 #include <QMetaObject>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QProgressBar>
 #include <QScrollArea>
 #include <QSignalBlocker>
 #include <QStackedLayout>

@@ -61,10 +61,32 @@ QStackedLayout *CompareWorkspace::buildCanvasPage()
     m_compareCanvas->setFocusPolicy(Qt::StrongFocus);
     m_compareCanvas->installEventFilter(this);
 
+    // Keep async Compare startup explicit. A non-modal page avoids showing an
+    // empty/black grid while the whole batch is still decoding; the
+    // indeterminate bar intentionally does not imply per-pane progress.
+    m_compareLoadingPage = new QWidget(this);
+    m_compareLoadingPage->setObjectName("compareLoadingPage");
+    auto *loadingLay = new QVBoxLayout(m_compareLoadingPage);
+    loadingLay->setContentsMargins(24, 24, 24, 24);
+    loadingLay->setSpacing(12);
+    loadingLay->addStretch(1);
+    m_compareLoadingLabel = new QLabel(tr("正在加载比较图片…"), m_compareLoadingPage);
+    m_compareLoadingLabel->setObjectName("compareLoadingLabel");
+    m_compareLoadingLabel->setAlignment(Qt::AlignCenter);
+    loadingLay->addWidget(m_compareLoadingLabel);
+    m_compareLoadingProgress = new QProgressBar(m_compareLoadingPage);
+    m_compareLoadingProgress->setObjectName("compareLoadingProgress");
+    m_compareLoadingProgress->setRange(0, 0);
+    m_compareLoadingProgress->setTextVisible(false);
+    m_compareLoadingProgress->setFixedWidth(280);
+    loadingLay->addWidget(m_compareLoadingProgress, 0, Qt::AlignHCenter);
+    loadingLay->addStretch(1);
+
     m_pageStack = new QStackedLayout;
     m_pageStack->setContentsMargins(0, 0, 0, 0);
     m_pageStack->addWidget(m_compareGridPage);
     m_pageStack->addWidget(m_compareCanvas);
+    m_pageStack->addWidget(m_compareLoadingPage);
     m_pageStack->setCurrentWidget(m_compareGridPage);
     return m_pageStack;
 }
@@ -74,8 +96,14 @@ QStackedLayout *CompareWorkspace::buildCanvasPage()
 // canvas; any other state (or a non-two-image load) restores the grid page.
 void CompareWorkspace::updateCanvasModeVisibility()
 {
-    if (!m_pageStack || !m_compareCanvas || !m_compareGridPage)
+    if (!m_pageStack || !m_compareCanvas || !m_compareGridPage || !m_compareLoadingPage)
         return;
+    if (m_loadInFlight)
+    {
+        m_pageStack->setCurrentWidget(m_compareLoadingPage);
+        update();
+        return;
+    }
     const bool canvasMode = m_engine.imageCount() == 2 && anyCanvasCompareMode();
     m_pageStack->setCurrentWidget(canvasMode ? static_cast<QWidget *>(m_compareCanvas)
                                              : static_cast<QWidget *>(m_compareGridPage));

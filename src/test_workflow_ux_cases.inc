@@ -2305,6 +2305,114 @@ void workflow12_compare_mixed_fit(const QString &dirPath)
     QFile::remove(portrait);
 }
 
+// ─── Workflow 14: Compare startup loading feedback ───────────────────────────
+// A real Decode worker gate makes the first setImages() observable before any
+// frame can land. The workflow verifies the non-modal loading page,
+// supersession text, terminal page restoration, and Escape while loading.
+void workflow14_compare_loading_feedback(const QString &rootDir)
+{
+    std::cout << "── Workflow 14: compare loading feedback ──\n";
+
+    QDir dir(rootDir);
+    const QString pathA =
+        writePng(dir, QStringLiteral("compare_load_a.png"), QColor(200, 40, 40));
+    const QString pathB =
+        writePng(dir, QStringLiteral("compare_load_b.png"), QColor(40, 200, 40));
+    const QString pathC =
+        writePng(dir, QStringLiteral("compare_load_c.png"), QColor(40, 40, 200));
+    auto &sched = TaskScheduler::instance();
+    // Keep the gate deterministic even if this workflow is run from a harness
+    // with a wider DecodePool than the normal offscreen suite. Restore the
+    // suite baseline before returning so later workflows see their contract.
+    sched.setQueueMaxThreads(TaskScheduler::Priority::Decode, 1);
+    struct RestoreDecodeThreads
+    {
+        ~RestoreDecodeThreads()
+        {
+            TaskScheduler::instance().setQueueMaxThreads(TaskScheduler::Priority::Decode, 1);
+        }
+    } restoreDecodeThreads;
+    CHECK(sched.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(15)),
+          "loading feedback starts with an idle Decode pool");
+
+    DecodeBlocker blocker;
+    bool blockerActive = false;
+    QElapsedTimer blockerTimer;
+    blockerTimer.start();
+    while (blockerTimer.elapsed() < 3000)
+    {
+        if (blocker.control->entered.load(std::memory_order_acquire))
+        {
+            blockerActive = true;
+            break;
+        }
+        pump(10);
+    }
+    CHECK(blockerActive, "loading feedback gate occupies the Decode worker");
+
+    // Escape must close the real non-modal host even while the loading page is
+    // current; the page cannot be a modal child or consume the key sequence.
+    {
+        QDialog escDialog;
+        auto *layout = new QVBoxLayout(&escDialog);
+        auto *workspace = new CompareWorkspace(&escDialog);
+        layout->addWidget(workspace);
+        escDialog.resize(800, 500);
+        escDialog.show();
+        pump(20);
+        workspace->setImages({pathA, pathB});
+        QWidget *loading = workspace->findChild<QWidget *>(QStringLiteral("compareLoadingPage"));
+        QLabel *label = workspace->findChild<QLabel *>(QStringLiteral("compareLoadingLabel"));
+        QProgressBar *progress =
+            workspace->findChild<QProgressBar *>(QStringLiteral("compareLoadingProgress"));
+        CHECK(loading && loading->isVisible(),
+              "loading feedback appears immediately after non-empty setImages");
+        CHECK(label && label->text().contains(QStringLiteral("2")),
+              "loading feedback names the requested image count");
+        CHECK(progress && progress->minimum() == 0 && progress->maximum() == 0,
+              "loading feedback uses an indeterminate progress indicator");
+        CHECK(!escDialog.isModal(), "loading feedback remains in the non-modal Compare host");
+        sendKey(&escDialog, Qt::Key_Escape);
+        CHECK(!escDialog.isVisible(), "Escape closes Compare while its loading page is visible");
+    }
+
+    // Superseding A -> B must update the same visible page, and only B may
+    // eventually restore the grid after the gate is released.
+    QDialog dialog;
+    auto *layout = new QVBoxLayout(&dialog);
+    auto *workspace = new CompareWorkspace(&dialog);
+    layout->addWidget(workspace);
+    dialog.resize(800, 500);
+    dialog.show();
+    pump(20);
+    workspace->setImages({pathA, pathB});
+    auto *loading = workspace->findChild<QWidget *>(QStringLiteral("compareLoadingPage"));
+    auto *label = workspace->findChild<QLabel *>(QStringLiteral("compareLoadingLabel"));
+    auto *grid = workspace->findChild<QWidget *>(QStringLiteral("compareGridPage"));
+    CHECK(loading && loading->isVisible() && label && label->text().contains(QStringLiteral("2")),
+          "first Compare batch owns the visible loading page");
+    workspace->setImages({pathA, pathB, pathC});
+    CHECK(loading && loading->isVisible() && label && label->text().contains(QStringLiteral("3")),
+          "superseding Compare batch updates loading text without hiding it");
+
+    blocker.release();
+    QElapsedTimer loadTimer;
+    loadTimer.start();
+    while (workspace->comparedImageCount() != 3 && loadTimer.elapsed() < 10000)
+        pump(25);
+    CHECK(workspace->comparedImageCount() == 3,
+          "current Compare batch completes with all requested panes");
+    pump(50);
+    CHECK(loading && !loading->isVisible() && grid && grid->isVisible(),
+          "completed Compare batch hides loading and restores the grid");
+    sendKey(&dialog, Qt::Key_Escape);
+    CHECK(!dialog.isVisible(), "Escape remains available after loading completes");
+
+    QFile::remove(pathA);
+    QFile::remove(pathB);
+    QFile::remove(pathC);
+}
+
 // ─── Workflow 10: Compare canvas page visibility + interaction ───────────────
 // The planned Compare refactor exposes two stable, discoverable widgets:
 //   - "compareCanvas":  the interactive page owning wheel/drag while a canvas

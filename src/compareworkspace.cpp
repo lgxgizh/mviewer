@@ -148,6 +148,18 @@ void CompareWorkspace::setImages(const QStringList &paths)
     for (const QString &p : paths)
         stdPaths.push_back(p.toStdString());
     const int requested = static_cast<int>(paths.size());
+    if (requested > 0)
+    {
+        // Publish loading state before queueing any probe. The page is
+        // non-modal and remains current for the whole latest-wins batch.
+        if (m_compareLoadingLabel)
+            m_compareLoadingLabel->setText(tr("正在加载 %1 张图片…").arg(requested));
+        if (m_compareLoadingProgress)
+            m_compareLoadingProgress->setRange(0, 0);
+        if (m_pageStack && m_compareLoadingPage)
+            m_pageStack->setCurrentWidget(m_compareLoadingPage);
+        update();
+    }
     if (requested == 0)
     {
         finishLoad({}, 0);

@@ -310,7 +310,7 @@ void testPaneHistogramConsistency(const QString &a, const QString &b)
     // A rebuild while Blink has detached one pane must delete both old panes,
     // preserve Blink visibility, and populate the new overlay widgets.
     ws->setImages({a, b});
-    waitForCompareCount(ws, 2);
+    waitForCompareLoadFinished(ws, 2);
     const auto panes0 = ws->findChildren<QWidget *>("comparePane0");
     const auto panes1 = ws->findChildren<QWidget *>("comparePane1");
     CHECK(panes0.size() == 1 && panes1.size() == 1,

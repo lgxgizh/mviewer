@@ -84,6 +84,25 @@ void waitForCompareCount(CompareWorkspace *ws, int expected, int timeoutMs = 150
         pump(25);
 }
 
+// Same-count reloads must wait for the terminal UI state as well as the engine
+// count. A newer setImages() briefly keeps the old frames in the engine while
+// the dedicated loading page is current, so the old count alone can satisfy a
+// wait before finishLoad() has restored the grid.
+void waitForCompareLoadFinished(CompareWorkspace *ws, int expected, int timeoutMs = 15000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (t.elapsed() < timeoutMs)
+    {
+        QWidget *loading = ws->findChild<QWidget *>(QStringLiteral("compareLoadingPage"));
+        QWidget *grid = ws->findChild<QWidget *>(QStringLiteral("compareGridPage"));
+        if (ws->comparedImageCount() == expected && loading && !loading->isVisible() && grid &&
+            grid->isVisible())
+            return;
+        pump(25);
+    }
+}
+
 void waitForCompareAtLeast(CompareWorkspace *ws, int minimum, int timeoutMs = 15000)
 {
     QElapsedTimer t;

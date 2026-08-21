@@ -46,6 +46,7 @@ class QTableWidget;
 class QComboBox;
 class HistogramWidget;
 class RawImageView;
+class QProgressBar;
 class SelectionModel;
 
 // CompareWorkspace：多图同步比较工作区
@@ -272,6 +273,12 @@ class CompareWorkspace : public QWidget
     // the sibling compareGridPage; a stacked layout switches between the two.
     QWidget *m_compareCanvas = nullptr;
     QWidget *m_compareGridPage = nullptr;
+    // A dedicated non-modal page covers stale/empty panes for the whole async
+    // load batch. It stays current while m_loadInFlight is true so a
+    // canvas-mode toggle cannot expose an apparently broken black grid.
+    QWidget *m_compareLoadingPage = nullptr;
+    QLabel *m_compareLoadingLabel = nullptr;
+    QProgressBar *m_compareLoadingProgress = nullptr;
     QStackedLayout *m_pageStack = nullptr;
     QStackedLayout *buildCanvasPage();
     QList<QLabel *> m_cellLabels;

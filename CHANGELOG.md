@@ -4,6 +4,10 @@
 
 ### Added
 
+- **Compare loading feedback:** Compare now shows a non-modal loading page
+  with the requested image count and an indeterminate progress indicator while
+  an asynchronous batch loads. Latest-wins supersession updates the message
+  without exposing stale panes, and Escape remains available throughout.
 - **Source-backed display (P0):** images now display through a bounded,
   probe-driven path instead of requiring a full-resolution RGB frame. The
   Viewer opens 100 MP-class sources with a fit-to-window LOD raster and issues

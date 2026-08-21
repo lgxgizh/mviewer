@@ -65,6 +65,7 @@
 #include <QMouseEvent>
 #include <QPointer>
 #include <QProgressDialog>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QSettings>
 #include <QSlider>
@@ -232,6 +233,51 @@ struct AnalysisBlocker
     }
     AnalysisBlocker(const AnalysisBlocker &) = delete;
     AnalysisBlocker &operator=(const AnalysisBlocker &) = delete;
+};
+
+// Compare loading-feedback gate: occupy the sole Decode worker so the UI can
+// be inspected while a real setImages() batch is pending. The blocker is
+// release-gated rather than time-based, keeping the contract test independent
+// of decoder/cache speed.
+struct DecodeBlocker
+{
+    struct Control
+    {
+        std::mutex mtx;
+        std::condition_variable cv;
+        bool released = false;
+        std::atomic<bool> entered{false};
+    };
+
+    std::shared_ptr<Control> control = std::make_shared<Control>();
+    TaskScheduler::TaskHandle task;
+
+    DecodeBlocker()
+    {
+        auto c = control;
+        task = TaskScheduler::instance().submit(
+            TaskScheduler::Priority::Decode,
+            [c](const TaskScheduler::TaskContext &)
+            {
+                c->entered.store(true, std::memory_order_release);
+                std::unique_lock<std::mutex> lk(c->mtx);
+                c->cv.wait(lk, [c] { return c->released; });
+            });
+    }
+
+    void release()
+    {
+        std::lock_guard<std::mutex> lk(control->mtx);
+        control->released = true;
+        control->cv.notify_all();
+    }
+
+    ~DecodeBlocker()
+    {
+        release();
+    }
+    DecodeBlocker(const DecodeBlocker &) = delete;
+    DecodeBlocker &operator=(const DecodeBlocker &) = delete;
 };
 
 // Release-gated Background blocker used by the real MainWindow report export
@@ -458,6 +504,7 @@ int main(int argc, char **argv)
     workflow7_stale_preload_cancellation(workDir.absolutePath());
     workflow8_preview_scaled_load(workDir.absolutePath());
     workflow9_pixel_inspector_lifecycle(workDir.absolutePath());
+    workflow14_compare_loading_feedback(workDir.absolutePath());
     // Keep the report workflow terminal: Qt's offscreen QFileDialog leaves
     // internal modal widgets that deadlock MainWindow destruction. The test
     // closes its window and lets process teardown reclaim it after assertions.
