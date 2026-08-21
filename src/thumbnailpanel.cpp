@@ -46,7 +46,8 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     m_delegate = new ThumbDelegate(this, this);
     setItemDelegate(m_delegate);
 
-    m_compareBtn = new QPushButton(QStringLiteral("姣旇緝閫変腑"), this);
+    m_compareBtn = new QPushButton(QStringLiteral("比较选中"), this);
+    m_compareBtn->setObjectName(QStringLiteral("compareSelectionButton"));
     m_compareBtn->setVisible(false);
     connect(m_compareBtn, &QPushButton::clicked, this, &ThumbnailPanel::onCompareClicked);
 
@@ -431,12 +432,12 @@ void ThumbnailPanel::onSelectionChanged()
     else
     {
         m_compareBtn->setVisible(true);
-        m_compareBtn->setText(QStringLiteral("姣旇緝閫変腑 (%1)").arg(n));
+        m_compareBtn->setText(QStringLiteral("比较选中 (%1)").arg(n));
         const bool canCompare = n >= 2 && n <= 8;
         m_compareBtn->setEnabled(canCompare);
         m_compareBtn->setToolTip(
-            canCompare ? QStringLiteral("灏嗛€変腑鐨?%1 寮犲浘鐗囬€佸叆瀵规瘮").arg(n)
-                       : QStringLiteral("闇€瑕侀€夋嫨 2-8 寮犲浘鐗囨墠鑳藉姣旓紙褰撳墠 %1 寮狅級").arg(n));
+            canCompare ? QStringLiteral("将选中的 %1 张图片送入对比").arg(n)
+                       : QStringLiteral("需要选择 2-8 张图片才能比较（当前 %1 张）").arg(n));
     }
     emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
 }

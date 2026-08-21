@@ -79,6 +79,9 @@
   foreground decode pool instead of opening every source on the UI thread.
   Superseded probe/decode chains remain cancellable and exactly-once accounted,
   including metadata-only large-image panes.
+- **Gallery Compare affordance:** restored the Chinese Compare button label and
+  selection guidance, including the live selected-count text and 2–8 image
+  enablement tooltip.
 
 ## [Unreleased] — M46 real-world workflow reliability & long-session release qualification
 

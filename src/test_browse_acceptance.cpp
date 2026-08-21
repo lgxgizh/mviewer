@@ -31,12 +31,15 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QHelpEvent>
 #include <QImage>
 #include <QInputDialog>
+#include <QPushButton>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QToolTip>
 
 #include <iostream>
 
@@ -177,6 +180,88 @@ void testViewModeAndSelection(const QString &dirPath)
 
     for (const QString &p : paths)
         QFile::remove(p);
+}
+
+// The gallery Compare affordance is the primary Browse -> Select -> Compare
+// handoff. Keep its count, enablement, and request payload observable through
+// a real ThumbnailPanel so text regressions cannot hide behind a green engine
+// test.
+void testCompareSelectionAffordance(const QString &dirPath)
+{
+    std::cout << "── Browse Compare selection affordance ──\n";
+    QDir dir(dirPath);
+    dir.mkpath(".");
+    QStringList paths;
+    for (int i = 0; i < 9; ++i)
+        paths.append(writePng(dir, QString("compare_%1.png").arg(i), QColor(20 * i, 80, 160)));
+
+    SelectionModel sel;
+    ThumbnailPanel panel;
+    panel.resize(640, 480);
+    panel.show();
+    panel.setSelectionModel(&sel);
+    panel.setDirectory(dir.absolutePath());
+
+    QElapsedTimer scanTimer;
+    scanTimer.start();
+    while (panel.entries().size() != paths.size() && scanTimer.elapsed() < 8000)
+        pump(10);
+    CHECK(panel.entries().size() == paths.size(),
+          "Compare selection affordance: gallery scan lands all nine images");
+
+    auto *button = panel.findChild<QPushButton *>(QStringLiteral("compareSelectionButton"));
+    CHECK(button != nullptr,
+          "Compare selection affordance: floating button has a stable object name");
+    if (!button)
+        return;
+
+    const auto nativeToolTipShows = [button](const QString &expected)
+    {
+        QToolTip::hideText();
+        const QPoint local = button->rect().center();
+        QHelpEvent event(QEvent::ToolTip, local, button->mapToGlobal(local));
+        QApplication::sendEvent(button, &event);
+        pump(50);
+        return QToolTip::isVisible() && QToolTip::text() == expected;
+    };
+
+    panel.selectPath(paths[0]);
+    CHECK(button->isVisible() && !button->isEnabled() &&
+              button->text() == QStringLiteral("比较选中 (1)") &&
+              button->toolTip() == QStringLiteral("需要选择 2-8 张图片才能比较（当前 1 张）"),
+          "Compare selection affordance: one selection is visible with disabled guidance");
+
+    panel.selectPaths({paths[0], paths[2]}, paths[0]);
+    CHECK(button->isVisible() && button->isEnabled() &&
+              button->text() == QStringLiteral("比较选中 (2)") &&
+              button->toolTip() == QStringLiteral("将选中的 2 张图片送入对比"),
+          "Compare selection affordance: two selections enable the exact Compare action");
+    CHECK(nativeToolTipShows(QStringLiteral("将选中的 2 张图片送入对比")),
+          "Compare selection affordance: enabled button shows its native tooltip");
+
+    int requestCount = 0;
+    QStringList requestedPaths;
+    QObject::connect(&panel, &ThumbnailPanel::compareRequested,
+                     [&requestCount, &requestedPaths](const QStringList &requested)
+                     {
+                         ++requestCount;
+                         requestedPaths = requested;
+                     });
+    button->click();
+    const QStringList expectedRequest = {paths[0], paths[2]};
+    CHECK(requestCount == 1 && requestedPaths == expectedRequest,
+          "Compare selection affordance: clicking two selections emits one ordered request");
+
+    panel.selectPaths(paths, paths.first());
+    CHECK(button->isVisible() && !button->isEnabled() &&
+              button->text() == QStringLiteral("比较选中 (9)") &&
+              button->toolTip() == QStringLiteral("需要选择 2-8 张图片才能比较（当前 9 张）"),
+          "Compare selection affordance: nine selections remain visible but disabled");
+    CHECK(nativeToolTipShows(QStringLiteral("需要选择 2-8 张图片才能比较（当前 9 张）")),
+          "Compare selection affordance: disabled button shows its native tooltip");
+    button->click();
+    CHECK(requestCount == 1,
+          "Compare selection affordance: disabled oversized selection emits no request");
 }
 
 // ─── A#8: rename / delete / undo consistency ────────────────────────────────
@@ -407,6 +492,7 @@ int main(int argc, char **argv)
     const QString dirPath = dir.absolutePath();
 
     testViewModeAndSelection(dirPath);
+    testCompareSelectionAffordance(tmp.filePath("compare_selection"));
     testFileOpsUndo(dirPath);
     testDegradedInputs(tmp);
     {
