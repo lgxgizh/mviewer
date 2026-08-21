@@ -165,16 +165,20 @@ void testViewModeAndSelection(const QString &dirPath)
     panel.setTypeFilter(""); // restore
     pump(20);
 
-    // Filename search narrows without destroying the selection semantics.
+    // Filename search narrows without destroying the selection semantics. When
+    // the selected image is filtered out but rows remain, promote the first
+    // visible image through the shared selection.
     panel.selectPath(paths[2]);
     panel.setFilter("ba_c");
     pump(50);
     CHECK(panel.selectedPaths() == QStringList{paths[2]},
           "A#7: search keeps the selected image when it stays visible");
-    panel.setFilter("ba_a"); // selected image filtered out
+    panel.setFilter("ba_a"); // selected image filtered out; ba_a remains visible
     pump(50);
-    CHECK(panel.selectedPaths().isEmpty(),
-          "A#7: search excluding the selection clears it");
+    CHECK(panel.selectedPaths() == QStringList{paths[0]},
+          "A#7: search promotes the first visible image when selection is filtered out");
+    CHECK(sel.currentImage() == paths[0],
+          "A#7: search keeps SelectionModel current on the first visible image");
     panel.setFilter("");
     pump(50);
 

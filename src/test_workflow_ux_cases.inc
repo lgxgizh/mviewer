@@ -95,6 +95,9 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     auto *previewSection = w.findChild<QWidget *>("previewSection");
     auto *directoryTree = w.findChild<DirectoryTree *>();
     auto *previewPanel = w.findChild<PreviewPanel *>();
+    auto *gallerySearchEdit = w.findChild<QLineEdit *>("searchEdit");
+    auto *viewModeCombo = w.findChild<QComboBox *>("thumbnailViewModeCombo");
+    auto *thumbnailPanel = w.findChild<ThumbnailPanel *>();
     CHECK(browserToolBar != nullptr, "professional browser toolbar has a stable object name");
     CHECK(browserToolBar && browserToolBar->actions().size() >= 8,
           "browser toolbar exposes the high-frequency browse commands");
@@ -122,10 +125,29 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "advanced gallery filters are hidden by default");
     CHECK(advancedFilterToggle && advancedFilterToggle->isCheckable(),
           "advanced filter toggle has a stable interactive control");
+    CHECK(gallerySearchEdit && gallerySearchEdit->isVisible() && gallerySearchEdit->isEnabled() &&
+              gallerySearchEdit->width() > 0 && gallerySearchEdit->height() > 0,
+          "gallery filename filter is visible, enabled, and has usable geometry");
+    const int galleryToolbarBottom =
+        gallerySearchEdit ? gallerySearchEdit->mapTo(&w, gallerySearchEdit->rect().bottomLeft()).y()
+                          : -1;
+    const int galleryTop = thumbnailPanel ? thumbnailPanel->mapTo(&w, QPoint(0, 0)).y() : -1;
+    CHECK(galleryToolbarBottom >= 0 && galleryTop > galleryToolbarBottom,
+          "gallery toolbar occupies space above the thumbnail panel");
+    CHECK(viewModeCombo && viewModeCombo->isVisible() && viewModeCombo->isEnabled(),
+          "gallery view mode control is visible and enabled");
+    CHECK(advancedFilterToggle && advancedFilterToggle->isVisible() &&
+              advancedFilterToggle->isEnabled(),
+          "advanced gallery filter toggle is visible and enabled");
+    w.resize(800, 500);
+    pump(10);
+    CHECK(thumbnailPanel && thumbnailPanel->isVisible() && thumbnailPanel->width() > 0 &&
+              thumbnailPanel->height() > 0,
+          "minimum-size Browse window keeps the gallery visible");
+    w.resize(1280, 800);
+    pump(10);
 
     auto *thumbnailSizeSlider = w.findChild<QSlider *>("thumbnailSizeSlider");
-    auto *viewModeCombo = w.findChild<QComboBox *>("thumbnailViewModeCombo");
-    auto *thumbnailPanel = w.findChild<ThumbnailPanel *>();
     auto *pathEdit = w.findChild<QLineEdit *>("pathEdit");
     CHECK(thumbnailSizeSlider != nullptr, "thumbnail size slider is discoverable");
     CHECK(viewModeCombo && thumbnailPanel,
@@ -419,11 +441,33 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "descending gallery sort republishes the visible Browse sequence");
     CHECK(viewer && imageList && viewer->browseSequence() == descending,
           "Viewer sequence follows descending gallery sort");
+    if (thumbnailPanel)
+    {
+        thumbnailPanel->selectPath(paths.first());
+        pump(20);
+    }
     thumbnailPanel->setFilter(QFileInfo(paths[1]).completeBaseName());
     pump(50);
     CHECK(imageList && thumbnailPanel && imageList->paths() == thumbnailPanel->pathList() &&
               imageList->paths() == QStringList{paths[1]},
           "filename filter republishes the filtered Browse sequence");
+    CHECK(thumbnailPanel && thumbnailPanel->selectedPaths() == QStringList{paths[1]},
+          "filename filter promotes the first visible image into the gallery selection");
+    CHECK(sel && sel->currentImage() == paths[1],
+          "filename filter keeps SelectionModel.currentImage on the visible image");
+    CHECK(previewPanel && previewPanel->requestedPath() == paths[1],
+          "filename filter routes the visible image to the PreviewPanel");
+    thumbnailPanel->setFilter(QStringLiteral("__mviewer_filter_no_match__"));
+    pump(50);
+    CHECK(imageList && thumbnailPanel && imageList->paths().isEmpty() &&
+              thumbnailPanel->pathList().isEmpty(),
+          "a no-match filter publishes an empty visible Browse sequence");
+    CHECK(thumbnailPanel && thumbnailPanel->selectedPaths().isEmpty(),
+          "a no-match filter clears the gallery selection");
+    CHECK(sel && sel->currentImage().isEmpty(),
+          "a no-match filter clears SelectionModel.currentImage");
+    CHECK(previewPanel && previewPanel->requestedPath().isEmpty(),
+          "a no-match filter clears the PreviewPanel request");
     thumbnailPanel->setFilter({});
     thumbnailPanel->setSortAscending(true);
     pump(50);

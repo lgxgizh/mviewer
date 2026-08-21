@@ -95,6 +95,12 @@
   selection guidance, including the live selected-count text and 2–8 image
   enablement tooltip.
 
+- **Browse gallery toolbar and selection:** restored the gallery toolbar layout
+  so the filename filter and view controls are visible and usable; filtering
+  away the current gallery selection now promotes the first visible image
+  through the shared selection, while an empty result clears the gallery,
+  preview, and status identity.
+
 ## [Unreleased] — M46 real-world workflow reliability & long-session release qualification
 
 ### Fixed

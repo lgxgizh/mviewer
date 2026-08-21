@@ -311,6 +311,8 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
         m_paths.isEmpty()
             ? QString()
             : (currentIndex().isValid() ? m_paths.value(currentIndex().row()) : QString());
+    const bool hadGallerySelection = !prevSelected.isEmpty();
+    const bool pendingSelectionBeforeRebuild = !m_pendingSelect.isEmpty();
 
     m_paths.clear();
     m_rowByPath.clear();
@@ -353,6 +355,13 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
             setCurrentIndex(m_model->index(it.value(), 0));
     }
 
+    // A completed filter rebuild with no visible rows must clear the shared
+    // selection as well as the gallery. This drives the existing preview and
+    // status-bar empty state through SelectionModel; recursive/meta searches
+    // that are still pending never reach buildModel().
+    if (entries.isEmpty() && m_selection)
+        m_selection->setSelection({}, {});
+
     {
         QMutexLocker lk(&m_thumbMtx);
         // M25: keep ready thumbnails for paths that are still in the filtered
@@ -384,6 +393,14 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     {
         selectPath(m_pendingSelect);
         m_pendingSelect.clear();
+    }
+    else if (hadGallerySelection && selToRestore.isEmpty() && !entries.isEmpty() &&
+             !pendingSelectionBeforeRebuild && m_pendingSelect.isEmpty())
+    {
+        // A filter may remove the whole previous selection while leaving
+        // visible rows. Promote exactly one visible path so Browse, preview,
+        // and the shared SelectionModel never drift into an unselected state.
+        selectPath(m_paths.first());
     }
 
     emit statsChanged(m_paths.size(), m_totalBytes, 0, 0);

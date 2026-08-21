@@ -659,6 +659,7 @@ QWidget *MainWindow::buildGalleryPanel()
 
 
     auto *sortBar = buildSortBar(rightWidget);
+    rightLayout->addWidget(sortBar);
 
     m_thumbnailPanel = new ThumbnailPanel(rightWidget);
     m_thumbnailPanel->setCommandStack(&m_cmdStack);   // A-10: reversible file ops
