@@ -123,6 +123,10 @@ void CompareWorkspace::exclusiveMode(QCheckBox *keepOn)
     uncheck(m_swipeChk);
     uncheck(m_overlayChk);
     uncheck(m_checkerChk);
+    // Blink and the dedicated canvas modes render through different surfaces.
+    // Keeping both checked would leave the canvas visible while Blink only
+    // toggles the hidden grid panes, so they must be mutually exclusive too.
+    uncheck(m_blinkChk);
 }
 
 void CompareWorkspace::setImages(const QStringList &paths)

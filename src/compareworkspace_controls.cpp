@@ -82,7 +82,17 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
             [this](bool on)
             {
                 if (on)
+                {
+                    // Blink owns the normal grid surface. For a two-image
+                    // compare, cancel any canvas mode before starting the
+                    // timer so the visible page and the checked mode agree.
+                    if (m_engine.imageCount() == 2)
+                    {
+                        exclusiveMode(m_blinkChk);
+                        updateCanvasModeVisibility();
+                    }
                     startBlink(150); // fast flicker
+                }
                 else
                     stopBlink();
             });

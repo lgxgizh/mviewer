@@ -105,8 +105,14 @@ void CompareWorkspace::updateCanvasModeVisibility()
         return;
     }
     const bool canvasMode = m_engine.imageCount() == 2 && anyCanvasCompareMode();
-    m_pageStack->setCurrentWidget(canvasMode ? static_cast<QWidget *>(m_compareCanvas)
-                                             : static_cast<QWidget *>(m_compareGridPage));
+    QWidget *target = canvasMode ? static_cast<QWidget *>(m_compareCanvas)
+                                 : static_cast<QWidget *>(m_compareGridPage);
+    const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
+    const bool switchedToGrid = !canvasMode && !blinkActive &&
+                                m_pageStack->currentWidget() != target;
+    m_pageStack->setCurrentWidget(target);
+    if (switchedToGrid)
+        schedulePostLayoutFit();
     if (canvasMode)
         m_compareCanvas->update();
     update();
@@ -431,6 +437,17 @@ void CompareWorkspace::schedulePostLayoutFit()
                            if (!ws)
                                return;
                            ws->m_postLayoutFitPending = false;
+                           // A canvas toggle can cancel Blink before its
+                           // 0-ms fit callback runs. In that transition the
+                           // grid is already hidden, so fitting it here would
+                           // capture transient/invalid pane geometry. The
+                           // Canvas -> Grid transition above queues a fresh
+                           // fit after the grid becomes current again.
+                           const bool blinkActive = ws->m_blinkChk && ws->m_blinkChk->isChecked();
+                           if (blinkActive ||
+                               (ws->m_pageStack && ws->m_compareGridPage &&
+                                ws->m_pageStack->currentWidget() != ws->m_compareGridPage))
+                               return;
                            const double requestedScale = ws->m_engine.syncTransform().scale;
                            const double requestedRatio = ws->m_sharedZoomRatio;
                            const bool preserveZoom =

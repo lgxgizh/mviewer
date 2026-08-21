@@ -1068,6 +1068,101 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(!split->isChecked() && !overlay->isChecked() && !blink->isChecked(),
           "all exclusive modes are OFF after the round-trip (grid restored)");
 
+    // Compare canvas and Blink use different rendering surfaces. They must
+    // never remain checked together: otherwise Blink only toggles hidden grid
+    // panes while the visible canvas stays static. Cover both user directions
+    // and the page/engine state, not only the toolbar checkboxes.
+    QWidget *gridPage = ws->findChild<QWidget *>(QStringLiteral("compareGridPage"));
+    QWidget *canvasPage = ws->findChild<QWidget *>(QStringLiteral("compareCanvas"));
+    CHECK(gridPage && canvasPage && gridPage->isVisible() && !canvasPage->isVisible(),
+          "compare starts on the normal grid page when no canvas mode is active");
+
+    auto findComparePane = [ws](int index) -> RawImageView *
+    {
+        for (RawImageView *view : ws->findChildren<RawImageView *>())
+            if (view && view->cellIndex() == index)
+                return view;
+        return nullptr;
+    };
+    auto paneGeometryValid = [](RawImageView *view)
+    {
+        return view && view->isVisible() && view->width() > 0 && view->height() > 0 &&
+               view->sourceSize().isValid();
+    };
+    auto paneFitValid = [&paneGeometryValid](RawImageView *view)
+    {
+        if (!paneGeometryValid(view))
+            return false;
+        const QSize source = view->sourceSize();
+        const double fit = std::min(static_cast<double>(view->width()) / source.width(),
+                                    static_cast<double>(view->height()) / source.height());
+        return fit > 0.0 && qIsFinite(view->scale()) && view->scale() > 0.0 &&
+               qAbs(view->scale() / fit - 1.0) < 0.05;
+    };
+    auto waitForGridPaneFit = [&](bool &geometry, bool &fit)
+    {
+        geometry = false;
+        fit = false;
+        QElapsedTimer settled;
+        settled.start();
+        while ((!geometry || !fit) && settled.elapsed() < 1500)
+        {
+            pump(25);
+            RawImageView *pane0 = findComparePane(0);
+            RawImageView *pane1 = findComparePane(1);
+            geometry = paneGeometryValid(pane0) && paneGeometryValid(pane1);
+            fit = paneFitValid(pane0) && paneFitValid(pane1);
+        }
+    };
+    sendKey(ws, Qt::Key_O);
+    pump(30);
+    CHECK(overlay->isChecked() && !blink->isChecked() && canvasPage && canvasPage->isVisible() &&
+              gridPage && !gridPage->isVisible(),
+          "overlay activates the canvas page without enabling Blink");
+    sendKey(ws, Qt::Key_B);
+    pump(30);
+    CHECK(blink->isChecked() && !overlay->isChecked() && gridPage && gridPage->isVisible() &&
+              canvasPage && !canvasPage->isVisible(),
+          "Blink cancels Overlay and returns to the grid page");
+    CHECK(ws->engine().blinkController().isBlinking(),
+          "Blink starts the engine blink state after leaving the canvas");
+    sendKey(ws, Qt::Key_B);
+    pump(40);
+    CHECK(!blink->isChecked() && !ws->engine().blinkController().isBlinking() && gridPage &&
+              gridPage->isVisible(),
+          "stopping Blink clears the engine state and restores the grid");
+    bool blinkStopGeometry = false;
+    bool blinkStopFit = false;
+    waitForGridPaneFit(blinkStopGeometry, blinkStopFit);
+    CHECK(blinkStopGeometry,
+          "O to B to stopping Blink restores visible geometry for both panes");
+    CHECK(blinkStopFit,
+          "O to B to stopping Blink restores a valid Fit ratio for both panes");
+
+    sendKey(ws, Qt::Key_B);
+    pump(30);
+    CHECK(blink->isChecked() && ws->engine().blinkController().isBlinking(),
+          "Blink can be started again from the normal grid");
+    sendKey(ws, Qt::Key_O);
+    pump(60);
+    CHECK(overlay->isChecked() && !blink->isChecked() &&
+              !ws->engine().blinkController().isBlinking() && canvasPage &&
+              canvasPage->isVisible() && gridPage && !gridPage->isVisible(),
+          "opening Overlay stops Blink and switches to the canvas page");
+    sendKey(ws, Qt::Key_O);
+    pump(40);
+    CHECK(!overlay->isChecked() && gridPage && gridPage->isVisible() && canvasPage &&
+              !canvasPage->isVisible(),
+          "closing Overlay returns to the normal grid page");
+
+    bool gridPanesHaveGeometry = false;
+    bool gridPanesHaveFit = false;
+    waitForGridPaneFit(gridPanesHaveGeometry, gridPanesHaveFit);
+    CHECK(gridPanesHaveGeometry,
+          "Canvas to Grid restores visible geometry for both compare panes");
+    CHECK(gridPanesHaveFit,
+          "Canvas to Grid restores a valid Fit display ratio for both compare panes");
+
     // 差异高亮（H）独立开关，不干扰其他模式。
     QCheckBox *diffHl = findChk(ws, QStringLiteral("高亮差异"));
     CHECK(diffHl != nullptr, "diff-highlight control is discoverable for the H shortcut");

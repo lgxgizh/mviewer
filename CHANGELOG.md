@@ -69,6 +69,11 @@
 
 ### Fixed
 
+- **Compare mode exclusivity:** Blink now cancels Split/Swipe/Overlay/
+  Checkerboard before starting, while opening any canvas mode stops Blink and
+  clears its engine state. Canvas-to-Grid transitions now defer Fit until the
+  normal grid geometry is settled. The visible compare page can no longer
+  remain on a static canvas while the toolbar reports that blinking is active.
 - **Compare Pixel Link exactness:** Pixel Link tooltips and RGB/Δ values now
   sample the current full-resolution analysis pixels with the active crop,
   rotation, and point adjustments instead of reading a bounded display LOD.
