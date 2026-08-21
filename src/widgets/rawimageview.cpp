@@ -32,8 +32,18 @@ void RawImageView::setImage(const QImage &img)
 
 void RawImageView::setImage(const QImage &img, const QSize &sourceSize)
 {
+    const QSize fullSize = sourceSize.isValid() ? sourceSize : img.size();
+    setImage(img, fullSize, QRect(QPoint(0, 0), fullSize));
+}
+
+void RawImageView::setImage(const QImage &img, const QSize &sourceSize, const QRect &sourceRect)
+{
     m_image = img;
     m_sourceSize = sourceSize.isValid() ? sourceSize : img.size();
+    const QRect fullRect(QPoint(0, 0), m_sourceSize);
+    m_sourceRect = sourceRect.isValid() ? sourceRect.normalized().intersected(fullRect) : fullRect;
+    if (m_sourceRect.isEmpty())
+        m_sourceRect = fullRect;
     m_sizeMismatch = false;
     releaseBaseSurface();
     resetFit();
@@ -44,6 +54,7 @@ void RawImageView::clear()
 {
     m_image = QImage();
     m_sourceSize = {};
+    m_sourceRect = {};
     m_scale = m_fitScale = 1.0;
     m_offset = {};
     releaseBaseSurface();
@@ -252,7 +263,8 @@ void RawImageView::ensureBaseSurface()
     // compare), overlay opacity, scale, pan offset, viewport, and device ratio.
     if (m_baseSurfaceValid && imageKey == m_cachedImageKey && overlayKey == m_cachedOverlayKey &&
         m_overlayAlpha == m_cachedOverlayAlpha && m_scale == m_cachedScale &&
-        m_offset == m_cachedOffset && viewport == m_cachedViewport && dpr == m_cachedDpr)
+        m_offset == m_cachedOffset && viewport == m_cachedViewport && dpr == m_cachedDpr &&
+        m_sourceRect == m_cachedSourceRect)
         return;
 
     // Bounded by widget viewport device pixels (never by scaled source dims:
@@ -297,6 +309,7 @@ void RawImageView::ensureBaseSurface()
     m_cachedOffset = m_offset;
     m_cachedViewport = viewport;
     m_cachedDpr = dpr;
+    m_cachedSourceRect = m_sourceRect;
 
     ++m_baseSurfaceRenderCount;
     // Diagnostic only: lets tests distinguish annotation repaints from source
@@ -317,7 +330,13 @@ void RawImageView::drawBaseLayer(QPainter &p)
     const double cy = height() / 2.0 + m_offset.y();
     const int dw = qRound(m_sourceSize.width() * m_scale);
     const int dh = qRound(m_sourceSize.height() * m_scale);
-    p.drawImage(QRectF(cx - dw / 2.0, cy - dh / 2.0, dw, dh), m_image);
+    const double sourceLeft = cx - dw / 2.0;
+    const double sourceTop = cy - dh / 2.0;
+    const QRectF coveredDest(sourceLeft + m_sourceRect.x() * m_scale,
+                             sourceTop + m_sourceRect.y() * m_scale,
+                             m_sourceRect.width() * m_scale,
+                             m_sourceRect.height() * m_scale);
+    p.drawImage(coveredDest, m_image);
 
     // Difference/heatmap overlay (compare mode): same transform as the base image
     // so it tracks zoom/pan. The QImage is produced by the workspace from core-layer
@@ -345,6 +364,7 @@ void RawImageView::releaseBaseSurface()
     m_cachedOffset = {};
     m_cachedViewport = {};
     m_cachedDpr = 0.0;
+    m_cachedSourceRect = {};
 }
 
 void RawImageView::mousePressEvent(QMouseEvent *ev)
@@ -485,10 +505,13 @@ QPointF RawImageView::widgetToImage(const QPoint &pos) const
 
 QPoint RawImageView::displayPointForSource(int x, int y) const
 {
-    if (m_image.isNull() || !m_sourceSize.isValid())
+    if (m_image.isNull() || !m_sourceSize.isValid() || !m_sourceRect.isValid() ||
+        x < m_sourceRect.x() || y < m_sourceRect.y() ||
+        x >= m_sourceRect.x() + m_sourceRect.width() ||
+        y >= m_sourceRect.y() + m_sourceRect.height())
         return {};
-    const double sx = static_cast<double>(m_image.width()) / m_sourceSize.width();
-    const double sy = static_cast<double>(m_image.height()) / m_sourceSize.height();
-    return QPoint(qBound(0, qFloor(x * sx), m_image.width() - 1),
-                  qBound(0, qFloor(y * sy), m_image.height() - 1));
+    const double sx = static_cast<double>(m_image.width()) / m_sourceRect.width();
+    const double sy = static_cast<double>(m_image.height()) / m_sourceRect.height();
+    return QPoint(qBound(0, qFloor((x - m_sourceRect.x()) * sx), m_image.width() - 1),
+                  qBound(0, qFloor((y - m_sourceRect.y()) * sy), m_image.height() - 1));
 }

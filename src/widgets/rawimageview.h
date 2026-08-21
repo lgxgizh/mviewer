@@ -4,6 +4,7 @@
 
 #include <QImage>
 #include <QPointF>
+#include <QRect>
 #include <QSize>
 #include <QVector>
 #include <QWidget>
@@ -40,9 +41,14 @@ class RawImageView : public QWidget
     // image is an LOD rather than a full-resolution raster.
     void setImage(const QImage &img);
     void setImage(const QImage &img, const QSize &sourceSize);
+    void setImage(const QImage &img, const QSize &sourceSize, const QRect &sourceRect);
     QSize sourceSize() const
     {
         return m_sourceSize;
+    }
+    QRect sourceRect() const
+    {
+        return m_sourceRect;
     }
     QPoint displayPointForSource(int x, int y) const;
     void clear();
@@ -204,6 +210,7 @@ class RawImageView : public QWidget
 
     QImage m_image;
     QSize m_sourceSize;
+    QRect m_sourceRect;
     double m_scale = 1.0;
     double m_fitScale = 1.0;
     QPointF m_offset;
@@ -230,6 +237,7 @@ class RawImageView : public QWidget
     double m_cachedScale = 0.0;
     QPointF m_cachedOffset;
     QSize m_cachedViewport;
+    QRect m_cachedSourceRect;
     qreal m_cachedDpr = 0.0;
 
     // M16.1 sync crosshair state (image-space position)

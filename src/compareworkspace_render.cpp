@@ -104,7 +104,7 @@ QPair<QRect, QRect> CompareWorkspace::splitRects(const QRect &canvas)
 // Center-relative destination helper: image center = target rect center + the
 // selected transform offset; top-left = center - scaled image size / 2. This
 // matches RawImageView's offset semantics (a pan delta from the pane center).
-QRectF CompareWorkspace::cellDestRect(int idx, const QRectF &geom) const
+QRectF CompareWorkspace::cellFullDestRect(int idx, const QRectF &geom) const
 {
     if (idx < 0 || idx >= m_cellViews.size() || !m_cellViews[idx])
         return {};
@@ -128,6 +128,168 @@ QRectF CompareWorkspace::cellDestRect(int idx, const QRectF &geom) const
     const double dh = sourceSize.height() * sc;
     const QPointF center(geom.x() + geom.width() / 2.0 + ox, geom.y() + geom.height() / 2.0 + oy);
     return QRectF(center.x() - dw / 2.0, center.y() - dh / 2.0, dw, dh);
+}
+
+QRectF CompareWorkspace::cellDestRect(int idx, const QRectF &geom) const
+{
+    const QRectF full = cellFullDestRect(idx, geom);
+    if (full.isEmpty() || idx < 0 || idx >= m_cellViews.size() || !m_cellViews[idx])
+        return {};
+    const QRect sourceRect = m_cellViews[idx]->sourceRect();
+    const QSize sourceSize = m_cellViews[idx]->sourceSize();
+    if (!sourceRect.isValid() || !sourceSize.isValid())
+        return {};
+    const double sx = full.width() / sourceSize.width();
+    const double sy = full.height() / sourceSize.height();
+    return QRectF(full.left() + sourceRect.x() * sx, full.top() + sourceRect.y() * sy,
+                  sourceRect.width() * sx, sourceRect.height() * sy);
+}
+
+QRect CompareWorkspace::sourceVisibleRect(int pane) const
+{
+    if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
+        return {};
+    const RawImageView *view = m_cellViews[pane];
+    const QSize sourceSize = view->sourceSize();
+    if (!sourceSize.isValid() || view->width() <= 0 || view->height() <= 0)
+        return {};
+    const QPointF a = view->widgetToImage(QPoint(0, 0));
+    const QPointF b = view->widgetToImage(QPoint(view->width(), view->height()));
+    const QRect full(QPoint(0, 0), sourceSize);
+    const int left = qFloor(std::min(a.x(), b.x()));
+    const int top = qFloor(std::min(a.y(), b.y()));
+    const int right = qCeil(std::max(a.x(), b.x()));
+    const int bottom = qCeil(std::max(a.y(), b.y()));
+    return QRect(left, top, std::max(1, right - left), std::max(1, bottom - top))
+        .intersected(full);
+}
+
+CompareWorkspace::DisplayRequest CompareWorkspace::sourceDisplayRequest(int pane) const
+{
+    DisplayRequest request;
+    if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
+        return request;
+    const RawImageView *view = m_cellViews[pane];
+    const QSize viewSourceSize = view->sourceSize();
+    QSize sourceSize = viewSourceSize;
+    // The first materialization is scheduled while the placeholder pane is
+    // still blank. Carry the probed metadata dimensions through that request
+    // so it is an explicit full-frame LOD (and never a partial region based on
+    // a stale engine transform).
+    if (!sourceSize.isValid() && pane < m_engine.imageCount())
+    {
+        const ImageFrame *img = m_engine.imageAt(pane);
+        if (img)
+        {
+            const auto &meta = img->metadata();
+            sourceSize = QSize(meta.width, meta.height);
+        }
+    }
+    if (!sourceSize.isValid())
+        return request;
+    const QRect full(QPoint(0, 0), sourceSize);
+    request.sourceRect = full;
+    request.target = QSize(sourceLodEdge(pane), sourceLodEdge(pane));
+
+    // Before the first LOD lands there is no widget transform in source
+    // coordinates. Keep that request full-frame even if a prior comparison
+    // left a zoomed engine state behind; fitAll() will establish the new
+    // metadata-based baseline on the queued post-layout pass.
+    if (!viewSourceSize.isValid())
+        return request;
+
+    // Crop/rotation change the displayed coordinate space. Until the worker
+    // maps a covered source rect through those geometric edits, keep this path
+    // on the established full-frame preview so a partial raster is never
+    // stretched across the wrong adjusted geometry. Point-only edits remain
+    // safe for viewport regions.
+    if (pane < static_cast<int>(m_cellAdjusts.size()) &&
+        (m_cellAdjusts[static_cast<size_t>(pane)].hasCrop ||
+         m_cellAdjusts[static_cast<size_t>(pane)].rotation != 0))
+        return request;
+
+    // RawImageView's scale is an absolute source-to-widget transform, so a
+    // 12K source may be fitted at ~0.05 and still be genuinely zoomed after a
+    // few wheel steps. Compare against the per-pane fit baseline to decide
+    // when a covered viewport region is warranted; using `scale > 1` here
+    // would keep that source on a full-frame LOD indefinitely.
+    double currentScale = view->scale();
+    if (pane < m_engine.imageCount())
+        currentScale = m_engine.cellTransform(pane).scale;
+    double fitScale = m_fitScales.value(pane, 0.0);
+    if (!m_uniformScale && viewSourceSize.isValid() && view->width() > 0 && view->height() > 0)
+    {
+        // The queued post-layout fit can race the first LOD delivery. The
+        // view geometry is an authoritative fallback for an independent pane
+        // and avoids treating a stale/default fit vector as a zoom request.
+        fitScale = std::min(static_cast<double>(view->width()) / viewSourceSize.width(),
+                            static_cast<double>(view->height()) / viewSourceSize.height());
+    }
+    else if (m_uniformScale)
+    {
+        bool firstFit = true;
+        double commonFit = 1.0;
+        for (double fit : m_fitScales)
+        {
+            if (!(fit > 0.0) || !std::isfinite(fit))
+                continue;
+            if (firstFit || fit < commonFit)
+                commonFit = fit;
+            firstFit = false;
+        }
+        if (!firstFit)
+            fitScale = commonFit;
+    }
+    const double zoomRatio = fitScale > 0.0 && std::isfinite(fitScale) &&
+                                    currentScale > 0.0 && std::isfinite(currentScale)
+                                ? currentScale / fitScale
+                                : 1.0;
+    if (!(zoomRatio > 1.0 + 1e-6))
+        return request;
+
+    const QRect visible = sourceVisibleRect(pane);
+    if (visible.isEmpty())
+        return request;
+    const int marginX = std::max(16, visible.width() / 8);
+    const int marginY = std::max(16, visible.height() / 8);
+    request.sourceRect = visible.adjusted(-marginX, -marginY, marginX, marginY).intersected(full);
+    if (request.sourceRect.isEmpty())
+    {
+        request.sourceRect = full;
+        return request;
+    }
+
+    const double dpr = std::max(1.0, view->devicePixelRatioF());
+    // A near-full covered rectangle is both more expensive and less reliable
+    // for clip-based decoders than a bounded full-frame LOD. Keep the existing
+    // full-frame path for this moderate-zoom seam, but raise its target edge
+    // with the logical zoom ratio so the user still sees a quality upgrade.
+    const qint64 fullPixels = static_cast<qint64>(full.width()) * full.height();
+    const qint64 coveredPixels = static_cast<qint64>(request.sourceRect.width()) *
+                                 request.sourceRect.height();
+    if (fullPixels > 0 && coveredPixels * 100 >= fullPixels * 90)
+    {
+        request.sourceRect = full;
+        const int edge = std::clamp(
+            static_cast<int>(std::ceil(std::max(view->width(), view->height()) * dpr *
+                                       zoomRatio * kDisplayLodOverscan)),
+            64, kMaxCompareLodEdge);
+        request.target = QSize(edge, edge);
+        request.region = false;
+        return request;
+    }
+
+    // Use the logical zoom ratio for source density. This preserves the
+    // pre-Fit source-backed behavior (where the engine scale started at 1.0)
+    // while keeping a fitted pane dense enough after the first wheel step.
+    const double density = std::max(1.0, zoomRatio) * dpr * kDisplayLodOverscan;
+    const int targetW = std::clamp(
+        static_cast<int>(std::ceil(request.sourceRect.width() * density)), 64, kMaxCompareLodEdge);
+    const int targetH = std::clamp(
+        static_cast<int>(std::ceil(request.sourceRect.height() * density)), 64, kMaxCompareLodEdge);
+    request.target = QSize(targetW, targetH);
+    request.region = true;
+    return request;
 }
 
 QSize CompareWorkspace::displayLodTarget(int idx, const ImageData &source) const
@@ -178,9 +340,30 @@ void CompareWorkspace::fitAll()
         const ImageFrame *img = m_engine.imageAt(i);
         const QSize qs = m_cellViews[i]->size();
         const CellSize cell{qs.width(), qs.height()};
-        if (!img || img->pixels().isNull() || cell.w <= 0 || cell.h <= 0)
+        if (!img || cell.w <= 0 || cell.h <= 0)
             continue;
-        const CellSize imgSize{img->width(), img->height()};
+        QSize sourceSize;
+        if (!img->pixels().isNull())
+        {
+            // Preserve the full-frame path's existing source geometry.
+            sourceSize = QSize(img->width(), img->height());
+        }
+        else
+        {
+            // M47 placeholder: the pane has no pixels yet, but its probed
+            // metadata is authoritative for the fit transform. Once the LOD
+            // arrives, sourceSize() is an equivalent fallback for adjusted
+            // display geometry.
+            sourceSize = m_cellViews[i]->sourceSize();
+            if (!sourceSize.isValid())
+            {
+                const auto &meta = img->metadata();
+                sourceSize = QSize(meta.width, meta.height);
+            }
+        }
+        if (!sourceSize.isValid())
+            continue;
+        const CellSize imgSize{sourceSize.width(), sourceSize.height()};
         m_engine.fitCell(i, cell, imgSize);
         m_fitScales[i] = m_engine.cellScale(i);
         if (first || m_engine.cellScale(i) < sharedScale)
@@ -291,10 +474,35 @@ void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
                                    if (pane < static_cast<int>(ws->m_comparePaths.size()) &&
                                        !ws->m_comparePaths[static_cast<size_t>(pane)].empty())
                                    {
-                                       const QSize cur = ws->m_cellViews[pane]->image().size();
-                                       const int edge = ws->sourceLodEdge(pane);
-                                       if (cur.isNull() || cur.width() <= 0 ||
-                                           std::max(cur.width(), cur.height()) != edge)
+                                       const RawImageView *view = ws->m_cellViews[pane];
+                                       const DisplayRequest desired =
+                                           ws->sourceDisplayRequest(pane);
+                                       const QRect current = view->sourceRect();
+                                       const bool hasRaster = !view->image().isNull();
+                                       bool stale = !hasRaster || !current.isValid();
+                                       if (!stale && desired.region)
+                                       {
+                                           const QRect visible = ws->sourceVisibleRect(pane);
+                                           const double currentDensity =
+                                               static_cast<double>(view->image().width()) /
+                                               std::max(1, current.width());
+                                           const double requiredDensity =
+                                               static_cast<double>(desired.target.width()) /
+                                               std::max(1, desired.sourceRect.width());
+                                           stale = !current.contains(desired.sourceRect) ||
+                                                   currentDensity < requiredDensity * 0.9 ||
+                                                   !current.contains(visible);
+                                       }
+                                       else if (!stale)
+                                       {
+                                           stale = desired.region ||
+                                                   std::max(view->image().width(),
+                                                            view->image().height()) !=
+                                                       std::max(desired.target.width(),
+                                                                desired.target.height()) ||
+                                                   current != desired.sourceRect;
+                                       }
+                                       if (stale)
                                            dirty.push_back(pane);
                                    }
                                    return;
@@ -560,13 +768,13 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
 
 TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
     const std::vector<ImageData> &pixels, const std::vector<mviewer::domain::ImageMetadata> &metadata,
-    const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
+    const std::vector<DisplayRequest> &displayRequests, const std::vector<CellAdjust> &adjusts,
     const std::vector<int> &panes, int paneCount, uint64_t gen,
     const std::vector<std::string> &paths, const QPointer<CompareWorkspace> &guard)
 {
     return TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, metadata, displayTargets, adjusts, panes, paneCount, gen, paths, guard](
+        [pixels, metadata, displayRequests, adjusts, panes, paneCount, gen, paths, guard](
             const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
@@ -594,17 +802,22 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                 QSize sourceDims;
                 mviewer::domain::ImageMetadata convMeta;
                 ImageData lod;
+                QRect coveredRect;
+                const DisplayRequest request =
+                    idx < static_cast<int>(displayRequests.size()) ? displayRequests[idx]
+                                                                     : DisplayRequest{};
                 if (!src.isNull())
                 {
                     // Full frame available: bounded client-side display LOD
                     // from the frame pixels (existing path).
                     sourceDims = QSize(src.width, src.height);
                     convMeta = metadata[static_cast<size_t>(idx)];
-                    const QSize target = displayTargets[static_cast<size_t>(idx)];
+                    const QSize target = request.target;
                     lod = target.isValid()
                               ? RenderEngine::scaleBoundedStatic(
                                     src, RenderSize{target.width(), target.height()})
                               : ImageData();
+                    coveredRect = QRect(QPoint(0, 0), sourceDims);
                 }
                 else
                 {
@@ -625,9 +838,30 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                     sourceDims = QSize(source->metadata().width, source->metadata().height);
                     if (sourceDims.isEmpty())
                         continue;
-                    const QSize target = displayTargets[static_cast<size_t>(idx)];
-                    const int edge = std::max(target.width(), target.height());
-                    const auto result = source->decodeLod(edge > 0 ? edge : 1024);
+                    const QSize target = request.target;
+                    mviewer::core::SourceImage::RasterResult result;
+                    if (request.region && request.sourceRect.isValid())
+                    {
+                        const mviewer::core::SourceRect displayed{
+                            request.sourceRect.x(), request.sourceRect.y(),
+                            request.sourceRect.width(), request.sourceRect.height()};
+                        const mviewer::core::SourceRect raw = mviewer::core::orientedRectToRaw(
+                            displayed, source->rawWidth(), source->rawHeight(),
+                            source->orientation());
+                        result = source->decodeRegion(raw, target.width(), target.height());
+                        const mviewer::core::SourceRect displayedCovered =
+                            mviewer::core::rawRectToOriented(result.coveredRect, source->rawWidth(),
+                                                             source->rawHeight(),
+                                                             source->orientation());
+                        coveredRect = QRect(displayedCovered.x, displayedCovered.y,
+                                            displayedCovered.w, displayedCovered.h);
+                    }
+                    else
+                    {
+                        const int edge = std::max(target.width(), target.height());
+                        result = source->decodeLod(edge > 0 ? edge : 1024);
+                        coveredRect = QRect(QPoint(0, 0), sourceDims);
+                    }
                     if (!result.ok)
                         continue;
                     lod = result.pixels;
@@ -639,6 +873,8 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                     continue;
                 if (sourceDims.isEmpty())
                     sourceDims = QSize(lod.width, lod.height);
+                if (!coveredRect.isValid())
+                    coveredRect = QRect(QPoint(0, 0), sourceDims);
 
                 // This is a bounded visual-preview approximation: nonlinear
                 // point operations (especially gamma and clipping) do not
@@ -666,6 +902,9 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                 cell.sourceSize = (displayAdjust.hasCrop || displayAdjust.rotation != 0)
                                       ? QSize(adjusted.width, adjusted.height)
                                       : sourceDims;
+                cell.sourceRect = (displayAdjust.hasCrop || displayAdjust.rotation != 0)
+                                      ? QRect(QPoint(0, 0), cell.sourceSize)
+                                      : coveredRect;
                 if (ctx.isCancelled())
                     return; // after conversion
                 if (cell.image.isNull())
@@ -729,10 +968,10 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
     // their pixel buffers, so the worker holds the pixels alive cheaply.
     std::vector<ImageData> pixels;
     std::vector<mviewer::domain::ImageMetadata> metadata;
-    std::vector<QSize> displayTargets;
+    std::vector<DisplayRequest> displayRequests;
     pixels.reserve(static_cast<size_t>(paneCount));
     metadata.reserve(static_cast<size_t>(paneCount));
-    displayTargets.reserve(static_cast<size_t>(paneCount));
+    displayRequests.reserve(static_cast<size_t>(paneCount));
     for (int i = 0; i < paneCount; ++i)
     {
         const ImageFrame *img = m_engine.imageAt(i);
@@ -740,28 +979,26 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
         metadata.push_back(img ? img->metadata() : mviewer::domain::ImageMetadata{});
         if (img && !img->pixels().isNull())
         {
-            displayTargets.push_back(displayLodTarget(i, img->pixels()));
+            displayRequests.push_back(
+                {displayLodTarget(i, img->pixels()),
+                 QRect(QPoint(0, 0), QSize(img->pixels().width, img->pixels().height)), false});
         }
         else if (i < static_cast<int>(m_comparePaths.size()) &&
                  !m_comparePaths[static_cast<size_t>(i)].empty())
         {
-            // M47: source-backed pane — the display target is the bounded
-            // viewport LOD edge (the worker decodes at that edge).
-            const int edge = sourceLodEdge(i);
-            displayTargets.push_back(edge > 0 ? QSize(edge, edge) : QSize());
+            displayRequests.push_back(sourceDisplayRequest(i));
         }
         else
         {
-            displayTargets.push_back(QSize());
+            displayRequests.push_back({});
         }
     }
     std::vector<CellAdjust> adjusts = m_cellAdjusts;
     const uint64_t gen = m_displayGen;
     QPointer<CompareWorkspace> guard(this);
 
-    auto handle = startDisplayMaterialization(
-        pixels, metadata, displayTargets, adjusts, panes, paneCount, gen, m_comparePaths,
-        guard);
+    auto handle = startDisplayMaterialization(pixels, metadata, displayRequests, adjusts, panes,
+                                              paneCount, gen, m_comparePaths, guard);
     if (!handle)
     {
         // submit() refused the task (pool paused / back-pressured). Keep the
@@ -794,12 +1031,15 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
         const QSize oldSourceSize = view->sourceSize();
         const double oldScale = view->scale();
         const QPointF oldOffset = view->offset();
-        view->setImage(cell.image, cell.sourceSize);
-        // M15: setImage() re-fits by default; keep the pane transform when the
-        // displayed image did not change dimensions.
-        if (!oldSize.isEmpty() && view->image().size() == oldSize &&
-            view->sourceSize() == oldSourceSize)
+        view->setImage(cell.image, cell.sourceSize, cell.sourceRect);
+        // M15/M48: the transform lives in full source coordinates. Preserve it
+        // across both ordinary LOD replacement and covered-region updates; a
+        // region's pixel dimensions are expected to change as the viewport
+        // moves, and must never reset the user's zoom/pan.
+        if (!oldSize.isEmpty() && view->sourceSize() == oldSourceSize)
             view->setTransform(oldScale, oldOffset);
+        if (cell.sourceRect != QRect(QPoint(0, 0), cell.sourceSize))
+            view->clearOverlay();
     }
 
     // Refresh the Pixel Inspector once after the newest display lands when its
@@ -1336,7 +1576,7 @@ void CompareWorkspace::drawCellCompare(QPainter &p, int idx, const QRect &clipRe
     if (!ov.isNull())
     {
         p.setOpacity(m_cellViews[idx]->overlayOpacity());
-        p.drawImage(dr, ov);
+        p.drawImage(cellFullDestRect(idx, geomRect), ov);
         p.setOpacity(1.0);
     }
     p.restore();
@@ -1414,7 +1654,7 @@ void CompareWorkspace::drawOverlayCompare(QPainter &p)
     if (!ov.isNull())
     {
         p.setOpacity(m_cellViews[1]->overlayOpacity());
-        p.drawImage(dr, ov);
+        p.drawImage(cellFullDestRect(1, QRectF(r)), ov);
         p.setOpacity(1.0);
     }
     p.restore();
@@ -1496,7 +1736,7 @@ void CompareWorkspace::drawCheckerboardCompare(QPainter &p)
     if (!ov.isNull())
     {
         p.setOpacity(m_cellViews[1]->overlayOpacity());
-        p.drawImage(dr, ov);
+        p.drawImage(cellFullDestRect(1, QRectF(r)), ov);
         p.setOpacity(1.0);
     }
     p.restore();

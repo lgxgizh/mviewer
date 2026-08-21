@@ -39,6 +39,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <functional>
 #include <memory>
@@ -243,6 +244,15 @@ int main(int argc, char **argv)
                   "C1: pane raster never exceeds source dimensions");
             CHECK(srcSize == QSize(12000, 8333),
                   "C1: pane sourceSize carries the full source geometry");
+            if (v && v->size().isValid() && srcSize.isValid())
+            {
+                const double fit = std::min(static_cast<double>(v->width()) / srcSize.width(),
+                                            static_cast<double>(v->height()) / srcSize.height());
+                CHECK(std::abs(v->scale() - fit) <= std::max(1e-6, fit * 0.02),
+                      "C1: source-backed pane starts at its metadata-based Fit scale");
+                CHECK(v->sourceRect() == QRect(QPoint(0, 0), srcSize),
+                      "C1: initial source-backed LOD covers the full source");
+            }
         }
         CHECK(waitTrue([&] { return sampleScheduler().pending + sampleScheduler().active == 0; },
                        15000),
@@ -279,7 +289,7 @@ int main(int argc, char **argv)
         CHECK(!cap.warned, "C2: no warning for a mixed feasible+infeasible set");
     }
 
-    // ── C3: zoom re-materializes the source-backed pane at a denser edge ────
+    // ── C3: zoom re-materializes the source-backed pane at denser quality ───
     {
         MARK("C3 start");
         SourceDecodeStats::instance().counters().reset();
@@ -325,13 +335,21 @@ int main(int argc, char **argv)
         printf("  C3: pane1 raster %dx%d -> %dx%d\n", before.width(), before.height(),
                after.width(), after.height());
         const auto &c = SourceDecodeStats::instance().counters();
-        CHECK(c.nativeLod.load() > nativeLodBefore,
-              "C3: zoom issues a re-materialization (NativeLod grows)");
         CHECK(!after.isEmpty() && std::max(after.width(), after.height()) <= 4096,
               "C3: the denser raster stays bounded");
-        CHECK(c.fullDecodeScaled.load() == 0 && c.fullDecodeCrop.load() == 0 &&
-                  c.boundedRegion.load() == 0,
+        CHECK(c.fullDecodeScaled.load() == 0 && c.fullDecodeCrop.load() == 0,
               "C3: re-materialization never falls back to a full decode");
+        const QRect fullSource(QPoint(0, 0), v1 ? v1->sourceSize() : QSize());
+        if (c.boundedRegion.load() > 0)
+        {
+            CHECK(v1 && v1->sourceRect().isValid() && v1->sourceRect() != fullSource,
+                  "C3: deep-enough zoom records the covered source region");
+        }
+        else
+        {
+            CHECK(c.nativeLod.load() > nativeLodBefore,
+                  "C3: moderate zoom re-materializes through NativeLod");
+        }
         CHECK(waitTrue([&] { return sampleScheduler().pending + sampleScheduler().active == 0; },
                        15000),
               "C3: scheduler drains after the zoom upgrade");

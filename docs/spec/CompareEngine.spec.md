@@ -28,6 +28,20 @@ CompareWorkspace::setImages() performs image loading **asynchronously**:
 - `applySession()` called while a load is in flight is deferred and replayed by
   `finishLoad()` once the frames land (openCompare -> setImages -> applySession).
 
+## Source-backed display regions (M48 P4)
+
+When a Compare pane has only a metadata placeholder for a large source, the
+workspace fits the pane from the probed source geometry before the first raster
+arrives. The display worker then keeps that complete oriented source geometry while materializing
+only the visible source rectangle (with a small overscan) once the pane is
+deeply zoomed. The request maps displayed coordinates to raw decoder
+coordinates through the EXIF contract, and the returned `coveredRect` is mapped
+back before delivery. `RawImageView` draws that raster in its covered source
+rectangle, so zoom/pan, selection, and crosshair coordinates remain in the full
+source space. Latest-wins cancellation and generation guards apply equally to
+full-frame LOD and region requests; geometric crop/rotation edits stay on the
+full-frame preview path until their coverage transform is available.
+
 ```cpp
 // Core structures (declared in CompareEngine.h)
 struct CellPoint { int x = 0; int y = 0; };

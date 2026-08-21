@@ -1509,7 +1509,7 @@ target_compile_definitions(m47_large_soak PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SO
 add_test(NAME m47_large_soak COMMAND m47_large_soak)
 set_tests_properties(m47_large_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
 
-# ─── M48 Phase 0: deterministic RED regressions (UI level) ───────────────────
+# ─── M48 Phase 0: deterministic regression gate (UI level) ───────────────────
 # Freeze the M48 contracts BEFORE implementation: ICC display fidelity across
 # full-frame / viewer-LOD / compare source-backed paths, EXIF orientation
 # region-coordinate correctness (oriented vs raw), LOD-only resize/fullscreen,
@@ -1531,11 +1531,10 @@ target_compile_features(m48_phase0_regressions PRIVATE cxx_std_20)
 target_include_directories(m48_phase0_regressions PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(m48_phase0_regressions PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME m48_phase0_regressions COMMAND m48_phase0_regressions)
-# Frozen RED: the cases FAIL against the current M47 code by design and must
-# only turn green after the corresponding M48 Phase 1/2 fix. WILL_FAIL keeps
-# the gate green while documenting the expected failures; flip it OFF once the
-# suite is green.
-set_tests_properties(m48_phase0_regressions PROPERTIES RUN_SERIAL TRUE TIMEOUT 900 WILL_FAIL TRUE)
+# M48 Phase 0 was frozen as RED before the implementation work. The ICC,
+# oriented-region, deep-zoom density, metadata, and decoder-terminal contracts
+# are now implemented, so keep this suite as a normal green release gate.
+set_tests_properties(m48_phase0_regressions PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
 
 # ─── M46: Browse real-world reliability (UI level) ──────────────────────────
 # Paint-path filesystem freedom (render-identical after source deletion),

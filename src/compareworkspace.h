@@ -24,6 +24,7 @@
 #include <QPixmap>
 #include <QPointF>
 #include <QPushButton>
+#include <QRect>
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QSlider>
@@ -305,6 +306,7 @@ class CompareWorkspace : public QWidget
     bool handleCanvasLeave(QEvent *event);
     int canvasRefCellAt(const QPoint &pos) const;
     void applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor);
+    QRectF cellFullDestRect(int idx, const QRectF &geom) const;
     QRectF cellDestRect(int idx, const QRectF &geom) const;
 
     // P0-4: split / swipe compare (only meaningful for exactly two images).
@@ -544,6 +546,15 @@ class CompareWorkspace : public QWidget
     // via qApp. Latest-wins: a newer schedule cancels the previous display task
     // and bumps the generation; the delivery is also guarded by generation and
     // pane count. Independent of the diff batch (m_diffGen/m_diffTask).
+    struct DisplayRequest
+    {
+        QSize target;
+        // Displayed/oriented source rectangle covered by this request. A
+        // full-frame LOD uses the complete source geometry.
+        QRect sourceRect;
+        bool region = false;
+    };
+
     struct DisplayBatchResult
     {
         uint64_t generation = 0;
@@ -554,10 +565,13 @@ class CompareWorkspace : public QWidget
             int index = -1;
             QImage image;
             QSize sourceSize;
+            QRect sourceRect;
         };
         std::vector<CellImage> cells;
     };
     QSize displayLodTarget(int idx, const ImageData &source) const;
+    QRect sourceVisibleRect(int pane) const;
+    DisplayRequest sourceDisplayRequest(int pane) const;
     void scheduleDisplayLodRefresh(int idx = -1);
     void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes);
     // M47: bounded per-pane display-target edge for a source-backed pane (no
@@ -566,7 +580,7 @@ class CompareWorkspace : public QWidget
     TaskScheduler::TaskHandle startDisplayMaterialization(
         const std::vector<ImageData> &pixels,
         const std::vector<mviewer::domain::ImageMetadata> &metadata,
-        const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
+        const std::vector<DisplayRequest> &displayRequests, const std::vector<CellAdjust> &adjusts,
         const std::vector<int> &panes, int paneCount, uint64_t generation,
         const std::vector<std::string> &paths, const QPointer<CompareWorkspace> &guard);
     void applyDisplayBatchResult(const DisplayBatchResult &result);

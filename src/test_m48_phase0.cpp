@@ -1,35 +1,24 @@
-// M48 Phase 0 — deterministic RED regressions (frozen BEFORE implementation).
+// M48 Phase 0 — deterministic regression gate (frozen BEFORE implementation).
 //
-// Every case asserts the M48 contract that the current M47 code violates; the
-// suite must FAIL until the corresponding Phase 1/2 fix lands, then stay green
-// forever. Contract summary:
+// Every case asserts an M48 contract and remains a release gate after the
+// corresponding implementation lands. Contract summary:
 //   A0  normal full-frame display applies the embedded ICC (reference; green).
-//   A1  Viewer source-backed LOD display applies the embedded ICC (RED: the
-//       raster path calls mvcore::toQImage() directly, skipping display ICC).
-//   A2  Compare source-backed pane display applies the embedded ICC (RED: the
-//       pane materializer copies convMeta BEFORE decodeLod, and the probe
-//       metadata carries no ICC key at all).
-//   B1/B2  Viewer visible-region rasters use ORIENTED coordinates, but
-//       decodeRegion consumes RAW source coordinates (RED: the decoded region
-//       shows the wrong corner content for EXIF 6/2 non-square sources).
-//   B3  probe geometry matches the displayed EXIF geometry for orientations
-//       2..8 (contract; may be green).
-//   C   resize/fullscreen re-request a raster at the new viewport density
-//       (contract; may be green).
-//   D   Compare deep zoom reaches viewport/source density instead of a
-//       fixed whole-image LOD (RED: the pane raster density stays far below
-//       the viewport density at ~2.3x zoom).
+//   A1  Viewer source-backed LOD display applies the embedded ICC.
+//   A2  Compare source-backed pane display applies the embedded ICC.
+//   B1/B2  Viewer visible-region rasters map ORIENTED coordinates to the RAW
+//       decode contract for EXIF 6/2 non-square sources.
+//   B3  probe geometry matches the displayed EXIF geometry for orientations 2..8.
+//   C   resize/fullscreen re-request a raster at the new viewport density.
+//   D   Compare deep zoom uses a covered viewport region with sufficient source
+//       density, without requiring a whole-image raster at the zoomed edge.
 //   E   source-backed placeholder metadata is complete (fileName, fileSize,
-//       modifiedEpochSec, orientation, ICC) (RED: the caps probe path fills
-//       only filePath/size/dims/orientation/format).
+//       modifiedEpochSec, orientation, ICC).
 //   F1  a throwing probe must not escape CompareWorkspace::setImages on the
-//       UI thread, and must reach exactly one terminal batch warning (fixed in
-//       M48 Phase 3: probe failures are accounted without escaping the UI path).
+//       UI thread, and must reach exactly one terminal batch warning.
 //   F2  a throwing decodeLod reaches an observable terminal (loadFailed) and
-//       pools drain (RED: the contained worker failure never marshals).
+//       pools drain.
 //   F3  a throwing decodeRegion keeps the current raster, reaches the same
-//       terminal contract, and does not retry upgrades (RED for the terminal
-//       signal/no-retry; raster-keep is green).
+//       terminal contract, and does not retry upgrades.
 
 #include "compareworkspace.h"
 #include "core/compare/CompareEngine.h"
@@ -55,8 +44,10 @@
 #include <QTimer>
 #include <QWheelEvent>
 
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <functional>
 #include <memory>
@@ -372,7 +363,7 @@ int main(int argc, char **argv)
         }
     }
 
-    // ── A1: Viewer source-backed LOD display applies the embedded ICC (RED) ──
+    // ── A1: Viewer source-backed LOD display applies the embedded ICC ────────
     {
         MARK("A1 start");
         installDefaults();
@@ -399,11 +390,11 @@ int main(int argc, char **argv)
                    qBlue(patchRaw));
             std::fflush(stdout);
             CHECK(colorClose(sample, expected, 14),
-                  "A1: viewer LOD display applies the ICC conversion (RED today)");
+                  "A1: viewer LOD display applies the ICC conversion");
         }
     }
 
-    // ── A2: Compare source-backed pane display applies the embedded ICC (RED)
+    // ── A2: Compare source-backed pane display applies the embedded ICC ─────
     {
         MARK("A2 start");
         installDefaults();
@@ -427,7 +418,7 @@ int main(int argc, char **argv)
                    qBlue(patchRaw));
             std::fflush(stdout);
             CHECK(colorClose(sample, expected, 14),
-                  "A2: compare source-backed pane applies the ICC conversion (RED today)");
+                  "A2: compare source-backed pane applies the ICC conversion");
         }
     }
 
@@ -475,7 +466,10 @@ int main(int argc, char **argv)
                   [&]
                   {
                       const auto &c = SourceDecodeStats::instance().counters();
-                      return c.boundedRegion.load() >= 2;
+                      // Latest-wins may coalesce the zoom and pan into one
+                      // bounded request; the corner sample below proves that
+                      // the surviving raster is the panned region.
+                      return c.boundedRegion.load() >= 1;
                   },
                   60000),
               "B1: the panned visible-region raster is requested");
@@ -489,8 +483,7 @@ int main(int argc, char **argv)
             printf("  B1: region TL sample=(%d,%d,%d)\n", qRed(tl), qGreen(tl), qBlue(tl));
             std::fflush(stdout);
             CHECK(colorClose(tl, qRgb(0, 0, 255), 40),
-                  "B1: the region raster shows the oriented TL corner (RED today: "
-                  "oriented coords fed to raw decodeRegion)");
+                  "B1: the region raster shows the oriented TL corner");
         }
         else
         {
@@ -529,7 +522,10 @@ int main(int argc, char **argv)
                   [&]
                   {
                       const auto &c = SourceDecodeStats::instance().counters();
-                      return c.boundedRegion.load() >= 2;
+                      // Latest-wins may coalesce the zoom and pan into one
+                      // bounded request; the corner sample below proves that
+                      // the surviving raster is the panned region.
+                      return c.boundedRegion.load() >= 1;
                   },
                   60000),
               "B2: the panned visible-region raster is requested");
@@ -543,7 +539,7 @@ int main(int argc, char **argv)
             printf("  B2: region TL sample=(%d,%d,%d)\n", qRed(tl), qGreen(tl), qBlue(tl));
             std::fflush(stdout);
             CHECK(colorClose(tl, qRgb(0, 255, 0), 40),
-                  "B2: mirrored region shows the oriented TL corner (RED today)");
+                  "B2: mirrored region shows the oriented TL corner");
         }
         else
         {
@@ -628,10 +624,11 @@ int main(int argc, char **argv)
         assertAlive("after-restore");
     }
 
-    // ── D: Compare deep zoom reaches viewport/source density (RED) ───────────
+    // ── D: Compare deep zoom uses a covered, dense viewport region ───────────
     {
         MARK("D start");
         installDefaults();
+        SourceDecodeStats::instance().counters().reset();
         CompareWorkspace ws;
         ws.resize(1280, 800);
         ws.show();
@@ -642,6 +639,18 @@ int main(int argc, char **argv)
         CHECK(v1 != nullptr, "D: pane 1 exists");
         if (v1)
         {
+            // Let the terminal load/layout fit settle before measuring wheel
+            // intent; metadata-only panes fit from their probe geometry, and
+            // the post-layout pass must settle before the first wheel event.
+            pump(500);
+            const QSize initialSource = v1->sourceSize();
+            const QRect initialFull(QPoint(0, 0), initialSource);
+            const double expectedFit =
+                std::min(static_cast<double>(v1->width()) / initialSource.width(),
+                         static_cast<double>(v1->height()) / initialSource.height());
+            CHECK(initialSource.isValid() && v1->sourceRect() == initialFull &&
+                      std::abs(v1->scale() - expectedFit) < 1e-6,
+                  "D: source-backed panes start at Fit with full-source coverage");
             // Six wheel steps -> ~1.15^6 = 2.31x zoom (deep).
             const QPointF center(v1->rect().center());
             for (int k = 0; k < 6; ++k)
@@ -651,24 +660,58 @@ int main(int argc, char **argv)
                 QApplication::sendEvent(v1, &event);
                 pump(30);
             }
-            pump(1500); // materialization settles
-            const double scale = ws.engine().cellTransform(1).scale;
+            const QRect fullBeforeRegion(QPoint(0, 0), v1->sourceSize());
+            CHECK(waitTrue(
+                      [&]
+                      {
+                          const auto &c = SourceDecodeStats::instance().counters();
+                          return !v1->image().isNull() && v1->sourceRect().isValid() &&
+                                 v1->sourceRect() != fullBeforeRegion &&
+                                 c.boundedRegion.load() >= 1;
+                      },
+                      60000),
+                  "D: deep-zoom pane receives a bounded viewport region");
+            pump(500); // allow the latest region result to settle
+            const double fitScale = expectedFit > 0.0 ? expectedFit : 1.0;
+            const double scale = std::max(1.0, v1->scale() / fitScale);
             const QSize pane = v1->image().size();
             const QSize src = v1->sourceSize();
             const double dpr = std::max(1.0, v1->devicePixelRatioF());
-            // At deep zoom the visible source rect is src.width()/scale wide;
-            // the pane raster must provide at least that many pixels (x dpr).
-            const double neededWidth = static_cast<double>(src.width()) / scale * dpr;
-            printf("  D: scale=%.2f pane raster=%dx%d neededWidth=%.0f (dpr=%.1f)\n", scale,
-                   pane.width(), pane.height(), neededWidth, dpr);
+            const QPointF a = v1->widgetToImage(QPoint(0, 0));
+            const QPointF b = v1->widgetToImage(QPoint(v1->width(), v1->height()));
+            const QRect full(QPoint(0, 0), src);
+            const int left = static_cast<int>(std::floor(std::min(a.x(), b.x())));
+            const int top = static_cast<int>(std::floor(std::min(a.y(), b.y())));
+            const int right = static_cast<int>(std::ceil(std::max(a.x(), b.x())));
+            const int bottom = static_cast<int>(std::ceil(std::max(a.y(), b.y())));
+            const QRect visible(left, top, std::max(1, right - left),
+                                std::max(1, bottom - top));
+            const QRect visibleInSource = visible.intersected(full);
+            const QRect coverage = v1->sourceRect();
+            const double densityX = static_cast<double>(pane.width()) /
+                                    std::max(1, coverage.width());
+            const double densityY = static_cast<double>(pane.height()) /
+                                    std::max(1, coverage.height());
+            // Density is measured in source pixels per source coordinate. The
+            // physical source-to-widget scale is the requirement; `scale`
+            // above is the logical zoom ratio used to select the region path.
+            const double requiredDensity = v1->scale() * dpr * 0.9;
+            printf("  D: scale=%.2f raster=%dx%d coverage=%dx%d+%d+%d visible=%dx%d+%d+%d "
+                   "density=(%.2f,%.2f) required=%.2f (dpr=%.1f)\n",
+                   scale, pane.width(), pane.height(), coverage.width(), coverage.height(),
+                   coverage.x(), coverage.y(), visible.width(), visible.height(), visible.x(),
+                   visible.y(), densityX, densityY, requiredDensity, dpr);
             std::fflush(stdout);
-            CHECK(static_cast<double>(pane.width()) >= neededWidth * 0.9,
-                  "D: pane raster density matches the viewport at deep zoom "
-                  "(RED today: whole-image LOD ceiling)");
+            CHECK(coverage.isValid() && coverage != full,
+                  "D: deep zoom keeps a bounded covered source region");
+            CHECK(!visibleInSource.isEmpty() && coverage.contains(visibleInSource),
+                  "D: covered source region contains the visible source rect");
+            CHECK(densityX >= requiredDensity && densityY >= requiredDensity,
+                  "D: covered raster density matches the deep-zoom viewport");
         }
     }
 
-    // ── E: source-backed placeholder metadata completeness (RED) ─────────────
+    // ── E: source-backed placeholder metadata completeness ───────────────────
     {
         MARK("E start");
         installDefaults();
@@ -689,13 +732,13 @@ int main(int argc, char **argv)
                    static_cast<long long>(m.modifiedEpochSec), m.orientation, m.width, m.height,
                    m.textKeys.count("MViewer.DisplayICC.Base64"));
             std::fflush(stdout);
-            CHECK(!m.fileName.empty(), "E: fileName is stable (RED today)");
-            CHECK(m.fileSize > 0, "E: fileSize is stable (RED today)");
-            CHECK(m.modifiedEpochSec > 0, "E: modified identity is stable (RED today)");
+            CHECK(!m.fileName.empty(), "E: fileName is stable");
+            CHECK(m.fileSize > 0, "E: fileSize is stable");
+            CHECK(m.modifiedEpochSec > 0, "E: modified identity is stable");
             CHECK(m.orientation == 1, "E: orientation is stable");
             CHECK(m.width == 12000 && m.height == 8333, "E: dims are stable");
             CHECK(m.textKeys.count("MViewer.DisplayICC.Base64") != 0,
-                  "E: display ICC metadata is present on the placeholder (RED today)");
+                  "E: display ICC metadata is present on the placeholder");
         }
     }
 
@@ -747,7 +790,7 @@ int main(int argc, char **argv)
               "B4: raw/displayed geometry split is authoritative for swaps");
     }
 
-    // ── F1: a throwing probe must not escape CompareWorkspace::setImages (RED)
+    // ── F1: a throwing probe must not escape CompareWorkspace::setImages ─────
     {
         MARK("F1 start");
         installThrowing(ThrowingM48Decoder::Mode::Probe);
@@ -772,7 +815,7 @@ int main(int argc, char **argv)
         CHECK(waitTrue(schedulerIdle, 20000), "F1: pools drain");
     }
 
-    // ── F2: a throwing decodeLod reaches an observable terminal (RED) ────────
+    // ── F2: a throwing decodeLod reaches an observable terminal ──────────────
     {
         MARK("F2 start");
         installThrowing(ThrowingM48Decoder::Mode::Lod);
@@ -785,7 +828,7 @@ int main(int argc, char **argv)
         viewer.setBrowseSequence({throwingPath});
         viewer.setImage(throwingPath);
         CHECK(waitTrue([&] { return failed; }, 15000),
-              "F2: a failed LOD decode reaches the loadFailed terminal (RED today)");
+              "F2: a failed LOD decode reaches the loadFailed terminal");
         CHECK(waitTrue(schedulerIdle, 20000), "F2: pools drain after the terminal");
         // Recovery: a subsequent valid open must work.
         installDefaults();
@@ -824,7 +867,7 @@ int main(int argc, char **argv)
         CHECK(!viewer.displayRaster().isNull() && viewer.displayRaster() == before,
               "F3: the current good raster is kept when the upgrade fails");
         CHECK(failed,
-              "F3: the failed region upgrade reaches the loadFailed terminal (RED today)");
+              "F3: the failed region upgrade reaches the loadFailed terminal");
         const int regionCallsAfterFailure = g_throwing->regionCalls.load();
         // A terminal display failure must not be retried by a later viewport
         // revision. This also covers an upgrade singleShot that was queued
@@ -837,7 +880,7 @@ int main(int argc, char **argv)
               "F3: a degraded display does not retry region upgrades");
     }
 
-    std::printf("=== M48 Phase 0 regressions: %s (RED cases must fail until fixed) ===\n",
+    std::printf("=== M48 Phase 0 regression gate: %s ===\n",
                 g_failures == 0 ? "PASS" : "FAIL");
     std::fflush(stdout);
     return g_failures == 0 ? 0 : 1;

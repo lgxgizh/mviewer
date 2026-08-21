@@ -10,10 +10,11 @@
   bounded region rasters as you zoom; the Compare grid keeps a pane for every
   requested source — including sources whose full materialization is
   infeasible (JPEG > 60 MP, TIFF > 60 MP) — and displays those panes via
-  viewport-sized source LOD rasters that re-materialize at a denser edge on
-  zoom. Skips are never reported as load failures, panes keep their requested
-  index, and process RSS stays bounded (a 100 MP pair displays with tens of MB
-  instead of a rejected ~286 MB full decode). Formats without a native LOD
+  viewport-aware covered region rasters that re-materialize around the visible
+  source rect at the required zoom density. Skips are never reported as load
+  failures, panes keep their requested index, and process RSS stays bounded (a
+  100 MP pair displays with tens of MB instead of a rejected ~286 MB full
+  decode). Formats without a native LOD
   (e.g. large TIFF) honestly stay blank until full materialization is feasible.
 - **Exact-source consumers stay full-resolution (P0):** with source-backed
   panes present, the Pixel Inspector still samples the exact full-resolution
@@ -55,6 +56,12 @@
   metadata probing is now contained, accounted exactly once, and surfaced as
   one Compare load warning; ordinary unsupported probes still use the existing
   full-load fallback.
+- **M48 deep-zoom quality gate:** source-backed Compare panes now decode
+  metadata-only panes fit from probe geometry on first display, then decode
+  viewport-covered regions at the required zoom density (with EXIF-aware
+  displayed/raw mapping), while the Viewer/Compare decoder failure paths expose
+  terminal state and stop retrying; the Phase 0 regression suite is now a green
+  release gate.
 
 ## [Unreleased] — M46 real-world workflow reliability & long-session release qualification
 
