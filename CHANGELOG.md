@@ -74,6 +74,10 @@
   clears its engine state. Canvas-to-Grid transitions now defer Fit until the
   normal grid geometry is settled. The visible compare page can no longer
   remain on a static canvas while the toolbar reports that blinking is active.
+- **Compare diff visibility:** enabling “高亮差异” now also enables “显示差异”
+  so the highlighted result is immediately visible; turning highlight off keeps
+  the ordinary diff overlay, while hiding and reopening the overlay preserves
+  the highlight preference.
 - **Compare Pixel Link exactness:** Pixel Link tooltips and RGB/Δ values now
   sample the current full-resolution analysis pixels with the active crop,
   rotation, and point adjustments instead of reading a bounded display LOD.

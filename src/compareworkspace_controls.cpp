@@ -223,6 +223,16 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     connect(m_diffHighlightChk, &QCheckBox::toggled, this,
             [this](bool on)
             {
+                // Highlighting without visualization is invisible. Promote
+                // the display toggle first, but keep this as one latest-wins
+                // refresh so the worker never publishes the intermediate
+                // non-highlighted overlay.
+                if (on && m_diffOverlayChk && !m_diffOverlayChk->isChecked())
+                {
+                    const QSignalBlocker blocker(m_diffOverlayChk);
+                    m_diffOverlayChk->setChecked(true);
+                    m_diffOverlayVisible = true;
+                }
                 m_diffHighlight = on;
                 refreshAllDiffOverlays();
             });

@@ -1163,15 +1163,78 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(gridPanesHaveFit,
           "Canvas to Grid restores a valid Fit display ratio for both compare panes");
 
-    // 差异高亮（H）独立开关，不干扰其他模式。
+    // Diff visualization and highlight are separate preferences, but turning
+    // highlight on must make the result visible immediately. Exercise both the
+    // keyboard path and the real checkbox path without relying on pixel colors.
     QCheckBox *diffHl = findChk(ws, QStringLiteral("高亮差异"));
+    QCheckBox *diffOverlay = ws->findChild<QCheckBox *>(QStringLiteral("diffOverlayToggle"));
     CHECK(diffHl != nullptr, "diff-highlight control is discoverable for the H shortcut");
-    if (diffHl)
+    CHECK(diffOverlay != nullptr && !diffOverlay->isChecked() && diffHl && !diffHl->isChecked(),
+          "diff display and highlight start OFF independently");
+    if (diffHl && diffOverlay)
     {
+        auto waitForDiffOverlay = [&ws](double &opacity, double minOpacity, double maxOpacity)
+        {
+            opacity = 0.0;
+            QElapsedTimer delivery;
+            delivery.start();
+            while (delivery.elapsed() < 3000)
+            {
+                pump(25);
+                for (RawImageView *view : ws->findChildren<RawImageView *>())
+                {
+                    if (view && !view->overlay().isNull() && view->overlayOpacity() >= minOpacity &&
+                        view->overlayOpacity() <= maxOpacity)
+                    {
+                        opacity = view->overlayOpacity();
+                        return true;
+                    }
+                }
+            }
+            return false;
+        };
+
         sendKey(ws, Qt::Key_H);
-        CHECK(diffHl->isChecked(), "key H turns diff-highlight ON");
+        CHECK(diffHl->isChecked() && diffOverlay->isChecked(),
+              "key H enables diff display before turning highlight ON");
+        double highlightedOpacity = 0.0;
+        CHECK(waitForDiffOverlay(highlightedOpacity, 0.7, 1.0),
+              "highlighted diff delivers a visible red-style overlay");
+
         sendKey(ws, Qt::Key_H);
-        CHECK(!diffHl->isChecked(), "key H turns diff-highlight OFF");
+        CHECK(!diffHl->isChecked() && diffOverlay->isChecked(),
+              "key H turns highlight OFF without hiding diff display");
+        double normalOpacity = 0.0;
+        CHECK(waitForDiffOverlay(normalOpacity, 0.1, 0.7) && normalOpacity < highlightedOpacity,
+              "turning highlight OFF keeps the ordinary heatmap overlay visible");
+
+        diffHl->click();
+        CHECK(diffHl->isChecked() && diffOverlay->isChecked(),
+              "clicking highlight keeps diff display enabled");
+        double clickedHighlightOpacity = 0.0;
+        CHECK(waitForDiffOverlay(clickedHighlightOpacity, 0.7, 1.0),
+              "clicking highlight restores a visible highlighted overlay");
+
+        diffOverlay->click();
+        pump(40);
+        bool allOverlaysCleared = true;
+        for (RawImageView *view : ws->findChildren<RawImageView *>())
+            if (view && !view->overlay().isNull())
+                allOverlaysCleared = false;
+        CHECK(!diffOverlay->isChecked() && diffHl->isChecked() && allOverlaysCleared,
+              "closing diff display clears overlays but preserves highlight preference");
+
+        diffOverlay->click();
+        CHECK(diffOverlay->isChecked() && diffHl->isChecked(),
+              "reopening diff display preserves highlighted preference");
+        double restoredHighlightOpacity = 0.0;
+        CHECK(waitForDiffOverlay(restoredHighlightOpacity, 0.7, 1.0),
+              "reopening diff display restores the highlighted overlay");
+
+        // Leave the shared Compare workspace in the ordinary off/off state so
+        // the later threshold-gated diff workflow starts from its own contract.
+        diffOverlay->click();
+        diffHl->click();
     }
 
     // Space 按住 = 临时闪烁；松开必须恢复（评审"状态不同步"高危点）。
