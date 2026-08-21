@@ -2,22 +2,38 @@
 #include "compareworkspace_p.h"
 
 // A-4.5 / M20: continuous compare — walk a sliding window over the pool.
-void CompareWorkspace::setImagePool(const QStringList &allPaths)
+void CompareWorkspace::setImagePool(const QStringList &allPaths, const QStringList &currentWindow)
 {
     m_imagePool = allPaths;
-    // Align window start to the first currently-loaded image when possible.
     m_pairIndex = 0;
-    if (!m_imagePool.isEmpty() && m_engine.imageCount() > 0)
+    if (!currentWindow.isEmpty())
     {
-        const QString first = comparedImages().value(0);
-        const int idx = m_imagePool.indexOf(first);
+        // MainWindow seeds the pool before the deferred setImages() call, so
+        // use the selected window explicitly instead of waiting for an engine
+        // count that is not populated yet.
+        const int idx = m_imagePool.indexOf(currentWindow.first());
         if (idx >= 0)
             m_pairIndex = idx;
+
+        const int n = currentWindow.size();
+        if (n == 2 || n == 4 || n == 8)
+            m_navWindow = n;
     }
-    // Infer nav window from current load count when it is a known preset.
-    const int n = m_engine.imageCount();
-    if (n == 2 || n == 4 || n == 8)
-        m_navWindow = n;
+    else
+    {
+        // Preserve the legacy one-argument behavior for callers that seed a
+        // pool around an already-loaded compare set.
+        if (!m_imagePool.isEmpty() && m_engine.imageCount() > 0)
+        {
+            const QString first = comparedImages().value(0);
+            const int idx = m_imagePool.indexOf(first);
+            if (idx >= 0)
+                m_pairIndex = idx;
+        }
+        const int n = m_engine.imageCount();
+        if (n == 2 || n == 4 || n == 8)
+            m_navWindow = n;
+    }
     updatePairButtons();
 }
 

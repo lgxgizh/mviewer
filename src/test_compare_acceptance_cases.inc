@@ -161,6 +161,59 @@ void testContinuousNav(const QStringList &paths6)
     CHECK(!ws->focusImagePath().isEmpty(), "B#6: focus image defined after navigation");
 }
 
+// B#6 regression: MainWindow seeds the pool before the asynchronous initial
+// compare load.  The explicit current window must therefore establish both
+// the pair index and the navigation step before setImages() finishes.
+void testNonFirstWindowNav(const QStringList &paths6)
+{
+    std::cout << "── Compare B#6: selected non-first window navigation ──\n";
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    dlg.resize(1100, 750);
+    dlg.show();
+    pump(80);
+
+    const QStringList current{paths6[2], paths6[3]};
+    ws->setImagePool(paths6, current);
+    ws->setImages(current);
+    waitForCompareLoadFinished(ws, 2);
+    CHECK(ws->comparedImages() == current,
+          "B#6: an explicit current window loads the selected C/D pair");
+    CHECK(ws->hasPrevPair() && ws->hasNextPair(),
+          "B#6: non-first C/D window enables both previous and next pair");
+
+    QCheckBox *overlay = findChk(ws, QStringLiteral("叠加对比"));
+    CHECK(overlay != nullptr, "B#6: selected-window navigation exposes overlay mode");
+    if (!overlay)
+        return;
+    overlay->setChecked(true);
+    pump(30);
+
+    ws->nextPair();
+    waitForCompareLoadFinished(ws, 2);
+    const QStringList end{paths6[4], paths6[5]};
+    CHECK(ws->comparedImages() == end, "B#6: next from C/D loads E/F without reopening Compare");
+    CHECK(overlay->isChecked() && sel.currentImage() == paths6[4],
+          "B#6: next preserves overlay and moves SelectionModel to E");
+
+    ws->prevPair();
+    waitForCompareLoadFinished(ws, 2);
+    CHECK(ws->comparedImages() == current, "B#6: previous from E/F returns to C/D");
+    CHECK(overlay->isChecked() && sel.currentImage() == paths6[2],
+          "B#6: returning to C/D preserves overlay and focus");
+
+    ws->prevPair();
+    waitForCompareLoadFinished(ws, 2);
+    const QStringList start{paths6[0], paths6[1]};
+    CHECK(ws->comparedImages() == start, "B#6: previous from C/D reaches the first A/B pair");
+    CHECK(overlay->isChecked() && sel.currentImage() == paths6[0],
+          "B#6: first pair keeps the compare mode and SelectionModel focus");
+}
+
 // P1: pane histogram consistency across ROI, rebuilds, and Blink.
 void testPaneHistogramConsistency(const QString &a, const QString &b)
 {

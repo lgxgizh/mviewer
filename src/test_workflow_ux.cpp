@@ -498,6 +498,7 @@ int main(int argc, char **argv)
     workflow1_browse(workDir.absolutePath(), paths);
     workflow3_session_restore(workDir.absolutePath(), paths.first());
     workflow11_compare_fullscreen(paths[0], paths[2]);
+    workflow15_compare_nonfirst_pair_navigation(workDir.absolutePath());
     workflow12_compare_mixed_fit(workDir.absolutePath());
     workflow2_compare(paths[0], paths[2]);
     workflow10_compare_canvas(paths[0], paths[2]);

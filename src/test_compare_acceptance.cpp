@@ -225,6 +225,7 @@ int main(int argc, char **argv)
     testMultiImageEntry(paths8);
     testModePreservesState(paths8[0], paths8[1]);
     testContinuousNav(paths6);
+    testNonFirstWindowNav(paths6);
     testPaneHistogramConsistency(paths8[0], paths8[1]);
     testDegradedImages(dir);
     testCompareLoadIsAsync(dir);

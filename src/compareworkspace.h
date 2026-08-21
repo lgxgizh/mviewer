@@ -127,7 +127,9 @@ class CompareWorkspace : public QWidget
 
     // A-4.5: continuous compare — set the full image list so Next/Prev Pair
     // can walk through consecutive pairs without reopening the dialog.
-    void setImagePool(const QStringList &allPaths);
+    // Seed the navigation pool; an optional current window aligns the pair
+    // index before an asynchronous setImages() finishes loading.
+    void setImagePool(const QStringList &allPaths, const QStringList &currentWindow = {});
     bool hasNextPair() const;
     bool hasPrevPair() const;
 

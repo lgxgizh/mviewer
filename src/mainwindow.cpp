@@ -616,9 +616,9 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
     // A-4.5 / M19: continuous compare — seed the pool from ImageListModel.
     ensureImageList();
     if (m_imageList && !m_imageList->isEmpty())
-        m_compareView->setImagePool(m_imageList->paths());
+        m_compareView->setImagePool(m_imageList->paths(), imgs);
     else if (imgs.size() > 2)
-        m_compareView->setImagePool(imgs);
+        m_compareView->setImagePool(imgs, imgs);
     // M19: WorkspaceModel tracks the live compare set.
     if (m_workspace)
         m_workspace->setComparedImages(imgs);

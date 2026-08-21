@@ -81,6 +81,10 @@
 - **Compare resize zoom continuity:** resizing the Compare window now refits
   Fit-state panes to their new geometry while preserving an intentional shared
   zoom ratio, so a window resize no longer discards the user's inspection scale.
+- **Compare selected-window navigation:** opening Compare from a non-first
+  selection now starts at that selected pair, so Previous/Next moves to the
+  adjacent pairs instead of replaying the first pair; the active compare mode
+  and SelectionModel focus remain synchronized while navigating.
 - **Compare Pixel Link exactness:** Pixel Link tooltips and RGB/Δ values now
   sample the current full-resolution analysis pixels with the active crop,
   rotation, and point adjustments instead of reading a bounded display LOD.

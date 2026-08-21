@@ -2201,6 +2201,167 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
     pump(20);
 }
 
+// ─── Workflow 15: Compare opens at the selected non-first pair ─────────────
+void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
+{
+    std::cout << "── Workflow 15: non-first Compare pair navigation ──\n";
+    const QString navDirPath =
+        QDir(rootDir).filePath(QStringLiteral("compare_nonfirst_pair_navigation"));
+    QDir navDir(navDirPath);
+    if (navDir.exists())
+        navDir.removeRecursively();
+    CHECK(QDir().mkpath(navDirPath), "non-first navigation creates an isolated six-image folder");
+
+    const QList<QColor> colors = {QColor(210, 40, 40), QColor(40, 210, 40),
+                                  QColor(40, 40, 210),  QColor(210, 210, 40),
+                                  QColor(40, 210, 210),  QColor(210, 40, 210)};
+    QStringList paths;
+    for (int i = 0; i < colors.size(); ++i)
+        paths << writePng(navDir, QStringLiteral("nav_%1.png").arg(i, 3, 10, QChar('0')),
+                          colors[i]);
+    CHECK(paths.size() == 6, "non-first navigation writes six ordered fixtures");
+
+    MainWindow w;
+    w.resize(1100, 760);
+    w.show();
+    pump(75);
+    auto *gallery = w.findChild<ThumbnailPanel *>();
+    CHECK(gallery != nullptr, "non-first navigation exposes the real gallery");
+    if (!gallery)
+    {
+        w.close();
+        pump(20);
+        navDir.removeRecursively();
+        return;
+    }
+
+    gallery->setDirectory(navDirPath);
+    QElapsedTimer galleryTimer;
+    galleryTimer.start();
+    auto galleryHasAllPaths = [&]()
+    {
+        for (const QString &path : paths)
+            if (!gallery->pathList().contains(path))
+                return false;
+        return true;
+    };
+    while (!galleryHasAllPaths() && galleryTimer.elapsed() < 10000)
+        pump(25);
+    CHECK(galleryHasAllPaths(), "non-first navigation discovers all six gallery inputs");
+
+    const QStringList selected{paths[2], paths[3]};
+    gallery->selectPaths(selected, paths[2]);
+    pump(35);
+    SelectionModel *sel = w.findChild<SelectionModel *>();
+    CHECK(sel && sel->selection().size() == 2 && sel->selection().contains(paths[2]) &&
+              sel->selection().contains(paths[3]),
+          "non-first navigation selects the C/D pair in Browse");
+    CHECK(sel && (sel->currentImage() == paths[2] || sel->currentImage() == paths[3]),
+          "non-first navigation keeps Browse focus inside the selected C/D pair");
+
+    QAction *compareAction = nullptr;
+    for (QAction *action : w.findChildren<QAction *>())
+    {
+        if (action && action->text().startsWith(QStringLiteral("比较模式")))
+        {
+            compareAction = action;
+            break;
+        }
+    }
+    CHECK(compareAction != nullptr, "non-first navigation finds the real Compare action");
+    if (!compareAction)
+    {
+        w.close();
+        pump(20);
+        navDir.removeRecursively();
+        return;
+    }
+    compareAction->trigger();
+    pump(300);
+
+    QDialog *compareDialog = w.findChild<QDialog *>("compareDialog");
+    CompareWorkspace *compare = compareDialog ? compareDialog->findChild<CompareWorkspace *>() :
+                                                 nullptr;
+    CHECK(compareDialog && compareDialog->isVisible() && compare,
+          "non-first navigation opens the real Compare workspace");
+
+    auto waitForPair = [&](const QStringList &expected)
+    {
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 10000)
+        {
+            if (compare && compare->comparedImages() == expected)
+                return true;
+            pump(25);
+        }
+        return compare && compare->comparedImages() == expected;
+    };
+
+    const QStringList firstPair{paths[2], paths[3]};
+    const QStringList nextPair{paths[4], paths[5]};
+    const QStringList lastPair{paths[0], paths[1]};
+    CHECK(waitForPair(firstPair), "non-first navigation opens at the selected C/D pair");
+    CHECK(compare && compare->hasPrevPair() && compare->hasNextPair(),
+          "non-first navigation exposes both previous and next from C/D");
+
+    auto findNavButton = [](QWidget *root, const QString &marker)
+    {
+        if (!root)
+            return static_cast<QPushButton *>(nullptr);
+        for (QPushButton *button : root->findChildren<QPushButton *>())
+            if (button->text().contains(marker))
+                return button;
+        return static_cast<QPushButton *>(nullptr);
+    };
+    QPushButton *previous = findNavButton(compare, QStringLiteral("上一对"));
+    QPushButton *next = findNavButton(compare, QStringLiteral("下一对"));
+    QCheckBox *overlay = compare ? findChk(compare, QStringLiteral("叠加对比")) : nullptr;
+    CHECK(previous && next && previous->isEnabled() && next->isEnabled(),
+          "non-first navigation enables both real pair buttons at C/D");
+    CHECK(overlay != nullptr, "non-first navigation exposes the real overlay mode");
+    if (overlay)
+    {
+        overlay->setChecked(true);
+        pump(30);
+    }
+
+    if (next)
+    {
+        next->click();
+        CHECK(waitForPair(nextPair), "real MainWindow navigation advances C/D to E/F");
+        CHECK(compare && compare->hasPrevPair() && !compare->hasNextPair(),
+              "real pair buttons report E/F as the final window");
+        CHECK(sel && sel->currentImage() == paths[4],
+              "real navigation moves SelectionModel focus to E");
+        CHECK(!overlay || overlay->isChecked(),
+              "real navigation preserves overlay while advancing");
+    }
+
+    if (previous)
+    {
+        previous->click();
+        CHECK(waitForPair(firstPair), "real MainWindow navigation returns E/F to C/D");
+        CHECK(sel && sel->currentImage() == paths[2],
+              "real navigation restores SelectionModel focus to C");
+        previous->click();
+        CHECK(waitForPair(lastPair), "real MainWindow navigation reaches A/B from C/D");
+        CHECK(compare && !compare->hasPrevPair() && compare->hasNextPair(),
+              "real pair buttons report A/B as the first window");
+        CHECK(sel && sel->currentImage() == paths[0],
+              "real navigation moves SelectionModel focus to A");
+        CHECK(!overlay || overlay->isChecked(),
+              "real navigation preserves overlay while returning");
+    }
+
+    if (compareDialog && compareDialog->isVisible())
+        sendKey(compareDialog, Qt::Key_Escape);
+    pump(50);
+    w.close();
+    pump(20);
+    navDir.removeRecursively();
+}
+
 // ─── Workflow 13: real Compare report export stays responsive and cancellable ─
 // The save dialog is deliberately held open for one watchdog sample.  That
 // makes the assertion independent of total action time: a nested Qt dialog
