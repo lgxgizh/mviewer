@@ -51,6 +51,10 @@
 - `CompareEngine::setFrames` keeps metadata-only placeholder frames so an
   infeasible (skipped) source still occupies its requested pane; true load
   failures continue to drop and shrink the grid (B#7 behavior unchanged).
+- **Compare probe failure terminal:** a plugin/decoder exception during source
+  metadata probing is now contained, accounted exactly once, and surfaced as
+  one Compare load warning; ordinary unsupported probes still use the existing
+  full-load fallback.
 
 ## [Unreleased] — M46 real-world workflow reliability & long-session release qualification
 
