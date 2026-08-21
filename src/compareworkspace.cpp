@@ -172,6 +172,22 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
     auto self = std::make_shared<QPointer<CompareWorkspace>>(this);
     auto lifetime = m_lifetime;
     const ImageLoadOptions opts{true, false, 256};
+    const auto queueBatchFinish = [self, batch]()
+    {
+        if (!qApp)
+            return;
+        QMetaObject::invokeMethod(
+            qApp,
+            [self, batch]()
+            {
+                CompareWorkspace *ws = self->data();
+                if (!ws || batch->generation != ws->m_loadGen)
+                    return;
+                ws->finishLoad(*batch->frames,
+                               batch->failed->load(std::memory_order_relaxed));
+            },
+            Qt::QueuedConnection);
+    };
     // M47: the pane display no longer depends on the full frame. Sources whose
     // full-resolution materialization is infeasible (RGB > Qt's 256 MB
     // allocation limit) skip the full load entirely — their panes display
@@ -184,14 +200,32 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
         auto &request = *batch->requests[i];
         bool infeasible = false;
         std::shared_ptr<mviewer::core::SourceImage> source;
+        bool probeFailed = false;
         {
-            source = mviewer::core::SourceImage::open(paths[i]);
-            if (source)
+            try
             {
-                const qint64 px =
-                    static_cast<qint64>(source->metadata().width) * source->metadata().height;
-                infeasible = px > kCompareAnalysisFeasiblePixels;
+                source = mviewer::core::SourceImage::open(paths[i]);
+                if (source)
+                {
+                    const qint64 px = static_cast<qint64>(source->metadata().width) *
+                                      source->metadata().height;
+                    infeasible = px > kCompareAnalysisFeasiblePixels;
+                }
             }
+            catch (...)
+            {
+                // A capability probe may throw from a plugin decoder. Treat
+                // that request as one terminal load failure and continue
+                // queuing the rest of the batch; a plain nullptr probe below
+                // deliberately keeps the existing full-load fallback.
+                probeFailed = true;
+            }
+        }
+        if (probeFailed)
+        {
+            if (accountLoadRequest(batch, i, nullptr, true))
+                queueBatchFinish();
+            continue;
         }
         if (infeasible && source)
         {
@@ -208,37 +242,18 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
                 // The last request was accounted synchronously (an all-
                 // infeasible set has no async callbacks to deliver the
                 // terminal load) — queue it like the async path does.
-                QMetaObject::invokeMethod(
-                    qApp,
-                    [self, batch]()
-                    {
-                        CompareWorkspace *ws = self->data();
-                        if (!ws || batch->generation != ws->m_loadGen)
-                            return;
-                        ws->finishLoad(*batch->frames,
-                                       batch->failed->load(std::memory_order_relaxed));
-                    },
-                    Qt::QueuedConnection);
+                queueBatchFinish();
             }
             continue;
         }
         auto handle = mviewer::application::ImageLoadingService::instance().loadAsyncCancellable(
             paths[i],
-            [self, batch, i](const mviewer::application::ImageLoadingService::Result &res)
+            [self, batch, i, queueBatchFinish](
+                const mviewer::application::ImageLoadingService::Result &res)
             {
-                if (!CompareWorkspace::accountLoadRequest(batch, i, &res) || !qApp)
+                if (!CompareWorkspace::accountLoadRequest(batch, i, &res))
                     return;
-                QMetaObject::invokeMethod(
-                    qApp,
-                    [self, batch]()
-                    {
-                        CompareWorkspace *ws = self->data();
-                        if (!ws || batch->generation != ws->m_loadGen)
-                            return;
-                        ws->finishLoad(*batch->frames,
-                                       batch->failed->load(std::memory_order_relaxed));
-                    },
-                    Qt::QueuedConnection);
+                queueBatchFinish();
             },
             opts, lifetime);
         std::lock_guard<std::mutex> lk(batch->handlesMutex);

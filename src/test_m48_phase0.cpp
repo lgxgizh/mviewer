@@ -23,7 +23,8 @@
 //       modifiedEpochSec, orientation, ICC) (RED: the caps probe path fills
 //       only filePath/size/dims/orientation/format).
 //   F1  a throwing probe must not escape CompareWorkspace::setImages on the
-//       UI thread (RED: SourceImage::open throws inside queueLoadRequests).
+//       UI thread, and must reach exactly one terminal batch warning (fixed in
+//       M48 Phase 3: probe failures are accounted without escaping the UI path).
 //   F2  a throwing decodeLod reaches an observable terminal (loadFailed) and
 //       pools drain (RED: the contained worker failure never marshals).
 //   F3  a throwing decodeRegion keeps the current raster, reaches the same
@@ -753,6 +754,9 @@ int main(int argc, char **argv)
         CompareWorkspace ws;
         ws.resize(1280, 800);
         ws.show();
+        int warningCount = 0;
+        QObject::connect(&ws, &CompareWorkspace::loadWarning, &ws,
+                         [&](const QString &) { ++warningCount; });
         bool threw = false;
         try
         {
@@ -762,9 +766,9 @@ int main(int argc, char **argv)
         {
             threw = true;
         }
-        CHECK(!threw,
-              "F1: a throwing probe never escapes setImages on the UI thread (RED today)");
-        pump(1500);
+        CHECK(!threw, "F1: a throwing probe never escapes setImages on the UI thread");
+        CHECK(waitTrue([&] { return warningCount == 1; }, 20000),
+              "F1: throwing probe is accounted once and finishes with one load warning");
         CHECK(waitTrue(schedulerIdle, 20000), "F1: pools drain");
     }
 
