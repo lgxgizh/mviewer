@@ -627,6 +627,28 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
     // M24 (B#7): failed compare loads surface in the status bar (non-modal).
     connect(m_compareView, &CompareWorkspace::loadWarning, this,
             [this](const QString &text) { statusBar()->showMessage(text, 10000); });
+
+    connect(dlg, &QDialog::finished, this,
+            [this, viewGuard](int)
+            {
+                // WA_DeleteOnClose schedules destruction after finished(). Stop
+                // late Compare deliveries before rebuilding Browse's message
+                // from its current SSOT. The workspace remains alive until the
+                // dialog's deferred deletion.
+                if (viewGuard)
+                    QObject::disconnect(viewGuard.data(), nullptr, this, nullptr);
+                const QString current = currentImagePath();
+                if (!current.isEmpty())
+                    statusBar()->showMessage(
+                        QString("当前: %1").arg(QFileInfo(current).fileName()));
+                else if (m_imageList && !m_imageList->directory().isEmpty())
+                    statusBar()->showMessage(
+                        QStringLiteral("Browse: %1, %2 images")
+                            .arg(m_imageList->directory())
+                            .arg(m_imageList->count()));
+                else
+                    statusBar()->showMessage(tr("就绪"));
+            });
     // P1 #④: Compare → Analyze workflow (Analyze button in Compare toolbar).
     connect(
         m_compareView, &CompareWorkspace::analyzeCurrent, this,

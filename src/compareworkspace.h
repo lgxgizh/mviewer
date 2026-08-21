@@ -219,6 +219,11 @@ class CompareWorkspace : public QWidget
     struct LoadRequest
     {
         std::atomic<bool> accounted{false};
+        // Capability probing is asynchronous too. The probe handle and
+        // the subsequent foreground load handle share the batch lock so a
+        // superseding setImages() cannot race a probe into starting a decode
+        // after its handle was cancelled.
+        TaskScheduler::TaskHandle probeHandle;
         mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
     };
     struct LoadBatch
@@ -227,6 +232,7 @@ class CompareWorkspace : public QWidget
         std::shared_ptr<std::vector<std::shared_ptr<ImageFrame>>> frames;
         std::shared_ptr<std::atomic<int>> remaining;
         std::shared_ptr<std::atomic<int>> failed;
+        std::shared_ptr<std::atomic<int>> infeasible;
         std::vector<std::unique_ptr<LoadRequest>> requests;
         std::mutex handlesMutex;
     };
@@ -246,7 +252,8 @@ class CompareWorkspace : public QWidget
     void queueLoadRequests(const std::shared_ptr<LoadBatch> &batch,
                            const std::vector<std::string> &paths);
     void cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch);
-    void finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames, int failedCount);
+    void finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames, int failedCount,
+                    int infeasibleCount = 0);
     QCheckBox *m_syncZoomChk = nullptr;
     QCheckBox *m_syncDragChk = nullptr;
     QCheckBox *m_uniformScaleChk = nullptr; // H5: 统一像素倍率

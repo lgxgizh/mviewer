@@ -1754,6 +1754,93 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
               "reset preserves the pane transform");
     }
 
+    // ── Pixel Link exact-source / LOD geometry gate ───────────────────────
+    // Keep the real CompareWorkspace interaction path, but replace the two
+    // pane display rasters with deliberately smaller black LODs.  The engine
+    // still owns the original 32x32 source frames, so a tooltip that reads
+    // from RawImageView::image() would report black instead of the source RGB.
+    // The same setup also exercises the metadata-only placeholder contract by
+    // replacing pane 1's analysis pixels with an empty ImageData while its
+    // visible LOD remains present.
+    {
+        RawImageView *linkPane0 = nullptr;
+        RawImageView *linkPane1 = nullptr;
+        for (RawImageView *view : ws->findChildren<RawImageView *>())
+        {
+            if (!view || view->cellIndex() < 0 || view->cellIndex() > 1)
+                continue;
+            if (view->cellIndex() == 0)
+                linkPane0 = view;
+            else
+                linkPane1 = view;
+        }
+        CHECK(linkPane0 && linkPane1, "pixel-link gate: both real Compare panes are available");
+        QCheckBox *pixelLink = findChk(ws, QStringLiteral("像素连线"));
+        CHECK(pixelLink != nullptr, "pixel-link gate: real Pixel Link control is discoverable");
+
+        QLabel *linkInfo = nullptr;
+        for (QLabel *label : ws->findChildren<QLabel *>())
+        {
+            if (label && label->text().startsWith(QStringLiteral("标记:")))
+            {
+                linkInfo = label;
+                break;
+            }
+        }
+        CHECK(linkInfo != nullptr, "pixel-link gate: marker summary label is discoverable");
+        if (linkPane0 && linkPane1 && pixelLink && linkInfo)
+        {
+            const QSize sourceSize(32, 32);
+            const QRect sourceRect(QPoint(0, 0), sourceSize);
+            QImage lod(8, 8, QImage::Format_RGB32);
+            lod.fill(Qt::black);
+            linkPane0->setImage(lod, sourceSize, sourceRect);
+            linkPane1->setImage(lod, sourceSize, sourceRect);
+            CHECK(linkPane0->image().width() < linkPane0->sourceSize().width() &&
+                      linkPane0->image().height() < linkPane0->sourceSize().height(),
+                  "pixel-link gate: display raster is smaller than source geometry");
+
+            const QPoint sourcePoint(20, 24);
+            const QPointF mapped = linkPane0->sourcePointToWidget(sourcePoint);
+            CHECK(mapped.x() >= 0.0 && mapped.x() <= linkPane0->width() &&
+                      mapped.y() >= 0.0 && mapped.y() <= linkPane0->height(),
+                  "pixel-link gate: source marker maps inside the pane using sourceSize");
+            CHECK(sourcePoint.x() < linkPane0->sourceSize().width() &&
+                      sourcePoint.y() < linkPane0->sourceSize().height(),
+                  "pixel-link gate: marker coordinate stays within full source bounds");
+
+            pixelLink->setChecked(true);
+            sendLeftClick(linkPane0, mapped.toPoint());
+            CHECK(linkPane0->linkMarkers().size() == 1 &&
+                      qRound(linkPane0->linkMarkers().first().x()) == sourcePoint.x() &&
+                      qRound(linkPane0->linkMarkers().first().y()) == sourcePoint.y(),
+                  "pixel-link gate: real click stores the source-space marker, not LOD coords");
+            const int linkBaseIndex = ws->buildReportBundle().referenceIndex;
+            const QString expectedLinkDelta =
+                linkBaseIndex == 0 ? QStringLiteral("Δ(-160,0,160)")
+                                   : QStringLiteral("Δ(160,0,-160)");
+            CHECK(linkInfo->toolTip().contains(QStringLiteral("[0] RGB(200,40,40)")) &&
+                      linkInfo->toolTip().contains(QStringLiteral("[1] RGB(40,40,200)")) &&
+                      linkInfo->toolTip().contains(expectedLinkDelta),
+                  "pixel-link gate: tooltip RGB/Δ comes from exact Compare source pixels");
+
+            std::vector<std::shared_ptr<ImageFrame>> originalFrames;
+            for (int c = 0; c < ws->engine().imageCount(); ++c)
+                originalFrames.push_back(ws->engine().image(c));
+            const std::shared_ptr<ImageFrame> sourceFrame = originalFrames[0];
+            const auto placeholderMeta = ws->engine().imageAt(1)->metadata();
+            ws->engine().setFrames(
+                {sourceFrame, std::make_shared<ImageFrame>(placeholderMeta, ImageData{})});
+            pixelLink->setChecked(false);
+            pixelLink->setChecked(true);
+            CHECK(linkInfo->toolTip().contains(QStringLiteral("[1] 无效")),
+                  "pixel-link gate: metadata-only placeholder reports 无效");
+            CHECK(!linkInfo->toolTip().contains(QStringLiteral("[1] RGB(0,0,0)")),
+                  "pixel-link gate: placeholder never falls back to its display LOD");
+            ws->engine().setFrames(originalFrames);
+        }
+    }
+
     sendKey(ws, Qt::Key_Escape);
     CHECK(!dlg.isVisible(), "Esc closes the Compare dialog");
 
@@ -1803,9 +1890,44 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
               "fullscreen workflow: native Compare opens directly fullscreen");
     if (compareDialog)
     {
+        const QString browseStatus = w.statusBar()->currentMessage();
+        CompareWorkspace *compare = compareDialog->findChild<CompareWorkspace *>();
+        QCheckBox *pixelLink = compare ? findChk(compare, QStringLiteral("像素连线")) : nullptr;
+        RawImageView *linkPane = nullptr;
+        if (compare)
+        {
+            for (RawImageView *view : compare->findChildren<RawImageView *>())
+            {
+                // Select pane 1 so leaving Compare must restore Browse from the
+                // updated SelectionModel, not from a stale pre-Compare string.
+                if (view && view->cellIndex() == 1 && view->isVisible() && view->isEnabled())
+                {
+                    linkPane = view;
+                    break;
+                }
+            }
+        }
+        CHECK(!browseStatus.isEmpty(),
+              "fullscreen workflow: Browse has a status message before Compare owns it");
+        CHECK(pixelLink && linkPane,
+              "fullscreen workflow: real Compare exposes Pixel Link and an interactive pane");
+        if (pixelLink && linkPane)
+        {
+            pixelLink->setChecked(true);
+            sendLeftClick(linkPane, linkPane->rect().center());
+            CHECK(w.statusBar()->currentMessage().contains(QStringLiteral("像素连线")),
+                  "fullscreen workflow: Pixel Link publishes its transient status");
+            CHECK(sel->currentImage() == pathB,
+                  "fullscreen workflow: interacting with pane 1 updates Browse's image SSOT");
+        }
+        const QString expectedBrowseStatus =
+            QString("当前: %1").arg(QFileInfo(sel->currentImage()).fileName());
         sendKey(compareDialog, Qt::Key_Escape);
         pump(50);
         CHECK(!compareDialog->isVisible(), "fullscreen workflow: Escape closes fullscreen Compare");
+        CHECK(!w.statusBar()->currentMessage().contains(QStringLiteral("像素连线")) &&
+                  w.statusBar()->currentMessage() == expectedBrowseStatus,
+              "fullscreen workflow: leaving Compare restores the current Browse identity");
     }
     w.close();
     pump(20);

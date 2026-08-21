@@ -50,6 +50,11 @@ class RawImageView : public QWidget
     {
         return m_sourceRect;
     }
+    // Map a point in the complete source coordinate space to widget-local
+    // coordinates. This deliberately uses sourceSize(), not the bounded
+    // display raster dimensions, so covered-region/LOD panes keep annotations
+    // registered with the source image.
+    QPointF sourcePointToWidget(const QPointF &sourcePoint) const;
     QPoint displayPointForSource(int x, int y) const;
     void clear();
 

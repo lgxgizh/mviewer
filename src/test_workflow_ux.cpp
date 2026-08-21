@@ -22,6 +22,7 @@
 #include "core/image/Decoder.h"
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/ImageFrame.h" // Compare workflow exercises metadata-only placeholders.
 #include "core/image/ImageRepository.h"
 #include "core/image/QtConvert.h"
 #include "core/metadata/MetadataIndexer.h"
@@ -69,6 +70,7 @@
 #include <QSlider>
 #include <QSplitter>
 #include <QStandardPaths>
+#include <QStatusBar>
 #include <QTableWidget>
 #include <QThread>
 #include <QTimer>

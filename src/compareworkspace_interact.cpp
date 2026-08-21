@@ -1,6 +1,8 @@
 // CompareWorkspace interaction: keyboard, mouse, event filter, pixel link (M20 P0#2).
 #include "compareworkspace_p.h"
 
+#include "core/analysis/PixelInspector.h"
+
 void CompareWorkspace::showShortcutHelp()
 {
     // Lightweight status-bar style tip via window title flash — no modal dialog
@@ -413,13 +415,23 @@ void CompareWorkspace::updateLinkInfo()
         std::vector<LinkSample> samples(static_cast<size_t>(n));
         for (int c = 0; c < n; ++c)
         {
-            if (c >= m_cellViews.size() || !m_cellViews[c])
+            const ImageFrame *frame = m_engine.imageAt(c);
+            if (!frame)
                 continue;
-            const QImage &image = m_cellViews[c]->image();
-            if (x < 0 || y < 0 || x >= image.width() || y >= image.height())
+            const CellAdjust adjust =
+                c < static_cast<int>(m_cellAdjusts.size())
+                    ? m_cellAdjusts[static_cast<size_t>(c)]
+                    : CellAdjust{};
+            // Pixel Link is an analysis readout, not a display readout. The
+            // RawImageView raster may be a bounded LOD or covered region, and
+            // an infeasible source intentionally has no full pixels. Keep the
+            // latter invalid instead of triggering materialization or sampling
+            // whatever display raster happens to be visible.
+            const auto pixel = mviewer::core::sampleAnalysisPixel(
+                frame->pixels(), analysisAdjustment(adjust), x, y);
+            if (!pixel.valid)
                 continue;
-            const QRgb pixel = image.pixel(x, y);
-            samples[static_cast<size_t>(c)] = {qRed(pixel), qGreen(pixel), qBlue(pixel), true};
+            samples[static_cast<size_t>(c)] = {pixel.r, pixel.g, pixel.b, true};
         }
         const bool baseValid = baseIdx >= 0 && samples[static_cast<size_t>(baseIdx)].valid;
         const LinkSample base = baseValid ? samples[static_cast<size_t>(baseIdx)] : LinkSample{};
@@ -480,18 +492,16 @@ void CompareWorkspace::drawPixelLinkLines(QPainter &p)
 
     auto mapToWorkspace = [this](RawImageView *view, const QPointF &imgPt) -> QPointF
     {
-        if (!view || view->image().isNull() || view->scale() <= 0.0)
+        if (!view || view->image().isNull() || view->scale() <= 0.0 ||
+            !view->sourceSize().isValid())
             return {};
-        // Image → widget (view-local), then map to this workspace.
-        const double sc = view->scale();
-        const QPointF off = view->offset();
-        const double cx = view->width() / 2.0 + off.x();
-        const double cy = view->height() / 2.0 + off.y();
-        const double dw = view->image().width() * sc;
-        const double dh = view->image().height() * sc;
-        const double wx = cx - dw / 2.0 + imgPt.x() * sc;
-        const double wy = cy - dh / 2.0 + imgPt.y() * sc;
-        return view->mapTo(this, QPoint(qRound(wx), qRound(wy)));
+        // Image → widget (view-local), then map to this workspace. The view
+        // owns the source-space transform so this seam stays identical to its
+        // marker paint path even when the display raster is an LOD/region.
+        const QPointF widgetPoint = view->sourcePointToWidget(imgPt);
+        if (!std::isfinite(widgetPoint.x()) || !std::isfinite(widgetPoint.y()))
+            return {};
+        return view->mapTo(this, widgetPoint.toPoint());
     };
 
     QPen pen(QColor(0xFF, 0x66, 0x66, 180), 1, Qt::DashLine);

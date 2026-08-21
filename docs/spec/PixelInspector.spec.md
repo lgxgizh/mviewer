@@ -25,10 +25,17 @@ without depending on Qt or on a viewport-sized display image.
   paths only.
 - RAW16 values remain exact only for an identity, untransformed source sample;
   transformed samples use the adjusted 8-bit analysis result.
+- Compare Pixel Link reuses this exact-source sampler for every engine frame;
+  its RGB/Δ tooltip is independent of the pane's display LOD or covered-region
+  raster. A metadata-only/placeholder frame with no full-resolution pixels is
+  reported as invalid and never falls back to the visible display raster.
 
 ## Verification
 
 `src/core/test_pixelinspector.cpp` covers identity, crop, all four rotations,
 adjustment equivalence, grayscale behavior, all four Inspector kernels, and
 edge clipping. `src/test_compare_acceptance.cpp` covers source-vs-LOD
-adversarial sampling and LOD replacement stability.
+adversarial sampling and LOD replacement stability. `src/test_workflow_ux.cpp`
+and its `src/test_workflow_ux_cases.inc` cases cover the real Pixel Link
+exact-source tooltip, LOD-independent geometry, and metadata-only placeholder
+invalid behavior.

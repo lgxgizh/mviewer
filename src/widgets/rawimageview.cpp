@@ -8,6 +8,7 @@
 #include <QWheelEvent>
 
 #include <cmath>
+#include <limits>
 
 namespace
 {
@@ -201,15 +202,14 @@ void RawImageView::paintEvent(QPaintEvent *)
     // A-4.3: Pixel Link markers — numbered dots at image-space points.
     if (!m_linkMarkers.isEmpty() && m_scale > 0.0)
     {
-        const double imgLeft = cx - dw / 2.0;
-        const double imgTop = cy - dh / 2.0;
         for (int i = 0; i < m_linkMarkers.size(); ++i)
         {
             const QPointF &pt = m_linkMarkers[i];
-            const double wx = imgLeft + pt.x() * m_scale;
-            const double wy = imgTop + pt.y() * m_scale;
-            if (!std::isfinite(wx) || !std::isfinite(wy))
+            const QPointF widgetPoint = sourcePointToWidget(pt);
+            if (!std::isfinite(widgetPoint.x()) || !std::isfinite(widgetPoint.y()))
                 continue;
+            const double wx = widgetPoint.x();
+            const double wy = widgetPoint.y();
             // Outer ring
             p.setPen(QPen(QColor(255, 255, 255), 2));
             p.setBrush(QColor(0xFF, 0x44, 0x44));
@@ -514,4 +514,25 @@ QPoint RawImageView::displayPointForSource(int x, int y) const
     const double sy = static_cast<double>(m_image.height()) / m_sourceRect.height();
     return QPoint(qBound(0, qFloor((x - m_sourceRect.x()) * sx), m_image.width() - 1),
                   qBound(0, qFloor((y - m_sourceRect.y()) * sy), m_image.height() - 1));
+}
+
+QPointF RawImageView::sourcePointToWidget(const QPointF &sourcePoint) const
+{
+    if (m_image.isNull() || !m_sourceSize.isValid() || !(m_scale > 0.0) ||
+        !std::isfinite(m_scale) || !std::isfinite(sourcePoint.x()) ||
+        !std::isfinite(sourcePoint.y()))
+    {
+        const double invalid = std::numeric_limits<double>::quiet_NaN();
+        return QPointF(invalid, invalid);
+    }
+
+    // The transform is center-relative and always describes the complete
+    // source geometry. m_sourceRect only says which source region the bounded
+    // raster covers; it must never change the source-to-widget mapping.
+    const double cx = width() / 2.0 + m_offset.x();
+    const double cy = height() / 2.0 + m_offset.y();
+    const double sourceWidth = m_sourceSize.width() * m_scale;
+    const double sourceHeight = m_sourceSize.height() * m_scale;
+    return QPointF(cx - sourceWidth / 2.0 + sourcePoint.x() * m_scale,
+                   cy - sourceHeight / 2.0 + sourcePoint.y() * m_scale);
 }

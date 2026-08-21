@@ -159,6 +159,7 @@ void CompareWorkspace::setImages(const QStringList &paths)
     batch->frames = std::make_shared<std::vector<std::shared_ptr<ImageFrame>>>(requested);
     batch->remaining = std::make_shared<std::atomic<int>>(requested);
     batch->failed = std::make_shared<std::atomic<int>>(0);
+    batch->infeasible = std::make_shared<std::atomic<int>>(0);
     batch->requests.reserve(static_cast<size_t>(requested));
     for (int i = 0; i < requested; ++i)
         batch->requests.push_back(std::make_unique<LoadRequest>());
@@ -184,80 +185,124 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
                 if (!ws || batch->generation != ws->m_loadGen)
                     return;
                 ws->finishLoad(*batch->frames,
-                               batch->failed->load(std::memory_order_relaxed));
+                               batch->failed->load(std::memory_order_relaxed),
+                               batch->infeasible->load(std::memory_order_relaxed));
             },
             Qt::QueuedConnection);
     };
-    // M47: the pane display no longer depends on the full frame. Sources whose
-    // full-resolution materialization is infeasible (RGB > Qt's 256 MB
+    // M47: the pane display no longer depends on the full frame. Sources
+    // whose full-resolution materialization is infeasible (RGB > Qt's 256 MB
     // allocation limit) skip the full load entirely — their panes display
     // through the source-backed LOD path, and they must not count as load
-    // failures. The probe is a cheap header read (never a decode).
-    m_infeasibleCount = 0;
+    // failures. The capability probe runs on the foreground DecodePool, never
+    // on the UI thread; the worker starts a foreground decode only after the
+    // probe without yielding priority to background metadata work.
     m_comparePaths = paths;
     for (size_t i = 0; i < paths.size(); ++i)
     {
-        auto &request = *batch->requests[i];
-        bool infeasible = false;
-        std::shared_ptr<mviewer::core::SourceImage> source;
-        bool probeFailed = false;
-        {
-            try
+        auto *request = batch->requests[i].get();
+        const std::string path = paths[i];
+        auto probe = TaskScheduler::instance().submit(
+            TaskScheduler::Priority::Decode,
+            [batch, i, request, path, opts, lifetime, queueBatchFinish](
+                const TaskScheduler::TaskContext &ctx)
             {
-                source = mviewer::core::SourceImage::open(paths[i]);
-                if (source)
+                const auto account = [batch, i, queueBatchFinish](bool failed)
                 {
-                    const qint64 px = static_cast<qint64>(source->metadata().width) *
-                                      source->metadata().height;
-                    infeasible = px > kCompareAnalysisFeasiblePixels;
+                    if (CompareWorkspace::accountLoadRequest(batch, i, nullptr, failed))
+                        queueBatchFinish();
+                };
+
+                if (ctx.isCancelled())
+                    return;
+                try
+                {
+                    std::shared_ptr<mviewer::core::SourceImage> source;
+                    try
+                    {
+                        source = mviewer::core::SourceImage::open(path);
+                    }
+                    catch (...)
+                    {
+                        // A capability probe may throw from a plugin decoder.
+                        // This is a terminal load failure, matching the old
+                        // synchronous probe contract.
+                        if (!ctx.isCancelled())
+                            account(true);
+                        return;
+                    }
+
+                    // Serialize the probe -> foreground-load transition with
+                    // cancelLoadBatch(). The second cancellation check must be
+                    // under this lock: cancelling a probe handle outside the
+                    // lock cannot otherwise prevent a worker that already
+                    // passed its first check from submitting a decode.
+                    std::unique_lock<std::mutex> lk(batch->handlesMutex);
+                    if (ctx.isCancelled())
+                        return;
+
+                    const qint64 pixels =
+                        source ? static_cast<qint64>(source->metadata().width) *
+                                     source->metadata().height
+                               : 0;
+                    if (source && pixels > kCompareAnalysisFeasiblePixels)
+                    {
+                        batch->infeasible->fetch_add(1, std::memory_order_relaxed);
+                        // Keep the pane: a metadata-only placeholder preserves
+                        // the requested pane index, so source-backed LOD and
+                        // exact-source consumers remain aligned.
+                        (*batch->frames)[i] =
+                            std::make_shared<ImageFrame>(source->metadata(), ImageData());
+                        lk.unlock();
+                        account(false);
+                        return;
+                    }
+
+                    mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
+                    bool rejected = false;
+                    try
+                    {
+                        handle =
+                            mviewer::application::ImageLoadingService::instance()
+                                .loadAsyncCancellable(
+                                    path,
+                                    [batch, i, queueBatchFinish](
+                                        const mviewer::application::ImageLoadingService::Result
+                                            &res)
+                                    {
+                                        if (CompareWorkspace::accountLoadRequest(batch, i, &res))
+                                            queueBatchFinish();
+                                    },
+                                    opts, lifetime);
+                    }
+                    catch (...)
+                    {
+                        rejected = true;
+                    }
+                    request->handle = std::move(handle);
+                    lk.unlock();
+                    if (rejected)
+                        account(true);
                 }
-            }
-            catch (...)
-            {
-                // A capability probe may throw from a plugin decoder. Treat
-                // that request as one terminal load failure and continue
-                // queuing the rest of the batch; a plain nullptr probe below
-                // deliberately keeps the existing full-load fallback.
-                probeFailed = true;
-            }
+                catch (...)
+                {
+                    // Keep a scheduler/decoder exception from stranding the
+                    // batch. Cancellation remains bookkeeping-only; the
+                    // superseding batch already accounts the request locally.
+                    if (!ctx.isCancelled())
+                        account(true);
+                }
+            });
+
+        {
+            std::lock_guard<std::mutex> lk(batch->handlesMutex);
+            request->probeHandle = probe;
         }
-        if (probeFailed)
+        if (!probe)
         {
             if (accountLoadRequest(batch, i, nullptr, true))
                 queueBatchFinish();
-            continue;
         }
-        if (infeasible && source)
-        {
-            ++m_infeasibleCount;
-            // Keep the pane: a metadata-only placeholder frame preserves the
-            // requested pane index in the engine (so the LOD display worker's
-            // pane/path mapping stays aligned). The pane displays through the
-            // source-backed LOD path; this is a skip, not a failure — it must
-            // not count as a load failure and must not shrink the grid.
-            (*batch->frames)[i] =
-                std::make_shared<ImageFrame>(source->metadata(), ImageData());
-            if (accountLoadRequest(batch, i, nullptr, false))
-            {
-                // The last request was accounted synchronously (an all-
-                // infeasible set has no async callbacks to deliver the
-                // terminal load) — queue it like the async path does.
-                queueBatchFinish();
-            }
-            continue;
-        }
-        auto handle = mviewer::application::ImageLoadingService::instance().loadAsyncCancellable(
-            paths[i],
-            [self, batch, i, queueBatchFinish](
-                const mviewer::application::ImageLoadingService::Result &res)
-            {
-                if (!CompareWorkspace::accountLoadRequest(batch, i, &res))
-                    return;
-                queueBatchFinish();
-            },
-            opts, lifetime);
-        std::lock_guard<std::mutex> lk(batch->handlesMutex);
-        request.handle = std::move(handle);
     }
 }
 
@@ -288,6 +333,11 @@ void CompareWorkspace::cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch)
         mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
         {
             std::lock_guard<std::mutex> lk(batch->handlesMutex);
+            // Mark the probe cancelled while holding the same lock used by the
+            // probe worker for its probe -> decode transition. This closes the
+            // window where cancellation could move the probe handle and the
+            // worker could submit a new foreground load before seeing cancel.
+            TaskScheduler::cancel(batch->requests[i]->probeHandle);
             handle = std::move(batch->requests[i]->handle);
         }
         mviewer::application::ImageLoadingService::instance().cancelAsync(handle);
@@ -299,10 +349,11 @@ void CompareWorkspace::cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch)
 }
 
 void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames,
-                                  int failedCount)
+                                  int failedCount, int infeasibleCount)
 {
     m_loadInFlight = false;
     m_loadBatch.reset();
+    m_infeasibleCount = infeasibleCount;
     m_engine.setFrames(frames);
 
     // M24 (B#7): failed loads are dropped by the engine — tell the user why

@@ -63,6 +63,19 @@
   terminal state and stop retrying; the Phase 0 regression suite is now a green
   release gate.
 
+### Fixed
+
+- **Compare Pixel Link exactness:** Pixel Link tooltips and RGB/Δ values now
+  sample the current full-resolution analysis pixels with the active crop,
+  rotation, and point adjustments instead of reading a bounded display LOD.
+  Metadata-only/infeasible panes remain explicitly invalid, and connector lines
+  stay aligned to the complete source geometry during LOD and covered-region
+  refreshes.
+- **Responsive Compare startup:** source capability probes now run on the
+  foreground decode pool instead of opening every source on the UI thread.
+  Superseded probe/decode chains remain cancellable and exactly-once accounted,
+  including metadata-only large-image panes.
+
 ## [Unreleased] — M46 real-world workflow reliability & long-session release qualification
 
 ### Fixed
