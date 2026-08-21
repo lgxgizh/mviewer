@@ -78,6 +78,9 @@
   so the highlighted result is immediately visible; turning highlight off keeps
   the ordinary diff overlay, while hiding and reopening the overlay preserves
   the highlight preference.
+- **Compare resize zoom continuity:** resizing the Compare window now refits
+  Fit-state panes to their new geometry while preserving an intentional shared
+  zoom ratio, so a window resize no longer discards the user's inspection scale.
 - **Compare Pixel Link exactness:** Pixel Link tooltips and RGB/Δ values now
   sample the current full-resolution analysis pixels with the active crop,
   rotation, and point adjustments instead of reading a bounded display LOD.

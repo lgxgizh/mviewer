@@ -573,9 +573,26 @@ void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
 void CompareWorkspace::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
-    fitAll();
+    const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
+    const bool normalGrid = m_pageStack && m_compareGridPage &&
+                            m_pageStack->currentWidget() == m_compareGridPage;
+    if (!blinkActive && normalGrid)
+    {
+        // Coalesce ordinary-grid resize bursts through the same post-layout
+        // path used by mode transitions. It refits Fit-state panes to the new
+        // geometry while preserving an intentional shared relative zoom ratio.
+        schedulePostLayoutFit();
+    }
+    else
+    {
+        // Canvas, Blink, and loading-page resize behavior remains the legacy
+        // immediate fit path; the scheduled grid callback intentionally skips
+        // those hidden or detached panes.
+        fitAll();
+    }
     positionCellHists();
-    scheduleDisplayLodRefresh();
+    if (blinkActive || !normalGrid)
+        scheduleDisplayLodRefresh();
 }
 
 // Canvas paint entry — invoked from the canvas event path (Paint event via the

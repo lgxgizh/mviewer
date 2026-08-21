@@ -1163,6 +1163,72 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(gridPanesHaveFit,
           "Canvas to Grid restores a valid Fit display ratio for both compare panes");
 
+    // Compare resize must follow the same relative-zoom contract as the
+    // post-layout transitions: Fit follows the new pane geometry, while an
+    // intentional wheel zoom keeps its ratio relative to each pane's Fit.
+    auto paneFitRatio = [](RawImageView *view)
+    {
+        if (!view || view->width() <= 0 || view->height() <= 0 || !view->sourceSize().isValid())
+            return 0.0;
+        const QSize source = view->sourceSize();
+        const double fit = std::min(static_cast<double>(view->width()) / source.width(),
+                                    static_cast<double>(view->height()) / source.height());
+        return fit > 0.0 && qIsFinite(view->scale()) ? view->scale() / fit : 0.0;
+    };
+    auto waitForPaneGeometry = [&]()
+    {
+        QElapsedTimer settled;
+        settled.start();
+        while (settled.elapsed() < 1500)
+        {
+            pump(25);
+            RawImageView *pane0 = findComparePane(0);
+            RawImageView *pane1 = findComparePane(1);
+            if (paneGeometryValid(pane0) && paneGeometryValid(pane1))
+                return true;
+        }
+        return false;
+    };
+    RawImageView *resizePane0 = findComparePane(0);
+    RawImageView *resizePane1 = findComparePane(1);
+    CHECK(resizePane0 && resizePane1,
+          "resize workflow: normal grid exposes both panes before geometry checks");
+    if (resizePane0 && resizePane1)
+    {
+        const QSize originalDialogSize = dlg.size();
+        const QSize smallerDialogSize(std::max(640, originalDialogSize.width() - 160),
+                                      std::max(480, originalDialogSize.height() - 100));
+        CHECK(qAbs(paneFitRatio(resizePane0) - 1.0) < 0.05 &&
+                  qAbs(paneFitRatio(resizePane1) - 1.0) < 0.05,
+              "resize workflow: Fit starts at a relative zoom ratio of one");
+
+        dlg.resize(smallerDialogSize);
+        CHECK(waitForPaneGeometry(),
+              "resize workflow: Fit resize settles both pane geometries");
+        CHECK(qAbs(paneFitRatio(resizePane0) - 1.0) < 0.05 &&
+                  qAbs(paneFitRatio(resizePane1) - 1.0) < 0.05,
+              "resize workflow: Fit follows the new pane geometry without zoom drift");
+
+        const QPoint zoomCursor(resizePane0->width() / 2, resizePane0->height() / 2);
+        QWheelEvent zoomEvent(QPointF(zoomCursor), resizePane0->mapToGlobal(zoomCursor),
+                              QPoint(0, 0), QPoint(0, 120), Qt::NoButton, Qt::NoModifier,
+                              Qt::NoScrollPhase, false);
+        QApplication::sendEvent(resizePane0, &zoomEvent);
+        pump(50);
+        const double zoomRatioBeforeResize = paneFitRatio(resizePane0);
+        const double zoomRatioBeforeResizePeer = paneFitRatio(resizePane1);
+        CHECK(zoomRatioBeforeResize > 1.05 &&
+                  qAbs(zoomRatioBeforeResize - zoomRatioBeforeResizePeer) < 0.05,
+              "resize workflow: real wheel zoom establishes one shared relative ratio");
+
+        dlg.resize(originalDialogSize);
+        CHECK(waitForPaneGeometry(),
+              "resize workflow: zoomed resize settles both pane geometries");
+        CHECK(qAbs(paneFitRatio(resizePane0) - zoomRatioBeforeResize) < 0.05 &&
+                  qAbs(paneFitRatio(resizePane1) - zoomRatioBeforeResize) < 0.05,
+              "resize workflow: zoomed resize preserves the shared Fit-relative ratio");
+    }
+
     // Diff visualization and highlight are separate preferences, but turning
     // highlight on must make the result visible immediately. Exercise both the
     // keyboard path and the real checkbox path without relying on pixel colors.
