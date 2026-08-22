@@ -192,6 +192,9 @@ class ThumbnailPanel : public QListView
     // setDirectory's completion lambda so the scanning TU stays under the
     // function-length gate). Runs on the GUI thread; re-checks the generation.
     void applyScanResult(int gen, const QList<Entry> &entries);
+    // Keep decoded thumbnail state for the current directory across
+    // filter/sort rebuilds; implementation lives with pipeline delivery.
+    void pruneThumbnailState();
 
   public:
 

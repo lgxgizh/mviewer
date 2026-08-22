@@ -144,6 +144,11 @@ void MainWindow::connectSelectionSignals()
                     m_actToggleMetadata->setChecked(false);
                 if (m_lblImage)
                     m_lblImage->setText(tr("未选择图像"));
+                const QString activeDir =
+                    m_directory ? m_directory->currentDirectory() : QString();
+                setWindowTitle(activeDir.isEmpty()
+                                   ? QStringLiteral("MViewer")
+                                   : QString("%1 - MViewer").arg(QDir(activeDir).dirName()));
                 updateSelectionActions();
             });
     connect(m_thumbnailPanel, &ThumbnailPanel::itemDoubleClicked, this,
@@ -642,5 +647,4 @@ void MainWindow::connectSettingsSignals()
     connect(m_actDirBack, &QAction::triggered, this, &MainWindow::goDirBack);
     connect(m_actDirForward, &QAction::triggered, this, &MainWindow::goDirForward);
 }
-
 

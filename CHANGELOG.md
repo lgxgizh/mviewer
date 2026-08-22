@@ -103,7 +103,10 @@
   so the filename filter and view controls are visible and usable; filtering
   away the current gallery selection now promotes the first visible image
   through the shared selection, while an empty result clears the gallery,
-  preview, and status identity.
+  preview, and status identity, and resets the window title to the active
+  directory instead of retaining the filtered image. Already-decoded
+  thumbnails now remain available across no-match and restored filters, so
+  clearing a filter does not leave cached images as gray placeholders.
 
 ## [Unreleased] — M46 real-world workflow reliability & long-session release qualification
 

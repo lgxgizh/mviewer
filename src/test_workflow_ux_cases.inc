@@ -468,11 +468,19 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "a no-match filter clears SelectionModel.currentImage");
     CHECK(previewPanel && previewPanel->requestedPath().isEmpty(),
           "a no-match filter clears the PreviewPanel request");
+    const QString browseTitle = QString("%1 - MViewer").arg(QDir(dirPath).dirName());
+    CHECK(w.windowTitle() == browseTitle,
+          "a no-match filter changes the title to the active directory");
     thumbnailPanel->setFilter({});
     thumbnailPanel->setSortAscending(true);
     pump(50);
+    CHECK(sel && sel->currentImage().isEmpty() && w.windowTitle() == browseTitle,
+          "clearing an empty filter keeps the directory title without a selection");
     if (sel)
         sel->setCurrentImage(paths.first());
+    pump(20);
+    CHECK(w.windowTitle() == QString("%1 - MViewer").arg(QFileInfo(paths.first()).fileName()),
+          "selecting an image restores its filename title");
 
     // 键盘浏览：→ → ← （评审"滚轮切换"的键盘等价路径 navigate()）。
     sendKey(&w, Qt::Key_Right);

@@ -362,26 +362,7 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     if (entries.isEmpty() && m_selection)
         m_selection->setSelection({}, {});
 
-    {
-        QMutexLocker lk(&m_thumbMtx);
-        // M25: keep ready thumbnails for paths that are still in the filtered
-        // model (a search/filter/sort rebuild must not blank the whole grid 鈥?
-        // that caused full-screen flicker). Drop only paths that left the view
-        // and all pending markers (their scheduled size may be stale).
-        QSet<QString> keep;
-        keep.reserve(m_paths.size());
-        for (const QString &p : m_paths)
-            keep.insert(p);
-        QMutableHashIterator<QString, QPixmap> it(m_thumbReady);
-        while (it.hasNext())
-        {
-            it.next();
-            if (!keep.contains(it.key()))
-                it.remove();
-        }
-        m_thumbPending.clear();
-        m_thumbFailed.clear();
-    }
+    pruneThumbnailState();
     ThumbnailPipeline::instance().setSources(toStdPaths(m_paths));
     // M37: publish the exact order displayed by the gallery. Sort/filter
     // rebuilds also pass through here, keeping navigation and preload aligned.

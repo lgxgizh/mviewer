@@ -6,8 +6,8 @@
 // Workflow 1（浏览主流程）——真实 MainWindow：
 //   打开目录 → 浏览图片 → 键盘切换（←/→/Home/End/PageUp/PageDown）
 //   → 放大（100%/放大）→ 恢复（Fit）→ 关闭。
-//   过滤重建还验证当前选择投影到可见序列，以及无匹配时清空 SSOT（由真实
-//   ThumbnailPanel 选择驱动）。
+//   过滤重建还验证当前选择投影到可见序列、无匹配时清空 SSOT 与目录标题
+//   （由真实 ThumbnailPanel 选择驱动）。
 //   初始布局还验证 gallery 工具栏真正占位、可见且可用，并覆盖最小窗口。
 //   断言点：SelectionModel（SSOT）与导航状态始终同步、缩放数值正确、边界不越界。
 //

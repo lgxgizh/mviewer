@@ -1,5 +1,26 @@
 #include "thumbnailpanel_p.h"
 
+void ThumbnailPanel::pruneThumbnailState()
+{
+    QSet<QString> keep;
+    keep.reserve(m_allEntries.size() + m_paths.size());
+    for (const Entry &entry : m_allEntries)
+        keep.insert(entry.path);
+    for (const QString &path : m_paths)
+        keep.insert(path);
+
+    QMutexLocker lk(&m_thumbMtx);
+    QMutableHashIterator<QString, QPixmap> it(m_thumbReady);
+    while (it.hasNext())
+    {
+        it.next();
+        if (!keep.contains(it.key()))
+            it.remove();
+    }
+    m_thumbPending.clear();
+    m_thumbFailed.clear();
+}
+
 void ThumbnailPanel::updateVisibleRange()
 {
     const int n = m_model->rowCount();

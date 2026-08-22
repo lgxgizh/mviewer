@@ -266,8 +266,17 @@ void testPaintNeverStats()
         CHECK(waitPipelineIdle(5000), "B2: pipeline stays idle (no late submission)");
         // At least one thumbnail must be ready so the footer text and image
         // are actually painted in both renders.
-        CHECK(!panel.thumbReady(panel.pathList().value(0)).isNull(),
+        const QString firstPath = panel.pathList().value(0);
+        CHECK(!panel.thumbReady(firstPath).isNull(),
               "B2: at least one ready thumbnail before the render comparison");
+        panel.setFilter(QStringLiteral("__mviewer_filter_no_match__"));
+        CHECK(panel.pathList().isEmpty(), "B2: no-match filter clears the visible rows");
+        panel.setFilter({});
+        pump(50);
+        CHECK(panel.pathList().size() == 60,
+              "B2: clearing the no-match filter restores all rows");
+        CHECK(!panel.thumbReady(firstPath).isNull(),
+              "B2: no-match filter rebuild preserves an already-decoded thumbnail");
         const QImage before = panel.grab().toImage();
         QDir(dir).removeRecursively();
         pump(500);
