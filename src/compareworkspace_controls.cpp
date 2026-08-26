@@ -267,31 +267,24 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
             &CompareWorkspace::onLayoutChanged);
     viewLayout->addWidget(m_layoutCombo);
 
-    // A-4.2: custom M×N grid spin boxes (active when layout = 自定义).
-    // A-4.2: custom M×N grid spin boxes (active when layout = 自定义).
-    // The row count is informational only — the engine packs by columns, so the
-    // 行 spin box is disabled and labeled as auto-derived to avoid a misleading UI.
-    auto *rowsLabel = new QLabel(tr("行"), this);
-    rowsLabel->setToolTip(tr("行数由列数自动推导（按列填充，无法单独设置）"));
-    viewLayout->addWidget(rowsLabel);
-    m_gridRowsSpin = new QSpinBox(this);
-    m_gridRowsSpin->setRange(1, 8);
-    m_gridRowsSpin->setValue(2);
-    m_gridRowsSpin->setEnabled(false);
-    m_gridRowsSpin->setMaximumWidth(48);
-    m_gridRowsSpin->setToolTip(tr("行数由列数自动推导（按列填充，无法单独设置）"));
-    connect(m_gridRowsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
-            &CompareWorkspace::onCustomGridChanged);
-    viewLayout->addWidget(m_gridRowsSpin);
-    viewLayout->addWidget(new QLabel(tr("列"), this));
+    // A-4.2: custom grid is column-driven. CompareEngine derives the row count.
+    auto *columnsLabel = new QLabel(tr("列数:"), this);
+    columnsLabel->setToolTip(tr("只设置列数；行数由当前图片数自动推导"));
+    viewLayout->addWidget(columnsLabel);
     m_gridColsSpin = new QSpinBox(this);
     m_gridColsSpin->setRange(1, 8);
     m_gridColsSpin->setValue(2);
     m_gridColsSpin->setEnabled(false);
-    m_gridColsSpin->setMaximumWidth(48);
+    m_gridColsSpin->setObjectName("compareColumnsSpin");
+    m_gridColsSpin->setToolTip(tr("只设置列数；行数由当前图片数自动推导"));
     connect(m_gridColsSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
             &CompareWorkspace::onCustomGridChanged);
     viewLayout->addWidget(m_gridColsSpin);
+    m_layoutStatusLabel = new QLabel(this);
+    m_layoutStatusLabel->setObjectName("compareGridStatus");
+    m_layoutStatusLabel->setMinimumWidth(120);
+    m_layoutStatusLabel->setToolTip(tr("当前网格：行数由图片数和列数推导"));
+    viewLayout->addWidget(m_layoutStatusLabel);
 
     // P0 #③: inspector + histogram side panel toggle.
     m_sideChk = new QCheckBox(tr("检视面板"), this);
@@ -346,6 +339,20 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     connect(m_swapBtn, &QPushButton::clicked, this, &CompareWorkspace::onSwapPanes);
     toolLayout->addWidget(m_swapBtn);
 
+    m_temporaryCompareButton = new QPushButton(tr("临时切换"), this);
+    m_temporaryCompareButton->setObjectName("temporaryCompareButton");
+    m_temporaryCompareButton->setToolTip(
+        tr("按住时在 A 窗格显示 B；松开恢复 A（快捷键: Space）"));
+    m_temporaryCompareButton->setEnabled(false);
+    connect(m_temporaryCompareButton, &QPushButton::pressed, this,
+            &CompareWorkspace::beginTemporaryCompare);
+    connect(m_temporaryCompareButton, &QPushButton::released, this,
+            &CompareWorkspace::endTemporaryCompare);
+    m_temporaryCompareButton->installEventFilter(this);
+    if (auto *w = window())
+        w->installEventFilter(this);
+    toolLayout->addWidget(m_temporaryCompareButton);
+
     // P1 #④: Analyze & export buttons in the compare toolbar.
     m_analyzeBtn = new QPushButton(tr("分析"), this);
     m_analyzeBtn->setToolTip(tr("在分析面板中打开当前焦点图像"));
@@ -359,4 +366,3 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     toolLayout->addWidget(m_exportReportBtn);
     toolLayout->addStretch(1);
 }
-

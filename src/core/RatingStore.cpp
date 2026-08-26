@@ -5,6 +5,7 @@
 #include "RatingStore.h"
 
 #include "core/filesystem/AtomicFile.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include <algorithm>
 #include <chrono>
@@ -23,6 +24,14 @@ std::string getEnv(const char *name)
     const char *v = std::getenv(name);
     return v ? std::string(v) : std::string();
 }
+
+#ifdef _WIN32
+std::string getEnvUtf8(const wchar_t *name)
+{
+    const wchar_t *v = _wgetenv(name);
+    return v ? pathToUtf8(std::filesystem::path(v)) : std::string();
+}
+#endif
 } // namespace
 
 RatingStore::RatingStore()
@@ -54,9 +63,9 @@ RatingStore &RatingStore::instance()
 std::string RatingStore::defaultPath() const
 {
 #ifdef _WIN32
-    std::string base = getEnv("LOCALAPPDATA");
+    std::string base = getEnvUtf8(L"LOCALAPPDATA");
     if (base.empty())
-        base = getEnv("APPDATA");
+        base = getEnvUtf8(L"APPDATA");
     if (!base.empty())
         return base + "\\mviewer\\ratings.txt";
 #else
@@ -69,9 +78,8 @@ std::string RatingStore::defaultPath() const
 
 std::string RatingStore::flagsPath() const
 {
-    const auto dir = std::filesystem::path(m_filePath).parent_path();
-    const std::string d = dir.empty() ? "." : dir.string();
-    return d + "/flags.txt";
+    const auto dir = pathFromUtf8(m_filePath).parent_path();
+    return pathToUtf8((dir.empty() ? pathFromUtf8(".") : dir) / pathFromUtf8("flags.txt"));
 }
 
 std::string RatingStore::normalize(const std::string &path) const
@@ -391,7 +399,7 @@ void RatingStore::loadFlags()
     m_rejected.clear();
     m_picked.clear();
     m_recents.clear();
-    std::ifstream in(m_flagsPath);
+    std::ifstream in(pathFromUtf8(m_flagsPath), std::ios::binary);
     if (!in)
         return;
     std::string line;
@@ -437,7 +445,7 @@ bool RatingStore::load()
 {
     std::lock_guard<std::mutex> lk(m_mutex);
     m_ratings.clear();
-    std::ifstream in(m_filePath);
+    std::ifstream in(pathFromUtf8(m_filePath), std::ios::binary);
     if (!in)
         return false;
     std::string line;

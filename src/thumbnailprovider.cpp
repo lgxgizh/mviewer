@@ -23,7 +23,7 @@ QImage ThumbnailProvider::squareFitImage(const QImage &q, int size)
 
 ImageData ThumbnailProvider::produce(const std::string &path, int size)
 {
-    const QString qp = QString::fromStdString(path);
+    const QString qp = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
     QImage cached;
     if (ThumbnailCache::instance().get(qp, size, cached))
         return mvcore::fromQImage(cached);

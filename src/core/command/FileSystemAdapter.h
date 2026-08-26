@@ -1,5 +1,7 @@
 #pragma once
 
+#include "core/filesystem/Utf8Path.h"
+
 #include <filesystem>
 #include <functional>
 #include <memory>
@@ -7,12 +9,6 @@
 
 namespace mviewer::core
 {
-
-// Narrow command paths are UTF-8 at the Qt/core boundary. Keeping conversion
-// here avoids relying on the process locale when std::filesystem targets
-// Windows native paths.
-std::filesystem::path pathFromUtf8(const std::string &path);
-std::string pathToUtf8(const std::filesystem::path &path);
 
 class FileSystemAdapter
 {

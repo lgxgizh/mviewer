@@ -108,7 +108,7 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
     const qint64 knownSize = knownFileSize;
     QPointer<PreviewPanel> guard(this);
     auto lifetime = m_lifetime;
-    const std::string stdPath = path.toStdString();
+    const std::string stdPath = path.toUtf8().toStdString();
 
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Thumbnail,

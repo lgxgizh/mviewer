@@ -131,6 +131,7 @@ void CompareWorkspace::exclusiveMode(QCheckBox *keepOn)
 
 void CompareWorkspace::setImages(const QStringList &paths)
 {
+    endTemporaryCompare();
     // M28 P1-01: Compare loads are ASYNC. Decoding happens on the DecodePool,
     // never on the UI thread: setImages() returns immediately, and the frames
     // are applied by finishLoad() on the UI thread when every request in this
@@ -150,7 +151,7 @@ void CompareWorkspace::setImages(const QStringList &paths)
     std::vector<std::string> stdPaths;
     stdPaths.reserve(paths.size());
     for (const QString &p : paths)
-        stdPaths.push_back(p.toStdString());
+        stdPaths.push_back(p.toUtf8().toStdString());
     const int requested = static_cast<int>(paths.size());
     if (requested > 0)
     {
@@ -428,6 +429,8 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     if (m_grid && !two)
         m_grid->setVisible(true);
     updateCanvasModeVisibility();
+    updateTemporaryCompareAvailability();
+    updateLayoutStatus();
     setFocus();
     // P0-2: publish the compare set + reference to the app-wide SelectionModel so
     // Metadata/Analysis/Export stay in sync with what is being compared.
@@ -491,8 +494,6 @@ void CompareWorkspace::onLayoutChanged()
         return;
     const int idx = m_layoutCombo->currentIndex();
     const bool custom = (idx == 6); // 自定义 M×N
-    if (m_gridRowsSpin)
-        m_gridRowsSpin->setEnabled(custom);
     if (m_gridColsSpin)
         m_gridColsSpin->setEnabled(custom);
 
@@ -524,6 +525,7 @@ void CompareWorkspace::onLayoutChanged()
     }
     m_engine.setColumns(cols);
     rebuildCells();
+    updateLayoutStatus();
     schedulePostLayoutFit();
     refreshLinkMarkers();
     update();
@@ -539,9 +541,19 @@ void CompareWorkspace::onCustomGridChanged()
     const int cols = m_gridColsSpin ? m_gridColsSpin->value() : 2;
     m_engine.setColumns(cols);
     rebuildCells();
+    updateLayoutStatus();
     schedulePostLayoutFit();
     refreshLinkMarkers();
     update();
+}
+
+void CompareWorkspace::updateLayoutStatus()
+{
+    if (!m_layoutStatusLabel)
+        return;
+    const auto layout = m_engine.layout();
+    m_layoutStatusLabel->setText(
+        tr("网格: %1 行 × %2 列").arg(layout.rows).arg(layout.cols));
 }
 
 void CompareWorkspace::onSideToggled(bool on)
@@ -603,17 +615,15 @@ void CompareWorkspace::onFocusRequested(int cellIndex)
     if (m_focusLabel)
         m_focusLabel->setText(locking ? tr("基准: %1").arg(newFocus + 1) : tr("基准: —"));
 
-    // P0: Write the reference cell's image back to the global SelectionModel so
-    // the rest of the app (MetadataPanel/AnalysisPanel/Export/etc.) stays in sync.
-    if (locking && m_selection && newFocus >= 0)
-    {
-        const int poolIdx = m_pairIndex + newFocus;
-        if (poolIdx >= 0 && poolIdx < m_imagePool.size())
-            m_selection->setCurrentImage(m_imagePool[poolIdx]);
-    }
-    // P0-2: publish the locked reference to the app-wide SelectionModel.
+    // Resolve the actual compared pane before updating the global SelectionModel.
+    // The navigation pool may contain images not present in a non-contiguous pair.
+    const QString panePath = locking ? focusImagePath() : QString();
     if (m_selection)
-        m_selection->setFocused(locking ? focusImagePath() : QString());
+    {
+        if (locking && !panePath.isEmpty())
+            m_selection->setCurrentImage(panePath);
+        m_selection->setFocused(panePath);
+    }
 
     const int n = m_engine.imageCount();
     for (int i = 0; i < n; ++i)

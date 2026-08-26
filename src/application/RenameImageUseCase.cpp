@@ -8,8 +8,8 @@ RenameImageUseCase::Result RenameImageUseCase::execute(const std::string &oldPat
                                                        const std::string &newName)
 {
     Result r;
-    QString qOldPath = QString::fromStdString(oldPath);
-    QString qNewName = QString::fromStdString(newName);
+    QString qOldPath = QString::fromUtf8(oldPath.data(), static_cast<int>(oldPath.size()));
+    QString qNewName = QString::fromUtf8(newName.data(), static_cast<int>(newName.size()));
 
     QFile file(qOldPath);
     QFileInfo fi(qOldPath);
@@ -22,6 +22,6 @@ RenameImageUseCase::Result RenameImageUseCase::execute(const std::string &oldPat
         return r;
     }
     r.success = true;
-    r.newPath = newPath.toStdString();
+    r.newPath = newPath.toUtf8().toStdString();
     return r;
 }

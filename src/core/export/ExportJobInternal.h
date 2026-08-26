@@ -1,6 +1,7 @@
 #pragma once
 
 #include "core/export/ExportJob.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include <filesystem>
 #include <optional>
@@ -30,8 +31,6 @@ std::string jsonEscape(const std::string &value);
 std::string htmlEscape(const std::string &value);
 std::string fixedNumber(double value);
 std::string jsonNumber(double value);
-std::filesystem::path pathFromUtf8(const std::string &value);
-std::string pathToUtf8(const std::filesystem::path &path);
 std::string outputBaseName(const ExportJobConfig &cfg, const std::filesystem::path &source,
                            int index, int total);
 bool writeTextAtomically(const std::filesystem::path &destination, const std::string &contents);

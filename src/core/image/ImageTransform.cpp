@@ -2,6 +2,7 @@
 
 #include "core/image/Encoder.h"
 #include "core/image/QtConvert.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include <QFile>
 #include <QFont>
@@ -88,7 +89,7 @@ ImageData addTextWatermark(const ImageData &src, const std::string &text, Waterm
     f.setBold(true);
     p.setFont(f);
 
-    const QString qtext = QString::fromStdString(text);
+    const QString qtext = QString::fromUtf8(text.data(), static_cast<int>(text.size()));
     const QFontMetrics fm(f);
     const QSize ts = fm.size(Qt::TextSingleLine, qtext);
     const int tw = ts.width();
@@ -319,7 +320,7 @@ bool writePdf(const std::string &path, const std::vector<ImageData> &images, int
     pdf += "trailer\n<< /Size " + std::to_string(M) + " /Root 1 0 R >>\nstartxref\n" +
            std::to_string(xrefPos) + "\n%%EOF\n";
 
-    std::ofstream ofs(path, std::ios::binary);
+    std::ofstream ofs(mviewer::core::pathFromUtf8(path), std::ios::binary);
     if (!ofs)
         return false;
     ofs.write(pdf.data(), static_cast<std::streamsize>(pdf.size()));

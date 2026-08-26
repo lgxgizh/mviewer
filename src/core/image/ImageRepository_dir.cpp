@@ -6,6 +6,7 @@
 
 #include "core/cache/CacheManager.h"
 #include "core/filesystem/FileSystem.h"
+#include "core/filesystem/Utf8Path.h"
 #include "core/image/Decoder.h"
 #include "core/image/DiskCache.h"
 #include "core/image/ImageFrame.h"
@@ -306,7 +307,7 @@ mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string &roo
     ws.rootPath = rootPath;
 
     std::error_code ec;
-    const std::filesystem::path root(rootPath);
+    const std::filesystem::path root = mviewer::core::pathFromUtf8(rootPath);
     if (!std::filesystem::exists(root, ec) || !std::filesystem::is_directory(root, ec))
         return ws;
 
@@ -315,17 +316,22 @@ mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string &roo
 
     auto visitDir = [&](const std::filesystem::path &dir)
     {
-        std::vector<std::string> files = FileSystem::listImages(dir.string(), maxPerFolder);
+        const std::string dirUtf8 = mviewer::core::pathToUtf8(dir);
+        std::vector<std::string> files = FileSystem::listImages(dirUtf8, maxPerFolder);
         if (!files.empty())
-            byDir[dir.string()] = std::move(files);
+            byDir[dirUtf8] = std::move(files);
     };
 
     if (recursive)
     {
-        for (const auto &entry : std::filesystem::recursive_directory_iterator(root, ec))
+        for (std::filesystem::recursive_directory_iterator it(
+                 root, std::filesystem::directory_options::skip_permission_denied, ec),
+             end;
+             !ec && it != end; it.increment(ec))
         {
-            if (entry.is_directory(ec))
-                visitDir(entry.path());
+            std::error_code entryEc;
+            if (it->is_directory(entryEc) && !entryEc)
+                visitDir(it->path());
         }
         // recursive_directory_iterator does not yield the root itself if it has
         // no subdirectories; ensure the root is scanned too.
@@ -340,7 +346,7 @@ mviewer::domain::Workspace ImageRepository::loadWorkspace(const std::string &roo
     {
         mviewer::domain::Folder folder;
         folder.path = dir;
-        folder.name = std::filesystem::path(dir).filename().string();
+        folder.name = mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(dir).filename());
         mviewer::domain::ImageSet set;
         set.folderPath = dir;
         set.images.reserve(files.size());

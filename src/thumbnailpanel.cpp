@@ -395,51 +395,6 @@ void ThumbnailPanel::setSelectionModel(SelectionModel *sel)
     m_selection = sel;
 }
 
-void ThumbnailPanel::onSelectionChanged()
-{
-    const QModelIndexList sel = selectionModel()->selectedIndexes();
-    qint64 selBytes = 0;
-    for (const QModelIndex &idx : sel)
-        selBytes += m_sizeByPath.value(m_paths.value(idx.row()), 0);
-    const int n = sel.size();
-
-    // M23 P2 / Code-Review #5: keep the app-wide SelectionModel (the single
-    // source of truth that Compare reads) in sync with the gallery's full
-    // multi-selection. QListView::ExtendedSelection already supports Ctrl / Shift
-    // / rubber-band multi-select, but only a plain single click pushed the path
-    // into SelectionModel before 閳?so Compare used to receive a single (stale)
-    // image instead of the whole selection. Updating here makes the shared model
-    // reflect Ctrl/Shift/box selections uniformly.
-    if (m_selection)
-    {
-        QStringList paths;
-        paths.reserve(n);
-        for (const QModelIndex &idx : sel)
-            paths.append(m_paths.value(idx.row()));
-        const QString cur = sel.isEmpty() ? QString() : m_paths.value(sel.constLast().row());
-        m_selection->setSelection(paths, cur);
-    }
-
-    // M23 P2 (selection UX): keep the compare affordance always discoverable.
-    // It shows the live selection count, enables once 2閳? images are picked,
-    // and is hidden only when nothing is selected.
-    if (n == 0 || m_currentDir.isEmpty())
-    {
-        m_compareBtn->setVisible(false);
-    }
-    else
-    {
-        m_compareBtn->setVisible(true);
-        m_compareBtn->setText(QStringLiteral("比较选中 (%1)").arg(n));
-        const bool canCompare = n >= 2 && n <= 8;
-        m_compareBtn->setEnabled(canCompare);
-        m_compareBtn->setToolTip(
-            canCompare ? QStringLiteral("将选中的 %1 张图片送入对比").arg(n)
-                       : QStringLiteral("需要选择 2-8 张图片才能比较（当前 %1 张）").arg(n));
-    }
-    emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
-}
-
 void ThumbnailPanel::resizeEvent(QResizeEvent *event)
 {
     QListView::resizeEvent(event);
@@ -523,27 +478,52 @@ void ThumbnailPanel::showEvent(QShowEvent *event)
 
 void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
 {
-    m_selectionGesture = event->button() == Qt::LeftButton &&
-                          (event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier));
+    const bool left = event->button() == Qt::LeftButton;
+    const Qt::KeyboardModifiers mods = event->modifiers();
+    m_selectionGesture = left && (mods & (Qt::ControlModifier | Qt::ShiftModifier));
 
-    // P0: Enforce single-selection on plain left-click (no modifier keys).
-    // ExtendedSelection normally handles this, but in IconMode with certain Qt
-    // builds the selection is not reliably cleared. We make it explicit.
-    if (event->button() == Qt::LeftButton &&
-        !(event->modifiers() & (Qt::ControlModifier | Qt::ShiftModifier)))
+    // Keep the native QListView gesture surface, but apply the selection
+    // command explicitly. In IconMode on Windows, QListView can retain only
+    // the clicked item for Shift ranges when the previous click was a custom
+    // ClearAndSelect; the path anchor makes plain/Ctrl/Shift deterministic.
+    if (left)
     {
         const QModelIndex idx = indexAt(event->pos());
         if (idx.isValid())
         {
-            // CRITICAL FIX: Call setCurrentIndex to ensure currentChanged signal fires.
-            // Without this, itemClicked won't be emitted and the preview panel
-            // won't refresh when clicking a single image.
-            selectionModel()->setCurrentIndex(idx, QItemSelectionModel::ClearAndSelect);
+            const QString path = m_paths.value(idx.row());
+            if (mods & Qt::ShiftModifier)
+            {
+                int anchorRow = m_rowByPath.value(m_selectionAnchorPath, -1);
+                if (anchorRow < 0 && currentIndex().isValid())
+                    anchorRow = currentIndex().row();
+                if (anchorRow < 0)
+                    anchorRow = idx.row();
+                const int first = qMin(anchorRow, idx.row());
+                const int last = qMax(anchorRow, idx.row());
+                const QModelIndex firstIndex = m_model->index(first, 0);
+                const QModelIndex lastIndex = m_model->index(last, 0);
+                selectionModel()->select(QItemSelection(firstIndex, lastIndex),
+                                         QItemSelectionModel::Select);
+                selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
+            }
+            else if (mods & Qt::ControlModifier)
+            {
+                selectionModel()->select(idx, QItemSelectionModel::Toggle);
+                selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
+                m_selectionAnchorPath = path;
+            }
+            else
+            {
+                selectionModel()->setCurrentIndex(idx, QItemSelectionModel::ClearAndSelect);
+                m_selectionAnchorPath = path;
+            }
             event->accept();
             return;
         }
         // Click on empty area: deselect everything.
         selectionModel()->clearSelection();
+        m_selectionAnchorPath.clear();
         event->accept();
         return;
     }
@@ -552,6 +532,12 @@ void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
 
 void ThumbnailPanel::mouseReleaseEvent(QMouseEvent *event)
 {
+    if (event->button() == Qt::LeftButton && m_selectionGesture)
+    {
+        m_selectionGesture = false;
+        event->accept();
+        return;
+    }
     QListView::mouseReleaseEvent(event);
     if (event->button() == Qt::LeftButton)
         m_selectionGesture = false;

@@ -371,6 +371,11 @@ class ThumbnailPanel : public QListView
     // single image. Keep this set through the mouse release because Qt emits
     // clicked/currentChanged while the gesture is being processed.
     bool m_selectionGesture = false;
+    // Stable path anchor for Shift ranges. Qt's IconMode selection anchor is
+    // not consistent across the Windows styles used by the native view, so
+    // keep the anchor at the panel boundary and apply the same range semantics
+    // for real mouse events.
+    QString m_selectionAnchorPath;
     QString m_filterText;
     bool m_filterRecursive = false;
     qint64 m_totalBytes = 0;

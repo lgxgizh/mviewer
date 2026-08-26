@@ -5,6 +5,7 @@
 #include "TagStore.h"
 
 #include "core/filesystem/AtomicFile.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -22,6 +23,14 @@ std::string getEnv(const char *name)
     const char *v = std::getenv(name);
     return v ? std::string(v) : std::string();
 }
+
+#ifdef _WIN32
+std::string getEnvUtf8(const wchar_t *name)
+{
+    const wchar_t *v = _wgetenv(name);
+    return v ? pathToUtf8(std::filesystem::path(v)) : std::string();
+}
+#endif
 } // namespace
 
 TagStore::TagStore()
@@ -39,9 +48,9 @@ TagStore &TagStore::instance()
 std::string TagStore::defaultPath() const
 {
 #ifdef _WIN32
-    std::string base = getEnv("LOCALAPPDATA");
+    std::string base = getEnvUtf8(L"LOCALAPPDATA");
     if (base.empty())
-        base = getEnv("APPDATA");
+        base = getEnvUtf8(L"APPDATA");
     if (!base.empty())
         return base + "\\mviewer\\tags.txt";
 #else
@@ -149,7 +158,7 @@ bool TagStore::load()
 {
     std::lock_guard<std::mutex> lk(m_mutex);
     m_tags.clear();
-    std::ifstream in(m_filePath);
+    std::ifstream in(pathFromUtf8(m_filePath), std::ios::binary);
     if (!in)
         return false;
     std::string line;

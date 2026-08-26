@@ -113,17 +113,6 @@ void MainWindow::connectGallerySignals()
 
 void MainWindow::connectSelectionSignals()
 {
-    connect(m_thumbnailPanel, &ThumbnailPanel::itemClicked, this,
-            [this](const QString &path)
-            {
-                // P0-2: route selection through the shared model; all panels are
-                // updated centrally in onCurrentImageChanged().
-                // Skip while model→gallery sync is in progress (selectPaths
-                // already owns the multi-select); also skip empty paths.
-                if (m_syncingSelection || path.isEmpty() || !m_selection)
-                    return;
-                m_selection->setCurrentImage(path);
-            });
     // P0-2: the single place that keeps every view in sync with the current
     // image. Connected once; fired whenever the selection model changes,
     // regardless of the source (thumbnail click, keyboard nav, open, restore).
@@ -155,27 +144,9 @@ void MainWindow::connectSelectionSignals()
             [this](const QString &path) { onImageOpen(path); });
     connect(m_thumbnailPanel, &ThumbnailPanel::compareRequested, this,
             [this](const QStringList &images) { openCompare(images); });
-    // A-3 / M19: keep SelectionModel multi-selection in lock-step with the
-    // gallery. Guarded by m_syncingSelection so model→gallery sync does not
-    // re-enter and overwrite a programmatic selection.
-    connect(m_thumbnailPanel->selectionModel(), &QItemSelectionModel::selectionChanged, this,
-            [this]()
-            {
-                if (m_syncingSelection || !m_selection || !m_thumbnailPanel)
-                    return;
-                const QStringList paths = m_thumbnailPanel->selectedPaths();
-                if (paths.isEmpty())
-                {
-                    updateSelectionActions();
-                    return;
-                }
-                const QString cur =
-                    m_thumbnailPanel->currentIndex().isValid()
-                        ? m_thumbnailPanel->pathList().value(m_thumbnailPanel->currentIndex().row())
-                        : paths.first();
-                m_selection->setSelection(paths, cur);
-                updateSelectionActions();
-            });
+    // A-3 / M19: ThumbnailPanel is the sole gallery selection publisher. Its
+    // selectionChanged handler owns the native ExtendedSelection gesture and
+    // publishes the full ordered set to the app-wide SelectionModel.
     // A-3.4 / M19: SelectionModel → gallery (full multi-select, not just current).
     connect(m_selection, &SelectionModel::selectionChanged, this,
             [this](const QStringList &)
@@ -647,4 +618,3 @@ void MainWindow::connectSettingsSignals()
     connect(m_actDirBack, &QAction::triggered, this, &MainWindow::goDirBack);
     connect(m_actDirForward, &QAction::triggered, this, &MainWindow::goDirForward);
 }
-

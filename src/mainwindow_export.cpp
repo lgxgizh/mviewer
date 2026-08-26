@@ -114,7 +114,7 @@ void MainWindow::exportReport()
         }
         else if (m_compareView)
         {
-            ctx.imagePath = m_compareView->focusImagePath().toStdString();
+            ctx.imagePath = m_compareView->focusImagePath().toUtf8().toStdString();
         }
     }
     else
@@ -126,7 +126,7 @@ void MainWindow::exportReport()
         }
 
         const QString path = currentImagePath();
-        ctx.imagePath = path.toStdString();
+        ctx.imagePath = path.toUtf8().toStdString();
         if (m_analyzer)
         {
             const AnalysisPanel::ReportAnalysisState state =

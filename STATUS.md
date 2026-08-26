@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-08-17 · Version: **1.0.9 release line** · Verified release tag: **v1.0.9**
+> Snapshot: 2026-08-27 · Version: **1.0.10 release line** · Verified release tag: **v1.0.9**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -20,8 +20,24 @@
 > `docs/review/M46_RELIABILITY_SOAK_2026-08-17.md`,
 > `docs/review/M46_NATIVE_WINDOWS_QUALIFICATION_2026-08-17.md`,
 > `docs/review/M47_PHASE0_BASELINE_2026-08-17.md`,
-> `docs/review/M47_SOURCE_BACKED_DISPLAY_2026-08-17.md` and
+> `docs/review/M47_SOURCE_BACKED_DISPLAY_2026-08-17.md`,
+> `docs/review/M49_WINDOWS_UX_UNICODE_COMPARE_CLOSURE_2026-08-26.md` and
 > `.\build.ps1 Test`.
+
+## M49 — Windows UX / Unicode / Compare reliability closure (2026-08-27)
+
+- Unicode filesystem boundaries now use one UTF-8/native-path adapter across
+  persistence, sidecars, batch/export, image probing, plugins, and startup;
+  expected filesystem failures are contained at their owning boundary.
+- Browse selection has one gallery publication owner for plain/Ctrl/Shift
+  gestures, and sidecar import is cancellable background work so first-screen
+  browsing does not wait for a directory-wide import.
+- Compare now has strict equal-width default panes, elided captions with full
+  tooltips, a columns-driven `R rows × C cols` indicator, and a display-only
+  momentary A←B override shared by the button and Space key. Continuous Blink
+  remains independent.
+- Automated evidence and the native qualification boundary are recorded in
+  `docs/review/M49_WINDOWS_UX_UNICODE_COMPARE_CLOSURE_2026-08-26.md`.
 
 ## M47 — Production-scale data path hardening (2026-08-17, in progress)
 

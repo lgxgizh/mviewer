@@ -9,15 +9,46 @@
 #include "runtime_storage.h"
 
 #include <QApplication>
+#include <QDebug>
 
+#include <exception>
 #include <string>
 
 class MainWindow;
 static QString g_openOnLaunch;
 
+class MViewerApplication final : public QApplication
+{
+  public:
+    using QApplication::QApplication;
+
+    bool notify(QObject *receiver, QEvent *event) override
+    {
+        try
+        {
+            return QApplication::notify(receiver, event);
+        }
+        catch (const std::exception &error)
+        {
+            qCritical("Unhandled exception in Qt event handler (receiver=%s type=%d): %s",
+                      receiver && receiver->metaObject() ? receiver->metaObject()->className()
+                                                         : "<null>",
+                      event ? static_cast<int>(event->type()) : -1, error.what());
+        }
+        catch (...)
+        {
+            qCritical("Unhandled unknown exception in Qt event handler (receiver=%s type=%d)",
+                      receiver && receiver->metaObject() ? receiver->metaObject()->className()
+                                                         : "<null>",
+                      event ? static_cast<int>(event->type()) : -1);
+        }
+        return false;
+    }
+};
+
 int main(int argc, char *argv[])
 {
-    QApplication app(argc, argv);
+    MViewerApplication app(argc, argv);
     app.setApplicationName("MViewer");
     app.setOrganizationName("MViewer");
     app.setApplicationVersion(QStringLiteral(MVIEWER_VERSION_STRING));
@@ -34,17 +65,18 @@ int main(int argc, char *argv[])
 
     // P5: headless release self-test gate. Runs before any window is created so
     // a release pipeline can verify the decode path without a display.
-    for (int i = 1; i < argc; ++i)
+    const QStringList arguments = QCoreApplication::arguments();
+    for (int i = 1; i < arguments.size(); ++i)
     {
-        if (std::string(argv[i]) == "--selftest")
+        if (arguments.at(i) == QStringLiteral("--selftest"))
             return mviewer::core::runSelfTest();
     }
 
     // M14-1: Windows Native — open a file directly from the command line.
     // `mviewer.exe image.jpg` → open the image instead of an empty window.
-    for (int i = 1; i < argc; ++i)
+    for (int i = 1; i < arguments.size(); ++i)
     {
-        QString arg = QString::fromLocal8Bit(argv[i]);
+        const QString &arg = arguments.at(i);
         if (!arg.startsWith("-") && !arg.startsWith("/"))
         {
             QFileInfo fi(arg);

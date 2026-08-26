@@ -9,7 +9,8 @@ namespace
 std::string computeFileHash(const std::string &path, int64_t size, int64_t mtime)
 {
     const QString key =
-        QString::fromStdString(path) + QString::number(size) + QString::number(mtime);
+        QString::fromUtf8(path.data(), static_cast<int>(path.size())) + QString::number(size) +
+        QString::number(mtime);
     const QByteArray raw = QCryptographicHash::hash(key.toUtf8(), QCryptographicHash::Sha1);
     return std::string(raw.constData(), raw.size());
 }
@@ -18,12 +19,12 @@ std::string computeFileHash(const std::string &path, int64_t size, int64_t mtime
 
 ImageObject::ImageObject(const std::string &path, const ImageData &image)
 {
-    const QFileInfo fi(QString::fromStdString(path));
+    const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     const int64_t size = fi.size();
 
     mviewer::domain::ImageMetadata meta;
     meta.filePath = path;
-    meta.fileName = fi.fileName().toStdString();
+    meta.fileName = fi.fileName().toUtf8().toStdString();
     meta.width = image.width;
     meta.height = image.height;
     meta.fileSize = size;

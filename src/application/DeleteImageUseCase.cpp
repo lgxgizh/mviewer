@@ -5,7 +5,7 @@
 DeleteImageUseCase::Result DeleteImageUseCase::execute(const std::string &filePath)
 {
     Result r;
-    QString qPath = QString::fromStdString(filePath);
+    QString qPath = QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size()));
     if (!QFile::moveToTrash(qPath))
     {
         r.error = "Failed to move file to recycle bin";

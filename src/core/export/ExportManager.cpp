@@ -1,5 +1,6 @@
 // M17: ExportManager implementation — preset I/O and singleton lifecycle.
 #include "ExportManager.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -16,6 +17,14 @@
 // Lightweight JSON building — no Qt dependency in core layer.
 namespace
 {
+
+#ifdef _WIN32
+std::string envUtf8(const wchar_t *name)
+{
+    const wchar_t *value = _wgetenv(name);
+    return value ? mviewer::core::pathToUtf8(std::filesystem::path(value)) : std::string();
+}
+#endif
 
 std::string qs(const std::string &v)
 {
@@ -162,12 +171,12 @@ ExportManager::Preset ExportManager::Preset::fromJson(const std::string &json)
 std::string ExportManager::defaultPresetDir()
 {
 #ifdef _WIN32
-    const char *appData = std::getenv("APPDATA");
-    if (appData)
-        return std::string(appData) + "\\mviewer\\presets";
-    const char *localAppData = std::getenv("LOCALAPPDATA");
-    if (localAppData)
-        return std::string(localAppData) + "\\mviewer\\presets";
+    const std::string appData = envUtf8(L"APPDATA");
+    if (!appData.empty())
+        return appData + "\\mviewer\\presets";
+    const std::string localAppData = envUtf8(L"LOCALAPPDATA");
+    if (!localAppData.empty())
+        return localAppData + "\\mviewer\\presets";
     return "presets";
 #else
     const char *home = std::getenv("HOME");
@@ -186,13 +195,13 @@ bool ExportManager::savePreset(const Preset &p)
     if (p.name.empty())
         return false;
     std::error_code ec;
-    const auto dir = std::filesystem::path(defaultPresetDir());
+    const auto dir = mviewer::core::pathFromUtf8(defaultPresetDir());
     std::filesystem::create_directories(dir, ec);
     if (ec)
         return false;
 
     const std::string path = presetPath(p.name);
-    std::ofstream out(path, std::ios::trunc);
+    std::ofstream out(mviewer::core::pathFromUtf8(path), std::ios::trunc);
     if (!out)
         return false;
     out << p.toJson();
@@ -213,7 +222,7 @@ bool ExportManager::deletePreset(const std::string &name)
                                    [&](const Preset &x) { return x.name == name; }),
                     m_presets.end());
     std::error_code ec;
-    return std::filesystem::remove(presetPath(name), ec) || !ec;
+    return std::filesystem::remove(mviewer::core::pathFromUtf8(presetPath(name)), ec) || !ec;
 }
 
 std::vector<ExportManager::Preset> ExportManager::listPresets() const
@@ -224,7 +233,7 @@ std::vector<ExportManager::Preset> ExportManager::listPresets() const
 ExportManager::Preset ExportManager::loadPreset(const std::string &name) const
 {
     const std::string path = presetPath(name);
-    std::ifstream in(path);
+    std::ifstream in(mviewer::core::pathFromUtf8(path), std::ios::binary);
     if (!in)
         return {};
     std::ostringstream ss;
@@ -236,16 +245,17 @@ void ExportManager::loadAllPresets()
 {
     m_presets.clear();
     std::error_code ec;
-    const auto dir = std::filesystem::path(defaultPresetDir());
-    if (!std::filesystem::exists(dir))
+    const auto dir = mviewer::core::pathFromUtf8(defaultPresetDir());
+    if (!std::filesystem::exists(dir, ec))
         return;
-    for (const auto &entry : std::filesystem::directory_iterator(dir, ec))
+    for (std::filesystem::directory_iterator it(dir, ec), end; !ec && it != end;
+         it.increment(ec))
     {
-        if (ec)
-            break;
-        if (entry.is_regular_file() && entry.path().extension() == ".json")
+        std::error_code fileEc;
+        if (it->is_regular_file(fileEc) && !fileEc &&
+            mviewer::core::pathToUtf8(it->path().extension()) == ".json")
         {
-            std::ifstream in(entry.path());
+            std::ifstream in(it->path(), std::ios::binary);
             if (!in)
                 continue;
             std::ostringstream ss;
@@ -262,7 +272,7 @@ void ExportManager::saveAllPresets()
     for (const auto &p : m_presets)
     {
         const std::string path = presetPath(p.name);
-        std::ofstream out(path, std::ios::trunc);
+        std::ofstream out(mviewer::core::pathFromUtf8(path), std::ios::trunc);
         if (out)
             out << p.toJson();
     }

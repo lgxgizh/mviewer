@@ -156,6 +156,7 @@ class MainWindow : public QMainWindow
     // folders, status bar, etc. Used by the menu "Open Directory" action, the
     // path input bar, and breadcrumb navigation.
     void changeDirectory(const QString &dir);
+    void scheduleSidecarImport(const QString &dir);
     // Shows/hides the gallery empty-state hint (no directory open yet).
     void updateEmptyState();
     // Shows/hides the gallery empty-folder hint (directory open, no images).
@@ -439,6 +440,8 @@ class MainWindow : public QMainWindow
     // (a newer open supersedes an in-flight one), cancelled on destruction.
     TaskScheduler::TaskHandle m_restoreTask;
     uint64_t m_restoreGeneration = 0;
+    TaskScheduler::TaskHandle m_sidecarImportTask;
+    std::shared_ptr<std::atomic<bool>> m_sidecarImportAlive;
     TaskScheduler::TaskHandle m_reportTask;
     QProgressDialog *m_reportProgress = nullptr;
     uint64_t m_reportGeneration = 0;

@@ -142,13 +142,15 @@ void PluginSettings::refreshList()
         else
         {
             ++enabled;
-            label =
-                tr("%1 [%2] — %3").arg(pluginName).arg(capStr).arg(QString::fromStdString(p.path));
+            label = tr("%1 [%2] — %3")
+                        .arg(pluginName)
+                        .arg(capStr)
+                        .arg(QString::fromUtf8(p.path.data(), static_cast<int>(p.path.size())));
         }
 
         auto *item = new QListWidgetItem(disabled ? disabledIcon : loadedIcon, label);
         item->setData(Qt::UserRole, pluginName);
-        item->setToolTip(QString::fromStdString(p.path));
+        item->setToolTip(QString::fromUtf8(p.path.data(), static_cast<int>(p.path.size())));
         m_list->addItem(item);
     }
     if (m_statusLabel)
@@ -165,12 +167,12 @@ void PluginSettings::rescanPlugins()
     for (const QString &dir : paths)
     {
         if (QDir(dir).exists())
-            total += pm.loadDirectory(dir.toStdString());
+            total += pm.loadDirectory(dir.toUtf8().toStdString());
     }
     // Also scan the default app plugins folder if not already listed.
     const QString def = QCoreApplication::applicationDirPath() + "/plugins";
     if (!paths.contains(def) && QDir(def).exists())
-        total += pm.loadDirectory(def.toStdString());
+        total += pm.loadDirectory(def.toUtf8().toStdString());
 
     refreshList();
     if (m_statusLabel)

@@ -2,8 +2,10 @@
 #include "SidecarStore.h"
 #include "RatingStore.h"
 #include "core/filesystem/AtomicFile.h"
+#include "core/filesystem/Utf8Path.h"
 #include "core/image/ImageFormats.h"
 #include <algorithm>
+#include <cctype>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -130,11 +132,9 @@ std::string SidecarStore::sidecarPath(const std::string &imagePath)
 {
     // Replace extension with .xmp; for no extension, append .xmp.
     namespace fs = std::filesystem;
-    fs::path p(imagePath);
-    std::string stem = p.stem().string();
-    // Build sidecar: same dir + stem + ".xmp"
-    fs::path dir = p.parent_path();
-    return (dir / (stem + ".xmp")).string();
+    fs::path p = pathFromUtf8(imagePath);
+    p.replace_extension(pathFromUtf8(".xmp"));
+    return pathToUtf8(p);
 }
 
 std::string SidecarStore::toJson(const std::string &imagePath)
@@ -176,6 +176,8 @@ bool SidecarStore::fromJson(const std::string &json, const std::string &imagePat
 
 bool SidecarStore::writeSidecar(const std::string &imagePath)
 {
+    try
+    {
     auto &rs = RatingStore::instance();
     // Only write sidecar if there's actual data to save.
     if (rs.rating(imagePath) == 0 && rs.colorLabel(imagePath) == 0 && !rs.picked(imagePath) &&
@@ -185,40 +187,74 @@ bool SidecarStore::writeSidecar(const std::string &imagePath)
     }
 
     const std::string spath = sidecarPath(imagePath);
+    if (spath.empty())
+        return false;
     // M46: crash-safe atomic replace — a failed sidecar write leaves the
     // previous .xmp intact and can never leave a half-written JSON file.
     std::string error;
     return atomicWriteFile(spath, toJson(imagePath), &error);
+    }
+    catch (...)
+    {
+        return false;
+    }
 }
 
 bool SidecarStore::readSidecar(const std::string &imagePath)
 {
-    const std::string spath = sidecarPath(imagePath);
-    std::ifstream in(spath);
-    if (!in)
+    try
+    {
+        const std::string spath = sidecarPath(imagePath);
+        std::ifstream in(pathFromUtf8(spath), std::ios::binary);
+        if (!in)
+            return false;
+        std::ostringstream ss;
+        ss << in.rdbuf();
+        return fromJson(ss.str(), imagePath);
+    }
+    catch (...)
+    {
         return false;
-    std::ostringstream ss;
-    ss << in.rdbuf();
-    return fromJson(ss.str(), imagePath);
+    }
 }
 
 bool SidecarStore::removeSidecar(const std::string &imagePath)
 {
-    std::error_code ec;
-    return std::filesystem::remove(sidecarPath(imagePath), ec) || !ec;
+    try
+    {
+        std::error_code ec;
+        return std::filesystem::remove(pathFromUtf8(sidecarPath(imagePath)), ec) || !ec;
+    }
+    catch (...)
+    {
+        return false;
+    }
 }
 
-int SidecarStore::importDirectory(const std::string &dirPath)
+int SidecarStore::importDirectory(const std::string &dirPath,
+                                  const std::function<bool()> &cancelled)
 {
-    int count = 0;
-    std::error_code ec;
-    for (const auto &entry : std::filesystem::directory_iterator(dirPath, ec))
+    try
     {
-        if (ec)
-            break;
-        if (entry.is_regular_file() && entry.path().extension() == ".xmp")
+        int count = 0;
+        std::error_code ec;
+        const auto dir = pathFromUtf8(dirPath);
+        std::filesystem::directory_iterator it(
+            dir, std::filesystem::directory_options::skip_permission_denied, ec);
+        for (std::filesystem::directory_iterator end; !ec && it != end; it.increment(ec))
         {
-            std::ifstream in(entry.path());
+            if (cancelled && cancelled())
+                break;
+            const auto &entry = *it;
+            std::error_code fileEc;
+            if (!entry.is_regular_file(fileEc))
+                continue;
+            std::string ext = pathToUtf8(entry.path().extension());
+            std::transform(ext.begin(), ext.end(), ext.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            if (ext != ".xmp")
+                continue;
+            std::ifstream in(entry.path(), std::ios::binary);
             if (!in)
                 continue;
             std::ostringstream ss;
@@ -231,37 +267,46 @@ int SidecarStore::importDirectory(const std::string &dirPath)
                 ++count;
             }
         }
+        return count;
     }
-    return count;
+    catch (...)
+    {
+        return 0;
+    }
 }
 
 int SidecarStore::exportDirectory(const std::string &dirPath)
 {
-    int count = 0;
-    auto &rs = RatingStore::instance();
-    std::error_code ec;
+    try
+    {
+        int count = 0;
+        auto &rs = RatingStore::instance();
+        std::error_code ec;
 
     // Walk directory for all image files with known extensions (M25: the
     // shipped-format SSOT decides what counts as an image).
     auto isImageFile = [](const std::filesystem::path &p)
     {
-        const std::string ext = p.extension().string();
+        const std::string ext = pathToUtf8(p.extension());
         std::string lowerExt = ext;
         std::transform(lowerExt.begin(), lowerExt.end(), lowerExt.begin(),
                        [](char c) { return static_cast<char>(std::tolower(c)); });
         return mviewer::core::ImageFormats::isSupportedSuffix(lowerExt);
     };
 
-    for (const auto &entry : std::filesystem::directory_iterator(dirPath, ec))
+    const auto dir = pathFromUtf8(dirPath);
+    std::filesystem::directory_iterator it(
+        dir, std::filesystem::directory_options::skip_permission_denied, ec);
+    for (std::filesystem::directory_iterator end; !ec && it != end; it.increment(ec))
     {
-        if (ec)
-            break;
-        if (!entry.is_regular_file())
+        const auto &entry = *it;
+        std::error_code fileEc;
+        if (!entry.is_regular_file(fileEc))
             continue;
         if (!isImageFile(entry.path()))
             continue;
 
-        const std::string imgPath = entry.path().string();
+        const std::string imgPath = pathToUtf8(entry.path());
         if (rs.rating(imgPath) > 0 || rs.colorLabel(imgPath) > 0 || rs.picked(imgPath) ||
             rs.rejected(imgPath))
         {
@@ -269,7 +314,12 @@ int SidecarStore::exportDirectory(const std::string &dirPath)
                 ++count;
         }
     }
-    return count;
+        return count;
+    }
+    catch (...)
+    {
+        return 0;
+    }
 }
 
 } // namespace mviewer::core

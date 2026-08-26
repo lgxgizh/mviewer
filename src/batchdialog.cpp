@@ -325,7 +325,8 @@ void BatchDialog::onStart()
                         self->m_statusLabel->setText(QString("处理中 (%1/%2): %3")
                                                          .arg(current + 1)
                                                          .arg(total)
-                                                         .arg(QString::fromStdString(path)));
+                                                         .arg(QString::fromUtf8(
+                                                             path.data(), static_cast<int>(path.size()))));
                     }
                 });
         });
@@ -359,12 +360,18 @@ void BatchDialog::onStart()
                 // Log results.
                 for (const auto &r : result.fileResults)
                 {
+                    const auto inputPath = QString::fromUtf8(
+                        r.inputPath.data(), static_cast<int>(r.inputPath.size()));
+                    const auto outputPath = QString::fromUtf8(
+                        r.outputPath.data(), static_cast<int>(r.outputPath.size()));
+                    const auto errorMessage = QString::fromUtf8(
+                        r.errorMessage.data(), static_cast<int>(r.errorMessage.size()));
                     QString line = r.success ? QString("[OK] %1 → %2")
-                                                   .arg(QString::fromStdString(r.inputPath))
-                                                   .arg(QString::fromStdString(r.outputPath))
+                                                   .arg(inputPath)
+                                                   .arg(outputPath)
                                              : QString("[FAIL] %1: %2")
-                                                   .arg(QString::fromStdString(r.inputPath))
-                                                   .arg(QString::fromStdString(r.errorMessage));
+                                                   .arg(inputPath)
+                                                   .arg(errorMessage);
                     m_log->append(line);
                 }
 

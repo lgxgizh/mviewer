@@ -183,11 +183,12 @@ void MetadataOverlay::buildContent(
 
     const auto &meta = snapshot.metadata;
 
-    m_shortName = QString::fromStdString(meta.fileName);
+    m_shortName = QString::fromUtf8(meta.fileName.data(), static_cast<int>(meta.fileName.size()));
 
     // Basic file info
     m_lines << QString("文件: %1").arg(m_shortName);
-    m_lines << QString("路径: %1").arg(QString::fromStdString(meta.filePath));
+    m_lines << QString("路径: %1")
+                   .arg(QString::fromUtf8(meta.filePath.data(), static_cast<int>(meta.filePath.size())));
     m_lines << QString("尺寸: %1").arg(formatFileSize(meta.fileSize));
     m_lines << QString("格式: %1").arg(QString::fromStdString(meta.format));
 

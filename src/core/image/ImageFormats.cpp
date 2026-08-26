@@ -1,4 +1,5 @@
 #include "core/image/ImageFormats.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include "core/image/Decoder.h"
 
@@ -84,8 +85,8 @@ bool ImageFormats::isSupportedSuffix(const std::string &suffix)
 
 bool ImageFormats::isSupportedPath(const std::string &path)
 {
-    const std::filesystem::path p(path);
-    return isSupportedSuffix(p.extension().string());
+    const std::filesystem::path p = pathFromUtf8(path);
+    return isSupportedSuffix(pathToUtf8(p.extension()));
 }
 
 std::vector<std::string> ImageFormats::wildcardFilters()

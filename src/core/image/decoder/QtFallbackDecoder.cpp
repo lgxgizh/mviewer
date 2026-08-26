@@ -1,4 +1,5 @@
 #include "core/image/decoder/QtFallbackDecoder.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include "core/image/ImageBuffer.h"
 
@@ -101,7 +102,7 @@ ImageData QtFallbackDecoder::decodeFull(const std::string &path) const
 ImageData QtFallbackDecoder::decodeFull(const std::string &path,
                                         mviewer::domain::ImageMetadata &outMeta) const
 {
-    QImageReader reader(QString::fromStdString(path));
+    QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true);
     const QImage img = reader.read();
     if (img.isNull())
@@ -121,14 +122,15 @@ ImageData QtFallbackDecoder::decodeScaled(const std::string &path, int maxEdge) 
 ImageData QtFallbackDecoder::decodeScaled(const std::string &path, int maxEdge,
                                           mviewer::domain::ImageMetadata &outMeta) const
 {
-    QImageReader reader(QString::fromStdString(path));
+    QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true);
     const QSize full = reader.size();
     if (!full.isValid() || full.isEmpty())
         return ImageData();
     if (outMeta.filePath.empty())
         outMeta.filePath = path;
-    outMeta.fileSize = QFileInfo(QString::fromStdString(path)).size();
+    outMeta.fileSize = QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size())))
+                           .size();
     QImage img;
     if (full.width() <= maxEdge && full.height() <= maxEdge)
         img = reader.read();

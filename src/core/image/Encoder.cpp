@@ -17,8 +17,9 @@ bool Encoder::encode(const ImageData &img, const std::string &path, const Params
     if (image.isNull())
         return false;
 
-    QImageWriter writer(QString::fromStdString(path));
-    QString ext = QFileInfo(QString::fromStdString(path)).suffix().toLower();
+    const QString qPath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
+    QImageWriter writer(qPath);
+    QString ext = QFileInfo(qPath).suffix().toLower();
     QString fmt = QString::fromStdString(formatForExtension(ext.toStdString()));
     writer.setFormat(fmt.toUtf8());
 

@@ -23,7 +23,7 @@ MetadataPresentationService &MetadataPresentationService::instance()
 
 std::string MetadataPresentationService::fileIdentity(const std::string &path)
 {
-    const QFileInfo fi(QString::fromStdString(path));
+    const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     if (!fi.exists())
         return {};
     return std::to_string(fi.lastModified().toMSecsSinceEpoch()) + "|" +

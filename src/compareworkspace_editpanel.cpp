@@ -426,6 +426,7 @@ void CompareWorkspace::onSavePreset()
     sessionObj["threshold"] = static_cast<int>(sess.threshold);
     sessionObj["sidePanelVisible"] = sess.sidePanelVisible;
     sessionObj["layoutIndex"] = sess.layoutIndex;
+    sessionObj["customColumns"] = sess.customColumns;
     // selection
     QJsonObject selObj;
     selObj["x"] = sess.selection.x;
@@ -540,6 +541,7 @@ void CompareWorkspace::onLoadPreset()
         sess.threshold = static_cast<uint8_t>(s["threshold"].toInt(0));
         sess.sidePanelVisible = s["sidePanelVisible"].toBool(false);
         sess.layoutIndex = s["layoutIndex"].toInt(0);
+        sess.customColumns = s["customColumns"].toInt(2);
         if (s.contains("selection") && s["selection"].isObject())
         {
             const QJsonObject sel = s["selection"].toObject();

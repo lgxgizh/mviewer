@@ -4,6 +4,7 @@
 #pragma once
 
 #include <string>
+#include <functional>
 
 namespace mviewer::core
 {
@@ -24,7 +25,8 @@ class SidecarStore
 
     // Bulk import: scan directory for .xmp files and merge into RatingStore.
     // Returns count of merged entries.
-    int importDirectory(const std::string &dirPath);
+    int importDirectory(const std::string &dirPath,
+                        const std::function<bool()> &cancelled = {});
     // Bulk export: write sidecars for all known ratings in a directory.
     // Returns count of written sidecars.
     int exportDirectory(const std::string &dirPath);

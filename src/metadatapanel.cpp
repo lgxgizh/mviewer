@@ -67,7 +67,7 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
                 if (m_currentPath.isEmpty())
                     return;
                 auto &rs = mviewer::core::RatingStore::instance();
-                rs.setRating(m_currentPath.toStdString(), stars);
+                rs.setRating(m_currentPath.toUtf8().toStdString(), stars);
                 emit ratingEdited(m_currentPath, stars);
             });
     layout->addWidget(ratingBox);
@@ -100,9 +100,9 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
         if (m_currentPath.isEmpty())
             return;
         auto &rs = mviewer::core::RatingStore::instance();
-        emit flagsEdited(m_currentPath, rs.colorLabel(m_currentPath.toStdString()),
-                         rs.rejected(m_currentPath.toStdString()),
-                         rs.picked(m_currentPath.toStdString()));
+        emit flagsEdited(m_currentPath, rs.colorLabel(m_currentPath.toUtf8().toStdString()),
+                         rs.rejected(m_currentPath.toUtf8().toStdString()),
+                         rs.picked(m_currentPath.toUtf8().toStdString()));
     };
 
     connect(m_colorLabel, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
@@ -112,7 +112,7 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
                     return;
                 auto &rs = mviewer::core::RatingStore::instance();
                 const int label = m_colorLabel->currentData().toInt();
-                rs.setColorLabel(m_currentPath.toStdString(), label);
+                rs.setColorLabel(m_currentPath.toUtf8().toStdString(), label);
                 emitFlags();
             });
     connect(m_rejectBtn, &QPushButton::toggled, this,
@@ -120,7 +120,7 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
             {
                 if (m_currentPath.isEmpty())
                     return;
-                mviewer::core::RatingStore::instance().setRejected(m_currentPath.toStdString(), on);
+        mviewer::core::RatingStore::instance().setRejected(m_currentPath.toUtf8().toStdString(), on);
                 emitFlags();
             });
     connect(m_pickBtn, &QPushButton::toggled, this,
@@ -128,7 +128,7 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
             {
                 if (m_currentPath.isEmpty())
                     return;
-                mviewer::core::RatingStore::instance().setPicked(m_currentPath.toStdString(), on);
+        mviewer::core::RatingStore::instance().setPicked(m_currentPath.toUtf8().toStdString(), on);
                 emitFlags();
             });
     layout->addWidget(flagBox);
@@ -155,10 +155,10 @@ void MetadataPanel::setImage(const QString &path)
     ++m_requestGeneration;
 
     auto &rs = mviewer::core::RatingStore::instance();
-    m_rating->setRating(rs.rating(path.toStdString()));
-    m_colorLabel->setCurrentIndex(m_colorLabel->findData(rs.colorLabel(path.toStdString())));
-    m_rejectBtn->setChecked(!path.isEmpty() && rs.rejected(path.toStdString()));
-    m_pickBtn->setChecked(!path.isEmpty() && rs.picked(path.toStdString()));
+    m_rating->setRating(rs.rating(path.toUtf8().toStdString()));
+    m_colorLabel->setCurrentIndex(m_colorLabel->findData(rs.colorLabel(path.toUtf8().toStdString())));
+    m_rejectBtn->setChecked(!path.isEmpty() && rs.rejected(path.toUtf8().toStdString()));
+    m_pickBtn->setChecked(!path.isEmpty() && rs.picked(path.toUtf8().toStdString()));
 
     if (path.isEmpty())
     {
@@ -184,7 +184,7 @@ void MetadataPanel::requestMetadata()
     const uint64_t generation = m_requestGeneration;
     QPointer<MetadataPanel> guard(this);
     mviewer::core::MetadataPresentationService::instance().request(
-        path.toStdString(), m_consumerId,
+        path.toUtf8().toStdString(), m_consumerId,
         [guard, path, generation](const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
         {
             if (!guard || !guard->isVisible() || guard->m_currentPath != path ||
@@ -211,7 +211,7 @@ void MetadataPanel::requestMetadata()
 */
 /*
     const mviewer::domain::ImageMetadata meta =
-        mviewer::core::MetadataReader::read(path.toStdString());
+        mviewer::core::MetadataReader::read(path.toUtf8().toStdString());
     if (meta.filePath.empty())
     {
         // P0#4: the model owns all rendering, including the error row.
@@ -223,7 +223,7 @@ void MetadataPanel::requestMetadata()
     m_model->setImage(meta);
 
     // M14-2: if the file is a RAW format, also show sensor metadata.
-    const mviewer::core::RawMetadata rm = mviewer::core::parseRawMetadata(path.toStdString());
+    const mviewer::core::RawMetadata rm = mviewer::core::parseRawMetadata(path.toUtf8().toStdString());
     m_model->setRaw(rm);
 
     m_tree->expandAll();

@@ -179,7 +179,8 @@ void SearchPanel::performSearch()
         const auto &r = m_lastResults[static_cast<size_t>(i)];
 
         // Extract filename from path.
-        const QString fullPath = QString::fromStdString(r.filePath);
+        const QString fullPath =
+            QString::fromUtf8(r.filePath.data(), static_cast<int>(r.filePath.size()));
         const int sepIdx = std::max(fullPath.lastIndexOf('/'), fullPath.lastIndexOf('\\'));
         const QString fname = (sepIdx >= 0) ? fullPath.mid(sepIdx + 1) : fullPath;
 
@@ -189,7 +190,8 @@ void SearchPanel::performSearch()
         if (!r.matches.empty())
         {
             typeStr = matchTypeLabel(r.matches.front().type);
-            snippet = QString::fromStdString(r.matches.front().snippet);
+            const auto &snippetUtf8 = r.matches.front().snippet;
+            snippet = QString::fromUtf8(snippetUtf8.data(), static_cast<int>(snippetUtf8.size()));
         }
 
         auto *typeItem = new QTableWidgetItem(typeStr);

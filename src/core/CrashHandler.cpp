@@ -35,7 +35,7 @@ std::string crashReportPath()
         return {};
     const QString base = dir + "/" + QString::fromStdString(g_appName) + "-" +
                          QDateTime::currentDateTime().toString("yyyyMMdd-hhmmss");
-    return (base + ".dmp").toStdString();
+    return (base + ".dmp").toUtf8().toStdString();
 }
 
 #ifdef Q_OS_WIN

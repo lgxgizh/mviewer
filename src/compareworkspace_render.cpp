@@ -4,6 +4,7 @@
 #include "core/image/SourceImage.h"
 
 #include <cmath>
+#include <QResizeEvent>
 
 namespace
 {
@@ -11,6 +12,35 @@ constexpr double kDisplayLodOverscan = 1.25;
 constexpr double kDisplayLodBucketSteps = 16.0;
 // M47: bound for a source-backed pane LOD raster (longest edge).
 constexpr int kMaxCompareLodEdge = 4096;
+
+class ElidedCaption final : public QLabel
+{
+  public:
+    explicit ElidedCaption(QWidget *parent) : QLabel(parent) {}
+
+    void setFullText(const QString &text)
+    {
+        m_fullText = text;
+        setToolTip(text);
+        updateText();
+    }
+
+  protected:
+    void resizeEvent(QResizeEvent *event) override
+    {
+        QLabel::resizeEvent(event);
+        updateText();
+    }
+
+  private:
+    void updateText()
+    {
+        const int available = std::max(0, contentsRect().width() - 8);
+        QLabel::setText(fontMetrics().elidedText(m_fullText, Qt::ElideMiddle, available));
+    }
+
+    QString m_fullText;
+};
 }
 
 // M47: the display-target edge for a SOURCE-BACKED pane (no full frame):
@@ -96,6 +126,9 @@ QStackedLayout *CompareWorkspace::buildCanvasPage()
 // canvas; any other state (or a non-two-image load) restores the grid page.
 void CompareWorkspace::updateCanvasModeVisibility()
 {
+    // Canvas-mode transitions are semantic presentation changes. A transient
+    // A<-B hold must never survive a mode switch into a different renderer.
+    endTemporaryCompare();
     if (!m_pageStack || !m_compareCanvas || !m_compareGridPage || !m_compareLoadingPage)
         return;
     if (m_loadInFlight)
@@ -115,6 +148,7 @@ void CompareWorkspace::updateCanvasModeVisibility()
         schedulePostLayoutFit();
     if (canvasMode)
         m_compareCanvas->update();
+    updateTemporaryCompareAvailability();
     update();
 }
 
@@ -620,6 +654,7 @@ void CompareWorkspace::paintCompareCanvas()
 
 void CompareWorkspace::rebuildCells()
 {
+    endTemporaryCompare();
     // The terminal refreshAllDiffOverlays() at the end of this function covers
     // the whole rebuild (including the ROI re-applied below), so suppress the
     // refresh that applySelectionToAll() would otherwise schedule.
@@ -723,6 +758,8 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         // Each cell: a RawImageView for the image + a QLabel caption below
         auto *cellWidget = new QWidget(m_grid);
         cellWidget->setObjectName(QString("comparePane%1").arg(i));
+        cellWidget->setMinimumSize(0, 0);
+        cellWidget->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
         auto *cellLay = new QVBoxLayout(cellWidget);
         cellLay->setContentsMargins(0, 0, 0, 0);
         cellLay->setSpacing(1);
@@ -804,14 +841,16 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
             view->setLinkMarkers(m_linkPoints);
 
         // Caption label
-        auto *caption = new QLabel(cellWidget);
+        auto *caption = new ElidedCaption(cellWidget);
         caption->setObjectName(QString("paneCaption%1").arg(i));
         caption->setAlignment(Qt::AlignCenter);
         caption->setStyleSheet("QLabel{background:#222;color:#ccc;padding:2px;}");
-        caption->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
+        caption->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+        caption->setMinimumWidth(0);
         caption->setMinimumHeight(20);
         if (img)
-            caption->setText(QString::fromStdString(img->metadata().fileName));
+            caption->setFullText(QString::fromUtf8(img->metadata().fileName.data(),
+                                                   static_cast<int>(img->metadata().fileName.size())));
         cellLay->addWidget(caption);
         m_cellLabels.push_back(caption);
 
@@ -1110,6 +1149,7 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
     if (m_sidePanel && m_sidePanel->isVisible() && m_lastInspectX >= 0 && m_lastInspectY >= 0)
         requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
 
+    updateTemporaryCompareAvailability();
     update();
 }
 

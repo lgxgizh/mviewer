@@ -135,7 +135,7 @@ fs::path uniqueTempPath(const fs::path &destination)
     const auto item = sequence.fetch_add(1, std::memory_order_relaxed);
     const std::string prefix = ".mviewer-tmp-" + std::to_string(processId) + "-" +
                                std::to_string(ticks) + "-" + std::to_string(item) + "-";
-    fs::path name = pathFromUtf8(prefix);
+    fs::path name = mviewer::core::pathFromUtf8(prefix);
     name += destination.stem().native();
     name += destination.extension().native();
     return destination.parent_path() / name;
@@ -239,7 +239,7 @@ static ExportJobResult runContactOrPdf(const ExportJobConfig &cfg,
         }
 
         const fs::path destination = outputDirectory /
-                                     pathFromUtf8(cfg.mode == Mode::ContactSheet
+                                     mviewer::core::pathFromUtf8(cfg.mode == Mode::ContactSheet
                                                        ? "contact_sheet.png"
                                                        : "export.pdf");
         const fs::path temporary = uniqueTempPath(destination);
@@ -250,11 +250,13 @@ static ExportJobResult runContactOrPdf(const ExportJobConfig &cfg,
                 mviewer::core::makeContactSheet(images, std::clamp(cfg.contactCols, 1, 20),
                                                  std::clamp(cfg.contactThumb, 16, 2000));
             written = !sheet.isNull() &&
-                      Encoder::encode(sheet, pathToUtf8(temporary), Encoder::Params{cfg.quality});
+                      Encoder::encode(sheet, mviewer::core::pathToUtf8(temporary),
+                                      Encoder::Params{cfg.quality});
         }
         else
         {
-            written = mviewer::core::writePdf(pathToUtf8(temporary), images, cfg.quality);
+            written = mviewer::core::writePdf(mviewer::core::pathToUtf8(temporary), images,
+                                              cfg.quality);
         }
         if (!written)
         {
@@ -272,7 +274,7 @@ static ExportJobResult runContactOrPdf(const ExportJobConfig &cfg,
             return r;
         }
         r.done = 1;
-        r.primaryOutput = pathToUtf8(destination);
+        r.primaryOutput = mviewer::core::pathToUtf8(destination);
         if (progress)
             progress(r.total, r.total, {});
         r.message = std::string("done 1 output") + (r.failed ? " (some sources failed)" : "");
@@ -303,7 +305,8 @@ static ExportJobResult runReportExport(const ExportJobConfig &cfg,
                 progress(i, r.total, sources[static_cast<size_t>(i)]);
             try
             {
-                const auto row = analyzeSource(pathFromUtf8(sources[static_cast<size_t>(i)]));
+                const auto row = analyzeSource(
+                    mviewer::core::pathFromUtf8(sources[static_cast<size_t>(i)]));
                 if (row)
                     rows.push_back(*row);
                 else
@@ -369,14 +372,15 @@ static ExportJobResult runReportExport(const ExportJobConfig &cfg,
             out << "</table></body></html>\n";
             body = out.str();
         }
-        const fs::path destination = outputDirectory / pathFromUtf8("export_report" + extension);
+        const fs::path destination =
+            outputDirectory / mviewer::core::pathFromUtf8("export_report" + extension);
         if (!writeTextAtomically(destination, body))
         {
             r.message = "report write failed";
             return r;
         }
         r.done = 1;
-        r.primaryOutput = pathToUtf8(destination);
+        r.primaryOutput = mviewer::core::pathToUtf8(destination);
         if (progress)
             progress(r.total, r.total, {});
         r.message = std::string("done 1 report") + (r.failed ? " (some sources failed)" : "");
@@ -410,14 +414,17 @@ static std::optional<ConvertPlan> makeConvertPlan(const ExportJobConfig &cfg,
         }
         for (int i = 0; i < r.total; ++i)
         {
-            plan.sourcePaths.push_back(pathFromUtf8(sources[static_cast<size_t>(i)]));
+            plan.sourcePaths.push_back(
+                mviewer::core::pathFromUtf8(sources[static_cast<size_t>(i)]));
             if (!cfg.destinationPath.empty())
-                plan.destinations.push_back(pathFromUtf8(cfg.destinationPath));
+                plan.destinations.push_back(mviewer::core::pathFromUtf8(cfg.destinationPath));
             else
             {
                 const std::string baseName =
                     outputBaseName(cfg, plan.sourcePaths.back(), i, r.total);
-                plan.destinations.push_back(outputDirectory / pathFromUtf8(baseName + extensionFor(cfg.format)));
+                plan.destinations.push_back(
+                    outputDirectory /
+                    mviewer::core::pathFromUtf8(baseName + extensionFor(cfg.format)));
             }
         }
     }
@@ -531,7 +538,7 @@ static ExportJobResult runConvert(const ExportJobConfig &cfg,
 
         const fs::path &dst = plan->destinations[static_cast<size_t>(i)];
         const fs::path tmp = uniqueTempPath(dst);
-        if (Encoder::encode(data, pathToUtf8(tmp), params))
+        if (Encoder::encode(data, mviewer::core::pathToUtf8(tmp), params))
         {
             std::error_code tec;
             if (!commitTempFile(tmp, dst, tec))
@@ -544,7 +551,7 @@ static ExportJobResult runConvert(const ExportJobConfig &cfg,
             {
                 ++r.done;
                 if (r.primaryOutput.empty())
-                    r.primaryOutput = pathToUtf8(dst);
+                    r.primaryOutput = mviewer::core::pathToUtf8(dst);
             }
         }
         else
@@ -571,7 +578,7 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
     {
         try
         {
-            const fs::path sourceDirectory = pathFromUtf8(cfg.sourceDirectory);
+            const fs::path sourceDirectory = mviewer::core::pathFromUtf8(cfg.sourceDirectory);
             std::error_code listingError;
             for (fs::directory_iterator it(sourceDirectory, listingError), end;
                  !listingError && it != end; it.increment(listingError))
@@ -579,13 +586,13 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
                 std::error_code typeError;
                 if (!it->is_regular_file(typeError) || typeError)
                     continue;
-                std::string extension = pathToUtf8(it->path().extension());
+                std::string extension = mviewer::core::pathToUtf8(it->path().extension());
                 std::transform(extension.begin(), extension.end(), extension.begin(),
                                [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                 static const std::unordered_set<std::string> imageExtensions = {
                     ".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tif", ".tiff"};
                 if (imageExtensions.count(extension) != 0)
-                    sources.push_back(pathToUtf8(it->path()));
+                    sources.push_back(mviewer::core::pathToUtf8(it->path()));
             }
             std::sort(sources.begin(), sources.end());
         }
@@ -614,7 +621,7 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
     try
     {
         if (!cfg.outDir.empty())
-            outputDirectory = pathFromUtf8(cfg.outDir);
+            outputDirectory = mviewer::core::pathFromUtf8(cfg.outDir);
     }
     catch (const std::exception &error)
     {

@@ -112,6 +112,94 @@ void testModePreservesState(const QString &a, const QString &b)
     }
 }
 
+// M49: the column-driven grid and momentary A<-B presentation are UI-only
+// contracts. The engine/session/SelectionModel must not change while held.
+void testLayoutAndMomentaryCompare(const QDir &dir)
+{
+    std::cout << "── M49: exact grid + momentary Compare ──\n";
+    const QString longA = writePng(
+        dir,
+        QStringLiteral("a very long 中文 filename for caption elision 0123456789.png"), 80, 60,
+        QColor(240, 40, 40));
+    const QString b = writePng(dir, QStringLiteral("B 蓝色.png"), 80, 60, QColor(40, 80, 240));
+
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    ws->setImages({longA, b});
+    dlg.resize(1200, 760);
+    dlg.show();
+    waitForCompareCount(ws, 2);
+    pump(150);
+
+    auto *grid = ws->findChild<QWidget *>(QStringLiteral("compareGridPage"));
+    auto *pane0 = ws->findChild<QWidget *>(QStringLiteral("comparePane0"));
+    auto *pane1 = ws->findChild<QWidget *>(QStringLiteral("comparePane1"));
+    auto *caption = ws->findChild<QLabel *>(QStringLiteral("paneCaption0"));
+    CHECK(grid && pane0 && pane1, "M49: two compare panes are present");
+    if (grid && pane0 && pane1)
+    {
+        const QRect r0(pane0->mapTo(grid, QPoint(0, 0)), pane0->size());
+        const QRect r1(pane1->mapTo(grid, QPoint(0, 0)), pane1->size());
+        const int gap = r1.left() - r0.right() - 1;
+        CHECK(std::abs(r0.width() - r1.width()) <= 1 && r0.left() == 0 && gap >= 0 &&
+                  r1.right() == grid->width() - 1,
+              "M49: default two-pane grid is an exact 50/50 split");
+    }
+    CHECK(caption && caption->toolTip().contains(QStringLiteral("中文 filename")),
+          "M49: long caption keeps the full filename in its tooltip");
+    CHECK(caption && caption->text().size() < QFileInfo(longA).fileName().size(),
+          "M49: long caption is elided inside the pane");
+
+    auto *button = ws->findChild<QPushButton *>(QStringLiteral("temporaryCompareButton"));
+    auto *view0 = pane0 ? pane0->findChild<RawImageView *>() : nullptr;
+    auto *view1 = pane1 ? pane1->findChild<RawImageView *>() : nullptr;
+    CHECK(button && button->isVisible() && button->isEnabled(),
+          "M49: momentary Compare control is visible and enabled for two loaded panes");
+    CHECK(view0 && view1 && !view0->image().isNull() && !view1->image().isNull(),
+          "M49: both pane display rasters are materialized");
+    if (!button || !view0 || !view1 || view0->image().isNull() || view1->image().isNull())
+        return;
+
+    const auto before = ws->engine().session();
+    const QStringList selectionBefore = sel.selection();
+    const qint64 aKey = view0->image().cacheKey();
+    const qint64 bKey = view1->image().cacheKey();
+    QMouseEvent press(QEvent::MouseButtonPress, QPointF(button->rect().center()), Qt::LeftButton,
+                      Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(button, &press);
+    pump(20);
+    CHECK(view0->hasTransientDisplay() && view0->displayImage().cacheKey() == bKey &&
+              view0->image().cacheKey() == aKey,
+          "M49: pressing momentary Compare presents B without replacing A state");
+    QMouseEvent release(QEvent::MouseButtonRelease, QPointF(button->rect().center()),
+                        Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+    QApplication::sendEvent(button, &release);
+    pump(20);
+    CHECK(!view0->hasTransientDisplay() && view0->displayImage().cacheKey() == aKey,
+          "M49: releasing momentary Compare restores A");
+
+    ws->setFocus();
+    QKeyEvent spacePress(QEvent::KeyPress, Qt::Key_Space, Qt::NoModifier);
+    QApplication::sendEvent(ws, &spacePress);
+    pump(20);
+    CHECK(view0->hasTransientDisplay() && view0->displayImage().cacheKey() == bKey,
+          "M49: Space uses the same momentary presentation path");
+    QKeyEvent spaceRelease(QEvent::KeyRelease, Qt::Key_Space, Qt::NoModifier);
+    QApplication::sendEvent(ws, &spaceRelease);
+    pump(20);
+
+    const auto after = ws->engine().session();
+    CHECK(!view0->hasTransientDisplay() && sel.selection() == selectionBefore &&
+              before.imageIds == after.imageIds && before.cells.size() == after.cells.size() &&
+              before.selection.x == after.selection.x && before.selection.y == after.selection.y &&
+              before.selection.w == after.selection.w && before.selection.h == after.selection.h,
+          "M49: momentary Compare leaves engine and SelectionModel state unchanged");
+}
+
 // ─── B#6: continuous pair navigation preserves mode ─────────────────────────
 void testContinuousNav(const QStringList &paths6)
 {
@@ -197,21 +285,78 @@ void testNonFirstWindowNav(const QStringList &paths6)
     waitForCompareLoadFinished(ws, 2);
     const QStringList end{paths6[4], paths6[5]};
     CHECK(ws->comparedImages() == end, "B#6: next from C/D loads E/F without reopening Compare");
-    CHECK(overlay->isChecked() && sel.currentImage() == paths6[4],
-          "B#6: next preserves overlay and moves SelectionModel to E");
+    CHECK(overlay->isChecked(), "B#6: next preserves overlay");
+    CHECK(sel.selection() == end, "B#6: next publishes the complete E/F SelectionModel window");
+    CHECK(sel.currentImage() == end.first(), "B#6: next focuses E within the E/F window");
 
     ws->prevPair();
     waitForCompareLoadFinished(ws, 2);
     CHECK(ws->comparedImages() == current, "B#6: previous from E/F returns to C/D");
-    CHECK(overlay->isChecked() && sel.currentImage() == paths6[2],
-          "B#6: returning to C/D preserves overlay and focus");
+    CHECK(overlay->isChecked(), "B#6: returning to C/D preserves overlay");
+    CHECK(sel.selection() == current,
+          "B#6: returning to C/D publishes the complete C/D SelectionModel window");
+    CHECK(sel.currentImage() == current.first(), "B#6: returning to C/D focuses C");
 
     ws->prevPair();
     waitForCompareLoadFinished(ws, 2);
     const QStringList start{paths6[0], paths6[1]};
     CHECK(ws->comparedImages() == start, "B#6: previous from C/D reaches the first A/B pair");
-    CHECK(overlay->isChecked() && sel.currentImage() == paths6[0],
-          "B#6: first pair keeps the compare mode and SelectionModel focus");
+    CHECK(overlay->isChecked(), "B#6: first pair keeps the compare mode");
+    CHECK(sel.selection() == start,
+          "B#6: first pair publishes the complete A/B SelectionModel window");
+    CHECK(sel.currentImage() == start.first(), "B#6: first pair focuses A");
+}
+
+// B#6 regression: a selected non-adjacent pair must map Compare focus to the
+// engine's pane path, not to the adjacent entry in the navigation pool.
+void testNonAdjacentFocus(const QStringList &pool, const QString &pathA, const QString &pathC)
+{
+    std::cout << "── Compare B#6: non-adjacent focus mapping ──\n";
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    ws->setImagePool(pool, {pathA, pathC});
+    ws->setImages({pathA, pathC});
+    dlg.resize(1100, 750);
+    dlg.show();
+    waitForCompareLoadFinished(ws, 2);
+
+    const QStringList pair{pathA, pathC};
+    CHECK(ws->comparedImages() == pair, "B#6: non-adjacent A/C pair loads into Compare");
+    sel.setSelection(pair, pathA);
+
+    RawImageView *view1 = nullptr;
+    for (RawImageView *view : ws->findChildren<RawImageView *>())
+    {
+        if (view && view->cellIndex() == 1)
+        {
+            view1 = view;
+            break;
+        }
+    }
+    CHECK(view1 != nullptr, "B#6: non-adjacent pair exposes pane 1");
+    if (view1)
+    {
+        const QPoint center = view1->rect().center();
+        QMouseEvent hover(QEvent::MouseMove, QPointF(center), Qt::NoButton, Qt::NoButton,
+                          Qt::NoModifier);
+        QApplication::sendEvent(view1, &hover);
+        QMouseEvent doubleClick(QEvent::MouseButtonDblClick, QPointF(center), Qt::LeftButton,
+                                Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(view1, &doubleClick);
+        pump(60);
+    }
+    CHECK(ws->focusImagePath() == pathC,
+          "B#6: focusing pane 1 resolves the actual non-adjacent C path");
+    CHECK(sel.currentImage() == pathC,
+          "B#6: non-adjacent focus updates SelectionModel.currentImage to C");
+    CHECK(sel.focused() == pathC,
+          "B#6: non-adjacent focus publishes C as the SelectionModel reference");
+    CHECK(sel.selection() == pair,
+          "B#6: non-adjacent focus preserves the Browse A/C multi-selection");
 }
 
 // P1: pane histogram consistency across ROI, rebuilds, and Blink.

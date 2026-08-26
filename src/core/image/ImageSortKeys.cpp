@@ -1,4 +1,5 @@
 #include "core/image/ImageSortKeys.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include "core/RatingStore.h"
 #include "core/image/RawMetadata.h"
@@ -43,7 +44,7 @@ std::vector<ImageSortKey> computeSortKeys(const std::vector<std::string> &paths,
         dimensionReader ? dimensionReader
                         : [](const std::string &p) -> int64_t
     {
-        QImageReader reader(QString::fromStdString(p));
+        QImageReader reader(QString::fromUtf8(p.data(), static_cast<int>(p.size())));
         reader.setAutoTransform(true);
         const QSize s = reader.size();
         return static_cast<int64_t>(s.width()) * s.height();
@@ -64,14 +65,14 @@ std::vector<ImageSortKey> computeSortKeys(const std::vector<std::string> &paths,
         k.path = p;
         if (needFileInfo)
         {
-            const QFileInfo fi(QString::fromStdString(p));
+            const QFileInfo fi(QString::fromUtf8(p.data(), static_cast<int>(p.size())));
             k.size = fi.size();
             k.mtimeSec = fi.lastModified().toSecsSinceEpoch();
         }
         if (field == SortField::Type || field == SortField::Name)
         {
-            const QFileInfo fi(QString::fromStdString(p));
-            k.suffix = lower(fi.suffix().toStdString());
+            const QFileInfo fi(QString::fromUtf8(p.data(), static_cast<int>(p.size())));
+            k.suffix = lower(fi.suffix().toUtf8().toStdString());
         }
         if (needResolution)
             k.resolution = dims(p);

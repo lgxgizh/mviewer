@@ -120,12 +120,12 @@ void installFileLogger(const std::string &appName)
 
 std::string currentLogPath()
 {
-    return g_logPath.toStdString();
+    return g_logPath.toUtf8().toStdString();
 }
 
 std::string logDirectory()
 {
-    return g_logDir.toStdString();
+    return g_logDir.toUtf8().toStdString();
 }
 
 } // namespace mviewer::core

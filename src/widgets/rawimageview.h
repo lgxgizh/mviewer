@@ -26,6 +26,12 @@ class RawImageView : public QWidget
     {
         return m_image;
     }
+    // The raster currently presented by the view. During momentary Compare
+    // this is B's display raster while image() remains A's stable source.
+    const QImage &displayImage() const
+    {
+        return m_transientImage.isNull() ? m_image : m_transientImage;
+    }
     // H3: expose the diff/heatmap overlay so the workspace can re-draw it when
     // rendering split/swipe/overlay modes (which hide the cell widgets).
     const QImage &overlay() const
@@ -57,6 +63,16 @@ class RawImageView : public QWidget
     QPointF sourcePointToWidget(const QPointF &sourcePoint) const;
     QPoint displayPointForSource(int x, int y) const;
     void clear();
+
+    // Momentary Compare changes presentation only. It deliberately leaves the
+    // owned image, transform, ROI, overlays, and all CompareEngine state intact.
+    void setTransientDisplay(const QImage &img, const QSize &sourceSize,
+                             const QRect &sourceRect);
+    void clearTransientDisplay();
+    bool hasTransientDisplay() const
+    {
+        return !m_transientImage.isNull();
+    }
 
     // Difference/heatmap overlay (compare mode). The workspace computes the overlay
     // from core-layer data and hands it in as a QImage — RawImageView only renders it,
@@ -212,10 +228,15 @@ class RawImageView : public QWidget
     // pathological geometry).
     void drawBaseLayer(QPainter &p);
     void releaseBaseSurface();
+    QSize renderSourceSize() const;
+    QRect renderSourceRect() const;
 
     QImage m_image;
     QSize m_sourceSize;
     QRect m_sourceRect;
+    QImage m_transientImage;
+    QSize m_transientSourceSize;
+    QRect m_transientSourceRect;
     double m_scale = 1.0;
     double m_fitScale = 1.0;
     QPointF m_offset;

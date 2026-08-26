@@ -344,9 +344,9 @@ void ExportDialog::exportConvertBatch()
 
     mviewer::exportjob::ExportJobConfig cfg;
     cfg.mode = mviewer::exportjob::Mode::Convert;
-    cfg.outDir = m_outDir.toStdString();
+    cfg.outDir = m_outDir.toUtf8().toStdString();
     if (files.isEmpty())
-        cfg.sourceDirectory = m_outDir.toStdString();
+        cfg.sourceDirectory = m_outDir.toUtf8().toStdString();
     cfg.format = m_formatCombo->currentData().toString().toStdString();
     cfg.quality = m_qualitySpin->value();
     cfg.renamePattern = m_renameEdit->text().toStdString();
@@ -374,7 +374,7 @@ void ExportDialog::exportConvertBatch()
     for (const QString &f : files)
     {
         const QString src = m_sources.isEmpty() ? (m_outDir + "/" + f) : f;
-        cfg.sources.push_back(src.toStdString());
+        cfg.sources.push_back(src.toUtf8().toStdString());
     }
 
     startExportJob(std::move(cfg));
@@ -393,16 +393,16 @@ void ExportDialog::exportUnifiedMode(mviewer::exportjob::Mode mode)
 
     mviewer::exportjob::ExportJobConfig cfg;
     cfg.mode = mode;
-    cfg.outDir = m_outDir.toStdString();
+    cfg.outDir = m_outDir.toUtf8().toStdString();
     if (files.isEmpty())
-        cfg.sourceDirectory = m_outDir.toStdString();
+        cfg.sourceDirectory = m_outDir.toUtf8().toStdString();
     cfg.quality = m_qualitySpin->value();
     cfg.contactCols = m_colsSpin->value();
     cfg.contactThumb = m_thumbSpin->value();
     for (const QString &f : files)
     {
         const QString source = m_sources.isEmpty() ? QDir(m_outDir).filePath(f) : f;
-        cfg.sources.push_back(source.toStdString());
+        cfg.sources.push_back(source.toUtf8().toStdString());
     }
     startExportJob(std::move(cfg));
 }

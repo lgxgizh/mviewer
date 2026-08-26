@@ -1,4 +1,54 @@
 #include "thumbnailpanel_p.h"
+#include "selectionmodel.h"
+
+void ThumbnailPanel::onSelectionChanged()
+{
+    const QModelIndexList sel = selectionModel()->selectedIndexes();
+    qint64 selBytes = 0;
+    for (const QModelIndex &idx : sel)
+        selBytes += m_sizeByPath.value(m_paths.value(idx.row()), 0);
+    const int n = sel.size();
+
+    // M23 P2 / Code-Review #5: keep the app-wide SelectionModel (the single
+    // source of truth that Compare reads) in sync with the gallery's full
+    // multi-selection. QListView::ExtendedSelection already supports Ctrl / Shift
+    // / rubber-band multi-select, but only a plain single click pushed the path
+    // into SelectionModel before — so Compare used to receive a single (stale)
+    // image instead of the whole selection. Updating here makes the shared model
+    // reflect Ctrl/Shift/box selections uniformly.
+    if (m_selection)
+    {
+        QStringList paths;
+        paths.reserve(n);
+        for (const QModelIndex &idx : sel)
+            paths.append(m_paths.value(idx.row()));
+        const QModelIndex current = currentIndex();
+        const QModelIndex fallback = sel.isEmpty() ? QModelIndex() : sel.constLast();
+        const QModelIndex focused =
+            current.isValid() && selectionModel()->isSelected(current) ? current : fallback;
+        const QString cur = focused.isValid() ? m_paths.value(focused.row()) : QString();
+        m_selection->setSelection(paths, cur);
+    }
+
+    // M23 P2 (selection UX): keep the compare affordance always discoverable.
+    // It shows the live selection count, enables once 2+ images are picked,
+    // and is hidden only when nothing is selected.
+    if (n == 0 || m_currentDir.isEmpty())
+    {
+        m_compareBtn->setVisible(false);
+    }
+    else
+    {
+        m_compareBtn->setVisible(true);
+        m_compareBtn->setText(QStringLiteral("比较选中 (%1)").arg(n));
+        const bool canCompare = n >= 2 && n <= 8;
+        m_compareBtn->setEnabled(canCompare);
+        m_compareBtn->setToolTip(
+            canCompare ? QStringLiteral("将选中的 %1 张图片送入对比").arg(n)
+                       : QStringLiteral("需要选择 2-8 张图片才能比较（当前 %1 张）").arg(n));
+    }
+    emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
+}
 
 void ThumbnailPanel::scrollToPath(const QString &path)
 {
@@ -32,6 +82,7 @@ void ThumbnailPanel::selectPath(const QString &path)
     {
         selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
         scrollTo(idx);
+        onSelectionChanged();
         return;
     }
     // Single-path focus: replace selection with this item.
@@ -69,11 +120,13 @@ void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &curren
             const QModelIndex idx = m_model->index(row, 0);
             selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
             scrollTo(idx);
+            m_selectionAnchorPath = focus;
         }
     }
     selectionModel()->blockSignals(wasBlocked);
-    // Emit a single selectionChanged so MainWindow can re-sync if needed.
-    emit selectionModel() -> selectionChanged(selectionModel()->selection(), QItemSelection());
+    // Signals were blocked while the full native selection was reconstructed;
+    // publish once through this panel's single selection owner.
+    onSelectionChanged();
 }
 
 int ThumbnailPanel::scrollOffset() const

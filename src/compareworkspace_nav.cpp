@@ -129,14 +129,13 @@ QString CompareWorkspace::focusImagePath() const
 {
     if (m_focusIndex >= 0)
     {
+        const QString panePath = comparedImages().value(m_focusIndex);
+        if (!panePath.isEmpty())
+            return panePath;
+
         const int idx = m_pairIndex + m_focusIndex;
         if (idx >= 0 && idx < m_imagePool.size())
             return m_imagePool[idx];
-        // Pool not seeded yet (openCompare calls setImages before
-        // setImagePool): resolve the focused cell via the engine instead.
-        const QStringList imgs = comparedImages();
-        if (m_focusIndex < imgs.size())
-            return imgs[m_focusIndex];
     }
     // Fall back to first image in the current window.
     if (!m_imagePool.isEmpty())
@@ -163,9 +162,10 @@ void CompareWorkspace::nextPair()
     setImages(win);
     restoreNavState(saved);
     updatePairButtons();
-    // P0: write the first image of the new window back to global SelectionModel.
+    // P0: publish the complete ordered window so Browse and Compare share the
+    // same multi-selection while navigating.
     if (m_selection && !win.isEmpty())
-        m_selection->setCurrentImage(win.first());
+        m_selection->setSelection(win, win.first());
 }
 
 void CompareWorkspace::prevPair()
@@ -182,9 +182,10 @@ void CompareWorkspace::prevPair()
     setImages(win);
     restoreNavState(saved);
     updatePairButtons();
-    // P0: write the first image of the new window back to global SelectionModel.
+    // P0: publish the complete ordered window so Browse and Compare share the
+    // same multi-selection while navigating.
     if (m_selection && !win.isEmpty())
-        m_selection->setCurrentImage(win.first());
+        m_selection->setSelection(win, win.first());
 }
 
 void CompareWorkspace::updatePairButtons()
@@ -313,6 +314,11 @@ void CompareWorkspace::applySession(const mviewer::domain::CompareSession &s)
 
     // Layout combo (0=auto,1=single-col,2=2col,3=3col,4=4col,5=one-row). Setting
     // the index triggers onLayoutChanged which drives the engine's column count.
+    if (m_gridColsSpin && s.customColumns >= 1 && s.customColumns <= 8)
+    {
+        const QSignalBlocker blocker(m_gridColsSpin);
+        m_gridColsSpin->setValue(s.customColumns);
+    }
     if (m_layoutCombo && m_layoutCombo->currentIndex() != s.layoutIndex)
         m_layoutCombo->setCurrentIndex(s.layoutIndex);
 

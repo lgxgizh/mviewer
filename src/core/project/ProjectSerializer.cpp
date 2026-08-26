@@ -16,24 +16,28 @@ std::string serializeProject(const domain::Project &p)
     QJsonObject obj;
     obj["schema"] = "mviewer.project";
     obj["version"] = 1;
-    obj["name"] = QString::fromStdString(p.name);
-    obj["filePath"] = QString::fromStdString(p.filePath);
-    obj["createdIso"] = QString::fromStdString(p.createdIso);
-    obj["modifiedIso"] = QString::fromStdString(p.modifiedIso);
-    obj["appVersion"] = QString::fromStdString(p.appVersion);
-    obj["reviewNotes"] = QString::fromStdString(p.reviewNotes);
-    obj["analyzerPipelineJson"] = QString::fromStdString(p.analyzerPipelineJson);
-    obj["exportConfigJson"] = QString::fromStdString(p.exportConfigJson);
-    obj["benchmarkBaselineJson"] = QString::fromStdString(p.benchmarkBaselineJson);
+    const auto utf8 = [](const std::string &value)
+    {
+        return QString::fromUtf8(value.data(), static_cast<int>(value.size()));
+    };
+    obj["name"] = utf8(p.name);
+    obj["filePath"] = utf8(p.filePath);
+    obj["createdIso"] = utf8(p.createdIso);
+    obj["modifiedIso"] = utf8(p.modifiedIso);
+    obj["appVersion"] = utf8(p.appVersion);
+    obj["reviewNotes"] = utf8(p.reviewNotes);
+    obj["analyzerPipelineJson"] = utf8(p.analyzerPipelineJson);
+    obj["exportConfigJson"] = utf8(p.exportConfigJson);
+    obj["benchmarkBaselineJson"] = utf8(p.benchmarkBaselineJson);
 
     QJsonArray roots;
     for (const auto &r : p.datasetRoots)
-        roots.append(QString::fromStdString(r));
+        roots.append(utf8(r));
     obj["datasetRoots"] = roots;
 
     QJsonArray pipe;
     for (const auto &a : p.analyzerPipeline)
-        pipe.append(QString::fromStdString(a));
+        pipe.append(utf8(a));
     obj["analyzerPipeline"] = pipe;
 
     // Embed the workspace as a base64 string so the .mvproj is fully
@@ -65,7 +69,7 @@ bool deserializeProject(const std::string &json, domain::Project &out)
     auto str = [&](const char *k, std::string &dst)
     {
         if (obj.contains(k) && obj[k].isString())
-            dst = obj[k].toString().toStdString();
+            dst = obj[k].toString().toUtf8().toStdString();
     };
     str("name", out.name);
     str("filePath", out.filePath);
@@ -81,13 +85,13 @@ bool deserializeProject(const std::string &json, domain::Project &out)
     if (obj.contains("datasetRoots") && obj["datasetRoots"].isArray())
         for (const QJsonValue &v : obj["datasetRoots"].toArray())
             if (v.isString())
-                out.datasetRoots.push_back(v.toString().toStdString());
+                out.datasetRoots.push_back(v.toString().toUtf8().toStdString());
 
     out.analyzerPipeline.clear();
     if (obj.contains("analyzerPipeline") && obj["analyzerPipeline"].isArray())
         for (const QJsonValue &v : obj["analyzerPipeline"].toArray())
             if (v.isString())
-                out.analyzerPipeline.push_back(v.toString().toStdString());
+                out.analyzerPipeline.push_back(v.toString().toUtf8().toStdString());
 
     return true;
 }

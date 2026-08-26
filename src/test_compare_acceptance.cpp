@@ -27,6 +27,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QImage>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QMouseEvent>
 #include <QPushButton>
@@ -224,8 +225,10 @@ int main(int argc, char **argv)
 
     testMultiImageEntry(paths8);
     testModePreservesState(paths8[0], paths8[1]);
+    testLayoutAndMomentaryCompare(dir);
     testContinuousNav(paths6);
     testNonFirstWindowNav(paths6);
+    testNonAdjacentFocus(paths8, paths8[0], paths8[2]);
     testPaneHistogramConsistency(paths8[0], paths8[1]);
     testDegradedImages(dir);
     testCompareLoadIsAsync(dir);

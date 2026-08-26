@@ -28,7 +28,7 @@ void ExportCommand::execute()
     if (lastDir.isEmpty())
         return;
 
-    auto result = OpenDirectoryUseCase::execute(lastDir.toStdString());
+    auto result = OpenDirectoryUseCase::execute(lastDir.toUtf8().toStdString());
     QStringList images;
     for (const auto &p : result.imagePaths)
     {

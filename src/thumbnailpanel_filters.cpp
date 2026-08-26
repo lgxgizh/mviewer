@@ -177,11 +177,15 @@ void ThumbnailPanel::ensureMetaIndex()
                     ThumbnailPanel *panel = self.data();
                     if (gen != panel->m_dirGen)
                         return; // superseded directory: drop
-                    const QString p = QString::fromStdString(e.path);
-                    panel->m_metaIndex.insert(p, QString::fromStdString(e.searchBlob));
+                    const QString p =
+                        QString::fromUtf8(e.path.data(), static_cast<int>(e.path.size()));
+                    panel->m_metaIndex.insert(
+                        p, QString::fromUtf8(e.searchBlob.data(), static_cast<int>(e.searchBlob.size())));
                     panel->m_metaIso.insert(p, e.iso);
-                    panel->m_metaCamera.insert(p, QString::fromStdString(e.camera).trimmed());
-                    panel->m_metaLens.insert(p, QString::fromStdString(e.lens).trimmed());
+                    panel->m_metaCamera.insert(
+                        p, QString::fromUtf8(e.camera.data(), static_cast<int>(e.camera.size())).trimmed());
+                    panel->m_metaLens.insert(
+                        p, QString::fromUtf8(e.lens.data(), static_cast<int>(e.lens.size())).trimmed());
                 });
         },
         [alive, self, gen]()

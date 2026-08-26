@@ -36,6 +36,7 @@ add_library(mviewer_core SHARED
     core/image/ImageStats.cpp
     core/filesystem/FileSystem.cpp
     core/filesystem/AtomicFile.cpp
+    core/filesystem/Utf8Path.cpp
     core/scheduler/TaskScheduler.cpp
     core/compare/CompareEngine.cpp
     core/compare/SyncController.cpp

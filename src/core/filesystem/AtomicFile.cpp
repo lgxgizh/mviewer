@@ -1,5 +1,6 @@
 // M46 — crash-safe atomic file replace implementation (see AtomicFile.h).
 #include "core/filesystem/AtomicFile.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include <atomic>
 #include <chrono>
@@ -7,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <mutex>
+#include <exception>
 #include <system_error>
 
 #ifdef _WIN32
@@ -51,11 +53,13 @@ AtomicWriteFaults atomicWriteFaults()
 bool atomicWriteFile(const std::string &path, const std::string &content,
                      std::string *errorOut)
 {
+    try
+    {
     namespace fs = std::filesystem;
     const AtomicWriteFaults faults = atomicWriteFaults();
 
     std::error_code ec;
-    const fs::path target(path);
+    const fs::path target = pathFromUtf8(path);
     const fs::path dir = target.parent_path();
     if (!dir.empty())
         fs::create_directories(dir, ec);
@@ -71,12 +75,11 @@ bool atomicWriteFile(const std::string &path, const std::string &content,
         static_cast<unsigned long>(::getpid());
 #endif
     const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-    const std::string base = target.filename().string();
-    const fs::path temp =
-        dir.empty() ? fs::path(base + "." + std::to_string(pid) + "." +
-                               std::to_string(now) + "." + std::to_string(serial) + ".tmp")
-                    : dir / (base + "." + std::to_string(pid) + "." + std::to_string(now) +
-                             "." + std::to_string(serial) + ".tmp");
+    const std::string base = pathToUtf8(target.filename());
+    const std::string tempName = base + "." + std::to_string(pid) + "." +
+                                 std::to_string(now) + "." + std::to_string(serial) + ".tmp";
+    const fs::path temp = dir.empty() ? pathFromUtf8(tempName)
+                                      : dir / pathFromUtf8(tempName);
 
     auto cleanup = [&]()
     {
@@ -93,7 +96,7 @@ bool atomicWriteFile(const std::string &path, const std::string &content,
         std::error_code itEc;
         for (fs::directory_iterator it(dir, itEc), end; !itEc && it != end; it.increment(itEc))
         {
-            const std::string name = it->path().filename().string();
+            const std::string name = pathToUtf8(it->path().filename());
             if (name.size() > base.size() + 4 && name.compare(0, base.size(), base) == 0 &&
                 name.compare(name.size() - 4, 4, ".tmp") == 0)
             {
@@ -117,7 +120,7 @@ bool atomicWriteFile(const std::string &path, const std::string &content,
     if (!out)
     {
         if (errorOut)
-            *errorOut = "cannot create temp file: " + temp.string();
+            *errorOut = "cannot create temp file: " + pathToUtf8(temp);
         return false;
     }
     out.write(content.data(), static_cast<std::streamsize>(content.size()));
@@ -129,7 +132,7 @@ bool atomicWriteFile(const std::string &path, const std::string &content,
         out.close();
         cleanup();
         if (errorOut)
-            *errorOut = "write/flush failed for: " + temp.string();
+            *errorOut = "write/flush failed for: " + pathToUtf8(temp);
         return false;
     }
     out.close();
@@ -137,7 +140,7 @@ bool atomicWriteFile(const std::string &path, const std::string &content,
     {
         cleanup();
         if (errorOut)
-            *errorOut = "close failed for: " + temp.string();
+            *errorOut = "close failed for: " + pathToUtf8(temp);
         return false;
     }
 
@@ -173,6 +176,19 @@ bool atomicWriteFile(const std::string &path, const std::string &content,
     }
 #endif
     return true;
+    }
+    catch (const std::exception &ex)
+    {
+        if (errorOut)
+            *errorOut = std::string("atomic write failed: ") + ex.what();
+        return false;
+    }
+    catch (...)
+    {
+        if (errorOut)
+            *errorOut = "atomic write failed: unknown error";
+        return false;
+    }
 }
 
 } // namespace mviewer::core

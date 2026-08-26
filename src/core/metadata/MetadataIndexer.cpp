@@ -84,7 +84,7 @@ MetadataIndexer &MetadataIndexer::instance()
 
 std::string MetadataIndexer::fileIdentity(const std::string &path)
 {
-    const QFileInfo fi(QString::fromStdString(path));
+    const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     return std::to_string(fi.lastModified().toSecsSinceEpoch()) + "|" +
            std::to_string(fi.size());
 }

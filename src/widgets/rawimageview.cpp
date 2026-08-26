@@ -39,6 +39,7 @@ void RawImageView::setImage(const QImage &img, const QSize &sourceSize)
 
 void RawImageView::setImage(const QImage &img, const QSize &sourceSize, const QRect &sourceRect)
 {
+    clearTransientDisplay();
     m_image = img;
     m_sourceSize = sourceSize.isValid() ? sourceSize : img.size();
     const QRect fullRect(QPoint(0, 0), m_sourceSize);
@@ -53,6 +54,7 @@ void RawImageView::setImage(const QImage &img, const QSize &sourceSize, const QR
 
 void RawImageView::clear()
 {
+    clearTransientDisplay();
     m_image = QImage();
     m_sourceSize = {};
     m_sourceRect = {};
@@ -60,6 +62,47 @@ void RawImageView::clear()
     m_offset = {};
     releaseBaseSurface();
     update();
+}
+
+void RawImageView::setTransientDisplay(const QImage &img, const QSize &sourceSize,
+                                       const QRect &sourceRect)
+{
+    if (img.isNull())
+    {
+        clearTransientDisplay();
+        return;
+    }
+    const QSize fullSize = sourceSize.isValid() ? sourceSize : img.size();
+    const QRect fullRect(QPoint(0, 0), fullSize);
+    QRect covered = sourceRect.isValid() ? sourceRect.normalized().intersected(fullRect) : fullRect;
+    if (covered.isEmpty())
+        covered = fullRect;
+    m_transientImage = img;
+    m_transientSourceSize = fullSize;
+    m_transientSourceRect = covered;
+    releaseBaseSurface();
+    update();
+}
+
+void RawImageView::clearTransientDisplay()
+{
+    if (m_transientImage.isNull())
+        return;
+    m_transientImage = QImage();
+    m_transientSourceSize = {};
+    m_transientSourceRect = {};
+    releaseBaseSurface();
+    update();
+}
+
+QSize RawImageView::renderSourceSize() const
+{
+    return m_transientImage.isNull() ? m_sourceSize : m_transientSourceSize;
+}
+
+QRect RawImageView::renderSourceRect() const
+{
+    return m_transientImage.isNull() ? m_sourceRect : m_transientSourceRect;
 }
 
 void RawImageView::setOverlay(const QImage &overlay, double alpha)
@@ -154,7 +197,7 @@ void RawImageView::paintEvent(QPaintEvent *)
     QPainter p(this);
     p.fillRect(rect(), palette().color(QPalette::Dark));
 
-    if (m_image.isNull())
+    if (displayImage().isNull())
         return;
 
     // Rasterize the static base image + diff overlay once per input change into
@@ -166,13 +209,19 @@ void RawImageView::paintEvent(QPaintEvent *)
         drawBaseLayer(p);
 
     // Geometry for the live annotation layer below (same transform as the image).
+    const QSize sourceSize = renderSourceSize();
     const double cx = width() / 2.0 + m_offset.x();
     const double cy = height() / 2.0 + m_offset.y();
-    const int dw = qRound(m_sourceSize.width() * m_scale);
-    const int dh = qRound(m_sourceSize.height() * m_scale);
+    const int dw = qRound(sourceSize.width() * m_scale);
+    const int dh = qRound(sourceSize.height() * m_scale);
 
     // ROI selection box (image coords -> widget coords, same transform as the image)
-    if (!m_selection.isEmpty())
+    if (!m_transientImage.isNull())
+    {
+        // A is still the editing/analysis target. Do not paint A's annotations
+        // over B's transient raster or let the temporary view become editable.
+    }
+    else if (!m_selection.isEmpty())
     {
         const double sx = static_cast<double>(dw) / m_sourceSize.width();
         const double sy = static_cast<double>(dh) / m_sourceSize.height();
@@ -185,12 +234,12 @@ void RawImageView::paintEvent(QPaintEvent *)
     }
 
     // M16.1: synced crosshair at the shared image-space position (n/n compare).
-    if (m_crosshairOn)
+    if (m_transientImage.isNull() && m_crosshairOn)
         drawCrosshair(p, cx, cy, dw, dh);
 
     // M16.1: focus-lock highlight — draw a thick accent border when this cell
     // is the locked reference.
-    if (m_focused)
+    if (m_transientImage.isNull() && m_focused)
     {
         QPen pen(QColor(0xFF, 0xB0, 0x20), 3);
         pen.setCosmetic(true);
@@ -200,7 +249,7 @@ void RawImageView::paintEvent(QPaintEvent *)
     }
 
     // A-4.3: Pixel Link markers — numbered dots at image-space points.
-    if (!m_linkMarkers.isEmpty() && m_scale > 0.0)
+    if (m_transientImage.isNull() && !m_linkMarkers.isEmpty() && m_scale > 0.0)
     {
         for (int i = 0; i < m_linkMarkers.size(); ++i)
         {
@@ -256,7 +305,9 @@ void RawImageView::ensureBaseSurface()
 {
     const qreal dpr = devicePixelRatioF();
     const QSize viewport = size();
-    const qint64 imageKey = m_image.isNull() ? -1 : m_image.cacheKey();
+    const QImage &image = displayImage();
+    const QRect sourceRect = renderSourceRect();
+    const qint64 imageKey = image.isNull() ? -1 : image.cacheKey();
     const qint64 overlayKey = m_overlay.isNull() ? -1 : m_overlay.cacheKey();
 
     // Cache key: image/overlay content (cheap unique buffer ids, never a pixel
@@ -264,7 +315,7 @@ void RawImageView::ensureBaseSurface()
     if (m_baseSurfaceValid && imageKey == m_cachedImageKey && overlayKey == m_cachedOverlayKey &&
         m_overlayAlpha == m_cachedOverlayAlpha && m_scale == m_cachedScale &&
         m_offset == m_cachedOffset && viewport == m_cachedViewport && dpr == m_cachedDpr &&
-        m_sourceRect == m_cachedSourceRect)
+        sourceRect == m_cachedSourceRect)
         return;
 
     // Bounded by widget viewport device pixels (never by scaled source dims:
@@ -309,7 +360,7 @@ void RawImageView::ensureBaseSurface()
     m_cachedOffset = m_offset;
     m_cachedViewport = viewport;
     m_cachedDpr = dpr;
-    m_cachedSourceRect = m_sourceRect;
+    m_cachedSourceRect = sourceRect;
 
     ++m_baseSurfaceRenderCount;
     // Diagnostic only: lets tests distinguish annotation repaints from source
@@ -323,20 +374,23 @@ void RawImageView::drawBaseLayer(QPainter &p)
     // Single source of truth for the base image + diff overlay geometry shared
     // by the cached viewport surface and the direct-draw fallback. Matches the
     // pre-cache paintEvent rendering exactly.
+    const QImage &image = displayImage();
+    const QSize sourceSize = renderSourceSize();
+    const QRect sourceRect = renderSourceRect();
     p.setRenderHint(QPainter::SmoothPixmapTransform, m_scale < 4.0);
 
     // Center in widget, then apply pan offset, then scale.
     const double cx = width() / 2.0 + m_offset.x();
     const double cy = height() / 2.0 + m_offset.y();
-    const int dw = qRound(m_sourceSize.width() * m_scale);
-    const int dh = qRound(m_sourceSize.height() * m_scale);
+    const int dw = qRound(sourceSize.width() * m_scale);
+    const int dh = qRound(sourceSize.height() * m_scale);
     const double sourceLeft = cx - dw / 2.0;
     const double sourceTop = cy - dh / 2.0;
-    const QRectF coveredDest(sourceLeft + m_sourceRect.x() * m_scale,
-                             sourceTop + m_sourceRect.y() * m_scale,
-                             m_sourceRect.width() * m_scale,
-                             m_sourceRect.height() * m_scale);
-    p.drawImage(coveredDest, m_image);
+    const QRectF coveredDest(sourceLeft + sourceRect.x() * m_scale,
+                             sourceTop + sourceRect.y() * m_scale,
+                             sourceRect.width() * m_scale,
+                             sourceRect.height() * m_scale);
+    p.drawImage(coveredDest, image);
 
     // Difference/heatmap overlay (compare mode): same transform as the base image
     // so it tracks zoom/pan. The QImage is produced by the workspace from core-layer
@@ -369,6 +423,11 @@ void RawImageView::releaseBaseSurface()
 
 void RawImageView::mousePressEvent(QMouseEvent *ev)
 {
+    if (!m_transientImage.isNull())
+    {
+        ev->accept();
+        return;
+    }
     if (ev->button() == Qt::RightButton)
     {
         // Begin box selection (image coords) instead of panning.
@@ -388,6 +447,11 @@ void RawImageView::mousePressEvent(QMouseEvent *ev)
 
 void RawImageView::mouseMoveEvent(QMouseEvent *ev)
 {
+    if (!m_transientImage.isNull())
+    {
+        ev->accept();
+        return;
+    }
     if (m_selecting)
     {
         const QPointF cur = widgetToImage(ev->pos());
@@ -433,6 +497,14 @@ void RawImageView::mouseMoveEvent(QMouseEvent *ev)
 
 void RawImageView::mouseReleaseEvent(QMouseEvent *ev)
 {
+    if (!m_transientImage.isNull())
+    {
+        m_dragging = false;
+        m_selecting = false;
+        setCursor(Qt::OpenHandCursor);
+        ev->accept();
+        return;
+    }
     if (ev->button() == Qt::RightButton && m_selecting)
     {
         m_selecting = false;
@@ -448,6 +520,11 @@ void RawImageView::mouseReleaseEvent(QMouseEvent *ev)
 
 void RawImageView::mouseDoubleClickEvent(QMouseEvent *ev)
 {
+    if (!m_transientImage.isNull())
+    {
+        ev->accept();
+        return;
+    }
     // M16.1: toggle this cell as the locked reference (focus-lock, n/1).
     Q_UNUSED(ev);
     emit focusRequested(m_cellIndex);

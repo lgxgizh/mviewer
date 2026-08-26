@@ -1,4 +1,5 @@
 #include "core/image/decoder/QtDecoder.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include "core/image/ImageBuffer.h"
 
@@ -187,7 +188,9 @@ const std::vector<std::string> &supportedExts()
 
 bool QtDecoder::canDecode(const std::string &path) const
 {
-    QString ext = QFileInfo(QString::fromStdString(path)).suffix().toLower();
+    QString ext = QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size())))
+                      .suffix()
+                      .toLower();
     // Canonical aliases so .jpg/.jpeg and .tif/.tiff both match regardless of
     // which name QImageReader reports.
     if (ext == "jpg")
@@ -210,7 +213,7 @@ ImageData QtDecoder::decodeFull(const std::string &path) const
 ImageData QtDecoder::decodeFull(const std::string &path,
                                 mviewer::domain::ImageMetadata &outMeta) const
 {
-    QImageReader reader(QString::fromStdString(path));
+    QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true); // 尊重 EXIF 方向
     const QImage img = reader.read();
     if (img.isNull())
@@ -253,15 +256,15 @@ bool QtDecoder::canProbe(const std::string &path) const
 bool QtDecoder::probeMetadata(const std::string &path,
                               mviewer::domain::ImageMetadata &meta) const
 {
-    QImageReader reader(QString::fromStdString(path));
+    QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true);
     const QSize full = reader.size();
     if (!full.isValid() || full.isEmpty())
         return false;
-    const QFileInfo info(QString::fromStdString(path));
+    const QFileInfo info(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     if (meta.filePath.empty())
         meta.filePath = path;
-    meta.fileName = info.fileName().toStdString();
+    meta.fileName = info.fileName().toUtf8().toStdString();
     meta.fileSize = info.size();
     meta.modifiedEpochSec = info.lastModified().toSecsSinceEpoch();
     meta.width = full.width();
@@ -282,7 +285,7 @@ bool QtDecoder::probeMetadata(const std::string &path,
     const QString ext = info.suffix().toLower();
     if (ext == "jpg" || ext == "jpeg" || ext == "png")
     {
-        QImageReader iccReader(QString::fromStdString(path));
+        QImageReader iccReader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
         iccReader.setScaledSize(QSize(1, 1));
         QImage tiny;
         if (iccReader.read(&tiny) && tiny.colorSpace().isValid())
@@ -307,7 +310,9 @@ bool QtDecoder::canNativeLod(const std::string &path) const
     // (a 100 MP JPEG scales to 256 px while full decode is rejected by Qt's
     // 256 MB allocation limit). Other formats are NOT claimed: TIFF scaled
     // decode still rasterizes fully (measured failure at the same limit).
-    const QString ext = QFileInfo(QString::fromStdString(path)).suffix().toLower();
+    const QString ext = QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size())))
+                            .suffix()
+                            .toLower();
     return ext == "jpg" || ext == "jpeg";
 }
 
@@ -323,14 +328,15 @@ bool QtDecoder::canNativeRegion(const std::string &path) const
 ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
                                mviewer::domain::ImageMetadata &outMeta) const
 {
-    QImageReader reader(QString::fromStdString(path));
+    QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true);
     const QSize full = reader.size();
     if (!full.isValid() || full.isEmpty())
         return ImageData();
     if (outMeta.filePath.empty())
         outMeta.filePath = path;
-    outMeta.fileSize = QFileInfo(QString::fromStdString(path)).size();
+    outMeta.fileSize = QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size())))
+                           .size();
     if (full.width() > maxEdge || full.height() > maxEdge)
     {
         const double ratio = static_cast<double>(maxEdge) /
@@ -359,7 +365,7 @@ ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, 
                                   int targetW, int targetH,
                                   mviewer::domain::ImageMetadata &meta) const
 {
-    QImageReader reader(QString::fromStdString(path));
+    QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true);
     const QSize full = reader.size();
     if (!full.isValid() || full.isEmpty() || w <= 0 || h <= 0)

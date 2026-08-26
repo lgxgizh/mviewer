@@ -431,6 +431,44 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(viewer && imageList && viewer->browseSequence() == imageList->paths(),
           "Viewer consumes the Browse sequence SSOT for neighbors and position");
 
+    // M49: exercise the real QListView ExtendedSelection gesture path rather
+    // than publishing a synthetic SelectionModel value. Plain, Ctrl-toggle,
+    // Shift-range, and Ctrl-toggle-off must all keep the gallery and SSOT in
+    // agreement.
+    if (thumbnailPanel && thumbnailPanel->pathList().size() >= 5 && sel)
+    {
+        auto galleryClick = [thumbnailPanel](int row, Qt::KeyboardModifiers modifiers)
+        {
+            const QModelIndex index = thumbnailPanel->model()->index(row, 0);
+            const QPoint point = thumbnailPanel->visualRect(index).center();
+            QMouseEvent press(QEvent::MouseButtonPress, QPointF(point), Qt::LeftButton,
+                              Qt::LeftButton, modifiers);
+            QApplication::sendEvent(thumbnailPanel->viewport(), &press);
+            QMouseEvent release(QEvent::MouseButtonRelease, QPointF(point), Qt::LeftButton,
+                                Qt::NoButton, modifiers);
+            QApplication::sendEvent(thumbnailPanel->viewport(), &release);
+            pump(30);
+        };
+        galleryClick(0, Qt::NoModifier);
+        CHECK(thumbnailPanel->selectedPaths().size() == 1 &&
+                  thumbnailPanel->selectedPaths().contains(paths[0]) && sel->selection().size() == 1,
+              "M49: plain gallery click selects one image through the real view");
+        galleryClick(2, Qt::ControlModifier);
+        CHECK(thumbnailPanel->selectedPaths().size() == 2 &&
+                  thumbnailPanel->selectedPaths().contains(paths[0]) &&
+                  thumbnailPanel->selectedPaths().contains(paths[2]) && sel->selection().size() == 2,
+              "M49: Ctrl+click toggles a second image into the SSOT selection");
+        galleryClick(4, Qt::ShiftModifier);
+        CHECK(thumbnailPanel->selectedPaths().size() >= 4 && sel->selection().size() >= 4 &&
+                  thumbnailPanel->selectedPaths().contains(paths[3]) &&
+                  thumbnailPanel->selectedPaths().contains(paths[4]),
+              "M49: Shift+click selects the native contiguous range");
+        galleryClick(2, Qt::ControlModifier);
+        CHECK(!thumbnailPanel->selectedPaths().contains(paths[2]) &&
+                  !sel->selection().contains(paths[2]) && sel->selection().size() >= 3,
+              "M49: Ctrl+click removes one item without collapsing the range");
+    }
+
     // Sort/filter rebuilds must republish the order that is actually visible;
     // navigation consumers must never fall back to a filename scan.
     thumbnailPanel->setSortMode(ThumbnailPanel::SortName);
@@ -1355,11 +1393,20 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         diffHl->click();
     }
 
-    // Space 按住 = 临时闪烁；松开必须恢复（评审"状态不同步"高危点）。
+    // Space 按住 = momentary A<-B presentation; the continuous Blink state
+    // remains independent and therefore must stay unchecked.
+    auto *temporaryCompare = ws->findChild<QPushButton *>(QStringLiteral("temporaryCompareButton"));
+    RawImageView *temporaryView0 = nullptr;
+    for (RawImageView *view : ws->findChildren<RawImageView *>())
+        if (view && view->cellIndex() == 0)
+            temporaryView0 = view;
     sendKeyPressOnly(ws, Qt::Key_Space);
-    CHECK(blink->isChecked(), "holding Space starts temporary blink");
+    CHECK(temporaryCompare && temporaryCompare->isDown() && temporaryView0 &&
+              temporaryView0->hasTransientDisplay() && !blink->isChecked(),
+          "holding Space starts momentary Compare without starting continuous Blink");
     sendKeyReleaseOnly(ws, Qt::Key_Space);
-    CHECK(!blink->isChecked(), "releasing Space stops temporary blink (no stuck state)");
+    CHECK(temporaryView0 && !temporaryView0->hasTransientDisplay() && !temporaryCompare->isDown(),
+          "releasing Space stops momentary Compare (no stuck state)");
 
     // Compare 会话可快照（供退出→重进恢复；round-trip 细节由 compare_session_tests 覆盖）。
     const auto session = ws->compareSession();
@@ -2174,8 +2221,8 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
         {
             for (RawImageView *view : compare->findChildren<RawImageView *>())
             {
-                // Select pane 1 so leaving Compare must restore Browse from the
-                // updated SelectionModel, not from a stale pre-Compare string.
+                // Double-click pane 1 to lock its reference through the real
+                // focusRequested path; Pixel Link's single click must not change it.
                 if (view && view->cellIndex() == 1 && view->isVisible() && view->isEnabled())
                 {
                     linkPane = view;
@@ -2189,12 +2236,24 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
               "fullscreen workflow: real Compare exposes Pixel Link and an interactive pane");
         if (pixelLink && linkPane)
         {
+            const QPoint paneCenter = linkPane->rect().center();
+            QMouseEvent focusDbl(QEvent::MouseButtonDblClick, QPointF(paneCenter),
+                                 Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(linkPane, &focusDbl);
+            pump(50);
+            CHECK(sel->selection() == expectedSelection,
+                  "fullscreen workflow: pane 1 focus keeps the Browse pair selection");
+            CHECK(sel->currentImage() == pathB,
+                  "fullscreen workflow: pane 1 double-click focuses B in Browse SSOT");
+
             pixelLink->setChecked(true);
-            sendLeftClick(linkPane, linkPane->rect().center());
+            sendLeftClick(linkPane, paneCenter);
             CHECK(w.statusBar()->currentMessage().contains(QStringLiteral("像素连线")),
                   "fullscreen workflow: Pixel Link publishes its transient status");
+            CHECK(sel->selection() == expectedSelection,
+                  "fullscreen workflow: Pixel Link click preserves the Browse pair selection");
             CHECK(sel->currentImage() == pathB,
-                  "fullscreen workflow: interacting with pane 1 updates Browse's image SSOT");
+                  "fullscreen workflow: Pixel Link click preserves Browse current B");
         }
         const QString expectedBrowseStatus =
             QString("当前: %1").arg(QFileInfo(sel->currentImage()).fileName());
@@ -2340,8 +2399,12 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
         CHECK(waitForPair(nextPair), "real MainWindow navigation advances C/D to E/F");
         CHECK(compare && compare->hasPrevPair() && !compare->hasNextPair(),
               "real pair buttons report E/F as the final window");
-        CHECK(sel && sel->currentImage() == paths[4],
-              "real navigation moves SelectionModel focus to E");
+        CHECK(sel && sel->selection() == nextPair,
+              "real navigation synchronizes the complete E/F selection to Browse");
+        CHECK(sel && sel->currentImage() == nextPair.first(),
+              "real navigation focuses E within the E/F selection");
+        CHECK(gallery && gallery->selectedPaths() == nextPair,
+              "real navigation highlights the complete E/F pair in Browse");
         CHECK(!overlay || overlay->isChecked(),
               "real navigation preserves overlay while advancing");
     }
@@ -2350,18 +2413,46 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     {
         previous->click();
         CHECK(waitForPair(firstPair), "real MainWindow navigation returns E/F to C/D");
-        CHECK(sel && sel->currentImage() == paths[2],
-              "real navigation restores SelectionModel focus to C");
+        CHECK(sel && sel->selection() == firstPair,
+              "real navigation synchronizes the complete C/D selection to Browse");
+        CHECK(sel && sel->currentImage() == firstPair.first(),
+              "real navigation focuses C within the C/D selection");
+        CHECK(gallery && gallery->selectedPaths() == firstPair,
+              "real navigation highlights the complete C/D pair in Browse");
         previous->click();
         CHECK(waitForPair(lastPair), "real MainWindow navigation reaches A/B from C/D");
         CHECK(compare && !compare->hasPrevPair() && compare->hasNextPair(),
               "real pair buttons report A/B as the first window");
-        CHECK(sel && sel->currentImage() == paths[0],
-              "real navigation moves SelectionModel focus to A");
+        CHECK(sel && sel->selection() == lastPair,
+              "real navigation synchronizes the complete A/B selection to Browse");
+        CHECK(sel && sel->currentImage() == lastPair.first(),
+              "real navigation focuses A within the A/B selection");
+        CHECK(gallery && gallery->selectedPaths() == lastPair,
+              "real navigation highlights the complete A/B pair in Browse");
         CHECK(!overlay || overlay->isChecked(),
               "real navigation preserves overlay while returning");
     }
 
+    if (compareDialog && compareDialog->isVisible())
+        sendKey(compareDialog, Qt::Key_Escape);
+    pump(50);
+
+    CHECK(sel && sel->selection() == lastPair,
+          "leaving Compare keeps the final A/B SelectionModel window");
+    CHECK(gallery->selectedPaths() == lastPair,
+          "leaving Compare keeps the final A/B Browse selection");
+
+    // Re-enter through the real MainWindow action: the post-navigation Pair
+    // must remain the Compare entry selection instead of falling back to the
+    // whole directory after SelectionModel was projected to one image.
+    compareAction->trigger();
+    pump(300);
+    compareDialog = w.findChild<QDialog *>(QStringLiteral("compareDialog"));
+    compare = compareDialog ? compareDialog->findChild<CompareWorkspace *>() : nullptr;
+    CHECK(compareDialog && compareDialog->isVisible() && compare,
+          "re-entering Compare after browsing opens the real workspace");
+    CHECK(waitForPair(lastPair),
+          "re-entering Compare after exit keeps the final A/B pair");
     if (compareDialog && compareDialog->isVisible())
         sendKey(compareDialog, Qt::Key_Escape);
     pump(50);

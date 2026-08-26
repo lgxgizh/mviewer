@@ -53,6 +53,11 @@ struct CompareSession {
     Viewport viewport;
     CompareSelection selection;
 
+    // Persisted presentation state. Custom layout rows are derived from the
+    // image count; only the column count is stored.
+    int layoutIndex = 0;
+    int customColumns = 2;
+
     int imageCount() const;
     bool isValid() const;                          // imageCount >= 2 && <= MAX_IMAGES
     bool isComparing() const;                     // convenience alias for isValid()

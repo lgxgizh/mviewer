@@ -11,7 +11,7 @@ namespace
 {
 std::shared_ptr<std::vector<uint16_t>> captureRaw16(const std::string &path)
 {
-    QImageReader reader(QString::fromStdString(path));
+    QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     const QImage::Format fmt = reader.imageFormat();
     const bool is16 = (fmt == QImage::Format_RGBX64 || fmt == QImage::Format_RGBA64 ||
                        fmt == QImage::Format_Grayscale16);
@@ -120,7 +120,10 @@ void ImageRepository::enrichFrame(ImageFrame &frame, const std::string &filePath
     mviewer::domain::ImageMetadata metadata = frame.metadata();
     if (metadata.format.empty())
     {
-        const QString ext = QFileInfo(QString::fromStdString(filePath)).suffix().toLower();
+        const QString ext = QFileInfo(
+                                QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())))
+                                .suffix()
+                                .toLower();
         if (ext == "jpg" || ext == "jpeg")
             metadata.format = "JPEG";
         else if (ext == "png")

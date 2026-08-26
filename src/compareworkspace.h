@@ -109,6 +109,7 @@ class CompareWorkspace : public QWidget
         s.blinkIntervalMs = m_blinkTimer ? m_blinkTimer->interval() : 150;
         s.sidePanelVisible = m_sideChk ? m_sideChk->isChecked() : false;
         s.layoutIndex = m_layoutCombo ? m_layoutCombo->currentIndex() : 0;
+        s.customColumns = m_gridColsSpin ? m_gridColsSpin->value() : 2;
         s.uniformScale = m_uniformScale; // H5
         return s;
     }
@@ -179,6 +180,7 @@ class CompareWorkspace : public QWidget
     void exportReportRequested();
 
   protected:
+    bool event(QEvent *) override;
     void paintEvent(QPaintEvent *) override;
     bool eventFilter(QObject *, QEvent *) override;
     void resizeEvent(QResizeEvent *) override;
@@ -295,11 +297,15 @@ class CompareWorkspace : public QWidget
     QCheckBox *m_blinkChk = nullptr;
     QTimer *m_blinkTimer = nullptr;
     bool m_blinkState = false;
-    bool m_tempBlinking = false; // true while Space is held down
+    QPushButton *m_temporaryCompareButton = nullptr;
+    bool m_temporaryCompareActive = false;
     void toggleBlink();
     void applyBlink(bool state);
     void startBlink(int intervalMs);
     void stopBlink();
+    void beginTemporaryCompare();
+    void endTemporaryCompare();
+    void updateTemporaryCompareAvailability();
     // M24: mirror the blink target into the engine's BlinkController so the
     // captured CompareSession carries the blink state (round-trip persistence).
     void syncEngineBlink();
@@ -371,9 +377,9 @@ class CompareWorkspace : public QWidget
     bool m_diffOverlayVisible = false;
     bool m_diffHighlight = false;
 
-    // A-4.2: custom M×N grid (spin boxes; 0 = use layout combo).
-    QSpinBox *m_gridRowsSpin = nullptr;
+    // A-4.2: custom grid is column-driven; rows are derived by CompareEngine.
     QSpinBox *m_gridColsSpin = nullptr;
+    QLabel *m_layoutStatusLabel = nullptr;
     void onCustomGridChanged();
 
     // A-4.5 / M20: continuous compare — walk a sliding window over the pool.
@@ -416,6 +422,7 @@ class CompareWorkspace : public QWidget
     // P0 #③: explicit multi-layout selector.
     QComboBox *m_layoutCombo = nullptr;
     void onLayoutChanged();
+    void updateLayoutStatus();
 
     // P0 #③: collapsible inspector + histogram side panel.
     QCheckBox *m_sideChk = nullptr;

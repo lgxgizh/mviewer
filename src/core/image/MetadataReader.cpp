@@ -15,8 +15,9 @@ namespace mviewer::core
 
 std::string MetadataReader::key(const std::string &filePath)
 {
-    const QFileInfo fi(QString::fromStdString(filePath));
-    const QString k = QString::fromStdString(filePath) + QString::number(fi.size()) +
+    const QString qPath = QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size()));
+    const QFileInfo fi(qPath);
+    const QString k = qPath + QString::number(fi.size()) +
                       QString::number(fi.lastModified().toSecsSinceEpoch());
     return k.toStdString();
 }
@@ -25,7 +26,7 @@ void populateFileIdentity(mviewer::domain::ImageMetadata &meta, const std::strin
                           const QFileInfo &fileInfo)
 {
     meta.filePath = filePath;
-    meta.fileName = fileInfo.fileName().toStdString();
+    meta.fileName = fileInfo.fileName().toUtf8().toStdString();
     meta.fileSize = fileInfo.size();
     meta.modifiedEpochSec = fileInfo.lastModified().toSecsSinceEpoch();
 }
@@ -93,7 +94,8 @@ void populateDisplayMetadata(mviewer::domain::ImageMetadata &meta, const std::st
     // a 1x1 scaled size so we get the headers/metadata cheaply without decoding
     // full pixels (important for 100MP originals).
     {
-        QImageReader dpiReader(QString::fromStdString(filePath));
+        QImageReader dpiReader(
+            QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())));
         dpiReader.setScaledSize(QSize(1, 1));
         QImage img;
         if (dpiReader.read(&img))
@@ -143,11 +145,11 @@ void populateTextMetadata(mviewer::domain::ImageMetadata &meta, QImageReader &re
 mviewer::domain::ImageMetadata MetadataReader::read(const std::string &filePath)
 {
     mviewer::domain::ImageMetadata meta;
-    const QFileInfo fi(QString::fromStdString(filePath));
+    const QFileInfo fi(QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())));
     if (!fi.exists())
         return meta;
     populateFileIdentity(meta, filePath, fi);
-    QImageReader reader(QString::fromStdString(filePath));
+    QImageReader reader(QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())));
     populateImageInfo(meta, reader);
     populateDisplayMetadata(meta, filePath);
     populateTextMetadata(meta, reader);
@@ -317,7 +319,7 @@ GpsValues parseGpsIfd(const unsigned char *data, int size, bool little, uint32_t
 
 void MetadataReader::readGps(mviewer::domain::ImageMetadata &meta, const std::string &filePath)
 {
-    QFile file(QString::fromStdString(filePath));
+    QFile file(QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())));
     if (!file.open(QIODevice::ReadOnly))
         return;
     const QByteArray header = file.read(4);

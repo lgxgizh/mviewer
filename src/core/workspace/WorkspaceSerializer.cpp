@@ -208,7 +208,7 @@ struct Parser
 //         "sharedScale":S,"sharedOffsetX":X,"sharedOffsetY":Y,
 //         "cols":C,"rows":R,"selection":[x,y,w,h,sync],
 //         "threshold":T,"blinkIntervalMs":B,"sidePanel":0|1,"layoutIndex":L,
-//         "uniformScale":0|1}
+//         "customColumns":C,"uniformScale":0|1}
 std::string serializeCompareSession(const mviewer::domain::CompareSession &s)
 {
     std::ostringstream os;
@@ -235,6 +235,7 @@ std::string serializeCompareSession(const mviewer::domain::CompareSession &s)
        << "],\"threshold\":" << static_cast<int>(s.threshold)
        << ",\"blinkIntervalMs\":" << s.blinkIntervalMs
        << ",\"sidePanel\":" << (s.sidePanelVisible ? 1 : 0) << ",\"layoutIndex\":" << s.layoutIndex
+       << ",\"customColumns\":" << s.customColumns
        << ",\"uniformScale\":" << (s.uniformScale ? 1 : 0) << "}";
     return os.str();
 }
@@ -257,6 +258,7 @@ struct CompareParseState
     long long blinkIntervalMs = 500;
     long long sidePanel = 0;
     long long layoutIndex = 0;
+    long long customColumns = 2;
     long long uniformScale = 0;
     bool haveIds = false;
     bool haveCells = false;
@@ -352,6 +354,8 @@ static bool parseComparePresentation(Parser &p, const std::string &key,
         state.sidePanel = p.parseNumber();
     else if (key == "layoutIndex")
         state.layoutIndex = p.parseNumber();
+    else if (key == "customColumns")
+        state.customColumns = p.parseNumber();
     else if (key == "uniformScale")
         state.uniformScale = p.parseNumber();
     else
@@ -375,6 +379,7 @@ static void applyCompareParseState(const CompareParseState &state,
     out.blinkIntervalMs = static_cast<int>(state.blinkIntervalMs);
     out.sidePanelVisible = (state.sidePanel != 0);
     out.layoutIndex = static_cast<int>(state.layoutIndex);
+    out.customColumns = static_cast<int>(state.customColumns);
     out.uniformScale = (state.uniformScale != 0);
 }
 

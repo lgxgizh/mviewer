@@ -64,9 +64,9 @@ ImageFrame::~ImageFrame()
 /*static*/ ImageFrame ImageFrame::create(const std::string &path, const ImageData &pixels)
 {
     mviewer::domain::ImageMetadata meta;
-    const QFileInfo fi(QString::fromStdString(path));
+    const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     meta.filePath = path;
-    meta.fileName = fi.fileName().toStdString();
+    meta.fileName = fi.fileName().toUtf8().toStdString();
     meta.width = pixels.width;
     meta.height = pixels.height;
     meta.fileSize = static_cast<int64_t>(fi.size());

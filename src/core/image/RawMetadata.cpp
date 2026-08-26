@@ -1,6 +1,5 @@
 #include "core/image/RawMetadata.h"
-
-#include <Windows.h>
+#include "core/filesystem/Utf8Path.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -24,8 +23,8 @@ static std::string toLower(const std::string &s)
 
 static bool isRawExtension(const std::string &path)
 {
-    std::filesystem::path p(path);
-    std::string ext = toLower(p.extension().string());
+    const std::filesystem::path p = pathFromUtf8(path);
+    std::string ext = toLower(pathToUtf8(p.extension()));
     return ext == ".dng" || ext == ".arw" || ext == ".nef" || ext == ".orf" || ext == ".rw2" ||
            ext == ".raf" || ext == ".cr2" || ext == ".cr3" || ext == ".crw" || ext == ".pef" ||
            ext == ".srw" || ext == ".x3f" || ext == ".erf" || ext == ".mos" || ext == ".raw";
@@ -451,12 +450,14 @@ RawMetadata parseRawMetadata(const std::string &filePath)
 
     FILE *f = nullptr;
 #ifdef _WIN32
-    int len = MultiByteToWideChar(CP_UTF8, 0, filePath.c_str(), -1, nullptr, 0);
-    if (len > 0)
+    try
     {
-        std::wstring wpath(len, L'\0');
-        MultiByteToWideChar(CP_UTF8, 0, filePath.c_str(), -1, wpath.data(), len);
-        f = _wfopen(wpath.c_str(), L"rb");
+        const std::filesystem::path nativePath = pathFromUtf8(filePath);
+        f = _wfopen(nativePath.native().c_str(), L"rb");
+    }
+    catch (...)
+    {
+        return rm;
     }
 #else
     f = std::fopen(filePath.c_str(), "rb");

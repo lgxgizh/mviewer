@@ -1,5 +1,6 @@
 // Self-contained trace sink implementation. See TraceSink.h.
 #include "core/trace/TraceSink.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include <windows.h>
 
@@ -68,7 +69,7 @@ size_t count()
 bool flush(const std::string &path)
 {
     std::lock_guard<std::mutex> lk(g_mu);
-    std::ofstream f(path, std::ios::binary);
+    std::ofstream f(mviewer::core::pathFromUtf8(path), std::ios::binary);
     if (!f)
         return false;
 

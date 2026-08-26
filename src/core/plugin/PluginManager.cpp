@@ -7,6 +7,7 @@
 #include "core/import/IImporter.h"
 #include "core/import/ImporterRegistry.h"
 #include "core/plugin/PluginABI.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include <filesystem>
 #include <iostream>
@@ -44,8 +45,9 @@ std::string PluginManager::lastError() const
 std::vector<std::string> PluginManager::scanDirectory(const std::string &dirPath)
 {
     std::vector<std::string> candidates;
-    std::filesystem::path dir(dirPath);
-    if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir))
+    const std::filesystem::path dir = mviewer::core::pathFromUtf8(dirPath);
+    std::error_code ec;
+    if (!std::filesystem::exists(dir, ec) || !std::filesystem::is_directory(dir, ec))
         return candidates;
 
 #ifdef _WIN32
@@ -58,10 +60,12 @@ std::vector<std::string> PluginManager::scanDirectory(const std::string &dirPath
 #endif
 #endif
 
-    for (const auto &entry : std::filesystem::directory_iterator(dir))
+    for (std::filesystem::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
     {
-        if (entry.is_regular_file() && entry.path().extension() == ext)
-            candidates.push_back(entry.path().string());
+        std::error_code fileEc;
+        if (it->is_regular_file(fileEc) && !fileEc &&
+            mviewer::core::pathToUtf8(it->path().extension()) == ext)
+            candidates.push_back(mviewer::core::pathToUtf8(it->path()));
     }
     return candidates;
 }
@@ -130,7 +134,8 @@ void closePluginHandle(PluginHandle handle)
 bool openPlugin(const std::string &path, OpenPlugin &plugin, std::string &error)
 {
 #ifdef _WIN32
-    plugin.handle = reinterpret_cast<PluginHandle>(LoadLibraryA(path.c_str()));
+    const std::filesystem::path nativePath = mviewer::core::pathFromUtf8(path);
+    plugin.handle = reinterpret_cast<PluginHandle>(LoadLibraryW(nativePath.native().c_str()));
     if (!plugin.handle)
     {
         error = "LoadLibrary failed: " + std::to_string(GetLastError());
@@ -300,7 +305,8 @@ bool finishPluginLoad(const std::string &path, OpenPlugin &plugin,
                       std::string &error)
 {
     const std::string displayName =
-        plugin.symbols.name ? plugin.symbols.name() : std::filesystem::path(path).stem().string();
+        plugin.symbols.name ? plugin.symbols.name()
+                           : mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(path).stem());
     if (plugin.symbols.createAnalyzer)
         return registerAnalyzerPlugin(path, displayName, plugin, plugins, error);
     if (plugin.symbols.createDecoder)

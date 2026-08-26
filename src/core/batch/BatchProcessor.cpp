@@ -2,6 +2,7 @@
 #include "core/analyzer/Analyzer.h"
 #include "core/analyzer/AnalyzerPipeline.h"
 #include "core/export/ExporterRegistry.h"
+#include "core/filesystem/Utf8Path.h"
 #include "core/image/Decoder.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageFrame.h"
@@ -10,6 +11,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cctype>
 #include <chrono>
 #include <filesystem>
 #include <sstream>
@@ -85,9 +87,9 @@ std::string buildOutputPath(const domain::BatchJobConfig &config, const std::str
     if (config.outputDir.empty())
         return outName;
 
-    std::filesystem::path dir(config.outputDir);
-    dir /= outName;
-    return dir.string();
+    std::filesystem::path dir = pathFromUtf8(config.outputDir);
+    dir /= pathFromUtf8(outName);
+    return pathToUtf8(dir);
 }
 
 } // anonymous namespace
@@ -227,25 +229,32 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
     {
         auto collectImages = [](const std::filesystem::path &dir, std::vector<std::string> &out)
         {
-            for (const auto &entry : std::filesystem::recursive_directory_iterator(dir))
+            std::error_code ec;
+            for (std::filesystem::recursive_directory_iterator it(
+                     dir, std::filesystem::directory_options::skip_permission_denied, ec),
+                 end;
+                 !ec && it != end; it.increment(ec))
             {
-                if (entry.is_regular_file())
+                std::error_code fileEc;
+                if (it->is_regular_file(fileEc) && !fileEc)
                 {
-                    auto ext = entry.path().extension().string();
-                    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                    auto ext = pathToUtf8(it->path().extension());
+                    std::transform(ext.begin(), ext.end(), ext.begin(),
+                                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
                     static const std::vector<std::string> imgExts = {
                         ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".cr2",
                         ".nef", ".arw",  ".dng", ".raf", ".rw2", ".orf",  ".raw"};
                     if (std::find(imgExts.begin(), imgExts.end(), ext) != imgExts.end())
-                        out.push_back(entry.path().string());
+                        out.push_back(pathToUtf8(it->path()));
                 }
             }
         };
         expandedPaths.clear();
         for (const auto &p : config.inputPaths)
         {
-            std::filesystem::path fsp(p);
-            if (std::filesystem::is_directory(fsp))
+            const std::filesystem::path fsp = pathFromUtf8(p);
+            std::error_code typeEc;
+            if (std::filesystem::is_directory(fsp, typeEc) && !typeEc)
                 collectImages(fsp, expandedPaths);
             else
                 expandedPaths.push_back(p);

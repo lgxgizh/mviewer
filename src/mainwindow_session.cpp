@@ -319,14 +319,15 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
 
     // Restore the browsing view: load the workspace root back into the gallery.
     // changeDirectory drives DirectoryModel + ImageListModel + tree + gallery.
-    const QString root = QString::fromStdString(ws.rootPath);
+    const QString root =
+        QString::fromUtf8(ws.rootPath.data(), static_cast<int>(ws.rootPath.size()));
     changeDirectory(root);
     if (m_workspace)
     {
         m_workspace->setRootPath(root);
         QStringList cmp;
         for (const auto &p : ws.comparedImages)
-            cmp.append(QString::fromStdString(p));
+            cmp.append(QString::fromUtf8(p.data(), static_cast<int>(p.size())));
         m_workspace->setComparedImages(cmp);
         m_workspace->setCompareSessionJson(QString::fromStdString(ws.compareSessionJson));
     }
@@ -340,7 +341,7 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
     QStringList comparePaths;
     comparePaths.reserve(static_cast<int>(ws.comparedImages.size()));
     for (const auto &p : ws.comparedImages)
-        comparePaths.push_back(QString::fromStdString(p));
+        comparePaths.push_back(QString::fromUtf8(p.data(), static_cast<int>(p.size())));
 
     // M15: rebuild the per-image analysis map from the saved model so the whole
     // compare session's analysis context is available on reload (each image's
@@ -352,7 +353,9 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
         for (const auto &img : folder.imageSet.images)
         {
             if (!img.analysis.empty())
-                m_analyzer->setResult(QString::fromStdString(img.filePath),
+                m_analyzer->setResult(
+                                      QString::fromUtf8(img.filePath.data(),
+                                                        static_cast<int>(img.filePath.size())),
                                       QString::fromStdString(img.analysis),
                                       QString::fromStdString(img.analysisAnalyzerId));
         }
@@ -395,13 +398,14 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
         }
     }
     if (restoredPath.empty() && !comparePaths.isEmpty())
-        restoredPath = comparePaths.first().toStdString();
+        restoredPath = comparePaths.first().toUtf8().toStdString();
     else if (restoredPath.empty() && ws.imageCount() > 0)
         restoredPath = ws.folders.front().imageSet.images.front().filePath;
 
     if (!restoredPath.empty())
     {
-        m_selection->setCurrentImage(QString::fromStdString(restoredPath));
+        m_selection->setCurrentImage(
+            QString::fromUtf8(restoredPath.data(), static_cast<int>(restoredPath.size())));
         if (m_imageViewer)
         {
             // Async decode; imageReady() feeds AnalysisPanel once the frame is
@@ -819,7 +823,7 @@ void MainWindow::closeEvent(QCloseEvent *event)
             const auto cs = m_compareView->compareSession();
             QJsonArray cmpImg;
             for (const auto &id : cs.imageIds)
-                cmpImg.append(QString::fromStdString(id));
+                cmpImg.append(QString::fromUtf8(id.data(), static_cast<int>(id.size())));
             settings.setValue("compareImages", cmpImg);
             settings.setValue("compareSession",
                               QString::fromStdString(mviewer::core::serializeCompareSession(cs)));
@@ -870,7 +874,7 @@ void MainWindow::autosaveSession()
         const auto cs = m_compareView->compareSession();
         QJsonArray cmpImg;
         for (const auto &id : cs.imageIds)
-            cmpImg.append(QString::fromStdString(id));
+            cmpImg.append(QString::fromUtf8(id.data(), static_cast<int>(id.size())));
         obj.insert("compareImages", cmpImg);
         obj.insert("compareSession",
                    QString::fromStdString(mviewer::core::serializeCompareSession(cs)));

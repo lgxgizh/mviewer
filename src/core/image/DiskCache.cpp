@@ -96,7 +96,7 @@ void DiskCache::openDb()
     }
 
     const QString dbPath = QDir(cacheDir).filePath(QStringLiteral("mviewer_disk.db"));
-    m_dbPath = dbPath.toStdString();
+    m_dbPath = dbPath.toUtf8().toStdString();
     m_impl->db = QSqlDatabase::addDatabase("QSQLITE", "mviewer_disk_cache");
     m_impl->db.setDatabaseName(dbPath);
     if (!m_impl->db.open())
@@ -151,7 +151,7 @@ QSqlDatabase DiskCache::connectionForThread() const
             g_threadConnection.name =
                 QStringLiteral("mviewer_disk_cache_worker_%1").arg(serial);
             QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", g_threadConnection.name);
-            db.setDatabaseName(QString::fromStdString(m_dbPath));
+            db.setDatabaseName(QString::fromUtf8(m_dbPath.data(), static_cast<int>(m_dbPath.size())));
             if (!db.open())
             {
                 qWarning() << "DiskCache: worker connection failed:" << db.lastError().text();

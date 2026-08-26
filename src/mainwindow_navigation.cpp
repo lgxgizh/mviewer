@@ -1,6 +1,30 @@
 // MainWindow navigation: history, recent items, favorites, breadcrumb (M20 P0#1).
 #include "mainwindow_p.h"
 
+void MainWindow::scheduleSidecarImport(const QString &dir)
+{
+    TaskScheduler::cancel(m_sidecarImportTask);
+    if (m_sidecarImportAlive)
+        m_sidecarImportAlive->store(false, std::memory_order_release);
+
+    auto alive = std::make_shared<std::atomic<bool>>(true);
+    m_sidecarImportAlive = alive;
+    const std::string utf8Dir = dir.toUtf8().toStdString();
+    m_sidecarImportTask = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Background,
+        [alive, utf8Dir](const TaskScheduler::TaskContext &context)
+        {
+            if (context.isCancelled() || !alive->load(std::memory_order_acquire))
+                return;
+            mviewer::core::SidecarStore::instance().importDirectory(
+                utf8Dir,
+                [alive, &context]
+                {
+                    return context.isCancelled() || !alive->load(std::memory_order_acquire);
+                });
+        });
+}
+
 void MainWindow::navigate(int delta)
 {
     if (currentDir().isEmpty() || currentImagePath().isEmpty())

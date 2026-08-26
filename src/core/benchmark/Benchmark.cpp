@@ -1,4 +1,5 @@
 #include "core/benchmark/Benchmark.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include <fstream>
 
@@ -63,7 +64,7 @@ bool Benchmark::reportCsv(const std::string &path) const
         // Default: benchmark_results.csv next to the running executable.
         outPath = "benchmark_results.csv";
     }
-    std::ofstream f(outPath);
+    std::ofstream f(mviewer::core::pathFromUtf8(outPath));
     if (!f.is_open())
         return false;
     f << "name,avg_ms,min_ms,max_ms,iterations\n";

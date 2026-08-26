@@ -120,7 +120,7 @@ bool exportSettings(const std::string &path, std::string *errorOut)
     root[QStringLiteral("settingsSchemaVersion")] = kSettingsSchemaVersion;
     root[QStringLiteral("schema")] = QStringLiteral("mviewer.settings");
 
-    QSaveFile f(QString::fromStdString(path));
+    QSaveFile f(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     if (!f.open(QIODevice::WriteOnly | QIODevice::Text))
     {
         if (errorOut)
@@ -132,7 +132,7 @@ bool exportSettings(const std::string &path, std::string *errorOut)
 
 bool importSettings(const std::string &path, std::string *errorOut)
 {
-    QFile f(QString::fromStdString(path));
+    QFile f(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
     {
         if (errorOut)

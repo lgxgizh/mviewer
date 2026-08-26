@@ -156,6 +156,10 @@ MainWindow::~MainWindow()
     // never touch freed MainWindow state.
     TaskScheduler::cancel(m_restoreTask);
     m_restoreTask.reset();
+    TaskScheduler::cancel(m_sidecarImportTask);
+    m_sidecarImportTask.reset();
+    if (m_sidecarImportAlive)
+        m_sidecarImportAlive->store(false, std::memory_order_release);
     // M27 lifetime closure: stop the async search re-index immediately. The
     // worker callback checks the alive token before marshaling, and the queued
     // UI lambda checks it again before touching any member — without this, a
@@ -219,7 +223,7 @@ void MainWindow::reindexSearch()
     const QStringList listPaths = m_imageList->paths();
     paths.reserve(static_cast<size_t>(listPaths.size()));
     for (const QString &p : listPaths)
-        paths.push_back(p.toStdString());
+        paths.push_back(p.toUtf8().toStdString());
 
     ++m_reindexGen;
     const uint64_t gen = m_reindexGen;
@@ -250,7 +254,8 @@ void MainWindow::reindexSearch()
                     for (const QString &p : cur)
                     {
                         const auto e =
-                            mviewer::core::MetadataIndexer::instance().cached(p.toStdString());
+                            mviewer::core::MetadataIndexer::instance().cached(
+                                p.toUtf8().toStdString());
                         if (e)
                             entries.push_back(*e);
                     }
@@ -269,10 +274,10 @@ void MainWindow::rateCurrentImage(int stars)
 {
     if (currentImagePath().isEmpty())
         return;
-    mviewer::core::RatingStore::instance().setRating(currentImagePath().toStdString(), stars);
+    mviewer::core::RatingStore::instance().setRating(currentImagePath().toUtf8().toStdString(), stars);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath()); // refresh the rating widget
-    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toStdString());
+    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
     statusBar()->showMessage(
         QString("已为 %1 评分: %2 星").arg(QFileInfo(currentImagePath()).fileName()).arg(stars));
 }
@@ -331,10 +336,10 @@ void MainWindow::setCurrentColorLabel(int label)
 {
     if (currentImagePath().isEmpty())
         return;
-    mviewer::core::RatingStore::instance().setColorLabel(currentImagePath().toStdString(), label);
+    mviewer::core::RatingStore::instance().setColorLabel(currentImagePath().toUtf8().toStdString(), label);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath());
-    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toStdString());
+    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
     const QString name = QFileInfo(currentImagePath()).fileName();
     statusBar()->showMessage(label == 0 ? QString("已清除 %1 的色标").arg(name)
                                         : QString("已为 %1 设置色标 %2").arg(name).arg(label));
@@ -345,11 +350,11 @@ void MainWindow::toggleCurrentPick()
     if (currentImagePath().isEmpty())
         return;
     auto &rs = mviewer::core::RatingStore::instance();
-    const bool v = !rs.picked(currentImagePath().toStdString());
-    rs.setPicked(currentImagePath().toStdString(), v);
+    const bool v = !rs.picked(currentImagePath().toUtf8().toStdString());
+    rs.setPicked(currentImagePath().toUtf8().toStdString(), v);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath());
-    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toStdString());
+    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
     statusBar()->showMessage(
         v ? QString("已收藏 %1").arg(QFileInfo(currentImagePath()).fileName())
           : QString("已取消收藏 %1").arg(QFileInfo(currentImagePath()).fileName()));
@@ -360,11 +365,11 @@ void MainWindow::toggleCurrentReject()
     if (currentImagePath().isEmpty())
         return;
     auto &rs = mviewer::core::RatingStore::instance();
-    const bool v = !rs.rejected(currentImagePath().toStdString());
-    rs.setRejected(currentImagePath().toStdString(), v);
+    const bool v = !rs.rejected(currentImagePath().toUtf8().toStdString());
+    rs.setRejected(currentImagePath().toUtf8().toStdString(), v);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath());
-    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toStdString());
+    mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
     statusBar()->showMessage(
         v ? QString("已拒绝 %1").arg(QFileInfo(currentImagePath()).fileName())
           : QString("已取消拒绝 %1").arg(QFileInfo(currentImagePath()).fileName()));
@@ -428,7 +433,7 @@ void MainWindow::onImageOpen(const QString &path)
     // P0-1: cross-session image history.
     m_appState.addHistory(path);
     // M14-1: track in recent-files LRU + refresh menu.
-    m_recentFiles.add(path.toStdString());
+    m_recentFiles.add(path.toUtf8().toStdString());
     rebuildRecentFilesMenu();
     // M12.2 / M19: restore saved analysis from AnalyzerModel if present.
     const QString savedAnalysis = m_analyzer->resultText(path);
@@ -481,8 +486,8 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     if (m_metadataPanel && m_metadataPanel->isVisible())
         m_metadataPanel->setImage(path);
 
-    // Keep the thumbnail-grid highlight in lock-step (no-op if already current).
-    m_thumbnailPanel->selectPath(path);
+    // Sync the committed SelectionModel pair; m_syncingSelection blocks gallery feedback.
+    syncGalleryFromSelection();
 
     // P0: Auto-locate the directory tree to the image's parent folder. The tree
     // itself short-circuits an already-selected directory before QFileInfo or
@@ -494,7 +499,7 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     if (m_directoryTree && !dir.isEmpty())
         m_directoryTree->navigateTo(dir);
 
-    mviewer::core::RatingStore::instance().addRecent(path.toStdString()); // P3 recents
+    mviewer::core::RatingStore::instance().addRecent(path.toUtf8().toStdString()); // P3 recents
 
     // Window title + status bar identity follow the current image. Dimensions
     // arrive from the shared metadata presentation service; never re-read the
@@ -509,7 +514,7 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     const QString requestedPath = path;
     QPointer<MainWindow> guard(this);
     mviewer::core::MetadataPresentationService::instance().request(
-        path.toStdString(), m_statusMetadataConsumer,
+        path.toUtf8().toStdString(), m_statusMetadataConsumer,
         [guard, requestedPath, generation](
             const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
         {
@@ -553,7 +558,7 @@ void MainWindow::changeDirectory(const QString &dir)
     pushDirHistory(dir);
 
     // Import sidecar metadata for the new directory.
-    mviewer::core::SidecarStore::instance().importDirectory(dir.toStdString());
+    scheduleSidecarImport(dir);
 }
 
 void MainWindow::openCompare(const QStringList &images, const QString &sessionJson)
@@ -709,7 +714,7 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
                            if (!sessionFinal.isEmpty())
                            {
                                 const auto session =
-                                    decodeCompareSession(sessionFinal.toStdString());
+                                    decodeCompareSession(sessionFinal.toUtf8().toStdString());
                                 if (session)
                                     viewGuard->applySession(*session);
                            }

@@ -19,25 +19,12 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
-#include <limits>
 #include <optional>
 #include <set>
 #include <sstream>
-#include <stdexcept>
-#include <system_error>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#else
-#include <sys/stat.h>
-#include <unistd.h>
-#endif
 
 namespace fs = std::filesystem;
 
@@ -140,7 +127,7 @@ bool writeTextAtomically(const std::string &destination, const std::string &cont
 {
     try
     {
-        return writeTextAtomically(pathFromUtf8(destination), contents, cancelled);
+        return writeTextAtomically(mviewer::core::pathFromUtf8(destination), contents, cancelled);
     }
     catch (const std::exception &)
     {
@@ -148,8 +135,6 @@ bool writeTextAtomically(const std::string &destination, const std::string &cont
     }
 }
 
-fs::path pathFromUtf8(const std::string &value);
-std::string pathToUtf8(const fs::path &path);
 std::string csvEscape(const std::string &value)
 {
     if (value.find_first_of(",\"\r\n") == std::string::npos)
@@ -247,12 +232,12 @@ std::string jsonNumber(double value)
 
 std::optional<ReportRow> analyzeSource(const fs::path &path)
 {
-    ImageData image = Decoder::decodeFull(pathToUtf8(path));
+    ImageData image = Decoder::decodeFull(mviewer::core::pathToUtf8(path));
     if (image.isNull())
         return std::nullopt;
     const ImageStats stats = AnalysisEngine::computeStats(image);
     ReportRow row;
-    row.name = pathToUtf8(path.filename());
+    row.name = mviewer::core::pathToUtf8(path.filename());
     row.width = image.width;
     row.height = image.height;
     row.lumMean = stats.lumMean;
@@ -297,66 +282,11 @@ bool writeTextAtomically(const fs::path &destination, const std::string &content
     return false;
 }
 
-fs::path pathFromUtf8(const std::string &value)
-{
-#ifdef _WIN32
-    if (value.empty())
-        return {};
-    if (value.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-        throw std::length_error("UTF-8 path is too long");
-
-    const int inputLength = static_cast<int>(value.size());
-    const int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(),
-                                           inputLength, nullptr, 0);
-    if (length == 0)
-        throw std::system_error(static_cast<int>(GetLastError()), std::system_category(),
-                                "invalid UTF-8 path");
-    std::wstring wide(static_cast<size_t>(length), L'\0');
-    if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, value.data(), inputLength,
-                            wide.data(), length) == 0)
-    {
-        throw std::system_error(static_cast<int>(GetLastError()), std::system_category(),
-                                "invalid UTF-8 path");
-    }
-    return fs::path(wide);
-#else
-    return fs::path(value);
-#endif
-}
-
-std::string pathToUtf8(const fs::path &path)
-{
-#ifdef _WIN32
-    const std::wstring &wide = path.native();
-    if (wide.empty())
-        return {};
-    if (wide.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-        throw std::length_error("native path is too long");
-
-    const int inputLength = static_cast<int>(wide.size());
-    const int length = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), inputLength,
-                                           nullptr, 0, nullptr, nullptr);
-    if (length == 0)
-        throw std::system_error(static_cast<int>(GetLastError()), std::system_category(),
-                                "cannot encode path as UTF-8");
-    std::string utf8(static_cast<size_t>(length), '\0');
-    if (WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, wide.data(), inputLength, utf8.data(),
-                            length, nullptr, nullptr) == 0)
-    {
-        throw std::system_error(static_cast<int>(GetLastError()), std::system_category(),
-                                "cannot encode path as UTF-8");
-    }
-    return utf8;
-#else
-    return path.string();
-#endif
-}
-
 std::string outputBaseName(const ExportJobConfig &cfg, const fs::path &source, int index,
                                   int total)
 {
-    const std::string baseName = pathToUtf8(source.stem());
-    std::string sourceExtension = pathToUtf8(source.extension());
+    const std::string baseName = mviewer::core::pathToUtf8(source.stem());
+    std::string sourceExtension = mviewer::core::pathToUtf8(source.extension());
     if (!sourceExtension.empty() && sourceExtension.front() == '.')
         sourceExtension.erase(sourceExtension.begin());
 

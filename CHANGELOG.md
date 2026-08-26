@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.0.10] - 2026-08-27
+
+### Fixed
+
+- **Windows Unicode reliability:** user filesystem paths now use one explicit
+  UTF-8/native-path contract across image discovery, persistence, sidecars,
+  batch/export, plugins, and startup; expected filesystem exceptions are
+  contained at their owning boundary.
+- **Browse selection:** real MainWindow gallery clicks now keep plain, Ctrl,
+  and Shift selection semantics synchronized with the shared SelectionModel,
+  with one publication owner and cancellable background sidecar import.
+- **Compare layout and presentation:** default two-pane Compare is exactly
+  half-and-half, long captions elide with a full-name tooltip, and the layout
+  indicator is columns-driven with derived row counts.
+- **Momentary Compare:** the visible `临时切换` button and Space key now show B
+  in pane A only while held, restore A on every release/focus/mode teardown
+  path, and leave Blink, engine order, selection, ROI, analysis, and session
+  state untouched.
+
+### Tests
+
+- Added Unicode path/sidecar/rating identity coverage and MainWindow-backed
+  selection, Compare geometry, layout, caption, and momentary presentation
+  regressions. Native Windows/DPI qualification remains explicitly
+  MANUAL/BLOCKED where it was not run on physical hardware.
+
 ## [Unreleased] — M47 production-scale data path hardening
 
 ### Added
@@ -83,8 +109,11 @@
   zoom ratio, so a window resize no longer discards the user's inspection scale.
 - **Compare selected-window navigation:** opening Compare from a non-first
   selection now starts at that selected pair, so Previous/Next moves to the
-  adjacent pairs instead of replaying the first pair; the active compare mode
-  and SelectionModel focus remain synchronized while navigating.
+  adjacent pairs instead of replaying the first pair; the active compare mode,
+  complete pair selection, and SelectionModel focus remain synchronized while
+  navigating, and exiting after navigation preserves that pair for continued
+  browsing and Compare re-entry. Locking a pane also resolves the image actually
+  displayed when the initial selection is non-adjacent.
 - **Compare Pixel Link exactness:** Pixel Link tooltips and RGB/Δ values now
   sample the current full-resolution analysis pixels with the active crop,
   rotation, and point adjustments instead of reading a bounded display LOD.

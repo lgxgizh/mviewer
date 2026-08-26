@@ -168,17 +168,6 @@ bool FileSystemAdapter::copyFileWithProgress(const fs::path &from, const fs::pat
     return true;
 }
 
-fs::path pathFromUtf8(const std::string &path)
-{
-    return fs::u8path(path);
-}
-
-std::string pathToUtf8(const fs::path &path)
-{
-    const auto value = path.u8string();
-    return {reinterpret_cast<const char *>(value.data()), value.size()};
-}
-
 std::shared_ptr<FileSystemAdapter> defaultFileSystemAdapter()
 {
     static const auto adapter = std::make_shared<StdFileSystemAdapter>();

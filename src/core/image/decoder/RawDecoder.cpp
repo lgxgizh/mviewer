@@ -1,4 +1,5 @@
 #include "core/image/decoder/RawDecoder.h"
+#include "core/filesystem/Utf8Path.h"
 
 #include "core/image/ImageBuffer.h"
 
@@ -123,7 +124,9 @@ ImageData toImageData(const QImage &src)
 
 bool RawDecoder::canDecode(const std::string &path) const
 {
-    const QString ext = QFileInfo(QString::fromStdString(path)).suffix().toLower();
+    const QString ext = QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size())))
+                            .suffix()
+                            .toLower();
     for (const char *e : kRawExts)
     {
         if (ext == QString::fromLatin1(e))
@@ -140,7 +143,7 @@ size_t RawDecoder::lastPreviewFullFileCopyBytes()
 ImageData RawDecoder::extractPreview(const std::string &path, int maxEdge) const
 {
     g_lastPreviewFullFileCopyBytes.store(0, std::memory_order_relaxed);
-    QFile f(QString::fromStdString(path));
+    QFile f(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     if (!f.open(QIODevice::ReadOnly))
         return ImageData();
     const QByteArray raw = f.readAll();
@@ -184,9 +187,9 @@ ImageData RawDecoder::decodeScaled(const std::string &path, int maxEdge,
     ImageData d = extractPreview(path, maxEdge);
     if (!d.isNull())
     {
-        const QFileInfo fi(QString::fromStdString(path));
+        const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
         outMeta.filePath = path;
-        outMeta.fileName = fi.fileName().toStdString();
+        outMeta.fileName = fi.fileName().toUtf8().toStdString();
         outMeta.fileSize = static_cast<uint64_t>(qMax<qint64>(0, fi.size()));
         outMeta.width = d.width;
         outMeta.height = d.height;

@@ -295,7 +295,7 @@ void AnalysisPanel::applyAnalysisResult(const AnalysisResult &r)
             return; // nothing to present (e.g. materialization failed)
         }
         m_imageA = r.image;
-        m_imagePath = QString::fromStdString(r.path);
+        m_imagePath = QString::fromUtf8(r.path.data(), static_cast<int>(r.path.size()));
         m_hasA = true;
         m_hasB = false;
         m_statsA = r.stats; // full-image stats, mirroring applyFrameImage

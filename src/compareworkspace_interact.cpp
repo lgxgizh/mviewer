@@ -8,7 +8,7 @@ void CompareWorkspace::showShortcutHelp()
     // Lightweight status-bar style tip via window title flash — no modal dialog
     // so day-long keyboard work is not interrupted.
     const QString tip =
-        tr("Compare 快捷键: B Blink · Space 按住Blink · S Split · W Swipe · O Overlay · "
+        tr("Compare 快捷键: B Blink · Space 临时切换 · S Split · W Swipe · O Overlay · "
            "K 棋盘 · H Diff高亮 · Z/D 同步缩放/拖动 · C 准星 · L 像素连线 · "
            "1~8 布局预设 · PgUp/PgDn 或 ←/→ 连续导航 · F Fit · X 交换 · ? 帮助 · Esc 关闭");
     if (auto *w = window())
@@ -17,8 +17,23 @@ void CompareWorkspace::showShortcutHelp()
 
 #include <cmath>
 
+bool CompareWorkspace::event(QEvent *event)
+{
+    if (event && (event->type() == QEvent::FocusOut || event->type() == QEvent::Hide ||
+                  event->type() == QEvent::WindowDeactivate || event->type() == QEvent::Close ||
+                  event->type() == QEvent::EnabledChange))
+        endTemporaryCompare();
+    return QWidget::event(event);
+}
+
 bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
 {
+    if (event && (event->type() == QEvent::FocusOut || event->type() == QEvent::Hide ||
+                  event->type() == QEvent::WindowDeactivate || event->type() == QEvent::Close ||
+                  event->type() == QEvent::EnabledChange) &&
+        (obj == this || obj == m_temporaryCompareButton || obj == window()))
+        endTemporaryCompare();
+
     // M34: the dedicated compareCanvas owns its own input while a canvas mode
     // (split / swipe / overlay / checkerboard) is active. Hidden RawImageViews
     // cannot receive wheel/drag, so route canvas events here instead.
@@ -107,6 +122,48 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
     }
 
     return QWidget::eventFilter(obj, event);
+}
+
+void CompareWorkspace::beginTemporaryCompare()
+{
+    if (m_temporaryCompareActive || m_engine.imageCount() != 2 || m_cellViews.size() < 2 ||
+        anyCanvasCompareMode() || (m_blinkChk && m_blinkChk->isChecked()))
+        return;
+    RawImageView *a = m_cellViews[0];
+    RawImageView *b = m_cellViews[1];
+    if (!a || !b || b->displayImage().isNull() || !b->sourceSize().isValid())
+        return;
+
+    a->setTransientDisplay(b->displayImage(), b->sourceSize(), b->sourceRect());
+    m_temporaryCompareActive = true;
+    if (m_temporaryCompareButton)
+        m_temporaryCompareButton->setDown(true);
+    update();
+}
+
+void CompareWorkspace::endTemporaryCompare()
+{
+    if (!m_temporaryCompareActive)
+        return;
+    if (!m_cellViews.isEmpty() && m_cellViews[0])
+        m_cellViews[0]->clearTransientDisplay();
+    m_temporaryCompareActive = false;
+    if (m_temporaryCompareButton)
+        m_temporaryCompareButton->setDown(false);
+    update();
+}
+
+void CompareWorkspace::updateTemporaryCompareAvailability()
+{
+    const bool available = m_engine.imageCount() == 2 && m_cellViews.size() >= 2 &&
+                           m_cellViews[0] && m_cellViews[1] &&
+                           !m_cellViews[1]->displayImage().isNull() &&
+                           m_cellViews[1]->sourceSize().isValid() && !anyCanvasCompareMode() &&
+                           !(m_blinkChk && m_blinkChk->isChecked());
+    if (m_temporaryCompareButton)
+        m_temporaryCompareButton->setEnabled(available);
+    if (!available)
+        endTemporaryCompare();
 }
 
 // M34: wheel + mouse input for the dedicated compareCanvas page. All canvas
@@ -536,10 +593,9 @@ bool CompareWorkspace::handleBasicCompareSpace(QKeyEvent *event)
 {
     if (event->key() != Qt::Key_Space || event->isAutoRepeat())
         return false;
-    if (m_blinkChk && m_blinkChk->isEnabled() && !m_blinkChk->isChecked())
+    if (m_temporaryCompareButton && m_temporaryCompareButton->isEnabled())
     {
-        m_tempBlinking = true;
-        m_blinkChk->setChecked(true);
+        beginTemporaryCompare();
     }
     event->accept();
     return true;
@@ -712,11 +768,9 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
 
 void CompareWorkspace::keyReleaseEvent(QKeyEvent *event)
 {
-    if (event->key() == Qt::Key_Space && !event->isAutoRepeat() && m_tempBlinking)
+    if (event->key() == Qt::Key_Space && !event->isAutoRepeat())
     {
-        m_tempBlinking = false;
-        if (m_blinkChk && m_blinkChk->isChecked())
-            m_blinkChk->setChecked(false);
+        endTemporaryCompare();
         event->accept();
         return;
     }
