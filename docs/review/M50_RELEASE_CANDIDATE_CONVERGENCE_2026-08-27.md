@@ -2,7 +2,7 @@
 
 Date: 2026-08-27  
 Branch: `master`  
-Target patch line: `1.0.11`
+Target patch line: `1.0.12`
 
 ## Scope
 
@@ -67,6 +67,15 @@ canvas/Blink painting.
   `/` switches only on Windows, and permits Unix absolute paths on Unix. The
   Windows drive and UNC path cases remain positional file arguments.
 
+### CI hardening follow-up (`1.0.12`)
+
+- The architecture gate's human-readable PowerShell output is ASCII-safe, so
+  Windows PowerShell cannot reinterpret a typographic dash under a legacy code
+  page and fail parsing before the JSON gate runs.
+- The canonical Ctrl+C workflow check waits for the asynchronous clipboard
+  export result, removing a CI-only race while preserving the product's
+  worker-side export behavior.
+
 ## Automated evidence
 
 | Check | Result | Evidence |
@@ -78,7 +87,7 @@ canvas/Blink painting.
 | M48 phase-0 regressions | PASS | `m48_phase0_regressions` |
 | M46 browse and persistence | PASS | `m46_browse_tests`, `m46_persistence_tests` |
 | Full local build/test gate | PASS — clean `build.ps1 Test`, 107/107 | `build.ps1 Clean`, then `build.ps1 Test` |
-| Release ZIP assembly | PASS — 1.0.11 payload, 50 entries, no test executables/PDBs | exact release ZIP command |
+| Release ZIP assembly | PASS — 1.0.12 payload, 50 entries, no test executables/PDBs | exact release ZIP command |
 
 The M50-focused and adjacent-workflow checks passed 7/7 after the fix. The
 clean full gate now passes 107/107, and the versioned package contains the

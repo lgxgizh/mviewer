@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.12] - 2026-08-27
+
+### Fixed
+
+- **Windows CI architecture gate:** made the PowerShell gate's human-readable
+  output ASCII-safe so non-UTF-8 runner code pages cannot reinterpret a
+  typographic dash as a parser token.
+- **Workflow UX test stability:** the Ctrl+C clipboard assertion now waits for
+  the asynchronous export result instead of racing a fixed 20 ms delay.
+
+### Tests
+
+- Full local `build.ps1 Test` gate passed 107/107 after the CI hardening fixes.
+
 ## [1.0.11] - 2026-08-27
 
 ### Fixed

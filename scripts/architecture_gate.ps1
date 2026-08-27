@@ -129,7 +129,10 @@ if ($Json) {
 else {
     Write-Host "=== Architecture Gate ==="
     Write-Host "files scanned : $($src.Count)"
-    Write-Host "violations    : $($violations.Count)  (advisory — never fails the build)"
+    # Keep this script ASCII-safe: Windows PowerShell can misread UTF-8 without
+    # a BOM under a non-UTF-8 runner code page, turning typographic quotes into
+    # parser tokens. The human report does not need a Unicode dash here.
+    Write-Host "violations    : $($violations.Count)  (advisory - never fails the build)"
     if ($violations.Count) {
         foreach ($v in ($violations | Sort-Object rule, file)) {
             Write-Host ("  [{0}] {1} L{2}: {3}  ({4})" -f $v.rule, $v.file, $v.line, $v.include, $v.message)

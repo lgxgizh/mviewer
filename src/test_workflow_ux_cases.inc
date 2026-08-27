@@ -602,7 +602,14 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             // Ctrl+C for that action — same key, different behavior).
             QApplication::clipboard()->clear();
             sendKey(&w, Qt::Key_C, Qt::ControlModifier);
-            pump(20);
+            // Copy is intentionally an asynchronous worker export. A short
+            // fixed pump passes on a fast desktop but races the worker on CI;
+            // wait for the observable clipboard result instead.
+            QElapsedTimer clipboardTimer;
+            clipboardTimer.start();
+            while (QApplication::clipboard()->image().isNull() &&
+                   clipboardTimer.elapsed() < 5000)
+                pump(25);
             CHECK(!QApplication::clipboard()->image().isNull(),
                   "Ctrl+C copies the current image to the clipboard");
 
