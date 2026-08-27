@@ -281,6 +281,25 @@ so the archive runs on a clean Windows install. Prereqs: Qt 6.10.x
 version is read from `build_msvc/version_info.txt` (generated from the CMake
 `project(VERSION)` — the single version source).
 
+The Release Candidate gate is explicit and hard-failing:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_release_checklist.ps1 `
+  -ReleaseCandidate -Version 1.0.13
+```
+
+It validates the exact portable/installer names, Qt SQL and platform plugins,
+absence of development binaries/source files, packaged `MViewer.exe --selftest`,
+the four-component installer PE version, and `dist/SHA256SUMS.txt`. The app
+accepts an image, directory, `.mvws`, or `.mvproj` from the command line, shell
+association, or drag-and-drop; multiple targets are accepted only when all are
+existing supported images.
+
+Windows crash diagnostics are always enabled and are written to the per-user
+AppData `MViewer/crash-reports` directory as a `.dmp` plus sibling `.txt` file.
+No `MVIEWER_CRASH_*` environment variable or working-directory permission is
+required.
+
 > **Screenshot / demo GIF**: Generated from the real UI (no mock) via
 > `scripts/record_demo.ps1`, which renders the actual `MainWindow` offscreen
 > through Qt (`mviewer_demo_render`) across three workflow states — directory

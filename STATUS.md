@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-08-27 · Version: **1.0.12 release line** · Verified release tag: **v1.0.12**
+> Snapshot: 2026-08-28 · Version: **1.0.13 release candidate line** · Release tag: **v1.0.13 pending final push**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -22,7 +22,25 @@
 > `docs/review/M47_PHASE0_BASELINE_2026-08-17.md`,
 > `docs/review/M47_SOURCE_BACKED_DISPLAY_2026-08-17.md`,
 > `docs/review/M49_WINDOWS_UX_UNICODE_COMPARE_CLOSURE_2026-08-26.md` and
+> `docs/review/M50_RELEASE_CANDIDATE_CONVERGENCE_2026-08-27.md`,
+> `docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md` and
 > `.\build.ps1 Test`.
+
+## M51 — Native launch, release contract & Windows qualification closure (2026-08-28)
+
+- Command line, shell associations, and drag-and-drop share one external-open
+  classifier for images, directories, `.mvws`, and `.mvproj`. Missing,
+  unsupported, and mixed targets are rejected atomically.
+- Strict RC packaging validates Qt/SQL/runtime dependencies, excludes
+  development payloads, runs packaged `--selftest`, checks installer PE
+  version identity, and verifies SHA256 for both shipping artifacts.
+- Windows crash reporting is always on under AppData. The SEH path is
+  pre-initialized, fixed-buffer/Win32-only, recursion-guarded, and covered by
+  a real child-process crash smoke test.
+- Automated evidence is recorded in
+  `docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md`.
+  Physical target-machine DPI/UNC/install-uninstall/long-path and extended
+  GUI soak rows remain explicitly **MANUAL/BLOCKED** unless run on that target.
 
 ## M50 — Release candidate workflow convergence (2026-08-27)
 
@@ -56,7 +74,7 @@
 - Automated evidence and the native qualification boundary are recorded in
   `docs/review/M49_WINDOWS_UX_UNICODE_COMPARE_CLOSURE_2026-08-26.md`.
 
-## M47 — Production-scale data path hardening (2026-08-17, in progress)
+## M47 — Production-scale data path hardening (historical phase record)
 
 - **Phase 0 complete — baseline, contract & failure reproduction:**
   - **Reproduction (measured):** 100 MP JPEG/TIFF **cannot be opened at all**
@@ -85,7 +103,7 @@
     pipelines → exact-source consumers → transactional Workspace/Project
     restore → large-image gates → qualification.
 
-## M47 — Production-scale data path hardening (2026-08-17, in progress)
+## M47 — Production-scale data path hardening (historical phase record)
 
 - **Phase 1 complete — source-backed image abstraction** (see below).
 - **Phase 2 complete — Viewer LOD-first display pipeline:**

@@ -73,6 +73,11 @@ class MainWindow : public QMainWindow
     void setupUi();
     void onImageOpen(const QString &path);
     void setOpenOnLaunch(const QString &path);
+    void setOpenOnLaunch(const QStringList &paths);
+    // Shared command-line, shell-association, and drag/drop dispatch. Invalid
+    // or mixed targets are rejected as one transaction and never partially
+    // open a different target.
+    void openExternalTargets(const QStringList &paths);
 
     // M47: dialog-free workspace/project restore. The file is read and
     // deserialized on a background worker; the UI applies the parsed document
@@ -385,7 +390,7 @@ class MainWindow : public QMainWindow
     // Persisted, cross-session app state (favorites + restore position).
     mviewer::core::RecentFiles m_recent;      // recent-folders LRU
     mviewer::core::RecentFiles m_recentFiles; // recent-files LRU (opened images)
-    QString m_openOnLaunch;                   // path passed via command line
+    QStringList m_openOnLaunch;               // paths passed via command line
     bool m_openOnLaunchQueued = false;
     AppState m_appState;
 
@@ -426,8 +431,7 @@ class MainWindow : public QMainWindow
     void maybeShowCrashReport();
     bool m_updateChecking = false;
 
-    // Shared drop handling for the main window and the thumbnail gallery:
-    // ≥2 images → Compare; a directory → open folder; one image → open it.
+    // Shared drop handling for the main window and the thumbnail gallery.
     void handleDroppedPaths(const QStringList &paths);
 
     // M44: long-running persistence/report work is owned by the window and

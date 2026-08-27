@@ -11,6 +11,10 @@ namespace mviewer::core
 // Pure: does not create files. Testable.
 std::string crashReportPath();
 
+// Stable user-facing location for crash diagnostics. The directory is created
+// when installCrashHandler() is called, not from inside the crash filter.
+std::string crashReportDirectory();
+
 // Install the unhandled-exception handler.
 //
 // On Windows, writes a minidump + a short .txt log into the crash-reports

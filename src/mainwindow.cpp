@@ -380,7 +380,15 @@ void MainWindow::setOpenOnLaunch(const QString &path)
     if (path.isEmpty())
         return;
 
-    m_openOnLaunch = path;
+    setOpenOnLaunch(QStringList{path});
+}
+
+void MainWindow::setOpenOnLaunch(const QStringList &paths)
+{
+    if (paths.isEmpty())
+        return;
+
+    m_openOnLaunch = paths;
     if (m_openOnLaunchQueued)
         return;
 
@@ -390,10 +398,10 @@ void MainWindow::setOpenOnLaunch(const QString &path)
         [this]()
         {
             m_openOnLaunchQueued = false;
-            const QString path = m_openOnLaunch;
+            const QStringList paths = m_openOnLaunch;
             m_openOnLaunch.clear();
-            if (!path.isEmpty())
-                onImageOpen(path);
+            if (!paths.isEmpty())
+                openExternalTargets(paths);
         },
         Qt::QueuedConnection);
 }

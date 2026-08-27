@@ -1,6 +1,8 @@
 // MainWindow view behaviors: drag&drop, overlays, fullscreen, slideshow, status (M20 P0#1).
 #include "mainwindow_p.h"
 
+#include "application/ExternalOpen.h"
+
 // M15: drag & drop — accept files/folders dropped onto the window.
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
 {
@@ -88,35 +90,42 @@ void MainWindow::dropEvent(QDropEvent *event)
     handleDroppedPaths(paths);
 }
 
+void MainWindow::openExternalTargets(const QStringList &paths)
+{
+    const auto plan = mviewer::application::planExternalOpen(paths);
+    if (!plan.isValid())
+    {
+        const QString message = plan.error.isEmpty() ? QStringLiteral("无法打开目标") : plan.error;
+        statusBar()->showMessage(message);
+        qWarning().noquote() << message;
+        return;
+    }
+
+    switch (plan.kind)
+    {
+    case mviewer::application::ExternalOpenKind::Image:
+        if (plan.isCompare())
+            openCompare(plan.paths);
+        else
+            onImageOpen(plan.paths.front());
+        break;
+    case mviewer::application::ExternalOpenKind::Directory:
+        changeDirectory(plan.paths.front());
+        break;
+    case mviewer::application::ExternalOpenKind::Workspace:
+        openWorkspaceFile(plan.paths.front());
+        break;
+    case mviewer::application::ExternalOpenKind::Project:
+        openProjectFile(plan.paths.front());
+        break;
+    case mviewer::application::ExternalOpenKind::Invalid:
+        break;
+    }
+}
+
 void MainWindow::handleDroppedPaths(const QStringList &paths)
 {
-    if (paths.isEmpty())
-        return;
-    // P1-5: drag workflow — dropping multiple images jumps straight into Compare
-    // (no manual "add" button); a single image opens it; a directory opens the folder.
-    if (paths.size() >= 2)
-    {
-        // All dropped items must be images (not a mix of dirs + files).
-        bool allImages = true;
-        for (const QString &p : paths)
-            if (QFileInfo(p).isDir())
-            {
-                allImages = false;
-                break;
-            }
-        if (allImages)
-        {
-            openCompare(paths);
-            return;
-        }
-        // Mixed: open the first directory, ignore the rest.
-    }
-    // If first path is a directory, open it; otherwise open as images.
-    const QFileInfo fi(paths.first());
-    if (fi.isDir())
-        changeDirectory(paths.first());
-    else
-        onImageOpen(paths.first());
+    openExternalTargets(paths);
 }
 
 void MainWindow::showMetadataOverlay()

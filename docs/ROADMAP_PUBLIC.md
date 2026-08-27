@@ -4,10 +4,10 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.12 hardening**
+## Where we are now — **Beta / 1.0.13 RC hardening**
 
 MViewer remains in **Beta** on the post-`v1.0.10` hardening line, now released as
-the `1.0.12` patch line. The product
+the `1.0.13` patch line. The product
 loop below is built and verified; packaging and final human review remain:
 
 - **Browse** — open a 1000-image directory without UI freeze; thumbnails stream
@@ -36,7 +36,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.12** (current line) | Release-candidate workflow convergence / native Windows qualification | 🔵 Beta hardening |
+| **1.0.13** (current line) | Native launch, release contract, and Windows qualification closure | 🔵 Beta hardening |
+| **1.0.12** | Release-candidate workflow convergence / native Windows qualification | ✅ Previous patch |
 | **1.0.11** | Release-candidate workflow convergence / native Windows qualification | ✅ Previous patch |
 | **1.0.10** | Windows UX / Unicode / Compare reliability closure | ✅ Previous patch |
 | **1.0.9** | Product loop closed + perf proven + SDK + installer | ✅ Previous patch |
@@ -44,7 +45,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Large-image depth: 100 MP / tiled decode, compare of huge images | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.12` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.13` patch line. The remaining 1.0 work is
 productization and release review.
 
 ## What's planned, in priority order

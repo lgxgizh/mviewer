@@ -9,21 +9,22 @@
 # Usage:
 #   powershell -ExecutionPolicy Bypass -File scripts/package_portable.ps1 `
 #       [-BuildDir build_msvc] [-QtDir D:/QT/6.11.1/msvc2022_64] `
-#       [-Version 0.11.0] [-OutDir dist]
+#       [-Version 1.0.13] [-OutDir dist]
 #
 # Output: dist/MViewer-<version>-portable.zip
 #>
 param(
     [string]$BuildDir = "build_msvc",
     # CI (install-qt-action) exports QT_ROOT_DIR to the msvc2022_64 root.
-    # Locally that env var is absent, so fall back to the dev Qt path.
-    [string]$QtDir    = $(if ($env:QT_ROOT_DIR) { $env:QT_ROOT_DIR } else { "D:/QT/6.11.1/msvc2022_64" }),
+    # Locally resolve an installed Qt instead of relying on a stale fixed path.
+    [string]$QtDir    = "",
     [string]$Version  = "",
     [string]$OutDir   = "dist"
 )
 
 $ErrorActionPreference = 'Stop'
 $root = (Get-Location).Path
+. (Join-Path $PSScriptRoot 'release_version.ps1')
 
 $exe = Join-Path $root (Join-Path $BuildDir "bin/MViewer.exe")
 if (-not (Test-Path $exe)) {
@@ -41,10 +42,24 @@ if (-not $Version) {
     }
     if (-not $Version) {
         $Version = (git describe --tags --always 2>$null)
-        if (-not $Version) { $Version = "0.0.0-dev" }
+        if (-not $Version) { throw "Release version is required (no CMake version_info.txt or git tag found)" }
         $Version = $Version.TrimStart("v")
     }
 }
+$identity = Get-ReleaseVersionIdentity $Version
+$Version = $identity.Version
+
+if (-not $QtDir) {
+    if ($env:QT_ROOT_DIR) {
+        $QtDir = $env:QT_ROOT_DIR
+    } else {
+        $qtCandidates = @(Get-ChildItem -Path 'D:/Qt' -Directory -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { Test-Path (Join-Path $_.FullName 'bin/windeployqt.exe') } |
+            Sort-Object FullName -Descending)
+        if ($qtCandidates.Count -gt 0) { $QtDir = $qtCandidates[0].FullName }
+    }
+}
+if (-not $QtDir) { throw 'Qt root is required; set QT_ROOT_DIR or pass -QtDir' }
 
 $windeployqt = Join-Path $QtDir "bin/windeployqt.exe"
 if (-not (Test-Path $windeployqt)) { Write-Error "windeployqt not found at $windeployqt" }
@@ -58,9 +73,11 @@ New-Item -ItemType Directory -Force -Path $staging | Out-Null
 #    actually links Qt6::Sql (DiskCache), and MViewer.exe does not import it
 #    directly -- so windeployqt on MViewer.exe alone can miss Qt6Sql.dll.
 & $windeployqt --release --no-translations --no-compiler-runtime --dir $staging $exe 2>&1 | ForEach-Object { Write-Host "  [windeployqt] $_" }
+if ($LASTEXITCODE -ne 0) { throw "windeployqt failed for MViewer.exe (exit $LASTEXITCODE)" }
 $coreDll = Join-Path $root (Join-Path $BuildDir "bin/mviewer_core.dll")
 if (Test-Path $coreDll) {
     & $windeployqt --release --no-translations --no-compiler-runtime --dir $staging $coreDll 2>&1 | ForEach-Object { Write-Host "  [windeployqt:core] $_" }
+    if ($LASTEXITCODE -ne 0) { throw "windeployqt failed for mviewer_core.dll (exit $LASTEXITCODE)" }
 }
 # Safety net: Qt6Sql.dll is required at runtime (DiskCache uses SQLite). Copy it
 # explicitly in case windeployqt still misses it.
@@ -119,9 +136,8 @@ foreach ($f in @("README.md","CHANGELOG.md","LICENSE")) {
     $src = Join-Path $root $f
     if (Test-Path $src) { Copy-Item $src $staging | Out-Null; Write-Host "  [asset] $f" }
 }
-# Benchmark corpus generator + golden data (optional, keeps mviewer_bench usable)
-$benchSrc = Join-Path $root "benchmarks"
-if (Test-Path $benchSrc) { Copy-Item $benchSrc (Join-Path $staging "benchmarks") -Recurse | Out-Null; Write-Host "  [asset] benchmarks/" }
+# Development corpora, benchmark binaries, source files, and test fixtures are
+# deliberately not copied into a user-facing package.
 
 # 3b) Defense-in-depth: a Release package must contain ONLY the shipping app.
 #     Strip any test / diagnostic / bench executables that may have landed in

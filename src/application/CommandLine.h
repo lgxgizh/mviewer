@@ -1,5 +1,7 @@
 #pragma once
 
+#include "application/ExternalOpen.h"
+
 #include <QString>
 
 namespace mviewer::application

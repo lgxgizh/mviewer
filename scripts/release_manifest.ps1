@@ -17,21 +17,31 @@
 .PARAMETER OutDir
   Directory containing the release artifacts (default: dist).
 
+.PARAMETER Strict
+  Require the exact versioned portable ZIP and NSIS installer. Missing files
+  are hard failures instead of an empty/warning-only manifest.
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts/release_manifest.ps1 -Version 1.0.3
 #>
 param(
     [string]$Version = "",
-    [string]$OutDir  = "dist"
+    [string]$OutDir  = "dist",
+    [switch]$Strict
 )
 
 $ErrorActionPreference = 'Stop'
 $root = (Get-Location).Path
+. (Join-Path $PSScriptRoot 'release_version.ps1')
 
 if (-not $Version) {
     $Version = (git describe --tags --always 2>$null)
     if (-not $Version) { $Version = "0.0.0-dev" }
     $Version = $Version.TrimStart("v")
+}
+if ($Strict) {
+    $identity = Get-ReleaseVersionIdentity $Version
+    $Version = $identity.Version
 }
 
 $outAbs = Join-Path $root $OutDir
@@ -40,21 +50,27 @@ if (-not (Test-Path $outAbs)) {
 }
 
 # ── 1) SHA256SUMS for shipping artifacts ────────────────────────────────────
-$patterns = @(
-    "MViewer-*-portable.zip",
-    "MViewer-*-Setup.exe",
-    "MViewer-*.zip",
-    "MViewer-*.exe"
-)
 $files = @()
-foreach ($pat in $patterns) {
-    $files += Get-ChildItem -Path $outAbs -Filter $pat -File -ErrorAction SilentlyContinue
+if ($Strict) {
+    foreach ($name in @("MViewer-$Version-portable.zip", "MViewer-$Version-Setup.exe")) {
+        $candidate = Join-Path $outAbs $name
+        if (-not (Test-Path -LiteralPath $candidate)) {
+            throw "Strict release manifest: missing exact artifact '$candidate'"
+        }
+        $files += Get-Item -LiteralPath $candidate
+    }
+} else {
+    foreach ($pat in @("MViewer-*-portable.zip", "MViewer-*-Setup.exe", "MViewer-*.zip", "MViewer-*.exe")) {
+        $files += Get-ChildItem -Path $outAbs -Filter $pat -File -ErrorAction SilentlyContinue
+    }
 }
 # De-dup by full path
 $files = $files | Sort-Object FullName -Unique
 
 $sumsPath = Join-Path $outAbs "SHA256SUMS.txt"
-if ($files.Count -eq 0) {
+if ($files.Count -eq 0 -and $Strict) {
+    throw "Strict release manifest: no release artifacts found under $outAbs"
+} elseif ($files.Count -eq 0) {
     Write-Warning "No release artifacts found under $outAbs — writing empty SHA256SUMS."
     Set-Content -Path $sumsPath -Value "# No artifacts found for version $Version" -Encoding utf8
 } else {

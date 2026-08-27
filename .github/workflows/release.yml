@@ -194,47 +194,27 @@ jobs:
       - name: Build
         run: powershell -NoProfile -ExecutionPolicy Bypass -File build.ps1 Release
 
-      - name: Package portable zip
-        run: |
-          $payload = @(& ./.github/scripts/release_payload.ps1 -BinDir build_msvc/bin)
-          try {
-            $files = @($payload) + @('README.md') + @(Get-ChildItem LICENSE* -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
-            Compress-Archive -Path $files -DestinationPath mviewer-win-x64.zip
-          } catch {
-            $files = @($payload) + @('README.md')
-            Compress-Archive -Path $files -DestinationPath mviewer-win-x64.zip
-          }
+      - name: Install NSIS
+        run: choco install nsis --no-progress -y
 
-      - name: Stage installer files
+      - name: Package and run Strict RC contract
         run: |
           $ver = "${{ github.ref_name }}".TrimStart('v')
-          if (-not $ver) { $ver = "0.0.0" }
-          New-Item -ItemType Directory -Force -Path dist/staging/MViewer | Out-Null
-          $payload = & ./.github/scripts/release_payload.ps1 -BinDir build_msvc/bin
-          Copy-Item $payload dist/staging/MViewer/ -Recurse -Force
-          # Deploy Qt runtime + imageformat plugin next to the main executable.
-          windeployqt --release --no-translations --no-opengl-sw dist/staging/MViewer/MViewer.exe
-          echo "MVIEWER_VERSION=$ver" >> $env:GITHUB_ENV
+          if (-not ("${{ github.ref }}" -like 'refs/tags/*')) {
+            $line = Get-Content build_msvc/version_info.txt | Where-Object { $_ -match '^MVIEWER_VERSION=' } | Select-Object -First 1
+            $ver = $line.Substring('MVIEWER_VERSION='.Length).Trim()
+          }
+          powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package_release.ps1 -Version $ver -OutDir dist
 
-      - name: Build installer (NSIS, best-effort)
-        run: |
-          choco install nsis -y
-          & "C:\Program Files (x86)\NSIS\makensis.exe" /DAPP_DIR=dist\staging\MViewer /DVERSION=${{ env.MVIEWER_VERSION }} installer/mviewer.nsi
-        continue-on-error: true
-
-      - name: Upload portable zip
+      - name: Upload release artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: mviewer-win-x64
-          path: mviewer-win-x64.zip
-
-      - name: Upload installer (best-effort)
-        if: always()
-        continue-on-error: true
-        uses: actions/upload-artifact@v4
-        with:
-          name: mviewer-installer
-          path: dist/*.exe
+          name: mviewer-release
+          path: |
+            dist/MViewer-*-portable.zip
+            dist/MViewer-*-Setup.exe
+            dist/SHA256SUMS.txt
+            dist/RELEASE_NOTES.md
 
   # ---------------------------------------------------------------------------
   # release — draft GitHub release with all artifacts
@@ -253,22 +233,14 @@ jobs:
         with:
           path: artifacts
 
-      - name: Draft release (portable zip)
+      - name: Draft release (all verified artifacts)
         uses: softprops/action-gh-release@v2
         with:
           draft: true
-          files: artifacts/mviewer-win-x64/mviewer-win-x64.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Attach installer if built
-        shell: bash
-        run: |
-          EXE=$(ls artifacts/mviewer-installer/*.exe 2>/dev/null || true)
-          if [ -n "$EXE" ]; then
-            gh release upload "${{ github.ref_name }}" "$EXE" --clobber
-          else
-            echo "No installer exe produced; skipping attach."
-          fi
+          body_path: artifacts/mviewer-release/RELEASE_NOTES.md
+          files: |
+            artifacts/mviewer-release/MViewer-*-portable.zip
+            artifacts/mviewer-release/MViewer-*-Setup.exe
+            artifacts/mviewer-release/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

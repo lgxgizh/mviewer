@@ -12,6 +12,7 @@
 #include <windows.h>
 
 #include <dbghelp.h>
+#include <strsafe.h>
 #pragma comment(lib, "DbgHelp.lib")
 #endif
 
@@ -38,35 +39,84 @@ std::string crashReportPath()
     return (base + ".dmp").toUtf8().toStdString();
 }
 
+std::string crashReportDirectory()
+{
+    return crashDir().toUtf8().toStdString();
+}
+
 #ifdef Q_OS_WIN
 
-static QString g_crashDir;
+// All data read by the exception filter is prepared before the handler is
+// installed. The filter itself uses fixed buffers and Win32 file APIs only;
+// Qt, QString, QDir, and heap-owning formatting stay out of the crash path.
+static std::wstring g_crashDir;
+static std::wstring g_crashAppName;
+static volatile LONG g_crashInProgress = 0;
 
 static LONG WINAPI crashExceptionFilter(EXCEPTION_POINTERS *ep)
 {
-    if (g_crashDir.isEmpty())
+    if (InterlockedCompareExchange(&g_crashInProgress, 1, 0) != 0)
+    {
+        TerminateProcess(GetCurrentProcess(), 0xC0000409u);
         return EXCEPTION_EXECUTE_HANDLER;
-    QDir().mkpath(g_crashDir);
+    }
+    if (g_crashDir.empty() || g_crashAppName.empty())
+        return EXCEPTION_EXECUTE_HANDLER;
 
-    const QString base = g_crashDir + "/" + QString::fromStdString(g_appName) + "-" +
-                         QDateTime::currentDateTime().toString("yyyyMMdd-hhmmss");
-    const std::wstring dmpW = (base + ".dmp").toStdWString();
-    const std::wstring txtW = (base + ".txt").toStdWString();
+    SYSTEMTIME now{};
+    GetLocalTime(&now);
+    wchar_t base[4096]{};
+    if (FAILED(StringCchPrintfW(base,
+                                ARRAYSIZE(base),
+                                L"%s\\%s-%04u%02u%02u-%02u%02u%02u-%lu-%lu",
+                                g_crashDir.c_str(),
+                                g_crashAppName.c_str(),
+                                static_cast<unsigned>(now.wYear),
+                                static_cast<unsigned>(now.wMonth),
+                                static_cast<unsigned>(now.wDay),
+                                static_cast<unsigned>(now.wHour),
+                                static_cast<unsigned>(now.wMinute),
+                                static_cast<unsigned>(now.wSecond),
+                                static_cast<unsigned long>(GetCurrentProcessId()),
+                                static_cast<unsigned long>(GetCurrentThreadId()))))
+        return EXCEPTION_EXECUTE_HANDLER;
 
-    FILE *tf = _wfopen(txtW.c_str(), L"w");
-    if (tf)
+    wchar_t dmpPath[4096]{};
+    wchar_t txtPath[4096]{};
+    if (FAILED(StringCchPrintfW(dmpPath, ARRAYSIZE(dmpPath), L"%s.dmp", base)) ||
+        FAILED(StringCchPrintfW(txtPath, ARRAYSIZE(txtPath), L"%s.txt", base)))
+        return EXCEPTION_EXECUTE_HANDLER;
+
+    const HANDLE textFile = CreateFileW(txtPath,
+                                        GENERIC_WRITE,
+                                        FILE_SHARE_READ,
+                                        nullptr,
+                                        CREATE_ALWAYS,
+                                        FILE_ATTRIBUTE_NORMAL,
+                                        nullptr);
+    if (textFile != INVALID_HANDLE_VALUE)
     {
         const DWORD code = ep && ep->ExceptionRecord ? ep->ExceptionRecord->ExceptionCode : 0;
-        fprintf(tf, "MViewer crash report\n");
-        fprintf(tf, "exception_code=0x%08lX\n", code);
-        fprintf(tf, "minidump=%ls\n", dmpW.c_str());
-        fprintf(tf, "generated=%ls\n",
-                QDateTime::currentDateTime().toString(Qt::ISODate).toStdWString().c_str());
-        fclose(tf);
+        char report[512]{};
+        DWORD reportBytes = 0;
+        if (SUCCEEDED(StringCchPrintfA(report,
+                                       ARRAYSIZE(report),
+                                       "MViewer crash report\r\nexception_code=0x%08lX\r\n",
+                                       static_cast<unsigned long>(code))))
+        {
+            reportBytes = static_cast<DWORD>(lstrlenA(report));
+            WriteFile(textFile, report, reportBytes, &reportBytes, nullptr);
+        }
+        CloseHandle(textFile);
     }
 
-    const HANDLE hFile = CreateFileW(dmpW.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
-                                     FILE_ATTRIBUTE_NORMAL, nullptr);
+    const HANDLE hFile = CreateFileW(dmpPath,
+                                     GENERIC_WRITE,
+                                     FILE_SHARE_READ,
+                                     nullptr,
+                                     CREATE_ALWAYS,
+                                     FILE_ATTRIBUTE_NORMAL,
+                                     nullptr);
     if (hFile != INVALID_HANDLE_VALUE)
     {
         MINIDUMP_EXCEPTION_INFORMATION info{};
@@ -92,9 +142,15 @@ void installCrashHandler(const std::string &appName)
     return;
 #else
     // Always install — crash dumps are written to AppData so they never pollute
-    // the working directory or the test suite's temp tree. Tests that need to
-    // avoid the handler can still call this safely (idempotent install).
-    g_crashDir = crashDir();
+    // the working directory or the test suite's temp tree. Prepare the folder
+    // before registering SEH: the handler must not create directories or use
+    // Qt after a process has already entered an exceptional state.
+    const QString dir = crashDir();
+    g_crashDir = dir.toStdWString();
+    g_crashAppName = QString::fromStdString(g_appName).toStdWString();
+    if (!dir.isEmpty())
+        QDir().mkpath(dir);
+    InterlockedExchange(&g_crashInProgress, 0);
     SetUnhandledExceptionFilter(crashExceptionFilter);
 #endif
 }

@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.13] - 2026-08-28
+
+### Fixed
+
+- **Native external-open contract:** command line, shell associations, and
+  drag-and-drop now share one classifier for images, directories, `.mvws`, and
+  `.mvproj`; missing, unsupported, and mixed targets are rejected atomically.
+- **Windows Release Candidate packaging:** portable artifacts now deploy the
+  Qt SQL/runtime dependencies, exclude development payloads, run packaged
+  `--selftest`, and verify installer PE version identity plus SHA256 checksums.
+- **Crash diagnostics:** Windows minidump writing is always on under AppData,
+  prepares its directory before SEH installation, and uses a fixed-buffer
+  Win32-only exception path with recursion protection.
+- **Installer associations:** native `.mvws` and `.mvproj` associations use
+  correctly quoted `%1` commands; the obsolete `.mviewer` association is no
+  longer registered.
+
+### Tests
+
+- Full local Release `build.ps1 Test` gate passed 110/110 after the M51
+  implementation; the final RC gate records the clean-build reruns.
+
 ## [1.0.12] - 2026-08-27
 
 ### Fixed

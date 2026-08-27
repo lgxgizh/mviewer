@@ -207,6 +207,7 @@ target_compile_features(mviewer_ui PUBLIC cxx_std_20)
 target_include_directories(mviewer_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_library(mviewer_application STATIC
+    application/ExternalOpen.cpp
     application/OpenDirectoryUseCase.cpp
     application/CompareImagesUseCase.cpp
     application/RenameImageUseCase.cpp
@@ -1608,6 +1609,13 @@ target_compile_definitions(mviewer_m46_workflow_soak PRIVATE MVIEWER_SOURCE_DIR=
 add_test(NAME m46_workflow_soak COMMAND mviewer_m46_workflow_soak --iterations 8)
 set_tests_properties(m46_workflow_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
 
+# M51: Release Candidate qualification extends the real product-loop soak
+# beyond the short regression form. The 20-iteration CTest gate is the
+# repeatable CI qualification; --extended remains available for 40 iterations
+# on a physical Windows target.
+add_test(NAME m51_rc_soak COMMAND mviewer_m46_workflow_soak --iterations 20)
+set_tests_properties(m51_rc_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 1800)
+
 # ─── M50: directory-transition + async Sidecar convergence  ────────────────
 # Exercises the production MainWindow/DirectoryTree signal path with Unicode
 # paths, active rating filtering, Back/Forward, path edit, and teardown while
@@ -1633,10 +1641,24 @@ set_tests_properties(m50_navigation_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180
 add_executable(commandline_tests
     test_commandline.cpp
 )
-target_link_libraries(commandline_tests PRIVATE Qt6::Core)
+target_link_libraries(commandline_tests PRIVATE Qt6::Core mviewer_application)
 target_compile_features(commandline_tests PRIVATE cxx_std_20)
 target_include_directories(commandline_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME commandline_tests COMMAND commandline_tests)
+
+# M51: package/installer version identity must be deterministic and must not
+# silently fall back to NSIS's development version.
+add_test(NAME release_version_tests
+    COMMAND powershell -ExecutionPolicy Bypass -File
+        ${CMAKE_SOURCE_DIR}/scripts/release_version_test.ps1
+        ${CMAKE_SOURCE_DIR})
+set_tests_properties(release_version_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
+
+add_test(NAME release_contract_tests
+    COMMAND powershell -ExecutionPolicy Bypass -File
+        ${CMAKE_SOURCE_DIR}/scripts/release_contract_test.ps1
+        ${CMAKE_SOURCE_DIR})
+set_tests_properties(release_contract_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60)
 
 # ─── M47 Phase 0: large-image data-path BASELINE recorder ───────────────────
 # Records the pre-Phase-1 behavior of the current data path (decode entry

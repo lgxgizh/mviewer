@@ -1,17 +1,17 @@
-{
-  "overall": 92.7,
-  "grade": "A",
-  "dimensions": {
-    "Build": 100.0,
-    "Unit Test": 100.0,
-    "Performance": null,
-    "Code Quality": null,
-    "Coverage": null,
-    "Memory": null,
-    "Architecture": 100,
-    "Complexity": 60,
-    "Regression": 100.0
-  },
-  "generated": "2026-08-15 23:35:48",
-  "commit": "db18bd6"
+﻿{
+    "overall":  84.5,
+    "grade":  "B",
+    "dimensions":  {
+                       "Build":  100,
+                       "Unit Test":  100,
+                       "Performance":  null,
+                       "Code Quality":  null,
+                       "Coverage":  null,
+                       "Memory":  null,
+                       "Architecture":  100,
+                       "Complexity":  15,
+                       "Regression":  100
+                   },
+    "generated":  "2026-08-28 03:11:32",
+    "commit":  "a0226cb"
 }

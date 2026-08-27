@@ -135,6 +135,12 @@ int main(int argc, char **argv)
     const QDir dirB(bPath);
     const QString imageA = writeImage(dirA, QStringLiteral("样片 A.png"), QColor(30, 60, 90));
     const QString imageB = writeImage(dirB, QStringLiteral("样片 B.png"), QColor(90, 60, 30));
+    const QString unsupported = root.filePath(QStringLiteral("说明 😀.txt"));
+    {
+        QFile file(unsupported);
+        CHECK(file.open(QIODevice::WriteOnly), "write an unsupported external-open fixture");
+        file.write("not an image");
+    }
 
     auto &ratings = mviewer::core::RatingStore::instance();
     const QString ratingsPath = root.filePath(QStringLiteral("ratings.txt"));
@@ -173,6 +179,20 @@ int main(int argc, char **argv)
     CHECK(back && forward, "directory back/forward actions are registered");
     if (!tree || !directory || !panel || !selection || !pathEdit || !back || !forward)
         return 1;
+
+    window.openExternalTargets({imageA});
+    CHECK(waitFor([&] { return selection->currentImage() == imageA; }),
+          "external-open dispatcher sends one image to the Viewer workflow");
+    const QString sessionDirBeforeMixedOpen = directory->currentDirectory();
+    const QString sessionImageBeforeMixedOpen = selection->currentImage();
+    window.openExternalTargets({imageA, unsupported});
+    pump();
+    CHECK(samePath(directory->currentDirectory(), sessionDirBeforeMixedOpen) &&
+              selection->currentImage() == sessionImageBeforeMixedOpen,
+          "mixed external-open rejection preserves the live session");
+    window.openExternalTargets({bPath});
+    CHECK(waitFor([&] { return samePath(directory->currentDirectory(), bPath); }),
+          "external-open dispatcher sends one directory to Browse");
 
     panel->setRatingFilter(5);
     CHECK(navigate(tree, directory, aPath), "Unicode directory A commits through DirectoryTree");

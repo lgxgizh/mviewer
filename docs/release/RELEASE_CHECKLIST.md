@@ -48,24 +48,33 @@ mviewer_bench --enforce     # full regression assertion
 The `--enforce` mode is the gating benchmark CTest. A regression past the
 accepted threshold must block the release.
 
-## 5. Crash diagnostics (opt-in, production only)
+## 5. Crash diagnostics (always on)
 
-Set `MVIEWER_CRASH_DUMP=1` in the shipped environment (or a wrapper script) so
-unhandled exceptions write a minidump + `.txt` log to
-`%TEMP%/mviewer-crash-reports/`. This is **off** by default and **never** set in
-the test suite — it only activates in the field to make crashes diagnosable.
+The Windows handler is installed during startup and writes a minidump plus a
+sibling `.txt` report under the per-user AppData location:
+`%LOCALAPPDATA%/MViewer/crash-reports/` (the exact path is resolved by Qt's
+`AppDataLocation`). No environment variable is required, and crash output is
+never written into the working directory. The handler directory is prepared
+before SEH registration and its exception path uses fixed-buffer Win32 I/O.
+
+The automated `crashhandler_tests` test launches a child process that raises a
+real SEH exception and verifies the `.dmp`/`.txt` pair. Opening the dump in
+WinDbg and checking the user-facing location remain physical Windows review
+items.
 
 ## 6. Package
 
 ```powershell
-scripts/package_release.ps1   # portable zip + NSIS installer + M14.8 manifest
+scripts/package_release.ps1   # portable zip + NSIS installer + strict manifest/gate
 ```
 
-Verify `dist/MViewer-<ver>-portable.zip` launches offscreen with no missing
-dependency errors, and `dist/MViewer-<ver>-Setup.exe` installs/uninstalls
-cleanly.
+The package script is strict: it fails if NSIS, the exact versioned installer,
+Qt SQL/plugin/runtime dependencies, or the packaged `--selftest` is missing.
+`dist/MViewer-<ver>-portable.zip` is inspected for development files and
+launched offscreen; `dist/MViewer-<ver>-Setup.exe` must carry the same four-part
+PE version as the CMake version identity.
 
-## 7. Release metadata (M14.8)
+## 7. Release metadata (M14.8 / M51)
 
 After packaging, confirm:
 
@@ -81,6 +90,20 @@ powershell -ExecutionPolicy Bypass -File scripts/release_manifest.ps1 -Version 1
 ```
 
 Attach both files to the GitHub Release alongside the zip/installer.
+
+## 8. Strict Release Candidate command
+
+Run the complete hard gate from the repository root:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/run_release_checklist.ps1 `
+  -ReleaseCandidate -Version 1.0.13
+```
+
+`-ReleaseCandidate` enables packaging automatically and converts missing
+artifacts, installer/version mismatches, checksum errors, dependency gaps,
+crash smoke failures, and packaged selftest failures into hard FAIL results.
+It also disallows `-SkipBench`; no WARN or SKIP can produce a passing RC report.
 
 ## Notes
 

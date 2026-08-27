@@ -76,6 +76,7 @@
 
 | M49 | **Windows UX / Unicode / Compare reliability closure** — UTF-8 filesystem boundaries, exception containment, MainWindow-backed multi-selection ownership, strict default Compare geometry, columns-driven layout semantics, and display-only momentary Compare | ✅ Complete (2026-08-27); automated evidence and the remaining native MANUAL/BLOCKED boundary are recorded in `docs/review/M49_WINDOWS_UX_UNICODE_COMPARE_CLOSURE_2026-08-26.md`. |
 | M50 | **Release Candidate Workflow Convergence & Native Windows Qualification** — one directory-transition owner, latest-wins Sidecar/UI convergence, Compare responsibility split, CLI path regression, release evidence | ✅ Automated closure complete (2026-08-27); clean `build.ps1 Test` passed 107/107 and the 1.0.12 release ZIP payload was verified. Physical target-machine qualification remains MANUAL/BLOCKED. See `docs/review/M50_RELEASE_CANDIDATE_CONVERGENCE_2026-08-27.md`. |
+| M51 | **Native Launch, Release Contract & Windows Qualification Closure** — unified external-open dispatch, native associations, strict portable/installer contract, always-on crash diagnostics, and RC soak evidence | ✅ Automated closure complete (2026-08-28); clean `build.ps1 Test` passed 110/110 twice, and the 1.0.13 portable ZIP plus NSIS installer passed the strict release contract. Physical target-machine qualification remains MANUAL/BLOCKED. See `docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md`. |
 
 ### M25 closure addendum (2026-08-09)
 

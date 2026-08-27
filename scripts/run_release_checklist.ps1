@@ -1,203 +1,199 @@
-<#
+<##
 .SYNOPSIS
-    Runs the MViewer release checklist (docs/release/RELEASE_CHECKLIST.md) end to
-    end and produces a PASS/FAIL report. This automates the 7-step manual
-    checklist so a release candidate can be validated with a single command.
+    Run the MViewer release checklist and write a machine-readable report.
 
 .DESCRIPTION
-    Executes the release gate steps defined in RELEASE_CHECKLIST.md:
-      1. Build (Release)
-      2. Core tests (ctest, via build.ps1 Test)
-      3. MViewer --selftest self-diagnostics
-      4. Performance regression gate (mviewer_bench --smoke / --enforce)
-      5. Crash-diagnostics env var (informational)
-      6. Packaging (opt-in via -Package)
-      7. Release manifest (changelog / version verification)
-    Writes release_checklist_report.md and returns a non-zero exit code if any
-    hard step fails.
-
-.PARAMETER Package
-    Also run the packaging step (scripts/package_release.ps1) if present.
-
-.PARAMETER SkipBench
-    Skip the performance gate (mviewer_bench) — useful for quick local checks.
-
-.PARAMETER Steps
-    Comma-separated subset of step numbers to run, e.g. "1,2,4". Default: all.
-
-.EXAMPLE
-    pwsh -ExecutionPolicy Bypass -File scripts/run_release_checklist.ps1
+    ReleaseCandidate is the strict Release Candidate mode. It always runs
+    build, tests, selftest, performance gates, child-process crash smoke,
+    packaging, manifest generation, and the post-package artifact contract.
+    Missing items are failures in strict mode; WARN/SKIP cannot pass it.
 #>
 [CmdletBinding()]
 param(
-    [switch] $Package,
-    [switch] $SkipBench,
-    [string] $Steps = ""
+    [switch]$Package,
+    [switch]$SkipBench,
+    [string]$Steps = '',
+    [switch]$ReleaseCandidate,
+    [string]$Version = '',
+    [string]$OutDir = 'dist'
 )
 
 $ErrorActionPreference = 'Stop'
 $repo = (Get-Item $PSScriptRoot).Parent.FullName
 Set-Location $repo
-
+$strict = [bool]$ReleaseCandidate
 $report = @()
 $overall = $true
 
-function Log-Step([string]$n, [string]$name) { Write-Host "`n=== Step $n : $name ===" -ForegroundColor Cyan }
-function Result([string]$status, [string]$detail) {
-    $color = @{ PASS='Green'; FAIL='Red'; WARN='Yellow'; SKIP='DarkGray' }[$status]
+function Add-Result([string]$status, [string]$detail) {
+    $color = @{ PASS = 'Green'; FAIL = 'Red'; WARN = 'Yellow'; SKIP = 'DarkGray' }[$status]
     Write-Host "[$status] $detail" -ForegroundColor $color
     $script:report += "| $status | $detail |"
     if ($status -eq 'FAIL') { $script:overall = $false }
 }
 
+function Heading([string]$number, [string]$name) {
+    Write-Host "`n=== Step $number : $name ===" -ForegroundColor Cyan
+}
+
+function Wanted([string]$number) {
+    if ($strict) { return $true }
+    if ($Steps -eq '') { return $true }
+    return $Steps.Split(',').Trim().Contains($number)
+}
+
 function Find-Binary([string]$name) {
-    $cands = @(
-        "$repo\bin\$name",
-        "$repo\bin\Release\$name",
-        "$repo\bin\Debug\$name",
-        "$repo\build_msvc\bin\$name",
-        "$repo\build_msvc\bin\Release\$name",
-        "$repo\build_msvc\bin\Debug\$name"
+    $candidates = @(
+        (Join-Path $repo "bin\$name"),
+        (Join-Path $repo "bin\Release\$name"),
+        (Join-Path $repo "build_msvc\bin\$name"),
+        (Join-Path $repo "build_msvc\bin\Release\$name")
     )
-    foreach ($c in $cands) { if (Test-Path $c) { return $c } }
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
     return $null
 }
 
-function Invoke-Step([string]$label, [scriptblock]$sb) {
-    try { & $sb }
-    catch {
-        Result FAIL "$label : $_"
+function Invoke-ProjectScript([string]$label, [string]$path, [string[]]$arguments) {
+    try {
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $path @arguments
+        $code = $LASTEXITCODE
+        if ($code -ne 0) { Add-Result FAIL "$label failed (exit $code)" }
+        else { Add-Result PASS "$label passed" }
+    } catch {
+        Add-Result FAIL "$label failed: $_"
     }
 }
 
-$want = @{}
-if ($Steps -ne '') { $Steps.Split(',') | ForEach-Object { $want[$_.Trim()] = $true } }
-function Wanted([string]$n) { return ($want.Count -eq 0) -or $want.ContainsKey($n) }
+if (-not $Version) {
+    $versionFile = Join-Path $repo 'build_msvc/version_info.txt'
+    if (Test-Path -LiteralPath $versionFile) {
+        $versionLine = Get-Content -LiteralPath $versionFile | Where-Object { $_ -match '^MVIEWER_VERSION=' } | Select-Object -First 1
+        if ($versionLine) { $Version = $versionLine.Substring('MVIEWER_VERSION='.Length).Trim() }
+    }
+    if (-not $Version) {
+        $Version = (git describe --tags --always 2>$null)
+        if ($Version) { $Version = $Version.TrimStart('v') }
+    }
+}
 
-# ── Step 1: Build Release ────────────────────────────────────────────────
 if (Wanted '1') {
-    Log-Step '1' '构建 Release'
-    Invoke-Step 'build' {
-        & powershell -ExecutionPolicy Bypass -File "$repo\build.ps1" Release
-        if ($LASTEXITCODE -ne 0) { Result FAIL 'build.ps1 Release 失败 (exit ' + $LASTEXITCODE + ')' }
-        else { Result PASS 'build.ps1 Release 成功' }
-    }
+    Heading '1' 'Release build'
+    Invoke-ProjectScript 'build.ps1 Release' (Join-Path $repo 'build.ps1') @('Release')
 }
 
-# ── Step 2: Core tests (ctest) ───────────────────────────────────────────
 if (Wanted '2') {
-    Log-Step '2' '运行核心测试 (ctest)'
-    Invoke-Step 'test' {
-        & powershell -ExecutionPolicy Bypass -File "$repo\build.ps1" Test
-        if ($LASTEXITCODE -ne 0) { Result FAIL 'build.ps1 Test 失败 (exit ' + $LASTEXITCODE + ')' }
-        else { Result PASS 'build.ps1 Test 全绿' }
-    }
+    Heading '2' 'CTest gate'
+    Invoke-ProjectScript 'build.ps1 Test' (Join-Path $repo 'build.ps1') @('Test')
 }
 
-# ── Step 3: MViewer --selftest ───────────────────────────────────────────
 if (Wanted '3') {
-    Log-Step '3' '运行 MViewer --selftest'
-    $mv = Find-Binary 'mviewer.exe'
-    if ($null -eq $mv) {
-        Result WARN '未找到 mviewer.exe (先运行 Step 1 构建)'
-    }
-    else {
-        Invoke-Step 'selftest' {
-            & $mv --selftest
-            if ($LASTEXITCODE -ne 0) { Result FAIL 'mviewer --selftest 返回 ' + $LASTEXITCODE }
-            else { Result PASS 'mviewer --selftest 通过' }
+    Heading '3' 'MViewer selftest'
+    $viewer = Find-Binary 'MViewer.exe'
+    if (-not $viewer) {
+        if ($strict) { Add-Result FAIL 'MViewer.exe is missing' }
+        else { Add-Result WARN 'MViewer.exe is missing' }
+    } else {
+        $oldQpa = $env:QT_QPA_PLATFORM
+        $env:QT_QPA_PLATFORM = 'windows'
+        try {
+            $selfTest = Start-Process -FilePath $viewer -ArgumentList '--selftest' `
+                -WorkingDirectory (Split-Path -Parent $viewer) -PassThru -Wait -WindowStyle Hidden
+            $selfTest.Refresh()
+            $selfTestCode = $selfTest.ExitCode
+        } finally {
+            if ($null -eq $oldQpa) { Remove-Item Env:QT_QPA_PLATFORM -ErrorAction SilentlyContinue }
+            else { $env:QT_QPA_PLATFORM = $oldQpa }
         }
+        if ($selfTestCode -ne 0) { Add-Result FAIL "MViewer --selftest failed (exit $selfTestCode)" }
+        else { Add-Result PASS 'MViewer --selftest passed' }
     }
 }
 
-# ── Step 4: Performance regression gate ─────────────────────────────────
-if (Wanted '4' -and -not $SkipBench) {
-    Log-Step '4' '性能回归门禁 (mviewer_bench --smoke / --enforce)'
-    $bench = Find-Binary 'mviewer_bench.exe'
-    if ($null -eq $bench) {
-        Result WARN '未找到 mviewer_bench.exe (Step 1 应已构建)'
-    }
-    else {
-        Invoke-Step 'bench-smoke' {
+if (Wanted '4') {
+    Heading '4' 'Performance gates'
+    if ($SkipBench) {
+        if ($strict) { Add-Result FAIL 'Strict RC does not allow -SkipBench' }
+        else { Add-Result SKIP 'Benchmark gate skipped by -SkipBench' }
+    } else {
+        $bench = Find-Binary 'mviewer_bench.exe'
+        if (-not $bench) {
+            if ($strict) { Add-Result FAIL 'mviewer_bench.exe is missing' }
+            else { Add-Result WARN 'mviewer_bench.exe is missing' }
+        } else {
             & $bench --smoke
-            if ($LASTEXITCODE -ne 0) { Result FAIL 'mviewer_bench --smoke 失败 (exit ' + $LASTEXITCODE + ')' }
-            else { Result PASS 'mviewer_bench --smoke 通过' }
-        }
-        Invoke-Step 'bench-enforce' {
+            $smokeCode = $LASTEXITCODE
+            if ($smokeCode -ne 0) { Add-Result FAIL "mviewer_bench --smoke failed (exit $smokeCode)" }
+            else { Add-Result PASS 'mviewer_bench --smoke passed' }
             & $bench --enforce
-            if ($LASTEXITCODE -ne 0) { Result FAIL 'mviewer_bench --enforce 未达性能预算' }
-            else { Result PASS 'mviewer_bench --enforce 达预算' }
+            $enforceCode = $LASTEXITCODE
+            if ($enforceCode -ne 0) { Add-Result FAIL 'mviewer_bench --enforce failed' }
+            else { Add-Result PASS 'mviewer_bench --enforce passed' }
         }
     }
 }
-elseif ($SkipBench) { Result SKIP 'Step 4 跳过 (-SkipBench)' }
 
-# ── Step 5: Crash-diagnostics env var (informational) ────────────────────
 if (Wanted '5') {
-    Log-Step '5' '崩溃诊断环境变量 (MVIEWER_CRASH_DIAG)'
-    $v = $env:MVIEWER_CRASH_DIAG
-    if ($v -eq '1') {
-        Result PASS "MVIEWER_CRASH_DIAG=1 已设置 (崩溃转储已开启)"
-    }
-    else {
-        Result WARN "MVIEWER_CRASH_DIAG 未设置；发布前建议 set MVIEWER_CRASH_DIAG=1 后再跑一次冒烟"
+    Heading '5' 'Always-on crash diagnostics'
+    $crashTest = Find-Binary 'test_crashhandler.exe'
+    if (-not $crashTest) {
+        if ($strict) { Add-Result FAIL 'test_crashhandler.exe is missing' }
+        else { Add-Result WARN 'test_crashhandler.exe is missing' }
+    } else {
+        & $crashTest
+        if ($LASTEXITCODE -ne 0) { Add-Result FAIL "crashhandler smoke failed (exit $LASTEXITCODE)" }
+        else { Add-Result PASS 'always-on crash handler child-process smoke passed' }
     }
 }
 
-# ── Step 6: Packaging (opt-in) ───────────────────────────────────────────
 if (Wanted '6') {
-    Log-Step '6' '打包发布'
-    $pkg = Join-Path $repo 'scripts\package_release.ps1'
-    if (-not (Test-Path $pkg)) {
-        Result SKIP 'scripts/package_release.ps1 不存在'
-    }
-    elseif (-not $Package) {
-        Result SKIP '打包未启用 (加 -Package 运行)'
-    }
-    else {
-        Invoke-Step 'package' {
-            & powershell -ExecutionPolicy Bypass -File $pkg
-            if ($LASTEXITCODE -ne 0) { Result FAIL '打包失败 (exit ' + $LASTEXITCODE + ')' }
-            else { Result PASS '打包成功' }
-        }
+    Heading '6' 'Strict package'
+    $packageScript = Join-Path $repo 'scripts/package_release.ps1'
+    if (-not (Test-Path -LiteralPath $packageScript)) {
+        Add-Result FAIL 'package_release.ps1 is missing'
+    } elseif (-not $Package -and -not $strict) {
+        Add-Result SKIP 'Packaging is disabled; pass -Package'
+    } else {
+        Invoke-ProjectScript 'package_release.ps1' $packageScript @('-Version', $Version, '-OutDir', $OutDir)
     }
 }
 
-# ── Step 7: Release manifest ─────────────────────────────────────────────
 if (Wanted '7') {
-    Log-Step '7' '生成发布清单 (changelog / version)'
-    $manifest = Join-Path $repo 'scripts\release_manifest.ps1'
-    if (-not (Test-Path $manifest)) {
-        Result WARN 'scripts/release_manifest.ps1 不存在'
-    }
-    else {
-        Invoke-Step 'manifest' {
-            & powershell -ExecutionPolicy Bypass -File $manifest
-            if ($LASTEXITCODE -ne 0) { Result FAIL 'release_manifest.ps1 校验失败' }
-            else { Result PASS 'release_manifest.ps1 通过' }
-        }
+    Heading '7' 'Release manifest'
+    $manifestScript = Join-Path $repo 'scripts/release_manifest.ps1'
+    if (-not (Test-Path -LiteralPath $manifestScript)) {
+        Add-Result FAIL 'release_manifest.ps1 is missing'
+    } else {
+        $manifestArgs = @('-Version', $Version, '-OutDir', $OutDir)
+        if ($strict) { $manifestArgs += '-Strict' }
+        Invoke-ProjectScript 'release_manifest.ps1' $manifestScript $manifestArgs
     }
 }
 
-# ── Report ───────────────────────────────────────────────────────────────
-$date = Get-Date -Format 'yyyy-MM-dd HH:mm'
-$md = @"
-# MViewer 发布检查清单报告
+if (Wanted '8') {
+    Heading '8' 'Strict artifact contract'
+    $gateScript = Join-Path $repo 'scripts/release_contract_gate.ps1'
+    if (-not $strict) {
+        Add-Result SKIP 'Strict artifact contract is enabled by -ReleaseCandidate'
+    } elseif (-not (Test-Path -LiteralPath $gateScript)) {
+        Add-Result FAIL 'release_contract_gate.ps1 is missing'
+    } else {
+        Invoke-ProjectScript 'release_contract_gate.ps1' $gateScript @('-Version', $Version, '-ArtifactDir', $OutDir)
+    }
+}
 
-生成时间: $date
-总体结果: $(if ($overall) { 'PASS' } else { 'FAIL' })
-
-| 结果 | 步骤 |
-|------|------|
-$($report -join "`n")
-
-## 说明
-- 本脚本自动执行 docs/release/RELEASE_CHECKLIST.md 的 7 个步骤。
-- FAIL 表示硬门禁未通过（构建/测试/性能预算/清单）；WARN 为需人工确认；SKIP 为未启用或缺失。
-- 任意 FAIL 会使进程以非零退出码结束。
-"@
+$overallText = if ($overall) { 'PASS' } else { 'FAIL' }
+$overallColor = if ($overall) { 'Green' } else { 'Red' }
+$exitCode = if ($overall) { 0 } else { 1 }
+$newline = [Environment]::NewLine
+$md = "# MViewer Release Checklist Report"
+$md += $newline + $newline + "Generated: " + (Get-Date -Format 'yyyy-MM-dd HH:mm')
+$md += $newline + "Overall: " + $overallText
+$md += $newline + $newline + "| Status | Step |" + $newline + "|--------|------|" + $newline
+$md += ($report -join $newline)
+$md += $newline + $newline + 'Strict RC mode requires package, installer, runtime, version, checksum, and packaged selftest to pass.'
 $md | Out-File -FilePath (Join-Path $repo 'release_checklist_report.md') -Encoding utf8
-Write-Host "`n报告已写入 release_checklist_report.md" -ForegroundColor Cyan
-Write-Host "总体结果: $(if ($overall) { 'PASS' } else { 'FAIL' })" -ForegroundColor $(if ($overall) { 'Green' } else { 'Red' })
-
-exit $(if ($overall) { 0 } else { 1 })
+Write-Host "`nReport written to release_checklist_report.md" -ForegroundColor Cyan
+Write-Host "Overall: $overallText" -ForegroundColor $overallColor
+exit $exitCode

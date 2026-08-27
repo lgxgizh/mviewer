@@ -10,10 +10,10 @@
 
 !define APPNAME "MViewer"
 !ifndef VERSION
-  !define VERSION "0.0.0-dev"
+  !error "VERSION is required (pass the release display version)"
 !endif
 !ifndef VI_VERSION
-  !define VI_VERSION "0.0.0.0"
+  !error "VI_VERSION is required as four numeric components (X.X.X.X)"
 !endif
 !ifndef APP_DIR
   !define APP_DIR "dist\staging\MViewer"
@@ -35,7 +35,8 @@ Unicode True
 
 VIProductVersion "${VI_VERSION}"
 VIAddVersionKey "ProductName" "${APPNAME}"
-VIAddVersionKey "FileVersion" "${VERSION}"
+VIAddVersionKey "FileVersion" "${VI_VERSION}"
+VIAddVersionKey "ProductVersion" "${VI_VERSION}"
 VIAddVersionKey "LegalCopyright" "(c) MViewer contributors"
 VIAddVersionKey "FileDescription" "${APPNAME} installer"
 
@@ -59,11 +60,18 @@ Section "Install"
   CreateShortcut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\MViewer.exe"
 
   ; ── P2 #⑩: File associations ────────────────────────────────────────
-  ; .mviewer workspace file association
-  WriteRegStr HKCR ".mviewer" "" "MViewer.Workspace"
+  ; Native workspace/project associations. These extensions are the only
+  ; serialized document formats understood by the application.
+  WriteRegStr HKCR ".mvws" "" "MViewer.Workspace"
   WriteRegStr HKCR "MViewer.Workspace" "" "MViewer Workspace"
   WriteRegStr HKCR "MViewer.Workspace\DefaultIcon" "" "$INSTDIR\MViewer.exe,0"
   WriteRegStr HKCR "MViewer.Workspace\shell\open\command" "" '"$INSTDIR\MViewer.exe" "%1"'
+  WriteRegStr HKCR ".mvws\OpenWithProgids" "MViewer.Workspace" ""
+  WriteRegStr HKCR ".mvproj" "" "MViewer.Project"
+  WriteRegStr HKCR "MViewer.Project" "" "MViewer Project"
+  WriteRegStr HKCR "MViewer.Project\DefaultIcon" "" "$INSTDIR\MViewer.exe,0"
+  WriteRegStr HKCR "MViewer.Project\shell\open\command" "" '"$INSTDIR\MViewer.exe" "%1"'
+  WriteRegStr HKCR ".mvproj\OpenWithProgids" "MViewer.Project" ""
 
   ; Register common image extensions for Open-With context menu
   !macro AssocExt ext
@@ -111,8 +119,13 @@ Section "Uninstall"
   RMDir "$SMPROGRAMS\${APPNAME}"
   Delete "$DESKTOP\${APPNAME}.lnk"
   ; Remove file associations
-  DeleteRegKey HKCR ".mviewer"
+  DeleteRegKey HKCR ".mvws"
+  DeleteRegKey HKCR ".mvproj"
   DeleteRegKey HKCR "MViewer.Workspace"
+  DeleteRegKey HKCR "MViewer.Project"
+  ; Legacy pre-M51 registration. MViewer never reads .mviewer; remove only
+  ; the obsolete association on uninstall so upgrades do not leave a ghost.
+  DeleteRegKey HKCR ".mviewer"
   !macro UnassocExt ext
     DeleteRegKey HKCR "MViewer.${ext}"
     DeleteRegValue HKCR ".${ext}\OpenWithProgids" "MViewer.${ext}"

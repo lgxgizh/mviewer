@@ -16,7 +16,7 @@
 #include <string>
 
 class MainWindow;
-static QString g_openOnLaunch;
+static QStringList g_openOnLaunch;
 
 class MViewerApplication final : public QApplication
 {
@@ -73,24 +73,28 @@ int main(int argc, char *argv[])
             return mviewer::core::runSelfTest();
     }
 
-    // M14-1: Windows Native — open a file directly from the command line.
-    // `mviewer.exe image.jpg` → open the image instead of an empty window.
+    // M51: collect positional arguments first. Classification happens after
+    // plugins are loaded so plugin-provided image suffixes use the same
+    // contract as shell associations and drag-and-drop.
+    QStringList positionalTargets;
     for (int i = 1; i < arguments.size(); ++i)
     {
         const QString &arg = arguments.at(i);
         if (mviewer::application::isPositionalOpenArgument(arg))
-        {
-            QFileInfo fi(arg);
-            if (fi.exists() && fi.isFile())
-            {
-                g_openOnLaunch = fi.absoluteFilePath();
-                break;
-            }
-        }
+            positionalTargets.append(arg);
     }
 
     // Load plugins (if any)
     startupPlugins();
+
+    if (!positionalTargets.isEmpty())
+    {
+        const auto plan = mviewer::application::planExternalOpen(positionalTargets);
+        if (plan.isValid())
+            g_openOnLaunch = plan.paths;
+        else
+            qWarning().noquote() << plan.error;
+    }
 
     MainWindow mainWindow;
     if (!g_openOnLaunch.isEmpty())
