@@ -4,10 +4,10 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.10 hardening**
+## Where we are now — **Beta / 1.0.11 hardening**
 
-MViewer remains in **Beta** on the post-`v1.0.9` hardening line, now released as
-the `1.0.10` patch line. The product
+MViewer remains in **Beta** on the post-`v1.0.10` hardening line, now released as
+the `1.0.11` patch line. The product
 loop below is built and verified; packaging and final human review remain:
 
 - **Browse** — open a 1000-image directory without UI freeze; thumbnails stream
@@ -36,14 +36,15 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.10** (current line) | Windows UX / Unicode / Compare reliability closure | 🔵 Beta hardening |
+| **1.0.11** (current line) | Release-candidate workflow convergence / native Windows qualification | 🔵 Beta hardening |
+| **1.0.10** | Windows UX / Unicode / Compare reliability closure | ✅ Previous patch |
 | **1.0.9** | Product loop closed + perf proven + SDK + installer | ✅ Previous patch |
 | **1.0** | First non-prerelease: signed installer, docs site, stable plugin ABI | ⬜ Release work |
 | **1.1** | Large-image depth: 100 MP / tiled decode, compare of huge images | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies a real `v1.0.9` release tag; no newer Git tag is
-claimed here. The remaining 1.0 work is productization and release review.
+The repository verifies the `v1.0.11` patch line. The remaining 1.0 work is
+productization and release review.
 
 ## What's planned, in priority order
 

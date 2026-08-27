@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 
 #include "MViewerVersion.h"
+#include "application/CommandLine.h"
 #include "application/Startup.h"
 #include "core/CrashHandler.h"
 #include "core/Logger.h"
@@ -77,7 +78,7 @@ int main(int argc, char *argv[])
     for (int i = 1; i < arguments.size(); ++i)
     {
         const QString &arg = arguments.at(i);
-        if (!arg.startsWith("-") && !arg.startsWith("/"))
+        if (mviewer::application::isPositionalOpenArgument(arg))
         {
             QFileInfo fi(arg);
             if (fi.exists() && fi.isFile())

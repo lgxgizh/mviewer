@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.11] - 2026-08-27
+
+### Fixed
+
+- **Release-candidate workflow convergence:** directory navigation now has one
+  committed transition owner, and latest-wins Sidecar imports refresh the active
+  gallery filters safely across Unicode paths, Back/Forward, and teardown.
+- **Compare maintainability:** LOD/materialization, Diff, and canvas/Blink
+  rendering responsibilities are separated into bounded translation units
+  without changing the Compare public behavior.
+- **Command-line paths:** Unix absolute image paths are accepted while Windows
+  slash-prefixed switches remain reserved; Windows drive and UNC paths remain
+  supported.
+
+### Tests
+
+- Added M50 navigation/Sidecar/teardown and command-line path regressions.
+- Full local `build.ps1 Test` gate passed 107/107, including workflow soak,
+  golden-image, benchmark-enforce, architecture, and large-image gates.
+- Physical target-machine Windows/DPI/UNC/installer qualification remains
+  explicitly MANUAL/BLOCKED where it was not run.
+
 ## [1.0.10] - 2026-08-27
 
 ### Fixed

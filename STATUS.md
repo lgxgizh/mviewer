@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-08-27 · Version: **1.0.10 release line** · Verified release tag: **v1.0.9**
+> Snapshot: 2026-08-27 · Version: **1.0.11 release line** · Verified release tag: **v1.0.11**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -23,6 +23,23 @@
 > `docs/review/M47_SOURCE_BACKED_DISPLAY_2026-08-17.md`,
 > `docs/review/M49_WINDOWS_UX_UNICODE_COMPARE_CLOSURE_2026-08-26.md` and
 > `.\build.ps1 Test`.
+
+## M50 — Release candidate workflow convergence (2026-08-27)
+
+- Directory transitions now have one committed `directoryChanged` owner for
+  gallery/model/history/recents/status/reindex and Sidecar scheduling. Sidecar
+  completion is latest-wins, lifetime-safe, UI-marshalled, and re-applies the
+  active rating/flag filters.
+- Compare materialization, Diff, and canvas/Blink rendering are separated into
+  bounded translation units; the largest is below the 800-line responsibility
+  guardrail.
+- Unix absolute command-line paths are accepted on Unix while Windows slash
+  switches remain reserved; drive and UNC paths are covered by regression
+  tests.
+- Focused evidence is recorded in
+  `docs/review/M50_RELEASE_CANDIDATE_CONVERGENCE_2026-08-27.md`. Physical
+  target-machine Windows/DPI/UNC/installer qualification remains
+  **MANUAL/BLOCKED**, never an automated PASS.
 
 ## M49 — Windows UX / Unicode / Compare reliability closure (2026-08-27)
 

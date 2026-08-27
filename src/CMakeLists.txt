@@ -165,6 +165,9 @@ add_library(mviewer_ui STATIC
     compareworkspace.cpp
     compareworkspace_controls.cpp
     compareworkspace_render.cpp
+    compareworkspace_render_materialization.cpp
+    compareworkspace_render_diff.cpp
+    compareworkspace_render_canvas.cpp
     compareworkspace_analysis.cpp
     compareworkspace_editpanel.cpp
     compareworkspace_interact.cpp
@@ -1604,6 +1607,36 @@ target_include_directories(mviewer_m46_workflow_soak PRIVATE ${CMAKE_CURRENT_SOU
 target_compile_definitions(mviewer_m46_workflow_soak PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME m46_workflow_soak COMMAND mviewer_m46_workflow_soak --iterations 8)
 set_tests_properties(m46_workflow_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
+
+# ─── M50: directory-transition + async Sidecar convergence  ────────────────
+# Exercises the production MainWindow/DirectoryTree signal path with Unicode
+# paths, active rating filtering, Back/Forward, path edit, and teardown while
+# background import work is owned by the scheduler.
+add_executable(m50_navigation_tests
+    test_m50_navigation.cpp
+)
+target_link_libraries(m50_navigation_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m50_navigation_tests PRIVATE cxx_std_20)
+target_include_directories(m50_navigation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m50_navigation_tests COMMAND m50_navigation_tests)
+set_tests_properties(m50_navigation_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
+# M50: command-line path classification must keep Unix absolute paths openable
+# while preserving slash-prefixed Windows switches.
+add_executable(commandline_tests
+    test_commandline.cpp
+)
+target_link_libraries(commandline_tests PRIVATE Qt6::Core)
+target_compile_features(commandline_tests PRIVATE cxx_std_20)
+target_include_directories(commandline_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME commandline_tests COMMAND commandline_tests)
 
 # ─── M47 Phase 0: large-image data-path BASELINE recorder ───────────────────
 # Records the pre-Phase-1 behavior of the current data path (decode entry

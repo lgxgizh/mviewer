@@ -10,6 +10,8 @@ void MainWindow::scheduleSidecarImport(const QString &dir)
     auto alive = std::make_shared<std::atomic<bool>>(true);
     m_sidecarImportAlive = alive;
     const std::string utf8Dir = dir.toUtf8().toStdString();
+    const QString expectedDir = QDir::cleanPath(QDir::fromNativeSeparators(dir));
+    const QPointer<MainWindow> guard(this);
     m_sidecarImportTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [alive, utf8Dir](const TaskScheduler::TaskContext &context)
@@ -22,6 +24,34 @@ void MainWindow::scheduleSidecarImport(const QString &dir)
                 {
                     return context.isCancelled() || !alive->load(std::memory_order_acquire);
                 });
+        },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, alive, expectedDir]()
+        {
+            if (!guard || !qApp || !alive->load(std::memory_order_acquire))
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, alive, expectedDir]()
+                {
+                    if (!guard || !alive->load(std::memory_order_acquire) || !guard->m_directory ||
+                        QDir::cleanPath(QDir::fromNativeSeparators(
+                            guard->m_directory->currentDirectory())) != expectedDir)
+                        return;
+                    if (guard->m_thumbnailPanel)
+                    {
+                        // Rating/flag filters read RatingStore at evaluation
+                        // time. Re-run the active filter after import so a
+                        // sidecar never requires a manual refresh to converge.
+                        guard->m_thumbnailPanel->invalidateRatings();
+                        if (guard->m_ratingFilter)
+                            guard->m_thumbnailPanel->setRatingFilter(
+                                guard->m_ratingFilter->currentData().toInt());
+                    }
+                    if (guard->m_metadataPanel && !guard->currentImagePath().isEmpty())
+                        guard->m_metadataPanel->setImage(guard->currentImagePath());
+                },
+                Qt::QueuedConnection);
         });
 }
 
@@ -90,12 +120,9 @@ void MainWindow::navigatePage(int key)
 
 void MainWindow::onBreadcrumbPath(const QString &path)
 {
-    // M15 Product Shell P0: navigate the directory tree to the breadcrumb path.
+    // The committed directoryChanged signal owns all transition side effects.
     if (!path.isEmpty())
-    {
-        m_directoryTree->navigateTo(path, true);
-        pushDirHistory(path);
-    }
+        changeDirectory(path);
 }
 
 void MainWindow::pushHistory(const QString &path)
@@ -131,6 +158,13 @@ void MainWindow::navigateHistory(int delta)
 void MainWindow::pushDirHistory(const QString &dir)
 {
     if (dir.isEmpty())
+        return;
+    // Back/Forward changes the cursor before DirectoryTree emits the committed
+    // transition. Recognize that existing entry before pruning the forward
+    // branch, otherwise a Back operation destroys the very Forward entry it
+    // should restore.
+    if (m_dirHistoryIndex >= 0 && m_dirHistoryIndex < m_dirHistory.size() &&
+        m_dirHistory.at(m_dirHistoryIndex) == dir)
         return;
     // Prune forward entries when branching.
     if (m_dirHistoryIndex >= 0 && m_dirHistoryIndex + 1 < m_dirHistory.size())

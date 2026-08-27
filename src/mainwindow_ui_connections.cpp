@@ -60,8 +60,12 @@ void MainWindow::connectNavigationSignals()
                 m_appState.addRecentFolder(path);
                 m_directory->addRecentFolder(path);
                 rebuildRecentMenu();
-                // P0: push directory-level history for back/forward navigation.
+                // P0: the committed transition is the only history owner.
                 pushDirHistory(path);
+                // M50: the same committed transition owns cancellable Sidecar
+                // import for every navigation entry point, including tree
+                // clicks/Enter, breadcrumb, Back/Forward, refresh, and restore.
+                scheduleSidecarImport(path);
                 statusBar()->showMessage(QStringLiteral("Browse: %1, scanning…").arg(path));
                 // With no image selected yet, the title carries the folder.
                 if (currentImagePath().isEmpty())

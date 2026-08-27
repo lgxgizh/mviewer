@@ -545,20 +545,11 @@ void MainWindow::changeDirectory(const QString &dir)
     if (dir.isEmpty() || !QDir(dir).exists())
         return;
 
-    // Update the path input bar to reflect the new directory.
-    if (m_pathEdit)
-        m_pathEdit->setText(QDir::toNativeSeparators(dir));
-
-    // Navigate the tree with emitSignal=true so the directoryChanged signal
-    // fires, triggering the full update chain (breadcrumb, thumbnails, recent
-    // folders, status bar, reindex, etc.) — just like clicking a tree node.
+    // DirectoryTree::directoryChanged is the committed-transition boundary.
+    // All directory-scoped side effects live in its MainWindow owner below so
+    // every entry point (tree, breadcrumb, history, path edit, and restore)
+    // follows exactly the same path.
     m_directoryTree->navigateTo(dir, true);
-
-    // P0: push directory-level history for back/forward navigation.
-    pushDirHistory(dir);
-
-    // Import sidecar metadata for the new directory.
-    scheduleSidecarImport(dir);
 }
 
 void MainWindow::openCompare(const QStringList &images, const QString &sessionJson)
