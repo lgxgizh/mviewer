@@ -126,11 +126,16 @@ void testMidFlightResize()
     pipe.setPredictiveCount(0); // deterministic: only the visible window is scheduled
     auto gate = std::make_shared<DecodeGate>();
     pipe.setDecodeFn([gate](const std::string &p, int size) { return gatedDecode(gate, p, size); });
-    std::vector<std::pair<int, std::string>> delivered; // (size, path)
-    pipe.setResultFn([&](const std::string &p, int size, const ImageData &img)
+    std::atomic<int> deliveredCount{0};
+    std::atomic<bool> staleSizeDelivered{false};
+    pipe.setResultFn([&](const std::string &, int size, const ImageData &img)
                      {
                          if (!img.isNull())
-                             delivered.push_back({size, p});
+                         {
+                             if (size != 128)
+                                 staleSizeDelivered.store(true, std::memory_order_relaxed);
+                             deliveredCount.fetch_add(1, std::memory_order_relaxed);
+                         }
                      });
 
     pipe.setSources(makeSources("dirA", 20));
@@ -145,15 +150,12 @@ void testMidFlightResize()
 
     // Release the gate: old (256) and new (128) decodes all finish.
     gate->release.store(true, std::memory_order_release);
-    CHECK(waitTrue([&] { return delivered.size() >= 10; }, 10000),
+    CHECK(waitTrue([&] { return deliveredCount.load(std::memory_order_relaxed) >= 10; }, 10000),
           "new-size results delivered");
     CHECK(waitTrue([&] { return pipe.handlesCount() == 0 && pipe.pendingCount() == 0; }, 10000),
           "pipeline bookkeeping converges to zero");
 
-    bool onlyNewSize = true;
-    for (const auto &d : delivered)
-        if (d.first != 128)
-            onlyNewSize = false;
+    const bool onlyNewSize = !staleSizeDelivered.load(std::memory_order_relaxed);
     CHECK(onlyNewSize, "every delivered thumbnail is at the NEW size (no stale 256 delivery)");
     // The old-size decodes ran (they were already in flight) but their results
     // must not be cached: the memory cache holds exactly the 10 new-size keys.

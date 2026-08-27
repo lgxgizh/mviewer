@@ -1029,10 +1029,11 @@ if(Python3_Interpreter_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/testdata/generate_fixtures.py --ensure --size 256)
     set_tests_properties(testdata_generator_gate PROPERTIES
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR})
-    # M47 Phase 0: deterministic large-image fixture corpus must exist with the
-    # exact dimensions (generator is tracked; binaries stay git-ignored).
+    # M47 Phase 0: deterministic large-image fixture corpus must be generated
+    # and validated in a clean checkout (generator is tracked; binaries stay
+    # git-ignored).
     add_test(NAME large_fixture_gate
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/testdata/generate_large_fixtures.py --check)
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/testdata/generate_large_fixtures.py --ensure)
     set_tests_properties(large_fixture_gate PROPERTIES
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR} TIMEOUT 900)
 endif()
