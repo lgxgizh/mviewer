@@ -44,7 +44,7 @@ if ($Strict) {
     $Version = $identity.Version
 }
 
-$outAbs = Join-Path $root $OutDir
+$outAbs = [IO.Path]::GetFullPath((Join-Path $root $OutDir))
 if (-not (Test-Path $outAbs)) {
     New-Item -ItemType Directory -Force -Path $outAbs | Out-Null
 }
@@ -64,8 +64,9 @@ if ($Strict) {
         $files += Get-ChildItem -Path $outAbs -Filter $pat -File -ErrorAction SilentlyContinue
     }
 }
-# De-dup by full path
-$files = $files | Sort-Object FullName -Unique
+# De-dup by full path. Keep the result as an array even when a caller supplies
+# only one artifact; Windows PowerShell otherwise unwraps the pipeline result.
+$files = @($files | Sort-Object FullName -Unique)
 
 $sumsPath = Join-Path $outAbs "SHA256SUMS.txt"
 if ($files.Count -eq 0 -and $Strict) {
@@ -83,7 +84,12 @@ if ($files.Count -eq 0 -and $Strict) {
         $lines += "$hash  $($f.Name)"
         Write-Host ("  [sha256] {0}  {1}" -f $hash.Substring(0,12), $f.Name)
     }
-    Set-Content -Path $sumsPath -Value ($lines -join "`n") -Encoding utf8
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    $manifestText = ($lines -join [Environment]::NewLine) + [Environment]::NewLine
+    [IO.File]::WriteAllText($sumsPath, $manifestText, $utf8NoBom)
+    if (-not (Test-Path -LiteralPath $sumsPath)) {
+        throw "Release manifest failed to create checksum file '$sumsPath'"
+    }
     Write-Host "=== SHA256SUMS: $sumsPath ($($files.Count) file(s)) ==="
 }
 
