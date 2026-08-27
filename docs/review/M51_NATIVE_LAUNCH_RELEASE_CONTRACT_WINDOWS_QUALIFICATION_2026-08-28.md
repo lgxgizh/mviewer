@@ -122,9 +122,10 @@ verified rather than hidden by a rerun.
 The next tag run passed all three quality jobs but its Package job exposed a
 second real release-contract defect: `release_manifest.ps1` produced
 `RELEASE_NOTES.md` on the GitHub runner but left no `SHA256SUMS.txt` for the
-strict gate. Manifest output now uses an explicit absolute path, a stable array
-of artifacts, and a no-BOM UTF-8 file write; `release_contract_tests` exercises
-that exact strict-generation path.
+strict gate. Manifest output now resolves the repository from the script
+location, accepts an explicit absolute output path, keeps a stable array of
+artifacts, and uses a no-BOM UTF-8 file write; `release_contract_tests` exercises
+that exact strict-generation path in an isolated system-temp directory.
 
 ## Unicode, long-path, and UNC evidence
 
@@ -142,7 +143,7 @@ is claimed for those target-dependent rows.
 | Pre-M51 characterization baseline | PASS — 107/107 | clean baseline run |
 | Final clean build + test gate | PASS — 110/110; 693.45 s | `build.ps1 Clean`, then `build.ps1 Test` |
 | Final no-source-change verification | PASS — 110/110; 684.71 s | second `build.ps1 Test` |
-| Post-manifest-fix full test gate | PASS — 110/110; 672.40 s | `build.ps1 Test` after the release manifest fix |
+| Post-manifest-fix full test gate | PASS — 110/110; 660.24 s | `build.ps1 Test` after final manifest hardening |
 | M51 repeated RC soak | PASS | `m51_rc_soak` (20 iterations) |
 | External-open parser and target contract | PASS | `commandline_tests` |
 | Production external-open dispatch/navigation | PASS | `m50_navigation_tests` |

@@ -22,27 +22,24 @@ Check ($nsi -notmatch 'WriteRegStr HKCR "\.mviewer"') 'obsolete .mviewer extensi
 # Exercise the manifest writer with the exact strict artifact names. This is a
 # small filesystem-only contract test and catches runner-specific path/encoding
 # behavior before package_release reaches the strict gate.
-$manifestRoot = Join-Path $RepoRoot (Join-Path 'build_msvc' ("release_manifest_contract_" + [guid]::NewGuid().ToString('N')))
+$manifestRoot = Join-Path ([IO.Path]::GetTempPath()) ("mviewer-release_manifest_contract_" + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Force -Path $manifestRoot | Out-Null
 try {
     Set-Content -LiteralPath (Join-Path $manifestRoot 'MViewer-9.8.7-portable.zip') -Value 'zip-fixture' -Encoding utf8
     Set-Content -LiteralPath (Join-Path $manifestRoot 'MViewer-9.8.7-Setup.exe') -Value 'installer-fixture' -Encoding utf8
-    $relativeManifestRoot = $manifestRoot.Substring($RepoRoot.TrimEnd('\\').Length).TrimStart('\\')
-    $savedLocation = Get-Location
-    try {
-        Set-Location $RepoRoot
-        & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot 'scripts/release_manifest.ps1') `
-            -Version '9.8.7' -OutDir $relativeManifestRoot -Strict
-    } finally {
-        Set-Location $savedLocation
-    }
+    $fixturesExist = (Test-Path -LiteralPath (Join-Path $manifestRoot 'MViewer-9.8.7-portable.zip')) -and
+        (Test-Path -LiteralPath (Join-Path $manifestRoot 'MViewer-9.8.7-Setup.exe'))
+    Check $fixturesExist 'strict manifest fixture files are created'
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot 'scripts/release_manifest.ps1') `
+        -Version '9.8.7' -OutDir $manifestRoot -Strict
     Check ($LASTEXITCODE -eq 0) 'strict manifest generation exits successfully'
     $sums = Join-Path $manifestRoot 'SHA256SUMS.txt'
     Check (Test-Path -LiteralPath $sums) 'strict manifest writes SHA256SUMS.txt'
     if (Test-Path -LiteralPath $sums) {
         $sumText = Get-Content -LiteralPath $sums -Raw
-        Check ($sumText -match 'MViewer-9\.8\.7-portable\.zip' -and
-               $sumText -match 'MViewer-9\.8\.7-Setup\.exe') 'strict manifest lists both exact artifacts'
+        $artifactsListed = ($sumText -match 'MViewer-9\.8\.7-portable\.zip') -and
+            ($sumText -match 'MViewer-9\.8\.7-Setup\.exe')
+        Check $artifactsListed 'strict manifest lists both exact artifacts'
     }
 } finally {
     if (Test-Path -LiteralPath $manifestRoot) {

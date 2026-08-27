@@ -31,7 +31,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$root = (Get-Location).Path
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 . (Join-Path $PSScriptRoot 'release_version.ps1')
 
 if (-not $Version) {
@@ -44,7 +44,11 @@ if ($Strict) {
     $Version = $identity.Version
 }
 
-$outAbs = [IO.Path]::GetFullPath((Join-Path $root $OutDir))
+$outAbs = if ([IO.Path]::IsPathRooted($OutDir)) {
+    [IO.Path]::GetFullPath($OutDir)
+} else {
+    [IO.Path]::GetFullPath((Join-Path $root $OutDir))
+}
 if (-not (Test-Path $outAbs)) {
     New-Item -ItemType Directory -Force -Path $outAbs | Out-Null
 }
