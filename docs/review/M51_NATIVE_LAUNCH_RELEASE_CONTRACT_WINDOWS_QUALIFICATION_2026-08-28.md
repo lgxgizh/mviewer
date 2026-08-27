@@ -109,6 +109,16 @@ directory, mixed-target, and session-preservation checks to that suite. The
 it passed with scheduler convergence and no crash/deadlock report. The full
 benchmark enforcement also passed its boundedness/workflow resource checks.
 
+## CI follow-up
+
+The first `v1.0.13` GitHub run exposed a real Qt 6.8 Windows teardown failure:
+`m50_navigation_tests` completed every assertion but exited with Windows status
+`0xc0000374` after closing the window. The production workflow had started image
+and thumbnail work without an explicit test-side convergence check. The
+regression now drains the DecodePool and ThumbnailPool after MainWindow close,
+alongside the existing MetadataPool drain, so this lifecycle boundary is
+verified rather than hidden by a rerun.
+
 ## Unicode, long-path, and UNC evidence
 
 Automated fixtures cover ASCII, spaces, Chinese, emoji, quoted paths, Unicode
@@ -123,7 +133,7 @@ is claimed for those target-dependent rows.
 | Check | Result | Evidence |
 |---|---|---|
 | Pre-M51 characterization baseline | PASS — 107/107 | clean baseline run |
-| Final clean build + test gate | PASS — 110/110; 710.96 s | `build.ps1 Clean`, then `build.ps1 Test` |
+| Final clean build + test gate | PASS — 110/110; 693.45 s | `build.ps1 Clean`, then `build.ps1 Test` |
 | Final no-source-change verification | PASS — 110/110; 684.71 s | second `build.ps1 Test` |
 | M51 repeated RC soak | PASS | `m51_rc_soak` (20 iterations) |
 | External-open parser and target contract | PASS | `commandline_tests` |

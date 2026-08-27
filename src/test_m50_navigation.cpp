@@ -231,6 +231,10 @@ int main(int argc, char **argv)
 
     window.close();
     auto &scheduler = TaskScheduler::instance();
+    CHECK(scheduler.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(10)),
+          "image decode background work drains after MainWindow close");
+    CHECK(scheduler.drain(TaskScheduler::PoolType::ThumbnailPool, std::chrono::seconds(10)),
+          "thumbnail background work drains after MainWindow close");
     CHECK(scheduler.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(10)),
           "Sidecar background work drains after MainWindow close");
     const auto metrics = scheduler.metrics(TaskScheduler::PoolType::MetadataPool);
