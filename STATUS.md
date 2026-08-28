@@ -24,7 +24,38 @@
 > `docs/review/M49_WINDOWS_UX_UNICODE_COMPARE_CLOSURE_2026-08-26.md` and
 > `docs/review/M50_RELEASE_CANDIDATE_CONVERGENCE_2026-08-27.md`,
 > `docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md` and
+> `docs/review/M52_RELEASE_QUALITY_WORKFLOW_CONVERGENCE_2026-08-28.md` and
 > `.\build.ps1 Test`.
+
+## M52 — Release quality truthfulness & workflow boundary convergence (2026-08-28)
+
+- PowerShell 5.1 quality generators now resolve the repository from the launch
+  directory, emit explicit UTF-8 without a BOM, and keep generated runtime
+  text ASCII-safe. A regression invokes the real Windows PowerShell entry
+  points, validates strict UTF-8 round trips, and rejects common mojibake.
+- Complexity reporting no longer grants split responsibility TUs a broad
+  1500/2500-line exemption. MainWindow/CompareWorkspace/ThumbnailPanel
+  responsibility files use a measured 800-line warning and 1000-line hard
+  ceiling; production functions over 120 lines or CC over 25 are hard failures.
+  The regression proves an oversized TU fails and a legal split passes.
+- Compare display materialization now delegates its source-backed planning to
+  a pure value-based planner. Table-driven coverage includes placeholder/fit,
+  independent and uniform scales, zoom/pan edges, DPR 1/1.25/1.5/2, crop and
+  rotation, resize, large JPEGs, duplicate panes, and A→B→A replacement.
+- MainWindow session update/crash notifications live in a dedicated
+  responsibility TU. The real M50 workflow regression now exercises rapid
+  A/B/C navigation, a disappearing source, invalid external targets, async
+  Compare replacement, ROI retention, and all scheduler-pool drains.
+- The release evidence distinguishes **gate PASS** (zero hard failures and
+  green automated checks) from **accepted baseline debt** (advisory warnings).
+  Native DPI/ICC/UNC/installer UX and extended physical GUI soak remain
+  explicitly **MANUAL/BLOCKED** unless run on the target machine.
+- Final local qualification passed **114/114 CTest tests twice consecutively**
+  on the source-stable tree (694.59 s and 690.70 s); `m51_rc_soak` passed in
+  both runs. `build_health` is 92.7 / grade A with 0 complexity hard failures
+  and 107 visible advisory warnings.
+- Evidence: `docs/review/M52_PHASE0_BASELINE_2026-08-28.md` and
+  `docs/review/M52_RELEASE_QUALITY_WORKFLOW_CONVERGENCE_2026-08-28.md`.
 
 ## M51 — Native launch, release contract & Windows qualification closure (2026-08-28)
 

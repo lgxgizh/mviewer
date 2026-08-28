@@ -4,6 +4,22 @@
 
 ### Fixed
 
+- **Release quality truthfulness:** PowerShell 5.1 quality generators now use
+  explicit UTF-8/no-BOM output and ASCII-safe generated text, with strict
+  encoding/mojibake regressions covering the real Windows entry points. Legacy
+  mojibake in production comments was cleaned up.
+- **Complexity gate honesty:** split responsibility translation units no longer
+  receive a broad file-size exemption; measured 800-line warnings and
+  1000-line hard ceilings are enforced for the MainWindow/CompareWorkspace/
+  ThumbnailPanel TU families, with an executable regression for illegal vs
+  legal splits.
+- **Compare planning boundary:** source-backed display target/region planning
+  is now a pure value-based component with table-driven zoom, pan, DPR, crop,
+  rotation, resize, duplicate, and pane-replacement coverage.
+- **MainWindow workflow boundaries:** session update/crash notifications are
+  isolated in their responsibility TU, and real navigation/Compare regressions
+  cover rapid directory intent, disappearing sources, invalid external targets,
+  ROI retention, stale pane replacement, and scheduler teardown.
 - **Native external-open contract:** command line, shell associations, and
   drag-and-drop now share one classifier for images, directories, `.mvws`, and
   `.mvproj`; missing, unsupported, and mixed targets are rejected atomically.
@@ -19,8 +35,11 @@
 
 ### Tests
 
-- Full local Release `build.ps1 Test` gate passed 110/110 after the M51
-  implementation; the final RC gate records the clean-build reruns.
+- Full local Release `build.ps1 Test` gate passed **114/114 twice
+  consecutively** on the M52 source-stable tree (694.59 s and 690.70 s),
+  including the encoding, complexity, planner, workflow, and RC-soak gates.
+- The M51 release-contract coverage remains green; physical target-machine
+  qualification is still recorded as MANUAL/BLOCKED.
 
 ## [1.0.12] - 2026-08-27
 

@@ -49,7 +49,7 @@ foreach ($h in $headers) {
         foreach ($f in $forbidden) {
             if ($ln -match "#\s*include\s*<$f>") {
                 if ($isAllowed) {
-                    Write-Host "ALLOWED: $full`:$($i+1)  $f (sanctioned boundary — see M12.5 doc)"
+                    Write-Host "ALLOWED: $full`:$($i+1)  $f (sanctioned boundary - see M12.5 doc)"
                 } else {
                     Write-Host "FAIL: $full`:$($i+1)  forbidden UI include: $f"
                     $fails++
@@ -59,7 +59,7 @@ foreach ($h in $headers) {
         foreach ($w in $warn) {
             if ($ln -match "#\s*include\s*<$w>") {
                 if ($isAllowed) {
-                    Write-Host "ALLOWED: $full`:$($i+1)  $w (sanctioned boundary — see M12.5 doc)"
+                    Write-Host "ALLOWED: $full`:$($i+1)  $w (sanctioned boundary - see M12.5 doc)"
                 } else {
                     Write-Host "WARN: $full`:$($i+1)  Qt GUI value type in header: $w"
                     $warns++

@@ -6,6 +6,7 @@
 #include "core/analysis/PixelInspector.h"
 #include "core/async/AsyncLifetimeToken.h"
 #include "core/compare/CompareEngine.h"
+#include "compareworkspace_display_planner.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/compare/Histogram.h"
 #include "core/image/ImageAdjust.h"
@@ -599,7 +600,6 @@ class CompareWorkspace : public QWidget
     void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes);
     // M47: bounded per-pane display-target edge for a source-backed pane (no
     // full frame): pane viewport x dpr x pane scale x overscan, capped.
-    int sourceLodEdge(int pane) const;
     TaskScheduler::TaskHandle startDisplayMaterialization(
         const std::vector<ImageData> &pixels,
         const std::vector<mviewer::domain::ImageMetadata> &metadata,

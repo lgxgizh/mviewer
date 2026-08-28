@@ -67,7 +67,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                 emit hovered(p);
             });
 
-    // Drive thumbnail decode priority from the viewport (P0 #閳?.
+    // Drive thumbnail decode priority from the viewport (P0 priority).
     connect(verticalScrollBar(), &QScrollBar::valueChanged, this,
             &ThumbnailPanel::updateVisibleRange);
     connect(horizontalScrollBar(), &QScrollBar::valueChanged, this,
@@ -90,8 +90,8 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     // Keyboard parity: Enter opens the viewer (same as double-click), and
     // moving the current item with the arrow keys drives the shared selection
     // model so the preview/status bar follow without a mouse. The central
-    // SelectionModel no-ops on a same-path set, so selectPath() 閳?currentChanged
-    // 閳?itemClicked cannot loop.
+    // SelectionModel no-ops on a same-path set, so selectPath() -> currentChanged
+    // -> itemClicked cannot loop.
     connect(this, &QAbstractItemView::activated, this,
             [this](const QModelIndex &idx)
             {
@@ -183,7 +183,7 @@ ThumbnailPanel::~ThumbnailPanel()
     // M46: queued scans dropped by clear() never run their completion, so
     // their busy-cursor refs would leak. Drain them here; a scan that was
     // still RUNNING marshals its own restore later, which becomes a no-op
-    // because the refcount is already zero 鈥?the cursor stays balanced in
+    // because the refcount is already zero - the cursor stays balanced in
     // every interleaving.
     while (m_busyCursorRefs && m_busyCursorRefs->load(std::memory_order_acquire) > 0)
         restoreBusyCursorOnce(m_busyCursorRefs);
@@ -253,13 +253,13 @@ void ThumbnailPanel::applyThumbSize(int size, bool rememberGridSize)
     m_thumbSize = size;
     if (rememberGridSize)
         m_gridThumbSize = size;
-    // M46: the pipeline treats a size change as a supersession boundary 鈥?it
+    // M46: the pipeline treats a size change as a supersession boundary - it
     // cancels in-flight old-size decodes and drops the old-size memory cache
     // and pending keys, so a slider drag cannot keep an unbounded old-size
     // workload running (previously only the ready map here was cleared and
     // old-size decodes kept decoding to completion).
     ThumbnailPipeline::instance().setThumbSize(size);
-    // M25: the ready cache and in-flight pending set belong to the OLD size 鈥?
+    // M25: the ready cache and in-flight pending set belong to the OLD size -
     // a stale 64px pixmap must never masquerade as the new 240px cell, and an
     // old-size result still in flight must not land in the ready map (the
     // result callback re-checks the size, so dropping the pending marker here
@@ -369,7 +369,7 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     emit sequenceChanged(m_currentDir, m_paths);
 
     // M24 (A#8): apply a selection that was requested while this model was
-    // still being rebuilt (e.g. rename 閳?async rescan 閳?re-select new name).
+    // still being rebuilt (e.g. rename -> async rescan -> re-select new name).
     if (!m_pendingSelect.isEmpty() && m_rowByPath.contains(m_pendingSelect))
     {
         selectPath(m_pendingSelect);

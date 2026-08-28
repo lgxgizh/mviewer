@@ -36,7 +36,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.13** (current line) | Native launch, release contract, and Windows qualification closure | 🔵 Beta hardening |
+| **1.0.13** (current line) | Release quality truthfulness, workflow boundaries, and Windows qualification closure | 🔵 Beta hardening |
 | **1.0.12** | Release-candidate workflow convergence / native Windows qualification | ✅ Previous patch |
 | **1.0.11** | Release-candidate workflow convergence / native Windows qualification | ✅ Previous patch |
 | **1.0.10** | Windows UX / Unicode / Compare reliability closure | ✅ Previous patch |
@@ -47,6 +47,11 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 The repository verifies the `v1.0.13` patch line. The remaining 1.0 work is
 productization and release review.
+
+The M52 hardening pass also makes release evidence explicit: automated gate
+PASS means zero measured hard failures, while advisory complexity warnings are
+tracked as accepted baseline debt. Native DPI/ICC/UNC and long-session GUI
+feel still require a physical Windows review.
 
 ## What's planned, in priority order
 

@@ -4,6 +4,21 @@
 > （见下方角色定义）完整跑一遍，全部打勾方可合入。目标是把产品从"开发中的 Demo"
 > 推向"可长期使用的产品"。
 >
+> **M52 release-quality review snapshot (2026-08-28)**
+> - Final local automated gate: `build.ps1 Test` passed **114/114 twice
+>   consecutively**; `m51_rc_soak` passed in both runs.
+> - Automated quality truthfulness: **PASS** means the measured hard-failure
+>   count is zero. Advisory complexity warnings are recorded as **accepted
+>   baseline debt**, not silently presented as a clean codebase.
+> - Automated boundary coverage includes PowerShell 5.1 UTF-8/mojibake,
+>   honest responsibility-TU caps, pure source-backed Compare planning, and
+>   real MainWindow navigation/Compare adversarial cases.
+> - Source-backed large-image truth: **100 MP JPEG implemented** through the
+>   source-backed LOD path; large TIFF has no JPEG-equivalent native LOD and is
+>   documented as an honest native fallback limitation.
+> - Native UX review: **MANUAL PENDING / BLOCKED** for physical DPI/ICC/UNC,
+>   installer behavior, long-session GUI feel, and extended soak on Windows.
+>
 > **通过判据（任一不满足即不通过）**：
 > - 无等待（no waiting）：每一步操作在预算延迟内完成，不出现可感知的卡顿/转圈。
 > - 无闪烁（no flicker）：布局切换、缩放、模式切换时画面不闪、不白屏、不跳动。

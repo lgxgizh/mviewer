@@ -39,7 +39,10 @@
 
 [CmdletBinding()]
 param(
-    [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot '..')),
+    # Windows PowerShell 5.1 can leave PSScriptRoot unavailable while it
+    # evaluates parameter defaults for a relative -File invocation. The
+    # project entry point runs from the repository root, so use that location.
+    [string]$Repo = (Get-Location).Path,
     [int]$FailFileLines = 800,
     [int]$WarnFileLines = 600,
     [int]$WarnFunctionLines = 80,
@@ -64,6 +67,16 @@ $adr014 = @{
     'compareworkspace.cpp' = 800
     'thumbnailpanel.cpp'   = 800
 }
+
+# Split responsibility translation units are still product source. Give them
+# a review warning at the ordinary cap and a hard ceiling below the old
+# 1500/2500-line exemption. This is a guardrail, not a file whitelist: every
+# matching TU is measured and remains subject to function/cyclomatic limits.
+$responsibilityCaps = @(
+    @{ pattern = '^mainwindow_.*\.cpp$'; warn = 800; fail = 1000 },
+    @{ pattern = '^compareworkspace_.*\.cpp$'; warn = 800; fail = 1000 },
+    @{ pattern = '^thumbnailpanel_.*\.cpp$'; warn = 800; fail = 1000 }
+)
 
 $fails = 0
 $warns = 0
@@ -100,9 +113,12 @@ foreach ($f in $src) {
         $failCap = $adr014[$f.Name]
         $warnCap = [math]::Max($WarnFileLines, $failCap - 200)
     }
-    elseif ($f.Name -match '^mainwindow_.*\.cpp$' -or $f.Name -match '^compareworkspace_.*\.cpp$' -or $f.Name -match '^thumbnailpanel_.*\.cpp$') {
-        $warnCap = 1500
-        $failCap = 2500
+    else {
+        $roleCap = $responsibilityCaps | Where-Object { $f.Name -match $_.pattern } | Select-Object -First 1
+        if ($roleCap) {
+            $warnCap = $roleCap.warn
+            $failCap = $roleCap.fail
+        }
     }
 
     # file-size rule
@@ -236,11 +252,11 @@ else {
         }
     }
     if ($Strict -and $fails -gt 0) {
-        Write-Host "`nCOMPLEXITY: hard limit violated ($fails) — strict mode"
+        Write-Host "`nCOMPLEXITY: hard limit violated ($fails) - strict mode"
         exit 1
     }
     elseif ($fails -gt 0) {
-        Write-Host "`nCOMPLEXITY: $fails hard-limit violation(s) (advisory — use -Strict to fail)"
+        Write-Host "`nCOMPLEXITY: $fails hard-limit violation(s) (advisory - use -Strict to fail)"
     }
     Write-Host "`nCOMPLEXITY: OK (advisory)"
 }

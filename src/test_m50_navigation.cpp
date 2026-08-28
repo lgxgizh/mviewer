@@ -8,6 +8,7 @@
 
 #include "directorymodel.h"
 #include "directorytree.h"
+#include "compareworkspace.h"
 #include "mainwindow.h"
 #include "runtime_storage.h"
 #include "selectionmodel.h"
@@ -23,8 +24,10 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QLineEdit>
+#include <QDialog>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -129,12 +132,19 @@ int main(int argc, char **argv)
     const QString unicodeName = QStringLiteral("中文 空格 😀");
     const QString aPath = root.filePath(unicodeName + QStringLiteral("/目录-A"));
     const QString bPath = root.filePath(unicodeName + QStringLiteral("/目录-B"));
+    const QString cPath = root.filePath(unicodeName + QStringLiteral("/目录-C"));
     QDir().mkpath(aPath);
     QDir().mkpath(bPath);
+    QDir().mkpath(cPath);
     const QDir dirA(aPath);
     const QDir dirB(bPath);
+    const QDir dirC(cPath);
     const QString imageA = writeImage(dirA, QStringLiteral("样片 A.png"), QColor(30, 60, 90));
     const QString imageB = writeImage(dirB, QStringLiteral("样片 B.png"), QColor(90, 60, 30));
+    const QString imageC1 = writeImage(dirC, QStringLiteral("样片 C-1.png"), QColor(30, 90, 60));
+    const QString imageC2 = writeImage(dirC, QStringLiteral("样片 C-2.png"), QColor(60, 30, 90));
+    const QString disappearing =
+        writeImage(dirC, QStringLiteral("导航中消失.png"), QColor(90, 90, 30));
     const QString unsupported = root.filePath(QStringLiteral("说明 😀.txt"));
     {
         QFile file(unsupported);
@@ -229,6 +239,67 @@ int main(int argc, char **argv)
     CHECK(waitFor([&] { return samePath(directory->currentDirectory(), aPath); }),
           "path edit commits through the same directory transition owner");
 
+    // M52: adversarial boundary checks use production entry points. The last
+    // directory request wins, and a source removed before its scan lands must
+    // not become a stale gallery item.
+    panel->setRatingFilter(0);
+    tree->navigateTo(aPath, true);
+    tree->navigateTo(bPath, true);
+    tree->navigateTo(cPath, true);
+    CHECK(QFile::remove(disappearing),
+          "remove a source while rapid A/B/C navigation is still converging");
+    CHECK(waitFor([&] { return samePath(directory->currentDirectory(), cPath); }),
+          "rapid A/B/C navigation commits only the newest directory");
+    CHECK(waitFor([&] { return samePath(panel->currentDir(), cPath); }),
+          "rapid navigation leaves the gallery owned by directory C");
+    CHECK(waitFor([&] { return panel->pathList().size() == 2; }),
+          "gallery excludes a source that disappeared during navigation");
+
+    const QString sessionDirBeforeInvalidOpen = directory->currentDirectory();
+    const QString sessionImageBeforeInvalidOpen = selection->currentImage();
+    window.openExternalTargets({root.filePath(QStringLiteral("missing image.png"))});
+    window.openExternalTargets({unsupported});
+    pump();
+    CHECK(samePath(directory->currentDirectory(), sessionDirBeforeInvalidOpen) &&
+              selection->currentImage() == sessionImageBeforeInvalidOpen,
+          "missing and unsupported external targets preserve the live session");
+
+    window.openExternalTargets({imageC1, imageC2});
+    CompareWorkspace *compare = nullptr;
+    CHECK(waitFor(
+              [&]
+              {
+                  compare = window.findChild<CompareWorkspace *>();
+                  return compare && compare->comparedImageCount() == 2;
+              },
+              15000),
+          "two external images cross the real Compare boundary");
+    if (compare)
+    {
+        CHECK(compare->comparedImages().size() == 2,
+              "Compare publishes both source-backed panes after async load");
+        const mviewer::domain::Selection roi{2, 3, 10, 11};
+        compare->applyROI(roi);
+        const auto applied = compare->currentROI();
+        CHECK(applied.x == roi.x && applied.y == roi.y && applied.width == roi.width &&
+                  applied.height == roi.height,
+              "ROI state remains attached to the active Compare workspace");
+
+        const QStringList finalCompare{imageC2, imageC1};
+        compare->setImages({imageB, imageC1});
+        compare->setImages(finalCompare);
+        CHECK(waitFor(
+                  [&]
+                  {
+                      return compare->comparedImageCount() == 2 &&
+                             compare->comparedImages() == finalCompare;
+                  },
+                  15000),
+              "rapid Compare pane replacement A-to-B-to-A drops stale loads");
+    }
+    if (auto *compareDialog = window.findChild<QDialog *>(QStringLiteral("compareDialog")))
+        compareDialog->close();
+
     window.close();
     auto &scheduler = TaskScheduler::instance();
     CHECK(scheduler.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(10)),
@@ -237,6 +308,10 @@ int main(int argc, char **argv)
           "thumbnail background work drains after MainWindow close");
     CHECK(scheduler.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(10)),
           "Sidecar background work drains after MainWindow close");
+    CHECK(scheduler.drain(TaskScheduler::PoolType::AnalysisPool, std::chrono::seconds(10)),
+          "analysis background work drains after MainWindow close");
+    CHECK(scheduler.drain(TaskScheduler::PoolType::IOPool, std::chrono::seconds(10)),
+          "I/O background work drains after MainWindow close");
     const auto metrics = scheduler.metrics(TaskScheduler::PoolType::MetadataPool);
     CHECK(metrics.pending == 0 && metrics.active_tasks == 0,
           "Sidecar scheduler pending and active counts converge to zero");

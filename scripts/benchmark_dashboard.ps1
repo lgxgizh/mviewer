@@ -108,11 +108,11 @@ $table
 
 <h2>Reading the trend</h2>
 <ul>
-<li><b>first_thumb_ms</b> — review budget &lt;300ms cold. Lower is better.</li>
-<li><b>decode_jpeg_p50_ms</b> — JPEG decode median. Lower is better.</li>
-<li><b>thumbs_per_sec</b> — thumbnail throughput. Higher is better.</li>
-<li><b>switch_*_p50_ms</b> — image-switch latency. Lower is better.</li>
-<li><b>peak_cache_bytes</b> / <b>rss_mb</b> — memory.</li>
+<li><b>first_thumb_ms</b> - review budget &lt;300ms cold. Lower is better.</li>
+<li><b>decode_jpeg_p50_ms</b> - JPEG decode median. Lower is better.</li>
+<li><b>thumbs_per_sec</b> - thumbnail throughput. Higher is better.</li>
+<li><b>switch_*_p50_ms</b> - image-switch latency. Lower is better.</li>
+<li><b>peak_cache_bytes</b> / <b>rss_mb</b> - memory.</li>
 </ul>
 
 <script>

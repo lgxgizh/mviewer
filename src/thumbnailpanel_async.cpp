@@ -196,7 +196,7 @@ void ThumbnailPanel::setDirectory(const QString &path)
                     const QFileInfo &fi = list.at(i);
                     if (!passesTypeFilter(typeFilter, fi.suffix()))
                         continue;
-                    // P0-1 (perf): no pixel dimensions here 鈥?resolved lazily in
+                    // P0-1 (perf): no pixel dimensions here - resolved lazily in
                     // the background for the Details view (see ensureDimensions).
                     entries.append(
                         {fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()});
@@ -280,7 +280,7 @@ void ThumbnailPanel::ensureDimensions()
                 // view would otherwise keep probing every superseded file).
                 if (!alive->load() ||
                     genToken->load(std::memory_order_acquire) != static_cast<uint64_t>(gen))
-                    return; // panel destroyed / folder superseded 鈥?abort fast
+                    return; // panel destroyed / folder superseded - abort fast
                 invokeScanProbe(); // M46 test instrumentation (exception-safe)
                 QImageReader reader(paths.at(i));
                 reader.setAutoTransform(true);

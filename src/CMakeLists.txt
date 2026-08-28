@@ -135,6 +135,7 @@ add_library(mviewer_ui STATIC
     mainwindow_commands.cpp
     mainwindow_navigation.cpp
     mainwindow_session.cpp
+    mainwindow_session_notifications.cpp
     mainwindow_export.cpp
     mainwindow_view.cpp
     selectionmodel.cpp
@@ -163,6 +164,7 @@ add_library(mviewer_ui STATIC
     previewpanel.cpp
     thumbnailcache.cpp
     compareworkspace.cpp
+    compareworkspace_display_planner.cpp
     compareworkspace_controls.cpp
     compareworkspace_render.cpp
     compareworkspace_render_materialization.cpp
@@ -1449,6 +1451,25 @@ target_compile_definitions(m47_compare_lod_tests PRIVATE MVIEWER_SOURCE_DIR="${C
 add_test(NAME m47_compare_lod_tests COMMAND m47_compare_lod_tests)
 set_tests_properties(m47_compare_lod_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
 
+# M52: pure source-backed Compare display planning regression matrix. The
+# planner owns no widget or decoder state, so this remains deterministic and
+# proves placeholder/Fit/zoom/pan/DPR/crop/rotation/supersession semantics.
+add_executable(compare_display_planner_tests
+    test_compare_display_planner.cpp
+)
+target_link_libraries(compare_display_planner_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_display_planner_tests PRIVATE cxx_std_20)
+target_include_directories(compare_display_planner_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_display_planner_tests COMMAND compare_display_planner_tests)
+set_tests_properties(compare_display_planner_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
 # ─── M47 Phase 4: exact-source consumers with source-backed panes ────────────
 # Inspector / diff / PSNR / SSIM / export keep full-resolution correctness when
 # source-backed (LOD) panes are present: they never sample the display LOD and
@@ -1542,6 +1563,23 @@ add_test(NAME m48_phase0_regressions COMMAND m48_phase0_regressions)
 # are now implemented, so keep this suite as a normal green release gate.
 set_tests_properties(m48_phase0_regressions PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
 
+add_executable(m48_phase0_failure_regressions
+    test_m48_phase0_failures.cpp
+)
+target_link_libraries(m48_phase0_failure_regressions
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m48_phase0_failure_regressions PRIVATE cxx_std_20)
+target_include_directories(m48_phase0_failure_regressions PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m48_phase0_failure_regressions PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m48_phase0_failure_regressions COMMAND m48_phase0_failure_regressions)
+set_tests_properties(m48_phase0_failure_regressions PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
+
 # ─── M46: Browse real-world reliability (UI level) ──────────────────────────
 # Paint-path filesystem freedom (render-identical after source deletion),
 # scan/dimension supersession bounds, busy-cursor ownership, and deterministic
@@ -1588,6 +1626,23 @@ add_test(NAME architecture_gate_regression
         ${CMAKE_SOURCE_DIR}/scripts/architecture_gate_test.ps1
         ${CMAKE_SOURCE_DIR})
 set_tests_properties(architecture_gate_regression PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
+# M52: complexity responsibility-TU guardrail regression. A planted 1001-line
+# responsibility file must fail, while two legal sub-1000-line TUs remain
+# visible as warnings and pass the hard gate.
+add_test(NAME complexity_gate_regression
+    COMMAND powershell -ExecutionPolicy Bypass -File
+        ${CMAKE_SOURCE_DIR}/scripts/complexity_gate_test.ps1
+        ${CMAKE_SOURCE_DIR})
+set_tests_properties(complexity_gate_regression PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
+# M52: execute the generators through Windows PowerShell 5.1 and validate the
+# emitted files as strict UTF-8 without common mojibake tokens.
+add_test(NAME script_encoding_regression
+    COMMAND powershell -ExecutionPolicy Bypass -File
+        ${CMAKE_SOURCE_DIR}/scripts/script_encoding_test.ps1
+        ${CMAKE_SOURCE_DIR})
+set_tests_properties(script_encoding_regression PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
 # ─── M46: real-workflow soak (short CI form; --extended for Release) ────────
 # One workload driver, two durations: the CTest here runs the short form; the

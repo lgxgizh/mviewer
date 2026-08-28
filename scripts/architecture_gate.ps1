@@ -29,7 +29,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$Repo = (Resolve-Path (Join-Path $PSScriptRoot '..')),
+    [string]$Repo = (Get-Location).Path,
     [switch]$Json,
     [string]$OutJson = ''
 )

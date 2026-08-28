@@ -263,7 +263,7 @@ ImageRepository::loadAsyncCancellable(const std::string &filePath,
         });
     if (!handle)
     {
-        // M27: a rejected submission must not silently lose the request 鈥?the
+        // M27: a rejected submission must not silently lose the request - the
         // caller must never have to infer failure from a missing callback.
         // The callback fires EXACTLY ONCE, here on the calling thread, with an
         // explicit rejection error (the worker-thread delivery path covers the
@@ -274,7 +274,7 @@ ImageRepository::loadAsyncCancellable(const std::string &filePath,
             cb = std::move(state->callback);
         }
         // M46: a dead consumer token (expired OR invalidated) suppresses even
-        // the synchronous rejection callback 鈥?no client callback may start
+        // the synchronous rejection callback - no client callback may start
         // once the consumer is gone.
         bool tokenAlive = true;
         if (!state->lifetime.expired())
@@ -420,7 +420,7 @@ ImageRepository::promotePreloadAsync(AsyncRequestHandle &preload,
         if (preload->phase == AsyncRequestState::Phase::Running)
         {
             // Reuse the running decode: promote the kind and stash the callback.
-            // The preload's terminal done path then delivers to this callback 鈥?
+            // The preload's terminal done path then delivers to this callback -
             // a running promotion never submits a second decode. Keep a local
             // copy of the state so the caller's handle can be consumed (reset)
             // only after the mutex guard is released.
@@ -493,7 +493,7 @@ void ImageRepository::cancelAsync(AsyncRequestHandle &handle)
     // and its callback invocation. The wait is bounded by the callback itself:
     // a callback that re-enters cancelAsync() for its own request cannot
     // deadlock because the worker releases deliveryMtx while cb runs and only
-    // needs it again to publish deliveryDone 鈥?and a re-entrant call from the
+    // needs it again to publish deliveryDone - and a re-entrant call from the
     // delivering thread skips the wait entirely (it would otherwise wait for
     // its own completion).
     {

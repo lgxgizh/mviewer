@@ -8,32 +8,10 @@
 
 namespace
 {
-constexpr double kDisplayLodOverscan = 1.25;
 constexpr double kDisplayLodBucketSteps = 16.0;
-// M47: bound for a source-backed pane LOD raster (longest edge).
-constexpr int kMaxCompareLodEdge = 4096;
+constexpr double kDisplayLodOverscan = 1.25;
 
 } // namespace
-
-// M47: the display-target edge for a SOURCE-BACKED pane (no full frame):
-// pane viewport x dpr x pane scale x overscan, bounded. The worker decodes a
-// viewport LOD at this edge; zooming re-materializes at a denser edge.
-int CompareWorkspace::sourceLodEdge(int pane) const
-{
-    if (pane < 0 || pane >= static_cast<int>(m_cellViews.size()) || !m_cellViews[pane])
-        return 0;
-    const QSize viewport = m_cellViews[pane]->size();
-    if (!viewport.isValid() || viewport.width() <= 0 || viewport.height() <= 0)
-        return 0;
-    const double dpr = std::max(1.0, m_cellViews[pane]->devicePixelRatioF());
-    double scale = 1.0;
-    if (pane < m_engine.imageCount())
-        scale = std::max(1.0, m_engine.cellTransform(pane).scale);
-    const double edge =
-        std::ceil(std::max(viewport.width(), viewport.height()) * dpr * scale *
-                  kDisplayLodOverscan);
-    return std::max(64, std::min(static_cast<int>(edge), kMaxCompareLodEdge));
-}
 
 // M34: the dedicated compare canvas page. The normal grid scrolls inside
 // "compareGridPage"; split/swipe/overlay/checker render on the sibling
@@ -205,9 +183,8 @@ QRect CompareWorkspace::sourceVisibleRect(int pane) const
 
 CompareWorkspace::DisplayRequest CompareWorkspace::sourceDisplayRequest(int pane) const
 {
-    DisplayRequest request;
     if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
-        return request;
+        return {};
     const RawImageView *view = m_cellViews[pane];
     const QSize viewSourceSize = view->sourceSize();
     QSize sourceSize = viewSourceSize;
@@ -225,110 +202,41 @@ CompareWorkspace::DisplayRequest CompareWorkspace::sourceDisplayRequest(int pane
         }
     }
     if (!sourceSize.isValid())
-        return request;
-    const QRect full(QPoint(0, 0), sourceSize);
-    request.sourceRect = full;
-    request.target = QSize(sourceLodEdge(pane), sourceLodEdge(pane));
+        return {};
 
-    // Before the first LOD lands there is no widget transform in source
-    // coordinates. Keep that request full-frame even if a prior comparison
-    // left a zoomed engine state behind; fitAll() will establish the new
-    // metadata-based baseline on the queued post-layout pass.
-    if (!viewSourceSize.isValid())
-        return request;
-
-    // Crop/rotation change the displayed coordinate space. Until the worker
-    // maps a covered source rect through those geometric edits, keep this path
-    // on the established full-frame preview so a partial raster is never
-    // stretched across the wrong adjusted geometry. Point-only edits remain
-    // safe for viewport regions.
-    if (pane < static_cast<int>(m_cellAdjusts.size()) &&
-        (m_cellAdjusts[static_cast<size_t>(pane)].hasCrop ||
-         m_cellAdjusts[static_cast<size_t>(pane)].rotation != 0))
-        return request;
-
-    // RawImageView's scale is an absolute source-to-widget transform, so a
-    // 12K source may be fitted at ~0.05 and still be genuinely zoomed after a
-    // few wheel steps. Compare against the per-pane fit baseline to decide
-    // when a covered viewport region is warranted; using `scale > 1` here
-    // would keep that source on a full-frame LOD indefinitely.
-    double currentScale = view->scale();
+    mviewer::ui::CompareDisplayPlanningInput input;
+    input.pane = pane;
+    input.sourceWidth = sourceSize.width();
+    input.sourceHeight = sourceSize.height();
+    input.viewportWidth = view->width();
+    input.viewportHeight = view->height();
+    input.devicePixelRatio = view->devicePixelRatioF();
+    input.hasWidgetSourceSize = viewSourceSize.isValid();
+    input.uniformScale = m_uniformScale;
+    input.fitScales.reserve(static_cast<size_t>(m_fitScales.size()));
+    for (const double fit : m_fitScales)
+        input.fitScales.push_back(fit);
+    input.currentScale = view->scale();
+    input.paneScale = input.currentScale;
     if (pane < m_engine.imageCount())
-        currentScale = m_engine.cellTransform(pane).scale;
-    double fitScale = m_fitScales.value(pane, 0.0);
-    if (!m_uniformScale && viewSourceSize.isValid() && view->width() > 0 && view->height() > 0)
     {
-        // The queued post-layout fit can race the first LOD delivery. The
-        // view geometry is an authoritative fallback for an independent pane
-        // and avoids treating a stale/default fit vector as a zoom request.
-        fitScale = std::min(static_cast<double>(view->width()) / viewSourceSize.width(),
-                            static_cast<double>(view->height()) / viewSourceSize.height());
+        input.currentScale = m_engine.cellTransform(pane).scale;
+        input.paneScale = input.currentScale;
     }
-    else if (m_uniformScale)
+    if (pane < static_cast<int>(m_cellAdjusts.size()))
     {
-        bool firstFit = true;
-        double commonFit = 1.0;
-        for (double fit : m_fitScales)
-        {
-            if (!(fit > 0.0) || !std::isfinite(fit))
-                continue;
-            if (firstFit || fit < commonFit)
-                commonFit = fit;
-            firstFit = false;
-        }
-        if (!firstFit)
-            fitScale = commonFit;
+        const auto &adjust = m_cellAdjusts[static_cast<size_t>(pane)];
+        input.hasCropOrRotation = adjust.hasCrop || adjust.rotation != 0;
     }
-    const double zoomRatio = fitScale > 0.0 && std::isfinite(fitScale) &&
-                                    currentScale > 0.0 && std::isfinite(currentScale)
-                                ? currentScale / fitScale
-                                : 1.0;
-    if (!(zoomRatio > 1.0 + 1e-6))
-        return request;
-
     const QRect visible = sourceVisibleRect(pane);
-    if (visible.isEmpty())
-        return request;
-    const int marginX = std::max(16, visible.width() / 8);
-    const int marginY = std::max(16, visible.height() / 8);
-    request.sourceRect = visible.adjusted(-marginX, -marginY, marginX, marginY).intersected(full);
-    if (request.sourceRect.isEmpty())
-    {
-        request.sourceRect = full;
-        return request;
-    }
+    input.visibleSourceRect = {visible.x(), visible.y(), visible.width(), visible.height()};
 
-    const double dpr = std::max(1.0, view->devicePixelRatioF());
-    // A near-full covered rectangle is both more expensive and less reliable
-    // for clip-based decoders than a bounded full-frame LOD. Keep the existing
-    // full-frame path for this moderate-zoom seam, but raise its target edge
-    // with the logical zoom ratio so the user still sees a quality upgrade.
-    const qint64 fullPixels = static_cast<qint64>(full.width()) * full.height();
-    const qint64 coveredPixels = static_cast<qint64>(request.sourceRect.width()) *
-                                 request.sourceRect.height();
-    if (fullPixels > 0 && coveredPixels * 100 >= fullPixels * 90)
-    {
-        request.sourceRect = full;
-        const int edge = std::clamp(
-            static_cast<int>(std::ceil(std::max(view->width(), view->height()) * dpr *
-                                       zoomRatio * kDisplayLodOverscan)),
-            64, kMaxCompareLodEdge);
-        request.target = QSize(edge, edge);
-        request.region = false;
-        return request;
-    }
-
-    // Use the logical zoom ratio for source density. This preserves the
-    // pre-Fit source-backed behavior (where the engine scale started at 1.0)
-    // while keeping a fitted pane dense enough after the first wheel step.
-    const double density = std::max(1.0, zoomRatio) * dpr * kDisplayLodOverscan;
-    const int targetW = std::clamp(
-        static_cast<int>(std::ceil(request.sourceRect.width() * density)), 64, kMaxCompareLodEdge);
-    const int targetH = std::clamp(
-        static_cast<int>(std::ceil(request.sourceRect.height() * density)), 64, kMaxCompareLodEdge);
-    request.target = QSize(targetW, targetH);
-    request.region = true;
-    return request;
+    const mviewer::ui::CompareDisplayPlan plan = mviewer::ui::planCompareDisplay(input);
+    if (!plan.isValid())
+        return {};
+    return {{plan.targetWidth, plan.targetHeight},
+            {plan.sourceRect.x, plan.sourceRect.y, plan.sourceRect.width, plan.sourceRect.height},
+            plan.region};
 }
 
 QSize CompareWorkspace::displayLodTarget(int idx, const ImageData &source) const

@@ -75,9 +75,9 @@ void ThumbnailPanel::selectPath(const QString &path)
     }
     const QModelIndex idx = m_model->index(row, 0);
     if (currentIndex() == idx && selectionModel() && selectionModel()->isSelected(idx))
-        return; // already the current selected item 鈥?nothing to do, no scroll jank
+        return; // already the current selected item - nothing to do, no scroll jank
     // If the path is already part of a multi-selection, only move the current
-    // focus 鈥?do NOT ClearAndSelect (that would collapse multi-select).
+    // focus - do NOT ClearAndSelect (that would collapse multi-select).
     if (selectionModel() && selectionModel()->isSelected(idx))
     {
         selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);

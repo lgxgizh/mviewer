@@ -4,7 +4,8 @@
 //   mainwindow_ui.cpp         setupUi (widget/menu/dock construction)
 //   mainwindow_commands.cpp   command registration + keyboard dispatch
 //   mainwindow_navigation.cpp history / recent / favorites / navigation
-//   mainwindow_session.cpp    workspace / project / autosave / recovery
+//   mainwindow_session.cpp    workspace / project / restore / close persistence
+//   mainwindow_session_notifications.cpp  update / crash notifications
 //   mainwindow_export.cpp     report + image export
 //   mainwindow_view.cpp       drag&drop, overlays, fullscreen, slideshow
 // Only MainWindow TUs may include this header.

@@ -1,4 +1,4 @@
-// M24 Phase 4C 鈥?Analyze workflow acceptance tests.
+// M24 Phase 4C - Analyze workflow acceptance tests.
 //
 // Maps the M24 Workflow C acceptance items that are automatable headless:
 //   C#2  analyzer list, execution status, and result meaning are explicit
