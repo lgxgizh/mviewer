@@ -14,10 +14,9 @@
 //   C3 zooming a source-backed pane issues a denser re-materialization
 //      (NativeLod classification grows, raster edge grows) with no full decode.
 //   C4 destroy mid-request and destroy after display: no crash, pools drain.
-//   C5 TIFF honest fallback: an infeasible TIFF pane stays blank (no native
-//      LOD; the bounded attempt is recorded as FullDecodeScaled and fails
-//      inside Qt's allocation limit), the JPEG pane still displays, and the
-//      skip never surfaces as a load failure.
+//   C5 TIFF native parity: an infeasible TIFF pane displays through the native
+//      bounded WIC LOD path alongside the JPEG pane, without a full decode or
+//      a load warning.
 //   C6 failure vs infeasible accounting: a missing file among infeasible +
 //      feasible sources emits a warning that counts ONLY the missing one.
 
@@ -383,7 +382,7 @@ int main(int argc, char **argv)
               "C4b: pools drain after destroy post-display");
     }
 
-    // ── C5: TIFF honest fallback (no native LOD) ─────────────────────────────
+    // ── C5: TIFF native bounded parity ──────────────────────────────────────
     {
         MARK("C5 start");
         SourceDecodeStats::instance().counters().reset();
@@ -393,24 +392,23 @@ int main(int argc, char **argv)
         WarningCapture cap;
         captureWarnings(&ws, cap);
         ws.setImages({jpeg100, tiff100});
-        CHECK(waitForLoadedPanes(&ws, 2, {0}), "C5: JPEG pane displays via LOD");
-        // The TIFF pane has no native LOD; the bounded attempt is recorded and
-        // rejected inside Qt's allocation limit — the pane stays blank, but
-        // the batch and the workspace stay healthy.
+        CHECK(waitForLoadedPanes(&ws, 2, {0, 1}),
+              "C5: JPEG and TIFF panes display via bounded LOD");
         CHECK(waitTrue(
                   [&]
                   {
                       const auto &c = SourceDecodeStats::instance().counters();
-                      return c.fullDecodeScaled.load() >= 1;
+                      return c.nativeLod.load() >= 2;
                   },
                   60000),
-              "C5: the TIFF bounded attempt is recorded (FullDecodeScaled)");
+              "C5: both pane decodes use the native bounded path");
         RawImageView *v1 = paneView(&ws, 1);
         pump(500);
-        CHECK(v1 && v1->image().isNull(),
-              "C5: the infeasible TIFF pane stays blank (honest fallback)");
+        CHECK(v1 && !v1->image().isNull() && v1->sourceSize() == QSize(10000, 10000),
+              "C5: the infeasible TIFF pane remains visible with source geometry");
         const auto &c = SourceDecodeStats::instance().counters();
-        CHECK(c.failed.load() >= 1, "C5: the TIFF attempt failed cleanly (no crash/OOM)");
+        CHECK(c.failed.load() == 0, "C5: the TIFF bounded path has no decode failure");
+        CHECK(c.fullDecodeScaled.load() == 0, "C5: no full-scaled fallback was attempted");
         CHECK(c.fullDecodeCrop.load() == 0, "C5: no full-decode crop fallback was attempted");
         CHECK(!cap.warned, "C5: a skipped source is not a load failure");
         CHECK(waitTrue([&] { return sampleScheduler().pending + sampleScheduler().active == 0; },

@@ -590,9 +590,23 @@ class CompareWorkspace : public QWidget
             QImage image;
             QSize sourceSize;
             QRect sourceRect;
+            // Terminal bounded-display failure. The last valid image remains
+            // intact when one exists; an initial failure is surfaced in the
+            // pane caption instead of leaving an unexplained blank cell.
+            QString errorText;
         };
         std::vector<CellImage> cells;
     };
+    struct SourceDisplayResult
+    {
+        ImageData pixels;
+        mviewer::domain::ImageMetadata metadata;
+        QSize sourceSize;
+        QRect coveredRect;
+        QString errorText;
+    };
+    static SourceDisplayResult materializeSourceDisplay(const std::string &path,
+                                                        const DisplayRequest &request);
     QSize displayLodTarget(int idx, const ImageData &source) const;
     QRect sourceVisibleRect(int pane) const;
     DisplayRequest sourceDisplayRequest(int pane) const;

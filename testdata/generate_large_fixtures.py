@@ -35,6 +35,11 @@ M48 Phase 0 additions (real non-sRGB + orientation + deep-zoom):
   deepzoom_hf_72mp.jpg    9000x8000 JPEG with 1px-period high-frequency detail
                           (deep-zoom density tests; ~53 MB)
 
+M53 Phase 0 additions (large-source parity characterization):
+  large_tiff_16bit.tiff   4096x4096 unsigned 16-bit grayscale TIFF
+  large_png_16mp.png      4096x4096 PNG boundary fixture
+  large_bmp_16mp.bmp      4096x4096 BMP boundary fixture
+
 Usage:
   python testdata/generate_large_fixtures.py [--check] [--ensure] [--force]
     default    generate (idempotent) any missing fixture
@@ -61,6 +66,9 @@ Image.MAX_IMAGE_PIXELS = None
 REQUIRED = {
     "large_jpeg_100mp.jpg": (12000, 8333, 1_000_000),
     "large_tiff_100mp.tiff": (10000, 10000, 1_000_000),
+    "large_tiff_16bit.tiff": (4096, 4096, 100_000),
+    "large_png_16mp.png": (4096, 4096, 100_000),
+    "large_bmp_16mp.bmp": (4096, 4096, 100_000),
     "high_compression.jpg": (6000, 4000, 100_000),
     "exif_orientation6.jpg": (4096, 4096, 100_000),
     "exif_orientation8.jpg": (4096, 4096, 100_000),
@@ -243,6 +251,21 @@ def make_pattern(w: int, h: int):
     return base.resize((w, h), Image.NEAREST)
 
 
+def make_16bit_pattern(w: int, h: int):
+    """Create a deterministic unsigned 16-bit grayscale source without NumPy."""
+    from array import array
+    from PIL import Image
+
+    values = array("H")
+    for y in range(h):
+        row = [(x * 65535 // max(1, w - 1) + y * 65535 // max(1, h - 1)) // 2
+               for x in range(w)]
+        values.extend(row)
+    if values.itemsize != 2:
+        values.byteswap()
+    return Image.frombytes("I;16", (w, h), values.tobytes())
+
+
 def _read_exif_orientation(tag_value: int) -> bytes:
     """Encode an EXIF orientation tag (274) into a minimal EXIF blob."""
     # Build a minimal Exif dict and let Pillow serialize it.
@@ -288,6 +311,20 @@ def generate(root: str) -> None:
         # LZW keeps the gradient pattern small on disk; no strip/planar tricks.
         img.save(path("large_tiff_100mp.tiff"), "TIFF", compression="tiff_lzw")
         print("generated large_tiff_100mp.tiff")
+
+    # M53 Phase 0: high-bit-depth TIFF and large PNG/BMP boundary fixtures.
+    if want("large_tiff_16bit.tiff"):
+        img = make_16bit_pattern(4096, 4096)
+        img.save(path("large_tiff_16bit.tiff"), "TIFF", compression="tiff_lzw")
+        print("generated large_tiff_16bit.tiff (16-bit grayscale)")
+
+    if want("large_png_16mp.png"):
+        make_pattern(4096, 4096).save(path("large_png_16mp.png"), "PNG", optimize=False)
+        print("generated large_png_16mp.png")
+
+    if want("large_bmp_16mp.bmp"):
+        make_pattern(4096, 4096).save(path("large_bmp_16mp.bmp"), "BMP")
+        print("generated large_bmp_16mp.bmp")
 
     if want("high_compression.jpg"):
         img = make_pattern(6000, 4000)

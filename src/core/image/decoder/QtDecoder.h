@@ -11,19 +11,17 @@
 // before the fallback. It respects EXIF orientation (auto-transform) and
 // outputs RGB24 ImageData, identical to the legacy Decoder output.
 //
-// M47: additionally implements the optional source-backed capability
+// M47/M53: additionally implements the optional source-backed capability
 // interface (probe without pixel decode, native-LOD where the backend really
-// provides it, bounded-memory region decode via clipRect). Capability claims
-// are evidence-based:
+// provides it, bounded-memory region decode). Capability claims are
+// evidence-based:
 //   * canProbe       — QImageReader::size() reads only the container header.
-//   * canNativeLod   — JPEG only: the Phase-0 baseline proved setScaledSize
-//                      avoids materializing the full raster (a 100 MP JPEG
-//                      scales to 256 px while full decode is rejected by Qt's
-//                      256 MB allocation limit). Other formats are NOT
-//                      claimed (TIFF scaled decode still rasterizes fully).
-//   * canNativeRegion— false: Qt offers no true random-access tile decode.
-//                      decodeRegion() is the bounded-memory clipRect path,
-//                      classified BoundedRasterRegion by the provider.
+//   * canNativeLod   — JPEG uses reduced DCT scaling; Windows TIFF uses the
+//                      measured WIC frame/clip/scale adapter. Other formats
+//                      are NOT claimed without equivalent proof.
+//   * canNativeRegion— false: decodeRegion() uses the bounded WIC clip path
+//                      for TIFF and is classified BoundedRasterRegion by the
+//                      provider; Qt offers no true random-access tile claim.
 class QtDecoder : public IDecoder, public mviewer::core::ISourceImageCapabilities
 {
   public:

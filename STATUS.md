@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-08-28 · Version: **1.0.13 release candidate line** · Release tag: **v1.0.13 pending final push**
+> Snapshot: 2026-08-29 · Version: **1.0.13 RC hardening line** · Release tag: **v1.0.13 patch line; publication is external to this repository**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -25,7 +25,31 @@
 > `docs/review/M50_RELEASE_CANDIDATE_CONVERGENCE_2026-08-27.md`,
 > `docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md` and
 > `docs/review/M52_RELEASE_QUALITY_WORKFLOW_CONVERGENCE_2026-08-28.md` and
+> `docs/review/M53_PHASE0_BASELINE_2026-08-28.md` and
+> `docs/review/M53_LARGE_SOURCE_NATIVE_RELEASE_CLOSURE_2026-08-29.md` and
 > `.\build.ps1 Test`.
+
+## M53 — Large-source format parity & native release reality closure (2026-08-29)
+
+- The Qt TIFF `ClipRect` claim was characterized and rejected as unsafe: the
+  Qt 6.10 TIFF handler still attempted a full 100MP allocation before clipping.
+  On Windows, the decoder now uses a narrow WIC frame → clip → scale → 24-bit
+  conversion path. `NativeLod` is claimed only for unrotated TIFFs on Windows;
+  regions remain `BoundedRasterRegion`, and PNG/BMP retain their honest
+  `FullDecodeScaled` classification.
+- `RawDecoder::extractPreview()` is now chunked/seek-based. It preserves the
+  largest valid embedded JPEG behavior, rejects truncated candidates, and no
+  longer calls `QFile::readAll()` for the RAW container. The M53 peak-buffer
+  diagnostic proves storage is tied to parser windows plus the selected preview.
+- Viewer and Compare now have M53 large-TIFF workflow and five-round lifecycle
+  soak coverage. Compare bounded-display failures retain the last valid raster
+  when possible and expose a user-facing reason on an initial blank pane.
+- The deterministic corpus now includes a 16-bit TIFF, large PNG/BMP boundary
+  fixtures, a large synthetic RAW preview container, and Unicode-path coverage.
+- Focused M53 verification is green: 31 core parity/RAW assertions, Viewer /
+  Compare UI qualification, and the five-round large-source soak. The final
+  Release two-run gate, package contract, and complexity/architecture results
+  are recorded in the closure review below.
 
 ## M52 — Release quality truthfulness & workflow boundary convergence (2026-08-28)
 

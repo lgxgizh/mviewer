@@ -4,7 +4,7 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.13 RC hardening**
+## Where we are now — **Beta / 1.0.13 RC hardening (M53)**
 
 MViewer remains in **Beta** on the post-`v1.0.10` hardening line, now released as
 the `1.0.13` patch line. The product
@@ -23,6 +23,8 @@ loop below is built and verified; packaging and final human review remain:
 - **Export** — compare report (JSON/CSV) + diff PNG.
 - **Workspace** — persist open directories, ROI, and per-image analysis to disk
   and restore.
+- **Large sources** — 100MP JPEG and 100MP-class TIFF now use bounded
+  source-backed display on Windows; exact-source analysis remains separate.
 - **Installer** — NSIS `.exe` + portable zip; real UI screenshot in the release.
 
 Supported formats today: **JPEG / PNG / BMP / TIFF** (8/16-bit), Gray / RGBA /
@@ -36,13 +38,13 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.13** (current line) | Release quality truthfulness, workflow boundaries, and Windows qualification closure | 🔵 Beta hardening |
+| **1.0.13** (current line) | Release quality truthfulness, large-source format parity, workflow boundaries, and Windows qualification closure | 🔵 Beta hardening |
 | **1.0.12** | Release-candidate workflow convergence / native Windows qualification | ✅ Previous patch |
 | **1.0.11** | Release-candidate workflow convergence / native Windows qualification | ✅ Previous patch |
 | **1.0.10** | Windows UX / Unicode / Compare reliability closure | ✅ Previous patch |
 | **1.0.9** | Product loop closed + perf proven + SDK + installer | ✅ Previous patch |
 | **1.0** | First non-prerelease: signed installer, docs site, stable plugin ABI | ⬜ Release work |
-| **1.1** | Large-image depth: 100 MP / tiled decode, compare of huge images | ⬜ Planned |
+| **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
 The repository verifies the `v1.0.13` patch line. The remaining 1.0 work is
@@ -58,9 +60,9 @@ feel still require a physical Windows review.
 1. **1.0 hardening** — code-signed installer, a docs/README site, and a
    **frozen plugin ABI** (same compiler/Qt per release; see
    [`docs/adr/005-why-plugin-analysis.md`](../adr/005-why-plugin-analysis.md)).
-2. **1.1 large images** — disk-LOD decode (Decoder emits reduced-resolution
-   bitmaps) so 100 MP / very large JPEG/TIFF open and pan without the full
-   bitmap, building on the already-landed Tile Pipeline
+2. **1.1 large-source depth** — extend measured format-specific LOD/tile
+   coverage beyond the current 100MP JPEG and Windows WIC-TIFF display paths,
+   while keeping exact-source analysis separate and bounded
    ([`docs/rfc/M13_TILE_PIPELINE.md`](../rfc/M13_TILE_PIPELINE.md)).
 3. **2.0 GPU** — Stage A only (GPU upload + blit via Qt RHI), gated on a
    measured 100 MP deficit. The full staged route is in
@@ -83,7 +85,8 @@ feel still require a physical Windows review.
 
 - Windows installer + portable zip: see the latest GitHub release.
 - Build from source: `powershell -ExecutionPolicy Bypass -File build.ps1 Release`
-  (requires MSVC + Qt 6.11). Tests: `build.ps1 Test`.
+  (requires MSVC + Qt 6.8 minimum; development qualification uses Qt 6.10.x).
+  Tests: `build.ps1 Test`.
 
 ## How we decide
 

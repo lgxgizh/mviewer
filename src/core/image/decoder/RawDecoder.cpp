@@ -12,12 +12,13 @@
 #include <atomic>
 #include <cstdint>
 #include <cstring>
-#include <span>
+#include <limits>
 
 namespace
 {
 
 std::atomic<size_t> g_lastPreviewFullFileCopyBytes{0};
+std::atomic<size_t> g_lastPreviewPeakBufferedBytes{0};
 
 // RAW container extensions we attempt to preview-decode. This list is
 // intentionally broad: every entry embeds at least a thumbnail/preview JPEG,
@@ -27,77 +28,200 @@ const char *kRawExts[] = {"cr2", "cr3", "nef", "nrw", "arw", "dng", "orf",
                           "rw2", "raf", "pef", "srw", "mrw", "kdc", "dcr",
                           "sr2", "3fr", "fff", "iiq", "mos", "erf", "rwz"};
 
-// Walk a single JPEG starting at FFD8, returning the index just past EOI
-// (FFD9), or -1 if the stream is malformed/truncated. Length fields of marker
-// segments are honoured so we do not stop early at a stray FFD9 inside data.
-long jpegEnd(std::span<const uint8_t> b, long start)
+constexpr qsizetype kScannerChunkBytes = 64 * 1024;
+
+class ChunkReader
 {
-    const long n = static_cast<long>(b.size());
-    if (start < 0 || start + 2 > n)
-        return -1;
-    if (b[start] != 0xFF || b[start + 1] != 0xD8)
-        return -1;
-    long i = start + 2;
-    while (i + 1 < n)
+  public:
+    explicit ChunkReader(QFile &file) : m_file(file), m_buffer(kScannerChunkBytes, Qt::Uninitialized)
     {
-        if (b[i] != 0xFF)
-        {
-            ++i;
-            continue;
-        }
-        const uint8_t m = b[i + 1];
-        if (m == 0xD9) // EOI
-            return i + 2;
-        if (m == 0x01 || (m >= 0xD0 && m <= 0xD7)) // standalone markers
-        {
-            i += 2;
-            continue;
-        }
-        if (m == 0xFF) // fill byte
-        {
-            ++i;
-            continue;
-        }
-        if (i + 4 > n) // segment with length field
-            return -1;
-        const int len = (static_cast<int>(b[i + 2]) << 8) | b[i + 3];
-        if (len < 2)
-            return -1;
-        i += 2 + len;
     }
-    return -1;
+
+    bool seek(qint64 offset)
+    {
+        if (!m_file.seek(offset))
+            return false;
+        m_offset = 0;
+        m_size = 0;
+        m_position = offset;
+        return true;
+    }
+
+    bool readByte(uint8_t &out)
+    {
+        if (m_offset >= m_size)
+        {
+            const qint64 read = m_file.read(m_buffer.data(), m_buffer.size());
+            if (read <= 0)
+                return false;
+            m_offset = 0;
+            m_size = static_cast<qsizetype>(read);
+        }
+        out = static_cast<uint8_t>(m_buffer[m_offset++]);
+        ++m_position;
+        return true;
+    }
+
+    qint64 position() const
+    {
+        return m_position;
+    }
+
+  private:
+    QFile &m_file;
+    QByteArray m_buffer;
+    qsizetype m_offset = 0;
+    qsizetype m_size = 0;
+    qint64 m_position = 0;
+};
+
+bool readMarker(ChunkReader &reader, uint8_t &marker)
+{
+    uint8_t byte = 0;
+    while (reader.readByte(byte))
+    {
+        if (byte != 0xff)
+            continue;
+        do
+        {
+            if (!reader.readByte(marker))
+                return false;
+        } while (marker == 0xff);
+        return marker != 0;
+    }
+    return false;
 }
 
-// Find the largest embedded JPEG preview in the buffer (cameras often store
-// several; we want the highest-resolution one).
-QByteArray extractLargestJpeg(std::span<const uint8_t> b)
+bool skipBytes(ChunkReader &reader, qint64 count)
 {
-    const long n = static_cast<long>(b.size());
-    long bestStart = -1;
-    long bestEnd = -1;
-    long bestLen = 0;
-    for (long i = 0; i + 3 < n; ++i)
+    uint8_t ignored = 0;
+    while (count-- > 0)
+        if (!reader.readByte(ignored))
+            return false;
+    return true;
+}
+
+bool readSegmentLength(ChunkReader &reader, int &length)
+{
+    uint8_t hi = 0;
+    uint8_t lo = 0;
+    if (!reader.readByte(hi) || !reader.readByte(lo))
+        return false;
+    length = (static_cast<int>(hi) << 8) | lo;
+    return length >= 2;
+}
+
+// Seek through one JPEG without retaining its compressed bytes. The scan-data
+// state handles FF00 stuffing and restart markers, so an EOI-like byte sequence
+// in entropy data cannot terminate a candidate prematurely.
+qint64 jpegEndAt(QFile &file, qint64 start)
+{
+    ChunkReader reader(file);
+    if (!reader.seek(start))
+        return -1;
+
+    uint8_t soi0 = 0;
+    uint8_t soi1 = 0;
+    if (!reader.readByte(soi0) || !reader.readByte(soi1) || soi0 != 0xff || soi1 != 0xd8)
+        return -1;
+
+    bool scanData = false;
+    for (;;)
     {
-        if (b[i] == 0xFF && b[i + 1] == 0xD8 && b[i + 2] == 0xFF)
+        uint8_t marker = 0;
+        if (scanData)
         {
-            const long end = jpegEnd(b, i);
-            if (end > 0)
+            uint8_t byte = 0;
+            do
             {
-                const long len = end - i;
-                if (len > bestLen)
+                if (!reader.readByte(byte))
+                    return -1;
+            } while (byte != 0xff);
+            do
+            {
+                if (!reader.readByte(marker))
+                    return -1;
+            } while (marker == 0xff);
+            if (marker == 0)
+                continue; // stuffed FF byte in entropy-coded data
+            if (marker == 0xd9)
+                return reader.position();
+            if (marker == 0xd0 || (marker >= 0xd1 && marker <= 0xd7))
+                continue; // restart marker
+        }
+        else if (!readMarker(reader, marker))
+        {
+            return -1;
+        }
+
+        if (marker == 0xd9)
+            return reader.position();
+        if (marker == 0xd8 || marker == 0x01 || (marker >= 0xd0 && marker <= 0xd7))
+            continue;
+
+        int length = 0;
+        if (!readSegmentLength(reader, length) || !skipBytes(reader, length - 2))
+            return -1;
+        if (marker == 0xda)
+            scanData = true;
+    }
+}
+
+void updatePeak(size_t bytes)
+{
+    auto &peak = g_lastPreviewPeakBufferedBytes;
+    size_t observed = peak.load(std::memory_order_relaxed);
+    while (observed < bytes &&
+           !peak.compare_exchange_weak(observed, bytes, std::memory_order_relaxed))
+    {
+    }
+}
+
+QByteArray readRange(QFile &file, qint64 start, qint64 length)
+{
+    if (start < 0 || length <= 0 || length > std::numeric_limits<qsizetype>::max() ||
+        !file.seek(start))
+        return QByteArray();
+    return file.read(length);
+}
+
+// Find the largest structurally valid and decodable JPEG by seeking over the
+// container. The scanner and candidate reader have independent handles so a
+// seek used to inspect a candidate never invalidates the sequential scan.
+QByteArray extractLargestJpeg(QFile &scanFile, QFile &dataFile)
+{
+    ChunkReader scanner(scanFile);
+    if (!scanner.seek(0))
+        return QByteArray();
+    updatePeak(static_cast<size_t>(2 * kScannerChunkBytes));
+
+    QByteArray best;
+    qint64 bestLength = 0;
+    bool previousWasFf = false;
+    uint8_t byte = 0;
+    while (scanner.readByte(byte))
+    {
+        const qint64 position = scanner.position() - 1;
+        if (previousWasFf && byte == 0xd8)
+        {
+            const qint64 start = position - 1;
+            const qint64 end = jpegEndAt(dataFile, start);
+            const qint64 length = end - start;
+            if (end > start && length > bestLength)
+            {
+                QByteArray candidate = readRange(dataFile, start, length);
+                updatePeak(static_cast<size_t>(2 * kScannerChunkBytes) + best.size() +
+                           static_cast<size_t>(candidate.size()));
+                if (candidate.size() == length && !QImage::fromData(candidate, "JPEG").isNull())
                 {
-                    bestLen = len;
-                    bestStart = i;
-                    bestEnd = end;
+                    best = std::move(candidate);
+                    bestLength = length;
                 }
-                i = end - 1; // resume scanning after this JPEG
             }
         }
+        previousWasFf = byte == 0xff;
     }
-    if (bestStart < 0)
-        return QByteArray();
-    return QByteArray::fromRawData(reinterpret_cast<const char *>(b.data() + bestStart),
-                                   static_cast<qsizetype>(bestEnd - bestStart));
+    return best;
 }
 
 ImageData toImageData(const QImage &src)
@@ -140,20 +264,21 @@ size_t RawDecoder::lastPreviewFullFileCopyBytes()
     return g_lastPreviewFullFileCopyBytes.load(std::memory_order_relaxed);
 }
 
+size_t RawDecoder::lastPreviewPeakBufferedBytes()
+{
+    return g_lastPreviewPeakBufferedBytes.load(std::memory_order_relaxed);
+}
+
 ImageData RawDecoder::extractPreview(const std::string &path, int maxEdge) const
 {
     g_lastPreviewFullFileCopyBytes.store(0, std::memory_order_relaxed);
-    QFile f(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
-    if (!f.open(QIODevice::ReadOnly))
+    g_lastPreviewPeakBufferedBytes.store(0, std::memory_order_relaxed);
+    const QString nativePath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
+    QFile scanFile(nativePath);
+    QFile dataFile(nativePath);
+    if (!scanFile.open(QIODevice::ReadOnly) || !dataFile.open(QIODevice::ReadOnly))
         return ImageData();
-    const QByteArray raw = f.readAll();
-    f.close();
-    if (raw.isEmpty())
-        return ImageData();
-
-    const auto bytes = std::span<const uint8_t>(
-        reinterpret_cast<const uint8_t *>(raw.constData()), static_cast<size_t>(raw.size()));
-    const QByteArray jpeg = extractLargestJpeg(bytes);
+    const QByteArray jpeg = extractLargestJpeg(scanFile, dataFile);
     if (jpeg.isEmpty())
         return ImageData();
 

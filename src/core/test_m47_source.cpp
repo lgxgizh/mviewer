@@ -5,9 +5,9 @@
 //   T2  native LOD: 100 MP JPEG decodeLod(256) succeeds, classified NativeLod,
 //       fullDecode counter stays 0 (a full decode would be rejected by Qt's
 //       256 MB allocation limit — success proves no full raster)
-//   T3  non-native LOD: 100 MP TIFF decodeLod fails today (Qt TIFF scaled
-//       decode still rasterizes fully -> allocation-limit rejection), honest
-//       FullDecodeScaled classification + failed counter
+//   T3  100 MP TIFF decodeLod uses the native Windows WIC bounded path; prove
+//       the source-backed raster is non-empty and never falls back to a full
+//       decode
 //   T4  bounded region: 100 MP JPEG decodeRegion succeeds at 512x512,
 //       classified BoundedRasterRegion, fullDecode counter stays 0
 //   T5  region correctness: clip-path region == full-decode crop region
@@ -195,26 +195,27 @@ int main(int argc, char **argv)
               "Qt's 256 MB limit, so success proves the LOD path)");
     }
 
-    // ── T3: non-native LOD on the 100 MP TIFF (honest current state) ────────
+    // ── T3: native bounded LOD on the 100 MP TIFF ───────────────────────────
     {
         MARK("T3 start");
         SourceDecodeStats::instance().counters().reset();
         auto src = SourceImage::open(tiff100);
-        CHECK(src && !src->hasNativeLod(), "T3: TIFF does NOT advertise native LOD");
+        CHECK(src && src->hasNativeLod(), "T3: TIFF advertises the native bounded WIC LOD");
         if (src)
         {
             auto lodR = src->decodeLod(256);
             ImageData lod = lodR.pixels;
-            // Current reality: Qt's TIFF scaled decode still rasterizes fully
-            // and hits the 256 MB allocation limit. The classification must be
-            // the honest fallback, and the failure must be recorded, not crash.
-            CHECK(lod.isNull(), "T3: 100MP TIFF LOD(256) fails today (Qt full raster limit)");
-            CHECK(lodR.decodePath == SourceDecodePath::FullDecodeScaled,
-                  "T3: classified FullDecodeScaled (cannot prove native)");
+            CHECK(lodR.ok && !lod.isNull(), "T3: 100MP TIFF LOD(256) returns a bounded raster");
+            CHECK(lod.width == 256 && lod.height == 256,
+                  "T3: TIFF LOD output preserves the square aspect");
+            CHECK(lodR.decodePath == SourceDecodePath::NativeLod,
+                  "T3: classified NativeLod through WIC");
         }
         const auto &c = SourceDecodeStats::instance().counters();
-        CHECK(c.fullDecodeScaled.load() == 1, "T3: fullDecodeScaled counter == 1");
-        CHECK(c.failed.load() == 1, "T3: failed counter == 1");
+        CHECK(c.nativeLod.load() == 1, "T3: nativeLod counter == 1");
+        CHECK(c.fullDecode.load() == 0 && c.fullDecodeScaled.load() == 0,
+              "T3: no full-source fallback was attempted");
+        CHECK(c.failed.load() == 0, "T3: bounded TIFF decode has no failure");
     }
 
     // ── T4: bounded region decode on the 100 MP JPEG ────────────────────────

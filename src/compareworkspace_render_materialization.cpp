@@ -300,6 +300,64 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
 
 }
 
+CompareWorkspace::SourceDisplayResult CompareWorkspace::materializeSourceDisplay(
+    const std::string &path, const DisplayRequest &request)
+{
+    SourceDisplayResult result;
+    if (path.empty())
+    {
+        result.errorText = QStringLiteral("源路径为空");
+        return result;
+    }
+    const auto source = mviewer::core::SourceImage::open(path);
+    if (!source)
+    {
+        result.errorText = QStringLiteral("源格式不支持或元数据读取失败");
+        return result;
+    }
+    result.sourceSize = QSize(source->metadata().width, source->metadata().height);
+    if (result.sourceSize.isEmpty())
+    {
+        result.errorText = QStringLiteral("源尺寸不可用");
+        return result;
+    }
+
+    if (request.region && request.sourceRect.isValid())
+    {
+        const mviewer::core::SourceRect displayed{
+            request.sourceRect.x(), request.sourceRect.y(), request.sourceRect.width(),
+            request.sourceRect.height()};
+        const mviewer::core::SourceRect raw = mviewer::core::orientedRectToRaw(
+            displayed, source->rawWidth(), source->rawHeight(), source->orientation());
+        const auto decoded = source->decodeRegion(raw, request.target.width(),
+                                                  request.target.height());
+        const mviewer::core::SourceRect displayedCovered = mviewer::core::rawRectToOriented(
+            decoded.coveredRect, source->rawWidth(), source->rawHeight(), source->orientation());
+        result.coveredRect = QRect(displayedCovered.x, displayedCovered.y, displayedCovered.w,
+                                   displayedCovered.h);
+        if (!decoded.ok)
+        {
+            result.errorText = QStringLiteral("有界显示解码不可用");
+            return result;
+        }
+        result.pixels = decoded.pixels;
+        result.metadata = decoded.metadata;
+        return result;
+    }
+
+    const int edge = std::max(request.target.width(), request.target.height());
+    const auto decoded = source->decodeLod(edge > 0 ? edge : 1024);
+    result.coveredRect = QRect(QPoint(0, 0), result.sourceSize);
+    if (!decoded.ok)
+    {
+        result.errorText = QStringLiteral("有界显示解码不可用");
+        return result;
+    }
+    result.pixels = decoded.pixels;
+    result.metadata = decoded.metadata;
+    return result;
+}
+
 TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
     const std::vector<ImageData> &pixels, const std::vector<mviewer::domain::ImageMetadata> &metadata,
     const std::vector<DisplayRequest> &displayRequests, const std::vector<CellAdjust> &adjusts,
@@ -324,6 +382,13 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                 if (idx >= 0 && idx < static_cast<int>(adjusts.size()))
                     return adjusts[idx];
                 return CellAdjust{};
+            };
+            const auto recordFailure = [&r](int idx, const QString &reason)
+            {
+                DisplayBatchResult::CellImage cell;
+                cell.index = idx;
+                cell.errorText = reason;
+                r.cells.push_back(std::move(cell));
             };
 
             for (int idx : panes)
@@ -362,49 +427,30 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                     // decode returns an atomic pixels+metadata result, so the
                     // display conversion uses the authoritative metadata AS OF
                     // this decode (ICC included), never a pre-decode snapshot.
-                    if (idx >= static_cast<int>(paths.size()) ||
-                        paths[static_cast<size_t>(idx)].empty())
-                        continue;
-                    auto source = mviewer::core::SourceImage::open(
-                        paths[static_cast<size_t>(idx)]);
-                    if (!source)
-                        continue;
-                    sourceDims = QSize(source->metadata().width, source->metadata().height);
-                    if (sourceDims.isEmpty())
-                        continue;
-                    const QSize target = request.target;
-                    mviewer::core::SourceImage::RasterResult result;
-                    if (request.region && request.sourceRect.isValid())
+                    if (idx >= static_cast<int>(paths.size()))
                     {
-                        const mviewer::core::SourceRect displayed{
-                            request.sourceRect.x(), request.sourceRect.y(),
-                            request.sourceRect.width(), request.sourceRect.height()};
-                        const mviewer::core::SourceRect raw = mviewer::core::orientedRectToRaw(
-                            displayed, source->rawWidth(), source->rawHeight(),
-                            source->orientation());
-                        result = source->decodeRegion(raw, target.width(), target.height());
-                        const mviewer::core::SourceRect displayedCovered =
-                            mviewer::core::rawRectToOriented(result.coveredRect, source->rawWidth(),
-                                                             source->rawHeight(),
-                                                             source->orientation());
-                        coveredRect = QRect(displayedCovered.x, displayedCovered.y,
-                                            displayedCovered.w, displayedCovered.h);
-                    }
-                    else
-                    {
-                        const int edge = std::max(target.width(), target.height());
-                        result = source->decodeLod(edge > 0 ? edge : 1024);
-                        coveredRect = QRect(QPoint(0, 0), sourceDims);
-                    }
-                    if (!result.ok)
+                        recordFailure(idx, QStringLiteral("源路径为空"));
                         continue;
-                    lod = result.pixels;
-                    convMeta = result.metadata;
+                    }
+                    const SourceDisplayResult sourceResult = materializeSourceDisplay(
+                        paths[static_cast<size_t>(idx)], request);
+                    if (!sourceResult.errorText.isEmpty())
+                    {
+                        recordFailure(idx, sourceResult.errorText);
+                        continue;
+                    }
+                    sourceDims = sourceResult.sourceSize;
+                    coveredRect = sourceResult.coveredRect;
+                    lod = sourceResult.pixels;
+                    convMeta = sourceResult.metadata;
                 }
                 if (ctx.isCancelled())
                     return; // after bounded scale
                 if (lod.isNull())
+                {
+                    recordFailure(idx, QStringLiteral("显示栅格为空"));
                     continue;
+                }
                 if (sourceDims.isEmpty())
                     sourceDims = QSize(lod.width, lod.height);
                 if (!coveredRect.isValid())
@@ -429,7 +475,10 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                 if (ctx.isCancelled())
                     return; // after bounded adjustment
                 if (adjusted.isNull())
+                {
+                    recordFailure(idx, QStringLiteral("显示调整失败"));
                     continue; // failed adjustment must not clear the last valid preview
+                }
                 DisplayBatchResult::CellImage cell;
                 cell.index = idx;
                 cell.image = mvcore::toDisplayQImage(adjusted, convMeta);
@@ -442,7 +491,10 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                 if (ctx.isCancelled())
                     return; // after conversion
                 if (cell.image.isNull())
+                {
+                    recordFailure(idx, QStringLiteral("显示格式转换失败"));
                     continue; // failed conversion must not clear the last valid preview
+                }
                 r.cells.push_back(std::move(cell));
             }
 
@@ -561,6 +613,21 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
         RawImageView *view = m_cellViews[static_cast<size_t>(cell.index)];
         if (!view)
             continue;
+        if (!cell.errorText.isEmpty())
+        {
+            // Keep a previously delivered raster visible during a transient
+            // zoom failure, but make the terminal reason inspectable. On the
+            // initial request the caption explains why the pane is blank.
+            const QString message = tr("无法显示此源：%1").arg(cell.errorText);
+            view->setToolTip(message);
+            if (view->image().isNull() && cell.index < m_cellLabels.size() &&
+                m_cellLabels[cell.index])
+            {
+                m_cellLabels[cell.index]->setText(message);
+                m_cellLabels[cell.index]->setToolTip(message);
+            }
+            continue;
+        }
         const QSize oldSize = view->image().size();
         const QSize oldSourceSize = view->sourceSize();
         const double oldScale = view->scale();
@@ -585,6 +652,3 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
     updateTemporaryCompareAvailability();
     update();
 }
-
-
-

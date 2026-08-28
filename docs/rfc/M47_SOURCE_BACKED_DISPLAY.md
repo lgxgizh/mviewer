@@ -1,6 +1,6 @@
 # M47 — Source-Backed Display Contract (RFC)
 
-Date: 2026-08-17 · Milestone: M47 · Status: accepted (Phase 0 contract) — **implemented through Phase 6** (Viewer LOD-first display, Compare source-backed panes, exact-source consumers, transactional async restore, soak + benchmark evidence; full CTest gate 104/104). This document remains the normative contract for the display-representation != analysis-source separation; implementation evidence lives in `docs/review/M47_SOURCE_BACKED_DISPLAY_2026-08-17.md`.
+Date: 2026-08-17 · Milestone: M47 · Status: accepted (Phase 0 contract) — **implemented through Phase 6**, with the Windows TIFF bounded backend extended in M53 (Viewer LOD-first display, Compare source-backed panes, exact-source consumers, transactional async restore, soak + benchmark evidence; full CTest gate 104/104 at M47). This document remains the normative contract for the display-representation != analysis-source separation; current format-parity evidence lives in `docs/review/M53_LARGE_SOURCE_NATIVE_RELEASE_CLOSURE_2026-08-29.md`.
 
 ## 1. Problem statement
 
@@ -106,7 +106,11 @@ initial position (to be re-measured at each phase):
   handler supports (1/2, 1/4, 1/8 DCT); `FullDecodeCrop` fallback for arbitrary
   regions.
 - TIFF via `QImageReader`: metadata probe; LOD/region generally `FullDecode*`
-  fallback unless the backend exposes native strips.
+  fallback unless the backend exposes native strips. On Windows, M53 adds a
+  narrow WIC frame/clip/scale adapter for unrotated TIFFs; its LOD is
+  classified `NativeLod`, while its clipped region is classified
+  `BoundedRasterRegion`. Other platforms retain this honest fallback until a
+  measured bounded backend exists.
 - PNG/BMP: `FullDecode*` fallback for LOD/region (no native tiling).
 
 ## 4. Viewer target lifecycle

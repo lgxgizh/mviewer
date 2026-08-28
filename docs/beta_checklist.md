@@ -4,18 +4,23 @@
 > （见下方角色定义）完整跑一遍，全部打勾方可合入。目标是把产品从"开发中的 Demo"
 > 推向"可长期使用的产品"。
 >
-> **M52 release-quality review snapshot (2026-08-28)**
-> - Final local automated gate: `build.ps1 Test` passed **114/114 twice
->   consecutively**; `m51_rc_soak` passed in both runs.
+> **M53 release-quality review snapshot (2026-08-29)**
+> - M53 focused qualification covers 100MP TIFF Viewer/Compare bounded display,
+>   16-bit TIFF plus large PNG/BMP boundaries, Unicode paths, streaming RAW
+>   preview scanning, and a five-round large-source lifecycle soak.
+> - Final local automated gate: `build.ps1 Test` passed **117/117 twice
+>   consecutively** (793.12 s and 792.20 s); `m51_rc_soak` passed in both runs.
+> - M53 package contract: **PASS** for the 1.0.13 portable ZIP and installer;
+>   physical target-machine UX remains MANUAL/BLOCKED.
 > - Automated quality truthfulness: **PASS** means the measured hard-failure
 >   count is zero. Advisory complexity warnings are recorded as **accepted
 >   baseline debt**, not silently presented as a clean codebase.
 > - Automated boundary coverage includes PowerShell 5.1 UTF-8/mojibake,
 >   honest responsibility-TU caps, pure source-backed Compare planning, and
 >   real MainWindow navigation/Compare adversarial cases.
-> - Source-backed large-image truth: **100 MP JPEG implemented** through the
->   source-backed LOD path; large TIFF has no JPEG-equivalent native LOD and is
->   documented as an honest native fallback limitation.
+> - Source-backed large-image truth: **100 MP JPEG and 100MP-class TIFF are
+>   implemented** through bounded source-backed display; TIFF uses the measured
+>   Windows WIC path, while PNG/BMP retain honest scaled-fallback classification.
 > - Native UX review: **MANUAL PENDING / BLOCKED** for physical DPI/ICC/UNC,
 >   installer behavior, long-session GUI feel, and extended soak on Windows.
 >

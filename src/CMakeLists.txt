@@ -115,7 +115,8 @@ add_library(mviewer_core SHARED
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql OpenGL OpenGLWidgets)
 # psapi: provides GetProcessMemoryInfo used by core/perf/MemoryTracker for the
 # OS working-set (RSS) sample. Windows-only; harmless on other platforms.
-target_link_libraries(mviewer_core PRIVATE Qt6::Widgets Qt6::Sql $<$<PLATFORM_ID:Windows>:psapi>)
+target_link_libraries(mviewer_core PRIVATE Qt6::Widgets Qt6::Sql
+    $<$<PLATFORM_ID:Windows>:psapi;windowscodecs;ole32>)
 
 target_compile_features(mviewer_core PUBLIC cxx_std_20)
 
@@ -1407,6 +1408,62 @@ target_include_directories(m47_source_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(m47_source_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME m47_source_tests COMMAND m47_source_tests)
 set_tests_properties(m47_source_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+
+# ─── M53 Phase 0/1/2: large-source parity and bounded RAW preview ───────────
+# Tests-first characterization: this target freezes the large-source contract
+# established red on the M52 baseline and now runs as a release regression gate.
+add_executable(m53_large_source_tests
+    core/test_m53_large_source.cpp
+)
+target_link_libraries(m53_large_source_tests
+    PRIVATE
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(m53_large_source_tests PRIVATE cxx_std_20)
+target_include_directories(m53_large_source_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m53_large_source_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m53_large_source_tests COMMAND m53_large_source_tests)
+set_tests_properties(m53_large_source_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
+
+# M53 Native Windows qualification: exercise the real Viewer and Compare UI
+# over the 100MP TIFF fixture, including zoom-region refresh and mode churn.
+add_executable(m53_large_source_ui_tests
+    test_m53_large_source_ui.cpp
+)
+target_link_libraries(m53_large_source_ui_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m53_large_source_ui_tests PRIVATE cxx_std_20)
+target_include_directories(m53_large_source_ui_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m53_large_source_ui_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m53_large_source_ui_tests COMMAND m53_large_source_ui_tests)
+set_tests_properties(m53_large_source_ui_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 900)
+
+# M53 release soak: repeat large-TIFF Viewer/Compare destruction and
+# latest-generation replacement to qualify long-session cleanup.
+add_executable(m53_large_source_soak
+    test_m53_large_source_soak.cpp
+)
+target_link_libraries(m53_large_source_soak
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m53_large_source_soak PRIVATE cxx_std_20)
+target_include_directories(m53_large_source_soak PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m53_large_source_soak PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m53_large_source_soak COMMAND m53_large_source_soak)
+set_tests_properties(m53_large_source_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 1800)
 
 # ─── M47 Phase 2: Viewer LOD-first display (UI level) ─────────────────────────
 # Large sources display through bounded LOD/region rasters (no full-resolution

@@ -32,12 +32,29 @@
 - **Installer associations:** native `.mvws` and `.mvproj` associations use
   correctly quoted `%1` commands; the obsolete `.mviewer` association is no
   longer registered.
+- **Large TIFF parity:** Windows now uses a measured WIC frame/clip/scale
+  adapter for 100MP-class TIFF display, so Viewer and Compare get bounded fit
+  and deep-zoom rasters without full RGB materialization. Qt's unbounded TIFF
+  `ClipRect` behavior is no longer claimed as native.
+- **Bounded RAW preview scan:** `RawDecoder` now seeks through fixed-size
+  parser windows, preserving largest-valid-preview selection and graceful
+  truncated failure without reading the entire RAW container into memory.
+- **Compare display failures:** an unavailable bounded raster now retains the
+  last valid preview when possible and explains an initial blank pane instead
+  of silently presenting an unexplained cell.
 
 ### Tests
 
 - Full local Release `build.ps1 Test` gate passed **114/114 twice
   consecutively** on the M52 source-stable tree (694.59 s and 690.70 s),
   including the encoding, complexity, planner, workflow, and RC-soak gates.
+- M53 adds deterministic 16-bit TIFF, large PNG/BMP, Unicode-path, large RAW,
+  Viewer/Compare, and five-round large-source soak coverage. Final M53 Release
+  gate and package results are recorded in
+  `docs/review/M53_LARGE_SOURCE_NATIVE_RELEASE_CLOSURE_2026-08-29.md`.
+- Final M53 source-stable Release `build.ps1 Test` gate passed **117/117 twice
+  consecutively** (793.12 s and 792.20 s); strict package contract passed for
+  version 1.0.13. Physical target-machine qualification remains MANUAL/BLOCKED.
 - The M51 release-contract coverage remains green; physical target-machine
   qualification is still recorded as MANUAL/BLOCKED.
 
@@ -103,7 +120,7 @@
   regressions. Native Windows/DPI qualification remains explicitly
   MANUAL/BLOCKED where it was not run on physical hardware.
 
-## [Unreleased] — M47 production-scale data path hardening
+## [1.0.13] — M47 production-scale data path hardening (historical release notes)
 
 ### Added
 

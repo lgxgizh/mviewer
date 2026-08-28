@@ -22,10 +22,16 @@
 class RawDecoder : public IDecoder
 {
   public:
-    // M42 diagnostic seam: bytes copied into a second full-file scan buffer by
-    // the most recent preview decode. The pre-fix implementation reports the
-    // full RAW size; the bounded span implementation must report zero.
+    // M42 diagnostic seam retained for compatibility: bytes copied into a
+    // second full-file scan buffer by the most recent preview decode. The
+    // current streaming implementation never creates that buffer and reports
+    // zero.
     static size_t lastPreviewFullFileCopyBytes();
+
+    // M53 diagnostic seam: peak bytes retained by the preview scanner while it
+    // searches the RAW container. This must stay bounded by the parser window
+    // plus the selected preview, rather than growing with the container.
+    static size_t lastPreviewPeakBufferedBytes();
 
     bool canDecode(const std::string &path) const override;
     ImageData decodeFull(const std::string &path) const override;
