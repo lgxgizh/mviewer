@@ -76,7 +76,6 @@ $artifactPaths = @()
 foreach ($name in @("MViewer-$Version-portable.zip", "MViewer-$Version-Setup.exe")) {
     $candidate = Join-Path $outAbs $name
     $exists = [IO.File]::Exists($candidate) -or (Test-Path -LiteralPath $candidate)
-    Write-Host ("manifest-debug: outAbs=[{0}] strict=[{1}] candidate=[{2}] exists=[{3}]" -f $outAbs, $Strict, $candidate, $exists)
     if ($exists) {
         $artifactPaths += $candidate
     } elseif ($Strict) {
@@ -96,15 +95,10 @@ if (-not $Strict) {
 # De-dup by full path. Keep the result as an array even when a caller supplies
 # only one artifact; Windows PowerShell otherwise unwraps a pipeline result.
 $artifactPaths = @($artifactPaths | Sort-Object -Unique)
-Write-Host ("manifest-debug: artifact count=[{0}]" -f $artifactPaths.Count)
+$artifactCount = @($artifactPaths).Count
 
 $sumsPath = Join-Path $outAbs "SHA256SUMS.txt"
-if ($artifactPaths.Count -eq 0 -and $Strict) {
-    throw "Strict release manifest: no release artifacts found under $outAbs"
-} elseif ($artifactPaths.Count -eq 0) {
-    Write-Warning "No release artifacts found under $outAbs — writing empty SHA256SUMS."
-    Set-Content -Path $sumsPath -Value "# No artifacts found for version $Version" -Encoding utf8
-} else {
+if ($artifactCount -gt 0) {
     $lines = @()
     $lines += "# MViewer $Version — SHA256 checksums"
     $lines += "# Generated $(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssK')"
@@ -121,7 +115,12 @@ if ($artifactPaths.Count -eq 0 -and $Strict) {
     if (-not (Test-Path -LiteralPath $sumsPath)) {
         throw "Release manifest failed to create checksum file '$sumsPath'"
     }
-    Write-Host "=== SHA256SUMS: $sumsPath ($($artifactPaths.Count) file(s)) ==="
+    Write-Host "=== SHA256SUMS: $sumsPath ($artifactCount file(s)) ==="
+} elseif ($Strict) {
+    throw "Strict release manifest: no release artifacts found under $outAbs"
+} else {
+    Write-Warning "No release artifacts found under $outAbs — writing empty SHA256SUMS."
+    Set-Content -Path $sumsPath -Value "# No artifacts found for version $Version" -Encoding utf8
 }
 
 # ── 2) RELEASE_NOTES.md from CHANGELOG.md ───────────────────────────────────
