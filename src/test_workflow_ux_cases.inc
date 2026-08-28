@@ -3542,12 +3542,10 @@ void workflow8_preview_scaled_load(const QString &rootDir)
     auto &repo = ImageRepository::instance();
     const std::string key = repo.makeKey(path.toStdString());
 
-    CHECK(sched.drain(TaskScheduler::PoolType::ThumbnailPool, std::chrono::seconds(15)),
-          "preview workflow: Thumbnail pool drained before measuring");
     CHECK(sched.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(15)),
           "preview workflow: Decode pool drained before measuring");
-    const uint64_t thumbSubmittedBefore =
-        sched.metrics(TaskScheduler::PoolType::ThumbnailPool).submitted;
+    CHECK(sched.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(15)),
+          "preview workflow: Decode pool drained before measuring");
     const uint64_t decodeSubmittedBefore =
         sched.metrics(TaskScheduler::PoolType::DecodePool).submitted;
     {
@@ -3574,11 +3572,9 @@ void workflow8_preview_scaled_load(const QString &rootDir)
         CHECK(panel.hasImage() && panel.presentedPath() == path &&
                   panel.presentationQuality() == PreviewPanel::PresentationQuality::Preview,
               "preview workflow: scaled preview atomically upgrades the warm thumbnail");
-        CHECK(sched.metrics(TaskScheduler::PoolType::ThumbnailPool).submitted ==
-                  thumbSubmittedBefore + 1,
-              "preview workflow: exactly one Thumbnail task serves the preview");
-        CHECK(sched.metrics(TaskScheduler::PoolType::DecodePool).submitted == decodeSubmittedBefore,
-              "preview workflow: zero Decode tasks serve the preview");
+        CHECK(sched.metrics(TaskScheduler::PoolType::DecodePool).submitted ==
+                  decodeSubmittedBefore + 1,
+              "preview workflow: exactly one foreground Decode task serves the preview");
         {
             ImageData fullProbe;
             CHECK(!CacheManager::instance().getMemory(CacheLevel::FullImage, key, fullProbe),
@@ -3597,9 +3593,7 @@ void workflow8_preview_scaled_load(const QString &rootDir)
               "preview workflow: preview pixmap is capped at a 512 max edge");
 
         // Re-selecting the same image reuses the Preview cache: still exactly
-        // one Thumbnail submission, zero Decode work, dimensions preserved.
-        const uint64_t thumbBeforeSecond =
-            sched.metrics(TaskScheduler::PoolType::ThumbnailPool).submitted;
+        // one foreground Decode submission, dimensions preserved.
         const uint64_t decodeBeforeSecond =
             sched.metrics(TaskScheduler::PoolType::DecodePool).submitted;
         panel.setImage(path);
@@ -3608,11 +3602,9 @@ void workflow8_preview_scaled_load(const QString &rootDir)
         while (!panel.hasImage() && t2.elapsed() < 10000)
             pump(25);
         CHECK(panel.hasImage(), "preview workflow: re-selected preview is delivered");
-        CHECK(sched.metrics(TaskScheduler::PoolType::ThumbnailPool).submitted ==
-                  thumbBeforeSecond + 1,
-              "preview workflow: re-select submits exactly one Thumbnail task");
-        CHECK(sched.metrics(TaskScheduler::PoolType::DecodePool).submitted == decodeBeforeSecond,
-              "preview workflow: re-select still does zero Decode work");
+        CHECK(sched.metrics(TaskScheduler::PoolType::DecodePool).submitted ==
+                  decodeBeforeSecond + 1,
+              "preview workflow: re-select submits exactly one foreground Decode task");
         CHECK(panel.sourceImageSize() == QSize(1024, 768),
               "preview workflow: re-select preserves source dimensions");
     }
@@ -3622,13 +3614,13 @@ void workflow8_preview_scaled_load(const QString &rootDir)
     // the UI thread — must drain to zero pending/active/queued work and leave
     // the dependency graph with no live handles before the fixture directory
     // is deleted.
-    CHECK(sched.drain(TaskScheduler::PoolType::ThumbnailPool, std::chrono::seconds(15)),
-          "preview workflow: Thumbnail pool drains after the cache re-select");
+    CHECK(sched.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(15)),
+          "preview workflow: Decode pool drains after the cache re-select");
     {
-        const TaskScheduler::PoolMetrics pm = sched.metrics(TaskScheduler::PoolType::ThumbnailPool);
-        CHECK(pm.pending == 0, "preview workflow: Thumbnail pool has zero pending tasks");
-        CHECK(pm.active_tasks == 0, "preview workflow: Thumbnail pool has zero active tasks");
-        CHECK(pm.queue_depth == 0, "preview workflow: Thumbnail pool queue is empty");
+        const TaskScheduler::PoolMetrics pm = sched.metrics(TaskScheduler::PoolType::DecodePool);
+        CHECK(pm.pending == 0, "preview workflow: Decode pool has zero pending tasks");
+        CHECK(pm.active_tasks == 0, "preview workflow: Decode pool has zero active tasks");
+        CHECK(pm.queue_depth == 0, "preview workflow: Decode pool queue is empty");
         CHECK(sched.graphMetrics().handles == 0,
               "preview workflow: scheduler dependency graph has no live handles");
     }

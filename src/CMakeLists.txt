@@ -1465,6 +1465,28 @@ target_compile_definitions(m53_large_source_soak PRIVATE MVIEWER_SOURCE_DIR="${C
 add_test(NAME m53_large_source_soak COMMAND m53_large_source_soak)
 set_tests_properties(m53_large_source_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 1800)
 
+# ─── M54: perceived-performance Browse E2E benchmark/regression ────────────
+# Measures the real ThumbnailPanel + PreviewPanel path at 100/1000/10000
+# images and a 50k-entry directory. The output is copied into the M54 review
+# baseline/final documents; the target remains a release test-gate executable
+# so a future browse regression is visible in the normal local Test run.
+add_executable(m54_perceived_performance_tests
+    test_m54_perceived_performance.cpp
+)
+target_link_libraries(m54_perceived_performance_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m54_perceived_performance_tests PRIVATE cxx_std_20)
+target_include_directories(m54_perceived_performance_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m54_perceived_performance_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m54_perceived_performance_tests COMMAND m54_perceived_performance_tests)
+set_tests_properties(m54_perceived_performance_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 1800)
+
 # ─── M47 Phase 2: Viewer LOD-first display (UI level) ─────────────────────────
 # Large sources display through bounded LOD/region rasters (no full-resolution
 # materialization for fit-to-window), with supersession/destroy safety and

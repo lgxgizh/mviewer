@@ -70,6 +70,26 @@ struct ThumbnailPipeline
         m_pending.clear();
     }
 
+    // M54: publish discovered batches without superseding already decoded
+    // thumbnails. The scanner may therefore feed the first screen while the
+    // rest of a large directory is still being enumerated.
+    void appendSources(const std::vector<std::string> &paths)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        m_sources.insert(m_sources.end(), paths.begin(), paths.end());
+    }
+
+    // M54: one controlled convergence update after a progressive scan. Keep
+    // the generation stable so path-keyed results remain reusable, while
+    // dropping work whose old row demand is no longer current.
+    void replaceSources(const std::vector<std::string> &paths)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        cancelHandlesLocked();
+        m_sources = paths;
+        m_pending.clear();
+    }
+
     // The currently visible item range [begin, end). Visible items are decoded
     // at Thumbnail priority (ahead of predictive neighbors). Must be called
     // whenever the viewport scrolls/resizes. Re-submits only missing items.
@@ -78,6 +98,11 @@ struct ThumbnailPipeline
         std::lock_guard<std::mutex> lk(m_mtx);
         m_visibleBegin = begin;
         m_visibleEnd = end;
+        // M54 latest-wins dispatch: a fast scrollbar drag must not retain a
+        // queue of historical predictive windows behind the current viewport.
+        // Cancellation is cooperative and stale results are dropped below.
+        cancelHandlesLocked();
+        m_pending.clear();
         scheduleLocked();
     }
 

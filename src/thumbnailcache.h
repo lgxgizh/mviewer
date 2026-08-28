@@ -23,9 +23,10 @@
 // public access (get/put/totalBytes/setMaxBytes/clear), so files left behind
 // by an earlier process already count against the budget; that same first
 // access enforces the current cap. put() evicts the least-recently-used
-// entries until usage fits the cap; a successful get() refreshes in-memory
-// recency and best-effort bumps the file mtime so the LRU order also survives
-// process restarts. A file another process adds after the index was built is
+// entries until usage fits the cap; a successful get() refreshes the
+// session-local approximate LRU. Startup still seeds order from file mtime,
+// while cache hits avoid write amplification. A file another process adds
+// after the index was built is
 // picked up and counted by get(). The cap is best-effort: if a file cannot be
 // deleted (e.g. an OS lock), its bytes stay counted and pruning moves on
 // instead of looping.

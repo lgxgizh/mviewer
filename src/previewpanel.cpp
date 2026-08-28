@@ -86,14 +86,16 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
         update();
     }
 
-    // A SINGLE scaled decode on the Thumbnail pool (never DecodePool, never
+    // A SINGLE scaled decode on the Decode pool (foreground priority, never
     // ImageRepository::loadAsync): the preview duplicates nothing and the UI
     // thread only ever materializes a <= kPreviewMaxEdge QPixmap. The scaled
     // result is cached in the existing CacheLevel::Preview layer. The worker
     // also computes the preview stats (sample means over the scaled buffer),
     // reads the original dimensions/orientation via QImageReader and the file
     // size, checks TaskContext cancellation before/after the work, and marshals
-    // an owned QImage + stats + metadata to the UI thread through qApp.
+    // an owned QImage + metadata to the UI thread through qApp. Visual delivery
+    // is posted before the optional stats pass so a selected preview is never
+    // held behind analysis of the same scaled buffer.
     //
     // M27 lifetime closure: the worker callback captures a QPointer (never a
     // raw `this`) and re-checks it on the UI thread through qApp (which
@@ -111,7 +113,7 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
     const std::string stdPath = path.toUtf8().toStdString();
 
     auto handle = TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Thumbnail,
+        TaskScheduler::Priority::Decode,
         [stdPath, path, gen, guard, lifetime, knownW, knownH, knownSize](
             const TaskScheduler::TaskContext &ctx)
         {
@@ -143,7 +145,6 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
             }
             if (!img.isNull())
             {
-                stats = mviewer::core::computePreviewStats(img);
                 // Original dimensions/orientation come from the source header,
                 // not the scaled buffer, so the panel shows the real size.
                 // QImageReader::size() is the ENCODED (raw) size even after
@@ -202,7 +203,7 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
                 // has no need to re-run ICC conversion.
                 qimg = mvcore::toQImage(img);
             QMetaObject::invokeMethod(qApp,
-                                      [path, gen, guard, lifetime, qimg, stats, srcW, srcH,
+                                      [path, gen, guard, lifetime, qimg, srcW, srcH,
                                        fileSize, sourceKnown, fileSizeKnown]()
                                       {
                                           PreviewPanel *panel = guard.data();
@@ -242,18 +243,6 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
                                           panel->m_presentedPath = path;
                                           panel->m_quality = PresentationQuality::Preview;
                                           panel->m_hasImage = true;
-                                          if (stats.valid)
-                                          {
-                                              panel->m_lumMean = stats.lumMean;
-                                              panel->m_rMean = stats.rMean;
-                                              panel->m_gMean = stats.gMean;
-                                              panel->m_bMean = stats.bMean;
-                                          }
-                                          else
-                                          {
-                                              panel->m_lumMean = 0.0;
-                                              panel->m_rMean = panel->m_gMean = panel->m_bMean = 0;
-                                          }
                                           panel->m_imgW = srcW;
                                           panel->m_imgH = srcH;
                                           panel->m_previewW = panel->m_preview.width();
@@ -264,6 +253,38 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
                                           panel->rebuild();
                                           panel->update();
                                       });
+            if (!qimg.isNull())
+            {
+                // M54: compute after the visual delivery has been queued. The
+                // first posted event gives the selected image a usable frame;
+                // this second event only enriches the already-visible panel.
+                if (ctx.isCancelled())
+                    return;
+                stats = mviewer::core::computePreviewStats(img);
+                QMetaObject::invokeMethod(qApp,
+                                          [path, gen, guard, lifetime, stats]()
+                                          {
+                                              PreviewPanel *panel = guard.data();
+                                              if (!panel || !lifetime->isAlive() ||
+                                                  path != panel->m_requestedPath ||
+                                                  gen != panel->m_requestGen)
+                                                  return;
+                                              if (stats.valid)
+                                              {
+                                                  panel->m_lumMean = stats.lumMean;
+                                                  panel->m_rMean = stats.rMean;
+                                                  panel->m_gMean = stats.gMean;
+                                                  panel->m_bMean = stats.bMean;
+                                              }
+                                              else
+                                              {
+                                                  panel->m_lumMean = 0.0;
+                                                  panel->m_rMean = panel->m_gMean = panel->m_bMean = 0;
+                                              }
+                                              panel->rebuild();
+                                              panel->update();
+                                          });
+            }
         });
     if (handle)
     {

@@ -97,13 +97,13 @@ void churnStack()
 int childPreviewDestroy()
 {
     auto &sched = TaskScheduler::instance();
-    sched.setQueueMaxThreads(Priority::Thumbnail, 1);
+    sched.setQueueMaxThreads(Priority::Decode, 1);
     const QString dir = makeImageDir("preview", 1);
     const QString path = dir + "/img_00000.png";
 
-    // Occupy the single Thumbnail worker: the panel's preview task is ACCEPTED
+    // Occupy the single Decode worker: the panel's preview task is ACCEPTED
     // but cannot run until after the panel is destroyed.
-    auto blocker = sched.submit(Priority::Thumbnail, [](const TaskContext &)
+    auto blocker = sched.submit(Priority::Decode, [](const TaskContext &)
                                 { std::this_thread::sleep_for(std::chrono::milliseconds(1200)); });
     {
         PreviewPanel panel;
@@ -120,8 +120,8 @@ int childPreviewDestroy()
             churnStack(); // reuse the freed stack region while late callbacks fire
         pump(5);
     }
-    sched.drain(PoolType::ThumbnailPool, std::chrono::seconds(15));
-    const auto m = sched.metrics(PoolType::ThumbnailPool);
+    sched.drain(PoolType::DecodePool, std::chrono::seconds(15));
+    const auto m = sched.metrics(PoolType::DecodePool);
     if (m.pending != 0 || m.active_tasks != 0)
         return 2;
     QDir qdir(dir);
@@ -198,14 +198,14 @@ void testPreviewABA()
     printf("\n[2. PreviewPanel A->B->A: newest generation wins]\n");
     fflush(stdout);
     auto &sched = TaskScheduler::instance();
-    sched.setQueueMaxThreads(Priority::Thumbnail, 1);
+    sched.setQueueMaxThreads(Priority::Decode, 1);
 
     const QString dir = makeImageDir("aba", 3);
     const QString a1 = dir + "/img_00000.png";
     const QString b = dir + "/img_00001.png";
     const QString a2 = dir + "/img_00000.png"; // same path as A1 on purpose
 
-    auto blocker = sched.submit(Priority::Thumbnail, [](const TaskContext &)
+    auto blocker = sched.submit(Priority::Decode, [](const TaskContext &)
                                 { std::this_thread::sleep_for(std::chrono::milliseconds(800)); });
 
     PreviewPanel panel;
@@ -215,7 +215,7 @@ void testPreviewABA()
     panel.setImage(a2); // queued (gen 3) — same path as the first request
     CHECK(!panel.hasImage(), "no preview while decodes are still queued");
 
-    sched.drain(PoolType::ThumbnailPool, std::chrono::seconds(15));
+    sched.drain(PoolType::DecodePool, std::chrono::seconds(15));
     pump(1000); // let the marshaled deliveries run
     CHECK(panel.hasImage(), "newest generation delivered");
     CHECK(panel.presentedPath() == a2 &&
@@ -223,7 +223,7 @@ void testPreviewABA()
           "newest generation owns the presented path and upgraded quality");
     pump(1500);
     CHECK(panel.hasImage(), "no stale overwrite after settlement");
-    const auto m = sched.metrics(PoolType::ThumbnailPool);
+    const auto m = sched.metrics(PoolType::DecodePool);
     CHECK(m.pending == 0 && m.active_tasks == 0, "Thumbnail pool converges after A->B->A");
     CHECK(sched.graphMetrics().handles == 0, "no handle residue after A->B->A");
 
@@ -265,7 +265,7 @@ void testViewerABA()
 }
 
 // ─── 4. P5: rejected requests must reach a terminal UI state ───────────────
-// A paused ThumbnailPool rejects preview submissions; a paused DecodePool
+// A paused DecodePool rejects preview submissions; a paused DecodePool
 // rejects viewer submissions. The panel/viewer must NOT sit in an eternal
 // loading state: the panel shows no-image, the viewer shows the failure title.
 void testRejectionReachesTerminalState()
@@ -274,7 +274,7 @@ void testRejectionReachesTerminalState()
     fflush(stdout);
     auto &sched = TaskScheduler::instance();
 
-    sched.pause(PoolType::ThumbnailPool);
+    sched.pause(PoolType::DecodePool);
     {
         PreviewPanel panel;
         panel.resize(320, 240);
@@ -287,7 +287,7 @@ void testRejectionReachesTerminalState()
         CHECK(panel.previewPixelSize().isEmpty(),
               "rejected preview request exposes an empty preview size");
     }
-    sched.resume(PoolType::ThumbnailPool);
+    sched.resume(PoolType::DecodePool);
     {
         sched.pause(PoolType::DecodePool);
         ImageViewer viewer;
@@ -298,9 +298,9 @@ void testRejectionReachesTerminalState()
               "rejected viewer request reaches the failure title (terminal state)");
         sched.resume(PoolType::DecodePool);
     }
-    const auto mt = sched.metrics(PoolType::ThumbnailPool);
+    const auto mt = sched.metrics(PoolType::DecodePool);
     CHECK(mt.pending == 0 && mt.active_tasks == 0,
-          "Thumbnail pool converges after rejected preview request");
+          "Decode pool converges after rejected preview request");
     const auto m = sched.metrics(PoolType::DecodePool);
     CHECK(m.pending == 0 && m.active_tasks == 0,
           "Decode pool converges after rejected viewer request");
@@ -343,7 +343,7 @@ void testPreviewUILatency24MP()
     printf("\n[5. P9: 24MP preview completion UI event gap]\n");
     fflush(stdout);
     auto &sched = TaskScheduler::instance();
-    sched.setQueueMaxThreads(Priority::Thumbnail, 1);
+    sched.setQueueMaxThreads(Priority::Decode, 1);
 
     const QString dir = QDir::tempPath() + "/mviewer_m27_24mp_" +
                         QString::number(QCoreApplication::applicationPid());
@@ -362,11 +362,10 @@ void testPreviewUILatency24MP()
 
     auto &repo = ImageRepository::instance();
     const std::string key = repo.makeKey(path.toStdString());
-    CHECK(sched.drain(PoolType::ThumbnailPool, std::chrono::seconds(15)),
-          "24MP preview: Thumbnail pool drained before measuring");
     CHECK(sched.drain(PoolType::DecodePool, std::chrono::seconds(15)),
           "24MP preview: Decode pool drained before measuring");
-    const uint64_t thumbSubmittedBefore = sched.metrics(PoolType::ThumbnailPool).submitted;
+    CHECK(sched.drain(PoolType::DecodePool, std::chrono::seconds(15)),
+          "24MP preview: Decode pool drained before measuring");
     const uint64_t decodeSubmittedBefore = sched.metrics(PoolType::DecodePool).submitted;
     {
         ImageData probe;
@@ -389,10 +388,8 @@ void testPreviewUILatency24MP()
     // only materializes the <=512 QPixmap.
     CHECK(worstMs < 250.0, "24MP preview completion UI gap < 250 ms");
 
-    CHECK(sched.metrics(PoolType::ThumbnailPool).submitted == thumbSubmittedBefore + 1,
-          "24MP preview: exactly one Thumbnail task serves the preview");
-    CHECK(sched.metrics(PoolType::DecodePool).submitted == decodeSubmittedBefore,
-          "24MP preview: zero Decode tasks serve the preview");
+    CHECK(sched.metrics(PoolType::DecodePool).submitted == decodeSubmittedBefore + 1,
+          "24MP preview: exactly one foreground Decode task serves the preview");
     {
         ImageData probe;
         CHECK(!CacheManager::instance().getMemory(CacheLevel::FullImage, key, probe),

@@ -217,6 +217,8 @@ void ThumbnailPanel::ensureMetaIndex()
 
 void ThumbnailPanel::applyFilter()
 {
+    if (!m_scanComplete)
+        m_scanProgressive = false;
     const QString t = m_filterText.trimmed().toLower();
     const bool needMeta = (m_metaSearch && !t.isEmpty()) || !m_cameraFilter.isEmpty() ||
                           !m_lensFilter.isEmpty() || m_isoFilter > 0;

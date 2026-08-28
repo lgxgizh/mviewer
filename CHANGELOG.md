@@ -42,6 +42,17 @@
 - **Compare display failures:** an unavailable bounded raster now retains the
   last valid preview when possible and explains an initial blank pane instead
   of silently presenting an unexplained cell.
+- **Perceived Browse latency:** the default large-directory path now publishes
+  batched rows progressively, while final sorting converges once without
+  repeated full publication. The real M54 E2E recorder covers first row,
+  thumbnail, first-screen readiness, scan completion, stability, and preview
+  p50/p95 across cold/warm 100/1K/10K/50K fixtures.
+- **Thumbnail cache contention:** normal cache payload reads, PNG decode/encode,
+  and atomic writes run outside the global bookkeeping lock; warm hits no
+  longer update payload timestamps and therefore avoid per-hit disk writes.
+- **Latest viewport and selected Preview:** obsolete thumbnail demand is
+  cancelled on viewport changes, and selected Preview runs on the foreground
+  Decode path with visual delivery posted before secondary statistics.
 
 ### Tests
 
@@ -55,6 +66,11 @@
 - Final M53 source-stable Release `build.ps1 Test` gate passed **117/117 twice
   consecutively** (793.12 s and 792.20 s); strict package contract passed for
   version 1.0.13. Physical target-machine qualification remains MANUAL/BLOCKED.
+- M54 focused Browse/Thumbnail/Preview/Viewer/M47/M53/architecture/complexity
+  coverage passed 23/23; two consecutive source-stable Release `build.ps1 Test`
+  gates passed **118/118** in 779.82 s and 782.14 s, with zero architecture
+  violations and zero complexity hard failures. Full evidence is recorded in
+  `docs/review/M54_INSTANT_BROWSE_FINAL_2026-08-29.md`.
 - The M51 release-contract coverage remains green; physical target-machine
   qualification is still recorded as MANUAL/BLOCKED.
 

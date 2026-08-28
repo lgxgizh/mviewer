@@ -16,7 +16,7 @@
 // selected image plus its filename and basic stats.
 //
 // The preview is served by a SINGLE scaled (<= kPreviewMaxEdge) decode on the
-// Thumbnail pool — never a full ImageRepository::loadAsync / DecodePool decode
+// foreground Decode pool — never a full ImageRepository::loadAsync decode
 // (which duplicates ImageViewer work and retains a full QPixmap). The scaled
 // result is cached in the existing CacheLevel::Preview layer (keyed by
 // ImageRepository::makeKey(path) plus the max edge) and the UI thread only
@@ -92,7 +92,7 @@ class PreviewPanel : public QWidget
     QString m_requestedPath;
     QString m_presentedPath;
     PresentationQuality m_quality = PresentationQuality::None;
-    // Cancellable scaled-preview task (Thumbnail pool). UI-thread-owned; the
+    // Cancellable scaled-preview task (foreground Decode pool). UI-thread-owned; the
     // worker only observes its TaskContext cancel flag.
     TaskScheduler::TaskHandle m_task;
     QPixmap m_preview; // decoded preview (max edge <= kPreviewMaxEdge)

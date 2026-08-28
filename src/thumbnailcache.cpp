@@ -172,53 +172,52 @@ bool ThumbnailCache::writeFileAtomically(const QString &file, const QImage &img)
 bool ThumbnailCache::get(const QString &path, int size, QImage &out)
 {
     MV_TRACE_SCOPED("ThumbnailCache::get");
-    QMutexLocker lock(&m_mutex);
-    ensureReady();
-    const QString dir = cacheDir();
-    if (dir.isEmpty())
-        return false;
     const QString key = keyFor(path, size);
-    const QString file = QDir(dir).filePath(key + ".png");
+    QString file;
+    {
+        QMutexLocker lock(&m_mutex);
+        ensureReady();
+        const QString dir = cacheDir();
+        if (dir.isEmpty())
+            return false;
+        file = QDir(dir).filePath(key + ".png");
+    }
+
+    // M54: filesystem probes and PNG decoding are deliberately outside the
+    // cache index mutex. One slow disk read must not serialize every worker.
     if (QFile::exists(file))
     {
-        // Stat before decoding so an external add/overwrite is accounted and
-        // the cap enforced before we commit to loading; if the file is evicted
-        // by that enforcement, skip the decode.
         const qint64 sz = QFileInfo(file).size();
-        if (sz > 0)
         {
-            const auto entryIt = m_entries.find(key);
-            if (entryIt == m_entries.end() || entryIt->fileSize != static_cast<quint64>(sz))
+            QMutexLocker lock(&m_mutex);
+            if (sz > 0)
             {
-                insertEntry(key, static_cast<quint64>(sz)); // replace/add accounting
-                pruneToCap(); // the newly-seen bytes may push usage over cap
+                const auto entryIt = m_entries.find(key);
+                if (entryIt == m_entries.end() || entryIt->fileSize != static_cast<quint64>(sz))
+                {
+                    insertEntry(key, static_cast<quint64>(sz));
+                    pruneToCap(); // the newly-seen bytes may push usage over cap
+                }
             }
+            if (!QFile::exists(file)) // evicted by the cap enforcement above
+                return false;
         }
-        if (!QFile::exists(file)) // evicted by the cap enforcement above
-            return false;
 
         QImage img;
         if (img.load(file))
         {
             out = std::move(img);
+            QMutexLocker lock(&m_mutex);
             touchEntry(key);
-            // Best-effort: bump the on-disk mtime so the next process's startup
-            // scan orders this entry as recently used. The file must be open
-            // for the call to take effect; runs on the caller's (worker) thread.
-            QFile f(file);
-            if (f.open(QIODevice::ReadWrite))
-            {
-                (void)f.setFileTime(QDateTime::currentDateTime(),
-                                    QFileDevice::FileModificationTime);
-                f.close();
-            }
             return true;
         }
         // Corrupt payload: remove the file best-effort; accounting follows the
         // disk only if the removal actually happened.
+        QMutexLocker lock(&m_mutex);
         removeKey(key, file);
         return false;
     }
+    QMutexLocker lock(&m_mutex);
     if (m_entries.contains(key))
         removeKey(key, file); // file vanished externally; drop stale accounting
     return false;
@@ -229,38 +228,44 @@ void ThumbnailCache::put(const QString &path, int size, const QImage &img)
     MV_TRACE_SCOPED("ThumbnailCache::put");
     if (img.isNull())
         return;
-    QMutexLocker lock(&m_mutex);
-    ensureReady();
-    const QString dir = cacheDir();
-    if (dir.isEmpty())
-        return;
     const QString key = keyFor(path, size);
-    const QString file = QDir(dir).filePath(key + ".png");
-
-    if (m_maxBytes == 0)
+    QString file;
     {
-        removeKey(key, file); // zero budget: never persist
-        return;
+        QMutexLocker lock(&m_mutex);
+        ensureReady();
+        const QString dir = cacheDir();
+        if (dir.isEmpty())
+            return;
+        file = QDir(dir).filePath(key + ".png");
+        if (m_maxBytes == 0)
+        {
+            removeKey(key, file); // zero budget: never persist
+            return;
+        }
     }
 
+    // M54: PNG encode + QSaveFile commit run without holding the index mutex.
     // Persist BEFORE touching accounting: a failed write must leave any prior
     // valid entry and its bytes untouched (QSaveFile never surfaces a torn PNG).
     if (!writeFileAtomically(file, img))
         return;
     const qint64 rawSize = QFileInfo(file).size();
-    if (rawSize <= 0)
     {
-        removeKey(key, file); // an empty/illegal file cannot be cached
-        return;
+        QMutexLocker lock(&m_mutex);
+        if (rawSize <= 0)
+        {
+            removeKey(key, file); // an empty/illegal file cannot be cached
+            return;
+        }
+        const quint64 sz = static_cast<quint64>(rawSize);
+        if (sz > m_maxBytes)
+        {
+            removeKey(key, file); // oversized payload can never fit the budget
+            return;
+        }
+        insertEntry(key, sz); // replaces the prior entry's accounting
+        pruneToCap();
     }
-    const quint64 sz = static_cast<quint64>(rawSize);
-    if (sz > m_maxBytes)
-    {
-        removeKey(key, file); // oversized payload can never fit the budget
-        return;
-    }
-    insertEntry(key, sz); // replaces the prior entry's accounting
-    pruneToCap();
 }
 
 quint64 ThumbnailCache::maxBytes() const

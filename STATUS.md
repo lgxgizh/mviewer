@@ -26,7 +26,9 @@
 > `docs/review/M51_NATIVE_LAUNCH_RELEASE_CONTRACT_WINDOWS_QUALIFICATION_2026-08-28.md` and
 > `docs/review/M52_RELEASE_QUALITY_WORKFLOW_CONVERGENCE_2026-08-28.md` and
 > `docs/review/M53_PHASE0_BASELINE_2026-08-28.md` and
-> `docs/review/M53_LARGE_SOURCE_NATIVE_RELEASE_CLOSURE_2026-08-29.md` and
+> `docs/review/M53_LARGE_SOURCE_NATIVE_RELEASE_CLOSURE_2026-08-29.md`,
+> `docs/review/M54_PERCEIVED_PERFORMANCE_BASELINE_2026-08-29.md`,
+> `docs/review/M54_INSTANT_BROWSE_FINAL_2026-08-29.md` and
 > `.\build.ps1 Test`.
 
 ## M53 — Large-source format parity & native release reality closure (2026-08-29)
@@ -50,6 +52,29 @@
   Compare UI qualification, and the five-round large-source soak. The final
   Release two-run gate, package contract, and complexity/architecture results
   are recorded in the closure review below.
+
+## M54 — Perceived performance & instant Browse (2026-08-29)
+
+- The real `ThumbnailPanel`/`PreviewPanel` Browse path now publishes safe
+  default-sort directory batches progressively, so large directories show
+  real rows before enumeration and final sort convergence complete. The M54
+  recorder covers 100/1,000/10,000/50,000-image cold/warm cases and reports
+  first row, first thumbnail, first-screen readiness, preview p50/p95, scan
+  completion, and stability.
+- Thumbnail cache payload I/O and PNG work no longer run under the global
+  bookkeeping mutex; warm hits no longer update file timestamps. Session-local
+  approximate recency preserves correctness without per-hit write amplification.
+- Viewport changes cancel obsolete demand and resubmit the latest visible
+  window. The stress benchmark measured a 112-request peak, 52 ms visible
+  jump p95, and 44 obsolete decode attempts. Selected Preview uses the
+  foreground Decode pool and posts visual pixels before optional statistics.
+- M54 focused coverage passed 23/23, and two consecutive source-stable full
+  `build.ps1 Test` gates passed 118/118 in 779.82 s and 782.14 s, with zero
+  architecture violations and zero complexity hard failures. Evidence is
+  recorded in `docs/review/M54_INSTANT_BROWSE_FINAL_2026-08-29.md`. Existing
+  M47 Viewer/Compare LOD behavior remains the large-source display contract;
+  new display-raster neighbor preload and physical perceived-UX qualification
+  remain explicit follow-up scope.
 
 ## M52 — Release quality truthfulness & workflow boundary convergence (2026-08-28)
 

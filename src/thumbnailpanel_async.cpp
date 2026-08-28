@@ -112,6 +112,51 @@ bool passesTypeFilter(const QString &typeFilter, const QString &suffixRaw)
     }
     return false;
 }
+
+void scanProgressiveDirectory(const QString &path,
+                              const std::shared_ptr<std::atomic<bool>> &alive,
+                              const std::shared_ptr<std::atomic<uint64_t>> &genToken, int gen,
+                              QList<ThumbnailPanel::Entry> &entries,
+                              const std::function<void()> &probe,
+                              const std::function<void(const QList<ThumbnailPanel::Entry> &)> &publishBatch,
+                              const std::function<void()> &onAbort)
+{
+    QList<ThumbnailPanel::Entry> batch;
+    QDirIterator it(path, QDir::Files | QDir::Readable | QDir::NoDotAndDotDot,
+                    QDirIterator::NoIteratorFlags);
+    while (it.hasNext())
+    {
+        // M54: QDirIterator yields the first model batch before the full
+        // directory is known, so the view can start painting and decoding.
+        if (!alive->load() ||
+            genToken->load(std::memory_order_acquire) != static_cast<uint64_t>(gen))
+        {
+            onAbort();
+            return;
+        }
+        probe();
+        it.next();
+        const QFileInfo fi = it.fileInfo();
+        const QString suffix = fi.suffix().toLower();
+        if (suffix.isEmpty() ||
+            !mviewer::core::ImageFormats::isSupportedSuffix(suffix.toStdString()))
+            continue;
+        const ThumbnailPanel::Entry entry{
+            fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()};
+        entries.append(entry);
+        batch.append(entry);
+        if (batch.size() >= 128)
+        {
+            publishBatch(batch);
+            batch.clear();
+        }
+    }
+    if (!batch.isEmpty())
+        publishBatch(batch);
+    std::sort(entries.begin(), entries.end(),
+              [](const ThumbnailPanel::Entry &a, const ThumbnailPanel::Entry &b)
+              { return a.path.toStdString() < b.path.toStdString(); });
+}
 } // namespace
 
 void ThumbnailPanel::setDirectory(const QString &path)
@@ -129,12 +174,17 @@ void ThumbnailPanel::setDirectory(const QString &path)
     const int gen = m_dirGen;
     m_scanGenToken->store(static_cast<uint64_t>(gen), std::memory_order_release);
     m_dimsResolved = false;
+    m_scanComplete = false;
+    m_scanProgressive = m_sortMode == SortName && m_sortAscending && m_typeFilter.isEmpty();
 
     // M23 P2 (first-screen): paint the (empty) directory shell immediately so a
     // 1000-image folder shows its grid in well under 1s, then scan the disk off
     // the UI thread and stream the real entries in once they are ready.
     resetDirectoryState();
     m_model->setStringList({});
+    // Supersede thumbnail demand at the same T0 as the directory transition;
+    // discovered batches below then append into an empty, current source set.
+    ThumbnailPipeline::instance().setSources({});
     viewport()->update();
     // Publish the empty shell immediately so consumers drop the previous
     // directory sequence before this directory's worker result arrives.
@@ -170,36 +220,48 @@ void ThumbnailPanel::setDirectory(const QString &path)
             QDir dir(path);
             if (dir.exists())
             {
-                const QFileInfoList list = sortedEntries(dir, sortMode, sortAscending);
-                for (int i = 0; i < list.size(); ++i)
+                const bool progressive = sortMode == SortName && sortAscending &&
+                                         typeFilter.isEmpty();
+                if (progressive)
                 {
-                    // M46: cooperative stop — the panel died OR a newer
-                    // directory superseded this generation (A → B → C while
-                    // walking A). The completion below would drop this scan
-                    // anyway; aborting here bounds the wasted work. The sort
-                    // itself is one uninterruptible QDir call; the entry loop
-                    // (type filter + Entry build for every file) is where the
-                    // per-file cost concentrates.
-                    if (!alive->load() ||
-                        genToken->load(std::memory_order_acquire) != static_cast<uint64_t>(gen))
+                    scanProgressiveDirectory(
+                        path, alive, genToken, gen, entries,
+                        [] { ThumbnailPanel::invokeScanProbe(); },
+                        [self, alive, gen](const QList<Entry> &batch)
+                        {
+                            QMetaObject::invokeMethod(
+                                qApp,
+                                [self, alive, gen, batch]()
+                                {
+                                    if (alive->load() && self && self->m_dirGen == gen)
+                                        self->applyScanBatch(gen, batch);
+                                });
+                        },
+                        [busyRefs] { ThumbnailPanel::marshalBusyRestore(busyRefs); });
+                }
+                else
+                {
+                    const QFileInfoList list = sortedEntries(dir, sortMode, sortAscending);
+                    for (int i = 0; i < list.size(); ++i)
                     {
-                        // Aborted (panel destroyed / folder superseded). The
-                        // completion lambda below will never run, so restore
-                        // the app-global busy cursor here, marshaled to the
-                        // UI thread.
-                        marshalBusyRestore(busyRefs);
-                        return;
+                        // M46: cooperative stop — the panel died OR a newer
+                        // directory superseded this generation (A → B → C while
+                        // walking A). The completion below drops this scan, but
+                        // aborting here bounds the wasted work.
+                        if (!alive->load() ||
+                            genToken->load(std::memory_order_acquire) != static_cast<uint64_t>(gen))
+                        {
+                            marshalBusyRestore(busyRefs);
+                            return;
+                        }
+                        invokeScanProbe();
+                        const QFileInfo &fi = list.at(i);
+                        if (!passesTypeFilter(typeFilter, fi.suffix()) ||
+                            fi.suffix().isEmpty())
+                            continue;
+                        entries.append(
+                            {fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()});
                     }
-                    // M46 test instrumentation. Exception-safe: the probe may
-                    // be reset while this worker is mid-iteration.
-                    invokeScanProbe();
-                    const QFileInfo &fi = list.at(i);
-                    if (!passesTypeFilter(typeFilter, fi.suffix()))
-                        continue;
-                    // P0-1 (perf): no pixel dimensions here - resolved lazily in
-                    // the background for the Details view (see ensureDimensions).
-                    entries.append(
-                        {fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()});
                 }
             }
             QMetaObject::invokeMethod(
@@ -215,6 +277,56 @@ void ThumbnailPanel::setDirectory(const QString &path)
         });
 }
 
+void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &batch)
+{
+    if (gen != m_dirGen || batch.isEmpty())
+        return;
+
+    const int sourceRow = m_allEntries.size();
+    m_allEntries.append(batch);
+    for (int i = 0; i < batch.size(); ++i)
+        m_sourceRowByPath.insert(batch.at(i).path, sourceRow + i);
+    if (!m_scanProgressive)
+        return;
+
+    const int firstRow = m_paths.size();
+    if (!m_model->insertRows(firstRow, batch.size()))
+        return;
+    m_displayEntries.append(batch);
+    m_displayEntryRow.reserve(m_displayEntries.size());
+    for (int i = 0; i < batch.size(); ++i)
+    {
+        const Entry &entry = batch.at(i);
+        const int row = firstRow + i;
+        m_paths.append(entry.path);
+        m_rowByPath.insert(entry.path, row);
+        m_displayEntryRow.insert(entry.path, row);
+        m_sizeByPath.insert(entry.path, entry.size);
+        m_model->setData(m_model->index(row, 0), entry.name);
+        m_totalBytes += entry.size;
+    }
+    QStringList paths;
+    paths.reserve(batch.size());
+    for (const Entry &entry : batch)
+        paths.append(entry.path);
+    ThumbnailPipeline::instance().appendSources(toStdPaths(paths));
+    emit statsChanged(m_paths.size(), m_totalBytes, 0, 0);
+
+    // Coalesce viewport demand to one event-loop turn per group of scanner
+    // batches. This keeps the first screen current without posting one timer
+    // and one scheduler resubmission for every 128 files.
+    if (!m_scanRangeUpdatePending)
+    {
+        m_scanRangeUpdatePending = true;
+        QTimer::singleShot(0, this,
+                           [this]
+                           {
+                               m_scanRangeUpdatePending = false;
+                               updateVisibleRange();
+                           });
+    }
+}
+
 // Publish a completed scan's entries on the UI thread. Runs inside the
 // qApp-marshaled completion lambda (never on the scan worker); the generation
 // guard makes a superseded scan a no-op.
@@ -222,6 +334,7 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries)
 {
     if (gen != m_dirGen) // a newer folder superseded this scan
         return;
+    m_scanComplete = true;
     m_allEntries = entries;
     m_sourceRowByPath.clear();
     m_sourceRowByPath.reserve(m_allEntries.size());

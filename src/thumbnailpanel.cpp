@@ -363,7 +363,10 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
         m_selection->setSelection({}, {});
 
     pruneThumbnailState();
-    ThumbnailPipeline::instance().setSources(toStdPaths(m_paths));
+    if (m_scanProgressive)
+        ThumbnailPipeline::instance().replaceSources(toStdPaths(m_paths));
+    else
+        ThumbnailPipeline::instance().setSources(toStdPaths(m_paths));
     // M37: publish the exact order displayed by the gallery. Sort/filter
     // rebuilds also pass through here, keeping navigation and preload aligned.
     emit sequenceChanged(m_currentDir, m_paths);

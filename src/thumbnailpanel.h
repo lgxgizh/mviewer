@@ -188,6 +188,8 @@ class ThumbnailPanel : public QListView
     static void invokeScanProbe();
     static void restoreBusyCursorOnce(const std::shared_ptr<std::atomic<int>> &refs);
     static void marshalBusyRestore(const std::shared_ptr<std::atomic<int>> &refs);
+    // M54: publish scan batches before the final sorted convergence pass.
+    void applyScanBatch(int gen, const QList<Entry> &batch);
     // M46: publish a completed scan's entries on the UI thread (extracted from
     // setDirectory's completion lambda so the scanning TU stays under the
     // function-length gate). Runs on the GUI thread; re-checks the generation.
@@ -435,6 +437,11 @@ class ThumbnailPanel : public QListView
     void ensureDimensions();
     int m_dirGen = 0;
     bool m_dimsResolved = false;
+    // M54: default name-ascending scans can publish rows while enumeration is
+    // still running. A filter/sort requested mid-scan disables provisional UI.
+    bool m_scanProgressive = false;
+    bool m_scanComplete = true;
+    bool m_scanRangeUpdatePending = false;
     // M46: directory-generation token shared with the scan/dimension/recursive
     // workers. setDirectory() stores the new generation here; every worker
     // loop re-checks it (alongside m_alive) so superseded walking, sorting and

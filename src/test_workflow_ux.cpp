@@ -442,6 +442,8 @@ QPushButton *findBtn(QWidget *root, const QString &textPrefix)
 }
 
 // ─── Workflow 1: 打开目录 → 浏览 → 键盘切换 → 放大 → 恢复 → 关闭 ─────────────
+// M54 keeps selected preview work on the foreground Decode path; the included
+// workflow cases assert that contract along with the existing UX flows.
 #include "test_workflow_ux_cases.inc"
 int main(int argc, char **argv)
 {
