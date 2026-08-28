@@ -70,39 +70,47 @@ function Get-Sha256Hex {
 }
 
 # ── 1) SHA256SUMS for shipping artifacts ────────────────────────────────────
-$files = @()
+# Keep artifact discovery in .NET path APIs. PowerShell's FileInfo pipeline
+# behavior differs between Windows PowerShell hosts used locally and on CI.
+$artifactPaths = @()
 if ($Strict) {
     foreach ($name in @("MViewer-$Version-portable.zip", "MViewer-$Version-Setup.exe")) {
         $candidate = Join-Path $outAbs $name
-        if (-not (Test-Path -LiteralPath $candidate)) {
+        if (-not [IO.File]::Exists($candidate)) {
             throw "Strict release manifest: missing exact artifact '$candidate'"
         }
-        $files += Get-Item -LiteralPath $candidate
+        $artifactPaths += $candidate
     }
 } else {
     foreach ($pat in @("MViewer-*-portable.zip", "MViewer-*-Setup.exe", "MViewer-*.zip", "MViewer-*.exe")) {
-        $files += Get-ChildItem -Path $outAbs -Filter $pat -File -ErrorAction SilentlyContinue
+        try {
+            $artifactPaths += [IO.Directory]::GetFiles($outAbs, $pat)
+        } catch [IO.DirectoryNotFoundException] {
+            # The output directory is created above, but keep non-strict mode
+            # warning-only if a provider removes it between operations.
+        }
     }
 }
 # De-dup by full path. Keep the result as an array even when a caller supplies
-# only one artifact; Windows PowerShell otherwise unwraps the pipeline result.
-$files = @($files | Sort-Object FullName -Unique)
+# only one artifact; Windows PowerShell otherwise unwraps a pipeline result.
+$artifactPaths = @($artifactPaths | Sort-Object -Unique)
 
 $sumsPath = Join-Path $outAbs "SHA256SUMS.txt"
-if ($files.Count -eq 0 -and $Strict) {
+if ($artifactPaths.Count -eq 0 -and $Strict) {
     throw "Strict release manifest: no release artifacts found under $outAbs"
-} elseif ($files.Count -eq 0) {
+} elseif ($artifactPaths.Count -eq 0) {
     Write-Warning "No release artifacts found under $outAbs — writing empty SHA256SUMS."
     Set-Content -Path $sumsPath -Value "# No artifacts found for version $Version" -Encoding utf8
 } else {
     $lines = @()
     $lines += "# MViewer $Version — SHA256 checksums"
     $lines += "# Generated $(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssK')"
-    foreach ($f in $files) {
-        $hash = Get-Sha256Hex -Path $f.FullName
+    foreach ($artifactPath in $artifactPaths) {
+        $hash = Get-Sha256Hex -Path $artifactPath
+        $fileName = [IO.Path]::GetFileName($artifactPath)
         # GNU coreutils style: "<hash>  <filename>" (two spaces)
-        $lines += "$hash  $($f.Name)"
-        Write-Host ("  [sha256] {0}  {1}" -f $hash.Substring(0,12), $f.Name)
+        $lines += "$hash  $fileName"
+        Write-Host ("  [sha256] {0}  {1}" -f $hash.Substring(0,12), $fileName)
     }
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     $manifestText = ($lines -join [Environment]::NewLine) + [Environment]::NewLine
@@ -110,7 +118,7 @@ if ($files.Count -eq 0 -and $Strict) {
     if (-not (Test-Path -LiteralPath $sumsPath)) {
         throw "Release manifest failed to create checksum file '$sumsPath'"
     }
-    Write-Host "=== SHA256SUMS: $sumsPath ($($files.Count) file(s)) ==="
+    Write-Host "=== SHA256SUMS: $sumsPath ($($artifactPaths.Count) file(s)) ==="
 }
 
 # ── 2) RELEASE_NOTES.md from CHANGELOG.md ───────────────────────────────────
