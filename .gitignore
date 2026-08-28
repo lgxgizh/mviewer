@@ -14,6 +14,7 @@ dist/
 
 # Local logs and generated reports
 *.log
+build_health.json
 buildlog.txt
 benchmark/report/history.csv
 benchmark/report/index.html
@@ -46,3 +47,6 @@ release_checklist_report.md
 
 # Local code-graph index (SQLite + logs) — machine-local, never commit
 .codegraph/
+
+# Local UX inspection scratch fixtures
+/.tmp_*/
