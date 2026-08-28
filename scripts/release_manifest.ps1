@@ -53,6 +53,22 @@ if (-not (Test-Path $outAbs)) {
     New-Item -ItemType Directory -Force -Path $outAbs | Out-Null
 }
 
+function Get-Sha256Hex {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    # Use .NET instead of Get-FileHash: the latter is not available in every
+    # Windows PowerShell module environment used by CTest/GitHub runners.
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        $hash = $sha256.ComputeHash($stream)
+        return ([BitConverter]::ToString($hash).Replace('-', '')).ToLowerInvariant()
+    } finally {
+        $stream.Dispose()
+        $sha256.Dispose()
+    }
+}
+
 # ── 1) SHA256SUMS for shipping artifacts ────────────────────────────────────
 $files = @()
 if ($Strict) {
@@ -83,7 +99,7 @@ if ($files.Count -eq 0 -and $Strict) {
     $lines += "# MViewer $Version — SHA256 checksums"
     $lines += "# Generated $(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssK')"
     foreach ($f in $files) {
-        $hash = (Get-FileHash -Path $f.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+        $hash = Get-Sha256Hex -Path $f.FullName
         # GNU coreutils style: "<hash>  <filename>" (two spaces)
         $lines += "$hash  $($f.Name)"
         Write-Host ("  [sha256] {0}  {1}" -f $hash.Substring(0,12), $f.Name)
