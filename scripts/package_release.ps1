@@ -78,7 +78,7 @@ if ($makensis) {
 
 # 4) M14.8/M51: SHA256SUMS + auto release notes
 Write-Host "=== release_manifest (M14.8) ==="
-& (Join-Path $root "scripts/release_manifest.ps1") `
+. (Join-Path $root "scripts/release_manifest.ps1") `
     -Version $Version -OutDir $OutDir -Strict
 if (-not $?) { throw "release_manifest failed" }
 

@@ -32,7 +32,7 @@ try {
     Check $fixturesExist 'strict manifest fixture files are created'
     $manifestSucceeded = $false
     try {
-        & (Join-Path $RepoRoot 'scripts/release_manifest.ps1') `
+        . (Join-Path $RepoRoot 'scripts/release_manifest.ps1') `
             -Version '9.8.7' -OutDir $manifestRoot -Strict
         $manifestSucceeded = $?
     } catch {
