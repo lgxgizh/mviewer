@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-  M14.8 — Generate SHA256SUMS + release notes for a packaged MViewer release.
+  M14.8 - Generate SHA256SUMS + release notes for a packaged MViewer release.
 
 .DESCRIPTION
   Scans dist/ for shipping artifacts (portable zip, Setup.exe) and writes:
-    dist/SHA256SUMS.txt          — standard "hash  filename" lines
-    dist/RELEASE_NOTES.md        — auto-extracted section from CHANGELOG.md
+    dist/SHA256SUMS.txt          - standard "hash  filename" lines
+    dist/RELEASE_NOTES.md        - auto-extracted section from CHANGELOG.md
 
   Safe to re-run; overwrites previous outputs. Does not modify CI workflows
   (AGENTS.md freezes release.yml); call this from package_release.ps1 or by hand.
@@ -69,7 +69,7 @@ function Get-Sha256Hex {
     }
 }
 
-# ── 1) SHA256SUMS for shipping artifacts ────────────────────────────────────
+# -- 1) SHA256SUMS for shipping artifacts -------------------------------------
 # Keep artifact discovery path-based. PowerShell's FileInfo pipeline behavior
 # differs between Windows PowerShell hosts used locally and on CI.
 $artifactPaths = @()
@@ -100,7 +100,7 @@ $artifactCount = @($artifactPaths).Count
 $sumsPath = Join-Path $outAbs "SHA256SUMS.txt"
 if ($artifactCount -gt 0) {
     $lines = @()
-    $lines += "# MViewer $Version — SHA256 checksums"
+    $lines += "# MViewer $Version - SHA256 checksums"
     $lines += "# Generated $(Get-Date -Format 'yyyy-MM-ddTHH:mm:ssK')"
     foreach ($artifactPath in $artifactPaths) {
         $hash = Get-Sha256Hex -Path $artifactPath
@@ -119,11 +119,11 @@ if ($artifactCount -gt 0) {
 } elseif ($Strict) {
     throw "Strict release manifest: no release artifacts found under $outAbs"
 } else {
-    Write-Warning "No release artifacts found under $outAbs — writing empty SHA256SUMS."
+    Write-Warning "No release artifacts found under $outAbs - writing empty SHA256SUMS."
     Set-Content -Path $sumsPath -Value "# No artifacts found for version $Version" -Encoding utf8
 }
 
-# ── 2) RELEASE_NOTES.md from CHANGELOG.md ───────────────────────────────────
+# -- 2) RELEASE_NOTES.md from CHANGELOG.md ------------------------------------
 $changelog = Join-Path $root "CHANGELOG.md"
 $notesPath = Join-Path $outAbs "RELEASE_NOTES.md"
 
