@@ -70,18 +70,19 @@ function Get-Sha256Hex {
 }
 
 # ── 1) SHA256SUMS for shipping artifacts ────────────────────────────────────
-# Keep artifact discovery in .NET path APIs. PowerShell's FileInfo pipeline
-# behavior differs between Windows PowerShell hosts used locally and on CI.
+# Keep artifact discovery path-based. PowerShell's FileInfo pipeline behavior
+# differs between Windows PowerShell hosts used locally and on CI.
 $artifactPaths = @()
-if ($Strict) {
-    foreach ($name in @("MViewer-$Version-portable.zip", "MViewer-$Version-Setup.exe")) {
-        $candidate = Join-Path $outAbs $name
-        if (-not [IO.File]::Exists($candidate)) {
-            throw "Strict release manifest: missing exact artifact '$candidate'"
-        }
+foreach ($name in @("MViewer-$Version-portable.zip", "MViewer-$Version-Setup.exe")) {
+    $candidate = Join-Path $outAbs $name
+    $exists = [IO.File]::Exists($candidate) -or (Test-Path -LiteralPath $candidate)
+    if ($exists) {
         $artifactPaths += $candidate
+    } elseif ($Strict) {
+        throw "Strict release manifest: missing exact artifact '$candidate'"
     }
-} else {
+}
+if (-not $Strict) {
     foreach ($pat in @("MViewer-*-portable.zip", "MViewer-*-Setup.exe", "MViewer-*.zip", "MViewer-*.exe")) {
         try {
             $artifactPaths += [IO.Directory]::GetFiles($outAbs, $pat)
