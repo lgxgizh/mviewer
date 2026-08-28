@@ -78,9 +78,9 @@ if ($makensis) {
 
 # 4) M14.8/M51: SHA256SUMS + auto release notes
 Write-Host "=== release_manifest (M14.8) ==="
-& $powerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts/release_manifest.ps1") `
+& (Join-Path $root "scripts/release_manifest.ps1") `
     -Version $Version -OutDir $OutDir -Strict
-if ($LASTEXITCODE -ne 0) { throw "release_manifest failed" }
+if (-not $?) { throw "release_manifest failed" }
 
 Write-Host "=== strict release contract gate ==="
 & $powerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts/release_contract_gate.ps1") `
