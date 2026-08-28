@@ -30,7 +30,11 @@ try {
     $fixturesExist = (Test-Path -LiteralPath (Join-Path $manifestRoot 'MViewer-9.8.7-portable.zip')) -and
         (Test-Path -LiteralPath (Join-Path $manifestRoot 'MViewer-9.8.7-Setup.exe'))
     Check $fixturesExist 'strict manifest fixture files are created'
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot 'scripts/release_manifest.ps1') `
+    $powerShellExe = Join-Path $PSHOME 'powershell.exe'
+    if (-not (Test-Path -LiteralPath $powerShellExe)) {
+        $powerShellExe = Join-Path $PSHOME 'pwsh.exe'
+    }
+    & $powerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $RepoRoot 'scripts/release_manifest.ps1') `
         -Version '9.8.7' -OutDir $manifestRoot -Strict
     Check ($LASTEXITCODE -eq 0) 'strict manifest generation exits successfully'
     $sums = Join-Path $manifestRoot 'SHA256SUMS.txt'

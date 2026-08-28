@@ -21,6 +21,10 @@ param(
 $ErrorActionPreference = 'Stop'
 $root = (Get-Location).Path
 . (Join-Path $PSScriptRoot 'release_version.ps1')
+$powerShellExe = Join-Path $PSHOME 'pwsh.exe'
+if (-not (Test-Path -LiteralPath $powerShellExe)) {
+    $powerShellExe = Join-Path $PSHOME 'powershell.exe'
+}
 if (-not $Version) {
     # M24 version SSOT: read from the CMake-generated file; git describe only
     # as a fallback so the installer name always matches the app version.
@@ -41,13 +45,13 @@ $Version = $identity.Version
 # 1) Optional Release build
 if ($Build) {
     Write-Host "=== build.ps1 Release ==="
-    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "build.ps1") Release
+    & $powerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "build.ps1") Release
     if ($LASTEXITCODE -ne 0) { throw "Release build failed" }
 }
 
 # 2) Portable zip
 Write-Host "=== package_portable ==="
-& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts/package_portable.ps1") `
+& $powerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts/package_portable.ps1") `
     -Version $Version -OutDir $OutDir $(if ($QtDir) { @('-QtDir', $QtDir) } else { @() })
 if ($LASTEXITCODE -ne 0) { throw "portable packaging failed" }
 
@@ -74,12 +78,12 @@ if ($makensis) {
 
 # 4) M14.8/M51: SHA256SUMS + auto release notes
 Write-Host "=== release_manifest (M14.8) ==="
-& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts/release_manifest.ps1") `
+& $powerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts/release_manifest.ps1") `
     -Version $Version -OutDir $OutDir -Strict
 if ($LASTEXITCODE -ne 0) { throw "release_manifest failed" }
 
 Write-Host "=== strict release contract gate ==="
-& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts/release_contract_gate.ps1") `
+& $powerShellExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root "scripts/release_contract_gate.ps1") `
     -Version $Version -ArtifactDir $OutDir -ManifestPath (Join-Path $root (Join-Path $OutDir 'SHA256SUMS.txt'))
 if ($LASTEXITCODE -ne 0) { throw "strict release contract gate failed" }
 
