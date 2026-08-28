@@ -76,6 +76,7 @@ $artifactPaths = @()
 foreach ($name in @("MViewer-$Version-portable.zip", "MViewer-$Version-Setup.exe")) {
     $candidate = Join-Path $outAbs $name
     $exists = [IO.File]::Exists($candidate) -or (Test-Path -LiteralPath $candidate)
+    Write-Host ("manifest-debug: outAbs=[{0}] strict=[{1}] candidate=[{2}] exists=[{3}]" -f $outAbs, $Strict, $candidate, $exists)
     if ($exists) {
         $artifactPaths += $candidate
     } elseif ($Strict) {
@@ -95,6 +96,7 @@ if (-not $Strict) {
 # De-dup by full path. Keep the result as an array even when a caller supplies
 # only one artifact; Windows PowerShell otherwise unwraps a pipeline result.
 $artifactPaths = @($artifactPaths | Sort-Object -Unique)
+Write-Host ("manifest-debug: artifact count=[{0}]" -f $artifactPaths.Count)
 
 $sumsPath = Join-Path $outAbs "SHA256SUMS.txt"
 if ($artifactPaths.Count -eq 0 -and $Strict) {
