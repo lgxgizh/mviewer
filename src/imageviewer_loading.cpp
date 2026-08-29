@@ -130,12 +130,53 @@ void ImageViewer::setImage(const QString &path)
     }
 }
 
+void ImageViewer::refreshSource(const QString &path)
+{
+    if (path.isEmpty() || path != m_currentPath)
+        return;
+    // The source/cache invalidation is owned by the caller. Re-enter the
+    // normal cancellable load path while retaining the user's zoom/pan.
+    m_preserveViewOnReload = true;
+    setImage(path);
+    m_preserveViewOnReload = false;
+}
+
+void ImageViewer::renameBrowsePaths(const QStringList &oldPaths, const QStringList &newPaths)
+{
+    const int count = qMin(oldPaths.size(), newPaths.size());
+    for (int i = 0; i < count; ++i)
+    {
+        const QString &oldPath = oldPaths.at(i);
+        const QString &newPath = newPaths.at(i);
+        for (QString &path : m_fileList)
+            if (path == oldPath)
+                path = newPath;
+        if (m_currentPath == oldPath)
+        {
+            m_currentPath = newPath;
+            m_provisionalPath = newPath;
+        }
+    }
+    m_currentIndex = m_fileList.indexOf(m_currentPath);
+    if (!m_currentPath.isEmpty())
+    {
+        const QString position = m_currentIndex >= 0
+                                     ? QString(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
+                                     : QString();
+        setWindowTitle(QString("%1%2 - MViewer")
+                           .arg(QFileInfo(m_currentPath).fileName(), position));
+    }
+}
+
 void ImageViewer::setImageImpl(const QString &path)
 {
     // Pixel Inspector lifecycle: invalidate synchronously on every new load so
     // the previous image's sample never lingers while the next decode runs —
     // including for empty/failing requests that never deliver a frame.
     clearPixelInfo();
+    const std::optional<Viewport> reloadView = m_preserveViewOnReload
+                                                   ? std::optional<Viewport>(m_view)
+                                                   : std::nullopt;
     const bool keepProvisional = !path.isEmpty() && path == m_provisionalPath &&
                                  !m_provisionalImage.isNull();
     m_currentPath = path;
@@ -158,6 +199,8 @@ void ImageViewer::setImageImpl(const QString &path)
     m_hasHistogram = false;
     m_loading = !path.isEmpty();
     m_pendingView.reset();
+    if (reloadView)
+        m_pendingView = reloadView;
     // M47: reset the LOD-first display state for the new request. Any
     // in-flight raster worker is cancelled; its (bounded) completion is
     // discarded by the generation guard. The matching preload (if any) is

@@ -16,6 +16,12 @@
   progressive sorting avoids comparator allocations, and exact thumbnail-cache
   hits no longer wait for the one-time disk index. TagStore writes are now
   coalesced while explicit `save()` still flushes synchronously.
+- **Live-folder coherence:** active Browse monitoring now separates filesystem
+  mutations from navigation, coalesces watcher storms, retries incomplete
+  writes within a bounded stability window, and applies add/remove/modify/
+  rename deltas incrementally without resetting selection or scroll position.
+  Sidecars update matching items only; overwrite invalidation covers the
+  thumbnail pipeline, disk cache, repository, metadata, and open Viewer.
 
 ### Verification
 
@@ -93,6 +99,10 @@
   `m55_interactive_baseline` records machine-local 10k/50k working-set,
   private-byte, pipeline-queue and scroll-jump evidence. Native fullscreen
   sequential-next and extended physical GUI smoothness remain MANUAL/BLOCKED.
+- M56 focused coverage is green: snapshot/delta classification, active-folder
+  debounce/recovery, row-local gallery continuity, and the deterministic 10k
+  live-directory soak all pass. Full two-round Release gate evidence is in
+  `docs/review/M56_LIVE_FOLDER_COHERENCE_CLOSURE_2026-08-29.md`.
 - The M51 release-contract coverage remains green; physical target-machine
   qualification is still recorded as MANUAL/BLOCKED.
 

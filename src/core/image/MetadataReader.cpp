@@ -18,7 +18,7 @@ std::string MetadataReader::key(const std::string &filePath)
     const QString qPath = QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size()));
     const QFileInfo fi(qPath);
     const QString k = qPath + QString::number(fi.size()) +
-                      QString::number(fi.lastModified().toSecsSinceEpoch());
+                      QString::number(fi.lastModified().toMSecsSinceEpoch());
     return k.toStdString();
 }
 

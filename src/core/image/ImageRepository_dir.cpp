@@ -271,7 +271,12 @@ void ImageRepository::prefetch(const std::vector<std::string> &keys, CacheLevel 
 
 void ImageRepository::release(const std::string &filePath)
 {
-    CacheManager::instance().invalidate(makeKey(filePath));
+    const std::string previous = cachedKeyForPath(filePath);
+    const std::string current = makeKey(filePath);
+    if (!previous.empty())
+        CacheManager::instance().invalidate(previous);
+    if (current != previous)
+        CacheManager::instance().invalidate(current);
 }
 
 mviewer::domain::ImageMetadata ImageRepository::metadata(const std::string &filePath) const
@@ -296,7 +301,16 @@ void ImageRepository::cacheToDisk(const std::string &filePath)
 
 void ImageRepository::invalidate(const std::string &filePath)
 {
-    CacheManager::instance().invalidate(makeKey(filePath));
+    // M56: a watcher mutation may arrive before the new stat identity is
+    // observed. Invalidate both the previously remembered revision and the
+    // current one, so an overwrite with unchanged size cannot keep stale
+    // memory/disk/metadata payloads alive.
+    const std::string previous = cachedKeyForPath(filePath);
+    const std::string current = makeKey(filePath);
+    if (!previous.empty())
+        CacheManager::instance().invalidate(previous);
+    if (current != previous)
+        CacheManager::instance().invalidate(current);
     forgetKey(filePath);
 }
 

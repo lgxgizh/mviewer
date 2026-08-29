@@ -112,13 +112,13 @@ bool MainWindow::handleWindowKey(QKeyEvent *event)
             return true;
         }
     }
-    // P0-1: F5 refreshes the directory tree and the gallery from disk.
+    // M56: F5 refreshes the tree and asks the active-directory monitor for an
+    // incremental reconcile; it never re-enters directory navigation.
     if (event->key() == Qt::Key_F5 && !mod)
     {
         m_directoryTree->refresh();
-        m_thumbnailPanel->refresh();
-        m_imageList->markDirty();
-        scheduleReindex();
+        if (m_directoryMonitor)
+            m_directoryMonitor->reconcileNow();
         event->accept();
         return true;
     }

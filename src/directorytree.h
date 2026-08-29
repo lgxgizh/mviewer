@@ -2,6 +2,7 @@
 
 #include <QLineEdit>
 #include <QListView>
+#include <QStringList>
 #include <QSortFilterProxyModel>
 #include <QTreeView>
 
@@ -39,7 +40,8 @@ class DirectoryProxyModel : public QSortFilterProxyModel
 //
 // Features (A-1 review action items):
 //   * Auto-sync: navigateTo() expands all ancestors and highlights the active dir
-//   * Auto-refresh: QFileSystemWatcher reloads when Explorer creates/deletes folders
+//   * Tree refresh: QFileSystemWatcher refreshes expanded directory nodes
+//     without owning the active Browse-directory lifecycle.
 //   * Large-dir async: fetchMore is driven by the model; loading indicator shown
 //   * Current-dir highlight: bold + accent background on the active node
 class DirectoryTree : public QTreeView
@@ -65,13 +67,16 @@ class DirectoryTree : public QTreeView
     }
 
   public slots:
-    // F5 refresh. Re-reads the currently selected folder from disk (so
-    // newly created / deleted sub-folders show up) and re-emits directoryChanged
-    // so the gallery reloads too.
+    // F5 refresh. Re-reads the currently selected folder from disk and sends a
+    // contents hint. It does not masquerade as a directory navigation.
     void refresh();
 
   signals:
+    // A committed A -> B navigation. MainWindow owns navigation side effects.
     void directoryChanged(const QString &path);
+    // A watcher/F5 hint that the current directory's contents may have changed.
+    // Consumers reconcile a snapshot; no navigation lifecycle is allowed.
+    void directoryContentsChanged(const QString &path);
 
   protected:
     // Enter/Return opens the selected directory (same as double-click) so the
@@ -105,7 +110,10 @@ class DirectoryTree : public QTreeView
     DirectoryProxyModel *m_proxy = nullptr;
     QFileSystemWatcher *m_watcher = nullptr;
     QString m_currentPath; // last navigated / selected path (for highlight)
-    QString m_watchedPath; // currently watched directory
+    // Bounded tree-only watcher set. The active Browse directory is retained
+    // when another tree node is expanded; gallery ownership lives in
+    // DirectoryMonitor, not in this view.
+    QStringList m_watchedPaths;
     bool m_loading = false;
     QLabel *m_loadingLabel = nullptr;
     QString m_pendingFetchPath; // path currently being progressively fetched

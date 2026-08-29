@@ -252,7 +252,11 @@ void ThumbnailPanel::applyFilter()
     for (const Entry &e : src)
         if (matchesFilter(e, t, useFuzzy, fuzzyRe))
             out.append(e);
-    buildModel(out);
+    if (m_incrementalApply)
+        applyDisplayedEntriesIncremental(out, m_incrementalPrevSelection, m_incrementalPrevCurrent,
+                                         m_incrementalAnchorPath, m_incrementalAnchorOffset);
+    else
+        buildModel(out);
 }
 
 bool ThumbnailPanel::prepareFilterSource(const QString &t, QList<Entry> &src)

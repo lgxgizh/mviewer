@@ -68,6 +68,7 @@ struct ThumbnailPipeline
         cancelHandlesLocked();
         m_sources = paths;
         m_pending.clear();
+        m_pathRevisions.clear();
     }
 
     // M54: publish discovered batches without superseding already decoded
@@ -88,6 +89,52 @@ struct ThumbnailPipeline
         cancelHandlesLocked();
         m_sources = paths;
         m_pending.clear();
+    }
+
+    // M56: update the live source order without bumping generation or
+    // cancelling thumbnails for paths that remain in the working set.
+    void updateSources(const std::vector<std::string> &paths)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        m_sources = paths;
+        cancelObsoleteHandlesLocked();
+        scheduleLocked();
+    }
+
+    // M56: invalidate one source without resetting the directory generation or
+    // the other visible thumbnails. In-flight work for this path is cancelled
+    // and carries a per-path revision guard so a running decoder cannot publish
+    // pixels from before an overwrite.
+    void invalidatePath(const std::string &path)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        ++m_pathRevisions[path];
+        const std::string prefix = path + "\x1f";
+        for (auto it = m_memCache.begin(); it != m_memCache.end();)
+        {
+            if (it->first.rfind(prefix, 0) != 0)
+            {
+                ++it;
+                continue;
+            }
+            m_lru.erase(it->second.lruIt);
+            it = m_memCache.erase(it);
+        }
+        for (auto it = m_pending.begin(); it != m_pending.end();)
+        {
+            if (it->first.rfind(prefix, 0) != 0)
+            {
+                ++it;
+                continue;
+            }
+            auto handle = m_handles.find(it->second.ownerKey);
+            if (handle != m_handles.end())
+            {
+                TaskScheduler::cancel(handle->second);
+                m_handles.erase(handle);
+            }
+            it = m_pending.erase(it);
+        }
     }
 
     // The currently visible item range [begin, end). Visible items are decoded
@@ -167,6 +214,7 @@ struct ThumbnailPipeline
         m_lru.clear();
         m_sources.clear();
         m_pending.clear();
+        m_pathRevisions.clear();
     }
 
     size_t memCacheSize() const
@@ -274,10 +322,11 @@ struct ThumbnailPipeline
         DecodeFn decode = m_decode;
         ResultFn result = m_result;
         const uint64_t gen = m_gen;
+        const uint64_t pathRevision = m_pathRevisions[path];
         auto handle = TaskScheduler::instance().submit(
             prio,
             [this, path, size, k, gen, owner, ownerKey, decode,
-             result](const TaskScheduler::TaskContext &ctx)
+             result, pathRevision](const TaskScheduler::TaskContext &ctx)
             {
                 // Stop stale queued work BEFORE decoding. The generation that
                 // owned this key already cleared/repurposed the bookkeeping in
@@ -311,7 +360,8 @@ struct ThumbnailPipeline
                     // Superseded generation: drop everything (no cache, no
                     // delivery) so old directories can never pollute the
                     // current one.
-                    if (gen != m_gen || ctx.isCancelled())
+                    if (gen != m_gen || ctx.isCancelled() ||
+                        m_pathRevisions[path] != pathRevision)
                         return;
                     if (!thumb.isNull())
                     {
@@ -412,6 +462,17 @@ struct ThumbnailPipeline
 
     void cacheLocked(const std::string &k, const std::string &path, const ImageData &data)
     {
+        // A cancelled same-generation decode may still finish after a newer
+        // request for the same key has been queued. Replace the existing
+        // entry instead of adding a second LRU node for the same key; otherwise
+        // a later path invalidation would erase a stale iterator and corrupt
+        // the cache.
+        auto existing = m_memCache.find(k);
+        if (existing != m_memCache.end())
+        {
+            m_lru.erase(existing->second.lruIt);
+            m_memCache.erase(existing);
+        }
         MemEntry e;
         e.data = data;
         m_lru.push_front(k);
@@ -443,5 +504,6 @@ struct ThumbnailPipeline
     // Pending keys: (path, size) -> unique request owner. An obsolete request
     // can never block or erase a later same-key request in the same generation.
     std::unordered_map<std::string, PendingEntry> m_pending;
+    std::unordered_map<std::string, uint64_t> m_pathRevisions;
     uint64_t m_nextOwner = 0;
 };

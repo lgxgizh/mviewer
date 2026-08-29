@@ -65,6 +65,14 @@ class ImageViewer : public QOpenGLWidget
     void setProvisionalImage(const QString &path, const QImage &image,
                              const QSize &sourceSize = QSize());
     void setImage(const QString &path);
+    // M56: a filesystem overwrite invalidates the current source while a
+    // rename only migrates its identity. Both preserve the browse sequence.
+    void refreshSource(const QString &path);
+    void renameBrowsePaths(const QStringList &oldPaths, const QStringList &newPaths);
+    QString currentPath() const
+    {
+        return m_currentPath;
+    }
     // M47: setImage body with a caller-side exception guard (an unexpected
     // error must never escape into the Qt event loop).
     void setImageImpl(const QString &path);
@@ -412,6 +420,7 @@ class ImageViewer : public QOpenGLWidget
     QSize m_provisionalSourceSize;
     bool m_tileRepaintQueued = false;
     bool m_loading = false;
+    bool m_preserveViewOnReload = false;
     TaskScheduler::TaskHandle m_roiStatsRequest;
     uint64_t m_exportGeneration = 0;
     TaskScheduler::TaskHandle m_exportTask;

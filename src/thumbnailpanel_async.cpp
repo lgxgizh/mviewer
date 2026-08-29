@@ -166,6 +166,8 @@ void scanProgressiveDirectory(const QString &path,
 void ThumbnailPanel::setDirectory(const QString &path)
 {
     m_currentDir = path;
+    emit directorySourceChanged(m_currentDir);
+    m_directoryUnavailable = false;
     m_filterText.clear();
     m_filterRecursive = false;
 

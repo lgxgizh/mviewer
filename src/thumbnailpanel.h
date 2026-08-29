@@ -23,6 +23,7 @@
 #include <QVector>
 
 #include "core/TagStore.h"
+#include "core/filesystem/DirectorySnapshot.h"
 #include "core/scheduler/TaskScheduler.h"
 
 class QPushButton;
@@ -83,6 +84,18 @@ class ThumbnailPanel : public QListView
     ~ThumbnailPanel() override;
 
     void setDirectory(const QString &path);
+    // M56: notify the host that this panel now has a committed source path.
+    // This is an observation boundary for the monitor, not a navigation event.
+    void setLiveDirectoryMonitoring(bool enabled)
+    {
+        m_liveDirectoryMonitoring = enabled;
+    }
+    // M56: apply an already-reconciled filesystem delta without crossing the
+    // directory navigation boundary or resetting the whole gallery model.
+    void applyDirectoryDelta(const mviewer::core::DirectoryDelta &delta);
+    // M56: re-evaluate the active filter after a sidecar import. Source rows
+    // stay intact and any membership change is row-local.
+    void refreshSidecarPaths(const QStringList &paths);
     // P0-1: F5 refresh — reload the current directory from disk.
     void refresh();
     QString currentDir() const
@@ -308,12 +321,21 @@ class ThumbnailPanel : public QListView
     // Emitted after a delete/trash operation so the host can advance the viewer
     // off the deleted image. `deletedPaths` lists the removed files.
     void pathsRemoved(const QStringList &deletedPaths);
+    // M56: path identity migration for an inferred rename.
+    void pathsRenamed(const QStringList &oldPaths, const QStringList &newPaths);
+    // M56: same-path content changes require source/cache refresh, not row
+    // replacement or directory navigation.
+    void pathsModified(const QStringList &paths);
     // P0 #①: live gallery stats for the status bar (count / sizes / selection).
     void statsChanged(int total, qint64 totalBytes, int selected, qint64 selectedBytes);
     // P0-2: the image under the cursor (gallery hover).
     void hovered(const QString &path);
     // M37: final visible order after the async scan and active sort/filters.
     void sequenceChanged(const QString &directory, const QStringList &paths);
+    void directorySourceChanged(const QString &path);
+    // M56: explicit watcher/F5 hint for the active directory. The host routes
+    // it to DirectoryMonitor; this is not a navigation signal.
+    void directoryContentsChanged(const QString &path);
 
   private slots:
     void onThumbReady(const QString &path);
@@ -456,6 +478,18 @@ class ThumbnailPanel : public QListView
     void startCommandFileOperation(std::unique_ptr<ICommand> command,
                                    const QStringList &paths, const QString &label);
     void startCopyFileOperation(const QStringList &paths, const QString &destinationDirectory);
+    void applyDisplayedEntriesIncremental(const QList<Entry> &entries,
+                                          const QStringList &previousSelection,
+                                          const QString &previousCurrent, const QString &anchorPath,
+                                          int anchorOffset);
+    void preserveScrollAnchor(const QString &anchorPath, int anchorOffset);
+    void applyDirectoryDeltaEntries(const mviewer::core::DirectoryDelta &delta,
+                                    QList<Entry> &next, QStringList &removedPaths,
+                                    QStringList &renamedFrom, QStringList &renamedTo);
+    void sortDirectoryDeltaEntries(QList<Entry> &entries) const;
+    void captureIncrementalDeltaState(QStringList &selection, QString &current,
+                                      QString &anchorPath, int &anchorOffset,
+                                      int &currentRow) const;
 
     // P0-1 (perf): resolve pixel dimensions off the UI thread. setDirectory no
     // longer reads image headers eagerly (that blocked folder switching on large
@@ -469,6 +503,14 @@ class ThumbnailPanel : public QListView
     bool m_scanProgressive = false;
     bool m_scanComplete = true;
     bool m_scanRangeUpdatePending = false;
+    bool m_incrementalApply = false;
+    bool m_directoryUnavailable = false;
+    bool m_liveDirectoryMonitoring = false;
+    QStringList m_incrementalPrevSelection;
+    QString m_incrementalPrevCurrent;
+    QString m_incrementalAnchorPath;
+    int m_incrementalAnchorOffset = 0;
+    int m_incrementalPreviousCurrentRow = -1;
     // M46: directory-generation token shared with the scan/dimension/recursive
     // workers. setDirectory() stores the new generation here; every worker
     // loop re-checks it (alongside m_alive) so superseded walking, sorting and

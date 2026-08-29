@@ -16,9 +16,62 @@ void MainWindow::connectUiSignals()
 
 void MainWindow::connectNavigationSignals()
 {
+    m_thumbnailPanel->setLiveDirectoryMonitoring(true);
     // ----- Signals -----
+    connect(m_thumbnailPanel, &ThumbnailPanel::directorySourceChanged, m_directoryMonitor,
+            &DirectoryMonitor::setActiveDirectory);
     connect(m_directoryTree, &DirectoryTree::directoryChanged, m_thumbnailPanel,
             &ThumbnailPanel::setDirectory);
+    connect(m_directoryTree, &DirectoryTree::directoryContentsChanged, m_directoryMonitor,
+            &DirectoryMonitor::notifyDirectoryChanged);
+    connect(m_thumbnailPanel, &ThumbnailPanel::directoryContentsChanged, m_directoryMonitor,
+            &DirectoryMonitor::notifyDirectoryChanged);
+    connect(m_directoryMonitor, &DirectoryMonitor::directoryDeltaReady, m_thumbnailPanel,
+            &ThumbnailPanel::applyDirectoryDelta);
+    connect(m_directoryMonitor, &DirectoryMonitor::directoryDeltaReady, this,
+            [this](const mviewer::core::DirectoryDelta &delta)
+            {
+                QStringList sidecarImages;
+                for (const auto &entry : delta.sidecarAdded)
+                {
+                    const QString sidecar =
+                        QString::fromUtf8(entry.path.data(), static_cast<int>(entry.path.size()));
+                    const QString base = QFileInfo(sidecar).completeBaseName();
+                    for (const auto &image : m_thumbnailPanel->entries())
+                        if (QFileInfo(image.path).completeBaseName() == base)
+                            sidecarImages.append(image.path);
+                }
+                for (const auto &entry : delta.sidecarModified)
+                {
+                    const QString sidecar =
+                        QString::fromUtf8(entry.path.data(), static_cast<int>(entry.path.size()));
+                    const QString base = QFileInfo(sidecar).completeBaseName();
+                    for (const auto &image : m_thumbnailPanel->entries())
+                        if (QFileInfo(image.path).completeBaseName() == base)
+                            sidecarImages.append(image.path);
+                }
+                for (const auto &entry : delta.sidecarRemoved)
+                {
+                    const QString sidecar =
+                        QString::fromUtf8(entry.path.data(), static_cast<int>(entry.path.size()));
+                    const QString base = QFileInfo(sidecar).completeBaseName();
+                    for (const auto &image : m_thumbnailPanel->entries())
+                        if (QFileInfo(image.path).completeBaseName() == base)
+                            sidecarImages.append(image.path);
+                }
+                sidecarImages.removeDuplicates();
+                scheduleSidecarImportPaths(sidecarImages);
+            });
+    connect(m_directoryMonitor, &DirectoryMonitor::directoryAvailabilityChanged, this,
+            [this](const QString &path, bool available)
+            {
+                if (!m_directory || m_directory->currentDirectory() != path)
+                    return;
+                if (!available)
+                    statusBar()->showMessage(QStringLiteral("目录暂不可用: %1").arg(path));
+                else
+                    statusBar()->clearMessage();
+            });
     // M37: the asynchronous gallery scan publishes the final visible sequence
     // into the single navigation model. Viewer, keyboard navigation, Compare
     // and preload all consume this same ordered list.
@@ -51,6 +104,8 @@ void MainWindow::connectNavigationSignals()
                     m_pathEdit->setText(QDir::toNativeSeparators(path));
                 // M19: DirectoryModel + ImageListModel are the SSOT.
                 m_directory->setCurrentDirectory(path);
+                if (m_directoryMonitor)
+                    m_directoryMonitor->setActiveDirectory(path);
                 m_workspace->setRootPath(path);
                 // ThumbnailPanel clears and later publishes the final sequence.
                 // Do not enumerate the directory synchronously here.
@@ -173,6 +228,37 @@ void MainWindow::connectSelectionSignals()
                     return;
                 // Advance to the next available image in the (refreshed) folder.
                 navigate(1);
+            });
+    connect(m_thumbnailPanel, &ThumbnailPanel::pathsRenamed, this,
+            [this](const QStringList &oldPaths, const QStringList &newPaths)
+            {
+                const QString before = currentImagePath();
+                if (m_imageViewer)
+                    m_imageViewer->renameBrowsePaths(oldPaths, newPaths);
+                const int index = oldPaths.indexOf(before);
+                if (index < 0 || index >= newPaths.size())
+                    return;
+                const QString after = newPaths.at(index);
+                if (m_previewPanel)
+                    m_previewPanel->setImage(after);
+                if (m_metadataPanel)
+                    m_metadataPanel->setImage(after);
+            });
+    connect(m_thumbnailPanel, &ThumbnailPanel::pathsModified, this,
+            [this](const QStringList &paths)
+            {
+                for (const QString &path : paths)
+                {
+                    if (m_imageViewer)
+                        m_imageViewer->refreshSource(path);
+                    if (path == currentImagePath())
+                    {
+                        if (m_previewPanel)
+                            m_previewPanel->setImage(path);
+                        if (m_metadataPanel)
+                            m_metadataPanel->setImage(path);
+                    }
+                }
             });
 
     // M27: the previous EventBus subscriptions ("image.open" / "compare.requested")
@@ -348,11 +434,8 @@ void MainWindow::connectMenuSignals()
             {
                 if (m_directoryTree)
                     m_directoryTree->refresh();
-                if (m_thumbnailPanel)
-                    m_thumbnailPanel->refresh();
-                if (m_imageList)
-                    m_imageList->markDirty();
-                scheduleReindex();
+                if (m_directoryMonitor)
+                    m_directoryMonitor->reconcileNow();
             });
 
     // Path input bar: pressing Enter navigates to the typed directory.

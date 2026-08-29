@@ -55,6 +55,56 @@ void MainWindow::scheduleSidecarImport(const QString &dir)
         });
 }
 
+void MainWindow::scheduleSidecarImportPaths(const QStringList &imagePaths)
+{
+    if (imagePaths.isEmpty())
+        return;
+    TaskScheduler::cancel(m_sidecarImportTask);
+    if (m_sidecarImportAlive)
+        m_sidecarImportAlive->store(false, std::memory_order_release);
+
+    auto alive = std::make_shared<std::atomic<bool>>(true);
+    m_sidecarImportAlive = alive;
+    const QString expectedDir = currentDir();
+    const QPointer<MainWindow> guard(this);
+    std::vector<std::string> paths;
+    paths.reserve(static_cast<size_t>(imagePaths.size()));
+    for (const QString &path : imagePaths)
+        paths.push_back(path.toUtf8().toStdString());
+    m_sidecarImportTask = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Background,
+        [alive, paths = std::move(paths)](const TaskScheduler::TaskContext &context)
+        {
+            if (context.isCancelled() || !alive->load(std::memory_order_acquire))
+                return;
+            for (const std::string &path : paths)
+            {
+                if (context.isCancelled() || !alive->load(std::memory_order_acquire))
+                    return;
+                mviewer::core::SidecarStore::instance().readSidecar(path);
+            }
+        },
+        {}, std::chrono::steady_clock::time_point::max(),
+        [guard, alive, expectedDir, imagePaths]()
+        {
+            if (!guard || !qApp || !alive->load(std::memory_order_acquire))
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, alive, expectedDir, imagePaths]()
+                {
+                    if (!guard || !alive->load(std::memory_order_acquire) ||
+                        guard->currentDir() != expectedDir)
+                        return;
+                    if (guard->m_thumbnailPanel)
+                        guard->m_thumbnailPanel->refreshSidecarPaths(imagePaths);
+                    if (guard->m_metadataPanel && !guard->currentImagePath().isEmpty())
+                        guard->m_metadataPanel->setImage(guard->currentImagePath());
+                },
+                Qt::QueuedConnection);
+        });
+}
+
 void MainWindow::navigate(int delta)
 {
     if (currentDir().isEmpty() || currentImagePath().isEmpty())

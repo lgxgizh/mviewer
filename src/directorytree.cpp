@@ -15,6 +15,8 @@
 #include <QSignalBlocker>
 #include <QTimer>
 
+#include <algorithm>
+
 namespace
 {
 const QStringList kImageExtensions = {".jpg",  ".jpeg", ".bmp", ".png", ".tif", ".tiff",
@@ -190,7 +192,7 @@ void DirectoryTree::refresh()
     const QModelIndex source = m_model->index(path);
     if (source.isValid())
         m_model->fetchMore(source);
-    emit directoryChanged(path);
+    emit directoryContentsChanged(path);
 }
 
 void DirectoryTree::keyPressEvent(QKeyEvent *event)
@@ -381,15 +383,15 @@ void DirectoryTree::cancelPendingNavigation()
 
 void DirectoryTree::onDirectoryChanged(const QString &path)
 {
-    // A-1.4: file system changed — refresh the affected node.
+    // M56: QFileSystemWatcher is only a tree refresh hint. A content change
+    // must never cross the committed navigation boundary.
     const QModelIndex source = m_model->index(path);
     if (source.isValid())
     {
         m_model->fetchMore(source);
-        // If the changed directory is the current one, re-emit so the gallery
-        // reloads.
+        // The active Browse monitor owns the incremental gallery reconcile.
         if (equivalentPath(path, m_currentPath))
-            emit directoryChanged(path);
+            emit directoryContentsChanged(path);
     }
 }
 
@@ -440,7 +442,9 @@ void DirectoryTree::onRowsInserted(const QModelIndex &parent, int first, int las
     if (m_loading && m_pendingFetchPath.isEmpty())
     {
         const QString parentPath = m_model->filePath(parent);
-        if (equivalentPath(parentPath, m_currentPath) || equivalentPath(parentPath, m_watchedPath))
+        if (equivalentPath(parentPath, m_currentPath) ||
+            std::any_of(m_watchedPaths.cbegin(), m_watchedPaths.cend(),
+                        [&](const QString &watched) { return equivalentPath(parentPath, watched); }))
             setLoading(false);
     }
     if (!m_pendingNavigationPath.isEmpty())
@@ -473,15 +477,32 @@ void DirectoryTree::onExpanded(const QModelIndex &index)
 
 void DirectoryTree::watchPath(const QString &path)
 {
-    // A-1.4: add the path to the file system watcher so we get notified when
-    // Explorer creates/deletes subdirectories.
-    if (path.isEmpty() || equivalentPath(path, m_watchedPath))
+    // M56: keep a bounded set of expanded tree directories. Expanding B must
+    // not replace the active Browse directory A's registration.
+    if (path.isEmpty())
         return;
-    if (!m_watchedPath.isEmpty())
-        m_watcher->removePath(m_watchedPath);
-    m_watchedPath = path;
+    for (const QString &watched : m_watchedPaths)
+        if (equivalentPath(watched, path))
+            return;
     if (QDir(path).exists())
+    {
         m_watcher->addPath(path);
+        m_watchedPaths.append(path);
+    }
+
+    constexpr int kMaxTreeWatchedDirectories = 64;
+    while (m_watchedPaths.size() > kMaxTreeWatchedDirectories)
+    {
+        const QString candidate = m_watchedPaths.first();
+        if (equivalentPath(candidate, m_currentPath) && m_watchedPaths.size() > 1)
+        {
+            m_watchedPaths.removeFirst();
+            m_watchedPaths.append(candidate);
+            continue;
+        }
+        m_watcher->removePath(candidate);
+        m_watchedPaths.removeFirst();
+    }
 }
 
 void DirectoryTree::setLoading(bool on)

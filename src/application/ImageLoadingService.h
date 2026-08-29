@@ -72,6 +72,11 @@ class ImageLoadingService
         mviewer::core::ImageLoadingFacade::instance().putPreviewCache(key, image);
     }
 
+    void invalidateSource(const std::string &path)
+    {
+        mviewer::core::ImageLoadingFacade::instance().invalidateSource(path);
+    }
+
   private:
     ImageLoadingService() = default;
 };

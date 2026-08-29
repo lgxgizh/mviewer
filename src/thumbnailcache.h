@@ -6,6 +6,8 @@
 #include <QString>
 
 #include <mutex>
+#include <condition_variable>
+#include <deque>
 #include <set>
 #include <thread>
 #include <utility>
@@ -44,7 +46,7 @@ class ThumbnailCache
     // Bump when the payload format or the key semantics change.
     // M36: cached payloads are display-ready (ICC converted), so invalidate
     // the pre-M36 analysis-domain PNGs.
-    static constexpr int kSchemaVersion = 3;
+    static constexpr int kSchemaVersion = 4;
 
     // Default budget for the on-disk thumbnail folder: 512 MiB.
     static constexpr quint64 kDefaultMaxBytes = 512ULL * 1024ULL * 1024ULL;
@@ -60,6 +62,11 @@ class ThumbnailCache
     // Persists `img` (a thumbnail) for `path` at `size`, then evicts
     // least-recently-used entries while total usage exceeds `maxBytes()`.
     void put(const QString &path, int size, const QImage &img);
+
+    // M56: remove every persisted thumbnail revision for one source. This is
+    // used when a watcher reports an overwrite even if size and timestamp are
+    // unchanged by the producing application.
+    void invalidatePath(const QString &path);
 
     // The identity key used for `path` at `size` (public for tests).
     static QString keyFor(const QString &path, int size);
@@ -93,6 +100,8 @@ class ThumbnailCache
     void ensureIndexed();
     void ensureReady();
     void scheduleBootstrap();
+    void startInvalidationWorker();
+    void runInvalidationWorker();
     void insertEntry(const QString &key, quint64 fileSize);
     void touchEntry(const QString &key);
     void dropEntry(const QString &key);
@@ -110,4 +119,10 @@ class ThumbnailCache
     std::mutex m_bootstrapMutex;
     std::thread m_bootstrapThread;
     bool m_bootstrapScheduled = false;
+    std::mutex m_invalidationMutex;
+    std::condition_variable m_invalidationWake;
+    std::deque<std::pair<QString, quint64>> m_invalidationQueue;
+    std::thread m_invalidationThread;
+    bool m_invalidationStop = false;
+    QHash<QString, quint64> m_pathInvalidations;
 };

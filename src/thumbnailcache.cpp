@@ -23,6 +23,13 @@ ThumbnailCache &ThumbnailCache::instance()
 
 ThumbnailCache::~ThumbnailCache()
 {
+    {
+        std::lock_guard<std::mutex> lock(m_invalidationMutex);
+        m_invalidationStop = true;
+    }
+    m_invalidationWake.notify_all();
+    if (m_invalidationThread.joinable())
+        m_invalidationThread.join();
     // The singleton normally lives until process teardown. Join the optional
     // bootstrap before its mutex/index storage disappears.
     if (m_bootstrapThread.joinable())
@@ -41,12 +48,83 @@ QString ThumbnailCache::cacheDir() const
 QString ThumbnailCache::keyFor(const QString &path, int size)
 {
     const QFileInfo fi(path);
-    // Identity = path + source mtime + source size + requested thumbnail size
-    // + schema version. Any of these changing invalidates the entry.
-    const QString raw = path + "|" + QString::number(fi.lastModified().toSecsSinceEpoch()) + "|" +
-                        QString::number(fi.size()) + "|" + QString::number(size) + "|v" +
-                        QString::number(kSchemaVersion);
-    return QCryptographicHash::hash(raw.toUtf8(), QCryptographicHash::Sha1).toHex();
+    // Keep a path-derived prefix so invalidatePath() can remove all historical
+    // revisions for one source. The remainder uses millisecond precision plus
+    // size and requested size, so normal overwrites also miss old payloads.
+    const QString pathPrefix =
+        QCryptographicHash::hash(path.toUtf8(), QCryptographicHash::Sha1).toHex();
+    return pathPrefix + "_" + QString::number(fi.lastModified().toMSecsSinceEpoch()) + "_" +
+           QString::number(fi.size()) + "_" + QString::number(size) + "_v" +
+           QString::number(kSchemaVersion);
+}
+
+void ThumbnailCache::invalidatePath(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+    quint64 revision = 0;
+    {
+        QMutexLocker lock(&m_mutex);
+        revision = ++m_pathInvalidations[path];
+    }
+    startInvalidationWorker();
+    {
+        std::lock_guard<std::mutex> lock(m_invalidationMutex);
+        m_invalidationQueue.emplace_back(path, revision);
+    }
+    m_invalidationWake.notify_one();
+}
+
+void ThumbnailCache::startInvalidationWorker()
+{
+    std::lock_guard<std::mutex> lock(m_invalidationMutex);
+    if (m_invalidationThread.joinable())
+        return;
+    try
+    {
+        m_invalidationThread = std::thread([this] { runInvalidationWorker(); });
+    }
+    catch (...)
+    {
+        // The path remains conservatively blocked only until the next put;
+        // the key itself still contains mtime/size, so this is fail-closed.
+    }
+}
+
+void ThumbnailCache::runInvalidationWorker()
+{
+    for (;;)
+    {
+        std::pair<QString, quint64> task;
+        {
+            std::unique_lock<std::mutex> lock(m_invalidationMutex);
+            m_invalidationWake.wait(lock,
+                                    [this]
+                                    { return m_invalidationStop || !m_invalidationQueue.empty(); });
+            if (m_invalidationStop && m_invalidationQueue.empty())
+                return;
+            task = std::move(m_invalidationQueue.front());
+            m_invalidationQueue.pop_front();
+        }
+
+        const QString dir = cacheDir();
+        if (dir.isEmpty())
+            continue;
+        const QString prefix =
+            QCryptographicHash::hash(task.first.toUtf8(), QCryptographicHash::Sha1).toHex() + "_";
+        const QFileInfoList files = QDir(dir).entryInfoList(QStringList{QStringLiteral("*.png")},
+                                                            QDir::Files | QDir::NoDotAndDotDot);
+        QMutexLocker lock(&m_mutex);
+        if (m_pathInvalidations.value(task.first, 0) != task.second)
+            continue;
+        for (const QFileInfo &info : files)
+        {
+            const QString key = info.fileName().left(info.fileName().size() - 4);
+            if (key.startsWith(prefix))
+                removeKey(key, info.absoluteFilePath());
+        }
+        m_pathInvalidations.remove(task.first);
+    }
 }
 
 // Lazily index the existing *.png files once, so files written by an earlier
@@ -213,6 +291,8 @@ bool ThumbnailCache::get(const QString &path, int size, QImage &out)
     QString file;
     {
         QMutexLocker lock(&m_mutex);
+        if (m_pathInvalidations.contains(path))
+            return false;
         scheduleBootstrap();
         const QString dir = cacheDir();
         if (dir.isEmpty())
@@ -243,8 +323,10 @@ bool ThumbnailCache::get(const QString &path, int size, QImage &out)
         QImage img;
         if (img.load(file))
         {
-            out = std::move(img);
             QMutexLocker lock(&m_mutex);
+            if (m_pathInvalidations.contains(path))
+                return false;
+            out = std::move(img);
             touchEntry(key);
             return true;
         }
@@ -269,6 +351,11 @@ void ThumbnailCache::put(const QString &path, int size, const QImage &img)
     QString file;
     {
         QMutexLocker lock(&m_mutex);
+        if (m_pathInvalidations.contains(path))
+        {
+            ++m_pathInvalidations[path];
+            m_pathInvalidations.remove(path);
+        }
         scheduleBootstrap();
         const QString dir = cacheDir();
         if (dir.isEmpty())
@@ -329,6 +416,7 @@ void ThumbnailCache::setMaxBytes(quint64 n)
 void ThumbnailCache::clear()
 {
     QMutexLocker lock(&m_mutex);
+    m_pathInvalidations.clear();
     ensureIndexed();
     const QString dir = cacheDir();
     if (dir.isEmpty())

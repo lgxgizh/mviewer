@@ -1,5 +1,6 @@
 #include "thumbnailprovider.h"
 
+#include "application/ImageLoadingService.h"
 #include "core/image/Decoder.h"
 #include "core/image/QtConvert.h"
 #include "thumbnailcache.h"
@@ -42,4 +43,13 @@ ImageData ThumbnailProvider::produce(const std::string &path, int size)
     // on the GUI thread).
     ThumbnailCache::instance().put(qp, size, fitted);
     return mvcore::fromQImage(fitted);
+}
+
+void ThumbnailProvider::invalidateSource(const std::string &path)
+{
+    if (path.empty())
+        return;
+    ThumbnailCache::instance().invalidatePath(QString::fromUtf8(path.data(),
+                                                                static_cast<int>(path.size())));
+    mviewer::application::ImageLoadingService::instance().invalidateSource(path);
 }

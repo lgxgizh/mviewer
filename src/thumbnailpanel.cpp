@@ -10,6 +10,7 @@
 
 ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
 {
+    m_liveDirectoryMonitoring = false;
     m_scanGenToken = std::make_shared<std::atomic<uint64_t>>(0);
     m_busyCursorRefs = std::make_shared<std::atomic<int>>(0);
     // M24: bounded background workers (directory scan + dimension resolve).

@@ -16,6 +16,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_selection = new SelectionModel(this);
     m_directory = new DirectoryModel(this);
     m_imageList = new ImageListModel(this);
+    m_directoryMonitor = new DirectoryMonitor(this);
     m_workspace = new WorkspaceModel(this);
     m_analyzer = new AnalyzerModel(this);
 

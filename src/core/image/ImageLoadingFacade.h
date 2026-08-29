@@ -73,6 +73,11 @@ class ImageLoadingFacade
         ImageRepository::instance().putPreviewCache(key, image);
     }
 
+    void invalidateSource(const std::string &path)
+    {
+        ImageRepository::instance().invalidate(path);
+    }
+
   private:
     ImageLoadingFacade() = default;
 };

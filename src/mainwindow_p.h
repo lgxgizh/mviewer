@@ -50,6 +50,7 @@
 #include "core/compare/Histogram.h"
 #include "core/render/Viewport.h"
 #include "directorymodel.h"
+#include "directorymonitor.h"
 #include "directorytree.h"
 #include "exportcommand.h"
 #include "exportdialog.h"

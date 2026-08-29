@@ -5,6 +5,18 @@
 
 namespace
 {
+mviewer::core::DirectoryEntry directoryEntryForPath(const QString &path)
+{
+    const QFileInfo info(path);
+    mviewer::core::DirectoryEntry entry;
+    entry.path = path.toUtf8().toStdString();
+    entry.filename = info.fileName().toUtf8().toStdString();
+    entry.extension = info.suffix().toLower().toUtf8().toStdString();
+    entry.size = info.exists() ? static_cast<uint64_t>(info.size()) : 0;
+    entry.modifiedEpochMs = info.exists() ? info.lastModified().toMSecsSinceEpoch() : 0;
+    return entry;
+}
+
 struct AsyncCommandState
 {
     explicit AsyncCommandState(std::unique_ptr<ICommand> value) : command(std::move(value))
@@ -154,7 +166,12 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
                     }
 
                     if (!panel->m_currentDir.isEmpty())
-                        panel->setDirectory(panel->m_currentDir);
+                    {
+                        if (panel->m_liveDirectoryMonitoring)
+                            emit panel->directoryContentsChanged(panel->m_currentDir);
+                        else
+                            panel->refresh();
+                    }
 
                     QStringList removed;
                     for (const QString &path : paths)
@@ -382,9 +399,25 @@ void ThumbnailPanel::renameSelected()
     }
     if (!m_currentDir.isEmpty())
     {
-        setDirectory(m_currentDir);
+        if (m_liveDirectoryMonitoring)
+        {
+            // The active-directory monitor owns the reconciliation boundary.
+            // Park the desired selection until its rename delta reaches model.
+            emit directoryContentsChanged(m_currentDir);
+        }
+        else
+        {
+            // Headless panel hosts do not install MainWindow's monitor. Apply
+            // the known identity migration locally so file operations retain
+            // the same row-local behavior without a full model reset.
+            mviewer::core::DirectoryDelta delta;
+            delta.path = m_currentDir.toUtf8().toStdString();
+            delta.renamed.push_back({directoryEntryForPath(oldPath),
+                                     directoryEntryForPath(newPath)});
+            applyDirectoryDelta(delta);
+        }
         // M24 (A#8): keep the renamed file selected — Explorer/FastStone
-        // parity. Without this the rescan drops the selection entirely.
+        // parity. The live delta migrates the identity without a model reset.
         selectPath(newPath);
     }
 }

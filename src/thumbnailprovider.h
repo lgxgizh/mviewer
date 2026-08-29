@@ -23,6 +23,8 @@ class ThumbnailProvider
     // directly as the body of ThumbnailPipeline's DecodeFn.
     static ImageData produce(const std::string &path, int size);
 
+    static void invalidateSource(const std::string &path);
+
     // Fit `q` into a transparent size×size image, centered with
     // KeepAspectRatio + SmoothTransformation. Null image if `q` is null.
     static QImage squareFitImage(const QImage &q, int size);

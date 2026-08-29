@@ -22,6 +22,7 @@
 class ImageViewer;
 class ImageFrame;
 class DirectoryTree;
+class DirectoryMonitor;
 class BreadcrumbBar;
 class MetadataOverlay;
 class ThumbnailPanel;
@@ -162,6 +163,7 @@ class MainWindow : public QMainWindow
     // path input bar, and breadcrumb navigation.
     void changeDirectory(const QString &dir);
     void scheduleSidecarImport(const QString &dir);
+    void scheduleSidecarImportPaths(const QStringList &imagePaths);
     // Shows/hides the gallery empty-state hint (no directory open yet).
     void updateEmptyState();
     // Shows/hides the gallery empty-folder hint (directory open, no images).
@@ -226,6 +228,7 @@ class MainWindow : public QMainWindow
 
     ImageViewer *m_imageViewer = nullptr;
     DirectoryTree *m_directoryTree = nullptr;
+    DirectoryMonitor *m_directoryMonitor = nullptr;
     BreadcrumbBar *m_breadcrumb = nullptr;
     QLineEdit *m_pathEdit = nullptr;              // Path input bar above the gallery area
     QSplitter *m_mainSplitter = nullptr;          // P1-3: central layout splitter

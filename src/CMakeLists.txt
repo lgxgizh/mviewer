@@ -35,6 +35,7 @@ add_library(mviewer_core SHARED
     core/image/QtConvert.cpp
     core/image/ImageStats.cpp
     core/filesystem/FileSystem.cpp
+    core/filesystem/DirectorySnapshot.cpp
     core/filesystem/AtomicFile.cpp
     core/filesystem/Utf8Path.cpp
     core/scheduler/TaskScheduler.cpp
@@ -151,9 +152,11 @@ add_library(mviewer_ui STATIC
     imageviewer_paint.cpp
     imageviewer_contextmenu.cpp
     directorytree.cpp
+    directorymonitor.cpp
     breadcrumbbar.cpp
     metadataoverlay.cpp
     thumbnailpanel.cpp
+    thumbnailpanel_live.cpp
     thumbnailpanel_async.cpp
     thumbnailpanel_selection.cpp
     thumbnailpanel_pipeline.cpp
@@ -1804,6 +1807,64 @@ target_compile_features(m50_navigation_tests PRIVATE cxx_std_20)
 target_include_directories(m50_navigation_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME m50_navigation_tests COMMAND m50_navigation_tests)
 set_tests_properties(m50_navigation_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
+# ─── M56: live-folder coherence / incremental Browse reconciliation ─────────
+# Snapshot/delta classification is UI-independent; the monitor and gallery
+# tests exercise debounce, bounded rescans, disappearance/recovery, selection
+# continuity, and model-identity preservation on the real Qt path.
+add_executable(m56_directory_snapshot_tests
+    core/test_m56_directory_snapshot.cpp
+)
+target_link_libraries(m56_directory_snapshot_tests
+    PRIVATE
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(m56_directory_snapshot_tests PRIVATE cxx_std_20)
+target_include_directories(m56_directory_snapshot_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m56_directory_snapshot_tests COMMAND m56_directory_snapshot_tests)
+
+add_executable(m56_directory_monitor_tests
+    test_m56_directory_monitor.cpp
+    directorymonitor.cpp
+)
+target_link_libraries(m56_directory_monitor_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(m56_directory_monitor_tests PRIVATE cxx_std_20)
+target_include_directories(m56_directory_monitor_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m56_directory_monitor_tests COMMAND m56_directory_monitor_tests)
+set_tests_properties(m56_directory_monitor_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
+add_executable(m56_live_gallery_tests
+    test_m56_live_gallery.cpp
+)
+target_link_libraries(m56_live_gallery_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m56_live_gallery_tests PRIVATE cxx_std_20)
+target_include_directories(m56_live_gallery_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m56_live_gallery_tests COMMAND m56_live_gallery_tests)
+set_tests_properties(m56_live_gallery_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+
+add_executable(mviewer_m56_live_directory_soak
+    ${CMAKE_SOURCE_DIR}/benchmarks/m56_live_directory_soak_main.cpp
+)
+target_link_libraries(mviewer_m56_live_directory_soak PRIVATE Qt6::Core mviewer_core)
+target_compile_features(mviewer_m56_live_directory_soak PRIVATE cxx_std_20)
+target_include_directories(mviewer_m56_live_directory_soak PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m56_live_directory_soak
+    COMMAND mviewer_m56_live_directory_soak 10000)
+set_tests_properties(m56_live_directory_soak PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 
 # M50: command-line path classification must keep Unix absolute paths openable
 # while preserving slash-prefixed Windows switches.
