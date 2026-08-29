@@ -191,7 +191,7 @@ class CompareWorkspace : public QWidget
   private:
     void buildSyncControls();
     QWidget *buildToolbarContainer(QHBoxLayout *&modeLayout, QHBoxLayout *&viewLayout,
-                                   QHBoxLayout *&toolLayout);
+                                   QHBoxLayout *&toolLayout, QHBoxLayout *&toolActionsLayout);
     void buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *viewLayout);
     void buildDiffControls(QHBoxLayout *toolLayout);
     void buildViewControls(QHBoxLayout *viewLayout);

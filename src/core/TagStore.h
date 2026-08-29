@@ -11,9 +11,12 @@
 #pragma once
 
 #include <map>
+#include <condition_variable>
+#include <cstdint>
 #include <mutex>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 namespace mviewer::core
@@ -36,18 +39,33 @@ class TagStore
     // Every distinct tag in the store, sorted.
     std::vector<std::string> allTags() const;
 
+    // Persistence: edits update memory immediately and are coalesced on the
+    // owned worker. save()/flushSave() are explicit synchronous boundaries
+    // used by tests, file switches and shutdown.
     bool save() const;
+    void flushSave();
     bool load();
     void setFilePath(const std::string &path);
+    ~TagStore();
 
   private:
     TagStore();
     std::string defaultPath() const;
     std::string normalize(const std::string &path) const;
+    void scheduleSave();
+    void workerLoop();
+    bool saveSnapshot() const;
 
     mutable std::mutex m_mutex;
     std::map<std::string, std::set<std::string>> m_tags; // path -> tags
     std::string m_filePath;
+    mutable std::mutex m_writeMutex;
+    mutable std::mutex m_workerMutex;
+    mutable std::condition_variable m_workerCv;
+    mutable bool m_dirty = false;
+    bool m_workerStop = false;
+    uint64_t m_changeSerial = 0;
+    std::thread m_worker;
 };
 
 } // namespace mviewer::core

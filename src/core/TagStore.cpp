@@ -8,6 +8,7 @@
 #include "core/filesystem/Utf8Path.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -37,6 +38,18 @@ TagStore::TagStore()
 {
     m_filePath = defaultPath();
     load();
+    m_worker = std::thread([this]() { workerLoop(); });
+}
+
+TagStore::~TagStore()
+{
+    {
+        std::lock_guard<std::mutex> lock(m_workerMutex);
+        m_workerStop = true;
+    }
+    m_workerCv.notify_one();
+    if (m_worker.joinable())
+        m_worker.join();
 }
 
 TagStore &TagStore::instance()
@@ -97,7 +110,7 @@ void TagStore::addTag(const std::string &path, const std::string &tag)
         std::lock_guard<std::mutex> lk(m_mutex);
         m_tags[key].insert(tag);
     }
-    save();
+    scheduleSave();
 }
 
 void TagStore::removeTag(const std::string &path, const std::string &tag)
@@ -112,7 +125,7 @@ void TagStore::removeTag(const std::string &path, const std::string &tag)
         if (it->second.empty())
             m_tags.erase(it);
     }
-    save();
+    scheduleSave();
 }
 
 void TagStore::setTags(const std::string &path, const std::vector<std::string> &tags)
@@ -126,7 +139,7 @@ void TagStore::setTags(const std::string &path, const std::vector<std::string> &
         else
             m_tags[key] = std::move(s);
     }
-    save();
+    scheduleSave();
 }
 
 void TagStore::clearTags(const std::string &path)
@@ -136,7 +149,7 @@ void TagStore::clearTags(const std::string &path)
         std::lock_guard<std::mutex> lk(m_mutex);
         m_tags.erase(key);
     }
-    save();
+    scheduleSave();
 }
 
 std::vector<std::string> TagStore::allTags() const
@@ -150,7 +163,15 @@ std::vector<std::string> TagStore::allTags() const
 
 void TagStore::setFilePath(const std::string &path)
 {
-    m_filePath = path;
+    flushSave();
+    {
+        std::lock_guard<std::mutex> lock(m_workerMutex);
+        m_dirty = false;
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_filePath = path;
+    }
     load();
 }
 
@@ -181,16 +202,118 @@ bool TagStore::load()
 
 bool TagStore::save() const
 {
+    bool shouldWrite = false;
+    {
+        std::lock_guard<std::mutex> lock(m_workerMutex);
+        shouldWrite = m_dirty;
+        if (shouldWrite)
+        {
+            m_dirty = false;
+            m_workerCv.notify_all();
+        }
+    }
+    // Wait for a worker write already in progress before returning.
+    std::lock_guard<std::mutex> writeLock(m_writeMutex);
+    if (!shouldWrite)
+        return true;
+    const bool ok = saveSnapshot();
+    if (!ok)
+    {
+        std::lock_guard<std::mutex> lock(m_workerMutex);
+        m_dirty = true;
+    }
+    return ok;
+}
+
+void TagStore::flushSave()
+{
+    (void)save();
+}
+
+bool TagStore::saveSnapshot() const
+{
     // M46: crash-safe atomic replace (temp -> flush/close -> replace). A
     // failed write leaves the previous official tags file intact; the file
-    // can never be observed half-written.
-    std::lock_guard<std::mutex> lk(m_mutex);
+    // can never be observed half-written. Snapshot state under the short
+    // mutex, then do filesystem work without blocking readers or editors.
+    std::string path;
+    std::map<std::string, std::set<std::string>> tags;
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        path = m_filePath;
+        tags = m_tags;
+    }
     std::ostringstream buf;
-    for (const auto &[p, ts] : m_tags)
+    for (const auto &[p, ts] : tags)
         for (const auto &t : ts)
             buf << t << '|' << p << '\n';
     std::string error;
-    return atomicWriteFile(m_filePath, buf.str(), &error);
+    return atomicWriteFile(path, buf.str(), &error);
+}
+
+void TagStore::scheduleSave()
+{
+    {
+        std::lock_guard<std::mutex> lock(m_workerMutex);
+        m_dirty = true;
+        ++m_changeSerial;
+    }
+    m_workerCv.notify_one();
+}
+
+void TagStore::workerLoop()
+{
+    std::unique_lock<std::mutex> lock(m_workerMutex);
+    for (;;)
+    {
+        if (!m_dirty && !m_workerStop)
+            m_workerCv.wait(lock, [this] { return m_dirty || m_workerStop; });
+        if (m_workerStop && !m_dirty)
+            return;
+
+        uint64_t observed = m_changeSerial;
+        bool write = m_workerStop;
+        while (!write && m_dirty)
+        {
+            const bool woke = m_workerCv.wait_for(
+                lock, std::chrono::milliseconds(100),
+                [this, observed]
+                {
+                    return m_workerStop || !m_dirty || m_changeSerial != observed;
+                });
+            if (!woke)
+            {
+                write = true;
+                break;
+            }
+            if (m_workerStop)
+            {
+                write = true;
+                break;
+            }
+            if (!m_dirty)
+                break; // save() owns the synchronous write
+            observed = m_changeSerial;
+        }
+        if (!write)
+            continue;
+
+        m_dirty = false;
+        lock.unlock();
+        bool ok = false;
+        {
+            std::lock_guard<std::mutex> writeLock(m_writeMutex);
+            ok = saveSnapshot();
+        }
+        lock.lock();
+        if (m_workerStop)
+        {
+            m_dirty = false;
+            return;
+        }
+        if (!ok)
+            m_dirty = true;
+    }
 }
 
 } // namespace mviewer::core

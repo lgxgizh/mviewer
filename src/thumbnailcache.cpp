@@ -21,6 +21,14 @@ ThumbnailCache &ThumbnailCache::instance()
     return inst;
 }
 
+ThumbnailCache::~ThumbnailCache()
+{
+    // The singleton normally lives until process teardown. Join the optional
+    // bootstrap before its mutex/index storage disappears.
+    if (m_bootstrapThread.joinable())
+        m_bootstrapThread.join();
+}
+
 QString ThumbnailCache::cacheDir() const
 {
     const QString base = mviewer::runtime::writableDirectory(QStandardPaths::CacheLocation);
@@ -77,6 +85,35 @@ void ThumbnailCache::ensureReady()
 {
     ensureIndexed();
     pruneToCap();
+}
+
+void ThumbnailCache::scheduleBootstrap()
+{
+    if (m_indexed)
+        return;
+    std::lock_guard<std::mutex> guard(m_bootstrapMutex);
+    if (m_indexed || m_bootstrapScheduled)
+        return;
+    if (m_bootstrapThread.joinable())
+        m_bootstrapThread.join();
+    m_bootstrapScheduled = true;
+    try
+    {
+        m_bootstrapThread = std::thread(
+            [this]
+            {
+                {
+                    QMutexLocker lock(&m_mutex);
+                    ensureReady();
+                }
+                std::lock_guard<std::mutex> doneGuard(m_bootstrapMutex);
+                m_bootstrapScheduled = false;
+            });
+    }
+    catch (...)
+    {
+        m_bootstrapScheduled = false;
+    }
 }
 
 void ThumbnailCache::insertEntry(const QString &key, quint64 fileSize)
@@ -176,7 +213,7 @@ bool ThumbnailCache::get(const QString &path, int size, QImage &out)
     QString file;
     {
         QMutexLocker lock(&m_mutex);
-        ensureReady();
+        scheduleBootstrap();
         const QString dir = cacheDir();
         if (dir.isEmpty())
             return false;
@@ -232,7 +269,7 @@ void ThumbnailCache::put(const QString &path, int size, const QImage &img)
     QString file;
     {
         QMutexLocker lock(&m_mutex);
-        ensureReady();
+        scheduleBootstrap();
         const QString dir = cacheDir();
         if (dir.isEmpty())
             return;

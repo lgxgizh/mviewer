@@ -28,8 +28,36 @@
 > `docs/review/M53_PHASE0_BASELINE_2026-08-28.md` and
 > `docs/review/M53_LARGE_SOURCE_NATIVE_RELEASE_CLOSURE_2026-08-29.md`,
 > `docs/review/M54_PERCEIVED_PERFORMANCE_BASELINE_2026-08-29.md`,
-> `docs/review/M54_INSTANT_BROWSE_FINAL_2026-08-29.md` and
+> `docs/review/M54_INSTANT_BROWSE_FINAL_2026-08-29.md`,
+> `docs/review/M55_PHASE0_BASELINE_2026-08-29.md`,
+> `docs/review/M55_INTERACTIVE_LATENCY_MEMORY_NAVIGATION_CLOSURE_2026-08-29.md` and
 > `.\build.ps1 Test`.
+
+## M55 — Interactive latency, memory and navigation closure (2026-08-29)
+
+- The UI-owned thumbnail surface is now an exact `(path, size)` LRU with hard
+  384-entry / 96 MiB bounds, and thumbnail results invalidate only contiguous
+  row spans instead of republishing the entire model on every decode.
+- Thumbnail demand retains the visible+predictive intersection during small
+  scrolls. Unique enqueue owners close the same-generation ABA hole, so a late
+  cancelled decode cannot erase a replacement request.
+- Scan probes use one immutable callback snapshot and progressive sorting no
+  longer allocates `std::string` values in every comparator call. On-disk
+  thumbnail bootstrap is asynchronous for exact get/put hits; maintenance APIs
+  still provide complete indexed accounting and cap enforcement.
+- LOD-first Viewer navigation prewarms at most two source-backed 1024-edge
+  display rasters under a 64 MiB cache and promotes matching work safely.
+  TagStore edits use a coalescing worker while `save()` remains the explicit
+  synchronous flush boundary.
+- M55 adds deterministic pipeline ABA/overlap tests, a real 420-image UI cache
+  test, and the standalone `m55_interactive_baseline` recorder. Native
+  fullscreen sequential-next feel and extended physical GUI smoothness remain
+  **MANUAL/BLOCKED** pending a real desktop session.
+- Final local Release verification passed twice consecutively: 119/119 in
+  749.06 s and 119/119 in 750.28 s, with zero architecture violations and zero
+  complexity hard failures.
+- Evidence: `docs/review/M55_PHASE0_BASELINE_2026-08-29.md` and
+  `docs/review/M55_INTERACTIVE_LATENCY_MEMORY_NAVIGATION_CLOSURE_2026-08-29.md`.
 
 ## M53 — Large-source format parity & native release reality closure (2026-08-29)
 

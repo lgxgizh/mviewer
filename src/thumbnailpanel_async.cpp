@@ -8,50 +8,45 @@
 #include <QtConcurrent/QtConcurrent>
 
 #include <functional>
-#include <mutex>
-
 namespace
 {
-// M46 test instrumentation storage (empty in production). The probe is stored
-// under a mutex and INVOKED FROM A LOCAL COPY: a test may reset the probe
-// while a worker is between its generation check and the probe call. Invoking
-// the stored std::function directly would race the reset (target destroyed
-// mid-call -> use-after-free), and invoking the then-empty copy would throw
-// bad_function_call — both would kill the process. The copy + catch make the
-// probe call safe on every interleaving.
-std::function<void()> &scanIterationProbeRef()
+// M46/M55 test instrumentation storage (empty in production). The immutable
+// shared callback is atomically swapped. A scan takes one snapshot, so the
+// production no-probe path is a single null check per iteration with no mutex,
+// while install/reset can safely race an in-flight worker.
+std::shared_ptr<const std::function<void()>> &scanIterationProbeRef()
 {
-    static std::function<void()> probe;
+    static std::shared_ptr<const std::function<void()>> probe;
     return probe;
-}
-
-std::mutex &scanProbeMutex()
-{
-    static std::mutex mtx;
-    return mtx;
 }
 } // namespace
 
 void ThumbnailPanel::setScanIterationProbe(const std::function<void()> &probe)
 {
-    std::lock_guard<std::mutex> lk(scanProbeMutex());
-    scanIterationProbeRef() = probe;
+    std::shared_ptr<const std::function<void()>> next;
+    if (probe)
+        next = std::make_shared<const std::function<void()>>(probe);
+    std::atomic_store_explicit(&scanIterationProbeRef(), std::move(next),
+                               std::memory_order_release);
 }
 
 void ThumbnailPanel::invokeScanProbe()
 {
-    std::function<void()> probe;
-    {
-        std::lock_guard<std::mutex> lk(scanProbeMutex());
-        probe = scanIterationProbeRef();
-    }
+    const auto probe = scanIterationProbeSnapshot();
+    if (!probe)
+        return;
     try
     {
-        probe();
+        (*probe)();
     }
     catch (...)
     {
     }
+}
+
+std::shared_ptr<const std::function<void()>> ThumbnailPanel::scanIterationProbeSnapshot()
+{
+    return std::atomic_load_explicit(&scanIterationProbeRef(), std::memory_order_acquire);
 }
 
 // M46: the app-global busy cursor is ref-counted UI-side. Every setDirectory()
@@ -117,7 +112,7 @@ void scanProgressiveDirectory(const QString &path,
                               const std::shared_ptr<std::atomic<bool>> &alive,
                               const std::shared_ptr<std::atomic<uint64_t>> &genToken, int gen,
                               QList<ThumbnailPanel::Entry> &entries,
-                              const std::function<void()> &probe,
+                              const std::shared_ptr<const std::function<void()>> &probe,
                               const std::function<void(const QList<ThumbnailPanel::Entry> &)> &publishBatch,
                               const std::function<void()> &onAbort)
 {
@@ -134,7 +129,16 @@ void scanProgressiveDirectory(const QString &path,
             onAbort();
             return;
         }
-        probe();
+        if (probe)
+        {
+            try
+            {
+                (*probe)();
+            }
+            catch (...)
+            {
+            }
+        }
         it.next();
         const QFileInfo fi = it.fileInfo();
         const QString suffix = fi.suffix().toLower();
@@ -155,7 +159,7 @@ void scanProgressiveDirectory(const QString &path,
         publishBatch(batch);
     std::sort(entries.begin(), entries.end(),
               [](const ThumbnailPanel::Entry &a, const ThumbnailPanel::Entry &b)
-              { return a.path.toStdString() < b.path.toStdString(); });
+              { return QString::compare(a.path, b.path, Qt::CaseSensitive) < 0; });
 }
 } // namespace
 
@@ -212,12 +216,23 @@ void ThumbnailPanel::setDirectory(const QString &path)
     // object is still alive. The busy cursor is restored unconditionally (it
     // is app-global and ref-counted) so a destroyed/superseded scan can never
     // leave the whole application with a stuck override cursor.
+    startDirectoryScan(path, gen, typeFilter, sortMode, sortAscending, alive, genToken, busyRefs,
+                       self);
+}
+
+void ThumbnailPanel::startDirectoryScan(
+    const QString &path, int gen, const QString &typeFilter, SortMode sortMode,
+    bool sortAscending, const std::shared_ptr<std::atomic<bool>> &alive,
+    const std::shared_ptr<std::atomic<uint64_t>> &genToken,
+    const std::shared_ptr<std::atomic<int>> &busyRefs, const QPointer<ThumbnailPanel> &self)
+{
     (void)QtConcurrent::run(
         &m_scanPool,
         [self, alive, gen, genToken, busyRefs, path, typeFilter, sortMode, sortAscending]()
         {
             QList<Entry> entries;
             QDir dir(path);
+            const auto probe = ThumbnailPanel::scanIterationProbeSnapshot();
             if (dir.exists())
             {
                 const bool progressive = sortMode == SortName && sortAscending &&
@@ -225,8 +240,7 @@ void ThumbnailPanel::setDirectory(const QString &path)
                 if (progressive)
                 {
                     scanProgressiveDirectory(
-                        path, alive, genToken, gen, entries,
-                        [] { ThumbnailPanel::invokeScanProbe(); },
+                        path, alive, genToken, gen, entries, probe,
                         [self, alive, gen](const QList<Entry> &batch)
                         {
                             QMetaObject::invokeMethod(
@@ -254,7 +268,16 @@ void ThumbnailPanel::setDirectory(const QString &path)
                             marshalBusyRestore(busyRefs);
                             return;
                         }
-                        invokeScanProbe();
+                        if (probe)
+                        {
+                            try
+                            {
+                                (*probe)();
+                            }
+                            catch (...)
+                            {
+                            }
+                        }
                         const QFileInfo &fi = list.at(i);
                         if (!passesTypeFilter(typeFilter, fi.suffix()) ||
                             fi.suffix().isEmpty())
@@ -383,6 +406,7 @@ void ThumbnailPanel::ensureDimensions()
         &m_scanPool,
         [self, alive, gen, genToken, paths]()
         {
+            const auto probe = ThumbnailPanel::scanIterationProbeSnapshot();
             QVector<QSize> sizes;
             sizes.reserve(paths.size());
             for (int i = 0; i < paths.size(); ++i)
@@ -394,7 +418,16 @@ void ThumbnailPanel::ensureDimensions()
                 if (!alive->load() ||
                     genToken->load(std::memory_order_acquire) != static_cast<uint64_t>(gen))
                     return; // panel destroyed / folder superseded - abort fast
-                invokeScanProbe(); // M46 test instrumentation (exception-safe)
+                if (probe)
+                {
+                    try
+                    {
+                        (*probe)();
+                    }
+                    catch (...)
+                    {
+                    }
+                }
                 QImageReader reader(paths.at(i));
                 reader.setAutoTransform(true);
                 sizes.append(reader.size());

@@ -98,11 +98,12 @@ struct ThumbnailPipeline
         std::lock_guard<std::mutex> lk(m_mtx);
         m_visibleBegin = begin;
         m_visibleEnd = end;
-        // M54 latest-wins dispatch: a fast scrollbar drag must not retain a
-        // queue of historical predictive windows behind the current viewport.
-        // Cancellation is cooperative and stale results are dropped below.
-        cancelHandlesLocked();
-        m_pending.clear();
+        // M55 demand ownership: retain requests that are still inside the new
+        // visible+predictive window. Only obsolete demand is cancelled. This
+        // avoids cancel/re-submit churn during small scrolls and, together
+        // with the per-enqueue owner token below, closes the same-generation
+        // ABA window when a running decoder outlives cancellation.
+        cancelObsoleteHandlesLocked();
         scheduleLocked();
     }
 
@@ -110,6 +111,7 @@ struct ThumbnailPipeline
     // priority (predictive loading for fast scroll). Default 16.
     void setPredictiveCount(size_t n)
     {
+        std::lock_guard<std::mutex> lk(m_mtx);
         m_predictive = n;
     }
 
@@ -208,15 +210,22 @@ struct ThumbnailPipeline
         std::list<std::string>::iterator lruIt;
     };
 
+    struct PendingEntry
+    {
+        uint64_t owner = 0;
+        std::string ownerKey;
+    };
+
     static std::string key(const std::string &path, int size)
     {
         return path + "\x1f" + std::to_string(size);
     }
-    // Handle-map key: (path, size, generation) so an old-generation task can
-    // remove exactly its own handle without ever clobbering a newer one.
-    static std::string handleKey(const std::string &k, uint64_t gen)
+    // Handle-map key includes a unique per-enqueue owner. Generation alone is
+    // insufficient because a same-generation viewport update may cancel a
+    // running request and immediately submit the same key again.
+    static std::string handleKey(const std::string &k, uint64_t gen, uint64_t owner)
     {
-        return k + "\x1e" + std::to_string(gen);
+        return k + "\x1e" + std::to_string(gen) + "\x1f" + std::to_string(owner);
     }
 
     // Must hold m_mtx. Enqueues visible items (Thumbnail prio) then predictive
@@ -257,15 +266,18 @@ struct ThumbnailPipeline
         if (m_memCache.count(k))
             return;
         auto pit = m_pending.find(k);
-        if (pit != m_pending.end() && pit->second == m_gen)
-            return; // already owned by the current generation
-        m_pending[k] = m_gen;
+        if (pit != m_pending.end())
+            return; // already owned by the current demand window
+        const uint64_t owner = ++m_nextOwner;
+        const std::string ownerKey = handleKey(k, m_gen, owner);
+        m_pending[k] = PendingEntry{owner, ownerKey};
         DecodeFn decode = m_decode;
         ResultFn result = m_result;
         const uint64_t gen = m_gen;
         auto handle = TaskScheduler::instance().submit(
             prio,
-            [this, path, size, k, gen, decode, result](const TaskScheduler::TaskContext &ctx)
+            [this, path, size, k, gen, owner, ownerKey, decode,
+             result](const TaskScheduler::TaskContext &ctx)
             {
                 // Stop stale queued work BEFORE decoding. The generation that
                 // owned this key already cleared/repurposed the bookkeeping in
@@ -293,9 +305,9 @@ struct ThumbnailPipeline
                     // Remove this task's own bookkeeping only — the key may
                     // belong to a newer generation by now.
                     auto pendIt = m_pending.find(k);
-                    if (pendIt != m_pending.end() && pendIt->second == gen)
+                    if (pendIt != m_pending.end() && pendIt->second.owner == owner)
                         m_pending.erase(pendIt);
-                    m_handles.erase(handleKey(k, gen));
+                    m_handles.erase(ownerKey);
                     // Superseded generation: drop everything (no cache, no
                     // delivery) so old directories can never pollute the
                     // current one.
@@ -340,7 +352,7 @@ struct ThumbnailPipeline
             });
         if (handle)
         {
-            m_handles[handleKey(k, gen)] = handle;
+            m_handles[ownerKey] = handle;
         }
         else
         {
@@ -348,8 +360,42 @@ struct ThumbnailPipeline
             // must remain schedulable — a later setVisibleRange/request will
             // retry it.
             auto pendIt = m_pending.find(k);
-            if (pendIt != m_pending.end() && pendIt->second == gen)
+            if (pendIt != m_pending.end() && pendIt->second.owner == owner)
                 m_pending.erase(pendIt);
+        }
+    }
+
+    // Must hold m_mtx. A same-generation viewport update retains the exact
+    // intersection of old and new demand. Each obsolete request is removed
+    // by its own owner key; a later same-key request therefore cannot be
+    // erased by the old task's completion.
+    void cancelObsoleteHandlesLocked()
+    {
+        std::unordered_set<std::string> keep;
+        const size_t n = m_sources.size();
+        const size_t vb = std::min(m_visibleBegin, n);
+        const size_t ve = std::min(m_visibleEnd, n);
+        keep.reserve((ve - vb) + m_predictive);
+        for (size_t i = vb; i < ve; ++i)
+            keep.insert(key(m_sources[i], thumbSize));
+        const size_t pe = std::min(ve + m_predictive, n);
+        for (size_t i = ve; i < pe; ++i)
+            keep.insert(key(m_sources[i], thumbSize));
+
+        for (auto it = m_pending.begin(); it != m_pending.end();)
+        {
+            if (keep.find(it->first) != keep.end())
+            {
+                ++it;
+                continue;
+            }
+            auto hit = m_handles.find(it->second.ownerKey);
+            if (hit != m_handles.end())
+            {
+                TaskScheduler::cancel(hit->second);
+                m_handles.erase(hit);
+            }
+            it = m_pending.erase(it);
         }
     }
 
@@ -390,11 +436,12 @@ struct ThumbnailPipeline
     ResultFn m_result;
     std::unordered_map<std::string, MemEntry> m_memCache;
     std::list<std::string> m_lru;
-    // Outstanding scheduler handles, keyed by (path, size, generation). Tasks
+    // Outstanding scheduler handles, keyed by (path, size, generation, owner). Tasks
     // remove their own entry on completion; setSources()/clear() cancel + drop
     // them wholesale — the map never accumulates the browse history.
     std::unordered_map<std::string, TaskScheduler::TaskHandle> m_handles;
-    // Pending keys: (path, size) -> generation that owns the request. An
-    // obsolete generation can never block or erase a newer generation's key.
-    std::unordered_map<std::string, uint64_t> m_pending;
+    // Pending keys: (path, size) -> unique request owner. An obsolete request
+    // can never block or erase a later same-key request in the same generation.
+    std::unordered_map<std::string, PendingEntry> m_pending;
+    uint64_t m_nextOwner = 0;
 };

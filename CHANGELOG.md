@@ -4,6 +4,24 @@
 
 ### Fixed
 
+- **Interactive Browse memory and navigation:** the UI thumbnail surface now
+  uses exact `(path,size)` identity with a 384-entry / 96 MiB LRU bound, and
+  viewport demand retains overlapping work with ABA-safe enqueue ownership.
+  Source-backed LOD neighbors are warmed within a two-entry / 64 MiB bound and
+  matching work is promoted on navigation.
+- **Compare toolbar fit:** diff controls and toolbar actions now occupy two rows
+  inside the same semantic tool toolbar, keeping the standard 1100 px workspace
+  width contract intact.
+- **Browse/cache hot paths:** scan probe snapshots remove per-item locking,
+  progressive sorting avoids comparator allocations, and exact thumbnail-cache
+  hits no longer wait for the one-time disk index. TagStore writes are now
+  coalesced while explicit `save()` still flushes synchronously.
+
+### Verification
+
+- M55 final Release gate: `build.ps1 Test` passed 119/119 twice consecutively
+  (749.06 s and 750.28 s); architecture and complexity hard gates were both 0.
+
 - **Release quality truthfulness:** PowerShell 5.1 quality generators now use
   explicit UTF-8/no-BOM output and ASCII-safe generated text, with strict
   encoding/mojibake regressions covering the real Windows entry points. Legacy
@@ -71,6 +89,10 @@
   gates passed **118/118** in 779.82 s and 782.14 s, with zero architecture
   violations and zero complexity hard failures. Full evidence is recorded in
   `docs/review/M54_INSTANT_BROWSE_FINAL_2026-08-29.md`.
+- M55 focused deterministic pipeline and real-widget UI coverage is green;
+  `m55_interactive_baseline` records machine-local 10k/50k working-set,
+  private-byte, pipeline-queue and scroll-jump evidence. Native fullscreen
+  sequential-next and extended physical GUI smoothness remain MANUAL/BLOCKED.
 - The M51 release-contract coverage remains green; physical target-machine
   qualification is still recorded as MANUAL/BLOCKED.
 

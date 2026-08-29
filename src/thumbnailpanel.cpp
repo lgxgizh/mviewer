@@ -136,27 +136,39 @@ void ThumbnailPanel::wireThumbnailPipeline()
                     const QString qp = QString::fromStdString(p);
                     if (size != panel->m_thumbSize)
                         return;
+                    const QString cacheKey = panel->thumbCacheKey(qp, size);
                     if (img.isNull())
                     {
                         QMutexLocker l(&panel->m_thumbMtx);
-                        panel->m_thumbFailed.insert(qp);
-                        panel->m_thumbPending.remove(qp);
-                        panel->viewport()->update();
+                        panel->m_thumbFailed.insert(cacheKey);
+                        panel->m_thumbPending.remove(cacheKey);
+                        panel->onThumbReady(qp);
                         return;
                     }
                     const QImage q = mvcore::toQImage(img);
                     if (q.isNull())
                     {
                         QMutexLocker l(&panel->m_thumbMtx);
-                        panel->m_thumbFailed.insert(qp);
-                        panel->m_thumbPending.remove(qp);
-                        panel->viewport()->update();
+                        panel->m_thumbFailed.insert(cacheKey);
+                        panel->m_thumbPending.remove(cacheKey);
+                        panel->onThumbReady(qp);
                         return;
                     }
                     {
                         QMutexLocker lk(&panel->m_thumbMtx);
-                        panel->m_thumbReady[qp] = QPixmap::fromImage(q);
-                        panel->m_thumbPending.remove(qp);
+                        auto old = panel->m_thumbReady.find(cacheKey);
+                        if (old != panel->m_thumbReady.end())
+                            panel->m_thumbReadyBytes =
+                                qMax<qint64>(0, panel->m_thumbReadyBytes - old->bytes);
+                        ThumbnailPanel::ReadyPixmap ready;
+                        ready.pixmap = QPixmap::fromImage(q);
+                        ready.bytes = static_cast<qint64>(q.sizeInBytes());
+                        ready.lastUse = ++panel->m_thumbReadyClock;
+                        panel->m_thumbReady.insert(cacheKey, std::move(ready));
+                        panel->m_thumbReadyBytes += panel->m_thumbReady.find(cacheKey)->bytes;
+                        panel->m_thumbFailed.remove(cacheKey);
+                        panel->m_thumbPending.remove(cacheKey);
+                        panel->enforceThumbPixmapBudgetLocked();
                     }
                     panel->onThumbReady(qp);
                 });
@@ -213,6 +225,15 @@ void ThumbnailPanel::resetDirectoryState()
     m_recursiveSearching = false;
     m_recursiveHits.clear();
     m_recursiveHitsFor.clear();
+    {
+        QMutexLocker lk(&m_thumbMtx);
+        m_thumbReady.clear();
+        m_thumbReadyBytes = 0;
+        m_thumbReadyClock = 0;
+        m_thumbPending.clear();
+        m_thumbFailed.clear();
+        m_thumbDirtyPaths.clear();
+    }
 }
 
 void ThumbnailPanel::refresh()
@@ -267,7 +288,10 @@ void ThumbnailPanel::applyThumbSize(int size, bool rememberGridSize)
     {
         QMutexLocker lk(&m_thumbMtx);
         m_thumbReady.clear();
+        m_thumbReadyBytes = 0;
+        m_thumbReadyClock = 0;
         m_thumbPending.clear();
+        m_thumbFailed.clear();
     }
     // Directly update gridSize instead of calling setViewMode(m_viewMode),
     // because setViewMode early-returns when the mode hasn't changed.
@@ -550,6 +574,9 @@ void ThumbnailPanel::stopThumbnailWorker()
 {
     QMutexLocker lk(&m_thumbMtx);
     m_thumbReady.clear();
+    m_thumbReadyBytes = 0;
+    m_thumbReadyClock = 0;
     m_thumbPending.clear();
     m_thumbFailed.clear();
+    m_thumbDirtyPaths.clear();
 }

@@ -86,6 +86,7 @@ ImageViewer::~ImageViewer()
     // cancelling first also removes the wasted full-resolution decode work.
     cancelCurrentLoad();
     cancelPreloads();
+    cancelDisplayRasterPreloads();
     cancelRoiStats();
     cancelExportJob();
     // M47: drop any in-flight LOD/region display raster request (queued work
@@ -165,6 +166,8 @@ void ImageViewer::closeEvent(QCloseEvent *event)
     beginImageGeneration();
     cancelCurrentLoad();
     cancelPreloads();
+    cancelDisplayRasterPreloads();
+    cancelDisplayRequest();
     cancelExportJob();
     QSettings settings;
     settings.setValue("viewerGeometry", saveGeometry());

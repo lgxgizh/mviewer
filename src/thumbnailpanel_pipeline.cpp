@@ -2,23 +2,38 @@
 
 void ThumbnailPanel::pruneThumbnailState()
 {
-    QSet<QString> keep;
-    keep.reserve(m_allEntries.size() + m_paths.size());
-    for (const Entry &entry : m_allEntries)
-        keep.insert(entry.path);
-    for (const QString &path : m_paths)
-        keep.insert(path);
-
     QMutexLocker lk(&m_thumbMtx);
-    QMutableHashIterator<QString, QPixmap> it(m_thumbReady);
-    while (it.hasNext())
-    {
-        it.next();
-        if (!keep.contains(it.key()))
-            it.remove();
-    }
+    // Directory transitions clear this cache in resetDirectoryState(). Within
+    // one directory, keep hot history across filter/sort rebuilds so A -> B ->
+    // A selection does not trigger avoidable duplicate decodes. The hard
+    // entry/byte budget is enforced on every insert and here as a convergence
+    // point after a large model rebuild.
+    enforceThumbPixmapBudgetLocked();
     m_thumbPending.clear();
     m_thumbFailed.clear();
+}
+
+QString ThumbnailPanel::thumbCacheKey(const QString &path, int size) const
+{
+    return path + QChar(0x1f) + QString::number(size);
+}
+
+void ThumbnailPanel::enforceThumbPixmapBudgetLocked()
+{
+    while (m_thumbReady.size() > kThumbPixmapCacheMaxEntries ||
+           m_thumbReadyBytes > kThumbPixmapCacheMaxBytes)
+    {
+        auto oldest = m_thumbReady.end();
+        for (auto it = m_thumbReady.begin(); it != m_thumbReady.end(); ++it)
+        {
+            if (oldest == m_thumbReady.end() || it->lastUse < oldest->lastUse)
+                oldest = it;
+        }
+        if (oldest == m_thumbReady.end())
+            break;
+        m_thumbReadyBytes = qMax<qint64>(0, m_thumbReadyBytes - oldest->bytes);
+        m_thumbReady.erase(oldest);
+    }
 }
 
 void ThumbnailPanel::updateVisibleRange()
@@ -112,6 +127,7 @@ void ThumbnailPanel::onThumbReady(const QString &path)
         m_thumbDirty = true;
         QTimer::singleShot(0, this, [this]() { flushThumbUpdates(); });
     }
+    m_thumbDirtyPaths.insert(path);
 }
 
 void ThumbnailPanel::flushThumbUpdates()
@@ -119,21 +135,64 @@ void ThumbnailPanel::flushThumbUpdates()
     m_thumbDirty = false;
     const int rows = m_model->rowCount();
     if (rows <= 0)
+    {
+        m_thumbDirtyPaths.clear();
         return;
-    // One broad DecorationRole change is correct: the delegate paints from
-    // thumbReady(path) at paint time, so stale geometry never leaks through.
-    emit dataChanged(m_model->index(0, 0), m_model->index(rows - 1, 0), {Qt::DecorationRole});
+    }
+
+    QVector<int> dirtyRows;
+    dirtyRows.reserve(m_thumbDirtyPaths.size());
+    for (const QString &path : m_thumbDirtyPaths)
+    {
+        const int row = m_rowByPath.value(path, -1);
+        if (row >= 0 && row < rows)
+            dirtyRows.append(row);
+    }
+    m_thumbDirtyPaths.clear();
+    if (dirtyRows.isEmpty())
+        return;
+    std::sort(dirtyRows.begin(), dirtyRows.end());
+    int spanStart = dirtyRows.first();
+    int spanEnd = spanStart;
+    for (int i = 1; i < dirtyRows.size(); ++i)
+    {
+        if (dirtyRows.at(i) == spanEnd + 1)
+        {
+            spanEnd = dirtyRows.at(i);
+            continue;
+        }
+        emit dataChanged(m_model->index(spanStart, 0), m_model->index(spanEnd, 0),
+                         {Qt::DecorationRole});
+        spanStart = spanEnd = dirtyRows.at(i);
+    }
+    emit dataChanged(m_model->index(spanStart, 0), m_model->index(spanEnd, 0),
+                     {Qt::DecorationRole});
 }
 
 QPixmap ThumbnailPanel::thumbReady(const QString &path) const
 {
     QMutexLocker lk(&m_thumbMtx);
-    auto it = m_thumbReady.constFind(path);
-    return it == m_thumbReady.constEnd() ? QPixmap() : it.value();
+    auto it = m_thumbReady.find(thumbCacheKey(path, m_thumbSize));
+    if (it == m_thumbReady.end())
+        return QPixmap();
+    it->lastUse = ++m_thumbReadyClock;
+    return it->pixmap;
 }
 
 bool ThumbnailPanel::thumbFailed(const QString &path) const
 {
     QMutexLocker lk(&m_thumbMtx);
-    return m_thumbFailed.contains(path);
+    return m_thumbFailed.contains(thumbCacheKey(path, m_thumbSize));
+}
+
+int ThumbnailPanel::thumbReadyCount() const
+{
+    QMutexLocker lk(&m_thumbMtx);
+    return m_thumbReady.size();
+}
+
+qint64 ThumbnailPanel::thumbReadyBytes() const
+{
+    QMutexLocker lk(&m_thumbMtx);
+    return m_thumbReadyBytes;
 }

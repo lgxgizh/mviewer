@@ -5,7 +5,9 @@
 #include <QMutex>
 #include <QString>
 
+#include <mutex>
 #include <set>
+#include <thread>
 #include <utility>
 
 // M25: on-disk thumbnail cache with a real cache identity.
@@ -19,21 +21,23 @@
 //
 // Capacity model: the thumbnail folder is kept at or below maxBytes() (default
 // 512 MiB). Usage is tracked from the ACTUAL on-disk file sizes in an in-memory
-// index that is lazily built once from the existing *.png files on the first
-// public access (get/put/totalBytes/setMaxBytes/clear), so files left behind
-// by an earlier process already count against the budget; that same first
-// access enforces the current cap. put() evicts the least-recently-used
-// entries until usage fits the cap; a successful get() refreshes the
-// session-local approximate LRU. Startup still seeds order from file mtime,
+// index. The first get()/put() starts a background bootstrap so the hot path
+// only probes the exact identity it needs; totalBytes(), setMaxBytes() and
+// clear() join that bootstrap and provide a complete accounting view. Files
+// left behind by an earlier process therefore become budget-visible
+// asynchronously, while a cache hit never waits for a directory-wide scan.
+// put() evicts the least-recently-used entries known at the time; once the
+// bootstrap completes the full cap is enforced. A successful get() refreshes
+// the session-local approximate LRU. Startup still seeds order from file mtime,
 // while cache hits avoid write amplification. A file another process adds
-// after the index was built is
-// picked up and counted by get(). The cap is best-effort: if a file cannot be
-// deleted (e.g. an OS lock), its bytes stay counted and pruning moves on
-// instead of looping.
+// after the index was built is picked up and counted by get(). The cap is
+// best-effort: if a file cannot be deleted (e.g. an OS lock), its bytes stay
+// counted and pruning moves on instead of looping.
 //
 // Thread-safe: the thumbnail worker threads read and write through here
 // (QImage payload is safe off the GUI thread; QPixmap is not). All disk I/O
-// happens on the caller's thread — nothing here runs on the GUI thread.
+// happens on the caller's thread except the one-time bootstrap scan, which is
+// deliberately detached from the GUI-facing thumbnail request.
 class ThumbnailCache
 {
   public:
@@ -64,8 +68,8 @@ class ThumbnailCache
     quint64 maxBytes() const;
 
     // On-disk bytes currently accounted for (actual file sizes, not pixel
-    // payloads). Always <= maxBytes() after put()/setMaxBytes(). The first
-    // call lazily indexes the existing *.png files and enforces the cap.
+    // payloads). Always <= maxBytes() after put()/setMaxBytes(). The call joins
+    // the one-time bootstrap if it is still running.
     quint64 totalBytes();
 
     // Sets the byte budget and prunes immediately so usage falls to <= `n`.
@@ -83,10 +87,12 @@ class ThumbnailCache
     };
 
     ThumbnailCache() = default;
+    ~ThumbnailCache();
     QString cacheDir() const;
 
     void ensureIndexed();
     void ensureReady();
+    void scheduleBootstrap();
     void insertEntry(const QString &key, quint64 fileSize);
     void touchEntry(const QString &key);
     void dropEntry(const QString &key);
@@ -101,4 +107,7 @@ class ThumbnailCache
     quint64 m_totalBytes = 0;
     quint64 m_maxBytes = kDefaultMaxBytes;
     bool m_indexed = false;
+    std::mutex m_bootstrapMutex;
+    std::thread m_bootstrapThread;
+    bool m_bootstrapScheduled = false;
 };

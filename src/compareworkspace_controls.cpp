@@ -27,7 +27,8 @@ void CompareWorkspace::buildSyncControls()
 
 QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout,
                                                   QHBoxLayout *&viewLayout,
-                                                  QHBoxLayout *&toolLayout)
+                                                  QHBoxLayout *&toolLayout,
+                                                  QHBoxLayout *&toolActionsLayout)
 {
     auto *toolbarContainer = new QWidget(this);
     auto *toolbarLayout = new QVBoxLayout(toolbarContainer);
@@ -44,7 +45,23 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout,
     };
     auto [modeBar, modeLayoutLocal] = makeToolbar("compareModeToolbar");
     auto [viewBar, viewLayoutLocal] = makeToolbar("compareViewToolbar");
-    auto [toolBar, toolLayoutLocal] = makeToolbar("compareToolToolbar");
+    auto *toolBar = new QWidget(toolbarContainer);
+    toolBar->setObjectName("compareToolToolbar");
+    auto *toolRows = new QVBoxLayout(toolBar);
+    toolRows->setContentsMargins(0, 0, 0, 0);
+    toolRows->setSpacing(4);
+    auto makeToolRow = [toolBar]()
+    {
+        auto *row = new QWidget(toolBar);
+        auto *layout = new QHBoxLayout(row);
+        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setSpacing(6);
+        return std::pair{row, layout};
+    };
+    auto [toolDiffBar, toolLayoutLocal] = makeToolRow();
+    auto [toolActionsBar, toolActionsLayoutLocal] = makeToolRow();
+    toolRows->addWidget(toolDiffBar);
+    toolRows->addWidget(toolActionsBar);
     toolbarLayout->addWidget(modeBar);
     toolbarLayout->addWidget(viewBar);
     toolbarLayout->addWidget(toolBar);
@@ -54,6 +71,7 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout,
     modeLayout = modeLayoutLocal;
     viewLayout = viewLayoutLocal;
     toolLayout = toolLayoutLocal;
+    toolActionsLayout = toolActionsLayoutLocal;
     return toolbarContainer;
 }
 

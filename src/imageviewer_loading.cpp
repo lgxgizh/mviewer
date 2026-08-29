@@ -1,24 +1,58 @@
 #include "imageviewer.h"
 
+#include "core/image/QtConvert.h"
+#include "core/image/SourceImage.h"
+#include "core/scheduler/TaskScheduler.h"
+
 #include <QApplication>
 #include <QFileInfo>
 #include <QMetaObject>
 #include <QPointer>
 #include <QTimer>
 
+#include <algorithm>
+
+namespace
+{
+
+constexpr int kDisplayWarmMaxEdge = 1024;
+constexpr qint64 kDisplayWarmMaxBytes = 64LL * 1024 * 1024;
+constexpr qint64 kDisplayWarmLodThresholdPixels = 16LL * 1000 * 1000;
+constexpr size_t kDisplayWarmMaxEntries = 2;
+
+} // namespace
+
 void ImageViewer::setBrowseSequence(const QStringList &paths)
 {
+    if (paths != m_fileList)
+    {
+        ++m_displayRasterBrowseGeneration;
+        cancelDisplayRasterPreloads();
+        m_displayRasterWarm.clear();
+        m_displayRasterWarmBytes = 0;
+    }
     m_fileList = paths;
     m_currentIndex = m_fileList.indexOf(m_currentPath);
 
-    if (!m_frame || m_currentPath.isEmpty())
+    if (m_currentPath.isEmpty())
         return;
 
     if (m_currentIndex >= 0)
-        preloadNeighbors(m_currentPath);
+    {
+        if (m_lodMode || m_largeSourcePending)
+            preloadDisplayRasterNeighbors(m_currentPath);
+        else if (m_frame)
+            preloadNeighbors(m_currentPath);
+    }
     else
+    {
         cancelPreloads();
+        cancelDisplayRasterPreloads();
+    }
 
+    const QSize size = displaySize();
+    if (!size.isValid())
+        return;
     const QFileInfo info(m_currentPath);
     const QString position =
         m_currentIndex >= 0
@@ -26,8 +60,8 @@ void ImageViewer::setBrowseSequence(const QStringList &paths)
             : QString();
     setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
                        .arg(info.fileName())
-                       .arg(m_frame->width())
-                       .arg(m_frame->height())
+                       .arg(size.width())
+                       .arg(size.height())
                        .arg(position));
 }
 
@@ -114,6 +148,7 @@ void ImageViewer::setImageImpl(const QString &path)
     // cache for a superseded image.
     cancelCurrentLoad();
     auto matchingPreload = takeMatchingPreload(path);
+    auto matchingDisplayPreload = takeMatchingDisplayRasterPreload(path);
     const uint64_t gen = ++m_requestGen;
     beginImageGeneration();
     m_tileCache.clear();
@@ -134,6 +169,7 @@ void ImageViewer::setImageImpl(const QString &path)
     m_sourceImage.reset();
     m_raster = DisplayRaster{};
     m_pendingAnalysisPreload = std::move(matchingPreload);
+    m_promotedDisplayRasterPreload = std::move(matchingDisplayPreload);
     if (!keepProvisional)
     {
         m_provisionalPath.clear();
@@ -292,7 +328,7 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
     // drop the user's zoom, no UI-thread scaling of the full frame).
     if (m_lodMode)
     {
-        preloadNeighbors(path);
+        preloadDisplayRasterNeighbors(path);
         update();
         emit imageReady(m_frame);
         return;
@@ -400,6 +436,56 @@ void ImageViewer::preloadNeighbors(const QString &path)
     }
 }
 
+void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
+{
+    if (m_currentIndex < 0 || path.isEmpty())
+        return;
+
+    cancelDisplayRasterPreloads();
+    for (int delta = -1; delta <= 1; ++delta)
+    {
+        const int i = m_currentIndex + delta;
+        if (i < 0 || i >= m_fileList.size())
+            continue;
+        const QString neighbor = m_fileList[i];
+        if (neighbor == path)
+            continue;
+        const auto alreadyWarm = std::find_if(
+            m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
+            [&](const DisplayRasterWarm &warm) { return warm.path == neighbor; });
+        if (alreadyWarm != m_displayRasterWarm.end())
+            continue;
+
+        auto state = std::make_shared<DisplayRasterPreloadState>();
+        auto guard = std::make_shared<QPointer<ImageViewer>>(this);
+        const uint64_t browseGeneration = m_displayRasterBrowseGeneration;
+        auto handle = TaskScheduler::instance().submit(
+            TaskScheduler::Priority::Thumbnail,
+            [neighbor, browseGeneration, state, guard](const TaskScheduler::TaskContext &ctx)
+            {
+                try
+                {
+                    runDisplayRasterPreload(neighbor, browseGeneration, state, ctx, guard);
+                }
+                catch (...)
+                {
+                    if (!ctx.isCancelled())
+                    {
+                        DisplayRasterPreloadResult result;
+                        result.path = neighbor;
+                        result.browseGeneration = browseGeneration;
+                        result.state = state;
+                        result.failed = true;
+                        queueDisplayRasterPreloadResult(guard, std::move(result));
+                    }
+                }
+            },
+            {}, std::chrono::steady_clock::time_point::max(), [] {});
+        if (handle)
+            m_displayRasterPreloads.push_back({neighbor, std::move(state), std::move(handle)});
+    }
+}
+
 void ImageViewer::cancelCurrentLoad()
 {
     mviewer::application::ImageLoadingService::instance().cancelAsync(m_foregroundRequest);
@@ -410,6 +496,13 @@ void ImageViewer::cancelPreloads()
     for (auto &p : m_neighborPreloads)
         mviewer::application::ImageLoadingService::instance().cancelAsync(p.handle);
     m_neighborPreloads.clear();
+}
+
+void ImageViewer::cancelDisplayRasterPreloads()
+{
+    for (auto &preload : m_displayRasterPreloads)
+        TaskScheduler::cancel(preload.handle);
+    m_displayRasterPreloads.clear();
 }
 
 mviewer::application::ImageLoadingService::AsyncRequestHandle
@@ -431,3 +524,180 @@ ImageViewer::takeMatchingPreload(const QString &path)
     return match;
 }
 
+ImageViewer::DisplayRasterPreload ImageViewer::takeMatchingDisplayRasterPreload(
+    const QString &path)
+{
+    DisplayRasterPreload match;
+    for (auto &preload : m_displayRasterPreloads)
+    {
+        if (!match.handle && preload.path == path)
+            match = std::move(preload);
+        else
+            TaskScheduler::cancel(preload.handle);
+    }
+    m_displayRasterPreloads.clear();
+    return match;
+}
+
+std::optional<ImageViewer::DisplayRasterWarm> ImageViewer::takeWarmDisplayRaster(
+    const QString &path)
+{
+    const auto it = std::find_if(
+        m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
+        [&](const DisplayRasterWarm &warm) { return warm.path == path; });
+    if (it == m_displayRasterWarm.end())
+        return std::nullopt;
+    DisplayRasterWarm warm = std::move(*it);
+    m_displayRasterWarmBytes = std::max<qint64>(0, m_displayRasterWarmBytes - warm.bytes);
+    m_displayRasterWarm.erase(it);
+    ++m_displayRasterWarmHits;
+    return warm;
+}
+
+void ImageViewer::enforceDisplayRasterWarmBudget()
+{
+    while (m_displayRasterWarm.size() > kDisplayWarmMaxEntries ||
+           m_displayRasterWarmBytes > kDisplayWarmMaxBytes)
+    {
+        if (m_displayRasterWarm.empty())
+            break;
+        const auto oldest = std::min_element(
+            m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
+            [](const DisplayRasterWarm &a, const DisplayRasterWarm &b)
+            { return a.lastUse < b.lastUse; });
+        m_displayRasterWarmBytes =
+            std::max<qint64>(0, m_displayRasterWarmBytes - oldest->bytes);
+        m_displayRasterWarm.erase(oldest);
+    }
+}
+
+void ImageViewer::storeWarmDisplayRaster(DisplayRasterPreloadResult result)
+{
+    if (result.image.isNull() || !result.source || result.path.isEmpty())
+        return;
+    const qint64 bytes = static_cast<qint64>(result.image.sizeInBytes());
+    if (bytes <= 0 || bytes > kDisplayWarmMaxBytes)
+        return;
+
+    const auto old = std::find_if(
+        m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
+        [&](const DisplayRasterWarm &warm) { return warm.path == result.path; });
+    if (old != m_displayRasterWarm.end())
+    {
+        m_displayRasterWarmBytes = std::max<qint64>(0, m_displayRasterWarmBytes - old->bytes);
+        m_displayRasterWarm.erase(old);
+    }
+    m_displayRasterWarm.push_back({result.path, std::move(result.source), std::move(result.image),
+                                   result.sourceRect, result.sourceSize, result.density, bytes,
+                                   ++m_displayRasterWarmClock});
+    m_displayRasterWarmBytes += bytes;
+    enforceDisplayRasterWarmBudget();
+}
+
+void ImageViewer::runDisplayRasterPreload(
+    const QString &path, uint64_t browseGeneration,
+    const std::shared_ptr<DisplayRasterPreloadState> &state,
+    const TaskScheduler::TaskContext &ctx, const std::shared_ptr<QPointer<ImageViewer>> &guard)
+{
+    if (ctx.isCancelled())
+        return;
+    DisplayRasterPreloadResult result;
+    result.path = path;
+    result.browseGeneration = browseGeneration;
+    result.state = state;
+    try
+    {
+        result.source = mviewer::core::SourceImage::open(path.toStdString());
+        if (!result.source)
+        {
+            queueDisplayRasterPreloadResult(guard, std::move(result));
+            return;
+        }
+        result.sourceSize = QSize(result.source->metadata().width, result.source->metadata().height);
+        const qint64 pixels = static_cast<qint64>(result.sourceSize.width()) *
+                              result.sourceSize.height();
+        if (pixels <= kDisplayWarmLodThresholdPixels)
+        {
+            queueDisplayRasterPreloadResult(guard, std::move(result));
+            return;
+        }
+        const auto raster = result.source->decodeLod(kDisplayWarmMaxEdge);
+        if (!raster.ok || raster.pixels.isNull())
+        {
+            result.failed = true;
+            queueDisplayRasterPreloadResult(guard, std::move(result));
+            return;
+        }
+        result.sourceRect = QRect(0, 0, result.sourceSize.width(), result.sourceSize.height());
+        result.density = static_cast<double>(result.sourceSize.width()) / raster.pixels.width;
+        result.image = mvcore::toDisplayQImage(raster.pixels, raster.metadata);
+    }
+    catch (...)
+    {
+        result.failed = true;
+    }
+    if (ctx.isCancelled())
+        return;
+    queueDisplayRasterPreloadResult(guard, std::move(result));
+}
+
+void ImageViewer::queueDisplayRasterPreloadResult(
+    const std::shared_ptr<QPointer<ImageViewer>> &guard, DisplayRasterPreloadResult result)
+{
+    if (!qApp)
+        return;
+    QMetaObject::invokeMethod(
+        qApp,
+        [guard, result = std::move(result)]() mutable
+        {
+            try
+            {
+                ImageViewer *viewer = guard ? guard->data() : nullptr;
+                if (viewer)
+                    viewer->applyDisplayRasterPreloadResult(std::move(result));
+            }
+            catch (...)
+            {
+            }
+        },
+        Qt::QueuedConnection);
+}
+
+void ImageViewer::applyDisplayRasterPreloadResult(DisplayRasterPreloadResult result)
+{
+    if (result.state)
+    {
+        m_displayRasterPreloads.erase(
+            std::remove_if(m_displayRasterPreloads.begin(), m_displayRasterPreloads.end(),
+                           [&](const DisplayRasterPreload &preload)
+                           { return preload.state == result.state; }),
+            m_displayRasterPreloads.end());
+    }
+    const uint64_t promotedGeneration =
+        result.state ? result.state->promotedGeneration.load(std::memory_order_acquire) : 0;
+    if (promotedGeneration != 0)
+    {
+        if (result.path != m_currentPath || promotedGeneration != m_requestGen)
+            return;
+        m_displayRequest.reset();
+        m_promotedDisplayRasterPreload = DisplayRasterPreload{};
+        if (result.failed || result.image.isNull())
+        {
+            // The neighbor result is best effort. Re-enter the normal probe
+            // path if it was promoted before the worker discovered a failure.
+            startLodDisplay(result.path, promotedGeneration);
+            return;
+        }
+        applyDisplayRaster(result.path, promotedGeneration, std::move(result.source),
+                           std::move(result.image), result.sourceRect, result.sourceSize,
+                           result.density, false);
+        return;
+    }
+
+    if (result.browseGeneration != m_displayRasterBrowseGeneration || result.failed ||
+        result.image.isNull())
+        return;
+    const bool stillListed = m_fileList.contains(result.path);
+    if (stillListed)
+        storeWarmDisplayRaster(std::move(result));
+}

@@ -20,6 +20,7 @@
 #include <QStringList>
 #include <QStyledItemDelegate>
 #include <QThreadPool>
+#include <QVector>
 
 #include "core/TagStore.h"
 #include "core/scheduler/TaskScheduler.h"
@@ -49,6 +50,11 @@ class ThumbnailPanel : public QListView
     static constexpr int kDefaultThumbSize = 140;
     static constexpr int kMinThumbSize = 48;
     static constexpr int kMaxThumbSize = 512;
+    // M55: the UI owns a bounded display cache in addition to the core
+    // ImageData LRU. The count keeps a generous visible+halo working set while
+    // the byte cap protects large thumbnail sizes from driving RSS linearly.
+    static constexpr int kThumbPixmapCacheMaxEntries = 384;
+    static constexpr qint64 kThumbPixmapCacheMaxBytes = 96LL * 1024 * 1024;
 
     enum SortMode
     {
@@ -186,8 +192,15 @@ class ThumbnailPanel : public QListView
     // exception-safe probe invocation; UI-side busy-cursor refcount helpers
     // (restoreBusyCursorOnce must run on the GUI thread).
     static void invokeScanProbe();
+    static std::shared_ptr<const std::function<void()>> scanIterationProbeSnapshot();
     static void restoreBusyCursorOnce(const std::shared_ptr<std::atomic<int>> &refs);
     static void marshalBusyRestore(const std::shared_ptr<std::atomic<int>> &refs);
+    void startDirectoryScan(const QString &path, int gen, const QString &typeFilter,
+                            SortMode sortMode, bool sortAscending,
+                            const std::shared_ptr<std::atomic<bool>> &alive,
+                            const std::shared_ptr<std::atomic<uint64_t>> &genToken,
+                            const std::shared_ptr<std::atomic<int>> &busyRefs,
+                            const QPointer<ThumbnailPanel> &self);
     // M54: publish scan batches before the final sorted convergence pass.
     void applyScanBatch(int gen, const QList<Entry> &batch);
     // M46: publish a completed scan's entries on the UI thread (extracted from
@@ -237,6 +250,9 @@ class ThumbnailPanel : public QListView
     }
     QPixmap thumbReady(const QString &path) const;
     bool thumbFailed(const QString &path) const;
+    // M55 observability for the bounded UI-side pixmap cache.
+    int thumbReadyCount() const;
+    qint64 thumbReadyBytes() const;
     const QList<Entry> &entries() const
     {
         return m_allEntries;
@@ -317,6 +333,8 @@ class ThumbnailPanel : public QListView
     void buildModel(const QList<Entry> &entries);
     void updateVisibleRange();
     void onCompareClicked();
+    QString thumbCacheKey(const QString &path, int size) const;
+    void enforceThumbPixmapBudgetLocked();
 
     static QFileInfoList sortedEntries(const QDir &dir, SortMode mode, bool ascending = true);
     void contextMenuEvent(QContextMenuEvent *event) override;
@@ -344,9 +362,17 @@ class ThumbnailPanel : public QListView
 
     // Thread-safe ready thumbnail pixmaps (filled from the pipeline result fn).
     mutable QMutex m_thumbMtx;
-    QHash<QString, QPixmap> m_thumbReady;
+    struct ReadyPixmap
+    {
+        QPixmap pixmap;
+        qint64 bytes = 0;
+        uint64_t lastUse = 0;
+    };
+    mutable QHash<QString, ReadyPixmap> m_thumbReady; // key = path + size
+    mutable qint64 m_thumbReadyBytes = 0;
+    mutable uint64_t m_thumbReadyClock = 0;
     QSet<QString> m_thumbPending;
-    QSet<QString> m_thumbFailed; // decode returned null → show error placeholder
+    QSet<QString> m_thumbFailed; // key = path + size; decode returned null
 
     QPushButton *m_compareBtn = nullptr;
     QString m_currentDir;
@@ -359,6 +385,7 @@ class ThumbnailPanel : public QListView
     QThreadPool m_scanPool;
     // M24 (S3): one pending coalesced DecorationRole flush per event-loop turn.
     bool m_thumbDirty = false;
+    QSet<QString> m_thumbDirtyPaths;
     // M24 (A#8): single-path selection requested while the directory model is
     // still being rebuilt asynchronously (e.g. rename→rescan). Applied by
     // buildModel once the path is present; cleared when applied.

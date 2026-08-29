@@ -84,6 +84,18 @@ class ImageViewer : public QOpenGLWidget
     {
         return m_raster.image;
     }
+    int displayRasterWarmCount() const
+    {
+        return static_cast<int>(m_displayRasterWarm.size());
+    }
+    qint64 displayRasterWarmBytes() const
+    {
+        return m_displayRasterWarmBytes;
+    }
+    uint64_t displayRasterWarmHits() const
+    {
+        return m_displayRasterWarmHits;
+    }
 
     // P1-7: serialize/restore the current view transform (scale + pan). Used to
     // restore the viewer's zoom level and pan position across sessions. Viewport
@@ -198,6 +210,8 @@ class ImageViewer : public QOpenGLWidget
     void issueAnalysisLoad(const QString &path, uint64_t generation);
     void fitToWidget();
     void preloadNeighbors(const QString &path);
+    void preloadDisplayRasterNeighbors(const QString &path);
+    void cancelDisplayRasterPreloads();
     void drawHistogram(QPainter &painter) const;
     void computeHistogram();
     // M29: cancel the outstanding foreground load and any neighbor preloads.
@@ -257,6 +271,51 @@ class ImageViewer : public QOpenGLWidget
                             std::shared_ptr<mviewer::core::SourceImage> source, QImage image,
                             QRect sourceRect, QSize sourceSize, double density,
                             bool failed);
+    struct DisplayRasterPreloadState
+    {
+        std::atomic<uint64_t> promotedGeneration{0};
+    };
+    struct DisplayRasterPreloadResult
+    {
+        QString path;
+        uint64_t browseGeneration = 0;
+        std::shared_ptr<DisplayRasterPreloadState> state;
+        std::shared_ptr<mviewer::core::SourceImage> source;
+        QImage image;
+        QRect sourceRect;
+        QSize sourceSize;
+        double density = 1.0;
+        bool failed = false;
+    };
+    struct DisplayRasterWarm
+    {
+        QString path;
+        std::shared_ptr<mviewer::core::SourceImage> source;
+        QImage image;
+        QRect sourceRect;
+        QSize sourceSize;
+        double density = 1.0;
+        qint64 bytes = 0;
+        uint64_t lastUse = 0;
+    };
+    struct DisplayRasterPreload
+    {
+        QString path;
+        std::shared_ptr<DisplayRasterPreloadState> state;
+        TaskScheduler::TaskHandle handle;
+    };
+    static void runDisplayRasterPreload(const QString &path, uint64_t browseGeneration,
+                                        const std::shared_ptr<DisplayRasterPreloadState> &state,
+                                        const TaskScheduler::TaskContext &ctx,
+                                        const std::shared_ptr<QPointer<ImageViewer>> &guard);
+    static void queueDisplayRasterPreloadResult(
+        const std::shared_ptr<QPointer<ImageViewer>> &guard,
+        DisplayRasterPreloadResult result);
+    void applyDisplayRasterPreloadResult(DisplayRasterPreloadResult result);
+    DisplayRasterPreload takeMatchingDisplayRasterPreload(const QString &path);
+    std::optional<DisplayRasterWarm> takeWarmDisplayRaster(const QString &path);
+    void storeWarmDisplayRaster(DisplayRasterPreloadResult result);
+    void enforceDisplayRasterWarmBudget();
     void runAnalysisLoadDecision(bool sourceValid, const QSize &sourceSize);
     void drawDisplayRaster(QPainter &painter) const;
     void drawProvisional(QPainter &painter) const;
@@ -403,6 +462,13 @@ class ImageViewer : public QOpenGLWidget
     std::shared_ptr<mviewer::core::SourceImage> m_sourceImage; // no pixels held
     DisplayRaster m_raster;
     TaskScheduler::TaskHandle m_displayRequest; // in-flight raster worker
+    DisplayRasterPreload m_promotedDisplayRasterPreload;
+    std::vector<DisplayRasterPreload> m_displayRasterPreloads;
+    std::vector<DisplayRasterWarm> m_displayRasterWarm;
+    qint64 m_displayRasterWarmBytes = 0;
+    uint64_t m_displayRasterWarmClock = 0;
+    uint64_t m_displayRasterWarmHits = 0;
+    uint64_t m_displayRasterBrowseGeneration = 0;
     bool m_displayUpgradeScheduled = false;
 
     int m_histogram[256] = {0};

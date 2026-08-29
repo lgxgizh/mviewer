@@ -1487,6 +1487,41 @@ target_compile_definitions(m54_perceived_performance_tests PRIVATE MVIEWER_SOURC
 add_test(NAME m54_perceived_performance_tests COMMAND m54_perceived_performance_tests)
 set_tests_properties(m54_perceived_performance_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 1800)
 
+# ─── M55: bounded UI raster cache / interactive navigation regressions ──────
+# Drives a real ThumbnailPanel over a 420-image corpus and verifies the
+# QPixmap working set remains bounded while the viewport visits disjoint rows.
+add_executable(m55_interactive_tests
+    test_m55_interactive.cpp
+)
+target_link_libraries(m55_interactive_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m55_interactive_tests PRIVATE cxx_std_20)
+target_include_directories(m55_interactive_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m55_interactive_tests COMMAND m55_interactive_tests)
+set_tests_properties(m55_interactive_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
+
+# Standalone recorder for M55 10k/50k memory and navigation evidence. It is
+# intentionally not a gate because its numbers are machine-dependent.
+add_executable(m55_interactive_baseline
+    test_m55_interactive_baseline.cpp
+)
+target_link_libraries(m55_interactive_baseline
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m55_interactive_baseline PRIVATE cxx_std_20)
+target_include_directories(m55_interactive_baseline PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
 # ─── M47 Phase 2: Viewer LOD-first display (UI level) ─────────────────────────
 # Large sources display through bounded LOD/region rasters (no full-resolution
 # materialization for fit-to-window), with supersession/destroy safety and

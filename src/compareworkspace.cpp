@@ -21,7 +21,9 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     QHBoxLayout *modeLayout = nullptr;
     QHBoxLayout *viewLayout = nullptr;
     QHBoxLayout *toolLayout = nullptr;
-    auto *toolbarContainer = buildToolbarContainer(modeLayout, viewLayout, toolLayout);
+    QHBoxLayout *toolActionsLayout = nullptr;
+    auto *toolbarContainer =
+        buildToolbarContainer(modeLayout, viewLayout, toolLayout, toolActionsLayout);
     buildModeControls(modeLayout, viewLayout);
     buildDiffControls(toolLayout);
     buildViewControls(viewLayout);
@@ -50,7 +52,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     buildEditPanel(sideLay);
 
     m_sidePanel->setVisible(false);
-    buildToolbarActions(toolLayout);
+    buildToolbarActions(toolActionsLayout);
     auto *leftLay = new QVBoxLayout;
     leftLay->setContentsMargins(0, 0, 0, 0);
     leftLay->setSpacing(4);

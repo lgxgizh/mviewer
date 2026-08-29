@@ -198,13 +198,25 @@ void ImageViewer::marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewe
 
 void ImageViewer::startLodDisplay(const QString &path, uint64_t generation)
 {
-    (void)path;
-    (void)generation;
     // The raster path owns the verdict for this image until the first result
     // (probe-only for small sources, a raster for large ones, or a probe
     // failure) lands in applyDisplayRaster.
     m_largeSourcePending = true;
     m_displayDegraded = false; // a new image resets any prior terminal failure
+    if (auto warm = takeWarmDisplayRaster(path))
+    {
+        applyDisplayRaster(path, generation, std::move(warm->source), std::move(warm->image),
+                           warm->sourceRect, warm->sourceSize, warm->density, false);
+        return;
+    }
+    if (m_promotedDisplayRasterPreload.handle)
+    {
+        auto promoted = std::move(m_promotedDisplayRasterPreload);
+        m_promotedDisplayRasterPreload = DisplayRasterPreload{};
+        promoted.state->promotedGeneration.store(generation, std::memory_order_release);
+        m_displayRequest = std::move(promoted.handle);
+        return;
+    }
     // The first raster request is issued immediately; the worker probes the
     // source, decides small-vs-large, and either returns the probe-only result
     // (small: the fast path owns the display) or the first viewport LOD.
