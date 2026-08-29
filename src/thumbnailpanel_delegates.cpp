@@ -131,6 +131,26 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
         painter->drawText(thumbRect, Qt::AlignCenter, QStringLiteral("无法加载"));
     }
 
+    if (entry && entry->frameCount > 1)
+    {
+        // Keep the gallery item singular and non-animated while making the
+        // container semantics visible without touching the filesystem in the
+        // paint path. A small badge is enough for both grid and filmstrip.
+        const QString badge = QStringLiteral("%1%2")
+                                  .arg(entry->frameCount)
+                                  .arg(entry->animated ? QStringLiteral("f")
+                                                       : QStringLiteral("p"));
+        const QFontMetrics metrics(painter->font());
+        const QSize badgeSize = metrics.size(Qt::TextSingleLine, badge) + QSize(10, 4);
+        const QRect badgeRect(card.right() - badgeSize.width() - 5, card.top() + 5,
+                              badgeSize.width(), badgeSize.height());
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(QColor(25, 25, 25, 190));
+        painter->drawRoundedRect(badgeRect, 4, 4);
+        painter->setPen(Qt::white);
+        painter->drawText(badgeRect, Qt::AlignCenter | Qt::TextSingleLine, badge);
+    }
+
     if (richFooter)
     {
         const QRect footer(card.x() + 7, thumbRect.bottom() + 3, qMax(1, card.width() - 14),

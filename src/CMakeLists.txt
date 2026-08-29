@@ -22,6 +22,7 @@ add_library(mviewer_core SHARED
     core/image/ImageRepository_async.cpp
     core/image/ImageRepository_dir.cpp
     core/image/ImageRepository_load.cpp
+    core/image/ImageRepository_frames.cpp
     core/image/SourceImage.cpp
     core/image/IccProfile.cpp
     core/image/MetadataReader.cpp
@@ -31,6 +32,8 @@ add_library(mviewer_core SHARED
     core/cache/CacheManager.cpp
     core/image/Encoder.cpp
     core/image/ImageFormats.cpp
+    core/image/FrameSequence.cpp
+    core/image/FramePlaybackController.cpp
     core/image/ImageTransform.cpp
     core/image/QtConvert.cpp
     core/image/ImageStats.cpp
@@ -148,6 +151,7 @@ add_library(mviewer_ui STATIC
     appstate.cpp
     imageviewer.cpp
     imageviewer_loading.cpp
+    imageviewer_multiframe.cpp
     imageviewer_lod.cpp
     imageviewer_paint.cpp
     imageviewer_contextmenu.cpp
@@ -1854,6 +1858,24 @@ target_link_libraries(m56_live_gallery_tests
 target_compile_features(m56_live_gallery_tests PRIVATE cxx_std_20)
 target_include_directories(m56_live_gallery_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME m56_live_gallery_tests COMMAND m56_live_gallery_tests)
+
+# ─── M57: unified animated/multi-page image contract ───────────────────────
+# The test writes deterministic red/green/blue GIF, WebP and TIFF fixtures,
+# records the direct Qt baseline, then verifies the frame-aware core reader,
+# repository cache identity, monotonic catch-up timeline, and persistence.
+add_executable(m57_multiframe_decoder_tests
+    test_m57_multiframe.cpp
+)
+target_link_libraries(m57_multiframe_decoder_tests
+    PRIVATE
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+)
+target_compile_features(m57_multiframe_decoder_tests PRIVATE cxx_std_20)
+target_include_directories(m57_multiframe_decoder_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m57_multiframe_decoder_tests COMMAND m57_multiframe_decoder_tests)
+set_tests_properties(m57_multiframe_decoder_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
 set_tests_properties(m56_live_gallery_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 
 add_executable(mviewer_m56_live_directory_soak

@@ -5,6 +5,7 @@
 #include "core/export/ExportJob.h"
 #include "core/analysis/ImageOverlay.h"
 #include "core/image/ImageFrame.h"
+#include "core/image/FramePlaybackController.h"
 #include "core/image/SourceImage.h"
 #include "core/render/AsyncTileRequestManager.h"
 #include "core/render/TileCache.h"
@@ -18,6 +19,7 @@
 #include <QPointer>
 #include <QPixmap>
 #include <QStringList>
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <atomic>
@@ -121,6 +123,30 @@ class ImageViewer : public QOpenGLWidget
         return m_frame;
     }
 
+    // M57: explicit multi-frame/page presentation state. File navigation
+    // remains owned by requestPrev/requestNext; these APIs only move within
+    // the currently opened container.
+    int frameIndex() const
+    {
+        return m_frame ? m_frame->frameIndex() : m_frameIndex;
+    }
+    int frameCount() const
+    {
+        return std::max(1, m_sequence.frameCount);
+    }
+    bool isPlaying() const
+    {
+        return m_playback.playing();
+    }
+    bool isMultiFrame() const
+    {
+        return frameCount() > 1;
+    }
+    const mviewer::core::FrameSequenceInfo &sequenceInfo() const
+    {
+        return m_sequence;
+    }
+
   signals:
     // Emitted on the UI thread once an async load (setImage) completes. Carries
     // the decoded ImageFrame so the analysis panel can run without re-decoding.
@@ -149,6 +175,12 @@ class ImageViewer : public QOpenGLWidget
     void zoomOut();
     void zoomFit();
     void zoomActual();
+    void play();
+    void pause();
+    void restart();
+    void previousFrame();
+    void nextFrame();
+    void setFrameIndex(int index);
     void setOverlayMode(mviewer::OverlayMode m); // F4 (M22): live zebra/false-color overlay
     void setZebraThreshold(int t); // F4 (M22): live zebra threshold (shared with prefs/dialog)
     mviewer::OverlayMode overlayMode() const
@@ -181,6 +213,8 @@ class ImageViewer : public QOpenGLWidget
     // MainWindow shows the AnalysisPanel and routes the run through it so
     // results land in the unified Result tab (not a QMessageBox).
     void analysisRequested(const QString &analyzerId);
+    void frameChanged(int index, int count, bool playing);
+    void playbackStateChanged(bool playing);
 
   protected:
     void initializeGL() override;
@@ -249,6 +283,15 @@ class ImageViewer : public QOpenGLWidget
     void applyLoadedImage(const QString &path, const ImageLoadResult &result);
     void applyPendingView();
     void clearLoadedGpu();
+    void applyLoadedFrame(const ImageLoadResult &result, int requestedFrame,
+                          uint64_t generation);
+    void requestFrame(int index);
+    void onPlaybackTick();
+    void ensurePlaybackTimer();
+    void cancelFrameRequests();
+    void prefetchFrames(int currentIndex);
+    void updateFramePresentationStatus();
+    bool handleFrameKey(int key, Qt::KeyboardModifiers modifiers);
     void scheduleLoadedRefit(const QString &path, uint64_t generation,
                              const ImageLoadGuard &guard);
     // ── M47 LOD-first display (defined in imageviewer_lod.cpp) ──────────────
@@ -446,6 +489,19 @@ class ImageViewer : public QOpenGLWidget
     // ImageFrame backing the current view. The QWidget itself never decodes;
     // it only renders the QPixmap produced by ImageRepository.
     std::shared_ptr<ImageFrame> m_frame;
+
+    // M57 multi-frame state. The foreground frame request is separate from
+    // the browse-image request so a slow frame cannot invalidate file
+    // navigation. At most two bounded prefetch requests are retained.
+    mviewer::core::FrameSequenceInfo m_sequence;
+    mviewer::core::FramePlaybackController m_playback;
+    int m_frameIndex = 0;
+    int m_requestedFrame = -1;
+    uint64_t m_frameGeneration = 0;
+    mviewer::application::ImageLoadingService::AsyncRequestHandle m_frameRequest;
+    std::vector<mviewer::application::ImageLoadingService::AsyncRequestHandle>
+        m_framePrefetchRequests;
+    QTimer *m_playbackTimer = nullptr;
 
     // ── M47 LOD-first display state ──────────────────────────────────────────
     struct DisplayRaster

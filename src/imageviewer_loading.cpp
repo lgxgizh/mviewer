@@ -195,6 +195,9 @@ void ImageViewer::setImageImpl(const QString &path)
     m_tileCache.clear();
     m_overlayCache.clear();
     m_frame.reset();
+    m_sequence = {};
+    m_frameIndex = 0;
+    m_playback = {};
     m_tiles = TileGrid();
     m_hasHistogram = false;
     m_loading = !path.isEmpty();
@@ -246,20 +249,14 @@ void ImageViewer::setImageImpl(const QString &path)
 void ImageViewer::issueAnalysisLoad(const QString &path, uint64_t generation)
 {
     auto onLoaded = makeImageLoadCallback(path, generation);
-    if (m_pendingAnalysisPreload)
-    {
-        m_foregroundRequest =
-            mviewer::application::ImageLoadingService::instance().promotePreloadAsync(
-                m_pendingAnalysisPreload, std::move(onLoaded), m_lifetime);
-        m_pendingAnalysisPreload.reset();
-    }
-    else
-    {
-        m_foregroundRequest =
-            mviewer::application::ImageLoadingService::instance().loadAsyncCancellable(
-                path.toUtf8().toStdString(), std::move(onLoaded),
-                ImageRepository::kDefaultLoadOptions, m_lifetime);
-    }
+    // Frame zero is an explicit request. Static-image preloads use the same
+    // frame-aware cache key, but a stale promoted legacy handle must never
+    // erase the requested frame identity.
+    m_pendingAnalysisPreload.reset();
+    m_foregroundRequest =
+        mviewer::application::ImageLoadingService::instance().loadFrameAsync(
+            path.toUtf8().toStdString(), 0, std::move(onLoaded),
+            ImageRepository::kDefaultLoadOptions, m_lifetime);
 }
 
 ImageViewer::ImageLoadCallback ImageViewer::makeImageLoadCallback(const QString &path,
@@ -362,6 +359,14 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
         return;
     }
 
+    m_sequence = m_frame->sequenceInfo();
+    m_frameIndex = m_frame->frameIndex();
+    m_playback.configure(m_sequence);
+    m_playback.setFrameInfo({m_frameIndex, m_frame->metadata().frameDurationMs > 0
+                                                  ? m_frame->metadata().frameDurationMs
+                                                  : 100,
+                             m_frame->width(), m_frame->height()});
+
     computeHistogram();
     const QFileInfo info(path);
     m_currentIndex = static_cast<int>(m_fileList.indexOf(path));
@@ -391,6 +396,10 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
                        .arg(m_frame->width())
                        .arg(m_frame->height())
                        .arg(position));
+    if (m_sequence.animated)
+        play();
+    else
+        updateFramePresentationStatus();
     applyPendingView();
     m_overlayCache.clear();
     clearLoadedGpu();
@@ -531,6 +540,7 @@ void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
 
 void ImageViewer::cancelCurrentLoad()
 {
+    cancelFrameRequests();
     mviewer::application::ImageLoadingService::instance().cancelAsync(m_foregroundRequest);
 }
 

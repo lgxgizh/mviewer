@@ -31,7 +31,38 @@
 > `docs/review/M54_INSTANT_BROWSE_FINAL_2026-08-29.md`,
 > `docs/review/M55_PHASE0_BASELINE_2026-08-29.md`,
 > `docs/review/M55_INTERACTIVE_LATENCY_MEMORY_NAVIGATION_CLOSURE_2026-08-29.md` and
+> `docs/review/M57_PHASE0_MULTIFRAME_BASELINE_2026-08-29.md`,
+> `docs/review/M57_MULTIFRAME_MULTIPAGE_CLOSURE_2026-08-29.md`, and
 > `.\build.ps1 Test`.
+
+## M57 — Multi-frame / multi-page image architecture and playback (2026-08-29)
+
+- `FrameSequenceReader` provides one core capability for static images,
+  animated GIF/WebP, and multi-page TIFF: bounded probe, explicit frame/page
+  decode, scaled decode, per-frame duration, and source dimensions. Qt reader
+  details stay in the core implementation TU; the Viewer does not open an
+  image reader directly.
+- `FrameIdentity` combines the M56 file revision with frame/page index and
+  decode variant. Repository, Viewer, Compare, metadata, persistence, and
+  export now carry the selected frame rather than relying on path-only state.
+- GIF/WebP play in the Viewer with monotonic-timeline scheduling, worker-side
+  decode, latest-generation cancellation, and two bounded neighbor prefetches.
+  TIFF pages use the same navigation surface but remain paused and are never
+  materialized as gallery files. Zoom/pan is retained across frame changes.
+- Preview and thumbnails intentionally use frame/page zero and do not animate;
+  thumbnails show compact `Nf`/`Np` badges. Compare is explicitly
+  frame/page-addressed per pane, and workspace/project restore persists the
+  current frame plus animated playing state. Legacy workspace schemas default
+  to frame zero and paused.
+- M57's deterministic real-plugin test covers qgif, qwebp, qtiff, repository
+  cache separation, Compare/session round-trip, playback catch-up, workspace
+  persistence, and legacy defaults. The focused real-plugin test and the two
+  required source-stable Release Test rounds are green: `build.ps1 Test`
+  passed **124/124** in 755.11 s and 753.71 s, with zero architecture
+  violations and zero complexity hard failures.
+- Physical native GUI feel, clean target-machine package launch, hostile
+  disposal/dirty-rectangle corpus, 100MP multi-page TIFF RSS, and extended
+  playback soak remain **MANUAL/BLOCKED** in this environment.
 
 ## M55 — Interactive latency, memory and navigation closure (2026-08-29)
 

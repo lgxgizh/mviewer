@@ -148,6 +148,8 @@ class ThumbnailPanel : public QListView
         int width = 0;
         int height = 0;
         QDateTime date;
+        int frameCount = 1;
+        bool animated = false;
     };
 
     // M18: live search. Filters the gallery by filename (case-insensitive

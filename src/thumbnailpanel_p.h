@@ -22,6 +22,7 @@
 #include "core/command/FileMoveCommand.h"
 #include "core/command/FileRenameCommand.h"
 #include "core/image/Decoder.h"
+#include "core/image/FrameSequence.h"
 #include "core/image/ImageFormats.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"

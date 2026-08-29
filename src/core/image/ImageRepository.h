@@ -3,6 +3,7 @@
 #include "core/cache/CacheManager.h"
 
 #include "ImageFrame.h"
+#include "FrameSequence.h"
 #include "domain/Workspace.h"
 
 #include <atomic>
@@ -28,11 +29,17 @@ struct ImageLoadOptions
     bool useDiskCache = true;
     bool generateHistogram = true;
     int maxEdgeForThumbnail = 256;
+    // M57: optional bounded frame prefetch. Zero keeps the native/full frame
+    // contract used by foreground loads.
+    int frameMaxEdge = 0;
 };
 
 class ImageRepository
 {
   public:
+    class AsyncRequestState;
+    using AsyncRequestHandle = std::shared_ptr<AsyncRequestState>;
+
     using LoadOptions = ImageLoadOptions;
 
     struct Result
@@ -53,18 +60,25 @@ class ImageRepository
     // Synchronous load (uses DiskCache internally)
     Result load(const std::string &filePath, const LoadOptions &opts = kDefaultLoadOptions);
 
+    // M57: load one explicit frame/page without changing the static-image
+    // contract. The cache key includes the M56 file revision and frame index.
+    Result loadFrame(const std::string &filePath, int frameIndex,
+                     const LoadOptions &opts = kDefaultLoadOptions);
+
     // Async load with callback (dispatched via TaskScheduler)
     void loadAsync(const std::string &filePath, std::function<void(const Result &)> callback,
                    const LoadOptions &opts = kDefaultLoadOptions);
+
+    AsyncRequestHandle loadFrameAsync(
+        const std::string &filePath, int frameIndex, std::function<void(const Result &)> callback,
+        const LoadOptions &opts = kDefaultLoadOptions,
+        std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {});
 
     // M29 cancellable loads. AsyncRequestState is opaque (defined in the .cpp):
     // UI callers hold an AsyncRequestHandle and call cancelAsync() — they never
     // depend on TaskScheduler types. A cancelled request never fires its client
     // callback; a rejected (non-cancelled) submission still reports exactly once
     // with an explicit error (same contract as loadAsync).
-    class AsyncRequestState;
-    using AsyncRequestHandle = std::shared_ptr<AsyncRequestState>;
-
     // Cancellable foreground load: same semantics as loadAsync, but returns an
     // opaque handle that cancelAsync() can use to drop obsolete work early.
     // `lifetime` is the M46 consumer-lifetime token: when it is expired or
@@ -146,6 +160,8 @@ class ImageRepository
 
     // Key derivation (shared with tests and advanced callers).
     std::string makeKey(const std::string &filePath) const;
+    std::string makeFrameKey(const std::string &filePath, int frameIndex,
+                             int decodeVariant = 0) const;
     mviewer::domain::ImageMetadata makeMeta(const std::string &filePath) const;
 
     // UI preview boundary: cache ownership stays inside the repository/cache

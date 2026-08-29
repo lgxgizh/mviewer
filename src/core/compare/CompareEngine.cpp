@@ -36,11 +36,18 @@ CompareEngine::~CompareEngine()
 
 void CompareEngine::setImages(const std::vector<std::string> &paths)
 {
+    setImages(paths, {});
+}
+
+void CompareEngine::setImages(const std::vector<std::string> &paths,
+                              const std::vector<int> &frameIndices)
+{
     m_images.clear();
     m_images.reserve(paths.size());
-    for (const auto &p : paths)
+    for (size_t i = 0; i < paths.size(); ++i)
     {
-        auto r = ImageRepository::instance().load(p);
+        const int frameIndex = i < frameIndices.size() ? std::max(0, frameIndices[i]) : 0;
+        auto r = ImageRepository::instance().loadFrame(paths[i], frameIndex);
         if (r.success())
             m_images.push_back(std::move(r.frame));
     }
@@ -135,8 +142,12 @@ mviewer::domain::CompareSession CompareEngine::session() const
 {
     mviewer::domain::CompareSession s;
     s.imageIds.reserve(imageCount());
+    s.frameIndices.reserve(imageCount());
     for (int i = 0; i < imageCount(); ++i)
+    {
         s.imageIds.push_back(m_images[i]->metadata().filePath);
+        s.frameIndices.push_back(std::max(0, m_images[i]->frameIndex()));
+    }
     const std::vector<CellState> &cells = m_sync.cells();
     s.cells.resize(cells.size());
     for (size_t i = 0; i < cells.size(); ++i)

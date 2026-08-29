@@ -40,6 +40,18 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aCopyColor = menu.addAction("复制像素颜色 (#RRGGBB)");
     menu.addSeparator();
     QAction *aSaveAs = menu.addAction("另存为...");
+    QAction *aPlay = nullptr;
+    QAction *aRestart = nullptr;
+    QAction *aPrevFrame = nullptr;
+    QAction *aNextFrame = nullptr;
+    if (isMultiFrame())
+    {
+        menu.addSeparator();
+        aPlay = menu.addAction(isPlaying() ? "暂停" : "播放");
+        aRestart = menu.addAction("重新开始");
+        aPrevFrame = menu.addAction("上一帧/页 (,)");
+        aNextFrame = menu.addAction("下一帧/页 (.)");
+    }
     menu.addSeparator();
     QAction *aZoomIn = menu.addAction("放大 (+)");
     QAction *aZoomOut = menu.addAction("缩小 (-)");
@@ -100,6 +112,29 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         emit analysisRequested(chosen->data().toString());
         return;
     }
+    if (chosen == aPlay)
+    {
+        if (isPlaying())
+            pause();
+        else
+            play();
+        return;
+    }
+    if (chosen == aRestart)
+    {
+        restart();
+        return;
+    }
+    if (chosen == aPrevFrame)
+    {
+        previousFrame();
+        return;
+    }
+    if (chosen == aNextFrame)
+    {
+        nextFrame();
+        return;
+    }
     if (handleContextCopyAction(chosen, aCopy, aCopyPath, aCopyColor, event) ||
         handleContextImageAction(chosen, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
                                   aSelectRegion))
@@ -147,7 +182,7 @@ bool ImageViewer::handleContextImageAction(QAction *chosen, QAction *saveAs, QAc
         {
             const QString defaultName = QFileInfo(m_currentPath).completeBaseName() + "_copy.png";
             const QString path = QFileDialog::getSaveFileName(
-                this, "另存为", defaultName,
+                this, isMultiFrame() ? "另存为当前帧/页" : "另存为", defaultName,
                 "PNG (*.png);;JPEG (*.jpg);;BMP (*.bmp);;WebP (*.webp)");
             if (!path.isEmpty())
                 saveToPath(path);

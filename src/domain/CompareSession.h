@@ -49,6 +49,9 @@ struct CompareSession
     static constexpr int MAX_IMAGES = 8;
 
     std::vector<std::string> imageIds;
+    // M57: frame/page identity aligned with imageIds. Legacy sessions omit
+    // this array and therefore restore every source at frame/page zero.
+    std::vector<int> frameIndices;
     std::vector<CellTransform> cells;
     SyncMode syncMode = SyncMode::All;
     int blinkIndex = -1;

@@ -337,6 +337,7 @@ void ImageViewer::copyToClipboard(const QString &path)
     mviewer::exportjob::ExportJobConfig cfg;
     cfg.mode = mviewer::exportjob::Mode::Clipboard;
     cfg.sources.push_back(source.toStdString());
+    cfg.frameIndex = (source == m_currentPath) ? frameIndex() : 0;
     cfg.preserveDisplayAppearance = true;
     startExportJob(std::move(cfg), true);
 }
@@ -352,6 +353,7 @@ void ImageViewer::saveToPath(const QString &path)
     mviewer::exportjob::ExportJobConfig cfg;
     cfg.mode = mviewer::exportjob::Mode::Convert;
     cfg.sources.push_back(m_currentPath.toStdString());
+    cfg.frameIndex = frameIndex();
     cfg.outDir = info.absolutePath().toStdString();
     cfg.destinationPath = path.toStdString();
     cfg.format = format.toStdString();
@@ -729,7 +731,8 @@ void ImageViewer::keyPressEvent(QKeyEvent *event)
 {
     const int key = event->key();
     const auto mods = event->modifiers();
-    if (handleNavigationKey(key) || handleZoomKey(key, mods) || handleModeKey(key, mods))
+    if (handleFrameKey(key, mods) || handleNavigationKey(key) || handleZoomKey(key, mods) ||
+        handleModeKey(key, mods))
         return;
     QWidget::keyPressEvent(event);
 }

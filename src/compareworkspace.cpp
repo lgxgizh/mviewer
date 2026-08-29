@@ -133,6 +133,11 @@ void CompareWorkspace::exclusiveMode(QCheckBox *keepOn)
 
 void CompareWorkspace::setImages(const QStringList &paths)
 {
+    setImages(paths, {});
+}
+
+void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &frameIndices)
+{
     endTemporaryCompare();
     // M28 P1-01: Compare loads are ASYNC. Decoding happens on the DecodePool,
     // never on the UI thread: setImages() returns immediately, and the frames
@@ -151,9 +156,15 @@ void CompareWorkspace::setImages(const QStringList &paths)
     m_pendingSession.reset();
 
     std::vector<std::string> stdPaths;
+    std::vector<int> stdFrameIndices;
     stdPaths.reserve(paths.size());
-    for (const QString &p : paths)
+    stdFrameIndices.reserve(paths.size());
+    for (int i = 0; i < paths.size(); ++i)
+    {
+        const QString &p = paths.at(i);
         stdPaths.push_back(p.toUtf8().toStdString());
+        stdFrameIndices.push_back(i < frameIndices.size() ? std::max(0, frameIndices.at(i)) : 0);
+    }
     const int requested = static_cast<int>(paths.size());
     if (requested > 0)
     {
@@ -183,11 +194,12 @@ void CompareWorkspace::setImages(const QStringList &paths)
     for (int i = 0; i < requested; ++i)
         batch->requests.push_back(std::make_unique<LoadRequest>());
     m_loadBatch = batch;
-    queueLoadRequests(batch, stdPaths);
+    queueLoadRequests(batch, stdPaths, stdFrameIndices);
 }
 
 void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch,
-                                         const std::vector<std::string> &paths)
+                                         const std::vector<std::string> &paths,
+                                         const std::vector<int> &frameIndices)
 {
     auto self = std::make_shared<QPointer<CompareWorkspace>>(this);
     auto lifetime = m_lifetime;
@@ -221,9 +233,10 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
     {
         auto *request = batch->requests[i].get();
         const std::string path = paths[i];
+        const int frameIndex = i < frameIndices.size() ? std::max(0, frameIndices[i]) : 0;
         auto probe = TaskScheduler::instance().submit(
             TaskScheduler::Priority::Decode,
-            [batch, i, request, path, opts, lifetime, queueBatchFinish](
+            [batch, i, request, path, frameIndex, opts, lifetime, queueBatchFinish](
                 const TaskScheduler::TaskContext &ctx)
             {
                 const auto account = [batch, i, queueBatchFinish](bool failed)
@@ -283,8 +296,9 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
                     {
                         handle =
                             mviewer::application::ImageLoadingService::instance()
-                                .loadAsyncCancellable(
+                                .loadFrameAsync(
                                     path,
+                                    frameIndex,
                                     [batch, i, queueBatchFinish](
                                         const mviewer::application::ImageLoadingService::Result
                                             &res)
@@ -441,6 +455,7 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
         m_selection->setCompared(comparedImages());
         m_selection->setFocused(focusImagePath());
     }
+    updateFrameControl();
 
     // M28 P1-01: a session that was applied while the load was in flight is
     // replayed once the frames exist (openCompare -> setImages -> applySession).
@@ -547,6 +562,60 @@ void CompareWorkspace::onCustomGridChanged()
     schedulePostLayoutFit();
     refreshLinkMarkers();
     update();
+}
+
+void CompareWorkspace::updateFrameControl()
+{
+    if (!m_frameLabel || !m_frameSpin)
+        return;
+    int index = m_editIdx;
+    if (index < 0)
+        index = m_hoverIdx;
+    if (index < 0)
+        index = 0;
+    const ImageFrame *frame = m_engine.imageAt(index);
+    const bool multi = frame && frame->sequenceInfo().frameCount > 1;
+    const int count = multi ? frame->sequenceInfo().frameCount : 1;
+    const QSignalBlocker blocker(m_frameSpin);
+    m_frameLabel->setVisible(multi);
+    m_frameSpin->setVisible(multi);
+    m_frameSpin->setEnabled(multi);
+    m_frameSpin->setRange(1, count);
+    if (multi)
+        m_frameSpin->setValue(std::clamp(frame->frameIndex() + 1, 1, count));
+}
+
+void CompareWorkspace::onFrameControlChanged(int oneBasedIndex)
+{
+    int index = m_editIdx;
+    if (index < 0)
+        index = m_hoverIdx;
+    if (index < 0 || index >= m_engine.imageCount())
+        return;
+    const ImageFrame *current = m_engine.imageAt(index);
+    if (!current || current->sequenceInfo().frameCount <= 1)
+        return;
+    const int target = std::clamp(oneBasedIndex - 1, 0,
+                                  current->sequenceInfo().frameCount - 1);
+    if (target == current->frameIndex())
+        return;
+
+    const QStringList paths = comparedImages();
+    if (index >= paths.size())
+        return;
+    auto session = compareSession();
+    if (session.frameIndices.size() < static_cast<size_t>(paths.size()))
+        session.frameIndices.resize(static_cast<size_t>(paths.size()), 0);
+    session.frameIndices[static_cast<size_t>(index)] = target;
+
+    QVector<int> frameIndices;
+    frameIndices.reserve(paths.size());
+    for (int i = 0; i < paths.size(); ++i)
+        frameIndices.append(i < static_cast<int>(session.frameIndices.size())
+                                ? std::max(0, session.frameIndices[static_cast<size_t>(i)])
+                                : 0);
+    setImages(paths, frameIndices);
+    applySession(session);
 }
 
 void CompareWorkspace::updateLayoutStatus()

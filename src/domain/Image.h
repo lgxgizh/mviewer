@@ -49,6 +49,16 @@ struct ImageMetadata
     std::string format;             // container format, e.g. "JPEG","PNG","BMP","TIFF"
     int dpiX = 0, dpiY = 0;         // physical resolution in DPI (0 = unknown)
 
+    // M57: container/frame presentation identity. Static images retain the
+    // neutral one-frame values, so existing consumers need no special case.
+    int frameCount = 1;
+    int currentFrame = 0;
+    int64_t durationMs = 0;
+    int frameDurationMs = 0;
+    int loopCount = -1;
+    bool animated = false;
+    std::string sequenceKind = "static"; // "static", "animation", or "pages"
+
     // M18: embedded text metadata (EXIF/XMP/IPTCCore keys the plugin exposes),
     // e.g. "Make", "Model", "DateTimeOriginal", "Software". Best-effort; the
     // exact keys available depend on the container + Qt image plugin.

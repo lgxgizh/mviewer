@@ -607,7 +607,6 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
     m_compareHost = dlg;
     dlg->setObjectName("compareDialog");
     dlg->setWindowTitle("比较模式 - MViewer");
-
     auto *layout = new QVBoxLayout(dlg);
     m_compareView = new CompareWorkspace(dlg);
     QPointer<CompareWorkspace> viewGuard(m_compareView);
@@ -707,18 +706,21 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
                        {
                            if (!dialogGuard || !viewGuard)
                                return;
-                           viewGuard->setImages(imgsFinal);
-
-                           // M15 P0#1: restore persisted compare session after images
-                           // are loaded.
+                           std::optional<mviewer::domain::CompareSession> session;
                            if (!sessionFinal.isEmpty())
-                           {
-                                const auto session =
-                                    decodeCompareSession(sessionFinal.toUtf8().toStdString());
-                                if (session)
-                                    viewGuard->applySession(*session);
-                           }
-                       });
+                               session = decodeCompareSession(
+                                   sessionFinal.toUtf8().toStdString());
+                           QVector<int> frameIndices;
+                            if (session)
+                                for (int i = 0; i < imgsFinal.size(); ++i)
+                                    frameIndices.append(
+                                        i < static_cast<int>(session->frameIndices.size())
+                                            ? std::max(0, session->frameIndices[i])
+                                            : 0);
+                            viewGuard->setImages(imgsFinal, frameIndices);
+                            if (session)
+                                viewGuard->applySession(*session);
+                        });
 }
 QStringList MainWindow::resolveSelectedPaths(bool preferMulti) const
 {

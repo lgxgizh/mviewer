@@ -335,6 +335,21 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
     m_focusLabel->setMinimumWidth(60);
     viewLayout->addWidget(m_focusLabel);
 
+    // M57: Compare is static by default, but a focused animated/page source
+    // can be switched to an explicit frame/page without changing the Browse
+    // file index. The control is hidden for ordinary single-frame sources.
+    m_frameLabel = new QLabel(tr("帧/页:"), this);
+    m_frameSpin = new QSpinBox(this);
+    m_frameSpin->setObjectName(QStringLiteral("compareFrameSpin"));
+    m_frameSpin->setRange(1, 1);
+    m_frameSpin->setVisible(false);
+    m_frameSpin->setEnabled(false);
+    m_frameLabel->setVisible(false);
+    connect(m_frameSpin, QOverload<int>::of(&QSpinBox::valueChanged), this,
+            &CompareWorkspace::onFrameControlChanged);
+    viewLayout->addWidget(m_frameLabel);
+    viewLayout->addWidget(m_frameSpin);
+
     viewLayout->addStretch(1);
 }
 

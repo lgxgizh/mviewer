@@ -111,7 +111,7 @@ ImageData decodeSource(const std::string &path, const ExportJobConfig &cfg)
     // the ICC/display conversion is deliberately performed on this worker,
     // never by a QAction, QWidget, or clipboard callback on the GUI thread.
     const ImageLoadOptions opts{true, false, 256};
-    const auto loaded = ImageRepository::instance().load(path, opts);
+    const auto loaded = ImageRepository::instance().loadFrame(path, std::max(0, cfg.frameIndex), opts);
     if (!loaded.success() || !loaded.frame)
         return {};
     return mvcore::toDisplayImageData(loaded.frame->pixels(), loaded.frame->metadata());

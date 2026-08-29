@@ -1,5 +1,6 @@
 #include "core/workspace/WorkspaceSerializer.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <optional>
@@ -204,7 +205,7 @@ struct Parser
 } // namespace
 
 // --- CompareSession (M15 P0#1): embedded so Workspace stays a flat value type. ---
-// Shape: {"imageIds":[...],"cells":[[s,ox,oy],...],"syncMode":N,"blink":I,
+// Shape: {"imageIds":[...],"frameIndices":[...],"cells":[[s,ox,oy],...],"syncMode":N,"blink":I,
 //         "sharedScale":S,"sharedOffsetX":X,"sharedOffsetY":Y,
 //         "cols":C,"rows":R,"selection":[x,y,w,h,sync],
 //         "threshold":T,"blinkIntervalMs":B,"sidePanel":0|1,"layoutIndex":L,
@@ -218,6 +219,14 @@ std::string serializeCompareSession(const mviewer::domain::CompareSession &s)
         if (i)
             os << ',';
         esc(os, s.imageIds[i]);
+    }
+    os << "],\"frameIndices\":[";
+    for (size_t i = 0; i < s.imageIds.size(); ++i)
+    {
+        if (i)
+            os << ',';
+        const int frame = i < s.frameIndices.size() ? std::max(0, s.frameIndices[i]) : 0;
+        os << frame;
     }
     os << "],\"cells\":[";
     for (size_t i = 0; i < s.cells.size(); ++i)
@@ -301,6 +310,18 @@ static bool parseCompareCollections(Parser &p, const std::string &key,
             if (!p.eat(']'))
                 return false;
             out.cells.push_back(ct);
+        }
+        return true;
+    }
+    if (key == "frameIndices")
+    {
+        if (!p.eat('['))
+            return false;
+        while (!p.eat(']'))
+        {
+            if (!out.frameIndices.empty())
+                p.eat(',');
+            out.frameIndices.push_back(static_cast<int>(p.parseNumber()));
         }
         return true;
     }
@@ -406,13 +427,20 @@ bool parseCompareSession(const std::string &text, mviewer::domain::CompareSessio
     if (!p.eat('}'))
         return false;
     applyCompareParseState(state, out);
+    if (out.frameIndices.size() < out.imageIds.size())
+        out.frameIndices.resize(out.imageIds.size(), 0);
+    if (out.frameIndices.size() > out.imageIds.size())
+        out.frameIndices.resize(out.imageIds.size());
+    for (auto &frame : out.frameIndices)
+        frame = std::max(0, frame);
     return state.haveIds; // require at least the image list to be a valid session
 }
 
 // M15: workspace version for forward/backward compatibility.
 // Version 1 = legacy (no version field). Version 2 added CompareSession;
-// version 3 adds the optional per-image analysis producer id.
-static constexpr int kWorkspaceVersion = 3;
+// version 3 adds the optional per-image analysis producer id; version 4 adds
+// the current frame/page and playback state.
+static constexpr int kWorkspaceVersion = 4;
 
 std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
 {
@@ -466,6 +494,10 @@ std::string serializeWorkspace(const mviewer::domain::Workspace &ws)
     // shared transform, ROI) so reopening restores the full compare view.
     os << ",\"compareSession\":";
     esc(os, ws.compareSessionJson);
+    os << ",\"currentImagePath\":";
+    esc(os, ws.currentImagePath);
+    os << ",\"currentFrameIndex\":" << std::max(0, ws.currentFrameIndex);
+    os << ",\"currentPlaying\":" << (ws.currentPlaying ? 1 : 0);
     os << "}";
     return os.str();
 }
@@ -569,6 +601,18 @@ static bool parseWorkspaceOptionalFields(Parser &p, mviewer::domain::Workspace &
         else if (key == "compareSession")
         {
             out.compareSessionJson = p.parseString();
+        }
+        else if (key == "currentImagePath")
+        {
+            out.currentImagePath = p.parseString();
+        }
+        else if (key == "currentFrameIndex")
+        {
+            out.currentFrameIndex = std::max(0, static_cast<int>(p.parseNumber()));
+        }
+        else if (key == "currentPlaying")
+        {
+            out.currentPlaying = p.parseNumber() != 0;
         }
         else
         {

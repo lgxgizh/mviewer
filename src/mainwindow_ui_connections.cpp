@@ -275,6 +275,7 @@ void MainWindow::connectViewerSignals()
     // load completes (no re-decode on the UI thread). This replaces the old
     // synchronous QImage(path) decode that blocked browsing.
     connect(m_imageViewer, &ImageViewer::imageReady, m_analysisPanel, &AnalysisPanel::setFrame);
+    connect(m_imageViewer, &ImageViewer::imageReady, m_metadataPanel, &MetadataPanel::setFrame);
     // P0-3: an active metadata overlay follows the freshly decoded frame — its
     // histogram is computed on the Analysis pool only after the frame is ready
     // (navigating while the overlay is visible must never show the old image's

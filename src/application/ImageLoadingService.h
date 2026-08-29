@@ -36,6 +36,15 @@ class ImageLoadingService
             path, std::move(callback), options, std::move(lifetime));
     }
 
+    AsyncRequestHandle loadFrameAsync(
+        const std::string &path, int frameIndex, std::function<void(const Result &)> callback,
+        const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions,
+        std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {})
+    {
+        return mviewer::core::ImageLoadingFacade::instance().loadFrameAsync(
+            path, frameIndex, std::move(callback), options, std::move(lifetime));
+    }
+
     AsyncRequestHandle preloadAsync(
         const std::string &path,
         std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime = {})

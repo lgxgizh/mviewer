@@ -178,6 +178,17 @@ void MetadataPanel::setImage(const QString &path)
     requestMetadata();
 }
 
+void MetadataPanel::setFrame(const std::shared_ptr<ImageFrame> &frame)
+{
+    if (!frame || frame->metadata().filePath != m_currentPath || m_currentPath.isEmpty())
+        return;
+    // The metadata service supplies the container/EXIF tree. Replace only the
+    // image metadata on frame changes so Current Frame/Page follows playback
+    // without starting a metadata file read for every animation tick.
+    m_model->setImage(frame->metadata());
+    m_tree->expandAll();
+}
+
 void MetadataPanel::requestMetadata()
 {
     const QString path = m_currentPath;

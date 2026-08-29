@@ -3,6 +3,7 @@
 #include <QWidget>
 
 #include "core/image/RawMetadata.h"
+#include "core/image/ImageFrame.h"
 #include "core/metadata/MetadataPresentationService.h"
 #include "domain/Image.h"
 
@@ -27,6 +28,7 @@ class MetadataPanel : public QWidget
 
   public slots:
     void setImage(const QString &path);
+    void setFrame(const std::shared_ptr<ImageFrame> &frame);
     void clear();
 
   signals:

@@ -30,6 +30,9 @@ struct PersistenceSnapshot
     std::string projectName;
     std::string createdIso;
     std::vector<std::string> analyzerPipeline;
+    std::string currentImagePath;
+    int currentFrameIndex = 0;
+    bool currentPlaying = false;
 };
 
 struct PersistenceResult
@@ -236,6 +239,12 @@ void MainWindow::saveWorkspace()
     PersistenceSnapshot snapshot;
     snapshot.rootPath = currentDir().toUtf8().toStdString();
     snapshot.outputPath = filePath.toUtf8().toStdString();
+    snapshot.currentImagePath = currentImagePath().toUtf8().toStdString();
+    if (m_imageViewer && m_imageViewer->currentPath() == currentImagePath())
+    {
+        snapshot.currentFrameIndex = m_imageViewer->frameIndex();
+        snapshot.currentPlaying = m_imageViewer->isPlaying();
+    }
     if (m_compareView)
     {
         const QStringList compared = m_compareView->comparedImages();
@@ -317,8 +326,6 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
 {
     const auto &ws = workspace;
 
-    // Restore the browsing view: load the workspace root back into the gallery.
-    // changeDirectory drives DirectoryModel + ImageListModel + tree + gallery.
     const QString root =
         QString::fromUtf8(ws.rootPath.data(), static_cast<int>(ws.rootPath.size()));
     changeDirectory(root);
@@ -332,21 +339,11 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
         m_workspace->setCompareSessionJson(QString::fromStdString(ws.compareSessionJson));
     }
 
-    // M12.2 (review fix): restore the compare session from the explicit
-    // comparedImages list written by saveWorkspace(). This is the exact set of
-    // images that were open in Compare — independent of whether they had ROI or
-    // analysis context — so a session with neither is no longer lost on reopen.
-    // (Earlier G2-ext code inferred the set from ROI/analysis presence, which
-    // dropped compare sessions with no ROI and no analysis.)
     QStringList comparePaths;
     comparePaths.reserve(static_cast<int>(ws.comparedImages.size()));
     for (const auto &p : ws.comparedImages)
         comparePaths.push_back(QString::fromUtf8(p.data(), static_cast<int>(p.size())));
 
-    // M15: rebuild the per-image analysis map from the saved model so the whole
-    // compare session's analysis context is available on reload (each image's
-    // own ROI/analysis is restored, not just the first). openCompare() below
-    // creates m_compareView; we apply the per-image context after it loads.
     m_analyzer->clearAllResults();
     for (const auto &folder : ws.folders)
     {
@@ -361,9 +358,6 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
         }
     }
 
-    // M15: if a compare session was saved, auto-open the compare dialog (it may
-    // not exist yet in a fresh launch) and load the exact image set. Previously
-    // the session was silently dropped when m_compareView was still null.
     std::optional<mviewer::domain::CompareSession> restoredSession;
     bool haveSession = false;
     if (!ws.compareSessionJson.empty())
@@ -372,16 +366,9 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
         haveSession = restoredSession.has_value();
     }
     if (!comparePaths.isEmpty())
-    {
-        openCompare(comparePaths); // creates m_compareView + setImages + show
-        // openCompare() shows the dialog; restore the saved transform snapshot.
-        if (haveSession && m_compareView)
-            m_compareView->applySession(*restoredSession);
-    }
+    openCompare(comparePaths,
+                haveSession ? QString::fromStdString(ws.compareSessionJson) : QString());
 
-    // Pick the active (browsing) image: prefer the first image carrying session
-    // context (ROI or analysis), else the first compared image, else the first
-    // image in the workspace.
     std::string restoredPath;
     mviewer::domain::Selection restoredRoi;
     std::string restoredAnalysis;
@@ -397,6 +384,14 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
             }
         }
     }
+    const QString persistedCurrentPath = QString::fromUtf8(
+        ws.currentImagePath.data(), static_cast<int>(ws.currentImagePath.size()));
+    if (!persistedCurrentPath.isEmpty() && QFile::exists(persistedCurrentPath))
+    {
+        restoredPath = persistedCurrentPath.toUtf8().toStdString();
+        restoredRoi = {};
+        restoredAnalysis.clear();
+    }
     if (restoredPath.empty() && !comparePaths.isEmpty())
         restoredPath = comparePaths.first().toUtf8().toStdString();
     else if (restoredPath.empty() && ws.imageCount() > 0)
@@ -404,12 +399,28 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
 
     if (!restoredPath.empty())
     {
+        const std::string restoredViewerPath = restoredPath;
+        const int restoredFrame = std::max(0, ws.currentFrameIndex);
+        const bool restoredPlaying = ws.currentPlaying;
+        if (m_imageViewer)
+        {
+            connect(m_imageViewer, &ImageViewer::imageReady, this,
+                    [this, restoredViewerPath, restoredFrame, restoredPlaying](const auto &frame)
+                    {
+                        if (!m_imageViewer || !frame || frame->metadata().filePath != restoredViewerPath)
+                            return;
+                        m_imageViewer->setFrameIndex(restoredFrame);
+                        if (restoredPlaying)
+                            m_imageViewer->play();
+                        else
+                            m_imageViewer->pause();
+                    },
+                    Qt::SingleShotConnection);
+        }
         m_selection->setCurrentImage(
             QString::fromUtf8(restoredPath.data(), static_cast<int>(restoredPath.size())));
         if (m_imageViewer)
         {
-            // Async decode; imageReady() feeds AnalysisPanel once the frame is
-            // ready (no synchronous frame() read here — it isn't ready yet).
             m_imageViewer->setImage(currentImagePath());
             m_previewPanel->setImage(currentImagePath());
         }
@@ -443,6 +454,12 @@ void MainWindow::saveProject()
     snapshot.outputPath = filePath.toUtf8().toStdString();
     snapshot.projectName = QFileInfo(filePath).baseName().toUtf8().toStdString();
     snapshot.createdIso = QDateTime::currentDateTimeUtc().toString(Qt::ISODate).toUtf8().toStdString();
+    snapshot.currentImagePath = currentImagePath().toUtf8().toStdString();
+    if (m_imageViewer && m_imageViewer->currentPath() == currentImagePath())
+    {
+        snapshot.currentFrameIndex = m_imageViewer->frameIndex();
+        snapshot.currentPlaying = m_imageViewer->isPlaying();
+    }
     if (m_compareView)
     {
         for (const QString &path : m_compareView->comparedImages())

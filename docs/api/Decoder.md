@@ -27,16 +27,37 @@ public:
 ```
 
 ## Format support matrix
-| Format | Decode | Scaled decode | Plugin / backend |
-|--------|--------|---------------|------------------|
-| JPEG   | ✅ | ✅ | Qt QtGui (built-in) |
-| PNG    | ✅ | ✅ | Qt QtGui (built-in) |
-| BMP    | ✅ | ✅ | Qt QtGui (built-in) |
-| TIFF   | ✅ | ✅ | `qtiff.dll` (qtimageformats module) — **G1**: must ship in portable zip / installer |
-| WebP   | ✅* | ✅* | `qwebp.dll` (qtimageformats module) |
+| Format | Static decode | Sequence capability | Plugin / backend |
+|--------|---------------|---------------------|------------------|
+| JPEG   | ✅ | one static frame | Qt QtGui (built-in) |
+| PNG    | ✅ | one static frame | Qt QtGui (built-in) |
+| BMP    | ✅ | one static frame | Qt QtGui (built-in) |
+| TIFF   | ✅ | ✅ pages | `qtiff.dll` (qtimageformats module) — must ship in portable zip / installer |
+| GIF    | ✅* | ✅* animation | `qgif.dll` (Qt imageformats module) |
+| WebP   | ✅* | ✅* animation | `qwebp.dll` (Qt imageformats module) |
 
 \* if the Qt imageformats module is deployed (it is, via windeployqt in the
 pack scripts + G1 guard).
+
+## Sequence capability
+
+`src/core/image/FrameSequence.h` is the Qt-free core contract for multi-frame
+sources:
+
+```cpp
+FrameSequenceInfo probeSequence(const std::string &path);
+FrameDecodeResult decodeFrame(const std::string &path, int frameIndex);
+FrameDecodeResult decodeFrameScaled(const std::string &path, int frameIndex,
+                                    int maxEdge);
+```
+
+`FrameSequenceKind::Animation` is used for GIF/WebP and
+`FrameSequenceKind::Pages` for multi-page TIFF. `FrameIdentity` adds the
+frame/page index and decode variant to the existing file-revision key. The
+implementation uses sequential fallback for qgif/qwebp because the qualified
+Qt 6.10 runtime reports counts but does not make `jumpToImage()` reliable for
+those handlers. Decode errors return an unsuccessful result and do not throw
+across the core/application boundary.
 
 ## Thread-safety
 `Decoder` static methods are stateless and safe to call from multiple worker

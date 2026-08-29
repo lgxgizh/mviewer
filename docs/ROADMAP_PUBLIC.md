@@ -4,7 +4,7 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.13 RC hardening (M53)**
+## Where we are now — **Beta / 1.0.13 RC hardening (M57)**
 
 MViewer remains in **Beta** on the post-`v1.0.10` hardening line, now released as
 the `1.0.13` patch line. The product
@@ -23,12 +23,20 @@ loop below is built and verified; packaging and final human review remain:
 - **Export** — compare report (JSON/CSV) + diff PNG.
 - **Workspace** — persist open directories, ROI, and per-image analysis to disk
   and restore.
+- **Multi-frame / multi-page** — animated GIF/WebP play with explicit frame
+  status and bounded prefetch; multi-page TIFF supports page navigation. The
+  gallery remains one item per source, and Compare/workspace state names the
+  selected frame/page.
 - **Large sources** — 100MP JPEG and 100MP-class TIFF now use bounded
   source-backed display on Windows; exact-source analysis remains separate.
 - **Installer** — NSIS `.exe` + portable zip; real UI screenshot in the release.
 
-Supported formats today: **JPEG / PNG / BMP / TIFF** (8/16-bit), Gray / RGBA /
-CMYK, plus integrity-edge cases (bad EXIF / bad ICC) handled without crashing.
+Supported formats today: **JPEG / PNG / BMP / TIFF** (8/16-bit), plus
+**GIF animation** and **animated WebP when the deployed Qt qwebp plugin is
+available**. Gray / RGBA / CMYK and integrity-edge cases (bad EXIF / bad ICC)
+remain handled without crashing. TIFF multi-page support and GIF/WebP runtime
+capability are verified by the M57 real-plugin test; a missing plugin is a
+diagnostic/deployment failure, not silently treated as full support.
 See [`docs/acceptance/M13.4_real_datasets.md`](acceptance/M13.4_real_datasets.md)
 for the verified format matrix.
 

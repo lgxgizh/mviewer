@@ -1,6 +1,7 @@
 #include "previewpanel.h"
 
 #include "core/image/Decoder.h"
+#include "core/image/FrameSequence.h"
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
 
@@ -137,11 +138,27 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
             }
             else
             {
+                if (mviewer::core::FrameSequenceReader::isSequencePath(stdPath))
+                {
+                    // Preview is deliberately representative-frame only. The
+                    // sequence probe/decode remains on the worker and never
+                    // starts playback or materializes neighboring frames.
+                    const auto decoded = mviewer::core::FrameSequenceReader::decodeFrameScaled(
+                        stdPath, 0, kPreviewMaxEdge);
+                    if (decoded.ok)
+                    {
+                        meta = decoded.metadata;
+                        img = decoded.pixels;
+                    }
+                }
+                else
+                {
                     ImageData decoded = Decoder::decodeScaled(stdPath, kPreviewMaxEdge, meta);
                     img = mvcore::toDisplayImageData(decoded, meta);
-                    if (!img.isNull())
-                        mviewer::application::ImageLoadingService::instance().putPreviewCache(
-                            cacheKey, img);
+                }
+                if (!img.isNull())
+                    mviewer::application::ImageLoadingService::instance().putPreviewCache(
+                        cacheKey, img);
             }
             if (!img.isNull())
             {

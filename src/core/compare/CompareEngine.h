@@ -202,6 +202,8 @@ class CompareEngine
     CompareEngine &operator=(const CompareEngine &) = delete;
 
     void setImages(const std::vector<std::string> &paths);
+    void setImages(const std::vector<std::string> &paths,
+                   const std::vector<int> &frameIndices);
     // M28 P1-01: adopt already-decoded frames produced off the UI thread (the
     // CompareWorkspace async load path). Invalid/null frames are dropped,
     // matching setImages() semantics. Engine state is NOT thread-safe: call

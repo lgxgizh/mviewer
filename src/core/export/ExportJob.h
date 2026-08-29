@@ -46,6 +46,9 @@ struct ExportJobConfig
     // synthesize a rename pattern or encode pixels itself.
     std::string destinationPath;
     std::string format = "jpeg"; // jpeg / png / webp / tiff / bmp
+    // M57: explicit source frame/page for viewer exports. Zero preserves the
+    // legacy static-image behavior and is also the first frame/page.
+    int frameIndex = 0;
     int quality = 90;
     ResizeMode resizeMode = ResizeMode::None;
     int resizeValue = 1920; // fit: max edge; scale: percent

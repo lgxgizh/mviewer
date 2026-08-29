@@ -4,6 +4,7 @@
 #include "domain/Selection.h"
 
 #include "ImageBuffer.h"
+#include "FrameSequence.h"
 
 #include <optional>
 #include <string>
@@ -67,6 +68,24 @@ class ImageFrame
         return m_meta;
     }
     mviewer::domain::ImageId id() const;
+
+    // M57: explicit source + frame identity. The file revision remains the
+    // M56 cache/revision key; frameIndex distinguishes animation frames and
+    // multi-page TIFF pages throughout analysis and export boundaries.
+    const mviewer::core::FrameIdentity &frameIdentity() const
+    {
+        return m_frameIdentity;
+    }
+    const mviewer::core::FrameSequenceInfo &sequenceInfo() const
+    {
+        return m_sequence;
+    }
+    int frameIndex() const
+    {
+        return m_frameIdentity.frameIndex;
+    }
+    void setSequenceIdentity(const mviewer::core::FrameSequenceInfo &sequence,
+                             const mviewer::core::FrameIdentity &identity);
 
     // ─── Pixel access ────────────────────────────────────────────────────────
     const ImageData &pixels() const
@@ -229,6 +248,9 @@ class ImageFrame
     std::vector<std::string> m_tags;
     std::vector<AnalysisCacheEntry> m_analysisCache;
     std::vector<RenderCacheEntry> m_renderCache;
+
+    mviewer::core::FrameSequenceInfo m_sequence;
+    mviewer::core::FrameIdentity m_frameIdentity;
 
     // Original 16-bit integer samples (when source bit depth > 8). Nullptr for
     // 8-bit / RAW-preview sources. Kept alongside the 8-bit display buffer so

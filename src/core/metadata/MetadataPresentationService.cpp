@@ -1,6 +1,7 @@
 #include "core/metadata/MetadataPresentationService.h"
 
 #include "core/image/MetadataReader.h"
+#include "core/image/FrameSequence.h"
 
 #include <QCoreApplication>
 #include <QFileInfo>
@@ -193,6 +194,19 @@ void MetadataPresentationService::runFlight(const std::shared_ptr<Flight> &fligh
     if (!fromCache && !identity.empty() && flight->active->load(std::memory_order_acquire))
     {
         snapshot.metadata = MetadataReader::read(flight->path);
+        const auto sequence = FrameSequenceReader::probeSequence(flight->path);
+        if (sequence.valid)
+        {
+            snapshot.metadata.frameCount = sequence.frameCount;
+            snapshot.metadata.currentFrame = sequence.defaultFrame;
+            snapshot.metadata.durationMs = sequence.totalDurationMs;
+            snapshot.metadata.loopCount = sequence.loopCount;
+            snapshot.metadata.animated = sequence.animated;
+            snapshot.metadata.sequenceKind =
+                sequence.kind == FrameSequenceKind::Pages
+                    ? "pages"
+                    : (sequence.kind == FrameSequenceKind::Animation ? "animation" : "static");
+        }
         snapshot.raw = parseRawMetadata(flight->path);
         snapshot.identity = identity;
         if (snapshot.valid())

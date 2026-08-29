@@ -74,6 +74,12 @@ struct Workspace
     // localized. Empty when no compare session was active at save time.
     std::string compareSessionJson;
 
+    // M57: single-image presentation restore. Legacy workspaces keep the
+    // zero-value frame/page and paused defaults.
+    std::string currentImagePath;
+    int currentFrameIndex = 0;
+    bool currentPlaying = false;
+
     bool empty() const
     {
         return folders.empty();

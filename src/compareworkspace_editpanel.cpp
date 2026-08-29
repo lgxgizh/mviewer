@@ -146,6 +146,7 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
 void CompareWorkspace::onEditCellSelected(int cellIdx)
 {
     m_editIdx = cellIdx;
+    updateFrameControl();
 
     // Resize adjustment vector if needed
     const int needed = cellIdx + 1;

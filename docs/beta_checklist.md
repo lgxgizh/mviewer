@@ -23,6 +23,21 @@
 >   Windows WIC path, while PNG/BMP retain honest scaled-fallback classification.
 > - Native UX review: **MANUAL PENDING / BLOCKED** for physical DPI/ICC/UNC,
 >   installer behavior, long-session GUI feel, and extended soak on Windows.
+
+> **M57 multi-frame review snapshot (2026-08-29)**
+> - Deterministic real-plugin coverage is in place for three-frame GIF, three-frame
+>   WebP, and three-page TIFF. The baseline records qgif/qwebp sequential-read
+>   behavior and qtiff page random access in
+>   `docs/review/M57_PHASE0_MULTIFRAME_BASELINE_2026-08-29.md`.
+> - Viewer playback/page navigation is bounded and cancellable; frame/page status,
+>   Compare pane identity, workspace restore, metadata, and static export use the
+>   selected frame. Preview and thumbnails remain static frame/page zero.
+> - Automated closure: two consecutive source-stable Release `build.ps1 Test`
+>   gates passed **124/124** in 755.11 s and 753.71 s; architecture violations
+>   and complexity hard failures were both zero.
+> - UX review is **MANUAL PENDING / BLOCKED** for native playback feel, mixed-DPI
+>   zoom continuity, target-machine packaging, hostile disposal fixtures, and
+>   long-session/100MP multi-page RSS qualification.
 >
 > **通过判据（任一不满足即不通过）**：
 > - 无等待（no waiting）：每一步操作在预算延迟内完成，不出现可感知的卡顿/转圈。
@@ -149,6 +164,9 @@ Checklist 条目凡能自动化的，已固化为回归测试，随门禁自动�
 - [ ] 200%
 - [ ] 缩放中心（以鼠标点为中心）
 - [ ] 平移
+- [ ] GIF/WebP：播放、暂停、重启、前后帧、Frame 状态正确
+- [ ] 多页 TIFF：前后页导航、Page 状态正确且不改变 Browse 文件索引
+- [ ] 帧切换保持缩放/平移，不重新 Fit
 
 ### UI
 - [ ] 当前目录同步（目录树 ↔ 主视图 ↔ 状态栏）
@@ -169,6 +187,7 @@ Checklist 条目凡能自动化的，已固化为回归测试，随门禁自动�
 - [ ] 快速切图（无崩溃、无不同步）
 - [ ] 快速缩放（无撕裂、无缩放错误）
 - [ ] 长时间浏览（内存稳定、无泄漏）
+- [ ] 动画快速切换文件后无 stale frame、无残留 timer、无后台无限解码
 
 ---
 

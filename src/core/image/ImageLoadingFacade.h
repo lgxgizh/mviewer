@@ -37,6 +37,16 @@ class ImageLoadingFacade
             path, std::move(callback), options, std::move(lifetime));
     }
 
+    ImageAsyncRequestHandle loadFrameAsync(
+        const std::string &path, int frameIndex,
+        std::function<void(const ImageLoadResult &)> callback,
+        const ImageLoadOptions &options = ImageRepository::kDefaultLoadOptions,
+        std::weak_ptr<AsyncLifetimeToken> lifetime = {})
+    {
+        return ImageRepository::instance().loadFrameAsync(
+            path, frameIndex, std::move(callback), options, std::move(lifetime));
+    }
+
     ImageAsyncRequestHandle preloadAsync(
         const std::string &path, std::weak_ptr<AsyncLifetimeToken> lifetime = {})
     {

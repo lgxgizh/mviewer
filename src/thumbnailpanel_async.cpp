@@ -410,7 +410,11 @@ void ThumbnailPanel::ensureDimensions()
         {
             const auto probe = ThumbnailPanel::scanIterationProbeSnapshot();
             QVector<QSize> sizes;
+            QVector<int> frameCounts;
+            QVector<bool> animated;
             sizes.reserve(paths.size());
+            frameCounts.reserve(paths.size());
+            animated.reserve(paths.size());
             for (int i = 0; i < paths.size(); ++i)
             {
                 // M46: cooperative stop — the panel died or the directory
@@ -430,13 +434,28 @@ void ThumbnailPanel::ensureDimensions()
                     {
                     }
                 }
-                QImageReader reader(paths.at(i));
-                reader.setAutoTransform(true);
-                sizes.append(reader.size());
+                const auto sequence = mviewer::core::FrameSequenceReader::probe(
+                    paths.at(i).toUtf8().toStdString());
+                QSize size;
+                if (sequence.valid)
+                {
+                    const auto frame = mviewer::core::FrameSequenceReader::frameInfo(
+                        paths.at(i).toUtf8().toStdString(), sequence.defaultFrame);
+                    size = QSize(frame.width, frame.height);
+                }
+                if (!size.isValid())
+                {
+                    QImageReader reader(paths.at(i));
+                    reader.setAutoTransform(true);
+                    size = reader.size();
+                }
+                sizes.append(size);
+                frameCounts.append(sequence.valid ? qMax(1, sequence.frameCount) : 1);
+                animated.append(sequence.valid && sequence.animated);
             }
             QMetaObject::invokeMethod(
                 qApp,
-                [self, alive, gen, sizes]()
+                [self, alive, gen, sizes, frameCounts, animated]()
                 {
                     if (!alive->load() || !self)
                         return;
@@ -447,6 +466,10 @@ void ThumbnailPanel::ensureDimensions()
                     {
                         panel->m_allEntries[i].width = sizes[i].width();
                         panel->m_allEntries[i].height = sizes[i].height();
+                        if (i < frameCounts.size())
+                            panel->m_allEntries[i].frameCount = frameCounts[i];
+                        if (i < animated.size())
+                            panel->m_allEntries[i].animated = animated[i];
                     }
                     panel->viewport()->update();
                 });

@@ -175,6 +175,17 @@ void MetadataModel::buildImageSection()
         addLeaf(img, tr("分辨率 (DPI)"), QString("%1 × %2").arg(m_meta.dpiX).arg(m_meta.dpiY));
     addLeaf(img, tr("方向"), orientationText(m_meta.orientation));
     addLeaf(img, tr("ICC 配置"), m_meta.hasIccProfile ? tr("已嵌入") : tr("无"));
+    if (m_meta.frameCount > 1)
+    {
+        const bool pages = m_meta.sequenceKind == "pages";
+        addLeaf(img, pages ? tr("页数") : tr("帧数"), QString::number(m_meta.frameCount));
+        addLeaf(img, pages ? tr("当前页") : tr("当前帧"),
+                QString::number(m_meta.currentFrame + 1));
+        if (!pages && m_meta.durationMs > 0)
+            addLeaf(img, tr("总时长"), QString("%1 ms").arg(m_meta.durationMs));
+        if (!pages && m_meta.loopCount >= 0)
+            addLeaf(img, tr("循环"), QString::number(m_meta.loopCount));
+    }
     if (!m_meta.hasGps)
         return;
     auto toDms = [](double dd, char pos, char neg)

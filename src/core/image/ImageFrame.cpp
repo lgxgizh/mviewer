@@ -53,6 +53,18 @@ ImageFrame::ImageFrame()
 ImageFrame::ImageFrame(const mviewer::domain::ImageMetadata &meta, const ImageData &pixels)
     : m_meta(meta), m_pixels(pixels)
 {
+    m_sequence.valid = true;
+    m_sequence.frameCount = std::max(1, meta.frameCount);
+    m_sequence.animated = meta.animated;
+    m_sequence.kind = meta.sequenceKind == "pages"
+                          ? mviewer::core::FrameSequenceKind::Pages
+                          : (meta.sequenceKind == "animation"
+                                 ? mviewer::core::FrameSequenceKind::Animation
+                                 : mviewer::core::FrameSequenceKind::Static);
+    m_sequence.loopCount = meta.loopCount;
+    m_sequence.totalDurationMs = meta.durationMs;
+    m_frameIdentity.fileRevision = meta.hash.empty() ? meta.filePath : meta.hash;
+    m_frameIdentity.frameIndex = meta.currentFrame;
     mviewer::perf::MemoryTracker::notifyFrameCreated();
 }
 
@@ -80,6 +92,23 @@ ImageFrame::~ImageFrame()
 mviewer::domain::ImageId ImageFrame::id() const
 {
     return mviewer::domain::ImageId{m_meta.hash};
+}
+
+void ImageFrame::setSequenceIdentity(const mviewer::core::FrameSequenceInfo &sequence,
+                                      const mviewer::core::FrameIdentity &identity)
+{
+    m_sequence = sequence;
+    m_frameIdentity = identity;
+    m_meta.frameCount = sequence.frameCount;
+    m_meta.currentFrame = identity.frameIndex;
+    m_meta.durationMs = sequence.totalDurationMs;
+    m_meta.loopCount = sequence.loopCount;
+    m_meta.animated = sequence.animated;
+    m_meta.sequenceKind = sequence.kind == mviewer::core::FrameSequenceKind::Pages
+                              ? "pages"
+                              : (sequence.kind == mviewer::core::FrameSequenceKind::Animation
+                                     ? "animation"
+                                     : "static");
 }
 
 void ImageFrame::setPixels(const ImageData &pixels)

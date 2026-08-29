@@ -4,6 +4,17 @@
 
 ### Fixed
 
+- **Multi-frame image workflow (M57):** GIF and animated WebP now expose a
+  unified sequence capability with real frame playback, monotonic timing,
+  bounded worker prefetch, cancellation, and explicit frame failure state.
+  Multi-page TIFF supports in-viewer page navigation without turning pages
+  into gallery items.
+- **Frame identity and downstream semantics:** repository/cache keys,
+  ImageFrame metadata, Compare panes and sessions, workspace/project restore,
+  metadata presentation, and static export now carry the selected
+  frame/page. Preview and thumbnails remain representative frame/page zero and
+  thumbnails display compact sequence badges.
+
 - **Interactive Browse memory and navigation:** the UI thumbnail surface now
   uses exact `(path,size)` identity with a 384-entry / 96 MiB LRU bound, and
   viewport demand retains overlapping work with ABA-safe enqueue ownership.
@@ -103,6 +114,11 @@
   debounce/recovery, row-local gallery continuity, and the deterministic 10k
   live-directory soak all pass. Full two-round Release gate evidence is in
   `docs/review/M56_LIVE_FOLDER_COHERENCE_CLOSURE_2026-08-29.md`.
+- M57 focused qgif/qwebp/qtiff coverage is green. Two consecutive source-stable
+  Release `build.ps1 Test` gates passed **124/124** in 755.11 s and 753.71 s,
+  with zero architecture violations and zero complexity hard failures. Native
+  GUI feel, hostile animation disposal, 100MP multi-page RSS, and clean
+  target-machine packaging remain MANUAL/BLOCKED.
 - The M51 release-contract coverage remains green; physical target-machine
   qualification is still recorded as MANUAL/BLOCKED.
 

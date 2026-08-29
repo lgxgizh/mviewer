@@ -4,16 +4,35 @@
 // wait-for-in-flight-delivery semantics — stays a bounded, testable unit).
 #include "core/image/ImageRepository.h"
 
+#include "core/image/FrameSequence.h"
+
 #include "core/scheduler/TaskScheduler.h"
 #include "core/trace/Trace.h"
 
 #include <atomic>
+#include <cctype>
 #include <condition_variable>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
+
+namespace
+{
+
+bool sequenceCandidate(const std::string &path)
+{
+    const size_t dot = path.find_last_of('.');
+    if (dot == std::string::npos)
+        return false;
+    std::string suffix = path.substr(dot + 1);
+    for (char &c : suffix)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    return suffix == "gif" || suffix == "webp" || suffix == "tif" || suffix == "tiff";
+}
+
+} // namespace
 
 // M29: opaque cancellable-request state. Defined here (not in the header)
 // so UI code only ever holds the shared_ptr handle and never touches
@@ -44,6 +63,7 @@ class ImageRepository::AsyncRequestState
     Phase phase = Phase::Queued;
     std::string path;
     std::function<void(const Result &)> callback;
+    std::function<Result()> operation;
     TaskScheduler::TaskHandle handle;
     std::atomic<bool> cancelled{false};
     ImageRepository::Result result;
@@ -130,6 +150,18 @@ ImageRepository::TestHooks &ImageRepository::testHooks()
 ImageRepository::Result ImageRepository::load(const std::string &filePath, const LoadOptions &opts)
 {
     MV_TRACE_SCOPED("ImageRepository::load");
+    // Keep the legacy repository entry point sequence-aware so callers that
+    // only know about a path still receive the canonical frame-zero identity.
+    // Static images take the unchanged path below; multi-frame sources use the
+    // bounded frame API and cannot accidentally collapse into a path-only
+    // cache entry.
+    if (sequenceCandidate(filePath))
+    {
+        const auto sequence = mviewer::core::FrameSequenceReader::probeSequence(filePath);
+        if (sequence.valid && sequence.frameCount > 1)
+            return loadFrame(filePath, sequence.defaultFrame, opts);
+    }
+
     Result res;
     std::string key = cachedKeyForPath(filePath);
     const bool hadCachedKey = !key.empty();
@@ -193,11 +225,12 @@ ImageRepository::loadAsyncCancellable(const std::string &filePath,
         state->phase = AsyncRequestState::Phase::Queued;
         state->path = filePath;
         state->callback = std::move(callback);
+        state->operation = [this, filePath, opts]() { return load(filePath, opts); };
         state->lifetime = std::move(lifetime);
     }
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::DecodePool,
-        [this, filePath, opts, state]()
+        [state]()
         {
             {
                 std::lock_guard<std::mutex> lk(state->mtx);
@@ -208,7 +241,15 @@ ImageRepository::loadAsyncCancellable(const std::string &filePath,
             }
             // Decode outside the lock; only a Running, uncancelled request may
             // publish its transient result.
-            Result res = load(filePath, opts);
+            Result res;
+            try
+            {
+                res = state->operation();
+            }
+            catch (...)
+            {
+                res.error = "unexpected image load failure: " + state->path;
+            }
             {
                 std::lock_guard<std::mutex> lk(state->mtx);
                 if (state->cancelled.load(std::memory_order_acquire) ||
@@ -304,6 +345,113 @@ ImageRepository::loadAsyncCancellable(const std::string &filePath,
     return state;
 }
 
+ImageRepository::AsyncRequestHandle ImageRepository::loadFrameAsync(
+    const std::string &filePath, int frameIndex, std::function<void(const Result &)> callback,
+    const LoadOptions &opts, std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime)
+{
+    auto state = std::make_shared<AsyncRequestState>();
+    {
+        std::lock_guard<std::mutex> lk(state->mtx);
+        state->kind = AsyncRequestState::Kind::Foreground;
+        state->phase = AsyncRequestState::Phase::Queued;
+        state->path = filePath;
+        state->callback = std::move(callback);
+        state->operation = [this, filePath, frameIndex, opts]()
+        { return loadFrame(filePath, frameIndex, opts); };
+        state->lifetime = std::move(lifetime);
+    }
+
+    auto handle = TaskScheduler::instance().submit(
+        TaskScheduler::DecodePool,
+        [state]()
+        {
+            {
+                std::lock_guard<std::mutex> lk(state->mtx);
+                if (state->cancelled.load(std::memory_order_acquire) ||
+                    state->phase != AsyncRequestState::Phase::Queued)
+                    return;
+                state->phase = AsyncRequestState::Phase::Running;
+            }
+            Result result;
+            try
+            {
+                result = state->operation();
+            }
+            catch (...)
+            {
+                result.error = "unexpected frame load failure: " + state->path;
+            }
+            {
+                std::lock_guard<std::mutex> lk(state->mtx);
+                if (state->cancelled.load(std::memory_order_acquire) ||
+                    state->phase != AsyncRequestState::Phase::Running)
+                    return;
+                state->result = std::move(result);
+            }
+        },
+        [state]()
+        {
+            Result result;
+            std::function<void(const Result &)> callback;
+            {
+                std::lock_guard<std::mutex> lk(state->mtx);
+                state->phase = AsyncRequestState::Phase::Finished;
+                if (!state->cancelled.load(std::memory_order_acquire))
+                {
+                    result = std::move(state->result);
+                    callback = std::move(state->callback);
+                }
+                state->result = {};
+                state->callback = {};
+            }
+            if (!beginClientDelivery(state, result, callback))
+                return;
+            invokeDeliveryHook(ImageRepository::testHooks().onBeforeDelivery);
+            try
+            {
+                callback(result);
+            }
+            catch (...)
+            {
+            }
+            invokeDeliveryHook(ImageRepository::testHooks().onAfterDelivery);
+            finishClientDelivery(state);
+        });
+
+    if (!handle)
+    {
+        Result error;
+        error.error = "scheduler rejected frame submission for: " + filePath;
+        std::function<void(const Result &)> rejected;
+        {
+            std::lock_guard<std::mutex> lk(state->mtx);
+            rejected = std::move(state->callback);
+        }
+        bool tokenAlive = true;
+        if (!state->lifetime.expired())
+        {
+            const auto token = state->lifetime.lock();
+            tokenAlive = token && token->isAlive();
+        }
+        if (tokenAlive)
+        {
+            try
+            {
+                rejected(error);
+            }
+            catch (...)
+            {
+            }
+        }
+        return nullptr;
+    }
+    {
+        std::lock_guard<std::mutex> lk(state->mtx);
+        state->handle = handle;
+    }
+    return state;
+}
+
 ImageRepository::AsyncRequestHandle ImageRepository::preloadAsync(
     const std::string &filePath, std::weak_ptr<mviewer::core::AsyncLifetimeToken> lifetime)
 {
@@ -333,7 +481,7 @@ ImageRepository::AsyncRequestHandle ImageRepository::preloadAsync(
             // concurrent promotion can deliver it; a pure preload releases it
             // at completion (the FullImage memory cache populated by load() is
             // the only observable effect).
-            Result res = load(filePath, opts);
+            Result res = loadFrame(filePath, 0, opts);
             {
                 std::lock_guard<std::mutex> lk(state->mtx);
                 if (state->cancelled.load(std::memory_order_acquire) ||
@@ -460,8 +608,8 @@ ImageRepository::promotePreloadAsync(AsyncRequestHandle &preload,
     // Finished/Cancelled: resubmit at Decode priority; a finished preload
     // already warmed the cache, so the foreground load resolves from cache.
     preload.reset();
-    return loadAsyncCancellable(path, std::move(callback), kDefaultLoadOptions,
-                                std::move(lifetime));
+    return loadFrameAsync(path, 0, std::move(callback), kDefaultLoadOptions,
+                          std::move(lifetime));
 }
 
 void ImageRepository::cancelAsync(AsyncRequestHandle &handle)

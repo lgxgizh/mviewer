@@ -65,7 +65,10 @@ class CompareWorkspace : public QWidget
     // the workflow test both consume this exact helper.
     static QPair<QRect, QRect> splitRects(const QRect &canvas);
 
+    // The default frame/page is zero. A caller restoring a persisted compare
+    // session may provide one explicit frame index per pane.
     void setImages(const QStringList &paths);
+    void setImages(const QStringList &paths, const QVector<int> &frameIndices);
 
     bool isSyncEnabled() const;
     void setSyncEnabled(bool on);
@@ -256,7 +259,8 @@ class CompareWorkspace : public QWidget
     // accounts exactly once per request.
     int m_infeasibleCount = 0;
     void queueLoadRequests(const std::shared_ptr<LoadBatch> &batch,
-                           const std::vector<std::string> &paths);
+                           const std::vector<std::string> &paths,
+                           const std::vector<int> &frameIndices);
     void cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch);
     void finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames, int failedCount,
                     int infeasibleCount = 0);
@@ -487,10 +491,14 @@ class CompareWorkspace : public QWidget
     QLabel *m_focusLabel = nullptr;      // 显示当前基准格
     int m_focusIndex = -1;               // 锁定的基准格索引 (-1 = 未锁定)
     int m_hoverIdx = -1;                 // 当前光标所在格 (用于锁定基准)
+    QLabel *m_frameLabel = nullptr;      // 当前窗格的帧/页选择
+    QSpinBox *m_frameSpin = nullptr;
     int m_lastInspectX = -1;             // 最近检视位置 (焦点切换时重刷)
     int m_lastInspectY = -1;
     void onCrosshairMoved(RawImageView *view, const QPointF &pos);
     void onFocusRequested(int cellIndex);
+    void updateFrameControl();
+    void onFrameControlChanged(int oneBasedIndex);
     int diffBaseIndex() const
     {
         return m_focusIndex >= 0 ? m_focusIndex : 0;
