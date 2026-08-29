@@ -272,9 +272,10 @@ int main(int argc, char **argv)
     const auto frame1Again = repo.loadFrame(gif.toUtf8().toStdString(), 1);
     ok = check(frame0.success() && frame1.success() && frame1Again.success() &&
                    frame0.frame->frameIdentity() != frame1.frame->frameIdentity() &&
+                   frame0.frame->id() != frame1.frame->id() &&
                    frame0.frame->frameIndex() == 0 && frame1.frame->frameIndex() == 1 &&
                    frame1Again.fromCache,
-               "repository cache identity includes frame index and revision") &&
+               "repository and render-cache identity include frame index and revision") &&
          ok;
 
     CompareEngine compare;

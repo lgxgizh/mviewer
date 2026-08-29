@@ -37,6 +37,9 @@
 
 ## M57 — Multi-frame / multi-page image architecture and playback (2026-08-29)
 
+- Post-closure Viewer polish gives each frame/page a distinct render identity, invalidates stale
+  derived rendering work on transitions, preserves the viewport, and shows frame/page state inside
+  the canvas so fullscreen playback does not depend on the hidden window title.
 - `FrameSequenceReader` provides one core capability for static images,
   animated GIF/WebP, and multi-page TIFF: bounded probe, explicit frame/page
   decode, scaled decode, per-frame duration, and source dimensions. Qt reader

@@ -91,7 +91,15 @@ ImageFrame::~ImageFrame()
 
 mviewer::domain::ImageId ImageFrame::id() const
 {
-    return mviewer::domain::ImageId{m_meta.hash};
+    // Static images retain their historical file-revision identity. A frame or
+    // page inside a container is a distinct render/analysis source, however,
+    // so it must never alias another frame in clients such as TileCache.
+    if (m_sequence.frameCount <= 1 && m_frameIdentity.frameIndex == 0)
+        return mviewer::domain::ImageId{m_meta.hash};
+    const std::string &revision =
+        m_frameIdentity.fileRevision.empty() ? m_meta.hash : m_frameIdentity.fileRevision;
+    return mviewer::domain::ImageId{revision + "#frame=" +
+                                    std::to_string(std::max(0, m_frameIdentity.frameIndex))};
 }
 
 void ImageFrame::setSequenceIdentity(const mviewer::core::FrameSequenceInfo &sequence,

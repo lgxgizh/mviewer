@@ -167,6 +167,10 @@ void ImageViewer::applyLoadedFrame(const ImageLoadResult &result, int requestedF
         return;
     }
 
+    // A frame/page change is an image-generation boundary for every derived
+    // surface. Cancel old tile/overlay/ROI work before publishing the new
+    // frame; the viewport itself deliberately remains unchanged.
+    beginImageGeneration();
     m_frame = result.frame;
     m_sequence = m_frame->sequenceInfo();
     m_frameIndex = m_frame->frameIndex();
@@ -239,24 +243,34 @@ void ImageViewer::prefetchFrames(int currentIndex)
 void ImageViewer::updateFramePresentationStatus()
 {
     if (!isMultiFrame() || m_currentPath.isEmpty())
+    {
+        m_frameStatusText.clear();
+        setAccessibleDescription({});
         return;
+    }
     const QFileInfo info(m_currentPath);
     const QSize size = displaySize();
     const QString position = m_currentIndex >= 0
                                  ? QStringLiteral(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
                                  : QString();
-    const QString state = m_sequence.animated
-                              ? (isPlaying() ? QStringLiteral("Playing") : QStringLiteral("Paused"))
-                              : QStringLiteral("Paused");
-    setWindowTitle(QStringLiteral("%1 (%2x%3)%4 · %5 %6/%7 · %8 - MViewer")
+    const QString state = isPlaying() ? QStringLiteral("Playing") : QStringLiteral("Paused");
+    m_frameStatusText = QStringLiteral("%1 %2/%3")
+                            .arg(sequenceLabel(m_sequence))
+                            .arg(m_frameIndex + 1)
+                            .arg(frameCount());
+    if (m_sequence.animated)
+        m_frameStatusText += QStringLiteral(" · %1").arg(state);
+    const QString shortcuts =
+        m_sequence.animated
+            ? QStringLiteral("Space: Play/Pause; comma/period: Previous/Next frame")
+            : QStringLiteral("Comma/period: Previous/Next page");
+    setAccessibleDescription(QStringLiteral("%1. %2").arg(m_frameStatusText, shortcuts));
+    setWindowTitle(QStringLiteral("%1 (%2x%3)%4 · %5 - MViewer")
                        .arg(info.fileName())
                        .arg(size.width())
                        .arg(size.height())
                        .arg(position)
-                       .arg(sequenceLabel(m_sequence))
-                       .arg(m_frameIndex + 1)
-                       .arg(frameCount())
-                       .arg(state));
+                       .arg(m_frameStatusText));
 }
 
 bool ImageViewer::handleFrameKey(int key, Qt::KeyboardModifiers modifiers)

@@ -48,6 +48,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QByteArray>
 #include <QCheckBox>
 #include <QClipboard>
 #include <QComboBox>
@@ -381,6 +382,47 @@ QString writePng(const QDir &dir, const QString &name, QColor color, int width =
     return path;
 }
 
+QByteArray makeWorkflowAnimatedGif()
+{
+    // Deterministic red/green/blue frames. Keep this tiny fixture local to the
+    // real Viewer workflow so the regression exercises the deployed qgif path.
+    QByteArray gif("GIF89a", 6);
+    gif.append("\x04\x00\x04\x00\x80\x00\x00", 7);
+    const char globalPalette[] = {char(0xff), 0, 0, 0, 0, 0};
+    gif.append(globalPalette, sizeof(globalPalette));
+    gif.append("\x21\xff\x0bNETSCAPE2.0\x03\x01\x00\x00\x00", 19);
+
+    const char colors[][3] = {{char(0xff), 0, 0}, {0, char(0xff), 0},
+                              {0, 0, char(0xff)}};
+    for (int frame = 0; frame < 3; ++frame)
+    {
+        gif.append("\x21\xf9\x04\x00", 4);
+        gif.append(static_cast<char>((frame + 1) * 10));
+        gif.append("\x00\x00\x00", 3);
+        gif.append('\x2c');
+        gif.append("\x00\x00\x00\x00\x04\x00\x04\x00", 8);
+        gif.append(frame == 0 ? '\x00' : '\x80');
+        if (frame != 0)
+        {
+            gif.append(colors[frame], 3);
+            gif.append("\x00\x00\x00", 3);
+        }
+        gif.append("\x08\x09\x00\x01\x08\x1c\x48\xb0\x20\x80\x80\x00", 12);
+    }
+    gif.append('\x3b');
+    return gif;
+}
+
+QString writeAnimatedGif(const QDir &dir, const QString &name)
+{
+    const QString path = dir.filePath(name);
+    QFile file(path);
+    const QByteArray fixture = makeWorkflowAnimatedGif();
+    if (!file.open(QIODevice::WriteOnly) || file.write(fixture) != fixture.size())
+        return {};
+    return path;
+}
+
 // Minimal little-endian TIFF (DNG-like) carrying ISO/Make/Model/LensModel so
 // parseRawMetadata extracts real camera/lens/ISO fields.
 bool writeFakeDng(const std::string &path, const std::string &make, const std::string &model,
@@ -510,6 +552,7 @@ int main(int argc, char **argv)
     workflow7_stale_preload_cancellation(workDir.absolutePath());
     workflow8_preview_scaled_load(workDir.absolutePath());
     workflow9_pixel_inspector_lifecycle(workDir.absolutePath());
+    workflow16_multiframe_view_continuity(workDir.absolutePath());
     workflow14_compare_loading_feedback(workDir.absolutePath());
     // Keep the report workflow terminal: Qt's offscreen QFileDialog leaves
     // internal modal widgets that deadlock MainWindow destruction. The test

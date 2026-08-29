@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- **Multi-frame Viewer continuity:** frame/page changes now use distinct render-cache identities
+  and cancel stale tile/overlay work, preventing a previous frame from reappearing after keyboard
+  stepping or playback. A compact in-canvas frame/page status remains visible in fullscreen.
 - **Multi-frame image workflow (M57):** GIF and animated WebP now expose a
   unified sequence capability with real frame playback, monotonic timing,
   bounded worker prefetch, cancellation, and explicit frame failure state.

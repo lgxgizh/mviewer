@@ -13,6 +13,7 @@
 #include <QContextMenuEvent>
 #include <QDir>
 #include <QFileDialog>
+#include <QFontMetrics>
 #include <QKeyEvent>
 #include <QMatrix4x4>
 #include <QMetaObject>
@@ -79,8 +80,30 @@ void ImageViewer::paintEvent(QPaintEvent *event)
     if (m_hasHistogram)
         drawHistogram(painter);
     drawSelection(painter);
+    drawFrameStatus(painter);
 }
 
+void ImageViewer::drawFrameStatus(QPainter &painter) const
+{
+    if (m_frameStatusText.isEmpty())
+        return;
+
+    painter.save();
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    const QFontMetrics metrics(painter.font());
+    const int availableWidth = std::max(80, width() - 24);
+    const QString text = metrics.elidedText(m_frameStatusText, Qt::ElideRight,
+                                             std::max(40, availableWidth - 20));
+    const int pillWidth = std::min(availableWidth, metrics.horizontalAdvance(text) + 20);
+    const int pillHeight = metrics.height() + 12;
+    const QRect pill(12, std::max(12, height() - pillHeight - 12), pillWidth, pillHeight);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0, 0, 0, 180));
+    painter.drawRoundedRect(pill, 6, 6);
+    painter.setPen(Qt::white);
+    painter.drawText(pill.adjusted(10, 0, -10, 0), Qt::AlignVCenter | Qt::AlignLeft, text);
+    painter.restore();
+}
 
 void ImageViewer::drawProvisional(QPainter &painter) const
 {

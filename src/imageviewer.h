@@ -291,6 +291,7 @@ class ImageViewer : public QOpenGLWidget
     void cancelFrameRequests();
     void prefetchFrames(int currentIndex);
     void updateFramePresentationStatus();
+    void drawFrameStatus(QPainter &painter) const;
     bool handleFrameKey(int key, Qt::KeyboardModifiers modifiers);
     void scheduleLoadedRefit(const QString &path, uint64_t generation,
                              const ImageLoadGuard &guard);
@@ -502,6 +503,7 @@ class ImageViewer : public QOpenGLWidget
     std::vector<mviewer::application::ImageLoadingService::AsyncRequestHandle>
         m_framePrefetchRequests;
     QTimer *m_playbackTimer = nullptr;
+    QString m_frameStatusText;
 
     // ── M47 LOD-first display state ──────────────────────────────────────────
     struct DisplayRaster

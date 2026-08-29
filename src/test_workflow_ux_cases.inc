@@ -3803,5 +3803,75 @@ void workflow9_pixel_inspector_lifecycle(const QString &rootDir)
     dir.removeRecursively();
 }
 
+// ── Workflow 16: animated frame stepping keeps render identity and view continuity ───────────
+void workflow16_multiframe_view_continuity(const QString &rootDir)
+{
+    std::cout << "\n=== Workflow 16: multi-frame Viewer continuity ===\n";
+    const QString path = writeAnimatedGif(QDir(rootDir), QStringLiteral("wf_animated.gif"));
+    CHECK(!path.isEmpty(), "multi-frame workflow writes the deterministic GIF");
+
+    ImageViewer viewer;
+    viewer.resize(320, 240);
+    viewer.show();
+    viewer.setImage(path);
+    {
+        QElapsedTimer timer;
+        timer.start();
+        while ((!viewer.frame() || !viewer.isMultiFrame()) && timer.elapsed() < 5000)
+            pump(25);
+    }
+    viewer.pause();
+    viewer.setFrameIndex(0);
+    {
+        QElapsedTimer timer;
+        timer.start();
+        while (viewer.frameIndex() != 0 && timer.elapsed() < 5000)
+            pump(25);
+    }
+    CHECK(viewer.frame() && viewer.frameCount() == 3 && viewer.frameIndex() == 0,
+          "multi-frame workflow opens frame 1/3 and can pause playback");
+    if (!viewer.frame())
+    {
+        viewer.close();
+        QFile::remove(path);
+        return;
+    }
+
+    const std::string firstRenderId = viewer.frame()->id().hash;
+    const PixelRGBA firstPixel = samplePixel(viewer.frame()->pixels(), 0, 0);
+    viewer.zoomActual();
+    const Viewport before = viewer.viewTransform();
+    sendKey(&viewer, Qt::Key_Period);
+    {
+        QElapsedTimer timer;
+        timer.start();
+        while (viewer.frameIndex() != 1 && timer.elapsed() < 5000)
+            pump(25);
+    }
+
+    const auto secondFrame = viewer.frame();
+    const PixelRGBA secondPixel =
+        secondFrame ? samplePixel(secondFrame->pixels(), 0, 0) : PixelRGBA{};
+    CHECK(firstPixel.valid && firstPixel.r == 255 && firstPixel.g == 0 && firstPixel.b == 0 &&
+              secondPixel.valid && secondPixel.r == 0 && secondPixel.g == 255 && secondPixel.b == 0,
+          "Period steps from the red frame to the green frame");
+    CHECK(secondFrame && secondFrame->id().hash != firstRenderId,
+          "each displayed frame has a distinct render-cache identity");
+    const Viewport after = viewer.viewTransform();
+    CHECK(qAbs(after.scale - before.scale) < 1e-9 &&
+              qAbs(after.offsetX - before.offsetX) < 1e-9 &&
+              qAbs(after.offsetY - before.offsetY) < 1e-9,
+          "frame stepping preserves zoom and pan without re-fitting");
+    CHECK(viewer.windowTitle().contains(QStringLiteral("Frame 2/3")) &&
+              viewer.windowTitle().contains(QStringLiteral("Paused")),
+          "paused frame position remains visible in the Viewer status");
+    CHECK(viewer.accessibleDescription().contains(QStringLiteral("Frame 2/3")) &&
+              viewer.accessibleDescription().contains(QStringLiteral("Space")),
+          "frame status and playback shortcut remain available to assistive UI");
+
+    viewer.close();
+    QFile::remove(path);
+}
+
 } // namespace
 
