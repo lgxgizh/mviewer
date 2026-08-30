@@ -42,6 +42,8 @@
   the canvas so fullscreen playback does not depend on the hidden window title.
 - Multi-page TIFF context menus now use document-specific First/Previous/Next page actions, disable
   impossible boundary moves, and omit animation-only playback controls.
+- Viewer file-navigation actions now mirror the Browse sequence position, with unavailable Previous/
+  Next directions disabled instead of silently doing nothing.
 - `FrameSequenceReader` provides one core capability for static images,
   animated GIF/WebP, and multi-page TIFF: bounded probe, explicit frame/page
   decode, scaled decode, per-frame duration, and source dimensions. Qt reader

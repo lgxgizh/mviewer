@@ -3874,6 +3874,30 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
               frameMenu.labels.contains(QStringLiteral("上一帧 (,)")) &&
               frameMenu.labels.contains(QStringLiteral("下一帧 (.)")),
           "animated context menu keeps explicit playback and frame navigation");
+    CHECK(!frameMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
+              !frameMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
+          "standalone viewer disables file navigation without a browse sequence");
+
+    viewer.setBrowseSequence({path, path + QStringLiteral(".next"),
+                              path + QStringLiteral(".last")});
+    const ContextMenuSnapshot firstFileMenu = contextMenuSnapshot(viewer);
+    CHECK(!firstFileMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
+              firstFileMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
+          "browse sequence disables previous navigation at the first image");
+
+    viewer.setBrowseSequence({path + QStringLiteral(".first"), path,
+                              path + QStringLiteral(".last")});
+    const ContextMenuSnapshot middleFileMenu = contextMenuSnapshot(viewer);
+    CHECK(middleFileMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
+              middleFileMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
+          "browse sequence enables both file directions in the middle");
+
+    viewer.setBrowseSequence({path + QStringLiteral(".first"),
+                              path + QStringLiteral(".middle"), path});
+    const ContextMenuSnapshot lastFileMenu = contextMenuSnapshot(viewer);
+    CHECK(lastFileMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
+              !lastFileMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
+          "browse sequence disables next navigation at the last image");
 
     viewer.close();
     QFile::remove(path);
