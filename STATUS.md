@@ -53,6 +53,9 @@
   presentation and disabled again after closing, while Browse selection remains intact.
 - Slideshow menu state now follows Browse prerequisites: it remains disabled until a current image
   and directory are available, while keyboard invocation retains a clear status message.
+- Browse navigation actions now reflect their actual boundaries: image/directory history, Up,
+  Refresh, and Add/Remove Favorite are disabled when no corresponding operation is available,
+  while restored image history and favorite commands refresh their state immediately.
 - `FrameSequenceReader` provides one core capability for static images,
   animated GIF/WebP, and multi-page TIFF: bounded probe, explicit frame/page
   decode, scaled decode, per-frame duration, and source dimensions. Qt reader

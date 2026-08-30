@@ -133,6 +133,34 @@ void MainWindow::navigate(int delta)
     m_selection->setCurrentImage(path);
 }
 
+void MainWindow::updateNavigationActions()
+{
+    const QString activeDir = currentDir();
+    const bool hasDirectory = !activeDir.isEmpty();
+    if (m_actHistoryBack)
+        m_actHistoryBack->setEnabled(m_historyIndex > 0);
+    if (m_actHistoryForward)
+        m_actHistoryForward->setEnabled(
+            m_historyIndex >= 0 && m_historyIndex + 1 < m_history.size());
+    if (m_actDirBack)
+        m_actDirBack->setEnabled(m_dirHistoryIndex > 0);
+    if (m_actDirForward)
+        m_actDirForward->setEnabled(
+            m_dirHistoryIndex >= 0 && m_dirHistoryIndex + 1 < m_dirHistory.size());
+    if (m_actDirUp)
+    {
+        QDir parent(activeDir);
+        m_actDirUp->setEnabled(hasDirectory && parent.cdUp());
+    }
+    if (m_actRefresh)
+        m_actRefresh->setEnabled(hasDirectory);
+    const bool isFavorite = m_directory && m_directory->favorites().contains(activeDir);
+    if (m_actAddFavorite)
+        m_actAddFavorite->setEnabled(hasDirectory && !isFavorite);
+    if (m_actRemoveFavorite)
+        m_actRemoveFavorite->setEnabled(hasDirectory && isFavorite);
+}
+
 void MainWindow::navigatePage(int key)
 {
     if (currentDir().isEmpty())
@@ -202,6 +230,7 @@ void MainWindow::navigateHistory(int delta)
     m_imageViewer->setImage(path);  // async; imageReady() feeds AnalysisPanel
     m_previewPanel->setImage(path); // async; off UI thread
     statusBar()->showMessage(QString("当前: %1").arg(QFileInfo(path).fileName()));
+    updateSelectionActions();
 }
 
 // P0: Directory-level back/forward history (independent of image history).
@@ -321,6 +350,7 @@ void MainWindow::addFavoriteCurrent()
     m_appState.save();
     rebuildFavoritesMenu();
     rebuildFavoritesBar();
+    updateSelectionActions();
     statusBar()->showMessage(QString("已收藏: %1").arg(currentDir()));
 }
 
@@ -334,6 +364,7 @@ void MainWindow::removeFavorite(const QString &dir)
     m_appState.save();
     rebuildFavoritesMenu();
     rebuildFavoritesBar();
+    updateSelectionActions();
     statusBar()->showMessage(QString("已取消收藏: %1").arg(QFileInfo(target).fileName()));
 }
 

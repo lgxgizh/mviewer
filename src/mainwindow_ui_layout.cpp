@@ -38,8 +38,10 @@ void MainWindow::buildFileMenu(QMenuBar *menuBar)
     m_recentFileMenu = fileMenu->addMenu("最近文件(&F)");
     m_favMenu = fileMenu->addMenu("收藏目录(&V)");
     m_actAddFavorite = new QAction("收藏当前目录(&D)", this);
+    m_actAddFavorite->setObjectName("addFavoriteAction");
     m_actAddFavorite->setShortcut(QKeySequence("Ctrl+D")); // Ctrl+D
     m_actRemoveFavorite = new QAction("取消收藏当前目录", this);
+    m_actRemoveFavorite->setObjectName("removeFavoriteAction");
     fileMenu->addAction(m_actAddFavorite);
     fileMenu->addAction(m_actRemoveFavorite);
 
@@ -112,13 +114,17 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actToggleAnalysis->setChecked(false);
     // P0: in-session browse history (browser-style back/forward).
     m_actHistoryBack = new QAction("上一步(&B)", this);
+    m_actHistoryBack->setObjectName("historyBackAction");
     m_actHistoryBack->setShortcut(QKeySequence::Back); // Alt+Left
     m_actHistoryForward = new QAction("下一步(&N)", this);
+    m_actHistoryForward->setObjectName("historyForwardAction");
     m_actHistoryForward->setShortcut(QKeySequence::Forward); // Alt+Right
     // P0: Directory-level back/forward (independent of image history).
     m_actDirBack = new QAction("上一个目录", this);
+    m_actDirBack->setObjectName("directoryBackAction");
     m_actDirBack->setShortcut(QKeySequence("Ctrl+Alt+Left"));
     m_actDirForward = new QAction("下一个目录", this);
+    m_actDirForward->setObjectName("directoryForwardAction");
     m_actDirForward->setShortcut(QKeySequence("Ctrl+Alt+Right"));
     viewMenu->addAction(m_actHistoryBack);
     viewMenu->addAction(m_actHistoryForward);

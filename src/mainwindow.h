@@ -419,6 +419,8 @@ class MainWindow : public QMainWindow
     QStringList resolveSelectedPaths(bool preferMulti = true) const;
     // A-3.4: enable/disable selection-dependent actions (Compare/Export/Batch).
     void updateSelectionActions();
+    // Keep directory/image history and folder command boundaries in sync.
+    void updateNavigationActions();
     // M19: ensure ImageListModel is populated for the current directory.
     void ensureImageList();
     // M19: apply SelectionModel multi-selection onto the gallery (one-way).

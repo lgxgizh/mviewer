@@ -708,6 +708,7 @@ void MainWindow::restoreLastSession()
                 m_historyIndex = idx;
                 // Feed the History sidebar panel from the restored stack.
                 m_appState.history = m_history;
+                updateSelectionActions();
             }
             // Restore the thumbnail-grid scroll position after items exist.
             QMetaObject::invokeMethod(

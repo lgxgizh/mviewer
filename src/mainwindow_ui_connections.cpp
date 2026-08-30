@@ -131,6 +131,7 @@ void MainWindow::connectNavigationSignals()
                 if (m_emptyFolderLabel)
                     m_emptyFolderLabel->hide();
                 updateEmptyState();
+                updateSelectionActions();
             });
 }
 

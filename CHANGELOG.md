@@ -20,6 +20,9 @@
   so closing the Viewer cannot leave four clickable commands that have no visible effect.
 - **Slideshow command state:** the slideshow menu action now stays disabled until a current image
   and directory are available, while keyboard `S` continues to explain the requirement.
+- **Browse navigation command state:** image/directory history, Up, Refresh, and Favorite actions
+  now enable only when their corresponding operation is possible. Restored image history and
+  favorite add/remove state update immediately.
 - **Multi-frame image workflow (M57):** GIF and animated WebP now expose a
   unified sequence capability with real frame playback, monotonic timing,
   bounded worker prefetch, cancellation, and explicit frame failure state.
