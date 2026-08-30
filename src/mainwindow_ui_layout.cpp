@@ -158,11 +158,15 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     // in the menu. Fit/Actual use plain 0/1 (a QAction plain-key shortcut
     // would shadow text entry in the search box).
     m_actZoomIn = new QAction("放大(&Z)", this);
+    m_actZoomIn->setObjectName("zoomInAction");
     m_actZoomIn->setShortcuts({QKeySequence("Ctrl++"), QKeySequence("Ctrl+=")});
     m_actZoomOut = new QAction("缩小(&O)", this);
+    m_actZoomOut->setObjectName("zoomOutAction");
     m_actZoomOut->setShortcut(QKeySequence("Ctrl+-"));
     m_actZoomFit = new QAction("适应窗口(&F) (0)", this);
+    m_actZoomFit->setObjectName("zoomFitAction");
     m_actZoomActual = new QAction("实际大小(&A) (1)", this);
+    m_actZoomActual->setObjectName("zoomActualAction");
     m_actFullscreen = new QAction("全屏(&U)", this);
     m_actFullscreen->setShortcut(QKeySequence("F11"));
     viewMenu->addAction(m_actZoomIn);

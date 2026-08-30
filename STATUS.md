@@ -49,6 +49,8 @@
 - Browse menu and toolbar commands now follow their real prerequisites: Image Information requires
   a current image, while Compare requires at least two available images and gives keyboard users a
   clear status message when that boundary is not met.
+- Viewer zoom menu actions now follow the Viewer window lifecycle: they are enabled on visible
+  presentation and disabled again after closing, while Browse selection remains intact.
 - `FrameSequenceReader` provides one core capability for static images,
   animated GIF/WebP, and multi-page TIFF: bounded probe, explicit frame/page
   decode, scaled decode, per-frame duration, and source dimensions. Qt reader

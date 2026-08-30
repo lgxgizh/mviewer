@@ -90,6 +90,10 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     auto *searchAction = w.findChild<QAction *>("toggleSearchPanelAction");
     auto *focusAction = w.findChild<QAction *>("focusBrowseAction");
     auto *metadataAction = w.findChild<QAction *>("toggleMetadataAction");
+    auto *zoomInAction = w.findChild<QAction *>("zoomInAction");
+    auto *zoomOutAction = w.findChild<QAction *>("zoomOutAction");
+    auto *zoomFitAction = w.findChild<QAction *>("zoomFitAction");
+    auto *zoomActualAction = w.findChild<QAction *>("zoomActualAction");
     QAction *compareAction = nullptr;
     for (QAction *action : w.findChildren<QAction *>())
         if (action && action->text().startsWith(QStringLiteral("比较模式")))
@@ -166,6 +170,10 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "empty-state hint is shown when no directory is open");
     CHECK(metadataAction && !metadataAction->isEnabled() && !metadataAction->isChecked(),
           "empty Browse disables the image-information command without a stale checked state");
+    CHECK(zoomInAction && zoomOutAction && zoomFitAction && zoomActualAction &&
+              !zoomInAction->isEnabled() && !zoomOutAction->isEnabled() &&
+              !zoomFitAction->isEnabled() && !zoomActualAction->isEnabled(),
+          "hidden Viewer disables all menu zoom commands");
     CHECK(compareAction && !compareAction->isEnabled(),
           "empty Browse disables Compare until at least two images are available");
 
@@ -331,6 +339,10 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                      viewer->property("mviewerFullscreenRequested").toBool()),
           "Browse open requests fullscreen before the first viewer presentation");
     CHECK(viewer && viewer->frame(), "post-construction setOpenOnLaunch decodes a frame within 5s");
+    CHECK(zoomInAction && zoomOutAction && zoomFitAction && zoomActualAction &&
+              zoomInAction->isEnabled() && zoomOutAction->isEnabled() &&
+              zoomFitAction->isEnabled() && zoomActualAction->isEnabled(),
+          "visible Viewer enables all menu zoom commands");
 
     // 打开第一张图（真实产品入口 onImageOpen：双击文件 → 查看器）。
     // 注意顺序：先打开单图、等首屏，再打开目录。offscreen 测试平台不允许
@@ -347,7 +359,12 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     if (viewer)
     {
         sendKey(viewer, Qt::Key_Escape);
+        pump(20);
         CHECK(!viewer->isVisible(), "Escape closes the default fullscreen Viewer in one step");
+        CHECK(zoomInAction && zoomOutAction && zoomFitAction && zoomActualAction &&
+                  !zoomInAction->isEnabled() && !zoomOutAction->isEnabled() &&
+                  !zoomFitAction->isEnabled() && !zoomActualAction->isEnabled(),
+              "closed Viewer disables menu zoom commands without clearing Browse selection");
         CHECK(sel->currentImage() == paths[0],
               "Escape returns to Browse without changing the current selection");
     }

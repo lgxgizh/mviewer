@@ -312,6 +312,10 @@ void MainWindow::connectViewerSignals()
     connect(m_imageViewer, &ImageViewer::viewerClosed, this,
             [this]()
             {
+                // closeEvent emits before Qt finishes hiding the top-level
+                // widget; defer the state refresh so menu zoom actions observe
+                // the final hidden state.
+                QTimer::singleShot(0, this, &MainWindow::updateSelectionActions);
                 if (!isVisible())
                     return;
                 raise();

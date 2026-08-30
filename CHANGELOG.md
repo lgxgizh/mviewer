@@ -16,6 +16,8 @@
 - **Browse command availability:** Image Information stays disabled without a current image, and
   Compare is enabled only when at least two images are available. Pressing `C` at that boundary
   now explains the requirement in the status bar instead of opening or silently doing nothing.
+- **Viewer zoom command state:** menu zoom actions now enable only while the Viewer is visible,
+  so closing the Viewer cannot leave four clickable commands that have no visible effect.
 - **Multi-frame image workflow (M57):** GIF and animated WebP now expose a
   unified sequence capability with real frame playback, monotonic timing,
   bounded worker prefetch, cancellation, and explicit frame failure state.

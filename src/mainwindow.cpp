@@ -452,6 +452,7 @@ void MainWindow::onImageOpen(const QString &path)
         m_imageViewer->showBrowseFullscreen();
     m_imageViewer->raise();
     m_imageViewer->activateWindow();
+    updateSelectionActions();
 }
 
 void MainWindow::onCurrentImageChanged(const QString &path)
@@ -753,6 +754,7 @@ void MainWindow::updateSelectionActions()
                  m_thumbnailPanel ? static_cast<int>(m_thumbnailPanel->pathList().size()) : 0);
     const bool hasImages = availableCount > 0;
     const bool hasCurrent = !currentImagePath().isEmpty();
+    const bool viewerVisible = m_imageViewer && m_imageViewer->isVisible();
     if (m_actCompare)
         m_actCompare->setEnabled(n >= 2 || availableCount >= 2);
     if (m_actExportImages)
@@ -765,6 +767,14 @@ void MainWindow::updateSelectionActions()
         if (!hasCurrent)
             m_actToggleMetadata->setChecked(false);
     }
+    if (m_actZoomIn)
+        m_actZoomIn->setEnabled(hasCurrent && viewerVisible);
+    if (m_actZoomOut)
+        m_actZoomOut->setEnabled(hasCurrent && viewerVisible);
+    if (m_actZoomFit)
+        m_actZoomFit->setEnabled(hasCurrent && viewerVisible);
+    if (m_actZoomActual)
+        m_actZoomActual->setEnabled(hasCurrent && viewerVisible);
 }
 
 QString MainWindow::currentDir() const
