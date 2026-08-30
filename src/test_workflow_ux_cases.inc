@@ -3813,6 +3813,18 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
     ImageViewer viewer;
     viewer.resize(320, 240);
     viewer.show();
+    const ContextMenuSnapshot emptyMenu = contextMenuSnapshot(viewer);
+    CHECK(!emptyMenu.enabledLabels.contains(QStringLiteral("复制图片")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("复制路径")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("复制像素颜色 (#RRGGBB)")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("另存为...")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("放大 (+)")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("缩小 (-)")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("适应窗口 (0)")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("实际大小 (1)")) &&
+              !emptyMenu.enabledLabels.contains(QStringLiteral("框选区域 (R)")) &&
+              emptyMenu.enabledLabels.contains(QStringLiteral("全屏 (F)")),
+          "empty viewer disables image-dependent context actions but keeps fullscreen available");
     viewer.setImage(path);
     {
         QElapsedTimer timer;

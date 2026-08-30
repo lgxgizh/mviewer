@@ -44,6 +44,8 @@
   impossible boundary moves, and omit animation-only playback controls.
 - Viewer file-navigation actions now mirror the Browse sequence position, with unavailable Previous/
   Next directions disabled instead of silently doing nothing.
+- Viewer image-dependent context actions now disable themselves until a current image is available;
+  full-screen remains available for an empty Viewer.
 - `FrameSequenceReader` provides one core capability for static images,
   animated GIF/WebP, and multi-page TIFF: bounded probe, explicit frame/page
   decode, scaled decode, per-frame duration, and source dimensions. Qt reader

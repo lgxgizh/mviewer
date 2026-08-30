@@ -11,6 +11,8 @@
   correct boundary states, and no longer expose the animation-only Play command as a dead button.
 - **Viewer navigation feedback:** context-menu Previous/Next file actions now reflect the active
   Browse sequence and disable unavailable directions at standalone and first/last-image boundaries.
+- **Viewer context-menu state:** image-dependent actions now disable themselves while the Viewer
+  has no current image, while full-screen remains available for an empty Viewer.
 - **Multi-frame image workflow (M57):** GIF and animated WebP now expose a
   unified sequence capability with real frame playback, monotonic timing,
   bounded worker prefetch, cancellation, and explicit frame failure state.

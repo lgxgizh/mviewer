@@ -54,6 +54,22 @@ void addFrameContextActions(QMenu &menu, bool animated, bool playing, int frameI
     previous->setEnabled(frameIndex > 0);
     next->setEnabled(frameIndex + 1 < frameCount);
 }
+
+void setContextImageActionAvailability(QAction *copy, QAction *copyPath, QAction *copyColor,
+                                       QAction *saveAs, QAction *zoomIn, QAction *zoomOut,
+                                       QAction *zoomFit, QAction *zoomActual, QAction *selectRegion,
+                                       bool hasPath, bool hasFrame, bool hasDisplay)
+{
+    copy->setEnabled(hasPath);
+    copyPath->setEnabled(hasPath);
+    copyColor->setEnabled(hasFrame);
+    saveAs->setEnabled(hasFrame);
+    zoomIn->setEnabled(hasDisplay);
+    zoomOut->setEnabled(hasDisplay);
+    zoomFit->setEnabled(hasDisplay);
+    zoomActual->setEnabled(hasDisplay);
+    selectRegion->setEnabled(hasDisplay);
+}
 } // namespace
 
 void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
@@ -83,6 +99,9 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aSelectRegion = menu.addAction("框选区域 (R)");
     aSelectRegion->setCheckable(true);
     aSelectRegion->setChecked(m_selectMode);
+    setContextImageActionAvailability(aCopy, aCopyPath, aCopyColor, aSaveAs, aZoomIn, aZoomOut,
+                                      aZoomFit, aZoomActual, aSelectRegion, !m_currentPath.isEmpty(),
+                                      m_frame && m_frame->isValid(), hasDisplayImage());
     menu.addSeparator();
 
     // F4 (M22): live overlay toggle
