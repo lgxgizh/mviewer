@@ -89,6 +89,11 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     auto *analysisAction = w.findChild<QAction *>("toggleAnalysisPanelAction");
     auto *searchAction = w.findChild<QAction *>("toggleSearchPanelAction");
     auto *focusAction = w.findChild<QAction *>("focusBrowseAction");
+    auto *metadataAction = w.findChild<QAction *>("toggleMetadataAction");
+    QAction *compareAction = nullptr;
+    for (QAction *action : w.findChildren<QAction *>())
+        if (action && action->text().startsWith(QStringLiteral("比较模式")))
+            compareAction = action;
     auto *browserToolBar = w.findChild<QToolBar *>("browserToolBar");
     auto *browseWorkspaceAction = w.findChild<QAction *>("browseWorkspaceAction");
     auto *foldersSection = w.findChild<QWidget *>("foldersSection");
@@ -159,6 +164,10 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(emptyFolder != nullptr, "empty-folder hint has a stable object name");
     CHECK(emptyState && emptyState->isVisible(),
           "empty-state hint is shown when no directory is open");
+    CHECK(metadataAction && !metadataAction->isEnabled() && !metadataAction->isChecked(),
+          "empty Browse disables the image-information command without a stale checked state");
+    CHECK(compareAction && !compareAction->isEnabled(),
+          "empty Browse disables Compare until at least two images are available");
 
     if (thumbnailSizeSlider && viewModeCombo && thumbnailPanel)
     {
@@ -887,8 +896,17 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         directoryTree->navigateTo(singleDir, true);
         pump(200);
         sel->setCurrentImage(singlePath);
+        pump(20);
+        CHECK(metadataAction && metadataAction->isEnabled(),
+              "selecting an image enables the image-information command");
+        CHECK(compareAction && !compareAction->isEnabled(),
+              "a single-image folder keeps the impossible Compare command disabled");
+        w.statusBar()->clearMessage();
         sendKey(&w, Qt::Key_C);
         pump(100);
+        CHECK(w.statusBar()->currentMessage().contains(
+                  QStringLiteral("需要至少两张图片才能比较")),
+              "Compare keyboard command explains why a single-image folder cannot compare");
         bool compareOpened = false;
         for (QWidget *top : QApplication::topLevelWidgets())
         {

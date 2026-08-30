@@ -13,6 +13,9 @@
   Browse sequence and disable unavailable directions at standalone and first/last-image boundaries.
 - **Viewer context-menu state:** image-dependent actions now disable themselves while the Viewer
   has no current image, while full-screen remains available for an empty Viewer.
+- **Browse command availability:** Image Information stays disabled without a current image, and
+  Compare is enabled only when at least two images are available. Pressing `C` at that boundary
+  now explains the requirement in the status bar instead of opening or silently doing nothing.
 - **Multi-frame image workflow (M57):** GIF and animated WebP now expose a
   unified sequence capability with real frame playback, monotonic timing,
   bounded worker prefetch, cancellation, and explicit frame failure state.

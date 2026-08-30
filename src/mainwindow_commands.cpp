@@ -430,7 +430,10 @@ bool MainWindow::handleViewerKey(QKeyEvent *event)
     // plain-key shortcut would shadow text entry in the search box.)
     if (event->key() == Qt::Key_C && !mod)
     {
-        m_actCompare->trigger();
+        if (m_actCompare && m_actCompare->isEnabled())
+            m_actCompare->trigger();
+        else
+            statusBar()->showMessage(tr("需要至少两张图片才能比较"), 3000);
         event->accept();
         return true;
     }

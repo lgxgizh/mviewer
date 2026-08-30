@@ -46,6 +46,9 @@
   Next directions disabled instead of silently doing nothing.
 - Viewer image-dependent context actions now disable themselves until a current image is available;
   full-screen remains available for an empty Viewer.
+- Browse menu and toolbar commands now follow their real prerequisites: Image Information requires
+  a current image, while Compare requires at least two available images and gives keyboard users a
+  clear status message when that boundary is not met.
 - `FrameSequenceReader` provides one core capability for static images,
   animated GIF/WebP, and multi-page TIFF: bounded probe, explicit frame/page
   decode, scaled decode, per-frame duration, and source dimensions. Qt reader

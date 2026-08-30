@@ -746,16 +746,25 @@ QStringList MainWindow::resolveSelectedPaths(bool preferMulti) const
 
 void MainWindow::updateSelectionActions()
 {
-    // A-3.4: enable Compare when ≥2 selected; Export/Batch when ≥1 path available.
+    // A-3.4: commands reflect whether their required source data is actually available.
     const int n = m_selection ? m_selection->selection().size() : 0;
-    const bool hasDir = (m_imageList && !m_imageList->isEmpty()) ||
-                        (m_thumbnailPanel && !m_thumbnailPanel->pathList().isEmpty());
+    const int availableCount =
+        std::max(m_imageList ? m_imageList->count() : 0,
+                 m_thumbnailPanel ? static_cast<int>(m_thumbnailPanel->pathList().size()) : 0);
+    const bool hasImages = availableCount > 0;
+    const bool hasCurrent = !currentImagePath().isEmpty();
     if (m_actCompare)
-        m_actCompare->setEnabled(n >= 2 || hasDir);
+        m_actCompare->setEnabled(n >= 2 || availableCount >= 2);
     if (m_actExportImages)
-        m_actExportImages->setEnabled(n >= 1 || hasDir);
+        m_actExportImages->setEnabled(n >= 1 || hasImages);
     if (m_actBatch)
-        m_actBatch->setEnabled(n >= 1 || hasDir);
+        m_actBatch->setEnabled(n >= 1 || hasImages);
+    if (m_actToggleMetadata)
+    {
+        m_actToggleMetadata->setEnabled(hasCurrent);
+        if (!hasCurrent)
+            m_actToggleMetadata->setChecked(false);
+    }
 }
 
 QString MainWindow::currentDir() const
