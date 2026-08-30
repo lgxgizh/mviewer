@@ -176,6 +176,7 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     viewMenu->addSeparator();
     viewMenu->addAction(m_actFullscreen);
     m_actSlideshow = new QAction("幻灯片放映(&S) (S)", this);
+    m_actSlideshow->setObjectName("slideshowAction");
     m_actSlideshow->setCheckable(true);
     viewMenu->addAction(m_actSlideshow);
 }

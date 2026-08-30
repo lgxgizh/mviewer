@@ -775,6 +775,8 @@ void MainWindow::updateSelectionActions()
         m_actZoomFit->setEnabled(hasCurrent && viewerVisible);
     if (m_actZoomActual)
         m_actZoomActual->setEnabled(hasCurrent && viewerVisible);
+    if (m_actSlideshow)
+        m_actSlideshow->setEnabled(hasCurrent && !currentDir().isEmpty());
 }
 
 QString MainWindow::currentDir() const

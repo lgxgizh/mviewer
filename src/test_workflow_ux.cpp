@@ -590,7 +590,7 @@ QPushButton *findBtn(QWidget *root, const QString &textPrefix)
 // M54 keeps selected preview work on the foreground Decode path; the included
 // workflow cases assert that contract along with the existing UX flows.
 // Workflow1/16 also verify empty-state command availability, Viewer zoom state,
-// and Browse boundaries.
+// slideshow state, and Browse boundaries.
 #include "test_workflow_ux_cases.inc"
 int main(int argc, char **argv)
 {

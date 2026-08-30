@@ -18,6 +18,8 @@
   now explains the requirement in the status bar instead of opening or silently doing nothing.
 - **Viewer zoom command state:** menu zoom actions now enable only while the Viewer is visible,
   so closing the Viewer cannot leave four clickable commands that have no visible effect.
+- **Slideshow command state:** the slideshow menu action now stays disabled until a current image
+  and directory are available, while keyboard `S` continues to explain the requirement.
 - **Multi-frame image workflow (M57):** GIF and animated WebP now expose a
   unified sequence capability with real frame playback, monotonic timing,
   bounded worker prefetch, cancellation, and explicit frame failure state.

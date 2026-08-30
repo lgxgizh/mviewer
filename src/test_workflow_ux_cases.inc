@@ -94,6 +94,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     auto *zoomOutAction = w.findChild<QAction *>("zoomOutAction");
     auto *zoomFitAction = w.findChild<QAction *>("zoomFitAction");
     auto *zoomActualAction = w.findChild<QAction *>("zoomActualAction");
+    auto *slideshowAction = w.findChild<QAction *>("slideshowAction");
     QAction *compareAction = nullptr;
     for (QAction *action : w.findChildren<QAction *>())
         if (action && action->text().startsWith(QStringLiteral("比较模式")))
@@ -174,6 +175,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
               !zoomInAction->isEnabled() && !zoomOutAction->isEnabled() &&
               !zoomFitAction->isEnabled() && !zoomActualAction->isEnabled(),
           "hidden Viewer disables all menu zoom commands");
+    CHECK(slideshowAction && !slideshowAction->isEnabled(),
+          "empty Browse disables slideshow until an image and directory are available");
     CHECK(compareAction && !compareAction->isEnabled(),
           "empty Browse disables Compare until at least two images are available");
 
@@ -916,6 +919,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         pump(20);
         CHECK(metadataAction && metadataAction->isEnabled(),
               "selecting an image enables the image-information command");
+        CHECK(slideshowAction && slideshowAction->isEnabled(),
+              "selecting an image in a directory enables slideshow");
         CHECK(compareAction && !compareAction->isEnabled(),
               "a single-image folder keeps the impossible Compare command disabled");
         w.statusBar()->clearMessage();
