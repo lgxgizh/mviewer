@@ -3868,9 +3868,59 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
     CHECK(viewer.accessibleDescription().contains(QStringLiteral("Frame 2/3")) &&
               viewer.accessibleDescription().contains(QStringLiteral("Space")),
           "frame status and playback shortcut remain available to assistive UI");
+    const ContextMenuSnapshot frameMenu = contextMenuSnapshot(viewer);
+    CHECK(frameMenu.labels.contains(QStringLiteral("播放")) &&
+              frameMenu.labels.contains(QStringLiteral("重新开始")) &&
+              frameMenu.labels.contains(QStringLiteral("上一帧 (,)")) &&
+              frameMenu.labels.contains(QStringLiteral("下一帧 (.)")),
+          "animated context menu keeps explicit playback and frame navigation");
 
     viewer.close();
     QFile::remove(path);
+
+    const QString pagesPath =
+        writeMultipageTiff(QDir(rootDir), QStringLiteral("wf_multipage.tiff"));
+    CHECK(!pagesPath.isEmpty(), "multi-page workflow writes the deterministic TIFF");
+    ImageViewer pages;
+    pages.resize(320, 240);
+    pages.show();
+    pages.setImage(pagesPath);
+    {
+        QElapsedTimer timer;
+        timer.start();
+        while ((!pages.frame() || !pages.isMultiFrame()) && timer.elapsed() < 5000)
+            pump(25);
+    }
+    CHECK(pages.frameCount() == 3 && !pages.sequenceInfo().animated,
+          "multi-page TIFF opens as a three-page document, not an animation");
+    const ContextMenuSnapshot pageMenu = contextMenuSnapshot(pages);
+    CHECK(pageMenu.labels.contains(QStringLiteral("第一页")) &&
+              pageMenu.labels.contains(QStringLiteral("上一页 (,)")) &&
+              pageMenu.labels.contains(QStringLiteral("下一页 (.)")),
+          "multi-page context menu exposes document-specific page navigation");
+    CHECK(!pageMenu.labels.contains(QStringLiteral("播放")) &&
+              !pageMenu.labels.contains(QStringLiteral("暂停")),
+          "multi-page context menu does not expose a dead playback action");
+    CHECK(!pageMenu.enabledLabels.contains(QStringLiteral("第一页")) &&
+              !pageMenu.enabledLabels.contains(QStringLiteral("上一页 (,)")) &&
+              pageMenu.enabledLabels.contains(QStringLiteral("下一页 (.)")),
+          "multi-page context menu communicates the first-page boundary");
+
+    pages.setFrameIndex(2);
+    {
+        QElapsedTimer timer;
+        timer.start();
+        while (pages.frameIndex() != 2 && timer.elapsed() < 5000)
+            pump(25);
+    }
+    const ContextMenuSnapshot lastPageMenu = contextMenuSnapshot(pages);
+    CHECK(lastPageMenu.enabledLabels.contains(QStringLiteral("第一页")) &&
+              lastPageMenu.enabledLabels.contains(QStringLiteral("上一页 (,)")) &&
+              !lastPageMenu.enabledLabels.contains(QStringLiteral("下一页 (.)")),
+          "multi-page context menu communicates the last-page boundary");
+
+    pages.close();
+    QFile::remove(pagesPath);
 }
 
 } // namespace

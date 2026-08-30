@@ -32,6 +32,30 @@
 #include <cmath>
 #include <cstring>
 
+namespace
+{
+void addFrameContextActions(QMenu &menu, bool animated, bool playing, int frameIndex,
+                            int frameCount, QAction *&play, QAction *&restart,
+                            QAction *&previous, QAction *&next)
+{
+    if (animated)
+    {
+        play = menu.addAction(playing ? "暂停" : "播放");
+        restart = menu.addAction("重新开始");
+        previous = menu.addAction("上一帧 (,)");
+        next = menu.addAction("下一帧 (.)");
+        return;
+    }
+
+    restart = menu.addAction("第一页");
+    previous = menu.addAction("上一页 (,)");
+    next = menu.addAction("下一页 (.)");
+    restart->setEnabled(frameIndex > 0);
+    previous->setEnabled(frameIndex > 0);
+    next->setEnabled(frameIndex + 1 < frameCount);
+}
+} // namespace
+
 void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu menu(this);
@@ -47,10 +71,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     if (isMultiFrame())
     {
         menu.addSeparator();
-        aPlay = menu.addAction(isPlaying() ? "暂停" : "播放");
-        aRestart = menu.addAction("重新开始");
-        aPrevFrame = menu.addAction("上一帧/页 (,)");
-        aNextFrame = menu.addAction("下一帧/页 (.)");
+        addFrameContextActions(menu, m_sequence.animated, isPlaying(), m_frameIndex,
+                               frameCount(), aPlay, aRestart, aPrevFrame, aNextFrame);
     }
     menu.addSeparator();
     QAction *aZoomIn = menu.addAction("放大 (+)");

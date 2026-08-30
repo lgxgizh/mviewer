@@ -40,6 +40,8 @@
 - Post-closure Viewer polish gives each frame/page a distinct render identity, invalidates stale
   derived rendering work on transitions, preserves the viewport, and shows frame/page state inside
   the canvas so fullscreen playback does not depend on the hidden window title.
+- Multi-page TIFF context menus now use document-specific First/Previous/Next page actions, disable
+  impossible boundary moves, and omit animation-only playback controls.
 - `FrameSequenceReader` provides one core capability for static images,
   animated GIF/WebP, and multi-page TIFF: bounded probe, explicit frame/page
   decode, scaled decode, per-frame duration, and source dimensions. Qt reader

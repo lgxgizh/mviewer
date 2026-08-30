@@ -52,6 +52,7 @@
 #include <QCheckBox>
 #include <QClipboard>
 #include <QComboBox>
+#include <QContextMenuEvent>
 #include <QDialog>
 #include <QDir>
 #include <QElapsedTimer>
@@ -66,6 +67,7 @@
 #include <QLineEdit>
 #include <QMessageBox>
 #include <QMetaObject>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPointer>
 #include <QProgressDialog>
@@ -421,6 +423,107 @@ QString writeAnimatedGif(const QDir &dir, const QString &name)
     if (!file.open(QIODevice::WriteOnly) || file.write(fixture) != fixture.size())
         return {};
     return path;
+}
+
+void putWorkflowTiff16(QByteArray &data, int offset, uint16_t value)
+{
+    data[offset] = static_cast<char>(value & 0xff);
+    data[offset + 1] = static_cast<char>((value >> 8) & 0xff);
+}
+
+void putWorkflowTiff32(QByteArray &data, int offset, uint32_t value)
+{
+    for (int byte = 0; byte < 4; ++byte)
+        data[offset + byte] = static_cast<char>((value >> (byte * 8)) & 0xff);
+}
+
+QByteArray makeWorkflowMultipageTiff()
+{
+    constexpr int pageCount = 3;
+    constexpr int ifdStart = 8;
+    constexpr int ifdSize = 2 + 9 * 12 + 4;
+    constexpr int bitsStart = ifdStart + pageCount * ifdSize;
+    constexpr int pixelsStart = bitsStart + pageCount * 6;
+    QByteArray tiff(pixelsStart + pageCount * 48, '\0');
+    tiff[0] = 'I';
+    tiff[1] = 'I';
+    putWorkflowTiff16(tiff, 2, 42);
+    putWorkflowTiff32(tiff, 4, ifdStart);
+    for (int page = 0; page < pageCount; ++page)
+    {
+        const int ifd = ifdStart + page * ifdSize;
+        putWorkflowTiff16(tiff, ifd, 9);
+        const int entries = ifd + 2;
+        auto entry = [&](int n, uint16_t tag, uint16_t type, uint32_t count, uint32_t value)
+        {
+            const int at = entries + n * 12;
+            putWorkflowTiff16(tiff, at, tag);
+            putWorkflowTiff16(tiff, at + 2, type);
+            putWorkflowTiff32(tiff, at + 4, count);
+            putWorkflowTiff32(tiff, at + 8, value);
+        };
+        entry(0, 256, 3, 1, 4);
+        entry(1, 257, 3, 1, 4);
+        entry(2, 258, 3, 3, bitsStart + page * 6);
+        entry(3, 259, 3, 1, 1);
+        entry(4, 262, 3, 1, 2);
+        entry(5, 273, 4, 1, pixelsStart + page * 48);
+        entry(6, 277, 3, 1, 3);
+        entry(7, 278, 4, 1, 4);
+        entry(8, 279, 4, 1, 48);
+        putWorkflowTiff32(tiff, entries + 9 * 12,
+                          page + 1 < pageCount ? ifd + ifdSize : 0);
+        for (int channel = 0; channel < 3; ++channel)
+            putWorkflowTiff16(tiff, bitsStart + page * 6 + channel * 2, 8);
+        for (int pixel = 0; pixel < 16; ++pixel)
+        {
+            const int at = pixelsStart + page * 48 + pixel * 3;
+            tiff[at] = page == 0 ? char(0xff) : 0;
+            tiff[at + 1] = page == 1 ? char(0xff) : 0;
+            tiff[at + 2] = page == 2 ? char(0xff) : 0;
+        }
+    }
+    return tiff;
+}
+
+QString writeMultipageTiff(const QDir &dir, const QString &name)
+{
+    const QString path = dir.filePath(name);
+    QFile file(path);
+    const QByteArray fixture = makeWorkflowMultipageTiff();
+    if (!file.open(QIODevice::WriteOnly) || file.write(fixture) != fixture.size())
+        return {};
+    return path;
+}
+
+struct ContextMenuSnapshot
+{
+    QStringList labels;
+    QStringList enabledLabels;
+};
+
+ContextMenuSnapshot contextMenuSnapshot(ImageViewer &viewer)
+{
+    ContextMenuSnapshot snapshot;
+    QTimer::singleShot(0,
+                       [&snapshot]()
+                       {
+                           auto *menu = qobject_cast<QMenu *>(QApplication::activePopupWidget());
+                           if (!menu)
+                               return;
+                           for (QAction *action : menu->actions())
+                               if (!action->isSeparator())
+                               {
+                                   snapshot.labels.append(action->text());
+                                   if (action->isEnabled())
+                                       snapshot.enabledLabels.append(action->text());
+                               }
+                           menu->close();
+                       });
+    const QPoint local(viewer.width() / 2, viewer.height() / 2);
+    QContextMenuEvent event(QContextMenuEvent::Mouse, local, viewer.mapToGlobal(local));
+    QApplication::sendEvent(&viewer, &event);
+    return snapshot;
 }
 
 // Minimal little-endian TIFF (DNG-like) carrying ISO/Make/Model/LensModel so
