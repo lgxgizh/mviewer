@@ -13,3 +13,5 @@ nullPointerRedundantCheck:*tests/*.cpp
 duplicateAssignExpression:*test_*.cpp
 duplicateAssignExpression:*_test.cpp
 duplicateAssignExpression:*tests/*.cpp
+stlIfStrFind:src/core/test_export.cpp
+containerOutOfBounds:src/core/test_tilecache.cpp

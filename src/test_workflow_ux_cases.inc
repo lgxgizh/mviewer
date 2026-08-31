@@ -536,6 +536,22 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             sendFocusedKey(Qt::Key_Escape);
             CHECK(!viewer->isVisible(),
                   "ESC closes a Viewer opened by a real distant-thumbnail double-click");
+
+            // Continue the canonical Browse workflow with the Viewer open.
+            // Closing above intentionally cancels an in-flight decode; on a
+            // slower CI runner the frame may therefore still be null. Reopen
+            // through the same real double-click path before keyboard
+            // navigation/zoom assertions instead of depending on decode speed.
+            QMouseEvent reopen(QEvent::MouseButtonDblClick, QPointF(point),
+                               Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(thumbnailPanel->viewport(), &reopen);
+            QElapsedTimer reopenTimer;
+            reopenTimer.start();
+            while ((!viewer->isVisible() || !viewer->frame()) &&
+                   reopenTimer.elapsed() < 5000)
+                pump(25);
+            CHECK(viewer->isVisible() && viewer->frame(),
+                  "Browse workflow reopens a decoded Viewer after the ESC regression check");
         }
     }
 
