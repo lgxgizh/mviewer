@@ -268,7 +268,7 @@ int main(int argc, char **argv)
                   noAnalysisJson.find("no compare data") == std::string::npos,
               "single-image JSON without analysis remains valid and non-error-shaped");
         const std::string noAnalysisCsv = mviewer::core::buildReportCsv(noAnalysis);
-        CHECK(noAnalysisCsv.find("imagePath,analyzerId,resultText") == 0 &&
+        CHECK(noAnalysisCsv.starts_with("imagePath,analyzerId,resultText") &&
                   noAnalysisCsv.find("pending.png") != std::string::npos,
               "single-image CSV without analysis still identifies the image");
     }

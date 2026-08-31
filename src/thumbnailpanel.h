@@ -366,6 +366,7 @@ class ThumbnailPanel : public QListView
     void showEvent(QShowEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
     // Ctrl+wheel adjusts the thumbnail size (Explorer/FastStone parity).
     void wheelEvent(QWheelEvent *event) override;
     // External drag & drop of files/folders onto the gallery.

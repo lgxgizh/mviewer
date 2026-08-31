@@ -82,12 +82,6 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
                 if (idx.isValid() && !m_selectionGesture)
                     emit itemClicked(m_paths.value(idx.row()));
             });
-    connect(this, &QAbstractItemView::doubleClicked, this,
-            [this](const QModelIndex &idx)
-            {
-                if (idx.isValid())
-                    emit itemDoubleClicked(m_paths.value(idx.row()));
-            });
     // Keyboard parity: Enter opens the viewer (same as double-click), and
     // moving the current item with the arrow keys drives the shared selection
     // model so the preview/status bar follow without a mouse. The central
@@ -569,6 +563,25 @@ void ThumbnailPanel::mouseReleaseEvent(QMouseEvent *event)
     QListView::mouseReleaseEvent(event);
     if (event->button() == Qt::LeftButton)
         m_selectionGesture = false;
+}
+
+void ThumbnailPanel::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    // mousePressEvent owns selection updates, so it intentionally does not
+    // call QListView::mousePressEvent. Emit the open signal from the virtual
+    // double-click path directly instead of relying on QAbstractItemView's
+    // internal press/release tracking (which is platform-dependent).
+    if (event->button() == Qt::LeftButton)
+    {
+        const QModelIndex idx = indexAt(event->pos());
+        if (idx.isValid())
+        {
+            event->accept();
+            emit itemDoubleClicked(m_paths.value(idx.row()));
+            return;
+        }
+    }
+    QListView::mouseDoubleClickEvent(event);
 }
 
 void ThumbnailPanel::stopThumbnailWorker()

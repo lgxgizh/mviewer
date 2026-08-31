@@ -170,7 +170,7 @@ void ThumbnailCache::scheduleBootstrap()
     if (m_indexed)
         return;
     std::lock_guard<std::mutex> guard(m_bootstrapMutex);
-    if (m_indexed || m_bootstrapScheduled)
+    if (m_bootstrapScheduled)
         return;
     if (m_bootstrapThread.joinable())
         m_bootstrapThread.join();

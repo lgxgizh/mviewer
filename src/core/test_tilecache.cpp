@@ -163,9 +163,11 @@ static void testCanonicalIdentity()
           "canonical LOD output size is stable");
 
     auto hidpi = cache.request("canonical", fitB, grid, decode, nullptr, 4, 150);
-    CHECK(!hidpi.empty() && targets.size() == 2, "DPR policy creates a distinct payload key");
-    CHECK(hidpi.front().key.renderScalePercent == 150 && targets.back().first == 384,
-          "HiDPI key and materialized width agree");
+    const bool hidpiShape = !hidpi.empty() && targets.size() == 2;
+    CHECK(hidpiShape, "DPR policy creates a distinct payload key");
+    if (hidpiShape)
+        CHECK(hidpi.front().key.renderScalePercent == 150 && targets.back().first == 384,
+              "HiDPI key and materialized width agree");
 }
 
 static void testAsyncTileManager()
