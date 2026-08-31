@@ -87,6 +87,14 @@ void CompareWorkspace::updateCanvasModeVisibility()
         update();
         return;
     }
+    if (m_engine.imageCount() == 0)
+    {
+        if (m_compareLoadingProgress)
+            m_compareLoadingProgress->setVisible(false);
+        m_pageStack->setCurrentWidget(m_compareLoadingPage);
+        update();
+        return;
+    }
     const bool canvasMode = m_engine.imageCount() == 2 && anyCanvasCompareMode();
     QWidget *target = canvasMode ? static_cast<QWidget *>(m_compareCanvas)
                                  : static_cast<QWidget *>(m_compareGridPage);

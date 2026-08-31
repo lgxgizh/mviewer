@@ -91,6 +91,10 @@ void ThumbnailPanel::selectPath(const QString &path)
     else
         setCurrentIndex(idx);
     scrollTo(idx); // default EnsureVisible: only scrolls when off-screen
+    // A programmatic jump may update the scroll bar after this stack frame.
+    // Schedule one range refresh so the newly selected distant item is promoted
+    // to visible priority instead of waiting for a later repaint/scroll event.
+    QTimer::singleShot(0, this, &ThumbnailPanel::updateVisibleRange);
 }
 
 void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &current)

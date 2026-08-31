@@ -42,6 +42,10 @@ ImageViewer::ImageViewer(QWidget *parent)
     setWindowTitle("图片查看");
     setMouseTracking(true);
     setCursor(Qt::OpenHandCursor);
+    // The viewer is a standalone top-level window. Explicitly opt into
+    // keyboard focus so ESC and the viewer's navigation/zoom keys are not left
+    // with the thumbnail list after a double-click open.
+    setFocusPolicy(Qt::StrongFocus);
     setMinimumSize(200, 200);
     // Stage A: QPainter over GL FBO for overlays (histogram / selection).
     setUpdateBehavior(QOpenGLWidget::NoPartialUpdate);

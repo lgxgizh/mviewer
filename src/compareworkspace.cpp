@@ -175,7 +175,10 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
         if (m_compareLoadingLabel)
             m_compareLoadingLabel->setText(tr("正在加载 %1 张图片…").arg(requested));
         if (m_compareLoadingProgress)
+        {
             m_compareLoadingProgress->setRange(0, 0);
+            m_compareLoadingProgress->setVisible(true);
+        }
         if (m_pageStack && m_compareLoadingPage)
             m_pageStack->setCurrentWidget(m_compareLoadingPage);
         update();
@@ -390,6 +393,15 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     m_loadBatch.reset();
     m_infeasibleCount = infeasibleCount;
     m_engine.setFrames(frames);
+    if (m_compareLoadingProgress)
+        m_compareLoadingProgress->setVisible(false);
+    if (m_engine.imageCount() == 0 && m_compareLoadingLabel)
+    {
+        m_compareLoadingLabel->setText(
+            failedCount > 0
+                ? tr("没有可用的图片。\n请检查文件是否存在、完整且受支持。")
+                : tr("没有可用的图片。\n请返回浏览器选择图片。"));
+    }
 
     // M24 (B#7): failed loads are dropped by the engine — tell the user why
     // the grid has fewer cells than requested instead of silently shrinking.

@@ -499,6 +499,46 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(viewer && imageList && viewer->browseSequence() == imageList->paths(),
           "Viewer consumes the Browse sequence SSOT for neighbors and position");
 
+    // Regression: opening a distant thumbnail through the real QListView
+    // double-click path must activate the standalone Viewer and give it the
+    // keyboard focus. Otherwise the image appears to stop responding and ESC
+    // is delivered to the gallery instead of closing the Viewer.
+    if (thumbnailPanel && viewer && thumbnailPanel->pathList().size() >= 2)
+    {
+        viewer->hide();
+        thumbnailPanel->selectPath(thumbnailPanel->pathList().last());
+        pump(50);
+        const QModelIndex index = thumbnailPanel->model()->index(
+            thumbnailPanel->pathList().size() - 1, 0);
+        const QRect itemRect = thumbnailPanel->visualRect(index);
+        CHECK(itemRect.isValid() && itemRect.width() > 0 && itemRect.height() > 0,
+              "distant thumbnail remains addressable after scrolling into view");
+        if (itemRect.isValid() && itemRect.width() > 0 && itemRect.height() > 0)
+        {
+            const QPoint point = itemRect.center();
+            QMouseEvent press(QEvent::MouseButtonPress, QPointF(point), Qt::LeftButton,
+                              Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(thumbnailPanel->viewport(), &press);
+            QMouseEvent release(QEvent::MouseButtonRelease, QPointF(point), Qt::LeftButton,
+                                Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(thumbnailPanel->viewport(), &release);
+            QMouseEvent doubleClick(QEvent::MouseButtonDblClick, QPointF(point),
+                                    Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(thumbnailPanel->viewport(), &doubleClick);
+            QElapsedTimer openTimer;
+            openTimer.start();
+            while ((!viewer->isVisible() || QApplication::focusWidget() != viewer) &&
+                   openTimer.elapsed() < 1000)
+                pump(25);
+            CHECK(viewer->isVisible(), "real thumbnail double-click opens the Viewer");
+            CHECK(QApplication::focusWidget() == viewer,
+                  "real thumbnail double-click transfers keyboard focus to the Viewer");
+            sendFocusedKey(Qt::Key_Escape);
+            CHECK(!viewer->isVisible(),
+                  "ESC closes a Viewer opened by a real distant-thumbnail double-click");
+        }
+    }
+
     // M49: exercise the real QListView ExtendedSelection gesture path rather
     // than publishing a synthetic SelectionModel value. Plain, Ctrl-toggle,
     // Shift-range, and Ctrl-toggle-off must all keep the gallery and SSOT in
@@ -2278,6 +2318,18 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(!blink->isEnabled() && analyzeButton && !analyzeButton->isEnabled() &&
               exportReportButton && !exportReportButton->isEnabled(),
           "failed Compare load disables image-dependent actions");
+    QWidget *failedLoadPage =
+        ws->findChild<QWidget *>(QStringLiteral("compareLoadingPage"));
+    QLabel *failedLoadLabel =
+        ws->findChild<QLabel *>(QStringLiteral("compareLoadingLabel"));
+    QProgressBar *failedLoadProgress =
+        ws->findChild<QProgressBar *>(QStringLiteral("compareLoadingProgress"));
+    CHECK(failedLoadPage && failedLoadPage->isVisible() && failedLoadLabel &&
+              (failedLoadLabel->text().contains(QStringLiteral("没有可用")) ||
+               failedLoadLabel->text().contains(QStringLiteral("无法加载"))),
+          "failed Compare load shows an actionable empty-state explanation");
+    CHECK(failedLoadProgress && !failedLoadProgress->isVisible(),
+          "failed Compare load hides the indeterminate progress indicator");
 
     sendKey(ws, Qt::Key_Escape);
     CHECK(!dlg.isVisible(), "Esc closes the Compare dialog");

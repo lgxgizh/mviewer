@@ -105,13 +105,12 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
                           imageSize, imageSize);
 
     // A palette-derived well makes portrait and transparent images legible on
-    // both themes, while the border keeps the image boundary visible in a
-    // sparse FastStone-like gallery.
+    // both themes. Do not draw the image boundary until a real pixmap exists:
+    // a distant selection is painted once before its async thumbnail arrives,
+    // and a dark Mid border there reads as a black flash rather than loading
+    // feedback.
     const QColor well = option.palette.color(QPalette::AlternateBase);
     painter->fillRect(thumbRect, well);
-    painter->setPen(option.palette.color(QPalette::Mid));
-    painter->setBrush(Qt::NoBrush);
-    painter->drawRect(thumbRect.adjusted(0, 0, -1, -1));
 
     const QPixmap pm = m_panel->thumbReady(path);
     if (!pm.isNull())
@@ -120,6 +119,9 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
             pm.scaled(thumbRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
         painter->drawPixmap(thumbRect.x() + (thumbRect.width() - scaled.width()) / 2,
                             thumbRect.y() + (thumbRect.height() - scaled.height()) / 2, scaled);
+        painter->setPen(option.palette.color(QPalette::Mid));
+        painter->setBrush(Qt::NoBrush);
+        painter->drawRect(thumbRect.adjusted(0, 0, -1, -1));
     }
     else if (m_panel->thumbFailed(path))
     {
@@ -129,6 +131,12 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
         f.setPointSize(qMax(7, f.pointSize() - 1));
         painter->setFont(f);
         painter->drawText(thumbRect, Qt::AlignCenter, QStringLiteral("无法加载"));
+    }
+    else
+    {
+        // Keep the pending state quiet and theme-aware. The next coalesced
+        // DecorationRole update replaces this tile with the real pixmap.
+        painter->fillRect(thumbRect, blended(well, base, 55));
     }
 
     if (entry && entry->frameCount > 1)

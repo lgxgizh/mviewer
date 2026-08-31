@@ -70,6 +70,10 @@ void ImageViewer::showBrowseFullscreen()
     setFullscreenRequested(true);
     raise();
     activateWindow();
+    // showFullScreen() can preserve the previous gallery focus on some window
+    // managers. The browse entry point must finish with the Viewer focused so
+    // the first ESC always closes it and viewer-owned keys respond immediately.
+    setFocus(Qt::OtherFocusReason);
 }
 
 void ImageViewer::setFullscreenRequested(bool requested)

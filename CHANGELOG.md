@@ -1,8 +1,18 @@
 # Changelog
 
-## [1.0.13] - 2026-08-28
+## [1.0.14] - 2026-08-31
 
 ### Fixed
+
+- **Viewer double-click entry:** opening an image from a distant thumbnail now
+  transfers keyboard focus to the fullscreen Viewer, so the first `ESC` closes
+  it reliably and Viewer navigation/zoom keys respond immediately.
+- **Thumbnail loading polish:** pending thumbnails use a neutral, borderless
+  placeholder and distant programmatic selections immediately promote their
+  visible decode range, removing the transient dark border before preview data
+  arrives.
+- **Compare empty state:** a Compare batch with no loadable images now remains
+  on an actionable empty-state page instead of returning to a blank grid.
 
 - **Multi-frame Viewer continuity:** frame/page changes now use distinct render-cache identities
   and cancel stale tile/overlay work, preventing a previous frame from reappearing after keyboard
