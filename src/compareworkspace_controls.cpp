@@ -95,6 +95,8 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
     // M14-3: blink (flicker) compare — rapid toggle between base and target.
     // Click the button (or press B) to start/stop rapid blinking.
     m_blinkChk = new QCheckBox("闪烁对比(&B)", this);
+    m_blinkChk->setObjectName("blinkCompareToggle");
+    m_blinkChk->setEnabled(false);
     m_blinkChk->setToolTip(tr("点击开始/停止快速闪烁切换（快捷键: B）"));
     connect(m_blinkChk, &QCheckBox::toggled, this,
             [this](bool on)
@@ -206,6 +208,7 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     m_thresholdSlider->setValue(0);
     m_thresholdSlider->setMaximumWidth(120);
     m_thresholdSlider->setToolTip("差异阈值: 低于此值的像素将被隐藏");
+    m_thresholdSlider->setEnabled(false);
     connect(m_thresholdSlider, &QSlider::valueChanged, this,
             [this](int value)
             {
@@ -227,6 +230,7 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     m_diffOverlayChk = new QCheckBox(tr("显示差异"), this);
     m_diffOverlayChk->setObjectName("diffOverlayToggle");
     m_diffOverlayChk->setChecked(false);
+    m_diffOverlayChk->setEnabled(false);
     m_diffOverlayChk->setToolTip(tr("显式叠加差异热力图；普通 Compare 始终显示原图"));
     connect(m_diffOverlayChk, &QCheckBox::toggled, this,
             [this](bool on)
@@ -237,6 +241,8 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
     toolLayout->addWidget(m_diffOverlayChk);
 
     m_diffHighlightChk = new QCheckBox(tr("高亮差异"), this);
+    m_diffHighlightChk->setObjectName("diffHighlightToggle");
+    m_diffHighlightChk->setEnabled(false);
     m_diffHighlightChk->setToolTip(tr("差异区域红色高亮，相似区域灰度显示"));
     connect(m_diffHighlightChk, &QCheckBox::toggled, this,
             [this](bool on)
@@ -258,6 +264,8 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
 
     // A-4.3: Pixel Link — mark corresponding points across cells.
     m_pixelLinkChk = new QCheckBox(tr("像素连线"), this);
+    m_pixelLinkChk->setObjectName("pixelLinkToggle");
+    m_pixelLinkChk->setEnabled(false);
     m_pixelLinkChk->setToolTip(tr("开启后点击图片添加标记点，显示各图 RGB 与差值"));
     connect(m_pixelLinkChk, &QCheckBox::toggled, this, &CompareWorkspace::onPixelLinkToggled);
     toolLayout->addWidget(m_pixelLinkChk);
@@ -388,11 +396,15 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
 
     // P1 #④: Analyze & export buttons in the compare toolbar.
     m_analyzeBtn = new QPushButton(tr("分析"), this);
+    m_analyzeBtn->setObjectName("analyzeCompareButton");
+    m_analyzeBtn->setEnabled(false);
     m_analyzeBtn->setToolTip(tr("在分析面板中打开当前焦点图像"));
     connect(m_analyzeBtn, &QPushButton::clicked, this, &CompareWorkspace::analyzeCurrent);
     toolLayout->addWidget(m_analyzeBtn);
 
     m_exportReportBtn = new QPushButton(tr("导出报告"), this);
+    m_exportReportBtn->setObjectName("exportCompareReportButton");
+    m_exportReportBtn->setEnabled(false);
     m_exportReportBtn->setToolTip(tr("将对比结果导出为 HTML/Markdown/JSON 报告"));
     connect(m_exportReportBtn, &QPushButton::clicked, this,
             &CompareWorkspace::exportReportRequested);

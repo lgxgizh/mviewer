@@ -64,6 +64,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     root->setSpacing(4);
     root->addLayout(leftLay, 1);
     root->addWidget(m_sidePanel);
+    updateActionAvailability();
 }
 
 CompareWorkspace::~CompareWorkspace()
@@ -152,6 +153,7 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
         m_loadBatch.reset();
     }
     m_loadInFlight = true;
+    updateActionAvailability();
     // A newer load supersedes a session that was pending on the older one.
     m_pendingSession.reset();
 
@@ -442,6 +444,7 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
             m_checkerChk->setChecked(false);
         m_checkerChk->setEnabled(two);
     }
+    updateActionAvailability();
     if (m_grid && !two)
         m_grid->setVisible(true);
     updateCanvasModeVisibility();

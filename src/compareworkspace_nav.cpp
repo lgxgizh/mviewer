@@ -55,6 +55,60 @@ bool CompareWorkspace::hasPrevPair() const
     return m_pairIndex >= m_navWindow;
 }
 
+void CompareWorkspace::updateActionAvailability()
+{
+    const int count = m_engine.imageCount();
+    const bool loading = m_loadInFlight;
+    const bool hasImage = !loading && count > 0;
+    const bool hasPair = !loading && count == 2;
+
+    if (!loading && !hasPair)
+    {
+        // A failed or partial batch must not leave analysis toggles visibly
+        // active after the panes they refer to have disappeared.
+        if (m_diffOverlayChk)
+            m_diffOverlayChk->setChecked(false);
+        if (m_diffHighlightChk)
+            m_diffHighlightChk->setChecked(false);
+        if (m_pixelLinkChk)
+            m_pixelLinkChk->setChecked(false);
+        m_linkPoints.clear();
+        refreshLinkMarkers();
+        updateLinkInfo();
+    }
+
+    // These controls operate on the rendered comparison, not on a pending
+    // request. Keeping one gate here prevents a stale successful pair from
+    // making the new loading/empty state look interactive.
+    if (m_blinkChk)
+        m_blinkChk->setEnabled(hasPair);
+    if (m_splitChk)
+        m_splitChk->setEnabled(hasPair);
+    if (m_swipeChk)
+        m_swipeChk->setEnabled(hasPair);
+    if (m_overlayChk)
+        m_overlayChk->setEnabled(hasPair);
+    if (m_checkerChk)
+        m_checkerChk->setEnabled(hasPair);
+    if (m_overlayAlphaSlider)
+        m_overlayAlphaSlider->setEnabled(hasPair && m_overlayChk && m_overlayChk->isChecked());
+    if (m_thresholdSlider)
+        m_thresholdSlider->setEnabled(hasPair);
+    if (m_diffOverlayChk)
+        m_diffOverlayChk->setEnabled(hasPair);
+    if (m_diffHighlightChk)
+        m_diffHighlightChk->setEnabled(hasPair);
+    if (m_pixelLinkChk)
+        m_pixelLinkChk->setEnabled(hasPair);
+    if (m_clearLinksBtn)
+        m_clearLinksBtn->setEnabled(hasPair && m_pixelLinkChk && m_pixelLinkChk->isChecked() &&
+                                    !m_linkPoints.isEmpty());
+    if (m_analyzeBtn)
+        m_analyzeBtn->setEnabled(hasImage);
+    if (m_exportReportBtn)
+        m_exportReportBtn->setEnabled(hasPair);
+}
+
 CompareWorkspace::NavState CompareWorkspace::captureNavState() const
 {
     NavState s;

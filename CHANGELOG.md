@@ -23,6 +23,9 @@
 - **Browse navigation command state:** image/directory history, Up, Refresh, and Favorite actions
   now enable only when their corresponding operation is possible. Restored image history and
   favorite add/remove state update immediately.
+- **Compare action availability:** loading or failed comparison batches now disable image-dependent
+  modes, diff tools, Pixel Link, and report export until the required panes are ready; Analyze
+  remains available when a single image is usable.
 - **Multi-frame image workflow (M57):** GIF and animated WebP now expose a
   unified sequence capability with real frame playback, monotonic timing,
   bounded worker prefetch, cancellation, and explicit frame failure state.

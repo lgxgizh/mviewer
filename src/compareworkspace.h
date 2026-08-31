@@ -394,6 +394,7 @@ class CompareWorkspace : public QWidget
     QPushButton *m_prevPairBtn = nullptr;
     QPushButton *m_nextPairBtn = nullptr;
     void updatePairButtons();
+    void updateActionAvailability();
     // M20: snapshot UI mode so next/prev can restore after setImages rebuild.
     struct NavState
     {

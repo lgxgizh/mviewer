@@ -1203,6 +1203,10 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     QCheckBox *swipe = findChk(ws, QStringLiteral("滑动对比"));
     QCheckBox *overlay = findChk(ws, QStringLiteral("叠加对比"));
     QCheckBox *checker = findChk(ws, QStringLiteral("棋盘"));
+    QPushButton *analyzeButton =
+        ws->findChild<QPushButton *>(QStringLiteral("analyzeCompareButton"));
+    QPushButton *exportReportButton =
+        ws->findChild<QPushButton *>(QStringLiteral("exportCompareReportButton"));
     CHECK(blink && split && overlay, "mode checkboxes exist (blink/split/overlay)");
     CHECK(blink && split && swipe && overlay && checker && blink->isVisible() &&
               split->isVisible() && swipe->isVisible() && overlay->isVisible() &&
@@ -1212,6 +1216,9 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         return;
     CHECK(split->isEnabled() && overlay->isEnabled(),
           "2-image modes are enabled for exactly two images");
+    CHECK(analyzeButton && exportReportButton && blink->isEnabled() && analyzeButton->isEnabled() &&
+              exportReportButton->isEnabled(),
+          "loaded two-image Compare enables image-dependent actions");
 
     // 闪烁（B）开 → 关。
     sendKey(ws, Qt::Key_B);
@@ -2249,6 +2256,28 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
             ws->engine().setFrames(originalFrames);
         }
     }
+
+    // Replacing the pair with two missing files must settle into a clear empty
+    // state. Controls from the previous successful pair must not remain
+    // clickable while the async batch is loading or after both requests fail.
+    const QString missingStem =
+        QDir(QDir::tempPath()).filePath(QStringLiteral("mviewer-workflow-missing-%1")
+                                            .arg(QString::number(
+                                                reinterpret_cast<quintptr>(ws), 16)));
+    ws->setImages({missingStem + QStringLiteral("-a.png"),
+                   missingStem + QStringLiteral("-b.png")});
+    CHECK(!blink->isEnabled() && analyzeButton && !analyzeButton->isEnabled() &&
+              exportReportButton && !exportReportButton->isEnabled(),
+          "Compare loading state disables image-dependent actions immediately");
+    QElapsedTimer failedLoadTimer;
+    failedLoadTimer.start();
+    while (ws->comparedImageCount() != 0 && failedLoadTimer.elapsed() < 5000)
+        pump(25);
+    CHECK(ws->comparedImageCount() == 0,
+          "failed Compare load settles with no usable panes");
+    CHECK(!blink->isEnabled() && analyzeButton && !analyzeButton->isEnabled() &&
+              exportReportButton && !exportReportButton->isEnabled(),
+          "failed Compare load disables image-dependent actions");
 
     sendKey(ws, Qt::Key_Escape);
     CHECK(!dlg.isVisible(), "Esc closes the Compare dialog");
