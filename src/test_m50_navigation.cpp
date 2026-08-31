@@ -173,6 +173,7 @@ int main(int argc, char **argv)
               !ratings.picked(imageAUtf8) && !ratings.rejected(imageAUtf8),
           "clear in-store metadata before opening the directory");
 
+    {
     MainWindow window;
     window.resize(1100, 750);
     window.show();
@@ -301,6 +302,10 @@ int main(int argc, char **argv)
         compareDialog->close();
 
     window.close();
+    // Flush close-time queued deliveries while the MainWindow and QApplication
+    // are both still alive. Under parallel CTest, leaving these DeferredDelete
+    // events pending can crash the process after the test has printed PASS.
+    pump(100);
     auto &scheduler = TaskScheduler::instance();
     CHECK(scheduler.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(10)),
           "image decode background work drains after MainWindow close");
@@ -315,6 +320,10 @@ int main(int argc, char **argv)
     const auto metrics = scheduler.metrics(TaskScheduler::PoolType::MetadataPool);
     CHECK(metrics.pending == 0 && metrics.active_tasks == 0,
           "Sidecar scheduler pending and active counts converge to zero");
+    }
+    pump(50);
+    QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    QCoreApplication::processEvents();
 
     if (g_failures > 0)
     {
