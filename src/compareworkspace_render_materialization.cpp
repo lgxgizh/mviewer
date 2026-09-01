@@ -490,9 +490,9 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
         {
             if (ctx.isCancelled())
                 return;
-            const DisplayBatchResult result = materializeDisplayBatch(
-                pixels, metadata, displayRequests, adjusts, panes, paneCount, gen, paths, target,
-                ctx);
+            const DisplayBatchResult result =
+                materializeDisplayBatch(pixels, metadata, displayRequests, adjusts, panes,
+                                        paneCount, gen, paths, target, ctx);
             if (ctx.isCancelled())
                 return;
             QMetaObject::invokeMethod(
