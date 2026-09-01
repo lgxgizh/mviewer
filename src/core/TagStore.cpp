@@ -92,6 +92,7 @@ std::vector<std::string> TagStore::tags(const std::string &path) const
     return {it->second.begin(), it->second.end()};
 }
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool TagStore::hasTag(const std::string &path, const std::string &tag) const
 {
     std::lock_guard<std::mutex> lk(m_mutex);
@@ -101,6 +102,7 @@ bool TagStore::hasTag(const std::string &path, const std::string &tag) const
     return it->second.count(tag) > 0;
 }
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void TagStore::addTag(const std::string &path, const std::string &tag)
 {
     if (tag.empty())
@@ -113,6 +115,7 @@ void TagStore::addTag(const std::string &path, const std::string &tag)
     scheduleSave();
 }
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 void TagStore::removeTag(const std::string &path, const std::string &tag)
 {
     const std::string key = normalize(path);
@@ -175,6 +178,7 @@ void TagStore::setFilePath(const std::string &path)
     load();
 }
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 bool TagStore::Snapshot::hasTag(const std::string &path, const std::string &tag) const
 {
     auto it = tags.find(path);

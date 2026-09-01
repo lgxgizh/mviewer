@@ -87,8 +87,8 @@ std::string MetadataIndexer::fileIdentity(const std::string &path)
     return std::to_string(fi.lastModified().toSecsSinceEpoch()) + "|" + std::to_string(fi.size());
 }
 
-uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, EntryCallback onEntry,
-                                DoneCallback onDone)
+uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, const EntryCallback &onEntry,
+                                const DoneCallback &onDone)
 {
     auto cancelToken = std::make_shared<std::atomic<bool>>(false);
     uint64_t requestId = 0;
@@ -100,13 +100,13 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, EntryCall
 
     // Marshals `fn` to the main thread; delivers only while THIS request is
     // still alive (cancelled requests drop their remaining deliveries).
-    auto deliver = [this, requestId, cancelToken](std::function<void()> fn)
+    auto deliver = [this, requestId, cancelToken](const std::function<void()> &fn)
     {
         if (cancelToken->load())
             return;
         if (QCoreApplication::instance())
         {
-            QMetaObject::invokeMethod(
+            QMetaObject::invokeMethod( // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
                 QCoreApplication::instance(),
                 [requestId, cancelToken, fn]()
                 {
@@ -180,8 +180,7 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, EntryCall
                 }
                 if (onEntry && !cancelToken->load() && !ctx.isCancelled())
                 {
-                    const Entry copy = e;
-                    deliver([onEntry, copy]() { onEntry(copy); });
+                    deliver([onEntry, copy = e]() { onEntry(copy); });
                 }
             }
             // Cancelled (own token or scheduler context): mark the token so
@@ -256,7 +255,8 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, EntryCall
 }
 
 uint64_t MetadataIndexer::indexBatched(const std::vector<std::string> &paths,
-                                       EntryBatchCallback onBatch, DoneCallback onDone)
+                                       const EntryBatchCallback &onBatch,
+                                       const DoneCallback &onDone)
 {
     auto cancelToken = std::make_shared<std::atomic<bool>>(false);
     uint64_t requestId = 0;
@@ -266,13 +266,13 @@ uint64_t MetadataIndexer::indexBatched(const std::vector<std::string> &paths,
         m_requestCancel[requestId] = cancelToken;
     }
 
-    auto deliver = [cancelToken](std::function<void()> fn)
+    auto deliver = [cancelToken](const std::function<void()> &fn)
     {
         if (cancelToken->load())
             return;
         if (QCoreApplication::instance())
         {
-            QMetaObject::invokeMethod(
+            QMetaObject::invokeMethod( // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
                 QCoreApplication::instance(),
                 [cancelToken, fn]()
                 {

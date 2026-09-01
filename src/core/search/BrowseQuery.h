@@ -10,7 +10,7 @@
 namespace mviewer::core
 {
 
-enum class BrowseSortField
+enum class BrowseSortField : std::uint8_t
 {
     Name,
     Date,
@@ -39,7 +39,7 @@ struct BrowseQuery
     std::string type;
     BrowseSortField sort = BrowseSortField::Name;
     bool ascending = true;
-    uint64_t generation = 0;
+    std::uint64_t generation = 0;
 
     bool empty() const
     {

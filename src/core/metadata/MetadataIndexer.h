@@ -56,14 +56,14 @@ class MetadataIndexer
     // independent: starting one does NOT cancel another consumer's request.
     // Returns the request id (never 0), or 0 when the scheduler rejected the
     // submission (caller must not wait for callbacks in that case).
-    uint64_t index(const std::vector<std::string> &paths, EntryCallback onEntry,
-                   DoneCallback onDone);
+    uint64_t index(const std::vector<std::string> &paths, const EntryCallback &onEntry,
+                   const DoneCallback &onDone);
 
     // M58: bounded batches reduce UI queue pressure from one queued closure
     // per file to one closure per batch. The batch is a value snapshot and is
     // delivered on the main thread in directory order.
-    uint64_t indexBatched(const std::vector<std::string> &paths, EntryBatchCallback onBatch,
-                          DoneCallback onDone);
+    uint64_t indexBatched(const std::vector<std::string> &paths, const EntryBatchCallback &onBatch,
+                          const DoneCallback &onDone);
 
     // Supersede ONE request (its owner's stale work). Its callbacks are never
     // delivered after this point. No-op for unknown/already-finished ids.

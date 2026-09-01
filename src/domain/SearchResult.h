@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -9,7 +10,7 @@ namespace mviewer::domain
 // A single match within a search result.
 struct SearchMatch
 {
-    enum class Type : uint8_t
+    enum class Type : std::uint8_t
     {
         Filename,
         Metadata,
