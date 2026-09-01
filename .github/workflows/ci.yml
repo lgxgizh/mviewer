@@ -71,7 +71,9 @@ jobs:
           if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
             BASE_SHA="$(git rev-list --max-parents=0 "$GITHUB_SHA")"
           fi
-          format_diff="$(git clang-format --diff "$BASE_SHA" "$GITHUB_SHA" --extensions h,cpp,inc)"
+          # git-clang-format returns 1 when there are no matching files; capture
+          # that expected result so the explicit diff check below can decide.
+          format_diff="$(git clang-format --diff "$BASE_SHA" "$GITHUB_SHA" --extensions h,cpp,inc || true)"
           case "$format_diff" in
             ""|"no modified files to format"|"clang-format did not modify any files") ;;
             *) printf '%s\n' "$format_diff"; exit 1 ;;
