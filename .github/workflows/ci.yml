@@ -71,6 +71,11 @@ jobs:
           if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
             BASE_SHA="$(git rev-list --max-parents=0 "$GITHUB_SHA")"
           fi
+          changed_cpp="$(git diff --name-only --diff-filter=ACMR "$BASE_SHA" "$GITHUB_SHA" -- '*.h' '*.cpp' '*.inc')"
+          if [[ -z "$changed_cpp" ]]; then
+            echo "No C++ files changed; skipping clang-format."
+            exit 0
+          fi
           # git-clang-format returns 1 when there are no matching files; capture
           # that expected result so the explicit diff check below can decide.
           format_diff="$(git clang-format --diff "$BASE_SHA" "$GITHUB_SHA" --extensions h,cpp,inc || true)"
