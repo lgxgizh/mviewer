@@ -169,6 +169,7 @@ add_library(mviewer_ui STATIC
     thumbnailpanel_delegates.cpp
     thumbnailpanel_viewmode.cpp
     thumbnailprovider.cpp
+    display/DisplayColorContextProvider.cpp
     previewpanel.cpp
     thumbnailcache.cpp
     compareworkspace.cpp
@@ -1525,6 +1526,48 @@ target_compile_features(m58_large_directory_query_tests PRIVATE cxx_std_20)
 target_include_directories(m58_large_directory_query_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME m58_large_directory_query_tests COMMAND m58_large_directory_query_tests)
 set_tests_properties(m58_large_directory_query_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
+# ─── M59 Phase 0: source metadata truth baseline ───────────────────────────
+# Deliberately RED before the M59 color-managed presentation implementation:
+# probe/full/frame-sequence paths must agree on bits-per-channel, exact EXIF
+# orientation, canonical color-space labels, and embedded ICC bytes.
+add_executable(m59_phase0_metadata_tests
+    test_m59_phase0.cpp
+)
+target_link_libraries(m59_phase0_metadata_tests PRIVATE mviewer_core Qt6::Gui Qt6::Core)
+target_compile_features(m59_phase0_metadata_tests PRIVATE cxx_std_20)
+target_include_directories(m59_phase0_metadata_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m59_phase0_metadata_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m59_phase0_metadata_tests COMMAND m59_phase0_metadata_tests)
+set_tests_properties(m59_phase0_metadata_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
+# ─── M59 Browse regression: production evaluator + latest-wins panel ───────
+add_executable(m59_browse_regression_tests
+    test_m59_browse_regression.cpp
+)
+target_link_libraries(m59_browse_regression_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(m59_browse_regression_tests PRIVATE cxx_std_20)
+target_include_directories(m59_browse_regression_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m59_browse_regression_tests COMMAND m59_browse_regression_tests)
+set_tests_properties(m59_browse_regression_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 180)
+
+# ─── M59 adversarial source/presentation color contract ─────────────────────
+add_executable(m59_color_managed_tests
+    test_m59_color_managed.cpp
+)
+target_link_libraries(m59_color_managed_tests PRIVATE mviewer_core Qt6::Gui Qt6::Core)
+target_compile_features(m59_color_managed_tests PRIVATE cxx_std_20)
+target_include_directories(m59_color_managed_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_definitions(m59_color_managed_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+add_test(NAME m59_color_managed_tests COMMAND m59_color_managed_tests)
+set_tests_properties(m59_color_managed_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
 
 # Standalone recorder for M55 10k/50k memory and navigation evidence. It is
 # intentionally not a gate because its numbers are machine-dependent.

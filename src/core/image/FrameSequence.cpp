@@ -3,6 +3,7 @@
 #include "core/filesystem/Utf8Path.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/QtConvert.h"
+#include "core/image/QtMetadataSemantics.h"
 
 #include <QFileInfo>
 #include <QImageReader>
@@ -56,14 +57,17 @@ void fillMetadata(const std::string &path, QImageReader &reader, const QImage &i
     meta.fileName = info.fileName().toUtf8().toStdString();
     meta.fileSize = info.size();
     meta.modifiedEpochSec = info.lastModified().toSecsSinceEpoch();
+    // QImageReader autoTransform has already produced the displayed geometry
+    // for static/page sources.  Animation frames intentionally remain raw
+    // (their container has no EXIF orientation contract), so image dimensions
+    // are authoritative in both cases.
     meta.width = image.width();
     meta.height = image.height();
-    meta.channels = image.hasAlphaChannel() ? 4 : 3;
-    meta.bitDepth = image.depth() > 0 ? image.depth() / std::max(1, meta.channels) : 8;
+    qtmetadata::applyReaderRasterMetadata(reader, image, meta);
     meta.format = QString::fromLatin1(reader.format()).toUpper().toStdString();
     if (meta.format.empty())
         meta.format = info.suffix().toUpper().toStdString();
-    meta.orientation = 1;
+    meta.orientation = qtmetadata::orientationFromTransform(reader.transformation());
     meta.frameCount = sequence.frameCount;
     meta.currentFrame = frameIndex;
     meta.animated = sequence.animated;
@@ -74,13 +78,17 @@ void fillMetadata(const std::string &path, QImageReader &reader, const QImage &i
                             ? "pages"
                             : (sequence.kind == FrameSequenceKind::Animation ? "animation" : "static");
 
-    const auto transformations = reader.transformation();
-    if (transformations == QImageIOHandler::TransformationRotate90 ||
-        transformations == QImageIOHandler::TransformationRotate270 ||
-        transformations == QImageIOHandler::TransformationMirrorAndRotate90 ||
-        transformations == QImageIOHandler::TransformationFlipAndRotate90)
+    // Some animation/page plugins do not carry the container ICC onto every
+    // selected frame.  Probe one bounded pixel when needed so all sequence
+    // frames expose the same source profile without materializing the source.
+    if (!meta.hasIccProfile)
     {
-        std::swap(meta.width, meta.height);
+        QImageReader profileReader(qpath(path));
+        profileReader.setAutoTransform(sequence.kind != FrameSequenceKind::Animation);
+        profileReader.setScaledSize(QSize(1, 1));
+        QImage tiny;
+        if (profileReader.read(&tiny))
+            qtmetadata::applyColorMetadata(tiny, meta);
     }
 }
 

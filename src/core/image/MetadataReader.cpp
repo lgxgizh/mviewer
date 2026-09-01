@@ -1,5 +1,6 @@
 #include "core/image/MetadataReader.h"
 #include "core/image/IccProfile.h"
+#include "core/image/QtMetadataSemantics.h"
 
 #include <QColorSpace>
 #include <QFile>
@@ -9,6 +10,7 @@
 #include <QtMath>
 
 #include <cstring>
+#include <utility>
 
 namespace mviewer::core
 {
@@ -40,52 +42,26 @@ void populateImageInfo(mviewer::domain::ImageMetadata &meta, QImageReader &reade
     // ── M18: richer metadata (no extra deps; QImageReader exposes what we need).
     const QString fmt = reader.format();
     meta.format = fmt.toUpper().toStdString();
-    // Number of color channels (3 = RGB, 4 = RGBA, 1 = grayscale).
+    // Number of color channels and bits per channel.  QImage::depth() is
+    // packed storage (RGB32 is 32 bits for three 8-bit channels), so it must
+    // never be exposed as the per-channel metadata value.
     const QImage::Format imgFmt = reader.imageFormat();
-    switch (imgFmt)
+    if (imgFmt != QImage::Format_Invalid)
     {
-    case QImage::Format_Mono:
-    case QImage::Format_MonoLSB:
-    case QImage::Format_Grayscale8:
-    case QImage::Format_Grayscale16:
-        meta.channels = 1;
-        break;
-    case QImage::Format_RGB32:
-    case QImage::Format_RGB16:
-    case QImage::Format_RGB666:
-    case QImage::Format_RGB555:
-    case QImage::Format_RGBX8888:
-    case QImage::Format_BGR888:
-        meta.channels = 3;
-        break;
-    case QImage::Format_ARGB32:
-    case QImage::Format_ARGB32_Premultiplied:
-    case QImage::Format_RGBA8888:
-    case QImage::Format_RGBA8888_Premultiplied:
-    case QImage::Format_RGBA64:
-    case QImage::Format_RGBA16FPx4:
-    case QImage::Format_RGBA32FPx4:
-        meta.channels = 4;
-        break;
-    default:
-        meta.channels = 0; // unknown / not yet decoded
-        break;
+        const QImage probe(1, 1, imgFmt);
+        meta.channels = qtmetadata::channelsForFormat(imgFmt, probe);
+        meta.bitDepth = qtmetadata::bitsPerChannel(imgFmt, meta.channels);
     }
-    meta.bitDepth = reader.imageFormat() == QImage::Format_Invalid
-                        ? 0
-                        : QImage(1, 1, reader.imageFormat()).depth();
+    else
+    {
+        meta.channels = 0;
+        meta.bitDepth = 0;
+    }
     // EXIF orientation (1-8); QImageReader maps the raw tag to a Qt enum.
-    const QImageIOHandler::Transformations xf = reader.transformation();
-    int orient = 1;
-    if (xf & QImageIOHandler::TransformationRotate180)
-        orient = 3;
-    else if (xf & QImageIOHandler::TransformationRotate90)
-        orient = 6;
-    else if (xf & QImageIOHandler::TransformationMirror)
-        orient = 2;
-    else if (xf & QImageIOHandler::TransformationFlip)
-        orient = 4;
-    meta.orientation = orient;
+    const auto transform = reader.transformation();
+    meta.orientation = qtmetadata::orientationFromTransform(transform);
+    if (qtmetadata::transformSwapsDimensions(transform))
+        std::swap(meta.width, meta.height);
 }
 
 void populateDisplayMetadata(mviewer::domain::ImageMetadata &meta, const std::string &filePath)
@@ -100,30 +76,16 @@ void populateDisplayMetadata(mviewer::domain::ImageMetadata &meta, const std::st
         QImage img;
         if (dpiReader.read(&img))
         {
+            if (meta.channels == 0 || meta.bitDepth == 0)
+                qtmetadata::applyRasterMetadata(img, meta);
+            else
+                qtmetadata::applyColorMetadata(img, meta);
             const int dpmx = img.dotsPerMeterX();
             const int dpmy = img.dotsPerMeterY();
             if (dpmx > 0)
                 meta.dpiX = qRound(dpmx * 0.0254);
             if (dpmy > 0)
                 meta.dpiY = qRound(dpmy * 0.0254);
-            meta.hasIccProfile = !img.colorSpace().iccProfile().isEmpty();
-            if (meta.hasIccProfile)
-            {
-                const QByteArray icc = img.colorSpace().iccProfile();
-                const QByteArray encoded = icc.toBase64();
-                meta.textKeys["MViewer.DisplayICC.Base64"] =
-                    std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
-                const auto pi =
-                    parseIccProfile(reinterpret_cast<const unsigned char *>(icc.constData()),
-                                    static_cast<size_t>(icc.size()));
-                meta.iccDescription = pi.description;
-                meta.iccCopyright = pi.copyright;
-                meta.iccColorSpace = pi.colorSpace;
-                meta.iccDeviceClass = pi.deviceClass;
-                meta.iccPcs = pi.pcs;
-                meta.iccRenderingIntent = pi.renderingIntent;
-                meta.iccVersion = pi.version;
-            }
         }
     }
 }
@@ -138,9 +100,8 @@ void populateTextMetadata(mviewer::domain::ImageMetadata &meta, QImageReader &re
         if (!v.isEmpty())
             meta.textKeys[k.toStdString()] = v.toStdString();
     }
-    // Best-effort color space label from the embedded profile if present.
-    if (!reader.text("Description").isEmpty())
-        meta.colorSpace = reader.text("Description").toStdString();
+    // Descriptive text is not a color-space assertion.  The canonical label is
+    // populated from QColorSpace by populateDisplayMetadata instead.
 }
 mviewer::domain::ImageMetadata MetadataReader::read(const std::string &filePath)
 {

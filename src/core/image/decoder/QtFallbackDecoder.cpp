@@ -2,6 +2,7 @@
 #include "core/filesystem/Utf8Path.h"
 
 #include "core/image/ImageBuffer.h"
+#include "core/image/QtMetadataSemantics.h"
 
 #include <QFileInfo>
 #include <QImage>
@@ -38,10 +39,7 @@ void fillMeta(const QImageReader &reader, const QImage &img, mviewer::domain::Im
 {
     meta.width = img.width();
     meta.height = img.height();
-    meta.channels = img.hasAlphaChannel() ? 4 : 3;
-    meta.bitDepth = img.depth() / (meta.channels > 0 ? meta.channels : 1);
-    if (meta.bitDepth <= 0)
-        meta.bitDepth = img.depth();
+    mviewer::core::qtmetadata::applyReaderRasterMetadata(reader, img, meta);
     const QByteArray fmt = reader.format();
     if (!fmt.isEmpty())
     {
@@ -61,28 +59,7 @@ void fillMeta(const QImageReader &reader, const QImage &img, mviewer::domain::Im
         else if (!ext.isEmpty())
             meta.format = ext.toUpper().toStdString();
     }
-    const QColorSpace cs = img.colorSpace();
-    if (cs.isValid())
-    {
-        const QByteArray profile = cs.iccProfile();
-        meta.hasIccProfile = !profile.isEmpty();
-        const QByteArray encoded = profile.toBase64();
-        meta.textKeys["MViewer.DisplayICC.Base64"] =
-            std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
-        if (cs.primaries() == QColorSpace::Primaries::SRgb)
-            meta.colorSpace = "sRGB";
-        else if (cs.primaries() == QColorSpace::Primaries::AdobeRgb)
-            meta.colorSpace = "AdobeRGB";
-        else if (cs.primaries() == QColorSpace::Primaries::DciP3D65)
-            meta.colorSpace = "DisplayP3";
-        else
-            meta.colorSpace = "unknown";
-    }
-    else
-    {
-        meta.colorSpace = "unknown";
-    }
-    meta.orientation = 1;
+    meta.orientation = mviewer::core::qtmetadata::orientationFromTransform(reader.transformation());
 }
 
 } // namespace
@@ -149,10 +126,7 @@ ImageData QtFallbackDecoder::decodeScaled(const std::string &path, int maxEdge,
     outMeta.width = sourceWidth;
     outMeta.height = sourceHeight;
     const auto transform = reader.transformation();
-    if (transform == QImageIOHandler::TransformationRotate90 ||
-        transform == QImageIOHandler::TransformationRotate270 ||
-        transform == QImageIOHandler::TransformationMirrorAndRotate90 ||
-        transform == QImageIOHandler::TransformationFlipAndRotate90)
+    if (mviewer::core::qtmetadata::transformSwapsDimensions(transform))
         std::swap(outMeta.width, outMeta.height);
     return toImageData(img);
 }

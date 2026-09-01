@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.0.16] - 2026-09-02
+
+### Fixed
+
+- **Color-managed presentation (M59):** source ICC/EXIF/bit-depth metadata is
+  now canonical across static, LOD, Compare, and frame-sequence reads.
+- Viewer and Compare presentation rasters now convert directly to the current
+  display target, invalidate stale profile generations, and fall back safely
+  to sRGB when a monitor or source profile is unavailable.
+- CPU and optional GPU display paths share one converted presentation buffer;
+  source pixels remain immutable for analysis and Pixel Inspector workflows.
+
+### Verification
+
+- Added M59 Phase 0 metadata, color-managed presentation, 16-bit, and
+  production Browse latest-wins regressions (10k/50k evaluator tiers plus a
+  real 660-file asynchronous panel run).
+- Physical monitor LUT/HDR/mixed-DPI qualification remains explicitly
+  MANUAL/BLOCKED; see `docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md`.
+
 ## [1.0.15] - 2026-09-01
 
 ### Fixed

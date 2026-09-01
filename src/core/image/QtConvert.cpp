@@ -105,31 +105,73 @@ QImage toQImageRef(const ImageData &src)
     return QImage();
 }
 
-QImage toDisplayQImage(const ImageData &src, const mviewer::domain::ImageMetadata &meta)
+namespace
 {
-    QImage out = toQImage(src);
-    if (out.isNull())
-        return out;
 
-    QColorSpace source;
+QColorSpace colorSpaceFromIcc(const std::vector<uint8_t> &profile)
+{
+    if (profile.empty())
+        return QColorSpace::SRgb;
+    const QByteArray bytes(reinterpret_cast<const char *>(profile.data()),
+                           static_cast<qsizetype>(profile.size()));
+    const QColorSpace colorSpace = QColorSpace::fromIccProfile(bytes);
+    return colorSpace.isValid() ? colorSpace : QColorSpace::SRgb;
+}
+
+QColorSpace sourceColorSpace(const mviewer::domain::ImageMetadata &meta)
+{
     const auto profileIt = meta.textKeys.find("MViewer.DisplayICC.Base64");
     if (profileIt != meta.textKeys.end() && !profileIt->second.empty())
     {
         const QByteArray encoded(profileIt->second.data(),
                                  static_cast<qsizetype>(profileIt->second.size()));
-        source = QColorSpace::fromIccProfile(QByteArray::fromBase64(encoded));
+        const QByteArray profile = QByteArray::fromBase64(encoded);
+        const QColorSpace source = QColorSpace::fromIccProfile(profile);
+        if (source.isValid())
+            return source;
     }
-    if (!source.isValid())
-        source = QColorSpace::SRgb;
+    return QColorSpace::SRgb;
+}
+
+} // namespace
+
+QImage toDisplayQImage(const ImageData &src, const mviewer::domain::ImageMetadata &meta)
+{
+    return toDisplayQImage(src, meta, mviewer::core::DisplayColorContext::sRGB());
+}
+
+QImage toDisplayQImage(const ImageData &src, const mviewer::domain::ImageMetadata &meta,
+                       const mviewer::core::DisplayColorContext &target)
+{
+    QImage out = toQImage(src);
+    if (out.isNull())
+        return out;
+
+    const QColorSpace source = sourceColorSpace(meta);
+    const QColorSpace destination = colorSpaceFromIcc(target.iccProfile);
     out.setColorSpace(source);
-    if (source != QColorSpace::SRgb)
-        out.convertToColorSpace(QColorSpace::SRgb);
+    if (source != destination)
+    {
+        // QColorSpace performs a direct source -> presentation-target
+        // transform.  If a platform/plugin cannot build that transform, Qt
+        // leaves the raster usable; keep the source-tagged copy rather than
+        // returning black or throwing from an asynchronous paint path.
+        out.convertToColorSpace(destination);
+    }
+    if (out.isNull())
+        return toQImage(src);
     return out;
 }
 
 ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageMetadata &meta)
 {
-    return fromQImage(toDisplayQImage(src, meta));
+    return toDisplayImageData(src, meta, mviewer::core::DisplayColorContext::sRGB());
+}
+
+ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageMetadata &meta,
+                            const mviewer::core::DisplayColorContext &target)
+{
+    return fromQImage(toDisplayQImage(src, meta, target));
 }
 
 ImageData fromQImage(const QImage &src)

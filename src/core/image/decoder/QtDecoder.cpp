@@ -2,6 +2,7 @@
 #include "core/filesystem/Utf8Path.h"
 
 #include "core/image/ImageBuffer.h"
+#include "core/image/QtMetadataSemantics.h"
 
 #include <QColorSpace>
 #include <QFileInfo>
@@ -51,31 +52,12 @@ ImageData toImageData(const QImage &src)
 // MirrorAndRotate90=5 (EXIF 7), FlipAndRotate90=6 (EXIF 5), Rotate270=7.
 int orientationFromTransform(QImageIOHandler::Transformations t)
 {
-    if (t == QImageIOHandler::TransformationNone)
-        return 1;
-    if (t == QImageIOHandler::TransformationMirror)
-        return 2;
-    if (t == QImageIOHandler::TransformationRotate180)
-        return 3;
-    if (t == QImageIOHandler::TransformationFlip)
-        return 4;
-    if (t == QImageIOHandler::TransformationFlipAndRotate90)
-        return 5; // EXIF transpose
-    if (t == QImageIOHandler::TransformationRotate90)
-        return 6;
-    if (t == QImageIOHandler::TransformationMirrorAndRotate90)
-        return 7; // EXIF transverse
-    if (t == QImageIOHandler::TransformationRotate270)
-        return 8;
-    return 1;
+    return mviewer::core::qtmetadata::orientationFromTransform(t);
 }
 
 bool transformSwapsDimensions(QImageIOHandler::Transformations t)
 {
-    return t == QImageIOHandler::TransformationRotate90 ||
-           t == QImageIOHandler::TransformationRotate270 ||
-           t == QImageIOHandler::TransformationMirrorAndRotate90 ||
-           t == QImageIOHandler::TransformationFlipAndRotate90;
+    return mviewer::core::qtmetadata::transformSwapsDimensions(t);
 }
 
 bool isTiffPath(const std::string &path)
@@ -214,6 +196,15 @@ QImage decodeTiffWic(const std::string &path, const QRect &rawRect, const QSize 
     meta.height = static_cast<int>(fullHeight);
     meta.orientation = 1;
     meta.format = "TIFF";
+    // WIC intentionally materializes only an 8-bit display raster.  Recover
+    // source bit depth and ICC from a bounded Qt probe so the native TIFF LOD
+    // path has the same metadata contract as ordinary decoding.
+    QImageReader profileReader(filename);
+    profileReader.setAutoTransform(true);
+    profileReader.setScaledSize(QSize(1, 1));
+    QImage tiny;
+    if (profileReader.read(&tiny))
+        mviewer::core::qtmetadata::applyReaderRasterMetadata(profileReader, tiny, meta);
     return output;
 }
 
@@ -256,69 +247,8 @@ void fillMetadata(const QImageReader &reader, const QImage &img,
     meta.width = img.width();
     meta.height = img.height();
 
-    // channels + bitDepth from the source image format (before RGB888 convert).
-    switch (img.format())
-    {
-    case QImage::Format_Grayscale8:
-    case QImage::Format_Grayscale16:
-        meta.channels = 1;
-        break;
-    case QImage::Format_RGB32:
-    case QImage::Format_ARGB32:
-    case QImage::Format_ARGB32_Premultiplied:
-    case QImage::Format_RGBX8888:
-    case QImage::Format_RGBA8888:
-    case QImage::Format_RGBA8888_Premultiplied:
-        meta.channels = (img.hasAlphaChannel() && img.format() != QImage::Format_RGB32 &&
-                         img.format() != QImage::Format_RGBX8888)
-                            ? 4
-                            : 3;
-        break;
-    case QImage::Format_RGB16:
-    case QImage::Format_RGB555:
-    case QImage::Format_RGB888:
-    case QImage::Format_BGR888:
-        meta.channels = 3;
-        break;
-    default:
-        meta.channels = img.hasAlphaChannel() ? 4 : 3;
-        break;
-    }
-    meta.bitDepth = img.depth() / (meta.channels > 0 ? meta.channels : 1);
-    if (meta.bitDepth <= 0)
-        meta.bitDepth = img.depth();
-
     meta.orientation = orientationFromTransform(reader.transformation());
-
-    // Color space (if the decoded image carries one).
-    const QColorSpace cs = img.colorSpace();
-    if (cs.isValid())
-    {
-        meta.hasIccProfile = !cs.iccProfile().isEmpty();
-        const QByteArray profile = cs.iccProfile();
-        const QByteArray encoded = profile.toBase64();
-        meta.textKeys["MViewer.DisplayICC.Base64"] =
-            std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
-        switch (cs.primaries())
-        {
-        case QColorSpace::Primaries::SRgb:
-            meta.colorSpace = "sRGB";
-            break;
-        case QColorSpace::Primaries::AdobeRgb:
-            meta.colorSpace = "AdobeRGB";
-            break;
-        case QColorSpace::Primaries::DciP3D65:
-            meta.colorSpace = "DisplayP3";
-            break;
-        default:
-            meta.colorSpace = "unknown";
-            break;
-        }
-    }
-    else
-    {
-        meta.colorSpace = "unknown";
-    }
+    mviewer::core::qtmetadata::applyReaderRasterMetadata(reader, img, meta);
 
     meta.format = formatName(reader);
 }
@@ -436,26 +366,23 @@ bool QtDecoder::probeMetadata(const std::string &path,
     meta.orientation = orientationFromTransform(t);
     meta.format = formatName(reader);
 
-    // M48 Phase 1: the display ICC metadata must be stable on the probe (the
-    // placeholder carries it), not only on a decode. A tiny scaled read pulls
-    // the ICC out of the container header without materializing pixels. This
-    // is only attempted for formats whose scaled read is truly bounded (JPEG
-    // DCT); for others the profile is discovered at decode time instead.
+    // Keep the probe bounded and avoid asking every optional Qt plugin to
+    // materialize a scaled raster. JPEG/PNG carry the common ICC metadata;
+    // TIFF additionally needs the reader format to preserve 16-bit source
+    // depth. Other formats enrich metadata during their normal decode path.
     const QString ext = info.suffix().toLower();
-    if (ext == "jpg" || ext == "jpeg" || ext == "png")
+    if (ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "tif" || ext == "tiff")
     {
         QImageReader iccReader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
         iccReader.setScaledSize(QSize(1, 1));
         QImage tiny;
-        if (iccReader.read(&tiny) && tiny.colorSpace().isValid())
+        if (iccReader.read(&tiny))
         {
-            const QByteArray icc = tiny.colorSpace().iccProfile();
-            if (!icc.isEmpty())
+            if (ext == "tif" || ext == "tiff")
+                mviewer::core::qtmetadata::applyReaderRasterMetadata(iccReader, tiny, meta);
+            else
             {
-                meta.hasIccProfile = true;
-                const QByteArray encoded = icc.toBase64();
-                meta.textKeys["MViewer.DisplayICC.Base64"] =
-                    std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
+                mviewer::core::qtmetadata::applyRasterMetadata(tiny, meta);
             }
         }
     }
@@ -587,5 +514,6 @@ ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, 
         std::swap(meta.width, meta.height);
     meta.orientation = orientationFromTransform(t);
     meta.format = formatName(reader);
+    mviewer::core::qtmetadata::applyReaderRasterMetadata(reader, img, meta);
     return toImageData(img);
 }

@@ -11,6 +11,7 @@
 #include "core/compare/Histogram.h"
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/DisplayColorContext.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QCheckBox>
@@ -69,6 +70,15 @@ class CompareWorkspace : public QWidget
     // session may provide one explicit frame index per pane.
     void setImages(const QStringList &paths);
     void setImages(const QStringList &paths, const QVector<int> &frameIndices);
+
+    // Presentation target snapshot.  A target change re-materializes pane
+    // rasters while preserving source frames, compare selection, and view
+    // transforms.
+    void setDisplayColorContext(const mviewer::core::DisplayColorContext &target);
+    const mviewer::core::DisplayColorContext &displayColorContext() const
+    {
+        return m_displayColorTarget;
+    }
 
     bool isSyncEnabled() const;
     void setSyncEnabled(bool on);
@@ -628,10 +638,14 @@ class CompareWorkspace : public QWidget
         const std::vector<mviewer::domain::ImageMetadata> &metadata,
         const std::vector<DisplayRequest> &displayRequests, const std::vector<CellAdjust> &adjusts,
         const std::vector<int> &panes, int paneCount, uint64_t generation,
-        const std::vector<std::string> &paths, const QPointer<CompareWorkspace> &guard);
+        const std::vector<std::string> &paths,
+        const mviewer::core::DisplayColorContext &target,
+        const QPointer<CompareWorkspace> &guard);
     void applyDisplayBatchResult(const DisplayBatchResult &result);
 
     uint64_t m_displayGen = 0;
+    mviewer::core::DisplayColorContext m_displayColorTarget =
+        mviewer::core::DisplayColorContext::sRGB();
     TaskScheduler::TaskHandle m_displayTask;
     bool m_displayLodRefreshPending = false;
     int m_displayLodRefreshPane = -1;

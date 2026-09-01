@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-09-01 · Version: **1.0.15 M58 large-directory query line** · Release tag: **v1.0.15 pending publication**
+> Snapshot: 2026-09-02 · Version: **1.0.16 M59 color-managed presentation line** · Release tag: **v1.0.16 pending publication**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -34,8 +34,32 @@
 > `docs/review/M57_PHASE0_MULTIFRAME_BASELINE_2026-08-29.md`,
 > `docs/review/M57_MULTIFRAME_MULTIPAGE_CLOSURE_2026-08-29.md`, and
 > `docs/review/M58_PHASE0_LARGE_DIRECTORY_QUERY_BASELINE_2026-09-01.md`,
-> `docs/review/M58_LARGE_DIRECTORY_QUERY_CLOSURE_2026-09-01.md`, and
+> `docs/review/M58_LARGE_DIRECTORY_QUERY_CLOSURE_2026-09-01.md`,
+> `docs/review/M59_PHASE0_COLOR_METADATA_BASELINE_2026-09-01.md`,
+> `docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## M59 — Color-managed presentation contract (2026-09-02)
+
+- Source ICC, EXIF orientation, channel count, and bits-per-channel now use
+  one shared Qt-internal semantics helper across ordinary, LOD/region, probe,
+  and FrameSequenceReader paths. Untagged and malformed profiles have an
+  explicit sRGB fallback.
+- `DisplayColorContext` makes the target monitor profile, fingerprint, and
+  generation explicit. Windows discovery uses the current `QWindow` device
+  context; Viewer and Compare cancel stale display work and invalidate only
+  presentation caches when the target changes.
+- CPU and optional GPU paths share the same source-to-target presentation
+  conversion. Source/analysis bytes remain immutable and Pixel Inspector stays
+  source-backed. The focused M59 gates cover metadata truth, CPU parity,
+  malformed ICC, 16-bit probe, static/sequence parity, and Browse latest-wins
+  behavior at 10k/50k plus a real 660-file panel.
+- Physical monitor LUT/HDR/mixed-DPI and long-session native GUI behavior are
+  intentionally **MANUAL/BLOCKED** in this environment.
+- Final qualification: two consecutive source-stable Release `build.ps1 Test`
+  gates passed **128/128** (742.80 s and 743.22 s), including the M59 focused
+  tests, workflow/architecture/complexity gates, golden-image, and benchmark
+  enforcement.
 
 ## M58 — Large-directory query and search responsiveness (2026-09-01)
 

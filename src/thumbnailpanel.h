@@ -277,6 +277,23 @@ class ThumbnailPanel : public QListView
         return m_displayEntries;
     }
 
+    // M59 deterministic seam: evaluate the same immutable source/query
+    // snapshot used by the background filter worker.  Keeping this wrapper
+    // value-only lets the large-directory gate exercise the real Browse
+    // evaluator without constructing one widget per row.
+    static QList<Entry> evaluateQuerySnapshotForTest(
+        const QList<Entry> &source, const QString &text, bool useFuzzy,
+        const QRegularExpression &fuzzy, const mviewer::core::BrowseQuery &query,
+        const mviewer::core::RatingStore::Snapshot &ratings,
+        const mviewer::core::TagStore::Snapshot &tags,
+        const QHash<QString, QString> &metaIndex, const QHash<QString, int> &metaIso,
+        const QHash<QString, QString> &metaCamera,
+        const QHash<QString, QString> &metaLens)
+    {
+        return evaluateFilterSnapshot(source, text, useFuzzy, fuzzy, query, ratings, tags,
+                                      metaIndex, metaIso, metaCamera, metaLens);
+    }
+
     // Resolve a path to the current filtered model row (scroll / repaint).
     // This row must never be used to index m_allEntries.
     int rowForPath(const QString &path) const

@@ -5,6 +5,7 @@
 #include "core/export/ExportJob.h"
 #include "core/analysis/ImageOverlay.h"
 #include "core/image/ImageFrame.h"
+#include "core/image/DisplayColorContext.h"
 #include "core/image/FramePlaybackController.h"
 #include "core/image/SourceImage.h"
 #include "core/render/AsyncTileRequestManager.h"
@@ -67,6 +68,13 @@ class ImageViewer : public QOpenGLWidget
     void setProvisionalImage(const QString &path, const QImage &image,
                              const QSize &sourceSize = QSize());
     void setImage(const QString &path);
+    // Presentation target snapshot.  Source/analysis pixels remain unchanged;
+    // changing this context invalidates only display rasters/tiles.
+    void setDisplayColorContext(const mviewer::core::DisplayColorContext &target);
+    const mviewer::core::DisplayColorContext &displayColorContext() const
+    {
+        return m_displayColorTarget;
+    }
     // M56: a filesystem overwrite invalidates the current source while a
     // rename only migrates its identity. Both preserve the browse sequence.
     void refreshSource(const QString &path);
@@ -312,7 +320,9 @@ class ImageViewer : public QOpenGLWidget
                                      const QString &path, uint64_t generation,
                                      std::shared_ptr<mviewer::core::SourceImage> source,
                                      QImage image, QRect sourceRect, QSize sourceSize,
-                                     double density, bool failed = false);
+                                     double density,
+                                     const mviewer::core::DisplayColorContext &target,
+                                     bool failed = false);
     // M47: the raster worker body (probe -> classify -> decodeLod/decodeRegion
     // -> marshal). Runs inside the submit lambda; an unexpected decoder
     // exception is caught at the call site so it can never escape the worker.
@@ -322,7 +332,7 @@ class ImageViewer : public QOpenGLWidget
     void applyDisplayRaster(const QString &path, uint64_t generation,
                             std::shared_ptr<mviewer::core::SourceImage> source, QImage image,
                             QRect sourceRect, QSize sourceSize, double density,
-                            bool failed);
+                            const mviewer::core::DisplayColorContext &target, bool failed);
     struct DisplayRasterPreloadState
     {
         std::atomic<uint64_t> promotedGeneration{0};
@@ -337,6 +347,7 @@ class ImageViewer : public QOpenGLWidget
         QRect sourceRect;
         QSize sourceSize;
         double density = 1.0;
+        mviewer::core::DisplayColorContext target;
         bool failed = false;
     };
     struct DisplayRasterWarm
@@ -347,6 +358,7 @@ class ImageViewer : public QOpenGLWidget
         QRect sourceRect;
         QSize sourceSize;
         double density = 1.0;
+        mviewer::core::DisplayColorContext target;
         qint64 bytes = 0;
         uint64_t lastUse = 0;
     };
@@ -358,6 +370,7 @@ class ImageViewer : public QOpenGLWidget
     };
     static void runDisplayRasterPreload(const QString &path, uint64_t browseGeneration,
                                         const std::shared_ptr<DisplayRasterPreloadState> &state,
+                                        const mviewer::core::DisplayColorContext &target,
                                         const TaskScheduler::TaskContext &ctx,
                                         const std::shared_ptr<QPointer<ImageViewer>> &guard);
     static void queueDisplayRasterPreloadResult(
@@ -527,6 +540,8 @@ class ImageViewer : public QOpenGLWidget
     // image (at most one per image; the display never waits for it).
     bool m_analysisLoadIssued = false;
     std::shared_ptr<mviewer::core::SourceImage> m_sourceImage; // no pixels held
+    mviewer::core::DisplayColorContext m_displayColorTarget =
+        mviewer::core::DisplayColorContext::sRGB();
     DisplayRaster m_raster;
     TaskScheduler::TaskHandle m_displayRequest; // in-flight raster worker
     DisplayRasterPreload m_promotedDisplayRasterPreload;

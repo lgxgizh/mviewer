@@ -109,6 +109,20 @@ CompareWorkspace::~CompareWorkspace()
     ++m_histGen;
 }
 
+void CompareWorkspace::setDisplayColorContext(
+    const mviewer::core::DisplayColorContext &target)
+{
+    if (target.cacheKey() == m_displayColorTarget.cacheKey())
+        return;
+    m_displayColorTarget = target;
+    std::vector<int> all;
+    all.reserve(m_cellViews.size());
+    for (int i = 0; i < static_cast<int>(m_cellViews.size()); ++i)
+        all.push_back(i);
+    scheduleDisplayMaterialization(all);
+    update();
+}
+
 void CompareWorkspace::setSelectionModel(SelectionModel *sel)
 {
     m_selection = sel;

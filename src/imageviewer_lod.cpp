@@ -49,11 +49,47 @@ struct RasterRequest
 {
     QString path;
     uint64_t generation = 0;
+    mviewer::core::DisplayColorContext target =
+        mviewer::core::DisplayColorContext::sRGB();
     bool fullLod = true; // true = decodeLod over the full source
     int maxEdge = 0;     // fullLod target
     int rx = 0, ry = 0, rw = 0, rh = 0; // region source rect
     int tw = 0, th = 0;                 // region raster target size
 };
+
+void ImageViewer::setDisplayColorContext(
+    const mviewer::core::DisplayColorContext &target)
+{
+    if (target.cacheKey() == m_displayColorTarget.cacheKey())
+        return;
+
+    const bool wasLod = m_lodMode;
+    m_displayColorTarget = target;
+    // A target change invalidates presentation-only state. Source/analysis
+    // state remains intact and queued results are rejected by cache identity.
+    cancelDisplayRequest();
+    ++m_displayRasterBrowseGeneration;
+    cancelDisplayRasterPreloads();
+    m_displayRasterWarm.clear();
+    m_displayRasterWarmBytes = 0;
+    m_raster = DisplayRaster{};
+    m_lodMode = false;
+    m_displayDegraded = false;
+
+    ++m_imageGeneration;
+    m_tileRequests.reset(m_imageGeneration);
+    m_tileCache.clear();
+    ++m_overlayGeneration;
+    m_overlayRequests.reset(m_overlayGeneration);
+    m_overlayCache.clear();
+    m_gpu.clear();
+    // A profile change can race the first small-source verdict. Restarting the
+    // display request keeps that verdict as the owner of the foreground load
+    // instead of cancelling the only trigger before it reaches the UI thread.
+    if (!m_currentPath.isEmpty() && (!m_frame || wasLod))
+        requestDisplayRaster();
+    update();
+}
 
 // The raster worker body: probe -> classify -> decodeLod/decodeRegion ->
 // marshal. Private static member so it can reach marshalDisplayRaster while
@@ -86,7 +122,7 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
         // cannot be represented by SourceImage (for example a legacy/plugin
         // decoder without probe metadata). Only the former is terminal.
         ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
-                                          QImage(), QRect(), QSize(), 1.0, true);
+                                          QImage(), QRect(), QSize(), 1.0, req.target, true);
         return;
     }
     if (!source)
@@ -95,7 +131,7 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
         // the existing full-frame ImageLoadingService path decide whether the
         // decoder can load the image. Do not surface this as loadFailed here.
         ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, nullptr, QImage(),
-                                          QRect(), QSize(), 1.0, false);
+                                          QRect(), QSize(), 1.0, req.target, false);
         return;
     }
     const QSize srcSize(source->metadata().width, source->metadata().height);
@@ -104,7 +140,7 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
         // Small source: the existing full-frame fast path owns the display;
         // only propagate the source dims (keeps the worker contract uniform).
         ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
-                                          QImage(), QRect(), srcSize, 1.0);
+                                          QImage(), QRect(), srcSize, 1.0, req.target);
         return;
     }
     if (ctx.isCancelled())
@@ -159,24 +195,27 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
         // M48 Phase 2: source-backed display goes through the SAME display
         // conversion as the full-frame path (ICC applied) using the decoded
         // result's authoritative metadata.
-        raster = mvcore::toDisplayQImage(r.pixels, r.metadata);
+        raster = mvcore::toDisplayQImage(r.pixels, r.metadata, req.target);
     }
     ImageViewer::marshalDisplayRaster(guard, req.path, req.generation, std::move(source),
-                                      std::move(raster), covered, srcSize, density, decodeFailed);
+                                      std::move(raster), covered, srcSize, density, req.target,
+                                      decodeFailed);
 }
 
 void ImageViewer::marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewer>> &guard,
                                        const QString &path, uint64_t generation,
                                        std::shared_ptr<mviewer::core::SourceImage> source,
                                        QImage image, QRect sourceRect, QSize sourceSize,
-                                       double density, bool failed)
+                                       double density,
+                                       const mviewer::core::DisplayColorContext &target,
+                                       bool failed)
 {
     if (!qApp)
         return; // app teardown
     QMetaObject::invokeMethod(
         qApp,
         [guard, path, generation, source = std::move(source), image = std::move(image),
-         sourceRect, sourceSize, density, failed]() mutable
+         sourceRect, sourceSize, density, target, failed]() mutable
         {
             try
             {
@@ -185,7 +224,7 @@ void ImageViewer::marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewe
                     return; // viewer destroyed; never touch it
                 viewer->applyDisplayRaster(path, generation, std::move(source),
                                            std::move(image), sourceRect, sourceSize, density,
-                                           failed);
+                                           target, failed);
             }
             catch (...)
             {
@@ -206,7 +245,7 @@ void ImageViewer::startLodDisplay(const QString &path, uint64_t generation)
     if (auto warm = takeWarmDisplayRaster(path))
     {
         applyDisplayRaster(path, generation, std::move(warm->source), std::move(warm->image),
-                           warm->sourceRect, warm->sourceSize, warm->density, false);
+                           warm->sourceRect, warm->sourceSize, warm->density, warm->target, false);
         return;
     }
     if (m_promotedDisplayRasterPreload.handle)
@@ -304,6 +343,7 @@ void ImageViewer::requestDisplayRasterImpl()
     RasterRequest req;
     req.path = m_currentPath;
     req.generation = m_requestGen;
+    req.target = m_displayColorTarget;
 
     if (firstRequest || sw <= 0 || sh <= 0)
     {
@@ -385,7 +425,7 @@ void ImageViewer::requestDisplayRasterImpl()
                     try
                     {
                         marshalDisplayRaster(guard, req.path, req.generation, nullptr, QImage(),
-                                             QRect(), QSize(), 1.0, true);
+                                             QRect(), QSize(), 1.0, req.target, true);
                     }
                     catch (...)
                     {
@@ -411,9 +451,12 @@ void ImageViewer::requestDisplayRasterImpl()
 void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
                                      std::shared_ptr<mviewer::core::SourceImage> source,
                                      QImage image, QRect sourceRect, QSize sourceSize,
-                                     double density, bool failed)
+                                     double density,
+                                     const mviewer::core::DisplayColorContext &target,
+                                     bool failed)
 {
-    if (path != m_currentPath || generation != m_requestGen)
+    if (path != m_currentPath || generation != m_requestGen ||
+        target.cacheKey() != m_displayColorTarget.cacheKey())
         return; // superseded (A -> B -> A) or stale request
     m_displayRequest.reset();
     m_displayUpgradeScheduled = false;

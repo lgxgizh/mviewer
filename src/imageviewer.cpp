@@ -7,6 +7,7 @@
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
 #include "core/trace/Trace.h"
+#include "display/DisplayColorContextProvider.h"
 #include "gpu/GpuTileUploader.h"
 
 #include <QApplication>
@@ -673,6 +674,8 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
 void ImageViewer::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
+    if (windowHandle())
+        setDisplayColorContext(DisplayColorContextProvider::forWindow(windowHandle()));
     // Keep the image fitted across window resizes while in fit mode; an
     // explicit zoom (wheel/keyboard/double-click) opts out of re-fitting.
     if (m_fitMode && m_frame && m_frame->isValid())

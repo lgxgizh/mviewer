@@ -138,13 +138,15 @@ AsyncTileRequestManager::VisibleTiles ImageViewer::requestVisibleTiles()
     const uint64_t generation = m_imageGeneration;
     const ImageData source = m_frame->pixels();
     const auto metadata = m_frame->metadata();
+    const auto displayTarget = m_displayColorTarget;
     QPointer<ImageViewer> guard(this);
-    const auto decode = [source, metadata](const std::string &, int sx, int sy, int sw, int sh,
-                                            int tw, int th) -> ImageData
+    const auto decode = [source, metadata, displayTarget](const std::string &, int sx, int sy,
+                                                           int sw, int sh, int tw,
+                                                           int th) -> ImageData
     {
         const ImageData raw = RenderEngine::scaleRegionStatic(
             source, RenderRect{sx, sy, sw, sh}, RenderSize{tw, th}, RenderInterp::Bilinear);
-        return mvcore::toDisplayImageData(raw, metadata);
+        return mvcore::toDisplayImageData(raw, metadata, displayTarget);
     };
     return m_tileRequests.requestVisible(
         id, m_view, m_tiles, renderScalePercent, generation, decode,

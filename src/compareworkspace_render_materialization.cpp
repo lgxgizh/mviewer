@@ -1,6 +1,7 @@
 #include "compareworkspace_p.h"
 
 #include "core/image/SourceImage.h"
+#include "display/DisplayColorContextProvider.h"
 
 #include <algorithm>
 #include <cmath>
@@ -40,6 +41,8 @@ class ElidedCaption final : public QLabel
 void CompareWorkspace::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
+    if (windowHandle())
+        setDisplayColorContext(DisplayColorContextProvider::forWindow(windowHandle()));
     const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
     const bool normalGrid = m_pageStack && m_compareGridPage &&
                             m_pageStack->currentWidget() == m_compareGridPage;
@@ -362,11 +365,13 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
     const std::vector<ImageData> &pixels, const std::vector<mviewer::domain::ImageMetadata> &metadata,
     const std::vector<DisplayRequest> &displayRequests, const std::vector<CellAdjust> &adjusts,
     const std::vector<int> &panes, int paneCount, uint64_t gen,
-    const std::vector<std::string> &paths, const QPointer<CompareWorkspace> &guard)
+    const std::vector<std::string> &paths,
+    const mviewer::core::DisplayColorContext &target,
+    const QPointer<CompareWorkspace> &guard)
 {
     return TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, metadata, displayRequests, adjusts, panes, paneCount, gen, paths, guard](
+        [pixels, metadata, displayRequests, adjusts, panes, paneCount, gen, paths, target, guard](
             const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
@@ -481,7 +486,7 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                 }
                 DisplayBatchResult::CellImage cell;
                 cell.index = idx;
-                cell.image = mvcore::toDisplayQImage(adjusted, convMeta);
+                cell.image = mvcore::toDisplayQImage(adjusted, convMeta, target);
                 cell.sourceSize = (displayAdjust.hasCrop || displayAdjust.rotation != 0)
                                       ? QSize(adjusted.width, adjusted.height)
                                       : sourceDims;
@@ -581,10 +586,11 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
     }
     std::vector<CellAdjust> adjusts = m_cellAdjusts;
     const uint64_t gen = m_displayGen;
+    const auto target = m_displayColorTarget;
     QPointer<CompareWorkspace> guard(this);
 
     auto handle = startDisplayMaterialization(pixels, metadata, displayRequests, adjusts, panes,
-                                              paneCount, gen, m_comparePaths, guard);
+                                              paneCount, gen, m_comparePaths, target, guard);
     if (!handle)
     {
         // submit() refused the task (pool paused / back-pressured). Keep the
