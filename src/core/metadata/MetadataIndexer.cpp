@@ -106,6 +106,7 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, const Ent
             return;
         if (QCoreApplication::instance())
         {
+            // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
             QTimer::singleShot(0, QCoreApplication::instance(),
                                [requestId, cancelToken, fn]()
                                {
@@ -260,6 +261,7 @@ uint64_t MetadataIndexer::indexBatched(const std::vector<std::string> &paths,
             return;
         if (QCoreApplication::instance())
         {
+            // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
             QTimer::singleShot(0, QCoreApplication::instance(),
                                [cancelToken, fn]()
                                {
