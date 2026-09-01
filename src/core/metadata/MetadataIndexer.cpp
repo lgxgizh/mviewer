@@ -223,9 +223,10 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, const Ent
             };
             if (QCoreApplication::instance())
             {
-                const bool queued = QMetaObject::invokeMethod(
-                    QCoreApplication::instance(), [finalize]() { finalize(); },
-                    Qt::QueuedConnection);
+                const bool queued =
+                    QMetaObject::invokeMethod( // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
+                        QCoreApplication::instance(), [finalize]() { finalize(); },
+                        Qt::QueuedConnection);
                 if (!queued)
                 {
                     // The event loop is closing: the queued closure will never
@@ -378,9 +379,10 @@ uint64_t MetadataIndexer::indexBatched(const std::vector<std::string> &paths,
             };
             if (QCoreApplication::instance())
             {
-                const bool queued = QMetaObject::invokeMethod(
-                    QCoreApplication::instance(), [finalize]() { finalize(); },
-                    Qt::QueuedConnection);
+                const bool queued =
+                    QMetaObject::invokeMethod( // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
+                        QCoreApplication::instance(), [finalize]() { finalize(); },
+                        Qt::QueuedConnection);
                 if (!queued)
                 {
                     cancelToken->store(true);
