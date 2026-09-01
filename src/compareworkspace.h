@@ -626,6 +626,13 @@ class CompareWorkspace : public QWidget
     };
     static SourceDisplayResult materializeSourceDisplay(const std::string &path,
                                                         const DisplayRequest &request);
+    static DisplayBatchResult materializeDisplayBatch(
+        const std::vector<ImageData> &pixels,
+        const std::vector<mviewer::domain::ImageMetadata> &metadata,
+        const std::vector<DisplayRequest> &displayRequests, const std::vector<CellAdjust> &adjusts,
+        const std::vector<int> &panes, int paneCount, uint64_t generation,
+        const std::vector<std::string> &paths, const mviewer::core::DisplayColorContext &target,
+        const TaskScheduler::TaskContext &context);
     QSize displayLodTarget(int idx, const ImageData &source) const;
     QRect sourceVisibleRect(int pane) const;
     DisplayRequest sourceDisplayRequest(int pane) const;

@@ -37,7 +37,7 @@ class ElidedCaption final : public QLabel
 
     QString m_fullText;
 };
-}
+} // namespace
 void CompareWorkspace::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
@@ -361,6 +361,120 @@ CompareWorkspace::SourceDisplayResult CompareWorkspace::materializeSourceDisplay
     return result;
 }
 
+CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
+    const std::vector<ImageData> &pixels,
+    const std::vector<mviewer::domain::ImageMetadata> &metadata,
+    const std::vector<DisplayRequest> &displayRequests, const std::vector<CellAdjust> &adjusts,
+    const std::vector<int> &panes, int paneCount, uint64_t generation,
+    const std::vector<std::string> &paths, const mviewer::core::DisplayColorContext &target,
+    const TaskScheduler::TaskContext &context)
+{
+    DisplayBatchResult result;
+    result.generation = generation;
+    result.paneCount = paneCount;
+    result.cells.reserve(panes.size());
+
+    const auto adjustFor = [&adjusts](int idx) -> CellAdjust
+    { return idx >= 0 && idx < static_cast<int>(adjusts.size()) ? adjusts[idx] : CellAdjust{}; };
+    const auto recordFailure = [&result](int idx, const QString &reason)
+    {
+        DisplayBatchResult::CellImage cell;
+        cell.index = idx;
+        cell.errorText = reason;
+        result.cells.push_back(std::move(cell));
+    };
+
+    for (int idx : panes)
+    {
+        if (context.isCancelled())
+            return {};
+        if (idx < 0 || idx >= static_cast<int>(pixels.size()))
+            continue;
+        const ImageData &src = pixels[static_cast<size_t>(idx)];
+        QSize sourceDims;
+        mviewer::domain::ImageMetadata convMeta;
+        ImageData lod;
+        QRect coveredRect;
+        const DisplayRequest request = idx < static_cast<int>(displayRequests.size())
+                                           ? displayRequests[idx]
+                                           : DisplayRequest{};
+        if (!src.isNull())
+        {
+            sourceDims = QSize(src.width, src.height);
+            convMeta = metadata[static_cast<size_t>(idx)];
+            lod = request.target.isValid()
+                      ? RenderEngine::scaleBoundedStatic(
+                            src, RenderSize{request.target.width(), request.target.height()})
+                      : ImageData();
+            coveredRect = QRect(QPoint(0, 0), sourceDims);
+        }
+        else
+        {
+            if (idx >= static_cast<int>(paths.size()))
+            {
+                recordFailure(idx, QStringLiteral("源路径为空"));
+                continue;
+            }
+            const SourceDisplayResult sourceResult =
+                materializeSourceDisplay(paths[static_cast<size_t>(idx)], request);
+            if (!sourceResult.errorText.isEmpty())
+            {
+                recordFailure(idx, sourceResult.errorText);
+                continue;
+            }
+            sourceDims = sourceResult.sourceSize;
+            coveredRect = sourceResult.coveredRect;
+            lod = sourceResult.pixels;
+            convMeta = sourceResult.metadata;
+        }
+        if (context.isCancelled())
+            return {};
+        if (lod.isNull())
+        {
+            recordFailure(idx, QStringLiteral("显示栅格为空"));
+            continue;
+        }
+        if (sourceDims.isEmpty())
+            sourceDims = QSize(lod.width, lod.height);
+        if (!coveredRect.isValid())
+            coveredRect = QRect(QPoint(0, 0), sourceDims);
+
+        CellAdjust displayAdjust = adjustFor(idx);
+        if (displayAdjust.hasCrop && !sourceDims.isEmpty())
+        {
+            const double sx = static_cast<double>(lod.width) / sourceDims.width();
+            const double sy = static_cast<double>(lod.height) / sourceDims.height();
+            displayAdjust.cropX = static_cast<int>(std::lround(displayAdjust.cropX * sx));
+            displayAdjust.cropY = static_cast<int>(std::lround(displayAdjust.cropY * sy));
+            displayAdjust.cropW = static_cast<int>(std::lround(displayAdjust.cropW * sx));
+            displayAdjust.cropH = static_cast<int>(std::lround(displayAdjust.cropH * sy));
+        }
+        const ImageData adjusted = CompareWorkspace::applyAdjusts(lod, displayAdjust);
+        if (context.isCancelled())
+            return {};
+        if (adjusted.isNull())
+        {
+            recordFailure(idx, QStringLiteral("显示调整失败"));
+            continue;
+        }
+        DisplayBatchResult::CellImage cell;
+        cell.index = idx;
+        cell.image = mvcore::toDisplayQImage(adjusted, convMeta, target);
+        const bool transformed = displayAdjust.hasCrop || displayAdjust.rotation != 0;
+        cell.sourceSize = transformed ? QSize(adjusted.width, adjusted.height) : sourceDims;
+        cell.sourceRect = transformed ? QRect(QPoint(0, 0), cell.sourceSize) : coveredRect;
+        if (context.isCancelled())
+            return {};
+        if (cell.image.isNull())
+        {
+            recordFailure(idx, QStringLiteral("显示格式转换失败"));
+            continue;
+        }
+        result.cells.push_back(std::move(cell));
+    }
+    return result;
+}
+
 TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
     const std::vector<ImageData> &pixels,
     const std::vector<mviewer::domain::ImageMetadata> &metadata,
@@ -375,148 +489,19 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
          guard](const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
-                return; // superseded while queued — stop before any work
-
-            DisplayBatchResult r;
-            r.generation = gen;
-            r.paneCount = paneCount;
-            r.cells.reserve(panes.size());
-
-            const auto adjustFor = [&adjusts](int idx) -> CellAdjust
-            {
-                if (idx >= 0 && idx < static_cast<int>(adjusts.size()))
-                    return adjusts[idx];
-                return CellAdjust{};
-            };
-            const auto recordFailure = [&r](int idx, const QString &reason)
-            {
-                DisplayBatchResult::CellImage cell;
-                cell.index = idx;
-                cell.errorText = reason;
-                r.cells.push_back(std::move(cell));
-            };
-
-            for (int idx : panes)
-            {
-                if (ctx.isCancelled())
-                    return; // before pane materialization
-                if (idx < 0 || idx >= static_cast<int>(pixels.size()))
-                    continue;
-                const ImageData &src = pixels[static_cast<size_t>(idx)];
-                QSize sourceDims;
-                mviewer::domain::ImageMetadata convMeta;
-                ImageData lod;
-                QRect coveredRect;
-                const DisplayRequest request =
-                    idx < static_cast<int>(displayRequests.size()) ? displayRequests[idx]
-                                                                     : DisplayRequest{};
-                if (!src.isNull())
-                {
-                    // Full frame available: bounded client-side display LOD
-                    // from the frame pixels (existing path).
-                    sourceDims = QSize(src.width, src.height);
-                    convMeta = metadata[static_cast<size_t>(idx)];
-                    const QSize target = request.target;
-                    lod = target.isValid()
-                              ? RenderEngine::scaleBoundedStatic(
-                                    src, RenderSize{target.width(), target.height()})
-                              : ImageData();
-                    coveredRect = QRect(QPoint(0, 0), sourceDims);
-                }
-                else
-                {
-                    // M47: source-backed display — bounded viewport LOD from
-                    // the source (native where available, e.g. JPEG). The pane
-                    // never waits for a full frame; the full frame, when
-                    // loaded, remains the analysis source. M48 Phase 1: the
-                    // decode returns an atomic pixels+metadata result, so the
-                    // display conversion uses the authoritative metadata AS OF
-                    // this decode (ICC included), never a pre-decode snapshot.
-                    if (idx >= static_cast<int>(paths.size()))
-                    {
-                        recordFailure(idx, QStringLiteral("源路径为空"));
-                        continue;
-                    }
-                    const SourceDisplayResult sourceResult = materializeSourceDisplay(
-                        paths[static_cast<size_t>(idx)], request);
-                    if (!sourceResult.errorText.isEmpty())
-                    {
-                        recordFailure(idx, sourceResult.errorText);
-                        continue;
-                    }
-                    sourceDims = sourceResult.sourceSize;
-                    coveredRect = sourceResult.coveredRect;
-                    lod = sourceResult.pixels;
-                    convMeta = sourceResult.metadata;
-                }
-                if (ctx.isCancelled())
-                    return; // after bounded scale
-                if (lod.isNull())
-                {
-                    recordFailure(idx, QStringLiteral("显示栅格为空"));
-                    continue;
-                }
-                if (sourceDims.isEmpty())
-                    sourceDims = QSize(lod.width, lod.height);
-                if (!coveredRect.isValid())
-                    coveredRect = QRect(QPoint(0, 0), sourceDims);
-
-                // This is a bounded visual-preview approximation: nonlinear
-                // point operations (especially gamma and clipping) do not
-                // strictly commute with downsampling. Analysis never consumes
-                // this LOD; it maps the hover coordinate back to source pixels
-                // and applies point-wise adjustments without a full-res QImage.
-                CellAdjust displayAdjust = adjustFor(idx);
-                if (displayAdjust.hasCrop && sourceDims.width() > 0 && sourceDims.height() > 0)
-                {
-                    const double sx = static_cast<double>(lod.width) / sourceDims.width();
-                    const double sy = static_cast<double>(lod.height) / sourceDims.height();
-                    displayAdjust.cropX = static_cast<int>(std::lround(displayAdjust.cropX * sx));
-                    displayAdjust.cropY = static_cast<int>(std::lround(displayAdjust.cropY * sy));
-                    displayAdjust.cropW = static_cast<int>(std::lround(displayAdjust.cropW * sx));
-                    displayAdjust.cropH = static_cast<int>(std::lround(displayAdjust.cropH * sy));
-                }
-                const ImageData adjusted = CompareWorkspace::applyAdjusts(lod, displayAdjust);
-                if (ctx.isCancelled())
-                    return; // after bounded adjustment
-                if (adjusted.isNull())
-                {
-                    recordFailure(idx, QStringLiteral("显示调整失败"));
-                    continue; // failed adjustment must not clear the last valid preview
-                }
-                DisplayBatchResult::CellImage cell;
-                cell.index = idx;
-                cell.image = mvcore::toDisplayQImage(adjusted, convMeta, target);
-                cell.sourceSize = (displayAdjust.hasCrop || displayAdjust.rotation != 0)
-                                      ? QSize(adjusted.width, adjusted.height)
-                                      : sourceDims;
-                cell.sourceRect = (displayAdjust.hasCrop || displayAdjust.rotation != 0)
-                                      ? QRect(QPoint(0, 0), cell.sourceSize)
-                                      : coveredRect;
-                if (ctx.isCancelled())
-                    return; // after conversion
-                if (cell.image.isNull())
-                {
-                    recordFailure(idx, QStringLiteral("显示格式转换失败"));
-                    continue; // failed conversion must not clear the last valid preview
-                }
-                r.cells.push_back(std::move(cell));
-            }
-
+                return;
+            const DisplayBatchResult result = materializeDisplayBatch(
+                pixels, metadata, displayRequests, adjusts, panes, paneCount, gen, paths, target,
+                ctx);
             if (ctx.isCancelled())
                 return;
-
-            // Marshal to the UI thread through qApp (outlives this workspace).
-            // The queued lambda re-checks the guard AND the generation/pane-count
-            // match before touching any widget.
             QMetaObject::invokeMethod(
                 qApp,
-                [guard, r]()
+                [guard, result]()
                 {
                     CompareWorkspace *ws = guard.data();
-                    if (!ws)
-                        return;
-                    ws->applyDisplayBatchResult(r);
+                    if (ws)
+                        ws->applyDisplayBatchResult(result);
                 },
                 Qt::QueuedConnection);
         });
