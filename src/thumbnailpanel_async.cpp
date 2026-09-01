@@ -281,8 +281,7 @@ void ThumbnailPanel::startDirectoryScan(
                             }
                         }
                         const QFileInfo &fi = list.at(i);
-                        if (!passesTypeFilter(typeFilter, fi.suffix()) ||
-                            fi.suffix().isEmpty())
+                        if (fi.suffix().isEmpty())
                             continue;
                         entries.append(
                             {fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()});

@@ -175,6 +175,20 @@ void TagStore::setFilePath(const std::string &path)
     load();
 }
 
+bool TagStore::Snapshot::hasTag(const std::string &path, const std::string &tag) const
+{
+    auto it = tags.find(path);
+    return it != tags.end() && it->second.count(tag) != 0;
+}
+
+TagStore::Snapshot TagStore::snapshot() const
+{
+    std::lock_guard<std::mutex> lk(m_mutex);
+    Snapshot out;
+    out.tags = m_tags;
+    return out;
+}
+
 bool TagStore::load()
 {
     std::lock_guard<std::mutex> lk(m_mutex);

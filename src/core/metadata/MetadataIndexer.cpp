@@ -258,6 +258,152 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, EntryCall
     return requestId;
 }
 
+uint64_t MetadataIndexer::indexBatched(const std::vector<std::string> &paths,
+                                       EntryBatchCallback onBatch, DoneCallback onDone)
+{
+    auto cancelToken = std::make_shared<std::atomic<bool>>(false);
+    uint64_t requestId = 0;
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        requestId = ++m_nextRequestId;
+        m_requestCancel[requestId] = cancelToken;
+    }
+
+    auto deliver = [cancelToken](std::function<void()> fn)
+    {
+        if (cancelToken->load())
+            return;
+        if (QCoreApplication::instance())
+        {
+            QMetaObject::invokeMethod(
+                QCoreApplication::instance(),
+                [cancelToken, fn]()
+                {
+                    if (!cancelToken->load())
+                        fn();
+                },
+                Qt::QueuedConnection);
+        }
+        else if (!cancelToken->load())
+        {
+            fn();
+        }
+    };
+
+    auto handle = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Background,
+        [this, requestId, cancelToken, paths, onBatch, onDone,
+         deliver](const TaskScheduler::TaskContext &ctx)
+        {
+            constexpr size_t kBatchSize = 256;
+            std::vector<Entry> batch;
+            batch.reserve(kBatchSize);
+            auto publish = [&]
+            {
+                if (batch.empty() || cancelToken->load() || ctx.isCancelled())
+                    return;
+                const std::vector<Entry> copy = batch;
+                deliver([onBatch, copy]()
+                        {
+                            if (onBatch)
+                                onBatch(copy);
+                        });
+                batch.clear();
+            };
+            for (const std::string &p : paths)
+            {
+                if (cancelToken->load() || ctx.isCancelled())
+                    break;
+                Entry e;
+                bool fromCache = false;
+                const std::string currentIdentity = fileIdentity(p);
+                {
+                    std::lock_guard<std::mutex> lk(m_mtx);
+                    auto it = m_cache.find(p);
+                    if (it != m_cache.end() && m_identity.count(p) &&
+                        m_identity.at(p) == currentIdentity)
+                    {
+                        e = it->second;
+                        fromCache = true;
+                    }
+                }
+                if (!fromCache)
+                {
+                    if (cancelToken->load() || ctx.isCancelled())
+                        break;
+                    const auto meta = mviewer::core::MetadataReader::read(p);
+                    const auto raw = mviewer::core::parseRawMetadata(p);
+                    e = buildEntry(p, meta, raw);
+                    {
+                        std::lock_guard<std::mutex> lk(m_mtx);
+                        if (cancelToken->load() || ctx.isCancelled())
+                            break;
+                        const bool wasAbsent = m_cache.find(p) == m_cache.end();
+                        m_cache[p] = e;
+                        m_identity[p] = currentIdentity;
+                        if (wasAbsent)
+                            m_cacheOrder.push_back(p);
+                        while (m_cache.size() > m_cacheLimit && !m_cacheOrder.empty())
+                        {
+                            const std::string oldest = m_cacheOrder.front();
+                            m_cacheOrder.pop_front();
+                            m_cache.erase(oldest);
+                            m_identity.erase(oldest);
+                        }
+                    }
+                }
+                batch.push_back(std::move(e));
+                if (batch.size() >= kBatchSize)
+                    publish();
+            }
+            publish();
+            if (cancelToken->load() || ctx.isCancelled())
+            {
+                cancelToken->store(true);
+                std::lock_guard<std::mutex> lk(m_mtx);
+                eraseRequestLocked(requestId);
+                return;
+            }
+            auto finalize = [this, requestId, cancelToken, onDone]()
+            {
+                bool authorized = false;
+                {
+                    std::lock_guard<std::mutex> lk(m_mtx);
+                    auto it = m_requestCancel.find(requestId);
+                    if (it == m_requestCancel.end() || it->second != cancelToken)
+                        return;
+                    authorized = !cancelToken->load();
+                    eraseRequestLocked(requestId);
+                }
+                if (authorized && onDone)
+                    onDone();
+            };
+            if (QCoreApplication::instance())
+            {
+                const bool queued = QMetaObject::invokeMethod(
+                    QCoreApplication::instance(), [finalize]() { finalize(); },
+                    Qt::QueuedConnection);
+                if (!queued)
+                {
+                    cancelToken->store(true);
+                    std::lock_guard<std::mutex> lk(m_mtx);
+                    eraseRequestLocked(requestId);
+                }
+            }
+            else
+            {
+                finalize();
+            }
+        });
+    if (!handle)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        eraseRequestLocked(requestId);
+        return 0;
+    }
+    return requestId;
+}
+
 void MetadataIndexer::eraseRequestLocked(uint64_t requestId)
 {
     m_requestCancel.erase(requestId);

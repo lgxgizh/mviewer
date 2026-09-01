@@ -22,8 +22,10 @@
 #include <QThreadPool>
 #include <QVector>
 
+#include "core/RatingStore.h"
 #include "core/TagStore.h"
 #include "core/filesystem/DirectorySnapshot.h"
+#include "core/search/BrowseQuery.h"
 #include "core/scheduler/TaskScheduler.h"
 
 class QPushButton;
@@ -268,9 +270,12 @@ class ThumbnailPanel : public QListView
     // M55 observability for the bounded UI-side pixmap cache.
     int thumbReadyCount() const;
     qint64 thumbReadyBytes() const;
+    // Public inspection follows the committed gallery result (post-filter),
+    // while the private m_allEntries snapshot remains the full directory source
+    // used to re-evaluate later query generations without rescanning.
     const QList<Entry> &entries() const
     {
-        return m_allEntries;
+        return m_displayEntries;
     }
 
     // Resolve a path to the current filtered model row (scroll / repaint).
@@ -355,6 +360,8 @@ class ThumbnailPanel : public QListView
     void configureListMode();
     void configureThumbnailMode();
     void buildModel(const QList<Entry> &entries);
+    bool takePendingFilterRestore(bool hasEntries, QStringList &selection,
+                                  QString &current);
     void updateVisibleRange();
     void onCompareClicked();
     QString thumbCacheKey(const QString &path, int size) const;
@@ -470,10 +477,39 @@ class ThumbnailPanel : public QListView
     QHash<QString, QString> m_metaCamera; // path -> "make model" (Details EXIF column)
     QHash<QString, QString> m_metaLens;   // path -> lens model (Details EXIF column)
 
-    void applyFilter();     // (re)build the filtered model
+    QTimer *m_filterDebounceTimer = nullptr;
+    std::shared_ptr<std::atomic<bool>> m_filterCancel;
+    TaskScheduler::TaskHandle m_filterTask;
+    uint64_t m_filterGeneration = 0;
+    // Small directories clear their stale projection immediately while the
+    // debounced query is pending. Keep the path identity so the eventual
+    // result can restore selection/current-image exactly.
+    QStringList m_pendingFilterSelection;
+    QString m_pendingFilterCurrent;
+    uint64_t m_pendingFilterGeneration = 0;
+
+    void applyFilter();     // schedule a latest-wins filtered model rebuild
+    void scheduleFilter(bool debounce);
+    void runFilterQuery();
     bool prepareFilterSource(const QString &text, QList<Entry> &source);
     bool matchesFilter(const Entry &entry, const QString &text, bool useFuzzy,
                        const QRegularExpression &fuzzy) const;
+    static bool matchesFilterSnapshot(
+        const Entry &entry, const QString &text, bool useFuzzy, const QRegularExpression &fuzzy,
+        const mviewer::core::BrowseQuery &query,
+        const mviewer::core::RatingStore::Snapshot &ratings,
+        const mviewer::core::TagStore::Snapshot &tags,
+        const QHash<QString, QString> &metaIndex, const QHash<QString, int> &metaIso,
+        const QHash<QString, QString> &metaCamera,
+        const QHash<QString, QString> &metaLens);
+    static QList<Entry> evaluateFilterSnapshot(
+        const QList<Entry> &source, const QString &text, bool useFuzzy,
+        const QRegularExpression &fuzzy, const mviewer::core::BrowseQuery &query,
+        const mviewer::core::RatingStore::Snapshot &ratings,
+        const mviewer::core::TagStore::Snapshot &tags,
+        const QHash<QString, QString> &metaIndex, const QHash<QString, int> &metaIso,
+        const QHash<QString, QString> &metaCamera,
+        const QHash<QString, QString> &metaLens);
     void ensureMetaIndex(); // lazily index metadata for m_allEntries
     void applyThumbSize(int size, bool rememberGridSize);
     void runBatchAnalyzeExportAsync(const QStringList &paths, const std::string &analyzerId,

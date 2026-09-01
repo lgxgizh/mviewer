@@ -622,6 +622,7 @@ void MainWindow::connectPanelSignals()
             });
     connect(m_searchPanel, &SearchPanel::resultActivated, this,
             QOverload<const QString &>::of(&MainWindow::onImageOpen));
+    connect(m_searchPanel, &SearchPanel::reindexRequested, this, &MainWindow::reindexSearch);
     connect(m_actBatch, &QAction::triggered, this,
             [this]()
             {

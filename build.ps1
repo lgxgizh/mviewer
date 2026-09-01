@@ -53,7 +53,13 @@ function Import-MSVCEnvironment {
     Write-Host "[VS] $script:vsPath" -ForegroundColor Cyan
     Write-Host "[VS] Initializing environment..." -ForegroundColor Cyan
 
-    cmd /c "`"$script:vcvars64`" x64 && set" | ForEach-Object {
+    # Keep cl.exe's /showIncludes marker in the language Ninja expects.  The
+    # vcvars script may otherwise inherit the host's localized VSLANG and
+    # generate a dependency prefix that Ninja cannot decode.
+    # CMake probes /showIncludes while configuring.  Keep that probe on the
+    # UTF-8 console code page so its generated Ninja prefix matches cl.exe's
+    # UTF-8 marker bytes instead of a CP936->UTF-8 mojibake conversion.
+    cmd /c "chcp 65001>nul&&set VSLANG=1033&& `"$script:vcvars64`" x64 && set" | ForEach-Object {
         if ($_ -match '^([^=]+)=(.*)$') {
             [System.Environment]::SetEnvironmentVariable($Matches[1], $Matches[2])
         }
@@ -61,6 +67,13 @@ function Import-MSVCEnvironment {
 }
 
 Import-MSVCEnvironment | Out-Null
+
+# Ninja's MSVC dependency scanner recognizes the English /showIncludes
+# markers.  A localized developer shell emits (for example) "注意: 包含文件",
+# which silently drops header dependencies and lets stale translation units
+# survive an incremental build.  Pin the compiler diagnostics language for the
+# build process so header edits always invalidate every dependent TU.
+$env:VSLANG = '1033'
 
 # ── 1b. Deploy MSVC C++ runtime next to the built exe ───────────────────────
 # windeployqt (CMake POST_BUILD) ships the Qt DLLs; this step ships the MSVC CRT

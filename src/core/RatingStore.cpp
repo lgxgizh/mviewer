@@ -60,6 +60,46 @@ RatingStore &RatingStore::instance()
     return s;
 }
 
+int RatingStore::Snapshot::rating(const std::string &path) const
+{
+    auto it = ratings.find(path);
+    return it == ratings.end() ? 0 : it->second;
+}
+
+int RatingStore::Snapshot::colorLabel(const std::string &path) const
+{
+    auto it = colorLabels.find(path);
+    return it == colorLabels.end() ? 0 : it->second;
+}
+
+bool RatingStore::Snapshot::isRejected(const std::string &path) const
+{
+    return rejected.count(path) != 0;
+}
+
+bool RatingStore::Snapshot::isPicked(const std::string &path) const
+{
+    return picked.count(path) != 0;
+}
+
+bool RatingStore::Snapshot::isRecent(const std::string &path) const
+{
+    return recentSet.count(path) != 0;
+}
+
+RatingStore::Snapshot RatingStore::snapshot() const
+{
+    std::lock_guard<std::mutex> lk(m_mutex);
+    Snapshot out;
+    out.ratings = m_ratings;
+    out.colorLabels = m_colorLabels;
+    out.rejected = m_rejected;
+    out.picked = m_picked;
+    out.recents = m_recents;
+    out.recentSet.insert(m_recents.begin(), m_recents.end());
+    return out;
+}
+
 std::string RatingStore::defaultPath() const
 {
 #ifdef _WIN32

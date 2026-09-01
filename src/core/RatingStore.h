@@ -28,6 +28,26 @@ namespace mviewer::core
 class RatingStore
 {
   public:
+    // M58: one lock/copy boundary for a Browse evaluation. Workers consume a
+    // value snapshot instead of taking the store mutex once per visible row.
+    struct Snapshot
+    {
+        std::map<std::string, int> ratings;
+        std::map<std::string, int> colorLabels;
+        std::set<std::string> rejected;
+        std::set<std::string> picked;
+        std::vector<std::string> recents;
+        // Membership lookup is on the hot path of large-directory queries;
+        // retain ordering for callers while providing O(log N) checks.
+        std::set<std::string> recentSet;
+
+        int rating(const std::string &path) const;
+        int colorLabel(const std::string &path) const;
+        bool isRejected(const std::string &path) const;
+        bool isPicked(const std::string &path) const;
+        bool isRecent(const std::string &path) const;
+    };
+
     // Process-wide singleton backed by a platform data directory.
     static RatingStore &instance();
     ~RatingStore();
@@ -57,6 +77,8 @@ class RatingStore
 
     // ---- favorites == picked set ----
     std::vector<std::string> favorites() const;
+
+    Snapshot snapshot() const;
 
     // Persistence. M46: user edits are coalesced on an owned worker thread
     // (reads stay immediate); save() is the explicit flush boundary — it

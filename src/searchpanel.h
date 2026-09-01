@@ -4,7 +4,9 @@
 #include "core/metadata/MetadataIndexer.h"
 #include "domain/Image.h"
 #include "domain/SearchResult.h"
+#include "core/scheduler/TaskScheduler.h"
 
+#include <atomic>
 #include <QTableWidget>
 #include <QWidget>
 #include <memory>
@@ -35,6 +37,7 @@ class SearchPanel : public QWidget
     Q_OBJECT
   public:
     explicit SearchPanel(QWidget *parent = nullptr);
+    ~SearchPanel() override;
 
     // Supply an external engine so the panel shares state with the caller.
     void setEngine(std::shared_ptr<mviewer::core::SearchEngine> engine);
@@ -54,6 +57,9 @@ class SearchPanel : public QWidget
   signals:
     // Emitted when the user clicks a result row; the caller opens the image.
     void resultActivated(const QString &filePath);
+    // M58: the panel does not own the workspace file list. The host handles
+    // this explicit request and feeds the resulting index back via reindexEntries().
+    void reindexRequested();
 
   private slots:
     void onSearchTextChanged();
@@ -66,6 +72,7 @@ class SearchPanel : public QWidget
     void buildQuery(mviewer::domain::SearchQuery &q) const;
     QString matchTypeLabel(mviewer::domain::SearchMatch::Type type) const;
     void performSearch();
+    void populateResultsChunk(uint64_t generation, int firstRow);
 
     QLineEdit *m_searchEdit = nullptr;
     QCheckBox *m_chkFilename = nullptr;
@@ -79,4 +86,8 @@ class SearchPanel : public QWidget
 
     std::shared_ptr<mviewer::core::SearchEngine> m_engine;
     std::vector<mviewer::domain::SearchResult> m_lastResults;
+    std::shared_ptr<std::atomic<bool>> m_alive;
+    TaskScheduler::TaskHandle m_searchTask;
+    uint64_t m_searchGeneration = 0;
+    uint64_t m_tableGeneration = 0;
 };

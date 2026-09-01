@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.15] - 2026-09-01
+
+### Fixed
+
+- **Large-directory Browse queries (M58):** filter and sort intents now use
+  value snapshots, a real debounce, cancellable latest-wins background
+  evaluation, and in-memory type/sort changes without directory rescans.
+- **Metadata/search responsiveness:** MetadataIndexer supports bounded batch
+  callbacks; RatingStore and TagStore expose one-copy snapshots; SearchPanel
+  evaluates immutable index snapshots off the UI thread and populates results
+  incrementally. The reindex button now emits an explicit host-owned request.
+
+### Verification
+
+- Added the hermetic `m58_large_directory_query_tests` 10k/50k acceptance gate.
+- Native GUI first-paint/typing feel remains explicitly MANUAL/BLOCKED; see
+  `docs/review/M58_PHASE0_LARGE_DIRECTORY_QUERY_BASELINE_2026-09-01.md` and
+  `docs/review/M58_LARGE_DIRECTORY_QUERY_CLOSURE_2026-09-01.md`.
+
 ## [1.0.14] - 2026-08-31
 
 ### Fixed

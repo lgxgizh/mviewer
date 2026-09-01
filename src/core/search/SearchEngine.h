@@ -70,6 +70,7 @@ class SearchIndex
 class SearchEngine
 {
   public:
+    using Snapshot = SearchIndex;
     SearchEngine() = default;
 
     // Register a data source: all images in a directory, with their metadata.
@@ -90,6 +91,19 @@ class SearchEngine
 
     // Return ranked results for the given query.
     std::vector<domain::SearchResult> search(const domain::SearchQuery &query) const;
+
+    // M58: copy the immutable searchable index once at the UI boundary. The
+    // returned value is safe to evaluate on a worker while new indexing starts.
+    Snapshot snapshot() const
+    {
+        return m_index;
+    }
+
+    static std::vector<domain::SearchResult> searchSnapshot(const Snapshot &snapshot,
+                                                             const domain::SearchQuery &query)
+    {
+        return snapshot.search(query);
+    }
 
     // Access the underlying index (useful for tests).
     const SearchIndex &index() const

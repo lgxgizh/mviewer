@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-08-31 · Version: **1.0.14 RC hardening line** · Release tag: **v1.0.14 patch line; publication is external to this repository**
+> Snapshot: 2026-09-01 · Version: **1.0.15 M58 large-directory query line** · Release tag: **v1.0.15 pending publication**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -33,7 +33,28 @@
 > `docs/review/M55_INTERACTIVE_LATENCY_MEMORY_NAVIGATION_CLOSURE_2026-08-29.md` and
 > `docs/review/M57_PHASE0_MULTIFRAME_BASELINE_2026-08-29.md`,
 > `docs/review/M57_MULTIFRAME_MULTIPAGE_CLOSURE_2026-08-29.md`, and
+> `docs/review/M58_PHASE0_LARGE_DIRECTORY_QUERY_BASELINE_2026-09-01.md`,
+> `docs/review/M58_LARGE_DIRECTORY_QUERY_CLOSURE_2026-09-01.md`, and
 > `.\build.ps1 Test`.
+
+## M58 — Large-directory query and search responsiveness (2026-09-01)
+
+- Browse filter state is represented as a Qt-free value query with one
+  generation per logical intent. Text input uses a real coalescing debounce;
+  background filtering/sorting consumes immutable entry/store snapshots and
+  drops stale generations before touching the model.
+- Sort and type filters now rebuild from the committed in-memory directory
+  listing; changing them never calls `setDirectory()` or rescans the folder.
+  SearchPanel uses an immutable SearchEngine snapshot, cancellable latest-wins
+  evaluation, bounded table population, and an explicit `reindexRequested()`
+  host contract.
+- MetadataIndexer batches 256 entries per GUI callback. RatingStore and
+  TagStore expose single-copy snapshots for filter workers.
+- The deterministic 10k/50k M58 acceptance executable is part of CTest. Two
+  source-stable Release `build.ps1 Test` runs passed 125/125 (762.13 s and
+  761.78 s). Native first-paint/typing cadence and extended GUI feel remain
+  **MANUAL/BLOCKED** in this environment; see the Phase-0 baseline and closure
+  report for the exact boundary.
 
 ## M57 — Multi-frame / multi-page image architecture and playback (2026-08-29)
 

@@ -18,7 +18,7 @@ void ThumbnailPanel::setSortMode(SortMode mode)
         return;
     m_sortMode = mode;
     if (!m_currentDir.isEmpty())
-        setDirectory(m_currentDir);
+        scheduleFilter(false);
 }
 
 void ThumbnailPanel::setSortAscending(bool ascending)
@@ -27,7 +27,7 @@ void ThumbnailPanel::setSortAscending(bool ascending)
         return;
     m_sortAscending = ascending;
     if (!m_currentDir.isEmpty())
-        setDirectory(m_currentDir);
+        scheduleFilter(false);
 }
 
 void ThumbnailPanel::setTypeFilter(const QString &types)
@@ -36,14 +36,40 @@ void ThumbnailPanel::setTypeFilter(const QString &types)
         return;
     m_typeFilter = types;
     if (!m_currentDir.isEmpty())
-        setDirectory(m_currentDir);
+        scheduleFilter(false);
 }
 
 void ThumbnailPanel::setFilter(const QString &text, bool recursive)
 {
     m_filterText = text;
     m_filterRecursive = recursive;
-    applyFilter();
+    scheduleFilter(true);
+    // Reflect a pending non-empty query immediately so a stale directory
+    // result is never presented as the answer to the new filter. The actual
+    // evaluation remains debounced and latest-wins in runFilterQuery().
+    // Tiny directories can clear their stale projection immediately without
+    // creating a meaningful UI slice; the actual query still runs on the
+    // debounce timer. Large directories keep the previous model until the
+    // guarded worker result arrives, avoiding a 50K-row synchronous reset.
+    if (!m_filterText.trimmed().isEmpty() && m_allEntries.size() <= 256)
+    {
+        QStringList previousSelection = selectedPaths();
+        QString previousCurrent = currentIndex().isValid()
+                                       ? m_paths.value(currentIndex().row())
+                                       : QString();
+        // A second keystroke can arrive before the first debounced query
+        // publishes. In that case the native model is already empty; retain
+        // the original identity captured by the pending query.
+        if (m_pendingFilterGeneration != 0)
+        {
+            previousSelection = m_pendingFilterSelection;
+            previousCurrent = m_pendingFilterCurrent;
+        }
+        buildModel({});
+        m_pendingFilterSelection = previousSelection;
+        m_pendingFilterCurrent = previousCurrent;
+        m_pendingFilterGeneration = m_filterGeneration;
+    }
 }
 
 void ThumbnailPanel::setMetaSearch(bool on)
@@ -51,13 +77,13 @@ void ThumbnailPanel::setMetaSearch(bool on)
     m_metaSearch = on;
     if (on)
         ensureMetaIndex();
-    applyFilter();
+    scheduleFilter(false);
 }
 
 void ThumbnailPanel::setRatingFilter(int stars)
 {
     m_ratingFilter = qBound(0, stars, 5);
-    applyFilter();
+    scheduleFilter(false);
 }
 
 void ThumbnailPanel::setCameraFilter(const QString &camera)
@@ -66,7 +92,7 @@ void ThumbnailPanel::setCameraFilter(const QString &camera)
         return;
     m_cameraFilter = camera.trimmed();
     if (!m_currentDir.isEmpty())
-        applyFilter();
+        scheduleFilter(false);
 }
 
 void ThumbnailPanel::setLensFilter(const QString &lens)
@@ -75,7 +101,7 @@ void ThumbnailPanel::setLensFilter(const QString &lens)
         return;
     m_lensFilter = lens.trimmed();
     if (!m_currentDir.isEmpty())
-        applyFilter();
+        scheduleFilter(false);
 }
 
 void ThumbnailPanel::setIsoFilter(int iso)
@@ -84,7 +110,7 @@ void ThumbnailPanel::setIsoFilter(int iso)
         return;
     m_isoFilter = iso;
     if (!m_currentDir.isEmpty())
-        applyFilter();
+        scheduleFilter(false);
 }
 
 void ThumbnailPanel::setTagFilter(const QString &tag)
@@ -94,31 +120,31 @@ void ThumbnailPanel::setTagFilter(const QString &tag)
         return;
     m_tagFilter = t;
     if (!m_currentDir.isEmpty())
-        applyFilter();
+        scheduleFilter(false);
 }
 
 void ThumbnailPanel::setLabelFilter(int label)
 {
     m_labelFilter = qBound(0, label, 6);
-    applyFilter();
+    scheduleFilter(false);
 }
 
 void ThumbnailPanel::setRejectFilter(bool on)
 {
     m_rejectFilter = on;
-    applyFilter();
+    scheduleFilter(false);
 }
 
 void ThumbnailPanel::setPickFilter(bool on)
 {
     m_pickFilter = on;
-    applyFilter();
+    scheduleFilter(false);
 }
 
 void ThumbnailPanel::setRecentFilter(bool on)
 {
     m_recentFilter = on;
-    applyFilter();
+    scheduleFilter(false);
 }
 
 void ThumbnailPanel::clearFlagFilters()
@@ -127,7 +153,7 @@ void ThumbnailPanel::clearFlagFilters()
     m_rejectFilter = false;
     m_pickFilter = false;
     m_recentFilter = false;
-    applyFilter();
+    scheduleFilter(false);
 }
 
 void ThumbnailPanel::invalidateRatings()
@@ -162,31 +188,33 @@ void ThumbnailPanel::ensureMetaIndex()
     // MainWindow search re-index running concurrently on the same directory.
     if (m_metaRequestId != 0)
         mviewer::core::MetadataIndexer::instance().cancelRequest(m_metaRequestId);
-    const uint64_t requestId = mviewer::core::MetadataIndexer::instance().index(
+    const uint64_t requestId = mviewer::core::MetadataIndexer::instance().indexBatched(
         paths,
-        [alive, self, gen](const mviewer::core::MetadataIndexer::Entry &e)
+        [alive, self, gen](const std::vector<mviewer::core::MetadataIndexer::Entry> &batch)
         {
             if (!alive->load() || !self)
                 return;
-            QMetaObject::invokeMethod(
-                qApp,
-                [alive, self, gen, e]()
-                {
-                    if (!alive->load() || !self)
-                        return;
-                    ThumbnailPanel *panel = self.data();
-                    if (gen != panel->m_dirGen)
-                        return; // superseded directory: drop
-                    const QString p =
-                        QString::fromUtf8(e.path.data(), static_cast<int>(e.path.size()));
-                    panel->m_metaIndex.insert(
-                        p, QString::fromUtf8(e.searchBlob.data(), static_cast<int>(e.searchBlob.size())));
-                    panel->m_metaIso.insert(p, e.iso);
-                    panel->m_metaCamera.insert(
-                        p, QString::fromUtf8(e.camera.data(), static_cast<int>(e.camera.size())).trimmed());
-                    panel->m_metaLens.insert(
-                        p, QString::fromUtf8(e.lens.data(), static_cast<int>(e.lens.size())).trimmed());
-                });
+            // M58: MetadataIndexer already marshals this one bounded batch to
+            // the GUI thread, so update the value maps without another hop.
+            ThumbnailPanel *panel = self.data();
+            if (gen != panel->m_dirGen)
+                return;
+            for (const auto &e : batch)
+            {
+                const QString p =
+                    QString::fromUtf8(e.path.data(), static_cast<int>(e.path.size()));
+                panel->m_metaIndex.insert(
+                    p, QString::fromUtf8(e.searchBlob.data(), static_cast<int>(e.searchBlob.size())));
+                panel->m_metaIso.insert(p, e.iso);
+                panel->m_metaCamera.insert(
+                    p, QString::fromUtf8(e.camera.data(), static_cast<int>(e.camera.size())).trimmed());
+                panel->m_metaLens.insert(
+                    p, QString::fromUtf8(e.lens.data(), static_cast<int>(e.lens.size())).trimmed());
+            }
+            // M58 progressive non-default query state: a batch landing may
+            // refine the visible result immediately; the generation gate
+            // coalesces bursts and drops stale work.
+            panel->scheduleFilter(false);
         },
         [alive, self, gen]()
         {
@@ -217,6 +245,36 @@ void ThumbnailPanel::ensureMetaIndex()
 
 void ThumbnailPanel::applyFilter()
 {
+    scheduleFilter(false);
+}
+
+void ThumbnailPanel::scheduleFilter(bool debounce)
+{
+    ++m_filterGeneration;
+    if (m_filterTask)
+        TaskScheduler::cancel(m_filterTask);
+    if (m_filterCancel)
+        m_filterCancel->store(true, std::memory_order_release);
+    m_filterCancel = std::make_shared<std::atomic<bool>>(false);
+    if (!m_filterDebounceTimer)
+        return;
+    m_filterDebounceTimer->stop();
+    if (debounce)
+    {
+        m_filterDebounceTimer->setInterval(25);
+        m_filterDebounceTimer->start();
+    }
+    else
+    {
+        // Discrete controls (sort/type/flags) submit immediately; evaluation
+        // is still background and latest-wins, so no heavy O(N) work runs in
+        // this UI handler and tests/users do not observe an extra timer turn.
+        runFilterQuery();
+    }
+}
+
+void ThumbnailPanel::runFilterQuery()
+{
     if (!m_scanComplete)
         m_scanProgressive = false;
     const QString t = m_filterText.trimmed().toLower();
@@ -225,10 +283,10 @@ void ThumbnailPanel::applyFilter()
     if (needMeta)
     {
         ensureMetaIndex();
-        // Progressively apply as entries land: if the index is still filling,
-        // wait for its completion callback to re-run applyFilter.
-        if (m_metaIndexing && m_metaIndex.size() < static_cast<int>(m_allEntries.size()))
-            return;
+        // M58: do not block on the full index. The worker evaluates the
+        // currently available snapshot and each bounded metadata batch
+        // schedules a newer generation, so non-default queries converge
+        // progressively instead of waiting for the last file.
     }
 
     QList<Entry> src;
@@ -248,15 +306,165 @@ void ThumbnailPanel::applyFilter()
         fuzzyRe.setPatternOptions(QRegularExpression::CaseInsensitiveOption);
     }
 
+    // Build one value query and one store snapshot at the UI boundary. The
+    // worker never reads mutable widgets, singleton stores, or Qt models.
+    mviewer::core::BrowseQuery query;
+    query.text = t.toStdString();
+    query.recursive = m_filterRecursive;
+    query.metadata = m_metaSearch;
+    query.ratingMinimum = m_ratingFilter;
+    query.colorLabel = m_labelFilter;
+    query.rejectedOnly = m_rejectFilter;
+    query.pickedOnly = m_pickFilter;
+    query.recentOnly = m_recentFilter;
+    query.camera = m_cameraFilter.toLower().toStdString();
+    query.lens = m_lensFilter.toLower().toStdString();
+    query.iso = m_isoFilter;
+    query.tag = m_tagFilter.toStdString();
+    query.type = m_typeFilter.toLower().toStdString();
+    query.sort = static_cast<mviewer::core::BrowseSortField>(m_sortMode);
+    query.ascending = m_sortAscending;
+    query.generation = m_filterGeneration;
+    const auto ratings = mviewer::core::RatingStore::instance().snapshot();
+    const auto tags = mviewer::core::TagStore::instance().snapshot();
+    const auto metaIndex = m_metaIndex;
+    const auto metaIso = m_metaIso;
+    const auto metaCamera = m_metaCamera;
+    const auto metaLens = m_metaLens;
+    const bool incremental = m_incrementalApply;
+    const QStringList prevSelection = m_incrementalPrevSelection;
+    const QString prevCurrent = m_incrementalPrevCurrent;
+    const QString anchorPath = m_incrementalAnchorPath;
+    const int anchorOffset = m_incrementalAnchorOffset;
+    const uint64_t generation = m_filterGeneration;
+    const auto cancel = m_filterCancel;
+    const auto alive = m_alive;
+    const QPointer<ThumbnailPanel> self(this);
+    // Tiny directories do not benefit from queueing and the synchronous path
+    // keeps established selection/filter semantics deterministic. Large
+    // directories always take the cancellable worker path below.
+    if (src.size() <= 256)
+    {
+        const QList<Entry> out = evaluateFilterSnapshot(
+            src, t, useFuzzy, fuzzyRe, query, ratings, tags, metaIndex, metaIso, metaCamera,
+            metaLens);
+        if (m_incrementalApply)
+            applyDisplayedEntriesIncremental(out, prevSelection, prevCurrent, anchorPath,
+                                              anchorOffset);
+        else
+            buildModel(out);
+        return;
+    }
+    m_filterTask = TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Background,
+        [self, alive, cancel, generation, src, t, fuzzyRe, useFuzzy, query, ratings, tags,
+         metaIndex, metaIso, metaCamera, metaLens, incremental, prevSelection, prevCurrent,
+         anchorPath, anchorOffset](const TaskScheduler::TaskContext &ctx) mutable
+        {
+            if (ctx.isCancelled() || cancel->load(std::memory_order_acquire) || !alive->load())
+                return;
+            const QList<Entry> out = ThumbnailPanel::evaluateFilterSnapshot(
+                src, t, useFuzzy, fuzzyRe, query, ratings, tags, metaIndex, metaIso, metaCamera,
+                metaLens);
+            if (ctx.isCancelled() || cancel->load(std::memory_order_acquire) || !alive->load() ||
+                !self)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [self, alive, cancel, generation, out, incremental, prevSelection, prevCurrent,
+                 anchorPath, anchorOffset]()
+                {
+                    if (!alive->load() || cancel->load(std::memory_order_acquire) || !self ||
+                        generation != self->m_filterGeneration)
+                        return;
+                    if (incremental)
+                        self->applyDisplayedEntriesIncremental(out, prevSelection, prevCurrent,
+                                                               anchorPath, anchorOffset);
+                    else
+                        self->buildModel(out);
+                },
+                Qt::QueuedConnection);
+        });
+}
+
+QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
+    const QList<Entry> &source, const QString &text, bool useFuzzy,
+    const QRegularExpression &fuzzy, const mviewer::core::BrowseQuery &query,
+    const mviewer::core::RatingStore::Snapshot &ratings,
+    const mviewer::core::TagStore::Snapshot &tags,
+    const QHash<QString, QString> &metaIndex, const QHash<QString, int> &metaIso,
+    const QHash<QString, QString> &metaCamera, const QHash<QString, QString> &metaLens)
+{
     QList<Entry> out;
-    for (const Entry &e : src)
-        if (matchesFilter(e, t, useFuzzy, fuzzyRe))
-            out.append(e);
-    if (m_incrementalApply)
-        applyDisplayedEntriesIncremental(out, m_incrementalPrevSelection, m_incrementalPrevCurrent,
-                                         m_incrementalAnchorPath, m_incrementalAnchorOffset);
-    else
-        buildModel(out);
+    out.reserve(source.size());
+    const auto passesType = [&query](const QString &path)
+    {
+        if (query.type.empty())
+            return true;
+        const QString suffix = QFileInfo(path).suffix().toLower();
+        static const QStringList rawExts = {
+            "cr2", "cr3", "nef", "arw", "dng", "raf", "rw2", "orf", "sr2", "srw",
+            "pef", "3fr", "mef", "erf", "mrw", "dcr", "kdc", "mos", "raw", "iiq"};
+        for (const QString &candidate :
+             QString::fromStdString(query.type).split(',', Qt::SkipEmptyParts))
+        {
+            const QString type = candidate.trimmed().toLower();
+            if (type == suffix || (type == "tiff" && (suffix == "tif" || suffix == "tiff")) ||
+                (type == "raw" && rawExts.contains(suffix)))
+                return true;
+        }
+        return false;
+    };
+    for (const Entry &entry : source)
+    {
+        if (passesType(entry.path) &&
+            matchesFilterSnapshot(entry, text, useFuzzy, fuzzy, query, ratings, tags, metaIndex,
+                                  metaIso, metaCamera, metaLens))
+            out.append(entry);
+    }
+    const auto less = [&query, &ratings, &metaCamera, &metaLens](const Entry &a, const Entry &b)
+    {
+        int cmp = 0;
+        switch (query.sort)
+        {
+        case mviewer::core::BrowseSortField::Name:
+            cmp = QString::compare(a.name, b.name, Qt::CaseInsensitive);
+            break;
+        case mviewer::core::BrowseSortField::Date:
+            cmp = a.date < b.date ? -1 : (a.date > b.date ? 1 : 0);
+            break;
+        case mviewer::core::BrowseSortField::Size:
+            cmp = a.size < b.size ? -1 : (a.size > b.size ? 1 : 0);
+            break;
+        case mviewer::core::BrowseSortField::Resolution:
+        {
+            const qint64 ar = static_cast<qint64>(a.width) * a.height;
+            const qint64 br = static_cast<qint64>(b.width) * b.height;
+            cmp = ar < br ? -1 : (ar > br ? 1 : 0);
+            break;
+        }
+        case mviewer::core::BrowseSortField::Type:
+            cmp = QString::compare(QFileInfo(a.path).suffix(), QFileInfo(b.path).suffix(),
+                                   Qt::CaseInsensitive);
+            break;
+        case mviewer::core::BrowseSortField::Rating:
+            cmp = ratings.rating(a.path.toStdString()) - ratings.rating(b.path.toStdString());
+            break;
+        case mviewer::core::BrowseSortField::Camera:
+            cmp = QString::compare(metaCamera.value(a.path), metaCamera.value(b.path),
+                                   Qt::CaseInsensitive);
+            break;
+        case mviewer::core::BrowseSortField::Lens:
+            cmp = QString::compare(metaLens.value(a.path), metaLens.value(b.path),
+                                   Qt::CaseInsensitive);
+            break;
+        }
+        if (cmp == 0)
+            cmp = QString::compare(a.path, b.path, Qt::CaseSensitive);
+        return query.ascending ? cmp < 0 : cmp > 0;
+    };
+    std::stable_sort(out.begin(), out.end(), less);
+    return out;
 }
 
 bool ThumbnailPanel::prepareFilterSource(const QString &t, QList<Entry> &src)
@@ -335,37 +543,58 @@ bool ThumbnailPanel::prepareFilterSource(const QString &t, QList<Entry> &src)
 bool ThumbnailPanel::matchesFilter(const Entry &e, const QString &t, bool useFuzzy,
                                    const QRegularExpression &fuzzy) const
 {
+    mviewer::core::BrowseQuery query;
+    query.text = t.toStdString();
+    query.metadata = m_metaSearch;
+    query.ratingMinimum = m_ratingFilter;
+    query.colorLabel = m_labelFilter;
+    query.rejectedOnly = m_rejectFilter;
+    query.pickedOnly = m_pickFilter;
+    query.recentOnly = m_recentFilter;
+    query.camera = m_cameraFilter.toLower().toStdString();
+    query.lens = m_lensFilter.toLower().toStdString();
+    query.iso = m_isoFilter;
+    query.tag = m_tagFilter.toStdString();
+    return matchesFilterSnapshot(e, t, useFuzzy, fuzzy,
+                                 query,
+                                 mviewer::core::RatingStore::instance().snapshot(),
+                                 mviewer::core::TagStore::instance().snapshot(), m_metaIndex,
+                                 m_metaIso, m_metaCamera, m_metaLens);
+}
+
+bool ThumbnailPanel::matchesFilterSnapshot(
+    const Entry &e, const QString &t, bool useFuzzy, const QRegularExpression &fuzzy,
+    const mviewer::core::BrowseQuery &query,
+    const mviewer::core::RatingStore::Snapshot &ratings,
+    const mviewer::core::TagStore::Snapshot &tags, const QHash<QString, QString> &metaIndex,
+    const QHash<QString, int> &metaIso, const QHash<QString, QString> &metaCamera,
+    const QHash<QString, QString> &metaLens)
+{
     const std::string ep = e.path.toStdString();
-    auto &rs = mviewer::core::RatingStore::instance();
-    if (m_ratingFilter > 0 && rs.rating(ep) < m_ratingFilter)
+    if (query.ratingMinimum > 0 && ratings.rating(ep) < query.ratingMinimum)
         return false;
-    if (m_labelFilter > 0 && rs.colorLabel(ep) != m_labelFilter)
+    if (query.colorLabel > 0 && ratings.colorLabel(ep) != query.colorLabel)
         return false;
-    if (m_rejectFilter && !rs.rejected(ep))
+    if (query.rejectedOnly && !ratings.isRejected(ep))
         return false;
-    if (m_pickFilter && !rs.picked(ep))
+    if (query.pickedOnly && !ratings.isPicked(ep))
         return false;
-    if (m_recentFilter)
-    {
-        const auto recents = rs.recents();
-        if (std::find(recents.begin(), recents.end(), ep) == recents.end())
-            return false;
-    }
-    if (!m_cameraFilter.isEmpty() &&
-        !m_metaCamera.value(e.path).toLower().contains(m_cameraFilter.toLower()))
+    if (query.recentOnly && !ratings.isRecent(ep))
         return false;
-    if (!m_lensFilter.isEmpty() &&
-        !m_metaLens.value(e.path).toLower().contains(m_lensFilter.toLower()))
+    if (!query.camera.empty() &&
+        !metaCamera.value(e.path).toLower().contains(QString::fromStdString(query.camera)))
         return false;
-    if (m_isoFilter > 0 && m_metaIso.value(e.path, -1) != m_isoFilter)
+    if (!query.lens.empty() &&
+        !metaLens.value(e.path).toLower().contains(QString::fromStdString(query.lens)))
         return false;
-    if (!m_tagFilter.isEmpty() && !mviewer::core::TagStore::instance().hasTag(
-                                       ep, m_tagFilter.toStdString()))
+    if (query.iso > 0 && metaIso.value(e.path, -1) != query.iso)
+        return false;
+    if (!query.tag.empty() && !tags.hasTag(ep, query.tag))
         return false;
     if (t.isEmpty())
         return true;
-    if (m_metaSearch)
-        return m_metaIndex.value(e.path).contains(t);
+    if (query.metadata)
+        return metaIndex.value(e.path).contains(t);
     if (useFuzzy)
         return fuzzy.match(e.name).hasMatch();
     return e.name.toLower().contains(t);

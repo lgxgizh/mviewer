@@ -1513,6 +1513,19 @@ target_include_directories(m55_interactive_tests PRIVATE ${CMAKE_CURRENT_SOURCE_
 add_test(NAME m55_interactive_tests COMMAND m55_interactive_tests)
 set_tests_properties(m55_interactive_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 600)
 
+# ─── M58: large-directory query snapshots / latest-wins data path ──────────
+# The deterministic core gate uses synthetic 10k/50k entries so it remains
+# hermetic and fast; native GUI typing/first-paint qualification is recorded as
+# MANUAL/BLOCKED in the Phase-0 evidence document.
+add_executable(m58_large_directory_query_tests
+    test_m58_large_directory_query.cpp
+)
+target_link_libraries(m58_large_directory_query_tests PRIVATE mviewer_core Qt6::Core)
+target_compile_features(m58_large_directory_query_tests PRIVATE cxx_std_20)
+target_include_directories(m58_large_directory_query_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m58_large_directory_query_tests COMMAND m58_large_directory_query_tests)
+set_tests_properties(m58_large_directory_query_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
 # Standalone recorder for M55 10k/50k memory and navigation evidence. It is
 # intentionally not a gate because its numbers are machine-dependent.
 add_executable(m55_interactive_baseline

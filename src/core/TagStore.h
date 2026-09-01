@@ -25,6 +25,13 @@ namespace mviewer::core
 class TagStore
 {
   public:
+    // M58: immutable value snapshot used by background Browse filtering.
+    struct Snapshot
+    {
+        std::map<std::string, std::set<std::string>> tags;
+        bool hasTag(const std::string &path, const std::string &tag) const;
+    };
+
     // Process-wide singleton backed by a platform data directory.
     static TagStore &instance();
 
@@ -38,6 +45,8 @@ class TagStore
 
     // Every distinct tag in the store, sorted.
     std::vector<std::string> allTags() const;
+
+    Snapshot snapshot() const;
 
     // Persistence: edits update memory immediately and are coalesced on the
     // owned worker. save()/flushSave() are explicit synchronous boundaries

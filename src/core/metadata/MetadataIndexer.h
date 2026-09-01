@@ -46,6 +46,7 @@ class MetadataIndexer
   public:
     using Entry = MetadataIndexEntry;
     using EntryCallback = std::function<void(const Entry &)>;
+    using EntryBatchCallback = std::function<void(const std::vector<Entry> &)>;
     using DoneCallback = std::function<void()>;
 
     static MetadataIndexer &instance();
@@ -57,6 +58,12 @@ class MetadataIndexer
     // submission (caller must not wait for callbacks in that case).
     uint64_t index(const std::vector<std::string> &paths, EntryCallback onEntry,
                    DoneCallback onDone);
+
+    // M58: bounded batches reduce UI queue pressure from one queued closure
+    // per file to one closure per batch. The batch is a value snapshot and is
+    // delivered on the main thread in directory order.
+    uint64_t indexBatched(const std::vector<std::string> &paths, EntryBatchCallback onBatch,
+                          DoneCallback onDone);
 
     // Supersede ONE request (its owner's stale work). Its callbacks are never
     // delivered after this point. No-op for unknown/already-finished ids.

@@ -17,6 +17,11 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     // Two threads keep first-screen scans fast without unbounded growth when
     // the user switches folders rapidly.
     m_scanPool.setMaxThreadCount(2);
+    m_filterCancel = std::make_shared<std::atomic<bool>>(false);
+    m_filterDebounceTimer = new QTimer(this);
+    m_filterDebounceTimer->setSingleShot(true);
+    m_filterDebounceTimer->setInterval(120);
+    connect(m_filterDebounceTimer, &QTimer::timeout, this, &ThumbnailPanel::runFilterQuery);
 
     // QListView:: prefix disambiguates from our own ThumbnailPanel::setViewMode().
     QListView::setViewMode(QListView::IconMode);
@@ -176,6 +181,8 @@ ThumbnailPanel::~ThumbnailPanel()
         TaskScheduler::cancel(m_batchTask);
     if (m_fileOperationTask)
         TaskScheduler::cancel(m_fileOperationTask);
+    if (m_filterTask)
+        TaskScheduler::cancel(m_filterTask);
     if (m_batchProgress)
         m_batchProgress->close();
     if (m_fileProgress)
@@ -183,6 +190,10 @@ ThumbnailPanel::~ThumbnailPanel()
     ++m_fileOperationGeneration;
     if (m_alive)
         *m_alive = false;
+    if (m_filterCancel)
+        m_filterCancel->store(true);
+    if (m_filterDebounceTimer)
+        m_filterDebounceTimer->stop();
     // M24: drop queued scan/dimension tasks; in-flight ones abort at their next
     // m_alive check, so destruction waits only a bounded time for the current
     // QDir sort (typically < 100 ms even for 10k-image folders).
@@ -320,16 +331,50 @@ void ThumbnailPanel::applyThumbSize(int size, bool rememberGridSize)
     emit thumbSizeChanged(m_thumbSize);
 }
 
+bool ThumbnailPanel::takePendingFilterRestore(bool hasEntries, QStringList &selection,
+                                               QString &current)
+{
+    if (m_pendingFilterGeneration == 0)
+        return false;
+    if (m_pendingFilterGeneration != m_filterGeneration)
+    {
+        m_pendingFilterSelection.clear();
+        m_pendingFilterCurrent.clear();
+        m_pendingFilterGeneration = 0;
+        return false;
+    }
+    if (!hasEntries)
+    {
+        m_pendingFilterSelection.clear();
+        m_pendingFilterCurrent.clear();
+        m_pendingFilterGeneration = 0;
+        return false;
+    }
+    selection = m_pendingFilterSelection;
+    current = m_pendingFilterCurrent;
+    m_pendingFilterSelection.clear();
+    m_pendingFilterCurrent.clear();
+    m_pendingFilterGeneration = 0;
+    return true;
+}
+
 void ThumbnailPanel::buildModel(const QList<Entry> &entries)
 {
+    QStringList pendingSelection;
+    QString pendingCurrent;
+    const bool restorePendingFilter =
+        takePendingFilterRestore(!entries.isEmpty(), pendingSelection, pendingCurrent);
     // Preserve selection and current index across model rebuild (e.g. when
     // sorting changes).  Without this, setStringList() resets the entire
     // selection model and the user's multi-select is silently lost.
-    const QStringList prevSelected = selectedPaths();
-    const QString prevCurrent =
-        m_paths.isEmpty()
-            ? QString()
-            : (currentIndex().isValid() ? m_paths.value(currentIndex().row()) : QString());
+    const QStringList prevSelected = restorePendingFilter ? pendingSelection : selectedPaths();
+    const QString prevCurrent = restorePendingFilter
+                                    ? pendingCurrent
+                                    : (m_paths.isEmpty()
+                                           ? QString()
+                                           : (currentIndex().isValid()
+                                                  ? m_paths.value(currentIndex().row())
+                                                  : QString()));
     const bool hadGallerySelection = !prevSelected.isEmpty();
     const bool pendingSelectionBeforeRebuild = !m_pendingSelect.isEmpty();
 
