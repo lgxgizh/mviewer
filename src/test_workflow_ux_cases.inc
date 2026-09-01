@@ -980,7 +980,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 {
                     return viewer->property("mviewerFullscreenRequested").toBool();
                 };
-                if (viewer->isFullScreen())
+                if (viewerFullscreenRequested() || viewer->isFullScreen())
                 {
                     sendKey(&w, Qt::Key_F);
                     pump(20);
