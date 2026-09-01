@@ -7,7 +7,6 @@
 
 #include <QCoreApplication>
 #include <QFileInfo>
-#include <QMetaObject>
 #include <QString>
 #include <QTimer>
 
@@ -107,15 +106,13 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, const Ent
             return;
         if (QCoreApplication::instance())
         {
-            QMetaObject::invokeMethod( // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
-                QCoreApplication::instance(),
-                [requestId, cancelToken, fn]()
-                {
-                    if (cancelToken->load())
-                        return; // superseded request: drop stale callback
-                    fn();
-                },
-                Qt::QueuedConnection);
+            QTimer::singleShot(0, QCoreApplication::instance(),
+                               [requestId, cancelToken, fn]()
+                               {
+                                   if (cancelToken->load())
+                                       return; // superseded request: drop stale callback
+                                   fn();
+                               });
         }
         else if (!cancelToken->load())
         {
@@ -263,14 +260,12 @@ uint64_t MetadataIndexer::indexBatched(const std::vector<std::string> &paths,
             return;
         if (QCoreApplication::instance())
         {
-            QMetaObject::invokeMethod( // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
-                QCoreApplication::instance(),
-                [cancelToken, fn]()
-                {
-                    if (!cancelToken->load())
-                        fn();
-                },
-                Qt::QueuedConnection);
+            QTimer::singleShot(0, QCoreApplication::instance(),
+                               [cancelToken, fn]()
+                               {
+                                   if (!cancelToken->load())
+                                       fn();
+                               });
         }
         else if (!cancelToken->load())
         {
