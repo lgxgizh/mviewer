@@ -2,8 +2,8 @@
 // 内部 core 助手：ImageData <-> QImage 转换。
 // 注意：本头文件包含 Qt，仅供 core 的 .cpp 内部包含，
 // 绝不可被已去 Qt 化的公共头文件包含。
-#include "core/image/ImageBuffer.h"
 #include "core/image/DisplayColorContext.h"
+#include "core/image/ImageBuffer.h"
 #include "domain/Image.h"
 
 #include <QImage>
@@ -38,7 +38,7 @@ QImage toDisplayQImage(const ImageData &src, const mviewer::domain::ImageMetadat
 ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageMetadata &meta);
 
 ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageMetadata &meta,
-                            const mviewer::core::DisplayColorContext &target);
+                             const mviewer::core::DisplayColorContext &target);
 
 // QImage -> ImageData（格式感知：Grayscale8 保留为灰度，其余转 RGB24）
 ImageData fromQImage(const QImage &src);

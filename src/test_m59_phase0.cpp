@@ -25,7 +25,7 @@ int g_failures = 0;
     {                                                                                              \
         if (!(condition))                                                                          \
         {                                                                                          \
-            std::printf("FAIL: %s\n", message);                                                   \
+            std::printf("FAIL: %s\n", message);                                                    \
             ++g_failures;                                                                          \
         }                                                                                          \
     } while (false)
@@ -71,9 +71,8 @@ int main(int argc, char **argv)
     // lost when a Qt transformation bitmask is interpreted with bitwise ORs.
     for (int orientation = 2; orientation <= 8; ++orientation)
     {
-        const std::string path = fixture((std::string("exif_orient") + std::to_string(orientation) +
-                                          "_non_square.jpg")
-                                             .c_str());
+        const std::string path = fixture(
+            (std::string("exif_orient") + std::to_string(orientation) + "_non_square.jpg").c_str());
         const auto probed = mviewer::core::MetadataReader::read(path);
         mviewer::domain::ImageMetadata full;
         const auto pixels = decoder.decodeFull(path, full);
@@ -93,15 +92,14 @@ int main(int argc, char **argv)
     CHECK(sequence.metadata.hasIccProfile,
           "frame-sequence metadata preserves the embedded ICC profile");
     const auto sequenceIcc = sequence.metadata.textKeys.find("MViewer.DisplayICC.Base64");
-    CHECK(sequenceIcc != sequence.metadata.textKeys.end() && decodedIcc != decodedMeta.textKeys.end() &&
-              sequenceIcc->second == decodedIcc->second,
+    CHECK(sequenceIcc != sequence.metadata.textKeys.end() &&
+              decodedIcc != decodedMeta.textKeys.end() && sequenceIcc->second == decodedIcc->second,
           "frame-sequence metadata exposes identical ICC bytes");
 
     for (int orientation : {5, 6, 7})
     {
-        const std::string path = fixture((std::string("exif_orient") + std::to_string(orientation) +
-                                          "_non_square.jpg")
-                                             .c_str());
+        const std::string path = fixture(
+            (std::string("exif_orient") + std::to_string(orientation) + "_non_square.jpg").c_str());
         const auto frame = mviewer::core::FrameSequenceReader::decodeFull(path, 0);
         CHECK(frame.ok, "orientation fixture decodes through FrameSequenceReader");
         CHECK(frame.metadata.orientation == orientation,

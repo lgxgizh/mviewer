@@ -27,11 +27,10 @@ int g_failures = 0;
     {                                                                                              \
         if (!(condition))                                                                          \
         {                                                                                          \
-            std::printf("FAIL: %s\n", message);                                                   \
+            std::printf("FAIL: %s\n", message);                                                    \
             ++g_failures;                                                                          \
         }                                                                                          \
-    }                                                                                              \
-    while (false)
+    } while (false)
 
 std::string fixture(const char *name)
 {
@@ -68,11 +67,11 @@ int main(int argc, char **argv)
 
     const QColorSpace p3Space(QColorSpace::DisplayP3);
     const QByteArray p3Icc = p3Space.iccProfile();
-    auto p3Profile = std::vector<uint8_t>(reinterpret_cast<const uint8_t *>(p3Icc.constData()),
-                                          reinterpret_cast<const uint8_t *>(p3Icc.constData()) +
-                                              p3Icc.size());
-    const auto p3Target = mviewer::core::DisplayColorContext::fromIccProfile(
-        std::move(p3Profile), 7, "display-p3-test");
+    auto p3Profile =
+        std::vector<uint8_t>(reinterpret_cast<const uint8_t *>(p3Icc.constData()),
+                             reinterpret_cast<const uint8_t *>(p3Icc.constData()) + p3Icc.size());
+    const auto p3Target = mviewer::core::DisplayColorContext::fromIccProfile(std::move(p3Profile),
+                                                                             7, "display-p3-test");
     const auto p3Again = mviewer::core::DisplayColorContext::fromIccProfile(
         std::vector<uint8_t>(reinterpret_cast<const uint8_t *>(p3Icc.constData()),
                              reinterpret_cast<const uint8_t *>(p3Icc.constData()) + p3Icc.size()),
@@ -84,10 +83,10 @@ int main(int argc, char **argv)
     const QImage srgb = mvcore::toDisplayQImage(source, meta);
     const QImage p3 = mvcore::toDisplayQImage(source, meta, p3Target);
     CHECK(srgb.colorSpace() == QColorSpace::SRgb, "legacy display API remains deterministic sRGB");
-    CHECK(p3.colorSpace() == p3Space,
-          "explicit target keeps the presentation target color space");
+    CHECK(p3.colorSpace() == p3Space, "explicit target keeps the presentation target color space");
     CHECK(!samePixels(srgb, p3), "source AdobeRGB converts directly to distinct P3 output");
-    CHECK(source.buffer && *source.buffer == before, "presentation conversion never mutates source bytes");
+    CHECK(source.buffer && *source.buffer == before,
+          "presentation conversion never mutates source bytes");
 
     const ImageData p3Data = mvcore::toDisplayImageData(source, meta, p3Target);
     CHECK(samePixels(p3, mvcore::toQImage(p3Data)),
@@ -121,10 +120,10 @@ int main(int argc, char **argv)
           "sequence reader preserves the AdobeRGB ICC profile bytes");
 
     mviewer::domain::ImageMetadata highBitProbe;
-    const bool highBitReadable = decoder.probeMetadata(fixture("large_tiff_16bit.tiff"), highBitProbe);
+    const bool highBitReadable =
+        decoder.probeMetadata(fixture("large_tiff_16bit.tiff"), highBitProbe);
     CHECK(highBitReadable, "16-bit TIFF remains probeable without full materialization");
-    CHECK(highBitProbe.bitDepth == 16,
-          "16-bit TIFF probe reports source bits per channel");
+    CHECK(highBitProbe.bitDepth == 16, "16-bit TIFF probe reports source bits per channel");
 
     std::printf("M59 color-managed presentation failures: %d\n", g_failures);
     return g_failures == 0 ? 0 : 1;

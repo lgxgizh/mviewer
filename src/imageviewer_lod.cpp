@@ -49,16 +49,14 @@ struct RasterRequest
 {
     QString path;
     uint64_t generation = 0;
-    mviewer::core::DisplayColorContext target =
-        mviewer::core::DisplayColorContext::sRGB();
-    bool fullLod = true; // true = decodeLod over the full source
-    int maxEdge = 0;     // fullLod target
+    mviewer::core::DisplayColorContext target = mviewer::core::DisplayColorContext::sRGB();
+    bool fullLod = true;                // true = decodeLod over the full source
+    int maxEdge = 0;                    // fullLod target
     int rx = 0, ry = 0, rw = 0, rh = 0; // region source rect
     int tw = 0, th = 0;                 // region raster target size
 };
 
-void ImageViewer::setDisplayColorContext(
-    const mviewer::core::DisplayColorContext &target)
+void ImageViewer::setDisplayColorContext(const mviewer::core::DisplayColorContext &target)
 {
     if (target.cacheKey() == m_displayColorTarget.cacheKey())
         return;
@@ -202,29 +200,25 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
                                       decodeFailed);
 }
 
-void ImageViewer::marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewer>> &guard,
-                                       const QString &path, uint64_t generation,
-                                       std::shared_ptr<mviewer::core::SourceImage> source,
-                                       QImage image, QRect sourceRect, QSize sourceSize,
-                                       double density,
-                                       const mviewer::core::DisplayColorContext &target,
-                                       bool failed)
+void ImageViewer::marshalDisplayRaster(
+    const std::shared_ptr<QPointer<ImageViewer>> &guard, const QString &path, uint64_t generation,
+    std::shared_ptr<mviewer::core::SourceImage> source, QImage image, QRect sourceRect,
+    QSize sourceSize, double density, const mviewer::core::DisplayColorContext &target, bool failed)
 {
     if (!qApp)
         return; // app teardown
     QMetaObject::invokeMethod(
         qApp,
-        [guard, path, generation, source = std::move(source), image = std::move(image),
-         sourceRect, sourceSize, density, target, failed]() mutable
+        [guard, path, generation, source = std::move(source), image = std::move(image), sourceRect,
+         sourceSize, density, target, failed]() mutable
         {
             try
             {
                 ImageViewer *viewer = guard->data();
                 if (!viewer)
                     return; // viewer destroyed; never touch it
-                viewer->applyDisplayRaster(path, generation, std::move(source),
-                                           std::move(image), sourceRect, sourceSize, density,
-                                           target, failed);
+                viewer->applyDisplayRaster(path, generation, std::move(source), std::move(image),
+                                           sourceRect, sourceSize, density, target, failed);
             }
             catch (...)
             {
@@ -452,8 +446,7 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
                                      std::shared_ptr<mviewer::core::SourceImage> source,
                                      QImage image, QRect sourceRect, QSize sourceSize,
                                      double density,
-                                     const mviewer::core::DisplayColorContext &target,
-                                     bool failed)
+                                     const mviewer::core::DisplayColorContext &target, bool failed)
 {
     if (path != m_currentPath || generation != m_requestGen ||
         target.cacheKey() != m_displayColorTarget.cacheKey())

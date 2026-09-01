@@ -1,8 +1,8 @@
 #include "imageviewer.h"
 
+#include "application/ImageLoadingService.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/Analyzer.h"
-#include "application/ImageLoadingService.h"
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"

@@ -7,8 +7,8 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QRegularExpression>
-#include <QThread>
 #include <QTemporaryDir>
+#include <QThread>
 
 #include <cstdio>
 #include <functional>
@@ -23,7 +23,7 @@ int g_failures = 0;
     {                                                                                              \
         if (!(condition))                                                                          \
         {                                                                                          \
-            std::printf("FAIL: %s\n", message);                                                   \
+            std::printf("FAIL: %s\n", message);                                                    \
             ++g_failures;                                                                          \
         }                                                                                          \
     } while (false)

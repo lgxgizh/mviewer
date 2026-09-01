@@ -3,9 +3,9 @@
 #include "core/image/SourceImage.h"
 #include "display/DisplayColorContextProvider.h"
 
+#include <QResizeEvent>
 #include <algorithm>
 #include <cmath>
-#include <QResizeEvent>
 
 namespace
 {
@@ -44,8 +44,8 @@ void CompareWorkspace::resizeEvent(QResizeEvent *event)
     if (windowHandle())
         setDisplayColorContext(DisplayColorContextProvider::forWindow(windowHandle()));
     const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
-    const bool normalGrid = m_pageStack && m_compareGridPage &&
-                            m_pageStack->currentWidget() == m_compareGridPage;
+    const bool normalGrid =
+        m_pageStack && m_compareGridPage && m_pageStack->currentWidget() == m_compareGridPage;
     if (!blinkActive && normalGrid)
     {
         // Coalesce ordinary-grid resize bursts through the same post-layout
@@ -362,17 +362,17 @@ CompareWorkspace::SourceDisplayResult CompareWorkspace::materializeSourceDisplay
 }
 
 TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
-    const std::vector<ImageData> &pixels, const std::vector<mviewer::domain::ImageMetadata> &metadata,
+    const std::vector<ImageData> &pixels,
+    const std::vector<mviewer::domain::ImageMetadata> &metadata,
     const std::vector<DisplayRequest> &displayRequests, const std::vector<CellAdjust> &adjusts,
     const std::vector<int> &panes, int paneCount, uint64_t gen,
-    const std::vector<std::string> &paths,
-    const mviewer::core::DisplayColorContext &target,
+    const std::vector<std::string> &paths, const mviewer::core::DisplayColorContext &target,
     const QPointer<CompareWorkspace> &guard)
 {
     return TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, metadata, displayRequests, adjusts, panes, paneCount, gen, paths, target, guard](
-            const TaskScheduler::TaskContext &ctx)
+        [pixels, metadata, displayRequests, adjusts, panes, paneCount, gen, paths, target,
+         guard](const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
                 return; // superseded while queued — stop before any work

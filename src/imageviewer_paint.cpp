@@ -141,8 +141,8 @@ AsyncTileRequestManager::VisibleTiles ImageViewer::requestVisibleTiles()
     const auto displayTarget = m_displayColorTarget;
     QPointer<ImageViewer> guard(this);
     const auto decode = [source, metadata, displayTarget](const std::string &, int sx, int sy,
-                                                           int sw, int sh, int tw,
-                                                           int th) -> ImageData
+                                                          int sw, int sh, int tw,
+                                                          int th) -> ImageData
     {
         const ImageData raw = RenderEngine::scaleRegionStatic(
             source, RenderRect{sx, sy, sw, sh}, RenderSize{tw, th}, RenderInterp::Bilinear);

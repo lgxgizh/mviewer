@@ -1,12 +1,12 @@
 #pragma once
 
 #include "application/ImageLoadingService.h"
+#include "core/analysis/ImageOverlay.h"
 #include "core/async/AsyncLifetimeToken.h"
 #include "core/export/ExportJob.h"
-#include "core/analysis/ImageOverlay.h"
-#include "core/image/ImageFrame.h"
 #include "core/image/DisplayColorContext.h"
 #include "core/image/FramePlaybackController.h"
+#include "core/image/ImageFrame.h"
 #include "core/image/SourceImage.h"
 #include "core/render/AsyncTileRequestManager.h"
 #include "core/render/TileCache.h"
@@ -316,13 +316,11 @@ class ImageViewer : public QOpenGLWidget
     // M47: worker -> UI-thread marshal for display raster results (static so
     // the worker lambda captures no raw `this`; the QPointer guard is checked
     // on the UI thread before any viewer access).
-    static void marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewer>> &guard,
-                                     const QString &path, uint64_t generation,
-                                     std::shared_ptr<mviewer::core::SourceImage> source,
-                                     QImage image, QRect sourceRect, QSize sourceSize,
-                                     double density,
-                                     const mviewer::core::DisplayColorContext &target,
-                                     bool failed = false);
+    static void
+    marshalDisplayRaster(const std::shared_ptr<QPointer<ImageViewer>> &guard, const QString &path,
+                         uint64_t generation, std::shared_ptr<mviewer::core::SourceImage> source,
+                         QImage image, QRect sourceRect, QSize sourceSize, double density,
+                         const mviewer::core::DisplayColorContext &target, bool failed = false);
     // M47: the raster worker body (probe -> classify -> decodeLod/decodeRegion
     // -> marshal). Runs inside the submit lambda; an unexpected decoder
     // exception is caught at the call site so it can never escape the worker.
@@ -373,9 +371,8 @@ class ImageViewer : public QOpenGLWidget
                                         const mviewer::core::DisplayColorContext &target,
                                         const TaskScheduler::TaskContext &ctx,
                                         const std::shared_ptr<QPointer<ImageViewer>> &guard);
-    static void queueDisplayRasterPreloadResult(
-        const std::shared_ptr<QPointer<ImageViewer>> &guard,
-        DisplayRasterPreloadResult result);
+    static void queueDisplayRasterPreloadResult(const std::shared_ptr<QPointer<ImageViewer>> &guard,
+                                                DisplayRasterPreloadResult result);
     void applyDisplayRasterPreloadResult(DisplayRasterPreloadResult result);
     DisplayRasterPreload takeMatchingDisplayRasterPreload(const QString &path);
     std::optional<DisplayRasterWarm> takeWarmDisplayRaster(const QString &path);

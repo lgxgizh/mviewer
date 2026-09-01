@@ -4,10 +4,10 @@
 #include "core/image/ImageBuffer.h"
 #include "core/image/QtMetadataSemantics.h"
 
+#include <QColorSpace>
 #include <QFileInfo>
 #include <QImage>
 #include <QImageReader>
-#include <QColorSpace>
 #include <QString>
 #include <cmath>
 #include <cstring>

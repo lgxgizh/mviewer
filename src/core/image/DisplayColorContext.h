@@ -34,8 +34,7 @@ struct DisplayColorContext
         return context;
     }
 
-    static DisplayColorContext fromIccProfile(std::vector<uint8_t> profile,
-                                              uint64_t generation = 0,
+    static DisplayColorContext fromIccProfile(std::vector<uint8_t> profile, uint64_t generation = 0,
                                               std::string identity = {})
     {
         DisplayColorContext context;
@@ -58,12 +57,15 @@ struct DisplayColorContext
         return context;
     }
 
-    bool hasProfile() const { return !iccProfile.empty(); }
+    bool hasProfile() const
+    {
+        return !iccProfile.empty();
+    }
 
     std::string cacheKey() const
     {
         return fingerprint.empty() ? "srgb@" + std::to_string(generation)
-                                    : fingerprint + "@" + std::to_string(generation);
+                                   : fingerprint + "@" + std::to_string(generation);
     }
 };
 

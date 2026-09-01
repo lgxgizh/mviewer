@@ -285,9 +285,8 @@ class ThumbnailPanel : public QListView
         const QList<Entry> &source, const QString &text, bool useFuzzy,
         const QRegularExpression &fuzzy, const mviewer::core::BrowseQuery &query,
         const mviewer::core::RatingStore::Snapshot &ratings,
-        const mviewer::core::TagStore::Snapshot &tags,
-        const QHash<QString, QString> &metaIndex, const QHash<QString, int> &metaIso,
-        const QHash<QString, QString> &metaCamera,
+        const mviewer::core::TagStore::Snapshot &tags, const QHash<QString, QString> &metaIndex,
+        const QHash<QString, int> &metaIso, const QHash<QString, QString> &metaCamera,
         const QHash<QString, QString> &metaLens)
     {
         return evaluateFilterSnapshot(source, text, useFuzzy, fuzzy, query, ratings, tags,

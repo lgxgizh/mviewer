@@ -527,7 +527,8 @@ void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
         const auto target = m_displayColorTarget;
         auto handle = TaskScheduler::instance().submit(
             TaskScheduler::Priority::Thumbnail,
-            [neighbor, browseGeneration, state, guard, target](const TaskScheduler::TaskContext &ctx)
+            [neighbor, browseGeneration, state, guard,
+             target](const TaskScheduler::TaskContext &ctx)
             {
                 try
                 {
@@ -662,11 +663,11 @@ void ImageViewer::storeWarmDisplayRaster(DisplayRasterPreloadResult result)
     enforceDisplayRasterWarmBudget();
 }
 
-void ImageViewer::runDisplayRasterPreload(
-    const QString &path, uint64_t browseGeneration,
-    const std::shared_ptr<DisplayRasterPreloadState> &state,
-    const mviewer::core::DisplayColorContext &target,
-    const TaskScheduler::TaskContext &ctx, const std::shared_ptr<QPointer<ImageViewer>> &guard)
+void ImageViewer::runDisplayRasterPreload(const QString &path, uint64_t browseGeneration,
+                                          const std::shared_ptr<DisplayRasterPreloadState> &state,
+                                          const mviewer::core::DisplayColorContext &target,
+                                          const TaskScheduler::TaskContext &ctx,
+                                          const std::shared_ptr<QPointer<ImageViewer>> &guard)
 {
     if (ctx.isCancelled())
         return;

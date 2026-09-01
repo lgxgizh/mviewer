@@ -6,10 +6,10 @@
 #include "core/image/IccProfile.h"
 #include "domain/Image.h"
 
+#include <QColorSpace>
 #include <QImage>
 #include <QImageIOHandler>
 #include <QImageReader>
-#include <QColorSpace>
 
 #include <algorithm>
 
@@ -135,8 +135,9 @@ inline void applyColorMetadata(const QImage &image, mviewer::domain::ImageMetada
     const QByteArray encoded = profile.toBase64();
     meta.textKeys["MViewer.DisplayICC.Base64"] =
         std::string(encoded.constData(), static_cast<size_t>(encoded.size()));
-    const auto parsed = parseIccProfile(reinterpret_cast<const unsigned char *>(profile.constData()),
-                                        static_cast<size_t>(profile.size()));
+    const auto parsed =
+        parseIccProfile(reinterpret_cast<const unsigned char *>(profile.constData()),
+                        static_cast<size_t>(profile.size()));
     meta.iccDescription = parsed.description;
     meta.iccCopyright = parsed.copyright;
     meta.iccColorSpace = parsed.colorSpace;

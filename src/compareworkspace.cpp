@@ -109,8 +109,7 @@ CompareWorkspace::~CompareWorkspace()
     ++m_histGen;
 }
 
-void CompareWorkspace::setDisplayColorContext(
-    const mviewer::core::DisplayColorContext &target)
+void CompareWorkspace::setDisplayColorContext(const mviewer::core::DisplayColorContext &target)
 {
     if (target.cacheKey() == m_displayColorTarget.cacheKey())
         return;

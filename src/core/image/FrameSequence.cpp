@@ -6,8 +6,8 @@
 #include "core/image/QtMetadataSemantics.h"
 
 #include <QFileInfo>
-#include <QImageReader>
 #include <QImageIOHandler>
+#include <QImageReader>
 #include <QString>
 
 #include <algorithm>
@@ -74,9 +74,10 @@ void fillMetadata(const std::string &path, QImageReader &reader, const QImage &i
     meta.loopCount = sequence.loopCount;
     meta.durationMs = sequence.totalDurationMs;
     meta.frameDurationMs = frameDelay;
-    meta.sequenceKind = sequence.kind == FrameSequenceKind::Pages
-                            ? "pages"
-                            : (sequence.kind == FrameSequenceKind::Animation ? "animation" : "static");
+    meta.sequenceKind =
+        sequence.kind == FrameSequenceKind::Pages
+            ? "pages"
+            : (sequence.kind == FrameSequenceKind::Animation ? "animation" : "static");
 
     // Some animation/page plugins do not carry the container ICC onto every
     // selected frame.  Probe one bounded pixel when needed so all sequence

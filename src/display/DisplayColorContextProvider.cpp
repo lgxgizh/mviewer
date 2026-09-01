@@ -32,8 +32,8 @@ std::unordered_map<uintptr_t, WindowProfileState> &profileStates()
     return states;
 }
 
-mviewer::core::DisplayColorContext withGeneration(
-    uintptr_t windowId, mviewer::core::DisplayColorContext context)
+mviewer::core::DisplayColorContext withGeneration(uintptr_t windowId,
+                                                  mviewer::core::DisplayColorContext context)
 {
     std::lock_guard<std::mutex> lock(profileMutex());
     auto &state = profileStates()[windowId];

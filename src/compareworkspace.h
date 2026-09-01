@@ -1,17 +1,17 @@
 #pragma once
 
 #include "application/ImageLoadingService.h"
+#include "compareworkspace_display_planner.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/ExportReport.h"
 #include "core/analysis/PixelInspector.h"
 #include "core/async/AsyncLifetimeToken.h"
 #include "core/compare/CompareEngine.h"
-#include "compareworkspace_display_planner.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/compare/Histogram.h"
+#include "core/image/DisplayColorContext.h"
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
-#include "core/image/DisplayColorContext.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QCheckBox>
@@ -638,8 +638,7 @@ class CompareWorkspace : public QWidget
         const std::vector<mviewer::domain::ImageMetadata> &metadata,
         const std::vector<DisplayRequest> &displayRequests, const std::vector<CellAdjust> &adjusts,
         const std::vector<int> &panes, int paneCount, uint64_t generation,
-        const std::vector<std::string> &paths,
-        const mviewer::core::DisplayColorContext &target,
+        const std::vector<std::string> &paths, const mviewer::core::DisplayColorContext &target,
         const QPointer<CompareWorkspace> &guard);
     void applyDisplayBatchResult(const DisplayBatchResult &result);
 

@@ -169,7 +169,7 @@ ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageM
 }
 
 ImageData toDisplayImageData(const ImageData &src, const mviewer::domain::ImageMetadata &meta,
-                            const mviewer::core::DisplayColorContext &target)
+                             const mviewer::core::DisplayColorContext &target)
 {
     return fromQImage(toDisplayQImage(src, meta, target));
 }
