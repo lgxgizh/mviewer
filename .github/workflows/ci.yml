@@ -47,6 +47,8 @@ jobs:
   format:
     name: Format check
     runs-on: ubuntu-latest
+    # Legacy formatting debt is reported but must not block build/test gates.
+    continue-on-error: true
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -62,9 +64,6 @@ jobs:
         run: pip install "clang-format==22.1.8"
 
       - name: clang-format (C++20 / Qt6)
-        # Legacy files are not uniformly formatter-clean yet. Keep the report
-        # visible without blocking the required build/test gates.
-        continue-on-error: true
         run: |
           # The repository contains legacy formatting debt. Enforce the pinned
           # formatter on lines changed by this event instead of re-linting every
