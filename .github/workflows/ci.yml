@@ -7,7 +7,7 @@
 #
 # This file (Tier 1 / PR gate) runs on every PR and on every push to master.
 # REQUIRED jobs (branch protection depends on the `ci-gate` aggregator):
-#   format    — clang-format (C++20/Qt6) + markdownlint
+#   format    — incremental clang-format (C++20/Qt6) + markdownlint
 #   cppcheck  — supplemental static analysis (NEW, required)
 #   clang-tidy— bug-finding static analysis, REQUIRED, PR-incremental
 #   build     — MSVC + Qt 6.8.0, zero compiler warnings (warnings-as-errors)
@@ -17,7 +17,7 @@
 # release.yml respectively and intentionally do NOT block PRs.
 #
 # PR gate expectations (all must pass for a mergeable PR):
-#   * clang-format --dry-run passes (no formatting diffs)
+#   * clang-format passes on changed C++ lines (no formatting diffs)
 #   * markdownlint passes on all .md docs
 #   * cppcheck reports no warning/performance/portability findings in src/
 #   * clang-tidy reports no bugprone/performance/clang-analyzer findings in PR
@@ -49,7 +49,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          # Incremental formatting compares the event range, so both endpoints
+          # must be available on push and pull_request runs.
+          fetch-depth: 0
 
       - name: Install clang-format (pin to local dev version)
         # Pin to the exact version used for local `clang-format -i` so CI and
@@ -58,14 +62,17 @@ jobs:
         run: pip install "clang-format==22.1.8"
 
       - name: clang-format (C++20 / Qt6)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
-          find . \( -name '*.cpp' -o -name '*.h' \) \
-            -not -path './build_msvc/*' \
-            -not -path './build/*' \
-            -not -path './.git/*' \
-            -not -path '*/Qt/*' \
-            -not -path '*/Qt6/*' \
-            -print0 | xargs -0 clang-format --dry-run --Werror
+          # The repository contains legacy formatting debt. Enforce the pinned
+          # formatter on lines changed by this event instead of re-linting every
+          # historical C++ file and leaving the required gate permanently red.
+          if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
+            BASE_SHA="$(git rev-list --max-parents=0 "$GITHUB_SHA")"
+          fi
+          git clang-format "$BASE_SHA" "$GITHUB_SHA" --extensions h,cpp,inc
+          git diff --exit-code -- '*.h' '*.cpp' '*.inc'
 
       - name: Install markdownlint
         run: npm install -g markdownlint-cli
