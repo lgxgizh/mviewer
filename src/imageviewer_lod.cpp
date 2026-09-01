@@ -346,8 +346,8 @@ void ImageViewer::requestDisplayRasterImpl()
         const double dpr = std::max(1.0, devicePixelRatioF());
         req.fullLod = true;
         req.maxEdge = static_cast<int>(
-            std::ceil(std::max(static_cast<double>(width()), static_cast<double>(height())) *
-                      dpr * kRasterOverscan));
+            std::ceil(std::max(static_cast<double>(width()), static_cast<double>(height())) * dpr *
+                      kRasterOverscan));
         req.maxEdge = std::max(64, std::min(req.maxEdge, kMaxLodEdge));
     }
     else
