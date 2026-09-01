@@ -54,9 +54,8 @@ void ThumbnailPanel::setFilter(const QString &text, bool recursive)
     if (!m_filterText.trimmed().isEmpty() && m_allEntries.size() <= 256)
     {
         QStringList previousSelection = selectedPaths();
-        QString previousCurrent = currentIndex().isValid()
-                                       ? m_paths.value(currentIndex().row())
-                                       : QString();
+        QString previousCurrent =
+            currentIndex().isValid() ? m_paths.value(currentIndex().row()) : QString();
         // A second keystroke can arrive before the first debounced query
         // publishes. In that case the native model is already empty; retain
         // the original identity captured by the pending query.
@@ -201,13 +200,14 @@ void ThumbnailPanel::ensureMetaIndex()
                 return;
             for (const auto &e : batch)
             {
-                const QString p =
-                    QString::fromUtf8(e.path.data(), static_cast<int>(e.path.size()));
+                const QString p = QString::fromUtf8(e.path.data(), static_cast<int>(e.path.size()));
                 panel->m_metaIndex.insert(
-                    p, QString::fromUtf8(e.searchBlob.data(), static_cast<int>(e.searchBlob.size())));
+                    p,
+                    QString::fromUtf8(e.searchBlob.data(), static_cast<int>(e.searchBlob.size())));
                 panel->m_metaIso.insert(p, e.iso);
                 panel->m_metaCamera.insert(
-                    p, QString::fromUtf8(e.camera.data(), static_cast<int>(e.camera.size())).trimmed());
+                    p, QString::fromUtf8(e.camera.data(), static_cast<int>(e.camera.size()))
+                           .trimmed());
                 panel->m_metaLens.insert(
                     p, QString::fromUtf8(e.lens.data(), static_cast<int>(e.lens.size())).trimmed());
             }
@@ -345,12 +345,12 @@ void ThumbnailPanel::runFilterQuery()
     // directories always take the cancellable worker path below.
     if (src.size() <= 256)
     {
-        const QList<Entry> out = evaluateFilterSnapshot(
-            src, t, useFuzzy, fuzzyRe, query, ratings, tags, metaIndex, metaIso, metaCamera,
-            metaLens);
+        const QList<Entry> out =
+            evaluateFilterSnapshot(src, t, useFuzzy, fuzzyRe, query, ratings, tags, metaIndex,
+                                   metaIso, metaCamera, metaLens);
         if (m_incrementalApply)
             applyDisplayedEntriesIncremental(out, prevSelection, prevCurrent, anchorPath,
-                                              anchorOffset);
+                                             anchorOffset);
         else
             buildModel(out);
         return;
@@ -388,12 +388,11 @@ void ThumbnailPanel::runFilterQuery()
 }
 
 QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
-    const QList<Entry> &source, const QString &text, bool useFuzzy,
-    const QRegularExpression &fuzzy, const mviewer::core::BrowseQuery &query,
-    const mviewer::core::RatingStore::Snapshot &ratings,
-    const mviewer::core::TagStore::Snapshot &tags,
-    const QHash<QString, QString> &metaIndex, const QHash<QString, int> &metaIso,
-    const QHash<QString, QString> &metaCamera, const QHash<QString, QString> &metaLens)
+    const QList<Entry> &source, const QString &text, bool useFuzzy, const QRegularExpression &fuzzy,
+    const mviewer::core::BrowseQuery &query, const mviewer::core::RatingStore::Snapshot &ratings,
+    const mviewer::core::TagStore::Snapshot &tags, const QHash<QString, QString> &metaIndex,
+    const QHash<QString, int> &metaIso, const QHash<QString, QString> &metaCamera,
+    const QHash<QString, QString> &metaLens)
 {
     QList<Entry> out;
     out.reserve(source.size());
@@ -402,9 +401,9 @@ QList<ThumbnailPanel::Entry> ThumbnailPanel::evaluateFilterSnapshot(
         if (query.type.empty())
             return true;
         const QString suffix = QFileInfo(path).suffix().toLower();
-        static const QStringList rawExts = {
-            "cr2", "cr3", "nef", "arw", "dng", "raf", "rw2", "orf", "sr2", "srw",
-            "pef", "3fr", "mef", "erf", "mrw", "dcr", "kdc", "mos", "raw", "iiq"};
+        static const QStringList rawExts = {"cr2", "cr3", "nef", "arw", "dng", "raf", "rw2",
+                                            "orf", "sr2", "srw", "pef", "3fr", "mef", "erf",
+                                            "mrw", "dcr", "kdc", "mos", "raw", "iiq"};
         for (const QString &candidate :
              QString::fromStdString(query.type).split(',', Qt::SkipEmptyParts))
         {
@@ -513,20 +512,19 @@ bool ThumbnailPanel::prepareFilterSource(const QString &t, QList<Entry> &src)
                         found.append({fi.absoluteFilePath(), fi.fileName() + " [" + sub + "]",
                                       fi.size(), 0, 0, fi.lastModified()});
                     }
-                    QMetaObject::invokeMethod(
-                        qApp,
-                        [self, alive, gen, found, t]()
-                        {
-                            if (!alive->load() || !self)
-                                return;
-                            ThumbnailPanel *panel = self.data();
-                            panel->m_recursiveSearching = false;
-                            if (gen != panel->m_dirGen)
-                                return;
-                            panel->m_recursiveHits = found;
-                            panel->m_recursiveHitsFor = t;
-                            panel->applyFilter();
-                        });
+                    QMetaObject::invokeMethod(qApp,
+                                              [self, alive, gen, found, t]()
+                                              {
+                                                  if (!alive->load() || !self)
+                                                      return;
+                                                  ThumbnailPanel *panel = self.data();
+                                                  panel->m_recursiveSearching = false;
+                                                  if (gen != panel->m_dirGen)
+                                                      return;
+                                                  panel->m_recursiveHits = found;
+                                                  panel->m_recursiveHitsFor = t;
+                                                  panel->applyFilter();
+                                              });
                 });
             return false;
         }
@@ -555,8 +553,7 @@ bool ThumbnailPanel::matchesFilter(const Entry &e, const QString &t, bool useFuz
     query.lens = m_lensFilter.toLower().toStdString();
     query.iso = m_isoFilter;
     query.tag = m_tagFilter.toStdString();
-    return matchesFilterSnapshot(e, t, useFuzzy, fuzzy,
-                                 query,
+    return matchesFilterSnapshot(e, t, useFuzzy, fuzzy, query,
                                  mviewer::core::RatingStore::instance().snapshot(),
                                  mviewer::core::TagStore::instance().snapshot(), m_metaIndex,
                                  m_metaIso, m_metaCamera, m_metaLens);
@@ -564,8 +561,7 @@ bool ThumbnailPanel::matchesFilter(const Entry &e, const QString &t, bool useFuz
 
 bool ThumbnailPanel::matchesFilterSnapshot(
     const Entry &e, const QString &t, bool useFuzzy, const QRegularExpression &fuzzy,
-    const mviewer::core::BrowseQuery &query,
-    const mviewer::core::RatingStore::Snapshot &ratings,
+    const mviewer::core::BrowseQuery &query, const mviewer::core::RatingStore::Snapshot &ratings,
     const mviewer::core::TagStore::Snapshot &tags, const QHash<QString, QString> &metaIndex,
     const QHash<QString, int> &metaIso, const QHash<QString, QString> &metaCamera,
     const QHash<QString, QString> &metaLens)

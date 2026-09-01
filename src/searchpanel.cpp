@@ -9,8 +9,8 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
-#include <QPushButton>
 #include <QPointer>
+#include <QPushButton>
 #include <QTableWidget>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -86,11 +86,7 @@ SearchPanel::SearchPanel(QWidget *parent)
     connect(m_chkMetadata, &QCheckBox::toggled, this, &SearchPanel::onSearchTextChanged);
     connect(m_chkAnalysis, &QCheckBox::toggled, this, &SearchPanel::onSearchTextChanged);
     connect(m_chkPaths, &QCheckBox::toggled, this, &SearchPanel::onSearchTextChanged);
-    connect(m_reindexBtn, &QPushButton::clicked, this,
-            [this]()
-            {
-                emit reindexRequested();
-            });
+    connect(m_reindexBtn, &QPushButton::clicked, this, [this]() { emit reindexRequested(); });
 }
 
 SearchPanel::~SearchPanel()
@@ -202,8 +198,7 @@ void SearchPanel::performSearch()
                     else
                         self->m_countLabel->setText(
                             QString("找到 %1 个结果（点击列头可排序）").arg(n));
-                    QTimer::singleShot(0, self.data(),
-                                       [self, generation]()
+                    QTimer::singleShot(0, self.data(), [self, generation]()
                                        { self->populateResultsChunk(generation, 0); });
                 },
                 Qt::QueuedConnection);
@@ -244,8 +239,7 @@ void SearchPanel::populateResultsChunk(uint64_t generation, int firstRow)
     if (end < static_cast<int>(m_lastResults.size()))
     {
         QTimer::singleShot(0, this,
-                           [this, generation, end]()
-                           { populateResultsChunk(generation, end); });
+                           [this, generation, end]() { populateResultsChunk(generation, end); });
     }
     else
     {

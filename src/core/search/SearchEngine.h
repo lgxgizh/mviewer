@@ -100,7 +100,7 @@ class SearchEngine
     }
 
     static std::vector<domain::SearchResult> searchSnapshot(const Snapshot &snapshot,
-                                                             const domain::SearchQuery &query)
+                                                            const domain::SearchQuery &query)
     {
         return snapshot.search(query);
     }

@@ -290,11 +290,8 @@ void TagStore::workerLoop()
         while (!write && m_dirty)
         {
             const bool woke = m_workerCv.wait_for(
-                lock, std::chrono::milliseconds(100),
-                [this, observed]
-                {
-                    return m_workerStop || !m_dirty || m_changeSerial != observed;
-                });
+                lock, std::chrono::milliseconds(100), [this, observed]
+                { return m_workerStop || !m_dirty || m_changeSerial != observed; });
             if (!woke)
             {
                 write = true;

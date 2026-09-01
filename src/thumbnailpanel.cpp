@@ -117,8 +117,8 @@ void ThumbnailPanel::wireThumbnailPipeline()
         return;
     m_pipelineWired = true;
     ThumbnailPipeline::instance().thumbSize = m_thumbSize;
-    ThumbnailPipeline::instance().setDecodeFn(
-        [](const std::string &p, int size) { return ThumbnailProvider::produce(p, size); });
+    ThumbnailPipeline::instance().setDecodeFn([](const std::string &p, int size)
+                                              { return ThumbnailProvider::produce(p, size); });
     auto alive = m_alive;
     const QPointer<ThumbnailPanel> self(this);
     ThumbnailPipeline::instance().setResultFn(
@@ -212,8 +212,6 @@ ThumbnailPanel::~ThumbnailPanel()
                                               { return Decoder::decodeScaled(p, size); });
 }
 
-
-
 void ThumbnailPanel::resetDirectoryState()
 {
     m_allEntries.clear();
@@ -247,7 +245,6 @@ void ThumbnailPanel::refresh()
     if (!m_currentDir.isEmpty())
         setDirectory(m_currentDir);
 }
-
 
 // M23 re-check: setViewMode now lives in thumbnailpanel_viewmode.cpp to keep
 // this TU under the 800-line guard.
@@ -332,7 +329,7 @@ void ThumbnailPanel::applyThumbSize(int size, bool rememberGridSize)
 }
 
 bool ThumbnailPanel::takePendingFilterRestore(bool hasEntries, QStringList &selection,
-                                               QString &current)
+                                              QString &current)
 {
     if (m_pendingFilterGeneration == 0)
         return false;
@@ -368,13 +365,12 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     // sorting changes).  Without this, setStringList() resets the entire
     // selection model and the user's multi-select is silently lost.
     const QStringList prevSelected = restorePendingFilter ? pendingSelection : selectedPaths();
-    const QString prevCurrent = restorePendingFilter
-                                    ? pendingCurrent
-                                    : (m_paths.isEmpty()
-                                           ? QString()
-                                           : (currentIndex().isValid()
-                                                  ? m_paths.value(currentIndex().row())
-                                                  : QString()));
+    const QString prevCurrent =
+        restorePendingFilter
+            ? pendingCurrent
+            : (m_paths.isEmpty()
+                   ? QString()
+                   : (currentIndex().isValid() ? m_paths.value(currentIndex().row()) : QString()));
     const bool hadGallerySelection = !prevSelected.isEmpty();
     const bool pendingSelectionBeforeRebuild = !m_pendingSelect.isEmpty();
 

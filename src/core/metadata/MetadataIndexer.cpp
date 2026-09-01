@@ -31,8 +31,7 @@ std::string lower(std::string s)
 
 // Mirrors SearchIndex::buildBlob so gallery search, panel filters and the
 // search panel agree on the searchable text of one file.
-std::string buildSearchBlob(const mviewer::domain::ImageMetadata &meta,
-                            const RawMetadata &raw)
+std::string buildSearchBlob(const mviewer::domain::ImageMetadata &meta, const RawMetadata &raw)
 {
     std::ostringstream oss;
     oss << meta.fileName << " " << meta.filePath << " " << meta.format << " ";
@@ -85,8 +84,7 @@ MetadataIndexer &MetadataIndexer::instance()
 std::string MetadataIndexer::fileIdentity(const std::string &path)
 {
     const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
-    return std::to_string(fi.lastModified().toSecsSinceEpoch()) + "|" +
-           std::to_string(fi.size());
+    return std::to_string(fi.lastModified().toSecsSinceEpoch()) + "|" + std::to_string(fi.size());
 }
 
 uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, EntryCallback onEntry,
@@ -227,8 +225,7 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, EntryCall
             if (QCoreApplication::instance())
             {
                 const bool queued = QMetaObject::invokeMethod(
-                    QCoreApplication::instance(),
-                    [finalize]() { finalize(); },
+                    QCoreApplication::instance(), [finalize]() { finalize(); },
                     Qt::QueuedConnection);
                 if (!queued)
                 {
@@ -303,11 +300,12 @@ uint64_t MetadataIndexer::indexBatched(const std::vector<std::string> &paths,
                 if (batch.empty() || cancelToken->load() || ctx.isCancelled())
                     return;
                 const std::vector<Entry> copy = batch;
-                deliver([onBatch, copy]()
-                        {
-                            if (onBatch)
-                                onBatch(copy);
-                        });
+                deliver(
+                    [onBatch, copy]()
+                    {
+                        if (onBatch)
+                            onBatch(copy);
+                    });
                 batch.clear();
             };
             for (const std::string &p : paths)

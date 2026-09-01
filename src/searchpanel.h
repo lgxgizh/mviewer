@@ -2,13 +2,13 @@
 
 #include "core/image/RawMetadata.h"
 #include "core/metadata/MetadataIndexer.h"
+#include "core/scheduler/TaskScheduler.h"
 #include "domain/Image.h"
 #include "domain/SearchResult.h"
-#include "core/scheduler/TaskScheduler.h"
 
-#include <atomic>
 #include <QTableWidget>
 #include <QWidget>
+#include <atomic>
 #include <memory>
 #include <vector>
 
