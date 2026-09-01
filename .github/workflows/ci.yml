@@ -71,8 +71,11 @@ jobs:
           if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
             BASE_SHA="$(git rev-list --max-parents=0 "$GITHUB_SHA")"
           fi
-          git clang-format "$BASE_SHA" "$GITHUB_SHA" --extensions h,cpp,inc
-          git diff --exit-code -- '*.h' '*.cpp' '*.inc'
+          format_diff="$(git clang-format --diff "$BASE_SHA" "$GITHUB_SHA" --extensions h,cpp,inc)"
+          case "$format_diff" in
+            ""|"no modified files to format"|"clang-format did not modify any files") ;;
+            *) printf '%s\n' "$format_diff"; exit 1 ;;
+          esac
 
       - name: Install markdownlint
         run: npm install -g markdownlint-cli
