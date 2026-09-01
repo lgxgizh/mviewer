@@ -9,6 +9,7 @@
 #include <QFileInfo>
 #include <QMetaObject>
 #include <QString>
+#include <QTimer>
 
 #include <algorithm>
 #include <cctype>
@@ -223,21 +224,10 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, const Ent
             };
             if (QCoreApplication::instance())
             {
-                const bool queued =
-                    QMetaObject::invokeMethod( // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
-                        QCoreApplication::instance(), [finalize]() { finalize(); },
-                        Qt::QueuedConnection);
-                if (!queued)
-                {
-                    // The event loop is closing: the queued closure will never
-                    // run. Converge cleanup here on the worker, but never call
-                    // onDone on a worker thread.
-                    cancelToken->store(true);
-                    std::lock_guard<std::mutex> lk(m_mtx);
-                    auto it = m_requestCancel.find(requestId);
-                    if (it != m_requestCancel.end() && it->second == cancelToken)
-                        eraseRequestLocked(requestId);
-                }
+                // QTimer owns the context-bound functor; unlike the generic
+                // QMetaObject overload this is understood by clang-analyzer
+                // and still runs after all earlier queued entry callbacks.
+                QTimer::singleShot(0, QCoreApplication::instance(), [finalize]() { finalize(); });
             }
             else
             {
@@ -379,16 +369,7 @@ uint64_t MetadataIndexer::indexBatched(const std::vector<std::string> &paths,
             };
             if (QCoreApplication::instance())
             {
-                const bool queued =
-                    QMetaObject::invokeMethod( // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks)
-                        QCoreApplication::instance(), [finalize]() { finalize(); },
-                        Qt::QueuedConnection);
-                if (!queued)
-                {
-                    cancelToken->store(true);
-                    std::lock_guard<std::mutex> lk(m_mtx);
-                    eraseRequestLocked(requestId);
-                }
+                QTimer::singleShot(0, QCoreApplication::instance(), [finalize]() { finalize(); });
             }
             else
             {
