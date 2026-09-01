@@ -62,12 +62,11 @@ jobs:
         run: pip install "clang-format==22.1.8"
 
       - name: clang-format (C++20 / Qt6)
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           # The repository contains legacy formatting debt. Enforce the pinned
           # formatter on lines changed by this event instead of re-linting every
           # historical C++ file and leaving the required gate permanently red.
+          BASE_SHA="$(git rev-parse "${GITHUB_SHA}^" 2>/dev/null || true)"
           if [[ -z "$BASE_SHA" || "$BASE_SHA" =~ ^0+$ ]]; then
             BASE_SHA="$(git rev-list --max-parents=0 "$GITHUB_SHA")"
           fi
