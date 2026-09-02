@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-09-02 · Version: **1.0.16 M59 color-managed presentation line** · Release tag: **v1.0.16 pending publication**
+> Snapshot: 2026-09-02 · Version: **1.0.17 M60 linked ROI measurement line** · Release tag: **v1.0.17 pending publication**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -36,8 +36,30 @@
 > `docs/review/M58_PHASE0_LARGE_DIRECTORY_QUERY_BASELINE_2026-09-01.md`,
 > `docs/review/M58_LARGE_DIRECTORY_QUERY_CLOSURE_2026-09-01.md`,
 > `docs/review/M59_PHASE0_COLOR_METADATA_BASELINE_2026-09-01.md`,
-> `docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md`, and
+> `docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md`,
+> `docs/review/M60_LINKED_ROI_PHASE0_LINKED_ROI_2026-09-02.md`,
+> `docs/review/M60_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## M60 — Linked ROI measurement (2026-09-02)
+
+- Compare now treats a ROI as a canonical half-open rectangle in source
+  coordinates. Equal-dimension panes mirror the geometry live during a drag;
+  unequal dimensions retain only a local non-measuring ROI and explain why
+  linked measurement is unavailable.
+- The Analysis panel exposes **ROI Measurement — Source RGB** with per-image
+  means, R/G and B/G ratios, pixel counts, and a B−A delta for exactly two
+  images. Results are latest-generation asynchronous work, so stale or
+  cancelled jobs cannot overwrite a newer ROI.
+- Statistics are computed from source/analysis pixels rather than ICC-converted
+  display LODs. Source-backed panes use bounded region decode where the source
+  provider supports it; high-bit input remains explicitly limited by the
+  existing 8-bit `ImageData` boundary.
+- Focused geometry/format/ratio/analyzer/large-region coverage is gated by
+  `m60_linked_roi_tests`; Compare acceptance also covers mode persistence and
+  histogram consistency. Two source-stable Release `build.ps1 Test` runs passed
+  **129/129** in 820.73 s and 822.00 s; the GitHub Actions packaging result is
+  recorded in the M60 closure review.
 
 ## M59 — Color-managed presentation contract (2026-09-02)
 

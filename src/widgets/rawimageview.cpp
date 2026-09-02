@@ -7,6 +7,7 @@
 #include <QVariant>
 #include <QWheelEvent>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -17,6 +18,43 @@ namespace
 // 256 MiB of ARGB); the cache simply falls back to direct paint.
 constexpr qint64 kMaxCacheDim = 16384;
 constexpr qint64 kMaxSurfacePixels = qint64(64) * 1024 * 1024; // 64M px
+
+void drawSelectionOverlay(QPainter &p, const mviewer::domain::Selection &selection,
+                          const QSize &sourceSize, double cx, double cy, int dw, int dh)
+{
+    if (selection.isEmpty() || sourceSize.width() <= 0 || sourceSize.height() <= 0)
+        return;
+    const double sx = static_cast<double>(dw) / sourceSize.width();
+    const double sy = static_cast<double>(dh) / sourceSize.height();
+    const QRect box(qRound(cx - dw / 2.0 + selection.x * sx),
+                    qRound(cy - dh / 2.0 + selection.y * sy), qRound(selection.width * sx),
+                    qRound(selection.height * sy));
+    // Two cosmetic outlines keep the ROI legible on both saturated dark and
+    // bright imagery without obscuring the selected pixels.
+    QPen shadow(QColor(0, 0, 0, 220), 3);
+    shadow.setCosmetic(true);
+    p.setPen(shadow);
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(box);
+    QPen accent(QColor(0xFF, 0xD2, 0x33), 1);
+    accent.setCosmetic(true);
+    p.setPen(accent);
+    p.drawRect(box);
+    QFont labelFont = p.font();
+    labelFont.setPointSize(8);
+    labelFont.setBold(true);
+    p.setFont(labelFont);
+    const QString label = QStringLiteral("ROI %1×%2")
+                              .arg(selection.width)
+                              .arg(selection.height);
+    const QRect labelRect(box.left(), std::max(0, box.top() - 18),
+                          p.fontMetrics().horizontalAdvance(label) + 8, 16);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0, 0, 0, 170));
+    p.drawRoundedRect(labelRect, 2, 2);
+    p.setPen(Qt::white);
+    p.drawText(labelRect, Qt::AlignCenter, label);
+}
 } // namespace
 
 RawImageView::RawImageView(QWidget *parent) : QWidget(parent)
@@ -221,17 +259,8 @@ void RawImageView::paintEvent(QPaintEvent *)
         // A is still the editing/analysis target. Do not paint A's annotations
         // over B's transient raster or let the temporary view become editable.
     }
-    else if (!m_selection.isEmpty())
-    {
-        const double sx = static_cast<double>(dw) / m_sourceSize.width();
-        const double sy = static_cast<double>(dh) / m_sourceSize.height();
-        const QRect box(qRound(cx - dw / 2.0 + m_selection.x * sx),
-                        qRound(cy - dh / 2.0 + m_selection.y * sy), qRound(m_selection.width * sx),
-                        qRound(m_selection.height * sy));
-        p.setPen(QPen(QColor(0xFF, 0x33, 0x33), 2));
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(box);
-    }
+    else
+        drawSelectionOverlay(p, m_selection, m_sourceSize, cx, cy, dw, dh);
 
     // M16.1: synced crosshair at the shared image-space position (n/n compare).
     if (m_transientImage.isNull() && m_crosshairOn)
@@ -430,10 +459,14 @@ void RawImageView::mousePressEvent(QMouseEvent *ev)
     }
     if (ev->button() == Qt::RightButton)
     {
-        // Begin box selection (image coords) instead of panning.
+        // Begin box selection (image coords) instead of panning. Keep the old
+        // selection visible until the drag crosses the platform threshold so
+        // an ordinary right click cannot accidentally clear a measurement.
         m_selecting = true;
+        m_selectionMoved = false;
+        m_selectPressPos = ev->pos();
         m_selectStart = widgetToImage(ev->pos());
-        m_selection = mviewer::domain::Selection{};
+        ev->accept();
         update();
         return;
     }
@@ -454,13 +487,19 @@ void RawImageView::mouseMoveEvent(QMouseEvent *ev)
     }
     if (m_selecting)
     {
+        if (!m_selectionMoved && (ev->pos() - m_selectPressPos).manhattanLength() < 4)
+        {
+            ev->accept();
+            return;
+        }
+        m_selectionMoved = true;
         const QPointF cur = widgetToImage(ev->pos());
-        const int x = qMin(m_selectStart.x(), cur.x());
-        const int y = qMin(m_selectStart.y(), cur.y());
-        const int w = qAbs(cur.x() - m_selectStart.x());
-        const int h = qAbs(cur.y() - m_selectStart.y());
-        m_selection = mviewer::domain::Selection{x, y, w, h};
+        m_selection = mviewer::domain::normalizeSelection(
+            m_selectStart.x(), m_selectStart.y(), cur.x(), cur.y(), m_sourceSize.width(),
+            m_sourceSize.height());
+        emit selectionPreviewChanged(m_selection);
         update();
+        ev->accept();
         return;
     }
     if (!m_dragging)
@@ -508,7 +547,9 @@ void RawImageView::mouseReleaseEvent(QMouseEvent *ev)
     if (ev->button() == Qt::RightButton && m_selecting)
     {
         m_selecting = false;
-        emit selectionChanged(m_selection);
+        if (m_selectionMoved)
+            emit selectionChanged(m_selection);
+        ev->accept();
         return;
     }
     if (ev->button() == Qt::LeftButton)

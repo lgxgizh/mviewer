@@ -193,6 +193,10 @@ class RawImageView : public QWidget
     void pixelInfo(int x, int y, int r, int g, int b, bool valid);
     // Emitted when the user finishes drawing a selection box (image coords).
     void selectionChanged(const mviewer::domain::Selection &sel);
+    // Emitted during a right-button drag. The geometry is already normalized
+    // and clipped to source pixels; CompareWorkspace uses this cheap signal to
+    // mirror the live outline without starting statistics work.
+    void selectionPreviewChanged(const mviewer::domain::Selection &sel);
     // M16.1: emitted on hover with the image-space cursor position so the
     // workspace can mirror a synced crosshair across all cells. A negative x
     // signals "cursor left the cell" (clear the crosshair).
@@ -245,7 +249,9 @@ class RawImageView : public QWidget
     int m_cellIndex = -1;
     mviewer::domain::Selection m_selection;
     bool m_selecting = false;
+    bool m_selectionMoved = false;
     QPointF m_selectStart;
+    QPoint m_selectPressPos;
     QImage m_overlay;
     double m_overlayAlpha = 0.5;
 

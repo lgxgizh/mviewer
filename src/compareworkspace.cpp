@@ -65,6 +65,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     root->addLayout(leftLay, 1);
     root->addWidget(m_sidePanel);
     updateActionAvailability();
+    updateROIAvailabilityStatus();
 }
 
 CompareWorkspace::~CompareWorkspace()
@@ -107,6 +108,12 @@ CompareWorkspace::~CompareWorkspace()
         TaskScheduler::cancel(m_histTask);
     m_histTask.reset();
     ++m_histGen;
+
+    // M60: invalidate pending source ROI measurements before widget teardown.
+    if (m_roiTask)
+        TaskScheduler::cancel(m_roiTask);
+    m_roiTask.reset();
+    ++m_roiGen;
 }
 
 void CompareWorkspace::setDisplayColorContext(const mviewer::core::DisplayColorContext &target)
@@ -153,6 +160,16 @@ void CompareWorkspace::setImages(const QStringList &paths)
 void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &frameIndices)
 {
     endTemporaryCompare();
+    // A new compare set supersedes any in-flight ROI calculation immediately;
+    // preserving only the geometry for a possible same-dimension navigation
+    // restore prevents stale source statistics from crossing image pairs.
+    if (m_roiTask)
+        TaskScheduler::cancel(m_roiTask);
+    m_roiTask.reset();
+    ++m_roiGen;
+    clearROIStatsDisplay();
+    if (!m_roiLinked)
+        m_lastSelection = {};
     // M28 P1-01: Compare loads are ASYNC. Decoding happens on the DecodePool,
     // never on the UI thread: setImages() returns immediately, and the frames
     // are applied by finishLoad() on the UI thread when every request in this
@@ -475,6 +492,7 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     updateCanvasModeVisibility();
     updateTemporaryCompareAvailability();
     updateLayoutStatus();
+    updateROIAvailabilityStatus();
     setFocus();
     // P0-2: publish the compare set + reference to the app-wide SelectionModel so
     // Metadata/Analysis/Export stay in sync with what is being compared.

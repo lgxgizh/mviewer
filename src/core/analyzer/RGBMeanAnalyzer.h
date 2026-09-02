@@ -1,6 +1,8 @@
 #pragma once
 #include "core/analyzer/Analyzer.h"
 
+#include <cstdint>
+
 // RGB mean analyzer: per-channel mean + stddev.
 class RGBMeanAnalyzer : public Analyzer
 {
@@ -35,9 +37,12 @@ class RGBMeanAnalyzer : public Analyzer
 
     struct Result
     {
-        double rMean, gMean, bMean;
-        double rStd, gStd, bStd;
+        double rMean = 0.0, gMean = 0.0, bMean = 0.0;
+        double rStd = 0.0, gStd = 0.0, bStd = 0.0;
+        double rOverG = 0.0, bOverG = 0.0;
+        int64_t pixelCount = 0;
         bool ok = false;
+        bool ratiosValid = false;
     };
     const Result &result() const
     {

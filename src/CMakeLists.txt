@@ -179,6 +179,7 @@ add_library(mviewer_ui STATIC
     compareworkspace_render_materialization.cpp
     compareworkspace_render_diff.cpp
     compareworkspace_render_canvas.cpp
+    compareworkspace_roi.cpp
     compareworkspace_analysis.cpp
     compareworkspace_editpanel.cpp
     compareworkspace_interact.cpp
@@ -1568,6 +1569,16 @@ target_include_directories(m59_color_managed_tests PRIVATE ${CMAKE_CURRENT_SOURC
 target_compile_definitions(m59_color_managed_tests PRIVATE MVIEWER_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 add_test(NAME m59_color_managed_tests COMMAND m59_color_managed_tests)
 set_tests_properties(m59_color_managed_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 300)
+
+# ─── M60: linked ROI geometry + source RGB measurement contract ────────────
+add_executable(m60_linked_roi_tests
+    test_m60_linked_roi.cpp
+)
+target_link_libraries(m60_linked_roi_tests PRIVATE mviewer_core Qt6::Core)
+target_compile_features(m60_linked_roi_tests PRIVATE cxx_std_20)
+target_include_directories(m60_linked_roi_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m60_linked_roi_tests COMMAND m60_linked_roi_tests)
+set_tests_properties(m60_linked_roi_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
 # Standalone recorder for M55 10k/50k memory and navigation evidence. It is
 # intentionally not a gate because its numbers are machine-dependent.

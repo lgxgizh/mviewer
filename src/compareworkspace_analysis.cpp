@@ -132,6 +132,7 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
     sideLay->addWidget(m_statsLabel);
 
     buildHistogramPanel(sideLay);
+    buildROIMeasurementPanel(sideLay);
 }
 
 void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)

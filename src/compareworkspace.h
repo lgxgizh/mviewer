@@ -12,6 +12,7 @@
 #include "core/image/DisplayColorContext.h"
 #include "core/image/ImageAdjust.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/ImageStats.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QCheckBox>
@@ -40,6 +41,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <string>
 #include <vector>
 
 class QScrollArea;
@@ -221,6 +223,12 @@ class CompareWorkspace : public QWidget
     void buildCompareCells(int count, int columns);
     void fitAll();
     void applySelectionToAll(const mviewer::domain::Selection &sel);
+    void applySelectionFromView(RawImageView *view, const mviewer::domain::Selection &sel);
+    void applySelectionPreviewFromView(RawImageView *view,
+                                       const mviewer::domain::Selection &sel);
+    void clearROI();
+    bool linkedROIAvailable() const;
+    void updateROIAvailabilityStatus();
 
     CompareEngine m_engine;
 
@@ -307,6 +315,38 @@ class CompareWorkspace : public QWidget
     QPoint m_dragStartPos;
     int m_dragIdx = -1;
     mviewer::domain::Selection m_lastSelection; // M12.1: last applied ROI
+
+    // M60: source-coordinate linked ROI measurement. Geometry is updated on
+    // the UI thread; statistics are latest-wins Analysis-pool work.
+    struct ROIInput
+    {
+        ImageData pixels;
+        mviewer::domain::ImageMetadata metadata;
+        std::string path;
+    };
+    struct ROIStatsBatchResult
+    {
+        uint64_t generation = 0;
+        int paneCount = 0;
+        bool linked = false;
+        mviewer::domain::Selection roi;
+        std::vector<mviewer::core::ROIChannelStats> stats;
+    };
+    static mviewer::core::ROIChannelStats computeSourceROI(const ROIInput &input,
+                                                            const mviewer::domain::Selection &roi);
+    static ROIStatsBatchResult computeROIStatsBatch(
+        const std::vector<ROIInput> &inputs, const mviewer::domain::Selection &roi,
+        bool linked, uint64_t generation, const TaskScheduler::TaskContext &context);
+    TaskScheduler::TaskHandle startROIStatsBatch(const std::vector<ROIInput> &inputs,
+                                                 const mviewer::domain::Selection &roi,
+                                                 bool linked, uint64_t generation,
+                                                 const QPointer<CompareWorkspace> &guard);
+    void scheduleROIMeasurement();
+    void applyROIStatsBatchResult(const ROIStatsBatchResult &result);
+    void clearROIStatsDisplay();
+    uint64_t m_roiGen = 0;
+    TaskScheduler::TaskHandle m_roiTask;
+    bool m_roiLinked = false;
 
     // M14-3 / P0-4: blink (flicker) compare
     QCheckBox *m_blinkChk = nullptr;
@@ -457,17 +497,7 @@ class CompareWorkspace : public QWidget
     void updateInspectorRows(const std::vector<InspectorSample> &samples,
                              mviewer::core::ColorSpace space,
                              int baseIndex, int x, int y);
-    // ── M30: coalesced Pixel Inspector hover path ──
-    // High-frequency hover requests (RawImageView::pixelInfo plus the synced
-    // crosshair pair) funnel into requestInspectorUpdate(): it stores the
-    // latest coordinate immediately and schedules at most ONE zero-delay queued
-    // render per event-loop turn. The queued callback is receiver-bound to
-    // `this`, so it is dropped when the workspace is destroyed (no stale render
-    // / use-after-free), and it always renders the CURRENT m_lastInspectX/Y
-    // with the CURRENT semantic state — an old request can never overwrite
-    // newer state. Low-frequency semantic changes (color space, kernel, focus,
-    // delivered display image, edit target) funnel through the same coalescer
-    // and are deterministically refreshed on the next event-loop turn.
+    // M30: coalesced Pixel Inspector hover path.
     void requestInspectorUpdate(int x, int y);
     bool m_inspectQueued = false; // coalescing flag: one queued render at a time
     int m_inspectorSpaceIdx = -1; // last color-space index whose headers were set
@@ -477,11 +507,11 @@ class CompareWorkspace : public QWidget
     // session must not let the counter sign-overflow.
     quint64 m_inspectorRenderCount = 0;
     void refreshHistograms();
-
     // ── M23: analysis panel (Pixel Inspector Pro + ROI histogram) ──
     // Built in compareworkspace_analysis.cpp per ADR 014 TU split.
     void buildAnalysisPanel(QVBoxLayout *sideLayout);
     void buildHistogramPanel(QVBoxLayout *sideLayout);
+    void buildROIMeasurementPanel(QVBoxLayout *sideLayout);
     void buildSecondaryEditControls(QVBoxLayout *editLayout);
     void finishPresetRestore(uint64_t displayGenBeforeRestore);
     QComboBox *m_csCombo = nullptr;     // inspector colour space selector
@@ -495,6 +525,11 @@ class CompareWorkspace : public QWidget
     QCheckBox *m_histLumaChk = nullptr;
     QCheckBox *m_histLogChk = nullptr;
     QCheckBox *m_roiHistChk = nullptr; // limit histogram to the current ROI
+    QLabel *m_roiStatusLabel = nullptr;
+    QLabel *m_roiGeometryLabel = nullptr;
+    QTableWidget *m_roiTable = nullptr;
+    QLabel *m_roiDeltaLabel = nullptr;
+    QPushButton *m_clearRoiBtn = nullptr;
 
     // M16.1: cursor-sync crosshair (n/n) + focus-lock / reference pin (n/1).
     QCheckBox *m_crosshairChk = nullptr; // 同步准星开关
@@ -582,13 +617,7 @@ class CompareWorkspace : public QWidget
     // window (avoids a duplicate batch submission).
     bool m_rebuildingCells = false;
 
-    // M28 P1-01: async pane materialization. rebuildCells() and live adjustment
-    // previews schedule ONE cancellable Analysis-pool task per request that
-    // applies the captured CellAdjust and converts the owned result to QImage
-    // off the UI thread, then marshals a value-only batch back to the UI thread
-    // via qApp. Latest-wins: a newer schedule cancels the previous display task
-    // and bumps the generation; the delivery is also guarded by generation and
-    // pane count. Independent of the diff batch (m_diffGen/m_diffTask).
+    // M28 P1-01: async pane materialization, latest-wins and value-only delivery.
     struct DisplayRequest
     {
         QSize target;
@@ -655,7 +684,6 @@ class CompareWorkspace : public QWidget
     TaskScheduler::TaskHandle m_displayTask;
     bool m_displayLodRefreshPending = false;
     int m_displayLodRefreshPane = -1;
-
     // ── M16.2: per-cell image adjustments ──
     struct CellAdjust
     {
@@ -716,13 +744,7 @@ class CompareWorkspace : public QWidget
     void onPaneHistOverlayToggled(bool on);
     bool m_paneHistOverlay = false;
 
-    // Async batch histogram refresh: the per-pane overlays and the main analysis
-    // histogram are computed by ONE cancellable Analysis-pool task per logical
-    // refresh and delivered to the UI thread via qApp. Value/POD data only — no
-    // widget, QObject, ImageFrame, or CompareEngine reference crosses the thread
-    // boundary. Latest-wins: a newer schedule cancels the previous task and bumps
-    // the generation; delivery re-checks both. Independent of the display
-    // (m_displayGen/m_displayTask) and diff (m_diffGen/m_diffTask) batches.
+    // Async batch histogram refresh: one cancellable latest-wins task per refresh.
     struct HistogramBatchResult
     {
         uint64_t generation = 0;

@@ -606,6 +606,11 @@ bool CompareWorkspace::handleBasicCompareEscape(QKeyEvent *event)
     if (event->key() != Qt::Key_Escape)
         return false;
     event->accept();
+    if (!m_lastSelection.isEmpty())
+    {
+        clearROI();
+        return true;
+    }
     if (auto *dlg = qobject_cast<QDialog *>(window()))
         dlg->reject();
     return true;

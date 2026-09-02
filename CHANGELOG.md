@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.17] - 2026-09-02
+
+### Added
+
+- **Linked ROI measurement (M60):** ordinary two-image and multi-pane Compare
+  now shares a canonical source-coordinate ROI when all source dimensions
+  match. The live overlay mirrors during drag, while source RGB means,
+  R/G/B/G ratios, pixel counts, and pair deltas are computed asynchronously.
+- ROI measurement covers RGB/BGR/RGBA/BGRA and grayscale storage, preserves
+  source/analysis bytes independently from display color management, and
+  rejects unequal-dimension linking with a nonblocking explanation instead of
+  silently applying proportional coordinates.
+
+### Verification
+
+- Added the `m60_linked_roi_tests` geometry, format, ratio, analyzer, and large
+  region gate; Compare acceptance now also verifies ROI state through mode
+  transitions and histogram consistency.
+- Source-backed ROI work uses a bounded region decode when available; the
+  existing 8-bit `ImageData` boundary remains explicit for high-bit sources.
+  See `docs/rfc/M60_LINKED_ROI_MEASUREMENT.md` and the M60 closure review.
+
 ## [1.0.16] - 2026-09-02
 
 ### Fixed

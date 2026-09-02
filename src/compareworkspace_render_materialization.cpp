@@ -31,7 +31,12 @@ class ElidedCaption final : public QLabel
   private:
     void updateText()
     {
-        const int available = std::max(0, contentsRect().width() - 8);
+        // Keep captions compact even when a wide compare pane could fit an
+        // unusually long filename. The full name remains available via the
+        // tooltip, while a bounded label leaves the image and ROI overlay
+        // visually dominant.
+        constexpr int kMaxCaptionPixels = 320;
+        const int available = std::min(kMaxCaptionPixels, std::max(0, contentsRect().width() - 8));
         QLabel::setText(fontMetrics().elidedText(m_fullText, Qt::ElideMiddle, available));
     }
 
@@ -267,7 +272,11 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
                         requestInspectorUpdate(x, y);
                 });
         connect(view, &RawImageView::selectionChanged, this,
-                [this](const mviewer::domain::Selection &sel) { applySelectionToAll(sel); });
+                [this, view](const mviewer::domain::Selection &sel)
+                { applySelectionFromView(view, sel); });
+        connect(view, &RawImageView::selectionPreviewChanged, this,
+                [this, view](const mviewer::domain::Selection &sel)
+                { applySelectionPreviewFromView(view, sel); });
         connect(view, &RawImageView::crosshairMoved, this,
                 [this, view](const QPointF &p) { onCrosshairMoved(view, p); });
         connect(view, &RawImageView::focusRequested, this, &CompareWorkspace::onFocusRequested);
