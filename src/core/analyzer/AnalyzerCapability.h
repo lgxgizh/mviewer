@@ -6,6 +6,8 @@
 
 // Self-describing capability flags for analyzers.
 // Agents and UI query these to determine which analyzer fits a task.
+// The uint32_t width is part of the plugin-facing ABI; do not shrink it.
+// NOLINTBEGIN(performance-enum-size)
 enum class AnalyzerCapability : uint32_t
 {
     None = 0,
@@ -19,6 +21,7 @@ enum class AnalyzerCapability : uint32_t
     QualityMetric = 1 << 7,    // output is a computed quality score (PSNR/SSIM)
     DifferenceOutput = 1 << 8, // output is an ImageData (heatmap/difference)
 };
+// NOLINTEND(performance-enum-size)
 
 // NOLINTBEGIN(clang-analyzer-optin.core.EnumCastOutOfRange)
 constexpr AnalyzerCapability operator|(AnalyzerCapability a, AnalyzerCapability b)
