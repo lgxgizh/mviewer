@@ -168,6 +168,7 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
     m_roiTask.reset();
     ++m_roiGen;
     clearROIStatsDisplay();
+    setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);
     if (!m_roiLinked)
         m_lastSelection = {};
     // M28 P1-01: Compare loads are ASYNC. Decoding happens on the DecodePool,
@@ -250,8 +251,7 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
                 CompareWorkspace *ws = self->data();
                 if (!ws || batch->generation != ws->m_loadGen)
                     return;
-                ws->finishLoad(*batch->frames,
-                               batch->failed->load(std::memory_order_relaxed),
+                ws->finishLoad(*batch->frames, batch->failed->load(std::memory_order_relaxed),
                                batch->infeasible->load(std::memory_order_relaxed));
             },
             Qt::QueuedConnection);
@@ -271,8 +271,8 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
         const int frameIndex = i < frameIndices.size() ? std::max(0, frameIndices[i]) : 0;
         auto probe = TaskScheduler::instance().submit(
             TaskScheduler::Priority::Decode,
-            [batch, i, request, path, frameIndex, opts, lifetime, queueBatchFinish](
-                const TaskScheduler::TaskContext &ctx)
+            [batch, i, request, path, frameIndex, opts, lifetime,
+             queueBatchFinish](const TaskScheduler::TaskContext &ctx)
             {
                 const auto account = [batch, i, queueBatchFinish](bool failed)
                 {
@@ -308,10 +308,9 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
                     if (ctx.isCancelled())
                         return;
 
-                    const qint64 pixels =
-                        source ? static_cast<qint64>(source->metadata().width) *
-                                     source->metadata().height
-                               : 0;
+                    const qint64 pixels = source ? static_cast<qint64>(source->metadata().width) *
+                                                       source->metadata().height
+                                                 : 0;
                     if (source && pixels > kCompareAnalysisFeasiblePixels)
                     {
                         batch->infeasible->fetch_add(1, std::memory_order_relaxed);
@@ -330,18 +329,15 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
                     try
                     {
                         handle =
-                            mviewer::application::ImageLoadingService::instance()
-                                .loadFrameAsync(
-                                    path,
-                                    frameIndex,
-                                    [batch, i, queueBatchFinish](
-                                        const mviewer::application::ImageLoadingService::Result
-                                            &res)
-                                    {
-                                        if (CompareWorkspace::accountLoadRequest(batch, i, &res))
-                                            queueBatchFinish();
-                                    },
-                                    opts, lifetime);
+                            mviewer::application::ImageLoadingService::instance().loadFrameAsync(
+                                path, frameIndex,
+                                [batch, i, queueBatchFinish](
+                                    const mviewer::application::ImageLoadingService::Result &res)
+                                {
+                                    if (CompareWorkspace::accountLoadRequest(batch, i, &res))
+                                        queueBatchFinish();
+                                },
+                                opts, lifetime);
                     }
                     catch (...)
                     {
@@ -428,9 +424,8 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     if (m_engine.imageCount() == 0 && m_compareLoadingLabel)
     {
         m_compareLoadingLabel->setText(
-            failedCount > 0
-                ? tr("没有可用的图片。\n请检查文件是否存在、完整且受支持。")
-                : tr("没有可用的图片。\n请返回浏览器选择图片。"));
+            failedCount > 0 ? tr("没有可用的图片。\n请检查文件是否存在、完整且受支持。")
+                            : tr("没有可用的图片。\n请返回浏览器选择图片。"));
     }
 
     // M24 (B#7): failed loads are dropped by the engine — tell the user why
@@ -641,8 +636,7 @@ void CompareWorkspace::onFrameControlChanged(int oneBasedIndex)
     const ImageFrame *current = m_engine.imageAt(index);
     if (!current || current->sequenceInfo().frameCount <= 1)
         return;
-    const int target = std::clamp(oneBasedIndex - 1, 0,
-                                  current->sequenceInfo().frameCount - 1);
+    const int target = std::clamp(oneBasedIndex - 1, 0, current->sequenceInfo().frameCount - 1);
     if (target == current->frameIndex())
         return;
 
@@ -669,8 +663,7 @@ void CompareWorkspace::updateLayoutStatus()
     if (!m_layoutStatusLabel)
         return;
     const auto layout = m_engine.layout();
-    m_layoutStatusLabel->setText(
-        tr("网格: %1 行 × %2 列").arg(layout.rows).arg(layout.cols));
+    m_layoutStatusLabel->setText(tr("网格: %1 行 × %2 列").arg(layout.rows).arg(layout.cols));
 }
 
 void CompareWorkspace::onSideToggled(bool on)
@@ -683,6 +676,7 @@ void CompareWorkspace::onSideToggled(bool on)
         refreshHistograms();
         refreshAllDiffOverlays();
     }
+    updateROISurfaces();
     update();
 }
 

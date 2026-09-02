@@ -1,5 +1,6 @@
 // CompareWorkspace interaction: keyboard, mouse, event filter, pixel link (M20 P0#2).
 #include "compareworkspace_p.h"
+#include "domain/SelectionMapping.h"
 
 #include "core/analysis/PixelInspector.h"
 
@@ -28,9 +29,10 @@ bool CompareWorkspace::event(QEvent *event)
 
 bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
 {
-    if (event && (event->type() == QEvent::FocusOut || event->type() == QEvent::Hide ||
-                  event->type() == QEvent::WindowDeactivate || event->type() == QEvent::Close ||
-                  event->type() == QEvent::EnabledChange) &&
+    if (event &&
+        (event->type() == QEvent::FocusOut || event->type() == QEvent::Hide ||
+         event->type() == QEvent::WindowDeactivate || event->type() == QEvent::Close ||
+         event->type() == QEvent::EnabledChange) &&
         (obj == this || obj == m_temporaryCompareButton || obj == window()))
         endTemporaryCompare();
 
@@ -155,11 +157,10 @@ void CompareWorkspace::endTemporaryCompare()
 
 void CompareWorkspace::updateTemporaryCompareAvailability()
 {
-    const bool available = m_engine.imageCount() == 2 && m_cellViews.size() >= 2 &&
-                           m_cellViews[0] && m_cellViews[1] &&
-                           !m_cellViews[1]->displayImage().isNull() &&
-                           m_cellViews[1]->sourceSize().isValid() && !anyCanvasCompareMode() &&
-                           !(m_blinkChk && m_blinkChk->isChecked());
+    const bool available =
+        m_engine.imageCount() == 2 && m_cellViews.size() >= 2 && m_cellViews[0] && m_cellViews[1] &&
+        !m_cellViews[1]->displayImage().isNull() && m_cellViews[1]->sourceSize().isValid() &&
+        !anyCanvasCompareMode() && !(m_blinkChk && m_blinkChk->isChecked());
     if (m_temporaryCompareButton)
         m_temporaryCompareButton->setEnabled(available);
     if (!available)
@@ -203,6 +204,32 @@ bool CompareWorkspace::handleCanvasWheel(QEvent *event)
 bool CompareWorkspace::handleCanvasPress(QEvent *event)
 {
     auto *me = static_cast<QMouseEvent *>(event);
+    if (me->button() == Qt::RightButton)
+    {
+        m_canvasSelecting = true;
+        m_canvasSelectionMoved = false;
+        m_canvasSelectionPress = me->pos();
+        m_canvasSelectionPane = canvasRefCellAt(me->pos());
+        m_canvasSelectionStart = canvasSourcePoint(me->pos(), m_canvasSelectionPane);
+        m_canvasSelectionOrigin = m_lastSelection;
+        const QRectF destination =
+            cellFullDestRect(m_canvasSelectionPane, canvasPaneGeometry(m_canvasSelectionPane));
+        const QSize source =
+            m_canvasSelectionPane < m_cellViews.size() && m_cellViews[m_canvasSelectionPane]
+                ? m_cellViews[m_canvasSelectionPane]->sourceSize()
+                : QSize();
+        const double toleranceX =
+            destination.width() > 0.0 ? 8.0 * source.width() / destination.width() : 0.0;
+        const double toleranceY =
+            destination.height() > 0.0 ? 8.0 * source.height() / destination.height() : 0.0;
+        m_canvasSelectionHandle =
+            mviewer::domain::hitTestSelection(m_lastSelection, m_canvasSelectionStart.x(),
+                                              m_canvasSelectionStart.y(), toleranceX, toleranceY);
+        if (m_canvasSelectionHandle == mviewer::domain::SelectionHandle::None)
+            m_canvasSelectionHandle = mviewer::domain::SelectionHandle::Create;
+        me->accept();
+        return true;
+    }
     if (me->button() == Qt::LeftButton)
     {
         const QRect cr = canvasRect();
@@ -228,6 +255,27 @@ bool CompareWorkspace::handleCanvasMove(QEvent *event)
 {
     auto *me = static_cast<QMouseEvent *>(event);
     const QRect cr = canvasRect();
+    if (m_canvasSelecting)
+    {
+        if (!m_canvasSelectionMoved && (me->pos() - m_canvasSelectionPress).manhattanLength() < 4)
+            return true;
+        m_canvasSelectionMoved = true;
+        const QPointF current = canvasSourcePoint(me->pos(), m_canvasSelectionPane);
+        const QSize source =
+            m_canvasSelectionPane < m_cellViews.size() && m_cellViews[m_canvasSelectionPane]
+                ? m_cellViews[m_canvasSelectionPane]->sourceSize()
+                : QSize();
+        const auto selection = mviewer::domain::updateSelectionInteraction(
+            m_canvasSelectionOrigin, m_canvasSelectionHandle, m_canvasSelectionStart.x(),
+            m_canvasSelectionStart.y(), current.x(), current.y(), source.width(), source.height());
+        RawImageView *view = m_canvasSelectionPane < m_cellViews.size()
+                                 ? m_cellViews[m_canvasSelectionPane]
+                                 : nullptr;
+        applySelectionPreviewFromView(view, selection);
+        if (m_compareCanvas)
+            m_compareCanvas->update();
+        return true;
+    }
     if (m_splitDragging && m_swipeChk && m_swipeChk->isChecked())
     {
         m_splitPos = std::clamp(me->pos().x() / double(cr.width()), 0.05, 0.95);
@@ -239,7 +287,7 @@ bool CompareWorkspace::handleCanvasMove(QEvent *event)
     {
         const int divider = int(cr.width() * m_splitPos);
         m_compareCanvas->setCursor(std::abs(me->pos().x() - divider) < 12 ? Qt::SplitHCursor
-                                                                           : Qt::ArrowCursor);
+                                                                          : Qt::ArrowCursor);
     }
     if (m_dragging)
     {
@@ -265,6 +313,17 @@ bool CompareWorkspace::handleCanvasMove(QEvent *event)
 bool CompareWorkspace::handleCanvasRelease(QEvent *event)
 {
     auto *me = static_cast<QMouseEvent *>(event);
+    if (me->button() == Qt::RightButton && m_canvasSelecting)
+    {
+        m_canvasSelecting = false;
+        if (m_canvasSelectionMoved && !m_lastSelection.isEmpty())
+            applySelectionToAll(m_lastSelection);
+        else if (!m_canvasSelectionMoved)
+            applySelectionToAll(m_canvasSelectionOrigin);
+        m_canvasSelectionHandle = mviewer::domain::SelectionHandle::None;
+        me->accept();
+        return true;
+    }
     if (me->button() == Qt::LeftButton)
     {
         m_splitDragging = false;
@@ -385,6 +444,30 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
     scheduleDisplayLodRefresh(refIdx);
 }
 
+QRectF CompareWorkspace::canvasPaneGeometry(int pane) const
+{
+    const QRect canvas = canvasRect();
+    if (m_splitChk && m_splitChk->isChecked())
+    {
+        const auto halves = splitRects(canvas);
+        return pane == 1 ? QRectF(halves.second) : QRectF(halves.first);
+    }
+    return QRectF(canvas);
+}
+
+QPointF CompareWorkspace::canvasSourcePoint(const QPoint &pos, int pane) const
+{
+    if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
+        return {};
+    const QSize source = m_cellViews[pane]->sourceSize();
+    const QRectF destination = cellFullDestRect(pane, canvasPaneGeometry(pane));
+    const auto point = mviewer::domain::presentationToSource(
+        {static_cast<double>(pos.x()), static_cast<double>(pos.y())},
+        {destination.x(), destination.y(), destination.width(), destination.height()},
+        source.width(), source.height());
+    return QPointF(point.x, point.y);
+}
+
 void CompareWorkspace::onPixelLinkToggled(bool on)
 {
     if (m_clearLinksBtn)
@@ -475,17 +558,16 @@ void CompareWorkspace::updateLinkInfo()
             const ImageFrame *frame = m_engine.imageAt(c);
             if (!frame)
                 continue;
-            const CellAdjust adjust =
-                c < static_cast<int>(m_cellAdjusts.size())
-                    ? m_cellAdjusts[static_cast<size_t>(c)]
-                    : CellAdjust{};
+            const CellAdjust adjust = c < static_cast<int>(m_cellAdjusts.size())
+                                          ? m_cellAdjusts[static_cast<size_t>(c)]
+                                          : CellAdjust{};
             // Pixel Link is an analysis readout, not a display readout. The
             // RawImageView raster may be a bounded LOD or covered region, and
             // an infeasible source intentionally has no full pixels. Keep the
             // latter invalid instead of triggering materialization or sampling
             // whatever display raster happens to be visible.
-            const auto pixel = mviewer::core::sampleAnalysisPixel(
-                frame->pixels(), analysisAdjustment(adjust), x, y);
+            const auto pixel = mviewer::core::sampleAnalysisPixel(frame->pixels(),
+                                                                  analysisAdjustment(adjust), x, y);
             if (!pixel.valid)
                 continue;
             samples[static_cast<size_t>(c)] = {pixel.r, pixel.g, pixel.b, true};

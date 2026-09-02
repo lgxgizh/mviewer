@@ -17,8 +17,8 @@
 
 #if defined(Q_OS_WIN)
 #define NOMINMAX
-#include <windows.h>
 #include <wincodec.h>
+#include <windows.h>
 #include <wrl/client.h>
 #endif
 
@@ -62,9 +62,8 @@ bool transformSwapsDimensions(QImageIOHandler::Transformations t)
 
 bool isTiffPath(const std::string &path)
 {
-    const QString ext = QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size())))
-                            .suffix()
-                            .toLower();
+    const QString ext =
+        QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
     return ext == "tif" || ext == "tiff";
 }
 
@@ -90,13 +89,18 @@ QImage decodeTiffWic(const std::string &path, const QRect &rawRect, const QSize 
     class ComScope
     {
       public:
-        ComScope() : result_(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) {}
+        ComScope() : result_(CoInitializeEx(nullptr, COINIT_MULTITHREADED))
+        {
+        }
         ~ComScope()
         {
             if (SUCCEEDED(result_))
                 CoUninitialize();
         }
-        bool usable() const { return SUCCEEDED(result_) || result_ == RPC_E_CHANGED_MODE; }
+        bool usable() const
+        {
+            return SUCCEEDED(result_) || result_ == RPC_E_CHANGED_MODE;
+        }
 
       private:
         HRESULT result_;
@@ -111,9 +115,8 @@ QImage decodeTiffWic(const std::string &path, const QRect &rawRect, const QSize 
         return QImage();
 
     ComPtr<IWICBitmapDecoder> decoder;
-    if (FAILED(factory->CreateDecoderFromFilename(
-            filenameWide.c_str(), nullptr, GENERIC_READ, WICDecodeMetadataCacheOnDemand,
-            &decoder)))
+    if (FAILED(factory->CreateDecoderFromFilename(filenameWide.c_str(), nullptr, GENERIC_READ,
+                                                  WICDecodeMetadataCacheOnDemand, &decoder)))
         return QImage();
 
     ComPtr<IWICBitmapFrameDecode> frame;
@@ -153,7 +156,8 @@ QImage decodeTiffWic(const std::string &path, const QRect &rawRect, const QSize 
     ComPtr<IWICBitmapScaler> scaler;
     if (FAILED(factory->CreateBitmapScaler(&scaler)) ||
         FAILED(scaler->Initialize(source.Get(), static_cast<UINT>(target.width()),
-                                  static_cast<UINT>(target.height()), WICBitmapInterpolationModeFant)))
+                                  static_cast<UINT>(target.height()),
+                                  WICBitmapInterpolationModeFant)))
         return QImage();
 
     ComPtr<IWICFormatConverter> converter;
@@ -277,9 +281,8 @@ const std::vector<std::string> &supportedExts()
 
 bool QtDecoder::canDecode(const std::string &path) const
 {
-    QString ext = QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size())))
-                      .suffix()
-                      .toLower();
+    QString ext =
+        QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
     // Canonical aliases so .jpg/.jpeg and .tif/.tiff both match regardless of
     // which name QImageReader reports.
     if (ext == "jpg")
@@ -342,8 +345,7 @@ bool QtDecoder::canProbe(const std::string &path) const
     return canDecode(path);
 }
 
-bool QtDecoder::probeMetadata(const std::string &path,
-                              mviewer::domain::ImageMetadata &meta) const
+bool QtDecoder::probeMetadata(const std::string &path, mviewer::domain::ImageMetadata &meta) const
 {
     QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true);
@@ -394,9 +396,8 @@ bool QtDecoder::canNativeLod(const std::string &path) const
     // Evidence-based (M47/M53): JPEG uses the decoder's reduced DCT read. TIFF
     // uses the measured strip/clip adapter below; it never asks Qt to allocate
     // the full raster. Other formats remain on the honest scaled fallback.
-    const QString ext = QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size())))
-                            .suffix()
-                            .toLower();
+    const QString ext =
+        QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
     if (ext == "jpg" || ext == "jpeg")
         return true;
     if (!isTiffPath(path))
@@ -414,10 +415,34 @@ bool QtDecoder::canNativeLod(const std::string &path) const
 bool QtDecoder::canNativeRegion(const std::string &path) const
 {
     (void)path;
-    // Qt offers no true random-access tile decode. decodeRegion() is the
-    // bounded-memory clipRect path, classified BoundedRasterRegion by the
-    // provider — never claimed as native.
+    // Qt offers no true random-access tile decode. Evidence-backed bounded
+    // handlers are declared separately through sourceRegionBehavior().
     return false;
+}
+
+mviewer::core::SourceRegionBehavior QtDecoder::sourceRegionBehavior(const std::string &path) const
+{
+    const QString ext =
+        QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
+    // Qt's JPEG handler has an evidence-backed clipped scanline path. It may
+    // walk entropy data before the ROI, but it does not materialize the whole
+    // RGB raster and returns the exact current 8-bit analysis pixels.
+    if (ext == "jpg" || ext == "jpeg")
+        return mviewer::core::SourceRegionBehavior::BoundedSourcePixels;
+#if defined(Q_OS_WIN)
+    // The M53 WIC adapter clips before CopyPixels. Rotated TIFF falls through
+    // to Qt and therefore cannot make the same memory claim.
+    if (ext == "tif" || ext == "tiff")
+    {
+        QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
+        if (reader.transformation() == QImageIOHandler::TransformationNone)
+            return mviewer::core::SourceRegionBehavior::BoundedSourcePixels;
+    }
+#endif
+    // PNG/BMP and optional Qt plugins have no proven bounded exact-source
+    // region path. Display may still attempt them, but measurement must reject
+    // the FullDecodeCrop classification.
+    return mviewer::core::SourceRegionBehavior::MayMaterializeFullRaster;
 }
 
 ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
@@ -430,8 +455,8 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
         return ImageData();
     if (outMeta.filePath.empty())
         outMeta.filePath = path;
-    outMeta.fileSize = QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size())))
-                           .size();
+    outMeta.fileSize =
+        QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).size();
 
 #if defined(Q_OS_WIN)
     if (isTiffPath(path) && reader.transformation() == QImageIOHandler::TransformationNone)
@@ -441,8 +466,8 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
         const double ratio = static_cast<double>(requestedEdge) / sourceEdge;
         const QSize target(std::max(1, static_cast<int>(std::lround(full.width() * ratio))),
                            std::max(1, static_cast<int>(std::lround(full.height() * ratio))));
-        const QImage img = decodeTiffWic(path, QRect(0, 0, full.width(), full.height()), target,
-                                         outMeta);
+        const QImage img =
+            decodeTiffWic(path, QRect(0, 0, full.width(), full.height()), target, outMeta);
         if (!img.isNull())
             return toImageData(img);
         return ImageData();
@@ -451,10 +476,9 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
 
     if (full.width() > maxEdge || full.height() > maxEdge)
     {
-        const double ratio = static_cast<double>(maxEdge) /
-                             std::max(full.width(), full.height());
-        reader.setScaledSize(QSize(static_cast<int>(full.width() * ratio),
-                                   static_cast<int>(full.height() * ratio)));
+        const double ratio = static_cast<double>(maxEdge) / std::max(full.width(), full.height());
+        reader.setScaledSize(
+            QSize(static_cast<int>(full.width() * ratio), static_cast<int>(full.height() * ratio)));
     }
     const QImage img = reader.read();
     if (img.isNull())
@@ -473,9 +497,8 @@ ImageData QtDecoder::decodeLod(const std::string &path, int maxEdge,
     return toImageData(img);
 }
 
-ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, int h,
-                                  int targetW, int targetH,
-                                  mviewer::domain::ImageMetadata &meta) const
+ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, int h, int targetW,
+                                  int targetH, mviewer::domain::ImageMetadata &meta) const
 {
     QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     reader.setAutoTransform(true);
@@ -492,8 +515,8 @@ ImageData QtDecoder::decodeRegion(const std::string &path, int x, int y, int w, 
         const int y1 = std::min(full.height(), y + h);
         if (x1 <= x0 || y1 <= y0 || targetW <= 0 || targetH <= 0)
             return ImageData();
-        const QImage img = decodeTiffWic(path, QRect(x0, y0, x1 - x0, y1 - y0),
-                                         QSize(targetW, targetH), meta);
+        const QImage img =
+            decodeTiffWic(path, QRect(x0, y0, x1 - x0, y1 - y0), QSize(targetW, targetH), meta);
         return toImageData(img);
     }
 #endif

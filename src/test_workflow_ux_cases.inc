@@ -357,8 +357,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "post-construction setOpenOnLaunch syncs SelectionModel.currentImage");
     CHECK(viewer && viewer->isVisible(),
           "post-construction setOpenOnLaunch makes ImageViewer visible");
-    CHECK(viewer && (viewer->isFullScreen() ||
-                     viewer->property("mviewerFullscreenRequested").toBool()),
+    CHECK(viewer &&
+              (viewer->isFullScreen() || viewer->property("mviewerFullscreenRequested").toBool()),
           "Browse open requests fullscreen before the first viewer presentation");
     CHECK(viewer && viewer->frame(), "post-construction setOpenOnLaunch decodes a frame within 5s");
     CHECK(zoomInAction && zoomOutAction && zoomFitAction && zoomActualAction &&
@@ -508,8 +508,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         viewer->hide();
         thumbnailPanel->selectPath(thumbnailPanel->pathList().last());
         pump(50);
-        const QModelIndex index = thumbnailPanel->model()->index(
-            thumbnailPanel->pathList().size() - 1, 0);
+        const QModelIndex index =
+            thumbnailPanel->model()->index(thumbnailPanel->pathList().size() - 1, 0);
         const QRect itemRect = thumbnailPanel->visualRect(index);
         CHECK(itemRect.isValid() && itemRect.width() > 0 && itemRect.height() > 0,
               "distant thumbnail remains addressable after scrolling into view");
@@ -522,8 +522,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             QMouseEvent release(QEvent::MouseButtonRelease, QPointF(point), Qt::LeftButton,
                                 Qt::NoButton, Qt::NoModifier);
             QApplication::sendEvent(thumbnailPanel->viewport(), &release);
-            QMouseEvent doubleClick(QEvent::MouseButtonDblClick, QPointF(point),
-                                    Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QMouseEvent doubleClick(QEvent::MouseButtonDblClick, QPointF(point), Qt::LeftButton,
+                                    Qt::LeftButton, Qt::NoModifier);
             QApplication::sendEvent(thumbnailPanel->viewport(), &doubleClick);
             QElapsedTimer openTimer;
             openTimer.start();
@@ -542,13 +542,12 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             // slower CI runner the frame may therefore still be null. Reopen
             // through the same real double-click path before keyboard
             // navigation/zoom assertions instead of depending on decode speed.
-            QMouseEvent reopen(QEvent::MouseButtonDblClick, QPointF(point),
-                               Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QMouseEvent reopen(QEvent::MouseButtonDblClick, QPointF(point), Qt::LeftButton,
+                               Qt::LeftButton, Qt::NoModifier);
             QApplication::sendEvent(thumbnailPanel->viewport(), &reopen);
             QElapsedTimer reopenTimer;
             reopenTimer.start();
-            while ((!viewer->isVisible() || !viewer->frame()) &&
-                   reopenTimer.elapsed() < 5000)
+            while ((!viewer->isVisible() || !viewer->frame()) && reopenTimer.elapsed() < 5000)
                 pump(25);
             CHECK(viewer->isVisible() && viewer->frame(),
                   "Browse workflow reopens a decoded Viewer after the ESC regression check");
@@ -575,12 +574,14 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         };
         galleryClick(0, Qt::NoModifier);
         CHECK(thumbnailPanel->selectedPaths().size() == 1 &&
-                  thumbnailPanel->selectedPaths().contains(paths[0]) && sel->selection().size() == 1,
+                  thumbnailPanel->selectedPaths().contains(paths[0]) &&
+                  sel->selection().size() == 1,
               "M49: plain gallery click selects one image through the real view");
         galleryClick(2, Qt::ControlModifier);
         CHECK(thumbnailPanel->selectedPaths().size() == 2 &&
                   thumbnailPanel->selectedPaths().contains(paths[0]) &&
-                  thumbnailPanel->selectedPaths().contains(paths[2]) && sel->selection().size() == 2,
+                  thumbnailPanel->selectedPaths().contains(paths[2]) &&
+                  sel->selection().size() == 2,
               "M49: Ctrl+click toggles a second image into the SSOT selection");
         galleryClick(4, Qt::ShiftModifier);
         CHECK(thumbnailPanel->selectedPaths().size() >= 4 && sel->selection().size() >= 4 &&
@@ -731,8 +732,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             // wait for the observable clipboard result instead.
             QElapsedTimer clipboardTimer;
             clipboardTimer.start();
-            while (QApplication::clipboard()->image().isNull() &&
-                   clipboardTimer.elapsed() < 5000)
+            while (QApplication::clipboard()->image().isNull() && clipboardTimer.elapsed() < 5000)
                 pump(25);
             CHECK(!QApplication::clipboard()->image().isNull(),
                   "Ctrl+C copies the current image to the clipboard");
@@ -858,23 +858,23 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
 
                 if (toggleAction && overlay && hist)
                 {
-                    const int64_t srcPixels =
-                        viewer->frame()
-                            ? static_cast<int64_t>(viewer->frame()->width()) *
-                                  viewer->frame()->height()
-                            : 0;
+                    const int64_t srcPixels = viewer->frame()
+                                                  ? static_cast<int64_t>(viewer->frame()->width()) *
+                                                        viewer->frame()->height()
+                                                  : 0;
                     {
                         AnalysisBlocker blocker;
                         {
                             QElapsedTimer t;
                             t.start();
-                            while (sched.metrics(TaskScheduler::PoolType::AnalysisPool)
-                                       .active_tasks < 1 &&
-                                   t.elapsed() < 5000)
+                            while (
+                                sched.metrics(TaskScheduler::PoolType::AnalysisPool).active_tasks <
+                                    1 &&
+                                t.elapsed() < 5000)
                                 pump(10);
                         }
-                        CHECK(sched.metrics(TaskScheduler::PoolType::AnalysisPool)
-                                  .active_tasks >= 1,
+                        CHECK(sched.metrics(TaskScheduler::PoolType::AnalysisPool).active_tasks >=
+                                  1,
                               "metadata gate: blocker occupies the single Analysis worker");
 
                         const uint64_t submittedBefore =
@@ -945,10 +945,9 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                           "metadata gate: the new image schedules exactly one fresh batch");
                     const long targetTotal = hist->histogramTotal(0);
                     const int64_t targetPixels =
-                        viewer->frame()
-                            ? static_cast<int64_t>(viewer->frame()->width()) *
-                                  viewer->frame()->height()
-                            : 0;
+                        viewer->frame() ? static_cast<int64_t>(viewer->frame()->width()) *
+                                              viewer->frame()->height()
+                                        : 0;
                     CHECK(targetTotal == targetPixels && targetTotal != srcTotal,
                           "metadata gate: fresh histogram has the new dimensions");
 
@@ -977,9 +976,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                 // The requested property is the production fullscreen contract;
                 // native state remains a best-effort side effect on real screens.
                 const auto viewerFullscreenRequested = [&]()
-                {
-                    return viewer->property("mviewerFullscreenRequested").toBool();
-                };
+                { return viewer->property("mviewerFullscreenRequested").toBool(); };
                 if (viewerFullscreenRequested() || viewer->isFullScreen())
                 {
                     sendKey(&w, Qt::Key_F);
@@ -1032,8 +1029,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         w.statusBar()->clearMessage();
         sendKey(&w, Qt::Key_C);
         pump(100);
-        CHECK(w.statusBar()->currentMessage().contains(
-                  QStringLiteral("需要至少两张图片才能比较")),
+        CHECK(w.statusBar()->currentMessage().contains(QStringLiteral("需要至少两张图片才能比较")),
               "Compare keyboard command explains why a single-image folder cannot compare");
         bool compareOpened = false;
         for (QWidget *top : QApplication::topLevelWidgets())
@@ -1213,7 +1209,8 @@ void workflow3_session_restore(const QString &dirPath, const QString &imagePath)
 
     QFile::remove(recoveryPath);
     QSettings().clear();
-    const QString configPath = mviewer::runtime::writableDirectory(QStandardPaths::AppConfigLocation);
+    const QString configPath =
+        mviewer::runtime::writableDirectory(QStandardPaths::AppConfigLocation);
     if (!configPath.isEmpty())
         QDir(configPath).removeRecursively();
 }
@@ -1384,10 +1381,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     bool blinkStopGeometry = false;
     bool blinkStopFit = false;
     waitForGridPaneFit(blinkStopGeometry, blinkStopFit);
-    CHECK(blinkStopGeometry,
-          "O to B to stopping Blink restores visible geometry for both panes");
-    CHECK(blinkStopFit,
-          "O to B to stopping Blink restores a valid Fit ratio for both panes");
+    CHECK(blinkStopGeometry, "O to B to stopping Blink restores visible geometry for both panes");
+    CHECK(blinkStopFit, "O to B to stopping Blink restores a valid Fit ratio for both panes");
 
     sendKey(ws, Qt::Key_B);
     pump(30);
@@ -1408,8 +1403,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     bool gridPanesHaveGeometry = false;
     bool gridPanesHaveFit = false;
     waitForGridPaneFit(gridPanesHaveGeometry, gridPanesHaveFit);
-    CHECK(gridPanesHaveGeometry,
-          "Canvas to Grid restores visible geometry for both compare panes");
+    CHECK(gridPanesHaveGeometry, "Canvas to Grid restores visible geometry for both compare panes");
     CHECK(gridPanesHaveFit,
           "Canvas to Grid restores a valid Fit display ratio for both compare panes");
 
@@ -1453,8 +1447,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
               "resize workflow: Fit starts at a relative zoom ratio of one");
 
         dlg.resize(smallerDialogSize);
-        CHECK(waitForPaneGeometry(),
-              "resize workflow: Fit resize settles both pane geometries");
+        CHECK(waitForPaneGeometry(), "resize workflow: Fit resize settles both pane geometries");
         CHECK(qAbs(paneFitRatio(resizePane0) - 1.0) < 0.05 &&
                   qAbs(paneFitRatio(resizePane1) - 1.0) < 0.05,
               "resize workflow: Fit follows the new pane geometry without zoom drift");
@@ -1472,8 +1465,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
               "resize workflow: real wheel zoom establishes one shared relative ratio");
 
         dlg.resize(originalDialogSize);
-        CHECK(waitForPaneGeometry(),
-              "resize workflow: zoomed resize settles both pane geometries");
+        CHECK(waitForPaneGeometry(), "resize workflow: zoomed resize settles both pane geometries");
         CHECK(qAbs(paneFitRatio(resizePane0) - zoomRatioBeforeResize) < 0.05 &&
                   qAbs(paneFitRatio(resizePane1) - zoomRatioBeforeResize) < 0.05,
               "resize workflow: zoomed resize preserves the shared Fit-relative ratio");
@@ -1634,9 +1626,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         if (!pane0 || !pane1)
             return;
         auto renderCount = [](RawImageView *v)
-        {
-            return v->property("baseSurfaceRenderCount").toULongLong();
-        };
+        { return v->property("baseSurfaceRenderCount").toULongLong(); };
         {
             QElapsedTimer t;
             t.start();
@@ -1791,8 +1781,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
             CHECK(qAbs(pane0->scale() - 50.0) < 1e-9,
                   "wheel gate: sync wheel zoom clamps to the 50x ceiling");
             const QPointF limOff = pane0->offset();
-            const quint64 ceilingRenders =
-                pane0->property("baseSurfaceRenderCount").toULongLong();
+            const quint64 ceilingRenders = pane0->property("baseSurfaceRenderCount").toULongLong();
             CHECK(wheelDrift(120) < 0.2,
                   "wheel gate: further wheel at the ceiling keeps the anchor");
             CHECK(qAbs(pane0->scale() - 50.0) < 1e-9 && pane0->offset() == limOff,
@@ -1803,10 +1792,9 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
             // Zero wheel delta is ignored: no transform change, no repaint request.
             const double scaleBefore = pane0->scale();
             const QPointF offBefore = pane0->offset();
-            const quint64 rendersBefore =
-                pane0->property("baseSurfaceRenderCount").toULongLong();
-            QWheelEvent zev(QPointF(cursor), pane0->mapToGlobal(cursor), QPoint(0, 0),
-                            QPoint(0, 0), Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
+            const quint64 rendersBefore = pane0->property("baseSurfaceRenderCount").toULongLong();
+            QWheelEvent zev(QPointF(cursor), pane0->mapToGlobal(cursor), QPoint(0, 0), QPoint(0, 0),
+                            Qt::NoButton, Qt::NoModifier, Qt::NoScrollPhase, false);
             QApplication::sendEvent(pane0, &zev);
             pump(30);
             CHECK(pane0->scale() == scaleBefore && pane0->offset() == offBefore,
@@ -1993,9 +1981,10 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
                 const uint8_t finalThreshold = 180;
                 const ImageData basePx = ws->engine().imageAt(targetBase)->pixels();
                 const ImageData tgtPx = ws->engine().imageAt(0)->pixels();
-                const auto expectedHeat = [&](uint8_t t) {
-                    return mvcore::toQImage(DifferenceEngine::heatMap(
-                        DifferenceEngine::applyThreshold(
+                const auto expectedHeat = [&](uint8_t t)
+                {
+                    return mvcore::toQImage(
+                        DifferenceEngine::heatMap(DifferenceEngine::applyThreshold(
                             DifferenceEngine::differenceMap(tgtPx, basePx), t)));
                 };
                 const QImage expectedBaseline = expectedHeat(200);
@@ -2057,8 +2046,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
                     gateReleased = true;
                 }
                 gateCv.notify_all();
-                CHECK(sched.drain(TaskScheduler::PoolType::AnalysisPool,
-                                  std::chrono::seconds(15)),
+                CHECK(sched.drain(TaskScheduler::PoolType::AnalysisPool, std::chrono::seconds(15)),
                       "gate test: Analysis pool drains after the gate release");
                 {
                     QElapsedTimer t;
@@ -2138,13 +2126,13 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
             std::mutex gateMtx;
             std::condition_variable gateCv;
             bool gateReleased = false;
-            auto blocker = sched.submit(
-                TaskScheduler::Priority::Analysis,
-                [&gateMtx, &gateCv, &gateReleased](const TaskScheduler::TaskContext &)
-                {
-                    std::unique_lock<std::mutex> lk(gateMtx);
-                    gateCv.wait(lk, [&gateReleased] { return gateReleased; });
-                });
+            auto blocker =
+                sched.submit(TaskScheduler::Priority::Analysis,
+                             [&gateMtx, &gateCv, &gateReleased](const TaskScheduler::TaskContext &)
+                             {
+                                 std::unique_lock<std::mutex> lk(gateMtx);
+                                 gateCv.wait(lk, [&gateReleased] { return gateReleased; });
+                             });
             struct ReleaseGateGuard
             {
                 std::mutex &mtx;
@@ -2188,8 +2176,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
                 gateReleased = true;
             }
             gateCv.notify_all();
-            CHECK(sched.drain(TaskScheduler::PoolType::AnalysisPool,
-                              std::chrono::seconds(15)),
+            CHECK(sched.drain(TaskScheduler::PoolType::AnalysisPool, std::chrono::seconds(15)),
                   "display gate: Analysis pool drains after the gate release");
             {
                 QElapsedTimer t;
@@ -2285,8 +2272,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
 
             const QPoint sourcePoint(20, 24);
             const QPointF mapped = linkPane0->sourcePointToWidget(sourcePoint);
-            CHECK(mapped.x() >= 0.0 && mapped.x() <= linkPane0->width() &&
-                      mapped.y() >= 0.0 && mapped.y() <= linkPane0->height(),
+            CHECK(mapped.x() >= 0.0 && mapped.x() <= linkPane0->width() && mapped.y() >= 0.0 &&
+                      mapped.y() <= linkPane0->height(),
                   "pixel-link gate: source marker maps inside the pane using sourceSize");
             CHECK(sourcePoint.x() < linkPane0->sourceSize().width() &&
                       sourcePoint.y() < linkPane0->sourceSize().height(),
@@ -2299,9 +2286,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
                       qRound(linkPane0->linkMarkers().first().y()) == sourcePoint.y(),
                   "pixel-link gate: real click stores the source-space marker, not LOD coords");
             const int linkBaseIndex = ws->buildReportBundle().referenceIndex;
-            const QString expectedLinkDelta =
-                linkBaseIndex == 0 ? QStringLiteral("Δ(-160,0,160)")
-                                   : QStringLiteral("Δ(160,0,-160)");
+            const QString expectedLinkDelta = linkBaseIndex == 0 ? QStringLiteral("Δ(-160,0,160)")
+                                                                 : QStringLiteral("Δ(160,0,-160)");
             CHECK(linkInfo->toolTip().contains(QStringLiteral("[0] RGB(200,40,40)")) &&
                       linkInfo->toolTip().contains(QStringLiteral("[1] RGB(40,40,200)")) &&
                       linkInfo->toolTip().contains(expectedLinkDelta),
@@ -2328,11 +2314,10 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     // state. Controls from the previous successful pair must not remain
     // clickable while the async batch is loading or after both requests fail.
     const QString missingStem =
-        QDir(QDir::tempPath()).filePath(QStringLiteral("mviewer-workflow-missing-%1")
-                                            .arg(QString::number(
-                                                reinterpret_cast<quintptr>(ws), 16)));
-    ws->setImages({missingStem + QStringLiteral("-a.png"),
-                   missingStem + QStringLiteral("-b.png")});
+        QDir(QDir::tempPath())
+            .filePath(QStringLiteral("mviewer-workflow-missing-%1")
+                          .arg(QString::number(reinterpret_cast<quintptr>(ws), 16)));
+    ws->setImages({missingStem + QStringLiteral("-a.png"), missingStem + QStringLiteral("-b.png")});
     CHECK(!blink->isEnabled() && analyzeButton && !analyzeButton->isEnabled() &&
               exportReportButton && !exportReportButton->isEnabled(),
           "Compare loading state disables image-dependent actions immediately");
@@ -2340,15 +2325,12 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     failedLoadTimer.start();
     while (ws->comparedImageCount() != 0 && failedLoadTimer.elapsed() < 5000)
         pump(25);
-    CHECK(ws->comparedImageCount() == 0,
-          "failed Compare load settles with no usable panes");
+    CHECK(ws->comparedImageCount() == 0, "failed Compare load settles with no usable panes");
     CHECK(!blink->isEnabled() && analyzeButton && !analyzeButton->isEnabled() &&
               exportReportButton && !exportReportButton->isEnabled(),
           "failed Compare load disables image-dependent actions");
-    QWidget *failedLoadPage =
-        ws->findChild<QWidget *>(QStringLiteral("compareLoadingPage"));
-    QLabel *failedLoadLabel =
-        ws->findChild<QLabel *>(QStringLiteral("compareLoadingLabel"));
+    QWidget *failedLoadPage = ws->findChild<QWidget *>(QStringLiteral("compareLoadingPage"));
+    QLabel *failedLoadLabel = ws->findChild<QLabel *>(QStringLiteral("compareLoadingLabel"));
     QProgressBar *failedLoadProgress =
         ws->findChild<QProgressBar *>(QStringLiteral("compareLoadingProgress"));
     CHECK(failedLoadPage && failedLoadPage->isVisible() && failedLoadLabel &&
@@ -2431,8 +2413,8 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
         if (pixelLink && linkPane)
         {
             const QPoint paneCenter = linkPane->rect().center();
-            QMouseEvent focusDbl(QEvent::MouseButtonDblClick, QPointF(paneCenter),
-                                 Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QMouseEvent focusDbl(QEvent::MouseButtonDblClick, QPointF(paneCenter), Qt::LeftButton,
+                                 Qt::LeftButton, Qt::NoModifier);
             QApplication::sendEvent(linkPane, &focusDbl);
             pump(50);
             CHECK(sel->selection() == expectedSelection,
@@ -2473,9 +2455,8 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
         navDir.removeRecursively();
     CHECK(QDir().mkpath(navDirPath), "non-first navigation creates an isolated six-image folder");
 
-    const QList<QColor> colors = {QColor(210, 40, 40), QColor(40, 210, 40),
-                                  QColor(40, 40, 210),  QColor(210, 210, 40),
-                                  QColor(40, 210, 210),  QColor(210, 40, 210)};
+    const QList<QColor> colors = {QColor(210, 40, 40),  QColor(40, 210, 40),  QColor(40, 40, 210),
+                                  QColor(210, 210, 40), QColor(40, 210, 210), QColor(210, 40, 210)};
     QStringList paths;
     for (int i = 0; i < colors.size(); ++i)
         paths << writePng(navDir, QStringLiteral("nav_%1.png").arg(i, 3, 10, QChar('0')),
@@ -2541,8 +2522,8 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     pump(300);
 
     QDialog *compareDialog = w.findChild<QDialog *>("compareDialog");
-    CompareWorkspace *compare = compareDialog ? compareDialog->findChild<CompareWorkspace *>() :
-                                                 nullptr;
+    CompareWorkspace *compare =
+        compareDialog ? compareDialog->findChild<CompareWorkspace *>() : nullptr;
     CHECK(compareDialog && compareDialog->isVisible() && compare,
           "non-first navigation opens the real Compare workspace");
 
@@ -2645,8 +2626,7 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     compare = compareDialog ? compareDialog->findChild<CompareWorkspace *>() : nullptr;
     CHECK(compareDialog && compareDialog->isVisible() && compare,
           "re-entering Compare after browsing opens the real workspace");
-    CHECK(waitForPair(lastPair),
-          "re-entering Compare after exit keeps the final A/B pair");
+    CHECK(waitForPair(lastPair), "re-entering Compare after exit keeps the final A/B pair");
     if (compareDialog && compareDialog->isVisible())
         sendKey(compareDialog, Qt::Key_Escape);
     pump(50);
@@ -2672,10 +2652,10 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
           "report workflow creates its isolated large-image fixture directory");
 
     constexpr int kLargeEdge = 4096;
-    const QString pathA = writePng(reportDir, QStringLiteral("report_a.png"),
-                                   QColor(180, 40, 40), kLargeEdge, kLargeEdge);
-    const QString pathB = writePng(reportDir, QStringLiteral("report_b.png"),
-                                   QColor(40, 40, 180), kLargeEdge, kLargeEdge);
+    const QString pathA = writePng(reportDir, QStringLiteral("report_a.png"), QColor(180, 40, 40),
+                                   kLargeEdge, kLargeEdge);
+    const QString pathB = writePng(reportDir, QStringLiteral("report_b.png"), QColor(40, 40, 180),
+                                   kLargeEdge, kLargeEdge);
     CHECK(QFileInfo::exists(pathA) && QFileInfo::exists(pathB),
           "report workflow writes two same-size 4096x4096 fixtures");
 
@@ -2683,8 +2663,8 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
     QFile::remove(outputPath);
 
     auto &sched = TaskScheduler::instance();
-    const bool metadataIdle = sched.drain(TaskScheduler::PoolType::MetadataPool,
-                                          std::chrono::seconds(15));
+    const bool metadataIdle =
+        sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15));
     CHECK(metadataIdle, "report workflow starts with an idle Background pool");
 
     {
@@ -2769,8 +2749,8 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
         // it settle, then drain any MainWindow metadata debounce before the
         // release-gated Background blocker is installed.
         waitForAnalysisIdle(15000);
-        const bool idleAfterCompare = sched.drain(TaskScheduler::PoolType::MetadataPool,
-                                                  std::chrono::seconds(15));
+        const bool idleAfterCompare =
+            sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15));
         CHECK(idleAfterCompare, "report workflow drains pre-existing Background work");
 
         BackgroundBlocker blocker;
@@ -2804,8 +2784,7 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
         if (!reportButton)
         {
             blocker.release();
-            CHECK(sched.drain(TaskScheduler::PoolType::MetadataPool,
-                              std::chrono::seconds(15)),
+            CHECK(sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15)),
                   "report workflow drains Background blocker after missing export button");
             compareDialog->close();
             w.close();
@@ -2819,8 +2798,7 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
         std::atomic<bool> watchdogSawHeartbeat{false};
         QTimer heartbeat;
         heartbeat.setInterval(1);
-        QObject::connect(&heartbeat, &QTimer::timeout, &heartbeat,
-                         [&heartbeatTicks]()
+        QObject::connect(&heartbeat, &QTimer::timeout, &heartbeat, [&heartbeatTicks]()
                          { heartbeatTicks.fetch_add(1, std::memory_order_relaxed); });
         heartbeat.start();
 
@@ -2841,16 +2819,16 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
                                  dialog->selectFile(outputPath);
                                  dialogPoll.stop();
                                  QPointer<QFileDialog> guard(dialog);
-                                 QTimer::singleShot(
-                                     300, dialog,
-                                     [guard, &saveDialogAccepted]()
-                                     {
-                                         if (!guard)
-                                             return;
-                                         saveDialogAccepted = true;
-                                         QMetaObject::invokeMethod(guard.data(), "accept",
-                                                                   Qt::DirectConnection);
-                                     });
+                                 QTimer::singleShot(300, dialog,
+                                                    [guard, &saveDialogAccepted]()
+                                                    {
+                                                        if (!guard)
+                                                            return;
+                                                        saveDialogAccepted = true;
+                                                        QMetaObject::invokeMethod(
+                                                            guard.data(), "accept",
+                                                            Qt::DirectConnection);
+                                                    });
                                  return;
                              }
                          });
@@ -2932,7 +2910,7 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
                 QProgressDialog::staticMetaObject.indexOfSignal("canceled()");
             if (canceledSignal >= 0)
                 QMetaObject::activate(progress.data(), &QProgressDialog::staticMetaObject,
-                                       canceledSignal, nullptr);
+                                      canceledSignal, nullptr);
         }
         if (reportHandle)
             TaskScheduler::cancel(reportHandle);
@@ -2941,8 +2919,8 @@ void workflow13_compare_report_export_nonblocking(const QString &rootDir)
         CHECK(progress && progress->wasCanceled(),
               "report progress records cancellation from its real cancel state");
         blocker.release();
-        const bool drained = sched.drain(TaskScheduler::PoolType::MetadataPool,
-                                          std::chrono::seconds(15));
+        const bool drained =
+            sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15));
         CHECK(drained, "report cancellation drains the Background pool");
 
         CHECK(!QFileInfo::exists(outputPath),
@@ -2998,10 +2976,10 @@ void workflow12_compare_mixed_fit(const QString &dirPath)
     CHECK(pane0 && pane1, "mixed-fit workflow exposes both panes");
     if (pane0 && pane1)
     {
-        const double fit0 = std::min(double(pane0->width()) / 800.0,
-                                     double(pane0->height()) / 100.0);
-        const double fit1 = std::min(double(pane1->width()) / 100.0,
-                                     double(pane1->height()) / 500.0);
+        const double fit0 =
+            std::min(double(pane0->width()) / 800.0, double(pane0->height()) / 100.0);
+        const double fit1 =
+            std::min(double(pane1->width()) / 100.0, double(pane1->height()) / 500.0);
         CHECK(qAbs(pane0->scale() - fit0) < 0.02 && qAbs(pane1->scale() - fit1) < 0.02,
               "mixed-fit workflow fits each image to its own final pane geometry");
         CHECK(qAbs(pane0->scale() / fit0 - pane1->scale() / fit1) < 0.02,
@@ -3036,12 +3014,9 @@ void workflow14_compare_loading_feedback(const QString &rootDir)
     std::cout << "── Workflow 14: compare loading feedback ──\n";
 
     QDir dir(rootDir);
-    const QString pathA =
-        writePng(dir, QStringLiteral("compare_load_a.png"), QColor(200, 40, 40));
-    const QString pathB =
-        writePng(dir, QStringLiteral("compare_load_b.png"), QColor(40, 200, 40));
-    const QString pathC =
-        writePng(dir, QStringLiteral("compare_load_c.png"), QColor(40, 40, 200));
+    const QString pathA = writePng(dir, QStringLiteral("compare_load_a.png"), QColor(200, 40, 40));
+    const QString pathB = writePng(dir, QStringLiteral("compare_load_b.png"), QColor(40, 200, 40));
+    const QString pathC = writePng(dir, QStringLiteral("compare_load_c.png"), QColor(40, 40, 200));
     auto &sched = TaskScheduler::instance();
     // Keep the gate deterministic even if this workflow is run from a harness
     // with a wider DecodePool than the normal offscreen suite. Restore the
@@ -3271,6 +3246,30 @@ void workflow10_compare_canvas(const QString &pathA, const QString &pathB)
                   qAbs(offAfter.y - (offBefore.y + p1.y() - p0.y())) < 1e-6,
               "canvas workflow: left-drag on the canvas pans the shared offset by the mouse "
               "delta");
+    }
+
+    // M61: the production canvas owns real right-button ROI creation while
+    // left-button pan/divider behavior remains unchanged. Assert the live
+    // canonical geometry before release, not only a programmatic applyROI().
+    {
+        const Vec2 offset = ws->engine().syncTransform().offset;
+        const QPoint imageCenter(canvas->width() / 4 + qRound(offset.x),
+                                 canvas->height() / 2 + qRound(offset.y));
+        const QPoint from = imageCenter - QPoint(25, 20);
+        const QPoint to = imageCenter + QPoint(35, 30);
+        QMouseEvent press(QEvent::MouseButtonPress, QPointF(from), canvas->mapToGlobal(from),
+                          Qt::RightButton, Qt::RightButton, Qt::NoModifier);
+        QApplication::sendEvent(canvas, &press);
+        QMouseEvent move(QEvent::MouseMove, QPointF(to), canvas->mapToGlobal(to), Qt::NoButton,
+                         Qt::RightButton, Qt::NoModifier);
+        QApplication::sendEvent(canvas, &move);
+        CHECK(!ws->currentROI().isEmpty(),
+              "canvas workflow: split right-drag publishes live canonical ROI before release");
+        QMouseEvent release(QEvent::MouseButtonRelease, QPointF(to), canvas->mapToGlobal(to),
+                            Qt::RightButton, Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(canvas, &release);
+        pump(20);
+        CHECK(!ws->currentROI().isEmpty(), "canvas workflow: split right-release commits the ROI");
     }
 
     // ── Canvas modes preserve the shared zoom/pan on the SAME canvas ──
@@ -4057,8 +4056,7 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
     CHECK(secondFrame && secondFrame->id().hash != firstRenderId,
           "each displayed frame has a distinct render-cache identity");
     const Viewport after = viewer.viewTransform();
-    CHECK(qAbs(after.scale - before.scale) < 1e-9 &&
-              qAbs(after.offsetX - before.offsetX) < 1e-9 &&
+    CHECK(qAbs(after.scale - before.scale) < 1e-9 && qAbs(after.offsetX - before.offsetX) < 1e-9 &&
               qAbs(after.offsetY - before.offsetY) < 1e-9,
           "frame stepping preserves zoom and pan without re-fitting");
     CHECK(viewer.windowTitle().contains(QStringLiteral("Frame 2/3")) &&
@@ -4077,22 +4075,22 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
               !frameMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
           "standalone viewer disables file navigation without a browse sequence");
 
-    viewer.setBrowseSequence({path, path + QStringLiteral(".next"),
-                              path + QStringLiteral(".last")});
+    viewer.setBrowseSequence(
+        {path, path + QStringLiteral(".next"), path + QStringLiteral(".last")});
     const ContextMenuSnapshot firstFileMenu = contextMenuSnapshot(viewer);
     CHECK(!firstFileMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
               firstFileMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
           "browse sequence disables previous navigation at the first image");
 
-    viewer.setBrowseSequence({path + QStringLiteral(".first"), path,
-                              path + QStringLiteral(".last")});
+    viewer.setBrowseSequence(
+        {path + QStringLiteral(".first"), path, path + QStringLiteral(".last")});
     const ContextMenuSnapshot middleFileMenu = contextMenuSnapshot(viewer);
     CHECK(middleFileMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
               middleFileMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
           "browse sequence enables both file directions in the middle");
 
-    viewer.setBrowseSequence({path + QStringLiteral(".first"),
-                              path + QStringLiteral(".middle"), path});
+    viewer.setBrowseSequence(
+        {path + QStringLiteral(".first"), path + QStringLiteral(".middle"), path});
     const ContextMenuSnapshot lastFileMenu = contextMenuSnapshot(viewer);
     CHECK(lastFileMenu.enabledLabels.contains(QStringLiteral("上一张 (←)")) &&
               !lastFileMenu.enabledLabels.contains(QStringLiteral("下一张 (→)")),
@@ -4147,4 +4145,3 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
 }
 
 } // namespace
-

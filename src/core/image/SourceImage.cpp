@@ -70,9 +70,9 @@ ImageData scaleNearest(const ImageData &src, int targetW, int targetH)
 
 SourceImage::SourceImage(std::string path, bool valid, mviewer::domain::ImageMetadata meta,
                          int rawW, int rawH, std::shared_ptr<IDecoder> decoder,
-                         ISourceImageCapabilities *caps)
-    : m_path(std::move(path)), m_valid(valid), m_meta(std::move(meta)), m_rawW(rawW),
-      m_rawH(rawH), m_decoder(std::move(decoder)), m_caps(caps)
+                         ISourceImageCapabilities *caps, ISourceImageRegionTruth *regionTruth)
+    : m_path(std::move(path)), m_valid(valid), m_meta(std::move(meta)), m_rawW(rawW), m_rawH(rawH),
+      m_decoder(std::move(decoder)), m_caps(caps), m_regionTruth(regionTruth)
 {
 }
 
@@ -82,6 +82,7 @@ std::shared_ptr<SourceImage> SourceImage::open(const std::string &path)
     if (!decoder)
         return nullptr;
     auto *caps = dynamic_cast<ISourceImageCapabilities *>(decoder.get());
+    auto *regionTruth = dynamic_cast<ISourceImageRegionTruth *>(decoder.get());
 
     mviewer::domain::ImageMetadata meta;
     meta.filePath = path;
@@ -127,8 +128,8 @@ std::shared_ptr<SourceImage> SourceImage::open(const std::string &path)
         rawH = meta.width;
     }
 
-    return std::shared_ptr<SourceImage>(
-        new SourceImage(path, true, std::move(meta), rawW, rawH, std::move(decoder), caps));
+    return std::shared_ptr<SourceImage>(new SourceImage(path, true, std::move(meta), rawW, rawH,
+                                                        std::move(decoder), caps, regionTruth));
 }
 
 SourceImage::RasterResult SourceImage::decodeLod(int maxEdge)
@@ -194,6 +195,18 @@ SourceImage::RasterResult SourceImage::decodeLod(int maxEdge)
     return r;
 }
 
+SourceDecodePath SourceImage::regionDecodePath() const
+{
+    if (m_caps == nullptr)
+        return SourceDecodePath::FullDecodeCrop;
+    if (m_caps->canNativeRegion(m_path))
+        return SourceDecodePath::NativeRegion;
+    if (m_regionTruth &&
+        m_regionTruth->sourceRegionBehavior(m_path) == SourceRegionBehavior::BoundedSourcePixels)
+        return SourceDecodePath::BoundedRasterRegion;
+    return SourceDecodePath::FullDecodeCrop;
+}
+
 SourceImage::RasterResult SourceImage::decodeRegion(const SourceRect &rawRect, int targetW,
                                                     int targetH)
 {
@@ -217,10 +230,11 @@ SourceImage::RasterResult SourceImage::decodeRegion(const SourceRect &rawRect, i
     const int cy = r.coveredRect.y;
     const int cw = r.coveredRect.w;
     const int ch = r.coveredRect.h;
+    const SourceDecodePath plannedPath = regionDecodePath();
 
     if (m_caps != nullptr)
     {
-        if (m_caps->canNativeRegion(m_path))
+        if (plannedPath == SourceDecodePath::NativeRegion)
         {
             r.pixels = m_caps->decodeRegion(m_path, cx, cy, cw, ch, targetW, targetH, meta);
             r.decodePath = SourceDecodePath::NativeRegion;
@@ -235,14 +249,15 @@ SourceImage::RasterResult SourceImage::decodeRegion(const SourceRect &rawRect, i
             stats.failed.fetch_add(1);
             return r;
         }
-        // Bounded-memory region (e.g. Qt clipRect): memory bounded by the
-        // region, CPU possibly full-image. NOT a true native region decode.
         r.pixels = m_caps->decodeRegion(m_path, cx, cy, cw, ch, targetW, targetH, meta);
-        r.decodePath = SourceDecodePath::BoundedRasterRegion;
-        m_lastPath = SourceDecodePath::BoundedRasterRegion;
+        r.decodePath = plannedPath;
+        m_lastPath = r.decodePath;
         if (!r.pixels.isNull())
         {
-            stats.boundedRegion.fetch_add(1);
+            if (r.decodePath == SourceDecodePath::BoundedRasterRegion)
+                stats.boundedRegion.fetch_add(1);
+            else
+                stats.fullDecodeCrop.fetch_add(1);
             r.metadata = std::move(meta);
             r.ok = true;
             return r;

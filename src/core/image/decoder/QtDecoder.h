@@ -22,7 +22,9 @@
 //   * canNativeRegion— false: decodeRegion() uses the bounded WIC clip path
 //                      for TIFF and is classified BoundedRasterRegion by the
 //                      provider; Qt offers no true random-access tile claim.
-class QtDecoder : public IDecoder, public mviewer::core::ISourceImageCapabilities
+class QtDecoder : public IDecoder,
+                  public mviewer::core::ISourceImageCapabilities,
+                  public mviewer::core::ISourceImageRegionTruth
 {
   public:
     bool canDecode(const std::string &path) const override;
@@ -44,6 +46,8 @@ class QtDecoder : public IDecoder, public mviewer::core::ISourceImageCapabilitie
                        mviewer::domain::ImageMetadata &meta) const override;
     bool canNativeLod(const std::string &path) const override;
     bool canNativeRegion(const std::string &path) const override;
+    mviewer::core::SourceRegionBehavior
+    sourceRegionBehavior(const std::string &path) const override;
     ImageData decodeLod(const std::string &path, int maxEdge,
                         mviewer::domain::ImageMetadata &meta) const override;
     ImageData decodeRegion(const std::string &path, int x, int y, int w, int h, int targetW,

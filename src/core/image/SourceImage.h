@@ -18,29 +18,28 @@ namespace mviewer::core
 // whether a "no full materialization" claim is true.
 enum class SourceDecodePath
 {
-    ProbeMetadata,      // metadata only, no pixels
-    NativeLod,          // backend reduced-resolution decode (no full raster)
-    NativeRegion,       // backend true random-access region decode
-    BoundedRasterRegion, // bounded-memory partial raster during decode (e.g. Qt
-                         // clipRect: memory bounded by the region, CPU may be
-                         // full-image) — NOT a true native region decode
-    FullDecodeScaled,   // full decode then client-scale (fallback LOD)
-    FullDecodeCrop      // full decode then client-crop (fallback region)
+    ProbeMetadata,       // metadata only, no pixels
+    NativeLod,           // backend reduced-resolution decode (no full raster)
+    NativeRegion,        // backend true random-access region decode
+    BoundedRasterRegion, // decoder explicitly guarantees bounded-memory partial raster;
+                         // CPU may still be full-image — NOT true native region decode
+    FullDecodeScaled,    // full decode then client-scale (fallback LOD)
+    FullDecodeCrop       // full decode then client-crop (fallback region)
 };
 
 // Thread-safe, process-wide instrumentation proving which paths ran. Empty in
 // production; tests read the counters (M46-style instrumentation pattern).
 struct SourceDecodeCounters
 {
-    std::atomic<uint64_t> probe{0};          // metadata probes (any mechanism)
-    std::atomic<uint64_t> nativeLod{0};      // NativeLod classifications
-    std::atomic<uint64_t> nativeRegion{0};   // NativeRegion classifications
-    std::atomic<uint64_t> boundedRegion{0};  // BoundedRasterRegion classifications
-    std::atomic<uint64_t> fullDecodeScaled{0}; // FullDecodeScaled classifications
-    std::atomic<uint64_t> fullDecodeCrop{0};   // FullDecodeCrop classifications
-    std::atomic<uint64_t> fullDecode{0};       // actual full-resolution decodes
-                                               // that ran (decodeFull calls)
-    std::atomic<uint64_t> failed{0};           // failed operations
+    std::atomic<uint64_t> probe{0};                // metadata probes (any mechanism)
+    std::atomic<uint64_t> nativeLod{0};            // NativeLod classifications
+    std::atomic<uint64_t> nativeRegion{0};         // NativeRegion classifications
+    std::atomic<uint64_t> boundedRegion{0};        // BoundedRasterRegion classifications
+    std::atomic<uint64_t> fullDecodeScaled{0};     // FullDecodeScaled classifications
+    std::atomic<uint64_t> fullDecodeCrop{0};       // FullDecodeCrop classifications
+    std::atomic<uint64_t> fullDecode{0};           // actual full-resolution decodes
+                                                   // that ran (decodeFull calls)
+    std::atomic<uint64_t> failed{0};               // failed operations
     std::atomic<uint64_t> fallbackNoCapability{0}; // provider fallback path used
                                                    // (decoder without the interface)
 
@@ -130,6 +129,9 @@ class SourceImage
     {
         return m_caps != nullptr && m_caps->canNativeRegion(m_path);
     }
+    // Preflight classification. Exact-source consumers can reject an unproven
+    // path before decodeRegion() is allowed to materialize any pixels.
+    SourceDecodePath regionDecodePath() const;
     bool hasCapabilities() const
     {
         return m_caps != nullptr;
@@ -162,10 +164,10 @@ class SourceImage
     {
         bool ok = false;
         SourceDecodePath decodePath = SourceDecodePath::ProbeMetadata;
-        ImageData pixels;                    // never the full source unless explicitly asked
+        ImageData pixels;                        // never the full source unless explicitly asked
         mviewer::domain::ImageMetadata metadata; // complete as of THIS decode (ICC, orientation,
                                                  // dims); independent of the live probe metadata
-        SourceRect coveredRect;              // in `space` coordinates
+        SourceRect coveredRect;                  // in `space` coordinates
         SourceCoordinateSpace space = SourceCoordinateSpace::Raw;
     };
 
@@ -175,11 +177,10 @@ class SourceImage
     // raw source; space = Raw.
     RasterResult decodeLod(int maxEdge);
 
-    // Bounded region decode of the RAW source rect (pre-EXIF coordinates),
-    // EXIF-applied output scaled to (targetW,targetH). Exact pixel values are
-    // only guaranteed when hasNativeRegion(); otherwise the result is a
-    // display representation (see RFC) — exact-source consumers must NOT use
-    // this path. Result.coveredRect is the clamped raw rect; space = Raw.
+    // Region decode of the RAW source rect (pre-EXIF coordinates), EXIF-applied
+    // and scaled to (targetW,targetH). Exact-source consumers accept this only
+    // when decodePath is NativeRegion or BoundedRasterRegion; FullDecodeCrop
+    // means the decoder did not guarantee bounded materialization.
     RasterResult decodeRegion(const SourceRect &rawRect, int targetW, int targetH);
 
     // The classification recorded by the most recent decodeLod/decodeRegion.
@@ -195,15 +196,17 @@ class SourceImage
 
   private:
     SourceImage(std::string path, bool valid, mviewer::domain::ImageMetadata meta, int rawW,
-                int rawH, std::shared_ptr<IDecoder> decoder, ISourceImageCapabilities *caps);
+                int rawH, std::shared_ptr<IDecoder> decoder, ISourceImageCapabilities *caps,
+                ISourceImageRegionTruth *regionTruth);
 
     std::string m_path;
     bool m_valid = false;
     mviewer::domain::ImageMetadata m_meta;
     int m_rawW = 0;
     int m_rawH = 0;
-    std::shared_ptr<IDecoder> m_decoder; // keeps the decoder alive (may be null)
-    ISourceImageCapabilities *m_caps = nullptr; // owned by m_decoder when set
+    std::shared_ptr<IDecoder> m_decoder;              // keeps the decoder alive (may be null)
+    ISourceImageCapabilities *m_caps = nullptr;       // owned by m_decoder when set
+    ISourceImageRegionTruth *m_regionTruth = nullptr; // owned by m_decoder when set
     SourceDecodePath m_lastPath = SourceDecodePath::ProbeMetadata;
 };
 

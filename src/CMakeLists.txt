@@ -1580,6 +1580,27 @@ target_include_directories(m60_linked_roi_tests PRIVATE ${CMAKE_CURRENT_SOURCE_D
 add_test(NAME m60_linked_roi_tests COMMAND m60_linked_roi_tests)
 set_tests_properties(m60_linked_roi_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
+# M61: real Grid/Canvas right-drag, editable ROI, HUD and lifecycle gate.
+add_executable(m61_roi_workflow_tests
+    test_m61_roi_workflow.cpp
+)
+target_link_libraries(m61_roi_workflow_tests
+    PRIVATE Qt6::Widgets Qt6::Gui Qt6::Core mviewer_core mviewer_ui
+)
+target_compile_features(m61_roi_workflow_tests PRIVATE cxx_std_20)
+target_include_directories(m61_roi_workflow_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m61_roi_workflow_tests COMMAND m61_roi_workflow_tests)
+set_tests_properties(m61_roi_workflow_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
+add_executable(m61_roi_benchmark
+    test_m61_roi_benchmark.cpp
+)
+target_link_libraries(m61_roi_benchmark PRIVATE mviewer_core Qt6::Core)
+target_compile_features(m61_roi_benchmark PRIVATE cxx_std_20)
+target_include_directories(m61_roi_benchmark PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME m61_roi_benchmark COMMAND m61_roi_benchmark)
+set_tests_properties(m61_roi_benchmark PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
 # Standalone recorder for M55 10k/50k memory and navigation evidence. It is
 # intentionally not a gate because its numbers are machine-dependent.
 add_executable(m55_interactive_baseline

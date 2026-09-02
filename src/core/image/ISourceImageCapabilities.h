@@ -36,8 +36,7 @@ class ISourceImageCapabilities
     // (and any other fields the backend can answer cheaply). Returns false when
     // the backend cannot answer (provider then falls back to the repository
     // metadata path, which never decodes pixels either).
-    virtual bool probeMetadata(const std::string &path,
-                               mviewer::domain::ImageMetadata &meta) const
+    virtual bool probeMetadata(const std::string &path, mviewer::domain::ImageMetadata &meta) const
     {
         (void)path;
         (void)meta;
@@ -78,9 +77,8 @@ class ISourceImageCapabilities
     // Region decode: the source rect (x,y,w,h) scaled to (targetW,targetH).
     // Bounded-memory when the backend supports clipping during decode; may be
     // a full-raster read otherwise. Empty ImageData on failure.
-    virtual ImageData decodeRegion(const std::string &path, int x, int y, int w, int h,
-                                   int targetW, int targetH,
-                                   mviewer::domain::ImageMetadata &meta) const
+    virtual ImageData decodeRegion(const std::string &path, int x, int y, int w, int h, int targetW,
+                                   int targetH, mviewer::domain::ImageMetadata &meta) const
     {
         (void)path;
         (void)x;
@@ -92,6 +90,21 @@ class ISourceImageCapabilities
         (void)meta;
         return ImageData{};
     }
+};
+
+// Additive truth seam for the non-native region path. Implementing the base
+// capability interface alone no longer implies bounded-memory source pixels.
+enum class SourceRegionBehavior
+{
+    BoundedSourcePixels,
+    MayMaterializeFullRaster
+};
+
+class ISourceImageRegionTruth
+{
+  public:
+    virtual ~ISourceImageRegionTruth() = default;
+    virtual SourceRegionBehavior sourceRegionBehavior(const std::string &path) const = 0;
 };
 
 } // namespace mviewer::core

@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.0.18] - 2026-09-02
+
+### Added
+
+- **Professional linked ROI workflow (M61):** linked ROI creation, move, and
+  eight-direction resize now work consistently in Grid, Split, Overlay, Swipe,
+  and Checkerboard. One half-open source-coordinate selection remains canonical
+  through mode changes, zoom, pan, fit, resize, and fullscreen transitions.
+- The ROI panel now exposes explicit lifecycle and per-pane failure states,
+  aligned source RGB statistics, filename tooltips, TSV clipboard export, and a
+  compact clickable HUD when the Analysis panel is hidden.
+
+### Fixed
+
+- ROI scans now check cancellation at row boundaries and surface scheduler
+  rejection as `Backpressured`; stale work cannot overwrite a newer ROI, clear,
+  navigation, or workspace lifetime.
+- Exact-source ROI measurement now accepts only decoder paths with an explicit
+  bounded-region guarantee. JPEG and Windows unrotated TIFF retain their proven
+  bounded paths; PNG, BMP, and unproven Qt-plugin paths report `Unsupported`
+  instead of implying a bounded decode.
+- Canvas ROI annotation repaint reuses the cached base comparison surface, so
+  pointer movement does not recomposite image pixels or submit statistics.
+
+### Verification
+
+- Added real right-button UI regressions across every Compare presentation mode,
+  interaction geometry/mapping/cancellation/source-truth tests, and a 24/60/100
+  MP ROI scan benchmark. See `docs/rfc/M61_PROFESSIONAL_LINKED_ROI_WORKFLOW.md`
+  and the M61 closure review.
+
 ## [1.0.17] - 2026-09-02
 
 ### Added

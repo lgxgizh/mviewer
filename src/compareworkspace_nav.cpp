@@ -443,7 +443,8 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
                                                   .arg(m_lastSelection.height));
         if (m_roiHistChk && m_roiHistChk->isChecked())
             refreshHistograms();
-        updateROIAvailabilityStatus();
+        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
+                               tr("Linked ROI unavailable — image dimensions differ"));
         update();
         return;
     }
@@ -519,7 +520,8 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
         clearROIStatsDisplay();
         if (m_roiGeometryLabel)
             m_roiGeometryLabel->setText(tr("ROI: —"));
-        updateROIAvailabilityStatus();
+        setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
+                               tr("Linked ROI unavailable — image dimensions differ"));
         return;
     }
 
@@ -541,7 +543,8 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
                                                       .arg(m_lastSelection.width)
                                                       .arg(m_lastSelection.height)
                                                 : tr("ROI: —"));
-    updateROIAvailabilityStatus();
+    setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle,
+                           tr("Release ROI to measure Source RGB"));
     update();
 }
 
@@ -578,7 +581,8 @@ void CompareWorkspace::applySelectionFromView(RawImageView *view,
     clearROIStatsDisplay();
     if (m_roiGeometryLabel)
         m_roiGeometryLabel->setText(tr("ROI: —"));
-    updateROIAvailabilityStatus();
+    setROIMeasurementState(mviewer::ui::ROIMeasurementState::Unsupported,
+                           tr("Linked ROI unavailable — image dimensions differ"));
     update();
 }
 
@@ -598,6 +602,6 @@ void CompareWorkspace::clearROI()
     if (m_roiHistChk && m_roiHistChk->isChecked())
         refreshHistograms();
     refreshAllDiffOverlays();
-    updateROIAvailabilityStatus();
+    setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);
     update();
 }

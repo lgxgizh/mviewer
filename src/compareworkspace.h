@@ -2,6 +2,7 @@
 
 #include "application/ImageLoadingService.h"
 #include "compareworkspace_display_planner.h"
+#include "compareworkspace_roi_types.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/ExportReport.h"
 #include "core/analysis/PixelInspector.h"
@@ -14,6 +15,7 @@
 #include "core/image/ImageBuffer.h"
 #include "core/image/ImageStats.h"
 #include "core/scheduler/TaskScheduler.h"
+#include "domain/SelectionInteraction.h"
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -73,9 +75,7 @@ class CompareWorkspace : public QWidget
     void setImages(const QStringList &paths);
     void setImages(const QStringList &paths, const QVector<int> &frameIndices);
 
-    // Presentation target snapshot.  A target change re-materializes pane
-    // rasters while preserving source frames, compare selection, and view
-    // transforms.
+    // A target change re-materializes presentation rasters only.
     void setDisplayColorContext(const mviewer::core::DisplayColorContext &target);
     const mviewer::core::DisplayColorContext &displayColorContext() const
     {
@@ -90,14 +90,13 @@ class CompareWorkspace : public QWidget
         return m_engine;
     }
 
-    // M12.1: last ROI applied to the compare cells (for Workspace persistence).
-    // Empty selection (width<=0) means no ROI was set.
+    // Last ROI applied to the compare cells; empty means unset.
     mviewer::domain::Selection currentROI() const
     {
         return m_lastSelection;
     }
 
-    // M12.1: re-apply a persisted ROI (delegates to the internal all-cells apply).
+    // Re-apply a persisted ROI.
     void applyROI(const mviewer::domain::Selection &sel)
     {
         applySelectionToAll(sel);
@@ -263,9 +262,9 @@ class CompareWorkspace : public QWidget
         std::mutex handlesMutex;
     };
     std::shared_ptr<LoadBatch> m_loadBatch;
-    static bool accountLoadRequest(
-        const std::shared_ptr<LoadBatch> &batch, size_t index,
-        const mviewer::application::ImageLoadingService::Result *result, bool countAsFailure = true);
+    static bool accountLoadRequest(const std::shared_ptr<LoadBatch> &batch, size_t index,
+                                   const mviewer::application::ImageLoadingService::Result *result,
+                                   bool countAsFailure = true);
     // M47: paths of the current load batch (parallel to pane indices) — the
     // display materialization uses them for the source-backed LOD fallback.
     std::vector<std::string> m_comparePaths;
@@ -293,15 +292,12 @@ class CompareWorkspace : public QWidget
     void schedulePostLayoutFit();
     QWidget *m_grid = nullptr;
     QGridLayout *m_layout = nullptr;
-    // M34: dedicated compare canvas page. Split / swipe / overlay / checkerboard
-    // render on this widget (never obscured by the scroll area) and it owns
-    // wheel/drag input while a canvas mode is active. The normal grid lives in
-    // the sibling compareGridPage; a stacked layout switches between the two.
     QWidget *m_compareCanvas = nullptr;
+    QImage m_canvasBaseSurface;
+    QByteArray m_canvasBaseKey;
+    quint64 m_canvasBaseRenderCount = 0;
     QWidget *m_compareGridPage = nullptr;
-    // A dedicated non-modal page covers stale/empty panes for the whole async
-    // load batch. It stays current while m_loadInFlight is true so a
-    // canvas-mode toggle cannot expose an apparently broken black grid.
+    // Non-modal loading/empty page for the current async batch.
     QWidget *m_compareLoadingPage = nullptr;
     QLabel *m_compareLoadingLabel = nullptr;
     QProgressBar *m_compareLoadingProgress = nullptr;
@@ -315,24 +311,11 @@ class CompareWorkspace : public QWidget
     int m_dragIdx = -1;
     mviewer::domain::Selection m_lastSelection; // M12.1: last applied ROI
 
-    // M60: source-coordinate linked ROI measurement. Geometry is updated on
-    // the UI thread; statistics are latest-wins Analysis-pool work.
-    struct ROIInput
-    {
-        ImageData pixels;
-        mviewer::domain::ImageMetadata metadata;
-        std::string path;
-    };
-    struct ROIStatsBatchResult
-    {
-        uint64_t generation = 0;
-        int paneCount = 0;
-        bool linked = false;
-        mviewer::domain::Selection roi;
-        std::vector<mviewer::core::ROIChannelStats> stats;
-    };
-    static mviewer::core::ROIChannelStats computeSourceROI(const ROIInput &input,
-                                                           const mviewer::domain::Selection &roi);
+    using ROIInput = mviewer::ui::ROIInput;
+    using ROIStatsBatchResult = mviewer::ui::ROIStatsBatchResult;
+    static mviewer::ui::ROIPaneMeasurement
+    computeSourceROI(const ROIInput &input, const mviewer::domain::Selection &roi,
+                     const TaskScheduler::TaskContext &context);
     static ROIStatsBatchResult computeROIStatsBatch(const std::vector<ROIInput> &inputs,
                                                     const mviewer::domain::Selection &roi,
                                                     bool linked, uint64_t generation,
@@ -344,10 +327,16 @@ class CompareWorkspace : public QWidget
     void scheduleROIMeasurement();
     void applyROIStatsBatchResult(const ROIStatsBatchResult &result);
     void clearROIStatsDisplay();
+    void setROIMeasurementState(mviewer::ui::ROIMeasurementState state, const QString &detail = {});
+    void updateROISurfaces();
+    void positionROIHud();
+    void copyROIMeasurements();
     uint64_t m_roiGen = 0;
     TaskScheduler::TaskHandle m_roiTask;
     bool m_roiLinked = false;
-
+    mviewer::ui::ROIMeasurementState m_roiState = mviewer::ui::ROIMeasurementState::Idle;
+    QString m_roiStateDetail;
+    std::optional<ROIStatsBatchResult> m_roiResult;
     // M14-3 / P0-4: blink (flicker) compare
     QCheckBox *m_blinkChk = nullptr;
     QTimer *m_blinkTimer = nullptr;
@@ -369,9 +358,6 @@ class CompareWorkspace : public QWidget
         return (m_splitChk && m_splitChk->isChecked()) || (m_swipeChk && m_swipeChk->isChecked());
     }
 
-    // M34: page visibility + canvas paint/input contract. updateCanvasModeVisibility
-    // switches the stacked page (canvas vs grid); paintCompareCanvas draws the canvas
-    // modes; canvasEventFilter owns wheel/drag on the canvas.
     void updateCanvasModeVisibility();
     void paintCompareCanvas();
     QRect canvasRect() const;
@@ -382,15 +368,25 @@ class CompareWorkspace : public QWidget
     bool handleCanvasRelease(QEvent *event);
     bool handleCanvasLeave(QEvent *event);
     int canvasRefCellAt(const QPoint &pos) const;
+    QRectF canvasPaneGeometry(int pane) const;
+    QPointF canvasSourcePoint(const QPoint &pos, int pane) const;
+    void drawCanvasROI(QPainter &p);
     void applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor);
     QRectF cellFullDestRect(int idx, const QRectF &geom) const;
     QRectF cellDestRect(int idx, const QRectF &geom) const;
 
-    // P0-4: split / swipe compare (only meaningful for exactly two images).
     QCheckBox *m_splitChk = nullptr;
     QCheckBox *m_swipeChk = nullptr;
     double m_splitPos = 0.5;
     bool m_splitDragging = false;
+    bool m_canvasSelecting = false;
+    bool m_canvasSelectionMoved = false;
+    QPoint m_canvasSelectionPress;
+    QPointF m_canvasSelectionStart;
+    mviewer::domain::Selection m_canvasSelectionOrigin;
+    mviewer::domain::SelectionHandle m_canvasSelectionHandle =
+        mviewer::domain::SelectionHandle::None;
+    int m_canvasSelectionPane = 0;
     // A-4.1: Overlay compare mode — semi-transparent blend of the two images.
     QCheckBox *m_overlayChk = nullptr;
     QSlider *m_overlayAlphaSlider = nullptr; // 0–100 → opacity of top image
@@ -495,8 +491,7 @@ class CompareWorkspace : public QWidget
         bool valid = false;
     };
     void updateInspectorRows(const std::vector<InspectorSample> &samples,
-                             mviewer::core::ColorSpace space,
-                             int baseIndex, int x, int y);
+                             mviewer::core::ColorSpace space, int baseIndex, int x, int y);
     // M30: coalesced Pixel Inspector hover path.
     void requestInspectorUpdate(int x, int y);
     bool m_inspectQueued = false; // coalescing flag: one queued render at a time
@@ -530,6 +525,8 @@ class CompareWorkspace : public QWidget
     QTableWidget *m_roiTable = nullptr;
     QLabel *m_roiDeltaLabel = nullptr;
     QPushButton *m_clearRoiBtn = nullptr;
+    QPushButton *m_copyRoiBtn = nullptr;
+    QPushButton *m_roiHud = nullptr;
 
     // M16.1: cursor-sync crosshair (n/n) + focus-lock / reference pin (n/1).
     QCheckBox *m_crosshairChk = nullptr; // 同步准星开关
@@ -539,7 +536,7 @@ class CompareWorkspace : public QWidget
     int m_hoverIdx = -1;                 // 当前光标所在格 (用于锁定基准)
     QLabel *m_frameLabel = nullptr;      // 当前窗格的帧/页选择
     QSpinBox *m_frameSpin = nullptr;
-    int m_lastInspectX = -1;             // 最近检视位置 (焦点切换时重刷)
+    int m_lastInspectX = -1; // 最近检视位置 (焦点切换时重刷)
     int m_lastInspectY = -1;
     void onCrosshairMoved(RawImageView *view, const QPointF &pos);
     void onFocusRequested(int cellIndex);
@@ -587,25 +584,27 @@ class CompareWorkspace : public QWidget
         ImageData diff;
         bool sizeMismatch = false;
     };
-    static DiffSources buildDiffOverlays(
-        DiffBatchResult &result, const std::vector<ImageData> &pixels,
-        const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
-        int baseIndex, uint8_t threshold, bool highlight, bool visualize,
-        const ImageData &basePixels, const TaskScheduler::TaskContext &context);
+    static DiffSources buildDiffOverlays(DiffBatchResult &result,
+                                         const std::vector<ImageData> &pixels,
+                                         const std::vector<QSize> &displayTargets,
+                                         const std::vector<CellAdjust> &adjusts, int baseIndex,
+                                         uint8_t threshold, bool highlight, bool visualize,
+                                         const ImageData &basePixels,
+                                         const TaskScheduler::TaskContext &context);
     static void computeDiffMetrics(DiffBatchResult &result, const DiffSources &sources,
                                    const ImageData &basePixels, uint8_t threshold,
                                    const mviewer::domain::Selection &roi,
                                    const TaskScheduler::TaskContext &context);
-    static DiffBatchResult computeDiffBatch(
-        const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
-        const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, bool highlight,
-        bool visualize, const mviewer::domain::Selection &roi, int paneCount, uint64_t generation,
-        const TaskScheduler::TaskContext &context);
-    TaskScheduler::TaskHandle startDiffBatch(
-        const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
-        const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, bool highlight,
-        bool visualize, const mviewer::domain::Selection &roi, int paneCount, uint64_t generation,
-        const QPointer<CompareWorkspace> &guard);
+    static DiffBatchResult
+    computeDiffBatch(const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
+                     const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold,
+                     bool highlight, bool visualize, const mviewer::domain::Selection &roi,
+                     int paneCount, uint64_t generation, const TaskScheduler::TaskContext &context);
+    TaskScheduler::TaskHandle
+    startDiffBatch(const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
+                   const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold,
+                   bool highlight, bool visualize, const mviewer::domain::Selection &roi,
+                   int paneCount, uint64_t generation, const QPointer<CompareWorkspace> &guard);
     void applyDiffBatchResult(const DiffBatchResult &result);
 
     // M29: latest-wins generation + handle of the in-flight batch diff task.

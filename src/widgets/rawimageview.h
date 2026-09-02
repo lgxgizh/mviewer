@@ -1,6 +1,7 @@
 #pragma once
 
 #include "domain/Selection.h"
+#include "domain/SelectionInteraction.h"
 
 #include <QImage>
 #include <QPointF>
@@ -66,8 +67,7 @@ class RawImageView : public QWidget
 
     // Momentary Compare changes presentation only. It deliberately leaves the
     // owned image, transform, ROI, overlays, and all CompareEngine state intact.
-    void setTransientDisplay(const QImage &img, const QSize &sourceSize,
-                             const QRect &sourceRect);
+    void setTransientDisplay(const QImage &img, const QSize &sourceSize, const QRect &sourceRect);
     void clearTransientDisplay();
     bool hasTransientDisplay() const
     {
@@ -254,6 +254,8 @@ class RawImageView : public QWidget
     bool m_selectionMoved = false;
     QPointF m_selectStart;
     QPoint m_selectPressPos;
+    mviewer::domain::Selection m_selectOrigin;
+    mviewer::domain::SelectionHandle m_selectHandle = mviewer::domain::SelectionHandle::None;
     QImage m_overlay;
     double m_overlayAlpha = 0.5;
 

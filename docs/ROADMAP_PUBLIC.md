@@ -4,10 +4,10 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.17 linked ROI measurement (M60)**
+## Where we are now — **Beta / 1.0.18 professional linked ROI workflow (M61)**
 
-MViewer remains in **Beta** on the post-`v1.0.10` hardening line, now released as
-  the `1.0.17` patch line. The product
+MViewer remains in **Beta** on the post-`v1.0.10` hardening line, now verified as
+the `1.0.18` patch line. The product
 loop below is built and verified; packaging and final human review remain:
 
 - **Browse** — open a 1000-image directory without UI freeze; thumbnails stream
@@ -46,9 +46,10 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.17** (current line) | Linked source-coordinate ROI measurement, asynchronous source RGB statistics, unequal-dimension guardrails, and M59 color-managed presentation | 🔵 Beta hardening |
+| **1.0.18** (current line) | Editable linked ROI in every Compare mode, cancellable source measurement, honest decoder support states, and compact HUD/TSV results | 🔵 Beta hardening |
+| **1.0.17** | Linked source-coordinate ROI measurement, asynchronous source RGB statistics, unequal-dimension guardrails, and M59 color-managed presentation | ✅ Previous patch |
 | **1.0.16** | Color-managed presentation, canonical ICC/EXIF metadata, monitor-target invalidation, and Browse regression closure | ✅ Previous patch |
-| **1.0.15** (current line) | Large-directory query responsiveness, latest-wins filtering, bounded metadata/search updates, and Windows build reproducibility | 🔵 Beta hardening |
+| **1.0.15** | Large-directory query responsiveness, latest-wins filtering, bounded metadata/search updates, and Windows build reproducibility | ✅ Previous patch |
 | **1.0.14** | Release quality truthfulness, large-source format parity, workflow boundaries, and Windows qualification closure | ✅ Previous patch |
 | **1.0.13** | Release quality truthfulness, large-source format parity, workflow boundaries, and Windows qualification closure | ✅ Previous patch |
 | **1.0.12** | Release-candidate workflow convergence / native Windows qualification | ✅ Previous patch |
@@ -59,7 +60,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.17` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.18` patch line. The remaining 1.0 work is
 productization and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate

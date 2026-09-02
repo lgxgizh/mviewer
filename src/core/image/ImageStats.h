@@ -9,6 +9,7 @@
 #include "domain/Selection.h"
 
 #include <cstdint>
+#include <functional>
 
 namespace mviewer::core
 {
@@ -38,6 +39,7 @@ struct ROIChannelStats
     int64_t pixelCount = 0;
     bool valid = false;
     bool ratiosValid = false;
+    bool cancelled = false;
 };
 
 // Iterates the full image once and computes mean luminance + per-channel RGB
@@ -47,13 +49,15 @@ PreviewStats computePreviewStats(const ImageData &img);
 
 // Region-aware variant used by interactive ROI selection. It scans the
 // clipped source stride directly and never allocates a cropped ImageData.
-PreviewStats computePreviewStatsROI(const ImageData &img,
-                                    const mviewer::domain::Selection &region);
+PreviewStats computePreviewStatsROI(const ImageData &img, const mviewer::domain::Selection &region);
 
 // Authoritative format-aware source/analysis RGB measurement. This is pure
 // core code and handles RGB/BGR, alpha, and grayscale storage without a Qt
 // presentation conversion.
 ROIChannelStats computeROIChannelStats(const ImageData &img,
                                        const mviewer::domain::Selection &region);
+ROIChannelStats computeROIChannelStats(const ImageData &img,
+                                       const mviewer::domain::Selection &region,
+                                       const std::function<bool()> &isCancelled);
 
 } // namespace mviewer::core

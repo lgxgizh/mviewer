@@ -3,8 +3,8 @@
 
 #include "core/image/SourceImage.h"
 
-#include <cmath>
 #include <QResizeEvent>
+#include <cmath>
 
 namespace
 {
@@ -99,13 +99,14 @@ void CompareWorkspace::updateCanvasModeVisibility()
     QWidget *target = canvasMode ? static_cast<QWidget *>(m_compareCanvas)
                                  : static_cast<QWidget *>(m_compareGridPage);
     const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
-    const bool switchedToGrid = !canvasMode && !blinkActive &&
-                                m_pageStack->currentWidget() != target;
+    const bool switchedToGrid =
+        !canvasMode && !blinkActive && m_pageStack->currentWidget() != target;
     m_pageStack->setCurrentWidget(target);
     if (switchedToGrid)
         schedulePostLayoutFit();
     if (canvasMode)
         m_compareCanvas->update();
+    updateROISurfaces();
     updateTemporaryCompareAvailability();
     update();
 }
@@ -142,8 +143,8 @@ QRectF CompareWorkspace::cellFullDestRect(int idx, const QRectF &geom) const
     double sc = ct.scale;
     if (!m_uniformScale && m_syncZoom)
     {
-        const double canvasFit = std::min(geom.width() / sourceSize.width(),
-                                          geom.height() / sourceSize.height());
+        const double canvasFit =
+            std::min(geom.width() / sourceSize.width(), geom.height() / sourceSize.height());
         sc = canvasFit * m_sharedZoomRatio;
     }
     if (!(sc > 0.0) || !std::isfinite(sc))
@@ -185,8 +186,7 @@ QRect CompareWorkspace::sourceVisibleRect(int pane) const
     const int top = qFloor(std::min(a.y(), b.y()));
     const int right = qCeil(std::max(a.x(), b.x()));
     const int bottom = qCeil(std::max(a.y(), b.y()));
-    return QRect(left, top, std::max(1, right - left), std::max(1, bottom - top))
-        .intersected(full);
+    return QRect(left, top, std::max(1, right - left), std::max(1, bottom - top)).intersected(full);
 }
 
 CompareWorkspace::DisplayRequest CompareWorkspace::sourceDisplayRequest(int pane) const
@@ -274,9 +274,8 @@ QSize CompareWorkspace::displayLodTarget(int idx, const ImageData &source) const
         kDisplayLodBucketSteps;
     // Never upscale a source that already fits inside the viewport. Avoid
     // passing an inverted [physicalFit, 1.0] interval to std::clamp for thumbnails.
-    const double factor = physicalFit >= 1.0
-                              ? 1.0
-                              : std::clamp(std::max(physicalFit, bucketed), physicalFit, 1.0);
+    const double factor =
+        physicalFit >= 1.0 ? 1.0 : std::clamp(std::max(physicalFit, bucketed), physicalFit, 1.0);
     return QSize(std::max(1, static_cast<int>(std::ceil(source.width * factor))),
                  std::max(1, static_cast<int>(std::ceil(source.height * factor))));
 }
@@ -351,60 +350,56 @@ void CompareWorkspace::schedulePostLayoutFit()
         return;
     m_postLayoutFitPending = true;
     QPointer<CompareWorkspace> guard(this);
-    QTimer::singleShot(0, this,
-                       [guard]()
-                       {
-                           CompareWorkspace *ws = guard.data();
-                           if (!ws)
-                               return;
-                           ws->m_postLayoutFitPending = false;
-                           // A canvas toggle can cancel Blink before its
-                           // 0-ms fit callback runs. In that transition the
-                           // grid is already hidden, so fitting it here would
-                           // capture transient/invalid pane geometry. The
-                           // Canvas -> Grid transition above queues a fresh
-                           // fit after the grid becomes current again.
-                           const bool blinkActive = ws->m_blinkChk && ws->m_blinkChk->isChecked();
-                           if (blinkActive ||
-                               (ws->m_pageStack && ws->m_compareGridPage &&
+    QTimer::singleShot(
+        0, this,
+        [guard]()
+        {
+            CompareWorkspace *ws = guard.data();
+            if (!ws)
+                return;
+            ws->m_postLayoutFitPending = false;
+            // A canvas toggle can cancel Blink before its
+            // 0-ms fit callback runs. In that transition the
+            // grid is already hidden, so fitting it here would
+            // capture transient/invalid pane geometry. The
+            // Canvas -> Grid transition above queues a fresh
+            // fit after the grid becomes current again.
+            const bool blinkActive = ws->m_blinkChk && ws->m_blinkChk->isChecked();
+            if (blinkActive || (ws->m_pageStack && ws->m_compareGridPage &&
                                 ws->m_pageStack->currentWidget() != ws->m_compareGridPage))
-                               return;
-                           const double requestedScale = ws->m_engine.syncTransform().scale;
-                           const double requestedRatio = ws->m_sharedZoomRatio;
-                           const bool preserveZoom =
-                               (std::isfinite(requestedScale) &&
-                                std::abs(requestedScale - 1.0) > 1e-9) ||
-                               (std::isfinite(requestedRatio) &&
-                                std::abs(requestedRatio - 1.0) > 1e-9);
-                           ws->fitAll();
-                           if (preserveZoom)
-                           {
-                               const double ratio =
-                                   std::abs(requestedRatio - 1.0) > 1e-9 ? requestedRatio
-                                                                         : requestedScale;
-                               double commonFit = 1.0;
-                               bool firstFit = true;
-                               for (double fit : ws->m_fitScales)
-                               {
-                                   if (firstFit || fit < commonFit)
-                                       commonFit = fit;
-                                   firstFit = false;
-                               }
-                               ws->m_sharedZoomRatio = ratio;
-                               ws->m_engine.setScale(ratio);
-                               for (int i = 0; i < ws->m_engine.imageCount(); ++i)
-                               {
-                                   if (i >= ws->m_cellViews.size() || !ws->m_cellViews[i])
-                                       continue;
-                                   const double fit = ws->m_uniformScale
-                                                           ? commonFit
-                                                           : ws->m_fitScales.value(i, 1.0);
-                                   ws->m_engine.setCellScale(i, fit * ratio);
-                               }
-                           }
-                           ws->scheduleDisplayLodRefresh();
-                           ws->update();
-                       });
+                return;
+            const double requestedScale = ws->m_engine.syncTransform().scale;
+            const double requestedRatio = ws->m_sharedZoomRatio;
+            const bool preserveZoom =
+                (std::isfinite(requestedScale) && std::abs(requestedScale - 1.0) > 1e-9) ||
+                (std::isfinite(requestedRatio) && std::abs(requestedRatio - 1.0) > 1e-9);
+            ws->fitAll();
+            if (preserveZoom)
+            {
+                const double ratio =
+                    std::abs(requestedRatio - 1.0) > 1e-9 ? requestedRatio : requestedScale;
+                double commonFit = 1.0;
+                bool firstFit = true;
+                for (double fit : ws->m_fitScales)
+                {
+                    if (firstFit || fit < commonFit)
+                        commonFit = fit;
+                    firstFit = false;
+                }
+                ws->m_sharedZoomRatio = ratio;
+                ws->m_engine.setScale(ratio);
+                for (int i = 0; i < ws->m_engine.imageCount(); ++i)
+                {
+                    if (i >= ws->m_cellViews.size() || !ws->m_cellViews[i])
+                        continue;
+                    const double fit =
+                        ws->m_uniformScale ? commonFit : ws->m_fitScales.value(i, 1.0);
+                    ws->m_engine.setCellScale(i, fit * ratio);
+                }
+            }
+            ws->scheduleDisplayLodRefresh();
+            ws->update();
+        });
 }
 
 void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
@@ -416,77 +411,74 @@ void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
         return;
     m_displayLodRefreshPending = true;
     QPointer<CompareWorkspace> guard(this);
-    QTimer::singleShot(70, this,
-                       [guard]()
-                       {
-                           CompareWorkspace *ws = guard.data();
-                           if (!ws)
-                               return;
-                           ws->m_displayLodRefreshPending = false;
-                           const int requestedPane = ws->m_displayLodRefreshPane;
-                           ws->m_displayLodRefreshPane = -1;
-                           std::vector<int> dirty;
-                           auto addIfNeeded = [&dirty, ws](int pane)
-                           {
-                               if (pane < 0 || pane >= ws->m_cellViews.size() ||
-                                   !ws->m_cellViews[pane])
-                                   return;
-                               const ImageFrame *frame = ws->m_engine.imageAt(pane);
-                               if (!frame || frame->pixels().isNull())
-                               {
-                                   // M47: source-backed pane (no full frame —
-                                   // e.g. an infeasible source): refresh when
-                                   // its LOD raster is stale (zoom/pan/scale).
-                                   if (pane < static_cast<int>(ws->m_comparePaths.size()) &&
-                                       !ws->m_comparePaths[static_cast<size_t>(pane)].empty())
-                                   {
-                                       const RawImageView *view = ws->m_cellViews[pane];
-                                       const DisplayRequest desired =
-                                           ws->sourceDisplayRequest(pane);
-                                       const QRect current = view->sourceRect();
-                                       const bool hasRaster = !view->image().isNull();
-                                       bool stale = !hasRaster || !current.isValid();
-                                       if (!stale && desired.region)
-                                       {
-                                           const QRect visible = ws->sourceVisibleRect(pane);
-                                           const double currentDensity =
-                                               static_cast<double>(view->image().width()) /
-                                               std::max(1, current.width());
-                                           const double requiredDensity =
-                                               static_cast<double>(desired.target.width()) /
-                                               std::max(1, desired.sourceRect.width());
-                                           stale = !current.contains(desired.sourceRect) ||
-                                                   currentDensity < requiredDensity * 0.9 ||
-                                                   !current.contains(visible);
-                                       }
-                                       else if (!stale)
-                                       {
-                                           stale = desired.region ||
-                                                   std::max(view->image().width(),
-                                                            view->image().height()) !=
-                                                       std::max(desired.target.width(),
-                                                                desired.target.height()) ||
-                                                   current != desired.sourceRect;
-                                       }
-                                       if (stale)
-                                           dirty.push_back(pane);
-                                   }
-                                   return;
-                               }
-                               if (ws->m_cellViews[pane]->image().isNull() ||
-                                   ws->m_cellViews[pane]->image().size() !=
-                                       ws->displayLodTarget(pane, frame->pixels()))
-                                   dirty.push_back(pane);
-                           };
-                           if (requestedPane >= 0 && !ws->m_syncZoom)
-                               addIfNeeded(requestedPane);
-                           else
-                           {
-                               dirty.reserve(ws->m_cellViews.size());
-                               for (int i = 0; i < ws->m_cellViews.size(); ++i)
-                                   addIfNeeded(i);
-                           }
-                            if (!dirty.empty())
-                                ws->scheduleDisplayMaterialization(dirty);
-                        });
+    QTimer::singleShot(
+        70, this,
+        [guard]()
+        {
+            CompareWorkspace *ws = guard.data();
+            if (!ws)
+                return;
+            ws->m_displayLodRefreshPending = false;
+            const int requestedPane = ws->m_displayLodRefreshPane;
+            ws->m_displayLodRefreshPane = -1;
+            std::vector<int> dirty;
+            auto addIfNeeded = [&dirty, ws](int pane)
+            {
+                if (pane < 0 || pane >= ws->m_cellViews.size() || !ws->m_cellViews[pane])
+                    return;
+                const ImageFrame *frame = ws->m_engine.imageAt(pane);
+                if (!frame || frame->pixels().isNull())
+                {
+                    // M47: source-backed pane (no full frame —
+                    // e.g. an infeasible source): refresh when
+                    // its LOD raster is stale (zoom/pan/scale).
+                    if (pane < static_cast<int>(ws->m_comparePaths.size()) &&
+                        !ws->m_comparePaths[static_cast<size_t>(pane)].empty())
+                    {
+                        const RawImageView *view = ws->m_cellViews[pane];
+                        const DisplayRequest desired = ws->sourceDisplayRequest(pane);
+                        const QRect current = view->sourceRect();
+                        const bool hasRaster = !view->image().isNull();
+                        bool stale = !hasRaster || !current.isValid();
+                        if (!stale && desired.region)
+                        {
+                            const QRect visible = ws->sourceVisibleRect(pane);
+                            const double currentDensity =
+                                static_cast<double>(view->image().width()) /
+                                std::max(1, current.width());
+                            const double requiredDensity =
+                                static_cast<double>(desired.target.width()) /
+                                std::max(1, desired.sourceRect.width());
+                            stale = !current.contains(desired.sourceRect) ||
+                                    currentDensity < requiredDensity * 0.9 ||
+                                    !current.contains(visible);
+                        }
+                        else if (!stale)
+                        {
+                            stale = desired.region ||
+                                    std::max(view->image().width(), view->image().height()) !=
+                                        std::max(desired.target.width(), desired.target.height()) ||
+                                    current != desired.sourceRect;
+                        }
+                        if (stale)
+                            dirty.push_back(pane);
+                    }
+                    return;
+                }
+                if (ws->m_cellViews[pane]->image().isNull() ||
+                    ws->m_cellViews[pane]->image().size() !=
+                        ws->displayLodTarget(pane, frame->pixels()))
+                    dirty.push_back(pane);
+            };
+            if (requestedPane >= 0 && !ws->m_syncZoom)
+                addIfNeeded(requestedPane);
+            else
+            {
+                dirty.reserve(ws->m_cellViews.size());
+                for (int i = 0; i < ws->m_cellViews.size(); ++i)
+                    addIfNeeded(i);
+            }
+            if (!dirty.empty())
+                ws->scheduleDisplayMaterialization(dirty);
+        });
 }

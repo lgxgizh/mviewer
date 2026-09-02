@@ -7,12 +7,10 @@ namespace mviewer::core
 
 PreviewStats computePreviewStats(const ImageData &img)
 {
-    return computePreviewStatsROI(
-        img, mviewer::domain::Selection{0, 0, img.width, img.height});
+    return computePreviewStatsROI(img, mviewer::domain::Selection{0, 0, img.width, img.height});
 }
 
-PreviewStats computePreviewStatsROI(const ImageData &img,
-                                    const mviewer::domain::Selection &region)
+PreviewStats computePreviewStatsROI(const ImageData &img, const mviewer::domain::Selection &region)
 {
     PreviewStats out;
     if (img.isNull() || region.isEmpty())
@@ -75,6 +73,13 @@ PreviewStats computePreviewStatsROI(const ImageData &img,
 ROIChannelStats computeROIChannelStats(const ImageData &img,
                                        const mviewer::domain::Selection &region)
 {
+    return computeROIChannelStats(img, region, {});
+}
+
+ROIChannelStats computeROIChannelStats(const ImageData &img,
+                                       const mviewer::domain::Selection &region,
+                                       const std::function<bool()> &isCancelled)
+{
     ROIChannelStats out;
     if (img.isNull() || region.isEmpty())
         return out;
@@ -100,6 +105,12 @@ ROIChannelStats computeROIChannelStats(const ImageData &img,
     const ImageBuffer view = img.view();
     for (int y = y0; y < y1; ++y)
     {
+        if (isCancelled && isCancelled())
+        {
+            out = {};
+            out.cancelled = true;
+            return out;
+        }
         const uint8_t *row = view.data + static_cast<size_t>(y) * view.stride();
         for (int x = x0; x < x1; ++x)
         {

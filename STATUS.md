@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-09-02 · Version: **1.0.17 M60 linked ROI measurement line** · Release tag: **v1.0.17 published**
+> Snapshot: 2026-09-02 · Version: **1.0.18 M61 professional linked ROI workflow line** · Release tag: **not yet published**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -38,8 +38,30 @@
 > `docs/review/M59_PHASE0_COLOR_METADATA_BASELINE_2026-09-01.md`,
 > `docs/review/M59_COLOR_MANAGED_PRESENTATION_CLOSURE_2026-09-02.md`,
 > `docs/review/M60_LINKED_ROI_PHASE0_LINKED_ROI_2026-09-02.md`,
-> `docs/review/M60_LINKED_ROI_CLOSURE_2026-09-02.md`, and
+> `docs/review/M60_LINKED_ROI_CLOSURE_2026-09-02.md`,
+> `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
+> `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## M61 — Professional linked ROI workflow convergence (2026-09-02)
+
+- One canonical half-open source-coordinate ROI is visible and editable in
+  Grid, Split, Overlay, Swipe, and Checkerboard. Right-drag creates; dragging
+  inside moves; four edges and four corners resize with clipping and no
+  Canvas/Grid geometry drift.
+- ROI measurement has explicit `Idle`, `Measuring`, `Ready`, `Unsupported`,
+  `Failed`, and `Backpressured` states. Row-level cancellation bounds stale
+  scan work, and submit rejection is visible instead of leaving a false busy
+  state.
+- Exact-source measurement requires a decoder-declared bounded region path.
+  JPEG and Windows unrotated TIFF qualify; PNG/BMP/unproven plugin paths report
+  the reason per pane. Results remain source RGB at the honest 8-bit analysis
+  boundary and are independent of display ICC conversion and Compare edits.
+- A compact clickable HUD preserves current results when Analysis is hidden;
+  the full table adds stable columns, tooltips, numeric alignment, and TSV copy.
+  Focused real UI and 24/60/100 MP benchmark evidence is green; two consecutive
+  source-stable Release `build.ps1 Test` runs passed **131/131** in 814.15 s and
+  795.36 s. Full evidence is recorded in the M61 closure review.
 
 ## M60 — Linked ROI measurement (2026-09-02)
 

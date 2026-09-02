@@ -1,7 +1,7 @@
 #include "widgets/rawimageview.h"
+#include "widgets/roioverlay.h"
 
 #include <QEvent>
-#include <QFont>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QVariant>
@@ -19,40 +19,6 @@ namespace
 constexpr qint64 kMaxCacheDim = 16384;
 constexpr qint64 kMaxSurfacePixels = qint64(64) * 1024 * 1024; // 64M px
 
-void drawSelectionOverlay(QPainter &p, const mviewer::domain::Selection &selection,
-                          const QSize &sourceSize, double cx, double cy, int dw, int dh)
-{
-    if (selection.isEmpty() || sourceSize.width() <= 0 || sourceSize.height() <= 0)
-        return;
-    const double sx = static_cast<double>(dw) / sourceSize.width();
-    const double sy = static_cast<double>(dh) / sourceSize.height();
-    const QRect box(qRound(cx - dw / 2.0 + selection.x * sx),
-                    qRound(cy - dh / 2.0 + selection.y * sy), qRound(selection.width * sx),
-                    qRound(selection.height * sy));
-    // Two cosmetic outlines keep the ROI legible on both saturated dark and
-    // bright imagery without obscuring the selected pixels.
-    QPen shadow(QColor(0, 0, 0, 220), 3);
-    shadow.setCosmetic(true);
-    p.setPen(shadow);
-    p.setBrush(Qt::NoBrush);
-    p.drawRect(box);
-    QPen accent(QColor(0xFF, 0xD2, 0x33), 1);
-    accent.setCosmetic(true);
-    p.setPen(accent);
-    p.drawRect(box);
-    QFont labelFont = p.font();
-    labelFont.setPointSize(8);
-    labelFont.setBold(true);
-    p.setFont(labelFont);
-    const QString label = QStringLiteral("ROI %1×%2").arg(selection.width).arg(selection.height);
-    const QRect labelRect(box.left(), std::max(0, box.top() - 18),
-                          p.fontMetrics().horizontalAdvance(label) + 8, 16);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0, 0, 0, 170));
-    p.drawRoundedRect(labelRect, 2, 2);
-    p.setPen(Qt::white);
-    p.drawText(labelRect, Qt::AlignCenter, label);
-}
 } // namespace
 
 RawImageView::RawImageView(QWidget *parent) : QWidget(parent)
@@ -257,7 +223,9 @@ void RawImageView::paintEvent(QPaintEvent *)
         // over B's transient raster or let the temporary view become editable.
     }
     else
-        drawSelectionOverlay(p, m_selection, m_sourceSize, cx, cy, dw, dh);
+        mviewer::ui::drawROIOverlay(
+            p, m_selection, m_sourceSize,
+            QRectF(cx - dw / 2.0, cy - dh / 2.0, static_cast<double>(dw), static_cast<double>(dh)));
 
     // M16.1: synced crosshair at the shared image-space position (n/n compare).
     if (m_transientImage.isNull() && m_crosshairOn)
@@ -413,8 +381,7 @@ void RawImageView::drawBaseLayer(QPainter &p)
     const double sourceLeft = cx - dw / 2.0;
     const double sourceTop = cy - dh / 2.0;
     const QRectF coveredDest(sourceLeft + sourceRect.x() * m_scale,
-                             sourceTop + sourceRect.y() * m_scale,
-                             sourceRect.width() * m_scale,
+                             sourceTop + sourceRect.y() * m_scale, sourceRect.width() * m_scale,
                              sourceRect.height() * m_scale);
     p.drawImage(coveredDest, image);
 
@@ -463,6 +430,12 @@ void RawImageView::mousePressEvent(QMouseEvent *ev)
         m_selectionMoved = false;
         m_selectPressPos = ev->pos();
         m_selectStart = widgetToImage(ev->pos());
+        m_selectOrigin = m_selection;
+        const double tolerance = m_scale > 0.0 ? 8.0 / m_scale : 0.0;
+        m_selectHandle = mviewer::domain::hitTestSelection(m_selection, m_selectStart.x(),
+                                                           m_selectStart.y(), tolerance, tolerance);
+        if (m_selectHandle == mviewer::domain::SelectionHandle::None)
+            m_selectHandle = mviewer::domain::SelectionHandle::Create;
         ev->accept();
         update();
         return;
@@ -491,9 +464,9 @@ void RawImageView::mouseMoveEvent(QMouseEvent *ev)
         }
         m_selectionMoved = true;
         const QPointF cur = widgetToImage(ev->pos());
-        m_selection = mviewer::domain::normalizeSelection(m_selectStart.x(), m_selectStart.y(),
-                                                          cur.x(), cur.y(), m_sourceSize.width(),
-                                                          m_sourceSize.height());
+        m_selection = mviewer::domain::updateSelectionInteraction(
+            m_selectOrigin, m_selectHandle, m_selectStart.x(), m_selectStart.y(), cur.x(), cur.y(),
+            m_sourceSize.width(), m_sourceSize.height());
         emit selectionPreviewChanged(m_selection);
         update();
         ev->accept();
@@ -546,6 +519,7 @@ void RawImageView::mouseReleaseEvent(QMouseEvent *ev)
         m_selecting = false;
         if (m_selectionMoved)
             emit selectionChanged(m_selection);
+        m_selectHandle = mviewer::domain::SelectionHandle::None;
         ev->accept();
         return;
     }

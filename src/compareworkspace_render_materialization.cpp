@@ -2,8 +2,11 @@
 
 #include "core/image/SourceImage.h"
 #include "display/DisplayColorContextProvider.h"
+#include "widgets/roioverlay.h"
 
+#include <QDataStream>
 #include <QResizeEvent>
+#include <QVariant>
 #include <algorithm>
 #include <cmath>
 
@@ -12,7 +15,9 @@ namespace
 class ElidedCaption final : public QLabel
 {
   public:
-    explicit ElidedCaption(QWidget *parent) : QLabel(parent) {}
+    explicit ElidedCaption(QWidget *parent) : QLabel(parent)
+    {
+    }
 
     void setFullText(const QString &text)
     {
@@ -68,6 +73,7 @@ void CompareWorkspace::resizeEvent(QResizeEvent *event)
     positionCellHists();
     if (blinkActive || !normalGrid)
         scheduleDisplayLodRefresh();
+    positionROIHud();
 }
 
 // Canvas paint entry — invoked from the canvas event path (Paint event via the
@@ -77,20 +83,73 @@ void CompareWorkspace::paintCompareCanvas()
     QWidget *cv = m_compareCanvas;
     if (!cv)
         return;
-    QPainter p(cv);
-    p.setRenderHint(QPainter::SmoothPixmapTransform);
     const QRect r = cv->rect();
-    p.fillRect(r, palette().color(QPalette::Dark));
     if (m_engine.imageCount() != 2 || m_cellViews.size() < 2 || !anyCanvasCompareMode())
         return;
+    QByteArray key;
+    QDataStream stream(&key, QIODevice::WriteOnly);
+    stream << cv->size() << cv->devicePixelRatioF() << m_splitPos << m_overlayAlpha << m_checkerSize
+           << (m_splitChk && m_splitChk->isChecked()) << (m_swipeChk && m_swipeChk->isChecked())
+           << (m_overlayChk && m_overlayChk->isChecked())
+           << (m_checkerChk && m_checkerChk->isChecked());
+    for (int index = 0; index < 2; ++index)
+    {
+        const RawImageView *view = m_cellViews[index];
+        const auto &transform = m_engine.cellTransform(index);
+        stream << view->image().cacheKey() << view->overlay().cacheKey() << view->sourceSize()
+               << view->sourceRect() << view->overlayOpacity() << transform.scale
+               << transform.offset.x << transform.offset.y;
+    }
+    stream << m_engine.syncTransform().offset.x << m_engine.syncTransform().offset.y << m_syncDrag
+           << m_syncZoom << m_uniformScale << m_sharedZoomRatio;
+
+    const qreal dpr = cv->devicePixelRatioF();
+    const QSize physical(qCeil(cv->width() * dpr), qCeil(cv->height() * dpr));
+    if (m_canvasBaseKey != key || m_canvasBaseSurface.isNull() ||
+        m_canvasBaseSurface.size() != physical)
+    {
+        m_canvasBaseSurface = QImage(physical, QImage::Format_ARGB32_Premultiplied);
+        m_canvasBaseSurface.setDevicePixelRatio(dpr);
+        m_canvasBaseSurface.fill(palette().color(QPalette::Dark));
+        QPainter base(&m_canvasBaseSurface);
+        base.setRenderHint(QPainter::SmoothPixmapTransform);
+        if (m_splitChk && m_splitChk->isChecked())
+            drawSplitCompare(base);
+        else if (m_swipeChk && m_swipeChk->isChecked())
+            drawSwipeCompare(base, int(r.width() * m_splitPos));
+        else if (m_overlayChk && m_overlayChk->isChecked())
+            drawOverlayCompare(base);
+        else if (m_checkerChk && m_checkerChk->isChecked())
+            drawCheckerboardCompare(base);
+        base.end();
+        m_canvasBaseKey = key;
+        ++m_canvasBaseRenderCount;
+        cv->setProperty("baseSurfaceRenderCount",
+                        QVariant::fromValue<qulonglong>(m_canvasBaseRenderCount));
+    }
+    QPainter p(cv);
+    p.drawImage(QPoint(0, 0), m_canvasBaseSurface);
+    drawCanvasROI(p);
+}
+
+void CompareWorkspace::drawCanvasROI(QPainter &p)
+{
+    if (m_lastSelection.isEmpty() || !m_roiLinked)
+        return;
+    const auto drawPane = [this, &p](int pane)
+    {
+        if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
+            return;
+        mviewer::ui::drawROIOverlay(p, m_lastSelection, m_cellViews[pane]->sourceSize(),
+                                    cellFullDestRect(pane, canvasPaneGeometry(pane)));
+    };
     if (m_splitChk && m_splitChk->isChecked())
-        drawSplitCompare(p);
-    else if (m_swipeChk && m_swipeChk->isChecked())
-        drawSwipeCompare(p, int(r.width() * m_splitPos));
-    else if (m_overlayChk && m_overlayChk->isChecked())
-        drawOverlayCompare(p);
-    else if (m_checkerChk && m_checkerChk->isChecked())
-        drawCheckerboardCompare(p);
+    {
+        drawPane(0);
+        drawPane(1);
+    }
+    else
+        drawPane(0);
 }
 
 void CompareWorkspace::rebuildCells()
@@ -249,10 +308,10 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
                         cellIndex >= 0 && cellIndex < static_cast<int>(m_cellAdjusts.size())
                             ? m_cellAdjusts[static_cast<size_t>(cellIndex)]
                             : CellAdjust{};
-                    const auto sample = frame
-                                            ? mviewer::core::sampleAnalysisPixel(
-                                                  frame->pixels(), analysisAdjustment(adjust), x, y)
-                                            : mviewer::core::AnalysisPixel{};
+                    const auto sample =
+                        frame ? mviewer::core::sampleAnalysisPixel(frame->pixels(),
+                                                                   analysisAdjustment(adjust), x, y)
+                              : mviewer::core::AnalysisPixel{};
                     if (!sample.valid)
                     {
                         emit pixelInfo(QString());
@@ -294,8 +353,9 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         caption->setMinimumWidth(0);
         caption->setMinimumHeight(20);
         if (img)
-            caption->setFullText(QString::fromUtf8(img->metadata().fileName.data(),
-                                                   static_cast<int>(img->metadata().fileName.size())));
+            caption->setFullText(
+                QString::fromUtf8(img->metadata().fileName.data(),
+                                  static_cast<int>(img->metadata().fileName.size())));
         cellLay->addWidget(caption);
         m_cellLabels.push_back(caption);
 
@@ -309,11 +369,10 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         m_layout->setRowStretch(row, 1);
         m_layout->setColumnStretch(col, 1);
     }
-
 }
 
-CompareWorkspace::SourceDisplayResult CompareWorkspace::materializeSourceDisplay(
-    const std::string &path, const DisplayRequest &request)
+CompareWorkspace::SourceDisplayResult
+CompareWorkspace::materializeSourceDisplay(const std::string &path, const DisplayRequest &request)
 {
     SourceDisplayResult result;
     if (path.empty())
@@ -336,17 +395,17 @@ CompareWorkspace::SourceDisplayResult CompareWorkspace::materializeSourceDisplay
 
     if (request.region && request.sourceRect.isValid())
     {
-        const mviewer::core::SourceRect displayed{
-            request.sourceRect.x(), request.sourceRect.y(), request.sourceRect.width(),
-            request.sourceRect.height()};
+        const mviewer::core::SourceRect displayed{request.sourceRect.x(), request.sourceRect.y(),
+                                                  request.sourceRect.width(),
+                                                  request.sourceRect.height()};
         const mviewer::core::SourceRect raw = mviewer::core::orientedRectToRaw(
             displayed, source->rawWidth(), source->rawHeight(), source->orientation());
-        const auto decoded = source->decodeRegion(raw, request.target.width(),
-                                                  request.target.height());
+        const auto decoded =
+            source->decodeRegion(raw, request.target.width(), request.target.height());
         const mviewer::core::SourceRect displayedCovered = mviewer::core::rawRectToOriented(
             decoded.coveredRect, source->rawWidth(), source->rawHeight(), source->orientation());
-        result.coveredRect = QRect(displayedCovered.x, displayedCovered.y, displayedCovered.w,
-                                   displayedCovered.h);
+        result.coveredRect =
+            QRect(displayedCovered.x, displayedCovered.y, displayedCovered.w, displayedCovered.h);
         if (!decoded.ok)
         {
             result.errorText = QStringLiteral("有界显示解码不可用");
