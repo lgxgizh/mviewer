@@ -407,7 +407,7 @@ Whenever multiple implementations are possible, choose the simplest solution tha
 The long-term goal is to build a maintainable open-source desktop visual
 analysis platform for image algorithm engineers, with code quality comparable
 to mature open-source C++ projects.
-### M45 product qualification boundary
+## M45 product qualification boundary
 
 MViewer's desktop workflow is qualified as Browse → Viewer → Compare → Analyze
 → Export → File Operations only where the evidence says so. Automated tests do

@@ -23,7 +23,7 @@
 >   Windows WIC path, while PNG/BMP retain honest scaled-fallback classification.
 > - Native UX review: **MANUAL PENDING / BLOCKED** for physical DPI/ICC/UNC,
 >   installer behavior, long-session GUI feel, and extended soak on Windows.
-
+>
 > **M57 multi-frame review snapshot (2026-08-29)**
 > - Deterministic real-plugin coverage is in place for three-frame GIF, three-frame
 >   WebP, and three-page TIFF. The baseline records qgif/qwebp sequential-read

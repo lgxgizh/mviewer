@@ -255,4 +255,4 @@ Legend: a number = count of test sources covering that feature in that test type
 `UI-linked` = the executable links `mviewer_ui` and therefore needs a Qt platform (offscreen works; a real display for pixel-level UX review). `RUN_SERIAL` = must not run in parallel with bench/other UI tests (CI applies this automatically).
 
 ---
-_This matrix is regenerated automatically. The M23 policy: every shipped feature MUST have at least one regression test - add the test, then this matrix updates itself._
+*This matrix is regenerated automatically. The M23 policy: every shipped feature MUST have at least one regression test - add the test, then this matrix updates itself.*

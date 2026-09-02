@@ -59,7 +59,7 @@ MViewer is **not a general-purpose image viewer** — it is a **visual analysis 
 | Component | Choice |
 | ----------- | -------- |
 | Language | C++20 |
-| GUI | Qt 6 Widgets (see the [Qt version matrix](#qt-version-matrix)) |
+| GUI | Qt 6 Widgets (see the [Qt version matrix](#qt-version-matrix-m46-single-source-of-truth)) |
 | Build | CMake + Ninja |
 | Compiler | MSVC 2022 (primary), Clang/GCC (CI / Linux) |
 | Cache | SQLite (disk) + LRU (memory) |

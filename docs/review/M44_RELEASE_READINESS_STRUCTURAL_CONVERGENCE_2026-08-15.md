@@ -5,7 +5,7 @@ Status: automated release-candidate closure complete; native UX sign-off pending
 
 ## Final verdict
 
-**AUTOMATED RC READY — MANUAL ITEMS PENDING**
+### Automated RC ready — manual items pending
 
 The M44 implementation closes the reproducible data-safety, export-path,
 async-persistence, architecture-boundary, and complexity risks in the local

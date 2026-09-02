@@ -86,7 +86,7 @@ jobs:
           esac
 
       - name: Install markdownlint
-        run: npm install -g markdownlint-cli
+        run: npm install -g markdownlint-cli@0.49.1
 
       - name: markdownlint
         run: markdownlint --config .markdownlint.jsonc '**/*.md' --ignore node_modules
@@ -379,4 +379,14 @@ jobs:
     if: always()
     steps:
       - name: All required jobs passed
-        run: echo "format, cppcheck, clang-tidy, build, test, adr-gate, and known-issues all succeeded (Tier-2 nightly / Tier-3 release are non-blocking for PRs)."
+        env:
+          REQUIRED_RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Required job results: $REQUIRED_RESULTS"
+          for result in $REQUIRED_RESULTS; do
+            if [ "$result" != "success" ]; then
+              echo "::error::At least one required Tier-1 job did not succeed."
+              exit 1
+            fi
+          done
+          echo "All required Tier-1 jobs succeeded."

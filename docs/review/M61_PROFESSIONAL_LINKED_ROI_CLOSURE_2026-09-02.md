@@ -10,7 +10,7 @@ Phase 0 baseline: `M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`
 
 **Automated closure: PASS.** M61 turns the M60 measurement primitive into one
 editable, failure-honest workflow across all Compare presentation modes. No
-second ROI model, scheduler redesign, decoder-registry change, or CI/build-system
+second ROI model, scheduler redesign, decoder-registry change, or build-system
 change was introduced.
 
 ## Closure questions
@@ -80,8 +80,12 @@ complexity gates, golden image, `bench_smoke`, and `bench_enforce`.
 
 ## Self-review and limitations
 
-- Build system, presets, CI, Scheduler architecture, DecoderRegistry, cache,
-  plugin framework, and workspace architecture remain untouched.
+- Build system, presets, Scheduler architecture, DecoderRegistry, cache, plugin
+  framework, and workspace architecture remain untouched.
+- The GitHub format child job was already failing on the preceding commit while
+  the unconditional Tier-1 aggregator still reported success. M61 clears that
+  Markdown debt, pins `markdownlint-cli@0.49.1`, and makes the aggregator reject
+  any non-success required job; this is a gate-truth fix, not a build change.
 - `compareworkspace.h` remains below the 800-line hard cap; ROI value/state
   types and pure interaction/mapping responsibilities live in separate headers.
 - No native 16-bit ROI accumulator was added. No proportional linking for

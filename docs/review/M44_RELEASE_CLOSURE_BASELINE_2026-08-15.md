@@ -12,9 +12,9 @@ Status: baseline captured before M44 source changes
 | Benchmark smoke | included in full gate | passed, 122.90 s |
 | Benchmark enforcement | included in full gate | passed, 324.14 s |
 | Workflow/Browse/Compare | included in full gate | passed (`workflow_ux_tests`, `browse_acceptance_tests`, `browse_convergence_ui_tests`, `compare_acceptance_tests`) |
-| Architecture | ` .\\scripts\\architecture_gate.ps1` | 4 advisory warnings |
-| Complexity | ` .\\scripts\\complexity_gate.ps1` | 58 hard-limit violations, 6 cyclomatic failures, 44 long functions, 122 warnings |
-| Health | ` .\\scripts\\health_score.ps1` | 78.2 / 100, grade C |
+| Architecture | `.\\scripts\\architecture_gate.ps1` | 4 advisory warnings |
+| Complexity | `.\\scripts\\complexity_gate.ps1` | 58 hard-limit violations, 6 cyclomatic failures, 44 long functions, 122 warnings |
+| Health | `.\\scripts\\health_score.ps1` | 78.2 / 100, grade C |
 
 The three script commands were invoked directly from PowerShell because invoking
 them through a nested `powershell -File` in this managed environment leaves

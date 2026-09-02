@@ -354,47 +354,47 @@
 
 - **Phase 1 complete — source-backed image abstraction** (see below).
 - **Phase 2 complete — Viewer LOD-first display pipeline:**
-  - Large sources display through a bounded raster over `SourceImage`:
+- Large sources display through a bounded raster over `SourceImage`:
     viewport LOD while zoomed out (`NativeLod` for JPEG), visible-region
     rasters while zoomed in (`BoundedRasterRegion`) — progressive,
     generation-cancelled, lifetime-safe, one in-flight request with debounced
     view-churn upgrades, and NO UI-thread file I/O / decode / full-frame
     scaling.
-  - The Phase-0 reproduction is fixed: **a 100 MP JPEG now opens and
+- The Phase-0 reproduction is fixed: **a 100 MP JPEG now opens and
     displays** (displayReady with the full source dims, bounded raster,
     display-path RSS < ~100 MB vs ~286 MB full materialization), while the
     full frame stays the analysis/Inspector source only (loaded when
     feasible, skipped when > Qt's 256 MB allocation limit — Phase 4 adds
     explicit materialization).
-  - Small images keep the existing fast path; zoom/pan/fit stay fully
+- Small images keep the existing fast path; zoom/pan/fit stay fully
     interactive in LOD mode (`hasDisplayImage`); M46 preload-promotion and
     rejection contracts preserved (raster work rides the Thumbnail pool).
-  - New CTest `m47_viewer_lod_tests` (100 MP open, zoom-in regions, A→B→A,
+- New CTest `m47_viewer_lod_tests` (100 MP open, zoom-in regions, A→B→A,
     destroy mid-request/post-display, idle convergence, small-image fast
     path). Full gate **100/100 green**.
 
 ## M47 Phase 1 — source-backed image abstraction (2026-08-17)
-  - New Qt-free capability interface `ISourceImageCapabilities` (probe without
+- New Qt-free capability interface `ISourceImageCapabilities` (probe without
     pixel decode, native-LOD, bounded region decode) discovered by
     `dynamic_cast` — the frozen `DecoderRegistry`/`IDecoder`/plugin ABI is
     untouched; non-capability decoders fall back cleanly.
-  - `SourceImage` (`core/image/SourceImage.{h,cpp}`) represents a file as
+- `SourceImage` (`core/image/SourceImage.{h,cpp}`) represents a file as
     metadata + capability handle; opening never decodes pixels. Every
     operation records its RFC classification (`NativeLod` / `BoundedRasterRegion`
     / `FullDecodeScaled` / `FullDecodeCrop` / `ProbeMetadata`) plus raw
     full-decode counts in `SourceDecodeStats` — tests can prove which path ran.
-  - `QtDecoder` implements the interface: JPEG advertises `NativeLod`
+- `QtDecoder` implements the interface: JPEG advertises `NativeLod`
     (evidence-based from Phase 0), TIFF honestly does not; region decode uses
     the bounded-memory clipRect path classified `BoundedRasterRegion`, never
     claimed as native.
-  - Measured (test-verified): 100 MP JPEG probes without decoding, LOD(256)
+- Measured (test-verified): 100 MP JPEG probes without decoding, LOD(256)
     succeeds as NativeLod with `fullDecode==0`; a 512×512 region of the 100 MP
     JPEG succeeds (bounded memory) where full decode is rejected by Qt's
     256 MB limit; TIFF LOD fails today with the honest fallback classification;
     clip-path region is pixel-identical to the full-decode crop; EXIF-oriented
     probe/LOD report the rotated geometry.
-  - New CTest `m47_source_tests` (8 groups); full gate 99/99 green.
-  - Next: Phase 2 Viewer large-image pipeline (viewport LOD/tile over
+- New CTest `m47_source_tests` (8 groups); full gate 99/99 green.
+- Next: Phase 2 Viewer large-image pipeline (viewport LOD/tile over
     `SourceImage`).
 
 ## M47 Phases 3–6 complete (2026-08-17) — Compare source-backed display, exact-source consumers, transactional restore, soak & benchmark evidence

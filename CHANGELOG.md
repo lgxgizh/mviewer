@@ -30,6 +30,9 @@
   interaction geometry/mapping/cancellation/source-truth tests, and a 24/60/100
   MP ROI scan benchmark. See `docs/rfc/M61_PROFESSIONAL_LINKED_ROI_WORKFLOW.md`
   and the M61 closure review.
+- Repaired the Tier-1 CI aggregator so a failed required child job now fails the
+  overall gate, pinned markdownlint, and cleared the repository's existing
+  Markdown violations that the previously masked format job exposed.
 
 ## [1.0.17] - 2026-09-02
 
