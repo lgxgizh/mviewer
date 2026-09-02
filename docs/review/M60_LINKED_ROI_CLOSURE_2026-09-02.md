@@ -71,8 +71,9 @@ Release line: `1.0.17` (tag and GitHub run are filled after final push)
 | Full `build.ps1 Test` run 1 | PASS — 129/129, 820.73 s |
 | Full `build.ps1 Test` run 2 | PASS — 129/129, 822.00 s |
 | Complexity/architecture gates | PASS — 0 hard failures / 0 architecture violations |
-| GitHub PR Gate / package workflow | pending push |
-| GitHub release | pending tag |
+| GitHub PR Gate | PASS — [run 33602280952](https://github.com/lgxgizh/mviewer/actions/runs/33602280952) (Tier 1) |
+| GitHub Release package workflow | PASS — [run 33605323674](https://github.com/lgxgizh/mviewer/actions/runs/33605323674) (Tier 3) |
+| GitHub release | Published — [v1.0.17](https://github.com/lgxgizh/mviewer/releases/tag/v1.0.17) |
 
 ## Known qualification boundary
 

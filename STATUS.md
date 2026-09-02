@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-09-02 · Version: **1.0.17 M60 linked ROI measurement line** · Release tag: **v1.0.17 pending publication**
+> Snapshot: 2026-09-02 · Version: **1.0.17 M60 linked ROI measurement line** · Release tag: **v1.0.17 published**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
