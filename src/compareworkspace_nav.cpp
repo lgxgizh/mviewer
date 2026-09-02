@@ -418,8 +418,8 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
         // There is no linked measurement to clip against, and preserving the
         // geometry keeps existing local-ROI/session behavior deterministic.
         m_lastSelection = mviewer::domain::normalizeSelection(
-            sel.x, sel.y, sel.x + sel.width, sel.y + sel.height,
-            std::numeric_limits<int>::max(), std::numeric_limits<int>::max());
+            sel.x, sel.y, sel.x + sel.width, sel.y + sel.height, std::numeric_limits<int>::max(),
+            std::numeric_limits<int>::max());
         m_roiLinked = false;
         m_engine.selection().setSelection(m_lastSelection);
         for (int i = 0; i < m_cellViews.size(); ++i)
@@ -434,14 +434,13 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
         }
         clearROIStatsDisplay();
         if (m_roiGeometryLabel)
-            m_roiGeometryLabel->setText(
-                m_lastSelection.isEmpty()
-                    ? tr("ROI: —")
-                    : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
-                          .arg(m_lastSelection.x)
-                          .arg(m_lastSelection.y)
-                          .arg(m_lastSelection.width)
-                          .arg(m_lastSelection.height));
+            m_roiGeometryLabel->setText(m_lastSelection.isEmpty()
+                                            ? tr("ROI: —")
+                                            : tr("ROI   X: %1   Y: %2   W: %3   H: %4")
+                                                  .arg(m_lastSelection.x)
+                                                  .arg(m_lastSelection.y)
+                                                  .arg(m_lastSelection.width)
+                                                  .arg(m_lastSelection.height));
         if (m_roiHistChk && m_roiHistChk->isChecked())
             refreshHistograms();
         updateROIAvailabilityStatus();
@@ -450,14 +449,12 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
     }
 
     const ImageFrame *first = m_engine.imageAt(0);
-    const int width = first ? (first->metadata().width > 0 ? first->metadata().width
-                                                           : first->width())
-                            : 0;
-    const int height = first ? (first->metadata().height > 0 ? first->metadata().height
-                                                               : first->height())
-                             : 0;
-    m_lastSelection = mviewer::domain::normalizeSelection(
-        sel.x, sel.y, sel.x + sel.width, sel.y + sel.height, width, height);
+    const int width =
+        first ? (first->metadata().width > 0 ? first->metadata().width : first->width()) : 0;
+    const int height =
+        first ? (first->metadata().height > 0 ? first->metadata().height : first->height()) : 0;
+    m_lastSelection = mviewer::domain::normalizeSelection(sel.x, sel.y, sel.x + sel.width,
+                                                          sel.y + sel.height, width, height);
     m_roiLinked = !m_lastSelection.isEmpty();
     // Engine owns the frames; it mirrors the synchronized ROI to every ImageFrame.
     if (m_roiLinked)
@@ -486,19 +483,18 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
         refreshAllDiffOverlays();
     scheduleROIMeasurement();
     if (m_roiGeometryLabel)
-        m_roiGeometryLabel->setText(
-            m_roiLinked ? tr("ROI   X: %1   Y: %2   W: %3   H: %4")
-                              .arg(m_lastSelection.x)
-                              .arg(m_lastSelection.y)
-                              .arg(m_lastSelection.width)
-                              .arg(m_lastSelection.height)
-                        : tr("ROI: —"));
+        m_roiGeometryLabel->setText(m_roiLinked ? tr("ROI   X: %1   Y: %2   W: %3   H: %4")
+                                                      .arg(m_lastSelection.x)
+                                                      .arg(m_lastSelection.y)
+                                                      .arg(m_lastSelection.width)
+                                                      .arg(m_lastSelection.height)
+                                                : tr("ROI: —"));
     updateROIAvailabilityStatus();
     update();
 }
 
-void CompareWorkspace::applySelectionPreviewFromView(
-    RawImageView *view, const mviewer::domain::Selection &sel)
+void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
+                                                     const mviewer::domain::Selection &sel)
 {
     if (!view)
         return;
@@ -539,19 +535,18 @@ void CompareWorkspace::applySelectionPreviewFromView(
             other->setSelection(clipped);
     clearROIStatsDisplay();
     if (m_roiGeometryLabel)
-        m_roiGeometryLabel->setText(
-            m_roiLinked ? tr("ROI   X: %1   Y: %2   W: %3   H: %4")
-                              .arg(m_lastSelection.x)
-                              .arg(m_lastSelection.y)
-                              .arg(m_lastSelection.width)
-                              .arg(m_lastSelection.height)
-                        : tr("ROI: —"));
+        m_roiGeometryLabel->setText(m_roiLinked ? tr("ROI   X: %1   Y: %2   W: %3   H: %4")
+                                                      .arg(m_lastSelection.x)
+                                                      .arg(m_lastSelection.y)
+                                                      .arg(m_lastSelection.width)
+                                                      .arg(m_lastSelection.height)
+                                                : tr("ROI: —"));
     updateROIAvailabilityStatus();
     update();
 }
 
 void CompareWorkspace::applySelectionFromView(RawImageView *view,
-                                               const mviewer::domain::Selection &sel)
+                                              const mviewer::domain::Selection &sel)
 {
     if (!view)
         return;

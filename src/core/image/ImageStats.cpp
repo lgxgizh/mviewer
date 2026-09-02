@@ -85,10 +85,10 @@ ROIChannelStats computeROIChannelStats(const ImageData &img,
 
     const long long x0ll = std::clamp<long long>(region.x, 0, img.width);
     const long long y0ll = std::clamp<long long>(region.y, 0, img.height);
-    const long long x1ll = std::clamp<long long>(static_cast<long long>(region.x) + region.width,
-                                                 0, img.width);
-    const long long y1ll = std::clamp<long long>(static_cast<long long>(region.y) + region.height,
-                                                 0, img.height);
+    const long long x1ll =
+        std::clamp<long long>(static_cast<long long>(region.x) + region.width, 0, img.width);
+    const long long y1ll =
+        std::clamp<long long>(static_cast<long long>(region.y) + region.height, 0, img.height);
     const int x0 = static_cast<int>(std::min(x0ll, x1ll));
     const int y0 = static_cast<int>(std::min(y0ll, y1ll));
     const int x1 = static_cast<int>(std::max(x0ll, x1ll));

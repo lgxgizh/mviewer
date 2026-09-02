@@ -5,12 +5,12 @@
 // by CompareWorkspace's asynchronous measurement path.
 
 #include "core/analyzer/RGBMeanAnalyzer.h"
-#include "core/image/ImageStats.h"
 #include "core/image/ImageFrame.h"
+#include "core/image/ImageStats.h"
 
 #include <cmath>
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <memory>
 
 namespace
@@ -22,7 +22,7 @@ int g_failures = 0;
     {                                                                                              \
         if (!(condition))                                                                          \
         {                                                                                          \
-            std::printf("FAIL: %s\n", message);                                                   \
+            std::printf("FAIL: %s\n", message);                                                    \
             ++g_failures;                                                                          \
         }                                                                                          \
     } while (false)
@@ -114,8 +114,8 @@ void formatTests()
         CHECK(stats.ratiosValid, "non-zero green marks ratios valid");
     }
 
-    const auto gray = mviewer::core::computeROIChannelStats(
-        makePattern(PixelFormat::Grayscale8), mviewer::domain::Selection{0, 0, 2, 2});
+    const auto gray = mviewer::core::computeROIChannelStats(makePattern(PixelFormat::Grayscale8),
+                                                            mviewer::domain::Selection{0, 0, 2, 2});
     CHECK(gray.valid && gray.pixelCount == 4, "grayscale ROI reports all pixels");
     checkNear(gray.rMean, 40.0, "grayscale R mean is replicated");
     checkNear(gray.gMean, 40.0, "grayscale G mean is replicated");
@@ -127,8 +127,8 @@ void formatTests()
     (*zeroGreen.buffer)[0] = 10;
     (*zeroGreen.buffer)[1] = 0;
     (*zeroGreen.buffer)[2] = 20;
-    const auto zeroStats = mviewer::core::computeROIChannelStats(
-        zeroGreen, mviewer::domain::Selection{0, 0, 1, 1});
+    const auto zeroStats =
+        mviewer::core::computeROIChannelStats(zeroGreen, mviewer::domain::Selection{0, 0, 1, 1});
     CHECK(zeroStats.valid && !zeroStats.ratiosValid, "zero-green ROI exposes unavailable ratios");
 }
 

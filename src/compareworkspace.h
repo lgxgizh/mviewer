@@ -224,8 +224,7 @@ class CompareWorkspace : public QWidget
     void fitAll();
     void applySelectionToAll(const mviewer::domain::Selection &sel);
     void applySelectionFromView(RawImageView *view, const mviewer::domain::Selection &sel);
-    void applySelectionPreviewFromView(RawImageView *view,
-                                       const mviewer::domain::Selection &sel);
+    void applySelectionPreviewFromView(RawImageView *view, const mviewer::domain::Selection &sel);
     void clearROI();
     bool linkedROIAvailable() const;
     void updateROIAvailabilityStatus();
@@ -333,13 +332,14 @@ class CompareWorkspace : public QWidget
         std::vector<mviewer::core::ROIChannelStats> stats;
     };
     static mviewer::core::ROIChannelStats computeSourceROI(const ROIInput &input,
-                                                            const mviewer::domain::Selection &roi);
-    static ROIStatsBatchResult computeROIStatsBatch(
-        const std::vector<ROIInput> &inputs, const mviewer::domain::Selection &roi,
-        bool linked, uint64_t generation, const TaskScheduler::TaskContext &context);
+                                                           const mviewer::domain::Selection &roi);
+    static ROIStatsBatchResult computeROIStatsBatch(const std::vector<ROIInput> &inputs,
+                                                    const mviewer::domain::Selection &roi,
+                                                    bool linked, uint64_t generation,
+                                                    const TaskScheduler::TaskContext &context);
     TaskScheduler::TaskHandle startROIStatsBatch(const std::vector<ROIInput> &inputs,
-                                                 const mviewer::domain::Selection &roi,
-                                                 bool linked, uint64_t generation,
+                                                 const mviewer::domain::Selection &roi, bool linked,
+                                                 uint64_t generation,
                                                  const QPointer<CompareWorkspace> &guard);
     void scheduleROIMeasurement();
     void applyROIStatsBatchResult(const ROIStatsBatchResult &result);

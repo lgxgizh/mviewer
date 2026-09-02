@@ -18,10 +18,10 @@ bool computeRGB(const ImageData &img, const mviewer::domain::Selection &region,
 
     const long long x0ll = std::clamp<long long>(region.x, 0, img.width);
     const long long y0ll = std::clamp<long long>(region.y, 0, img.height);
-    const long long x1ll = std::clamp<long long>(static_cast<long long>(region.x) + region.width,
-                                                 0, img.width);
-    const long long y1ll = std::clamp<long long>(static_cast<long long>(region.y) + region.height,
-                                                 0, img.height);
+    const long long x1ll =
+        std::clamp<long long>(static_cast<long long>(region.x) + region.width, 0, img.width);
+    const long long y1ll =
+        std::clamp<long long>(static_cast<long long>(region.y) + region.height, 0, img.height);
     const int x0 = static_cast<int>(std::min(x0ll, x1ll));
     const int y0 = static_cast<int>(std::min(y0ll, y1ll));
     const int x1 = static_cast<int>(std::max(x0ll, x1ll));
@@ -68,12 +68,12 @@ bool computeRGB(const ImageData &img, const mviewer::domain::Selection &region,
     out.rMean = measured.rMean;
     out.gMean = measured.gMean;
     out.bMean = measured.bMean;
-    out.rStd = std::sqrt(std::max(0.0, static_cast<double>(sumR2 / measured.pixelCount) -
-                                           out.rMean * out.rMean));
-    out.gStd = std::sqrt(std::max(0.0, static_cast<double>(sumG2 / measured.pixelCount) -
-                                           out.gMean * out.gMean));
-    out.bStd = std::sqrt(std::max(0.0, static_cast<double>(sumB2 / measured.pixelCount) -
-                                           out.bMean * out.bMean));
+    out.rStd = std::sqrt(
+        std::max(0.0, static_cast<double>(sumR2 / measured.pixelCount) - out.rMean * out.rMean));
+    out.gStd = std::sqrt(
+        std::max(0.0, static_cast<double>(sumG2 / measured.pixelCount) - out.gMean * out.gMean));
+    out.bStd = std::sqrt(
+        std::max(0.0, static_cast<double>(sumB2 / measured.pixelCount) - out.bMean * out.bMean));
     out.rOverG = measured.rOverG;
     out.bOverG = measured.bOverG;
     out.pixelCount = measured.pixelCount;
@@ -108,25 +108,29 @@ std::string RGBMeanAnalyzer::resultText() const
         std::snprintf(buf, sizeof(buf),
                       "RGB mean: (%.2f, %.2f, %.2f)  std: (%.2f, %.2f, %.2f)  "
                       "R/G %.4f  B/G %.4f",
-                      m_result.rMean, m_result.gMean, m_result.bMean, m_result.rStd,
-                      m_result.gStd, m_result.bStd, m_result.rOverG, m_result.bOverG);
+                      m_result.rMean, m_result.gMean, m_result.bMean, m_result.rStd, m_result.gStd,
+                      m_result.bStd, m_result.rOverG, m_result.bOverG);
     }
     else
     {
         std::snprintf(buf, sizeof(buf),
                       "RGB mean: (%.2f, %.2f, %.2f)  std: (%.2f, %.2f, %.2f)  "
                       "R/G —  B/G —",
-                      m_result.rMean, m_result.gMean, m_result.bMean, m_result.rStd,
-                      m_result.gStd, m_result.bStd);
+                      m_result.rMean, m_result.gMean, m_result.bMean, m_result.rStd, m_result.gStd,
+                      m_result.bStd);
     }
     return buf;
 }
 
 std::unordered_map<std::string, double> RGBMeanAnalyzer::resultMetrics() const
 {
-    return {{"rMean", m_result.rMean},   {"gMean", m_result.gMean},
-            {"bMean", m_result.bMean},   {"rStd", m_result.rStd},
-            {"gStd", m_result.gStd},     {"bStd", m_result.bStd},
-            {"rOverG", m_result.rOverG}, {"bOverG", m_result.bOverG},
+    return {{"rMean", m_result.rMean},
+            {"gMean", m_result.gMean},
+            {"bMean", m_result.bMean},
+            {"rStd", m_result.rStd},
+            {"gStd", m_result.gStd},
+            {"bStd", m_result.bStd},
+            {"rOverG", m_result.rOverG},
+            {"bOverG", m_result.bOverG},
             {"pixelCount", static_cast<double>(m_result.pixelCount)}};
 }

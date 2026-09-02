@@ -50,10 +50,9 @@ void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
     m_roiTable = new QTableWidget(this);
     m_roiTable->setObjectName("roiMeasurementTable");
     m_roiTable->setColumnCount(7);
-    m_roiTable->setHorizontalHeaderLabels({tr("Image"), QStringLiteral("R Mean"),
-                                           QStringLiteral("G Mean"), QStringLiteral("B Mean"),
-                                           QStringLiteral("R/G"), QStringLiteral("B/G"),
-                                           tr("Pixels")});
+    m_roiTable->setHorizontalHeaderLabels(
+        {tr("Image"), QStringLiteral("R Mean"), QStringLiteral("G Mean"), QStringLiteral("B Mean"),
+         QStringLiteral("R/G"), QStringLiteral("B/G"), tr("Pixels")});
     m_roiTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_roiTable->setSelectionMode(QAbstractItemView::NoSelection);
     m_roiTable->verticalHeader()->setVisible(false);
@@ -113,8 +112,8 @@ CompareWorkspace::ROIStatsBatchResult CompareWorkspace::computeROIStatsBatch(
     return result;
 }
 
-mviewer::core::ROIChannelStats CompareWorkspace::computeSourceROI(
-    const ROIInput &input, const mviewer::domain::Selection &roi)
+mviewer::core::ROIChannelStats
+CompareWorkspace::computeSourceROI(const ROIInput &input, const mviewer::domain::Selection &roi)
 {
     if (!input.pixels.isNull())
         return mviewer::core::computeROIChannelStats(input.pixels, roi);
@@ -137,18 +136,19 @@ mviewer::core::ROIChannelStats CompareWorkspace::computeSourceROI(
     const mviewer::core::SourceRect displayed{roi.x, roi.y, roi.width, roi.height};
     const mviewer::core::SourceRect raw = mviewer::core::orientedRectToRaw(
         displayed, source->rawWidth(), source->rawHeight(), source->orientation());
-    const auto decoded =
-        source->decodeRegion(raw, std::max(1, raw.w), std::max(1, raw.h));
+    const auto decoded = source->decodeRegion(raw, std::max(1, raw.w), std::max(1, raw.h));
     if (!decoded.ok || decoded.pixels.isNull() ||
         decoded.decodePath == mviewer::core::SourceDecodePath::FullDecodeCrop)
         return {};
-    const mviewer::domain::Selection decodedRegion{0, 0, decoded.pixels.width, decoded.pixels.height};
+    const mviewer::domain::Selection decodedRegion{0, 0, decoded.pixels.width,
+                                                   decoded.pixels.height};
     return mviewer::core::computeROIChannelStats(decoded.pixels, decodedRegion);
 }
 
-TaskScheduler::TaskHandle CompareWorkspace::startROIStatsBatch(
-    const std::vector<ROIInput> &inputs, const mviewer::domain::Selection &roi, bool linked,
-    uint64_t generation, const QPointer<CompareWorkspace> &guard)
+TaskScheduler::TaskHandle
+CompareWorkspace::startROIStatsBatch(const std::vector<ROIInput> &inputs,
+                                     const mviewer::domain::Selection &roi, bool linked,
+                                     uint64_t generation, const QPointer<CompareWorkspace> &guard)
 {
     return TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
@@ -222,14 +222,14 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
         const QString name = frame ? QString::fromStdString(frame->metadata().fileName)
                                    : QStringLiteral("#%1").arg(i + 1);
         const auto &stats = result.stats[static_cast<size_t>(i)];
-        const QStringList cells = {
-            name,
-            stats.valid ? meanText(stats.rMean) : QStringLiteral("—"),
-            stats.valid ? meanText(stats.gMean) : QStringLiteral("—"),
-            stats.valid ? meanText(stats.bMean) : QStringLiteral("—"),
-            stats.valid ? ratioText(stats, true) : QStringLiteral("—"),
-            stats.valid ? ratioText(stats, false) : QStringLiteral("—"),
-            stats.valid ? QString::number(stats.pixelCount) : QStringLiteral("—")};
+        const QStringList cells = {name,
+                                   stats.valid ? meanText(stats.rMean) : QStringLiteral("—"),
+                                   stats.valid ? meanText(stats.gMean) : QStringLiteral("—"),
+                                   stats.valid ? meanText(stats.bMean) : QStringLiteral("—"),
+                                   stats.valid ? ratioText(stats, true) : QStringLiteral("—"),
+                                   stats.valid ? ratioText(stats, false) : QStringLiteral("—"),
+                                   stats.valid ? QString::number(stats.pixelCount)
+                                               : QStringLiteral("—")};
         for (int col = 0; col < cells.size(); ++col)
         {
             QTableWidgetItem *item = m_roiTable->item(i, col);
@@ -257,9 +257,8 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
             const QString dbg = (a.ratiosValid && b.ratiosValid)
                                     ? QString::number(b.bOverG - a.bOverG, 'f', 4)
                                     : QStringLiteral("—");
-            m_roiDeltaLabel->setText(
-                tr("Delta (B − A): ΔR %1  ΔG %2  ΔB %3  ΔR/G %4  ΔB/G %5")
-                    .arg(dr, dg, db, drg, dbg));
+            m_roiDeltaLabel->setText(tr("Delta (B − A): ΔR %1  ΔG %2  ΔB %3  ΔR/G %4  ΔB/G %5")
+                                         .arg(dr, dg, db, drg, dbg));
         }
         else
             m_roiDeltaLabel->setText(tr("Delta (B − A): —"));

@@ -44,9 +44,7 @@ void drawSelectionOverlay(QPainter &p, const mviewer::domain::Selection &selecti
     labelFont.setPointSize(8);
     labelFont.setBold(true);
     p.setFont(labelFont);
-    const QString label = QStringLiteral("ROI %1×%2")
-                              .arg(selection.width)
-                              .arg(selection.height);
+    const QString label = QStringLiteral("ROI %1×%2").arg(selection.width).arg(selection.height);
     const QRect labelRect(box.left(), std::max(0, box.top() - 18),
                           p.fontMetrics().horizontalAdvance(label) + 8, 16);
     p.setPen(Qt::NoPen);
@@ -494,9 +492,9 @@ void RawImageView::mouseMoveEvent(QMouseEvent *ev)
         }
         m_selectionMoved = true;
         const QPointF cur = widgetToImage(ev->pos());
-        m_selection = mviewer::domain::normalizeSelection(
-            m_selectStart.x(), m_selectStart.y(), cur.x(), cur.y(), m_sourceSize.width(),
-            m_sourceSize.height());
+        m_selection = mviewer::domain::normalizeSelection(m_selectStart.x(), m_selectStart.y(),
+                                                          cur.x(), cur.y(), m_sourceSize.width(),
+                                                          m_sourceSize.height());
         emit selectionPreviewChanged(m_selection);
         update();
         ev->accept();

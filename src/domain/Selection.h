@@ -55,8 +55,8 @@ inline Selection normalizeSelection(int x0, int y0, int x1, int y1, int imageWid
 // Convert floating-point pointer coordinates to the canonical half-open pixel
 // rectangle. floor/ceil means a drag touching any part of a pixel includes it,
 // while a click with no extent remains a zero-area Selection.
-inline Selection normalizeSelection(double x0, double y0, double x1, double y1,
-                                    int imageWidth, int imageHeight) noexcept
+inline Selection normalizeSelection(double x0, double y0, double x1, double y1, int imageWidth,
+                                    int imageHeight) noexcept
 {
     const auto floorToInt = [](double value) -> int
     {
