@@ -220,7 +220,9 @@ class RawImageView : public QWidget
 
   private:
     void computeFit();
+    // NOLINTBEGIN(bugprone-easily-swappable-parameters)
     void drawCrosshair(QPainter &p, double cx, double cy, double dw, double dh) const;
+    // NOLINTEND(bugprone-easily-swappable-parameters)
     // Viewport-bounded cached base+overlay surface (UI thread only). Holds the
     // transformed base image plus the optional diff overlay so annotation-only
     // repaints (ROI, crosshair, focus border, link markers, size-mismatch badge)

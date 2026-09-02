@@ -4,7 +4,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdio>
+#include <iomanip>
+#include <sstream>
 
 namespace
 {
@@ -102,24 +103,17 @@ std::string RGBMeanAnalyzer::resultText() const
 {
     if (!m_result.ok)
         return "RGB mean: unavailable";
-    char buf[320];
+    std::ostringstream text;
+    text << std::fixed << std::setprecision(2) << "RGB mean: (" << m_result.rMean << ", "
+         << m_result.gMean << ", " << m_result.bMean << ")  std: (" << m_result.rStd << ", "
+         << m_result.gStd << ", " << m_result.bStd << ")  ";
     if (m_result.ratiosValid)
     {
-        std::snprintf(buf, sizeof(buf),
-                      "RGB mean: (%.2f, %.2f, %.2f)  std: (%.2f, %.2f, %.2f)  "
-                      "R/G %.4f  B/G %.4f",
-                      m_result.rMean, m_result.gMean, m_result.bMean, m_result.rStd, m_result.gStd,
-                      m_result.bStd, m_result.rOverG, m_result.bOverG);
+        text << std::setprecision(4) << "R/G " << m_result.rOverG << "  B/G " << m_result.bOverG;
     }
     else
-    {
-        std::snprintf(buf, sizeof(buf),
-                      "RGB mean: (%.2f, %.2f, %.2f)  std: (%.2f, %.2f, %.2f)  "
-                      "R/G —  B/G —",
-                      m_result.rMean, m_result.gMean, m_result.bMean, m_result.rStd, m_result.gStd,
-                      m_result.bStd);
-    }
-    return buf;
+        text << "R/G —  B/G —";
+    return text.str();
 }
 
 std::unordered_map<std::string, double> RGBMeanAnalyzer::resultMetrics() const

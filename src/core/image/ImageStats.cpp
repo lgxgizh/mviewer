@@ -40,10 +40,6 @@ PreviewStats computePreviewStatsROI(const ImageData &img,
             switch (view.format)
             {
             case PixelFormat::BGR24:
-                b = p[0];
-                g = p[1];
-                r = p[2];
-                break;
             case PixelFormat::BGRA32:
                 b = p[0];
                 g = p[1];
@@ -68,7 +64,7 @@ PreviewStats computePreviewStatsROI(const ImageData &img,
         }
     }
 
-    out.lumMean = static_cast<double>(sumL) / count;
+    out.lumMean = static_cast<double>(sumL) / static_cast<double>(count);
     out.rMean = static_cast<int>(sumR / count);
     out.gMean = static_cast<int>(sumG / count);
     out.bMean = static_cast<int>(sumB / count);

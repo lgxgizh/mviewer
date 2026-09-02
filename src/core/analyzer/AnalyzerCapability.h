@@ -20,10 +20,14 @@ enum class AnalyzerCapability : uint32_t
     DifferenceOutput = 1 << 8, // output is an ImageData (heatmap/difference)
 };
 
+// NOLINTBEGIN(clang-analyzer-optin.core.EnumCastOutOfRange)
 constexpr AnalyzerCapability operator|(AnalyzerCapability a, AnalyzerCapability b)
 {
+    // Capability values are an open bitmask; combinations are intentionally not
+    // enumerators of AnalyzerCapability.
     return static_cast<AnalyzerCapability>(static_cast<uint32_t>(a) | static_cast<uint32_t>(b));
 }
+// NOLINTEND(clang-analyzer-optin.core.EnumCastOutOfRange)
 constexpr bool hasCapability(AnalyzerCapability flags, AnalyzerCapability c)
 {
     return (static_cast<uint32_t>(flags) & static_cast<uint32_t>(c)) != 0;

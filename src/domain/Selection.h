@@ -31,6 +31,7 @@ struct Selection
 // and the resulting rectangle is clipped to [0,width) x [0,height). The
 // helper is deliberately Qt-free so every UI and analysis path shares the
 // same edge and reverse-drag semantics.
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 inline Selection normalizeSelection(int x0, int y0, int x1, int y1, int imageWidth,
                                     int imageHeight) noexcept
 {
@@ -87,5 +88,6 @@ inline Selection normalizeSelection(double x0, double y0, double x1, double y1, 
     return normalizeSelection(floorToInt(left), floorToInt(top), ceilToInt(right),
                               ceilToInt(bottom), imageWidth, imageHeight);
 }
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
 } // namespace mviewer::domain

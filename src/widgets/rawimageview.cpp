@@ -193,7 +193,6 @@ void RawImageView::zoom(double factor, const QPointF &anchor)
 
     // Keep the image point under anchor fixed
     const QPointF imgPt = (anchorPt - QPointF(width() / 2.0, height() / 2.0) - m_offset) / m_scale;
-    const double ratio = newScale / m_scale;
     m_offset = anchorPt - QPointF(width() / 2.0, height() / 2.0) - imgPt * newScale;
     m_scale = newScale;
     clampOffset();
@@ -576,6 +575,7 @@ void RawImageView::leaveEvent(QEvent *ev)
     emit crosshairMoved(QPointF(-1, -1));
 }
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 void RawImageView::drawCrosshair(QPainter &p, double cx, double cy, double dw, double dh) const
 {
     if (m_image.isNull() || m_scale <= 0.0)
@@ -596,6 +596,7 @@ void RawImageView::drawCrosshair(QPainter &p, double cx, double cy, double dw, d
     p.setPen(Qt::NoPen);
     p.drawEllipse(QPointF(wx, wy), 3, 3);
 }
+// NOLINTEND(bugprone-easily-swappable-parameters)
 
 void RawImageView::resizeEvent(QResizeEvent *ev)
 {
