@@ -13,6 +13,8 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+
+// NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,bugprone-easily-swappable-parameters,bugprone-implicit-widening-of-multiplication-result)
 #include <memory>
 #include <system_error>
 #include <vector>
@@ -695,3 +697,5 @@ int main(int argc, char **argv)
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;
 }
+
+// NOLINTEND(cppcoreguidelines-pro-type-vararg,bugprone-easily-swappable-parameters,bugprone-implicit-widening-of-multiplication-result)

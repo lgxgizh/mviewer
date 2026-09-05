@@ -7,6 +7,8 @@
 #include "core/image/ImageBuffer.h"
 #include "domain/Selection.h"
 
+// NOLINTBEGIN(performance-enum-size)
+
 namespace mviewer::core
 {
 // Pixel Inspector math — Qt-free, std-only so it is unit-testable without
@@ -128,3 +130,5 @@ const char *colorSpaceLabel(ColorSpace space);
 // Format an sRGB pixel as a "#RRGGBB" string.
 std::string toHex(uint8_t r, uint8_t g, uint8_t b);
 } // namespace mviewer::core
+
+// NOLINTEND(performance-enum-size)

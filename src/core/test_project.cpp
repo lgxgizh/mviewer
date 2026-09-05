@@ -5,6 +5,8 @@
 #include <cstdio>
 #include <iostream>
 
+// NOLINTBEGIN(cppcoreguidelines-pro-type-vararg)
+
 namespace
 {
 int g_failures = 0;
@@ -73,3 +75,5 @@ int main()
     std::printf("project round-trip failures: %d\n", g_failures);
     return g_failures == 0 ? 0 : 1;
 }
+
+// NOLINTEND(cppcoreguidelines-pro-type-vararg)

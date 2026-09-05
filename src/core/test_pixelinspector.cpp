@@ -10,6 +10,8 @@
 #include <memory>
 #include <vector>
 
+// NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,bugprone-easily-swappable-parameters,bugprone-implicit-widening-of-multiplication-result)
+
 using namespace mviewer::core;
 
 static int g_failures = 0;
@@ -332,3 +334,5 @@ int main()
     std::printf("FAILED: pixelinspector_tests (%d failures)\n", g_failures);
     return 1;
 }
+
+// NOLINTEND(cppcoreguidelines-pro-type-vararg,bugprone-easily-swappable-parameters,bugprone-implicit-widening-of-multiplication-result)

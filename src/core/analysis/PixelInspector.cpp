@@ -4,6 +4,8 @@
 #include <cmath>
 #include <cstdio>
 
+// NOLINTBEGIN(bugprone-easily-swappable-parameters,bugprone-incorrect-roundings,cppcoreguidelines-pro-type-vararg)
+
 namespace mviewer::core
 {
 namespace
@@ -531,3 +533,5 @@ std::string toHex(uint8_t r, uint8_t g, uint8_t b)
     return std::string(buf);
 }
 } // namespace mviewer::core
+
+// NOLINTEND(bugprone-easily-swappable-parameters,bugprone-incorrect-roundings,cppcoreguidelines-pro-type-vararg)
