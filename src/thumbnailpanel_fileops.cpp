@@ -45,7 +45,7 @@ int transferPercent(uintmax_t copied, uintmax_t total)
 } // namespace
 
 void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command,
-                                                const QStringList &paths, const QString &label)
+                                               const QStringList &paths, const QString &label)
 {
     if (!command || paths.isEmpty() || m_fileOperationBusy)
         return;
@@ -56,8 +56,8 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
     const QPointer<ThumbnailPanel> guard(this);
     auto state = std::make_shared<AsyncCommandState>(std::move(command));
 
-    m_fileProgress = new QProgressDialog(label + QStringLiteral("…"), QStringLiteral("取消"), 0,
-                                         100, this);
+    m_fileProgress =
+        new QProgressDialog(label + QStringLiteral("…"), QStringLiteral("取消"), 0, 100, this);
     m_fileProgress->setWindowModality(Qt::WindowModal);
     m_fileProgress->setAutoClose(false);
     m_fileProgress->setAutoReset(false);
@@ -151,18 +151,17 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
 
                     const std::string error =
                         state->command ? state->command->lastError() : "Command was lost.";
-                    const bool unresolved =
-                        state->command && state->command->hasUnresolvedState();
+                    const bool unresolved = state->command && state->command->hasUnresolvedState();
                     if (panel->m_cmdStack)
                         panel->m_cmdStack->recordExecuted(std::move(state->command));
 
                     if (!state->succeeded)
                     {
                         const QString detail = QString::fromUtf8(error.c_str());
-                        QMessageBox::warning(
-                            panel, label,
-                            state->cancelled ? label + QStringLiteral("已取消。\n") + detail
-                                             : label + QStringLiteral("失败。\n") + detail);
+                        QMessageBox::warning(panel, label,
+                                             state->cancelled
+                                                 ? label + QStringLiteral("已取消。\n") + detail
+                                                 : label + QStringLiteral("失败。\n") + detail);
                     }
 
                     if (!panel->m_currentDir.isEmpty())
@@ -204,7 +203,7 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
 }
 
 void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
-                                             const QString &destinationDirectory)
+                                            const QString &destinationDirectory)
 {
     if (paths.isEmpty() || destinationDirectory.isEmpty() || m_fileOperationBusy)
         return;
@@ -216,8 +215,8 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
     auto state = std::make_shared<AsyncCopyState>();
     const auto fileSystem = mviewer::core::defaultFileSystemAdapter();
 
-    m_fileProgress = new QProgressDialog(QStringLiteral("复制中…"), QStringLiteral("取消"), 0,
-                                         100, this);
+    m_fileProgress =
+        new QProgressDialog(QStringLiteral("复制中…"), QStringLiteral("取消"), 0, 100, this);
     m_fileProgress->setWindowModality(Qt::WindowModal);
     m_fileProgress->setAutoClose(false);
     m_fileProgress->setAutoReset(false);
@@ -293,8 +292,7 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
                     ++state->copied;
                 else
                 {
-                    state->failures.append(path + ": " +
-                                           QString::fromUtf8(result.error.c_str()));
+                    state->failures.append(path + ": " + QString::fromUtf8(result.error.c_str()));
                     if (ctx.isCancelled())
                     {
                         state->cancelled = true;
@@ -371,7 +369,20 @@ void ThumbnailPanel::renameSelected()
         QInputDialog::getText(this, "重命名", "新文件名:", QLineEdit::Normal, fi.fileName(), &ok);
     if (!ok || newName.isEmpty() || newName == fi.fileName())
         return;
+    if (newName.contains(QLatin1Char('/')) || newName.contains(QLatin1Char('\\')) ||
+        QFileInfo(newName).fileName() != newName)
+    {
+        QMessageBox::warning(this, QStringLiteral("重命名失败"),
+                             QStringLiteral("文件名不能包含路径。"));
+        return;
+    }
     const QString newPath = fi.absolutePath() + "/" + newName;
+    if (QFileInfo(newPath).absolutePath() != fi.absolutePath())
+    {
+        QMessageBox::warning(this, QStringLiteral("重命名失败"),
+                             QStringLiteral("文件名不能包含路径。"));
+        return;
+    }
 
     // A-10: reversible rename via CommandStack when available.
     if (m_cmdStack)
@@ -412,8 +423,8 @@ void ThumbnailPanel::renameSelected()
             // the same row-local behavior without a full model reset.
             mviewer::core::DirectoryDelta delta;
             delta.path = m_currentDir.toUtf8().toStdString();
-            delta.renamed.push_back({directoryEntryForPath(oldPath),
-                                     directoryEntryForPath(newPath)});
+            delta.renamed.push_back(
+                {directoryEntryForPath(oldPath), directoryEntryForPath(newPath)});
             applyDirectoryDelta(delta);
         }
         // M24 (A#8): keep the renamed file selected — Explorer/FastStone
@@ -440,7 +451,8 @@ void ThumbnailPanel::moveToTrashSelected()
         return;
     }
 
-    auto cmd = std::make_unique<FileDeleteCommand>(toStdPaths(paths), trashDir.toUtf8().toStdString());
+    auto cmd =
+        std::make_unique<FileDeleteCommand>(toStdPaths(paths), trashDir.toUtf8().toStdString());
     startCommandFileOperation(std::move(cmd), paths, QStringLiteral("删除"));
 }
 
@@ -530,8 +542,8 @@ void ThumbnailPanel::batchAnalyzeExport()
 }
 
 void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
-                                                 const std::string &analyzerId,
-                                                 const QString &output)
+                                                const std::string &analyzerId,
+                                                const QString &output)
 {
     if (m_batchTask)
     {
@@ -612,8 +624,8 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
             const auto report = mviewer::core::buildBatchReport(state->analyzerId, results);
             const size_t resultCount = results.size();
             const std::string body = asJson ? report.toJson() : report.toCsv();
-            const bool writeOk = mviewer::exportjob::writeTextAtomically(
-                state->output.toUtf8().toStdString(), body);
+            const bool writeOk =
+                mviewer::exportjob::writeTextAtomically(state->output.toUtf8().toStdString(), body);
             std::lock_guard<std::mutex> lock(state->mutex);
             state->resultCount = resultCount;
             state->body = body;
@@ -650,15 +662,14 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
                     else if (!writeOk)
                     {
                         QMessageBox::critical(guard, QObject::tr("批量分析导出"),
-                                               QObject::tr("无法写入：%1").arg(state->output));
+                                              QObject::tr("无法写入：%1").arg(state->output));
                     }
                     else
                     {
-                        QMessageBox::information(
-                            guard, QObject::tr("批量分析导出"),
-                            QObject::tr("已导出 %1 条结果 → %2")
-                                .arg(static_cast<qlonglong>(resultCount))
-                                .arg(output));
+                        QMessageBox::information(guard, QObject::tr("批量分析导出"),
+                                                 QObject::tr("已导出 %1 条结果 → %2")
+                                                     .arg(static_cast<qlonglong>(resultCount))
+                                                     .arg(output));
                     }
                 },
                 Qt::QueuedConnection);

@@ -364,6 +364,26 @@ int main(int argc, char **argv)
             side->setChecked(false);
     }
 
+    {
+        if (split)
+            split->setChecked(true);
+        pump(30);
+        CHECK(canvas, "Canvas exists for empty-release regression");
+        if (canvas)
+        {
+            const QPoint outsideFrom(-40, canvas->height() / 2);
+            const QPoint outsideTo(-10, canvas->height() / 2 + 30);
+            sendRightDrag(canvas, outsideFrom, outsideTo);
+            CHECK(workspace->currentROI().isEmpty() &&
+                      workspace->engine().selection().selection().isEmpty(),
+                  "a moved Canvas drag that clips to empty commits a clear instead of keeping the "
+                  "previous engine ROI");
+        }
+        if (split)
+            split->setChecked(false);
+        pump(20);
+    }
+
     clearROI(workspace);
     TaskScheduler::instance().pause(TaskScheduler::AnalysisPool);
     sendRightDrag(first, gridFrom, gridTo);

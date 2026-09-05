@@ -2,8 +2,23 @@
 #include "core/project/ProjectSerializer.h"
 #include "core/workspace/WorkspaceSerializer.h"
 
-#include <cassert>
+#include <cstdio>
 #include <iostream>
+
+namespace
+{
+int g_failures = 0;
+
+#define CHECK(condition, message)                                                                  \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(condition))                                                                          \
+        {                                                                                          \
+            std::printf("FAIL: %s\n", message);                                                    \
+            ++g_failures;                                                                          \
+        }                                                                                          \
+    } while (false)
+} // namespace
 
 // M15 Project (.mvproj) round-trip acceptance test.
 int main()
@@ -36,23 +51,25 @@ int main()
 
     const std::string json = mviewer::core::serializeProject(p);
     mviewer::domain::Project out;
-    assert(mviewer::core::deserializeProject(json, out));
-    assert(out.name == "ISP eval");
-    assert(out.appVersion == MVIEWER_VERSION_STRING && "appVersion must round-trip");
-    assert(out.datasetRoots.size() == 2);
-    assert(out.analyzerPipeline.size() == 3);
-    assert(out.analyzerPipeline[0] == "histogram");
-    assert(out.workspace.imageCount() == 1);
-    assert(out.workspace.folders.front().imageSet.images.front().analysis == "peak=0.9");
-    assert(out.workspace.folders.front().imageSet.images.front().analysisAnalyzerId ==
-           "brightness");
-    assert(!out.workspace.compareSessionJson.empty());
+    CHECK(mviewer::core::deserializeProject(json, out), "project JSON deserializes");
+    CHECK(out.name == "ISP eval", "project name round-trips");
+    CHECK(out.appVersion == MVIEWER_VERSION_STRING, "appVersion must round-trip");
+    CHECK(out.datasetRoots.size() == 2, "dataset roots round-trip");
+    CHECK(out.analyzerPipeline.size() == 3, "analyzer pipeline size round-trips");
+    CHECK(out.analyzerPipeline[0] == "histogram", "analyzer pipeline entries round-trip");
+    CHECK(out.workspace.imageCount() == 1, "workspace image count round-trips");
+    CHECK(out.workspace.folders.front().imageSet.images.front().analysis == "peak=0.9",
+          "workspace analysis round-trips");
+    CHECK(out.workspace.folders.front().imageSet.images.front().analysisAnalyzerId == "brightness",
+          "workspace analyzer id round-trips");
+    CHECK(!out.workspace.compareSessionJson.empty(), "compare session JSON round-trips");
 
     // Negative cases must fail cleanly (no throw, false return).
     mviewer::domain::Project bad;
-    assert(!mviewer::core::deserializeProject("{not valid json", bad));
-    assert(!mviewer::core::deserializeProject(R"({"name":"x"})", bad)); // no workspace
+    CHECK(!mviewer::core::deserializeProject("{not valid json", bad), "invalid JSON is rejected");
+    CHECK(!mviewer::core::deserializeProject(R"({"name":"x"})", bad),
+          "JSON without a workspace is rejected");
 
-    std::cout << "project round-trip OK\n";
-    return 0;
+    std::printf("project round-trip failures: %d\n", g_failures);
+    return g_failures == 0 ? 0 : 1;
 }

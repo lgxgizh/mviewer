@@ -211,7 +211,23 @@ bool CompareWorkspace::handleCanvasPress(QEvent *event)
         m_canvasSelectionPress = me->pos();
         m_canvasSelectionPane = canvasRefCellAt(me->pos());
         m_canvasSelectionStart = canvasSourcePoint(me->pos(), m_canvasSelectionPane);
-        m_canvasSelectionOrigin = m_lastSelection;
+        const ImageFrame *pressFrame = m_engine.imageAt(m_canvasSelectionPane);
+        const int pressW = pressFrame
+                               ? (pressFrame->metadata().width > 0 ? pressFrame->metadata().width
+                                                                   : pressFrame->width())
+                               : 0;
+        const int pressH = pressFrame
+                               ? (pressFrame->metadata().height > 0 ? pressFrame->metadata().height
+                                                                    : pressFrame->height())
+                               : 0;
+        const CellAdjust pressAdjust =
+            m_canvasSelectionPane >= 0 &&
+                    m_canvasSelectionPane < static_cast<int>(m_cellAdjusts.size())
+                ? m_cellAdjusts[static_cast<size_t>(m_canvasSelectionPane)]
+                : CellAdjust{};
+        const auto displayOrigin = mviewer::core::mapSourceSelectionToDisplay(
+            m_lastSelection, analysisAdjustment(pressAdjust), pressW, pressH);
+        m_canvasSelectionOrigin = displayOrigin;
         const QRectF destination =
             cellFullDestRect(m_canvasSelectionPane, canvasPaneGeometry(m_canvasSelectionPane));
         const QSize source =
@@ -223,7 +239,7 @@ bool CompareWorkspace::handleCanvasPress(QEvent *event)
         const double toleranceY =
             destination.height() > 0.0 ? 8.0 * source.height() / destination.height() : 0.0;
         m_canvasSelectionHandle =
-            mviewer::domain::hitTestSelection(m_lastSelection, m_canvasSelectionStart.x(),
+            mviewer::domain::hitTestSelection(displayOrigin, m_canvasSelectionStart.x(),
                                               m_canvasSelectionStart.y(), toleranceX, toleranceY);
         if (m_canvasSelectionHandle == mviewer::domain::SelectionHandle::None)
             m_canvasSelectionHandle = mviewer::domain::SelectionHandle::Create;
@@ -316,10 +332,27 @@ bool CompareWorkspace::handleCanvasRelease(QEvent *event)
     if (me->button() == Qt::RightButton && m_canvasSelecting)
     {
         m_canvasSelecting = false;
-        if (m_canvasSelectionMoved && !m_lastSelection.isEmpty())
+        if (!m_canvasSelectionMoved)
+        {
+            const ImageFrame *releaseFrame = m_engine.imageAt(m_canvasSelectionPane);
+            const int srcW =
+                releaseFrame ? (releaseFrame->metadata().width > 0 ? releaseFrame->metadata().width
+                                                                   : releaseFrame->width())
+                             : 0;
+            const int srcH = releaseFrame ? (releaseFrame->metadata().height > 0
+                                                 ? releaseFrame->metadata().height
+                                                 : releaseFrame->height())
+                                          : 0;
+            const CellAdjust releaseAdjust =
+                m_canvasSelectionPane >= 0 &&
+                        m_canvasSelectionPane < static_cast<int>(m_cellAdjusts.size())
+                    ? m_cellAdjusts[static_cast<size_t>(m_canvasSelectionPane)]
+                    : CellAdjust{};
+            applySelectionToAll(mviewer::core::mapDisplaySelectionToSource(
+                m_canvasSelectionOrigin, analysisAdjustment(releaseAdjust), srcW, srcH));
+        }
+        else
             applySelectionToAll(m_lastSelection);
-        else if (!m_canvasSelectionMoved)
-            applySelectionToAll(m_canvasSelectionOrigin);
         m_canvasSelectionHandle = mviewer::domain::SelectionHandle::None;
         me->accept();
         return true;

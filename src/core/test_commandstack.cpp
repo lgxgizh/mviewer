@@ -2,9 +2,9 @@
 // with real undo. Domain-free; no display.
 #include "core/command/CommandStack.h"
 #include "core/command/FileDeleteCommand.h"
-#include "core/command/FileSystemAdapter.h"
 #include "core/command/FileMoveCommand.h"
 #include "core/command/FileRenameCommand.h"
+#include "core/command/FileSystemAdapter.h"
 #include "core/command/LabelCommand.h"
 #include "core/command/RotateCommand.h"
 #include "core/image/ImageBuffer.h"
@@ -176,7 +176,7 @@ class FaultFileSystem final : public mviewer::core::FileSystemAdapter
             (failRenameAt2 > 0 && renameCalls == failRenameAt2))
         {
             ec = std::make_error_code(failAsCrossVolume ? std::errc::cross_device_link
-                                                         : std::errc::permission_denied);
+                                                        : std::errc::permission_denied);
             return false;
         }
         return base()->rename(from, to, ec);
@@ -186,10 +186,8 @@ class FaultFileSystem final : public mviewer::core::FileSystemAdapter
     {
         return base()->copyFile(from, to, ec);
     }
-    bool copyFileWithProgress(const std::filesystem::path &from,
-                              const std::filesystem::path &to,
-                              const TransferObserver &observer,
-                              std::error_code &ec) override
+    bool copyFileWithProgress(const std::filesystem::path &from, const std::filesystem::path &to,
+                              const TransferObserver &observer, std::error_code &ec) override
     {
         if (!incrementalCopy)
             return FileSystemAdapter::copyFileWithProgress(from, to, observer, ec);
@@ -383,6 +381,12 @@ static void testFileRenameCommand()
     cmd2.execute();
     CHECK(!cmd2.lastError().empty() && fs::exists(a), "rename fails when destination exists");
 
+    FileRenameCommand escape(a.string(), (dir.parent_path() / "escaped.txt").string());
+    escape.execute();
+    CHECK(!escape.lastError().empty() && fs::exists(a) &&
+              !fs::exists(dir.parent_path() / "escaped.txt"),
+          "rename refuses a destination outside the source directory");
+
     fs::remove_all(dir);
 }
 
@@ -529,8 +533,7 @@ static void testFileOperationSafety()
     CHECK(stuck.lastError().empty() && fs::exists(stuckA) && fs::exists(stuckB),
           "retained partial state can be recovered by undo");
 
-    const std::string unicodeDirUtf8 =
-        mviewer::core::pathToUtf8(dir) + "/中文目录-😀";
+    const std::string unicodeDirUtf8 = mviewer::core::pathToUtf8(dir) + "/中文目录-😀";
     const fs::path unicodeDir = mviewer::core::pathFromUtf8(unicodeDirUtf8);
     fs::create_directories(unicodeDir);
     const fs::path unicodeSource = unicodeDir / mviewer::core::pathFromUtf8("文件-😀.txt");
@@ -554,7 +557,7 @@ static void testFileOperationSafety()
     writeFile(cancelledSource, "cancel me");
     int cancelObservations = 0;
     FileMoveCommand cancelled({cancelledSource.string()}, (dir / "destination").string(),
-                               crossVolume);
+                              crossVolume);
     cancelled.setTransferObserver(
         [&](uintmax_t, uintmax_t)
         {
@@ -562,8 +565,8 @@ static void testFileOperationSafety()
             return false;
         });
     cancelled.execute();
-    CHECK(cancelObservations > 0 && !cancelled.lastError().empty() &&
-              fs::exists(cancelledSource) && !fs::exists(dir / "destination" / "cancelled.txt"),
+    CHECK(cancelObservations > 0 && !cancelled.lastError().empty() && fs::exists(cancelledSource) &&
+              !fs::exists(dir / "destination" / "cancelled.txt"),
           "cancelled transfer leaves source and destination in a safe state");
 
     fs::remove_all(dir);
@@ -587,13 +590,12 @@ static void testFileTransferProgressAndCancellation()
     progressive->incrementalCopy = true;
 
     int progressCalls = 0;
-    const auto copied = mviewer::core::copyFileAtomically(
-        source, destination, progressive,
-        [&](uintmax_t bytes, uintmax_t total)
-        {
-            ++progressCalls;
-            return bytes <= total;
-        });
+    const auto copied = mviewer::core::copyFileAtomically(source, destination, progressive,
+                                                          [&](uintmax_t bytes, uintmax_t total)
+                                                          {
+                                                              ++progressCalls;
+                                                              return bytes <= total;
+                                                          });
     CHECK(copied.state == mviewer::core::FileTransferState::Succeeded &&
               readFile(destination) == payload && progressCalls > 3,
           "atomic copy reports real incremental progress and verifies the destination");
@@ -602,11 +604,11 @@ static void testFileTransferProgressAndCancellation()
     for (int i = 0; i < 101; ++i)
     {
         const fs::path batchSource = dir / "source" / ("batch_" + std::to_string(i) + ".bin");
-        const fs::path batchDestination = dir / "destination" / ("batch_" + std::to_string(i) +
-                                                                    ".bin");
+        const fs::path batchDestination =
+            dir / "destination" / ("batch_" + std::to_string(i) + ".bin");
         writeFile(batchSource, "batch-" + std::to_string(i));
-        const auto result = mviewer::core::copyFileAtomically(batchSource, batchDestination,
-                                                               progressive);
+        const auto result =
+            mviewer::core::copyFileAtomically(batchSource, batchDestination, progressive);
         if (result.state == mviewer::core::FileTransferState::Succeeded &&
             readFile(batchDestination) == "batch-" + std::to_string(i))
             ++batchSuccess;
@@ -617,13 +619,12 @@ static void testFileTransferProgressAndCancellation()
     const fs::path earlyDestination = dir / "destination" / "cancel-before-first.bin";
     writeFile(earlySource, "cancel before first");
     int earlyObservations = 0;
-    const auto early = mviewer::core::copyFileAtomically(
-        earlySource, earlyDestination, progressive,
-        [&](uintmax_t, uintmax_t)
-        {
-            ++earlyObservations;
-            return false;
-        });
+    const auto early = mviewer::core::copyFileAtomically(earlySource, earlyDestination, progressive,
+                                                         [&](uintmax_t, uintmax_t)
+                                                         {
+                                                             ++earlyObservations;
+                                                             return false;
+                                                         });
     CHECK(early.state == mviewer::core::FileTransferState::Failed && earlyObservations == 1 &&
               fs::exists(earlySource) && !fs::exists(earlyDestination),
           "cancellation before the first byte leaves source and destination safe");
@@ -632,13 +633,13 @@ static void testFileTransferProgressAndCancellation()
     const fs::path halfwayDestination = dir / "destination" / "cancel-halfway.bin";
     writeFile(halfwaySource, payload);
     uintmax_t cancelledAt = 0;
-    const auto halfway = mviewer::core::copyFileAtomically(
-        halfwaySource, halfwayDestination, progressive,
-        [&](uintmax_t bytes, uintmax_t total)
-        {
-            cancelledAt = bytes;
-            return total == 0 || bytes < total / 2;
-        });
+    const auto halfway =
+        mviewer::core::copyFileAtomically(halfwaySource, halfwayDestination, progressive,
+                                          [&](uintmax_t bytes, uintmax_t total)
+                                          {
+                                              cancelledAt = bytes;
+                                              return total == 0 || bytes < total / 2;
+                                          });
     const std::string halfwayTempPrefix = halfwayDestination.string() + ".mviewer-part-";
     bool temporaryRemains = false;
     for (const auto &entry : fs::directory_iterator(halfwayDestination.parent_path()))
@@ -673,7 +674,8 @@ int main(int argc, char **argv)
         auto frame = std::make_shared<ImageData>();
         *frame = makeRGB(1, 1, 1, 1, 1);
         auto image = std::make_shared<ImageFrame>(ImageFrame::create("probe.jpg", *frame));
-        return stack.execute(std::make_unique<LabelCommand>(image, "probe", LabelCommand::Mode::Add))
+        return stack.execute(
+                   std::make_unique<LabelCommand>(image, "probe", LabelCommand::Mode::Add))
                    ? 0
                    : 1;
     }

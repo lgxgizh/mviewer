@@ -427,10 +427,21 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
             RawImageView *view = m_cellViews[i];
             if (!view)
                 continue;
-            if (i == 0)
-                view->setSelection(m_lastSelection);
-            else
+            if (i != 0)
+            {
                 view->clearSelection();
+                continue;
+            }
+            const ImageFrame *frame = m_engine.imageAt(0);
+            const int srcW =
+                frame ? (frame->metadata().width > 0 ? frame->metadata().width : frame->width())
+                      : 0;
+            const int srcH =
+                frame ? (frame->metadata().height > 0 ? frame->metadata().height : frame->height())
+                      : 0;
+            const CellAdjust adjust = !m_cellAdjusts.empty() ? m_cellAdjusts.front() : CellAdjust{};
+            view->setSelection(mviewer::core::mapSourceSelectionToDisplay(
+                m_lastSelection, analysisAdjustment(adjust), srcW, srcH));
         }
         clearROIStatsDisplay();
         if (m_roiGeometryLabel)
@@ -467,10 +478,21 @@ void CompareWorkspace::applySelectionToAll(const mviewer::domain::Selection &sel
     {
         if (i >= m_cellViews.size() || !m_cellViews[i])
             continue;
-        if (m_roiLinked)
-            m_cellViews[i]->setSelection(m_lastSelection);
-        else
+        if (!m_roiLinked)
+        {
             m_cellViews[i]->clearSelection();
+            continue;
+        }
+        const ImageFrame *frame = m_engine.imageAt(i);
+        const int srcW =
+            frame ? (frame->metadata().width > 0 ? frame->metadata().width : frame->width()) : 0;
+        const int srcH =
+            frame ? (frame->metadata().height > 0 ? frame->metadata().height : frame->height()) : 0;
+        const CellAdjust adjust = i < static_cast<int>(m_cellAdjusts.size())
+                                      ? m_cellAdjusts[static_cast<size_t>(i)]
+                                      : CellAdjust{};
+        m_cellViews[i]->setSelection(mviewer::core::mapSourceSelectionToDisplay(
+            m_lastSelection, analysisAdjustment(adjust), srcW, srcH));
     }
     // M23: ROI + Histogram 联动 — histogram surfaces keep their ROI scope
     // even when the analysis side panel is collapsed.
@@ -499,6 +521,19 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
 {
     if (!view)
         return;
+    const int pane = view->cellIndex();
+    const ImageFrame *paneFrame = m_engine.imageAt(pane);
+    const int paneW = paneFrame ? (paneFrame->metadata().width > 0 ? paneFrame->metadata().width
+                                                                   : paneFrame->width())
+                                : 0;
+    const int paneH = paneFrame ? (paneFrame->metadata().height > 0 ? paneFrame->metadata().height
+                                                                    : paneFrame->height())
+                                : 0;
+    const CellAdjust paneAdjust = pane >= 0 && pane < static_cast<int>(m_cellAdjusts.size())
+                                      ? m_cellAdjusts[static_cast<size_t>(pane)]
+                                      : CellAdjust{};
+    const auto sourceSel = mviewer::core::mapDisplaySelectionToSource(
+        sel, analysisAdjustment(paneAdjust), paneW, paneH);
     if (!linkedROIAvailable())
     {
         // Keep a useful active-pane preview for unequal dimensions, but never
@@ -508,14 +543,10 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
         for (RawImageView *other : m_cellViews)
             if (other)
                 other->clearSelection();
-        const ImageFrame *frame = m_engine.imageAt(view->cellIndex());
-        if (frame)
+        if (paneFrame)
         {
-            const auto clipped = mviewer::domain::normalizeSelection(
-                sel.x, sel.y, sel.x + sel.width, sel.y + sel.height,
-                frame->metadata().width > 0 ? frame->metadata().width : frame->width(),
-                frame->metadata().height > 0 ? frame->metadata().height : frame->height());
-            view->setSelection(clipped);
+            view->setSelection(mviewer::core::mapSourceSelectionToDisplay(
+                sourceSel, analysisAdjustment(paneAdjust), paneW, paneH));
         }
         clearROIStatsDisplay();
         if (m_roiGeometryLabel)
@@ -526,15 +557,30 @@ void CompareWorkspace::applySelectionPreviewFromView(RawImageView *view,
     }
 
     const ImageFrame *first = m_engine.imageAt(0);
-    const auto clipped = mviewer::domain::normalizeSelection(
-        sel.x, sel.y, sel.x + sel.width, sel.y + sel.height,
-        first ? (first->metadata().width > 0 ? first->metadata().width : first->width()) : 0,
-        first ? (first->metadata().height > 0 ? first->metadata().height : first->height()) : 0);
-    m_lastSelection = clipped;
-    m_roiLinked = !clipped.isEmpty();
+    const int width =
+        first ? (first->metadata().width > 0 ? first->metadata().width : first->width()) : 0;
+    const int height =
+        first ? (first->metadata().height > 0 ? first->metadata().height : first->height()) : 0;
+    m_lastSelection =
+        mviewer::domain::normalizeSelection(sourceSel.x, sourceSel.y, sourceSel.x + sourceSel.width,
+                                            sourceSel.y + sourceSel.height, width, height);
+    m_roiLinked = !m_lastSelection.isEmpty();
     for (RawImageView *other : m_cellViews)
-        if (other)
-            other->setSelection(clipped);
+    {
+        if (!other)
+            continue;
+        const int idx = other->cellIndex();
+        const ImageFrame *frame = m_engine.imageAt(idx);
+        const int srcW =
+            frame ? (frame->metadata().width > 0 ? frame->metadata().width : frame->width()) : 0;
+        const int srcH =
+            frame ? (frame->metadata().height > 0 ? frame->metadata().height : frame->height()) : 0;
+        const CellAdjust adjust = idx >= 0 && idx < static_cast<int>(m_cellAdjusts.size())
+                                      ? m_cellAdjusts[static_cast<size_t>(idx)]
+                                      : CellAdjust{};
+        other->setSelection(mviewer::core::mapSourceSelectionToDisplay(
+            m_lastSelection, analysisAdjustment(adjust), srcW, srcH));
+    }
     clearROIStatsDisplay();
     if (m_roiGeometryLabel)
         m_roiGeometryLabel->setText(m_roiLinked ? tr("ROI   X: %1   Y: %2   W: %3   H: %4")
@@ -553,9 +599,22 @@ void CompareWorkspace::applySelectionFromView(RawImageView *view,
 {
     if (!view)
         return;
+    const int pane = view->cellIndex();
+    const ImageFrame *paneFrame = m_engine.imageAt(pane);
+    const int paneW = paneFrame ? (paneFrame->metadata().width > 0 ? paneFrame->metadata().width
+                                                                   : paneFrame->width())
+                                : 0;
+    const int paneH = paneFrame ? (paneFrame->metadata().height > 0 ? paneFrame->metadata().height
+                                                                    : paneFrame->height())
+                                : 0;
+    const CellAdjust paneAdjust = pane >= 0 && pane < static_cast<int>(m_cellAdjusts.size())
+                                      ? m_cellAdjusts[static_cast<size_t>(pane)]
+                                      : CellAdjust{};
+    const auto sourceSel = mviewer::core::mapDisplaySelectionToSource(
+        sel, analysisAdjustment(paneAdjust), paneW, paneH);
     if (linkedROIAvailable())
     {
-        applySelectionToAll(sel);
+        applySelectionToAll(sourceSel);
         return;
     }
 
@@ -566,14 +625,13 @@ void CompareWorkspace::applySelectionFromView(RawImageView *view,
     for (RawImageView *other : m_cellViews)
         if (other)
             other->clearSelection();
-    const ImageFrame *frame = m_engine.imageAt(view->cellIndex());
-    if (frame)
+    if (paneFrame)
     {
         m_lastSelection = mviewer::domain::normalizeSelection(
-            sel.x, sel.y, sel.x + sel.width, sel.y + sel.height,
-            frame->metadata().width > 0 ? frame->metadata().width : frame->width(),
-            frame->metadata().height > 0 ? frame->metadata().height : frame->height());
-        view->setSelection(m_lastSelection);
+            sourceSel.x, sourceSel.y, sourceSel.x + sourceSel.width, sourceSel.y + sourceSel.height,
+            paneW, paneH);
+        view->setSelection(mviewer::core::mapSourceSelectionToDisplay(
+            m_lastSelection, analysisAdjustment(paneAdjust), paneW, paneH));
         m_engine.selection().setSelection(m_lastSelection);
     }
     else

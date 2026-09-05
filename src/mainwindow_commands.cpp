@@ -82,8 +82,8 @@ void MainWindow::setupCommands()
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
-    if (handleWindowKey(event) || handleMetadataKey(event) ||
-        handleViewModeKey(event) || handleClipboardKey(event) || handleViewerKey(event))
+    if (handleWindowKey(event) || handleMetadataKey(event) || handleViewModeKey(event) ||
+        handleClipboardKey(event) || handleViewerKey(event))
         return;
     ICommand *cmd = CommandRegistry::instance().findByShortcut(
         event->key(), static_cast<int>(event->modifiers()));
@@ -303,8 +303,7 @@ void MainWindow::startClipboardPaste(const QImage &img)
 {
     // Persist to a temp file so ImageViewer can load it via its normal async
     // path (keeps decode/histogram consistent).
-    const QString tempRoot =
-        mviewer::runtime::writableDirectory(QStandardPaths::TempLocation);
+    const QString tempRoot = mviewer::runtime::writableDirectory(QStandardPaths::TempLocation);
     if (tempRoot.isEmpty())
     {
         statusBar()->showMessage("无法创建剪贴板临时文件", 3000);
@@ -319,9 +318,8 @@ void MainWindow::startClipboardPaste(const QImage &img)
 
     cancelClipboardPaste();
     cleanupClipboardPasteTemps();
-    const QString tmpPath =
-        QDir(tmpDir).filePath(QStringLiteral("paste_%1.png").arg(
-            QUuid::createUuid().toString(QUuid::WithoutBraces)));
+    const QString tmpPath = QDir(tmpDir).filePath(
+        QStringLiteral("paste_%1.png").arg(QUuid::createUuid().toString(QUuid::WithoutBraces)));
     const uint64_t generation = ++m_clipboardPasteGeneration;
     const auto alive = m_clipboardPasteAlive = std::make_shared<std::atomic<bool>>(true);
     const QPointer<MainWindow> guard(this);
@@ -371,9 +369,8 @@ void MainWindow::startClipboardPaste(const QImage &img)
                     {
                         QFile::remove(tmpPath);
                         window->statusBar()->showMessage(
-                            state->cancelled.load(std::memory_order_relaxed)
-                                ? "剪贴板粘贴已取消"
-                                : "无法保存剪贴板图片",
+                            state->cancelled.load(std::memory_order_relaxed) ? "剪贴板粘贴已取消"
+                                                                             : "无法保存剪贴板图片",
                             3000);
                     }
                 },
@@ -400,16 +397,15 @@ void MainWindow::cancelClipboardPaste()
 
 void MainWindow::cleanupClipboardPasteTemps()
 {
-    const QString tempRoot =
-        mviewer::runtime::writableDirectory(QStandardPaths::TempLocation);
+    const QString tempRoot = mviewer::runtime::writableDirectory(QStandardPaths::TempLocation);
     if (tempRoot.isEmpty())
         return;
     const QDir dir(QDir(tempRoot).filePath(QStringLiteral("mviewer-clip-paste")));
     if (!dir.exists())
         return;
     const QDateTime cutoff = QDateTime::currentDateTime().addDays(-1);
-    for (const QFileInfo &info : dir.entryInfoList(QStringList() << QStringLiteral("paste_*.png"),
-                                                    QDir::Files))
+    for (const QFileInfo &info :
+         dir.entryInfoList(QStringList() << QStringLiteral("paste_*.png"), QDir::Files))
     {
         if (info.absoluteFilePath() != m_clipboardPastePath && info.lastModified() < cutoff)
             QFile::remove(info.absoluteFilePath());
@@ -433,7 +429,7 @@ bool MainWindow::handleViewerKey(QKeyEvent *event)
         if (m_actCompare && m_actCompare->isEnabled())
             m_actCompare->trigger();
         else
-            statusBar()->showMessage(tr("需要至少两张图片才能比较"), 3000);
+            statusBar()->showMessage(tr("需要选择 2-8 张图片才能比较"), 3000);
         event->accept();
         return true;
     }

@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-09-02 · Version: **1.0.18 M61 professional linked ROI workflow line** · Release tag: **not yet published**
+> Snapshot: 2026-09-05 · Version: **1.0.19 product-workflow correctness patch** · Release tag: **not yet published**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -42,6 +42,18 @@
 > `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
 > `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## 1.0.19 — Browse/Compare/ROI correctness patch (2026-09-05)
+
+- Viewer metadata overlay is `I` / `M` / 图片信息 only. Left-click and hover no
+  longer cover the image and steal pan or Fit↔100% double-click.
+- Compare toolbar/menu/`C` require a 2–8 image selection, matching 比较选中.
+  Folder-first-8 fallback is gone. Space uses the current 2–8 selection when
+  present, otherwise current+next.
+- Linked ROI geometry stays in original source pixels through crop/rotation
+  display projection. Canvas empty-release clears the engine selection.
+- Rename cannot escape the source directory. M58/compare-session/project
+  Release gates use live `CHECK` counters.
 
 ## M61 — Professional linked ROI workflow convergence (2026-09-02)
 

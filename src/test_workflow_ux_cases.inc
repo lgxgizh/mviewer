@@ -577,12 +577,31 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
                   thumbnailPanel->selectedPaths().contains(paths[0]) &&
                   sel->selection().size() == 1,
               "M49: plain gallery click selects one image through the real view");
+        CHECK(compareAction && !compareAction->isEnabled(),
+              "a 1-image selection in a multi-image folder keeps Compare disabled");
+        w.statusBar()->clearMessage();
+        sendKey(&w, Qt::Key_C);
+        pump(40);
+        CHECK(
+            w.statusBar()->currentMessage().contains(QStringLiteral("需要选择 2-8 张图片才能比较")),
+            "C explains that Compare needs a 2-8 image selection");
+        bool compareOpenedFromOne = false;
+        for (QWidget *top : QApplication::topLevelWidgets())
+        {
+            auto *dlg = qobject_cast<QDialog *>(top);
+            if (dlg && dlg->isVisible() && dlg->windowTitle().contains("比较模式"))
+                compareOpenedFromOne = true;
+        }
+        CHECK(!compareOpenedFromOne,
+              "C does not open Compare with a 1-image selection in a larger folder");
         galleryClick(2, Qt::ControlModifier);
         CHECK(thumbnailPanel->selectedPaths().size() == 2 &&
                   thumbnailPanel->selectedPaths().contains(paths[0]) &&
                   thumbnailPanel->selectedPaths().contains(paths[2]) &&
                   sel->selection().size() == 2,
               "M49: Ctrl+click toggles a second image into the SSOT selection");
+        CHECK(compareAction && compareAction->isEnabled(),
+              "selecting two images enables the Compare command");
         galleryClick(4, Qt::ShiftModifier);
         CHECK(thumbnailPanel->selectedPaths().size() >= 4 && sel->selection().size() >= 4 &&
                   thumbnailPanel->selectedPaths().contains(paths[3]) &&
@@ -756,12 +775,23 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             }
 
             // Double-click toggles fit <-> 100% at the cursor (beta
-            // checklist "双击放大 -> 恢复").
+            // checklist "双击放大 -> 恢复"). A preceding left press must not
+            // open the metadata overlay and steal the gesture.
             {
+                MetadataOverlay *overlay = viewer->findChild<MetadataOverlay *>();
+                if (overlay && overlay->isVisible())
+                    overlay->hide();
                 viewer->zoomFit();
                 pump(20);
                 const double fitScale = viewer->viewTransform().scale;
                 const QPointF dcPos(300.0, 200.0);
+                QMouseEvent press(QEvent::MouseButtonPress, dcPos,
+                                  viewer->mapToGlobal(dcPos.toPoint()), Qt::LeftButton,
+                                  Qt::LeftButton, Qt::NoModifier);
+                QApplication::sendEvent(viewer, &press);
+                pump(20);
+                CHECK(!overlay || !overlay->isVisible(),
+                      "Viewer left-click does not open the metadata overlay");
                 QMouseEvent dbl(QEvent::MouseButtonDblClick, dcPos,
                                 viewer->mapToGlobal(dcPos.toPoint()), Qt::LeftButton,
                                 Qt::LeftButton, Qt::NoModifier);
@@ -1029,8 +1059,9 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         w.statusBar()->clearMessage();
         sendKey(&w, Qt::Key_C);
         pump(100);
-        CHECK(w.statusBar()->currentMessage().contains(QStringLiteral("需要至少两张图片才能比较")),
-              "Compare keyboard command explains why a single-image folder cannot compare");
+        CHECK(
+            w.statusBar()->currentMessage().contains(QStringLiteral("需要选择 2-8 张图片才能比较")),
+            "Compare keyboard command explains why a single-image folder cannot compare");
         bool compareOpened = false;
         for (QWidget *top : QApplication::topLevelWidgets())
         {

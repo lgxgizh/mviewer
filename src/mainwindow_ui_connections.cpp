@@ -155,8 +155,7 @@ void MainWindow::connectGallerySignals()
                 {
                     m_emptyFolderTimer->start();
                 }
-                if (!m_autoSelectFirstPending || total <= 0 || !m_selection ||
-                    !m_thumbnailPanel)
+                if (!m_autoSelectFirstPending || total <= 0 || !m_selection || !m_thumbnailPanel)
                     return;
                 if (!m_selection->currentImage().isEmpty())
                 {
@@ -193,8 +192,7 @@ void MainWindow::connectSelectionSignals()
                     m_actToggleMetadata->setChecked(false);
                 if (m_lblImage)
                     m_lblImage->setText(tr("未选择图像"));
-                const QString activeDir =
-                    m_directory ? m_directory->currentDirectory() : QString();
+                const QString activeDir = m_directory ? m_directory->currentDirectory() : QString();
                 setWindowTitle(activeDir.isEmpty()
                                    ? QStringLiteral("MViewer")
                                    : QString("%1 - MViewer").arg(QDir(activeDir).dirName()));
@@ -498,31 +496,7 @@ void MainWindow::connectMenuSignals()
     connect(m_actExportReport, &QAction::triggered, this, &MainWindow::exportReport);
     connect(m_actExportImages, &QAction::triggered, this, &MainWindow::exportImages);
     connect(m_actExit, &QAction::triggered, qApp, &QApplication::quit);
-    connect(m_actCompare, &QAction::triggered, this,
-            [this]()
-            {
-                // M19: SelectionModel first; fall back to ImageListModel.
-                QStringList imgs = resolveSelectedPaths(true);
-                if (imgs.size() < 2)
-                {
-                    ensureImageList();
-                    imgs = m_imageList ? m_imageList->paths() : QStringList();
-                }
-                if (imgs.isEmpty())
-                {
-                    const QString dir = QFileDialog::getExistingDirectory(this, tr("打开目录"));
-                    if (!dir.isEmpty())
-                    {
-                        changeDirectory(dir);
-                        ensureImageList();
-                        imgs = m_imageList ? m_imageList->paths() : QStringList();
-                    }
-                }
-                if (imgs.size() > 8)
-                    imgs = imgs.mid(0, 8);
-                if (!imgs.isEmpty())
-                    openCompare(imgs);
-            });
+    connect(m_actCompare, &QAction::triggered, this, [this]() { openCompare(); });
 }
 
 void MainWindow::connectWorkspaceSignals()
@@ -531,7 +505,7 @@ void MainWindow::connectWorkspaceSignals()
     {
         if (m_actBrowseWorkspace && m_analysisPanel && m_searchPanel)
             m_actBrowseWorkspace->setChecked(!m_analysisPanel->isVisible() &&
-                                              !m_searchPanel->isVisible());
+                                             !m_searchPanel->isVisible());
     };
     connect(m_actToggleAnalysis, &QAction::toggled, this,
             [this, syncBrowseWorkspaceAction](bool visible)
@@ -694,15 +668,16 @@ void MainWindow::connectSettingsSignals()
                     QMessageBox::warning(this, tr("导入设置"),
                                          tr("导入失败：%1").arg(QString::fromStdString(err)));
             });
-    connect(
-        m_actAbout, &QAction::triggered, this, [this]()
-        {
-            QMessageBox::about(
-                this, "关于 MViewer",
-                tr("MViewer %1\n\n图像算法工程师的可视化分析平台：浏览、对比、分析、导出。\n\n构建: %2")
-                    .arg(QStringLiteral(MVIEWER_VERSION_STRING),
-                         QStringLiteral(MVIEWER_VERSION_FULL)));
-        });
+    connect(m_actAbout, &QAction::triggered, this,
+            [this]()
+            {
+                QMessageBox::about(
+                    this, "关于 MViewer",
+                    tr("MViewer "
+                       "%1\n\n图像算法工程师的可视化分析平台：浏览、对比、分析、导出。\n\n构建: %2")
+                        .arg(QStringLiteral(MVIEWER_VERSION_STRING),
+                             QStringLiteral(MVIEWER_VERSION_FULL)));
+            });
 
     // P0: recent / favorites / history wiring.
     connect(m_actAddFavorite, &QAction::triggered, this, &MainWindow::addFavoriteCurrent);

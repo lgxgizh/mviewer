@@ -179,7 +179,7 @@ void SearchPanel::performSearch()
             if (ctx.isCancelled() || !alive->load())
                 return;
             const auto results = mviewer::core::SearchEngine::searchSnapshot(indexSnapshot, q);
-            if (ctx.isCancelled() || !alive->load() || !self)
+            if (ctx.isCancelled() || !alive->load())
                 return;
             QMetaObject::invokeMethod(
                 qApp,

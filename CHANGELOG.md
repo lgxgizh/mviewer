@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.0.19] - 2026-09-05
+
+### Fixed
+
+- **Viewer pan and double-click zoom:** the standalone Viewer no longer opens the
+  full-window metadata overlay on left-click or hover. Image information stays
+  on `I` / `M` / the 图片信息 command, so pan and Fit↔100% double-click work on
+  the first gesture.
+- **Compare entry:** toolbar, menu, and `C` now match 比较选中 — enabled only
+  for a 2–8 image selection. A 1-image selection in a larger folder no longer
+  silently compares the first 8 files. Space still compares current+next unless
+  2–8 images are already selected.
+- **Linked ROI after crop/rotation:** the drawn rectangle is mapped back to
+  original source pixels before measurement, and each pane overlay is projected
+  from that canonical source ROI. A Canvas drag that clips to empty now clears
+  the engine selection instead of resurrecting the previous box.
+- **Rename:** file names that contain path separators or `..` are rejected so a
+  rename cannot leave the gallery directory.
+- **Release test credibility:** M58 large-directory query, compare-session, and
+  project round-trip gates now use live `CHECK` counters so Release `/DNDEBUG`
+  cannot compile the contracts out.
+
+### Verification
+
+- Workflow UX covers Viewer left-click vs overlay, double-click zoom after a
+  real press, and Compare enablement with a 1-image selection in a multi-image
+  folder. Pixel Inspector mapping tests cover identity/crop/90° ROI round-trips
+  plus source RGB means; M61 covers Canvas empty-release.
+
 ## [1.0.18] - 2026-09-02
 
 ### Added

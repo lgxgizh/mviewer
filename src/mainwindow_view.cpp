@@ -177,8 +177,7 @@ void MainWindow::scheduleMetadataHistogram()
         return;
     // Latest-wins dedup: an in-flight request for the same path+frame is already
     // the newest work — do not stack a second Analysis task for one show.
-    if (m_metadataHistTask && m_metadataHistPath == path &&
-        m_metadataHistFrame.lock() == frame)
+    if (m_metadataHistTask && m_metadataHistPath == path && m_metadataHistFrame.lock() == frame)
         return;
 
     // A new request supersedes whatever was in flight or already delivered;
@@ -497,6 +496,12 @@ void MainWindow::zoomViewer(int op)
 
 void MainWindow::openQuickCompare()
 {
+    const QStringList selected = resolveSelectedPaths(true);
+    if (selected.size() >= 2 && selected.size() <= 8)
+    {
+        openCompare(selected);
+        return;
+    }
     if (currentImagePath().isEmpty())
         return;
     ensureImageList();
@@ -591,30 +596,11 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
     if (watched == m_imageViewer)
     {
-        if (event->type() == QEvent::MouseButtonPress && !currentImagePath().isEmpty())
-        {
-            auto *me = static_cast<QMouseEvent *>(event);
-            if (me->button() == Qt::LeftButton)
-            {
-                if (m_metadataOverlay && m_metadataOverlay->isVisible())
-                    m_metadataOverlay->hide();
-                else
-                    showMetadataOverlay();
-            }
-        }
-        else if (event->type() == QEvent::HoverMove || event->type() == QEvent::MouseMove)
-        {
-            if (m_metadataHoverTimer && !currentImagePath().isEmpty())
-            {
-                m_metadataHoverTimer->stop();
-                m_metadataHoverTimer->start();
-            }
-        }
-        else if (event->type() == QEvent::Leave)
-        {
-            if (m_metadataHoverTimer)
-                m_metadataHoverTimer->stop();
-        }
+        // Image-surface clicks and hover belong to pan / double-click Fit↔100%.
+        // Metadata overlay is I / M / 图片信息 only — a full-window overlay on
+        // press or 600 ms hover stole those gestures.
+        if (event->type() == QEvent::Leave && m_metadataHoverTimer)
+            m_metadataHoverTimer->stop();
     }
     // Keep the gallery overlay hints sized to the panel as the window
     // (and therefore the gallery) resizes.

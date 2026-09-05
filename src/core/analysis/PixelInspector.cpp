@@ -145,23 +145,91 @@ struct CropBounds
     int height = 0;
 };
 
-CropBounds analysisCropBounds(const ImageData &source, const AnalysisAdjustment &adjustment)
+CropBounds analysisCropBounds(int sourceWidth, int sourceHeight,
+                              const AnalysisAdjustment &adjustment)
 {
-    CropBounds bounds{0, 0, source.width, source.height};
+    CropBounds bounds{0, 0, sourceWidth, sourceHeight};
     if (!adjustment.hasCrop || adjustment.cropW <= 0 || adjustment.cropH <= 0)
         return bounds;
 
     const auto clampCoordinate = [](long long value, int limit)
     { return static_cast<int>(std::clamp(value, 0LL, static_cast<long long>(limit))); };
-    bounds.x = clampCoordinate(adjustment.cropX, source.width);
-    bounds.y = clampCoordinate(adjustment.cropY, source.height);
-    const int right = clampCoordinate(static_cast<long long>(adjustment.cropX) + adjustment.cropW,
-                                      source.width);
-    const int bottom = clampCoordinate(static_cast<long long>(adjustment.cropY) + adjustment.cropH,
-                                       source.height);
+    bounds.x = clampCoordinate(adjustment.cropX, sourceWidth);
+    bounds.y = clampCoordinate(adjustment.cropY, sourceHeight);
+    const int right =
+        clampCoordinate(static_cast<long long>(adjustment.cropX) + adjustment.cropW, sourceWidth);
+    const int bottom =
+        clampCoordinate(static_cast<long long>(adjustment.cropY) + adjustment.cropH, sourceHeight);
     bounds.width = right - bounds.x;
     bounds.height = bottom - bounds.y;
     return bounds;
+}
+
+CropBounds analysisCropBounds(const ImageData &source, const AnalysisAdjustment &adjustment)
+{
+    return analysisCropBounds(source.width, source.height, adjustment);
+}
+
+void rotateDisplayToCropped(int rotation, int cropWidth, int cropHeight, int displayX, int displayY,
+                            int &croppedX, int &croppedY)
+{
+    switch (rotation)
+    {
+    case 90:
+        croppedX = displayY;
+        croppedY = cropHeight - 1 - displayX;
+        break;
+    case 180:
+        croppedX = cropWidth - 1 - displayX;
+        croppedY = cropHeight - 1 - displayY;
+        break;
+    case 270:
+        croppedX = cropWidth - 1 - displayY;
+        croppedY = displayX;
+        break;
+    default:
+        croppedX = displayX;
+        croppedY = displayY;
+        break;
+    }
+}
+
+void rotateCroppedToDisplay(int rotation, int cropWidth, int cropHeight, int croppedX, int croppedY,
+                            int &displayX, int &displayY)
+{
+    switch (rotation)
+    {
+    case 90:
+        displayX = cropHeight - 1 - croppedY;
+        displayY = croppedX;
+        break;
+    case 180:
+        displayX = cropWidth - 1 - croppedX;
+        displayY = cropHeight - 1 - croppedY;
+        break;
+    case 270:
+        displayX = croppedY;
+        displayY = cropWidth - 1 - croppedX;
+        break;
+    default:
+        displayX = croppedX;
+        displayY = croppedY;
+        break;
+    }
+}
+
+mviewer::domain::Selection boundsFromInclusiveCorners(const int xs[4], const int ys[4], int width,
+                                                      int height)
+{
+    int x0 = xs[0], x1 = xs[0], y0 = ys[0], y1 = ys[0];
+    for (int i = 1; i < 4; ++i)
+    {
+        x0 = std::min(x0, xs[i]);
+        x1 = std::max(x1, xs[i]);
+        y0 = std::min(y0, ys[i]);
+        y1 = std::max(y1, ys[i]);
+    }
+    return mviewer::domain::normalizeSelection(x0, y0, x1 + 1, y1 + 1, width, height);
 }
 
 int normalizedRotation(int rotation)
@@ -188,8 +256,7 @@ int adjustAnalysisChannel(int value, const AnalysisAdjustment &adjustment)
     if (std::abs(gamma - 1.0f) >= 1e-6f)
     {
         const float clampedGamma = std::clamp(gamma, 0.05f, 8.0f);
-        const float corrected =
-            std::pow(static_cast<float>(value) / 255.0f, 1.0f / clampedGamma);
+        const float corrected = std::pow(static_cast<float>(value) / 255.0f, 1.0f / clampedGamma);
         value = static_cast<int>(std::lroundf(corrected * 255.0f));
     }
     return std::clamp(value, 0, 255);
@@ -244,17 +311,91 @@ AnalysisPixel sampleAnalysisPixel(const ImageData &source, const AnalysisAdjustm
     {
         if (std::abs(static_cast<float>(adjustment.redGain) - 1.0f) >= 1e-6f)
             result.r = std::clamp(static_cast<int>(std::lroundf(
-                                     static_cast<float>(result.r) *
-                                     std::max(static_cast<float>(adjustment.redGain), 0.01f))),
+                                      static_cast<float>(result.r) *
+                                      std::max(static_cast<float>(adjustment.redGain), 0.01f))),
                                   0, 255);
         if (std::abs(static_cast<float>(adjustment.blueGain) - 1.0f) >= 1e-6f)
             result.b = std::clamp(static_cast<int>(std::lroundf(
-                                     static_cast<float>(result.b) *
-                                     std::max(static_cast<float>(adjustment.blueGain), 0.01f))),
+                                      static_cast<float>(result.b) *
+                                      std::max(static_cast<float>(adjustment.blueGain), 0.01f))),
                                   0, 255);
     }
     result.valid = true;
     return result;
+}
+
+mviewer::domain::Selection mapDisplaySelectionToSource(const mviewer::domain::Selection &display,
+                                                       const AnalysisAdjustment &adjustment,
+                                                       int sourceWidth, int sourceHeight)
+{
+    if (display.isEmpty() || sourceWidth <= 0 || sourceHeight <= 0)
+        return {};
+    const CropBounds crop = analysisCropBounds(sourceWidth, sourceHeight, adjustment);
+    if (crop.width <= 0 || crop.height <= 0)
+        return {};
+    const int rotation = normalizedRotation(adjustment.rotation);
+    const int displayWidth = (rotation == 90 || rotation == 270) ? crop.height : crop.width;
+    const int displayHeight = (rotation == 90 || rotation == 270) ? crop.width : crop.height;
+    const auto clipped = mviewer::domain::normalizeSelection(
+        display.x, display.y, display.x + display.width, display.y + display.height, displayWidth,
+        displayHeight);
+    if (clipped.isEmpty())
+        return {};
+    const int x1 = clipped.x + clipped.width - 1;
+    const int y1 = clipped.y + clipped.height - 1;
+    const int dx[4] = {clipped.x, x1, clipped.x, x1};
+    const int dy[4] = {clipped.y, clipped.y, y1, y1};
+    int sx[4] = {};
+    int sy[4] = {};
+    for (int i = 0; i < 4; ++i)
+    {
+        int croppedX = 0;
+        int croppedY = 0;
+        rotateDisplayToCropped(rotation, crop.width, crop.height, dx[i], dy[i], croppedX, croppedY);
+        sx[i] = crop.x + croppedX;
+        sy[i] = crop.y + croppedY;
+    }
+    return boundsFromInclusiveCorners(sx, sy, sourceWidth, sourceHeight);
+}
+
+mviewer::domain::Selection mapSourceSelectionToDisplay(const mviewer::domain::Selection &source,
+                                                       const AnalysisAdjustment &adjustment,
+                                                       int sourceWidth, int sourceHeight)
+{
+    if (source.isEmpty() || sourceWidth <= 0 || sourceHeight <= 0)
+        return {};
+    const CropBounds crop = analysisCropBounds(sourceWidth, sourceHeight, adjustment);
+    if (crop.width <= 0 || crop.height <= 0)
+        return {};
+    const auto clipped = mviewer::domain::normalizeSelection(
+        source.x, source.y, source.x + source.width, source.y + source.height, crop.x + crop.width,
+        crop.y + crop.height);
+    const auto inCrop =
+        mviewer::domain::normalizeSelection(clipped.x, clipped.y, clipped.x + clipped.width,
+                                            clipped.y + clipped.height, sourceWidth, sourceHeight);
+    if (inCrop.isEmpty())
+        return {};
+    const int left = std::max(inCrop.x, crop.x);
+    const int top = std::max(inCrop.y, crop.y);
+    const int right = std::min(inCrop.x + inCrop.width, crop.x + crop.width);
+    const int bottom = std::min(inCrop.y + inCrop.height, crop.y + crop.height);
+    if (right <= left || bottom <= top)
+        return {};
+    const int rotation = normalizedRotation(adjustment.rotation);
+    const int displayWidth = (rotation == 90 || rotation == 270) ? crop.height : crop.width;
+    const int displayHeight = (rotation == 90 || rotation == 270) ? crop.width : crop.height;
+    const int x1 = right - 1;
+    const int y1 = bottom - 1;
+    const int sx[4] = {left, x1, left, x1};
+    const int sy[4] = {top, top, y1, y1};
+    int dx[4] = {};
+    int dy[4] = {};
+    for (int i = 0; i < 4; ++i)
+    {
+        rotateCroppedToDisplay(rotation, crop.width, crop.height, sx[i] - crop.x, sy[i] - crop.y,
+                               dx[i], dy[i]);
+    }
+    return boundsFromInclusiveCorners(dx, dy, displayWidth, displayHeight);
 }
 
 NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjustment &adjustment,
@@ -280,8 +421,8 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
                 sampleAnalysisPixel(source, adjustment, adjustedX + dx, adjustedY + dy);
             if (!pixel.valid)
                 continue;
-            const int luminance = static_cast<int>(0.2126 * pixel.r + 0.7152 * pixel.g +
-                                                   0.0722 * pixel.b + 0.5);
+            const int luminance =
+                static_cast<int>(0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b + 0.5);
             sum += luminance;
             sumSq += static_cast<long long>(luminance) * luminance;
             rSum += pixel.r;

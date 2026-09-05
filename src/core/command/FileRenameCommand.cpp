@@ -13,8 +13,8 @@ FileRenameCommand::FileRenameCommand(std::string oldPath, std::string newPath,
 
 std::string FileRenameCommand::description() const
 {
-    return "Rename " + mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(m_oldPath).filename()) +
-           " → " +
+    return "Rename " +
+           mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(m_oldPath).filename()) + " → " +
            mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(m_newPath).filename());
 }
 
@@ -28,6 +28,13 @@ void FileRenameCommand::execute()
     m_unresolved = false;
     const fs::path oldPath = mviewer::core::pathFromUtf8(m_oldPath);
     const fs::path newPath = mviewer::core::pathFromUtf8(m_newPath);
+    const fs::path fileName = newPath.filename();
+    if (fileName.empty() || fileName == "." || fileName == ".." ||
+        oldPath.parent_path().lexically_normal() != newPath.parent_path().lexically_normal())
+    {
+        m_lastError = "Rename destination must stay in the same directory: " + m_newPath;
+        return;
+    }
     std::error_code ec;
     if (!m_fileSystem->exists(oldPath, ec))
     {

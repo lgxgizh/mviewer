@@ -14,7 +14,6 @@
 #include <QEventLoop>
 
 #include <algorithm>
-#include <cassert>
 #include <chrono>
 #include <cstdio>
 #include <string>
@@ -23,6 +22,17 @@
 
 namespace
 {
+int g_failures = 0;
+
+#define CHECK(condition, message)                                                                  \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(condition))                                                                          \
+        {                                                                                          \
+            std::printf("FAIL: %s\n", message);                                                    \
+            ++g_failures;                                                                          \
+        }                                                                                          \
+    } while (false)
 
 std::vector<mviewer::core::MetadataIndexEntry> makeEntries(size_t count)
 {
@@ -55,8 +65,8 @@ void runCase(size_t count)
     const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
                              std::chrono::steady_clock::now() - started)
                              .count();
-    assert(snapshot.size() == count);
-    assert(results.size() == count);
+    CHECK(snapshot.size() == count, "snapshot size matches the indexed entry count");
+    CHECK(results.size() == count, "metadata search returns every synthetic camera entry");
     std::printf("M58 large_query entries=%zu results=%zu snapshot_search_ms=%lld\n", count,
                 results.size(), static_cast<long long>(elapsed));
 }
@@ -96,12 +106,12 @@ void runMetadataBatchCases()
             largestBatch = std::max(largestBatch, batch.size());
         },
         [&]() { done = true; });
-    assert(requestId != 0);
+    CHECK(requestId != 0, "batched metadata index request is accepted");
     waitFor([&]() { return done; });
-    assert(done);
-    assert(delivered == paths.size());
-    assert(batchCount == 3);
-    assert(largestBatch <= 256);
+    CHECK(done, "batched metadata index completes");
+    CHECK(delivered == paths.size(), "batched metadata delivers every entry");
+    CHECK(batchCount == 3, "513 entries are published in 256-sized batches");
+    CHECK(largestBatch <= 256, "metadata batches never exceed 256 entries");
 
     // Cancellation must invalidate already queued batches as well as work
     // still running on the worker. The first delivered batch cancels the
@@ -120,11 +130,11 @@ void runMetadataBatchCases()
             Indexer::instance().cancelRequest(cancelledId);
         },
         [&]() { cancelledDone = true; });
-    assert(cancelledId != 0);
+    CHECK(cancelledId != 0, "cancellable metadata index request is accepted");
     waitFor([&]() { return cancelledBatches > 0 || cancelledDone; });
     QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
-    assert(cancelledBatches <= 1);
-    assert(!cancelledDone);
+    CHECK(cancelledBatches <= 1, "cancel drops later queued metadata batches");
+    CHECK(!cancelledDone, "cancelled metadata index does not report completion");
     std::printf("M58 metadata batches delivered=%zu largest=%zu cancelled=%zu\n", batchCount,
                 largestBatch, cancelledBatches);
 }
@@ -138,18 +148,19 @@ int main(int argc, char **argv)
     query.text = "m58";
     query.generation = 2;
     const auto copy = query;
-    assert(copy.text == query.text && copy.generation == query.generation);
+    CHECK(copy.text == query.text && copy.generation == query.generation,
+          "BrowseQuery copies text and generation by value");
 
     // Snapshot APIs must be callable without exposing per-entry locking to a
     // worker. The singleton data is intentionally empty in this hermetic test.
     const auto ratings = mviewer::core::RatingStore::instance().snapshot();
     const auto tags = mviewer::core::TagStore::instance().snapshot();
-    assert(ratings.rating("missing") == 0);
-    assert(!tags.hasTag("missing", "m58"));
+    CHECK(ratings.rating("missing") == 0, "RatingStore snapshot returns zero for a missing path");
+    CHECK(!tags.hasTag("missing", "m58"), "TagStore snapshot has no tag for a missing path");
 
     runMetadataBatchCases();
     runCase(10000);
     runCase(50000);
-    std::puts("M58 large directory query acceptance: PASS");
-    return 0;
+    std::printf("M58 large directory query failures: %d\n", g_failures);
+    return g_failures == 0 ? 0 : 1;
 }

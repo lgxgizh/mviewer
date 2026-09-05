@@ -22,8 +22,8 @@
 #include <QFile>
 
 #include <atomic>
-#include <cassert>
 #include <chrono>
+#include <cstdio>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -31,6 +31,18 @@
 
 namespace
 {
+int g_failures = 0;
+
+#define CHECK(condition, message)                                                                  \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(condition))                                                                          \
+        {                                                                                          \
+            std::printf("FAIL: %s\n", message);                                                    \
+            ++g_failures;                                                                          \
+        }                                                                                          \
+    } while (false)
+
 // Make a tiny valid PNG on disk so CompareWorkspace::setImages() can load it.
 QString writeTempPng(const std::string &name)
 {
@@ -79,10 +91,11 @@ int main(int argc, char **argv)
 
     // ---- 1) Engine-level ROI capture (the previously-broken path). ----
     const mviewer::domain::CompareSession captured = producer.compareSession();
-    assert(captured.selection.w > 0 && captured.selection.h > 0 &&
-           "CompareEngine::session() must capture the ROI/selection");
-    assert(captured.selection.x == 1 && captured.selection.y == 2 && captured.selection.w == 4 &&
-           captured.selection.h == 3 && "captured ROI must match applied selection");
+    CHECK(captured.selection.w > 0 && captured.selection.h > 0,
+          "CompareEngine::session() must capture the ROI/selection");
+    CHECK(captured.selection.x == 1 && captured.selection.y == 2 && captured.selection.w == 4 &&
+              captured.selection.h == 3,
+          "captured ROI must match applied selection");
     std::cout << "[ok] CompareEngine::session() captures ROI (" << captured.selection.x << ","
               << captured.selection.y << "," << captured.selection.w << "," << captured.selection.h
               << ")\n";
@@ -90,35 +103,36 @@ int main(int argc, char **argv)
     // ---- 2) Serialize -> deserialize round-trip preserves every field. ----
     const std::string json = mviewer::core::serializeCompareSession(captured);
     const auto r = mviewer::core::deserializeCompareSession(json);
-    assert(r.has_value() && "deserializeCompareSession must succeed");
-    assert(r->selection.w == 4 && r->selection.h == 3 && "ROI must survive round-trip");
-    assert(r->threshold == 120 && "threshold must survive round-trip");
-    assert(r->layoutIndex == 2 && "layoutIndex must survive round-trip");
-    assert(r->sidePanelVisible == true && "sidePanelVisible must survive round-trip");
-    assert(r->blinkIntervalMs == 350 && "blinkIntervalMs must survive round-trip");
-    assert(r->blinkIndex == 1 && "blinkIndex must survive round-trip");
-    assert(static_cast<int>(r->imageIds.size()) == 2 && "image list must survive round-trip");
+    CHECK(r.has_value(), "deserializeCompareSession must succeed");
+    CHECK(r && r->selection.w == 4 && r->selection.h == 3, "ROI must survive round-trip");
+    CHECK(r && r->threshold == 120, "threshold must survive round-trip");
+    CHECK(r && r->layoutIndex == 2, "layoutIndex must survive round-trip");
+    CHECK(r && r->sidePanelVisible == true, "sidePanelVisible must survive round-trip");
+    CHECK(r && r->blinkIntervalMs == 350, "blinkIntervalMs must survive round-trip");
+    CHECK(r && r->blinkIndex == 1, "blinkIndex must survive round-trip");
+    CHECK(r && static_cast<int>(r->imageIds.size()) == 2, "image list must survive round-trip");
     std::cout << "[ok] serialize -> deserialize preserves ROI/threshold/layout/side/blink\n";
 
     // ---- 3) applySession on a fresh workspace restores the state. ----
     CompareWorkspace consumer;
     consumer.setImages(paths); // engine must own frames before applySession
     pumpUntilCompareCount(&consumer, 2);
-    consumer.applySession(*r);
+    if (r)
+        consumer.applySession(*r);
 
     mviewer::domain::CompareSession after = consumer.compareSession();
-    assert(after.selection.w == 4 && after.selection.h == 3 && "applied session must restore ROI");
-    assert(after.threshold == 120 && "applied session must restore threshold");
-    assert(after.layoutIndex == 2 && "applied session must restore layout");
-    assert(after.sidePanelVisible == true && "applied session must restore side panel");
-    assert(after.blinkIntervalMs == 350 && "applied session must restore blink interval");
+    CHECK(after.selection.w == 4 && after.selection.h == 3, "applied session must restore ROI");
+    CHECK(after.threshold == 120, "applied session must restore threshold");
+    CHECK(after.layoutIndex == 2, "applied session must restore layout");
+    CHECK(after.sidePanelVisible == true, "applied session must restore side panel");
+    CHECK(after.blinkIntervalMs == 350, "applied session must restore blink interval");
     std::cout << "[ok] applySession fully restores Compare state on a fresh workspace\n";
 
     // ---- 4) Regression: destroying engines while their diffs are queued must
     //      not leave worker callbacks dereferencing the destroyed engine. ----
     TaskScheduler &scheduler = TaskScheduler::instance();
-    assert(scheduler.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(5)) &&
-           "earlier analysis jobs must drain before the lifetime regression");
+    CHECK(scheduler.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(5)),
+          "earlier analysis jobs must drain before the lifetime regression");
     scheduler.setPoolMaxThreads(TaskScheduler::AnalysisPool, 1);
 
     std::atomic<bool> blockerStarted{false};
@@ -131,7 +145,7 @@ int main(int argc, char **argv)
                              while (!releaseBlocker.load(std::memory_order_acquire))
                                  std::this_thread::yield();
                          });
-    assert(blocker && "analysis queue blocker must be accepted");
+    CHECK(blocker, "analysis queue blocker must be accepted");
 
     const auto waitDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!blockerStarted.load(std::memory_order_acquire) &&
@@ -140,7 +154,7 @@ int main(int argc, char **argv)
         QCoreApplication::processEvents(QEventLoop::AllEvents, 1);
         std::this_thread::yield();
     }
-    assert(blockerStarted.load(std::memory_order_acquire) && "analysis queue blocker must start");
+    CHECK(blockerStarted.load(std::memory_order_acquire), "analysis queue blocker must start");
 
     std::atomic<int> diffEvents{0};
     const int diffSubId =
@@ -152,19 +166,19 @@ int main(int argc, char **argv)
     {
         auto engine = std::make_unique<CompareEngine>();
         engine->setImages({p1.toStdString(), p2.toStdString()});
-        assert(engine->requestDiff(1, 0) && "queued diff must be accepted");
+        CHECK(engine->requestDiff(1, 0), "queued diff must be accepted");
     }
 
     releaseBlocker.store(true, std::memory_order_release);
-    assert(scheduler.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(5)) &&
-           "queued compare diffs must finish within the bounded wait");
+    CHECK(scheduler.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(5)),
+          "queued compare diffs must finish within the bounded wait");
     QCoreApplication::processEvents(QEventLoop::AllEvents, 1);
     EventBus::instance().unsubscribe(diffSubId);
-    assert(diffEvents.load(std::memory_order_relaxed) == 0 &&
-           "destroyed compare engines must not publish completion events");
+    CHECK(diffEvents.load(std::memory_order_relaxed) == 0,
+          "destroyed compare engines must not publish completion events");
 
     QFile::remove(p1);
     QFile::remove(p2);
-    std::cout << "compare_session_tests: PASS\n";
-    return 0;
+    std::printf("compare_session_tests failures: %d\n", g_failures);
+    return g_failures == 0 ? 0 : 1;
 }

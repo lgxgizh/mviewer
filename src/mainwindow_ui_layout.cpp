@@ -418,30 +418,26 @@ QWidget *MainWindow::buildNavigationPanel()
     // splitter, producing a tiny folder tree and an oversized preview. Run once
     // after MainWindow's synchronous settings restore, then leave subsequent
     // user-adjusted proportions untouched.
-    QTimer::singleShot(0, this,
-                       [this]()
-                       {
-                           constexpr int currentLayoutVersion = 1;
-                           QSettings settings;
-                           if (settings.value("browserSidebarLayoutVersion", 0).toInt() >=
-                               currentLayoutVersion)
-                           {
-                               return;
-                           }
+    QTimer::singleShot(
+        0, this,
+        [this]()
+        {
+            constexpr int currentLayoutVersion = 1;
+            QSettings settings;
+            if (settings.value("browserSidebarLayoutVersion", 0).toInt() >= currentLayoutVersion)
+            {
+                return;
+            }
 
-                           if (m_leftSplitter)
-                           {
-                               const bool showFavorites =
-                                   m_favoritesBar && m_favoritesBar->count() > 0 &&
-                                   !m_favoritesBar->isHidden();
-                               m_leftSplitter->setSizes(
-                                   {showFavorites ? 80 : 0, 390, 260});
-                           }
-                           settings.setValue("browserSidebarLayoutVersion",
-                                             currentLayoutVersion);
-                           settings.sync();
-                       });
-
+            if (m_leftSplitter)
+            {
+                const bool showFavorites =
+                    m_favoritesBar && m_favoritesBar->count() > 0 && !m_favoritesBar->isHidden();
+                m_leftSplitter->setSizes({showFavorites ? 80 : 0, 390, 260});
+            }
+            settings.setValue("browserSidebarLayoutVersion", currentLayoutVersion);
+            settings.sync();
+        });
 
     return leftWidget;
 }
@@ -500,7 +496,8 @@ void MainWindow::buildPrimarySortControls(QWidget *sortBar, QHBoxLayout *sortLay
 }
 
 void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sortLayout,
-                                      QWidget *advancedFilterPanel, QHBoxLayout *advancedLayout)
+                                             QWidget *advancedFilterPanel,
+                                             QHBoxLayout *advancedLayout)
 {
     // A-2.3: file-type quick filter buttons.
     auto *typeFilterCombo = new QComboBox(sortBar);
@@ -583,7 +580,7 @@ void MainWindow::buildAdvancedFilterControls(QWidget *sortBar, QHBoxLayout *sort
 }
 
 void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
-                             QWidget *advancedFilterPanel, QHBoxLayout *advancedLayout)
+                                     QWidget *advancedFilterPanel, QHBoxLayout *advancedLayout)
 {
     // P0-2: View mode switcher (Grid / Large / Small / Detail / Filmstrip / Compact)
     m_viewModeCombo = new QComboBox(sortBar);
@@ -668,7 +665,6 @@ QWidget *MainWindow::buildGalleryPanel()
     rightLayout->setContentsMargins(0, 0, 0, 0);
     rightLayout->setSpacing(4);
 
-
     auto *sortBar = buildSortBar(rightWidget);
     rightLayout->addWidget(sortBar);
 
@@ -741,7 +737,6 @@ QWidget *MainWindow::buildGalleryPanel()
                 m_thumbSizeSlider->setValue(size);
             });
     m_thumbnailPanel->setViewMode(m_thumbnailPanel->viewMode());
-
 
     return rightWidget;
 }
@@ -830,7 +825,7 @@ void MainWindow::buildImageViewerUi()
     m_imageViewer = new ImageViewer(nullptr);
     m_imageViewer->setWindowTitle("图片查看 - MViewer");
 
-    // P0-3: metadata overlay on the image viewer (toggle with 'M' key / click / hover)
+    // P0-3: metadata overlay on the image viewer (toggle with I / M / 图片信息)
     m_metadataOverlay = new MetadataOverlay(m_imageViewer);
     m_metadataOverlay->hide();
     // P0-3: the overlay can close itself (ESC / I / M / click). Mirror any
@@ -849,18 +844,11 @@ void MainWindow::buildImageViewerUi()
                     m_actToggleMetadata->setChecked(visible);
             });
 
-    // Intercept viewer mouse events to show overlay on click / hover.
     m_imageViewer->installEventFilter(this);
     m_imageViewer->setMouseTracking(true);
     m_metadataHoverTimer = new QTimer(this);
     m_metadataHoverTimer->setSingleShot(true);
     m_metadataHoverTimer->setInterval(600);
-    connect(m_metadataHoverTimer, &QTimer::timeout, this,
-            [this]()
-            {
-                if (!currentImagePath().isEmpty())
-                    showMetadataOverlay();
-            });
 }
 
 void MainWindow::buildStatusBarUi()

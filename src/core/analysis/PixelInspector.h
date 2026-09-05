@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "core/image/ImageBuffer.h"
+#include "domain/Selection.h"
 
 namespace mviewer::core
 {
@@ -98,12 +99,21 @@ struct AnalysisPixel
 AnalysisPixel sampleAnalysisPixel(const ImageData &source, const AnalysisAdjustment &adjustment,
                                   int adjustedX, int adjustedY);
 
+// Map a half-open rectangle between original source pixels and the
+// crop-then-rotate display space used by Compare panes. Identity adjustments
+// are a no-op. Linked ROI storage stays in source space; overlays project.
+mviewer::domain::Selection mapDisplaySelectionToSource(const mviewer::domain::Selection &display,
+                                                       const AnalysisAdjustment &adjustment,
+                                                       int sourceWidth, int sourceHeight);
+mviewer::domain::Selection mapSourceSelectionToDisplay(const mviewer::domain::Selection &source,
+                                                       const AnalysisAdjustment &adjustment,
+                                                       int sourceWidth, int sourceHeight);
+
 // Compute an exact N×N neighborhood over source-backed adjusted pixels.
 // Out-of-bounds samples are clipped; n=1,3,5,7 are the supported Inspector
 // kernels used by the UI.
-NeighborhoodStats neighborhoodStats(const ImageData &source,
-                                    const AnalysisAdjustment &adjustment, int adjustedX,
-                                    int adjustedY, int n);
+NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjustment &adjustment,
+                                    int adjustedX, int adjustedY, int n);
 
 // Compute luminance statistics over an N×N neighborhood centered at (cx,cy)
 // in an RGB24 buffer laid out row-major with the given stride (bytes/row).

@@ -26,8 +26,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
     m_directory->setRecentFolders(m_appState.recentFolders);
     m_workspace->setAnalysisVisible(m_appState.analysisVisible);
     m_workspace->setAnalysisPage(m_appState.analysisPage);
-    const QString recentPath =
-        mviewer::runtime::filePath(QStandardPaths::AppConfigLocation, QStringLiteral("recent.json"));
+    const QString recentPath = mviewer::runtime::filePath(QStandardPaths::AppConfigLocation,
+                                                          QStringLiteral("recent.json"));
     {
         QFile rf(recentPath);
         if (rf.open(QIODevice::ReadOnly))
@@ -254,9 +254,8 @@ void MainWindow::reindexSearch()
                     entries.reserve(static_cast<size_t>(cur.size()));
                     for (const QString &p : cur)
                     {
-                        const auto e =
-                            mviewer::core::MetadataIndexer::instance().cached(
-                                p.toUtf8().toStdString());
+                        const auto e = mviewer::core::MetadataIndexer::instance().cached(
+                            p.toUtf8().toStdString());
                         if (e)
                             entries.push_back(*e);
                     }
@@ -275,7 +274,8 @@ void MainWindow::rateCurrentImage(int stars)
 {
     if (currentImagePath().isEmpty())
         return;
-    mviewer::core::RatingStore::instance().setRating(currentImagePath().toUtf8().toStdString(), stars);
+    mviewer::core::RatingStore::instance().setRating(currentImagePath().toUtf8().toStdString(),
+                                                     stars);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath()); // refresh the rating widget
     mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
@@ -337,7 +337,8 @@ void MainWindow::setCurrentColorLabel(int label)
 {
     if (currentImagePath().isEmpty())
         return;
-    mviewer::core::RatingStore::instance().setColorLabel(currentImagePath().toUtf8().toStdString(), label);
+    mviewer::core::RatingStore::instance().setColorLabel(currentImagePath().toUtf8().toStdString(),
+                                                         label);
     m_thumbnailPanel->invalidateRatings();
     m_metadataPanel->setImage(currentImagePath());
     mviewer::core::SidecarStore::instance().writeSidecar(currentImagePath().toUtf8().toStdString());
@@ -525,20 +526,19 @@ void MainWindow::onCurrentImageChanged(const QString &path)
     QPointer<MainWindow> guard(this);
     mviewer::core::MetadataPresentationService::instance().request(
         path.toUtf8().toStdString(), m_statusMetadataConsumer,
-        [guard, requestedPath, generation](
-            const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
+        [guard, requestedPath,
+         generation](const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
         {
-            if (!guard || generation != guard->m_statusMetadataGeneration ||
-                !guard->m_selection || guard->m_selection->currentImage() != requestedPath)
+            if (!guard || generation != guard->m_statusMetadataGeneration || !guard->m_selection ||
+                guard->m_selection->currentImage() != requestedPath)
                 return;
             const auto &meta = snapshot.metadata;
             if (meta.width > 0 && meta.height > 0)
             {
-                guard->m_lblImage->setText(
-                    QString("%1x%2 · %3")
-                        .arg(meta.width)
-                        .arg(meta.height)
-                        .arg(MainWindow::formatBytes(meta.fileSize)));
+                guard->m_lblImage->setText(QString("%1x%2 · %3")
+                                               .arg(meta.width)
+                                               .arg(meta.height)
+                                               .arg(MainWindow::formatBytes(meta.fileSize)));
             }
         });
 }
@@ -579,16 +579,8 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     // didn't pass an explicit list (e.g. menu "比较模式").
     if (imgs.isEmpty())
         imgs = resolveSelectedPaths(true);
-    // Compare needs ≥2 images; if only one is selected, fall back to the folder.
-    if (imgs.size() < 2)
-    {
-        ensureImageList();
-        imgs = m_imageList ? m_imageList->paths() : QStringList();
-    }
-    // Compare sessions are documented for 2-8 images: trim oversized
-    // fallbacks to the supported range and refuse to open a degenerate
-    // single-image “compare” (with user feedback instead of a silent no-op
-    // or a one-pane dialog).
+    // Compare is a 2-8 image selection. Do not substitute the first 8 files
+    // of the folder when the user has 0-1 images selected.
     if (imgs.size() > 8)
     {
         imgs = imgs.mid(0, 8);
@@ -596,7 +588,7 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
     }
     if (imgs.size() < 2)
     {
-        statusBar()->showMessage(tr("需要至少两张图片才能比较"), 5000);
+        statusBar()->showMessage(tr("需要选择 2-8 张图片才能比较"), 5000);
         return;
     }
     showCompareDialog(imgs, sessionJson);
@@ -647,10 +639,9 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
                     statusBar()->showMessage(
                         QString("当前: %1").arg(QFileInfo(current).fileName()));
                 else if (m_imageList && !m_imageList->directory().isEmpty())
-                    statusBar()->showMessage(
-                        QStringLiteral("Browse: %1, %2 images")
-                            .arg(m_imageList->directory())
-                            .arg(m_imageList->count()));
+                    statusBar()->showMessage(QStringLiteral("Browse: %1, %2 images")
+                                                 .arg(m_imageList->directory())
+                                                 .arg(m_imageList->count()));
                 else
                     statusBar()->showMessage(tr("就绪"));
             });
@@ -709,19 +700,18 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
                                return;
                            std::optional<mviewer::domain::CompareSession> session;
                            if (!sessionFinal.isEmpty())
-                               session = decodeCompareSession(
-                                   sessionFinal.toUtf8().toStdString());
+                               session = decodeCompareSession(sessionFinal.toUtf8().toStdString());
                            QVector<int> frameIndices;
-                            if (session)
-                                for (int i = 0; i < imgsFinal.size(); ++i)
-                                    frameIndices.append(
-                                        i < static_cast<int>(session->frameIndices.size())
-                                            ? std::max(0, session->frameIndices[i])
-                                            : 0);
-                            viewGuard->setImages(imgsFinal, frameIndices);
-                            if (session)
-                                viewGuard->applySession(*session);
-                        });
+                           if (session)
+                               for (int i = 0; i < imgsFinal.size(); ++i)
+                                   frameIndices.append(
+                                       i < static_cast<int>(session->frameIndices.size())
+                                           ? std::max(0, session->frameIndices[i])
+                                           : 0);
+                           viewGuard->setImages(imgsFinal, frameIndices);
+                           if (session)
+                               viewGuard->applySession(*session);
+                       });
 }
 QStringList MainWindow::resolveSelectedPaths(bool preferMulti) const
 {
@@ -756,7 +746,7 @@ void MainWindow::updateSelectionActions()
     const bool hasCurrent = !currentImagePath().isEmpty();
     const bool viewerVisible = m_imageViewer && m_imageViewer->isVisible();
     if (m_actCompare)
-        m_actCompare->setEnabled(n >= 2 || availableCount >= 2);
+        m_actCompare->setEnabled(n >= 2 && n <= 8);
     if (m_actExportImages)
         m_actExportImages->setEnabled(n >= 1 || hasImages);
     if (m_actBatch)

@@ -1,7 +1,8 @@
 #include "core/analysis/PixelInspector.h"
-#include "core/image/ImageBuffer.h"
 #include "core/image/ImageAdjust.h"
+#include "core/image/ImageBuffer.h"
 #include "core/image/ImageFrame.h"
+#include "core/image/ImageStats.h"
 #include <cassert>
 #include <cmath>
 #include <cstdint>
@@ -164,8 +165,8 @@ static void test_source_backed_analysis()
         static_cast<float>(adjustment.redGain), static_cast<float>(adjustment.blueGain));
     const auto expectedPixel = samplePixel(expected, 0, 0);
     const auto actualPixel = sampleAnalysisPixel(adjustedSource, adjustment, 0, 0);
-    CHECK(actualPixel.valid && actualPixel.r == expectedPixel.r && actualPixel.g == expectedPixel.g &&
-          actualPixel.b == expectedPixel.b);
+    CHECK(actualPixel.valid && actualPixel.r == expectedPixel.r &&
+          actualPixel.g == expectedPixel.g && actualPixel.b == expectedPixel.b);
 
     ImageData grayscale = makeImageData(1, 1, PixelFormat::Grayscale8);
     grayscale.buffer->at(0) = 120;
@@ -194,6 +195,44 @@ static void test_source_backed_analysis()
         CHECK(std::abs(stats.mean - static_cast<double>(expectedSum) / stats.count) < 1e-9);
     }
     CHECK(neighborhoodStats(neighborhood, identity, 0, 0, 7).count == 16);
+
+    using mviewer::domain::Selection;
+    const Selection identityBox{1, 0, 2, 1};
+    const auto identityMapped =
+        mapDisplaySelectionToSource(identityBox, identity, source.width, source.height);
+    CHECK(identityMapped.x == 1 && identityMapped.y == 0 && identityMapped.width == 2 &&
+          identityMapped.height == 1);
+    const auto identityRoundTrip =
+        mapSourceSelectionToDisplay(identityMapped, identity, source.width, source.height);
+    CHECK(identityRoundTrip.x == 1 && identityRoundTrip.y == 0 && identityRoundTrip.width == 2 &&
+          identityRoundTrip.height == 1);
+
+    AnalysisAdjustment cropOnly = identity;
+    cropOnly.hasCrop = true;
+    cropOnly.cropX = 1;
+    cropOnly.cropY = 0;
+    cropOnly.cropW = 2;
+    cropOnly.cropH = 2;
+    const Selection cropDisplay{0, 0, 2, 2};
+    const auto cropSource =
+        mapDisplaySelectionToSource(cropDisplay, cropOnly, source.width, source.height);
+    CHECK(cropSource.x == 1 && cropSource.y == 0 && cropSource.width == 2 &&
+          cropSource.height == 2);
+
+    AnalysisAdjustment crop90 = cropOnly;
+    crop90.rotation = 90;
+    const Selection leftColumn{0, 0, 1, 2};
+    const auto rotatedSource =
+        mapDisplaySelectionToSource(leftColumn, crop90, source.width, source.height);
+    CHECK(rotatedSource.x == 1 && rotatedSource.y == 1 && rotatedSource.width == 2 &&
+          rotatedSource.height == 1);
+    const auto rotatedDisplay =
+        mapSourceSelectionToDisplay(rotatedSource, crop90, source.width, source.height);
+    CHECK(rotatedDisplay.x == 0 && rotatedDisplay.y == 0 && rotatedDisplay.width == 1 &&
+          rotatedDisplay.height == 2);
+    const auto stats = computeROIChannelStats(source, rotatedSource);
+    CHECK(stats.valid && stats.pixelCount == 2);
+    CHECK(std::abs(stats.rMean - (coordinateValue(1, 1) + coordinateValue(2, 1)) / 2.0) < 1e-9);
 }
 
 static void test_raw16At()
