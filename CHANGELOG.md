@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.25] - 2026-09-11
+
+### Changed
+
+- **Console subsystem restored:** MViewer.exe is again a Windows console
+  application, matching 1.0.22. Double-click shows a CMD window. This avoids
+  the unsigned GUI-subsystem heuristic that caused antivirus to quarantine
+  1.0.24 portable and Setup binaries.
+
 ## [1.0.24] - 2026-09-11
 
 ### Changed
