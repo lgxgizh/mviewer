@@ -6,6 +6,8 @@
 #include <cstdio>
 #include <cstring>
 
+// NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,bugprone-easily-swappable-parameters)
+
 static int g_pass = 0;
 static int g_fail = 0;
 
@@ -198,3 +200,4 @@ int main()
     printf("\n=== %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }
+// NOLINTEND(cppcoreguidelines-pro-type-vararg,bugprone-easily-swappable-parameters)

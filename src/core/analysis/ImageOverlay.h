@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 namespace mviewer
 {
@@ -11,7 +12,7 @@ namespace mviewer
 // F4 (M22): live analysis overlays for the zoomable ImageViewer.
 // Kept in core (pure std) so both the viewer and the standalone
 // AnalysisOverlayDialog can share identical pixel math.
-enum class OverlayMode
+enum class OverlayMode : std::uint8_t
 {
     None = 0,
     Zebra = 1,      // over/under-exposure clip indicators
@@ -123,7 +124,7 @@ inline void applyOverlay(ImageData &img, OverlayMode mode, int zebraThresholdPct
                     r = p[0], g = p[1], b = p[2];
                 const int l = luminance(static_cast<uint8_t>(r), static_cast<uint8_t>(g),
                                         static_cast<uint8_t>(b));
-                const float t = std::clamp(l / 255.f, 0.f, 1.f);
+                const float t = std::clamp(static_cast<float>(l) / 255.f, 0.f, 1.f);
                 const float fr = std::clamp(1.5f - std::fabs(4.f * t - 3.f), 0.f, 1.f);
                 const float fg = std::clamp(1.5f - std::fabs(4.f * t - 2.f), 0.f, 1.f);
                 const float fb = std::clamp(1.5f - std::fabs(4.f * t - 1.f), 0.f, 1.f);
@@ -172,12 +173,10 @@ inline void applyOverlay(ImageData &img, OverlayMode mode, int zebraThresholdPct
             {
                 if (((x + y) % 8) < 4)
                 {
-                    const bool over = l >= hi;
-                    const uint8_t v0 = over ? 0 : 255;
-                    if (bgr)
-                        p[0] = v0, p[1] = v0, p[2] = v0;
-                    else
-                        p[0] = v0, p[1] = v0, p[2] = v0;
+                    const uint8_t v0 = (l >= hi) ? 0 : 255;
+                    p[0] = v0;
+                    p[1] = v0;
+                    p[2] = v0;
                 }
             }
         }

@@ -12,6 +12,8 @@
 #include <memory>
 #include <vector>
 
+// NOLINTBEGIN(cppcoreguidelines-pro-type-vararg,bugprone-implicit-widening-of-multiplication-result)
+
 static int g_pass = 0;
 static int g_fail = 0;
 
@@ -143,3 +145,4 @@ int main()
     printf("\nhistogram_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }
+// NOLINTEND(cppcoreguidelines-pro-type-vararg,bugprone-implicit-widening-of-multiplication-result)
