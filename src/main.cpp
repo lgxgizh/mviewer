@@ -87,8 +87,10 @@ int main(int argc, char *argv[])
             if (AttachConsole(ATTACH_PARENT_PROCESS))
             {
                 FILE *stream = nullptr;
-                freopen_s(&stream, "CONOUT$", "w", stdout);
-                freopen_s(&stream, "CONOUT$", "w", stderr);
+                if (freopen_s(&stream, "CONOUT$", "w", stdout) != 0)
+                    stream = nullptr;
+                if (freopen_s(&stream, "CONOUT$", "w", stderr) != 0)
+                    stream = nullptr;
             }
 #endif
             return mviewer::core::runSelfTest();
