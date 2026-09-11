@@ -24,6 +24,8 @@
 
 Name "${APPNAME} ${VERSION}"
 OutFile "${OUTFILE}"
+Icon "..\resources\mviewer.ico"
+UninstallIcon "..\resources\mviewer.ico"
 InstallDir "$PROGRAMFILES64\${APPNAME}"
 InstallDirRegKey HKLM "Software\${APPNAME}" "InstallDir"
 

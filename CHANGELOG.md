@@ -2,6 +2,12 @@
 
 ## [1.0.22] - 2026-09-11
 
+### Added
+
+- **Application icon:** MViewer.exe, the main window, and the installer use a
+  dedicated compare/viewfinder mark instead of the default system executable
+  icon.
+
 ### Fixed
 
 - **Faster Compare histograms:** overlay and full-image inspection histograms

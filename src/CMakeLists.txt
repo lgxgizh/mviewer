@@ -233,7 +233,11 @@ target_compile_features(mviewer_application PUBLIC cxx_std_20)
 
 add_executable(MViewer
     main.cpp
+    ${CMAKE_SOURCE_DIR}/resources/mviewer.qrc
 )
+if(WIN32)
+    target_sources(MViewer PRIVATE ${CMAKE_SOURCE_DIR}/resources/mviewer.rc)
+endif()
 
 target_link_libraries(MViewer
     PRIVATE

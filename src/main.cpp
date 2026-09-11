@@ -11,6 +11,7 @@
 
 #include <QApplication>
 #include <QDebug>
+#include <QIcon>
 
 #include <exception>
 #include <string>
@@ -53,6 +54,7 @@ int main(int argc, char *argv[])
     app.setApplicationName("MViewer");
     app.setOrganizationName("MViewer");
     app.setApplicationVersion(QStringLiteral(MVIEWER_VERSION_STRING));
+    app.setWindowIcon(QIcon(QStringLiteral(":/app/mviewer.png")));
     mviewer::runtime::configureSettings();
 
     // Structured file logging (AppData/logs/mviewer-YYYYMMDD.log).

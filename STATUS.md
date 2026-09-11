@@ -47,6 +47,7 @@
 
 - Overlay and full-image inspection histograms subsample to a 256-pixel long
   edge. ROI analysis histograms remain exact pixel counts.
+- The application, window, and installer ship a dedicated MViewer icon.
 
 ## 1.0.21 — Compare overlay inspection (2026-09-11)
 
