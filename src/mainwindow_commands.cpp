@@ -414,9 +414,9 @@ bool MainWindow::handleViewerKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    // Compare mode on a plain 'C' — same style as G/D/H/M above. (A QAction
-    // plain-key shortcut would shadow text entry in the search box.)
-    if (event->key() == Qt::Key_C && !mod)
+    // Compare mode on a plain 'C' or 'P' — P is the advertised gallery
+    // shortcut so a multi-select does not require the context menu.
+    if (!mod && (event->key() == Qt::Key_C || event->key() == Qt::Key_P))
     {
         if (m_actCompare && m_actCompare->isEnabled())
             m_actCompare->trigger();
@@ -501,7 +501,7 @@ QString MainWindow::shortcutsHelpHtml()
         "胶片条</td></tr>"
         "<tr><td><kbd>Ctrl+5</kbd> / <kbd>Ctrl+6</kbd></td><td>小图标 / 紧凑</td></tr>"
         "<tr><th colspan='2'>比较（仅比较窗口）</th></tr>"
-        "<tr><td><kbd>C</kbd>（浏览窗口）</td><td>打开比较模式</td></tr>"
+        "<tr><td><kbd>P</kbd> / <kbd>C</kbd>（浏览窗口）</td><td>选中 2–8 张后打开比较</td></tr>"
         "<tr><td><kbd>Space</kbd></td><td>浏览：快速比较当前选中；比较窗口：按住临时切换</td></tr>"
         "<tr><td><kbd>B</kbd> / <kbd>S</kbd> / <kbd>W</kbd> / <kbd>O</kbd></td>"
         "<td>闪烁 / 分割 / 滑动 / 叠加</td></tr>"
@@ -543,6 +543,72 @@ void MainWindow::showShortcutsHelp()
     auto *lay = new QVBoxLayout(&dlg);
     auto *browser = new QTextBrowser(&dlg);
     browser->setHtml(shortcutsHelpHtml());
+    browser->setOpenExternalLinks(false);
+    lay->addWidget(browser);
+    auto *box = new QDialogButtonBox(QDialogButtonBox::Close, &dlg);
+    connect(box, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    connect(box, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    lay->addWidget(box);
+    dlg.exec();
+}
+
+QString MainWindow::userGuideHtml()
+{
+    return QStringLiteral(
+        "<h2>MViewer 使用说明</h2>"
+        "<p>图像算法工程师用的浏览 / 比较 / 分析工具。下面只写日常路径。</p>"
+        "<h3>1. 浏览</h3>"
+        "<ol>"
+        "<li>打开一个图片目录（Ctrl+O）。缩略图会陆续出来。</li>"
+        "<li>单击看大图；Ctrl+单击 / Shift+单击多选。</li>"
+        "<li>滚轮缩放，双击在适应窗口和 100% 之间切换。</li>"
+        "</ol>"
+        "<h3>2. 比较（主路径）</h3>"
+        "<ol>"
+        "<li>在缩略图里选中 <b>2–8 张</b>图。</li>"
+        "<li>按 <kbd>P</kbd> 或 <kbd>C</kbd> 进入比较（也可点工具栏「比较」或右键「比较」）。"
+        "选不够 2 张时，状态栏会提示原因。</li>"
+        "<li>默认同步缩放和拖动。底部状态条显示 <b>PSNR / SSIM</b>。</li>"
+        "<li>模式（仅 2 张时）：<kbd>B</kbd> 闪烁 · <kbd>S</kbd> 左右分割 · "
+        "<kbd>W</kbd> 滑动 · <kbd>O</kbd> 叠加 · <kbd>K</kbd> "
+        "棋盘。叠加/棋盘的滑条用到才出现。</li>"
+        "<li>勾选「显示差异」看热力图；「对齐」可在算指标前自动对齐。</li>"
+        "<li>在图上<b>右键拖</b>画 ROI。黄框上方标 <b>A / B</b>，右下角统计也是 A 一行、B "
+        "一行。</li>"
+        "<li><kbd>Esc</kbd>：有选区先清框，再按退出。也可点「退出比较」。</li>"
+        "</ol>"
+        "<h3>3. 比较窗口常用键</h3>"
+        "<table border='1' cellpadding='4' cellspacing='0'>"
+        "<tr><td><kbd>Z</kbd> / <kbd>D</kbd></td><td>同步缩放 / 同步拖动</td></tr>"
+        "<tr><td><kbd>Space</kbd></td><td>按住：在 A 窗格临时看 B</td></tr>"
+        "<tr><td><kbd>H</kbd></td><td>差异高亮</td></tr>"
+        "<tr><td><kbd>R</kbd> / <kbd>L</kbd></td><td>同步准星 / 像素连线</td></tr>"
+        "<tr><td><kbd>X</kbd></td><td>交换 A/B</td></tr>"
+        "<tr><td><kbd>F</kbd></td><td>全部适应窗口</td></tr>"
+        "<tr><td><kbd>PgUp</kbd> / <kbd>PgDn</kbd></td><td>上一对 / 下一对</td></tr>"
+        "<tr><td><kbd>?</kbd></td><td>底部快捷键提示（不改窗口标题）</td></tr>"
+        "<tr><td><kbd>Shift+1</kbd>…<kbd>5</kbd></td><td>通道 RGB / R / G / B / Y</td></tr>"
+        "</table>"
+        "<h3>4. 浏览窗口常用键</h3>"
+        "<table border='1' cellpadding='4' cellspacing='0'>"
+        "<tr><td><kbd>P</kbd> / <kbd>C</kbd></td><td>打开比较（需 2–8 张）</td></tr>"
+        "<tr><td><kbd>Space</kbd></td><td>当前图与下一张快速比较</td></tr>"
+        "<tr><td><kbd>Alt+H</kbd></td><td>分析面板（打开即出直方图）</td></tr>"
+        "<tr><td><kbd>I</kbd> / <kbd>M</kbd></td><td>图片信息浮层</td></tr>"
+        "<tr><td><kbd>S</kbd></td><td>幻灯片</td></tr>"
+        "<tr><td><kbd>F1</kbd></td><td>完整快捷键表</td></tr>"
+        "</table>"
+        "<p>完整快捷键表：菜单「帮助 → 键盘快捷键」或 <kbd>F1</kbd>。</p>");
+}
+
+void MainWindow::showUserGuide()
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle(QStringLiteral("使用说明"));
+    dlg.resize(560, 640);
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *browser = new QTextBrowser(&dlg);
+    browser->setHtml(userGuideHtml());
     browser->setOpenExternalLinks(false);
     lay->addWidget(browser);
     auto *box = new QDialogButtonBox(QDialogButtonBox::Close, &dlg);

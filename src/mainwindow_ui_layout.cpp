@@ -108,6 +108,7 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     // ----- 视图(&V) -----
     auto *viewMenu = menuBar->addMenu("视图(&V)");
     m_actCompare = new QAction("比较模式(&C)", this);
+    m_actCompare->setToolTip(tr("选中 2–8 张图片后按 P 或 C 打开比较"));
     m_actToggleAnalysis = new QAction("分析面板(&H)", this);
     m_actToggleAnalysis->setObjectName("toggleAnalysisPanelAction");
     m_actToggleAnalysis->setCheckable(true);
@@ -270,6 +271,9 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     connect(actCheckUpdate, &QAction::triggered, this, [this]() { checkForUpdates(false); });
     helpMenu->addAction(actCheckUpdate);
     helpMenu->addSeparator();
+    auto *actGuide = new QAction("使用说明(&G)", this);
+    connect(actGuide, &QAction::triggered, this, &MainWindow::showUserGuide);
+    helpMenu->addAction(actGuide);
     auto *actShortcuts = new QAction("键盘快捷键(&K)", this);
     actShortcuts->setShortcut(QKeySequence(Qt::Key_F1));
     connect(actShortcuts, &QAction::triggered, this, &MainWindow::showShortcutsHelp);

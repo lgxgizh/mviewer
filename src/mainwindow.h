@@ -1,9 +1,9 @@
 #pragma once
 
 #include "appstate.h"
+#include "core/analysis/ReportHtml.h"
 #include "core/command/CommandRegistry.h"
 #include "core/command/CommandStack.h"
-#include "core/analysis/ReportHtml.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/update/UpdateChecker.h"
 #include "core/workspace/WorkspaceSerializer.h"
@@ -91,6 +91,7 @@ class MainWindow : public QMainWindow
     // The shortcut cheat-sheet HTML (single source of truth for the F1 help;
     // public so tests can verify it stays in sync with registered commands).
     static QString shortcutsHelpHtml();
+    static QString userGuideHtml();
 
   protected:
     void closeEvent(QCloseEvent *event) override;
@@ -156,6 +157,7 @@ class MainWindow : public QMainWindow
     void onCurrentImageChanged(const QString &path);
     // P1-8: keyboard-shortcut cheat-sheet dialog (F1 / Help menu).
     void showShortcutsHelp();
+    void showUserGuide();
     void openDirectory(const QString &dir);
     // Unified directory-change handler: updates directory tree (which triggers
     // the directoryChanged signal chain), thumbnail panel, breadcrumb, recent
@@ -204,9 +206,9 @@ class MainWindow : public QMainWindow
     void scheduleMetadataHistogram();
     void applyMetadataHistogram(uint64_t gen, const QString &path,
                                 const mviewer::core::Histogram &hist);
-    TaskScheduler::TaskHandle m_metadataHistTask; // newest owned Analysis task
-    uint64_t m_metadataHistGen = 0;               // generation guard (latest-wins)
-    QString m_metadataHistPath;                   // image the newest task targets
+    TaskScheduler::TaskHandle m_metadataHistTask;  // newest owned Analysis task
+    uint64_t m_metadataHistGen = 0;                // generation guard (latest-wins)
+    QString m_metadataHistPath;                    // image the newest task targets
     std::weak_ptr<ImageFrame> m_metadataHistFrame; // frame identity token
     // Post-delivery dedup: once a histogram lands, the completed task handle is
     // released and this flag records that the CURRENT path+frame is already
@@ -237,7 +239,8 @@ class MainWindow : public QMainWindow
     MetadataOverlay *m_metadataOverlay = nullptr; // M15: semi-transparent info overlay
     ThumbnailPanel *m_thumbnailPanel = nullptr;
     QLabel *m_emptyState = nullptr; // gallery empty-state hint (objectName: emptyStateLabel)
-    QLabel *m_emptyFolderLabel = nullptr; // gallery empty-folder hint (objectName: emptyFolderLabel)
+    QLabel *m_emptyFolderLabel =
+        nullptr; // gallery empty-folder hint (objectName: emptyFolderLabel)
     QTimer *m_emptyFolderTimer = nullptr; // defers the hint past the pre-scan zero
     PreviewPanel *m_previewPanel = nullptr;
 
@@ -333,7 +336,7 @@ class MainWindow : public QMainWindow
     // P1: metadata-aware search + star-rating filter.
     QCheckBox *m_searchMeta = nullptr;
     QComboBox *m_ratingFilter = nullptr;
-    QComboBox *m_sortCombo = nullptr;     // persisted across sessions via QSettings
+    QComboBox *m_sortCombo = nullptr; // persisted across sessions via QSettings
     QComboBox *m_viewModeCombo = nullptr;
     QSlider *m_thumbSizeSlider = nullptr; // persisted across sessions via QSettings
     QComboBox *m_flagFilter = nullptr;    // P3 tail: color label / reject / pick / recents

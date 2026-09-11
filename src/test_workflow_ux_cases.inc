@@ -476,6 +476,10 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(helpHtml.contains("Ctrl+F"),
           "cheat sheet documents the Ctrl+F directory-filter shortcut");
     CHECK(helpHtml.contains("F1"), "cheat sheet documents the F1 help shortcut");
+    CHECK(helpHtml.contains("<kbd>P</kbd>"), "cheat sheet documents P to open Compare");
+    const QString guideHtml = MainWindow::userGuideHtml();
+    CHECK(guideHtml.contains("<kbd>P</kbd>") && guideHtml.contains(QStringLiteral("比较")),
+          "user guide documents P to open Compare");
     if (viewer)
     {
         // 首屏：异步解码必须在 5 秒内交付（评审"有没有等待"硬上限）。
@@ -585,6 +589,12 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         CHECK(
             w.statusBar()->currentMessage().contains(QStringLiteral("需要选择 2-8 张图片才能比较")),
             "C explains that Compare needs a 2-8 image selection");
+        w.statusBar()->clearMessage();
+        sendKey(&w, Qt::Key_P);
+        pump(40);
+        CHECK(
+            w.statusBar()->currentMessage().contains(QStringLiteral("需要选择 2-8 张图片才能比较")),
+            "P explains that Compare needs a 2-8 image selection");
         bool compareOpenedFromOne = false;
         for (QWidget *top : QApplication::topLevelWidgets())
         {
@@ -602,6 +612,19 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
               "M49: Ctrl+click toggles a second image into the SSOT selection");
         CHECK(compareAction && compareAction->isEnabled(),
               "selecting two images enables the Compare command");
+        sendKey(&w, Qt::Key_P);
+        pump(200);
+        QDialog *compareFromP = nullptr;
+        for (QWidget *top : QApplication::topLevelWidgets())
+        {
+            auto *dlg = qobject_cast<QDialog *>(top);
+            if (dlg && dlg->isVisible() && dlg->windowTitle().contains("比较模式"))
+                compareFromP = dlg;
+        }
+        CHECK(compareFromP, "P opens Compare for a 2-image selection");
+        if (compareFromP)
+            compareFromP->close();
+        pump(50);
         galleryClick(4, Qt::ShiftModifier);
         CHECK(thumbnailPanel->selectedPaths().size() >= 4 && sel->selection().size() >= 4 &&
                   thumbnailPanel->selectedPaths().contains(paths[3]) &&

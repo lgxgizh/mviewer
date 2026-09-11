@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-09-12 · Version: **1.0.27 Compare contextual chrome** · Release tag: **v1.0.26 published**
+> Snapshot: 2026-09-12 · Version: **1.0.28 user guide / P to Compare** · Release tag: **v1.0.26 published**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -42,6 +42,11 @@
 > `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
 > `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## 1.0.28 — User guide and P to Compare (2026-09-12)
+
+- Selecting 2–8 images and pressing P (or C) opens Compare. Help → 使用说明
+  and `docs/USER_GUIDE.md` cover Compare and shortcuts.
 
 ## 1.0.27 — Compare contextual chrome (2026-09-12)
 

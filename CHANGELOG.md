@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.28] - 2026-09-12
+
+### Added
+
+- **P opens Compare:** with 2–8 images selected, P (or C) starts Compare. Help
+  → 使用说明 is a short Chinese guide; F1 still lists every shortcut.
+
 ## [1.0.27] - 2026-09-12
 
 ### Changed
