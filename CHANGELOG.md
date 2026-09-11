@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.29] - 2026-09-12
+
+### Changed
+
+- **Larger Compare filenames:** pane captions and the on-image filename overlay
+  use a bigger bold type so names are readable at a glance.
+
 ## [1.0.28] - 2026-09-12
 
 ### Added

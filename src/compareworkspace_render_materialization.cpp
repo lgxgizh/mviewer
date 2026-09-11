@@ -73,10 +73,14 @@ ElidedCaption *createPaneCaption(QWidget *cellWidget, int index, const ImageFram
     auto *caption = new ElidedCaption(cellWidget);
     caption->setObjectName(QString("paneCaption%1").arg(index));
     caption->setAlignment(Qt::AlignCenter);
-    caption->setStyleSheet("QLabel{background:#222;color:#ccc;padding:2px;}");
+    QFont capFont = caption->font();
+    capFont.setPointSize(12);
+    capFont.setBold(true);
+    caption->setFont(capFont);
+    caption->setStyleSheet("QLabel{background:#222;color:#ffffff;padding:4px 8px;}");
     caption->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     caption->setMinimumWidth(0);
-    caption->setMinimumHeight(20);
+    caption->setMinimumHeight(28);
     if (img)
         caption->setFullText(QString::fromUtf8(img->metadata().fileName.data(),
                                                static_cast<int>(img->metadata().fileName.size())));

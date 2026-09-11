@@ -11,8 +11,9 @@
 namespace mviewer::ui
 {
 
-inline constexpr int kFilenameOverlayPad = 6;
-inline constexpr int kFilenameOverlayMaxHeight = 72;
+inline constexpr int kFilenameOverlayPad = 8;
+inline constexpr int kFilenameOverlayPointSize = 13;
+inline constexpr int kFilenameOverlayMaxHeight = 110;
 
 inline QRect filenameOverlayRect(const QFontMetrics &metrics, const QRect &pane,
                                  const QString &text)
@@ -35,7 +36,7 @@ inline QRect drawFilenameOverlay(QPainter &p, const QRect &pane, const QString &
         return {};
     QFont font = p.font();
     font.setBold(true);
-    font.setPointSize(9);
+    font.setPointSize(kFilenameOverlayPointSize);
     p.setFont(font);
     const QRect box = filenameOverlayRect(QFontMetrics(font), pane, text);
     if (box.isEmpty())

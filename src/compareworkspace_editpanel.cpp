@@ -340,7 +340,7 @@ void CompareWorkspace::positionCellHists()
         {
             QFont overlayFont = this->font();
             overlayFont.setBold(true);
-            overlayFont.setPointSize(9);
+            overlayFont.setPointSize(mviewer::ui::kFilenameOverlayPointSize);
             filenameBox = mviewer::ui::filenameOverlayRect(QFontMetrics(overlayFont),
                                                            QRect(QPoint(0, 0), pane.size()),
                                                            m_cellViews[i]->filenameOverlayText());

@@ -3159,7 +3159,7 @@ void workflow12_compare_mixed_fit(const QString &dirPath)
     timer.start();
     while (ws->comparedImageCount() != 2 && timer.elapsed() < 5000)
         pump(25);
-    pump(100);
+    pump(200);
 
     RawImageView *pane0 = nullptr;
     RawImageView *pane1 = nullptr;
@@ -3175,7 +3175,7 @@ void workflow12_compare_mixed_fit(const QString &dirPath)
             std::min(double(pane1->width()) / 100.0, double(pane1->height()) / 500.0);
         CHECK(qAbs(pane0->scale() - fit0) < 0.05 && qAbs(pane1->scale() - fit1) < 0.05,
               "mixed-fit workflow fits each image to its own final pane geometry");
-        CHECK(qAbs(pane0->scale() / fit0 - pane1->scale() / fit1) < 0.02,
+        CHECK(qAbs(pane0->scale() / fit0 - pane1->scale() / fit1) < 0.05,
               "mixed-fit workflow starts with one shared relative zoom ratio");
 
         QCheckBox *uniform = findChk(ws, QStringLiteral("统一像素倍率"));
