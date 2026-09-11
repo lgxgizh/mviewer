@@ -89,6 +89,10 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
     m_analysisOverlay->addItem(tr("无"), 0);
     m_analysisOverlay->addItem(tr("过曝/欠曝斑马线"), 1);
     m_analysisOverlay->addItem(tr("伪彩色"), 2);
+    m_analysisOverlay->addItem(tr("R 通道"), 3);
+    m_analysisOverlay->addItem(tr("G 通道"), 4);
+    m_analysisOverlay->addItem(tr("B 通道"), 5);
+    m_analysisOverlay->addItem(tr("Y 亮度"), 6);
     m_analysisOverlay->setCurrentIndex(
         m_analysisOverlay->findData(s.value("defaultAnalysisOverlay", 0).toInt()));
     al->addRow(tr("默认分析叠加层"), m_analysisOverlay);

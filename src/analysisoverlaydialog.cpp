@@ -112,6 +112,10 @@ AnalysisOverlayDialog::AnalysisOverlayDialog(const QImage &image, QWidget *paren
     m_mode->addItem(tr("无"), 0);
     m_mode->addItem(tr("过曝/欠曝斑马线"), 1);
     m_mode->addItem(tr("伪彩色"), 2);
+    m_mode->addItem(tr("R 通道"), 3);
+    m_mode->addItem(tr("G 通道"), 4);
+    m_mode->addItem(tr("B 通道"), 5);
+    m_mode->addItem(tr("Y 亮度"), 6);
     m_mode->setCurrentIndex(m_mode->findData(s.value("defaultAnalysisOverlay", 0).toInt()));
 
     m_threshold = new QSlider(Qt::Horizontal);

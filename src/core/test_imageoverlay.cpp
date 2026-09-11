@@ -1,5 +1,6 @@
-// M22 unit tests: live analysis overlay math (zebra / false-color).
+// M22 unit tests: live analysis overlay math (zebra / false-color / channels).
 #include "core/analysis/ImageOverlay.h"
+#include "core/analysis/PixelGrid.h"
 #include "core/image/ImageBuffer.h"
 
 #include <cstdio>
@@ -122,6 +123,68 @@ static void testNoneNoOp()
     CHECK(p[0] == 10 && p[1] == 20 && p[2] == 30, "None overlay leaves pixels unchanged");
 }
 
+static void testChannelIsolation()
+{
+    printf("\n[channel isolation]\n");
+    fflush(stdout);
+    ImageData red = makeImageData(8, 8, PixelFormat::RGB24);
+    fillSolid(red, 200, 10, 20);
+    mviewer::applyOverlay(red, mviewer::OverlayMode::ChannelR, 2);
+    const uint8_t *pr = px(red.view(), 3, 3);
+    CHECK(pr[0] == 200 && pr[1] == 200 && pr[2] == 200, "R plane becomes grayscale of red");
+
+    ImageData green = makeImageData(8, 8, PixelFormat::RGB24);
+    fillSolid(green, 200, 10, 20);
+    mviewer::applyOverlay(green, mviewer::OverlayMode::ChannelG, 2);
+    const uint8_t *pg = px(green.view(), 3, 3);
+    CHECK(pg[0] == 10 && pg[1] == 10 && pg[2] == 10, "G plane becomes grayscale of green");
+
+    ImageData blue = makeImageData(8, 8, PixelFormat::RGB24);
+    fillSolid(blue, 200, 10, 20);
+    mviewer::applyOverlay(blue, mviewer::OverlayMode::ChannelB, 2);
+    const uint8_t *pb = px(blue.view(), 3, 3);
+    CHECK(pb[0] == 20 && pb[1] == 20 && pb[2] == 20, "B plane becomes grayscale of blue");
+
+    ImageData luma = makeImageData(8, 8, PixelFormat::RGB24);
+    fillSolid(luma, 200, 10, 20);
+    mviewer::applyOverlay(luma, mviewer::OverlayMode::ChannelY, 2);
+    const uint8_t *py = px(luma.view(), 3, 3);
+    const int expectedY = luminance(200, 10, 20);
+    CHECK(py[0] == expectedY && py[1] == expectedY && py[2] == expectedY,
+          "Y plane becomes BT.601 luminance grayscale");
+    CHECK(mviewer::isChannelOverlay(mviewer::OverlayMode::ChannelR), "R is a channel overlay");
+    CHECK(!mviewer::isChannelOverlay(mviewer::OverlayMode::Zebra), "zebra is not a channel overlay");
+}
+
+static void testPixelGrid()
+{
+    printf("\n[pixel grid]\n");
+    fflush(stdout);
+    CHECK(!mviewer::pixelGridVisible(1.0), "fit/100% does not show a pixel grid");
+    CHECK(!mviewer::pixelGridVisible(7.99), "799% stays below the grid threshold");
+    CHECK(mviewer::pixelGridVisible(8.0), "800% shows a pixel grid");
+
+    const auto hidden = mviewer::enumeratePixelGrid(0, 0, 64, 64, 0, 0, 16, 16, 0, 0, 64, 64);
+    CHECK(hidden.empty(), "scale 4x emits no grid lines");
+
+    const auto lines = mviewer::enumeratePixelGrid(0, 0, 128, 128, 0, 0, 16, 16, 0, 0, 128, 128);
+    CHECK(!lines.empty(), "scale 8x emits grid lines");
+    int vertical = 0;
+    int horizontal = 0;
+    for (const auto &line : lines)
+    {
+        if (line.x1 == line.x2)
+            ++vertical;
+        if (line.y1 == line.y2)
+            ++horizontal;
+    }
+    CHECK(vertical >= 16 && horizontal >= 16, "grid covers source columns and rows");
+
+    const auto clipped = mviewer::enumeratePixelGrid(0, 0, 128, 128, 0, 0, 16, 16, 0, 0, 16, 16);
+    CHECK(!clipped.empty() && clipped.size() < lines.size(),
+          "visible clip reduces the emitted lattice");
+}
+
 int main()
 {
     printf("=== ImageOverlay Tests (M22) ===\n");
@@ -129,6 +192,8 @@ int main()
     testZebra();
     testFalseColor();
     testNoneNoOp();
+    testChannelIsolation();
+    testPixelGrid();
     printf("\n=== %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

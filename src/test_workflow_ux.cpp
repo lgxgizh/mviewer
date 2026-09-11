@@ -20,6 +20,8 @@
 
 #include "appstate.h"
 #include "compareworkspace.h"
+#include "core/analysis/ImageOverlay.h"
+#include "core/analysis/PixelGrid.h"
 #include "core/cache/CacheManager.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/image/Decoder.h"
@@ -44,6 +46,7 @@
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
 #include "widgets/histogramwidget.h"
+#include "widgets/infooverlay.h"
 #include "widgets/rawimageview.h"
 
 #include <QAction>
@@ -59,6 +62,8 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QFont>
+#include <QFontMetrics>
 #include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -73,6 +78,7 @@
 #include <QProgressDialog>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QRect>
 #include <QSettings>
 #include <QSlider>
 #include <QSplitter>

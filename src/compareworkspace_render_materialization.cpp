@@ -2,6 +2,8 @@
 
 #include "core/image/SourceImage.h"
 #include "display/DisplayColorContextProvider.h"
+#include "widgets/infooverlay.h"
+#include "widgets/pixelgrid.h"
 #include "widgets/roioverlay.h"
 
 #include <QDataStream>
@@ -47,6 +49,40 @@ class ElidedCaption final : public QLabel
 
     QString m_fullText;
 };
+
+HistogramWidget *createPaneHistogramOverlay(QWidget *cellWidget, int index, bool visible)
+{
+    auto *hframe = new QFrame(cellWidget);
+    hframe->setObjectName(QString("paneHistogramFrame%1").arg(index));
+    hframe->setAttribute(Qt::WA_TranslucentBackground);
+    hframe->setStyleSheet("background-color: rgba(0,0,0,90); border-radius:4px;");
+    hframe->setVisible(visible);
+    auto *layout = new QVBoxLayout(hframe);
+    layout->setContentsMargins(2, 2, 2, 2);
+    auto *histogram = new HistogramWidget(hframe);
+    histogram->setObjectName(QString("paneHistogram%1").arg(index));
+    histogram->setOverlayStyle(true);
+    layout->addWidget(histogram);
+    hframe->raise();
+    return histogram;
+}
+
+ElidedCaption *createPaneCaption(QWidget *cellWidget, int index, const ImageFrame *img,
+                                 bool filenameOverlay)
+{
+    auto *caption = new ElidedCaption(cellWidget);
+    caption->setObjectName(QString("paneCaption%1").arg(index));
+    caption->setAlignment(Qt::AlignCenter);
+    caption->setStyleSheet("QLabel{background:#222;color:#ccc;padding:2px;}");
+    caption->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    caption->setMinimumWidth(0);
+    caption->setMinimumHeight(20);
+    if (img)
+        caption->setFullText(QString::fromUtf8(img->metadata().fileName.data(),
+                                               static_cast<int>(img->metadata().fileName.size())));
+    caption->setVisible(!filenameOverlay);
+    return caption;
+}
 } // namespace
 void CompareWorkspace::resizeEvent(QResizeEvent *event)
 {
@@ -89,6 +125,7 @@ void CompareWorkspace::paintCompareCanvas()
     QByteArray key;
     QDataStream stream(&key, QIODevice::WriteOnly);
     stream << cv->size() << cv->devicePixelRatioF() << m_splitPos << m_overlayAlpha << m_checkerSize
+           << static_cast<int>(m_displayOverlay)
            << (m_splitChk && m_splitChk->isChecked()) << (m_swipeChk && m_swipeChk->isChecked())
            << (m_overlayChk && m_overlayChk->isChecked())
            << (m_checkerChk && m_checkerChk->isChecked());
@@ -96,7 +133,8 @@ void CompareWorkspace::paintCompareCanvas()
     {
         const RawImageView *view = m_cellViews[index];
         const auto &transform = m_engine.cellTransform(index);
-        stream << view->image().cacheKey() << view->overlay().cacheKey() << view->sourceSize()
+        stream << view->presentationImage().cacheKey() << view->overlay().cacheKey()
+               << view->sourceSize()
                << view->sourceRect() << view->overlayOpacity() << transform.scale
                << transform.offset.x << transform.offset.y;
     }
@@ -129,7 +167,9 @@ void CompareWorkspace::paintCompareCanvas()
     }
     QPainter p(cv);
     p.drawImage(QPoint(0, 0), m_canvasBaseSurface);
+    drawCanvasPixelGrid(p);
     drawCanvasROI(p);
+    drawCanvasInfoOverlays(p);
 }
 
 void CompareWorkspace::drawCanvasROI(QPainter &p)
@@ -142,6 +182,61 @@ void CompareWorkspace::drawCanvasROI(QPainter &p)
             return;
         mviewer::ui::drawROIOverlay(p, m_lastSelection, m_cellViews[pane]->sourceSize(),
                                     cellFullDestRect(pane, canvasPaneGeometry(pane)));
+    };
+    if (m_splitChk && m_splitChk->isChecked())
+    {
+        drawPane(0);
+        drawPane(1);
+    }
+    else
+        drawPane(0);
+}
+
+void CompareWorkspace::drawCanvasPixelGrid(QPainter &p)
+{
+    if (!m_compareCanvas || m_cellViews.size() < 2)
+        return;
+    const auto drawPane = [this, &p](int pane)
+    {
+        if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
+            return;
+        const QSize sourceSize = m_cellViews[pane]->sourceSize();
+        if (!sourceSize.isValid() || sourceSize.width() <= 0 || sourceSize.height() <= 0)
+            return;
+        const QRectF geom = canvasPaneGeometry(pane);
+        const QRectF dest = cellFullDestRect(pane, geom);
+        mviewer::ui::drawPixelGrid(p, dest, 0, 0, sourceSize.width(), sourceSize.height(), geom);
+    };
+    if (m_splitChk && m_splitChk->isChecked())
+    {
+        drawPane(0);
+        drawPane(1);
+    }
+    else
+        drawPane(0);
+}
+
+void CompareWorkspace::drawCanvasInfoOverlays(QPainter &p)
+{
+    if (!m_compareCanvas || m_cellViews.size() < 2)
+        return;
+    if (!m_filenameOverlay && !m_paneHistOverlay)
+        return;
+    const auto drawPane = [this, &p](int pane)
+    {
+        if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
+            return;
+        const QRect geom = canvasPaneGeometry(pane).toRect();
+        QRect filenameBox;
+        if (m_filenameOverlay)
+            filenameBox = mviewer::ui::drawFilenameOverlay(
+                p, geom, m_cellViews[pane]->filenameOverlayText());
+        if (!m_paneHistOverlay || pane >= static_cast<int>(m_cellHists.size()) || !m_cellHists[pane])
+            return;
+        const QRect histBox = mviewer::ui::histogramOverlayRect(geom, filenameBox);
+        if (histBox.isEmpty())
+            return;
+        m_cellHists[pane]->paintOverlay(p, histBox);
     };
     if (m_splitChk && m_splitChk->isChecked())
     {
@@ -270,6 +365,7 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         view->setMouseTracking(true);
         view->installEventFilter(this);
         view->setCellIndex(i);
+        view->setDisplayOverlay(m_displayOverlay);
         cellLay->addWidget(view, 1);
         m_cellViews.push_back(view);
         connect(view, &RawImageView::scaleChanged, this,
@@ -279,20 +375,7 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         // one async Analysis batch scheduled below, never a synchronous
         // conversion on the UI thread.
         const ImageFrame *img = m_engine.imageAt(i);
-
-        // M16.7: per-pane histogram overlay widget (hidden until toggled).
-        {
-            QFrame *hframe = new QFrame(cellWidget);
-            hframe->setObjectName(QString("paneHistogramFrame%1").arg(i));
-            hframe->setStyleSheet("background-color: rgba(15,15,15,210); border-radius:3px;");
-            hframe->setVisible(m_paneHistOverlay);
-            auto *hl = new QVBoxLayout(hframe);
-            hl->setContentsMargins(2, 2, 2, 2);
-            auto *hw = new HistogramWidget(hframe);
-            hw->setObjectName(QString("paneHistogram%1").arg(i));
-            hl->addWidget(hw);
-            m_cellHists.push_back(hw);
-        }
+        m_cellHists.push_back(createPaneHistogramOverlay(cellWidget, i, m_paneHistOverlay));
 
         const QString cellName = img ? QString::fromStdString(img->metadata().fileName) : QString();
         connect(view, &RawImageView::pixelInfo, this,
@@ -344,20 +427,10 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         if (!m_linkPoints.isEmpty())
             view->setLinkMarkers(m_linkPoints);
 
-        // Caption label
-        auto *caption = new ElidedCaption(cellWidget);
-        caption->setObjectName(QString("paneCaption%1").arg(i));
-        caption->setAlignment(Qt::AlignCenter);
-        caption->setStyleSheet("QLabel{background:#222;color:#ccc;padding:2px;}");
-        caption->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
-        caption->setMinimumWidth(0);
-        caption->setMinimumHeight(20);
-        if (img)
-            caption->setFullText(
-                QString::fromUtf8(img->metadata().fileName.data(),
-                                  static_cast<int>(img->metadata().fileName.size())));
+        auto *caption = createPaneCaption(cellWidget, i, img, m_filenameOverlay);
         cellLay->addWidget(caption);
         m_cellLabels.push_back(caption);
+        view->setFilenameOverlay(caption->toolTip(), m_filenameOverlay);
 
         const int row = i / columns;
         const int col = i % columns;

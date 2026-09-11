@@ -10,8 +10,9 @@ void CompareWorkspace::showShortcutHelp()
     // so day-long keyboard work is not interrupted.
     const QString tip =
         tr("Compare 快捷键: B Blink · Space 临时切换 · S Split · W Swipe · O Overlay · "
-           "K 棋盘 · H Diff高亮 · Z/D 同步缩放/拖动 · C 准星 · L 像素连线 · "
-           "1~8 布局预设 · PgUp/PgDn 或 ←/→ 连续导航 · F Fit · X 交换 · ? 帮助 · Esc 关闭");
+           "K 棋盘 · H Diff高亮 · Shift+1…5 通道 RGB/R/G/B/Y · Z/D 同步缩放/拖动 · C 准星 · "
+           "L 像素连线 · 1~8 布局预设 · PgUp/PgDn 或 ←/→ 连续导航 · F Fit · X 交换 · ? 帮助 · "
+           "Esc 关闭");
     if (auto *w = window())
         w->setWindowTitle(tip);
 }
@@ -693,7 +694,8 @@ void CompareWorkspace::drawPixelLinkLines(QPainter &p)
 void CompareWorkspace::keyPressEvent(QKeyEvent *event)
 {
     if (handleBasicCompareKey(event) || handleModeCompareKey(event) ||
-        handleSyncCompareKey(event) || handleAdvancedCompareKey(event))
+        handleChannelCompareKey(event) || handleSyncCompareKey(event) ||
+        handleAdvancedCompareKey(event))
         return;
     QWidget::keyPressEvent(event);
 }
@@ -780,6 +782,25 @@ bool CompareWorkspace::handleModeCompareKey(QKeyEvent *event)
     if (!target || (target != m_diffHighlightChk && !target->isEnabled()))
         return false;
     target->setChecked(!target->isChecked());
+    event->accept();
+    return true;
+}
+
+bool CompareWorkspace::handleChannelCompareKey(QKeyEvent *event)
+{
+    if (event->modifiers() != Qt::ShiftModifier)
+        return false;
+    const int key = event->key();
+    if (key < Qt::Key_1 || key > Qt::Key_5)
+        return false;
+    static const mviewer::OverlayMode kModes[] = {
+        mviewer::OverlayMode::None,
+        mviewer::OverlayMode::ChannelR,
+        mviewer::OverlayMode::ChannelG,
+        mviewer::OverlayMode::ChannelB,
+        mviewer::OverlayMode::ChannelY,
+    };
+    setOverlayMode(kModes[key - Qt::Key_1]);
     event->accept();
     return true;
 }

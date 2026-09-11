@@ -39,14 +39,33 @@ void HistogramWidget::setLogScale(bool on)
     update();
 }
 
+void HistogramWidget::setOverlayStyle(bool on)
+{
+    if (m_overlayStyle == on)
+        return;
+    m_overlayStyle = on;
+    setAttribute(Qt::WA_TranslucentBackground, on);
+    update();
+}
+
 void HistogramWidget::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
-    p.fillRect(rect(), Qt::black);
+    paintOverlay(p, rect());
+}
 
-    const int w = rect().width();
-    const int h = rect().height();
-    if (m_hists.empty() || w < 2 || h < 2)
+void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
+{
+    if (target.width() < 2 || target.height() < 2)
+        return;
+    if (m_overlayStyle)
+        p.fillRect(target, QColor(0, 0, 0, 90));
+    else
+        p.fillRect(target, Qt::black);
+
+    const int w = target.width();
+    const int h = target.height();
+    if (m_hists.empty())
         return;
 
     // Channel accessor: 0=R 1=G 2=B 3=Luma (luma may be absent on old data).
@@ -84,6 +103,8 @@ void HistogramWidget::paintEvent(QPaintEvent *)
         }
 
     const int bins = m_hists.front().bins;
+    const double left = target.left();
+    const double top = target.top();
     const double dx = static_cast<double>(w) / bins;
     const double dy = static_cast<double>(h - 2) / maxVal;
 
@@ -102,14 +123,14 @@ void HistogramWidget::paintEvent(QPaintEvent *)
                 continue;
             const auto &ch = *chPtr;
             QPolygonF poly;
-            poly.append(QPointF(0, h));
+            poly.append(QPointF(left, top + h));
             for (int i = 0; i < bins; ++i)
             {
-                const double x = i * dx;
-                const double y = h - 1 - mapVal(ch[static_cast<size_t>(i)]) * dy;
+                const double x = left + i * dx;
+                const double y = top + h - 1 - mapVal(ch[static_cast<size_t>(i)]) * dy;
                 poly.append(QPointF(x, y));
             }
-            poly.append(QPointF(w, h));
+            poly.append(QPointF(left + w, top + h));
 
             QColor fill = cols[c];
             fill.setAlpha(55);
@@ -124,8 +145,8 @@ void HistogramWidget::paintEvent(QPaintEvent *)
             QPolygonF linePoly;
             for (int i = 0; i < bins; ++i)
             {
-                const double x = i * dx;
-                const double y = h - 1 - mapVal(ch[static_cast<size_t>(i)]) * dy;
+                const double x = left + i * dx;
+                const double y = top + h - 1 - mapVal(ch[static_cast<size_t>(i)]) * dy;
                 linePoly.append(QPointF(x, y));
             }
             p.drawPolyline(linePoly);

@@ -1346,6 +1346,67 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(!split->isChecked() && !overlay->isChecked() && !blink->isChecked(),
           "all exclusive modes are OFF after the round-trip (grid restored)");
 
+    auto *channelCombo = ws->findChild<QComboBox *>(QStringLiteral("compareChannelCombo"));
+    CHECK(channelCombo && channelCombo->count() == 5,
+          "compare exposes RGB/R/G/B/Y channel isolation");
+    sendKey(ws, Qt::Key_2, Qt::ShiftModifier);
+    CHECK(ws->overlayMode() == mviewer::OverlayMode::ChannelR,
+          "Shift+2 isolates the red channel");
+    CHECK(channelCombo &&
+              channelCombo->currentData().toInt() ==
+                  static_cast<int>(mviewer::OverlayMode::ChannelR),
+          "channel combo follows Shift+2");
+    sendKey(ws, Qt::Key_1, Qt::ShiftModifier);
+    CHECK(ws->overlayMode() == mviewer::OverlayMode::None, "Shift+1 restores RGB");
+    CHECK(mviewer::pixelGridVisible(8.0) && !mviewer::pixelGridVisible(4.0),
+          "pixel grid appears at 800% and stays off at 400%");
+
+    auto *histOverlayChk =
+        ws->findChild<QCheckBox *>(QStringLiteral("paneHistogramOverlayToggle"));
+    auto *filenameOverlayChk =
+        ws->findChild<QCheckBox *>(QStringLiteral("compareFilenameOverlayToggle"));
+    CHECK(histOverlayChk && filenameOverlayChk,
+          "compare exposes histogram and filename overlay toggles");
+    CHECK(histOverlayChk && !histOverlayChk->isChecked(),
+          "histogram overlay is off by default");
+    CHECK(filenameOverlayChk && !filenameOverlayChk->isChecked(),
+          "filename overlay is off by default");
+    if (filenameOverlayChk)
+        filenameOverlayChk->setChecked(true);
+    CHECK(ws->filenameOverlayVisible(), "filename overlay checkbox enables the overlay");
+    auto *pane0 = ws->findChild<QWidget *>(QStringLiteral("comparePane0"));
+    auto *view0 = pane0 ? pane0->findChild<RawImageView *>() : nullptr;
+    CHECK(view0 && view0->filenameOverlayVisible() && !view0->filenameOverlayText().isEmpty(),
+          "filename overlay is painted from the current pane filename");
+    QFont wrapFont;
+    wrapFont.setBold(true);
+    wrapFont.setPointSize(9);
+    const QString longName =
+        QStringLiteral("algorithm_output_v2_very_long_compare_filename_that_must_wrap.png");
+    const QRect oneLine = mviewer::ui::filenameOverlayRect(
+        QFontMetrics(wrapFont), QRect(0, 0, 800, 200), QStringLiteral("short.png"));
+    const QRect wrapped = mviewer::ui::filenameOverlayRect(QFontMetrics(wrapFont),
+                                                           QRect(0, 0, 160, 200), longName);
+    CHECK(oneLine.height() > 0 && wrapped.height() > oneLine.height(),
+          "long filenames wrap onto additional overlay lines");
+    if (histOverlayChk)
+        histOverlayChk->setChecked(true);
+    auto *histFrame = ws->findChild<QWidget *>(QStringLiteral("paneHistogramFrame0"));
+    CHECK(histFrame && histFrame->isVisible(), "histogram overlay appears when checked");
+    if (view0 && histFrame && histFrame->isVisible())
+    {
+        const QRect paneRect(view0->mapTo(pane0, QPoint(0, 0)), view0->size());
+        CHECK(histFrame->geometry().left() <= paneRect.left() + 12,
+              "histogram overlay sits at the image top-left");
+        CHECK(histFrame->geometry().top() >= paneRect.top() &&
+                  histFrame->geometry().top() <= paneRect.top() + 80,
+              "histogram overlay stays in the top of the image");
+    }
+    if (filenameOverlayChk)
+        filenameOverlayChk->setChecked(false);
+    if (histOverlayChk)
+        histOverlayChk->setChecked(false);
+
     // Compare canvas and Blink use different rendering surfaces. They must
     // never remain checked together: otherwise Blink only toggles hidden grid
     // panes while the visible canvas stays static. Cover both user directions

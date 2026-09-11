@@ -1,9 +1,12 @@
 #include "imageviewer.h"
 
 #include "core/analysis/AnalysisEngine.h"
+#include "core/analysis/ImageOverlay.h"
+#include "core/analysis/PixelGrid.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
+#include "widgets/pixelgrid.h"
 #include "core/trace/Trace.h"
 #include "gpu/GpuTileUploader.h"
 
@@ -79,8 +82,56 @@ void ImageViewer::paintEvent(QPaintEvent *event)
 
     if (m_hasHistogram)
         drawHistogram(painter);
+    drawPixelGridOverlay(painter);
+    drawOverlayBadge(painter);
     drawSelection(painter);
     drawFrameStatus(painter);
+}
+
+void ImageViewer::drawPixelGridOverlay(QPainter &painter)
+{
+    int imageW = 0;
+    int imageH = 0;
+    if (m_lodMode && m_raster.sourceSize.isValid())
+    {
+        imageW = m_raster.sourceSize.width();
+        imageH = m_raster.sourceSize.height();
+    }
+    else if (m_tiles.imageW > 0 && m_tiles.imageH > 0)
+    {
+        imageW = m_tiles.imageW;
+        imageH = m_tiles.imageH;
+    }
+    if (imageW <= 0 || imageH <= 0 || !mviewer::pixelGridVisible(m_view.scale))
+        return;
+    int sx = 0;
+    int sy = 0;
+    int sw = 0;
+    int sh = 0;
+    m_view.imageRectToScreen(0, 0, imageW, imageH, sx, sy, sw, sh);
+    if (sw <= 0 || sh <= 0)
+        return;
+    mviewer::ui::drawPixelGrid(painter, QRectF(sx, sy, sw, sh), 0, 0, imageW, imageH,
+                               QRectF(rect()));
+}
+
+void ImageViewer::drawOverlayBadge(QPainter &painter)
+{
+    if (m_overlayMode == mviewer::OverlayMode::None)
+        return;
+    const QString label = QString::fromLatin1(mviewer::overlayModeLabel(m_overlayMode));
+    QFont font = painter.font();
+    font.setBold(true);
+    font.setPointSize(10);
+    painter.setFont(font);
+    const QFontMetrics metrics(font);
+    const int pad = 6;
+    const QRect box(8, 8, metrics.horizontalAdvance(label) + pad * 2, metrics.height() + pad);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0, 0, 0, 160));
+    painter.drawRoundedRect(box, 3, 3);
+    painter.setPen(Qt::white);
+    painter.drawText(box, Qt::AlignCenter, label);
 }
 
 void ImageViewer::drawFrameStatus(QPainter &painter) const

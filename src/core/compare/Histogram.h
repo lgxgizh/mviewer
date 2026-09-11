@@ -30,7 +30,7 @@ struct Histogram
 // (w/h <= 0 or fully outside) yields an all-zero histogram.
 // Handles RGB24 / BGR24 / RGBA32 / BGRA32 / Grayscale8 layouts.
 inline Histogram computeHistogram(const ImageData &img, int roiX, int roiY, int roiW, int roiH,
-                                  int bins = 256)
+                                  int bins = 256, int stepX = 1, int stepY = 1)
 {
     Histogram h;
     h.bins = std::max(1, bins);
@@ -50,6 +50,8 @@ inline Histogram computeHistogram(const ImageData &img, int roiX, int roiY, int 
     if (x0 >= x1 || y0 >= y1)
         return h;
 
+    const int sx = std::max(1, stepX);
+    const int sy = std::max(1, stepY);
     const int cpp = v.channelsPerPixel();
     const long stride = static_cast<long>(v.stride());
     const uint8_t *data = v.data;
@@ -57,10 +59,11 @@ inline Histogram computeHistogram(const ImageData &img, int roiX, int roiY, int 
     const bool gray = (v.format == PixelFormat::Grayscale8);
     const bool bgr = (v.format == PixelFormat::BGR24 || v.format == PixelFormat::BGRA32);
 
-    for (int y = y0; y < y1; ++y)
+    long samples = 0;
+    for (int y = y0; y < y1; y += sy)
     {
         const uint8_t *row = data + static_cast<ptrdiff_t>(y) * stride;
-        for (int x = x0; x < x1; ++x)
+        for (int x = x0; x < x1; x += sx)
         {
             const uint8_t *p = row + static_cast<ptrdiff_t>(x) * cpp;
             int R, G, B;
@@ -85,9 +88,10 @@ inline Histogram computeHistogram(const ImageData &img, int roiX, int roiY, int 
             h.b[std::min<int>(B, h.bins - 1)]++;
             const int Y = static_cast<int>(0.299 * R + 0.587 * G + 0.114 * B + 0.5);
             h.luma[std::min<int>(Y, h.bins - 1)]++;
+            ++samples;
         }
     }
-    h.total = static_cast<long>(x1 - x0) * (y1 - y0);
+    h.total = samples;
     return h;
 }
 
@@ -106,6 +110,25 @@ inline Histogram computeHistogram(const ImageData &img, int bins = 256)
         return h;
     }
     return computeHistogram(img, 0, 0, img.width, img.height, bins);
+}
+
+// Overlay / inspection histogram: subsample so the long edge is about
+// kDisplayHistogramMaxEdge pixels. Shape is preserved; pixel totals are sample
+// counts. Exact ROI analysis still uses computeHistogram().
+inline constexpr int kDisplayHistogramMaxEdge = 256;
+
+inline Histogram computeDisplayHistogram(const ImageData &img, int bins = 256)
+{
+    if (img.isNull())
+        return computeHistogram(img, bins);
+    const int maxDim = std::max(img.width, img.height);
+    if (maxDim <= kDisplayHistogramMaxEdge)
+        return computeHistogram(img, bins);
+    const int stepX =
+        std::max(1, (img.width + kDisplayHistogramMaxEdge - 1) / kDisplayHistogramMaxEdge);
+    const int stepY =
+        std::max(1, (img.height + kDisplayHistogramMaxEdge - 1) / kDisplayHistogramMaxEdge);
+    return computeHistogram(img, 0, 0, img.width, img.height, bins, stepX, stepY);
 }
 
 } // namespace mviewer::core

@@ -1,11 +1,15 @@
 #include "compareworkspace_p.h"
 
+#include "core/compare/Aligner.h"
+
+#include <QSettings>
+
 #include <algorithm>
 #include <cmath>
 CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
     DiffBatchResult &result, const std::vector<ImageData> &pixels,
     const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
-    int baseIndex, uint8_t threshold, bool highlight, bool visualize,
+    int baseIndex, uint8_t threshold, bool highlight, bool visualize, bool autoAlign,
     const ImageData &basePixels, const TaskScheduler::TaskContext &context)
 {
     DiffSources sources;
@@ -29,7 +33,7 @@ CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
         }
         if (sources.targetIndex < 0)
             sources.targetIndex = i;
-        const ImageData target = CompareWorkspace::applyAdjusts(pixels[i], adjustFor(i));
+        ImageData target = CompareWorkspace::applyAdjusts(pixels[i], adjustFor(i));
         if (context.isCancelled())
             return sources;
         if (target.isNull())
@@ -47,6 +51,17 @@ CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
             }
             result.overlays.push_back(std::move(overlay));
             continue;
+        }
+        if (autoAlign)
+        {
+            const mviewer::AlignOffset off = mviewer::Aligner::estimate(basePixels, target, 32);
+            result.aligned = true;
+            result.alignX = off.x;
+            result.alignY = off.y;
+            if (off.x != 0 || off.y != 0)
+                target = mviewer::Aligner::shift(target, off.x, off.y);
+            if (context.isCancelled())
+                return sources;
         }
         const ImageData diff = DifferenceEngine::differenceMap(target, basePixels);
         if (context.isCancelled())
@@ -136,8 +151,8 @@ void CompareWorkspace::computeDiffMetrics(DiffBatchResult &result, const DiffSou
 CompareWorkspace::DiffBatchResult CompareWorkspace::computeDiffBatch(
     const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
     const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, bool highlight,
-    bool visualize, const mviewer::domain::Selection &roi, int paneCount, uint64_t generation,
-    const TaskScheduler::TaskContext &context)
+    bool visualize, bool autoAlign, const mviewer::domain::Selection &roi, int paneCount,
+    uint64_t generation, const TaskScheduler::TaskContext &context)
 {
     DiffBatchResult result;
     result.generation = generation;
@@ -164,7 +179,7 @@ CompareWorkspace::DiffBatchResult CompareWorkspace::computeDiffBatch(
     }
     const DiffSources sources = buildDiffOverlays(
         result, pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize,
-        basePixels, context);
+        autoAlign, basePixels, context);
     if (!context.isCancelled())
         computeDiffMetrics(result, sources, basePixels, threshold, roi, context);
     return result;
@@ -173,19 +188,20 @@ CompareWorkspace::DiffBatchResult CompareWorkspace::computeDiffBatch(
 TaskScheduler::TaskHandle CompareWorkspace::startDiffBatch(
     const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
     const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, bool highlight,
-    bool visualize, const mviewer::domain::Selection &roi, int paneCount, uint64_t generation,
-    const QPointer<CompareWorkspace> &guard)
+    bool visualize, bool autoAlign, const mviewer::domain::Selection &roi, int paneCount,
+    uint64_t generation, const QPointer<CompareWorkspace> &guard)
 {
     return TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize, roi, paneCount,
-         generation, guard](const TaskScheduler::TaskContext &context)
+        [pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize,
+         autoAlign, roi, paneCount, generation,
+         guard](const TaskScheduler::TaskContext &context)
         {
             if (context.isCancelled())
                 return;
             const DiffBatchResult result = CompareWorkspace::computeDiffBatch(
-                pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize, roi,
-                paneCount, generation, context);
+                pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize,
+                autoAlign, roi, paneCount, generation, context);
             if (context.isCancelled())
                 return;
             QMetaObject::invokeMethod(
@@ -261,12 +277,13 @@ void CompareWorkspace::refreshAllDiffOverlays()
     const uint8_t threshold = m_thresholdValue;
     const bool highlight = m_diffHighlight;
     const bool visualize = m_diffOverlayVisible;
+    const bool autoAlign = QSettings().value("autoAlignBeforeDiff", false).toBool();
     const mviewer::domain::Selection roi = m_lastSelection;
     const uint64_t gen = m_diffGen;
     QPointer<CompareWorkspace> guard(this);
 
     auto handle = startDiffBatch(
-        pixels, displayTargets, adjusts, baseIdx, threshold, highlight, visualize, roi,
+        pixels, displayTargets, adjusts, baseIdx, threshold, highlight, visualize, autoAlign, roi,
         paneCount, gen, guard);
     if (!handle)
     {
@@ -318,6 +335,8 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
                        .arg(psnrStr, ssimStr)
                        .arg(r.baseIdx + 1)
                        .arg(r.targetIdx + 1);
+            if (r.aligned)
+                text += tr("\n对齐: (%1, %2)").arg(r.alignX).arg(r.alignY);
             if (r.hasStats)
             {
                 text += tr("\n差异: %1%  均值 %2  峰值 %3")

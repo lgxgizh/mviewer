@@ -2,6 +2,7 @@
 #include "mainwindow_p.h"
 
 #include "application/ExternalOpen.h"
+#include "core/analysis/ImageOverlay.h"
 
 // M15: drag & drop — accept files/folders dropped onto the window.
 void MainWindow::dragEnterEvent(QDragEnterEvent *event)
@@ -402,7 +403,11 @@ void MainWindow::applyPreferences()
             m_slideshowTimer->start(interval);
     }
     if (m_imageViewer)
+    {
         m_imageViewer->setZebraThreshold(s.value("zebraThreshold", 2).toInt());
+        m_imageViewer->setOverlayMode(static_cast<mviewer::OverlayMode>(
+            s.value("defaultAnalysisOverlay", 0).toInt()));
+    }
 }
 
 void MainWindow::openAnalysisOverlay()

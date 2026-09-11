@@ -1,6 +1,8 @@
 // CompareWorkspace control construction split from the lifecycle constructor.
 #include "compareworkspace_p.h"
 
+#include "core/image/ImageFrame.h"
+
 void CompareWorkspace::buildSyncControls()
 {
     m_syncZoomChk = new QCheckBox("同步缩放(&Z)", this);
@@ -361,8 +363,112 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
     viewLayout->addStretch(1);
 }
 
+void CompareWorkspace::setOverlayMode(mviewer::OverlayMode mode)
+{
+    if (m_displayOverlay == mode)
+    {
+        if (m_channelCombo)
+        {
+            const int index = m_channelCombo->findData(static_cast<int>(mode));
+            if (index >= 0 && m_channelCombo->currentIndex() != index)
+            {
+                const QSignalBlocker blocker(m_channelCombo);
+                m_channelCombo->setCurrentIndex(index);
+            }
+        }
+        return;
+    }
+    m_displayOverlay = mode;
+    if (m_channelCombo)
+    {
+        const int index = m_channelCombo->findData(static_cast<int>(mode));
+        if (index >= 0)
+        {
+            const QSignalBlocker blocker(m_channelCombo);
+            m_channelCombo->setCurrentIndex(index);
+        }
+    }
+    applyDisplayOverlayToViews();
+    m_canvasBaseKey.clear();
+    update();
+}
+
+void CompareWorkspace::applyDisplayOverlayToViews()
+{
+    for (RawImageView *view : m_cellViews)
+    {
+        if (view)
+            view->setDisplayOverlay(m_displayOverlay);
+    }
+}
+
+void CompareWorkspace::applyFilenameOverlays()
+{
+    for (int i = 0; i < m_cellViews.size(); ++i)
+    {
+        RawImageView *view = m_cellViews[i];
+        if (!view)
+            continue;
+        QString name;
+        if (i < m_cellLabels.size() && m_cellLabels[i])
+            name = m_cellLabels[i]->toolTip();
+        if (name.isEmpty())
+        {
+            const ImageFrame *img = m_engine.imageAt(i);
+            if (img)
+                name = QString::fromStdString(img->metadata().fileName);
+        }
+        view->setFilenameOverlay(name, m_filenameOverlay);
+        if (i < m_cellLabels.size() && m_cellLabels[i])
+            m_cellLabels[i]->setVisible(!m_filenameOverlay);
+    }
+}
+
 void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
 {
+    m_paneHistOverlayChk = new QCheckBox(tr("直方图"), this);
+    m_paneHistOverlayChk->setObjectName("paneHistogramOverlayToggle");
+    m_paneHistOverlayChk->setChecked(m_paneHistOverlay);
+    m_paneHistOverlayChk->setToolTip(tr("在每张比较图左上角透明叠加当前直方图"));
+    connect(m_paneHistOverlayChk, &QCheckBox::toggled, this,
+            &CompareWorkspace::onPaneHistOverlayToggled);
+    toolLayout->addWidget(m_paneHistOverlayChk);
+
+    m_filenameOverlayChk = new QCheckBox(tr("文件名"), this);
+    m_filenameOverlayChk->setObjectName("compareFilenameOverlayToggle");
+    m_filenameOverlayChk->setChecked(m_filenameOverlay);
+    m_filenameOverlayChk->setToolTip(tr("在每张比较图上方叠加显示文件名，过长时换行"));
+    connect(m_filenameOverlayChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                m_filenameOverlay = on;
+                applyFilenameOverlays();
+                positionCellHists();
+                m_canvasBaseKey.clear();
+                update();
+            });
+    toolLayout->addWidget(m_filenameOverlayChk);
+
+    m_channelCombo = new QComboBox(this);
+    m_channelCombo->setObjectName("compareChannelCombo");
+    m_channelCombo->setMaximumWidth(72);
+    m_channelCombo->addItem(tr("RGB"), static_cast<int>(mviewer::OverlayMode::None));
+    m_channelCombo->addItem(tr("R"), static_cast<int>(mviewer::OverlayMode::ChannelR));
+    m_channelCombo->addItem(tr("G"), static_cast<int>(mviewer::OverlayMode::ChannelG));
+    m_channelCombo->addItem(tr("B"), static_cast<int>(mviewer::OverlayMode::ChannelB));
+    m_channelCombo->addItem(tr("Y"), static_cast<int>(mviewer::OverlayMode::ChannelY));
+    m_channelCombo->setToolTip(tr("隔离 R/G/B/Y 通道（Shift+1…5）"));
+    connect(m_channelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int)
+            {
+                if (!m_channelCombo)
+                    return;
+                const auto mode =
+                    static_cast<mviewer::OverlayMode>(m_channelCombo->currentData().toInt());
+                setOverlayMode(mode);
+            });
+    toolLayout->addWidget(m_channelCombo);
+
     // M16.6: layout presets save/load + swap panes (sync bar right side)
     m_savePresetBtn = new QPushButton(tr("存储布局"), this);
     m_savePresetBtn->setToolTip(tr("将当前布局存储为预设"));

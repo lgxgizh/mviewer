@@ -5,6 +5,7 @@
 #include "compareworkspace_roi_types.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/ExportReport.h"
+#include "core/analysis/ImageOverlay.h"
 #include "core/analysis/PixelInspector.h"
 #include "core/async/AsyncLifetimeToken.h"
 #include "core/compare/CompareEngine.h"
@@ -78,29 +79,18 @@ class CompareWorkspace : public QWidget
     // A target change re-materializes presentation rasters only.
     void setDisplayColorContext(const mviewer::core::DisplayColorContext &target);
     const mviewer::core::DisplayColorContext &displayColorContext() const
-    {
-        return m_displayColorTarget;
-    }
+    { return m_displayColorTarget; }
 
     bool isSyncEnabled() const;
     void setSyncEnabled(bool on);
 
-    CompareEngine &engine()
-    {
-        return m_engine;
-    }
+    CompareEngine &engine() { return m_engine; }
 
     // Last ROI applied to the compare cells; empty means unset.
-    mviewer::domain::Selection currentROI() const
-    {
-        return m_lastSelection;
-    }
+    mviewer::domain::Selection currentROI() const { return m_lastSelection; }
 
     // Re-apply a persisted ROI.
-    void applyROI(const mviewer::domain::Selection &sel)
-    {
-        applySelectionToAll(sel);
-    }
+    void applyROI(const mviewer::domain::Selection &sel) { applySelectionToAll(sel); }
 
     // M12.2 (G2-ext): the image paths currently loaded into the compare cells.
     // Used by Workspace persistence to capture session context per image.
@@ -136,10 +126,10 @@ class CompareWorkspace : public QWidget
 
     // M15 P0#1: number of images currently loaded into the comparison. Used by
     // the crash-recovery autosave to decide whether a Compare session is active.
-    int comparedImageCount() const
-    {
-        return m_engine.imageCount();
-    }
+    int comparedImageCount() const { return m_engine.imageCount(); }
+    mviewer::OverlayMode overlayMode() const { return m_displayOverlay; }
+    void setOverlayMode(mviewer::OverlayMode mode);
+    bool filenameOverlayVisible() const { return m_filenameOverlay; }
 
     // A-4.5: continuous compare — set the full image list so Next/Prev Pair
     // can walk through consecutive pairs without reopening the dialog.
@@ -216,6 +206,7 @@ class CompareWorkspace : public QWidget
     bool handleBasicCompareEscape(QKeyEvent *event);
     bool handleBasicCompareNavigation(QKeyEvent *event);
     bool handleModeCompareKey(QKeyEvent *event);
+    bool handleChannelCompareKey(QKeyEvent *event);
     bool handleSyncCompareKey(QKeyEvent *event);
     bool handleAdvancedCompareKey(QKeyEvent *event);
     void rebuildCells();
@@ -371,6 +362,8 @@ class CompareWorkspace : public QWidget
     QRectF canvasPaneGeometry(int pane) const;
     QPointF canvasSourcePoint(const QPoint &pos, int pane) const;
     void drawCanvasROI(QPainter &p);
+    void drawCanvasPixelGrid(QPainter &p);
+    void drawCanvasInfoOverlays(QPainter &p);
     void applyAnchorZoom(int refIdx, double anchorX, double anchorY, double factor);
     QRectF cellFullDestRect(int idx, const QRectF &geom) const;
     QRectF cellDestRect(int idx, const QRectF &geom) const;
@@ -455,6 +448,8 @@ class CompareWorkspace : public QWidget
         bool syncDrag = true;
         bool crosshair = false;
         bool pixelLink = false;
+        bool filenameOverlay = false;
+        int overlayMode = 0;
         int overlayAlpha = 45;
         uint8_t threshold = 0;
         int layoutIndex = 0;
@@ -473,6 +468,9 @@ class CompareWorkspace : public QWidget
 
     // P0 #③: explicit multi-layout selector.
     QComboBox *m_layoutCombo = nullptr;
+    QComboBox *m_channelCombo = nullptr;
+    mviewer::OverlayMode m_displayOverlay = mviewer::OverlayMode::None;
+    void applyDisplayOverlayToViews();
     void onLayoutChanged();
     void updateLayoutStatus();
 
@@ -542,10 +540,7 @@ class CompareWorkspace : public QWidget
     void onFocusRequested(int cellIndex);
     void updateFrameControl();
     void onFrameControlChanged(int oneBasedIndex);
-    int diffBaseIndex() const
-    {
-        return m_focusIndex >= 0 ? m_focusIndex : 0;
-    }
+    int diffBaseIndex() const { return m_focusIndex >= 0 ? m_focusIndex : 0; }
 
     // Repaints every diff overlay after a user-visible compare state change.
     void refreshAllDiffOverlays();
@@ -560,6 +555,8 @@ class CompareWorkspace : public QWidget
         int baseIdx = 0;
         int targetIdx = -1;
         bool sizeMismatch = false; // first non-base cell differs in size
+        bool aligned = false;
+        int alignX = 0, alignY = 0;
         bool metricsValid = false;
         double psnr = 0.0;
         double ssim = 0.0;
@@ -589,7 +586,7 @@ class CompareWorkspace : public QWidget
                                          const std::vector<QSize> &displayTargets,
                                          const std::vector<CellAdjust> &adjusts, int baseIndex,
                                          uint8_t threshold, bool highlight, bool visualize,
-                                         const ImageData &basePixels,
+                                         bool autoAlign, const ImageData &basePixels,
                                          const TaskScheduler::TaskContext &context);
     static void computeDiffMetrics(DiffBatchResult &result, const DiffSources &sources,
                                    const ImageData &basePixels, uint8_t threshold,
@@ -598,13 +595,15 @@ class CompareWorkspace : public QWidget
     static DiffBatchResult
     computeDiffBatch(const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
                      const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold,
-                     bool highlight, bool visualize, const mviewer::domain::Selection &roi,
-                     int paneCount, uint64_t generation, const TaskScheduler::TaskContext &context);
+                     bool highlight, bool visualize, bool autoAlign,
+                     const mviewer::domain::Selection &roi, int paneCount, uint64_t generation,
+                     const TaskScheduler::TaskContext &context);
     TaskScheduler::TaskHandle
     startDiffBatch(const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
                    const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold,
-                   bool highlight, bool visualize, const mviewer::domain::Selection &roi,
-                   int paneCount, uint64_t generation, const QPointer<CompareWorkspace> &guard);
+                   bool highlight, bool visualize, bool autoAlign,
+                   const mviewer::domain::Selection &roi, int paneCount, uint64_t generation,
+                   const QPointer<CompareWorkspace> &guard);
     void applyDiffBatchResult(const DiffBatchResult &result);
 
     // M29: latest-wins generation + handle of the in-flight batch diff task.
@@ -771,9 +770,11 @@ class CompareWorkspace : public QWidget
     uint64_t m_histGen = 0;
     TaskScheduler::TaskHandle m_histTask;
     QCheckBox *m_paneHistOverlayChk = nullptr;
+    QCheckBox *m_filenameOverlayChk = nullptr;
+    bool m_filenameOverlay = false;
+    void applyFilenameOverlays();
     std::vector<HistogramWidget *> m_cellHists;
 
-    // ── M16.5: per-pane histogram overlay toggle ──
     bool m_perPaneHist = false;
     QCheckBox *m_perPaneHistChk = nullptr;
     void onPerPaneHistToggled(bool on);
@@ -786,14 +787,9 @@ class CompareWorkspace : public QWidget
     void onLoadPreset();
     void ensurePresetDir();
 
-    // ── M16.6: swap panes ──
     QPushButton *m_swapBtn = nullptr;
     void onSwapPanes();
-
-    // P0: App-wide SelectionModel for current-image consistency.
     SelectionModel *m_selection = nullptr;
-
-    // P1 #④: Compare → Analyze → Export workflow buttons.
     QPushButton *m_analyzeBtn = nullptr;
     QPushButton *m_exportReportBtn = nullptr;
 };

@@ -10,6 +10,8 @@
 
 #include "core/compare/Histogram.h"
 
+class QPainter;
+
 // Overlays the RGB histograms of one or more images for side-by-side compare.
 class HistogramWidget : public QWidget
 {
@@ -40,6 +42,12 @@ class HistogramWidget : public QWidget
     {
         return m_logScale;
     }
+    void setOverlayStyle(bool on);
+    bool overlayStyle() const
+    {
+        return m_overlayStyle;
+    }
+    void paintOverlay(QPainter &p, const QRect &target) const;
 
   protected:
     void paintEvent(QPaintEvent *event) override;
@@ -48,4 +56,5 @@ class HistogramWidget : public QWidget
     std::vector<mviewer::core::Histogram> m_hists;
     bool m_chanVisible[4] = {true, true, true, false}; // R, G, B, Luma
     bool m_logScale = false;
+    bool m_overlayStyle = false;
 };

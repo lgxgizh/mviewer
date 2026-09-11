@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/analysis/ImageOverlay.h"
 #include "domain/Selection.h"
 #include "domain/SelectionInteraction.h"
 
@@ -32,6 +33,26 @@ class RawImageView : public QWidget
     const QImage &displayImage() const
     {
         return m_transientImage.isNull() ? m_image : m_transientImage;
+    }
+    // Channel/zebra/false-color presentation of the current display raster.
+    // Diff overlays stay on the unfiltered source so heatmaps remain RGB.
+    const QImage &presentationImage() const
+    {
+        return m_filteredDisplay.isNull() ? displayImage() : m_filteredDisplay;
+    }
+    void setDisplayOverlay(mviewer::OverlayMode mode);
+    mviewer::OverlayMode displayOverlay() const
+    {
+        return m_displayOverlay;
+    }
+    void setFilenameOverlay(const QString &text, bool visible);
+    QString filenameOverlayText() const
+    {
+        return m_filenameOverlayText;
+    }
+    bool filenameOverlayVisible() const
+    {
+        return m_filenameOverlayVisible;
     }
     // H3: expose the diff/heatmap overlay so the workspace can re-draw it when
     // rendering split/swipe/overlay modes (which hide the cell widgets).
@@ -237,7 +258,13 @@ class RawImageView : public QWidget
     QSize renderSourceSize() const;
     QRect renderSourceRect() const;
 
+    void rebuildFilteredDisplay();
+
     QImage m_image;
+    QImage m_filteredDisplay;
+    mviewer::OverlayMode m_displayOverlay = mviewer::OverlayMode::None;
+    QString m_filenameOverlayText;
+    bool m_filenameOverlayVisible = false;
     QSize m_sourceSize;
     QRect m_sourceRect;
     QImage m_transientImage;

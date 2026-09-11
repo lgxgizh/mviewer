@@ -168,7 +168,7 @@ void CompareWorkspace::drawCellCompare(QPainter &p, int idx, const QRect &clipRe
 {
     if (idx < 0 || idx >= m_cellViews.size() || !m_cellViews[idx])
         return;
-    const QImage &img = m_cellViews[idx]->image();
+    const QImage &img = m_cellViews[idx]->presentationImage();
     if (img.isNull() || clipRect.isEmpty() || geomRect.isEmpty())
         return;
     const QRectF dr = cellDestRect(idx, geomRect);
@@ -250,7 +250,7 @@ void CompareWorkspace::drawOverlayCompare(QPainter &p)
     // Base image (full opacity), drawn with the synchronized transform.
     drawCellCompare(p, 0, r, QRectF(r));
 
-    const QImage &img1 = m_cellViews[1]->image();
+    const QImage &img1 = m_cellViews[1]->presentationImage();
     if (img1.isNull())
         return;
     const QRectF dr = cellDestRect(1, QRectF(r));
@@ -327,7 +327,7 @@ void CompareWorkspace::drawCheckerboardCompare(QPainter &p)
     // Base image fills the canvas with the synchronized transform.
     drawCellCompare(p, 0, r, QRectF(r));
 
-    const QImage &img1 = m_cellViews[1]->image();
+    const QImage &img1 = m_cellViews[1]->presentationImage();
     if (img1.isNull())
         return;
     const QRectF dr = cellDestRect(1, QRectF(r));

@@ -773,6 +773,15 @@ bool ImageViewer::handleZoomKey(int key, Qt::KeyboardModifiers modifiers)
 
 bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
 {
+    if (modifiers == Qt::ShiftModifier && key >= Qt::Key_1 && key <= Qt::Key_5)
+    {
+        static const mviewer::OverlayMode kChannelKeys[] = {
+            mviewer::OverlayMode::None, mviewer::OverlayMode::ChannelR,
+            mviewer::OverlayMode::ChannelG, mviewer::OverlayMode::ChannelB,
+            mviewer::OverlayMode::ChannelY};
+        setOverlayMode(kChannelKeys[key - Qt::Key_1]);
+        return true;
+    }
     if (key == Qt::Key_R && !modifiers)
         setSelectMode(!m_selectMode);
     else if ((key == Qt::Key_F && !modifiers) || key == Qt::Key_F11)

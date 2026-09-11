@@ -380,6 +380,8 @@ class ImageViewer : public QOpenGLWidget
     void enforceDisplayRasterWarmBudget();
     void runAnalysisLoadDecision(bool sourceValid, const QSize &sourceSize);
     void drawDisplayRaster(QPainter &painter) const;
+    void drawPixelGridOverlay(QPainter &painter);
+    void drawOverlayBadge(QPainter &painter);
     void drawProvisional(QPainter &painter) const;
     AsyncTileRequestManager::VisibleTiles requestVisibleTiles();
     void scheduleOverlayTiles(std::vector<TileCache::ReadyTile> &ready);
@@ -399,7 +401,8 @@ class ImageViewer : public QOpenGLWidget
                                   QAction *zoomActualAction, QAction *selectRegion);
     bool handleContextNavigationAction(QAction *chosen, QAction *next, QAction *prev,
                                        QAction *overlayNone, QAction *overlayZebra,
-                                       QAction *overlayFalse, QAction *fullscreen);
+                                       QAction *overlayFalse, QAction *overlayR, QAction *overlayG,
+                                       QAction *overlayB, QAction *overlayY, QAction *fullscreen);
     // Preload promotion: consume the neighbor preload handle that matches
     // `path` and cancel all others, so a navigation back to a preloaded
     // neighbor can be promoted to the foreground decode without re-queuing.
@@ -540,6 +543,10 @@ class ImageViewer : public QOpenGLWidget
     mviewer::core::DisplayColorContext m_displayColorTarget =
         mviewer::core::DisplayColorContext::sRGB();
     DisplayRaster m_raster;
+    mutable QImage m_lodOverlayImage;
+    mutable qint64 m_lodOverlayKey = -1;
+    mutable mviewer::OverlayMode m_lodOverlayMode = mviewer::OverlayMode::None;
+    mutable int m_lodOverlayThreshold = -1;
     TaskScheduler::TaskHandle m_displayRequest; // in-flight raster worker
     DisplayRasterPreload m_promotedDisplayRasterPreload;
     std::vector<DisplayRasterPreload> m_displayRasterPreloads;

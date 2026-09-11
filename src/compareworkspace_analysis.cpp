@@ -190,14 +190,6 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
     connect(m_perPaneHistChk, &QCheckBox::toggled, this, &CompareWorkspace::onPerPaneHistToggled);
     sideLay->addWidget(m_perPaneHistChk);
 
-    // M16.7: per-pane histogram overlay toggle
-    m_paneHistOverlayChk = new QCheckBox(tr("每格直方图叠加"), this);
-    m_paneHistOverlayChk->setObjectName("paneHistogramOverlayToggle");
-    m_paneHistOverlayChk->setChecked(m_paneHistOverlay);
-    connect(m_paneHistOverlayChk, &QCheckBox::toggled, this,
-            &CompareWorkspace::onPaneHistOverlayToggled);
-    sideLay->addWidget(m_paneHistOverlayChk);
-
     // M16.4: quick PSNR/SSIM metrics label (M23: + diff stats)
     sideLay->addWidget(new QLabel(tr("差异指标"), this));
     m_metricLabel = new QLabel(tr("PSNR: —  SSIM: —"), this);
@@ -569,7 +561,7 @@ void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
                 mviewer::core::Histogram h =
                     roiEnabled ? mviewer::core::computeHistogram(adjusted, roi.x, roi.y,
                                                                  roi.width, roi.height)
-                               : mviewer::core::computeHistogram(adjusted);
+                               : mviewer::core::computeDisplayHistogram(adjusted);
                 if (ctx.isCancelled())
                     return; // after histogram computation
                 HistogramBatchResult::CellHist cell;

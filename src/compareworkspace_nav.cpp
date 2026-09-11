@@ -125,6 +125,8 @@ CompareWorkspace::NavState CompareWorkspace::captureNavState() const
     s.syncDrag = m_syncDragChk ? m_syncDragChk->isChecked() : true;
     s.crosshair = m_crosshairChk && m_crosshairChk->isChecked();
     s.pixelLink = m_pixelLinkChk && m_pixelLinkChk->isChecked();
+    s.filenameOverlay = m_filenameOverlay;
+    s.overlayMode = static_cast<int>(m_displayOverlay);
     s.overlayAlpha = m_overlayAlpha;
     s.threshold = m_thresholdValue;
     s.layoutIndex = m_layoutCombo ? m_layoutCombo->currentIndex() : 0;
@@ -143,6 +145,11 @@ void CompareWorkspace::restoreNavState(const NavState &s)
         m_crosshairChk->setChecked(s.crosshair);
     if (m_pixelLinkChk)
         m_pixelLinkChk->setChecked(s.pixelLink);
+    m_filenameOverlay = s.filenameOverlay;
+    if (m_filenameOverlayChk)
+        m_filenameOverlayChk->setChecked(s.filenameOverlay);
+    applyFilenameOverlays();
+    setOverlayMode(static_cast<mviewer::OverlayMode>(s.overlayMode));
     if (m_diffHighlightChk)
         m_diffHighlightChk->setChecked(s.diffHighlight);
     m_overlayAlpha = s.overlayAlpha;

@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-09-05 · Version: **1.0.19 product-workflow correctness patch** · Release tag: **not yet published**
+> Snapshot: 2026-09-11 · Version: **1.0.22 faster Compare histograms** · Release tag: **not yet published**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -42,6 +42,25 @@
 > `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
 > `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## 1.0.22 — Faster Compare histograms (2026-09-11)
+
+- Overlay and full-image inspection histograms subsample to a 256-pixel long
+  edge. ROI analysis histograms remain exact pixel counts.
+
+## 1.0.21 — Compare overlay inspection (2026-09-11)
+
+- Compare adds toolbar checkboxes for a transparent top-left histogram overlay
+  and a wrapping filename overlay on each pane, including canvas modes.
+
+## 1.0.20 — Professional inspection (2026-09-11)
+
+- Viewer and Compare isolate R/G/B/Y as grayscale presentation overlays.
+  Analysis, Pixel Inspector, and ROI measurement stay on source RGB.
+- A source-pixel grid appears at 800% zoom and above in Viewer and Compare,
+  including Split/Overlay/Swipe/Checkerboard canvas modes.
+- Compare visual diffs and PSNR/SSIM honor `autoAlignBeforeDiff`, and the
+  metrics label reports the detected integer translation.
 
 ## 1.0.19 — Browse/Compare/ROI correctness patch (2026-09-05)
 

@@ -121,6 +121,24 @@ int main()
               "full ROI == whole image");
     }
 
+    // Display histogram: small images stay exact; large images subsample.
+    {
+        Histogram exact = computeDisplayHistogram(img);
+        CHECK(exact.total == 4 && exact.r[10] == 1, "display histogram is exact under the max edge");
+
+        ImageData large = makeImageData(512, 512, PixelFormat::RGB24);
+        std::memset(large.buffer->data(), 40, large.byteSize());
+        Histogram sampled = computeDisplayHistogram(large);
+        Histogram full = computeHistogram(large);
+        CHECK(sampled.total > 0 && sampled.total < full.total,
+              "display histogram samples fewer pixels than a full scan");
+        CHECK(sampled.total <= (kDisplayHistogramMaxEdge + 1) * (kDisplayHistogramMaxEdge + 1),
+              "display histogram stays near the 256-edge sample budget");
+        CHECK(sampled.r[40] == sampled.total && sampled.g[40] == sampled.total &&
+                  sampled.b[40] == sampled.total,
+              "uniform large image keeps all display-histogram mass in one bin");
+    }
+
     printf("\nhistogram_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

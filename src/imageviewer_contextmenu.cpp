@@ -55,6 +55,33 @@ void addFrameContextActions(QMenu &menu, bool animated, bool playing, int frameI
     next->setEnabled(frameIndex + 1 < frameCount);
 }
 
+void addOverlayContextActions(QMenu &menu, mviewer::OverlayMode mode, QAction *&none,
+                              QAction *&zebra, QAction *&falseColor, QAction *&channelR,
+                              QAction *&channelG, QAction *&channelB, QAction *&channelY)
+{
+    none = menu.addAction("无叠加");
+    zebra = menu.addAction("过曝/欠曝斑马线(&Z)");
+    falseColor = menu.addAction("伪彩色(&C)");
+    channelR = menu.addAction("R 通道 (Shift+2)");
+    channelG = menu.addAction("G 通道 (Shift+3)");
+    channelB = menu.addAction("B 通道 (Shift+4)");
+    channelY = menu.addAction("Y 亮度 (Shift+5)");
+    none->setCheckable(true);
+    zebra->setCheckable(true);
+    falseColor->setCheckable(true);
+    channelR->setCheckable(true);
+    channelG->setCheckable(true);
+    channelB->setCheckable(true);
+    channelY->setCheckable(true);
+    none->setChecked(mode == mviewer::OverlayMode::None);
+    zebra->setChecked(mode == mviewer::OverlayMode::Zebra);
+    falseColor->setChecked(mode == mviewer::OverlayMode::FalseColor);
+    channelR->setChecked(mode == mviewer::OverlayMode::ChannelR);
+    channelG->setChecked(mode == mviewer::OverlayMode::ChannelG);
+    channelB->setChecked(mode == mviewer::OverlayMode::ChannelB);
+    channelY->setChecked(mode == mviewer::OverlayMode::ChannelY);
+}
+
 void setContextImageActionAvailability(QAction *copy, QAction *copyPath, QAction *copyColor,
                                        QAction *saveAs, QAction *zoomIn, QAction *zoomOut,
                                        QAction *zoomFit, QAction *zoomActual, QAction *selectRegion,
@@ -103,17 +130,15 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
                                       aZoomFit, aZoomActual, aSelectRegion, !m_currentPath.isEmpty(),
                                       m_frame && m_frame->isValid(), hasDisplayImage());
     menu.addSeparator();
-
-    // F4 (M22): live overlay toggle
-    QAction *aOvNone = menu.addAction("无叠加");
-    QAction *aOvZebra = menu.addAction("过曝/欠曝斑马线(&Z)");
-    QAction *aOvFalse = menu.addAction("伪彩色(&C)");
-    aOvNone->setCheckable(true);
-    aOvZebra->setCheckable(true);
-    aOvFalse->setCheckable(true);
-    aOvNone->setChecked(m_overlayMode == mviewer::OverlayMode::None);
-    aOvZebra->setChecked(m_overlayMode == mviewer::OverlayMode::Zebra);
-    aOvFalse->setChecked(m_overlayMode == mviewer::OverlayMode::FalseColor);
+    QAction *aOvNone = nullptr;
+    QAction *aOvZebra = nullptr;
+    QAction *aOvFalse = nullptr;
+    QAction *aOvR = nullptr;
+    QAction *aOvG = nullptr;
+    QAction *aOvB = nullptr;
+    QAction *aOvY = nullptr;
+    addOverlayContextActions(menu, m_overlayMode, aOvNone, aOvZebra, aOvFalse, aOvR, aOvG, aOvB,
+                             aOvY);
 
     // A-7.3: "分析" submenu — list every registered analyzer for one-click run.
     QMenu *analyzeMenu = menu.addMenu("分析");
@@ -183,8 +208,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         handleContextImageAction(chosen, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
                                   aSelectRegion))
         return;
-    handleContextNavigationAction(chosen, aNext, aPrev, aOvNone, aOvZebra, aOvFalse,
-                                  aFullscreen);
+    handleContextNavigationAction(chosen, aNext, aPrev, aOvNone, aOvZebra, aOvFalse, aOvR, aOvG,
+                                  aOvB, aOvY, aFullscreen);
 }
 
 bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
@@ -249,7 +274,9 @@ bool ImageViewer::handleContextImageAction(QAction *chosen, QAction *saveAs, QAc
 
 bool ImageViewer::handleContextNavigationAction(QAction *chosen, QAction *next, QAction *prev,
                                                 QAction *overlayNone, QAction *overlayZebra,
-                                                QAction *overlayFalse, QAction *fullscreen)
+                                                QAction *overlayFalse, QAction *overlayR,
+                                                QAction *overlayG, QAction *overlayB,
+                                                QAction *overlayY, QAction *fullscreen)
 {
     if (chosen == next)
         emit requestNext();
@@ -261,6 +288,14 @@ bool ImageViewer::handleContextNavigationAction(QAction *chosen, QAction *next, 
         setOverlayMode(mviewer::OverlayMode::Zebra);
     else if (chosen == overlayFalse)
         setOverlayMode(mviewer::OverlayMode::FalseColor);
+    else if (chosen == overlayR)
+        setOverlayMode(mviewer::OverlayMode::ChannelR);
+    else if (chosen == overlayG)
+        setOverlayMode(mviewer::OverlayMode::ChannelG);
+    else if (chosen == overlayB)
+        setOverlayMode(mviewer::OverlayMode::ChannelB);
+    else if (chosen == overlayY)
+        setOverlayMode(mviewer::OverlayMode::ChannelY);
     else if (chosen == fullscreen)
         toggleFullscreen();
     else

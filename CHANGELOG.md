@@ -1,5 +1,57 @@
 # Changelog
 
+## [1.0.22] - 2026-09-11
+
+### Fixed
+
+- **Faster Compare histograms:** overlay and full-image inspection histograms
+  now subsample so the long edge is about 256 pixels. A 4K/8K pane no longer
+  walks every source pixel. Exact ROI histograms are unchanged.
+
+### Verification
+
+- Histogram unit tests cover exact small-image behavior and the large-image
+  sample budget. Compare pane-histogram ROI totals remain exact.
+
+## [1.0.21] - 2026-09-11
+
+### Added
+
+- **Compare histogram overlay:** a 直方图 checkbox overlays the current pane's
+  RGB histogram at the top-left of each compared image with a transparent
+  background. Split/Overlay/Swipe/Checkerboard paint the same overlay.
+- **Compare filename overlay:** a 文件名 checkbox floats the current filename
+  at the top of each image. Long names wrap onto additional lines instead of
+  being elided.
+
+### Verification
+
+- Workflow UX covers both toggles, wrapping of a long filename, and top-left
+  histogram placement. Existing pane-histogram acceptance remains on the same
+  overlay toggle object name.
+
+## [1.0.20] - 2026-09-11
+
+### Added
+
+- **Channel isolation:** Viewer and Compare can display the R, G, B, or Y
+  plane as grayscale. Compare uses a compact 通道 combo and `Shift+1…5`;
+  Viewer uses the same keys plus the context menu. Pixel Inspector, ROI
+  measurement, and analysis remain source RGB.
+- **Pixel grid at 800%+:** Viewer and Compare draw a source-pixel lattice
+  once each pixel occupies eight or more screen pixels, so 1:1 inspection
+  is readable without guessing boundaries.
+- **Compare visual auto-align:** the existing “对比前自动对齐” preference now
+  registers the target pane before PSNR/SSIM and the difference heatmap, and
+  the metrics label reports the detected `(dx, dy)` offset.
+
+### Verification
+
+- Overlay unit tests cover R/G/B/Y isolation and the 800% pixel-grid
+  threshold. Aligner tests assert that an aligned pair produces a smaller
+  visual difference than the unaligned pair. Workflow UX covers the Compare
+  channel combo and `Shift+1/2`.
+
 ## [1.0.19] - 2026-09-05
 
 ### Fixed

@@ -1,5 +1,10 @@
 #include "widgets/rawimageview.h"
+#include "widgets/infooverlay.h"
+#include "widgets/pixelgrid.h"
 #include "widgets/roioverlay.h"
+
+#include "core/analysis/ImageOverlay.h"
+#include "core/image/QtConvert.h"
 
 #include <QEvent>
 #include <QMouseEvent>
@@ -49,6 +54,7 @@ void RawImageView::setImage(const QImage &img, const QSize &sourceSize, const QR
     if (m_sourceRect.isEmpty())
         m_sourceRect = fullRect;
     m_sizeMismatch = false;
+    rebuildFilteredDisplay();
     releaseBaseSurface();
     resetFit();
     update();
@@ -58,6 +64,7 @@ void RawImageView::clear()
 {
     clearTransientDisplay();
     m_image = QImage();
+    m_filteredDisplay = QImage();
     m_sourceSize = {};
     m_sourceRect = {};
     m_scale = m_fitScale = 1.0;
@@ -82,6 +89,7 @@ void RawImageView::setTransientDisplay(const QImage &img, const QSize &sourceSiz
     m_transientImage = img;
     m_transientSourceSize = fullSize;
     m_transientSourceRect = covered;
+    rebuildFilteredDisplay();
     releaseBaseSurface();
     update();
 }
@@ -93,8 +101,43 @@ void RawImageView::clearTransientDisplay()
     m_transientImage = QImage();
     m_transientSourceSize = {};
     m_transientSourceRect = {};
+    rebuildFilteredDisplay();
     releaseBaseSurface();
     update();
+}
+
+void RawImageView::setDisplayOverlay(mviewer::OverlayMode mode)
+{
+    if (m_displayOverlay == mode)
+        return;
+    m_displayOverlay = mode;
+    rebuildFilteredDisplay();
+    releaseBaseSurface();
+    update();
+}
+
+void RawImageView::setFilenameOverlay(const QString &text, bool visible)
+{
+    if (m_filenameOverlayText == text && m_filenameOverlayVisible == visible)
+        return;
+    m_filenameOverlayText = text;
+    m_filenameOverlayVisible = visible;
+    update();
+}
+
+void RawImageView::rebuildFilteredDisplay()
+{
+    m_filteredDisplay = QImage();
+    if (m_displayOverlay == mviewer::OverlayMode::None)
+        return;
+    const QImage &src = displayImage();
+    if (src.isNull())
+        return;
+    ImageData data = mvcore::fromQImage(src);
+    if (data.isNull())
+        return;
+    mviewer::applyOverlay(data, m_displayOverlay, 2);
+    m_filteredDisplay = mvcore::toQImage(data);
 }
 
 QSize RawImageView::renderSourceSize() const
@@ -216,6 +259,13 @@ void RawImageView::paintEvent(QPaintEvent *)
     const int dw = qRound(sourceSize.width() * m_scale);
     const int dh = qRound(sourceSize.height() * m_scale);
 
+    if (mviewer::pixelGridVisible(m_scale) && sourceSize.width() > 0 && sourceSize.height() > 0)
+    {
+        mviewer::ui::drawPixelGrid(p, QRectF(cx - dw / 2.0, cy - dh / 2.0, static_cast<double>(dw),
+                                             static_cast<double>(dh)),
+                                   0, 0, sourceSize.width(), sourceSize.height(), QRectF(rect()));
+    }
+
     // ROI selection box (image coords -> widget coords, same transform as the image)
     if (!m_transientImage.isNull())
     {
@@ -287,6 +337,9 @@ void RawImageView::paintEvent(QPaintEvent *)
         p.drawText(QRect(6, 6, bw, bh), Qt::AlignCenter, txt);
         p.restore();
     }
+
+    if (m_filenameOverlayVisible && !m_filenameOverlayText.isEmpty())
+        mviewer::ui::drawFilenameOverlay(p, rect(), m_filenameOverlayText);
 }
 
 void RawImageView::wheelEvent(QWheelEvent *ev)
@@ -299,7 +352,7 @@ void RawImageView::ensureBaseSurface()
 {
     const qreal dpr = devicePixelRatioF();
     const QSize viewport = size();
-    const QImage &image = displayImage();
+    const QImage &image = presentationImage();
     const QRect sourceRect = renderSourceRect();
     const qint64 imageKey = image.isNull() ? -1 : image.cacheKey();
     const qint64 overlayKey = m_overlay.isNull() ? -1 : m_overlay.cacheKey();
@@ -368,7 +421,7 @@ void RawImageView::drawBaseLayer(QPainter &p)
     // Single source of truth for the base image + diff overlay geometry shared
     // by the cached viewport surface and the direct-draw fallback. Matches the
     // pre-cache paintEvent rendering exactly.
-    const QImage &image = displayImage();
+    const QImage &image = presentationImage();
     const QSize sourceSize = renderSourceSize();
     const QRect sourceRect = renderSourceRect();
     p.setRenderHint(QPainter::SmoothPixmapTransform, m_scale < 4.0);

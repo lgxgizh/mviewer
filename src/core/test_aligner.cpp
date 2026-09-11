@@ -1,6 +1,7 @@
 // F3 (M22) unit test: Aligner estimates the inverse of its own shift, and
 // applying that shift realigns the moved frame back onto the reference.
 #include "core/compare/Aligner.h"
+#include "core/compare/DifferenceEngine.h"
 #include "core/image/QtConvert.h"
 
 #include <QImage>
@@ -102,6 +103,18 @@ int main()
     if (raw > 0 && mismatches > raw * 9 / 10)
     {
         printf("FAIL: realignment did not reduce error enough (%d vs %d)\n", mismatches, raw);
+        return 1;
+    }
+
+    const ImageData unalignedDiff = DifferenceEngine::differenceMap(a, moving);
+    const ImageData alignedDiff = DifferenceEngine::differenceMap(a, aligned);
+    const auto unalignedStats = DifferenceEngine::computeStats(unalignedDiff, 0);
+    const auto alignedStats = DifferenceEngine::computeStats(alignedDiff, 0);
+    printf("diff mean unaligned=%.3f aligned=%.3f\n", unalignedStats.meanDiff,
+           alignedStats.meanDiff);
+    if (!(alignedStats.meanDiff < unalignedStats.meanDiff))
+    {
+        printf("FAIL: aligned visual diff is not smaller than the unaligned pair\n");
         return 1;
     }
 

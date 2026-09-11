@@ -18,6 +18,7 @@
 // shot timer so pan/zoom bursts coalesce.
 #include "imageviewer.h"
 
+#include "core/analysis/ImageOverlay.h"
 #include "core/image/SourceImage.h"
 #include "core/image/QtConvert.h"
 #include "core/scheduler/TaskScheduler.h"
@@ -561,8 +562,28 @@ void ImageViewer::drawDisplayRaster(QPainter &painter) const
     m_view.imageRectToScreen(r.x(), r.y(), r.width(), r.height(), sx, sy, sw, sh);
     if (sw <= 0 || sh <= 0)
         return;
+    const QImage *drawn = &m_raster.image;
+    if (m_overlayMode != mviewer::OverlayMode::None)
+    {
+        const qint64 key = m_raster.image.cacheKey();
+        if (m_lodOverlayKey != key || m_lodOverlayMode != m_overlayMode ||
+            m_lodOverlayThreshold != m_zebraThreshold)
+        {
+            ImageData data = mvcore::fromQImage(m_raster.image);
+            if (!data.isNull())
+            {
+                mviewer::applyOverlay(data, m_overlayMode, m_zebraThreshold);
+                m_lodOverlayImage = mvcore::toQImage(data);
+                m_lodOverlayKey = key;
+                m_lodOverlayMode = m_overlayMode;
+                m_lodOverlayThreshold = m_zebraThreshold;
+            }
+        }
+        if (!m_lodOverlayImage.isNull())
+            drawn = &m_lodOverlayImage;
+    }
     painter.save();
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-    painter.drawImage(QRect(sx, sy, sw, sh), m_raster.image);
+    painter.drawImage(QRect(sx, sy, sw, sh), *drawn);
     painter.restore();
 }

@@ -2,6 +2,7 @@
 #include "compareworkspace_p.h"
 
 #include "runtime_storage.h"
+#include "widgets/infooverlay.h"
 
 #include <QSaveFile>
 
@@ -332,12 +333,29 @@ void CompareWorkspace::positionCellHists()
         if (!hw)
             continue;
         QWidget *frame = hw->parentWidget();
-        if (!frame || i >= m_cellViews.size())
+        if (!frame || i >= static_cast<size_t>(m_cellViews.size()) || !m_cellViews[i])
             continue;
-        const QRect r = m_cellViews[i]->geometry();
-        const int w = qMin(160, r.width() / 2);
-        const int h = 48;
-        frame->setGeometry(r.right() - w - 4, r.bottom() - h - 4, w, h);
+        const QRect pane = m_cellViews[i]->geometry();
+        QRect filenameBox;
+        if (m_filenameOverlay)
+        {
+            QFont overlayFont = this->font();
+            overlayFont.setBold(true);
+            overlayFont.setPointSize(9);
+            filenameBox = mviewer::ui::filenameOverlayRect(
+                QFontMetrics(overlayFont), QRect(QPoint(0, 0), pane.size()),
+                m_cellViews[i]->filenameOverlayText());
+        }
+        const QRect box = mviewer::ui::histogramOverlayRect(QRect(QPoint(0, 0), pane.size()),
+                                                            filenameBox);
+        if (box.isEmpty())
+        {
+            frame->setVisible(false);
+            continue;
+        }
+        frame->setGeometry(pane.left() + box.x(), pane.top() + box.y(), box.width(), box.height());
+        frame->setVisible(m_paneHistOverlay);
+        frame->raise();
     }
 }
 
