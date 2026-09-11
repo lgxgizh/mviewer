@@ -13,8 +13,7 @@ void CompareWorkspace::showShortcutHelp()
            "K 棋盘 · H Diff高亮 · Shift+1…5 通道 · Z/D 同步缩放/拖动 · R 准星 · "
            "L 像素连线 · 1~8 布局 · PgUp/PgDn 连续导航 · F Fit · X 交换 A/B · ? 帮助 · "
            "Esc 有选区则清除，否则退出");
-    if (auto *w = window())
-        w->setWindowTitle(tip);
+    showCompareStatus(tip, 8000);
 }
 
 #include <cmath>
@@ -724,15 +723,15 @@ void CompareWorkspace::closeCompareHost()
         dlg->reject();
 }
 
-void CompareWorkspace::showCompareStatus(const QString &text)
+void CompareWorkspace::showCompareStatus(const QString &text, int msec)
 {
     if (!m_compareStatusLabel)
         return;
     m_compareStatusLabel->setText(text);
-    QTimer::singleShot(3000, m_compareStatusLabel,
-                       [label = QPointer<QLabel>(m_compareStatusLabel)]()
+    QTimer::singleShot(msec, m_compareStatusLabel,
+                       [label = QPointer<QLabel>(m_compareStatusLabel), text]()
                        {
-                           if (label)
+                           if (label && label->text() == text)
                                label->clear();
                        });
 }

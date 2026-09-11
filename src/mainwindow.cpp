@@ -670,6 +670,10 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
         m_compareView, &CompareWorkspace::analyzeCurrent, this,
         [this, viewGuard]()
         {
+            // Compare is a fullscreen host. Opening MainWindow's analysis panel
+            // behind it looks like a no-op; the Compare inspector is the target.
+            if (m_compareHost && m_compareHost->isVisible())
+                return;
             if (viewGuard)
             {
                 const QString path = viewGuard->focusImagePath();

@@ -175,6 +175,7 @@ class CompareWorkspace : public QWidget
     QWidget *buildToolbarContainer(QHBoxLayout *&modeLayout, QHBoxLayout *&viewLayout,
                                    QHBoxLayout *&toolLayout, QHBoxLayout *&toolActionsLayout);
     void buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *viewLayout);
+    void buildOverlayControls(QHBoxLayout *modeLayout);
     void buildDiffControls(QHBoxLayout *toolLayout);
     void buildViewControls(QHBoxLayout *viewLayout);
     void buildToolbarActions(QHBoxLayout *toolLayout);
@@ -771,6 +772,7 @@ class CompareWorkspace : public QWidget
     QLabel *m_compareStatusLabel = nullptr;
     QWidget *buildStatusStrip();
     void closeCompareHost();
-    void showCompareStatus(const QString &text);
+    void showCompareStatus(const QString &text, int msec = 3000);
     void applyCompareSafeInsets();
+    void syncContextualCompareControls();
 };

@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.27] - 2026-09-12
+
+### Changed
+
+- **Compare contextual controls:** overlay opacity, checker size, and diff
+  threshold appear only while that mode is on. 列数 appears only for custom
+  layout. Analyze opens the Compare inspector. Shortcut help uses the status
+  strip instead of replacing the window title.
+
 ## [1.0.26] - 2026-09-12
 
 ### Added

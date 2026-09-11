@@ -1324,6 +1324,53 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
               exportReportButton->isEnabled(),
           "loaded two-image Compare enables image-dependent actions");
 
+    QSlider *overlayAlphaSlider = ws->findChild<QSlider *>(QStringLiteral("overlayAlphaSlider"));
+    QSlider *checkerSizeSlider = ws->findChild<QSlider *>(QStringLiteral("checkerSizeSlider"));
+    QSlider *diffThresholdEarly = ws->findChild<QSlider *>(QStringLiteral("diffThresholdSlider"));
+    CHECK(overlayAlphaSlider && !overlayAlphaSlider->isVisible(),
+          "overlay opacity slider stays hidden until overlay mode is on");
+    CHECK(checkerSizeSlider && !checkerSizeSlider->isVisible(),
+          "checker size slider stays hidden until checkerboard mode is on");
+    CHECK(diffThresholdEarly && !diffThresholdEarly->isVisible(),
+          "diff threshold slider stays hidden until the diff overlay is on");
+    if (overlay && overlayAlphaSlider)
+    {
+        overlay->setChecked(true);
+        pump(20);
+        CHECK(overlayAlphaSlider->isVisible(), "overlay opacity slider appears in overlay mode");
+        overlay->setChecked(false);
+        pump(20);
+        CHECK(!overlayAlphaSlider->isVisible(), "overlay opacity slider hides when overlay is off");
+    }
+    QCheckBox *diffOverlayChk = ws->findChild<QCheckBox *>(QStringLiteral("diffOverlayToggle"));
+    if (diffOverlayChk && diffThresholdEarly)
+    {
+        diffOverlayChk->setChecked(true);
+        pump(20);
+        CHECK(diffThresholdEarly->isVisible(), "diff threshold slider appears with the overlay");
+        diffOverlayChk->setChecked(false);
+        pump(20);
+        CHECK(!diffThresholdEarly->isVisible(), "diff threshold slider hides with the overlay");
+    }
+    QCheckBox *inspectorToggle = ws->findChild<QCheckBox *>(QStringLiteral("analysisPanelToggle"));
+    if (analyzeButton && inspectorToggle)
+    {
+        analyzeButton->click();
+        pump(20);
+        CHECK(inspectorToggle->isChecked(),
+              "Analyze opens the Compare inspector instead of the hidden MainWindow panel");
+        inspectorToggle->setChecked(false);
+        pump(20);
+    }
+    if (QWidget *host = ws->window())
+    {
+        const QString titleBefore = host->windowTitle();
+        sendKey(ws, Qt::Key_Question);
+        pump(20);
+        CHECK(host->windowTitle() == titleBefore,
+              "shortcut help does not overwrite the Compare window title");
+    }
+
     QLabel *hudMetrics = ws->findChild<QLabel *>(QStringLiteral("diffMetricsLabel"));
     QCheckBox *analysisToggleEarly =
         ws->findChild<QCheckBox *>(QStringLiteral("analysisPanelToggle"));

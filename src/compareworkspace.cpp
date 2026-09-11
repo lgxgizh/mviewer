@@ -70,6 +70,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     applyCompareSafeInsets();
     updateActionAvailability();
     updateROIAvailabilityStatus();
+    syncContextualCompareControls();
 }
 
 void CompareWorkspace::applyCompareSafeInsets()
@@ -593,6 +594,7 @@ void CompareWorkspace::onLayoutChanged()
     const bool custom = (idx == 6); // 自定义 M×N
     if (m_gridColsSpin)
         m_gridColsSpin->setEnabled(custom);
+    syncContextualCompareControls();
 
     int cols = 0;
     switch (idx)

@@ -266,6 +266,7 @@ void CompareWorkspace::restoreNavState(const NavState &s)
     }
     if (s.hasRoi)
         applySelectionToAll(s.roi);
+    syncContextualCompareControls();
 }
 
 QString CompareWorkspace::focusImagePath() const

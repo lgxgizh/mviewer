@@ -149,42 +149,7 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
             });
     modeLayout->addWidget(m_swipeChk);
 
-    // A-4.1: Overlay compare mode — semi-transparent blend of the two images.
-    m_overlayChk = new QCheckBox("叠加对比(&O)", this);
-    m_overlayChk->setEnabled(false);
-    m_overlayChk->setToolTip(tr("仅 2 张图片时可用：半透明叠加对比（快捷键: O）"));
-    connect(m_overlayChk, &QCheckBox::toggled, this,
-            [this](bool on)
-            {
-                if (on)
-                    exclusiveMode(m_overlayChk);
-                updateCanvasModeVisibility();
-                if (m_overlayAlphaSlider)
-                    m_overlayAlphaSlider->setEnabled(on);
-            });
-    modeLayout->addWidget(m_overlayChk);
-
-    // A-4.1: overlay opacity slider (0–100%).
-    m_overlayAlphaSlider = new QSlider(Qt::Horizontal, this);
-    m_overlayAlphaSlider->setRange(0, 100);
-    m_overlayAlphaSlider->setValue(m_overlayAlpha);
-    m_overlayAlphaSlider->setMaximumWidth(80);
-    m_overlayAlphaSlider->setEnabled(false);
-    m_overlayAlphaSlider->setToolTip(tr("叠加不透明度（上层图片）"));
-    connect(m_overlayAlphaSlider, &QSlider::valueChanged, this,
-            [this](int v)
-            {
-                m_overlayAlpha = v;
-                if (m_overlayAlphaLabel)
-                    m_overlayAlphaLabel->setText(QString("%1%").arg(v));
-                update();
-            });
-    modeLayout->addWidget(m_overlayAlphaSlider);
-    m_overlayAlphaLabel = new QLabel(QString("%1%").arg(m_overlayAlpha), this);
-    m_overlayAlphaLabel->setMinimumWidth(28);
-    modeLayout->addWidget(m_overlayAlphaLabel);
-
-    // M23: checkerboard compare mode (棋盘格) — alternating blocks of A/B.
+    buildOverlayControls(modeLayout);
     buildCheckerboardControls(modeLayout);
 
     // A-4.5: continuous compare — walk consecutive pairs without reopening.
@@ -206,6 +171,7 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
 {
     // M15: threshold slider for difference heatmap (0-255).
     auto *thresholdLabel = new QLabel("阈值:", this);
+    thresholdLabel->setObjectName("diffThresholdCaption");
     toolLayout->addWidget(thresholdLabel);
     m_thresholdSlider = new QSlider(Qt::Horizontal, this);
     m_thresholdSlider->setObjectName("diffThresholdSlider");
@@ -241,6 +207,7 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
             [this](bool on)
             {
                 m_diffOverlayVisible = on;
+                syncContextualCompareControls();
                 refreshAllDiffOverlays();
             });
     toolLayout->addWidget(m_diffOverlayChk);
@@ -263,6 +230,7 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
                     m_diffOverlayVisible = true;
                 }
                 m_diffHighlight = on;
+                syncContextualCompareControls();
                 refreshAllDiffOverlays();
             });
     toolLayout->addWidget(m_diffHighlightChk);
@@ -300,6 +268,7 @@ void CompareWorkspace::buildViewControls(QHBoxLayout *viewLayout)
 
     // A-4.2: custom grid is column-driven. CompareEngine derives the row count.
     auto *columnsLabel = new QLabel(tr("列数:"), this);
+    columnsLabel->setObjectName("compareColumnsCaption");
     columnsLabel->setToolTip(tr("只设置列数；行数由当前图片数自动推导"));
     viewLayout->addWidget(columnsLabel);
     m_gridColsSpin = new QSpinBox(this);
@@ -507,8 +476,14 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     m_analyzeBtn = new QPushButton(tr("分析"), this);
     m_analyzeBtn->setObjectName("analyzeCompareButton");
     m_analyzeBtn->setEnabled(false);
-    m_analyzeBtn->setToolTip(tr("在分析面板中打开当前焦点图像"));
-    connect(m_analyzeBtn, &QPushButton::clicked, this, &CompareWorkspace::analyzeCurrent);
+    m_analyzeBtn->setToolTip(tr("打开比较检视面板"));
+    connect(m_analyzeBtn, &QPushButton::clicked, this,
+            [this]()
+            {
+                if (m_sideChk)
+                    m_sideChk->setChecked(true);
+                emit analyzeCurrent();
+            });
     toolLayout->addWidget(m_analyzeBtn);
 
     m_exportReportBtn = new QPushButton(tr("导出报告"), this);
@@ -561,4 +536,30 @@ QWidget *CompareWorkspace::buildStatusStrip()
     connect(m_exitBtn, &QPushButton::clicked, this, &CompareWorkspace::closeCompareHost);
     lay->addWidget(m_exitBtn);
     return strip;
+}
+
+void CompareWorkspace::syncContextualCompareControls()
+{
+    const bool overlayOn = m_overlayChk && m_overlayChk->isChecked();
+    const bool checkerOn = m_checkerChk && m_checkerChk->isChecked();
+    const bool diffOn = m_diffOverlayChk && m_diffOverlayChk->isChecked();
+    const bool customGrid = m_layoutCombo && m_layoutCombo->currentIndex() == 6;
+    if (m_overlayAlphaSlider)
+        m_overlayAlphaSlider->setVisible(overlayOn);
+    if (m_overlayAlphaLabel)
+        m_overlayAlphaLabel->setVisible(overlayOn);
+    if (m_checkerSizeSlider)
+        m_checkerSizeSlider->setVisible(checkerOn);
+    if (m_checkerSizeLabel)
+        m_checkerSizeLabel->setVisible(checkerOn);
+    if (m_thresholdSlider)
+        m_thresholdSlider->setVisible(diffOn);
+    if (m_thresholdLabel)
+        m_thresholdLabel->setVisible(diffOn);
+    if (auto *caption = findChild<QLabel *>(QStringLiteral("diffThresholdCaption")))
+        caption->setVisible(diffOn);
+    if (m_gridColsSpin)
+        m_gridColsSpin->setVisible(customGrid);
+    if (auto *columns = findChild<QLabel *>(QStringLiteral("compareColumnsCaption")))
+        columns->setVisible(customGrid);
 }

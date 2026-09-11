@@ -279,6 +279,46 @@ void CompareWorkspace::drawOverlayCompare(QPainter &p)
 // Alternating blocks show image A and image B under the SAME synchronized
 // transform, so block seams reveal misalignment/color shifts instantly.
 
+void CompareWorkspace::buildOverlayControls(QHBoxLayout *lay)
+{
+    if (!lay)
+        return;
+    m_overlayChk = new QCheckBox("叠加对比(&O)", this);
+    m_overlayChk->setEnabled(false);
+    m_overlayChk->setToolTip(tr("仅 2 张图片时可用：半透明叠加对比（快捷键: O）"));
+    connect(m_overlayChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                if (on)
+                    exclusiveMode(m_overlayChk);
+                updateCanvasModeVisibility();
+                if (m_overlayAlphaSlider)
+                    m_overlayAlphaSlider->setEnabled(on);
+                syncContextualCompareControls();
+            });
+    lay->addWidget(m_overlayChk);
+
+    m_overlayAlphaSlider = new QSlider(Qt::Horizontal, this);
+    m_overlayAlphaSlider->setObjectName("overlayAlphaSlider");
+    m_overlayAlphaSlider->setRange(0, 100);
+    m_overlayAlphaSlider->setValue(m_overlayAlpha);
+    m_overlayAlphaSlider->setMaximumWidth(80);
+    m_overlayAlphaSlider->setEnabled(false);
+    m_overlayAlphaSlider->setToolTip(tr("叠加不透明度（上层图片）"));
+    connect(m_overlayAlphaSlider, &QSlider::valueChanged, this,
+            [this](int v)
+            {
+                m_overlayAlpha = v;
+                if (m_overlayAlphaLabel)
+                    m_overlayAlphaLabel->setText(QString("%1%").arg(v));
+                update();
+            });
+    lay->addWidget(m_overlayAlphaSlider);
+    m_overlayAlphaLabel = new QLabel(QString("%1%").arg(m_overlayAlpha), this);
+    m_overlayAlphaLabel->setMinimumWidth(28);
+    lay->addWidget(m_overlayAlphaLabel);
+}
+
 void CompareWorkspace::buildCheckerboardControls(QHBoxLayout *lay)
 {
     if (!lay)
@@ -294,10 +334,12 @@ void CompareWorkspace::buildCheckerboardControls(QHBoxLayout *lay)
                 updateCanvasModeVisibility();
                 if (m_checkerSizeSlider)
                     m_checkerSizeSlider->setEnabled(on);
+                syncContextualCompareControls();
             });
     lay->addWidget(m_checkerChk);
 
     m_checkerSizeSlider = new QSlider(Qt::Horizontal, this);
+    m_checkerSizeSlider->setObjectName("checkerSizeSlider");
     m_checkerSizeSlider->setRange(16, 256);
     m_checkerSizeSlider->setValue(m_checkerSize);
     m_checkerSizeSlider->setFixedWidth(70);
@@ -365,4 +407,3 @@ void CompareWorkspace::drawCheckerboardCompare(QPainter &p)
         p.drawLine(0, y, r.width(), y);
     p.restore();
 }
-
