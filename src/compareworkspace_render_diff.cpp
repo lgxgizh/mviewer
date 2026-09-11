@@ -328,7 +328,7 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
         {
             const QString psnrStr = QString::number(r.psnr, 'f', 2) + " dB";
             const QString ssimStr = QString::number(r.ssim, 'f', 4);
-            text = tr("PSNR: %1  SSIM: %2\n(Image #%3 vs #%4)")
+            text = tr("PSNR: %1    SSIM: %2\n（图 %3 vs 图 %4）")
                        .arg(psnrStr, ssimStr)
                        .arg(r.baseIdx + 1)
                        .arg(r.targetIdx + 1);

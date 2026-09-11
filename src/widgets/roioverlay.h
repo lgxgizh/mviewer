@@ -23,7 +23,7 @@ inline QRectF roiPresentationRect(const mviewer::domain::Selection &selection,
 
 inline void drawROIOverlay(QPainter &p, const mviewer::domain::Selection &selection,
                            const QSize &sourceSize, const QRectF &destination,
-                           bool drawHandles = true)
+                           bool drawHandles = true, const QString &paneTag = {})
 {
     const QRectF box = roiPresentationRect(selection, sourceSize, destination);
     if (box.isEmpty())
@@ -58,14 +58,16 @@ inline void drawROIOverlay(QPainter &p, const mviewer::domain::Selection &select
     }
 
     QFont font = p.font();
-    font.setPointSize(8);
+    font.setPointSize(9);
     font.setBold(true);
     p.setFont(font);
-    const QString label = QStringLiteral("ROI %1×%2").arg(selection.width).arg(selection.height);
-    const int labelWidth = p.fontMetrics().horizontalAdvance(label) + 8;
-    const QRectF labelRect(box.left(), std::max(0.0, box.top() - 18.0), labelWidth, 16.0);
+    const QString sizeText = QStringLiteral("%1×%2").arg(selection.width).arg(selection.height);
+    const QString label = paneTag.isEmpty() ? QStringLiteral("ROI %1").arg(sizeText)
+                                            : QStringLiteral("%1  %2").arg(paneTag, sizeText);
+    const int labelWidth = p.fontMetrics().horizontalAdvance(label) + 10;
+    const QRectF labelRect(box.left(), std::max(0.0, box.top() - 20.0), labelWidth, 18.0);
     p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0, 0, 0, 170));
+    p.setBrush(QColor(0, 0, 0, 200));
     p.drawRoundedRect(labelRect, 2, 2);
     p.setPen(Qt::white);
     p.drawText(labelRect, Qt::AlignCenter, label);

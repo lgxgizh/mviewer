@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-09-11 · Version: **1.0.25 console launch** · Release tag: **v1.0.24 published**
+> Snapshot: 2026-09-12 · Version: **1.0.26 Compare chrome / ROI A-B** · Release tag: **v1.0.25 published**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -42,6 +42,12 @@
 > `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
 > `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## 1.0.26 — Compare chrome and ROI A/B (2026-09-12)
+
+- Fullscreen Compare insets content away from the taskbar and screen edges.
+- ROI boxes are tagged A/B; the measurement HUD stays fully visible.
+- PSNR/SSIM uses a dark high-contrast strip; sync-zoom is no longer clipped.
 
 ## 1.0.25 — Console launch (2026-09-11)
 

@@ -114,6 +114,15 @@ class RawImageView : public QWidget
     {
         return m_cellIndex;
     }
+    void setPaneTag(const QString &tag)
+    {
+        m_paneTag = tag;
+        update();
+    }
+    QString paneTag() const
+    {
+        return m_paneTag;
+    }
 
     // ROI selection in image coordinates. The widget renders it on top of the
     // fit/pan transform. CompareWorkspace drives this through the SelectionController
@@ -276,6 +285,7 @@ class RawImageView : public QWidget
     bool m_dragging = false;
     QPoint m_lastMouse;
     int m_cellIndex = -1;
+    QString m_paneTag;
     mviewer::domain::Selection m_selection;
     bool m_selecting = false;
     bool m_selectionMoved = false;

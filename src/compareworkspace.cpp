@@ -3,6 +3,9 @@
 #include "core/image/ImageFrame.h"
 #include "core/image/SourceImage.h"
 
+#include <QScreen>
+
+#include <algorithm>
 #include <utility>
 
 // M47: Compare analysis-support full frames are only loaded when the source's
@@ -61,12 +64,47 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     leftLay->addLayout(pages, 1);
 
     auto *root = new QHBoxLayout(this);
-    root->setContentsMargins(0, 0, 0, 0);
     root->setSpacing(0);
     root->addLayout(leftLay, 1);
     root->addWidget(m_sidePanel);
+    applyCompareSafeInsets();
     updateActionAvailability();
     updateROIAvailabilityStatus();
+}
+
+void CompareWorkspace::applyCompareSafeInsets()
+{
+    QLayout *root = layout();
+    if (!root)
+        return;
+    int left = 8;
+    int top = 6;
+    int right = 8;
+    int bottom = 8;
+    const Qt::WindowStates state = window() ? window()->windowState() : windowState();
+    const bool coverScreen =
+        state.testFlag(Qt::WindowFullScreen) || state.testFlag(Qt::WindowMaximized);
+    if (coverScreen)
+    {
+        if (QScreen *screen = this->screen())
+        {
+            const QRect widgetScreen(mapToGlobal(QPoint(0, 0)), size());
+            if (widgetScreen.isValid() && widgetScreen.width() > 0 && widgetScreen.height() > 0)
+            {
+                const QRect overlap = widgetScreen.intersected(screen->availableGeometry());
+                if (overlap.isValid() && !overlap.isEmpty())
+                {
+                    left = std::max(8, overlap.left() - widgetScreen.left());
+                    top = std::max(6, overlap.top() - widgetScreen.top());
+                    right = std::max(8, widgetScreen.right() - overlap.right());
+                    bottom = std::max(8, widgetScreen.bottom() - overlap.bottom());
+                }
+            }
+        }
+    }
+    const QMargins next(left, top, right, bottom);
+    if (root->contentsMargins() != next)
+        root->setContentsMargins(next);
 }
 
 CompareWorkspace::~CompareWorkspace()

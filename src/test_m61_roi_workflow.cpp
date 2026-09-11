@@ -263,6 +263,14 @@ int main(int argc, char **argv)
     QPushButton *hud = workspace->findChild<QPushButton *>("roiMeasurementHud");
     CHECK(hud && hud->isVisible() && hud->text().contains(QStringLiteral("Ready")),
           "side-panel-hidden HUD immediately exposes ready results");
+    CHECK(hud && hud->text().contains(QLatin1Char('A')) && hud->text().contains(QLatin1Char('B')),
+          "ROI HUD lists pane A and pane B on separate lines");
+    if (hud)
+    {
+        const QRect hudInWs(hud->mapTo(workspace, QPoint(0, 0)), hud->size());
+        CHECK(workspace->contentsRect().contains(hudInWs),
+              "ROI HUD stays fully inside the Compare workspace");
+    }
 
     const auto beforePreview = TaskScheduler::instance().metrics(TaskScheduler::AnalysisPool);
     const QPoint rapidStart = first->sourcePointToWidget(QPointF(2, 2)).toPoint();

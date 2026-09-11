@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.26] - 2026-09-12
+
+### Added
+
+- **ROI pane tags:** Compare ROI boxes are labeled A/B (and onward) so each
+  box matches the measurement HUD.
+
+### Fixed
+
+- **Compare chrome clipping:** fullscreen Compare keeps a safe inset above the
+  taskbar and window edges. The ROI A/B HUD stays on-screen, PSNR/SSIM uses a
+  dark high-contrast strip, and the sync-zoom checkbox is no longer half-cut.
+
 ## [1.0.25] - 2026-09-11
 
 ### Changed

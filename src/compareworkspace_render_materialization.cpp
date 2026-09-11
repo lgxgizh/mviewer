@@ -87,6 +87,9 @@ ElidedCaption *createPaneCaption(QWidget *cellWidget, int index, const ImageFram
 void CompareWorkspace::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
+    const Qt::WindowStates state = window() ? window()->windowState() : windowState();
+    if (state.testFlag(Qt::WindowFullScreen) || state.testFlag(Qt::WindowMaximized))
+        applyCompareSafeInsets();
     if (windowHandle())
         setDisplayColorContext(DisplayColorContextProvider::forWindow(windowHandle()));
     const bool blinkActive = m_blinkChk && m_blinkChk->isChecked();
@@ -179,7 +182,8 @@ void CompareWorkspace::drawCanvasROI(QPainter &p)
         if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
             return;
         mviewer::ui::drawROIOverlay(p, m_lastSelection, m_cellViews[pane]->sourceSize(),
-                                    cellFullDestRect(pane, canvasPaneGeometry(pane)));
+                                    cellFullDestRect(pane, canvasPaneGeometry(pane)), true,
+                                    QString(QChar('A' + pane)));
     };
     if (m_splitChk && m_splitChk->isChecked())
     {
@@ -364,6 +368,7 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
         view->setMouseTracking(true);
         view->installEventFilter(this);
         view->setCellIndex(i);
+        view->setPaneTag(QString(QChar('A' + i)));
         view->setDisplayOverlay(m_displayOverlay);
         cellLay->addWidget(view, 1);
         m_cellViews.push_back(view);

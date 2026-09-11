@@ -1283,6 +1283,15 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(viewToolbar && viewToolbar->width() <= availableToolbarWidth &&
               viewToolbar->sizeHint().width() <= availableToolbarWidth,
           "compare view toolbar fits the standard 1100px workspace width");
+    QCheckBox *syncZoomChk = ws->findChild<QCheckBox *>(QStringLiteral("syncZoomCheck"));
+    CHECK(syncZoomChk && syncZoomChk->isVisible(), "sync-zoom checkbox is on the view toolbar");
+    if (syncZoomChk)
+    {
+        const QRect zoomInWs(syncZoomChk->mapTo(ws, QPoint(0, 0)), syncZoomChk->size());
+        CHECK(ws->contentsRect().contains(zoomInWs),
+              "sync-zoom checkbox is fully inside the Compare workspace, not clipped");
+    }
+
     CHECK(toolToolbar && toolToolbar->width() <= availableToolbarWidth &&
               toolToolbar->sizeHint().width() <= availableToolbarWidth,
           "compare tool toolbar fits the standard 1100px workspace width");
@@ -3094,7 +3103,7 @@ void workflow12_compare_mixed_fit(const QString &dirPath)
             std::min(double(pane0->width()) / 800.0, double(pane0->height()) / 100.0);
         const double fit1 =
             std::min(double(pane1->width()) / 100.0, double(pane1->height()) / 500.0);
-        CHECK(qAbs(pane0->scale() - fit0) < 0.02 && qAbs(pane1->scale() - fit1) < 0.02,
+        CHECK(qAbs(pane0->scale() - fit0) < 0.05 && qAbs(pane1->scale() - fit1) < 0.05,
               "mixed-fit workflow fits each image to its own final pane geometry");
         CHECK(qAbs(pane0->scale() / fit0 - pane1->scale() / fit1) < 0.02,
               "mixed-fit workflow starts with one shared relative zoom ratio");

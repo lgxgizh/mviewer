@@ -9,6 +9,7 @@
 void CompareWorkspace::buildSyncControls()
 {
     m_syncZoomChk = new QCheckBox("同步缩放(&Z)", this);
+    m_syncZoomChk->setObjectName("syncZoomCheck");
     m_syncZoomChk->setChecked(true);
     m_syncDragChk = new QCheckBox("同步拖动(&D)", this);
     m_syncDragChk->setChecked(true);
@@ -43,7 +44,7 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBox
         auto *bar = new QWidget(toolbarContainer);
         bar->setObjectName(name);
         auto *layout = new QHBoxLayout(bar);
-        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setContentsMargins(8, 0, 8, 0);
         layout->setSpacing(6);
         return std::pair{bar, layout};
     };
@@ -58,7 +59,7 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBox
     {
         auto *row = new QWidget(toolBar);
         auto *layout = new QHBoxLayout(row);
-        layout->setContentsMargins(0, 0, 0, 0);
+        layout->setContentsMargins(8, 0, 8, 0);
         layout->setSpacing(6);
         return std::pair{row, layout};
     };
@@ -524,18 +525,21 @@ QWidget *CompareWorkspace::buildStatusStrip()
 {
     auto *strip = new QWidget(this);
     strip->setObjectName("compareStatusStrip");
+    strip->setStyleSheet("QWidget#compareStatusStrip{background:#1f1f1f;}");
     auto *lay = new QHBoxLayout(strip);
-    lay->setContentsMargins(4, 0, 4, 0);
+    lay->setContentsMargins(8, 2, 8, 2);
     lay->setSpacing(8);
 
-    m_metricLabel = new QLabel(tr("PSNR: —  SSIM: —"), strip);
+    m_metricLabel = new QLabel(tr("PSNR: —    SSIM: —"), strip);
     m_metricLabel->setObjectName("diffMetricsLabel");
     m_metricLabel->setWordWrap(true);
-    m_metricLabel->setStyleSheet("color:#ddd;");
-    lay->addWidget(m_metricLabel, 1);
+    m_metricLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
+    m_metricLabel->setStyleSheet("color:#ffffff;font-weight:700;padding:2px 6px;");
+    lay->addWidget(m_metricLabel, 0);
 
     m_autoAlignChk = new QCheckBox(tr("对齐"), strip);
     m_autoAlignChk->setObjectName("autoAlignBeforeDiffToggle");
+    m_autoAlignChk->setStyleSheet("color:#ffffff;");
     m_autoAlignChk->setToolTip(tr("对比前自动对齐，消除平移错位后再算 PSNR/SSIM"));
     m_autoAlignChk->setChecked(QSettings().value("autoAlignBeforeDiff", false).toBool());
     connect(m_autoAlignChk, &QCheckBox::toggled, this,
@@ -548,7 +552,7 @@ QWidget *CompareWorkspace::buildStatusStrip()
 
     m_compareStatusLabel = new QLabel(strip);
     m_compareStatusLabel->setObjectName("compareStatusLabel");
-    m_compareStatusLabel->setStyleSheet("color:#ccc;");
+    m_compareStatusLabel->setStyleSheet("color:#f0f0f0;");
     lay->addWidget(m_compareStatusLabel, 1);
 
     m_exitBtn = new QPushButton(tr("退出比较"), strip);

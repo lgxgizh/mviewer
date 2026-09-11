@@ -129,9 +129,9 @@ void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
     m_roiHud->setObjectName("roiMeasurementHud");
     m_roiHud->setCursor(Qt::PointingHandCursor);
     m_roiHud->setStyleSheet(
-        "QPushButton{background:rgba(20,20,20,225);color:#eee;border:1px solid #FFD233;"
-        "border-radius:4px;padding:7px;text-align:left;}"
-        "QPushButton:hover{background:rgba(35,35,35,240);}");
+        "QPushButton{background:rgba(20,20,20,235);color:#ffffff;border:1px solid #FFD233;"
+        "border-radius:4px;padding:8px;text-align:left;font-size:12px;font-weight:600;}"
+        "QPushButton:hover{background:rgba(35,35,35,245);}");
     m_roiHud->setVisible(false);
     connect(m_roiHud, &QPushButton::clicked, this,
             [this]()
@@ -532,11 +532,20 @@ void CompareWorkspace::positionROIHud()
         return;
     const QPoint topLeft = target->mapTo(this, QPoint(0, 0));
     const QRect area(topLeft, target->size());
-    const int width = std::min(370, std::max(180, area.width() - 16));
+    const QRect bounds = contentsRect().adjusted(8, 8, -8, -8);
+    const QRect safe = area.intersected(bounds);
+    if (safe.width() < 80 || safe.height() < 40)
+        return;
+    const int width = std::min(420, std::max(220, safe.width() - 16));
     m_roiHud->setFixedWidth(width);
     m_roiHud->adjustSize();
-    const int height = std::min(m_roiHud->height(), std::max(40, area.height() - 16));
-    QRect hudRect(area.right() - width - 8, area.bottom() - height - 8, width, height);
+    int height = std::max(m_roiHud->sizeHint().height(), 48);
+    height = std::min(height, safe.height());
+    QRect hudRect(safe.right() - width + 1, safe.bottom() - height + 1, width, height);
+    if (hudRect.left() < safe.left())
+        hudRect.moveLeft(safe.left());
+    if (hudRect.top() < safe.top())
+        hudRect.moveTop(safe.top());
     if (target == m_compareCanvas && !m_lastSelection.isEmpty() && !m_cellViews.isEmpty() &&
         m_cellViews[0])
     {
@@ -546,7 +555,7 @@ void CompareWorkspace::positionROIHud()
         roiRect.translate(topLeft);
         const QRectF roiCenter(roiRect.center() - QPointF(24, 24), QSizeF(48, 48));
         if (roiCenter.intersects(hudRect))
-            hudRect.moveTop(area.top() + 8);
+            hudRect.moveTop(safe.top());
     }
     m_roiHud->setGeometry(hudRect);
 }

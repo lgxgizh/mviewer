@@ -772,4 +772,5 @@ class CompareWorkspace : public QWidget
     QWidget *buildStatusStrip();
     void closeCompareHost();
     void showCompareStatus(const QString &text);
+    void applyCompareSafeInsets();
 };

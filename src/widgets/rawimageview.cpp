@@ -276,7 +276,8 @@ void RawImageView::paintEvent(QPaintEvent *)
     else
         mviewer::ui::drawROIOverlay(
             p, m_selection, m_sourceSize,
-            QRectF(cx - dw / 2.0, cy - dh / 2.0, static_cast<double>(dw), static_cast<double>(dh)));
+            QRectF(cx - dw / 2.0, cy - dh / 2.0, static_cast<double>(dw), static_cast<double>(dh)),
+            true, m_paneTag);
 
     // M16.1: synced crosshair at the shared image-space position (n/n compare).
     if (m_transientImage.isNull() && m_crosshairOn)
