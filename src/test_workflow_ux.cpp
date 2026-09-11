@@ -36,8 +36,8 @@
 #include "directorymodel.h"
 #include "directorytree.h"
 #include "exportdialog.h"
-#include "imageviewer.h"
 #include "imagelistmodel.h"
+#include "imageviewer.h"
 #include "mainwindow.h"
 #include "metadataoverlay.h"
 #include "previewpanel.h"
@@ -70,13 +70,13 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QMessageBox>
 #include <QMetaObject>
-#include <QMenu>
 #include <QMouseEvent>
 #include <QPointer>
-#include <QProgressDialog>
 #include <QProgressBar>
+#include <QProgressDialog>
 #include <QPushButton>
 #include <QRect>
 #include <QSettings>
@@ -229,13 +229,12 @@ struct AnalysisBlocker
     AnalysisBlocker()
     {
         auto c = control;
-        task = TaskScheduler::instance().submit(
-            TaskScheduler::Priority::Analysis,
-            [c](const TaskScheduler::TaskContext &)
-            {
-                std::unique_lock<std::mutex> lk(c->mtx);
-                c->cv.wait(lk, [c] { return c->released; });
-            });
+        task = TaskScheduler::instance().submit(TaskScheduler::Priority::Analysis,
+                                                [c](const TaskScheduler::TaskContext &)
+                                                {
+                                                    std::unique_lock<std::mutex> lk(c->mtx);
+                                                    c->cv.wait(lk, [c] { return c->released; });
+                                                });
     }
     ~AnalysisBlocker()
     {
@@ -267,14 +266,14 @@ struct DecodeBlocker
     DecodeBlocker()
     {
         auto c = control;
-        task = TaskScheduler::instance().submit(
-            TaskScheduler::Priority::Decode,
-            [c](const TaskScheduler::TaskContext &)
-            {
-                c->entered.store(true, std::memory_order_release);
-                std::unique_lock<std::mutex> lk(c->mtx);
-                c->cv.wait(lk, [c] { return c->released; });
-            });
+        task =
+            TaskScheduler::instance().submit(TaskScheduler::Priority::Decode,
+                                             [c](const TaskScheduler::TaskContext &)
+                                             {
+                                                 c->entered.store(true, std::memory_order_release);
+                                                 std::unique_lock<std::mutex> lk(c->mtx);
+                                                 c->cv.wait(lk, [c] { return c->released; });
+                                             });
     }
 
     void release()
@@ -311,14 +310,14 @@ struct BackgroundBlocker
     BackgroundBlocker()
     {
         auto c = control;
-        task = TaskScheduler::instance().submit(
-            TaskScheduler::Priority::Background,
-            [c](const TaskScheduler::TaskContext &)
-            {
-                c->entered.store(true, std::memory_order_release);
-                std::unique_lock<std::mutex> lk(c->mtx);
-                c->cv.wait(lk, [c] { return c->released; });
-            });
+        task =
+            TaskScheduler::instance().submit(TaskScheduler::Priority::Background,
+                                             [c](const TaskScheduler::TaskContext &)
+                                             {
+                                                 c->entered.store(true, std::memory_order_release);
+                                                 std::unique_lock<std::mutex> lk(c->mtx);
+                                                 c->cv.wait(lk, [c] { return c->released; });
+                                             });
     }
 
     void release()
@@ -343,11 +342,9 @@ TaskScheduler::TaskHandle newestBackgroundTask(TaskScheduler::TaskId excludedId)
 {
     auto &sched = TaskScheduler::instance();
     uint64_t submitted = 0;
-    for (const TaskScheduler::PoolType pool : {TaskScheduler::MetadataPool,
-                                               TaskScheduler::DecodePool,
-                                               TaskScheduler::ThumbnailPool,
-                                               TaskScheduler::AnalysisPool,
-                                               TaskScheduler::IOPool})
+    for (const TaskScheduler::PoolType pool :
+         {TaskScheduler::MetadataPool, TaskScheduler::DecodePool, TaskScheduler::ThumbnailPool,
+          TaskScheduler::AnalysisPool, TaskScheduler::IOPool})
         submitted += sched.metrics(pool).submitted;
 
     TaskScheduler::TaskHandle newest;
@@ -400,8 +397,7 @@ QByteArray makeWorkflowAnimatedGif()
     gif.append(globalPalette, sizeof(globalPalette));
     gif.append("\x21\xff\x0bNETSCAPE2.0\x03\x01\x00\x00\x00", 19);
 
-    const char colors[][3] = {{char(0xff), 0, 0}, {0, char(0xff), 0},
-                              {0, 0, char(0xff)}};
+    const char colors[][3] = {{char(0xff), 0, 0}, {0, char(0xff), 0}, {0, 0, char(0xff)}};
     for (int frame = 0; frame < 3; ++frame)
     {
         gif.append("\x21\xf9\x04\x00", 4);
@@ -477,8 +473,7 @@ QByteArray makeWorkflowMultipageTiff()
         entry(6, 277, 3, 1, 3);
         entry(7, 278, 4, 1, 4);
         entry(8, 279, 4, 1, 48);
-        putWorkflowTiff32(tiff, entries + 9 * 12,
-                          page + 1 < pageCount ? ifd + ifdSize : 0);
+        putWorkflowTiff32(tiff, entries + 9 * 12, page + 1 < pageCount ? ifd + ifdSize : 0);
         for (int channel = 0; channel < 3; ++channel)
             putWorkflowTiff16(tiff, bitsStart + page * 6 + channel * 2, 8);
         for (int pixel = 0; pixel < 16; ++pixel)
@@ -646,8 +641,8 @@ int main(int argc, char **argv)
         // different dimensions; paths[0] and paths[2] stay 32x32 for Workflow 2.
         const int w = i == 4 ? 19 : 32;
         const int h = i == 4 ? 13 : 32;
-        paths << writePng(workDir, QStringLiteral("wf_%1.png").arg(i, 3, 10, QChar('0')),
-                          colors[i], w, h);
+        paths << writePng(workDir, QStringLiteral("wf_%1.png").arg(i, 3, 10, QChar('0')), colors[i],
+                          w, h);
     }
 
     workflow1_browse(workDir.absolutePath(), paths);

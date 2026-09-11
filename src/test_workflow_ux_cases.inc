@@ -1350,25 +1350,21 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(channelCombo && channelCombo->count() == 5,
           "compare exposes RGB/R/G/B/Y channel isolation");
     sendKey(ws, Qt::Key_2, Qt::ShiftModifier);
-    CHECK(ws->overlayMode() == mviewer::OverlayMode::ChannelR,
-          "Shift+2 isolates the red channel");
-    CHECK(channelCombo &&
-              channelCombo->currentData().toInt() ==
-                  static_cast<int>(mviewer::OverlayMode::ChannelR),
+    CHECK(ws->overlayMode() == mviewer::OverlayMode::ChannelR, "Shift+2 isolates the red channel");
+    CHECK(channelCombo && channelCombo->currentData().toInt() ==
+                              static_cast<int>(mviewer::OverlayMode::ChannelR),
           "channel combo follows Shift+2");
     sendKey(ws, Qt::Key_1, Qt::ShiftModifier);
     CHECK(ws->overlayMode() == mviewer::OverlayMode::None, "Shift+1 restores RGB");
     CHECK(mviewer::pixelGridVisible(8.0) && !mviewer::pixelGridVisible(4.0),
           "pixel grid appears at 800% and stays off at 400%");
 
-    auto *histOverlayChk =
-        ws->findChild<QCheckBox *>(QStringLiteral("paneHistogramOverlayToggle"));
+    auto *histOverlayChk = ws->findChild<QCheckBox *>(QStringLiteral("paneHistogramOverlayToggle"));
     auto *filenameOverlayChk =
         ws->findChild<QCheckBox *>(QStringLiteral("compareFilenameOverlayToggle"));
     CHECK(histOverlayChk && filenameOverlayChk,
           "compare exposes histogram and filename overlay toggles");
-    CHECK(histOverlayChk && !histOverlayChk->isChecked(),
-          "histogram overlay is off by default");
+    CHECK(histOverlayChk && !histOverlayChk->isChecked(), "histogram overlay is off by default");
     CHECK(filenameOverlayChk && !filenameOverlayChk->isChecked(),
           "filename overlay is off by default");
     if (filenameOverlayChk)
@@ -1385,8 +1381,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         QStringLiteral("algorithm_output_v2_very_long_compare_filename_that_must_wrap.png");
     const QRect oneLine = mviewer::ui::filenameOverlayRect(
         QFontMetrics(wrapFont), QRect(0, 0, 800, 200), QStringLiteral("short.png"));
-    const QRect wrapped = mviewer::ui::filenameOverlayRect(QFontMetrics(wrapFont),
-                                                           QRect(0, 0, 160, 200), longName);
+    const QRect wrapped =
+        mviewer::ui::filenameOverlayRect(QFontMetrics(wrapFont), QRect(0, 0, 160, 200), longName);
     CHECK(oneLine.height() > 0 && wrapped.height() > oneLine.height(),
           "long filenames wrap onto additional overlay lines");
     if (histOverlayChk)

@@ -124,7 +124,8 @@ int main()
     // Display histogram: small images stay exact; large images subsample.
     {
         Histogram exact = computeDisplayHistogram(img);
-        CHECK(exact.total == 4 && exact.r[10] == 1, "display histogram is exact under the max edge");
+        CHECK(exact.total == 4 && exact.r[10] == 1,
+              "display histogram is exact under the max edge");
 
         ImageData large = makeImageData(512, 512, PixelFormat::RGB24);
         std::memset(large.buffer->data(), 40, large.byteSize());

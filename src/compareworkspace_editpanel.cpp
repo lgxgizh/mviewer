@@ -6,8 +6,7 @@
 
 #include <QSaveFile>
 
-mviewer::core::CompareAdjustmentState
-CompareWorkspace::reportAdjustment(const CellAdjust &adjust)
+mviewer::core::CompareAdjustmentState CompareWorkspace::reportAdjustment(const CellAdjust &adjust)
 {
     mviewer::core::CompareAdjustmentState report;
     report.brightness = adjust.brightness;
@@ -108,8 +107,8 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
 
 void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
 {
-    auto addGain = [this, editLay](const QString &label, QSlider *&slider, QLabel *&value,
-                                   auto callback)
+    auto addGain =
+        [this, editLay](const QString &label, QSlider *&slider, QLabel *&value, auto callback)
     {
         auto *row = new QHBoxLayout;
         row->addWidget(new QLabel(label, m_editPanel));
@@ -139,8 +138,8 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
     m_resetAdjBtn->setObjectName("resetAdjustmentsButton");
     connect(m_resetAdjBtn, &QPushButton::clicked, this, &CompareWorkspace::onResetAdj);
     editLay->addWidget(m_resetAdjBtn);
-    for (QSlider *slider : {m_brightSlider, m_contrastSlider, m_gammaSlider, m_rGainSlider,
-                            m_bGainSlider})
+    for (QSlider *slider :
+         {m_brightSlider, m_contrastSlider, m_gammaSlider, m_rGainSlider, m_bGainSlider})
         connect(slider, &QSlider::sliderReleased, this, &CompareWorkspace::onAdjEditFinished);
 }
 
@@ -342,12 +341,12 @@ void CompareWorkspace::positionCellHists()
             QFont overlayFont = this->font();
             overlayFont.setBold(true);
             overlayFont.setPointSize(9);
-            filenameBox = mviewer::ui::filenameOverlayRect(
-                QFontMetrics(overlayFont), QRect(QPoint(0, 0), pane.size()),
-                m_cellViews[i]->filenameOverlayText());
+            filenameBox = mviewer::ui::filenameOverlayRect(QFontMetrics(overlayFont),
+                                                           QRect(QPoint(0, 0), pane.size()),
+                                                           m_cellViews[i]->filenameOverlayText());
         }
-        const QRect box = mviewer::ui::histogramOverlayRect(QRect(QPoint(0, 0), pane.size()),
-                                                            filenameBox);
+        const QRect box =
+            mviewer::ui::histogramOverlayRect(QRect(QPoint(0, 0), pane.size()), filenameBox);
         if (box.isEmpty())
         {
             frame->setVisible(false);

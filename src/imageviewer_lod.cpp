@@ -19,8 +19,8 @@
 #include "imageviewer.h"
 
 #include "core/analysis/ImageOverlay.h"
-#include "core/image/SourceImage.h"
 #include "core/image/QtConvert.h"
+#include "core/image/SourceImage.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QApplication>
@@ -35,9 +35,9 @@
 // file-local (internal linkage) and shared by the worker + the viewer members.
 constexpr qint64 kLodThresholdPixels = 16 * 1000 * 1000; // 16 MP
 // Bounds for a single display raster request (bounded memory by design).
-constexpr int kMaxLodEdge = 4096;          // LOD longest edge (<= 48 MB RGB)
+constexpr int kMaxLodEdge = 4096;                      // LOD longest edge (<= 48 MB RGB)
 constexpr double kMaxRasterPixels = 8.0 * 1000 * 1000; // region raster cap
-constexpr double kRasterOverscan = 1.25;   // request/keep margin around density
+constexpr double kRasterOverscan = 1.25;               // request/keep margin around density
 // Analysis-support full frame loads are only issued for sources whose RGB
 // materialization fits comfortably under Qt's 256 MB allocation limit
 // (60 MP * 3 B = 180 MB, leaving headroom for QImage copies). Larger sources
@@ -165,15 +165,13 @@ void ImageViewer::runRasterWorker(const RasterRequest &req, const TaskScheduler:
             // single authoritative contract (M48 B1/B2) so transformed sources
             // decode the correct region.
             const int orientation = source->orientation();
-            const mviewer::core::SourceRect raw =
-                mviewer::core::orientedRectToRaw({req.rx, req.ry, req.rw, req.rh},
-                                                 source->rawWidth(), source->rawHeight(),
-                                                 orientation);
+            const mviewer::core::SourceRect raw = mviewer::core::orientedRectToRaw(
+                {req.rx, req.ry, req.rw, req.rh}, source->rawWidth(), source->rawHeight(),
+                orientation);
             r = source->decodeRegion(raw, req.tw, req.th);
             // Report the covered area back in DISPLAYED coordinates for drawing.
-            const mviewer::core::SourceRect coveredD =
-                mviewer::core::rawRectToOriented(r.coveredRect, source->rawWidth(),
-                                                 source->rawHeight(), orientation);
+            const mviewer::core::SourceRect coveredD = mviewer::core::rawRectToOriented(
+                r.coveredRect, source->rawWidth(), source->rawHeight(), orientation);
             covered = QRect(coveredD.x, coveredD.y, coveredD.w, coveredD.h);
             if (r.ok && !r.pixels.isNull())
                 density = static_cast<double>(raw.w) / r.pixels.width;
@@ -329,10 +327,8 @@ void ImageViewer::requestDisplayRasterImpl()
     if (m_currentPath.isEmpty() || m_displayDegraded)
         return;
     const bool firstRequest = !m_lodMode && m_raster.image.isNull();
-    const int sw = m_sourceImage ? m_sourceImage->metadata().width
-                                 : m_raster.sourceSize.width();
-    const int sh = m_sourceImage ? m_sourceImage->metadata().height
-                                 : m_raster.sourceSize.height();
+    const int sw = m_sourceImage ? m_sourceImage->metadata().width : m_raster.sourceSize.width();
+    const int sh = m_sourceImage ? m_sourceImage->metadata().height : m_raster.sourceSize.height();
 
     cancelDisplayRequest();
     RasterRequest req;
@@ -508,10 +504,9 @@ void ImageViewer::applyDisplayRaster(const QString &path, uint64_t generation,
         advanceViewportRevision();
         emitZoom();
         const QFileInfo info(m_currentPath);
-        const QString position = m_currentIndex >= 0
-                                     ? QString(" [%1/%2]").arg(m_currentIndex + 1)
-                                                           .arg(m_fileList.size())
-                                     : QString();
+        const QString position =
+            m_currentIndex >= 0 ? QString(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
+                                : QString();
         setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
                            .arg(info.fileName())
                            .arg(m_raster.sourceSize.width())

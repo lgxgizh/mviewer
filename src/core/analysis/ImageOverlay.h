@@ -62,10 +62,9 @@ inline uint8_t channelPlaneValue(OverlayMode mode, int r, int g, int b)
         return static_cast<uint8_t>(b);
     case OverlayMode::ChannelY:
     default:
-        return static_cast<uint8_t>(
-            std::clamp(luminance(static_cast<uint8_t>(r), static_cast<uint8_t>(g),
-                                 static_cast<uint8_t>(b)),
-                       0, 255));
+        return static_cast<uint8_t>(std::clamp(
+            luminance(static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b)), 0,
+            255));
     }
 }
 

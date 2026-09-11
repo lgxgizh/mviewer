@@ -35,8 +35,8 @@
 namespace
 {
 void addFrameContextActions(QMenu &menu, bool animated, bool playing, int frameIndex,
-                            int frameCount, QAction *&play, QAction *&restart,
-                            QAction *&previous, QAction *&next)
+                            int frameCount, QAction *&play, QAction *&restart, QAction *&previous,
+                            QAction *&next)
 {
     if (animated)
     {
@@ -114,8 +114,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     if (isMultiFrame())
     {
         menu.addSeparator();
-        addFrameContextActions(menu, m_sequence.animated, isPlaying(), m_frameIndex,
-                               frameCount(), aPlay, aRestart, aPrevFrame, aNextFrame);
+        addFrameContextActions(menu, m_sequence.animated, isPlaying(), m_frameIndex, frameCount(),
+                               aPlay, aRestart, aPrevFrame, aNextFrame);
     }
     menu.addSeparator();
     QAction *aZoomIn = menu.addAction("放大 (+)");
@@ -126,9 +126,9 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aSelectRegion = menu.addAction("框选区域 (R)");
     aSelectRegion->setCheckable(true);
     aSelectRegion->setChecked(m_selectMode);
-    setContextImageActionAvailability(aCopy, aCopyPath, aCopyColor, aSaveAs, aZoomIn, aZoomOut,
-                                      aZoomFit, aZoomActual, aSelectRegion, !m_currentPath.isEmpty(),
-                                      m_frame && m_frame->isValid(), hasDisplayImage());
+    setContextImageActionAvailability(
+        aCopy, aCopyPath, aCopyColor, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
+        aSelectRegion, !m_currentPath.isEmpty(), m_frame && m_frame->isValid(), hasDisplayImage());
     menu.addSeparator();
     QAction *aOvNone = nullptr;
     QAction *aOvZebra = nullptr;
@@ -206,7 +206,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     }
     if (handleContextCopyAction(chosen, aCopy, aCopyPath, aCopyColor, event) ||
         handleContextImageAction(chosen, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
-                                  aSelectRegion))
+                                 aSelectRegion))
         return;
     handleContextNavigationAction(chosen, aNext, aPrev, aOvNone, aOvZebra, aOvFalse, aOvR, aOvG,
                                   aOvB, aOvY, aFullscreen);
@@ -230,11 +230,10 @@ bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QActio
             return true;
         const PixelRGBA px = samplePixel(m_frame->pixels(), ix, iy);
         if (px.valid)
-            QApplication::clipboard()->setText(
-                QString("#%1%2%3")
-                    .arg(px.r, 2, 16, QChar('0'))
-                    .arg(px.g, 2, 16, QChar('0'))
-                    .arg(px.b, 2, 16, QChar('0')));
+            QApplication::clipboard()->setText(QString("#%1%2%3")
+                                                   .arg(px.r, 2, 16, QChar('0'))
+                                                   .arg(px.g, 2, 16, QChar('0'))
+                                                   .arg(px.b, 2, 16, QChar('0')));
     }
     else
         return false;

@@ -261,9 +261,10 @@ void RawImageView::paintEvent(QPaintEvent *)
 
     if (mviewer::pixelGridVisible(m_scale) && sourceSize.width() > 0 && sourceSize.height() > 0)
     {
-        mviewer::ui::drawPixelGrid(p, QRectF(cx - dw / 2.0, cy - dh / 2.0, static_cast<double>(dw),
-                                             static_cast<double>(dh)),
-                                   0, 0, sourceSize.width(), sourceSize.height(), QRectF(rect()));
+        mviewer::ui::drawPixelGrid(
+            p,
+            QRectF(cx - dw / 2.0, cy - dh / 2.0, static_cast<double>(dw), static_cast<double>(dh)),
+            0, 0, sourceSize.width(), sourceSize.height(), QRectF(rect()));
     }
 
     // ROI selection box (image coords -> widget coords, same transform as the image)

@@ -67,8 +67,7 @@ ImageViewer::ImageViewer(QWidget *parent)
     connect(m_cursorHideTimer, &QTimer::timeout, this,
             [this]()
             {
-                if (property("mviewerFullscreenRequested").toBool() && !m_dragging &&
-                    !m_selecting)
+                if (property("mviewerFullscreenRequested").toBool() && !m_dragging && !m_selecting)
                 {
                     m_cursorHidden = true;
                     setCursor(Qt::BlankCursor);
@@ -113,9 +112,6 @@ ImageViewer::~ImageViewer()
     }
 }
 
-
-
-
 void ImageViewer::toggleFullscreen()
 {
     setFullscreenRequested(!property("mviewerFullscreenRequested").toBool());
@@ -134,9 +130,9 @@ void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
     m_provisionalSourceSize = sourceSize.isValid() ? sourceSize : image.size();
     m_view.screenW = width();
     m_view.screenH = height();
-    const FitPolicy fitPolicy =
-        property("mviewerFullscreenRequested").toBool() ? FitPolicy::MaximizeClient
-                                                         : FitPolicy::Comfortable;
+    const FitPolicy fitPolicy = property("mviewerFullscreenRequested").toBool()
+                                    ? FitPolicy::MaximizeClient
+                                    : FitPolicy::Comfortable;
     m_view.fit(m_provisionalSourceSize.width(), m_provisionalSourceSize.height(), fitPolicy);
     advanceViewportRevision();
     m_fitMode = true;
@@ -210,7 +206,7 @@ void ImageViewer::scheduleRoiStats(const QRect &selection)
     const auto path = m_currentPath;
     const uint64_t revision = m_roiRevision;
     const mviewer::domain::Selection region{selection.x(), selection.y(), selection.width(),
-                                             selection.height()};
+                                            selection.height()};
     const auto result = std::make_shared<mviewer::core::PreviewStats>();
     auto guard = std::make_shared<QPointer<ImageViewer>>(this);
     m_roiStatsRequest = TaskScheduler::instance().submit(
@@ -233,16 +229,15 @@ void ImageViewer::scheduleRoiStats(const QRect &selection)
                     if (!viewer || viewer->m_roiRevision != revision || viewer->m_frame != frame ||
                         viewer->m_currentPath != path || !result->valid)
                         return;
-                    const QString text =
-                        QString("ROI [%1,%2,%3,%4]: lum=%5, R=%6,G=%7,B=%8")
-                            .arg(region.x)
-                            .arg(region.y)
-                            .arg(region.width)
-                            .arg(region.height)
-                            .arg(result->lumMean, 0, 'f', 1)
-                            .arg(result->rMean)
-                            .arg(result->gMean)
-                            .arg(result->bMean);
+                    const QString text = QString("ROI [%1,%2,%3,%4]: lum=%5, R=%6,G=%7,B=%8")
+                                             .arg(region.x)
+                                             .arg(region.y)
+                                             .arg(region.width)
+                                             .arg(region.height)
+                                             .arg(result->lumMean, 0, 'f', 1)
+                                             .arg(result->rMean)
+                                             .arg(result->gMean)
+                                             .arg(result->bMean);
                     emit viewer->regionStats(text);
                 },
                 Qt::QueuedConnection);
@@ -267,11 +262,6 @@ void ImageViewer::beginImageGeneration()
     m_overlayRequests.reset(m_overlayGeneration);
     cancelRoiStats();
 }
-
-
-
-
-
 
 void ImageViewer::cancelExportJob()
 {
@@ -366,7 +356,6 @@ void ImageViewer::saveToPath(const QString &path)
     startExportJob(std::move(cfg), false, path);
 }
 
-
 void ImageViewer::emitZoom()
 {
     emit zoomChanged(static_cast<int>(m_view.scale * 100.0 + 0.5));
@@ -396,7 +385,7 @@ void ImageViewer::fitToWidget()
     const QSize size = displaySize();
     m_view.fit(size.width(), size.height(),
                property("mviewerFullscreenRequested").toBool() ? FitPolicy::MaximizeClient
-                                                                 : FitPolicy::Comfortable);
+                                                               : FitPolicy::Comfortable);
     advanceViewportRevision();
     m_fitMode = true;
     emitZoom();
@@ -652,7 +641,7 @@ void ImageViewer::mouseReleaseEvent(QMouseEvent *event)
                     emit regionStats(text);
                     emit selectionChanged(valid); // new: live ROI stats
                 }
- #endif
+#endif
                     scheduleRoiStats(valid);
                     emit selectionChanged(valid);
                 }
@@ -684,11 +673,11 @@ void ImageViewer::resizeEvent(QResizeEvent *event)
     {
         m_view.screenW = width();
         m_view.screenH = height();
-        const QSize source = m_provisionalSourceSize.isValid() ? m_provisionalSourceSize
-                                                                : m_provisionalImage.size();
-        const FitPolicy fitPolicy =
-        property("mviewerFullscreenRequested").toBool() ? FitPolicy::MaximizeClient
-                                                         : FitPolicy::Comfortable;
+        const QSize source =
+            m_provisionalSourceSize.isValid() ? m_provisionalSourceSize : m_provisionalImage.size();
+        const FitPolicy fitPolicy = property("mviewerFullscreenRequested").toBool()
+                                        ? FitPolicy::MaximizeClient
+                                        : FitPolicy::Comfortable;
         m_view.fit(source.width(), source.height(), fitPolicy);
         advanceViewportRevision();
         emitZoom();

@@ -27,10 +27,9 @@ void CompareWorkspace::buildSyncControls()
             });
 }
 
-QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout,
-                                                  QHBoxLayout *&viewLayout,
-                                                  QHBoxLayout *&toolLayout,
-                                                  QHBoxLayout *&toolActionsLayout)
+QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBoxLayout *&viewLayout,
+                                                 QHBoxLayout *&toolLayout,
+                                                 QHBoxLayout *&toolActionsLayout)
 {
     auto *toolbarContainer = new QWidget(this);
     auto *toolbarLayout = new QVBoxLayout(toolbarContainer);
@@ -488,8 +487,7 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
 
     m_temporaryCompareButton = new QPushButton(tr("临时切换"), this);
     m_temporaryCompareButton->setObjectName("temporaryCompareButton");
-    m_temporaryCompareButton->setToolTip(
-        tr("按住时在 A 窗格显示 B；松开恢复 A（快捷键: Space）"));
+    m_temporaryCompareButton->setToolTip(tr("按住时在 A 窗格显示 B；松开恢复 A（快捷键: Space）"));
     m_temporaryCompareButton->setEnabled(false);
     connect(m_temporaryCompareButton, &QPushButton::pressed, this,
             &CompareWorkspace::beginTemporaryCompare);

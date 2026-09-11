@@ -405,8 +405,8 @@ void MainWindow::applyPreferences()
     if (m_imageViewer)
     {
         m_imageViewer->setZebraThreshold(s.value("zebraThreshold", 2).toInt());
-        m_imageViewer->setOverlayMode(static_cast<mviewer::OverlayMode>(
-            s.value("defaultAnalysisOverlay", 0).toInt()));
+        m_imageViewer->setOverlayMode(
+            static_cast<mviewer::OverlayMode>(s.value("defaultAnalysisOverlay", 0).toInt()));
     }
 }
 

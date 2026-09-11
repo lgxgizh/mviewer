@@ -3,6 +3,82 @@
 
 #include <limits>
 
+const mviewer::core::DisplayColorContext &CompareWorkspace::displayColorContext() const
+{
+    return m_displayColorTarget;
+}
+
+CompareEngine &CompareWorkspace::engine()
+{
+    return m_engine;
+}
+
+mviewer::domain::Selection CompareWorkspace::currentROI() const
+{
+    return m_lastSelection;
+}
+
+void CompareWorkspace::applyROI(const mviewer::domain::Selection &sel)
+{
+    applySelectionToAll(sel);
+}
+
+mviewer::domain::CompareSession CompareWorkspace::compareSession() const
+{
+    mviewer::domain::CompareSession s = m_engine.session();
+    if (m_syncZoom && m_syncDrag)
+        s.syncMode = mviewer::domain::SyncMode::All;
+    else if (m_syncZoom)
+        s.syncMode = mviewer::domain::SyncMode::Zoom;
+    else if (m_syncDrag)
+        s.syncMode = mviewer::domain::SyncMode::Drag;
+    else
+        s.syncMode = mviewer::domain::SyncMode::Off;
+    s.threshold = m_thresholdValue;
+    s.blinkIntervalMs = m_blinkTimer ? m_blinkTimer->interval() : 150;
+    s.sidePanelVisible = m_sideChk ? m_sideChk->isChecked() : false;
+    s.layoutIndex = m_layoutCombo ? m_layoutCombo->currentIndex() : 0;
+    s.customColumns = m_gridColsSpin ? m_gridColsSpin->value() : 2;
+    s.uniformScale = m_uniformScale; // H5
+    return s;
+}
+
+int CompareWorkspace::comparedImageCount() const
+{
+    return m_engine.imageCount();
+}
+
+mviewer::OverlayMode CompareWorkspace::overlayMode() const
+{
+    return m_displayOverlay;
+}
+
+bool CompareWorkspace::filenameOverlayVisible() const
+{
+    return m_filenameOverlay;
+}
+
+int CompareWorkspace::navWindow() const
+{
+    return m_navWindow;
+}
+
+bool CompareWorkspace::isSplitOrSwipe() const
+{
+    return (m_splitChk && m_splitChk->isChecked()) || (m_swipeChk && m_swipeChk->isChecked());
+}
+
+bool CompareWorkspace::anyCanvasCompareMode() const
+{
+    return isSplitOrSwipe() || (m_overlayChk && m_overlayChk->isChecked()) ||
+           (m_checkerChk && m_checkerChk->isChecked());
+}
+
+int CompareWorkspace::diffBaseIndex() const
+{
+    return m_focusIndex >= 0 ? m_focusIndex : 0;
+}
+
 // A-4.5 / M20: continuous compare — walk a sliding window over the pool.
 void CompareWorkspace::setImagePool(const QStringList &allPaths, const QStringList &currentWindow)
 {

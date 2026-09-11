@@ -153,7 +153,8 @@ static void testChannelIsolation()
     CHECK(py[0] == expectedY && py[1] == expectedY && py[2] == expectedY,
           "Y plane becomes BT.601 luminance grayscale");
     CHECK(mviewer::isChannelOverlay(mviewer::OverlayMode::ChannelR), "R is a channel overlay");
-    CHECK(!mviewer::isChannelOverlay(mviewer::OverlayMode::Zebra), "zebra is not a channel overlay");
+    CHECK(!mviewer::isChannelOverlay(mviewer::OverlayMode::Zebra),
+          "zebra is not a channel overlay");
 }
 
 static void testPixelGrid()

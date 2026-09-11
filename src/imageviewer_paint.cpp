@@ -6,9 +6,9 @@
 #include "core/analyzer/Analyzer.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
-#include "widgets/pixelgrid.h"
 #include "core/trace/Trace.h"
 #include "gpu/GpuTileUploader.h"
+#include "widgets/pixelgrid.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -19,9 +19,9 @@
 #include <QFontMetrics>
 #include <QKeyEvent>
 #include <QMatrix4x4>
-#include <QMetaObject>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMetaObject>
 #include <QMouseEvent>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
@@ -143,8 +143,8 @@ void ImageViewer::drawFrameStatus(QPainter &painter) const
     painter.setRenderHint(QPainter::Antialiasing, true);
     const QFontMetrics metrics(painter.font());
     const int availableWidth = std::max(80, width() - 24);
-    const QString text = metrics.elidedText(m_frameStatusText, Qt::ElideRight,
-                                             std::max(40, availableWidth - 20));
+    const QString text =
+        metrics.elidedText(m_frameStatusText, Qt::ElideRight, std::max(40, availableWidth - 20));
     const int pillWidth = std::min(availableWidth, metrics.horizontalAdvance(text) + 20);
     const int pillHeight = metrics.height() + 12;
     const QRect pill(12, std::max(12, height() - pillHeight - 12), pillWidth, pillHeight);
@@ -160,12 +160,10 @@ void ImageViewer::drawProvisional(QPainter &painter) const
 {
     if (m_provisionalImage.isNull())
         return;
-    const int sourceW = m_provisionalSourceSize.width() > 0
-                            ? m_provisionalSourceSize.width()
-                            : m_provisionalImage.width();
-    const int sourceH = m_provisionalSourceSize.height() > 0
-                            ? m_provisionalSourceSize.height()
-                            : m_provisionalImage.height();
+    const int sourceW = m_provisionalSourceSize.width() > 0 ? m_provisionalSourceSize.width()
+                                                            : m_provisionalImage.width();
+    const int sourceH = m_provisionalSourceSize.height() > 0 ? m_provisionalSourceSize.height()
+                                                             : m_provisionalImage.height();
     int sx = 0;
     int sy = 0;
     int sw = 0;
@@ -214,18 +212,17 @@ AsyncTileRequestManager::VisibleTiles ImageViewer::requestVisibleTiles()
                         viewer->m_tileRepaintQueued)
                         return;
                     viewer->m_tileRepaintQueued = true;
-                    QTimer::singleShot(
-                        0, viewer,
-                        [guard, generation]()
-                        {
-                            ImageViewer *current = guard.data();
-                            if (!current)
-                                return;
-                            current->m_tileRepaintQueued = false;
-                            if (generation != current->m_imageGeneration)
-                                return;
-                            current->update();
-                        });
+                    QTimer::singleShot(0, viewer,
+                                       [guard, generation]()
+                                       {
+                                           ImageViewer *current = guard.data();
+                                           if (!current)
+                                               return;
+                                           current->m_tileRepaintQueued = false;
+                                           if (generation != current->m_imageGeneration)
+                                               return;
+                                           current->update();
+                                       });
                 },
                 Qt::QueuedConnection);
         });
@@ -267,18 +264,17 @@ void ImageViewer::scheduleOverlayTiles(std::vector<TileCache::ReadyTile> &ready)
                                 viewer->m_tileRepaintQueued)
                                 return;
                             viewer->m_tileRepaintQueued = true;
-                            QTimer::singleShot(
-                                0, viewer,
-                                [guard, generation]()
-                                {
-                                    ImageViewer *current = guard.data();
-                                    if (!current)
-                                        return;
-                                    current->m_tileRepaintQueued = false;
-                                    if (generation != current->m_overlayGeneration)
-                                        return;
-                                    current->update();
-                                });
+                            QTimer::singleShot(0, viewer,
+                                               [guard, generation]()
+                                               {
+                                                   ImageViewer *current = guard.data();
+                                                   if (!current)
+                                                       return;
+                                                   current->m_tileRepaintQueued = false;
+                                                   if (generation != current->m_overlayGeneration)
+                                                       return;
+                                                   current->update();
+                                               });
                         },
                         Qt::QueuedConnection);
                 });
@@ -288,12 +284,11 @@ void ImageViewer::scheduleOverlayTiles(std::vector<TileCache::ReadyTile> &ready)
     }
 }
 
-void ImageViewer::drawGpuTiles(QPainter &painter,
-                               const std::vector<TileCache::ReadyTile> &ready,
+void ImageViewer::drawGpuTiles(QPainter &painter, const std::vector<TileCache::ReadyTile> &ready,
                                const Viewport &tileView)
 {
-    const bool useGpu = GpuTileUploader::enabled() && m_blitterReady &&
-                        m_overlayMode == mviewer::OverlayMode::None;
+    const bool useGpu =
+        GpuTileUploader::enabled() && m_blitterReady && m_overlayMode == mviewer::OverlayMode::None;
     if (!useGpu)
         return;
     const QRect viewportRect(0, 0, width(), height());
@@ -323,24 +318,21 @@ void ImageViewer::drawGpuTiles(QPainter &painter,
         const int actualH = qMin(lodSize, m_tiles.imageH - sourceY);
         if (actualW <= 0 || actualH <= 0)
             continue;
-        tileView.imageRectToScreen(sourceX, sourceY, actualW, actualH,
-                                   screenX, screenY, screenW, screenH);
+        tileView.imageRectToScreen(sourceX, sourceY, actualW, actualH, screenX, screenY, screenW,
+                                   screenH);
         const QRect destination(screenX, screenY, screenW, screenH);
-        const QMatrix4x4 target =
-            QOpenGLTextureBlitter::targetTransform(destination, viewportRect);
-        m_blitter.blit(static_cast<GLuint>(handle), target,
-                       QOpenGLTextureBlitter::OriginTopLeft);
+        const QMatrix4x4 target = QOpenGLTextureBlitter::targetTransform(destination, viewportRect);
+        m_blitter.blit(static_cast<GLuint>(handle), target, QOpenGLTextureBlitter::OriginTopLeft);
     }
     m_blitter.release();
     painter.endNativePainting();
 }
 
-void ImageViewer::drawCpuTiles(QPainter &painter,
-                               const std::vector<TileCache::ReadyTile> &ready,
+void ImageViewer::drawCpuTiles(QPainter &painter, const std::vector<TileCache::ReadyTile> &ready,
                                const Viewport &tileView)
 {
-    const bool gpuActive = GpuTileUploader::enabled() && m_blitterReady &&
-                           m_overlayMode == mviewer::OverlayMode::None;
+    const bool gpuActive =
+        GpuTileUploader::enabled() && m_blitterReady && m_overlayMode == mviewer::OverlayMode::None;
     for (const auto &rt : ready)
     {
         if (gpuActive && m_gpu.handle(rt.key) != 0)
@@ -357,8 +349,8 @@ void ImageViewer::drawCpuTiles(QPainter &painter,
         const int actualH = qMin(lodSize, m_tiles.imageH - sourceY);
         if (actualW <= 0 || actualH <= 0)
             continue;
-        tileView.imageRectToScreen(sourceX, sourceY, actualW, actualH,
-                                   screenX, screenY, screenW, screenH);
+        tileView.imageRectToScreen(sourceX, sourceY, actualW, actualH, screenX, screenY, screenW,
+                                   screenH);
         QImage image = mvcore::toQImageRef(rt.data);
         if (image.isNull())
             image = mvcore::toQImage(rt.data);

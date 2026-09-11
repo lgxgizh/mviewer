@@ -197,7 +197,6 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
     m_metricLabel->setWordWrap(true);
     m_metricLabel->setStyleSheet("color:#888;");
     sideLay->addWidget(m_metricLabel);
-
 }
 
 void CompareWorkspace::requestInspectorUpdate(int x, int y)
@@ -260,13 +259,13 @@ void CompareWorkspace::updateInspector(int x, int y)
         const ImageFrame *img = m_engine.imageAt(i);
         if (!img)
             continue;
-        const CellAdjust adjust =
-            i < static_cast<int>(m_cellAdjusts.size()) ? m_cellAdjusts[static_cast<size_t>(i)]
-                                                       : CellAdjust{};
+        const CellAdjust adjust = i < static_cast<int>(m_cellAdjusts.size())
+                                      ? m_cellAdjusts[static_cast<size_t>(i)]
+                                      : CellAdjust{};
         const auto sourceSample =
             mviewer::core::sampleAnalysisPixel(img->pixels(), analysisAdjustment(adjust), x, y);
-        samples[static_cast<size_t>(i)] = {
-            sourceSample.r, sourceSample.g, sourceSample.b, sourceSample.valid};
+        samples[static_cast<size_t>(i)] = {sourceSample.r, sourceSample.g, sourceSample.b,
+                                           sourceSample.valid};
     }
 
     // Reuse existing QTableWidgetItem objects across ordinary hovers: only
@@ -287,11 +286,10 @@ void CompareWorkspace::updateInspector(int x, int y)
             baseIdx >= 0 && baseIdx < static_cast<int>(m_cellAdjusts.size())
                 ? m_cellAdjusts[static_cast<size_t>(baseIdx)]
                 : CellAdjust{};
-        const auto stats = baseFrame
-                               ? mviewer::core::neighborhoodStats(
-                                     baseFrame->pixels(), analysisAdjustment(baseAdjust), x, y,
-                                     kernel)
-                               : mviewer::core::NeighborhoodStats{};
+        const auto stats =
+            baseFrame ? mviewer::core::neighborhoodStats(
+                            baseFrame->pixels(), analysisAdjustment(baseAdjust), x, y, kernel)
+                      : mviewer::core::NeighborhoodStats{};
         if (stats.count > 0)
         {
             m_statsLabel->setText(tr("邻域 %1×%1: 亮度 μ=%2 σ=%3 [%4, %5] · RGB均值(%6, %7, %8)")
@@ -309,8 +307,8 @@ void CompareWorkspace::updateInspector(int x, int y)
     }
 }
 
-void CompareWorkspace::updateInspectorRows(
-    const std::vector<InspectorSample> &samples, ColorSpace space, int baseIdx, int x, int y)
+void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &samples,
+                                           ColorSpace space, int baseIdx, int x, int y)
 {
     const int n = static_cast<int>(samples.size());
     for (int i = 0; i < n; ++i)
@@ -379,17 +377,12 @@ void CompareWorkspace::updateInspectorRows(
         }
         setCellText(m_inspector, i, 6, raw16);
     }
-
 }
 QString CompareWorkspace::histogramTitleText(bool roiEnabled,
                                              const mviewer::domain::Selection &roi) const
 {
     if (roiEnabled && !roi.isEmpty())
-        return tr("直方图（ROI %1,%2 %3×%4）")
-            .arg(roi.x)
-            .arg(roi.y)
-            .arg(roi.width)
-            .arg(roi.height);
+        return tr("直方图（ROI %1,%2 %3×%4）").arg(roi.x).arg(roi.y).arg(roi.width).arg(roi.height);
     return tr("直方图（全图）");
 }
 
@@ -512,16 +505,15 @@ void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
         pixels.push_back(img ? img->pixels() : ImageData());
     }
     std::vector<CellAdjust> adjusts = m_cellAdjusts;
-    const bool roiEnabled =
-        m_roiHistChk && m_roiHistChk->isChecked() && !m_lastSelection.isEmpty();
+    const bool roiEnabled = m_roiHistChk && m_roiHistChk->isChecked() && !m_lastSelection.isEmpty();
     const mviewer::domain::Selection roi = m_lastSelection;
     const uint64_t gen = m_histGen;
     QPointer<CompareWorkspace> guard(this);
 
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, adjusts, roiEnabled, roi, unionIdx, mainIndices, panes, paneCount, updateMain,
-         gen, guard](const TaskScheduler::TaskContext &ctx)
+        [pixels, adjusts, roiEnabled, roi, unionIdx, mainIndices, panes, paneCount, updateMain, gen,
+         guard](const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
                 return; // superseded while queued — stop before any work
@@ -559,8 +551,8 @@ void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
                 if (adjusted.isNull())
                     continue; // failed adjustment must not clear the last valid widget
                 mviewer::core::Histogram h =
-                    roiEnabled ? mviewer::core::computeHistogram(adjusted, roi.x, roi.y,
-                                                                 roi.width, roi.height)
+                    roiEnabled ? mviewer::core::computeHistogram(adjusted, roi.x, roi.y, roi.width,
+                                                                 roi.height)
                                : mviewer::core::computeDisplayHistogram(adjusted);
                 if (ctx.isCancelled())
                     return; // after histogram computation
@@ -578,18 +570,18 @@ void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
                 r.main.reserve(mainIndices.size());
                 for (int idx : mainIndices)
                 {
-                    const auto it = std::find_if(
-                        computed.cbegin(), computed.cend(),
-                        [idx](const HistogramBatchResult::CellHist &c) { return c.index == idx; });
+                    const auto it = std::find_if(computed.cbegin(), computed.cend(),
+                                                 [idx](const HistogramBatchResult::CellHist &c)
+                                                 { return c.index == idx; });
                     if (it != computed.cend())
                         r.main.push_back(it->hist);
                 }
             }
             for (int idx : panes)
             {
-                const auto it = std::find_if(
-                    computed.cbegin(), computed.cend(),
-                    [idx](const HistogramBatchResult::CellHist &c) { return c.index == idx; });
+                const auto it = std::find_if(computed.cbegin(), computed.cend(),
+                                             [idx](const HistogramBatchResult::CellHist &c)
+                                             { return c.index == idx; });
                 if (it == computed.cend())
                     continue;
                 r.panes.push_back(*it);

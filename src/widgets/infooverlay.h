@@ -53,8 +53,7 @@ inline QRect histogramOverlayRect(const QRect &pane, const QRect &filenameBox)
         return {};
     const int width = std::min(160, std::max(72, pane.width() / 3));
     const int height = std::min(56, std::max(36, pane.height() / 5));
-    const int top =
-        filenameBox.isEmpty() ? pane.top() + 4 : filenameBox.bottom() + 4;
+    const int top = filenameBox.isEmpty() ? pane.top() + 4 : filenameBox.bottom() + 4;
     if (top + height > pane.bottom() - 4)
         return {};
     return QRect(pane.left() + 4, top, width, height);

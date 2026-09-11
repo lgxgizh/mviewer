@@ -8,9 +8,9 @@
 #include <cmath>
 CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
     DiffBatchResult &result, const std::vector<ImageData> &pixels,
-    const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
-    int baseIndex, uint8_t threshold, bool highlight, bool visualize, bool autoAlign,
-    const ImageData &basePixels, const TaskScheduler::TaskContext &context)
+    const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts, int baseIndex,
+    uint8_t threshold, bool highlight, bool visualize, bool autoAlign, const ImageData &basePixels,
+    const TaskScheduler::TaskContext &context)
 {
     DiffSources sources;
     result.overlays.reserve(pixels.size());
@@ -88,13 +88,12 @@ CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
             {
                 ImageData displayOverlay = overlayImage;
                 const QSize targetSize = displayTargets[static_cast<size_t>(i)];
-                if (targetSize.isValid() &&
-                    (targetSize.width() < overlayImage.width ||
-                     targetSize.height() < overlayImage.height))
+                if (targetSize.isValid() && (targetSize.width() < overlayImage.width ||
+                                             targetSize.height() < overlayImage.height))
                 {
-                    const double factor = std::min(
-                        static_cast<double>(targetSize.width()) / pixels[i].width,
-                        static_cast<double>(targetSize.height()) / pixels[i].height);
+                    const double factor =
+                        std::min(static_cast<double>(targetSize.width()) / pixels[i].width,
+                                 static_cast<double>(targetSize.height()) / pixels[i].height);
                     const QSize overlayTarget(
                         std::max(1, static_cast<int>(std::ceil(overlayImage.width * factor))),
                         std::max(1, static_cast<int>(std::ceil(overlayImage.height * factor))));
@@ -142,8 +141,8 @@ void CompareWorkspace::computeDiffMetrics(DiffBatchResult &result, const DiffSou
     {
         if (context.isCancelled())
             return;
-        result.roiStats = DifferenceEngine::computeStats(
-            sources.diff, threshold, roi.x, roi.y, roi.width, roi.height);
+        result.roiStats = DifferenceEngine::computeStats(sources.diff, threshold, roi.x, roi.y,
+                                                         roi.width, roi.height);
         result.hasRoiStats = result.roiStats.totalPixels > 0;
     }
 }
@@ -177,9 +176,9 @@ CompareWorkspace::DiffBatchResult CompareWorkspace::computeDiffBatch(
         }
         return result;
     }
-    const DiffSources sources = buildDiffOverlays(
-        result, pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize,
-        autoAlign, basePixels, context);
+    const DiffSources sources =
+        buildDiffOverlays(result, pixels, displayTargets, adjusts, baseIndex, threshold, highlight,
+                          visualize, autoAlign, basePixels, context);
     if (!context.isCancelled())
         computeDiffMetrics(result, sources, basePixels, threshold, roi, context);
     return result;
@@ -193,9 +192,8 @@ TaskScheduler::TaskHandle CompareWorkspace::startDiffBatch(
 {
     return TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize,
-         autoAlign, roi, paneCount, generation,
-         guard](const TaskScheduler::TaskContext &context)
+        [pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize, autoAlign,
+         roi, paneCount, generation, guard](const TaskScheduler::TaskContext &context)
         {
             if (context.isCancelled())
                 return;
@@ -282,9 +280,8 @@ void CompareWorkspace::refreshAllDiffOverlays()
     const uint64_t gen = m_diffGen;
     QPointer<CompareWorkspace> guard(this);
 
-    auto handle = startDiffBatch(
-        pixels, displayTargets, adjusts, baseIdx, threshold, highlight, visualize, autoAlign, roi,
-        paneCount, gen, guard);
+    auto handle = startDiffBatch(pixels, displayTargets, adjusts, baseIdx, threshold, highlight,
+                                 visualize, autoAlign, roi, paneCount, gen, guard);
     if (!handle)
     {
         // submit() refused the task (pool paused / back-pressured). Leave
@@ -324,8 +321,8 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
         QString text;
         if (!r.metricsValid)
         {
-            text = r.sizeMismatch ? tr("PSNR: —  SSIM: —\n(图像尺寸不一致)")
-                                  : tr("PSNR: —  SSIM: —");
+            text =
+                r.sizeMismatch ? tr("PSNR: —  SSIM: —\n(图像尺寸不一致)") : tr("PSNR: —  SSIM: —");
         }
         else
         {
@@ -354,5 +351,3 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
     }
     update();
 }
-
-

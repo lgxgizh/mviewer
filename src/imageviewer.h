@@ -17,14 +17,14 @@
 #include <QImage>
 #include <QOpenGLTextureBlitter>
 #include <QOpenGLWidget>
-#include <QPointer>
 #include <QPixmap>
+#include <QPointer>
 #include <QStringList>
 #include <algorithm>
-#include <memory>
-#include <optional>
 #include <atomic>
 #include <functional>
+#include <memory>
+#include <optional>
 #include <vector>
 
 class QEvent;
@@ -291,8 +291,7 @@ class ImageViewer : public QOpenGLWidget
     void applyLoadedImage(const QString &path, const ImageLoadResult &result);
     void applyPendingView();
     void clearLoadedGpu();
-    void applyLoadedFrame(const ImageLoadResult &result, int requestedFrame,
-                          uint64_t generation);
+    void applyLoadedFrame(const ImageLoadResult &result, int requestedFrame, uint64_t generation);
     void requestFrame(int index);
     void onPlaybackTick();
     void ensurePlaybackTimer();
@@ -301,8 +300,7 @@ class ImageViewer : public QOpenGLWidget
     void updateFramePresentationStatus();
     void drawFrameStatus(QPainter &painter) const;
     bool handleFrameKey(int key, Qt::KeyboardModifiers modifiers);
-    void scheduleLoadedRefit(const QString &path, uint64_t generation,
-                             const ImageLoadGuard &guard);
+    void scheduleLoadedRefit(const QString &path, uint64_t generation, const ImageLoadGuard &guard);
     // ── M47 LOD-first display (defined in imageviewer_lod.cpp) ──────────────
     // A large source displays through a bounded display raster: a viewport LOD
     // while zoomed out and a visible-region raster while zoomed in. The
@@ -406,8 +404,8 @@ class ImageViewer : public QOpenGLWidget
     // Preload promotion: consume the neighbor preload handle that matches
     // `path` and cancel all others, so a navigation back to a preloaded
     // neighbor can be promoted to the foreground decode without re-queuing.
-    mviewer::application::ImageLoadingService::AsyncRequestHandle takeMatchingPreload(
-        const QString &path);
+    mviewer::application::ImageLoadingService::AsyncRequestHandle
+    takeMatchingPreload(const QString &path);
     QString m_currentPath;
     QStringList m_fileList;
     int m_currentIndex = -1;

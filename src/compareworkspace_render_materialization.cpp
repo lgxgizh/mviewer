@@ -125,18 +125,16 @@ void CompareWorkspace::paintCompareCanvas()
     QByteArray key;
     QDataStream stream(&key, QIODevice::WriteOnly);
     stream << cv->size() << cv->devicePixelRatioF() << m_splitPos << m_overlayAlpha << m_checkerSize
-           << static_cast<int>(m_displayOverlay)
-           << (m_splitChk && m_splitChk->isChecked()) << (m_swipeChk && m_swipeChk->isChecked())
-           << (m_overlayChk && m_overlayChk->isChecked())
+           << static_cast<int>(m_displayOverlay) << (m_splitChk && m_splitChk->isChecked())
+           << (m_swipeChk && m_swipeChk->isChecked()) << (m_overlayChk && m_overlayChk->isChecked())
            << (m_checkerChk && m_checkerChk->isChecked());
     for (int index = 0; index < 2; ++index)
     {
         const RawImageView *view = m_cellViews[index];
         const auto &transform = m_engine.cellTransform(index);
         stream << view->presentationImage().cacheKey() << view->overlay().cacheKey()
-               << view->sourceSize()
-               << view->sourceRect() << view->overlayOpacity() << transform.scale
-               << transform.offset.x << transform.offset.y;
+               << view->sourceSize() << view->sourceRect() << view->overlayOpacity()
+               << transform.scale << transform.offset.x << transform.offset.y;
     }
     stream << m_engine.syncTransform().offset.x << m_engine.syncTransform().offset.y << m_syncDrag
            << m_syncZoom << m_uniformScale << m_sharedZoomRatio;
@@ -229,9 +227,10 @@ void CompareWorkspace::drawCanvasInfoOverlays(QPainter &p)
         const QRect geom = canvasPaneGeometry(pane).toRect();
         QRect filenameBox;
         if (m_filenameOverlay)
-            filenameBox = mviewer::ui::drawFilenameOverlay(
-                p, geom, m_cellViews[pane]->filenameOverlayText());
-        if (!m_paneHistOverlay || pane >= static_cast<int>(m_cellHists.size()) || !m_cellHists[pane])
+            filenameBox =
+                mviewer::ui::drawFilenameOverlay(p, geom, m_cellViews[pane]->filenameOverlayText());
+        if (!m_paneHistOverlay || pane >= static_cast<int>(m_cellHists.size()) ||
+            !m_cellHists[pane])
             return;
         const QRect histBox = mviewer::ui::histogramOverlayRect(geom, filenameBox);
         if (histBox.isEmpty())

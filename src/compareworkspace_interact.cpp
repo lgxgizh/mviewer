@@ -794,10 +794,8 @@ bool CompareWorkspace::handleChannelCompareKey(QKeyEvent *event)
     if (key < Qt::Key_1 || key > Qt::Key_5)
         return false;
     static const mviewer::OverlayMode kModes[] = {
-        mviewer::OverlayMode::None,
-        mviewer::OverlayMode::ChannelR,
-        mviewer::OverlayMode::ChannelG,
-        mviewer::OverlayMode::ChannelB,
+        mviewer::OverlayMode::None,     mviewer::OverlayMode::ChannelR,
+        mviewer::OverlayMode::ChannelG, mviewer::OverlayMode::ChannelB,
         mviewer::OverlayMode::ChannelY,
     };
     setOverlayMode(kModes[key - Qt::Key_1]);
