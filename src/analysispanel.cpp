@@ -109,7 +109,7 @@ void AnalysisPanel::renderHistogramPixmap()
     if (!m_hasA)
         return;
     const int W = qMax(200, m_histogramLabel->width() - 8);
-    const int H = 160;
+    const int H = 220;
     QPixmap pix(W, H);
     pix.fill(QColor(20, 20, 20));
     QPainter p(&pix);
@@ -174,7 +174,7 @@ void AnalysisPanel::updateRgbPage()
     m_rgbStatsLabel->setText(txt);
 
     const int W = qMax(200, m_rgbLabel->width() - 8);
-    const int H = 160;
+    const int H = 220;
     QPixmap pix(W, H);
     pix.fill(QColor(20, 20, 20));
     QPainter p(&pix);
@@ -431,7 +431,7 @@ void AnalysisPanel::renderHistogramPixmap(const mviewer::domain::Histogram &hist
     if (!m_histogramLabel)
         return;
     const int W = qMax(200, m_histogramLabel->width() - 8);
-    const int H = 160;
+    const int H = 220;
     QPixmap pix(W, H);
     pix.fill(QColor(20, 20, 20));
     QPainter p(&pix);

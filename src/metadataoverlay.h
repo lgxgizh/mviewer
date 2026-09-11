@@ -66,5 +66,5 @@ class MetadataOverlay : public QWidget
     // Auto-hide delay constants
     static constexpr int kInfoRectWidth = 380;
     static constexpr int kFontSize = 12;
-    static constexpr int kHistogramHeight = 64;
+    static constexpr int kHistogramHeight = 120;
 };

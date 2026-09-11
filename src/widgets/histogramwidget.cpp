@@ -10,7 +10,7 @@
 
 HistogramWidget::HistogramWidget(QWidget *parent) : QWidget(parent)
 {
-    setMinimumHeight(120);
+    setMinimumHeight(160);
 }
 
 void HistogramWidget::setHistograms(const std::vector<mviewer::core::Histogram> &hists)

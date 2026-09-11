@@ -2,6 +2,29 @@
 
 #include "runtime_storage.h"
 
+namespace
+{
+QDialog *createFullscreenCompareHost(QWidget *parent, CompareWorkspace **viewOut)
+{
+    // Qt::Window keeps MainWindow as QObject parent but is a top-level native
+    // window. A child QDialog's showFullScreen() can leave a strip of the parent
+    // visible on one edge.
+    auto *dlg = new QDialog(parent, Qt::Window);
+    dlg->setObjectName("compareDialog");
+    dlg->setWindowTitle("比较模式 - MViewer");
+    auto *layout = new QVBoxLayout(dlg);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    auto *view = new CompareWorkspace(dlg);
+    layout->addWidget(view);
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
+    dlg->setProperty("mviewerFullscreenRequested", true);
+    dlg->setWindowState(dlg->windowState() | Qt::WindowFullScreen);
+    *viewOut = view;
+    return dlg;
+}
+} // namespace
+
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
 {
     // Library/test hosts may construct MainWindow without going through the
@@ -596,15 +619,12 @@ void MainWindow::openCompare(const QStringList &images, const QString &sessionJs
 
 void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessionJson)
 {
-    auto *dlg = new QDialog(this);
+    CompareWorkspace *view = nullptr;
+    auto *dlg = createFullscreenCompareHost(this, &view);
     m_compareHost = dlg;
-    dlg->setObjectName("compareDialog");
-    dlg->setWindowTitle("比较模式 - MViewer");
-    auto *layout = new QVBoxLayout(dlg);
-    m_compareView = new CompareWorkspace(dlg);
+    m_compareView = view;
     QPointer<CompareWorkspace> viewGuard(m_compareView);
     QPointer<QDialog> dialogGuard(dlg);
-    layout->addWidget(m_compareView);
     // P0: Inject SelectionModel so CompareWorkspace writes focus back to global SSOT.
     // M28 P1-01: setImages() is async and is invoked once below (after the
     // dialog is shown and laid out) — the old pre-show call decoded every
@@ -677,12 +697,6 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
                 }
             });
 
-    dlg->setAttribute(Qt::WA_DeleteOnClose);
-    // Set the state before show so the first native frame is fullscreen.
-    // The property is the platform-independent contract for headless Qt,
-    // whose offscreen plugin intentionally discards fullscreen window state.
-    dlg->setProperty("mviewerFullscreenRequested", true);
-    dlg->setWindowState(dlg->windowState() | Qt::WindowFullScreen);
     dlg->showFullScreen();
 
     // Load images *after* the dialog has been shown AND the event loop has

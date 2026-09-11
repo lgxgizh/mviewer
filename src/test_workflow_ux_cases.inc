@@ -2493,6 +2493,14 @@ void workflow11_compare_fullscreen(const QString &pathA, const QString &pathB)
     if (QGuiApplication::platformName() != "offscreen")
         CHECK(compareDialog && compareDialog->isFullScreen(),
               "fullscreen workflow: native Compare opens directly fullscreen");
+    if (compareDialog && compareDialog->layout())
+    {
+        CHECK(compareDialog->layout()->contentsMargins() == QMargins(),
+              "fullscreen Compare has no dialog-layout inset around the workspace");
+        CompareWorkspace *hosted = compareDialog->findChild<CompareWorkspace *>();
+        CHECK(hosted && hosted->geometry() == compareDialog->contentsRect(),
+              "fullscreen Compare workspace fills the dialog client area");
+    }
     if (compareDialog)
     {
         const QString browseStatus = w.statusBar()->currentMessage();

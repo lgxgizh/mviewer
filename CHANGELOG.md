@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.24] - 2026-09-11
+
+### Changed
+
+- **Larger histograms:** Compare overlay histograms use about half the pane
+  width and a third of its height (up to ~420×180). Analysis, inspection, and
+  metadata histograms are taller as well.
+
+### Fixed
+
+- **Compare fullscreen edge:** Compare is a top-level fullscreen window with no
+  dialog inset, so the right (and other) edges no longer show the parent window
+  or desktop.
+
 ## [1.0.23] - 2026-09-11
 
 ### Added

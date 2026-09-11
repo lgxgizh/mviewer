@@ -49,14 +49,16 @@ inline QRect drawFilenameOverlay(QPainter &p, const QRect &pane, const QString &
 
 inline QRect histogramOverlayRect(const QRect &pane, const QRect &filenameBox)
 {
-    if (pane.width() < 48 || pane.height() < 40)
+    if (pane.width() < 80 || pane.height() < 80)
         return {};
-    const int width = std::min(160, std::max(72, pane.width() / 3));
-    const int height = std::min(56, std::max(36, pane.height() / 5));
-    const int top = filenameBox.isEmpty() ? pane.top() + 4 : filenameBox.bottom() + 4;
-    if (top + height > pane.bottom() - 4)
+    const int top = filenameBox.isEmpty() ? pane.top() + 6 : filenameBox.bottom() + 6;
+    const int maxWidth = pane.width() - 12;
+    const int maxHeight = pane.bottom() - 6 - top;
+    if (maxWidth < 80 || maxHeight < 64)
         return {};
-    return QRect(pane.left() + 4, top, width, height);
+    const int width = std::min(maxWidth, std::max(220, pane.width() / 2));
+    const int height = std::min(maxHeight, std::min(180, std::max(110, pane.height() / 3)));
+    return QRect(pane.left() + 6, top, width, height);
 }
 
 } // namespace mviewer::ui

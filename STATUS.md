@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-09-11 · Version: **1.0.23 Compare chrome / no console** · Release tag: **v1.0.22 published**
+> Snapshot: 2026-09-11 · Version: **1.0.24 larger histograms / Compare fullscreen** · Release tag: **v1.0.22 published**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -42,6 +42,12 @@
 > `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
 > `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## 1.0.24 — Larger histograms and Compare fullscreen (2026-09-11)
+
+- Compare overlay histograms are large enough to read; analysis, inspection,
+  and metadata histograms grew with them.
+- Compare opens as a true top-level fullscreen window with no dialog inset.
 
 ## 1.0.23 — Compare chrome and silent launch (2026-09-11)
 

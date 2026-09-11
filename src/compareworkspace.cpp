@@ -61,8 +61,8 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     leftLay->addLayout(pages, 1);
 
     auto *root = new QHBoxLayout(this);
-    root->setContentsMargins(4, 4, 4, 4);
-    root->setSpacing(4);
+    root->setContentsMargins(0, 0, 0, 0);
+    root->setSpacing(0);
     root->addLayout(leftLay, 1);
     root->addWidget(m_sidePanel);
     updateActionAvailability();

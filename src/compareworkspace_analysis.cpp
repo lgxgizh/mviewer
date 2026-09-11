@@ -180,7 +180,7 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
 
     m_hist = new HistogramWidget(this);
     m_hist->setObjectName("analysisHistogram");
-    m_hist->setMinimumHeight(140);
+    m_hist->setMinimumHeight(200);
     sideLay->addWidget(m_hist, 1);
 
     // M16.5: per-pane histogram toggle

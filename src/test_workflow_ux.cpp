@@ -69,7 +69,9 @@
 #include <QJsonObject>
 #include <QKeyEvent>
 #include <QLabel>
+#include <QLayout>
 #include <QLineEdit>
+#include <QMargins>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMetaObject>
