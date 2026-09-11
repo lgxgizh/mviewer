@@ -13,6 +13,14 @@
 #include <QDebug>
 #include <QIcon>
 
+#ifdef Q_OS_WIN
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
+#include <cstdio>
 #include <exception>
 #include <string>
 
@@ -72,7 +80,19 @@ int main(int argc, char *argv[])
     for (int i = 1; i < arguments.size(); ++i)
     {
         if (arguments.at(i) == QStringLiteral("--selftest"))
+        {
+#ifdef Q_OS_WIN
+            // WIN32_EXECUTABLE hides the console on Explorer launch. Attach the
+            // parent console so `MViewer.exe --selftest` from cmd still prints.
+            if (AttachConsole(ATTACH_PARENT_PROCESS))
+            {
+                FILE *stream = nullptr;
+                freopen_s(&stream, "CONOUT$", "w", stdout);
+                freopen_s(&stream, "CONOUT$", "w", stderr);
+            }
+#endif
             return mviewer::core::runSelfTest();
+        }
     }
 
     // M51: collect positional arguments first. Classification happens after

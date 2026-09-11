@@ -23,11 +23,10 @@
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 
-#include <cstdio>
 #include <cmath>
+#include <cstdio>
 #include <string>
 #include <unordered_map>
-
 
 void AnalysisPanel::refreshAnalyzers()
 {
@@ -45,7 +44,7 @@ void AnalysisPanel::refreshAnalyzers()
             info ? QString::fromStdString(info->name) : QString::fromStdString(id);
         m_analyzerCombo->addItem(label, QString::fromStdString(id));
     }
-    m_analyzerCombo->addItem(tr("Dual Compare (PSNR/SSIM)"), QString("builtin_compare"));
+    m_analyzerCombo->addItem(tr("双图对比 (PSNR/SSIM)"), QString("builtin_compare"));
     // Restore previous selection if still present.
     const int idx = m_analyzerCombo->findData(prev);
     if (idx >= 0)

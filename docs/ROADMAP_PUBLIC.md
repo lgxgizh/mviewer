@@ -4,10 +4,10 @@
 > This is the **user-facing** roadmap. The engineering milestone log lives in
 > [`docs/roadmap.md`](roadmap.md); this page is what ships to users.
 
-## Where we are now — **Beta / 1.0.22 faster Compare histograms**
+## Where we are now — **Beta / 1.0.23 Compare chrome**
 
 MViewer remains in **Beta** on the post-`v1.0.10` hardening line, now verified as
-the `1.0.22` patch line. The product
+the `1.0.23` patch line. The product
 loop below is built and verified; packaging and final human review remain:
 
 - **Browse** — open a 1000-image directory without UI freeze; thumbnails stream
@@ -46,7 +46,8 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 
 | Public version | Theme | Status |
 | --- | --- | --- |
-| **1.0.22** (current line) | Faster Compare overlay histograms via 256-edge subsample | 🔵 Beta hardening |
+| **1.0.23** (current line) | Compare PSNR HUD, exit, auto-align, toolbar icons, silent GUI launch | 🔵 Beta hardening |
+| **1.0.22** | Faster Compare overlay histograms via 256-edge subsample | ✅ Previous patch |
 | **1.0.21** | Compare transparent histogram overlay and wrapping filename overlay | ✅ Previous patch |
 | **1.0.20** | Channel isolation, 800% pixel grid, and Compare visual auto-align for algorithm-engineer inspection | ✅ Previous patch |
 | **1.0.19** | Viewer overlay/pan, Compare entry, and linked ROI source-mapping correctness | ✅ Previous patch |
@@ -64,7 +65,7 @@ We relabel the product so it reads as a shipping tool, not an R&D line:
 | **1.1** | Further large-source depth beyond the current JPEG/WIC-TIFF bounded display path | ⬜ Planned |
 | **2.0** | GPU-accelerated rendering (see below) + plugin ecosystem | ⬜ Future |
 
-The repository verifies the `v1.0.22` patch line. The remaining 1.0 work is
+The repository verifies the `v1.0.23` patch line. The remaining 1.0 work is
 productization and release review.
 
 The M52 hardening pass also makes release evidence explicit: automated gate

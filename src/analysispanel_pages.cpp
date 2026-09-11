@@ -33,7 +33,7 @@ void AnalysisPanel::updateInspectorPage()
         mviewer::core::toColorSpace(static_cast<uint8_t>(m_pR), static_cast<uint8_t>(m_pG),
                                     static_cast<uint8_t>(m_pB), m_colorSpace);
 
-    QString txt = QString("<h3>Pixel Inspector — %1</h3>").arg(csLabel);
+    QString txt = QString("<h3>%1 — %2</h3>").arg(tr("像素检视"), csLabel);
     txt += QString("pos: (%1, %2)<br>").arg(m_px).arg(m_py);
     if (m_colorSpace == mviewer::core::ColorSpace::HEX)
     {

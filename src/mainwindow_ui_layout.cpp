@@ -1,8 +1,8 @@
 // MainWindow layout construction and command surfaces.
 #include "mainwindow_p.h"
 
+#include <QIcon>
 #include <QSignalBlocker>
-#include <QStyle>
 #include <QToolBar>
 
 void MainWindow::buildMenus()
@@ -112,6 +112,7 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actToggleAnalysis->setObjectName("toggleAnalysisPanelAction");
     m_actToggleAnalysis->setCheckable(true);
     m_actToggleAnalysis->setChecked(false);
+    m_actToggleAnalysis->setShortcut(QKeySequence(QStringLiteral("Alt+H")));
     // P0: in-session browse history (browser-style back/forward).
     m_actHistoryBack = new QAction("上一步(&B)", this);
     m_actHistoryBack->setObjectName("historyBackAction");
@@ -294,23 +295,23 @@ void MainWindow::buildBrowserShell()
     browserToolBar->setFloatable(false);
     browserToolBar->setToolButtonStyle(Qt::ToolButtonIconOnly);
     browserToolBar->setIconSize(QSize(18, 18));
-    auto addBrowserAction = [this, browserToolBar](QAction *action, QStyle::StandardPixmap icon)
+    auto addBrowserAction = [browserToolBar](QAction *action, const char *iconFile)
     {
-        action->setIcon(style()->standardIcon(icon));
+        action->setIcon(QIcon(QStringLiteral(":/app/toolbar/%1.png").arg(QLatin1String(iconFile))));
         browserToolBar->addAction(action);
     };
-    addBrowserAction(m_actOpenDir, QStyle::SP_DialogOpenButton);
-    addBrowserAction(m_actDirBack, QStyle::SP_ArrowBack);
-    addBrowserAction(m_actDirForward, QStyle::SP_ArrowForward);
-    addBrowserAction(m_actDirUp, QStyle::SP_ArrowUp);
-    addBrowserAction(m_actRefresh, QStyle::SP_BrowserReload);
+    addBrowserAction(m_actOpenDir, "open");
+    addBrowserAction(m_actDirBack, "back");
+    addBrowserAction(m_actDirForward, "forward");
+    addBrowserAction(m_actDirUp, "up");
+    addBrowserAction(m_actRefresh, "refresh");
     browserToolBar->addSeparator();
-    addBrowserAction(m_actAddFavorite, QStyle::SP_DialogYesButton);
-    addBrowserAction(m_actCompare, QStyle::SP_FileDialogDetailedView);
-    addBrowserAction(m_actToggleAnalysis, QStyle::SP_FileDialogContentsView);
-    addBrowserAction(m_actToggleSearch, QStyle::SP_FileDialogListView);
+    addBrowserAction(m_actAddFavorite, "favorite");
+    addBrowserAction(m_actCompare, "compare");
+    addBrowserAction(m_actToggleAnalysis, "analysis");
+    addBrowserAction(m_actToggleSearch, "search");
     browserToolBar->addSeparator();
-    addBrowserAction(m_actBrowseWorkspace, QStyle::SP_DesktopIcon);
+    addBrowserAction(m_actBrowseWorkspace, "browse");
 
     // ----- Breadcrumb navigation bar (M15 Product Shell P0) -----
     m_breadcrumb = new BreadcrumbBar(this);

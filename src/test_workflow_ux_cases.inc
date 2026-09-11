@@ -1315,6 +1315,24 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
               exportReportButton->isEnabled(),
           "loaded two-image Compare enables image-dependent actions");
 
+    QLabel *hudMetrics = ws->findChild<QLabel *>(QStringLiteral("diffMetricsLabel"));
+    QCheckBox *analysisToggleEarly =
+        ws->findChild<QCheckBox *>(QStringLiteral("analysisPanelToggle"));
+    QPushButton *swapButton =
+        ws->findChild<QPushButton *>(QStringLiteral("compareSwapPanesButton"));
+    QPushButton *exitButton = ws->findChild<QPushButton *>(QStringLiteral("exitCompareButton"));
+    QCheckBox *autoAlignChk =
+        ws->findChild<QCheckBox *>(QStringLiteral("autoAlignBeforeDiffToggle"));
+    CHECK(hudMetrics && hudMetrics->isVisible(),
+          "PSNR/SSIM HUD is visible without opening the analysis panel");
+    CHECK(analysisToggleEarly && !analysisToggleEarly->isChecked(),
+          "analysis side panel stays closed by default");
+    CHECK(swapButton && swapButton->isEnabled(), "swap A/B is enabled for two images");
+    CHECK(exitButton && exitButton->isVisible() && exitButton->isEnabled(),
+          "exit compare is visible on the status strip");
+    CHECK(autoAlignChk && autoAlignChk->isVisible(),
+          "auto-align lives on the compare chrome, not only in Preferences");
+
     // 闪烁（B）开 → 关。
     sendKey(ws, Qt::Key_B);
     CHECK(blink->isChecked(), "key B turns blink compare ON");

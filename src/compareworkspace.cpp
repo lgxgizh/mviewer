@@ -57,6 +57,7 @@ CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
     leftLay->setContentsMargins(0, 0, 0, 0);
     leftLay->setSpacing(4);
     leftLay->addWidget(toolbarContainer);
+    leftLay->addWidget(buildStatusStrip());
     leftLay->addLayout(pages, 1);
 
     auto *root = new QHBoxLayout(this);

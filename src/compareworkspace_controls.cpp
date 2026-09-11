@@ -3,6 +3,9 @@
 
 #include "core/image/ImageFrame.h"
 
+#include <QSettings>
+#include <QTimer>
+
 void CompareWorkspace::buildSyncControls()
 {
     m_syncZoomChk = new QCheckBox("同步缩放(&Z)", this);
@@ -479,8 +482,9 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     connect(m_loadPresetBtn, &QPushButton::clicked, this, &CompareWorkspace::onLoadPreset);
     toolLayout->addWidget(m_loadPresetBtn);
 
-    m_swapBtn = new QPushButton(tr("交换窗格"), this);
-    m_swapBtn->setToolTip(tr("交换选中的两个窗格"));
+    m_swapBtn = new QPushButton(tr("交换 A/B"), this);
+    m_swapBtn->setObjectName("compareSwapPanesButton");
+    m_swapBtn->setToolTip(tr("交换 A/B 窗格"));
     m_swapBtn->setEnabled(false);
     connect(m_swapBtn, &QPushButton::clicked, this, &CompareWorkspace::onSwapPanes);
     toolLayout->addWidget(m_swapBtn);
@@ -514,4 +518,43 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
             &CompareWorkspace::exportReportRequested);
     toolLayout->addWidget(m_exportReportBtn);
     toolLayout->addStretch(1);
+}
+
+QWidget *CompareWorkspace::buildStatusStrip()
+{
+    auto *strip = new QWidget(this);
+    strip->setObjectName("compareStatusStrip");
+    auto *lay = new QHBoxLayout(strip);
+    lay->setContentsMargins(4, 0, 4, 0);
+    lay->setSpacing(8);
+
+    m_metricLabel = new QLabel(tr("PSNR: —  SSIM: —"), strip);
+    m_metricLabel->setObjectName("diffMetricsLabel");
+    m_metricLabel->setWordWrap(true);
+    m_metricLabel->setStyleSheet("color:#ddd;");
+    lay->addWidget(m_metricLabel, 1);
+
+    m_autoAlignChk = new QCheckBox(tr("对齐"), strip);
+    m_autoAlignChk->setObjectName("autoAlignBeforeDiffToggle");
+    m_autoAlignChk->setToolTip(tr("对比前自动对齐，消除平移错位后再算 PSNR/SSIM"));
+    m_autoAlignChk->setChecked(QSettings().value("autoAlignBeforeDiff", false).toBool());
+    connect(m_autoAlignChk, &QCheckBox::toggled, this,
+            [this](bool on)
+            {
+                QSettings().setValue("autoAlignBeforeDiff", on);
+                refreshAllDiffOverlays();
+            });
+    lay->addWidget(m_autoAlignChk);
+
+    m_compareStatusLabel = new QLabel(strip);
+    m_compareStatusLabel->setObjectName("compareStatusLabel");
+    m_compareStatusLabel->setStyleSheet("color:#ccc;");
+    lay->addWidget(m_compareStatusLabel, 1);
+
+    m_exitBtn = new QPushButton(tr("退出比较"), strip);
+    m_exitBtn->setObjectName("exitCompareButton");
+    m_exitBtn->setToolTip(tr("关闭比较窗口（Esc；有选区时 Esc 先清除选区）"));
+    connect(m_exitBtn, &QPushButton::clicked, this, &CompareWorkspace::closeCompareHost);
+    lay->addWidget(m_exitBtn);
+    return strip;
 }

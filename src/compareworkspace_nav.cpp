@@ -3,6 +3,21 @@
 
 #include <limits>
 
+namespace
+{
+void enableWidget(QWidget *widget, bool on)
+{
+    if (widget)
+        widget->setEnabled(on);
+}
+
+void checkBox(QCheckBox *button, bool on)
+{
+    if (button)
+        button->setChecked(on);
+}
+} // namespace
+
 const mviewer::core::DisplayColorContext &CompareWorkspace::displayColorContext() const
 {
     return m_displayColorTarget;
@@ -139,17 +154,15 @@ void CompareWorkspace::updateActionAvailability()
     const bool loading = m_loadInFlight;
     const bool hasImage = !loading && count > 0;
     const bool hasPair = !loading && count == 2;
+    const bool hasSet = !loading && count >= 2;
 
-    if (!loading && !hasPair)
+    if (!loading && !hasSet)
     {
         // A failed or partial batch must not leave analysis toggles visibly
         // active after the panes they refer to have disappeared.
-        if (m_diffOverlayChk)
-            m_diffOverlayChk->setChecked(false);
-        if (m_diffHighlightChk)
-            m_diffHighlightChk->setChecked(false);
-        if (m_pixelLinkChk)
-            m_pixelLinkChk->setChecked(false);
+        checkBox(m_diffOverlayChk, false);
+        checkBox(m_diffHighlightChk, false);
+        checkBox(m_pixelLinkChk, false);
         m_linkPoints.clear();
         refreshLinkMarkers();
         updateLinkInfo();
@@ -158,33 +171,24 @@ void CompareWorkspace::updateActionAvailability()
     // These controls operate on the rendered comparison, not on a pending
     // request. Keeping one gate here prevents a stale successful pair from
     // making the new loading/empty state look interactive.
-    if (m_blinkChk)
-        m_blinkChk->setEnabled(hasPair);
-    if (m_splitChk)
-        m_splitChk->setEnabled(hasPair);
-    if (m_swipeChk)
-        m_swipeChk->setEnabled(hasPair);
-    if (m_overlayChk)
-        m_overlayChk->setEnabled(hasPair);
-    if (m_checkerChk)
-        m_checkerChk->setEnabled(hasPair);
-    if (m_overlayAlphaSlider)
-        m_overlayAlphaSlider->setEnabled(hasPair && m_overlayChk && m_overlayChk->isChecked());
-    if (m_thresholdSlider)
-        m_thresholdSlider->setEnabled(hasPair);
-    if (m_diffOverlayChk)
-        m_diffOverlayChk->setEnabled(hasPair);
-    if (m_diffHighlightChk)
-        m_diffHighlightChk->setEnabled(hasPair);
-    if (m_pixelLinkChk)
-        m_pixelLinkChk->setEnabled(hasPair);
-    if (m_clearLinksBtn)
-        m_clearLinksBtn->setEnabled(hasPair && m_pixelLinkChk && m_pixelLinkChk->isChecked() &&
-                                    !m_linkPoints.isEmpty());
-    if (m_analyzeBtn)
-        m_analyzeBtn->setEnabled(hasImage);
-    if (m_exportReportBtn)
-        m_exportReportBtn->setEnabled(hasPair);
+    const bool overlayOn = hasPair && m_overlayChk && m_overlayChk->isChecked();
+    const bool linksOn =
+        hasPair && m_pixelLinkChk && m_pixelLinkChk->isChecked() && !m_linkPoints.isEmpty();
+    enableWidget(m_blinkChk, hasPair);
+    enableWidget(m_splitChk, hasPair);
+    enableWidget(m_swipeChk, hasPair);
+    enableWidget(m_overlayChk, hasPair);
+    enableWidget(m_checkerChk, hasPair);
+    enableWidget(m_overlayAlphaSlider, overlayOn);
+    enableWidget(m_thresholdSlider, hasSet);
+    enableWidget(m_diffOverlayChk, hasSet);
+    enableWidget(m_diffHighlightChk, hasSet);
+    enableWidget(m_pixelLinkChk, hasPair);
+    enableWidget(m_clearLinksBtn, linksOn);
+    enableWidget(m_analyzeBtn, hasImage);
+    enableWidget(m_exportReportBtn, hasSet);
+    enableWidget(m_swapBtn, hasSet);
+    enableWidget(m_autoAlignChk, hasSet);
 }
 
 CompareWorkspace::NavState CompareWorkspace::captureNavState() const

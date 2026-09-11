@@ -237,6 +237,7 @@ add_executable(MViewer
 )
 if(WIN32)
     target_sources(MViewer PRIVATE ${CMAKE_SOURCE_DIR}/resources/mviewer.rc)
+    set_target_properties(MViewer PROPERTIES WIN32_EXECUTABLE TRUE)
 endif()
 
 target_link_libraries(MViewer

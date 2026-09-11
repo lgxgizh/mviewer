@@ -2,5 +2,15 @@
 <RCC version="1.0">
     <qresource prefix="/app">
         <file>mviewer.png</file>
+        <file>toolbar/open.png</file>
+        <file>toolbar/back.png</file>
+        <file>toolbar/forward.png</file>
+        <file>toolbar/up.png</file>
+        <file>toolbar/refresh.png</file>
+        <file>toolbar/favorite.png</file>
+        <file>toolbar/compare.png</file>
+        <file>toolbar/analysis.png</file>
+        <file>toolbar/search.png</file>
+        <file>toolbar/browse.png</file>
     </qresource>
 </RCC>

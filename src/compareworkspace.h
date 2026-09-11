@@ -765,4 +765,11 @@ class CompareWorkspace : public QWidget
     SelectionModel *m_selection = nullptr;
     QPushButton *m_analyzeBtn = nullptr;
     QPushButton *m_exportReportBtn = nullptr;
+
+    QCheckBox *m_autoAlignChk = nullptr;
+    QPushButton *m_exitBtn = nullptr;
+    QLabel *m_compareStatusLabel = nullptr;
+    QWidget *buildStatusStrip();
+    void closeCompareHost();
+    void showCompareStatus(const QString &text);
 };

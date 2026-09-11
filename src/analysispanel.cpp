@@ -23,8 +23,8 @@
 #include <QSignalBlocker>
 #include <QVBoxLayout>
 
-#include <cstdio>
 #include <cmath>
+#include <cstdio>
 #include <string>
 #include <unordered_map>
 
@@ -233,17 +233,17 @@ void AnalysisPanel::updateExposurePage()
     const double highlightPct = total ? 100.0 * highlights / total : 0.0;
     const double shadowPct = total ? 100.0 * shadows / total : 0.0;
 
-    QString txt = QString("<h3>%1</h3>").arg(tr("Exposure"));
+    QString txt = QString("<h3>%1</h3>").arg(tr("曝光"));
     txt += QString("<table>"
                    "<tr><td>%1</td><td>%2%</td></tr>"
                    "<tr><td>%3</td><td>%4%</td></tr>"
                    "<tr><td>%5</td><td>%6</td></tr>"
                    "</table>")
-               .arg(tr("Highlights (>=240)"))
+               .arg(tr("高光 (>=240)"))
                .arg(highlightPct, 0, 'f', 2)
-               .arg(tr("Shadows (<=15)"))
+               .arg(tr("阴影 (<=15)"))
                .arg(shadowPct, 0, 'f', 2)
-               .arg(tr("Luminance Mean"))
+               .arg(tr("亮度均值"))
                .arg(m_statsA.lumMean, 0, 'f', 2);
     m_exposureLabel->setText(txt);
 }
@@ -308,7 +308,7 @@ void AnalysisPanel::updateComparePage()
     double noiseA = AnalysisEngine::noiseEstimate(a);
     double noiseB = AnalysisEngine::noiseEstimate(b);
 
-    QString txt = QString("<h3>%1</h3>").arg(tr("Dual Compare"));
+    QString txt = QString("<h3>%1</h3>").arg(tr("双图对比"));
     txt += QString("<table>"
                    "<tr><td>%2</td><td>%3 dB</td></tr>"
                    "<tr><td>%4</td><td>%5</td></tr>"

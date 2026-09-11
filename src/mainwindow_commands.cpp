@@ -248,14 +248,6 @@ bool MainWindow::handleViewModeKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    // P1-4: 'H' toggles the analysis (histogram) panel.
-    if (event->key() == Qt::Key_H && !mod)
-    {
-        if (m_actToggleAnalysis)
-            m_actToggleAnalysis->trigger();
-        event->accept();
-        return true;
-    }
     return false;
 }
 
@@ -508,22 +500,22 @@ QString MainWindow::shortcutsHelpHtml()
         "<tr><td><kbd>Ctrl+1</kbd>…<kbd>Ctrl+4</kbd></td><td>缩略图 / 列表 / 详情 / "
         "胶片条</td></tr>"
         "<tr><td><kbd>Ctrl+5</kbd> / <kbd>Ctrl+6</kbd></td><td>小图标 / 紧凑</td></tr>"
-        "<tr><th colspan='2'>比较（比较窗口内）</th></tr>"
-        "<tr><td><kbd>C</kbd></td><td>打开比较模式</td></tr>"
-        "<tr><td><kbd>Space</kbd></td><td>按住 Blink / 主窗口快速比较</td></tr>"
+        "<tr><th colspan='2'>比较（仅比较窗口）</th></tr>"
+        "<tr><td><kbd>C</kbd>（浏览窗口）</td><td>打开比较模式</td></tr>"
+        "<tr><td><kbd>Space</kbd></td><td>浏览：快速比较当前选中；比较窗口：按住临时切换</td></tr>"
         "<tr><td><kbd>B</kbd> / <kbd>S</kbd> / <kbd>W</kbd> / <kbd>O</kbd></td>"
-        "<td>Blink / Split / Swipe / Overlay</td></tr>"
-        "<tr><td><kbd>H</kbd></td><td>Diff 高亮</td></tr>"
+        "<td>闪烁 / 分割 / 滑动 / 叠加</td></tr>"
+        "<tr><td><kbd>H</kbd></td><td>Diff 高亮（比较窗口；浏览窗口请用 Alt+H 打开分析）</td></tr>"
         "<tr><td><kbd>Z</kbd> / <kbd>D</kbd></td><td>同步缩放 / 同步拖动</td></tr>"
-        "<tr><td><kbd>C</kbd> / <kbd>L</kbd> / <kbd>I</kbd></td><td>准星 / 像素连线 / "
+        "<tr><td><kbd>R</kbd> / <kbd>L</kbd> / <kbd>I</kbd></td><td>准星 / 像素连线 / "
         "侧栏</td></tr>"
         "<tr><td><kbd>1</kbd>~<kbd>8</kbd></td><td>N 联布局预设（比较 N 张）</td></tr>"
         "<tr><td><kbd>PgUp</kbd>/<kbd>PgDn</kbd> / <kbd>←</kbd>/<kbd>→</kbd></td>"
         "<td>连续导航（保留模式）</td></tr>"
-        "<tr><td><kbd>F</kbd> / <kbd>X</kbd> / <kbd>?</kbd></td><td>Fit / 交换窗格 / 帮助</td></tr>"
-        "<tr><td><kbd>ESC</kbd></td><td>关闭比较窗口</td></tr>"
+        "<tr><td><kbd>F</kbd> / <kbd>X</kbd> / <kbd>?</kbd></td><td>Fit / 交换 A/B / 帮助</td></tr>"
+        "<tr><td><kbd>ESC</kbd></td><td>有选区则清除选区，再按一次退出比较</td></tr>"
         "<tr><th colspan='2'>分析 / 信息</th></tr>"
-        "<tr><td><kbd>H</kbd></td><td>直方图 / 分析面板</td></tr>"
+        "<tr><td><kbd>Alt+H</kbd></td><td>分析面板（浏览窗口）</td></tr>"
         "<tr><td><kbd>I</kbd> / <kbd>M</kbd></td><td>图片信息浮层（ESC 关闭；浮层内 Ctrl+C "
         "复制全部元数据）</td></tr>"
         "<tr><th colspan='2'>评分 / 标签</th></tr>"

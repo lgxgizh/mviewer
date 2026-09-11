@@ -9,10 +9,10 @@ void CompareWorkspace::showShortcutHelp()
     // Lightweight status-bar style tip via window title flash — no modal dialog
     // so day-long keyboard work is not interrupted.
     const QString tip =
-        tr("Compare 快捷键: B Blink · Space 临时切换 · S Split · W Swipe · O Overlay · "
-           "K 棋盘 · H Diff高亮 · Shift+1…5 通道 RGB/R/G/B/Y · Z/D 同步缩放/拖动 · C 准星 · "
-           "L 像素连线 · 1~8 布局预设 · PgUp/PgDn 或 ←/→ 连续导航 · F Fit · X 交换 · ? 帮助 · "
-           "Esc 关闭");
+        tr("比较窗口快捷键: B 闪烁 · Space 临时切换 · S 分割 · W 滑动 · O 叠加 · "
+           "K 棋盘 · H Diff高亮 · Shift+1…5 通道 · Z/D 同步缩放/拖动 · R 准星 · "
+           "L 像素连线 · 1~8 布局 · PgUp/PgDn 连续导航 · F Fit · X 交换 A/B · ? 帮助 · "
+           "Esc 有选区则清除，否则退出");
     if (auto *w = window())
         w->setWindowTitle(tip);
 }
@@ -718,6 +718,25 @@ bool CompareWorkspace::handleBasicCompareSpace(QKeyEvent *event)
     return true;
 }
 
+void CompareWorkspace::closeCompareHost()
+{
+    if (auto *dlg = qobject_cast<QDialog *>(window()))
+        dlg->reject();
+}
+
+void CompareWorkspace::showCompareStatus(const QString &text)
+{
+    if (!m_compareStatusLabel)
+        return;
+    m_compareStatusLabel->setText(text);
+    QTimer::singleShot(3000, m_compareStatusLabel,
+                       [label = QPointer<QLabel>(m_compareStatusLabel)]()
+                       {
+                           if (label)
+                               label->clear();
+                       });
+}
+
 bool CompareWorkspace::handleBasicCompareEscape(QKeyEvent *event)
 {
     if (event->key() != Qt::Key_Escape)
@@ -726,10 +745,10 @@ bool CompareWorkspace::handleBasicCompareEscape(QKeyEvent *event)
     if (!m_lastSelection.isEmpty())
     {
         clearROI();
+        showCompareStatus(tr("选区已清除，再按 Esc 退出"));
         return true;
     }
-    if (auto *dlg = qobject_cast<QDialog *>(window()))
-        dlg->reject();
+    closeCompareHost();
     return true;
 }
 
@@ -823,7 +842,7 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
         return true;
     }
     // Crosshair / Pixel Link / Side panel.
-    if (plain && key == Qt::Key_C && m_crosshairChk)
+    if (plain && key == Qt::Key_R && m_crosshairChk)
     {
         m_crosshairChk->setChecked(!m_crosshairChk->isChecked());
         event->accept();

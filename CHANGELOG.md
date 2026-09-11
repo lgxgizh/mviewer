@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.23] - 2026-09-11
+
+### Added
+
+- **Compare status strip:** PSNR/SSIM stay visible without opening the analysis
+  panel. Auto-align is a compare checkbox, Swap A/B is enabled, and 退出比较
+  closes the window. Metrics and report export work for 3–8 images vs the
+  reference pane.
+- **Browse toolbar icons** matching the application mark.
+
+### Changed
+
+- Browse analysis uses Alt+H; Compare crosshair is R. Help and Esc copy
+  distinguish the browse window from the compare window.
+- Analysis panel labels are Chinese; opening the panel still runs the current
+  analyzer (histogram by default).
+- Installed MViewer.exe is a Windows GUI subsystem binary, so Explorer launch
+  no longer opens a console window.
+
 ## [1.0.22] - 2026-09-11
 
 ### Added

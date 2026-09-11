@@ -572,9 +572,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         // Forward navigation / workflow shortcuts from child widgets so they work
         // regardless of which panel has focus.
         static const QList<int> globalKeys = {
-            Qt::Key_Space, Qt::Key_M, Qt::Key_H,    Qt::Key_G,    Qt::Key_D,      Qt::Key_F,
-            Qt::Key_Tab,   Qt::Key_C, Qt::Key_S,    Qt::Key_Plus, Qt::Key_Equal,  Qt::Key_Minus,
-            Qt::Key_0,     Qt::Key_1, Qt::Key_Home, Qt::Key_End,  Qt::Key_PageUp, Qt::Key_PageDown};
+            Qt::Key_Space, Qt::Key_M,    Qt::Key_G,    Qt::Key_D,      Qt::Key_F,       Qt::Key_Tab,
+            Qt::Key_C,     Qt::Key_S,    Qt::Key_Plus, Qt::Key_Equal,  Qt::Key_Minus,   Qt::Key_0,
+            Qt::Key_1,     Qt::Key_Home, Qt::Key_End,  Qt::Key_PageUp, Qt::Key_PageDown};
         const bool isGlobalKey =
             globalKeys.contains(ke->key()) ||
             ((ke->modifiers() & Qt::ControlModifier) &&

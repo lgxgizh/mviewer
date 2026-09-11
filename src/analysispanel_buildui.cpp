@@ -36,17 +36,18 @@ void AnalysisPanel::buildUi()
 void AnalysisPanel::buildAnalyzerSection(QVBoxLayout &layout)
 {
     auto *bar = new QHBoxLayout;
-    bar->addWidget(new QLabel(tr("Analyzer:")));
+    bar->addWidget(new QLabel(tr("分析器:")));
     m_analyzerCombo = new QComboBox;
     auto &registry = m_pipeline ? m_pipeline->registry() : AnalyzerRegistry::instance();
     m_pluginIds = registry.availableAnalyzers();
     for (const auto &id : m_pluginIds)
     {
         const auto info = registry.infoFor(id);
-        const QString label = info ? QString::fromStdString(info->name) : QString::fromStdString(id);
+        const QString label =
+            info ? QString::fromStdString(info->name) : QString::fromStdString(id);
         m_analyzerCombo->addItem(label, QString::fromStdString(id));
     }
-    m_analyzerCombo->addItem(tr("Dual Compare (PSNR/SSIM)"), QString("builtin_compare"));
+    m_analyzerCombo->addItem(tr("双图对比 (PSNR/SSIM)"), QString("builtin_compare"));
     bar->addWidget(m_analyzerCombo, 1);
 
     auto *runButton = new QPushButton(tr("运行"));
@@ -116,7 +117,7 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
     histogramLayout->setSpacing(4);
     histogramLayout->addWidget(m_histogramLabel, 1);
     histogramLayout->addWidget(m_statsLabel);
-    m_tabs->addTab(histogramPage, tr("Histogram"));
+    m_tabs->addTab(histogramPage, tr("直方图"));
 
     m_rgbLabel = new QLabel;
     m_rgbLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
@@ -131,38 +132,38 @@ void AnalysisPanel::buildResultTabs(QVBoxLayout &layout)
     rgbLayout->setSpacing(4);
     rgbLayout->addWidget(m_rgbLabel, 1);
     rgbLayout->addWidget(m_rgbStatsLabel);
-    m_tabs->addTab(rgbPage, tr("RGB"));
+    m_tabs->addTab(rgbPage, tr("RGB 通道"));
 
     m_exposureLabel = new QLabel;
     m_exposureLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_exposureLabel->setWordWrap(true);
     m_exposureLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
-    m_tabs->addTab(m_exposureLabel, tr("Exposure"));
+    m_tabs->addTab(m_exposureLabel, tr("曝光"));
     m_focusLabel = new QLabel;
     m_focusLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_focusLabel->setWordWrap(true);
     m_focusLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
-    m_tabs->addTab(m_focusLabel, tr("Focus"));
+    m_tabs->addTab(m_focusLabel, tr("对焦"));
     m_metaLabel = new QLabel;
     m_metaLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_metaLabel->setWordWrap(true);
     m_metaLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
-    m_tabs->addTab(m_metaLabel, tr("Metadata"));
+    m_tabs->addTab(m_metaLabel, tr("元数据"));
     m_compareLabel = new QLabel;
     m_compareLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_compareLabel->setWordWrap(true);
     m_compareLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
-    m_tabs->addTab(m_compareLabel, tr("Compare"));
+    m_tabs->addTab(m_compareLabel, tr("对比"));
     m_diffPreview = new QLabel;
     m_diffPreview->setMinimumHeight(kPreviewSize);
     m_diffPreview->setAlignment(Qt::AlignCenter);
     m_diffPreview->setStyleSheet("QLabel{background:#1e1e1e;}");
-    m_tabs->addTab(m_diffPreview, tr("Diff Map"));
+    m_tabs->addTab(m_diffPreview, tr("差异图"));
     m_pluginResult = new QLabel;
     m_pluginResult->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_pluginResult->setWordWrap(true);
     m_pluginResult->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;}");
-    m_tabs->addTab(m_pluginResult, tr("Plugin"));
+    m_tabs->addTab(m_pluginResult, tr("插件"));
 }
 
 void AnalysisPanel::buildInspectorTab()
@@ -173,7 +174,7 @@ void AnalysisPanel::buildInspectorTab()
     layout->setSpacing(4);
 
     auto *bar = new QHBoxLayout;
-    bar->addWidget(new QLabel(tr("Space:")));
+    bar->addWidget(new QLabel(tr("色空间:")));
     auto *colorSpace = new QComboBox;
     colorSpace->addItem(tr("RGB"), static_cast<int>(mviewer::core::ColorSpace::RGB));
     colorSpace->addItem(tr("HSV"), static_cast<int>(mviewer::core::ColorSpace::HSV));
@@ -184,11 +185,11 @@ void AnalysisPanel::buildInspectorTab()
     colorSpace->addItem(tr("HEX"), static_cast<int>(mviewer::core::ColorSpace::HEX));
     bar->addWidget(colorSpace, 1);
 
-    auto *freeze = new QPushButton(tr("Freeze"));
+    auto *freeze = new QPushButton(tr("冻结"));
     freeze->setCheckable(true);
-    freeze->setToolTip(tr("Freeze the inspected pixel so it stays shown while you move the mouse"));
+    freeze->setToolTip(tr("冻结当前检视像素，移动鼠标时保持显示"));
     bar->addWidget(freeze);
-    bar->addWidget(new QLabel(tr("Kernel:")));
+    bar->addWidget(new QLabel(tr("邻域:")));
     auto *kernel = new QComboBox;
     kernel->addItem(tr("1×1"), 1);
     kernel->addItem(tr("3×3"), 3);
@@ -200,24 +201,25 @@ void AnalysisPanel::buildInspectorTab()
     m_inspectorLabel = new QLabel;
     m_inspectorLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_inspectorLabel->setWordWrap(true);
-    m_inspectorLabel->setStyleSheet("QLabel{background:#1e1e1e;color:#eee;padding:8px;font-family:monospace;}");
-    m_inspectorLabel->setText(tr("Move the mouse over an image to inspect pixels."));
+    m_inspectorLabel->setStyleSheet(
+        "QLabel{background:#1e1e1e;color:#eee;padding:8px;font-family:monospace;}");
+    m_inspectorLabel->setText(tr("将鼠标移到图像上检视像素。"));
     layout->addWidget(m_inspectorLabel, 1);
     buildInspectorActions(*layout);
-    m_tabs->addTab(page, tr("Inspector"));
+    m_tabs->addTab(page, tr("像素检视"));
 
     connect(colorSpace, QOverload<int>::of(&QComboBox::activated), this,
             [this, colorSpace](int)
             {
-                m_colorSpace = static_cast<mviewer::core::ColorSpace>(
-                    colorSpace->currentData().toInt());
+                m_colorSpace =
+                    static_cast<mviewer::core::ColorSpace>(colorSpace->currentData().toInt());
                 updateInspectorPage();
             });
     connect(freeze, &QPushButton::toggled, this,
             [this, freeze](bool on)
             {
                 m_frozen = on;
-                freeze->setText(on ? tr("Frozen") : tr("Freeze"));
+                freeze->setText(on ? tr("已冻结") : tr("冻结"));
                 updateInspectorPage();
             });
     connect(kernel, QOverload<int>::of(&QComboBox::activated), this,
@@ -260,28 +262,24 @@ void AnalysisPanel::buildInspectorActions(QVBoxLayout &layout)
                                                        .arg(m_pG, 2, 16, QChar('0'))
                                                        .arg(m_pB, 2, 16, QChar('0')));
             });
-    connect(copyXyz, &QPushButton::clicked, this,
-            [this]()
+    connect(
+        copyXyz, &QPushButton::clicked, this,
+        [this]()
+        {
+            if (!m_pValid)
+                return;
+            auto toLinear = [](uint8_t c) -> double
             {
-                if (!m_pValid)
-                    return;
-                auto toLinear = [](uint8_t c) -> double
-                {
-                    const double value = c / 255.0;
-                    return value <= 0.04045
-                               ? value / 12.92
-                               : std::pow((value + 0.055) / 1.055, 2.4);
-                };
-                const double r = toLinear(static_cast<uint8_t>(m_pR));
-                const double g = toLinear(static_cast<uint8_t>(m_pG));
-                const double b = toLinear(static_cast<uint8_t>(m_pB));
-                const double x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
-                const double y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
-                const double z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
-                QApplication::clipboard()->setText(
-                    QString("XYZ(%1, %2, %3)")
-                        .arg(x, 0, 'f', 3)
-                        .arg(y, 0, 'f', 3)
-                        .arg(z, 0, 'f', 3));
-            });
+                const double value = c / 255.0;
+                return value <= 0.04045 ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
+            };
+            const double r = toLinear(static_cast<uint8_t>(m_pR));
+            const double g = toLinear(static_cast<uint8_t>(m_pG));
+            const double b = toLinear(static_cast<uint8_t>(m_pB));
+            const double x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
+            const double y = r * 0.2126729 + g * 0.7151522 + b * 0.0721750;
+            const double z = r * 0.0193339 + g * 0.1191920 + b * 0.9503041;
+            QApplication::clipboard()->setText(
+                QString("XYZ(%1, %2, %3)").arg(x, 0, 'f', 3).arg(y, 0, 'f', 3).arg(z, 0, 'f', 3));
+        });
 }

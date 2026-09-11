@@ -189,14 +189,6 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
     m_perPaneHistChk->setChecked(false);
     connect(m_perPaneHistChk, &QCheckBox::toggled, this, &CompareWorkspace::onPerPaneHistToggled);
     sideLay->addWidget(m_perPaneHistChk);
-
-    // M16.4: quick PSNR/SSIM metrics label (M23: + diff stats)
-    sideLay->addWidget(new QLabel(tr("差异指标"), this));
-    m_metricLabel = new QLabel(tr("PSNR: —  SSIM: —"), this);
-    m_metricLabel->setObjectName("diffMetricsLabel");
-    m_metricLabel->setWordWrap(true);
-    m_metricLabel->setStyleSheet("color:#888;");
-    sideLay->addWidget(m_metricLabel);
 }
 
 void CompareWorkspace::requestInspectorUpdate(int x, int y)
