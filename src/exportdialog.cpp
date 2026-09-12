@@ -443,9 +443,9 @@ void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
                 if (mode == mviewer::exportjob::Mode::Clipboard &&
                     !result.clipboardImage.isNull())
                 {
-                    QImage clipboard = mvcore::toQImageRef(result.clipboardImage);
-                    if (clipboard.isNull())
-                        clipboard = mvcore::toQImage(result.clipboardImage);
+                    // Owning conversion: the clipboard outlives `result`, so the
+                    // non-owning toQImageRef() alias must never be handed out.
+                    QImage clipboard = mvcore::toQImage(result.clipboardImage);
                     if (!clipboard.isNull())
                         QApplication::clipboard()->setImage(clipboard);
                 }

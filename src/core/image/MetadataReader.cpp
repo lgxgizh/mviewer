@@ -139,6 +139,15 @@ static uint32_t readU32(const unsigned char *buf, bool little)
            (static_cast<uint32_t>(buf[2]) << 8) | static_cast<uint32_t>(buf[3]);
 }
 
+// True when [offset, offset+need) lies inside a buffer of `size` bytes.
+// Deliberately written as a subtraction: `offset + need <= size` wraps in
+// 32-bit arithmetic, so a crafted IFD offset (e.g. 0xFFFFFFFF) passes the
+// addition form and turns the following read into a wild pointer dereference.
+static bool fits(size_t offset, size_t need, size_t size)
+{
+    return offset <= size && need <= size - offset;
+}
+
 double MetadataReader::exifToDecimal(const unsigned char *buf, int offset, bool isLittle)
 {
     const uint32_t num = readU32(buf + offset, isLittle);
@@ -186,14 +195,15 @@ QByteArray readExifPayload(QFile &file, bool isJpeg)
 
 uint32_t findGpsIfd(const unsigned char *data, int size, bool little)
 {
+    const size_t total = static_cast<size_t>(size);
     const uint32_t ifd0 = readU32(data + 4, little);
-    if (ifd0 == 0 || ifd0 + 2 > static_cast<uint32_t>(size))
+    if (ifd0 == 0 || !fits(ifd0, 2, total))
         return 0;
     const uint16_t count = readU16(data + ifd0, little);
     for (uint16_t i = 0; i < count; ++i)
     {
-        const int offset = static_cast<int>(ifd0 + 2 + i * 12);
-        if (offset + 12 > size)
+        const size_t offset = static_cast<size_t>(ifd0) + 2 + static_cast<size_t>(i) * 12;
+        if (!fits(offset, 12, total))
             break;
         if (readU16(data + offset, little) == 0x8825)
             return readU32(data + offset + 8, little);
@@ -214,6 +224,9 @@ struct GpsValues
 GpsValues parseGpsIfd(const unsigned char *data, int size, bool little, uint32_t ifd)
 {
     GpsValues values;
+    const size_t total = static_cast<size_t>(size);
+    if (!fits(ifd, 2, total))
+        return values;
     const uint16_t count = readU16(data + ifd, little);
     bool north = true;
     bool east = true;
@@ -222,26 +235,28 @@ GpsValues parseGpsIfd(const unsigned char *data, int size, bool little, uint32_t
     double lon[3] = {};
     for (uint16_t i = 0; i < count; ++i)
     {
-        const int offset = static_cast<int>(ifd + 2 + i * 12);
-        if (offset + 12 > size)
+        const size_t offset = static_cast<size_t>(ifd) + 2 + static_cast<size_t>(i) * 12;
+        if (!fits(offset, 12, total))
             break;
         const uint16_t tag = readU16(data + offset, little);
-        if (tag == 0x0001 && offset + 8 < size)
+        const bool hasValueByte = fits(offset, 9, total);
+        if (tag == 0x0001 && hasValueByte)
             north = data[offset + 8] == 'N';
-        else if (tag == 0x0003 && offset + 8 < size)
+        else if (tag == 0x0003 && hasValueByte)
             east = data[offset + 8] == 'E';
-        else if (tag == 0x0005 && offset + 8 < size)
+        else if (tag == 0x0005 && hasValueByte)
             aboveSea = data[offset + 8] == 0;
         else if (tag == 0x0002 || tag == 0x0004)
         {
             const uint32_t value = readU32(data + offset + 8, little);
-            if (value == 0 || value + 24 > static_cast<uint32_t>(size))
+            if (value == 0 || !fits(value, 24, total))
                 continue;
             double *target = tag == 0x0002 ? lat : lon;
             for (int component = 0; component < 3; ++component)
             {
-                const uint32_t numerator = readU32(data + value + component * 8, little);
-                const uint32_t denominator = readU32(data + value + component * 8 + 4, little);
+                const size_t base = static_cast<size_t>(value) + static_cast<size_t>(component) * 8;
+                const uint32_t numerator = readU32(data + base, little);
+                const uint32_t denominator = readU32(data + base + 4, little);
                 target[component] = denominator == 0
                                          ? 0.0
                                          : static_cast<double>(numerator) / denominator;
@@ -254,7 +269,7 @@ GpsValues parseGpsIfd(const unsigned char *data, int size, bool little, uint32_t
         else if (tag == 0x0006)
         {
             const uint32_t value = readU32(data + offset + 8, little);
-            if (value > 0 && value + 8 <= static_cast<uint32_t>(size))
+            if (value > 0 && fits(value, 8, total))
             {
                 const uint32_t numerator = readU32(data + value, little);
                 const uint32_t denominator = readU32(data + value + 4, little);
@@ -301,7 +316,7 @@ void MetadataReader::readGps(mviewer::domain::ImageMetadata &meta, const std::st
     if (readU16(data + 2, little) != 0x002A)
         return;
     const uint32_t gpsIfd = findGpsIfd(data, size, little);
-    if (gpsIfd == 0 || gpsIfd + 2 > static_cast<uint32_t>(size))
+    if (gpsIfd == 0 || !fits(gpsIfd, 2, static_cast<size_t>(size)))
         return;
     const GpsValues values = parseGpsIfd(data, size, little, gpsIfd);
     if (!values.hasLat || !values.hasLon)

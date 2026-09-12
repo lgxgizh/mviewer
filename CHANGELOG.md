@@ -7,6 +7,22 @@
 - **Larger Compare filenames:** pane captions and the on-image filename overlay
   use a bigger bold type so names are readable at a glance.
 
+### Fixed
+
+- **No more crash on a malformed image file:** EXIF/ICC offsets read from a file
+  header are now range-checked with overflow-safe arithmetic. A crafted or
+  truncated file (e.g. an 8-byte `.tif` whose IFD offset is `0xFFFFFFFF`) used to
+  pass the bounds check and dereference a wild pointer while its metadata was
+  read — which happens on a plain folder browse.
+- **No more hang on a truncated workspace:** an unterminated array in a
+  workspace/project/recent-files JSON file no longer spins the parser forever
+  while growing memory. Malformed state files are now rejected instead of
+  hanging the restore path (and the UI thread for embedded compare sessions).
+- **Clipboard copy keeps working after the export finishes:** the image placed on
+  the clipboard now owns its pixels. Previously it aliased a buffer that was
+  freed as soon as the export result was released, so pasting could read freed
+  memory.
+
 ## [1.0.28] - 2026-09-12
 
 ### Added

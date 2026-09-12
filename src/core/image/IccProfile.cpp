@@ -50,8 +50,9 @@ std::string parseTextType(const unsigned char *tagData, uint32_t tagSize)
     }
     if (type == "mluc")
     {
-        // mluc type: records of UTF-16BE strings.
-        if (tagSize < 12)
+        // mluc type: records of UTF-16BE strings. Reading the record size at
+        // offset 12 needs 16 bytes present, not 12.
+        if (tagSize < 16)
             return {};
         const uint32_t recSize = be32(tagData + 12);
         if (recSize < 12 || tagSize < 16 + recSize)
@@ -63,11 +64,17 @@ std::string parseTextType(const unsigned char *tagData, uint32_t tagSize)
         for (uint32_t i = 0; i < recCount && i < maxRec; ++i)
         {
             const uint32_t recOff = 16 + i * recSize;
-            if (recOff + 12 > tagSize)
+            // 16 bytes are needed, not 12: the string offset is read at
+            // recOff + 12, so a payload ending exactly at recOff + 12 would
+            // otherwise be over-read by 4 bytes.
+            if (recOff + 16 > tagSize)
                 break;
             const uint32_t len = be32(tagData + recOff + 8);
             const uint32_t strOff = be32(tagData + recOff + 12);
-            if (strOff + len > tagSize || len < 2)
+            // Subtraction form: `strOff + len` wraps in 32-bit arithmetic for a
+            // hostile offset (0xFFFFFFFE + 2 == 0), which previously let a
+            // crafted profile read gigabytes past the tag payload.
+            if (len < 2 || strOff > tagSize || len > tagSize - strOff)
                 continue;
             std::string out;
             for (uint32_t j = 0; j + 1 < len; j += 2)

@@ -310,9 +310,10 @@ void ImageViewer::startExportJob(mviewer::exportjob::ExportJobConfig cfg, bool c
                     viewer->m_exportCancel.reset();
                     if (clipboard && result->done > 0 && !result->clipboardImage.isNull())
                     {
-                        QImage image = mvcore::toQImageRef(result->clipboardImage);
-                        if (image.isNull())
-                            image = mvcore::toQImage(result->clipboardImage);
+                        // Owning conversion is required here: the clipboard
+                        // outlives this delivery, while toQImageRef() returns a
+                        // non-owning alias whose buffer dies with `result`.
+                        QImage image = mvcore::toQImage(result->clipboardImage);
                         if (!image.isNull())
                             QApplication::clipboard()->setImage(image);
                     }

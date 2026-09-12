@@ -8,8 +8,10 @@
 #include "core/workspace/WorkspaceSerializer.h"
 
 #include <QCoreApplication>
+#include <QElapsedTimer>
 
 #include <cstdio>
+#include <functional>
 #include <string>
 
 static int g_pass = 0;
@@ -30,6 +32,72 @@ static int g_fail = 0;
         }                                                                                          \
         fflush(stdout);                                                                            \
     } while (0)
+
+// A truncated or hand-edited state file must be rejected, not parsed forever.
+// The collection loops used to call parseString()/parseNumber() unconditionally:
+// at EOF those consume nothing, so an unclosed array spun the loop while
+// appending empty elements (permanent hang + unbounded memory). This locks in
+// "terminates quickly and reports failure".
+static void testTruncatedJsonTerminates()
+{
+    printf("\n[M15-5: truncated JSON is rejected instead of hanging]\n");
+    fflush(stdout);
+
+    const std::string kBudgetNote = "terminates within budget";
+
+    const auto elapsedMs = [](const std::function<void()> &fn)
+    {
+        QElapsedTimer t;
+        t.start();
+        fn();
+        return t.elapsed();
+    };
+
+    // Unclosed comparedImages array (workspace restore path).
+    {
+        const std::string json = "{\"root\":\"x\",\"folders\":[],\"comparedImages\":[";
+        bool rejected = false;
+        const qint64 ms = elapsedMs(
+            [&] { rejected = !mviewer::core::deserializeWorkspace(json).has_value(); });
+        CHECK(rejected && ms < 1000, kBudgetNote.c_str());
+    }
+
+    // Unclosed imageIds array (compare-session path, parsed on the GUI thread).
+    {
+        const std::string json = "{\"imageIds\":[";
+        bool rejected = false;
+        const qint64 ms = elapsedMs(
+            [&] { rejected = !mviewer::core::deserializeCompareSession(json).has_value(); });
+        CHECK(rejected && ms < 1000, kBudgetNote.c_str());
+    }
+
+    // Unclosed frameIndices array (numeric loop: parseNumber() also consumed
+    // nothing at EOF).
+    {
+        const std::string json = "{\"frameIndices\":[";
+        bool rejected = false;
+        const qint64 ms = elapsedMs(
+            [&] { rejected = !mviewer::core::deserializeCompareSession(json).has_value(); });
+        CHECK(rejected && ms < 1000, kBudgetNote.c_str());
+    }
+
+    // Unclosed recent-files array (read during MainWindow construction).
+    {
+        const std::string json = "{\"recent\":[\"a\",\"b\"";
+        mviewer::core::RecentFiles recent(5);
+        bool rejected = false;
+        const qint64 ms = elapsedMs([&] { rejected = !recent.deserialize(json); });
+        CHECK(rejected && ms < 1000, kBudgetNote.c_str());
+    }
+
+    // A well-formed file must still parse (the guard must not over-reject).
+    {
+        mviewer::domain::Workspace ok;
+        ok.rootPath = "D:/photos";
+        CHECK(mviewer::core::deserializeWorkspace(mviewer::core::serializeWorkspace(ok)).has_value(),
+              "well-formed workspace still parses");
+    }
+}
 
 int main(int argc, char **argv)
 {
@@ -260,6 +328,8 @@ int main(int argc, char **argv)
     CHECK(maybeCsEmb.has_value() && maybeCsEmb->selection.w == 256,
           "embedded compareSession JSON round-trips through workspace");
     CHECK(wscsBack.compareSessionJson == csJson, "compareSessionJson verbatim round-trips");
+
+    testTruncatedJsonTerminates();
 
     printf("\n=== M15-5 acceptance: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);

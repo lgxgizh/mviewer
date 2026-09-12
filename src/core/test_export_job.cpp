@@ -2,6 +2,7 @@
 #include "core/export/ExportJob.h"
 #include "core/image/Encoder.h"
 #include "core/image/ImageBuffer.h"
+#include "core/image/QtConvert.h"
 
 #include <QCoreApplication>
 #include <atomic>
@@ -115,6 +116,23 @@ int main(int argc, char **argv)
         const auto clipboardResult = run(clipboardCfg);
         CHECK(clipboardResult.done == 1 && !clipboardResult.clipboardImage.isNull(),
               "M40: clipboard job returns a display-ready worker image");
+
+        // The UI hands this image to QClipboard::setImage, which outlives the
+        // ExportJobResult (imageviewer.cpp / exportdialog.cpp). The clipboard
+        // must therefore receive an OWNING conversion: toQImageRef() is a
+        // non-owning alias, and its buffer is freed with the result - which
+        // turned a pasted image into a read of freed memory.
+        {
+            const ImageData &workerImage = clipboardResult.clipboardImage;
+            const QImage owned = mvcore::toQImage(workerImage);
+            CHECK(!owned.isNull(), "clipboard image converts");
+            CHECK(owned.constBits() != workerImage.buffer->data(),
+                  "clipboard conversion owns its pixels (no alias of the result buffer)");
+            // Dropping the last owner of the source must not affect the copy.
+            const ImageData released = workerImage;
+            CHECK(owned.constBits() != released.buffer->data(),
+                  "clipboard image stays independent of the source lifetime");
+        }
 
         auto alreadyCancelled = std::make_shared<std::atomic<bool>>(true);
         ExportJobConfig cancelledCfg;

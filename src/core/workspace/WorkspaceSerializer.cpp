@@ -42,6 +42,11 @@ void esc(std::ostringstream &os, const std::string &s)
     os << '"';
 }
 
+// Hard stop for a malformed/truncated collection. A legitimate workspace can
+// describe a 100k-image folder, so the cap is generous on purpose — the real
+// guard against a hang is the per-iteration progress check at each loop below.
+constexpr size_t kMaxArrayElements = 1000000;
+
 // --- Minimal JSON parser for the shape emitted by serializeWorkspace() ---
 // Supports: objects, arrays, strings, integers, nested structure. Whitespace
 // tolerant. Returns false on structural mismatch.
@@ -286,7 +291,13 @@ static bool parseCompareCollections(Parser &p, const std::string &key,
         {
             if (!out.imageIds.empty())
                 p.eat(',');
+            // parseString() makes no progress when the next token is not a
+            // quote, so an unclosed array in a truncated file used to spin here
+            // forever appending empty strings (unbounded memory + hang).
+            const size_t before = p.i;
             out.imageIds.push_back(p.parseString());
+            if (p.i == before || out.imageIds.size() > kMaxArrayElements)
+                return false;
         }
         return true;
     }
@@ -321,7 +332,10 @@ static bool parseCompareCollections(Parser &p, const std::string &key,
         {
             if (!out.frameIndices.empty())
                 p.eat(',');
+            const size_t before = p.i;
             out.frameIndices.push_back(static_cast<int>(p.parseNumber()));
+            if (p.i == before || out.frameIndices.size() > kMaxArrayElements)
+                return false;
         }
         return true;
     }
@@ -595,7 +609,10 @@ static bool parseWorkspaceOptionalFields(Parser &p, mviewer::domain::Workspace &
             {
                 if (!out.comparedImages.empty())
                     p.eat(',');
+                const size_t before = p.i;
                 out.comparedImages.push_back(p.parseString());
+                if (p.i == before || out.comparedImages.size() > kMaxArrayElements)
+                    return false;
             }
         }
         else if (key == "compareSession")
@@ -699,7 +716,10 @@ bool RecentFiles::deserialize(const std::string &text)
     {
         if (!m_items.empty())
             p.eat(',');
+        const size_t before = p.i;
         m_items.push_back(p.parseString());
+        if (p.i == before || m_items.size() > kMaxArrayElements)
+            return false;
     }
     return true;
 }

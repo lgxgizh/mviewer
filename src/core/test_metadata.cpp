@@ -7,6 +7,7 @@
 
 #include <QColor>
 #include <QCoreApplication>
+#include <QFile>
 #include <QFileInfo>
 #include <QImage>
 #include <QTemporaryDir>
@@ -135,6 +136,73 @@ static void testMetadataReader()
     CHECK(missing.fileSize == 0, "missing file -> empty metadata");
 }
 
+// Hostile/degenerate EXIF offsets. A crafted file must degrade to "no GPS",
+// never to a wild pointer read: the IFD bounds checks used 32-bit addition,
+// which wraps for file-supplied offsets such as 0xFFFFFFFF.
+static void writeBytes(const std::string &path, const std::vector<unsigned char> &bytes)
+{
+    QFile f(QString::fromStdString(path));
+    if (!f.open(QIODevice::WriteOnly))
+        return;
+    f.write(reinterpret_cast<const char *>(bytes.data()),
+            static_cast<qint64>(bytes.size()));
+    f.close();
+}
+
+static void testMetadataHostileOffsets()
+{
+    printf("\n[MetadataReader hostile EXIF offsets]\n");
+    fflush(stdout);
+
+    QTemporaryDir dir;
+    CHECK(dir.isValid(), "hostile-offset temp dir created");
+
+    // (a) II*\0 + IFD0 offset 0xFFFFFFFF: `ifd0 + 2` wraps to 1 and used to pass
+    //     the bounds check, dereferencing `data + 0xFFFFFFFF`.
+    {
+        const std::string p = (dir.path() + "/evil-ifd0.tif").toStdString();
+        writeBytes(p, {0x49, 0x49, 0x2A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF});
+        const mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
+        CHECK(!m.hasGps, "IFD0 offset 0xFFFFFFFF -> no GPS, no crash");
+    }
+
+    // (b) Valid IFD0 whose GPS tag points at 0xFFFFFFFF: the same wrap in the
+    //     gpsIfd guard, reaching parseGpsIfd with a wild offset.
+    {
+        const std::string p = (dir.path() + "/evil-gps.tif").toStdString();
+        std::vector<unsigned char> bytes = {
+            0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00, // II, IFD0 at 8
+            0x01, 0x00,                                     // 1 entry
+            0x25, 0x88,                                     // tag 0x8825 (GPS IFD)
+            0x04, 0x00,                                     // type LONG
+            0x01, 0x00, 0x00, 0x00,                         // count 1
+            0xFF, 0xFF, 0xFF, 0xFF,                         // value 0xFFFFFFFF
+        };
+        writeBytes(p, bytes);
+        const mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
+        CHECK(!m.hasGps, "GPS IFD offset 0xFFFFFFFF -> no GPS, no crash");
+    }
+
+    // (c) Entry count far past the buffer: the entry loop must stop at the end.
+    {
+        const std::string p = (dir.path() + "/evil-count.tif").toStdString();
+        writeBytes(p, {0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00,
+                       0xFF, 0xFF}); // count = 65535, no entries present
+        const mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
+        CHECK(!m.hasGps, "IFD entry count past EOF -> no GPS, no crash");
+    }
+
+    // (d) A normal file still reports as before (the fix must not over-reject).
+    {
+        const std::string p = (dir.path() + "/plain.png").toStdString();
+        QImage img(32, 16, QImage::Format_RGB32);
+        img.fill(QColor(7, 8, 9));
+        CHECK(img.save(QString::fromStdString(p), "PNG"), "write plain png");
+        const mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
+        CHECK(m.width == 32 && m.height == 16, "well-formed file still reads dimensions");
+    }
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -144,6 +212,7 @@ int main(int argc, char **argv)
     testMetadataGolden();
     testDecoderEnrichment();
     testMetadataReader();
+    testMetadataHostileOffsets();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
