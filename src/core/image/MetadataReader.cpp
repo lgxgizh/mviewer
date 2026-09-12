@@ -311,11 +311,12 @@ void MetadataReader::readGps(mviewer::domain::ImageMetadata &meta, const std::st
     const QByteArray exif = readExifPayload(file, isJpeg);
     if (exif.size() < 8)
         return;
-    // QByteArray hands out const char*; go through void* so the byte view needs
-    // no reinterpret_cast (the CI clang-tidy check set promotes
-    // cppcoreguidelines-pro-type-reinterpret-cast to an error).
-    const auto *data =
-        static_cast<const unsigned char *>(static_cast<const void *>(exif.constData()));
+    // Byte view over the exif payload. The reinterpret_cast is unavoidable
+    // (QByteArray hands out const char*); .clang-tidy disables this check, but
+    // the CI job re-enables it on the command line, and the void* hop that
+    // would avoid it trips bugprone-casting-through-void instead.
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    const auto *data = reinterpret_cast<const unsigned char *>(exif.constData());
     const int size = static_cast<int>(exif.size());
     const bool little = data[0] == 0x49 && data[1] == 0x49;
     if (readU16(data + 2, little) != 0x002A)
