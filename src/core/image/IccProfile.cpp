@@ -22,7 +22,9 @@ inline uint16_t be16(const unsigned char *p)
 
 inline std::string sig4(const unsigned char *p)
 {
-    return std::string(reinterpret_cast<const char *>(p), 4);
+    // Pointer-pair form avoids a reinterpret_cast (the CI clang-tidy check set
+    // promotes cppcoreguidelines-pro-type-reinterpret-cast to an error).
+    return std::string(p, p + 4);
 }
 
 inline std::string trimNull(const std::string &s)
@@ -46,7 +48,7 @@ std::string parseTextType(const unsigned char *tagData, uint32_t tagSize)
         const uint32_t maxLen = tagSize - 12;
         if (len > maxLen)
             len = maxLen;
-        return trimNull(std::string(reinterpret_cast<const char *>(tagData + 12), len));
+        return trimNull(std::string(tagData + 12, tagData + 12 + len));
     }
     if (type == "mluc")
     {
@@ -187,9 +189,8 @@ IccProfile parseIccProfile(const unsigned char *data, size_t size)
     const uint32_t major = data[8];
     const uint32_t minor = data[9] >> 4;
     const uint32_t bugfix = uint32_t(data[10]) * 10 + uint32_t(data[11]);
-    char buf[32];
-    std::snprintf(buf, sizeof(buf), "%u.%u.%u", major, minor, bugfix);
-    info.version = buf;
+    info.version =
+        std::to_string(major) + "." + std::to_string(minor) + "." + std::to_string(bugfix);
     info.deviceClass = deviceClassText(sig4(data + 12));
     info.colorSpace = colorSpaceText(sig4(data + 16));
     info.pcs = colorSpaceText(sig4(data + 20));
@@ -201,7 +202,7 @@ IccProfile parseIccProfile(const unsigned char *data, size_t size)
         const size_t entryEnd = 132 + size_t(i) * 12 + 12;
         if (entryEnd > size)
             break;
-        const unsigned char *e = data + 132 + i * 12;
+        const unsigned char *e = data + 132 + size_t(i) * 12;
         const std::string sig = sig4(e);
         const uint32_t off = be32(e + 4);
         const uint32_t sz = be32(e + 8);

@@ -17,6 +17,10 @@
 #include <string>
 #include <vector>
 
+// This TU reports through printf, which the CI clang-tidy check set flags as a
+// c-style vararg call; the repo's test files suppress it the same way.
+// NOLINTBEGIN(cppcoreguidelines-pro-type-vararg)
+
 #ifndef MVIEWER_SOURCE_DIR
 static std::string srcRootFromThisFile()
 {
@@ -237,3 +241,5 @@ int main(int argc, char **argv)
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }
+
+// NOLINTEND(cppcoreguidelines-pro-type-vararg)

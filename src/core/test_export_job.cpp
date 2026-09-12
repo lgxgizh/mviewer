@@ -12,6 +12,10 @@
 #include <iterator>
 #include <string>
 
+// This TU reports through std::printf, which the CI clang-tidy check set flags
+// as a c-style vararg call; the repo's test files suppress it the same way.
+// NOLINTBEGIN(cppcoreguidelines-pro-type-vararg)
+
 namespace fs = std::filesystem;
 
 static int g_failures = 0;
@@ -219,3 +223,5 @@ int main(int argc, char **argv)
     std::printf("\n%s (%d failures)\n", g_failures == 0 ? "ALL PASS" : "HAS FAILURES", g_failures);
     return g_failures == 0 ? 0 : 1;
 }
+
+// NOLINTEND(cppcoreguidelines-pro-type-vararg)
