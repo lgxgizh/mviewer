@@ -144,8 +144,7 @@ static void writeBytes(const std::string &path, const std::vector<unsigned char>
     QFile f(QString::fromStdString(path));
     if (!f.open(QIODevice::WriteOnly))
         return;
-    f.write(reinterpret_cast<const char *>(bytes.data()),
-            static_cast<qint64>(bytes.size()));
+    f.write(reinterpret_cast<const char *>(bytes.data()), static_cast<qint64>(bytes.size()));
     f.close();
 }
 
@@ -186,8 +185,8 @@ static void testMetadataHostileOffsets()
     // (c) Entry count far past the buffer: the entry loop must stop at the end.
     {
         const std::string p = (dir.path() + "/evil-count.tif").toStdString();
-        writeBytes(p, {0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00,
-                       0xFF, 0xFF}); // count = 65535, no entries present
+        writeBytes(p, {0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00, 0xFF,
+                       0xFF}); // count = 65535, no entries present
         const mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
         CHECK(!m.hasGps, "IFD entry count past EOF -> no GPS, no crash");
     }

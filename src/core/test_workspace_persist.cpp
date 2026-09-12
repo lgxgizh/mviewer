@@ -57,8 +57,8 @@ static void testTruncatedJsonTerminates()
     {
         const std::string json = "{\"root\":\"x\",\"folders\":[],\"comparedImages\":[";
         bool rejected = false;
-        const qint64 ms = elapsedMs(
-            [&] { rejected = !mviewer::core::deserializeWorkspace(json).has_value(); });
+        const qint64 ms =
+            elapsedMs([&] { rejected = !mviewer::core::deserializeWorkspace(json).has_value(); });
         CHECK(rejected && ms < 1000, kBudgetNote.c_str());
     }
 
@@ -94,8 +94,9 @@ static void testTruncatedJsonTerminates()
     {
         mviewer::domain::Workspace ok;
         ok.rootPath = "D:/photos";
-        CHECK(mviewer::core::deserializeWorkspace(mviewer::core::serializeWorkspace(ok)).has_value(),
-              "well-formed workspace still parses");
+        CHECK(
+            mviewer::core::deserializeWorkspace(mviewer::core::serializeWorkspace(ok)).has_value(),
+            "well-formed workspace still parses");
     }
 }
 
