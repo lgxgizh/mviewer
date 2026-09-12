@@ -143,6 +143,7 @@ static uint32_t readU32(const unsigned char *buf, bool little)
 // Deliberately written as a subtraction: `offset + need <= size` wraps in
 // 32-bit arithmetic, so a crafted IFD offset (e.g. 0xFFFFFFFF) passes the
 // addition form and turns the following read into a wild pointer dereference.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static bool fits(size_t offset, size_t need, size_t size)
 {
     return offset <= size && need <= size - offset;

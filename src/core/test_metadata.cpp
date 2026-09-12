@@ -5,12 +5,14 @@
 #include "core/image/MetadataReader.h"
 #include "core/image/decoder/DecoderRegistry.h"
 
+#include <QByteArray>
 #include <QColor>
 #include <QCoreApplication>
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
 #include <QTemporaryDir>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -139,12 +141,12 @@ static void testMetadataReader()
 // Hostile/degenerate EXIF offsets. A crafted file must degrade to "no GPS",
 // never to a wild pointer read: the IFD bounds checks used 32-bit addition,
 // which wraps for file-supplied offsets such as 0xFFFFFFFF.
-static void writeBytes(const std::string &path, const std::vector<unsigned char> &bytes)
+static void writeBytes(const std::string &path, const char *hexBytes)
 {
     QFile f(QString::fromStdString(path));
     if (!f.open(QIODevice::WriteOnly))
         return;
-    f.write(reinterpret_cast<const char *>(bytes.data()), static_cast<qint64>(bytes.size()));
+    f.write(QByteArray::fromHex(hexBytes));
     f.close();
 }
 
@@ -160,7 +162,7 @@ static void testMetadataHostileOffsets()
     //     the bounds check, dereferencing `data + 0xFFFFFFFF`.
     {
         const std::string p = (dir.path() + "/evil-ifd0.tif").toStdString();
-        writeBytes(p, {0x49, 0x49, 0x2A, 0x00, 0xFF, 0xFF, 0xFF, 0xFF});
+        writeBytes(p, "49492a00ffffffff"); // II*\0 + IFD0 offset 0xFFFFFFFF
         const mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
         CHECK(!m.hasGps, "IFD0 offset 0xFFFFFFFF -> no GPS, no crash");
     }
@@ -169,15 +171,9 @@ static void testMetadataHostileOffsets()
     //     gpsIfd guard, reaching parseGpsIfd with a wild offset.
     {
         const std::string p = (dir.path() + "/evil-gps.tif").toStdString();
-        std::vector<unsigned char> bytes = {
-            0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00, // II, IFD0 at 8
-            0x01, 0x00,                                     // 1 entry
-            0x25, 0x88,                                     // tag 0x8825 (GPS IFD)
-            0x04, 0x00,                                     // type LONG
-            0x01, 0x00, 0x00, 0x00,                         // count 1
-            0xFF, 0xFF, 0xFF, 0xFF,                         // value 0xFFFFFFFF
-        };
-        writeBytes(p, bytes);
+        // II, IFD0 at 8, one entry: tag 0x8825 (GPS IFD), type LONG, count 1,
+        // value 0xFFFFFFFF.
+        writeBytes(p, "49492a000800000001002588040001000000ffffffff");
         const mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
         CHECK(!m.hasGps, "GPS IFD offset 0xFFFFFFFF -> no GPS, no crash");
     }
@@ -185,8 +181,8 @@ static void testMetadataHostileOffsets()
     // (c) Entry count far past the buffer: the entry loop must stop at the end.
     {
         const std::string p = (dir.path() + "/evil-count.tif").toStdString();
-        writeBytes(p, {0x49, 0x49, 0x2A, 0x00, 0x08, 0x00, 0x00, 0x00, 0xFF,
-                       0xFF}); // count = 65535, no entries present
+        // II*\0 + IFD0 at 8 + entry count 65535 with no entries present.
+        writeBytes(p, "49492a0008000000ffff");
         const mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
         CHECK(!m.hasGps, "IFD entry count past EOF -> no GPS, no crash");
     }
@@ -199,6 +195,31 @@ static void testMetadataHostileOffsets()
         CHECK(img.save(QString::fromStdString(p), "PNG"), "write plain png");
         const mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
         CHECK(m.width == 32 && m.height == 16, "well-formed file still reads dimensions");
+    }
+
+    // (e) Positive control: a well-formed TIFF with a GPS IFD must still be
+    //     parsed. Without this, (a)-(c) could pass by never reaching the GPS
+    //     path at all and would not protect the bounds checks they target.
+    //     Layout: header(8) IFD0@8(1 entry -> GPS IFD@26) GPS IFD@26(2 entries:
+    //     GPSLatitude -> rationals@56, GPSLongitude -> rationals@80).
+    {
+        const std::string p = (dir.path() + "/valid-gps.tif").toStdString();
+        writeBytes(p,
+                   "49492a0008000000"                                 // II*\0, IFD0 at 8
+                   "0100"                                             // 1 entry
+                   "25880400010000001a000000"                         // GPS IFD pointer -> 26
+                   "00000000"                                         // no next IFD
+                   "0200"                                             // GPS IFD: 2 entries
+                   "020005000300000038000000"                         // GPSLatitude -> 56
+                   "040005000300000050000000"                         // GPSLongitude -> 80
+                   "00000000"                                         // no next IFD
+                   "28000000010000001e000000010000000000000001000000" // 40/1, 30/1, 0/1
+                   "500000000100000000000000010000000000000001000000" // 80/1, 0/1, 0/1
+        );
+        const mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
+        CHECK(m.hasGps, "well-formed GPS TIFF still reports GPS");
+        CHECK(std::abs(m.gpsLatitude - 40.5) < 1e-6 && std::abs(m.gpsLongitude - 80.0) < 1e-6,
+              "GPS coordinates parsed exactly");
     }
 }
 
