@@ -188,7 +188,7 @@ static void testDiskCacheThreadAffinityAndStress()
     }
     if (workerConnections.size() < workerCount)
     {
-        printf("  observed %d worker connection(s):", workerConnections.size());
+        printf("  observed %d worker connection(s):", static_cast<int>(workerConnections.size()));
         for (const QString &name : workerConnections)
             printf(" %s", name.toUtf8().constData());
         printf("\n");
@@ -384,6 +384,7 @@ static void testRaw16CacheM42()
     std::atomic<int> failures{0};
     std::barrier start(8);
     std::vector<std::thread> workers;
+    workers.reserve(8);
     for (int t = 0; t < 8; ++t)
         workers.emplace_back(
             [&, t]
