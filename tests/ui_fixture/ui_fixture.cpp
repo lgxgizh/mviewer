@@ -11,6 +11,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QEventLoop>
 #include <QFile>
 #include <QImage>
 #include <QMainWindow>
@@ -18,6 +19,8 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTimer>
+#include <QWidget>
+#include <QWindow>
 #include <chrono>
 #include <cmath>
 #include <iostream>
@@ -38,6 +41,21 @@ struct UiTestFixture
     double tolerance = 8.0;        // per-channel diff threshold (0-255)
     double maxDiffFraction = 0.05; // fraction of pixels allowed to differ (5%)
 };
+
+// Bounded wait for a widget's first expose (see renderMainWindow): the golden
+// capture must not race the first paint on a loaded machine.
+static void waitForExposed(QWidget &widget, int timeoutMs = 5000)
+{
+    QElapsedTimer timer;
+    timer.start();
+    while (timer.elapsed() < timeoutMs)
+    {
+        QApplication::processEvents(QEventLoop::AllEvents, 20);
+        const QWindow *handle = widget.windowHandle();
+        if (widget.isVisible() && handle && handle->isExposed())
+            return;
+    }
+}
 
 struct UiTestResult
 {
@@ -196,6 +214,12 @@ static QImage renderMainWindow(int w = 1600, int h = 900)
     window.resize(w, h);
     window.show();
 
+    // Wait (bounded) for the first expose before settling. On a loaded machine
+    // the fixed 300 ms below was sometimes not enough and the capture happened
+    // mid-layout, which changed pixels and failed the golden comparison for
+    // reasons unrelated to the UI. The settle delay is deliberately kept, so the
+    // capture is never EARLIER than before (references stay valid).
+    waitForExposed(window);
     QApplication::processEvents();
     std::this_thread::sleep_for(std::chrono::milliseconds(300));
     QApplication::processEvents();
@@ -224,6 +248,7 @@ static QImage renderMainWindowWithImage(int w = 1600, int h = 900)
     QString imgPath = QStringLiteral("%1/test_image_0.png").arg(tempRoot);
     window.onImageOpen(imgPath);
 
+    waitForExposed(window);
     QApplication::processEvents();
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     QApplication::processEvents();

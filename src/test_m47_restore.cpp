@@ -44,22 +44,22 @@
 
 static int g_failures = 0;
 
-#define CHECK(c, m)                                                                                 \
-    do                                                                                              \
-    {                                                                                               \
-        if (!(c))                                                                                   \
-        {                                                                                           \
-            std::printf("FAIL: %s\n", m);                                                           \
-            std::fflush(stdout);                                                                    \
-            ++g_failures;                                                                           \
-        }                                                                                           \
+#define CHECK(c, m)                                                                                \
+    do                                                                                             \
+    {                                                                                              \
+        if (!(c))                                                                                  \
+        {                                                                                          \
+            std::printf("FAIL: %s\n", m);                                                          \
+            std::fflush(stdout);                                                                   \
+            ++g_failures;                                                                          \
+        }                                                                                          \
     } while (false)
 
-#define MARK(t)                                                                                     \
-    do                                                                                              \
-    {                                                                                               \
-        std::printf("%s\n", t);                                                                     \
-        std::fflush(stdout);                                                                        \
+#define MARK(t)                                                                                    \
+    do                                                                                             \
+    {                                                                                              \
+        std::printf("%s\n", t);                                                                    \
+        std::fflush(stdout);                                                                       \
     } while (false)
 
 namespace
@@ -172,9 +172,9 @@ int main(int argc, char **argv)
     writePng(rootB + "/b.png");
 
     const QString wsA = writeWorkspaceFile(dir, "a.mvws", makeWorkspace(rootA, {rootA + "/a.png"}));
-    const QString wsB =
-        writeWorkspaceFile(dir, "b.mvws", makeWorkspace(rootB, {rootB + "/b.png"}));
-    const QString projA = writeProjectFile(dir, "a.mvproj", makeWorkspace(rootA, {rootA + "/a.png"}));
+    const QString wsB = writeWorkspaceFile(dir, "b.mvws", makeWorkspace(rootB, {rootB + "/b.png"}));
+    const QString projA =
+        writeProjectFile(dir, "a.mvproj", makeWorkspace(rootA, {rootA + "/a.png"}));
 
     // ── R1: async success + ordering ─────────────────────────────────────────
     {
@@ -192,7 +192,11 @@ int main(int argc, char **argv)
         CHECK(!started.contains(QStringLiteral("工作区已打开")),
               "R1: the restore is NOT applied synchronously (async worker path)");
         CHECK(waitTrue(
-                  [&] { return w.statusBar()->currentMessage().contains(QStringLiteral("工作区已打开")); },
+                  [&]
+                  {
+                      return w.statusBar()->currentMessage().contains(
+                          QStringLiteral("工作区已打开"));
+                  },
                   30000),
               "R1: the parsed workspace lands on a later UI delivery");
         DirectoryModel *model = w.findChild<DirectoryModel *>();
@@ -209,10 +213,12 @@ int main(int argc, char **argv)
         MainWindow w;
         w.show();
         w.openProjectFile(projA);
-        CHECK(waitTrue(
-                  [&] { return w.statusBar()->currentMessage().contains(QStringLiteral("项目已打开")); },
-                  30000),
-              "R1b: the project's embedded workspace restores");
+        CHECK(
+            waitTrue(
+                [&]
+                { return w.statusBar()->currentMessage().contains(QStringLiteral("项目已打开")); },
+                30000),
+            "R1b: the project's embedded workspace restores");
         DirectoryModel *model = w.findChild<DirectoryModel *>();
         CHECK(model && model->currentDirectory() == rootA,
               "R1b: the project restores the browsing directory");
@@ -225,7 +231,11 @@ int main(int argc, char **argv)
         w.show();
         w.openWorkspaceFile(wsA);
         CHECK(waitTrue(
-                  [&] { return w.statusBar()->currentMessage().contains(QStringLiteral("工作区已打开")); },
+                  [&]
+                  {
+                      return w.statusBar()->currentMessage().contains(
+                          QStringLiteral("工作区已打开"));
+                  },
                   30000),
               "R2: baseline workspace applied");
         DirectoryModel *model = w.findChild<DirectoryModel *>();
@@ -239,7 +249,15 @@ int main(int argc, char **argv)
             installModalCloser(closer);
             closer.start();
             w.openWorkspaceFile(dir + "/no_such_file.mvws");
-            pump(4000);
+            // Wait (bounded) for the failure terminal instead of a fixed 4 s
+            // pump: the assertions below read that message.
+            (void)waitTrue(
+                [&]
+                {
+                    return w.statusBar()->currentMessage().contains(
+                        QStringLiteral("打开工作区失败"));
+                },
+                15000);
             closer.stop();
         }
         CHECK(model && model->currentDirectory() == dirBefore,
@@ -260,7 +278,15 @@ int main(int argc, char **argv)
             installModalCloser(closer);
             closer.start();
             w.openWorkspaceFile(bad);
-            pump(4000);
+            // Same bounded terminal wait: a corrupt document reports through the
+            // same failure path (mainwindow_session.cpp: "工作区文件无效或为空。").
+            (void)waitTrue(
+                [&]
+                {
+                    return w.statusBar()->currentMessage().contains(
+                        QStringLiteral("打开工作区失败"));
+                },
+                15000);
             closer.stop();
         }
         CHECK(model && model->currentDirectory() == dirBefore,
@@ -280,7 +306,11 @@ int main(int argc, char **argv)
         w.openWorkspaceFile(wsA);
         w.openWorkspaceFile(wsB);
         CHECK(waitTrue(
-                  [&] { return w.statusBar()->currentMessage().contains(QStringLiteral("工作区已打开")); },
+                  [&]
+                  {
+                      return w.statusBar()->currentMessage().contains(
+                          QStringLiteral("工作区已打开"));
+                  },
                   30000),
               "R3: the final open lands");
         pump(500); // allow any stale A delivery to attempt landing
@@ -310,8 +340,8 @@ int main(int argc, char **argv)
                       uint64_t active = 0;
                       for (int p = 0; p < 5; ++p)
                       {
-                          const auto m =
-                              TaskScheduler::instance().metrics(static_cast<TaskScheduler::PoolType>(p));
+                          const auto m = TaskScheduler::instance().metrics(
+                              static_cast<TaskScheduler::PoolType>(p));
                           pending += m.pending;
                           active += m.active_tasks;
                       }

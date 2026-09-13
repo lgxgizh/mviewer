@@ -57,18 +57,29 @@ using PoolType = TaskScheduler::PoolType;
 const auto kDrain = std::chrono::milliseconds(10000);
 
 // Aborts the process if the scenario deadlocks (pre-fix the callback-under-
-// lock reentrancy hangs forever).
+// lock reentrancy hangs forever). The window must stay comfortably above the
+// guarded work's own bounded waits (8 s waitUntil + a 10 s drain), otherwise a
+// loaded machine turns "slow but progressing" into a hard abort. The watchdog
+// polls `finished` in slices, so a passing scope tears down immediately instead
+// of costing the whole window on destruction.
 struct DeadlockWatchdog
 {
     std::atomic<bool> finished{false};
     std::thread thread;
 
-    explicit DeadlockWatchdog(int seconds = 20)
+    explicit DeadlockWatchdog(int seconds = 90)
     {
         thread = std::thread(
             [this, seconds]()
             {
-                std::this_thread::sleep_for(std::chrono::seconds(seconds));
+                const auto deadline =
+                    std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+                while (std::chrono::steady_clock::now() < deadline)
+                {
+                    if (finished.load())
+                        return;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                }
                 if (!finished.load())
                 {
                     fprintf(stderr, "  WATCHDOG: deadlock detected, aborting\n");

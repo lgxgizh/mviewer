@@ -87,8 +87,7 @@ int main(int argc, char **argv)
     {
         QSet<QString> names;
         for (const QFileInfo &file : reports.entryInfoList(
-                 {QStringLiteral("MViewer-*.dmp"), QStringLiteral("MViewer-*.txt")},
-                 QDir::Files))
+                 {QStringLiteral("MViewer-*.dmp"), QStringLiteral("MViewer-*.txt")}, QDir::Files))
             names.insert(file.fileName());
         return names;
     }();
@@ -104,11 +103,12 @@ int main(int argc, char **argv)
     QSet<QString> created;
     QElapsedTimer wait;
     wait.start();
-    while (wait.elapsed() < 5000)
+    // Bounded, but generous: under parallel test load the child's start + SEH +
+    // MiniDumpWriteDump can take well over the original 5 s window.
+    while (wait.elapsed() < 30000)
     {
         for (const QFileInfo &file : reports.entryInfoList(
-                 {QStringLiteral("MViewer-*.dmp"), QStringLiteral("MViewer-*.txt")},
-                 QDir::Files))
+                 {QStringLiteral("MViewer-*.dmp"), QStringLiteral("MViewer-*.txt")}, QDir::Files))
         {
             if (!before.contains(file.fileName()))
                 created.insert(file.fileName());

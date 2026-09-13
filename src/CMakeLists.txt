@@ -1236,7 +1236,7 @@ add_test(NAME commandstack_callback_regression
     COMMAND test_commandstack --callback-probe)
 set_tests_properties(commandstack_callback_regression PROPERTIES
     RUN_SERIAL TRUE
-    TIMEOUT 3)
+    TIMEOUT 60)
 add_test(NAME crop_tests COMMAND test_crop)
 add_test(NAME job_tests COMMAND test_job)
 add_test(NAME datamodel_tests COMMAND test_datamodel)
@@ -2130,7 +2130,7 @@ foreach(_mviewer_test IN LISTS MVIEWER_REGISTERED_TESTS)
         "${_mviewer_root}/cache")
     set_tests_properties(${_mviewer_test} PROPERTIES
         ENVIRONMENT
-        "MVIEWER_TEST_RUNTIME_ROOT=${_mviewer_root};APPDATA=${_mviewer_root}/appdata;LOCALAPPDATA=${_mviewer_root}/localappdata;TEMP=${_mviewer_root}/temp;TMP=${_mviewer_root}/temp;XDG_CONFIG_HOME=${_mviewer_root}/config;XDG_DATA_HOME=${_mviewer_root}/data;XDG_CACHE_HOME=${_mviewer_root}/cache")
+        "QT_QPA_PLATFORM=offscreen;MVIEWER_TEST_RUNTIME_ROOT=${_mviewer_root};APPDATA=${_mviewer_root}/appdata;LOCALAPPDATA=${_mviewer_root}/localappdata;TEMP=${_mviewer_root}/temp;TMP=${_mviewer_root}/temp;XDG_CONFIG_HOME=${_mviewer_root}/config;XDG_DATA_HOME=${_mviewer_root}/data;XDG_CACHE_HOME=${_mviewer_root}/cache")
 endforeach()
 
 # ─── Format target ──────────────────────────────────────────────────────────

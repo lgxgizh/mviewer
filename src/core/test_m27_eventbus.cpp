@@ -61,7 +61,16 @@ struct DeadlockWatchdog
     {
         thread = std::thread([this, seconds]()
                              {
-                                 std::this_thread::sleep_for(std::chrono::seconds(seconds));
+                                 // Poll in slices: a scope that completes normally
+                                 // must not pay the whole window on destruction.
+                                 const auto deadline = std::chrono::steady_clock::now() +
+                                                       std::chrono::seconds(seconds);
+                                 while (std::chrono::steady_clock::now() < deadline)
+                                 {
+                                     if (finished.load())
+                                         return;
+                                     std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                                 }
                                  if (!finished.load())
                                  {
                                      fprintf(stderr, "  WATCHDOG: deadlock detected, aborting\n");

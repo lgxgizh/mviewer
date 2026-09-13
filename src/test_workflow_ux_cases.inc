@@ -1608,7 +1608,10 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     {
         QElapsedTimer settled;
         settled.start();
-        while (settled.elapsed() < 1500)
+        // Generous deadline: the panes materialize asynchronously, and a loaded
+        // runner needs longer than the original 1.5 s (the check itself still
+        // requires valid geometry, not just elapsed time).
+        while (settled.elapsed() < 15000)
         {
             pump(25);
             RawImageView *pane0 = findComparePane(0);

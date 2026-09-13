@@ -7,7 +7,7 @@
 //   thumbnailpanel_async.cpp       scan + dimension-probe workers          476
 //   thumbnailpanel_delegates.cpp   thumb / details / list item delegates   527
 //   thumbnailpanel_fileops.cpp     rename / trash / copy / move / batch export 784
-//   thumbnailpanel_filters.cpp     filtering / sorting / metadata index    705
+//   thumbnailpanel_filters.cpp     filtering / sorting / metadata index    716
 //   thumbnailpanel_live.cpp        incremental live-folder delta apply     445
 //   thumbnailpanel_pipeline.cpp    visible-range scheduling / delivery     220
 //   thumbnailpanel_selection.cpp   selection / path navigation             147

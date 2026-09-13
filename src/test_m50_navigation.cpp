@@ -6,9 +6,9 @@
 // the sidecar import must update the active gallery without blocking the
 // initial directory transition.
 
+#include "compareworkspace.h"
 #include "directorymodel.h"
 #include "directorytree.h"
-#include "compareworkspace.h"
 #include "mainwindow.h"
 #include "runtime_storage.h"
 #include "selectionmodel.h"
@@ -21,13 +21,13 @@
 #include <QAction>
 #include <QApplication>
 #include <QCoreApplication>
+#include <QDialog>
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
 #include <QLineEdit>
-#include <QDialog>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -40,16 +40,16 @@ namespace
 {
 int g_failures = 0;
 
-#define CHECK(cond, msg)                                                                            \
-    do                                                                                              \
-    {                                                                                               \
-        if (cond)                                                                                   \
-            std::cout << "[ok] " << msg << "\n";                                                    \
-        else                                                                                        \
-        {                                                                                           \
-            std::cout << "[FAIL] " << msg << " (" << __FILE__ << ":" << __LINE__ << ")\n";        \
-            ++g_failures;                                                                           \
-        }                                                                                           \
+#define CHECK(cond, msg)                                                                           \
+    do                                                                                             \
+    {                                                                                              \
+        if (cond)                                                                                  \
+            std::cout << "[ok] " << msg << "\n";                                                   \
+        else                                                                                       \
+        {                                                                                          \
+            std::cout << "[FAIL] " << msg << " (" << __FILE__ << ":" << __LINE__ << ")\n";         \
+            ++g_failures;                                                                          \
+        }                                                                                          \
     } while (false)
 
 void pump(int ms = 20)
@@ -105,8 +105,12 @@ bool navigate(DirectoryTree *tree, DirectoryModel *directory, const QString &pat
     QElapsedTimer elapsed;
     elapsed.start();
     tree->navigateTo(path, true);
+    // Only the call itself is budgeted: the assertion is "navigateTo returns
+    // without waiting for the sidecar scan". Timing the bounded waitFor below
+    // made a slow-but-correct commit fail the 500 ms budget.
+    const qint64 callMs = elapsed.elapsed();
     const bool committed = waitFor([&] { return samePath(directory->currentDirectory(), path); });
-    CHECK(elapsed.elapsed() < 500, "directory transition returns without waiting for the sidecar scan");
+    CHECK(callMs < 500, "directory transition returns without waiting for the sidecar scan");
     return committed;
 }
 
@@ -174,152 +178,154 @@ int main(int argc, char **argv)
           "clear in-store metadata before opening the directory");
 
     {
-    MainWindow window;
-    window.resize(1100, 750);
-    window.show();
-    pump(80);
-    auto *tree = window.findChild<DirectoryTree *>();
-    auto *directory = window.findChild<DirectoryModel *>();
-    auto *panel = window.findChild<ThumbnailPanel *>();
-    auto *selection = window.findChild<SelectionModel *>();
-    auto *pathEdit = window.findChild<QLineEdit *>(QStringLiteral("pathEdit"));
-    QAction *back = actionWithShortcut(window, QKeySequence(QStringLiteral("Ctrl+Alt+Left")));
-    QAction *forward = actionWithShortcut(window, QKeySequence(QStringLiteral("Ctrl+Alt+Right")));
-    CHECK(tree && directory && panel && selection && pathEdit,
-          "MainWindow exposes the production navigation SSOT objects");
-    CHECK(back && forward, "directory back/forward actions are registered");
-    if (!tree || !directory || !panel || !selection || !pathEdit || !back || !forward)
-        return 1;
+        MainWindow window;
+        window.resize(1100, 750);
+        window.show();
+        pump(80);
+        auto *tree = window.findChild<DirectoryTree *>();
+        auto *directory = window.findChild<DirectoryModel *>();
+        auto *panel = window.findChild<ThumbnailPanel *>();
+        auto *selection = window.findChild<SelectionModel *>();
+        auto *pathEdit = window.findChild<QLineEdit *>(QStringLiteral("pathEdit"));
+        QAction *back = actionWithShortcut(window, QKeySequence(QStringLiteral("Ctrl+Alt+Left")));
+        QAction *forward =
+            actionWithShortcut(window, QKeySequence(QStringLiteral("Ctrl+Alt+Right")));
+        CHECK(tree && directory && panel && selection && pathEdit,
+              "MainWindow exposes the production navigation SSOT objects");
+        CHECK(back && forward, "directory back/forward actions are registered");
+        if (!tree || !directory || !panel || !selection || !pathEdit || !back || !forward)
+            return 1;
 
-    window.openExternalTargets({imageA});
-    CHECK(waitFor([&] { return selection->currentImage() == imageA; }),
-          "external-open dispatcher sends one image to the Viewer workflow");
-    const QString sessionDirBeforeMixedOpen = directory->currentDirectory();
-    const QString sessionImageBeforeMixedOpen = selection->currentImage();
-    window.openExternalTargets({imageA, unsupported});
-    pump();
-    CHECK(samePath(directory->currentDirectory(), sessionDirBeforeMixedOpen) &&
-              selection->currentImage() == sessionImageBeforeMixedOpen,
-          "mixed external-open rejection preserves the live session");
-    window.openExternalTargets({bPath});
-    CHECK(waitFor([&] { return samePath(directory->currentDirectory(), bPath); }),
-          "external-open dispatcher sends one directory to Browse");
+        window.openExternalTargets({imageA});
+        CHECK(waitFor([&] { return selection->currentImage() == imageA; }),
+              "external-open dispatcher sends one image to the Viewer workflow");
+        const QString sessionDirBeforeMixedOpen = directory->currentDirectory();
+        const QString sessionImageBeforeMixedOpen = selection->currentImage();
+        window.openExternalTargets({imageA, unsupported});
+        pump();
+        CHECK(samePath(directory->currentDirectory(), sessionDirBeforeMixedOpen) &&
+                  selection->currentImage() == sessionImageBeforeMixedOpen,
+              "mixed external-open rejection preserves the live session");
+        window.openExternalTargets({bPath});
+        CHECK(waitFor([&] { return samePath(directory->currentDirectory(), bPath); }),
+              "external-open dispatcher sends one directory to Browse");
 
-    panel->setRatingFilter(5);
-    CHECK(navigate(tree, directory, aPath), "Unicode directory A commits through DirectoryTree");
-    CHECK(waitFor([&] { return samePath(panel->currentDir(), aPath); }),
-          "gallery follows the committed directory A");
-    CHECK(waitFor([&] { return panel->pathList().size() == 1; }),
-          "async sidecar import converges the active rating filter in directory A");
-    CHECK(ratings.rating(imageAUtf8) == 5 && ratings.colorLabel(imageAUtf8) == 3 &&
-              ratings.picked(imageAUtf8) && ratings.rejected(imageAUtf8),
-          "sidecar import restores rating, label, picked, and rejected state");
-    CHECK(selection->currentImage() == imageA,
-          "sidecar convergence preserves the gallery current-image publication");
+        panel->setRatingFilter(5);
+        CHECK(navigate(tree, directory, aPath),
+              "Unicode directory A commits through DirectoryTree");
+        CHECK(waitFor([&] { return samePath(panel->currentDir(), aPath); }),
+              "gallery follows the committed directory A");
+        CHECK(waitFor([&] { return panel->pathList().size() == 1; }),
+              "async sidecar import converges the active rating filter in directory A");
+        CHECK(ratings.rating(imageAUtf8) == 5 && ratings.colorLabel(imageAUtf8) == 3 &&
+                  ratings.picked(imageAUtf8) && ratings.rejected(imageAUtf8),
+              "sidecar import restores rating, label, picked, and rejected state");
+        CHECK(selection->currentImage() == imageA,
+              "sidecar convergence preserves the gallery current-image publication");
 
-    CHECK(navigate(tree, directory, bPath), "directory B commits through the same owner");
-    CHECK(waitFor([&] { return samePath(panel->currentDir(), bPath); }),
-          "gallery follows directory B");
-    CHECK(waitFor([&] { return panel->pathList().isEmpty(); }),
-          "directory B does not inherit directory A's active rating filter result");
-    CHECK(ratings.rating(imageBUtf8) == 0, "directory B has no stale rating import");
+        CHECK(navigate(tree, directory, bPath), "directory B commits through the same owner");
+        CHECK(waitFor([&] { return samePath(panel->currentDir(), bPath); }),
+              "gallery follows directory B");
+        CHECK(waitFor([&] { return panel->pathList().isEmpty(); }),
+              "directory B does not inherit directory A's active rating filter result");
+        CHECK(ratings.rating(imageBUtf8) == 0, "directory B has no stale rating import");
 
-    back->trigger();
-    CHECK(waitFor([&] { return samePath(directory->currentDirectory(), aPath); }),
-          "directory Back restores A");
-    CHECK(waitFor([&] { return panel->pathList().size() == 1; }),
-          "Back re-runs Sidecar convergence for A");
-    forward->trigger();
-    CHECK(waitFor([&] { return samePath(directory->currentDirectory(), bPath); }),
-          "directory Forward remains available after Back");
-    CHECK(waitFor([&] { return panel->pathList().isEmpty(); }),
-          "Forward restores B's filtered result");
+        back->trigger();
+        CHECK(waitFor([&] { return samePath(directory->currentDirectory(), aPath); }),
+              "directory Back restores A");
+        CHECK(waitFor([&] { return panel->pathList().size() == 1; }),
+              "Back re-runs Sidecar convergence for A");
+        forward->trigger();
+        CHECK(waitFor([&] { return samePath(directory->currentDirectory(), bPath); }),
+              "directory Forward remains available after Back");
+        CHECK(waitFor([&] { return panel->pathList().isEmpty(); }),
+              "Forward restores B's filtered result");
 
-    pathEdit->setText(QDir::toNativeSeparators(aPath));
-    pathEdit->returnPressed();
-    CHECK(waitFor([&] { return samePath(directory->currentDirectory(), aPath); }),
-          "path edit commits through the same directory transition owner");
+        pathEdit->setText(QDir::toNativeSeparators(aPath));
+        pathEdit->returnPressed();
+        CHECK(waitFor([&] { return samePath(directory->currentDirectory(), aPath); }),
+              "path edit commits through the same directory transition owner");
 
-    // M52: adversarial boundary checks use production entry points. The last
-    // directory request wins, and a source removed before its scan lands must
-    // not become a stale gallery item.
-    panel->setRatingFilter(0);
-    tree->navigateTo(aPath, true);
-    tree->navigateTo(bPath, true);
-    tree->navigateTo(cPath, true);
-    CHECK(QFile::remove(disappearing),
-          "remove a source while rapid A/B/C navigation is still converging");
-    CHECK(waitFor([&] { return samePath(directory->currentDirectory(), cPath); }),
-          "rapid A/B/C navigation commits only the newest directory");
-    CHECK(waitFor([&] { return samePath(panel->currentDir(), cPath); }),
-          "rapid navigation leaves the gallery owned by directory C");
-    CHECK(waitFor([&] { return panel->pathList().size() == 2; }),
-          "gallery excludes a source that disappeared during navigation");
+        // M52: adversarial boundary checks use production entry points. The last
+        // directory request wins, and a source removed before its scan lands must
+        // not become a stale gallery item.
+        panel->setRatingFilter(0);
+        tree->navigateTo(aPath, true);
+        tree->navigateTo(bPath, true);
+        tree->navigateTo(cPath, true);
+        CHECK(QFile::remove(disappearing),
+              "remove a source while rapid A/B/C navigation is still converging");
+        CHECK(waitFor([&] { return samePath(directory->currentDirectory(), cPath); }),
+              "rapid A/B/C navigation commits only the newest directory");
+        CHECK(waitFor([&] { return samePath(panel->currentDir(), cPath); }),
+              "rapid navigation leaves the gallery owned by directory C");
+        CHECK(waitFor([&] { return panel->pathList().size() == 2; }),
+              "gallery excludes a source that disappeared during navigation");
 
-    const QString sessionDirBeforeInvalidOpen = directory->currentDirectory();
-    const QString sessionImageBeforeInvalidOpen = selection->currentImage();
-    window.openExternalTargets({root.filePath(QStringLiteral("missing image.png"))});
-    window.openExternalTargets({unsupported});
-    pump();
-    CHECK(samePath(directory->currentDirectory(), sessionDirBeforeInvalidOpen) &&
-              selection->currentImage() == sessionImageBeforeInvalidOpen,
-          "missing and unsupported external targets preserve the live session");
+        const QString sessionDirBeforeInvalidOpen = directory->currentDirectory();
+        const QString sessionImageBeforeInvalidOpen = selection->currentImage();
+        window.openExternalTargets({root.filePath(QStringLiteral("missing image.png"))});
+        window.openExternalTargets({unsupported});
+        pump();
+        CHECK(samePath(directory->currentDirectory(), sessionDirBeforeInvalidOpen) &&
+                  selection->currentImage() == sessionImageBeforeInvalidOpen,
+              "missing and unsupported external targets preserve the live session");
 
-    window.openExternalTargets({imageC1, imageC2});
-    CompareWorkspace *compare = nullptr;
-    CHECK(waitFor(
-              [&]
-              {
-                  compare = window.findChild<CompareWorkspace *>();
-                  return compare && compare->comparedImageCount() == 2;
-              },
-              15000),
-          "two external images cross the real Compare boundary");
-    if (compare)
-    {
-        CHECK(compare->comparedImages().size() == 2,
-              "Compare publishes both source-backed panes after async load");
-        const mviewer::domain::Selection roi{2, 3, 10, 11};
-        compare->applyROI(roi);
-        const auto applied = compare->currentROI();
-        CHECK(applied.x == roi.x && applied.y == roi.y && applied.width == roi.width &&
-                  applied.height == roi.height,
-              "ROI state remains attached to the active Compare workspace");
-
-        const QStringList finalCompare{imageC2, imageC1};
-        compare->setImages({imageB, imageC1});
-        compare->setImages(finalCompare);
+        window.openExternalTargets({imageC1, imageC2});
+        CompareWorkspace *compare = nullptr;
         CHECK(waitFor(
                   [&]
                   {
-                      return compare->comparedImageCount() == 2 &&
-                             compare->comparedImages() == finalCompare;
+                      compare = window.findChild<CompareWorkspace *>();
+                      return compare && compare->comparedImageCount() == 2;
                   },
                   15000),
-              "rapid Compare pane replacement A-to-B-to-A drops stale loads");
-    }
-    if (auto *compareDialog = window.findChild<QDialog *>(QStringLiteral("compareDialog")))
-        compareDialog->close();
+              "two external images cross the real Compare boundary");
+        if (compare)
+        {
+            CHECK(compare->comparedImages().size() == 2,
+                  "Compare publishes both source-backed panes after async load");
+            const mviewer::domain::Selection roi{2, 3, 10, 11};
+            compare->applyROI(roi);
+            const auto applied = compare->currentROI();
+            CHECK(applied.x == roi.x && applied.y == roi.y && applied.width == roi.width &&
+                      applied.height == roi.height,
+                  "ROI state remains attached to the active Compare workspace");
 
-    window.close();
-    // Flush close-time queued deliveries while the MainWindow and QApplication
-    // are both still alive. Under parallel CTest, leaving these DeferredDelete
-    // events pending can crash the process after the test has printed PASS.
-    pump(100);
-    auto &scheduler = TaskScheduler::instance();
-    CHECK(scheduler.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(10)),
-          "image decode background work drains after MainWindow close");
-    CHECK(scheduler.drain(TaskScheduler::PoolType::ThumbnailPool, std::chrono::seconds(10)),
-          "thumbnail background work drains after MainWindow close");
-    CHECK(scheduler.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(10)),
-          "Sidecar background work drains after MainWindow close");
-    CHECK(scheduler.drain(TaskScheduler::PoolType::AnalysisPool, std::chrono::seconds(10)),
-          "analysis background work drains after MainWindow close");
-    CHECK(scheduler.drain(TaskScheduler::PoolType::IOPool, std::chrono::seconds(10)),
-          "I/O background work drains after MainWindow close");
-    const auto metrics = scheduler.metrics(TaskScheduler::PoolType::MetadataPool);
-    CHECK(metrics.pending == 0 && metrics.active_tasks == 0,
-          "Sidecar scheduler pending and active counts converge to zero");
+            const QStringList finalCompare{imageC2, imageC1};
+            compare->setImages({imageB, imageC1});
+            compare->setImages(finalCompare);
+            CHECK(waitFor(
+                      [&]
+                      {
+                          return compare->comparedImageCount() == 2 &&
+                                 compare->comparedImages() == finalCompare;
+                      },
+                      15000),
+                  "rapid Compare pane replacement A-to-B-to-A drops stale loads");
+        }
+        if (auto *compareDialog = window.findChild<QDialog *>(QStringLiteral("compareDialog")))
+            compareDialog->close();
+
+        window.close();
+        // Flush close-time queued deliveries while the MainWindow and QApplication
+        // are both still alive. Under parallel CTest, leaving these DeferredDelete
+        // events pending can crash the process after the test has printed PASS.
+        pump(100);
+        auto &scheduler = TaskScheduler::instance();
+        CHECK(scheduler.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(10)),
+              "image decode background work drains after MainWindow close");
+        CHECK(scheduler.drain(TaskScheduler::PoolType::ThumbnailPool, std::chrono::seconds(10)),
+              "thumbnail background work drains after MainWindow close");
+        CHECK(scheduler.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(10)),
+              "Sidecar background work drains after MainWindow close");
+        CHECK(scheduler.drain(TaskScheduler::PoolType::AnalysisPool, std::chrono::seconds(10)),
+              "analysis background work drains after MainWindow close");
+        CHECK(scheduler.drain(TaskScheduler::PoolType::IOPool, std::chrono::seconds(10)),
+              "I/O background work drains after MainWindow close");
+        const auto metrics = scheduler.metrics(TaskScheduler::PoolType::MetadataPool);
+        CHECK(metrics.pending == 0 && metrics.active_tasks == 0,
+              "Sidecar scheduler pending and active counts converge to zero");
     }
     pump(50);
     QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
