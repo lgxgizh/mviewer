@@ -1,11 +1,32 @@
 # Changelog
 
-## [1.0.29] - 2026-09-12
+## [1.0.30] - 2026-09-13
+
+A review pass over the whole codebase (crash/hang risks plus design problems)
+closed the findings below. The two user-visible themes: nothing in a file or a
+settings value can make the app read, allocate or decode without a bound, and
+core results are delivered deterministically instead of depending on ambient Qt
+state.
 
 ### Changed
 
-- **Larger Compare filenames:** pane captions and the on-image filename overlay
-  use a bigger bold type so names are readable at a glance.
+- **Core results no longer depend on an ambient Qt application.** Metadata
+  indexing and metadata presentation used to decide their delivery thread by
+  testing `QCoreApplication::instance()`, so the same call ran on the GUI thread
+  in the app, inline on a worker in a headless tool and however a unit test
+  happened to be set up. They now hand results to an explicitly installed
+  main-thread dispatcher (`main.cpp` installs the Qt event-loop one), and the
+  widget-touching consumers marshal to the GUI thread themselves.
+- **Batch runs report each file as it finishes** instead of printing the whole
+  result list once the job ends; the aggregate is unchanged for callers that
+  want it.
+- **Compare keeps only the transport it uses.** The engine's asynchronous diff
+  request and the EventBus event it published had no production subscriber —
+  the live path is the Compare workspace's analysis-pool batch with a
+  lifetime-guarded delivery — so the duplicate was removed.
+- **`docs/coding_style.md` documents this codebase** (error handling without
+  `std::expected`, braces/include order, LF-only commits, commit style) instead
+  of an aspirational design that contradicted `.clang-format` and the code.
 
 ### Fixed
 
@@ -39,9 +60,38 @@
 - **Pixel-inspector neighbourhood statistics were computed on the wrong pixels:**
   the analysis panel's page view holds 32-bit RGB data but was sampled as 24-bit,
   which skewed the mean/variance and swapped the red and blue channels.
-- **Compare no longer depends on an ambient Qt application to deliver results:**
-  core callbacks are deferred through an explicitly installed main-thread
-  dispatcher, so headless tools and tests get deterministic delivery.
+- **A crashed or cancelled thumbnail refresh can no longer leave the gallery
+  stale:** cache invalidation runs off the UI thread, and a compare pane whose
+  image shrank no longer reads past the end of its pixel link.
+- **Analysis, Compare and export can no longer lose or double-report results:**
+  a throwing analyzer is reported instead of silently producing nothing, the
+  difference map uses one implementation, and batch/export watcher results are
+  guarded.
+- **No more unbounded waits on shutdown:** asynchronous repository cancellation
+  and the disk cache are bounded (and the cache releases its per-thread SQLite
+  connections instead of leaking one per worker thread), so closing during heavy
+  work cannot hang or lose the cache's own bookkeeping.
+
+### Verification
+
+- **New `teardown_stress_tests`** (part of `.\build.ps1 Test`) creates a real
+  MainWindow with the browse/thumbnail/metadata pipelines and a CompareWorkspace
+  with queued decode and diff work, destroys them while that work is in flight,
+  and repeats: every round must finish inside its budget, no top-level window may
+  survive it, and the application must still open a window afterwards.
+- **`docs/adr/017-process-lifetime-services.md`** records the lifetime policy the
+  code already followed: process-wide services are leaked on purpose, objects the
+  application owns must survive destruction with queued work, tests may skip
+  process-exit teardown only with the platform reason named, and plugin modules
+  stay mapped. `docs/adr/016-qt-boundary-in-core-headers.md` records the Qt
+  boundary in core headers that `scripts/architecture_gate.ps1` now enforces.
+
+## [1.0.29] - 2026-09-12
+
+### Changed
+
+- **Larger Compare filenames:** pane captions and the on-image filename overlay
+  use a bigger bold type so names are readable at a glance.
 
 ## [1.0.28] - 2026-09-12
 

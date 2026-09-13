@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-09-12 · Version: **1.0.29 larger Compare filenames** · Release tag: **v1.0.26 published**
+> Snapshot: 2026-09-13 · Version: **1.0.30 review hardening** · Release tag: **v1.0.29 published**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
@@ -42,6 +42,26 @@
 > `docs/review/M61_PHASE0_ROI_WORKFLOW_BASELINE_2026-09-02.md`,
 > `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
+
+## 1.0.30 — Review hardening (2026-09-13)
+
+- **Bounded everything a file can drive:** EXIF/ICC offsets are range-checked
+  (a crafted 8-byte `.tif` used to dereference a wild pointer), an unterminated
+  JSON array no longer spins the parser, workspace/settings/session/preset/ICC
+  reads have size caps, animation probes and contact sheets are bounded, and a
+  rename pattern can no longer write outside the export folder.
+- **No unbounded waits or silent losses:** repository cancellation and disk-cache
+  shutdown are bounded, per-thread SQLite connections are released, a throwing
+  analyzer is reported instead of producing nothing, and the clipboard keeps its
+  own pixels after an export.
+- **Delivery is deterministic:** core callbacks go through an explicitly
+  installed main-thread dispatcher instead of sniffing `QCoreApplication`, and
+  batch runs report each file as it finishes.
+- Compare's dead asynchronous diff transport (no production subscriber) removed;
+  `docs/coding_style.md` now describes the code that exists.
+- Evidence: ADR 016 (Qt boundary in core headers, enforced by the architecture
+  gate), ADR 017 (process-lifetime services and teardown policy), and the new
+  `teardown_stress_tests` in `.\build.ps1 Test`.
 
 ## 1.0.29 — Larger Compare filenames (2026-09-12)
 
