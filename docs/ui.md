@@ -16,9 +16,9 @@ For what the product actually does, use:
 
 Passages that no longer match the product carry an explicit
 **[not implemented]** marker. The shortcut tables were corrected to the shipped
-keymap in 1.0.30 (they previously listed an intended keymap: `Space` = next
-image, `F` = fit to window, `Ctrl+O` = open file — none of which the product
-binds).
+keymap in 1.0.30: the earlier text listed an intended keymap (`Space` = next
+image, `F` = fit to window, `Ctrl+O` = open file) whose keys the product binds to
+different actions, or not at all.
 
 ---
 
@@ -95,6 +95,8 @@ above is the main window only.
 | -------- | ---------- | ------------- |
 | Zoom In | `Ctrl++` / `Ctrl+=` | Increase zoom level |
 | Zoom Out | `Ctrl+-` | Decrease zoom level |
+| Fit to window | `0` (viewer; `Ctrl+0` shares the action) | Scale the image to the canvas |
+| Actual size | `1` (viewer) | 100% (1:1 pixel) |
 | Fullscreen | `F11` (viewer: `F` or `F11`) | Toggle fullscreen mode |
 | Analysis panel | `Alt+H` | Toggle the analysis panel (histogram by default) |
 | Metadata panel | `Ctrl+I` | Toggle the metadata panel |
@@ -115,7 +117,7 @@ above is the main window only.
 | Open / activate | `Enter` | Open the selection in the viewer |
 | First Image | `Home` | Go to first image in folder |
 | Last Image | `End` | Go to last image in folder |
-| Previous / Next page | `PageUp` / `PageDown` | Page through the gallery |
+| Previous / Next page | `PageUp` / `PageDown` | Jump 10 images back / forward |
 | Refresh | `F5` | Rescan the current directory |
 
 > `Space` is **not** "next image" in the shipped build: in the browse window it
@@ -128,12 +130,14 @@ above is the main window only.
 | -------- | ---------- | ------------- |
 | Rename | `F2` | Rename the selected file |
 | Delete (MViewer staging) | `Delete` | Move the selection to the MViewer trash |
-| Rotate | `R` (viewer) | Rotate the displayed image |
+| ROI select mode | `R` (viewer) | Toggle the viewer's ROI selection mode |
 | Colour label | `0`–`6` | Assign a colour label to the selection |
 
 > The original spec listed `R` / `Shift+R` / `H` / `V` as rotate and flip
-> bindings of the main window. Only the viewer binds `R`; flips are done through
-> the toolbar and the command stack, which is what makes them undoable.
+> bindings. No rotate or flip shortcut is bound in the shipped build: rotation and
+> flips are command-stack entries (`RotateCommand` / `CropCommand`) driven from the
+> toolbar, which is what makes them undoable. The viewer's `R` toggles ROI
+> selection mode instead (`src/imageviewer.cpp`).
 
 ### Slideshow
 
@@ -167,7 +171,7 @@ above is the main window only.
 | ----- | -------- |
 | `←` / `→` | Previous / next image |
 | `Home` / `End` | First / last image |
-| `PageUp` / `PageDown` | Previous / next page |
+| `PageUp` / `PageDown` | 10 images back / forward |
 | `Enter` | Open the selection in the viewer |
 | `Ctrl+O` | Open folder |
 | `Ctrl+Shift+O` | Open file |
@@ -194,7 +198,7 @@ above is the main window only.
 | `←` / `→` | Previous / next image |
 | `+` / `-` | Zoom in / out |
 | `F` or `F11` | Fullscreen |
-| `R` | Rotate |
+| `R` | Toggle ROI selection mode |
 | `Esc` | Close the viewer |
 | `,` / `.` | Previous / next frame (animated / multi-page sources) |
 | `Space` | Play / pause animation (animated sources only) |
@@ -235,7 +239,7 @@ above is the main window only.
 | Input | Action |
 | ------- | -------- |
 | Mouse drag | Pan image |
-| Mouse wheel | Zoom in/out (cursor-centered) |
+| Mouse wheel | Zoom in/out (cursor-centered, ×1.15 per tick) |
 | Double-click | Toggle fit-to-window / actual size |
 | Right-drag (Compare) | Draw the ROI |
 | Touch pinch / drag | **[not implemented]** |
@@ -267,6 +271,7 @@ list / detail / filmstrip / compact view modes, a toolbar, and a resizable panel
 
 | Property | Value |
 | ---------- | ------- |
+| Size | 48–512 px, default 140 (`kMinThumbSize`/`kMaxThumbSize`/`kDefaultThumbSize`) |
 | Aspect ratio | Preserved |
 | Selection | Highlighted; the current image is marked |
 | Label | Optional filename overlay in the larger view modes |
