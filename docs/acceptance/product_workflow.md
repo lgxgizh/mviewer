@@ -22,7 +22,7 @@ resolved** in the current tree. Surfacing them so we don't re-do finished work:
 | "first thumbnail 2400ms — must be solved" | That was a **benchmark defect** (B2 drove `loadDirectoryAsync`, not the real pipeline). Fixed: B2 now measures the real `ThumbnailPipeline`. Verified `--enforce`: cold 11–20 ms, warm ≤20 ms. Not a product defect. |
 | "Does `AnalyzerRegistry` really exist (`registerAnalyzer`/`getAnalyzer`/`runAnalyzer`)?" | **Exists**, factory-based (plugin-safe): `registerAnalyzer(id, AnalyzerCreator)`, `create(id)`, `availableAnalyzers()`, `infoFor(id)`, `queryByCapability(cap)`. Wired into `AnalysisPanel` (registry-driven dropdown; ROI via `create(id)->analyzeRegion(frame, selection)`). The review's proposed `registerAnalyzer(std::make_unique<Analyzer>())` API is inferior (no cross-module-safe deleter) — do **not** replace the existing one. |
 | "Core headers may leak Qt (`#include <QWidget>/<QPainter>/<QImage>`)" | `core/**/*.h` already Qt-free by construction (AGENTS.md rule + CI). `Analyzer.h`, `ImageFrame.h`, `CompareEngine.h`, `FileSystem.h`, `ThumbnailPipeline.h` all use `std`/`domain` only. The review's P5 scan is a no-op today. |
-| "Singletons may leak / lack shutdown" | `EventBus::instance().unsubscribe()` is called in `~CompareWorkspace` (lifecycle bug already handled). `MemoryTracker` is documented process-global. No unbounded singleton growth found. |
+| "Singletons may leak / lack shutdown" | CompareWorkspace holds no EventBus subscription (the legacy `unsubscribe()` in its destructor is gone; `EventBus` itself currently has no production subscriber — see `src/core/EventBus.h`). `MemoryTracker` is documented process-global. No unbounded singleton growth found. |
 
 **Genuinely open items (the real work):** Workspace **persistence** (save/load
 to disk) is not wired; `FileSystem::listImages` caps at 2000 (truncates >2000-img
@@ -44,14 +44,14 @@ OpenDirectoryCommand
                             └─ ThumbnailPanel cells (LRU, UI update on callback)
    thumbnail clicked  → PreviewPanel + AnalysisPanel::setImage/setFrame
    thumbnail dbl-click→ ImageViewer (zoom/pan/ROI/pixelInfo)  [separate window]
-   thumbnail compareRequested → CompareWorkspace (sync zoom/pan/ROI/blink/diff, EventBus async diff)
+   thumbnail compareRequested → CompareWorkspace (sync zoom/pan/ROI/blink/diff, async diff batch on the Analysis pool)
    AnalysisPanel combo → AnalyzerRegistry::create(id)->analyzeRegion(frame, Selection)
    Ctrl+S → ExportCommand → ExportDialog → core::buildCompareReport + Encoder (JSON/CSV/PNG)
    Workspace: scanned into domain::Workspace model (ImageRepository::loadWorkspace) — NO disk persistence
 ```
 
-**Verified green this session:** `core_tests` (ALL_COMPARE_OK — sync/blink/diff/
-async-EventBus), `export_tests` (13/13 — real report+diff PNG), `mviewer_bench
+**Verified green this session:** `core_tests` (ALL_COMPARE_OK — sync/blink/diff),
+`export_tests` (13/13 — real report+diff PNG), `mviewer_bench
 --enforce` (B2/B8/B9 PASS), `MViewer.exe` headless launch clean.
 
 ---
@@ -70,8 +70,9 @@ async-EventBus), `export_tests` (13/13 — real report+diff PNG), `mviewer_bench
 
 ### Case 2 — Two-image Compare
 - thumbnail click → CompareWorkspace; sync zoom, sync pan, ROI, blink, diff all work.
-- **Verified by `core_tests`** (layout/sync/blink/diff + non-blocking async diff via
-  EventBus). Acceptance **already met**; no code change needed.
+- **Verified by `core_tests`** (layout/sync/blink/diff) and `compare_session_tests`
+  (async diff batch off the UI thread + lifetime guard). Acceptance **already
+  met**; no code change needed.
 
 ### Case 3 — Analysis
 - `ImageFrame → AnalyzerRegistry → AnalysisPanel` for ≥ Histogram, RGB Mean, PSNR,

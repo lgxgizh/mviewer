@@ -180,17 +180,6 @@ class ViewportController
     int m_cols = 1, m_rows = 1;
 };
 
-// Result of an asynchronous difference computation. Published on the EventBus
-// (event "CompareEngine.DiffResult", scope Application) when requestDiff
-// completes. The pixels live in CompareEngine::lastDiff() (mutex-guarded), not
-// in this struct, so subscribers read them from the engine after the event.
-struct DiffResult
-{
-    int index = -1;
-    int baseIndex = -1;
-    bool valid = false;
-};
-
 // CompareEngine: pure facade. Owns images + blink, and composes the three
 // independent controllers (sync, selection, viewport).
 class CompareEngine
@@ -310,23 +299,12 @@ class CompareEngine
         m_blink.clearBlink();
     }
 
-    // Difference (synchronous; for tests / callers needing an immediate result)
+    // Difference (synchronous; for tests / callers needing an immediate result).
+    // The UI never calls this on the event loop: CompareWorkspace submits its own
+    // batch to the Analysis pool (startDiffBatch in
+    // compareworkspace_render_diff.cpp) and applies the result on the UI thread,
+    // so no full-image diff is ever computed on the UI thread.
     ImageData differenceMap(int index, int baseIndex = 0);
-
-    // Difference (asynchronous). Submits the compute to JobSystem (Analysis
-    // pool) so the calling thread never blocks; on completion the result is
-    // stored in lastDiff() and a "CompareEngine.DiffResult" event is published
-    // on the EventBus (scope Application). Returns true if the job was accepted.
-    // The UI subscribes to that event and hops to the UI thread before painting.
-    bool requestDiff(int index, int baseIndex = 0);
-
-    // Most recent asynchronous diff result (mutex-guarded). valid==false until
-    // the first requestDiff completes.
-    DiffResult lastDiff() const;
-    // By-value: the internal buffer is mutex-guarded and released after the
-    // call returns, so returning a reference would dangle. ImageData is
-    // shared_ptr-backed, so a value copy is cheap and thread-safe.
-    ImageData lastDiffImage() const;
 
     // Access controllers / blink
     const BlinkController &blinkController() const
@@ -377,8 +355,6 @@ class CompareEngine
     }
 
   private:
-    struct AsyncState;
-
     void rebuildLayout();
 
     std::vector<std::shared_ptr<ImageFrame>> m_images;
@@ -389,6 +365,4 @@ class CompareEngine
     SelectionController m_selection;
     ViewportController m_viewport;
     PixelController m_pixel;
-
-    std::shared_ptr<AsyncState> m_asyncState;
 };

@@ -25,7 +25,6 @@
 
 #include <QPointer>
 
-#include "core/EventBus.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/compare/Histogram.h"
 #include "core/image/ImageBuffer.h"

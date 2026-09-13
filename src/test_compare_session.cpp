@@ -10,7 +10,6 @@
 // field (ROI, layout, threshold, side panel, blink, zoom) survives the trip.
 
 #include "compareworkspace.h"
-#include "core/EventBus.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/workspace/WorkspaceSerializer.h"
 #include "domain/CompareSession.h"
@@ -128,8 +127,13 @@ int main(int argc, char **argv)
     CHECK(after.blinkIntervalMs == 350, "applied session must restore blink interval");
     std::cout << "[ok] applySession fully restores Compare state on a fresh workspace\n";
 
-    // ---- 4) Regression: destroying engines while their diffs are queued must
-    //      not leave worker callbacks dereferencing the destroyed engine. ----
+    // ---- 4) Regression: destroying a CompareWorkspace while its async diff
+    //      batch is still queued must not crash and must not paint into the dead
+    //      widget. startDiffBatch() captures only pixel buffers plus a QPointer
+    //      guard, and the destructor cancels + bumps the generation, so the
+    //      delivery is dropped. This is the live async-diff path (CompareEngine's
+    //      legacy requestDiff/EventBus transport was removed: the UI never used
+    //      it). ----
     TaskScheduler &scheduler = TaskScheduler::instance();
     CHECK(scheduler.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(5)),
           "earlier analysis jobs must drain before the lifetime regression");
@@ -156,27 +160,28 @@ int main(int argc, char **argv)
     }
     CHECK(blockerStarted.load(std::memory_order_acquire), "analysis queue blocker must start");
 
-    std::atomic<int> diffEvents{0};
-    const int diffSubId =
-        EventBus::instance().subscribe("CompareEngine.DiffResult", [&diffEvents](void *)
-                                       { diffEvents.fetch_add(1, std::memory_order_relaxed); });
-
-    constexpr int kQueuedEngines = 32;
-    for (int i = 0; i < kQueuedEngines; ++i)
+    const QString p3 = writeTempPng("cmp_lifetime_a");
+    const QString p4 = writeTempPng("cmp_lifetime_b");
     {
-        auto engine = std::make_unique<CompareEngine>();
-        engine->setImages({p1.toStdString(), p2.toStdString()});
-        CHECK(engine->requestDiff(1, 0), "queued diff must be accepted");
+        auto doomed = std::make_unique<CompareWorkspace>();
+        doomed->setImages({p3, p4});
+        pumpUntilCompareCount(doomed.get(), 2);
+        // The diff batches those frames scheduled are queued behind the blocker,
+        // so the workspace is destroyed with an undelivered diff in flight.
+        CHECK(!scheduler.drain(TaskScheduler::AnalysisPool, std::chrono::milliseconds(50)),
+              "the blocker must still hold the analysis pool when the workspace dies");
+        doomed.reset();
     }
 
     releaseBlocker.store(true, std::memory_order_release);
     CHECK(scheduler.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(5)),
-          "queued compare diffs must finish within the bounded wait");
-    QCoreApplication::processEvents(QEventLoop::AllEvents, 1);
-    EventBus::instance().unsubscribe(diffSubId);
-    CHECK(diffEvents.load(std::memory_order_relaxed) == 0,
-          "destroyed compare engines must not publish completion events");
+          "queued compare diff batches must finish within the bounded wait");
+    // Any completion that was already marshalled to qApp lands here; it must be
+    // dropped by the QPointer/generation guard instead of touching freed memory.
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
 
+    QFile::remove(p3);
+    QFile::remove(p4);
     QFile::remove(p1);
     QFile::remove(p2);
     std::printf("compare_session_tests failures: %d\n", g_failures);

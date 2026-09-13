@@ -8,6 +8,16 @@
 
 // Tiny type-erased event bus. Subscribe with a callback; publish synchronously.
 // No Qt dependency.
+//
+// STATUS (2026-08 review): no production path publishes or subscribes today.
+// Async results are delivered through the transports of the code that produces
+// them — CompareWorkspace marshals its diff/materialization batches to qApp with
+// a QPointer + generation guard, ImageRepository delivers through result
+// callbacks, and UI signals stay plain Qt signals. The bus is retained as tested
+// infrastructure (core/test_eventbus.cpp, core/test_m27_eventbus.cpp) for
+// genuinely decoupled, multi-subscriber notifications; do NOT add a publisher
+// that has no production subscriber, and do not use it as a single-consumer
+// completion channel — use a callback for that.
 class EventBus
 {
   public:

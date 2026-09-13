@@ -53,13 +53,21 @@
 ### C2. Diff is non-blocking (off UI thread)
 
 - `differenceMap` is submitted to `JobSystem`/`TaskScheduler` (Analysis or
-  Background pool); the UI thread returns immediately and receives the
-  `DiffResult` via `EventBus`.
+  Background pool); the UI thread returns immediately and receives the result
+  asynchronously.
 - **Verify:** compute diff of two 50 MP frames; assert the calling thread is not
   blocked (wall-clock of the submit call << compute time) and the result arrives
-  via the EventBus subscription.
+  asynchronously.
 - **Regression guard:** no `DifferenceEngine::differenceMap` call on the UI
   thread in `CompareWorkspace` paint/event handlers.
+- **Transport (amended 2026-08):** the sanctioned transport is
+  `CompareWorkspace::startDiffBatch()` — a TaskScheduler Analysis batch whose
+  result is marshalled to `qApp` with a `QPointer` + generation guard
+  (`compareworkspace_render_diff.cpp`). The original design routed a single
+  `DiffResult` through `CompareEngine::requestDiff()` + the `EventBus`
+  (`CompareEngine.DiffResult`); that path had no production subscriber and was
+  removed. Async diff delivery is exercised by `compare_session_tests` case 4
+  (workspace destroyed while a batch is queued) and the Compare workflow tests.
 
 ## D. Pixel Inspector (P0/P1)
 

@@ -231,7 +231,8 @@ void runRound(const RoundDirs &dirs, int round, int phase)
         tracePoint("viewer opened");
     }
 
-    // Compare session with a diff request (EventBus unsubscribe on destroy).
+    // Compare session with an async diff batch queued at destroy time (the
+    // QPointer/generation guard must drop the late delivery).
     if (phase >= 3 && round % 5 == 0)
     {
         CompareWorkspace cw;
