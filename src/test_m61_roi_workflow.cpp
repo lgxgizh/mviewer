@@ -233,11 +233,24 @@ int main(int argc, char **argv)
     CHECK(waitFor([&]() { return workspace->comparedImageCount() == 2; }),
           "two equal-dimension panes load");
 
+    // The panes materialize their frames asynchronously (a display batch that
+    // runs after the engine reports the image count), so wait for the geometry
+    // instead of asserting on whichever batch happened to have landed. Without
+    // this the whole case cascades: an unmaterialized pane has no source
+    // geometry to drag on, so the preview/table/HUD checks below cannot pass.
+    // The pane widget itself is re-resolved on every poll because the cells are
+    // rebuilt while the batch is in flight.
+    const bool panesReady = waitFor(
+        [&]()
+        {
+            RawImageView *candidate = pane(workspace, 0);
+            return candidate && candidate->sourceSize() == QSize(96, 72);
+        });
     RawImageView *first = pane(workspace, 0);
     RawImageView *second = pane(workspace, 1);
-    CHECK(first && second && first->sourceSize() == QSize(96, 72),
+    CHECK(panesReady && first && second && second->sourceSize() == QSize(96, 72),
           "real Grid panes expose source geometry");
-    if (!first || !second)
+    if (!panesReady || !first || !second)
         return 1;
 
     const QPoint gridFrom = first->sourcePointToWidget(QPointF(12, 10)).toPoint();
