@@ -59,24 +59,25 @@ struct DeadlockWatchdog
 
     explicit DeadlockWatchdog(int seconds = 15)
     {
-        thread = std::thread([this, seconds]()
-                             {
-                                 // Poll in slices: a scope that completes normally
-                                 // must not pay the whole window on destruction.
-                                 const auto deadline = std::chrono::steady_clock::now() +
-                                                       std::chrono::seconds(seconds);
-                                 while (std::chrono::steady_clock::now() < deadline)
-                                 {
-                                     if (finished.load())
-                                         return;
-                                     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-                                 }
-                                 if (!finished.load())
-                                 {
-                                     fprintf(stderr, "  WATCHDOG: deadlock detected, aborting\n");
-                                     std::abort();
-                                 }
-                             });
+        thread = std::thread(
+            [this, seconds]()
+            {
+                // Poll in slices: a scope that completes normally
+                // must not pay the whole window on destruction.
+                const auto deadline =
+                    std::chrono::steady_clock::now() + std::chrono::seconds(seconds);
+                while (std::chrono::steady_clock::now() < deadline)
+                {
+                    if (finished.load())
+                        return;
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+                }
+                if (!finished.load())
+                {
+                    fprintf(stderr, "  WATCHDOG: deadlock detected, aborting\n");
+                    std::abort();
+                }
+            });
     }
     ~DeadlockWatchdog()
     {
@@ -98,7 +99,8 @@ void testSelfUnsubscribe()
     int subId = 0;
     {
         DeadlockWatchdog watchdog;
-        subId = b.subscribe(ev, [&](void *)
+        subId = b.subscribe(ev,
+                            [&](void *)
                             {
                                 calls.fetch_add(1);
                                 b.unsubscribe(subId);
@@ -123,15 +125,16 @@ void testSubscribeInsideHandler()
     bool subscribed = false;
     {
         DeadlockWatchdog watchdog;
-        auto outerId = b.subscribe(ev, [&](void *)
-                                   {
-                                       if (!subscribed)
-                                       {
-                                           subscribed = true;
-                                           newId = b.subscribe(ev, [&](void *)
-                                                               { newCalls.fetch_add(1); });
-                                       }
-                                   });
+        auto outerId =
+            b.subscribe(ev,
+                        [&](void *)
+                        {
+                            if (!subscribed)
+                            {
+                                subscribed = true;
+                                newId = b.subscribe(ev, [&](void *) { newCalls.fetch_add(1); });
+                            }
+                        });
         b.publish(ev); // outer handler subscribes mid-publish
         CHECK(newCalls.load() == 0, "new subscriber does NOT receive the in-flight publish");
         b.publish(ev); // next publish reaches both
@@ -154,7 +157,8 @@ void testNestedPublish()
     {
         DeadlockWatchdog watchdog;
         auto innerId = b.subscribe(innerEv, [&](void *) { order.push_back("inner"); });
-        auto outerId = b.subscribe(outerEv, [&](void *)
+        auto outerId = b.subscribe(outerEv,
+                                   [&](void *)
                                    {
                                        order.push_back("outer-begin");
                                        b.publish(innerEv); // nested publish inside a handler
@@ -183,19 +187,21 @@ void testConcurrentPublishUnsubscribe()
     for (int i = 0; i < 8; ++i)
         ids.push_back(b.subscribe(ev, [&](void *) { handlerCalls.fetch_add(1); }));
 
-    std::thread publisher([&]()
-                          {
-                              for (int i = 0; i < 500 && !stop.load(); ++i)
-                                  b.publish(ev);
-                          });
-    std::thread unsubscriber([&]()
-                             {
-                                 for (int i = 0; i < 8; ++i)
-                                 {
-                                     std::this_thread::sleep_for(std::chrono::milliseconds(2));
-                                     b.unsubscribe(ids[i]);
-                                 }
-                             });
+    std::thread publisher(
+        [&]()
+        {
+            for (int i = 0; i < 500 && !stop.load(); ++i)
+                b.publish(ev);
+        });
+    std::thread unsubscriber(
+        [&]()
+        {
+            for (int i = 0; i < 8; ++i)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                b.unsubscribe(ids[i]);
+            }
+        });
     publisher.join();
     unsubscriber.join();
     stop.store(true);
