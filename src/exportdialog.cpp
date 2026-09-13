@@ -432,7 +432,41 @@ void ExportDialog::startExportJob(mviewer::exportjob::ExportJobConfig cfg)
     connect(watcher, &QFutureWatcher<mviewer::exportjob::ExportJobResult>::finished, this,
             [self, watcher, generation, mode = cfg.mode]()
             {
-                const auto result = watcher->result();
+                // Reading the future rethrows anything the worker threw; without
+                // this guard the exception escapes into the event loop and the
+                // dialog is left mid-completion.
+                mviewer::exportjob::ExportJobResult result;
+                try
+                {
+                    result = watcher->result();
+                }
+                catch (const std::exception &error)
+                {
+                    watcher->deleteLater();
+                    ExportDialog *failed = self->data();
+                    if (failed && generation == failed->m_exportGeneration)
+                    {
+                        if (failed->m_progress)
+                            failed->m_progress->close();
+                        failed->m_exportBtn->setEnabled(true);
+                        failed->m_statusLabel->setText(
+                            tr("导出失败: %1").arg(QString::fromUtf8(error.what())));
+                    }
+                    return;
+                }
+                catch (...)
+                {
+                    watcher->deleteLater();
+                    ExportDialog *failed = self->data();
+                    if (failed && generation == failed->m_exportGeneration)
+                    {
+                        if (failed->m_progress)
+                            failed->m_progress->close();
+                        failed->m_exportBtn->setEnabled(true);
+                        failed->m_statusLabel->setText(tr("导出失败: 未知错误"));
+                    }
+                    return;
+                }
                 watcher->deleteLater();
                 ExportDialog *dialog = self->data();
                 if (!dialog || generation != dialog->m_exportGeneration)

@@ -11,7 +11,9 @@
 
 #include <atomic>
 #include <cctype>
+#include <chrono>
 #include <condition_variable>
+#include <cstdio>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -633,22 +635,27 @@ void ImageRepository::cancelAsync(AsyncRequestHandle &handle)
     }
     if (staleHandle)
         TaskScheduler::cancel(staleHandle);
-    // M46 delivery gate: a terminal delivery that already started must be
-    // allowed to finish (the client callback runs outside every lock and is
-    // itself lifetime-guarded), but after cancelAsync() returns NO client
-    // callback is running and none will start for this request. Waiting here
-    // closes the check-then-call race between the worker's cancellation check
-    // and its callback invocation. The wait is bounded by the callback itself:
-    // a callback that re-enters cancelAsync() for its own request cannot
-    // deadlock because the worker releases deliveryMtx while cb runs and only
-    // needs it again to publish deliveryDone - and a re-entrant call from the
-    // delivering thread skips the wait entirely (it would otherwise wait for
-    // its own completion).
+    // M46 delivery gate: a terminal delivery that already started is allowed to
+    // finish, so after cancelAsync() returns NO client callback is running and
+    // none will start for this request. The wait is BOUNDED: this runs on the
+    // caller's thread (in practice the GUI thread), and an unbounded wait here
+    // freezes the UI on any client callback that does not return promptly.
+    // A late delivery still cannot start, because beginClientDelivery() re-checks
+    // `cancelled` under deliveryMtx before publishing deliveryStarted.
     {
         std::unique_lock<std::mutex> gk(handle->deliveryMtx);
         if (handle->deliveryStarted && !handle->deliveryDone &&
             std::this_thread::get_id() != handle->deliveryThreadId)
-            handle->deliveryCv.wait(gk, [&]() { return handle->deliveryDone; });
+        {
+            if (!handle->deliveryCv.wait_for(gk, std::chrono::milliseconds(250),
+                                             [&]() { return handle->deliveryDone; }))
+            {
+                // Client callbacks are contractually non-blocking; if one is not,
+                // report it rather than hanging the caller forever.
+                std::fprintf(stderr, "ImageRepository::cancelAsync: delivery still running after "
+                                     "250 ms (blocking client callback?)\n");
+            }
+        }
     }
     handle.reset();
 }

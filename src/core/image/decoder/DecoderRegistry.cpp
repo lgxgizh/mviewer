@@ -1,6 +1,8 @@
 #include "core/image/decoder/DecoderRegistry.h"
 
 #include <algorithm>
+#include <mutex>
+#include <utility>
 
 #include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/QtFallbackDecoder.h"
@@ -17,26 +19,40 @@ DecoderRegistry::DecoderRegistry()
     resetToDefaults();
 }
 
+std::vector<std::shared_ptr<IDecoder>> DecoderRegistry::snapshot() const
+{
+    std::lock_guard<std::mutex> lk(m_mutex);
+    return m_decoders;
+}
+
 void DecoderRegistry::resetToDefaults()
 {
-    m_decoders.clear();
+    // Build the default line-up unlocked, then publish it in one step (the
+    // locked registerDecoder() must not be called while holding m_mutex).
+    std::vector<std::shared_ptr<IDecoder>> defaults;
     // P6: RAW preview decoder gets first pick for RAW extensions. It returns an
     // empty ImageData when no embedded JPEG preview is found, so non-RAW and
     // preview-less RAW fall through to the Qt decoders below.
-    registerDecoder(std::make_shared<RawDecoder>());
-    registerDecoder(std::make_shared<QtDecoder>());
+    defaults.push_back(std::make_shared<RawDecoder>());
+    defaults.push_back(std::make_shared<QtDecoder>());
     // The fallback must remain LAST so specific decoders get first pick.
-    registerDecoder(std::make_shared<QtFallbackDecoder>());
+    defaults.push_back(std::make_shared<QtFallbackDecoder>());
+
+    std::lock_guard<std::mutex> lk(m_mutex);
+    m_decoders = std::move(defaults);
 }
 
 void DecoderRegistry::registerDecoder(std::shared_ptr<IDecoder> decoder)
 {
-    if (decoder)
-        m_decoders.push_back(std::move(decoder));
+    if (!decoder)
+        return;
+    std::lock_guard<std::mutex> lk(m_mutex);
+    m_decoders.push_back(std::move(decoder));
 }
 
 void DecoderRegistry::unregister(const std::string &id)
 {
+    std::lock_guard<std::mutex> lk(m_mutex);
     m_decoders.erase(std::remove_if(m_decoders.begin(), m_decoders.end(),
                                     [&](const std::shared_ptr<IDecoder> &d)
                                     { return d && d->name() == id; }),
@@ -45,7 +61,8 @@ void DecoderRegistry::unregister(const std::string &id)
 
 std::shared_ptr<IDecoder> DecoderRegistry::get(const std::string &id) const
 {
-    for (const auto &d : m_decoders)
+    const auto decoders = snapshot();
+    for (const auto &d : decoders)
         if (d && d->name() == id)
             return d;
     return nullptr;
@@ -53,9 +70,10 @@ std::shared_ptr<IDecoder> DecoderRegistry::get(const std::string &id) const
 
 std::vector<std::string> DecoderRegistry::available() const
 {
+    const auto decoders = snapshot();
     std::vector<std::string> ids;
-    ids.reserve(m_decoders.size());
-    for (const auto &d : m_decoders)
+    ids.reserve(decoders.size());
+    for (const auto &d : decoders)
         if (d)
             ids.push_back(d->name());
     return ids;
@@ -70,9 +88,12 @@ ImageData DecoderRegistry::decodeFull(const std::string &path) const
 ImageData DecoderRegistry::decodeFull(const std::string &path,
                                       mviewer::domain::ImageMetadata &outMeta) const
 {
-    for (const auto &d : m_decoders)
+    // Iterate a snapshot: a plugin registering/unregistering a decoder from the
+    // UI thread must not reallocate the vector under this loop, and the
+    // shared_ptr copies keep each decoder alive for the whole decode.
+    for (const auto &d : snapshot())
     {
-        if (d->canDecode(path))
+        if (d && d->canDecode(path))
         {
             ImageData out = d->decodeFull(path, outMeta);
             if (!out.isNull())
@@ -93,9 +114,9 @@ ImageData DecoderRegistry::decodeScaled(const std::string &path, int maxEdge) co
 ImageData DecoderRegistry::decodeScaled(const std::string &path, int maxEdge,
                                         mviewer::domain::ImageMetadata &outMeta) const
 {
-    for (const auto &d : m_decoders)
+    for (const auto &d : snapshot())
     {
-        if (d->canDecode(path))
+        if (d && d->canDecode(path))
         {
             ImageData out = d->decodeScaled(path, maxEdge, outMeta);
             if (!out.isNull())
@@ -108,8 +129,10 @@ ImageData DecoderRegistry::decodeScaled(const std::string &path, int maxEdge,
 std::vector<std::string> DecoderRegistry::supportedExtensions() const
 {
     std::vector<std::string> all;
-    for (const auto &d : m_decoders)
+    for (const auto &d : snapshot())
     {
+        if (!d)
+            continue;
         const auto exts = d->extensions();
         all.insert(all.end(), exts.begin(), exts.end());
     }

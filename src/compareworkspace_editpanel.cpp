@@ -145,6 +145,11 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
 
 void CompareWorkspace::onEditCellSelected(int cellIdx)
 {
+    // Defensive: every caller must pass a live pane index. A negative index used
+    // to reach m_cellAdjusts[SIZE_MAX] through the resize/index pair below.
+    if (cellIdx < 0 || cellIdx >= static_cast<int>(m_cellViews.size()))
+        return;
+
     m_editIdx = cellIdx;
     updateFrameControl();
 

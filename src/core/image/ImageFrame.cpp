@@ -1,5 +1,6 @@
 #include "core/image/ImageFrame.h"
 
+#include "core/image/ImageBuffer.h"
 #include "core/perf/MemoryTracker.h"
 
 #include <cstdint>
@@ -8,16 +9,6 @@
 #include <algorithm>
 #include <cstring>
 #include <functional>
-
-namespace
-{
-
-inline int toLum(uint8_t r, uint8_t g, uint8_t b)
-{
-    return static_cast<int>(0.299 * r + 0.587 * g + 0.114 * b);
-}
-
-} // namespace
 
 bool ImageFrame::raw16At(int x, int y, uint16_t &r, uint16_t &g, uint16_t &b) const
 {
@@ -146,6 +137,12 @@ void ImageFrame::computeHistogram()
     const int64_t n = static_cast<int64_t>(w) * h;
     if (n == 0)
         return;
+    // Format-aware read. Grayscale8 stores one byte per pixel, so the previous
+    // unconditional p[1]/p[2] read ran one to two bytes past the buffer at the
+    // final pixel and reported a neighbouring pixel's bytes as green/blue.
+    const bool gray = (m_pixels.format == PixelFormat::Grayscale8);
+    const bool bgr =
+        (m_pixels.format == PixelFormat::BGR24 || m_pixels.format == PixelFormat::BGRA32);
     int64_t sumL = 0, sumR = 0, sumG = 0, sumB = 0;
     for (int y = 0; y < h; ++y)
     {
@@ -153,15 +150,17 @@ void ImageFrame::computeHistogram()
         for (int x = 0; x < w; ++x)
         {
             const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-            const int r = p[0], g = p[1], b = p[2];
-            ++m_histogram.luminance[std::clamp(toLum(r, g, b), 0, 255)];
+            const int r = gray ? p[0] : (bgr ? p[2] : p[0]);
+            const int g = gray ? p[0] : p[1];
+            const int b = gray ? p[0] : (bgr ? p[0] : p[2]);
+            ++m_histogram.luminance[std::clamp(luminance(r, g, b), 0, 255)];
             ++m_histogram.red[std::clamp(r, 0, 255)];
             ++m_histogram.green[std::clamp(g, 0, 255)];
             ++m_histogram.blue[std::clamp(b, 0, 255)];
             sumR += r;
             sumG += g;
             sumB += b;
-            sumL += toLum(r, g, b);
+            sumL += luminance(r, g, b);
         }
     }
     m_histogram.lumMean = static_cast<double>(sumL) / n;

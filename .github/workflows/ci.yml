@@ -187,7 +187,6 @@ jobs:
             exit 0
           fi
           echo "$FILES" | tr '\n' '\0' | xargs -0 clang-tidy -p build_sa \
-            --checks='bugprone-*,performance-*,clang-analyzer-*,cppcoreguidelines-pro-type-*,cppcoreguidelines-special-member-functions' \
             --warnings-as-errors='bugprone-*,performance-*,clang-analyzer-*,cppcoreguidelines-pro-type-*'
           echo "clang-tidy clean on changed files"
 

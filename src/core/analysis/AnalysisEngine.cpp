@@ -1,5 +1,6 @@
 #include "core/analysis/AnalysisEngine.h"
 
+#include "core/compare/DifferenceEngine.h"
 #include "core/image/QtConvert.h"
 #include "domain/Selection.h"
 
@@ -76,29 +77,11 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
 
 ImageData AnalysisEngine::differenceMap(const ImageData &aData, const ImageData &bData)
 {
-    if (aData.isNull() || bData.isNull())
-        return ImageData();
-    QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_RGB32);
-    QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_RGB32);
-    const int w = std::min(aa.width(), bb.width());
-    const int h = std::min(aa.height(), bb.height());
-    QImage out(w, h, QImage::Format_Grayscale8);
-    if (out.isNull())
-        return ImageData();
-    for (int y = 0; y < h; ++y)
-    {
-        const QRgb *la = reinterpret_cast<const QRgb *>(aa.constScanLine(y));
-        const QRgb *lb = reinterpret_cast<const QRgb *>(bb.constScanLine(y));
-        uchar *dst = out.scanLine(y);
-        for (int x = 0; x < w; ++x)
-        {
-            const int dr = abs(static_cast<int>(qRed(la[x])) - qRed(lb[x]));
-            const int dg = abs(static_cast<int>(qGreen(la[x])) - qGreen(lb[x]));
-            const int db = abs(static_cast<int>(qBlue(la[x])) - qBlue(lb[x]));
-            dst[x] = static_cast<uchar>(std::min(255, (dr + dg + db) / 3));
-        }
-    }
-    return mvcore::fromQImage(out);
+    // ONE implementation: DifferenceEngine handles every PixelFormat natively
+    // (per-format channel offsets) and produces the same Grayscale8 map, so this
+    // entry point only supplies the "no threshold" default. Keeping a second
+    // copy here meant two sets of numerics for one user-visible feature.
+    return DifferenceEngine::differenceMap(aData, bData, 0);
 }
 
 double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)

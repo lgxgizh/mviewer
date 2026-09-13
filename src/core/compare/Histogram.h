@@ -86,7 +86,11 @@ inline Histogram computeHistogram(const ImageData &img, int roiX, int roiY, int 
             h.r[std::min<int>(R, h.bins - 1)]++;
             h.g[std::min<int>(G, h.bins - 1)]++;
             h.b[std::min<int>(B, h.bins - 1)]++;
-            const int Y = static_cast<int>(0.299 * R + 0.587 * G + 0.114 * B + 0.5);
+            // Rec.601 luma via the ONE shared implementation (ImageBuffer.h).
+            // The previous local copy rounded (+0.5) while ImageFrame truncated,
+            // so Browse and Compare reported different luma bins for one image.
+            const int Y = luminance(static_cast<uint8_t>(R), static_cast<uint8_t>(G),
+                                    static_cast<uint8_t>(B));
             h.luma[std::min<int>(Y, h.bins - 1)]++;
             ++samples;
         }

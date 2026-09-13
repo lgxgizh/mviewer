@@ -112,9 +112,13 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
         if (me->button() == Qt::LeftButton)
         {
             m_dragging = false;
-            // Click (no significant drag): select cell for editing & per-pane histogram
+            // Click (no significant drag): select cell for editing & per-pane histogram.
+            // m_dragIdx is -1 until a plain pane press sets it (pixel-link mode
+            // consumes the press without setting it), so it must be validated:
+            // passing -1 on subscripted m_cellAdjusts[SIZE_MAX] was a wild read.
             const QPoint delta = me->pos() - m_dragStartPos;
-            if (delta.manhattanLength() < 4)
+            if (delta.manhattanLength() < 4 && m_dragIdx >= 0 &&
+                m_dragIdx < static_cast<int>(m_cellViews.size()))
             {
                 onEditCellSelected(m_dragIdx);
                 refreshHistograms();

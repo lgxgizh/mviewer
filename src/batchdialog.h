@@ -4,6 +4,7 @@
 #include "domain/BatchJob.h"
 
 #include <QDialog>
+#include <QFutureWatcher>
 #include <QString>
 #include <memory>
 
@@ -52,6 +53,9 @@ class BatchDialog : public QDialog
     void connectControls();
     void buildConfig(mviewer::domain::BatchJobConfig &config) const;
     void updateUiState(bool running);
+    // Completion path of a batch run: drains the QFutureWatcher (which rethrows a
+    // worker exception), reports the summary and resets the dialog for reuse.
+    void finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *watcher);
 
     // ── file list ──────────────────────────────────────────────────
     QListWidget *m_fileList = nullptr;

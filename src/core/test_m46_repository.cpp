@@ -8,10 +8,11 @@
 //       completion is a no-op before any consumer-visible code runs.
 //   C2  cancelAsync() on a request whose delivery has NOT started returns
 //       without waiting and guarantees the callback never starts.
-//   C3  cancelAsync() on a request whose delivery HAS started waits (bounded)
-//       for that in-flight delivery to finish, so after cancelAsync() returns
-//       no client callback is running and none will start. The delivery that
-//       already began completes exactly once.
+//   C3  cancelAsync() on a request whose delivery HAS started waits at most a
+//       BOUNDED window (~250 ms) for that in-flight delivery, so a slow client
+//       callback cannot freeze the calling (GUI) thread forever. The delivery
+//       that already began still completes exactly once, and no new delivery
+//       starts after cancelAsync() returns.
 //   C4  A client callback may re-enter cancelAsync() for its own request
 //       without deadlocking (the callback runs outside every lock; the gate
 //       wait is released by the worker's finishClientDelivery).
@@ -342,26 +343,34 @@ void testCancelDuringTerminalDelivery()
     ctl->release.store(true, std::memory_order_release); // decode completes
     CHECK(waitFlag(latches->inBeforeDelivery, 5000), "worker entered the delivery gate");
 
-    // cancelAsync from a helper thread: it MUST block until the in-flight
-    // delivery finishes.
+    // cancelAsync from a helper thread: it MUST return within its bounded window
+    // even though the in-flight delivery is still blocked — an unbounded wait
+    // here is what would freeze the GUI thread on a slow callback.
     std::atomic<bool> cancelReturned{false};
+    const auto cancelStart = std::chrono::steady_clock::now();
     std::thread canceller([&]()
                           {
                               repo.cancelAsync(handle);
                               cancelReturned.store(true, std::memory_order_release);
                           });
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    CHECK(!cancelReturned.load(std::memory_order_acquire),
-          "cancelAsync waits while a delivery is in flight");
+    CHECK(waitFlag(cancelReturned, 5000), "cancelAsync returns while a delivery is blocked");
+    const auto cancelMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                              std::chrono::steady_clock::now() - cancelStart)
+                              .count();
+    CHECK(cancelMs >= 100 && cancelMs < 5000,
+          "cancelAsync honoured its bounded wait (not instant, not unbounded)");
     CHECK(!cbStarted.load(std::memory_order_acquire),
           "client callback not yet started (held by the test hook)");
 
+    // Releasing the hook lets the in-flight delivery finish. No NEW delivery may
+    // start after cancelAsync returned, but the one already inside the gate must
+    // still complete exactly once.
     latches->releaseDelivery.store(true, std::memory_order_release);
     canceller.join();
-    CHECK(cancelReturned.load(), "cancelAsync returned after the delivery finished");
+    CHECK(cancelReturned.load(), "cancelAsync returned");
+    CHECK(waitFlag(latches->afterDeliveryDone, 5000), "worker observed the delivery completion");
     CHECK(cbStarted.load() && cbDone.load(), "the started delivery completed exactly once");
     CHECK(callbacks.load() == 1, "client callback invoked exactly once");
-    CHECK(latches->afterDeliveryDone.load(), "worker observed the delivery completion");
     CHECK(waitTrue(poolsConverged, 5000), "pools converged after the cancel-during-delivery");
     CHECK(sched.drain(PoolType::DecodePool, std::chrono::seconds(5)), "DecodePool drains");
 

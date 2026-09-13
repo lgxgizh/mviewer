@@ -322,11 +322,12 @@ void BatchDialog::onStart()
                     self->m_progress->setValue(current);
                     if (!path.empty())
                     {
-                        self->m_statusLabel->setText(QString("处理中 (%1/%2): %3")
-                                                         .arg(current + 1)
-                                                         .arg(total)
-                                                         .arg(QString::fromUtf8(
-                                                             path.data(), static_cast<int>(path.size()))));
+                        self->m_statusLabel->setText(
+                            QString("处理中 (%1/%2): %3")
+                                .arg(current + 1)
+                                .arg(total)
+                                .arg(
+                                    QString::fromUtf8(path.data(), static_cast<int>(path.size()))));
                     }
                 });
         });
@@ -341,48 +342,70 @@ void BatchDialog::onStart()
 
     auto *watcher = new QFutureWatcher<mviewer::domain::BatchJobResult>(this);
     connect(watcher, &QFutureWatcher<mviewer::domain::BatchJobResult>::finished, this,
-            [this, watcher]()
-            {
-                auto result = watcher->result();
-
-                m_progress->setValue(m_progress->maximum());
-                m_statusLabel->setText(QString("完成: %1 成功, %2 失败")
-                                           .arg(result.totalSucceeded)
-                                           .arg(result.totalFailed));
-
-                // Enable "open output dir" if any files were produced and the
-                // output directory is known (empty = same-as-source per file).
-                m_lastOutputDir = m_outputDir->text().trimmed();
-                m_openOutputBtn->setEnabled(!m_lastOutputDir.isEmpty() &&
-                                            result.totalSucceeded > 0 &&
-                                            QDir(m_lastOutputDir).exists());
-
-                // Log results.
-                for (const auto &r : result.fileResults)
-                {
-                    const auto inputPath = QString::fromUtf8(
-                        r.inputPath.data(), static_cast<int>(r.inputPath.size()));
-                    const auto outputPath = QString::fromUtf8(
-                        r.outputPath.data(), static_cast<int>(r.outputPath.size()));
-                    const auto errorMessage = QString::fromUtf8(
-                        r.errorMessage.data(), static_cast<int>(r.errorMessage.size()));
-                    QString line = r.success ? QString("[OK] %1 → %2")
-                                                   .arg(inputPath)
-                                                   .arg(outputPath)
-                                             : QString("[FAIL] %1: %2")
-                                                   .arg(inputPath)
-                                                   .arg(errorMessage);
-                    m_log->append(line);
-                }
-
-                // Create a fresh processor so the dialog can be reused.
-                m_processor = std::make_unique<mviewer::core::BatchProcessor>();
-                m_activeProcessor.reset();
-                updateUiState(false);
-                watcher->deleteLater();
-            });
+            [this, watcher]() { finishBatch(watcher); });
 
     watcher->setFuture(future);
+}
+
+void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *watcher)
+{
+    // Reading the future rethrows anything the worker threw; without this guard
+    // the exception escapes into the event loop and the dialog is left in its
+    // running state (progress never finishes, the processor is never released).
+    mviewer::domain::BatchJobResult result;
+    try
+    {
+        result = watcher->result();
+    }
+    catch (const std::exception &error)
+    {
+        m_progress->setValue(m_progress->maximum());
+        m_statusLabel->setText(tr("批量处理失败: %1").arg(QString::fromUtf8(error.what())));
+        m_processor = std::make_unique<mviewer::core::BatchProcessor>();
+        m_activeProcessor.reset();
+        updateUiState(false);
+        watcher->deleteLater();
+        return;
+    }
+    catch (...)
+    {
+        m_progress->setValue(m_progress->maximum());
+        m_statusLabel->setText(tr("批量处理失败: 未知错误"));
+        m_processor = std::make_unique<mviewer::core::BatchProcessor>();
+        m_activeProcessor.reset();
+        updateUiState(false);
+        watcher->deleteLater();
+        return;
+    }
+
+    m_progress->setValue(m_progress->maximum());
+    m_statusLabel->setText(
+        QString("完成: %1 成功, %2 失败").arg(result.totalSucceeded).arg(result.totalFailed));
+
+    // Enable "open output dir" if any files were produced and the output
+    // directory is known (empty = same-as-source per file).
+    m_lastOutputDir = m_outputDir->text().trimmed();
+    m_openOutputBtn->setEnabled(!m_lastOutputDir.isEmpty() && result.totalSucceeded > 0 &&
+                                QDir(m_lastOutputDir).exists());
+
+    for (const auto &r : result.fileResults)
+    {
+        const auto inputPath =
+            QString::fromUtf8(r.inputPath.data(), static_cast<int>(r.inputPath.size()));
+        const auto outputPath =
+            QString::fromUtf8(r.outputPath.data(), static_cast<int>(r.outputPath.size()));
+        const auto errorMessage =
+            QString::fromUtf8(r.errorMessage.data(), static_cast<int>(r.errorMessage.size()));
+        const QString line = r.success ? QString("[OK] %1 → %2").arg(inputPath).arg(outputPath)
+                                       : QString("[FAIL] %1: %2").arg(inputPath).arg(errorMessage);
+        m_log->append(line);
+    }
+
+    // Create a fresh processor so the dialog can be reused.
+    m_processor = std::make_unique<mviewer::core::BatchProcessor>();
+    m_activeProcessor.reset();
+    updateUiState(false);
+    watcher->deleteLater();
 }
 
 void BatchDialog::onCancel()

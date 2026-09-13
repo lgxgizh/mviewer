@@ -3,6 +3,7 @@
 #include "core/image/decoder/IDecoder.h"
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -50,5 +51,12 @@ class DecoderRegistry
     DecoderRegistry(const DecoderRegistry &) = delete;
     DecoderRegistry &operator=(const DecoderRegistry &) = delete;
 
+    // Plugins register/unregister decoders from the UI thread while decode tasks
+    // iterate the list on pool threads, so every access is serialized and the
+    // decode paths iterate a SNAPSHOT (shared_ptr keeps the decoder alive even
+    // if it is unregistered mid-decode).
+    std::vector<std::shared_ptr<IDecoder>> snapshot() const;
+
+    mutable std::mutex m_mutex;
     std::vector<std::shared_ptr<IDecoder>> m_decoders;
 };

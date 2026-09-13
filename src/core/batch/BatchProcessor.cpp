@@ -184,9 +184,20 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
             // Determine output path (0-based index; applyRenamePattern adds +1).
             const std::string outPath = buildOutputPath(config, inputPath, fileIndex, total);
 
-            // Ensure output directory exists.
+            // Ensure output directory exists. The non-throwing overload matters:
+            // this runs inside QtConcurrent, and a thrown filesystem_error would
+            // surface when the GUI slot re-reads the QFuture, aborting the whole
+            // completion path (the dialog then stays in its "running" state).
             if (!config.outputDir.empty())
-                std::filesystem::create_directories(config.outputDir);
+            {
+                std::error_code dirEc;
+                std::filesystem::create_directories(config.outputDir, dirEc);
+                if (dirEc)
+                {
+                    result.errorMessage = "cannot create output directory: " + dirEc.message();
+                    return result;
+                }
+            }
 
             // Try the exporter registry first, then fall back to Qt encoder.
             bool exported = false;

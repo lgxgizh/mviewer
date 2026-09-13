@@ -19,7 +19,10 @@ std::string MetadataReader::key(const std::string &filePath)
 {
     const QString qPath = QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size()));
     const QFileInfo fi(qPath);
-    const QString k = qPath + QString::number(fi.size()) +
+    // Fields are separated: plain concatenation let two distinct files collide
+    // ("a.jpg" + 123 + T equals "a.jpg12" + 3 + T), which aliased their cache
+    // entries (metadata, memory tier and disk tier all key off this string).
+    const QString k = qPath + "|" + QString::number(fi.size()) + "|" +
                       QString::number(fi.lastModified().toMSecsSinceEpoch());
     return k.toStdString();
 }

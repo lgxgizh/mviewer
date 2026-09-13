@@ -187,38 +187,51 @@ AnalyzerRegistry::runAnalyzer(const ImageFrame &frame) const
     // frame is const and analyzers are read-only; each task creates its own
     // analyzer instance, so no locks are needed inside analyzers.
     TaskScheduler &sched = TaskScheduler::instance();
-    std::mutex mtx;
-    std::unordered_map<std::string, std::string> results;
+    // The tasks outlive this stack frame if the drain gives up, so the shared
+    // state they write into must not be this frame's locals.
+    auto mtx = std::make_shared<std::mutex>();
+    auto results = std::make_shared<std::unordered_map<std::string, std::string>>();
+    std::vector<TaskScheduler::TaskHandle> handles;
+    handles.reserve(m_factories.size());
     for (const auto &[id, factory] : m_factories)
     {
-        sched.submit(
-            TaskScheduler::AnalysisPool,
-            [&mtx, &results, id, factory, &frame]()
-            {
-                std::string text;
-                try
-                {
-                    auto analyzer = factory();
-                    if (analyzer && analyzer->analyze(frame))
-                        text = analyzer->resultText();
-                }
-                catch (...)
-                {
-                    // M24 (C#7): a throwing analyzer (e.g. a buggy plugin) must
-                    // be isolated — the whole batch must not crash.
-                }
-                if (!text.empty())
-                {
-                    std::lock_guard<std::mutex> lk(mtx);
-                    results[id] = std::move(text);
-                }
-            });
+        handles.push_back(sched.submit(TaskScheduler::AnalysisPool,
+                                       [mtx, results, id, factory, &frame]()
+                                       {
+                                           std::string text;
+                                           try
+                                           {
+                                               auto analyzer = factory();
+                                               if (analyzer && analyzer->analyze(frame))
+                                                   text = analyzer->resultText();
+                                           }
+                                           catch (...)
+                                           {
+                                               // M24 (C#7): a throwing analyzer (e.g. a buggy
+                                               // plugin) must be isolated — the whole batch must
+                                               // not crash.
+                                           }
+                                           if (!text.empty())
+                                           {
+                                               std::lock_guard<std::mutex> lk(*mtx);
+                                               (*results)[id] = std::move(text);
+                                           }
+                                       }));
     }
-    // Bounded wait: analyzers are short (µs-ms); 10 s is generous even on a
-    // loaded low-core machine. The scheduler's pending counter guarantees the
-    // drain covers every task submitted above, including in-flight ones.
-    sched.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(10));
-    return results;
+    // Bounded wait: analyzers are short (µs-ms) and 10 s is generous, but the
+    // AnalysisPool is SHARED with diff/ROI batches, so the drain can give up.
+    // Previously the result was discarded, which let still-queued tasks write
+    // into `results`/`mtx` after this function had returned (use-after-free).
+    if (!sched.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(10)))
+    {
+        for (const auto &handle : handles)
+        {
+            if (handle)
+                TaskScheduler::cancelTree(handle->id);
+        }
+        sched.drain(TaskScheduler::AnalysisPool, std::chrono::seconds(2));
+    }
+    return *results;
 }
 
 std::vector<mviewer::analyzer::AnalyzerResult> AnalyzerRegistry::runBatch(
