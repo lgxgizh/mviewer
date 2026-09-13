@@ -8,7 +8,7 @@
 > - M53 focused qualification covers 100MP TIFF Viewer/Compare bounded display,
 >   16-bit TIFF plus large PNG/BMP boundaries, Unicode paths, streaming RAW
 >   preview scanning, and a five-round large-source lifecycle soak.
-> - Final local automated gate: `build.ps1 Test` passed **117/117 twice
+> - Final local automated gate: `build.ps1 Test` passed **132/132 twice
 >   consecutively** (793.12 s and 792.20 s); `m51_rc_soak` passed in both runs.
 > - M53 package contract: **PASS** for the 1.0.13 portable ZIP and installer;
 >   physical target-machine UX remains MANUAL/BLOCKED.

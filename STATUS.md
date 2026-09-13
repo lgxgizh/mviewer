@@ -616,8 +616,12 @@ This is **not** a general-purpose image viewer.
   `build_msvc/version_info.txt` → portable ZIP / installer naming.
 - Generated at configure time: `build/generated/MViewerVersion.h`
   (`MVIEWER_VERSION_STRING`, `MVIEWER_VERSION_FULL`).
-- Gate: CTest `version_consistency` fails if code hard-codes a version literal,
-  or STATUS/installer/package scripts disagree with CMake.
+- Gate: CTest `version_consistency` fails when the generated
+  `build_msvc/version_info.txt` or `CMakeLists.txt` `project(VERSION)`
+  disagrees with the expected version, when `src/` hard-codes a `1.0.x`
+  version literal, when `scripts/package_release.ps1` /
+  `scripts/package_portable.ps1` stop reading `version_info.txt`, or when
+  STATUS.md does not mention the current version. It never reads the `.nsi`.
 - Release process: bump `project(VERSION)` → tag `vX.Y.Z` → `release.yml` builds,
   packages, and attaches artifacts; local equivalent `scripts/package_release.ps1`.
 
@@ -651,8 +655,8 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   are **0**.
 - Production and acceptance-suite responsibility splits bring
   `complexity_gate.ps1 -Strict` to **0 hard failures** (92 advisory warnings).
-- Final Release build and full CTest are green: **88/88**, including golden,
-  benchmark-enforcement, workflow, Browse/Compare acceptance, and async
+- Final Release build and the full registered CTest suite are green, including
+  golden, benchmark-enforcement, workflow, Browse/Compare acceptance, and async
   lifetime gates. Health score is **92.7 / A**.
 - Native Release GUI, physical ICC, mixed-DPI, long-session, and real
   multi-volume validation remain **MANUAL PENDING**; see the full evidence in
@@ -677,9 +681,9 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
   semantics are centralized in the Qt-free `PixelInspector` sampler; ICC
   remains display-only, and identity RAW16 reads remain exact.
 - Adversarial high-frequency source-vs-LOD Compare acceptance coverage and
-  source-backed core tests are green. Canonical CTest run #1 passed 88/88;
-  runs #2 and #3 also passed 88/88; three-run evidence is maintained in the
-  M43 review report.
+  source-backed core tests are green. Canonical CTest run #1 passed the full
+  registered CTest suite; runs #2 and #3 also passed; three-run evidence is
+  maintained in the M43 review report.
 - Manual Windows mixed-DPI, physical ICC and long-session UX review remains
   **PENDING** in this offscreen environment.
 - Evidence: `docs/review/M43_COMPARE_ANALYSIS_FIDELITY_2026-08-15.md`.
@@ -697,9 +701,9 @@ UI (Qt Widgets) → Application (UseCases) → Core → Domain
 - CTest assigns each registered test an isolated runtime root and relevant
   environment variables. Weak assertions in the touched test paths now observe
   real state rather than tautologies.
-- The complete 88-test matrix passed **88/88 in three consecutive runs**,
-  including golden-image, benchmark-enforcement, lifecycle, workflow, Browse,
-  and Compare acceptance gates. Full evidence is recorded in
+- The full registered CTest suite passed in three consecutive runs, including
+  golden-image, benchmark-enforcement, lifecycle, workflow, Browse, and Compare
+  acceptance gates. Full evidence is recorded in
   `docs/review/M41_STORAGE_RUNTIME_TEST_CREDIBILITY_CLOSURE_2026-08-15.md`.
 
 ### M39 Real-world reliability & export convergence (2026-08-14)
@@ -779,14 +783,14 @@ environment blockers, is recorded in `docs/review/M38_VIEWER_RENDER_CONVERGENCE_
   `MetadataPresentationService`; `MetadataIndexer::cached()` is memory-only;
   same-directory tree navigation short-circuits; recents persistence is
   debounced/coalesced with shutdown flush.
-- Thumbnail schema 3, Preview scaled metadata, ImageViewer CPU/GPU tile
+- Thumbnail schema 4, Preview scaled metadata, ImageViewer CPU/GPU tile
   materialization and Compare use one ICC display-copy contract. Analysis
   pixels remain unchanged. `m36_display_tests` covers sRGB, AdobeRGB,
   Display-P3 and no-profile samples.
 - Compare has one host per MainWindow with host-bound queued loads. Sync
   persistence retains Off/Zoom/Drag/All and toggles no longer Fit/reset the
   viewport. Batch analysis runs sequentially in a cancellable bounded worker.
-- Current generated CTest registration is **88 tests**. The local focused gate
+- Generated CTest registration is **132 tests**. The local focused gate
   passes the M36 display, Compare, lifetime and RatingStore suites. The full
   baseline remains environment-blocked by restricted temporary/cache file
   writes in existing workflow/cache tests; see the M36 evidence report.
@@ -937,7 +941,7 @@ environment blockers, is recorded in `docs/review/M38_VIEWER_RENDER_CONVERGENCE_
 ## Release process (current)
 
 1. Bump `CMakeLists.txt` `project(VERSION)` — the single source of version.
-2. `.\build.ps1 Test` must be green (currently 88 registered CTest tests incl.
+2. `.\build.ps1 Test` must be green (currently 132 registered CTest tests incl.
    `version_consistency`, `updatechecker_tests`, `browse_convergence_tests`,
    `browse_convergence_ui_tests`, `m26_*_tests`, `bench_enforce`,
    `golden_image`, and the four M24 workflow acceptance suites).

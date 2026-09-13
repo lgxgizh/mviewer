@@ -2,7 +2,10 @@
 
 ## Status
 
-Proposed (DRAFT, companion to `docs/rfc/M22_PRODUCT_POLISH.md` §F2)
+Accepted — shipped in M22 (companion to `docs/rfc/M22_PRODUCT_POLISH.md` §F2). Implemented in
+`src/core/image/decoder/QtDecoder.cpp` (`supportedExts()`, marked `// F2 (M22)`):
+`extensions()` and `canDecode()` derive the claim set from
+`QImageReader::supportedImageFormats()`, and the historical 6 formats stay guaranteed present.
 
 ## Context
 

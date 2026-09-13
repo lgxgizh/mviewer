@@ -309,7 +309,10 @@ TEST(Compare, DifferenceNullOnMismatch) {
 
 ## Benchmark
 
-See `benchmarks/benchmark_main.csv` scenario `Compare::differenceMap(1920x1080)`.
+`mviewer_bench` has no compare-specific scenario; the compare hot path is measured by the
+`benchmark_scenario` harness (`benchmarks/benchmark_main.cpp`), scenarios `Compare` /
+`differenceMap(1920x1080)` and `Compare` / `heatMap(1920x1080)` — it writes its CSV at runtime
+(`--csv <path>`). The `bench_smoke` and `bench_enforce` CTest entries run `mviewer_bench`.
 
 ## Future Extension
 

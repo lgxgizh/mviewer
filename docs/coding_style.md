@@ -44,7 +44,7 @@ update the document in the same commit.
 | Global constants | `kCamelCase` (prefix `k_`) | `kMaxCacheSize` |
 | Macros (avoid) | `SCREAMING_SNAKE_CASE` | `MVIEWER_ASSERT()` |
 | Namespaces | `snake_case` | `mvcore` (core), `mviewer::domain`, UI types live in the global namespace |
-| Enum values | `kCamelCase` | `PixelFormat::kRGBA8` |
+| Enum values | `PascalCase`, no `k` prefix | `PixelFormat::RGB24`, `RenderCommandType::DrawImage` |
 | Template parameters | `PascalCase`, single letter for simple | `typename T`, `typename Allocator` |
 | Concepts | `PascalCase` (verb-ish) | `Decodable`, `Cacheable` |
 | Files | `PascalCase`, matching the primary type | `ImageRepository.cpp`, `BatchProcessor.h` |

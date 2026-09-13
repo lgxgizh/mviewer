@@ -1,6 +1,6 @@
 # M4 Acceptance Test Specification — Professional Viewer Core
 
-**Target suite:** extend `src/core/test_compare.cpp` (currently 139 lines).
+**Target suite:** extend `src/core/test_compare.cpp` (171 lines).
 **Gate:** all checks below + `test_m3acceptance` must be green before merge.
 **Rule:** no implementation until this spec is reviewed and accepted.
 

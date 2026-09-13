@@ -25,7 +25,7 @@ implementation into responsibility-scoped translation units**, sharing one
 private header per class (`*_p.h`) that owns the include set and the few
 file-local helpers that must be visible to more than one TU (now `inline`).
 
-- `mainwindow.cpp` (core wiring, 844 lines) +
+- `mainwindow.cpp` (core wiring, 860 lines) +
   `mainwindow_ui.cpp` (setupUi) · `mainwindow_commands.cpp` (commands +
   keyboard dispatch) · `mainwindow_navigation.cpp` (history / recent /
   favorites) · `mainwindow_session.cpp` (workspace / project / autosave /
@@ -34,7 +34,7 @@ file-local helpers that must be visible to more than one TU (now `inline`).
   `mainwindow_ui_layout.cpp` (widget / menu / dock / status layout) ·
   `mainwindow_ui_connections.cpp` (signal wiring) ·
   `mainwindow_view.cpp` (drag&drop, overlays, fullscreen, slideshow, status).
-- `compareworkspace.cpp` (cells / layout / loading, 766 lines) +
+- `compareworkspace.cpp` (cells / layout / loading, 770 lines) +
   `compareworkspace_analysis.cpp` (histograms / metrics panels) ·
   `compareworkspace_controls.cpp` (toolbar + mode controls) ·
   `compareworkspace_display_planner.cpp` (fit/LOD planning, free functions) ·
@@ -75,8 +75,8 @@ The line budgets are not prose: `scripts/complexity_gate.ps1` (a CTest entry,
 The sibling cap is what keeps this ADR honest: the caps on the *seed* files alone
 were satisfied by relocating code. Three siblings are currently between the 800
 warning and the 1000 failure and are tracked debt, not accepted state:
-`mainwindow_session.cpp` (994), `compareworkspace_interact.cpp` (947),
-`mainwindow_ui_layout.cpp` (895).
+`mainwindow_session.cpp` (990), `compareworkspace_interact.cpp` (947),
+`mainwindow_ui_layout.cpp` (897).
 
 No public header changed; no behavior changed. The private headers are an
 implementation detail and may only be included by their class's TUs.
@@ -96,7 +96,7 @@ would churn signals/ownership for no product gain.
 
 ## Consequences
 
-- All three review targets are met (610 / 731 / 682 physical lines as of M25).
+- All three review targets are met (860 / 770 / 637 physical lines).
   The core `thumbnailpanel.cpp` returned below the 800 guard by keeping
   `setViewMode` in `thumbnailpanel_viewmode.cpp` and selection/navigation in
   `thumbnailpanel_selection.cpp`.
@@ -104,9 +104,9 @@ would churn signals/ownership for no product gain.
   `ThumbnailProvider` is the first real class extracted from a god object, not
   just a TU split. It removes the thumbnail-production knowledge (decode,
   square-fit, on-disk cache) from `ThumbnailPanel`, leaving the panel to own only
-  where finished thumbnails land and the widget lifecycle. The core TU dropped
-  from 680 → 670 lines as a side effect; `ThumbnailProvider` adds 34 (header) +
-  48 (impl) lines of genuinely reusable, testable logic.
+  where finished thumbnails land and the widget lifecycle. The core TU now stands
+  at 637 lines; `ThumbnailProvider` adds 31 (header) + 55 (impl) lines of
+  genuinely reusable, testable logic.
 - Each responsibility is now independently reviewable and diffable; merge
   conflicts across unrelated features disappear.
 - The include cost of `*_p.h` is paid by every TU of that class; acceptable

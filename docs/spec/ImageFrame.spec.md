@@ -248,7 +248,9 @@ TEST(ImageFrame, RenderCacheLookup) {
 
 ## Benchmark
 
-See `benchmarks/benchmark_main.csv` scenario `Frame::create(1920x1080)`.
+No `ImageFrame`-specific scenario exists; frame construction and materialization are on the
+`mviewer_bench` paths `B3` (`decode_p50_ms_jpeg`) and `B6` (`peak_cache_bytes`, the 1000-image
+24 MP sweep) in `src/benchmark/scenarios.cpp`. CTest gates: `bench_smoke`, `bench_enforce`.
 
 ## Future Extension
 

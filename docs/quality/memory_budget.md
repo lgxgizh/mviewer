@@ -4,11 +4,13 @@
 
 | Layer | Default | Configurable |
 | ------- | --------- | -------------- |
+| Metadata cache | 16 MB | Yes |
 | Thumbnail cache | 64 MB | Yes |
 | Preview cache | 256 MB | Yes |
 | Viewer cache | 512 MB | Yes |
+| Raw16 cache (16-bit inspector samples) | 256 MB | Yes |
 | Disk cache | 1 GB | Yes |
-| Total soft limit | 500 MB (runtime) | Hard limit |
+| Total memory budget | 1104 MB (sum of the five memory layers) | Yes (`CacheConfig`) |
 
 ## Per-Image Budget (24MP RGBA8)
 
@@ -24,7 +26,9 @@
 Each pool evicts LRU entries when exceeding budget.
 
 - Order touched on every access.
-- Eviction in batch (up to 10% of pool) to avoid thrashing.
+- `ImageCache::evictIfNeeded` evicts victims one at a time, oldest-first, in a
+  loop until the incoming bytes fit the pool budget (no batch/percentage
+  eviction).
 
 ## Future Fine-Graining
 

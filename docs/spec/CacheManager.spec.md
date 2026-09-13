@@ -207,7 +207,9 @@ TEST(Cache, LevelStatsTrackHits) {
 
 ## Benchmark
 
-See `benchmarks/benchmark_main.csv` scenario `Cache::memoryUsage`.
+See `mviewer_bench` scenarios `B5` (`cache_hit_ratio`, Zipf navigation), `B13` (`cache_hit_rate`)
+and `B6` (`peak_cache_bytes`); the budget is enforced by the `bench_enforce` CTest entry against
+`benchmark/performance_budget.json`, with `bench_smoke` as the CI link-and-run check.
 
 ## Future Extension
 

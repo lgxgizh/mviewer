@@ -30,12 +30,13 @@ criteria. No GPU code is proposed (GPU is RFC-only, see M13 Phase 7).
 | `TileGrid` | `src/core/render/TileGrid.h` | ✅ Built + used | Divides source image into fixed tiles; enumerates visible tiles for a `Viewport`. Domain-free (std only). |
 | `Viewport` | `src/core/render/Viewport.h` | ✅ Built + used | Image↔screen transform; owns pan/zoom; no Qt, no rasterization. |
 | `RenderEngine` | `src/core/render/RenderEngine.cpp` | ✅ Built + used | `scaleRegion()` draws visible tiles; consumed by `ImageViewer::paintEvent`. |
-| `RenderCommandType` | `src/core/render/RenderEngine.h:16` | ✅ Built | Enum `DrawImage/DrawOverlay/DrawHistogram/DrawSelection/DrawHeatmap/DrawPixelMarker` — the review's "RenderCommand" abstraction exists as an enum (see §3). |
+| `RenderCommandType` | `src/core/render/RenderEngine.h:24` | ✅ Built | Enum `DrawImage/DrawOverlay/DrawHistogram/DrawSelection/DrawHeatmap/DrawPixelMarker` — the review's "RenderCommand" abstraction exists as an enum (see §3). |
 
-**Wiring proof (not dead code):** `src/imageviewer.cpp:154` —
-`ImageViewer::paintEvent` calls `RenderEngine::instance()`, asks `TileCache`
-for visible tiles at the LOD for current zoom, and paints only those
-(`painter.drawImage(...)` at lines 176–182). So the main viewer **does** render
+**Wiring proof (not dead code):** `src/imageviewer_paint.cpp:39` —
+`ImageViewer::paintEvent` requests the visible tiles through `AsyncTileRequestManager` (backed by
+`TileCache`): `requestVisibleTiles()` at `:180`, `m_tileRequests.requestVisible(...)` at `:200`,
+whose decode callback calls `RenderEngine::scaleRegionStatic()` at `:196`. Only ready tiles are
+drawn (`painter.drawImage(...)` in `drawCpuTiles`, `:358`). So the main viewer **does** render
 tile-by-tile; a 100 MP / RAW image is not rasterized into one giant bitmap.
 
 ---

@@ -114,7 +114,9 @@ TEST(RenderEngine, OverlayNullInput) {
 
 ## Benchmark
 
-See `benchmarks/benchmark_main.csv` scenario `Render::scale(1920x1080→1280x720)`.
+See `mviewer_bench` scenario `B15` (`zoom_frame_ms_b15`, the per-frame zoom/scale hot path) in
+`src/benchmark/scenarios.cpp`; `B16` reports render throughput (fps) report-only. CTest gates:
+`bench_smoke`, `bench_enforce`.
 
 ## Future Extension
 

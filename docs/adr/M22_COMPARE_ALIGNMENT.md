@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed (DRAFT, companion to `docs/rfc/M22_PRODUCT_POLISH.md` §F3)
+Accepted — shipped in M22 (companion to `docs/rfc/M22_PRODUCT_POLISH.md` §F3). Implemented as
+the Qt-free `src/core/compare/Aligner.{h,cpp}`, with unit coverage in `src/core/test_aligner.cpp`
+(CTest `aligner_tests`).
 
 ## Context
 

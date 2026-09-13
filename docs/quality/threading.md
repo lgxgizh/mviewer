@@ -11,14 +11,18 @@
 
 | Pool | Thread Count | Purpose |
 | ------ | ------------- | --------- |
-| UI | 1 (main) | Render, input, signals |
-| Decode | N/2 | Full-image decode |
-| Thumbnail | N/2 | Thumbnail generation |
-| Analysis | N | Stats, diff, PSNR, SSIM |
-| IO | 2 | File read, disk cache |
-| Background | 1 | Prefetch, preload |
+| UI | 1 (main, not a pool) | Render, input, signals |
+| Metadata (`Priority::Background`) | max(1, N/2) | Metadata index, prefetch, preload |
+| Decode (`Priority::Decode`) | max(1, N) | Full-image decode |
+| Thumbnail (`Priority::Thumbnail`) | max(2, N) | Thumbnail generation |
+| Analysis (`Priority::Analysis`) | max(1, N/2) | Stats, diff, PSNR, SSIM |
+| IO (`Priority::UI`) | max(1, N) | File read, disk cache; also serves UI-priority tasks |
 
-N = hardware concurrency (QThread::idealThreadCount)
+N = hardware concurrency (QThread::idealThreadCount). The five pools are the
+`PoolType` values (`MetadataPool` / `DecodePool` / `ThumbnailPool` /
+`AnalysisPool` / `IOPool`); `Priority` maps onto them via `poolFromPriority`
+(`src/core/scheduler/TaskScheduler.h`), and the per-pool thread counts are set in
+`TaskScheduler.cpp` (`setQueueMaxThreads`).
 
 ## Task Priority
 
@@ -44,7 +48,7 @@ N = hardware concurrency (QThread::idealThreadCount)
 
 ## Cache Thread Safety
 
-- ImageCache: per-pool shared_mutex (read-heavy)
+- ImageCache: one `std::mutex mtx` per pool (exclusive, short-held; `src/core/image/ImageCache.h`)
 - DiskCache: serialized (SQLite)
 - ImageFrame: immutable after construction (safe to share across threads)
 - CacheManager: thread-safe API over layer below

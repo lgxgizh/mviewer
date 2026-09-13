@@ -5,6 +5,12 @@ pasted by the user, plus the approved 8-phase M13 plan.
 **Verdict:** review is **closed** except two items that are *blocked by external
 constraints* (not forgotten, not faked).
 
+> **Historical record (2026-07-19); current state in `STATUS.md`.** The
+> `pack_installer.ps1` name in the M11.3 row predates M14.1 — the installer is
+> now built by `scripts/package_release.ps1` — and the nightly dashboard is
+> produced by `scripts/health_score.ps1` in the `publish-health` job, not by a
+> `dashboard` job in `.github/workflows/nightly.yml`.
+
 ## Closed this pass
 
 | Item | What closed it | Evidence |

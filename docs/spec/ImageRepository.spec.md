@@ -171,7 +171,9 @@ TEST(Repository, DiskCacheHit) {
 
 ## Benchmark
 
-See `benchmarks/benchmark_main.csv` scenarios.
+See `mviewer_bench` (`src/benchmark/scenarios.cpp`): repository load latency after opening a
+folder is `B14` (`first_frame_latency_ms`), decode cost is `B3` (`decode_p50_ms_jpeg`), and
+cache residency is `B6` (`peak_cache_bytes`). CTest gates: `bench_smoke`, `bench_enforce`.
 
 ## Future Extension
 

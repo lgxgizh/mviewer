@@ -109,7 +109,7 @@ class MemoryTracker {
   budget checks use `ImageCache` bytes + `liveImageFrames × frameBytes`, which are
   deterministic.
 
-### Tests (`test_memorytracker.cpp` → `memorytracker_tests`)
+### Tests (`test_memorytracker.cpp`, folded into the `core_tests` target)
 - `sample()` returns `imageCacheTotalBytes == ImageCache::totalUsedBytes()`.
 - After `put` N frames of known size into `ImageCache::Viewer`, `peak().imageCacheTotalBytes`
   ≥ N × frameBytes and `liveImageFrames` tracks ctor/dtor exactly (construct K frames,
@@ -153,7 +153,7 @@ and the binary exits non-zero **only in `--enforce` mode** (local perf gate, opt
 Default mode (CI `--smoke`) prints numbers and always exits 0 — CI does not enforce
 budgets (roadmap Phase-4 defers the regression gate).
 
-### Tests (`test_benchmark.cpp` → `benchmark_tests`)
+### Tests (`test_benchmark.cpp`, folded into the `core_tests` target)
 - The scenario *functions* are unit-testable: given a 20-image corpus, `B3` returns
   finite p50; `B5` with a rigged Zipf navigator returns a ratio in [0,1]; `B6`
   asserts `MemoryTracker` peak ≥ N×frameBytes and that after `ImageCache::clear()` the
@@ -183,9 +183,9 @@ src/core/image/ImageFrame.cpp      (add atomic liveImageFrames ++/-- ; additive)
 benchmark/main.cpp                 (new; argparse: --smoke/--enforce/--corpus-size)
 benchmark/scenarios_b1_b7.cpp/.h  (new; scenario functors, unit-testable)
 benchmark/corpus.cpp/.h           (new; temp-dir 1000-JPEG/PNG/TIFF generator)
-test_memorytracker.cpp             (new → memorytracker_tests)
-test_benchmark.cpp                (new → benchmark_tests)
-src/CMakeLists.txt                (+ mviewer_bench exe, + 2 add_test entries)
+test_memorytracker.cpp             (new; compiled into the core_tests target)
+test_benchmark.cpp                (new; compiled into the core_tests target)
+src/CMakeLists.txt                (+ mviewer_bench exe, + bench_smoke / bench_enforce tests)
 ```
 
 ---
@@ -193,12 +193,12 @@ src/CMakeLists.txt                (+ mviewer_bench exe, + 2 add_test entries)
 ## 6. Acceptance criteria (M10)
 
 - [ ] `MemoryTracker` samples `ImageCache` totals/per-level + tracks live `ImageFrame`
-      count; `peak()` monotonic; `reset()` clears it. `memorytracker_tests` green.
+      count; `peak()` monotonic; `reset()` clears it. `core_tests` green.
 - [ ] `mviewer_bench` builds and `--smoke` (20-image corpus) runs and exits 0 in CI
       (proves it links on the gating pipeline).
 - [ ] All 7 scenarios (B1–B7) run on a 1000-image corpus locally and print
       p50/p95/p99 + budget verdicts readable by a human.
-- [ ] `benchmark_tests` green (structural correctness of each scenario functor).
+- [ ] `core_tests` green (structural correctness of each scenario functor).
 - [ ] Memory budget B6 verified locally: peak ≥ N×~96 MB during a 1000×24 MP sweep and
       returns to within 10% of baseline after `ImageCache::clear()` + eviction.
 - [ ] `MemoryTracker` adds **no** decode logic to any QWidget; `core/perf/` is Qt-free

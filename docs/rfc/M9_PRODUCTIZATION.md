@@ -27,7 +27,8 @@ M3–M8 are complete. The engineering substrate is real and frozen:
 - **Analyzers** (`src/core/analyzer/`): `Analyzer` base + **8 concrete**:
   Histogram, RGBMean, PSNR, SSIM, Sharpness, Entropy, Noise. (No Metadata or
   Diff analyzer class — Metadata comes from `ImageFrame::metadata()`, Diff from
-  `DifferenceEngine`.) **No AnalyzerRegistry exists** (verified).
+  `DifferenceEngine`.) `AnalyzerRegistry` **does** exist
+  (`src/core/analyzer/Analyzer.h`) and is gated by `analyzer_registry_tests`.
 - **Command system** (`src/core/command/`): `ICommand`, `CommandStack`,
   `CropCommand`, `RotateCommand`, `LabelCommand`.
 - **Domain** (`src/domain/`): `Workspace.h`, `CompareSession.h`, `Selection.h`,

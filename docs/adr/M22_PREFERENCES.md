@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed (DRAFT, companion to `docs/rfc/M22_PRODUCT_POLISH.md` §F1)
+Accepted — shipped in M22 (companion to `docs/rfc/M22_PRODUCT_POLISH.md` §F1). Implemented as
+the tabbed `PreferencesDialog` in `src/preferencesdialog.{h,cpp}`, reading/writing the existing
+`QSettings` keys.
 
 ## Context
 

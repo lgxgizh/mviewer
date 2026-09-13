@@ -60,19 +60,24 @@ as a hard CI gate is tracked separately (Phase 2 / M17).
 | AnalysisEngine::computeStats(24MP) | full histogram + stats | < 20 ms |
 | AnalysisEngine::psnr(24MP) | pixel-compare | < 20 ms |
 
-## Current Baselines (0.1.0)
+## Current Baseline
 
-| Operation | Avg | Status |
-| ----------- | ----- | -------- |
-| Decode 1920x1080 (JPEG) | 24.7ms | ✅ |
-| Encode 1920x1080 (JPEG) | 64.0ms | ✅ |
-| ImageCache hit | <0.01ms | ✅ |
-| CacheManager miss | 0.2ms | ✅ |
-| Analysis (1920x1080) | 18.4ms | ✅ |
-| PSNR (1920x1080) | 18.2ms | ✅ |
-| SSIM (1920x1080) | 95.2ms | ✅ |
-| Noise estimate | 9.0ms | ✅ |
-| Difference map | 21.9ms | ✅ |
+The committed baseline — the only source of current numbers — is
+`benchmark/perf_baseline.json` (`schema_version` 2, `hardware_profile` `ci`,
+recalibrated 2026-07-28). This document deliberately does not duplicate it.
+
+Measure the current values with:
+
+```
+mviewer_bench --profile ci --results results.json
+```
+
+`--results` writes one JSON verdict per scenario (`name` / `metric` / `value`);
+those measured values are then promoted into `benchmark/perf_baseline.json`
+(baseline updates require a documented reason — see
+`docs/review/M24_TEST_CREDIBILITY_2026-08-05.md` §6). The nightly regression
+check runs `mviewer_bench --enforce --regression --profile ci --budget
+benchmark/performance_budget.json` (`.github/workflows/nightly.yml`).
 
 ## Enforcement
 

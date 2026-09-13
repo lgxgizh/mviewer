@@ -8,14 +8,9 @@ This directory contains detailed design documents that bridge specifications and
 
 ```
 docs/design/
-  overall.md        ← Big picture architectural overview
+  README.md         ← This index (directory overview)
   data_flow.md      ← How data flows: File → ImageFrame → Cache → Render → UI
-  threading.md      ← Threading model: which thread owns which data
-  caching.md        ← Cache design: hierarchy, eviction, integrity
-  rendering.md      ← Render pipeline: backend abstraction, command model
-  analysis.md       ← Analyzer plugin design + capability framework
-  compare.md        ← Compare state machine, ownership model
-  plugins.md        ← Future plugin framework
+  image_pipeline.md ← Full image data flow: Directory → Repository → Decoder → ImageFrame
 ```
 
 ## Relationship with Specs

@@ -102,7 +102,7 @@ Task Scheduler
 | ImageRepository | `src/core/image/ImageRepository.{h,cpp}` | 图片生命周期抽象（FileSystem + Decoder + Cache） |
 | CacheManager | `src/core/cache/CacheManager.{h,cpp}` | 统一缓存调度（内存+磁盘） |
 | DiskCache | `src/core/image/DiskCache.{h,cpp}` | SQLite 磁盘缓存 |
-| TaskScheduler | `src/core/scheduler/TaskScheduler.{h,cpp}` | 4 独立池（Decode/Thumbnail/Analysis/IO） |
+| TaskScheduler | `src/core/scheduler/TaskScheduler.{h,cpp}` | 5 独立池（Metadata/Decode/Thumbnail/Analysis/IO，由 `Priority` 映射） |
 | Analyzer | `src/core/analyzer/Analyzer.{h,cpp}` + `HistogramAnalyzer.{h,cpp}` | 插件化分析接口 |
 | EventBus | `src/core/EventBus.{h,cpp}` | 4 域隔离事件总线 |
 | CommandRegistry | `src/core/command/CommandRegistry.{h,cpp}` + 5 种子命令 | 命令系统基础设施（CommandPalette UI 留待 M7） |

@@ -168,7 +168,10 @@ TEST(Analysis, NoiseOnFlatIsLow) {
 
 ## Benchmark
 
-See `benchmarks/benchmark_main.csv` scenarios: `Compute::stats(1920x1080)`, `Compute::psnr(1920x1080)`, `Compute::ssim(1920x1080)`, `Compute::noise(1920x1080)`, `Compute::diffMap(1920x1080)`.
+See the `mviewer_bench` harness (`src/benchmark/scenarios.cpp`; CTest gates `bench_smoke` and
+`bench_enforce`). It has no analyzer-specific scenario — analysis cost rides the decode and
+switch paths, `B3` (`decode_p50_ms_jpeg`) and `B7` (`switch_warm_p50_ms`) — while analyzer
+behavior is asserted by the `analyzer_registry_tests` suite.
 
 ## Future Extension
 

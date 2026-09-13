@@ -5,8 +5,9 @@
 Thumbnail, scaled preview, ImageViewer and Compare surfaces use the same
 display materialization semantics: embedded ICC is converted on a worker or
 render-materialization path, while analysis-domain bytes remain unchanged.
-Thumbnail cache schema 3 stores display-ready PNG payloads; older schema
-entries never satisfy a request.
+Thumbnail cache schema 4 (`ThumbnailCache::kSchemaVersion`, `src/thumbnailcache.h`) stores
+display-ready, ICC-converted PNG payloads; schema 4 is the bump that replaced the pre-M36
+analysis-domain PNGs, and older schema entries never satisfy a request.
 
 ## M35 two-stage presentation contract
 

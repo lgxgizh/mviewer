@@ -71,5 +71,5 @@ CI checklist:
 
 1. Author generates golden images via `golden/golden_main.exe`.
 2. Commit to `golden/` directory.
-3. CI / QA runs `golden_compare.exe` on each CI pass.
+3. CI / QA runs `golden_main --compare` (CTest `golden_image`) on each CI pass.
 4. If any output differs beyond tolerance → investigate, and either fix the bug or update golden (with human approval).

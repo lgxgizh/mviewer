@@ -154,13 +154,24 @@ for ($i = 0; $i -lt $cmake.Count; $i++) {
         }
     }
 }
-# Map test NAME -> executable: the command token right after add_test(NAME <n> COMMAND <exe>.
+# Map test NAME -> executable: `add_test(NAME <n> COMMAND <exe>)`. Registrations
+# may wrap onto the next line (`add_test(NAME x` / `COMMAND y)`), so the block is
+# joined before matching — a single-line-only parse silently dropped 25 of the
+# 132 registrations from the published inventory.
+$inventoryRows = 0
 for ($i = 0; $i -lt $cmake.Count; $i++) {
-    if ($cmake[$i] -match 'add_test\(NAME (\w+) COMMAND ([A-Za-z0-9_]+)') {
+    if ($cmake[$i] -notmatch 'add_test\(') { continue }
+    $block = ''
+    for ($j = $i; $j -lt [Math]::Min($i + 5, $cmake.Count); $j++) {
+        $block += ' ' + $cmake[$j].Trim()
+        if ($block -match '\)') { break }
+    }
+    if ($block -match 'add_test\(NAME\s+(\w+)\s+COMMAND\s+(\S+)') {
         $name = $Matches[1]; $exe = $Matches[2]
         $isSerial = if ($serial.Contains($name)) { 'yes' } else { '-' }
         $isUi = if ($uiTargets.Contains($exe)) { 'yes' } else { '-' }
         [void]$sb.AppendLine("| $name | ``$exe`` | $isSerial | $isUi |")
+        $inventoryRows++
     }
 }
 [void]$sb.AppendLine()
@@ -169,5 +180,6 @@ for ($i = 0; $i -lt $cmake.Count; $i++) {
 [void]$sb.AppendLine('---')
 [void]$sb.AppendLine('_This matrix is regenerated automatically. The M23 policy: every shipped feature MUST have at least one regression test - add the test, then this matrix updates itself._')
 
-Write-Utf8NoBom $Out $sb.ToString().TrimEnd("`n", "`r")
-Write-Host "test_matrix: wrote $($sources.Count) test sources -> $Out"
+# markdownlint MD047: the file must end with exactly one newline.
+Write-Utf8NoBom $Out ($sb.ToString().TrimEnd("`n", "`r") + "`n")
+Write-Host "test_matrix: wrote $($sources.Count) test sources, $inventoryRows CTest registrations -> $Out"

@@ -84,14 +84,14 @@ feel still require a physical Windows review.
 
 1. **1.0 hardening** — code-signed installer, a docs/README site, and a
    **frozen plugin ABI** (same compiler/Qt per release; see
-   [`docs/adr/005-why-plugin-analysis.md`](../adr/005-why-plugin-analysis.md)).
+   [`docs/adr/005-why-plugin-analysis.md`](adr/005-why-plugin-analysis.md)).
 2. **1.1 large-source depth** — extend measured format-specific LOD/tile
    coverage beyond the current 100MP JPEG and Windows WIC-TIFF display paths,
    while keeping exact-source analysis separate and bounded
-   ([`docs/rfc/M13_TILE_PIPELINE.md`](../rfc/M13_TILE_PIPELINE.md)).
+   ([`docs/rfc/M13_TILE_PIPELINE.md`](rfc/M13_TILE_PIPELINE.md)).
 3. **2.0 GPU** — Stage A only (GPU upload + blit via Qt RHI), gated on a
    measured 100 MP deficit. The full staged route is in
-   [`docs/rfc/M13_GPU_ROADMAP.md`](../rfc/M13_GPU_ROADMAP.md). **No D3D11/Vulkan
+   [`docs/rfc/M13_GPU_ROADMAP.md`](rfc/M13_GPU_ROADMAP.md). **No D3D11/Vulkan
    direct-compositing until the UI boundary is intentionally reopened.**
 
 ## Explicitly deferred (not in the current track)

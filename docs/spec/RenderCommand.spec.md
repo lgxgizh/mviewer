@@ -6,7 +6,7 @@ RenderCommand + RenderCommandType + RenderInterp + RenderSize + RenderRect + Ren
 
 ## Purpose
 
-RenderCommand is a flat-struct command pattern for composable UI draw operations. Each command carries its data inline (srcImage, overlayImage, histogram bins, rect, color, alpha). 5 operations: DrawImage, DrawOverlay, DrawHistogram, DrawSelection, DrawPixelMarker. The RenderEngine facade dispatches to a pluggable Renderer backend (default: SoftwareRenderer). Flat struct (not union) because ImageData has a non-trivial constructor.
+RenderCommand is a flat-struct command pattern for composable UI draw operations. Each command carries its data inline (srcImage, overlayImage, histogram bins, rect, color, alpha). 6 operations: DrawImage, DrawOverlay, DrawHistogram, DrawSelection, DrawHeatmap, DrawPixelMarker. The RenderEngine facade dispatches to a pluggable Renderer backend (default: SoftwareRenderer). Flat struct (not union) because ImageData has a non-trivial constructor.
 
 ## API
 
@@ -16,6 +16,7 @@ enum class RenderCommandType : uint8_t {
     DrawOverlay,      // blend overlayImage over current buffer at alpha
     DrawHistogram,    // draw bar chart from histData[0..histCount] into rect
     DrawSelection,    // draw marquee rect with rgba color
+    DrawHeatmap,      // draw heatmap srcImage into rect (backend heatMap())
     DrawPixelMarker,  // draw crosshair marker at (x,y) with rgba color
 };
 
@@ -64,6 +65,7 @@ struct RenderCommand {
     static RenderCommand drawImage(const ImageData& img, const RenderSize& tgt, RenderInterp m);
     static RenderCommand drawOverlay(const ImageData& img, double a);
     static RenderCommand drawHistogram(const int* bins, int n, const RenderRect& r);
+    static RenderCommand drawHeatmap(const ImageData& gray, const RenderRect& r);
     static RenderCommand drawSelection(const RenderRect& r, int rgb);
     static RenderCommand drawPixelMarker(int x, int y, int rgb);
 };
@@ -88,7 +90,7 @@ public:
 
 | Factory Parameter | Type | Constraints | Default |
 | ------------------- | ------ | ------------- | --------- |
-| `img` | `const ImageData&` | Valid pixels for DrawImage/DrawOverlay | — |
+| `img` | `const ImageData&` | Valid pixels for DrawImage/DrawOverlay/DrawHeatmap | — |
 | `tgt` | `const RenderSize&` | width>0, height>0 | — |
 | `m` | `RenderInterp` | — | — |
 | `a` | `double` | 0.0–1.0 | — |
@@ -106,6 +108,7 @@ public:
 | `drawOverlay` | `RenderCommand` | type=DrawOverlay, overlayImage=img, alpha=a |
 | `drawHistogram` | `RenderCommand` | type=DrawHistogram, histData[0..n]=bins, rect=r, histCount=n |
 | `drawSelection` | `RenderCommand` | type=DrawSelection, rect=r, rgba=rgb |
+| `drawHeatmap` | `RenderCommand` | type=DrawHeatmap, srcImage=gray, rect=r |
 | `drawPixelMarker` | `RenderCommand` | type=DrawPixelMarker, targetSize={x,y}, rgba=rgb |
 
 ## Ownership
@@ -201,7 +204,9 @@ TEST(RenderEngine, Scale100to50) {
 
 ## Benchmark
 
-See `benchmarks/benchmark_main.csv` scenario `Render::scale(1920x1080→1280x720)`.
+See `mviewer_bench` scenario `B15` (`zoom_frame_ms_b15`, the per-frame zoom/scale hot path) in
+`src/benchmark/scenarios.cpp`; `bench_smoke` / `bench_enforce` are the CTest gates over that
+harness.
 
 ## Future Extension
 

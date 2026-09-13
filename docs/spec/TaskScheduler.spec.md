@@ -289,7 +289,9 @@ TEST(Scheduler, CancelTreeCancelsDependents) {
 
 ## Benchmark
 
-See `benchmarks/benchmark_main.csv` scenario `Scheduler::submit(Background)`.
+See `mviewer_bench` scenario `TRACE` (`scenarioPipelinePriority`), which proves the visible >
+neighbor > background priority ordering, and `B2` (`first_thumbnail_ms`), whose stage breakdown
+reports the scheduler queue wait. CTest gates: `bench_smoke`, `bench_enforce`.
 
 ## Future Extension
 

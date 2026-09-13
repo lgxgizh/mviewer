@@ -38,11 +38,12 @@ Does not modify frozen modules.
 
 ## F2 — Broaden Decode Format Coverage
 
-**Why:** `QtDecoder::kExtensions` is hard-coded to 6 formats
-(`jpg/jpeg/bmp/png/tif/tiff`). Qt itself can decode more (WebP, GIF, and — when
-plugins ship — HEIF/AVIF) via `QImageReader::supportedImageFormats()`. Image
-algorithm engineers routinely handle WebP/HEIF/AVIF/HDR. The current list
-silently drops anything else.
+**Why (F2 implemented — see `docs/adr/M22_FORMAT_COVERAGE.md`):** the original proposal was to
+replace a hard-coded 6-format extension list (`jpg/jpeg/bmp/png/tif/tiff`) inside
+`QtDecoder`. Qt itself can decode more (WebP, GIF, and — when plugins ship — HEIF/AVIF) via
+`QImageReader::supportedImageFormats()`. Image algorithm engineers routinely handle
+WebP/HEIF/AVIF/HDR. The shipped code (`src/core/image/decoder/QtDecoder.cpp`, `// F2 (M22)`)
+derives the claim set that way; there is no `kExtensions` constant in `src/`.
 
 **What:**
 - `QtDecoder::extensions()` / `canDecode()` derive the supported set from

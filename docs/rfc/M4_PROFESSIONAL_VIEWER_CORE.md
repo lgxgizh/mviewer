@@ -147,7 +147,7 @@ Priority order per review:
 
 ## 5. Test strategy
 
-- Extend `src/core/test_compare.cpp` (currently 139 lines: layout + sync +
+- Extend `src/core/test_compare.cpp` (171 lines: layout + sync +
   diff + pixel probe checks). Add:
   - 8-image grid sync (no stall on 50 MP).
   - Blink index alternation timing.

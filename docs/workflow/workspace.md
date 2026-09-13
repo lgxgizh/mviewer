@@ -68,5 +68,5 @@ explicit `comparedImages` array. No new core code; `WorkspaceSerializer` already
 exists.
 
 ---
-*Cross-refs: `docs/acceptance/user_workflow.md`, `docs/domain/Workspace.h`,
+*Cross-refs: `docs/acceptance/user_workflow.md`, `src/domain/Workspace.h`,
 `docs/rfc/M13_PRODUCT_BETA.md` (Phase 1).*
