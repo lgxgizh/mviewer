@@ -134,16 +134,28 @@ Required:
 - GIF (including animation playback)
 - TIFF
 - WebP
-- AVIF
-- HEIF / HEIC
-- JPEG XL
+
+Shipped through the Qt image plugins, so availability follows the deployed Qt
+build: **GIF animation always, animated WebP when the `qwebp` plugin is present**
+(verified by the M57 real-plugin test). List the rest as *candidate* formats, not
+requirements — the original list named AVIF/HEIF/JPEG XL as "Required", but no
+decoder for them ships and none is in scope:
+
+- AVIF — candidate, no decoder
+- HEIF / HEIC — candidate, no decoder
+- JPEG XL — candidate, no decoder
 
 Optional (Future):
 
 - SVG
 - ICO
 
-RAW image formats are intentionally **out of scope**.
+RAW is **not** out of scope in the shipped product: `RawDecoder` serves the
+embedded-JPEG preview for CR2/CR3/NEF/ARW/DNG/ORF/RW2/PEF/RAF (full demosaic via
+libraw stays deferred — see `docs/roadmap.md`, M18/M24).
+
+See [`docs/acceptance/M13.4_real_datasets.md`](acceptance/M13.4_real_datasets.md)
+for the format matrix that is actually verified.
 
 ---
 

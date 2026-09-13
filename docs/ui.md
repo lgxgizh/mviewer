@@ -1,8 +1,32 @@
 # MViewer UI Specification
 
+## Status — read this first
+
+This file is the **design spec** for the UI, not a description of the shipped
+product. Several sections describe an intended design that was deliberately not
+built: a thumbnail *sidebar* layout, a Direct3D 11 backend, momentum panning and
+touch input, IPTC/XMP metadata sections with per-section collapse, a Ken Burns
+slideshow, system light/dark switching, and a virtualized thumbnail scroll area.
+
+For what the product actually does, use:
+
+- [`USER_GUIDE.md`](USER_GUIDE.md) — the user-facing guide (browse / compare).
+- The in-app **F1** shortcut dialog — generated from the shipped keymap.
+- [`ROADMAP_PUBLIC.md`](ROADMAP_PUBLIC.md) — what shipped in which version.
+
+Passages that no longer match the product carry an explicit
+**[not implemented]** marker. The shortcut tables were corrected to the shipped
+keymap in 1.0.30 (they previously listed an intended keymap: `Space` = next
+image, `F` = fit to window, `Ctrl+O` = open file — none of which the product
+binds).
+
+---
+
 ## Overview
 
-The MViewer user interface is designed for efficient image browsing with minimal visual clutter. The interface prioritizes keyboard navigation and provides a native desktop experience through Qt 6 Widgets.
+The MViewer user interface is designed for efficient image browsing with minimal
+visual clutter. The interface prioritizes keyboard navigation and provides a
+native desktop experience through Qt 6 Widgets.
 
 ---
 
@@ -22,28 +46,32 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ┌─────────────────────────────────────────────────────────────┐
 │  Menu Bar                                                   │
 ├─────────────────────────────────────────────────────────────┤
-│  Toolbar (optional, collapsible)                            │
-├──────────┬──────────────────────────────────┬───────────────┤
-│          │                                  │               │
-│Thumbnail │                                  │  Metadata     │
-│Sidebar   │         Image Canvas             │  Panel        │
-│          │                                  │  (collapsible)│
-│          │                                  │               │
-│          │                                  │               │
-├──────────┴──────────────────────────────────┴───────────────┤
-│  Status Bar                                                 │
+│  Gallery toolbar (view mode, sort, filter, search)          │
+├──────────────────────────────┬──────────────────────────────┤
+│                              │                              │
+│      Thumbnail gallery       │   Preview / analysis dock    │
+│      (grid · list · detail · │   (metadata panel, analysis  │
+│       filmstrip · compact)   │    panel, histogram)         │
+│                              │                              │
+├──────────────────────────────┴──────────────────────────────┤
+│  Status Bar (selection, image info, zoom, position)        │
 └─────────────────────────────────────────────────────────────┘
 ```
 
+The image itself opens in a dedicated **viewer window** (`ImageViewer`), and
+Compare opens its own workspace window — neither is a docked canvas. The sketch
+above is the main window only.
+
 ### Default Panel Visibility
 
-| Panel | Default | User Toggle |
+| Panel | Default | Toggle |
 | ------- | --------- | ------------- |
 | Menu Bar | Visible | Always visible |
-| Toolbar | Hidden | View → Toolbar |
-| Thumbnail Sidebar | Visible | View → Thumbnails (T) |
-| Metadata Panel | Hidden | View → Metadata (M) |
-| Status Bar | Visible | View → Status Bar |
+| Gallery toolbar | Visible | View menu |
+| Thumbnail gallery | Visible | Always visible (the main content) |
+| Metadata panel | Hidden | View → Metadata (`Ctrl+I`) |
+| Analysis panel | Hidden | `Alt+H` |
+| Status Bar | Visible | View menu |
 
 ---
 
@@ -53,110 +81,139 @@ The MViewer user interface is designed for efficient image browsing with minimal
 
 | Action | Shortcut | Description |
 | -------- | ---------- | ------------- |
-| Open File... | `Ctrl+O` | Open single image file |
-| Open Folder... | `Ctrl+Shift+O` | Open folder for browsing |
-| Exit | `Alt+F4` / `Ctrl+Q` | Close application |
+| Open Folder... | `Ctrl+O` | Open a folder for browsing (`QKeySequence::Open`) |
+| Open File... | `Ctrl+Shift+O` | Open a single image file |
+| Exit | `Ctrl+Q` / `Alt+F4` | Close application |
+
+> Corrected in 1.0.30: the table previously had `Ctrl+O` = Open File and
+> `Ctrl+Shift+O` = Open Folder, the reverse of the shipped bindings
+> (`src/mainwindow_ui_layout.cpp`).
 
 ### View
 
 | Action | Shortcut | Description |
 | -------- | ---------- | ------------- |
-| Zoom In | `+` / `Ctrl+=` | Increase zoom level |
-| Zoom Out | `-` | Decrease zoom level |
-| Fit to Window | `F` | Scale image to fit canvas |
-| Actual Size | `1` | 100% zoom (1:1 pixel) |
-| Stretch to Window | | Fill canvas (ignore aspect) |
-| Fullscreen | `F11` | Toggle fullscreen mode |
-| Thumbnails | `T` | Toggle thumbnail sidebar |
-| Metadata | `M` | Toggle metadata panel |
-| Toolbar | | Toggle toolbar |
-| Status Bar | | Toggle status bar |
+| Zoom In | `Ctrl++` / `Ctrl+=` | Increase zoom level |
+| Zoom Out | `Ctrl+-` | Decrease zoom level |
+| Fullscreen | `F11` (viewer: `F` or `F11`) | Toggle fullscreen mode |
+| Analysis panel | `Alt+H` | Toggle the analysis panel (histogram by default) |
+| Metadata panel | `Ctrl+I` | Toggle the metadata panel |
+| Search | `Ctrl+Shift+F` | Focus the search field |
+| Batch | `Ctrl+Shift+B` | Batch operations dialog |
+| Batch analyze | `Ctrl+Shift+A` | Batch analysis over the selection |
+| History back / forward | `Alt+Left` / `Alt+Right` | Browse history |
+| Directory back / forward | `Ctrl+Alt+Left` / `Ctrl+Alt+Right` | Directory navigation |
+| Undo / Redo | `Ctrl+Z` / `Ctrl+Y` | Command stack |
+| Keyboard shortcuts | `F1` | Shortcut reference |
 
 ### Navigate
 
 | Action | Shortcut | Description |
 | -------- | ---------- | ------------- |
-| Next Image | `→` / `Space` | Go to next image |
-| Previous Image | `←` / `Backspace` | Go to previous image |
+| Next Image | `→` | Go to next image |
+| Previous Image | `←` | Go to previous image |
+| Open / activate | `Enter` | Open the selection in the viewer |
 | First Image | `Home` | Go to first image in folder |
 | Last Image | `End` | Go to last image in folder |
-| Go to... | `Ctrl+G` | Open "go to image" dialog |
+| Previous / Next page | `PageUp` / `PageDown` | Page through the gallery |
+| Refresh | `F5` | Rescan the current directory |
+
+> `Space` is **not** "next image" in the shipped build: in the browse window it
+> starts a quick compare of the current image against the next one
+> ([`USER_GUIDE.md`](USER_GUIDE.md)).
 
 ### Image
 
 | Action | Shortcut | Description |
 | -------- | ---------- | ------------- |
-| Rotate Clockwise | `R` | Rotate 90° clockwise |
-| Rotate Counter-CCW | `Shift+R` | Rotate 90° counter-clockwise |
-| Flip Horizontal | `H` | Mirror horizontally |
-| Flip Vertical | `V` | Mirror vertically |
+| Rename | `F2` | Rename the selected file |
+| Delete (MViewer staging) | `Delete` | Move the selection to the MViewer trash |
+| Rotate | `R` (viewer) | Rotate the displayed image |
+| Colour label | `0`–`6` | Assign a colour label to the selection |
+
+> The original spec listed `R` / `Shift+R` / `H` / `V` as rotate and flip
+> bindings of the main window. Only the viewer binds `R`; flips are done through
+> the toolbar and the command stack, which is what makes them undoable.
 
 ### Slideshow
 
 | Action | Shortcut | Description |
 |--------|----------|-------------|
-| Start/Stop | `Space` (when not navigating) | Toggle slideshow |
+| Start/Stop | `S` | Toggle slideshow |
 | Settings... | | Configure interval, order |
+
+> `Space` toggles a quick compare, not the slideshow.
 
 ### Help
 
 | Action | Shortcut | Description |
 |--------|----------|-------------|
 | Keyboard Shortcuts | `F1` | Show shortcut reference |
+| 使用说明 (User guide) | | Open `docs/USER_GUIDE.md` in the browser |
 | About | | Show version and credits |
 
 ---
 
 ## Keyboard Shortcuts (Complete Reference)
 
-### Navigation
+> **Source of truth:** the in-app **F1** dialog and
+> [`USER_GUIDE.md`](USER_GUIDE.md). The tables below mirror them. The zoom-level
+> table that used to live here (`2` = 200%, `5` = 50%, `Ctrl+0` = fit) was never
+> bound, and `PageDown` / `PageUp` navigate the gallery, not the image.
+
+### Browse window (MainWindow)
 
 | Key | Action |
 | ----- | -------- |
-| `→` or `PageDown` | Next image |
-| `←` or `PageUp` | Previous image |
-| `Home` | First image |
-| `End` | Last image |
-| `Space` | Next image (or slideshow toggle) |
-| `Backspace` | Previous image |
+| `←` / `→` | Previous / next image |
+| `Home` / `End` | First / last image |
+| `PageUp` / `PageDown` | Previous / next page |
+| `Enter` | Open the selection in the viewer |
+| `Ctrl+O` | Open folder |
+| `Ctrl+Shift+O` | Open file |
+| `P` / `C` | Open Compare (needs 2–8 selected images) |
+| `Space` | Quick compare: current image against the next one |
+| `Alt+H` | Analysis panel |
+| `I` / `M` | Image-info overlay / metadata overlay |
+| `S` | Slideshow |
+| `F` | Fullscreen |
+| `F1` | Full shortcut reference |
+| `F2` | Rename |
+| `F5` | Refresh the directory |
+| `Delete` | Move to MViewer staging |
+| `Ctrl+Shift+B` / `Ctrl+Shift+A` | Batch / batch analyze |
+| `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
+| `Ctrl+Shift+F` | Search |
+| `0`–`6` | Colour label |
+| `Esc` | Clear the current state (e.g. leave fullscreen) |
 
-### Zoom
-
-| Key | Action |
-| ----- | -------- |
-| `+` or `=` | Zoom in |
-| `-` | Zoom out |
-| `F` | Fit to window |
-| `1` | Actual size (100%) |
-| `2` | 200% zoom |
-| `5` | 50% zoom |
-| `Ctrl+0` | Fit to window (alternate) |
-
-### View
-
-| Key | Action |
-| ----- | -------- |
-| `F11` | Toggle fullscreen |
-| `T` | Toggle thumbnail sidebar |
-| `M` | Toggle metadata panel |
-| `Esc` | Exit fullscreen / Close panels |
-
-### Image Manipulation
+### Viewer window (ImageViewer)
 
 | Key | Action |
 | ----- | -------- |
-| `R` | Rotate 90° clockwise |
-| `Shift+R` | Rotate 90° counter-clockwise |
-| `H` | Flip horizontal |
-| `V` | Flip vertical |
+| `←` / `→` | Previous / next image |
+| `+` / `-` | Zoom in / out |
+| `F` or `F11` | Fullscreen |
+| `R` | Rotate |
+| `Esc` | Close the viewer |
+| `,` / `.` | Previous / next frame (animated / multi-page sources) |
+| `Space` | Play / pause animation (animated sources only) |
 
-### File
+### Compare window (CompareWorkspace)
 
 | Key | Action |
 | ----- | -------- |
-| `Ctrl+O` | Open file |
-| `Ctrl+Shift+O` | Open folder |
-| `Ctrl+Q` | Quit |
+| `Z` / `D` | Sync zoom / sync drag |
+| `Space` (hold) | Blink: show B while held |
+| `B` / `S` / `W` / `O` / `K` | Blink / split / swipe / overlay / checkerboard (2 images) |
+| `H` | Difference highlight |
+| `R` / `L` | Sync crosshair / pixel link |
+| `X` | Swap A/B |
+| `F` | Fit all panes |
+| `PageUp` / `PageDown` | Previous / next pair |
+| `Shift+1`…`Shift+5` | Channel: RGB / R / G / B / Y |
+| `?` | Shortcut hints |
+| `Esc` | Clear the ROI, then exit Compare |
 
 ---
 
@@ -164,11 +221,14 @@ The MViewer user interface is designed for efficient image browsing with minimal
 
 ### Rendering
 
-- Custom `QWidget` with platform-specific rendering backend
-- Direct3D 11 surface on Windows (via `QWindow` or `HWND` interop)
-- OpenGL surface on Linux (via `QOpenGLWidget`)
-- GPU-accelerated zoom and pan
-- Bilinear filtering for smooth scaling
+- Custom `QWidget` (`RawImageView`) painting an `ImageFrame`; the full-size view
+  is a separate window (`ImageViewer`).
+- Qt's raster paint engine by default. Tiles may be uploaded to GPU textures
+  through `GpuTileUploader` when an OpenGL context is current **and** the opt-in
+  `MVIEWER_GPU` environment variable is set; the CPU compositor remains the
+  verified default.
+- **[not implemented]** a Direct3D 11 surface — the original design named D3D11
+  on Windows, but no D3D backend exists in `src/`.
 
 ### Interaction
 
@@ -177,61 +237,57 @@ The MViewer user interface is designed for efficient image browsing with minimal
 | Mouse drag | Pan image |
 | Mouse wheel | Zoom in/out (cursor-centered) |
 | Double-click | Toggle fit-to-window / actual size |
-| Middle-click drag | Pan image (alternative) |
-| Touch pinch | Zoom (future) |
-| Touch drag | Pan (future) |
+| Right-drag (Compare) | Draw the ROI |
+| Touch pinch / drag | **[not implemented]** |
 
 ### Zoom Behavior
 
-- Zoom levels: 1% to 1600%
-- Default zoom step: 10% per wheel tick
-- Zoom centered on cursor position
-- Smooth zoom (no discrete steps perceived)
-- Maintain zoom level across image switches (user-configurable)
+- Zoom range follows `Viewport::zoomAt` (0.05×–50×); a value restored from
+  settings is clamped to that range.
+- Zoom is centered on the cursor position.
+- Fit-to-window applies per image until the user zooms.
 
 ### Pan Behavior
 
-- Pan only when image larger than canvas
-- Momentum/inertia (optional, minimal)
 - Boundary clamping (no infinite panning)
-- Pan resets on "Fit to Window"
+- `Fit` restores the centered view
+- **[not implemented]** momentum / inertia
 
 ---
 
-## Thumbnail Sidebar
+## Thumbnail Gallery
 
 ### Layout
 
-- Vertical strip on left side of window
-- Width: 150-300px (user-resizable)
-- Thumbnails arranged top-to-bottom
-- Scrollbar for overflow
+**[not implemented] as originally drawn** (a 150–300 px vertical strip). The
+shipped gallery is `ThumbnailPanel`, the main dock of the window, with grid /
+list / detail / filmstrip / compact view modes, a toolbar, and a resizable panel.
 
 ### Thumbnail Display
 
 | Property | Value |
 | ---------- | ------- |
-| Thumbnail size | 128-256px (user-configurable) |
 | Aspect ratio | Preserved |
-| Border | 2px, highlight on selected |
-| Spacing | 4px between thumbnails |
-| Label | Optional filename overlay |
+| Selection | Highlighted; the current image is marked |
+| Label | Optional filename overlay in the larger view modes |
 
 ### Behavior
 
-- Click to select and display image
-- Scroll to navigate through folder
-- Selected thumbnail highlighted
-- Current image indicator (colored border)
-- Drag to resize panel width
-- Context menu: Open in new window, Show in folder, File info
+- Click to select and show the image; `Ctrl` / `Shift`-click extends the
+  selection
+- Context menu: open in viewer, compare, rate / label, batch rename / move /
+  delete
+- Drag to resize the panel
 
 ### Performance
 
-- Only visible thumbnails rendered (virtual scrolling)
-- Thumbnails loaded from cache (L3 → L4 → generate)
-- Priority: visible range first, then scroll buffer
-- Smooth scrolling at 60fps
+- Only the visible range (plus a small neighbour buffer) is requested first —
+  `ThumbnailPipeline` priorities are visible → neighbours → rest
+- Thumbnails come from `ThumbnailCache` (bounded on-disk PNG keyed by
+  path + mtime + size + requested size + schema) and are generated off the UI
+  thread
+- **[not implemented]** the "virtualized scroll area, 60 fps" claim of the
+  original spec
 
 ---
 
@@ -239,9 +295,8 @@ The MViewer user interface is designed for efficient image browsing with minimal
 
 ### Layout
 
-- Vertical strip on right side of window
-- Width: 250-400px (user-resizable)
-- Sections with collapsible headers
+- Docked panel on the right, resizable, tree of metadata groups
+- The on-image overlay (`I` / `M`) shows a compact subset of the same data
 
 ### Sections
 
@@ -249,17 +304,18 @@ The MViewer user interface is designed for efficient image browsing with minimal
 | --------- | --------- |
 | File Info | Filename, path, size, dimensions, format |
 | EXIF | Camera, lens, exposure, ISO, focal length, date |
-| IPTC | Title, keywords, copyright, creator |
-| XMP | Rating, labels, description |
-| Color | Color space, bit depth, ICC profile name |
+| RAW | Embedded-preview information for RAW containers |
+| Colour | Colour space, bit depth, ICC profile name |
+| **[not implemented]** IPTC / XMP | Title, keywords, copyright, creator |
 
 ### Behavior
 
-- Updates asynchronously on image navigation
-- No blocking of image display
-- Scrollable content
-- Copy value on click (optional)
-- Section collapse state persisted
+- Updates asynchronously on image navigation; one shared single-flight service
+  (`MetadataPresentationService`) coalesces the overlay, panel and status-bar
+  requests into one background read per path
+- Never blocks image display
+- Delivers an empty snapshot for a deleted, corrupt or unsupported file instead
+  of leaving stale content on screen
 
 ---
 
@@ -268,7 +324,7 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Layout
 
 ```
-[Image info]          [Zoom level]          [Folder position]
+[Selection / image info]      [Zoom level]      [Folder position]
 ```
 
 ### Content
@@ -282,8 +338,8 @@ The MViewer user interface is designed for efficient image browsing with minimal
 ### Behavior
 
 - Updates on navigation and zoom
+- Reports why an action is unavailable (e.g. "Compare needs 2–8 images")
 - No user interaction (display only)
-- Hidden in fullscreen mode (or minimal overlay)
 
 ---
 
@@ -291,21 +347,18 @@ The MViewer user interface is designed for efficient image browsing with minimal
 
 ### Behavior
 
-- Toggle with `F11`
+- Toggle with `F11` (viewer: `F` or `F11`)
 - Hide all panels and chrome
 - Black background
 - Image centered, fit to screen
-- Status bar overlay (auto-hide after 2 seconds)
 - Exit with `Esc` or `F11`
 
 ### Interaction
 
 | Input | Action |
 | ------- | -------- |
-| `→` / `←` | Navigate |
+| `←` / `→` | Navigate |
 | `Esc` | Exit fullscreen |
-| Mouse move | Show cursor (auto-hide after 2s) |
-| `Space` | Slideshow toggle |
 
 ---
 
@@ -313,22 +366,18 @@ The MViewer user interface is designed for efficient image browsing with minimal
 
 ### Behavior
 
-- Toggle with `Space` (when not navigating)
-- Fullscreen or windowed (user-configurable)
-- Configurable interval (1s - 60s, default 5s)
-- Forward or random order
-- Loop or stop at end
-- Ken Burns effect (optional, future)
+- Toggle with `S` in the browse window
+- Configurable interval and order
+- Loop or stop at the end
+- **[not implemented]** Ken Burns effect
 
 ### Controls
 
 | Input | Action |
 | ------- | -------- |
-| `Space` | Pause/resume |
-| `→` | Next (manual advance) |
-| `←` | Previous |
-| `Esc` | Stop slideshow |
-| `+/-` | Adjust interval (while running) |
+| `S` | Start / stop |
+| `←` / `→` | Previous / next image |
+| `Esc` | Leave fullscreen / clear state |
 
 ---
 
@@ -336,25 +385,16 @@ The MViewer user interface is designed for efficient image browsing with minimal
 
 ### System Theme
 
-- Respect system light/dark mode (Windows 11 / Linux GTK)
-- Auto-switch on system theme change
-- Manual override in settings
-
-### Color Scheme
-
-| Element | Light | Dark |
-| --------- | ------- | ------ |
-| Background | `#FFFFFF` | `#1E1E1E` |
-| Canvas | `#808080` (neutral gray) | `#404040` |
-| Text | `#000000` | `#FFFFFF` |
-| Accent | System accent | System accent |
-| Border | `#E0E0E0` | `#404040` |
+- Qt's native style with the platform palette; the Compare workspace uses a dark
+  chrome palette
+- **[not implemented]** automatic light/dark switching on system theme change,
+  and a manual override in settings
 
 ### Fonts
 
-- System default font (Segoe UI on Windows, system font on Linux)
+- System default font
 - Monospace for metadata values
-- Minimum size: 11pt
+- Compare captions and the filename overlay use a larger bold type (1.0.29)
 
 ---
 
@@ -364,20 +404,20 @@ The MViewer user interface is designed for efficient image browsing with minimal
 
 | Platform | Location |
 |----------|----------|
-| Windows | `%APPDATA%\MViewer\settings.json` |
-| Linux | `~/.config/mviewer/settings.json` |
+| Windows | `%APPDATA%\MViewer\` (`QSettings` + JSON state files under the app config location) |
+| Linux | `~/.config/MViewer/` |
 
 ### Persisted Settings
 
 - Window size and position
 - Panel visibility states
-- Panel sizes (sidebar width, metadata width)
+- Panel sizes
 - Thumbnail size
-- Zoom behavior (maintain across images)
+- Viewer zoom / pan for the last image (clamped when restored)
 - Cache size limits
 - Slideshow interval
-- Theme preference
-- Last opened directory
+- Last opened directory, recent folders, favourites
+- Workspace and compare sessions (plus a crash-recovery snapshot)
 
 ---
 
@@ -385,51 +425,51 @@ The MViewer user interface is designed for efficient image browsing with minimal
 
 ### Keyboard Navigation
 
-- All actions accessible via keyboard
-- Tab order: Menu → Sidebar → Canvas → Metadata
-- Focus indicators visible
-- No mouse-only actions
+- Every gallery and viewer action has a keyboard path; the full table is on `F1`
+- Focus indicators come from the platform style
+- **[not implemented]** a documented Tab order across the docks
 
 ### Screen Reader
 
-- Image descriptions via alt text (future)
-- Panel state announcements (future)
-- Keyboard shortcut help (F1)
-
-### High Contrast
-
-- Respect system high contrast mode
-- Focus indicators visible in all themes
-- Minimum contrast ratio: 4.5:1 (WCAG AA)
+- Keyboard shortcut help (`F1`) and the user guide are the documented surfaces
+- **[not implemented]** image descriptions / panel state announcements
 
 ---
 
 ## Qt Widget Hierarchy
 
 ```
-QMainWindow
+MainWindow (QMainWindow)
 ├── QMenuBar
-├── QToolBar (optional)
-├── QSplitter (horizontal)
-│   ├── ThumbnailScrollArea
-│   │   └── ThumbnailListWidget (custom)
-│   ├── ImageCanvas (custom QWidget)
-│   │   └── [Qt 6 QWidget paint surface]
-│   └── MetadataPanel (custom QWidget)
-│       └── QScrollArea
-│           └── QTreeWidget / QFormLayout
+├── ThumbnailPanel            (gallery: view modes, toolbar, model/view)
+├── PreviewPanel              (selected-image preview + histogram)
+├── MetadataPanel             (docked metadata tree)
+├── AnalysisPanel             (analyzer results, histograms, ROI stats)
 └── QStatusBar
+
+ImageViewer (separate window, QWidget)
+└── RawImageView              (tile-based paint surface, optional GPU upload)
+
+CompareWorkspace (separate window, QDialog)
+├── RawImageView × N          (2–8 panes)
+├── ROI / measurement HUD + table
+└── Inspector + metrics strip
 ```
 
 ### Custom Widgets
 
 | Widget | Parent | Purpose |
 | -------- | -------- | --------- |
-| `ImageCanvas` | QWidget | Image display through the Qt render pipeline |
-| `ThumbnailListWidget` | QWidget | Virtualized thumbnail grid |
-| `ThumbnailScrollArea` | QScrollArea | Scrollable thumbnail container |
-| `MetadataPanel` | QWidget | Collapsible metadata display |
-### M45 UI convergence notes
+| `RawImageView` | viewer / Compare pane | Image display through the Qt paint pipeline (tiles, overlay, ROI) |
+| `ThumbnailPanel` | MainWindow | Gallery with view modes, filtering, sorting and selection |
+| `PreviewPanel` | MainWindow | Selected-image preview and histogram |
+| `MetadataPanel` | MainWindow | Metadata tree for the current image |
+| `AnalysisPanel` | MainWindow | Analyzer selection, results, histogram and ROI statistics |
+| `CompareWorkspace` | (window) | Multi-pane compare: sync, modes, ROI, diff, metrics, export |
+
+---
+
+## M45 UI convergence notes
 
 Long-running file operations show cancellable progress and complete through a
 generation-guarded UI handoff. Ctrl+V accepts an image immediately while PNG
