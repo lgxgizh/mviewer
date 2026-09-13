@@ -30,8 +30,8 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMouseEvent>
-#include <QPushButton>
 #include <QPointer>
+#include <QPushButton>
 #include <QSlider>
 #include <QTableWidget>
 #include <QTemporaryDir>
@@ -42,8 +42,8 @@
 #include <chrono>
 #include <cmath>
 #include <condition_variable>
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <mutex>
 #include <string>
@@ -77,7 +77,13 @@ void pump(int ms = 30)
 // M28 P1-01: Compare loads are asynchronous - pump until the engine reports the
 // requested frame count (or the timeout expires). Deterministic waits replace
 // bare pump() calls that could race the async delivery.
-void waitForCompareCount(CompareWorkspace *ws, int expected, int timeoutMs = 15000)
+//
+// The deadline is an environment guard, not an assertion: decoding eight
+// full-resolution fixtures on a loaded CI runner (this suite is RUN_SERIAL, but
+// the benchmark gate can overlap it) took longer than the previous 15 s and made
+// the suite fail without any product regression. The assertions below still
+// require the exact requested count.
+void waitForCompareCount(CompareWorkspace *ws, int expected, int timeoutMs = 60000)
 {
     QElapsedTimer t;
     t.start();
@@ -88,8 +94,9 @@ void waitForCompareCount(CompareWorkspace *ws, int expected, int timeoutMs = 150
 // Same-count reloads must wait for the terminal UI state as well as the engine
 // count. A newer setImages() briefly keeps the old frames in the engine while
 // the dedicated loading page is current, so the old count alone can satisfy a
-// wait before finishLoad() has restored the grid.
-void waitForCompareLoadFinished(CompareWorkspace *ws, int expected, int timeoutMs = 15000)
+// wait before finishLoad() has restored the grid. Same environment-guard
+// deadline as waitForCompareCount().
+void waitForCompareLoadFinished(CompareWorkspace *ws, int expected, int timeoutMs = 60000)
 {
     QElapsedTimer t;
     t.start();
