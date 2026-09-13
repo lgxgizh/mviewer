@@ -8,6 +8,7 @@
 #include <QImage>
 #include <QImageReader>
 #include <QtMath>
+#include <algorithm>
 
 #include <cstring>
 #include <utility>
@@ -161,12 +162,22 @@ double MetadataReader::exifToDecimal(const unsigned char *buf, int offset, bool 
 
 namespace
 {
+// Upper bound for the non-JPEG EXIF payload. TIFF-based containers must be read
+// as one buffer so IFD offsets stay valid, but slurping a 100+ MP RAW/TIFF into
+// memory just to read its EXIF is not acceptable (and a truncated read is safe:
+// every offset is bounds-checked against the buffer).
+constexpr qint64 kMaxExifPayloadBytes = 64LL * 1024 * 1024;
+
 QByteArray readExifPayload(QFile &file, bool isJpeg)
 {
     if (!isJpeg)
     {
         file.seek(0);
-        return file.readAll();
+        // QIODevice::read(maxSize) sizes its result to maxSize before reading, so
+        // the request is bounded by the real file size first: reading the cap
+        // directly would allocate 64 MiB for every small file.
+        const qint64 payloadBytes = std::min<qint64>(file.size(), kMaxExifPayloadBytes);
+        return file.read(payloadBytes);
     }
     file.seek(2);
     while (file.pos() + 4 <= file.size())
@@ -178,8 +189,8 @@ QByteArray readExifPayload(QFile &file, bool isJpeg)
         const QByteArray length = file.read(2);
         if (length.size() < 2)
             break;
-        int segmentSize = (static_cast<unsigned char>(length[0]) << 8) |
-                          static_cast<unsigned char>(length[1]);
+        int segmentSize =
+            (static_cast<unsigned char>(length[0]) << 8) | static_cast<unsigned char>(length[1]);
         if (segmentSize < 2)
             break;
         segmentSize -= 2;
@@ -261,9 +272,8 @@ GpsValues parseGpsIfd(const unsigned char *data, int size, bool little, uint32_t
                 const size_t base = static_cast<size_t>(value) + static_cast<size_t>(component) * 8;
                 const uint32_t numerator = readU32(data + base, little);
                 const uint32_t denominator = readU32(data + base + 4, little);
-                target[component] = denominator == 0
-                                         ? 0.0
-                                         : static_cast<double>(numerator) / denominator;
+                target[component] =
+                    denominator == 0 ? 0.0 : static_cast<double>(numerator) / denominator;
             }
             if (tag == 0x0002)
                 values.hasLat = true;
@@ -277,8 +287,8 @@ GpsValues parseGpsIfd(const unsigned char *data, int size, bool little, uint32_t
             {
                 const uint32_t numerator = readU32(data + value, little);
                 const uint32_t denominator = readU32(data + value + 4, little);
-                values.altitude = denominator == 0 ? 0.0
-                                                    : static_cast<double>(numerator) / denominator;
+                values.altitude =
+                    denominator == 0 ? 0.0 : static_cast<double>(numerator) / denominator;
                 values.hasAlt = true;
             }
         }

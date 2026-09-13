@@ -1329,6 +1329,29 @@ target_include_directories(browse_convergence_ui_tests PRIVATE ${CMAKE_CURRENT_S
 add_test(NAME browse_convergence_ui_tests COMMAND browse_convergence_ui_tests)
 set_tests_properties(browse_convergence_ui_tests PROPERTIES RUN_SERIAL TRUE)
 
+# ─── H23: object-level teardown stress (docs/adr/017) ───────────────────────
+# Repeatedly creates a real MainWindow (browse + thumbnail + metadata pipelines)
+# and a CompareWorkspace with queued decode/diff work, then destroys them while
+# the work is in flight. Bounds and justifies the Qt-teardown workarounds the
+# acceptance/workflow suites use for process-level teardown.
+add_executable(teardown_stress_tests
+    test_teardown_stress.cpp
+)
+
+target_link_libraries(teardown_stress_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(teardown_stress_tests PRIVATE cxx_std_20)
+target_include_directories(teardown_stress_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME teardown_stress_tests COMMAND teardown_stress_tests)
+set_tests_properties(teardown_stress_tests PROPERTIES RUN_SERIAL TRUE)
+
 # --- M27: QObject async lifetime closure regression (UI level) ---
 # Child-process destroy-mid-decode crash detection (PreviewPanel / ImageViewer),
 # A->B->A newest-generation delivery, rejection terminal state, and the P9 24MP

@@ -192,8 +192,17 @@ std::string httpGet(const std::string &url, std::string &error)
 
     std::string body;
     DWORD avail = 0;
+    // A release manifest is a few KB. Refuse an oversized body instead of
+    // allocating whatever the server (or a hijacked endpoint) decides to send.
+    constexpr size_t kMaxBodyBytes = 256 * 1024;
     while (WinHttpQueryDataAvailable(hRequest, &avail) && avail > 0)
     {
+        if (body.size() + avail > kMaxBodyBytes)
+        {
+            error = "UpdateChecker: response body too large";
+            body.clear();
+            break;
+        }
         std::string buf(avail, '\0');
         DWORD read = 0;
         if (!WinHttpReadData(hRequest, buf.data(), avail, &read) || read == 0)
@@ -251,11 +260,8 @@ bool isGitHubComponent(const std::string &component)
 {
     if (component.empty() || component == "." || component == "..")
         return false;
-    return std::all_of(component.begin(), component.end(),
-                       [](unsigned char c)
-                       {
-                           return std::isalnum(c) || c == '-' || c == '_' || c == '.';
-                       });
+    return std::all_of(component.begin(), component.end(), [](unsigned char c)
+                       { return std::isalnum(c) || c == '-' || c == '_' || c == '.'; });
 }
 
 std::string deriveGitHubReleaseUrl(const std::string &apiUrl, const std::string &tag)

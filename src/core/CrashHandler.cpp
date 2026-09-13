@@ -4,6 +4,8 @@
 
 #include <QDateTime>
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QStandardPaths>
 
 #include <cstdio>
@@ -66,19 +68,13 @@ static LONG WINAPI crashExceptionFilter(EXCEPTION_POINTERS *ep)
     SYSTEMTIME now{};
     GetLocalTime(&now);
     wchar_t base[4096]{};
-    if (FAILED(StringCchPrintfW(base,
-                                ARRAYSIZE(base),
-                                L"%s\\%s-%04u%02u%02u-%02u%02u%02u-%lu-%lu",
-                                g_crashDir.c_str(),
-                                g_crashAppName.c_str(),
-                                static_cast<unsigned>(now.wYear),
-                                static_cast<unsigned>(now.wMonth),
-                                static_cast<unsigned>(now.wDay),
-                                static_cast<unsigned>(now.wHour),
-                                static_cast<unsigned>(now.wMinute),
-                                static_cast<unsigned>(now.wSecond),
-                                static_cast<unsigned long>(GetCurrentProcessId()),
-                                static_cast<unsigned long>(GetCurrentThreadId()))))
+    if (FAILED(StringCchPrintfW(
+            base, ARRAYSIZE(base), L"%s\\%s-%04u%02u%02u-%02u%02u%02u-%lu-%lu", g_crashDir.c_str(),
+            g_crashAppName.c_str(), static_cast<unsigned>(now.wYear),
+            static_cast<unsigned>(now.wMonth), static_cast<unsigned>(now.wDay),
+            static_cast<unsigned>(now.wHour), static_cast<unsigned>(now.wMinute),
+            static_cast<unsigned>(now.wSecond), static_cast<unsigned long>(GetCurrentProcessId()),
+            static_cast<unsigned long>(GetCurrentThreadId()))))
         return EXCEPTION_EXECUTE_HANDLER;
 
     wchar_t dmpPath[4096]{};
@@ -87,20 +83,14 @@ static LONG WINAPI crashExceptionFilter(EXCEPTION_POINTERS *ep)
         FAILED(StringCchPrintfW(txtPath, ARRAYSIZE(txtPath), L"%s.txt", base)))
         return EXCEPTION_EXECUTE_HANDLER;
 
-    const HANDLE textFile = CreateFileW(txtPath,
-                                        GENERIC_WRITE,
-                                        FILE_SHARE_READ,
-                                        nullptr,
-                                        CREATE_ALWAYS,
-                                        FILE_ATTRIBUTE_NORMAL,
-                                        nullptr);
+    const HANDLE textFile = CreateFileW(txtPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+                                        CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (textFile != INVALID_HANDLE_VALUE)
     {
         const DWORD code = ep && ep->ExceptionRecord ? ep->ExceptionRecord->ExceptionCode : 0;
         char report[512]{};
         DWORD reportBytes = 0;
-        if (SUCCEEDED(StringCchPrintfA(report,
-                                       ARRAYSIZE(report),
+        if (SUCCEEDED(StringCchPrintfA(report, ARRAYSIZE(report),
                                        "MViewer crash report\r\nexception_code=0x%08lX\r\n",
                                        static_cast<unsigned long>(code))))
         {
@@ -110,13 +100,8 @@ static LONG WINAPI crashExceptionFilter(EXCEPTION_POINTERS *ep)
         CloseHandle(textFile);
     }
 
-    const HANDLE hFile = CreateFileW(dmpPath,
-                                     GENERIC_WRITE,
-                                     FILE_SHARE_READ,
-                                     nullptr,
-                                     CREATE_ALWAYS,
-                                     FILE_ATTRIBUTE_NORMAL,
-                                     nullptr);
+    const HANDLE hFile = CreateFileW(dmpPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+                                     CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (hFile != INVALID_HANDLE_VALUE)
     {
         MINIDUMP_EXCEPTION_INFORMATION info{};
@@ -131,6 +116,30 @@ static LONG WINAPI crashExceptionFilter(EXCEPTION_POINTERS *ep)
 }
 
 #endif // Q_OS_WIN
+
+namespace
+{
+
+// Crash dumps are written one .dmp/.txt pair per crash and nothing ever removed
+// them, so a crash loop (or months of use) grew the folder without limit. Keep
+// the newest N reports and drop the rest at startup — before SEH is installed,
+// so no handler can observe the folder changing.
+constexpr int kMaxCrashReports = 20;
+
+void pruneCrashReports(const QString &dir)
+{
+    QDir reports(dir);
+    const QFileInfoList dumps =
+        reports.entryInfoList({QStringLiteral("*.dmp")}, QDir::Files, QDir::Time);
+    for (int i = kMaxCrashReports; i < dumps.size(); ++i)
+    {
+        const QFileInfo &dump = dumps.at(i);
+        QFile::remove(dump.absoluteFilePath());
+        QFile::remove(dump.absolutePath() + "/" + dump.completeBaseName() + ".txt");
+    }
+}
+
+} // namespace
 
 void installCrashHandler(const std::string &appName)
 {
@@ -149,7 +158,10 @@ void installCrashHandler(const std::string &appName)
     g_crashDir = dir.toStdWString();
     g_crashAppName = QString::fromStdString(g_appName).toStdWString();
     if (!dir.isEmpty())
+    {
         QDir().mkpath(dir);
+        pruneCrashReports(dir);
+    }
     InterlockedExchange(&g_crashInProgress, 0);
     SetUnhandledExceptionFilter(crashExceptionFilter);
 #endif

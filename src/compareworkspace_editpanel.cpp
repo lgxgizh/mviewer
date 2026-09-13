@@ -5,6 +5,7 @@
 #include "widgets/infooverlay.h"
 
 #include <QSaveFile>
+#include <algorithm>
 
 mviewer::core::CompareAdjustmentState CompareWorkspace::reportAdjustment(const CellAdjust &adjust)
 {
@@ -492,7 +493,14 @@ void CompareWorkspace::onLoadPreset()
         QMessageBox::warning(this, tr("读取失败"), tr("无法打开文件:\n%1").arg(fileName));
         return;
     }
-    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    constexpr qint64 kMaxPresetFileBytes = 16LL * 1024 * 1024;
+    if (f.size() > kMaxPresetFileBytes)
+    {
+        QMessageBox::warning(this, tr("读取失败"), tr("预设文件过大:\n%1").arg(fileName));
+        return;
+    }
+    const QJsonDocument doc =
+        QJsonDocument::fromJson(f.read(std::min<qint64>(f.size(), kMaxPresetFileBytes)));
     f.close();
 
     if (!doc.isObject())

@@ -23,12 +23,24 @@ class BatchProcessor
     // Progress callback: (currentFileIndex, totalFiles, currentFilePath).
     using ProgressCallback = std::function<void(int, int, const std::string &)>;
 
+    // Per-file result callback: called once per finished file, on the worker
+    // thread, before the aggregate is returned. Lets a UI show each success or
+    // failure as it happens instead of only when the whole job ends.
+    using FileResultCallback = std::function<void(const domain::BatchFileResult &)>;
+
     BatchProcessor() = default;
 
     // Set a progress callback (called before each file is processed).
     void setProgressCallback(ProgressCallback cb)
     {
         m_progressCb = std::move(cb);
+    }
+
+    // Set a per-file result callback (called after each file is processed).
+    // Runs on the calling/worker thread; marshal to the UI thread yourself.
+    void setFileResultCallback(FileResultCallback cb)
+    {
+        m_fileResultCb = std::move(cb);
     }
 
     // Execute the batch job synchronously. Returns aggregated results.
@@ -75,6 +87,7 @@ class BatchProcessor
 
   private:
     ProgressCallback m_progressCb;
+    FileResultCallback m_fileResultCb;
     std::atomic<bool> m_cancelled{false};
     std::atomic<bool> m_paused{false};
     mutable std::mutex m_pauseMtx;

@@ -9,8 +9,8 @@
 #include "core/image/QtConvert.h"
 #include "domain/Selection.h"
 
-#include <atomic>
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <chrono>
 #include <cmath>
@@ -99,9 +99,9 @@ struct FileIdentityHash
 static std::optional<FileIdentity> fileIdentity(const fs::path &path)
 {
 #ifdef _WIN32
-    const HANDLE handle = CreateFileW(
-        path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
+    const HANDLE handle = CreateFileW(path.c_str(), FILE_READ_ATTRIBUTES,
+                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                      nullptr, OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, nullptr);
     if (handle == INVALID_HANDLE_VALUE)
         return std::nullopt;
 
@@ -141,16 +141,15 @@ fs::path uniqueTempPath(const fs::path &destination)
     return destination.parent_path() / name;
 }
 
-bool commitTempFile(const fs::path &temporary, const fs::path &destination,
-                           std::error_code &error)
+bool commitTempFile(const fs::path &temporary, const fs::path &destination, std::error_code &error)
 {
 #ifdef _WIN32
     const DWORD attributes = GetFileAttributesW(destination.c_str());
     BOOL committed = FALSE;
     if (attributes != INVALID_FILE_ATTRIBUTES)
     {
-        committed = ReplaceFileW(destination.c_str(), temporary.c_str(), nullptr, 0, nullptr,
-                                 nullptr);
+        committed =
+            ReplaceFileW(destination.c_str(), temporary.c_str(), nullptr, 0, nullptr, nullptr);
     }
     else
     {
@@ -168,7 +167,6 @@ bool commitTempFile(const fs::path &temporary, const fs::path &destination,
     return !error;
 #endif
 }
-
 
 static ExportJobResult runClipboardMode(const ExportJobConfig &cfg,
                                         const std::vector<std::string> &sources,
@@ -210,8 +208,8 @@ static ExportJobResult runContactOrPdf(const ExportJobConfig &cfg,
         {
             if (cfg.cancel && cfg.cancel->load(std::memory_order_relaxed))
             {
-                r.message = "cancelled after " + std::to_string(i) + " / " +
-                            std::to_string(r.total);
+                r.message =
+                    "cancelled after " + std::to_string(i) + " / " + std::to_string(r.total);
                 return r;
             }
             if (progress)
@@ -238,25 +236,34 @@ static ExportJobResult runContactOrPdf(const ExportJobConfig &cfg,
             return r;
         }
 
-        const fs::path destination = outputDirectory /
-                                     mviewer::core::pathFromUtf8(cfg.mode == Mode::ContactSheet
-                                                       ? "contact_sheet.png"
-                                                       : "export.pdf");
+        const fs::path destination =
+            outputDirectory / mviewer::core::pathFromUtf8(cfg.mode == Mode::ContactSheet
+                                                              ? "contact_sheet.png"
+                                                              : "export.pdf");
         const fs::path temporary = uniqueTempPath(destination);
         bool written = false;
         if (cfg.mode == Mode::ContactSheet)
         {
-            const ImageData sheet =
-                mviewer::core::makeContactSheet(images, std::clamp(cfg.contactCols, 1, 20),
-                                                 std::clamp(cfg.contactThumb, 16, 2000));
-            written = !sheet.isNull() &&
-                      Encoder::encode(sheet, mviewer::core::pathToUtf8(temporary),
+            const int sheetThumb = std::clamp(cfg.contactThumb, 16, 2000);
+            const ImageData sheet = mviewer::core::makeContactSheet(
+                images, std::clamp(cfg.contactCols, 1, 20), sheetThumb);
+            if (sheet.isNull())
+            {
+                // makeContactSheet() refuses a sheet above its pixel budget
+                // rather than failing the whole job with a bad_alloc.
+                r.failed = r.total;
+                r.message = "contact sheet exceeds the compositing budget (" +
+                            std::to_string(images.size()) + " images at " +
+                            std::to_string(sheetThumb) + "px)";
+                return r;
+            }
+            written = Encoder::encode(sheet, mviewer::core::pathToUtf8(temporary),
                                       Encoder::Params{cfg.quality});
         }
         else
         {
-            written = mviewer::core::writePdf(mviewer::core::pathToUtf8(temporary), images,
-                                              cfg.quality);
+            written =
+                mviewer::core::writePdf(mviewer::core::pathToUtf8(temporary), images, cfg.quality);
         }
         if (!written)
         {
@@ -297,16 +304,16 @@ static ExportJobResult runReportExport(const ExportJobConfig &cfg,
         {
             if (cfg.cancel && cfg.cancel->load(std::memory_order_relaxed))
             {
-                r.message = "cancelled after " + std::to_string(i) + " / " +
-                            std::to_string(r.total);
+                r.message =
+                    "cancelled after " + std::to_string(i) + " / " + std::to_string(r.total);
                 return r;
             }
             if (progress)
                 progress(i, r.total, sources[static_cast<size_t>(i)]);
             try
             {
-                const auto row = analyzeSource(
-                    mviewer::core::pathFromUtf8(sources[static_cast<size_t>(i)]));
+                const auto row =
+                    analyzeSource(mviewer::core::pathFromUtf8(sources[static_cast<size_t>(i)]));
                 if (row)
                     rows.push_back(*row);
                 else
@@ -346,11 +353,11 @@ static ExportJobResult runReportExport(const ExportJobConfig &cfg,
                 if (i)
                     out << ",";
                 const auto &row = rows[i];
-                out << "\n    {\"name\":\"" << jsonEscape(row.name) << "\",\"width\":"
-                    << row.width << ",\"height\":" << row.height << ",\"lumMean\":"
-                    << jsonNumber(row.lumMean) << ",\"rMean\":" << jsonNumber(row.rMean)
-                    << ",\"gMean\":" << jsonNumber(row.gMean) << ",\"bMean\":"
-                    << jsonNumber(row.bMean) << "}";
+                out << "\n    {\"name\":\"" << jsonEscape(row.name) << "\",\"width\":" << row.width
+                    << ",\"height\":" << row.height << ",\"lumMean\":" << jsonNumber(row.lumMean)
+                    << ",\"rMean\":" << jsonNumber(row.rMean)
+                    << ",\"gMean\":" << jsonNumber(row.gMean)
+                    << ",\"bMean\":" << jsonNumber(row.bMean) << "}";
             }
             out << "\n  ]\n}\n";
             body = out.str();
@@ -364,11 +371,10 @@ static ExportJobResult runReportExport(const ExportJobConfig &cfg,
                    "<th>Name</th><th>Width</th><th>Height</th><th>LumMean</th><th>R</th>"
                    "<th>G</th><th>B</th></tr>\n";
             for (const auto &row : rows)
-                out << "<tr><td>" << htmlEscape(row.name) << "</td><td>" << row.width
-                    << "</td><td>" << row.height << "</td><td>" << fixedNumber(row.lumMean)
-                    << "</td><td>" << fixedNumber(row.rMean) << "</td><td>"
-                    << fixedNumber(row.gMean) << "</td><td>" << fixedNumber(row.bMean)
-                    << "</td></tr>\n";
+                out << "<tr><td>" << htmlEscape(row.name) << "</td><td>" << row.width << "</td><td>"
+                    << row.height << "</td><td>" << fixedNumber(row.lumMean) << "</td><td>"
+                    << fixedNumber(row.rMean) << "</td><td>" << fixedNumber(row.gMean)
+                    << "</td><td>" << fixedNumber(row.bMean) << "</td></tr>\n";
             out << "</table></body></html>\n";
             body = out.str();
         }
@@ -397,9 +403,9 @@ struct ConvertPlan
 };
 
 static std::optional<ConvertPlan> makeConvertPlan(const ExportJobConfig &cfg,
-                                                   const std::vector<std::string> &sources,
-                                                   const fs::path &outputDirectory,
-                                                   ExportJobResult &r)
+                                                  const std::vector<std::string> &sources,
+                                                  const fs::path &outputDirectory,
+                                                  ExportJobResult &r)
 {
     ConvertPlan plan;
     try
@@ -517,8 +523,8 @@ static ExportJobResult runConvert(const ExportJobConfig &cfg,
         const std::string &src = sources[static_cast<size_t>(i)];
         if (cfg.cancel && cfg.cancel->load(std::memory_order_relaxed))
         {
-            r.message = "cancelled after " + std::to_string(r.done) + " / " +
-                        std::to_string(r.total);
+            r.message =
+                "cancelled after " + std::to_string(r.done) + " / " + std::to_string(r.total);
             return r;
         }
         if (progress)
@@ -647,8 +653,8 @@ ExportJobResult run(const ExportJobConfig &cfg, ProgressFn progress)
     if (cfg.mode == Mode::Csv || cfg.mode == Mode::Json || cfg.mode == Mode::HtmlReport)
         return runReportExport(cfg, sources, outputDirectory, progress, r);
 
-    static const std::unordered_set<std::string> kKnownFormats = {
-        "jpeg", "jpg", "png", "webp", "tiff", "tif", "bmp"};
+    static const std::unordered_set<std::string> kKnownFormats = {"jpeg", "jpg", "png", "webp",
+                                                                  "tiff", "tif", "bmp"};
     if (!kKnownFormats.count(cfg.format))
     {
         r.failed = r.total;

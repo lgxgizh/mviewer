@@ -106,7 +106,7 @@ double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
             mse += dr * dr + dg * dg + db * db;
         }
     }
-    const int n = w * h;
+    const long long n = 1LL * w * h;
     mse /= (n * 3);
     if (mse <= 1e-10)
         return 100.0; // 完美一致(而非 inf)

@@ -9,6 +9,7 @@
 #include <QJsonObject>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <algorithm>
 
 AnalyzerModel::AnalyzerModel(QObject *parent) : QObject(parent)
 {
@@ -180,7 +181,11 @@ void AnalyzerModel::load()
     QFile f(path);
     if (!f.exists() || !f.open(QIODevice::ReadOnly))
         return;
-    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    constexpr qint64 kMaxResultsFileBytes = 16LL * 1024 * 1024;
+    if (f.size() > kMaxResultsFileBytes)
+        return;
+    const QJsonDocument doc =
+        QJsonDocument::fromJson(f.read(std::min<qint64>(f.size(), kMaxResultsFileBytes)));
     if (!doc.isObject())
         return;
     const QJsonObject root = doc.object();

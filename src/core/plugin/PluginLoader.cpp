@@ -1,6 +1,6 @@
 #include "core/plugin/PluginLoader.h"
-#include "core/plugin/PluginABI.h"
 #include "core/filesystem/Utf8Path.h"
+#include "core/plugin/PluginABI.h"
 
 #include <iostream>
 
@@ -71,8 +71,7 @@ PluginLoader::LoadedPlugin finishLoadedPlugin(const std::string &path, void *han
     }
     else
     {
-        result.name = mviewer::core::pathToUtf8(
-            mviewer::core::pathFromUtf8(path).stem());
+        result.name = mviewer::core::pathToUtf8(mviewer::core::pathFromUtf8(path).stem());
     }
 
     // Create instance and register
@@ -113,13 +112,11 @@ PluginLoader::LoadedPlugin finishLoadedPlugin(const std::string &path, void *han
     std::cout << "[PluginLoader] Loaded plugin: " << result.name << " (analyzer: " << id
               << ") from " << path << std::endl;
 
-// Note: handle is intentionally leaked for lifetime of the loaded library.
-// In production, store handles in a plugin manager for proper cleanup.
-#ifdef _WIN32
-    // handle kept open
-#else
-    // handle kept open
-#endif
+    // The module handle is deliberately kept mapped for the process lifetime:
+    // unloading a Qt-linking plugin DLL is unsafe on Windows (DLL-detach / CRT
+    // static ordering), so PluginManager::unload() drops the registration but
+    // never calls FreeLibrary/dlclose. Loading the same path twice reuses the
+    // already-mapped handle. See docs/adr/017-process-lifetime-services.md.
 
     return result;
 }

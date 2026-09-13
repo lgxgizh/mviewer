@@ -55,8 +55,13 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
         QFile rf(recentPath);
         if (rf.open(QIODevice::ReadOnly))
         {
-            const QByteArray raw = rf.readAll();
-            m_recent.deserialize(std::string(raw.constData(), raw.size()));
+            // Recent-folders LRU is a small JSON array; bound the read.
+            constexpr qint64 kMaxRecentFileBytes = 16LL * 1024 * 1024;
+            if (rf.size() <= kMaxRecentFileBytes)
+            {
+                const QByteArray raw = rf.read(std::min<qint64>(rf.size(), kMaxRecentFileBytes));
+                m_recent.deserialize(std::string(raw.constData(), raw.size()));
+            }
         }
     }
 

@@ -107,6 +107,7 @@ TaskScheduler &TaskScheduler::instance()
     // never exits. Leaking the singleton lets the OS reclaim the threads on
     // process exit, which is the correct lifetime for a process-global
     // scheduler. The destructor below remains a safe explicit-shutdown path.
+    // Policy: docs/adr/017-process-lifetime-services.md.
     static TaskScheduler *inst = new TaskScheduler();
     return *inst;
 }
@@ -188,7 +189,8 @@ void TaskScheduler::submit(PoolType pool, void *runnable)
     ctx->pool = pool;
     const TaskId ctx_id = ctx->id;
     auto *wrapped = new LambdaTask(
-        ctx, [runnable](const TaskContext &)
+        ctx,
+        [runnable](const TaskContext &)
         {
             auto *r = static_cast<QRunnable *>(runnable);
             r->run();
@@ -276,11 +278,10 @@ bool TaskScheduler::rejectBackpressure(Priority prio)
     bool rejected = false;
     {
         std::lock_guard<std::mutex> lock(m_graphMtx);
-        const size_t depth = m_poolState[pIdx].metrics.queue_depth +
-                             m_poolState[pIdx].metrics.active_tasks;
+        const size_t depth =
+            m_poolState[pIdx].metrics.queue_depth + m_poolState[pIdx].metrics.active_tasks;
         if (m_poolState[pIdx].paused ||
-            (m_poolState[pIdx].max_queue_depth > 0 &&
-             depth >= m_poolState[pIdx].max_queue_depth))
+            (m_poolState[pIdx].max_queue_depth > 0 && depth >= m_poolState[pIdx].max_queue_depth))
         {
             m_poolState[pIdx].metrics.backpressure_rejected++;
             pool = poolFromPriority(prio);

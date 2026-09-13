@@ -3,9 +3,9 @@
 
 #include "runtime_storage.h"
 
-#include <QtConcurrent/QtConcurrent>
 #include <QSaveFile>
 #include <QThreadPool>
+#include <QtConcurrent/QtConcurrent>
 
 #include <unordered_map>
 
@@ -63,18 +63,14 @@ void runRestoreFile(const QString &filePath, bool project, const TaskScheduler::
         return;
     result.filePath = filePath;
     QFile f(filePath);
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
-    {
-        result.error = QStringLiteral("无法读取文件：%1").arg(filePath);
+    QByteArray data;
+    if (!readBoundedStateFile(f, filePath, kMaxPersistedStateBytes, data, &result.error))
         return;
-    }
-    const QByteArray data = f.readAll();
     if (ctx.isCancelled())
         return;
     if (!project)
     {
-        auto ws =
-            mviewer::core::deserializeWorkspace(std::string(data.constData(), data.size()));
+        auto ws = mviewer::core::deserializeWorkspace(std::string(data.constData(), data.size()));
         if (!ws || ws->empty())
         {
             result.error = QStringLiteral("工作区文件无效或为空。");
@@ -85,8 +81,7 @@ void runRestoreFile(const QString &filePath, bool project, const TaskScheduler::
     else
     {
         mviewer::domain::Project proj;
-        if (!mviewer::core::deserializeProject(std::string(data.constData(), data.size()),
-                                               proj) ||
+        if (!mviewer::core::deserializeProject(std::string(data.constData(), data.size()), proj) ||
             proj.workspace.empty())
         {
             result.error = QStringLiteral("项目文件无效或为空。");
@@ -116,7 +111,7 @@ void captureAnalysis(PersistenceSnapshot &snapshot, AnalyzerModel *model, const 
 }
 
 void applyPersistedCompareContext(mviewer::domain::Workspace &ws,
-                                   const PersistenceSnapshot &snapshot)
+                                  const PersistenceSnapshot &snapshot)
 {
     for (const std::string &path : snapshot.comparedImages)
         ws.comparedImages.push_back(path);
@@ -261,10 +256,10 @@ void MainWindow::saveWorkspace()
 
     // Compare-session JSON is a value snapshot too; it is applied to the
     // workspace after directory enumeration, entirely on the worker.
-    snapshot.compareSessionJson = m_compareView && m_compareView->compareSession().isValid()
-                                      ? mviewer::core::serializeCompareSession(
-                                            m_compareView->compareSession())
-                                      : std::string();
+    snapshot.compareSessionJson =
+        m_compareView && m_compareView->compareSession().isValid()
+            ? mviewer::core::serializeCompareSession(m_compareView->compareSession())
+            : std::string();
 
     auto state = std::make_shared<PersistenceResult>();
     auto cancel = m_persistenceCancel = std::make_shared<std::atomic<bool>>(false);
@@ -274,8 +269,8 @@ void MainWindow::saveWorkspace()
     m_persistenceTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [snapshot, cancel, state](const TaskScheduler::TaskContext &ctx)
-        { runPersistence(snapshot, ctx, cancel, *state); },
-        {}, std::chrono::steady_clock::time_point::max(),
+        { runPersistence(snapshot, ctx, cancel, *state); }, {},
+        std::chrono::steady_clock::time_point::max(),
         [guard, state, cancel, generation, filePath]()
         {
             if (!qApp)
@@ -351,10 +346,9 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
         {
             if (!img.analysis.empty())
                 m_analyzer->setResult(
-                                      QString::fromUtf8(img.filePath.data(),
-                                                        static_cast<int>(img.filePath.size())),
-                                      QString::fromStdString(img.analysis),
-                                      QString::fromStdString(img.analysisAnalyzerId));
+                    QString::fromUtf8(img.filePath.data(), static_cast<int>(img.filePath.size())),
+                    QString::fromStdString(img.analysis),
+                    QString::fromStdString(img.analysisAnalyzerId));
         }
     }
 
@@ -366,8 +360,8 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
         haveSession = restoredSession.has_value();
     }
     if (!comparePaths.isEmpty())
-    openCompare(comparePaths,
-                haveSession ? QString::fromStdString(ws.compareSessionJson) : QString());
+        openCompare(comparePaths,
+                    haveSession ? QString::fromStdString(ws.compareSessionJson) : QString());
 
     std::string restoredPath;
     mviewer::domain::Selection restoredRoi;
@@ -384,8 +378,8 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
             }
         }
     }
-    const QString persistedCurrentPath = QString::fromUtf8(
-        ws.currentImagePath.data(), static_cast<int>(ws.currentImagePath.size()));
+    const QString persistedCurrentPath =
+        QString::fromUtf8(ws.currentImagePath.data(), static_cast<int>(ws.currentImagePath.size()));
     if (!persistedCurrentPath.isEmpty() && QFile::exists(persistedCurrentPath))
     {
         restoredPath = persistedCurrentPath.toUtf8().toStdString();
@@ -404,18 +398,20 @@ void MainWindow::restoreWorkspaceState(const mviewer::domain::Workspace &workspa
         const bool restoredPlaying = ws.currentPlaying;
         if (m_imageViewer)
         {
-            connect(m_imageViewer, &ImageViewer::imageReady, this,
-                    [this, restoredViewerPath, restoredFrame, restoredPlaying](const auto &frame)
-                    {
-                        if (!m_imageViewer || !frame || frame->metadata().filePath != restoredViewerPath)
-                            return;
-                        m_imageViewer->setFrameIndex(restoredFrame);
-                        if (restoredPlaying)
-                            m_imageViewer->play();
-                        else
-                            m_imageViewer->pause();
-                    },
-                    Qt::SingleShotConnection);
+            connect(
+                m_imageViewer, &ImageViewer::imageReady, this,
+                [this, restoredViewerPath, restoredFrame, restoredPlaying](const auto &frame)
+                {
+                    if (!m_imageViewer || !frame ||
+                        frame->metadata().filePath != restoredViewerPath)
+                        return;
+                    m_imageViewer->setFrameIndex(restoredFrame);
+                    if (restoredPlaying)
+                        m_imageViewer->play();
+                    else
+                        m_imageViewer->pause();
+                },
+                Qt::SingleShotConnection);
         }
         m_selection->setCurrentImage(
             QString::fromUtf8(restoredPath.data(), static_cast<int>(restoredPath.size())));
@@ -453,7 +449,8 @@ void MainWindow::saveProject()
     snapshot.rootPath = currentDir().toUtf8().toStdString();
     snapshot.outputPath = filePath.toUtf8().toStdString();
     snapshot.projectName = QFileInfo(filePath).baseName().toUtf8().toStdString();
-    snapshot.createdIso = QDateTime::currentDateTimeUtc().toString(Qt::ISODate).toUtf8().toStdString();
+    snapshot.createdIso =
+        QDateTime::currentDateTimeUtc().toString(Qt::ISODate).toUtf8().toStdString();
     snapshot.currentImagePath = currentImagePath().toUtf8().toStdString();
     if (m_imageViewer && m_imageViewer->currentPath() == currentImagePath())
     {
@@ -484,8 +481,8 @@ void MainWindow::saveProject()
     m_persistenceTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [snapshot, cancel, state](const TaskScheduler::TaskContext &ctx)
-        { runPersistence(snapshot, ctx, cancel, *state); },
-        {}, std::chrono::steady_clock::time_point::max(),
+        { runPersistence(snapshot, ctx, cancel, *state); }, {},
+        std::chrono::steady_clock::time_point::max(),
         [guard, state, generation, filePath]()
         {
             if (!qApp)
@@ -549,8 +546,8 @@ void MainWindow::openWorkspaceFile(const QString &filePath)
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [filePath, result](const TaskScheduler::TaskContext &ctx)
-        { runRestoreFile(filePath, false, ctx, *result); },
-        {}, std::chrono::steady_clock::time_point::max(),
+        { runRestoreFile(filePath, false, ctx, *result); }, {},
+        std::chrono::steady_clock::time_point::max(),
         [guard, result, generation]()
         {
             if (!qApp)
@@ -599,8 +596,8 @@ void MainWindow::openProjectFile(const QString &filePath)
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Background,
         [filePath, result](const TaskScheduler::TaskContext &ctx)
-        { runRestoreFile(filePath, true, ctx, *result); },
-        {}, std::chrono::steady_clock::time_point::max(),
+        { runRestoreFile(filePath, true, ctx, *result); }, {},
+        std::chrono::steady_clock::time_point::max(),
         [guard, result, generation]()
         {
             if (!qApp)
@@ -769,10 +766,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
     // Browse, not the hidden Browse layout.
     const bool inBrowseWorkspace = m_actBrowseWorkspace && m_actBrowseWorkspace->isChecked();
     m_appState.analysisVisible =
-        inBrowseWorkspace
-            ? m_browseAnalysisVisible
-            : (m_focusBrowse ? m_focusAnalysisVisible
-                             : (m_analysisPanel && m_analysisPanel->isVisible()));
+        inBrowseWorkspace ? m_browseAnalysisVisible
+                          : (m_focusBrowse ? m_focusAnalysisVisible
+                                           : (m_analysisPanel && m_analysisPanel->isVisible()));
     m_appState.analysisPage = m_analysisPanel ? m_analysisPanel->currentPage() : 0;
 
     // P1-3: persist the navigation history stack (browser back/forward + History
@@ -911,9 +907,9 @@ void MainWindow::restoreSessionRecovery()
     if (recoveryPath.isEmpty())
         return;
     QFile f(recoveryPath);
-    if (!f.exists() || !f.open(QIODevice::ReadOnly))
+    QByteArray data;
+    if (!readBoundedStateFile(f, recoveryPath, kMaxRecoveryStateBytes, data))
         return;
-    const QByteArray data = f.readAll();
     f.close();
 
     QJsonParseError err;

@@ -10,8 +10,9 @@
 #include <QCoreApplication>
 #include <QImage>
 #include <QSqlDatabase>
-#include <barrier>
 #include <atomic>
+#include <barrier>
+#include <chrono>
 #include <cstdio>
 #include <string>
 #include <thread>
@@ -155,8 +156,8 @@ static void testDiskCacheThreadAffinityAndStress()
                 start.arrive_and_wait();
                 for (int round = 0; round < rounds; ++round)
                 {
-                    const std::string key = "m41-thread-" + std::to_string(worker) + "-" +
-                                             std::to_string(round);
+                    const std::string key =
+                        "m41-thread-" + std::to_string(worker) + "-" + std::to_string(round);
                     const QImage image(8 + (worker % 3), 8 + (round % 3), QImage::Format_RGB32);
                     ImageData data = mvcore::fromQImage(image);
                     disk.put(key, data);
@@ -170,12 +171,28 @@ static void testDiskCacheThreadAffinityAndStress()
     }
 
     // Checked while the workers are still running: each of them owns its own
-    // connection (they must not share one QSqlDatabase across threads).
+    // connection (they must not share one QSqlDatabase across threads). The
+    // rendezvous below holds every worker alive until this check has run.
     alive.arrive_and_wait();
     QSet<QString> workerConnections;
-    for (const QString &name : QSqlDatabase::connectionNames())
-        if (name.startsWith(QStringLiteral("mviewer_disk_cache_worker_")))
-            workerConnections.insert(name);
+    const auto connectionDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (std::chrono::steady_clock::now() < connectionDeadline)
+    {
+        workerConnections.clear();
+        for (const QString &name : QSqlDatabase::connectionNames())
+            if (name.startsWith(QStringLiteral("mviewer_disk_cache_worker_")))
+                workerConnections.insert(name);
+        if (workerConnections.size() >= workerCount)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    if (workerConnections.size() < workerCount)
+    {
+        printf("  observed %d worker connection(s):", workerConnections.size());
+        for (const QString &name : workerConnections)
+            printf(" %s", name.toUtf8().constData());
+        printf("\n");
+    }
     CHECK(workerConnections.size() >= workerCount,
           "each worker owns a distinct process-wide Qt SQL connection");
 
@@ -327,8 +344,7 @@ static void testRaw16CacheM42()
     std::shared_ptr<std::vector<uint16_t>> out;
     int channels = 0;
     uint16_t maxSample = 0;
-    CHECK(!mgr.getRaw16("raw-erase", out, channels, maxSample),
-          "erase removes the Raw16 key");
+    CHECK(!mgr.getRaw16("raw-erase", out, channels, maxSample), "erase removes the Raw16 key");
 
     mgr.putRaw16("raw-invalidate", a, 1, 65535);
     mgr.invalidate("raw-invalidate");
@@ -342,8 +358,7 @@ static void testRaw16CacheM42()
     mgr.putRaw16("raw-2", makeRaw16(20, 2), 1, 65535);
     CHECK(mgr.raw16UsageBytes() <= cfg.raw16CacheSize,
           "Raw16 total usage stays within byte budget");
-    CHECK(!mgr.getRaw16("raw-0", out, channels, maxSample),
-          "Raw16 budget evicts the oldest entry");
+    CHECK(!mgr.getRaw16("raw-0", out, channels, maxSample), "Raw16 budget evicts the oldest entry");
 
     auto tooLarge = makeRaw16(60, 99); // 120 bytes > 100-byte budget
     mgr.putRaw16("raw-too-large", tooLarge, 1, 65535);
@@ -370,28 +385,27 @@ static void testRaw16CacheM42()
     std::barrier start(8);
     std::vector<std::thread> workers;
     for (int t = 0; t < 8; ++t)
-        workers.emplace_back([&, t]
-                             {
-                                 start.arrive_and_wait();
-                                 for (int i = 0; i < 80; ++i)
-                                 {
-                                     const std::string key = "raw-thread-" + std::to_string(t) +
-                                                             "-" + std::to_string(i);
-                                     mgr.putRaw16(key, makeRaw16(32, static_cast<uint16_t>(i)), 1,
-                                                  65535);
-                                     if (i % 3 == 0)
-                                     {
-                                         std::shared_ptr<std::vector<uint16_t>> localOut;
-                                         int localChannels = 0;
-                                         uint16_t localMax = 0;
-                                         const bool hit = mgr.getRaw16(key, localOut, localChannels,
-                                                                        localMax);
-                                         if (hit && (!localOut || localOut->size() != 32 ||
-                                                     localChannels != 1 || localMax != 65535))
-                                             failures.fetch_add(1, std::memory_order_relaxed);
-                                     }
-                                 }
-                             });
+        workers.emplace_back(
+            [&, t]
+            {
+                start.arrive_and_wait();
+                for (int i = 0; i < 80; ++i)
+                {
+                    const std::string key =
+                        "raw-thread-" + std::to_string(t) + "-" + std::to_string(i);
+                    mgr.putRaw16(key, makeRaw16(32, static_cast<uint16_t>(i)), 1, 65535);
+                    if (i % 3 == 0)
+                    {
+                        std::shared_ptr<std::vector<uint16_t>> localOut;
+                        int localChannels = 0;
+                        uint16_t localMax = 0;
+                        const bool hit = mgr.getRaw16(key, localOut, localChannels, localMax);
+                        if (hit && (!localOut || localOut->size() != 32 || localChannels != 1 ||
+                                    localMax != 65535))
+                            failures.fetch_add(1, std::memory_order_relaxed);
+                    }
+                }
+            });
     for (auto &worker : workers)
         worker.join();
     CHECK(failures.load() == 0 && mgr.raw16UsageBytes() <= cfg.raw16CacheSize,

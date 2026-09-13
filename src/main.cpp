@@ -116,5 +116,10 @@ int main(int argc, char *argv[])
         mainWindow.setOpenOnLaunch(g_openOnLaunch);
     mainWindow.show();
 
-    return app.exec();
+    const int exitCode = app.exec();
+
+    // Flush and release the log file after the event loop returns so the last
+    // shutdown messages reach disk.
+    mviewer::core::shutdownFileLogger();
+    return exitCode;
 }

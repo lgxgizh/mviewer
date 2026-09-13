@@ -8,6 +8,10 @@
 
 #include <cstdio>
 #include <cstring>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 namespace mviewer::core
 {
@@ -33,7 +37,31 @@ int runSelfTest()
     printf("\n[Self-test] core decode roundtrip\n");
     fflush(stdout);
 
-    DecoderRegistry::instance().resetToDefaults();
+    // The self-test forces the built-in registry so it validates the shipped
+    // decode path no matter what is registered. That must not destroy state the
+    // rest of the process owns (a plugin host calling runSelfTest() would lose
+    // every plugin decoder), so snapshot the registry and restore it on every
+    // exit path — including the early returns below.
+    auto &registry = DecoderRegistry::instance();
+    std::vector<std::shared_ptr<IDecoder>> savedDecoders;
+    for (const std::string &id : registry.available())
+    {
+        if (auto decoder = registry.get(id))
+            savedDecoders.push_back(std::move(decoder));
+    }
+    struct RegistryRestore
+    {
+        std::vector<std::shared_ptr<IDecoder>> decoders;
+        ~RegistryRestore()
+        {
+            DecoderRegistry &reg = DecoderRegistry::instance();
+            reg.resetToDefaults();
+            for (auto &decoder : decoders)
+                reg.registerDecoder(decoder);
+        }
+    } registryRestore{std::move(savedDecoders)};
+
+    registry.resetToDefaults();
 
     // 1) Generate a known 64x64 gradient.
     QImage src(64, 64, QImage::Format_RGB888);

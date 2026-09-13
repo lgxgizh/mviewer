@@ -451,12 +451,16 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
 }
 
 NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, int height, int cx,
-                                    int cy, int n)
+                                    int cy, int n, int channels)
 {
     NeighborhoodStats s;
     if (!data || width <= 0 || height <= 0 || n < 1 || cx < 0 || cy < 0 || cx >= width ||
         cy >= height)
         return s;
+    // 3 = RGB24 (R,G,B), 4 = 32-bit BGRA (B,G,R,A) as produced by
+    // QImage::Format_RGB32/ARGB32 on little-endian hosts. Anything else is
+    // treated as RGB24.
+    const int bytesPerPixel = channels == 4 ? 4 : 3;
 
     long sum = 0, sumSq = 0;
     long rSum = 0, gSum = 0, bSum = 0;
@@ -473,11 +477,14 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
             const int xx = cx + dx;
             if (xx < 0 || xx >= width)
                 continue;
-            const uint8_t *p = row + static_cast<size_t>(xx) * 3;
-            rSum += p[0];
-            gSum += p[1];
-            bSum += p[2];
-            const double lum = luma(p[0], p[1], p[2]); // 0..255
+            const uint8_t *p = row + static_cast<size_t>(xx) * static_cast<size_t>(bytesPerPixel);
+            const uint8_t r = bytesPerPixel == 4 ? p[2] : p[0];
+            const uint8_t g = p[1];
+            const uint8_t b = bytesPerPixel == 4 ? p[0] : p[2];
+            rSum += r;
+            gSum += g;
+            bSum += b;
+            const double lum = luma(r, g, b); // 0..255
             const int v = static_cast<int>(lum + 0.5);
             sum += v;
             sumSq += static_cast<long>(v) * v;

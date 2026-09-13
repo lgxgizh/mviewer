@@ -22,6 +22,26 @@
   the clipboard now owns its pixels. Previously it aliased a buffer that was
   freed as soon as the export result was released, so pasting could read freed
   memory.
+- **Restoring a session can no longer paint an empty view:** a zoom/pan value
+  restored from settings (0, negative or corrupt) used to be applied verbatim and
+  produced a degenerate transform; it is now clamped to the interactive zoom
+  range.
+- **A rename pattern can no longer write outside the export folder:** patterns
+  such as `{name}/../../elsewhere` had their directory part joined onto the
+  destination path. A pattern now yields a file name only.
+- **Contact sheets and animation probes are bounded:** composing an oversized
+  contact sheet reports a clear failure instead of exhausting memory, a crafted
+  page count or frame index is rejected instead of decoding forever, and opening
+  a workspace/settings/session file refuses absurdly large files instead of
+  reading them whole.
+- **Crash reports no longer accumulate:** the crash-report folder keeps the 20
+  newest dumps, and the log file is flushed and closed on exit.
+- **Pixel-inspector neighbourhood statistics were computed on the wrong pixels:**
+  the analysis panel's page view holds 32-bit RGB data but was sampled as 24-bit,
+  which skewed the mean/variance and swapped the red and blue channels.
+- **Compare no longer depends on an ambient Qt application to deliver results:**
+  core callbacks are deferred through an explicitly installed main-thread
+  dispatcher, so headless tools and tests get deterministic delivery.
 
 ## [1.0.28] - 2026-09-12
 

@@ -4,6 +4,7 @@
 
 #include <QJsonArray>
 #include <QSaveFile>
+#include <algorithm>
 
 namespace
 {
@@ -27,9 +28,17 @@ AppState AppState::load()
     QFile f(path);
     if (!f.open(QIODevice::ReadOnly))
         return s; // missing file => defaults
+    // Persisted UI state is a small JSON object; never read an oversized
+    // (possibly replaced) file into memory.
+    constexpr qint64 kMaxStateFileBytes = 16LL * 1024 * 1024;
+    if (f.size() > kMaxStateFileBytes)
+        return s;
 
     QJsonParseError err;
-    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll(), &err);
+    // Bounded by the real size: QIODevice::read(maxSize) sizes its result to
+    // maxSize before reading.
+    const QJsonDocument doc =
+        QJsonDocument::fromJson(f.read(std::min<qint64>(f.size(), kMaxStateFileBytes)), &err);
     if (err.error != QJsonParseError::NoError || !doc.isObject())
         return s; // corrupt => defaults (safe)
 

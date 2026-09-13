@@ -1,6 +1,7 @@
 #include "display/DisplayColorContextProvider.h"
 
 #include <QFile>
+#include <algorithm>
 
 #include <mutex>
 #include <unordered_map>
@@ -69,7 +70,13 @@ mviewer::core::DisplayColorContext DisplayColorContextProvider::forWindow(const 
                     QFile file(path);
                     if (file.open(QIODevice::ReadOnly))
                     {
-                        const QByteArray bytes = file.readAll();
+                        // ICC profiles are small; a bogus/spoofed system profile
+                        // path must not turn into an unbounded allocation, and
+                        // the read is bounded by the real size so a small
+                        // profile does not allocate the whole cap.
+                        constexpr qint64 kMaxIccProfileBytes = 32LL * 1024 * 1024;
+                        const QByteArray bytes =
+                            file.read(std::min<qint64>(file.size(), kMaxIccProfileBytes));
                         ReleaseDC(reinterpret_cast<HWND>(windowId), dc);
                         auto profile = std::vector<uint8_t>(
                             reinterpret_cast<const uint8_t *>(bytes.constData()),

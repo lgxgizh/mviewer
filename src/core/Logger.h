@@ -24,6 +24,12 @@ namespace mviewer::core
 // `appName` is used as the log directory name under the app-data root.
 void installFileLogger(const std::string &appName = "MViewer");
 
+// Flush and close the log file and restore the previous Qt message handler.
+// Call once at process exit (after the event loop returns) so the last lines
+// are on disk and the log file is released; safe to call when the logger was
+// never installed.
+void shutdownFileLogger();
+
 // Return the absolute path of today's log file (empty if logger not installed).
 std::string currentLogPath();
 

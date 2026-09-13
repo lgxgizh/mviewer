@@ -22,6 +22,13 @@ namespace
 constexpr int kUnknownFrameCount = 1;
 constexpr int kMinimumAnimationDelayMs = 10;
 constexpr int kMaxTimingProbeFrames = 256;
+// A crafted container can declare an absurd page/frame count, and every
+// consumer uses the declared count as a loop bound, so it is clamped.
+constexpr int kMaxFrameCount = 100000;
+// Frames decoded to reach one requested animation frame. Real animations stay
+// far below this (60 s at 60 fps is 3600 frames); the bound keeps a session
+// file with a wild frame index from decoding for minutes.
+constexpr int kMaxSequentialFrameWalk = 4096;
 
 QString qpath(const std::string &path)
 {
@@ -45,12 +52,14 @@ FrameSequenceKind kindFor(const QImageReader &reader, const QString &suffix, int
 int safeFrameCount(const QImageReader &reader)
 {
     const int count = reader.imageCount();
-    return count > 0 ? count : kUnknownFrameCount;
+    if (count <= 0)
+        return kUnknownFrameCount;
+    return std::min(count, kMaxFrameCount);
 }
 
 void fillMetadata(const std::string &path, QImageReader &reader, const QImage &image,
-                  const FrameSequenceInfo &sequence, int frameIndex,
-                  int frameDelay, mviewer::domain::ImageMetadata &meta)
+                  const FrameSequenceInfo &sequence, int frameIndex, int frameDelay,
+                  mviewer::domain::ImageMetadata &meta)
 {
     const QFileInfo info(qpath(path));
     meta.filePath = path;
@@ -108,8 +117,7 @@ FrameSequenceInfo probeReader(QImageReader &reader, const QString &suffix)
 
     // Duration probing is intentionally bounded. A 10,000-frame source still
     // gets an O(1) open/probe; frameInfo() supplies the current delay on demand.
-    if (sequence.animated && sequence.countKnown &&
-        sequence.frameCount <= kMaxTimingProbeFrames)
+    if (sequence.animated && sequence.countKnown && sequence.frameCount <= kMaxTimingProbeFrames)
     {
         // qgif/qwebp expose the first frame through read(), not
         // jumpToImage(0).  Probe on a fresh reader so the caller's reader
@@ -135,11 +143,9 @@ FrameSequenceInfo probeReader(QImageReader &reader, const QString &suffix)
 
 QImage scaleToMaxEdge(QImage image, int maxEdge)
 {
-    if (maxEdge <= 0 || image.isNull() ||
-        std::max(image.width(), image.height()) <= maxEdge)
+    if (maxEdge <= 0 || image.isNull() || std::max(image.width(), image.height()) <= maxEdge)
         return image;
-    const double ratio = static_cast<double>(maxEdge) /
-                         std::max(image.width(), image.height());
+    const double ratio = static_cast<double>(maxEdge) / std::max(image.width(), image.height());
     return image.scaled(QSize(std::max(1, static_cast<int>(image.width() * ratio)),
                               std::max(1, static_cast<int>(image.height() * ratio))),
                         Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
@@ -158,6 +164,13 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
                           int frameIndex, int maxEdge)
 {
     SelectedFrame selected;
+    // The index can come from a restored session file, so bound it before it
+    // becomes a loop count (the sequential fallbacks below decode up to it).
+    if (frameIndex < 0 || frameIndex > kMaxSequentialFrameWalk)
+    {
+        selected.error = "frame index out of range";
+        return selected;
+    }
     QImageReader reader(qpath(path));
     reader.setAutoTransform(sequence.kind != FrameSequenceKind::Animation);
 
@@ -190,8 +203,9 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
         if (maxEdge > 0 && selected.sourceSize.isValid() &&
             std::max(selected.sourceSize.width(), selected.sourceSize.height()) > maxEdge)
         {
-            const double ratio = static_cast<double>(maxEdge) /
-                                 std::max(selected.sourceSize.width(), selected.sourceSize.height());
+            const double ratio =
+                static_cast<double>(maxEdge) /
+                std::max(selected.sourceSize.width(), selected.sourceSize.height());
             reader.setScaledSize(
                 QSize(std::max(1, static_cast<int>(selected.sourceSize.width() * ratio)),
                       std::max(1, static_cast<int>(selected.sourceSize.height() * ratio))));
@@ -210,8 +224,9 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
         if (maxEdge > 0 && selected.sourceSize.isValid() &&
             std::max(selected.sourceSize.width(), selected.sourceSize.height()) > maxEdge)
         {
-            const double ratio = static_cast<double>(maxEdge) /
-                                 std::max(selected.sourceSize.width(), selected.sourceSize.height());
+            const double ratio =
+                static_cast<double>(maxEdge) /
+                std::max(selected.sourceSize.width(), selected.sourceSize.height());
             reader.setScaledSize(
                 QSize(std::max(1, static_cast<int>(selected.sourceSize.width() * ratio)),
                       std::max(1, static_cast<int>(selected.sourceSize.height() * ratio))));
@@ -236,8 +251,8 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
             if (sequence.kind != FrameSequenceKind::Animation)
                 candidateSize = sequential.size();
             const int before = sequential.nextImageDelay();
-            if (i == frameIndex && sequence.kind != FrameSequenceKind::Animation &&
-                maxEdge > 0 && candidateSize.isValid() &&
+            if (i == frameIndex && sequence.kind != FrameSequenceKind::Animation && maxEdge > 0 &&
+                candidateSize.isValid() &&
                 std::max(candidateSize.width(), candidateSize.height()) > maxEdge)
             {
                 const double ratio = static_cast<double>(maxEdge) /
@@ -304,10 +319,10 @@ FrameDecodeResult decodeImpl(const std::string &path, int frameIndex, int maxEdg
         result.frame = {frameIndex, selected.delayMs, selected.sourceSize.width(),
                         selected.sourceSize.height()};
 
-    result.frame.width = selected.sourceSize.width() > 0 ? selected.sourceSize.width()
-                                                         : selected.image.width();
-    result.frame.height = selected.sourceSize.height() > 0 ? selected.sourceSize.height()
-                                                           : selected.image.height();
+    result.frame.width =
+        selected.sourceSize.width() > 0 ? selected.sourceSize.width() : selected.image.width();
+    result.frame.height =
+        selected.sourceSize.height() > 0 ? selected.sourceSize.height() : selected.image.height();
     QImageReader metadataReader(qpath(path));
     metadataReader.setAutoTransform(result.sequence.kind != FrameSequenceKind::Animation);
     fillMetadata(path, metadataReader, selected.image, result.sequence, frameIndex,

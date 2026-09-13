@@ -332,6 +332,22 @@ void BatchDialog::onStart()
                 });
         });
 
+    // Per-file results are streamed as they finish (same marshalling rule as the
+    // progress callback). The final aggregate is still returned, so headless
+    // callers keep the complete list.
+    m_processor->setFileResultCallback(
+        [self = QPointer<BatchDialog>(this)](const mviewer::domain::BatchFileResult &fileResult)
+        {
+            QMetaObject::invokeMethod(qApp,
+                                      [self, fileResult]()
+                                      {
+                                          if (!self)
+                                              return;
+                                          self->m_log->append(
+                                              BatchDialog::formatResultLine(fileResult));
+                                      });
+        });
+
     // Keep a shared_ptr to the processor for cancel control; the background
     // thread also holds a copy via the lambda capture. A fresh processor is
     // created when the job finishes so the dialog can be reused.
@@ -345,6 +361,18 @@ void BatchDialog::onStart()
             [this, watcher]() { finishBatch(watcher); });
 
     watcher->setFuture(future);
+}
+
+QString BatchDialog::formatResultLine(const mviewer::domain::BatchFileResult &result)
+{
+    const auto inputPath =
+        QString::fromUtf8(result.inputPath.data(), static_cast<int>(result.inputPath.size()));
+    const auto outputPath =
+        QString::fromUtf8(result.outputPath.data(), static_cast<int>(result.outputPath.size()));
+    const auto errorMessage =
+        QString::fromUtf8(result.errorMessage.data(), static_cast<int>(result.errorMessage.size()));
+    return result.success ? QString("[OK] %1 → %2").arg(inputPath).arg(outputPath)
+                          : QString("[FAIL] %1: %2").arg(inputPath).arg(errorMessage);
 }
 
 void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *watcher)
@@ -388,18 +416,8 @@ void BatchDialog::finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *w
     m_openOutputBtn->setEnabled(!m_lastOutputDir.isEmpty() && result.totalSucceeded > 0 &&
                                 QDir(m_lastOutputDir).exists());
 
-    for (const auto &r : result.fileResults)
-    {
-        const auto inputPath =
-            QString::fromUtf8(r.inputPath.data(), static_cast<int>(r.inputPath.size()));
-        const auto outputPath =
-            QString::fromUtf8(r.outputPath.data(), static_cast<int>(r.outputPath.size()));
-        const auto errorMessage =
-            QString::fromUtf8(r.errorMessage.data(), static_cast<int>(r.errorMessage.size()));
-        const QString line = r.success ? QString("[OK] %1 → %2").arg(inputPath).arg(outputPath)
-                                       : QString("[FAIL] %1: %2").arg(inputPath).arg(errorMessage);
-        m_log->append(line);
-    }
+    // Log lines were already streamed per file by the file-result callback; the
+    // aggregate remains the authoritative count for the status text.
 
     // Create a fresh processor so the dialog can be reused.
     m_processor = std::make_unique<mviewer::core::BatchProcessor>();

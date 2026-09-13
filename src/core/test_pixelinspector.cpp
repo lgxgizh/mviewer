@@ -92,6 +92,41 @@ static void test_neighborhood()
     auto corner = neighborhoodStats(g.data(), w * 3, w, h, 0, 0, 1);
     CHECK(corner.count == 1);
     CHECK(corner.mean == 0);
+
+    // Regression: a 32-bit BGRA buffer (QImage::Format_RGB32, as the analysis
+    // panel's page view holds) must produce exactly the same statistics as the
+    // equivalent RGB24 buffer. It used to be walked with a hardcoded 3-byte
+    // stride, which read every second pixel plus a neighbour's channel.
+    std::vector<uint8_t> rgba(static_cast<size_t>(w) * h * 4, 0);
+    for (int y = 0; y < h; ++y)
+        for (int x = 0; x < w; ++x)
+        {
+            const uint8_t v = static_cast<uint8_t>(y * 10);
+            const size_t i = (static_cast<size_t>(y) * w + x) * 4;
+            rgba[i] = v;     // B
+            rgba[i + 1] = v; // G
+            rgba[i + 2] = v; // R
+            rgba[i + 3] = 255;
+        }
+    const auto s4 = neighborhoodStats(rgba.data(), w * 4, w, h, 1, 1, 3, 4);
+    CHECK(s4.count == sg.count);
+    CHECK(std::abs(s4.mean - sg.mean) < 1e-6);
+    CHECK(std::abs(s4.variance - sg.variance) < 1e-6);
+    CHECK(s4.min == sg.min && s4.max == sg.max);
+    CHECK(std::abs(s4.rMean - sg.rMean) < 1e-6);
+    CHECK(std::abs(s4.gMean - sg.gMean) < 1e-6);
+    CHECK(std::abs(s4.bMean - sg.bMean) < 1e-6);
+
+    // Channel order is part of the contract: a red pixel in BGRA must read as
+    // red, not as blue.
+    std::vector<uint8_t> bgra(4, 0);
+    bgra[0] = 0;   // B
+    bgra[1] = 0;   // G
+    bgra[2] = 255; // R
+    bgra[3] = 255; // A
+    const auto red = neighborhoodStats(bgra.data(), 4, 1, 1, 0, 0, 1, 4);
+    CHECK(std::abs(red.rMean - 255) < 1e-6);
+    CHECK(std::abs(red.bMean) < 1e-6);
 }
 
 static void setRgb(ImageData &image, int x, int y, int r, int g, int b)

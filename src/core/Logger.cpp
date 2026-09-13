@@ -123,6 +123,26 @@ std::string currentLogPath()
     return g_logPath.toUtf8().toStdString();
 }
 
+void shutdownFileLogger()
+{
+    if (!g_installed)
+        return;
+    g_installed = false;
+
+    // Restore the default handler first: the file must not receive messages
+    // while it is being closed.
+    qInstallMessageHandler(nullptr);
+
+    QMutexLocker lock(&g_logMtx);
+    if (g_logFile)
+    {
+        g_logFile->flush();
+        g_logFile->close();
+        delete g_logFile;
+        g_logFile = nullptr;
+    }
+}
+
 std::string logDirectory()
 {
     return g_logDir.toUtf8().toStdString();

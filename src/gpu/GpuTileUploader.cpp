@@ -13,23 +13,37 @@ bool GpuTileUploader::available()
     // A current QOpenGLContext means we can issue GL calls (real Stage A host
     // or a test that made a context current). Headless QCoreApplication /
     // offscreen without GL returns false — CPU path stays the default.
+    // Deliberately NOT cached: context availability changes per thread and per
+    // test section.
     QOpenGLContext *ctx = QOpenGLContext::currentContext();
     return ctx != nullptr && ctx->isValid();
 }
 
+namespace
+{
+// The opt-in environment variable is process configuration, so it is read once
+// instead of on every paint/tile (enabled() is called from the paint path and
+// from ensure() for every tile).
+bool gpuRequestedByEnvironment()
+{
+    static const bool requested = []
+    {
+        const char *env = std::getenv("MVIEWER_GPU");
+        if (!env || env[0] == '\0')
+            return false;
+        // Accept common truthy spellings.
+        return std::strcmp(env, "1") == 0 || std::strcmp(env, "true") == 0 ||
+               std::strcmp(env, "TRUE") == 0 || std::strcmp(env, "yes") == 0 ||
+               std::strcmp(env, "YES") == 0 || std::strcmp(env, "on") == 0 ||
+               std::strcmp(env, "ON") == 0;
+    }();
+    return requested;
+}
+} // namespace
+
 bool GpuTileUploader::enabled()
 {
-    if (!available())
-        return false;
-    const char *env = std::getenv("MVIEWER_GPU");
-    if (!env || env[0] == '\0')
-        return false;
-    // Accept common truthy spellings.
-    if (std::strcmp(env, "1") == 0 || std::strcmp(env, "true") == 0 ||
-        std::strcmp(env, "TRUE") == 0 || std::strcmp(env, "yes") == 0 ||
-        std::strcmp(env, "YES") == 0 || std::strcmp(env, "on") == 0 || std::strcmp(env, "ON") == 0)
-        return true;
-    return false;
+    return gpuRequestedByEnvironment() && available();
 }
 
 // ─── residency ───────────────────────────────────────────────────────────────

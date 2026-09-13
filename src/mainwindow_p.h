@@ -130,3 +130,31 @@ inline std::optional<mviewer::domain::CompareSession> decodeCompareSession(const
         return std::nullopt;
     return mviewer::core::deserializeCompareSession(json);
 }
+
+// Caps for whole-file reads of persisted JSON state. A workspace/project file
+// lists paths (a few MB at most) and recovery/recent state is smaller still, so
+// an oversized file means the path was replaced with something else — reject it
+// instead of reading it into memory.
+inline constexpr qint64 kMaxPersistedStateBytes = 64LL * 1024 * 1024;
+inline constexpr qint64 kMaxRecoveryStateBytes = 16LL * 1024 * 1024;
+
+// Read a whole persisted state file within `maxBytes`. Returns false (filling
+// `error` when provided) if the file is missing, unreadable or too large.
+inline bool readBoundedStateFile(QFile &file, const QString &path, qint64 maxBytes, QByteArray &out,
+                                 QString *error = nullptr)
+{
+    if (!file.exists() || !file.open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        if (error)
+            *error = QStringLiteral("无法读取文件：%1").arg(path);
+        return false;
+    }
+    if (file.size() > maxBytes)
+    {
+        if (error)
+            *error = QStringLiteral("文件过大，无法作为状态文件读取：%1").arg(path);
+        return false;
+    }
+    out = file.read(std::min<qint64>(file.size(), maxBytes));
+    return true;
+}

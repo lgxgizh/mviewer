@@ -1,12 +1,13 @@
 #include "core/SettingsIO.h"
 
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
-#include <QFile>
 #include <QSettings>
 #include <QVariant>
+#include <algorithm>
 
 namespace mviewer::core
 {
@@ -139,7 +140,17 @@ bool importSettings(const std::string &path, std::string *errorOut)
             *errorOut = "cannot open file for reading: " + path;
         return false;
     }
-    const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
+    // An imported settings file is a small JSON document; refuse an oversized
+    // one instead of reading an arbitrary file into memory.
+    constexpr qint64 kMaxSettingsFileBytes = 16LL * 1024 * 1024;
+    if (f.size() > kMaxSettingsFileBytes)
+    {
+        if (errorOut)
+            *errorOut = "settings file too large: " + path;
+        return false;
+    }
+    const QJsonDocument doc =
+        QJsonDocument::fromJson(f.read(std::min<qint64>(f.size(), kMaxSettingsFileBytes)));
     if (!doc.isObject())
     {
         if (errorOut)

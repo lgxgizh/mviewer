@@ -1,8 +1,8 @@
 #include "core/image/ImageTransform.h"
 
+#include "core/filesystem/Utf8Path.h"
 #include "core/image/Encoder.h"
 #include "core/image/QtConvert.h"
-#include "core/filesystem/Utf8Path.h"
 
 #include <QFile>
 #include <QFont>
@@ -30,6 +30,20 @@ void replaceAll(std::string &s, const std::string &token, const std::string &val
         s.replace(pos, token.size(), value);
         pos += value.size();
     }
+}
+
+// A rename-pattern result is used as a FILE NAME inside the destination
+// directory (BatchProcessor and ExportJob join it straight onto that path), so
+// any directory component it produced is dropped: "{name}/../../elsewhere"
+// used to write outside the export folder. An empty or dot-only name falls back
+// to the source basename.
+std::string toSafeFileName(const std::string &name, const std::string &fallback)
+{
+    const size_t separator = name.find_last_of("/\\");
+    std::string leaf = separator == std::string::npos ? name : name.substr(separator + 1);
+    if (leaf.empty() || leaf == "." || leaf == "..")
+        return fallback;
+    return leaf;
 }
 
 } // namespace
@@ -155,8 +169,19 @@ ImageData makeContactSheet(const std::vector<ImageData> &imgs, int cols, int thu
     const int rows = (n + cols - 1) / cols;
     const int pad = 6;
     const int cell = thumb + pad * 2;
-    const int W = cols * cell + pad;
-    const int H = rows * cell + pad;
+
+    // The sheet is composed as one RGB32 image, so a large job (or a large
+    // cols/thumb combination) would allocate without limit and fail the export
+    // with a bad_alloc. Refuse a sheet above the pixel budget instead; callers
+    // report the failure. The geometry is computed in 64-bit so the bound itself
+    // cannot overflow.
+    constexpr long long kMaxSheetPixels = 64LL * 1024 * 1024;
+    const long long sheetW = 1LL * cols * cell + pad;
+    const long long sheetH = 1LL * rows * cell + pad;
+    if (sheetW <= 0 || sheetH <= 0 || sheetW * sheetH > kMaxSheetPixels)
+        return ImageData();
+    const int W = static_cast<int>(sheetW);
+    const int H = static_cast<int>(sheetH);
 
     QImage sheet(W, H, QImage::Format_RGB32);
     sheet.fill(Qt::black);
@@ -217,7 +242,7 @@ std::string applyRenamePattern(const std::string &pattern, const std::string &ba
         pos += padded.size();
     }
 
-    return out;
+    return toSafeFileName(out, baseName);
 }
 
 bool writePdf(const std::string &path, const std::vector<ImageData> &images, int quality)

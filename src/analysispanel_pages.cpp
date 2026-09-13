@@ -90,8 +90,11 @@ void AnalysisPanel::updateInspectorPage()
         {
             const uchar *data = m_imageA.constBits();
             const int stride = m_imageA.bytesPerLine();
+            // m_imageA is Format_RGB32: 4 bytes per pixel in B,G,R,A order.
+            // Passing it as RGB24 read the wrong pixels (and the wrong channel
+            // order), so the layout is stated explicitly.
             const mviewer::core::NeighborhoodStats s =
-                mviewer::core::neighborhoodStats(data, stride, w, h, m_px, m_py, m_kernel);
+                mviewer::core::neighborhoodStats(data, stride, w, h, m_px, m_py, m_kernel, 4);
             txt += QString("<br><b>%1×%1 Kernel</b> (lum)<br>").arg(m_kernel);
             txt += QString("mean:%1  std:%2<br>").arg(s.mean, 0, 'f', 1).arg(s.stdDev, 0, 'f', 1);
             txt += QString("min:%1  max:%2  var:%3  n:%4")

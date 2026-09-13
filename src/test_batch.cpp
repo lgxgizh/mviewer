@@ -97,6 +97,32 @@ int main(int argc, char *argv[])
         CHECK(progressCalls.back().first == 2, "Last progress call should be (total, total)");
     }
 
+    // ── Test 2b: Per-file result streaming ─────────────────────────
+    {
+        mviewer::domain::BatchJobConfig config;
+        config.inputPaths = {p1.toStdString(), p2.toStdString(), p3.toStdString()};
+        config.operations = {mviewer::domain::BatchOp::Export};
+        config.exportFormat = "png";
+        config.outputDir = outDir.toStdString();
+
+        mviewer::core::BatchProcessor processor;
+        std::vector<std::string> streamedInputs;
+        processor.setFileResultCallback([&streamedInputs](const mviewer::domain::BatchFileResult &r)
+                                        { streamedInputs.push_back(r.inputPath); });
+
+        auto result = processor.execute(config);
+
+        // One callback per finished file, in submission order, matching the
+        // aggregate the caller also receives.
+        CHECK(streamedInputs.size() == result.fileResults.size(),
+              "file-result callback fires once per file");
+        CHECK(streamedInputs.size() == 3, "file-result callback fires for all 3 files");
+        bool orderMatches = streamedInputs.size() == result.fileResults.size();
+        for (size_t i = 0; orderMatches && i < streamedInputs.size(); ++i)
+            orderMatches = streamedInputs[i] == result.fileResults[i].inputPath;
+        CHECK(orderMatches, "streamed results arrive in the same order as the aggregate");
+    }
+
     // ── Test 3: Rename pattern ─────────────────────────────────────
     {
         mviewer::domain::BatchJobConfig config;

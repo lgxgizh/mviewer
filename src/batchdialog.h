@@ -57,6 +57,10 @@ class BatchDialog : public QDialog
     // worker exception), reports the summary and resets the dialog for reuse.
     void finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *watcher);
 
+    // One "[OK] in → out" / "[FAIL] in: error" line for the dialog log. Used by
+    // the streaming per-file result callback.
+    static QString formatResultLine(const mviewer::domain::BatchFileResult &result);
+
     // ── file list ──────────────────────────────────────────────────
     QListWidget *m_fileList = nullptr;
     QPushButton *m_addBtn = nullptr;

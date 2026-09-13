@@ -241,8 +241,8 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
         auto collectImages = [](const std::filesystem::path &dir, std::vector<std::string> &out)
         {
             std::error_code ec;
-            for (std::filesystem::recursive_directory_iterator it(
-                     dir, std::filesystem::directory_options::skip_permission_denied, ec),
+            for (std::filesystem::recursive_directory_iterator
+                     it(dir, std::filesystem::directory_options::skip_permission_denied, ec),
                  end;
                  !ec && it != end; it.increment(ec))
             {
@@ -250,8 +250,8 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
                 if (it->is_regular_file(fileEc) && !fileEc)
                 {
                     auto ext = pathToUtf8(it->path().extension());
-                    std::transform(ext.begin(), ext.end(), ext.begin(),
-                                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c)
+                                   { return static_cast<char>(std::tolower(c)); });
                     static const std::vector<std::string> imgExts = {
                         ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".cr2",
                         ".nef", ".arw",  ".dng", ".raf", ".rw2", ".orf",  ".raw"};
@@ -305,6 +305,10 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
             ++aggregate.totalSucceeded;
         else
             ++aggregate.totalFailed;
+        // Stream the result before it is moved into the aggregate so a UI can
+        // report progress per file instead of waiting for the whole job.
+        if (m_fileResultCb)
+            m_fileResultCb(fileResult);
         aggregate.fileResults.push_back(std::move(fileResult));
     }
 

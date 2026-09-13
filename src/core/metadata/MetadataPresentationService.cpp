@@ -17,6 +17,7 @@ MetadataPresentationService &MetadataPresentationService::instance()
     // Keep the process-wide repository alive until process exit. Widget
     // consumers cancel explicitly; avoiding static destruction order here
     // prevents a queued worker delivery from touching torn-down globals.
+    // Policy: docs/adr/017-process-lifetime-services.md.
     static auto *service = new MetadataPresentationService();
     return *service;
 }

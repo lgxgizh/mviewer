@@ -118,11 +118,16 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
                                     int adjustedX, int adjustedY, int n);
 
 // Compute luminance statistics over an N×N neighborhood centered at (cx,cy)
-// in an RGB24 buffer laid out row-major with the given stride (bytes/row).
+// in a packed byte buffer laid out row-major with the given stride (bytes/row).
 // Out-of-bounds samples are skipped (the kernel is clipped to the image).
 // `n` is the kernel half-width+1 (n=1 → 1×1, n=3 → 3×3, n=5 → 5×5, n=7 → 7×7).
+// `channels` is the byte count per pixel and must match the buffer:
+//   3 = RGB24 (bytes R,G,B — the QImage::Format_RGB888 layout)
+//   4 = 32-bit BGRA (bytes B,G,R,A — the QImage::Format_RGB32/ARGB32 layout)
+// Passing a 4-byte buffer with channels=3 silently reads every second pixel
+// plus a neighbour's channel, so callers must state which layout they hold.
 NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, int height, int cx,
-                                    int cy, int n);
+                                    int cy, int n, int channels = 3);
 
 // Convert a ColorSpace enum to its short label (e.g. "RGB", "HSV").
 const char *colorSpaceLabel(ColorSpace space);

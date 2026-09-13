@@ -39,6 +39,18 @@ int main()
     auto r6 = mviewer::core::applyRenamePattern("", "file", "txt", 0, 1);
     CHECK(!r6.empty() || r6 == "file", "empty pattern handled");
 
+    // A pattern produces a FILE NAME, never a path: BatchProcessor and ExportJob
+    // join the result straight onto the destination directory, so directory
+    // components and parent references must not survive.
+    auto t1 = mviewer::core::applyRenamePattern("../../{name}", "photo", "jpg", 0, 1);
+    CHECK(t1 == "photo", "traversal prefix is stripped");
+    auto t2 = mviewer::core::applyRenamePattern("{name}/../{name}", "photo", "jpg", 0, 1);
+    CHECK(t2 == "photo", "parent reference is stripped");
+    auto t3 = mviewer::core::applyRenamePattern("..", "photo", "jpg", 0, 1);
+    CHECK(t3 == "photo", "a dot-only pattern falls back to the base name");
+    auto t4 = mviewer::core::applyRenamePattern("sub/{name}_x", "photo", "jpg", 0, 1);
+    CHECK(t4 == "photo_x", "directory prefix is dropped, the leaf survives");
+
     std::cout << "\nImageTransform: " << (g_fail == 0 ? "ALL PASSED" : "FAILURES") << "\n";
     return g_fail == 0 ? 0 : 1;
 }

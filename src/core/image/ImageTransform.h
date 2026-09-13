@@ -33,7 +33,10 @@ ImageData addTextWatermark(const ImageData &src, const std::string &text, Waterm
                            double opacity01, int fontSizePx);
 
 // Compose a contact sheet: `cols` columns, each thumbnail `thumb` px on its
-// long edge, images laid out row by row. Returns an empty image if `imgs` is empty.
+// long edge, images laid out row by row. Returns an empty image if `imgs` is
+// empty or if the sheet would exceed the compositing budget (64 MP at the
+// current cols/thumb/image-count combination) — callers report that as an
+// export failure instead of risking a bad_alloc.
 ImageData makeContactSheet(const std::vector<ImageData> &imgs, int cols, int thumb);
 
 // Apply a rename pattern to a base file name. Supported tokens:
@@ -42,7 +45,10 @@ ImageData makeContactSheet(const std::vector<ImageData> &imgs, int cols, int thu
 //   {n}     1-based index
 //   {total} total count
 //   {seq:W} 1-based index zero-padded to width W (e.g. {seq:3} -> 001)
-// Returns the new base name (no extension).
+// Returns the new base name (no extension). The result is a FILE NAME, not a
+// path: any directory component the pattern produced is dropped (so
+// "{name}/../../x" cannot escape the destination directory) and a pattern that
+// reduces to nothing falls back to `baseName`.
 std::string applyRenamePattern(const std::string &pattern, const std::string &baseName,
                                const std::string &ext, int index, int total);
 

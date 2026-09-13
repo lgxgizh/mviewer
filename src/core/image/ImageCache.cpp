@@ -103,6 +103,9 @@ void ImageCache::setCapacity(Level level, size_t maxBytes)
     Pool &pool = m_pools[level];
     std::lock_guard<std::mutex> lock(pool.mtx);
     pool.maxBytes = maxBytes;
+    // Shrinking the budget must take effect immediately: without the trim the
+    // pool stayed above its documented cap until enough new entries arrived.
+    evictIfNeeded(pool, 0);
 }
 
 size_t ImageCache::usedBytes(Level level) const

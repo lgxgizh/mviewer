@@ -11,6 +11,7 @@
 #include <QTimer>
 
 #include <algorithm>
+#include <cmath>
 
 namespace
 {
@@ -55,9 +56,8 @@ void ImageViewer::setBrowseSequence(const QStringList &paths)
         return;
     const QFileInfo info(m_currentPath);
     const QString position =
-        m_currentIndex >= 0
-            ? QString(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
-            : QString();
+        m_currentIndex >= 0 ? QString(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
+                            : QString();
     setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
                        .arg(info.fileName())
                        .arg(size.width())
@@ -117,11 +117,11 @@ void ImageViewer::setFullscreenRequested(bool requested)
                                    viewer->m_view.screenW = viewer->width();
                                    viewer->m_view.screenH = viewer->height();
                                    const QSize source = viewer->m_provisionalSourceSize.isValid()
-                                                             ? viewer->m_provisionalSourceSize
-                                                             : viewer->m_provisionalImage.size();
+                                                            ? viewer->m_provisionalSourceSize
+                                                            : viewer->m_provisionalImage.size();
                                    viewer->m_view.fit(source.width(), source.height(),
-                                                     requested ? FitPolicy::MaximizeClient
-                                                               : FitPolicy::Comfortable);
+                                                      requested ? FitPolicy::MaximizeClient
+                                                                : FitPolicy::Comfortable);
                                    viewer->advanceViewportRevision();
                                    viewer->emitZoom();
                                }
@@ -173,11 +173,11 @@ void ImageViewer::renameBrowsePaths(const QStringList &oldPaths, const QStringLi
     m_currentIndex = m_fileList.indexOf(m_currentPath);
     if (!m_currentPath.isEmpty())
     {
-        const QString position = m_currentIndex >= 0
-                                     ? QString(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
-                                     : QString();
-        setWindowTitle(QString("%1%2 - MViewer")
-                           .arg(QFileInfo(m_currentPath).fileName(), position));
+        const QString position =
+            m_currentIndex >= 0 ? QString(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
+                                : QString();
+        setWindowTitle(
+            QString("%1%2 - MViewer").arg(QFileInfo(m_currentPath).fileName(), position));
     }
 }
 
@@ -187,11 +187,10 @@ void ImageViewer::setImageImpl(const QString &path)
     // the previous image's sample never lingers while the next decode runs —
     // including for empty/failing requests that never deliver a frame.
     clearPixelInfo();
-    const std::optional<Viewport> reloadView = m_preserveViewOnReload
-                                                   ? std::optional<Viewport>(m_view)
-                                                   : std::nullopt;
-    const bool keepProvisional = !path.isEmpty() && path == m_provisionalPath &&
-                                 !m_provisionalImage.isNull();
+    const std::optional<Viewport> reloadView =
+        m_preserveViewOnReload ? std::optional<Viewport>(m_view) : std::nullopt;
+    const bool keepProvisional =
+        !path.isEmpty() && path == m_provisionalPath && !m_provisionalImage.isNull();
     m_currentPath = path;
     m_currentIndex = m_fileList.indexOf(path);
     // M29: drop the prior foreground decode BEFORE scheduling the new load, and
@@ -266,10 +265,9 @@ void ImageViewer::issueAnalysisLoad(const QString &path, uint64_t generation)
     // frame-aware cache key, but a stale promoted legacy handle must never
     // erase the requested frame identity.
     m_pendingAnalysisPreload.reset();
-    m_foregroundRequest =
-        mviewer::application::ImageLoadingService::instance().loadFrameAsync(
-            path.toUtf8().toStdString(), 0, std::move(onLoaded),
-            ImageRepository::kDefaultLoadOptions, m_lifetime);
+    m_foregroundRequest = mviewer::application::ImageLoadingService::instance().loadFrameAsync(
+        path.toUtf8().toStdString(), 0, std::move(onLoaded), ImageRepository::kDefaultLoadOptions,
+        m_lifetime);
 }
 
 ImageViewer::ImageLoadCallback ImageViewer::makeImageLoadCallback(const QString &path,
@@ -296,48 +294,46 @@ ImageViewer::ImageLoadCallback ImageViewer::makeImageLoadCallback(const QString 
 void ImageViewer::queueImageLoadFailure(const QString &path, uint64_t generation,
                                         const ImageLoadGuard &guard)
 {
-    QMetaObject::invokeMethod(qApp,
-                              [path, generation, guard]()
-                              {
-                                  ImageViewer *viewer = guard->data();
-                                  if (!viewer || path != viewer->m_currentPath ||
-                                      generation != viewer->m_requestGen)
-                                      return;
-                                  viewer->m_foregroundRequest.reset();
-                                  viewer->m_loading = false;
-                                  viewer->m_hasHistogram = false;
-                                  // M47: while the raster-path verdict for a
-                                  // large source is still pending, suppress the
-                                  // analysis-support full-frame failure (the
-                                  // 100 MP full decode fails fast, the LOD
-                                  // arrives later — the display owns the
-                                  // verdict).
-                                  if (viewer->m_largeSourcePending)
-                                  {
-                                      viewer->update();
-                                      return;
-                                  }
-                                  // M47: in LOD-first display the image IS on
-                                  // screen (the raster path); only the
-                                  // analysis-support full frame failed (e.g.
-                                  // > Qt's allocation limit). Do not clobber
-                                  // the successful display with a failure.
-                                  if (viewer->m_lodMode && !viewer->m_raster.image.isNull())
-                                  {
-                                      viewer->update();
-                                      return;
-                                  }
-                                  viewer->setWindowTitle(
-                                      QString("无法加载 - %1 - MViewer")
-                                          .arg(QFileInfo(path).fileName()));
-                                  viewer->update();
-                                  emit viewer->loadFailed(path);
-                              });
+    QMetaObject::invokeMethod(
+        qApp,
+        [path, generation, guard]()
+        {
+            ImageViewer *viewer = guard->data();
+            if (!viewer || path != viewer->m_currentPath || generation != viewer->m_requestGen)
+                return;
+            viewer->m_foregroundRequest.reset();
+            viewer->m_loading = false;
+            viewer->m_hasHistogram = false;
+            // M47: while the raster-path verdict for a
+            // large source is still pending, suppress the
+            // analysis-support full-frame failure (the
+            // 100 MP full decode fails fast, the LOD
+            // arrives later — the display owns the
+            // verdict).
+            if (viewer->m_largeSourcePending)
+            {
+                viewer->update();
+                return;
+            }
+            // M47: in LOD-first display the image IS on
+            // screen (the raster path); only the
+            // analysis-support full frame failed (e.g.
+            // > Qt's allocation limit). Do not clobber
+            // the successful display with a failure.
+            if (viewer->m_lodMode && !viewer->m_raster.image.isNull())
+            {
+                viewer->update();
+                return;
+            }
+            viewer->setWindowTitle(
+                QString("无法加载 - %1 - MViewer").arg(QFileInfo(path).fileName()));
+            viewer->update();
+            emit viewer->loadFailed(path);
+        });
 }
 
 void ImageViewer::queueLoadedImage(const QString &path, uint64_t generation,
-                                   const ImageLoadGuard &guard,
-                                   const ImageLoadResult &result)
+                                   const ImageLoadGuard &guard, const ImageLoadResult &result)
 {
     QMetaObject::invokeMethod(qApp,
                               [path, generation, guard, result]()
@@ -375,10 +371,10 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
     m_sequence = m_frame->sequenceInfo();
     m_frameIndex = m_frame->frameIndex();
     m_playback.configure(m_sequence);
-    m_playback.setFrameInfo({m_frameIndex, m_frame->metadata().frameDurationMs > 0
-                                                  ? m_frame->metadata().frameDurationMs
-                                                  : 100,
-                             m_frame->width(), m_frame->height()});
+    m_playback.setFrameInfo(
+        {m_frameIndex,
+         m_frame->metadata().frameDurationMs > 0 ? m_frame->metadata().frameDurationMs : 100,
+         m_frame->width(), m_frame->height()});
 
     computeHistogram();
     const QFileInfo info(path);
@@ -401,9 +397,9 @@ void ImageViewer::applyLoadedImage(const QString &path, const ImageLoadResult &r
                                     : FitPolicy::Comfortable;
     m_view.fit(m_frame->width(), m_frame->height(), fitPolicy);
     m_fitMode = true;
-    const QString position = m_currentIndex >= 0
-                                 ? QString(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
-                                 : QString();
+    const QString position =
+        m_currentIndex >= 0 ? QString(" [%1/%2]").arg(m_currentIndex + 1).arg(m_fileList.size())
+                            : QString();
     setWindowTitle(QString("%1 (%2x%3)%4 - MViewer")
                        .arg(info.fileName())
                        .arg(m_frame->width())
@@ -425,12 +421,20 @@ void ImageViewer::applyPendingView()
 {
     if (!m_pendingView)
         return;
-    m_view.scale = m_pendingView->scale;
+    // A restored view transform is untrusted input (QSettings is user-editable):
+    // a zero, negative or NaN scale divides to a degenerate transform and paints
+    // nothing. Clamp to the range the interactive zoom path already enforces.
+    constexpr double kMinRestoredScale = 0.05;
+    constexpr double kMaxRestoredScale = 50.0;
+    double restoredScale = m_pendingView->scale;
+    if (!std::isfinite(restoredScale))
+        restoredScale = 1.0;
+    m_view.scale = std::clamp(restoredScale, kMinRestoredScale, kMaxRestoredScale);
     if (std::fabs(m_view.screenW - m_pendingView->screenW) < 2.0 &&
         std::fabs(m_view.screenH - m_pendingView->screenH) < 2.0)
     {
-        m_view.offsetX = m_pendingView->offsetX;
-        m_view.offsetY = m_pendingView->offsetY;
+        m_view.offsetX = std::isfinite(m_pendingView->offsetX) ? m_pendingView->offsetX : 0.0;
+        m_view.offsetY = std::isfinite(m_pendingView->offsetY) ? m_pendingView->offsetY : 0.0;
     }
     m_pendingView.reset();
     m_fitMode = false;
@@ -449,18 +453,17 @@ void ImageViewer::clearLoadedGpu()
 void ImageViewer::scheduleLoadedRefit(const QString &path, uint64_t generation,
                                       const ImageLoadGuard &guard)
 {
-    QTimer::singleShot(0, this,
-                       [guard, path, generation]()
-                       {
-                           ImageViewer *viewer = guard->data();
-                           if (!viewer || viewer->m_currentPath != path ||
-                               viewer->m_requestGen != generation)
-                               return;
-                           if (viewer->property("mviewerFullscreenRequested").toBool() &&
-                               viewer->m_fitMode)
-                               viewer->fitToWidget();
-                           viewer->update();
-                       });
+    QTimer::singleShot(
+        0, this,
+        [guard, path, generation]()
+        {
+            ImageViewer *viewer = guard->data();
+            if (!viewer || viewer->m_currentPath != path || viewer->m_requestGen != generation)
+                return;
+            if (viewer->property("mviewerFullscreenRequested").toBool() && viewer->m_fitMode)
+                viewer->fitToWidget();
+            viewer->update();
+        });
 }
 
 void ImageViewer::setViewTransform(const Viewport &v)
@@ -515,9 +518,9 @@ void ImageViewer::preloadDisplayRasterNeighbors(const QString &path)
         const QString neighbor = m_fileList[i];
         if (neighbor == path)
             continue;
-        const auto alreadyWarm = std::find_if(
-            m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
-            [&](const DisplayRasterWarm &warm) { return warm.path == neighbor; });
+        const auto alreadyWarm =
+            std::find_if(m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
+                         [&](const DisplayRasterWarm &warm) { return warm.path == neighbor; });
         if (alreadyWarm != m_displayRasterWarm.end())
             continue;
 
@@ -593,8 +596,7 @@ ImageViewer::takeMatchingPreload(const QString &path)
     return match;
 }
 
-ImageViewer::DisplayRasterPreload ImageViewer::takeMatchingDisplayRasterPreload(
-    const QString &path)
+ImageViewer::DisplayRasterPreload ImageViewer::takeMatchingDisplayRasterPreload(const QString &path)
 {
     DisplayRasterPreload match;
     for (auto &preload : m_displayRasterPreloads)
@@ -608,12 +610,11 @@ ImageViewer::DisplayRasterPreload ImageViewer::takeMatchingDisplayRasterPreload(
     return match;
 }
 
-std::optional<ImageViewer::DisplayRasterWarm> ImageViewer::takeWarmDisplayRaster(
-    const QString &path)
+std::optional<ImageViewer::DisplayRasterWarm>
+ImageViewer::takeWarmDisplayRaster(const QString &path)
 {
-    const auto it = std::find_if(
-        m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
-        [&](const DisplayRasterWarm &warm) { return warm.path == path; });
+    const auto it = std::find_if(m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
+                                 [&](const DisplayRasterWarm &warm) { return warm.path == path; });
     if (it == m_displayRasterWarm.end())
         return std::nullopt;
     DisplayRasterWarm warm = std::move(*it);
@@ -630,12 +631,11 @@ void ImageViewer::enforceDisplayRasterWarmBudget()
     {
         if (m_displayRasterWarm.empty())
             break;
-        const auto oldest = std::min_element(
-            m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
-            [](const DisplayRasterWarm &a, const DisplayRasterWarm &b)
-            { return a.lastUse < b.lastUse; });
-        m_displayRasterWarmBytes =
-            std::max<qint64>(0, m_displayRasterWarmBytes - oldest->bytes);
+        const auto oldest =
+            std::min_element(m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
+                             [](const DisplayRasterWarm &a, const DisplayRasterWarm &b)
+                             { return a.lastUse < b.lastUse; });
+        m_displayRasterWarmBytes = std::max<qint64>(0, m_displayRasterWarmBytes - oldest->bytes);
         m_displayRasterWarm.erase(oldest);
     }
 }
@@ -648,9 +648,9 @@ void ImageViewer::storeWarmDisplayRaster(DisplayRasterPreloadResult result)
     if (bytes <= 0 || bytes > kDisplayWarmMaxBytes)
         return;
 
-    const auto old = std::find_if(
-        m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
-        [&](const DisplayRasterWarm &warm) { return warm.path == result.path; });
+    const auto old =
+        std::find_if(m_displayRasterWarm.begin(), m_displayRasterWarm.end(),
+                     [&](const DisplayRasterWarm &warm) { return warm.path == result.path; });
     if (old != m_displayRasterWarm.end())
     {
         m_displayRasterWarmBytes = std::max<qint64>(0, m_displayRasterWarmBytes - old->bytes);
@@ -684,9 +684,10 @@ void ImageViewer::runDisplayRasterPreload(const QString &path, uint64_t browseGe
             queueDisplayRasterPreloadResult(guard, std::move(result));
             return;
         }
-        result.sourceSize = QSize(result.source->metadata().width, result.source->metadata().height);
-        const qint64 pixels = static_cast<qint64>(result.sourceSize.width()) *
-                              result.sourceSize.height();
+        result.sourceSize =
+            QSize(result.source->metadata().width, result.source->metadata().height);
+        const qint64 pixels =
+            static_cast<qint64>(result.sourceSize.width()) * result.sourceSize.height();
         if (pixels <= kDisplayWarmLodThresholdPixels)
         {
             queueDisplayRasterPreloadResult(guard, std::move(result));
@@ -738,11 +739,11 @@ void ImageViewer::applyDisplayRasterPreloadResult(DisplayRasterPreloadResult res
 {
     if (result.state)
     {
-        m_displayRasterPreloads.erase(
-            std::remove_if(m_displayRasterPreloads.begin(), m_displayRasterPreloads.end(),
-                           [&](const DisplayRasterPreload &preload)
-                           { return preload.state == result.state; }),
-            m_displayRasterPreloads.end());
+        m_displayRasterPreloads.erase(std::remove_if(m_displayRasterPreloads.begin(),
+                                                     m_displayRasterPreloads.end(),
+                                                     [&](const DisplayRasterPreload &preload)
+                                                     { return preload.state == result.state; }),
+                                      m_displayRasterPreloads.end());
     }
     const uint64_t promotedGeneration =
         result.state ? result.state->promotedGeneration.load(std::memory_order_acquire) : 0;
