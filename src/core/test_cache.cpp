@@ -188,10 +188,18 @@ static void testDiskCacheThreadAffinityAndStress()
     }
     if (workerConnections.size() < workerCount)
     {
-        printf("  observed %d worker connection(s):", static_cast<int>(workerConnections.size()));
-        for (const QString &name : workerConnections)
+        // Full diagnostics: the interesting failure is "the workers clearly did
+        // database work (the no-data-loss check below passes) yet the registry
+        // shows no worker connection", which needs the whole registry, not just
+        // the subset this check looks for.
+        const QStringList all = QSqlDatabase::connectionNames();
+        printf("  observed %d/%d worker connection(s); registry holds %d:",
+               static_cast<int>(workerConnections.size()), workerCount,
+               static_cast<int>(all.size()));
+        for (const QString &name : all)
             printf(" %s", name.toUtf8().constData());
-        printf("\n");
+        printf("\n  disk cache enabled=%d\n", DiskCache::instance().isEnabled() ? 1 : 0);
+        fflush(stdout);
     }
     CHECK(workerConnections.size() >= workerCount,
           "each worker owns a distinct process-wide Qt SQL connection");

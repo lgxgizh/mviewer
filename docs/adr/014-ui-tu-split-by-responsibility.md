@@ -113,3 +113,48 @@ would churn signals/ownership for no product gain.
   because member TUs previously included the same superset anyway.
 - Adding a new MainWindow/CompareWorkspace/ThumbnailPanel method requires
   choosing the right TU — the banner comment in each `*_p.h` is the map.
+
+## Tracked function debt (2026-09-13)
+
+`scripts/complexity_gate.ps1` used to type a brace frame from the **previous
+line only** (`$prefix = $prevLine + text-before-brace`), so an Allman-style
+multi-line signature — the project's own formatting — put the opening `(` several
+lines above the brace, typed the frame as a *block*, and skipped its span and
+cyclomatic complexity completely. Every function below was therefore invisible to
+the caps, and `complexity_gate_regression`'s "real tree has zero hard failures"
+was true only because they were never measured.
+
+The gate now walks back through the whole signature (template arguments and
+lambdas handled), `complexity_gate_test.ps1` plants a multi-line-signature
+function and a namespace body to keep both directions honest, and the functions
+the correction exposes are enumerated in the gate's `$knownFunctionDebt` table.
+They are reported as **advisory** warnings from that table, not as hard failures,
+so the regression test keeps its meaning: *no new* violation.
+
+| Function | Measured |
+| --- | --- |
+| `previewpanel.cpp::setImage` | span 276 |
+| `previewpanel.cpp::<lambda>` (load worker inside `setImage`) | span 186 |
+| `compareworkspace_analysis.cpp::scheduleHistogramRefresh` | span 204 |
+| `compareworkspace.cpp::queueLoadRequests` | span 133 |
+| `thumbnailpanel_delegates.cpp::paint` (thumb + details delegates) | span 202 / CC 32 |
+| `thumbnailpanel_fileops.cpp::startCommandFileOperation` | span 155 |
+| `thumbnailpanel_fileops.cpp::startCopyFileOperation` | span 152 |
+| `thumbnailpanel_fileops.cpp::runBatchAnalyzeExportAsync` | span 148 |
+| `metadataoverlay.cpp::buildContent` | span 141 |
+| `mainwindow_export.cpp::startReportExport` | span 139 |
+| `core/metadata/MetadataIndexer.cpp::index` | span 136 |
+| `core/image/decoder/QtDecoder.cpp::decodeTiffWic` | span 133 / CC 32 |
+| `core/batch/BatchProcessor.cpp::processFile` | span 130 |
+| `core/image/ImageRepository_async.cpp::loadAsyncCancellable` | span 127 |
+| `core/metadata/MetadataIndexer.cpp::indexBatched` | span 122 |
+| `core/image/FrameSequence.cpp::selectFrame` | span 121 |
+| `core/filesystem/AtomicFile.cpp::atomicWriteFile` | span 152 |
+| `domain/SelectionInteraction.h::hitTestSelection` | CC 26 |
+
+Policy: the table is an inventory, not a permission. Removing an entry requires
+splitting the function in the same commit; adding one requires a note in this
+section. The function cap stays 120 lines / CC 25. Split order (biggest product
+risk first): `thumbnailpanel_delegates.cpp` (also over the CC cap),
+`previewpanel.cpp`, `compareworkspace_analysis.cpp`, the three
+`thumbnailpanel_fileops.cpp` operations, then the rest.

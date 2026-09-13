@@ -78,6 +78,34 @@ $responsibilityCaps = @(
     @{ pattern = '^thumbnailpanel_.*\.cpp$'; warn = 800; fail = 1000 }
 )
 
+# ---- Tracked function debt (ADR-014) -----------------------------------------
+# Functions that the corrected frame typing below exposes as over the function
+# cap. They are reported as advisory warnings instead of hard failures so the
+# regression test keeps its meaning ("no NEW violation") while the debt stays
+# visible and enumerable. Keys are "<relative path>::<function name>", so an
+# entry keeps matching when code above it shifts. Remove an entry in the same
+# commit that splits the function; never add one without an ADR-014 note.
+$knownFunctionDebt = @{
+    'src/previewpanel.cpp::setImage'                                = 'span 276'
+    'src/previewpanel.cpp::<lambda>'                                = 'span 186 (load worker inside setImage)'
+    'src/compareworkspace_analysis.cpp::scheduleHistogramRefresh'   = 'span 204'
+    'src/compareworkspace.cpp::queueLoadRequests'                   = 'span 133'
+    'src/thumbnailpanel_delegates.cpp::paint'                       = 'span 202 / cc 32 (thumb + details delegates)'
+    'src/thumbnailpanel_fileops.cpp::startCommandFileOperation'     = 'span 155'
+    'src/thumbnailpanel_fileops.cpp::startCopyFileOperation'        = 'span 152'
+    'src/thumbnailpanel_fileops.cpp::runBatchAnalyzeExportAsync'    = 'span 148'
+    'src/metadataoverlay.cpp::buildContent'                         = 'span 141'
+    'src/mainwindow_export.cpp::startReportExport'                  = 'span 139'
+    'src/core/metadata/MetadataIndexer.cpp::index'                  = 'span 136'
+    'src/core/image/decoder/QtDecoder.cpp::decodeTiffWic'           = 'span 133 / cc 32'
+    'src/core/batch/BatchProcessor.cpp::processFile'                = 'span 130'
+    'src/core/image/ImageRepository_async.cpp::loadAsyncCancellable' = 'span 127'
+    'src/core/metadata/MetadataIndexer.cpp::indexBatched'           = 'span 122'
+    'src/core/image/FrameSequence.cpp::selectFrame'                 = 'span 121'
+    'src/core/filesystem/AtomicFile.cpp::atomicWriteFile'           = 'span 152'
+    'src/domain/SelectionInteraction.h::hitTestSelection'           = 'cc 26'
+}
+
 $fails = 0
 $warns = 0
 $fileFindings = [System.Collections.Generic.List[object]]::new()
@@ -94,6 +122,21 @@ function Measure-DecisionPoints([string]$line) {
     $c += ([regex]::Matches($line, '&&|\|\|')).Count
     $c += ([regex]::Matches($line, '\?')).Count   # ternary (colon is ambiguous, count '?')
     return $c
+}
+
+# Name of the function a signature text declares, or '' when it is not a
+# declaration. The first identifier followed by '(' wins, skipping template
+# arguments (a '(' directly after '<' belongs to std::function<...>, not to the
+# declaration) and control keywords.
+function Get-FunctionName([string]$prefix) {
+    foreach ($m in [regex]::Matches($prefix, '([A-Za-z_]\w*)\s*\(')) {
+        $before = $m.Index - 1
+        if ($before -ge 0 -and $prefix[$before] -eq '<') { continue }
+        $name = $m.Groups[1].Value
+        if ($name -match '^(if|for|while|switch|catch|return|sizeof|static_cast|reinterpret_cast|const_cast|dynamic_cast|decltype|alignof|noexcept)$') { continue }
+        return $name
+    }
+    return ''
 }
 
 foreach ($f in $src) {
@@ -156,13 +199,41 @@ foreach ($f in $src) {
         for ($p = 0; $p -lt $ln.Length; $p++) {
             $ch = $ln[$p]
             if ($ch -eq '{') {
-                $prefix = ($prevLine + ' ' + $ln.Substring(0, $p))
+                # Type the frame from the WHOLE signature, not just the previous
+                # line: an Allman multi-line parameter list puts the opening '('
+                # several lines above the brace, so a one-line look-back typed the
+                # frame as a block and skipped its span/CC entirely (that hole hid
+                # every function below from the caps). Walk back with a
+                # balanced-paren scan until the signature is complete.
+                $sig = [System.Collections.Generic.List[string]]::new()
+                [void]$sig.Add($ln.Substring(0, $p))
+                $fnName = ''
+                $isLambda = $false
+                for ($b = $i - 1; $b -ge 0 -and ($i - $b) -le 30; $b--) {
+                    $prefix = ($sig -join ' ')
+                    # A capture list followed by '(' is a lambda: it has no
+                    # function name, so it must be recognised BEFORE the name
+                    # scan can pick up a call inside the surrounding statement.
+                    if ($prefix -match '\]\s*\(') { $isLambda = $true; break }
+                    $fnName = Get-FunctionName $prefix
+                    if ($fnName -ne '') { break }
+                    $sigPrev = ($lines[$b] -replace '//.*$', '').Trim()
+                    if ($sigPrev -eq '' -or $sigPrev.StartsWith('#')) { break }
+                    if ($sigPrev.EndsWith(';') -or $sigPrev.EndsWith('{') -or $sigPrev.EndsWith('}')) { break }
+                    $sig.Insert(0, $sigPrev)
+                }
+                $prefix = ($sig -join ' ')
+                if ($fnName -eq '') { $fnName = Get-FunctionName $prefix }
+                if ($fnName -eq '' -and ($prefix -match '\]\s*\(')) { $isLambda = $true }
                 $type = 'block'
                 if ($prefix -match '\b(class|struct)\b') { $type = 'class' }
+                elseif ($prefix -match '\b(namespace|enum)\b\s*[\w:]*\s*$') { $type = 'block' }
+                elseif ($fnName -ne '' -or $isLambda) { $type = 'func' }
                 elseif ($prefix -match '\(' -and $prefix -notmatch '\b(if|for|while|switch|catch|do|else)\b\s*$') {
                     $type = 'func'
                 }
-                $frame = [ordered]@{ type = $type; start = ($i + 1); cc = 1 }
+                if ($type -eq 'func' -and $isLambda) { $fnName = '<lambda>' }
+                $frame = [ordered]@{ type = $type; start = ($i + 1); cc = 1; name = $fnName }
                 $stack.Add($frame)
             }
             elseif ($ch -eq '}') {
@@ -172,11 +243,21 @@ foreach ($f in $src) {
                     if ($frame.type -eq 'func') {
                         $span = ($i + 1) - $frame.start + 1
                         $cc = $frame.cc
-                        if (-not $isTest) {
+                        # Tracked debt (ADR-014): an over-cap function that is
+                        # already enumerated there is advisory, not a hard failure,
+                        # so the regression test keeps meaning "no NEW violation".
+                        # Keys use forward slashes; $rel is a Windows path.
+                        $debtKey = ($rel -replace '\\', '/') + '::' + $frame.name
+                        $isKnownDebt = $knownFunctionDebt.ContainsKey($debtKey)
+                        if (-not $isTest -and -not $isKnownDebt) {
                             if ($cc -gt $FailCyclo) { $cycloFails++; $fails++; $warns++ }
                             elseif ($cc -gt $WarnCyclo) { $warns++ }
                             if ($span -gt $FailFunctionLines) { $funcFails++; $fails++; $warns++ }
                             elseif ($span -gt $WarnFunctionLines) { $warns++ }
+                        }
+                        elseif (-not $isTest -and $isKnownDebt -and
+                                ($cc -gt $FailCyclo -or $span -gt $FailFunctionLines)) {
+                            $warns++
                         }
                         if (-not $isTest -and ($cc -gt $WarnCyclo -or $span -gt $WarnFunctionLines)) {
                             $fnFindings.Add([ordered]@{
@@ -184,6 +265,7 @@ foreach ($f in $src) {
                                 line = $frame.start
                                 span = $span
                                 cc   = $cc
+                                debt = $isKnownDebt
                             })
                         }
                     }
