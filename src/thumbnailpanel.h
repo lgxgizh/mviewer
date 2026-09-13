@@ -420,6 +420,12 @@ class ThumbnailPanel : public QListView
     QSet<QString> m_thumbPending;
     QSet<QString> m_thumbFailed; // key = path + size; decode returned null
 
+    // Drops this panel's pixmap caches (every size) for one source path. The
+    // panel key is path+size with no revision component, so an in-place
+    // overwrite would otherwise keep serving the stale pixmap and a one-off
+    // decode failure would stay negative-cached for the whole directory.
+    void invalidateThumbnailCacheFor(const QString &path);
+
     QPushButton *m_compareBtn = nullptr;
     QString m_currentDir;
     CommandStack *m_cmdStack = nullptr;    // A-10: optional reversible file ops

@@ -18,6 +18,28 @@ QString ThumbnailPanel::thumbCacheKey(const QString &path, int size) const
     return path + QChar(0x1f) + QString::number(size);
 }
 
+void ThumbnailPanel::invalidateThumbnailCacheFor(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+    const QString prefix = path + QChar(0x1f);
+    QMutexLocker lk(&m_thumbMtx);
+    for (auto it = m_thumbReady.begin(); it != m_thumbReady.end();)
+    {
+        if (it.key().startsWith(prefix))
+        {
+            m_thumbReadyBytes = std::max<qint64>(0, m_thumbReadyBytes - it.value().bytes);
+            it = m_thumbReady.erase(it);
+        }
+        else
+            ++it;
+    }
+    for (auto it = m_thumbPending.begin(); it != m_thumbPending.end();)
+        it = it->startsWith(prefix) ? m_thumbPending.erase(it) : ++it;
+    for (auto it = m_thumbFailed.begin(); it != m_thumbFailed.end();)
+        it = it->startsWith(prefix) ? m_thumbFailed.erase(it) : ++it;
+}
+
 void ThumbnailPanel::enforceThumbPixmapBudgetLocked()
 {
     while (m_thumbReady.size() > kThumbPixmapCacheMaxEntries ||

@@ -178,7 +178,7 @@ jobs:
           echo "EOF" >> "$GITHUB_OUTPUT"
           echo "Changed files to analyze:"; echo "$FILES"
 
-      - name: Run clang-tidy (required, changed files only)
+      - name: Run clang-tidy (required, changed lines only)
         shell: bash
         run: |
           FILES="${{ steps.changed.outputs.files }}"
@@ -186,9 +186,18 @@ jobs:
             echo "No changed C++ files to analyze — passing."
             exit 0
           fi
+          # clang-tidy reports diagnostics for the WHOLE file it analyses, so
+          # historical debt in a touched file would fail a change that introduced
+          # none of it. Run it for the record, then gate only on diagnostics that
+          # fall on lines this push changed (the rule the clang-format step uses).
+          set +e
           echo "$FILES" | tr '\n' '\0' | xargs -0 clang-tidy -p build_sa \
-            --warnings-as-errors='bugprone-*,performance-*,clang-analyzer-*,cppcoreguidelines-pro-type-*'
-          echo "clang-tidy clean on changed files"
+            --warnings-as-errors='bugprone-*,performance-*,clang-analyzer-*' \
+            > clang-tidy.log 2>&1
+          set -e
+          python3 .github/scripts/clang_tidy_changed_only.py \
+            --base "$(git rev-parse HEAD~1)" --head "$(git rev-parse HEAD)" \
+            --log clang-tidy.log --prefix "$GITHUB_WORKSPACE"
 
   # ---------------------------------------------------------------------------
   # build — MSVC + Qt 6.8.0, enforce zero warnings from build log

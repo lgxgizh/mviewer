@@ -116,7 +116,7 @@ void ThumbnailPanel::wireThumbnailPipeline()
     if (m_pipelineWired)
         return;
     m_pipelineWired = true;
-    ThumbnailPipeline::instance().thumbSize = m_thumbSize;
+    ThumbnailPipeline::instance().setThumbSize(m_thumbSize);
     ThumbnailPipeline::instance().setDecodeFn([](const std::string &p, int size)
                                               { return ThumbnailProvider::produce(p, size); });
     auto alive = m_alive;

@@ -13,12 +13,13 @@
 #include <cctype>
 #include <chrono>
 #include <condition_variable>
-#include <cstdio>
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
+
+#include <QDebug>
 
 namespace
 {
@@ -651,9 +652,10 @@ void ImageRepository::cancelAsync(AsyncRequestHandle &handle)
                                              [&]() { return handle->deliveryDone; }))
             {
                 // Client callbacks are contractually non-blocking; if one is not,
-                // report it rather than hanging the caller forever.
-                std::fprintf(stderr, "ImageRepository::cancelAsync: delivery still running after "
-                                     "250 ms (blocking client callback?)\n");
+                // report it rather than hanging the caller forever. qWarning (not
+                // fprintf) keeps this TU free of c-style vararg calls.
+                qWarning("ImageRepository::cancelAsync: delivery still running after "
+                         "250 ms (blocking client callback?)");
             }
         }
     }

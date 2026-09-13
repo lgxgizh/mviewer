@@ -16,8 +16,12 @@
 #include "core/analyzer/SSIMAnalyzer.h"
 #include "core/analyzer/SharpnessAnalyzer.h"
 #include "core/scheduler/TaskScheduler.h"
+
+#include <QDebug>
+
 #include <algorithm>
 #include <chrono>
+#include <exception>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -205,11 +209,20 @@ AnalyzerRegistry::runAnalyzer(const ImageFrame &frame) const
                                                if (analyzer && analyzer->analyze(frame))
                                                    text = analyzer->resultText();
                                            }
-                                           catch (...)
+                                           catch (const std::exception &error)
                                            {
                                                // M24 (C#7): a throwing analyzer (e.g. a buggy
                                                // plugin) must be isolated — the whole batch must
-                                               // not crash.
+                                               // not crash. Reported rather than swallowed: an
+                                               // invisible failure here looks like "no result".
+                                               qWarning("AnalyzerRegistry: analyzer '%s' threw: %s",
+                                                        id.c_str(), error.what());
+                                           }
+                                           catch (...)
+                                           {
+                                               qWarning("AnalyzerRegistry: analyzer '%s' threw "
+                                                        "an unknown exception",
+                                                        id.c_str());
                                            }
                                            if (!text.empty())
                                            {

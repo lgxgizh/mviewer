@@ -16,12 +16,17 @@
 #include <QStandardPaths>
 #include <QThread>
 #include <QVariant>
-#include <cstring>
 #include <atomic>
+#include <cstring>
+#include <limits>
 #include <memory>
 
 namespace
 {
+
+// How many inserts may pass between two limit enforcements. Enforcing after
+// every single put meant one full-table aggregate per decoded image.
+constexpr int kEnforceInterval = 32;
 
 std::atomic_uint64_t g_connectionSerial{0};
 
@@ -32,6 +37,46 @@ struct ThreadConnectionState
 };
 
 thread_local ThreadConnectionState g_threadConnection;
+
+// Connection-level settings that make concurrent access behave: WAL lets readers
+// proceed while one writer commits, and a busy timeout makes a concurrent writer
+// wait instead of failing immediately (the old unchecked exec() silently dropped
+// such failures).
+void applyConnectionPragmas(QSqlDatabase &db)
+{
+    if (!db.isOpen())
+        return;
+    QSqlQuery pragma(db);
+    pragma.exec(QStringLiteral("PRAGMA journal_mode=WAL"));
+    pragma.exec(QStringLiteral("PRAGMA busy_timeout=5000"));
+    pragma.exec(QStringLiteral("PRAGMA synchronous=NORMAL"));
+}
+
+// Releases a worker thread's own connection when that thread exits. QThreadPool
+// expires idle threads and mints new ones, and each new thread used to create a
+// connection that was never released (one file handle plus one SQLite page cache
+// per thread, for the lifetime of the process). This destructor runs ON the
+// exiting thread, which is the only thread allowed to close its connection.
+struct ThreadConnectionGuard
+{
+    ~ThreadConnectionGuard()
+    {
+        if (!g_threadConnection.initialized || g_threadConnection.name.isEmpty())
+            return;
+        if (g_threadConnection.name == QStringLiteral("mviewer_disk_cache"))
+            return; // owner-thread connection: closed by ~DiskCache
+        {
+            QSqlDatabase db = QSqlDatabase::database(g_threadConnection.name, false);
+            if (db.isValid())
+                db.close();
+        }
+        QSqlDatabase::removeDatabase(g_threadConnection.name);
+        g_threadConnection.initialized = false;
+    }
+};
+
+// Constructed after g_threadConnection, so it is destroyed before it.
+thread_local std::unique_ptr<ThreadConnectionGuard> g_connectionGuard;
 
 } // namespace
 
@@ -44,7 +89,6 @@ class DiskCache::Impl
     // from another thread. All runtime access goes through connectionForThread().
     QSqlDatabase db;
     QThread *ownerThread = nullptr;
-    std::set<std::string> workerConnectionNames;
 };
 
 DiskCache::DiskCache()
@@ -60,17 +104,8 @@ DiskCache::~DiskCache()
     if (m_impl)
     {
         std::lock_guard<std::recursive_mutex> lock(m_mutex);
-        for (const std::string &name : m_impl->workerConnectionNames)
-        {
-            const QString qname = QString::fromStdString(name);
-            if (!QSqlDatabase::contains(qname))
-                continue;
-            QSqlDatabase db = QSqlDatabase::database(qname, false);
-            db.close();
-            db = QSqlDatabase();
-            QSqlDatabase::removeDatabase(qname);
-        }
-        m_impl->workerConnectionNames.clear();
+        // Worker-thread connections are released by ThreadConnectionGuard when
+        // their thread exits, so only the owner-thread connection is left here.
         m_impl->db.close();
         m_impl->db = QSqlDatabase();
         if (QSqlDatabase::contains(QStringLiteral("mviewer_disk_cache")))
@@ -103,7 +138,9 @@ void DiskCache::openDb()
     {
         qWarning() << "DiskCache: Failed to open DB:" << m_impl->db.lastError().text();
         m_enabled = false;
+        return;
     }
+    applyConnectionPragmas(m_impl->db);
 }
 
 void DiskCache::ensureTable()
@@ -161,7 +198,9 @@ QSqlDatabase DiskCache::connectionForThread() const
             }
             else
             {
-                m_impl->workerConnectionNames.insert(g_threadConnection.name.toStdString());
+                applyConnectionPragmas(db);
+                // Release this connection when the worker thread exits.
+                g_connectionGuard = std::make_unique<ThreadConnectionGuard>();
             }
         }
         g_threadConnection.initialized = true;
@@ -203,20 +242,30 @@ void DiskCache::enforceLimits(const QSqlDatabase &db)
 {
     if (!db.isOpen())
         return;
-    while (true)
+    if (m_maxEntries <= 0 && m_maxBytes <= 0)
+        return;
+    // Delete in chunks instead of one row per full-table aggregate. The old loop
+    // re-ran COUNT(*) + SUM(LENGTH(data)) after every single-row delete, so
+    // bringing a populated cache back under its cap cost O(n^2) table scans while
+    // holding the global cache mutex (all decode workers serialized behind it).
+    for (int pass = 0; pass < 64; ++pass)
     {
         QSqlQuery count(db);
-        if (!count.exec("SELECT COUNT(*), COALESCE(SUM(LENGTH(data)), 0) FROM blobs") ||
+        if (!count.exec(QStringLiteral("SELECT COUNT(*), COALESCE(SUM(LENGTH(data)), 0) "
+                                       "FROM blobs")) ||
             !count.next())
             return;
         const auto entries = count.value(0).toLongLong();
         const auto bytes = count.value(1).toLongLong();
-        if (!((m_maxEntries > 0 && entries > m_maxEntries) ||
-              (m_maxBytes > 0 && bytes > static_cast<qint64>(m_maxBytes))))
+        const bool overEntries = m_maxEntries > 0 && entries > m_maxEntries;
+        const bool overBytes = m_maxBytes > 0 && bytes > static_cast<qint64>(m_maxBytes);
+        if (!overEntries && !overBytes)
             return;
         QSqlQuery del(db);
-        if (!del.exec("DELETE FROM blobs WHERE key = "
-                     "(SELECT key FROM blobs ORDER BY ts ASC, key ASC LIMIT 1)"))
+        if (!del.exec(QStringLiteral("DELETE FROM blobs WHERE key IN "
+                                     "(SELECT key FROM blobs ORDER BY ts ASC, key ASC LIMIT 512)")))
+            return;
+        if (del.numRowsAffected() <= 0)
             return;
     }
 }
@@ -238,17 +287,40 @@ bool DiskCache::get(const std::string &key, ImageData &out)
     const QByteArray blob = q.value(3).toByteArray();
     if (w <= 0 || h <= 0 || blob.isEmpty())
         return false;
+    // Reject implausible dimensions before allocating: a corrupt row must not be
+    // able to turn a cache read into a huge allocation attempt.
+    constexpr int kMaxCachedEdge = 200000;
+    if (w > kMaxCachedEdge || h > kMaxCachedEdge)
+        return false;
 
     const PixelFormat pf = static_cast<PixelFormat>(fmt);
+    // The format is persisted across versions, so it has to be a known value.
+    if (pf != PixelFormat::RGB24 && pf != PixelFormat::RGBA32 && pf != PixelFormat::BGR24 &&
+        pf != PixelFormat::BGRA32 && pf != PixelFormat::Grayscale8)
+        return false;
+
     out = makeImageData(w, h, pf);
-    const size_t bytesToCopy = std::min(static_cast<size_t>(blob.size()), out.byteSize());
-    std::memcpy(out.buffer->data(), blob.constData(), bytesToCopy);
+    if (out.isNull())
+        return false;
+    // Exact payload size: a truncated/rolled-back write must be a MISS, not a
+    // partially-filled image served as valid (the old min() copy zero-padded it
+    // and returned true).
+    if (static_cast<size_t>(blob.size()) != out.byteSize())
+    {
+        out = ImageData();
+        return false;
+    }
+    std::memcpy(out.buffer->data(), blob.constData(), out.byteSize());
     return true;
 }
 
 void DiskCache::put(const std::string &key, const ImageData &img)
 {
     if (!m_enabled || !connectionForThread().isOpen() || img.isNull())
+        return;
+    // A QByteArray length is an int; refusing oversized payloads beats silently
+    // truncating them into an unreadable row.
+    if (img.byteSize() > static_cast<size_t>(std::numeric_limits<int>::max()))
         return;
     std::lock_guard<std::recursive_mutex> lock(m_mutex);
     QSqlQuery q(connectionForThread());
@@ -261,9 +333,17 @@ void DiskCache::put(const std::string &key, const ImageData &img)
     q.addBindValue(QVariant::fromValue<qint64>(QDateTime::currentSecsSinceEpoch()));
     q.addBindValue(QByteArray(reinterpret_cast<const char *>(img.buffer->data()),
                               static_cast<int>(img.byteSize())));
-    q.exec();
+    if (!q.exec())
+        qWarning() << "DiskCache: put failed:" << q.lastError().text();
 
-    enforceLimits(connectionForThread());
+    // Enforcing on every single insert meant a full-table aggregate per decoded
+    // image at steady state; a periodic check keeps the cap honoured without
+    // paying that on the hot path.
+    if (++m_writesSinceEnforce >= kEnforceInterval)
+    {
+        m_writesSinceEnforce = 0;
+        enforceLimits(connectionForThread());
+    }
 }
 
 void DiskCache::remove(const std::string &key)

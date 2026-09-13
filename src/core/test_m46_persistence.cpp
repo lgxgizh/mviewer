@@ -140,13 +140,24 @@ void testStaleTempHandling()
     CHECK(tempFilesIn(dir, "state.txt") == 1,
           "a fresh stale temp is inert (age-gated sweep leaves it)");
 
-    // Age the stale temp beyond the sweep horizon; the next write removes it.
+    // Age the stale temp beyond the sweep horizon. The sweep is amortized to the
+    // FIRST write in each directory (a per-write full-directory walk was the
+    // defect this replaced), so this case uses its own fresh directory.
     std::error_code ec;
+    const std::string sweepDir = dir + "/aged";
+    fs::create_directories(sweepDir, ec);
+    const std::string sweepPath = sweepDir + "/state.txt";
+    const std::string aged = sweepDir + "/state.txt.9999.1.1.tmp";
+    {
+        std::ofstream out(aged, std::ios::binary);
+        out << "garbage from a crashed writer";
+    }
     const auto old = fs::file_time_type::clock::now() - std::chrono::hours(2);
-    fs::last_write_time(stale, old, ec);
-    CHECK(atomicWriteFile(path, "fresh-state-2\n"), "write succeeds again");
-    CHECK(tempFilesIn(dir, "state.txt") == 0, "aged stale temp swept by the next write");
-    CHECK(readAll(path) == "fresh-state-2\n", "official state unaffected by the sweep");
+    fs::last_write_time(aged, old, ec);
+    CHECK(atomicWriteFile(sweepPath, "fresh-state-2\n"), "write succeeds in a new directory");
+    CHECK(tempFilesIn(sweepDir, "state.txt") == 0,
+          "aged stale temp swept by the first write in a directory");
+    CHECK(readAll(sweepPath) == "fresh-state-2\n", "official state unaffected by the sweep");
     QDir(tmp.path()).removeRecursively();
 }
 

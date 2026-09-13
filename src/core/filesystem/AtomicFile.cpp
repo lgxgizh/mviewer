@@ -5,10 +5,12 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
-#include <exception>
+#include <set>
+#include <string>
 #include <system_error>
 
 #ifdef _WIN32
@@ -27,6 +29,38 @@ std::atomic<int> &tempCounter()
 {
     static std::atomic<int> counter{0};
     return counter;
+}
+
+// True when `name` is exactly the temp shape this file writes for `base`:
+// base + "." + pid + "." + ticks + "." + serial + ".tmp" (three numeric groups).
+// Matching on the base-name prefix alone would delete unrelated files such as
+// "settings.json.bak.tmp" or another tool's temp with the same starting name.
+bool isStaleTempName(const std::string &name, const std::string &base)
+{
+    const std::string prefix = base + ".";
+    if (name.size() <= prefix.size() + 4 || name.compare(0, prefix.size(), prefix) != 0)
+        return false;
+    if (name.compare(name.size() - 4, 4, ".tmp") != 0)
+        return false;
+
+    const std::string middle = name.substr(prefix.size(), name.size() - prefix.size() - 4);
+    int separators = 0;
+    bool digitsSinceSeparator = false;
+    for (char c : middle)
+    {
+        if (c == '.')
+        {
+            if (!digitsSinceSeparator)
+                return false;
+            ++separators;
+            digitsSinceSeparator = false;
+            continue;
+        }
+        if (c < '0' || c > '9')
+            return false;
+        digitsSinceSeparator = true;
+    }
+    return separators == 2 && digitsSinceSeparator;
 }
 
 std::mutex &faultMutex()
@@ -90,16 +124,30 @@ bool atomicWriteFile(const std::string &path, const std::string &content,
     // Sweep stale temps from crashed writers (age-gated: anything older than
     // one hour for this target's base name). They are garbage, never state —
     // load() only ever reads the official path.
+    //
+    // Two constraints keep this cheap and safe: the name must match the exact
+    // shape written above (`base.<pid>.<ticks>.<serial>.tmp`), so an unrelated
+    // `base-something.tmp` is never deleted, and each directory is swept at most
+    // once per process — this used to walk the whole directory on EVERY write
+    // (sidecar/rating writes happen per image while browsing).
     {
-        const auto oneHour =
-            fs::file_time_type::clock::now() - std::chrono::hours(1);
-        std::error_code itEc;
-        for (fs::directory_iterator it(dir, itEc), end; !itEc && it != end; it.increment(itEc))
+        static std::mutex sweptMutex;
+        static std::set<std::string> sweptDirs;
+        const std::string dirKey = pathToUtf8(dir);
+        bool sweep = false;
         {
-            const std::string name = pathToUtf8(it->path().filename());
-            if (name.size() > base.size() + 4 && name.compare(0, base.size(), base) == 0 &&
-                name.compare(name.size() - 4, 4, ".tmp") == 0)
+            std::lock_guard<std::mutex> lk(sweptMutex);
+            sweep = sweptDirs.insert(dirKey).second;
+        }
+        if (sweep)
+        {
+            const auto oneHour = fs::file_time_type::clock::now() - std::chrono::hours(1);
+            std::error_code itEc;
+            for (fs::directory_iterator it(dir, itEc), end; !itEc && it != end; it.increment(itEc))
             {
+                const std::string name = pathToUtf8(it->path().filename());
+                if (!isStaleTempName(name, base))
+                    continue;
                 std::error_code tEc;
                 const auto mtime = fs::last_write_time(it->path(), tEc);
                 if (!tEc && mtime < oneHour)

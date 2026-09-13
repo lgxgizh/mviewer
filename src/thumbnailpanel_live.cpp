@@ -2,6 +2,7 @@
 #include "thumbnailpanel_p.h"
 #include "selectionmodel.h"
 
+#include "core/scheduler/TaskScheduler.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
 #include "thumbnailprovider.h"
 
@@ -124,12 +125,20 @@ void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDe
         return std::find_if(next.begin(), next.end(),
                             [&](const Entry &entry) { return pathEqual(entry.path, path); });
     };
-    auto invalidate = [](const QString &path)
+    // Paths whose DISK-tier cache entry must go. Each of those invalidations ends
+    // in a SQLite DELETE, so they are collected here and executed once, off the
+    // UI thread, instead of one blocking round trip per changed file inside this
+    // slot (a bulk delete/overwrite of a few hundred files froze the UI).
+    QStringList diskInvalidations;
+    auto invalidate = [this, &diskInvalidations](const QString &path)
     {
         if (path.isEmpty())
             return;
-        ThumbnailPipeline::instance().invalidatePath(path.toUtf8().toStdString());
-        ThumbnailProvider::invalidateSource(path.toUtf8().toStdString());
+        const std::string utf8 = path.toUtf8().toStdString();
+        // In-memory tiers: cheap, and must not be stale for even one paint.
+        ThumbnailPipeline::instance().invalidatePath(utf8);
+        invalidateThumbnailCacheFor(path);
+        diskInvalidations.append(path);
     };
     for (const auto &entry : delta.removed)
     {
@@ -187,6 +196,21 @@ void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDe
         m_metaLens.insert(newPath, m_metaLens.take(oldPath));
         if (m_pendingSelect == oldPath)
             m_pendingSelect = newPath;
+    }
+
+    // One background pass for the disk tier (SQLite row delete + thumbnail PNG
+    // removal per path) instead of N synchronous round trips inside this slot.
+    if (!diskInvalidations.isEmpty())
+    {
+        const QStringList paths = diskInvalidations;
+        // MetadataPool is the Background-priority pool (see toPriority).
+        TaskScheduler::instance().submit(TaskScheduler::MetadataPool,
+                                         [paths]()
+                                         {
+                                             for (const QString &path : paths)
+                                                 ThumbnailProvider::invalidateSource(
+                                                     path.toUtf8().toStdString());
+                                         });
     }
 }
 

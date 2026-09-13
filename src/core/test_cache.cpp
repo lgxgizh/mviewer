@@ -140,6 +140,9 @@ static void testDiskCacheThreadAffinityAndStress()
     constexpr int workerCount = 8;
     constexpr int rounds = 160;
     std::barrier start(workerCount);
+    // Second barrier: every worker stays alive (keeping its own connection open)
+    // until the main thread has verified the per-thread connections exist.
+    std::barrier alive(workerCount + 1);
     std::atomic<int> failures{0};
     std::vector<std::thread> workers;
     workers.reserve(workerCount);
@@ -162,20 +165,36 @@ static void testDiskCacheThreadAffinityAndStress()
                         out.height != image.height())
                         failures.fetch_add(1, std::memory_order_relaxed);
                 }
+                alive.arrive_and_wait();
             });
     }
+
+    // Checked while the workers are still running: each of them owns its own
+    // connection (they must not share one QSqlDatabase across threads).
+    alive.arrive_and_wait();
+    QSet<QString> workerConnections;
+    for (const QString &name : QSqlDatabase::connectionNames())
+        if (name.startsWith(QStringLiteral("mviewer_disk_cache_worker_")))
+            workerConnections.insert(name);
+    CHECK(workerConnections.size() >= workerCount,
+          "each worker owns a distinct process-wide Qt SQL connection");
+
     for (auto &worker : workers)
         worker.join();
 
     CHECK(failures.load(std::memory_order_relaxed) == 0,
           "8 workers complete 1280 put/get operations without data loss");
 
-    int workerConnections = 0;
-    for (const QString &name : QSqlDatabase::connectionNames())
-        if (name.startsWith(QStringLiteral("mviewer_disk_cache_worker_")))
-            ++workerConnections;
-    CHECK(workerConnections >= workerCount,
-          "each worker owns a distinct process-wide Qt SQL connection");
+    // ... and releases it when the thread exits (QThreadPool mints fresh threads
+    // as idle ones expire, so an unreleased connection per thread leaks a file
+    // handle and an SQLite page cache for the whole process lifetime). Only the
+    // connections seen above are checked: connections belonging to pool threads
+    // another test left running are not this case's business.
+    int stillRegistered = 0;
+    for (const QString &name : workerConnections)
+        if (QSqlDatabase::contains(name))
+            ++stillRegistered;
+    CHECK(stillRegistered == 0, "worker connections are released when their thread exits");
 
     disk.clear();
     CHECK(disk.entryCount() == 0, "stress cleanup leaves no disk-cache entries");

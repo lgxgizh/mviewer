@@ -177,7 +177,7 @@ static void testPipelineSizeAndGeneration()
         src.push_back("a/img" + std::to_string(i) + ".jpg");
 
     // Generation 1 at 64px.
-    pipe.thumbSize = 64;
+    pipe.setThumbSize(64);
     pipe.setSources(src);
     pipe.setVisibleRange(0, 8);
     TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool, std::chrono::milliseconds(5000));
@@ -191,7 +191,7 @@ static void testPipelineSizeAndGeneration()
     }
 
     // Generation 2 at 240px (same directory set — a pure size switch).
-    pipe.thumbSize = 240;
+    pipe.setThumbSize(240);
     pipe.setVisibleRange(0, 8);
     TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool, std::chrono::milliseconds(5000));
     {
@@ -211,7 +211,7 @@ static void testPipelineSizeAndGeneration()
     std::vector<std::string> srcB;
     for (int i = 0; i < 8; ++i)
         srcB.push_back("b/img" + std::to_string(i) + ".jpg");
-    pipe.thumbSize = 240;
+    pipe.setThumbSize(240);
     pipe.setSources(srcB);
     pipe.setVisibleRange(0, 8);
     // Wait until the B-tasks have definitely STARTED decoding (they are still

@@ -95,4 +95,6 @@ class DiskCache
     std::string m_dbPath;
     int m_maxEntries = 100000;
     size_t m_maxBytes = 2147483648ULL; // 2 GB default cap
+    // Inserts since the last limit enforcement (see put()/enforceLimits()).
+    int m_writesSinceEnforce = 0;
 };

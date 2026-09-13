@@ -50,6 +50,11 @@ void ImageCache::put(Level level, const std::string &key, const ImageData &img)
         pool.order.remove(key);
     }
     evictIfNeeded(pool, bytes);
+    // A single entry larger than the whole pool budget used to evict every other
+    // entry and then be inserted anyway, leaving the pool permanently over its
+    // documented cap. Refuse it instead.
+    if (pool.maxBytes > 0 && bytes > pool.maxBytes)
+        return;
     Entry e{img, bytes};
     pool.map.emplace(key, std::move(e));
     pool.order.push_front(key);

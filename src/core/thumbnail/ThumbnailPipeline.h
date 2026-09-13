@@ -40,8 +40,17 @@ struct ThumbnailPipeline
     using ResultFn =
         std::function<void(const std::string &path, int size, const ImageData &thumb)>;
 
-    int thumbSize = 256;
     size_t memCacheMax = 512; // hot thumbnails retained in memory (LRU)
+
+    // Current thumbnail size. Read under m_mtx by the workers and written only
+    // through setThumbSize(), which also performs the size-change invalidation
+    // (generation bump + dropping old-size cache entries). It used to be a public
+    // field, so the UI could write it without the lock and skip that work.
+    int currentThumbSize() const
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        return thumbSize;
+    }
 
     // Inject the decode step (default: Decoder::decodeScaled). Tests inject a fake.
     void setDecodeFn(DecodeFn fn)
@@ -252,6 +261,10 @@ struct ThumbnailPipeline
     }
 
   private:
+    // Only setThumbSize() writes this: it also bumps the generation and drops
+    // cache entries decoded at the previous size.
+    int thumbSize = 256;
+
     struct MemEntry
     {
         ImageData data;

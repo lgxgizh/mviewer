@@ -50,3 +50,7 @@ release_checklist_report.md
 
 # Local UX inspection scratch fixtures
 /.tmp_*/
+
+# Python bytecode from CI helper scripts (local debug runs)
+__pycache__/
+*.pyc

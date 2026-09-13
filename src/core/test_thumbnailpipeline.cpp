@@ -105,7 +105,7 @@ int main()
         printf("\n[cache hit]\n");
         fflush(stdout);
         size_t before = order.size();
-        ImageData hit = pipe.request(src[0], pipe.thumbSize);
+        ImageData hit = pipe.request(src[0], pipe.currentThumbSize());
         TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool,
                                         std::chrono::milliseconds(1000));
         size_t after = order.size();
