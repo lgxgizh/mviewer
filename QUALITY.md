@@ -56,12 +56,13 @@ pwsh scripts/health_score.ps1        # -> docs/quality/dashboard.md + build_heal
 | Build / Tests | ctest JUnit XML (`build_msvc/`) | **Hard** (ci-gate) |
 | Code Quality | cppcheck + clang-tidy CI artifacts | **Hard** (ci-gate) |
 | Complexity | `scripts/complexity_gate.ps1` — file >800 FAIL · function >120 lines FAIL · cyclomatic >25 FAIL · function >80 / cyclo >15 WARN · class >1000 WARN; ADR-014 TUs use documented caps | Advisory on PR (nightly `-Strict`) |
-| Architecture | `scripts/architecture_gate.ps1` R1–R4 (UI∌Cache · Widget∌Repository · Compare∌Thumbnail · Domain 0-dep) | Advisory Warning |
+| Architecture | `scripts/architecture_gate.ps1` R1–R5 (UI∌Cache · Widget∌Repository · Compare∌Thumbnail · Domain 0-dep · core/domain headers must not `#include` Qt, with only `core/image/QtConvert.h` + `core/image/QtMetadataSemantics.h` allow-listed) | Advisory Warning |
 | ADR | `scripts/adr_gate.ps1` — architectural PRs (Repository / Cache / Scheduler / Compare) MUST add/update an ADR | **Required** (ci-gate) |
 | Known Issues (Bug Gate) | `scripts/known_issues_gate.ps1` — every OPEN issue must link an existing regression test | **Required** (ci-gate) |
 | Test Matrix | `scripts/test_matrix.ps1` — auto-generated `docs/test_matrix.md` (Feature × Unit/Integration/Benchmark/UI/Vision) | auto (nightly) |
 | Benchmark Trend | `scripts/benchmark_trend.ps1` — rolling `benchmark/report/index.html` SVG sparklines over past runs | auto (nightly) |
-| Performance | `benchmark/perf_baseline.json` ±10% regression gate (`bench_enforce`) | **Hard** |
+| Performance | `benchmark/performance_budget.json` budgets via the `bench_enforce` CTest, run by the required Tier-1 `test` job | **Hard** (ci-gate) |
+| Performance trend | `benchmark/perf_baseline.json` ±10 % regression diff via `--enforce --regression --profile ci` | Alerting (nightly `quality`) |
 | Stability | B9 (cache soak) + B17 (workflow soak: RSS / handle growth across browse→compare→exit) | Report-only → dashboard |
 | Coverage | Nightly OpenCppCoverage (cobertura **+ HTML**) per-module summary; target **Core ≥ 85%** | Advisory (nightly) |
 

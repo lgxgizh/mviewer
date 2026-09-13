@@ -98,9 +98,14 @@ OpenDirectoryCommand
 > 3. ~~No real benchmark dataset~~ — **DONE.** `benchmark/generate_bench_data.ps1`
 >    emits `small/medium/large` = 100/1000/10000 real JPEGs (deterministic
 >    gradient+noise). `mviewer_bench` reports B1 scan + B2/B3 p50/p95/p99.
-> 4. ~~No `nightly.yml`~~ — **DONE.** `.github/workflows/nightly.yml` runs
->    clang-tidy + benchmark + MSVC/LLVM ASan on a daily cron with
->    `continue-on-error: true` (never blocks PRs).
+> 4. ~~No `nightly.yml`~~ — **DONE.** `.github/workflows/nightly.yml` runs on a
+>    daily cron (`13 2 * * *`) with the jobs `asan`, `ubsan`, `clazy`, `quality`
+>    (benchmark + golden image via `build.ps1 Test`), `perfetto`, `coverage`,
+>    `publish-health` and the `qa-report` aggregator. Exactly three of them are
+>    `continue-on-error: true` — `clazy`, `perfetto` and `coverage`; `asan` and
+>    `ubsan` are not, so a sanitizer finding reds the nightly run. Note the
+>    nightly has **no** clang-tidy job (clang-tidy is a required Tier-1 job in
+>    `ci.yml`), and nightly never blocks a PR either way.
 > 5. ~~Tile Render RFC missing~~ — **DONE.** `docs/rfc/M11_TILE_RENDER.md` +
 >    `docs/rfc/M13_TILE_PIPELINE.md` + `docs/rfc/M13_GPU_ROADMAP.md` define the
 >    CPU-tile loader (visible-region-only, 12000×8000 target) and the staged GPU
@@ -111,9 +116,12 @@ OpenDirectoryCommand
 - **GPU D3D11** — deferred. CPU Tile pipeline should be benchmarked at 100MP
   first; only if <30 FPS should GPU be considered. OpenGL GPU tile path
   exists (GpuTileUploader) but is OFF by default.
-- **Performance regression history** — `benchmark/report/history.csv` exists
-  but CI does not yet diff against baseline or fail on regression. Recommended
-  for M15.
+- **Performance regression history** — `benchmark/report/history.csv` exists, and
+  CI now *does* fail on regression: `bench_enforce` (registered CTest, run by the
+  required Tier-1 `test` job in `ci.yml`) fails when a budget in
+  `benchmark/performance_budget.json` is exceeded, and the nightly `quality` job
+  runs `mviewer_bench --enforce --regression --profile ci` to diff against
+  `benchmark/perf_baseline.json` (±10%).
 - **External RAW libraries (libraw/RawSpeed)** — deferred per RFC Phase A.
   Self-contained parser covers metadata; true demosaic display is Phase B.
 
@@ -146,7 +154,10 @@ OpenDirectoryCommand
 - ❌ Introduce Rust.
 - ❌ New abstraction layers (`ImageManager`/`ImageProvider`/`ImageFactory`).
 - ❌ Modify `build.ps1` / `CMakePresets.json` / `ci.yml` (except adding `nightly.yml`).
-- ❌ clang-tidy/ASan as PR-blocking gates (keep advisory; nightly only).
+- ❌ ASan/UBSan as PR-blocking gates (nightly only). clang-tidy is **not** a
+  non-goal any more: `ci.yml`'s `clang-tidy` job is a required Tier-1 gate
+  (aggregated by `ci-gate`), failing on bugprone/performance/clang-analyzer
+  findings on PR-changed lines.
 
 ## 6. Proposed execution order (after review approval)
 

@@ -72,13 +72,19 @@ env var.
 To point the build at a custom Qt without moving it:
 
 ```powershell
-$env:Qt6_DIR  = 'C:\Qt\6.11.1\msvc2022_64'          # highest priority
+$env:QT_ROOT_DIR = 'C:\Qt\6.11.1\msvc2022_64'        # highest priority: the msvc2022_64 root
+# or
+$env:Qt6_DIR  = 'C:\Qt\6.11.1\msvc2022_64\lib\cmake\Qt6'   # walked up to the Qt root
 # or
 $env:QT_ROOT  = 'C:\Qt\6.11.1'                       # → $QT_ROOT/msvc2022_64
 ```
 
-Resolution order inside `build.ps1`: `Qt6_DIR` → `QT_ROOT/msvc2022_64` →
-`D:\QT\6.11.1\msvc2022_64` (guard-checked) → **throw** with setup hints.
+Resolution order inside `build.ps1` (every step guard-checked with `Test-Path`):
+`QT_ROOT_DIR` (already the `msvc2022_64` root — what `install-qt-action@v4`
+exports, i.e. the CI path) → `Qt6_DIR` → `QT_ROOT/msvc2022_64` →
+`D:\QT\6.11.1\msvc2022_64` (legacy default) →
+`%USERPROFILE%\Qt\6.11.1\msvc2022_64` → `%ProgramFiles%\Qt\6.11.1\msvc2022_64`
+→ **throw** with setup hints.
 
 ---
 
@@ -115,15 +121,36 @@ a "Developer Command Prompt" yourself.
 
 ## 5. CI
 
-`.github/workflows/ci.yml` (single `build` job, `windows-2022`):
+`.github/workflows/ci.yml` is **Tier 1 — the PR gate** (`PR Gate (Tier 1)`), and
+it is **nine jobs, not one `build` job**:
 
-```
-checkout → ilammy/msvc-dev-cmd → jurplel/install-qt-action (Qt 6.8.0)
-   → powershell build.ps1 Test
-```
+| Job | Runner | What it does | Blocks the PR? |
+|-----|--------|--------------|----------------|
+| `format` | ubuntu | clang-format 22.1.8 on changed C++ lines + markdownlint | `continue-on-error: true` (still listed in `ci-gate`'s `needs`) |
+| `cppcheck` | ubuntu | supplemental static analysis with `--error-exitcode=1` | yes (required) |
+| `clang-tidy` | ubuntu | bugprone/performance/clang-analyzer findings on PR-changed lines | yes (required) |
+| `build` | windows-2022 | `build.ps1 Release` (compile + Qt/CRT deploy) + zero-compiler-warning grep on `build.log` | yes |
+| `test` | windows-2022 | `build.ps1 Release` + `testdata/generate_fixtures.py`, then raw `ctest` (unit tests, `bench_enforce` perf hard-gate, `golden_image`); `needs: build` | yes |
+| `build-health` | ubuntu | complexity gate + architecture gate + health dashboard | no (advisory, `continue-on-error: true`) |
+| `adr-gate` | ubuntu | architectural PRs must touch `docs/adr/` | yes (required) |
+| `known-issues` | ubuntu | every OPEN issue must link a regression test | yes (required) |
+| `ci-gate` | ubuntu | aggregator: every required job must report `success` | this is the status branch protection depends on |
 
-CI does **not** re-implement configure/build/test. It installs toolchains and
-then calls `build.ps1 Test`, so local and CI cannot drift.
+The important split: **the Tier-1 PR path never calls `build.ps1 Test`.**
+`build` and `test` each run `build.ps1 Release` (the `test` job recompiles on its
+own fresh runner because jobs do not share artifacts), and the `test` job then
+owns CTest itself (`ctest --output-on-failure --output-junit test-results.xml
+-j$testJobs`) so the suite executes once per PR and the job can publish its own
+JUnit artifact. `build.ps1 Test` — build + CTest in one command — is what the
+nightly `quality` job (`.github/workflows/nightly.yml`) and two Tier-3
+`release.yml` jobs (performance report, full golden-image regression) run, and
+what you run locally. That is a deliberate one-step difference, not drift: the
+CTest invocation itself is kept identical (same `-j` rule, same
+`QT_QPA_PLATFORM=offscreen`). The only workflows that hand-write `cmake`
+configure/build are the ones that need a different toolchain or extra flags —
+nightly `asan`, `ubsan`, `clazy`, `perfetto` (clang-cl sanitizer builds,
+`MVIEWER_ENABLE_PERFETTO=ON`) — while every job that builds or gates the shipped
+product goes through `build.ps1`.
 
 ---
 
@@ -145,7 +172,10 @@ Build presets and a `windows-msvc` test preset mirror them.
 
 ## 7. ctest
 
-`CMakeLists.txt` calls `enable_testing()` and registers targets:
+`CMakeLists.txt` calls `enable_testing()`, and at HEAD the suite registers
+**132** tests via `add_test(NAME ...)` across `CMakeLists.txt` +
+`src/CMakeLists.txt` (the block below shows three of them; `bench_enforce`,
+registered in `src/CMakeLists.txt`, is the performance hard gate):
 
 ```cmake
 enable_testing()
@@ -160,8 +190,14 @@ Run them with:
 powershell -ExecutionPolicy Bypass -File .\build.ps1 Test
 ```
 
-which builds and then runs `ctest --output-on-failure --output-junit
-test-results.xml -j4` under the offscreen Qt platform.
+which builds Release, deploys the Qt/CRT runtime, sets
+`QT_QPA_PLATFORM=offscreen` and then runs `ctest --output-on-failure
+--output-junit test-results.xml -j$testJobs` — **not a hardcoded `-j4`**.
+`build.ps1` computes `$testJobs = max(1, min(4, [Environment]::ProcessorCount -
+1))`: one logical core is left for the OS/Qt helper threads and the parallelism
+is capped at four. The Tier-1 `test` job in `ci.yml` uses the same computation
+(`[Math]::Max(1, [Math]::Min(4, $logicalCores - 1))`), so local and CI choose the
+same `-j` on the same host.
 
 ---
 

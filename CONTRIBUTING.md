@@ -7,7 +7,8 @@ Thank you for your interest in contributing! MViewer is an open-source image alg
 ### Prerequisites
 
 - **C++20 compiler**: MSVC 2022 (primary), or Clang/GCC (tested on Linux/macOS)
-- **Qt 6.11+** (`msvc2022_64` on Windows, or system Qt on Linux/macOS)
+- **Qt 6.8+** (minimum supported — the CI PR gate builds and tests with **6.8.0**;
+  the dev machine verifies with 6.10.3. See the Qt version matrix in `README.md`)
 - **CMake 3.22+**
 - **Ninja** (recommended) or your platform generator
 
@@ -16,7 +17,7 @@ Thank you for your interest in contributing! MViewer is an open-source image alg
 ```bash
 # Configure
 cmake -B build -G Ninja \
-  -DCMAKE_PREFIX_PATH="<path-to-Qt>/6.11.1/msvc2022_64"
+  -DCMAKE_PREFIX_PATH="<path-to-Qt>/<version>/msvc2022_64"
 
 # Build
 cmake --build build
@@ -34,11 +35,19 @@ On Windows, ensure the MSVC `bin` directory is first on `PATH` (or use the Visua
 MViewer follows a strict layered architecture:
 
 ```
-UI → Application → Domain → Core → Infrastructure
+UI (Qt Widgets) → Application → Core → Domain
 ```
 
+Dependencies point strictly inward: each layer may use the ones to its right,
+never the ones to its left. **Domain is innermost and has zero dependencies**
+(pure `std`); there is no `Infrastructure` layer — cache, scheduler, repository
+and render live inside Core.
+
 - **Domain**: Pure `std` types, zero Qt dependency
-- **Core**: Qt-free headers; `.cpp` internals may use Qt
+- **Core**: Qt-free headers (the only two exceptions are the named Qt adapters
+  `core/image/QtConvert.h` + `core/image/QtMetadataSemantics.h`, enforced by R5
+  in `scripts/architecture_gate.ps1`); `.cpp` internals may use Qt
+- **Application**: use cases that coordinate Repository / Cache / Scheduler
 - **UI**: Qt 6 Widgets boundary only
 
 When adding a feature, place it in the correct layer. Do not let UI logic leak into Core, and do not let Qt types appear in Domain headers.

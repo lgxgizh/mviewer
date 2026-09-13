@@ -91,9 +91,15 @@ ui_screenshot harness → real MainWindow PNG (1040x700) produced
   from the installed app on a GUI session and drop it into
   `docs/release/assets/`. The static `ui_screenshot.png` ships as the
   primary visual.
-- Benchmark `--enforce` CI gate is run via `build.ps1 Test` + the nightly
-  workflow (`nightly.yml`: clang-tidy / ASan / benchmark, non-blocking),
-  not as a PR-blocking gate — by design, to avoid slowing iteration.
+- ~~Benchmark `--enforce` is not a PR-blocking gate~~ — **corrected: it is one.**
+  `src/CMakeLists.txt` registers it as the CTest case `bench_enforce`
+  (`mviewer_bench --enforce --profile auto
+  --budget <repo>/benchmark/performance_budget.json`, marked `RUN_SERIAL`), and
+  the required Tier-1 `test` job in `.github/workflows/ci.yml` runs the whole
+  CTest suite — so a performance regression fails the PR. On top of that the
+  nightly `quality` job runs the noisier baseline diff
+  (`--enforce --regression --profile ci` against `benchmark/perf_baseline.json`,
+  ±10%) on a cron that never blocks PRs.
 
 ## Demo dataset
 `testdata/golden/` contains graded JPEG/PNG/BMP/TIFF images (64×64 → 8192×8192)
