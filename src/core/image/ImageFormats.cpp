@@ -8,6 +8,9 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <mutex>
+#include <string>
+#include <vector>
 
 namespace mviewer::core
 {
@@ -49,28 +52,43 @@ std::vector<std::string> buildSuffixSet()
     return out;
 }
 
+// Rebuilt whenever the inputs change: the decoder registry's extension union
+// (plugins register/remove decoders at runtime) and whether a QCoreApplication
+// exists yet (the Qt image plugins are only fully discoverable once it does).
+// Previously the set was computed once — with a one-shot "the app appeared"
+// repair — so a decoder registered later stayed invisible to the file list.
+std::string suffixFingerprint()
+{
+    std::string f = QCoreApplication::instance() != nullptr ? "app|" : "noapp|";
+    for (const auto &e : Decoder::supportedExtensions())
+    {
+        f += e;
+        f += ',';
+    }
+    return f;
+}
+
 const std::vector<std::string> &suffixSet()
 {
-    // The Qt image-format plugins are only fully discoverable once
-    // QCoreApplication exists. A set computed earlier (e.g. from a static
-    // initializer) would miss WebP/GIF; recompute once when the app appears.
+    static std::mutex mtx;
     static std::vector<std::string> cached;
-    static bool computed = false;
-    static bool computedWithoutApp = false;
-    const bool appExists = QCoreApplication::instance() != nullptr;
-    if (!computed || (computedWithoutApp && appExists))
+    static std::string cachedFingerprint;
+    const std::string fingerprint = suffixFingerprint();
+    std::lock_guard<std::mutex> lk(mtx);
+    if (fingerprint != cachedFingerprint)
     {
         cached = buildSuffixSet();
-        computed = true;
-        computedWithoutApp = !appExists;
+        cachedFingerprint = fingerprint;
     }
     return cached;
 }
 
 } // namespace
 
-const std::vector<std::string> &ImageFormats::supportedSuffixes()
+std::vector<std::string> ImageFormats::supportedSuffixes()
 {
+    // By value: handing out a reference to shared mutable state let a caller
+    // iterate a vector that another thread could rebuild underneath it.
     return suffixSet();
 }
 
@@ -79,7 +97,7 @@ bool ImageFormats::isSupportedSuffix(const std::string &suffix)
     const std::string s = normalizeSuffix(suffix);
     if (s.empty())
         return false;
-    const auto &all = suffixSet();
+    const std::vector<std::string> &all = suffixSet();
     return std::binary_search(all.begin(), all.end(), s);
 }
 

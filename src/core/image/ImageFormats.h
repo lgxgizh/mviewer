@@ -20,8 +20,11 @@ class ImageFormats
 {
   public:
     // Every suffix a registered decoder accepts, lowercased, WITHOUT the dot
-    // (e.g. {"jpg","jpeg","png","webp","gif","cr2","dng",...}).
-    static const std::vector<std::string> &supportedSuffixes();
+    // (e.g. {"jpg","jpeg","png","webp","gif","cr2","dng",...}). Returned BY
+    // VALUE: the set is rebuilt when the decoder registry or the presence of a
+    // QCoreApplication changes, and a caller holding a reference to shared
+    // mutable state could observe it being rebuilt under an iteration.
+    static std::vector<std::string> supportedSuffixes();
 
     // True when `suffix` (case-insensitive, with or without leading dot) is a
     // supported image extension.

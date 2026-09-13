@@ -3,13 +3,18 @@
 // covered directly, not only through the heavier ImageRepository::loadDirectory path.
 #include "core/filesystem/FileSystem.h"
 #include "core/image/Decoder.h"
+#include "core/image/ImageFormats.h"
+#include "core/image/decoder/DecoderRegistry.h"
+#include "core/image/decoder/IDecoder.h"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QTemporaryDir>
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -183,6 +188,66 @@ static void testFileSystemEmptyDir()
           "missing directory yields no images (no throw)");
 }
 
+// The supported-suffix set must follow the decoder registry. It used to be
+// computed once (with a one-shot "QCoreApplication appeared" repair), so a
+// decoder registered later — a plugin, or a test decoder — stayed invisible to
+// the file list, and its files were filtered out of the gallery.
+namespace
+{
+class LateSuffixDecoder : public IDecoder
+{
+  public:
+    bool canDecode(const std::string &path) const override
+    {
+        const std::string ext = ".mvlate";
+        return path.size() > ext.size() &&
+               path.compare(path.size() - ext.size(), ext.size(), ext) == 0;
+    }
+    ImageData decodeFull(const std::string &) const override
+    {
+        return ImageData();
+    }
+    ImageData decodeScaled(const std::string &, int) const override
+    {
+        return ImageData();
+    }
+    ImageData decodeFull(const std::string &, mviewer::domain::ImageMetadata &) const override
+    {
+        return ImageData();
+    }
+    std::vector<std::string> extensions() const override
+    {
+        return {"mvlate"};
+    }
+    const char *name() const override
+    {
+        return "LateSuffixTestDecoder";
+    }
+};
+} // namespace
+
+static void testSuffixSetFollowsRegistry()
+{
+    printf("\n[Suffix set follows the decoder registry]\n");
+    // Compute the set first, so the registration below is a later change.
+    CHECK(!mviewer::core::ImageFormats::supportedSuffixes().empty(),
+          "supported suffix set is non-empty");
+    CHECK(!mviewer::core::ImageFormats::isSupportedSuffix("mvlate"), "unknown suffix is rejected");
+
+    auto &registry = DecoderRegistry::instance();
+    registry.registerDecoder(std::make_shared<LateSuffixDecoder>());
+    CHECK(mviewer::core::ImageFormats::isSupportedSuffix("mvlate"),
+          "a decoder registered later becomes visible in the suffix set");
+    const auto filters = mviewer::core::ImageFormats::wildcardFilters();
+    CHECK(std::find(filters.begin(), filters.end(), "*.mvlate") != filters.end(),
+          "the wildcard filter list picks the new decoder up");
+    CHECK(FileSystem::isImage("x.mvlate"), "the file list accepts the new decoder's files");
+
+    registry.unregister("LateSuffixTestDecoder");
+    CHECK(!mviewer::core::ImageFormats::isSupportedSuffix("mvlate"),
+          "unregistering a decoder removes its suffix again");
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -192,6 +257,7 @@ int main(int argc, char **argv)
     testFileSystemScan();
     testFileSystemEmptyDir();
     testSupportedFormatSSOT();
+    testSuffixSetFollowsRegistry();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
