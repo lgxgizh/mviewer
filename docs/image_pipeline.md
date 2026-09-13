@@ -42,6 +42,12 @@ The image pipeline transforms a file path into pixels on screen. It encompasses 
 
 ### Detection API
 
+[unverified] — this API does not exist in the codebase: there is no `ImageFormat`
+enum, no `detectFormat()` and no `FormatDetectionResult` in `src/`. Format
+dispatch happens through `DecoderRegistry::canDecode()` (each decoder claims by
+extension or content), driven by the signatures above. The block below is a
+design sketch, not implemented code:
+
 ```cpp
 enum class ImageFormat {
     Unknown,
@@ -65,56 +71,71 @@ auto detectFormat(std::span<const std::byte, 16> header)
 ### Decoder Interface
 
 ```cpp
+// src/core/image/decoder/IDecoder.h — Qt-free header.
 class IDecoder {
 public:
     virtual ~IDecoder() = default;
 
-    /// Check if this decoder can handle the given format
-    virtual bool canDecode(ImageFormat format) const = 0;
+    /// True if this decoder claims the given file (by extension or content).
+    virtual bool canDecode(const std::string& path) const = 0;
 
-    /// Full-resolution decode
-    virtual std::expected<DecodedImage, DecodeError>
-        decode(const FilePath& path, const DecodeParams& params) = 0;
+    /// Full-resolution decode -> RGB24 ImageData (null buffer on failure).
+    virtual ImageData decodeFull(const std::string& path) const = 0;
 
-    /// Thumbnail-resolution decode (fast path)
-    virtual std::expected<DecodedImage, DecodeError>
-        decodeThumbnail(const FilePath& path, int maxEdgeLength) = 0;
+    /// Scaled decode: longest edge clamped to maxEdge, aspect ratio preserved.
+    virtual ImageData decodeScaled(const std::string& path, int maxEdge) const = 0;
 
-    /// Animated image support
-    virtual bool supportsAnimation() const { return false; }
-    virtual std::expected<AnimationInfo, DecodeError>
-        queryAnimation(const FilePath& path) { return std::unexpected(...); }
+    /// Presentation consumers can take source metadata from the same reader pass.
+    virtual ImageData decodeScaled(const std::string& path, int maxEdge,
+                                   mviewer::domain::ImageMetadata& outMeta) const;
+
+    /// Decode + metadata in one pass.
+    virtual ImageData decodeFull(const std::string& path,
+                                 mviewer::domain::ImageMetadata& outMeta) const = 0;
+
+    /// Lowercased extensions this decoder handles (e.g. "jpg", "png").
+    virtual std::vector<std::string> extensions() const = 0;
+
+    /// Human-readable name (for diagnostics).
+    virtual const char* name() const = 0;
 };
 ```
 
-### Decoder Factory
+Failure is reported by a null `ImageData`, never by an exception or an error
+code: there is no `DecodeError` type and no `std::expected` return. Decoders are
+selected through `DecoderRegistry`, not called directly by the UI.
 
-The factory maintains a priority-ordered list of decoders. For each format, multiple decoders may be registered (primary + fallback).
+### Decoder Registry
 
-| Format | Primary Decoder | Fallback Decoder |
-| -------- | ---------------- | ------------------ |
-| JPEG | libjpeg-turbo | WIC |
-| PNG | libpng | WIC |
-| BMP | Custom | — |
-| GIF | libvips | Custom |
-| TIFF | libtiff | WIC |
-| WebP | libwebp | WIC |
-| AVIF | libdav1d + libaom | WIC |
-| HEIF/HEIC | libheif | WIC |
-| JPEG XL | libjxl | — |
+Decoders are registered with `DecoderRegistry`
+(`src/core/image/decoder/DecoderRegistry.h`); the registry dispatches a file to
+the first decoder whose `canDecode()` returns true, and the fallback is
+registered last. No per-format codec library is linked (there is no
+libjpeg-turbo / libheif / libjxl / WIC dependency):
+
+| Decoder | Role |
+| -------- | ------ |
+| `QtDecoder` | Primary path — decodes through Qt's image reader for every format that Qt build supports |
+| `QtFallbackDecoder` | Registered last: the last-resort path when no specific decoder claims the file |
+| `RawDecoder` | RAW files (CR2/CR3/NEF/ARW/DNG/ORF/RW2/PEF/RAF…): serves the embedded preview, and the 16-bit samples used by the Pixel Inspector |
+| plugin decoders | Any `IDecoder` a plugin registers (`PluginManager` → `DecoderRegistry::registerDecoder`), e.g. the shipped PPM example |
+
+The registry holds decoders behind a mutex and decodes over a snapshot of that
+list, so a plugin can be unloaded mid-decode without invalidating a running
+decode.
 
 ### Fallback Chain
 
 ```
 Try primary decoder
     │
-    ├── Success → return DecodedImage
+    ├── Success → return ImageData
     │
-    └── Failure → Try fallback decoder
+    └── Failure (null buffer) → Try fallback decoder
                     │
-                    ├── Success → return DecodedImage
+                    ├── Success → return ImageData
                     │
-                    └── Failure → Return DecodeError::UnsupportedFormat
+                    └── Failure → Load fails: `ImageRepository::Result::error` explains why
 ```
 
 ---
@@ -123,15 +144,23 @@ Try primary decoder
 
 ### Decode Parameters
 
+There is no `DecodeParams` struct: the caller's options and the decoder's own
+`maxEdge` argument are the whole parameter set.
+
 ```cpp
-struct DecodeParams {
-    std::optional<Resolution> maxResolution;  // Downscale during decode
-    ColorSpace targetColorSpace = ColorSpace::sRGB;
-    bool applyOrientation = true;             // EXIF orientation
-    bool flattenAnimation = true;             // Return first frame only
-    Orientation orientation = Orientation::Identity;
+// src/core/image/ImageRepository.h
+struct ImageLoadOptions {
+    bool useDiskCache = true;      // consult / populate the disk tier
+    bool generateHistogram = true;
+    int maxEdgeForThumbnail = 256; // longest edge requested for the thumbnail tier
+    int frameMaxEdge = 0;          // 0 = native / full frame (M57 frame prefetch)
 };
 ```
+
+`IDecoder` takes only a path, plus `maxEdge` for the scaled tier:
+`decodeFull(path)` / `decodeScaled(path, maxEdge)`, each with an optional
+`mviewer::domain::ImageMetadata&` overload that fills source metadata from the
+same reader pass.
 
 ### Decode Output (current M35 contract)
 
@@ -157,7 +186,8 @@ header boundary.
    embedded source profile, and converts that copy to sRGB. Invalid or missing
    profiles deterministically fall back to sRGB-assumed values.
 4. Thumbnail workers convert before square-fit and persist display-ready PNGs
-   (ThumbnailCache schema 3). Preview scaled decodes carry source dimensions,
+   (`ThumbnailCache` schema 4 — the display-ready, ICC-converted payload).
+   Preview scaled decodes carry source dimensions,
    file identity and profile metadata from the same decoder pass; cached
    previews are display-ready. ImageViewer CPU tiles and GPU uploads share the
    same display-ready tile materialization, so repaint does not repeat ICC work.
@@ -218,31 +248,37 @@ Compare has two deliberately separate representations:
 
 ### Cache Insertion
 
-After decode, the image is inserted into the L2 (decoded image) cache. If the image is the current display target, it is also uploaded to the GPU (L1 texture cache).
+After decode, the pixels are written to the `FullImage` memory pool with
+`CacheManager::putMemory(CacheLevel::FullImage, key, pixels)` and persisted
+through `DiskCache` (SQLite blobs); the thumbnail tier is written by the
+thumbnail workers. See `docs/cache.md` for the real hierarchy.
 
 ### Cache Key
 
-```cpp
-struct CacheKey {
-    FilePath path;
-    int64_t fileSize;
-    int64_t modificationTime;
-    DecodeParams params;  // Orientation, resolution limit
-};
-```
+Every tier is keyed by one `std::string`: the file-identity key built by
+`ImageRepository::makeKey()` from `MetadataReader::key(path)`, i.e.
+`path|fileSize|mtimeMsec` (fields separated so distinct files cannot collide).
+A frame load uses `ImageRepository::makeFrameKey(path, frameIndex,
+decodeVariant)`, which extends the same identity with the frame index and decode
+variant. There is no `CacheKey` struct — a key is a plain string, and mtime changes
+invalidate it.
 
 ### Invalidation
 
-- File modification time changed → invalidate
-- File size changed → invalidate
-- File deleted → invalidate
-- Cache entry evicted by LRU → remove
+- File modification time changed → the key changes, so the old entry is no longer reachable
+- File size changed → same, both fields are part of the key
+- File deleted or overwritten → `ImageRepository::release()` / `invalidate()` calls `CacheManager::invalidate()`, which drops the key from every tier (pixels, metadata, disk)
+- Cache entry evicted by LRU → each memory pool and the disk cache enforce their own budget
 
 ---
 
 ## Stage 6: GPU Upload
 
 ### Texture Creation
+
+[unverified] — no `uploadToGpu()` and no `DecodedImage` type exist in the
+codebase; GPU uploads live in the viewer (Qt/OpenGL), not in `core/`. The
+signature below is a design sketch.
 
 ```cpp
 struct TextureHandle { uint64_t id; };
@@ -275,6 +311,12 @@ auto uploadToGpu(const DecodedImage& image) -> TextureHandle;
 - APNG (future)
 
 ### Animation Info
+
+[unverified] — there is no `AnimationInfo` / `FrameInfo` / `DisposalMethod` type
+in the codebase. Multi-frame files are handled through `FrameSequence`
+(`core/image/FrameSequence.h`) and
+`ImageRepository::loadFrame(path, frameIndex, opts)`. The structure below is a
+design sketch.
 
 ```cpp
 struct AnimationInfo {

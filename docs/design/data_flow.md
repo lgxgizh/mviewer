@@ -13,9 +13,9 @@ Decoder::decodeFull() → ImageData pixels
    ↓
 ImageFrame::create(path, pixels) → ImageFrame (metadata filled)
    ↓
-CacheManager::put(Memory::Viewer, key, pixels)
+CacheManager::instance().putMemory(CacheLevel::FullImage, key, pixels)
    ↓
-Engine::process(frame) → new ImageData / stats / analysis
+AnalyzerRegistry::runAnalyzer(frame) / AnalysisEngine::computeStats(...) → stats / analysis
    ↓
 ImageFrame::setRenderCache(entry) / ImageFrame::setAnalysisResult(...)   ← owns derived data
    ↓
@@ -60,7 +60,7 @@ Decoder::decodeFull
    ↓
 DiskCache::put (background)
    ↓
-ImageCache::put(Memory::Viewer) — bounded by LRU eviction
+CacheManager::instance().putMemory(CacheLevel::FullImage, key, pixels) — bounded by LRU eviction
    ↓
 CacheManager::putMetadata(key, frame->metadata())
 ```

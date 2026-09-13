@@ -79,8 +79,11 @@ all feature implementation and bug identification.
 |-------|--------|-------|--------|--------|
 | `ImageFrame`, viewport, transform | `QPixmap` ready for UI | `RenderEngine` | UI thread | <16ms |
 
-**Laggy zoom/pan, flicker on image switch.
-**Check:** `RenderEngine::render()`, QPainter state, widget update rect.
+**Bug Symptoms:** Laggy zoom/pan, flicker on image switch.
+**Check:** `RenderEngine::executeCommand(QPainter&, const RenderCommand&, const QRect&)`
+and its `executeDrawXxx` dispatchers, the `ImageData` overloads
+(`executeCommand(cmd, buffer)` / `executeCommands(cmds)`), QPainter state, widget
+update rect.
 
 ---
 

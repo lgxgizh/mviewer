@@ -2,9 +2,9 @@
 
 ## Overview
 
-The plugin system provides extensibility without modifying the core application. Plugins can add new image formats, metadata handlers, UI panels, and export capabilities. The system is designed to be lightweight, versioned, and isolated from the core browsing performance.
+The plugin system provides extensibility without modifying the core application. A plugin can contribute an analyzer, an image decoder, an exporter, an importer or a compare algorithm, and all kinds are loaded through the same ABI-gated loader. The system is designed to be lightweight, versioned, and isolated from the core browsing performance.
 
-**Status:** Post-MVP. The plugin system is not required for version 0.1 but the architecture must accommodate it.
+**Status:** Implemented and frozen. The Plugin SDK ABI v1 is frozen by [ADR 013](adr/013-p2-plugin-sdk-frozen.md); the reference plugins in `plugins/example/` ship with the build, and the plugin gates (`pluginregistry_tests`, `pluginabi_tests`, `pluginexamples_tests`) run as part of `.\build.ps1 Test`. Every plugin declares the frozen ABI triple `apiVersion` 1 / `abiVersion` 1 / `sdkVersion` 10000 (SDK 1.0.0) from `src/core/plugin/PluginABI.h`.
 
 ---
 
@@ -13,176 +13,191 @@ The plugin system provides extensibility without modifying the core application.
 1. **Non-intrusive** — Plugins cannot degrade core browsing performance
 2. **Versioned** — ABI stability across minor versions
 3. **Discoverable** — Automatic plugin detection and loading
-4. **Isolated** — Plugin failures do not crash the application
+4. **Isolated** — A throwing analyzer is caught and logged by `AnalyzerRegistry::runAnalyzer` instead of failing the batch; a plugin that corrupts memory can still take the process down (see Plugin Security)
 5. **Simple** — Minimal boilerplate for plugin authors
 
 ---
 
 ## Plugin Types
 
-### 1. Image Decoder Plugins
+A plugin's kind is decided by which `create*` export it provides. The host probes
+the exports in a fixed order (Analyzer → Decoder → Exporter → Importer → Compare
+Algorithm) and registers the factory it finds with the matching registry
+(`src/core/plugin/PluginManager.cpp`).
 
-Add support for new image formats or improve existing decoders.
+### 1. Analyzer Plugins
+
+Add an analysis algorithm. Base class `Analyzer`
+(`src/core/analyzer/Analyzer.h`); registered into `AnalyzerRegistry`.
 
 ```cpp
-class IDecoderPlugin : public IPlugin {
+class Analyzer {
 public:
-    /// Plugin interface
-    virtual PluginInfo info() const = 0;
+    virtual ~Analyzer() = default;
 
-    /// Decoder capabilities
-    virtual std::vector<ImageFormat> supportedFormats() const = 0;
-    virtual float priority() const { return 0.5f; }  // 0.0-1.0, higher = preferred
+    virtual std::string name() const = 0;   // stable id, e.g. "example.mean_luminance"
+    virtual std::string description() const = 0;
+    virtual bool analyze(const ImageFrame& frame) = 0;
+    virtual bool analyzeRegion(const ImageFrame& frame,
+                               const mviewer::domain::Selection& region) = 0;
 
-    /// Decode operations
-    virtual std::expected<DecodedImage, DecodeError>
-        decode(const FilePath& path, const DecodeParams& params) = 0;
-
-    virtual std::expected<DecodedImage, DecodeError>
-        decodeThumbnail(const FilePath& path, int maxEdgeLength) = 0;
-
-    /// Animation support (optional)
-    virtual bool supportsAnimation() const { return false; }
+    // Optional reporting / capability hooks (each has a default).
+    virtual std::string resultText() const;
+    virtual std::unordered_map<std::string, double> resultMetrics() const;
+    virtual AnalyzerCapability capabilities() const;
+    virtual AnalyzerInfo info() const;
 };
 ```
 
-### 2. Metadata Handler Plugins
+### 2. Decoder Plugins
 
-Add support for new metadata formats or custom tag extraction.
+Add support for new image formats. Base interface `IDecoder`
+(`src/core/image/decoder/IDecoder.h`); registered into `DecoderRegistry`.
 
 ```cpp
-class IMetadataPlugin : public IPlugin {
+class IDecoder {
 public:
-    virtual PluginInfo info() const = 0;
+    virtual ~IDecoder() = default;
 
-    /// Which metadata standards this plugin handles
-    virtual std::vector<MetadataFormat> supportedFormats() const = 0;
-
-    /// Parse metadata from file
-    virtual std::expected<Metadata, MetadataError>
-        parse(const FilePath& path) = 0;
-
-    /// Parse from raw buffer (for embedded metadata)
-    virtual std::expected<Metadata, MetadataError>
-        parseBuffer(std::span<const std::byte> data) = 0;
+    virtual bool canDecode(const std::string& path) const = 0;
+    virtual ImageData decodeFull(const std::string& path) const = 0;
+    virtual ImageData decodeScaled(const std::string& path, int maxEdge) const = 0;
+    virtual ImageData decodeScaled(const std::string& path, int maxEdge,
+                                   mviewer::domain::ImageMetadata& outMeta) const;
+    virtual ImageData decodeFull(const std::string& path,
+                                 mviewer::domain::ImageMetadata& outMeta) const = 0;
+    virtual std::vector<std::string> extensions() const = 0;  // lowercased, no dot
+    virtual const char* name() const = 0;
 };
 ```
 
-### 3. UI Extension Plugins
+Every decode returns an `ImageData` value: a null buffer means failure. There is
+no `std::expected` in the decoder contract.
 
-Add toolbar buttons, menu items, or panel content.
+### 3. Exporter Plugins
+
+Add output formats for batch conversion. Base interface `IExporter`
+(`src/core/export/IExporter.h`); registered into `ExporterRegistry`.
 
 ```cpp
-class IUIExtensionPlugin : public IPlugin {
+class IExporter {
 public:
-    virtual PluginInfo info() const = 0;
+    virtual ~IExporter() = default;
 
-    /// Toolbar contributions
-    virtual std::vector<ToolbarItem> toolbarItems() const = 0;
-
-    /// Menu contributions
-    virtual std::vector<MenuItem> menuItems() const = 0;
-
-    /// Panel contributions (docked widgets)
-    virtual std::vector<PanelDefinition> panels() const = 0;
-
-    /// Context menu contributions
-    virtual std::vector<ContextMenuAction> contextMenuActions() const = 0;
+    virtual std::string name() const = 0;                     // e.g. "png-exporter"
+    virtual std::string description() const = 0;
+    virtual std::vector<std::string> extensions() const = 0;  // e.g. {"png","bmp"}
+    virtual bool exportImage(const ImageData& img, const std::string& outPath) = 0;
 };
 ```
 
-### 4. Export Filter Plugins
+### 4. Importer Plugins
 
-Add output formats for batch conversion.
+Turn an external catalog / project / folder layout into a
+`mviewer::domain::Workspace` (folders + image metadata, no pixels). Base
+interface `IImporter` (`src/core/import/IImporter.h`); registered into
+`ImporterRegistry`.
 
 ```cpp
-class IExportPlugin : public IPlugin {
+class IImporter {
 public:
-    virtual PluginInfo info() const = 0;
+    virtual ~IImporter() = default;
 
-    /// Supported output formats
-    virtual std::vector<std::string> supportedExtensions() const = 0;
-
-    /// Export a single image
-    virtual std::expected<void, ExportError>
-        exportImage(const DecodedImage& image, const FilePath& outputPath,
-                    const ExportParams& params) = 0;
-
-    /// Batch export (optional optimization)
-    virtual std::expected<BatchResult, ExportError>
-        exportBatch(const std::vector<ExportTask>& tasks,
-                    const ExportParams& params) = 0;
+    virtual std::string name() const = 0;                     // e.g. "folder-importer"
+    virtual std::string description() const = 0;
+    virtual std::vector<std::string> extensions() const = 0;  // empty = any path
+    virtual bool canImport(const std::string& path) const = 0;
+    virtual mviewer::domain::Workspace importWorkspace(const std::string& path) const = 0;
 };
 ```
+
+### 5. Compare Algorithm Plugins
+
+Add third-party compare metrics and an optional heatmap. Base interface
+`ICompareAlgorithm` (`src/core/compare/ICompareAlgorithm.h`, scope
+`mviewer::core`); the loaded id is kept in
+`PluginManager::PluginEntry::compareAlgorithmId`.
+
+```cpp
+class ICompareAlgorithm {
+public:
+    virtual ~ICompareAlgorithm() = default;
+
+    virtual std::string name() const = 0;  // stable id, e.g. "example.psnr_plus"
+    virtual std::string displayName() const = 0;
+    virtual CompareAlgorithmResult run(const ImageFrame& reference,
+                                       const std::vector<const ImageFrame*>& candidates) = 0;
+};
+```
+
+There is no UI-extension plugin kind and no metadata-handler plugin kind:
+toolbar / panel contributions and metadata parsing are not extension points in
+this SDK.
 
 ---
 
 ## Plugin Interface
 
-### Base Interface
+### Exported C symbols
 
-All plugins implement `IPlugin`:
+A plugin is a shared library, not a polymorphic `IPlugin` object handed to the
+host. It exports the frozen ABI descriptor plus exactly one kind-specific
+`create*` / `destroy*` pair (`src/core/plugin/PluginABI.h`; the full contract is
+in [`docs/sdk/PLUGIN_ABI.md`](sdk/PLUGIN_ABI.md)):
 
 ```cpp
-class IPlugin {
-public:
-    virtual ~IPlugin() = default;
+extern "C" {
 
-    /// Plugin metadata
-    virtual PluginInfo info() const = 0;
+/// MUST (M14.2): the frozen ABI triple.
+__declspec(dllexport)
+const PluginABI* mviewer_plugin_abi();
 
-    /// Lifecycle
-    virtual bool initialize(IHost* host) = 0;
-    virtual void shutdown() = 0;
+/// Display name; matches the implementation's name().
+__declspec(dllexport)
+const char* pluginName();
 
-    /// State
-    virtual bool isEnabled() const = 0;
-    virtual void setEnabled(bool enabled) = 0;
+/// Kind-specific pair — exactly one kind per library, e.g.:
+__declspec(dllexport) Analyzer* createAnalyzer();
+__declspec(dllexport) void      destroyAnalyzer(Analyzer*);
+
+/// Optional legacy single-version export (loader fallback).
+__declspec(dllexport) int mviewer_plugin_api_version();
+
+} // extern "C"
+```
+
+### ABI descriptor
+
+```cpp
+struct PluginABI {
+    uint32_t apiVersion = MVIEWER_API_VERSION;  // 1 — API contract
+    uint32_t abiVersion = MVIEWER_ABI_VERSION;  // 1 — binary compatibility
+    uint32_t sdkVersion = MVIEWER_SDK_VERSION;  // 10000 == SDK 1.0.0
 };
 ```
 
-### Plugin Info
+`pluginABICompatible()` requires an exact `abiVersion` match and a plugin
+`apiVersion` no newer than the host; a differing `sdkVersion` only produces the
+warning returned by `pluginABIWarnings()`. A rejected plugin is never
+instantiated and nothing is registered from it.
+
+### Capabilities
 
 ```cpp
-struct PluginInfo {
-    std::string id;              // Unique identifier (e.g., "mviewer.heif-decoder")
-    std::string name;            // Display name
-    std::string description;     // Short description
-    std::string author;          // Author/organization
-    std::string version;         // Plugin version (semver)
-    int apiVersion;              // MViewer plugin API version
-    std::string website;         // URL for more info
-    std::string license;         // License identifier (MIT, GPL, etc.)
+enum class PluginCapability : uint32_t {
+    None        = 0,
+    SingleImage = 1 << 0,
+    Region      = 1 << 1,
+    Batch       = 1 << 2,
+    RAW         = 1 << 3,
 };
 ```
 
-### Host Interface
-
-The host provides services to plugins:
-
-```cpp
-class IHost {
-public:
-    /// Logging
-    virtual void log(LogLevel level, const std::string& message) = 0;
-
-    /// Settings
-    virtual std::optional<std::string> getSetting(const std::string& key) = 0;
-    virtual void setSetting(const std::string& key, const std::string& value) = 0;
-
-    /// Cache access (read-only)
-    virtual std::shared_ptr<const DecodedImage>
-        findCachedImage(const CacheKey& key) = 0;
-
-    /// UI access
-    virtual void showMessage(const std::string& title, const std::string& text) = 0;
-    virtual void addStatusIndicator(const std::string& id, const std::string& text) = 0;
-
-    /// Event subscription
-    virtual void subscribe(EventType event, EventCallback callback) = 0;
-    virtual void unsubscribe(EventType event, CallbackId id) = 0;
-};
-```
+`mviewer_plugin_capabilities()` is declared in `PluginABI.h` as an optional
+export, but the loader does not resolve it. The capability query that exists
+today is the analyzer one: `Analyzer::capabilities()` returning
+`AnalyzerCapability`, queried through `AnalyzerRegistry::capabilitiesOf()` and
+`AnalyzerRegistry::queryByCapability()`.
 
 ---
 
@@ -192,42 +207,58 @@ public:
 
 | Platform | Path |
 | ---------- | ------ |
-| Windows | `%APPDATA%\MViewer\plugins\` |
-| Windows | `<install_dir>\plugins\` |
-| Linux | `~/.local/share/mviewer/plugins/` |
-| Linux | `/usr/lib/mviewer/plugins/` |
-| All | Directory specified by `MVIEWER_PLUGIN_PATH` env var |
+| All | `<exe dir>/plugins` — resolved next to the executable and created on first run (`src/application/Startup.cpp`) |
+| All | Extra directories listed in the Plugin Settings search-path list (QSettings `plugins/searchPaths`; the default entry is `<exe dir>/plugins`) |
+
+There is no `%APPDATA%` / `~/.local/share` fallback and no `MVIEWER_PLUGIN_PATH`
+environment variable. Because the plugin home is derived from
+`QCoreApplication::applicationDirPath()`, a launch through a shortcut or the
+Start Menu finds the same directory regardless of the working directory.
 
 ### Discovery Process
 
-1. Scan all search paths for `.dll` (Windows) or `.so` (Linux) files
-2. Load each library and query entry point: `mviewer_plugin_create()`
-3. Validate `apiVersion` matches current MViewer API version
-4. Call `initialize(host)` — if it returns false, skip plugin
-5. Register plugin capabilities with appropriate subsystem
-6. Store plugin metadata for UI display
+1. Scan the search path(s) for `.dll` (Windows) or `.so`/`.dylib` files
+   (`PluginManager::scanDirectory()`)
+2. Load each library and resolve `mviewer_plugin_abi()`, the optional legacy
+   `mviewer_plugin_api_version()`, `pluginName()` and the `create*` / `destroy*`
+   pairs
+3. Validate the descriptor with `pluginABICompatible()`; on an `abiVersion`
+   mismatch (or a plugin `apiVersion` newer than the host) the handle is closed
+   and the plugin is rejected
+4. Probe the exports in the order Analyzer → Decoder → Exporter → Importer →
+   Compare Algorithm; the first `create*` found determines the kind, and the
+   probe instance's `name()` becomes the plugin id
+5. Register the factory with the matching registry (`AnalyzerRegistry`,
+   `DecoderRegistry`, `ExporterRegistry`, `ImporterRegistry`)
+6. Keep the library handle in `PluginManager` and record a `PluginEntry` for the
+   Plugin Settings UI
 
 ### Entry Point
 
 ```cpp
-// C linkage for ABI stability
+// C linkage for ABI stability.
 extern "C" {
 
-/// Create plugin instance
-__declspec(dllexport)  // Windows
-// __attribute__((visibility("default")))  // Linux
-IPlugin* mviewer_plugin_create();
-
-/// Destroy plugin instance
+/// Kind-specific create/destroy pair — exactly one kind per library.
+__declspec(dllexport)  // Windows; __attribute__((visibility("default"))) on Linux
+Analyzer* createAnalyzer();
 __declspec(dllexport)
-void mviewer_plugin_destroy(IPlugin* plugin);
+void destroyAnalyzer(Analyzer* analyzer);
 
-/// Query API version supported by this plugin
+/// Display name; matches the implementation's name().
 __declspec(dllexport)
-int mviewer_plugin_api_version();
+const char* pluginName();
+
+/// Frozen ABI triple — required from v1.x on.
+__declspec(dllexport)
+const PluginABI* mviewer_plugin_abi();
 
 } // extern "C"
 ```
+
+There is no `IPlugin* mviewer_plugin_create()` / `mviewer_plugin_destroy(IPlugin*)`
+entry point: the host never receives a polymorphic plugin object, only the
+kind-specific interface instance returned by `create*`.
 
 ---
 
@@ -235,13 +266,8 @@ int mviewer_plugin_api_version();
 
 ```
 ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
-│ Discover │───▶│  Load    │───▶│ Initialize│───▶│  Active  │
+│ Discover │───▶│  Load    │───▶│ Register │───▶│  Active  │
 └──────────┘    └──────────┘    └──────────┘    └──────────┘
-                                                      │
-                                                      ▼
-                                               ┌──────────┐
-                                               │ Shutdown │
-                                               └──────────┘
                                                       │
                                                       ▼
                                                ┌──────────┐
@@ -253,23 +279,27 @@ int mviewer_plugin_api_version();
 
 | State | Description |
 | ------- | ------------- |
-| Discovered | Found in plugin directory, not yet loaded |
-| Loaded | Library loaded, entry point resolved |
-| Initialized | `initialize()` called successfully |
-| Active | Registered and operational |
-| Disabled | User or system disabled the plugin |
-| Error | Failed to load or initialize |
+| Discovered | Candidate file found by `PluginManager::scanDirectory()` |
+| Loaded | Library opened (`LoadLibraryW` / `dlopen`) and the ABI gate passed |
+| Registered | A `create*` probe returned an instance whose `name()` became the plugin id |
+| Active | The factory is registered with its registry and usable by the app |
+| Disabled | User-disabled in Plugin Settings (QSettings `plugins/disabled`); it stays loaded and only its UI entry is marked |
+| Error | Open / ABI gate / kind probe failed: the handle is closed and `lastError()` reports why |
 
 ### Lifecycle Events
 
-| Event | When | Plugin Action |
+| Event | When | What happens |
 | ------- | ------ | --------------- |
-| `OnLoad` | Library loaded | Allocate resources |
-| `OnInitialize` | `initialize()` called | Register capabilities |
-| `OnEnable` | User enables plugin | Activate functionality |
-| `OnDisable` | User disables plugin | Deactivate, keep state |
-| `OnShutdown` | Application closing | Release resources |
-| `OnUnload` | Library unloading | Final cleanup |
+| `load(path)` | Startup (`startupPlugins`) or Plugin Settings "rescan" | Open the library, resolve symbols, run the ABI gate |
+| Kind probe | Immediately after the gate | `create*` is called once, the instance's `name()` becomes the id, the probe instance is destroyed |
+| Registration | Probe succeeded | The factory is registered with the matching registry; the handle is kept in `PluginManager` |
+| `unload(path)` / `unloadAll()` | Plugin Settings / application exit | The factory is unregistered from its registry (no dangling entry into the plugin module); the library handle is deliberately **not** closed — unloading a Qt-linking DLL mid-process crashes on Windows |
+
+There is no plugin-side `initialize()` / `shutdown()` callback: an instance is
+created on demand through the plugin's `create*` export and destroyed through the
+matching `destroy*` export, so the plugin supplies its own destructor semantics.
+The host owns the library handle, so the module stays loaded for the process
+lifetime.
 
 ---
 
@@ -277,25 +307,32 @@ int mviewer_plugin_api_version();
 
 ### Version Scheme
 
-- **API Version:** Integer, incremented on breaking changes
-- **Current API Version:** 1 (initial)
-- Plugins declare which API version they target
-- MViewer supports current and one previous API version
+Three integers travel with every plugin (`src/core/plugin/PluginABI.h`):
 
-### Compatibility
+| Field | Meaning | Gate |
+| ------- | --------- | ------ |
+| `apiVersion` | Plugin API contract — the Analyzer / Decoder / Exporter interfaces, exported C symbols and capability flags | Plugin `apiVersion` ≤ host is accepted; a newer plugin is rejected |
+| `abiVersion` | Binary ABI level — struct layouts, calling convention, the std/Qt boundary and the compiler/Qt build | Must match the host exactly; a mismatch means the plugin must be recompiled |
+| `sdkVersion` | SDK release the plugin was built against (`major*10000 + minor*100 + patch`) | Informational only; a mismatch warns and never blocks loading |
 
-| MViewer Version | API Version | Supports Plugins Targeting |
-| ---------------- | ------------- | --------------------------- |
-| 1.0.x | 1 | 1 |
-| 1.1.x | 1 | 1 |
-| 2.0.x | 2 | 1, 2 |
-| 2.1.x | 2 | 1, 2 |
+Current host values: `MVIEWER_API_VERSION` = 1, `MVIEWER_ABI_VERSION` = 1,
+`MVIEWER_SDK_VERSION` = 10000 (SDK 1.0.0). For the entire v1.x line
+`abiVersion` stays 1, so a plugin built against the v1.0.0 SDK loads on any
+v1.x host without recompilation.
 
 ### Breaking Changes Policy
 
-- Breaking changes only in major versions
-- Deprecation warnings in minor versions before removal
-- Migration guide provided for each API version bump
+- `abiVersion` is bumped only when the binary layout itself changes; that is a
+  major-release event (v2.0) that requires every plugin to be rebuilt.
+- `apiVersion` is bumped when an interface or exported symbol changes in a way
+  that an old plugin could not satisfy. Adding new optional symbols does not
+  require a bump.
+- The legacy `mviewer_plugin_api_version()` export is still accepted as a
+  single-version fallback for plugins that do not export
+  `mviewer_plugin_abi()`.
+
+The full bump policy lives in [`docs/sdk/PLUGIN_ABI.md`](sdk/PLUGIN_ABI.md) and
+[ADR 013](adr/013-p2-plugin-sdk-frozen.md).
 
 ---
 
@@ -313,10 +350,11 @@ Plugins run in the same process as MViewer. This provides maximum performance bu
 
 ### Mitigations
 
-1. **Validation** — Verify plugin API version and entry points before loading
-2. **Isolation** — Plugin crashes caught via SEH (Windows) / signal handlers (Linux)
-3. **Permissions** — Plugin declares required capabilities; user approves
-4. **Signing** — Future: plugin signature verification
+1. **Validation** — The frozen ABI descriptor and the exported entry points are verified before any instance is created (`pluginABICompatible()` plus the kind probe)
+2. **Build contract** — Plugin, host and `mviewer_core` must be built with the same compiler, Qt and `c++20` settings, and `mviewer_core` must stay a SHARED library so host and plugin share one vtable
+3. **Trust model** — Installing a plugin is equivalent to running code inside MViewer; there is no permission system. Only load plugins you trust.
+
+Plugin signing and permission-based approval are not implemented.
 
 ### Future: Out-of-Process (Optional)
 
@@ -332,100 +370,96 @@ For untrusted plugins, an out-of-process execution model may be added:
 
 ## Plugin Configuration
 
-### Settings Namespace
+### Settings
 
-Each plugin gets its own settings namespace:
+Plugins do not get a settings namespace of their own. What MViewer persists is
+listed in `src/pluginsettings.cpp`:
 
-```json
-{
-    "plugins": {
-        "mviewer.heif-decoder": {
-            "enabled": true,
-            "settings": {
-                "hardwareAcceleration": true
-            }
-        }
-    }
-}
-```
+| QSettings key | Type | Meaning |
+| --------------- | ------ | --------- |
+| `plugins/searchPaths` | `QStringList` | Directories scanned for plugin libraries; defaults to `<exe dir>/plugins` |
+| `plugins/disabled` | `QStringList` | Plugin display names (`pluginName()`) the user disabled; the plugin stays loaded and the UI marks it disabled |
 
 ### UI Integration
 
-- Plugin settings appear in the main Settings dialog
-- Each plugin can provide a settings widget
-- Settings are per-plugin, namespaced by plugin ID
+- The Plugin Settings dialog lists every loaded plugin with its kind (analyzer / decoder / exporter / importer) and path
+- The search-path list is editable; "rescan" loads newly dropped libraries without restarting the app
+- A plugin cannot ship its own settings widget: there is no host service API for that
 
 ---
 
-## Example Plugin: HEIF Decoder
+## Example Plugin: Analyzer
+
+The reference analyzer (`plugins/example/ExampleAnalyzerPlugin.cpp`) is a
+complete, buildable plugin — use it as the template. The decoder
+(`ExampleDecoderPlugin.cpp`), exporter (`ExampleExporterPlugin.cpp`) and
+importer (`ExampleImporterPlugin.cpp`) examples follow the same shape with the
+matching interface and exports.
 
 ```cpp
-// heif_decoder_plugin.cpp
-#include <mviewer/plugin.h>
-#include <libheif/heif.h>
+// example_analyzer_plugin.cpp
+#include "core/analyzer/Analyzer.h"
+#include "core/analyzer/AnalyzerCapability.h"
+#include "core/image/ImageFrame.h"
+#include "core/plugin/PluginABI.h"
+#include "domain/Selection.h"
 
-class HeifDecoderPlugin : public IDecoderPlugin {
+#define MVIEWER_PLUGIN_EXPORT __declspec(dllexport)  // __attribute__((visibility("default"))) on Linux
+
+class MeanLuminanceAnalyzer : public Analyzer {
 public:
-    PluginInfo info() const override {
-        return {
-            .id = "mviewer.heif-decoder",
-            .name = "HEIF/HEIC Decoder",
-            .description = "Decode HEIF and HEIC images via libheif",
-            .author = "MViewer Team",
-            .version = "1.0.0",
-            .apiVersion = MVIEWER_PLUGIN_API_VERSION,
-            .website = "https://github.com/mviewer/plugins",
-            .license = "MIT",
-        };
+    std::string name() const override { return "example.mean_luminance"; }
+    std::string description() const override {
+        return "Example plugin: mean luminance of a frame or region";
     }
 
-    bool initialize(IHost* host) override {
-        m_host = host;
-        return true;
+    AnalyzerCapability capabilities() const override {
+        return AnalyzerCapability::SingleImage | AnalyzerCapability::RegionOfInterest;
     }
 
-    void shutdown() override {
-        // Cleanup
+    bool analyze(const ImageFrame& frame) override {
+        m_mean = computeMean(frame.pixels(), 0, 0, frame.width(), frame.height());
+        return !frame.pixels().isNull();
     }
 
-    std::vector<ImageFormat> supportedFormats() const override {
-        return {ImageFormat::HEIF, ImageFormat::HEIC};
+    bool analyzeRegion(const ImageFrame& frame,
+                       const mviewer::domain::Selection& region) override {
+        // The shipped example clips `region` to the frame and computes the mean
+        // over that rectangle; abbreviated here.
+        return analyze(frame);
     }
 
-    float priority() const override { return 0.8f; }
-
-    std::expected<DecodedImage, DecodeError>
-    decode(const FilePath& path, const DecodeParams& params) override {
-        // libheif decode implementation
+    std::string resultText() const override {
+        return "mean luminance = " + std::to_string(m_mean);
     }
-
-    std::expected<DecodedImage, DecodeError>
-    decodeThumbnail(const FilePath& path, int maxEdgeLength) override {
-        // Fast thumbnail decode
-    }
-
-    bool supportsAnimation() const override { return false; }
-
-    bool isEnabled() const override { return m_enabled; }
-    void setEnabled(bool enabled) override { m_enabled = enabled; }
 
 private:
-    IHost* m_host = nullptr;
-    bool m_enabled = true;
+    static double computeMean(const ImageData& img, int x0, int y0, int w, int h);
+    double m_mean = 0.0;
 };
 
 extern "C" {
 
-IPlugin* mviewer_plugin_create() {
-    return new HeifDecoderPlugin();
+MVIEWER_PLUGIN_EXPORT Analyzer* createAnalyzer() {
+    return new MeanLuminanceAnalyzer();
 }
 
-void mviewer_plugin_destroy(IPlugin* plugin) {
-    delete plugin;
+MVIEWER_PLUGIN_EXPORT void destroyAnalyzer(Analyzer* analyzer) {
+    delete analyzer;
 }
 
-int mviewer_plugin_api_version() {
-    return MVIEWER_PLUGIN_API_VERSION;
+MVIEWER_PLUGIN_EXPORT const char* pluginName() {
+    return "example.mean_luminance";
+}
+
+// M14.2: declare the frozen ABI triple so the host can verify compatibility.
+MVIEWER_PLUGIN_EXPORT const PluginABI* mviewer_plugin_abi() {
+    static const PluginABI abi;  // defaults to {api=1, abi=1, sdk=10000}
+    return &abi;
+}
+
+MVIEWER_PLUGIN_EXPORT int mviewer_plugin_api_version() {  // legacy fallback
+    return MVIEWER_API_VERSION;
 }
 
 } // extern "C"
@@ -438,15 +472,14 @@ int mviewer_plugin_api_version() {
 ### Official Plugins
 
 - Maintained by MViewer core team
-- Distributed with the application
-- Located in `<install_dir>/plugins/`
+- The reference plugins in `plugins/example/` are built by `.\build.ps1 Release` and land next to the MViewer binaries
+- The release package itself ships without plugins; the `<exe dir>/plugins` home is created empty on first run
 
 ### Community Plugins
 
 - Third-party maintained
-- Distributed via GitHub releases or plugin registry
-- User installs by copying to plugin directory
-- Future: built-in plugin manager for discovery and updates
+- Distributed via GitHub releases
+- Installed by copying the library into `<exe dir>/plugins`, or into any directory added to the Plugin Settings search-path list; there is no download-and-update mechanism
 
 ### Plugin Registry (Future)
 
@@ -463,9 +496,9 @@ int mviewer_plugin_api_version() {
 | ------------- | -------- |
 | Plugin discovery | < 50ms |
 | Plugin load | < 100ms |
-| Plugin initialization | < 200ms |
+| Plugin registration (kind probe) | < 200ms |
 | Decode plugin overhead | < 1ms per call |
-| Plugin crash isolation | No application crash |
+| Plugin crash isolation | Target only: in-process plugins are not isolated, and a memory-corrupting plugin can take the process down (see Plugin Security) |
 | Memory overhead per plugin | < 10MB baseline |
 
 ### Constraints
@@ -479,20 +512,18 @@ int mviewer_plugin_api_version() {
 
 ## API Version History
 
-### Version 1 (Initial)
+### Version 1 (current, frozen)
 
-- `IDecoderPlugin` — Image format support
-- `IMetadataPlugin` — Metadata format support
-- `IUIExtensionPlugin` — UI contributions
-- `IExportPlugin` — Export/conversion support
-- `IHost` — Logging, settings, cache read, UI messaging
-- Plugin discovery via filesystem scanning
-- In-process execution only
+- `Analyzer` (`core/analyzer/Analyzer.h`) — analysis algorithms, full frame + region
+- `IDecoder` (`core/image/decoder/IDecoder.h`) — image format support
+- `IExporter` (`core/export/IExporter.h`) — export / conversion support
+- `IImporter` (`core/import/IImporter.h`) — external catalog → `Workspace`
+- `ICompareAlgorithm` (`core/compare/ICompareAlgorithm.h`) — compare metrics + optional heatmap
+- Frozen ABI descriptor `mviewer_plugin_abi()` (`apiVersion` 1 / `abiVersion` 1 / `sdkVersion` 10000)
+- Discovery by directory scan next to the executable; in-process execution only
 
-### Future Versions
+### Not in the SDK
 
-- `IImageProcessorPlugin` — Pixel-level filters (future)
-- `ICollectionPlugin` — Virtual folder sources (future)
-- `IAutomationPlugin` — Scripting/automation hooks (future)
-- Out-of-process execution option
-- Plugin signing and verification
+- Metadata-handler and UI-extension plugin kinds do not exist
+- Out-of-process execution, plugin signing and a built-in plugin registry are
+  ideas only; none of them is implemented

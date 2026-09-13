@@ -13,31 +13,56 @@ on Qt UI types).
 
 ## Interface (contract)
 ```cpp
-namespace mviewer::core {
-
-// Base interface every analyzer implements.
-class IAnalyzer {
+// Global scope — not inside a namespace (src/core/analyzer/Analyzer.h).
+// Base class every analyzer implements.
+class Analyzer {
 public:
-    virtual ~IAnalyzer() = default;
-    virtual std::string name() const = 0;            // e.g. "Histogram"
-    virtual bool analyze(const ImageFrame &frame) = 0; // run; stash result internally
-    // result accessors depend on analyzer type (e.g. histogram bins, scalar metrics)
+    virtual ~Analyzer() = default;
+
+    static void registerBuiltins();                  // idempotent; called by AnalyzerRegistry::instance()
+
+    virtual std::string name() const = 0;            // stable id, e.g. "histogram"
+    virtual std::string description() const = 0;
+    virtual bool analyze(const ImageFrame &frame) = 0;                                  // run; stash result internally
+    virtual bool analyzeRegion(const ImageFrame &frame,
+                               const mviewer::domain::Selection &region) = 0;           // ROI variant
+
+    // Optional hooks, each with a default implementation.
+    virtual std::string resultText() const;                                  // human-readable summary
+    virtual std::unordered_map<std::string, double> resultMetrics() const;   // machine metrics (batch export)
+    virtual AnalyzerCapability capabilities() const;                         // default SingleImage
+    virtual AnalyzerInfo info() const;                                       // self-describing metadata
 };
 
 // Process-wide registry.
 class AnalyzerRegistry {
 public:
-    using AnalyzerCreator = std::function<std::unique_ptr<IAnalyzer>()>;
+    // A factory returns an analyzer plus the deleter that owns it, so a plugin
+    // can free the instance in its own module.
+    using AnalyzerDeleter = std::function<void(Analyzer *)>;
+    using AnalyzerCreator = std::function<std::unique_ptr<Analyzer, AnalyzerDeleter>()>;
 
     static AnalyzerRegistry &instance();
     void registerAnalyzer(const std::string &id, AnalyzerCreator creator);
-    std::unique_ptr<IAnalyzer> getAnalyzer(const std::string &id) const;
-    // Run every registered analyzer on a frame; returns ids that succeeded.
-    std::vector<std::string> runAnalyzer(const ImageFrame &frame) const;
-    std::vector<std::string> registeredIds() const;
-};
+    void unregister(const std::string &id);
 
-} // namespace mviewer::core
+    std::unique_ptr<Analyzer, AnalyzerDeleter> create(const std::string &id) const;
+    std::unique_ptr<Analyzer, AnalyzerDeleter> getAnalyzer(const std::string &id) const;  // alias of create()
+    std::vector<std::string> availableAnalyzers() const;                     // registered ids
+
+    // Run every registered analyzer on a frame (AnalysisPool, bounded 10 s drain);
+    // returns id -> resultText() for analyzers that produced a non-empty text.
+    std::unordered_map<std::string, std::string> runAnalyzer(const ImageFrame &frame) const;
+
+    // Run one analyzer by id over many (filename, frame) pairs.
+    std::vector<mviewer::analyzer::AnalyzerResult>
+    runBatch(const std::vector<std::pair<std::string, std::shared_ptr<ImageFrame>>> &frames,
+             const std::string &id) const;
+
+    AnalyzerCapability capabilitiesOf(const std::string &id) const;
+    std::optional<AnalyzerInfo> infoFor(const std::string &id) const;
+    std::vector<std::string> queryByCapability(AnalyzerCapability required) const;
+};
 ```
 
 ## Built-in analyzers (`core/analyzer/`)
@@ -51,11 +76,18 @@ public:
 | Noise | `NoiseAnalyzer.{h,cpp}` | noise estimate |
 | Entropy | `EntropyAnalyzer.{h,cpp}` | Shannon entropy |
 
+`Analyzer::registerBuiltins()` registers fifteen ids in total. The remaining
+(M13/M15) ones are `mtf`, `deadpixel`, `colorchecker`, `brightness`, `contrast`,
+`blur`, `colorcast`, `exposure`, implemented by `MTFAnalyzer`,
+`DeadPixelAnalyzer`, `ColorCheckerAnalyzer`, `BrightnessAnalyzer`,
+`ContrastAnalyzer`, `BlurAnalyzer`, `ColorCastAnalyzer`, `ExposureAnalyzer`.
+
 ## Thread-safety
 `AnalyzerRegistry` singleton construction is C++11-thread-safe. Registration is
 expected at startup (single-threaded init); `runAnalyzer` is read-only on the
-registry and safe to call from worker threads. Individual `IAnalyzer` instances
-are created per-call via `getAnalyzer` and are not shared across threads.
+registry and safe to call from worker threads. Individual `Analyzer` instances
+are created per-call via `create()` / `getAnalyzer()` and are not shared across
+threads, so an analyzer may keep per-run state in its members.
 
 ## Product flow (review P1 / Scenario C)
 `ImageFrame → AnalyzerRegistry::runAnalyzer → AnalysisPanel` renders results.

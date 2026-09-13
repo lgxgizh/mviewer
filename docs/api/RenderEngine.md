@@ -1,7 +1,8 @@
 # API — RenderEngine
 
 **Header**: `src/core/render/RenderEngine.h`
-**Layer**: core (mostly Qt-free; **sanctioned** `QPainter` boundary — see M12.5 §5.1)
+**Layer**: core (no Qt *include* — forward-declared `QPainter`/`QRect` in the
+rasterization API; see the Qt boundary note and `docs/adr/016-qt-boundary-in-core-headers.md`)
 
 ## Purpose
 CPU rasterization facade. Produces `ImageData` (Qt-free pixel buffer) for scaled
@@ -11,8 +12,7 @@ facade plus a `RenderCommand` pipeline.
 
 ## Interface (contract)
 ```cpp
-namespace mviewer::core {
-
+// Global scope: RenderEngine.h opens no namespace, so every type below is global.
 enum class RenderCommandType { DrawImage, DrawOverlay, DrawHistogram,
                                DrawSelection, DrawHeatmap, DrawPixelMarker };
 enum class RenderInterp { Nearest, Bilinear, Bicubic, Lanczos };
@@ -43,22 +43,27 @@ public:
     ImageData executeCommands(const std::vector<RenderCommand> &) const;
     static ImageData scaleStatic(...); // backend-independent helpers
 
-    // ── SANCTIONED Qt boundary (M12.5 §5.1) ──
+    // ── Qt in the API (no Qt include; QPainter/QRect are forward-declared) ──
     // Rasterizes a command onto a caller-supplied QPainter (UI-side compositing).
     void executeCommand(QPainter &painter, const RenderCommand &cmd, const QRect &viewport);
 };
-
-} // namespace mviewer::core
 ```
 
 ## Qt boundary note (important)
-`RenderEngine.h` includes `<QPainter>` and exposes `executeCommand(QPainter&, …)`
-plus private `executeDrawXxx(QPainter&, …)` dispatchers. This is the **single
-deliberate spot** where the Qt-free core does CPU rasterization against a
-`QPainter`. Everything else in the header operates on `ImageData`. This is
-**sanctioned** (documented in M12.5 §5.1); RenderEngine is frozen per AGENTS.md,
-so it is NOT being refactored out in M12. The remaining GPU/tile pipeline (review
-P2) is a post-1.0 item.
+`RenderEngine.h` does **not** include `<QPainter>`: it forward-declares
+`class QPainter; class QRect;` (header lines 12-13) and exposes
+`executeCommand(QPainter &, const RenderCommand &, const QRect &)` (line 213)
+plus private `executeDrawXxx(QPainter &, …)` dispatchers (lines 220-224). So it
+is the spot where core rasterizes against a caller-supplied `QPainter`, and the
+header is "no Qt include", not "Qt-free" — a caller needs Qt to call that
+overload. That is exactly the rule `docs/adr/016-qt-boundary-in-core-headers.md`
+states and that the **R5** check in `scripts/architecture_gate.ps1` enforces:
+core/domain headers must not *include* Qt, with only
+`core/image/QtConvert.h` + `core/image/QtMetadataSemantics.h` allow-listed —
+`RenderEngine.h` is **not** one of those two exceptions, because it has no Qt
+include to except. RenderEngine is frozen per AGENTS.md, so it is NOT being
+refactored out in M12. The remaining GPU/tile pipeline (review P2) is a post-1.0
+item.
 
 ## Thread-safety
 `RenderEngine::instance()` is a Meyers singleton (thread-safe init). `ImageData`

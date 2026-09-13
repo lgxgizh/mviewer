@@ -76,11 +76,18 @@ executed the task; UI consumers marshal to the UI thread themselves.
 
 Interface: `Analyzer { name(), description(), analyze(frame), analyzeRegion(frame, region); }`
 
-Register via global static: `registerAnalyzer(id, factory)`.
+Register via the process-wide registry: `AnalyzerRegistry::instance().registerAnalyzer(id, creator)`, where a creator returns `std::unique_ptr<Analyzer, AnalyzerDeleter>` (the deleter lets a plugin free the instance in its own module). `Analyzer::registerBuiltins()` registers the built-in ids idempotently and is called from `AnalyzerRegistry::instance()`.
 
-Built-in IDs: `histogram`, `rgbmean`, `noise`, `psnr`, `ssim`, `entropy`, `sharpness`.
+Built-in IDs: `histogram`, `noise`, `entropy`, `psnr`, `rgbmean`, `sharpness`,
+`ssim`, `mtf`, `deadpixel`, `colorchecker`, `brightness`, `contrast`, `blur`,
+`colorcast`, `exposure` (see `Analyzer::registerBuiltins()`).
 
-**Future:** `AnalyzerCapability` (single/multi image/ROI/streaming/GPU) — agents query automatically.
+**Implemented:** `AnalyzerCapability` (`SingleImage`, `MultiImage`,
+`RegionOfInterest`, `Streaming`, `GPU`, `HistogramOutput`, `StatsOutput`,
+`QualityMetric`, `DifferenceOutput`) — `src/core/analyzer/AnalyzerCapability.h`.
+Every analyzer reports `capabilities()`, and callers query it without
+instantiating the analyzer through `AnalyzerRegistry::capabilitiesOf(id)` and
+`queryByCapability(required)`.
 
 ## Module: RenderEngine
 
