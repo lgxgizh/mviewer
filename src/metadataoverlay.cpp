@@ -165,24 +165,37 @@ void MetadataOverlay::requestMetadata()
     m_requestActive = true;
     mviewer::core::MetadataPresentationService::instance().request(
         path.toStdString(), m_consumerId,
-        [guard, path, generation](const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
+        [guard, path,
+         generation](const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
         {
-            if (!guard || !guard->isVisible() || guard->m_requestedPath != path ||
-                guard->m_requestGeneration != generation)
+            if (!guard)
                 return;
-            guard->m_requestActive = false;
-            if (!snapshot.valid())
-            {
-                // The service delivers an empty snapshot for a deleted, corrupt
-                // or unsupported file; painting it showed "尺寸: 0 B / 格式: "
-                // instead of clearing the overlay (its two sibling consumers
-                // already guard for this).
-                guard->m_lines.clear();
-                guard->update();
-                return;
-            }
-            guard->buildContent(snapshot);
-            guard->update();
+            // The service defers delivery through the process main-thread
+            // dispatcher, but the overlay must not depend on that: hop
+            // explicitly so a test/headless run without a dispatcher cannot
+            // paint from a worker thread.
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, path, generation, snapshot]()
+                {
+                    if (!guard || !guard->isVisible() || guard->m_requestedPath != path ||
+                        guard->m_requestGeneration != generation)
+                        return;
+                    guard->m_requestActive = false;
+                    if (!snapshot.valid())
+                    {
+                        // The service delivers an empty snapshot for a deleted,
+                        // corrupt or unsupported file; painting it showed
+                        // "尺寸: 0 B / 格式: " instead of clearing the overlay (its
+                        // two sibling consumers already guard for this).
+                        guard->m_lines.clear();
+                        guard->update();
+                        return;
+                    }
+                    guard->buildContent(snapshot);
+                    guard->update();
+                },
+                Qt::QueuedConnection);
         });
 }
 
@@ -198,7 +211,8 @@ void MetadataOverlay::buildContent(
     // Basic file info
     m_lines << QString("文件: %1").arg(m_shortName);
     m_lines << QString("路径: %1")
-                   .arg(QString::fromUtf8(meta.filePath.data(), static_cast<int>(meta.filePath.size())));
+                   .arg(QString::fromUtf8(meta.filePath.data(),
+                                          static_cast<int>(meta.filePath.size())));
     m_lines << QString("尺寸: %1").arg(formatFileSize(meta.fileSize));
     m_lines << QString("格式: %1").arg(QString::fromStdString(meta.format));
 

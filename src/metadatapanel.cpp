@@ -12,8 +12,8 @@
 #include <QHeaderView>
 #include <QHideEvent>
 #include <QLabel>
-#include <QPushButton>
 #include <QPointer>
+#include <QPushButton>
 #include <QTreeView>
 #include <QVBoxLayout>
 
@@ -120,7 +120,8 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
             {
                 if (m_currentPath.isEmpty())
                     return;
-        mviewer::core::RatingStore::instance().setRejected(m_currentPath.toUtf8().toStdString(), on);
+                mviewer::core::RatingStore::instance().setRejected(
+                    m_currentPath.toUtf8().toStdString(), on);
                 emitFlags();
             });
     connect(m_pickBtn, &QPushButton::toggled, this,
@@ -128,7 +129,8 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
             {
                 if (m_currentPath.isEmpty())
                     return;
-        mviewer::core::RatingStore::instance().setPicked(m_currentPath.toUtf8().toStdString(), on);
+                mviewer::core::RatingStore::instance().setPicked(
+                    m_currentPath.toUtf8().toStdString(), on);
                 emitFlags();
             });
     layout->addWidget(flagBox);
@@ -156,7 +158,8 @@ void MetadataPanel::setImage(const QString &path)
 
     auto &rs = mviewer::core::RatingStore::instance();
     m_rating->setRating(rs.rating(path.toUtf8().toStdString()));
-    m_colorLabel->setCurrentIndex(m_colorLabel->findData(rs.colorLabel(path.toUtf8().toStdString())));
+    m_colorLabel->setCurrentIndex(
+        m_colorLabel->findData(rs.colorLabel(path.toUtf8().toStdString())));
     m_rejectBtn->setChecked(!path.isEmpty() && rs.rejected(path.toUtf8().toStdString()));
     m_pickBtn->setChecked(!path.isEmpty() && rs.picked(path.toUtf8().toStdString()));
 
@@ -196,22 +199,34 @@ void MetadataPanel::requestMetadata()
     QPointer<MetadataPanel> guard(this);
     mviewer::core::MetadataPresentationService::instance().request(
         path.toUtf8().toStdString(), m_consumerId,
-        [guard, path, generation](const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
+        [guard, path,
+         generation](const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
         {
-            if (!guard || !guard->isVisible() || guard->m_currentPath != path ||
-                guard->m_requestGeneration != generation)
+            if (!guard)
                 return;
-            const auto &meta = snapshot.metadata;
-            if (meta.filePath.empty())
-            {
-                guard->m_model->clear();
-                guard->m_model->setImage(meta);
-                return;
-            }
-            guard->m_model->setImage(meta);
-            guard->m_model->setRaw(snapshot.raw);
-            guard->m_tree->expandAll();
-            guard->m_tree->setColumnWidth(0, 130);
+            // Explicit hop: the service already defers to the process
+            // main-thread dispatcher, but the panel must stay correct even
+            // without one (tests / headless runs).
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, path, generation, snapshot]()
+                {
+                    if (!guard || !guard->isVisible() || guard->m_currentPath != path ||
+                        guard->m_requestGeneration != generation)
+                        return;
+                    const auto &meta = snapshot.metadata;
+                    if (meta.filePath.empty())
+                    {
+                        guard->m_model->clear();
+                        guard->m_model->setImage(meta);
+                        return;
+                    }
+                    guard->m_model->setImage(meta);
+                    guard->m_model->setRaw(snapshot.raw);
+                    guard->m_tree->expandAll();
+                    guard->m_tree->setColumnWidth(0, 130);
+                },
+                Qt::QueuedConnection);
         });
 }
 
@@ -234,8 +249,8 @@ void MetadataPanel::requestMetadata()
     m_model->setImage(meta);
 
     // M14-2: if the file is a RAW format, also show sensor metadata.
-    const mviewer::core::RawMetadata rm = mviewer::core::parseRawMetadata(path.toUtf8().toStdString());
-    m_model->setRaw(rm);
+    const mviewer::core::RawMetadata rm =
+   mviewer::core::parseRawMetadata(path.toUtf8().toStdString()); m_model->setRaw(rm);
 
     m_tree->expandAll();
     m_tree->setColumnWidth(0, 130);

@@ -1,16 +1,17 @@
-#include "core/image/QtConvert.h"
 #include "core/compare/CompareEngine.h"
+#include "core/image/QtConvert.h"
 #include "core/metadata/MetadataPresentationService.h"
 #include "core/scheduler/TaskScheduler.h"
 
 #include <QColorSpace>
 #include <QCoreApplication>
 #include <QDir>
-#include <QImage>
-#include <QTemporaryDir>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QImage>
+#include <QTemporaryDir>
 
+#include <atomic>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -23,7 +24,7 @@ static int g_fail = 0;
     {                                                                                              \
         if (!(c))                                                                                  \
         {                                                                                          \
-            std::printf("FAIL: %s\n", m);                                                         \
+            std::printf("FAIL: %s\n", m);                                                          \
             ++g_fail;                                                                              \
         }                                                                                          \
     } while (0)
@@ -52,8 +53,7 @@ static void checkSyncAxes()
     sync.setDragEnabled(false);
     sync.setScale(3.0);
     sync.setOffset(50.0, 60.0);
-    CHECK(sync.cell(0).scale == 3.0 && sync.cell(1).scale == 3.0,
-          "Zoom-only propagates scale");
+    CHECK(sync.cell(0).scale == 3.0 && sync.cell(1).scale == 3.0, "Zoom-only propagates scale");
     CHECK(sync.cell(0).offset.x == 10.0 && sync.cell(1).offset.x == 30.0,
           "Zoom-only preserves pane offsets");
 
@@ -84,29 +84,31 @@ static void checkMetadataSingleFlight(int argc, char **argv)
     auto &scheduler = TaskScheduler::instance();
     scheduler.drain(TaskScheduler::MetadataPool, 5s);
     const uint64_t submitted = scheduler.metrics(TaskScheduler::MetadataPool).submitted;
-    int delivered = 0;
-    bool firstValid = false;
-    bool secondValid = false;
+    // Inline delivery on the worker thread when no dispatcher is installed, so
+    // the shared state the callbacks touch is atomic.
+    std::atomic<int> delivered{0};
+    std::atomic<bool> firstValid{false};
+    std::atomic<bool> secondValid{false};
     service.request(path.toStdString(), "m36-consumer-a",
                     [&](const auto &snapshot)
                     {
-                        ++delivered;
-                        firstValid = snapshot.valid();
+                        delivered.fetch_add(1);
+                        firstValid.store(snapshot.valid());
                     });
     service.request(path.toStdString(), "m36-consumer-b",
                     [&](const auto &snapshot)
                     {
-                        ++delivered;
-                        secondValid = snapshot.valid();
+                        delivered.fetch_add(1);
+                        secondValid.store(snapshot.valid());
                     });
     CHECK(scheduler.metrics(TaskScheduler::MetadataPool).submitted == submitted + 1,
           "two metadata consumers share one flight");
     scheduler.drain(TaskScheduler::MetadataPool, 5s);
     QElapsedTimer timer;
     timer.start();
-    while (delivered < 2 && timer.elapsed() < 5000)
+    while (delivered.load() < 2 && timer.elapsed() < 5000)
         QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
-    CHECK(delivered == 2 && firstValid && secondValid,
+    CHECK(delivered.load() == 2 && firstValid.load() && secondValid.load(),
           "all metadata consumers receive one immutable result");
     CHECK(service.cached(path.toStdString()).has_value(),
           "metadata result is retained as a memory snapshot");
@@ -128,8 +130,8 @@ int main(int argc, char **argv)
     (*source.buffer)[5] = 220;
     const std::vector<uint8_t> before = *source.buffer;
 
-    const std::vector<QColorSpace> spaces = {
-        QColorSpace::SRgb, QColorSpace::AdobeRgb, QColorSpace::DisplayP3};
+    const std::vector<QColorSpace> spaces = {QColorSpace::SRgb, QColorSpace::AdobeRgb,
+                                             QColorSpace::DisplayP3};
     for (const QColorSpace &space : spaces)
     {
         const auto meta = profileMeta(space);

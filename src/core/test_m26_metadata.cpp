@@ -11,6 +11,7 @@
 // cancels the previous handle unconditionally — consumer B's request cancels
 // consumer A's in-flight request, and A's onDone is silently dropped.
 
+#include "core/MainThreadDispatcher.h"
 #include "core/metadata/MetadataIndexer.h"
 #include "core/scheduler/TaskScheduler.h"
 
@@ -25,6 +26,9 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <deque>
+#include <functional>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -52,7 +56,7 @@ namespace
 
 using Entry = mviewer::core::MetadataIndexer::Entry;
 
-// Pump the event loop so queued (main-thread-marshaled) callbacks can land.
+// Pump the event loop so queued callbacks can land.
 void pump(int ms)
 {
     QElapsedTimer t;
@@ -62,6 +66,54 @@ void pump(int ms)
         QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
     } while (t.elapsed() < ms);
 }
+
+// Deterministic stand-in for the UI event loop: collects the deliveries core
+// posts to the main thread (core/MainThreadDispatcher.h) so a test decides
+// exactly when they run. No Qt event loop is involved — that is the point of
+// injecting the dispatcher instead of sniffing for a QCoreApplication.
+class ManualDispatcher
+{
+  public:
+    void install()
+    {
+        mvcore::setMainThreadDispatcher([this](std::function<void()> fn)
+                                        { enqueue(std::move(fn)); });
+    }
+
+    static void uninstall()
+    {
+        mvcore::setMainThreadDispatcher({});
+    }
+
+    size_t pending() const
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_queue.size();
+    }
+
+    // Runs everything queued so far, in posting order.
+    size_t flush()
+    {
+        std::deque<std::function<void()>> queued;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            queued.swap(m_queue);
+        }
+        for (auto &fn : queued)
+            fn();
+        return queued.size();
+    }
+
+  private:
+    void enqueue(std::function<void()> fn)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_queue.push_back(std::move(fn));
+    }
+
+    mutable std::mutex m_mutex;
+    std::deque<std::function<void()>> m_queue;
+};
 
 // Wait until `flag` is true or `ms` elapses.
 bool waitFor(std::atomic<bool> &flag, int ms)
@@ -83,8 +135,7 @@ std::vector<std::string> makeDngs(QTemporaryDir &tmp, int count)
     paths.reserve(static_cast<size_t>(count));
     for (int i = 0; i < count; ++i)
     {
-        const std::string p =
-            tmp.path().toStdString() + "/img_" + std::to_string(i) + ".dng";
+        const std::string p = tmp.path().toStdString() + "/img_" + std::to_string(i) + ".dng";
         QFile f(QString::fromStdString(p));
         f.open(QIODevice::WriteOnly);
         f.close();
@@ -157,10 +208,7 @@ void testDualConsumerReverseOrder()
     // Consumer B (filter) first.
     std::atomic<int> bEntries{0};
     std::atomic<bool> bDone{false};
-    indexer.index(
-        all,
-        [&](const Entry &) { bEntries.fetch_add(1); },
-        [&]() { bDone = true; });
+    indexer.index(all, [&](const Entry &) { bEntries.fetch_add(1); }, [&]() { bDone = true; });
 
     // Consumer A (search) second, same directory.
     std::atomic<bool> aDone{false};
@@ -193,9 +241,7 @@ void testSameConsumerSupersedeCompletes()
     std::atomic<bool> secondDone{false};
     std::atomic<int> secondEntries{0};
     const uint64_t secondReq = indexer.index(
-        a,
-        [&](const Entry &) { secondEntries.fetch_add(1); },
-        [&]() { secondDone = true; });
+        a, [&](const Entry &) { secondEntries.fetch_add(1); }, [&]() { secondDone = true; });
     CHECK(secondReq != 0, "second request accepted");
 
     CHECK(waitFor(secondDone, 15000), "the newer same-consumer request completes");
@@ -233,14 +279,14 @@ void testCancelRequestIsolation()
 
     std::atomic<bool> blockerStarted{false};
     std::atomic<bool> releaseBlocker{false};
-    const auto blocker = sched.submit(
-        TaskScheduler::Priority::Background,
-        [&blockerStarted, &releaseBlocker](const TaskScheduler::TaskContext &)
-        {
-            blockerStarted.store(true, std::memory_order_release);
-            while (!releaseBlocker.load(std::memory_order_acquire))
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        });
+    const auto blocker =
+        sched.submit(TaskScheduler::Priority::Background,
+                     [&blockerStarted, &releaseBlocker](const TaskScheduler::TaskContext &)
+                     {
+                         blockerStarted.store(true, std::memory_order_release);
+                         while (!releaseBlocker.load(std::memory_order_acquire))
+                             std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                     });
     if (!blocker)
     {
         CHECK(false, "blocker accepted (Background pool not paused/saturated)");
@@ -277,11 +323,14 @@ void testCancelRequestIsolation()
     sched.setPoolMaxThreads(TaskScheduler::PoolType::MetadataPool, restoreThreads);
 }
 
-// The worker has FINISHED (all callbacks marshaled to the main-thread queue)
-// but none has been DELIVERED yet. cancelRequest() in that window must
-// suppress every queued callback: the old code erased the request on the
+// The worker has FINISHED (every closure is posted to the main-thread
+// dispatcher) but none has been DELIVERED yet. cancelRequest() in that window
+// must suppress every posted callback: the old code erased the request on the
 // worker right after posting, so cancelRequest() found nothing and the stale
 // closures fired against the (potentially gone) consumer state.
+//
+// The dispatcher is supplied by the test, so the window is controlled exactly
+// instead of depending on the Qt event loop being unpumped.
 void testCancelAfterWorkerBeforeDelivery()
 {
     printf("\n[cancel after worker finished but before queued delivery]\n");
@@ -290,28 +339,73 @@ void testCancelAfterWorkerBeforeDelivery()
     indexer.cancel();
     auto &sched = TaskScheduler::instance();
 
+    ManualDispatcher dispatcher;
+    dispatcher.install();
+
     QTemporaryDir tmp;
     const std::vector<std::string> a = makeDngs(tmp, 20);
 
     std::atomic<int> entries{0};
     std::atomic<bool> done{false};
+    const uint64_t req =
+        indexer.index(a, [&](const Entry &) { entries.fetch_add(1); }, [&]() { done = true; });
+    CHECK(req != 0, "request accepted");
+
+    // Let the worker run to completion: every onEntry/onDone is posted to the
+    // dispatcher and held there, so not one has been delivered yet.
+    CHECK(sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15)),
+          "worker drains within timeout");
+    CHECK(dispatcher.pending() >= a.size(),
+          "every entry delivery waits in the dispatcher queue (deferred, not inline)");
+    CHECK(entries.load() == 0, "nothing is delivered before the dispatcher runs");
+
+    // The request is finished but its posted callbacks are still pending:
+    // cancelling now must drop ALL of them (no stale consumer state).
+    indexer.cancelRequest(req);
+    dispatcher.flush();
+    CHECK(entries.load() == 0, "no queued entry callbacks fire after cancel");
+    CHECK(!done.load(), "queued completion never fires after cancel");
+
+    ManualDispatcher::uninstall();
+}
+
+// Without an installed dispatcher (headless tool, unit test) delivery is inline
+// on the worker thread — deterministic, and never silently "marshaled into
+// whatever Qt application happens to exist". This binary HAS a QCoreApplication:
+// the assertion below would fail before the dispatcher became explicit.
+void testInlineDeliveryWithoutDispatcher()
+{
+    printf("\n[no dispatcher installed: delivery runs inline on the worker]\n");
+    fflush(stdout);
+    auto &indexer = mviewer::core::MetadataIndexer::instance();
+    indexer.cancel();
+    CHECK(!mvcore::hasMainThreadDispatcher(), "no dispatcher is installed for this test");
+
+    QTemporaryDir tmp;
+    const std::vector<std::string> a = makeDngs(tmp, 8);
+
+    const std::thread::id caller = std::this_thread::get_id();
+    std::atomic<int> entries{0};
+    std::atomic<bool> done{false};
+    std::atomic<bool> deliveredOffCallerThread{false};
     const uint64_t req = indexer.index(
         a,
-        [&](const Entry &) { entries.fetch_add(1); },
+        [&](const Entry &)
+        {
+            entries.fetch_add(1);
+            if (std::this_thread::get_id() != caller)
+                deliveredOffCallerThread.store(true);
+        },
         [&]() { done = true; });
     CHECK(req != 0, "request accepted");
 
-    // Let the worker run to completion WITHOUT pumping the Qt event loop, so
-    // every onEntry/onDone is queued but not one is delivered.
-    CHECK(sched.drain(TaskScheduler::PoolType::MetadataPool, std::chrono::seconds(15)),
-          "worker drains within timeout");
-
-    // The request is finished but its queued callbacks are still pending:
-    // cancelling now must drop ALL of them (no stale consumer state).
-    indexer.cancelRequest(req);
-    pump(1500);
-    CHECK(entries.load() == 0, "no queued entry callbacks fire after cancel");
-    CHECK(!done.load(), "queued completion never fires after cancel");
+    // No pump() here on purpose: an inline delivery needs no event loop.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
+    while (!done.load() && std::chrono::steady_clock::now() < deadline)
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    CHECK(done.load(), "index completes without pumping any event loop");
+    CHECK(entries.load() == 8, "every entry is delivered without an event loop");
+    CHECK(deliveredOffCallerThread.load(), "delivery happens on the worker thread");
 }
 
 // ─── Bounded cache + value-semantics reads ──────────────────────────────────
@@ -368,6 +462,7 @@ int main(int argc, char **argv)
     testSameConsumerSupersedeCompletes();
     testCancelRequestIsolation();
     testCancelAfterWorkerBeforeDelivery();
+    testInlineDeliveryWithoutDispatcher();
     testCacheBoundAndValueSemantics();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

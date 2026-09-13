@@ -1,14 +1,13 @@
 #include "core/metadata/MetadataIndexer.h"
 
+#include "core/MainThreadDispatcher.h"
 #include "core/image/MetadataReader.h"
 #include "core/image/RawMetadata.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/search/MetadataFilter.h"
 
-#include <QCoreApplication>
 #include <QFileInfo>
 #include <QString>
-#include <QTimer>
 
 #include <algorithm>
 #include <cctype>
@@ -98,27 +97,20 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, const Ent
         m_requestCancel[requestId] = cancelToken;
     }
 
-    // Marshals `fn` to the main thread; delivers only while THIS request is
-    // still alive (cancelled requests drop their remaining deliveries).
-    auto deliver = [this, requestId, cancelToken](const std::function<void()> &fn)
+    // Defers `fn` through the process main-thread dispatcher and re-checks the
+    // token when it finally runs, so a request cancelled after its worker
+    // finished still drops every already-posted delivery. With no dispatcher
+    // installed the closure runs inline on this worker thread.
+    auto deliver = [cancelToken](const std::function<void()> &fn)
     {
         if (cancelToken->load())
             return;
-        if (QCoreApplication::instance())
-        {
-            // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
-            QTimer::singleShot(0, QCoreApplication::instance(),
-                               [requestId, cancelToken, fn]()
-                               {
-                                   if (cancelToken->load())
-                                       return; // superseded request: drop stale callback
-                                   fn();
-                               });
-        }
-        else if (!cancelToken->load())
-        {
-            fn();
-        }
+        mvcore::postToMainThread(
+            [cancelToken, fn]()
+            {
+                if (!cancelToken->load())
+                    fn();
+            });
     };
 
     auto handle = TaskScheduler::instance().submit(
@@ -194,9 +186,9 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, const Ent
                 return;
             }
 
-            // Successful run: hand completion + bookkeeping release to ONE final
-            // main-thread closure queued AFTER every per-entry delivery, so the
-            // request stays cancellable until its queued callbacks actually run
+            // Successful run: hand completion + bookkeeping release through the
+            // SAME dispatcher, queued AFTER every per-entry delivery, so the
+            // request stays cancellable until its posted callbacks actually run
             // — a late cancelRequest() (worker done, callbacks still queued)
             // must still suppress the whole tail. The erase is token-guarded so
             // it can only ever release THIS request.
@@ -220,17 +212,7 @@ uint64_t MetadataIndexer::index(const std::vector<std::string> &paths, const Ent
                 if (doneAuthorized && onDone)
                     onDone();
             };
-            if (QCoreApplication::instance())
-            {
-                // QTimer owns the context-bound functor; unlike the generic
-                // QMetaObject overload this is understood by clang-analyzer
-                // and still runs after all earlier queued entry callbacks.
-                QTimer::singleShot(0, QCoreApplication::instance(), [finalize]() { finalize(); });
-            }
-            else
-            {
-                finalize(); // no event loop: deliver synchronously
-            }
+            mvcore::postToMainThread([finalize]() { finalize(); });
         });
     if (!handle)
     {
@@ -255,24 +237,18 @@ uint64_t MetadataIndexer::indexBatched(const std::vector<std::string> &paths,
         m_requestCancel[requestId] = cancelToken;
     }
 
+    // Batch deliveries go through the same main-thread dispatcher (see the
+    // per-entry `deliver` above): deferred, token-guarded, order-preserving.
     auto deliver = [cancelToken](const std::function<void()> &fn)
     {
         if (cancelToken->load())
             return;
-        if (QCoreApplication::instance())
-        {
-            // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks)
-            QTimer::singleShot(0, QCoreApplication::instance(),
-                               [cancelToken, fn]()
-                               {
-                                   if (!cancelToken->load())
-                                       fn();
-                               });
-        }
-        else if (!cancelToken->load())
-        {
-            fn();
-        }
+        mvcore::postToMainThread(
+            [cancelToken, fn]()
+            {
+                if (!cancelToken->load())
+                    fn();
+            });
     };
 
     auto handle = TaskScheduler::instance().submit(
@@ -364,14 +340,7 @@ uint64_t MetadataIndexer::indexBatched(const std::vector<std::string> &paths,
                 if (authorized && onDone)
                     onDone();
             };
-            if (QCoreApplication::instance())
-            {
-                QTimer::singleShot(0, QCoreApplication::instance(), [finalize]() { finalize(); });
-            }
-            else
-            {
-                finalize();
-            }
+            mvcore::postToMainThread([finalize]() { finalize(); });
         });
     if (!handle)
     {

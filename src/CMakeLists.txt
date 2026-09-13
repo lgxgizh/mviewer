@@ -11,6 +11,7 @@ endif()
 add_library(mviewer_core SHARED
     runtime_storage.cpp
     core/EventBus.cpp
+    core/MainThreadDispatcher.cpp
     core/image/Decoder.cpp
     core/image/decoder/QtDecoder.cpp
     core/image/decoder/QtFallbackDecoder.cpp

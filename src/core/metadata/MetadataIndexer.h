@@ -11,7 +11,17 @@
 // authoritative index: one background pass per request, with per-path cache
 // reuse, per-request cancellation and value-semantics cache reads.
 //
-// Qt-free header; the .cpp may use Qt and the TaskScheduler.
+// Qt-free header; the .cpp may use Qt for file metadata and the TaskScheduler.
+//
+// Delivery contract (see core/MainThreadDispatcher.h): callbacks are deferred
+// through the process main-thread dispatcher — the UI installs the Qt
+// event-loop dispatcher in main.cpp — so they run on the GUI thread, in
+// submission order, after the worker stopped producing them. A request
+// cancelled in that window (worker finished, deliveries still queued) delivers
+// nothing. Consumers must NOT rely on the delivery thread for widget safety:
+// marshaling is the consumer's job, because a process without an installed
+// dispatcher (unit tests, headless tools) gets inline delivery on the worker
+// thread.
 
 #include "core/scheduler/TaskScheduler.h"
 
@@ -52,8 +62,9 @@ class MetadataIndexer
     static MetadataIndexer &instance();
 
     // Index `paths` off the UI thread. `onEntry` fires per file, `onDone` once
-    // at the end — both marshaled to the main thread. Requests are
-    // independent: starting one does NOT cancel another consumer's request.
+    // at the end — both deferred through the main-thread dispatcher (see the
+    // delivery contract above). Requests are independent: starting one does NOT
+    // cancel another consumer's request.
     // Returns the request id (never 0), or 0 when the scheduler rejected the
     // submission (caller must not wait for callbacks in that case).
     uint64_t index(const std::vector<std::string> &paths, const EntryCallback &onEntry,
@@ -61,7 +72,7 @@ class MetadataIndexer
 
     // M58: bounded batches reduce UI queue pressure from one queued closure
     // per file to one closure per batch. The batch is a value snapshot and is
-    // delivered on the main thread in directory order.
+    // delivered through the same main-thread dispatcher, in directory order.
     uint64_t indexBatched(const std::vector<std::string> &paths, const EntryBatchCallback &onBatch,
                           const DoneCallback &onDone);
 

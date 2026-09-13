@@ -1,11 +1,10 @@
 #include "core/metadata/MetadataPresentationService.h"
 
-#include "core/image/MetadataReader.h"
+#include "core/MainThreadDispatcher.h"
 #include "core/image/FrameSequence.h"
+#include "core/image/MetadataReader.h"
 
-#include <QCoreApplication>
 #include <QFileInfo>
-#include <QMetaObject>
 
 #include <utility>
 #include <vector>
@@ -27,12 +26,10 @@ std::string MetadataPresentationService::fileIdentity(const std::string &path)
     const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     if (!fi.exists())
         return {};
-    return std::to_string(fi.lastModified().toMSecsSinceEpoch()) + "|" +
-           std::to_string(fi.size());
+    return std::to_string(fi.lastModified().toMSecsSinceEpoch()) + "|" + std::to_string(fi.size());
 }
 
-uint64_t MetadataPresentationService::request(const std::string &path,
-                                              const std::string &consumer,
+uint64_t MetadataPresentationService::request(const std::string &path, const std::string &consumer,
                                               Callback callback)
 {
     if (path.empty() || consumer.empty() || !callback)
@@ -243,21 +240,17 @@ void MetadataPresentationService::runFlight(const std::shared_ptr<Flight> &fligh
             continue;
         const auto callback = std::move(callbacks[i]);
         const auto guard = guards[i];
-        if (QCoreApplication::instance())
-        {
-            QMetaObject::invokeMethod(
-                QCoreApplication::instance(),
-                [callback, guard, snapshot]()
-                {
-                    if (guard->load(std::memory_order_acquire))
-                        callback(snapshot);
-                },
-                Qt::QueuedConnection);
-        }
-        else if (guard->load(std::memory_order_acquire))
-        {
-            callback(snapshot);
-        }
+        // Deferred through the process main-thread dispatcher; the guard is
+        // re-checked when the closure finally runs, so a consumer that
+        // unregistered in the meantime is never called. Widget-touching
+        // consumers marshal themselves as well, so the delivery is safe even
+        // when no dispatcher is installed (headless/tests).
+        mvcore::postToMainThread(
+            [callback, guard, snapshot]()
+            {
+                if (guard->load(std::memory_order_acquire))
+                    callback(snapshot);
+            });
     }
 }
 

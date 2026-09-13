@@ -14,6 +14,7 @@
 #include <QEventLoop>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <string>
@@ -93,25 +94,28 @@ void runMetadataBatchCases()
     for (int i = 0; i < 513; ++i)
         paths.push_back("M58/batch_" + std::to_string(i) + ".jpg");
 
-    size_t delivered = 0;
-    size_t batchCount = 0;
-    size_t largestBatch = 0;
-    bool done = false;
+    // Batches are delivered inline on the worker thread when no main-thread
+    // dispatcher is installed and deferred through it otherwise, so the shared
+    // counters are atomic in both cases.
+    std::atomic<size_t> delivered{0};
+    std::atomic<size_t> batchCount{0};
+    std::atomic<size_t> largestBatch{0};
+    std::atomic<bool> done{false};
     const uint64_t requestId = Indexer::instance().indexBatched(
         paths,
         [&](const std::vector<Indexer::Entry> &batch)
         {
-            ++batchCount;
-            delivered += batch.size();
-            largestBatch = std::max(largestBatch, batch.size());
+            batchCount.fetch_add(1);
+            delivered.fetch_add(batch.size());
+            largestBatch.store(std::max(largestBatch.load(), batch.size()));
         },
-        [&]() { done = true; });
+        [&]() { done.store(true); });
     CHECK(requestId != 0, "batched metadata index request is accepted");
-    waitFor([&]() { return done; });
-    CHECK(done, "batched metadata index completes");
-    CHECK(delivered == paths.size(), "batched metadata delivers every entry");
-    CHECK(batchCount == 3, "513 entries are published in 256-sized batches");
-    CHECK(largestBatch <= 256, "metadata batches never exceed 256 entries");
+    waitFor([&]() { return done.load(); });
+    CHECK(done.load(), "batched metadata index completes");
+    CHECK(delivered.load() == paths.size(), "batched metadata delivers every entry");
+    CHECK(batchCount.load() == 3, "513 entries are published in 256-sized batches");
+    CHECK(largestBatch.load() <= 256, "metadata batches never exceed 256 entries");
 
     // Cancellation must invalidate already queued batches as well as work
     // still running on the worker. The first delivered batch cancels the
@@ -119,24 +123,24 @@ void runMetadataBatchCases()
     paths.clear();
     for (int i = 0; i < 4096; ++i)
         paths.push_back("M58/cancel_" + std::to_string(i) + ".jpg");
-    size_t cancelledBatches = 0;
-    bool cancelledDone = false;
+    std::atomic<size_t> cancelledBatches{0};
+    std::atomic<bool> cancelledDone{false};
     uint64_t cancelledId = 0;
     cancelledId = Indexer::instance().indexBatched(
         paths,
         [&](const std::vector<Indexer::Entry> &)
         {
-            ++cancelledBatches;
+            cancelledBatches.fetch_add(1);
             Indexer::instance().cancelRequest(cancelledId);
         },
-        [&]() { cancelledDone = true; });
+        [&]() { cancelledDone.store(true); });
     CHECK(cancelledId != 0, "cancellable metadata index request is accepted");
-    waitFor([&]() { return cancelledBatches > 0 || cancelledDone; });
+    waitFor([&]() { return cancelledBatches.load() > 0 || cancelledDone.load(); });
     QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
-    CHECK(cancelledBatches <= 1, "cancel drops later queued metadata batches");
-    CHECK(!cancelledDone, "cancelled metadata index does not report completion");
-    std::printf("M58 metadata batches delivered=%zu largest=%zu cancelled=%zu\n", batchCount,
-                largestBatch, cancelledBatches);
+    CHECK(cancelledBatches.load() <= 1, "cancel drops later queued metadata batches");
+    CHECK(!cancelledDone.load(), "cancelled metadata index does not report completion");
+    std::printf("M58 metadata batches delivered=%zu largest=%zu cancelled=%zu\n", batchCount.load(),
+                largestBatch.load(), cancelledBatches.load());
 }
 
 } // namespace

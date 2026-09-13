@@ -552,17 +552,28 @@ void MainWindow::onCurrentImageChanged(const QString &path)
         [guard, requestedPath,
          generation](const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
         {
-            if (!guard || generation != guard->m_statusMetadataGeneration || !guard->m_selection ||
-                guard->m_selection->currentImage() != requestedPath)
+            if (!guard)
                 return;
-            const auto &meta = snapshot.metadata;
-            if (meta.width > 0 && meta.height > 0)
-            {
-                guard->m_lblImage->setText(QString("%1x%2 · %3")
-                                               .arg(meta.width)
-                                               .arg(meta.height)
-                                               .arg(MainWindow::formatBytes(meta.fileSize)));
-            }
+            // Explicit hop: the service defers to the process main-thread
+            // dispatcher, but the status strip must stay correct without one.
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, requestedPath, generation, snapshot]()
+                {
+                    if (!guard || generation != guard->m_statusMetadataGeneration ||
+                        !guard->m_selection || guard->m_selection->currentImage() != requestedPath)
+                        return;
+                    const auto &meta = snapshot.metadata;
+                    if (meta.width > 0 && meta.height > 0)
+                    {
+                        guard->m_lblImage->setText(
+                            QString("%1x%2 · %3")
+                                .arg(meta.width)
+                                .arg(meta.height)
+                                .arg(MainWindow::formatBytes(meta.fileSize)));
+                    }
+                },
+                Qt::QueuedConnection);
         });
 }
 

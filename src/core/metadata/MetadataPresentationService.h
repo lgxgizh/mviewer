@@ -34,6 +34,13 @@ struct MetadataPresentationSnapshot
 // overlay, MetadataPanel and status bar coalesce into one background read for
 // a path. Consumer cancellation is independent, so A -> B -> A and widget
 // destruction cannot deliver stale data to a newer consumer.
+//
+// Delivery contract (see core/MainThreadDispatcher.h): snapshots are deferred
+// through the process main-thread dispatcher (the UI installs the Qt
+// event-loop dispatcher in main.cpp) and re-check their consumer guard when
+// they finally run, so an unregistered consumer is never called. Widget-touching
+// consumers marshal themselves as well: a process without an installed
+// dispatcher gets inline delivery on the worker thread.
 class MetadataPresentationService
 {
   public:

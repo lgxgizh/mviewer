@@ -193,28 +193,38 @@ void ThumbnailPanel::ensureMetaIndex()
         {
             if (!alive->load() || !self)
                 return;
-            // M58: MetadataIndexer already marshals this one bounded batch to
-            // the GUI thread, so update the value maps without another hop.
+            // The indexer defers batches through the process main-thread
+            // dispatcher, but the panel state must only ever be touched from
+            // the GUI thread — hop explicitly instead of relying on the
+            // producer's delivery thread.
             ThumbnailPanel *panel = self.data();
-            if (gen != panel->m_dirGen)
-                return;
-            for (const auto &e : batch)
-            {
-                const QString p = QString::fromUtf8(e.path.data(), static_cast<int>(e.path.size()));
-                panel->m_metaIndex.insert(
-                    p,
-                    QString::fromUtf8(e.searchBlob.data(), static_cast<int>(e.searchBlob.size())));
-                panel->m_metaIso.insert(p, e.iso);
-                panel->m_metaCamera.insert(
-                    p, QString::fromUtf8(e.camera.data(), static_cast<int>(e.camera.size()))
-                           .trimmed());
-                panel->m_metaLens.insert(
-                    p, QString::fromUtf8(e.lens.data(), static_cast<int>(e.lens.size())).trimmed());
-            }
-            // M58 progressive non-default query state: a batch landing may
-            // refine the visible result immediately; the generation gate
-            // coalesces bursts and drops stale work.
-            panel->scheduleFilter(false);
+            QMetaObject::invokeMethod(
+                qApp,
+                [alive, panel, gen, batch]()
+                {
+                    if (!alive->load() || gen != panel->m_dirGen)
+                        return;
+                    for (const auto &e : batch)
+                    {
+                        const QString p =
+                            QString::fromUtf8(e.path.data(), static_cast<int>(e.path.size()));
+                        panel->m_metaIndex.insert(
+                            p, QString::fromUtf8(e.searchBlob.data(),
+                                                 static_cast<int>(e.searchBlob.size())));
+                        panel->m_metaIso.insert(p, e.iso);
+                        panel->m_metaCamera.insert(
+                            p, QString::fromUtf8(e.camera.data(), static_cast<int>(e.camera.size()))
+                                   .trimmed());
+                        panel->m_metaLens.insert(
+                            p, QString::fromUtf8(e.lens.data(), static_cast<int>(e.lens.size()))
+                                   .trimmed());
+                    }
+                    // M58 progressive non-default query state: a batch landing may
+                    // refine the visible result immediately; the generation gate
+                    // coalesces bursts and drops stale work.
+                    panel->scheduleFilter(false);
+                },
+                Qt::QueuedConnection);
         },
         [alive, self, gen]()
         {

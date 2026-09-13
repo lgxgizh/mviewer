@@ -16,6 +16,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QTemporaryDir>
+#include <atomic>
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -153,27 +154,30 @@ static void testMetadataIndexer()
     auto &indexer = mviewer::core::MetadataIndexer::instance();
     indexer.cancel(); // reset any prior generation
 
-    int delivered = 0;
-    bool done = false;
+    // Delivery is inline on the worker thread when no main-thread dispatcher is
+    // installed (see core/MainThreadDispatcher.h), so every counter the
+    // callbacks touch is atomic.
+    std::atomic<int> delivered{0};
+    std::atomic<bool> done{false};
     const uint64_t token = indexer.index(
         paths,
         [&](const mviewer::core::MetadataIndexer::Entry &e)
         {
             CHECK(!e.path.empty(), "delivered entry carries a path");
-            ++delivered;
+            delivered.fetch_add(1);
         },
-        [&]() { done = true; });
+        [&]() { done.store(true); });
 
     // Pump the event loop until completion (bounded).
     QElapsedTimer t;
     t.start();
-    while (!done && t.elapsed() < 10000)
+    while (!done.load() && t.elapsed() < 10000)
     {
         QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
-    CHECK(done, "indexer reports completion");
-    CHECK(delivered == 8, "every path delivered exactly once");
+    CHECK(done.load(), "indexer reports completion");
+    CHECK(delivered.load() == 8, "every path delivered exactly once");
     CHECK(token != 0, "indexer returns a generation token");
 
     // Cache reuse: a second index of the same files must not re-read metadata
@@ -186,11 +190,11 @@ static void testMetadataIndexer()
     std::vector<std::string> big;
     for (int i = 0; i < 200; ++i)
         big.push_back(tmp.path().toStdString() + "/big" + std::to_string(i) + ".dng");
-    int cancelledDelivered = 0;
-    bool cancelledDone = false;
+    std::atomic<int> cancelledDelivered{0};
+    std::atomic<bool> cancelledDone{false};
     indexer.index(
-        big, [&](const mviewer::core::MetadataIndexer::Entry &) { ++cancelledDelivered; },
-        [&]() { cancelledDone = true; });
+        big, [&](const mviewer::core::MetadataIndexer::Entry &)
+        { cancelledDelivered.fetch_add(1); }, [&]() { cancelledDone.store(true); });
     indexer.cancel();
     t.restart();
     while (t.elapsed() < 2000)
@@ -198,7 +202,7 @@ static void testMetadataIndexer()
         QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
     }
-    CHECK(!cancelledDone, "cancelled generation never reports completion");
+    CHECK(!cancelledDone.load(), "cancelled generation never reports completion");
 }
 
 int main(int argc, char **argv)

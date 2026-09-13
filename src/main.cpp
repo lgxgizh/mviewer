@@ -5,6 +5,7 @@
 #include "application/Startup.h"
 #include "core/CrashHandler.h"
 #include "core/Logger.h"
+#include "core/MainThreadDispatcher.h"
 #include "core/SelfTest.h"
 #include "core/SettingsIO.h"
 #include "runtime_storage.h"
@@ -12,9 +13,12 @@
 #include <QApplication>
 #include <QDebug>
 #include <QIcon>
+#include <QTimer>
 
 #include <exception>
+#include <functional>
 #include <string>
+#include <utility>
 
 class MainWindow;
 static QStringList g_openOnLaunch;
@@ -56,6 +60,15 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(QStringLiteral(MVIEWER_VERSION_STRING));
     app.setWindowIcon(QIcon(QStringLiteral(":/app/mviewer.png")));
     mviewer::runtime::configureSettings();
+
+    // Core producers (metadata indexing, metadata presentation) deliver their
+    // callbacks through this dispatcher. Install it before any window or
+    // service starts work. It defers exactly like the Qt event loop did before
+    // (zero-timer, insertion order), so a request cancelled after its worker
+    // finished still drops every pending delivery.
+    mvcore::setMainThreadDispatcher(
+        [](std::function<void()> fn)
+        { QTimer::singleShot(0, qApp, [fn = std::move(fn)]() { fn(); }); });
 
     // Structured file logging (AppData/logs/mviewer-YYYYMMDD.log).
     mviewer::core::installFileLogger("MViewer");
