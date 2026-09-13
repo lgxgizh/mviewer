@@ -317,6 +317,9 @@ class CompareWorkspace : public QWidget
     void applyBlink(bool state);
     void startBlink(int intervalMs);
     void stopBlink();
+    // Disarms every two-image mode (split / swipe / overlay / checkerboard /
+    // blink) when the loaded set is not exactly two images.
+    void disarmSingleImageModes();
     void beginTemporaryCompare();
     void endTemporaryCompare();
     void updateTemporaryCompareAvailability();

@@ -23,12 +23,52 @@ void CompareWorkspace::startBlink(int intervalMs)
     syncEngineBlink();
 }
 
+void CompareWorkspace::disarmSingleImageModes()
+{
+    // Split / swipe / overlay / checkerboard / blink only make sense for exactly
+    // two images. Disarming them on a set change keeps the checkbox state and the
+    // rendered mode consistent: previously blink was the only one missing, so a
+    // set that shrank to one image left the timer running and applyBlink hiding
+    // the surviving pane on alternate phases — with no way for the user to stop
+    // it (the checkbox is disabled and the B shortcut refuses a disabled target).
+    const bool two = m_engine.imageCount() == 2;
+    if (m_splitChk)
+    {
+        if (!two)
+            m_splitChk->setChecked(false);
+        m_splitChk->setEnabled(two);
+    }
+    if (m_swipeChk)
+    {
+        if (!two)
+            m_swipeChk->setChecked(false);
+        m_swipeChk->setEnabled(two);
+    }
+    if (m_overlayChk)
+    {
+        if (!two)
+            m_overlayChk->setChecked(false);
+        m_overlayChk->setEnabled(two);
+    }
+    if (m_checkerChk)
+    {
+        if (!two)
+            m_checkerChk->setChecked(false);
+        m_checkerChk->setEnabled(two);
+    }
+    if (m_blinkChk)
+    {
+        if (!two)
+            m_blinkChk->setChecked(false); // drives its toggled handler -> stopBlink()
+        m_blinkChk->setEnabled(two);
+    }
+}
+
 void CompareWorkspace::stopBlink()
 {
     if (m_blinkTimer)
         m_blinkTimer->stop();
     m_engine.clearBlink(); // M24: capture must report "blink off" after stopping
-
     // Restore visibility before rebuilding the normal grid. rebuildCells()
     // centrally reattaches any pane detached by two-image Blink.
     for (auto *v : m_cellViews)

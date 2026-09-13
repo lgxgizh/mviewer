@@ -545,6 +545,14 @@ class ImageViewer : public QOpenGLWidget
     mutable qint64 m_lodOverlayKey = -1;
     mutable mviewer::OverlayMode m_lodOverlayMode = mviewer::OverlayMode::None;
     mutable int m_lodOverlayThreshold = -1;
+    // Derives the channel/zebra overlay of the LOD raster on a worker thread.
+    // Deriving it inside the paint path meant a full fromQImage + per-pixel
+    // applyOverlay + toQImage on the UI thread (~100-200 ms and ~150 MB transient
+    // for a 4096px raster) on every raster change; while the derivation is in
+    // flight the frame simply paints the base raster.
+    void scheduleLodOverlayDerivation() const;
+    mutable bool m_lodOverlayPending = false;
+    mutable uint64_t m_lodOverlayRequest = 0;
     TaskScheduler::TaskHandle m_displayRequest; // in-flight raster worker
     DisplayRasterPreload m_promotedDisplayRasterPreload;
     std::vector<DisplayRasterPreload> m_displayRasterPreloads;

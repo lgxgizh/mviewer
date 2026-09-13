@@ -97,7 +97,6 @@ class ExportDialog : public QDialog
     QPushButton *m_browseBtn = nullptr;
     QComboBox *m_formatCombo = nullptr;
     QSpinBox *m_qualitySpin = nullptr;
-    QCheckBox *m_batchCheck = nullptr;
 
     QComboBox *m_modeCombo = nullptr;
     QComboBox *m_resizeCombo = nullptr;

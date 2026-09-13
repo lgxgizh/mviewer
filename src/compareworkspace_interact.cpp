@@ -73,7 +73,16 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
                 idx < m_cellViews.size() && m_cellViews[idx])
             {
                 const QPointF imgPt = m_cellViews[idx]->widgetToImage(me->pos());
-                addLinkPoint(imgPt);
+                // widgetToImage is an unclipped affine map, so a click in the
+                // letterbox around a fitted image lands outside the source. Those
+                // clicks used to count as markers that are drawn off-image: the
+                // counter/HUD went up while nothing appeared.
+                const QSize source = m_cellViews[idx]->sourceSize();
+                if (source.isValid() && imgPt.x() >= 0 && imgPt.y() >= 0 &&
+                    imgPt.x() < source.width() && imgPt.y() < source.height())
+                {
+                    addLinkPoint(imgPt);
+                }
                 return true; // consume — do not start pan drag
             }
             m_dragging = true;

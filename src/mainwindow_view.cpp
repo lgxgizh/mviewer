@@ -415,9 +415,24 @@ void MainWindow::openAnalysisOverlay()
     const QString path = currentImagePath();
     if (path.isEmpty())
         return;
-    QImage img(path);
+    // Use the frame the viewer already holds. Re-decoding the file here was a
+    // synchronous full-resolution decode on the UI thread (tens to hundreds of
+    // ms on an 8K/50MP source) with no cancellation and no budget, and it
+    // silently did nothing for formats Qt cannot read.
+    QImage img;
+    if (m_imageViewer)
+    {
+        const auto frame = m_imageViewer->frame();
+        if (frame && !frame->pixels().isNull() && frame->metadata().filePath == path.toStdString())
+        {
+            img = mvcore::toQImage(frame->pixels());
+        }
+    }
     if (img.isNull())
+    {
+        QMessageBox::information(this, tr("分析叠加层"), tr("当前图像尚未解码完成，请稍后再试。"));
         return;
+    }
     AnalysisOverlayDialog dlg(img, this);
     dlg.exec();
 }

@@ -561,24 +561,69 @@ void ImageViewer::drawDisplayRaster(QPainter &painter) const
     if (m_overlayMode != mviewer::OverlayMode::None)
     {
         const qint64 key = m_raster.image.cacheKey();
-        if (m_lodOverlayKey != key || m_lodOverlayMode != m_overlayMode ||
-            m_lodOverlayThreshold != m_zebraThreshold)
+        const bool ready = m_lodOverlayKey == key && m_lodOverlayMode == m_overlayMode &&
+                           m_lodOverlayThreshold == m_zebraThreshold && !m_lodOverlayImage.isNull();
+        if (ready)
         {
-            ImageData data = mvcore::fromQImage(m_raster.image);
-            if (!data.isNull())
-            {
-                mviewer::applyOverlay(data, m_overlayMode, m_zebraThreshold);
-                m_lodOverlayImage = mvcore::toQImage(data);
-                m_lodOverlayKey = key;
-                m_lodOverlayMode = m_overlayMode;
-                m_lodOverlayThreshold = m_zebraThreshold;
-            }
-        }
-        if (!m_lodOverlayImage.isNull())
             drawn = &m_lodOverlayImage;
+        }
+        else
+        {
+            // Never derive here: this runs inside paintEvent, and the derivation
+            // is a full-raster conversion plus a per-pixel pass. The worker
+            // stores the result and requests a repaint.
+            scheduleLodOverlayDerivation();
+        }
     }
     painter.save();
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
     painter.drawImage(QRect(sx, sy, sw, sh), *drawn);
     painter.restore();
+}
+
+void ImageViewer::scheduleLodOverlayDerivation() const
+{
+    if (m_lodOverlayPending || m_raster.image.isNull() ||
+        m_overlayMode == mviewer::OverlayMode::None)
+        return;
+    m_lodOverlayPending = true;
+    const uint64_t request = ++m_lodOverlayRequest;
+    // COW copy: the worker reads pixels that the UI thread may replace later,
+    // without copying the payload.
+    const QImage raster = m_raster.image;
+    const qint64 key = raster.cacheKey();
+    const mviewer::OverlayMode mode = m_overlayMode;
+    const int threshold = m_zebraThreshold;
+    QPointer<ImageViewer> guard(const_cast<ImageViewer *>(this));
+    TaskScheduler::instance().submit(
+        TaskScheduler::Priority::Decode,
+        [guard, request, raster, key, mode, threshold](const TaskScheduler::TaskContext &ctx)
+        {
+            if (ctx.isCancelled())
+                return;
+            ImageData data = mvcore::fromQImage(raster);
+            QImage derived;
+            if (!data.isNull())
+            {
+                mviewer::applyOverlay(data, mode, threshold);
+                derived = mvcore::toQImage(data);
+            }
+            if (!qApp)
+                return;
+            QMetaObject::invokeMethod(
+                qApp,
+                [guard, request, derived, key, mode, threshold]()
+                {
+                    ImageViewer *viewer = guard.data();
+                    if (!viewer || request != viewer->m_lodOverlayRequest)
+                        return; // superseded, or the viewer is gone
+                    viewer->m_lodOverlayPending = false;
+                    viewer->m_lodOverlayImage = derived;
+                    viewer->m_lodOverlayKey = key;
+                    viewer->m_lodOverlayMode = mode;
+                    viewer->m_lodOverlayThreshold = threshold;
+                    viewer->update();
+                },
+                Qt::QueuedConnection);
+        });
 }

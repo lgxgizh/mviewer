@@ -493,36 +493,11 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     if (m_sidePanel && m_sidePanel->isVisible())
         refreshHistograms();
 
-    // P0-4: split / swipe only make sense for exactly two images.
-    const bool two = m_engine.imageCount() == 2;
-    if (m_splitChk)
-    {
-        if (!two)
-            m_splitChk->setChecked(false);
-        m_splitChk->setEnabled(two);
-    }
-    if (m_swipeChk)
-    {
-        if (!two)
-            m_swipeChk->setChecked(false);
-        m_swipeChk->setEnabled(two);
-    }
-    // A-4.1: overlay mode also only for two images.
-    if (m_overlayChk)
-    {
-        if (!two)
-            m_overlayChk->setChecked(false);
-        m_overlayChk->setEnabled(two);
-    }
-    // M23: checkerboard mode also only for two images.
-    if (m_checkerChk)
-    {
-        if (!two)
-            m_checkerChk->setChecked(false);
-        m_checkerChk->setEnabled(two);
-    }
+    // P0-4 / A-4.1 / M23: split, swipe, overlay and checkerboard only make sense
+    // for exactly two images, and so does blink (see the TU for the blink case).
+    disarmSingleImageModes();
     updateActionAvailability();
-    if (m_grid && !two)
+    if (m_grid && m_engine.imageCount() != 2)
         m_grid->setVisible(true);
     updateCanvasModeVisibility();
     updateTemporaryCompareAvailability();

@@ -8,8 +8,8 @@
 #include <QClipboard>
 #include <QDateTime>
 #include <QFileInfo>
-#include <QKeyEvent>
 #include <QHideEvent>
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -171,6 +171,16 @@ void MetadataOverlay::requestMetadata()
                 guard->m_requestGeneration != generation)
                 return;
             guard->m_requestActive = false;
+            if (!snapshot.valid())
+            {
+                // The service delivers an empty snapshot for a deleted, corrupt
+                // or unsupported file; painting it showed "尺寸: 0 B / 格式: "
+                // instead of clearing the overlay (its two sibling consumers
+                // already guard for this).
+                guard->m_lines.clear();
+                guard->update();
+                return;
+            }
             guard->buildContent(snapshot);
             guard->update();
         });

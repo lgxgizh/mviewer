@@ -108,10 +108,11 @@ void ExportDialog::buildFormatSection(QVBoxLayout *root)
     m_qualitySpin = new QSpinBox(this);
     m_qualitySpin->setRange(1, 100);
     m_qualitySpin->setValue(90);
-    m_batchCheck = new QCheckBox(tr("批量(目录内全部图片)"), this);
+    // The old "批量(目录内全部图片)" checkbox was never read anywhere, so it could
+    // not affect what was exported; removed rather than left as a control that
+    // silently does nothing.
     fmtLay->addRow(tr("格式:"), m_formatCombo);
     fmtLay->addRow(tr("质量:"), m_qualitySpin);
-    fmtLay->addRow(m_batchCheck);
     root->addWidget(fmtBox);
 }
 

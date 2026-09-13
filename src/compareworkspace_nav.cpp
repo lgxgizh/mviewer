@@ -745,6 +745,10 @@ void CompareWorkspace::clearROI()
         if (view)
             view->clearSelection();
     clearROIStatsDisplay();
+    // The geometry readout is written only by the applySelection* paths, so
+    // clearing the ROI used to leave "X/Y/W/H" of a box that no longer exists.
+    if (m_roiGeometryLabel)
+        m_roiGeometryLabel->setText(tr("ROI: —"));
     if (m_roiHistChk && m_roiHistChk->isChecked())
         refreshHistograms();
     refreshAllDiffOverlays();

@@ -25,6 +25,8 @@
 #include "core/image/ImageRepository.h"
 #include "core/image/decoder/DecoderRegistry.h"
 #include "core/image/decoder/IDecoder.h"
+#include "core/image/decoder/QtDecoder.h"
+#include "core/image/decoder/QtFallbackDecoder.h"
 #include "core/scheduler/TaskScheduler.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
 #include "imageviewer.h"
@@ -33,9 +35,11 @@
 #include <QApplication>
 #include <QCursor>
 #include <QDir>
+#include <QElapsedTimer>
+#include <QFile>
 #include <QImage>
-#include <QThread>
 #include <QTemporaryDir>
+#include <QThread>
 #include <QTimer>
 
 #include <atomic>
@@ -619,6 +623,151 @@ void testCompareSwapThenDestroy()
 
 } // namespace
 
+// B9: the browse path must never issue a FULL-resolution decode. That is the
+// documented reason ImageRepository's directory pre-decode uses decodeScaled()
+// (a concurrently running full-resolution QImageReader::read() deadlocks the
+// worker pool and would freeze the UI on a large directory). The canonical
+// workflow gate cannot catch a regression here — it serialises every pool to one
+// thread — so the invariant is pinned by counting decoder entry points.
+namespace
+{
+struct DecodeModeSpy
+{
+    std::atomic<int> fullCalls{0};
+    std::atomic<int> scaledCalls{0};
+};
+
+class ModeSpyDecoder : public IDecoder
+{
+  public:
+    explicit ModeSpyDecoder(std::shared_ptr<DecodeModeSpy> spy) : m_spy(std::move(spy))
+    {
+    }
+
+    bool canDecode(const std::string &path) const override
+    {
+        // Claims png: the directory listing is driven by the supported-suffix set,
+        // so a brand-new extension would need the (cached) suffix set to be
+        // refreshed first. Registering ahead of QtDecoder makes this decoder win
+        // for the files this test creates.
+        const std::string ext = ".png";
+        return path.size() > ext.size() &&
+               path.compare(path.size() - ext.size(), ext.size(), ext) == 0;
+    }
+
+    ImageData decodeFull(const std::string &path) const override
+    {
+        mviewer::domain::ImageMetadata meta;
+        return decodeFull(path, meta);
+    }
+
+    ImageData decodeFull(const std::string &path,
+                         mviewer::domain::ImageMetadata &outMeta) const override
+    {
+        m_spy->fullCalls.fetch_add(1, std::memory_order_relaxed);
+        fillMeta(path, outMeta);
+        return makeImageData(8, 8, PixelFormat::RGB24);
+    }
+
+    ImageData decodeScaled(const std::string &path, int maxEdge) const override
+    {
+        mviewer::domain::ImageMetadata meta;
+        return decodeScaled(path, maxEdge, meta);
+    }
+
+    ImageData decodeScaled(const std::string &path, int maxEdge,
+                           mviewer::domain::ImageMetadata &outMeta) const override
+    {
+        (void)maxEdge;
+        m_spy->scaledCalls.fetch_add(1, std::memory_order_relaxed);
+        fillMeta(path, outMeta);
+        return makeImageData(8, 8, PixelFormat::RGB24);
+    }
+
+    std::vector<std::string> extensions() const override
+    {
+        return {"png"};
+    }
+
+    const char *name() const override
+    {
+        return "ModeSpyTestDecoder";
+    }
+
+  private:
+    static void fillMeta(const std::string &path, mviewer::domain::ImageMetadata &meta)
+    {
+        meta.width = 8;
+        meta.height = 8;
+        meta.channels = 3;
+        meta.bitDepth = 8;
+        meta.format = "MVSPY";
+        meta.filePath = path;
+        meta.fileName = path;
+    }
+
+    std::shared_ptr<DecodeModeSpy> m_spy;
+};
+
+void testBrowseUsesScaledDecodesOnly()
+{
+    printf("\n[B9: browse path decodes scaled only]\n");
+    fflush(stdout);
+
+    QTemporaryDir tmp;
+    CHECK(tmp.isValid(), "B9 temp dir created");
+    QDir dir(tmp.path());
+    for (int i = 0; i < 6; ++i)
+    {
+        QImage png(16, 16, QImage::Format_RGB32);
+        png.fill(QColor(20 + i, 40, 60));
+        const QString file = dir.filePath(QStringLiteral("spy%1.png").arg(i));
+        CHECK(png.save(file, "PNG"), "B9 spy file created");
+    }
+
+    auto spy = std::make_shared<DecodeModeSpy>();
+    // registerDecoder() appends, and the registry tries decoders in registration
+    // order with the fallback last, so the spy has to be inserted ahead of the Qt
+    // decoders to win for the files this test creates. The registry is restored
+    // to its defaults at the end of the case.
+    auto &registry = DecoderRegistry::instance();
+    registry.resetToDefaults();
+    registry.unregister("QtFallbackDecoder");
+    registry.unregister("QtDecoder");
+    registry.registerDecoder(std::make_shared<ModeSpyDecoder>(spy));
+    registry.registerDecoder(std::make_shared<QtDecoder>());
+    registry.registerDecoder(std::make_shared<QtFallbackDecoder>());
+
+    std::atomic<bool> done{false};
+    size_t loaded = 0;
+    ImageRepository::instance().loadDirectoryAsync(
+        tmp.path().toStdString(),
+        [&](std::vector<ImageRepository::Result> results)
+        {
+            loaded = results.size();
+            done.store(true, std::memory_order_release);
+        },
+        6);
+
+    QElapsedTimer timer;
+    timer.start();
+    while (!done.load(std::memory_order_acquire) && timer.elapsed() < 10000)
+        pump(10);
+
+    CHECK(done.load(std::memory_order_acquire), "B9 directory load completed");
+    printf("  spy counts: scaled=%d full=%d results=%zu\n", spy->scaledCalls.load(),
+           spy->fullCalls.load(), loaded);
+    fflush(stdout);
+    CHECK(loaded == 6, "B9 every spy file produced a result");
+    CHECK(spy->scaledCalls.load() == 6, "B9 browse decoded each file via decodeScaled");
+    CHECK(spy->fullCalls.load() == 0,
+          "B9 browse issued no full-resolution decode (documented pool-deadlock invariant)");
+
+    DecoderRegistry::instance().resetToDefaults();
+    TaskScheduler::instance().drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(5));
+}
+} // namespace
+
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
@@ -632,6 +781,7 @@ int main(int argc, char **argv)
     testViewerDestroyMidDecode();
     testViewerABA();
     testCompareSwapThenDestroy();
+    testBrowseUsesScaledDecodesOnly();
 
     pump(1000);
     if (QApplication::overrideCursor() != nullptr)
