@@ -21,6 +21,7 @@
 | [010](010-why-ui-widgets-lightweight.md) | UI Widget 保持轻量 | 业务逻辑下沉 Application/Core |
 | [011](011-viewer-core-boundary.md) | Viewer/Core 边界冻结 | 防止 UI 逻辑渗入核心层 |
 | [014](014-ui-tu-split-by-responsibility.md) | 大 UI 文件按职责拆 TU | `mainwindow.cpp` <1000 行等硬约束 |
+| [016](016-qt-boundary-in-core-headers.md) | core/domain 头文件不得 include Qt（两个具名适配头例外） | 规则须与 R5 门禁一致且可审计 |
 
 ### 缓存与调度
 

@@ -1,13 +1,17 @@
 // M20 P0#1: shared private header for the MainWindow implementation, which is
-// split across several translation units by responsibility:
-//   mainwindow.cpp            core wiring (models, browsing, image open)
-//   mainwindow_ui.cpp         setupUi (widget/menu/dock construction)
-//   mainwindow_commands.cpp   command registration + keyboard dispatch
-//   mainwindow_navigation.cpp history / recent / favorites / navigation
-//   mainwindow_session.cpp    workspace / project / restore / close persistence
-//   mainwindow_session_notifications.cpp  update / crash notifications
-//   mainwindow_export.cpp     report + image export
-//   mainwindow_view.cpp       drag&drop, overlays, fullscreen, slideshow
+// split across several translation units by responsibility. Line counts are
+// physical lines and the budget is enforced by scripts/complexity_gate.ps1
+// (mainwindow.cpp fails above 1000; every mainwindow_*.cpp warns above 800):
+//   mainwindow.cpp                        core wiring (models, browse, open)   844
+//   mainwindow_ui.cpp                     setupUi dispatcher / empty state     40
+//   mainwindow_ui_layout.cpp              widget / menu / dock / status layout 895
+//   mainwindow_ui_connections.cpp         signal wiring + slot bodies          689
+//   mainwindow_commands.cpp               command registration + key dispatch  619
+//   mainwindow_navigation.cpp             history / recent / favorites / nav   383
+//   mainwindow_session.cpp                workspace / project / restore / close 994
+//   mainwindow_session_notifications.cpp  update / crash notifications         113
+//   mainwindow_export.cpp                 report + image export                331
+//   mainwindow_view.cpp                   drag&drop / overlays / slideshow     635
 // Only MainWindow TUs may include this header.
 #pragma once
 
@@ -28,8 +32,8 @@
 #include "core/command/OpenDirectoryCommand.h"
 #include "core/command/RenameCommand.h"
 #include "core/command/ToggleHistogramCommand.h"
-#include "core/export/ExportManager.h"
 #include "core/export/ExportJob.h"
+#include "core/export/ExportManager.h"
 #include "core/image/ImageFormats.h"
 #include "core/image/ImageRepository.h"
 #include "core/image/MetadataReader.h"
@@ -98,8 +102,8 @@
 #include <QMoveEvent>
 #include <QPainter>
 #include <QPointer>
-#include <QPushButton>
 #include <QProgressDialog>
+#include <QPushButton>
 #include <QResizeEvent>
 #include <QScreen>
 #include <QScrollBar>

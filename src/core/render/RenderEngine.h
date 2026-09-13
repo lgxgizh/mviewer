@@ -2,10 +2,13 @@
 
 #include "core/image/ImageBuffer.h"
 
-// QPainter is used only by reference in method signatures below; a forward
-// declaration keeps this core header Qt-free per the architecture boundary
-// (no <QWidget>/<QPainter>/<QImage> in src/core/**/*.h). The full type is
-// included in RenderEngine.cpp where the painting is implemented.
+// This header deliberately does NOT include <QPainter>/<QRect>, but it is not
+// "Qt-free": executeCommand(QPainter &, ...) is part of the public API, so a
+// caller must already have Qt to use it, and the forward declarations below
+// only keep the include out. The declared rule (see docs/adr/011) is therefore:
+// core headers keep Qt INCLUDES out, with two named Qt adapter headers
+// (core/image/QtConvert.h, core/image/QtMetadataSemantics.h) as the only
+// exceptions, and the R5 architecture gate checks exactly that.
 class QPainter;
 class QRect;
 

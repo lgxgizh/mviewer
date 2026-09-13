@@ -33,7 +33,11 @@ Always verify locally first: `.\build.ps1 Test`.
 
 - C++20, 4-space indent, 100-column limit
 - Headers must compile standalone (include what you use)
-- No Qt types in `domain/` or `core/` headers
+- No Qt types in `domain/` headers
+- Core headers must not `#include` Qt — the two named Qt adapters
+  (`core/image/QtConvert.h`, `core/image/QtMetadataSemantics.h`) are the only
+  exception, enforced by the R5 check in `scripts/architecture_gate.ps1`
+  (see `docs/adr/016-qt-boundary-in-core-headers.md`)
 - Use `std` types in core; Qt allowed only in UI layer
 
 ## Project Architecture

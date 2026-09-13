@@ -1,9 +1,20 @@
 // M20 P0#2: shared private header for the CompareWorkspace implementation,
-// which is split across several translation units by responsibility:
-//   compareworkspace.cpp           core (cells, layout, session, loading)
-//   compareworkspace_render.cpp    paint / diff overlay / blink / histograms
-//   compareworkspace_editpanel.cpp edit panel, adjustments, presets, metrics
-//   compareworkspace_interact.cpp  keyboard / mouse / pixel-link interaction
+// which is split across several translation units by responsibility. Line counts
+// are physical lines and the budget is enforced by scripts/complexity_gate.ps1
+// (compareworkspace.cpp fails above 800; every compareworkspace_*.cpp warns
+// above 800 and fails above 1000):
+//   compareworkspace.cpp                     core (cells, layout, session, load) 766
+//   compareworkspace_analysis.cpp            histograms / metrics panels      642
+//   compareworkspace_controls.cpp            toolbar + mode controls          565
+//   compareworkspace_display_planner.cpp     fit/LOD planning (free functions) 110
+//   compareworkspace_editpanel.cpp           edit panel, adjustments, presets 642
+//   compareworkspace_interact.cpp            keyboard / mouse / pixel-link    947
+//   compareworkspace_nav.cpp                 pair navigation, layout presets  756
+//   compareworkspace_render.cpp              paint modes, canvas host         483
+//   compareworkspace_render_canvas.cpp       blink controller, canvas paint   448
+//   compareworkspace_render_diff.cpp         diff overlay batch + metrics     353
+//   compareworkspace_render_materialization.cpp cell raster materialization   794
+//   compareworkspace_roi.cpp                 ROI box, HUD, measurement export 589
 // Only CompareWorkspace TUs may include this header.
 #pragma once
 

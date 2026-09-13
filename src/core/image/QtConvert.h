@@ -1,7 +1,9 @@
 #pragma once
 // 内部 core 助手：ImageData <-> QImage 转换。
-// 注意：本头文件包含 Qt，仅供 core 的 .cpp 内部包含，
-// 绝不可被已去 Qt 化的公共头文件包含。
+// 本头文件是 core 中**被点名允许包含 Qt 的适配头**之一（另一个是
+// QtMetadataSemantics.h，见 docs/adr/011 与 architecture_gate.ps1 的 R5）。
+// 它可以被 core 的 .cpp 与 UI 的私有头（*_p.h）包含；除此之外的 core/domain
+// 头文件必须保持不含 Qt include。
 #include "core/image/DisplayColorContext.h"
 #include "core/image/ImageBuffer.h"
 #include "domain/Image.h"

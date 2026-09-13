@@ -17,6 +17,12 @@
 #   R4  Domain layer must NOT include anything from Core / UI / Application.
 #       Domain is the zero-dependency base; an upward edge breaks the whole
 #       layering contract.
+#   R5  Core / Domain HEADERS must not include Qt, with two named exceptions:
+#       src/core/image/QtConvert.h and src/core/image/QtMetadataSemantics.h are
+#       the sanctioned Qt adapters of the core image layer (they exist to convert
+#       between core pixel buffers and Qt types). Everything else in core/ and
+#       domain/ keeps Qt in .cpp bodies only — that is what makes those layers
+#       Qt-free in practice, and it is checkable.
 #
 # Violations are WARNING-level (per the product owner's directive: "违反：CI：
 # 直接：Warning。") — they never fail the build, but the Health Score deducts
@@ -47,6 +53,13 @@ $src = Get-ChildItem -Path (Join-Path $Repo 'src') -Recurse -Include *.cpp, *.h 
 
 $violations = [System.Collections.Generic.List[object]]::new()
 
+# R5: the only core headers allowed to pull in Qt. Keep this list short and
+# named — it is the sanctioned Qt boundary of the core image layer.
+$qtAdapterHeaders = @(
+    'src\core\image\QtConvert.h',
+    'src\core\image\QtMetadataSemantics.h'
+)
+
 foreach ($f in $src) {
     $rel = $f.FullName.Substring($Repo.Length).TrimStart('\', '/')
     # Benchmark / test / plugin harnesses are allowed to poke internal
@@ -71,6 +84,14 @@ foreach ($f in $src) {
     elseif ($rel -match '[\\/]widgets[\\/]') { $layer = 'ui' }
     elseif ($rel -match '^[\\/]?src[\\/][^\\/]+\.') { $layer = 'ui' }  # src root TU (mainwindow.cpp etc.)
 
+    # R5 scope: headers of the core / domain layers, minus the named Qt adapters.
+    $relNorm = $rel -replace '/', '\'
+    $isLayerHeader = ($f.Extension -eq '.h') -and ($layer -in @('core', 'domain'))
+    $isQtAdapter = $false
+    foreach ($adapter in $qtAdapterHeaders) {
+        if ($relNorm.EndsWith($adapter, [System.StringComparison]::OrdinalIgnoreCase)) { $isQtAdapter = $true }
+    }
+
     # M46: the historical imageviewer.cpp / previewpanel.cpp exemption is
     # GONE — the Application/Core loading facades exist and Preview/Viewer/
     # Compare all load through them, so a direct Repository include anywhere
@@ -81,6 +102,14 @@ foreach ($f in $src) {
     $lines = Get-Content $f.FullName -Encoding UTF8
     for ($i = 0; $i -lt $lines.Length; $i++) {
         $ln = $lines[$i]
+        # R5: a core / domain header may not pull in Qt (the two named adapters
+        # are the only exception). Qt in those layers' .cpp bodies is allowed.
+        # -cmatch: Qt headers are spelled <Q...>; a case-insensitive match would
+        # also flag standard headers such as <queue>.
+        if ($isLayerHeader -and -not $isQtAdapter -and ($ln -cmatch '#\s*include\s*[<"]Q')) {
+            $violations.Add([ordered]@{ file=$rel; line=($i+1); include=$ln.Trim(); rule='R5';
+                message='Core/Domain header includes Qt (keep Qt in .cpp bodies, or add the header to the named adapter allow-list)' })
+        }
         if ($ln -notmatch '#\s*include\s*"([^"]+)"') { continue }
         $inc = $Matches[1]
         # A file including its own header (e.g. thumbnailcache.cpp -> thumbnailcache.h)

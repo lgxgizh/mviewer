@@ -1,12 +1,17 @@
 // M20 P0#3: shared private header for the ThumbnailPanel implementation,
-// which is split across several translation units by responsibility:
-//   thumbnailpanel.cpp           core view / model / directory scan
-//   thumbnailpanel_filters.cpp   filtering / sorting / metadata index
-//   thumbnailpanel_fileops.cpp   rename / trash / copy / move / batch export
-//   thumbnailpanel_delegates.cpp thumb / details / list item delegates
-//   thumbnailpanel_viewmode.cpp  view-mode configuration
-//   thumbnailpanel_selection.cpp selection / path navigation
-//   thumbnailpanel_pipeline.cpp  visible-range scheduling / thumbnail delivery
+// which is split across several translation units by responsibility. Line counts
+// are physical lines and the budget is enforced by scripts/complexity_gate.ps1
+// (thumbnailpanel.cpp fails above 800; every thumbnailpanel_*.cpp warns above
+// 800):
+//   thumbnailpanel.cpp             core view / model / directory scan      637
+//   thumbnailpanel_async.cpp       scan + dimension-probe workers          476
+//   thumbnailpanel_delegates.cpp   thumb / details / list item delegates   527
+//   thumbnailpanel_fileops.cpp     rename / trash / copy / move / batch export 784
+//   thumbnailpanel_filters.cpp     filtering / sorting / metadata index    705
+//   thumbnailpanel_live.cpp        incremental live-folder delta apply     445
+//   thumbnailpanel_pipeline.cpp    visible-range scheduling / delivery     220
+//   thumbnailpanel_selection.cpp   selection / path navigation             147
+//   thumbnailpanel_viewmode.cpp    view-mode configuration                 179
 // Only ThumbnailPanel TUs may include this header.
 #pragma once
 
@@ -17,10 +22,10 @@
 #include "core/analyzer/Analyzer.h"
 #include "core/command/CommandStack.h"
 #include "core/command/FileDeleteCommand.h"
-#include "core/command/FileSystemAdapter.h"
-#include "core/export/ExportJob.h"
 #include "core/command/FileMoveCommand.h"
 #include "core/command/FileRenameCommand.h"
+#include "core/command/FileSystemAdapter.h"
+#include "core/export/ExportJob.h"
 #include "core/image/Decoder.h"
 #include "core/image/FrameSequence.h"
 #include "core/image/ImageFormats.h"

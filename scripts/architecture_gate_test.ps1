@@ -62,6 +62,29 @@ try {
 '@
     Set-Content -Path (Join-Path $tmp 'src\domain\fake_domain_type.h') -Value $domainViolation -Encoding UTF8
 
+    # R5: a core header that pulls Qt in (other than the two named adapters).
+    New-Item -ItemType Directory -Path (Join-Path $tmp 'src\core\image') -Force | Out-Null
+    $qtHeaderViolation = @'
+// planted Core-header Qt violation (R5)
+#pragma once
+#include <QImage>
+'@
+    Set-Content -Path (Join-Path $tmp 'src\core\image\fake_core_header.h') -Value $qtHeaderViolation -Encoding UTF8
+
+    # ... while a sanctioned Qt adapter header is NOT flagged, and Qt in a core
+    # .cpp body is not flagged either.
+    $qtAdapter = @'
+// sanctioned adapter (R5 exception)
+#pragma once
+#include <QImage>
+'@
+    Set-Content -Path (Join-Path $tmp 'src\core\image\QtConvert.h') -Value $qtAdapter -Encoding UTF8
+    $qtCpp = @'
+// Qt in a core implementation body is allowed (R5 scope is headers)
+#include <QImage>
+'@
+    Set-Content -Path (Join-Path $tmp 'src\core\fake_core_impl.cpp') -Value $qtCpp -Encoding UTF8
+
     # A legitimate UI file that loads through the facade must NOT be flagged.
     $cleanUi = @'
 // legitimate: goes through the Application facade
@@ -76,6 +99,12 @@ try {
     Check ($rules -contains 'R2' -and @($j.violations | Where-Object { $_.file -match 'fake_compare_workspace' }).Count -eq 1) `
         'planted Compare-layer Repository include is flagged (R2)'
     Check ($rules -contains 'R4') 'planted Domain->Core include is flagged (R4)'
+    Check ($rules -contains 'R5' -and @($j.violations | Where-Object { $_.file -match 'fake_core_header' }).Count -eq 1) `
+        'planted Qt include in a core header is flagged (R5)'
+    Check (@($j.violations | Where-Object { $_.file -match 'QtConvert\.h' }).Count -eq 0) `
+        'the sanctioned Qt adapter header is NOT flagged (R5 exception)'
+    Check (@($j.violations | Where-Object { $_.file -match 'fake_core_impl' }).Count -eq 0) `
+        'Qt in a core .cpp body is NOT flagged (R5 scope is headers)'
     Check (@($j.violations | Where-Object { $_.file -match 'clean_ui_widget' }).Count -eq 0) `
         'facade-based UI include is NOT flagged'
 
