@@ -65,6 +65,8 @@ mviewer::core::AnalysisAdjustment CompareWorkspace::analysisAdjustment(const Cel
     result.redGain = adjust.rGain;
     result.blueGain = adjust.bGain;
     result.rotation = adjust.rotation;
+    result.flipH = adjust.flipH;
+    result.flipV = adjust.flipV;
     result.hasCrop = adjust.hasCrop;
     result.cropX = adjust.cropX;
     result.cropY = adjust.cropY;

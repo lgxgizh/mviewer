@@ -302,6 +302,11 @@ AnalysisPixel sampleAnalysisPixel(const ImageData &source, const AnalysisAdjustm
         break;
     }
 
+    if (adjustment.flipH)
+        croppedX = crop.width - 1 - croppedX;
+    if (adjustment.flipV)
+        croppedY = crop.height - 1 - croppedY;
+
     const PixelRGBA sourcePixel = samplePixel(source, crop.x + croppedX, crop.y + croppedY);
     if (!sourcePixel.valid)
         return result;
@@ -354,6 +359,10 @@ mviewer::domain::Selection mapDisplaySelectionToSource(const mviewer::domain::Se
         int croppedX = 0;
         int croppedY = 0;
         rotateDisplayToCropped(rotation, crop.width, crop.height, dx[i], dy[i], croppedX, croppedY);
+        if (adjustment.flipH)
+            croppedX = crop.width - 1 - croppedX;
+        if (adjustment.flipV)
+            croppedY = crop.height - 1 - croppedY;
         sx[i] = crop.x + croppedX;
         sy[i] = crop.y + croppedY;
     }
@@ -394,8 +403,13 @@ mviewer::domain::Selection mapSourceSelectionToDisplay(const mviewer::domain::Se
     int dy[4] = {};
     for (int i = 0; i < 4; ++i)
     {
-        rotateCroppedToDisplay(rotation, crop.width, crop.height, sx[i] - crop.x, sy[i] - crop.y,
-                               dx[i], dy[i]);
+        int cx = sx[i] - crop.x;
+        int cy = sy[i] - crop.y;
+        if (adjustment.flipH)
+            cx = crop.width - 1 - cx;
+        if (adjustment.flipV)
+            cy = crop.height - 1 - cy;
+        rotateCroppedToDisplay(rotation, crop.width, crop.height, cx, cy, dx[i], dy[i]);
     }
     return boundsFromInclusiveCorners(dx, dy, displayWidth, displayHeight);
 }

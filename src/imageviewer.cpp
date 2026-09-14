@@ -774,10 +774,8 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
         setOverlayMode(kChannelKeys[key - Qt::Key_1]);
         return true;
     }
-    if (modifiers == Qt::ControlModifier && key == Qt::Key_R)
-        return rotateCW();
-    if (modifiers == (Qt::ControlModifier | Qt::ShiftModifier) && key == Qt::Key_R)
-        return rotateCCW();
+    if (handleTransformKey(key, modifiers))
+        return true;
     if (key == Qt::Key_R && !modifiers)
         setSelectMode(!m_selectMode);
     else if ((key == Qt::Key_F && !modifiers) || key == Qt::Key_F11)

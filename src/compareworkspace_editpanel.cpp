@@ -16,6 +16,8 @@ mviewer::core::CompareAdjustmentState CompareWorkspace::reportAdjustment(const C
     report.redGain = adjust.rGain;
     report.blueGain = adjust.bGain;
     report.rotation = adjust.rotation;
+    report.flipH = adjust.flipH;
+    report.flipV = adjust.flipV;
     report.hasCrop = adjust.hasCrop;
     report.cropX = adjust.cropX;
     report.cropY = adjust.cropY;
@@ -153,6 +155,21 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
         connect(btnCCW, &QPushButton::clicked, this, [this]() { rotateCurrentCell(-90); });
         connect(btnCW, &QPushButton::clicked, this, [this]() { rotateCurrentCell(90); });
     }
+    {
+        auto *row = new QHBoxLayout;
+        row->addWidget(new QLabel(tr("翻转"), m_editPanel));
+        auto *btnFlipH = new QPushButton(tr("⇄ 水平"), m_editPanel);
+        btnFlipH->setObjectName("flipHButton");
+        btnFlipH->setToolTip(tr("水平翻转 (Ctrl+Shift+H，临时预览，不修改原文件)"));
+        auto *btnFlipV = new QPushButton(tr("⇅ 垂直"), m_editPanel);
+        btnFlipV->setObjectName("flipVButton");
+        btnFlipV->setToolTip(tr("垂直翻转 (Ctrl+Shift+V，临时预览，不修改原文件)"));
+        row->addWidget(btnFlipH);
+        row->addWidget(btnFlipV);
+        editLay->addLayout(row);
+        connect(btnFlipH, &QPushButton::clicked, this, [this]() { flipCurrentCell(true); });
+        connect(btnFlipV, &QPushButton::clicked, this, [this]() { flipCurrentCell(false); });
+    }
     m_resetAdjBtn = new QPushButton(tr("重置调整"), m_editPanel);
     m_resetAdjBtn->setObjectName("resetAdjustmentsButton");
     connect(m_resetAdjBtn, &QPushButton::clicked, this, &CompareWorkspace::onResetAdj);
@@ -279,6 +296,61 @@ void CompareWorkspace::rotateCurrentCell(int degrees)
     applyAdjToCell(idx);
     onAdjEditFinished();
     update();
+}
+
+void CompareWorkspace::flipCurrentCell(bool horizontal)
+{
+    const int count = static_cast<int>(m_cellViews.size());
+    if (count <= 0)
+        return;
+    const int idx = (m_editIdx >= 0 && m_editIdx < count) ? m_editIdx : 0;
+    const int needed = idx + 1;
+    if (static_cast<int>(m_cellAdjusts.size()) < needed)
+        m_cellAdjusts.resize(static_cast<size_t>(needed));
+
+    if (horizontal)
+        m_cellAdjusts[static_cast<size_t>(idx)].flipH =
+            !m_cellAdjusts[static_cast<size_t>(idx)].flipH;
+    else
+        m_cellAdjusts[static_cast<size_t>(idx)].flipV =
+            !m_cellAdjusts[static_cast<size_t>(idx)].flipV;
+    m_editIdx = idx;
+    applyAdjToCell(idx);
+    onAdjEditFinished();
+    update();
+}
+
+bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)
+{
+    const int key = event->key();
+    const auto mods = event->modifiers();
+    const bool ctrl = (mods == Qt::ControlModifier);
+    const bool shiftCtrl = (mods == (Qt::ControlModifier | Qt::ShiftModifier));
+    if (ctrl && key == Qt::Key_R)
+    {
+        rotateCurrentCell(90);
+        event->accept();
+        return true;
+    }
+    if (shiftCtrl && key == Qt::Key_R)
+    {
+        rotateCurrentCell(-90);
+        event->accept();
+        return true;
+    }
+    if (shiftCtrl && key == Qt::Key_H)
+    {
+        flipCurrentCell(true);
+        event->accept();
+        return true;
+    }
+    if (shiftCtrl && key == Qt::Key_V)
+    {
+        flipCurrentCell(false);
+        event->accept();
+        return true;
+    }
+    return false;
 }
 
 void CompareWorkspace::applyAdjToCell(int cellIdx)
@@ -463,6 +535,8 @@ void CompareWorkspace::onSavePreset()
         ao["rGain"] = static_cast<double>(a.rGain);
         ao["bGain"] = static_cast<double>(a.bGain);
         ao["rotation"] = a.rotation;
+        ao["flipH"] = a.flipH;
+        ao["flipV"] = a.flipV;
         ao["hasCrop"] = a.hasCrop;
         if (a.hasCrop)
         {
@@ -564,6 +638,8 @@ void CompareWorkspace::onLoadPreset()
             a.rGain = static_cast<float>(ao["rGain"].toDouble(1.0));
             a.bGain = static_cast<float>(ao["bGain"].toDouble(1.0));
             a.rotation = ao["rotation"].toInt();
+            a.flipH = ao["flipH"].toBool();
+            a.flipV = ao["flipV"].toBool();
             a.hasCrop = ao["hasCrop"].toBool();
             if (a.hasCrop)
             {

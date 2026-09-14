@@ -129,6 +129,30 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
                 else if (m_imageViewer)
                     m_imageViewer->rotateCCW();
             });
+    m_actFlipH = new QAction(tr("水平翻转(&H)"), this);
+    m_actFlipH->setObjectName("flipHAction");
+    m_actFlipH->setShortcut(QKeySequence("Ctrl+Shift+H"));
+    m_actFlipV = new QAction(tr("垂直翻转(&V)"), this);
+    m_actFlipV->setObjectName("flipVAction");
+    m_actFlipV->setShortcut(QKeySequence("Ctrl+Shift+V"));
+    editMenu->addAction(m_actFlipH);
+    editMenu->addAction(m_actFlipV);
+    connect(m_actFlipH, &QAction::triggered, this,
+            [this]()
+            {
+                if (m_compareView && m_compareView->isVisible())
+                    m_compareView->flipCurrentCell(true);
+                else if (m_imageViewer)
+                    m_imageViewer->flipHorizontal();
+            });
+    connect(m_actFlipV, &QAction::triggered, this,
+            [this]()
+            {
+                if (m_compareView && m_compareView->isVisible())
+                    m_compareView->flipCurrentCell(false);
+                else if (m_imageViewer)
+                    m_imageViewer->flipVertical();
+            });
 }
 
 void MainWindow::buildViewMenu(QMenuBar *menuBar)

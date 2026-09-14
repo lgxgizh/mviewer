@@ -234,7 +234,8 @@ CompareWorkspace::DisplayRequest CompareWorkspace::sourceDisplayRequest(int pane
     if (pane < static_cast<int>(m_cellAdjusts.size()))
     {
         const auto &adjust = m_cellAdjusts[static_cast<size_t>(pane)];
-        input.hasCropOrRotation = adjust.hasCrop || adjust.rotation != 0;
+        input.hasCropOrRotation =
+            adjust.hasCrop || adjust.rotation != 0 || adjust.flipH || adjust.flipV;
     }
     const QRect visible = sourceVisibleRect(pane);
     input.visibleSourceRect = {visible.x(), visible.y(), visible.width(), visible.height()};

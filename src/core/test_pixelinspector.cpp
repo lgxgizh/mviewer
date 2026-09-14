@@ -187,6 +187,16 @@ static void test_source_backed_analysis()
     crop.rotation = 270;
     checkSourceSample(source, crop, 0, 0, 2, 0);
 
+    AnalysisAdjustment flipH = identity;
+    flipH.flipH = true;
+    checkSourceSample(source, flipH, 0, 0, 2, 0);
+    checkSourceSample(source, flipH, 2, 1, 0, 1);
+
+    AnalysisAdjustment flipV = identity;
+    flipV.flipV = true;
+    checkSourceSample(source, flipV, 0, 0, 0, 1);
+    checkSourceSample(source, flipV, 0, 1, 0, 0);
+
     ImageData adjustedSource = makeImageData(1, 1, PixelFormat::RGB24);
     setRgb(adjustedSource, 0, 0, 90, 140, 210);
     AnalysisAdjustment adjustment;

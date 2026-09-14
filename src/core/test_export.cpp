@@ -539,6 +539,19 @@ int main(int argc, char **argv)
         CHECK(cancelledIdentity.isNull() && identityCancelChecks > 0,
               "identity adjustment honors pre-cancel before fast path");
 
+        mviewer::core::CompareAdjustmentState flipHState{.flipH = true};
+        CHECK(!flipHState.isIdentity(), "flipH is not identity");
+        const auto flippedH =
+            mviewer::core::applyCompareAdjustments(adjustedImages[0].pixels(), flipHState);
+        CHECK(!flippedH.isNull() && flippedH.width == adjustedImages[0].pixels().width,
+              "applyCompareAdjustments with flipH succeeds");
+        mviewer::core::CompareAdjustmentState flipVState{.flipV = true};
+        CHECK(!flipVState.isIdentity(), "flipV is not identity");
+        const auto flippedV =
+            mviewer::core::applyCompareAdjustments(adjustedImages[0].pixels(), flipVState);
+        CHECK(!flippedV.isNull() && flippedV.height == adjustedImages[0].pixels().height,
+              "applyCompareAdjustments with flipV succeeds");
+
         bool cancelDuringMetrics = false;
         int bundleCancelChecks = 0;
         int lastCancelProgress = -1;

@@ -609,7 +609,8 @@ CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
         DisplayBatchResult::CellImage cell;
         cell.index = idx;
         cell.image = mvcore::toDisplayQImage(adjusted, convMeta, target);
-        const bool transformed = displayAdjust.hasCrop || displayAdjust.rotation != 0;
+        const bool transformed =
+            displayAdjust.hasCrop || displayAdjust.rotation != 0 || displayAdjust.flipH || displayAdjust.flipV;
         cell.sourceSize = transformed ? QSize(adjusted.width, adjusted.height) : sourceDims;
         cell.sourceRect = transformed ? QRect(QPoint(0, 0), cell.sourceSize) : coveredRect;
         if (context.isCancelled())

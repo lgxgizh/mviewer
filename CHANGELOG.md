@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.32] - 2026-09-14
+
+### Added
+
+- **Image Flipping (Horizontal & Vertical Mirror)**:
+  - **Browse Mode (看图)**: added Horizontal Flip (`H` or `Ctrl+Shift+H`) and Vertical Flip (`V` or `Ctrl+Shift+V`), available in Edit menu and right-click context menu. Atomic overwrite on disk with automatic cache invalidation and live viewer reload.
+  - **Compare Mode (比较视图)**: added in-memory Horizontal/Vertical Flip (`Ctrl+Shift+H` / `Ctrl+Shift+V`, Edit menu, Edit panel `⇄ 水平` and `⇅ 垂直` buttons). Temporary preview only; does not mutate source files on disk.
+  - **Core Pipeline & Analysis**: added `flipHorizontal` and `flipVertical` to `ImageBuffer.h`, integrated into `CompareAdjustmentState`, `applyCompareAdjustments`, `AnalysisAdjustment`, `sampleAnalysisPixel`, and linked ROI coordinate projections in `PixelInspector`. Preset serialization (`*.mvc`) persists flip states.
+
 ## [1.0.31] - 2026-09-14
 
 ### Added

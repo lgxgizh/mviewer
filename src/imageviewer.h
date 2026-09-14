@@ -198,6 +198,9 @@ class ImageViewer : public QOpenGLWidget
     bool rotateCW();
     bool rotateCCW();
     bool rotateImage(int angle);
+    bool flipHorizontal();
+    bool flipVertical();
+    bool flipImage(bool horizontal);
 
   signals:
     void fileRotated(const QString &path);
@@ -395,9 +398,12 @@ class ImageViewer : public QOpenGLWidget
     void drawSelection(QPainter &painter);
     bool handleNavigationKey(int key);
     bool handleZoomKey(int key, Qt::KeyboardModifiers modifiers);
+    bool handleTransformKey(int key, Qt::KeyboardModifiers modifiers);
     bool handleModeKey(int key, Qt::KeyboardModifiers modifiers);
     bool handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
                                  QAction *copyColor, QContextMenuEvent *event);
+    bool handleContextTransformAction(QAction *chosen, QAction *rotateCWAct, QAction *rotateCCWAct,
+                                      QAction *flipHAct, QAction *flipVAct);
     bool handleContextImageAction(QAction *chosen, QAction *saveAs, QAction *zoomInAction,
                                   QAction *zoomOutAction, QAction *zoomFitAction,
                                   QAction *zoomActualAction, QAction *selectRegion);

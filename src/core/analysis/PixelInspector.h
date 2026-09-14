@@ -78,6 +78,8 @@ struct AnalysisAdjustment
     double redGain = 1.0;
     double blueGain = 1.0;
     int rotation = 0;
+    bool flipH = false;
+    bool flipV = false;
     bool hasCrop = false;
     int cropX = 0;
     int cropY = 0;

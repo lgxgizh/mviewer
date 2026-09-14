@@ -108,7 +108,7 @@ bool CompareAdjustmentState::isIdentity() const
 {
     return brightness == 0 && std::abs(contrast - 1.0) < 1e-6 && std::abs(gamma - 1.0) < 1e-6 &&
            std::abs(redGain - 1.0) < 1e-6 && std::abs(blueGain - 1.0) < 1e-6 && rotation == 0 &&
-           !hasCrop;
+           !flipH && !flipV && !hasCrop;
 }
 
 ImageData applyCompareAdjustments(const ImageData &src,
@@ -151,6 +151,21 @@ ImageData applyCompareAdjustments(const ImageData &src,
         const mviewer::domain::Selection selection{adjustment.cropX, adjustment.cropY,
                                                    adjustment.cropW, adjustment.cropH};
         cur = cropRegion(cur, selection);
+    }
+    if (shouldCancel())
+        return {};
+
+    if (adjustment.flipH)
+    {
+        if (shouldCancel())
+            return {};
+        cur = flipHorizontal(cur);
+    }
+    if (adjustment.flipV)
+    {
+        if (shouldCancel())
+            return {};
+        cur = flipVertical(cur);
     }
     if (shouldCancel())
         return {};

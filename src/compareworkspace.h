@@ -149,6 +149,7 @@ class CompareWorkspace : public QWidget
     void nextPair();
     void prevPair();
     void rotateCurrentCell(int degrees);
+    void flipCurrentCell(bool horizontal);
 
   signals:
     void syncToggled(bool on);
@@ -187,6 +188,7 @@ class CompareWorkspace : public QWidget
     bool handleBasicCompareNavigation(QKeyEvent *event);
     bool handleModeCompareKey(QKeyEvent *event);
     bool handleChannelCompareKey(QKeyEvent *event);
+    bool handleTransformCompareKey(QKeyEvent *event);
     bool handleSyncCompareKey(QKeyEvent *event);
     bool handleAdvancedCompareKey(QKeyEvent *event);
     void rebuildCells();
@@ -669,6 +671,8 @@ class CompareWorkspace : public QWidget
         float rGain = 1.0f;    // WB red gain [0.01, 5.0]
         float bGain = 1.0f;    // WB blue gain [0.01, 5.0]
         int rotation = 0;      // 0, 90, 180, 270
+        bool flipH = false;
+        bool flipV = false;
         bool hasCrop = false;
         int cropX = 0, cropY = 0, cropW = 0, cropH = 0;
 
@@ -676,7 +680,7 @@ class CompareWorkspace : public QWidget
         {
             return brightness == 0 && std::abs(contrast - 1.0f) < 1e-6f &&
                    std::abs(gamma - 1.0f) < 1e-6f && std::abs(rGain - 1.0f) < 1e-6f &&
-                   std::abs(bGain - 1.0f) < 1e-6f && rotation == 0 && !hasCrop;
+                   std::abs(bGain - 1.0f) < 1e-6f && rotation == 0 && !flipH && !flipV && !hasCrop;
         }
     };
     std::vector<CellAdjust> m_cellAdjusts; // per-cell adjustment state

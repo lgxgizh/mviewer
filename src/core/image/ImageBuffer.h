@@ -284,3 +284,50 @@ inline ImageData rotate90CW(const ImageData &src)
     }
     return dst;
 }
+
+// Flip an image horizontally (left-right mirror). Pure std implementation.
+inline ImageData flipHorizontal(const ImageData &src)
+{
+    if (src.isNull())
+        return ImageData{};
+    const int cpp = src.channelsPerPixel();
+    const int w = src.width;
+    const int h = src.height;
+    ImageData dst = makeImageData(w, h, src.format);
+    const ImageBuffer v = src.view();
+    const ImageBuffer dv = dst.view();
+    for (int y = 0; y < h; ++y)
+    {
+        const uint8_t *sp = v.data + static_cast<size_t>(y) * v.stride();
+        uint8_t *dp = dv.data + static_cast<size_t>(y) * dv.stride();
+        for (int x = 0; x < w; ++x)
+        {
+            const size_t sx = static_cast<size_t>(x) * static_cast<size_t>(cpp);
+            const size_t dx = static_cast<size_t>(w - 1 - x) * static_cast<size_t>(cpp);
+            for (int c = 0; c < cpp; ++c)
+                dp[dx + static_cast<size_t>(c)] = sp[sx + static_cast<size_t>(c)];
+        }
+    }
+    return dst;
+}
+
+// Flip an image vertically (top-bottom mirror). Pure std implementation.
+inline ImageData flipVertical(const ImageData &src)
+{
+    if (src.isNull())
+        return ImageData{};
+    const int cpp = src.channelsPerPixel();
+    const int w = src.width;
+    const int h = src.height;
+    ImageData dst = makeImageData(w, h, src.format);
+    const ImageBuffer v = src.view();
+    const ImageBuffer dv = dst.view();
+    const size_t rowBytes = static_cast<size_t>(w) * static_cast<size_t>(cpp);
+    for (int y = 0; y < h; ++y)
+    {
+        const uint8_t *sp = v.data + static_cast<size_t>(y) * v.stride();
+        uint8_t *dp = dv.data + static_cast<size_t>(h - 1 - y) * dv.stride();
+        std::memcpy(dp, sp, rowBytes);
+    }
+    return dst;
+}

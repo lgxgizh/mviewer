@@ -139,8 +139,12 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aSaveAs = menu.addAction("另存为...");
     QAction *aRotateCW = menu.addAction("顺时针旋转 90° (Ctrl+R)");
     QAction *aRotateCCW = menu.addAction("逆时针旋转 90° (Ctrl+Shift+R)");
+    QAction *aFlipH = menu.addAction("水平翻转 (H)");
+    QAction *aFlipV = menu.addAction("垂直翻转 (V)");
     aRotateCW->setEnabled(!m_currentPath.isEmpty());
     aRotateCCW->setEnabled(!m_currentPath.isEmpty());
+    aFlipH->setEnabled(!m_currentPath.isEmpty());
+    aFlipV->setEnabled(!m_currentPath.isEmpty());
     QAction *aPlay = nullptr;
     QAction *aRestart = nullptr;
     QAction *aPrevFrame = nullptr;
@@ -219,17 +223,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         nextFrame();
         return;
     }
-    if (chosen == aRotateCW)
-    {
-        rotateCW();
-        return;
-    }
-    if (chosen == aRotateCCW)
-    {
-        rotateCCW();
-        return;
-    }
-    if (handleContextCopyAction(chosen, aCopy, aCopyPath, aCopyColor, event) ||
+    if (handleContextTransformAction(chosen, aRotateCW, aRotateCCW, aFlipH, aFlipV) ||
+        handleContextCopyAction(chosen, aCopy, aCopyPath, aCopyColor, event) ||
         handleContextImageAction(chosen, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
                                  aSelectRegion))
         return;
@@ -263,6 +258,37 @@ bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QActio
     else
         return false;
     return true;
+}
+
+bool ImageViewer::handleContextTransformAction(QAction *chosen, QAction *rotateCWAct,
+                                               QAction *rotateCCWAct, QAction *flipHAct,
+                                               QAction *flipVAct)
+{
+    if (chosen == rotateCWAct)
+        return rotateCW();
+    if (chosen == rotateCCWAct)
+        return rotateCCW();
+    if (chosen == flipHAct)
+        return flipHorizontal();
+    if (chosen == flipVAct)
+        return flipVertical();
+    return false;
+}
+
+bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
+{
+    const bool plain = (modifiers == Qt::NoModifier);
+    const bool ctrl = (modifiers == Qt::ControlModifier);
+    const bool shiftCtrl = (modifiers == (Qt::ControlModifier | Qt::ShiftModifier));
+    if (ctrl && key == Qt::Key_R)
+        return rotateCW();
+    if (shiftCtrl && key == Qt::Key_R)
+        return rotateCCW();
+    if ((plain || shiftCtrl) && key == Qt::Key_H)
+        return flipHorizontal();
+    if ((plain || shiftCtrl) && key == Qt::Key_V)
+        return flipVertical();
+    return false;
 }
 
 bool ImageViewer::handleContextImageAction(QAction *chosen, QAction *saveAs, QAction *zoomInAction,
@@ -383,6 +409,66 @@ bool ImageViewer::rotateImage(int angle)
     {
         saveFile.cancelWriting();
         QMessageBox::warning(this, tr("旋转失败"), tr("保存文件失败：%1").arg(m_currentPath));
+        return false;
+    }
+
+    mviewer::core::ImageLoadingFacade::instance().invalidateSource(
+        m_currentPath.toUtf8().toStdString());
+    ThumbnailProvider::invalidateSource(m_currentPath.toUtf8().toStdString());
+
+    emit fileRotated(m_currentPath);
+    refreshSource(m_currentPath);
+    return true;
+}
+
+bool ImageViewer::flipHorizontal()
+{
+    return flipImage(true);
+}
+
+bool ImageViewer::flipVertical()
+{
+    return flipImage(false);
+}
+
+bool ImageViewer::flipImage(bool horizontal)
+{
+    if (m_currentPath.isEmpty())
+        return false;
+
+    QImageReader reader(m_currentPath);
+    reader.setAutoTransform(true);
+    const QImage original = reader.read();
+    if (original.isNull())
+    {
+        QMessageBox::warning(this, tr("翻转失败"), tr("无法读取图片：%1").arg(m_currentPath));
+        return false;
+    }
+
+    const QImage flipped = original.mirrored(horizontal, !horizontal);
+    if (flipped.isNull())
+        return false;
+
+    QByteArray format = reader.format();
+    if (format.isEmpty())
+        format = QFileInfo(m_currentPath).suffix().toLatin1();
+
+    QSaveFile saveFile(m_currentPath);
+    if (!saveFile.open(QIODevice::WriteOnly))
+    {
+        QMessageBox::warning(this, tr("翻转失败"), tr("无法写入文件：%1").arg(saveFile.errorString()));
+        return false;
+    }
+
+    int quality = 95;
+    const QString fmtLower = QString::fromLatin1(format).toLower();
+    if (fmtLower == "png" || fmtLower == "bmp")
+        quality = -1;
+
+    if (!flipped.save(&saveFile, format.constData(), quality) || !saveFile.commit())
+    {
+        saveFile.cancelWriting();
+        QMessageBox::warning(this, tr("翻转失败"), tr("保存文件失败：%1").arg(m_currentPath));
         return false;
     }
 
