@@ -1,5 +1,15 @@
 # Changelog
  
+## [1.0.34] - 2026-09-15
+
+### Added
+
+- **Quick Zoom Presets & Viewport UX**:
+  - **Direct Zoom Presets**: Added `ImageViewer::zoomTo(double)` supporting instant scaling to 50%, 100% (Actual), 200%, 400%, and 800% (Pixel Grid) with viewport center preservation.
+  - **Right-Click Context Menu**: Added "缩放预设" submenu in ImageViewer for one-click jumping to 50%, 100%, 200%, 400%, or 800%.
+  - **View Menu Presets**: Added "缩放预设" submenu under View (视图) menu with 50%, 100%, 200%, 400%, 800%.
+  - **Interactive Status Bar Zoom Label**: Click the zoom indicator in the status bar to pop up the zoom presets menu; double-click to instantly toggle between Fit and 100% Actual Size.
+
 ## [1.0.33] - 2026-09-15
 
 ### Added

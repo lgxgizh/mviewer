@@ -233,6 +233,13 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     viewMenu->addAction(m_actZoomOut);
     viewMenu->addAction(m_actZoomFit);
     viewMenu->addAction(m_actZoomActual);
+    m_zoomPresetsMenu = viewMenu->addMenu("缩放预设");
+    m_zoomPresetsMenu->setObjectName("zoomPresetsMenu");
+    m_zoomPresetsMenu->addAction("50%", this, [this]() { zoomViewer(4); });
+    m_zoomPresetsMenu->addAction("100% (实际大小)", this, [this]() { zoomViewer(3); });
+    m_zoomPresetsMenu->addAction("200%", this, [this]() { zoomViewer(5); });
+    m_zoomPresetsMenu->addAction("400%", this, [this]() { zoomViewer(6); });
+    m_zoomPresetsMenu->addAction("800% (像素网格)", this, [this]() { zoomViewer(7); });
     viewMenu->addSeparator();
     viewMenu->addAction(m_actFullscreen);
     m_actSlideshow = new QAction("幻灯片放映(&S) (S)", this);

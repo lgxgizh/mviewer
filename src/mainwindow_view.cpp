@@ -511,7 +511,34 @@ void MainWindow::zoomViewer(int op)
     case 3:
         m_imageViewer->zoomActual();
         break;
+    case 4:
+        m_imageViewer->zoomTo(0.5);
+        break;
+    case 5:
+        m_imageViewer->zoomTo(2.0);
+        break;
+    case 6:
+        m_imageViewer->zoomTo(4.0);
+        break;
+    case 7:
+        m_imageViewer->zoomTo(8.0);
+        break;
     }
+}
+
+void MainWindow::showZoomPresetMenu(const QPoint &globalPos)
+{
+    if (!m_imageViewer || m_imageViewer->isHidden() || currentImagePath().isEmpty())
+        return;
+    QMenu menu(this);
+    menu.addAction("适应窗口 (0)", this, [this]() { m_imageViewer->zoomFit(); });
+    menu.addAction("实际大小 100% (1)", this, [this]() { m_imageViewer->zoomActual(); });
+    menu.addSeparator();
+    menu.addAction("50%", this, [this]() { m_imageViewer->zoomTo(0.5); });
+    menu.addAction("200%", this, [this]() { m_imageViewer->zoomTo(2.0); });
+    menu.addAction("400%", this, [this]() { m_imageViewer->zoomTo(4.0); });
+    menu.addAction("800% (像素网格)", this, [this]() { m_imageViewer->zoomTo(8.0); });
+    menu.exec(globalPos);
 }
 
 void MainWindow::openQuickCompare()
@@ -611,6 +638,30 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             }
             keyPressEvent(ke);
             return true;
+        }
+    }
+
+    if (watched == m_lblZoom)
+    {
+        if (event->type() == QEvent::MouseButtonDblClick)
+        {
+            if (m_imageViewer && !m_imageViewer->isHidden() && !currentImagePath().isEmpty())
+            {
+                if (m_imageViewer->isFitMode())
+                    m_imageViewer->zoomActual();
+                else
+                    m_imageViewer->zoomFit();
+            }
+            return true;
+        }
+        if (event->type() == QEvent::MouseButtonPress)
+        {
+            auto *me = static_cast<QMouseEvent *>(event);
+            if (me->button() == Qt::LeftButton || me->button() == Qt::RightButton)
+            {
+                showZoomPresetMenu(me->globalPosition().toPoint());
+                return true;
+            }
         }
     }
 

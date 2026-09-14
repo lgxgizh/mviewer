@@ -378,6 +378,12 @@ void MainWindow::connectViewerSignals()
                 }
                 m_analysisPanel->showPixel(x, y, r, g, b, a, r16, g16, b16, rawKind, valid);
             });
+    if (m_lblZoom)
+    {
+        m_lblZoom->setCursor(Qt::PointingHandCursor);
+        m_lblZoom->setToolTip(tr("点击打开缩放预设菜单，双击切换 适应/100%"));
+        m_lblZoom->installEventFilter(this);
+    }
 }
 
 void MainWindow::connectFilterSignals()

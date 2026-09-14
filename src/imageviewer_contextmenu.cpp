@@ -90,8 +90,9 @@ void addOverlayContextActions(QMenu &menu, mviewer::OverlayMode mode, QAction *&
 
 void setContextImageActionAvailability(QAction *copy, QAction *copyPath, QMenu *copyColorMenu,
                                        QAction *saveAs, QAction *zoomIn, QAction *zoomOut,
-                                       QAction *zoomFit, QAction *zoomActual, QAction *selectRegion,
-                                       bool hasPath, bool hasFrame, bool hasDisplay)
+                                       QAction *zoomFit, QAction *zoomActual, QMenu *zoomPresetsMenu,
+                                       QAction *selectRegion, bool hasPath, bool hasFrame,
+                                       bool hasDisplay)
 {
     copy->setEnabled(hasPath);
     copyPath->setEnabled(hasPath);
@@ -102,6 +103,8 @@ void setContextImageActionAvailability(QAction *copy, QAction *copyPath, QMenu *
     zoomOut->setEnabled(hasDisplay);
     zoomFit->setEnabled(hasDisplay);
     zoomActual->setEnabled(hasDisplay);
+    if (zoomPresetsMenu)
+        zoomPresetsMenu->menuAction()->setEnabled(hasDisplay);
     selectRegion->setEnabled(hasDisplay);
 }
 
@@ -222,13 +225,20 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aZoomOut = menu.addAction("缩小 (-)");
     QAction *aZoomFit = menu.addAction("适应窗口 (0)");
     QAction *aZoomActual = menu.addAction("实际大小 (1)");
+    QMenu *mZoomPresets = menu.addMenu("缩放预设");
+    mZoomPresets->addAction("50%")->setData(0.5);
+    mZoomPresets->addAction("100% (实际大小)")->setData(1.0);
+    mZoomPresets->addAction("200%")->setData(2.0);
+    mZoomPresets->addAction("400%")->setData(4.0);
+    mZoomPresets->addAction("800% (像素网格)")->setData(8.0);
     menu.addSeparator();
     QAction *aSelectRegion = menu.addAction("框选区域 (R)");
     aSelectRegion->setCheckable(true);
     aSelectRegion->setChecked(m_selectMode);
     setContextImageActionAvailability(
         aCopy, aCopyPath, mCopyColor, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
-        aSelectRegion, !m_currentPath.isEmpty(), m_frame && m_frame->isValid(), hasDisplayImage());
+        mZoomPresets, aSelectRegion, !m_currentPath.isEmpty(), m_frame && m_frame->isValid(),
+        hasDisplayImage());
     menu.addSeparator();
     QAction *aOvNone = nullptr;
     QAction *aOvZebra = nullptr;
@@ -424,6 +434,8 @@ bool ImageViewer::handleContextImageAction(QAction *chosen, QAction *saveAs, QAc
         zoomFit();
     else if (chosen == zoomActualAction)
         zoomActual();
+    else if (chosen && chosen->data().isValid() && chosen->data().userType() == QMetaType::Double)
+        zoomTo(chosen->data().toDouble());
     else if (chosen == selectRegion)
         setSelectMode(!m_selectMode);
     else
@@ -588,4 +600,17 @@ bool ImageViewer::flipImage(bool horizontal)
     emit fileRotated(m_currentPath);
     refreshSource(m_currentPath);
     return true;
+}
+
+void ImageViewer::zoomTo(double targetScale)
+{
+    if (!hasDisplayImage() || targetScale <= 0.0)
+        return;
+    m_view.screenW = width();
+    m_view.screenH = height();
+    m_view.zoomAt(width() / 2.0, height() / 2.0, targetScale / m_view.scale);
+    advanceViewportRevision();
+    m_fitMode = false;
+    emitZoom();
+    update();
 }

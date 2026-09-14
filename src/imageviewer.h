@@ -183,6 +183,11 @@ class ImageViewer : public QOpenGLWidget
     void zoomOut();
     void zoomFit();
     void zoomActual();
+    void zoomTo(double targetScale);
+    bool isFitMode() const
+    {
+        return m_fitMode;
+    }
     void play();
     void pause();
     void restart();

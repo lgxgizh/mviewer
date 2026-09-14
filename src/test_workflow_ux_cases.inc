@@ -743,6 +743,21 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             CHECK(qAbs(viewer->viewTransform().scale - fitScale) < 1e-6,
                   "restore (Fit) returns to the original fit scale");
 
+            viewer->zoomTo(2.0);
+            pump(20);
+            CHECK(qAbs(viewer->viewTransform().scale - 2.0) < 1e-6,
+                  "zoomTo(2.0) sets scale to exactly 200%");
+
+            viewer->zoomTo(4.0);
+            pump(20);
+            CHECK(qAbs(viewer->viewTransform().scale - 4.0) < 1e-6,
+                  "zoomTo(4.0) sets scale to exactly 400%");
+
+            viewer->zoomTo(8.0);
+            pump(20);
+            CHECK(qAbs(viewer->viewTransform().scale - 8.0) < 1e-6,
+                  "zoomTo(8.0) sets scale to exactly 800%");
+
             // Wheel zoom keeps the image point under the cursor stationary
             // (beta checklist “缩放中心：以鼠标点为中心”).
             {

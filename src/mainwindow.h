@@ -174,7 +174,8 @@ class MainWindow : public QMainWindow
     // main window itself. Shared by the F command, F11 and the View menu.
     void toggleFullscreen();
     // Forwards a zoom command to the viewer when it is on screen.
-    void zoomViewer(int op); // 0=in, 1=out, 2=fit, 3=actual
+    void zoomViewer(int op); // 0=in, 1=out, 2=fit, 3=actual, 4=50%, 5=200%, 6=400%, 7=800%
+    void showZoomPresetMenu(const QPoint &globalPos);
 
     // P0: product browse state — recent folders, favorites, in-session history,
     // and cross-session restore.
@@ -305,6 +306,7 @@ class MainWindow : public QMainWindow
     QAction *m_actZoomFit = nullptr;
     QAction *m_actZoomActual = nullptr;
     QAction *m_actFullscreen = nullptr;
+    QMenu *m_zoomPresetsMenu = nullptr;
     QMenu *m_recentMenu = nullptr;
     QMenu *m_recentFileMenu = nullptr; // recent-files menu (opened images)
     QMenu *m_favMenu = nullptr;
