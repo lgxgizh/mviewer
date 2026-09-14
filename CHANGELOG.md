@@ -1,5 +1,14 @@
 # Changelog
  
+## [1.0.35] - 2026-09-15
+
+### Added
+
+- **HSV-V Brightness in Neighborhood Inspection & Persistent ROI Dimensions**:
+  - **Neighborhood HSV-V Mean**: Added $V = \max(R,G,B)$ mean statistics (`vMean`) across $N \times N$ kernels in `NeighborhoodStats` for both raw buffer and source-backed adjusted pixel sampling.
+  - **Analysis Panel & Compare Status Readout**: Displaying `HSV-V` kernel mean in AnalysisPanel ROI channel averages and CompareWorkspace neighborhood statistics readout (`· V均值 xx.x`).
+  - **Persistent ROI Selection Dimensions**: Selected ROI region pixel dimensions (`W×H`) remain visible on the canvas after releasing the mouse, allowing engineers to confirm the exact cropped area dimensions at all times.
+
 ## [1.0.34] - 2026-09-15
 
 ### Added

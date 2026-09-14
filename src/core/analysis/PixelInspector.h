@@ -64,6 +64,7 @@ struct NeighborhoodStats
     double rMean = 0;    // mean of R channel over the kernel
     double gMean = 0;    // mean of G channel over the kernel
     double bMean = 0;    // mean of B channel over the kernel
+    double vMean = 0;    // mean of HSV-V (max(R,G,B)) over the kernel
 };
 
 // Coordinate-space adjustment state used by source-backed analysis. The

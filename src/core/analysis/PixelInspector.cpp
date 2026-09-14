@@ -426,6 +426,7 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
     long long rSum = 0;
     long long gSum = 0;
     long long bSum = 0;
+    long long vSum = 0;
     int minValue = 255;
     int maxValue = 0;
     const int half = n / 2;
@@ -444,6 +445,7 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
             rSum += pixel.r;
             gSum += pixel.g;
             bSum += pixel.b;
+            vSum += std::max({pixel.r, pixel.g, pixel.b});
             minValue = std::min(minValue, luminance);
             maxValue = std::max(maxValue, luminance);
             ++stats.count;
@@ -461,6 +463,7 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
     stats.rMean = static_cast<double>(rSum) / stats.count;
     stats.gMean = static_cast<double>(gSum) / stats.count;
     stats.bMean = static_cast<double>(bSum) / stats.count;
+    stats.vMean = static_cast<double>(vSum) / stats.count;
     return stats;
 }
 
@@ -477,7 +480,7 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
     const int bytesPerPixel = channels == 4 ? 4 : 3;
 
     long sum = 0, sumSq = 0;
-    long rSum = 0, gSum = 0, bSum = 0;
+    long rSum = 0, gSum = 0, bSum = 0, vSum = 0;
     int mn = 255, mx = 0, count = 0;
     const int half = n / 2; // n=1→0, n=3→1, n=5→2, n=7→3
     for (int dy = -half; dy <= half; ++dy)
@@ -498,6 +501,7 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
             rSum += r;
             gSum += g;
             bSum += b;
+            vSum += std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
             const double lum = luma(r, g, b); // 0..255
             const int v = static_cast<int>(lum + 0.5);
             sum += v;
@@ -522,6 +526,7 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
     s.rMean = static_cast<double>(rSum) / count;
     s.gMean = static_cast<double>(gSum) / count;
     s.bMean = static_cast<double>(bSum) / count;
+    s.vMean = static_cast<double>(vSum) / count;
     return s;
 }
 

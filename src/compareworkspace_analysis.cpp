@@ -292,15 +292,17 @@ void CompareWorkspace::updateInspector(int x, int y)
                       : mviewer::core::NeighborhoodStats{};
         if (stats.count > 0)
         {
-            m_statsLabel->setText(tr("邻域 %1×%1: 亮度 μ=%2 σ=%3 [%4, %5] · RGB均值(%6, %7, %8)")
-                                      .arg(kernel)
-                                      .arg(stats.mean, 0, 'f', 1)
-                                      .arg(stats.stdDev, 0, 'f', 1)
-                                      .arg(static_cast<int>(stats.min))
-                                      .arg(static_cast<int>(stats.max))
-                                      .arg(stats.rMean, 0, 'f', 1)
-                                      .arg(stats.gMean, 0, 'f', 1)
-                                      .arg(stats.bMean, 0, 'f', 1));
+            m_statsLabel->setText(
+                tr("邻域 %1×%1: 亮度 μ=%2 σ=%3 [%4, %5] · RGB均值(%6, %7, %8) · V均值 %9")
+                    .arg(kernel)
+                    .arg(stats.mean, 0, 'f', 1)
+                    .arg(stats.stdDev, 0, 'f', 1)
+                    .arg(static_cast<int>(stats.min))
+                    .arg(static_cast<int>(stats.max))
+                    .arg(stats.rMean, 0, 'f', 1)
+                    .arg(stats.gMean, 0, 'f', 1)
+                    .arg(stats.bMean, 0, 'f', 1)
+                    .arg(stats.vMean, 0, 'f', 1));
         }
         else
             m_statsLabel->setText(tr("邻域统计: —"));

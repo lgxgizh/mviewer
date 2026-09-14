@@ -402,16 +402,19 @@ void ImageViewer::drawSelection(QPainter &painter)
     painter.setPen(QPen(QColor(255, 255, 0), 1));
     painter.setBrush(QColor(255, 255, 0, 80));
     painter.drawRect(region);
-    if (m_selecting && m_frame && m_frame->width() > 0)
+    if (m_frame && m_frame->width() > 0)
     {
         const int imageWidth = static_cast<int>(region.width() / m_view.scale);
         const int imageHeight = static_cast<int>(region.height() / m_view.scale);
-        const QString sizeText = QString("%1×%2").arg(imageWidth).arg(imageHeight);
-        painter.setPen(QColor(255, 255, 0));
-        QFont font = painter.font();
-        font.setBold(true);
-        painter.setFont(font);
-        painter.drawText(region.bottomRight() + QPoint(8, 14), sizeText);
+        if (imageWidth > 0 && imageHeight > 0)
+        {
+            const QString sizeText = QString("%1×%2").arg(imageWidth).arg(imageHeight);
+            painter.setPen(QColor(255, 255, 0));
+            QFont font = painter.font();
+            font.setBold(true);
+            painter.setFont(font);
+            painter.drawText(region.bottomRight() + QPoint(8, 14), sizeText);
+        }
     }
     painter.restore();
 }

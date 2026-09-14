@@ -71,6 +71,7 @@ static void test_neighborhood()
     auto s = neighborhoodStats(buf.data(), w * 3, w, h, 1, 1, 3);
     CHECK(s.count == 9);
     CHECK(std::abs(s.mean - 100) < 1e-6);
+    CHECK(std::abs(s.vMean - 100) < 1e-6);
     CHECK(std::abs(s.variance) < 1e-6);
     CHECK(std::abs(s.stdDev) < 1e-6);
     CHECK(s.min == 100 && s.max == 100);
@@ -132,6 +133,7 @@ static void test_neighborhood()
     const auto red = neighborhoodStats(bgra.data(), 4, 1, 1, 0, 0, 1, 4);
     CHECK(std::abs(red.rMean - 255) < 1e-6);
     CHECK(std::abs(red.bMean) < 1e-6);
+    CHECK(std::abs(red.vMean - 255) < 1e-6);
 }
 
 static void setRgb(ImageData &image, int x, int y, int r, int g, int b)
@@ -245,6 +247,7 @@ static void test_source_backed_analysis()
                 expectedSum += y * neighborhood.width + x;
         CHECK(stats.count == kernel * kernel);
         CHECK(std::abs(stats.mean - static_cast<double>(expectedSum) / stats.count) < 1e-9);
+        CHECK(std::abs(stats.vMean - stats.mean) < 1e-9);
     }
     CHECK(neighborhoodStats(neighborhood, identity, 0, 0, 7).count == 16);
 

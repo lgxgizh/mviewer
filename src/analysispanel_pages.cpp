@@ -102,10 +102,11 @@ void AnalysisPanel::updateInspectorPage()
                        .arg(s.max, 0, 'f', 0)
                        .arg(s.variance, 0, 'f', 1)
                        .arg(s.count);
-            txt += QString("<br>ROI 通道均值: R %1  G %2  B %3")
+            txt += QString("<br>ROI 通道均值: R %1  G %2  B %3  HSV-V %4")
                        .arg(s.rMean, 0, 'f', 1)
                        .arg(s.gMean, 0, 'f', 1)
-                       .arg(s.bMean, 0, 'f', 1);
+                       .arg(s.bMean, 0, 'f', 1)
+                       .arg(s.vMean, 0, 'f', 1);
         }
     }
 
