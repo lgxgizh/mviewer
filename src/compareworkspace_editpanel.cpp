@@ -135,6 +135,24 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
                 m_bGainVal->setText(QString::number(v / 100.0, 'f', 2));
                 onAdjChanged();
             });
+    {
+        auto *row = new QHBoxLayout;
+        row->addWidget(new QLabel(tr("旋转"), m_editPanel));
+        auto *btnCCW = new QPushButton(tr("↺ 逆时针"), m_editPanel);
+        btnCCW->setObjectName("rotateCCWButton");
+        btnCCW->setToolTip(tr("逆时针旋转 90° (临时预览，不修改原文件)"));
+        auto *btnCW = new QPushButton(tr("↻ 顺时针"), m_editPanel);
+        btnCW->setObjectName("rotateCWButton");
+        btnCW->setToolTip(tr("顺时针旋转 90° (临时预览，不修改原文件)"));
+        m_rotVal = new QLabel("0°", m_editPanel);
+        m_rotVal->setMinimumWidth(30);
+        row->addWidget(btnCCW);
+        row->addWidget(btnCW);
+        row->addWidget(m_rotVal);
+        editLay->addLayout(row);
+        connect(btnCCW, &QPushButton::clicked, this, [this]() { rotateCurrentCell(-90); });
+        connect(btnCW, &QPushButton::clicked, this, [this]() { rotateCurrentCell(90); });
+    }
     m_resetAdjBtn = new QPushButton(tr("重置调整"), m_editPanel);
     m_resetAdjBtn->setObjectName("resetAdjustmentsButton");
     connect(m_resetAdjBtn, &QPushButton::clicked, this, &CompareWorkspace::onResetAdj);
@@ -191,6 +209,8 @@ void CompareWorkspace::onEditCellSelected(int cellIdx)
         m_bGainSlider->setValue(static_cast<int>(a.bGain * 100.0f));
     }
     m_bGainVal->setText(QString::number(a.bGain, 'f', 2));
+    if (m_rotVal)
+        m_rotVal->setText(QString::number(a.rotation) + "°");
 
     const ImageFrame *img = m_engine.imageAt(cellIdx);
     m_editLabel->setText(img ? QString::fromStdString(img->metadata().fileName)
@@ -237,6 +257,28 @@ void CompareWorkspace::onResetAdj()
     onEditCellSelected(m_editIdx); // resync sliders
 
     onAdjChanged();
+}
+
+void CompareWorkspace::rotateCurrentCell(int degrees)
+{
+    const int count = static_cast<int>(m_cellViews.size());
+    if (count <= 0)
+        return;
+    const int idx = (m_editIdx >= 0 && m_editIdx < count) ? m_editIdx : 0;
+    const int needed = idx + 1;
+    if (static_cast<int>(m_cellAdjusts.size()) < needed)
+        m_cellAdjusts.resize(static_cast<size_t>(needed));
+
+    int rot = (m_cellAdjusts[static_cast<size_t>(idx)].rotation + degrees) % 360;
+    if (rot < 0)
+        rot += 360;
+    m_cellAdjusts[static_cast<size_t>(idx)].rotation = rot;
+    m_editIdx = idx;
+    if (m_rotVal)
+        m_rotVal->setText(QString::number(rot) + "°");
+    applyAdjToCell(idx);
+    onAdjEditFinished();
+    update();
 }
 
 void CompareWorkspace::applyAdjToCell(int cellIdx)

@@ -15,6 +15,10 @@ namespace mviewer::core
 
 struct DisplayColorContext
 {
+    // Whether color management is active. When false, images are rendered
+    // directly as raw RGB/sRGB without ICC profile conversions.
+    bool colorManagementEnabled = true;
+
     // An empty profile means the deterministic sRGB fallback target.  For a
     // real target this contains the ICC bytes supplied by the platform or a
     // test fixture.
@@ -26,9 +30,19 @@ struct DisplayColorContext
     // change).  It prevents a previous target's raster from being reused.
     uint64_t generation = 0;
 
+    static DisplayColorContext raw(uint64_t generation = 0)
+    {
+        DisplayColorContext context;
+        context.colorManagementEnabled = false;
+        context.fingerprint = "raw";
+        context.generation = generation;
+        return context;
+    }
+
     static DisplayColorContext sRGB(uint64_t generation = 0)
     {
         DisplayColorContext context;
+        context.colorManagementEnabled = true;
         context.fingerprint = "srgb";
         context.generation = generation;
         return context;
@@ -38,6 +52,7 @@ struct DisplayColorContext
                                               std::string identity = {})
     {
         DisplayColorContext context;
+        context.colorManagementEnabled = true;
         context.iccProfile = std::move(profile);
         context.generation = generation;
         if (!identity.empty())
@@ -59,11 +74,13 @@ struct DisplayColorContext
 
     bool hasProfile() const
     {
-        return !iccProfile.empty();
+        return colorManagementEnabled && !iccProfile.empty();
     }
 
     std::string cacheKey() const
     {
+        if (!colorManagementEnabled)
+            return "raw@" + std::to_string(generation);
         return fingerprint.empty() ? "srgb@" + std::to_string(generation)
                                    : fingerprint + "@" + std::to_string(generation);
     }

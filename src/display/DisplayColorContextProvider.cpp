@@ -1,8 +1,9 @@
 #include "display/DisplayColorContextProvider.h"
 
 #include <QFile>
+#include <QSettings>
 #include <algorithm>
-
+#include <atomic>
 #include <mutex>
 #include <unordered_map>
 #include <utility>
@@ -14,6 +15,9 @@
 
 namespace
 {
+
+std::atomic<bool> g_cmsLoaded{false};
+std::atomic<bool> g_cmsEnabled{true};
 
 struct WindowProfileState
 {
@@ -49,9 +53,33 @@ mviewer::core::DisplayColorContext withGeneration(uintptr_t windowId,
 
 } // namespace
 
+bool DisplayColorContextProvider::isColorManagementEnabled()
+{
+    if (!g_cmsLoaded.load(std::memory_order_relaxed))
+    {
+        QSettings settings;
+        g_cmsEnabled.store(settings.value("display/colorManagement", true).toBool(),
+                           std::memory_order_relaxed);
+        g_cmsLoaded.store(true, std::memory_order_relaxed);
+    }
+    return g_cmsEnabled.load(std::memory_order_relaxed);
+}
+
+void DisplayColorContextProvider::setColorManagementEnabled(bool enabled)
+{
+    g_cmsEnabled.store(enabled, std::memory_order_relaxed);
+    g_cmsLoaded.store(true, std::memory_order_relaxed);
+    QSettings settings;
+    settings.setValue("display/colorManagement", enabled);
+}
+
 mviewer::core::DisplayColorContext DisplayColorContextProvider::forWindow(const QWindow *window)
 {
     const uintptr_t windowId = window ? static_cast<uintptr_t>(window->winId()) : 0;
+    if (!isColorManagementEnabled())
+    {
+        return withGeneration(windowId, mviewer::core::DisplayColorContext::raw());
+    }
 #if defined(Q_OS_WIN)
     if (window && windowId != 0)
     {

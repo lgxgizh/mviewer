@@ -174,12 +174,13 @@ void AnalysisPanel::runRoiAnalysis()
         m_statsA = AnalysisEngine::computeStatsROI(mvcore::fromQImage(m_imageA), m_roi);
         updateHistogramPage();
         // Publish a plain-text ROI summary (never HTML from m_statsLabel).
-        const QString plain = QString("ROI %1x%2 @(%3,%4) lum=%5 r=%6 g=%7 b=%8")
+        const QString plain = QString("ROI %1x%2 @(%3,%4) lum=%5 v=%6 r=%7 g=%8 b=%9")
                                   .arg(m_roi.width)
                                   .arg(m_roi.height)
                                   .arg(m_roi.x)
                                   .arg(m_roi.y)
                                   .arg(m_statsA.lumMean, 0, 'f', 2)
+                                  .arg(m_statsA.vMean, 0, 'f', 2)
                                   .arg(m_statsA.rMean, 0, 'f', 2)
                                   .arg(m_statsA.gMean, 0, 'f', 2)
                                   .arg(m_statsA.bMean, 0, 'f', 2);

@@ -26,7 +26,7 @@ PreviewStats computePreviewStatsROI(const ImageData &img, const mviewer::domain:
     const ImageBuffer view = img.view();
     const int cpp = view.channelsPerPixel();
     const ptrdiff_t stride = view.stride();
-    int64_t sumR = 0, sumG = 0, sumB = 0, sumL = 0;
+    int64_t sumR = 0, sumG = 0, sumB = 0, sumL = 0, sumV = 0;
     int64_t count = 0;
     for (int y = y0; y < y1; ++y)
     {
@@ -58,11 +58,13 @@ PreviewStats computePreviewStatsROI(const ImageData &img, const mviewer::domain:
             sumG += g;
             sumB += b;
             sumL += luminance(r, g, b);
+            sumV += std::max({r, g, b});
             ++count;
         }
     }
 
     out.lumMean = static_cast<double>(sumL) / static_cast<double>(count);
+    out.vMean = static_cast<double>(sumV) / static_cast<double>(count);
     out.rMean = static_cast<int>(sumR / count);
     out.gMean = static_cast<int>(sumG / count);
     out.bMean = static_cast<int>(sumB / count);
@@ -102,6 +104,7 @@ ROIChannelStats computeROIChannelStats(const ImageData &img,
     long double sumR = 0.0L;
     long double sumG = 0.0L;
     long double sumB = 0.0L;
+    long double sumV = 0.0L;
     const ImageBuffer view = img.view();
     for (int y = y0; y < y1; ++y)
     {
@@ -138,6 +141,7 @@ ROIChannelStats computeROIChannelStats(const ImageData &img,
             sumR += r;
             sumG += g;
             sumB += b;
+            sumV += std::max({r, g, b});
             ++out.pixelCount;
         }
     }
@@ -148,6 +152,7 @@ ROIChannelStats computeROIChannelStats(const ImageData &img,
     out.rMean = static_cast<double>(sumR / count);
     out.gMean = static_cast<double>(sumG / count);
     out.bMean = static_cast<double>(sumB / count);
+    out.vMean = static_cast<double>(sumV / count);
     out.valid = true;
     if (sumG != 0.0L)
     {

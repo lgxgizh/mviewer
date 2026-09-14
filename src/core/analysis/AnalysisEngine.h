@@ -10,8 +10,10 @@
 struct ImageStats
 {
     double lumMean = 0;                                       // 亮度均值
+    double vMean = 0;                                         // HSV-V 明度均值
     double rMean = 0, gMean = 0, bMean = 0;                   // RGB 均值
     int histLum[256] = {0};                                   // 亮度直方图
+    int histV[256] = {0};                                     // HSV-V 直方图
     int histR[256] = {0}, histG[256] = {0}, histB[256] = {0}; // RGB 直方图
     int pixelCount = 0; // 参与统计的像素数（ROI 时可能小于全图）
 };

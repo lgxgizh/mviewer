@@ -148,6 +148,7 @@ class CompareWorkspace : public QWidget
   public slots:
     void nextPair();
     void prevPair();
+    void rotateCurrentCell(int degrees);
 
   signals:
     void syncToggled(bool on);
@@ -701,6 +702,7 @@ class CompareWorkspace : public QWidget
     QLabel *m_rGainVal = nullptr;
     QSlider *m_bGainSlider = nullptr;
     QLabel *m_bGainVal = nullptr;
+    QLabel *m_rotVal = nullptr;
     QPushButton *m_resetAdjBtn = nullptr;
     void onEditCellSelected(int cellIdx);
     void onAdjChanged();

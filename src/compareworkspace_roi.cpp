@@ -103,18 +103,19 @@ void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
 
     m_roiTable = new QTableWidget(this);
     m_roiTable->setObjectName("roiMeasurementTable");
-    m_roiTable->setColumnCount(8);
+    m_roiTable->setColumnCount(9);
     m_roiTable->setHorizontalHeaderLabels(
-        {tr("Image"), QStringLiteral("R Mean"), QStringLiteral("G Mean"), QStringLiteral("B Mean"),
-         QStringLiteral("R/G"), QStringLiteral("B/G"), tr("Pixels"), tr("Status")});
+        {tr("Image"), QStringLiteral("V Mean"), QStringLiteral("R Mean"), QStringLiteral("G Mean"),
+         QStringLiteral("B Mean"), QStringLiteral("R/G"), QStringLiteral("B/G"), tr("Pixels"),
+         tr("Status")});
     m_roiTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_roiTable->setSelectionMode(QAbstractItemView::NoSelection);
     m_roiTable->setTextElideMode(Qt::ElideMiddle);
     m_roiTable->verticalHeader()->setVisible(false);
     m_roiTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
-    for (int column = 1; column < 7; ++column)
+    for (int column = 1; column < 8; ++column)
         m_roiTable->horizontalHeader()->setSectionResizeMode(column, QHeaderView::ResizeToContents);
-    m_roiTable->horizontalHeader()->setSectionResizeMode(7, QHeaderView::Stretch);
+    m_roiTable->horizontalHeader()->setSectionResizeMode(8, QHeaderView::Stretch);
     m_roiTable->setMinimumHeight(90);
     m_roiTable->setMaximumHeight(200);
     sideLay->addWidget(m_roiTable);
@@ -365,6 +366,7 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
             frame ? frame->metadata() : mviewer::domain::ImageMetadata{};
         const QStringList cells = {
             paneName(metadata, row),
+            pane.stats.valid ? meanText(pane.stats.vMean) : QStringLiteral("—"),
             pane.stats.valid ? meanText(pane.stats.rMean) : QStringLiteral("—"),
             pane.stats.valid ? meanText(pane.stats.gMean) : QStringLiteral("—"),
             pane.stats.valid ? meanText(pane.stats.bMean) : QStringLiteral("—"),
@@ -375,11 +377,11 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
         for (int column = 0; column < cells.size(); ++column)
         {
             auto *item = new QTableWidgetItem(cells[column]);
-            if (column > 0 && column < 7)
+            if (column > 0 && column < 8)
                 item->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
             if (column == 0)
                 item->setToolTip(QString::fromStdString(metadata.filePath));
-            if (column == 7)
+            if (column == 8)
                 item->setToolTip(cells[column]);
             m_roiTable->setItem(row, column, item);
         }
@@ -398,8 +400,9 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
         const QString blueGreen = (a.ratiosValid && b.ratiosValid)
                                       ? QString::number(b.bOverG - a.bOverG, 'f', 4)
                                       : QStringLiteral("—");
-        m_roiDeltaLabel->setText(tr("Delta (B − A): ΔR %1  ΔG %2  ΔB %3  ΔR/G %4  ΔB/G %5")
-                                     .arg(QString::number(b.rMean - a.rMean, 'f', 2),
+        m_roiDeltaLabel->setText(tr("Delta (B − A): ΔV %1  ΔR %2  ΔG %3  ΔB %4  ΔR/G %5  ΔB/G %6")
+                                     .arg(QString::number(b.vMean - a.vMean, 'f', 2),
+                                          QString::number(b.rMean - a.rMean, 'f', 2),
                                           QString::number(b.gMean - a.gMean, 'f', 2),
                                           QString::number(b.bMean - a.bMean, 'f', 2), redGreen,
                                           blueGreen));
@@ -485,10 +488,11 @@ void CompareWorkspace::updateROISurfaces()
         {
             const auto &pane = m_roiResult->panes[static_cast<size_t>(index)];
             if (pane.stats.valid)
-                lines << QStringLiteral("%1  R %2  G %3  B %4  R/G %5  B/G %6")
-                             .arg(QChar('A' + index), meanText(pane.stats.rMean),
-                                  meanText(pane.stats.gMean), meanText(pane.stats.bMean),
-                                  ratioText(pane.stats, true), ratioText(pane.stats, false));
+                lines << QStringLiteral("%1  V %2  R %3  G %4  B %5  R/G %6  B/G %7")
+                             .arg(QChar('A' + index), meanText(pane.stats.vMean),
+                                  meanText(pane.stats.rMean), meanText(pane.stats.gMean),
+                                  meanText(pane.stats.bMean), ratioText(pane.stats, true),
+                                  ratioText(pane.stats, false));
             else
                 lines << QStringLiteral("%1  %2").arg(QChar('A' + index), paneStateText(pane));
         }
@@ -497,8 +501,9 @@ void CompareWorkspace::updateROISurfaces()
         {
             const auto &a = m_roiResult->panes[0].stats;
             const auto &b = m_roiResult->panes[1].stats;
-            lines << QStringLiteral("Δ  R %1  G %2  B %3  R/G %4  B/G %5")
-                         .arg(QString::number(b.rMean - a.rMean, 'f', 2),
+            lines << QStringLiteral("Δ  V %1  R %2  G %3  B %4  R/G %5  B/G %6")
+                         .arg(QString::number(b.vMean - a.vMean, 'f', 2),
+                              QString::number(b.rMean - a.rMean, 'f', 2),
                               QString::number(b.gMean - a.gMean, 'f', 2),
                               QString::number(b.bMean - a.bMean, 'f', 2),
                               a.ratiosValid && b.ratiosValid

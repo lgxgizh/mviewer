@@ -229,15 +229,17 @@ void ImageViewer::scheduleRoiStats(const QRect &selection)
                     if (!viewer || viewer->m_roiRevision != revision || viewer->m_frame != frame ||
                         viewer->m_currentPath != path || !result->valid)
                         return;
-                    const QString text = QString("ROI [%1,%2,%3,%4]: lum=%5, R=%6,G=%7,B=%8")
-                                             .arg(region.x)
-                                             .arg(region.y)
-                                             .arg(region.width)
-                                             .arg(region.height)
-                                             .arg(result->lumMean, 0, 'f', 1)
-                                             .arg(result->rMean)
-                                             .arg(result->gMean)
-                                             .arg(result->bMean);
+                    const QString text =
+                        QString("ROI [%1,%2,%3,%4]: lum=%5, V=%6, R=%7,G=%8,B=%9")
+                            .arg(region.x)
+                            .arg(region.y)
+                            .arg(region.width)
+                            .arg(region.height)
+                            .arg(result->lumMean, 0, 'f', 1)
+                            .arg(result->vMean, 0, 'f', 1)
+                            .arg(result->rMean)
+                            .arg(result->gMean)
+                            .arg(result->bMean);
                     emit viewer->regionStats(text);
                 },
                 Qt::QueuedConnection);
@@ -772,6 +774,10 @@ bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
         setOverlayMode(kChannelKeys[key - Qt::Key_1]);
         return true;
     }
+    if (modifiers == Qt::ControlModifier && key == Qt::Key_R)
+        return rotateCW();
+    if (modifiers == (Qt::ControlModifier | Qt::ShiftModifier) && key == Qt::Key_R)
+        return rotateCCW();
     if (key == Qt::Key_R && !modifiers)
         setSelectMode(!m_selectMode);
     else if ((key == Qt::Key_F && !modifiers) || key == Qt::Key_F11)

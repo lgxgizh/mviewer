@@ -839,6 +839,19 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     const auto mods = event->modifiers();
     const bool plain = (mods == Qt::NoModifier);
     const bool ctrl = (mods == Qt::ControlModifier);
+    const bool shiftCtrl = (mods == (Qt::ControlModifier | Qt::ShiftModifier));
+    if (ctrl && key == Qt::Key_R)
+    {
+        rotateCurrentCell(90);
+        event->accept();
+        return true;
+    }
+    if (shiftCtrl && key == Qt::Key_R)
+    {
+        rotateCurrentCell(-90);
+        event->accept();
+        return true;
+    }
     // Sync toggles.
     if (plain && key == Qt::Key_Z && m_syncZoomChk)
     {

@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.31] - 2026-09-14
+
+### Added
+
+- **Image Rotation**:
+  - **Browse Mode (看图)**: added CW and CCW 90° rotation (`Ctrl+R` / `Ctrl+Shift+R`, Edit menu, right-click context menu). Rotated image is saved and overwrites the source file on disk with automatic cache invalidation and live viewer reload.
+  - **Compare Mode (比较视图)**: added in-memory rotation (`Ctrl+R` / `Ctrl+Shift+R`, Edit menu, Edit panel rotation buttons). Temporary preview only; does not mutate source files on disk.
+- **Color Management (CMS) Toggle**:
+  - Added View menu toggle "色彩管理 (CMS)" (`DisplayColorContextProvider`) allowing users to switch between Color-Managed display and Raw RGB display. When disabled, images render raw RGB pixel-for-pixel matching FastStone Image Viewer without ICC color shifts.
+- **HSV-V Brightness Statistics**:
+  - Added HSV brightness ($V = \max(R,G,B)$) statistics to ROI selection, PreviewStats, ROIChannelStats, AnalysisPanel (RGB Channels and Exposure pages), ImageViewer HUD/banner, and CompareWorkspace linked ROI measurement table (including delta $\Delta V$).
+
 ## [1.0.30] - 2026-09-13
 
 A review pass over the whole codebase (crash/hang risks plus design problems)

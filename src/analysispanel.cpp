@@ -164,13 +164,16 @@ void AnalysisPanel::updateRgbPage()
                    "<tr><td>%1</td><td>%2</td></tr>"
                    "<tr><td>%3</td><td>%4</td></tr>"
                    "<tr><td>%5</td><td>%6</td></tr>"
+                   "<tr><td>%7</td><td>%8</td></tr>"
                    "</table>")
                .arg(tr("R Mean"))
                .arg(m_statsA.rMean, 0, 'f', 2)
                .arg(tr("G Mean"))
                .arg(m_statsA.gMean, 0, 'f', 2)
                .arg(tr("B Mean"))
-               .arg(m_statsA.bMean, 0, 'f', 2);
+               .arg(m_statsA.bMean, 0, 'f', 2)
+               .arg(tr("HSV-V Mean"))
+               .arg(m_statsA.vMean, 0, 'f', 2);
     m_rgbStatsLabel->setText(txt);
 
     const int W = qMax(200, m_rgbLabel->width() - 8);
@@ -238,13 +241,16 @@ void AnalysisPanel::updateExposurePage()
                    "<tr><td>%1</td><td>%2%</td></tr>"
                    "<tr><td>%3</td><td>%4%</td></tr>"
                    "<tr><td>%5</td><td>%6</td></tr>"
+                   "<tr><td>%7</td><td>%8</td></tr>"
                    "</table>")
                .arg(tr("高光 (>=240)"))
                .arg(highlightPct, 0, 'f', 2)
                .arg(tr("阴影 (<=15)"))
                .arg(shadowPct, 0, 'f', 2)
                .arg(tr("亮度均值"))
-               .arg(m_statsA.lumMean, 0, 'f', 2);
+               .arg(m_statsA.lumMean, 0, 'f', 2)
+               .arg(tr("HSV-V 明度均值"))
+               .arg(m_statsA.vMean, 0, 'f', 2);
     m_exposureLabel->setText(txt);
 }
 

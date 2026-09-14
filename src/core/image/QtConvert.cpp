@@ -144,7 +144,7 @@ QImage toDisplayQImage(const ImageData &src, const mviewer::domain::ImageMetadat
                        const mviewer::core::DisplayColorContext &target)
 {
     QImage out = toQImage(src);
-    if (out.isNull())
+    if (out.isNull() || !target.colorManagementEnabled)
         return out;
 
     const QColorSpace source = sourceColorSpace(meta);

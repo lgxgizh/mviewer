@@ -19,6 +19,7 @@ namespace mviewer::core
 struct PreviewStats
 {
     double lumMean = 0.0;
+    double vMean = 0.0;
     int rMean = 0;
     int gMean = 0;
     int bMean = 0;
@@ -34,6 +35,7 @@ struct ROIChannelStats
     double rMean = 0.0;
     double gMean = 0.0;
     double bMean = 0.0;
+    double vMean = 0.0;
     double rOverG = 0.0;
     double bOverG = 0.0;
     int64_t pixelCount = 0;

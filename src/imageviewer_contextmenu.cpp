@@ -2,10 +2,12 @@
 
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/Analyzer.h"
+#include "core/image/ImageLoadingFacade.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
 #include "core/trace/Trace.h"
 #include "gpu/GpuTileUploader.h"
+#include "thumbnailprovider.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -14,6 +16,7 @@
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QImageReader>
 #include <QKeyEvent>
 #include <QMatrix4x4>
 #include <QMenu>
@@ -26,8 +29,10 @@
 #include <QPointer>
 #include <QRect>
 #include <QResizeEvent>
+#include <QSaveFile>
 #include <QSettings>
 #include <QTimer>
+#include <QTransform>
 #include <QWheelEvent>
 #include <cmath>
 #include <cstring>
@@ -97,6 +102,31 @@ void setContextImageActionAvailability(QAction *copy, QAction *copyPath, QAction
     zoomActual->setEnabled(hasDisplay);
     selectRegion->setEnabled(hasDisplay);
 }
+
+void populateAnalyzeSubmenu(QMenu &menu, const std::shared_ptr<ImageFrame> &frame,
+                            QList<QAction *> &analyzeActions)
+{
+    QMenu *analyzeMenu = menu.addMenu("分析");
+    if (frame)
+    {
+        const auto ids = AnalyzerRegistry::instance().availableAnalyzers();
+        for (const auto &id : ids)
+        {
+            const auto info = AnalyzerRegistry::instance().infoFor(id);
+            const QString label =
+                info ? QString::fromStdString(info->name) : QString::fromStdString(id);
+            QAction *a = analyzeMenu->addAction(label);
+            a->setData(QString::fromStdString(id));
+            analyzeActions.append(a);
+        }
+        if (analyzeActions.isEmpty())
+            analyzeMenu->addAction("（无可用分析器）")->setEnabled(false);
+    }
+    else
+    {
+        analyzeMenu->addAction("（请先打开图片）")->setEnabled(false);
+    }
+}
 } // namespace
 
 void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
@@ -107,6 +137,10 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aCopyColor = menu.addAction("复制像素颜色 (#RRGGBB)");
     menu.addSeparator();
     QAction *aSaveAs = menu.addAction("另存为...");
+    QAction *aRotateCW = menu.addAction("顺时针旋转 90° (Ctrl+R)");
+    QAction *aRotateCCW = menu.addAction("逆时针旋转 90° (Ctrl+Shift+R)");
+    aRotateCW->setEnabled(!m_currentPath.isEmpty());
+    aRotateCCW->setEnabled(!m_currentPath.isEmpty());
     QAction *aPlay = nullptr;
     QAction *aRestart = nullptr;
     QAction *aPrevFrame = nullptr;
@@ -141,27 +175,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
                              aOvY);
 
     // A-7.3: "分析" submenu — list every registered analyzer for one-click run.
-    QMenu *analyzeMenu = menu.addMenu("分析");
     QList<QAction *> analyzeActions;
-    if (m_frame)
-    {
-        const auto ids = AnalyzerRegistry::instance().availableAnalyzers();
-        for (const auto &id : ids)
-        {
-            const auto info = AnalyzerRegistry::instance().infoFor(id);
-            const QString label =
-                info ? QString::fromStdString(info->name) : QString::fromStdString(id);
-            QAction *a = analyzeMenu->addAction(label);
-            a->setData(QString::fromStdString(id));
-            analyzeActions.append(a);
-        }
-        if (analyzeActions.isEmpty())
-            analyzeMenu->addAction("（无可用分析器）")->setEnabled(false);
-    }
-    else
-    {
-        analyzeMenu->addAction("（请先打开图片）")->setEnabled(false);
-    }
+    populateAnalyzeSubmenu(menu, m_frame, analyzeActions);
     menu.addSeparator();
     QAction *aNext = menu.addAction("下一张 (→)");
     QAction *aPrev = menu.addAction("上一张 (←)");
@@ -202,6 +217,16 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     if (chosen == aNextFrame)
     {
         nextFrame();
+        return;
+    }
+    if (chosen == aRotateCW)
+    {
+        rotateCW();
+        return;
+    }
+    if (chosen == aRotateCCW)
+    {
+        rotateCCW();
         return;
     }
     if (handleContextCopyAction(chosen, aCopy, aCopyPath, aCopyColor, event) ||
@@ -299,5 +324,73 @@ bool ImageViewer::handleContextNavigationAction(QAction *chosen, QAction *next, 
         toggleFullscreen();
     else
         return false;
+    return true;
+}
+
+bool ImageViewer::rotateCW()
+{
+    return rotateImage(90);
+}
+
+bool ImageViewer::rotateCCW()
+{
+    return rotateImage(-90);
+}
+
+bool ImageViewer::rotateImage(int angle)
+{
+    if (m_currentPath.isEmpty())
+        return false;
+
+    int normAngle = angle % 360;
+    if (normAngle < 0)
+        normAngle += 360;
+    if (normAngle == 0)
+        return true;
+
+    QImageReader reader(m_currentPath);
+    reader.setAutoTransform(true);
+    const QImage original = reader.read();
+    if (original.isNull())
+    {
+        QMessageBox::warning(this, tr("旋转失败"), tr("无法读取图片：%1").arg(m_currentPath));
+        return false;
+    }
+
+    QTransform transform;
+    transform.rotate(normAngle);
+    const QImage rotated = original.transformed(transform, Qt::SmoothTransformation);
+    if (rotated.isNull())
+        return false;
+
+    QByteArray format = reader.format();
+    if (format.isEmpty())
+        format = QFileInfo(m_currentPath).suffix().toLatin1();
+
+    QSaveFile saveFile(m_currentPath);
+    if (!saveFile.open(QIODevice::WriteOnly))
+    {
+        QMessageBox::warning(this, tr("旋转失败"), tr("无法写入文件：%1").arg(saveFile.errorString()));
+        return false;
+    }
+
+    int quality = 95;
+    const QString fmtLower = QString::fromLatin1(format).toLower();
+    if (fmtLower == "png" || fmtLower == "bmp")
+        quality = -1;
+
+    if (!rotated.save(&saveFile, format.constData(), quality) || !saveFile.commit())
+    {
+        saveFile.cancelWriting();
+        QMessageBox::warning(this, tr("旋转失败"), tr("保存文件失败：%1").arg(m_currentPath));
+        return false;
+    }
+
+    mviewer::core::ImageLoadingFacade::instance().invalidateSource(
+        m_currentPath.toUtf8().toStdString());
+    ThumbnailProvider::invalidateSource(m_currentPath.toUtf8().toStdString());
+
+    emit fileRotated(m_currentPath);
+    refreshSource(m_currentPath);
     return true;
 }

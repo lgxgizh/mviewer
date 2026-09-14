@@ -133,9 +133,9 @@ AnalysisResult runAnalysis(const AnalysisInput &in, const TaskScheduler::TaskCon
         r.roiStats = AnalysisEngine::computeStatsROI(roiData, in.roi);
         r.hasRoiStats = true;
         char buf[128];
-        std::snprintf(buf, sizeof(buf), "ROI %dx%d @(%d,%d) lum=%.2f r=%.2f g=%.2f b=%.2f",
+        std::snprintf(buf, sizeof(buf), "ROI %dx%d @(%d,%d) lum=%.2f v=%.2f r=%.2f g=%.2f b=%.2f",
                       in.roi.width, in.roi.height, in.roi.x, in.roi.y, r.roiStats.lumMean,
-                      r.roiStats.rMean, r.roiStats.gMean, r.roiStats.bMean);
+                      r.roiStats.vMean, r.roiStats.rMean, r.roiStats.gMean, r.roiStats.bMean);
         r.plainResult = buf;
         return r;
     }

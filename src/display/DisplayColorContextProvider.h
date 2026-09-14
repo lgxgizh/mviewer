@@ -11,4 +11,6 @@ class DisplayColorContextProvider
 {
   public:
     static mviewer::core::DisplayColorContext forWindow(const QWindow *window);
+    static bool isColorManagementEnabled();
+    static void setColorManagementEnabled(bool enabled);
 };

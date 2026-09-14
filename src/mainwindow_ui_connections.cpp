@@ -333,6 +333,17 @@ void MainWindow::connectViewerSignals()
                     m_actToggleAnalysis->setChecked(true);
                 m_analysisPanel->runAnalyzer(analyzerId);
             });
+    connect(m_imageViewer, &ImageViewer::fileRotated, this,
+            [this](const QString &path)
+            {
+                if (path == currentImagePath())
+                {
+                    if (m_previewPanel)
+                        m_previewPanel->setImage(path);
+                    if (m_metadataPanel)
+                        m_metadataPanel->setImage(path);
+                }
+            });
     connect(m_imageViewer, &ImageViewer::pixelInfo, this,
             [this](int x, int y, int r, int g, int b, int a, int r16, int g16, int b16, int rawKind,
                    bool valid)

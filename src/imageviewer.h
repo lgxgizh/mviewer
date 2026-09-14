@@ -195,8 +195,12 @@ class ImageViewer : public QOpenGLWidget
     {
         return m_overlayMode;
     }
+    bool rotateCW();
+    bool rotateCCW();
+    bool rotateImage(int angle);
 
   signals:
+    void fileRotated(const QString &path);
     // Emitted when the async decode of a setImage() request fails, so the
     // host can surface the failure (status bar) instead of it being silent.
     void loadFailed(const QString &path);

@@ -1,6 +1,8 @@
 // MainWindow layout construction and command surfaces.
 #include "mainwindow_p.h"
 
+#include "display/DisplayColorContextProvider.h"
+
 #include <QIcon>
 #include <QSignalBlocker>
 #include <QToolBar>
@@ -101,6 +103,32 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
                 updateUndoRedoActions();
             });
     m_cmdStack.setChangeCallback([this]() { updateUndoRedoActions(); });
+
+    editMenu->addSeparator();
+    m_actRotateCW = new QAction(tr("顺时针旋转 90°(&R)"), this);
+    m_actRotateCW->setObjectName("rotateCWAction");
+    m_actRotateCW->setShortcut(QKeySequence("Ctrl+R"));
+    m_actRotateCCW = new QAction(tr("逆时针旋转 90°(&L)"), this);
+    m_actRotateCCW->setObjectName("rotateCCWAction");
+    m_actRotateCCW->setShortcut(QKeySequence("Ctrl+Shift+R"));
+    editMenu->addAction(m_actRotateCW);
+    editMenu->addAction(m_actRotateCCW);
+    connect(m_actRotateCW, &QAction::triggered, this,
+            [this]()
+            {
+                if (m_compareView && m_compareView->isVisible())
+                    m_compareView->rotateCurrentCell(90);
+                else if (m_imageViewer)
+                    m_imageViewer->rotateCW();
+            });
+    connect(m_actRotateCCW, &QAction::triggered, this,
+            [this]()
+            {
+                if (m_compareView && m_compareView->isVisible())
+                    m_compareView->rotateCurrentCell(-90);
+                else if (m_imageViewer)
+                    m_imageViewer->rotateCCW();
+            });
 }
 
 void MainWindow::buildViewMenu(QMenuBar *menuBar)
@@ -187,6 +215,25 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actSlideshow->setObjectName("slideshowAction");
     m_actSlideshow->setCheckable(true);
     viewMenu->addAction(m_actSlideshow);
+    viewMenu->addSeparator();
+    m_actColorManagement = new QAction(tr("色彩管理 (CMS)"), this);
+    m_actColorManagement->setObjectName("colorManagementAction");
+    m_actColorManagement->setCheckable(true);
+    m_actColorManagement->setChecked(DisplayColorContextProvider::isColorManagementEnabled());
+    m_actColorManagement->setToolTip(
+        tr("启用时根据显示器 ICC 转换颜色；禁用时使用原生 RGB/sRGB（与 FastStone 一致）"));
+    viewMenu->addAction(m_actColorManagement);
+    connect(m_actColorManagement, &QAction::toggled, this,
+            [this](bool on)
+            {
+                DisplayColorContextProvider::setColorManagementEnabled(on);
+                if (m_imageViewer)
+                    m_imageViewer->setDisplayColorContext(
+                        DisplayColorContextProvider::forWindow(m_imageViewer->windowHandle()));
+                if (m_compareView)
+                    m_compareView->setDisplayColorContext(
+                        DisplayColorContextProvider::forWindow(m_compareView->windowHandle()));
+            });
 }
 
 void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)

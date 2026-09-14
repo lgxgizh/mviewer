@@ -43,7 +43,7 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
     if (rw <= 0 || rh <= 0)
         return s;
 
-    long long sumL = 0, sumR = 0, sumG = 0, sumB = 0;
+    long long sumL = 0, sumR = 0, sumG = 0, sumB = 0, sumV = 0;
     int count = 0;
     for (int y = ry; y < ry + rh; ++y)
     {
@@ -57,7 +57,10 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
             sumB += b;
             const int lum = static_cast<int>(0.299 * r + 0.587 * g + 0.114 * b);
             sumL += lum;
+            const int v = std::max({r, g, b});
+            sumV += v;
             ++s.histLum[std::clamp(lum, 0, 255)];
+            ++s.histV[std::clamp(v, 0, 255)];
             ++s.histR[std::clamp(r, 0, 255)];
             ++s.histG[std::clamp(g, 0, 255)];
             ++s.histB[std::clamp(b, 0, 255)];
@@ -68,6 +71,7 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
     if (count > 0)
     {
         s.lumMean = static_cast<double>(sumL) / count;
+        s.vMean = static_cast<double>(sumV) / count;
         s.rMean = static_cast<double>(sumR) / count;
         s.gMean = static_cast<double>(sumG) / count;
         s.bMean = static_cast<double>(sumB) / count;
