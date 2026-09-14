@@ -401,7 +401,8 @@ class ImageViewer : public QOpenGLWidget
     bool handleTransformKey(int key, Qt::KeyboardModifiers modifiers);
     bool handleModeKey(int key, Qt::KeyboardModifiers modifiers);
     bool handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
-                                 QAction *copyColor, QContextMenuEvent *event);
+                                 QAction *copyHex, QAction *copyRgb, QAction *copyFloat,
+                                 QAction *copyHsv, QContextMenuEvent *event);
     bool handleContextTransformAction(QAction *chosen, QAction *rotateCWAct, QAction *rotateCCWAct,
                                       QAction *flipHAct, QAction *flipVAct);
     bool handleContextImageAction(QAction *chosen, QAction *saveAs, QAction *zoomInAction,
@@ -584,6 +585,7 @@ class ImageViewer : public QOpenGLWidget
     bool m_selecting = false;
     bool m_selectMode = false;
     QPoint m_selStart, m_selEnd;
+    PixelRGBA m_lastHoverPixel{};
 
     // Auto-hide cursor in fullscreen after inactivity.
     QTimer *m_cursorHideTimer = nullptr;

@@ -1,6 +1,25 @@
 # Changelog
+ 
+## [1.0.33] - 2026-09-15
 
-## [1.0.32] - 2026-09-14
+### Added
+
+- **Multi-format Pixel Color Copying**:
+  - Expanded ImageViewer right-click menu with a dedicated "复制像素值" submenu:
+    - 十六进制 (`#RRGGBB`) (with `Shift+C` shortcut)
+    - RGB 值 `RGB(r, g, b)`
+    - 归一化浮点 `(0.xxx, 0.yyy, 0.zzz)`
+    - HSV 值 `HSV(h°, s%, v%)`
+  - Added `Shift+C` global viewer shortcut to instantly copy current hover pixel's hex color.
+  - Added `Ctrl+C` (copy image) and `Ctrl+Shift+C` (copy image path) direct shortcuts in ImageViewer.
+
+### Improved
+
+- **Pixel Inspector & Status Bar Readouts**:
+  - Switching color spaces (RGB, HEX, HSV, Lab, YUV, YCbCr, XYZ) in Compare Mode now updates table column headers immediately without waiting for cursor movement.
+  - Cleaned up status bar pixel hover readout: replaced confusing `16bit(0,0,0)` display on standard 8-bit images with uppercase `#RRGGBB` hex code; 16-bit info is now only shown when high bit-depth or RAW data is actually present.
+
+ ## [1.0.32] - 2026-09-14
 
 ### Added
 

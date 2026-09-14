@@ -92,9 +92,10 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
                          QStringLiteral("Lab"), QStringLiteral("YUV"), QStringLiteral("YCbCr"),
                          QStringLiteral("XYZ")});
     m_csCombo->setToolTip(tr("像素值显示的色彩空间"));
-    connect(m_csCombo, &QComboBox::currentIndexChanged, this,
-            [this](int)
+    connect(m_csCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int idx)
             {
+                updateInspectorHeader(idx);
                 if (m_lastInspectX >= 0 && m_lastInspectY >= 0)
                     requestInspectorUpdate(m_lastInspectX, m_lastInspectY);
             });
@@ -217,6 +218,20 @@ void CompareWorkspace::requestInspectorUpdate(int x, int y)
         Qt::QueuedConnection);
 }
 
+void CompareWorkspace::updateInspectorHeader(int spaceIdx)
+{
+    if (!m_inspector)
+        return;
+    const int idx = std::clamp(spaceIdx, 0, 6);
+    if (idx == m_inspectorSpaceIdx)
+        return;
+    m_inspector->setHorizontalHeaderLabels(
+        {tr("#"), tr("名称"), QString::fromLatin1(kHeaders[idx][0]),
+         QString::fromLatin1(kHeaders[idx][1]), QString::fromLatin1(kHeaders[idx][2]),
+         QStringLiteral("Δ"), QStringLiteral("16bit/RAW")});
+    m_inspectorSpaceIdx = idx;
+}
+
 void CompareWorkspace::updateInspector(int x, int y)
 {
     if (!m_inspector)
@@ -234,16 +249,7 @@ void CompareWorkspace::updateInspector(int x, int y)
 
     const int spaceIdx = m_csCombo ? std::clamp(m_csCombo->currentIndex(), 0, 6) : 0;
     const ColorSpace space = kSpaces[spaceIdx];
-    // Only touch the horizontal header when the selected color space changed;
-    // ordinary hovers never rebuild it.
-    if (spaceIdx != m_inspectorSpaceIdx)
-    {
-        m_inspector->setHorizontalHeaderLabels(
-            {tr("#"), tr("名称"), QString::fromLatin1(kHeaders[spaceIdx][0]),
-             QString::fromLatin1(kHeaders[spaceIdx][1]), QString::fromLatin1(kHeaders[spaceIdx][2]),
-             QStringLiteral("Δ"), QStringLiteral("16bit/RAW")});
-        m_inspectorSpaceIdx = spaceIdx;
-    }
+    updateInspectorHeader(spaceIdx);
 
     const int n = m_engine.imageCount();
     const int baseIdx = diffBaseIndex();

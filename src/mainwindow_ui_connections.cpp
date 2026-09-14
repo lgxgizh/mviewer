@@ -350,29 +350,27 @@ void MainWindow::connectViewerSignals()
             {
                 if (valid)
                 {
-                    if (a < 255)
+                    const QString hex = QString("#%1%2%3")
+                                            .arg(r, 2, 16, QChar('0'))
+                                            .arg(g, 2, 16, QChar('0'))
+                                            .arg(b, 2, 16, QChar('0'))
+                                            .toUpper();
+                    if (rawKind == 2)
                         statusBar()->showMessage(
-                            QString("像素 [%1,%2]  RGBA(%3,%4,%5,%6)  16bit(%7,%8,%9)")
-                                .arg(x)
-                                .arg(y)
-                                .arg(r)
-                                .arg(g)
-                                .arg(b)
-                                .arg(a)
-                                .arg(r16)
-                                .arg(g16)
-                                .arg(b16));
+                            QString("像素 [%1,%2]  RGB(%3,%4,%5)  16bit(%6,%7,%8)  %9")
+                                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(r16).arg(g16).arg(b16).arg(hex));
+                    else if (rawKind == 1)
+                        statusBar()->showMessage(
+                            QString("像素 [%1,%2]  RGB(%3,%4,%5)  (RAW)  %6")
+                                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(hex));
+                    else if (a < 255)
+                        statusBar()->showMessage(
+                            QString("像素 [%1,%2]  RGBA(%3,%4,%5,%6)  %7")
+                                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(a).arg(hex));
                     else
                         statusBar()->showMessage(
-                            QString("像素 [%1,%2]  RGB(%3,%4,%5)  16bit(%6,%7,%8)")
-                                .arg(x)
-                                .arg(y)
-                                .arg(r)
-                                .arg(g)
-                                .arg(b)
-                                .arg(r16)
-                                .arg(g16)
-                                .arg(b16));
+                            QString("像素 [%1,%2]  RGB(%3,%4,%5)  %6")
+                                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(hex));
                 }
                 else
                 {

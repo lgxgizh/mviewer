@@ -186,6 +186,7 @@ void ImageViewer::leaveEvent(QEvent *event)
 
 void ImageViewer::clearPixelInfo()
 {
+    m_lastHoverPixel = PixelRGBA{};
     emit pixelInfo(-1, -1, 0, 0, 0, 0, 0, 0, 0, 0, false);
 }
 
@@ -576,6 +577,7 @@ void ImageViewer::mouseMoveEvent(QMouseEvent *event)
         b = px.b;
         a = px.a;
         valid = px.valid;
+        m_lastHoverPixel = px;
     }
     // P0-2/PixelInspector: also surface the original high-bit-depth sample when
     // available. rawKind: 0 = 8-bit only, 1 = RAW preview (demosaic 8-bit),

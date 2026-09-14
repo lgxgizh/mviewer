@@ -56,6 +56,11 @@ static void test_color_spaces()
     CHECK(std::abs(yc.c1 - 128) < 1e-3);
     CHECK(std::abs(yc.c2 - 128) < 1e-3);
     CHECK(std::abs(yc.c3 - 128) < 1e-3);
+
+    // toHex formatting
+    CHECK(toHex(255, 0, 128) == "#FF0080");
+    CHECK(toHex(0, 0, 0) == "#000000");
+    CHECK(toHex(255, 255, 255) == "#FFFFFF");
 }
 
 static void test_neighborhood()

@@ -1,6 +1,7 @@
 #include "imageviewer.h"
 
 #include "core/analysis/AnalysisEngine.h"
+#include "core/analysis/PixelInspector.h"
 #include "core/analyzer/Analyzer.h"
 #include "core/image/ImageLoadingFacade.h"
 #include "core/image/QtConvert.h"
@@ -87,20 +88,75 @@ void addOverlayContextActions(QMenu &menu, mviewer::OverlayMode mode, QAction *&
     channelY->setChecked(mode == mviewer::OverlayMode::ChannelY);
 }
 
-void setContextImageActionAvailability(QAction *copy, QAction *copyPath, QAction *copyColor,
+void setContextImageActionAvailability(QAction *copy, QAction *copyPath, QMenu *copyColorMenu,
                                        QAction *saveAs, QAction *zoomIn, QAction *zoomOut,
                                        QAction *zoomFit, QAction *zoomActual, QAction *selectRegion,
                                        bool hasPath, bool hasFrame, bool hasDisplay)
 {
     copy->setEnabled(hasPath);
     copyPath->setEnabled(hasPath);
-    copyColor->setEnabled(hasFrame);
+    if (copyColorMenu)
+        copyColorMenu->menuAction()->setEnabled(hasFrame);
     saveAs->setEnabled(hasFrame);
     zoomIn->setEnabled(hasDisplay);
     zoomOut->setEnabled(hasDisplay);
     zoomFit->setEnabled(hasDisplay);
     zoomActual->setEnabled(hasDisplay);
     selectRegion->setEnabled(hasDisplay);
+}
+
+void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QMenu *&colorMenu,
+                           QAction *&copyHex, QAction *&copyRgb, QAction *&copyFloat,
+                           QAction *&copyHsv)
+{
+    copy = menu.addAction("复制图片 (Ctrl+C)");
+    copyPath = menu.addAction("复制路径 (Ctrl+Shift+C)");
+    colorMenu = menu.addMenu("复制像素值");
+    copyHex = colorMenu->addAction("十六进制 (#RRGGBB) (Shift+C)");
+    copyRgb = colorMenu->addAction("RGB 值 RGB(r, g, b)");
+    copyFloat = colorMenu->addAction("归一化浮点 (0.xxx, 0.yyy, 0.zzz)");
+    copyHsv = colorMenu->addAction("HSV 值 HSV(h°, s%, v%)");
+}
+
+void copyPixelValue(const PixelRGBA &px, int format)
+{
+    if (!px.valid)
+        return;
+    QString text;
+    switch (format)
+    {
+    case 0:
+        text = QString("#%1%2%3")
+                   .arg(px.r, 2, 16, QChar('0'))
+                   .arg(px.g, 2, 16, QChar('0'))
+                   .arg(px.b, 2, 16, QChar('0'))
+                   .toUpper();
+        break;
+    case 1:
+        text = QString("RGB(%1, %2, %3)").arg(px.r).arg(px.g).arg(px.b);
+        break;
+    case 2:
+        text = QString("(%1, %2, %3)")
+                   .arg(px.r / 255.0, 0, 'f', 4)
+                   .arg(px.g / 255.0, 0, 'f', 4)
+                   .arg(px.b / 255.0, 0, 'f', 4);
+        break;
+    case 3:
+    {
+        const auto hsv =
+            mviewer::core::toColorSpace(static_cast<uint8_t>(px.r), static_cast<uint8_t>(px.g),
+                                        static_cast<uint8_t>(px.b), mviewer::core::ColorSpace::HSV);
+        text = QString("HSV(%1°, %2%, %3%)")
+                   .arg(std::round(hsv.c1))
+                   .arg(std::round(hsv.c2))
+                   .arg(std::round(hsv.c3));
+        break;
+    }
+    default:
+        break;
+    }
+    if (!text.isEmpty())
+        QApplication::clipboard()->setText(text);
 }
 
 void populateAnalyzeSubmenu(QMenu &menu, const std::shared_ptr<ImageFrame> &frame,
@@ -132,9 +188,15 @@ void populateAnalyzeSubmenu(QMenu &menu, const std::shared_ptr<ImageFrame> &fram
 void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
 {
     QMenu menu(this);
-    QAction *aCopy = menu.addAction("复制图片");
-    QAction *aCopyPath = menu.addAction("复制路径");
-    QAction *aCopyColor = menu.addAction("复制像素颜色 (#RRGGBB)");
+    QAction *aCopy = nullptr;
+    QAction *aCopyPath = nullptr;
+    QMenu *mCopyColor = nullptr;
+    QAction *aCopyHex = nullptr;
+    QAction *aCopyRgb = nullptr;
+    QAction *aCopyFloat = nullptr;
+    QAction *aCopyHsv = nullptr;
+    addCopyContextActions(menu, aCopy, aCopyPath, mCopyColor, aCopyHex, aCopyRgb, aCopyFloat,
+                          aCopyHsv);
     menu.addSeparator();
     QAction *aSaveAs = menu.addAction("另存为...");
     QAction *aRotateCW = menu.addAction("顺时针旋转 90° (Ctrl+R)");
@@ -165,7 +227,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     aSelectRegion->setCheckable(true);
     aSelectRegion->setChecked(m_selectMode);
     setContextImageActionAvailability(
-        aCopy, aCopyPath, aCopyColor, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
+        aCopy, aCopyPath, mCopyColor, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
         aSelectRegion, !m_currentPath.isEmpty(), m_frame && m_frame->isValid(), hasDisplayImage());
     menu.addSeparator();
     QAction *aOvNone = nullptr;
@@ -224,7 +286,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         return;
     }
     if (handleContextTransformAction(chosen, aRotateCW, aRotateCCW, aFlipH, aFlipV) ||
-        handleContextCopyAction(chosen, aCopy, aCopyPath, aCopyColor, event) ||
+        handleContextCopyAction(chosen, aCopy, aCopyPath, aCopyHex, aCopyRgb, aCopyFloat, aCopyHsv,
+                                event) ||
         handleContextImageAction(chosen, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
                                  aSelectRegion))
         return;
@@ -233,31 +296,46 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
 }
 
 bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
-                                          QAction *copyColor, QContextMenuEvent *event)
+                                          QAction *copyHex, QAction *copyRgb, QAction *copyFloat,
+                                          QAction *copyHsv, QContextMenuEvent *event)
 {
     if (chosen == copy)
-        copyToClipboard();
-    else if (chosen == copyPath)
-        QApplication::clipboard()->setText(m_currentPath);
-    else if (chosen == copyColor)
     {
-        const QPoint pos = event->pos();
-        if (!m_frame || !m_frame->isValid())
-            return true;
-        const int ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
-        const int iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
-        if (ix < 0 || ix >= m_frame->width() || iy < 0 || iy >= m_frame->height())
-            return true;
-        const PixelRGBA px = samplePixel(m_frame->pixels(), ix, iy);
-        if (px.valid)
-            QApplication::clipboard()->setText(QString("#%1%2%3")
-                                                   .arg(px.r, 2, 16, QChar('0'))
-                                                   .arg(px.g, 2, 16, QChar('0'))
-                                                   .arg(px.b, 2, 16, QChar('0')));
+        copyToClipboard();
+        return true;
     }
-    else
-        return false;
-    return true;
+    if (chosen == copyPath)
+    {
+        QApplication::clipboard()->setText(m_currentPath);
+        return true;
+    }
+    int format = -1;
+    if (chosen == copyHex)
+        format = 0;
+    else if (chosen == copyRgb)
+        format = 1;
+    else if (chosen == copyFloat)
+        format = 2;
+    else if (chosen == copyHsv)
+        format = 3;
+
+    if (format >= 0)
+    {
+        PixelRGBA px{};
+        const QPoint pos = event->pos();
+        if (m_frame && m_frame->isValid())
+        {
+            const int ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
+            const int iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
+            if (ix >= 0 && ix < m_frame->width() && iy >= 0 && iy < m_frame->height())
+                px = samplePixel(m_frame->pixels(), ix, iy);
+        }
+        if (!px.valid)
+            px = m_lastHoverPixel;
+        copyPixelValue(px, format);
+        return true;
+    }
+    return false;
 }
 
 bool ImageViewer::handleContextTransformAction(QAction *chosen, QAction *rotateCWAct,
@@ -279,6 +357,7 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
 {
     const bool plain = (modifiers == Qt::NoModifier);
     const bool ctrl = (modifiers == Qt::ControlModifier);
+    const bool shift = (modifiers == Qt::ShiftModifier);
     const bool shiftCtrl = (modifiers == (Qt::ControlModifier | Qt::ShiftModifier));
     if (ctrl && key == Qt::Key_R)
         return rotateCW();
@@ -288,6 +367,36 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
         return flipHorizontal();
     if ((plain || shiftCtrl) && key == Qt::Key_V)
         return flipVertical();
+    if (shift && key == Qt::Key_C)
+    {
+        PixelRGBA px = m_lastHoverPixel;
+        if (!px.valid && m_frame && m_frame->isValid())
+        {
+            const QPoint pos = mapFromGlobal(QCursor::pos());
+            const int ix = static_cast<int>((pos.x() - m_view.offsetX) / m_view.scale);
+            const int iy = static_cast<int>((pos.y() - m_view.offsetY) / m_view.scale);
+            if (ix >= 0 && ix < m_frame->width() && iy >= 0 && iy < m_frame->height())
+                px = samplePixel(m_frame->pixels(), ix, iy);
+        }
+        if (px.valid)
+        {
+            copyPixelValue(px, 0);
+            return true;
+        }
+    }
+    if (ctrl && key == Qt::Key_C)
+    {
+        copyToClipboard();
+        return true;
+    }
+    if (shiftCtrl && key == Qt::Key_C)
+    {
+        if (!m_currentPath.isEmpty())
+        {
+            QApplication::clipboard()->setText(m_currentPath);
+            return true;
+        }
+    }
     return false;
 }
 

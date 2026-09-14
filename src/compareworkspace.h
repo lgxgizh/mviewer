@@ -469,6 +469,7 @@ class CompareWorkspace : public QWidget
     void updateInspectorRows(const std::vector<InspectorSample> &samples,
                              mviewer::core::ColorSpace space, int baseIndex, int x, int y);
     // M30: coalesced Pixel Inspector hover path.
+    void updateInspectorHeader(int spaceIdx);
     void requestInspectorUpdate(int x, int y);
     bool m_inspectQueued = false; // coalescing flag: one queued render at a time
     int m_inspectorSpaceIdx = -1; // last color-space index whose headers were set
