@@ -34,9 +34,9 @@ class HistogramWidget : public QWidget
         return m_hists[static_cast<size_t>(index)].total;
     }
 
-    // M23: channel visibility (R/G/B/Luma) and log-scale Y axis.
-    // Defaults keep the historical look: RGB on, luma off, linear scale.
-    void setChannelVisible(int channel, bool on); // 0=R 1=G 2=B 3=Luma
+    // M23: channel visibility (R/G/B/Luma/V) and log-scale Y axis.
+    // Defaults keep the historical look: RGB on, luma off, V off, linear scale.
+    void setChannelVisible(int channel, bool on); // 0=R 1=G 2=B 3=Luma 4=V
     void setLogScale(bool on);
     bool logScale() const
     {
@@ -54,7 +54,7 @@ class HistogramWidget : public QWidget
 
   private:
     std::vector<mviewer::core::Histogram> m_hists;
-    bool m_chanVisible[4] = {true, true, true, false}; // R, G, B, Luma
+    bool m_chanVisible[5] = {true, true, true, false, false}; // R, G, B, Luma, V
     bool m_logScale = false;
     bool m_overlayStyle = false;
 };

@@ -154,7 +154,15 @@ static void testChannelIsolation()
     const int expectedY = luminance(200, 10, 20);
     CHECK(py[0] == expectedY && py[1] == expectedY && py[2] == expectedY,
           "Y plane becomes BT.601 luminance grayscale");
+
+    ImageData val = makeImageData(8, 8, PixelFormat::RGB24);
+    fillSolid(val, 200, 10, 20);
+    mviewer::applyOverlay(val, mviewer::OverlayMode::ChannelV, 2);
+    const uint8_t *pv = px(val.view(), 3, 3);
+    CHECK(pv[0] == 200 && pv[1] == 200 && pv[2] == 200,
+          "V plane becomes HSV-V max(R,G,B) grayscale");
     CHECK(mviewer::isChannelOverlay(mviewer::OverlayMode::ChannelR), "R is a channel overlay");
+    CHECK(mviewer::isChannelOverlay(mviewer::OverlayMode::ChannelV), "V is a channel overlay");
     CHECK(!mviewer::isChannelOverlay(mviewer::OverlayMode::Zebra),
           "zebra is not a channel overlay");
 }

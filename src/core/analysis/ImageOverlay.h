@@ -20,13 +20,15 @@ enum class OverlayMode : std::uint8_t
     ChannelR = 3,   // grayscale of the red plane
     ChannelG = 4,   // grayscale of the green plane
     ChannelB = 5,   // grayscale of the blue plane
-    ChannelY = 6    // grayscale of BT.601 luminance
+    ChannelY = 6,   // grayscale of BT.601 luminance
+    ChannelV = 7    // grayscale of HSV-V (max(R,G,B))
 };
 
 inline bool isChannelOverlay(OverlayMode mode)
 {
     return mode == OverlayMode::ChannelR || mode == OverlayMode::ChannelG ||
-           mode == OverlayMode::ChannelB || mode == OverlayMode::ChannelY;
+           mode == OverlayMode::ChannelB || mode == OverlayMode::ChannelY ||
+           mode == OverlayMode::ChannelV;
 }
 
 inline const char *overlayModeLabel(OverlayMode mode)
@@ -45,6 +47,8 @@ inline const char *overlayModeLabel(OverlayMode mode)
         return "B";
     case OverlayMode::ChannelY:
         return "Y";
+    case OverlayMode::ChannelV:
+        return "V";
     case OverlayMode::None:
     default:
         return "RGB";
@@ -61,6 +65,8 @@ inline uint8_t channelPlaneValue(OverlayMode mode, int r, int g, int b)
         return static_cast<uint8_t>(g);
     case OverlayMode::ChannelB:
         return static_cast<uint8_t>(b);
+    case OverlayMode::ChannelV:
+        return static_cast<uint8_t>(std::max({r, g, b}));
     case OverlayMode::ChannelY:
     default:
         return static_cast<uint8_t>(std::clamp(

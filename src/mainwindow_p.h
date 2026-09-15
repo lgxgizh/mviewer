@@ -4,11 +4,13 @@
 // (mainwindow.cpp fails above 1000; every mainwindow_*.cpp warns above 800):
 //   mainwindow.cpp                        core wiring (models, browse, open)   860
 //   mainwindow_ui.cpp                     setupUi dispatcher / empty state     40
-//   mainwindow_ui_layout.cpp              widget / menu / dock / status layout 897
+//   mainwindow_ui_layout.cpp              widget / dock / status layout        621
+//   mainwindow_ui_menus.cpp               menu bar construction                362
 //   mainwindow_ui_connections.cpp         signal wiring + slot bodies          689
 //   mainwindow_commands.cpp               command registration + key dispatch  619
 //   mainwindow_navigation.cpp             history / recent / favorites / nav   383
-//   mainwindow_session.cpp                workspace / project / restore / close 990
+//   mainwindow_session.cpp                workspace / project save/open        628
+//   mainwindow_session_recovery.cpp       session restore / recovery / close   365
 //   mainwindow_session_notifications.cpp  update / crash notifications         113
 //   mainwindow_export.cpp                 report + image export                331
 //   mainwindow_view.cpp                   drag&drop / overlays / slideshow     635

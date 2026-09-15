@@ -162,6 +162,8 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
     m_histGChk = makeChanChk(QStringLiteral("G"), true, 1);
     m_histBChk = makeChanChk(QStringLiteral("B"), true, 2);
     m_histLumaChk = makeChanChk(tr("亮度"), false, 3);
+    m_histVChk = makeChanChk(tr("V(明度)"), false, 4);
+    m_histVChk->setToolTip(tr("HSV 空间的 V 分量（最大通道明度 max(R,G,B)）"));
 
     m_histLogChk = new QCheckBox(QStringLiteral("Log"), this);
     m_histLogChk->setToolTip(tr("对数纵轴：低计数区间不再被峰值淹没"));

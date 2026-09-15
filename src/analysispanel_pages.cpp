@@ -116,12 +116,16 @@ void AnalysisPanel::updateInspectorPage()
         const QRgb c = m_imageB.pixel(m_px, m_py);
         const int rR = qRed(c), rG = qGreen(c), rB = qBlue(c);
         const int dR = m_pR - rR, dG = m_pG - rG, dB = m_pB - rB;
+        const int vA = std::max({m_pR, m_pG, m_pB});
+        const int vB = std::max({rR, rG, rB});
+        const int dV = vA - vB;
         const double dist = qSqrt(static_cast<double>(dR * dR + dG * dG + dB * dB));
-        txt += QString("<br><span style='color:#6e6;'>●</span> Right RGB(%1, %2, %3)<br>")
+        txt += QString("<br><span style='color:#6e6;'>●</span> Right RGB(%1, %2, %3)  V %4<br>")
                    .arg(rR)
                    .arg(rG)
-                   .arg(rB);
-        txt += QString("Δ      (%1, %2, %3)<br>").arg(dR).arg(dG).arg(dB);
+                   .arg(rB)
+                   .arg(vB);
+        txt += QString("Δ      (%1, %2, %3)  ΔV %4<br>").arg(dR).arg(dG).arg(dB).arg(dV);
         txt += QString("dist: %1").arg(dist, 0, 'f', 2);
     }
     else

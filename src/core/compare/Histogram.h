@@ -21,6 +21,7 @@ struct Histogram
 {
     std::vector<long> r, g, b;
     std::vector<long> luma; // Rec.601: 0.299 R + 0.587 G + 0.114 B
+    std::vector<long> v;    // HSV-V: max(R, G, B)
     int bins = 256;
     long total = 0;
 };
@@ -38,6 +39,7 @@ inline Histogram computeHistogram(const ImageData &img, int roiX, int roiY, int 
     h.g.assign(static_cast<size_t>(h.bins), 0);
     h.b.assign(static_cast<size_t>(h.bins), 0);
     h.luma.assign(static_cast<size_t>(h.bins), 0);
+    h.v.assign(static_cast<size_t>(h.bins), 0);
 
     if (img.isNull() || roiW <= 0 || roiH <= 0)
         return h;
@@ -92,6 +94,8 @@ inline Histogram computeHistogram(const ImageData &img, int roiX, int roiY, int 
             const int Y = luminance(static_cast<uint8_t>(R), static_cast<uint8_t>(G),
                                     static_cast<uint8_t>(B));
             h.luma[std::min<int>(Y, h.bins - 1)]++;
+            const int V = std::max({R, G, B});
+            h.v[std::min<int>(V, h.bins - 1)]++;
             ++samples;
         }
     }
@@ -111,6 +115,7 @@ inline Histogram computeHistogram(const ImageData &img, int bins = 256)
         h.g.assign(static_cast<size_t>(h.bins), 0);
         h.b.assign(static_cast<size_t>(h.bins), 0);
         h.luma.assign(static_cast<size_t>(h.bins), 0);
+        h.v.assign(static_cast<size_t>(h.bins), 0);
         return h;
     }
     return computeHistogram(img, 0, 0, img.width, img.height, bins);

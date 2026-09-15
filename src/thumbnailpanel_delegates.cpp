@@ -60,59 +60,28 @@ QString thumbInfoText(const ThumbnailPanel::Entry *entry, const QString &suffix)
     const qint64 bytes = entry ? entry->size : 0;
     return format + QStringLiteral(" · ") + formatFileSize(bytes);
 }
-} // namespace
 
-void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
-                                          const QModelIndex &index) const
+void drawThumbBackground(QPainter *painter, const QRect &card, const QRect &itemRect,
+                         bool selected, bool hovered, const QStyleOptionViewItem &option)
 {
-    const QStringList &paths = m_panel->pathList();
-    if (index.row() < 0 || index.row() >= paths.size() || option.rect.isEmpty())
-        return;
-
-    const QString path = paths.at(index.row());
-    const QString name = index.data(Qt::DisplayRole).toString();
-    // M46: paint reads ONLY scan-cached entry data — no QFileInfo here.
-    const ThumbnailPanel::Entry *entry = m_panel->entryForPath(path);
-    const bool selected = option.state & QStyle::State_Selected;
-    const bool hovered = option.state & QStyle::State_MouseOver;
-    const ThumbnailPanel::ViewMode mode = m_panel->viewMode();
-    const bool richFooter = mode == ThumbnailPanel::Thumbnail || mode == ThumbnailPanel::LargeIcon;
-    const bool nameFooter = richFooter || mode == ThumbnailPanel::SmallIcon;
-    const bool compactImageOnly = mode == ThumbnailPanel::Compact ||
-                                  mode == ThumbnailPanel::Filmstrip;
-
-    painter->save();
-    painter->setClipRect(option.rect);
-
     const QColor base = option.palette.color(QPalette::Base);
     const QColor accent = option.palette.color(QPalette::Highlight);
     const QColor cardBg = selected ? blended(base, accent, 30)
                                    : (hovered ? blended(base, accent, 12) : base);
-    const QRect card = option.rect.adjusted(compactImageOnly ? 1 : 3, compactImageOnly ? 1 : 3,
-                                            compactImageOnly ? -1 : -3,
-                                            compactImageOnly ? -1 : -3);
-    painter->fillRect(option.rect, base);
+    painter->fillRect(itemRect, base);
     painter->setPen(Qt::NoPen);
     painter->setBrush(cardBg);
     painter->drawRoundedRect(card, 4, 4);
+}
 
-    const int footerHeight = richFooter ? 42 : (nameFooter ? 20 : 0);
-    const int imagePadding = compactImageOnly ? 4 : 7;
-    const int availableImage = qMax(1, card.height() - footerHeight - imagePadding - 4);
-    const int imageSize = qMax(1, qMin(thumbSize(), qMin(card.width() - imagePadding * 2,
-                                                         availableImage)));
-    const QRect thumbRect(card.x() + (card.width() - imageSize) / 2, card.y() + imagePadding,
-                          imageSize, imageSize);
-
-    // A palette-derived well makes portrait and transparent images legible on
-    // both themes. Do not draw the image boundary until a real pixmap exists:
-    // a distant selection is painted once before its async thumbnail arrives,
-    // and a dark Mid border there reads as a black flash rather than loading
-    // feedback.
+void drawThumbImage(QPainter *painter, const QRect &thumbRect, const QString &path,
+                    const ThumbnailPanel *panel, const QStyleOptionViewItem &option)
+{
+    const QColor base = option.palette.color(QPalette::Base);
     const QColor well = option.palette.color(QPalette::AlternateBase);
     painter->fillRect(thumbRect, well);
 
-    const QPixmap pm = m_panel->thumbReady(path);
+    const QPixmap pm = panel->thumbReady(path);
     if (!pm.isNull())
     {
         const QPixmap scaled =
@@ -123,7 +92,7 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
         painter->setBrush(Qt::NoBrush);
         painter->drawRect(thumbRect.adjusted(0, 0, -1, -1));
     }
-    else if (m_panel->thumbFailed(path))
+    else if (panel->thumbFailed(path))
     {
         painter->fillRect(thumbRect, blended(well, option.palette.color(QPalette::Mid), 35));
         painter->setPen(option.palette.color(QPalette::Text));
@@ -138,27 +107,32 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
         // DecorationRole update replaces this tile with the real pixmap.
         painter->fillRect(thumbRect, blended(well, base, 55));
     }
+}
 
-    if (entry && entry->frameCount > 1)
-    {
-        // Keep the gallery item singular and non-animated while making the
-        // container semantics visible without touching the filesystem in the
-        // paint path. A small badge is enough for both grid and filmstrip.
-        const QString badge = QStringLiteral("%1%2")
-                                  .arg(entry->frameCount)
-                                  .arg(entry->animated ? QStringLiteral("f")
-                                                       : QStringLiteral("p"));
-        const QFontMetrics metrics(painter->font());
-        const QSize badgeSize = metrics.size(Qt::TextSingleLine, badge) + QSize(10, 4);
-        const QRect badgeRect(card.right() - badgeSize.width() - 5, card.top() + 5,
-                              badgeSize.width(), badgeSize.height());
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(QColor(25, 25, 25, 190));
-        painter->drawRoundedRect(badgeRect, 4, 4);
-        painter->setPen(Qt::white);
-        painter->drawText(badgeRect, Qt::AlignCenter | Qt::TextSingleLine, badge);
-    }
+void drawFrameBadge(QPainter *painter, const QRect &card, const ThumbnailPanel::Entry *entry)
+{
+    if (!entry || entry->frameCount <= 1)
+        return;
 
+    const QString badge = QStringLiteral("%1%2")
+                              .arg(entry->frameCount)
+                              .arg(entry->animated ? QStringLiteral("f") : QStringLiteral("p"));
+    const QFontMetrics metrics(painter->font());
+    const QSize badgeSize = metrics.size(Qt::TextSingleLine, badge) + QSize(10, 4);
+    const QRect badgeRect(card.right() - badgeSize.width() - 5, card.top() + 5,
+                          badgeSize.width(), badgeSize.height());
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(QColor(25, 25, 25, 190));
+    painter->drawRoundedRect(badgeRect, 4, 4);
+    painter->setPen(Qt::white);
+    painter->drawText(badgeRect, Qt::AlignCenter | Qt::TextSingleLine, badge);
+}
+
+void drawThumbFooter(QPainter *painter, const QRect &card, const QRect &thumbRect,
+                     const ThumbnailPanel::Entry *entry, const QString &path,
+                     const QString &name, bool richFooter, bool nameFooter,
+                     const QStyleOptionViewItem &option)
+{
     if (richFooter)
     {
         const QRect footer(card.x() + 7, thumbRect.bottom() + 3, qMax(1, card.width() - 14),
@@ -195,12 +169,12 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
         painter->drawText(nameRect, Qt::AlignHCenter | Qt::AlignVCenter | Qt::TextSingleLine,
                           nameText);
     }
+}
 
-    // Preserve the rating, label, reject and pick overlays, but keep every
-    // mark inside the cell so no overlay can eat the filename's left edge.
+void drawThumbRatingOverlays(QPainter *painter, const QRect &overlayRect, const QString &path)
+{
     const auto &rs = mviewer::core::RatingStore::instance();
     const std::string ep = path.toStdString();
-    const QRect overlayRect = card;
     const int stars = rs.rating(ep);
     if (stars > 0)
     {
@@ -247,10 +221,14 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
                           Qt::AlignRight | Qt::AlignTop | Qt::TextSingleLine,
                           QStringLiteral("⚑"));
     }
+}
 
+void drawThumbCardBorder(QPainter *painter, const QRect &card, bool selected, bool hovered,
+                         const QStyleOptionViewItem &option)
+{
     if (selected)
     {
-        QPen border(accent);
+        QPen border(option.palette.color(QPalette::Highlight));
         border.setWidth(2);
         painter->setPen(border);
         painter->setBrush(Qt::NoBrush);
@@ -264,6 +242,150 @@ void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionV
         painter->setBrush(Qt::NoBrush);
         painter->drawRoundedRect(card.adjusted(1, 1, -1, -1), 4, 4);
     }
+}
+
+void drawDetailsThumb(QPainter *painter, const QRect &thumbR, const QString &path,
+                      const ThumbnailPanel *panel)
+{
+    const QPixmap pm = panel->thumbReady(path);
+    if (!pm.isNull())
+    {
+        const QPixmap scaled =
+            pm.scaled(thumbR.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        painter->drawPixmap(thumbR.x() + (48 - scaled.width()) / 2,
+                            thumbR.y() + (48 - scaled.height()) / 2, scaled);
+    }
+    else if (panel->thumbFailed(path))
+    {
+        painter->fillRect(thumbR, QColor(200, 200, 200));
+        painter->setPen(QColor(150, 150, 150));
+        QFont f = painter->font();
+        f.setPointSize(qMax(7, f.pointSize() - 1));
+        painter->setFont(f);
+        painter->drawText(thumbR, Qt::AlignCenter, "无法\n加载");
+    }
+    else
+    {
+        painter->fillRect(thumbR, QColor(228, 228, 228));
+    }
+}
+
+void drawDetailsRating(QPainter *painter, const QRect &rateR, const QString &path,
+                       bool sel, const QColor &textColor)
+{
+    const auto &rs = mviewer::core::RatingStore::instance();
+    const std::string ep = path.toStdString();
+    const int stars = rs.rating(ep);
+    if (stars > 0)
+    {
+        QString starStr;
+        starStr.reserve(5);
+        for (int s = 0; s < 5; ++s)
+            starStr += (s < stars ? QStringLiteral("★") : QStringLiteral("☆"));
+        painter->save();
+        painter->setPen(sel ? textColor : QColor(255, 179, 0));
+        painter->drawText(rateR, Qt::AlignVCenter | Qt::TextSingleLine, starStr);
+        painter->restore();
+    }
+    else
+    {
+        painter->drawText(rateR, Qt::AlignVCenter | Qt::TextSingleLine, QStringLiteral("-"));
+    }
+}
+
+void drawDetailsLabel(QPainter *painter, const QRect &labelR, const QString &path)
+{
+    const auto &rs = mviewer::core::RatingStore::instance();
+    const std::string ep = path.toStdString();
+    const int label = rs.colorLabel(ep);
+    if (label > 0)
+    {
+        static const QColor kLabelColors[7] = {QColor(),
+                                               QColor(229, 57, 53),
+                                               QColor(251, 140, 0),
+                                               QColor(249, 215, 41),
+                                               QColor(67, 160, 71),
+                                               QColor(30, 136, 229),
+                                               QColor(142, 36, 170)};
+        static const char *kLabelNames[7] = {"", "红", "橙", "黄", "绿", "蓝", "紫"};
+        const QColor chip = kLabelColors[label];
+        const int cs = 12;
+        const QRect chipR(labelR.x(), labelR.y() + (labelR.height() - cs) / 2, cs, cs);
+        painter->save();
+        painter->setPen(Qt::NoPen);
+        painter->setBrush(chip);
+        painter->drawRoundedRect(chipR, 3, 3);
+        painter->restore();
+        const QRect chipTextR(labelR.x() + cs + 6, labelR.y(), labelR.width() - cs - 6,
+                              labelR.height());
+        painter->drawText(chipTextR, Qt::AlignVCenter | Qt::TextSingleLine,
+                          QString::fromUtf8(kLabelNames[label]));
+    }
+    else
+    {
+        painter->drawText(labelR, Qt::AlignVCenter | Qt::TextSingleLine, QStringLiteral("-"));
+    }
+}
+
+void drawDetailsExif(QPainter *painter, const DetailLayout &L, const QString &path,
+                     bool sel, const QStyleOptionViewItem &option, const ThumbnailPanel *panel)
+{
+    const QString cam = panel->metaCameraForPath(path).trimmed();
+    const QString lens = panel->metaLensForPath(path).trimmed();
+    const int iso = panel->metaIsoForPath(path);
+    painter->setFont(option.font);
+    painter->setPen(sel ? option.palette.color(QPalette::HighlightedText)
+                        : option.palette.color(QPalette::Text));
+    painter->drawText(L.camera, Qt::AlignVCenter | Qt::TextSingleLine,
+                      cam.isEmpty() ? QStringLiteral("-") : cam);
+    painter->drawText(L.lens, Qt::AlignVCenter | Qt::TextSingleLine,
+                      lens.isEmpty() ? QStringLiteral("-") : lens);
+    painter->drawText(L.iso, Qt::AlignVCenter | Qt::TextSingleLine,
+                      iso > 0 ? QString("ISO %1").arg(iso) : QStringLiteral("-"));
+}
+} // namespace
+
+void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
+                                          const QModelIndex &index) const
+{
+    const QStringList &paths = m_panel->pathList();
+    if (index.row() < 0 || index.row() >= paths.size() || option.rect.isEmpty())
+        return;
+
+    const QString path = paths.at(index.row());
+    const QString name = index.data(Qt::DisplayRole).toString();
+    // M46: paint reads ONLY scan-cached entry data — no QFileInfo here.
+    const ThumbnailPanel::Entry *entry = m_panel->entryForPath(path);
+    const bool selected = option.state & QStyle::State_Selected;
+    const bool hovered = option.state & QStyle::State_MouseOver;
+    const ThumbnailPanel::ViewMode mode = m_panel->viewMode();
+    const bool richFooter = mode == ThumbnailPanel::Thumbnail || mode == ThumbnailPanel::LargeIcon;
+    const bool nameFooter = richFooter || mode == ThumbnailPanel::SmallIcon;
+    const bool compactImageOnly = mode == ThumbnailPanel::Compact ||
+                                  mode == ThumbnailPanel::Filmstrip;
+
+    painter->save();
+    painter->setClipRect(option.rect);
+
+    const QRect card = option.rect.adjusted(compactImageOnly ? 1 : 3, compactImageOnly ? 1 : 3,
+                                            compactImageOnly ? -1 : -3,
+                                            compactImageOnly ? -1 : -3);
+    drawThumbBackground(painter, card, option.rect, selected, hovered, option);
+
+    const int footerHeight = richFooter ? 42 : (nameFooter ? 20 : 0);
+    const int imagePadding = compactImageOnly ? 4 : 7;
+    const int availableImage = qMax(1, card.height() - footerHeight - imagePadding - 4);
+    const int imageSize = qMax(1, qMin(thumbSize(), qMin(card.width() - imagePadding * 2,
+                                                         availableImage)));
+    const QRect thumbRect(card.x() + (card.width() - imageSize) / 2, card.y() + imagePadding,
+                          imageSize, imageSize);
+
+    drawThumbImage(painter, thumbRect, path, m_panel, option);
+    drawFrameBadge(painter, card, entry);
+    drawThumbFooter(painter, card, thumbRect, entry, path, name, richFooter, nameFooter, option);
+    drawThumbRatingOverlays(painter, card, path);
+    drawThumbCardBorder(painter, card, selected, hovered, option);
+
     painter->restore();
 }
 
@@ -342,30 +464,7 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
 
     // Column 1: small thumbnail (48×48)
     const QRect thumbR(L.thumb.x(), r.y() + (r.height() - 48) / 2, 48, 48);
-    QPixmap pm = m_panel->thumbReady(path);
-    if (!pm.isNull())
-    {
-        const QPixmap scaled =
-            pm.scaled(thumbR.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
-        painter->drawPixmap(thumbR.x() + (48 - scaled.width()) / 2,
-                            thumbR.y() + (48 - scaled.height()) / 2, scaled);
-    }
-    else
-    {
-        if (m_panel->thumbFailed(path))
-        {
-            painter->fillRect(thumbR, QColor(200, 200, 200));
-            painter->setPen(QColor(150, 150, 150));
-            QFont f = painter->font();
-            f.setPointSize(qMax(7, f.pointSize() - 1));
-            painter->setFont(f);
-            painter->drawText(thumbR, Qt::AlignCenter, "无法\n加载");
-        }
-        else
-        {
-            painter->fillRect(thumbR, QColor(228, 228, 228));
-        }
-    }
+    drawDetailsThumb(painter, thumbR, path, m_panel);
 
     const QColor textColor = sel ? option.palette.color(QPalette::HighlightedText)
                                  : option.palette.color(QPalette::Text);
@@ -401,69 +500,14 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
                       cachedSuffix.isEmpty() ? QStringLiteral("IMAGE") : cachedSuffix.toUpper());
 
     // Column 7: rating (P0-4). Draw filled/empty stars from the RatingStore.
-    const auto &rs = mviewer::core::RatingStore::instance();
-    const std::string ep = path.toStdString();
-    const int stars = rs.rating(ep);
-    if (stars > 0)
-    {
-        QString starStr;
-        starStr.reserve(5);
-        for (int s = 0; s < 5; ++s)
-            starStr += (s < stars ? QStringLiteral("★") : QStringLiteral("☆"));
-        painter->save();
-        painter->setPen(sel ? textColor : QColor(255, 179, 0));
-        painter->drawText(L.rate, Qt::AlignVCenter | Qt::TextSingleLine, starStr);
-        painter->restore();
-    }
-    else
-    {
-        painter->drawText(L.rate, Qt::AlignVCenter | Qt::TextSingleLine, QStringLiteral("-"));
-    }
+    drawDetailsRating(painter, L.rate, path, sel, textColor);
 
     // Column 8: color label (P0-4). Draw a small colored chip + name.
-    const int label = rs.colorLabel(ep);
-    const QRect labelR = L.label;
-    if (label > 0)
-    {
-        static const QColor kLabelColors[7] = {QColor(),
-                                               QColor(229, 57, 53),
-                                               QColor(251, 140, 0),
-                                               QColor(249, 215, 41),
-                                               QColor(67, 160, 71),
-                                               QColor(30, 136, 229),
-                                               QColor(142, 36, 170)};
-        static const char *kLabelNames[7] = {"", "红", "橙", "黄", "绿", "蓝", "紫"};
-        const QColor chip = kLabelColors[label];
-        const int cs = 12;
-        QRect chipR(labelR.x(), labelR.y() + (labelR.height() - cs) / 2, cs, cs);
-        painter->save();
-        painter->setPen(Qt::NoPen);
-        painter->setBrush(chip);
-        painter->drawRoundedRect(chipR, 3, 3);
-        painter->restore();
-        QRect chipTextR(labelR.x() + cs + 6, labelR.y(), labelR.width() - cs - 6, labelR.height());
-        painter->drawText(chipTextR, Qt::AlignVCenter | Qt::TextSingleLine,
-                          QString::fromUtf8(kLabelNames[label]));
-    }
-    else
-    {
-        painter->drawText(labelR, Qt::AlignVCenter | Qt::TextSingleLine, QStringLiteral("-"));
-    }
+    drawDetailsLabel(painter, L.label, path);
 
     // Columns 9-11: EXIF (camera / lens / ISO) — P0 #① professional columns for
     // image algorithm engineers. Backed by the metadata index (ensureMetaIndex).
-    const QString cam = m_panel->metaCameraForPath(path).trimmed();
-    const QString lens = m_panel->metaLensForPath(path).trimmed();
-    const int iso = m_panel->metaIsoForPath(path);
-    painter->setFont(option.font);
-    painter->setPen(sel ? option.palette.color(QPalette::HighlightedText)
-                        : option.palette.color(QPalette::Text));
-    painter->drawText(L.camera, Qt::AlignVCenter | Qt::TextSingleLine,
-                      cam.isEmpty() ? QStringLiteral("-") : cam);
-    painter->drawText(L.lens, Qt::AlignVCenter | Qt::TextSingleLine,
-                      lens.isEmpty() ? QStringLiteral("-") : lens);
-    painter->drawText(L.iso, Qt::AlignVCenter | Qt::TextSingleLine,
-                      iso > 0 ? QString("ISO %1").arg(iso) : QStringLiteral("-"));
+    drawDetailsExif(painter, L, path, sel, option, m_panel);
 
     painter->restore();
 }

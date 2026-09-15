@@ -87,10 +87,16 @@ int main()
         Histogram hw = computeHistogram(wimg);
         CHECK(hw.luma.size() == 256, "luma has 256 bins");
         CHECK(hw.luma[255] == 1, "white pixel -> luma 255");
+        CHECK(hw.v.size() == 256, "HSV-V has 256 bins");
+        CHECK(hw.v[255] == 1, "white pixel -> V 255");
         long ls = 0;
         for (long v : hw.luma)
             ls += v;
         CHECK(ls == hw.total, "luma sums to total");
+        long vs = 0;
+        for (long v : hw.v)
+            vs += v;
+        CHECK(vs == hw.total, "V channel sums to total");
     }
 
     // M23: ROI histogram — only pixels inside the ROI are counted.
@@ -119,7 +125,8 @@ int main()
         // Full-rect ROI equals the whole-image histogram.
         Histogram full = computeHistogram(rimg, 0, 0, 4, 1);
         Histogram whole = computeHistogram(rimg);
-        CHECK(full.total == whole.total && full.r == whole.r && full.luma == whole.luma,
+        CHECK(full.total == whole.total && full.r == whole.r && full.luma == whole.luma &&
+                  full.v == whole.v,
               "full ROI == whole image");
     }
 

@@ -28,7 +28,8 @@ class HistogramAnalyzer : public Analyzer
             .description = description(),
             .version = "0.1.0",
             .capabilities = capabilities(),
-            .outputFields = {"histogramLuminance", "histogramRGB", "lumMean", "rgbMeans"}};
+            .outputFields = {"histogramLuminance", "histogramRGB", "histogramV", "lumMean",
+                             "rgbMeans", "vMean"}};
     }
 
     bool analyze(const ImageFrame &frame) override;

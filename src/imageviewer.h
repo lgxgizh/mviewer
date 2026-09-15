@@ -416,7 +416,8 @@ class ImageViewer : public QOpenGLWidget
     bool handleContextNavigationAction(QAction *chosen, QAction *next, QAction *prev,
                                        QAction *overlayNone, QAction *overlayZebra,
                                        QAction *overlayFalse, QAction *overlayR, QAction *overlayG,
-                                       QAction *overlayB, QAction *overlayY, QAction *fullscreen);
+                                       QAction *overlayB, QAction *overlayY, QAction *fullscreen,
+                                       QAction *overlayV = nullptr);
     // Preload promotion: consume the neighbor preload handle that matches
     // `path` and cancel all others, so a navigation back to a preloaded
     // neighbor can be promoted to the foreground decode without re-queuing.

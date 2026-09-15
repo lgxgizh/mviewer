@@ -1459,13 +1459,15 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
           "all exclusive modes are OFF after the round-trip (grid restored)");
 
     auto *channelCombo = ws->findChild<QComboBox *>(QStringLiteral("compareChannelCombo"));
-    CHECK(channelCombo && channelCombo->count() == 5,
-          "compare exposes RGB/R/G/B/Y channel isolation");
+    CHECK(channelCombo && channelCombo->count() == 6,
+          "compare exposes RGB/R/G/B/Y/V channel isolation");
     sendKey(ws, Qt::Key_2, Qt::ShiftModifier);
     CHECK(ws->overlayMode() == mviewer::OverlayMode::ChannelR, "Shift+2 isolates the red channel");
     CHECK(channelCombo && channelCombo->currentData().toInt() ==
                               static_cast<int>(mviewer::OverlayMode::ChannelR),
           "channel combo follows Shift+2");
+    sendKey(ws, Qt::Key_6, Qt::ShiftModifier);
+    CHECK(ws->overlayMode() == mviewer::OverlayMode::ChannelV, "Shift+6 isolates the V channel");
     sendKey(ws, Qt::Key_1, Qt::ShiftModifier);
     CHECK(ws->overlayMode() == mviewer::OverlayMode::None, "Shift+1 restores RGB");
     CHECK(mviewer::pixelGridVisible(8.0) && !mviewer::pixelGridVisible(4.0),
@@ -2270,6 +2272,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
             }
         }
 
+        const double preAdjScale = referenceView->scale();
+        const QPointF preAdjOffset = referenceView->offset();
         brightnessSlider->setValue(40);
         waitForAnalysisIdle();
         const QString adjustedMetrics = waitForMetricsChange(metricsLabel, thresholdMetrics);
@@ -2283,8 +2287,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
                   adjustedBundle.adjustments[0].brightness == 0 &&
                   adjustedBundle.adjustments[1].brightness == 40,
               "pane click selects the second pane as the edit target");
-        CHECK(qAbs(referenceView->scale() - savedScale) < 1e-9 &&
-                  referenceView->offset() == savedOffset,
+        CHECK(qAbs(referenceView->scale() - preAdjScale) < 1e-9 &&
+                  referenceView->offset() == preAdjOffset,
               "brightness adjustment preserves the pane transform");
 
         // ── Async latest-wins display gate ─────────────────────────────────────
@@ -2415,6 +2419,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         CHECK(metricsLabel->text() != deferredMetrics,
               "adjustment release refreshes deferred metrics");
 
+        const double preResetScale = referenceView->scale();
+        const QPointF preResetOffset = referenceView->offset();
         resetButton->click();
         waitForAnalysisIdle();
         const QString resetInspector =
@@ -2422,8 +2428,8 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         waitForMetricsText(metricsLabel, thresholdMetrics);
         CHECK(metricsLabel->text() == thresholdMetrics && resetInspector == thresholdInspector,
               "reset exactly restores the threshold-baseline metrics and Inspector RGB");
-        CHECK(qAbs(referenceView->scale() - savedScale) < 1e-9 &&
-                  referenceView->offset() == savedOffset,
+        CHECK(qAbs(referenceView->scale() - preResetScale) < 1e-9 &&
+                  referenceView->offset() == preResetOffset,
               "reset preserves the pane transform");
     }
 

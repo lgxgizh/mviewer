@@ -8,7 +8,8 @@
 //   compareworkspace_controls.cpp            toolbar + mode controls          565
 //   compareworkspace_display_planner.cpp     fit/LOD planning (free functions) 110
 //   compareworkspace_editpanel.cpp           edit panel, adjustments, presets 650
-//   compareworkspace_interact.cpp            keyboard / mouse / pixel-link    947
+//   compareworkspace_interact.cpp            canvas mouse / pixel-link        704
+//   compareworkspace_keyboard.cpp            keyboard-first compare controls  245
 //   compareworkspace_nav.cpp                 pair navigation, layout presets  757
 //   compareworkspace_render.cpp              paint modes, canvas host         484
 //   compareworkspace_render_canvas.cpp       blink controller, canvas paint   449

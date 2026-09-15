@@ -169,6 +169,59 @@ QImage makeFlat(int w, int h, QColor c)
     return img;
 }
 
+QImage makeHistogramImage(const QImage &src, int w, int h)
+{
+    QImage img(w, h, QImage::Format_RGB32);
+    img.fill(qRgb(30, 30, 30));
+    std::vector<int> counts(256, 0);
+    int maxCount = 1;
+    for (int y = 0; y < src.height(); ++y)
+    {
+        for (int x = 0; x < src.width(); ++x)
+        {
+            const QRgb pixel = src.pixel(x, y);
+            const int luma = std::clamp(static_cast<int>(lumaOf(pixel)), 0, 255);
+            counts[luma]++;
+            if (counts[luma] > maxCount)
+                maxCount = counts[luma];
+        }
+    }
+    for (int x = 0; x < w; ++x)
+    {
+        const int bin = x * 256 / w;
+        const int barH = counts[bin] * (h - 4) / maxCount;
+        for (int y = h - 1; y >= h - 1 - barH && y >= 0; --y)
+            img.setPixel(x, y, qRgb(0, 180, 240));
+    }
+    return img;
+}
+
+QImage makeRoiComposite(const QImage &src, const QRect &roi)
+{
+    QImage img = src.copy();
+    for (int y = 0; y < img.height(); ++y)
+    {
+        for (int x = 0; x < img.width(); ++x)
+        {
+            if (roi.contains(x, y))
+            {
+                if (x == roi.left() || x == roi.right() || y == roi.top() || y == roi.bottom())
+                {
+                    img.setPixel(x, y, qRgb(255, 215, 0));
+                }
+                else
+                {
+                    const QRgb orig = img.pixel(x, y);
+                    img.setPixel(x, y,
+                                 qRgb(std::min(255, qRed(orig) + 30),
+                                      std::min(255, qGreen(orig) + 30), qBlue(orig)));
+                }
+            }
+        }
+    }
+    return img;
+}
+
 static bool generateGoldenImages(const std::string &dir)
 {
     ensureDir(dir + "/image");
@@ -195,6 +248,12 @@ static bool generateGoldenImages(const std::string &dir)
             diff.setPixel(x, y, qRgb(d, d, d));
         }
     diff.save(QString::fromStdString(dir + "/difference/gradient_vs_flat.png"));
+
+    QImage hist = makeHistogramImage(grad, 256, 128);
+    hist.save(QString::fromStdString(dir + "/histogram/gradient_hist_256x128.png"));
+
+    QImage roiComp = makeRoiComposite(grad, QRect(48, 48, 160, 160));
+    roiComp.save(QString::fromStdString(dir + "/roi/gradient_roi_256x256.png"));
 
     std::cout << "Generated golden images in " << dir << std::endl;
     return true;
@@ -230,13 +289,18 @@ int main(int argc, char **argv)
                     const int d = std::abs((x * 255 / 256 + y * 255 / 256) / 2 - 128);
                     diff.setPixel(x, y, qRgb(d, d, d));
                 }
+            const QImage grad = makeGradient(256, 256);
             std::vector<Case> cases;
-            cases.push_back({"gradient", makeGradient(256, 256), "/image/gradient_256x256.png"});
+            cases.push_back({"gradient", grad, "/image/gradient_256x256.png"});
             cases.push_back(
                 {"flat", makeFlat(256, 256, QColor(128, 128, 128)), "/image/flat_256x256.png"});
             cases.push_back(
                 {"blue", makeFlat(256, 256, QColor(100, 150, 200)), "/image/blue_256x256.png"});
             cases.push_back({"diff_gradient_vs_flat", diff, "/difference/gradient_vs_flat.png"});
+            cases.push_back({"gradient_hist", makeHistogramImage(grad, 256, 128),
+                             "/histogram/gradient_hist_256x128.png"});
+            cases.push_back({"gradient_roi", makeRoiComposite(grad, QRect(48, 48, 160, 160)),
+                             "/roi/gradient_roi_256x256.png"});
 
             int failures = 0;
             for (const Case &c : cases)

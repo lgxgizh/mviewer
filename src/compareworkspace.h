@@ -491,11 +491,8 @@ class CompareWorkspace : public QWidget
     QLabel *m_coordLabel = nullptr;     // hovered pixel coordinate readout
     QLabel *m_statsLabel = nullptr;     // neighborhood mean/σ of base cell
     QLabel *m_histTitle = nullptr;      // histogram section title (ROI aware)
-    QCheckBox *m_histRChk = nullptr;
-    QCheckBox *m_histGChk = nullptr;
-    QCheckBox *m_histBChk = nullptr;
-    QCheckBox *m_histLumaChk = nullptr;
-    QCheckBox *m_histLogChk = nullptr;
+    QCheckBox *m_histRChk = nullptr, *m_histGChk = nullptr, *m_histBChk = nullptr;
+    QCheckBox *m_histLumaChk = nullptr, *m_histVChk = nullptr, *m_histLogChk = nullptr;
     QCheckBox *m_roiHistChk = nullptr; // limit histogram to the current ROI
     QLabel *m_roiStatusLabel = nullptr;
     QLabel *m_roiGeometryLabel = nullptr;

@@ -116,6 +116,7 @@ AnalysisOverlayDialog::AnalysisOverlayDialog(const QImage &image, QWidget *paren
     m_mode->addItem(tr("G 通道"), 4);
     m_mode->addItem(tr("B 通道"), 5);
     m_mode->addItem(tr("Y 亮度"), 6);
+    m_mode->addItem(tr("V 明度"), 7);
     m_mode->setCurrentIndex(m_mode->findData(s.value("defaultAnalysisOverlay", 0).toInt()));
 
     m_threshold = new QSlider(Qt::Horizontal);

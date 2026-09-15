@@ -18,8 +18,10 @@ mviewer::domain::Histogram toHistogram(const ImageStats &s)
         h.red[i] = s.histR[i];
         h.green[i] = s.histG[i];
         h.blue[i] = s.histB[i];
+        h.v[i] = s.histV[i];
     }
     h.lumMean = s.lumMean;
+    h.vMean = s.vMean;
     h.rMean = s.rMean;
     h.gMean = s.gMean;
     h.bMean = s.bMean;
@@ -52,7 +54,7 @@ bool HistogramAnalyzer::analyzeRegion(const ImageFrame &frame,
         return false;
 
     mviewer::domain::Histogram h; // zero-initialized via in-class initializers
-    long long sumL = 0, sumR = 0, sumG = 0, sumB = 0;
+    long long sumL = 0, sumR = 0, sumG = 0, sumB = 0, sumV = 0;
     const int64_t n = static_cast<int64_t>(x1 - x0) * (y1 - y0);
 
     for (int y = y0; y < y1; ++y)
@@ -62,17 +64,21 @@ bool HistogramAnalyzer::analyzeRegion(const ImageFrame &frame,
         {
             const uint8_t *p = line + static_cast<size_t>(x) * cpp;
             const int r = p[0], g = p[1], b = p[2];
+            const int vVal = std::max({r, g, b});
             ++h.luminance[std::clamp(luminance(r, g, b), 0, 255)];
             ++h.red[std::clamp(r, 0, 255)];
             ++h.green[std::clamp(g, 0, 255)];
             ++h.blue[std::clamp(b, 0, 255)];
+            ++h.v[std::clamp(vVal, 0, 255)];
             sumR += r;
             sumG += g;
             sumB += b;
             sumL += luminance(r, g, b);
+            sumV += vVal;
         }
     }
     h.lumMean = static_cast<double>(sumL) / n;
+    h.vMean = static_cast<double>(sumV) / n;
     h.rMean = static_cast<double>(sumR) / n;
     h.gMean = static_cast<double>(sumG) / n;
     h.bMean = static_cast<double>(sumB) / n;
@@ -83,14 +89,16 @@ bool HistogramAnalyzer::analyzeRegion(const ImageFrame &frame,
 std::string HistogramAnalyzer::resultText() const
 {
     char buf[256];
-    std::snprintf(buf, sizeof(buf), "lumMean: %.1f  R: %.1f  G: %.1f  B: %.1f", m_result.lumMean,
-                  m_result.rMean, m_result.gMean, m_result.bMean);
+    std::snprintf(buf, sizeof(buf), "lumMean: %.1f  V: %.1f  R: %.1f  G: %.1f  B: %.1f",
+                  m_result.lumMean, m_result.vMean, m_result.rMean, m_result.gMean,
+                  m_result.bMean);
     return buf;
 }
 
 std::unordered_map<std::string, double> HistogramAnalyzer::resultMetrics() const
 {
     return {{"lumMean", m_result.lumMean},
+            {"vMean", m_result.vMean},
             {"rMean", m_result.rMean},
             {"gMean", m_result.gMean},
             {"bMean", m_result.bMean}};

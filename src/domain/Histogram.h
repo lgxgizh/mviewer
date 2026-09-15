@@ -13,8 +13,10 @@ struct Histogram
     std::array<int, BINS> red{};
     std::array<int, BINS> green{};
     std::array<int, BINS> blue{};
+    std::array<int, BINS> v{};
 
     double lumMean = 0.0;
+    double vMean = 0.0;
     double rMean = 0.0, gMean = 0.0, bMean = 0.0;
 
     Histogram() = default;
@@ -22,8 +24,8 @@ struct Histogram
     int64_t totalPixels() const noexcept
     {
         int64_t s = 0;
-        for (int v : luminance)
-            s += static_cast<int64_t>(v);
+        for (int val : luminance)
+            s += static_cast<int64_t>(val);
         return s;
     }
 
@@ -33,7 +35,8 @@ struct Histogram
         red.fill(0);
         green.fill(0);
         blue.fill(0);
-        lumMean = rMean = gMean = bMean = 0.0;
+        v.fill(0);
+        lumMean = vMean = rMean = gMean = bMean = 0.0;
     }
 };
 

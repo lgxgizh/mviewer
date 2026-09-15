@@ -250,10 +250,15 @@ static void testAnalyzerRegistryConsistency()
     auto ah = reg.create("histogram");
     CHECK(ah->analyzeRegion(frame, full), "full-frame histogram analyzes");
     const double regLum = dynamic_cast<HistogramAnalyzer *>(ah.get())->result().lumMean;
+    const double regV = dynamic_cast<HistogramAnalyzer *>(ah.get())->result().vMean;
     const ImageStats refH = AnalysisEngine::computeStatsROI(data, full);
     CHECK(std::abs(regLum - refH.lumMean) < 1.0,
           ("registry histogram lumMean (" + std::to_string(regLum) +
            ") matches AnalysisEngine lumMean (" + std::to_string(refH.lumMean) + ")")
+              .c_str());
+    CHECK(std::abs(regV - refH.vMean) < 1.0,
+          ("registry histogram vMean (" + std::to_string(regV) +
+           ") matches AnalysisEngine vMean (" + std::to_string(refH.vMean) + ")")
               .c_str());
 }
 

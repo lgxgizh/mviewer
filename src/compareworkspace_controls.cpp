@@ -429,7 +429,8 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
     m_channelCombo->addItem(tr("G"), static_cast<int>(mviewer::OverlayMode::ChannelG));
     m_channelCombo->addItem(tr("B"), static_cast<int>(mviewer::OverlayMode::ChannelB));
     m_channelCombo->addItem(tr("Y"), static_cast<int>(mviewer::OverlayMode::ChannelY));
-    m_channelCombo->setToolTip(tr("隔离 R/G/B/Y 通道（Shift+1…5）"));
+    m_channelCombo->addItem(tr("V"), static_cast<int>(mviewer::OverlayMode::ChannelV));
+    m_channelCombo->setToolTip(tr("隔离 R/G/B/Y/V 通道（Shift+1…6）"));
     connect(m_channelCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
             [this](int)
             {
@@ -507,6 +508,7 @@ QWidget *CompareWorkspace::buildStatusStrip()
 
     m_metricLabel = new QLabel(tr("PSNR: —    SSIM: —"), strip);
     m_metricLabel->setObjectName("diffMetricsLabel");
+    m_metricLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_metricLabel->setWordWrap(true);
     m_metricLabel->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Preferred);
     m_metricLabel->setStyleSheet("color:#ffffff;font-weight:700;padding:2px 6px;");

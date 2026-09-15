@@ -90,7 +90,6 @@ $knownFunctionDebt = @{
     'src/previewpanel.cpp::<lambda>'                                = 'span 186 (load worker inside setImage)'
     'src/compareworkspace_analysis.cpp::scheduleHistogramRefresh'   = 'span 204'
     'src/compareworkspace.cpp::queueLoadRequests'                   = 'span 133'
-    'src/thumbnailpanel_delegates.cpp::paint'                       = 'span 202 / cc 32 (thumb + details delegates)'
     'src/thumbnailpanel_fileops.cpp::startCommandFileOperation'     = 'span 155'
     'src/thumbnailpanel_fileops.cpp::startCopyFileOperation'        = 'span 152'
     'src/thumbnailpanel_fileops.cpp::runBatchAnalyzeExportAsync'    = 'span 148'

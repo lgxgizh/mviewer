@@ -137,7 +137,6 @@ so the regression test keeps its meaning: *no new* violation.
 | `previewpanel.cpp::<lambda>` (load worker inside `setImage`) | span 186 |
 | `compareworkspace_analysis.cpp::scheduleHistogramRefresh` | span 204 |
 | `compareworkspace.cpp::queueLoadRequests` | span 133 |
-| `thumbnailpanel_delegates.cpp::paint` (thumb + details delegates) | span 202 / CC 32 |
 | `thumbnailpanel_fileops.cpp::startCommandFileOperation` | span 155 |
 | `thumbnailpanel_fileops.cpp::startCopyFileOperation` | span 152 |
 | `thumbnailpanel_fileops.cpp::runBatchAnalyzeExportAsync` | span 148 |
@@ -152,9 +151,11 @@ so the regression test keeps its meaning: *no new* violation.
 | `core/filesystem/AtomicFile.cpp::atomicWriteFile` | span 152 |
 | `domain/SelectionInteraction.h::hitTestSelection` | CC 26 |
 
+*(Note: `thumbnailpanel_delegates.cpp::paint` [span 202 / CC 32] was split into modular helpers in 2026-09 and removed from this inventory).*
+
 Policy: the table is an inventory, not a permission. Removing an entry requires
 splitting the function in the same commit; adding one requires a note in this
 section. The function cap stays 120 lines / CC 25. Split order (biggest product
-risk first): `thumbnailpanel_delegates.cpp` (also over the CC cap),
-`previewpanel.cpp`, `compareworkspace_analysis.cpp`, the three
+risk first): `previewpanel.cpp`, `compareworkspace_analysis.cpp`, the three
 `thumbnailpanel_fileops.cpp` operations, then the rest.
+

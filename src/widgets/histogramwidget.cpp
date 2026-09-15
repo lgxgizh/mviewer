@@ -27,7 +27,7 @@ void HistogramWidget::clear()
 
 void HistogramWidget::setChannelVisible(int channel, bool on)
 {
-    if (channel < 0 || channel > 3)
+    if (channel < 0 || channel > 4)
         return;
     m_chanVisible[channel] = on;
     update();
@@ -68,7 +68,7 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
     if (m_hists.empty())
         return;
 
-    // Channel accessor: 0=R 1=G 2=B 3=Luma (luma may be absent on old data).
+    // Channel accessor: 0=R 1=G 2=B 3=Luma 4=V.
     auto channelOf = [](const mviewer::core::Histogram &hist, int c) -> const std::vector<long> *
     {
         switch (c)
@@ -79,8 +79,12 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
             return &hist.g;
         case 2:
             return &hist.b;
-        default:
+        case 3:
             return hist.luma.empty() ? nullptr : &hist.luma;
+        case 4:
+            return hist.v.empty() ? nullptr : &hist.v;
+        default:
+            return nullptr;
         }
     };
 
@@ -91,7 +95,7 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
     // Shared scale across every histogram so channels/images are comparable.
     double maxVal = 1.0;
     for (const auto &hist : m_hists)
-        for (int c = 0; c < 4; ++c)
+        for (int c = 0; c < 5; ++c)
         {
             if (!m_chanVisible[c])
                 continue;
@@ -108,13 +112,13 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
     const double dx = static_cast<double>(w) / bins;
     const double dy = static_cast<double>(h - 2) / maxVal;
 
-    // Channel colours: R, G, B, Luma (light gray). Low-alpha overlay fills.
-    const QColor cols[4] = {QColor(255, 70, 70), QColor(70, 220, 90), QColor(80, 140, 255),
-                            QColor(225, 225, 225)};
+    // Channel colours: R, G, B, Luma (light gray), V (amber). Low-alpha overlay fills.
+    const QColor cols[5] = {QColor(255, 70, 70), QColor(70, 220, 90), QColor(80, 140, 255),
+                            QColor(225, 225, 225), QColor(255, 200, 50)};
 
     for (const auto &hist : m_hists)
     {
-        for (int c = 0; c < 4; ++c)
+        for (int c = 0; c < 5; ++c)
         {
             if (!m_chanVisible[c])
                 continue;

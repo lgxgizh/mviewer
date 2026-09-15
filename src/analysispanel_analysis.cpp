@@ -118,6 +118,7 @@ bool AnalysisPanel::runLegacyAnalyzer(const QString &id)
                     {
                         const auto &h = hist->result();
                         m_statsA.lumMean = h.lumMean;
+                        m_statsA.vMean = h.vMean;
                         m_statsA.rMean = h.rMean;
                         m_statsA.gMean = h.gMean;
                         m_statsA.bMean = h.bMean;

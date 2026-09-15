@@ -137,10 +137,12 @@ add_library(mviewer_ui STATIC
     mainwindow.cpp
     mainwindow_ui.cpp
     mainwindow_ui_layout.cpp
+    mainwindow_ui_menus.cpp
     mainwindow_ui_connections.cpp
     mainwindow_commands.cpp
     mainwindow_navigation.cpp
     mainwindow_session.cpp
+    mainwindow_session_recovery.cpp
     mainwindow_session_notifications.cpp
     mainwindow_export.cpp
     mainwindow_view.cpp
@@ -184,6 +186,7 @@ add_library(mviewer_ui STATIC
     compareworkspace_analysis.cpp
     compareworkspace_editpanel.cpp
     compareworkspace_interact.cpp
+    compareworkspace_keyboard.cpp
     compareworkspace_nav.cpp
     analysispanel.cpp
     analysispanel_analysis.cpp

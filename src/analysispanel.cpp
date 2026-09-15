@@ -418,10 +418,13 @@ void AnalysisPanel::updateHistogram(const mviewer::domain::Histogram &hist)
                                   "<tr><td>%6</td><td>%7</td></tr>"
                                   "<tr><td>%8</td><td>%9</td></tr>"
                                   "<tr><td>%10</td><td>%11</td></tr>"
+                                  "<tr><td>%12</td><td>%13</td></tr>"
                                   "</table>")
                               .arg(tr("Full Image Stats"))
                               .arg(tr("Lum Mean"))
                               .arg(hist.lumMean, 0, 'f', 2)
+                              .arg(tr("HSV-V Mean"))
+                              .arg(hist.vMean, 0, 'f', 2)
                               .arg(tr("R Mean"))
                               .arg(hist.rMean, 0, 'f', 2)
                               .arg(tr("G Mean"))

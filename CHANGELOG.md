@@ -1,5 +1,30 @@
 # Changelog
  
+## [1.0.36] - 2026-09-15
+
+### Added
+
+- **Channel V (HSV Value / Max Brightness) Isolation & Multi-Channel Histogram**:
+  - **Channel V Isolation Overlay**: Added `ChannelV` (`Shift+6`) to `mviewer::OverlayMode`, displaying the grayscale representation of HSV-V ($\max(R, G, B)$) across both Browse Mode and Compare Workspace.
+  - **Context Menu & Channel Selector Integration**: Added "V 明度 (Shift+6)" to ImageViewer context menu, Compare Workspace channel combo box (`RGB/R/G/B/Y/V`), and Analysis Overlay Dialog.
+  - **Multi-Channel Histogram Support**: Added HSV-V channel (`v`) to `core::Histogram` and `domain::Histogram`; added channel 4 checkbox ("V(明度)") with Amber/Gold curve visualization in `HistogramWidget` and Compare Workspace side panel.
+  - **Analysis Panel & Dual-Image Delta V**: Displaying HSV-V mean in AnalysisPanel full-image stats table and dual-image inspection readout with $\Delta V$ brightness delta.
+  - **Selectable Diff Metrics**: Enabled mouse text selection (`Qt::TextSelectableByMouse`) on `diffMetricsLabel` so algorithm engineers can copy PSNR, SSIM, and difference values directly.
+
+### Refactored
+
+- **UI TU Decomposition & Architecture Guardrails (ADR 014)**:
+  - Extracted session recovery/persistence logic from `mainwindow_session.cpp` into `mainwindow_session_recovery.cpp` (reducing file from 987 to 628 lines).
+  - Extracted menu creation logic from `mainwindow_ui_layout.cpp` into `mainwindow_ui_menus.cpp` (reducing file from 977 to 621 lines).
+  - Extracted keyboard navigation and shortcuts from `compareworkspace_interact.cpp` into `compareworkspace_keyboard.cpp` (reducing file from 951 to 704 lines).
+  - Modularized `ThumbDelegate::paint` and `DetailsDelegate::paint` in `thumbnailpanel_delegates.cpp` into small focused functions (< 45 lines, CC < 4), resolving the last remaining complexity gate function debt.
+
+### Quality & Tests
+
+- **Golden Image Test Gates**: Added reference fixtures in `golden/histogram/` and `golden/roi/` along with automated visual comparison checks in `golden/golden_main.cpp`.
+- **User Documentation**: Expanded `docs/USER_GUIDE.md` covering rotation, flip, channel isolation (Shift+1..6), linked markers, and CMS settings.
+- **Workflow UX Verification**: Fixed channel isolation selection count and verified transform preservation across brightness/reset actions in `workflow_ux_tests`.
+
 ## [1.0.35] - 2026-09-15
 
 ### Added
