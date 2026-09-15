@@ -1,5 +1,29 @@
 # Changelog
  
+## [1.0.41] - 2026-09-16
+
+### Performance & Optimizations
+
+- **sRGB-to-Linear LUT Accelerated Color Inspection**:
+  - Implemented a 256-entry precomputed `srgbToLinearTable` in `PixelInspector.cpp`, operating at L1 cache latency.
+  - Eliminated repetitive transcendental `std::pow(..., 2.4)` operations in high-frequency pixel inspection pathways (CIE XYZ, CIE L\*a\*b\*), accelerating hover and comparison sample lookups.
+
+### Features & Polish
+
+- **Compare Workspace Pixel Inspector Table Context Menu & Copy Actions**:
+  - Enabled row selection and contextual interactions for the Pixel Inspector table in Compare Workspace.
+  - Added rich right-click context menu supporting "复制单元格内容" (Copy Cell Content), "复制该行数据" (Copy Row TSV), and "复制全部表格数据" (Copy Entire Table TSV), streamlining reporting and spreadsheet data export for image algorithm engineers.
+- **Architectural Complexity Compression**:
+  - Re-compacted member variable declarations across `src/compareworkspace.h`, maintaining its line count at 761 lines (well below the 800-line strict complexity cap) while expanding feature capabilities.
+
+### Bug Fixes & Stability
+
+- **PixelInspector Grayscale8 Single-Channel Support**:
+  - Fixed `neighborhoodStats` byte-stepping assumptions when analyzing `PixelFormat::Grayscale8` buffers with `channels == 1`, eliminating out-of-bounds reads on grayscale single-byte layouts.
+  - Added unit test coverage for single-channel grayscale buffers in `test_pixelinspector`.
+- **ImageFrame 64-bit Index Overflow Prevention**:
+  - Updated `ImageFrame::raw16At` index calculation to use 64-bit `size_t` arithmetic, guaranteeing numerical safety on ultra-high-resolution panoramic and multi-gigapixel image buffers.
+
 ## [1.0.40] - 2026-09-16
 
 ### Performance & Optimizations

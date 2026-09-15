@@ -57,6 +57,18 @@ static void test_color_spaces()
     CHECK(std::abs(yc.c2 - 128) < 1e-3);
     CHECK(std::abs(yc.c3 - 128) < 1e-3);
 
+    // XYZ: white (255, 255, 255) → X≈0.95047, Y≈1.00000, Z≈1.08883 (D65).
+    auto xyzWhite = toColorSpace(255, 255, 255, ColorSpace::XYZ);
+    CHECK(std::abs(xyzWhite.c1 - 0.95047) < 1e-3);
+    CHECK(std::abs(xyzWhite.c2 - 1.00000) < 1e-3);
+    CHECK(std::abs(xyzWhite.c3 - 1.08883) < 1e-3);
+
+    // XYZ: black (0, 0, 0) → 0, 0, 0.
+    auto xyzBlack = toColorSpace(0, 0, 0, ColorSpace::XYZ);
+    CHECK(std::abs(xyzBlack.c1) < 1e-6);
+    CHECK(std::abs(xyzBlack.c2) < 1e-6);
+    CHECK(std::abs(xyzBlack.c3) < 1e-6);
+
     // toHex formatting
     CHECK(toHex(255, 0, 128) == "#FF0080");
     CHECK(toHex(0, 0, 0) == "#000000");
@@ -134,6 +146,15 @@ static void test_neighborhood()
     CHECK(std::abs(red.rMean - 255) < 1e-6);
     CHECK(std::abs(red.bMean) < 1e-6);
     CHECK(std::abs(red.vMean - 255) < 1e-6);
+
+    // Grayscale8 buffer (1 byte per pixel)
+    const std::vector<uint8_t> gray(9, 150);
+    const auto sGray = neighborhoodStats(gray.data(), 3, 3, 3, 1, 1, 3, 1);
+    CHECK(sGray.count == 9);
+    CHECK(std::abs(sGray.mean - 150) < 1e-6);
+    CHECK(std::abs(sGray.rMean - 150) < 1e-6);
+    CHECK(std::abs(sGray.gMean - 150) < 1e-6);
+    CHECK(std::abs(sGray.bMean - 150) < 1e-6);
 }
 
 static void setRgb(ImageData &image, int x, int y, int r, int g, int b)

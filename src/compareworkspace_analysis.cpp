@@ -8,6 +8,10 @@
 #include <cmath>
 #include <utility>
 
+#include <QApplication>
+#include <QClipboard>
+#include <QMenu>
+
 namespace
 {
 using mviewer::core::ColorSpace;
@@ -57,25 +61,76 @@ void setCellText(QTableWidget *table, int row, int col, const QString &text,
     if (item->toolTip() != toolTip)
         item->setToolTip(toolTip);
 }
+void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
+{
+    if (!inspector)
+        return;
+    inspector->setContextMenuPolicy(Qt::CustomContextMenu);
+    QObject::connect(
+        inspector, &QTableWidget::customContextMenuRequested, parent,
+        [inspector, parent](const QPoint &pos)
+        {
+            QTableWidgetItem *item = inspector->itemAt(pos);
+            QMenu menu(parent);
+            if (item && !item->text().isEmpty())
+            {
+                const QString cellText = item->text();
+                QAction *actCopyCell = menu.addAction(QObject::tr("复制单元格内容 (%1)").arg(cellText));
+                QObject::connect(actCopyCell, &QAction::triggered,
+                                 [cellText]() { QApplication::clipboard()->setText(cellText); });
+            }
+            const int row = item ? item->row() : inspector->currentRow();
+            if (row >= 0 && row < inspector->rowCount())
+            {
+                QStringList rowCells;
+                for (int c = 0; c < inspector->columnCount(); ++c)
+                {
+                    auto *it = inspector->item(row, c);
+                    rowCells << (it ? it->text() : QString());
+                }
+                const QString rowText = rowCells.join('\t');
+                QAction *actCopyRow = menu.addAction(QObject::tr("复制该行数据"));
+                QObject::connect(actCopyRow, &QAction::triggered,
+                                 [rowText]() { QApplication::clipboard()->setText(rowText); });
+            }
+            if (inspector->rowCount() > 0)
+            {
+                QAction *actCopyTable = menu.addAction(QObject::tr("复制全部表格数据"));
+                QObject::connect(actCopyTable, &QAction::triggered,
+                                 [inspector]()
+                                 {
+                                     QStringList lines;
+                                     QStringList headers;
+                                     for (int c = 0; c < inspector->columnCount(); ++c)
+                                     {
+                                         auto *h = inspector->horizontalHeaderItem(c);
+                                         headers << (h ? h->text() : QString());
+                                     }
+                                     lines << headers.join('\t');
+                                     for (int r = 0; r < inspector->rowCount(); ++r)
+                                     {
+                                         QStringList rowCells;
+                                         for (int c = 0; c < inspector->columnCount(); ++c)
+                                         {
+                                             auto *it = inspector->item(r, c);
+                                             rowCells << (it ? it->text() : QString());
+                                         }
+                                         lines << rowCells.join('\t');
+                                     }
+                                     QApplication::clipboard()->setText(lines.join('\n'));
+                                 });
+            }
+            if (!menu.isEmpty())
+                menu.exec(inspector->viewport()->mapToGlobal(pos));
+        });
+}
 } // namespace
 
 mviewer::core::AnalysisAdjustment CompareWorkspace::analysisAdjustment(const CellAdjust &adjust)
 {
-    mviewer::core::AnalysisAdjustment result;
-    result.brightness = adjust.brightness;
-    result.contrast = adjust.contrast;
-    result.gamma = adjust.gamma;
-    result.redGain = adjust.rGain;
-    result.blueGain = adjust.bGain;
-    result.rotation = adjust.rotation;
-    result.flipH = adjust.flipH;
-    result.flipV = adjust.flipV;
-    result.hasCrop = adjust.hasCrop;
-    result.cropX = adjust.cropX;
-    result.cropY = adjust.cropY;
-    result.cropW = adjust.cropW;
-    result.cropH = adjust.cropH;
-    return result;
+    return {adjust.brightness, adjust.contrast, adjust.gamma, adjust.rGain, adjust.bGain,
+            adjust.rotation, adjust.flipH, adjust.flipV, adjust.hasCrop,
+            adjust.cropX, adjust.cropY, adjust.cropW, adjust.cropH};
 }
 
 void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
@@ -126,9 +181,11 @@ void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
                                             QStringLiteral("G"), QStringLiteral("B"),
                                             QStringLiteral("Δ"), QStringLiteral("16bit/RAW")});
     m_inspector->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_inspector->setSelectionMode(QAbstractItemView::NoSelection);
+    m_inspector->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_inspector->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_inspector->horizontalHeader()->setStretchLastSection(true);
     m_inspector->setFixedHeight(200);
+    setupInspectorContextMenu(m_inspector, this);
     sideLay->addWidget(m_inspector);
 
     m_statsLabel = new QLabel(tr("邻域统计: —"), this);

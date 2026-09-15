@@ -1,6 +1,7 @@
 #include "core/analysis/PixelInspector.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 
@@ -113,12 +114,48 @@ ColorTriple toColorSpaceNorm(double R, double G, double B, ColorSpace space)
     }
     return out;
 }
+// Precomputed 256-entry lookup table for exact sRGB (0..255) to Linear RGB conversion.
+// Eliminates transcendental std::pow calls in high-frequency pixel inspection (XYZ / Lab).
+const std::array<double, 256> &srgbToLinearTable()
+{
+    static const auto table = []()
+    {
+        std::array<double, 256> lut{};
+        for (int i = 0; i < 256; ++i)
+        {
+            const double c = i / 255.0;
+            lut[static_cast<size_t>(i)] =
+                (c <= 0.04045) ? (c / 12.92) : std::pow((c + 0.055) / 1.055, 2.4);
+        }
+        return lut;
+    }();
+    return table;
+}
 } // namespace
 
 ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space)
 {
     if (space == ColorSpace::RGB || space == ColorSpace::HEX)
         return {double(r), double(g), double(b)};
+    if (space == ColorSpace::XYZ)
+    {
+        const auto &lut = srgbToLinearTable();
+        const double lr = lut[r], lg = lut[g], lb = lut[b];
+        return {lr * 0.4124564 + lg * 0.3575761 + lb * 0.1804375,
+                lr * 0.2126729 + lg * 0.7151522 + lb * 0.0721750,
+                lr * 0.0193339 + lg * 0.1191920 + lb * 0.9503041};
+    }
+    if (space == ColorSpace::Lab)
+    {
+        const auto &lut = srgbToLinearTable();
+        const double lr = lut[r], lg = lut[g], lb = lut[b];
+        const double X = (lr * 0.4124564 + lg * 0.3575761 + lb * 0.1804375) / 0.95047;
+        const double Y = (lr * 0.2126729 + lg * 0.7151522 + lb * 0.0721750) / 1.00000;
+        const double Z = (lr * 0.0193339 + lg * 0.1191920 + lb * 0.9503041) / 1.08883;
+        auto f = [](double t) { return t > 0.008856 ? std::cbrt(t) : (7.787 * t + 16.0 / 116.0); };
+        const double fx = f(X), fy = f(Y), fz = f(Z);
+        return {116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)};
+    }
     return toColorSpaceNorm(r / 255.0, g / 255.0, b / 255.0, space);
 }
 
@@ -126,6 +163,9 @@ ColorTriple toColorSpace(uint16_t r, uint16_t g, uint16_t b, uint16_t maxVal, Co
 {
     if (maxVal == 0)
         maxVal = 1;
+    if (maxVal == 255)
+        return toColorSpace(static_cast<uint8_t>(r), static_cast<uint8_t>(g),
+                            static_cast<uint8_t>(b), space);
     if (space == ColorSpace::RGB)
         return {double(r), double(g), double(b)};
     if (space == ColorSpace::HEX)
@@ -474,10 +514,10 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
     if (!data || width <= 0 || height <= 0 || n < 1 || cx < 0 || cy < 0 || cx >= width ||
         cy >= height)
         return s;
-    // 3 = RGB24 (R,G,B), 4 = 32-bit BGRA (B,G,R,A) as produced by
+    // 1 = Grayscale8 (Y), 3 = RGB24 (R,G,B), 4 = 32-bit BGRA (B,G,R,A) as produced by
     // QImage::Format_RGB32/ARGB32 on little-endian hosts. Anything else is
     // treated as RGB24.
-    const int bytesPerPixel = channels == 4 ? 4 : 3;
+    const int bytesPerPixel = (channels == 4) ? 4 : ((channels == 1) ? 1 : 3);
 
     long sum = 0, sumSq = 0;
     long rSum = 0, gSum = 0, bSum = 0, vSum = 0;
@@ -495,9 +535,23 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
             if (xx < 0 || xx >= width)
                 continue;
             const uint8_t *p = row + static_cast<size_t>(xx) * static_cast<size_t>(bytesPerPixel);
-            const uint8_t r = bytesPerPixel == 4 ? p[2] : p[0];
-            const uint8_t g = p[1];
-            const uint8_t b = bytesPerPixel == 4 ? p[0] : p[2];
+            uint8_t r = 0, g = 0, b = 0;
+            if (bytesPerPixel == 1)
+            {
+                r = g = b = p[0];
+            }
+            else if (bytesPerPixel == 4)
+            {
+                r = p[2];
+                g = p[1];
+                b = p[0];
+            }
+            else
+            {
+                r = p[0];
+                g = p[1];
+                b = p[2];
+            }
             rSum += r;
             gSum += g;
             bSum += b;

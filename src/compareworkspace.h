@@ -493,24 +493,17 @@ class CompareWorkspace : public QWidget
     QCheckBox *m_histRChk = nullptr, *m_histGChk = nullptr, *m_histBChk = nullptr;
     QCheckBox *m_histLumaChk = nullptr, *m_histVChk = nullptr, *m_histLogChk = nullptr;
     QCheckBox *m_roiHistChk = nullptr; // limit histogram to the current ROI
-    QLabel *m_roiStatusLabel = nullptr;
-    QLabel *m_roiGeometryLabel = nullptr;
+    QLabel *m_roiStatusLabel = nullptr, *m_roiGeometryLabel = nullptr, *m_roiDeltaLabel = nullptr;
     QTableWidget *m_roiTable = nullptr;
-    QLabel *m_roiDeltaLabel = nullptr;
-    QPushButton *m_clearRoiBtn = nullptr;
-    QPushButton *m_copyRoiBtn = nullptr;
-    QPushButton *m_roiHud = nullptr;
+    QPushButton *m_clearRoiBtn = nullptr, *m_copyRoiBtn = nullptr, *m_roiHud = nullptr;
 
     // M16.1: cursor-sync crosshair (n/n) + focus-lock / reference pin (n/1).
     QCheckBox *m_crosshairChk = nullptr; // 同步准星开关
     QPushButton *m_focusBtn = nullptr;   // 锁定/解除基准
-    QLabel *m_focusLabel = nullptr;      // 显示当前基准格
-    int m_focusIndex = -1;               // 锁定的基准格索引 (-1 = 未锁定)
-    int m_hoverIdx = -1;                 // 当前光标所在格 (用于锁定基准)
-    QLabel *m_frameLabel = nullptr;      // 当前窗格的帧/页选择
+    QLabel *m_focusLabel = nullptr, *m_frameLabel = nullptr;
     QSpinBox *m_frameSpin = nullptr;
-    int m_lastInspectX = -1; // 最近检视位置 (焦点切换时重刷)
-    int m_lastInspectY = -1;
+    int m_focusIndex = -1, m_hoverIdx = -1;
+    int m_lastInspectX = -1, m_lastInspectY = -1;
     void onCrosshairMoved(RawImageView *view, const QPointF &pos);
     void onFocusRequested(int cellIndex);
     void updateFrameControl();
@@ -688,17 +681,10 @@ class CompareWorkspace : public QWidget
     // Edit panel widgets (inside side panel)
     QWidget *m_editPanel = nullptr;
     QLabel *m_editLabel = nullptr; // shows which cell is being edited
-    QSlider *m_brightSlider = nullptr;
-    QLabel *m_brightVal = nullptr;
-    QSlider *m_contrastSlider = nullptr;
-    QLabel *m_contrastVal = nullptr;
-    QSlider *m_gammaSlider = nullptr;
-    QLabel *m_gammaVal = nullptr;
-    QSlider *m_rGainSlider = nullptr;
-    QLabel *m_rGainVal = nullptr;
-    QSlider *m_bGainSlider = nullptr;
-    QLabel *m_bGainVal = nullptr;
-    QLabel *m_rotVal = nullptr;
+    QSlider *m_brightSlider = nullptr, *m_contrastSlider = nullptr, *m_gammaSlider = nullptr;
+    QSlider *m_rGainSlider = nullptr, *m_bGainSlider = nullptr;
+    QLabel *m_brightVal = nullptr, *m_contrastVal = nullptr, *m_gammaVal = nullptr;
+    QLabel *m_rGainVal = nullptr, *m_bGainVal = nullptr, *m_rotVal = nullptr;
     QPushButton *m_resetAdjBtn = nullptr;
     void onEditCellSelected(int cellIdx);
     void onAdjChanged();
@@ -755,8 +741,7 @@ class CompareWorkspace : public QWidget
     void onPerPaneHistToggled(bool on);
 
     // ── M16.6: layout presets save/load ──
-    QPushButton *m_savePresetBtn = nullptr;
-    QPushButton *m_loadPresetBtn = nullptr;
+    QPushButton *m_savePresetBtn = nullptr, *m_loadPresetBtn = nullptr;
     QString m_presetDir;
     void onSavePreset();
     void onLoadPreset();
@@ -765,11 +750,8 @@ class CompareWorkspace : public QWidget
     QPushButton *m_swapBtn = nullptr;
     void onSwapPanes();
     SelectionModel *m_selection = nullptr;
-    QPushButton *m_analyzeBtn = nullptr;
-    QPushButton *m_exportReportBtn = nullptr;
-
+    QPushButton *m_analyzeBtn = nullptr, *m_exportReportBtn = nullptr, *m_exitBtn = nullptr;
     QCheckBox *m_autoAlignChk = nullptr;
-    QPushButton *m_exitBtn = nullptr;
     QLabel *m_compareStatusLabel = nullptr;
     QWidget *buildStatusStrip();
     void closeCompareHost();

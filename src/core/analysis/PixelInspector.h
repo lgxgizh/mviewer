@@ -125,6 +125,7 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
 // Out-of-bounds samples are skipped (the kernel is clipped to the image).
 // `n` is the kernel half-width+1 (n=1 → 1×1, n=3 → 3×3, n=5 → 5×5, n=7 → 7×7).
 // `channels` is the byte count per pixel and must match the buffer:
+//   1 = Grayscale8 (single byte per pixel)
 //   3 = RGB24 (bytes R,G,B — the QImage::Format_RGB888 layout)
 //   4 = 32-bit BGRA (bytes B,G,R,A — the QImage::Format_RGB32/ARGB32 layout)
 // Passing a 4-byte buffer with channels=3 silently reads every second pixel

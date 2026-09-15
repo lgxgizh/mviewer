@@ -18,9 +18,10 @@ bool ImageFrame::raw16At(int x, int y, uint16_t &r, uint16_t &g, uint16_t &b) co
     const int h = m_pixels.height;
     if (x < 0 || y < 0 || x >= w || y >= h)
         return false;
-    const int idx = (y * w + x) * m_rawCh;
+    const size_t idx = (static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x)) *
+                       static_cast<size_t>(m_rawCh);
     const auto &buf = *m_raw16;
-    if (static_cast<size_t>(idx) + static_cast<size_t>(m_rawCh) > buf.size())
+    if (idx + static_cast<size_t>(m_rawCh) > buf.size())
         return false;
     if (m_rawCh >= 3)
     {
