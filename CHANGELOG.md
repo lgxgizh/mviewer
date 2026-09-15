@@ -1,5 +1,23 @@
 # Changelog
  
+## [1.0.43] - 2026-09-16
+
+### Performance & Optimizations
+
+- **HistogramWidget Paint Overhead Elimination & Vector Pre-allocation**:
+  - Pre-allocated `QPolygonF` capacity (`reserve(bins + 2)` and `reserve(bins)`) in `HistogramWidget::paintOverlay`, completely eliminating dynamic vector reallocation churn during 60 FPS viewport zooming, panning, and ROI interaction.
+  - Reused computed point coordinates across fill polygon and stroke polyline passes, halving scale calculations (`mapVal`) per channel.
+- **DifferenceEngine::highlightMap Fast Path Hoisting**:
+  - Hoisted base image availability and pixel format checks (`hasBase`, `base.format`) outside of scanline loops in `DifferenceEngine::highlightMap`.
+  - Added direct indexing for `Grayscale8` base images (avoiding per-pixel RGB conversions) and replaced general byte offsets with branchless access for RGB/BGR layouts.
+- **DifferenceEngine::computeStats Branchless Peak Discrepancy Tracking**:
+  - Replaced conditional branch `if (v > maxV) maxV = v;` with branchless `maxV = std::max(maxV, v);` in `DifferenceEngine::computeStats`, enabling MSVC auto-vectorization using vector max instructions (`_mm256_max_epu8` / `_mm_max_epu8`).
+
+### Testing & Verification
+
+- **DifferenceEngine Grayscale8 Base Image Highlight Coverage**:
+  - Added dedicated unit test coverage in `test_differenceengine` verifying that `highlightMap` correctly preserves grayscale luminance references and highlights discrepancy coordinates.
+
 ## [1.0.42] - 2026-09-16
 
 ### Performance & Optimizations

@@ -127,12 +127,17 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
                 continue;
             const auto &ch = *chPtr;
             QPolygonF poly;
+            poly.reserve(bins + 2);
+            QPolygonF linePoly;
+            linePoly.reserve(bins);
             poly.append(QPointF(left, top + h));
             for (int i = 0; i < bins; ++i)
             {
                 const double x = left + i * dx;
                 const double y = top + h - 1 - mapVal(ch[static_cast<size_t>(i)]) * dy;
-                poly.append(QPointF(x, y));
+                const QPointF pt(x, y);
+                poly.append(pt);
+                linePoly.append(pt);
             }
             poly.append(QPointF(left + w, top + h));
 
@@ -146,13 +151,6 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
             line.setAlpha(170);
             p.setPen(line);
             p.setBrush(Qt::NoBrush);
-            QPolygonF linePoly;
-            for (int i = 0; i < bins; ++i)
-            {
-                const double x = left + i * dx;
-                const double y = top + h - 1 - mapVal(ch[static_cast<size_t>(i)]) * dy;
-                linePoly.append(QPointF(x, y));
-            }
             p.drawPolyline(linePoly);
         }
     }

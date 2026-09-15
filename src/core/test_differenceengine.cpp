@@ -167,6 +167,30 @@ int main(int argc, char **argv)
         CHECK((*hlZero.buffer)[off] == (*hlZero.buffer)[off + 1] &&
                   (*hlZero.buffer)[off] == (*hlZero.buffer)[off + 2],
               "highlightMap threshold zero keeps identical pixels gray");
+
+        // Grayscale8 base test
+        auto diffGrayBuf = std::make_shared<std::vector<uint8_t>>(16, uint8_t(0));
+        (*diffGrayBuf)[0] = 50;
+        ImageData diffGray;
+        diffGray.buffer = diffGrayBuf;
+        diffGray.width = 4;
+        diffGray.height = 4;
+        diffGray.format = PixelFormat::Grayscale8;
+
+        auto baseGrayBuf = std::make_shared<std::vector<uint8_t>>(16, uint8_t(180));
+        ImageData baseGray;
+        baseGray.buffer = baseGrayBuf;
+        baseGray.width = 4;
+        baseGray.height = 4;
+        baseGray.format = PixelFormat::Grayscale8;
+
+        auto hlGray = DifferenceEngine::highlightMap(diffGray, baseGray, 10);
+        CHECK(!hlGray.isNull() && hlGray.format == PixelFormat::RGB24,
+              "highlightMap Grayscale8 base non-null");
+        CHECK((*hlGray.buffer)[0] > (*hlGray.buffer)[1] && (*hlGray.buffer)[0] > (*hlGray.buffer)[2],
+              "highlightMap Grayscale8 diff pixel is red");
+        CHECK((*hlGray.buffer)[3] == 180 && (*hlGray.buffer)[4] == 180 && (*hlGray.buffer)[5] == 180,
+              "highlightMap similar pixel equals Grayscale8 base");
     }
 
     // M23: computeStats — full image
