@@ -20,11 +20,7 @@ bool ExposureAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int
         for (int x = x0; x < x1; ++x)
         {
             const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-            double l;
-            if (cpp >= 3)
-                l = 0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2];
-            else
-                l = p[0];
+            const double l = pixelLuminance(p, v.format);
             sumLum += l;
             if (l < 25.0)
                 ++shadows;

@@ -68,9 +68,11 @@ bool ColorCheckerAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1,
                         continue;
                     const uint8_t *p = v.data + static_cast<size_t>(py) * v.stride() +
                                        static_cast<size_t>(px) * cpp;
-                    sr += p[0];
-                    sg += p[1];
-                    sb += p[2];
+                    uint8_t pr = 0, pg = 0, pb = 0;
+                    getPixelRGB(p, v.format, pr, pg, pb);
+                    sr += pr;
+                    sg += pg;
+                    sb += pb;
                     ++cnt;
                 }
             }

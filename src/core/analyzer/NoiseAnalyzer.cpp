@@ -30,7 +30,7 @@ double NoiseAnalyzer::estimateLaplacian(const ImageBuffer &v, int x0, int y0, in
             {
                 const uint8_t *p =
                     v.data + static_cast<size_t>(yy) * v.stride() + static_cast<size_t>(xx) * cpp;
-                return (p[0] + p[1] + p[2]) / 3.0;
+                return pixelLuminanceAvg(p, v.format);
             };
             const double c = lum(x, y) * 4;
             const double n4 = lum(x, y - 1) + lum(x, y + 1) + lum(x - 1, y) + lum(x + 1, y);

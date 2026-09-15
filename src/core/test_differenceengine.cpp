@@ -112,6 +112,33 @@ int main(int argc, char **argv)
         CHECK(isAllBlack(thresh), "threshold > pixel all black");
     }
 
+    // amplify
+    {
+        auto buf = std::make_shared<std::vector<uint8_t>>(4, uint8_t(10));
+        (*buf)[1] = 100;
+        (*buf)[2] = 200;
+        ImageData gray;
+        gray.buffer = buf;
+        gray.width = 2;
+        gray.height = 2;
+        gray.format = PixelFormat::Grayscale8;
+
+        // Gain <= 1.0 identity
+        auto id = DifferenceEngine::amplify(gray, 1.0);
+        CHECK(!id.isNull() && (*id.buffer)[0] == 10 && (*id.buffer)[2] == 200,
+              "amplify gain 1.0 preserves values");
+
+        // Gain 2.0
+        auto amp2 = DifferenceEngine::amplify(gray, 2.0);
+        CHECK((*amp2.buffer)[0] == 20, "amplify 10*2 = 20");
+        CHECK((*amp2.buffer)[1] == 200, "amplify 100*2 = 200");
+        CHECK((*amp2.buffer)[2] == 255, "amplify 200*2 saturates to 255");
+
+        // Null image
+        ImageData nullImg;
+        CHECK(DifferenceEngine::amplify(nullImg, 4.0).isNull(), "amplify null returns null");
+    }
+
     // A-4.6: highlightMap — diffs red, similar gray
     {
         auto a = makeSolidRgb(8, 8, 100, 100, 100);

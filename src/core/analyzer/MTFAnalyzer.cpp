@@ -91,7 +91,7 @@ bool MTFAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
         {
             const uint8_t *p =
                 v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-            row += (p[0] + p[1] + p[2]) / 3.0;
+            row += pixelLuminanceAvg(p, v.format);
         }
         profile[y - y0] = row / w;
     }

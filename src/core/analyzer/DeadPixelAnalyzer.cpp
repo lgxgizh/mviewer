@@ -35,14 +35,14 @@ bool DeadPixelAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, in
         {
             const uint8_t *p =
                 v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-            const int lum = (p[0] + p[1] + p[2]) / 3;
+            const int lum = static_cast<int>(pixelLuminanceAvg(p, v.format));
             // Median of the 8 neighbors.
             int neigh[8];
             for (int k = 0; k < 8; ++k)
             {
                 const uint8_t *q = v.data + static_cast<size_t>(y + ny[k]) * v.stride() +
                                    static_cast<size_t>(x + nx[k]) * cpp;
-                neigh[k] = (q[0] + q[1] + q[2]) / 3;
+                neigh[k] = static_cast<int>(pixelLuminanceAvg(q, v.format));
             }
             std::sort(neigh, neigh + 8);
             const int med = neigh[4];

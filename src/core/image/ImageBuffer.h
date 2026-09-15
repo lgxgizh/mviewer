@@ -218,6 +218,57 @@ inline int luminance(uint8_t r, uint8_t g, uint8_t b)
     return (int)(0.299 * r + 0.587 * g + 0.114 * b);
 }
 
+inline void getPixelRGB(const uint8_t *p, PixelFormat fmt, uint8_t &r, uint8_t &g,
+                        uint8_t &b) noexcept
+{
+    switch (fmt)
+    {
+    case PixelFormat::BGR24:
+    case PixelFormat::BGRA32:
+        b = p[0];
+        g = p[1];
+        r = p[2];
+        break;
+    case PixelFormat::Grayscale8:
+        r = g = b = p[0];
+        break;
+    case PixelFormat::RGB24:
+    case PixelFormat::RGBA32:
+    default:
+        r = p[0];
+        g = p[1];
+        b = p[2];
+        break;
+    }
+}
+
+inline double pixelLuminance(const uint8_t *p, PixelFormat fmt) noexcept
+{
+    switch (fmt)
+    {
+    case PixelFormat::BGR24:
+    case PixelFormat::BGRA32:
+        return 0.299 * p[2] + 0.587 * p[1] + 0.114 * p[0];
+    case PixelFormat::Grayscale8:
+        return static_cast<double>(p[0]);
+    case PixelFormat::RGB24:
+    case PixelFormat::RGBA32:
+    default:
+        return 0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2];
+    }
+}
+
+inline double pixelLuminanceAvg(const uint8_t *p, PixelFormat fmt) noexcept
+{
+    switch (fmt)
+    {
+    case PixelFormat::Grayscale8:
+        return static_cast<double>(p[0]);
+    default:
+        return (p[0] + p[1] + p[2]) / 3.0;
+    }
+}
+
 // Crop a rectangular region from an image. Pure std implementation (no Qt).
 // Returns an empty ImageData on invalid input or an out-of-bounds / empty
 // selection. The selection is clamped to the source bounds, so a partially

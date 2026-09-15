@@ -22,9 +22,11 @@ bool ColorCastAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, in
         for (int x = x0; x < x1; ++x)
         {
             const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-            sumR += p[0];
-            sumG += p[1];
-            sumB += p[2];
+            uint8_t r = 0, g = 0, b = 0;
+            getPixelRGB(p, v.format, r, g, b);
+            sumR += r;
+            sumG += g;
+            sumB += b;
         }
     }
     const double meanR = sumR / n;

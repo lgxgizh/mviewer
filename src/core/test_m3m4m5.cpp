@@ -650,6 +650,65 @@ static void testCompareDiffOverlay()
     }
 }
 
+static void testAnalyzerFormats()
+{
+    printf("\n[Analyzer Format Invariance & Grayscale8 Safety]\n");
+    fflush(stdout);
+    auto &reg = AnalyzerRegistry::instance();
+
+    // 1. Grayscale8 test: 32x32 image with known gradient
+    ImageData grayImg = makeImageData(32, 32, PixelFormat::Grayscale8);
+    for (int y = 0; y < 32; ++y)
+    {
+        for (int x = 0; x < 32; ++x)
+            grayImg.buffer->data()[y * 32 + x] = static_cast<uint8_t>(x * 4);
+    }
+    ImageFrame grayFrame = ImageFrame::create("gray_test", grayImg);
+    mviewer::domain::Selection fullSel{0, 0, 32, 32};
+
+    // HistogramAnalyzer on Grayscale8
+    auto hist = reg.create("histogram");
+    CHECK(hist != nullptr, "histogram created");
+    if (hist)
+    {
+        CHECK(hist->analyzeRegion(grayFrame, fullSel),
+              "histogram analyzes Grayscale8 ROI without crashing");
+        auto hRes = dynamic_cast<HistogramAnalyzer *>(hist.get())->result();
+        CHECK(hRes.lumMean > 0, "histogram Grayscale8 lumMean > 0");
+    }
+
+    // Analyzers on Grayscale8 (verify no OOB read or crash)
+    const char *analyzers[] = {"noise", "sharpness", "entropy", "brightness", "contrast",
+                               "deadpixel"};
+    for (const char *name : analyzers)
+    {
+        auto a = reg.create(name);
+        if (a)
+        {
+            CHECK(a->analyzeRegion(grayFrame, fullSel),
+                  (std::string(name) + " analyzes Grayscale8").c_str());
+        }
+    }
+
+    // 2. BGR24 test: verify R and B are not swapped
+    ImageData bgrImg = makeImageData(4, 4, PixelFormat::BGR24);
+    for (size_t i = 0; i < 4 * 4 * 3; i += 3)
+    {
+        bgrImg.buffer->data()[i + 0] = 0;   // B
+        bgrImg.buffer->data()[i + 1] = 0;   // G
+        bgrImg.buffer->data()[i + 2] = 200; // R
+    }
+    ImageFrame bgrFrame = ImageFrame::create("bgr_test", bgrImg);
+    mviewer::domain::Selection bgrSel{0, 0, 4, 4};
+    if (hist)
+    {
+        CHECK(hist->analyzeRegion(bgrFrame, bgrSel), "histogram analyzes BGR24");
+        auto hRes = dynamic_cast<HistogramAnalyzer *>(hist.get())->result();
+        CHECK(hRes.rMean > 190.0, "histogram BGR24 rMean is ~200 (not swapped with B)");
+        CHECK(hRes.bMean < 10.0, "histogram BGR24 bMean is 0 (not swapped with R)");
+    }
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -674,6 +733,7 @@ int main(int argc, char **argv)
     testRenderCommand();
     testAnalyzerCapabilityFramework();
     testCompareDiffOverlay();
+    testAnalyzerFormats();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

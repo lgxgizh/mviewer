@@ -235,6 +235,24 @@ void CompareWorkspace::buildDiffControls(QHBoxLayout *toolLayout)
             });
     toolLayout->addWidget(m_diffHighlightChk);
 
+    auto *gainLabel = new QLabel(tr("增益:"), this);
+    gainLabel->setObjectName("diffGainCaption");
+    toolLayout->addWidget(gainLabel);
+    m_diffGainCombo = new QComboBox(this);
+    m_diffGainCombo->setObjectName("diffGainCombo");
+    m_diffGainCombo->addItems({"1x", "2x", "4x", "8x", "16x", "32x"});
+    m_diffGainCombo->setCurrentIndex(0);
+    m_diffGainCombo->setEnabled(false);
+    m_diffGainCombo->setToolTip(tr("差异放大倍数（用于检查微弱噪点与压缩残差）"));
+    connect(m_diffGainCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+            [this](int idx)
+            {
+                static const double kGains[] = {1.0, 2.0, 4.0, 8.0, 16.0, 32.0};
+                m_diffGain = (idx >= 0 && idx < 6) ? kGains[idx] : 1.0;
+                refreshAllDiffOverlays();
+            });
+    toolLayout->addWidget(m_diffGainCombo);
+
     // A-4.3: Pixel Link — mark corresponding points across cells.
     m_pixelLinkChk = new QCheckBox(tr("像素连线"), this);
     m_pixelLinkChk->setObjectName("pixelLinkToggle");
@@ -560,6 +578,10 @@ void CompareWorkspace::syncContextualCompareControls()
         m_thresholdLabel->setVisible(diffOn);
     if (auto *caption = findChild<QLabel *>(QStringLiteral("diffThresholdCaption")))
         caption->setVisible(diffOn);
+    if (m_diffGainCombo)
+        m_diffGainCombo->setVisible(diffOn);
+    if (auto *gainCaption = findChild<QLabel *>(QStringLiteral("diffGainCaption")))
+        gainCaption->setVisible(diffOn);
     if (m_gridColsSpin)
         m_gridColsSpin->setVisible(customGrid);
     if (auto *columns = findChild<QLabel *>(QStringLiteral("compareColumnsCaption")))

@@ -28,7 +28,7 @@ double SharpnessAnalyzer::computeSharpness(const ImageBuffer &v, int x0, int y0,
             {
                 const uint8_t *p =
                     v.data + static_cast<size_t>(yy) * v.stride() + static_cast<size_t>(xx) * cpp;
-                return (p[0] + p[1] + p[2]) / 3.0;
+                return pixelLuminanceAvg(p, v.format);
             };
             // Sobel: Gx = (r+2l+r) - (r+2l+r) shifted cols
             const double gx = (lum(x + 1, y - 1) + 2 * lum(x + 1, y) + lum(x + 1, y + 1)) -

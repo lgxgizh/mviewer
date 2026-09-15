@@ -183,6 +183,7 @@ void CompareWorkspace::updateActionAvailability()
     enableWidget(m_thresholdSlider, hasSet);
     enableWidget(m_diffOverlayChk, hasSet);
     enableWidget(m_diffHighlightChk, hasSet);
+    enableWidget(m_diffGainCombo, hasSet);
     enableWidget(m_pixelLinkChk, hasPair);
     enableWidget(m_clearLinksBtn, linksOn);
     enableWidget(m_analyzeBtn, hasImage);
@@ -201,6 +202,7 @@ CompareWorkspace::NavState CompareWorkspace::captureNavState() const
     s.checker = m_checkerChk && m_checkerChk->isChecked(); // M23
     s.checkerSize = m_checkerSize;                         // M23
     s.diffHighlight = m_diffHighlightChk && m_diffHighlightChk->isChecked();
+    s.diffGainIndex = m_diffGainCombo ? m_diffGainCombo->currentIndex() : 0;
     s.syncZoom = m_syncZoomChk ? m_syncZoomChk->isChecked() : true;
     s.syncDrag = m_syncDragChk ? m_syncDragChk->isChecked() : true;
     s.crosshair = m_crosshairChk && m_crosshairChk->isChecked();
@@ -232,6 +234,8 @@ void CompareWorkspace::restoreNavState(const NavState &s)
     setOverlayMode(static_cast<mviewer::OverlayMode>(s.overlayMode));
     if (m_diffHighlightChk)
         m_diffHighlightChk->setChecked(s.diffHighlight);
+    if (m_diffGainCombo && s.diffGainIndex >= 0 && s.diffGainIndex < m_diffGainCombo->count())
+        m_diffGainCombo->setCurrentIndex(s.diffGainIndex);
     m_overlayAlpha = s.overlayAlpha;
     if (m_overlayAlphaSlider)
         m_overlayAlphaSlider->setValue(s.overlayAlpha);

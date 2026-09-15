@@ -396,8 +396,10 @@ class CompareWorkspace : public QWidget
     // A-4.6: Diff highlight mode (red diffs / gray similar) vs heatmap.
     QCheckBox *m_diffHighlightChk = nullptr;
     QCheckBox *m_diffOverlayChk = nullptr;
+    QComboBox *m_diffGainCombo = nullptr;
     bool m_diffOverlayVisible = false;
     bool m_diffHighlight = false;
+    double m_diffGain = 1.0;
 
     // A-4.2: custom grid is column-driven; rows are derived by CompareEngine.
     QSpinBox *m_gridColsSpin = nullptr;
@@ -422,6 +424,7 @@ class CompareWorkspace : public QWidget
         bool checker = false; // M23
         int checkerSize = 64; // M23
         bool diffHighlight = false;
+        int diffGainIndex = 0;
         bool syncZoom = true;
         bool syncDrag = true;
         bool crosshair = false;
@@ -536,6 +539,7 @@ class CompareWorkspace : public QWidget
         DifferenceEngine::DiffStats stats;
         bool hasRoiStats = false;
         DifferenceEngine::DiffStats roiStats;
+        double diffGain = 1.0;
 
         struct CellOverlay
         {
@@ -553,31 +557,25 @@ class CompareWorkspace : public QWidget
         ImageData diff;
         bool sizeMismatch = false;
     };
-    static DiffSources buildDiffOverlays(DiffBatchResult &result,
-                                         const std::vector<ImageData> &pixels,
-                                         const std::vector<QSize> &displayTargets,
-                                         const std::vector<CellAdjust> &adjusts, int baseIndex,
-                                         uint8_t threshold, bool highlight, bool visualize,
-                                         bool autoAlign, const ImageData &basePixels,
-                                         const TaskScheduler::TaskContext &context);
-    static void computeDiffMetrics(DiffBatchResult &result, const DiffSources &sources,
-                                   const ImageData &basePixels, uint8_t threshold,
-                                   const mviewer::domain::Selection &roi,
-                                   const TaskScheduler::TaskContext &context);
-    static DiffBatchResult computeDiffBatch(const std::vector<ImageData> &pixels,
-                                            const std::vector<QSize> &displayTargets,
-                                            const std::vector<CellAdjust> &adjusts, int baseIndex,
-                                            uint8_t threshold, bool highlight, bool visualize,
-                                            bool autoAlign, const mviewer::domain::Selection &roi,
-                                            int paneCount, uint64_t generation,
-                                            const TaskScheduler::TaskContext &context);
-    TaskScheduler::TaskHandle startDiffBatch(const std::vector<ImageData> &pixels,
-                                             const std::vector<QSize> &displayTargets,
-                                             const std::vector<CellAdjust> &adjusts, int baseIndex,
-                                             uint8_t threshold, bool highlight, bool visualize,
-                                             bool autoAlign, const mviewer::domain::Selection &roi,
-                                             int paneCount, uint64_t generation,
-                                             const QPointer<CompareWorkspace> &guard);
+    static DiffSources buildDiffOverlays(
+        DiffBatchResult &result, const std::vector<ImageData> &pixels,
+        const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
+        int baseIndex, uint8_t threshold, double gain, bool highlight, bool visualize,
+        bool autoAlign, const ImageData &basePixels, const TaskScheduler::TaskContext &context);
+    static void computeDiffMetrics(
+        DiffBatchResult &result, const DiffSources &sources, const ImageData &basePixels,
+        uint8_t threshold, const mviewer::domain::Selection &roi,
+        const TaskScheduler::TaskContext &context);
+    static DiffBatchResult computeDiffBatch(
+        const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
+        const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, double gain,
+        bool highlight, bool visualize, bool autoAlign, const mviewer::domain::Selection &roi,
+        int paneCount, uint64_t generation, const TaskScheduler::TaskContext &context);
+    TaskScheduler::TaskHandle startDiffBatch(
+        const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
+        const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, double gain,
+        bool highlight, bool visualize, bool autoAlign, const mviewer::domain::Selection &roi,
+        int paneCount, uint64_t generation, const QPointer<CompareWorkspace> &guard);
     void applyDiffBatchResult(const DiffBatchResult &result);
 
     // M29: latest-wins generation + handle of the in-flight batch diff task.

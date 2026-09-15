@@ -9,8 +9,8 @@
 CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
     DiffBatchResult &result, const std::vector<ImageData> &pixels,
     const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts, int baseIndex,
-    uint8_t threshold, bool highlight, bool visualize, bool autoAlign, const ImageData &basePixels,
-    const TaskScheduler::TaskContext &context)
+    uint8_t threshold, double gain, bool highlight, bool visualize, bool autoAlign,
+    const ImageData &basePixels, const TaskScheduler::TaskContext &context)
 {
     DiffSources sources;
     result.overlays.reserve(pixels.size());
@@ -78,7 +78,9 @@ CompareWorkspace::DiffSources CompareWorkspace::buildDiffOverlays(
         }
         if (visualize)
         {
-            const ImageData thresholded = DifferenceEngine::applyThreshold(diff, threshold);
+            const ImageData diffToView =
+                (gain > 1.0) ? DifferenceEngine::amplify(diff, gain) : diff;
+            const ImageData thresholded = DifferenceEngine::applyThreshold(diffToView, threshold);
             const ImageData overlayImage =
                 highlight ? DifferenceEngine::highlightMap(thresholded, basePixels, threshold)
                           : DifferenceEngine::heatMap(thresholded);
@@ -149,13 +151,14 @@ void CompareWorkspace::computeDiffMetrics(DiffBatchResult &result, const DiffSou
 
 CompareWorkspace::DiffBatchResult CompareWorkspace::computeDiffBatch(
     const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
-    const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, bool highlight,
-    bool visualize, bool autoAlign, const mviewer::domain::Selection &roi, int paneCount,
-    uint64_t generation, const TaskScheduler::TaskContext &context)
+    const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, double gain,
+    bool highlight, bool visualize, bool autoAlign, const mviewer::domain::Selection &roi,
+    int paneCount, uint64_t generation, const TaskScheduler::TaskContext &context)
 {
     DiffBatchResult result;
     result.generation = generation;
     result.baseIdx = baseIndex;
+    result.diffGain = gain;
     const auto adjustFor = [&adjusts](int index) -> CellAdjust
     {
         if (index >= 0 && index < static_cast<int>(adjusts.size()))
@@ -177,8 +180,8 @@ CompareWorkspace::DiffBatchResult CompareWorkspace::computeDiffBatch(
         return result;
     }
     const DiffSources sources =
-        buildDiffOverlays(result, pixels, displayTargets, adjusts, baseIndex, threshold, highlight,
-                          visualize, autoAlign, basePixels, context);
+        buildDiffOverlays(result, pixels, displayTargets, adjusts, baseIndex, threshold, gain,
+                          highlight, visualize, autoAlign, basePixels, context);
     if (!context.isCancelled())
         computeDiffMetrics(result, sources, basePixels, threshold, roi, context);
     return result;
@@ -186,19 +189,19 @@ CompareWorkspace::DiffBatchResult CompareWorkspace::computeDiffBatch(
 
 TaskScheduler::TaskHandle CompareWorkspace::startDiffBatch(
     const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
-    const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, bool highlight,
-    bool visualize, bool autoAlign, const mviewer::domain::Selection &roi, int paneCount,
-    uint64_t generation, const QPointer<CompareWorkspace> &guard)
+    const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, double gain,
+    bool highlight, bool visualize, bool autoAlign, const mviewer::domain::Selection &roi,
+    int paneCount, uint64_t generation, const QPointer<CompareWorkspace> &guard)
 {
     return TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize, autoAlign,
-         roi, paneCount, generation, guard](const TaskScheduler::TaskContext &context)
+        [pixels, displayTargets, adjusts, baseIndex, threshold, gain, highlight, visualize,
+         autoAlign, roi, paneCount, generation, guard](const TaskScheduler::TaskContext &context)
         {
             if (context.isCancelled())
                 return;
             const DiffBatchResult result = CompareWorkspace::computeDiffBatch(
-                pixels, displayTargets, adjusts, baseIndex, threshold, highlight, visualize,
+                pixels, displayTargets, adjusts, baseIndex, threshold, gain, highlight, visualize,
                 autoAlign, roi, paneCount, generation, context);
             if (context.isCancelled())
                 return;
@@ -273,6 +276,7 @@ void CompareWorkspace::refreshAllDiffOverlays()
     }
     std::vector<CellAdjust> adjusts = m_cellAdjusts;
     const uint8_t threshold = m_thresholdValue;
+    const double gain = m_diffGain;
     const bool highlight = m_diffHighlight;
     const bool visualize = m_diffOverlayVisible;
     const bool autoAlign = QSettings().value("autoAlignBeforeDiff", false).toBool();
@@ -280,8 +284,8 @@ void CompareWorkspace::refreshAllDiffOverlays()
     const uint64_t gen = m_diffGen;
     QPointer<CompareWorkspace> guard(this);
 
-    auto handle = startDiffBatch(pixels, displayTargets, adjusts, baseIdx, threshold, highlight,
-                                 visualize, autoAlign, roi, paneCount, gen, guard);
+    auto handle = startDiffBatch(pixels, displayTargets, adjusts, baseIdx, threshold, gain,
+                                 highlight, visualize, autoAlign, roi, paneCount, gen, guard);
     if (!handle)
     {
         // submit() refused the task (pool paused / back-pressured). Leave
@@ -332,6 +336,8 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
                        .arg(psnrStr, ssimStr)
                        .arg(r.baseIdx + 1)
                        .arg(r.targetIdx + 1);
+            if (r.diffGain > 1.0)
+                text += tr("  [增益: %1x]").arg(r.diffGain, 0, 'f', 0);
             if (r.aligned)
                 text += tr("\n对齐: (%1, %2)").arg(r.alignX).arg(r.alignY);
             if (r.hasStats)

@@ -292,6 +292,64 @@ ImageData DifferenceEngine::applyThreshold(const ImageData &gray, uint8_t thresh
     return out;
 }
 
+ImageData DifferenceEngine::amplify(const ImageData &gray, double gain)
+{
+    if (gray.isNull())
+        return ImageData();
+    if (gain <= 1.0)
+    {
+        ImageData copy = makeImageData(gray.width, gray.height, gray.format);
+        if (copy.isNull())
+            return ImageData();
+        for (int y = 0; y < gray.height; ++y)
+        {
+            const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
+            uint8_t *dst = copy.buffer->data() + static_cast<size_t>(y) * copy.stride();
+            std::memcpy(dst, src, static_cast<size_t>(gray.width) * gray.channelsPerPixel());
+        }
+        return copy;
+    }
+
+    ImageData out = makeImageData(gray.width, gray.height, gray.format);
+    if (out.isNull())
+        return ImageData();
+
+    const int cpp = gray.channelsPerPixel();
+    const int ro = channelOffset(gray.format, 0);
+
+    alignas(16) uint8_t lut[256];
+    for (int i = 0; i < 256; ++i)
+    {
+        lut[i] = static_cast<uint8_t>(std::min(255, static_cast<int>(std::round(i * gain))));
+    }
+
+    if (cpp == 1 && ro == 0)
+    {
+        for (int y = 0; y < gray.height; ++y)
+        {
+            const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
+            uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+            for (int x = 0; x < gray.width; ++x)
+                dst[x] = lut[src[x]];
+        }
+    }
+    else
+    {
+        for (int y = 0; y < gray.height; ++y)
+        {
+            const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
+            uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+            for (int x = 0; x < gray.width; ++x)
+            {
+                const uint8_t v = lut[src[x * cpp + ro]];
+                for (int c = 0; c < cpp; ++c)
+                    dst[x * cpp + c] = v;
+            }
+        }
+    }
+    return out;
+}
+
 DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &grayDiff,
                                                            uint8_t threshold)
 {

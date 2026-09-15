@@ -29,9 +29,7 @@ bool BlurAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
             {
                 const uint8_t *line = v.data + static_cast<size_t>(y + oy) * v.stride();
                 const uint8_t *p = line + static_cast<size_t>(x + ox) * cpp;
-                if (cpp >= 3)
-                    return 0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2];
-                return p[0];
+                return pixelLuminance(p, v.format);
             };
             // Laplacian 3x3
             double lap = 0;

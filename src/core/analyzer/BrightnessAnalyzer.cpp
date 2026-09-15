@@ -20,19 +20,10 @@ bool BrightnessAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, i
         for (int x = x0; x < x1; ++x)
         {
             const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-            if (cpp >= 3)
-            {
-                const double l = 0.299 * p[0] + 0.587 * p[1] + 0.114 * p[2];
-                sum += l;
-                mn = std::min(mn, l);
-                mx = std::max(mx, l);
-            }
-            else
-            {
-                sum += p[0];
-                mn = std::min(mn, static_cast<double>(p[0]));
-                mx = std::max(mx, static_cast<double>(p[0]));
-            }
+            const double l = pixelLuminance(p, v.format);
+            sum += l;
+            mn = std::min(mn, l);
+            mx = std::max(mx, l);
         }
     }
     m_result.avgLum = sum / n;

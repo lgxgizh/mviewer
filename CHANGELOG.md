@@ -1,5 +1,29 @@
 # Changelog
  
+## [1.0.40] - 2026-09-16
+
+### Performance & Optimizations
+
+- **Vectorized Diff Amplification Engine**:
+  - Implemented `DifferenceEngine::amplify(const ImageData &gray, double gain)` utilizing a hardware-accelerated 256-entry L1 data-cache-resident lookup table, operating at full memory bandwidth speed.
+  - Enabled realtime gain scaling for difference heatmaps and highlight overlays without re-executing full-image difference passes.
+
+### Features & Polish
+
+- **Compare Workspace Diff Gain Amplification ($1\times - 32\times$)**:
+  - Added Diff Gain selector (`1x`, `2x`, `4x`, `8x`, `16x`, `32x`) to CompareWorkspace diff toolbar, allowing image algorithm engineers to instantly amplify subtle compression artifacts, quantization noise, and sub-5 intensity discrepancies.
+  - Diff Gain control is contextually synchronized, auto-hiding when diff overlay mode is inactive to preserve clean toolbar layout.
+  - Integrated active gain indication (`[增益: Nx]`) directly into CompareWorkspace difference metrics display.
+  - Added full navigation state capture and restoration (`NavState::diffGainIndex`) across image pool windowing and layout changes.
+
+### Bug Fixes & Stability
+
+- **Core Analyzer Format Safety & OOB Elimination**:
+  - Fixed out-of-bounds memory read in `HistogramAnalyzer::analyzeRegion` when processing `PixelFormat::Grayscale8` images, and eliminated channel inversion when analyzing `PixelFormat::BGR24`/`BGRA32` images by delegating region processing to `AnalysisEngine::computeStatsROI`.
+  - Added format-aware pixel decoding helpers (`getPixelRGB`, `pixelLuminance`, `pixelLuminanceAvg`) to `ImageBuffer.h`.
+  - Upgraded `BrightnessAnalyzer`, `ContrastAnalyzer`, `ColorCastAnalyzer`, `ExposureAnalyzer`, `NoiseAnalyzer`, `SharpnessAnalyzer`, `BlurAnalyzer`, `DeadPixelAnalyzer`, `EntropyAnalyzer`, `MTFAnalyzer`, and `ColorCheckerAnalyzer` with format-safe pixel decoders, eliminating out-of-bounds access on Grayscale8 and fixing BGR channel swapping.
+  - Added comprehensive format invariance tests in `test_m3m4m5` covering Grayscale8 safety and BGR24 channel order.
+
 ## [1.0.39] - 2026-09-15
 
 ### Performance & Optimizations

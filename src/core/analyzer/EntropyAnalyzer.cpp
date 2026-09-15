@@ -18,7 +18,8 @@ double EntropyAnalyzer::computeEntropy(const ImageBuffer &v, int x0, int y0, int
         for (int x = x0; x < x1; ++x)
         {
             const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-            ++hist[(p[0] + p[1] + p[2]) / 3];
+            const int lum = std::clamp(static_cast<int>(pixelLuminanceAvg(p, v.format)), 0, 255);
+            ++hist[lum];
         }
     }
     double H = 0.0;

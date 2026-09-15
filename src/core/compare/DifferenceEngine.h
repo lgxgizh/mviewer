@@ -25,6 +25,10 @@ class DifferenceEngine
     // Apply threshold to a grayscale image: pixels below threshold become 0 (black).
     static ImageData applyThreshold(const ImageData &gray, uint8_t threshold);
 
+    // Multiplies each pixel value of a Grayscale8 image by gain (clamped to 255).
+    // Gain <= 1.0 returns an exact copy of gray.
+    static ImageData amplify(const ImageData &gray, double gain);
+
     // M23: quantitative difference statistics computed over a Grayscale8 diff
     // map (as produced by differenceMap with threshold 0).
     struct DiffStats
