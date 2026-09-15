@@ -13,8 +13,7 @@ bool computeRGB(const ImageData &img, const mviewer::domain::Selection &region,
                 RGBMeanAnalyzer::Result &out)
 {
     out = {};
-    const auto measured = mviewer::core::computeROIChannelStats(img, region);
-    if (!measured.valid)
+    if (img.isNull() || region.isEmpty())
         return false;
 
     const long long x0ll = std::clamp<long long>(region.x, 0, img.width);
@@ -30,55 +29,73 @@ bool computeRGB(const ImageData &img, const mviewer::domain::Selection &region,
     if (x1 <= x0 || y1 <= y0)
         return false;
 
-    long double sumR2 = 0.0L;
-    long double sumG2 = 0.0L;
-    long double sumB2 = 0.0L;
+    long double sumR = 0.0L, sumG = 0.0L, sumB = 0.0L;
+    long double sumR2 = 0.0L, sumG2 = 0.0L, sumB2 = 0.0L;
+    int64_t pixelCount = 0;
     const ImageBuffer view = img.view();
+    const int cpp = view.channelsPerPixel();
+    const bool isBGR = (view.format == PixelFormat::BGR24 || view.format == PixelFormat::BGRA32);
+    const bool isGray = (view.format == PixelFormat::Grayscale8);
+
     for (int y = y0; y < y1; ++y)
     {
         const uint8_t *row = view.data + static_cast<size_t>(y) * view.stride();
-        for (int x = x0; x < x1; ++x)
+        if (isGray)
         {
-            const uint8_t *p = row + static_cast<size_t>(x) * view.channelsPerPixel();
-            uint8_t r = 0, g = 0, b = 0;
-            switch (view.format)
+            for (int x = x0; x < x1; ++x)
             {
-            case PixelFormat::BGR24:
-            case PixelFormat::BGRA32:
-                b = p[0];
-                g = p[1];
-                r = p[2];
-                break;
-            case PixelFormat::Grayscale8:
-                r = g = b = p[0];
-                break;
-            case PixelFormat::RGB24:
-            case PixelFormat::RGBA32:
-            default:
-                r = p[0];
-                g = p[1];
-                b = p[2];
-                break;
+                const uint8_t v = row[x];
+                const auto vL = static_cast<long double>(v);
+                sumR += vL;
+                sumR2 += vL * v;
+                ++pixelCount;
             }
-            sumR2 += static_cast<long double>(r) * r;
-            sumG2 += static_cast<long double>(g) * g;
-            sumB2 += static_cast<long double>(b) * b;
+        }
+        else
+        {
+            for (int x = x0; x < x1; ++x)
+            {
+                const uint8_t *p = row + static_cast<size_t>(x) * cpp;
+                const uint8_t r = isBGR ? p[2] : p[0];
+                const uint8_t g = p[1];
+                const uint8_t b = isBGR ? p[0] : p[2];
+                sumR += r;
+                sumG += g;
+                sumB += b;
+                sumR2 += static_cast<long double>(r) * r;
+                sumG2 += static_cast<long double>(g) * g;
+                sumB2 += static_cast<long double>(b) * b;
+                ++pixelCount;
+            }
         }
     }
 
-    out.rMean = measured.rMean;
-    out.gMean = measured.gMean;
-    out.bMean = measured.bMean;
+    if (pixelCount <= 0)
+        return false;
+
+    if (isGray)
+    {
+        sumG = sumB = sumR;
+        sumG2 = sumB2 = sumR2;
+    }
+
+    const long double count = static_cast<long double>(pixelCount);
+    out.rMean = static_cast<double>(sumR / count);
+    out.gMean = static_cast<double>(sumG / count);
+    out.bMean = static_cast<double>(sumB / count);
     out.rStd = std::sqrt(
-        std::max(0.0, static_cast<double>(sumR2 / measured.pixelCount) - out.rMean * out.rMean));
+        std::max(0.0, static_cast<double>(sumR2 / count) - out.rMean * out.rMean));
     out.gStd = std::sqrt(
-        std::max(0.0, static_cast<double>(sumG2 / measured.pixelCount) - out.gMean * out.gMean));
+        std::max(0.0, static_cast<double>(sumG2 / count) - out.gMean * out.gMean));
     out.bStd = std::sqrt(
-        std::max(0.0, static_cast<double>(sumB2 / measured.pixelCount) - out.bMean * out.bMean));
-    out.rOverG = measured.rOverG;
-    out.bOverG = measured.bOverG;
-    out.pixelCount = measured.pixelCount;
-    out.ratiosValid = measured.ratiosValid;
+        std::max(0.0, static_cast<double>(sumB2 / count) - out.bMean * out.bMean));
+    if (sumG != 0.0L)
+    {
+        out.rOverG = static_cast<double>(sumR / sumG);
+        out.bOverG = static_cast<double>(sumB / sumG);
+        out.ratiosValid = true;
+    }
+    out.pixelCount = pixelCount;
     out.ok = true;
     return true;
 }

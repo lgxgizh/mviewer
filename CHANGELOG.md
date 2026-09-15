@@ -1,5 +1,33 @@
 # Changelog
  
+## [1.0.42] - 2026-09-16
+
+### Performance & Optimizations
+
+- **Single-Pass Integer Vectorization across Analysis Pipeline**:
+  - **Single-Pass SSIM 8×8 Covariance Accumulation**:
+    - Replaced the two-pass mean + covariance algorithm in `AnalysisEngine::ssim` with a single integer accumulation pass (`sumA`, `sumB`, `sumAA`, `sumBB`, `sumAB`), halving memory bandwidth and inner-loop iterations while enabling integer SIMD auto-vectorization.
+  - **Integer PSNR Sum-of-Squares Accumulator**:
+    - Replaced double accumulators with 64-bit integer sum-of-squares (`int64_t sumSq`) in `AnalysisEngine::psnr`, hoisting `isGray` branching outside of the nested scanline loop to eliminate millions of per-pixel branches.
+  - **Integer Noise Variance & Laplacian Accumulation**:
+    - Refactored `AnalysisEngine::noiseEstimate`, `NoiseAnalyzer`, and `BlurAnalyzer` to use row-pointer caching and pure 64-bit integer Laplacian arithmetic, eliminating per-pixel lambda invocations and vertical stride recalculations.
+  - **Single-Pass ROI Traversal in RGBMeanAnalyzer**:
+    - Eliminated redundant `computeROIChannelStats` scanning; now computes channel sums and sums-of-squares in a single pass with hoisted format checks.
+  - **Format Hoisting & Integer Acceleration across Core Analyzers**:
+    - Vectorized `BrightnessAnalyzer`, `ContrastAnalyzer`, `ColorCastAnalyzer`, `ExposureAnalyzer`, `EntropyAnalyzer`, and `DeadPixelAnalyzer`.
+    - Eliminated per-pixel `pixelLuminance` format branches, utilized division-free reciprocal fixed-point multiplication `(sum * 21846) >> 16` for entropy luminance binning, and accelerated median extraction with `std::nth_element`.
+  - **AnalysisEngine::computeStatsROI Grayscale Specialization**:
+    - Specialized Grayscale8 histogram generation to single-channel increment with post-loop bin copying, and removed redundant per-pixel `std::clamp` operations on color channels, eliminating over 80 million branches on 4K analysis passes.
+
+### Bug Fixes & Stability
+
+- **Grayscale8 PSNR Numeric Correction**:
+  - Fixed MSE calculation bug in `AnalysisEngine::psnr`: for single-channel `Grayscale8` buffers, MSE was previously divided by `n * 3` instead of `n`, artificially underestimating MSE by 3x and inflating PSNR by ~4.77 dB. Corrected to `isGray ? n : (n * 3)`.
+- **Subregion Copy 64-bit Index Overflow Prevention**:
+  - Updated subregion copy buffer index arithmetic in `PSNRAnalyzer::analyzeRegion` and `SSIMAnalyzer::analyzeRegion` to use 64-bit `size_t` types, and corrected a height variable name typo (`rw2` -> `rh`).
+- **Complexity Guardrail Compliance**:
+  - Refactored `MainWindow::startReportExport` and `AnalysisEngine::computeStatsROI` with modular worker helpers, ensuring all functions remain strictly under the 120-line ceiling and 0 hard fails in `complexity_gate.ps1 -Strict`.
+
 ## [1.0.41] - 2026-09-16
 
 ### Performance & Optimizations

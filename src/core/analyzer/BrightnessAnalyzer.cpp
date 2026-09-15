@@ -13,17 +13,45 @@ bool BrightnessAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, i
         return false;
 
     double sum = 0;
-    double mn = 255, mx = 0;
-    for (int y = y0; y < y1; ++y)
+    double mn = 255.0, mx = 0.0;
+    const bool isBGR = (v.format == PixelFormat::BGR24 || v.format == PixelFormat::BGRA32);
+    const bool isGray = (v.format == PixelFormat::Grayscale8);
+
+    if (isGray)
     {
-        const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
-        for (int x = x0; x < x1; ++x)
+        int64_t iSum = 0;
+        uint8_t iMn = 255, iMx = 0;
+        for (int y = y0; y < y1; ++y)
         {
-            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-            const double l = pixelLuminance(p, v.format);
-            sum += l;
-            mn = std::min(mn, l);
-            mx = std::max(mx, l);
+            const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = x0; x < x1; ++x)
+            {
+                const uint8_t val = line[x];
+                iSum += val;
+                iMn = std::min(iMn, val);
+                iMx = std::max(iMx, val);
+            }
+        }
+        sum = static_cast<double>(iSum);
+        mn = static_cast<double>(iMn);
+        mx = static_cast<double>(iMx);
+    }
+    else
+    {
+        for (int y = y0; y < y1; ++y)
+        {
+            const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = x0; x < x1; ++x)
+            {
+                const uint8_t *p = line + static_cast<size_t>(x) * cpp;
+                const double r = isBGR ? p[2] : p[0];
+                const double g = p[1];
+                const double b = isBGR ? p[0] : p[2];
+                const double l = 0.299 * r + 0.587 * g + 0.114 * b;
+                sum += l;
+                mn = std::min(mn, l);
+                mx = std::max(mx, l);
+            }
         }
     }
     m_result.avgLum = sum / n;

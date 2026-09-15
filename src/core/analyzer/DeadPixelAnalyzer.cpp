@@ -26,31 +26,62 @@ bool DeadPixelAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, in
     m_count = 0;
     m_maxDev = 0;
     const int kThresh = 40; // luminance deviation (0..255) to flag a dead pixel
-    std::array<int, 8> nx{-1, 0, 1, -1, 1, -1, 0, 1};
-    std::array<int, 8> ny{-1, -1, -1, 0, 0, 1, 1, 1};
-
-    for (int y = y0; y < y1; ++y)
+    const bool isGray = (v.format == PixelFormat::Grayscale8);
+    if (isGray)
     {
-        for (int x = x0; x < x1; ++x)
+        for (int y = y0; y < y1; ++y)
         {
-            const uint8_t *p =
-                v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
-            const int lum = static_cast<int>(pixelLuminanceAvg(p, v.format));
-            // Median of the 8 neighbors.
-            int neigh[8];
-            for (int k = 0; k < 8; ++k)
+            const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
+            const uint8_t *line1 = v.data + static_cast<size_t>(y) * v.stride();
+            const uint8_t *line2 = v.data + static_cast<size_t>(y + 1) * v.stride();
+            for (int x = x0; x < x1; ++x)
             {
-                const uint8_t *q = v.data + static_cast<size_t>(y + ny[k]) * v.stride() +
-                                   static_cast<size_t>(x + nx[k]) * cpp;
-                neigh[k] = static_cast<int>(pixelLuminanceAvg(q, v.format));
+                const int lum = line1[x];
+                int neigh[8] = {
+                    line0[x - 1], line0[x], line0[x + 1],
+                    line1[x - 1],           line1[x + 1],
+                    line2[x - 1], line2[x], line2[x + 1]
+                };
+                std::nth_element(neigh, neigh + 4, neigh + 8);
+                const int med = neigh[4];
+                const int dev = std::abs(lum - med);
+                if (dev > kThresh)
+                {
+                    ++m_count;
+                    m_maxDev = std::max(m_maxDev, dev);
+                }
             }
-            std::sort(neigh, neigh + 8);
-            const int med = neigh[4];
-            const int dev = std::abs(lum - med);
-            if (dev > kThresh)
+        }
+    }
+    else
+    {
+        auto getAvg = [cpp](const uint8_t *line, int x) -> int
+        {
+            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
+            return (static_cast<int>(p[0]) + p[1] + p[2]) / 3;
+        };
+
+        for (int y = y0; y < y1; ++y)
+        {
+            const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
+            const uint8_t *line1 = v.data + static_cast<size_t>(y) * v.stride();
+            const uint8_t *line2 = v.data + static_cast<size_t>(y + 1) * v.stride();
+            for (int x = x0; x < x1; ++x)
             {
-                ++m_count;
-                m_maxDev = std::max(m_maxDev, dev);
+                const int lum = getAvg(line1, x);
+                int neigh[8] = {
+                    getAvg(line0, x - 1), getAvg(line0, x), getAvg(line0, x + 1),
+                    getAvg(line1, x - 1),                   getAvg(line1, x + 1),
+                    getAvg(line2, x - 1), getAvg(line2, x), getAvg(line2, x + 1)
+                };
+                std::nth_element(neigh, neigh + 4, neigh + 8);
+                const int med = neigh[4];
+                const int dev = std::abs(lum - med);
+                if (dev > kThresh)
+                {
+                    ++m_count;
+                    m_maxDev = std::max(m_maxDev, dev);
+                }
             }
         }
     }

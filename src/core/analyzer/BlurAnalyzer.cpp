@@ -17,28 +17,49 @@ bool BlurAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
     if (n <= 0)
         return false;
 
-    double sum = 0, sum2 = 0;
-    for (int y = y0 + 1; y < y1 - 1; ++y)
+    double sum2 = 0;
+    const bool isGray = (v.format == PixelFormat::Grayscale8);
+    const bool isBGR = (v.format == PixelFormat::BGR24 || v.format == PixelFormat::BGRA32);
+
+    if (isGray)
     {
-        const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
-        const uint8_t *line1 = v.data + static_cast<size_t>(y) * v.stride();
-        const uint8_t *line2 = v.data + static_cast<size_t>(y + 1) * v.stride();
-        for (int x = x0 + 1; x < x1 - 1; ++x)
+        int64_t iSum2 = 0;
+        for (int y = y0 + 1; y < y1 - 1; ++y)
         {
-            auto lum = [&](int ox, int oy) -> double
+            const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
+            const uint8_t *line1 = v.data + static_cast<size_t>(y) * v.stride();
+            const uint8_t *line2 = v.data + static_cast<size_t>(y + 1) * v.stride();
+            for (int x = x0 + 1; x < x1 - 1; ++x)
             {
-                const uint8_t *line = v.data + static_cast<size_t>(y + oy) * v.stride();
-                const uint8_t *p = line + static_cast<size_t>(x + ox) * cpp;
-                return pixelLuminance(p, v.format);
-            };
-            // Laplacian 3x3
-            double lap = 0;
-            lap += 1.0 * lum(0, -1);
-            lap += 1.0 * lum(-1, 0);
-            lap += -4.0 * lum(0, 0);
-            lap += 1.0 * lum(1, 0);
-            lap += 1.0 * lum(0, 1);
-            sum2 += lap * lap;
+                const int lap = static_cast<int>(line0[x]) + line1[x - 1] + line1[x + 1] +
+                                line2[x] - 4 * static_cast<int>(line1[x]);
+                iSum2 += static_cast<int64_t>(lap) * lap;
+            }
+        }
+        sum2 = static_cast<double>(iSum2);
+    }
+    else
+    {
+        auto getLum = [cpp, isBGR](const uint8_t *line, int x) -> double
+        {
+            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
+            const double r = isBGR ? p[2] : p[0];
+            const double g = p[1];
+            const double b = isBGR ? p[0] : p[2];
+            return 0.299 * r + 0.587 * g + 0.114 * b;
+        };
+
+        for (int y = y0 + 1; y < y1 - 1; ++y)
+        {
+            const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
+            const uint8_t *line1 = v.data + static_cast<size_t>(y) * v.stride();
+            const uint8_t *line2 = v.data + static_cast<size_t>(y + 1) * v.stride();
+            for (int x = x0 + 1; x < x1 - 1; ++x)
+            {
+                const double lap = getLum(line0, x) + getLum(line1, x - 1) + getLum(line1, x + 1) +
+                                   getLum(line2, x) - 4.0 * getLum(line1, x);
+                sum2 += lap * lap;
+            }
         }
     }
     m_result.variance = sum2 / n;

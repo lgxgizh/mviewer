@@ -12,14 +12,30 @@ double EntropyAnalyzer::computeEntropy(const ImageBuffer &v, int x0, int y0, int
     const int64_t n = static_cast<int64_t>(x1 - x0) * (y1 - y0);
     if (n == 0)
         return 0.0;
-    for (int y = y0; y < y1; ++y)
+    const bool isGray = (v.format == PixelFormat::Grayscale8);
+    if (isGray)
     {
-        const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
-        for (int x = x0; x < x1; ++x)
+        for (int y = y0; y < y1; ++y)
         {
-            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-            const int lum = std::clamp(static_cast<int>(pixelLuminanceAvg(p, v.format)), 0, 255);
-            ++hist[lum];
+            const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = x0; x < x1; ++x)
+            {
+                ++hist[line[x]];
+            }
+        }
+    }
+    else
+    {
+        for (int y = y0; y < y1; ++y)
+        {
+            const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = x0; x < x1; ++x)
+            {
+                const uint8_t *p = line + static_cast<size_t>(x) * cpp;
+                const int sum = static_cast<int>(p[0]) + p[1] + p[2];
+                const int lum = (sum * 21846) >> 16;
+                ++hist[lum];
+            }
         }
     }
     double H = 0.0;

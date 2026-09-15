@@ -32,14 +32,16 @@ bool SSIMAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain:
     const int cppT = vT.channelsPerPixel();
     for (int y = 0; y < rh; ++y)
     {
-        std::memcpy(subR.buffer->data() + static_cast<size_t>(y) * rw * cppR,
+        std::memcpy(subR.buffer->data() +
+                        static_cast<size_t>(y) * static_cast<size_t>(rw) * static_cast<size_t>(cppR),
                     vR.data + static_cast<size_t>(y0 + y) * vR.stride() +
-                        static_cast<size_t>(x0) * cppR,
-                    static_cast<size_t>(rw) * cppR);
-        std::memcpy(subT.buffer->data() + static_cast<size_t>(y) * rw * cppT,
+                        static_cast<size_t>(x0) * static_cast<size_t>(cppR),
+                    static_cast<size_t>(rw) * static_cast<size_t>(cppR));
+        std::memcpy(subT.buffer->data() +
+                        static_cast<size_t>(y) * static_cast<size_t>(rw) * static_cast<size_t>(cppT),
                     vT.data + static_cast<size_t>(y0 + y) * vT.stride() +
-                        static_cast<size_t>(x0) * cppT,
-                    static_cast<size_t>(rw) * cppT);
+                        static_cast<size_t>(x0) * static_cast<size_t>(cppT),
+                    static_cast<size_t>(rw) * static_cast<size_t>(cppT));
     }
     m_ssim = AnalysisEngine::ssim(subR, subT);
     return true;

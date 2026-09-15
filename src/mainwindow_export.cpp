@@ -65,6 +65,73 @@ void encodeReportImages(ReportExportState &state, const TaskScheduler::TaskConte
     ctx.reportProgress(80);
 }
 
+static void executeReportExportTask(ReportExportState &state, const TaskScheduler::TaskContext &task)
+{
+    if (task.isCancelled())
+    {
+        state.cancelled = true;
+        return;
+    }
+
+    if (state.compareInput.has_value())
+    {
+        mviewer::core::ReportBuildCallbacks callbacks;
+        callbacks.cancelled = [&task]() { return task.isCancelled(); };
+        callbacks.progress = [&task](int value)
+        {
+            task.reportProgress(5 + value * 50 / 100);
+        };
+        state.context.compareBundle =
+            mviewer::core::buildCompareReportBundle(*state.compareInput, callbacks);
+        if (task.isCancelled())
+        {
+            state.cancelled = true;
+            return;
+        }
+        state.context.hasCompareBundle = true;
+        state.compareInput.reset();
+    }
+
+    task.reportProgress(55);
+    encodeReportImages(state, task);
+    if (state.cancelled || task.isCancelled())
+    {
+        state.cancelled = true;
+        return;
+    }
+    if (state.suffix == "json")
+        state.body = mviewer::core::buildReportJson(state.context);
+    else if (state.suffix == "csv")
+        state.body = mviewer::core::buildReportCsv(state.context);
+    else if (state.suffix == "md")
+        state.body = mviewer::core::buildReportMarkdown(state.context);
+    else
+        state.body = mviewer::core::buildReportHtml(state.context);
+    task.reportProgress(85);
+    if (state.body.empty())
+    {
+        state.error = "报告内容为空。";
+        return;
+    }
+    if (task.isCancelled())
+    {
+        state.cancelled = true;
+        return;
+    }
+    task.reportProgress(95);
+    if (!mviewer::exportjob::writeTextAtomically(
+            state.output, state.body, [&task]() { return task.isCancelled(); }))
+    {
+        if (task.isCancelled())
+            state.cancelled = true;
+        else
+            state.error = "无法原子写入目标文件。";
+        return;
+    }
+    state.success = true;
+    task.reportProgress(100);
+}
+
 } // namespace
 
 void MainWindow::cancelReportExport()
@@ -189,71 +256,7 @@ void MainWindow::startReportExport(
         TaskScheduler::Priority::Background,
         [state](const TaskScheduler::TaskContext &task)
         {
-            if (task.isCancelled())
-            {
-                state->cancelled = true;
-                return;
-            }
-
-            if (state->compareInput.has_value())
-            {
-                mviewer::core::ReportBuildCallbacks callbacks;
-                callbacks.cancelled = [&task]() { return task.isCancelled(); };
-                callbacks.progress = [&task](int value)
-                {
-                    // The source/analysis phase occupies the first 55% of
-                    // the report job; encoding/rendering use the remainder.
-                    task.reportProgress(5 + value * 50 / 100);
-                };
-                state->context.compareBundle = mviewer::core::buildCompareReportBundle(
-                    *state->compareInput, callbacks);
-                if (task.isCancelled())
-                {
-                    state->cancelled = true;
-                    return;
-                }
-                state->context.hasCompareBundle = true;
-                state->compareInput.reset();
-            }
-
-            task.reportProgress(55);
-            encodeReportImages(*state, task);
-            if (state->cancelled || task.isCancelled())
-            {
-                state->cancelled = true;
-                return;
-            }
-            if (state->suffix == "json")
-                state->body = mviewer::core::buildReportJson(state->context);
-            else if (state->suffix == "csv")
-                state->body = mviewer::core::buildReportCsv(state->context);
-            else if (state->suffix == "md")
-                state->body = mviewer::core::buildReportMarkdown(state->context);
-            else
-                state->body = mviewer::core::buildReportHtml(state->context);
-            task.reportProgress(85);
-            if (state->body.empty())
-            {
-                state->error = "报告内容为空。";
-                return;
-            }
-            if (task.isCancelled())
-            {
-                state->cancelled = true;
-                return;
-            }
-            task.reportProgress(95);
-            if (!mviewer::exportjob::writeTextAtomically(
-                    state->output, state->body, [&task]() { return task.isCancelled(); }))
-            {
-                if (task.isCancelled())
-                    state->cancelled = true;
-                else
-                    state->error = "无法原子写入目标文件。";
-                return;
-            }
-            state->success = true;
-            task.reportProgress(100);
+            executeReportExportTask(*state, task);
         },
         {}, std::chrono::steady_clock::time_point::max(),
         [guard, state, generation, out]()

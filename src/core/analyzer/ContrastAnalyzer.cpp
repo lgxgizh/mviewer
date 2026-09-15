@@ -14,19 +14,45 @@ bool ContrastAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int
         return false;
 
     double sum = 0, sum2 = 0;
-    for (int y = y0; y < y1; ++y)
+    const bool isBGR = (v.format == PixelFormat::BGR24 || v.format == PixelFormat::BGRA32);
+    const bool isGray = (v.format == PixelFormat::Grayscale8);
+
+    if (isGray)
     {
-        const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
-        for (int x = x0; x < x1; ++x)
+        int64_t iSum = 0;
+        int64_t iSum2 = 0;
+        for (int y = y0; y < y1; ++y)
         {
-            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-            const double l = pixelLuminance(p, v.format);
-            sum += l;
-            sum2 += l * l;
+            const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = x0; x < x1; ++x)
+            {
+                const uint8_t val = line[x];
+                iSum += val;
+                iSum2 += static_cast<int64_t>(val) * val;
+            }
+        }
+        sum = static_cast<double>(iSum);
+        sum2 = static_cast<double>(iSum2);
+    }
+    else
+    {
+        for (int y = y0; y < y1; ++y)
+        {
+            const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = x0; x < x1; ++x)
+            {
+                const uint8_t *p = line + static_cast<size_t>(x) * cpp;
+                const double r = isBGR ? p[2] : p[0];
+                const double g = p[1];
+                const double b = isBGR ? p[0] : p[2];
+                const double l = 0.299 * r + 0.587 * g + 0.114 * b;
+                sum += l;
+                sum2 += l * l;
+            }
         }
     }
     m_result.mean = sum / n;
-    m_result.rms = std::sqrt(sum2 / n - m_result.mean * m_result.mean);
+    m_result.rms = std::sqrt(std::max(0.0, sum2 / n - m_result.mean * m_result.mean));
     m_result.ok = true;
     return true;
 }

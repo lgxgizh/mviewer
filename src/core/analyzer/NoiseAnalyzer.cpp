@@ -22,25 +22,55 @@ double NoiseAnalyzer::estimateLaplacian(const ImageBuffer &v, int x0, int y0, in
         return 0.0;
     const int64_t n = static_cast<int64_t>(x1 - x0) * (y1 - y0);
     double sum = 0, sum2 = 0;
-    for (int y = y0; y < y1; ++y)
+    const bool isGray = (v.format == PixelFormat::Grayscale8);
+
+    if (isGray)
     {
-        for (int x = x0; x < x1; ++x)
+        int64_t iSum = 0;
+        int64_t iSum2 = 0;
+        for (int y = y0; y < y1; ++y)
         {
-            auto lum = [&](int xx, int yy)
+            const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
+            const uint8_t *line1 = v.data + static_cast<size_t>(y) * v.stride();
+            const uint8_t *line2 = v.data + static_cast<size_t>(y + 1) * v.stride();
+            for (int x = x0; x < x1; ++x)
             {
-                const uint8_t *p =
-                    v.data + static_cast<size_t>(yy) * v.stride() + static_cast<size_t>(xx) * cpp;
-                return pixelLuminanceAvg(p, v.format);
-            };
-            const double c = lum(x, y) * 4;
-            const double n4 = lum(x, y - 1) + lum(x, y + 1) + lum(x - 1, y) + lum(x + 1, y);
-            const double lap = c - n4;
-            sum += lap;
-            sum2 += lap * lap;
+                const int c = static_cast<int>(line1[x]) * 4;
+                const int n4 = static_cast<int>(line0[x]) + line2[x] + line1[x - 1] + line1[x + 1];
+                const int lap = c - n4;
+                iSum += lap;
+                iSum2 += static_cast<int64_t>(lap) * lap;
+            }
+        }
+        sum = static_cast<double>(iSum);
+        sum2 = static_cast<double>(iSum2);
+    }
+    else
+    {
+        auto getAvg = [cpp](const uint8_t *line, int x) -> double
+        {
+            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
+            return (p[0] + p[1] + p[2]) / 3.0;
+        };
+
+        for (int y = y0; y < y1; ++y)
+        {
+            const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
+            const uint8_t *line1 = v.data + static_cast<size_t>(y) * v.stride();
+            const uint8_t *line2 = v.data + static_cast<size_t>(y + 1) * v.stride();
+            for (int x = x0; x < x1; ++x)
+            {
+                const double c = getAvg(line1, x) * 4.0;
+                const double n4 = getAvg(line0, x) + getAvg(line2, x) + getAvg(line1, x - 1) +
+                                  getAvg(line1, x + 1);
+                const double lap = c - n4;
+                sum += lap;
+                sum2 += lap * lap;
+            }
         }
     }
     const double mean = sum / n;
-    return sum2 / n - mean * mean;
+    return std::max(0.0, sum2 / n - mean * mean);
 }
 
 bool NoiseAnalyzer::analyze(const ImageFrame &frame)

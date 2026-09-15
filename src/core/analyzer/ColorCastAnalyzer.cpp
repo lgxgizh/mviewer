@@ -15,23 +15,41 @@ bool ColorCastAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, in
     if (n <= 0)
         return false;
 
-    double sumR = 0, sumG = 0, sumB = 0;
-    for (int y = y0; y < y1; ++y)
+    const bool isBGR = (v.format == PixelFormat::BGR24 || v.format == PixelFormat::BGRA32);
+    int64_t sumR = 0, sumG = 0, sumB = 0;
+
+    if (isBGR)
     {
-        const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
-        for (int x = x0; x < x1; ++x)
+        for (int y = y0; y < y1; ++y)
         {
-            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-            uint8_t r = 0, g = 0, b = 0;
-            getPixelRGB(p, v.format, r, g, b);
-            sumR += r;
-            sumG += g;
-            sumB += b;
+            const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = x0; x < x1; ++x)
+            {
+                const uint8_t *p = line + static_cast<size_t>(x) * cpp;
+                sumB += p[0];
+                sumG += p[1];
+                sumR += p[2];
+            }
         }
     }
-    const double meanR = sumR / n;
-    const double meanG = sumG / n;
-    const double meanB = sumB / n;
+    else
+    {
+        for (int y = y0; y < y1; ++y)
+        {
+            const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = x0; x < x1; ++x)
+            {
+                const uint8_t *p = line + static_cast<size_t>(x) * cpp;
+                sumR += p[0];
+                sumG += p[1];
+                sumB += p[2];
+            }
+        }
+    }
+
+    const double meanR = static_cast<double>(sumR) / n;
+    const double meanG = static_cast<double>(sumG) / n;
+    const double meanB = static_cast<double>(sumB) / n;
     const double gray = (meanR + meanG + meanB) / 3.0;
 
     m_result.castR = meanR - gray;

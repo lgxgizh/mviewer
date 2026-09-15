@@ -20,22 +20,48 @@ double SharpnessAnalyzer::computeSharpness(const ImageBuffer &v, int x0, int y0,
         return 0.0;
     const int64_t n = static_cast<int64_t>(x1 - x0) * (y1 - y0);
     double sumG = 0.0;
-    for (int y = y0; y < y1; ++y)
+    const bool isGray = (v.format == PixelFormat::Grayscale8);
+
+    if (isGray)
     {
-        for (int x = x0; x < x1; ++x)
+        for (int y = y0; y < y1; ++y)
         {
-            auto lum = [&](int xx, int yy)
+            const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
+            const uint8_t *line1 = v.data + static_cast<size_t>(y) * v.stride();
+            const uint8_t *line2 = v.data + static_cast<size_t>(y + 1) * v.stride();
+            for (int x = x0; x < x1; ++x)
             {
-                const uint8_t *p =
-                    v.data + static_cast<size_t>(yy) * v.stride() + static_cast<size_t>(xx) * cpp;
-                return pixelLuminanceAvg(p, v.format);
-            };
-            // Sobel: Gx = (r+2l+r) - (r+2l+r) shifted cols
-            const double gx = (lum(x + 1, y - 1) + 2 * lum(x + 1, y) + lum(x + 1, y + 1)) -
-                              (lum(x - 1, y - 1) + 2 * lum(x - 1, y) + lum(x - 1, y + 1));
-            const double gy = (lum(x - 1, y + 1) + 2 * lum(x, y + 1) + lum(x + 1, y + 1)) -
-                              (lum(x - 1, y - 1) + 2 * lum(x, y - 1) + lum(x + 1, y - 1));
-            sumG += std::sqrt(gx * gx + gy * gy);
+                const int gx = (static_cast<int>(line0[x + 1]) + 2 * line1[x + 1] + line2[x + 1]) -
+                               (static_cast<int>(line0[x - 1]) + 2 * line1[x - 1] + line2[x - 1]);
+                const int gy = (static_cast<int>(line2[x - 1]) + 2 * line2[x] + line2[x + 1]) -
+                               (static_cast<int>(line0[x - 1]) + 2 * line0[x] + line0[x + 1]);
+                sumG += std::sqrt(static_cast<double>(gx * gx + gy * gy));
+            }
+        }
+    }
+    else
+    {
+        auto getAvg = [cpp](const uint8_t *line, int x) -> double
+        {
+            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
+            return (p[0] + p[1] + p[2]) / 3.0;
+        };
+
+        for (int y = y0; y < y1; ++y)
+        {
+            const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
+            const uint8_t *line1 = v.data + static_cast<size_t>(y) * v.stride();
+            const uint8_t *line2 = v.data + static_cast<size_t>(y + 1) * v.stride();
+            for (int x = x0; x < x1; ++x)
+            {
+                const double gx =
+                    (getAvg(line0, x + 1) + 2.0 * getAvg(line1, x + 1) + getAvg(line2, x + 1)) -
+                    (getAvg(line0, x - 1) + 2.0 * getAvg(line1, x - 1) + getAvg(line2, x - 1));
+                const double gy =
+                    (getAvg(line2, x - 1) + 2.0 * getAvg(line2, x) + getAvg(line2, x + 1)) -
+                    (getAvg(line0, x - 1) + 2.0 * getAvg(line0, x) + getAvg(line0, x + 1));
+                sumG += std::sqrt(gx * gx + gy * gy);
+            }
         }
     }
     return sumG / n;
