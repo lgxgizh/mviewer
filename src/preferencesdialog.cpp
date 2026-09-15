@@ -75,6 +75,10 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
     m_confirmDelete->setChecked(s.value("confirmDelete", true).toBool());
     gl->addRow(m_confirmDelete);
 
+    m_gpuAcceleration = new QCheckBox(tr("启用 GPU 硬件加速渲染"));
+    m_gpuAcceleration->setChecked(s.value("gpuAcceleration", true).toBool());
+    gl->addRow(m_gpuAcceleration);
+
     // --- 对比 ---
     QWidget *compare = new QWidget;
     auto *cl = new QFormLayout(compare);
@@ -132,6 +136,7 @@ void PreferencesDialog::accept()
     s.setValue("thumbSize", m_thumbSize->value());
     s.setValue("slideshowInterval", m_slideshowInterval->value());
     s.setValue("confirmDelete", m_confirmDelete->isChecked());
+    s.setValue("gpuAcceleration", m_gpuAcceleration->isChecked());
     s.setValue("autoAlignBeforeDiff", m_autoAlign->isChecked());
     s.setValue("defaultAnalysisOverlay", m_analysisOverlay->currentData().toInt());
     s.setValue("zebraThreshold", m_zebraThreshold->value());

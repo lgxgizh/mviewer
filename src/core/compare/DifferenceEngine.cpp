@@ -1,4 +1,5 @@
 #include "core/compare/DifferenceEngine.h"
+#include "core/simd/CpuFeatures.h"
 
 #include <algorithm>
 #include <cstring>
@@ -50,12 +51,85 @@ ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b
     if (out.isNull())
         return ImageData();
 
+    const bool useAvx2 = mviewer::core::CpuFeatures::hasAvx2();
     for (int y = 0; y < h; ++y)
     {
         const uint8_t *la = a.buffer->data() + static_cast<size_t>(y) * a.stride();
         const uint8_t *lb = b.buffer->data() + static_cast<size_t>(y) * b.stride();
         uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
-        for (int x = 0; x < w; ++x)
+        int x = 0;
+
+        if (useAvx2)
+        {
+            if (a.format == PixelFormat::Grayscale8 && b.format == PixelFormat::Grayscale8)
+            {
+                const __m256i vthresh = _mm256_set1_epi8(static_cast<char>(threshold));
+                const __m256i vzero = _mm256_setzero_si256();
+                for (; x + 32 <= w; x += 32)
+                {
+                    const __m256i va =
+                        _mm256_loadu_si256(reinterpret_cast<const __m256i *>(la + x));
+                    const __m256i vb =
+                        _mm256_loadu_si256(reinterpret_cast<const __m256i *>(lb + x));
+                    const __m256i sub1 = _mm256_subs_epu8(va, vb);
+                    const __m256i sub2 = _mm256_subs_epu8(vb, va);
+                    const __m256i diff = _mm256_or_si256(sub1, sub2);
+                    const __m256i under = _mm256_subs_epu8(vthresh, diff);
+                    const __m256i mask = _mm256_cmpeq_epi8(under, vzero);
+                    const __m256i result = _mm256_and_si256(diff, mask);
+                    _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + x), result);
+                }
+            }
+            else if (a.format == b.format &&
+                     (a.format == PixelFormat::RGBA32 || a.format == PixelFormat::BGRA32))
+            {
+                for (; x + 8 <= w; x += 8)
+                {
+                    const __m256i va =
+                        _mm256_loadu_si256(reinterpret_cast<const __m256i *>(la + x * 4));
+                    const __m256i vb =
+                        _mm256_loadu_si256(reinterpret_cast<const __m256i *>(lb + x * 4));
+                    const __m256i sub1 = _mm256_subs_epu8(va, vb);
+                    const __m256i sub2 = _mm256_subs_epu8(vb, va);
+                    const __m256i diff = _mm256_or_si256(sub1, sub2);
+
+                    const __m128i dlo = _mm256_castsi256_si128(diff);
+                    const __m128i dhi = _mm256_extracti128_si256(diff, 1);
+
+                    auto calc4 = [&](__m128i d) -> uint32_t
+                    {
+                        const __m128i p01 = _mm_cvtepu8_epi16(d);
+                        const __m128i p23 = _mm_cvtepu8_epi16(_mm_srli_si128(d, 8));
+                        const int sum0 = _mm_extract_epi16(p01, 0) + _mm_extract_epi16(p01, 1) +
+                                         _mm_extract_epi16(p01, 2);
+                        const int sum1 = _mm_extract_epi16(p01, 4) + _mm_extract_epi16(p01, 5) +
+                                         _mm_extract_epi16(p01, 6);
+                        const int sum2 = _mm_extract_epi16(p23, 0) + _mm_extract_epi16(p23, 1) +
+                                         _mm_extract_epi16(p23, 2);
+                        const int sum3 = _mm_extract_epi16(p23, 4) + _mm_extract_epi16(p23, 5) +
+                                         _mm_extract_epi16(p23, 6);
+                        uint8_t d0 = static_cast<uint8_t>(sum0 / 3);
+                        uint8_t d1 = static_cast<uint8_t>(sum1 / 3);
+                        uint8_t d2 = static_cast<uint8_t>(sum2 / 3);
+                        uint8_t d3 = static_cast<uint8_t>(sum3 / 3);
+                        d0 = (d0 >= threshold) ? d0 : 0;
+                        d1 = (d1 >= threshold) ? d1 : 0;
+                        d2 = (d2 >= threshold) ? d2 : 0;
+                        d3 = (d3 >= threshold) ? d3 : 0;
+                        return static_cast<uint32_t>(d0) | (static_cast<uint32_t>(d1) << 8) |
+                               (static_cast<uint32_t>(d2) << 16) |
+                               (static_cast<uint32_t>(d3) << 24);
+                    };
+
+                    const uint32_t r0 = calc4(dlo);
+                    const uint32_t r1 = calc4(dhi);
+                    std::memcpy(dst + x, &r0, 4);
+                    std::memcpy(dst + x + 4, &r1, 4);
+                }
+            }
+        }
+
+        for (; x < w; ++x)
         {
             const int dr = std::abs(static_cast<int>(la[x * cppA + roA0]) -
                                     static_cast<int>(lb[x * cppB + roB0]));
@@ -64,7 +138,6 @@ ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b
             const int db = std::abs(static_cast<int>(la[x * cppA + roA2]) -
                                     static_cast<int>(lb[x * cppB + roB2]));
             const uint8_t diff = static_cast<uint8_t>((dr + dg + db) / 3);
-            // M15: apply threshold — only highlight pixels above threshold
             dst[x] = (diff >= threshold) ? diff : 0;
         }
     }

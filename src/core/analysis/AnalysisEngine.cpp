@@ -29,9 +29,8 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
     ImageStats s;
     if (imgData.isNull())
         return s;
-    const QImage image = mvcore::toQImage(imgData).convertToFormat(QImage::Format_RGB32);
-    const int w = image.width();
-    const int h = image.height();
+    const int w = imgData.width;
+    const int h = imgData.height;
     if (w <= 0 || h <= 0)
         return s;
 
@@ -43,6 +42,60 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
     if (rw <= 0 || rh <= 0)
         return s;
 
+    const ImageBuffer vbuf = imgData.view();
+    const int cpp = vbuf.channelsPerPixel();
+    const PixelFormat fmt = imgData.format;
+    const bool isRgb24 = (fmt == PixelFormat::RGB24);
+    const bool isBgr24 = (fmt == PixelFormat::BGR24);
+    const bool isRgba32 = (fmt == PixelFormat::RGBA32);
+    const bool isBgra32 = (fmt == PixelFormat::BGRA32);
+    const bool isGray8 = (fmt == PixelFormat::Grayscale8);
+
+    if (isRgb24 || isBgr24 || isRgba32 || isBgra32 || isGray8)
+    {
+        const int rOff = (isBgr24 || isBgra32) ? 2 : 0;
+        const int gOff = isGray8 ? 0 : 1;
+        const int bOff = (isBgr24 || isBgra32) ? 0 : (isGray8 ? 0 : 2);
+
+        long long sumL = 0, sumR = 0, sumG = 0, sumB = 0, sumV = 0;
+        int count = 0;
+        for (int y = ry; y < ry + rh; ++y)
+        {
+            const uint8_t *line = vbuf.data + static_cast<size_t>(y) * vbuf.stride();
+            for (int x = rx; x < rx + rw; ++x)
+            {
+                const uint8_t *p = line + static_cast<size_t>(x) * cpp;
+                const int r = p[rOff];
+                const int g = p[gOff];
+                const int b = p[bOff];
+                sumR += r;
+                sumG += g;
+                sumB += b;
+                const int lum = static_cast<int>(0.299 * r + 0.587 * g + 0.114 * b);
+                sumL += lum;
+                const int v = std::max({r, g, b});
+                sumV += v;
+                ++s.histLum[std::clamp(lum, 0, 255)];
+                ++s.histV[std::clamp(v, 0, 255)];
+                ++s.histR[std::clamp(r, 0, 255)];
+                ++s.histG[std::clamp(g, 0, 255)];
+                ++s.histB[std::clamp(b, 0, 255)];
+                ++count;
+            }
+        }
+        s.pixelCount = count;
+        if (count > 0)
+        {
+            s.lumMean = static_cast<double>(sumL) / count;
+            s.vMean = static_cast<double>(sumV) / count;
+            s.rMean = static_cast<double>(sumR) / count;
+            s.gMean = static_cast<double>(sumG) / count;
+            s.bMean = static_cast<double>(sumB) / count;
+        }
+        return s;
+    }
+
+    const QImage image = mvcore::toQImage(imgData).convertToFormat(QImage::Format_RGB32);
     long long sumL = 0, sumR = 0, sumG = 0, sumB = 0, sumV = 0;
     int count = 0;
     for (int y = ry; y < ry + rh; ++y)
@@ -90,14 +143,53 @@ ImageData AnalysisEngine::differenceMap(const ImageData &aData, const ImageData 
 
 double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
 {
-    QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_RGB32);
-    QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_RGB32);
-    const int w = std::min(aa.width(), bb.width());
-    const int h = std::min(aa.height(), bb.height());
+    const int w = std::min(aData.width, bData.width);
+    const int h = std::min(aData.height, bData.height);
     if (w == 0 || h == 0)
         return 0.0;
 
     double mse = 0.0;
+    if (aData.format == bData.format &&
+        (aData.format == PixelFormat::RGB24 || aData.format == PixelFormat::BGR24 ||
+         aData.format == PixelFormat::RGBA32 || aData.format == PixelFormat::BGRA32 ||
+         aData.format == PixelFormat::Grayscale8))
+    {
+        const ImageBuffer va = aData.view();
+        const ImageBuffer vb = bData.view();
+        const int cpp = va.channelsPerPixel();
+        const bool isGray = (aData.format == PixelFormat::Grayscale8);
+
+        for (int y = 0; y < h; ++y)
+        {
+            const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
+            const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
+            for (int x = 0; x < w; ++x)
+            {
+                const uint8_t *pa = la + static_cast<size_t>(x) * cpp;
+                const uint8_t *pb = lb + static_cast<size_t>(x) * cpp;
+                if (isGray)
+                {
+                    const int d = static_cast<int>(pa[0]) - static_cast<int>(pb[0]);
+                    mse += d * d;
+                }
+                else
+                {
+                    const int dr = static_cast<int>(pa[0]) - static_cast<int>(pb[0]);
+                    const int dg = static_cast<int>(pa[1]) - static_cast<int>(pb[1]);
+                    const int db = static_cast<int>(pa[2]) - static_cast<int>(pb[2]);
+                    mse += dr * dr + dg * dg + db * db;
+                }
+            }
+        }
+        const long long n = 1LL * w * h;
+        mse /= (n * 3);
+        if (mse <= 1e-10)
+            return 100.0; // 完美一致(而非 inf)
+        return 10.0 * std::log10(65025.0 / mse);
+    }
+
+    QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_RGB32);
+    QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_RGB32);
     for (int y = 0; y < h; ++y)
     {
         const QRgb *la = reinterpret_cast<const QRgb *>(aa.constScanLine(y));
@@ -139,10 +231,12 @@ double AnalysisEngine::ssim(const ImageData &aData, const ImageData &bData)
             double meanA = 0, meanB = 0, varA = 0, varB = 0, cov = 0;
             for (int y = 0; y < block; ++y)
             {
+                const uchar *lineA = aa.constScanLine(by + y);
+                const uchar *lineB = bb.constScanLine(by + y);
                 for (int x = 0; x < block; ++x)
                 {
-                    double pa = qRed(aa.pixel(bx + x, by + y));
-                    double pb = qRed(bb.pixel(bx + x, by + y));
+                    double pa = lineA[bx + x];
+                    double pb = lineB[bx + x];
                     meanA += pa;
                     meanB += pb;
                 }
@@ -152,10 +246,12 @@ double AnalysisEngine::ssim(const ImageData &aData, const ImageData &bData)
             meanB /= N;
             for (int y = 0; y < block; ++y)
             {
+                const uchar *lineA = aa.constScanLine(by + y);
+                const uchar *lineB = bb.constScanLine(by + y);
                 for (int x = 0; x < block; ++x)
                 {
-                    double pa = qRed(aa.pixel(bx + x, by + y)) - meanA;
-                    double pb = qRed(bb.pixel(bx + x, by + y)) - meanB;
+                    double pa = lineA[bx + x] - meanA;
+                    double pb = lineB[bx + x] - meanB;
                     varA += pa * pa;
                     varB += pb * pb;
                     cov += pa * pb;

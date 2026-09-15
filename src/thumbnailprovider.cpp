@@ -5,6 +5,8 @@
 #include "core/image/QtConvert.h"
 #include "thumbnailcache.h"
 
+#include "core/image/MetadataReader.h"
+
 #include <QImage>
 #include <QPainter>
 
@@ -14,8 +16,10 @@ QImage ThumbnailProvider::squareFitImage(const QImage &q, int size)
         return {};
     QImage pm(size, size, QImage::Format_ARGB32);
     pm.fill(Qt::transparent);
+    const bool alreadyFitted =
+        (q.width() == size && q.height() <= size) || (q.height() == size && q.width() <= size);
     const QImage scaled =
-        q.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        alreadyFitted ? q : q.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
     QPainter painter(&pm);
     painter.drawImage((size - scaled.width()) / 2, (size - scaled.height()) / 2, scaled);
     painter.end();
@@ -28,6 +32,30 @@ ImageData ThumbnailProvider::produce(const std::string &path, int size)
     QImage cached;
     if (ThumbnailCache::instance().get(qp, size, cached))
         return mvcore::fromQImage(cached);
+
+    // Fast path: attempt embedded EXIF thumbnail extraction for JPEG/TIFF/RAW
+    const std::vector<uint8_t> exifThumb =
+        mviewer::core::MetadataReader::extractExifThumbnail(path);
+    if (!exifThumb.empty())
+    {
+        QImage thumb;
+        if (thumb.loadFromData(reinterpret_cast<const uchar *>(exifThumb.data()),
+                               static_cast<int>(exifThumb.size()), "JPEG") &&
+            !thumb.isNull())
+        {
+            if (thumb.width() >= 64 && thumb.height() >= 64)
+            {
+                mviewer::domain::ImageMetadata meta = mviewer::core::MetadataReader::read(path);
+                const QImage q = mvcore::toDisplayQImage(mvcore::fromQImage(thumb), meta);
+                const QImage fitted = squareFitImage(q.isNull() ? thumb : q, size);
+                if (!fitted.isNull())
+                {
+                    ThumbnailCache::instance().put(qp, size, fitted);
+                    return mvcore::fromQImage(fitted);
+                }
+            }
+        }
+    }
 
     mviewer::domain::ImageMetadata meta;
     const ImageData decoded = Decoder::decodeScaled(path, size, meta);
@@ -49,7 +77,7 @@ void ThumbnailProvider::invalidateSource(const std::string &path)
 {
     if (path.empty())
         return;
-    ThumbnailCache::instance().invalidatePath(QString::fromUtf8(path.data(),
-                                                                static_cast<int>(path.size())));
+    ThumbnailCache::instance().invalidatePath(
+        QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     mviewer::application::ImageLoadingService::instance().invalidateSource(path);
 }

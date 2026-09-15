@@ -3,6 +3,7 @@
 #include <QByteArray>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
+#include <QSettings>
 #include <cstdlib>
 #include <cstring>
 
@@ -21,29 +22,33 @@ bool GpuTileUploader::available()
 
 namespace
 {
-// The opt-in environment variable is process configuration, so it is read once
-// instead of on every paint/tile (enabled() is called from the paint path and
-// from ensure() for every tile).
-bool gpuRequestedByEnvironment()
+int gpuRequestedByEnvironment()
 {
-    static const bool requested = []
-    {
-        const char *env = std::getenv("MVIEWER_GPU");
-        if (!env || env[0] == '\0')
-            return false;
-        // Accept common truthy spellings.
-        return std::strcmp(env, "1") == 0 || std::strcmp(env, "true") == 0 ||
-               std::strcmp(env, "TRUE") == 0 || std::strcmp(env, "yes") == 0 ||
-               std::strcmp(env, "YES") == 0 || std::strcmp(env, "on") == 0 ||
-               std::strcmp(env, "ON") == 0;
-    }();
-    return requested;
+    const char *env = std::getenv("MVIEWER_GPU");
+    if (!env || env[0] == '\0')
+        return -1;
+    if (std::strcmp(env, "0") == 0 || std::strcmp(env, "false") == 0 ||
+        std::strcmp(env, "FALSE") == 0 || std::strcmp(env, "no") == 0 ||
+        std::strcmp(env, "off") == 0)
+        return 0;
+    return 1;
+}
+
+bool gpuEnabledBySettings()
+{
+    QSettings s;
+    return s.value("gpuAcceleration", true).toBool();
 }
 } // namespace
 
 bool GpuTileUploader::enabled()
 {
-    return gpuRequestedByEnvironment() && available();
+    if (!available())
+        return false;
+    const int env = gpuRequestedByEnvironment();
+    if (env >= 0)
+        return env == 1;
+    return gpuEnabledBySettings();
 }
 
 // ─── residency ───────────────────────────────────────────────────────────────

@@ -5,7 +5,9 @@
 // Qt types are permitted here (core/ layer); this is NOT the domain/ layer.
 #pragma once
 
+#include <cstdint>
 #include <string>
+#include <vector>
 
 #include "domain/Image.h"
 
@@ -22,6 +24,10 @@ class MetadataReader
     // File-level metadata: path, name, size, mtime, pixel dimensions. Does NOT
     // decode pixels; dimension is read cheaply via QImageReader::size().
     static mviewer::domain::ImageMetadata read(const std::string &filePath);
+
+    // Extracts embedded JPEG thumbnail from EXIF IFD1 if present.
+    // Returns raw JPEG bytes, or empty vector if none.
+    static std::vector<uint8_t> extractExifThumbnail(const std::string &filePath);
 
   private:
     // P0: parse GPS IFD from a JPEG file buffer. Populates hasGps, gpsLatitude,

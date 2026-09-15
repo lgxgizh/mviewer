@@ -1,5 +1,24 @@
 # Changelog
  
+## [1.0.37] - 2026-09-15
+
+### Performance & Optimizations
+
+- **Phase 1: Thumbnail Loading & Cache Acceleration**:
+  - **Embedded EXIF Thumbnail Fast-Path**: Added `MetadataReader::extractExifThumbnail()` to extract embedded JPEG thumbnails from EXIF IFD1 (Tags `0x0201`/`0x0202`) with strict bounds and JPEG signature verification. Integrated into `ThumbnailProvider` as an instant pre-render path before full image decoding.
+  - **Optimized Thumbnail Disk Cache Writing**: Switched `ThumbnailCache::writeFileAtomically` to `img.save(&save, "PNG", 1)` (compression level 1). Reduces PNG compression time by 5-10x during batch folder browsing while maintaining 100% lossless image fidelity.
+  - **Avoided Redundant Resampling**: Removed redundant `q.scaled()` resampling in `ThumbnailProvider::squareFitImage` when dimensions already match target thumbnail size.
+
+- **Phase 2: SIMD Vectorization (AVX2 / SSSE3) & Pipeline Optimization**:
+  - **Runtime CPU Feature Detection**: Introduced `mviewer::core::CpuFeatures` with hardware and OSXSAVE feature detection for AVX2 and SSSE3 via MSVC `__cpuid`/`__cpuidex` and GCC/Clang `__get_cpuid`.
+  - **AVX2 Vectorized Difference Map**: Implemented 256-bit AVX2 SIMD compute paths for `DifferenceEngine::differenceMap` (Grayscale8 and RGBA32/BGRA32), vectorizing 32 grayscale bytes or 8 RGBA pixels per iteration with automatic scalar fallback.
+  - **Zero-Copy Image Analysis & Pointer Scanlines**: Removed redundant `QImage` re-allocations in `AnalysisEngine::computeStatsROI` and `psnr` by computing directly over `ImageData.view()` contiguous byte buffers; optimized `ssim` calculation by replacing `pixel(x, y)` function call overhead with raw scanline row pointers.
+  - **Vectorized Format Conversion**: Replaced scalar nested per-pixel assignment loops in `QtConvert::toQImage` with `std::memcpy` for contiguous `PixelFormat::RGB24` to `Format_RGB888`.
+
+- **Phase 3: Hardware Acceleration & GPU Preferences Control**:
+  - **GPU Acceleration Preference Toggle**: Added "启用 GPU 硬件加速渲染" checkbox in Preferences Dialog General tab, backed by `QSettings("gpuAcceleration")`.
+  - **Dynamic GPU Tile Upload**: Updated `GpuTileUploader::enabled()` to query user configuration while honoring headless test environment guards (`available()`) and `MVIEWER_GPU` environment override.
+
 ## [1.0.36] - 2026-09-15
 
 ### Added

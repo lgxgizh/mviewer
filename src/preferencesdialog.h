@@ -32,6 +32,7 @@ class PreferencesDialog : public QDialog
     QSpinBox *m_slideshowInterval = nullptr;
     QCheckBox *m_confirmDelete = nullptr;
     QCheckBox *m_autoAlign = nullptr;
+    QCheckBox *m_gpuAcceleration = nullptr;
     QComboBox *m_analysisOverlay = nullptr;
     QSlider *m_zebraThreshold = nullptr;
 };

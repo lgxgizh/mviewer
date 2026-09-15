@@ -49,6 +49,17 @@ QImage toQImage(const ImageData &src)
         return out;
     }
     case PixelFormat::RGB24:
+    {
+        QImage out(v.width, v.height, QImage::Format_RGB888);
+        if (out.isNull())
+            return QImage();
+        const size_t rowBytes = static_cast<size_t>(v.width) * 3;
+        for (int y = 0; y < v.height; ++y)
+        {
+            std::memcpy(out.scanLine(y), v.data + static_cast<size_t>(y) * v.stride(), rowBytes);
+        }
+        return out;
+    }
     case PixelFormat::BGR24:
     default:
     {
@@ -60,21 +71,13 @@ QImage toQImage(const ImageData &src)
         {
             const uint8_t *sl = v.data + static_cast<size_t>(y) * v.stride();
             uchar *dl = out.scanLine(y);
-            for (int x = 0; x < v.width; ++x)
+            int x = 0;
+            for (; x < v.width; ++x)
             {
                 const uint8_t *p = sl + x * cpp;
-                if (src.format == PixelFormat::BGR24)
-                {
-                    dl[x * 3 + 0] = p[2];
-                    dl[x * 3 + 1] = p[1];
-                    dl[x * 3 + 2] = p[0];
-                }
-                else
-                {
-                    dl[x * 3 + 0] = p[0];
-                    dl[x * 3 + 1] = p[1];
-                    dl[x * 3 + 2] = p[2];
-                }
+                dl[x * 3 + 0] = p[2];
+                dl[x * 3 + 1] = p[1];
+                dl[x * 3 + 2] = p[0];
             }
         }
         return out;

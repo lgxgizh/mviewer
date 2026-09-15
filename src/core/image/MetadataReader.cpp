@@ -347,4 +347,73 @@ void MetadataReader::readGps(mviewer::domain::ImageMetadata &meta, const std::st
         meta.gpsAltitude = values.altitude;
 }
 
+std::vector<uint8_t> MetadataReader::extractExifThumbnail(const std::string &filePath)
+{
+    QFile file(QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())));
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+
+    const QByteArray header = file.read(4);
+    if (header.size() < 4)
+        return {};
+    const unsigned char b0 = static_cast<unsigned char>(header[0]);
+    const unsigned char b1 = static_cast<unsigned char>(header[1]);
+    const bool isJpeg = b0 == 0xFF && b1 == 0xD8;
+    const bool isTiff = (b0 == 0x49 && b1 == 0x49) || (b0 == 0x4D && b1 == 0x4D);
+    if (!isJpeg && !isTiff)
+        return {};
+
+    const QByteArray exif = readExifPayload(file, isJpeg);
+    if (exif.size() < 8)
+        return {};
+
+    // NOLINTNEXTLINE(cppcoreguidelines-pro-type-reinterpret-cast)
+    const auto *data = reinterpret_cast<const unsigned char *>(exif.constData());
+    const int size = static_cast<int>(exif.size());
+    const bool little = data[0] == 0x49 && data[1] == 0x49;
+    if (readU16(data + 2, little) != 0x002A)
+        return {};
+
+    const size_t total = static_cast<size_t>(size);
+    const uint32_t ifd0 = readU32(data + 4, little);
+    if (ifd0 == 0 || !fits(ifd0, 2, total))
+        return {};
+
+    const uint16_t ifd0Count = readU16(data + ifd0, little);
+    const size_t ifd1PtrOffset =
+        static_cast<size_t>(ifd0) + 2 + static_cast<size_t>(ifd0Count) * 12;
+    if (!fits(ifd1PtrOffset, 4, total))
+        return {};
+
+    const uint32_t ifd1 = readU32(data + ifd1PtrOffset, little);
+    if (ifd1 == 0 || !fits(ifd1, 2, total))
+        return {};
+
+    const uint16_t ifd1Count = readU16(data + ifd1, little);
+    uint32_t thumbOffset = 0;
+    uint32_t thumbLength = 0;
+
+    for (uint16_t i = 0; i < ifd1Count; ++i)
+    {
+        const size_t entryOffset = static_cast<size_t>(ifd1) + 2 + static_cast<size_t>(i) * 12;
+        if (!fits(entryOffset, 12, total))
+            break;
+        const uint16_t tag = readU16(data + entryOffset, little);
+        if (tag == 0x0201) // JPEGInterchangeFormat
+            thumbOffset = readU32(data + entryOffset + 8, little);
+        else if (tag == 0x0202) // JPEGInterchangeFormatLength
+            thumbLength = readU32(data + entryOffset + 8, little);
+    }
+
+    if (thumbOffset > 0 && thumbLength > 0 && fits(thumbOffset, thumbLength, total))
+    {
+        const unsigned char *thumbData = data + thumbOffset;
+        if (thumbLength >= 4 && thumbData[0] == 0xFF && thumbData[1] == 0xD8)
+        {
+            return std::vector<uint8_t>(thumbData, thumbData + thumbLength);
+        }
+    }
+    return {};
+}
+
 } // namespace mviewer::core

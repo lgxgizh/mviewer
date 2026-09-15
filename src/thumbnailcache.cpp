@@ -98,8 +98,7 @@ void ThumbnailCache::runInvalidationWorker()
         std::pair<QString, quint64> task;
         {
             std::unique_lock<std::mutex> lock(m_invalidationMutex);
-            m_invalidationWake.wait(lock,
-                                    [this]
+            m_invalidationWake.wait(lock, [this]
                                     { return m_invalidationStop || !m_invalidationQueue.empty(); });
             if (m_invalidationStop && m_invalidationQueue.empty())
                 return;
@@ -139,9 +138,8 @@ void ThumbnailCache::ensureIndexed()
     const QString dir = cacheDir();
     if (dir.isEmpty())
         return;
-    QFileInfoList infos = QDir(dir)
-                              .entryInfoList(QStringList{QStringLiteral("*.png")},
-                                             QDir::Files | QDir::NoDotAndDotDot);
+    QFileInfoList infos = QDir(dir).entryInfoList(QStringList{QStringLiteral("*.png")},
+                                                  QDir::Files | QDir::NoDotAndDotDot);
     std::sort(infos.begin(), infos.end(),
               [](const QFileInfo &a, const QFileInfo &b)
               {
@@ -279,7 +277,9 @@ bool ThumbnailCache::writeFileAtomically(const QString &file, const QImage &img)
     QSaveFile save(file);
     if (!save.open(QIODevice::WriteOnly))
         return false;
-    if (!img.save(&save, "PNG"))
+    // Compression quality 1: uses fast zlib compression (level 1), ~5-10x faster
+    // than the default level 6 while remaining 100% valid lossless PNG.
+    if (!img.save(&save, "PNG", 1))
         return false;
     return save.commit();
 }
