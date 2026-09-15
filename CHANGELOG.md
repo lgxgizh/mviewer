@@ -1,5 +1,24 @@
 # Changelog
  
+## [1.0.44] - 2026-09-16
+
+### Performance & Optimizations
+
+- **PixelInspector Real-Time Sampling & Neighborhood Calculation Acceleration**:
+  - **Direct 8-bit Color Space Math**: Added specialized 8-bit conversions for `ColorSpace::YUV`, `ColorSpace::YCbCr`, and `ColorSpace::HSV` in `toColorSpace`, avoiding floating-point roundtrip divisions and multiplications.
+  - **Identity Adjustment Fast Path**: Hoisted identity check in `sampleAnalysisPixel` to bypass float conversions, contrast clamping, gamma calculation, and white balance math during standard browsing and inspection.
+  - **Neighborhood Analysis LUT Cache**: Extracted `buildAnalysisLUT` to precompute a 256-byte adjustment lookup table once per neighborhood call, eliminating up to 147 `std::pow` transcendental calls across $N \times N$ kernels during real-time mouse movement.
+  - **Bounding Box Pre-clipping & Channel Hoisting**: Pre-clipped `[yStart, yEnd]` and `[xStart, xEnd]` in `neighborhoodStats` to eliminate nested boundary condition tests, hoisted `bytesPerPixel`, and specialized `Grayscale8` with pure integer accumulation.
+- **DifferenceEngine SSE2 Vectorization & Branchless Math**:
+  - **SSE2 applyThreshold Vectorization**: Added 16-byte SSE2 threshold vectorization for Grayscale8 buffers on systems without AVX2.
+  - **Branchless diffCount Accumulation**: Converted `diffCount` updates in `DifferenceEngine::computeStats` to branchless boolean addition, eliminating branch misprediction stalls on noisy diff patterns.
+  - **HeatRGB Struct Assignment in heatMap**: Stored 3-byte RGB triplets directly using structured writes, reducing scalar store instructions per pixel.
+
+### Testing & Verification
+
+- **PixelInspector HSV Primaries & Adjustment Regression Coverage**:
+  - Added unit test cases in `test_pixelinspector` validating Cyan, Yellow, and Magenta HSV color space calculations as well as non-identity neighborhood statistical convergence.
+
 ## [1.0.43] - 2026-09-16
 
 ### Performance & Optimizations

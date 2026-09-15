@@ -156,6 +156,40 @@ ColorTriple toColorSpace(uint8_t r, uint8_t g, uint8_t b, ColorSpace space)
         const double fx = f(X), fy = f(Y), fz = f(Z);
         return {116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)};
     }
+    if (space == ColorSpace::YUV)
+    {
+        const double Y = 0.299 * r + 0.587 * g + 0.114 * b;
+        return {Y, 0.564 * (b - Y), 0.713 * (r - Y)};
+    }
+    if (space == ColorSpace::YCbCr)
+    {
+        return {0.299 * r + 0.587 * g + 0.114 * b,
+                -0.168736 * r - 0.331264 * g + 0.5 * b + 128.0,
+                0.5 * r - 0.418688 * g - 0.081312 * b + 128.0};
+    }
+    if (space == ColorSpace::HSV)
+    {
+        const int mx = std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
+        const int mn = std::min({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
+        const int d = mx - mn;
+        double h = 0.0;
+        if (d > 0)
+        {
+            if (mx == r)
+                h = std::fmod(
+                    60.0 * (static_cast<double>(static_cast<int>(g) - static_cast<int>(b)) / d),
+                    360.0);
+            else if (mx == g)
+                h = 60.0 * (static_cast<double>(static_cast<int>(b) - static_cast<int>(r)) / d + 2.0);
+            else
+                h = 60.0 * (static_cast<double>(static_cast<int>(r) - static_cast<int>(g)) / d + 4.0);
+            if (h < 0.0)
+                h += 360.0;
+        }
+        const double v = (mx * 100.0) / 255.0;
+        const double s = mx > 0 ? (static_cast<double>(d) / mx) * 100.0 : 0.0;
+        return {h, s, v};
+    }
     return toColorSpaceNorm(r / 255.0, g / 255.0, b / 255.0, space);
 }
 
@@ -303,6 +337,55 @@ int adjustAnalysisChannel(int value, const AnalysisAdjustment &adjustment)
     }
     return std::clamp(value, 0, 255);
 }
+
+struct AnalysisLUT
+{
+    std::array<uint8_t, 256> r{};
+    std::array<uint8_t, 256> g{};
+    std::array<uint8_t, 256> b{};
+    bool isIdentity = true;
+};
+
+AnalysisLUT buildAnalysisLUT(const AnalysisAdjustment &adjustment, PixelFormat format)
+{
+    AnalysisLUT lut;
+    lut.isIdentity =
+        (adjustment.brightness == 0 &&
+         std::abs(static_cast<float>(adjustment.contrast) - 1.0f) < 1e-6f &&
+         std::abs(static_cast<float>(adjustment.gamma) - 1.0f) < 1e-6f &&
+         std::abs(static_cast<float>(adjustment.redGain) - 1.0f) < 1e-6f &&
+         std::abs(static_cast<float>(adjustment.blueGain) - 1.0f) < 1e-6f);
+    if (lut.isIdentity)
+        return lut;
+
+    for (int i = 0; i < 256; ++i)
+    {
+        const int ch = adjustAnalysisChannel(i, adjustment);
+        lut.g[static_cast<size_t>(i)] = static_cast<uint8_t>(ch);
+        if (format != PixelFormat::Grayscale8)
+        {
+            int r = ch, b = ch;
+            if (std::abs(static_cast<float>(adjustment.redGain) - 1.0f) >= 1e-6f)
+                r = std::clamp(static_cast<int>(std::lroundf(
+                                   static_cast<float>(r) *
+                                   std::max(static_cast<float>(adjustment.redGain), 0.01f))),
+                               0, 255);
+            if (std::abs(static_cast<float>(adjustment.blueGain) - 1.0f) >= 1e-6f)
+                b = std::clamp(static_cast<int>(std::lroundf(
+                                   static_cast<float>(b) *
+                                   std::max(static_cast<float>(adjustment.blueGain), 0.01f))),
+                               0, 255);
+            lut.r[static_cast<size_t>(i)] = static_cast<uint8_t>(r);
+            lut.b[static_cast<size_t>(i)] = static_cast<uint8_t>(b);
+        }
+        else
+        {
+            lut.r[static_cast<size_t>(i)] = static_cast<uint8_t>(ch);
+            lut.b[static_cast<size_t>(i)] = static_cast<uint8_t>(ch);
+        }
+    }
+    return lut;
+}
 } // namespace
 
 AnalysisPixel sampleAnalysisPixel(const ImageData &source, const AnalysisAdjustment &adjustment,
@@ -350,6 +433,21 @@ AnalysisPixel sampleAnalysisPixel(const ImageData &source, const AnalysisAdjustm
     const PixelRGBA sourcePixel = samplePixel(source, crop.x + croppedX, crop.y + croppedY);
     if (!sourcePixel.valid)
         return result;
+
+    const bool isAdjIdentity =
+        (adjustment.brightness == 0 &&
+         std::abs(static_cast<float>(adjustment.contrast) - 1.0f) < 1e-6f &&
+         std::abs(static_cast<float>(adjustment.gamma) - 1.0f) < 1e-6f &&
+         std::abs(static_cast<float>(adjustment.redGain) - 1.0f) < 1e-6f &&
+         std::abs(static_cast<float>(adjustment.blueGain) - 1.0f) < 1e-6f);
+    if (isAdjIdentity)
+    {
+        result.r = sourcePixel.r;
+        result.g = sourcePixel.g;
+        result.b = sourcePixel.b;
+        result.valid = true;
+        return result;
+    }
 
     result.r = adjustAnalysisChannel(sourcePixel.r, adjustment);
     result.g = adjustAnalysisChannel(sourcePixel.g, adjustment);
@@ -461,31 +559,60 @@ NeighborhoodStats neighborhoodStats(const ImageData &source, const AnalysisAdjus
     if (source.isNull() || n < 1)
         return stats;
 
-    long long sum = 0;
-    long long sumSq = 0;
-    long long rSum = 0;
-    long long gSum = 0;
-    long long bSum = 0;
-    long long vSum = 0;
-    int minValue = 255;
-    int maxValue = 0;
+    const CropBounds crop = analysisCropBounds(source, adjustment);
+    if (crop.width <= 0 || crop.height <= 0)
+        return stats;
+
+    const int rotation = normalizedRotation(adjustment.rotation);
+    const int outputWidth = (rotation == 90 || rotation == 270) ? crop.height : crop.width;
+    const int outputHeight = (rotation == 90 || rotation == 270) ? crop.width : crop.height;
+    const AnalysisLUT lut = buildAnalysisLUT(adjustment, source.format);
+
+    long long sum = 0, sumSq = 0;
+    long long rSum = 0, gSum = 0, bSum = 0, vSum = 0;
+    int minValue = 255, maxValue = 0;
     const int half = n / 2;
     for (int dy = -half; dy <= half; ++dy)
     {
+        const int curY = adjustedY + dy;
+        if (curY < 0 || curY >= outputHeight)
+            continue;
         for (int dx = -half; dx <= half; ++dx)
         {
-            const AnalysisPixel pixel =
-                sampleAnalysisPixel(source, adjustment, adjustedX + dx, adjustedY + dy);
-            if (!pixel.valid)
+            const int curX = adjustedX + dx;
+            if (curX < 0 || curX >= outputWidth)
                 continue;
+
+            int croppedX = curX, croppedY = curY;
+            switch (rotation)
+            {
+            case 90:  croppedX = curY; croppedY = crop.height - 1 - curX; break;
+            case 180: croppedX = crop.width - 1 - curX; croppedY = crop.height - 1 - curY; break;
+            case 270: croppedX = crop.width - 1 - curY; croppedY = curX; break;
+            default:  break;
+            }
+
+            if (adjustment.flipH)
+                croppedX = crop.width - 1 - croppedX;
+            if (adjustment.flipV)
+                croppedY = crop.height - 1 - croppedY;
+
+            const PixelRGBA sourcePixel = samplePixel(source, crop.x + croppedX, crop.y + croppedY);
+            if (!sourcePixel.valid)
+                continue;
+
+            const int pr = lut.isIdentity ? sourcePixel.r : lut.r[sourcePixel.r];
+            const int pg = lut.isIdentity ? sourcePixel.g : lut.g[sourcePixel.g];
+            const int pb = lut.isIdentity ? sourcePixel.b : lut.b[sourcePixel.b];
+
             const int luminance =
-                static_cast<int>(0.2126 * pixel.r + 0.7152 * pixel.g + 0.0722 * pixel.b + 0.5);
+                static_cast<int>(0.2126 * pr + 0.7152 * pg + 0.0722 * pb + 0.5);
             sum += luminance;
             sumSq += static_cast<long long>(luminance) * luminance;
-            rSum += pixel.r;
-            gSum += pixel.g;
-            bSum += pixel.b;
-            vSum += std::max({pixel.r, pixel.g, pixel.b});
+            rSum += pr;
+            gSum += pg;
+            bSum += pb;
+            vSum += std::max({pr, pg, pb});
             minValue = std::min(minValue, luminance);
             maxValue = std::max(maxValue, luminance);
             ++stats.count;
@@ -514,59 +641,91 @@ NeighborhoodStats neighborhoodStats(const uint8_t *data, int stride, int width, 
     if (!data || width <= 0 || height <= 0 || n < 1 || cx < 0 || cy < 0 || cx >= width ||
         cy >= height)
         return s;
-    // 1 = Grayscale8 (Y), 3 = RGB24 (R,G,B), 4 = 32-bit BGRA (B,G,R,A) as produced by
-    // QImage::Format_RGB32/ARGB32 on little-endian hosts. Anything else is
-    // treated as RGB24.
-    const int bytesPerPixel = (channels == 4) ? 4 : ((channels == 1) ? 1 : 3);
+
+    const int half = n / 2; // n=1→0, n=3→1, n=5→2, n=7→3
+    const int yStart = std::max(0, cy - half);
+    const int yEnd = std::min(height - 1, cy + half);
+    const int xStart = std::max(0, cx - half);
+    const int xEnd = std::min(width - 1, cx + half);
+    if (yStart > yEnd || xStart > xEnd)
+        return s;
 
     long sum = 0, sumSq = 0;
     long rSum = 0, gSum = 0, bSum = 0, vSum = 0;
-    int mn = 255, mx = 0, count = 0;
-    const int half = n / 2; // n=1→0, n=3→1, n=5→2, n=7→3
-    for (int dy = -half; dy <= half; ++dy)
+    int mn = 255, mx = 0;
+    const int count = (yEnd - yStart + 1) * (xEnd - xStart + 1);
+
+    if (channels == 1)
     {
-        const int yy = cy + dy;
-        if (yy < 0 || yy >= height)
-            continue;
-        const uint8_t *row = data + static_cast<size_t>(yy) * stride;
-        for (int dx = -half; dx <= half; ++dx)
+        for (int yy = yStart; yy <= yEnd; ++yy)
         {
-            const int xx = cx + dx;
-            if (xx < 0 || xx >= width)
-                continue;
-            const uint8_t *p = row + static_cast<size_t>(xx) * static_cast<size_t>(bytesPerPixel);
-            uint8_t r = 0, g = 0, b = 0;
-            if (bytesPerPixel == 1)
+            const uint8_t *row = data + static_cast<size_t>(yy) * stride;
+            for (int xx = xStart; xx <= xEnd; ++xx)
             {
-                r = g = b = p[0];
+                const uint8_t v = row[xx];
+                sum += v;
+                sumSq += static_cast<long>(v) * v;
+                if (v < mn)
+                    mn = v;
+                if (v > mx)
+                    mx = v;
             }
-            else if (bytesPerPixel == 4)
+        }
+        rSum = gSum = bSum = vSum = sum;
+    }
+    else if (channels == 4)
+    {
+        for (int yy = yStart; yy <= yEnd; ++yy)
+        {
+            const uint8_t *row = data + static_cast<size_t>(yy) * stride;
+            for (int xx = xStart; xx <= xEnd; ++xx)
             {
-                r = p[2];
-                g = p[1];
-                b = p[0];
+                const uint8_t *p = row + static_cast<size_t>(xx) * 4;
+                const uint8_t b = p[0];
+                const uint8_t g = p[1];
+                const uint8_t r = p[2];
+                rSum += r;
+                gSum += g;
+                bSum += b;
+                vSum += std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
+                const double lum = luma(r, g, b);
+                const int v = static_cast<int>(lum + 0.5);
+                sum += v;
+                sumSq += static_cast<long>(v) * v;
+                if (v < mn)
+                    mn = v;
+                if (v > mx)
+                    mx = v;
             }
-            else
-            {
-                r = p[0];
-                g = p[1];
-                b = p[2];
-            }
-            rSum += r;
-            gSum += g;
-            bSum += b;
-            vSum += std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
-            const double lum = luma(r, g, b); // 0..255
-            const int v = static_cast<int>(lum + 0.5);
-            sum += v;
-            sumSq += static_cast<long>(v) * v;
-            if (v < mn)
-                mn = v;
-            if (v > mx)
-                mx = v;
-            ++count;
         }
     }
+    else
+    {
+        for (int yy = yStart; yy <= yEnd; ++yy)
+        {
+            const uint8_t *row = data + static_cast<size_t>(yy) * stride;
+            for (int xx = xStart; xx <= xEnd; ++xx)
+            {
+                const uint8_t *p = row + static_cast<size_t>(xx) * 3;
+                const uint8_t r = p[0];
+                const uint8_t g = p[1];
+                const uint8_t b = p[2];
+                rSum += r;
+                gSum += g;
+                bSum += b;
+                vSum += std::max({static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)});
+                const double lum = luma(r, g, b);
+                const int v = static_cast<int>(lum + 0.5);
+                sum += v;
+                sumSq += static_cast<long>(v) * v;
+                if (v < mn)
+                    mn = v;
+                if (v > mx)
+                    mx = v;
+            }
+        }
+    }
+
     if (count == 0)
         return s;
     const double mean = static_cast<double>(sum) / count;

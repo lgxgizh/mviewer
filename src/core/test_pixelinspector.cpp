@@ -35,6 +35,24 @@ static void test_color_spaces()
     CHECK(std::abs(hsv.c1 - 0) < 1e-6);   // hue 0
     CHECK(std::abs(hsv.c3 - 100) < 1e-6); // value 100
 
+    // Cyan RGB(0, 255, 255) -> Hue 180, Sat 100, Val 100
+    auto hsvCyan = toColorSpace(0, 255, 255, ColorSpace::HSV);
+    CHECK(std::abs(hsvCyan.c1 - 180.0) < 1e-4);
+    CHECK(std::abs(hsvCyan.c2 - 100.0) < 1e-4);
+    CHECK(std::abs(hsvCyan.c3 - 100.0) < 1e-4);
+
+    // Yellow RGB(255, 255, 0) -> Hue 60, Sat 100, Val 100
+    auto hsvYellow = toColorSpace(255, 255, 0, ColorSpace::HSV);
+    CHECK(std::abs(hsvYellow.c1 - 60.0) < 1e-4);
+    CHECK(std::abs(hsvYellow.c2 - 100.0) < 1e-4);
+    CHECK(std::abs(hsvYellow.c3 - 100.0) < 1e-4);
+
+    // Magenta RGB(255, 0, 255) -> Hue 300, Sat 100, Val 100
+    auto hsvMagenta = toColorSpace(255, 0, 255, ColorSpace::HSV);
+    CHECK(std::abs(hsvMagenta.c1 - 300.0) < 1e-4);
+    CHECK(std::abs(hsvMagenta.c2 - 100.0) < 1e-4);
+    CHECK(std::abs(hsvMagenta.c3 - 100.0) < 1e-4);
+
     // White → Lab L≈100, a≈0, b≈0.
     auto lab = toColorSpace(255, 255, 255, ColorSpace::Lab);
     CHECK(std::abs(lab.c1 - 100) < 1e-3);
@@ -271,6 +289,14 @@ static void test_source_backed_analysis()
         CHECK(std::abs(stats.vMean - stats.mean) < 1e-9);
     }
     CHECK(neighborhoodStats(neighborhood, identity, 0, 0, 7).count == 16);
+
+    AnalysisAdjustment adjNonIdentity;
+    adjNonIdentity.brightness = 10;
+    adjNonIdentity.contrast = 1.1;
+    adjNonIdentity.gamma = 1.2;
+    const auto statsAdj = neighborhoodStats(neighborhood, adjNonIdentity, 4, 4, 3);
+    CHECK(statsAdj.count == 9);
+    CHECK(statsAdj.mean > 0.0);
 
     using mviewer::domain::Selection;
     const Selection identityBox{1, 0, 2, 1};

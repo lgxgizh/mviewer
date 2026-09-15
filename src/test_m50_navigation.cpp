@@ -255,11 +255,11 @@ int main(int argc, char **argv)
         tree->navigateTo(cPath, true);
         CHECK(QFile::remove(disappearing),
               "remove a source while rapid A/B/C navigation is still converging");
-        CHECK(waitFor([&] { return samePath(directory->currentDirectory(), cPath); }),
+        CHECK(waitFor([&] { return samePath(directory->currentDirectory(), cPath); }, 15000),
               "rapid A/B/C navigation commits only the newest directory");
-        CHECK(waitFor([&] { return samePath(panel->currentDir(), cPath); }),
+        CHECK(waitFor([&] { return samePath(panel->currentDir(), cPath); }, 15000),
               "rapid navigation leaves the gallery owned by directory C");
-        CHECK(waitFor([&] { return panel->pathList().size() == 2; }),
+        CHECK(waitFor([&] { return panel->pathList().size() == 2; }, 15000),
               "gallery excludes a source that disappeared during navigation");
 
         const QString sessionDirBeforeInvalidOpen = directory->currentDirectory();

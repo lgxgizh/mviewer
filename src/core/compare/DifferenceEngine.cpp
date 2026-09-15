@@ -278,6 +278,31 @@ ImageData DifferenceEngine::applyThreshold(const ImageData &gray, uint8_t thresh
         }
         return out;
     }
+    else if (cpp == 1 && ro == 0)
+    {
+        const __m128i vthresh = _mm_set1_epi8(static_cast<char>(threshold));
+        const __m128i vzero = _mm_setzero_si128();
+        for (int y = 0; y < gray.height; ++y)
+        {
+            const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
+            uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+            int x = 0;
+            for (; x + 16 <= gray.width; x += 16)
+            {
+                const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src + x));
+                const __m128i under = _mm_subs_epu8(vthresh, v);
+                const __m128i mask = _mm_cmpeq_epi8(under, vzero);
+                const __m128i result = _mm_and_si128(v, mask);
+                _mm_storeu_si128(reinterpret_cast<__m128i *>(dst + x), result);
+            }
+            for (; x < gray.width; ++x)
+            {
+                const uint8_t v = src[x];
+                dst[x] = (v >= threshold) ? v : 0;
+            }
+        }
+        return out;
+    }
 
     for (int y = 0; y < gray.height; ++y)
     {
@@ -391,8 +416,7 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
             {
                 const int v = src[x];
                 sum += v;
-                if (v >= minDiff)
-                    ++diffCount;
+                diffCount += (v >= minDiff);
                 maxV = std::max(maxV, v);
             }
         }
@@ -407,8 +431,7 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
             {
                 const int v = src[x * cpp + ro];
                 sum += v;
-                if (v >= minDiff)
-                    ++diffCount;
+                diffCount += (v >= minDiff);
                 maxV = std::max(maxV, v);
             }
         }
@@ -428,6 +451,7 @@ struct HeatRGB
 {
     uint8_t r, g, b;
 };
+static_assert(sizeof(HeatRGB) == 3, "HeatRGB must be packed 3 bytes");
 
 const auto &heatLUT()
 {
@@ -485,14 +509,9 @@ ImageData DifferenceEngine::heatMap(const ImageData &gray)
         for (int y = 0; y < h; ++y)
         {
             const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
-            uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+            auto *dst = reinterpret_cast<HeatRGB *>(out.buffer->data() + static_cast<size_t>(y) * out.stride());
             for (int x = 0; x < w; ++x)
-            {
-                const HeatRGB c = lut[src[x]];
-                dst[x * 3 + 0] = c.r;
-                dst[x * 3 + 1] = c.g;
-                dst[x * 3 + 2] = c.b;
-            }
+                dst[x] = lut[src[x]];
         }
     }
     else
@@ -500,14 +519,9 @@ ImageData DifferenceEngine::heatMap(const ImageData &gray)
         for (int y = 0; y < h; ++y)
         {
             const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
-            uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+            auto *dst = reinterpret_cast<HeatRGB *>(out.buffer->data() + static_cast<size_t>(y) * out.stride());
             for (int x = 0; x < w; ++x)
-            {
-                const HeatRGB c = lut[src[x * cpp + ro]];
-                dst[x * 3 + 0] = c.r;
-                dst[x * 3 + 1] = c.g;
-                dst[x * 3 + 2] = c.b;
-            }
+                dst[x] = lut[src[x * cpp + ro]];
         }
     }
     return out;
