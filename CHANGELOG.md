@@ -1,5 +1,27 @@
 # Changelog
  
+## [1.0.38] - 2026-09-15
+
+### Performance & Optimizations
+
+- **Thumbnail Delegate Paint Cache**:
+  - Implemented `cachedScaledPixmap` bounded cache in `thumbnailpanel_delegates.cpp` keyed by `QPixmap::cacheKey()` and target size, with pass-through for exact-size matches.
+  - Eliminated synchronous `pm.scaled(..., Qt::SmoothTransformation)` calls in `ThumbDelegate::paint`, `DetailsDelegate::paint`, and `ListDelegate::paint`, removing UI-thread rendering stutter during gallery scrolling.
+
+- **CompareWorkspace Repaint Isolation & Coalescing**:
+  - Isolated canvas pan/drag repaints to `m_compareCanvas`, eliminating redundant full-workspace parent widget redraws.
+  - Coalesced image adjustment updates in `CompareWorkspace::onAdjChanged()`, preventing synchronous workspace repaint cascades during interactive slider scrubbing while background materialization is in flight.
+
+- **ImageViewer Viewport Culling**:
+  - Added viewport intersection testing and visible sub-rectangle mapping in `ImageViewer::drawProvisional()`, skipping out-of-viewport drawing and clipping zoomed-in provisional renders to only on-screen regions.
+
+- **Directory Scan Allocation Reduction**:
+  - Pre-cached supported extensions as `QSet<QString>` before directory scanning in `scanProgressiveDirectory()` and `sortedEntries()`, avoiding thousands of per-file `std::string` heap allocations and fingerprint recalculations.
+
+- **QtDecoder Fast-Path & Bulk Buffer Copy**:
+  - Avoided redundant `convertToFormat(Format_RGB888)` when decoded image is already in target format.
+  - Vectorized row copying with contiguous bulk `std::memcpy` when stride matches packed 24-bit RGB line width.
+
 ## [1.0.37] - 2026-09-15
 
 ### Performance & Optimizations

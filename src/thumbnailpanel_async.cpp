@@ -8,6 +8,7 @@
 #include <QtConcurrent/QtConcurrent>
 
 #include <functional>
+#include <QSet>
 namespace
 {
 // M46/M55 test instrumentation storage (empty in production). The immutable
@@ -117,6 +118,12 @@ void scanProgressiveDirectory(const QString &path,
                               const std::function<void()> &onAbort)
 {
     QList<ThumbnailPanel::Entry> batch;
+    const auto supportedVec = mviewer::core::ImageFormats::supportedSuffixes();
+    QSet<QString> supportedExts;
+    supportedExts.reserve(static_cast<qsizetype>(supportedVec.size()));
+    for (const auto &s : supportedVec)
+        supportedExts.insert(QString::fromStdString(s));
+
     QDirIterator it(path, QDir::Files | QDir::Readable | QDir::NoDotAndDotDot,
                     QDirIterator::NoIteratorFlags);
     while (it.hasNext())
@@ -142,8 +149,7 @@ void scanProgressiveDirectory(const QString &path,
         it.next();
         const QFileInfo fi = it.fileInfo();
         const QString suffix = fi.suffix().toLower();
-        if (suffix.isEmpty() ||
-            !mviewer::core::ImageFormats::isSupportedSuffix(suffix.toStdString()))
+        if (suffix.isEmpty() || !supportedExts.contains(suffix))
             continue;
         const ThumbnailPanel::Entry entry{
             fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()};

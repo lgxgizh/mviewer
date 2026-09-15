@@ -171,9 +171,28 @@ void ImageViewer::drawProvisional(QPainter &painter) const
     m_view.imageRectToScreen(0, 0, sourceW, sourceH, sx, sy, sw, sh);
     if (sw <= 0 || sh <= 0)
         return;
+    const QRect targetRect(sx, sy, sw, sh);
+    const QRect viewportRect(0, 0, m_view.screenW, m_view.screenH);
+    if (!targetRect.intersects(viewportRect))
+        return;
+
+    const QRect visibleTarget = targetRect.intersected(viewportRect);
     painter.save();
     painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
-    painter.drawImage(QRect(sx, sy, sw, sh), m_provisionalImage);
+    if (visibleTarget == targetRect)
+    {
+        painter.drawImage(targetRect, m_provisionalImage);
+    }
+    else
+    {
+        const double scaleX = static_cast<double>(m_provisionalImage.width()) / sw;
+        const double scaleY = static_cast<double>(m_provisionalImage.height()) / sh;
+        const QRectF sourceSubRect((visibleTarget.left() - sx) * scaleX,
+                                   (visibleTarget.top() - sy) * scaleY,
+                                   visibleTarget.width() * scaleX,
+                                   visibleTarget.height() * scaleY);
+        painter.drawImage(visibleTarget, m_provisionalImage, sourceSubRect);
+    }
     painter.restore();
 }
 

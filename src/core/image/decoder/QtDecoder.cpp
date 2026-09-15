@@ -29,18 +29,28 @@ ImageData toImageData(const QImage &src)
 {
     if (src.isNull())
         return ImageData();
-    const QImage img = src.convertToFormat(QImage::Format_RGB888);
+    const QImage img = (src.format() == QImage::Format_RGB888)
+                           ? src
+                           : src.convertToFormat(QImage::Format_RGB888);
     if (img.isNull())
         return ImageData();
     ImageData out = makeImageData(img.width(), img.height(), PixelFormat::RGB24);
     const int w = img.width();
     const int h = img.height();
     const size_t rowBytes = static_cast<size_t>(w) * 3;
-    for (int y = 0; y < h; ++y)
+    const qsizetype bytesPerLine = img.bytesPerLine();
+    if (bytesPerLine == static_cast<qsizetype>(rowBytes))
     {
-        const uchar *s = img.constScanLine(y);
-        uint8_t *d = out.buffer->data() + static_cast<size_t>(y) * out.stride();
-        std::memcpy(d, s, rowBytes);
+        std::memcpy(out.buffer->data(), img.constBits(), rowBytes * static_cast<size_t>(h));
+    }
+    else
+    {
+        for (int y = 0; y < h; ++y)
+        {
+            const uchar *s = img.constScanLine(y);
+            uint8_t *d = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+            std::memcpy(d, s, rowBytes);
+        }
     }
     return out;
 }

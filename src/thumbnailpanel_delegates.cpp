@@ -1,8 +1,59 @@
 // ThumbnailPanel item delegates: thumbnail grid, details row, list row (M20 P0#3).
 #include "thumbnailpanel_p.h"
 
+#include <algorithm>
+#include <vector>
+
 namespace
 {
+QPixmap cachedScaledPixmap(const QPixmap &pm, const QSize &targetSize)
+{
+    if (pm.isNull() || targetSize.isEmpty())
+        return QPixmap();
+    if (pm.size() == targetSize)
+        return pm;
+
+    struct CacheEntry
+    {
+        qint64 pixmapKey = 0;
+        int targetW = 0;
+        int targetH = 0;
+        QPixmap scaled;
+        uint64_t clock = 0;
+    };
+    static constexpr size_t kMaxScaledCache = 256;
+    static std::vector<CacheEntry> s_scaledCache;
+    static uint64_t s_clock = 0;
+
+    const qint64 key = pm.cacheKey();
+    const int tw = targetSize.width();
+    const int th = targetSize.height();
+    ++s_clock;
+
+    for (auto &entry : s_scaledCache)
+    {
+        if (entry.pixmapKey == key && entry.targetW == tw && entry.targetH == th)
+        {
+            entry.clock = s_clock;
+            return entry.scaled;
+        }
+    }
+
+    QPixmap scaled = pm.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    if (s_scaledCache.size() < kMaxScaledCache)
+    {
+        s_scaledCache.push_back({key, tw, th, scaled, s_clock});
+    }
+    else
+    {
+        auto oldest = std::min_element(s_scaledCache.begin(), s_scaledCache.end(),
+                                       [](const CacheEntry &a, const CacheEntry &b)
+                                       { return a.clock < b.clock; });
+        *oldest = {key, tw, th, scaled, s_clock};
+    }
+    return scaled;
+}
+
 QString formatFileSize(qint64 bytes)
 {
     if (bytes < 1024)
@@ -84,8 +135,7 @@ void drawThumbImage(QPainter *painter, const QRect &thumbRect, const QString &pa
     const QPixmap pm = panel->thumbReady(path);
     if (!pm.isNull())
     {
-        const QPixmap scaled =
-            pm.scaled(thumbRect.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        const QPixmap scaled = cachedScaledPixmap(pm, thumbRect.size());
         painter->drawPixmap(thumbRect.x() + (thumbRect.width() - scaled.width()) / 2,
                             thumbRect.y() + (thumbRect.height() - scaled.height()) / 2, scaled);
         painter->setPen(option.palette.color(QPalette::Mid));
@@ -250,8 +300,7 @@ void drawDetailsThumb(QPainter *painter, const QRect &thumbR, const QString &pat
     const QPixmap pm = panel->thumbReady(path);
     if (!pm.isNull())
     {
-        const QPixmap scaled =
-            pm.scaled(thumbR.size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        const QPixmap scaled = cachedScaledPixmap(pm, thumbR.size());
         painter->drawPixmap(thumbR.x() + (48 - scaled.width()) / 2,
                             thumbR.y() + (48 - scaled.height()) / 2, scaled);
     }
@@ -550,8 +599,7 @@ void ThumbnailPanel::ListDelegate::paint(QPainter *painter, const QStyleOptionVi
     const QRect iconR(r.x(), r.y() + (r.height() - icon) / 2, icon, icon);
     QPixmap pm = m_panel->thumbReady(path);
     if (!pm.isNull())
-        painter->drawPixmap(iconR,
-                            pm.scaled(icon, icon, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+        painter->drawPixmap(iconR, cachedScaledPixmap(pm, QSize(icon, icon)));
     else if (m_panel->thumbFailed(path))
         painter->fillRect(iconR, QColor(200, 200, 200));
     else

@@ -260,9 +260,10 @@ void CompareWorkspace::onAdjChanged()
                             (m_rGainSlider && m_rGainSlider->isSliderDown()) ||
                             (m_bGainSlider && m_bGainSlider->isSliderDown());
     if (!sliderDown)
+    {
         onAdjEditFinished();
-
-    update();
+        update();
+    }
 }
 
 void CompareWorkspace::onResetAdj()

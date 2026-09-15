@@ -334,7 +334,8 @@ bool CompareWorkspace::handleCanvasMove(QEvent *event)
         }
         if (m_compareCanvas)
             m_compareCanvas->update();
-        update();
+        else
+            update();
     }
     return true;
 }

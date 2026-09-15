@@ -11,6 +11,7 @@
 #include <QtConcurrent/QtConcurrent>
 
 #include <algorithm>
+#include <QSet>
 
 void ThumbnailPanel::setSortMode(SortMode mode)
 {
@@ -614,11 +615,16 @@ QFileInfoList ThumbnailPanel::sortedEntries(const QDir &dir, SortMode mode, bool
     // sorts in pure memory — no file I/O inside a comparator.
     QFileInfoList files = dir.entryInfoList(QDir::Files | QDir::Readable, QDir::NoSort);
     QFileInfoList out;
+    const auto supportedVec = mviewer::core::ImageFormats::supportedSuffixes();
+    QSet<QString> supportedExts;
+    supportedExts.reserve(static_cast<qsizetype>(supportedVec.size()));
+    for (const auto &s : supportedVec)
+        supportedExts.insert(QString::fromStdString(s));
+
     for (const QFileInfo &fi : files)
     {
         const QString suffix = fi.suffix().toLower();
-        if (!suffix.isEmpty() &&
-            mviewer::core::ImageFormats::isSupportedSuffix(suffix.toStdString()))
+        if (!suffix.isEmpty() && supportedExts.contains(suffix))
             out.append(fi);
     }
     if (out.size() < 2)
