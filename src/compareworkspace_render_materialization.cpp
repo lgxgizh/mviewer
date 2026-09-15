@@ -408,13 +408,7 @@ void CompareWorkspace::buildCompareCells(int n, int columns)
                         emit pixelInfo(QString());
                         return;
                     }
-                    emit pixelInfo(QString("[%1] (%2,%3) RGB(%4,%5,%6)")
-                                       .arg(cellName)
-                                       .arg(x)
-                                       .arg(y)
-                                       .arg(sample.r)
-                                       .arg(sample.g)
-                                       .arg(sample.b));
+                    emit pixelInfo(formatPixelInfo(cellIndex, cellName, x, y, sample));
                     // M30: route the high-frequency hover through the coalescer
                     // so the sync-crosshair pixelInfo + crosshairMoved pair and
                     // rapid hovers render the inspector at most once per turn.

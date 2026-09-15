@@ -459,15 +459,11 @@ class CompareWorkspace : public QWidget
     HistogramWidget *m_hist = nullptr;
     void onSideToggled(bool on);
     void updateInspector(int x, int y);
-    struct InspectorSample
-    {
-        int r = 0;
-        int g = 0;
-        int b = 0;
-        bool valid = false;
-    };
+    struct InspectorSample { int r = 0; int g = 0; int b = 0; bool valid = false; };
     void updateInspectorRows(const std::vector<InspectorSample> &samples,
                              mviewer::core::ColorSpace space, int baseIndex, int x, int y);
+    QString formatPixelInfo(int cellIndex, const QString &cellName, int x, int y,
+                            const mviewer::core::AnalysisPixel &sample) const;
     // M30: coalesced Pixel Inspector hover path.
     void updateInspectorHeader(int spaceIdx);
     void requestInspectorUpdate(int x, int y);

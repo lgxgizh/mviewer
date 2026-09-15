@@ -114,55 +114,61 @@ void ThumbnailPanel::applyDirectoryDelta(const mviewer::core::DirectoryDelta &de
         emit pathsModified(modifiedPaths);
 }
 
-void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDelta &delta,
-                                                 QList<Entry> &next,
-                                                 QStringList &removedPaths,
-                                                 QStringList &renamedFrom,
-                                                 QStringList &renamedTo)
+static void applyDeltaRemovalsAndModifications(
+    const mviewer::core::DirectoryDelta &delta,
+    QList<ThumbnailPanel::Entry> &next,
+    QStringList &removedPaths,
+    QStringList &renamedFrom,
+    QStringList &renamedTo,
+    const std::function<void(const QString &)> &invalidate)
 {
-    auto findPath = [&](const QString &path)
-    {
-        return std::find_if(next.begin(), next.end(),
-                            [&](const Entry &entry) { return pathEqual(entry.path, path); });
-    };
-    // Paths whose DISK-tier cache entry must go. Each of those invalidations ends
-    // in a SQLite DELETE, so they are collected here and executed once, off the
-    // UI thread, instead of one blocking round trip per changed file inside this
-    // slot (a bulk delete/overwrite of a few hundred files froze the UI).
-    QStringList diskInvalidations;
-    auto invalidate = [this, &diskInvalidations](const QString &path)
-    {
-        if (path.isEmpty())
-            return;
-        const std::string utf8 = path.toUtf8().toStdString();
-        // In-memory tiers: cheap, and must not be stale for even one paint.
-        ThumbnailPipeline::instance().invalidatePath(utf8);
-        invalidateThumbnailCacheFor(path);
-        diskInvalidations.append(path);
-    };
+    QHash<QString, int> nextIndex;
+    nextIndex.reserve(next.size());
+    for (int i = 0; i < next.size(); ++i)
+        nextIndex.insert(next[i].path, i);
+
+    QList<int> removeIndices;
+    removeIndices.reserve(delta.removed.size());
     for (const auto &entry : delta.removed)
     {
         const QString path = qpath(entry.path);
-        const auto it = findPath(path);
-        if (it != next.end())
-            next.erase(it);
+        auto idxIt = nextIndex.find(path);
+        if (idxIt != nextIndex.end())
+            removeIndices.append(idxIt.value());
         removedPaths.append(path);
         invalidate(path);
     }
+    std::sort(removeIndices.begin(), removeIndices.end(), std::greater<int>());
+    for (int idx : removeIndices)
+    {
+        nextIndex.remove(next[idx].path);
+        next.removeAt(idx);
+    }
+    nextIndex.clear();
+    nextIndex.reserve(next.size());
+    for (int i = 0; i < next.size(); ++i)
+        nextIndex.insert(next[i].path, i);
+
     for (const auto &rename : delta.renamed)
     {
         const QString oldPath = qpath(rename.before.path);
         const QString newPath = qpath(rename.after.path);
-        const auto it = findPath(oldPath);
-        if (it != next.end())
+        auto idxIt = nextIndex.find(oldPath);
+        if (idxIt != nextIndex.end())
         {
-            Entry replacement = toPanelEntry(rename.after);
-            replacement.width = it->width;
-            replacement.height = it->height;
-            *it = replacement;
+            const int idx = idxIt.value();
+            ThumbnailPanel::Entry replacement = toPanelEntry(rename.after);
+            replacement.width = next[idx].width;
+            replacement.height = next[idx].height;
+            next[idx] = replacement;
+            nextIndex.remove(oldPath);
+            nextIndex.insert(newPath, idx);
         }
         else
+        {
             next.append(toPanelEntry(rename.after));
+            nextIndex.insert(newPath, next.size() - 1);
+        }
         renamedFrom.append(oldPath);
         renamedTo.append(newPath);
         ThumbnailPipeline::instance().invalidatePath(oldPath.toUtf8().toStdString());
@@ -171,20 +177,46 @@ void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDe
     for (const auto &entry : delta.modified)
     {
         const QString path = qpath(entry.path);
-        const auto it = findPath(path);
-        if (it != next.end())
+        auto idxIt = nextIndex.find(path);
+        if (idxIt != nextIndex.end())
         {
-            Entry replacement = toPanelEntry(entry);
-            replacement.width = it->width;
-            replacement.height = it->height;
-            *it = replacement;
+            const int idx = idxIt.value();
+            ThumbnailPanel::Entry replacement = toPanelEntry(entry);
+            replacement.width = next[idx].width;
+            replacement.height = next[idx].height;
+            next[idx] = replacement;
         }
         else
+        {
             next.append(toPanelEntry(entry));
+            nextIndex.insert(path, next.size() - 1);
+        }
         invalidate(path);
     }
     for (const auto &entry : delta.added)
+    {
         next.append(toPanelEntry(entry));
+    }
+}
+
+void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDelta &delta,
+                                                 QList<Entry> &next,
+                                                 QStringList &removedPaths,
+                                                 QStringList &renamedFrom,
+                                                 QStringList &renamedTo)
+{
+    QStringList diskInvalidations;
+    auto invalidate = [this, &diskInvalidations](const QString &path)
+    {
+        if (path.isEmpty())
+            return;
+        const std::string utf8 = path.toUtf8().toStdString();
+        ThumbnailPipeline::instance().invalidatePath(utf8);
+        invalidateThumbnailCacheFor(path);
+        diskInvalidations.append(path);
+    };
+
+    applyDeltaRemovalsAndModifications(delta, next, removedPaths, renamedFrom, renamedTo, invalidate);
 
     for (const auto &rename : delta.renamed)
     {
@@ -198,12 +230,9 @@ void ThumbnailPanel::applyDirectoryDeltaEntries(const mviewer::core::DirectoryDe
             m_pendingSelect = newPath;
     }
 
-    // One background pass for the disk tier (SQLite row delete + thumbnail PNG
-    // removal per path) instead of N synchronous round trips inside this slot.
     if (!diskInvalidations.isEmpty())
     {
         const QStringList paths = diskInvalidations;
-        // MetadataPool is the Background-priority pool (see toPriority).
         TaskScheduler::instance().submit(TaskScheduler::MetadataPool,
                                          [paths]()
                                          {
@@ -312,57 +341,75 @@ void ThumbnailPanel::refreshSidecarPaths(const QStringList &paths)
     applyFilter();
 }
 
+static void syncModelRows(QAbstractItemModel *model,
+                           const QList<ThumbnailPanel::Entry> &entries,
+                           QStringList &working)
+{
+    QSet<QString> desired;
+    for (const auto &entry : entries)
+        desired.insert(entry.path);
+
+    for (int row = working.size() - 1; row >= 0; --row)
+    {
+        if (desired.contains(working.at(row)))
+            continue;
+        model->removeRows(row, 1);
+        working.removeAt(row);
+    }
+
+    QHash<QString, int> workingIndex;
+    workingIndex.reserve(working.size());
+    for (int i = 0; i < working.size(); ++i)
+        workingIndex.insert(working.at(i), i);
+
+    for (int target = 0; target < entries.size(); ++target)
+    {
+        const auto &entry = entries.at(target);
+        if (target < working.size() && working.at(target) == entry.path)
+        {
+            model->setData(model->index(target, 0), entry.name);
+            continue;
+        }
+        const auto idxIt = workingIndex.find(entry.path);
+        const int existing = (idxIt != workingIndex.end() && idxIt.value() >= target)
+                                 ? idxIt.value()
+                                 : -1;
+        if (existing >= 0)
+        {
+            const QString moved = working.takeAt(existing);
+            model->removeRows(existing, 1);
+            model->insertRows(target, 1);
+            model->setData(model->index(target, 0), entry.name);
+            working.insert(target, moved);
+            workingIndex.clear();
+            for (int i = 0; i < working.size(); ++i)
+                workingIndex.insert(working.at(i), i);
+        }
+        else
+        {
+            model->insertRows(target, 1);
+            model->setData(model->index(target, 0), entry.name);
+            working.insert(target, entry.path);
+            workingIndex.clear();
+            for (int i = 0; i < working.size(); ++i)
+                workingIndex.insert(working.at(i), i);
+        }
+    }
+    while (working.size() > entries.size())
+    {
+        const int row = working.size() - 1;
+        model->removeRows(row, 1);
+        working.removeAt(row);
+    }
+}
+
 void ThumbnailPanel::applyDisplayedEntriesIncremental(const QList<Entry> &entries,
                                                        const QStringList &previousSelection,
                                                        const QString &previousCurrent,
                                                        const QString &anchorPath, int anchorOffset)
 {
     QStringList working = m_paths;
-    QSet<QString> desired;
-    for (const Entry &entry : entries)
-        desired.insert(entry.path);
-
-    // Remove only rows that disappeared or no longer match the active filter.
-    for (int row = working.size() - 1; row >= 0; --row)
-    {
-        if (desired.contains(working.at(row)))
-            continue;
-        m_model->removeRows(row, 1);
-        working.removeAt(row);
-    }
-
-    // Reorder through row-local remove/insert operations. This preserves the
-    // model object and avoids beginResetModel()/setStringList() on every hint.
-    for (int target = 0; target < entries.size(); ++target)
-    {
-        const Entry &entry = entries.at(target);
-        if (target < working.size() && working.at(target) == entry.path)
-        {
-            m_model->setData(m_model->index(target, 0), entry.name);
-            continue;
-        }
-        const int existing = working.indexOf(entry.path, target);
-        if (existing >= 0)
-        {
-            const QString moved = working.takeAt(existing);
-            m_model->removeRows(existing, 1);
-            m_model->insertRows(target, 1);
-            m_model->setData(m_model->index(target, 0), entry.name);
-            working.insert(target, moved);
-        }
-        else
-        {
-            m_model->insertRows(target, 1);
-            m_model->setData(m_model->index(target, 0), entry.name);
-            working.insert(target, entry.path);
-        }
-    }
-    while (working.size() > entries.size())
-    {
-        const int row = working.size() - 1;
-        m_model->removeRows(row, 1);
-        working.removeAt(row);
-    }
+    syncModelRows(m_model, entries, working);
 
     m_paths.clear();
     m_rowByPath.clear();

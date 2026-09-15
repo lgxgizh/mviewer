@@ -39,7 +39,8 @@ ImageData toImageData(const QImage &src)
     const int h = img.height();
     const size_t rowBytes = static_cast<size_t>(w) * 3;
     const qsizetype bytesPerLine = img.bytesPerLine();
-    if (bytesPerLine == static_cast<qsizetype>(rowBytes))
+    if (bytesPerLine == static_cast<qsizetype>(rowBytes) &&
+        out.stride() == rowBytes)
     {
         std::memcpy(out.buffer->data(), img.constBits(), rowBytes * static_cast<size_t>(h));
     }

@@ -43,7 +43,8 @@ QString formatChannel(ColorSpace space, double v)
 // path churned the item heap on every hover). Only setText when the text
 // actually changed, so stable index/name cells skip the model data-change and
 // repaint work.
-void setCellText(QTableWidget *table, int row, int col, const QString &text)
+void setCellText(QTableWidget *table, int row, int col, const QString &text,
+                 const QString &toolTip = QString())
 {
     QTableWidgetItem *item = table->item(row, col);
     if (!item)
@@ -53,6 +54,8 @@ void setCellText(QTableWidget *table, int row, int col, const QString &text)
     }
     if (item->text() != text)
         item->setText(text);
+    if (item->toolTip() != toolTip)
+        item->setToolTip(toolTip);
 }
 } // namespace
 
@@ -352,6 +355,7 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
         }
 
         QString delta = QStringLiteral("无效");
+        QString deltaTip;
         if (sample.valid && baseIdx >= 0 && baseIdx < n &&
             samples[static_cast<size_t>(baseIdx)].valid)
         {
@@ -361,8 +365,20 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
             const int db = sample.b - base.b;
             const double dist = std::sqrt(static_cast<double>(dr * dr + dg * dg + db * db));
             delta = (i == baseIdx) ? QStringLiteral("0") : QString::number(dist, 'f', 0);
+            if (i == baseIdx)
+            {
+                deltaTip = tr("基准图像（差值为0）");
+            }
+            else
+            {
+                deltaTip = tr("与基准对比：ΔR=%1, ΔG=%2, ΔB=%3 (欧氏距离: %4)")
+                               .arg(dr >= 0 ? QString("+%1").arg(dr) : QString::number(dr))
+                               .arg(dg >= 0 ? QString("+%1").arg(dg) : QString::number(dg))
+                               .arg(db >= 0 ? QString("+%1").arg(db) : QString::number(db))
+                               .arg(dist, 0, 'f', 2);
+            }
         }
-        setCellText(m_inspector, i, 5, delta);
+        setCellText(m_inspector, i, 5, delta, deltaTip);
 
         QString raw16 = QStringLiteral("无效");
         if (sample.valid)
@@ -651,4 +667,39 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
     }
 
     update();
+}
+
+QString CompareWorkspace::formatPixelInfo(int cellIndex, const QString &cellName, int x, int y,
+                                          const mviewer::core::AnalysisPixel &sample) const
+{
+    QString info = QString("[%1] (%2,%3) RGB(%4,%5,%6)")
+                       .arg(cellName)
+                       .arg(x)
+                       .arg(y)
+                       .arg(sample.r)
+                       .arg(sample.g)
+                       .arg(sample.b);
+    const int baseIdx = diffBaseIndex();
+    if (cellIndex != baseIdx && baseIdx >= 0 && baseIdx < m_engine.imageCount())
+    {
+        const ImageFrame *baseFrame = m_engine.imageAt(baseIdx);
+        const CellAdjust baseAdjust = baseIdx < static_cast<int>(m_cellAdjusts.size())
+                                          ? m_cellAdjusts[static_cast<size_t>(baseIdx)]
+                                          : CellAdjust{};
+        const auto baseSample =
+            baseFrame ? mviewer::core::sampleAnalysisPixel(
+                            baseFrame->pixels(), analysisAdjustment(baseAdjust), x, y)
+                      : mviewer::core::AnalysisPixel{};
+        if (baseSample.valid)
+        {
+            const int dr = sample.r - baseSample.r;
+            const int dg = sample.g - baseSample.g;
+            const int db = sample.b - baseSample.b;
+            info += QString(" Δ(%1,%2,%3)")
+                        .arg(dr >= 0 ? QString("+%1").arg(dr) : QString::number(dr))
+                        .arg(dg >= 0 ? QString("+%1").arg(dg) : QString::number(dg))
+                        .arg(db >= 0 ? QString("+%1").arg(db) : QString::number(db));
+        }
+    }
+    return info;
 }

@@ -52,7 +52,8 @@ DirectoryMonitor::~DirectoryMonitor()
     if (m_stabilityTimer)
         m_stabilityTimer->stop();
     m_pool.clear();
-    m_pool.waitForDone();
+    // Do not block the GUI thread waiting for a possibly slow directory
+    // snapshot. Running tasks check m_alive and self-cancel safely.
 }
 
 void DirectoryMonitor::setActiveDirectory(const QString &path)
@@ -155,10 +156,11 @@ void DirectoryMonitor::startReconcile()
             auto snapshot = mviewer::core::snapshotDirectory(path.toUtf8().toStdString(), generation);
             QMetaObject::invokeMethod(
                 this,
-                [this, alive, generation, snapshot = std::move(snapshot)]() mutable
+                [this, alive, generation, generationToken,
+                 snapshot = std::move(snapshot)]() mutable
                 {
                     if (!alive->load(std::memory_order_acquire) ||
-                        generation != m_generation->load(std::memory_order_acquire))
+                        generation != generationToken->load(std::memory_order_acquire))
                         return;
                     handleSnapshot(std::move(snapshot), generation);
                 },

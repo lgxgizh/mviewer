@@ -1,5 +1,37 @@
 # Changelog
  
+## [1.0.39] - 2026-09-15
+
+### Performance & Optimizations
+
+- **DifferenceEngine SIMD Vectorization & Arithmetic Acceleration**:
+  - Vectorized RGB24 / BGR24 difference calculations using SSSE3 when available, and replaced expensive integer division by 3 with division-free reciprocal fixed-point multiplication `(sum * 21846) >> 16` across all paths.
+  - Implemented 256-bit AVX2 vectorization for `applyThreshold` on Grayscale8 diff maps, processing 32 pixels per instruction.
+  - Replaced branching and runtime arithmetic in `heatMap` with a precomputed 256-entry L1-resident lookup table, operating at raw memory bandwidth speed.
+  - Accelerated `highlightMap` with a precomputed 256-entry intensity LUT and fixed-point luminance calculations.
+  - Streamlined `computeStats` with direct row scans for Grayscale8 and pre-calculated pixel counts, eliminating redundant inner-loop counter increments.
+
+- **Thumbnail Cache & Directory Reconcile Acceleration**:
+  - Optimized `ThumbnailCache::runInvalidationWorker()` to query the in-memory cache index instead of performing expensive synchronous filesystem directory scans for `*.png` matches on invalidation prefixes.
+  - Accelerated `ThumbnailPanel::applyDirectoryDeltaEntries` and `applyDisplayedEntriesIncremental` with hash map indices for $O(1)$ path lookups, replacing repeated $O(N)$ searches during rapid live-directory sync.
+
+### Features & Polish
+
+- **Enhanced Compare Workspace Pixel Inspection**:
+  - Added live signed channel delta readout $\Delta(dr, dg, db)$ relative to the baseline image directly in the status bar hover display: `[name] (x,y) RGB(r,g,b) Δ(+dr,+dg,+db)`.
+  - Added rich channel-level delta tooltips to the $\Delta$ column in the side-panel Pixel Inspector table, displaying `ΔR`, `ΔG`, `ΔB` and 2-decimal Euclidean distance on hover.
+  - Decoupled `formatPixelInfo` into `compareworkspace_analysis.cpp` to keep UI responsibility TUs compact and compliant with architecture complexity gates.
+
+### Bug Fixes & Stability
+
+- **CacheManager Hit Accounting & Memory Cleanup**:
+  - Corrected `CacheManager::get()` accounting when promoted from disk: records a miss for the requested memory tier and a hit for the disk tier, preventing inflated memory hit rates.
+  - Fixed `CacheManager::clearMemory()` to clear `m_metaStore` and `m_metaOrder` in addition to `m_raw16Store`.
+- **QtDecoder Buffer Safety**:
+  - Added stride check `out.stride() == rowBytes` before contiguous memory copies to ensure safety against padded or non-standard row alignments.
+- **DirectoryMonitor Non-Blocking Destruction**:
+  - Prevented GUI thread blocking in `DirectoryMonitor::~DirectoryMonitor()` by clearing pending tasks and relying on `m_alive` cancellation tokens instead of blocking with `waitForDone()`.
+
 ## [1.0.38] - 2026-09-15
 
 ### Performance & Optimizations

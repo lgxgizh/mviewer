@@ -103,7 +103,8 @@ bool CacheManager::get(CacheLevel level, const std::string &key, ImageData &out)
     if (getDisk(key, out))
     {
         putMemory(level, key, out);
-        recordHit(level);
+        recordMiss(level);
+        recordHit(CacheLevel::Disk);
         return true;
     }
     recordMiss(level);
@@ -164,10 +165,17 @@ void CacheManager::clear()
 void CacheManager::clearMemory()
 {
     ImageCache::instance().clear();
-    std::lock_guard<std::mutex> lock(m_raw16Mutex);
-    m_raw16Store.clear();
-    m_raw16Order.clear();
-    m_raw16Bytes = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_metaMutex);
+        m_metaStore.clear();
+        m_metaOrder.clear();
+    }
+    {
+        std::lock_guard<std::mutex> lock(m_raw16Mutex);
+        m_raw16Store.clear();
+        m_raw16Order.clear();
+        m_raw16Bytes = 0;
+    }
 }
 
 void CacheManager::clearDisk()

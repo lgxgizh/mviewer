@@ -111,16 +111,21 @@ void ThumbnailCache::runInvalidationWorker()
             continue;
         const QString prefix =
             QCryptographicHash::hash(task.first.toUtf8(), QCryptographicHash::Sha1).toHex() + "_";
-        const QFileInfoList files = QDir(dir).entryInfoList(QStringList{QStringLiteral("*.png")},
-                                                            QDir::Files | QDir::NoDotAndDotDot);
+        // Use the in-memory index instead of scanning the entire cache directory.
+        // Collect matching keys first, then remove them (avoids iterator invalidation).
         QMutexLocker lock(&m_mutex);
         if (m_pathInvalidations.value(task.first, 0) != task.second)
             continue;
-        for (const QFileInfo &info : files)
+        QStringList keysToRemove;
+        for (auto it = m_entries.cbegin(); it != m_entries.cend(); ++it)
         {
-            const QString key = info.fileName().left(info.fileName().size() - 4);
-            if (key.startsWith(prefix))
-                removeKey(key, info.absoluteFilePath());
+            if (it.key().startsWith(prefix))
+                keysToRemove.append(it.key());
+        }
+        for (const QString &key : keysToRemove)
+        {
+            const QString file = QDir(dir).filePath(key + ".png");
+            removeKey(key, file);
         }
         m_pathInvalidations.remove(task.first);
     }
