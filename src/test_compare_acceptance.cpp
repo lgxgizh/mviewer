@@ -243,6 +243,7 @@ int main(int argc, char **argv)
     testInspectorUsesFullResolutionSource(dir);
     testCompareLoadCancellation(dir);
     testInspectorCoalescing(paths8[0], paths8[1]);
+    testCanvasDoubleClickGestures(paths8[0], paths8[1]);
 
     if (g_failures > 0)
     {

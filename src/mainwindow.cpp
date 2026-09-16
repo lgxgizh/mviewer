@@ -571,11 +571,26 @@ void MainWindow::onCurrentImageChanged(const QString &path)
                     const auto &meta = snapshot.metadata;
                     if (meta.width > 0 && meta.height > 0)
                     {
-                        guard->m_lblImage->setText(
-                            QString("%1x%2 · %3")
-                                .arg(meta.width)
-                                .arg(meta.height)
-                                .arg(MainWindow::formatBytes(meta.fileSize)));
+                        const QString sizeStr = MainWindow::formatBytes(meta.fileSize);
+                        if (!meta.format.empty())
+                        {
+                            const QString fmt =
+                                QString::fromStdString(meta.format).toUpper();
+                            guard->m_lblImage->setText(
+                                QString("%1x%2 · %3 · %4")
+                                    .arg(meta.width)
+                                    .arg(meta.height)
+                                    .arg(fmt)
+                                    .arg(sizeStr));
+                        }
+                        else
+                        {
+                            guard->m_lblImage->setText(
+                                QString("%1x%2 · %3")
+                                    .arg(meta.width)
+                                    .arg(meta.height)
+                                    .arg(sizeStr));
+                        }
                     }
                 },
                 Qt::QueuedConnection);

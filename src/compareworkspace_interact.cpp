@@ -381,6 +381,65 @@ bool CompareWorkspace::handleCanvasRelease(QEvent *event)
     return true;
 }
 
+bool CompareWorkspace::handleCanvasDoubleClick(QEvent *event)
+{
+    auto *me = static_cast<QMouseEvent *>(event);
+    if (me->button() != Qt::LeftButton)
+        return false;
+
+    const QRect cr = canvasRect();
+    const bool swipe = m_swipeChk && m_swipeChk->isChecked();
+    const int divider = int(cr.width() * m_splitPos);
+    if (swipe && std::abs(me->pos().x() - divider) < 16)
+    {
+        m_splitDragging = false;
+        m_dragging = false;
+        m_splitPos = 0.5;
+        if (m_compareCanvas)
+            m_compareCanvas->update();
+        showCompareStatus(tr("滑动卷帘已重置居中 (50%)"));
+        return true;
+    }
+
+    const QPoint pos = me->pos();
+    double anchorX = pos.x() - cr.width() / 2.0;
+    double anchorY = pos.y() - cr.height() / 2.0;
+    int refCell = 0;
+    if (m_splitChk && m_splitChk->isChecked())
+    {
+        const int midX = cr.width() / 2;
+        const bool left = pos.x() < midX;
+        const QRect half = left ? QRect(cr.left(), cr.top(), midX, cr.height())
+                                : QRect(cr.left() + midX, cr.top(), cr.width() - midX, cr.height());
+        anchorX = pos.x() - (half.x() + half.width() / 2.0);
+        anchorY = pos.y() - (half.y() + half.height() / 2.0);
+        refCell = left ? 0 : 1;
+    }
+
+    const double currentScale = m_engine.cellTransform(refCell).scale;
+    const double fitScale = refCell < m_fitScales.size() ? m_fitScales[refCell] : 1.0;
+    const bool isFit = fitScale > 0.0 && std::abs(currentScale - fitScale) < 0.005;
+
+    if (isFit)
+    {
+        const double factor = std::abs(fitScale - 1.0) < 0.005 ? 2.0 : (1.0 / currentScale);
+        applyAnchorZoom(refCell, anchorX, anchorY, factor);
+        showCompareStatus(std::abs(factor - 2.0) < 0.001 ? tr("视图缩放: 200%") : tr("视图缩放: 100%"));
+    }
+    else
+    {
+        fitAll();
+        showCompareStatus(tr("视图自适应窗口 (Fit)"));
+    }
+
+    m_dragging = false;
+    m_splitDragging = false;
+    if (m_compareCanvas)
+        m_compareCanvas->update();
+    update();
+    return true;
+}
+
 bool CompareWorkspace::handleCanvasLeave(QEvent *)
 {
     m_splitDragging = false;
@@ -401,6 +460,8 @@ bool CompareWorkspace::canvasEventFilter(QEvent *event)
         return handleCanvasWheel(event);
     if (event->type() == QEvent::MouseButtonPress)
         return handleCanvasPress(event);
+    if (event->type() == QEvent::MouseButtonDblClick)
+        return handleCanvasDoubleClick(event);
     if (event->type() == QEvent::MouseMove)
         return handleCanvasMove(event);
     if (event->type() == QEvent::MouseButtonRelease)

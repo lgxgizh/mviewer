@@ -1303,5 +1303,69 @@ void testInspectorCoalescing(const QString &a, const QString &b)
     }
 }
 
+void testCanvasDoubleClickGestures(const QString &a, const QString &b)
+{
+    SelectionModel sel;
+    QDialog dlg;
+    auto *lay = new QVBoxLayout(&dlg);
+    auto *ws = new CompareWorkspace(&dlg);
+    lay->addWidget(ws);
+    ws->setSelectionModel(&sel);
+    ws->setImages({a, b});
+    dlg.resize(800, 600);
+    dlg.show();
+    waitForCompareCount(ws, 2);
+    pump(100);
+
+    auto *swipe = findChk(ws, QStringLiteral("滑动对比"));
+    CHECK(swipe && swipe->isEnabled(), "Canvas double-click: swipe mode is available");
+    if (!swipe)
+        return;
+    swipe->setChecked(true);
+    pump(50);
+
+    auto *canvas = ws->findChild<QWidget *>(QStringLiteral("compareCanvas"));
+    CHECK(canvas && canvas->isVisible(), "Canvas double-click: compareCanvas is visible in swipe mode");
+    if (!canvas)
+        return;
+
+    // Drag the divider to 0.25
+    const int startX = int(canvas->width() * 0.5);
+    const int targetX = int(canvas->width() * 0.25);
+    QMouseEvent press(QEvent::MouseButtonPress, QPointF(startX, 300), Qt::LeftButton, Qt::LeftButton,
+                      Qt::NoModifier);
+    QApplication::sendEvent(canvas, &press);
+    QMouseEvent move(QEvent::MouseMove, QPointF(targetX, 300), Qt::LeftButton, Qt::LeftButton,
+                     Qt::NoModifier);
+    QApplication::sendEvent(canvas, &move);
+    QMouseEvent release(QEvent::MouseButtonRelease, QPointF(targetX, 300), Qt::LeftButton, Qt::NoButton,
+                        Qt::NoModifier);
+    QApplication::sendEvent(canvas, &release);
+    pump(30);
+
+    // Double click at targetX should reset divider to 0.5
+    QMouseEvent dblDivider(QEvent::MouseButtonDblClick, QPointF(targetX, 300), Qt::LeftButton,
+                           Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(canvas, &dblDivider);
+    pump(30);
+
+    // Double click away from divider (e.g. at 0.8) should toggle zoom
+    const double initialScale = ws->engine().cellTransform(0).scale;
+    QMouseEvent dblZoom(QEvent::MouseButtonDblClick, QPointF(canvas->width() * 0.8, 300), Qt::LeftButton,
+                        Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(canvas, &dblZoom);
+    pump(30);
+    const double zoomedScale = ws->engine().cellTransform(0).scale;
+    CHECK(std::abs(zoomedScale - initialScale) > 0.001,
+          "Canvas double-click: double clicking canvas toggles zoom from fit");
+
+    // Double clicking again should restore fit
+    QApplication::sendEvent(canvas, &dblZoom);
+    pump(30);
+    const double restoredScale = ws->engine().cellTransform(0).scale;
+    CHECK(std::abs(restoredScale - initialScale) < 0.01,
+          "Canvas double-click: double clicking again restores fit");
+}
+
 } // namespace
 

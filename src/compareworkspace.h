@@ -337,6 +337,7 @@ class CompareWorkspace : public QWidget
     bool canvasEventFilter(QEvent *event);
     bool handleCanvasWheel(QEvent *event);
     bool handleCanvasPress(QEvent *event);
+    bool handleCanvasDoubleClick(QEvent *event);
     bool handleCanvasMove(QEvent *event);
     bool handleCanvasRelease(QEvent *event);
     bool handleCanvasLeave(QEvent *event);

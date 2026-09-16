@@ -260,11 +260,18 @@ bool MainWindow::handleClipboardKey(QKeyEvent *event)
         if ((mod & Qt::ShiftModifier))
         {
             if (!currentImagePath().isEmpty())
-                QApplication::clipboard()->setText(currentImagePath());
+            {
+                const QString nativePath = QDir::toNativeSeparators(currentImagePath());
+                QApplication::clipboard()->setText(nativePath);
+                if (statusBar())
+                    statusBar()->showMessage(tr("已复制路径: %1").arg(nativePath), 2000);
+            }
         }
         else
         {
             copyCurrentImageToClipboard();
+            if (statusBar())
+                statusBar()->showMessage(tr("已复制图片到剪贴板"), 2000);
         }
         event->accept();
         return true;

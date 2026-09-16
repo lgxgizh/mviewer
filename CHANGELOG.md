@@ -1,5 +1,19 @@
 # Changelog
  
+## [1.0.49] - 2026-09-16
+
+### UX, Ergonomics & Interaction Polish
+
+- **Compare Canvas Natural Interaction (`CompareWorkspace`, `compareworkspace_interact.cpp`)**:
+  - **Swipe Divider Quick Reset**: In swipe comparison mode (`m_swipeChk`), double-clicking on or near the divider line resets the split position to exact center (50%) with toast HUD feedback (`滑动卷帘已重置居中 (50%)`), making comparison recalibration instantaneous without fine drag adjustments.
+  - **Canvas Fit ↔ 100% Zoom Toggle**: Double-clicking anywhere on the comparison canvas toggles between Fit to Window (`fitAll()`) and 100% zoom anchored at the cursor point (`applyAnchorZoom`), seamlessly aligning the multi-image comparison canvas with standard single-image viewer gestures.
+- **Recent Items Management (`MainWindow`, `mainwindow_navigation.cpp`)**:
+  - Added dedicated **清空最近目录 (Clear Recent Directories)** and **清空最近文件 (Clear Recent Files)** actions to the respective menus, enabling users to clear navigation history with immediate status bar confirmation while maintaining directory model synchronization.
+- **Clipboard & Navigation Status Feedback (`MainWindow`, `mainwindow_commands.cpp`)**:
+  - Added immediate status bar feedback (`tr("已复制路径: %1")` / `tr("已复制图片到剪贴板")`) when triggering path copy (`Ctrl+Shift+C`) and image copy (`Ctrl+C`), giving algorithm engineers clear feedback without guesswork.
+- **Status Bar Metadata Enrichment (`MainWindow`, `mainwindow.cpp`)**:
+  - Enriched the permanent image dimension status bar label (`m_lblImage`) to display the detected container format in uppercase alongside dimensions and file size (e.g. `1920x1080 · PNG · 2.4 MB`), providing instant container format visibility without opening metadata dialogs.
+
 ## [1.0.48] - 2026-09-16
 
 ### Performance & Engine Acceleration

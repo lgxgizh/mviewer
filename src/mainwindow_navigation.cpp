@@ -295,6 +295,22 @@ void MainWindow::rebuildRecentMenu()
         act->setToolTip(qs);
         connect(act, &QAction::triggered, this, [this, qs]() { changeDirectory(qs); });
     }
+    if (!m_recent.items().empty())
+    {
+        m_recentMenu->addSeparator();
+        auto *clearAct = m_recentMenu->addAction(tr("清空最近目录"));
+        connect(clearAct, &QAction::triggered, this,
+                [this]()
+                {
+                    m_recent.clear();
+                    m_appState.clearRecentFolders();
+                    if (m_directory)
+                        m_directory->setRecentFolders({});
+                    rebuildRecentMenu();
+                    if (statusBar())
+                        statusBar()->showMessage(tr("已清空最近目录记录"), 2000);
+                });
+    }
     if (m_recentMenu->isEmpty())
         m_recentMenu->addAction("(无)")->setEnabled(false);
 }
@@ -318,6 +334,19 @@ void MainWindow::rebuildRecentFilesMenu()
         auto *act = m_recentFileMenu->addAction(QFileInfo(qs).fileName());
         act->setToolTip(qs);
         connect(act, &QAction::triggered, this, [this, qs]() { onImageOpen(qs); });
+    }
+    if (!m_recentFiles.items().empty())
+    {
+        m_recentFileMenu->addSeparator();
+        auto *clearAct = m_recentFileMenu->addAction(tr("清空最近文件"));
+        connect(clearAct, &QAction::triggered, this,
+                [this]()
+                {
+                    m_recentFiles.clear();
+                    rebuildRecentFilesMenu();
+                    if (statusBar())
+                        statusBar()->showMessage(tr("已清空最近文件记录"), 2000);
+                });
     }
     if (m_recentFileMenu->isEmpty())
         m_recentFileMenu->addAction("(无)")->setEnabled(false);
