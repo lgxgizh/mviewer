@@ -271,6 +271,77 @@ constexpr const char s_darkStyleSheet[] = R"(
             padding: 0 4px;
             left: 8px;
         }
+        QHeaderView::section {
+            background-color: #222226;
+            color: #a1a1aa;
+            padding: 4px 8px;
+            border: 1px solid #2d2d32;
+            font-weight: 500;
+        }
+        QTreeView, QTableView, QListView {
+            background-color: #141416;
+            alternate-background-color: #1a1a1d;
+            color: #e4e4e7;
+            border: 1px solid #2d2d32;
+            outline: none;
+            selection-background-color: #2563eb;
+            selection-color: #ffffff;
+        }
+        QTreeView::item:hover, QTableView::item:hover, QListView::item:hover {
+            background-color: #27272e;
+        }
+        QSlider::groove:horizontal {
+            height: 4px;
+            background: #38383e;
+            border-radius: 2px;
+        }
+        QSlider::sub-page:horizontal {
+            background: #3b82f6;
+            border-radius: 2px;
+        }
+        QSlider::handle:horizontal {
+            width: 14px;
+            margin: -5px 0;
+            background: #e4e4e7;
+            border: 1px solid #3b82f6;
+            border-radius: 7px;
+        }
+        QSlider::handle:horizontal:hover {
+            background: #ffffff;
+            border-color: #60a5fa;
+        }
+        QProgressBar {
+            border: 1px solid #38383e;
+            border-radius: 4px;
+            text-align: center;
+            background: #18181b;
+            color: #e4e4e7;
+        }
+        QProgressBar::chunk {
+            background: #2563eb;
+            border-radius: 3px;
+        }
+        QCheckBox, QRadioButton {
+            spacing: 6px;
+            color: #e4e4e7;
+        }
+        QCheckBox::indicator, QRadioButton::indicator {
+            width: 16px;
+            height: 16px;
+            border: 1px solid #4a4a54;
+            border-radius: 3px;
+            background: #18181b;
+        }
+        QRadioButton::indicator {
+            border-radius: 8px;
+        }
+        QCheckBox::indicator:hover, QRadioButton::indicator:hover {
+            border-color: #3b82f6;
+        }
+        QCheckBox::indicator:checked, QRadioButton::indicator:checked {
+            background-color: #2563eb;
+            border-color: #3b82f6;
+        }
     )";
 
 static ThemeMode s_currentTheme = ThemeMode::Dark;

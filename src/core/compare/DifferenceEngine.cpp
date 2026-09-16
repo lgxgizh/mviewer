@@ -102,6 +102,20 @@ static inline void diffGrayscale8Row(const uint8_t *la, const uint8_t *lb, uint8
             _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + x), result);
         }
     }
+    const __m128i vthresh128 = _mm_set1_epi8(static_cast<char>(threshold));
+    const __m128i vzero128 = _mm_setzero_si128();
+    for (; x + 16 <= w; x += 16)
+    {
+        const __m128i va = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x));
+        const __m128i vb = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x));
+        const __m128i sub1 = _mm_subs_epu8(va, vb);
+        const __m128i sub2 = _mm_subs_epu8(vb, va);
+        const __m128i diff = _mm_or_si128(sub1, sub2);
+        const __m128i under = _mm_subs_epu8(vthresh128, diff);
+        const __m128i mask = _mm_cmpeq_epi8(under, vzero128);
+        const __m128i result = _mm_and_si128(diff, mask);
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(dst + x), result);
+    }
     for (; x < w; ++x)
     {
         const int dr = std::abs(static_cast<int>(la[x]) - static_cast<int>(lb[x]));
@@ -326,11 +340,19 @@ ImageData DifferenceEngine::amplify(const ImageData &gray, double gain)
         ImageData copy = makeImageData(gray.width, gray.height, gray.format);
         if (copy.isNull())
             return ImageData();
-        for (int y = 0; y < gray.height; ++y)
+        if (gray.stride() == copy.stride())
         {
-            const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
-            uint8_t *dst = copy.buffer->data() + static_cast<size_t>(y) * copy.stride();
-            std::memcpy(dst, src, static_cast<size_t>(gray.width) * gray.channelsPerPixel());
+            std::memcpy(copy.buffer->data(), gray.buffer->data(),
+                        static_cast<size_t>(gray.stride()) * gray.height);
+        }
+        else
+        {
+            for (int y = 0; y < gray.height; ++y)
+            {
+                const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
+                uint8_t *dst = copy.buffer->data() + static_cast<size_t>(y) * copy.stride();
+                std::memcpy(dst, src, static_cast<size_t>(gray.width) * gray.channelsPerPixel());
+            }
         }
         return copy;
     }
@@ -350,12 +372,24 @@ ImageData DifferenceEngine::amplify(const ImageData &gray, double gain)
 
     if (cpp == 1 && ro == 0)
     {
-        for (int y = 0; y < gray.height; ++y)
+        if (gray.stride() == static_cast<size_t>(gray.width) &&
+            out.stride() == static_cast<size_t>(out.width))
         {
-            const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
-            uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
-            for (int x = 0; x < gray.width; ++x)
-                dst[x] = lut[src[x]];
+            const size_t total = static_cast<size_t>(gray.width) * gray.height;
+            const uint8_t *src = gray.buffer->data();
+            uint8_t *dst = out.buffer->data();
+            for (size_t i = 0; i < total; ++i)
+                dst[i] = lut[src[i]];
+        }
+        else
+        {
+            for (int y = 0; y < gray.height; ++y)
+            {
+                const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
+                uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+                for (int x = 0; x < gray.width; ++x)
+                    dst[x] = lut[src[x]];
+            }
         }
     }
     else
@@ -406,7 +440,22 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
     long long sum = 0;
     long long diffCount = 0;
     int maxV = 0;
-    if (cpp == 1 && ro == 0)
+    const bool contiguous = (cpp == 1 && ro == 0 && x0 == 0 && y0 == 0 &&
+                             x1 == grayDiff.width && y1 == grayDiff.height &&
+                             grayDiff.stride() == static_cast<size_t>(grayDiff.width));
+    if (contiguous)
+    {
+        const size_t total = static_cast<size_t>(grayDiff.width) * grayDiff.height;
+        const uint8_t *src = grayDiff.buffer->data();
+        for (size_t i = 0; i < total; ++i)
+        {
+            const int v = src[i];
+            sum += v;
+            diffCount += (v >= minDiff);
+            maxV = std::max(maxV, v);
+        }
+    }
+    else if (cpp == 1 && ro == 0)
     {
         for (int y = y0; y < y1; ++y)
         {

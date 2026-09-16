@@ -2,9 +2,11 @@
 
 #include "core/analysis/PixelGrid.h"
 
+#include <QLineF>
 #include <QPainter>
 #include <QPen>
 #include <QRectF>
+#include <QVarLengthArray>
 
 namespace mviewer::ui
 {
@@ -22,8 +24,11 @@ inline void drawPixelGrid(QPainter &p, const QRectF &imageDest, int srcX, int sr
     QPen pen(QColor(255, 255, 255, 72), 1);
     pen.setCosmetic(true);
     p.setPen(pen);
+    QVarLengthArray<QLineF, 256> qlines;
+    qlines.reserve(static_cast<qsizetype>(lines.size()));
     for (const auto &line : lines)
-        p.drawLine(QPointF(line.x1, line.y1), QPointF(line.x2, line.y2));
+        qlines.append(QLineF(line.x1, line.y1, line.x2, line.y2));
+    p.drawLines(qlines.constData(), static_cast<int>(qlines.size()));
     p.restore();
 }
 

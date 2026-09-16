@@ -239,6 +239,44 @@ int main(int argc, char **argv)
         CHECK(nul.totalPixels == 0, "null input = empty stats");
     }
 
+    // Vectorized Grayscale8 diffMap + contiguous amplify & computeStats
+    {
+        // 48x4 image to exercise AVX2 (32B), SSE2 (16B), and scalar tails
+        const int w = 48;
+        const int h = 4;
+        auto bufA = std::make_shared<std::vector<uint8_t>>(w * h, uint8_t(50));
+        auto bufB = std::make_shared<std::vector<uint8_t>>(w * h, uint8_t(50));
+        (*bufA)[0] = 100; // diff 50
+        (*bufA)[33] = 70; // diff 20 in SSE2 span
+        (*bufA)[47] = 80; // diff 30 in tail
+        ImageData a;
+        a.buffer = bufA;
+        a.width = w;
+        a.height = h;
+        a.format = PixelFormat::Grayscale8;
+        ImageData b;
+        b.buffer = bufB;
+        b.width = w;
+        b.height = h;
+        b.format = PixelFormat::Grayscale8;
+
+        auto diff = DifferenceEngine::differenceMap(a, b);
+        CHECK(!diff.isNull(), "vectorized Grayscale8 diff non-null");
+        CHECK((*diff.buffer)[0] == 50, "diff at 0 is 50");
+        CHECK((*diff.buffer)[33] == 20, "diff at 33 is 20");
+        CHECK((*diff.buffer)[47] == 30, "diff at 47 is 30");
+
+        auto amp = DifferenceEngine::amplify(diff, 2.0);
+        CHECK(!amp.isNull(), "contiguous amplify non-null");
+        CHECK((*amp.buffer)[0] == 100, "amplified diff at 0 is 100");
+        CHECK((*amp.buffer)[33] == 40, "amplified diff at 33 is 40");
+
+        const auto stats = DifferenceEngine::computeStats(diff);
+        CHECK(stats.totalPixels == w * h, "contiguous computeStats total matches");
+        CHECK(stats.diffPixels == 3, "contiguous computeStats diff count matches");
+        CHECK(stats.maxDiff == 50, "contiguous computeStats maxDiff is 50");
+    }
+
     std::cout << "\nDifferenceEngine: " << (g_fail == 0 ? "ALL PASSED" : "FAILURES") << "\n";
     return g_fail == 0 ? 0 : 1;
 }

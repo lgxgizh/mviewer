@@ -131,20 +131,42 @@ void copyPixelValue(const PixelRGBA &px, int format)
     switch (format)
     {
     case 0:
-        text = QString("#%1%2%3")
-                   .arg(px.r, 2, 16, QChar('0'))
-                   .arg(px.g, 2, 16, QChar('0'))
-                   .arg(px.b, 2, 16, QChar('0'))
-                   .toUpper();
+        if (px.a < 255)
+        {
+            text = QString("#%1%2%3%4")
+                       .arg(px.r, 2, 16, QChar('0'))
+                       .arg(px.g, 2, 16, QChar('0'))
+                       .arg(px.b, 2, 16, QChar('0'))
+                       .arg(px.a, 2, 16, QChar('0'))
+                       .toUpper();
+        }
+        else
+        {
+            text = QString("#%1%2%3")
+                       .arg(px.r, 2, 16, QChar('0'))
+                       .arg(px.g, 2, 16, QChar('0'))
+                       .arg(px.b, 2, 16, QChar('0'))
+                       .toUpper();
+        }
         break;
     case 1:
-        text = QString("RGB(%1, %2, %3)").arg(px.r).arg(px.g).arg(px.b);
+        if (px.a < 255)
+            text = QString("RGBA(%1, %2, %3, %4)").arg(px.r).arg(px.g).arg(px.b).arg(px.a);
+        else
+            text = QString("RGB(%1, %2, %3)").arg(px.r).arg(px.g).arg(px.b);
         break;
     case 2:
-        text = QString("(%1, %2, %3)")
-                   .arg(px.r / 255.0, 0, 'f', 4)
-                   .arg(px.g / 255.0, 0, 'f', 4)
-                   .arg(px.b / 255.0, 0, 'f', 4);
+        if (px.a < 255)
+            text = QString("(%1, %2, %3, %4)")
+                       .arg(px.r / 255.0, 0, 'f', 4)
+                       .arg(px.g / 255.0, 0, 'f', 4)
+                       .arg(px.b / 255.0, 0, 'f', 4)
+                       .arg(px.a / 255.0, 0, 'f', 4);
+        else
+            text = QString("(%1, %2, %3)")
+                       .arg(px.r / 255.0, 0, 'f', 4)
+                       .arg(px.g / 255.0, 0, 'f', 4)
+                       .arg(px.b / 255.0, 0, 'f', 4);
         break;
     case 3:
     {

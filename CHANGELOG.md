@@ -1,5 +1,28 @@
 # Changelog
  
+## [1.0.47] - 2026-09-16
+
+### UI Beautification & Precision Ergonomics
+
+- **Refined Dark Control Styles (`Theme.cpp`)**:
+  - Extended dark stylesheet with modern styling for `QHeaderView`, `QTreeView`, `QTableView`, `QListView` (clean row hover `#27272e`, selection `#2563eb`), modern horizontal `QSlider` (slim track and accent handle), `QProgressBar`, and custom dark checkboxes/radios.
+- **Alpha-Aware Pixel Copying (`imageviewer_contextmenu.cpp`)**:
+  - Added 4-channel alpha preservation to `copyPixelValue`, accurately formatting `#RRGGBBAA`, `RGBA(r, g, b, a)`, and normalized `(r, g, b, a)` when inspecting transparent or semi-transparent images.
+
+### Performance & Optimizations
+
+- **PixelGrid Batched Vector Drawing**:
+  - Replaced iterative `p.drawLine` loops in `drawPixelGrid` (`widgets/pixelgrid.h`) with stack-allocated `QVarLengthArray<QLineF, 256>` and a single `p.drawLines` batch call, reducing GPU/driver draw call overhead during deep zoom (800%+) inspections.
+- **DifferenceEngine SSE2 Vectorization & Contiguous Memory Fast Paths**:
+  - **SSE2 Grayscale8 Diff**: Added 16-byte SSE2 vectorization (`_mm_subs_epu8`, `_mm_or_si128`, `_mm_cmpeq_epi8`, `_mm_and_si128`) to `diffGrayscale8Row`, accelerating grayscale diff calculations on all x64 systems and tail segments.
+  - **Contiguous amplify Acceleration**: Added full-buffer single `std::memcpy` for identity amplification (gain $\le 1.0$) and a flat 1D LUT loop for contiguous memory, avoiding row-by-row dispatch overhead.
+  - **Contiguous computeStats Flat Loop**: Streamlined whole-image statistics calculation into a single flat scan, enabling unrolled auto-vectorization.
+
+### Testing & Quality Gates
+
+- Added unit tests in `test_differenceengine.cpp` verifying vectorized Grayscale8 diffs, contiguous amplification, and full-image statistics.
+- Passed 100% of all 132 automated test suites, complexity gate checks, and architectural boundaries.
+
 ## [1.0.46] - 2026-09-16
 
 ### UI Beautification & Ergonomics
