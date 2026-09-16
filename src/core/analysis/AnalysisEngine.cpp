@@ -130,13 +130,18 @@ double computeSSIMCore(int w, int h, LineGetterA &&lineA, LineGetterB &&lineB)
 template <typename LineGetter>
 double calcLaplacianCore(int w, int h, LineGetter &&getLine)
 {
+    if (w < 3 || h < 3)
+        return 0.0;
+    const int count = (w - 2) * (h - 2);
+    if (count < 2)
+        return 0.0;
+
     int64_t sum = 0;
     int64_t sumSq = 0;
-    int count = 0;
+    const uint8_t *prev = getLine(0);
+    const uint8_t *curr = getLine(1);
     for (int y = 1; y < h - 1; ++y)
     {
-        const uint8_t *prev = getLine(y - 1);
-        const uint8_t *curr = getLine(y);
         const uint8_t *next = getLine(y + 1);
         for (int x = 1; x < w - 1; ++x)
         {
@@ -144,11 +149,10 @@ double calcLaplacianCore(int w, int h, LineGetter &&getLine)
                             4 * static_cast<int>(curr[x]);
             sum += lap;
             sumSq += static_cast<int64_t>(lap) * lap;
-            ++count;
         }
+        prev = curr;
+        curr = next;
     }
-    if (count < 2)
-        return 0.0;
     const double mean = static_cast<double>(sum) / count;
     const double variance = static_cast<double>(sumSq) / count - mean * mean;
     return std::max(0.0, variance);
@@ -304,14 +308,29 @@ double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
 
         if (isGray)
         {
-            for (int y = 0; y < h; ++y)
+            if (w == va.width && va.stride() == static_cast<size_t>(w) &&
+                vb.stride() == static_cast<size_t>(w))
             {
-                const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
-                const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
-                for (int x = 0; x < w; ++x)
+                const size_t total = static_cast<size_t>(w) * h;
+                const uint8_t *la = va.data;
+                const uint8_t *lb = vb.data;
+                for (size_t i = 0; i < total; ++i)
                 {
-                    const int d = static_cast<int>(la[x]) - static_cast<int>(lb[x]);
+                    const int d = static_cast<int>(la[i]) - static_cast<int>(lb[i]);
                     sumSq += d * d;
+                }
+            }
+            else
+            {
+                for (int y = 0; y < h; ++y)
+                {
+                    const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
+                    const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
+                    for (int x = 0; x < w; ++x)
+                    {
+                        const int d = static_cast<int>(la[x]) - static_cast<int>(lb[x]);
+                        sumSq += d * d;
+                    }
                 }
             }
             const double mse = static_cast<double>(sumSq) / static_cast<double>(n);
@@ -320,18 +339,37 @@ double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
             return 10.0 * std::log10(65025.0 / mse);
         }
 
-        for (int y = 0; y < h; ++y)
+        const bool isContiguous = (w == va.width &&
+                                   va.stride() == static_cast<size_t>(w * cpp) &&
+                                   vb.stride() == static_cast<size_t>(w * cpp));
+        if (isContiguous)
         {
-            const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
-            const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
-            for (int x = 0; x < w; ++x)
+            const size_t totalPixels = static_cast<size_t>(w) * h;
+            const uint8_t *la = va.data;
+            const uint8_t *lb = vb.data;
+            for (size_t i = 0; i < totalPixels; ++i)
             {
-                const uint8_t *pa = la + static_cast<size_t>(x) * cpp;
-                const uint8_t *pb = lb + static_cast<size_t>(x) * cpp;
-                const int dr = static_cast<int>(pa[0]) - static_cast<int>(pb[0]);
-                const int dg = static_cast<int>(pa[1]) - static_cast<int>(pb[1]);
-                const int db = static_cast<int>(pa[2]) - static_cast<int>(pb[2]);
+                const size_t offset = i * cpp;
+                const int dr = static_cast<int>(la[offset + 0]) - static_cast<int>(lb[offset + 0]);
+                const int dg = static_cast<int>(la[offset + 1]) - static_cast<int>(lb[offset + 1]);
+                const int db = static_cast<int>(la[offset + 2]) - static_cast<int>(lb[offset + 2]);
                 sumSq += dr * dr + dg * dg + db * db;
+            }
+        }
+        else
+        {
+            for (int y = 0; y < h; ++y)
+            {
+                const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
+                const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
+                for (int x = 0; x < w; ++x)
+                {
+                    const size_t offset = static_cast<size_t>(x) * cpp;
+                    const int dr = static_cast<int>(la[offset + 0]) - static_cast<int>(lb[offset + 0]);
+                    const int dg = static_cast<int>(la[offset + 1]) - static_cast<int>(lb[offset + 1]);
+                    const int db = static_cast<int>(la[offset + 2]) - static_cast<int>(lb[offset + 2]);
+                    sumSq += dr * dr + dg * dg + db * db;
+                }
             }
         }
         const double mse = static_cast<double>(sumSq) / static_cast<double>(n * 3);

@@ -40,6 +40,31 @@ static inline void diffRGB24Row(const uint8_t *la, const uint8_t *lb, uint8_t *d
         const __m128i vzero = _mm_setzero_si128();
         const __m128i vdiv = _mm_set1_epi16(21846);
 
+        for (; x * 3 + 16 <= w * 3; x += 4)
+        {
+            const __m128i va = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 3));
+            const __m128i vb = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 3));
+
+            const __m128i diff = _mm_or_si128(_mm_subs_epu8(va, vb), _mm_subs_epu8(vb, va));
+            const __m128i R = _mm_shuffle_epi8(diff, maskR);
+            const __m128i G = _mm_shuffle_epi8(diff, maskG);
+            const __m128i B = _mm_shuffle_epi8(diff, maskB);
+
+            const __m128i R16 = _mm_cvtepu8_epi16(R);
+            const __m128i G16 = _mm_cvtepu8_epi16(G);
+            const __m128i B16 = _mm_cvtepu8_epi16(B);
+
+            const __m128i sum = _mm_add_epi16(_mm_add_epi16(R16, G16), B16);
+            const __m128i avg16 = _mm_mulhi_epu16(sum, vdiv);
+            const __m128i avg8 = _mm_packus_epi16(avg16, vzero);
+
+            const __m128i under = _mm_subs_epu8(vthresh, avg8);
+            const __m128i mask = _mm_cmpeq_epi8(under, vzero);
+            const __m128i result = _mm_and_si128(avg8, mask);
+
+            const uint32_t out4 = static_cast<uint32_t>(_mm_cvtsi128_si32(result));
+            std::memcpy(dst + x, &out4, 4);
+        }
         for (; x + 4 <= w; x += 4)
         {
             alignas(16) uint8_t bufA[16]{};
@@ -124,50 +149,55 @@ static inline void diffGrayscale8Row(const uint8_t *la, const uint8_t *lb, uint8
 }
 
 static inline void diffRGBA32Row(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w,
-                                 uint8_t threshold, bool useAvx2)
+                                 uint8_t threshold, bool useSsse3)
 {
     int x = 0;
-    if (useAvx2)
+    if (useSsse3)
     {
+        const __m128i vthresh = _mm_set1_epi8(static_cast<char>(threshold));
+        const __m128i vzero = _mm_setzero_si128();
+        const __m128i vdiv = _mm_set1_epi16(21846);
+        const __m128i wRGB = _mm_setr_epi8(1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 0);
+
         for (; x + 8 <= w; x += 8)
         {
-            const __m256i va = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(la + x * 4));
-            const __m256i vb = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(lb + x * 4));
-            const __m256i sub1 = _mm256_subs_epu8(va, vb);
-            const __m256i sub2 = _mm256_subs_epu8(vb, va);
-            const __m256i diff = _mm256_or_si256(sub1, sub2);
+            const __m128i va0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 4));
+            const __m128i vb0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 4));
+            const __m128i va1 =
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + (x + 4) * 4));
+            const __m128i vb1 =
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + (x + 4) * 4));
 
-            const __m128i dlo = _mm256_castsi256_si128(diff);
-            const __m128i dhi = _mm256_extracti128_si256(diff, 1);
+            const __m128i diff0 = _mm_or_si128(_mm_subs_epu8(va0, vb0), _mm_subs_epu8(vb0, va0));
+            const __m128i diff1 = _mm_or_si128(_mm_subs_epu8(va1, vb1), _mm_subs_epu8(vb1, va1));
 
-            auto calc4 = [&](__m128i d) -> uint32_t
-            {
-                const __m128i p01 = _mm_cvtepu8_epi16(d);
-                const __m128i p23 = _mm_cvtepu8_epi16(_mm_srli_si128(d, 8));
-                const int sum0 = _mm_extract_epi16(p01, 0) + _mm_extract_epi16(p01, 1) +
-                                 _mm_extract_epi16(p01, 2);
-                const int sum1 = _mm_extract_epi16(p01, 4) + _mm_extract_epi16(p01, 5) +
-                                 _mm_extract_epi16(p01, 6);
-                const int sum2 = _mm_extract_epi16(p23, 0) + _mm_extract_epi16(p23, 1) +
-                                 _mm_extract_epi16(p23, 2);
-                const int sum3 = _mm_extract_epi16(p23, 4) + _mm_extract_epi16(p23, 5) +
-                                 _mm_extract_epi16(p23, 6);
-                uint8_t d0 = static_cast<uint8_t>((sum0 * 21846) >> 16);
-                uint8_t d1 = static_cast<uint8_t>((sum1 * 21846) >> 16);
-                uint8_t d2 = static_cast<uint8_t>((sum2 * 21846) >> 16);
-                uint8_t d3 = static_cast<uint8_t>((sum3 * 21846) >> 16);
-                d0 = (d0 >= threshold) ? d0 : 0;
-                d1 = (d1 >= threshold) ? d1 : 0;
-                d2 = (d2 >= threshold) ? d2 : 0;
-                d3 = (d3 >= threshold) ? d3 : 0;
-                return static_cast<uint32_t>(d0) | (static_cast<uint32_t>(d1) << 8) |
-                       (static_cast<uint32_t>(d2) << 16) | (static_cast<uint32_t>(d3) << 24);
-            };
+            const __m128i pair_sum0 = _mm_maddubs_epi16(diff0, wRGB);
+            const __m128i pair_sum1 = _mm_maddubs_epi16(diff1, wRGB);
 
-            const uint32_t r0 = calc4(dlo);
-            const uint32_t r1 = calc4(dhi);
-            std::memcpy(dst + x, &r0, 4);
-            std::memcpy(dst + x + 4, &r1, 4);
+            const __m128i pixel_sum = _mm_hadd_epi16(pair_sum0, pair_sum1);
+            const __m128i avg16 = _mm_mulhi_epu16(pixel_sum, vdiv);
+            const __m128i avg8 = _mm_packus_epi16(avg16, vzero);
+
+            const __m128i under = _mm_subs_epu8(vthresh, avg8);
+            const __m128i mask = _mm_cmpeq_epi8(under, vzero);
+            const __m128i result = _mm_and_si128(avg8, mask);
+
+            _mm_storel_epi64(reinterpret_cast<__m128i *>(dst + x), result);
+        }
+        for (; x + 4 <= w; x += 4)
+        {
+            const __m128i va0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 4));
+            const __m128i vb0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 4));
+            const __m128i diff0 = _mm_or_si128(_mm_subs_epu8(va0, vb0), _mm_subs_epu8(vb0, va0));
+            const __m128i pair_sum0 = _mm_maddubs_epi16(diff0, wRGB);
+            const __m128i pixel_sum = _mm_hadd_epi16(pair_sum0, pair_sum0);
+            const __m128i avg16 = _mm_mulhi_epu16(pixel_sum, vdiv);
+            const __m128i avg8 = _mm_packus_epi16(avg16, vzero);
+            const __m128i under = _mm_subs_epu8(vthresh, avg8);
+            const __m128i mask = _mm_cmpeq_epi8(under, vzero);
+            const __m128i result = _mm_and_si128(avg8, mask);
+            const uint32_t out4 = static_cast<uint32_t>(_mm_cvtsi128_si32(result));
+            std::memcpy(dst + x, &out4, 4);
         }
     }
     for (; x < w; ++x)
@@ -248,7 +278,7 @@ ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b
         else if (isRGB24)
             diffRGB24Row(la, lb, dst, w, threshold, useSsse3);
         else if (isRGBA32)
-            diffRGBA32Row(la, lb, dst, w, threshold, useAvx2);
+            diffRGBA32Row(la, lb, dst, w, threshold, useSsse3);
         else
             diffScalarRow(la, lb, dst, w, cppA, cppB, roA0, roA1, roA2, roB0, roB1, roB2,
                           threshold);
@@ -555,12 +585,23 @@ ImageData DifferenceEngine::heatMap(const ImageData &gray)
     const auto &lut = heatLUT();
     if (cpp == 1 && ro == 0)
     {
-        for (int y = 0; y < h; ++y)
+        if (gray.stride() == static_cast<size_t>(w) && out.stride() == static_cast<size_t>(w * 3))
         {
-            const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
-            auto *dst = reinterpret_cast<HeatRGB *>(out.buffer->data() + static_cast<size_t>(y) * out.stride());
-            for (int x = 0; x < w; ++x)
-                dst[x] = lut[src[x]];
+            const size_t total = static_cast<size_t>(w) * h;
+            const uint8_t *src = gray.buffer->data();
+            auto *dst = reinterpret_cast<HeatRGB *>(out.buffer->data());
+            for (size_t i = 0; i < total; ++i)
+                dst[i] = lut[src[i]];
+        }
+        else
+        {
+            for (int y = 0; y < h; ++y)
+            {
+                const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
+                auto *dst = reinterpret_cast<HeatRGB *>(out.buffer->data() + static_cast<size_t>(y) * out.stride());
+                for (int x = 0; x < w; ++x)
+                    dst[x] = lut[src[x]];
+            }
         }
     }
     else

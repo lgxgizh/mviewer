@@ -391,6 +391,8 @@ ImageData SoftwareRenderer::overlayDifference(const ImageData &base, const Image
     const int h = std::min(bb.height(), dd.height());
     QImage out = bb;
     const double a = std::clamp(alpha, 0.0, 1.0);
+    const int iAlpha = static_cast<int>(std::round(a * 256.0));
+    const int invAlpha = 256 - iAlpha;
     for (int y = 0; y < h; ++y)
     {
         QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
@@ -398,10 +400,11 @@ ImageData SoftwareRenderer::overlayDifference(const ImageData &base, const Image
         for (int x = 0; x < w; ++x)
         {
             const int dv = qRed(dline[x]);
-            const int r = static_cast<int>(qRed(line[x]) * (1.0 - a) + dv * a);
-            const int g = static_cast<int>(qGreen(line[x]) * (1.0 - a) + dv * a);
-            const int b = static_cast<int>(qBlue(line[x]) * (1.0 - a) + dv * a);
-            line[x] = qRgb(std::clamp(r, 0, 255), std::clamp(g, 0, 255), std::clamp(b, 0, 255));
+            const QRgb pix = line[x];
+            const int r = (qRed(pix) * invAlpha + dv * iAlpha) >> 8;
+            const int g = (qGreen(pix) * invAlpha + dv * iAlpha) >> 8;
+            const int b = (qBlue(pix) * invAlpha + dv * iAlpha) >> 8;
+            line[x] = qRgb(r, g, b);
         }
     }
     return mvcore::fromQImage(out);

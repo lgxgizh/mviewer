@@ -1,5 +1,19 @@
 # Changelog
  
+## [1.0.48] - 2026-09-16
+
+### Performance & Engine Acceleration
+
+- **SIMD Vectorization & Memory Bandwidth (`DifferenceEngine.cpp`)**:
+  - **SSSE3 Vectorized RGBA32 Diff (`diffRGBA32Row`)**: Implemented pure SIMD vectorization utilizing `_mm_maddubs_epi16` and `_mm_hadd_epi16` to calculate pairwise color difference sums across RGBA32 and BGRA32 buffers. Processes 8 pixels simultaneously into a single 64-bit store with zero scalar extractions and zero conditional branches, accelerating 4-channel difference maps across all x86_64 CPUs.
+  - **RGB24 Direct Row Load (`diffRGB24Row`)**: Added fast-path 16-byte unaligned vector loading (`_mm_loadu_si128`) directly from row data when within bounds, eliminating intermediate stack buffer `std::memcpy` calls for the vast majority of pixels.
+  - **Contiguous Heat Map Generation (`heatMap`)**: Added flat 1D single-pass loop when image buffers are contiguous, bypassing row pointer recalculations.
+- **Analysis Metric & PSNR Optimization (`AnalysisEngine.cpp`)**:
+  - **Contiguous PSNR Fast Paths (`psnr`)**: Added linear single-pass memory streaming for contiguous grayscale and multi-channel RGB24/BGR24/RGBA32/BGRA32 buffers, eliminating per-pixel stride arithmetic.
+  - **Laplacian Row Pointer Shifting (`calcLaplacianCore`)**: Optimized row pointer lifetime (`prev = curr; curr = next;`) and precomputed sample counts, reducing scanline Lambda lookups by 66% during noise estimation.
+- **Render Engine Blending Optimization (`RenderEngine.cpp`)**:
+  - **Fixed-Point Difference Overlay (`overlayDifference`)**: Replaced per-pixel floating-point multiplications and clamping with exact 8-bit fixed-point integer blending (`(pixel * invAlpha + dv * iAlpha) >> 8`), accelerating live comparison overlay and wipe interactions.
+
 ## [1.0.47] - 2026-09-16
 
 ### Performance & Engine Acceleration
