@@ -7,6 +7,7 @@
 #include "core/Logger.h"
 #include "core/MainThreadDispatcher.h"
 #include "core/SelfTest.h"
+#include "Theme.h"
 #include "core/SettingsIO.h"
 #include "runtime_storage.h"
 
@@ -60,6 +61,7 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(QStringLiteral(MVIEWER_VERSION_STRING));
     app.setWindowIcon(QIcon(QStringLiteral(":/app/mviewer.png")));
     mviewer::runtime::configureSettings();
+    mviewer::ui::Theme::initTheme();
 
     // Core producers (metadata indexing, metadata presentation) deliver their
     // callbacks through this dispatcher. Install it before any window or

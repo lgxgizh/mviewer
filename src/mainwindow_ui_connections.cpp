@@ -266,6 +266,39 @@ void MainWindow::connectSelectionSignals()
     // directly via MainWindow's own slots.
 }
 
+static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, int b, int a,
+                                    int r16, int g16, int b16, int rawKind, bool valid)
+{
+    if (!sb)
+        return;
+    if (!valid)
+    {
+        sb->showMessage(QStringLiteral("光标不在图像上"));
+        return;
+    }
+    const QString hex = QString("#%1%2%3")
+                            .arg(r, 2, 16, QChar('0'))
+                            .arg(g, 2, 16, QChar('0'))
+                            .arg(b, 2, 16, QChar('0'))
+                            .toUpper();
+    if (rawKind == 2)
+        sb->showMessage(
+            QString("像素 [%1,%2]  RGB(%3,%4,%5)  16bit(%6,%7,%8)  %9")
+                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(r16).arg(g16).arg(b16).arg(hex));
+    else if (rawKind == 1)
+        sb->showMessage(
+            QString("像素 [%1,%2]  RGB(%3,%4,%5)  (RAW)  %6")
+                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(hex));
+    else if (a < 255)
+        sb->showMessage(
+            QString("像素 [%1,%2]  RGBA(%3,%4,%5,%6)  %7")
+                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(a).arg(hex));
+    else
+        sb->showMessage(
+            QString("像素 [%1,%2]  RGB(%3,%4,%5)  %6")
+                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(hex));
+}
+
 void MainWindow::connectViewerSignals()
 {
     connect(m_imageViewer, &ImageViewer::regionStats, m_analysisPanel,
@@ -348,34 +381,7 @@ void MainWindow::connectViewerSignals()
             [this](int x, int y, int r, int g, int b, int a, int r16, int g16, int b16, int rawKind,
                    bool valid)
             {
-                if (valid)
-                {
-                    const QString hex = QString("#%1%2%3")
-                                            .arg(r, 2, 16, QChar('0'))
-                                            .arg(g, 2, 16, QChar('0'))
-                                            .arg(b, 2, 16, QChar('0'))
-                                            .toUpper();
-                    if (rawKind == 2)
-                        statusBar()->showMessage(
-                            QString("像素 [%1,%2]  RGB(%3,%4,%5)  16bit(%6,%7,%8)  %9")
-                                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(r16).arg(g16).arg(b16).arg(hex));
-                    else if (rawKind == 1)
-                        statusBar()->showMessage(
-                            QString("像素 [%1,%2]  RGB(%3,%4,%5)  (RAW)  %6")
-                                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(hex));
-                    else if (a < 255)
-                        statusBar()->showMessage(
-                            QString("像素 [%1,%2]  RGBA(%3,%4,%5,%6)  %7")
-                                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(a).arg(hex));
-                    else
-                        statusBar()->showMessage(
-                            QString("像素 [%1,%2]  RGB(%3,%4,%5)  %6")
-                                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(hex));
-                }
-                else
-                {
-                    statusBar()->showMessage("光标不在图像上");
-                }
+                updateViewerPixelStatus(statusBar(), x, y, r, g, b, a, r16, g16, b16, rawKind, valid);
                 m_analysisPanel->showPixel(x, y, r, g, b, a, r16, g16, b16, rawKind, valid);
             });
     if (m_lblZoom)
@@ -383,6 +389,12 @@ void MainWindow::connectViewerSignals()
         m_lblZoom->setCursor(Qt::PointingHandCursor);
         m_lblZoom->setToolTip(tr("点击打开缩放预设菜单，双击切换 适应/100%"));
         m_lblZoom->installEventFilter(this);
+    }
+    if (m_lblImage)
+    {
+        m_lblImage->setCursor(Qt::PointingHandCursor);
+        m_lblImage->setToolTip(tr("点击在资源管理器中定位当前文件，右键复制完整路径"));
+        m_lblImage->installEventFilter(this);
     }
 }
 

@@ -30,12 +30,15 @@ QPixmap cachedScaledPixmap(const QPixmap &pm, const QSize &targetSize)
     const int th = targetSize.height();
     ++s_clock;
 
-    for (auto &entry : s_scaledCache)
+    for (size_t i = 0; i < s_scaledCache.size(); ++i)
     {
+        auto &entry = s_scaledCache[i];
         if (entry.pixmapKey == key && entry.targetW == tw && entry.targetH == th)
         {
             entry.clock = s_clock;
-            return entry.scaled;
+            if (i > 0)
+                std::swap(s_scaledCache[i], s_scaledCache[i - 1]);
+            return (i > 0) ? s_scaledCache[i - 1].scaled : entry.scaled;
         }
     }
 

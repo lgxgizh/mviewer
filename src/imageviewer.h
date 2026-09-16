@@ -206,6 +206,7 @@ class ImageViewer : public QOpenGLWidget
     bool flipHorizontal();
     bool flipVertical();
     bool flipImage(bool horizontal);
+    void revealInExplorer();
 
   signals:
     void fileRotated(const QString &path);
@@ -406,8 +407,8 @@ class ImageViewer : public QOpenGLWidget
     bool handleTransformKey(int key, Qt::KeyboardModifiers modifiers);
     bool handleModeKey(int key, Qt::KeyboardModifiers modifiers);
     bool handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
-                                 QAction *copyHex, QAction *copyRgb, QAction *copyFloat,
-                                 QAction *copyHsv, QContextMenuEvent *event);
+                                 QAction *reveal, QAction *copyHex, QAction *copyRgb,
+                                 QAction *copyFloat, QAction *copyHsv, QContextMenuEvent *event);
     bool handleContextTransformAction(QAction *chosen, QAction *rotateCWAct, QAction *rotateCCWAct,
                                       QAction *flipHAct, QAction *flipVAct);
     bool handleContextImageAction(QAction *chosen, QAction *saveAs, QAction *zoomInAction,

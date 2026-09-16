@@ -26,6 +26,7 @@ class PreferencesDialog : public QDialog
     void accept() override;
 
   private:
+    QComboBox *m_uiTheme = nullptr;
     QComboBox *m_viewMode = nullptr;
     QComboBox *m_sortMode = nullptr;
     QSpinBox *m_thumbSize = nullptr;

@@ -1,15 +1,15 @@
-// M19: unit tests for the new UI models (Selection, Directory, ImageList,
-// Workspace, Analyzer). These models are Qt-free in header (only QObjects) and
-// are safe to test headless.
+#include "Theme.h"
 #include "analyzermodel.h"
 #include "directorymodel.h"
 #include "imagelistmodel.h"
 #include "selectionmodel.h"
 #include "workspacemodel.h"
 
+#include <QApplication>
 #include <QDebug>
 #include <QStringList>
 #include <cstdio>
+#include <memory>
 
 static int g_failures = 0;
 #define CHECK(cond, msg)                                                                           \
@@ -26,8 +26,13 @@ static int g_failures = 0;
         }                                                                                          \
     } while (0)
 
-int main(int, char **)
+int main(int argc, char **argv)
 {
+    std::unique_ptr<QApplication> app;
+    if (!QApplication::instance())
+        app = std::make_unique<QApplication>(argc, argv);
+    QCoreApplication::setOrganizationName(QStringLiteral("MViewer"));
+    QCoreApplication::setApplicationName(QStringLiteral("MViewer"));
     // ---- SelectionModel ----
     {
         SelectionModel sel;
@@ -127,6 +132,23 @@ int main(int, char **)
         CHECK(!am.isPinned("a.jpg"), "AnalyzerModel unpin");
         am.setCurrentAnalyzer("histogram");
         CHECK(am.currentAnalyzerId() == "histogram", "AnalyzerModel currentAnalyzer");
+    }
+
+    // ---- Theme ----
+    {
+        mviewer::ui::Theme::initTheme();
+        CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::Dark,
+              "Default theme is Dark");
+        mviewer::ui::Theme::applyTheme(mviewer::ui::ThemeMode::System);
+        CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::System,
+              "Theme switched to System");
+        mviewer::ui::Theme::applyTheme(mviewer::ui::ThemeMode::Dark);
+        CHECK(mviewer::ui::Theme::currentTheme() == mviewer::ui::ThemeMode::Dark,
+              "Theme switched back to Dark");
+        CHECK(!mviewer::ui::Theme::themeModeName(mviewer::ui::ThemeMode::Dark).isEmpty(),
+              "ThemeModeName not empty for Dark");
+        CHECK(!mviewer::ui::Theme::themeModeName(mviewer::ui::ThemeMode::System).isEmpty(),
+              "ThemeModeName not empty for System");
     }
 
     std::printf("\n%s (%d failures)\n", g_failures == 0 ? "ALL PASS" : "HAS FAILURES", g_failures);

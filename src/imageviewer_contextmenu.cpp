@@ -28,6 +28,7 @@
 #include <QOpenGLTextureBlitter>
 #include <QPainter>
 #include <QPointer>
+#include <QProcess>
 #include <QRect>
 #include <QResizeEvent>
 #include <QSaveFile>
@@ -86,14 +87,16 @@ void addOverlayContextActions(QMenu &menu, mviewer::OverlayMode mode, QAction *&
     channelV->setChecked(mode == mviewer::OverlayMode::ChannelV);
 }
 
-void setContextImageActionAvailability(QAction *copy, QAction *copyPath, QMenu *copyColorMenu,
-                                       QAction *saveAs, QAction *zoomIn, QAction *zoomOut,
-                                       QAction *zoomFit, QAction *zoomActual, QMenu *zoomPresetsMenu,
-                                       QAction *selectRegion, bool hasPath, bool hasFrame,
-                                       bool hasDisplay)
+void setContextImageActionAvailability(QAction *copy, QAction *copyPath, QAction *reveal,
+                                       QMenu *copyColorMenu, QAction *saveAs, QAction *zoomIn,
+                                       QAction *zoomOut, QAction *zoomFit, QAction *zoomActual,
+                                       QMenu *zoomPresetsMenu, QAction *selectRegion, bool hasPath,
+                                       bool hasFrame, bool hasDisplay)
 {
     copy->setEnabled(hasPath);
     copyPath->setEnabled(hasPath);
+    if (reveal)
+        reveal->setEnabled(hasPath);
     if (copyColorMenu)
         copyColorMenu->menuAction()->setEnabled(hasFrame);
     saveAs->setEnabled(hasFrame);
@@ -106,12 +109,13 @@ void setContextImageActionAvailability(QAction *copy, QAction *copyPath, QMenu *
     selectRegion->setEnabled(hasDisplay);
 }
 
-void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QMenu *&colorMenu,
-                           QAction *&copyHex, QAction *&copyRgb, QAction *&copyFloat,
-                           QAction *&copyHsv)
+void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QAction *&reveal,
+                           QMenu *&colorMenu, QAction *&copyHex, QAction *&copyRgb,
+                           QAction *&copyFloat, QAction *&copyHsv)
 {
     copy = menu.addAction("复制图片 (Ctrl+C)");
     copyPath = menu.addAction("复制路径 (Ctrl+Shift+C)");
+    reveal = menu.addAction("在资源管理器中显示 (Ctrl+E)");
     colorMenu = menu.addMenu("复制像素值");
     copyHex = colorMenu->addAction("十六进制 (#RRGGBB) (Shift+C)");
     copyRgb = colorMenu->addAction("RGB 值 RGB(r, g, b)");
@@ -191,12 +195,13 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QMenu menu(this);
     QAction *aCopy = nullptr;
     QAction *aCopyPath = nullptr;
+    QAction *aReveal = nullptr;
     QMenu *mCopyColor = nullptr;
     QAction *aCopyHex = nullptr;
     QAction *aCopyRgb = nullptr;
     QAction *aCopyFloat = nullptr;
     QAction *aCopyHsv = nullptr;
-    addCopyContextActions(menu, aCopy, aCopyPath, mCopyColor, aCopyHex, aCopyRgb, aCopyFloat,
+    addCopyContextActions(menu, aCopy, aCopyPath, aReveal, mCopyColor, aCopyHex, aCopyRgb, aCopyFloat,
                           aCopyHsv);
     menu.addSeparator();
     QAction *aSaveAs = menu.addAction("另存为...");
@@ -234,7 +239,7 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     aSelectRegion->setCheckable(true);
     aSelectRegion->setChecked(m_selectMode);
     setContextImageActionAvailability(
-        aCopy, aCopyPath, mCopyColor, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
+        aCopy, aCopyPath, aReveal, mCopyColor, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
         mZoomPresets, aSelectRegion, !m_currentPath.isEmpty(), m_frame && m_frame->isValid(),
         hasDisplayImage());
     menu.addSeparator();
@@ -289,8 +294,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
         return;
     }
     if (handleContextTransformAction(chosen, aRotateCW, aRotateCCW, aFlipH, aFlipV) ||
-        handleContextCopyAction(chosen, aCopy, aCopyPath, aCopyHex, aCopyRgb, aCopyFloat, aCopyHsv,
-                                event) ||
+        handleContextCopyAction(chosen, aCopy, aCopyPath, aReveal, aCopyHex, aCopyRgb, aCopyFloat,
+                                aCopyHsv, event) ||
         handleContextImageAction(chosen, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
                                  aSelectRegion))
         return;
@@ -299,8 +304,9 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
 }
 
 bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
-                                          QAction *copyHex, QAction *copyRgb, QAction *copyFloat,
-                                          QAction *copyHsv, QContextMenuEvent *event)
+                                          QAction *reveal, QAction *copyHex, QAction *copyRgb,
+                                          QAction *copyFloat, QAction *copyHsv,
+                                          QContextMenuEvent *event)
 {
     if (chosen == copy)
     {
@@ -310,6 +316,11 @@ bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QActio
     if (chosen == copyPath)
     {
         QApplication::clipboard()->setText(m_currentPath);
+        return true;
+    }
+    if (chosen == reveal)
+    {
+        revealInExplorer();
         return true;
     }
     int format = -1;
@@ -392,6 +403,11 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
         copyToClipboard();
         return true;
     }
+    if (ctrl && key == Qt::Key_E)
+    {
+        revealInExplorer();
+        return true;
+    }
     if (shiftCtrl && key == Qt::Key_C)
     {
         if (!m_currentPath.isEmpty())
@@ -401,6 +417,20 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
         }
     }
     return false;
+}
+
+void ImageViewer::revealInExplorer()
+{
+    if (m_currentPath.isEmpty())
+        return;
+    const QString p = QDir::toNativeSeparators(m_currentPath);
+#ifdef Q_OS_WIN
+    QProcess::startDetached(QStringLiteral("explorer.exe"),
+                            QStringList{QStringLiteral("/select,") + p});
+#else
+    QProcess::startDetached(QStringLiteral("xdg-open"),
+                            QStringList() << QFileInfo(m_currentPath).absolutePath());
+#endif
 }
 
 bool ImageViewer::handleContextImageAction(QAction *chosen, QAction *saveAs, QAction *zoomInAction,

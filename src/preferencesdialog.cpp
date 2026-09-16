@@ -1,4 +1,5 @@
 #include "preferencesdialog.h"
+#include "Theme.h"
 #include "thumbnailpanel.h"
 
 #include <QCheckBox>
@@ -25,6 +26,13 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
     // --- 常规 ---
     QWidget *general = new QWidget;
     auto *gl = new QFormLayout(general);
+
+    m_uiTheme = new QComboBox;
+    m_uiTheme->addItem(tr("深色模式 (专业 / 推荐)"), static_cast<int>(mviewer::ui::ThemeMode::Dark));
+    m_uiTheme->addItem(tr("系统默认 (亮色)"), static_cast<int>(mviewer::ui::ThemeMode::System));
+    m_uiTheme->setCurrentIndex(
+        m_uiTheme->findData(static_cast<int>(mviewer::ui::Theme::currentTheme())));
+    gl->addRow(tr("界面主题"), m_uiTheme);
 
     m_viewMode = new QComboBox;
     struct VM
@@ -131,6 +139,11 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
 void PreferencesDialog::accept()
 {
     QSettings s;
+    if (m_uiTheme)
+    {
+        const auto mode = static_cast<mviewer::ui::ThemeMode>(m_uiTheme->currentData().toInt());
+        mviewer::ui::Theme::applyTheme(mode);
+    }
     s.setValue("thumbViewMode", m_viewMode->currentData().toInt());
     s.setValue("thumbSortMode", m_sortMode->currentData().toInt());
     s.setValue("thumbSize", m_thumbSize->value());

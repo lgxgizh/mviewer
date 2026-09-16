@@ -490,7 +490,7 @@ void ThumbnailPanel::revealSelected()
     // exits, and handing off to the shell can take hundreds of ms to seconds
     // (busy Explorer / slow or network path) with the UI frozen for all of it.
 #ifdef Q_OS_WIN
-    QProcess::startDetached("explorer.exe", QStringList() << "/select," << p);
+    QProcess::startDetached("explorer.exe", QStringList{QStringLiteral("/select,") + p});
 #else
     QProcess::startDetached("xdg-open", QStringList() << QFileInfo(paths.first()).absolutePath());
 #endif

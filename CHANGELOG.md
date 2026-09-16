@@ -1,5 +1,28 @@
 # Changelog
  
+## [1.0.46] - 2026-09-16
+
+### UI Beautification & Ergonomics
+
+- **Modern Dark Theme & Aesthetics (`mviewer::ui::Theme`)**:
+  - Implemented cohesive dark theme using a tuned charcoal/zinc palette (`#1e1e20` window, `#141416` base, `#27272a` panels, `#2563eb` accent blue) reducing eye fatigue during prolonged visual analysis.
+  - Modernized UI controls: slim non-intrusive scrollbars (10px rounded handle with hover state), flat toolbar buttons, clean popup menus, and crisp focus rings.
+  - Added theme selection dropdown to **首选项 (Preferences)** with live switching between "深色模式 (Dark)" and "系统默认 (System)".
+- **Workflow Ergonomics & User Habits**:
+  - **Explorer Reveal & Shortcut**: Added `Ctrl+E` shortcut and "在资源管理器中显示" action in ImageViewer; corrected Windows Explorer command arguments (`/select,"<path>"`) so target files are reliably selected and highlighted.
+  - **Interactive Status Bar**: Left-clicking the image filename in the status bar reveals the file in Windows Explorer; right-clicking copies the native path to the clipboard with visual confirmation.
+  - **Compare Mode HUD Feedback**: Added immediate HUD toast overlay feedback when toggling compare modes (`B`/`S`/`W`/`O`/`K`/`H`) and zoom presets (`Z`/`D`/`R`/`L`/`I`/`F`/`X`).
+
+### Performance & Optimizations
+
+- **Thumbnail Scale Cache MRU Bubble Swap**:
+  - Enhanced `cachedScaledPixmap` in `thumbnailpanel_delegates.cpp` with adaptive MRU bubble swaps, eliminating repeated linear scans across 256 cached pixmaps during rapid thumbnail gallery scrolling.
+
+### Testing & Quality Gates
+
+- Added `Theme` unit test assertions in `test_ui_models.cpp`.
+- Passed all 132 automated test suites (100% pass rate), adhering to ADR-014 complexity caps and ADR-016 architectural boundaries.
+
 ## [1.0.45] - 2026-09-16
 
 ### Performance & Optimizations

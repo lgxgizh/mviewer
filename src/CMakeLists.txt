@@ -206,6 +206,7 @@ add_library(mviewer_ui STATIC
     widgets/histogramwidget.cpp
     pluginsettings.cpp
     preferencesdialog.cpp
+    Theme.cpp
     analysisoverlaydialog.cpp
     gpu/GpuTileUploader.cpp
 )
@@ -361,6 +362,7 @@ add_executable(test_ui_models
     imagelistmodel.cpp
     workspacemodel.cpp
     analyzermodel.cpp
+    Theme.cpp
 )
 target_link_libraries(test_ui_models
     PRIVATE

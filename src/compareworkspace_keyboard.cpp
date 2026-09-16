@@ -87,33 +87,42 @@ bool CompareWorkspace::handleModeCompareKey(QKeyEvent *event)
     if (event->modifiers() != Qt::NoModifier)
         return false;
     QCheckBox *target = nullptr;
+    QString modeName;
     switch (key)
     {
     case Qt::Key_B:
         target = m_blinkChk;
+        modeName = tr("模式: 闪烁对比 (B)");
         break;
     case Qt::Key_S:
         target = m_splitChk;
+        modeName = tr("模式: 左右分割 (S)");
         break;
     case Qt::Key_W:
         target = m_swipeChk;
+        modeName = tr("模式: 卷帘对比 (W)");
         break;
     case Qt::Key_O:
     case Qt::Key_Tab:
         target = m_overlayChk;
+        modeName = tr("模式: 叠加对比 (O)");
         break;
     case Qt::Key_K:
         target = m_checkerChk;
+        modeName = tr("模式: 棋盘对比 (K)");
         break;
     case Qt::Key_H:
         target = m_diffHighlightChk;
+        modeName = tr("模式: 差异高亮 (H)");
         break;
     default:
         return false;
     }
     if (!target || (target != m_diffHighlightChk && !target->isEnabled()))
         return false;
-    target->setChecked(!target->isChecked());
+    const bool newState = !target->isChecked();
+    target->setChecked(newState);
+    showCompareStatus(newState ? modeName : tr("模式已关闭"));
     event->accept();
     return true;
 }
@@ -146,12 +155,14 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_Z && m_syncZoomChk)
     {
         m_syncZoomChk->setChecked(!m_syncZoomChk->isChecked());
+        showCompareStatus(m_syncZoomChk->isChecked() ? tr("同步缩放: 开启") : tr("同步缩放: 关闭"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_D && m_syncDragChk)
     {
         m_syncDragChk->setChecked(!m_syncDragChk->isChecked());
+        showCompareStatus(m_syncDragChk->isChecked() ? tr("同步平移: 开启") : tr("同步平移: 关闭"));
         event->accept();
         return true;
     }
@@ -159,18 +170,21 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_R && m_crosshairChk)
     {
         m_crosshairChk->setChecked(!m_crosshairChk->isChecked());
+        showCompareStatus(m_crosshairChk->isChecked() ? tr("十字光标: 开启") : tr("十字光标: 关闭"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_L && m_pixelLinkChk)
     {
         m_pixelLinkChk->setChecked(!m_pixelLinkChk->isChecked());
+        showCompareStatus(m_pixelLinkChk->isChecked() ? tr("像素审查联动: 开启") : tr("像素审查联动: 关闭"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_I && m_sideChk)
     {
         m_sideChk->setChecked(!m_sideChk->isChecked());
+        showCompareStatus(m_sideChk->isChecked() ? tr("分析面板: 展开") : tr("分析面板: 收起"));
         event->accept();
         return true;
     }
@@ -178,12 +192,14 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_F)
     {
         fitAll();
+        showCompareStatus(tr("视图自适应窗口 (Fit)"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_X)
     {
         onSwapPanes();
+        showCompareStatus(tr("已对调 A/B 窗格"));
         event->accept();
         return true;
     }

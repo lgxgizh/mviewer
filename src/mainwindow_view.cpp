@@ -665,6 +665,27 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
 
+    if (watched == m_lblImage && event->type() == QEvent::MouseButtonPress)
+    {
+        auto *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::LeftButton)
+        {
+            if (m_thumbnailPanel)
+                m_thumbnailPanel->revealSelected();
+            return true;
+        }
+        if (me->button() == Qt::RightButton)
+        {
+            const QString p = currentImagePath();
+            if (!p.isEmpty())
+            {
+                QApplication::clipboard()->setText(QDir::toNativeSeparators(p));
+                statusBar()->showMessage(tr("已复制文件路径到剪贴板"), 3000);
+            }
+            return true;
+        }
+    }
+
     if (watched == m_imageViewer)
     {
         // Image-surface clicks and hover belong to pan / double-click Fit↔100%.
