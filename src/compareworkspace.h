@@ -186,6 +186,7 @@ class CompareWorkspace : public QWidget
     bool handleBasicCompareSpace(QKeyEvent *event);
     bool handleBasicCompareEscape(QKeyEvent *event);
     bool handleBasicCompareNavigation(QKeyEvent *event);
+    bool handleROIKeyboardNudge(QKeyEvent *event);
     bool handleModeCompareKey(QKeyEvent *event);
     bool handleChannelCompareKey(QKeyEvent *event);
     bool handleTransformCompareKey(QKeyEvent *event);

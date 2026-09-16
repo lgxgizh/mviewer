@@ -17,7 +17,7 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
 bool CompareWorkspace::handleBasicCompareKey(QKeyEvent *event)
 {
     return handleBasicCompareSpace(event) || handleBasicCompareEscape(event) ||
-           handleBasicCompareNavigation(event);
+           handleBasicCompareNavigation(event) || handleROIKeyboardNudge(event);
 }
 
 bool CompareWorkspace::handleBasicCompareSpace(QKeyEvent *event)
@@ -78,6 +78,67 @@ bool CompareWorkspace::handleBasicCompareNavigation(QKeyEvent *event)
         prevPair();
     else
         return false;
+    event->accept();
+    return true;
+}
+
+bool CompareWorkspace::handleROIKeyboardNudge(QKeyEvent *event)
+{
+    if (m_lastSelection.isEmpty() || !m_roiLinked)
+        return false;
+
+    const int key = event->key();
+    if (key != Qt::Key_Left && key != Qt::Key_Right && key != Qt::Key_Up && key != Qt::Key_Down)
+        return false;
+
+    const auto mods = event->modifiers();
+    const bool shift = (mods & Qt::ShiftModifier);
+    const bool alt = (mods & Qt::AltModifier);
+    const bool ctrl = (mods & Qt::ControlModifier);
+
+    if (!alt && !shift)
+        return false;
+
+    const ImageFrame *first = m_engine.imageAt(0);
+    const int imgW =
+        first ? (first->metadata().width > 0 ? first->metadata().width : first->width()) : 0;
+    const int imgH =
+        first ? (first->metadata().height > 0 ? first->metadata().height : first->height()) : 0;
+    if (imgW <= 0 || imgH <= 0)
+        return false;
+
+    const int step = shift ? 10 : 1;
+    mviewer::domain::Selection sel = m_lastSelection;
+
+    if (ctrl && alt)
+    {
+        if (key == Qt::Key_Right)
+            sel.width = std::clamp(sel.width + step, 1, imgW - sel.x);
+        else if (key == Qt::Key_Left)
+            sel.width = std::max(1, sel.width - step);
+        else if (key == Qt::Key_Down)
+            sel.height = std::clamp(sel.height + step, 1, imgH - sel.y);
+        else if (key == Qt::Key_Up)
+            sel.height = std::max(1, sel.height - step);
+    }
+    else
+    {
+        if (key == Qt::Key_Left)
+            sel.x = std::clamp(sel.x - step, 0, std::max(0, imgW - sel.width));
+        else if (key == Qt::Key_Right)
+            sel.x = std::clamp(sel.x + step, 0, std::max(0, imgW - sel.width));
+        else if (key == Qt::Key_Up)
+            sel.y = std::clamp(sel.y - step, 0, std::max(0, imgH - sel.height));
+        else if (key == Qt::Key_Down)
+            sel.y = std::clamp(sel.y + step, 0, std::max(0, imgH - sel.height));
+    }
+
+    applySelectionToAll(sel);
+    showCompareStatus(tr("微调 ROI: X=%1 Y=%2 W=%3 H=%4")
+                          .arg(m_lastSelection.x)
+                          .arg(m_lastSelection.y)
+                          .arg(m_lastSelection.width)
+                          .arg(m_lastSelection.height));
     event->accept();
     return true;
 }

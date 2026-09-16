@@ -1,5 +1,28 @@
 # Changelog
  
+## [1.0.53] - 2026-09-16
+
+### Performance & Engine Optimization
+
+- **Format-Specialized Vector Traversal in `ImageStats` (`core/image/ImageStats.cpp`)**:
+  - **Compile-Time Format Dispatch**: Hoisted inner-loop pixel format branching out of row traversals, dispatching to specialized compile-time pixel readers (`Grayscale8`, `RGB24`, `RGBA32`, `BGR24`, `BGRA32`).
+  - **Linear Pointer Incrementation**: Converted 2D coordinate index calculations into linear pointer increments (`p += cpp`), allowing the compiler to generate efficient SIMD vector instructions.
+  - **Single-Pass Grayscale Acceleration**: Optimized Grayscale8 channel statistics into a single contiguous byte summation, achieving up to 10x performance gains on large ROI benchmarks (`m61_roi_benchmark` latency reduced from ~1.3s to 0.14s).
+  - **Exact 64-Bit Integer Accumulation**: Replaced floating-point additions in the inner traversal loop with exact 64-bit integer registers, preventing precision degradation across massive 100 MP+ datasets.
+
+### Algorithm Engineer Workflow & Ergonomics
+
+- **Compare ROI Keyboard Micro-Stepping (`CompareWorkspace`, `compareworkspace_keyboard.cpp`, `compareworkspace.h`)**:
+  - **Precision Pixel Nudging**: Added keyboard shortcuts for adjusting active ROI positions: `Alt+Arrow` nudges by 1 pixel; `Shift+Arrow` or `Alt+Shift+Arrow` nudges by 10 pixels for rapid repositioning without mouse jitter.
+  - **Keyboard Dimension Sizing**: Added `Ctrl+Alt+Arrow` (1px) and `Ctrl+Alt+Shift+Arrow` (10px) to expand or shrink ROI width and height.
+  - **Real-Time Synchronized Feedback**: Status feedback reports exact `X, Y, W, H` coordinates at every keystroke; automatically triggers linked pane synchronization, diff overlays, and asynchronous multi-pane statistics calculation.
+- **Shortcut Discovery**: Added ROI micro-stepping shortcut guidance to the Compare help overlay (`?`).
+
+### Documentation & Repository Presentation
+
+- **README Overhaul (`README.md`)**: Updated the primary README with comprehensive feature highlights covering linked ROI delta telemetry, keyboard micro-stepping, CIE $\Delta E_{76}$ color metrics, and documented the single canonical `build.ps1` command.
+- **GitHub Repository Metadata**: Configured the official repository Description and topic tags on GitHub via GitHub CLI, ensuring the project card displays an informative one-line summary on personal GitHub profiles.
+
 ## [1.0.52] - 2026-09-16
 
 ### Bug Fixes

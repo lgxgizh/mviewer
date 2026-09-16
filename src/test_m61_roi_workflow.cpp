@@ -441,6 +441,42 @@ int main(int argc, char **argv)
         }
     }
 
+    // ROI keyboard micro-stepping (nudging & resizing)
+    {
+        const QPoint from = first->sourcePointToWidget(QPointF(20, 20)).toPoint();
+        const QPoint to = first->sourcePointToWidget(QPointF(50, 50)).toPoint();
+        sendRightDrag(first, from, to);
+        pump(30);
+        const auto initialROI = workspace->currentROI();
+        CHECK(!initialROI.isEmpty(), "initial ROI set before keyboard nudge");
+
+        const int startX = initialROI.x;
+        const int startY = initialROI.y;
+        const int startW = initialROI.width;
+
+        // Alt+Right: nudge +1 px in X
+        QKeyEvent altRight(QEvent::KeyPress, Qt::Key_Right, Qt::AltModifier);
+        QApplication::sendEvent(workspace, &altRight);
+        pump(10);
+        CHECK(workspace->currentROI().x == startX + 1 && workspace->currentROI().y == startY,
+              "Alt+Right nudges ROI by +1 px in X");
+
+        // Shift+Down: nudge +10 px in Y
+        QKeyEvent shiftDown(QEvent::KeyPress, Qt::Key_Down, Qt::ShiftModifier);
+        QApplication::sendEvent(workspace, &shiftDown);
+        pump(10);
+        CHECK(workspace->currentROI().x == startX + 1 && workspace->currentROI().y == startY + 10,
+              "Shift+Down nudges ROI by +10 px in Y");
+
+        // Ctrl+Alt+Right: resize width by +1 px
+        QKeyEvent ctrlAltRight(QEvent::KeyPress, Qt::Key_Right,
+                               Qt::ControlModifier | Qt::AltModifier);
+        QApplication::sendEvent(workspace, &ctrlAltRight);
+        pump(10);
+        CHECK(workspace->currentROI().width == startW + 1,
+              "Ctrl+Alt+Right expands ROI width by +1 px");
+    }
+
     TaskScheduler::instance().drain(TaskScheduler::AnalysisPool, std::chrono::seconds(5));
 
     std::printf("M61 ROI workflow failures: %d\n", g_failures);
