@@ -1,5 +1,20 @@
 # Changelog
  
+## [1.0.48] - 2026-09-16
+
+### UI Beautification & Comparison Ergonomics
+
+- **High-Contrast Comparison Divider & Wipe Grab Handle (`compareworkspace_render_canvas.cpp`)**:
+  - Implemented dual-tone high-contrast divider in `drawSplitCompare` and `drawSwipeCompare` with a subtle dark boundary shadow beneath the bright guide line, preventing the divider from disappearing against bright highlights or white image content.
+  - Added an intuitive circular grab button with tactile grip mark at the center of the swipe divider for professional dragging affordance.
+- **Histogram Quartile Guides & Background Polish (`widgets/histogramwidget.cpp`)**:
+  - Added dashed quartile reference lines (25%, 50%, 75% luminance) and a clean baseline border to `HistogramWidget::paintOverlay`, giving engineers instant visual feedback on shadow, midtone, and highlight balance.
+  - Softened histogram background to harmonized dark theme base `#141416`.
+
+### Testing & Quality Gates
+
+- Passed 100% of all 132 automated test suites (including `bench_enforce`, `workflow_ux_tests`, `architecture_gate_regression`, and `complexity_gate_regression`).
+
 ## [1.0.47] - 2026-09-16
 
 ### UI Beautification & Precision Ergonomics

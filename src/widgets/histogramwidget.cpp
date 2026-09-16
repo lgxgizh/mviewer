@@ -54,6 +54,25 @@ void HistogramWidget::paintEvent(QPaintEvent *)
     paintOverlay(p, rect());
 }
 
+static void drawHistogramGrid(QPainter &p, double left, double top, int w, int h)
+{
+    p.save();
+    p.setRenderHint(QPainter::Antialiasing, false);
+    QPen gridPen(QColor(255, 255, 255, 28), 1, Qt::DashLine);
+    gridPen.setCosmetic(true);
+    p.setPen(gridPen);
+    for (int q = 1; q <= 3; ++q)
+    {
+        const double gx = left + (static_cast<double>(w) * q) / 4.0;
+        p.drawLine(QPointF(gx, top), QPointF(gx, top + h));
+    }
+    QPen basePen(QColor(255, 255, 255, 50), 1);
+    basePen.setCosmetic(true);
+    p.setPen(basePen);
+    p.drawLine(QPointF(left, top + h - 1), QPointF(left + w, top + h - 1));
+    p.restore();
+}
+
 void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
 {
     if (target.width() < 2 || target.height() < 2)
@@ -61,10 +80,15 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
     if (m_overlayStyle)
         p.fillRect(target, QColor(0, 0, 0, 90));
     else
-        p.fillRect(target, Qt::black);
+        p.fillRect(target, QColor(20, 20, 22));
 
     const int w = target.width();
     const int h = target.height();
+    const double left = target.left();
+    const double top = target.top();
+
+    drawHistogramGrid(p, left, top, w, h);
+
     if (m_hists.empty())
         return;
 
@@ -107,8 +131,6 @@ void HistogramWidget::paintOverlay(QPainter &p, const QRect &target) const
         }
 
     const int bins = m_hists.front().bins;
-    const double left = target.left();
-    const double top = target.top();
     const double dx = static_cast<double>(w) / bins;
     const double dy = static_cast<double>(h - 2) / maxVal;
 

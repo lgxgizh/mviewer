@@ -249,7 +249,9 @@ void CompareWorkspace::drawSplitCompare(QPainter &p)
     // complementary-clip convention.
     drawCellCompare(p, 0, left, QRectF(left));
     drawCellCompare(p, 1, right, QRectF(right));
-    p.setPen(QPen(QColor(255, 255, 255), 2));
+    p.setPen(QPen(QColor(0, 0, 0, 110), 3));
+    p.drawLine(QPoint(right.left(), r.top()), QPoint(right.left(), r.bottom()));
+    p.setPen(QPen(QColor(255, 255, 255, 230), 1));
     p.drawLine(QPoint(right.left(), r.top()), QPoint(right.left(), r.bottom()));
 }
 
@@ -272,10 +274,19 @@ void CompareWorkspace::drawSwipeCompare(QPainter &p, int x)
     drawCellCompare(p, 1, rightClip, QRectF(r));
     p.restore();
 
-    p.setPen(QPen(QColor(255, 255, 255), 2));
+    // High-contrast dual-tone divider
+    p.setPen(QPen(QColor(0, 0, 0, 110), 3));
     p.drawLine(QPoint(divX, 0), QPoint(divX, r.height()));
-    p.setBrush(QColor(255, 255, 255));
-    p.drawEllipse(QPoint(divX, r.height() / 2), 4, 4);
+    p.setPen(QPen(QColor(255, 255, 255, 230), 1));
+    p.drawLine(QPoint(divX, 0), QPoint(divX, r.height()));
+
+    // Professional handle button in center
+    const int centerY = r.height() / 2;
+    p.setPen(QPen(QColor(0, 0, 0, 120), 1.5));
+    p.setBrush(QColor(255, 255, 255, 240));
+    p.drawEllipse(QPoint(divX, centerY), 8, 8);
+    p.setPen(QPen(QColor(40, 40, 45), 1.5));
+    p.drawLine(QPoint(divX - 4, centerY), QPoint(divX + 4, centerY));
 }
 
 // A-4.1 + H3: semi-transparent overlay blend of two images, drawn with the
