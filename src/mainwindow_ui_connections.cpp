@@ -516,6 +516,11 @@ void MainWindow::connectMenuSignals()
                 statusBar()->showMessage(
                     QString("无法加载图片: %1").arg(QFileInfo(path).fileName()), 5000);
             });
+    connect(m_imageViewer, &ImageViewer::statusMessageRequested, this,
+            [this](const QString &msg, int timeoutMs)
+            {
+                statusBar()->showMessage(msg, timeoutMs);
+            });
     connect(m_actSaveWorkspace, &QAction::triggered, this, &MainWindow::saveWorkspace);
     connect(m_actOpenWorkspace, &QAction::triggered, this, &MainWindow::openWorkspace);
     connect(m_actSaveProject, &QAction::triggered, this, &MainWindow::saveProject);

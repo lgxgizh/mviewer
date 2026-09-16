@@ -9,7 +9,7 @@ void CompareWorkspace::keyPressEvent(QKeyEvent *event)
 {
     if (handleBasicCompareKey(event) || handleModeCompareKey(event) ||
         handleChannelCompareKey(event) || handleSyncCompareKey(event) ||
-        handleAdvancedCompareKey(event))
+        handleZoomCompareKey(event) || handleAdvancedCompareKey(event))
         return;
     QWidget::keyPressEvent(event);
 }
@@ -200,6 +200,55 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     {
         onSwapPanes();
         showCompareStatus(tr("已对调 A/B 窗格"));
+        event->accept();
+        return true;
+    }
+    return false;
+}
+
+bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
+{
+    const int key = event->key();
+    const auto mods = event->modifiers();
+    const bool plain = (mods == Qt::NoModifier);
+    const bool ctrl = (mods == Qt::ControlModifier);
+
+    // Ctrl+0 -> Fit, Ctrl+1 -> 100% actual size.
+    if (ctrl && key == Qt::Key_0)
+    {
+        fitAll();
+        showCompareStatus(tr("视图自适应窗口 (Fit)"));
+        if (m_compareCanvas)
+            m_compareCanvas->update();
+        update();
+        event->accept();
+        return true;
+    }
+    if (ctrl && key == Qt::Key_1)
+    {
+        const double currentScale = m_engine.cellTransform(0).scale;
+        if (currentScale > 0.0)
+        {
+            applyAnchorZoom(0, 0.0, 0.0, 1.0 / currentScale);
+            showCompareStatus(tr("视图缩放: 100% (原始大小)"));
+            if (m_compareCanvas)
+                m_compareCanvas->update();
+            update();
+            event->accept();
+            return true;
+        }
+    }
+    // Zoom in / out (+ / = / - / _).
+    const bool isZoomIn = (key == Qt::Key_Plus || key == Qt::Key_Equal);
+    const bool isZoomOut = (key == Qt::Key_Minus || key == Qt::Key_Underscore);
+    if ((plain || ctrl || mods == Qt::ShiftModifier) && (isZoomIn || isZoomOut))
+    {
+        const double factor = isZoomIn ? 1.15 : (1.0 / 1.15);
+        applyAnchorZoom(0, 0.0, 0.0, factor);
+        showCompareStatus(isZoomIn ? tr("视图放大") : tr("视图缩小"));
+        if (m_compareCanvas)
+            m_compareCanvas->update();
+        update();
         event->accept();
         return true;
     }

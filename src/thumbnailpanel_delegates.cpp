@@ -1,6 +1,10 @@
 // ThumbnailPanel item delegates: thumbnail grid, details row, list row (M20 P0#3).
 #include "thumbnailpanel_p.h"
 
+#include <QDir>
+#include <QHelpEvent>
+#include <QToolTip>
+
 #include <algorithm>
 #include <vector>
 
@@ -395,6 +399,94 @@ void drawDetailsExif(QPainter *painter, const DetailLayout &L, const QString &pa
     painter->drawText(L.iso, Qt::AlignVCenter | Qt::TextSingleLine,
                       iso > 0 ? QString("ISO %1").arg(iso) : QStringLiteral("-"));
 }
+
+bool showThumbnailTooltip(QHelpEvent *event, QAbstractItemView *view,
+                          const QModelIndex &index, const ThumbnailPanel *panel)
+{
+    if (!event || !view || !panel || !index.isValid())
+        return false;
+
+    const QStringList &paths = panel->pathList();
+    if (index.row() < 0 || index.row() >= paths.size())
+        return false;
+
+    const QString path = paths.at(index.row());
+    const ThumbnailPanel::Entry *entry = panel->entryForPath(path);
+    const QString name = fileNameFromPath(path);
+
+    QStringList lines;
+    lines << QStringLiteral("<b>%1</b>").arg(name.toHtmlEscaped());
+
+    if (entry && entry->width > 0 && entry->height > 0)
+    {
+        const double mp = (entry->width * static_cast<double>(entry->height)) / 1000000.0;
+        const QString fmt = fileSuffixFromPath(path).toUpper();
+        lines << QObject::tr("分辨率: %1 × %2 (%3 MP) · %4")
+                     .arg(entry->width)
+                     .arg(entry->height)
+                     .arg(QString::number(mp, 'f', 1))
+                     .arg(fmt.isEmpty() ? QStringLiteral("IMAGE") : fmt);
+    }
+    else
+    {
+        const QString fmt = fileSuffixFromPath(path).toUpper();
+        if (!fmt.isEmpty())
+            lines << QObject::tr("格式: %1").arg(fmt);
+    }
+
+    if (entry && entry->size > 0)
+        lines << QObject::tr("大小: %1").arg(formatFileSize(entry->size));
+
+    if (entry && entry->date.isValid())
+        lines << QObject::tr("修改时间: %1")
+                     .arg(entry->date.toString(QStringLiteral("yyyy-MM-dd hh:mm:ss")));
+
+    const auto &rs = mviewer::core::RatingStore::instance();
+    const std::string ep = path.toStdString();
+    const int stars = rs.rating(ep);
+    const int label = rs.colorLabel(ep);
+    const bool rejected = rs.rejected(ep);
+
+    QStringList metaTags;
+    if (stars > 0)
+    {
+        QString starStr;
+        for (int s = 0; s < 5; ++s)
+            starStr += (s < stars ? QStringLiteral("★") : QStringLiteral("☆"));
+        metaTags << starStr;
+    }
+    if (label > 0)
+    {
+        static const char *kLabelNames[7] = {"", "红色", "橙色", "黄色", "绿色", "蓝色", "紫色"};
+        metaTags << QString::fromUtf8(kLabelNames[label]) + QObject::tr("标签");
+    }
+    if (rejected)
+        metaTags << QObject::tr("已排除 (Rejected)");
+
+    if (!metaTags.isEmpty())
+        lines << metaTags.join(QStringLiteral(" · "));
+
+    const QString cam = panel->metaCameraForPath(path).trimmed();
+    const QString lens = panel->metaLensForPath(path).trimmed();
+    const int iso = panel->metaIsoForPath(path);
+    if (!cam.isEmpty() || !lens.isEmpty() || iso > 0)
+    {
+        QStringList exifParts;
+        if (!cam.isEmpty())
+            exifParts << cam;
+        if (!lens.isEmpty())
+            exifParts << lens;
+        if (iso > 0)
+            exifParts << QString("ISO %1").arg(iso);
+        lines << exifParts.join(QStringLiteral(" · "));
+    }
+
+    lines << QStringLiteral("<span style='color: gray;'>%1</span>")
+                 .arg(QDir::toNativeSeparators(path).toHtmlEscaped());
+
+    QToolTip::showText(event->globalPos(), lines.join(QStringLiteral("<br>")), view);
+    return true;
+}
 } // namespace
 
 void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
@@ -469,6 +561,13 @@ QSize ThumbnailPanel::ThumbDelegate::sizeHint(const QStyleOptionViewItem &,
 int ThumbnailPanel::ThumbDelegate::thumbSize() const
 {
     return m_panel->thumbSize();
+}
+
+bool ThumbnailPanel::ThumbDelegate::helpEvent(QHelpEvent *event, QAbstractItemView *view,
+                                              const QStyleOptionViewItem &,
+                                              const QModelIndex &index)
+{
+    return showThumbnailTooltip(event, view, index, m_panel);
 }
 
 // ---- DetailsDelegate ---------------------------------------------------------
@@ -573,6 +672,13 @@ QSize ThumbnailPanel::DetailsDelegate::sizeHint(const QStyleOptionViewItem &,
     return QSize(w, kDetailsItemHeight);
 }
 
+bool ThumbnailPanel::DetailsDelegate::helpEvent(QHelpEvent *event, QAbstractItemView *view,
+                                                const QStyleOptionViewItem &,
+                                                const QModelIndex &index)
+{
+    return showThumbnailTooltip(event, view, index, m_panel);
+}
+
 // ---- ListDelegate ----------------------------------------------------------
 void ThumbnailPanel::ListDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
                                          const QModelIndex &index) const
@@ -619,4 +725,11 @@ QSize ThumbnailPanel::ListDelegate::sizeHint(const QStyleOptionViewItem &,
 {
     // Fixed width so items wrap into columns; single compact row height.
     return QSize(kListItemWidth, kListItemHeight);
+}
+
+bool ThumbnailPanel::ListDelegate::helpEvent(QHelpEvent *event, QAbstractItemView *view,
+                                             const QStyleOptionViewItem &,
+                                             const QModelIndex &index)
+{
+    return showThumbnailTooltip(event, view, index, m_panel);
 }

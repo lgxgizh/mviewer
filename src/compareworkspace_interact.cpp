@@ -11,7 +11,7 @@ void CompareWorkspace::showShortcutHelp()
     const QString tip =
         tr("比较窗口快捷键: B 闪烁 · Space 临时切换 · S 分割 · W 滑动 · O 叠加 · "
            "K 棋盘 · H Diff高亮 · Shift+1…5 通道 · Z/D 同步缩放/拖动 · R 准星 · "
-           "L 像素连线 · 1~8 布局 · PgUp/PgDn 上一对/下一对 · F Fit · X 交换 A/B · ? 帮助 · "
+           "L 像素连线 · 1~8 布局 · PgUp/PgDn 上一对/下一对 · F/Ctrl+0 Fit · Ctrl+1 100% · +/- 缩放 · X 交换 A/B · ? 帮助 · "
            "Esc 有选区则清除，否则退出");
     showCompareStatus(tip, 8000);
 }

@@ -288,6 +288,9 @@ class MainWindow : public QMainWindow
     QAction *m_actRotateCCW = nullptr;
     QAction *m_actFlipH = nullptr;
     QAction *m_actFlipV = nullptr;
+    QAction *m_actSelectAll = nullptr;
+    QAction *m_actDeselectAll = nullptr;
+    QAction *m_actInvertSelection = nullptr;
     QAction *m_actColorManagement = nullptr;
     CommandStack m_cmdStack;
     void updateUndoRedoActions();

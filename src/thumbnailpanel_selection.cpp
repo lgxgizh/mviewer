@@ -145,3 +145,19 @@ QStringList ThumbnailPanel::selectedPaths() const
         r.append(m_paths.value(idx.row()));
     return r;
 }
+
+void ThumbnailPanel::invertSelection()
+{
+    if (!selectionModel() || !m_model)
+        return;
+    const int count = m_model->rowCount();
+    QItemSelection inverted;
+    for (int r = 0; r < count; ++r)
+    {
+        const QModelIndex idx = m_model->index(r, 0);
+        if (!selectionModel()->isSelected(idx))
+            inverted.select(idx, idx);
+    }
+    selectionModel()->select(inverted, QItemSelectionModel::ClearAndSelect);
+    onSelectionChanged();
+}

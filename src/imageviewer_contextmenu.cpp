@@ -123,10 +123,10 @@ void addCopyContextActions(QMenu &menu, QAction *&copy, QAction *&copyPath, QAct
     copyHsv = colorMenu->addAction("HSV 值 HSV(h°, s%, v%)");
 }
 
-void copyPixelValue(const PixelRGBA &px, int format)
+QString copyPixelValue(const PixelRGBA &px, int format)
 {
     if (!px.valid)
-        return;
+        return QString();
     QString text;
     switch (format)
     {
@@ -184,6 +184,7 @@ void copyPixelValue(const PixelRGBA &px, int format)
     }
     if (!text.isEmpty())
         QApplication::clipboard()->setText(text);
+    return text;
 }
 
 void populateAnalyzeSubmenu(QMenu &menu, const std::shared_ptr<ImageFrame> &frame,
@@ -333,11 +334,13 @@ bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QActio
     if (chosen == copy)
     {
         copyToClipboard();
+        emit statusMessageRequested(tr("正在复制图片到剪贴板..."));
         return true;
     }
     if (chosen == copyPath)
     {
         QApplication::clipboard()->setText(m_currentPath);
+        emit statusMessageRequested(tr("已复制图片完整路径到剪贴板"));
         return true;
     }
     if (chosen == reveal)
@@ -368,7 +371,9 @@ bool ImageViewer::handleContextCopyAction(QAction *chosen, QAction *copy, QActio
         }
         if (!px.valid)
             px = m_lastHoverPixel;
-        copyPixelValue(px, format);
+        const QString copied = copyPixelValue(px, format);
+        if (!copied.isEmpty())
+            emit statusMessageRequested(tr("已复制像素值: %1").arg(copied));
         return true;
     }
     return false;
@@ -416,13 +421,16 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
         }
         if (px.valid)
         {
-            copyPixelValue(px, 0);
+            const QString copied = copyPixelValue(px, 0);
+            if (!copied.isEmpty())
+                emit statusMessageRequested(tr("已复制像素值: %1").arg(copied));
             return true;
         }
     }
     if (ctrl && key == Qt::Key_C)
     {
         copyToClipboard();
+        emit statusMessageRequested(tr("正在复制图片到剪贴板..."));
         return true;
     }
     if (ctrl && key == Qt::Key_E)
@@ -435,6 +443,7 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
         if (!m_currentPath.isEmpty())
         {
             QApplication::clipboard()->setText(m_currentPath);
+            emit statusMessageRequested(tr("已复制图片完整路径到剪贴板"));
             return true;
         }
     }

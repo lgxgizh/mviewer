@@ -190,6 +190,7 @@ class CompareWorkspace : public QWidget
     bool handleChannelCompareKey(QKeyEvent *event);
     bool handleTransformCompareKey(QKeyEvent *event);
     bool handleSyncCompareKey(QKeyEvent *event);
+    bool handleZoomCompareKey(QKeyEvent *event);
     bool handleAdvancedCompareKey(QKeyEvent *event);
     void rebuildCells();
     void buildCompareCells(int count, int columns);

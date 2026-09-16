@@ -1,5 +1,20 @@
 # Changelog
  
+## [1.0.50] - 2026-09-16
+
+### UX, Ergonomics & Interaction Polish
+
+- **Thumbnail Gallery Rich Tooltips (`ThumbnailPanel`, `thumbnailpanel_delegates.cpp`, `thumbnailpanel.h`)**:
+  - **Comprehensive Multi-Property Tooltips**: Added formatted HTML tooltips across all thumbnail gallery view modes (`ThumbDelegate`, `DetailsDelegate`, `ListDelegate`). Displays filename, resolution with calculated megapixels (MP), image format, human-readable file size, modification timestamp, rating stars (★), color label flags, rejection status, and cached EXIF camera/lens/ISO parameters with full native path.
+  - **Zero Disk I/O Overhead**: Tooltip data is resolved purely from the in-memory metadata cache (`entryForPath`, `RatingStore`, and cached EXIF metadata) without blocking disk access or re-reading files on hover.
+- **Batch Selection Ergonomics (`MainWindow`, `ThumbnailPanel`, `mainwindow_ui_menus.cpp`, `thumbnailpanel_selection.cpp`)**:
+  - **Invert Selection & Selection Menu Actions**: Added "全选 (Select All, Ctrl+A)", "取消选择 (Deselect All, Ctrl+Shift+A)", and "反向选择 (Invert Selection, Ctrl+Shift+I)" to the top-level Edit (`编辑`) menu, matching standard file manager conventions and facilitating rapid bulk image selection for comparison and batch export.
+- **Compare Workspace Keyboard Zoom Controls (`CompareWorkspace`, `compareworkspace_keyboard.cpp`, `compareworkspace_interact.cpp`)**:
+  - **Standard Zoom Shortcuts**: Added `+` / `=` / `Ctrl++` (zoom in by 15%), `-` / `_` / `Ctrl+-` (zoom out by 15%), `Ctrl+0` (fit all panes to window), and `Ctrl+1` (100% actual pixel size) shortcuts to CompareWorkspace.
+  - **Updated Shortcut HUD**: Refreshed the comparison workspace shortcut tooltip (`?`) to explicitly guide users to `F/Ctrl+0 Fit · Ctrl+1 100% · +/- 缩放`.
+- **Image Copy & Pixel Inspection Status Feedback (`ImageViewer`, `imageviewer_contextmenu.cpp`, `mainwindow_ui_connections.cpp`)**:
+  - **Immediate Status Bar Notifications**: Added `statusMessageRequested` signal to `ImageViewer`, relaying copy actions (pixel values in Hex/RGB/Float/HSV, image frame copying, and full file path copying) to `statusBar()->showMessage` with immediate clear visual feedback.
+
 ## [1.0.49] - 2026-09-16
 
 ### UX, Ergonomics & Interaction Polish

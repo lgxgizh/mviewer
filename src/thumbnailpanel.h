@@ -240,6 +240,7 @@ class ThumbnailPanel : public QListView
     void copySelectedTo();
     void moveSelectedTo();
     void revealSelected();
+    void invertSelection();
 
     // A-10: reversible file ops via CommandStack. When set, rename/delete/move
     // go through the stack so Ctrl+Z can reverse them. When null, falls back
@@ -614,6 +615,8 @@ class ThumbnailPanel::ThumbDelegate : public QStyledItemDelegate
     void paint(QPainter *painter, const QStyleOptionViewItem &option,
                const QModelIndex &index) const override;
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+    bool helpEvent(QHelpEvent *event, QAbstractItemView *view, const QStyleOptionViewItem &option,
+                   const QModelIndex &index) override;
 
   private:
     int thumbSize() const; // reads m_panel->thumbSize()
@@ -633,6 +636,8 @@ class ThumbnailPanel::DetailsDelegate : public QStyledItemDelegate
     void paint(QPainter *painter, const QStyleOptionViewItem &option,
                const QModelIndex &index) const override;
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+    bool helpEvent(QHelpEvent *event, QAbstractItemView *view, const QStyleOptionViewItem &option,
+                   const QModelIndex &index) override;
 
   private:
     ThumbnailPanel *m_panel;
@@ -650,6 +655,8 @@ class ThumbnailPanel::ListDelegate : public QStyledItemDelegate
     void paint(QPainter *painter, const QStyleOptionViewItem &option,
                const QModelIndex &index) const override;
     QSize sizeHint(const QStyleOptionViewItem &option, const QModelIndex &index) const override;
+    bool helpEvent(QHelpEvent *event, QAbstractItemView *view, const QStyleOptionViewItem &option,
+                   const QModelIndex &index) override;
 
   private:
     ThumbnailPanel *m_panel;

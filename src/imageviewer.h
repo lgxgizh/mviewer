@@ -214,6 +214,7 @@ class ImageViewer : public QOpenGLWidget
     // host can surface the failure (status bar) instead of it being silent.
     void loadFailed(const QString &path);
     void exportFinished(bool success, const QString &message);
+    void statusMessageRequested(const QString &message, int timeoutMs = 2000);
 
     void regionStats(const QString &text);
     void selectionChanged(const QRect &sel); // image coords (may be null rect)
