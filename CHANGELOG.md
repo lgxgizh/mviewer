@@ -1,43 +1,5 @@
 # Changelog
  
-## [1.0.48] - 2026-09-16
-
-### UI Beautification & Comparison Ergonomics
-
-- **High-Contrast Comparison Divider & Wipe Grab Handle (`compareworkspace_render_canvas.cpp`)**:
-  - Implemented dual-tone high-contrast divider in `drawSplitCompare` and `drawSwipeCompare` with a subtle dark boundary shadow beneath the bright guide line, preventing the divider from disappearing against bright highlights or white image content.
-  - Added an intuitive circular grab button with tactile grip mark at the center of the swipe divider for professional dragging affordance.
-- **Histogram Quartile Guides & Background Polish (`widgets/histogramwidget.cpp`)**:
-  - Added dashed quartile reference lines (25%, 50%, 75% luminance) and a clean baseline border to `HistogramWidget::paintOverlay`, giving engineers instant visual feedback on shadow, midtone, and highlight balance.
-  - Softened histogram background to harmonized dark theme base `#141416`.
-
-### Testing & Quality Gates
-
-- Passed 100% of all 132 automated test suites (including `bench_enforce`, `workflow_ux_tests`, `architecture_gate_regression`, and `complexity_gate_regression`).
-
-## [1.0.47] - 2026-09-16
-
-### UI Beautification & Precision Ergonomics
-
-- **Refined Dark Control Styles (`Theme.cpp`)**:
-  - Extended dark stylesheet with modern styling for `QHeaderView`, `QTreeView`, `QTableView`, `QListView` (clean row hover `#27272e`, selection `#2563eb`), modern horizontal `QSlider` (slim track and accent handle), `QProgressBar`, and custom dark checkboxes/radios.
-- **Alpha-Aware Pixel Copying (`imageviewer_contextmenu.cpp`)**:
-  - Added 4-channel alpha preservation to `copyPixelValue`, accurately formatting `#RRGGBBAA`, `RGBA(r, g, b, a)`, and normalized `(r, g, b, a)` when inspecting transparent or semi-transparent images.
-
-### Performance & Optimizations
-
-- **PixelGrid Batched Vector Drawing**:
-  - Replaced iterative `p.drawLine` loops in `drawPixelGrid` (`widgets/pixelgrid.h`) with stack-allocated `QVarLengthArray<QLineF, 256>` and a single `p.drawLines` batch call, reducing GPU/driver draw call overhead during deep zoom (800%+) inspections.
-- **DifferenceEngine SSE2 Vectorization & Contiguous Memory Fast Paths**:
-  - **SSE2 Grayscale8 Diff**: Added 16-byte SSE2 vectorization (`_mm_subs_epu8`, `_mm_or_si128`, `_mm_cmpeq_epi8`, `_mm_and_si128`) to `diffGrayscale8Row`, accelerating grayscale diff calculations on all x64 systems and tail segments.
-  - **Contiguous amplify Acceleration**: Added full-buffer single `std::memcpy` for identity amplification (gain $\le 1.0$) and a flat 1D LUT loop for contiguous memory, avoiding row-by-row dispatch overhead.
-  - **Contiguous computeStats Flat Loop**: Streamlined whole-image statistics calculation into a single flat scan, enabling unrolled auto-vectorization.
-
-### Testing & Quality Gates
-
-- Added unit tests in `test_differenceengine.cpp` verifying vectorized Grayscale8 diffs, contiguous amplification, and full-image statistics.
-- Passed 100% of all 132 automated test suites, complexity gate checks, and architectural boundaries.
-
 ## [1.0.46] - 2026-09-16
 
 ### UI Beautification & Ergonomics
@@ -45,21 +7,33 @@
 - **Modern Dark Theme & Aesthetics (`mviewer::ui::Theme`)**:
   - Implemented cohesive dark theme using a tuned charcoal/zinc palette (`#1e1e20` window, `#141416` base, `#27272a` panels, `#2563eb` accent blue) reducing eye fatigue during prolonged visual analysis.
   - Modernized UI controls: slim non-intrusive scrollbars (10px rounded handle with hover state), flat toolbar buttons, clean popup menus, and crisp focus rings.
+  - Extended dark styling to all standard controls: `QHeaderView`, `QTreeView`, `QTableView`, `QListView` (clean row hover `#27272e`, selection `#2563eb`), horizontal `QSlider` (slim track and accent handle), `QProgressBar`, and custom dark checkboxes/radios.
   - Added theme selection dropdown to **首选项 (Preferences)** with live switching between "深色模式 (Dark)" and "系统默认 (System)".
 - **Workflow Ergonomics & User Habits**:
   - **Explorer Reveal & Shortcut**: Added `Ctrl+E` shortcut and "在资源管理器中显示" action in ImageViewer; corrected Windows Explorer command arguments (`/select,"<path>"`) so target files are reliably selected and highlighted.
   - **Interactive Status Bar**: Left-clicking the image filename in the status bar reveals the file in Windows Explorer; right-clicking copies the native path to the clipboard with visual confirmation.
   - **Compare Mode HUD Feedback**: Added immediate HUD toast overlay feedback when toggling compare modes (`B`/`S`/`W`/`O`/`K`/`H`) and zoom presets (`Z`/`D`/`R`/`L`/`I`/`F`/`X`).
+  - **Alpha-Aware Pixel Copying**: Added 4-channel alpha preservation to `copyPixelValue` (`#RRGGBBAA`, `RGBA(r, g, b, a)`, and normalized `(r, g, b, a)`) when inspecting transparent or semi-transparent images.
+- **Comparison & Analysis Visual Refinement**:
+  - **High-Contrast Comparison Divider & Wipe Grab Handle**: Implemented dual-tone high-contrast divider in `drawSplitCompare` and `drawSwipeCompare` with a subtle dark boundary shadow beneath the bright guide line, preventing the divider from disappearing against bright highlights or white image content. Added an intuitive circular grab button with tactile grip mark at the center of the swipe divider.
+  - **Histogram Quartile Guides**: Added dashed quartile reference lines (25%, 50%, 75% luminance) and a clean baseline border to `HistogramWidget::paintOverlay`, giving engineers instant visual feedback on shadow, midtone, and highlight balance. Softened background to harmonized dark theme base `#141416`.
 
 ### Performance & Optimizations
 
+- **DifferenceEngine SSE2 Vectorization & Contiguous Memory Fast Paths**:
+  - **SSE2 Grayscale8 Diff**: Added 16-byte SSE2 vectorization (`_mm_subs_epu8`, `_mm_or_si128`, `_mm_cmpeq_epi8`, `_mm_and_si128`) to `diffGrayscale8Row`, accelerating grayscale diff calculations on all x64 systems and tail segments.
+  - **Contiguous amplify Acceleration**: Added full-buffer single `std::memcpy` for identity amplification (gain $\le 1.0$) and a flat 1D LUT loop for contiguous memory, avoiding row-by-row dispatch overhead.
+  - **Contiguous computeStats Flat Loop**: Streamlined whole-image statistics calculation into a single flat scan, enabling unrolled auto-vectorization.
+- **PixelGrid Batched Vector Drawing**:
+  - Replaced iterative `p.drawLine` loops in `drawPixelGrid` (`widgets/pixelgrid.h`) with stack-allocated `QVarLengthArray<QLineF, 256>` and a single `p.drawLines` batch call, reducing GPU/driver draw call overhead during deep zoom (800%+) inspections.
 - **Thumbnail Scale Cache MRU Bubble Swap**:
   - Enhanced `cachedScaledPixmap` in `thumbnailpanel_delegates.cpp` with adaptive MRU bubble swaps, eliminating repeated linear scans across 256 cached pixmaps during rapid thumbnail gallery scrolling.
 
 ### Testing & Quality Gates
 
+- Added unit tests in `test_differenceengine.cpp` verifying vectorized Grayscale8 diffs, contiguous amplification, and full-image statistics.
 - Added `Theme` unit test assertions in `test_ui_models.cpp`.
-- Passed all 132 automated test suites (100% pass rate), adhering to ADR-014 complexity caps and ADR-016 architectural boundaries.
+- Passed 100% of all 132 automated test suites (including `bench_enforce`, `workflow_ux_tests`, `architecture_gate_regression`, and `complexity_gate_regression`).
 
 ## [1.0.45] - 2026-09-16
 
