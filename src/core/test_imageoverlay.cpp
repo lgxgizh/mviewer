@@ -196,14 +196,80 @@ static void testPixelGrid()
           "visible clip reduces the emitted lattice");
 }
 
+static void testZebraGrayscale()
+{
+    printf("\n[zebra grayscale overlay]\n");
+    fflush(stdout);
+    ImageData white = makeImageData(16, 16, PixelFormat::Grayscale8);
+    for (int i = 0; i < 16 * 16; ++i)
+        white.buffer->data()[i] = 255;
+    mviewer::applyOverlay(white, mviewer::OverlayMode::Zebra, 2);
+    bool sawBlack = false, sawWhite = false;
+    for (int y = 0; y < 16; ++y)
+        for (int x = 0; x < 16; ++x)
+        {
+            uint8_t val = white.buffer->data()[y * 16 + x];
+            if (val == 0)
+                sawBlack = true;
+            if (val == 255)
+                sawWhite = true;
+        }
+    CHECK(sawBlack, "zebra paints black stripes on over-exposed grayscale");
+    CHECK(sawWhite, "zebra leaves non-stripe grayscale white");
+}
+
+static void testBGRAndAlphaPreservation()
+{
+    printf("\n[BGR and alpha preservation]\n");
+    fflush(stdout);
+    auto makeBGR = []() {
+        ImageData img = makeImageData(8, 8, PixelFormat::BGR24);
+        const ImageBuffer vb = img.view();
+        for (int y = 0; y < 8; ++y)
+            for (int x = 0; x < 8; ++x)
+            {
+                uint8_t *p = vb.data + static_cast<size_t>(y) * vb.stride() + static_cast<size_t>(x) * 3;
+                p[0] = 30; // B
+                p[1] = 20; // G
+                p[2] = 10; // R
+            }
+        return img;
+    };
+
+    ImageData bgrR = makeBGR();
+    mviewer::applyOverlay(bgrR, mviewer::OverlayMode::ChannelR, 2);
+    const uint8_t *pr = px(bgrR.view(), 0, 0);
+    CHECK(pr[0] == 10 && pr[1] == 10 && pr[2] == 10, "BGR24 ChannelR extracts red correctly");
+
+    ImageData bgrB = makeBGR();
+    mviewer::applyOverlay(bgrB, mviewer::OverlayMode::ChannelB, 2);
+    const uint8_t *pb = px(bgrB.view(), 0, 0);
+    CHECK(pb[0] == 30 && pb[1] == 30 && pb[2] == 30, "BGR24 ChannelB extracts blue correctly");
+
+    ImageData rgba = makeImageData(8, 8, PixelFormat::RGBA32);
+    fillSolid(rgba, 100, 150, 200);
+    for (int y = 0; y < 8; ++y)
+        for (int x = 0; x < 8; ++x)
+            rgba.buffer->data()[static_cast<size_t>(y) * rgba.stride() + static_cast<size_t>(x) * 4 + 3] = 177;
+    mviewer::applyOverlay(rgba, mviewer::OverlayMode::FalseColor, 2);
+    bool alphaIntact = true;
+    for (int y = 0; y < 8 && alphaIntact; ++y)
+        for (int x = 0; x < 8; ++x)
+            if (rgba.buffer->data()[static_cast<size_t>(y) * rgba.stride() + static_cast<size_t>(x) * 4 + 3] != 177)
+                alphaIntact = false;
+    CHECK(alphaIntact, "FalseColor preserves alpha channel in RGBA32");
+}
+
 int main()
 {
     printf("=== ImageOverlay Tests (M22) ===\n");
     fflush(stdout);
     testZebra();
+    testZebraGrayscale();
     testFalseColor();
     testNoneNoOp();
     testChannelIsolation();
+    testBGRAndAlphaPreservation();
     testPixelGrid();
     printf("\n=== %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

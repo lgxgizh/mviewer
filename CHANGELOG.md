@@ -1,5 +1,24 @@
 # Changelog
  
+## [1.0.45] - 2026-09-16
+
+### Performance & Optimizations
+
+- **ImageOverlay Compile-Time LUT & Loop Vectorization**:
+  - **Compile-Time FalseColorLUT**: Precomputed 256-entry `FalseColorLUT` at compile time (`constexpr`), eliminating 3 `std::fabs` transcendental calls, floating-point divisions, and multiple `std::clamp` operations per pixel (saving over 25 million floating-point operations per 4K frame).
+  - **Channel Isolation Loop Hoisting**: Hoisted `mode` switch and pixel format checks completely out of inner scanline loops in `applyChannelOverlay`, short-circuiting `Grayscale8` as an immediate no-op and enabling branchless auto-vectorization across `ChannelR`, `ChannelG`, `ChannelB`, `ChannelY`, and `ChannelV`.
+  - **Zebra Diagonal Stripe Early Skip**: Evaluated stripe condition `((x + y) & 7) >= 4` upfront to skip 50% of pixels before computing luminance.
+  - **Grayscale8 Memory Safety Fix**: Corrected Zebra and FalseColor handling on single-channel `Grayscale8` buffers to write strictly 1 byte per pixel, fixing memory corruption of adjacent pixel data.
+- **AnalysisEngine Direct Buffer Processing**:
+  - **Grayscale8 Zero-Allocation Fast Paths**: Added direct `ImageBuffer` scanline processing for `noiseEstimate` (Laplacian response) and `ssim` (8x8 block calculations) on `Grayscale8` inputs, completely bypassing redundant `QImage` heap allocations and format conversions.
+  - **Unified heatMap Pipeline**: Routed `AnalysisEngine::heatMap` directly to `DifferenceEngine::heatMap`, eliminating duplicate logic and redundant QImage conversions.
+  - **Channel Offset Hoisting in computeStatsROI**: Hoisted BGR/RGB channel index resolution outside the scanline loops.
+
+### Testing & Verification
+
+- **ImageOverlay Comprehensive Format & Alpha Tests**:
+  - Added unit test cases in `test_imageoverlay` covering Zebra on `Grayscale8`, BGR24 channel isolation, and alpha channel preservation in `RGBA32`.
+
 ## [1.0.44] - 2026-09-16
 
 ### Performance & Optimizations

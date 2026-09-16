@@ -75,30 +75,310 @@ inline uint8_t channelPlaneValue(OverlayMode mode, int r, int g, int b)
     }
 }
 
-inline void applyChannelOverlay(ImageData &img, OverlayMode mode)
+struct FalseColorLUT
 {
-    const int cpp = img.channelsPerPixel();
-    const ImageBuffer v = img.view();
-    const bool bgr = (v.format == PixelFormat::BGR24 || v.format == PixelFormat::BGRA32);
+    uint8_t r[256];
+    uint8_t g[256];
+    uint8_t b[256];
+
+    constexpr FalseColorLUT() : r{}, g{}, b{}
+    {
+        for (int l = 0; l < 256; ++l)
+        {
+            const float t = static_cast<float>(l) / 255.0f;
+            auto fclamp = [](float val) {
+                return val < 0.0f ? 0.0f : (val > 1.0f ? 1.0f : val);
+            };
+            auto fabs_ = [](float val) {
+                return val < 0.0f ? -val : val;
+            };
+            const float fr = fclamp(1.5f - fabs_(4.0f * t - 3.0f));
+            const float fg = fclamp(1.5f - fabs_(4.0f * t - 2.0f));
+            const float fb = fclamp(1.5f - fabs_(4.0f * t - 1.0f));
+            r[l] = static_cast<uint8_t>(255.0f * fr);
+            g[l] = static_cast<uint8_t>(255.0f * fg);
+            b[l] = static_cast<uint8_t>(255.0f * fb);
+        }
+    }
+};
+
+inline constexpr FalseColorLUT s_falseColorLut{};
+
+template <int Cpp, bool IsBgr>
+inline void applyFalseColorImpl(const ImageBuffer &v)
+{
     for (int y = 0; y < v.height; ++y)
     {
         uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
         for (int x = 0; x < v.width; ++x)
         {
-            uint8_t *p = row + static_cast<size_t>(x) * cpp;
-            int r, g, b;
-            if (v.format == PixelFormat::Grayscale8)
-                r = g = b = p[0];
-            else if (bgr)
-                b = p[0], g = p[1], r = p[2];
+            uint8_t *p = row + static_cast<size_t>(x) * Cpp;
+            uint8_t r, g, b;
+            if constexpr (IsBgr)
+            {
+                b = p[0];
+                g = p[1];
+                r = p[2];
+            }
             else
-                r = p[0], g = p[1], b = p[2];
-            const uint8_t plane = channelPlaneValue(mode, r, g, b);
-            if (v.format == PixelFormat::Grayscale8)
-                p[0] = plane;
+            {
+                r = p[0];
+                g = p[1];
+                b = p[2];
+            }
+            const int l = luminance(r, g, b);
+            const uint8_t idx = static_cast<uint8_t>(std::clamp(l, 0, 255));
+            if constexpr (IsBgr)
+            {
+                p[0] = s_falseColorLut.b[idx];
+                p[1] = s_falseColorLut.g[idx];
+                p[2] = s_falseColorLut.r[idx];
+            }
             else
-                p[0] = plane, p[1] = plane, p[2] = plane;
+            {
+                p[0] = s_falseColorLut.r[idx];
+                p[1] = s_falseColorLut.g[idx];
+                p[2] = s_falseColorLut.b[idx];
+            }
         }
+    }
+}
+
+inline void applyFalseColor(ImageData &img)
+{
+    const ImageBuffer v = img.view();
+    switch (v.format)
+    {
+    case PixelFormat::RGB24:
+        applyFalseColorImpl<3, false>(v);
+        break;
+    case PixelFormat::RGBA32:
+        applyFalseColorImpl<4, false>(v);
+        break;
+    case PixelFormat::BGR24:
+        applyFalseColorImpl<3, true>(v);
+        break;
+    case PixelFormat::BGRA32:
+        applyFalseColorImpl<4, true>(v);
+        break;
+    case PixelFormat::Grayscale8:
+        for (int y = 0; y < v.height; ++y)
+        {
+            uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = 0; x < v.width; ++x)
+                row[x] = s_falseColorLut.r[row[x]];
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+template <int Cpp, bool IsBgr>
+inline void applyChannelImpl(const ImageBuffer &v, OverlayMode mode)
+{
+    switch (mode)
+    {
+    case OverlayMode::ChannelR:
+    {
+        constexpr int rIdx = IsBgr ? 2 : 0;
+        for (int y = 0; y < v.height; ++y)
+        {
+            uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = 0; x < v.width; ++x)
+            {
+                uint8_t *p = row + static_cast<size_t>(x) * Cpp;
+                const uint8_t r = p[rIdx];
+                p[0] = r;
+                p[1] = r;
+                p[2] = r;
+            }
+        }
+        break;
+    }
+    case OverlayMode::ChannelG:
+    {
+        for (int y = 0; y < v.height; ++y)
+        {
+            uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = 0; x < v.width; ++x)
+            {
+                uint8_t *p = row + static_cast<size_t>(x) * Cpp;
+                const uint8_t g = p[1];
+                p[0] = g;
+                p[1] = g;
+                p[2] = g;
+            }
+        }
+        break;
+    }
+    case OverlayMode::ChannelB:
+    {
+        constexpr int bIdx = IsBgr ? 0 : 2;
+        for (int y = 0; y < v.height; ++y)
+        {
+            uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = 0; x < v.width; ++x)
+            {
+                uint8_t *p = row + static_cast<size_t>(x) * Cpp;
+                const uint8_t b = p[bIdx];
+                p[0] = b;
+                p[1] = b;
+                p[2] = b;
+            }
+        }
+        break;
+    }
+    case OverlayMode::ChannelV:
+    {
+        for (int y = 0; y < v.height; ++y)
+        {
+            uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = 0; x < v.width; ++x)
+            {
+                uint8_t *p = row + static_cast<size_t>(x) * Cpp;
+                const uint8_t val = std::max({p[0], p[1], p[2]});
+                p[0] = val;
+                p[1] = val;
+                p[2] = val;
+            }
+        }
+        break;
+    }
+    case OverlayMode::ChannelY:
+    default:
+    {
+        for (int y = 0; y < v.height; ++y)
+        {
+            uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
+            for (int x = 0; x < v.width; ++x)
+            {
+                uint8_t *p = row + static_cast<size_t>(x) * Cpp;
+                uint8_t r, g, b;
+                if constexpr (IsBgr)
+                {
+                    b = p[0];
+                    g = p[1];
+                    r = p[2];
+                }
+                else
+                {
+                    r = p[0];
+                    g = p[1];
+                    b = p[2];
+                }
+                const uint8_t yVal = static_cast<uint8_t>(std::clamp(luminance(r, g, b), 0, 255));
+                p[0] = yVal;
+                p[1] = yVal;
+                p[2] = yVal;
+            }
+        }
+        break;
+    }
+    }
+}
+
+inline void applyChannelOverlay(ImageData &img, OverlayMode mode)
+{
+    if (img.isNull() || img.format == PixelFormat::Grayscale8)
+        return;
+    const ImageBuffer v = img.view();
+    switch (v.format)
+    {
+    case PixelFormat::RGB24:
+        applyChannelImpl<3, false>(v, mode);
+        break;
+    case PixelFormat::RGBA32:
+        applyChannelImpl<4, false>(v, mode);
+        break;
+    case PixelFormat::BGR24:
+        applyChannelImpl<3, true>(v, mode);
+        break;
+    case PixelFormat::BGRA32:
+        applyChannelImpl<4, true>(v, mode);
+        break;
+    default:
+        break;
+    }
+}
+
+template <int Cpp, bool IsBgr>
+inline void applyZebraImpl(const ImageBuffer &v, int lo, int hi)
+{
+    for (int y = 0; y < v.height; ++y)
+    {
+        uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
+        for (int x = 0; x < v.width; ++x)
+        {
+            if (((x + y) & 7) >= 4)
+                continue;
+            uint8_t *p = row + static_cast<size_t>(x) * Cpp;
+            uint8_t r, g, b;
+            if constexpr (IsBgr)
+            {
+                b = p[0];
+                g = p[1];
+                r = p[2];
+            }
+            else
+            {
+                r = p[0];
+                g = p[1];
+                b = p[2];
+            }
+            const int l = luminance(r, g, b);
+            if (l >= hi || l <= lo)
+            {
+                const uint8_t v0 = (l >= hi) ? 0 : 255;
+                p[0] = v0;
+                p[1] = v0;
+                p[2] = v0;
+            }
+        }
+    }
+}
+
+inline void applyZebraGrayscale(const ImageBuffer &v, int lo, int hi)
+{
+    for (int y = 0; y < v.height; ++y)
+    {
+        uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
+        for (int x = 0; x < v.width; ++x)
+        {
+            if (((x + y) & 7) >= 4)
+                continue;
+            const int l = row[x];
+            if (l >= hi || l <= lo)
+                row[x] = (l >= hi) ? 0 : 255;
+        }
+    }
+}
+
+inline void applyZebraOverlay(ImageData &img, int zebraThresholdPct)
+{
+    const int thr = std::clamp(zebraThresholdPct, 1, 40);
+    const int lo = (thr * 255) / 100;
+    const int hi = 255 - lo;
+    const ImageBuffer v = img.view();
+    switch (v.format)
+    {
+    case PixelFormat::RGB24:
+        applyZebraImpl<3, false>(v, lo, hi);
+        break;
+    case PixelFormat::RGBA32:
+        applyZebraImpl<4, false>(v, lo, hi);
+        break;
+    case PixelFormat::BGR24:
+        applyZebraImpl<3, true>(v, lo, hi);
+        break;
+    case PixelFormat::BGRA32:
+        applyZebraImpl<4, true>(v, lo, hi);
+        break;
+    case PixelFormat::Grayscale8:
+        applyZebraGrayscale(v, lo, hi);
+        break;
+    default:
+        break;
     }
 }
 
@@ -109,40 +389,10 @@ inline void applyOverlay(ImageData &img, OverlayMode mode, int zebraThresholdPct
 {
     if (mode == OverlayMode::None || img.isNull())
         return;
-    const int cpp = img.channelsPerPixel();
-    const ImageBuffer v = img.view();
-    const bool bgr = (v.format == PixelFormat::BGR24 || v.format == PixelFormat::BGRA32);
 
     if (mode == OverlayMode::FalseColor)
     {
-        for (int y = 0; y < v.height; ++y)
-        {
-            uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
-            for (int x = 0; x < v.width; ++x)
-            {
-                uint8_t *p = row + static_cast<size_t>(x) * cpp;
-                int r, g, b;
-                if (v.format == PixelFormat::Grayscale8)
-                    r = g = b = p[0];
-                else if (bgr)
-                    b = p[0], g = p[1], r = p[2];
-                else
-                    r = p[0], g = p[1], b = p[2];
-                const int l = luminance(static_cast<uint8_t>(r), static_cast<uint8_t>(g),
-                                        static_cast<uint8_t>(b));
-                const float t = std::clamp(static_cast<float>(l) / 255.f, 0.f, 1.f);
-                const float fr = std::clamp(1.5f - std::fabs(4.f * t - 3.f), 0.f, 1.f);
-                const float fg = std::clamp(1.5f - std::fabs(4.f * t - 2.f), 0.f, 1.f);
-                const float fb = std::clamp(1.5f - std::fabs(4.f * t - 1.f), 0.f, 1.f);
-                const uint8_t R = static_cast<uint8_t>(255 * fr);
-                const uint8_t G = static_cast<uint8_t>(255 * fg);
-                const uint8_t B = static_cast<uint8_t>(255 * fb);
-                if (bgr)
-                    p[0] = B, p[1] = G, p[2] = R;
-                else
-                    p[0] = R, p[1] = G, p[2] = B;
-            }
-        }
+        applyFalseColor(img);
         return;
     }
 
@@ -152,40 +402,9 @@ inline void applyOverlay(ImageData &img, OverlayMode mode, int zebraThresholdPct
         return;
     }
 
-    if (mode != OverlayMode::Zebra)
-        return;
-
-    // Zebra: paint clip indicators only on a 4/8 diagonal stripe so the
-    // underlying image stays readable.
-    const int thr = std::clamp(zebraThresholdPct, 1, 40);
-    const int lo = (thr * 255) / 100;
-    const int hi = 255 - lo;
-    for (int y = 0; y < v.height; ++y)
+    if (mode == OverlayMode::Zebra)
     {
-        uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
-        for (int x = 0; x < v.width; ++x)
-        {
-            uint8_t *p = row + static_cast<size_t>(x) * cpp;
-            int r, g, b;
-            if (v.format == PixelFormat::Grayscale8)
-                r = g = b = p[0];
-            else if (bgr)
-                b = p[0], g = p[1], r = p[2];
-            else
-                r = p[0], g = p[1], b = p[2];
-            const int l = luminance(static_cast<uint8_t>(r), static_cast<uint8_t>(g),
-                                    static_cast<uint8_t>(b));
-            if (l >= hi || l <= lo)
-            {
-                if (((x + y) % 8) < 4)
-                {
-                    const uint8_t v0 = (l >= hi) ? 0 : 255;
-                    p[0] = v0;
-                    p[1] = v0;
-                    p[2] = v0;
-                }
-            }
-        }
+        applyZebraOverlay(img, zebraThresholdPct);
     }
 }
 

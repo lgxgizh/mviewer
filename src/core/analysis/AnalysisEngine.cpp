@@ -61,6 +61,77 @@ ImageStats computeStatsGrayscale(const ImageBuffer &vbuf, int rx, int ry, int rw
     return s;
 }
 
+template <typename LineGetterA, typename LineGetterB>
+double computeSSIMCore(int w, int h, LineGetterA &&lineA, LineGetterB &&lineB)
+{
+    const double C1 = (0.01 * 255.0) * (0.01 * 255.0);
+    const double C2 = (0.03 * 255.0) * (0.03 * 255.0);
+    constexpr int block = 8;
+    constexpr double N = 64.0;
+
+    double ssimSum = 0.0;
+    int blocks = 0;
+    for (int by = 0; by + block <= h; by += block)
+    {
+        for (int bx = 0; bx + block <= w; bx += block)
+        {
+            int sumA = 0, sumB = 0, sumAA = 0, sumBB = 0, sumAB = 0;
+            for (int y = 0; y < block; ++y)
+            {
+                const uint8_t *la = lineA(by + y);
+                const uint8_t *lb = lineB(by + y);
+                for (int x = 0; x < block; ++x)
+                {
+                    const int pa = la[bx + x];
+                    const int pb = lb[bx + x];
+                    sumA += pa;
+                    sumB += pb;
+                    sumAA += pa * pa;
+                    sumBB += pb * pb;
+                    sumAB += pa * pb;
+                }
+            }
+            const double meanA = sumA / N;
+            const double meanB = sumB / N;
+            const double varA = std::max(0.0, (sumAA / N) - meanA * meanA);
+            const double varB = std::max(0.0, (sumBB / N) - meanB * meanB);
+            const double cov = (sumAB / N) - meanA * meanB;
+            const double num = (2.0 * meanA * meanB + C1) * (2.0 * cov + C2);
+            const double den = (meanA * meanA + meanB * meanB + C1) * (varA + varB + C2);
+            ssimSum += num / den;
+            ++blocks;
+        }
+    }
+    return blocks > 0 ? ssimSum / blocks : 0.0;
+}
+
+template <typename LineGetter>
+double calcLaplacianCore(int w, int h, LineGetter &&getLine)
+{
+    int64_t sum = 0;
+    int64_t sumSq = 0;
+    int count = 0;
+    for (int y = 1; y < h - 1; ++y)
+    {
+        const uint8_t *prev = getLine(y - 1);
+        const uint8_t *curr = getLine(y);
+        const uint8_t *next = getLine(y + 1);
+        for (int x = 1; x < w - 1; ++x)
+        {
+            const int lap = static_cast<int>(prev[x]) + curr[x - 1] + curr[x + 1] + next[x] -
+                            4 * static_cast<int>(curr[x]);
+            sum += lap;
+            sumSq += static_cast<int64_t>(lap) * lap;
+            ++count;
+        }
+    }
+    if (count < 2)
+        return 0.0;
+    const double mean = static_cast<double>(sum) / count;
+    const double variance = static_cast<double>(sumSq) / count - mean * mean;
+    return std::max(0.0, variance);
+}
+
 ImageStats computeStatsFallback(const ImageData &imgData, int rx, int ry, int rw, int rh)
 {
     ImageStats s;
@@ -136,6 +207,8 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
         ImageStats s;
         const int cpp = vbuf.channelsPerPixel();
         const bool isBGR = (isBgr24 || isBgra32);
+        const int rIdx = isBGR ? 2 : 0;
+        const int bIdx = isBGR ? 0 : 2;
         long long sumL = 0, sumR = 0, sumG = 0, sumB = 0, sumV = 0;
         int count = 0;
         for (int y = ry; y < ry + rh; ++y)
@@ -144,9 +217,9 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
             for (int x = rx; x < rx + rw; ++x)
             {
                 const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-                const int r = isBGR ? p[2] : p[0];
+                const int r = p[rIdx];
                 const int g = p[1];
-                const int b = isBGR ? p[0] : p[2];
+                const int b = p[bIdx];
                 sumR += r;
                 sumG += g;
                 sumB += b;
@@ -267,115 +340,51 @@ double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
 
 double AnalysisEngine::ssim(const ImageData &aData, const ImageData &bData)
 {
-    QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_Grayscale8);
-    QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_Grayscale8);
-    const int w = std::min(aa.width(), bb.width());
-    const int h = std::min(aa.height(), bb.height());
+    const int w = std::min(aData.width, bData.width);
+    const int h = std::min(aData.height, bData.height);
     if (w < 8 || h < 8)
         return 0.0;
 
-    const double C1 = (0.01 * 255.0) * (0.01 * 255.0);
-    const double C2 = (0.03 * 255.0) * (0.03 * 255.0);
-    constexpr int block = 8;
-    constexpr double N = 64.0;
-
-    double ssimSum = 0.0;
-    int blocks = 0;
-    for (int by = 0; by + block <= h; by += block)
+    if (aData.format == PixelFormat::Grayscale8 && bData.format == PixelFormat::Grayscale8)
     {
-        for (int bx = 0; bx + block <= w; bx += block)
-        {
-            int sumA = 0, sumB = 0, sumAA = 0, sumBB = 0, sumAB = 0;
-            for (int y = 0; y < block; ++y)
-            {
-                const uchar *lineA = aa.constScanLine(by + y);
-                const uchar *lineB = bb.constScanLine(by + y);
-                for (int x = 0; x < block; ++x)
-                {
-                    const int pa = lineA[bx + x];
-                    const int pb = lineB[bx + x];
-                    sumA += pa;
-                    sumB += pb;
-                    sumAA += pa * pa;
-                    sumBB += pb * pb;
-                    sumAB += pa * pb;
-                }
-            }
-            const double meanA = sumA / N;
-            const double meanB = sumB / N;
-            const double varA = std::max(0.0, (sumAA / N) - meanA * meanA);
-            const double varB = std::max(0.0, (sumBB / N) - meanB * meanB);
-            const double cov = (sumAB / N) - meanA * meanB;
-            const double num = (2.0 * meanA * meanB + C1) * (2.0 * cov + C2);
-            const double den = (meanA * meanA + meanB * meanB + C1) * (varA + varB + C2);
-            ssimSum += num / den;
-            ++blocks;
-        }
+        const ImageBuffer va = aData.view();
+        const ImageBuffer vb = bData.view();
+        return computeSSIMCore(
+            w, h, [&va](int y) { return va.data + static_cast<size_t>(y) * va.stride(); },
+            [&vb](int y) { return vb.data + static_cast<size_t>(y) * vb.stride(); });
     }
-    return blocks > 0 ? ssimSum / blocks : 0.0;
+
+    QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_Grayscale8);
+    QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_Grayscale8);
+    return computeSSIMCore(
+        w, h, [&aa](int y) { return aa.constScanLine(y); },
+        [&bb](int y) { return bb.constScanLine(y); });
 }
 
 double AnalysisEngine::noiseEstimate(const ImageData &imgData)
 {
     if (imgData.isNull())
         return 0.0;
-    QImage img = mvcore::toQImage(imgData).convertToFormat(QImage::Format_Grayscale8);
-    const int w = img.width();
-    const int h = img.height();
+    const int w = imgData.width;
+    const int h = imgData.height;
     if (w < 3 || h < 3)
         return 0.0;
 
-    // 拉普拉斯算子 (3x3): [0 1 0; 1 -4 1; 0 1 0]
-    // 噪声估计 = 拉普拉斯响应的方差 * (调整因子)
-    // 参考: variance-of-Laplacian 方法
-    int64_t sum = 0;
-    int64_t sumSq = 0;
-    int count = 0;
-    for (int y = 1; y < h - 1; ++y)
+    if (imgData.format == PixelFormat::Grayscale8)
     {
-        const uchar *prev = img.constScanLine(y - 1);
-        const uchar *curr = img.constScanLine(y);
-        const uchar *next = img.constScanLine(y + 1);
-        for (int x = 1; x < w - 1; ++x)
-        {
-            // 拉普拉斯响应
-            const int lap = static_cast<int>(prev[x]) + curr[x - 1] + curr[x + 1] + next[x] -
-                            4 * static_cast<int>(curr[x]);
-            sum += lap;
-            sumSq += static_cast<int64_t>(lap) * lap;
-            ++count;
-        }
+        const ImageBuffer v = imgData.view();
+        return calcLaplacianCore(w, h, [&v](int y) {
+            return v.data + static_cast<size_t>(y) * v.stride();
+        });
     }
-    if (count < 2)
-        return 0.0;
-    const double mean = static_cast<double>(sum) / count;
-    const double variance = static_cast<double>(sumSq) / count - mean * mean;
-    return std::max(0.0, variance);
+
+    QImage img = mvcore::toQImage(imgData).convertToFormat(QImage::Format_Grayscale8);
+    return calcLaplacianCore(w, h, [&img](int y) { return img.constScanLine(y); });
 }
 
 ImageData AnalysisEngine::heatMap(const ImageData &grayData)
 {
     if (grayData.isNull())
         return ImageData();
-    QImage src = mvcore::toQImage(grayData);
-    src = src.format() == QImage::Format_Grayscale8
-              ? src
-              : src.convertToFormat(QImage::Format_Grayscale8);
-    const int w = src.width();
-    const int h = src.height();
-    QImage out(w, h, QImage::Format_RGB32);
-    for (int y = 0; y < h; ++y)
-    {
-        const uchar *line = src.constScanLine(y);
-        QRgb *dst = reinterpret_cast<QRgb *>(out.scanLine(y));
-        for (int x = 0; x < w; ++x)
-        {
-            const int v = line[x]; // 0..255
-            const int r = std::min(255, std::max(0, v * 2 - 255)) + std::min(255, v);
-            const int g = std::min(255, std::max(0, 255 - std::abs(v - 128) * 2)) + v / 2;
-            const int b = std::min(255, std::max(0, 255 - v * 2)) + std::min(255, 255 - v);
-            dst[x] = qRgb(std::min(255, r / 2), std::min(255, g / 2), std::min(255, b / 2));
-        }
-    }
-    return mvcore::fromQImage(out);
+    return DifferenceEngine::heatMap(grayData);
 }
