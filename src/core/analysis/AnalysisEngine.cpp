@@ -30,14 +30,28 @@ ImageStats computeStatsGrayscale(const ImageBuffer &vbuf, int rx, int ry, int rw
 {
     ImageStats s;
     long long sum = 0;
-    for (int y = ry; y < ry + rh; ++y)
+    if (rx == 0 && rw == vbuf.width && vbuf.stride() == static_cast<size_t>(rw))
     {
-        const uint8_t *line = vbuf.data + static_cast<size_t>(y) * vbuf.stride();
-        for (int x = rx; x < rx + rw; ++x)
+        const uint8_t *p = vbuf.data + static_cast<size_t>(ry) * rw;
+        const size_t total = static_cast<size_t>(rw) * rh;
+        for (size_t i = 0; i < total; ++i)
         {
-            const uint8_t val = line[x];
+            const uint8_t val = p[i];
             sum += val;
             ++s.histLum[val];
+        }
+    }
+    else
+    {
+        for (int y = ry; y < ry + rh; ++y)
+        {
+            const uint8_t *line = vbuf.data + static_cast<size_t>(y) * vbuf.stride();
+            for (int x = rx; x < rx + rw; ++x)
+            {
+                const uint8_t val = line[x];
+                sum += val;
+                ++s.histLum[val];
+            }
         }
     }
     for (int i = 0; i < 256; ++i)
@@ -73,17 +87,25 @@ double computeSSIMCore(int w, int h, LineGetterA &&lineA, LineGetterB &&lineB)
     int blocks = 0;
     for (int by = 0; by + block <= h; by += block)
     {
+        const uint8_t *linesA[block];
+        const uint8_t *linesB[block];
+        for (int y = 0; y < block; ++y)
+        {
+            linesA[y] = lineA(by + y);
+            linesB[y] = lineB(by + y);
+        }
+
         for (int bx = 0; bx + block <= w; bx += block)
         {
             int sumA = 0, sumB = 0, sumAA = 0, sumBB = 0, sumAB = 0;
             for (int y = 0; y < block; ++y)
             {
-                const uint8_t *la = lineA(by + y);
-                const uint8_t *lb = lineB(by + y);
+                const uint8_t *la = linesA[y] + bx;
+                const uint8_t *lb = linesB[y] + bx;
                 for (int x = 0; x < block; ++x)
                 {
-                    const int pa = la[bx + x];
-                    const int pb = lb[bx + x];
+                    const int pa = la[x];
+                    const int pb = lb[x];
                     sumA += pa;
                     sumB += pb;
                     sumAA += pa * pa;
@@ -148,11 +170,11 @@ ImageStats computeStatsFallback(const ImageData &imgData, int rx, int ry, int rw
             sumR += r;
             sumG += g;
             sumB += b;
-            const int lum = static_cast<int>(0.299 * r + 0.587 * g + 0.114 * b);
+            const int lum = (19595 * r + 38470 * g + 7471 * b) >> 16;
             sumL += lum;
             const int v = std::max({r, g, b});
             sumV += v;
-            ++s.histLum[std::clamp(lum, 0, 255)];
+            ++s.histLum[lum];
             ++s.histV[std::clamp(v, 0, 255)];
             ++s.histR[std::clamp(r, 0, 255)];
             ++s.histG[std::clamp(g, 0, 255)];
@@ -223,7 +245,7 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
                 sumR += r;
                 sumG += g;
                 sumB += b;
-                const int lum = static_cast<int>(0.299 * r + 0.587 * g + 0.114 * b);
+                const int lum = (19595 * r + 38470 * g + 7471 * b) >> 16;
                 sumL += lum;
                 const int v = std::max({r, g, b});
                 sumV += v;

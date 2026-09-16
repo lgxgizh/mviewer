@@ -8,8 +8,10 @@
 #include <QPen>
 #include <QRect>
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <mutex>
+#include <vector>
 
 namespace
 {
@@ -33,6 +35,13 @@ QImage nearestQ(const QImage &src, const QSize &target)
     return out;
 }
 
+struct BilinearX
+{
+    int x0;
+    double fx;
+    double invFx;
+};
+
 QImage bilinearQ(const QImage &src, const QSize &target)
 {
     QImage out(target, QImage::Format_RGB32);
@@ -40,25 +49,46 @@ QImage bilinearQ(const QImage &src, const QSize &target)
     const int tw = target.width(), th = target.height();
     const double rx = static_cast<double>(sw) / tw;
     const double ry = static_cast<double>(sh) / th;
+
+    std::vector<BilinearX> xTab(tw);
+    for (int x = 0; x < tw; ++x)
+    {
+        const double sx = (x + 0.5) * rx - 0.5;
+        const int x0 = std::max(0, std::min(sw - 2, static_cast<int>(std::floor(sx))));
+        const double fx = std::max(0.0, sx - std::floor(sx));
+        xTab[x] = {x0, fx, 1.0 - fx};
+    }
+
     for (int y = 0; y < th; ++y)
     {
         QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
         const double sy = (y + 0.5) * ry - 0.5;
         const int y0 = std::max(0, std::min(sh - 2, static_cast<int>(std::floor(sy))));
         const double fy = std::max(0.0, sy - std::floor(sy));
+        const double w0y = 1.0 - fy;
+        const double w1y = fy;
         const QRgb *sl0 = reinterpret_cast<const QRgb *>(src.constScanLine(y0));
         const QRgb *sl1 = reinterpret_cast<const QRgb *>(src.constScanLine(y0 + 1));
         for (int x = 0; x < tw; ++x)
         {
-            const double sx = (x + 0.5) * rx - 0.5;
-            const int x0 = std::max(0, std::min(sw - 2, static_cast<int>(std::floor(sx))));
-            const double fx = std::max(0.0, sx - std::floor(sx));
-            double r = (1 - fx) * (1 - fy) * qRed(sl0[x0]) + fx * (1 - fy) * qRed(sl0[x0 + 1]) +
-                       (1 - fx) * fy * qRed(sl1[x0]) + fx * fy * qRed(sl1[x0 + 1]);
-            double g = (1 - fx) * (1 - fy) * qGreen(sl0[x0]) + fx * (1 - fy) * qGreen(sl0[x0 + 1]) +
-                       (1 - fx) * fy * qGreen(sl1[x0]) + fx * fy * qGreen(sl1[x0 + 1]);
-            double b = (1 - fx) * (1 - fy) * qBlue(sl0[x0]) + fx * (1 - fy) * qBlue(sl0[x0 + 1]) +
-                       (1 - fx) * fy * qBlue(sl1[x0]) + fx * fy * qBlue(sl1[x0 + 1]);
+            const auto &tab = xTab[x];
+            const double w00 = tab.invFx * w0y;
+            const double w10 = tab.fx * w0y;
+            const double w01 = tab.invFx * w1y;
+            const double w11 = tab.fx * w1y;
+            const int x0 = tab.x0;
+
+            const QRgb p00 = sl0[x0];
+            const QRgb p10 = sl0[x0 + 1];
+            const QRgb p01 = sl1[x0];
+            const QRgb p11 = sl1[x0 + 1];
+
+            const double r =
+                w00 * qRed(p00) + w10 * qRed(p10) + w01 * qRed(p01) + w11 * qRed(p11);
+            const double g =
+                w00 * qGreen(p00) + w10 * qGreen(p10) + w01 * qGreen(p01) + w11 * qGreen(p11);
+            const double b =
+                w00 * qBlue(p00) + w10 * qBlue(p10) + w01 * qBlue(p01) + w11 * qBlue(p11);
             line[x] = qRgb(static_cast<int>(r), static_cast<int>(g), static_cast<int>(b));
         }
     }
@@ -80,6 +110,12 @@ static double cubicKernel(double x)
     return 0.0;
 }
 
+struct BicubicX
+{
+    int sxx[4];
+    double wx[4];
+};
+
 QImage bicubicQ(const QImage &src, const QSize &target)
 {
     QImage out(target, QImage::Format_RGB32);
@@ -87,29 +123,48 @@ QImage bicubicQ(const QImage &src, const QSize &target)
     const int tw = target.width(), th = target.height();
     const double rx = static_cast<double>(sw) / tw;
     const double ry = static_cast<double>(sh) / th;
+
+    std::vector<BicubicX> xTab(tw);
+    for (int x = 0; x < tw; ++x)
+    {
+        const double sx = (x + 0.5) * rx - 0.5;
+        const int x0 = static_cast<int>(std::floor(sx));
+        for (int n = -1; n <= 2; ++n)
+        {
+            xTab[x].sxx[n + 1] = std::max(0, std::min(sw - 1, x0 + n));
+            xTab[x].wx[n + 1] = cubicKernel(sx - (x0 + n));
+        }
+    }
+
     for (int y = 0; y < th; ++y)
     {
         QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
         const double sy = (y + 0.5) * ry - 0.5;
         const int y0 = static_cast<int>(std::floor(sy));
+        double wy[4];
+        const QRgb *slines[4];
+        for (int m = -1; m <= 2; ++m)
+        {
+            const int syy = std::max(0, std::min(sh - 1, y0 + m));
+            wy[m + 1] = cubicKernel(sy - (y0 + m));
+            slines[m + 1] = reinterpret_cast<const QRgb *>(src.constScanLine(syy));
+        }
+
         for (int x = 0; x < tw; ++x)
         {
-            const double sx = (x + 0.5) * rx - 0.5;
-            const int x0 = static_cast<int>(std::floor(sx));
+            const auto &xt = xTab[x];
             double r = 0, g = 0, b = 0, wsum = 0;
-            for (int m = -1; m <= 2; ++m)
+            for (int m = 0; m < 4; ++m)
             {
-                const int syy = std::max(0, std::min(sh - 1, y0 + m));
-                const double wy = cubicKernel(sy - (y0 + m));
-                const QRgb *sline = reinterpret_cast<const QRgb *>(src.constScanLine(syy));
-                for (int n = -1; n <= 2; ++n)
+                const double wym = wy[m];
+                const QRgb *sline = slines[m];
+                for (int n = 0; n < 4; ++n)
                 {
-                    const int sxx = std::max(0, std::min(sw - 1, x0 + n));
-                    const double wx = cubicKernel(sx - (x0 + n));
-                    const double w = wx * wy;
-                    r += w * qRed(sline[sxx]);
-                    g += w * qGreen(sline[sxx]);
-                    b += w * qBlue(sline[sxx]);
+                    const double w = xt.wx[n] * wym;
+                    const QRgb pix = sline[xt.sxx[n]];
+                    r += w * qRed(pix);
+                    g += w * qGreen(pix);
+                    b += w * qBlue(pix);
                     wsum += w;
                 }
             }
@@ -141,6 +196,12 @@ static double lanczosKernel(double x)
     return 3.0 * std::sin(pix) * std::sin(pix / 3.0) / (pix * pix);
 }
 
+struct LanczosX
+{
+    int sxx[5];
+    double wx[5];
+};
+
 QImage lanczosQ(const QImage &src, const QSize &target)
 {
     QImage out(target, QImage::Format_RGB32);
@@ -148,29 +209,48 @@ QImage lanczosQ(const QImage &src, const QSize &target)
     const int tw = target.width(), th = target.height();
     const double rx = static_cast<double>(sw) / tw;
     const double ry = static_cast<double>(sh) / th;
+
+    std::vector<LanczosX> xTab(tw);
+    for (int x = 0; x < tw; ++x)
+    {
+        const double sx = (x + 0.5) * rx - 0.5;
+        const int x0 = static_cast<int>(std::floor(sx));
+        for (int n = -2; n <= 2; ++n)
+        {
+            xTab[x].sxx[n + 2] = std::max(0, std::min(sw - 1, x0 + n));
+            xTab[x].wx[n + 2] = lanczosKernel(sx - (x0 + n));
+        }
+    }
+
     for (int y = 0; y < th; ++y)
     {
         QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
         const double sy = (y + 0.5) * ry - 0.5;
         const int y0 = static_cast<int>(std::floor(sy));
+        double wy[5];
+        const QRgb *slines[5];
+        for (int m = -2; m <= 2; ++m)
+        {
+            const int syy = std::max(0, std::min(sh - 1, y0 + m));
+            wy[m + 2] = lanczosKernel(sy - (y0 + m));
+            slines[m + 2] = reinterpret_cast<const QRgb *>(src.constScanLine(syy));
+        }
+
         for (int x = 0; x < tw; ++x)
         {
-            const double sx = (x + 0.5) * rx - 0.5;
-            const int x0 = static_cast<int>(std::floor(sx));
+            const auto &xt = xTab[x];
             double r = 0, g = 0, b = 0, wsum = 0;
-            for (int m = -2; m <= 2; ++m)
+            for (int m = 0; m < 5; ++m)
             {
-                const int syy = std::max(0, std::min(sh - 1, y0 + m));
-                const double wy = lanczosKernel(sy - (y0 + m));
-                const QRgb *sline = reinterpret_cast<const QRgb *>(src.constScanLine(syy));
-                for (int n = -2; n <= 2; ++n)
+                const double wym = wy[m];
+                const QRgb *sline = slines[m];
+                for (int n = 0; n < 5; ++n)
                 {
-                    const int sxx = std::max(0, std::min(sw - 1, x0 + n));
-                    const double wx = lanczosKernel(sx - (x0 + n));
-                    const double w = wx * wy;
-                    r += w * qRed(sline[sxx]);
-                    g += w * qGreen(sline[sxx]);
-                    b += w * qBlue(sline[sxx]);
+                    const double w = xt.wx[n] * wym;
+                    const QRgb pix = sline[xt.sxx[n]];
+                    r += w * qRed(pix);
+                    g += w * qGreen(pix);
+                    b += w * qBlue(pix);
                     wsum += w;
                 }
             }
@@ -207,6 +287,28 @@ QImage scaleQ(const QImage &src, const QSize &target, RenderInterp mode)
     return QImage();
 }
 
+static const std::array<QRgb, 256> s_heatLut = []() {
+    std::array<QRgb, 256> lut{};
+    for (int v = 0; v < 256; ++v)
+    {
+        int rr, gg, bb;
+        if (v < 128)
+        {
+            rr = 0;
+            gg = v * 2;
+            bb = 255 - v * 2;
+        }
+        else
+        {
+            rr = (v - 128) * 2;
+            gg = 255 - (v - 128) * 2;
+            bb = 0;
+        }
+        lut[v] = qRgb(std::clamp(rr, 0, 255), std::clamp(gg, 0, 255), std::clamp(bb, 0, 255));
+    }
+    return lut;
+}();
+
 QImage heatMapQ(const QImage &gray, const QRect &r)
 {
     QImage out(r.width(), r.height(), QImage::Format_RGB32);
@@ -216,29 +318,34 @@ QImage heatMapQ(const QImage &gray, const QRect &r)
     const int y0 = std::max(0, r.y());
     const int x1 = std::min(gray.width(), r.x() + r.width());
     const int y1 = std::min(gray.height(), r.y() + r.height());
+    const int copyW = std::max(0, x1 - x0);
+
+    const bool isGrayscale8 = (gray.format() == QImage::Format_Grayscale8);
+
     for (int y = 0; y < out.height(); ++y)
     {
         QRgb *dst = reinterpret_cast<QRgb *>(out.scanLine(y));
-        for (int x = 0; x < out.width(); ++x)
+        const int sy = y0 + y;
+        if (sy < y1 && isGrayscale8)
         {
-            const int sx = x0 + x;
-            const int sy = y0 + y;
-            const int v = (sx < x1 && sy < y1) ? qRed(gray.pixel(sx, sy)) : 0;
-            // Blue (cold) -> Green -> Red (hot)
-            int rr, gg, bb;
-            if (v < 128)
+            const uchar *sline = gray.constScanLine(sy) + x0;
+            for (int x = 0; x < copyW; ++x)
             {
-                rr = 0;
-                gg = v * 2;
-                bb = 255 - v * 2;
+                dst[x] = s_heatLut[sline[x]];
             }
-            else
+            for (int x = copyW; x < out.width(); ++x)
             {
-                rr = (v - 128) * 2;
-                gg = 255 - (v - 128) * 2;
-                bb = 0;
+                dst[x] = s_heatLut[0];
             }
-            dst[x] = qRgb(std::clamp(rr, 0, 255), std::clamp(gg, 0, 255), std::clamp(bb, 0, 255));
+        }
+        else
+        {
+            for (int x = 0; x < out.width(); ++x)
+            {
+                const int sx = x0 + x;
+                const int v = (sx < x1 && sy < y1) ? qRed(gray.pixel(sx, sy)) : 0;
+                dst[x] = s_heatLut[static_cast<uint8_t>(v)];
+            }
         }
     }
     return out;

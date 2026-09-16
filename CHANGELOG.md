@@ -1,5 +1,19 @@
 # Changelog
  
+## [1.0.47] - 2026-09-16
+
+### Performance & Engine Acceleration
+
+- **Software Renderer Interpolation Acceleration (`RenderEngine.cpp`)**:
+  - **Separable Bilinear Sampling (`bilinearQ`)**: Precomputed horizontal sampling coordinates `x0` and fractional weights `fx, 1.0 - fx` outside the row loop; cached 4-point bilinear weights (`w00, w10, w01, w11`) per pixel, eliminating redundant `floor`/`min`/`max` horizontal coordinate calculations and 66% of per-channel multiplications across all target rows.
+  - **Separable Bicubic Sampling (`bicubicQ`)**: Factored horizontal and vertical 4-tap Catmull-Rom kernel evaluations into a precomputed column table (`xTab`) and hoisted scanline row lookups to the row loop. Reduced kernel evaluations from 16 calls per pixel (~33 million for 1080p) down to $4 \times (W + H)$ (~12,000 calls), while maintaining bit-identical results.
+  - **Separable Lanczos-3 Sampling (`lanczosQ`)**: Factored 5-tap sinc kernel evaluations into a precomputed column table (`xTab`) and hoisted scanline row lookups to the row loop. Reduced trigonometric kernel evaluations from 25 calls per pixel (over 103 million `sin` calls for 1080p) down to $5 \times (W + H)$ (~15,000 calls), drastically accelerating high-fidelity software scaling.
+  - **LUT-Accelerated Heat Map (`heatMapQ`)**: Replaced per-pixel Qt `pixel()` calls and runtime branchy color math with a static 256-entry lookup table (`s_heatLut`) and direct `Format_Grayscale8` scanline indexing, achieving zero-branch single-pass pseudo-color rendering.
+- **Analysis Math & Metric Optimization (`AnalysisEngine.cpp`)**:
+  - **SSIM Scanline Hoisting (`computeSSIMCore`)**: Hoisted the 8 scanline row pointer retrievals (`linesA[8]`, `linesB[8]`) out of the inner horizontal block loop (`bx`), eliminating millions of redundant lambda invocations on high-resolution image comparisons.
+  - **Fixed-Point Integer Luminance (`computeStatsROI`, `computeStatsFallback`)**: Converted floating-point luminance calculations (`0.299*r + 0.587*g + 0.114*b`) to exact 16-bit fixed-point integer arithmetic (`(19595 * r + 38470 * g + 7471 * b) >> 16`), accelerating histogram and mean statistics without floating-point conversion overhead.
+  - **Contiguous Grayscale Buffer Fast-Path (`computeStatsGrayscale`)**: Added a flat 1D single-pass loop for full-width contiguous grayscale image buffers, enabling auto-vectorization and cache-line streaming.
+
 ## [1.0.46] - 2026-09-16
 
 ### UI Beautification & Ergonomics
