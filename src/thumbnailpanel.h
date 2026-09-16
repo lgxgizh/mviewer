@@ -30,6 +30,8 @@
 
 class QPushButton;
 class QContextMenuEvent;
+class QKeyEvent;
+class QMenu;
 class QResizeEvent;
 class QStringListModel;
 class CommandStack;
@@ -241,6 +243,11 @@ class ThumbnailPanel : public QListView
     void moveSelectedTo();
     void revealSelected();
     void invertSelection();
+    void copySelectedPaths();
+    void batchRateSelected(int stars);
+    void batchSetColorLabelSelected(int label);
+    void batchSetFlagSelected(bool reject, bool pick);
+    void populateRatingContextMenu(QMenu *menu);
 
     // A-10: reversible file ops via CommandStack. When set, rename/delete/move
     // go through the stack so Ctrl+Z can reverse them. When null, falls back
@@ -391,6 +398,7 @@ class ThumbnailPanel : public QListView
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     // Ctrl+wheel adjusts the thumbnail size (Explorer/FastStone parity).
     void wheelEvent(QWheelEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
     // External drag & drop of files/folders onto the gallery.
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;

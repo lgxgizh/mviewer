@@ -35,6 +35,80 @@ std::string PreviewPanel::previewCacheKey(const std::string &path)
            std::to_string(kPreviewMaxEdge);
 }
 
+namespace
+{
+QPixmap unpadSquareThumbnail(const QPixmap &pm, const QSize &knownSourceSize)
+{
+    if (pm.isNull() || pm.width() <= 0 || pm.height() <= 0)
+        return pm;
+    if (pm.width() != pm.height())
+        return pm;
+
+    const int s = pm.width();
+    if (knownSourceSize.isValid() && knownSourceSize.width() > 0 && knownSourceSize.height() > 0)
+    {
+        const double aspect =
+            static_cast<double>(knownSourceSize.width()) / knownSourceSize.height();
+        if (aspect > 1.001)
+        {
+            const int ch = qMax(1, qRound(static_cast<double>(s) / aspect));
+            const int y = (s - ch) / 2;
+            return pm.copy(0, y, s, ch);
+        }
+        else if (aspect < 0.999)
+        {
+            const int cw = qMax(1, qRound(static_cast<double>(s) * aspect));
+            const int x = (s - cw) / 2;
+            return pm.copy(x, 0, cw, s);
+        }
+        return pm;
+    }
+
+    if (pm.hasAlpha())
+    {
+        const QImage img = pm.toImage();
+        const int w = img.width();
+        const int h = img.height();
+        const int cx = w / 2;
+        const int cy = h / 2;
+        const bool hasTopBottomPadding =
+            (qAlpha(img.pixel(cx, 0)) == 0) || (qAlpha(img.pixel(cx, h - 1)) == 0);
+        const bool hasLeftRightPadding =
+            (qAlpha(img.pixel(0, cy)) == 0) || (qAlpha(img.pixel(w - 1, cy)) == 0);
+
+        if (hasTopBottomPadding && !hasLeftRightPadding)
+        {
+            int top = 0;
+            while (top < h / 2 && qAlpha(img.pixel(cx, top)) == 0)
+                ++top;
+            int bottom = h - 1;
+            while (bottom > h / 2 && qAlpha(img.pixel(cx, bottom)) == 0)
+                --bottom;
+            if (top > 0 || bottom < h - 1)
+            {
+                const int ch = qMax(1, bottom - top + 1);
+                return pm.copy(0, top, w, ch);
+            }
+        }
+        else if (hasLeftRightPadding && !hasTopBottomPadding)
+        {
+            int left = 0;
+            while (left < w / 2 && qAlpha(img.pixel(left, cy)) == 0)
+                ++left;
+            int right = w - 1;
+            while (right > w / 2 && qAlpha(img.pixel(right, cy)) == 0)
+                --right;
+            if (left > 0 || right < w - 1)
+            {
+                const int cw = qMax(1, right - left + 1);
+                return pm.copy(left, 0, cw, h);
+            }
+        }
+    }
+    return pm;
+}
+} // namespace
+
 void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
                             const QSize &knownSourceSize, qint64 knownFileSize)
 {
@@ -65,14 +139,12 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
     }
 
     // Stage 1: present an already-materialized gallery thumbnail immediately.
-    // This is a UI-thread-only implicit QPixmap copy: no disk access, decode, or
-    // scheduler hop. On a cold miss keep the prior presented frame until the
-    // requested preview is ready, avoiding a visible blank flash.
+    // Unpad square thumbnail letterboxing so geometry matches the true aspect ratio.
     if (!warmThumbnail.isNull())
     {
         m_presentedPath = path;
         m_quality = PresentationQuality::Thumbnail;
-        m_preview = warmThumbnail;
+        m_preview = unpadSquareThumbnail(warmThumbnail, knownSourceSize);
         m_previewW = m_preview.width();
         m_previewH = m_preview.height();
         m_imgW = knownSourceSize.width() > 0 ? knownSourceSize.width() : m_previewW;

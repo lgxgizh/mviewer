@@ -40,9 +40,12 @@ class MetadataPanel : public QWidget
   private slots:
     void copyAll();
     void requestMetadata();
+    void onTreeContextMenu(const QPoint &pos);
+    void onTreeDoubleClicked(const QModelIndex &index);
 
   private:
     void hideEvent(QHideEvent *event) override;
+    QWidget *buildFlagsBox();
     QTreeView *m_tree = nullptr;
     MetadataModel *m_model = nullptr;
     RatingWidget *m_rating = nullptr;   // P1: 0-5 star editor

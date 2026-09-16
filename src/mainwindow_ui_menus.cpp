@@ -242,10 +242,12 @@ void MainWindow::buildViewMenu(QMenuBar *menuBar)
     m_actZoomOut = new QAction("缩小(&O)", this);
     m_actZoomOut->setObjectName("zoomOutAction");
     m_actZoomOut->setShortcut(QKeySequence("Ctrl+-"));
-    m_actZoomFit = new QAction("适应窗口(&F) (0)", this);
+    m_actZoomFit = new QAction("适应窗口(&F)", this);
     m_actZoomFit->setObjectName("zoomFitAction");
-    m_actZoomActual = new QAction("实际大小(&A) (1)", this);
+    m_actZoomFit->setShortcut(QKeySequence("Ctrl+0"));
+    m_actZoomActual = new QAction("实际大小(&A)", this);
     m_actZoomActual->setObjectName("zoomActualAction");
+    m_actZoomActual->setShortcut(QKeySequence("Ctrl+1"));
     m_actFullscreen = new QAction("全屏(&U)", this);
     m_actFullscreen->setShortcut(QKeySequence("F11"));
     viewMenu->addAction(m_actZoomIn);
@@ -295,7 +297,7 @@ void MainWindow::buildToolsHelpMenus(QMenuBar *menuBar)
     toolsMenu->addAction(m_actBatch);
     // M17: batch analyzer export — same path as gallery context menu.
     auto *actBatchAnalyze = new QAction(tr("批量分析导出(&A)..."), this);
-    actBatchAnalyze->setShortcut(QKeySequence("Ctrl+Shift+A"));
+    actBatchAnalyze->setShortcut(QKeySequence("Ctrl+Alt+A"));
     toolsMenu->addAction(actBatchAnalyze);
     connect(actBatchAnalyze, &QAction::triggered, this,
             [this]()

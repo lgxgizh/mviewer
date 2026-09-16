@@ -17,6 +17,12 @@ QString appConfigFile(const QString &name)
 
 void MainWindow::restoreLastSession()
 {
+    // If an unclean shutdown recovery file exists, defer session restore to
+    // restoreSessionRecovery() so the user can choose whether to restore.
+    const QString recoveryPath = appConfigFile(QStringLiteral("recovery.json"));
+    if (QFile::exists(recoveryPath))
+        return;
+
     // Defer to the next event loop tick so the thumbnail worker has started and
     // setDirectory() has populated items before we try to scroll/select.
     QMetaObject::invokeMethod(
@@ -33,8 +39,6 @@ void MainWindow::restoreLastSession()
             const int ts = settings.value("thumbSize", ThumbnailPanel::kDefaultThumbSize).toInt();
             if (m_thumbnailPanel)
                 m_thumbnailPanel->setThumbSize(ts);
-            if (m_thumbSizeSlider)
-                m_thumbSizeSlider->setValue(m_thumbnailPanel ? m_thumbnailPanel->thumbSize() : ts);
 
             // P1-3: restore the Analysis workspace so the UI reopens where left off.
             if (m_analysisPanel)
@@ -315,6 +319,20 @@ void MainWindow::restoreSessionRecovery()
     if (answer != QMessageBox::Yes)
     {
         QFile::remove(recoveryPath);
+        QSettings settings;
+        settings.remove("compareImages");
+        settings.remove("compareSession");
+        settings.remove("viewerPath");
+        m_appState.lastDir.clear();
+        m_appState.lastImage.clear();
+        m_appState.save();
+        updateSelectionActions();
+        updateNavigationActions();
+        statusBar()->showMessage(tr("就绪"));
+        activateWindow();
+        raise();
+        if (m_thumbnailPanel)
+            m_thumbnailPanel->setFocus();
         return;
     }
 
@@ -365,5 +383,7 @@ void MainWindow::restoreSessionRecovery()
             if (restoreCompare)
                 openCompare(cmpImgs, compareSession);
             m_autosaveLoaded = true;
+            activateWindow();
+            raise();
         });
 }

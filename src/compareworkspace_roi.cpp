@@ -483,7 +483,7 @@ void CompareWorkspace::updateROISurfaces()
                  .arg(static_cast<qint64>(m_lastSelection.width) * m_lastSelection.height);
     if (m_roiResult)
     {
-        const int count = std::min(2, static_cast<int>(m_roiResult->panes.size()));
+        const int count = std::min(8, static_cast<int>(m_roiResult->panes.size()));
         for (int index = 0; index < count; ++index)
         {
             const auto &pane = m_roiResult->panes[static_cast<size_t>(index)];
@@ -541,7 +541,7 @@ void CompareWorkspace::positionROIHud()
     const QRect safe = area.intersected(bounds);
     if (safe.width() < 80 || safe.height() < 40)
         return;
-    const int width = std::min(420, std::max(220, safe.width() - 16));
+    const int width = std::min(460, std::max(240, safe.width() - 16));
     m_roiHud->setFixedWidth(width);
     m_roiHud->adjustSize();
     int height = std::max(m_roiHud->sizeHint().height(), 48);

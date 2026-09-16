@@ -1,6 +1,13 @@
 #include "thumbnailpanel_p.h"
 #include "selectionmodel.h"
 
+#include "core/SidecarStore.h"
+
+#include <QApplication>
+#include <QClipboard>
+#include <QDir>
+#include <QMenu>
+
 void ThumbnailPanel::onSelectionChanged()
 {
     const QModelIndexList sel = selectionModel()->selectedIndexes();
@@ -160,4 +167,108 @@ void ThumbnailPanel::invertSelection()
     }
     selectionModel()->select(inverted, QItemSelectionModel::ClearAndSelect);
     onSelectionChanged();
+}
+
+void ThumbnailPanel::copySelectedPaths()
+{
+    const QStringList paths = selectedPaths();
+    if (paths.isEmpty())
+        return;
+    QStringList nativePaths;
+    nativePaths.reserve(paths.size());
+    for (const QString &p : paths)
+        nativePaths.append(QDir::toNativeSeparators(p));
+    QApplication::clipboard()->setText(nativePaths.join(QStringLiteral("\n")));
+}
+
+void ThumbnailPanel::batchRateSelected(int stars)
+{
+    const QStringList paths = selectedPaths();
+    if (paths.isEmpty())
+        return;
+    auto &rs = mviewer::core::RatingStore::instance();
+    auto &sidecar = mviewer::core::SidecarStore::instance();
+    for (const QString &p : paths)
+    {
+        const std::string sp = p.toUtf8().toStdString();
+        rs.setRating(sp, stars);
+        sidecar.writeSidecar(sp);
+    }
+    invalidateRatings();
+}
+
+void ThumbnailPanel::batchSetColorLabelSelected(int label)
+{
+    const QStringList paths = selectedPaths();
+    if (paths.isEmpty())
+        return;
+    auto &rs = mviewer::core::RatingStore::instance();
+    auto &sidecar = mviewer::core::SidecarStore::instance();
+    for (const QString &p : paths)
+    {
+        const std::string sp = p.toUtf8().toStdString();
+        rs.setColorLabel(sp, label);
+        sidecar.writeSidecar(sp);
+    }
+    invalidateRatings();
+}
+
+void ThumbnailPanel::batchSetFlagSelected(bool reject, bool pick)
+{
+    const QStringList paths = selectedPaths();
+    if (paths.isEmpty())
+        return;
+    auto &rs = mviewer::core::RatingStore::instance();
+    auto &sidecar = mviewer::core::SidecarStore::instance();
+    for (const QString &p : paths)
+    {
+        const std::string sp = p.toUtf8().toStdString();
+        rs.setRejected(sp, reject);
+        rs.setPicked(sp, pick);
+        sidecar.writeSidecar(sp);
+    }
+    invalidateRatings();
+}
+
+void ThumbnailPanel::populateRatingContextMenu(QMenu *menu)
+{
+    if (!menu)
+        return;
+    menu->addSeparator();
+    auto *rateMenu = menu->addMenu(tr("设置评级"));
+    for (int s = 5; s >= 1; --s)
+    {
+        QString stars;
+        for (int i = 0; i < s; ++i)
+            stars += QStringLiteral("★");
+        QAction *act = rateMenu->addAction(QStringLiteral("%1 (%2 星)").arg(stars).arg(s));
+        connect(act, &QAction::triggered, this, [this, s]() { batchRateSelected(s); });
+    }
+    QAction *actClearRate = rateMenu->addAction(tr("清除评级"));
+    connect(actClearRate, &QAction::triggered, this, [this]() { batchRateSelected(0); });
+
+    auto *labelMenu = menu->addMenu(tr("设置颜色标签"));
+    static const struct
+    {
+        const char *name;
+        int id;
+    } kLabels[] = {
+        {"红色", 1}, {"橙色", 2}, {"黄色", 3}, {"绿色", 4}, {"蓝色", 5}, {"紫色", 6},
+    };
+    for (const auto &item : kLabels)
+    {
+        QAction *act = labelMenu->addAction(tr(item.name));
+        connect(act, &QAction::triggered, this,
+                [this, id = item.id]() { batchSetColorLabelSelected(id); });
+    }
+    QAction *actClearLabel = labelMenu->addAction(tr("无标签"));
+    connect(actClearLabel, &QAction::triggered, this, [this]() { batchSetColorLabelSelected(0); });
+
+    auto *flagMenu = menu->addMenu(tr("设置标记"));
+    QAction *actPick = flagMenu->addAction(tr("标记为精选 (Pick)"));
+    connect(actPick, &QAction::triggered, this, [this]() { batchSetFlagSelected(false, true); });
+    QAction *actReject = flagMenu->addAction(tr("标记为排除 (Reject)"));
+    connect(actReject, &QAction::triggered, this, [this]() { batchSetFlagSelected(true, false); });
+    QAction *actClearFlag = flagMenu->addAction(tr("清除标记"));
+    connect(actClearFlag, &QAction::triggered, this, [this]() { batchSetFlagSelected(false, false); });
 }

@@ -201,6 +201,7 @@ void AnalysisPanel::buildInspectorTab()
     m_inspectorLabel = new QLabel;
     m_inspectorLabel->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_inspectorLabel->setWordWrap(true);
+    m_inspectorLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
     m_inspectorLabel->setStyleSheet(
         "QLabel{background:#1e1e1e;color:#eee;padding:8px;font-family:monospace;}");
     m_inspectorLabel->setText(tr("将鼠标移到图像上检视像素。"));

@@ -485,6 +485,45 @@ void ThumbnailPanel::wheelEvent(QWheelEvent *event)
     QListView::wheelEvent(event);
 }
 
+void ThumbnailPanel::keyPressEvent(QKeyEvent *event)
+{
+    const auto mods = event->modifiers();
+    const int key = event->key();
+    if (mods & Qt::ControlModifier)
+    {
+        if (key == Qt::Key_Plus || key == Qt::Key_Equal)
+        {
+            setThumbSize(qBound(kMinThumbSize, m_thumbSize + 16, kMaxThumbSize));
+            event->accept();
+            return;
+        }
+        if (key == Qt::Key_Minus || key == Qt::Key_Underscore)
+        {
+            setThumbSize(qBound(kMinThumbSize, m_thumbSize - 16, kMaxThumbSize));
+            event->accept();
+            return;
+        }
+        if (key == Qt::Key_0)
+        {
+            setThumbSize(kDefaultThumbSize);
+            event->accept();
+            return;
+        }
+    }
+    if ((key == Qt::Key_Return || key == Qt::Key_Enter) &&
+        (mods == Qt::NoModifier || mods == Qt::KeypadModifier))
+    {
+        const QModelIndex idx = currentIndex();
+        if (idx.isValid() && idx.row() >= 0 && idx.row() < m_paths.size())
+        {
+            emit itemDoubleClicked(m_paths.at(idx.row()));
+            event->accept();
+            return;
+        }
+    }
+    QListView::keyPressEvent(event);
+}
+
 void ThumbnailPanel::dragEnterEvent(QDragEnterEvent *event)
 {
     if (event->mimeData()->hasUrls())

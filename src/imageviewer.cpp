@@ -740,9 +740,9 @@ void ImageViewer::keyPressEvent(QKeyEvent *event)
 
 bool ImageViewer::handleNavigationKey(int key)
 {
-    if (key == Qt::Key_Left)
+    if (key == Qt::Key_Left || key == Qt::Key_PageUp || key == Qt::Key_Backspace)
         emit requestPrev();
-    else if (key == Qt::Key_Right)
+    else if (key == Qt::Key_Right || key == Qt::Key_PageDown || key == Qt::Key_Space)
         emit requestNext();
     else
         return false;
@@ -755,10 +755,12 @@ bool ImageViewer::handleZoomKey(int key, Qt::KeyboardModifiers modifiers)
         zoomIn();
     else if (key == Qt::Key_Minus || key == Qt::Key_Underscore)
         zoomOut();
-    else if (key == Qt::Key_0)
+    else if (key == Qt::Key_0 || key == Qt::Key_F)
         zoomFit();
     else if (key == Qt::Key_1)
         zoomActual();
+    else if (key == Qt::Key_2)
+        zoomTo(2.0);
     else
         return false;
     Q_UNUSED(modifiers); // Ctrl+0/Ctrl+1 intentionally share the same zoom action.

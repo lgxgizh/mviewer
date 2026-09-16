@@ -383,6 +383,7 @@ void CompareWorkspace::applyLayoutPreset(int n)
     schedulePostLayoutFit();
     restoreNavState(saved);
     updatePairButtons();
+    showCompareStatus(tr("已切换至 %1 窗格对比布局").arg(n));
     update();
 }
 

@@ -14,8 +14,12 @@ void MainWindow::buildBrowserShell()
     // command model.
     m_actDirUp = new QAction(tr("上一级"), this);
     m_actDirUp->setObjectName("directoryUpAction");
+    m_actDirUp->setShortcut(QKeySequence("Alt+Up"));
+    m_actDirUp->setToolTip(tr("上一级目录 (Alt+Up)"));
     m_actRefresh = new QAction(tr("刷新"), this);
     m_actRefresh->setObjectName("refreshDirectoryAction");
+    m_actRefresh->setShortcut(QKeySequence::Refresh);
+    m_actRefresh->setToolTip(tr("刷新目录与缩略图 (F5)"));
     auto *browserToolBar = new QToolBar(tr("浏览工具栏"), this);
     addToolBar(Qt::TopToolBarArea, browserToolBar);
     browserToolBar->setObjectName("browserToolBar");
@@ -52,8 +56,21 @@ void MainWindow::buildBrowserShell()
     m_pathEdit = new QLineEdit(this);
     m_pathEdit->setObjectName("pathEdit");
     m_pathEdit->setPlaceholderText("输入目录路径并按 Enter 切换...");
-    m_pathEdit->setToolTip("输入或粘贴目录路径，按 Enter 键进入该目录（等效于菜单\"打开目录\"）。");
+    m_pathEdit->setToolTip("输入或粘贴目录路径，按 Enter 键进入该目录（快捷键: Ctrl+L / Alt+D 聚焦）。");
     m_pathEdit->setClearButtonEnabled(true);
+    auto *actFocusPath = new QAction(this);
+    actFocusPath->setObjectName("focusPathAction");
+    actFocusPath->setShortcuts({QKeySequence("Ctrl+L"), QKeySequence("Alt+D")});
+    connect(actFocusPath, &QAction::triggered, this,
+            [this]()
+            {
+                if (m_pathEdit)
+                {
+                    m_pathEdit->setFocus();
+                    m_pathEdit->selectAll();
+                }
+            });
+    addAction(actFocusPath);
 }
 
 QWidget *MainWindow::buildNavigationPanel()
@@ -331,23 +348,13 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
                 m_thumbnailPanel->setViewMode(mode);
             });
 
-    // M15: Dynamic thumbnail size slider (48–512 px)
-    sortLayout->addWidget(new QLabel("缩略图：", sortBar));
-    m_thumbSizeSlider = new QSlider(Qt::Horizontal, sortBar);
-    m_thumbSizeSlider->setObjectName("thumbnailSizeSlider");
-    m_thumbSizeSlider->setRange(ThumbnailPanel::kMinThumbSize, ThumbnailPanel::kMaxThumbSize);
-    m_thumbSizeSlider->setValue(ThumbnailPanel::kDefaultThumbSize);
-    m_thumbSizeSlider->setFixedWidth(100);
-    m_thumbSizeSlider->setToolTip("调整缩略图大小");
-    sortLayout->addWidget(m_thumbSizeSlider);
-    connect(m_thumbSizeSlider, &QSlider::valueChanged, this,
-            [this](int value) { m_thumbnailPanel->setThumbSize(value); });
     // M18: live search bar.
     sortLayout->addWidget(new QLabel("搜索：", sortBar));
     m_searchEdit = new QLineEdit(sortBar);
     m_searchEdit->setObjectName("searchEdit");
     m_searchEdit->setPlaceholderText("按文件名过滤...");
     m_searchEdit->setClearButtonEnabled(true);
+    m_searchEdit->installEventFilter(this);
     sortLayout->addWidget(m_searchEdit, 1);
     m_searchRecursive = new QCheckBox("包含子目录", sortBar);
     advancedLayout->addWidget(m_searchRecursive);
@@ -381,6 +388,12 @@ void MainWindow::buildSearchControls(QWidget *sortBar, QHBoxLayout *sortLayout,
     m_flagFilter->addItem("蓝标", 15);
     m_flagFilter->addItem("紫标", 16);
     advancedLayout->addWidget(m_flagFilter);
+
+    auto *resetFilterBtn = new QPushButton(tr("重置筛选"), advancedFilterPanel);
+    resetFilterBtn->setObjectName("resetFiltersButton");
+    resetFilterBtn->setToolTip(tr("清除所有搜索和过滤条件"));
+    connect(resetFilterBtn, &QPushButton::clicked, this, &MainWindow::clearAllFilters);
+    advancedLayout->addWidget(resetFilterBtn);
 
     advancedLayout->addStretch(1);
     advancedFilterPanel->hide();
@@ -452,18 +465,6 @@ QWidget *MainWindow::buildGalleryPanel()
                         break;
                     }
                 }
-                const bool adjustable = mode == ThumbnailPanel::Thumbnail ||
-                                        mode == ThumbnailPanel::Filmstrip ||
-                                        mode == ThumbnailPanel::Compact;
-                m_thumbSizeSlider->setEnabled(adjustable);
-            });
-    connect(m_thumbnailPanel, &ThumbnailPanel::thumbSizeChanged, this,
-            [this](int size)
-            {
-                if (!m_thumbSizeSlider)
-                    return;
-                const QSignalBlocker blocker(m_thumbSizeSlider);
-                m_thumbSizeSlider->setValue(size);
             });
     m_thumbnailPanel->setViewMode(m_thumbnailPanel->viewMode());
 

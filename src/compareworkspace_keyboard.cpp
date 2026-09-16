@@ -73,7 +73,8 @@ bool CompareWorkspace::handleBasicCompareNavigation(QKeyEvent *event)
     if (event->key() == Qt::Key_PageDown || event->key() == Qt::Key_Right ||
         event->key() == Qt::Key_N)
         nextPair();
-    else if (event->key() == Qt::Key_PageUp || event->key() == Qt::Key_Left)
+    else if (event->key() == Qt::Key_PageUp || event->key() == Qt::Key_Left ||
+             event->key() == Qt::Key_P)
         prevPair();
     else
         return false;
@@ -132,6 +133,13 @@ bool CompareWorkspace::handleChannelCompareKey(QKeyEvent *event)
     if (event->modifiers() != Qt::ShiftModifier)
         return false;
     const int key = event->key();
+    if (key == Qt::Key_0)
+    {
+        setOverlayMode(mviewer::OverlayMode::None);
+        showCompareStatus(tr("已重置为全色彩通道"));
+        event->accept();
+        return true;
+    }
     if (key < Qt::Key_1 || key > Qt::Key_6)
         return false;
     static const mviewer::OverlayMode kModes[] = {
@@ -245,7 +253,9 @@ bool CompareWorkspace::handleZoomCompareKey(QKeyEvent *event)
     {
         const double factor = isZoomIn ? 1.15 : (1.0 / 1.15);
         applyAnchorZoom(0, 0.0, 0.0, factor);
-        showCompareStatus(isZoomIn ? tr("视图放大") : tr("视图缩小"));
+        const double currentScale = m_engine.cellTransform(0).scale;
+        const int pct = static_cast<int>(std::round(currentScale * 100.0));
+        showCompareStatus(isZoomIn ? tr("视图放大 (%1%)").arg(pct) : tr("视图缩小 (%1%)").arg(pct));
         if (m_compareCanvas)
             m_compareCanvas->update();
         update();

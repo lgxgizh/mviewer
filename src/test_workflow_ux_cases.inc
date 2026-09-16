@@ -165,9 +165,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     w.resize(1280, 800);
     pump(10);
 
-    auto *thumbnailSizeSlider = w.findChild<QSlider *>("thumbnailSizeSlider");
     auto *pathEdit = w.findChild<QLineEdit *>("pathEdit");
-    CHECK(thumbnailSizeSlider != nullptr, "thumbnail size slider is discoverable");
     CHECK(viewModeCombo && thumbnailPanel,
           "thumbnail view controls expose a stable panel and combo");
     CHECK(pathEdit != nullptr, "directory path input is discoverable");
@@ -199,10 +197,10 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(compareAction && !compareAction->isEnabled(),
           "empty Browse disables Compare until at least two images are available");
 
-    if (thumbnailSizeSlider && viewModeCombo && thumbnailPanel)
+    if (viewModeCombo && thumbnailPanel)
     {
-        thumbnailSizeSlider->setValue(180);
-        CHECK(thumbnailPanel->thumbSize() == 180 && thumbnailSizeSlider->value() == 180,
+        thumbnailPanel->setThumbSize(180);
+        CHECK(thumbnailPanel->thumbSize() == 180,
               "standard grid remembers the user-selected 180px size");
         auto setViewModeFromCombo = [viewModeCombo](ThumbnailPanel::ViewMode mode)
         {
@@ -216,47 +214,38 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         setViewModeFromCombo(ThumbnailPanel::LargeIcon);
         CHECK(thumbnailPanel->viewMode() == ThumbnailPanel::LargeIcon &&
                   viewModeCombo->currentData().toInt() == ThumbnailPanel::LargeIcon &&
-                  thumbnailSizeSlider->value() == 240,
-              "Large view synchronizes mode and slider at 240px");
+                  thumbnailPanel->thumbSize() == 240,
+              "Large view synchronizes mode and size at 240px");
         setViewModeFromCombo(ThumbnailPanel::SmallIcon);
         CHECK(thumbnailPanel->viewMode() == ThumbnailPanel::SmallIcon &&
                   viewModeCombo->currentData().toInt() == ThumbnailPanel::SmallIcon &&
-                  thumbnailSizeSlider->value() == 64,
-              "Small view synchronizes mode and slider at 64px");
+                  thumbnailPanel->thumbSize() == 64,
+              "Small view synchronizes mode and size at 64px");
         setViewModeFromCombo(ThumbnailPanel::Thumbnail);
         CHECK(thumbnailPanel->viewMode() == ThumbnailPanel::Thumbnail &&
                   viewModeCombo->currentData().toInt() == ThumbnailPanel::Thumbnail &&
-                  thumbnailSizeSlider->value() == 180 && thumbnailPanel->thumbSize() == 180,
+                  thumbnailPanel->thumbSize() == 180,
               "returning to Thumbnail restores the remembered 180px grid");
 
         setViewModeFromCombo(ThumbnailPanel::LargeIcon);
         thumbnailPanel->setThumbSize(192); // Restore/preferences call after the mode.
         CHECK(thumbnailPanel->viewMode() == ThumbnailPanel::LargeIcon &&
-                  thumbnailPanel->thumbSize() == 240 && thumbnailSizeSlider->value() == 240,
+                  thumbnailPanel->thumbSize() == 240,
               "restore size cannot override the Large 240px preset");
-        CHECK(!thumbnailSizeSlider->isEnabled(), "Large preset disables the thumbnail size slider");
         thumbnailPanel->setViewMode(ThumbnailPanel::LargeIcon);
         CHECK(viewModeCombo->currentData().toInt() == ThumbnailPanel::LargeIcon &&
-                  thumbnailSizeSlider->value() == 240,
+                  thumbnailPanel->thumbSize() == 240,
               "same-mode setViewMode re-synchronizes the effective Large size");
         setViewModeFromCombo(ThumbnailPanel::SmallIcon);
-        CHECK(!thumbnailSizeSlider->isEnabled() && thumbnailSizeSlider->value() == 64,
-              "Small preset disables the slider and keeps its 64px value");
+        CHECK(thumbnailPanel->thumbSize() == 64, "Small preset keeps its 64px value");
 
         setViewModeFromCombo(ThumbnailPanel::Details);
-        CHECK(!thumbnailSizeSlider->isEnabled(),
-              "Details disables the thumbnail size slider because it has no visible effect");
         thumbnailPanel->setThumbSize(196); // Preferences call while Details is active.
-        CHECK(thumbnailSizeSlider->value() == 196,
-              "Details accepts a size for the future standard grid");
         setViewModeFromCombo(ThumbnailPanel::List);
-        CHECK(!thumbnailSizeSlider->isEnabled(),
-              "List disables the thumbnail size slider because it has no visible effect");
         setViewModeFromCombo(ThumbnailPanel::Details);
         setViewModeFromCombo(ThumbnailPanel::Thumbnail);
-        CHECK(thumbnailPanel->thumbSize() == 196 && thumbnailSizeSlider->value() == 196,
+        CHECK(thumbnailPanel->thumbSize() == 196,
               "Thumbnail restores the size remembered while Details was active");
-        CHECK(thumbnailSizeSlider->isEnabled(), "Thumbnail re-enables the thumbnail size slider");
     }
 
     if (browseWorkspaceAction)
@@ -289,11 +278,11 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "analysis action and panel visibility stay synchronized");
     CHECK(searchPanel && !searchPanel->isVisible(), "search panel remains independently hidden");
 
-    if (thumbnailSizeSlider)
-        thumbnailSizeSlider->setFocus(Qt::OtherFocusReason);
+    if (pathEdit)
+        pathEdit->setFocus(Qt::OtherFocusReason);
     pump(10);
-    CHECK(QApplication::focusWidget() == thumbnailSizeSlider,
-          "focus can be placed on the real thumbnail size slider");
+    CHECK(QApplication::focusWidget() == pathEdit,
+          "focus can be placed on the real path edit");
     sendFocusedKey(Qt::Key_Tab);
     CHECK(navigationPanel && !navigationPanel->isVisible() && analysisPanel &&
               !analysisPanel->isVisible() && searchPanel && !searchPanel->isVisible() &&
@@ -1257,7 +1246,6 @@ void workflow3_session_restore(const QString &dirPath, const QString &imagePath)
         auto *searchAction = w.findChild<QAction *>("toggleSearchPanelAction");
         auto *browseAction = w.findChild<QAction *>("browseWorkspaceAction");
         auto *thumbnailPanel = w.findChild<ThumbnailPanel *>();
-        auto *thumbnailSizeSlider = w.findChild<QSlider *>("thumbnailSizeSlider");
         auto *viewModeCombo = w.findChild<QComboBox *>("thumbnailViewModeCombo");
         CHECK(analysisPanel && analysisPanel->isVisible() && analysisAction &&
                   analysisAction->isChecked(),
@@ -1268,10 +1256,9 @@ void workflow3_session_restore(const QString &dirPath, const QString &imagePath)
               "restored side panels keep the Browser workspace action unchecked");
         CHECK(
             thumbnailPanel && thumbnailPanel->viewMode() == ThumbnailPanel::LargeIcon &&
-                thumbnailPanel->thumbSize() == 240 && thumbnailSizeSlider &&
-                thumbnailSizeSlider->value() == 240 && !thumbnailSizeSlider->isEnabled() &&
+                thumbnailPanel->thumbSize() == 240 &&
                 viewModeCombo && viewModeCombo->currentData().toInt() == ThumbnailPanel::LargeIcon,
-            "deferred restore keeps the Large preset at 240px with a disabled synchronized slider");
+            "deferred restore keeps the Large preset at 240px");
         w.close();
         pump(50);
     }

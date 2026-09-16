@@ -595,6 +595,7 @@ bool ImageViewer::rotateImage(int angle)
     ThumbnailProvider::invalidateSource(m_currentPath.toUtf8().toStdString());
 
     emit fileRotated(m_currentPath);
+    emit statusMessageRequested(tr("已旋转图片 (%1°)").arg(normAngle));
     refreshSource(m_currentPath);
     return true;
 }
@@ -655,6 +656,7 @@ bool ImageViewer::flipImage(bool horizontal)
     ThumbnailProvider::invalidateSource(m_currentPath.toUtf8().toStdString());
 
     emit fileRotated(m_currentPath);
+    emit statusMessageRequested(horizontal ? tr("已水平翻转图片") : tr("已垂直翻转图片"));
     refreshSource(m_currentPath);
     return true;
 }

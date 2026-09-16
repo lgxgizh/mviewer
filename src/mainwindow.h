@@ -106,6 +106,7 @@ class MainWindow : public QMainWindow
     void resizeEvent(QResizeEvent *event) override;
     // P0-3: intercept image-viewer mouse events for metadata overlay triggers.
     bool eventFilter(QObject *watched, QEvent *event) override;
+    bool filterKeyPress(QObject *watched, QKeyEvent *ke);
 
   private:
     void buildMenus();
@@ -348,7 +349,6 @@ class MainWindow : public QMainWindow
     QComboBox *m_ratingFilter = nullptr;
     QComboBox *m_sortCombo = nullptr; // persisted across sessions via QSettings
     QComboBox *m_viewModeCombo = nullptr;
-    QSlider *m_thumbSizeSlider = nullptr; // persisted across sessions via QSettings
     QComboBox *m_flagFilter = nullptr;    // P3 tail: color label / reject / pick / recents
     QWidget *m_advancedFilterPanel = nullptr;
     bool m_focusBrowse = false;
@@ -383,6 +383,7 @@ class MainWindow : public QMainWindow
     void setCurrentColorLabel(int label);
     void toggleCurrentPick();
     void toggleCurrentReject();
+    void clearAllFilters();
 
     // M19: UI models — single source of truth for Current / Selection /
     // Directory / ImageList / Workspace / Analyzer. Widgets listen; they do not

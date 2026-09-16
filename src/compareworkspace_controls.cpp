@@ -473,7 +473,7 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
 
     m_swapBtn = new QPushButton(tr("交换 A/B"), this);
     m_swapBtn->setObjectName("compareSwapPanesButton");
-    m_swapBtn->setToolTip(tr("交换 A/B 窗格"));
+    m_swapBtn->setToolTip(tr("交换 A/B 窗格 (快捷键: X)"));
     m_swapBtn->setEnabled(false);
     connect(m_swapBtn, &QPushButton::clicked, this, &CompareWorkspace::onSwapPanes);
     toolLayout->addWidget(m_swapBtn);

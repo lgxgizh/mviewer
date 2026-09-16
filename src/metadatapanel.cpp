@@ -8,12 +8,15 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QComboBox>
+#include <QCursor>
 #include <QFileInfo>
 #include <QHeaderView>
 #include <QHideEvent>
 #include <QLabel>
+#include <QMenu>
 #include <QPointer>
 #include <QPushButton>
+#include <QToolTip>
 #include <QTreeView>
 #include <QVBoxLayout>
 
@@ -50,6 +53,10 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
     m_tree->setUniformRowHeights(true);
     m_tree->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_tree->header()->setStretchLastSection(true);
+    m_tree->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(m_tree, &QTreeView::customContextMenuRequested, this,
+            &MetadataPanel::onTreeContextMenu);
+    connect(m_tree, &QTreeView::doubleClicked, this, &MetadataPanel::onTreeDoubleClicked);
     layout->addWidget(m_tree, 1);
 
     // P1: star-rating editor, persists to RatingStore.
@@ -72,6 +79,14 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
             });
     layout->addWidget(ratingBox);
 
+    layout->addWidget(buildFlagsBox());
+
+    // Until an image is selected, the model shows its "select an image" hint.
+    m_model->clear();
+}
+
+QWidget *MetadataPanel::buildFlagsBox()
+{
     // P3 tail: color label + reject / pick (favorite) controls.
     auto *flagBox = new QWidget(this);
     auto *flagLay = new QHBoxLayout(flagBox);
@@ -133,10 +148,7 @@ MetadataPanel::MetadataPanel(QWidget *parent) : QWidget(parent)
                     m_currentPath.toUtf8().toStdString(), on);
                 emitFlags();
             });
-    layout->addWidget(flagBox);
-
-    // Until an image is selected, the model shows its "select an image" hint.
-    m_model->clear();
+    return flagBox;
 }
 
 MetadataPanel::~MetadataPanel()
@@ -291,3 +303,61 @@ void MetadataPanel::copyAll()
         return;
     QApplication::clipboard()->setText(lines.join('\n'));
 }
+
+void MetadataPanel::onTreeContextMenu(const QPoint &pos)
+{
+    const QModelIndex index = m_tree->indexAt(pos);
+    QMenu menu(this);
+
+    if (index.isValid())
+    {
+        const QModelIndex parent = index.parent();
+        if (parent.isValid())
+        {
+            const QModelIndex keyIdx = m_model->index(index.row(), 0, parent);
+            const QModelIndex valIdx = m_model->index(index.row(), 1, parent);
+            const QString keyStr = keyIdx.data().toString();
+            const QString valStr = valIdx.data().toString();
+
+            if (!valStr.isEmpty())
+            {
+                const QString displayVal =
+                    valStr.length() > 20 ? valStr.left(17) + "..." : valStr;
+                menu.addAction(tr("复制数值 (\"%1\")").arg(displayVal), this,
+                               [valStr]() { QApplication::clipboard()->setText(valStr); });
+            }
+            if (!keyStr.isEmpty() && !valStr.isEmpty())
+            {
+                const QString preview = QString("%1: %2").arg(keyStr, valStr);
+                const QString displayKv =
+                    preview.length() > 25 ? preview.left(22) + "..." : preview;
+                menu.addAction(tr("复制项 (\"%1\")").arg(displayKv), this,
+                               [keyStr, valStr]()
+                               {
+                                   QApplication::clipboard()->setText(
+                                       QString("%1: %2").arg(keyStr, valStr));
+                               });
+            }
+            menu.addSeparator();
+        }
+    }
+
+    menu.addAction(tr("复制全部元数据"), this, &MetadataPanel::copyAll);
+    menu.exec(m_tree->viewport()->mapToGlobal(pos));
+}
+
+void MetadataPanel::onTreeDoubleClicked(const QModelIndex &index)
+{
+    if (!index.isValid())
+        return;
+    const QModelIndex parent = index.parent();
+    if (!parent.isValid())
+        return;
+    const QModelIndex valIdx = m_model->index(index.row(), 1, parent);
+    const QString valStr = valIdx.data().toString();
+    if (valStr.isEmpty())
+        return;
+    QApplication::clipboard()->setText(valStr);
+    QToolTip::showText(QCursor::pos(), tr("已复制数值: %1").arg(valStr), m_tree);
+}
+

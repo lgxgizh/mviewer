@@ -740,6 +740,7 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
             rmTagMenu->addAction(QString::fromStdString(tg));
         rmTagMenu->setEnabled(!myTags.empty());
     }
+    populateRatingContextMenu(&menu);
     QAction *chosen = menu.exec(event->globalPos());
     if (!chosen)
         return;
@@ -756,7 +757,7 @@ void ThumbnailPanel::contextMenuEvent(QContextMenuEvent *event)
     else if (chosen == aReveal)
         revealSelected();
     else if (chosen == aCopyPath)
-        QApplication::clipboard()->setText(path);
+        copySelectedPaths();
     else if (chosen == aCompare)
         onCompareClicked();
     else if (chosen == aAnalyze)

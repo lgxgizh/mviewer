@@ -99,8 +99,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
                                return;
                            restoreSessionRecovery();
                            // M17: if a previous run crashed, surface a crash-report prompt
-                           // on next launch.
-                           maybeShowCrashReport();
+                           // after recovery has settled, avoiding nested modal activation locks.
+                           QTimer::singleShot(500, this, &MainWindow::maybeShowCrashReport);
                        });
     // M17: quiet background update check shortly after launch (only notifies on a new version).
     // Acceptance harnesses can disable this unrelated network activity so

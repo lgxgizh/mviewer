@@ -597,48 +597,71 @@ void MainWindow::updateCacheStat()
         m_lblCache->setText(QString("命中率 %1%").arg(int(100.0 * hits / (hits + misses))));
 }
 
+bool MainWindow::filterKeyPress(QObject *watched, QKeyEvent *ke)
+{
+    if (watched == m_searchEdit)
+    {
+        if (ke->key() == Qt::Key_Return || ke->key() == Qt::Key_Enter)
+        {
+            if (m_thumbnailPanel)
+                m_thumbnailPanel->setFocus();
+            return true;
+        }
+        if (ke->key() == Qt::Key_Escape)
+        {
+            if (!m_searchEdit->text().isEmpty())
+                m_searchEdit->clear();
+            if (m_thumbnailPanel)
+                m_thumbnailPanel->setFocus();
+            return true;
+        }
+    }
+    // While the viewer window has focus (e.g. slideshow fullscreen), 'S'
+    // still toggles the slideshow; the viewer itself has no such binding.
+    if (watched == m_imageViewer && ke->key() == Qt::Key_S && !ke->modifiers())
+    {
+        toggleSlideshow();
+        return true;
+    }
+    // Forward navigation / workflow shortcuts from child widgets so they work
+    // regardless of which panel has focus.
+    static const QList<int> globalKeys = {
+        Qt::Key_Space, Qt::Key_M, Qt::Key_G,    Qt::Key_D,    Qt::Key_F,      Qt::Key_Tab,
+        Qt::Key_C,     Qt::Key_P, Qt::Key_S,    Qt::Key_Plus, Qt::Key_Equal,  Qt::Key_Minus,
+        Qt::Key_0,     Qt::Key_1, Qt::Key_Home, Qt::Key_End,  Qt::Key_PageUp, Qt::Key_PageDown};
+    const bool isGlobalKey =
+        globalKeys.contains(ke->key()) ||
+        ((ke->modifiers() & Qt::ControlModifier) &&
+         (ke->key() == Qt::Key_C || (ke->key() >= Qt::Key_1 && ke->key() <= Qt::Key_6)));
+    if (isGlobalKey && watched != this)
+    {
+        // Also forward from the image viewer (it has its own keyPressEvent
+        // that handles zoom/navigation, but Home/End/PageUp/PageDown and
+        // workflow keys like C/S/Space should still reach MainWindow).
+        if (watched == m_imageViewer)
+        {
+            // Only forward keys the viewer doesn't handle itself.
+            static const QSet<int> viewerOwns = {
+                Qt::Key_Left,  Qt::Key_Right,  Qt::Key_Plus,      Qt::Key_Equal,
+                Qt::Key_Minus, Qt::Key_0,      Qt::Key_1,         Qt::Key_F,
+                Qt::Key_F11,   Qt::Key_Escape, Qt::Key_Underscore};
+            if (viewerOwns.contains(ke->key()))
+                return false; // let the viewer handle it
+        }
+        keyPressEvent(ke);
+        return true;
+    }
+    return false;
+}
+
 // P0-3: click / hover on the image viewer shows the metadata overlay.
 // P1-4: also forward global workflow shortcuts from child widgets.
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
     if (event->type() == QEvent::KeyPress)
     {
-        auto *ke = static_cast<QKeyEvent *>(event);
-        // While the viewer window has focus (e.g. slideshow fullscreen), 'S'
-        // still toggles the slideshow; the viewer itself has no such binding.
-        if (watched == m_imageViewer && ke->key() == Qt::Key_S && !ke->modifiers())
-        {
-            toggleSlideshow();
+        if (filterKeyPress(watched, static_cast<QKeyEvent *>(event)))
             return true;
-        }
-        // Forward navigation / workflow shortcuts from child widgets so they work
-        // regardless of which panel has focus.
-        static const QList<int> globalKeys = {
-            Qt::Key_Space, Qt::Key_M, Qt::Key_G,    Qt::Key_D,    Qt::Key_F,      Qt::Key_Tab,
-            Qt::Key_C,     Qt::Key_P, Qt::Key_S,    Qt::Key_Plus, Qt::Key_Equal,  Qt::Key_Minus,
-            Qt::Key_0,     Qt::Key_1, Qt::Key_Home, Qt::Key_End,  Qt::Key_PageUp, Qt::Key_PageDown};
-        const bool isGlobalKey =
-            globalKeys.contains(ke->key()) ||
-            ((ke->modifiers() & Qt::ControlModifier) &&
-             (ke->key() == Qt::Key_C || (ke->key() >= Qt::Key_1 && ke->key() <= Qt::Key_6)));
-        if (isGlobalKey && watched != this)
-        {
-            // Also forward from the image viewer (it has its own keyPressEvent
-            // that handles zoom/navigation, but Home/End/PageUp/PageDown and
-            // workflow keys like C/S/Space should still reach MainWindow).
-            if (watched == m_imageViewer)
-            {
-                // Only forward keys the viewer doesn't handle itself.
-                static const QSet<int> viewerOwns = {
-                    Qt::Key_Left,  Qt::Key_Right,  Qt::Key_Plus,      Qt::Key_Equal,
-                    Qt::Key_Minus, Qt::Key_0,      Qt::Key_1,         Qt::Key_F,
-                    Qt::Key_F11,   Qt::Key_Escape, Qt::Key_Underscore};
-                if (viewerOwns.contains(ke->key()))
-                    return false; // let the viewer handle it
-            }
-            keyPressEvent(ke);
-            return true;
-        }
     }
 
     if (watched == m_lblZoom)

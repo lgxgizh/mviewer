@@ -1,5 +1,59 @@
 # Changelog
  
+## [1.0.51] - 2026-09-16
+
+### Bug Fixes
+
+- **Session Recovery Dialog Freeze on "No" (`MainWindow`, `mainwindow_session_recovery.cpp`, `mainwindow.cpp`)**:
+  - **Suppressed Startup Race**: Prevented dual session restoration race where `restoreLastSession()` was loading `lastDir` and `CompareWorkspace` in the background before the user answered the recovery prompt.
+  - **Clean State & Window Re-activation**: When clicking "否" (No), thoroughly purged stale directory paths and comparison settings from memory and `QSettings`, activated and raised `MainWindow`, and focused the thumbnail gallery.
+  - **Decoupled Modal Dialog Chaining**: Resolved a Windows native modal activation deadlock by decoupling `maybeShowCrashReport()` from the recovery callback turn via a deferred timer.
+- **Bottom-Left Preview Thumbnail Jump (`PreviewPanel`, `previewpanel.cpp`)**:
+  - **Proportional Square Unpadding**: Added `unpadSquareThumbnail` helper to trim transparent letterbox margins from gallery thumbnails. The provisional preview immediately conforms to the true source image aspect ratio and fits the panel box without jarring size jumps or bounding-box snaps when navigating to distant images.
+- **Compare Workspace Multi-Image ROI Statistics (`CompareWorkspace`, `compareworkspace_roi.cpp`)**:
+  - **Full Pane Support in Bottom-Right HUD**: Expanded floating `m_roiHud` to display measurements for all compared images (A, B, C, D...) up to 8 panes, resolving an artificial 2-pane cap that previously omitted panes C and D when performing 4-image comparisons.
+  - **Comfortable HUD Geometry**: Dynamically widened the HUD layout to preserve clear alignment across multiple panes.
+- **Browse Command Bar Clutter Removal (`MainWindow`, `mainwindow_ui_layout.cpp`, `mainwindow.h`, `mainwindow_session_recovery.cpp`)**:
+  - **Eliminated Non-Interactive Slider**: Removed the redundant "缩略图：" slider from the top search and sort bar, reclaiming valuable horizontal space for file queries while relying on the View Mode combo and keyboard shortcuts (`Ctrl++`, `Ctrl+-`, `Ctrl+0`) for gallery sizing.
+
+### UX, Ergonomics & Interaction Polish (Top 30 Touchpoints)
+
+- **Navigation & Path Bar (`MainWindow`, `mainwindow_ui_layout.cpp`, `mainwindow_view.cpp`, `mainwindow_navigation.cpp`)**:
+  - **Global Address Bar Focus (`Ctrl+L` / `Alt+D`)**: Standard browser shortcut instantly focuses the path line edit and selects all text for immediate typing or path pasting.
+  - **Smooth Search Navigation**: Pressing `Enter` in the search filter jumps focus directly to the gallery thumbnails; pressing `Escape` clears active filter text and refocuses the gallery.
+  - **Directory Up Shortcut & Tooltip (`Alt+Up`)**: Added `Alt+Up` global shortcut and clear keyboard tooltips to the "返回上一级" toolbar button.
+  - **Refresh Directory Shortcut (`F5`)**: Attached standard `F5` / `QKeySequence::Refresh` shortcut to the reload directory button.
+  - **Reset All Filters Action**: Added "重置筛选" button and `clearAllFilters` method that resets search text, rating filter, label filter, and state toggles in a single click with status bar feedback.
+- **Gallery & Thumbnail Panel (`ThumbnailPanel`, `thumbnailpanel.cpp`, `thumbnailpanel_selection.cpp`, `thumbnailpanel_fileops.cpp`, `mainwindow_ui_menus.cpp`)**:
+  - **Keyboard Thumbnail Resizing**: Added `Ctrl++` (zoom in), `Ctrl+-` (zoom out), and `Ctrl+0` (reset to default 140px) keyboard shortcuts for smooth gallery density adjustments.
+  - **Batch Multi-Image Path Copying**: Copying paths (`Ctrl+Shift+C`) with multiple gallery selections copies all paths formatted with native separators and separated by newlines.
+  - **Batch Rating Context Submenu**: Added "设置评级" context menu submenu (0–5 stars) that applies rating to all selected images simultaneously.
+  - **Batch Color Label Context Submenu**: Added "设置颜色标签" context menu submenu (None, Red, Orange, Yellow, Green, Blue, Purple) applying to all selected images simultaneously.
+  - **Batch Pick & Reject Context Submenu**: Added "设置标记" submenu ("标记为选中 (Pick)", "标记为拒绝 (Reject)", "清除标记") for bulk triage workflows.
+  - **Shortcut Collision Resolution**: Reassigned "批量分析导出" menu action from `Ctrl+Shift+A` to `Ctrl+Alt+A`, freeing `Ctrl+Shift+A` for "取消选择 (Deselect All)".
+  - **Thumbnail Enter Key Navigation**: Pressing `Enter` / `Return` on a focused gallery thumbnail opens the image directly in the viewer.
+- **Single-Image Viewer (`ImageViewer`, `imageviewer.cpp`, `imageviewer_contextmenu.cpp`, `mainwindow_ui_menus.cpp`)**:
+  - **Viewer `F` Key Fit-to-Window**: Pressing `F` instantly triggers `zoomFit()`, complementing existing `0` and double-click gestures.
+  - **Viewer `2` Key 200% Zoom**: Pressing `2` jumps directly to 200% zoom level.
+  - **Viewer Navigation Keys (`PageUp` / `PageDown` / `Backspace` / `Space`)**: Added `PageUp` / `Backspace` (previous image) and `PageDown` / `Space` (next image) for one-handed image navigation.
+  - **Viewer First/Last Keys (`Home` / `End`)**: Forwarded `Home` and `End` keys through `MainWindow::eventFilter` to jump to first and last images in the current folder.
+  - **View Menu Shortcuts Alignment**: Aligned menu shortcuts for "适应窗口 (`Ctrl+0`)" and "实际大小 100% (`Ctrl+1`)".
+  - **Immediate Status Bar Feedback on Transform**: Added status bar toast notifications when rotating (90° CW/CCW) or flipping (Horizontal/Vertical) images.
+- **Compare Workspace (`CompareWorkspace`, `compareworkspace_controls.cpp`, `compareworkspace_keyboard.cpp`, `compareworkspace_nav.cpp`)**:
+  - **Swap A/B Tooltip Shortcut Hint**: Added `(快捷键: X)` to the Swap A/B button tooltip.
+  - **Compare Pair Navigation (`P` / `N`)**: Added `P` (previous pair) and `N` (next pair) keys for continuous sequential comparison.
+  - **Channel Reset Shortcut (`Shift+0`)**: Added `Shift+0` shortcut to immediately reset channel overlays back to full RGB.
+  - **Layout Preset Feedback Toast**: Switching layout presets (1–8 panes) displays an exact pane count toast: `已切换至 N 窗格对比布局`.
+  - **Keyboard Zoom Live Percent Toast**: Zooming with keyboard displays live scale percent (e.g. `视图放大 (115%)`).
+  - **Diff Threshold Tooltip**: Enhanced the difference threshold slider tooltip with clear threshold ranges and operational explanations.
+  - **Continuous Pair Navigation Boundary Feedback**: Reaching start or end of pair sequences displays clear status toasts without jarring stops.
+- **Metadata, Analysis & Window Ergonomics (`MetadataPanel`, `metadatapanel.cpp`, `analysispanel_buildui.cpp`, `mainwindow.cpp`, `mainwindow_commands.cpp`)**:
+  - **Metadata Tree View Context Menu**: Right-clicking any row in the metadata tree brings up a context menu offering "复制数值", "复制项 (键值对)", and "复制全部元数据".
+  - **Metadata Tree View Double-Click Quick Copy**: Double-clicking any metadata value row instantly copies the value to clipboard and shows a tooltip notification.
+  - **Pixel Inspector Text Selection**: Enabled `TextSelectableByMouse` on the Pixel Inspector readout in the Analysis Panel, allowing engineers to highlight and copy pixel color values, delta values, and kernel statistics.
+  - **Window Navigation & Title State Synchronization**: Guaranteed strict SSOT title and status bar formatting contracts across filtering, browsing, and image transitions.
+  - **Updated Shortcuts Cheat Sheet**: Refreshed the authoritative F1 shortcut help dialog with all new navigation, selection, gallery sizing, and comparison shortcuts.
+
 ## [1.0.50] - 2026-09-16
 
 ### UX, Ergonomics & Interaction Polish

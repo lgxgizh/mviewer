@@ -410,3 +410,20 @@ void MainWindow::rebuildFavoritesBar()
         m_favoritesBar->addItem(item);
     }
 }
+
+void MainWindow::clearAllFilters()
+{
+    if (m_searchEdit)
+        m_searchEdit->clear();
+    if (m_ratingFilter)
+        m_ratingFilter->setCurrentIndex(0);
+    if (m_flagFilter)
+        m_flagFilter->setCurrentIndex(0);
+    if (m_thumbnailPanel)
+    {
+        m_thumbnailPanel->clearFlagFilters();
+        m_thumbnailPanel->setRatingFilter(0);
+        m_thumbnailPanel->setFilter(QString(), false);
+    }
+    statusBar()->showMessage(tr("已清除所有筛选条件"), 2000);
+}
