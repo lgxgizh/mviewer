@@ -1,6 +1,7 @@
 #include "analysispanel.h"
 #include "analyzermodel.h"
 #include "core/analysis/AnalysisEngine.h"
+#include "core/analysis/PixelInspector.h"
 #include "core/analyzer/HistogramAnalyzer.h"
 #include "core/compare/Aligner.h"
 #include "widgets/rawimageview.h"
@@ -20,6 +21,32 @@
 
 #include <cmath>
 
+static QString formatLeftPixel(mviewer::core::ColorSpace cs, int r, int g, int b)
+{
+    const char *csLabel = mviewer::core::colorSpaceLabel(cs);
+    const mviewer::core::ColorTriple px =
+        mviewer::core::toColorSpace(static_cast<uint8_t>(r), static_cast<uint8_t>(g),
+                                    static_cast<uint8_t>(b), cs);
+    if (cs == mviewer::core::ColorSpace::HEX)
+    {
+        const QString hex = QString::fromStdString(mviewer::core::toHex(
+            static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b)));
+        return QString("<span style='color:#e66;'>●</span> Left HEX %1<br>").arg(hex);
+    }
+    if (cs == mviewer::core::ColorSpace::XYZ)
+    {
+        return QString("<span style='color:#e66;'>●</span> Left XYZ(%1, %2, %3)<br>")
+            .arg(px.c1, 0, 'f', 3)
+            .arg(px.c2, 0, 'f', 3)
+            .arg(px.c3, 0, 'f', 3);
+    }
+    return QString("<span style='color:#e66;'>●</span> Left %1(%2, %3, %4)<br>")
+        .arg(csLabel)
+        .arg(px.c1, 0, 'f', 1)
+        .arg(px.c2, 0, 'f', 1)
+        .arg(px.c3, 0, 'f', 1);
+}
+
 void AnalysisPanel::updateInspectorPage()
 {
     if (!m_pValid)
@@ -29,33 +56,9 @@ void AnalysisPanel::updateInspectorPage()
     }
 
     const char *csLabel = mviewer::core::colorSpaceLabel(m_colorSpace);
-    const mviewer::core::ColorTriple px =
-        mviewer::core::toColorSpace(static_cast<uint8_t>(m_pR), static_cast<uint8_t>(m_pG),
-                                    static_cast<uint8_t>(m_pB), m_colorSpace);
-
     QString txt = QString("<h3>%1 — %2</h3>").arg(tr("像素检视"), csLabel);
     txt += QString("pos: (%1, %2)<br>").arg(m_px).arg(m_py);
-    if (m_colorSpace == mviewer::core::ColorSpace::HEX)
-    {
-        const QString hex = QString::fromStdString(mviewer::core::toHex(
-            static_cast<uint8_t>(m_pR), static_cast<uint8_t>(m_pG), static_cast<uint8_t>(m_pB)));
-        txt += QString("<span style='color:#e66;'>●</span> Left HEX %1<br>").arg(hex);
-    }
-    else if (m_colorSpace == mviewer::core::ColorSpace::XYZ)
-    {
-        txt += QString("<span style='color:#e66;'>●</span> Left XYZ(%1, %2, %3)<br>")
-                   .arg(px.c1, 0, 'f', 3)
-                   .arg(px.c2, 0, 'f', 3)
-                   .arg(px.c3, 0, 'f', 3);
-    }
-    else
-    {
-        txt += QString("<span style='color:#e66;'>●</span> Left %1(%2, %3, %4)<br>")
-                   .arg(csLabel)
-                   .arg(px.c1, 0, 'f', 1)
-                   .arg(px.c2, 0, 'f', 1)
-                   .arg(px.c3, 0, 'f', 1);
-    }
+    txt += formatLeftPixel(m_colorSpace, m_pR, m_pG, m_pB);
 
     // P0-2/PixelInspector: original high-bit-depth readout.
     txt += QString("<br><b>原始采样</b> ");
@@ -120,13 +123,23 @@ void AnalysisPanel::updateInspectorPage()
         const int vB = std::max({rR, rG, rB});
         const int dV = vA - vB;
         const double dist = qSqrt(static_cast<double>(dR * dR + dG * dG + dB * dB));
+        const auto labA = mviewer::core::toColorSpace(static_cast<uint8_t>(m_pR),
+                                                      static_cast<uint8_t>(m_pG),
+                                                      static_cast<uint8_t>(m_pB),
+                                                      mviewer::core::ColorSpace::Lab);
+        const auto labB = mviewer::core::toColorSpace(static_cast<uint8_t>(rR),
+                                                      static_cast<uint8_t>(rG),
+                                                      static_cast<uint8_t>(rB),
+                                                      mviewer::core::ColorSpace::Lab);
+        const double dL = labB.c1 - labA.c1, da = labB.c2 - labA.c2, dbv = labB.c3 - labA.c3;
+        const double dE76 = std::sqrt(dL * dL + da * da + dbv * dbv);
         txt += QString("<br><span style='color:#6e6;'>●</span> Right RGB(%1, %2, %3)  V %4<br>")
                    .arg(rR)
                    .arg(rG)
                    .arg(rB)
                    .arg(vB);
         txt += QString("Δ      (%1, %2, %3)  ΔV %4<br>").arg(dR).arg(dG).arg(dB).arg(dV);
-        txt += QString("dist: %1").arg(dist, 0, 'f', 2);
+        txt += QString("dist: %1  ΔE76: %2").arg(dist, 0, 'f', 2).arg(dE76, 0, 'f', 2);
     }
     else
     {

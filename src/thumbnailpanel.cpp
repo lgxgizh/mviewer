@@ -2,6 +2,13 @@
 #include "thumbnailpanel_p.h"
 #include "thumbnailprovider.h"
 
+#if defined(Q_OS_WIN)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 // P0#3: DetailsHeader (the column-title strip above the Details list) is now
 // defined in thumbnailpanel_p.h alongside the shared DetailLayout geometry, so
 // it stays in sync with the delegate cells and keeps this TU lean.
@@ -581,7 +588,20 @@ void ThumbnailPanel::showEvent(QShowEvent *event)
 void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
 {
     const bool left = event->button() == Qt::LeftButton;
-    const Qt::KeyboardModifiers mods = event->modifiers();
+    Qt::KeyboardModifiers mods = event->modifiers();
+
+#if defined(Q_OS_WIN)
+    // Guard against phantom Shift/Ctrl modifier from Windows IME language toggle (Shift tap).
+    // Validate Qt's cached event modifier against live physical key state for spontaneous events.
+    if (event->spontaneous())
+    {
+        if ((mods & Qt::ShiftModifier) && ((GetKeyState(VK_SHIFT) & 0x8000) == 0))
+            mods &= ~Qt::ShiftModifier;
+        if ((mods & Qt::ControlModifier) && ((GetKeyState(VK_CONTROL) & 0x8000) == 0))
+            mods &= ~Qt::ControlModifier;
+    }
+#endif
+
     m_selectionGesture = left && (mods & (Qt::ControlModifier | Qt::ShiftModifier));
 
     // Keep the native QListView gesture surface, but apply the selection
@@ -591,6 +611,7 @@ void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
     if (left)
     {
         const QModelIndex idx = indexAt(event->pos());
+        m_pressedOnItem = idx.isValid();
         if (idx.isValid())
         {
             const QString path = m_paths.value(idx.row());
@@ -629,20 +650,33 @@ void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
         event->accept();
         return;
     }
+    m_pressedOnItem = false;
     QListView::mousePressEvent(event);
+}
+
+void ThumbnailPanel::mouseMoveEvent(QMouseEvent *event)
+{
+    // If the press started on a thumbnail item, suppress QAbstractItemView's
+    // accidental drag-selection which could drag-expand selection across items
+    // from a stale internal pressedIndex.
+    if ((event->buttons() & Qt::LeftButton) && m_pressedOnItem)
+    {
+        event->accept();
+        return;
+    }
+    QListView::mouseMoveEvent(event);
 }
 
 void ThumbnailPanel::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::LeftButton && m_selectionGesture)
+    m_pressedOnItem = false;
+    if (event->button() == Qt::LeftButton)
     {
         m_selectionGesture = false;
         event->accept();
         return;
     }
     QListView::mouseReleaseEvent(event);
-    if (event->button() == Qt::LeftButton)
-        m_selectionGesture = false;
 }
 
 void ThumbnailPanel::mouseDoubleClickEvent(QMouseEvent *event)

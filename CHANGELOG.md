@@ -1,5 +1,24 @@
 # Changelog
  
+## [1.0.52] - 2026-09-16
+
+### Bug Fixes
+
+- **Gallery Phantom Shift Range-Selection & Stale Drag Expansion (`ThumbnailPanel`, `thumbnailpanel.cpp`, `thumbnailpanel.h`)**:
+  - **Physical Modifier Validation (`GetKeyState`)**: On Windows, frequent tapping of Shift (e.g. switching Chinese/English IME) could cause Qt's event modifier state to become desynchronized if the IME swallowed key releases, causing ordinary mouse clicks to behave as Shift-range clicks. Added real-time physical keyboard validation via `GetKeyState(VK_SHIFT)` and `GetKeyState(VK_CONTROL)` on Windows to strip phantom modifiers.
+  - **Stale Item Drag Selection Suppression**: Added `m_pressedOnItem` tracking and suppressed unwanted `QAbstractItemView` drag-selection in `mouseMoveEvent` during clicks with micro-movement, preventing the gallery from selecting an unintended contiguous block of thumbnails based on stale internal indices.
+  - **Clean Release Handling**: Added safe release cleanup in `mouseReleaseEvent` to cleanly complete selection interactions.
+
+### Algorithm Engineer Workflow & Analysis Enhancements
+
+- **Multi-Pane Linked ROI Delta Telemetry (`CompareWorkspace`, `compareworkspace_roi.cpp`)**:
+  - **Relative Delta Telemetry for Multi-Image Comparison**: When comparing 3 or 4 images (Panes A, B, C, D), `m_roiDeltaLabel` and the floating `m_roiHud` now compute and display per-pane relative deltas vs base pane A ($\Delta(B-A), \Delta(C-A), \Delta(D-A)$ for luminance $V$, $R$, $G$, $B$, $R/G$, and $B/G$).
+  - **Multi-Pane TSV Export**: Enhanced `copyROIMeasurements` to include multi-pane relative delta columns in the clipboard output for algorithm performance benchmarking.
+- **Pixel Inspector CIE $\Delta E_{76}$ Perceptual Color Difference (`CompareWorkspace`, `AnalysisPanel`, `compareworkspace_analysis.cpp`, `analysispanel_pages.cpp`)**:
+  - Added CIE $\Delta E_{76} = \sqrt{\Delta L^2 + \Delta a^2 + \Delta b^2}$ calculation in CIELAB color space. Populated $\Delta$ column in comparison table and detailed Euclidean $\Delta E$ in hover tooltips for quantitative perceptual color analysis.
+- **Dynamic Range Clipping Telemetry in Histogram (`CompareWorkspace`, `compareworkspace_analysis.cpp`)**:
+  - Integrated shadow underexposure ($Y=0$) and highlight clipping/burnout ($Y=255$) pixel count and percentage telemetry into the histogram title bar and detailed tooltip, offering instant diagnostic insight for dynamic range and exposure analysis.
+
 ## [1.0.51] - 2026-09-16
 
 ### Bug Fixes

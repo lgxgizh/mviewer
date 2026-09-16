@@ -394,6 +394,7 @@ class ThumbnailPanel : public QListView
     void resizeEvent(QResizeEvent *event) override;
     void showEvent(QShowEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseDoubleClickEvent(QMouseEvent *event) override;
     // Ctrl+wheel adjusts the thumbnail size (Explorer/FastStone parity).
@@ -461,6 +462,7 @@ class ThumbnailPanel : public QListView
     // single image. Keep this set through the mouse release because Qt emits
     // clicked/currentChanged while the gesture is being processed.
     bool m_selectionGesture = false;
+    bool m_pressedOnItem = false;
     // Stable path anchor for Shift ranges. Qt's IconMode selection anchor is
     // not consistent across the Windows styles used by the native view, so
     // keep the anchor at the panel boundary and apply the same range semantics

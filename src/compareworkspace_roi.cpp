@@ -389,23 +389,63 @@ void CompareWorkspace::applyROIStatsBatchResult(const ROIStatsBatchResult &resul
         failed = failed || pane.state == mviewer::ui::ROIPaneState::Failed;
     }
 
-    if (m_roiDeltaLabel && result.panes.size() == 2 && result.panes[0].stats.valid &&
-        result.panes[1].stats.valid)
+    if (m_roiDeltaLabel && result.panes.size() >= 2 && result.panes[0].stats.valid)
     {
         const auto &a = result.panes[0].stats;
-        const auto &b = result.panes[1].stats;
-        const QString redGreen = (a.ratiosValid && b.ratiosValid)
-                                     ? QString::number(b.rOverG - a.rOverG, 'f', 4)
-                                     : QStringLiteral("—");
-        const QString blueGreen = (a.ratiosValid && b.ratiosValid)
-                                      ? QString::number(b.bOverG - a.bOverG, 'f', 4)
-                                      : QStringLiteral("—");
-        m_roiDeltaLabel->setText(tr("Delta (B − A): ΔV %1  ΔR %2  ΔG %3  ΔB %4  ΔR/G %5  ΔB/G %6")
-                                     .arg(QString::number(b.vMean - a.vMean, 'f', 2),
-                                          QString::number(b.rMean - a.rMean, 'f', 2),
-                                          QString::number(b.gMean - a.gMean, 'f', 2),
-                                          QString::number(b.bMean - a.bMean, 'f', 2), redGreen,
-                                          blueGreen));
+        if (result.panes.size() == 2)
+        {
+            const auto &b = result.panes[1].stats;
+            if (b.valid)
+            {
+                const QString redGreen = (a.ratiosValid && b.ratiosValid)
+                                             ? QString::number(b.rOverG - a.rOverG, 'f', 4)
+                                             : QStringLiteral("—");
+                const QString blueGreen = (a.ratiosValid && b.ratiosValid)
+                                              ? QString::number(b.bOverG - a.bOverG, 'f', 4)
+                                              : QStringLiteral("—");
+                m_roiDeltaLabel->setText(
+                    tr("Delta (B − A): ΔV %1  ΔR %2  ΔG %3  ΔB %4  ΔR/G %5  ΔB/G %6")
+                        .arg(QString::number(b.vMean - a.vMean, 'f', 2),
+                             QString::number(b.rMean - a.rMean, 'f', 2),
+                             QString::number(b.gMean - a.gMean, 'f', 2),
+                             QString::number(b.bMean - a.bMean, 'f', 2), redGreen, blueGreen));
+            }
+            else
+            {
+                m_roiDeltaLabel->setText(tr("Delta (B − A): —"));
+            }
+        }
+        else
+        {
+            QStringList deltaLines;
+            const int count = std::min(8, static_cast<int>(result.panes.size()));
+            for (int i = 1; i < count; ++i)
+            {
+                const auto &p = result.panes[static_cast<size_t>(i)];
+                const QChar paneChar('A' + i);
+                if (p.stats.valid)
+                {
+                    const QString rg = (a.ratiosValid && p.stats.ratiosValid)
+                                           ? QString::number(p.stats.rOverG - a.rOverG, 'f', 4)
+                                           : QStringLiteral("—");
+                    const QString bg = (a.ratiosValid && p.stats.ratiosValid)
+                                           ? QString::number(p.stats.bOverG - a.bOverG, 'f', 4)
+                                           : QStringLiteral("—");
+                    deltaLines << tr("Δ(%1−A): ΔV %2  ΔR %3  ΔG %4  ΔB %5  ΔR/G %6  ΔB/G %7")
+                                      .arg(paneChar)
+                                      .arg(QString::number(p.stats.vMean - a.vMean, 'f', 2),
+                                           QString::number(p.stats.rMean - a.rMean, 'f', 2),
+                                           QString::number(p.stats.gMean - a.gMean, 'f', 2),
+                                           QString::number(p.stats.bMean - a.bMean, 'f', 2), rg,
+                                           bg);
+                }
+                else
+                {
+                    deltaLines << tr("Δ(%1−A): —").arg(paneChar);
+                }
+            }
+            m_roiDeltaLabel->setText(deltaLines.join('\n'));
+        }
     }
     else if (m_roiDeltaLabel)
         m_roiDeltaLabel->setText(tr("Delta (B − A): —"));
@@ -512,6 +552,29 @@ void CompareWorkspace::updateROISurfaces()
                               a.ratiosValid && b.ratiosValid
                                   ? QString::number(b.bOverG - a.bOverG, 'f', 4)
                                   : QStringLiteral("—"));
+        }
+        else if (m_roiResult->panes.size() > 2 && m_roiResult->panes[0].stats.valid)
+        {
+            const auto &a = m_roiResult->panes[0].stats;
+            for (int i = 1; i < count; ++i)
+            {
+                const auto &p = m_roiResult->panes[static_cast<size_t>(i)];
+                if (p.stats.valid)
+                {
+                    lines << QStringLiteral("Δ(%1−A)  V %2  R %3  G %4  B %5  R/G %6  B/G %7")
+                                 .arg(QChar('A' + i))
+                                 .arg(QString::number(p.stats.vMean - a.vMean, 'f', 2),
+                                      QString::number(p.stats.rMean - a.rMean, 'f', 2),
+                                      QString::number(p.stats.gMean - a.gMean, 'f', 2),
+                                      QString::number(p.stats.bMean - a.bMean, 'f', 2),
+                                      a.ratiosValid && p.stats.ratiosValid
+                                          ? QString::number(p.stats.rOverG - a.rOverG, 'f', 4)
+                                          : QStringLiteral("—"),
+                                      a.ratiosValid && p.stats.ratiosValid
+                                          ? QString::number(p.stats.bOverG - a.bOverG, 'f', 4)
+                                          : QStringLiteral("—"));
+                }
+            }
         }
     }
     else if (!m_roiStateDetail.isEmpty())

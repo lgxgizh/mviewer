@@ -79,16 +79,20 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
                 QObject::connect(actCopyCell, &QAction::triggered,
                                  [cellText]() { QApplication::clipboard()->setText(cellText); });
             }
+            auto rowToTsv = [inspector](int r) -> QString
+            {
+                QStringList cells;
+                for (int c = 0; c < inspector->columnCount(); ++c)
+                {
+                    auto *it = inspector->item(r, c);
+                    cells << (it ? it->text() : QString());
+                }
+                return cells.join('\t');
+            };
             const int row = item ? item->row() : inspector->currentRow();
             if (row >= 0 && row < inspector->rowCount())
             {
-                QStringList rowCells;
-                for (int c = 0; c < inspector->columnCount(); ++c)
-                {
-                    auto *it = inspector->item(row, c);
-                    rowCells << (it ? it->text() : QString());
-                }
-                const QString rowText = rowCells.join('\t');
+                const QString rowText = rowToTsv(row);
                 QAction *actCopyRow = menu.addAction(QObject::tr("复制该行数据"));
                 QObject::connect(actCopyRow, &QAction::triggered,
                                  [rowText]() { QApplication::clipboard()->setText(rowText); });
@@ -97,10 +101,9 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
             {
                 QAction *actCopyTable = menu.addAction(QObject::tr("复制全部表格数据"));
                 QObject::connect(actCopyTable, &QAction::triggered,
-                                 [inspector]()
+                                 [inspector, rowToTsv]()
                                  {
-                                     QStringList lines;
-                                     QStringList headers;
+                                     QStringList lines, headers;
                                      for (int c = 0; c < inspector->columnCount(); ++c)
                                      {
                                          auto *h = inspector->horizontalHeaderItem(c);
@@ -108,15 +111,7 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
                                      }
                                      lines << headers.join('\t');
                                      for (int r = 0; r < inspector->rowCount(); ++r)
-                                     {
-                                         QStringList rowCells;
-                                         for (int c = 0; c < inspector->columnCount(); ++c)
-                                         {
-                                             auto *it = inspector->item(r, c);
-                                             rowCells << (it ? it->text() : QString());
-                                         }
-                                         lines << rowCells.join('\t');
-                                     }
+                                         lines << rowToTsv(r);
                                      QApplication::clipboard()->setText(lines.join('\n'));
                                  });
             }
@@ -210,11 +205,7 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
         auto *chk = new QCheckBox(text, this);
         chk->setChecked(on);
         connect(chk, &QCheckBox::toggled, this,
-                [this, channel](bool v)
-                {
-                    if (m_hist)
-                        m_hist->setChannelVisible(channel, v);
-                });
+                [this, channel](bool v) { if (m_hist) m_hist->setChannelVisible(channel, v); });
         histOpts->addWidget(chk);
         return chk;
     };
@@ -228,11 +219,7 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
     m_histLogChk = new QCheckBox(QStringLiteral("Log"), this);
     m_histLogChk->setToolTip(tr("对数纵轴：低计数区间不再被峰值淹没"));
     connect(m_histLogChk, &QCheckBox::toggled, this,
-            [this](bool on)
-            {
-                if (m_hist)
-                    m_hist->setLogScale(on);
-            });
+            [this](bool on) { if (m_hist) m_hist->setLogScale(on); });
     histOpts->addWidget(m_histLogChk);
 
     m_roiHistChk = new QCheckBox(QStringLiteral("ROI"), this);
@@ -417,22 +404,33 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
             samples[static_cast<size_t>(baseIdx)].valid)
         {
             const InspectorSample &base = samples[static_cast<size_t>(baseIdx)];
-            const int dr = sample.r - base.r;
-            const int dg = sample.g - base.g;
-            const int db = sample.b - base.b;
+            const int dr = sample.r - base.r, dg = sample.g - base.g, db = sample.b - base.b;
             const double dist = std::sqrt(static_cast<double>(dr * dr + dg * dg + db * db));
-            delta = (i == baseIdx) ? QStringLiteral("0") : QString::number(dist, 'f', 0);
+            const auto labS = mviewer::core::toColorSpace(static_cast<uint8_t>(sample.r),
+                                                          static_cast<uint8_t>(sample.g),
+                                                          static_cast<uint8_t>(sample.b),
+                                                          ColorSpace::Lab);
+            const auto labB = mviewer::core::toColorSpace(static_cast<uint8_t>(base.r),
+                                                          static_cast<uint8_t>(base.g),
+                                                          static_cast<uint8_t>(base.b),
+                                                          ColorSpace::Lab);
+            const double dL = labS.c1 - labB.c1, da = labS.c2 - labB.c2, dbv = labS.c3 - labB.c3;
+            const double dE76 = std::sqrt(dL * dL + da * da + dbv * dbv);
             if (i == baseIdx)
             {
+                delta = QStringLiteral("0");
                 deltaTip = tr("基准图像（差值为0）");
             }
             else
             {
-                deltaTip = tr("与基准对比：ΔR=%1, ΔG=%2, ΔB=%3 (欧氏距离: %4)")
+                delta = (space == ColorSpace::Lab) ? QString::number(dE76, 'f', 1)
+                                                   : QString::number(dist, 'f', 0);
+                deltaTip = tr("与基准对比：ΔR=%1, ΔG=%2, ΔB=%3 (欧氏距离: %4, ΔE76: %5)")
                                .arg(dr >= 0 ? QString("+%1").arg(dr) : QString::number(dr))
                                .arg(dg >= 0 ? QString("+%1").arg(dg) : QString::number(dg))
                                .arg(db >= 0 ? QString("+%1").arg(db) : QString::number(db))
-                               .arg(dist, 0, 'f', 2);
+                               .arg(dist, 0, 'f', 2)
+                               .arg(dE76, 0, 'f', 2);
             }
         }
         setCellText(m_inspector, i, 5, delta, deltaTip);
@@ -517,41 +515,30 @@ void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
     // or rebuild batch with a later partial request never strands an empty
     // pane.
     std::vector<int> panes;
-    auto add = [&panes, paneCount](int idx)
+    auto addUnique = [paneCount](std::vector<int> &vec, int idx)
     {
-        if (idx < 0 || idx >= paneCount)
-            return;
-        if (std::find(panes.cbegin(), panes.cend(), idx) != panes.cend())
-            return;
-        panes.push_back(idx);
+        if (idx >= 0 && idx < paneCount && std::find(vec.cbegin(), vec.cend(), idx) == vec.cend())
+            vec.push_back(idx);
     };
     for (int idx : paneIndices)
-        add(idx);
+        addUnique(panes, idx);
     if (m_paneHistOverlay)
     {
         const int histCount = static_cast<int>(m_cellHists.size());
         for (int i = 0; i < paneCount && i < histCount; ++i)
             if (m_cellHists[static_cast<size_t>(i)] &&
                 m_cellHists[static_cast<size_t>(i)]->histogramCount() == 0)
-                add(i);
+                addUnique(panes, i);
     }
 
     // Union of the main-required and overlay-required indices: the worker
     // computes exactly one histogram per index and feeds both surfaces.
     std::vector<int> unionIdx;
     unionIdx.reserve(mainIndices.size() + panes.size());
-    auto addToUnion = [&unionIdx, paneCount](int idx)
-    {
-        if (idx < 0 || idx >= paneCount)
-            return;
-        if (std::find(unionIdx.cbegin(), unionIdx.cend(), idx) != unionIdx.cend())
-            return;
-        unionIdx.push_back(idx);
-    };
     for (int idx : mainIndices)
-        addToUnion(idx);
+        addUnique(unionIdx, idx);
     for (int idx : panes)
-        addToUnion(idx);
+        addUnique(unionIdx, idx);
     if (unionIdx.empty())
     {
         // Nothing to compute; the stale task is already cancelled. When the
@@ -709,7 +696,39 @@ void CompareWorkspace::applyHistogramBatchResult(const HistogramBatchResult &r)
         // title over stale data. An empty main result clears the current
         // histogram (zero-image / no-valid-source current state).
         if (m_histTitle)
-            m_histTitle->setText(histogramTitleText(r.roiEnabled, r.roi));
+        {
+            QString title = histogramTitleText(r.roiEnabled, r.roi);
+            QString tip = tr("直方图与动态范围截断分析");
+            if (!r.main.empty() && r.main[0].total > 0 && r.main[0].bins == 256)
+            {
+                const auto &h0 = r.main[0];
+                const double under = (100.0 * h0.luma[0]) / static_cast<double>(h0.total);
+                const double over = (100.0 * h0.luma[255]) / static_cast<double>(h0.total);
+                title += tr(" · 截断: 暗 %1% / 亮 %2%")
+                             .arg(QString::number(under, 'f', under >= 0.1 ? 1 : 2),
+                                  QString::number(over, 'f', over >= 0.1 ? 1 : 2));
+                QStringList tipLines;
+                for (size_t i = 0; i < r.main.size(); ++i)
+                {
+                    const auto &h = r.main[i];
+                    if (h.total <= 0 || h.bins < 256)
+                        continue;
+                    const double u = (100.0 * h.luma[0]) / static_cast<double>(h.total);
+                    const double o = (100.0 * h.luma[255]) / static_cast<double>(h.total);
+                    tipLines << tr("[%1] 像素 %2 · 暗部(Y=0): %3 (%4%) · 高光(Y=255): %5 (%6%)")
+                                    .arg(QChar('A' + static_cast<int>(i)))
+                                    .arg(h.total)
+                                    .arg(h.luma[0])
+                                    .arg(QString::number(u, 'f', 2))
+                                    .arg(h.luma[255])
+                                    .arg(QString::number(o, 'f', 2));
+                }
+                if (!tipLines.isEmpty())
+                    tip = tipLines.join(QLatin1Char('\n'));
+            }
+            m_histTitle->setText(title);
+            m_histTitle->setToolTip(tip);
+        }
         m_hist->setHistograms(r.main);
     }
 

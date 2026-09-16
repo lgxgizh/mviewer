@@ -149,6 +149,15 @@ int main()
               "uniform large image keeps all display-histogram mass in one bin");
     }
 
+    // Clipping analysis: shadow (0) and highlight (255) detection.
+    {
+        const std::vector<uint8_t> clipPx = {0, 0, 0, 255, 255, 255, 128, 128, 128, 64, 64, 64};
+        ImageData clipImg = makeRgb(2, 2, clipPx);
+        Histogram hClip = computeHistogram(clipImg);
+        CHECK(hClip.luma[0] == 1, "shadow clipping at Y=0 correctly counted");
+        CHECK(hClip.luma[255] == 1, "highlight clipping at Y=255 correctly counted");
+    }
+
     printf("\nhistogram_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }

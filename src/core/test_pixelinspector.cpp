@@ -91,6 +91,14 @@ static void test_color_spaces()
     CHECK(toHex(255, 0, 128) == "#FF0080");
     CHECK(toHex(0, 0, 0) == "#000000");
     CHECK(toHex(255, 255, 255) == "#FFFFFF");
+
+    // Delta E76 calculation between white and black:
+    // White L=100, a=0, b=0; Black L=0, a=0, b=0 -> Delta E76 = 100.
+    auto labW = toColorSpace(255, 255, 255, ColorSpace::Lab);
+    auto labB = toColorSpace(0, 0, 0, ColorSpace::Lab);
+    double dE76 = std::sqrt(std::pow(labW.c1 - labB.c1, 2) + std::pow(labW.c2 - labB.c2, 2) +
+                            std::pow(labW.c3 - labB.c3, 2));
+    CHECK(std::abs(dE76 - 100.0) < 1e-2);
 }
 
 static void test_neighborhood()
