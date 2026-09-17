@@ -152,10 +152,10 @@ int main(int argc, char **argv)
     // to verify vectorized skipToNextFF performance and correctness.
     {
         const QByteArray embedded = makeJpegBytes(128, 96);
-        std::vector<uint8_t> largeRaw(1024 * 1024, 0x3a); // 1 MiB junk filler
+        std::vector<uint8_t> largeRaw(size_t{1024} * 1024, 0x3a); // 1 MiB junk filler
         largeRaw.insert(largeRaw.end(), reinterpret_cast<const uint8_t *>(embedded.constData()),
                         reinterpret_cast<const uint8_t *>(embedded.constData()) + embedded.size());
-        largeRaw.insert(largeRaw.end(), 64 * 1024, 0x4b); // 64 KiB trailing junk
+        largeRaw.insert(largeRaw.end(), size_t{64} * 1024, 0x4b); // 64 KiB trailing junk
         const std::string largePath = tmp.path().toStdString() + "/large_simulated.cr3";
         writeFile(largePath, largeRaw);
         ImageData dLarge = DecoderRegistry::instance().decodeFull(largePath);

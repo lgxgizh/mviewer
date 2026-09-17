@@ -39,8 +39,8 @@ struct ThumbnailPipeline
     using DecodeFn = std::function<ImageData(const std::string &path, int size)>;
     using ResultFn = std::function<void(const std::string &path, int size, const ImageData &thumb)>;
 
-    size_t memCacheMax = 512;                   // hot thumbnails retained in memory (LRU)
-    size_t memCacheMaxBytes = 96 * 1024 * 1024; // 96 MiB budget (M55)
+    size_t memCacheMax = 512;                           // hot thumbnails retained in memory (LRU)
+    size_t memCacheMaxBytes = size_t{96} * 1024 * 1024; // 96 MiB budget (M55)
 
     // Current thumbnail size. Read under m_mtx by the workers and written only
     // through setThumbSize(), which also performs the size-change invalidation

@@ -7,6 +7,7 @@
 #include "core/image/decoder/QtDecoder.h"
 #include "core/image/decoder/QtFallbackDecoder.h"
 #include "core/image/decoder/RawDecoder.h"
+#include <cstring>
 
 DecoderRegistry &DecoderRegistry::instance()
 {
@@ -49,7 +50,7 @@ void DecoderRegistry::registerDecoder(std::shared_ptr<IDecoder> decoder)
     std::lock_guard<std::mutex> lk(m_mutex);
     auto fallbackIt =
         std::find_if(m_decoders.begin(), m_decoders.end(), [](const std::shared_ptr<IDecoder> &d)
-                     { return d && d->name() == "QtFallbackDecoder"; });
+                     { return d && std::strcmp(d->name(), "QtFallbackDecoder") == 0; });
     if (fallbackIt != m_decoders.end())
         m_decoders.insert(fallbackIt, std::move(decoder));
     else

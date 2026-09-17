@@ -123,7 +123,7 @@ int main()
         ThumbnailPipeline bytePipe;
         bytePipe.setThumbSize(64);
         bytePipe.setDecodeFn([](const std::string &, int size) { return fakeThumb(size); });
-        const size_t oneThumbBytes = 64 * 64 * 3;
+        const size_t oneThumbBytes = size_t{64} * 64 * 3;
         bytePipe.setMemCacheMaxBytes(oneThumbBytes * 2);
         std::vector<std::string> bSrc = {"b0.jpg", "b1.jpg", "b2.jpg"};
         bytePipe.setSources(bSrc);
