@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstddef>
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
@@ -231,8 +232,8 @@ AsyncTileRequestManager::AsyncTileRequestManager(TileCache &cache)
     : m_impl(std::make_shared<Impl>(cache))
 {
     const std::weak_ptr<Impl> weakImpl = m_impl;
-    m_impl->retryWorker =
-        std::jthread([weakImpl](std::stop_token stopToken) { retryLoop(weakImpl, stopToken); });
+    m_impl->retryWorker = std::jthread([weakImpl](std::stop_token stopToken)
+                                       { retryLoop(weakImpl, std::move(stopToken)); });
 }
 
 AsyncTileRequestManager::~AsyncTileRequestManager()
@@ -387,7 +388,8 @@ AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisible(
             const size_t evictCount = std::min(excess, nonVisible.size());
             if (evictCount > 0)
             {
-                std::partial_sort(nonVisible.begin(), nonVisible.begin() + evictCount,
+                std::partial_sort(nonVisible.begin(),
+                                  nonVisible.begin() + static_cast<std::ptrdiff_t>(evictCount),
                                   nonVisible.end(), [](const Candidate &a, const Candidate &b)
                                   { return a.serial < b.serial; });
                 for (size_t i = 0; i < evictCount; ++i)
@@ -454,7 +456,8 @@ ImageData AsyncTileRequestManager::requestDerived(const TileKey &key, const Imag
             const size_t evictCount = std::min(excess, evictable.size());
             if (evictCount > 0)
             {
-                std::partial_sort(evictable.begin(), evictable.begin() + evictCount,
+                std::partial_sort(evictable.begin(),
+                                  evictable.begin() + static_cast<std::ptrdiff_t>(evictCount),
                                   evictable.end(), [](const Candidate &a, const Candidate &b)
                                   { return a.serial < b.serial; });
                 for (size_t i = 0; i < evictCount; ++i)

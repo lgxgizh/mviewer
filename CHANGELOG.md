@@ -479,7 +479,7 @@
   - Switching color spaces (RGB, HEX, HSV, Lab, YUV, YCbCr, XYZ) in Compare Mode now updates table column headers immediately without waiting for cursor movement.
   - Cleaned up status bar pixel hover readout: replaced confusing `16bit(0,0,0)` display on standard 8-bit images with uppercase `#RRGGBB` hex code; 16-bit info is now only shown when high bit-depth or RAW data is actually present.
 
- ## [1.0.32] - 2026-09-14
+## [1.0.32] - 2026-09-14
 
 ### Added
 
