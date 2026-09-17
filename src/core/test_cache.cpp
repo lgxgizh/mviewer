@@ -430,7 +430,7 @@ static void testOversizedItemDoesNotFlushCache()
     ImageCache &cache = ImageCache::instance();
     cache.clear();
 
-    const size_t cap = 3 * 16 * 16 * 3; // capacity for 3 items of 768 bytes = 2304 bytes
+    const size_t cap = size_t{3} * 16 * 16 * 3; // capacity for 3 items of 768 bytes = 2304 bytes
     cache.setCapacity(ImageCache::Viewer, cap);
 
     auto mk = [](int i)
@@ -473,7 +473,7 @@ static void testO1LruScalability()
 
     constexpr int kCount = 500;
     // Set capacity to hold exactly 300 entries of 16x16 RGB (768 bytes each)
-    constexpr size_t kEntryBytes = 16 * 16 * 3;
+    constexpr size_t kEntryBytes = size_t{16} * 16 * 3;
     constexpr int kCapEntries = 300;
     cache.setCapacity(ImageCache::Viewer, kCapEntries * kEntryBytes);
 

@@ -295,7 +295,7 @@ bool DiskCache::get(const std::string &key, ImageData &out)
 
     // Hardened bound: protect against pathological allocations from corrupt DB rows.
     // 256M pixels (~1GB at 32bpp) is the maximum single-image allocation envelope.
-    constexpr int64_t kMaxCachedPixels = 256 * 1024 * 1024;
+    constexpr int64_t kMaxCachedPixels = int64_t{256} * 1024 * 1024;
     if (static_cast<int64_t>(w) * h > kMaxCachedPixels)
         return false;
 
@@ -326,7 +326,7 @@ void DiskCache::put(const std::string &key, const ImageData &img)
         return;
     if (img.width <= 0 || img.height <= 0)
         return;
-    constexpr int64_t kMaxCachedPixels = 256 * 1024 * 1024;
+    constexpr int64_t kMaxCachedPixels = int64_t{256} * 1024 * 1024;
     if (static_cast<int64_t>(img.width) * img.height > kMaxCachedPixels)
         return;
     // A QByteArray length is an int; refusing oversized payloads beats silently

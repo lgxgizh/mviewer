@@ -30,3 +30,25 @@ Hierarchical cache with 5 levels: Metadata → Thumbnail → Preview → Viewer 
 
 - RFC-003 (Cache pipeline)
 - ADR-002 (ImageData)
+
+## Amendment (2026-09-18) — O(1) LRU and oversized rejection
+
+### Context
+
+Viewer-level memory cache eviction previously scaled poorly under large entry
+counts, and attempting to insert an entry larger than the level capacity could
+flush already-resident working-set entries.
+
+### Decision
+
+- Keep the hierarchical levels from the original decision.
+- Implement **O(1) LRU** unlink/relink for `ImageCache` / `CacheManager` eviction.
+- **Reject oversized puts** (entry bytes > level capacity) without evicting
+  existing entries; disk cache additionally bounds decoded width/height/pixels
+  before allocation.
+
+### Consequences
+
+- ✅ Predictable latency under large warm caches
+- ✅ Oversized frames cannot wipe a warm viewer cache
+- ✅ Corrupt disk-cache rows cannot force huge allocations
