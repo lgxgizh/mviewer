@@ -53,7 +53,7 @@ static bool writeFakeDng(const std::string &path, uint16_t iso, uint32_t exposur
     };
 
     const long ifdStart = 8;
-    const long dataOffset = ifdStart + 2 + count * 12 + 4;
+    const long dataOffset = ifdStart + 2 + static_cast<long>(count) * 12 + 4;
 
     // ISO (0x8827, SHORT, count=1) -> inline value
     writeEntry(0x8827, 3, 1, iso);
