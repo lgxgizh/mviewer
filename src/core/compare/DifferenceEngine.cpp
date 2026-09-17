@@ -215,14 +215,13 @@ static inline void diffScalarRow(const uint8_t *la, const uint8_t *lb, uint8_t *
                                  int cppA, int cppB, int roA0, int roA1, int roA2, int roB0,
                                  int roB1, int roB2, uint8_t threshold)
 {
-    for (int x = 0; x < w; ++x)
+    const uint8_t *pa = la;
+    const uint8_t *pb = lb;
+    for (int x = 0; x < w; ++x, pa += cppA, pb += cppB)
     {
-        const int dr =
-            std::abs(static_cast<int>(la[x * cppA + roA0]) - static_cast<int>(lb[x * cppB + roB0]));
-        const int dg =
-            std::abs(static_cast<int>(la[x * cppA + roA1]) - static_cast<int>(lb[x * cppB + roB1]));
-        const int db =
-            std::abs(static_cast<int>(la[x * cppA + roA2]) - static_cast<int>(lb[x * cppB + roB2]));
+        const int dr = std::abs(static_cast<int>(pa[roA0]) - static_cast<int>(pb[roB0]));
+        const int dg = std::abs(static_cast<int>(pa[roA1]) - static_cast<int>(pb[roB1]));
+        const int db = std::abs(static_cast<int>(pa[roA2]) - static_cast<int>(pb[roB2]));
         const int sum = dr + dg + db;
         const uint8_t diff = static_cast<uint8_t>((sum * 21846) >> 16);
         dst[x] = (diff >= threshold) ? diff : 0;
@@ -745,25 +744,25 @@ ImageData DifferenceEngine::highlightMap(const ImageData &grayDiff, const ImageD
         const uint8_t *src = grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride();
         const uint8_t *bs = base.buffer->data() + static_cast<size_t>(y) * base.stride();
         uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
-        for (int x = 0; x < w; ++x)
+        const uint8_t *bp = bs;
+        for (int x = 0; x < w; ++x, dst += 3, bp += cppB)
         {
             const uint8_t v = isDirectDiff ? src[x] : src[x * cppD + roD];
             if (v >= minDiff)
             {
-                dst[x * 3 + 0] = intLUT[v];
-                dst[x * 3 + 1] = 0;
-                dst[x * 3 + 2] = 0;
+                dst[0] = intLUT[v];
+                dst[1] = 0;
+                dst[2] = 0;
             }
             else
             {
-                const uint8_t *bp = bs + static_cast<size_t>(x) * cppB;
                 const int r = isBGR ? bp[2] : bp[0];
                 const int g = bp[1];
                 const int b = isBGR ? bp[0] : bp[2];
                 const uint8_t gray = static_cast<uint8_t>((r * 30 + g * 59 + b * 11) / 100);
-                dst[x * 3 + 0] = gray;
-                dst[x * 3 + 1] = gray;
-                dst[x * 3 + 2] = gray;
+                dst[0] = gray;
+                dst[1] = gray;
+                dst[2] = gray;
             }
         }
     }

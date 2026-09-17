@@ -421,7 +421,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform differenceengine blinkcontroller aligner imageoverlay browse_convergence m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -1313,6 +1313,7 @@ add_test(NAME blinkcontroller_tests COMMAND test_blinkcontroller)
 add_test(NAME aligner_tests COMMAND test_aligner)
 add_test(NAME imageoverlay_tests COMMAND test_imageoverlay)
 add_test(NAME browse_convergence_tests COMMAND test_browse_convergence)
+add_test(NAME analysisengine_tests COMMAND test_analysisengine)
 
 # ─── M25: Browse pipeline convergence (UI level) — thumbnail cache identity,
 # pipeline size/generation semantics, panel size-switch and filter behaviors ─

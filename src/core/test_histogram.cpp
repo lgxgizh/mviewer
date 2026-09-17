@@ -158,6 +158,60 @@ int main()
         CHECK(hClip.luma[255] == 1, "highlight clipping at Y=255 correctly counted");
     }
 
+    // Grayscale8 fast-path verification: all channels equal, total matches.
+    {
+        ImageData grayImg = makeImageData(4, 4, PixelFormat::Grayscale8);
+        for (int i = 0; i < 16; ++i)
+            (*grayImg.buffer)[i] = static_cast<uint8_t>(i * 10);
+        Histogram hg = computeHistogram(grayImg);
+        CHECK(hg.total == 16, "Grayscale8 total = 16");
+        CHECK(hg.luma == hg.r && hg.luma == hg.g && hg.luma == hg.b && hg.luma == hg.v,
+              "Grayscale8 all channels identical");
+        CHECK(hg.luma[0] == 1 && hg.luma[150] == 1, "Grayscale8 specific bin counts correct");
+    }
+
+    // RGBA32 / BGRA32 channel order and alpha skipping.
+    {
+        ImageData rgba = makeImageData(2, 1, PixelFormat::RGBA32);
+        // Pixel 0: R=10, G=20, B=30, A=255
+        // Pixel 1: R=40, G=50, B=60, A=128
+        (*rgba.buffer)[0] = 10;
+        (*rgba.buffer)[1] = 20;
+        (*rgba.buffer)[2] = 30;
+        (*rgba.buffer)[3] = 255;
+        (*rgba.buffer)[4] = 40;
+        (*rgba.buffer)[5] = 50;
+        (*rgba.buffer)[6] = 60;
+        (*rgba.buffer)[7] = 128;
+        Histogram hrgba = computeHistogram(rgba);
+        CHECK(hrgba.total == 2, "RGBA32 total = 2");
+        CHECK(hrgba.r[10] == 1 && hrgba.r[40] == 1, "RGBA32 R channel correct");
+        CHECK(hrgba.g[20] == 1 && hrgba.g[50] == 1, "RGBA32 G channel correct");
+        CHECK(hrgba.b[30] == 1 && hrgba.b[60] == 1, "RGBA32 B channel correct");
+
+        ImageData bgra = makeImageData(1, 1, PixelFormat::BGRA32);
+        // Pixel: B=70, G=80, R=90, A=255
+        (*bgra.buffer)[0] = 70;
+        (*bgra.buffer)[1] = 80;
+        (*bgra.buffer)[2] = 90;
+        (*bgra.buffer)[3] = 255;
+        Histogram hbgra = computeHistogram(bgra);
+        CHECK(hbgra.total == 1, "BGRA32 total = 1");
+        CHECK(hbgra.r[90] == 1 && hbgra.g[80] == 1 && hbgra.b[70] == 1,
+              "BGRA32 channels mapped correctly");
+    }
+
+    // Negative ROI coordinates correctly clamped.
+    {
+        const std::vector<uint8_t> px = {10, 10, 10, 20, 20, 20, 30, 30, 30, 40, 40, 40};
+        ImageData img2 = makeRgb(2, 2, px);
+        // ROI top-left (-1, -1), width 2, height 2 -> visible portion is (0, 0, 1, 1) -> pixel 0
+        // only
+        Histogram hNeg = computeHistogram(img2, -1, -1, 2, 2);
+        CHECK(hNeg.total == 1, "negative ROI clamped total = 1");
+        CHECK(hNeg.r[10] == 1, "negative ROI contains only pixel (0,0)");
+    }
+
     printf("\nhistogram_tests: %d passed, %d failed\n", g_pass, g_fail);
     return g_fail;
 }
