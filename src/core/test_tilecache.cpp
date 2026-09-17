@@ -325,6 +325,52 @@ static void test100MpVisibleOnly()
     CHECK(cache.size() < 200, "100MP: resident tile count stays bounded");
 }
 
+static void testAsyncTileManagerEvictionAndBounds()
+{
+    printf("\n[AsyncTileRequestManager eviction and capacity bounds]\n");
+    fflush(stdout);
+    auto &scheduler = TaskScheduler::instance();
+    TileCache cache;
+    AsyncTileRequestManager manager(cache);
+    manager.reset(10);
+
+    // Test requestDerived with cached result and fresh transform
+    ImageData src = makeImageData(32, 32, PixelFormat::RGB24);
+    const TileKey derivedKey{"derived_img", 0, 0, 0, 100};
+    int derivedCalls = 0;
+    auto derivedDecode = [&](const TileKey &, const ImageData &in) -> ImageData
+    {
+        ++derivedCalls;
+        return in;
+    };
+    ImageData d1 = manager.requestDerived(derivedKey, src, 10, derivedDecode, nullptr);
+    CHECK(d1.isNull(), "first requestDerived schedules async and returns null");
+    scheduler.drain(TaskScheduler::DecodePool, std::chrono::seconds(5));
+    CHECK(derivedCalls == 1, "derivedDecode executed once");
+    ImageData d2 = manager.requestDerived(derivedKey, src, 10, derivedDecode, nullptr);
+    CHECK(!d2.isNull(), "subsequent requestDerived returns cached tile immediately");
+
+    // Test capacity bound enforcement: non-visible requests are evicted on pan/zoom
+    manager.reset(11);
+    scheduler.pause(TaskScheduler::DecodePool);
+    TileGrid grid(8192, 8192, 256);
+    // Viewport 1 views top-left 16x16 tiles = 256 tiles
+    Viewport vp1(4096, 4096, 1.0, 0.0, 0.0);
+    auto dummyDecode = [&](const std::string &, int, int, int, int, int tw, int th) -> ImageData
+    { return makeImageData(tw, th, PixelFormat::RGB24); };
+    manager.requestVisible("massive", vp1, grid, 100, 11, dummyDecode, nullptr);
+    CHECK(manager.pendingCount() == 256, "initial 256 tiles accepted");
+
+    // Viewport 2 pans to bottom-right (4096, 4096) with 4x4 tiles = 16 new tiles
+    Viewport vp2(1024, 1024, 1.0, -4096.0, -4096.0);
+    manager.requestVisible("massive", vp2, grid, 100, 11, dummyDecode, nullptr);
+    CHECK(manager.pendingCount() <= 256, "non-visible tiles evicted so pending count <= 256");
+    scheduler.resume(TaskScheduler::DecodePool);
+    manager.reset(12);
+    scheduler.drain(TaskScheduler::DecodePool, std::chrono::seconds(5));
+    CHECK(manager.pendingCount() == 0, "pending count cleared after reset");
+}
+
 int main()
 {
     printf("=== TileCache + LOD tests (M7 ①) ===\n");
@@ -336,6 +382,7 @@ int main()
     testCanonicalIdentity();
     testAsyncTileManager();
     test100MpVisibleOnly();
+    testAsyncTileManagerEvictionAndBounds();
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

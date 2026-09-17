@@ -427,6 +427,64 @@ static void test_color_spaces_16bit()
     CHECK(std::abs(hexT.c1 - 255) < 1e-6 && std::abs(hexT.c2) < 1e-6 && std::abs(hexT.c3) < 1e-6);
 }
 
+static void test_image_adjustments()
+{
+    // Brightness identity (offset = 0)
+    ImageData imgRgb = makeImageData(2, 2, PixelFormat::RGB24);
+    for (int i = 0; i < 12; ++i)
+        imgRgb.buffer->at(static_cast<size_t>(i)) = static_cast<uint8_t>(i * 20);
+    ImageData bZero = adjustBrightness(imgRgb, 0);
+    CHECK(bZero.buffer == imgRgb.buffer);
+
+    // Brightness offset
+    ImageData bPlus = adjustBrightness(imgRgb, 15);
+    CHECK(bPlus.buffer->at(0) == 15);
+    CHECK(bPlus.buffer->at(1) == 35);
+    ImageData bClamp = adjustBrightness(imgRgb, 300);
+    CHECK(bClamp.buffer->at(0) == 255);
+
+    // Alpha channel preserved in RGBA32
+    ImageData imgRgba = makeImageData(2, 2, PixelFormat::RGBA32);
+    for (int i = 0; i < 16; ++i)
+        imgRgba.buffer->at(static_cast<size_t>(i)) = static_cast<uint8_t>(i * 10);
+    imgRgba.buffer->at(3) = 210;
+    ImageData bRgba = adjustBrightness(imgRgba, 20);
+    CHECK(bRgba.buffer->at(0) == 20);
+    CHECK(bRgba.buffer->at(3) == 210);
+
+    // Contrast identity (factor = 1.0)
+    ImageData cOne = adjustContrast(imgRgb, 1.0f);
+    CHECK(cOne.buffer == imgRgb.buffer);
+    ImageData cHigher = adjustContrast(imgRgb, 1.5f);
+    CHECK(!cHigher.isNull());
+
+    // Gamma identity (gamma = 1.0)
+    ImageData gOne = adjustGamma(imgRgb, 1.0f);
+    CHECK(gOne.buffer == imgRgb.buffer);
+    ImageData gDark = adjustGamma(imgRgb, 2.2f);
+    CHECK(!gDark.isNull());
+
+    // White Balance identity (rGain = 1.0, bGain = 1.0)
+    ImageData wbOne = adjustWhiteBalance(imgRgb, 1.0f, 1.0f);
+    CHECK(wbOne.buffer == imgRgb.buffer);
+
+    // White balance on BGR24 channels: rOff=2, bOff=0
+    ImageData imgBgr = makeImageData(1, 1, PixelFormat::BGR24);
+    imgBgr.buffer->at(0) = 50;  // Blue
+    imgBgr.buffer->at(1) = 100; // Green
+    imgBgr.buffer->at(2) = 100; // Red
+    ImageData wbBgr = adjustWhiteBalance(imgBgr, 1.5f, 0.5f);
+    CHECK(wbBgr.buffer->at(0) == 25);  // Blue * 0.5
+    CHECK(wbBgr.buffer->at(1) == 100); // Green unchanged
+    CHECK(wbBgr.buffer->at(2) == 150); // Red * 1.5
+
+    // Grayscale8 unchanged by white balance
+    ImageData gray = makeImageData(2, 2, PixelFormat::Grayscale8);
+    gray.buffer->at(0) = 80;
+    ImageData wbGray = adjustWhiteBalance(gray, 2.0f, 0.5f);
+    CHECK(wbGray.buffer == gray.buffer);
+}
+
 int main()
 {
     test_color_spaces();
@@ -434,6 +492,7 @@ int main()
     test_source_backed_analysis();
     test_raw16At();
     test_color_spaces_16bit();
+    test_image_adjustments();
     if (g_failures == 0)
     {
         std::printf("PASS: pixelinspector_tests (%d checks)\n", 0);

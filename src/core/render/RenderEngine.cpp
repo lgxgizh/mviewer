@@ -38,44 +38,53 @@ QImage nearestQ(const QImage &src, const QSize &target)
 struct BilinearX
 {
     int x0;
-    double fx;
-    double invFx;
+    int fx;
+    int invFx;
 };
 
 QImage bilinearQ(const QImage &src, const QSize &target)
 {
-    QImage out(target, QImage::Format_RGB32);
+    if (src.isNull() || target.width() <= 0 || target.height() <= 0)
+        return QImage();
+
     const int sw = src.width(), sh = src.height();
     const int tw = target.width(), th = target.height();
-    const double rx = static_cast<double>(sw) / tw;
-    const double ry = static_cast<double>(sh) / th;
 
-    std::vector<BilinearX> xTab(tw);
+    if (sw <= 1 || sh <= 1)
+        return nearestQ(src, target);
+
+    QImage out(target, QImage::Format_RGB32);
+    const double rx = static_cast<double>(sw) / static_cast<double>(tw);
+    const double ry = static_cast<double>(sh) / static_cast<double>(th);
+
+    std::vector<BilinearX> xTab(static_cast<size_t>(tw));
     for (int x = 0; x < tw; ++x)
     {
-        const double sx = (x + 0.5) * rx - 0.5;
+        const double sx = (static_cast<double>(x) + 0.5) * rx - 0.5;
         const int x0 = std::max(0, std::min(sw - 2, static_cast<int>(std::floor(sx))));
-        const double fx = std::max(0.0, sx - std::floor(sx));
-        xTab[x] = {x0, fx, 1.0 - fx};
+        const double fxD = std::max(0.0, sx - std::floor(sx));
+        const int fx = static_cast<int>(std::round(fxD * 256.0));
+        xTab[static_cast<size_t>(x)] = {x0, fx, 256 - fx};
     }
 
     for (int y = 0; y < th; ++y)
     {
         QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
-        const double sy = (y + 0.5) * ry - 0.5;
+        const double sy = (static_cast<double>(y) + 0.5) * ry - 0.5;
         const int y0 = std::max(0, std::min(sh - 2, static_cast<int>(std::floor(sy))));
-        const double fy = std::max(0.0, sy - std::floor(sy));
-        const double w0y = 1.0 - fy;
-        const double w1y = fy;
+        const double fyD = std::max(0.0, sy - std::floor(sy));
+        const int fy = static_cast<int>(std::round(fyD * 256.0));
+        const int w0y = 256 - fy;
+        const int w1y = fy;
         const QRgb *sl0 = reinterpret_cast<const QRgb *>(src.constScanLine(y0));
         const QRgb *sl1 = reinterpret_cast<const QRgb *>(src.constScanLine(y0 + 1));
         for (int x = 0; x < tw; ++x)
         {
-            const auto &tab = xTab[x];
-            const double w00 = tab.invFx * w0y;
-            const double w10 = tab.fx * w0y;
-            const double w01 = tab.invFx * w1y;
-            const double w11 = tab.fx * w1y;
+            const auto &tab = xTab[static_cast<size_t>(x)];
+            const int w00 = (tab.invFx * w0y) >> 8;
+            const int w10 = (tab.fx * w0y) >> 8;
+            const int w01 = (tab.invFx * w1y) >> 8;
+            const int w11 = (tab.fx * w1y) >> 8;
             const int x0 = tab.x0;
 
             const QRgb p00 = sl0[x0];
@@ -83,13 +92,15 @@ QImage bilinearQ(const QImage &src, const QSize &target)
             const QRgb p01 = sl1[x0];
             const QRgb p11 = sl1[x0 + 1];
 
-            const double r =
-                w00 * qRed(p00) + w10 * qRed(p10) + w01 * qRed(p01) + w11 * qRed(p11);
-            const double g =
-                w00 * qGreen(p00) + w10 * qGreen(p10) + w01 * qGreen(p01) + w11 * qGreen(p11);
-            const double b =
-                w00 * qBlue(p00) + w10 * qBlue(p10) + w01 * qBlue(p01) + w11 * qBlue(p11);
-            line[x] = qRgb(static_cast<int>(r), static_cast<int>(g), static_cast<int>(b));
+            const int r =
+                (w00 * qRed(p00) + w10 * qRed(p10) + w01 * qRed(p01) + w11 * qRed(p11) + 128) >> 8;
+            const int g = (w00 * qGreen(p00) + w10 * qGreen(p10) + w01 * qGreen(p01) +
+                           w11 * qGreen(p11) + 128) >>
+                          8;
+            const int b =
+                (w00 * qBlue(p00) + w10 * qBlue(p10) + w01 * qBlue(p01) + w11 * qBlue(p11) + 128) >>
+                8;
+            line[x] = qRgb(std::clamp(r, 0, 255), std::clamp(g, 0, 255), std::clamp(b, 0, 255));
         }
     }
     return out;
@@ -287,7 +298,8 @@ QImage scaleQ(const QImage &src, const QSize &target, RenderInterp mode)
     return QImage();
 }
 
-static const std::array<QRgb, 256> s_heatLut = []() {
+static const std::array<QRgb, 256> s_heatLut = []()
+{
     std::array<QRgb, 256> lut{};
     for (int v = 0; v < 256; ++v)
     {
@@ -385,6 +397,9 @@ ImageData SoftwareRenderer::overlayDifference(const ImageData &base, const Image
 {
     if (base.isNull() || diff.isNull())
         return ImageData();
+    if (alpha <= 0.0)
+        return base;
+
     QImage bb = mvcore::toQImage(base).convertToFormat(QImage::Format_RGB32);
     QImage dd = mvcore::toQImage(diff).convertToFormat(QImage::Format_RGB32);
     const int w = std::min(bb.width(), dd.width());
@@ -484,36 +499,60 @@ ImageData RenderEngine::scaleBoundedStatic(const ImageData &src, const RenderSiz
 
     ImageData out = makeImageData(target.width, target.height, PixelFormat::RGB24);
     ImageBuffer dst = out.view();
-    const double rx = static_cast<double>(src.width) / target.width;
-    const double ry = static_cast<double>(src.height) / target.height;
+
+    struct BoundedX
+    {
+        int sx0;
+        int sx1;
+        int fx;
+        int invFx;
+    };
+
+    std::vector<BoundedX> xTab(static_cast<size_t>(target.width));
+    const double rx = static_cast<double>(src.width) / static_cast<double>(target.width);
+    const double ry = static_cast<double>(src.height) / static_cast<double>(target.height);
+
+    for (int x = 0; x < target.width; ++x)
+    {
+        const double sx = (static_cast<double>(x) + 0.5) * rx - 0.5;
+        const int sx0 = std::clamp(static_cast<int>(std::floor(sx)), 0, src.width - 1);
+        const int sx1 = std::min(src.width - 1, sx0 + 1);
+        const double fxD = std::clamp(sx - std::floor(sx), 0.0, 1.0);
+        const int fx = static_cast<int>(std::round(fxD * 256.0));
+        xTab[static_cast<size_t>(x)] = {sx0, sx1, fx, 256 - fx};
+    }
+
     for (int y = 0; y < target.height; ++y)
     {
-        const double sy = (y + 0.5) * ry - 0.5;
+        const double sy = (static_cast<double>(y) + 0.5) * ry - 0.5;
         const int sy0 = std::clamp(static_cast<int>(std::floor(sy)), 0, src.height - 1);
         const int sy1 = std::min(src.height - 1, sy0 + 1);
-        const double fy = std::clamp(sy - std::floor(sy), 0.0, 1.0);
+        const double fyD = std::clamp(sy - std::floor(sy), 0.0, 1.0);
+        const int fy = static_cast<int>(std::round(fyD * 256.0));
+        const int w0y = 256 - fy;
+        const int w1y = fy;
+
         uint8_t *line = dst.data + static_cast<size_t>(y) * dst.stride();
         for (int x = 0; x < target.width; ++x)
         {
-            const double sx = (x + 0.5) * rx - 0.5;
-            const int sx0 = std::clamp(static_cast<int>(std::floor(sx)), 0, src.width - 1);
-            const int sx1 = std::min(src.width - 1, sx0 + 1);
-            const double fx = std::clamp(sx - std::floor(sx), 0.0, 1.0);
-            const PixelRGBA p00 = samplePixel(src, sx0, sy0);
-            const PixelRGBA p10 = samplePixel(src, sx1, sy0);
-            const PixelRGBA p01 = samplePixel(src, sx0, sy1);
-            const PixelRGBA p11 = samplePixel(src, sx1, sy1);
-            auto lerp = [fx, fy](uint8_t a, uint8_t b, uint8_t c, uint8_t d)
-            {
-                const double top = a + (b - a) * fx;
-                const double bottom = c + (d - c) * fx;
-                return static_cast<uint8_t>(std::clamp(
-                    static_cast<int>(std::lround(top + (bottom - top) * fy)), 0, 255));
-            };
+            const auto &tab = xTab[static_cast<size_t>(x)];
+            const int w00 = (tab.invFx * w0y) >> 8;
+            const int w10 = (tab.fx * w0y) >> 8;
+            const int w01 = (tab.invFx * w1y) >> 8;
+            const int w11 = (tab.fx * w1y) >> 8;
+
+            const PixelRGBA p00 = samplePixel(src, tab.sx0, sy0);
+            const PixelRGBA p10 = samplePixel(src, tab.sx1, sy0);
+            const PixelRGBA p01 = samplePixel(src, tab.sx0, sy1);
+            const PixelRGBA p11 = samplePixel(src, tab.sx1, sy1);
+
             uint8_t *pixel = line + static_cast<size_t>(x) * 3;
-            pixel[0] = lerp(p00.r, p10.r, p01.r, p11.r);
-            pixel[1] = lerp(p00.g, p10.g, p01.g, p11.g);
-            pixel[2] = lerp(p00.b, p10.b, p01.b, p11.b);
+            const int r = (w00 * p00.r + w10 * p10.r + w01 * p01.r + w11 * p11.r + 128) >> 8;
+            const int g = (w00 * p00.g + w10 * p10.g + w01 * p01.g + w11 * p11.g + 128) >> 8;
+            const int b = (w00 * p00.b + w10 * p10.b + w01 * p01.b + w11 * p11.b + 128) >> 8;
+            pixel[0] = static_cast<uint8_t>(std::clamp(r, 0, 255));
+            pixel[1] = static_cast<uint8_t>(std::clamp(g, 0, 255));
+            pixel[2] = static_cast<uint8_t>(std::clamp(b, 0, 255));
         }
     }
     return out;

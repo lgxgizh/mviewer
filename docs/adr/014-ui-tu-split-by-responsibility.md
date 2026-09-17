@@ -158,4 +158,3 @@ splitting the function in the same commit; adding one requires a note in this
 section. The function cap stays 120 lines / CC 25. Split order (biggest product
 risk first): `previewpanel.cpp`, `compareworkspace_analysis.cpp`, the three
 `thumbnailpanel_fileops.cpp` operations, then the rest.
-

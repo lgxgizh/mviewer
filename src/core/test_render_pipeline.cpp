@@ -1,10 +1,14 @@
 // M7 Render Pipeline foundation: Viewport transform + TileGrid visibility math.
 // These are domain-free (std only); this test verifies the pan/zoom/visible-tile
 // computations that the Widget will drive, without requiring a display.
+#include "core/image/QtConvert.h"
+#include "core/render/RenderEngine.h"
 #include "core/render/TileGrid.h"
 #include "core/render/Viewport.h"
 
+#include <cmath>
 #include <cstdio>
+#include <limits>
 
 static int g_pass = 0;
 static int g_fail = 0;
@@ -47,8 +51,8 @@ static void testFullscreenFitGeometry()
         int w;
         int h;
     };
-    for (const auto &c : {Case{1600, 900}, Case{900, 1600}, Case{1000, 1000},
-                          Case{2400, 400}, Case{400, 2400}})
+    for (const auto &c :
+         {Case{1600, 900}, Case{900, 1600}, Case{1000, 1000}, Case{2400, 400}, Case{400, 2400}})
     {
         Viewport vp(1200, 800, 1.0, 0.0, 0.0);
         vp.fit(c.w, c.h, FitPolicy::MaximizeClient);
@@ -141,6 +145,91 @@ static void testTileGrid()
     CHECK(last.srcW == 232 && last.srcH == 232, "edge tile clamped to remaining pixels");
 }
 
+static void testViewportEdgeAndOffscreen()
+{
+    printf("\n[Viewport edge and offscreen bounds]\n");
+    fflush(stdout);
+
+    // Negative / far off-screen right/bottom: visible rect must be empty, not negative.
+    Viewport vpOff(800, 600, 1.0, -2000.0, -2000.0);
+    int x = -1, y = -1, w = -1, h = -1;
+    vpOff.visibleImageRect(1000, 1000, x, y, w, h);
+    CHECK(w == 0 && h == 0 && x == 0 && y == 0, "far offscreen viewport returns empty w=0, h=0");
+
+    // Invalid screen dimensions
+    Viewport vpZeroScreen(0, 0, 1.0, 0.0, 0.0);
+    vpZeroScreen.visibleImageRect(100, 100, x, y, w, h);
+    CHECK(w == 0 && h == 0, "zero screen viewport returns empty");
+
+    // Non-finite scale or translation
+    Viewport vpNan(800, 600, std::numeric_limits<double>::quiet_NaN(), 0.0, 0.0);
+    vpNan.visibleImageRect(100, 100, x, y, w, h);
+    CHECK(w == 0 && h == 0, "NaN scale viewport returns empty");
+
+    // ZoomAt with NaN factor must safely do nothing
+    Viewport vpZoom(800, 600, 1.0, 0.0, 0.0);
+    vpZoom.zoomAt(400.0, 300.0, std::numeric_limits<double>::quiet_NaN());
+    CHECK(vpZoom.scale == 1.0, "NaN zoom factor ignored");
+
+    // Fit with non-positive or NaN margin safely defaults
+    Viewport vpFit(800, 600, 1.0, 0.0, 0.0);
+    vpFit.fit(1600, 1200, -1.0);
+    CHECK(vpFit.scale > 0.0 && std::isfinite(vpFit.scale),
+          "negative margin in fit safely defaults");
+}
+
+static void testTileGridBoundsAndClamping()
+{
+    printf("\n[TileGrid bounds and overflow clamping]\n");
+    fflush(stdout);
+
+    // Negative image dimensions clamp to 0
+    TileGrid negGrid(-500, -300, 256);
+    CHECK(negGrid.cols() == 0 && negGrid.rows() == 0, "negative dimensions yield 0 cols and rows");
+
+    // Zero tileSize defaults to 256
+    TileGrid zeroTs(1000, 1000, 0);
+    CHECK(zeroTs.tileSize == 256, "zero tileSize defaults to 256");
+
+    // Extreme image dimensions do not overflow 32-bit integer arithmetic
+    TileGrid largeGrid(100000000, 100000000, 256);
+    CHECK(largeGrid.cols() > 0 && largeGrid.rows() > 0, "large grid computes valid row/col count");
+}
+
+static void testRenderEngineBoundsAndScaling()
+{
+    printf("\n[RenderEngine bounds and scaling]\n");
+    fflush(stdout);
+    auto &engine = RenderEngine::instance();
+
+    // 1x1 image scaled via Bilinear mode: must not dereference out of bounds
+    ImageData img1x1 = makeImageData(1, 1, PixelFormat::RGB24);
+    img1x1.buffer->data()[0] = 42;
+    img1x1.buffer->data()[1] = 84;
+    img1x1.buffer->data()[2] = 126;
+    ImageData scaledBilinear = engine.scale(img1x1, {50, 50}, RenderInterp::Bilinear);
+    CHECK(!scaledBilinear.isNull() && scaledBilinear.width == 50 && scaledBilinear.height == 50,
+          "bilinear scale on 1x1 image succeeds without out-of-bounds access");
+
+    // 1x10 and 10x1 images scaled via Bilinear
+    ImageData img1x10 = makeImageData(1, 10, PixelFormat::RGB24);
+    ImageData scaled1x10 = engine.scale(img1x10, {20, 20}, RenderInterp::Bilinear);
+    CHECK(!scaled1x10.isNull() && scaled1x10.width == 20 && scaled1x10.height == 20,
+          "bilinear scale on 1x10 image succeeds");
+
+    // Bounded display scaling via scaleBoundedStatic
+    ImageData img100 = makeImageData(100, 100, PixelFormat::RGB24);
+    for (int i = 0; i < 100 * 100 * 3; ++i)
+        img100.buffer->data()[static_cast<size_t>(i)] = static_cast<uint8_t>(i % 256);
+    ImageData bounded = RenderEngine::scaleBoundedStatic(img100, {25, 25});
+    CHECK(!bounded.isNull() && bounded.width == 25 && bounded.height == 25,
+          "scaleBoundedStatic scales image accurately");
+
+    // Overlay difference alpha bounds fast paths
+    ImageData ovZero = engine.overlayDifference(img100, img100, 0.0);
+    CHECK(!ovZero.isNull() && ovZero.width == 100, "overlayDifference at alpha=0 succeeds");
+}
+
 int main()
 {
     printf("=== Render Pipeline foundation tests (M7) ===\n");
@@ -150,6 +239,9 @@ int main()
     testViewportZoomAt();
     testViewportVisibleRect();
     testTileGrid();
+    testViewportEdgeAndOffscreen();
+    testTileGridBoundsAndClamping();
+    testRenderEngineBoundsAndScaling();
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 // ─── Viewport ────────────────────────────────────────────────────────────────
@@ -63,13 +64,14 @@ struct Viewport
             offsetY = 0.0;
             return;
         }
-        const double sx = static_cast<double>(screenW) / imageW;
-        const double sy = static_cast<double>(screenH) / imageH;
-        scale = std::min(sx, sy) * margin;
-        if (scale <= 0.0)
+        const double m = (margin > 0.0 && std::isfinite(margin)) ? margin : kComfortFitMargin;
+        const double sx = static_cast<double>(screenW) / static_cast<double>(imageW);
+        const double sy = static_cast<double>(screenH) / static_cast<double>(imageH);
+        scale = std::min(sx, sy) * m;
+        if (scale <= 0.0 || !std::isfinite(scale))
             scale = 1.0;
-        offsetX = (screenW - imageW * scale) / 2.0;
-        offsetY = (screenH - imageH * scale) / 2.0;
+        offsetX = (static_cast<double>(screenW) - static_cast<double>(imageW) * scale) / 2.0;
+        offsetY = (static_cast<double>(screenH) - static_cast<double>(imageH) * scale) / 2.0;
     }
 
     // Zoom about a fixed screen anchor (keeps the image point under `anchor`
@@ -77,6 +79,8 @@ struct Viewport
     void zoomAt(double anchorX, double anchorY, double factor, double minScale = 0.05,
                 double maxScale = 50.0)
     {
+        if (!(factor > 0.0) || !std::isfinite(factor) || !(scale > 0.0) || !std::isfinite(scale))
+            return;
         const double imgX = (anchorX - offsetX) / scale;
         const double imgY = (anchorY - offsetY) / scale;
         scale *= factor;
@@ -98,10 +102,20 @@ struct Viewport
     // image bounds [0,0,imageW,imageH]. Empty when nothing is visible.
     void visibleImageRect(int imageW, int imageH, int &x, int &y, int &w, int &h) const
     {
+        x = 0;
+        y = 0;
+        w = 0;
+        h = 0;
+        if (imageW <= 0 || imageH <= 0 || screenW <= 0 || screenH <= 0)
+            return;
+        if (!(scale > 0.0) || !std::isfinite(scale) || !std::isfinite(offsetX) ||
+            !std::isfinite(offsetY))
+            return;
+
         const double ix0 = (0.0 - offsetX) / scale;
         const double iy0 = (0.0 - offsetY) / scale;
-        const double ix1 = (screenW - offsetX) / scale;
-        const double iy1 = (screenH - offsetY) / scale;
+        const double ix1 = (static_cast<double>(screenW) - offsetX) / scale;
+        const double iy1 = (static_cast<double>(screenH) - offsetY) / scale;
         int rx = static_cast<int>(ix0);
         int ry = static_cast<int>(iy0);
         int rx1 = static_cast<int>(ix1);
@@ -114,13 +128,9 @@ struct Viewport
             rx1 = imageW;
         if (ry1 > imageH)
             ry1 = imageH;
-        // Fully off-image (viewport right/below the image) -> empty.
-        if (rx1 <= 0 || ry1 <= 0)
+        // Fully off-image (viewport left/above or right/below the image) -> empty.
+        if (rx >= imageW || ry >= imageH || rx1 <= rx || ry1 <= ry)
         {
-            x = 0;
-            y = 0;
-            w = 0;
-            h = 0;
             return;
         }
         x = rx;
