@@ -41,7 +41,7 @@ bool BrightnessAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, i
                 vmin = _mm_min_epu8(vmin, val);
                 vmax = _mm_max_epu8(vmax, val);
             }
-            alignas(16) uint64_t sBuf[2];
+            alignas(16) int64_t sBuf[2];
             alignas(16) uint8_t mnBuf[16];
             alignas(16) uint8_t mxBuf[16];
             _mm_storeu_si128(reinterpret_cast<__m128i *>(sBuf), vsum);
@@ -81,7 +81,8 @@ bool BrightnessAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, i
             }
         }
     }
-    m_result.avgLum = static_cast<double>(iSum) / n;
+    // Image sums fit comfortably in double mantissa for ROI sizes we support.
+    m_result.avgLum = static_cast<double>(iSum) / static_cast<double>(n); // NOLINT(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
     m_result.minLum = static_cast<double>(iMn);
     m_result.maxLum = static_cast<double>(iMx);
     m_result.ok = true;
