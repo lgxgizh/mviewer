@@ -50,7 +50,7 @@ std::string toSafeFileName(const std::string &name, const std::string &fallback)
 
 ImageData resizeToFit(const ImageData &src, int maxW, int maxH)
 {
-    if (src.isNull())
+    if (src.isNull() || src.width <= 0 || src.height <= 0)
         return ImageData();
     const int w = src.width;
     const int h = src.height;
@@ -61,8 +61,13 @@ ImageData resizeToFit(const ImageData &src, int maxW, int maxH)
     const double sx = static_cast<double>(cw) / w;
     const double sy = static_cast<double>(ch) / h;
     const double s = std::min(sx, sy);
+    if (!std::isfinite(s) || s <= 0.0)
+        return src;
     const int nw = std::max(1, static_cast<int>(std::round(w * s)));
     const int nh = std::max(1, static_cast<int>(std::round(h * s)));
+    constexpr int64_t kMaxPixels = 256LL * 1024 * 1024;
+    if (static_cast<int64_t>(nw) * nh > kMaxPixels)
+        return ImageData();
     QImage img = mvcore::toQImage(src);
     if (img.isNull())
         return ImageData();
@@ -72,10 +77,18 @@ ImageData resizeToFit(const ImageData &src, int maxW, int maxH)
 
 ImageData resizeByFactor(const ImageData &src, double factor)
 {
-    if (src.isNull() || factor <= 0.0)
+    if (src.isNull() || src.width <= 0 || src.height <= 0 || !std::isfinite(factor) ||
+        factor <= 0.0)
         return ImageData();
-    const int nw = std::max(1, static_cast<int>(std::round(src.width * factor)));
-    const int nh = std::max(1, static_cast<int>(std::round(src.height * factor)));
+    const double targetW = src.width * factor;
+    const double targetH = src.height * factor;
+    if (!std::isfinite(targetW) || !std::isfinite(targetH))
+        return ImageData();
+    const int nw = std::max(1, static_cast<int>(std::round(targetW)));
+    const int nh = std::max(1, static_cast<int>(std::round(targetH)));
+    constexpr int64_t kMaxPixels = 256LL * 1024 * 1024;
+    if (static_cast<int64_t>(nw) * nh > kMaxPixels)
+        return ImageData();
     QImage img = mvcore::toQImage(src);
     if (img.isNull())
         return ImageData();
@@ -88,7 +101,7 @@ ImageData addTextWatermark(const ImageData &src, const std::string &text, Waterm
 {
     if (src.isNull())
         return ImageData();
-    if (text.empty())
+    if (text.empty() || !std::isfinite(opacity01) || opacity01 <= 0.0)
         return src;
     QImage img = mvcore::toQImage(src);
     if (img.isNull())
@@ -165,10 +178,11 @@ ImageData makeContactSheet(const std::vector<ImageData> &imgs, int cols, int thu
     if (imgs.empty())
         return ImageData();
     cols = std::max(1, cols);
+    const int safeThumb = std::max(1, thumb);
     const int n = static_cast<int>(imgs.size());
     const int rows = (n + cols - 1) / cols;
     const int pad = 6;
-    const int cell = thumb + pad * 2;
+    const int cell = safeThumb + pad * 2;
 
     // The sheet is composed as one RGB32 image, so a large job (or a large
     // cols/thumb combination) would allocate without limit and fail the export
@@ -193,7 +207,7 @@ ImageData makeContactSheet(const std::vector<ImageData> &imgs, int cols, int thu
         QImage t = mvcore::toQImage(imgs[i]);
         if (t.isNull())
             continue;
-        QImage tt = t.scaled(thumb, thumb, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        QImage tt = t.scaled(safeThumb, safeThumb, Qt::KeepAspectRatio, Qt::SmoothTransformation);
         const int col = i % cols;
         const int row = i / cols;
         const int x = pad + col * cell + (cell - tt.width()) / 2;
@@ -333,16 +347,16 @@ bool writePdf(const std::string &path, const std::vector<ImageData> &images, int
     }
 
     const long xrefPos = static_cast<long>(pdf.size());
-    std::string xref = "xref\n0 " + std::to_string(M) + "\n";
+    std::string xref = "xref\n0 " + std::to_string(M + 1) + "\n";
     xref += "0000000000 65535 f \n";
-    for (int i = 1; i < M; ++i)
+    for (int i = 1; i <= M; ++i)
     {
         char buf[32];
         std::snprintf(buf, sizeof(buf), "%010ld 00000 n \n", off[i]);
         xref += buf;
     }
     pdf += xref;
-    pdf += "trailer\n<< /Size " + std::to_string(M) + " /Root 1 0 R >>\nstartxref\n" +
+    pdf += "trailer\n<< /Size " + std::to_string(M + 1) + " /Root 1 0 R >>\nstartxref\n" +
            std::to_string(xrefPos) + "\n%%EOF\n";
 
     std::ofstream ofs(mviewer::core::pathFromUtf8(path), std::ios::binary);
