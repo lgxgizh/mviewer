@@ -56,7 +56,9 @@ bool ExposureAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int
     m_result.shadowPct = (static_cast<double>(shadows) / n) * 100.0;
     m_result.highlightPct = (static_cast<double>(highlights) / n) * 100.0;
     // Image sums fit comfortably in double mantissa for ROI sizes we support.
-    m_result.avgLum = static_cast<double>(iSum) / static_cast<double>(n); // NOLINT(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    // NOLINTBEGIN(bugprone-narrowing-conversions, cppcoreguidelines-narrowing-conversions)
+    m_result.avgLum = static_cast<double>(iSum) / static_cast<double>(n);
+    // NOLINTEND(bugprone-narrowing-conversions, cppcoreguidelines-narrowing-conversions)
     m_result.ok = true;
     return true;
 }

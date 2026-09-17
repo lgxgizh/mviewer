@@ -82,10 +82,11 @@ bool ContrastAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int
         }
     }
     // Image sums fit comfortably in double mantissa for ROI sizes we support.
-    m_result.mean = static_cast<double>(iSum) / static_cast<double>(n); // NOLINT(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-    m_result.rms = std::sqrt(std::max(
-        0.0, static_cast<double>(iSum2) / static_cast<double>(n) - // NOLINT(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
-                 m_result.mean * m_result.mean));
+    // NOLINTBEGIN(bugprone-narrowing-conversions, cppcoreguidelines-narrowing-conversions)
+    m_result.mean = static_cast<double>(iSum) / static_cast<double>(n);
+    m_result.rms = std::sqrt(std::max(0.0, static_cast<double>(iSum2) / static_cast<double>(n) -
+                                               m_result.mean * m_result.mean));
+    // NOLINTEND(bugprone-narrowing-conversions, cppcoreguidelines-narrowing-conversions)
     m_result.ok = true;
     return true;
 }
