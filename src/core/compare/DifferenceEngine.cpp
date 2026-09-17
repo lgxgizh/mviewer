@@ -514,7 +514,9 @@ DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &gray
     const bool contiguous =
         (cpp == 1 && ro == 0 && x0 == 0 && y0 == 0 && x1 == grayDiff.width &&
          y1 == grayDiff.height && grayDiff.stride() == static_cast<ptrdiff_t>(grayDiff.width));
+#if defined(__AVX2__) || defined(_M_AVX2)
     const bool useAvx2 = mviewer::core::CpuFeatures::hasAvx2();
+#endif
 
     if (contiguous)
     {
@@ -623,7 +625,7 @@ ImageData DifferenceEngine::heatMap(const ImageData &gray)
     if (cpp == 1 && ro == 0)
     {
         if (gray.stride() == static_cast<ptrdiff_t>(w) &&
-            out.stride() == static_cast<ptrdiff_t>(w * 3))
+            out.stride() == static_cast<ptrdiff_t>(w) * 3)
         {
             const size_t total = static_cast<size_t>(w) * h;
             const uint8_t *src = gray.buffer->data();
