@@ -302,7 +302,7 @@ int main(int argc, char **argv)
         const int w = 16, h = 16;
         auto rgbBuf = std::make_shared<std::vector<uint8_t>>(w * h * 3);
         auto bgrBuf = std::make_shared<std::vector<uint8_t>>(w * h * 3);
-        for (size_t i = 0; i < static_cast<size_t>(w * h); ++i)
+        for (size_t i = 0; i < static_cast<size_t>(w) * static_cast<size_t>(h); ++i)
         {
             (*rgbBuf)[i * 3 + 0] = 200; // R
             (*rgbBuf)[i * 3 + 1] = 100; // G
@@ -341,7 +341,7 @@ int main(int argc, char **argv)
         const int w = 8, h = 8;
         auto rgbaBuf = std::make_shared<std::vector<uint8_t>>(w * h * 4);
         auto bgraBuf = std::make_shared<std::vector<uint8_t>>(w * h * 4);
-        for (size_t i = 0; i < static_cast<size_t>(w * h); ++i)
+        for (size_t i = 0; i < static_cast<size_t>(w) * static_cast<size_t>(h); ++i)
         {
             (*rgbaBuf)[i * 4 + 0] = 180; // R
             (*rgbaBuf)[i * 4 + 1] = 90;  // G

@@ -49,8 +49,10 @@ static inline void diffRGB24RowSSSE3(const uint8_t *la, const uint8_t *lb, uint8
 
     for (; x * 3 + 16 <= w * 3; x += 4)
     {
-        const __m128i va = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 3));
-        __m128i vb = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 3));
+        const __m128i va =
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + static_cast<ptrdiff_t>(x) * 3));
+        __m128i vb =
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + static_cast<ptrdiff_t>(x) * 3));
         if (swapB)
             vb = _mm_shuffle_epi8(vb, maskSwapRGB);
 
@@ -78,8 +80,8 @@ static inline void diffRGB24RowSSSE3(const uint8_t *la, const uint8_t *lb, uint8
     {
         alignas(16) uint8_t bufA[16]{};
         alignas(16) uint8_t bufB[16]{};
-        std::memcpy(bufA, la + x * 3, 12);
-        std::memcpy(bufB, lb + x * 3, 12);
+        std::memcpy(bufA, la + static_cast<ptrdiff_t>(x) * 3, 12);
+        std::memcpy(bufB, lb + static_cast<ptrdiff_t>(x) * 3, 12);
         const __m128i va = _mm_load_si128(reinterpret_cast<const __m128i *>(bufA));
         __m128i vb = _mm_load_si128(reinterpret_cast<const __m128i *>(bufB));
         if (swapB)
@@ -190,10 +192,14 @@ static inline void diffRGBA32RowSSSE3(const uint8_t *la, const uint8_t *lb, uint
 
     for (; x + 8 <= w; x += 8)
     {
-        const __m128i va0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 4));
-        __m128i vb0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 4));
-        const __m128i va1 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + (x + 4) * 4));
-        __m128i vb1 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + (x + 4) * 4));
+        const __m128i va0 =
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + static_cast<ptrdiff_t>(x) * 4));
+        __m128i vb0 =
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + static_cast<ptrdiff_t>(x) * 4));
+        const __m128i va1 = _mm_loadu_si128(
+            reinterpret_cast<const __m128i *>(la + (static_cast<ptrdiff_t>(x) + 4) * 4));
+        __m128i vb1 = _mm_loadu_si128(
+            reinterpret_cast<const __m128i *>(lb + (static_cast<ptrdiff_t>(x) + 4) * 4));
 
         if (swapB)
         {
@@ -219,8 +225,10 @@ static inline void diffRGBA32RowSSSE3(const uint8_t *la, const uint8_t *lb, uint
     }
     for (; x + 4 <= w; x += 4)
     {
-        const __m128i va0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + x * 4));
-        __m128i vb0 = _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + x * 4));
+        const __m128i va0 =
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(la + static_cast<ptrdiff_t>(x) * 4));
+        __m128i vb0 =
+            _mm_loadu_si128(reinterpret_cast<const __m128i *>(lb + static_cast<ptrdiff_t>(x) * 4));
         if (swapB)
             vb0 = _mm_shuffle_epi8(vb0, maskSwapRGBA);
 
@@ -275,17 +283,36 @@ static inline void diffScalarRow(const uint8_t *la, const uint8_t *lb, uint8_t *
     }
 }
 
+namespace
+{
+
+bool isSupportedDiffFormat(PixelFormat fmt)
+{
+    return fmt == PixelFormat::RGB24 || fmt == PixelFormat::BGR24 || fmt == PixelFormat::RGBA32 ||
+           fmt == PixelFormat::BGRA32 || fmt == PixelFormat::Grayscale8;
+}
+
+void diffOneRow(const uint8_t *la, const uint8_t *lb, uint8_t *dst, int w, bool isGray8,
+                bool isRGB24Pair, bool isRGBA32Pair, bool useAvx2, bool useSsse3, bool swapB24,
+                bool swapB32, int cppA, int cppB, int roA0, int roA1, int roA2, int roB0, int roB1,
+                int roB2, uint8_t threshold)
+{
+    if (isGray8)
+        diffGrayscale8Row(la, lb, dst, w, threshold, useAvx2);
+    else if (isRGB24Pair)
+        diffRGB24Row(la, lb, dst, w, threshold, useSsse3, swapB24);
+    else if (isRGBA32Pair)
+        diffRGBA32Row(la, lb, dst, w, threshold, useSsse3, swapB32);
+    else
+        diffScalarRow(la, lb, dst, w, cppA, cppB, roA0, roA1, roA2, roB0, roB1, roB2, threshold);
+}
+
+} // namespace
+
 ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b, uint8_t threshold)
 {
-    if (a.isNull() || b.isNull())
-        return ImageData();
-    if (a.format != PixelFormat::RGB24 && a.format != PixelFormat::BGR24 &&
-        a.format != PixelFormat::RGBA32 && a.format != PixelFormat::BGRA32 &&
-        a.format != PixelFormat::Grayscale8)
-        return ImageData();
-    if (b.format != PixelFormat::RGB24 && b.format != PixelFormat::BGR24 &&
-        b.format != PixelFormat::RGBA32 && b.format != PixelFormat::BGRA32 &&
-        b.format != PixelFormat::Grayscale8)
+    if (a.isNull() || b.isNull() || !isSupportedDiffFormat(a.format) ||
+        !isSupportedDiffFormat(b.format))
         return ImageData();
 
     const int w = std::min(a.width, b.width);
@@ -308,11 +335,10 @@ ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b
     const bool aIsRGB24 = (a.format == PixelFormat::RGB24 || a.format == PixelFormat::BGR24);
     const bool bIsRGB24 = (b.format == PixelFormat::RGB24 || b.format == PixelFormat::BGR24);
     const bool isRGB24Pair = aIsRGB24 && bIsRGB24;
-    const bool swapB24 = (a.format != b.format);
-
     const bool aIsRGBA32 = (a.format == PixelFormat::RGBA32 || a.format == PixelFormat::BGRA32);
     const bool bIsRGBA32 = (b.format == PixelFormat::RGBA32 || b.format == PixelFormat::BGRA32);
     const bool isRGBA32Pair = aIsRGBA32 && bIsRGBA32;
+    const bool swapB24 = (a.format != b.format);
     const bool swapB32 = (a.format != b.format);
 
     const bool useAvx2 = mviewer::core::CpuFeatures::hasAvx2();
@@ -331,16 +357,8 @@ ImageData DifferenceEngine::differenceMap(const ImageData &a, const ImageData &b
         const uint8_t *la = a.buffer->data() + static_cast<size_t>(y) * a.stride();
         const uint8_t *lb = b.buffer->data() + static_cast<size_t>(y) * b.stride();
         uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
-
-        if (isGray8)
-            diffGrayscale8Row(la, lb, dst, w, threshold, useAvx2);
-        else if (isRGB24Pair)
-            diffRGB24Row(la, lb, dst, w, threshold, useSsse3, swapB24);
-        else if (isRGBA32Pair)
-            diffRGBA32Row(la, lb, dst, w, threshold, useSsse3, swapB32);
-        else
-            diffScalarRow(la, lb, dst, w, cppA, cppB, roA0, roA1, roA2, roB0, roB1, roB2,
-                          threshold);
+        diffOneRow(la, lb, dst, w, isGray8, isRGB24Pair, isRGBA32Pair, useAvx2, useSsse3, swapB24,
+                   swapB32, cppA, cppB, roA0, roA1, roA2, roB0, roB1, roB2, threshold);
     }
     return out;
 }
@@ -516,461 +534,6 @@ ImageData DifferenceEngine::amplify(const ImageData &gray, double gain)
                 const uint8_t v = lut[*src];
                 for (int c = 0; c < cpp; ++c)
                     dst[x * cpp + c] = v;
-            }
-        }
-    }
-    return out;
-}
-
-MV_TARGET_AVX2
-static inline void accumulateGrayscaleStatsAVX2(const uint8_t *data, size_t count, int minDiff,
-                                                long long &sum, long long &diffCount, int &maxV)
-{
-    const __m256i vzero = _mm256_setzero_si256();
-    const __m256i vMinDiff = _mm256_set1_epi8(static_cast<char>(minDiff));
-    const __m256i vOnes = _mm256_set1_epi8(1);
-    __m256i vSumAcc = _mm256_setzero_si256();
-    __m256i vDiffAcc = _mm256_setzero_si256();
-    __m256i vMaxAcc = _mm256_setzero_si256();
-
-    size_t i = 0;
-    for (; i + 32 <= count; i += 32)
-    {
-        const __m256i v = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(data + i));
-        vMaxAcc = _mm256_max_epu8(vMaxAcc, v);
-
-        const __m256i sad = _mm256_sad_epu8(v, vzero);
-        vSumAcc = _mm256_add_epi64(vSumAcc, sad);
-
-        const __m256i under = _mm256_subs_epu8(vMinDiff, v);
-        const __m256i mask = _mm256_cmpeq_epi8(under, vzero);
-        const __m256i matchedOnes = _mm256_and_si256(mask, vOnes);
-        const __m256i diffSad = _mm256_sad_epu8(matchedOnes, vzero);
-        vDiffAcc = _mm256_add_epi64(vDiffAcc, diffSad);
-    }
-
-    alignas(32) int64_t sums[4];
-    alignas(32) int64_t diffCounts[4];
-    _mm256_store_si256(reinterpret_cast<__m256i *>(sums), vSumAcc);
-    _mm256_store_si256(reinterpret_cast<__m256i *>(diffCounts), vDiffAcc);
-
-    sum += sums[0] + sums[1] + sums[2] + sums[3];
-    diffCount += diffCounts[0] + diffCounts[1] + diffCounts[2] + diffCounts[3];
-
-    __m128i max128 =
-        _mm_max_epu8(_mm256_castsi256_si128(vMaxAcc), _mm256_extracti128_si256(vMaxAcc, 1));
-    max128 = _mm_max_epu8(max128, _mm_srli_si128(max128, 8));
-    max128 = _mm_max_epu8(max128, _mm_srli_si128(max128, 4));
-    max128 = _mm_max_epu8(max128, _mm_srli_si128(max128, 2));
-    max128 = _mm_max_epu8(max128, _mm_srli_si128(max128, 1));
-    maxV = std::max(maxV, _mm_extract_epi16(max128, 0) & 0xFF);
-
-    for (; i < count; ++i)
-    {
-        const int v = data[i];
-        sum += v;
-        diffCount += (v >= minDiff);
-        maxV = std::max(maxV, v);
-    }
-}
-
-static inline void accumulateGrayscaleStatsSSE2(const uint8_t *data, size_t count, int minDiff,
-                                                long long &sum, long long &diffCount, int &maxV)
-{
-    const __m128i vzero = _mm_setzero_si128();
-    const __m128i vMinDiff = _mm_set1_epi8(static_cast<char>(minDiff));
-    const __m128i vOnes = _mm_set1_epi8(1);
-    __m128i vSumAcc = _mm_setzero_si128();
-    __m128i vDiffAcc = _mm_setzero_si128();
-    __m128i vMaxAcc = _mm_setzero_si128();
-
-    size_t i = 0;
-    for (; i + 16 <= count; i += 16)
-    {
-        const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i *>(data + i));
-        vMaxAcc = _mm_max_epu8(vMaxAcc, v);
-
-        const __m128i sad = _mm_sad_epu8(v, vzero);
-        vSumAcc = _mm_add_epi64(vSumAcc, sad);
-
-        const __m128i under = _mm_subs_epu8(vMinDiff, v);
-        const __m128i mask = _mm_cmpeq_epi8(under, vzero);
-        const __m128i matchedOnes = _mm_and_si128(mask, vOnes);
-        const __m128i diffSad = _mm_sad_epu8(matchedOnes, vzero);
-        vDiffAcc = _mm_add_epi64(vDiffAcc, diffSad);
-    }
-
-    alignas(16) int64_t sums[2];
-    alignas(16) int64_t diffCounts[2];
-    _mm_store_si128(reinterpret_cast<__m128i *>(sums), vSumAcc);
-    _mm_store_si128(reinterpret_cast<__m128i *>(diffCounts), vDiffAcc);
-
-    sum += sums[0] + sums[1];
-    diffCount += diffCounts[0] + diffCounts[1];
-
-    __m128i max128 = vMaxAcc;
-    max128 = _mm_max_epu8(max128, _mm_srli_si128(max128, 8));
-    max128 = _mm_max_epu8(max128, _mm_srli_si128(max128, 4));
-    max128 = _mm_max_epu8(max128, _mm_srli_si128(max128, 2));
-    max128 = _mm_max_epu8(max128, _mm_srli_si128(max128, 1));
-    maxV = std::max(maxV, _mm_extract_epi16(max128, 0) & 0xFF);
-
-    for (; i < count; ++i)
-    {
-        const int v = data[i];
-        sum += v;
-        diffCount += (v >= minDiff);
-        maxV = std::max(maxV, v);
-    }
-}
-
-DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &grayDiff,
-                                                           uint8_t threshold)
-{
-    if (grayDiff.isNull())
-        return DiffStats{};
-    return computeStats(grayDiff, threshold, 0, 0, grayDiff.width, grayDiff.height);
-}
-
-DifferenceEngine::DiffStats DifferenceEngine::computeStats(const ImageData &grayDiff,
-                                                           uint8_t threshold, int roiX, int roiY,
-                                                           int roiW, int roiH)
-{
-    DiffStats s;
-    if (grayDiff.isNull() || roiW <= 0 || roiH <= 0)
-        return s;
-
-    // 64-bit coordinate clamping against integer overflow
-    const long long x0ll = std::clamp<long long>(roiX, 0, grayDiff.width);
-    const long long y0ll = std::clamp<long long>(roiY, 0, grayDiff.height);
-    const long long x1ll =
-        std::clamp<long long>(static_cast<long long>(roiX) + roiW, 0, grayDiff.width);
-    const long long y1ll =
-        std::clamp<long long>(static_cast<long long>(roiY) + roiH, 0, grayDiff.height);
-    const int x0 = static_cast<int>(std::min(x0ll, x1ll));
-    const int y0 = static_cast<int>(std::min(y0ll, y1ll));
-    const int x1 = static_cast<int>(std::max(x0ll, x1ll));
-    const int y1 = static_cast<int>(std::max(y0ll, y1ll));
-    if (x0 >= x1 || y0 >= y1)
-        return s;
-
-    const int cpp = grayDiff.channelsPerPixel();
-    const int ro = channelOffset(grayDiff.format, 0);
-    const int minDiff = std::max<int>(threshold, 1);
-
-    long long sum = 0;
-    long long diffCount = 0;
-    int maxV = 0;
-
-    const bool contiguous =
-        (cpp == 1 && ro == 0 && x0 == 0 && y0 == 0 && x1 == grayDiff.width &&
-         y1 == grayDiff.height && grayDiff.stride() == static_cast<size_t>(grayDiff.width));
-
-    const bool useAvx2 = mviewer::core::CpuFeatures::hasAvx2();
-
-    if (contiguous)
-    {
-        const size_t total = static_cast<size_t>(grayDiff.width) * grayDiff.height;
-        const uint8_t *src = grayDiff.buffer->data();
-        if (useAvx2)
-            accumulateGrayscaleStatsAVX2(src, total, minDiff, sum, diffCount, maxV);
-        else
-            accumulateGrayscaleStatsSSE2(src, total, minDiff, sum, diffCount, maxV);
-    }
-    else if (cpp == 1 && ro == 0)
-    {
-        const size_t rowLen = static_cast<size_t>(x1 - x0);
-        for (int y = y0; y < y1; ++y)
-        {
-            const uint8_t *src =
-                grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride() + x0;
-            if (useAvx2)
-                accumulateGrayscaleStatsAVX2(src, rowLen, minDiff, sum, diffCount, maxV);
-            else
-                accumulateGrayscaleStatsSSE2(src, rowLen, minDiff, sum, diffCount, maxV);
-        }
-    }
-    else
-    {
-        for (int y = y0; y < y1; ++y)
-        {
-            const uint8_t *src = grayDiff.buffer->data() +
-                                 static_cast<size_t>(y) * grayDiff.stride() +
-                                 static_cast<size_t>(x0) * cpp + ro;
-            for (int x = x0; x < x1; ++x, src += cpp)
-            {
-                const int v = *src;
-                sum += v;
-                diffCount += (v >= minDiff);
-                maxV = std::max(maxV, v);
-            }
-        }
-    }
-
-    const long long count = static_cast<long long>(x1 - x0) * (y1 - y0);
-    s.totalPixels = count;
-    s.diffPixels = diffCount;
-    s.diffRatio = count > 0 ? static_cast<double>(diffCount) / static_cast<double>(count) : 0.0;
-    s.meanDiff = count > 0 ? static_cast<double>(sum) / static_cast<double>(count) : 0.0;
-    s.maxDiff = maxV;
-    return s;
-}
-
-namespace
-{
-struct HeatRGB
-{
-    uint8_t r, g, b;
-};
-static_assert(sizeof(HeatRGB) == 3, "HeatRGB must be packed 3 bytes");
-
-const auto &heatLUT()
-{
-    static const auto table = []()
-    {
-        std::array<HeatRGB, 256> lut{};
-        for (int v = 0; v < 256; ++v)
-        {
-            if (v < 128)
-            {
-                lut[v].r = 0;
-                lut[v].g = static_cast<uint8_t>(v * 2);
-                lut[v].b = static_cast<uint8_t>(255 - v * 2);
-            }
-            else
-            {
-                lut[v].r = static_cast<uint8_t>((v - 128) * 2);
-                lut[v].g = static_cast<uint8_t>(255 - (v - 128) * 2);
-                lut[v].b = 0;
-            }
-        }
-        return lut;
-    }();
-    return table;
-}
-
-const auto &highlightIntensityLUT()
-{
-    static const auto table = []()
-    {
-        std::array<uint8_t, 256> lut{};
-        for (int v = 0; v < 256; ++v)
-            lut[v] = static_cast<uint8_t>(std::min(255, 80 + v * 2));
-        return lut;
-    }();
-    return table;
-}
-} // namespace
-
-ImageData DifferenceEngine::heatMap(const ImageData &gray)
-{
-    if (gray.isNull())
-        return ImageData();
-    const int w = gray.width;
-    const int h = gray.height;
-    const int cpp = gray.channelsPerPixel();
-    const int ro = channelOffset(gray.format, 0);
-    ImageData out = makeImageData(w, h, PixelFormat::RGB24);
-    if (out.isNull())
-        return ImageData();
-
-    const auto &lut = heatLUT();
-    if (cpp == 1 && ro == 0)
-    {
-        if (gray.stride() == static_cast<size_t>(w) && out.stride() == static_cast<size_t>(w * 3))
-        {
-            const size_t total = static_cast<size_t>(w) * h;
-            const uint8_t *src = gray.buffer->data();
-            auto *dst = reinterpret_cast<HeatRGB *>(out.buffer->data());
-            for (size_t i = 0; i < total; ++i)
-                dst[i] = lut[src[i]];
-        }
-        else
-        {
-            for (int y = 0; y < h; ++y)
-            {
-                const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride();
-                auto *dst = reinterpret_cast<HeatRGB *>(out.buffer->data() +
-                                                        static_cast<size_t>(y) * out.stride());
-                for (int x = 0; x < w; ++x)
-                    dst[x] = lut[src[x]];
-            }
-        }
-    }
-    else
-    {
-        for (int y = 0; y < h; ++y)
-        {
-            const uint8_t *src = gray.buffer->data() + static_cast<size_t>(y) * gray.stride() + ro;
-            auto *dst = reinterpret_cast<HeatRGB *>(out.buffer->data() +
-                                                    static_cast<size_t>(y) * out.stride());
-            for (int x = 0; x < w; ++x, src += cpp)
-                dst[x] = lut[*src];
-        }
-    }
-    return out;
-}
-
-ImageData DifferenceEngine::highlightMap(const ImageData &grayDiff, const ImageData &base,
-                                         uint8_t threshold)
-{
-    if (grayDiff.isNull())
-        return ImageData();
-    const int w = grayDiff.width;
-    const int h = grayDiff.height;
-    const int cppD = grayDiff.channelsPerPixel();
-    const int roD = channelOffset(grayDiff.format, 0);
-
-    const bool hasBase =
-        !base.isNull() && base.width >= w && base.height >= h &&
-        (base.format == PixelFormat::RGB24 || base.format == PixelFormat::BGR24 ||
-         base.format == PixelFormat::RGBA32 || base.format == PixelFormat::BGRA32 ||
-         base.format == PixelFormat::Grayscale8);
-    const int cppB = hasBase ? base.channelsPerPixel() : 0;
-    const int minDiff = std::max<int>(threshold, 1);
-
-    ImageData out = makeImageData(w, h, PixelFormat::RGB24);
-    if (out.isNull())
-        return ImageData();
-
-    const auto &intLUT = highlightIntensityLUT();
-    const bool isDirectDiff = (cppD == 1 && roD == 0);
-
-    if (!hasBase)
-    {
-        if (isDirectDiff && grayDiff.stride() == static_cast<size_t>(w) &&
-            out.stride() == static_cast<size_t>(w * 3))
-        {
-            const size_t total = static_cast<size_t>(w) * h;
-            const uint8_t *src = grayDiff.buffer->data();
-            uint8_t *dst = out.buffer->data();
-            for (size_t i = 0; i < total; ++i, dst += 3)
-            {
-                const uint8_t v = src[i];
-                if (v >= minDiff)
-                {
-                    dst[0] = intLUT[v];
-                    dst[1] = 0;
-                    dst[2] = 0;
-                }
-                else
-                {
-                    dst[0] = 128;
-                    dst[1] = 128;
-                    dst[2] = 128;
-                }
-            }
-            return out;
-        }
-
-        for (int y = 0; y < h; ++y)
-        {
-            const uint8_t *src = grayDiff.buffer->data() +
-                                 static_cast<size_t>(y) * grayDiff.stride() +
-                                 (isDirectDiff ? 0 : roD);
-            uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
-            for (int x = 0; x < w; ++x, dst += 3, src += cppD)
-            {
-                const uint8_t v = *src;
-                if (v >= minDiff)
-                {
-                    dst[0] = intLUT[v];
-                    dst[1] = 0;
-                    dst[2] = 0;
-                }
-                else
-                {
-                    dst[0] = 128;
-                    dst[1] = 128;
-                    dst[2] = 128;
-                }
-            }
-        }
-        return out;
-    }
-
-    if (base.format == PixelFormat::Grayscale8)
-    {
-        if (isDirectDiff && grayDiff.stride() == static_cast<size_t>(w) &&
-            base.stride() == static_cast<size_t>(w) && out.stride() == static_cast<size_t>(w * 3))
-        {
-            const size_t total = static_cast<size_t>(w) * h;
-            const uint8_t *src = grayDiff.buffer->data();
-            const uint8_t *bs = base.buffer->data();
-            uint8_t *dst = out.buffer->data();
-            for (size_t i = 0; i < total; ++i, dst += 3)
-            {
-                const uint8_t v = src[i];
-                if (v >= minDiff)
-                {
-                    dst[0] = intLUT[v];
-                    dst[1] = 0;
-                    dst[2] = 0;
-                }
-                else
-                {
-                    const uint8_t g = bs[i];
-                    dst[0] = g;
-                    dst[1] = g;
-                    dst[2] = g;
-                }
-            }
-            return out;
-        }
-
-        for (int y = 0; y < h; ++y)
-        {
-            const uint8_t *src = grayDiff.buffer->data() +
-                                 static_cast<size_t>(y) * grayDiff.stride() +
-                                 (isDirectDiff ? 0 : roD);
-            const uint8_t *bs = base.buffer->data() + static_cast<size_t>(y) * base.stride();
-            uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
-            for (int x = 0; x < w; ++x, dst += 3, src += cppD, ++bs)
-            {
-                const uint8_t v = *src;
-                if (v >= minDiff)
-                {
-                    dst[0] = intLUT[v];
-                    dst[1] = 0;
-                    dst[2] = 0;
-                }
-                else
-                {
-                    const uint8_t g = *bs;
-                    dst[0] = g;
-                    dst[1] = g;
-                    dst[2] = g;
-                }
-            }
-        }
-        return out;
-    }
-
-    const bool isBGR = (base.format == PixelFormat::BGR24 || base.format == PixelFormat::BGRA32);
-    for (int y = 0; y < h; ++y)
-    {
-        const uint8_t *src = grayDiff.buffer->data() + static_cast<size_t>(y) * grayDiff.stride() +
-                             (isDirectDiff ? 0 : roD);
-        const uint8_t *bp = base.buffer->data() + static_cast<size_t>(y) * base.stride();
-        uint8_t *dst = out.buffer->data() + static_cast<size_t>(y) * out.stride();
-        for (int x = 0; x < w; ++x, dst += 3, src += cppD, bp += cppB)
-        {
-            const uint8_t v = *src;
-            if (v >= minDiff)
-            {
-                dst[0] = intLUT[v];
-                dst[1] = 0;
-                dst[2] = 0;
-            }
-            else
-            {
-                const int r = isBGR ? bp[2] : bp[0];
-                const int g = bp[1];
-                const int b = isBGR ? bp[0] : bp[2];
-                const uint8_t gray = static_cast<uint8_t>((r * 30 + g * 59 + b * 11) / 100);
-                dst[0] = gray;
-                dst[1] = gray;
-                dst[2] = gray;
             }
         }
     }
