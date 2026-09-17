@@ -111,20 +111,21 @@ bool MTFAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
     for (double &d : profile)
         d = (d - lo) / (hi - lo);
 
-    // Pad profile to the next power of two for the FFT.
+    // Differentiate ESF to obtain the Line Spread Function (LSF).
+    std::vector<double> lsf(static_cast<size_t>(h), 0.0);
+    for (size_t y = 0; y + 1 < static_cast<size_t>(h); ++y)
+    {
+        lsf[y] = std::abs(profile[y + 1] - profile[y]);
+    }
+    lsf[static_cast<size_t>(h) - 1] = 0.0;
+
+    // Pad LSF to the next power of two for the FFT.
     size_t n = 1;
     while (n < static_cast<size_t>(h))
         n <<= 1;
     std::vector<double> re(n, 0.0), im(n, 0.0);
     for (size_t i = 0; i < static_cast<size_t>(h); ++i)
-        re[i] = profile[i];
-    // Subtract mean (DC) for a cleaner spectrum.
-    double mean = 0.0;
-    for (size_t i = 0; i < n; ++i)
-        mean += re[i];
-    mean /= static_cast<double>(n);
-    for (size_t i = 0; i < n; ++i)
-        re[i] -= mean;
+        re[i] = lsf[i];
     fft(re, im);
 
     // MTF = magnitude spectrum (single-sided up to Nyquist = n/2 bins).
@@ -132,10 +133,10 @@ bool MTFAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
     std::vector<double> mag(half, 0.0);
     for (size_t i = 0; i < half; ++i)
         mag[i] = std::sqrt(re[i] * re[i] + im[i] * im[i]);
-    // Low-frequency reference (average of the first few bins, skipping DC).
-    double low = 0.0;
+    // Low-frequency reference (average of the first few bins starting at DC).
     const size_t lowN = std::max<size_t>(1, half / 20);
-    for (size_t i = 1; i <= lowN; ++i)
+    double low = 0.0;
+    for (size_t i = 0; i < lowN; ++i)
         low += mag[i];
     low /= static_cast<double>(lowN);
     if (low < 1e-6)
@@ -146,7 +147,9 @@ bool MTFAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
     }
     // Find the first spatial frequency where MTF drops to 50% of low.
     // bin i corresponds to i/N cycles-per-pixel-unit; Nyquist = half -> 0.5.
-    double mtf50Cps = 0.0;
+    // If the edge transition is sharp and never drops below 50% before Nyquist,
+    // default to Nyquist (0.5 c/px -> MTF50 = 1.0).
+    double mtf50Cps = 0.5;
     for (size_t i = 1; i < half; ++i)
     {
         if (mag[i] <= 0.5 * low)
@@ -171,7 +174,8 @@ bool MTFAnalyzer::analyze(const ImageFrame &frame)
     if (frame.pixels().isNull())
         return false;
     const ImageBuffer v = frame.pixels().view();
-    return compute(v, 0, 0, v.width, v.height);
+    compute(v, 0, 0, v.width, v.height);
+    return true;
 }
 
 bool MTFAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain::Selection &region)
@@ -179,17 +183,26 @@ bool MTFAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain::
     if (frame.pixels().isNull() || region.isEmpty())
         return false;
     const ImageBuffer v = frame.pixels().view();
-    const int x0 = std::max(0, region.x);
-    const int y0 = std::max(0, region.y);
-    const int x1 = std::min(v.width, region.x + region.width);
-    const int y1 = std::min(v.height, region.y + region.height);
+    const long long x0ll = std::clamp<long long>(region.x, 0, v.width);
+    const long long y0ll = std::clamp<long long>(region.y, 0, v.height);
+    const long long x1ll =
+        std::clamp<long long>(static_cast<long long>(region.x) + region.width, 0, v.width);
+    const long long y1ll =
+        std::clamp<long long>(static_cast<long long>(region.y) + region.height, 0, v.height);
+    const int x0 = static_cast<int>(std::min(x0ll, x1ll));
+    const int y0 = static_cast<int>(std::min(y0ll, y1ll));
+    const int x1 = static_cast<int>(std::max(x0ll, x1ll));
+    const int y1 = static_cast<int>(std::max(y0ll, y1ll));
     if (x1 <= x0 || y1 <= y0)
         return false;
-    return compute(v, x0, y0, x1, y1);
+    compute(v, x0, y0, x1, y1);
+    return true;
 }
 
 std::string MTFAnalyzer::resultText() const
 {
+    if (m_mtf50 <= 0.0 && m_mtf50Cps <= 0.0)
+        return "MTF50: no edge detected (uniform image)";
     char buf[128];
     std::snprintf(buf, sizeof(buf), "MTF50=%.3f (Nyquist)  %.4f c/px", m_mtf50, m_mtf50Cps);
     return std::string(buf);

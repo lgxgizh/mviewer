@@ -29,9 +29,9 @@ double EntropyAnalyzer::computeEntropy(const ImageBuffer &v, int x0, int y0, int
         for (int y = y0; y < y1; ++y)
         {
             const uint8_t *line = v.data + static_cast<size_t>(y) * v.stride();
-            for (int x = x0; x < x1; ++x)
+            const uint8_t *p = line + static_cast<size_t>(x0) * cpp;
+            for (int x = x0; x < x1; ++x, p += cpp)
             {
-                const uint8_t *p = line + static_cast<size_t>(x) * cpp;
                 const int sum = static_cast<int>(p[0]) + p[1] + p[2];
                 const int lum = (sum * 21846) >> 16;
                 ++hist[lum];
@@ -64,10 +64,16 @@ bool EntropyAnalyzer::analyzeRegion(const ImageFrame &frame,
     if (frame.pixels().isNull() || region.isEmpty())
         return false;
     const ImageBuffer v = frame.pixels().view();
-    const int x0 = std::max(0, region.x);
-    const int y0 = std::max(0, region.y);
-    const int x1 = std::min(v.width, region.x + region.width);
-    const int y1 = std::min(v.height, region.y + region.height);
+    const long long x0ll = std::clamp<long long>(region.x, 0, v.width);
+    const long long y0ll = std::clamp<long long>(region.y, 0, v.height);
+    const long long x1ll =
+        std::clamp<long long>(static_cast<long long>(region.x) + region.width, 0, v.width);
+    const long long y1ll =
+        std::clamp<long long>(static_cast<long long>(region.y) + region.height, 0, v.height);
+    const int x0 = static_cast<int>(std::min(x0ll, x1ll));
+    const int y0 = static_cast<int>(std::min(y0ll, y1ll));
+    const int x1 = static_cast<int>(std::max(x0ll, x1ll));
+    const int y1 = static_cast<int>(std::max(y0ll, y1ll));
     if (x1 <= x0 || y1 <= y0)
         return false;
     m_entropy = computeEntropy(v, x0, y0, x1, y1);

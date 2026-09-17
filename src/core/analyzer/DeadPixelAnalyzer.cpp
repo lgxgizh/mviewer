@@ -5,6 +5,44 @@
 #include <cmath>
 #include <cstring>
 
+namespace
+{
+inline void swapIfLess(int &a, int &b)
+{
+    if (b < a)
+        std::swap(a, b);
+}
+
+inline int median8(int a0, int a1, int a2, int a3, int a4, int a5, int a6, int a7)
+{
+    swapIfLess(a0, a1);
+    swapIfLess(a2, a3);
+    swapIfLess(a4, a5);
+    swapIfLess(a6, a7);
+    swapIfLess(a0, a2);
+    swapIfLess(a1, a3);
+    swapIfLess(a4, a6);
+    swapIfLess(a5, a7);
+    swapIfLess(a1, a2);
+    swapIfLess(a5, a6);
+    swapIfLess(a0, a4);
+    swapIfLess(a1, a5);
+    swapIfLess(a2, a6);
+    swapIfLess(a3, a7);
+    swapIfLess(a2, a4);
+    swapIfLess(a3, a5);
+    swapIfLess(a1, a2);
+    swapIfLess(a3, a4);
+    swapIfLess(a5, a6);
+    return a4;
+}
+
+inline int getAvgInt(const uint8_t *p)
+{
+    return (static_cast<int>(p[0]) + p[1] + p[2]) / 3;
+}
+} // namespace
+
 bool DeadPixelAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
 {
     if (x0 < 1)
@@ -37,13 +75,8 @@ bool DeadPixelAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, in
             for (int x = x0; x < x1; ++x)
             {
                 const int lum = line1[x];
-                int neigh[8] = {
-                    line0[x - 1], line0[x], line0[x + 1],
-                    line1[x - 1],           line1[x + 1],
-                    line2[x - 1], line2[x], line2[x + 1]
-                };
-                std::nth_element(neigh, neigh + 4, neigh + 8);
-                const int med = neigh[4];
+                const int med = median8(line0[x - 1], line0[x], line0[x + 1], line1[x - 1],
+                                        line1[x + 1], line2[x - 1], line2[x], line2[x + 1]);
                 const int dev = std::abs(lum - med);
                 if (dev > kThresh)
                 {
@@ -55,27 +88,20 @@ bool DeadPixelAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, in
     }
     else
     {
-        auto getAvg = [cpp](const uint8_t *line, int x) -> int
-        {
-            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-            return (static_cast<int>(p[0]) + p[1] + p[2]) / 3;
-        };
-
         for (int y = y0; y < y1; ++y)
         {
             const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
             const uint8_t *line1 = v.data + static_cast<size_t>(y) * v.stride();
             const uint8_t *line2 = v.data + static_cast<size_t>(y + 1) * v.stride();
-            for (int x = x0; x < x1; ++x)
+            const uint8_t *p0 = line0 + static_cast<size_t>(x0) * cpp;
+            const uint8_t *p1 = line1 + static_cast<size_t>(x0) * cpp;
+            const uint8_t *p2 = line2 + static_cast<size_t>(x0) * cpp;
+            for (int x = x0; x < x1; ++x, p0 += cpp, p1 += cpp, p2 += cpp)
             {
-                const int lum = getAvg(line1, x);
-                int neigh[8] = {
-                    getAvg(line0, x - 1), getAvg(line0, x), getAvg(line0, x + 1),
-                    getAvg(line1, x - 1),                   getAvg(line1, x + 1),
-                    getAvg(line2, x - 1), getAvg(line2, x), getAvg(line2, x + 1)
-                };
-                std::nth_element(neigh, neigh + 4, neigh + 8);
-                const int med = neigh[4];
+                const int lum = getAvgInt(p1);
+                const int med = median8(getAvgInt(p0 - cpp), getAvgInt(p0), getAvgInt(p0 + cpp),
+                                        getAvgInt(p1 - cpp), getAvgInt(p1 + cpp),
+                                        getAvgInt(p2 - cpp), getAvgInt(p2), getAvgInt(p2 + cpp));
                 const int dev = std::abs(lum - med);
                 if (dev > kThresh)
                 {
@@ -102,10 +128,16 @@ bool DeadPixelAnalyzer::analyzeRegion(const ImageFrame &frame,
     if (frame.pixels().isNull() || region.isEmpty())
         return false;
     const ImageBuffer v = frame.pixels().view();
-    const int x0 = std::max(0, region.x);
-    const int y0 = std::max(0, region.y);
-    const int x1 = std::min(v.width, region.x + region.width);
-    const int y1 = std::min(v.height, region.y + region.height);
+    const long long x0ll = std::clamp<long long>(region.x, 0, v.width);
+    const long long y0ll = std::clamp<long long>(region.y, 0, v.height);
+    const long long x1ll =
+        std::clamp<long long>(static_cast<long long>(region.x) + region.width, 0, v.width);
+    const long long y1ll =
+        std::clamp<long long>(static_cast<long long>(region.y) + region.height, 0, v.height);
+    const int x0 = static_cast<int>(std::min(x0ll, x1ll));
+    const int y0 = static_cast<int>(std::min(y0ll, y1ll));
+    const int x1 = static_cast<int>(std::max(x0ll, x1ll));
+    const int y1 = static_cast<int>(std::max(y0ll, y1ll));
     if (x1 <= x0 || y1 <= y0)
         return false;
     return compute(v, x0, y0, x1, y1);

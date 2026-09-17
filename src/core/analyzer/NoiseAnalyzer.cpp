@@ -5,6 +5,14 @@
 #include <cmath>
 #include <unordered_map>
 
+namespace
+{
+inline int getAvgInt(const uint8_t *p)
+{
+    return (static_cast<int>(p[0]) + p[1] + p[2]) / 3;
+}
+} // namespace
+
 // Laplacian variance: |Laplacian(img)| variance, where L = [0 1 0; 1 -4 1; 0 1
 // 0].
 double NoiseAnalyzer::estimateLaplacian(const ImageBuffer &v, int x0, int y0, int x1, int y1) const
@@ -47,27 +55,28 @@ double NoiseAnalyzer::estimateLaplacian(const ImageBuffer &v, int x0, int y0, in
     }
     else
     {
-        auto getAvg = [cpp](const uint8_t *line, int x) -> double
-        {
-            const uint8_t *p = line + static_cast<size_t>(x) * cpp;
-            return (p[0] + p[1] + p[2]) / 3.0;
-        };
-
+        int64_t iSum = 0;
+        int64_t iSum2 = 0;
         for (int y = y0; y < y1; ++y)
         {
             const uint8_t *line0 = v.data + static_cast<size_t>(y - 1) * v.stride();
             const uint8_t *line1 = v.data + static_cast<size_t>(y) * v.stride();
             const uint8_t *line2 = v.data + static_cast<size_t>(y + 1) * v.stride();
-            for (int x = x0; x < x1; ++x)
+            const uint8_t *p0 = line0 + static_cast<size_t>(x0) * cpp;
+            const uint8_t *p1 = line1 + static_cast<size_t>(x0) * cpp;
+            const uint8_t *p2 = line2 + static_cast<size_t>(x0) * cpp;
+            for (int x = x0; x < x1; ++x, p0 += cpp, p1 += cpp, p2 += cpp)
             {
-                const double c = getAvg(line1, x) * 4.0;
-                const double n4 = getAvg(line0, x) + getAvg(line2, x) + getAvg(line1, x - 1) +
-                                  getAvg(line1, x + 1);
-                const double lap = c - n4;
-                sum += lap;
-                sum2 += lap * lap;
+                const int c = getAvgInt(p1) * 4;
+                const int n4 =
+                    getAvgInt(p0) + getAvgInt(p2) + getAvgInt(p1 - cpp) + getAvgInt(p1 + cpp);
+                const int lap = c - n4;
+                iSum += lap;
+                iSum2 += static_cast<int64_t>(lap) * lap;
             }
         }
+        sum = static_cast<double>(iSum);
+        sum2 = static_cast<double>(iSum2);
     }
     const double mean = sum / n;
     return std::max(0.0, sum2 / n - mean * mean);
@@ -87,10 +96,16 @@ bool NoiseAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain
     if (frame.pixels().isNull() || region.isEmpty())
         return false;
     const ImageBuffer v = frame.pixels().view();
-    const int x0 = std::max(0, region.x);
-    const int y0 = std::max(0, region.y);
-    const int x1 = std::min(v.width, region.x + region.width);
-    const int y1 = std::min(v.height, region.y + region.height);
+    const long long x0ll = std::clamp<long long>(region.x, 0, v.width);
+    const long long y0ll = std::clamp<long long>(region.y, 0, v.height);
+    const long long x1ll =
+        std::clamp<long long>(static_cast<long long>(region.x) + region.width, 0, v.width);
+    const long long y1ll =
+        std::clamp<long long>(static_cast<long long>(region.y) + region.height, 0, v.height);
+    const int x0 = static_cast<int>(std::min(x0ll, x1ll));
+    const int y0 = static_cast<int>(std::min(y0ll, y1ll));
+    const int x1 = static_cast<int>(std::max(x0ll, x1ll));
+    const int y1 = static_cast<int>(std::max(y0ll, y1ll));
     if (x1 <= x0 || y1 <= y0)
         return false;
     m_noise = estimateLaplacian(v, x0, y0, x1, y1);

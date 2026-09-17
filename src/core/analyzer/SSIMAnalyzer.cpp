@@ -18,10 +18,16 @@ bool SSIMAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain:
     const ImageBuffer vT = frame.pixels().view();
     const int w = std::min(vR.width, vT.width);
     const int h = std::min(vR.height, vT.height);
-    const int x0 = std::max(0, region.x);
-    const int y0 = std::max(0, region.y);
-    const int x1 = std::min(w, region.x + region.width);
-    const int y1 = std::min(h, region.y + region.height);
+    const long long x0ll = std::clamp<long long>(region.x, 0, w);
+    const long long y0ll = std::clamp<long long>(region.y, 0, h);
+    const long long x1ll =
+        std::clamp<long long>(static_cast<long long>(region.x) + region.width, 0, w);
+    const long long y1ll =
+        std::clamp<long long>(static_cast<long long>(region.y) + region.height, 0, h);
+    const int x0 = static_cast<int>(std::min(x0ll, x1ll));
+    const int y0 = static_cast<int>(std::min(y0ll, y1ll));
+    const int x1 = static_cast<int>(std::max(x0ll, x1ll));
+    const int y1 = static_cast<int>(std::max(y0ll, y1ll));
     if (x1 <= x0 || y1 <= y0)
         return false;
     const int rw = x1 - x0;
@@ -32,13 +38,13 @@ bool SSIMAnalyzer::analyzeRegion(const ImageFrame &frame, const mviewer::domain:
     const int cppT = vT.channelsPerPixel();
     for (int y = 0; y < rh; ++y)
     {
-        std::memcpy(subR.buffer->data() +
-                        static_cast<size_t>(y) * static_cast<size_t>(rw) * static_cast<size_t>(cppR),
+        std::memcpy(subR.buffer->data() + static_cast<size_t>(y) * static_cast<size_t>(rw) *
+                                              static_cast<size_t>(cppR),
                     vR.data + static_cast<size_t>(y0 + y) * vR.stride() +
                         static_cast<size_t>(x0) * static_cast<size_t>(cppR),
                     static_cast<size_t>(rw) * static_cast<size_t>(cppR));
-        std::memcpy(subT.buffer->data() +
-                        static_cast<size_t>(y) * static_cast<size_t>(rw) * static_cast<size_t>(cppT),
+        std::memcpy(subT.buffer->data() + static_cast<size_t>(y) * static_cast<size_t>(rw) *
+                                              static_cast<size_t>(cppT),
                     vT.data + static_cast<size_t>(y0 + y) * vT.stride() +
                         static_cast<size_t>(x0) * static_cast<size_t>(cppT),
                     static_cast<size_t>(rw) * static_cast<size_t>(cppT));
