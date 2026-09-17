@@ -2,6 +2,7 @@
 
 #include "Viewport.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <vector>
 
@@ -33,17 +34,22 @@ struct TileGrid
     int tileSize = 256;
 
     TileGrid() = default;
-    TileGrid(int iw, int ih, int ts) : imageW(iw), imageH(ih), tileSize(ts > 0 ? ts : 256)
+    TileGrid(int iw, int ih, int ts)
+        : imageW(std::max(0, iw)), imageH(std::max(0, ih)), tileSize(ts > 0 ? ts : 256)
     {
     }
 
     int cols() const
     {
-        return imageW > 0 ? (imageW + tileSize - 1) / tileSize : 0;
+        return imageW > 0
+                   ? static_cast<int>((static_cast<int64_t>(imageW) + tileSize - 1) / tileSize)
+                   : 0;
     }
     int rows() const
     {
-        return imageH > 0 ? (imageH + tileSize - 1) / tileSize : 0;
+        return imageH > 0
+                   ? static_cast<int>((static_cast<int64_t>(imageH) + tileSize - 1) / tileSize)
+                   : 0;
     }
 
     // Enumerate visible tiles for the given viewport (clamped to image bounds).
@@ -58,10 +64,14 @@ struct TileGrid
         if (vw <= 0 || vh <= 0)
             return out;
 
-        const int c0 = vx / tileSize;
-        const int r0 = vy / tileSize;
-        const int c1 = (vx + vw - 1) / tileSize;
-        const int r1 = (vy + vh - 1) / tileSize;
+        const int c0 = std::max(0, vx / tileSize);
+        const int r0 = std::max(0, vy / tileSize);
+        const int c1 = std::max(c0, (vx + vw - 1) / tileSize);
+        const int r1 = std::max(r0, (vy + vh - 1) / tileSize);
+
+        const int numRows = std::max(0, std::min(r1, rows() - 1) - r0 + 1);
+        const int numCols = std::max(0, std::min(c1, cols() - 1) - c0 + 1);
+        out.reserve(static_cast<size_t>(numRows) * static_cast<size_t>(numCols));
 
         for (int r = r0; r <= r1 && r < rows(); ++r)
         {
