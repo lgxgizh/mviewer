@@ -465,165 +465,144 @@ ImageData AnalysisEngine::differenceMap(const ImageData &aData, const ImageData 
     return DifferenceEngine::differenceMap(aData, bData, 0);
 }
 
-double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
+namespace
 {
-    const int w = std::min(aData.width, bData.width);
-    const int h = std::min(aData.height, bData.height);
-    if (w <= 0 || h <= 0)
-        return 0.0;
 
+double psnrFromSumSq(int64_t sumSq, long long denom)
+{
+    const double mse = static_cast<double>(sumSq) / static_cast<double>(denom);
+    if (mse <= 1e-10)
+        return 100.0; // 完美一致(而非 inf)
+    return 10.0 * std::log10(65025.0 / mse);
+}
+
+int64_t psnrSumSqGray(const ImageBuffer &va, const ImageBuffer &vb, int w, int h)
+{
     int64_t sumSq = 0;
-    const long long n = 1LL * w * h;
-    const bool isSameFormat = (aData.format == bData.format);
-
-    if (isSameFormat &&
-        (aData.format == PixelFormat::RGB24 || aData.format == PixelFormat::BGR24 ||
-         aData.format == PixelFormat::RGBA32 || aData.format == PixelFormat::BGRA32 ||
-         aData.format == PixelFormat::Grayscale8))
+    if (w == va.width && va.stride() == static_cast<size_t>(w) &&
+        vb.stride() == static_cast<size_t>(w))
     {
-        const ImageBuffer va = aData.view();
-        const ImageBuffer vb = bData.view();
-        const int cpp = va.channelsPerPixel();
-        const bool isGray = (aData.format == PixelFormat::Grayscale8);
-
-        if (isGray)
+        const size_t total = static_cast<size_t>(w) * static_cast<size_t>(h);
+#ifdef MVIEWER_HAVE_SSE2
+        sumSq = sse2_sum_sq_diff(va.data, vb.data, total);
+#else
+        const uint8_t *la = va.data;
+        const uint8_t *lb = vb.data;
+        for (size_t i = 0; i < total; ++i)
         {
-            if (w == va.width && va.stride() == static_cast<size_t>(w) &&
-                vb.stride() == static_cast<size_t>(w))
-            {
-                const size_t total = static_cast<size_t>(w) * h;
-#ifdef MVIEWER_HAVE_SSE2
-                sumSq = sse2_sum_sq_diff(va.data, vb.data, total);
-#else
-                const uint8_t *la = va.data;
-                const uint8_t *lb = vb.data;
-                for (size_t i = 0; i < total; ++i)
-                {
-                    const int d = static_cast<int>(la[i]) - static_cast<int>(lb[i]);
-                    sumSq += d * d;
-                }
-#endif
-            }
-            else
-            {
-                for (int y = 0; y < h; ++y)
-                {
-                    const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
-                    const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
-#ifdef MVIEWER_HAVE_SSE2
-                    sumSq += sse2_sum_sq_diff(la, lb, static_cast<size_t>(w));
-#else
-                    for (int x = 0; x < w; ++x)
-                    {
-                        const int d = static_cast<int>(la[x]) - static_cast<int>(lb[x]);
-                        sumSq += d * d;
-                    }
-#endif
-                }
-            }
-            const double mse = static_cast<double>(sumSq) / static_cast<double>(n);
-            if (mse <= 1e-10)
-                return 100.0; // 完美一致(而非 inf)
-            return 10.0 * std::log10(65025.0 / mse);
+            const int d = static_cast<int>(la[i]) - static_cast<int>(lb[i]);
+            sumSq += d * d;
         }
-
-        const bool is3Chan = (cpp == 3);
-        const bool isContiguous = (w == va.width && va.stride() == static_cast<size_t>(w * cpp) &&
-                                   vb.stride() == static_cast<size_t>(w * cpp));
-        if (is3Chan)
-        {
-            if (isContiguous)
-            {
-                const size_t totalBytes = static_cast<size_t>(w * 3) * h;
-#ifdef MVIEWER_HAVE_SSE2
-                sumSq = sse2_sum_sq_diff(va.data, vb.data, totalBytes);
-#else
-                const uint8_t *la = va.data;
-                const uint8_t *lb = vb.data;
-                for (size_t i = 0; i < totalBytes; ++i)
-                {
-                    const int d = static_cast<int>(la[i]) - static_cast<int>(lb[i]);
-                    sumSq += d * d;
-                }
 #endif
-            }
-            else
-            {
-                for (int y = 0; y < h; ++y)
-                {
-                    const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
-                    const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
-#ifdef MVIEWER_HAVE_SSE2
-                    sumSq += sse2_sum_sq_diff(la, lb, static_cast<size_t>(w * 3));
-#else
-                    for (int x = 0; x < w; ++x)
-                    {
-                        const size_t offset = static_cast<size_t>(x) * 3;
-                        const int dr =
-                            static_cast<int>(la[offset + 0]) - static_cast<int>(lb[offset + 0]);
-                        const int dg =
-                            static_cast<int>(la[offset + 1]) - static_cast<int>(lb[offset + 1]);
-                        const int db =
-                            static_cast<int>(la[offset + 2]) - static_cast<int>(lb[offset + 2]);
-                        sumSq += dr * dr + dg * dg + db * db;
-                    }
-#endif
-                }
-            }
-        }
-        else // 4 channels (RGBA32 / BGRA32)
-        {
-            if (isContiguous)
-            {
-                const size_t totalPixels = static_cast<size_t>(w) * h;
-#ifdef MVIEWER_HAVE_SSE2
-                sumSq = sse2_sum_sq_diff_rgba(va.data, vb.data, totalPixels);
-#else
-                const uint8_t *la = va.data;
-                const uint8_t *lb = vb.data;
-                for (size_t i = 0; i < totalPixels; ++i)
-                {
-                    const size_t offset = i * 4;
-                    const int dr =
-                        static_cast<int>(la[offset + 0]) - static_cast<int>(lb[offset + 0]);
-                    const int dg =
-                        static_cast<int>(la[offset + 1]) - static_cast<int>(lb[offset + 1]);
-                    const int db =
-                        static_cast<int>(la[offset + 2]) - static_cast<int>(lb[offset + 2]);
-                    sumSq += dr * dr + dg * dg + db * db;
-                }
-#endif
-            }
-            else
-            {
-                for (int y = 0; y < h; ++y)
-                {
-                    const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
-                    const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
-#ifdef MVIEWER_HAVE_SSE2
-                    sumSq += sse2_sum_sq_diff_rgba(la, lb, static_cast<size_t>(w));
-#else
-                    for (int x = 0; x < w; ++x)
-                    {
-                        const size_t offset = static_cast<size_t>(x) * 4;
-                        const int dr =
-                            static_cast<int>(la[offset + 0]) - static_cast<int>(lb[offset + 0]);
-                        const int dg =
-                            static_cast<int>(la[offset + 1]) - static_cast<int>(lb[offset + 1]);
-                        const int db =
-                            static_cast<int>(la[offset + 2]) - static_cast<int>(lb[offset + 2]);
-                        sumSq += dr * dr + dg * dg + db * db;
-                    }
-#endif
-                }
-            }
-        }
-        const double mse = static_cast<double>(sumSq) / static_cast<double>(n * 3);
-        if (mse <= 1e-10)
-            return 100.0; // 完美一致(而非 inf)
-        return 10.0 * std::log10(65025.0 / mse);
     }
+    else
+    {
+        for (int y = 0; y < h; ++y)
+        {
+            const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
+            const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
+#ifdef MVIEWER_HAVE_SSE2
+            sumSq += sse2_sum_sq_diff(la, lb, static_cast<size_t>(w));
+#else
+            for (int x = 0; x < w; ++x)
+            {
+                const int d = static_cast<int>(la[x]) - static_cast<int>(lb[x]);
+                sumSq += d * d;
+            }
+#endif
+        }
+    }
+    return sumSq;
+}
 
+int64_t psnrSumSq3(const ImageBuffer &va, const ImageBuffer &vb, int w, int h, bool contiguous)
+{
+    int64_t sumSq = 0;
+    if (contiguous)
+    {
+        const size_t totalBytes = static_cast<size_t>(w) * 3u * static_cast<size_t>(h);
+#ifdef MVIEWER_HAVE_SSE2
+        sumSq = sse2_sum_sq_diff(va.data, vb.data, totalBytes);
+#else
+        const uint8_t *la = va.data;
+        const uint8_t *lb = vb.data;
+        for (size_t i = 0; i < totalBytes; ++i)
+        {
+            const int d = static_cast<int>(la[i]) - static_cast<int>(lb[i]);
+            sumSq += d * d;
+        }
+#endif
+    }
+    else
+    {
+        for (int y = 0; y < h; ++y)
+        {
+            const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
+            const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
+#ifdef MVIEWER_HAVE_SSE2
+            sumSq += sse2_sum_sq_diff(la, lb, static_cast<size_t>(w) * 3u);
+#else
+            for (int x = 0; x < w; ++x)
+            {
+                const size_t offset = static_cast<size_t>(x) * 3;
+                const int dr = static_cast<int>(la[offset + 0]) - static_cast<int>(lb[offset + 0]);
+                const int dg = static_cast<int>(la[offset + 1]) - static_cast<int>(lb[offset + 1]);
+                const int db = static_cast<int>(la[offset + 2]) - static_cast<int>(lb[offset + 2]);
+                sumSq += dr * dr + dg * dg + db * db;
+            }
+#endif
+        }
+    }
+    return sumSq;
+}
+
+int64_t psnrSumSq4(const ImageBuffer &va, const ImageBuffer &vb, int w, int h, bool contiguous)
+{
+    int64_t sumSq = 0;
+    if (contiguous)
+    {
+        const size_t totalPixels = static_cast<size_t>(w) * static_cast<size_t>(h);
+#ifdef MVIEWER_HAVE_SSE2
+        sumSq = sse2_sum_sq_diff_rgba(va.data, vb.data, totalPixels);
+#else
+        const uint8_t *la = va.data;
+        const uint8_t *lb = vb.data;
+        for (size_t i = 0; i < totalPixels; ++i)
+        {
+            const size_t offset = i * 4;
+            const int dr = static_cast<int>(la[offset + 0]) - static_cast<int>(lb[offset + 0]);
+            const int dg = static_cast<int>(la[offset + 1]) - static_cast<int>(lb[offset + 1]);
+            const int db = static_cast<int>(la[offset + 2]) - static_cast<int>(lb[offset + 2]);
+            sumSq += dr * dr + dg * dg + db * db;
+        }
+#endif
+    }
+    else
+    {
+        for (int y = 0; y < h; ++y)
+        {
+            const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
+            const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
+#ifdef MVIEWER_HAVE_SSE2
+            sumSq += sse2_sum_sq_diff_rgba(la, lb, static_cast<size_t>(w));
+#else
+            for (int x = 0; x < w; ++x)
+            {
+                const size_t offset = static_cast<size_t>(x) * 4;
+                const int dr = static_cast<int>(la[offset + 0]) - static_cast<int>(lb[offset + 0]);
+                const int dg = static_cast<int>(la[offset + 1]) - static_cast<int>(lb[offset + 1]);
+                const int db = static_cast<int>(la[offset + 2]) - static_cast<int>(lb[offset + 2]);
+                sumSq += dr * dr + dg * dg + db * db;
+            }
+#endif
+        }
+    }
+    return sumSq;
+}
+
+int64_t psnrSumSqQImage(const ImageData &aData, const ImageData &bData, int w, int h)
+{
+    int64_t sumSq = 0;
     QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_RGB32);
     QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_RGB32);
     for (int y = 0; y < h; ++y)
@@ -644,10 +623,41 @@ double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
         }
 #endif
     }
-    const double mse = static_cast<double>(sumSq) / static_cast<double>(n * 3);
-    if (mse <= 1e-10)
-        return 100.0; // 完美一致(而非 inf)
-    return 10.0 * std::log10(65025.0 / mse);
+    return sumSq;
+}
+
+} // namespace
+
+double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
+{
+    const int w = std::min(aData.width, bData.width);
+    const int h = std::min(aData.height, bData.height);
+    if (w <= 0 || h <= 0)
+        return 0.0;
+
+    const long long n = 1LL * w * h;
+    const bool isSameFormat = (aData.format == bData.format);
+
+    if (isSameFormat &&
+        (aData.format == PixelFormat::RGB24 || aData.format == PixelFormat::BGR24 ||
+         aData.format == PixelFormat::RGBA32 || aData.format == PixelFormat::BGRA32 ||
+         aData.format == PixelFormat::Grayscale8))
+    {
+        const ImageBuffer va = aData.view();
+        const ImageBuffer vb = bData.view();
+        const int cpp = va.channelsPerPixel();
+        if (aData.format == PixelFormat::Grayscale8)
+            return psnrFromSumSq(psnrSumSqGray(va, vb, w, h), n);
+
+        const bool contiguous =
+            (w == va.width && va.stride() == static_cast<size_t>(w) * static_cast<size_t>(cpp) &&
+             vb.stride() == static_cast<size_t>(w) * static_cast<size_t>(cpp));
+        if (cpp == 3)
+            return psnrFromSumSq(psnrSumSq3(va, vb, w, h, contiguous), n * 3);
+        return psnrFromSumSq(psnrSumSq4(va, vb, w, h, contiguous), n * 3);
+    }
+
+    return psnrFromSumSq(psnrSumSqQImage(aData, bData, w, h), n * 3);
 }
 
 double AnalysisEngine::ssim(const ImageData &aData, const ImageData &bData)
