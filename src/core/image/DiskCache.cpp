@@ -185,10 +185,10 @@ QSqlDatabase DiskCache::connectionForThread() const
         else
         {
             const auto serial = g_connectionSerial.fetch_add(1, std::memory_order_relaxed);
-            g_threadConnection.name =
-                QStringLiteral("mviewer_disk_cache_worker_%1").arg(serial);
+            g_threadConnection.name = QStringLiteral("mviewer_disk_cache_worker_%1").arg(serial);
             QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", g_threadConnection.name);
-            db.setDatabaseName(QString::fromUtf8(m_dbPath.data(), static_cast<int>(m_dbPath.size())));
+            db.setDatabaseName(
+                QString::fromUtf8(m_dbPath.data(), static_cast<int>(m_dbPath.size())));
             if (!db.open())
             {
                 qWarning() << "DiskCache: worker connection failed:" << db.lastError().text();
@@ -293,6 +293,12 @@ bool DiskCache::get(const std::string &key, ImageData &out)
     if (w > kMaxCachedEdge || h > kMaxCachedEdge)
         return false;
 
+    // Hardened bound: protect against pathological allocations from corrupt DB rows.
+    // 256M pixels (~1GB at 32bpp) is the maximum single-image allocation envelope.
+    constexpr int64_t kMaxCachedPixels = 256 * 1024 * 1024;
+    if (static_cast<int64_t>(w) * h > kMaxCachedPixels)
+        return false;
+
     const PixelFormat pf = static_cast<PixelFormat>(fmt);
     // The format is persisted across versions, so it has to be a known value.
     if (pf != PixelFormat::RGB24 && pf != PixelFormat::RGBA32 && pf != PixelFormat::BGR24 &&
@@ -316,7 +322,12 @@ bool DiskCache::get(const std::string &key, ImageData &out)
 
 void DiskCache::put(const std::string &key, const ImageData &img)
 {
-    if (!m_enabled || !connectionForThread().isOpen() || img.isNull())
+    if (!m_enabled || !connectionForThread().isOpen() || img.isNull() || key.empty())
+        return;
+    if (img.width <= 0 || img.height <= 0)
+        return;
+    constexpr int64_t kMaxCachedPixels = 256 * 1024 * 1024;
+    if (static_cast<int64_t>(img.width) * img.height > kMaxCachedPixels)
         return;
     // A QByteArray length is an int; refusing oversized payloads beats silently
     // truncating them into an unreadable row.
@@ -348,7 +359,7 @@ void DiskCache::put(const std::string &key, const ImageData &img)
 
 void DiskCache::remove(const std::string &key)
 {
-    if (!m_enabled)
+    if (!m_enabled || key.empty())
         return;
     if (!connectionForThread().isOpen())
         return;
