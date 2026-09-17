@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.56] - 2026-09-18
+
+### Reliability, Decoder Bounds & Stream Hardening
+
+- **RAW / TIFF Metadata Bounds & Exif IFD Traversal (`core/image/RawMetadata.cpp`)**:
+  - **Exif IFD & SubIFD Traversal**: Added recursive traversal for Exif IFD (`0x8769`) and SubIFD (`0x014A`) pointers with cycle detection (`visited` set) and depth capping (max depth 4). Real-world RAW containers (Sony ARW, Canon CR2, Nikon NEF, Adobe DNG) storing exposure tags (`0x829A`, `0x829D`, `0x8827`, `0x9003`, `0x920A`, `0xA405`) inside the Exif IFD now resolve exposure and shooting metadata correctly.
+  - **Hostile Offset & Integer Overflow Protection**: Replaced raw seeks and 32-bit offset additions with subtraction-form bounds checks (`fits`), safeguarding against 32-bit integer overflow (e.g. `0xFFFFFFFF`) and EOF overrun on crafted or truncated files.
+  - **Sensor & Color Space Metadata**: Populated active sensor dimensions (`width`, `height`, `bitsPerSample`), color space (`0xA001`), and Bayer CFA patterns (`0x828E`, e.g. "RGGB", "BGGR").
+  - **Big-Endian Inline Short Correction**: Fixed big-endian TIFF inline SHORT extraction (`(v >> 16) & 0xFFFF`), properly reading camera tags on big-endian RAW files.
+  - **Honest Parse State**: Gated `rm.parsed = true` on whether meaningful tags were actually decoded rather than unconditionally claiming success on empty/corrupt files.
+
+- **EXIF / GPS Hardening & Nested Discovery (`core/image/MetadataReader.cpp`)**:
+  - **Robust JPEG Marker Stream Navigation**: Fixed segment length checks in `readExifPayload`. Consecutive `0xFF` padding bytes are skipped without prematurely aborting; markers with no length payload (`0xD8`, `0x01`, `0xD0..0xD7`) are handled cleanly, and `0xDA` (SOS) / `0xD9` (EOI) properly terminate header parsing to prevent misinterpreting image scan data as markers.
+  - **Nested Exif GPS Discovery**: Extended `findGpsIfd` to search inside Exif IFD (`0x8769`) when GPS tag `0x8825` is not located directly in root IFD0, restoring geolocation discovery for cameras that nest GPS IFD in Exif IFD.
+  - **Coordinate Sanitization**: Added sanity bounds verification on parsed GPS coordinates (`lat` $\in [-90, 90]$, `lon` $\in [-180, 180]$, `altitude` $\in [-20000, 100000]$ m) and finite checks, preventing `NaN` or invalid coordinates from reaching the UI layer.
+  - **Thumbnail Length Capping**: Enforced a 16 MiB safety ceiling on `thumbLength` in `extractExifThumbnail` to eliminate pathological memory allocations on corrupted files.
+
+- **Decoder & Frame Sequence Safety (`core/image/decoder/RawDecoder.cpp`, `core/image/decoder/QtFallbackDecoder.cpp`, `core/image/FrameSequence.cpp`)**:
+  - **Degenerate Frame Guard**: Added non-positive dimension checks in `scaleToMaxEdge` and `selectFrame` before aspect ratio division, preventing divide-by-zero on degenerate frames.
+  - **Scan Loop Bound**: Capped maximum marker count (`kMaxJpegMarkers = 65536`) in `RawDecoder::jpegEndAt` to prevent infinite loops on corrupted or hostile streams.
+  - **Contiguous Pixel Buffer Fast-Path**: Accelerated `toImageData` in `RawDecoder` and `QtFallbackDecoder` using a single contiguous `memcpy` when scanline byte counts match stride, matching `QtDecoder`.
+
 ## [1.0.55] - 2026-09-18
 
 ### Bug Fixes & Correctness Hardening

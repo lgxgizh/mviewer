@@ -143,11 +143,13 @@ FrameSequenceInfo probeReader(QImageReader &reader, const QString &suffix)
 
 QImage scaleToMaxEdge(QImage image, int maxEdge)
 {
-    if (maxEdge <= 0 || image.isNull() || std::max(image.width(), image.height()) <= maxEdge)
+    if (maxEdge <= 0 || image.isNull() || image.width() <= 0 || image.height() <= 0 ||
+        std::max(image.width(), image.height()) <= maxEdge)
         return image;
-    const double ratio = static_cast<double>(maxEdge) / std::max(image.width(), image.height());
-    return image.scaled(QSize(std::max(1, static_cast<int>(image.width() * ratio)),
-                              std::max(1, static_cast<int>(image.height() * ratio))),
+    const int maxDim = std::max(image.width(), image.height());
+    const double ratio = static_cast<double>(maxEdge) / maxDim;
+    return image.scaled(QSize(std::max(1, static_cast<int>(std::round(image.width() * ratio))),
+                              std::max(1, static_cast<int>(std::round(image.height() * ratio)))),
                         Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 }
 
@@ -200,15 +202,13 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
     {
         selected.sourceSize = reader.size();
         const int before = reader.nextImageDelay();
-        if (maxEdge > 0 && selected.sourceSize.isValid() &&
-            std::max(selected.sourceSize.width(), selected.sourceSize.height()) > maxEdge)
+        const int maxDim = std::max(selected.sourceSize.width(), selected.sourceSize.height());
+        if (maxEdge > 0 && selected.sourceSize.isValid() && maxDim > maxEdge && maxDim > 0)
         {
-            const double ratio =
-                static_cast<double>(maxEdge) /
-                std::max(selected.sourceSize.width(), selected.sourceSize.height());
-            reader.setScaledSize(
-                QSize(std::max(1, static_cast<int>(selected.sourceSize.width() * ratio)),
-                      std::max(1, static_cast<int>(selected.sourceSize.height() * ratio))));
+            const double ratio = static_cast<double>(maxEdge) / maxDim;
+            reader.setScaledSize(QSize(
+                std::max(1, static_cast<int>(std::round(selected.sourceSize.width() * ratio))),
+                std::max(1, static_cast<int>(std::round(selected.sourceSize.height() * ratio)))));
         }
         selected.image = reader.read();
         if (selected.sourceSize.isEmpty())
@@ -221,15 +221,13 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
     {
         selected.sourceSize = reader.size();
         const int before = reader.nextImageDelay();
-        if (maxEdge > 0 && selected.sourceSize.isValid() &&
-            std::max(selected.sourceSize.width(), selected.sourceSize.height()) > maxEdge)
+        const int maxDim = std::max(selected.sourceSize.width(), selected.sourceSize.height());
+        if (maxEdge > 0 && selected.sourceSize.isValid() && maxDim > maxEdge && maxDim > 0)
         {
-            const double ratio =
-                static_cast<double>(maxEdge) /
-                std::max(selected.sourceSize.width(), selected.sourceSize.height());
-            reader.setScaledSize(
-                QSize(std::max(1, static_cast<int>(selected.sourceSize.width() * ratio)),
-                      std::max(1, static_cast<int>(selected.sourceSize.height() * ratio))));
+            const double ratio = static_cast<double>(maxEdge) / maxDim;
+            reader.setScaledSize(QSize(
+                std::max(1, static_cast<int>(std::round(selected.sourceSize.width() * ratio))),
+                std::max(1, static_cast<int>(std::round(selected.sourceSize.height() * ratio)))));
         }
         selected.image = reader.read();
         if (selected.sourceSize.isEmpty())
@@ -251,15 +249,14 @@ SelectedFrame selectFrame(const std::string &path, const FrameSequenceInfo &sequ
             if (sequence.kind != FrameSequenceKind::Animation)
                 candidateSize = sequential.size();
             const int before = sequential.nextImageDelay();
+            const int maxDim = std::max(candidateSize.width(), candidateSize.height());
             if (i == frameIndex && sequence.kind != FrameSequenceKind::Animation && maxEdge > 0 &&
-                candidateSize.isValid() &&
-                std::max(candidateSize.width(), candidateSize.height()) > maxEdge)
+                candidateSize.isValid() && maxDim > maxEdge && maxDim > 0)
             {
-                const double ratio = static_cast<double>(maxEdge) /
-                                     std::max(candidateSize.width(), candidateSize.height());
-                sequential.setScaledSize(
-                    QSize(std::max(1, static_cast<int>(candidateSize.width() * ratio)),
-                          std::max(1, static_cast<int>(candidateSize.height() * ratio))));
+                const double ratio = static_cast<double>(maxEdge) / maxDim;
+                sequential.setScaledSize(QSize(
+                    std::max(1, static_cast<int>(std::round(candidateSize.width() * ratio))),
+                    std::max(1, static_cast<int>(std::round(candidateSize.height() * ratio)))));
             }
             const QImage candidate = sequential.read();
             if (candidate.isNull())
