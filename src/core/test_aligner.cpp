@@ -151,7 +151,8 @@ int main()
         for (int y = 20; y < 60; ++y)
             for (int x = 25; x < 75; ++x)
             {
-                const size_t idx = (static_cast<size_t>(y) * a3.stride()) + x * 3;
+                const size_t idx =
+                    static_cast<size_t>(y) * a3.stride() + static_cast<size_t>(x) * 3;
                 (*a3.buffer)[idx + 0] = 50;  // B
                 (*a3.buffer)[idx + 1] = 200; // G
                 (*a3.buffer)[idx + 2] = 220; // R

@@ -55,7 +55,7 @@ ImageData downscaleBy(const ImageData &src, int scale)
 {
     if (src.isNull())
         return ImageData{};
-    const ImageData gray = (src.format == PixelFormat::Grayscale8) ? src : toGray(src);
+    ImageData gray = (src.format == PixelFormat::Grayscale8) ? src : toGray(src);
     if (gray.isNull() || scale <= 1)
         return gray;
     const int w = gray.width, h = gray.height;

@@ -1,7 +1,11 @@
 # Changelog
 
+<<<<<<< HEAD
  
 ## [1.0.55] - 2026-09-18
+=======
+## [1.0.54] - 2026-09-17
+>>>>>>> 36ea7ac (chore(ci): fix format and clang-tidy for pass 1)
 
 ### Bug Fixes & Correctness Hardening
 

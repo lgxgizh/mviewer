@@ -281,7 +281,8 @@ int main(int argc, char **argv)
         // ROI row-by-row vectorized computeStats
         const int roiX = 5, roiY = 1, roiW = 36, roiH = 2;
         const auto roiStats = DifferenceEngine::computeStats(diff, 25, roiX, roiY, roiW, roiH);
-        CHECK(roiStats.totalPixels == roiW * roiH, "ROI computeStats totalPixels matches");
+        CHECK(roiStats.totalPixels == static_cast<long long>(roiW) * roiH,
+              "ROI computeStats totalPixels matches");
         // Diff at 33 is on row 0 (x=33). Diff at 47 is on row 0 (x=47).
         // For y=1..2 (rows 1 and 2), diff pixels are all 0.
         CHECK(roiStats.diffPixels == 0, "ROI computeStats thresholded diffPixels correct");
