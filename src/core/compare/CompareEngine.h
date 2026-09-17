@@ -54,6 +54,7 @@ class SyncController
     void setCellScale(int index, double s);
     void setCellOffset(int index, double ox, double oy);
     void fitCell(int index, const CellSize &viewport, const CellSize &imageSize);
+    void swapCells(int a, int b);
     void reset();
 
     CellState &cell(int index);
@@ -191,8 +192,7 @@ class CompareEngine
     CompareEngine &operator=(const CompareEngine &) = delete;
 
     void setImages(const std::vector<std::string> &paths);
-    void setImages(const std::vector<std::string> &paths,
-                   const std::vector<int> &frameIndices);
+    void setImages(const std::vector<std::string> &paths, const std::vector<int> &frameIndices);
     // M28 P1-01: adopt already-decoded frames produced off the UI thread (the
     // CompareWorkspace async load path). Invalid/null frames are dropped,
     // matching setImages() semantics. Engine state is NOT thread-safe: call

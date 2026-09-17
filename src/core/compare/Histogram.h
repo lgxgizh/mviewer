@@ -8,6 +8,8 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
+#include <cstdint>
 #include <vector>
 
 #include "core/image/ImageBuffer.h"
@@ -45,12 +47,17 @@ inline Histogram computeHistogram(const ImageData &img, int roiX, int roiY, int 
         return h;
 
     const ImageBuffer v = img.view();
-    const int x0 = std::max(0, roiX);
-    const int y0 = std::max(0, roiY);
-    const int x1 = std::min(v.width, roiX + roiW);
-    const int y1 = std::min(v.height, roiY + roiH);
-    if (x0 >= x1 || y0 >= y1)
+    const int64_t x0_64 = std::clamp<int64_t>(roiX, 0, v.width);
+    const int64_t y0_64 = std::clamp<int64_t>(roiY, 0, v.height);
+    const int64_t x1_64 = std::clamp<int64_t>(static_cast<int64_t>(roiX) + roiW, 0, v.width);
+    const int64_t y1_64 = std::clamp<int64_t>(static_cast<int64_t>(roiY) + roiH, 0, v.height);
+    if (x0_64 >= x1_64 || y0_64 >= y1_64)
         return h;
+
+    const int x0 = static_cast<int>(x0_64);
+    const int y0 = static_cast<int>(y0_64);
+    const int x1 = static_cast<int>(x1_64);
+    const int y1 = static_cast<int>(y1_64);
 
     const int sx = std::max(1, stepX);
     const int sy = std::max(1, stepY);
@@ -62,41 +69,132 @@ inline Histogram computeHistogram(const ImageData &img, int roiX, int roiY, int 
     const bool bgr = (v.format == PixelFormat::BGR24 || v.format == PixelFormat::BGRA32);
 
     long samples = 0;
-    for (int y = y0; y < y1; y += sy)
+    if (h.bins == 256)
     {
-        const uint8_t *row = data + static_cast<ptrdiff_t>(y) * stride;
-        for (int x = x0; x < x1; x += sx)
+        long rArr[256] = {0};
+        long gArr[256] = {0};
+        long bArr[256] = {0};
+        long lumaArr[256] = {0};
+        long vArr[256] = {0};
+
+        if (gray)
         {
-            const uint8_t *p = row + static_cast<ptrdiff_t>(x) * cpp;
-            int R, G, B;
-            if (gray)
+            static const auto grayLumaLut = []()
             {
-                R = G = B = p[0];
-            }
-            else if (bgr)
+                std::array<uint8_t, 256> lut{};
+                for (int i = 0; i < 256; ++i)
+                {
+                    lut[i] = static_cast<uint8_t>(luminance(
+                        static_cast<uint8_t>(i), static_cast<uint8_t>(i), static_cast<uint8_t>(i)));
+                }
+                return lut;
+            }();
+
+            for (int y = y0; y < y1; y += sy)
             {
-                B = p[0];
-                G = p[1];
-                R = p[2];
+                const uint8_t *row = data + static_cast<ptrdiff_t>(y) * stride;
+                for (int x = x0; x < x1; x += sx)
+                {
+                    const uint8_t g = row[x];
+                    rArr[g]++;
+                    lumaArr[grayLumaLut[g]]++;
+                    ++samples;
+                }
             }
-            else
+            for (int i = 0; i < 256; ++i)
             {
-                R = p[0];
-                G = p[1];
-                B = p[2];
+                gArr[i] = rArr[i];
+                bArr[i] = rArr[i];
+                vArr[i] = rArr[i];
             }
-            h.r[std::min<int>(R, h.bins - 1)]++;
-            h.g[std::min<int>(G, h.bins - 1)]++;
-            h.b[std::min<int>(B, h.bins - 1)]++;
-            // Rec.601 luma via the ONE shared implementation (ImageBuffer.h).
-            // The previous local copy rounded (+0.5) while ImageFrame truncated,
-            // so Browse and Compare reported different luma bins for one image.
-            const int Y = luminance(static_cast<uint8_t>(R), static_cast<uint8_t>(G),
-                                    static_cast<uint8_t>(B));
-            h.luma[std::min<int>(Y, h.bins - 1)]++;
-            const int V = std::max({R, G, B});
-            h.v[std::min<int>(V, h.bins - 1)]++;
-            ++samples;
+        }
+        else if (bgr)
+        {
+            for (int y = y0; y < y1; y += sy)
+            {
+                const uint8_t *row = data + static_cast<ptrdiff_t>(y) * stride;
+                for (int x = x0; x < x1; x += sx)
+                {
+                    const uint8_t *p = row + static_cast<ptrdiff_t>(x) * cpp;
+                    const uint8_t B = p[0];
+                    const uint8_t G = p[1];
+                    const uint8_t R = p[2];
+                    rArr[R]++;
+                    gArr[G]++;
+                    bArr[B]++;
+                    const int Y = luminance(R, G, B);
+                    lumaArr[std::min(Y, 255)]++;
+                    const uint8_t V = std::max({R, G, B});
+                    vArr[V]++;
+                    ++samples;
+                }
+            }
+        }
+        else
+        {
+            for (int y = y0; y < y1; y += sy)
+            {
+                const uint8_t *row = data + static_cast<ptrdiff_t>(y) * stride;
+                for (int x = x0; x < x1; x += sx)
+                {
+                    const uint8_t *p = row + static_cast<ptrdiff_t>(x) * cpp;
+                    const uint8_t R = p[0];
+                    const uint8_t G = p[1];
+                    const uint8_t B = p[2];
+                    rArr[R]++;
+                    gArr[G]++;
+                    bArr[B]++;
+                    const int Y = luminance(R, G, B);
+                    lumaArr[std::min(Y, 255)]++;
+                    const uint8_t V = std::max({R, G, B});
+                    vArr[V]++;
+                    ++samples;
+                }
+            }
+        }
+
+        std::copy(rArr, rArr + 256, h.r.begin());
+        std::copy(gArr, gArr + 256, h.g.begin());
+        std::copy(bArr, bArr + 256, h.b.begin());
+        std::copy(lumaArr, lumaArr + 256, h.luma.begin());
+        std::copy(vArr, vArr + 256, h.v.begin());
+    }
+    else
+    {
+        const int maxBin = h.bins - 1;
+        for (int y = y0; y < y1; y += sy)
+        {
+            const uint8_t *row = data + static_cast<ptrdiff_t>(y) * stride;
+            for (int x = x0; x < x1; x += sx)
+            {
+                const uint8_t *p = row + static_cast<ptrdiff_t>(x) * cpp;
+                int R, G, B;
+                if (gray)
+                {
+                    R = G = B = p[0];
+                }
+                else if (bgr)
+                {
+                    B = p[0];
+                    G = p[1];
+                    R = p[2];
+                }
+                else
+                {
+                    R = p[0];
+                    G = p[1];
+                    B = p[2];
+                }
+                h.r[std::min(R, maxBin)]++;
+                h.g[std::min(G, maxBin)]++;
+                h.b[std::min(B, maxBin)]++;
+                const int Y = luminance(static_cast<uint8_t>(R), static_cast<uint8_t>(G),
+                                        static_cast<uint8_t>(B));
+                h.luma[std::min(Y, maxBin)]++;
+                const int V = std::max({R, G, B});
+                h.v[std::min(V, maxBin)]++;
+                ++samples;
+            }
         }
     }
     h.total = samples;
