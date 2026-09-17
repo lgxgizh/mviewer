@@ -28,6 +28,31 @@
     - Metadata $O(1)$ LRU touch, invalidation, and empty key resilience (`testMetadataLruAndHardening`).
     - DiskCache pathological dimension rejection and key boundary safety (`testDiskCacheBoundsHardening`).
 
+### Performance & Engine Optimization
+
+- **SIMD Hotpath Acceleration in `DifferenceEngine` (`core/compare/DifferenceEngine.cpp`)**:
+  - **AVX2 / SSE2 Quantitative Statistics**: Implemented 256-bit AVX2 (`accumulateGrayscaleStatsAVX2`) and 128-bit SSE2 (`accumulateGrayscaleStatsSSE2`) vector accumulation in `DifferenceEngine::computeStats`, drastically speeding up difference pixel counting and peak difference searches over large diff buffers.
+  - **Deduplicated Inner Quad Vector Kernels**: Extracted reusable SSE2/SSSE3 vector quad routines for RGB24 and RGBA32 difference calculations, eliminating redundant unpack instructions and trimming maintenance footprint under the 800-line complexity ceiling.
+  - **Continuous Buffer Processing**: Hoisted stride branches in `DifferenceEngine::amplify` and `heatMap`, dispatching contiguous image rows into single-pass vector loops.
+
+- **Auto-Alignment Robustness & Vectorization in `Aligner` (`core/compare/Aligner.cpp`)**:
+  - **Multi-Channel Downsampling Correction**: Fixed a multi-channel decimation bug in `Aligner::downscaleBy()` by pre-converting RGB24, BGR24, RGBA32, and BGRA32 images to single-channel Grayscale8 prior to spatial downsampling when `scale > 1` (`max(W, H) >= 512`), preventing color channel interleaving artifacts from skewing registration offsets.
+  - **SAD Inner-Loop SSE2 Vectorization**: Accelerated Sum of Absolute Differences (SAD) block matching using SSE2 `_mm_sad_epu8` (`PSADBW`) instructions with 64-bit lane accumulation, delivering faster registration over large search windows.
+  - **Accurate Sub-Sampling Alignment Scoring**: Normalized candidate SAD metrics using double-precision average error (`bestAvgSAD`), avoiding integer truncation bias during coarse-to-fine search phases.
+  - **Fast Block Shifting**: Replaced per-pixel 2D coordinate calculation loops in `Aligner::shift` with whole-buffer initialization and overlapping scanline memory copies.
+
+- **Histogram Vectorization & Stack Accumulation (`core/compare/Histogram.h`)**:
+  - **Stack-Allocated Aligned Bins**: Replaced dynamic `std::vector` heap indirection in standard 256-bin histogram computation with stack-allocated, 16-byte aligned array accumulators (`alignas(16) long rAcc[256]`), eliminating pointer hops and cache misses.
+  - **Hoisted Format Traversal**: Hoisted pixel format dispatch out of inner row loops for Grayscale8, RGB24/RGBA32, and BGR24/BGRA32.
+
+### Robustness & Synchronization Hardening
+
+- **Compare Cell Transform Synchronization & Fallback Isolation (`core/compare/SyncController.cpp`, `core/compare/CompareEngine.cpp`, `core/compare/CompareEngine.h`)**:
+  - **Frame Swap Transform Synchronization**: Added `SyncController::swapCells(int a, int b)` and wired it into `CompareEngine::swapFrames()`, guaranteeing that independent per-cell zoom and pan states stay synchronized with their respective frames when reordering panes.
+  - **Thread-Isolated Fallback Cell**: Replaced shared mutable static fallback storage in `SyncController::cell()` with thread-local storage reset upon out-of-bounds access, preventing cross-cell and cross-thread state pollution.
+  - **Defensive Null-Frame Guards**: Added null frame validation in `CompareEngine::differenceMap()` and `CompareEngine::session()`.
+  - **64-Bit Integer Overflow Hardening**: Hardened ROI bounds checking across `DifferenceEngine` and `Histogram` using 64-bit integer arithmetic (`std::clamp<int64_t>`), preventing overflow and out-of-bounds memory reads on pathological or negative coordinates.
+
 ## [1.0.58] - 2026-09-18
 
 ### Bug Fixes & Correctness Hardening

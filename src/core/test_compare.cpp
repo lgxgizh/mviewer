@@ -137,6 +137,39 @@ int main(int argc, char **argv)
         else
             printf("DIFF_OK %dx%d\n", diff.width, diff.height);
 
+        // Test swapFrames sync and cell transform preservation
+        eng.setSyncEnabled(false);
+        eng.setCellScale(0, 1.5);
+        eng.setCellOffset(0, 10.0, 20.0);
+        eng.setCellScale(1, 2.5);
+        eng.setCellOffset(1, 30.0, 40.0);
+        eng.swapFrames(0, 1);
+        if (std::abs(eng.cellScale(0) - 2.5) > 1e-6 || std::abs(eng.cellScale(1) - 1.5) > 1e-6 ||
+            std::abs(eng.cellOffset(0).x - 30.0) > 1e-6 ||
+            std::abs(eng.cellOffset(1).x - 10.0) > 1e-6)
+        {
+            printf("SWAP_FRAMES_SYNC_FAIL\n");
+            fails++;
+        }
+        else
+        {
+            printf("SWAP_FRAMES_SYNC_OK\n");
+        }
+
+        // Test out-of-bounds cell access isolation
+        CellState &oob = eng.sync().cell(99);
+        oob.scale = 999.0;
+        const CellState &oobConst = eng.sync().cell(99);
+        if (std::abs(oobConst.scale - 1.0) > 1e-6)
+        {
+            printf("CELL_FALLBACK_CONTAMINATION_FAIL\n");
+            fails++;
+        }
+        else
+        {
+            printf("CELL_FALLBACK_ISOLATION_OK\n");
+        }
+
         eng.removeImage(0);
         if (eng.imageCount() != 1)
         {
