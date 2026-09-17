@@ -49,8 +49,8 @@ bool ContrastAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int
                 vsum2 = _mm_add_epi64(vsum2, _mm_add_epi64(sqlo_0, sqlo_1));
                 vsum2 = _mm_add_epi64(vsum2, _mm_add_epi64(sqhi_0, sqhi_1));
             }
-            alignas(16) uint64_t sBuf[2];
-            alignas(16) uint64_t s2Buf[2];
+            alignas(16) int64_t sBuf[2];
+            alignas(16) int64_t s2Buf[2];
             _mm_storeu_si128(reinterpret_cast<__m128i *>(sBuf), vsum);
             _mm_storeu_si128(reinterpret_cast<__m128i *>(s2Buf), vsum2);
             iSum += sBuf[0] + sBuf[1];
@@ -81,9 +81,11 @@ bool ContrastAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int
             }
         }
     }
-    m_result.mean = static_cast<double>(iSum) / n;
-    m_result.rms =
-        std::sqrt(std::max(0.0, static_cast<double>(iSum2) / n - m_result.mean * m_result.mean));
+    // Image sums fit comfortably in double mantissa for ROI sizes we support.
+    m_result.mean = static_cast<double>(iSum) / static_cast<double>(n); // NOLINT(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    m_result.rms = std::sqrt(std::max(
+        0.0, static_cast<double>(iSum2) / static_cast<double>(n) - // NOLINT(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+                 m_result.mean * m_result.mean));
     m_result.ok = true;
     return true;
 }

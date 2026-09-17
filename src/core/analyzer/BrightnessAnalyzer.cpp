@@ -82,7 +82,10 @@ bool BrightnessAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, i
         }
     }
     // Image sums fit comfortably in double mantissa for ROI sizes we support.
-    m_result.avgLum = static_cast<double>(iSum) / static_cast<double>(n); // NOLINT(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
+    m_result.avgLum =
+        static_cast<double>(iSum) /
+        static_cast<double>(
+            n); // NOLINT(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
     m_result.minLum = static_cast<double>(iMn);
     m_result.maxLum = static_cast<double>(iMx);
     m_result.ok = true;

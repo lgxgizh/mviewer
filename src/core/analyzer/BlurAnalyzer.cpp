@@ -64,7 +64,8 @@ bool BlurAnalyzer::compute(const ImageBuffer &v, int x0, int y0, int x1, int y1)
             }
         }
     }
-    m_result.variance = static_cast<double>(iSum2) / n;
+    // Laplacian energy fits in double mantissa for ROI sizes we support.
+    m_result.variance = static_cast<double>(iSum2) / static_cast<double>(n); // NOLINT(bugprone-narrowing-conversions,cppcoreguidelines-narrowing-conversions)
     m_result.ok = true;
     return true;
 }
