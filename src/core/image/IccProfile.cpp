@@ -39,7 +39,7 @@ std::string parseTextType(const unsigned char *tagData, uint32_t tagSize)
     if (tagSize < 4)
         return {};
     const std::string type = sig4(tagData);
-    if (type == "desc" || type == "text")
+    if (type == "desc")
     {
         // desc type: bytes 4-7 reserved, 8-11 ASCII length, then the string.
         if (tagSize < 12)
@@ -49,6 +49,14 @@ std::string parseTextType(const unsigned char *tagData, uint32_t tagSize)
         if (len > maxLen)
             len = maxLen;
         return trimNull(std::string(tagData + 12, tagData + 12 + len));
+    }
+    if (type == "text")
+    {
+        // text type (ICC.1:2010 §10.22): bytes 4-7 reserved, 8..end 7-bit ASCII string.
+        // There is no 4-byte length field at 8-11 in textType.
+        if (tagSize < 8)
+            return {};
+        return trimNull(std::string(tagData + 8, tagData + tagSize));
     }
     if (type == "mluc")
     {
@@ -131,25 +139,25 @@ const char *deviceClassText(const std::string &s)
 
 const char *colorSpaceText(const std::string &s)
 {
-    if (s == "RGB ")
+    if (s == "RGB " || s.rfind("RGB", 0) == 0)
         return "RGB";
-    if (s == "GRAY")
+    if (s == "GRAY" || s.rfind("GRAY", 0) == 0)
         return "灰度";
     if (s == "CMYK")
         return "CMYK";
-    if (s == "CMY ")
+    if (s == "CMY " || s.rfind("CMY", 0) == 0)
         return "CMY";
-    if (s == "Lab ")
+    if (s == "Lab " || s.rfind("Lab", 0) == 0)
         return "Lab";
-    if (s == "XYZ ")
+    if (s == "XYZ " || s.rfind("XYZ", 0) == 0)
         return "XYZ";
-    if (s == "Luv ")
+    if (s == "Luv " || s.rfind("Luv", 0) == 0)
         return "Luv";
-    if (s == "Yxy ")
+    if (s == "Yxy " || s.rfind("Yxy", 0) == 0)
         return "Yxy";
-    if (s == "HSV ")
+    if (s == "HSV " || s.rfind("HSV", 0) == 0)
         return "HSV";
-    if (s == "HLS ")
+    if (s == "HLS " || s.rfind("HLS", 0) == 0)
         return "HLS";
     if (s == "YCbr")
         return "YCbCr";
@@ -196,12 +204,10 @@ IccProfile parseIccProfile(const unsigned char *data, size_t size)
     info.pcs = colorSpaceText(sig4(data + 20));
     info.renderingIntent = renderingIntentText(be32(data + 64));
 
-    const uint32_t tagCount = be32(data + 128);
+    const uint32_t maxTags = (size >= 144) ? static_cast<uint32_t>((size - 132) / 12) : 0;
+    const uint32_t tagCount = std::min(be32(data + 128), maxTags);
     for (uint32_t i = 0; i < tagCount; ++i)
     {
-        const size_t entryEnd = 132 + size_t(i) * 12 + 12;
-        if (entryEnd > size)
-            break;
         const unsigned char *e = data + 132 + size_t(i) * 12;
         const std::string sig = sig4(e);
         const uint32_t off = be32(e + 4);
@@ -209,7 +215,7 @@ IccProfile parseIccProfile(const unsigned char *data, size_t size)
         if (sz < 4 || sz > size || off > size - sz)
             continue;
         const unsigned char *tagData = data + off;
-        if (sig == "desc")
+        if (sig == "desc" || sig == "dscm" || (info.description.empty() && sig == "dmdd"))
         {
             if (info.description.empty())
                 info.description = parseTextType(tagData, sz);

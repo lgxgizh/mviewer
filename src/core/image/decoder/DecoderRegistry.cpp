@@ -47,7 +47,13 @@ void DecoderRegistry::registerDecoder(std::shared_ptr<IDecoder> decoder)
     if (!decoder)
         return;
     std::lock_guard<std::mutex> lk(m_mutex);
-    m_decoders.push_back(std::move(decoder));
+    auto fallbackIt =
+        std::find_if(m_decoders.begin(), m_decoders.end(), [](const std::shared_ptr<IDecoder> &d)
+                     { return d && d->name() == "QtFallbackDecoder"; });
+    if (fallbackIt != m_decoders.end())
+        m_decoders.insert(fallbackIt, std::move(decoder));
+    else
+        m_decoders.push_back(std::move(decoder));
 }
 
 void DecoderRegistry::unregister(const std::string &id)

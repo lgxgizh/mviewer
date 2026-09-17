@@ -148,6 +148,24 @@ int main(int argc, char **argv)
     ImageData d3 = DecoderRegistry::instance().decodeFull(jpgPath);
     CHECK(!d3.isNull() && d3.width == 48, "plain JPEG still decoded via registry");
 
+    // Large container scan test: simulate a multi-megabyte RAW file with embedded preview
+    // to verify vectorized skipToNextFF performance and correctness.
+    {
+        const QByteArray embedded = makeJpegBytes(128, 96);
+        std::vector<uint8_t> largeRaw(1024 * 1024, 0x3a); // 1 MiB junk filler
+        largeRaw.insert(largeRaw.end(), reinterpret_cast<const uint8_t *>(embedded.constData()),
+                        reinterpret_cast<const uint8_t *>(embedded.constData()) + embedded.size());
+        largeRaw.insert(largeRaw.end(), 64 * 1024, 0x4b); // 64 KiB trailing junk
+        const std::string largePath = tmp.path().toStdString() + "/large_simulated.cr3";
+        writeFile(largePath, largeRaw);
+        ImageData dLarge = DecoderRegistry::instance().decodeFull(largePath);
+        CHECK(!dLarge.isNull() && dLarge.width == 128 && dLarge.height == 96,
+              "vectorized chunk scanner accurately extracts preview from 1MB+ container");
+        ImageData dLargeScaled = DecoderRegistry::instance().decodeScaled(largePath, 32);
+        CHECK(!dLargeScaled.isNull() && dLargeScaled.width <= 32 && dLargeScaled.height <= 32,
+              "scaled preview decode honors maxEdge constraint");
+    }
+
     printf("\n==== RAW decode test: %d passed, %d failed ====\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

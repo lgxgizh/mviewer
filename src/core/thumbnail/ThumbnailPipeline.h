@@ -37,10 +37,10 @@
 struct ThumbnailPipeline
 {
     using DecodeFn = std::function<ImageData(const std::string &path, int size)>;
-    using ResultFn =
-        std::function<void(const std::string &path, int size, const ImageData &thumb)>;
+    using ResultFn = std::function<void(const std::string &path, int size, const ImageData &thumb)>;
 
-    size_t memCacheMax = 512; // hot thumbnails retained in memory (LRU)
+    size_t memCacheMax = 512;                   // hot thumbnails retained in memory (LRU)
+    size_t memCacheMaxBytes = 96 * 1024 * 1024; // 96 MiB budget (M55)
 
     // Current thumbnail size. Read under m_mtx by the workers and written only
     // through setThumbSize(), which also performs the size-change invalidation
@@ -50,6 +50,24 @@ struct ThumbnailPipeline
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         return thumbSize;
+    }
+
+    void setMemCacheMaxBytes(size_t bytes)
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        memCacheMaxBytes = bytes;
+        while (!m_lru.empty() && (m_memCache.size() > memCacheMax ||
+                                  (memCacheMaxBytes > 0 && m_memCacheBytes > memCacheMaxBytes)))
+        {
+            const std::string &back = m_lru.back();
+            auto it = m_memCache.find(back);
+            if (it != m_memCache.end())
+            {
+                m_memCacheBytes -= it->second.data.byteSize();
+                m_memCache.erase(it);
+            }
+            m_lru.pop_back();
+        }
     }
 
     // Inject the decode step (default: Decoder::decodeScaled). Tests inject a fake.
@@ -126,6 +144,7 @@ struct ThumbnailPipeline
                 ++it;
                 continue;
             }
+            m_memCacheBytes -= it->second.data.byteSize();
             m_lru.erase(it->second.lruIt);
             it = m_memCache.erase(it);
         }
@@ -190,24 +209,24 @@ struct ThumbnailPipeline
         m_memCache.clear();
         m_lru.clear();
         m_pending.clear();
+        m_memCacheBytes = 0;
     }
 
     // Synchronous cache probe: returns the cached thumbnail at `size` if
     // present, else null and kicks an async decode (respecting
-    // visible/predictive ordering).
+    // visible/predictive ordering). Single-lock path tracks hits/misses.
     ImageData request(const std::string &path, int size)
     {
-        {
-            std::lock_guard<std::mutex> lk(m_mtx);
-            auto it = m_memCache.find(key(path, size));
-            if (it != m_memCache.end())
-            {
-                m_lru.splice(m_lru.begin(), m_lru, it->second.lruIt);
-                return it->second.data;
-            }
-        }
-        // Kick scheduling in case this path is newly visible.
         std::lock_guard<std::mutex> lk(m_mtx);
+        auto it = m_memCache.find(key(path, size));
+        if (it != m_memCache.end())
+        {
+            ++m_hits;
+            m_lru.splice(m_lru.begin(), m_lru, it->second.lruIt);
+            return it->second.data;
+        }
+        ++m_misses;
+        // Kick scheduling in case this path is newly visible.
         scheduleLocked();
         return ImageData{};
     }
@@ -224,12 +243,38 @@ struct ThumbnailPipeline
         m_sources.clear();
         m_pending.clear();
         m_pathRevisions.clear();
+        m_memCacheBytes = 0;
     }
 
     size_t memCacheSize() const
     {
         std::lock_guard<std::mutex> lk(m_mtx);
         return m_memCache.size();
+    }
+
+    size_t memCacheBytes() const
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        return m_memCacheBytes;
+    }
+
+    uint64_t hits() const
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        return m_hits;
+    }
+
+    uint64_t misses() const
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        return m_misses;
+    }
+
+    double hitRatio() const
+    {
+        std::lock_guard<std::mutex> lk(m_mtx);
+        const uint64_t total = m_hits + m_misses;
+        return total == 0 ? 0.0 : static_cast<double>(m_hits) / static_cast<double>(total);
     }
 
     // M26: test observability — number of keys with an outstanding scheduler
@@ -338,8 +383,8 @@ struct ThumbnailPipeline
         const uint64_t pathRevision = m_pathRevisions[path];
         auto handle = TaskScheduler::instance().submit(
             prio,
-            [this, path, size, k, gen, owner, ownerKey, decode,
-             result, pathRevision](const TaskScheduler::TaskContext &ctx)
+            [this, path, size, k, gen, owner, ownerKey, decode, result,
+             pathRevision](const TaskScheduler::TaskContext &ctx)
             {
                 // Stop stale queued work BEFORE decoding. The generation that
                 // owned this key already cleared/repurposed the bookkeeping in
@@ -373,8 +418,7 @@ struct ThumbnailPipeline
                     // Superseded generation: drop everything (no cache, no
                     // delivery) so old directories can never pollute the
                     // current one.
-                    if (gen != m_gen || ctx.isCancelled() ||
-                        m_pathRevisions[path] != pathRevision)
+                    if (gen != m_gen || ctx.isCancelled() || m_pathRevisions[path] != pathRevision)
                         return;
                     if (!thumb.isNull())
                     {
@@ -483,6 +527,7 @@ struct ThumbnailPipeline
         auto existing = m_memCache.find(k);
         if (existing != m_memCache.end())
         {
+            m_memCacheBytes -= existing->second.data.byteSize();
             m_lru.erase(existing->second.lruIt);
             m_memCache.erase(existing);
         }
@@ -490,11 +535,18 @@ struct ThumbnailPipeline
         e.data = data;
         m_lru.push_front(k);
         e.lruIt = m_lru.begin();
+        m_memCacheBytes += data.byteSize();
         m_memCache[k] = e;
-        while (m_memCache.size() > memCacheMax)
+        while (!m_lru.empty() && (m_memCache.size() > memCacheMax ||
+                                  (memCacheMaxBytes > 0 && m_memCacheBytes > memCacheMaxBytes)))
         {
             const std::string &back = m_lru.back();
-            m_memCache.erase(back);
+            auto it = m_memCache.find(back);
+            if (it != m_memCache.end())
+            {
+                m_memCacheBytes -= it->second.data.byteSize();
+                m_memCache.erase(it);
+            }
             m_lru.pop_back();
         }
     }
@@ -510,6 +562,9 @@ struct ThumbnailPipeline
     ResultFn m_result;
     std::unordered_map<std::string, MemEntry> m_memCache;
     std::list<std::string> m_lru;
+    size_t m_memCacheBytes = 0;
+    uint64_t m_hits = 0;
+    uint64_t m_misses = 0;
     // Outstanding scheduler handles, keyed by (path, size, generation, owner). Tasks
     // remove their own entry on completion; setSources()/clear() cancel + drop
     // them wholesale — the map never accumulates the browse history.

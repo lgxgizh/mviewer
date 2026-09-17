@@ -111,11 +111,35 @@ int main()
         size_t after = order.size();
         CHECK(!hit.isNull(), "cached thumbnail returned synchronously");
         CHECK(after == before, "cache hit did not trigger a new decode");
+        CHECK(pipe.hits() == 1, "telemetry tracks cache hit");
+        CHECK(pipe.memCacheBytes() > 0, "memCacheBytes tracks memory usage");
+        CHECK(pipe.hitRatio() > 0.0, "hitRatio calculates valid ratio");
+    }
+
+    // Byte budgeting eviction test
+    {
+        printf("\n[byte budgeting eviction]\n");
+        fflush(stdout);
+        ThumbnailPipeline bytePipe;
+        bytePipe.setThumbSize(64);
+        bytePipe.setDecodeFn([](const std::string &, int size) { return fakeThumb(size); });
+        const size_t oneThumbBytes = 64 * 64 * 3;
+        bytePipe.setMemCacheMaxBytes(oneThumbBytes * 2);
+        std::vector<std::string> bSrc = {"b0.jpg", "b1.jpg", "b2.jpg"};
+        bytePipe.setSources(bSrc);
+        bytePipe.setPredictiveCount(0);
+        bytePipe.setVisibleRange(0, 3);
+        TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool,
+                                        std::chrono::milliseconds(2000));
+        CHECK(bytePipe.memCacheBytes() <= oneThumbBytes * 2,
+              "memCacheBytes respects memCacheMaxBytes");
+        CHECK(bytePipe.memCacheSize() == 2, "oldest thumbnail evicted when byte budget exceeded");
     }
 
     // clear empties the cache.
     pipe.clear();
     CHECK(pipe.memCacheSize() == 0, "clear() empties the memory cache");
+    CHECK(pipe.memCacheBytes() == 0, "clear() resets memCacheBytes to 0");
 
     // M55: same-generation ABA. A running decode is cancelled by a viewport
     // update, then the exact key is requested again before the old worker
@@ -158,9 +182,9 @@ int main()
             releaseFirst = true;
         }
         gateCv.notify_all();
-        CHECK(TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool,
-                                              std::chrono::seconds(5)),
-              "same-generation ABA tasks drain");
+        CHECK(
+            TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool, std::chrono::seconds(5)),
+            "same-generation ABA tasks drain");
         CHECK(decodeCalls == 2, "same-key replacement decoded exactly once after the old run");
         CHECK(aba.pendingCount() == 0 && aba.handlesCount() == 0,
               "old ABA completion did not erase replacement bookkeeping");
@@ -193,8 +217,8 @@ int main()
                 lock.unlock();
                 return fakeThumb(size);
             });
-        overlap.setSources({"overlap0.png", "overlap1.png", "overlap2.png", "overlap3.png",
-                            "overlap4.png"});
+        overlap.setSources(
+            {"overlap0.png", "overlap1.png", "overlap2.png", "overlap3.png", "overlap4.png"});
         overlap.setPredictiveCount(0);
         overlap.setVisibleRange(0, 4);
         {
@@ -208,9 +232,9 @@ int main()
             releaseFirst = true;
         }
         gateCv.notify_all();
-        CHECK(TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool,
-                                              std::chrono::seconds(5)),
-              "overlap retention tasks drain");
+        CHECK(
+            TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool, std::chrono::seconds(5)),
+            "overlap retention tasks drain");
         CHECK(calls["overlap0.png"] == 1 && calls["overlap1.png"] == 1 &&
                   calls["overlap2.png"] == 1 && calls["overlap3.png"] == 1 &&
                   calls["overlap4.png"] == 1,

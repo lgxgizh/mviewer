@@ -210,7 +210,8 @@ QByteArray readExifPayload(QFile &file, bool isJpeg)
 
         if (code != 0xE1 || segmentSize < 6)
         {
-            file.seek(file.pos() + segmentSize);
+            if (!file.seek(file.pos() + segmentSize))
+                break;
             continue;
         }
         const QByteArray signature = file.read(6);
