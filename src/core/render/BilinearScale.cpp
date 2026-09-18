@@ -1,5 +1,3 @@
-#include "core/render/BilinearScale.h"
-
 #include "core/simd/CpuFeatures.h"
 
 #include <QImage>

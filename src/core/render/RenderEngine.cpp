@@ -1,7 +1,5 @@
 #include "core/render/RenderEngine.h"
 
-#include "core/render/BilinearScale.h"
-
 #include "core/image/QtConvert.h"
 #include "core/trace/Trace.h"
 
@@ -14,6 +12,11 @@
 #include <cmath>
 #include <mutex>
 #include <vector>
+
+namespace mviewer::core::render_detail
+{
+QImage bilinearQ(const QImage &src, const QSize &target);
+}
 
 namespace
 {
