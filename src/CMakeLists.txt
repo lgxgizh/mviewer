@@ -58,7 +58,9 @@ add_library(mviewer_core SHARED
     core/SelfTest.cpp
     core/SettingsIO.cpp
     core/analysis/AnalysisEngine.cpp
+    core/analysis/AnalysisEngine_metrics.cpp
     core/analysis/PixelInspector.cpp
+    core/analysis/PixelInspector_adjust.cpp
     core/analysis/ExportReport.cpp
     core/analysis/ExportReport_serialize.cpp
     core/analysis/ReportHtml.cpp
@@ -848,6 +850,23 @@ target_compile_features(test_pixelinspector PRIVATE cxx_std_20)
 target_include_directories(test_pixelinspector PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(NAME pixelinspector_tests COMMAND test_pixelinspector)
+
+# ─── AnalysisEngine & Quality Metrics SIMD Tests ─────────────────────────────
+add_executable(test_analysisengine
+    core/test_analysisengine.cpp
+)
+
+target_link_libraries(test_analysisengine
+    PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        mviewer_core
+)
+
+target_compile_features(test_analysisengine PRIVATE cxx_std_20)
+target_include_directories(test_analysisengine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(NAME analysisengine_tests COMMAND test_analysisengine)
 
 # ─── M15 P0#4 Metadata Center (unified MetadataModel + QTreeView) ───────────
 add_executable(test_metadatamodel

@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.0.56] - 2026-09-18
+
+### Performance & Vector Optimization
+
+- **SIMD-Accelerated Quality & Noise Metrics (`core/analysis/AnalysisEngine_metrics.cpp`)**:
+  - **AVX2 & SSE2 PSNR SSD Vectorization**: Vectorized sum-of-squared differences (SSD) calculation for image PSNR. Grayscale8, RGB24, and BGR24 now process via 256-bit AVX2 (`accumulateSsdBytesAVX2`, 32 bytes/iter with `_mm256_unpacklo_epi8`, `_mm256_sub_epi16`, `_mm256_madd_epi16`, and periodic 64-bit lane flushing) and 128-bit SSE2 (`accumulateSsdBytesSSE2`, 16 bytes/iter).
+  - **RGBA32/BGRA32 Color Difference SSE2 Kernel**: Implemented 4-pixel/iter SSE2 vector path (`accumulateSsdRgbaSSE2`) utilizing 16-bit RGB channel masking to zero alpha channel differences directly in SIMD registers without scalar branching.
+  - **Zero-Allocation Cross-Format Fast Paths**: Added direct cross-format SSD calculations (`RGB24` vs `BGR24` and `RGBA32` vs `BGRA32`), eliminating full 4K QImage allocations and format conversions during metric evaluation.
+  - **SSE2 SSIM 8x8 Block Statistics Acceleration**: Vectorized SSIM inner 8x8 block summation using SSE2 (`computeBlockStatsSSE2` with `_mm_loadl_epi64`, `_mm_sad_epu8`, and `_mm_madd_epi16`), accelerating SSIM block statistics calculation by ~4x.
+  - **SSE2 Laplacian Convolution for Noise Estimation**: Vectorized horizontal Laplacian kernel convolution $[0, 1, 0; 1, -4, 1; 0, 1, 0]$ via SSE2 (`calcLaplacianRowSSE2`, 16 pixels/iter) with 16-bit intermediate arithmetic and 64-bit accumulator accumulation.
+
+### Correctness, Hardening & ADR-014 Compliance
+
+- **PixelInspector 64-Bit Hardening & Boundary Clamping (`core/analysis/PixelInspector_adjust.cpp`)**:
+  - Fixed 32-bit `long` signed integer overflow on MSVC platforms in `neighborhoodStats` by elevating accumulators (`sum`, `sumSq`, `rSum`, `gSum`, `bSum`, `vSum`) to `int64_t`.
+  - Enforced 64-bit coordinate boundary clamping in `analysisCropBounds`, `mapDisplaySelectionToSource`, and `mapSourceSelectionToDisplay`.
+- **ExportReport Stride & Null Buffer Hardening (`core/analysis/ExportReport.cpp`)**:
+  - Added robust validation in `summarizeDiff` for non-contiguous padded strides, null buffers, and empty dimensions.
+- **ADR-014 TU Splits & Complexity Gate Conformance**:
+  - Split `PixelInspector.cpp` (formerly 777 lines) into `PixelInspector.cpp` (233 lines) and `PixelInspector_adjust.cpp` (566 lines).
+  - Split `AnalysisEngine.cpp` into `AnalysisEngine.cpp` (213 lines) and `AnalysisEngine_metrics.cpp` (599 lines), strictly respecting the 800-line translation unit limit and function line length ceiling.
+- **Unit Test Coverage (`core/test_analysisengine.cpp`)**:
+  - Registered `test_analysisengine` / `analysisengine_tests` covering identical PSNR, mathematical reference values, cross-format comparisons, large SIMD buffers, SSIM degradations, noise estimates, and ROI coordinate boundary clamping.
+
 ## [1.0.55] - 2026-09-18
 
 ### Performance & Vector Optimization

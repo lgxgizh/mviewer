@@ -7,6 +7,7 @@
 #include <QImage>
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 
 // 内部实现：把 ImageData 转成 QImage 做像素级统计，算法逻辑保持不变。
@@ -30,7 +31,7 @@ ImageStats computeStatsGrayscale(const ImageBuffer &vbuf, int rx, int ry, int rw
 {
     ImageStats s;
     long long sum = 0;
-    if (rx == 0 && rw == vbuf.width && vbuf.stride() == static_cast<size_t>(rw))
+    if (rx == 0 && rw == vbuf.width && vbuf.stride() == static_cast<ptrdiff_t>(rw))
     {
         const uint8_t *p = vbuf.data + static_cast<size_t>(ry) * rw;
         const size_t total = static_cast<size_t>(rw) * rh;
@@ -73,89 +74,6 @@ ImageStats computeStatsGrayscale(const ImageBuffer &vbuf, int rx, int ry, int rw
         s.bMean = mean;
     }
     return s;
-}
-
-template <typename LineGetterA, typename LineGetterB>
-double computeSSIMCore(int w, int h, LineGetterA &&lineA, LineGetterB &&lineB)
-{
-    const double C1 = (0.01 * 255.0) * (0.01 * 255.0);
-    const double C2 = (0.03 * 255.0) * (0.03 * 255.0);
-    constexpr int block = 8;
-    constexpr double N = 64.0;
-
-    double ssimSum = 0.0;
-    int blocks = 0;
-    for (int by = 0; by + block <= h; by += block)
-    {
-        const uint8_t *linesA[block];
-        const uint8_t *linesB[block];
-        for (int y = 0; y < block; ++y)
-        {
-            linesA[y] = lineA(by + y);
-            linesB[y] = lineB(by + y);
-        }
-
-        for (int bx = 0; bx + block <= w; bx += block)
-        {
-            int sumA = 0, sumB = 0, sumAA = 0, sumBB = 0, sumAB = 0;
-            for (int y = 0; y < block; ++y)
-            {
-                const uint8_t *la = linesA[y] + bx;
-                const uint8_t *lb = linesB[y] + bx;
-                for (int x = 0; x < block; ++x)
-                {
-                    const int pa = la[x];
-                    const int pb = lb[x];
-                    sumA += pa;
-                    sumB += pb;
-                    sumAA += pa * pa;
-                    sumBB += pb * pb;
-                    sumAB += pa * pb;
-                }
-            }
-            const double meanA = sumA / N;
-            const double meanB = sumB / N;
-            const double varA = std::max(0.0, (sumAA / N) - meanA * meanA);
-            const double varB = std::max(0.0, (sumBB / N) - meanB * meanB);
-            const double cov = (sumAB / N) - meanA * meanB;
-            const double num = (2.0 * meanA * meanB + C1) * (2.0 * cov + C2);
-            const double den = (meanA * meanA + meanB * meanB + C1) * (varA + varB + C2);
-            ssimSum += num / den;
-            ++blocks;
-        }
-    }
-    return blocks > 0 ? ssimSum / blocks : 0.0;
-}
-
-template <typename LineGetter>
-double calcLaplacianCore(int w, int h, LineGetter &&getLine)
-{
-    if (w < 3 || h < 3)
-        return 0.0;
-    const int count = (w - 2) * (h - 2);
-    if (count < 2)
-        return 0.0;
-
-    int64_t sum = 0;
-    int64_t sumSq = 0;
-    const uint8_t *prev = getLine(0);
-    const uint8_t *curr = getLine(1);
-    for (int y = 1; y < h - 1; ++y)
-    {
-        const uint8_t *next = getLine(y + 1);
-        for (int x = 1; x < w - 1; ++x)
-        {
-            const int lap = static_cast<int>(prev[x]) + curr[x - 1] + curr[x + 1] + next[x] -
-                            4 * static_cast<int>(curr[x]);
-            sum += lap;
-            sumSq += static_cast<int64_t>(lap) * lap;
-        }
-        prev = curr;
-        curr = next;
-    }
-    const double mean = static_cast<double>(sum) / count;
-    const double variance = static_cast<double>(sumSq) / count - mean * mean;
-    return std::max(0.0, variance);
 }
 
 ImageStats computeStatsFallback(const ImageData &imgData, int rx, int ry, int rw, int rh)
@@ -210,11 +128,17 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
     if (w <= 0 || h <= 0)
         return {};
 
-    // 裁剪 ROI 到图像边界
-    const int rx = std::max(0, region.x);
-    const int ry = std::max(0, region.y);
-    const int rw = std::min(region.width, w - rx);
-    const int rh = std::min(region.height, h - ry);
+    // 裁剪 ROI 到图像边界 (64位防溢出)
+    const long long x0ll = std::clamp<long long>(region.x, 0, w);
+    const long long y0ll = std::clamp<long long>(region.y, 0, h);
+    const long long x1ll =
+        std::clamp<long long>(static_cast<long long>(region.x) + region.width, 0, w);
+    const long long y1ll =
+        std::clamp<long long>(static_cast<long long>(region.y) + region.height, 0, h);
+    const int rx = static_cast<int>(std::min(x0ll, x1ll));
+    const int ry = static_cast<int>(std::min(y0ll, y1ll));
+    const int rw = static_cast<int>(std::max(x0ll, x1ll)) - rx;
+    const int rh = static_cast<int>(std::max(y0ll, y1ll)) - ry;
     if (rw <= 0 || rh <= 0)
         return {};
 
@@ -278,168 +202,7 @@ ImageStats AnalysisEngine::computeStatsROI(const ImageData &imgData,
 
 ImageData AnalysisEngine::differenceMap(const ImageData &aData, const ImageData &bData)
 {
-    // ONE implementation: DifferenceEngine handles every PixelFormat natively
-    // (per-format channel offsets) and produces the same Grayscale8 map, so this
-    // entry point only supplies the "no threshold" default. Keeping a second
-    // copy here meant two sets of numerics for one user-visible feature.
     return DifferenceEngine::differenceMap(aData, bData, 0);
-}
-
-double AnalysisEngine::psnr(const ImageData &aData, const ImageData &bData)
-{
-    const int w = std::min(aData.width, bData.width);
-    const int h = std::min(aData.height, bData.height);
-    if (w == 0 || h == 0)
-        return 0.0;
-
-    int64_t sumSq = 0;
-    const long long n = 1LL * w * h;
-    const bool isSameFormat = (aData.format == bData.format);
-
-    if (isSameFormat &&
-        (aData.format == PixelFormat::RGB24 || aData.format == PixelFormat::BGR24 ||
-         aData.format == PixelFormat::RGBA32 || aData.format == PixelFormat::BGRA32 ||
-         aData.format == PixelFormat::Grayscale8))
-    {
-        const ImageBuffer va = aData.view();
-        const ImageBuffer vb = bData.view();
-        const int cpp = va.channelsPerPixel();
-        const bool isGray = (aData.format == PixelFormat::Grayscale8);
-
-        if (isGray)
-        {
-            if (w == va.width && va.stride() == static_cast<size_t>(w) &&
-                vb.stride() == static_cast<size_t>(w))
-            {
-                const size_t total = static_cast<size_t>(w) * h;
-                const uint8_t *la = va.data;
-                const uint8_t *lb = vb.data;
-                for (size_t i = 0; i < total; ++i)
-                {
-                    const int d = static_cast<int>(la[i]) - static_cast<int>(lb[i]);
-                    sumSq += d * d;
-                }
-            }
-            else
-            {
-                for (int y = 0; y < h; ++y)
-                {
-                    const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
-                    const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
-                    for (int x = 0; x < w; ++x)
-                    {
-                        const int d = static_cast<int>(la[x]) - static_cast<int>(lb[x]);
-                        sumSq += d * d;
-                    }
-                }
-            }
-            const double mse = static_cast<double>(sumSq) / static_cast<double>(n);
-            if (mse <= 1e-10)
-                return 100.0; // 完美一致(而非 inf)
-            return 10.0 * std::log10(65025.0 / mse);
-        }
-
-        const bool isContiguous = (w == va.width &&
-                                   va.stride() == static_cast<size_t>(w * cpp) &&
-                                   vb.stride() == static_cast<size_t>(w * cpp));
-        if (isContiguous)
-        {
-            const size_t totalPixels = static_cast<size_t>(w) * h;
-            const uint8_t *la = va.data;
-            const uint8_t *lb = vb.data;
-            for (size_t i = 0; i < totalPixels; ++i)
-            {
-                const size_t offset = i * cpp;
-                const int dr = static_cast<int>(la[offset + 0]) - static_cast<int>(lb[offset + 0]);
-                const int dg = static_cast<int>(la[offset + 1]) - static_cast<int>(lb[offset + 1]);
-                const int db = static_cast<int>(la[offset + 2]) - static_cast<int>(lb[offset + 2]);
-                sumSq += dr * dr + dg * dg + db * db;
-            }
-        }
-        else
-        {
-            for (int y = 0; y < h; ++y)
-            {
-                const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
-                const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
-                for (int x = 0; x < w; ++x)
-                {
-                    const size_t offset = static_cast<size_t>(x) * cpp;
-                    const int dr = static_cast<int>(la[offset + 0]) - static_cast<int>(lb[offset + 0]);
-                    const int dg = static_cast<int>(la[offset + 1]) - static_cast<int>(lb[offset + 1]);
-                    const int db = static_cast<int>(la[offset + 2]) - static_cast<int>(lb[offset + 2]);
-                    sumSq += dr * dr + dg * dg + db * db;
-                }
-            }
-        }
-        const double mse = static_cast<double>(sumSq) / static_cast<double>(n * 3);
-        if (mse <= 1e-10)
-            return 100.0; // 完美一致(而非 inf)
-        return 10.0 * std::log10(65025.0 / mse);
-    }
-
-    QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_RGB32);
-    QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_RGB32);
-    for (int y = 0; y < h; ++y)
-    {
-        const QRgb *la = reinterpret_cast<const QRgb *>(aa.constScanLine(y));
-        const QRgb *lb = reinterpret_cast<const QRgb *>(bb.constScanLine(y));
-        for (int x = 0; x < w; ++x)
-        {
-            const int dr = static_cast<int>(qRed(la[x])) - qRed(lb[x]);
-            const int dg = static_cast<int>(qGreen(la[x])) - qGreen(lb[x]);
-            const int db = static_cast<int>(qBlue(la[x])) - qBlue(lb[x]);
-            sumSq += dr * dr + dg * dg + db * db;
-        }
-    }
-    const double mse = static_cast<double>(sumSq) / static_cast<double>(n * 3);
-    if (mse <= 1e-10)
-        return 100.0; // 完美一致(而非 inf)
-    return 10.0 * std::log10(65025.0 / mse);
-}
-
-double AnalysisEngine::ssim(const ImageData &aData, const ImageData &bData)
-{
-    const int w = std::min(aData.width, bData.width);
-    const int h = std::min(aData.height, bData.height);
-    if (w < 8 || h < 8)
-        return 0.0;
-
-    if (aData.format == PixelFormat::Grayscale8 && bData.format == PixelFormat::Grayscale8)
-    {
-        const ImageBuffer va = aData.view();
-        const ImageBuffer vb = bData.view();
-        return computeSSIMCore(
-            w, h, [&va](int y) { return va.data + static_cast<size_t>(y) * va.stride(); },
-            [&vb](int y) { return vb.data + static_cast<size_t>(y) * vb.stride(); });
-    }
-
-    QImage aa = mvcore::toQImage(aData).convertToFormat(QImage::Format_Grayscale8);
-    QImage bb = mvcore::toQImage(bData).convertToFormat(QImage::Format_Grayscale8);
-    return computeSSIMCore(
-        w, h, [&aa](int y) { return aa.constScanLine(y); },
-        [&bb](int y) { return bb.constScanLine(y); });
-}
-
-double AnalysisEngine::noiseEstimate(const ImageData &imgData)
-{
-    if (imgData.isNull())
-        return 0.0;
-    const int w = imgData.width;
-    const int h = imgData.height;
-    if (w < 3 || h < 3)
-        return 0.0;
-
-    if (imgData.format == PixelFormat::Grayscale8)
-    {
-        const ImageBuffer v = imgData.view();
-        return calcLaplacianCore(w, h, [&v](int y) {
-            return v.data + static_cast<size_t>(y) * v.stride();
-        });
-    }
-
-    QImage img = mvcore::toQImage(imgData).convertToFormat(QImage::Format_Grayscale8);
-    return calcLaplacianCore(w, h, [&img](int y) { return img.constScanLine(y); });
 }
 
 ImageData AnalysisEngine::heatMap(const ImageData &grayData)

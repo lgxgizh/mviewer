@@ -20,23 +20,33 @@ void summarizeDiff(const ImageData &d, double &mn, double &mean, double &mx)
     mn = 255.0;
     mx = 0.0;
     double sum = 0.0;
-    const int n = d.width * d.height;
-    if (n <= 0)
+    if (d.isNull() || !d.buffer || d.width <= 0 || d.height <= 0)
     {
         mn = mean = mx = 0.0;
         return;
     }
-    const uint8_t *p = d.buffer->data();
-    for (int i = 0; i < n; ++i)
+    const int w = d.width;
+    const int h = d.height;
+    const ImageBuffer vbuf = d.view();
+    const ptrdiff_t stride = vbuf.stride();
+    long long totalPixels = 0;
+    for (int y = 0; y < h; ++y)
     {
-        const double v = static_cast<double>(p[i]);
-        if (v < mn)
-            mn = v;
-        if (v > mx)
-            mx = v;
-        sum += v;
+        const uint8_t *row = vbuf.data + static_cast<ptrdiff_t>(y) * stride;
+        for (int x = 0; x < w; ++x)
+        {
+            const double v = static_cast<double>(row[x]);
+            if (v < mn)
+                mn = v;
+            if (v > mx)
+                mx = v;
+            sum += v;
+            ++totalPixels;
+        }
     }
-    mean = sum / static_cast<double>(n);
+    mean = totalPixels > 0 ? (sum / static_cast<double>(totalPixels)) : 0.0;
+    if (totalPixels == 0)
+        mn = mx = 0.0;
 }
 
 void fillMeanRgb(const ImageFrame &f, double &r, double &g, double &b)
@@ -111,14 +121,10 @@ bool CompareAdjustmentState::isIdentity() const
            !flipH && !flipV && !hasCrop;
 }
 
-ImageData applyCompareAdjustments(const ImageData &src,
-                                  const CompareAdjustmentState &adjustment,
+ImageData applyCompareAdjustments(const ImageData &src, const CompareAdjustmentState &adjustment,
                                   const std::function<bool()> &cancelled)
 {
-    const auto shouldCancel = [&cancelled]()
-    {
-        return cancelled && cancelled();
-    };
+    const auto shouldCancel = [&cancelled]() { return cancelled && cancelled(); };
     if (shouldCancel())
         return {};
     if (src.isNull() || adjustment.isIdentity())
@@ -137,8 +143,7 @@ ImageData applyCompareAdjustments(const ImageData &src,
         cur = adjustGamma(cur, static_cast<float>(adjustment.gamma));
     if (shouldCancel())
         return {};
-    if (std::abs(adjustment.redGain - 1.0) >= 1e-6 ||
-        std::abs(adjustment.blueGain - 1.0) >= 1e-6)
+    if (std::abs(adjustment.redGain - 1.0) >= 1e-6 || std::abs(adjustment.blueGain - 1.0) >= 1e-6)
     {
         cur = adjustWhiteBalance(cur, static_cast<float>(adjustment.redGain),
                                  static_cast<float>(adjustment.blueGain));
@@ -205,11 +210,11 @@ void reportProgress(const ReportBuildCallbacks &callbacks, int value)
 
 } // namespace
 
-CompareReportBundle buildCompareReportBundle(
-    const std::vector<ImageFrame> &adjustedImages, int referenceIndex, uint8_t threshold,
-    const mviewer::domain::Selection &roi,
-    const std::vector<CompareAdjustmentState> &adjustments,
-    const ReportBuildCallbacks &callbacks)
+CompareReportBundle buildCompareReportBundle(const std::vector<ImageFrame> &adjustedImages,
+                                             int referenceIndex, uint8_t threshold,
+                                             const mviewer::domain::Selection &roi,
+                                             const std::vector<CompareAdjustmentState> &adjustments,
+                                             const ReportBuildCallbacks &callbacks)
 {
     CompareReportBundle bundle;
     bundle.referenceIndex = referenceIndex;
@@ -225,8 +230,8 @@ CompareReportBundle buildCompareReportBundle(
     for (size_t i = 0; i < adjustmentCount; ++i)
         bundle.adjustments[i] = adjustments[i];
 
-    const bool validReference = referenceIndex >= 0 &&
-                                referenceIndex < static_cast<int>(adjustedImages.size());
+    const bool validReference =
+        referenceIndex >= 0 && referenceIndex < static_cast<int>(adjustedImages.size());
     if (validReference)
     {
         bundle.targets.reserve(adjustedImages.size() - 1);
@@ -314,9 +319,8 @@ CompareReportBundle buildCompareReportBundle(
             pair.path = adjustedImages[i].metadata().filePath;
             pair.referenceIndex = referenceIndex;
             bundle.targets.push_back(std::move(pair));
-            reportProgress(callbacks, targetCount == 0
-                                             ? 100
-                                             : static_cast<int>((i + 1) * 100 / targetCount));
+            reportProgress(callbacks,
+                           targetCount == 0 ? 100 : static_cast<int>((i + 1) * 100 / targetCount));
         }
     }
     reportProgress(callbacks, 100);
@@ -339,8 +343,8 @@ CompareReportBundle buildCompareReportBundle(const CompareReportInput &input,
 
         const CompareReportSource &source = input.images[i];
         const CompareAdjustmentState &adjustment = source.adjustment;
-        const ImageData pixels = applyCompareAdjustments(source.pixels, adjustment,
-                                                          callbacks.cancelled);
+        const ImageData pixels =
+            applyCompareAdjustments(source.pixels, adjustment, callbacks.cancelled);
         if (reportCancelled(callbacks))
             return {};
 
@@ -350,8 +354,8 @@ CompareReportBundle buildCompareReportBundle(const CompareReportInput &input,
         adjustedImages.emplace_back(metadata, pixels);
         adjustments.push_back(adjustment);
         reportProgress(callbacks, input.images.empty()
-                                         ? 35
-                                         : static_cast<int>((i + 1) * 35 / input.images.size()));
+                                      ? 35
+                                      : static_cast<int>((i + 1) * 35 / input.images.size()));
     }
 
     if (reportCancelled(callbacks))
@@ -366,9 +370,9 @@ CompareReportBundle buildCompareReportBundle(const CompareReportInput &input,
         if (progress)
             progress(35 + value * 65 / 100);
     };
-    CompareReportBundle bundle = buildCompareReportBundle(
-        adjustedImages, input.referenceIndex, input.threshold, input.roi, adjustments,
-        metricsCallbacks);
+    CompareReportBundle bundle =
+        buildCompareReportBundle(adjustedImages, input.referenceIndex, input.threshold, input.roi,
+                                 adjustments, metricsCallbacks);
     // The compatibility builder intentionally preserves its historical
     // partial-result behavior. A source snapshot, however, is the worker's
     // success boundary and must never publish a half-built bundle.
