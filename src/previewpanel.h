@@ -4,13 +4,21 @@
 #include "core/async/AsyncLifetimeToken.h"
 #include "core/scheduler/TaskScheduler.h"
 
+#include <QImage>
 #include <QPixmap>
+#include <QPointer>
 #include <QSize>
 #include <QString>
 #include <QWidget>
 
 #include <cstdint>
+#include <memory>
 #include <string>
+
+namespace mviewer::core
+{
+struct PreviewStats;
+}
 
 // Bottom-left panel: shows a single large preview of the currently
 // selected image plus its filename and basic stats.
@@ -88,6 +96,19 @@ class PreviewPanel : public QWidget
     void cancelPending();
     void resetMatchingHandle(uint64_t gen);
     void rebuild();
+    void clearPreview();
+    void presentWarmThumbnail(const QString &path, const QPixmap &warmThumbnail,
+                              const QSize &knownSourceSize, qint64 knownFileSize);
+    void deliverVisualPreview(const QImage &qimg, const QString &path, uint64_t gen, int srcW,
+                              int srcH, qint64 fileSize, bool sourceKnown, bool fileSizeKnown);
+    void deliverPreviewStats(const mviewer::core::PreviewStats &stats, const QString &path,
+                             uint64_t gen);
+    static void
+    decodePreviewWorker(const std::string &stdPath, const QString &path, uint64_t gen,
+                        const QPointer<PreviewPanel> &guard,
+                        const std::shared_ptr<mviewer::core::AsyncLifetimeToken> &lifetime,
+                        int knownW, int knownH, qint64 knownSize,
+                        const TaskScheduler::TaskContext &ctx);
 
     QString m_requestedPath;
     QString m_presentedPath;

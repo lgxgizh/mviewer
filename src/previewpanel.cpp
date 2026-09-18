@@ -16,6 +16,7 @@
 #include <QResizeEvent>
 #include <QSize>
 #include <algorithm>
+#include <utility>
 
 PreviewPanel::PreviewPanel(QWidget *parent) : QWidget(parent)
 {
@@ -107,7 +108,224 @@ QPixmap unpadSquareThumbnail(const QPixmap &pm, const QSize &knownSourceSize)
     }
     return pm;
 }
+
+struct PreviewDecodeResult
+{
+    QImage qimg;
+    int srcW = 0;
+    int srcH = 0;
+    qint64 fileSize = 0;
+    bool sourceKnown = false;
+    bool fileSizeKnown = false;
+    ImageData img;
+};
+
+PreviewDecodeResult loadPreviewPixels(const std::string &stdPath, int knownW, int knownH,
+                                      qint64 knownSize)
+{
+    PreviewDecodeResult out;
+    out.fileSize = knownSize >= 0 ? knownSize : 0;
+    out.sourceKnown = knownW > 0 && knownH > 0;
+    out.fileSizeKnown = knownSize >= 0;
+    const std::string cacheKey = PreviewPanel::previewCacheKey(stdPath);
+    mviewer::domain::ImageMetadata meta;
+    ImageData img;
+    if (mviewer::application::ImageLoadingService::instance().getPreviewCache(cacheKey, img))
+    {
+        // Warm scaled preview — reuse it.
+    }
+    else if (mviewer::core::FrameSequenceReader::isSequencePath(stdPath))
+    {
+        const auto decoded = mviewer::core::FrameSequenceReader::decodeFrameScaled(
+            stdPath, 0, PreviewPanel::kPreviewMaxEdge);
+        if (decoded.ok)
+        {
+            meta = decoded.metadata;
+            img = decoded.pixels;
+        }
+        if (!img.isNull())
+            mviewer::application::ImageLoadingService::instance().putPreviewCache(cacheKey, img);
+    }
+    else
+    {
+        ImageData decoded = Decoder::decodeScaled(stdPath, PreviewPanel::kPreviewMaxEdge, meta);
+        img = mvcore::toDisplayImageData(decoded, meta);
+        if (!img.isNull())
+            mviewer::application::ImageLoadingService::instance().putPreviewCache(cacheKey, img);
+    }
+    if (!img.isNull())
+    {
+        QSize src(meta.width, meta.height);
+        if (!src.isValid())
+        {
+            QImageReader reader(QString::fromStdString(stdPath));
+            reader.setAutoTransform(true);
+            src = reader.size();
+            if (src.isValid())
+            {
+                switch (reader.transformation())
+                {
+                case QImageIOHandler::TransformationRotate90:
+                case QImageIOHandler::TransformationRotate270:
+                case QImageIOHandler::TransformationMirrorAndRotate90:
+                case QImageIOHandler::TransformationFlipAndRotate90:
+                    src = src.transposed();
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+        if (!src.isValid())
+        {
+            out.srcW = knownW > 0 ? knownW : img.width;
+            out.srcH = knownH > 0 ? knownH : img.height;
+        }
+        else
+        {
+            out.srcW = src.width();
+            out.srcH = src.height();
+            out.sourceKnown = true;
+        }
+    }
+    if (out.fileSize == 0)
+        out.fileSize = static_cast<qint64>(meta.fileSize);
+    if (out.fileSize == 0)
+        out.fileSize = QFileInfo(QString::fromStdString(stdPath)).size();
+    out.fileSizeKnown = out.fileSize > 0;
+    out.img = std::move(img);
+    if (!out.img.isNull())
+        out.qimg = mvcore::toQImage(out.img);
+    return out;
+}
+
 } // namespace
+
+void PreviewPanel::clearPreview()
+{
+    m_presentedPath.clear();
+    m_quality = PresentationQuality::None;
+    m_preview = QPixmap();
+    m_scaled = QPixmap();
+    m_hasImage = false;
+    m_previewW = 0;
+    m_previewH = 0;
+    m_imgW = 0;
+    m_imgH = 0;
+    m_fileSize = 0;
+    m_sourceDimensionsKnown = false;
+    m_fileSizeKnown = false;
+    m_lumMean = 0.0;
+    m_rMean = m_gMean = m_bMean = 0;
+    update();
+}
+
+void PreviewPanel::presentWarmThumbnail(const QString &path, const QPixmap &warmThumbnail,
+                                        const QSize &knownSourceSize, qint64 knownFileSize)
+{
+    m_presentedPath = path;
+    m_quality = PresentationQuality::Thumbnail;
+    m_preview = unpadSquareThumbnail(warmThumbnail, knownSourceSize);
+    m_previewW = m_preview.width();
+    m_previewH = m_preview.height();
+    m_imgW = knownSourceSize.width() > 0 ? knownSourceSize.width() : m_previewW;
+    m_imgH = knownSourceSize.height() > 0 ? knownSourceSize.height() : m_previewH;
+    m_fileSize = knownFileSize >= 0 ? knownFileSize : 0;
+    m_sourceDimensionsKnown = knownSourceSize.width() > 0 && knownSourceSize.height() > 0;
+    m_fileSizeKnown = knownFileSize >= 0;
+    m_lumMean = 0.0;
+    m_rMean = m_gMean = m_bMean = 0;
+    m_hasImage = true;
+    rebuild();
+    update();
+}
+
+void PreviewPanel::deliverVisualPreview(const QImage &qimg, const QString &path, uint64_t gen,
+                                        int srcW, int srcH, qint64 fileSize, bool sourceKnown,
+                                        bool fileSizeKnown)
+{
+    if (!m_lifetime->isAlive())
+        return;
+    if (path != m_requestedPath || gen != m_requestGen)
+        return;
+    resetMatchingHandle(gen);
+    if (qimg.isNull())
+        return;
+    m_preview = QPixmap::fromImage(qimg);
+    if (m_preview.isNull())
+        return;
+    m_presentedPath = path;
+    m_quality = PresentationQuality::Preview;
+    m_hasImage = true;
+    m_imgW = srcW;
+    m_imgH = srcH;
+    m_previewW = m_preview.width();
+    m_previewH = m_preview.height();
+    m_fileSize = fileSize;
+    m_sourceDimensionsKnown = sourceKnown;
+    m_fileSizeKnown = fileSizeKnown;
+    rebuild();
+    update();
+}
+
+void PreviewPanel::deliverPreviewStats(const mviewer::core::PreviewStats &stats,
+                                       const QString &path, uint64_t gen)
+{
+    if (!m_lifetime->isAlive() || path != m_requestedPath || gen != m_requestGen)
+        return;
+    if (stats.valid)
+    {
+        m_lumMean = stats.lumMean;
+        m_rMean = stats.rMean;
+        m_gMean = stats.gMean;
+        m_bMean = stats.bMean;
+    }
+    else
+    {
+        m_lumMean = 0.0;
+        m_rMean = m_gMean = m_bMean = 0;
+    }
+    rebuild();
+    update();
+}
+
+void PreviewPanel::decodePreviewWorker(
+    const std::string &stdPath, const QString &path, uint64_t gen,
+    const QPointer<PreviewPanel> &guard,
+    const std::shared_ptr<mviewer::core::AsyncLifetimeToken> &lifetime, int knownW, int knownH,
+    qint64 knownSize, const TaskScheduler::TaskContext &ctx)
+{
+    if (ctx.isCancelled())
+        return;
+    PreviewDecodeResult loaded = loadPreviewPixels(stdPath, knownW, knownH, knownSize);
+    if (ctx.isCancelled())
+        return;
+    QMetaObject::invokeMethod(qApp,
+                              [path, gen, guard, lifetime, qimg = loaded.qimg, srcW = loaded.srcW,
+                               srcH = loaded.srcH, fileSize = loaded.fileSize,
+                               sourceKnown = loaded.sourceKnown,
+                               fileSizeKnown = loaded.fileSizeKnown]()
+                              {
+                                  PreviewPanel *panel = guard.data();
+                                  if (!panel || !lifetime->isAlive())
+                                      return;
+                                  panel->deliverVisualPreview(qimg, path, gen, srcW, srcH, fileSize,
+                                                              sourceKnown, fileSizeKnown);
+                              });
+    if (loaded.qimg.isNull())
+        return;
+    if (ctx.isCancelled())
+        return;
+    const mviewer::core::PreviewStats stats = mviewer::core::computePreviewStats(loaded.img);
+    QMetaObject::invokeMethod(qApp,
+                              [path, gen, guard, lifetime, stats]()
+                              {
+                                  PreviewPanel *panel = guard.data();
+                                  if (!panel || !lifetime->isAlive())
+                                      return;
+                                  panel->deliverPreviewStats(stats, path, gen);
+                              });
+}
 
 void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
                             const QSize &knownSourceSize, qint64 knownFileSize)
@@ -120,63 +338,15 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
         // Clear synchronously when a folder changes. This prevents an old
         // decoded frame from remaining visible while the next directory is
         // still being scanned asynchronously.
-        m_presentedPath.clear();
-        m_quality = PresentationQuality::None;
-        m_preview = QPixmap();
-        m_scaled = QPixmap();
-        m_hasImage = false;
-        m_previewW = 0;
-        m_previewH = 0;
-        m_imgW = 0;
-        m_imgH = 0;
-        m_fileSize = 0;
-        m_sourceDimensionsKnown = false;
-        m_fileSizeKnown = false;
-        m_lumMean = 0.0;
-        m_rMean = m_gMean = m_bMean = 0;
-        update();
+        clearPreview();
         return;
     }
 
     // Stage 1: present an already-materialized gallery thumbnail immediately.
-    // Unpad square thumbnail letterboxing so geometry matches the true aspect ratio.
     if (!warmThumbnail.isNull())
-    {
-        m_presentedPath = path;
-        m_quality = PresentationQuality::Thumbnail;
-        m_preview = unpadSquareThumbnail(warmThumbnail, knownSourceSize);
-        m_previewW = m_preview.width();
-        m_previewH = m_preview.height();
-        m_imgW = knownSourceSize.width() > 0 ? knownSourceSize.width() : m_previewW;
-        m_imgH = knownSourceSize.height() > 0 ? knownSourceSize.height() : m_previewH;
-        m_fileSize = knownFileSize >= 0 ? knownFileSize : 0;
-        m_sourceDimensionsKnown = knownSourceSize.width() > 0 && knownSourceSize.height() > 0;
-        m_fileSizeKnown = knownFileSize >= 0;
-        m_lumMean = 0.0;
-        m_rMean = m_gMean = m_bMean = 0;
-        m_hasImage = true;
-        rebuild();
-        update();
-    }
+        presentWarmThumbnail(path, warmThumbnail, knownSourceSize, knownFileSize);
 
-    // A SINGLE scaled decode on the Decode pool (foreground priority, never
-    // ImageRepository::loadAsync): the preview duplicates nothing and the UI
-    // thread only ever materializes a <= kPreviewMaxEdge QPixmap. The scaled
-    // result is cached in the existing CacheLevel::Preview layer. The worker
-    // also computes the preview stats (sample means over the scaled buffer),
-    // reads the original dimensions/orientation via QImageReader and the file
-    // size, checks TaskContext cancellation before/after the work, and marshals
-    // an owned QImage + metadata to the UI thread through qApp. Visual delivery
-    // is posted before the optional stats pass so a selected preview is never
-    // held behind analysis of the same scaled buffer.
-    //
-    // M27 lifetime closure: the worker callback captures a QPointer (never a
-    // raw `this`) and re-checks it on the UI thread through qApp (which
-    // outlives every panel); the queued lambda re-checks the guard AND the
-    // request generation, so a panel destroyed mid-decode or superseded by a
-    // newer setImage() (even A -> B -> A) can never be touched by an old
-    // delivery. The destructor additionally soft-cancels the task so queued
-    // stale work exits before decoding.
+    // Single scaled decode on the Decode pool. M27: QPointer + generation guard.
     const uint64_t gen = m_requestGen;
     const int knownW = knownSourceSize.width();
     const int knownH = knownSourceSize.height();
@@ -187,203 +357,14 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
 
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Decode,
-        [stdPath, path, gen, guard, lifetime, knownW, knownH, knownSize](
-            const TaskScheduler::TaskContext &ctx)
+        [stdPath, path, gen, guard, lifetime, knownW, knownH,
+         knownSize](const TaskScheduler::TaskContext &ctx)
         {
-            if (ctx.isCancelled())
-                return; // queued stale task — stop before any work
-            const std::string cacheKey = previewCacheKey(stdPath);
-            mviewer::core::PreviewStats stats{};
-            QImage qimg;
-            int srcW = 0;
-            int srcH = 0;
-            qint64 fileSize = knownSize >= 0 ? knownSize : 0;
-            bool sourceKnown = knownW > 0 && knownH > 0;
-            bool fileSizeKnown = knownSize >= 0;
-            mviewer::domain::ImageMetadata meta;
-            ImageData img;
-            if (mviewer::application::ImageLoadingService::instance().getPreviewCache(cacheKey,
-                                                                                       img))
-            {
-                // Warm scaled preview — reuse it, still recompute the stats on
-                // the worker from the cached buffer.
-            }
-            else
-            {
-                if (mviewer::core::FrameSequenceReader::isSequencePath(stdPath))
-                {
-                    // Preview is deliberately representative-frame only. The
-                    // sequence probe/decode remains on the worker and never
-                    // starts playback or materializes neighboring frames.
-                    const auto decoded = mviewer::core::FrameSequenceReader::decodeFrameScaled(
-                        stdPath, 0, kPreviewMaxEdge);
-                    if (decoded.ok)
-                    {
-                        meta = decoded.metadata;
-                        img = decoded.pixels;
-                    }
-                }
-                else
-                {
-                    ImageData decoded = Decoder::decodeScaled(stdPath, kPreviewMaxEdge, meta);
-                    img = mvcore::toDisplayImageData(decoded, meta);
-                }
-                if (!img.isNull())
-                    mviewer::application::ImageLoadingService::instance().putPreviewCache(
-                        cacheKey, img);
-            }
-            if (!img.isNull())
-            {
-                // Original dimensions/orientation come from the source header,
-                // not the scaled buffer, so the panel shows the real size.
-                // QImageReader::size() is the ENCODED (raw) size even after
-                // setAutoTransform(true); the 90-degree EXIF rotations swap the
-                // axes, so apply reader.transformation() before reporting.
-                QSize src(meta.width, meta.height);
-                if (!src.isValid())
-                {
-                    // A display-ready preview cache stores pixels only. A
-                    // cache hit therefore performs a cheap header probe on the
-                    // worker when the caller did not already provide source
-                    // identity; it never decodes the full image.
-                    QImageReader reader(QString::fromStdString(stdPath));
-                    reader.setAutoTransform(true);
-                    src = reader.size();
-                    if (src.isValid())
-                    {
-                        switch (reader.transformation())
-                        {
-                        case QImageIOHandler::TransformationRotate90:
-                        case QImageIOHandler::TransformationRotate270:
-                        case QImageIOHandler::TransformationMirrorAndRotate90:
-                        case QImageIOHandler::TransformationFlipAndRotate90:
-                            src = src.transposed();
-                            break;
-                        default:
-                            break;
-                        }
-                    }
-                }
-                if (!src.isValid())
-                {
-                    // Header probing failed (the decoder still produced a
-                    // buffer, e.g. via a fallback path): keep dimensions
-                    // unknown instead of presenting scaled pixels as source
-                    // dimensions.
-                    srcW = knownW > 0 ? knownW : img.width;
-                    srcH = knownH > 0 ? knownH : img.height;
-                }
-                else
-                {
-                    srcW = src.width();
-                    srcH = src.height();
-                    sourceKnown = true;
-                }
-            }
-            if (fileSize == 0)
-                fileSize = static_cast<qint64>(meta.fileSize);
-            if (fileSize == 0)
-                fileSize = QFileInfo(QString::fromStdString(stdPath)).size();
-            fileSizeKnown = fileSize > 0;
-            if (ctx.isCancelled())
-                return; // superseded while decoding — drop before delivery
-            if (!img.isNull())
-                // Preview cache payloads are already display-ready. A cache hit
-                // has no need to re-run ICC conversion.
-                qimg = mvcore::toQImage(img);
-            QMetaObject::invokeMethod(qApp,
-                                      [path, gen, guard, lifetime, qimg, srcW, srcH,
-                                       fileSize, sourceKnown, fileSizeKnown]()
-                                      {
-                                          PreviewPanel *panel = guard.data();
-                                          if (!panel)
-                                              return;
-                                          // M46: the panel's lifetime token is
-                                          // invalidated in its destructor before
-                                          // the QPointer guard clears — either
-                                          // check alone stops a stale delivery.
-                                          if (!lifetime->isAlive())
-                                              return;
-                                          // Stale-callback guard: discard deliveries from
-                                          // superseded requests (different path OR an older
-                                          // generation of the same path, i.e. A -> B -> A where the
-                                          // first A completes last). Without the generation check,
-                                          // the path-only guard lets an old A overwrite a newer A
-                                          // of the same path.
-                                          if (path != panel->m_requestedPath ||
-                                              gen != panel->m_requestGen)
-                                              return;
-                                          // Every accepted terminal delivery releases the
-                                          // matching completed handle — success OR failure —
-                                          // so a rejected decode never retains a finished
-                                          // task until the next request or destruction.
-                                          panel->resetMatchingHandle(gen);
-                                          if (qimg.isNull())
-                                          {
-                                              // Preserve either the target thumbnail or the
-                                              // preceding frame; a failed upgrade must not flash.
-                                              return;
-                                          }
-                                          panel->m_preview = QPixmap::fromImage(qimg);
-                                          if (panel->m_preview.isNull())
-                                          {
-                                              return;
-                                          }
-                                          panel->m_presentedPath = path;
-                                          panel->m_quality = PresentationQuality::Preview;
-                                          panel->m_hasImage = true;
-                                          panel->m_imgW = srcW;
-                                          panel->m_imgH = srcH;
-                                          panel->m_previewW = panel->m_preview.width();
-                                          panel->m_previewH = panel->m_preview.height();
-                                          panel->m_fileSize = fileSize;
-                                          panel->m_sourceDimensionsKnown = sourceKnown;
-                                          panel->m_fileSizeKnown = fileSizeKnown;
-                                          panel->rebuild();
-                                          panel->update();
-                                      });
-            if (!qimg.isNull())
-            {
-                // M54: compute after the visual delivery has been queued. The
-                // first posted event gives the selected image a usable frame;
-                // this second event only enriches the already-visible panel.
-                if (ctx.isCancelled())
-                    return;
-                stats = mviewer::core::computePreviewStats(img);
-                QMetaObject::invokeMethod(qApp,
-                                          [path, gen, guard, lifetime, stats]()
-                                          {
-                                              PreviewPanel *panel = guard.data();
-                                              if (!panel || !lifetime->isAlive() ||
-                                                  path != panel->m_requestedPath ||
-                                                  gen != panel->m_requestGen)
-                                                  return;
-                                              if (stats.valid)
-                                              {
-                                                  panel->m_lumMean = stats.lumMean;
-                                                  panel->m_rMean = stats.rMean;
-                                                  panel->m_gMean = stats.gMean;
-                                                  panel->m_bMean = stats.bMean;
-                                              }
-                                              else
-                                              {
-                                                  panel->m_lumMean = 0.0;
-                                                  panel->m_rMean = panel->m_gMean = panel->m_bMean = 0;
-                                              }
-                                              panel->rebuild();
-                                              panel->update();
-                                          });
-            }
+            decodePreviewWorker(stdPath, path, gen, guard, lifetime, knownW, knownH, knownSize,
+                                ctx);
         });
     if (handle)
-    {
         m_task = handle;
-    }
-    else
-    {
-        // A rejected background upgrade leaves the current usable presentation
-        // intact. A later selection/request may retry without a blank flash.
-    }
 }
 
 void PreviewPanel::cancelPending()
@@ -475,8 +456,8 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
     if (m_sourceDimensionsKnown)
         identity += "\n" + QString::number(m_imgW) + "×" + QString::number(m_imgH);
     if (m_fileSizeKnown)
-        identity += (m_sourceDimensionsKnown ? "  " : "\n") +
-                    QString::number(m_fileSize / 1024) + " KB";
+        identity +=
+            (m_sourceDimensionsKnown ? "  " : "\n") + QString::number(m_fileSize / 1024) + " KB";
     painter.drawText(txtArea, Qt::AlignTop | Qt::AlignLeft, identity);
     // The brightness/RGB figures are sample means computed over the scaled
     // preview buffer, not the full image.

@@ -86,8 +86,6 @@ $responsibilityCaps = @(
 # entry keeps matching when code above it shifts. Remove an entry in the same
 # commit that splits the function; never add one without an ADR-014 note.
 $knownFunctionDebt = @{
-    'src/previewpanel.cpp::setImage'                                = 'span 276'
-    'src/previewpanel.cpp::<lambda>'                                = 'span 186 (load worker inside setImage)'
     'src/compareworkspace.cpp::queueLoadRequests'                   = 'span 133'
     'src/core/metadata/MetadataIndexer.cpp::index'                  = 'span 136'
     'src/core/image/decoder/QtDecoder.cpp::decodeTiffWic'           = 'span 133 / cc 32'

@@ -6,6 +6,7 @@
 
 - **thumbnailpanel_fileops ADR-014 split**: Shared progress/queue helpers and batch finish extraction bring the three tracked file-ops functions under the span cap.
 - **scheduleHistogramRefresh ADR-014 split**: Extract `collectHistogramIndices`, `computeHistogramBatch`, and `clearMainHistogramForEmptyPlan`; retire the debt entry.
+- **PreviewPanel::setImage ADR-014 split**: Extract `clearPreview`, `presentWarmThumbnail`, `loadPreviewPixels`, `decodePreviewWorker`, and delivery helpers so `setImage` stays under the function-span cap; retire the two previewpanel `$knownFunctionDebt` entries.
 - **ADR-014 debt registry cleanup**: Retire stale `$knownFunctionDebt` entries for `mainwindow_export.cpp::startReportExport` (~79 lines, below fail cap) and `FrameSequence.cpp::selectFrame` (~118 lines, below fail cap); sync the ADR-014 inventory note. BatchProcessor/MetadataOverlay were already retired on master.
 - **SelectionInteraction hit-test CC**: Replace cascading handle checks in `hitTestSelection` with a flags + priority-table scan (`buildHitTestFlags` + `kHitRules`), dropping cyclomatic complexity below the ADR-014 warn threshold; retire the `hitTestSelection` entry from `$knownFunctionDebt`.
 
