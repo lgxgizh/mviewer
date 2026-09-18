@@ -5,6 +5,7 @@
 ### Code Quality
 
 - **ADR-014 debt registry cleanup**: Retire stale `$knownFunctionDebt` entries for `mainwindow_export.cpp::startReportExport` (~79 lines, below fail cap) and `FrameSequence.cpp::selectFrame` (~118 lines, below fail cap); sync the ADR-014 inventory note. BatchProcessor/MetadataOverlay were already retired on master.
+- **SelectionInteraction hit-test CC**: Replace cascading handle checks in `hitTestSelection` with a flags + priority-table scan (`buildHitTestFlags` + `kHitRules`), dropping cyclomatic complexity below the ADR-014 warn threshold; retire the `hitTestSelection` entry from `$knownFunctionDebt`.
 
 ### Release
 

@@ -145,9 +145,8 @@ so the regression test keeps its meaning: *no new* violation.
 | `core/image/ImageRepository_async.cpp::loadAsyncCancellable` | span 127 |
 | `core/metadata/MetadataIndexer.cpp::indexBatched` | span 122 |
 | `core/filesystem/AtomicFile.cpp::atomicWriteFile` | span 152 |
-| `domain/SelectionInteraction.h::hitTestSelection` | CC 26 |
 
-*(Note: `thumbnailpanel_delegates.cpp::paint` [span 202 / CC 32], `metadataoverlay.cpp::buildContent` [span 141], and `core/batch/BatchProcessor.cpp::processFile` [span 130] were split into modular helpers in 2026-09 and removed from this inventory. `mainwindow_export.cpp::startReportExport` [was span 139, now ~79] and `core/image/FrameSequence.cpp::selectFrame` [was span 121, now ~118] fell below the fail cap (120) and were retired from `$knownFunctionDebt` in 2026-09 without further splits.)*
+*(Note: `thumbnailpanel_delegates.cpp::paint` [span 202 / CC 32], `metadataoverlay.cpp::buildContent` [span 141], and `core/batch/BatchProcessor.cpp::processFile` [span 130] were split into modular helpers in 2026-09 and removed from this inventory. `mainwindow_export.cpp::startReportExport` [was span 139, now ~79] and `core/image/FrameSequence.cpp::selectFrame` [was span 121, now ~118] fell below the fail cap (120) and were retired from `$knownFunctionDebt` in 2026-09 without further splits. `domain/SelectionInteraction.h::hitTestSelection` [was CC 26] was refactored to a flags + priority-table implementation (CC below warn) and removed from the inventory.)*
 
 Policy: the table is an inventory, not a permission. Removing an entry requires
 splitting the function in the same commit; adding one requires a note in this
