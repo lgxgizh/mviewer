@@ -866,23 +866,6 @@ target_include_directories(test_qtconvert PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_test(NAME qtconvert_tests COMMAND test_qtconvert)
 
-# ─── AnalysisEngine & Quality Metrics SIMD Tests ─────────────────────────────
-add_executable(test_analysisengine
-    core/test_analysisengine.cpp
-)
-
-target_link_libraries(test_analysisengine
-    PRIVATE
-        Qt6::Core
-        Qt6::Gui
-        mviewer_core
-)
-
-target_compile_features(test_analysisengine PRIVATE cxx_std_20)
-target_include_directories(test_analysisengine PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
-
-add_test(NAME analysisengine_tests COMMAND test_analysisengine)
-
 # ─── M15 P0#4 Metadata Center (unified MetadataModel + QTreeView) ───────────
 add_executable(test_metadatamodel
     test_metadatamodel.cpp
