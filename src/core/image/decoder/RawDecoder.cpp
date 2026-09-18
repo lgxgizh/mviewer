@@ -3,10 +3,12 @@
 
 #include "core/image/ImageBuffer.h"
 
+#include <QBuffer>
 #include <QByteArray>
 #include <QFile>
 #include <QFileInfo>
 #include <QImage>
+#include <QImageReader>
 
 #include <algorithm>
 #include <atomic>
@@ -23,12 +25,17 @@ std::atomic<size_t> g_lastPreviewPeakBufferedBytes{0};
 // RAW container extensions we attempt to preview-decode. This list is
 // intentionally broad: every entry embeds at least a thumbnail/preview JPEG,
 // which is what we extract. Formats without an embedded JPEG simply fall
+
+// RAW container extensions we attempt to preview-decode. This list is
+// intentionally broad: every entry embeds at least a thumbnail/preview JPEG,
+// which is what we extract. Formats without an embedded JPEG simply fall
 // through (empty ImageData).
 const char *kRawExts[] = {"cr2", "cr3", "nef", "nrw", "arw", "dng", "orf",
                           "rw2", "raf", "pef", "srw", "mrw", "kdc", "dcr",
                           "sr2", "3fr", "fff", "iiq", "mos", "erf", "rwz"};
 
 constexpr qsizetype kScannerChunkBytes = 64 * 1024;
+constexpr qint64 kMaxPreviewJpegBytes = 64LL * 1024 * 1024;
 
 class ChunkReader
 {
@@ -63,6 +70,57 @@ class ChunkReader
         return true;
     }
 
+    bool skip(qint64 count)
+    {
+        if (count < 0)
+            return false;
+        const qint64 available = m_size - m_offset;
+        if (count <= available)
+        {
+            m_offset += static_cast<qsizetype>(count);
+            m_position += count;
+            return true;
+        }
+        const qint64 remaining = count - available;
+        m_offset = 0;
+        m_size = 0;
+        m_position += available;
+        if (!m_file.seek(m_position + remaining))
+            return false;
+        m_position += remaining;
+        return true;
+    }
+
+    // Fast-forward to the next 0xFF byte using hardware-accelerated memchr.
+    // Leaves reader positioned directly at the 0xFF byte.
+    bool skipToNextFF()
+    {
+        for (;;)
+        {
+            if (m_offset >= m_size)
+            {
+                const qint64 read = m_file.read(m_buffer.data(), m_buffer.size());
+                if (read <= 0)
+                    return false;
+                m_offset = 0;
+                m_size = static_cast<qsizetype>(read);
+            }
+            const void *ptr = std::memchr(m_buffer.constData() + m_offset, 0xff,
+                                          static_cast<size_t>(m_size - m_offset));
+            if (ptr)
+            {
+                const auto dist = static_cast<qsizetype>(static_cast<const char *>(ptr) -
+                                                         (m_buffer.constData() + m_offset));
+                m_offset += dist;
+                m_position += dist;
+                return true;
+            }
+            const qsizetype jumped = m_size - m_offset;
+            m_position += jumped;
+            m_offset = m_size;
+        }
+    }
+
     qint64 position() const
     {
         return m_position;
@@ -78,11 +136,11 @@ class ChunkReader
 
 bool readMarker(ChunkReader &reader, uint8_t &marker)
 {
-    uint8_t byte = 0;
-    while (reader.readByte(byte))
+    while (reader.skipToNextFF())
     {
-        if (byte != 0xff)
-            continue;
+        uint8_t byte = 0;
+        if (!reader.readByte(byte))
+            return false;
         do
         {
             if (!reader.readByte(marker))
@@ -95,11 +153,7 @@ bool readMarker(ChunkReader &reader, uint8_t &marker)
 
 bool skipBytes(ChunkReader &reader, qint64 count)
 {
-    uint8_t ignored = 0;
-    while (count-- > 0)
-        if (!reader.readByte(ignored))
-            return false;
-    return true;
+    return reader.skip(count);
 }
 
 bool readSegmentLength(ChunkReader &reader, int &length)
@@ -126,23 +180,17 @@ qint64 jpegEndAt(QFile &file, qint64 start)
     if (!reader.readByte(soi0) || !reader.readByte(soi1) || soi0 != 0xff || soi1 != 0xd8)
         return -1;
 
-    constexpr int kMaxJpegMarkers = 65536;
-    int markerCount = 0;
     bool scanData = false;
     for (;;)
     {
-        if (++markerCount > kMaxJpegMarkers)
-            return -1;
-
         uint8_t marker = 0;
         if (scanData)
         {
+            if (!reader.skipToNextFF())
+                return -1;
             uint8_t byte = 0;
-            do
-            {
-                if (!reader.readByte(byte))
-                    return -1;
-            } while (byte != 0xff);
+            if (!reader.readByte(byte))
+                return -1;
             do
             {
                 if (!reader.readByte(marker))
@@ -152,7 +200,7 @@ qint64 jpegEndAt(QFile &file, qint64 start)
                 continue; // stuffed FF byte in entropy-coded data
             if (marker == 0xd9)
                 return reader.position();
-            if (marker == 0xd0 || (marker >= 0xd1 && marker <= 0xd7))
+            if (marker >= 0xd0 && marker <= 0xd7)
                 continue; // restart marker
         }
         else if (!readMarker(reader, marker))
@@ -203,17 +251,25 @@ QByteArray extractLargestJpeg(QFile &scanFile, QFile &dataFile)
 
     QByteArray best;
     qint64 bestLength = 0;
-    bool previousWasFf = false;
-    uint8_t byte = 0;
-    while (scanner.readByte(byte))
+    while (scanner.skipToNextFF())
     {
-        const qint64 position = scanner.position() - 1;
-        if (previousWasFf && byte == 0xd8)
+        uint8_t ff = 0;
+        if (!scanner.readByte(ff))
+            break;
+        uint8_t byte = 0;
+        if (!scanner.readByte(byte))
+            break;
+        while (byte == 0xff)
         {
-            const qint64 start = position - 1;
+            if (!scanner.readByte(byte))
+                break;
+        }
+        if (byte == 0xd8)
+        {
+            const qint64 start = scanner.position() - 2;
             const qint64 end = jpegEndAt(dataFile, start);
             const qint64 length = end - start;
-            if (end > start && length > bestLength)
+            if (end > start && length > bestLength && length <= kMaxPreviewJpegBytes)
             {
                 QByteArray candidate = readRange(dataFile, start, length);
                 updatePeak(static_cast<size_t>(2 * kScannerChunkBytes) + best.size() +
@@ -225,7 +281,6 @@ QByteArray extractLargestJpeg(QFile &scanFile, QFile &dataFile)
                 }
             }
         }
-        previousWasFf = byte == 0xff;
     }
     return best;
 }
@@ -296,16 +351,35 @@ ImageData RawDecoder::extractPreview(const std::string &path, int maxEdge) const
     if (jpeg.isEmpty())
         return ImageData();
 
-    QImage img = QImage::fromData(jpeg, "JPEG");
+    QBuffer buf(const_cast<QByteArray *>(&jpeg));
+    buf.open(QIODevice::ReadOnly);
+    QImageReader reader(&buf, "JPEG");
+    reader.setAutoTransform(true);
+    const QSize fullSize = reader.size();
+    if (!fullSize.isValid() || fullSize.isEmpty())
+    {
+        QImage img = QImage::fromData(jpeg, "JPEG");
+        if (img.isNull())
+            return ImageData();
+        if (maxEdge > 0 && (img.width() > maxEdge || img.height() > maxEdge))
+        {
+            const double r = static_cast<double>(maxEdge) / std::max(img.width(), img.height());
+            img = img.scaled(static_cast<int>(img.width() * r), static_cast<int>(img.height() * r),
+                             Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        }
+        return toImageData(img);
+    }
+
+    if (maxEdge > 0 && (fullSize.width() > maxEdge || fullSize.height() > maxEdge))
+    {
+        const double r =
+            static_cast<double>(maxEdge) / std::max(fullSize.width(), fullSize.height());
+        reader.setScaledSize(QSize(std::max(1, static_cast<int>(fullSize.width() * r)),
+                                   std::max(1, static_cast<int>(fullSize.height() * r))));
+    }
+    const QImage img = reader.read();
     if (img.isNull())
         return ImageData();
-
-    if (maxEdge > 0 && (img.width() > maxEdge || img.height() > maxEdge))
-    {
-        const double r = static_cast<double>(maxEdge) / std::max(img.width(), img.height());
-        img = img.scaled(static_cast<int>(img.width() * r), static_cast<int>(img.height() * r),
-                         Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    }
     return toImageData(img);
 }
 

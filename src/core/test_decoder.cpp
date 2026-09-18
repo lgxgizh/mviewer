@@ -126,6 +126,43 @@ static void testRegistryDispatch()
     // Unknown/undecodable path must NOT crash — returns empty ImageData.
     ImageData empty = reg.decodeFull("/nonexistent/path/to/image.xyz");
     CHECK(empty.isNull(), "unknown file returns empty ImageData (graceful, no crash)");
+
+    // Custom decoder registration must precede QtFallbackDecoder
+    class DummyCustomDecoder : public IDecoder
+    {
+      public:
+        const char *name() const override
+        {
+            return "DummyCustomDecoder";
+        }
+        bool canDecode(const std::string &path) const override
+        {
+            return path.ends_with(".custom");
+        }
+        ImageData decodeFull(const std::string &) const override
+        {
+            return ImageData();
+        }
+        ImageData decodeFull(const std::string &, mviewer::domain::ImageMetadata &) const override
+        {
+            return ImageData();
+        }
+        ImageData decodeScaled(const std::string &, int) const override
+        {
+            return ImageData();
+        }
+        std::vector<std::string> extensions() const override
+        {
+            return {"custom"};
+        }
+    };
+    reg.registerDecoder(std::make_shared<DummyCustomDecoder>());
+    const auto avail = reg.available();
+    CHECK(!avail.empty() && avail.back() == "QtFallbackDecoder",
+          "registerDecoder preserves QtFallbackDecoder as the last resort");
+    CHECK(reg.get("DummyCustomDecoder") != nullptr, "registered decoder is accessible via get()");
+    reg.unregister("DummyCustomDecoder");
+    CHECK(reg.get("DummyCustomDecoder") == nullptr, "unregistered decoder is removed");
 }
 
 int main(int argc, char **argv)

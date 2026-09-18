@@ -206,7 +206,8 @@ int main()
               "display copy is tagged/converted to sRGB");
         CHECK(actual.pixelColor(0, 0) == expected.pixelColor(0, 0),
               "embedded AdobeRGB display conversion matches Qt reference");
-        CHECK(*pixels.buffer == before, "display conversion leaves analysis-domain bytes unchanged");
+        CHECK(*pixels.buffer == before,
+              "display conversion leaves analysis-domain bytes unchanged");
 
         meta.textKeys.erase("MViewer.DisplayICC.Base64");
         meta.hasIccProfile = false;
@@ -215,6 +216,62 @@ int main()
               "unprofiled images use deterministic sRGB display fallback");
         CHECK(unprofiled.pixelColor(0, 0) == QColor(180, 90, 40),
               "unprofiled fallback preserves decoded numeric values");
+    }
+
+    // 6) textType tag begins ASCII string directly at offset 8 (no 4-byte length field)
+    {
+        const std::string copyrightText = "Copyright 2026 MViewer";
+        std::vector<unsigned char> cprtTag(8 + copyrightText.size(), 0);
+        cprtTag[0] = 't';
+        cprtTag[1] = 'e';
+        cprtTag[2] = 'x';
+        cprtTag[3] = 't';
+        std::memcpy(&cprtTag[8], copyrightText.c_str(), copyrightText.size());
+
+        std::vector<unsigned char> p(128 + 4 + 12 + cprtTag.size(), 0);
+        p[8] = 2;
+        p[9] = 0x20; // v2.2.0
+        p[16] = 'R';
+        p[17] = 'G';
+        p[18] = 'B'; // null-padded "RGB\0"
+        put32(p, 128, 1);
+        p[132] = 'c';
+        p[133] = 'p';
+        p[134] = 'r';
+        p[135] = 't';
+        put32(p, 136, 144);
+        put32(p, 140, uint32_t(cprtTag.size()));
+        std::memcpy(&p[144], cprtTag.data(), cprtTag.size());
+
+        const IccProfile info = parseIccProfile(p.data(), p.size());
+        CHECK(info.valid, "v2.2 profile with textType tag reports valid=true");
+        CHECK(info.copyright == copyrightText, "textType copyright extracted without 4-byte loss");
+        CHECK(info.colorSpace == "RGB", "null-padded 'RGB\\0' space recognized as RGB");
+    }
+
+    // 7) Fallback dmdd description tag
+    {
+        const std::string modelDesc = "Pro Display XDR";
+        std::vector<unsigned char> descTag(12 + modelDesc.size() + 1, 0);
+        descTag[0] = 'd';
+        descTag[1] = 'e';
+        descTag[2] = 's';
+        descTag[3] = 'c';
+        put32(descTag, 8, uint32_t(modelDesc.size() + 1));
+        std::memcpy(&descTag[12], modelDesc.c_str(), modelDesc.size() + 1);
+
+        std::vector<unsigned char> p(128 + 4 + 12 + descTag.size(), 0);
+        put32(p, 128, 1);
+        p[132] = 'd';
+        p[133] = 'm';
+        p[134] = 'd';
+        p[135] = 'd';
+        put32(p, 136, 144);
+        put32(p, 140, uint32_t(descTag.size()));
+        std::memcpy(&p[144], descTag.data(), descTag.size());
+
+        const IccProfile info = parseIccProfile(p.data(), p.size());
+        CHECK(info.description == modelDesc, "dmdd tag surfaces as description fallback");
     }
 
     printf("\nIccProfile tests: %d passed, %d failed\n", g_pass, g_fail);
