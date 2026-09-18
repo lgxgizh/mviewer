@@ -90,6 +90,7 @@ std::optional<int> compareSemver(const std::string &lhsTag, const std::string &r
     return 0;
 }
 
+#if defined(_WIN32)
 // Convert a UTF-8 std::string to a wide string. This SDK's winhttp.h only
 // declares the Unicode (W) entry points, so we go wide end-to-end.
 static std::wstring toWide(const std::string &s)
@@ -103,6 +104,7 @@ static std::wstring toWide(const std::string &s)
     MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), &w[0], n);
     return w;
 }
+#endif
 
 // Minimal HTTP GET wrapper that reads a URL and returns the body.
 // On Windows this uses the OS WinHTTP API (TLS 1.2/1.3, with timeouts so the

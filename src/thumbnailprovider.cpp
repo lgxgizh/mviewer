@@ -14,12 +14,20 @@ QImage ThumbnailProvider::squareFitImage(const QImage &q, int size)
 {
     if (q.isNull() || size <= 0)
         return {};
-    QImage pm(size, size, QImage::Format_ARGB32);
-    pm.fill(Qt::transparent);
+    if (q.width() == size && q.height() == size &&
+        (q.format() == QImage::Format_ARGB32 || q.format() == QImage::Format_RGB32))
+        return q;
+
     const bool alreadyFitted =
         (q.width() == size && q.height() <= size) || (q.height() == size && q.width() <= size);
     const QImage scaled =
         alreadyFitted ? q : q.scaled(size, size, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    if (scaled.width() == size && scaled.height() == size &&
+        (scaled.format() == QImage::Format_ARGB32 || scaled.format() == QImage::Format_RGB32))
+        return scaled;
+
+    QImage pm(size, size, QImage::Format_ARGB32);
+    pm.fill(Qt::transparent);
     QPainter painter(&pm);
     painter.drawImage((size - scaled.width()) / 2, (size - scaled.height()) / 2, scaled);
     painter.end();
@@ -28,6 +36,8 @@ QImage ThumbnailProvider::squareFitImage(const QImage &q, int size)
 
 ImageData ThumbnailProvider::produce(const std::string &path, int size)
 {
+    if (path.empty() || size <= 0)
+        return {};
     const QString qp = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
     QImage cached;
     if (ThumbnailCache::instance().get(qp, size, cached))

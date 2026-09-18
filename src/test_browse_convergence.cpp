@@ -556,7 +556,8 @@ static void testThumbnailCacheCapacity()
     // Existing *.png files written by an earlier process count toward the
     // budget once the lazy startup scan runs on first access.
     const QString cacheBase = mviewer::runtime::writableDirectory(QStandardPaths::CacheLocation);
-    const QString thumbDir = cacheBase.isEmpty() ? QString() : QDir(cacheBase).filePath("thumbnails");
+    const QString thumbDir =
+        cacheBase.isEmpty() ? QString() : QDir(cacheBase).filePath("thumbnails");
     CHECK(QDir().mkpath(thumbDir), "thumbnail folder reachable in test mode");
 
     // Restore a sufficient cap BEFORE clearing/writing the historical files,
@@ -665,6 +666,49 @@ static void testThumbnailCacheCapacity()
     CHECK(cache.get(ovSrc, 64, out) && out.size() == QSize(320, 320),
           "overwritten external file served");
     CHECK(cache.totalBytes() == ovBigSize, "external overwrite re-accounted to the new size");
+
+    // Pass 21: Oversized external file discovered on disk must NOT flush the cache.
+    cache.clear();
+    const QString validSrc = fixture("valid_entry");
+    const QString validKey = ThumbnailCache::keyFor(validSrc, 64);
+    const QString validFile = thumbDir + "/" + validKey + ".png";
+    QImage validImg(32, 32, QImage::Format_RGB32);
+    validImg.fill(Qt::blue);
+    CHECK(validImg.save(validFile, "PNG"), "valid thumbnail written under tight budget");
+    const quint64 validFileSize = static_cast<quint64>(QFileInfo(validFile).size());
+    const quint64 tightCap = validFileSize + 50;
+    cache.setMaxBytes(tightCap);
+    CHECK(cache.get(validSrc, 64, out), "valid entry populated in cache");
+    const quint64 validBytes = cache.totalBytes();
+    CHECK(validBytes > 0 && validBytes <= tightCap, "valid entry byte size accounted");
+
+    // An oversized file (strictly larger than tightCap) appearing on disk
+    const QString hugeSrc = fixture("huge_entry");
+    const QString hugeKey = ThumbnailCache::keyFor(hugeSrc, 64);
+    const QString hugeFile = thumbDir + "/" + hugeKey + ".png";
+    QFile hf(hugeFile);
+    CHECK(hf.open(QIODevice::WriteOnly), "oversized file opened");
+    QByteArray bigData(static_cast<int>(tightCap + 1024), 'X');
+    CHECK(hf.write(bigData) == bigData.size(), "oversized external file written on disk");
+    hf.close();
+    CHECK(static_cast<quint64>(QFileInfo(hugeFile).size()) > tightCap,
+          "external file is strictly larger than budget");
+
+    // Probe the oversized entry: must be rejected without evicting the valid entry
+    CHECK(!cache.get(hugeSrc, 64, out), "oversized external file rejected by get()");
+    CHECK(cache.get(validSrc, 64, out),
+          "pre-existing valid entry survives oversized disk probe (no cache flush)");
+    CHECK(cache.totalBytes() == validBytes,
+          "cache totalBytes unchanged after oversized file probe");
+
+    // Input boundary guards
+    QImage dummyImg(16, 16, QImage::Format_RGB32);
+    CHECK(!cache.get("", 64, out), "get with empty path rejected");
+    CHECK(!cache.get(validSrc, -1, out), "get with negative size rejected");
+    CHECK(!cache.get(validSrc, 0, out), "get with zero size rejected");
+    CHECK(ThumbnailCache::keyFor("", 64).isEmpty(), "keyFor with empty path returns empty");
+    CHECK(ThumbnailCache::keyFor(validSrc, -1).isEmpty(),
+          "keyFor with negative size returns empty");
 
     // Restore the default budget and leave no state for later suites.
     cache.clear();

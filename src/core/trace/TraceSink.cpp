@@ -2,7 +2,12 @@
 #include "core/trace/TraceSink.h"
 #include "core/filesystem/Utf8Path.h"
 
+#if defined(_WIN32)
 #include <windows.h>
+#else
+#include <pthread.h>
+#include <unistd.h>
+#endif
 
 #include <chrono>
 #include <cstdio>
@@ -50,7 +55,11 @@ void record(const char *cat, const char *name, int64_t tsUs, int64_t durUs)
 {
     std::lock_guard<std::mutex> lk(g_mu);
     if (g_pid == 0)
+#if defined(_WIN32)
         g_pid = static_cast<uint64_t>(GetCurrentProcessId());
+#else
+        g_pid = static_cast<uint64_t>(getpid());
+#endif
     g_spans.push_back({cat, name, tsUs, durUs < 0 ? 0 : durUs, currentTid()});
 }
 

@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstdint>
 #include <functional>
+#include <list>
 #include <memory>
 
 #include <QDate>
@@ -423,8 +424,10 @@ class ThumbnailPanel : public QListView
         QPixmap pixmap;
         qint64 bytes = 0;
         uint64_t lastUse = 0;
+        std::list<QString>::iterator lruIt;
     };
     mutable QHash<QString, ReadyPixmap> m_thumbReady; // key = path + size
+    mutable std::list<QString> m_thumbReadyLru;       // MRU at front, LRU at back
     mutable qint64 m_thumbReadyBytes = 0;
     mutable uint64_t m_thumbReadyClock = 0;
     QSet<QString> m_thumbPending;

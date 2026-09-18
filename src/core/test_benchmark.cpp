@@ -22,7 +22,7 @@ static int g_failures = 0;
 
 using namespace mviewer::bench;
 
-static bool finite(double d)
+static bool isFiniteVal(double d)
 {
     return d == d && std::isfinite(d);
 }
@@ -39,18 +39,18 @@ int benchmark_suite()
     // B1 startup: finite, positive.
     auto b1 = scenarioStartup();
     CHECK(b1.name == "B1");
-    CHECK(finite(b1.value) && b1.value >= 0);
+    CHECK(isFiniteVal(b1.value) && b1.value >= 0);
 
     // B2 first thumbnail: finite.
     auto b2 = scenarioFirstThumbnail(corpus);
     CHECK(b2.name == "B2");
-    CHECK(finite(b2.value) && b2.value >= 0);
+    CHECK(isFiniteVal(b2.value) && b2.value >= 0);
 
     // B3 decode latency: timing populated, p50 finite and >=0.
     auto b3 = scenarioDecodeLatency(corpus);
     CHECK(b3.name == "B3");
     CHECK(b3.timing.samples > 0);
-    CHECK(finite(b3.timing.p50Ms) && b3.timing.p50Ms >= 0);
+    CHECK(isFiniteVal(b3.timing.p50Ms) && b3.timing.p50Ms >= 0);
     CHECK(b3.timing.p50Ms <= b3.timing.p99Ms + 1e-6);
 
     // B4 throughput: positive images/sec.
@@ -72,7 +72,7 @@ int benchmark_suite()
     // B7 image switch: warm p50 finite.
     auto b7 = scenarioImageSwitch(corpus);
     CHECK(b7.name == "B7");
-    CHECK(finite(b7.value) && b7.value >= 0);
+    CHECK(isFiniteVal(b7.value) && b7.value >= 0);
 
     corpus.clear();
     return g_failures;
