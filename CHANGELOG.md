@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.0.57] - 2026-09-18
+
+### Bug Fixes & Correctness Hardening
+
+- **High-Resolution Auto-Alignment Downsampling (`Aligner`, `core/compare/Aligner.cpp`)**:
+  - **Color-Aware Downsampling**: Fixed a critical defect in `downscaleBy` where downsampling multi-channel color images (`RGB24`, `RGBA32`, `BGR24`, `BGRA32`) with `scale > 1` (any image with max dimension $\ge 512$ px) treated interleaved raw byte offsets as pixel indices without multiplying by stride or channel count. This corrupted the luminance representation and ignored up to 75% of the horizontal image extent, causing registration on production-sized images to fail and report spurious `dx=-64, dy=-64` offsets.
+  - **BGR Channel Order Parity**: Fixed `toGray` to correctly order Red and Blue channel weights for BGR24 and BGRA32 image formats instead of inverting them. Added direct passthrough for existing Grayscale8 buffers to eliminate redundant reallocation.
+- **Viewport Off-Image Boundary Coordinate Hardening (`Viewport`, `core/render/Viewport.h`)**:
+  - **Non-Negative Rect Invariant**: Resolved a defect in `Viewport::visibleImageRect` where panning past the bottom or right boundaries of an image produced negative width or height values (`rx1 - rx < 0`) instead of returning an empty visible region (`w=0, h=0`).
+
+### Performance & Engine Optimization
+
+- **SSE2 Vectorized SAD Search in `Aligner` (`core/compare/Aligner.cpp`)**:
+  - Accelerated 2D search window sum-of-absolute-differences evaluation using SSE2 `_mm_sad_epu8` vector instructions, achieving a ~5.8x speedup (72 ms down to 12 ms) while maintaining 100% bit-exact parity with scalar arithmetic.
+  - Optimized `Aligner::shift` by hoisting row pointer offsets and using linear pointer increments.
+- **SSE2 Vectorized Difference Statistics in `DifferenceEngine` (`core/compare/DifferenceEngine.cpp`)**:
+  - Vectorized difference accumulation, threshold count, and peak diff calculation in `DifferenceEngine::computeStats` using SSE2 intrinsics (`_mm_sad_epu8`, `_mm_subs_epu8`, `_mm_max_epu8`), providing a ~4.0x speedup for Grayscale8 diff maps across both whole images and arbitrary ROI row slices.
+
 ## [1.0.56] - 2026-09-18
 
 ### Reliability, Decoder Bounds & Stream Hardening
