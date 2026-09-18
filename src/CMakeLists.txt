@@ -847,6 +847,23 @@ target_include_directories(test_pixelinspector PRIVATE ${CMAKE_CURRENT_SOURCE_DI
 
 add_test(NAME pixelinspector_tests COMMAND test_pixelinspector)
 
+# ─── QtConvert SIMD & Fast-Path Tests ─────────────────────────────────────────
+add_executable(test_qtconvert
+    core/test_qtconvert.cpp
+)
+
+target_link_libraries(test_qtconvert
+    PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        mviewer_core
+)
+
+target_compile_features(test_qtconvert PRIVATE cxx_std_20)
+target_include_directories(test_qtconvert PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+add_test(NAME qtconvert_tests COMMAND test_qtconvert)
+
 # ─── M15 P0#4 Metadata Center (unified MetadataModel + QTreeView) ───────────
 add_executable(test_metadatamodel
     test_metadatamodel.cpp

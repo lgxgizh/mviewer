@@ -37,6 +37,9 @@ class SearchIndex
     // Clear all entries.
     void clear();
 
+    // Reserve memory for bulk indexing.
+    void reserve(size_t capacity);
+
     // Number of indexed files.
     size_t size() const
     {
@@ -60,6 +63,7 @@ class SearchIndex
         std::string blob; // concatenated, lowercased searchable text
     };
     std::vector<Entry> m_blobs;
+    std::unordered_map<std::string, size_t> m_pathIndex;
 
     static std::string buildBlob(const domain::ImageMetadata &meta, const RawMetadata &raw,
                                  const std::string &analysisText);
@@ -94,6 +98,7 @@ class SearchEngine
 
     // M58: copy the immutable searchable index once at the UI boundary. The
     // returned value is safe to evaluate on a worker while new indexing starts.
+    // cppcheck-suppress returnByReference
     Snapshot snapshot() const
     {
         return m_index;

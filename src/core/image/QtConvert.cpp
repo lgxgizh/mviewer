@@ -1,8 +1,145 @@
 #include "core/image/QtConvert.h"
+#include "core/simd/CpuFeatures.h"
 
 #include <QByteArray>
 #include <QColorSpace>
+#include <algorithm>
 #include <cstring>
+
+#if defined(__GNUC__) || defined(__clang__)
+#define MV_TARGET_AVX2 __attribute__((target("avx2")))
+#define MV_TARGET_SSSE3 __attribute__((target("ssse3,sse4.1")))
+#else
+#define MV_TARGET_AVX2
+#define MV_TARGET_SSSE3
+#endif
+
+namespace
+{
+
+MV_TARGET_AVX2
+inline void convertRgba32ToArgb32RowAVX2(const uint8_t *src, uint8_t *dst, int width)
+{
+    const __m256i mask = _mm256_setr_epi8(2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15, 2,
+                                          1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15);
+    size_t x = 0;
+    const size_t w = static_cast<size_t>(width);
+    for (; x + 8 <= w; x += 8)
+    {
+        const size_t offset = x * 4;
+        const __m256i v = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src + offset));
+        const __m256i shuffled = _mm256_shuffle_epi8(v, mask);
+        _mm256_storeu_si256(reinterpret_cast<__m256i *>(dst + offset), shuffled);
+    }
+    for (; x < w; ++x)
+    {
+        const size_t offset = x * 4;
+        const uint8_t *p = src + offset;
+        uint8_t *d = dst + offset;
+        d[0] = p[2];
+        d[1] = p[1];
+        d[2] = p[0];
+        d[3] = p[3];
+    }
+}
+
+MV_TARGET_SSSE3
+inline void convertRgba32ToArgb32RowSSSE3(const uint8_t *src, uint8_t *dst, int width)
+{
+    const __m128i mask = _mm_setr_epi8(2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15);
+    size_t x = 0;
+    const size_t w = static_cast<size_t>(width);
+    for (; x + 4 <= w; x += 4)
+    {
+        const size_t offset = x * 4;
+        const __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i *>(src + offset));
+        const __m128i shuffled = _mm_shuffle_epi8(v, mask);
+        _mm_storeu_si128(reinterpret_cast<__m128i *>(dst + offset), shuffled);
+    }
+    for (; x < w; ++x)
+    {
+        const size_t offset = x * 4;
+        const uint8_t *p = src + offset;
+        uint8_t *d = dst + offset;
+        d[0] = p[2];
+        d[1] = p[1];
+        d[2] = p[0];
+        d[3] = p[3];
+    }
+}
+
+inline void convertRgba32ToArgb32RowScalar(const uint8_t *src, uint8_t *dst, int width)
+{
+    size_t x = 0;
+    const size_t w = static_cast<size_t>(width);
+    for (; x + 4 <= w; x += 4)
+    {
+        const size_t offset = x * 4;
+        const uint8_t *p = src + offset;
+        uint8_t *d = dst + offset;
+        d[0] = p[2];
+        d[1] = p[1];
+        d[2] = p[0];
+        d[3] = p[3];
+        d[4] = p[6];
+        d[5] = p[5];
+        d[6] = p[4];
+        d[7] = p[7];
+        d[8] = p[10];
+        d[9] = p[9];
+        d[10] = p[8];
+        d[11] = p[11];
+        d[12] = p[14];
+        d[13] = p[13];
+        d[14] = p[12];
+        d[15] = p[15];
+    }
+    for (; x < w; ++x)
+    {
+        const size_t offset = x * 4;
+        const uint8_t *p = src + offset;
+        uint8_t *d = dst + offset;
+        d[0] = p[2];
+        d[1] = p[1];
+        d[2] = p[0];
+        d[3] = p[3];
+    }
+}
+
+inline void convertBgr24ToRgb888Row(const uint8_t *src, uint8_t *dst, int width)
+{
+    size_t x = 0;
+    const size_t w = static_cast<size_t>(width);
+    for (; x + 4 <= w; x += 4)
+    {
+        const size_t sOff = x * 3;
+        const uint8_t *s = src + sOff;
+        uint8_t *d = dst + sOff;
+        d[0] = s[2];
+        d[1] = s[1];
+        d[2] = s[0];
+        d[3] = s[5];
+        d[4] = s[4];
+        d[5] = s[3];
+        d[6] = s[8];
+        d[7] = s[7];
+        d[8] = s[6];
+        d[9] = s[11];
+        d[10] = s[10];
+        d[11] = s[9];
+    }
+    for (; x < w; ++x)
+    {
+        const size_t sOff = x * 3;
+        const uint8_t *s = src + sOff;
+        uint8_t *d = dst + sOff;
+        d[0] = s[2];
+        d[1] = s[1];
+        d[2] = s[0];
+    }
+}
+
+} // namespace
 
 namespace mvcore
 {
@@ -20,31 +157,62 @@ QImage toQImage(const ImageData &src)
         if (out.isNull())
             return QImage();
         const size_t rowBytes = static_cast<size_t>(v.width);
-        for (int y = 0; y < v.height; ++y)
+        const size_t outStride = static_cast<size_t>(out.bytesPerLine());
+        const size_t vStride = static_cast<size_t>(v.stride());
+        if (vStride == outStride && vStride == rowBytes)
         {
-            std::memcpy(out.scanLine(y), v.data + static_cast<size_t>(y) * v.stride(), rowBytes);
+            std::memcpy(out.bits(), v.data, static_cast<size_t>(v.height) * rowBytes);
+        }
+        else
+        {
+            for (int y = 0; y < v.height; ++y)
+            {
+                std::memcpy(out.scanLine(y), v.data + static_cast<size_t>(y) * vStride, rowBytes);
+            }
+        }
+        return out;
+    }
+    case PixelFormat::BGRA32:
+    {
+        // On little-endian systems, BGRA32 byte layout is identical to Qt's Format_ARGB32 (B, G, R,
+        // A)
+        QImage out(v.width, v.height, QImage::Format_ARGB32);
+        if (out.isNull())
+            return QImage();
+        const size_t rowBytes = static_cast<size_t>(v.width) * 4;
+        const size_t outStride = static_cast<size_t>(out.bytesPerLine());
+        const size_t vStride = static_cast<size_t>(v.stride());
+        if (vStride == outStride && vStride == rowBytes)
+        {
+            std::memcpy(out.bits(), v.data, static_cast<size_t>(v.height) * rowBytes);
+        }
+        else
+        {
+            for (int y = 0; y < v.height; ++y)
+            {
+                std::memcpy(out.scanLine(y), v.data + static_cast<size_t>(y) * vStride, rowBytes);
+            }
         }
         return out;
     }
     case PixelFormat::RGBA32:
-    case PixelFormat::BGRA32:
     {
         QImage out(v.width, v.height, QImage::Format_ARGB32);
         if (out.isNull())
             return QImage();
-        const int cpp = v.channelsPerPixel();
+        const bool hasAvx2 = mviewer::core::CpuFeatures::hasAvx2();
+        const bool hasSsse3 = mviewer::core::CpuFeatures::hasSsse3();
+        const size_t vStride = static_cast<size_t>(v.stride());
         for (int y = 0; y < v.height; ++y)
         {
-            const uint8_t *sl = v.data + static_cast<size_t>(y) * v.stride();
-            QRgb *dl = reinterpret_cast<QRgb *>(out.scanLine(y));
-            for (int x = 0; x < v.width; ++x)
-            {
-                const uint8_t *p = sl + x * cpp;
-                if (src.format == PixelFormat::RGBA32)
-                    dl[x] = qRgba(p[0], p[1], p[2], p[3]);
-                else // BGRA32
-                    dl[x] = qRgba(p[2], p[1], p[0], p[3]);
-            }
+            const uint8_t *sl = v.data + static_cast<size_t>(y) * vStride;
+            uint8_t *dl = out.scanLine(y);
+            if (hasAvx2)
+                convertRgba32ToArgb32RowAVX2(sl, dl, v.width);
+            else if (hasSsse3)
+                convertRgba32ToArgb32RowSSSE3(sl, dl, v.width);
+            else
+                convertRgba32ToArgb32RowScalar(sl, dl, v.width);
         }
         return out;
     }
@@ -54,9 +222,18 @@ QImage toQImage(const ImageData &src)
         if (out.isNull())
             return QImage();
         const size_t rowBytes = static_cast<size_t>(v.width) * 3;
-        for (int y = 0; y < v.height; ++y)
+        const size_t outStride = static_cast<size_t>(out.bytesPerLine());
+        const size_t vStride = static_cast<size_t>(v.stride());
+        if (vStride == outStride && vStride == rowBytes)
         {
-            std::memcpy(out.scanLine(y), v.data + static_cast<size_t>(y) * v.stride(), rowBytes);
+            std::memcpy(out.bits(), v.data, static_cast<size_t>(v.height) * rowBytes);
+        }
+        else
+        {
+            for (int y = 0; y < v.height; ++y)
+            {
+                std::memcpy(out.scanLine(y), v.data + static_cast<size_t>(y) * vStride, rowBytes);
+            }
         }
         return out;
     }
@@ -66,19 +243,12 @@ QImage toQImage(const ImageData &src)
         QImage out(v.width, v.height, QImage::Format_RGB888);
         if (out.isNull())
             return QImage();
-        const int cpp = v.channelsPerPixel();
+        const size_t vStride = static_cast<size_t>(v.stride());
         for (int y = 0; y < v.height; ++y)
         {
-            const uint8_t *sl = v.data + static_cast<size_t>(y) * v.stride();
-            uchar *dl = out.scanLine(y);
-            int x = 0;
-            for (; x < v.width; ++x)
-            {
-                const uint8_t *p = sl + x * cpp;
-                dl[x * 3 + 0] = p[2];
-                dl[x * 3 + 1] = p[1];
-                dl[x * 3 + 2] = p[0];
-            }
+            const uint8_t *sl = v.data + static_cast<size_t>(y) * vStride;
+            uint8_t *dl = out.scanLine(y);
+            convertBgr24ToRgb888Row(sl, dl, v.width);
         }
         return out;
     }
@@ -156,7 +326,7 @@ QImage toDisplayQImage(const ImageData &src, const mviewer::domain::ImageMetadat
     if (source != destination)
     {
         // QColorSpace performs a direct source -> presentation-target
-        // transform.  If a platform/plugin cannot build that transform, Qt
+        // transform. If a platform/plugin cannot build that transform, Qt
         // leaves the raster usable; keep the source-tagged copy rather than
         // returning black or throwing from an asynchronous paint path.
         out.convertToColorSpace(destination);
@@ -186,10 +356,87 @@ ImageData fromQImage(const QImage &src)
     {
         ImageData out = makeImageData(src.width(), src.height(), PixelFormat::Grayscale8);
         const size_t rowBytes = static_cast<size_t>(src.width());
+        const size_t srcStride = static_cast<size_t>(src.bytesPerLine());
+        const size_t dstStride = out.stride();
+        if (srcStride == dstStride && srcStride == rowBytes)
+        {
+            std::memcpy(out.buffer->data(), src.constBits(),
+                        static_cast<size_t>(src.height()) * rowBytes);
+        }
+        else
+        {
+            for (int y = 0; y < src.height(); ++y)
+            {
+                std::memcpy(out.buffer->data() + static_cast<size_t>(y) * dstStride,
+                            src.constScanLine(y), rowBytes);
+            }
+        }
+        return out;
+    }
+
+    if (src.format() == QImage::Format_RGB888)
+    {
+        ImageData out = makeImageData(src.width(), src.height(), PixelFormat::RGB24);
+        const size_t rowBytes = static_cast<size_t>(src.width()) * 3;
+        const size_t srcStride = static_cast<size_t>(src.bytesPerLine());
+        const size_t dstStride = out.stride();
+        if (srcStride == dstStride && srcStride == rowBytes)
+        {
+            std::memcpy(out.buffer->data(), src.constBits(),
+                        static_cast<size_t>(src.height()) * rowBytes);
+        }
+        else
+        {
+            for (int y = 0; y < src.height(); ++y)
+            {
+                std::memcpy(out.buffer->data() + static_cast<size_t>(y) * dstStride,
+                            src.constScanLine(y), rowBytes);
+            }
+        }
+        return out;
+    }
+
+    if (src.format() == QImage::Format_ARGB32 || src.format() == QImage::Format_RGB32)
+    {
+        ImageData out = makeImageData(src.width(), src.height(), PixelFormat::RGB24);
+        const size_t dstStride = out.stride();
+        uint8_t *dstData = out.buffer->data();
+        const size_t w = static_cast<size_t>(src.width());
         for (int y = 0; y < src.height(); ++y)
         {
-            std::memcpy(out.buffer->data() + static_cast<size_t>(y) * out.stride(),
-                        src.constScanLine(y), rowBytes);
+            const uint8_t *sl = src.constScanLine(y);
+            uint8_t *dl = dstData + static_cast<size_t>(y) * dstStride;
+            size_t x = 0;
+            for (; x + 4 <= w; x += 4)
+            {
+                const size_t sOff = x * 4;
+                const size_t dOff = x * 3;
+                const uint8_t *s = sl + sOff;
+                uint8_t *d = dl + dOff;
+                // Little-endian ARGB32/RGB32 is [B, G, R, A]
+                d[0] = s[2];
+                d[1] = s[1];
+                d[2] = s[0];
+                d[3] = s[6];
+                d[4] = s[5];
+                d[5] = s[4];
+                d[6] = s[10];
+                d[7] = s[9];
+                d[8] = s[8];
+                d[9] = s[14];
+                d[10] = s[13];
+                d[11] = s[12];
+            }
+            for (; x < w; ++x)
+            {
+                const size_t sOff = x * 4;
+                const size_t dOff = x * 3;
+                const uint8_t *s = sl + sOff;
+                uint8_t *d = dl + dOff;
+                d[0] = s[2];
+                d[1] = s[1];
+                d[2] = s[0];
+            }
         }
         return out;
     }

@@ -28,6 +28,25 @@
   - Expanded `test_imageoverlay` with 150+ new assertions verifying channel isolation (R, G, B, V, Y) and alpha channel preservation across all supported 3-channel and 4-channel formats and varied image dimensions ($1\times 1$, $13\times 7$, $16\times 16$, $37\times 19$, $64\times 32$).
   - Added boundary tests verifying safe handling of null, $0\times 0$, and negative dimensions (179 total tests passing).
 
+### Release
+
+- **QtConvert SIMD Vectorization & Zero-Copy Fast-Paths (`core/image/QtConvert.cpp`)**:
+  - Accelerated `PixelFormat::RGBA32` to `QImage::Format_ARGB32` with AVX2 (`_mm256_shuffle_epi8`, 8 px/iter) and SSSE3 (`_mm_shuffle_epi8`, 4 px/iter) channel swizzling.
+  - Implemented contiguous memory bulk `std::memcpy` fast-paths for `PixelFormat::BGRA32` (natively matching little-endian `Format_ARGB32`), `PixelFormat::Grayscale8`, and `PixelFormat::RGB24`.
+  - Added direct RGB component extraction from `Format_ARGB32` and `Format_RGB32` in `fromQImage`, eliminating temporary QImage allocations and Qt generic format conversion.
+
+- **SearchIndex $O(1)$ Hash Lookups & Bulk Reserve (`core/search/SearchEngine.cpp`, `core/search/SearchEngine.h`)**:
+  - Replaced $O(N)$ linear scans during index insertion and removal with $O(1)$ `std::unordered_map<std::string, size_t>` lookup and $O(1)$ swap-and-pop removal.
+  - Added `reserve(size_t)` to preallocate hash buckets and vector capacity during bulk directory scans.
+  - Hoisted query lowercasing outside candidate iteration loop and searched pre-lowercased blobs directly.
+
+- **BatchProcessor Modular Refactoring (`core/batch/BatchProcessor.cpp`)**:
+  - Decomposed 133-line `processFile` into modular single-responsibility step helpers (`applyAnalyzeOp`, `applyCropOp`, `applyResizeOp`, `applyWatermarkOp`, `applyExportOp`), reducing function span to 46 lines and retiring tracked debt from `complexity_gate.ps1` and ADR-014. Master's directory expand helpers (`isImageFile` / `collectImages` / `expandInputPaths`) are retained.
+
+- **Unit Test Coverage (`core/test_qtconvert.cpp`, `test_search.cpp`)**:
+  - Registered `test_qtconvert` covering null inputs, Grayscale8, RGB24, BGRA32, RGBA32 SIMD swizzling across aligned and unaligned odd dimensions, non-owning `toQImageRef`, and round-trip fidelity.
+  - Expanded `test_search` with 5,000-entry indexing performance tests, $O(1)$ in-place update validation, case-folding search, and snippet integrity tests.
+
 ## [1.0.59] - 2026-09-18
 
 ### Bug Fixes
