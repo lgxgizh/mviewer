@@ -17,6 +17,7 @@
 #include <QResizeEvent>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 
 MetadataOverlay::MetadataOverlay(QWidget *parent) : QWidget(parent)
@@ -130,7 +131,7 @@ void MetadataOverlay::positionHistogram(const QRect &boxRect)
         return;
     const int padding = 12;
     const int lineH = fontMetrics().height() + 4;
-    const int bodyEnd = (m_lines.size() + 1) * lineH + padding;
+    const int bodyEnd = static_cast<int>(m_lines.size() + 1) * lineH + padding;
     const int x = boxRect.x() + padding;
     const int y = boxRect.y() + bodyEnd + 4;
     const int w = boxRect.width() - padding * 2;
@@ -141,13 +142,17 @@ namespace
 {
 QString formatFileSize(qint64 bytes)
 {
-    if (bytes < 1024)
+    constexpr qint64 kKiB = 1024;
+    constexpr qint64 kMiB = 1024 * kKiB;
+    constexpr qint64 kGiB = 1024 * kMiB;
+    if (bytes < kKiB)
         return QString("%1 B").arg(bytes);
-    if (bytes < 1024 * 1024)
-        return QString("%1 KB").arg(bytes / 1024.0, 0, 'f', 1);
-    if (bytes < 1024LL * 1024 * 1024)
-        return QString("%1 MB").arg(bytes / (1024.0 * 1024), 0, 'f', 2);
-    return QString("%1 GB").arg(bytes / (1024.0 * 1024 * 1024), 0, 'f', 2);
+    const double bytesD = static_cast<double>(bytes);
+    if (bytes < kMiB)
+        return QString("%1 KB").arg(bytesD / 1024.0, 0, 'f', 1);
+    if (bytes < kGiB)
+        return QString("%1 MB").arg(bytesD / (1024.0 * 1024.0), 0, 'f', 2);
+    return QString("%1 GB").arg(bytesD / (1024.0 * 1024.0 * 1024.0), 0, 'f', 2);
 }
 
 QString lookup(const std::map<std::string, std::string> &m, const char *key)
@@ -199,16 +204,8 @@ void MetadataOverlay::requestMetadata()
         });
 }
 
-void MetadataOverlay::buildContent(
-    const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
+void MetadataOverlay::appendFileInfo(const mviewer::domain::ImageMetadata &meta)
 {
-    m_lines.clear();
-
-    const auto &meta = snapshot.metadata;
-
-    m_shortName = QString::fromUtf8(meta.fileName.data(), static_cast<int>(meta.fileName.size()));
-
-    // Basic file info
     m_lines << QString("文件: %1").arg(m_shortName);
     m_lines << QString("路径: %1")
                    .arg(QString::fromUtf8(meta.filePath.data(),
@@ -216,7 +213,6 @@ void MetadataOverlay::buildContent(
     m_lines << QString("尺寸: %1").arg(formatFileSize(meta.fileSize));
     m_lines << QString("格式: %1").arg(QString::fromStdString(meta.format));
 
-    // Image dimensions
     if (meta.width > 0 && meta.height > 0)
         m_lines << QString("分辨率: %1 × %2").arg(meta.width).arg(meta.height);
 
@@ -226,84 +222,83 @@ void MetadataOverlay::buildContent(
     if (!meta.colorSpace.empty())
         m_lines << QString("色彩空间: %1").arg(QString::fromStdString(meta.colorSpace));
 
-    // DPI
     if (meta.dpiX > 0 || meta.dpiY > 0)
         m_lines << QString("DPI: %1 × %2").arg(meta.dpiX).arg(meta.dpiY);
+}
 
-    // EXIF text keys (from embedded metadata)
-    if (!meta.textKeys.empty())
+void MetadataOverlay::appendExifInfo(const mviewer::domain::ImageMetadata &meta)
+{
+    if (meta.textKeys.empty())
+        return;
+
+    const auto make = lookup(meta.textKeys, "Make");
+    const auto model = lookup(meta.textKeys, "Model");
+    if (!make.isEmpty() || !model.isEmpty())
+        m_lines << QString("相机: %1 %2").arg(make, model).trimmed();
+
+    const auto dateTime = lookup(meta.textKeys, "DateTimeOriginal");
+    if (!dateTime.isEmpty())
+        m_lines << QString("拍摄: %1").arg(dateTime);
+
+    const auto iso = lookup(meta.textKeys, "ISOSpeedRatings");
+    if (!iso.isEmpty())
+        m_lines << QString("ISO: %1").arg(iso);
+
+    const auto exp = lookup(meta.textKeys, "ExposureTime");
+    if (!exp.isEmpty())
+        m_lines << QString("快门: %1s").arg(exp);
+
+    const auto fnum = lookup(meta.textKeys, "FNumber");
+    if (!fnum.isEmpty())
+        m_lines << QString("光圈: f/%1").arg(fnum);
+
+    const auto fl = lookup(meta.textKeys, "FocalLength");
+    if (!fl.isEmpty())
+        m_lines << QString("焦距: %1mm").arg(fl);
+
+    const auto lensModel = lookup(meta.textKeys, "LensModel");
+    const auto lensMake = lookup(meta.textKeys, "LensMake");
+    if (!lensModel.isEmpty() || !lensMake.isEmpty())
+        m_lines << QString("镜头: %1 %2").arg(lensMake, lensModel).trimmed();
+
+    const auto sw = lookup(meta.textKeys, "Software");
+    if (!sw.isEmpty())
+        m_lines << QString("软件: %1").arg(sw);
+}
+
+void MetadataOverlay::appendRawInfo(const mviewer::core::RawMetadata &raw)
+{
+    if (!raw.make.empty() || !raw.model.empty())
     {
-        const auto make = lookup(meta.textKeys, "Make");
-        const auto model = lookup(meta.textKeys, "Model");
-        if (!make.isEmpty() || !model.isEmpty())
-            m_lines << QString("相机: %1 %2").arg(make, model).trimmed();
-
-        const auto dateTime = lookup(meta.textKeys, "DateTimeOriginal");
-        if (!dateTime.isEmpty())
-            m_lines << QString("拍摄: %1").arg(dateTime);
-
-        const auto iso = lookup(meta.textKeys, "ISOSpeedRatings");
-        if (!iso.isEmpty())
-            m_lines << QString("ISO: %1").arg(iso);
-
-        const auto exp = lookup(meta.textKeys, "ExposureTime");
-        if (!exp.isEmpty())
-            m_lines << QString("快门: %1s").arg(exp);
-
-        const auto fnum = lookup(meta.textKeys, "FNumber");
-        if (!fnum.isEmpty())
-            m_lines << QString("光圈: f/%1").arg(fnum);
-
-        const auto fl = lookup(meta.textKeys, "FocalLength");
-        if (!fl.isEmpty())
-            m_lines << QString("焦距: %1mm").arg(fl);
-
-        // Lens (EXIF LensModel / LensMake, with RAW fallback below).
-        const auto lensModel = lookup(meta.textKeys, "LensModel");
-        const auto lensMake = lookup(meta.textKeys, "LensMake");
-        if (!lensModel.isEmpty() || !lensMake.isEmpty())
-            m_lines << QString("镜头: %1 %2").arg(lensMake, lensModel).trimmed();
-
-        const auto sw = lookup(meta.textKeys, "Software");
-        if (!sw.isEmpty())
-            m_lines << QString("软件: %1").arg(sw);
+        const bool hasCameraLine =
+            std::any_of(m_lines.cbegin(), m_lines.cend(),
+                        [](const QString &l) { return l.startsWith(QStringLiteral("相机:")); });
+        if (!hasCameraLine)
+            m_lines << QString("相机: %1 %2")
+                           .arg(QString::fromStdString(raw.make), QString::fromStdString(raw.model))
+                           .trimmed();
     }
-
-    // RAW sidecar EXIF (camera / lens) when the generic textKeys path is empty.
+    if (!raw.lens.empty() || !raw.lensMaker.empty())
     {
-        const auto &raw = snapshot.raw;
-        if (!raw.make.empty() || !raw.model.empty())
-        {
-            const bool hasCameraLine =
-                std::any_of(m_lines.cbegin(), m_lines.cend(),
-                            [](const QString &l) { return l.startsWith(QStringLiteral("相机:")); });
-            if (!hasCameraLine)
-                m_lines << QString("相机: %1 %2")
-                               .arg(QString::fromStdString(raw.make),
-                                    QString::fromStdString(raw.model))
-                               .trimmed();
-        }
-        if (!raw.lens.empty() || !raw.lensMaker.empty())
-        {
-            const bool hasLensLine =
-                std::any_of(m_lines.cbegin(), m_lines.cend(),
-                            [](const QString &l) { return l.startsWith(QStringLiteral("镜头:")); });
-            if (!hasLensLine)
-                m_lines << QString("镜头: %1 %2")
-                               .arg(QString::fromStdString(raw.lensMaker),
-                                    QString::fromStdString(raw.lens))
-                               .trimmed();
-        }
-        if (raw.iso > 0)
-        {
-            const bool hasIso = std::any_of(m_lines.cbegin(), m_lines.cend(), [](const QString &l)
-                                            { return l.startsWith(QStringLiteral("ISO:")); });
-            if (!hasIso)
-                m_lines << QString("ISO: %1").arg(raw.iso);
-        }
+        const bool hasLensLine = std::any_of(m_lines.cbegin(), m_lines.cend(), [](const QString &l)
+                                             { return l.startsWith(QStringLiteral("镜头:")); });
+        if (!hasLensLine)
+            m_lines << QString("镜头: %1 %2")
+                           .arg(QString::fromStdString(raw.lensMaker),
+                                QString::fromStdString(raw.lens))
+                           .trimmed();
     }
+    if (raw.iso > 0)
+    {
+        const bool hasIso = std::any_of(m_lines.cbegin(), m_lines.cend(), [](const QString &l)
+                                        { return l.startsWith(QStringLiteral("ISO:")); });
+        if (!hasIso)
+            m_lines << QString("ISO: %1").arg(raw.iso);
+    }
+}
 
-    // ICC profile
+void MetadataOverlay::appendLocationAndTimes(const mviewer::domain::ImageMetadata &meta)
+{
     if (meta.hasIccProfile)
         m_lines << QString("ICC 配置: 已嵌入 (%1)")
                        .arg(meta.colorSpace.empty() ? QStringLiteral("embedded")
@@ -311,17 +306,17 @@ void MetadataOverlay::buildContent(
     else if (!meta.colorSpace.empty())
         m_lines << QString("色彩配置: %1").arg(QString::fromStdString(meta.colorSpace));
 
-    // P0: GPS coordinates (decimal degrees → DMS for readability).
-    if (meta.hasGps)
+    if (meta.hasGps && std::isfinite(meta.gpsLatitude) && std::isfinite(meta.gpsLongitude) &&
+        std::abs(meta.gpsLatitude) <= 90.0 && std::abs(meta.gpsLongitude) <= 180.0)
     {
         auto toDms = [](double dd, char pos, char neg)
         {
             const bool isNeg = (dd < 0);
-            double d = std::abs(dd);
-            int deg = static_cast<int>(d);
-            double m = (d - deg) * 60.0;
-            int min = static_cast<int>(m);
-            double s = (m - min) * 60.0;
+            const double d = std::abs(dd);
+            const int deg = static_cast<int>(d);
+            const double m = (d - deg) * 60.0;
+            const int min = static_cast<int>(m);
+            const double s = std::clamp((m - min) * 60.0, 0.0, 59.9);
             return QString("%1°%2'%3\"%4")
                 .arg(deg)
                 .arg(min, 2, 10, QChar('0'))
@@ -330,17 +325,29 @@ void MetadataOverlay::buildContent(
         };
         m_lines << QString("GPS: %1  %2")
                        .arg(toDms(meta.gpsLatitude, 'N', 'S'), toDms(meta.gpsLongitude, 'E', 'W'));
-        if (meta.gpsAltitude != 0.0)
+        if (meta.gpsAltitude != 0.0 && std::isfinite(meta.gpsAltitude))
             m_lines << QString("海拔: %1 m").arg(meta.gpsAltitude, 0, 'f', 1);
     }
 
-    // Modified time
     if (meta.modifiedEpochSec > 0)
     {
         const auto dt = QDateTime::fromSecsSinceEpoch(static_cast<qint64>(meta.modifiedEpochSec));
         m_lines << QString("修改: %1").arg(dt.toString("yyyy-MM-dd hh:mm:ss"));
     }
-    // P0: Histogram is rendered as a child widget (m_histogram), not in text lines.
+}
+
+void MetadataOverlay::buildContent(
+    const mviewer::core::MetadataPresentationService::Snapshot &snapshot)
+{
+    m_lines.clear();
+
+    const auto &meta = snapshot.metadata;
+    m_shortName = QString::fromUtf8(meta.fileName.data(), static_cast<int>(meta.fileName.size()));
+
+    appendFileInfo(meta);
+    appendExifInfo(meta);
+    appendRawInfo(snapshot.raw);
+    appendLocationAndTimes(meta);
 }
 
 void MetadataOverlay::paintEvent(QPaintEvent *)
@@ -357,7 +364,7 @@ void MetadataOverlay::paintEvent(QPaintEvent *)
     // P0: Reserve space for embedded histogram if it has data.
     const int histExtra =
         (m_histogram && m_histogram->isVisible()) ? kHistogramHeight + padding : 0;
-    const int boxH = (m_lines.size() + 1) * lineH + padding * 2 + histExtra;
+    const int boxH = static_cast<int>(m_lines.size() + 1) * lineH + padding * 2 + histExtra;
 
     const int x = width() - boxW - 20;
     const int y = 20;

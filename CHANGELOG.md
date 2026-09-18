@@ -8,6 +8,26 @@
 - **Batch dialog UI (#16)**: Heap-owned layout, group boxes, parameter visibility, and directory expand-on-add fixes for `BatchDialog` / `BatchProcessor`.
 - **Optimize passes (#1–#3, #5–#10, #17)**: Cache LRU O(1) splice, DiskCache bounds, Raw16/JPEG/thumbnail hotpaths, DifferenceEngine/Aligner/Histogram SIMD, SyncController hardening, ICC/EXIF/DecoderRegistry correctness — see `[1.0.55]`–`[1.0.59]` for per-change detail.
 
+### Performance & Memory Architecture
+
+- **Contiguous Scanline Fast-Path for Channel Overlay (`ImageOverlay`, `core/analysis/ImageOverlay.h`)**:
+  - Accelerated `applyChannelOverlay` across RGB24, BGR24, RGBA32, and BGRA32 pixel buffers by hoisting pitch checks and executing direct pointer walking over contiguous image rows, avoiding repeated 2D coordinate calculations in hot loop paths.
+  - Enforced input bounds validation guarding against empty, zero, or negative dimensions in `applyChannelOverlay` and `applyZebraOverlay`.
+
+### Code Quality, Safety & Architectural Debt (ADR-014)
+
+- **Modularization & TU Complexity Reduction (`MetadataOverlay`, `metadataoverlay.cpp`, `metadataoverlay.h`)**:
+  - Decomposed monolithic `buildContent` into focused single-responsibility helper methods (`appendFileInfo`, `appendExifInfo`, `appendRawInfo`, `appendLocationAndTimes`), bringing function spans well below ADR-014 limits (< 40 lines each).
+  - Retired `metadataoverlay.cpp::buildContent` from the grandfathered debt registry in `docs/adr/014-ui-tu-split-by-responsibility.md` and `scripts/complexity_gate.ps1`.
+  - Hardened GPS coordinate parsing with `std::isfinite` validation and coordinate range guards ($\pm 90^\circ$ latitude, $\pm 180^\circ$ longitude), clamping DMS seconds to $[0.0, 59.9\rangle$ to prevent coordinate rendering overflow.
+  - Eliminated narrowing conversions in file size formatting and overlay height calculations.
+
+### Test Harness & Verification
+
+- **SIMD Channel Parity & Boundary Verification (`core/test_imageoverlay.cpp`)**:
+  - Expanded `test_imageoverlay` with 150+ new assertions verifying channel isolation (R, G, B, V, Y) and alpha channel preservation across all supported 3-channel and 4-channel formats and varied image dimensions ($1\times 1$, $13\times 7$, $16\times 16$, $37\times 19$, $64\times 32$).
+  - Added boundary tests verifying safe handling of null, $0\times 0$, and negative dimensions (179 total tests passing).
+
 ## [1.0.59] - 2026-09-18
 
 ### Bug Fixes
