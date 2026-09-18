@@ -297,6 +297,73 @@ int main(int argc, char **argv)
         CHECK(roiStatsRow0.maxDiff == 50, "row0 ROI maxDiff is 50");
     }
 
+    // Large-buffer vectorized stats correctness
+    {
+        const int w = 128;
+        const int h = 10;
+        const size_t sz = static_cast<size_t>(w) * h;
+        auto buf = std::make_shared<std::vector<uint8_t>>(sz, uint8_t(0));
+        int64_t expectedSum = 0;
+        int64_t expectedDiffs = 0;
+        int expectedMax = 0;
+        for (size_t i = 0; i < sz; ++i)
+        {
+            const uint8_t v = static_cast<uint8_t>((i * 7) % 256);
+            (*buf)[i] = v;
+            expectedSum += v;
+            expectedDiffs += (v >= 10 ? 1 : 0);
+            expectedMax = std::max(expectedMax, static_cast<int>(v));
+        }
+        ImageData img;
+        img.buffer = buf;
+        img.width = w;
+        img.height = h;
+        img.format = PixelFormat::Grayscale8;
+
+        const auto stats = DifferenceEngine::computeStats(img, 10);
+        CHECK(stats.totalPixels == static_cast<int64_t>(sz), "large stats totalPixels matches");
+        CHECK(stats.diffPixels == expectedDiffs, "large stats diffPixels matches exact count");
+        CHECK(stats.maxDiff == expectedMax, "large stats maxDiff matches exact max");
+        CHECK(std::abs(stats.meanDiff -
+                       static_cast<double>(expectedSum) / static_cast<double>(sz)) < 1e-6,
+              "large stats meanDiff matches expected");
+    }
+
+    // Pathological 64-bit coordinate clamping test
+    {
+        ImageData img = makeSolidRgb(32, 32, 10, 10, 10);
+        // roiX + roiW would overflow 32-bit signed integer if not clamped with 64-bit arithmetic
+        const int bigX = 0x7ffffff0;
+        const int bigW = 100;
+        const auto stats = DifferenceEngine::computeStats(img, 5, bigX, 0, bigW, 32);
+        CHECK(stats.totalPixels == 0,
+              "pathological 64-bit ROI yields 0 pixels (no crash/overflow)");
+    }
+
+    // Cross-format difference: RGB24 vs BGR24
+    {
+        const int w = 8, h = 8;
+        auto a = makeSolidRgb(w, h, 100, 150, 200); // R=100, G=150, B=200
+        ImageData b;
+        const size_t sz = static_cast<size_t>(w) * h * 3;
+        auto bufB = std::make_shared<std::vector<uint8_t>>(sz);
+        for (size_t i = 0; i < sz; i += 3)
+        {
+            // BGR24 format: byte 0 is B, byte 1 is G, byte 2 is R
+            (*bufB)[i + 0] = 200; // B
+            (*bufB)[i + 1] = 150; // G
+            (*bufB)[i + 2] = 100; // R
+        }
+        b.buffer = bufB;
+        b.width = w;
+        b.height = h;
+        b.format = PixelFormat::BGR24;
+
+        auto diff = DifferenceEngine::differenceMap(a, b);
+        CHECK(!diff.isNull(), "cross-format RGB vs BGR non-null");
+        CHECK(isAllBlack(diff), "cross-format identical colors yield zero diff");
+    }
+
     std::cout << "\nDifferenceEngine: " << (g_fail == 0 ? "ALL PASSED" : "FAILURES") << "\n";
     return g_fail == 0 ? 0 : 1;
 }

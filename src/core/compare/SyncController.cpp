@@ -5,7 +5,8 @@
 namespace
 {
 
-CellState kDefaultCell{};
+thread_local CellState s_fallbackCell{};
+const CellState kDefaultCell{};
 
 } // namespace
 
@@ -80,6 +81,15 @@ void SyncController::setCellOffset(int index, double ox, double oy)
     }
 }
 
+void SyncController::swapCells(int a, int b)
+{
+    const int count = static_cast<int>(m_cells.size());
+    if (a >= 0 && a < count && b >= 0 && b < count && a != b)
+    {
+        std::swap(m_cells[a], m_cells[b]);
+    }
+}
+
 void SyncController::fitCell(int index, const CellSize &viewport, const CellSize &imageSize)
 {
     if (index < 0 || index >= static_cast<int>(m_cells.size()))
@@ -104,7 +114,8 @@ CellState &SyncController::cell(int index)
 {
     if (0 <= index && index < static_cast<int>(m_cells.size()))
         return m_cells[index];
-    return kDefaultCell;
+    s_fallbackCell = CellState{};
+    return s_fallbackCell;
 }
 
 const CellState &SyncController::cell(int index) const
