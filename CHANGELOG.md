@@ -184,6 +184,14 @@
   - **Scan Loop Bound**: Capped maximum marker count (`kMaxJpegMarkers = 65536`) in `RawDecoder::jpegEndAt` to prevent infinite loops on corrupted or hostile streams.
   - **Contiguous Pixel Buffer Fast-Path**: Accelerated `toImageData` in `RawDecoder` and `QtFallbackDecoder` using a single contiguous `memcpy` when scanline byte counts match stride, matching `QtDecoder`.
 
+### Bug Fixes & Correctness Hardening
+
+- **PDF Export Xref Table Spec Compliance (`ImageTransform`, `core/image/ImageTransform.cpp`)**:
+  - `writePdf` now emits `M+1` xref entries (object 0 free + objects 1..M in-use) and matching trailer `/Size`, so a K-page export includes the final image object instead of truncating the table at `M-1`.
+- **Resize / Contact-Sheet / Watermark Guards**:
+  - Reject non-positive source dimensions, non-finite scale factors, and destination pixel counts above a 256 MP budget in `resizeToFit` / `resizeByFactor`.
+  - Clamp non-positive contact-sheet thumb sizes; skip zero/non-finite watermark opacity without mutating the source.
+
 ## [1.0.55] - 2026-09-18
 
 ### Bug Fixes & Correctness Hardening
