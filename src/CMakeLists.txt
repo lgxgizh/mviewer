@@ -82,6 +82,7 @@ add_library(mviewer_core SHARED
     core/analyzer/ColorCastAnalyzer.cpp
     core/analyzer/ExposureAnalyzer.cpp
     core/render/RenderEngine.cpp
+    core/render/BilinearScale.cpp
     core/render/AsyncTileRequestManager.cpp
     core/thumbnail/ThumbnailPipeline.h
     core/plugin/PluginLoader.cpp

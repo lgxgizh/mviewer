@@ -13,6 +13,11 @@
 #include <mutex>
 #include <vector>
 
+namespace mviewer::core::render_detail
+{
+QImage bilinearQ(const QImage &src, const QSize &target);
+}
+
 namespace
 {
 
@@ -30,77 +35,6 @@ QImage nearestQ(const QImage &src, const QSize &target)
         {
             const int sx = std::min(sw - 1, (x * sw) / tw);
             line[x] = sline[sx];
-        }
-    }
-    return out;
-}
-
-struct BilinearX
-{
-    int x0;
-    int fx;
-    int invFx;
-};
-
-QImage bilinearQ(const QImage &src, const QSize &target)
-{
-    if (src.isNull() || target.width() <= 0 || target.height() <= 0)
-        return QImage();
-
-    const int sw = src.width(), sh = src.height();
-    const int tw = target.width(), th = target.height();
-
-    if (sw <= 1 || sh <= 1)
-        return nearestQ(src, target);
-
-    QImage out(target, QImage::Format_RGB32);
-    const double rx = static_cast<double>(sw) / static_cast<double>(tw);
-    const double ry = static_cast<double>(sh) / static_cast<double>(th);
-
-    std::vector<BilinearX> xTab(static_cast<size_t>(tw));
-    for (int x = 0; x < tw; ++x)
-    {
-        const double sx = (static_cast<double>(x) + 0.5) * rx - 0.5;
-        const int x0 = std::max(0, std::min(sw - 2, static_cast<int>(std::floor(sx))));
-        const double fxD = std::max(0.0, sx - std::floor(sx));
-        const int fx = static_cast<int>(std::round(fxD * 256.0));
-        xTab[static_cast<size_t>(x)] = {x0, fx, 256 - fx};
-    }
-
-    for (int y = 0; y < th; ++y)
-    {
-        QRgb *line = reinterpret_cast<QRgb *>(out.scanLine(y));
-        const double sy = (static_cast<double>(y) + 0.5) * ry - 0.5;
-        const int y0 = std::max(0, std::min(sh - 2, static_cast<int>(std::floor(sy))));
-        const double fyD = std::max(0.0, sy - std::floor(sy));
-        const int fy = static_cast<int>(std::round(fyD * 256.0));
-        const int w0y = 256 - fy;
-        const int w1y = fy;
-        const QRgb *sl0 = reinterpret_cast<const QRgb *>(src.constScanLine(y0));
-        const QRgb *sl1 = reinterpret_cast<const QRgb *>(src.constScanLine(y0 + 1));
-        for (int x = 0; x < tw; ++x)
-        {
-            const auto &tab = xTab[static_cast<size_t>(x)];
-            const int w00 = (tab.invFx * w0y) >> 8;
-            const int w10 = (tab.fx * w0y) >> 8;
-            const int w01 = (tab.invFx * w1y) >> 8;
-            const int w11 = (tab.fx * w1y) >> 8;
-            const int x0 = tab.x0;
-
-            const QRgb p00 = sl0[x0];
-            const QRgb p10 = sl0[x0 + 1];
-            const QRgb p01 = sl1[x0];
-            const QRgb p11 = sl1[x0 + 1];
-
-            const int r =
-                (w00 * qRed(p00) + w10 * qRed(p10) + w01 * qRed(p01) + w11 * qRed(p11) + 128) >> 8;
-            const int g = (w00 * qGreen(p00) + w10 * qGreen(p10) + w01 * qGreen(p01) +
-                           w11 * qGreen(p11) + 128) >>
-                          8;
-            const int b =
-                (w00 * qBlue(p00) + w10 * qBlue(p10) + w01 * qBlue(p01) + w11 * qBlue(p11) + 128) >>
-                8;
-            line[x] = qRgb(std::clamp(r, 0, 255), std::clamp(g, 0, 255), std::clamp(b, 0, 255));
         }
     }
     return out;
@@ -289,7 +223,7 @@ QImage scaleQ(const QImage &src, const QSize &target, RenderInterp mode)
     case RenderInterp::Nearest:
         return nearestQ(rgb, target);
     case RenderInterp::Bilinear:
-        return bilinearQ(rgb, target);
+        return mviewer::core::render_detail::bilinearQ(rgb, target);
     case RenderInterp::Bicubic:
         return bicubicQ(rgb, target);
     case RenderInterp::Lanczos:
