@@ -98,7 +98,6 @@ $knownFunctionDebt = @{
     'src/core/image/ImageRepository_async.cpp::loadAsyncCancellable' = 'span 127'
     'src/core/metadata/MetadataIndexer.cpp::indexBatched'           = 'span 122'
     'src/core/filesystem/AtomicFile.cpp::atomicWriteFile'           = 'span 152'
-    'src/domain/SelectionInteraction.h::hitTestSelection'           = 'cc 26'
 }
 
 $fails = 0
