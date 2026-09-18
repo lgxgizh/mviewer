@@ -130,7 +130,7 @@ QImage bilinearQ(const QImage &src, const QSize &target)
                 alignas(16) int r11[4], g11[4], b11[4];
                 for (int k = 0; k < 4; ++k)
                 {
-                    const auto &tab = xTab[static_cast<size_t>(x + k)];
+                    const auto &tab = xTab[static_cast<size_t>(x) + static_cast<size_t>(k)];
                     w00a[k] = (tab.invFx * w0y) >> 8;
                     w10a[k] = (tab.fx * w0y) >> 8;
                     w01a[k] = (tab.invFx * w1y) >> 8;
