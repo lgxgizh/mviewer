@@ -24,13 +24,14 @@ std::shared_ptr<std::vector<uint16_t>> captureRaw16(const std::string &path)
     {
         const int width = image.width();
         const int height = image.height();
-        auto samples = std::make_shared<std::vector<uint16_t>>();
-        samples->reserve(static_cast<size_t>(width) * static_cast<size_t>(height));
+        const size_t total = static_cast<size_t>(width) * height;
+        auto samples = std::make_shared<std::vector<uint16_t>>(total);
+        uint16_t *dst = samples->data();
         for (int y = 0; y < height; ++y)
         {
             const auto *row = reinterpret_cast<const uint16_t *>(image.constScanLine(y));
-            for (int x = 0; x < width; ++x)
-                samples->push_back(row[x]);
+            std::memcpy(dst + static_cast<size_t>(y) * width, row,
+                        static_cast<size_t>(width) * sizeof(uint16_t));
         }
         return samples;
     }
@@ -39,17 +40,20 @@ std::shared_ptr<std::vector<uint16_t>> captureRaw16(const std::string &path)
         return nullptr;
     const int width = source.width();
     const int height = source.height();
-    auto samples = std::make_shared<std::vector<uint16_t>>();
-    samples->reserve(static_cast<size_t>(width) * static_cast<size_t>(height) * 3);
+    const size_t total = static_cast<size_t>(width) * height * 3;
+    auto samples = std::make_shared<std::vector<uint16_t>>(total);
+    uint16_t *dst = samples->data();
     for (int y = 0; y < height; ++y)
     {
         const auto *row = reinterpret_cast<const uint16_t *>(source.constScanLine(y));
+        size_t rowDst = static_cast<size_t>(y) * width * 3;
         for (int x = 0; x < width; ++x)
         {
             const int pixel = x * 4;
-            samples->push_back(row[pixel]);
-            samples->push_back(row[pixel + 1]);
-            samples->push_back(row[pixel + 2]);
+            dst[rowDst + 0] = row[pixel];
+            dst[rowDst + 1] = row[pixel + 1];
+            dst[rowDst + 2] = row[pixel + 2];
+            rowDst += 3;
         }
     }
     return samples;
@@ -84,7 +88,6 @@ bool ImageRepository::loadMemoryHit(const std::string &filePath, const std::stri
         frame->computeHistogram();
     frame->setDecodeState(DecodeState::Decoded);
     frame->setCacheState(CacheState::Memory);
-    CacheManager::instance().putMemory(CacheLevel::FullImage, key, pixels);
     result.frame = std::move(frame);
     result.fromCache = true;
     return true;
@@ -120,10 +123,10 @@ void ImageRepository::enrichFrame(ImageFrame &frame, const std::string &filePath
     mviewer::domain::ImageMetadata metadata = frame.metadata();
     if (metadata.format.empty())
     {
-        const QString ext = QFileInfo(
-                                QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())))
-                                .suffix()
-                                .toLower();
+        const QString ext =
+            QFileInfo(QString::fromUtf8(filePath.data(), static_cast<int>(filePath.size())))
+                .suffix()
+                .toLower();
         if (ext == "jpg" || ext == "jpeg")
             metadata.format = "JPEG";
         else if (ext == "png")

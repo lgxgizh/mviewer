@@ -140,14 +140,20 @@ CacheLevelStats CacheManager::levelStats(CacheLevel level) const
 
 void CacheManager::erase(const std::string &key)
 {
+    if (key.empty())
+        return;
     ImageCache::instance().remove(ImageCache::Metadata, key);
     ImageCache::instance().remove(ImageCache::Thumbnail, key);
     ImageCache::instance().remove(ImageCache::Preview, key);
     ImageCache::instance().remove(ImageCache::Viewer, key);
     {
         std::lock_guard<std::mutex> lock(m_metaMutex);
-        m_metaStore.erase(key);
-        m_metaOrder.remove(key);
+        auto it = m_metaStore.find(key);
+        if (it != m_metaStore.end())
+        {
+            m_metaOrder.erase(it->second.orderIt);
+            m_metaStore.erase(it);
+        }
     }
     {
         std::lock_guard<std::mutex> lock(m_raw16Mutex);
@@ -207,34 +213,46 @@ size_t CacheManager::diskUsageBytes() const
 
 void CacheManager::putMetadata(const std::string &key, const mviewer::domain::ImageMetadata &meta)
 {
+    if (key.empty())
+        return;
     std::lock_guard<std::mutex> lock(m_metaMutex);
     auto it = m_metaStore.find(key);
     if (it != m_metaStore.end())
     {
-        m_metaOrder.remove(key);
+        it->second.meta = meta;
+        m_metaOrder.splice(m_metaOrder.begin(), m_metaOrder, it->second.orderIt);
+        return;
     }
-    else if (m_metaStore.size() >= kMetaMaxEntries)
+    if (m_metaStore.size() >= kMetaMaxEntries && !m_metaOrder.empty())
     {
-        const std::string victim = m_metaOrder.back();
+        const std::string victim = std::move(m_metaOrder.back());
         m_metaOrder.pop_back();
         m_metaStore.erase(victim);
     }
-    m_metaStore[key] = meta;
     m_metaOrder.push_front(key);
+    MetaEntry e;
+    e.meta = meta;
+    e.orderIt = m_metaOrder.begin();
+    m_metaStore.emplace(key, std::move(e));
 }
 
 bool CacheManager::getMetadata(const std::string &key, mviewer::domain::ImageMetadata &out) const
 {
+    if (key.empty())
+        return false;
     std::lock_guard<std::mutex> lock(m_metaMutex);
     auto it = m_metaStore.find(key);
     if (it == m_metaStore.end())
         return false;
-    out = it->second;
+    out = it->second.meta;
+    m_metaOrder.splice(m_metaOrder.begin(), m_metaOrder, it->second.orderIt);
     return true;
 }
 
 bool CacheManager::hasMetadata(const std::string &key) const
 {
+    if (key.empty())
+        return false;
     std::lock_guard<std::mutex> lock(m_metaMutex);
     return m_metaStore.find(key) != m_metaStore.end();
 }
@@ -242,7 +260,7 @@ bool CacheManager::hasMetadata(const std::string &key) const
 void CacheManager::putRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> buf,
                             int channels, uint16_t maxSample)
 {
-    if (!buf || buf->empty())
+    if (key.empty() || !buf || buf->empty())
         return;
     size_t bytes = 0;
     if (!raw16ByteSize(*buf, bytes))
@@ -256,18 +274,21 @@ void CacheManager::putRaw16(const std::string &key, std::shared_ptr<std::vector<
         const std::string victim = m_raw16Order.back();
         eraseRaw16Locked(victim);
     }
+    m_raw16Order.push_front(key);
     Raw16Entry e;
     e.buf = buf;
     e.channels = channels;
     e.maxSample = maxSample;
+    e.orderIt = m_raw16Order.begin();
     m_raw16Store[key] = std::move(e);
-    m_raw16Order.push_front(key);
     m_raw16Bytes += bytes;
 }
 
 bool CacheManager::getRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> &out,
                             int &channels, uint16_t &maxSample) const
 {
+    if (key.empty())
+        return false;
     std::lock_guard<std::mutex> lock(m_raw16Mutex);
     auto it = m_raw16Store.find(key);
     if (it == m_raw16Store.end())
@@ -275,21 +296,26 @@ bool CacheManager::getRaw16(const std::string &key, std::shared_ptr<std::vector<
     out = it->second.buf;
     channels = it->second.channels;
     maxSample = it->second.maxSample;
-    m_raw16Order.remove(key);
-    m_raw16Order.push_front(key);
+    m_raw16Order.splice(m_raw16Order.begin(), m_raw16Order, it->second.orderIt);
     return true;
 }
 
 void CacheManager::invalidate(const std::string &key)
 {
+    if (key.empty())
+        return;
     ImageCache::instance().remove(ImageCache::Metadata, key);
     ImageCache::instance().remove(ImageCache::Thumbnail, key);
     ImageCache::instance().remove(ImageCache::Preview, key);
     ImageCache::instance().remove(ImageCache::Viewer, key);
     {
         std::lock_guard<std::mutex> lock(m_metaMutex);
-        m_metaStore.erase(key);
-        m_metaOrder.remove(key);
+        auto it = m_metaStore.find(key);
+        if (it != m_metaStore.end())
+        {
+            m_metaOrder.erase(it->second.orderIt);
+            m_metaStore.erase(it);
+        }
     }
     {
         std::lock_guard<std::mutex> lock(m_raw16Mutex);
@@ -310,8 +336,8 @@ void CacheManager::eraseRaw16Locked(const std::string &key)
             bytes = m_raw16Bytes;
         m_raw16Bytes = bytes > m_raw16Bytes ? 0 : m_raw16Bytes - bytes;
     }
+    m_raw16Order.erase(it->second.orderIt);
     m_raw16Store.erase(it);
-    m_raw16Order.remove(key);
 }
 
 void CacheManager::trimRaw16Locked()

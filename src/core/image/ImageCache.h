@@ -56,6 +56,7 @@ class ImageCache
     {
         ImageData img;
         size_t bytes = 0;
+        std::list<std::string>::iterator orderIt;
     };
 
     struct Pool
@@ -68,7 +69,7 @@ class ImageCache
     };
 
     void evictIfNeeded(Pool &pool, size_t incoming);
-    void touch(Pool &pool, const std::string &key);
+    void touch(Pool &pool, std::list<std::string>::iterator it);
 
     Pool m_pools[LevelCount];
 

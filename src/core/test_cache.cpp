@@ -424,6 +424,188 @@ static void testRaw16CacheM42()
     mgr.configure(CacheConfig{});
 }
 
+static void testOversizedItemDoesNotFlushCache()
+{
+    printf("\n[Oversized Entry Protection]\n");
+    ImageCache &cache = ImageCache::instance();
+    cache.clear();
+
+    const size_t cap = size_t{3} * 16 * 16 * 3; // capacity for 3 items of 768 bytes = 2304 bytes
+    cache.setCapacity(ImageCache::Viewer, cap);
+
+    auto mk = [](int i)
+    {
+        QImage img = makeColorTest(16, 16, QColor(i * 10, i * 5, 255 - i * 10));
+        return mvcore::fromQImage(img);
+    };
+
+    // Insert 2 small items (total 1536 bytes <= 2304 bytes cap)
+    cache.put(ImageCache::Viewer, "small0", mk(0));
+    cache.put(ImageCache::Viewer, "small1", mk(1));
+
+    ImageData out;
+    CHECK(cache.get(ImageCache::Viewer, "small0", out), "small0 stored");
+    CHECK(cache.get(ImageCache::Viewer, "small1", out), "small1 stored");
+    CHECK(cache.entryCount(ImageCache::Viewer) == 2, "2 entries stored");
+
+    // Attempt to insert an oversized item (e.g. 100x100 RGB = 30000 bytes > 2304 cap)
+    QImage bigImg = makeColorTest(100, 100, QColor(200, 50, 50));
+    ImageData bigData = mvcore::fromQImage(bigImg);
+    cache.put(ImageCache::Viewer, "oversized", bigData);
+
+    // CRITICAL: The oversized entry must be rejected AND small0 / small1 must NOT be evicted!
+    CHECK(!cache.get(ImageCache::Viewer, "oversized", out), "oversized entry rejected");
+    CHECK(cache.get(ImageCache::Viewer, "small0", out),
+          "small0 survives oversized rejection (no cache flush)");
+    CHECK(cache.get(ImageCache::Viewer, "small1", out),
+          "small1 survives oversized rejection (no cache flush)");
+    CHECK(cache.entryCount(ImageCache::Viewer) == 2,
+          "entryCount unchanged after oversized rejection");
+
+    cache.clear();
+}
+
+static void testO1LruScalability()
+{
+    printf("\n[O(1) LRU Scalability]\n");
+    ImageCache &cache = ImageCache::instance();
+    cache.clear();
+
+    constexpr int kCount = 500;
+    // Set capacity to hold exactly 300 entries of 16x16 RGB (768 bytes each)
+    constexpr size_t kEntryBytes = size_t{16} * 16 * 3;
+    constexpr int kCapEntries = 300;
+    cache.setCapacity(ImageCache::Viewer, kCapEntries * kEntryBytes);
+
+    auto mk = [](int i)
+    {
+        QImage img = makeColorTest(16, 16, QColor((i * 13) % 256, (i * 29) % 256, (i * 47) % 256));
+        return mvcore::fromQImage(img);
+    };
+
+    // Insert entries 0..499
+    for (int i = 0; i < kCount; ++i)
+    {
+        cache.put(ImageCache::Viewer, "key_" + std::to_string(i), mk(i));
+    }
+
+    CHECK(cache.entryCount(ImageCache::Viewer) == kCapEntries,
+          "entryCount matches kCapEntries exactly");
+
+    ImageData out;
+    // Entries 0..199 must have been evicted in strict FIFO/LRU order
+    bool oldEvicted = true;
+    for (int i = 0; i < kCount - kCapEntries; ++i)
+    {
+        if (cache.get(ImageCache::Viewer, "key_" + std::to_string(i), out))
+        {
+            oldEvicted = false;
+            break;
+        }
+    }
+    CHECK(oldEvicted, "first 200 items strictly evicted by LRU");
+
+    // Entries 200..499 must all still be present
+    bool recentPresent = true;
+    for (int i = kCount - kCapEntries; i < kCount; ++i)
+    {
+        if (!cache.get(ImageCache::Viewer, "key_" + std::to_string(i), out))
+        {
+            recentPresent = false;
+            break;
+        }
+    }
+    CHECK(recentPresent, "last 300 items strictly retained in cache");
+
+    // Touch key_200 (make it most recent)
+    CHECK(cache.get(ImageCache::Viewer, "key_200", out), "touch key_200");
+
+    // Insert one more entry: key_500
+    cache.put(ImageCache::Viewer, "key_500", mk(500));
+
+    // Now key_201 should be evicted (as it was the least recently used after key_200 was touched),
+    // while key_200 must survive!
+    CHECK(!cache.get(ImageCache::Viewer, "key_201", out), "key_201 evicted as LRU");
+    CHECK(cache.get(ImageCache::Viewer, "key_200", out), "key_200 retained after O(1) LRU touch");
+    CHECK(cache.get(ImageCache::Viewer, "key_500", out), "key_500 retained as most recent");
+
+    cache.clear();
+}
+
+static void testMetadataLruAndHardening()
+{
+    printf("\n[Metadata O(1) LRU & Hardening]\n");
+    CacheManager &mgr = CacheManager::instance();
+    mgr.clear();
+
+    mviewer::domain::ImageMetadata meta;
+    meta.filePath = "/test/meta.png";
+    meta.fileSize = 1024;
+
+    // Test empty key handling
+    mgr.putMetadata("", meta);
+    mviewer::domain::ImageMetadata dummy;
+    CHECK(!mgr.getMetadata("", dummy), "getMetadata with empty key returns false");
+    CHECK(!mgr.hasMetadata(""), "hasMetadata with empty key returns false");
+
+    // Insert 10 metadata entries
+    for (int i = 0; i < 10; ++i)
+    {
+        meta.fileSize = 1000 + i;
+        mgr.putMetadata("meta_" + std::to_string(i), meta);
+    }
+
+    // Touch meta_0 (re-promoting it in LRU)
+    mviewer::domain::ImageMetadata outMeta;
+    CHECK(mgr.getMetadata("meta_0", outMeta) && outMeta.fileSize == 1000,
+          "getMetadata touched meta_0");
+
+    // Erase meta_5 with O(1) list splice
+    mgr.erase("meta_5");
+    CHECK(!mgr.hasMetadata("meta_5"), "meta_5 erased");
+
+    // Invalidate meta_3
+    mgr.invalidate("meta_3");
+    CHECK(!mgr.hasMetadata("meta_3"), "meta_3 invalidated");
+
+    // Remaining items should all be intact
+    CHECK(mgr.hasMetadata("meta_0"), "meta_0 intact");
+    CHECK(mgr.hasMetadata("meta_1"), "meta_1 intact");
+    CHECK(mgr.hasMetadata("meta_9"), "meta_9 intact");
+
+    mgr.clear();
+}
+
+static void testDiskCacheBoundsHardening()
+{
+    printf("\n[DiskCache Bounds Hardening]\n");
+    DiskCache &disk = DiskCache::instance();
+    disk.clear();
+
+    ImageData out;
+    // Empty key checks
+    CHECK(!disk.get("", out), "disk get with empty key returns false");
+    disk.remove("");
+
+    // Put image with valid dimensions
+    QImage validImg = makeColorTest(16, 16, QColor(80, 80, 80));
+    ImageData validData = mvcore::fromQImage(validImg);
+    disk.put("valid_key", validData);
+    CHECK(disk.get("valid_key", out), "valid disk get succeeds");
+    CHECK(out.width == 16 && out.height == 16, "valid disk get dimensions match");
+
+    // Attempt to put an image with pathological dimensions (>256M pixels)
+    ImageData huge;
+    huge.width = 30000;
+    huge.height = 30000; // 900M pixels > 256M cap
+    huge.format = PixelFormat::RGB24;
+    huge.buffer = std::make_shared<std::vector<uint8_t>>(10); // fake buffer
+    disk.put("huge_key", huge);
+    CHECK(!disk.get("huge_key", out), "huge image (>256M pixels) rejected by DiskCache");
+
+    disk.clear();
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -436,6 +618,10 @@ int main(int argc, char **argv)
     testCacheConfig();
     testCacheLruEviction();
     testRaw16CacheM42();
+    testOversizedItemDoesNotFlushCache();
+    testO1LruScalability();
+    testMetadataLruAndHardening();
+    testDiskCacheBoundsHardening();
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;

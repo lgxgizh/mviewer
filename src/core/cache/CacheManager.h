@@ -125,8 +125,13 @@ class CacheManager
 
     // Metadata 级的对象存储（ImageMetadata，独立于像素池）。
     mutable std::mutex m_metaMutex;
-    std::unordered_map<std::string, mviewer::domain::ImageMetadata> m_metaStore;
-    std::list<std::string> m_metaOrder;
+    struct MetaEntry
+    {
+        mviewer::domain::ImageMetadata meta;
+        std::list<std::string>::iterator orderIt;
+    };
+    std::unordered_map<std::string, MetaEntry> m_metaStore;
+    mutable std::list<std::string> m_metaOrder;
     static constexpr size_t kMetaMaxEntries = 50000;
 
     // 原始 16-bit 采样缓冲对象存储（独立于像素池）。
@@ -136,6 +141,7 @@ class CacheManager
         std::shared_ptr<std::vector<uint16_t>> buf;
         int channels = 0;
         uint16_t maxSample = 0;
+        std::list<std::string>::iterator orderIt;
     };
     std::unordered_map<std::string, Raw16Entry> m_raw16Store;
     mutable std::list<std::string> m_raw16Order;
