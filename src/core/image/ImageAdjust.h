@@ -41,9 +41,8 @@ inline ImageData adjustBrightness(const ImageData &src, int offset)
         lut[static_cast<size_t>(i)] = static_cast<uint8_t>(std::clamp(i + adj, 0, 255));
     }
 
-    const bool isContiguous =
-        (v.stride() == static_cast<size_t>(v.width) * static_cast<size_t>(cpp)) &&
-        (d.stride() == static_cast<size_t>(d.width) * static_cast<size_t>(cpp));
+    const bool isContiguous = (v.stride() == static_cast<ptrdiff_t>(v.width) * cpp) &&
+                              (d.stride() == static_cast<ptrdiff_t>(d.width) * cpp);
 
     if (isContiguous && cpp == ch)
     {
@@ -103,9 +102,8 @@ inline ImageData adjustContrast(const ImageData &src, float factor)
             static_cast<uint8_t>(std::clamp(static_cast<int>(std::lroundf(val)), 0, 255));
     }
 
-    const bool isContiguous =
-        (v.stride() == static_cast<size_t>(v.width) * static_cast<size_t>(cpp)) &&
-        (d.stride() == static_cast<size_t>(d.width) * static_cast<size_t>(cpp));
+    const bool isContiguous = (v.stride() == static_cast<ptrdiff_t>(v.width) * cpp) &&
+                              (d.stride() == static_cast<ptrdiff_t>(d.width) * cpp);
 
     if (isContiguous && cpp == ch)
     {
@@ -167,9 +165,8 @@ inline ImageData adjustGamma(const ImageData &src, float gamma)
             std::clamp(static_cast<int>(std::lroundf(corrected * 255.0f)), 0, 255));
     }
 
-    const bool isContiguous =
-        (v.stride() == static_cast<size_t>(v.width) * static_cast<size_t>(cpp)) &&
-        (d.stride() == static_cast<size_t>(d.width) * static_cast<size_t>(cpp));
+    const bool isContiguous = (v.stride() == static_cast<ptrdiff_t>(v.width) * cpp) &&
+                              (d.stride() == static_cast<ptrdiff_t>(d.width) * cpp);
 
     if (isContiguous && cpp == ch)
     {
@@ -238,9 +235,8 @@ inline ImageData adjustWhiteBalance(const ImageData &src, float rGain, float bGa
         lutB[static_cast<size_t>(i)] = static_cast<uint8_t>(std::clamp(bVal, 0, 255));
     }
 
-    const bool isContiguous =
-        (v.stride() == static_cast<size_t>(v.width) * static_cast<size_t>(cpp)) &&
-        (d.stride() == static_cast<size_t>(d.width) * static_cast<size_t>(cpp));
+    const bool isContiguous = (v.stride() == static_cast<ptrdiff_t>(v.width) * cpp) &&
+                              (d.stride() == static_cast<ptrdiff_t>(d.width) * cpp);
 
     if (isContiguous)
     {

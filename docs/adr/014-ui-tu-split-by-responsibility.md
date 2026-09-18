@@ -156,3 +156,12 @@ splitting the function in the same commit; adding one requires a note in this
 section. The function cap stays 120 lines / CC 25. Split order (biggest product
 risk first): `previewpanel.cpp`, `compareworkspace_analysis.cpp`, the three
 `thumbnailpanel_fileops.cpp` operations, then the rest.
+
+## Core Analysis TU splits (Pass 15, 2026-09-18)
+
+In Pass 15, the core analysis modules `PixelInspector` and `AnalysisEngine` were split to prevent god-object growth and enforce the strict 800-line ceiling (`FailFileLines = 800`) under `scripts/complexity_gate.ps1`:
+
+- `src/core/analysis/PixelInspector.cpp` (233 lines): Core inspection lifecycle, pixel sampling, HUD state queries.
+- `src/core/analysis/PixelInspector_adjust.cpp` (566 lines): Coordinate mapping, display transformations, and neighborhood statistical aggregations (extracted from `PixelInspector.cpp`, formerly 777 lines).
+- `src/core/analysis/AnalysisEngine.cpp` (213 lines): Analysis lifecycle, ROI statistics, difference/heatmap generation.
+- `src/core/analysis/AnalysisEngine_metrics.cpp` (599 lines): SIMD-vectorized quality metrics (AVX2/SSE2 PSNR SSD accumulation, SSE2 SSIM 8x8 block summation, SSE2 Laplacian convolution for noise estimation).
