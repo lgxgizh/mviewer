@@ -56,7 +56,9 @@ add_library(mviewer_core SHARED
     core/SelfTest.cpp
     core/SettingsIO.cpp
     core/analysis/AnalysisEngine.cpp
+    core/analysis/AnalysisEngine_metrics.cpp
     core/analysis/PixelInspector.cpp
+    core/analysis/PixelInspector_adjust.cpp
     core/analysis/ExportReport.cpp
     core/analysis/ExportReport_serialize.cpp
     core/analysis/ReportHtml.cpp

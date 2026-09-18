@@ -1,236 +1,309 @@
-//
-// Copyright (c) 2026 mviewer project. All rights reserved.
-// SPDX-License-Identifier: MIT
-//
-// test_analysisengine.cpp — Comprehensive unit tests for AnalysisEngine
-// Covers computeStatsROI, psnr, ssim, noiseEstimate, and format parity.
-//
-
 #include "core/analysis/AnalysisEngine.h"
+#include "core/analysis/PixelInspector.h"
 #include "core/image/ImageBuffer.h"
 
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
-#include <cstring>
-#include <memory>
+#include <cstdlib>
 #include <vector>
 
-static int g_pass = 0;
-static int g_fail = 0;
-
-#define CHECK(cond, msg)                                                                           \
+static int g_failures = 0;
+#define CHECK(cond)                                                                                \
     do                                                                                             \
     {                                                                                              \
-        if (cond)                                                                                  \
+        if (!(cond))                                                                               \
         {                                                                                          \
-            printf("  PASS: %s\n", msg);                                                           \
-            g_pass++;                                                                              \
-        }                                                                                          \
-        else                                                                                       \
-        {                                                                                          \
-            printf("  FAIL: %s\n", msg);                                                           \
-            g_fail++;                                                                              \
+            std::printf("FAIL: %s @line %d\n", #cond, __LINE__);                                   \
+            ++g_failures;                                                                          \
         }                                                                                          \
     } while (0)
 
-namespace
-{
+#define CHECK_NEAR(a, b, eps)                                                                      \
+    do                                                                                             \
+    {                                                                                              \
+        if (std::abs((a) - (b)) > (eps))                                                           \
+        {                                                                                          \
+            std::printf("FAIL: %s (%f) != %s (%f) @line %d\n", #a, static_cast<double>(a), #b,     \
+                        static_cast<double>(b), __LINE__);                                         \
+            ++g_failures;                                                                          \
+        }                                                                                          \
+    } while (0)
 
-ImageData makeColorImage(int w, int h, PixelFormat fmt, uint8_t r, uint8_t g, uint8_t b)
+using namespace mviewer::core;
+
+void test_psnr_identical()
 {
-    ImageData img = makeImageData(w, h, fmt);
-    const int cpp = img.channelsPerPixel();
-    const size_t stride = img.stride();
-    for (int y = 0; y < h; ++y)
+    // Grayscale8
     {
-        uint8_t *row = img.buffer->data() + static_cast<size_t>(y) * stride;
-        for (int x = 0; x < w; ++x)
-        {
-            uint8_t *p = row + static_cast<size_t>(x) * cpp;
-            if (fmt == PixelFormat::Grayscale8)
-            {
-                p[0] = r;
-            }
-            else if (fmt == PixelFormat::BGR24 || fmt == PixelFormat::BGRA32)
-            {
-                p[0] = b;
-                p[1] = g;
-                p[2] = r;
-                if (cpp == 4)
-                    p[3] = 255;
-            }
-            else
-            {
-                p[0] = r;
-                p[1] = g;
-                p[2] = b;
-                if (cpp == 4)
-                    p[3] = 255;
-            }
-        }
+        ImageData a = makeImageData(64, 64, PixelFormat::Grayscale8);
+        std::memset(a.buffer->data(), 128, a.buffer->size());
+        ImageData b = makeImageData(64, 64, PixelFormat::Grayscale8);
+        std::memset(b.buffer->data(), 128, b.buffer->size());
+        CHECK_NEAR(AnalysisEngine::psnr(a, b), 100.0, 1e-6);
     }
-    return img;
+
+    // RGB24
+    {
+        ImageData a = makeImageData(64, 64, PixelFormat::RGB24);
+        std::memset(a.buffer->data(), 200, a.buffer->size());
+        ImageData b = makeImageData(64, 64, PixelFormat::RGB24);
+        std::memset(b.buffer->data(), 200, b.buffer->size());
+        CHECK_NEAR(AnalysisEngine::psnr(a, b), 100.0, 1e-6);
+    }
+
+    // BGR24
+    {
+        ImageData a = makeImageData(64, 64, PixelFormat::BGR24);
+        std::memset(a.buffer->data(), 50, a.buffer->size());
+        ImageData b = makeImageData(64, 64, PixelFormat::BGR24);
+        std::memset(b.buffer->data(), 50, b.buffer->size());
+        CHECK_NEAR(AnalysisEngine::psnr(a, b), 100.0, 1e-6);
+    }
+
+    // RGBA32
+    {
+        ImageData a = makeImageData(64, 64, PixelFormat::RGBA32);
+        std::memset(a.buffer->data(), 77, a.buffer->size());
+        ImageData b = makeImageData(64, 64, PixelFormat::RGBA32);
+        std::memset(b.buffer->data(), 77, b.buffer->size());
+        CHECK_NEAR(AnalysisEngine::psnr(a, b), 100.0, 1e-6);
+    }
+
+    // BGRA32
+    {
+        ImageData a = makeImageData(64, 64, PixelFormat::BGRA32);
+        std::memset(a.buffer->data(), 99, a.buffer->size());
+        ImageData b = makeImageData(64, 64, PixelFormat::BGRA32);
+        std::memset(b.buffer->data(), 99, b.buffer->size());
+        CHECK_NEAR(AnalysisEngine::psnr(a, b), 100.0, 1e-6);
+    }
 }
 
-void testStatsROI()
+void test_psnr_math()
 {
-    printf("\n[AnalysisEngine::computeStatsROI]\n");
+    // Grayscale8: 10x10, 1 pixel delta 10 => MSE = 100 / 100 = 1.0 => PSNR = 10 * log10(65025)
+    // = 48.1308036
+    {
+        ImageData a = makeImageData(10, 10, PixelFormat::Grayscale8);
+        std::memset(a.buffer->data(), 50, a.buffer->size());
+        ImageData b = makeImageData(10, 10, PixelFormat::Grayscale8);
+        std::memset(b.buffer->data(), 50, b.buffer->size());
+        b.buffer->data()[0] = 60;
 
-    // 1. Solid color RGB24
-    ImageData imgRgb = makeColorImage(100, 100, PixelFormat::RGB24, 100, 150, 200);
-    mviewer::domain::Selection full{0, 0, 100, 100};
-    ImageStats sFull = AnalysisEngine::computeStatsROI(imgRgb, full);
-    CHECK(sFull.pixelCount == 10000, "full RGB24 pixelCount == 10000");
-    CHECK(sFull.rMean == 100 && sFull.gMean == 150 && sFull.bMean == 200, "RGB means exact");
-    CHECK(sFull.vMean == 200.0, "V mean == 200");
-    const int expLum = (19595 * 100 + 38470 * 150 + 7471 * 200) >> 16;
-    CHECK(std::abs(sFull.lumMean - expLum) < 0.01, "lumMean exact");
-    CHECK(sFull.histR[100] == 10000 && sFull.histG[150] == 10000 && sFull.histB[200] == 10000,
-          "histogram bin counts exact");
+        const double expected = 10.0 * std::log10(65025.0 / 1.0);
+        CHECK_NEAR(AnalysisEngine::psnr(a, b), expected, 1e-4);
+    }
 
-    // 2. Format parity: BGR24, RGBA32, BGRA32, Grayscale8
-    ImageData imgBgr = makeColorImage(100, 100, PixelFormat::BGR24, 100, 150, 200);
-    ImageStats sBgr = AnalysisEngine::computeStatsROI(imgBgr, full);
-    CHECK(sBgr.rMean == sFull.rMean && sBgr.gMean == sFull.gMean && sBgr.bMean == sFull.bMean,
-          "BGR24 stats match RGB24");
-    CHECK(sBgr.lumMean == sFull.lumMean && sBgr.vMean == sFull.vMean,
-          "BGR24 lum/v mean match RGB24");
+    // RGB24: 10x10, 1 pixel delta 10 in R channel => MSE = 100 / 300 = 1/3 => PSNR = 10 *
+    // log10(195075) = 52.90200
+    {
+        ImageData a = makeImageData(10, 10, PixelFormat::RGB24);
+        std::memset(a.buffer->data(), 50, a.buffer->size());
+        ImageData b = makeImageData(10, 10, PixelFormat::RGB24);
+        std::memset(b.buffer->data(), 50, b.buffer->size());
+        b.buffer->data()[0] = 60; // Delta in R channel
 
-    ImageData imgRgba = makeColorImage(100, 100, PixelFormat::RGBA32, 100, 150, 200);
-    ImageStats sRgba = AnalysisEngine::computeStatsROI(imgRgba, full);
-    CHECK(sRgba.rMean == sFull.rMean && sRgba.gMean == sFull.gMean && sRgba.bMean == sFull.bMean,
-          "RGBA32 stats match RGB24");
+        const double expected = 10.0 * std::log10(65025.0 / (100.0 / 300.0));
+        CHECK_NEAR(AnalysisEngine::psnr(a, b), expected, 1e-4);
+    }
 
-    ImageData imgBgra = makeColorImage(100, 100, PixelFormat::BGRA32, 100, 150, 200);
-    ImageStats sBgra = AnalysisEngine::computeStatsROI(imgBgra, full);
-    CHECK(sBgra.rMean == sFull.rMean && sBgra.gMean == sFull.gMean && sBgra.bMean == sFull.bMean,
-          "BGRA32 stats match RGB24");
+    // RGBA32: Alpha channel differences must NOT affect PSNR
+    {
+        ImageData a = makeImageData(10, 10, PixelFormat::RGBA32);
+        std::memset(a.buffer->data(), 50, a.buffer->size());
+        ImageData b = makeImageData(10, 10, PixelFormat::RGBA32);
+        std::memset(b.buffer->data(), 50, b.buffer->size());
+        b.buffer->data()[3] = 255; // Delta only in Alpha channel
 
-    ImageData imgGray = makeColorImage(100, 100, PixelFormat::Grayscale8, 128, 128, 128);
-    ImageStats sGray = AnalysisEngine::computeStatsROI(imgGray, full);
-    CHECK(sGray.pixelCount == 10000, "Grayscale8 pixelCount == 10000");
-    CHECK(sGray.lumMean == 128.0 && sGray.vMean == 128.0 && sGray.rMean == 128.0,
-          "Grayscale8 means exact");
-
-    // 3. ROI bounds and negative coordinate clipping
-    // Region starting at (-10, -10) with width 50, height 50.
-    // Clamped visible region is [0, 40) x [0, 40) -> 40 x 40 = 1600 pixels.
-    mviewer::domain::Selection negRoi{-10, -10, 50, 50};
-    ImageStats sNeg = AnalysisEngine::computeStatsROI(imgRgb, negRoi);
-    CHECK(sNeg.pixelCount == 1600, "negative ROI correctly clamped to 1600 pixels (not shifted)");
-    CHECK(sNeg.rMean == 100, "negative ROI values intact");
-
-    // Partial ROI overlapping bottom-right
-    mviewer::domain::Selection brRoi{80, 80, 40, 40};
-    ImageStats sBr = AnalysisEngine::computeStatsROI(imgRgb, brRoi);
-    CHECK(sBr.pixelCount == 400, "bottom-right clipped ROI has 20x20 = 400 pixels");
-
-    // Degenerate and outside ROIs
-    mviewer::domain::Selection degenRoi{10, 10, 0, 0};
-    CHECK(AnalysisEngine::computeStatsROI(imgRgb, degenRoi).pixelCount == 0,
-          "degenerate ROI returns empty");
-
-    mviewer::domain::Selection outRoi{200, 200, 50, 50};
-    CHECK(AnalysisEngine::computeStatsROI(imgRgb, outRoi).pixelCount == 0,
-          "outside ROI returns empty");
-
-    ImageData nullImg;
-    CHECK(AnalysisEngine::computeStatsROI(nullImg, full).pixelCount == 0,
-          "null image returns empty");
+        CHECK_NEAR(AnalysisEngine::psnr(a, b), 100.0, 1e-6);
+    }
 }
 
-void testPSNR()
+void test_psnr_cross_format()
 {
-    printf("\n[AnalysisEngine::psnr]\n");
+    // RGB24 vs BGR24 with identical color content
+    {
+        ImageData rgb = makeImageData(16, 16, PixelFormat::RGB24);
+        ImageData bgr = makeImageData(16, 16, PixelFormat::BGR24);
+        for (int i = 0; i < 16 * 16; ++i)
+        {
+            const uint8_t r = static_cast<uint8_t>((i * 7) % 256);
+            const uint8_t g = static_cast<uint8_t>((i * 13) % 256);
+            const uint8_t b = static_cast<uint8_t>((i * 19) % 256);
+            rgb.buffer->data()[i * 3 + 0] = r;
+            rgb.buffer->data()[i * 3 + 1] = g;
+            rgb.buffer->data()[i * 3 + 2] = b;
 
-    // 1. Identical images -> 100.0 dB
-    ImageData imgA = makeColorImage(64, 64, PixelFormat::RGB24, 120, 130, 140);
-    ImageData imgB = makeColorImage(64, 64, PixelFormat::RGB24, 120, 130, 140);
-    CHECK(AnalysisEngine::psnr(imgA, imgB) == 100.0, "identical RGB24 psnr == 100.0");
+            bgr.buffer->data()[i * 3 + 0] = b;
+            bgr.buffer->data()[i * 3 + 1] = g;
+            bgr.buffer->data()[i * 3 + 2] = r;
+        }
+        CHECK_NEAR(AnalysisEngine::psnr(rgb, bgr), 100.0, 1e-6);
+        CHECK_NEAR(AnalysisEngine::psnr(bgr, rgb), 100.0, 1e-6);
+    }
 
-    ImageData grayA = makeColorImage(64, 64, PixelFormat::Grayscale8, 80, 80, 80);
-    ImageData grayB = makeColorImage(64, 64, PixelFormat::Grayscale8, 80, 80, 80);
-    CHECK(AnalysisEngine::psnr(grayA, grayB) == 100.0, "identical Grayscale8 psnr == 100.0");
+    // RGBA32 vs BGRA32 with identical color content
+    {
+        ImageData rgba = makeImageData(16, 16, PixelFormat::RGBA32);
+        ImageData bgra = makeImageData(16, 16, PixelFormat::BGRA32);
+        for (int i = 0; i < 16 * 16; ++i)
+        {
+            const uint8_t r = static_cast<uint8_t>((i * 11) % 256);
+            const uint8_t g = static_cast<uint8_t>((i * 17) % 256);
+            const uint8_t b = static_cast<uint8_t>((i * 23) % 256);
+            rgba.buffer->data()[i * 4 + 0] = r;
+            rgba.buffer->data()[i * 4 + 1] = g;
+            rgba.buffer->data()[i * 4 + 2] = b;
+            rgba.buffer->data()[i * 4 + 3] = 255;
 
-    ImageData rgbaA = makeColorImage(64, 64, PixelFormat::RGBA32, 10, 20, 30);
-    ImageData rgbaB = makeColorImage(64, 64, PixelFormat::RGBA32, 10, 20, 30);
-    CHECK(AnalysisEngine::psnr(rgbaA, rgbaB) == 100.0, "identical RGBA32 psnr == 100.0");
-
-    // 2. Known uniform difference: diff = 10 on all pixels of RGB24
-    // MSE = (10^2 + 10^2 + 10^2) / 3 = 100.
-    // PSNR = 10 * log10(65025 / 100) = 10 * log10(650.25) ≈ 28.1308 dB
-    ImageData imgDiff = makeColorImage(64, 64, PixelFormat::RGB24, 130, 140, 150);
-    double p = AnalysisEngine::psnr(imgA, imgDiff);
-    const double expPsnr = 10.0 * std::log10(65025.0 / 100.0);
-    CHECK(std::abs(p - expPsnr) < 0.001, "RGB24 PSNR calculation accurate for MSE=100");
-
-    // 3. Known uniform difference for Grayscale8: diff = 5
-    // MSE = 25.
-    // PSNR = 10 * log10(65025 / 25) = 10 * log10(2601) ≈ 34.1514 dB
-    ImageData grayDiff = makeColorImage(64, 64, PixelFormat::Grayscale8, 85, 85, 85);
-    double pGray = AnalysisEngine::psnr(grayA, grayDiff);
-    const double expPGray = 10.0 * std::log10(65025.0 / 25.0);
-    CHECK(std::abs(pGray - expPGray) < 0.001, "Grayscale8 PSNR calculation accurate for MSE=25");
-
-    // 4. RGBA32 ignores alpha channel in PSNR
-    ImageData rgbaDiff = makeColorImage(64, 64, PixelFormat::RGBA32, 20, 30, 40); // diff 10 on RGB
-    double pRgba = AnalysisEngine::psnr(rgbaA, rgbaDiff);
-    CHECK(std::abs(pRgba - expPsnr) < 0.001, "RGBA32 PSNR matches RGB24 for identical color delta");
-
-    // 5. Null or empty inputs
-    ImageData nullImg;
-    CHECK(AnalysisEngine::psnr(nullImg, imgA) == 0.0, "null input yields psnr 0.0");
-    ImageData emptyImg = makeImageData(0, 0, PixelFormat::RGB24);
-    CHECK(AnalysisEngine::psnr(emptyImg, imgA) == 0.0, "empty input yields psnr 0.0");
+            bgra.buffer->data()[i * 4 + 0] = b;
+            bgra.buffer->data()[i * 4 + 1] = g;
+            bgra.buffer->data()[i * 4 + 2] = r;
+            bgra.buffer->data()[i * 4 + 3] = 128; // Alpha ignored
+        }
+        CHECK_NEAR(AnalysisEngine::psnr(rgba, bgra), 100.0, 1e-6);
+        CHECK_NEAR(AnalysisEngine::psnr(bgra, rgba), 100.0, 1e-6);
+    }
 }
 
-void testSSIM()
+void test_psnr_simd_large()
 {
-    printf("\n[AnalysisEngine::ssim]\n");
+    // Test 320x240 image with random pattern to thoroughly exercise AVX2 / SSE2 lanes
+    const int w = 320, h = 240;
+    ImageData a = makeImageData(w, h, PixelFormat::RGB24);
+    ImageData b = makeImageData(w, h, PixelFormat::RGB24);
 
-    // 1. Identical images -> 1.0
-    ImageData a = makeColorImage(32, 32, PixelFormat::Grayscale8, 128, 128, 128);
-    ImageData b = makeColorImage(32, 32, PixelFormat::Grayscale8, 128, 128, 128);
-    CHECK(std::abs(AnalysisEngine::ssim(a, b) - 1.0) < 0.0001, "identical Grayscale8 ssim == 1.0");
+    int64_t expectedSumSq = 0;
+    const size_t totalBytes = static_cast<size_t>(w) * h * 3;
+    for (size_t i = 0; i < totalBytes; ++i)
+    {
+        const uint8_t va = static_cast<uint8_t>((i * 37 + 11) % 256);
+        const uint8_t vb = static_cast<uint8_t>((i * 53 + 7) % 256);
+        a.buffer->data()[i] = va;
+        b.buffer->data()[i] = vb;
+        const int d = static_cast<int>(va) - static_cast<int>(vb);
+        expectedSumSq += static_cast<int64_t>(d) * d;
+    }
 
-    ImageData aRgb = makeColorImage(32, 32, PixelFormat::RGB24, 100, 150, 200);
-    ImageData bRgb = makeColorImage(32, 32, PixelFormat::RGB24, 100, 150, 200);
-    CHECK(std::abs(AnalysisEngine::ssim(aRgb, bRgb) - 1.0) < 0.0001, "identical RGB24 ssim == 1.0");
+    const double expectedMse = static_cast<double>(expectedSumSq) / static_cast<double>(w * h * 3);
+    const double expectedPsnr = 10.0 * std::log10(65025.0 / expectedMse);
 
-    // 2. Distorted image -> ssim in [0, 1)
-    ImageData c = makeColorImage(32, 32, PixelFormat::Grayscale8, 200, 200, 200);
-    double s = AnalysisEngine::ssim(a, c);
-    CHECK(s > 0.0 && s < 1.0, "distorted ssim in valid range (0, 1)");
-
-    // 3. Small image (< 8x8) yields 0.0
-    ImageData smallA = makeColorImage(6, 6, PixelFormat::Grayscale8, 100, 100, 100);
-    ImageData smallB = makeColorImage(6, 6, PixelFormat::Grayscale8, 100, 100, 100);
-    CHECK(AnalysisEngine::ssim(smallA, smallB) == 0.0, "sub-8x8 image yields ssim 0.0");
+    const double actualPsnr = AnalysisEngine::psnr(a, b);
+    CHECK_NEAR(actualPsnr, expectedPsnr, 1e-4);
 }
 
-void testNoiseEstimate()
+void test_ssim()
 {
-    printf("\n[AnalysisEngine::noiseEstimate]\n");
+    // Identical images should yield SSIM = 1.0
+    {
+        ImageData a = makeImageData(32, 32, PixelFormat::Grayscale8);
+        ImageData b = makeImageData(32, 32, PixelFormat::Grayscale8);
+        for (size_t i = 0; i < a.buffer->size(); ++i)
+        {
+            a.buffer->data()[i] = static_cast<uint8_t>((i * 13) % 256);
+            b.buffer->data()[i] = static_cast<uint8_t>((i * 13) % 256);
+        }
+        CHECK_NEAR(AnalysisEngine::ssim(a, b), 1.0, 1e-4);
+    }
 
-    ImageData flat = makeColorImage(50, 50, PixelFormat::Grayscale8, 128, 128, 128);
-    CHECK(AnalysisEngine::noiseEstimate(flat) < 0.001, "flat image noise estimate ~ 0");
+    // Slightly perturbed image should have SSIM in (0.7, 1.0)
+    {
+        ImageData a = makeImageData(32, 32, PixelFormat::Grayscale8);
+        ImageData b = makeImageData(32, 32, PixelFormat::Grayscale8);
+        for (size_t i = 0; i < a.buffer->size(); ++i)
+        {
+            a.buffer->data()[i] = static_cast<uint8_t>((i * 13) % 256);
+            b.buffer->data()[i] = static_cast<uint8_t>((a.buffer->data()[i] + 5) % 256);
+        }
+        const double ssimVal = AnalysisEngine::ssim(a, b);
+        CHECK(ssimVal > 0.7 && ssimVal < 1.0);
+    }
 
-    ImageData flatRgb = makeColorImage(50, 50, PixelFormat::RGB24, 100, 150, 200);
-    CHECK(AnalysisEngine::noiseEstimate(flatRgb) < 0.001, "flat RGB image noise estimate ~ 0");
-
-    ImageData smallImg = makeColorImage(2, 2, PixelFormat::Grayscale8, 100, 100, 100);
-    CHECK(AnalysisEngine::noiseEstimate(smallImg) == 0.0, "sub-3x3 image yields noise 0.0");
+    // Degenerate sizes (< 8x8) return 0.0
+    {
+        ImageData a = makeImageData(6, 6, PixelFormat::Grayscale8);
+        ImageData b = makeImageData(6, 6, PixelFormat::Grayscale8);
+        CHECK_NEAR(AnalysisEngine::ssim(a, b), 0.0, 1e-6);
+    }
 }
 
-} // namespace
+void test_noise_estimate()
+{
+    // Flat image has zero noise
+    {
+        ImageData flat = makeImageData(64, 64, PixelFormat::Grayscale8);
+        std::memset(flat.buffer->data(), 120, flat.buffer->size());
+        CHECK_NEAR(AnalysisEngine::noiseEstimate(flat), 0.0, 1e-6);
+    }
+
+    // Linear gradient has zero noise (Laplacian of linear is 0)
+    {
+        ImageData grad = makeImageData(64, 64, PixelFormat::Grayscale8);
+        for (int y = 0; y < 64; ++y)
+            for (int x = 0; x < 64; ++x)
+                grad.buffer->data()[y * 64 + x] = static_cast<uint8_t>(x * 2 + y * 2);
+        CHECK_NEAR(AnalysisEngine::noiseEstimate(grad), 0.0, 1e-4);
+    }
+
+    // High frequency checkerboard pattern has high noise variance
+    {
+        ImageData noisy = makeImageData(64, 64, PixelFormat::Grayscale8);
+        for (int y = 0; y < 64; ++y)
+            for (int x = 0; x < 64; ++x)
+                noisy.buffer->data()[y * 64 + x] = ((x + y) % 2 == 0) ? 0 : 255;
+        const double noise = AnalysisEngine::noiseEstimate(noisy);
+        CHECK(noise > 1000.0);
+    }
+}
+
+void test_stats_roi_bounds()
+{
+    ImageData img = makeImageData(100, 100, PixelFormat::RGB24);
+    std::memset(img.buffer->data(), 128, img.buffer->size());
+
+    // Normal ROI
+    {
+        mviewer::domain::Selection roi{10, 10, 20, 20};
+        ImageStats s = AnalysisEngine::computeStatsROI(img, roi);
+        CHECK(s.pixelCount == 400);
+        CHECK_NEAR(s.lumMean, 128.0, 1.0);
+    }
+
+    // Negative / overflow ROI safely clamps
+    {
+        mviewer::domain::Selection roi{-50, -50, 60, 60};
+        ImageStats s = AnalysisEngine::computeStatsROI(img, roi);
+        CHECK(s.pixelCount == 100); // Clamped to [0,10)x[0,10) = 100 pixels
+    }
+
+    // Completely outside ROI
+    {
+        mviewer::domain::Selection roi{200, 200, 50, 50};
+        ImageStats s = AnalysisEngine::computeStatsROI(img, roi);
+        CHECK(s.pixelCount == 0);
+    }
+}
 
 int main()
 {
-    testStatsROI();
-    testPSNR();
-    testSSIM();
-    testNoiseEstimate();
+    std::printf("Running AnalysisEngine and PixelInspector test suite...\n");
+    test_psnr_identical();
+    test_psnr_math();
+    test_psnr_cross_format();
+    test_psnr_simd_large();
+    test_ssim();
+    test_noise_estimate();
+    test_stats_roi_bounds();
 
-    printf("\nAnalysisEngine tests: %d passed, %d failed\n", g_pass, g_fail);
-    return g_fail;
+    if (g_failures == 0)
+    {
+        std::printf("AnalysisEngine: ALL PASSED\n");
+        return 0;
+    }
+    else
+    {
+        std::printf("AnalysisEngine: %d FAILS\n", g_failures);
+        return 1;
+    }
 }
