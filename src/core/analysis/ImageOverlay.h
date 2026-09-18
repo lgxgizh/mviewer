@@ -329,6 +329,207 @@ MVIEWER_TARGET_SSSE3 inline void applyChannelVSsse3(uint8_t *data, size_t count)
 }
 #endif
 
+template <bool IsBgr>
+inline void applyChannel4Rgb(const ImageBuffer &v, int chIdx, bool isContiguous, size_t totalPixels)
+{
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+    const bool hasAvx2 = mviewer::core::CpuFeatures::hasAvx2();
+    const bool hasSsse3 = mviewer::core::CpuFeatures::hasSsse3();
+
+    if (isContiguous)
+    {
+        uint8_t *data = v.data;
+        size_t i = 0;
+        if (hasAvx2)
+        {
+            applyChannelRgbAvx2(data, totalPixels, chIdx);
+            i = totalPixels & ~size_t(7);
+        }
+        else if (hasSsse3)
+        {
+            applyChannelRgbSsse3(data, totalPixels, chIdx);
+            i = totalPixels & ~size_t(3);
+        }
+        for (; i < totalPixels; ++i)
+        {
+            uint8_t *p = data + i * 4;
+            const uint8_t val = p[chIdx];
+            p[0] = val;
+            p[1] = val;
+            p[2] = val;
+        }
+        return;
+    }
+
+    for (int y = 0; y < v.height; ++y)
+    {
+        uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
+        const size_t width = static_cast<size_t>(v.width);
+        size_t x = 0;
+        if (hasAvx2)
+        {
+            applyChannelRgbAvx2(row, width, chIdx);
+            x = width & ~size_t(7);
+        }
+        else if (hasSsse3)
+        {
+            applyChannelRgbSsse3(row, width, chIdx);
+            x = width & ~size_t(3);
+        }
+        for (; x < width; ++x)
+        {
+            uint8_t *p = row + x * 4;
+            const uint8_t val = p[chIdx];
+            p[0] = val;
+            p[1] = val;
+            p[2] = val;
+        }
+    }
+#else
+    if (isContiguous)
+    {
+        uint8_t *p = v.data;
+        for (size_t i = 0; i < totalPixels; ++i, p += 4)
+        {
+            const uint8_t val = p[chIdx];
+            p[0] = val;
+            p[1] = val;
+            p[2] = val;
+        }
+        return;
+    }
+    for (int y = 0; y < v.height; ++y)
+    {
+        uint8_t *p = v.data + static_cast<size_t>(y) * v.stride();
+        for (int x = 0; x < v.width; ++x, p += 4)
+        {
+            const uint8_t val = p[chIdx];
+            p[0] = val;
+            p[1] = val;
+            p[2] = val;
+        }
+    }
+#endif
+}
+
+template <bool IsBgr>
+inline void applyChannel4Value(const ImageBuffer &v, bool isContiguous, size_t totalPixels)
+{
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+    const bool hasAvx2 = mviewer::core::CpuFeatures::hasAvx2();
+    const bool hasSsse3 = mviewer::core::CpuFeatures::hasSsse3();
+
+    if (isContiguous)
+    {
+        uint8_t *data = v.data;
+        size_t i = 0;
+        if (hasAvx2)
+        {
+            applyChannelVAvx2(data, totalPixels);
+            i = totalPixels & ~size_t(7);
+        }
+        else if (hasSsse3)
+        {
+            applyChannelVSsse3(data, totalPixels);
+            i = totalPixels & ~size_t(3);
+        }
+        for (; i < totalPixels; ++i)
+        {
+            uint8_t *p = data + i * 4;
+            const uint8_t val = std::max({p[0], p[1], p[2]});
+            p[0] = val;
+            p[1] = val;
+            p[2] = val;
+        }
+        return;
+    }
+
+    for (int y = 0; y < v.height; ++y)
+    {
+        uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
+        const size_t width = static_cast<size_t>(v.width);
+        size_t x = 0;
+        if (hasAvx2)
+        {
+            applyChannelVAvx2(row, width);
+            x = width & ~size_t(7);
+        }
+        else if (hasSsse3)
+        {
+            applyChannelVSsse3(row, width);
+            x = width & ~size_t(3);
+        }
+        for (; x < width; ++x)
+        {
+            uint8_t *p = row + x * 4;
+            const uint8_t val = std::max({p[0], p[1], p[2]});
+            p[0] = val;
+            p[1] = val;
+            p[2] = val;
+        }
+    }
+#else
+    if (isContiguous)
+    {
+        uint8_t *p = v.data;
+        for (size_t i = 0; i < totalPixels; ++i, p += 4)
+        {
+            const uint8_t val = std::max({p[0], p[1], p[2]});
+            p[0] = val;
+            p[1] = val;
+            p[2] = val;
+        }
+        return;
+    }
+    for (int y = 0; y < v.height; ++y)
+    {
+        uint8_t *p = v.data + static_cast<size_t>(y) * v.stride();
+        for (int x = 0; x < v.width; ++x, p += 4)
+        {
+            const uint8_t val = std::max({p[0], p[1], p[2]});
+            p[0] = val;
+            p[1] = val;
+            p[2] = val;
+        }
+    }
+#endif
+}
+
+template <bool IsBgr>
+inline void applyChannel4Luma(const ImageBuffer &v, bool isContiguous, size_t totalPixels)
+{
+    if (isContiguous)
+    {
+        uint8_t *p = v.data;
+        for (size_t i = 0; i < totalPixels; ++i, p += 4)
+        {
+            const uint8_t b = IsBgr ? p[0] : p[2];
+            const uint8_t g = p[1];
+            const uint8_t r = IsBgr ? p[2] : p[0];
+            const uint8_t val = static_cast<uint8_t>(std::clamp(luminance(r, g, b), 0, 255));
+            p[0] = val;
+            p[1] = val;
+            p[2] = val;
+        }
+        return;
+    }
+
+    for (int y = 0; y < v.height; ++y)
+    {
+        uint8_t *p = v.data + static_cast<size_t>(y) * v.stride();
+        for (int x = 0; x < v.width; ++x, p += 4)
+        {
+            const uint8_t b = IsBgr ? p[0] : p[2];
+            const uint8_t g = p[1];
+            const uint8_t r = IsBgr ? p[2] : p[0];
+            const uint8_t val = static_cast<uint8_t>(std::clamp(luminance(r, g, b), 0, 255));
+            p[0] = val;
+            p[1] = val;
+            p[2] = val;
+        }
+    }
+}
+
 template <bool IsBgr> inline void applyChannel4(const ImageBuffer &v, OverlayMode mode)
 {
     const bool isContiguous = (v.stride() == static_cast<ptrdiff_t>(v.width) * 4);
@@ -343,207 +544,11 @@ template <bool IsBgr> inline void applyChannel4(const ImageBuffer &v, OverlayMod
         chIdx = IsBgr ? 0 : 2;
 
     if (chIdx >= 0)
-    {
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-        const bool hasAvx2 = mviewer::core::CpuFeatures::hasAvx2();
-        const bool hasSsse3 = mviewer::core::CpuFeatures::hasSsse3();
-
-        if (isContiguous)
-        {
-            uint8_t *data = v.data;
-            size_t i = 0;
-            if (hasAvx2)
-            {
-                applyChannelRgbAvx2(data, totalPixels, chIdx);
-                i = totalPixels & ~size_t(7);
-            }
-            else if (hasSsse3)
-            {
-                applyChannelRgbSsse3(data, totalPixels, chIdx);
-                i = totalPixels & ~size_t(3);
-            }
-            for (; i < totalPixels; ++i)
-            {
-                uint8_t *p = data + i * 4;
-                const uint8_t val = p[chIdx];
-                p[0] = val;
-                p[1] = val;
-                p[2] = val;
-            }
-            return;
-        }
-
-        for (int y = 0; y < v.height; ++y)
-        {
-            uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
-            const size_t width = static_cast<size_t>(v.width);
-            size_t x = 0;
-            if (hasAvx2)
-            {
-                applyChannelRgbAvx2(row, width, chIdx);
-                x = width & ~size_t(7);
-            }
-            else if (hasSsse3)
-            {
-                applyChannelRgbSsse3(row, width, chIdx);
-                x = width & ~size_t(3);
-            }
-            for (; x < width; ++x)
-            {
-                uint8_t *p = row + x * 4;
-                const uint8_t val = p[chIdx];
-                p[0] = val;
-                p[1] = val;
-                p[2] = val;
-            }
-        }
-        return;
-#endif
-    }
+        applyChannel4Rgb<IsBgr>(v, chIdx, isContiguous, totalPixels);
     else if (mode == OverlayMode::ChannelV)
-    {
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
-        const bool hasAvx2 = mviewer::core::CpuFeatures::hasAvx2();
-        const bool hasSsse3 = mviewer::core::CpuFeatures::hasSsse3();
-
-        if (isContiguous)
-        {
-            uint8_t *data = v.data;
-            size_t i = 0;
-            if (hasAvx2)
-            {
-                applyChannelVAvx2(data, totalPixels);
-                i = totalPixels & ~size_t(7);
-            }
-            else if (hasSsse3)
-            {
-                applyChannelVSsse3(data, totalPixels);
-                i = totalPixels & ~size_t(3);
-            }
-            for (; i < totalPixels; ++i)
-            {
-                uint8_t *p = data + i * 4;
-                const uint8_t val = std::max({p[0], p[1], p[2]});
-                p[0] = val;
-                p[1] = val;
-                p[2] = val;
-            }
-            return;
-        }
-
-        for (int y = 0; y < v.height; ++y)
-        {
-            uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
-            const size_t width = static_cast<size_t>(v.width);
-            size_t x = 0;
-            if (hasAvx2)
-            {
-                applyChannelVAvx2(row, width);
-                x = width & ~size_t(7);
-            }
-            else if (hasSsse3)
-            {
-                applyChannelVSsse3(row, width);
-                x = width & ~size_t(3);
-            }
-            for (; x < width; ++x)
-            {
-                uint8_t *p = row + x * 4;
-                const uint8_t val = std::max({p[0], p[1], p[2]});
-                p[0] = val;
-                p[1] = val;
-                p[2] = val;
-            }
-        }
-        return;
-#endif
-    }
-
-    // Scalar fallback (including ChannelY and non-x86)
-    if (isContiguous)
-    {
-        uint8_t *p = v.data;
-        if (chIdx >= 0)
-        {
-            for (size_t i = 0; i < totalPixels; ++i, p += 4)
-            {
-                const uint8_t val = p[chIdx];
-                p[0] = val;
-                p[1] = val;
-                p[2] = val;
-            }
-        }
-        else if (mode == OverlayMode::ChannelV)
-        {
-            for (size_t i = 0; i < totalPixels; ++i, p += 4)
-            {
-                const uint8_t val = std::max({p[0], p[1], p[2]});
-                p[0] = val;
-                p[1] = val;
-                p[2] = val;
-            }
-        }
-        else // ChannelY
-        {
-            for (size_t i = 0; i < totalPixels; ++i, p += 4)
-            {
-                const uint8_t b = IsBgr ? p[0] : p[2];
-                const uint8_t g = p[1];
-                const uint8_t r = IsBgr ? p[2] : p[0];
-                const uint8_t val = static_cast<uint8_t>(std::clamp(luminance(r, g, b), 0, 255));
-                p[0] = val;
-                p[1] = val;
-                p[2] = val;
-            }
-        }
-        return;
-    }
-
-    if (chIdx >= 0)
-    {
-        for (int y = 0; y < v.height; ++y)
-        {
-            uint8_t *p = v.data + static_cast<size_t>(y) * v.stride();
-            for (int x = 0; x < v.width; ++x, p += 4)
-            {
-                const uint8_t val = p[chIdx];
-                p[0] = val;
-                p[1] = val;
-                p[2] = val;
-            }
-        }
-    }
-    else if (mode == OverlayMode::ChannelV)
-    {
-        for (int y = 0; y < v.height; ++y)
-        {
-            uint8_t *p = v.data + static_cast<size_t>(y) * v.stride();
-            for (int x = 0; x < v.width; ++x, p += 4)
-            {
-                const uint8_t val = std::max({p[0], p[1], p[2]});
-                p[0] = val;
-                p[1] = val;
-                p[2] = val;
-            }
-        }
-    }
-    else // ChannelY
-    {
-        for (int y = 0; y < v.height; ++y)
-        {
-            uint8_t *p = v.data + static_cast<size_t>(y) * v.stride();
-            for (int x = 0; x < v.width; ++x, p += 4)
-            {
-                const uint8_t b = IsBgr ? p[0] : p[2];
-                const uint8_t g = p[1];
-                const uint8_t r = IsBgr ? p[2] : p[0];
-                const uint8_t val = static_cast<uint8_t>(std::clamp(luminance(r, g, b), 0, 255));
-                p[0] = val;
-                p[1] = val;
-                p[2] = val;
-            }
-        }
-    }
+        applyChannel4Value<IsBgr>(v, isContiguous, totalPixels);
+    else
+        applyChannel4Luma<IsBgr>(v, isContiguous, totalPixels);
 }
 
 template <bool IsBgr> inline void applyChannel3(const ImageBuffer &v, OverlayMode mode)
