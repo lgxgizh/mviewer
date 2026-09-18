@@ -103,11 +103,12 @@ class PreviewPanel : public QWidget
                               int srcH, qint64 fileSize, bool sourceKnown, bool fileSizeKnown);
     void deliverPreviewStats(const mviewer::core::PreviewStats &stats, const QString &path,
                              uint64_t gen);
-    static void decodePreviewWorker(const std::string &stdPath, const QString &path, uint64_t gen,
-                                    const QPointer<PreviewPanel> &guard,
-                                    const std::shared_ptr<mviewer::core::AsyncLifetimeToken> &lifetime,
-                                    int knownW, int knownH, qint64 knownSize,
-                                    const TaskScheduler::TaskContext &ctx);
+    static void
+    decodePreviewWorker(const std::string &stdPath, const QString &path, uint64_t gen,
+                        const QPointer<PreviewPanel> &guard,
+                        const std::shared_ptr<mviewer::core::AsyncLifetimeToken> &lifetime,
+                        int knownW, int knownH, qint64 knownSize,
+                        const TaskScheduler::TaskContext &ctx);
 
     QString m_requestedPath;
     QString m_presentedPath;

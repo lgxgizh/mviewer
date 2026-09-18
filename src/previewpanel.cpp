@@ -268,8 +268,8 @@ void PreviewPanel::deliverVisualPreview(const QImage &qimg, const QString &path,
     update();
 }
 
-void PreviewPanel::deliverPreviewStats(const mviewer::core::PreviewStats &stats, const QString &path,
-                                       uint64_t gen)
+void PreviewPanel::deliverPreviewStats(const mviewer::core::PreviewStats &stats,
+                                       const QString &path, uint64_t gen)
 {
     if (!m_lifetime->isAlive() || path != m_requestedPath || gen != m_requestGen)
         return;
@@ -289,28 +289,29 @@ void PreviewPanel::deliverPreviewStats(const mviewer::core::PreviewStats &stats,
     update();
 }
 
-void PreviewPanel::decodePreviewWorker(const std::string &stdPath, const QString &path, uint64_t gen,
-                                       const QPointer<PreviewPanel> &guard,
-                                       const std::shared_ptr<mviewer::core::AsyncLifetimeToken> &lifetime,
-                                       int knownW, int knownH, qint64 knownSize,
-                                       const TaskScheduler::TaskContext &ctx)
+void PreviewPanel::decodePreviewWorker(
+    const std::string &stdPath, const QString &path, uint64_t gen,
+    const QPointer<PreviewPanel> &guard,
+    const std::shared_ptr<mviewer::core::AsyncLifetimeToken> &lifetime, int knownW, int knownH,
+    qint64 knownSize, const TaskScheduler::TaskContext &ctx)
 {
     if (ctx.isCancelled())
         return;
     PreviewDecodeResult loaded = loadPreviewPixels(stdPath, knownW, knownH, knownSize);
     if (ctx.isCancelled())
         return;
-    QMetaObject::invokeMethod(
-        qApp, [path, gen, guard, lifetime, qimg = loaded.qimg, srcW = loaded.srcW,
-               srcH = loaded.srcH, fileSize = loaded.fileSize, sourceKnown = loaded.sourceKnown,
-               fileSizeKnown = loaded.fileSizeKnown]()
-              {
-                  PreviewPanel *panel = guard.data();
-                  if (!panel || !lifetime->isAlive())
-                      return;
-                  panel->deliverVisualPreview(qimg, path, gen, srcW, srcH, fileSize, sourceKnown,
-                                              fileSizeKnown);
-              });
+    QMetaObject::invokeMethod(qApp,
+                              [path, gen, guard, lifetime, qimg = loaded.qimg, srcW = loaded.srcW,
+                               srcH = loaded.srcH, fileSize = loaded.fileSize,
+                               sourceKnown = loaded.sourceKnown,
+                               fileSizeKnown = loaded.fileSizeKnown]()
+                              {
+                                  PreviewPanel *panel = guard.data();
+                                  if (!panel || !lifetime->isAlive())
+                                      return;
+                                  panel->deliverVisualPreview(qimg, path, gen, srcW, srcH, fileSize,
+                                                              sourceKnown, fileSizeKnown);
+                              });
     if (loaded.qimg.isNull())
         return;
     if (ctx.isCancelled())
@@ -356,10 +357,11 @@ void PreviewPanel::setImage(const QString &path, const QPixmap &warmThumbnail,
 
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Decode,
-        [stdPath, path, gen, guard, lifetime, knownW, knownH, knownSize](
-            const TaskScheduler::TaskContext &ctx)
+        [stdPath, path, gen, guard, lifetime, knownW, knownH,
+         knownSize](const TaskScheduler::TaskContext &ctx)
         {
-            decodePreviewWorker(stdPath, path, gen, guard, lifetime, knownW, knownH, knownSize, ctx);
+            decodePreviewWorker(stdPath, path, gen, guard, lifetime, knownW, knownH, knownSize,
+                                ctx);
         });
     if (handle)
         m_task = handle;
@@ -454,8 +456,8 @@ void PreviewPanel::paintEvent(QPaintEvent *event)
     if (m_sourceDimensionsKnown)
         identity += "\n" + QString::number(m_imgW) + "×" + QString::number(m_imgH);
     if (m_fileSizeKnown)
-        identity += (m_sourceDimensionsKnown ? "  " : "\n") +
-                    QString::number(m_fileSize / 1024) + " KB";
+        identity +=
+            (m_sourceDimensionsKnown ? "  " : "\n") + QString::number(m_fileSize / 1024) + " KB";
     painter.drawText(txtArea, Qt::AlignTop | Qt::AlignLeft, identity);
     // The brightness/RGB figures are sample means computed over the scaled
     // preview buffer, not the full image.
