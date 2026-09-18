@@ -83,6 +83,7 @@ void CompareEngine::swapFrames(int a, int b)
     if (a < 0 || a >= n || b < 0 || b >= n || a == b)
         return;
     std::swap(m_images[a], m_images[b]);
+    m_sync.swapCells(a, b);
 }
 
 const ImageFrame *CompareEngine::imageAt(int index) const
@@ -168,6 +169,8 @@ ImageData CompareEngine::differenceMap(int index, int baseIndex)
     if (index < 0 || index >= imageCount())
         return ImageData();
     if (baseIndex < 0 || baseIndex >= imageCount())
+        return ImageData();
+    if (!m_images[baseIndex] || !m_images[index])
         return ImageData();
     return DifferenceEngine::differenceMap(m_images[baseIndex]->pixels(),
                                            m_images[index]->pixels());

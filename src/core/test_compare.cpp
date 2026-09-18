@@ -156,6 +156,44 @@ int main(int argc, char **argv)
             printf("CLEAR_OK\n");
     }
 
+    // 4) SwapFrames & SyncController cell swap and bounds
+    {
+        CompareEngine eng;
+        SyncController sync;
+        sync.setCellCount(3);
+        sync.setCellScale(0, 1.5);
+        sync.setCellOffset(0, 10.0, 20.0);
+        sync.setCellScale(1, 2.5);
+        sync.setCellOffset(1, 30.0, 40.0);
+
+        sync.swapCells(0, 1);
+        if (std::abs(sync.cell(0).scale - 2.5) > 1e-6 ||
+            std::abs(sync.cell(1).scale - 1.5) > 1e-6 ||
+            std::abs(sync.cell(0).offset.x - 30.0) > 1e-6 ||
+            std::abs(sync.cell(1).offset.x - 10.0) > 1e-6)
+        {
+            printf("SYNC_SWAP_FAIL\n");
+            fails++;
+        }
+        else
+        {
+            printf("SYNC_SWAP_OK\n");
+        }
+
+        // Out-of-bounds safety
+        CellState &oob = sync.cell(-1);
+        oob.scale = 999.0;
+        if (std::abs(sync.cell(-1).scale - 1.0) > 1e-6)
+        {
+            printf("SYNC_OOB_FAIL\n");
+            fails++;
+        }
+        else
+        {
+            printf("SYNC_OOB_OK\n");
+        }
+    }
+
     // ── Acceptance C2 (async diff) is covered by the live UI path ──
     // CompareEngine no longer owns an async diff transport: the production path
     // is CompareWorkspace::startDiffBatch() (Analysis pool + generation-guarded

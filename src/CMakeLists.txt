@@ -47,6 +47,8 @@ add_library(mviewer_core SHARED
     core/compare/SyncController.cpp
     core/compare/BlinkController.cpp
     core/compare/DifferenceEngine.cpp
+    core/compare/DifferenceEngine_stats.cpp
+    core/compare/DifferenceEngine_visualize.cpp
     core/compare/Aligner.cpp
     core/RatingStore.cpp
     core/TagStore.cpp

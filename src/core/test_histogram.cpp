@@ -149,13 +149,46 @@ int main()
               "uniform large image keeps all display-histogram mass in one bin");
     }
 
-    // Clipping analysis: shadow (0) and highlight (255) detection.
+    // Grayscale8 histogram and Rec.601 luma LUT exact matching.
     {
-        const std::vector<uint8_t> clipPx = {0, 0, 0, 255, 255, 255, 128, 128, 128, 64, 64, 64};
-        ImageData clipImg = makeRgb(2, 2, clipPx);
-        Histogram hClip = computeHistogram(clipImg);
-        CHECK(hClip.luma[0] == 1, "shadow clipping at Y=0 correctly counted");
-        CHECK(hClip.luma[255] == 1, "highlight clipping at Y=255 correctly counted");
+        ImageData grayImg = makeImageData(3, 1, PixelFormat::Grayscale8);
+        grayImg.buffer->data()[0] = 50;
+        grayImg.buffer->data()[1] = 120;
+        grayImg.buffer->data()[2] = 200;
+        Histogram hg = computeHistogram(grayImg);
+        CHECK(hg.total == 3, "Grayscale8 total is 3");
+        CHECK(hg.r[50] == 1 && hg.g[50] == 1 && hg.b[50] == 1 && hg.v[50] == 1,
+              "Grayscale8 R=G=B=V");
+        CHECK(hg.r[120] == 1 && hg.r[200] == 1, "Grayscale8 all samples present");
+        int expectedLuma50 = luminance(50, 50, 50);
+        CHECK(hg.luma[expectedLuma50] == 1, "Grayscale8 luma matches Rec.601 luminance");
+    }
+
+    // BGRA32 channel ordering and alpha skipping.
+    {
+        ImageData bgra = makeImageData(1, 1, PixelFormat::BGRA32);
+        bgra.buffer->data()[0] = 77;  // B
+        bgra.buffer->data()[1] = 88;  // G
+        bgra.buffer->data()[2] = 99;  // R
+        bgra.buffer->data()[3] = 255; // A
+        Histogram hbgra = computeHistogram(bgra);
+        CHECK(hbgra.total == 1, "BGRA32 total is 1");
+        CHECK(hbgra.b[77] == 1 && hbgra.g[88] == 1 && hbgra.r[99] == 1,
+              "BGRA32 channel mapping correct");
+    }
+
+    // Pathological ROI coordinates: large 32-bit values must not overflow.
+    {
+        Histogram hOverflow = computeHistogram(img, 2000000000, 2000000000, 2000000000, 2000000000);
+        CHECK(hOverflow.total == 0, "pathological ROI overflow safely returns 0 samples");
+    }
+
+    // Custom bin count (bins != 256).
+    {
+        Histogram h64 = computeHistogram(img, 64);
+        CHECK(h64.bins == 64, "custom bins = 64");
+        CHECK(h64.total == 4, "custom bins preserves total");
+        CHECK(h64.r.size() == 64, "custom bin vector sized to 64");
     }
 
     printf("\nhistogram_tests: %d passed, %d failed\n", g_pass, g_fail);

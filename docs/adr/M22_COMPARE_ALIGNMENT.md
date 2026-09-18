@@ -31,6 +31,8 @@ PSNR/SSIM/diff. Off by default to preserve current deterministic behavior.
 
 - ✅ Aligned comparisons reflect real signal difference.
 - ✅ Unit-testable on synthetic shifted data.
+- ✅ (Pass 14) Color decimation converts to Grayscale8 luminance before subsampling, fixing interleaved byte corruption.
+- ✅ (Pass 14) Vectorized SSE2 SAD block matching (`_mm_sad_epu8`) and contiguous scanline block shifting.
 - ❌ Affine / non-translation warps are out of scope for v1 of the aligner.
 
 ## Related

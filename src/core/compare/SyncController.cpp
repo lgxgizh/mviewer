@@ -93,6 +93,13 @@ void SyncController::fitCell(int index, const CellSize &viewport, const CellSize
     m_cells[index].offset.y = 0;
 }
 
+void SyncController::swapCells(int a, int b)
+{
+    const int n = static_cast<int>(m_cells.size());
+    if (a >= 0 && a < n && b >= 0 && b < n && a != b)
+        std::swap(m_cells[a], m_cells[b]);
+}
+
 void SyncController::reset()
 {
     m_sync = SyncTransform{};
@@ -104,12 +111,15 @@ CellState &SyncController::cell(int index)
 {
     if (0 <= index && index < static_cast<int>(m_cells.size()))
         return m_cells[index];
-    return kDefaultCell;
+    static thread_local CellState fallback{};
+    fallback = CellState{};
+    return fallback;
 }
 
 const CellState &SyncController::cell(int index) const
 {
     if (0 <= index && index < static_cast<int>(m_cells.size()))
         return m_cells[index];
-    return kDefaultCell;
+    static const CellState defaultCell{};
+    return defaultCell;
 }

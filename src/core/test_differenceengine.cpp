@@ -187,9 +187,11 @@ int main(int argc, char **argv)
         auto hlGray = DifferenceEngine::highlightMap(diffGray, baseGray, 10);
         CHECK(!hlGray.isNull() && hlGray.format == PixelFormat::RGB24,
               "highlightMap Grayscale8 base non-null");
-        CHECK((*hlGray.buffer)[0] > (*hlGray.buffer)[1] && (*hlGray.buffer)[0] > (*hlGray.buffer)[2],
+        CHECK((*hlGray.buffer)[0] > (*hlGray.buffer)[1] &&
+                  (*hlGray.buffer)[0] > (*hlGray.buffer)[2],
               "highlightMap Grayscale8 diff pixel is red");
-        CHECK((*hlGray.buffer)[3] == 180 && (*hlGray.buffer)[4] == 180 && (*hlGray.buffer)[5] == 180,
+        CHECK((*hlGray.buffer)[3] == 180 && (*hlGray.buffer)[4] == 180 &&
+                  (*hlGray.buffer)[5] == 180,
               "highlightMap similar pixel equals Grayscale8 base");
     }
 
@@ -275,6 +277,126 @@ int main(int argc, char **argv)
         CHECK(stats.totalPixels == w * h, "contiguous computeStats total matches");
         CHECK(stats.diffPixels == 3, "contiguous computeStats diff count matches");
         CHECK(stats.maxDiff == 50, "contiguous computeStats maxDiff is 50");
+    }
+
+    // Cross-format RGB24 vs BGR24
+    {
+        const int w = 16, h = 16;
+        auto rgbBuf = std::make_shared<std::vector<uint8_t>>(w * h * 3);
+        auto bgrBuf = std::make_shared<std::vector<uint8_t>>(w * h * 3);
+        for (size_t i = 0; i < static_cast<size_t>(w) * static_cast<size_t>(h); ++i)
+        {
+            (*rgbBuf)[i * 3 + 0] = 200; // R
+            (*rgbBuf)[i * 3 + 1] = 100; // G
+            (*rgbBuf)[i * 3 + 2] = 50;  // B
+
+            (*bgrBuf)[i * 3 + 0] = 50;  // B
+            (*bgrBuf)[i * 3 + 1] = 100; // G
+            (*bgrBuf)[i * 3 + 2] = 200; // R
+        }
+        ImageData rgbImg;
+        rgbImg.buffer = rgbBuf;
+        rgbImg.width = w;
+        rgbImg.height = h;
+        rgbImg.format = PixelFormat::RGB24;
+
+        ImageData bgrImg;
+        bgrImg.buffer = bgrBuf;
+        bgrImg.width = w;
+        bgrImg.height = h;
+        bgrImg.format = PixelFormat::BGR24;
+
+        auto diff = DifferenceEngine::differenceMap(rgbImg, bgrImg);
+        CHECK(!diff.isNull(), "cross-format RGB24 vs BGR24 diff non-null");
+        CHECK(isAllBlack(diff), "cross-format identical colors produce zero diff");
+
+        // Perturb one pixel in bgrImg
+        (*bgrBuf)[0] = 255;
+        auto diffPerturbed = DifferenceEngine::differenceMap(rgbImg, bgrImg);
+        CHECK(!diffPerturbed.isNull(), "perturbed cross-format non-null");
+        CHECK((*diffPerturbed.buffer)[0] > 0, "perturbed pixel shows diff");
+        CHECK((*diffPerturbed.buffer)[1] == 0, "adjacent pixel remains zero diff");
+    }
+
+    // Cross-format RGBA32 vs BGRA32
+    {
+        const int w = 8, h = 8;
+        auto rgbaBuf = std::make_shared<std::vector<uint8_t>>(w * h * 4);
+        auto bgraBuf = std::make_shared<std::vector<uint8_t>>(w * h * 4);
+        for (size_t i = 0; i < static_cast<size_t>(w) * static_cast<size_t>(h); ++i)
+        {
+            (*rgbaBuf)[i * 4 + 0] = 180; // R
+            (*rgbaBuf)[i * 4 + 1] = 90;  // G
+            (*rgbaBuf)[i * 4 + 2] = 40;  // B
+            (*rgbaBuf)[i * 4 + 3] = 255; // A
+
+            (*bgraBuf)[i * 4 + 0] = 40;  // B
+            (*bgraBuf)[i * 4 + 1] = 90;  // G
+            (*bgraBuf)[i * 4 + 2] = 180; // R
+            (*bgraBuf)[i * 4 + 3] = 255; // A
+        }
+        ImageData rgbaImg;
+        rgbaImg.buffer = rgbaBuf;
+        rgbaImg.width = w;
+        rgbaImg.height = h;
+        rgbaImg.format = PixelFormat::RGBA32;
+
+        ImageData bgraImg;
+        bgraImg.buffer = bgraBuf;
+        bgraImg.width = w;
+        bgraImg.height = h;
+        bgraImg.format = PixelFormat::BGRA32;
+
+        auto diff = DifferenceEngine::differenceMap(rgbaImg, bgraImg);
+        CHECK(!diff.isNull(), "cross-format RGBA32 vs BGRA32 diff non-null");
+        CHECK(isAllBlack(diff), "cross-format RGBA vs BGRA identical colors produce zero diff");
+    }
+
+    // 64-bit coordinate clamping & integer overflow protection in computeStats
+    {
+        auto a = makeSolidRgb(10, 10, 100, 100, 100);
+        auto b = makeSolidRgb(10, 10, 100, 100, 100);
+        auto diff = DifferenceEngine::differenceMap(a, b);
+
+        // Extreme positive offset that would overflow 32-bit int if added
+        const auto ovf =
+            DifferenceEngine::computeStats(diff, 0, 2000000000, 2000000000, 2000000000, 2000000000);
+        CHECK(ovf.totalPixels == 0, "extreme ROI offset safely clamps without overflow");
+
+        // Negative coordinates that fully lie outside
+        const auto negOut = DifferenceEngine::computeStats(diff, 0, -100, -100, 50, 50);
+        CHECK(negOut.totalPixels == 0, "negative fully outside ROI yields 0 pixels");
+
+        // Negative start coordinate with overlap
+        const auto negOverlap = DifferenceEngine::computeStats(diff, 0, -2, -2, 5, 5);
+        CHECK(negOverlap.totalPixels == 9, "negative overlapping ROI clamps to [0,3)x[0,3)");
+    }
+
+    // HighlightMap with BGR24 base image
+    {
+        const int w = 4, h = 4;
+        auto diffBuf = std::make_shared<std::vector<uint8_t>>(w * h, uint8_t(0));
+        (*diffBuf)[0] = 50; // diff at (0,0)
+        ImageData diffImg;
+        diffImg.buffer = diffBuf;
+        diffImg.width = w;
+        diffImg.height = h;
+        diffImg.format = PixelFormat::Grayscale8;
+
+        auto bgrBuf = std::make_shared<std::vector<uint8_t>>(w * h * 3, uint8_t(100));
+        ImageData bgrImg;
+        bgrImg.buffer = bgrBuf;
+        bgrImg.width = w;
+        bgrImg.height = h;
+        bgrImg.format = PixelFormat::BGR24;
+
+        auto hl = DifferenceEngine::highlightMap(diffImg, bgrImg, 10);
+        CHECK(!hl.isNull(), "highlightMap with BGR24 base non-null");
+        CHECK((*hl.buffer)[0] > (*hl.buffer)[1] && (*hl.buffer)[0] > (*hl.buffer)[2],
+              "highlightMap BGR diff pixel is red");
+        // Similar pixel (offset 3) should have equal R, G, B channels
+        CHECK((*hl.buffer)[3] == (*hl.buffer)[4] && (*hl.buffer)[4] == (*hl.buffer)[5],
+              "highlightMap BGR similar pixel is gray");
     }
 
     std::cout << "\nDifferenceEngine: " << (g_fail == 0 ? "ALL PASSED" : "FAILURES") << "\n";

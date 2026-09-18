@@ -31,6 +31,9 @@ Each controller owns one concern. CompareSession provides state; controllers con
 
 - ✅ Clean separation of comparison concerns
 - ✅ Each controller tests independently
+- ✅ (Pass 14) Frame reordering synchronously migrates cell transforms (`swapCells`)
+- ✅ (Pass 14) SIMD AVX2/SSE2 stats accumulation and SSSE3 cross-format channel conversion in DifferenceEngine
+- ✅ (Pass 14) Fixed-point BT.601 luminance and 64-bit ROI clamping eliminate integer overflows
 - ❌ More files (~6 vs 1)
 - ❌ Wiring complexity slightly higher
 
@@ -38,3 +41,4 @@ Each controller owns one concern. CompareSession provides state; controllers con
 
 - RFC-006 (Compare engine controllers)
 - ADR-003 (CompareSession)
+- ADR-M22.3 (Compare Auto-Alignment)

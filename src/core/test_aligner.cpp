@@ -118,6 +118,105 @@ int main()
         return 1;
     }
 
-    printf("PASS\n");
+    // Scenario 2: Downscaled auto-align with scale > 1 (W >= 512)
+    {
+        const int w2 = 512, h2 = 384;
+        ImageData a2 = makeImageData(w2, h2, PixelFormat::RGB24);
+        for (int y = 0; y < h2; ++y)
+        {
+            uint8_t *row = a2.buffer->data() + y * a2.stride();
+            for (int x = 0; x < w2; ++x)
+            {
+                const bool inBlock = (y >= 100 && y < 200 && x >= 150 && x < 250);
+                row[x * 3 + 0] = inBlock ? 220 : 30;
+                row[x * 3 + 1] = inBlock ? 220 : 30;
+                row[x * 3 + 2] = inBlock ? 220 : 30;
+            }
+        }
+        const int truthDx2 = 6, truthDy2 = 6;
+        ImageData moving2 = mviewer::Aligner::shift(a2, truthDx2, truthDy2, 30);
+        mviewer::AlignOffset off2 = mviewer::Aligner::estimate(a2, moving2, 32);
+        printf("Scenario 2 (scale > 1): estimated offset dx=%d dy=%d (expect ~ %d,%d)\n", off2.x,
+               off2.y, -truthDx2, -truthDy2);
+        if (std::abs(off2.x + truthDx2) > 2 || std::abs(off2.y + truthDy2) > 2)
+        {
+            printf("FAIL: scale > 1 offset out of expected range\n");
+            return 1;
+        }
+    }
+
+    // Scenario 3: BGR24 format auto-align
+    {
+        const int w3 = 200, h3 = 150;
+        ImageData a3 = makeImageData(w3, h3, PixelFormat::BGR24);
+        for (int y = 0; y < h3; ++y)
+        {
+            uint8_t *row = a3.buffer->data() + y * a3.stride();
+            for (int x = 0; x < w3; ++x)
+            {
+                const bool inBlock = (y >= 40 && y < 90 && x >= 50 && x < 100);
+                row[x * 3 + 0] = inBlock ? 50 : 200; // B
+                row[x * 3 + 1] = inBlock ? 220 : 30; // G
+                row[x * 3 + 2] = inBlock ? 240 : 10; // R
+            }
+        }
+        const int truthDx3 = 4, truthDy3 = 3;
+        ImageData moving3 = mviewer::Aligner::shift(a3, truthDx3, truthDy3);
+        mviewer::AlignOffset off3 = mviewer::Aligner::estimate(a3, moving3, 32);
+        printf("Scenario 3 (BGR24): estimated offset dx=%d dy=%d (expect ~ %d,%d)\n", off3.x,
+               off3.y, -truthDx3, -truthDy3);
+        if (std::abs(off3.x + truthDx3) > 1 || std::abs(off3.y + truthDy3) > 1)
+        {
+            printf("FAIL: BGR24 offset out of expected range\n");
+            return 1;
+        }
+    }
+
+    // Scenario 4: Grayscale8 format auto-align
+    {
+        const int w4 = 200, h4 = 150;
+        ImageData a4 = makeImageData(w4, h4, PixelFormat::Grayscale8);
+        for (int y = 0; y < h4; ++y)
+        {
+            uint8_t *row = a4.buffer->data() + y * a4.stride();
+            for (int x = 0; x < w4; ++x)
+            {
+                const bool inBlock = (y >= 40 && y < 90 && x >= 50 && x < 100);
+                row[x] = inBlock ? 210 : 25;
+            }
+        }
+        const int truthDx4 = -5, truthDy4 = -3;
+        ImageData moving4 = mviewer::Aligner::shift(a4, truthDx4, truthDy4);
+        mviewer::AlignOffset off4 = mviewer::Aligner::estimate(a4, moving4, 32);
+        printf("Scenario 4 (Grayscale8): estimated offset dx=%d dy=%d (expect ~ %d,%d)\n", off4.x,
+               off4.y, -truthDx4, -truthDy4);
+        if (std::abs(off4.x + truthDx4) > 1 || std::abs(off4.y + truthDy4) > 1)
+        {
+            printf("FAIL: Grayscale8 offset out of expected range\n");
+            return 1;
+        }
+    }
+
+    // Scenario 5: Shift edge cases (zero shift, total shift out)
+    {
+        ImageData gray = makeImageData(10, 10, PixelFormat::Grayscale8);
+        std::memset(gray.buffer->data(), 123, 100);
+
+        ImageData s0 = mviewer::Aligner::shift(gray, 0, 0);
+        if (s0.isNull() || (*s0.buffer)[0] != 123 || (*s0.buffer)[99] != 123)
+        {
+            printf("FAIL: zero shift did not preserve buffer\n");
+            return 1;
+        }
+
+        ImageData sOut = mviewer::Aligner::shift(gray, 20, 20, 77);
+        if (sOut.isNull() || (*sOut.buffer)[0] != 77 || (*sOut.buffer)[99] != 77)
+        {
+            printf("FAIL: total shift out did not fill with fill byte\n");
+            return 1;
+        }
+    }
+
+    printf("PASS: All 5 aligner scenarios succeeded\n");
     return 0;
 }
