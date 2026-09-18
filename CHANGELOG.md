@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.62] - 2026-09-19
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.62**.
+- **Stale ADR-014 debt cleanup (#21)**: Retire grandfathered `$knownFunctionDebt` entries for `mainwindow_export.cpp::startReportExport` and `FrameSequence.cpp::selectFrame` (both below fail cap); sync ADR-014 inventory note.
+- **hitTestSelection CC (#22)**: Replace cascading handle checks with flags + priority-table scan (`buildHitTestFlags` + `kHitRules`); retire the debt entry.
+- **PreviewPanel::setImage split (#23)**: Extract `clearPreview`, `presentWarmThumbnail`, `loadPreviewPixels`, `decodePreviewWorker`, and delivery helpers under the ADR-014 span cap.
+- **scheduleHistogramRefresh split (#24)**: Extract `collectHistogramIndices`, `computeHistogramBatch`, and `clearMainHistogramForEmptyPlan`; retire the debt entry.
+- **thumbnailpanel_fileops (#25)**: Shared progress/queue helpers and batch finish extraction bring the three tracked file-ops functions under the span cap.
+- **RenderEngine bilinear SSE2 (#26)**: Move `bilinearQ` into `BilinearScale.cpp` (ADR architecture R5) with SSE2 4-px blends, scalar-equivalent rounding, and row helpers under ADR-014 caps.
+
 ## [1.0.61] - 2026-09-18
 
 ### Code Quality
