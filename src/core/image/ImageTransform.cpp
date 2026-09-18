@@ -11,6 +11,8 @@
 #include <QPainter>
 #include <QString>
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <fstream>
 

@@ -1,8 +1,13 @@
 // ImageTransform unit tests — rename pattern.
 #include "core/image/ImageTransform.h"
 #include <QGuiApplication>
+#include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
+#include <system_error>
+#include <vector>
 
 static int g_fail = 0;
 #define CHECK(cond, msg)                                                                           \
@@ -128,7 +133,10 @@ int main(int argc, char **argv)
         std::memset(pg.buffer->data(), 100 + i * 50, pg.buffer->size());
         pdfPages.push_back(pg);
     }
-    const std::string pdfPath = "/tmp/test_mviewer_export.pdf";
+    std::error_code ec;
+    const auto tmpDir = std::filesystem::temp_directory_path(ec);
+    CHECK(!ec && !tmpDir.empty(), "temp directory is available");
+    const std::string pdfPath = (tmpDir / "mviewer_imagetransform_export.pdf").string();
     const bool pdfOk = mviewer::core::writePdf(pdfPath, pdfPages, 85);
     CHECK(pdfOk, "writePdf succeeds on multi-page export");
 
