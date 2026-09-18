@@ -2,6 +2,7 @@
 
 ## [1.0.57] - 2026-09-18
 
+<<<<<<< HEAD
 ### Performance & Engine Optimization
 
 - **Analyzer Subsystem SIMD Acceleration & Fixed-Point Math (`core/analyzer/`)**:
@@ -27,10 +28,60 @@
 
 - **Comprehensive Analyzer Extension Test Suite (`core/test_analyzer_ext.cpp`)**:
   - Added unit test suites verifying SIMD Grayscale8 and RGB24 paths, statistical bounds, degenerate/inverted ROI rejection, and edge response metrics across all 13 core analyzers, achieving 81 passing assertions (110 assertions across all analyzer test suites).
+=======
+### Bug Fixes & Correctness Hardening
+
+- **ROI Negative Coordinate Clamping in `AnalysisEngine` (`core/analysis/AnalysisEngine.cpp`)**:
+  - Resolved a coordinate calculation defect in `AnalysisEngine::computeStatsROI` where negative ROI offsets (`region.x < 0` or `region.y < 0`) caused the active bounding rectangle width and height to be miscalculated and shifted rather than clipped cleanly to image bounds. Aligned boundary clamping with the canonical 64-bit clamp implementation in `ImageStats.cpp`.
+- **ROI Bounds Hardening in `Histogram` (`core/compare/Histogram.h`)**:
+  - Added 64-bit coordinate clamping in `computeHistogram` to prevent integer overflow and coordinate inversion on pathological ROI parameters.
+
+### Performance & Engine Optimization
+
+- **SSE2 Vectorized PSNR Acceleration in `AnalysisEngine` (`core/analysis/AnalysisEngine.cpp`)**:
+  - Vectorized the inner sum-of-squared-differences metric kernel in `AnalysisEngine::psnr` using SSE2 intrinsics (`_mm_unpacklo_epi8`, `_mm_unpackhi_epi8`, `_mm_madd_epi16`, and 64-bit accumulator `_mm_add_epi64`), achieving a **~4.5x speedup** on 4K/1080p compare metrics while maintaining 100% bit-exact parity with scalar arithmetic.
+  - Added vectorized SSE2 RGBA/BGRA channel evaluation with compile-time 16-bit color channel masking (`maskRGB16`), skipping alpha channel differences without scalar branching.
+- **SSE2 Vectorized 8x8 SSIM Block Metric in `AnalysisEngine` (`core/analysis/AnalysisEngine.cpp`)**:
+  - Accelerated `computeSSIMCore` with an SSE2 kernel processing 8-byte row spans directly via `_mm_loadl_epi64`, `_mm_sad_epu8`, and `_mm_madd_epi16`, delivering a **~6.0x speedup** (3.4 ms down to 0.57 ms for 1080p) on SSIM comparisons.
+- **Compile-Time Format Dispatch in `AnalysisEngine::computeStatsROI` (`core/analysis/AnalysisEngine.cpp`)**:
+  - Replaced runtime dynamic channel indexing (`rIdx`, `bIdx`) and branch evaluation inside inner pixel loops with compile-time template specialization (`computeStatsColor<Fmt>`) for `RGB24`, `BGR24`, `RGBA32`, and `BGRA32`.
+- **Histogram Fast-Paths & Grayscale Acceleration in `Histogram` (`core/compare/Histogram.h`)**:
+  - **Single-Pass Grayscale8 Accumulation**: Hoisted format branching out of pixel loops and added a dedicated Grayscale8 single-channel accumulation fast-path, achieving a **~3.25x speedup** on grayscale histogram generation.
+  - **256-Bin Clamping Bypass**: Eliminated redundant `std::min(val, bins - 1)` clamping overhead for 256-bin histograms on 8-bit unsigned integer data.
+- **Pointer Linearization in `DifferenceEngine` (`core/compare/DifferenceEngine.cpp`)**:
+  - Linearized row pointer increments in `diffScalarRow` and `highlightMap`, eliminating 2D coordinate index multiplications across row iterations.
+
+### Testing & Verification
+
+- **Dedicated `AnalysisEngine` Test Suite (`core/test_analysisengine.cpp`)**:
+  - Added comprehensive automated unit test suite with 32 assertions covering `computeStatsROI`, `psnr`, `ssim`, `noiseEstimate`, format parity across all 5 pixel formats, negative ROI clipping, and MSE/PSNR numerical accuracy.
+- **Expanded `Histogram` Tests (`core/test_histogram.cpp`)**:
+  - Added tests for Grayscale8 fast-path, RGBA32/BGRA32 channel mapping, and negative ROI boundary clipping.
+
+### Performance & Engine Optimization
+
+- **Format-Specialized Vector Traversal in `ImageStats` (`core/image/ImageStats.cpp`)**:
+  - **Compile-Time Format Dispatch**: Hoisted inner-loop pixel format branching out of row traversals, dispatching to specialized compile-time pixel readers (`Grayscale8`, `RGB24`, `RGBA32`, `BGR24`, `BGRA32`).
+  - **Linear Pointer Incrementation**: Converted 2D coordinate index calculations into linear pointer increments (`p += cpp`), allowing the compiler to generate efficient SIMD vector instructions.
+  - **Single-Pass Grayscale Acceleration**: Optimized Grayscale8 channel statistics into a single contiguous byte summation, achieving up to 10x performance gains on large ROI benchmarks (`m61_roi_benchmark` latency reduced from ~1.3s to 0.14s).
+  - **Exact 64-Bit Integer Accumulation**: Replaced floating-point additions in the inner traversal loop with exact 64-bit integer registers, preventing precision degradation across massive 100 MP+ datasets.
+
+### Algorithm Engineer Workflow & Ergonomics
+
+- **Compare ROI Keyboard Micro-Stepping (`CompareWorkspace`, `compareworkspace_keyboard.cpp`, `compareworkspace.h`)**:
+  - **Precision Pixel Nudging**: Added keyboard shortcuts for adjusting active ROI positions: `Alt+Arrow` nudges by 1 pixel; `Shift+Arrow` or `Alt+Shift+Arrow` nudges by 10 pixels for rapid repositioning without mouse jitter.
+  - **Keyboard Dimension Sizing**: Added `Ctrl+Alt+Arrow` (1px) and `Ctrl+Alt+Shift+Arrow` (10px) to expand or shrink ROI width and height.
+  - **Real-Time Synchronized Feedback**: Status feedback reports exact `X, Y, W, H` coordinates at every keystroke; automatically triggers linked pane synchronization, diff overlays, and asynchronous multi-pane statistics calculation.
+- **Shortcut Discovery**: Added ROI micro-stepping shortcut guidance to the Compare help overlay (`?`).
+
+### Documentation & Repository Presentation
+
+- **README Overhaul (`README.md`)**: Updated the primary README with comprehensive feature highlights covering linked ROI delta telemetry, keyboard micro-stepping, CIE $\Delta E_{76}$ color metrics, and documented the single canonical `build.ps1` command.
+- **GitHub Repository Metadata**: Configured the official repository Description and topic tags on GitHub via GitHub CLI, ensuring the project card displays an informative one-line summary on personal GitHub profiles.
+>>>>>>> 5849325 (fix: remove leftover CHANGELOG conflict markers after rebase)
 
 ## [1.0.56] - 2026-09-18
 
-<<<<<<< HEAD
 ### Reliability, Decoder Bounds & Stream Hardening
 
 - **RAW / TIFF Metadata Bounds & Exif IFD Traversal (`core/image/RawMetadata.cpp`)**:
@@ -50,23 +101,6 @@
   - **Degenerate Frame Guard**: Added non-positive dimension checks in `scaleToMaxEdge` and `selectFrame` before aspect ratio division, preventing divide-by-zero on degenerate frames.
   - **Scan Loop Bound**: Capped maximum marker count (`kMaxJpegMarkers = 65536`) in `RawDecoder::jpegEndAt` to prevent infinite loops on corrupted or hostile streams.
   - **Contiguous Pixel Buffer Fast-Path**: Accelerated `toImageData` in `RawDecoder` and `QtFallbackDecoder` using a single contiguous `memcpy` when scanline byte counts match stride, matching `QtDecoder`.
-=======
-### Bug Fixes & Correctness Hardening
-
-- **High-Resolution Auto-Alignment Downsampling (`Aligner`, `core/compare/Aligner.cpp`)**:
-  - **Color-Aware Downsampling**: Fixed a critical defect in `downscaleBy` where downsampling multi-channel color images (`RGB24`, `RGBA32`, `BGR24`, `BGRA32`) with `scale > 1` (any image with max dimension $\ge 512$ px) treated interleaved raw byte offsets as pixel indices without multiplying by stride or channel count. This corrupted the luminance representation and ignored up to 75% of the horizontal image extent, causing registration on production-sized images to fail and report spurious `dx=-64, dy=-64` offsets.
-  - **BGR Channel Order Parity**: Fixed `toGray` to correctly order Red and Blue channel weights for BGR24 and BGRA32 image formats instead of inverting them. Added direct passthrough for existing Grayscale8 buffers to eliminate redundant reallocation.
-- **Viewport Off-Image Boundary Coordinate Hardening (`Viewport`, `core/render/Viewport.h`)**:
-  - **Non-Negative Rect Invariant**: Resolved a defect in `Viewport::visibleImageRect` where panning past the bottom or right boundaries of an image produced negative width or height values (`rx1 - rx < 0`) instead of returning an empty visible region (`w=0, h=0`).
-
-### Performance & Engine Optimization
-
-- **SSE2 Vectorized SAD Search in `Aligner` (`core/compare/Aligner.cpp`)**:
-  - Accelerated 2D search window sum-of-absolute-differences evaluation using SSE2 `_mm_sad_epu8` vector instructions, achieving a ~5.8x speedup (72 ms down to 12 ms) while maintaining 100% bit-exact parity with scalar arithmetic.
-  - Optimized `Aligner::shift` by hoisting row pointer offsets and using linear pointer increments.
-- **SSE2 Vectorized Difference Statistics in `DifferenceEngine` (`core/compare/DifferenceEngine.cpp`)**:
-  - Vectorized difference accumulation, threshold count, and peak diff calculation in `DifferenceEngine::computeStats` using SSE2 intrinsics (`_mm_sad_epu8`, `_mm_subs_epu8`, `_mm_max_epu8`), providing a ~4.0x speedup for Grayscale8 diff maps across both whole images and arbitrary ROI row slices.
->>>>>>> 413eeaf (perf(analysis): vectorize PSNR and SSIM, accelerate histogram and harden ROI bounds)
 
 ## [1.0.55] - 2026-09-18
 
