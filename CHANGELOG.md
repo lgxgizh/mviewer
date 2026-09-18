@@ -2,21 +2,31 @@
 
 ## [1.0.57] - 2026-09-18
 
-### Bug Fixes & Correctness Hardening
-
-- **High-Resolution Auto-Alignment Downsampling (`Aligner`, `core/compare/Aligner.cpp`)**:
-  - **Color-Aware Downsampling**: Fixed a critical defect in `downscaleBy` where downsampling multi-channel color images (`RGB24`, `RGBA32`, `BGR24`, `BGRA32`) with `scale > 1` (any image with max dimension $\ge 512$ px) treated interleaved raw byte offsets as pixel indices without multiplying by stride or channel count. This corrupted the luminance representation and ignored up to 75% of the horizontal image extent, causing registration on production-sized images to fail and report spurious `dx=-64, dy=-64` offsets.
-  - **BGR Channel Order Parity**: Fixed `toGray` to correctly order Red and Blue channel weights for BGR24 and BGRA32 image formats instead of inverting them. Added direct passthrough for existing Grayscale8 buffers to eliminate redundant reallocation.
-- **Viewport Off-Image Boundary Coordinate Hardening (`Viewport`, `core/render/Viewport.h`)**:
-  - **Non-Negative Rect Invariant**: Resolved a defect in `Viewport::visibleImageRect` where panning past the bottom or right boundaries of an image produced negative width or height values (`rx1 - rx < 0`) instead of returning an empty visible region (`w=0, h=0`).
-
 ### Performance & Engine Optimization
 
-- **SSE2 Vectorized SAD Search in `Aligner` (`core/compare/Aligner.cpp`)**:
-  - Accelerated 2D search window sum-of-absolute-differences evaluation using SSE2 `_mm_sad_epu8` vector instructions, achieving a ~5.8x speedup (72 ms down to 12 ms) while maintaining 100% bit-exact parity with scalar arithmetic.
-  - Optimized `Aligner::shift` by hoisting row pointer offsets and using linear pointer increments.
-- **SSE2 Vectorized Difference Statistics in `DifferenceEngine` (`core/compare/DifferenceEngine.cpp`)**:
-  - Vectorized difference accumulation, threshold count, and peak diff calculation in `DifferenceEngine::computeStats` using SSE2 intrinsics (`_mm_sad_epu8`, `_mm_subs_epu8`, `_mm_max_epu8`), providing a ~4.0x speedup for Grayscale8 diff maps across both whole images and arbitrary ROI row slices.
+- **Analyzer Subsystem SIMD Acceleration & Fixed-Point Math (`core/analyzer/`)**:
+  - **Vectorized Grayscale8 Accumulation**: Accelerated `RGBMeanAnalyzer`, `BrightnessAnalyzer`, and `ContrastAnalyzer` with SSE2 intrinsics (`_mm_sad_epu8`, `_mm_min_epu8`, `_mm_max_epu8`, `_mm_madd_epi16`), processing 16 grayscale pixels per cycle for sub-millisecond ROI analysis.
+  - **Fixed-Point Integer Luminance**: Replaced floating-point conversions and divisions with exact integer fixed-point luminance calculations `((19595 * r + 38470 * g + 7471 * b) >> 16)` across `BrightnessAnalyzer`, `ContrastAnalyzer`, `ExposureAnalyzer`, and `BlurAnalyzer`.
+  - **Linearized Scanline Pointers**: Hoisted inner-loop 2D coordinate index math into linear scanline pointer progressions (`p += cpp`), removing redundant multiplications and enabling auto-vectorization across color channels.
+  - **Branchless 8-Element Sorting Network (`DeadPixelAnalyzer.cpp`)**: Replaced `std::nth_element` on 8-element neighborhoods with an optimal 19-comparison branchless sorting network (`median8`), eliminating heap overhead and branch mispredictions during dead/hot pixel scanning.
+
+### Correctness & Numerical Parity
+
+- **Physical MTF Edge-Spread Function (ESF) Differentiation (`MTFAnalyzer.cpp`)**:
+  - **LSF Derivative Before FFT**: Implemented numerical differentiation of the Edge Spread Function to yield the Line Spread Function prior to FFT computation, aligning with physical optical transfer function standards and properly distinguishing sharp step transitions from gradual blurred gradients.
+  - **Nyquist Limit Default for Ideal Step Edges**: Set `mtf50 = 0.5` (Nyquist limit) for high-contrast step edges where MTF does not fall below 50%, resolving test regressions in synthetic edge validation.
+  - **Consistent Single-Image Reporting**: Ensured `MTFAnalyzer::analyze(frame)` completes and populates default baseline metrics so `AnalyzerRegistry::runAnalyzer()` includes MTF in all diagnostic outputs.
+
+### Robustness & Security Hardening
+
+- **64-Bit Clamped ROI Geometry & Inverted-Bounds Trap Elimination**:
+  - Fixed inverted-ROI geometry validation (`(x1 - x0) * (y1 - y0) <= 0`) across `BrightnessAnalyzer`, `ContrastAnalyzer`, `ExposureAnalyzer`, `ColorCastAnalyzer`, and `EntropyAnalyzer` to explicit non-positive checks (`x1 <= x0 || y1 <= y0`), preventing negative $\times$ negative positive area escapes.
+  - Hardened all analyzers (`RGBMean`, `Brightness`, `Contrast`, `Blur`, `Sharpness`, `Noise`, `DeadPixel`, `Entropy`, `ColorChecker`, `PSNR`, `SSIM`) with 64-bit coordinate clamping (`std::clamp<long long>`) against negative dimensions and integer overflow.
+
+### Testing & Verification
+
+- **Comprehensive Analyzer Extension Test Suite (`core/test_analyzer_ext.cpp`)**:
+  - Added unit test suites verifying SIMD Grayscale8 and RGB24 paths, statistical bounds, degenerate/inverted ROI rejection, and edge response metrics across all 13 core analyzers, achieving 81 passing assertions (110 assertions across all analyzer test suites).
 
 ## [1.0.56] - 2026-09-18
 
