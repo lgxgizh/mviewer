@@ -4,8 +4,8 @@
 
 ### Code Quality
 
-- **scheduleHistogramRefresh ADR-014 split**: Extract `collectHistogramIndices`, `computeHistogramBatch`, and `clearMainHistogramForEmptyPlan`; retire the debt entry.
 - **thumbnailpanel_fileops ADR-014 split**: Shared progress/queue helpers and batch finish extraction bring the three tracked file-ops functions under the span cap.
+- **scheduleHistogramRefresh ADR-014 split**: Extract `collectHistogramIndices`, `computeHistogramBatch`, and `clearMainHistogramForEmptyPlan`; retire the debt entry.
 - **ADR-014 debt registry cleanup**: Retire stale `$knownFunctionDebt` entries for `mainwindow_export.cpp::startReportExport` (~79 lines, below fail cap) and `FrameSequence.cpp::selectFrame` (~118 lines, below fail cap); sync the ADR-014 inventory note. BatchProcessor/MetadataOverlay were already retired on master.
 - **SelectionInteraction hit-test CC**: Replace cascading handle checks in `hitTestSelection` with a flags + priority-table scan (`buildHitTestFlags` + `kHitRules`), dropping cyclomatic complexity below the ADR-014 warn threshold; retire the `hitTestSelection` entry from `$knownFunctionDebt`.
 
@@ -361,6 +361,7 @@
 
 ### Performance & Engine Optimization
 
+- **Format-Specialized Vector Traversal in `ImageStats` (`core/image/ImageStats.cpp`)**:
   - **Compile-Time Format Dispatch**: Hoisted inner-loop pixel format branching out of row traversals, dispatching to specialized compile-time pixel readers (`Grayscale8`, `RGB24`, `RGBA32`, `BGR24`, `BGRA32`).
   - **Linear Pointer Incrementation**: Converted 2D coordinate index calculations into linear pointer increments (`p += cpp`), allowing the compiler to generate efficient SIMD vector instructions.
   - **Single-Pass Grayscale Acceleration**: Optimized Grayscale8 channel statistics into a single contiguous byte summation, achieving up to 10x performance gains on large ROI benchmarks (`m61_roi_benchmark` latency reduced from ~1.3s to 0.14s).
@@ -368,12 +369,16 @@
 
 ### Algorithm Engineer Workflow & Ergonomics
 
+- **Compare ROI Keyboard Micro-Stepping (`CompareWorkspace`, `compareworkspace_keyboard.cpp`, `compareworkspace.h`)**:
   - **Precision Pixel Nudging**: Added keyboard shortcuts for adjusting active ROI positions: `Alt+Arrow` nudges by 1 pixel; `Shift+Arrow` or `Alt+Shift+Arrow` nudges by 10 pixels for rapid repositioning without mouse jitter.
   - **Keyboard Dimension Sizing**: Added `Ctrl+Alt+Arrow` (1px) and `Ctrl+Alt+Shift+Arrow` (10px) to expand or shrink ROI width and height.
   - **Real-Time Synchronized Feedback**: Status feedback reports exact `X, Y, W, H` coordinates at every keystroke; automatically triggers linked pane synchronization, diff overlays, and asynchronous multi-pane statistics calculation.
+- **Shortcut Discovery**: Added ROI micro-stepping shortcut guidance to the Compare help overlay (`?`).
 
 ### Documentation & Repository Presentation
 
+- **README Overhaul (`README.md`)**: Updated the primary README with comprehensive feature highlights covering linked ROI delta telemetry, keyboard micro-stepping, CIE $\Delta E_{76}$ color metrics, and documented the single canonical `build.ps1` command.
+- **GitHub Repository Metadata**: Configured the official repository Description and topic tags on GitHub via GitHub CLI, ensuring the project card displays an informative one-line summary on personal GitHub profiles.
 
 ## [1.0.52] - 2026-09-16
 
