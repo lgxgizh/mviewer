@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
+#include <string_view>
 #include <unordered_map>
 
 namespace mviewer::core
@@ -14,7 +15,7 @@ namespace mviewer::core
 namespace
 {
 
-std::string toLower(const std::string &s)
+std::string toLower(std::string_view s)
 {
     std::string r;
     r.reserve(s.size());
@@ -23,29 +24,18 @@ std::string toLower(const std::string &s)
     return r;
 }
 
-bool contains(const std::string &haystack, const std::string &needle, bool caseSensitive)
+std::string snippetFromPos(std::string_view haystack, size_t pos, size_t needleLen,
+                           size_t radius = 40)
 {
-    if (needle.empty())
-        return true;
-    if (caseSensitive)
-        return haystack.find(needle) != std::string::npos;
-    return toLower(haystack).find(toLower(needle)) != std::string::npos;
-}
-
-std::string snippet(const std::string &haystack, const std::string &needle, size_t radius = 40)
-{
-    if (needle.empty() || haystack.empty())
-        return {};
-    const auto hs = toLower(haystack);
-    const auto nd = toLower(needle);
-    const auto pos = hs.find(nd);
-    if (pos == std::string::npos)
+    if (haystack.empty() || pos > haystack.size())
         return {};
     const size_t start = (pos > radius) ? (pos - radius) : 0;
-    const size_t end = std::min(pos + needle.size() + radius, haystack.size());
-    std::string snip = haystack.substr(start, end - start);
+    const size_t end = std::min(pos + needleLen + radius, haystack.size());
+    std::string snip;
+    snip.reserve(end - start + 6);
     if (start > 0)
-        snip = "..." + snip;
+        snip += "...";
+    snip.append(haystack.data() + start, end - start);
     if (end < haystack.size())
         snip += "...";
     return snip;
@@ -82,75 +72,119 @@ int calcScore(size_t matchCount, size_t totalMatches, domain::SearchMatch::Type 
 std::string SearchIndex::buildBlob(const domain::ImageMetadata &meta, const RawMetadata &raw,
                                    const std::string &analysisText)
 {
-    std::ostringstream oss;
-    oss << meta.fileName << " " << meta.filePath << " " << meta.format << " ";
+    std::string out;
+    out.reserve(meta.fileName.size() + meta.filePath.size() + meta.format.size() + raw.make.size() +
+                raw.model.size() + raw.lens.size() + analysisText.size() + 128);
+    out += meta.fileName;
+    out += ' ';
+    out += meta.filePath;
+    out += ' ';
+    out += meta.format;
+    out += ' ';
     for (const auto &[k, v] : meta.textKeys)
-        oss << k << " " << v << " ";
-    oss << raw.make << " " << raw.model << " " << raw.lens << " ";
+    {
+        out += k;
+        out += ' ';
+        out += v;
+        out += ' ';
+    }
+    out += raw.make;
+    out += ' ';
+    out += raw.model;
+    out += ' ';
+    out += raw.lens;
+    out += ' ';
     if (raw.iso > 0)
-        oss << "ISO" << raw.iso << " ";
+    {
+        out += "ISO";
+        out += std::to_string(raw.iso);
+        out += ' ';
+    }
     if (raw.focalLength > 0)
-        oss << raw.focalLength << "mm ";
+    {
+        out += std::to_string(raw.focalLength);
+        out += "mm ";
+    }
     if (raw.exposureSec > 0.0)
-        oss << raw.exposureSec << "s ";
+    {
+        std::ostringstream ss;
+        ss << raw.exposureSec << "s ";
+        out += ss.str();
+    }
     if (raw.fNumber > 0.0)
-        oss << "f/" << raw.fNumber << " ";
+    {
+        std::ostringstream ss;
+        ss << "f/" << raw.fNumber << " ";
+        out += ss.str();
+    }
     if (raw.width > 0)
-        oss << raw.width << "x" << raw.height << " ";
+    {
+        out += std::to_string(raw.width);
+        out += 'x';
+        out += std::to_string(raw.height);
+        out += ' ';
+    }
     if (!analysisText.empty())
-        oss << analysisText;
-    return toLower(oss.str());
+        out += analysisText;
+    return toLower(out);
+}
+
+void SearchIndex::reserve(size_t capacity)
+{
+    m_blobs.reserve(capacity);
+    m_pathIndex.reserve(capacity);
 }
 
 void SearchIndex::indexFile(const std::string &path, const domain::ImageMetadata &meta,
                             const RawMetadata &raw, const std::string &analysisText)
 {
-    // Update existing entry if found.
-    for (auto &e : m_blobs)
-    {
-        if (e.path == path)
-        {
-            e.blob = buildBlob(meta, raw, analysisText);
-            return;
-        }
-    }
-    m_blobs.push_back({path, buildBlob(meta, raw, analysisText)});
+    indexBlob(path, buildBlob(meta, raw, analysisText));
 }
 
 void SearchIndex::indexBlob(const std::string &path, const std::string &blob)
 {
-    for (auto &e : m_blobs)
+    auto it = m_pathIndex.find(path);
+    if (it != m_pathIndex.end())
     {
-        if (e.path == path)
-        {
-            e.blob = blob;
-            return;
-        }
+        m_blobs[it->second].blob = blob;
+        return;
     }
+    m_pathIndex[path] = m_blobs.size();
     m_blobs.push_back({path, blob});
 }
 
 void SearchIndex::removeFile(const std::string &path)
 {
-    m_blobs.erase(std::remove_if(m_blobs.begin(), m_blobs.end(),
-                                 [&](const Entry &e) { return e.path == path; }),
-                  m_blobs.end());
+    auto it = m_pathIndex.find(path);
+    if (it == m_pathIndex.end())
+        return;
+
+    const size_t idx = it->second;
+    m_blobs.erase(m_blobs.begin() + idx);
+    m_pathIndex.erase(it);
+    for (size_t i = idx; i < m_blobs.size(); ++i)
+    {
+        m_pathIndex[m_blobs[i].path] = i;
+    }
 }
 
 void SearchIndex::clear()
 {
     m_blobs.clear();
+    m_pathIndex.clear();
 }
 
 std::vector<domain::SearchResult>
 SearchIndex::search(const domain::SearchQuery &query,
                     const AnalysisTextProvider &analysisProvider) const
 {
+    (void)analysisProvider;
     if (query.text.empty())
         return {};
 
     std::vector<domain::SearchResult> results;
-    const std::string term = query.text;
+    const std::string &term = query.text;
+    const std::string termLower = toLower(term);
 
     for (const auto &entry : m_blobs)
     {
@@ -158,43 +192,82 @@ SearchIndex::search(const domain::SearchQuery &query,
 
         // Filename match (extract just the filename part).
         const auto sep = entry.path.find_last_of("/\\");
-        const std::string fname =
-            (sep != std::string::npos) ? entry.path.substr(sep + 1) : entry.path;
-        if (query.searchFilenames && contains(fname, term, query.caseSensitive))
+        const std::string_view fname = (sep != std::string::npos)
+                                           ? std::string_view(entry.path).substr(sep + 1)
+                                           : std::string_view(entry.path);
+
+        if (query.searchFilenames)
         {
-            matches.push_back({domain::SearchMatch::Type::Filename, "", snippet(fname, term)});
+            size_t pos = std::string::npos;
+            if (query.caseSensitive)
+            {
+                pos = fname.find(term);
+            }
+            else
+            {
+                auto it = std::search(
+                    fname.begin(), fname.end(), termLower.begin(), termLower.end(),
+                    [](char a, char b)
+                    {
+                        return static_cast<char>(std::tolower(static_cast<unsigned char>(a))) == b;
+                    });
+                if (it != fname.end())
+                    pos = static_cast<size_t>(std::distance(fname.begin(), it));
+            }
+            if (pos != std::string::npos)
+            {
+                matches.push_back({domain::SearchMatch::Type::Filename, "",
+                                   snippetFromPos(fname, pos, term.size())});
+            }
         }
 
         // Path match.
-        if (query.searchPaths && contains(entry.path, term, query.caseSensitive))
+        if (query.searchPaths)
         {
-            matches.push_back({domain::SearchMatch::Type::Path, "", snippet(entry.path, term)});
+            size_t pos = std::string::npos;
+            if (query.caseSensitive)
+            {
+                pos = entry.path.find(term);
+            }
+            else
+            {
+                auto it = std::search(
+                    entry.path.begin(), entry.path.end(), termLower.begin(), termLower.end(),
+                    [](char a, char b)
+                    {
+                        return static_cast<char>(std::tolower(static_cast<unsigned char>(a))) == b;
+                    });
+                if (it != entry.path.end())
+                    pos = static_cast<size_t>(std::distance(entry.path.begin(), it));
+            }
+            if (pos != std::string::npos)
+            {
+                matches.push_back({domain::SearchMatch::Type::Path, "",
+                                   snippetFromPos(entry.path, pos, term.size())});
+            }
         }
 
         // Blob (metadata + analysis) match.
-        if ((query.searchMetadata || query.searchAnalysis) &&
-            contains(entry.blob, term, query.caseSensitive))
+        if (query.searchMetadata || query.searchAnalysis)
         {
-            // Distinguish metadata vs analysis matches by checking sub-ranges.
-            // We look for the term in the blob and try to attribute it.
-            std::string blobLower = toLower(entry.blob);
-            std::string termLower = toLower(term);
-            size_t pos = 0;
-            while ((pos = blobLower.find(termLower, pos)) != std::string::npos)
+            size_t pos = std::string::npos;
+            if (query.caseSensitive)
             {
-                // Simple heuristic: if the match position falls in the earlier part
-                // of the blob, it's metadata; later part is analysis.
-                // Split point: we embed analysis text at the end of the blob.
-                // We'll mark all as Metadata first; if analysisProvider exists, we
-                // can check, but for simplicity we mark both types.
+                pos = entry.blob.find(term);
+            }
+            else
+            {
+                // entry.blob is already lowercased when built
+                pos = entry.blob.find(termLower);
+            }
+
+            if (pos != std::string::npos)
+            {
+                const std::string snip = snippetFromPos(entry.blob, pos, term.size());
                 if (query.searchMetadata)
-                    matches.push_back(
-                        {domain::SearchMatch::Type::Metadata, "", snippet(entry.blob, term)});
+                    matches.push_back({domain::SearchMatch::Type::Metadata, "", snip});
                 if (query.searchAnalysis)
-                    matches.push_back(
-                        {domain::SearchMatch::Type::Analysis, "", snippet(entry.blob, term)});
-                pos += termLower.size();
-                break; // one match per type per file is enough
+                    matches.push_back({domain::SearchMatch::Type::Analysis, "", snip});
             }
         }
 
@@ -222,6 +295,7 @@ void SearchEngine::indexDirectory(const std::vector<std::string> &paths,
     m_index.clear();
 
     const size_t n = std::min({paths.size(), metas.size(), raws.size()});
+    m_index.reserve(n);
     for (size_t i = 0; i < n; ++i)
     {
         std::string analysisText;
@@ -245,6 +319,7 @@ void SearchEngine::indexEntry(const MetadataIndexEntry &entry)
 void SearchEngine::indexEntries(const std::vector<MetadataIndexEntry> &entries)
 {
     m_index.clear();
+    m_index.reserve(entries.size());
     for (const auto &e : entries)
         m_index.indexBlob(e.path, e.searchBlob);
 }

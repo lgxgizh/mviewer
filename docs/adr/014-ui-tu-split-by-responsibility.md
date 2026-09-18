@@ -144,14 +144,13 @@ so the regression test keeps its meaning: *no new* violation.
 | `mainwindow_export.cpp::startReportExport` | span 139 |
 | `core/metadata/MetadataIndexer.cpp::index` | span 136 |
 | `core/image/decoder/QtDecoder.cpp::decodeTiffWic` | span 133 / CC 32 |
-| `core/batch/BatchProcessor.cpp::processFile` | span 130 |
 | `core/image/ImageRepository_async.cpp::loadAsyncCancellable` | span 127 |
 | `core/metadata/MetadataIndexer.cpp::indexBatched` | span 122 |
 | `core/image/FrameSequence.cpp::selectFrame` | span 121 |
 | `core/filesystem/AtomicFile.cpp::atomicWriteFile` | span 152 |
 | `domain/SelectionInteraction.h::hitTestSelection` | CC 26 |
 
-*(Note: `thumbnailpanel_delegates.cpp::paint` [span 202 / CC 32] was split into modular helpers in 2026-09 and removed from this inventory).*
+*(Note: `thumbnailpanel_delegates.cpp::paint` [span 202 / CC 32] was split into modular helpers in 2026-09; `core/batch/BatchProcessor.cpp::processFile` [span 130] was decomposed into modular operation helpers in Pass 16 and removed from this inventory).*
 
 Policy: the table is an inventory, not a permission. Removing an entry requires
 splitting the function in the same commit; adding one requires a note in this
@@ -167,3 +166,7 @@ In Pass 15, the core analysis modules `PixelInspector` and `AnalysisEngine` were
 - `src/core/analysis/PixelInspector_adjust.cpp` (566 lines): Coordinate mapping, display transformations, and neighborhood statistical aggregations (extracted from `PixelInspector.cpp`, formerly 777 lines).
 - `src/core/analysis/AnalysisEngine.cpp` (213 lines): Analysis lifecycle, ROI statistics, difference/heatmap generation.
 - `src/core/analysis/AnalysisEngine_metrics.cpp` (599 lines): SIMD-vectorized quality metrics (AVX2/SSE2 PSNR SSD accumulation, SSE2 SSIM 8x8 block summation, SSE2 Laplacian convolution for noise estimation).
+
+## Batch Processor Modularization & Function Debt Closure (Pass 16, 2026-09-18)
+
+In Pass 16, `BatchProcessor.cpp::processFile` (formerly 130 lines) was decomposed into static, single-responsibility step helpers (`applyAnalyzeOp`, `applyCropOp`, `applyResizeOp`, `applyWatermarkOp`, `applyExportOp`). The main `processFile` orchestrator was reduced from 130 lines to 42 lines, safely below the 120-line ceiling, fully eliminating its tracking debt from `$knownFunctionDebt`.

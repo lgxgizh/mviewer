@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.0.57] - 2026-09-18
+
+### Performance & Vector Optimization
+
+- **SIMD-Accelerated & Zero-Copy Image Conversions (`core/image/QtConvert.cpp`)**:
+  - **AVX2 & SSSE3 Vectorized Pixel Swizzling**: Accelerated `RGBA32` $\rightarrow$ `Format_ARGB32` with 256-bit AVX2 (`_mm256_shuffle_epi8`, 8 pixels/iter) and 128-bit SSSE3 (`_mm_shuffle_epi8`, 4 pixels/iter) channel reordering, bypassing expensive scalar `qRgba` unpacking loops.
+  - **Zero-Copy Contiguous `std::memcpy` Fast-Paths**: Leveraged native little-endian memory layout equivalence between `BGRA32` and Qt's `Format_ARGB32` (`[B, G, R, A]`), replacing per-pixel loops with direct full-buffer or row-wise `std::memcpy`. Added contiguous memory fast-paths for `Grayscale8` and `RGB24`.
+  - **Direct `fromQImage` Component Extraction**: Added direct contiguous memory copies for `Format_Grayscale8` and `Format_RGB888` without redundant `convertToFormat` allocations; implemented unrolled 4-pixel component extraction for `Format_ARGB32` and `Format_RGB32` directly into `PixelFormat::RGB24`.
+- **$O(1)$ Search Indexing & Query Acceleration (`core/search/SearchEngine.cpp`)**:
+  - **$O(1)$ Path Index Hash Map**: Added `m_pathIndex` lookup map and `reserve(size_t)` to `SearchIndex`, turning $O(N^2)$ linear directory scanning into $O(1)$ amortized indexing, updates, and removals.
+  - **Zero-Allocation Case-Insensitive Search**: Precomputed lowercased query terms outside search loops, removed redundant lowercase conversion on indexed blobs, and implemented zero-allocation case folding with position-based snippet extraction.
+
+### Correctness, Hardening & ADR-014 Compliance
+
+- **Batch Processor Modularization & Debt Elimination (`core/batch/BatchProcessor.cpp`)**:
+  - Decomposed monolithic `processFile` (formerly 130 lines) into focused, single-responsibility static helper functions (`applyAnalyzeOp`, `applyCropOp`, `applyResizeOp`, `applyWatermarkOp`, `applyExportOp`).
+  - Reduced `processFile` to 42 lines, eliminating its tracking entry in ADR-014 and `scripts/complexity_gate.ps1` `$knownFunctionDebt`.
+  - Replaced dynamic heap vector allocations in `collectImages` with a constexpr `std::string_view` extension table.
+- **Unit Test Coverage (`core/test_qtconvert.cpp`, `test_search.cpp`)**:
+  - Registered `test_qtconvert` / `qtconvert_tests` covering null inputs, `Grayscale8`, `RGB24`, `BGRA32` fast-paths, `RGBA32` SIMD swizzle with arbitrary/odd dimensions, non-owning `toQImageRef`, and round-trip conversion fidelity.
+  - Hardened `search_tests` with 5,000-entry indexing performance tests, $O(1)$ in-place update validation, case-folding search tests, snippet checks, and `removeFile` index integrity.
+
 ## [1.0.56] - 2026-09-18
 
 ### Performance & Vector Optimization
