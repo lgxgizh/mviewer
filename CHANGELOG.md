@@ -2,6 +2,10 @@
 
 ## [1.0.61] - 2026-09-18
 
+### Code Quality
+
+- **ADR-014 debt registry cleanup**: Retire stale `$knownFunctionDebt` entries for `mainwindow_export.cpp::startReportExport` (~79 lines, below fail cap) and `FrameSequence.cpp::selectFrame` (~118 lines, below fail cap); sync the ADR-014 inventory note. BatchProcessor/MetadataOverlay were already retired on master.
+
 ### Release
 
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.61**.
