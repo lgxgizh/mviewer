@@ -550,6 +550,13 @@ class ThumbnailPanel : public QListView
     void applyThumbSize(int size, bool rememberGridSize);
     void runBatchAnalyzeExportAsync(const QStringList &paths, const std::string &analyzerId,
                                     const QString &output);
+    uint64_t beginFileOperationProgress(const QString &label);
+    std::function<void(int)> makeFileOperationProgressHandler(uint64_t generation);
+    void closeFileOperationProgress();
+    void failFileOperationQueue(const QString &title, const QString &message);
+    void ensureBatchProgressDialog();
+    void finishBatchAnalyzeExport(bool cancelled, bool writeOk, size_t resultCount,
+                                  const QString &output);
     void startCommandFileOperation(std::unique_ptr<ICommand> command, const QStringList &paths,
                                    const QString &label);
     void startCopyFileOperation(const QStringList &paths, const QString &destinationDirectory);
