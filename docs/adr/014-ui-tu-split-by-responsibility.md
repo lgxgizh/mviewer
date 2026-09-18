@@ -143,14 +143,13 @@ so the regression test keeps its meaning: *no new* violation.
 | `mainwindow_export.cpp::startReportExport` | span 139 |
 | `core/metadata/MetadataIndexer.cpp::index` | span 136 |
 | `core/image/decoder/QtDecoder.cpp::decodeTiffWic` | span 133 / CC 32 |
-| `core/batch/BatchProcessor.cpp::processFile` | span 130 |
 | `core/image/ImageRepository_async.cpp::loadAsyncCancellable` | span 127 |
 | `core/metadata/MetadataIndexer.cpp::indexBatched` | span 122 |
 | `core/image/FrameSequence.cpp::selectFrame` | span 121 |
 | `core/filesystem/AtomicFile.cpp::atomicWriteFile` | span 152 |
 | `domain/SelectionInteraction.h::hitTestSelection` | CC 26 |
 
-*(Note: `thumbnailpanel_delegates.cpp::paint` [span 202 / CC 32] and `metadataoverlay.cpp::buildContent` [span 141] were split into modular helpers in 2026-09 and removed from this inventory).*
+*(Note: `thumbnailpanel_delegates.cpp::paint` [span 202 / CC 32], `metadataoverlay.cpp::buildContent` [span 141], and `core/batch/BatchProcessor.cpp::processFile` [span 130] were split into modular helpers in 2026-09 and removed from this inventory).*
 
 Policy: the table is an inventory, not a permission. Removing an entry requires
 splitting the function in the same commit; adding one requires a note in this

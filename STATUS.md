@@ -43,6 +43,23 @@
 > `docs/review/M61_PROFESSIONAL_LINKED_ROI_CLOSURE_2026-09-02.md`, and
 > `.\build.ps1 Test`.
 
+## 1.0.55 — Format conversion SIMD vectorization & search scalability (2026-09-18)
+
+- **QtConvert SIMD Vectorization & Zero-Copy Fast-Paths:**
+  - RGBA32 to ARGB32 format conversion accelerated via 256-bit AVX2 (`_mm256_shuffle_epi8`, 8 pixels/iter) and 128-bit SSSE3 (`_mm_shuffle_epi8`, 4 pixels/iter) vector channel swizzling with runtime CPU feature dispatch.
+  - Native little-endian memory layout equivalence between BGRA32 and Qt's `Format_ARGB32` utilized for direct full-buffer or row-wise `std::memcpy`, replacing per-pixel scalar unpacking loops.
+  - Contiguous full-buffer bulk `std::memcpy` fast-paths added for Grayscale8 and RGB24 when stride equals row width.
+  - Direct RGB channel extraction from `Format_ARGB32` and `Format_RGB32` in `fromQImage`, bypassing temporary `QImage` allocations and Qt generic format conversion.
+- **Search Scalability & Hash Indexing:**
+  - `SearchIndex` upgraded with `std::unordered_map<std::string, size_t>` for $O(1)$ index lookup and $O(1)$ swap-and-pop removal, reducing large-gallery indexing from $O(N^2)$ to $O(N)$.
+  - Added `reserve(size_t)` to pre-allocate index capacity during bulk directory scans.
+  - Case-insensitive search optimized by hoisting search term lowercasing outside candidate iteration and scanning pre-lowercased blobs directly.
+- **BatchProcessor Modular Refactoring:**
+  - Decomposed `BatchProcessor::processFile` into single-responsibility static step helpers (`applyAnalyzeOp`, `applyCropOp`, `applyResizeOp`, `applyWatermarkOp`, `applyExportOp`), reducing function span to 46 lines and retiring tracked debt from `complexity_gate.ps1` and ADR-014.
+- **Unit Tests:**
+  - Added new `test_qtconvert` test suite with 8 test groups covering null guards, Grayscale8/RGB24/BGRA32 fast paths, RGBA32 SIMD swizzling across aligned and unaligned odd dimensions, non-owning `toQImageRef`, and round-trip fidelity.
+  - Expanded `test_search` with 5,000-entry indexing performance tests, $O(1)$ in-place update validation, case-folding search, and snippet integrity tests.
+
 ## 1.0.30 — Review hardening (2026-09-13)
 
 - **Bounded everything a file can drive:** EXIF/ICC offsets are range-checked

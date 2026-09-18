@@ -92,6 +92,97 @@ std::string buildOutputPath(const domain::BatchJobConfig &config, const std::str
     return pathToUtf8(dir);
 }
 
+void applyAnalyzeOp(const domain::BatchJobConfig &config, const std::string &inputPath,
+                    const ImageData &img, domain::BatchFileResult &result)
+{
+    auto frame = ImageFrame::create(inputPath, img);
+    for (const auto &analyzerId : config.analyzerIds)
+    {
+        auto analyzer = AnalyzerRegistry::instance().create(analyzerId);
+        if (!analyzer)
+            continue;
+        analyzer->analyze(frame);
+        auto metrics = analyzer->resultMetrics();
+        for (const auto &[k, v] : metrics)
+        {
+            std::string metricKey = analyzerId;
+            metricKey += '.';
+            metricKey += k;
+            result.metrics[metricKey] = v;
+        }
+    }
+}
+
+void applyCropOp(const domain::BatchJobConfig &config, ImageData &img,
+                 domain::BatchFileResult &result)
+{
+    if (config.cropW > 0 && config.cropH > 0)
+    {
+        img = cropRegion(img, mviewer::domain::Selection{config.cropX, config.cropY, config.cropW,
+                                                         config.cropH});
+        result.width = img.width;
+        result.height = img.height;
+    }
+}
+
+void applyResizeOp(const domain::BatchJobConfig &config, ImageData &img,
+                   domain::BatchFileResult &result)
+{
+    img = resizeToFit(img, config.resizeMaxEdge, config.resizeMaxEdge);
+    result.width = img.width;
+    result.height = img.height;
+}
+
+void applyWatermarkOp(const domain::BatchJobConfig &config, ImageData &img)
+{
+    if (!config.watermarkText.empty())
+    {
+        img = addTextWatermark(img, config.watermarkText, mapWatermarkPos(config.watermarkPosition),
+                               config.watermarkOpacity, config.watermarkFontSize);
+    }
+}
+
+bool applyExportOp(const domain::BatchJobConfig &config, const std::string &inputPath,
+                   const ImageData &img, int fileIndex, int totalFiles,
+                   domain::BatchFileResult &result)
+{
+    if (config.exportFormat.empty())
+        return true;
+
+    const std::string outPath = buildOutputPath(config, inputPath, fileIndex, totalFiles);
+
+    if (!config.outputDir.empty())
+    {
+        std::error_code dirEc;
+        std::filesystem::create_directories(config.outputDir, dirEc);
+        if (dirEc)
+        {
+            result.errorMessage = "cannot create output directory: " + dirEc.message();
+            return false;
+        }
+    }
+
+    bool exported = false;
+    auto exporter = ExporterRegistry::instance().get(config.exportFormat + "-exporter");
+    if (exporter)
+    {
+        exported = exporter->exportImage(img, outPath);
+    }
+    else
+    {
+        exported = Encoder::encode(img, outPath, Encoder::Params(config.exportQuality));
+    }
+
+    if (exported)
+    {
+        result.outputPath = outPath;
+        return true;
+    }
+
+    result.errorMessage = "Export failed: " + outPath;
+    return false;
+}
+
 bool isImageFile(const std::filesystem::path &path)
 {
     auto ext = pathToUtf8(path.extension());
@@ -161,8 +252,6 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
     result.width = img.width;
     result.height = img.height;
 
-    const int total = totalFiles;
-
     // ── Apply operations in order ───────────────────────────────────
     for (domain::BatchOp op : config.operations)
     {
@@ -172,104 +261,29 @@ domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig
         switch (op)
         {
         case domain::BatchOp::Analyze:
-        {
-            // Run each configured analyzer and collect metrics.
-            auto frame = ImageFrame::create(inputPath, img);
-            for (const auto &analyzerId : config.analyzerIds)
-            {
-                auto analyzer = AnalyzerRegistry::instance().create(analyzerId);
-                if (!analyzer)
-                    continue;
-                analyzer->analyze(frame);
-                auto metrics = analyzer->resultMetrics();
-                for (const auto &[k, v] : metrics)
-                    result.metrics[analyzerId + "." + k] = v;
-            }
+            applyAnalyzeOp(config, inputPath, img, result);
             break;
-        }
 
         case domain::BatchOp::Crop:
-        {
-            // P2 #⑦: Crop to the configured rectangle.
-            if (config.cropW > 0 && config.cropH > 0)
-            {
-                img = cropRegion(img, mviewer::domain::Selection{config.cropX, config.cropY,
-                                                                 config.cropW, config.cropH});
-                result.width = img.width;
-                result.height = img.height;
-            }
+            applyCropOp(config, img, result);
             break;
-        }
 
         case domain::BatchOp::Resize:
-        {
-            img = resizeToFit(img, config.resizeMaxEdge, config.resizeMaxEdge);
-            result.width = img.width;
-            result.height = img.height;
+            applyResizeOp(config, img, result);
             break;
-        }
 
         case domain::BatchOp::Watermark:
-        {
-            if (!config.watermarkText.empty())
-            {
-                img = addTextWatermark(img, config.watermarkText,
-                                       mapWatermarkPos(config.watermarkPosition),
-                                       config.watermarkOpacity, config.watermarkFontSize);
-            }
+            applyWatermarkOp(config, img);
             break;
-        }
 
         case domain::BatchOp::Rename:
             // Rename is handled at export time (pattern applied to output path).
-            // No pixel operation needed here.
             break;
 
         case domain::BatchOp::Export:
-        {
-            if (config.exportFormat.empty())
-                break; // no export requested
-
-            // Determine output path (0-based index; applyRenamePattern adds +1).
-            const std::string outPath = buildOutputPath(config, inputPath, fileIndex, total);
-
-            // Ensure output directory exists. The non-throwing overload matters:
-            // this runs inside QtConcurrent, and a thrown filesystem_error would
-            // surface when the GUI slot re-reads the QFuture, aborting the whole
-            // completion path (the dialog then stays in its "running" state).
-            if (!config.outputDir.empty())
-            {
-                std::error_code dirEc;
-                std::filesystem::create_directories(config.outputDir, dirEc);
-                if (dirEc)
-                {
-                    result.errorMessage = "cannot create output directory: " + dirEc.message();
-                    return result;
-                }
-            }
-
-            // Try the exporter registry first, then fall back to Qt encoder.
-            bool exported = false;
-            auto exporter = ExporterRegistry::instance().get(config.exportFormat + "-exporter");
-            if (exporter)
-            {
-                exported = exporter->exportImage(img, outPath);
-            }
-            else
-            {
-                // Fall back: use Qt's QImageWriter via Encoder.
-                exported = Encoder::encode(img, outPath, Encoder::Params(config.exportQuality));
-            }
-
-            if (exported)
-                result.outputPath = outPath;
-            else
-            {
-                result.errorMessage = "Export failed: " + outPath;
+            if (!applyExportOp(config, inputPath, img, fileIndex, totalFiles, result))
                 return result;
-            }
             break;
-        }
         }
     }
 

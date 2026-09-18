@@ -102,55 +102,69 @@ std::string SearchIndex::buildBlob(const domain::ImageMetadata &meta, const RawM
     return toLower(oss.str());
 }
 
+void SearchIndex::reserve(size_t capacity)
+{
+    m_blobs.reserve(capacity);
+    m_pathIndex.reserve(capacity);
+}
+
 void SearchIndex::indexFile(const std::string &path, const domain::ImageMetadata &meta,
                             const RawMetadata &raw, const std::string &analysisText)
 {
-    // Update existing entry if found.
-    for (auto &e : m_blobs)
+    const auto it = m_pathIndex.find(path);
+    if (it != m_pathIndex.end())
     {
-        if (e.path == path)
-        {
-            e.blob = buildBlob(meta, raw, analysisText);
-            return;
-        }
+        m_blobs[it->second].blob = buildBlob(meta, raw, analysisText);
+        return;
     }
+    m_pathIndex[path] = m_blobs.size();
     m_blobs.push_back({path, buildBlob(meta, raw, analysisText)});
 }
 
 void SearchIndex::indexBlob(const std::string &path, const std::string &blob)
 {
-    for (auto &e : m_blobs)
+    const auto it = m_pathIndex.find(path);
+    if (it != m_pathIndex.end())
     {
-        if (e.path == path)
-        {
-            e.blob = blob;
-            return;
-        }
+        m_blobs[it->second].blob = blob;
+        return;
     }
+    m_pathIndex[path] = m_blobs.size();
     m_blobs.push_back({path, blob});
 }
 
 void SearchIndex::removeFile(const std::string &path)
 {
-    m_blobs.erase(std::remove_if(m_blobs.begin(), m_blobs.end(),
-                                 [&](const Entry &e) { return e.path == path; }),
-                  m_blobs.end());
+    const auto it = m_pathIndex.find(path);
+    if (it == m_pathIndex.end())
+        return;
+    const size_t idx = it->second;
+    if (idx + 1 < m_blobs.size())
+    {
+        m_blobs[idx] = std::move(m_blobs.back());
+        m_pathIndex[m_blobs[idx].path] = idx;
+    }
+    m_blobs.pop_back();
+    m_pathIndex.erase(it);
 }
 
 void SearchIndex::clear()
 {
     m_blobs.clear();
+    m_pathIndex.clear();
 }
 
 std::vector<domain::SearchResult>
 SearchIndex::search(const domain::SearchQuery &query,
                     const AnalysisTextProvider &analysisProvider) const
 {
+    (void)analysisProvider;
     if (query.text.empty())
         return {};
 
     std::vector<domain::SearchResult> results;
     const std::string term = query.text;
+    const std::string termLower = toLower(term);
 
     for (const auto &entry : m_blobs)
     {
@@ -172,29 +186,19 @@ SearchIndex::search(const domain::SearchQuery &query,
         }
 
         // Blob (metadata + analysis) match.
-        if ((query.searchMetadata || query.searchAnalysis) &&
-            contains(entry.blob, term, query.caseSensitive))
+        if (query.searchMetadata || query.searchAnalysis)
         {
-            // Distinguish metadata vs analysis matches by checking sub-ranges.
-            // We look for the term in the blob and try to attribute it.
-            std::string blobLower = toLower(entry.blob);
-            std::string termLower = toLower(term);
-            size_t pos = 0;
-            while ((pos = blobLower.find(termLower, pos)) != std::string::npos)
+            const bool matched = query.caseSensitive
+                                     ? (entry.blob.find(term) != std::string::npos)
+                                     : (entry.blob.find(termLower) != std::string::npos);
+            if (matched)
             {
-                // Simple heuristic: if the match position falls in the earlier part
-                // of the blob, it's metadata; later part is analysis.
-                // Split point: we embed analysis text at the end of the blob.
-                // We'll mark all as Metadata first; if analysisProvider exists, we
-                // can check, but for simplicity we mark both types.
                 if (query.searchMetadata)
                     matches.push_back(
                         {domain::SearchMatch::Type::Metadata, "", snippet(entry.blob, term)});
                 if (query.searchAnalysis)
                     matches.push_back(
                         {domain::SearchMatch::Type::Analysis, "", snippet(entry.blob, term)});
-                pos += termLower.size();
-                break; // one match per type per file is enough
             }
         }
 
@@ -222,6 +226,7 @@ void SearchEngine::indexDirectory(const std::vector<std::string> &paths,
     m_index.clear();
 
     const size_t n = std::min({paths.size(), metas.size(), raws.size()});
+    m_index.reserve(n);
     for (size_t i = 0; i < n; ++i)
     {
         std::string analysisText;
@@ -245,6 +250,7 @@ void SearchEngine::indexEntry(const MetadataIndexEntry &entry)
 void SearchEngine::indexEntries(const std::vector<MetadataIndexEntry> &entries)
 {
     m_index.clear();
+    m_index.reserve(entries.size());
     for (const auto &e : entries)
         m_index.indexBlob(e.path, e.searchBlob);
 }
