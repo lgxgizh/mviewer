@@ -93,7 +93,6 @@ $knownFunctionDebt = @{
     'src/thumbnailpanel_fileops.cpp::startCommandFileOperation'     = 'span 155'
     'src/thumbnailpanel_fileops.cpp::startCopyFileOperation'        = 'span 152'
     'src/thumbnailpanel_fileops.cpp::runBatchAnalyzeExportAsync'    = 'span 148'
-    'src/metadataoverlay.cpp::buildContent'                         = 'span 141'
     'src/mainwindow_export.cpp::startReportExport'                  = 'span 139'
     'src/core/metadata/MetadataIndexer.cpp::index'                  = 'span 136'
     'src/core/image/decoder/QtDecoder.cpp::decodeTiffWic'           = 'span 133 / cc 32'

@@ -222,13 +222,15 @@ static void testBGRAndAlphaPreservation()
 {
     printf("\n[BGR and alpha preservation]\n");
     fflush(stdout);
-    auto makeBGR = []() {
+    auto makeBGR = []()
+    {
         ImageData img = makeImageData(8, 8, PixelFormat::BGR24);
         const ImageBuffer vb = img.view();
         for (int y = 0; y < 8; ++y)
             for (int x = 0; x < 8; ++x)
             {
-                uint8_t *p = vb.data + static_cast<size_t>(y) * vb.stride() + static_cast<size_t>(x) * 3;
+                uint8_t *p =
+                    vb.data + static_cast<size_t>(y) * vb.stride() + static_cast<size_t>(x) * 3;
                 p[0] = 30; // B
                 p[1] = 20; // G
                 p[2] = 10; // R
@@ -250,14 +252,144 @@ static void testBGRAndAlphaPreservation()
     fillSolid(rgba, 100, 150, 200);
     for (int y = 0; y < 8; ++y)
         for (int x = 0; x < 8; ++x)
-            rgba.buffer->data()[static_cast<size_t>(y) * rgba.stride() + static_cast<size_t>(x) * 4 + 3] = 177;
+            rgba.buffer
+                ->data()[static_cast<size_t>(y) * rgba.stride() + static_cast<size_t>(x) * 4 + 3] =
+                177;
     mviewer::applyOverlay(rgba, mviewer::OverlayMode::FalseColor, 2);
     bool alphaIntact = true;
     for (int y = 0; y < 8 && alphaIntact; ++y)
         for (int x = 0; x < 8; ++x)
-            if (rgba.buffer->data()[static_cast<size_t>(y) * rgba.stride() + static_cast<size_t>(x) * 4 + 3] != 177)
+            if (rgba.buffer->data()[static_cast<size_t>(y) * rgba.stride() +
+                                    static_cast<size_t>(x) * 4 + 3] != 177)
                 alphaIntact = false;
     CHECK(alphaIntact, "FalseColor preserves alpha channel in RGBA32");
+}
+
+static void testSimdChannelParity()
+{
+    printf("\n[SIMD channel parity and unaligned dimensions]\n");
+    fflush(stdout);
+
+    const std::vector<std::pair<int, int>> dimensions = {
+        {1, 1}, {13, 7}, {16, 16}, {37, 19}, {64, 32}};
+
+    for (const auto &[w, h] : dimensions)
+    {
+        for (auto fmt :
+             {PixelFormat::RGBA32, PixelFormat::BGRA32, PixelFormat::RGB24, PixelFormat::BGR24})
+        {
+            const bool isBgr = (fmt == PixelFormat::BGRA32 || fmt == PixelFormat::BGR24);
+            const int cpp = (fmt == PixelFormat::RGBA32 || fmt == PixelFormat::BGRA32) ? 4 : 3;
+
+            for (auto mode : {mviewer::OverlayMode::ChannelR, mviewer::OverlayMode::ChannelG,
+                              mviewer::OverlayMode::ChannelB, mviewer::OverlayMode::ChannelV,
+                              mviewer::OverlayMode::ChannelY})
+            {
+                ImageData img = makeImageData(w, h, fmt);
+                std::vector<uint8_t> ref(static_cast<size_t>(w) * static_cast<size_t>(h) *
+                                         static_cast<size_t>(cpp));
+
+                // Populate with deterministic pseudo-random gradient
+                for (size_t idx = 0; idx < ref.size(); ++idx)
+                {
+                    const uint8_t val = static_cast<uint8_t>((idx * 37 + 11) & 0xFF);
+                    img.buffer->data()[idx] = val;
+                    ref[idx] = val;
+                }
+
+                // Compute reference
+                for (size_t p = 0; p < static_cast<size_t>(w) * static_cast<size_t>(h); ++p)
+                {
+                    const uint8_t b = isBgr ? ref[p * cpp + 0] : ref[p * cpp + 2];
+                    const uint8_t g = ref[p * cpp + 1];
+                    const uint8_t r = isBgr ? ref[p * cpp + 2] : ref[p * cpp + 0];
+                    uint8_t expected = 0;
+                    if (mode == mviewer::OverlayMode::ChannelR)
+                        expected = r;
+                    else if (mode == mviewer::OverlayMode::ChannelG)
+                        expected = g;
+                    else if (mode == mviewer::OverlayMode::ChannelB)
+                        expected = b;
+                    else if (mode == mviewer::OverlayMode::ChannelV)
+                        expected = std::max({r, g, b});
+                    else if (mode == mviewer::OverlayMode::ChannelY)
+                        expected = static_cast<uint8_t>(std::clamp(luminance(r, g, b), 0, 255));
+
+                    ref[p * cpp + 0] = expected;
+                    ref[p * cpp + 1] = expected;
+                    ref[p * cpp + 2] = expected;
+                    // For cpp == 4, ref[p * 4 + 3] (alpha) remains unchanged
+                }
+
+                mviewer::applyOverlay(img, mode, 2);
+
+                bool matches = true;
+                bool alphaMatches = true;
+                for (size_t idx = 0; idx < ref.size(); ++idx)
+                {
+                    if (img.buffer->data()[idx] != ref[idx])
+                    {
+                        matches = false;
+                        if (cpp == 4 && (idx % 4) == 3)
+                            alphaMatches = false;
+                        break;
+                    }
+                }
+                const char *fmtName = "Unknown";
+                switch (fmt)
+                {
+                case PixelFormat::RGBA32:
+                    fmtName = "RGBA32";
+                    break;
+                case PixelFormat::BGRA32:
+                    fmtName = "BGRA32";
+                    break;
+                case PixelFormat::RGB24:
+                    fmtName = "RGB24";
+                    break;
+                case PixelFormat::BGR24:
+                    fmtName = "BGR24";
+                    break;
+                default:
+                    break;
+                }
+
+                char desc[128];
+                std::snprintf(desc, sizeof(desc), "%s %dx%d %s matches reference", fmtName, w, h,
+                              mviewer::overlayModeLabel(mode));
+                CHECK(matches, desc);
+                if (cpp == 4)
+                    CHECK(alphaMatches, "alpha channel remained intact");
+            }
+        }
+    }
+}
+
+static void testNullAndBoundaryGuards()
+{
+    printf("\n[null and boundary guards]\n");
+    fflush(stdout);
+
+    ImageData nullImg{};
+    mviewer::applyOverlay(nullImg, mviewer::OverlayMode::ChannelR, 2);
+    mviewer::applyOverlay(nullImg, mviewer::OverlayMode::ChannelV, 2);
+    mviewer::applyOverlay(nullImg, mviewer::OverlayMode::FalseColor, 2);
+    mviewer::applyOverlay(nullImg, mviewer::OverlayMode::Zebra, 2);
+    CHECK(nullImg.isNull(), "null image remains null after overlays");
+
+    ImageData emptyImg = makeImageData(0, 0, PixelFormat::RGBA32);
+    mviewer::applyOverlay(emptyImg, mviewer::OverlayMode::ChannelR, 2);
+    mviewer::applyOverlay(emptyImg, mviewer::OverlayMode::ChannelV, 2);
+    mviewer::applyOverlay(emptyImg, mviewer::OverlayMode::FalseColor, 2);
+    mviewer::applyOverlay(emptyImg, mviewer::OverlayMode::Zebra, 2);
+    CHECK(emptyImg.width == 0 && emptyImg.height == 0, "0x0 image handled gracefully");
+
+    ImageData negImg = makeImageData(-1, -1, PixelFormat::RGB24);
+    mviewer::applyOverlay(negImg, mviewer::OverlayMode::ChannelR, 2);
+    mviewer::applyOverlay(negImg, mviewer::OverlayMode::ChannelV, 2);
+    mviewer::applyOverlay(negImg, mviewer::OverlayMode::FalseColor, 2);
+    mviewer::applyOverlay(negImg, mviewer::OverlayMode::Zebra, 2);
+    CHECK(negImg.width < 0, "negative dimension image handled gracefully");
 }
 
 int main()
@@ -271,6 +403,8 @@ int main()
     testChannelIsolation();
     testBGRAndAlphaPreservation();
     testPixelGrid();
+    testSimdChannelParity();
+    testNullAndBoundaryGuards();
     printf("\n=== %d passed, %d failed ===\n", g_pass, g_fail);
     return g_fail == 0 ? 0 : 1;
 }

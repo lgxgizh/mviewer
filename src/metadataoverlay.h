@@ -31,7 +31,10 @@ class MetadataOverlay : public QWidget
     /// Show metadata for the given image path.
     void showForImage(const QString &path);
     /// Image path currently represented by the overlay request.
-    QString currentImagePath() const { return m_requestedPath; }
+    QString currentImagePath() const
+    {
+        return m_requestedPath;
+    }
     /// Toggle visibility.
     void toggle();
     /// Hide and clear.
@@ -53,6 +56,10 @@ class MetadataOverlay : public QWidget
   private:
     void requestMetadata();
     void buildContent(const mviewer::core::MetadataPresentationService::Snapshot &snapshot);
+    void appendFileInfo(const mviewer::domain::ImageMetadata &meta);
+    void appendExifInfo(const mviewer::domain::ImageMetadata &meta);
+    void appendRawInfo(const mviewer::core::RawMetadata &raw);
+    void appendLocationAndTimes(const mviewer::domain::ImageMetadata &meta);
     void positionHistogram(const QRect &boxRect);
 
     QStringList m_lines;
