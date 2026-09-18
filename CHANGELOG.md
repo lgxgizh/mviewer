@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.60] - 2026-09-18
+
+### Release
+
+- **Version SSOT catch-up**: Bump `project(MViewer VERSION)` / STATUS release tag to **1.0.60**, aligning the CMake single source of truth with CHANGELOG sections already landed from the optimization PR wave.
+- **Batch dialog UI (#16)**: Heap-owned layout, group boxes, parameter visibility, and directory expand-on-add fixes for `BatchDialog` / `BatchProcessor`.
+- **Optimize passes (#1–#3, #5–#10, #17)**: Cache LRU O(1) splice, DiskCache bounds, Raw16/JPEG/thumbnail hotpaths, DifferenceEngine/Aligner/Histogram SIMD, SyncController hardening, ICC/EXIF/DecoderRegistry correctness — see `[1.0.55]`–`[1.0.59]` for per-change detail.
+
 ## [1.0.59] - 2026-09-18
 
 ### Bug Fixes
