@@ -183,7 +183,7 @@ void test_psnr_simd_large()
         a.buffer->data()[i] = va;
         b.buffer->data()[i] = vb;
         const int d = static_cast<int>(va) - static_cast<int>(vb);
-        expectedSumSq += d * d;
+        expectedSumSq += static_cast<int64_t>(d) * d;
     }
 
     const double expectedMse = static_cast<double>(expectedSumSq) / static_cast<double>(w * h * 3);

@@ -78,7 +78,7 @@ inline void accumulateSsdBytesAVX2(const uint8_t *a, const uint8_t *b, size_t co
     for (; i < count; ++i)
     {
         const int d = static_cast<int>(a[i]) - static_cast<int>(b[i]);
-        sumSq += d * d;
+        sumSq += static_cast<int64_t>(d) * d;
     }
 }
 
@@ -126,7 +126,7 @@ inline void accumulateSsdBytesSSE2(const uint8_t *a, const uint8_t *b, size_t co
     for (; i < count; ++i)
     {
         const int d = static_cast<int>(a[i]) - static_cast<int>(b[i]);
-        sumSq += d * d;
+        sumSq += static_cast<int64_t>(d) * d;
     }
 }
 
@@ -176,7 +176,8 @@ inline void accumulateSsdRgbaSSE2(const uint8_t *a, const uint8_t *b, size_t pix
         const int dr = static_cast<int>(a[i * 4 + 0]) - static_cast<int>(b[i * 4 + 0]);
         const int dg = static_cast<int>(a[i * 4 + 1]) - static_cast<int>(b[i * 4 + 1]);
         const int db = static_cast<int>(a[i * 4 + 2]) - static_cast<int>(b[i * 4 + 2]);
-        sumSq += dr * dr + dg * dg + db * db;
+        sumSq += static_cast<int64_t>(dr) * dr + static_cast<int64_t>(dg) * dg +
+                 static_cast<int64_t>(db) * db;
     }
 }
 
@@ -402,11 +403,11 @@ void accumulateGraySsd(const ImageBuffer &va, const ImageBuffer &vb, int w, int 
 void accumulateRgb24Ssd(const ImageBuffer &va, const ImageBuffer &vb, int w, int h, bool useAvx2,
                         int64_t &sumSq)
 {
-    const bool isContiguous = (w == va.width && va.stride() == static_cast<ptrdiff_t>(w * 3) &&
-                               vb.stride() == static_cast<ptrdiff_t>(w * 3));
+    const bool isContiguous = (w == va.width && va.stride() == static_cast<ptrdiff_t>(w) * 3 &&
+                               vb.stride() == static_cast<ptrdiff_t>(w) * 3);
     if (isContiguous)
     {
-        const size_t totalBytes = static_cast<size_t>(w * 3) * h;
+        const size_t totalBytes = static_cast<size_t>(w) * 3 * static_cast<size_t>(h);
         if (useAvx2)
             accumulateSsdBytesAVX2(va.data, vb.data, totalBytes, sumSq);
         else
@@ -419,17 +420,17 @@ void accumulateRgb24Ssd(const ImageBuffer &va, const ImageBuffer &vb, int w, int
             const uint8_t *la = va.data + static_cast<size_t>(y) * va.stride();
             const uint8_t *lb = vb.data + static_cast<size_t>(y) * vb.stride();
             if (useAvx2)
-                accumulateSsdBytesAVX2(la, lb, static_cast<size_t>(w * 3), sumSq);
+                accumulateSsdBytesAVX2(la, lb, static_cast<size_t>(w) * 3, sumSq);
             else
-                accumulateSsdBytesSSE2(la, lb, static_cast<size_t>(w * 3), sumSq);
+                accumulateSsdBytesSSE2(la, lb, static_cast<size_t>(w) * 3, sumSq);
         }
     }
 }
 
 void accumulateRgba32Ssd(const ImageBuffer &va, const ImageBuffer &vb, int w, int h, int64_t &sumSq)
 {
-    const bool isContiguous = (w == va.width && va.stride() == static_cast<ptrdiff_t>(w * 4) &&
-                               vb.stride() == static_cast<ptrdiff_t>(w * 4));
+    const bool isContiguous = (w == va.width && va.stride() == static_cast<ptrdiff_t>(w) * 4 &&
+                               vb.stride() == static_cast<ptrdiff_t>(w) * 4);
     if (isContiguous)
     {
         accumulateSsdRgbaSSE2(va.data, vb.data, static_cast<size_t>(w) * h, sumSq);
@@ -464,7 +465,8 @@ bool accumulateCrossFormatSsd(const ImageData &aData, const ImageData &bData, in
                 const int dr = static_cast<int>(la[x * 3 + 0]) - static_cast<int>(lb[x * 3 + 2]);
                 const int dg = static_cast<int>(la[x * 3 + 1]) - static_cast<int>(lb[x * 3 + 1]);
                 const int db = static_cast<int>(la[x * 3 + 2]) - static_cast<int>(lb[x * 3 + 0]);
-                sumSq += dr * dr + dg * dg + db * db;
+                sumSq += static_cast<int64_t>(dr) * dr + static_cast<int64_t>(dg) * dg +
+                         static_cast<int64_t>(db) * db;
             }
         }
         return true;
@@ -486,7 +488,8 @@ bool accumulateCrossFormatSsd(const ImageData &aData, const ImageData &bData, in
                 const int dr = static_cast<int>(la[x * 4 + 0]) - static_cast<int>(lb[x * 4 + 2]);
                 const int dg = static_cast<int>(la[x * 4 + 1]) - static_cast<int>(lb[x * 4 + 1]);
                 const int db = static_cast<int>(la[x * 4 + 2]) - static_cast<int>(lb[x * 4 + 0]);
-                sumSq += dr * dr + dg * dg + db * db;
+                sumSq += static_cast<int64_t>(dr) * dr + static_cast<int64_t>(dg) * dg +
+                         static_cast<int64_t>(db) * db;
             }
         }
         return true;
@@ -509,7 +512,8 @@ void accumulateGenericSsd(const ImageData &aData, const ImageData &bData, int w,
             const int dr = static_cast<int>(qRed(la[x])) - qRed(lb[x]);
             const int dg = static_cast<int>(qGreen(la[x])) - qGreen(lb[x]);
             const int db = static_cast<int>(qBlue(la[x])) - qBlue(lb[x]);
-            sumSq += dr * dr + dg * dg + db * db;
+            sumSq += static_cast<int64_t>(dr) * dr + static_cast<int64_t>(dg) * dg +
+                     static_cast<int64_t>(db) * db;
         }
     }
 }
