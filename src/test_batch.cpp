@@ -207,6 +207,66 @@ int main(int argc, char *argv[])
         CHECK(config.operations.empty(), "Default operations should be empty");
     }
 
+    // ── Test 8: Crop + Export ──────────────────────────────────────
+    {
+        mviewer::domain::BatchJobConfig config;
+        config.inputPaths = {p1.toStdString()};
+        config.operations = {mviewer::domain::BatchOp::Crop, mviewer::domain::BatchOp::Export};
+        config.cropX = 8;
+        config.cropY = 8;
+        config.cropW = 16;
+        config.cropH = 16;
+        config.exportFormat = "png";
+        config.outputDir = outDir.toStdString();
+
+        mviewer::core::BatchProcessor processor;
+        auto result = processor.execute(config);
+
+        CHECK(result.totalSucceeded == 1, "Crop+export should succeed");
+        CHECK(result.fileResults[0].width == 16, "Cropped width should be 16");
+        CHECK(result.fileResults[0].height == 16, "Cropped height should be 16");
+        QFile f(QString::fromStdString(result.fileResults[0].outputPath));
+        CHECK(f.exists(), "Cropped output file should exist");
+    }
+
+    // ── Test 9: Directory input expands without recursiveScan ──────
+    {
+        const QString dirPath = QDir::tempPath() + "/mviewer_batch_indir";
+        QDir().mkpath(dirPath);
+        const QString nested = dirPath + "/nested";
+        QDir().mkpath(nested);
+        QImage img(32, 24, QImage::Format_RGB32);
+        img.fill(qRgb(10, 20, 30));
+        const QString topFile = dirPath + "/top.png";
+        const QString nestedFile = nested + "/nested.png";
+        img.save(topFile, "PNG");
+        img.save(nestedFile, "PNG");
+
+        mviewer::domain::BatchJobConfig config;
+        config.inputPaths = {dirPath.toStdString()};
+        config.operations = {mviewer::domain::BatchOp::Export};
+        config.exportFormat = "png";
+        config.outputDir = outDir.toStdString();
+        config.recursiveScan = false;
+
+        mviewer::core::BatchProcessor processor;
+        auto result = processor.execute(config);
+        CHECK(result.totalSucceeded == 1, "Non-recursive dir input should pick top-level images");
+        CHECK(result.fileResults.size() == 1,
+              "Non-recursive dir input should not walk nested dirs");
+
+        config.recursiveScan = true;
+        mviewer::core::BatchProcessor recursiveProcessor;
+        auto recursiveResult = recursiveProcessor.execute(config);
+        CHECK(recursiveResult.totalSucceeded == 2,
+              "Recursive dir input should include nested images");
+
+        QFile::remove(topFile);
+        QFile::remove(nestedFile);
+        QDir(nested).rmdir(nested);
+        QDir(dirPath).rmdir(dirPath);
+    }
+
     // ── Cleanup ────────────────────────────────────────────────────
     QFile::remove(p1);
     QFile::remove(p2);

@@ -2,6 +2,17 @@
 
 ## [1.0.59] - 2026-09-18
 
+### Bug Fixes
+
+- **Batch dialog layout torn down on open (`BatchDialog`)**: The constructor
+  stack-allocated `QVBoxLayout mainLayout(this)`, so `~QLayout` ran when the
+  constructor returned and left every control piled in the corner. The dialog
+  now heap-owns the layout, uses 文件 / 操作 / 参数 / 进度 group boxes with
+  stretch on the file list and log (minimum size 720×640), shows parameter
+  rows only for checked operations, and exposes crop X/Y/宽/高. Adding a
+  directory lists image files immediately; `BatchProcessor` also expands
+  leftover directory paths when recursive scan is off.
+
 ### Performance & Cache Architecture
 
 - **$O(1)$ Constant-Time LRU Cache Splice (`ImageCache`, `core/image/ImageCache.cpp`, `core/image/ImageCache.h`)**:

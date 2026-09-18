@@ -92,6 +92,55 @@ std::string buildOutputPath(const domain::BatchJobConfig &config, const std::str
     return pathToUtf8(dir);
 }
 
+bool isImageFile(const std::filesystem::path &path)
+{
+    auto ext = pathToUtf8(path.extension());
+    std::transform(ext.begin(), ext.end(), ext.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    static const std::vector<std::string> imgExts = {".jpg",  ".jpeg", ".png", ".bmp", ".tif",
+                                                     ".tiff", ".webp", ".cr2", ".nef", ".arw",
+                                                     ".dng",  ".raf",  ".rw2", ".orf", ".raw"};
+    return std::find(imgExts.begin(), imgExts.end(), ext) != imgExts.end();
+}
+
+void collectImages(const std::filesystem::path &dir, bool recursive, std::vector<std::string> &out)
+{
+    std::error_code ec;
+    const auto options = std::filesystem::directory_options::skip_permission_denied;
+    auto takeFile = [&](const std::filesystem::directory_entry &entry)
+    {
+        std::error_code fileEc;
+        if (entry.is_regular_file(fileEc) && !fileEc && isImageFile(entry.path()))
+            out.push_back(pathToUtf8(entry.path()));
+    };
+    if (recursive)
+    {
+        for (std::filesystem::recursive_directory_iterator it(dir, options, ec), end;
+             !ec && it != end; it.increment(ec))
+            takeFile(*it);
+        return;
+    }
+    for (std::filesystem::directory_iterator it(dir, options, ec), end; !ec && it != end;
+         it.increment(ec))
+        takeFile(*it);
+}
+
+std::vector<std::string> expandInputPaths(const domain::BatchJobConfig &config)
+{
+    std::vector<std::string> expanded;
+    expanded.reserve(config.inputPaths.size());
+    for (const auto &p : config.inputPaths)
+    {
+        const std::filesystem::path fsp = pathFromUtf8(p);
+        std::error_code typeEc;
+        if (std::filesystem::is_directory(fsp, typeEc) && !typeEc)
+            collectImages(fsp, config.recursiveScan, expanded);
+        else
+            expanded.push_back(p);
+    }
+    return expanded;
+}
+
 } // anonymous namespace
 
 domain::BatchFileResult BatchProcessor::processFile(const domain::BatchJobConfig &config,
@@ -234,43 +283,9 @@ domain::BatchJobResult BatchProcessor::execute(const domain::BatchJobConfig &con
     m_paused.store(false);
     domain::BatchJobResult aggregate;
 
-    // P2 #⑦: Expand input paths with directory recursion if requested.
-    std::vector<std::string> expandedPaths = config.inputPaths;
-    if (config.recursiveScan)
-    {
-        auto collectImages = [](const std::filesystem::path &dir, std::vector<std::string> &out)
-        {
-            std::error_code ec;
-            for (std::filesystem::recursive_directory_iterator
-                     it(dir, std::filesystem::directory_options::skip_permission_denied, ec),
-                 end;
-                 !ec && it != end; it.increment(ec))
-            {
-                std::error_code fileEc;
-                if (it->is_regular_file(fileEc) && !fileEc)
-                {
-                    auto ext = pathToUtf8(it->path().extension());
-                    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c)
-                                   { return static_cast<char>(std::tolower(c)); });
-                    static const std::vector<std::string> imgExts = {
-                        ".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp", ".cr2",
-                        ".nef", ".arw",  ".dng", ".raf", ".rw2", ".orf",  ".raw"};
-                    if (std::find(imgExts.begin(), imgExts.end(), ext) != imgExts.end())
-                        out.push_back(pathToUtf8(it->path()));
-                }
-            }
-        };
-        expandedPaths.clear();
-        for (const auto &p : config.inputPaths)
-        {
-            const std::filesystem::path fsp = pathFromUtf8(p);
-            std::error_code typeEc;
-            if (std::filesystem::is_directory(fsp, typeEc) && !typeEc)
-                collectImages(fsp, expandedPaths);
-            else
-                expandedPaths.push_back(p);
-        }
-    }
+    // Expand directory inputs. recursiveScan walks subfolders; otherwise only
+    // the directory's own image files are collected so "添加目录" still works.
+    const std::vector<std::string> expandedPaths = expandInputPaths(config);
 
     const int total = static_cast<int>(expandedPaths.size());
     aggregate.fileResults.reserve(total);

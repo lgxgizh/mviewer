@@ -19,6 +19,7 @@
 // 与 docs/beta_checklist.md 的 "浏览体验 / Compare / View" 条目一一对应。
 
 #include "appstate.h"
+#include "batchdialog.h"
 #include "compareworkspace.h"
 #include "core/analysis/ImageOverlay.h"
 #include "core/analysis/PixelGrid.h"
@@ -64,6 +65,7 @@
 #include <QFileInfo>
 #include <QFont>
 #include <QFontMetrics>
+#include <QGroupBox>
 #include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -83,10 +85,12 @@
 #include <QRect>
 #include <QSettings>
 #include <QSlider>
+#include <QSpinBox>
 #include <QSplitter>
 #include <QStandardPaths>
 #include <QStatusBar>
 #include <QTableWidget>
+#include <QTextEdit>
 #include <QThread>
 #include <QTimer>
 #include <QToolBar>
@@ -655,6 +659,7 @@ int main(int argc, char **argv)
     workflow2_compare(paths[0], paths[2]);
     workflow10_compare_canvas(paths[0], paths[2]);
     workflow5_export_current_output_directory(workDir.absolutePath());
+    workflow17_batch_dialog(workDir.absolutePath());
     workflow4_list_scaling(workDir.absolutePath());
     workflow6_metadata_dual_consumer(workDir.absolutePath());
     workflow7_stale_preload_cancellation(workDir.absolutePath());
