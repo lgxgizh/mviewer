@@ -88,7 +88,6 @@ $responsibilityCaps = @(
 $knownFunctionDebt = @{
     'src/previewpanel.cpp::setImage'                                = 'span 276'
     'src/previewpanel.cpp::<lambda>'                                = 'span 186 (load worker inside setImage)'
-    'src/compareworkspace_analysis.cpp::scheduleHistogramRefresh'   = 'span 204'
     'src/compareworkspace.cpp::queueLoadRequests'                   = 'span 133'
     'src/thumbnailpanel_fileops.cpp::startCommandFileOperation'     = 'span 155'
     'src/thumbnailpanel_fileops.cpp::startCopyFileOperation'        = 'span 152'

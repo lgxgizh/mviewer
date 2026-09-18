@@ -75,7 +75,8 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
             if (item && !item->text().isEmpty())
             {
                 const QString cellText = item->text();
-                QAction *actCopyCell = menu.addAction(QObject::tr("复制单元格内容 (%1)").arg(cellText));
+                QAction *actCopyCell =
+                    menu.addAction(QObject::tr("复制单元格内容 (%1)").arg(cellText));
                 QObject::connect(actCopyCell, &QAction::triggered,
                                  [cellText]() { QApplication::clipboard()->setText(cellText); });
             }
@@ -123,9 +124,9 @@ void setupInspectorContextMenu(QTableWidget *inspector, QWidget *parent)
 
 mviewer::core::AnalysisAdjustment CompareWorkspace::analysisAdjustment(const CellAdjust &adjust)
 {
-    return {adjust.brightness, adjust.contrast, adjust.gamma, adjust.rGain, adjust.bGain,
-            adjust.rotation, adjust.flipH, adjust.flipV, adjust.hasCrop,
-            adjust.cropX, adjust.cropY, adjust.cropW, adjust.cropH};
+    return {adjust.brightness, adjust.contrast, adjust.gamma, adjust.rGain,   adjust.bGain,
+            adjust.rotation,   adjust.flipH,    adjust.flipV, adjust.hasCrop, adjust.cropX,
+            adjust.cropY,      adjust.cropW,    adjust.cropH};
 }
 
 void CompareWorkspace::buildAnalysisPanel(QVBoxLayout *sideLay)
@@ -205,7 +206,11 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
         auto *chk = new QCheckBox(text, this);
         chk->setChecked(on);
         connect(chk, &QCheckBox::toggled, this,
-                [this, channel](bool v) { if (m_hist) m_hist->setChannelVisible(channel, v); });
+                [this, channel](bool v)
+                {
+                    if (m_hist)
+                        m_hist->setChannelVisible(channel, v);
+                });
         histOpts->addWidget(chk);
         return chk;
     };
@@ -219,7 +224,11 @@ void CompareWorkspace::buildHistogramPanel(QVBoxLayout *sideLay)
     m_histLogChk = new QCheckBox(QStringLiteral("Log"), this);
     m_histLogChk->setToolTip(tr("对数纵轴：低计数区间不再被峰值淹没"));
     connect(m_histLogChk, &QCheckBox::toggled, this,
-            [this](bool on) { if (m_hist) m_hist->setLogScale(on); });
+            [this](bool on)
+            {
+                if (m_hist)
+                    m_hist->setLogScale(on);
+            });
     histOpts->addWidget(m_histLogChk);
 
     m_roiHistChk = new QCheckBox(QStringLiteral("ROI"), this);
@@ -406,14 +415,12 @@ void CompareWorkspace::updateInspectorRows(const std::vector<InspectorSample> &s
             const InspectorSample &base = samples[static_cast<size_t>(baseIdx)];
             const int dr = sample.r - base.r, dg = sample.g - base.g, db = sample.b - base.b;
             const double dist = std::sqrt(static_cast<double>(dr * dr + dg * dg + db * db));
-            const auto labS = mviewer::core::toColorSpace(static_cast<uint8_t>(sample.r),
-                                                          static_cast<uint8_t>(sample.g),
-                                                          static_cast<uint8_t>(sample.b),
-                                                          ColorSpace::Lab);
-            const auto labB = mviewer::core::toColorSpace(static_cast<uint8_t>(base.r),
-                                                          static_cast<uint8_t>(base.g),
-                                                          static_cast<uint8_t>(base.b),
-                                                          ColorSpace::Lab);
+            const auto labS = mviewer::core::toColorSpace(
+                static_cast<uint8_t>(sample.r), static_cast<uint8_t>(sample.g),
+                static_cast<uint8_t>(sample.b), ColorSpace::Lab);
+            const auto labB = mviewer::core::toColorSpace(
+                static_cast<uint8_t>(base.r), static_cast<uint8_t>(base.g),
+                static_cast<uint8_t>(base.b), ColorSpace::Lab);
             const double dL = labS.c1 - labB.c1, da = labS.c2 - labB.c2, dbv = labS.c3 - labB.c3;
             const double dE76 = std::sqrt(dL * dL + da * da + dbv * dbv);
             if (i == baseIdx)
@@ -483,84 +490,166 @@ void CompareWorkspace::refreshHistograms()
 // adjusted/ROI-aware histogram for the union of the main-required and
 // pane-overlay-required indices. All state the worker needs is snapped by
 // value on the UI thread; the worker never touches `this` or any QObject.
-void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
-                                                const std::vector<int> &paneIndices)
+void CompareWorkspace::clearMainHistogramForEmptyPlan(bool updateMain)
 {
-    // Latest-wins: cancel any in-flight batch and start a fresh generation.
-    // Cancellation alone is not enough — a task may already be past its final
-    // check when a newer request arrives, so the delivery is also guarded by
-    // the generation and pane count on the UI thread.
-    if (m_histTask)
-        TaskScheduler::cancel(m_histTask);
-    m_histTask.reset();
-    ++m_histGen;
+    if (!(updateMain && m_hist))
+        return;
+    if (m_histTitle)
+    {
+        const bool useRoi = m_roiHistChk && m_roiHistChk->isChecked() && !m_lastSelection.isEmpty();
+        m_histTitle->setText(histogramTitleText(useRoi, m_lastSelection));
+    }
+    m_hist->setHistograms({});
+}
 
+CompareWorkspace::HistIndexPlan
+CompareWorkspace::collectHistogramIndices(bool includeMain, const std::vector<int> &paneIndices)
+{
+    HistIndexPlan plan;
     const int paneCount = static_cast<int>(m_cellViews.size());
-
-    // Main surface: every pane, or only the edited pane when per-pane main
-    // mode is active (mirrors the pre-async refreshHistograms() semantics).
-    std::vector<int> mainIndices;
-    const bool updateMain = includeMain && m_hist;
-    if (updateMain)
+    plan.updateMain = includeMain && m_hist;
+    if (plan.updateMain)
     {
         if (m_perPaneHist && m_editIdx >= 0 && m_editIdx < paneCount)
-            mainIndices.push_back(m_editIdx);
+            plan.mainIndices.push_back(m_editIdx);
         else
             for (int i = 0; i < paneCount; ++i)
-                mainIndices.push_back(i);
+                plan.mainIndices.push_back(i);
     }
 
-    // Normalize/deduplicate the requested overlay indices and include every
-    // overlay pane still showing an empty histogram, so canceling an initial
-    // or rebuild batch with a later partial request never strands an empty
-    // pane.
-    std::vector<int> panes;
     auto addUnique = [paneCount](std::vector<int> &vec, int idx)
     {
         if (idx >= 0 && idx < paneCount && std::find(vec.cbegin(), vec.cend(), idx) == vec.cend())
             vec.push_back(idx);
     };
     for (int idx : paneIndices)
-        addUnique(panes, idx);
+        addUnique(plan.panes, idx);
     if (m_paneHistOverlay)
     {
         const int histCount = static_cast<int>(m_cellHists.size());
         for (int i = 0; i < paneCount && i < histCount; ++i)
             if (m_cellHists[static_cast<size_t>(i)] &&
                 m_cellHists[static_cast<size_t>(i)]->histogramCount() == 0)
-                addUnique(panes, i);
+                addUnique(plan.panes, i);
     }
 
-    // Union of the main-required and overlay-required indices: the worker
-    // computes exactly one histogram per index and feeds both surfaces.
-    std::vector<int> unionIdx;
-    unionIdx.reserve(mainIndices.size() + panes.size());
-    for (int idx : mainIndices)
-        addUnique(unionIdx, idx);
-    for (int idx : panes)
-        addUnique(unionIdx, idx);
-    if (unionIdx.empty())
+    plan.unionIdx.reserve(plan.mainIndices.size() + plan.panes.size());
+    for (int idx : plan.mainIndices)
+        addUnique(plan.unionIdx, idx);
+    for (int idx : plan.panes)
+        addUnique(plan.unionIdx, idx);
+    return plan;
+}
+
+void CompareWorkspace::computeHistogramBatch(
+    const std::vector<ImageData> &pixels, const std::vector<CellAdjust> &adjusts, bool roiEnabled,
+    const mviewer::domain::Selection &roi, const std::vector<int> &unionIdx,
+    const std::vector<int> &mainIndices, const std::vector<int> &panes, int paneCount,
+    bool updateMain, uint64_t gen, const QPointer<CompareWorkspace> &guard,
+    const TaskScheduler::TaskContext &ctx)
+{
+    if (ctx.isCancelled())
+        return;
+
+    HistogramBatchResult r;
+    r.generation = gen;
+    r.paneCount = paneCount;
+    r.updateMain = updateMain;
+    r.roiEnabled = roiEnabled;
+    r.roi = roi;
+
+    const auto adjustFor = [&adjusts](int idx) -> CellAdjust
     {
-        // Nothing to compute; the stale task is already cancelled. When the
-        // main surface is part of this refresh and no pane remains (e.g. an
-        // empty workspace), clear the main histogram/title synchronously so a
-        // zero-pane refresh never leaves stale content. UI-only state: no
-        // image adjustment or histogram computation runs here.
-        if (updateMain && m_hist)
+        if (idx >= 0 && idx < static_cast<int>(adjusts.size()))
+            return adjusts[idx];
+        return CellAdjust{};
+    };
+
+    std::vector<HistogramBatchResult::CellHist> computed;
+    computed.reserve(unionIdx.size());
+    for (int idx : unionIdx)
+    {
+        if (ctx.isCancelled())
+            return;
+        if (idx < 0 || idx >= static_cast<int>(pixels.size()))
+            continue;
+        const ImageData &src = pixels[static_cast<size_t>(idx)];
+        if (src.isNull())
+            continue;
+        const ImageData adjusted = CompareWorkspace::applyAdjusts(src, adjustFor(idx));
+        if (ctx.isCancelled())
+            return;
+        if (adjusted.isNull())
+            continue;
+        mviewer::core::Histogram h =
+            roiEnabled
+                ? mviewer::core::computeHistogram(adjusted, roi.x, roi.y, roi.width, roi.height)
+                : mviewer::core::computeDisplayHistogram(adjusted);
+        if (ctx.isCancelled())
+            return;
+        HistogramBatchResult::CellHist cell;
+        cell.index = idx;
+        cell.hist = std::move(h);
+        computed.push_back(std::move(cell));
+    }
+
+    if (ctx.isCancelled())
+        return;
+
+    if (r.updateMain)
+    {
+        r.main.reserve(mainIndices.size());
+        for (int idx : mainIndices)
         {
-            if (m_histTitle)
-            {
-                const bool useRoi =
-                    m_roiHistChk && m_roiHistChk->isChecked() && !m_lastSelection.isEmpty();
-                m_histTitle->setText(histogramTitleText(useRoi, m_lastSelection));
-            }
-            m_hist->setHistograms({});
+            const auto it = std::find_if(computed.cbegin(), computed.cend(),
+                                         [idx](const HistogramBatchResult::CellHist &c)
+                                         { return c.index == idx; });
+            if (it != computed.cend())
+                r.main.push_back(it->hist);
         }
+    }
+    for (int idx : panes)
+    {
+        const auto it =
+            std::find_if(computed.cbegin(), computed.cend(),
+                         [idx](const HistogramBatchResult::CellHist &c) { return c.index == idx; });
+        if (it == computed.cend())
+            continue;
+        r.panes.push_back(*it);
+    }
+
+    if (ctx.isCancelled())
+        return;
+
+    QMetaObject::invokeMethod(
+        qApp,
+        [guard, r]()
+        {
+            CompareWorkspace *ws = guard.data();
+            if (!ws)
+                return;
+            ws->applyHistogramBatchResult(r);
+        },
+        Qt::QueuedConnection);
+}
+
+void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
+                                                const std::vector<int> &paneIndices)
+{
+    // Latest-wins: cancel any in-flight batch and start a fresh generation.
+    if (m_histTask)
+        TaskScheduler::cancel(m_histTask);
+    m_histTask.reset();
+    ++m_histGen;
+
+    const HistIndexPlan plan = collectHistogramIndices(includeMain, paneIndices);
+    if (plan.unionIdx.empty())
+    {
+        clearMainHistogramForEmptyPlan(plan.updateMain);
         return;
     }
 
-    // Snapshot everything the worker needs BY VALUE. ImageData copies share
-    // their pixel buffers, so the worker holds the pixels alive cheaply.
+    const int paneCount = static_cast<int>(m_cellViews.size());
     std::vector<ImageData> pixels;
     pixels.reserve(static_cast<size_t>(paneCount));
     for (int i = 0; i < paneCount; ++i)
@@ -576,106 +665,15 @@ void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
 
     auto handle = TaskScheduler::instance().submit(
         TaskScheduler::Priority::Analysis,
-        [pixels, adjusts, roiEnabled, roi, unionIdx, mainIndices, panes, paneCount, updateMain, gen,
-         guard](const TaskScheduler::TaskContext &ctx)
+        [pixels = std::move(pixels), adjusts = std::move(adjusts), roiEnabled, roi,
+         unionIdx = plan.unionIdx, mainIndices = plan.mainIndices, panes = plan.panes, paneCount,
+         updateMain = plan.updateMain, gen, guard](const TaskScheduler::TaskContext &ctx)
         {
-            if (ctx.isCancelled())
-                return; // superseded while queued — stop before any work
-
-            HistogramBatchResult r;
-            r.generation = gen;
-            r.paneCount = paneCount;
-            r.updateMain = updateMain;
-            r.roiEnabled = roiEnabled;
-            r.roi = roi;
-
-            const auto adjustFor = [&adjusts](int idx) -> CellAdjust
-            {
-                if (idx >= 0 && idx < static_cast<int>(adjusts.size()))
-                    return adjusts[idx];
-                return CellAdjust{};
-            };
-
-            // Compute ONE adjusted/ROI-aware histogram per union index and
-            // reuse it for both the main and the pane result surfaces.
-            std::vector<HistogramBatchResult::CellHist> computed;
-            computed.reserve(unionIdx.size());
-            for (int idx : unionIdx)
-            {
-                if (ctx.isCancelled())
-                    return; // before pane computation
-                if (idx < 0 || idx >= static_cast<int>(pixels.size()))
-                    continue;
-                const ImageData &src = pixels[static_cast<size_t>(idx)];
-                if (src.isNull())
-                    continue; // no source data yet — the widget stays unchanged
-                const ImageData adjusted = CompareWorkspace::applyAdjusts(src, adjustFor(idx));
-                if (ctx.isCancelled())
-                    return; // after adjustment
-                if (adjusted.isNull())
-                    continue; // failed adjustment must not clear the last valid widget
-                mviewer::core::Histogram h =
-                    roiEnabled ? mviewer::core::computeHistogram(adjusted, roi.x, roi.y, roi.width,
-                                                                 roi.height)
-                               : mviewer::core::computeDisplayHistogram(adjusted);
-                if (ctx.isCancelled())
-                    return; // after histogram computation
-                HistogramBatchResult::CellHist cell;
-                cell.index = idx;
-                cell.hist = std::move(h);
-                computed.push_back(std::move(cell));
-            }
-
-            if (ctx.isCancelled())
-                return;
-
-            if (r.updateMain)
-            {
-                r.main.reserve(mainIndices.size());
-                for (int idx : mainIndices)
-                {
-                    const auto it = std::find_if(computed.cbegin(), computed.cend(),
-                                                 [idx](const HistogramBatchResult::CellHist &c)
-                                                 { return c.index == idx; });
-                    if (it != computed.cend())
-                        r.main.push_back(it->hist);
-                }
-            }
-            for (int idx : panes)
-            {
-                const auto it = std::find_if(computed.cbegin(), computed.cend(),
-                                             [idx](const HistogramBatchResult::CellHist &c)
-                                             { return c.index == idx; });
-                if (it == computed.cend())
-                    continue;
-                r.panes.push_back(*it);
-            }
-
-            if (ctx.isCancelled())
-                return;
-
-            // Marshal to the UI thread through qApp (outlives this workspace).
-            // The queued lambda re-checks the guard AND the generation/pane-count
-            // match before touching any widget.
-            QMetaObject::invokeMethod(
-                qApp,
-                [guard, r]()
-                {
-                    CompareWorkspace *ws = guard.data();
-                    if (!ws)
-                        return;
-                    ws->applyHistogramBatchResult(r);
-                },
-                Qt::QueuedConnection);
+            computeHistogramBatch(pixels, adjusts, roiEnabled, roi, unionIdx, mainIndices, panes,
+                                  paneCount, updateMain, gen, guard, ctx);
         });
     if (!handle)
-    {
-        // submit() refused the task (pool paused / back-pressured). Keep the
-        // last delivered histogram contents — never fall back to synchronous
-        // computation on the UI thread. The generation already advanced, so a
-        // later schedule supersedes this state.
         return;
-    }
     m_histTask = handle;
 }
 
@@ -763,8 +761,8 @@ QString CompareWorkspace::formatPixelInfo(int cellIndex, const QString &cellName
                                           ? m_cellAdjusts[static_cast<size_t>(baseIdx)]
                                           : CellAdjust{};
         const auto baseSample =
-            baseFrame ? mviewer::core::sampleAnalysisPixel(
-                            baseFrame->pixels(), analysisAdjustment(baseAdjust), x, y)
+            baseFrame ? mviewer::core::sampleAnalysisPixel(baseFrame->pixels(),
+                                                           analysisAdjustment(baseAdjust), x, y)
                       : mviewer::core::AnalysisPixel{};
         if (baseSample.valid)
         {

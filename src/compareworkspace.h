@@ -465,7 +465,13 @@ class CompareWorkspace : public QWidget
     HistogramWidget *m_hist = nullptr;
     void onSideToggled(bool on);
     void updateInspector(int x, int y);
-    struct InspectorSample { int r = 0; int g = 0; int b = 0; bool valid = false; };
+    struct InspectorSample
+    {
+        int r = 0;
+        int g = 0;
+        int b = 0;
+        bool valid = false;
+    };
     void updateInspectorRows(const std::vector<InspectorSample> &samples,
                              mviewer::core::ColorSpace space, int baseIndex, int x, int y);
     QString formatPixelInfo(int cellIndex, const QString &cellName, int x, int y,
@@ -553,25 +559,28 @@ class CompareWorkspace : public QWidget
         ImageData diff;
         bool sizeMismatch = false;
     };
-    static DiffSources buildDiffOverlays(
-        DiffBatchResult &result, const std::vector<ImageData> &pixels,
-        const std::vector<QSize> &displayTargets, const std::vector<CellAdjust> &adjusts,
-        int baseIndex, uint8_t threshold, double gain, bool highlight, bool visualize,
-        bool autoAlign, const ImageData &basePixels, const TaskScheduler::TaskContext &context);
-    static void computeDiffMetrics(
-        DiffBatchResult &result, const DiffSources &sources, const ImageData &basePixels,
-        uint8_t threshold, const mviewer::domain::Selection &roi,
-        const TaskScheduler::TaskContext &context);
-    static DiffBatchResult computeDiffBatch(
-        const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
-        const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, double gain,
-        bool highlight, bool visualize, bool autoAlign, const mviewer::domain::Selection &roi,
-        int paneCount, uint64_t generation, const TaskScheduler::TaskContext &context);
-    TaskScheduler::TaskHandle startDiffBatch(
-        const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
-        const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold, double gain,
-        bool highlight, bool visualize, bool autoAlign, const mviewer::domain::Selection &roi,
-        int paneCount, uint64_t generation, const QPointer<CompareWorkspace> &guard);
+    static DiffSources
+    buildDiffOverlays(DiffBatchResult &result, const std::vector<ImageData> &pixels,
+                      const std::vector<QSize> &displayTargets,
+                      const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold,
+                      double gain, bool highlight, bool visualize, bool autoAlign,
+                      const ImageData &basePixels, const TaskScheduler::TaskContext &context);
+    static void computeDiffMetrics(DiffBatchResult &result, const DiffSources &sources,
+                                   const ImageData &basePixels, uint8_t threshold,
+                                   const mviewer::domain::Selection &roi,
+                                   const TaskScheduler::TaskContext &context);
+    static DiffBatchResult
+    computeDiffBatch(const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
+                     const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold,
+                     double gain, bool highlight, bool visualize, bool autoAlign,
+                     const mviewer::domain::Selection &roi, int paneCount, uint64_t generation,
+                     const TaskScheduler::TaskContext &context);
+    TaskScheduler::TaskHandle
+    startDiffBatch(const std::vector<ImageData> &pixels, const std::vector<QSize> &displayTargets,
+                   const std::vector<CellAdjust> &adjusts, int baseIndex, uint8_t threshold,
+                   double gain, bool highlight, bool visualize, bool autoAlign,
+                   const mviewer::domain::Selection &roi, int paneCount, uint64_t generation,
+                   const QPointer<CompareWorkspace> &guard);
     void applyDiffBatchResult(const DiffBatchResult &result);
 
     // M29: latest-wins generation + handle of the in-flight batch diff task.
@@ -727,6 +736,23 @@ class CompareWorkspace : public QWidget
         std::vector<CellHist> panes; // pane overlay widgets keyed by index
     };
     void scheduleHistogramRefresh(bool includeMain, const std::vector<int> &paneIndices);
+    struct HistIndexPlan
+    {
+        bool updateMain = false;
+        std::vector<int> mainIndices;
+        std::vector<int> panes;
+        std::vector<int> unionIdx;
+    };
+    HistIndexPlan collectHistogramIndices(bool includeMain, const std::vector<int> &paneIndices);
+    void clearMainHistogramForEmptyPlan(bool updateMain);
+    static void computeHistogramBatch(const std::vector<ImageData> &pixels,
+                                      const std::vector<CellAdjust> &adjusts, bool roiEnabled,
+                                      const mviewer::domain::Selection &roi,
+                                      const std::vector<int> &unionIdx,
+                                      const std::vector<int> &mainIndices,
+                                      const std::vector<int> &panes, int paneCount, bool updateMain,
+                                      uint64_t gen, const QPointer<CompareWorkspace> &guard,
+                                      const TaskScheduler::TaskContext &ctx);
     void applyHistogramBatchResult(const HistogramBatchResult &result);
     // M23: the histogram section title text for the given ROI/full state.
     QString histogramTitleText(bool roiEnabled, const mviewer::domain::Selection &roi) const;
