@@ -44,20 +44,11 @@ int transferPercent(uintmax_t copied, uintmax_t total)
 }
 } // namespace
 
-void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command,
-                                               const QStringList &paths, const QString &label)
+uint64_t ThumbnailPanel::beginFileOperationProgress(const QString &label)
 {
-    if (!command || paths.isEmpty() || m_fileOperationBusy)
-        return;
-
     m_fileOperationBusy = true;
     const uint64_t generation = ++m_fileOperationGeneration;
-    const auto alive = m_alive;
-    const QPointer<ThumbnailPanel> guard(this);
-    auto state = std::make_shared<AsyncCommandState>(std::move(command));
-
-    m_fileProgress =
-        new QProgressDialog(label + QStringLiteral("…"), QStringLiteral("取消"), 0, 100, this);
+    m_fileProgress = new QProgressDialog(label, QStringLiteral("取消"), 0, 100, this);
     m_fileProgress->setWindowModality(Qt::WindowModal);
     m_fileProgress->setAutoClose(false);
     m_fileProgress->setAutoReset(false);
@@ -70,9 +61,15 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
                     TaskScheduler::cancel(m_fileOperationTask);
             });
     m_fileProgress->show();
+    return generation;
+}
 
+std::function<void(int)> ThumbnailPanel::makeFileOperationProgressHandler(uint64_t generation)
+{
+    const auto alive = m_alive;
+    const QPointer<ThumbnailPanel> guard(this);
     auto lastProgress = std::make_shared<std::atomic<int>>(-1);
-    const auto onProgress = [guard, alive, generation, lastProgress](int value)
+    return [guard, alive, generation, lastProgress](int value)
     {
         if (!alive->load(std::memory_order_relaxed) || !guard)
             return;
@@ -90,6 +87,35 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
             },
             Qt::QueuedConnection);
     };
+}
+
+void ThumbnailPanel::closeFileOperationProgress()
+{
+    if (!m_fileProgress)
+        return;
+    m_fileProgress->close();
+    m_fileProgress->deleteLater();
+    m_fileProgress = nullptr;
+}
+
+void ThumbnailPanel::failFileOperationQueue(const QString &title, const QString &message)
+{
+    m_fileOperationBusy = false;
+    closeFileOperationProgress();
+    QMessageBox::warning(this, title, message);
+}
+
+void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command,
+                                               const QStringList &paths, const QString &label)
+{
+    if (!command || paths.isEmpty() || m_fileOperationBusy)
+        return;
+
+    const auto alive = m_alive;
+    const QPointer<ThumbnailPanel> guard(this);
+    auto state = std::make_shared<AsyncCommandState>(std::move(command));
+    const uint64_t generation = beginFileOperationProgress(label + QStringLiteral("…"));
+    const auto onProgress = makeFileOperationProgressHandler(generation);
 
     m_fileOperationTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::UI,
@@ -190,16 +216,7 @@ void ThumbnailPanel::startCommandFileOperation(std::unique_ptr<ICommand> command
         onProgress);
 
     if (!m_fileOperationTask)
-    {
-        m_fileOperationBusy = false;
-        if (m_fileProgress)
-        {
-            m_fileProgress->close();
-            m_fileProgress->deleteLater();
-            m_fileProgress = nullptr;
-        }
-        QMessageBox::warning(this, label, label + QStringLiteral("无法排队：后台任务队列已满。"));
-    }
+        failFileOperationQueue(label, label + QStringLiteral("无法排队：后台任务队列已满。"));
 }
 
 void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
@@ -208,47 +225,12 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
     if (paths.isEmpty() || destinationDirectory.isEmpty() || m_fileOperationBusy)
         return;
 
-    m_fileOperationBusy = true;
-    const uint64_t generation = ++m_fileOperationGeneration;
     const auto alive = m_alive;
     const QPointer<ThumbnailPanel> guard(this);
     auto state = std::make_shared<AsyncCopyState>();
     const auto fileSystem = mviewer::core::defaultFileSystemAdapter();
-
-    m_fileProgress =
-        new QProgressDialog(QStringLiteral("复制中…"), QStringLiteral("取消"), 0, 100, this);
-    m_fileProgress->setWindowModality(Qt::WindowModal);
-    m_fileProgress->setAutoClose(false);
-    m_fileProgress->setAutoReset(false);
-    m_fileProgress->setMinimumDuration(0);
-    m_fileProgress->setValue(0);
-    connect(m_fileProgress, &QProgressDialog::canceled, this,
-            [this, generation]()
-            {
-                if (generation == m_fileOperationGeneration && m_fileOperationTask)
-                    TaskScheduler::cancel(m_fileOperationTask);
-            });
-    m_fileProgress->show();
-
-    auto lastProgress = std::make_shared<std::atomic<int>>(-1);
-    const auto onProgress = [guard, alive, generation, lastProgress](int value)
-    {
-        if (!alive->load(std::memory_order_relaxed) || !guard)
-            return;
-        if (lastProgress->exchange(value, std::memory_order_relaxed) == value)
-            return;
-        QMetaObject::invokeMethod(
-            qApp,
-            [guard, alive, generation, value]()
-            {
-                if (!alive->load(std::memory_order_relaxed) || !guard ||
-                    generation != guard->m_fileOperationGeneration)
-                    return;
-                if (guard->m_fileProgress)
-                    guard->m_fileProgress->setValue(value);
-            },
-            Qt::QueuedConnection);
-    };
+    const uint64_t generation = beginFileOperationProgress(QStringLiteral("复制中…"));
+    const auto onProgress = makeFileOperationProgressHandler(generation);
 
     m_fileOperationTask = TaskScheduler::instance().submit(
         TaskScheduler::Priority::UI,
@@ -344,17 +326,8 @@ void ThumbnailPanel::startCopyFileOperation(const QStringList &paths,
         onProgress);
 
     if (!m_fileOperationTask)
-    {
-        m_fileOperationBusy = false;
-        if (m_fileProgress)
-        {
-            m_fileProgress->close();
-            m_fileProgress->deleteLater();
-            m_fileProgress = nullptr;
-        }
-        QMessageBox::warning(this, QStringLiteral("复制"),
-                             QStringLiteral("复制无法排队：后台任务队列已满。"));
-    }
+        failFileOperationQueue(QStringLiteral("复制"),
+                               QStringLiteral("复制无法排队：后台任务队列已满。"));
 }
 
 void ThumbnailPanel::renameSelected()
@@ -544,6 +517,44 @@ void ThumbnailPanel::batchAnalyzeExport()
     return;
 }
 
+void ThumbnailPanel::ensureBatchProgressDialog()
+{
+    if (m_batchProgress)
+        return;
+    m_batchProgress = new QProgressDialog(tr("正在批量分析..."), tr("取消"), 0, 100, this);
+    m_batchProgress->setWindowModality(Qt::WindowModal);
+    m_batchProgress->setAutoClose(false);
+    m_batchProgress->setMinimumDuration(0);
+    connect(m_batchProgress, &QProgressDialog::canceled, this,
+            [this]()
+            {
+                if (m_batchTask)
+                    TaskScheduler::cancel(m_batchTask);
+            });
+}
+
+void ThumbnailPanel::finishBatchAnalyzeExport(bool cancelled, bool writeOk, size_t resultCount,
+                                              const QString &output)
+{
+    m_batchTask.reset();
+    if (m_batchProgress)
+        m_batchProgress->close();
+    if (cancelled)
+    {
+        QMessageBox::information(this, tr("批量分析导出"), tr("批量分析已取消。"));
+    }
+    else if (!writeOk)
+    {
+        QMessageBox::critical(this, tr("批量分析导出"), tr("无法写入：%1").arg(output));
+    }
+    else
+    {
+        QMessageBox::information(
+            this, tr("批量分析导出"),
+            tr("已导出 %1 条结果 → %2").arg(static_cast<qlonglong>(resultCount)).arg(output));
+    }
+}
+
 void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
                                                 const std::string &analyzerId,
                                                 const QString &output)
@@ -554,19 +565,7 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
         return;
     }
 
-    if (!m_batchProgress)
-    {
-        m_batchProgress = new QProgressDialog(tr("正在批量分析..."), tr("取消"), 0, 100, this);
-        m_batchProgress->setWindowModality(Qt::WindowModal);
-        m_batchProgress->setAutoClose(false);
-        m_batchProgress->setMinimumDuration(0);
-        connect(m_batchProgress, &QProgressDialog::canceled, this,
-                [this]()
-                {
-                    if (m_batchTask)
-                        TaskScheduler::cancel(m_batchTask);
-                });
-    }
+    ensureBatchProgressDialog();
     m_batchProgress->setValue(0);
     m_batchProgress->show();
 
@@ -643,9 +642,6 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
                 {
                     if (!guard)
                         return;
-                    guard->m_batchTask.reset();
-                    if (guard->m_batchProgress)
-                        guard->m_batchProgress->close();
                     bool cancelled = false;
                     bool writeOk = false;
                     size_t resultCount = 0;
@@ -657,23 +653,7 @@ void ThumbnailPanel::runBatchAnalyzeExportAsync(const QStringList &paths,
                         resultCount = state->resultCount;
                         output = state->output;
                     }
-                    if (cancelled)
-                    {
-                        QMessageBox::information(guard, QObject::tr("批量分析导出"),
-                                                 QObject::tr("批量分析已取消。"));
-                    }
-                    else if (!writeOk)
-                    {
-                        QMessageBox::critical(guard, QObject::tr("批量分析导出"),
-                                              QObject::tr("无法写入：%1").arg(state->output));
-                    }
-                    else
-                    {
-                        QMessageBox::information(guard, QObject::tr("批量分析导出"),
-                                                 QObject::tr("已导出 %1 条结果 → %2")
-                                                     .arg(static_cast<qlonglong>(resultCount))
-                                                     .arg(output));
-                    }
+                    guard->finishBatchAnalyzeExport(cancelled, writeOk, resultCount, output);
                 },
                 Qt::QueuedConnection);
         },
