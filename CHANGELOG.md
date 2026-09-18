@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.0.61] - 2026-09-18
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.61**.
+- **Analysis metrics & inspection (#12)**: SIMD PSNR/SSIM/Laplacian noise paths, PixelInspector 64-bit bounds hardening, ExportReport stride/null guards, ADR-014 splits for AnalysisEngine / PixelInspector.
+- **Channel overlay & metadata (#18)**: Contiguous scanline fast-path for `ImageOverlay`, MetadataOverlay modularization / ADR-014 debt retirement, GPS/coordinate hardening, expanded overlay unit coverage.
+- **Convert / search / batch (#15)**: QtConvert AVX2/SSSE3 + zero-copy paths, SearchIndex O(1) hash lookups, BatchProcessor step-helper refactor, QtConvert/Search unit coverage.
+
 ## [1.0.60] - 2026-09-18
 
 ### Release
