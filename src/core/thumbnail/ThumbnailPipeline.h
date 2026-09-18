@@ -217,6 +217,8 @@ struct ThumbnailPipeline
     // visible/predictive ordering). Single-lock path tracks hits/misses.
     ImageData request(const std::string &path, int size)
     {
+        if (path.empty() || size <= 0)
+            return ImageData{};
         std::lock_guard<std::mutex> lk(m_mtx);
         auto it = m_memCache.find(key(path, size));
         if (it != m_memCache.end())
@@ -478,6 +480,8 @@ struct ThumbnailPipeline
     // erased by the old task's completion.
     void cancelObsoleteHandlesLocked()
     {
+        if (m_pending.empty())
+            return;
         std::unordered_set<std::string> keep;
         const size_t n = m_sources.size();
         const size_t vb = std::min(m_visibleBegin, n);
@@ -519,6 +523,14 @@ struct ThumbnailPipeline
 
     void cacheLocked(const std::string &k, const std::string &path, const ImageData &data)
     {
+        (void)path;
+        if (k.empty() || data.isNull())
+            return;
+        const size_t bytes = data.byteSize();
+        // Prevent oversized decode candidate from wiping out the entire memory cache.
+        if (memCacheMaxBytes > 0 && bytes > memCacheMaxBytes)
+            return;
+
         // A cancelled same-generation decode may still finish after a newer
         // request for the same key has been queued. Replace the existing
         // entry instead of adding a second LRU node for the same key; otherwise
@@ -535,7 +547,7 @@ struct ThumbnailPipeline
         e.data = data;
         m_lru.push_front(k);
         e.lruIt = m_lru.begin();
-        m_memCacheBytes += data.byteSize();
+        m_memCacheBytes += bytes;
         m_memCache[k] = e;
         while (!m_lru.empty() && (m_memCache.size() > memCacheMax ||
                                   (memCacheMaxBytes > 0 && m_memCacheBytes > memCacheMaxBytes)))

@@ -29,6 +29,7 @@ void ThumbnailPanel::invalidateThumbnailCacheFor(const QString &path)
         if (it.key().startsWith(prefix))
         {
             m_thumbReadyBytes = std::max<qint64>(0, m_thumbReadyBytes - it.value().bytes);
+            m_thumbReadyLru.erase(it.value().lruIt);
             it = m_thumbReady.erase(it);
         }
         else
@@ -42,19 +43,17 @@ void ThumbnailPanel::invalidateThumbnailCacheFor(const QString &path)
 
 void ThumbnailPanel::enforceThumbPixmapBudgetLocked()
 {
-    while (m_thumbReady.size() > kThumbPixmapCacheMaxEntries ||
-           m_thumbReadyBytes > kThumbPixmapCacheMaxBytes)
+    while (!m_thumbReadyLru.empty() && (m_thumbReady.size() > kThumbPixmapCacheMaxEntries ||
+                                        m_thumbReadyBytes > kThumbPixmapCacheMaxBytes))
     {
-        auto oldest = m_thumbReady.end();
-        for (auto it = m_thumbReady.begin(); it != m_thumbReady.end(); ++it)
+        const QString oldestKey = m_thumbReadyLru.back();
+        m_thumbReadyLru.pop_back();
+        auto it = m_thumbReady.find(oldestKey);
+        if (it != m_thumbReady.end())
         {
-            if (oldest == m_thumbReady.end() || it->lastUse < oldest->lastUse)
-                oldest = it;
+            m_thumbReadyBytes = qMax<qint64>(0, m_thumbReadyBytes - it->bytes);
+            m_thumbReady.erase(it);
         }
-        if (oldest == m_thumbReady.end())
-            break;
-        m_thumbReadyBytes = qMax<qint64>(0, m_thumbReadyBytes - oldest->bytes);
-        m_thumbReady.erase(oldest);
     }
 }
 
@@ -83,8 +82,7 @@ void ThumbnailPanel::updateVisibleRange()
         const int rowsPerColumn = qMax(1, viewportHeight / stepH);
         const int offset = qMax(0, horizontalScrollBar()->value());
         const int firstColumn = offset / stepW;
-        const int visibleColumns =
-            qMax(1, (offset % stepW + viewportWidth + stepW - 1) / stepW);
+        const int visibleColumns = qMax(1, (offset % stepW + viewportWidth + stepW - 1) / stepW);
         first = firstColumn * rowsPerColumn;
         last = (firstColumn + visibleColumns) * rowsPerColumn - 1;
     }
@@ -134,7 +132,7 @@ void ThumbnailPanel::updateVisibleRange()
     const int predictive = n > 2000 ? 96 : (n > 500 ? 64 : 48);
     ThumbnailPipeline::instance().setPredictiveCount(static_cast<size_t>(predictive));
     ThumbnailPipeline::instance().setVisibleRange(static_cast<size_t>(first),
-                                                  static_cast<size_t>(last + 1));
+                                                  last >= 0 ? static_cast<size_t>(last) + 1 : 0);
 }
 
 void ThumbnailPanel::onThumbReady(const QString &path)
@@ -198,6 +196,7 @@ QPixmap ThumbnailPanel::thumbReady(const QString &path) const
     if (it == m_thumbReady.end())
         return QPixmap();
     it->lastUse = ++m_thumbReadyClock;
+    m_thumbReadyLru.splice(m_thumbReadyLru.begin(), m_thumbReadyLru, it->lruIt);
     return it->pixmap;
 }
 

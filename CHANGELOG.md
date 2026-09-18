@@ -205,6 +205,31 @@
 
 ## [1.0.55] - 2026-09-18
 
+### Thumbnail Pipeline, Cache & Bootstrap Optimization
+
+- **$O(1)$ Constant-Time LRU Pixmap Eviction (`ThumbnailPanel`, `thumbnailpanel.h`, `thumbnailpanel.cpp`, `thumbnailpanel_pipeline.cpp`)**:
+  - Replaced $O(N)$ linear scans in `enforceThumbPixmapBudgetLocked()` with strictly $O(1)$ LRU iterator splicing and popping via `m_thumbReadyLru` (`std::list<QString>`), eliminating linear scanning overhead during high-speed gallery browsing.
+  - Spliced recently accessed pixmaps to the front of `m_thumbReadyLru` on cache hits in `thumbReady()`.
+  - Added oversized pixmap allocation protection guarding `ReadyPixmap` insertion against pixmaps exceeding `kThumbPixmapCacheMaxBytes`.
+  - Cleared `m_thumbReadyLru` consistently across all thumbnail cache invalidation and reset entry points.
+
+- **Thumbnail Pipeline Oversized Item Guard & Fast Filtering (`ThumbnailPipeline`, `core/thumbnail/ThumbnailPipeline.h`)**:
+  - Protected thumbnail memory cache from pathological blowout in `cacheLocked()` (`if (memCacheMaxBytes > 0 && bytes > memCacheMaxBytes) return;`), preventing corrupt or enormous images from flushing existing cached thumbnails.
+  - Accelerated `cancelObsoleteHandlesLocked()` with an early exit when `m_pending.empty()`, avoiding repeated hash set allocations and string formatting during rapid scrolling.
+  - Added empty path, non-positive size, and null `ImageData` input validation guards across `request()` and `cacheLocked()`.
+
+- **Thumbnail Cache Bootstrap Acceleration & Disk Defense (`ThumbnailCache`, `thumbnailcache.h`, `thumbnailcache.cpp`)**:
+  - Accelerated directory indexing in `ensureIndexed()` with single-pass timestamp and size extraction into a lightweight `FileItem` struct, replacing expensive repeated `QFileInfo::lastModified()` filesystem queries during `std::sort`.
+  - Defended disk cache against corrupt/oversized entries in `get()`: immediately removes files exceeding `m_maxBytes` rather than adding them to accounting and triggering `pruneToCap()` to wipe the entire cache.
+  - Enforced input guards in `get()`, `put()`, and `keyFor()` against empty paths and non-positive sizes.
+
+- **Zero-Allocation Square Fit Optimization (`ThumbnailProvider`, `thumbnailprovider.cpp`)**:
+  - Added zero-allocation fast-paths in `squareFitImage()` when the source or scaled image already satisfies the square aspect ratio and target format.
+  - Added input validation guards in `produce()`.
+
+- **Unit Test Harness Expansion (`core/test_thumbnailpipeline.cpp`, `test_browse_convergence.cpp`)**:
+  - Added unit test cases verifying oversized thumbnail rejection, input validation guards, disk cache overflow protection, and cache stability (100% passing across `test_thumbnailpipeline`, `test_browse_convergence`, `test_m26_thumbnail`, and `test_m27_thumbnail`).
+
 ### Bug Fixes & Correctness Hardening
 
 - **High-Resolution Auto-Alignment Downsampling (`Aligner`, `core/compare/Aligner.cpp`)**:

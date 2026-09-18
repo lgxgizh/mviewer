@@ -243,6 +243,47 @@ int main()
               "overlap retention leaves no scheduler bookkeeping");
     }
 
+    // Pass 21: Oversized thumbnail protection and empty/invalid input guards.
+    {
+        printf("\n[oversized thumbnail protection & bounds hardening]\n");
+        fflush(stdout);
+        ThumbnailPipeline guardPipe;
+        guardPipe.setThumbSize(64);
+        const size_t normalBytes = size_t{64} * 64 * 3; // ~12 KiB
+        guardPipe.setMemCacheMaxBytes(normalBytes * 3); // budget for 3 thumbnails
+        guardPipe.setDecodeFn(
+            [&](const std::string &path, int size)
+            {
+                if (path == "huge.png")
+                    return makeImageData(1024, 1024, PixelFormat::RGBA32); // 4 MiB >> budget
+                return fakeThumb(size);
+            });
+
+        std::vector<std::string> testFiles = {"t1.png", "t2.png", "huge.png"};
+        guardPipe.setSources(testFiles);
+        guardPipe.setVisibleRange(0, 3);
+        TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool,
+                                        std::chrono::milliseconds(2000));
+
+        // The 2 normal thumbnails should be cached.
+        ImageData hit1 = guardPipe.request("t1.png", 64);
+        ImageData hit2 = guardPipe.request("t2.png", 64);
+        CHECK(!hit1.isNull(), "first valid thumbnail retained in cache");
+        CHECK(!hit2.isNull(), "second valid thumbnail retained in cache");
+        // The oversized thumbnail should NOT have flushed the valid cache entries
+        CHECK(guardPipe.memCacheSize() == 2, "oversized decode did not flush existing cache items");
+        CHECK(guardPipe.memCacheBytes() <= normalBytes * 3,
+              "memCacheBytes stays within strict budget after oversized attempt");
+
+        // Null and invalid request guards
+        ImageData emptyPath = guardPipe.request("", 64);
+        CHECK(emptyPath.isNull(), "request with empty path returns null ImageData");
+        ImageData negativeSize = guardPipe.request("t1.png", -5);
+        CHECK(negativeSize.isNull(), "request with negative size returns null ImageData");
+        ImageData zeroSize = guardPipe.request("t1.png", 0);
+        CHECK(zeroSize.isNull(), "request with zero size returns null ImageData");
+    }
+
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

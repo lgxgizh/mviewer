@@ -52,3 +52,21 @@ flush already-resident working-set entries.
 - ✅ Predictable latency under large warm caches
 - ✅ Oversized frames cannot wipe a warm viewer cache
 - ✅ Corrupt disk-cache rows cannot force huge allocations
+
+## Amendment (2026-09-18) — Thumbnail Tier O(1) LRU & Oversized Rejection
+
+### Context
+
+Similar to the full-image cache, the Thumbnail tier (`ThumbnailPipeline` memory cache, `ThumbnailPanel` display pixmaps, and `ThumbnailCache` on-disk PNGs) previously allowed oversized payloads to trigger global eviction passes, wiping resident galleries. In addition, `ThumbnailPanel::enforceThumbPixmapBudgetLocked()` used an $O(N)$ linear scan per thumbnail delivery.
+
+### Decision
+
+- Implement **O(1) LRU** iterator tracking and splicing for `ThumbnailPanel::m_thumbReadyLru`.
+- Add **oversized item rejection** across `ThumbnailPipeline::cacheLocked`, `ThumbnailPanel::ReadyPixmap`, and `ThumbnailCache::get`, ensuring candidates exceeding the budget are dropped before invoking eviction loops.
+- Optimize `ThumbnailCache::ensureIndexed` with single-pass timestamp/size extraction to avoid $O(N \log N)$ filesystem metadata probes during directory bootstrap.
+
+### Consequences
+
+- ✅ Constant-time $O(1)$ thumbnail pixmap eviction during high-speed gallery scrolling.
+- ✅ Complete immunity against cache blowout when handling pathological or corrupt thumbnails.
+- ✅ Accelerated cold startup indexing over large persistent thumbnail caches.

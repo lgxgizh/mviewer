@@ -17,9 +17,11 @@
 #include <QFile>
 #include <QTemporaryDir>
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 static int g_pass = 0;

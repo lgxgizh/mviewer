@@ -47,6 +47,8 @@ QString ThumbnailCache::cacheDir() const
 
 QString ThumbnailCache::keyFor(const QString &path, int size)
 {
+    if (path.isEmpty() || size <= 0)
+        return QString();
     const QFileInfo fi(path);
     // Keep a path-derived prefix so invalidatePath() can remove all historical
     // revisions for one source. The remainder uses millisecond precision plus
@@ -145,20 +147,33 @@ void ThumbnailCache::ensureIndexed()
         return;
     QFileInfoList infos = QDir(dir).entryInfoList(QStringList{QStringLiteral("*.png")},
                                                   QDir::Files | QDir::NoDotAndDotDot);
-    std::sort(infos.begin(), infos.end(),
-              [](const QFileInfo &a, const QFileInfo &b)
-              {
-                  const QDateTime at = a.lastModified();
-                  const QDateTime bt = b.lastModified();
-                  if (at != bt)
-                      return at < bt;
-                  return a.fileName() < b.fileName();
-              });
+    struct FileItem
+    {
+        qint64 mtime = 0;
+        quint64 size = 0;
+        QString key;
+    };
+    std::vector<FileItem> items;
+    items.reserve(static_cast<size_t>(infos.size()));
     for (const QFileInfo &fi : infos)
     {
         const QString base = fi.fileName();
-        const QString key = base.left(base.size() - 4); // strip ".png"
-        insertEntry(key, static_cast<quint64>(fi.size()));
+        if (!base.endsWith(QStringLiteral(".png"), Qt::CaseInsensitive) || base.size() <= 4)
+            continue;
+        items.push_back({fi.lastModified().toMSecsSinceEpoch(),
+                         static_cast<quint64>(std::max<qint64>(0, fi.size())),
+                         base.left(base.size() - 4)});
+    }
+    std::sort(items.begin(), items.end(),
+              [](const FileItem &a, const FileItem &b)
+              {
+                  if (a.mtime != b.mtime)
+                      return a.mtime < b.mtime;
+                  return a.key < b.key;
+              });
+    for (const auto &item : items)
+    {
+        insertEntry(item.key, item.size);
     }
 }
 
@@ -291,6 +306,8 @@ bool ThumbnailCache::writeFileAtomically(const QString &file, const QImage &img)
 
 bool ThumbnailCache::get(const QString &path, int size, QImage &out)
 {
+    if (path.isEmpty() || size <= 0)
+        return false;
     MV_TRACE_SCOPED("ThumbnailCache::get");
     const QString key = keyFor(path, size);
     QString file;
@@ -314,6 +331,14 @@ bool ThumbnailCache::get(const QString &path, int size, QImage &out)
             QMutexLocker lock(&m_mutex);
             if (sz > 0)
             {
+                if (m_maxBytes > 0 && static_cast<quint64>(sz) > m_maxBytes)
+                {
+                    // Oversized payload discovered on disk: remove it directly
+                    // instead of inserting into accounting and blowing away all
+                    // other cached thumbnails via pruneToCap().
+                    removeKey(key, file);
+                    return false;
+                }
                 const auto entryIt = m_entries.find(key);
                 if (entryIt == m_entries.end() || entryIt->fileSize != static_cast<quint64>(sz))
                 {
@@ -349,9 +374,9 @@ bool ThumbnailCache::get(const QString &path, int size, QImage &out)
 
 void ThumbnailCache::put(const QString &path, int size, const QImage &img)
 {
-    MV_TRACE_SCOPED("ThumbnailCache::put");
-    if (img.isNull())
+    if (path.isEmpty() || size <= 0 || img.isNull())
         return;
+    MV_TRACE_SCOPED("ThumbnailCache::put");
     const QString key = keyFor(path, size);
     QString file;
     {
