@@ -59,6 +59,28 @@ class CpuFeatures
         return supported;
     }
 
+    static bool hasSSE2()
+    {
+        static const bool supported = []() -> bool
+        {
+#if defined(_M_X64) || defined(__x86_64__)
+            return true; // SSE2 is part of the x86-64 ABI
+#elif defined(_MSC_VER)
+            int info[4] = {0};
+            __cpuid(info, 1);
+            return (info[3] & (1 << 26)) != 0;
+#elif defined(__GNUC__) || defined(__clang__)
+            unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
+            if (__get_cpuid(1, &eax, &ebx, &ecx, &edx))
+                return (edx & (1 << 26)) != 0;
+            return false;
+#else
+            return false;
+#endif
+        }();
+        return supported;
+    }
+
     static bool hasSsse3()
     {
         static const bool supported = []() -> bool
