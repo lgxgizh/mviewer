@@ -281,8 +281,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     if (pathEdit)
         pathEdit->setFocus(Qt::OtherFocusReason);
     pump(10);
-    CHECK(QApplication::focusWidget() == pathEdit,
-          "focus can be placed on the real path edit");
+    CHECK(QApplication::focusWidget() == pathEdit, "focus can be placed on the real path edit");
     sendFocusedKey(Qt::Key_Tab);
     CHECK(navigationPanel && !navigationPanel->isVisible() && analysisPanel &&
               !analysisPanel->isVisible() && searchPanel && !searchPanel->isVisible() &&
@@ -1254,11 +1253,10 @@ void workflow3_session_restore(const QString &dirPath, const QString &imagePath)
               "Search panel and action restore together across a new MainWindow");
         CHECK(browseAction && !browseAction->isChecked(),
               "restored side panels keep the Browser workspace action unchecked");
-        CHECK(
-            thumbnailPanel && thumbnailPanel->viewMode() == ThumbnailPanel::LargeIcon &&
-                thumbnailPanel->thumbSize() == 240 &&
-                viewModeCombo && viewModeCombo->currentData().toInt() == ThumbnailPanel::LargeIcon,
-            "deferred restore keeps the Large preset at 240px");
+        CHECK(thumbnailPanel && thumbnailPanel->viewMode() == ThumbnailPanel::LargeIcon &&
+                  thumbnailPanel->thumbSize() == 240 && viewModeCombo &&
+                  viewModeCombo->currentData().toInt() == ThumbnailPanel::LargeIcon,
+              "deferred restore keeps the Large preset at 240px");
         w.close();
         pump(50);
     }
@@ -4346,6 +4344,112 @@ void workflow16_multiframe_view_continuity(const QString &rootDir)
 
     pages.close();
     QFile::remove(pagesPath);
+}
+
+// ── Workflow 17: Batch dialog layout, param toggle, export Start path ─────
+void workflow17_batch_dialog(const QString &rootDir)
+{
+    std::cout << "── Workflow 17: batch dialog ──\n";
+    const QString sourceDirPath = QDir(rootDir).filePath(QStringLiteral("batch_source"));
+    const QString outputDirPath = QDir(rootDir).filePath(QStringLiteral("batch_output"));
+    QDir().mkpath(sourceDirPath);
+    QDir().mkpath(outputDirPath);
+    const QString sourcePath =
+        writePng(QDir(sourceDirPath), QStringLiteral("batch_src.png"), QColor(40, 90, 160));
+    const QString outputPath = QDir(outputDirPath).filePath(QStringLiteral("batch_src.png"));
+    QFile::remove(outputPath);
+
+    BatchDialog dialog;
+    CHECK(dialog.layout() != nullptr, "batch dialog owns a heap QLayout after construction");
+    CHECK(dialog.minimumWidth() >= 720 && dialog.minimumHeight() >= 640,
+          "batch dialog minimum size is at least 720x640");
+    auto *fileGroup = dialog.findChild<QGroupBox *>(QStringLiteral("batchFileGroup"));
+    auto *opGroup = dialog.findChild<QGroupBox *>(QStringLiteral("batchOpGroup"));
+    auto *paramGroup = dialog.findChild<QGroupBox *>(QStringLiteral("batchParamGroup"));
+    auto *progressGroup = dialog.findChild<QGroupBox *>(QStringLiteral("batchProgressGroup"));
+    CHECK(fileGroup && fileGroup->title() == QStringLiteral("文件"), "batch has 文件 group");
+    CHECK(opGroup && opGroup->title() == QStringLiteral("操作"), "batch has 操作 group");
+    CHECK(paramGroup && paramGroup->title() == QStringLiteral("参数"), "batch has 参数 group");
+    CHECK(progressGroup && progressGroup->title() == QStringLiteral("进度"),
+          "batch has 进度 group");
+
+    auto *resizePanel = dialog.findChild<QWidget *>(QStringLiteral("batchResizePanel"));
+    auto *cropPanel = dialog.findChild<QWidget *>(QStringLiteral("batchCropPanel"));
+    auto *watermarkPanel = dialog.findChild<QWidget *>(QStringLiteral("batchWatermarkPanel"));
+    auto *renamePanel = dialog.findChild<QWidget *>(QStringLiteral("batchRenamePanel"));
+    auto *exportPanel = dialog.findChild<QWidget *>(QStringLiteral("batchExportPanel"));
+    auto *chkResize = dialog.findChild<QCheckBox *>(QStringLiteral("batchChkResize"));
+    auto *chkCrop = dialog.findChild<QCheckBox *>(QStringLiteral("batchChkCrop"));
+    auto *chkWatermark = dialog.findChild<QCheckBox *>(QStringLiteral("batchChkWatermark"));
+    auto *chkRename = dialog.findChild<QCheckBox *>(QStringLiteral("batchChkRename"));
+    auto *chkExport = dialog.findChild<QCheckBox *>(QStringLiteral("batchChkExport"));
+    auto *cropW = dialog.findChild<QSpinBox *>(QStringLiteral("batchCropW"));
+    auto *cropH = dialog.findChild<QSpinBox *>(QStringLiteral("batchCropH"));
+    CHECK(resizePanel && cropPanel && watermarkPanel && renamePanel && exportPanel,
+          "batch exposes per-operation parameter panels");
+    CHECK(chkResize && chkCrop && chkWatermark && chkRename && chkExport,
+          "batch exposes operation checkboxes");
+    CHECK(cropW && cropH && cropW->value() > 0 && cropH->value() > 0,
+          "crop parameter controls exist and default to a usable rectangle");
+
+    dialog.show();
+    pump(50);
+    CHECK(chkExport && chkExport->isChecked() && exportPanel && exportPanel->isVisible(),
+          "export is on by default so its parameter row is visible");
+    CHECK(resizePanel && !resizePanel->isVisible() && cropPanel && !cropPanel->isVisible() &&
+              watermarkPanel && !watermarkPanel->isVisible() && renamePanel &&
+              !renamePanel->isVisible(),
+          "unchecked operation parameter rows stay hidden");
+    if (chkResize && chkCrop && resizePanel && cropPanel)
+    {
+        chkResize->setChecked(true);
+        chkCrop->setChecked(true);
+        CHECK(resizePanel->isVisible() && cropPanel->isVisible(),
+              "checking 缩放/裁剪 reveals their parameter rows");
+        chkResize->setChecked(false);
+        chkCrop->setChecked(false);
+        CHECK(!resizePanel->isVisible() && !cropPanel->isVisible(),
+              "unchecking 缩放/裁剪 hides their parameter rows again");
+    }
+
+    auto *startBtn = dialog.findChild<QPushButton *>(QStringLiteral("batchStartButton"));
+    auto *pauseBtn = dialog.findChild<QPushButton *>(QStringLiteral("batchPauseButton"));
+    auto *cancelBtn = dialog.findChild<QPushButton *>(QStringLiteral("batchCancelButton"));
+    auto *status = dialog.findChild<QLabel *>(QStringLiteral("batchStatusLabel"));
+    auto *log = dialog.findChild<QTextEdit *>(QStringLiteral("batchLog"));
+    auto *outputEdit = dialog.findChild<QLineEdit *>(QStringLiteral("batchOutputDir"));
+    CHECK(startBtn && pauseBtn && cancelBtn && status && log && outputEdit,
+          "batch start/pause/cancel/status/log/output controls exist");
+    CHECK(pauseBtn && !pauseBtn->isEnabled() && cancelBtn && !cancelBtn->isEnabled(),
+          "pause and cancel stay disabled while idle");
+
+    if (startBtn && pauseBtn && cancelBtn && status && log && outputEdit)
+    {
+        dialog.setInputFiles(QStringList{sourcePath});
+        outputEdit->setText(outputDirPath);
+        startBtn->click();
+        {
+            QElapsedTimer timer;
+            timer.start();
+            while (timer.elapsed() < 8000 &&
+                   (!startBtn->isEnabled() || !status->text().contains("完成")))
+                pump(25);
+        }
+        CHECK(startBtn->isEnabled(), "start is re-enabled after the batch finishes");
+        CHECK(status->text().contains(QStringLiteral("完成")), "status reports batch completion");
+        CHECK(log->toPlainText().contains(QStringLiteral("[OK]")),
+              "log streams a per-file OK line");
+        CHECK(QFileInfo::exists(outputPath),
+              "export writes the file into the chosen output directory");
+        CHECK(!pauseBtn->isEnabled() && !cancelBtn->isEnabled(),
+              "pause and cancel return to idle after the batch finishes");
+    }
+
+    dialog.close();
+    QFile::remove(outputPath);
+    QFile::remove(sourcePath);
+    QDir(sourceDirPath).removeRecursively();
+    QDir(outputDirPath).removeRecursively();
 }
 
 } // namespace

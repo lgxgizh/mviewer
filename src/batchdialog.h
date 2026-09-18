@@ -19,6 +19,7 @@ class QProgressBar;
 class QTextEdit;
 class QLabel;
 class QVBoxLayout;
+class QWidget;
 
 // BatchDialog is a modal dialog for configuring and running batch processing
 // jobs. The user adds files, selects operations (resize, watermark, analyze,
@@ -46,13 +47,14 @@ class BatchDialog : public QDialog
     void onOpenOutputDir();
 
   private:
-    void buildFileControls(QVBoxLayout &mainLayout);
-    void buildOperationControls(QVBoxLayout &mainLayout);
-    void buildParameterControls(QVBoxLayout &mainLayout);
-    void buildProgressControls(QVBoxLayout &mainLayout);
+    void buildFileControls(QVBoxLayout *mainLayout);
+    void buildOperationControls(QVBoxLayout *mainLayout);
+    void buildParameterControls(QVBoxLayout *mainLayout);
+    void buildProgressControls(QVBoxLayout *mainLayout);
     void connectControls();
     void buildConfig(mviewer::domain::BatchJobConfig &config) const;
     void updateUiState(bool running);
+    void updateParamVisibility();
     // Completion path of a batch run: drains the QFutureWatcher (which rethrows a
     // worker exception), reports the summary and resets the dialog for reuse.
     void finishBatch(QFutureWatcher<mviewer::domain::BatchJobResult> *watcher);
@@ -82,21 +84,32 @@ class BatchDialog : public QDialog
 
     // ── resize params ──────────────────────────────────────────────
     QSpinBox *m_resizeMaxEdge = nullptr;
+    QWidget *m_resizePanel = nullptr;
+
+    // ── crop params ────────────────────────────────────────────────
+    QSpinBox *m_cropX = nullptr;
+    QSpinBox *m_cropY = nullptr;
+    QSpinBox *m_cropW = nullptr;
+    QSpinBox *m_cropH = nullptr;
+    QWidget *m_cropPanel = nullptr;
 
     // ── watermark params ───────────────────────────────────────────
     QLineEdit *m_watermarkText = nullptr;
     QComboBox *m_watermarkPos = nullptr;
     QDoubleSpinBox *m_watermarkOpacity = nullptr;
     QSpinBox *m_watermarkFontSize = nullptr;
+    QWidget *m_watermarkPanel = nullptr;
 
     // ── rename params ──────────────────────────────────────────────
     QLineEdit *m_renamePattern = nullptr;
+    QWidget *m_renamePanel = nullptr;
 
     // ── export params ──────────────────────────────────────────────
     QComboBox *m_exportFormat = nullptr;
     QSpinBox *m_exportQuality = nullptr;
     QLineEdit *m_outputDir = nullptr;
     QPushButton *m_browseBtn = nullptr;
+    QWidget *m_exportPanel = nullptr;
 
     // ── progress ──────────────────────────────────────────────────
     QProgressBar *m_progress = nullptr;
