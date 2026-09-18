@@ -5,7 +5,6 @@
 ### Code Quality
 
 - **thumbnailpanel_fileops ADR-014 split**: Shared progress/queue helpers and batch finish extraction bring the three tracked file-ops functions under the span cap.
-- **RenderEngine bilinear SSE2**: Vectorize `bilinearQ` inner loop (4 px/iter) with SSE2-weighted channel blends gated by `CpuFeatures::hasSSE2()`, preserving scalar rounding (`+128 >> 8`) and scalar tail.
 - **RenderEngine bilinear SSE2**: Move `bilinearQ` into `BilinearScale.cpp` with SSE2 4-px blends (`CpuFeatures::hasSSE2()`), scalar-equivalent `+128 >> 8` rounding, and row helpers under the ADR-014 function/file caps.
 - **scheduleHistogramRefresh ADR-014 split**: Extract `collectHistogramIndices`, `computeHistogramBatch`, and `clearMainHistogramForEmptyPlan`; retire the debt entry.
 - **PreviewPanel::setImage ADR-014 split**: Extract `clearPreview`, `presentWarmThumbnail`, `loadPreviewPixels`, `decodePreviewWorker`, and delivery helpers so `setImage` stays under the function-span cap; retire the two previewpanel `$knownFunctionDebt` entries.
