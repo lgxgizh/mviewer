@@ -33,7 +33,8 @@ constexpr qsizetype kScannerChunkBytes = 64 * 1024;
 class ChunkReader
 {
   public:
-    explicit ChunkReader(QFile &file) : m_file(file), m_buffer(kScannerChunkBytes, Qt::Uninitialized)
+    explicit ChunkReader(QFile &file)
+        : m_file(file), m_buffer(kScannerChunkBytes, Qt::Uninitialized)
     {
     }
 
@@ -125,9 +126,14 @@ qint64 jpegEndAt(QFile &file, qint64 start)
     if (!reader.readByte(soi0) || !reader.readByte(soi1) || soi0 != 0xff || soi1 != 0xd8)
         return -1;
 
+    constexpr int kMaxJpegMarkers = 65536;
+    int markerCount = 0;
     bool scanData = false;
     for (;;)
     {
+        if (++markerCount > kMaxJpegMarkers)
+            return -1;
+
         uint8_t marker = 0;
         if (scanData)
         {
@@ -228,18 +234,27 @@ ImageData toImageData(const QImage &src)
 {
     if (src.isNull())
         return ImageData();
-    const QImage img = src.convertToFormat(QImage::Format_RGB888);
+    const QImage img =
+        (src.format() == QImage::Format_RGB888) ? src : src.convertToFormat(QImage::Format_RGB888);
     if (img.isNull())
         return ImageData();
     ImageData out = makeImageData(img.width(), img.height(), PixelFormat::RGB24);
     const int w = img.width();
     const int h = img.height();
     const size_t rowBytes = static_cast<size_t>(w) * 3;
-    for (int y = 0; y < h; ++y)
+    const qsizetype bytesPerLine = img.bytesPerLine();
+    if (bytesPerLine == static_cast<qsizetype>(rowBytes) && out.stride() == rowBytes)
     {
-        const uchar *s = img.constScanLine(y);
-        uint8_t *d = out.buffer->data() + static_cast<size_t>(y) * out.stride();
-        std::memcpy(d, s, rowBytes);
+        std::memcpy(out.buffer->data(), img.constBits(), rowBytes * static_cast<size_t>(h));
+    }
+    else
+    {
+        for (int y = 0; y < h; ++y)
+        {
+            const uchar *s = img.constScanLine(y);
+            uint8_t *d = out.buffer->data() + static_cast<size_t>(y) * out.stride();
+            std::memcpy(d, s, rowBytes);
+        }
     }
     return out;
 }
@@ -248,9 +263,8 @@ ImageData toImageData(const QImage &src)
 
 bool RawDecoder::canDecode(const std::string &path) const
 {
-    const QString ext = QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size())))
-                            .suffix()
-                            .toLower();
+    const QString ext =
+        QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).suffix().toLower();
     for (const char *e : kRawExts)
     {
         if (ext == QString::fromLatin1(e))

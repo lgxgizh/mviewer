@@ -225,6 +225,68 @@ static void testMetadataHostileOffsets()
         CHECK(std::abs(m.gpsLatitude - 40.5) < 1e-6 && std::abs(m.gpsLongitude - 80.0) < 1e-6,
               "GPS coordinates parsed exactly");
     }
+
+    // (f) Positive control: GPS IFD nested inside Exif IFD (0x8769 -> 0x8825)
+    //     Many cameras put GPS IFD inside Exif IFD rather than root IFD0.
+    {
+        const std::string p = (dir.path() + "/nested-gps.tif").toStdString();
+        writeBytes(p,
+                   "49492a0008000000"                                 // II*\0, IFD0 at 8
+                   "0100"                                             // IFD0: 1 entry
+                   "69870400010000001a000000"                         // Exif IFD pointer -> 26
+                   "00000000"                                         // no next IFD
+                   "0100"                                             // Exif IFD at 26: 1 entry
+                   "25880400010000002c000000"                         // GPS IFD pointer -> 44
+                   "00000000"                                         // no next IFD
+                   "0200"                                             // GPS IFD at 44: 2 entries
+                   "02000500030000004a000000"                         // GPSLatitude -> 74
+                   "040005000300000062000000"                         // GPSLongitude -> 98
+                   "00000000"                                         // no next IFD
+                   "23000000010000000f000000010000000000000001000000" // 35/1, 15/1, 0/1 (35.25 N)
+                   "8b000000010000002d000000010000000000000001000000" // 139/1, 45/1, 0/1 (139.75 E)
+        );
+        const mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
+        CHECK(m.hasGps, "GPS nested in Exif IFD discovered and parsed");
+        CHECK(std::abs(m.gpsLatitude - 35.25) < 1e-6 && std::abs(m.gpsLongitude - 139.75) < 1e-6,
+              "nested GPS coordinates match expected values");
+    }
+
+    // (g) Hostile/out-of-bounds latitude (e.g. 150.0 degrees) must be rejected
+    {
+        const std::string p = (dir.path() + "/invalid-lat-gps.tif").toStdString();
+        writeBytes(p,
+                   "49492a0008000000"
+                   "0100"
+                   "25880400010000001a000000"
+                   "00000000"
+                   "0200"
+                   "020005000300000038000000"
+                   "040005000300000050000000"
+                   "00000000"
+                   "960000000100000000000000010000000000000001000000" // 150/1 deg lat (> 90!)
+                   "500000000100000000000000010000000000000001000000" // 80/1 deg lon
+        );
+        const mviewer::domain::ImageMetadata m = mviewer::core::MetadataReader::read(p);
+        CHECK(!m.hasGps, "Out-of-bounds latitude (>90 deg) rejected from GPS report");
+    }
+
+    // (h) Hostile huge thumbnail length in IFD1
+    {
+        const std::string p = (dir.path() + "/evil-thumb.tif").toStdString();
+        // IFD0 at 8, 0 entries, next IFD -> 14 (IFD1)
+        // IFD1 at 14: 2 entries: tag 0x0201 (thumb offset=50), tag 0x0202 (thumb len=0x7FFFFFFF)
+        writeBytes(p,
+                   "49492a0008000000"         // II*\0, IFD0 at 8
+                   "0000"                     // 0 entries
+                   "0e000000"                 // next IFD -> 14
+                   "0200"                     // IFD1: 2 entries
+                   "010204000100000032000000" // 0x0201: offset 50
+                   "0202040001000000ffffff7f" // 0x0202: length 0x7FFFFFFF
+                   "00000000"                 // next IFD 0
+        );
+        const auto thumb = mviewer::core::MetadataReader::extractExifThumbnail(p);
+        CHECK(thumb.empty(), "hostile 2GB thumbnail length safely rejected without allocation");
+    }
 }
 
 int main(int argc, char **argv)

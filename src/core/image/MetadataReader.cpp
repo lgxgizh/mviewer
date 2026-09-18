@@ -186,6 +186,17 @@ QByteArray readExifPayload(QFile &file, bool isJpeg)
         if (marker.size() < 2 || static_cast<unsigned char>(marker[0]) != 0xFF)
             break;
         const unsigned char code = static_cast<unsigned char>(marker[1]);
+        if (code == 0xFF)
+        {
+            // Consecutive 0xFF is fill/padding in JPEG; realign back one byte
+            file.seek(file.pos() - 1);
+            continue;
+        }
+        if (code == 0xD8 || code == 0x01 || (code >= 0xD0 && code <= 0xD7))
+            continue; // Standalone markers with no length payload
+        if (code == 0xD9 || code == 0xDA)
+            break; // EOI (end of image) or SOS (start of scan data) terminates header scanning
+
         const QByteArray length = file.read(2);
         if (length.size() < 2)
             break;
@@ -194,6 +205,9 @@ QByteArray readExifPayload(QFile &file, bool isJpeg)
         if (segmentSize < 2)
             break;
         segmentSize -= 2;
+        if (segmentSize > file.size() - file.pos())
+            break;
+
         if (code != 0xE1 || segmentSize < 6)
         {
             file.seek(file.pos() + segmentSize);
@@ -202,7 +216,10 @@ QByteArray readExifPayload(QFile &file, bool isJpeg)
         const QByteArray signature = file.read(6);
         segmentSize -= 6;
         if (signature == QByteArray("Exif\0\0", 6))
-            return file.read(segmentSize);
+        {
+            const qint64 readBytes = std::min<qint64>(segmentSize, kMaxExifPayloadBytes);
+            return file.read(readBytes);
+        }
         file.seek(file.pos() + segmentSize);
     }
     return {};
@@ -215,13 +232,30 @@ uint32_t findGpsIfd(const unsigned char *data, int size, bool little)
     if (ifd0 == 0 || !fits(ifd0, 2, total))
         return 0;
     const uint16_t count = readU16(data + ifd0, little);
+    uint32_t exifIfd = 0;
     for (uint16_t i = 0; i < count; ++i)
     {
         const size_t offset = static_cast<size_t>(ifd0) + 2 + static_cast<size_t>(i) * 12;
         if (!fits(offset, 12, total))
             break;
-        if (readU16(data + offset, little) == 0x8825)
+        const uint16_t tag = readU16(data + offset, little);
+        if (tag == 0x8825)
             return readU32(data + offset + 8, little);
+        if (tag == 0x8769)
+            exifIfd = readU32(data + offset + 8, little);
+    }
+    // Cameras often nest the GPS IFD pointer inside the Exif IFD rather than IFD0
+    if (exifIfd > 0 && fits(exifIfd, 2, total))
+    {
+        const uint16_t exifCount = readU16(data + exifIfd, little);
+        for (uint16_t i = 0; i < exifCount; ++i)
+        {
+            const size_t offset = static_cast<size_t>(exifIfd) + 2 + static_cast<size_t>(i) * 12;
+            if (!fits(offset, 12, total))
+                break;
+            if (readU16(data + offset, little) == 0x8825)
+                return readU32(data + offset + 8, little);
+        }
     }
     return 0;
 }
@@ -294,15 +328,38 @@ GpsValues parseGpsIfd(const unsigned char *data, int size, bool little, uint32_t
         }
     }
     if (values.hasLat)
+    {
         values.lat = lat[0] + lat[1] / 60.0 + lat[2] / 3600.0;
+        if (!north)
+            values.lat = -values.lat;
+        if (!std::isfinite(values.lat) || values.lat < -90.0 || values.lat > 90.0)
+        {
+            values.lat = 0.0;
+            values.hasLat = false;
+        }
+    }
     if (values.hasLon)
+    {
         values.lon = lon[0] + lon[1] / 60.0 + lon[2] / 3600.0;
-    if (!north)
-        values.lat = -values.lat;
-    if (!east)
-        values.lon = -values.lon;
-    if (!aboveSea)
-        values.altitude = -values.altitude;
+        if (!east)
+            values.lon = -values.lon;
+        if (!std::isfinite(values.lon) || values.lon < -180.0 || values.lon > 180.0)
+        {
+            values.lon = 0.0;
+            values.hasLon = false;
+        }
+    }
+    if (values.hasAlt)
+    {
+        if (!aboveSea)
+            values.altitude = -values.altitude;
+        if (!std::isfinite(values.altitude) || values.altitude < -20000.0 ||
+            values.altitude > 100000.0)
+        {
+            values.altitude = 0.0;
+            values.hasAlt = false;
+        }
+    }
     return values;
 }
 } // namespace
@@ -405,7 +462,9 @@ std::vector<uint8_t> MetadataReader::extractExifThumbnail(const std::string &fil
             thumbLength = readU32(data + entryOffset + 8, little);
     }
 
-    if (thumbOffset > 0 && thumbLength > 0 && fits(thumbOffset, thumbLength, total))
+    constexpr uint32_t kMaxThumbnailBytes = 16u * 1024u * 1024u;
+    if (thumbOffset > 0 && thumbLength > 0 && thumbLength <= kMaxThumbnailBytes &&
+        fits(thumbOffset, thumbLength, total))
     {
         const unsigned char *thumbData = data + thumbOffset;
         if (thumbLength >= 4 && thumbData[0] == 0xFF && thumbData[1] == 0xD8)
