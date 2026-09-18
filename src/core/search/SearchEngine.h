@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace mviewer::domain
@@ -26,6 +27,9 @@ class SearchIndex
 {
   public:
     SearchIndex() = default;
+
+    // Reserve capacity for expected entries.
+    void reserve(size_t capacity);
 
     // Add or update the index entry for a single file.
     void indexFile(const std::string &path, const domain::ImageMetadata &meta,
@@ -60,6 +64,7 @@ class SearchIndex
         std::string blob; // concatenated, lowercased searchable text
     };
     std::vector<Entry> m_blobs;
+    std::unordered_map<std::string, size_t> m_pathIndex;
 
     static std::string buildBlob(const domain::ImageMetadata &meta, const RawMetadata &raw,
                                  const std::string &analysisText);

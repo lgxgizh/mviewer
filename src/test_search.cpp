@@ -309,6 +309,49 @@ int main(int argc, char *argv[])
         CHECK(a < b, "Higher score should sort before lower score");
     }
 
+    // ── Performance & Scale: O(1) Indexing & Case-folding ──────────────
+    {
+        mviewer::core::SearchIndex largeIdx;
+        largeIdx.reserve(5000);
+        for (int i = 0; i < 5000; ++i)
+        {
+            const std::string p = "/gallery/img_" + std::to_string(i) + ".raw";
+            largeIdx.indexBlob(p, "camera=sony a7iv lens=fe 50mm f/1.2 gm iso=" +
+                                      std::to_string(100 + i % 1000));
+        }
+        CHECK(largeIdx.size() == 5000, "Should index 5000 files successfully");
+
+        // O(1) in-place update
+        largeIdx.indexBlob("/gallery/img_42.raw", "camera=hasselblad x2d lens=xcd 55mm f/2.5");
+        CHECK(largeIdx.size() == 5000, "Size unchanged on re-indexing existing path");
+
+        // Query with case-folding
+        mviewer::domain::SearchQuery q;
+        q.text = "HASSELBLAD";
+        q.caseSensitive = false;
+        q.searchMetadata = true;
+        q.searchFilenames = false;
+        auto results = largeIdx.search(q);
+        CHECK(results.size() == 1,
+              "Case-insensitive query 'HASSELBLAD' should find exactly 1 file");
+        CHECK(results[0].filePath == "/gallery/img_42.raw", "Should match img_42");
+        CHECK(!results[0].matches.empty() && !results[0].matches[0].snippet.empty(),
+              "Snippet generated");
+
+        // Case-sensitive negative test
+        q.caseSensitive = true;
+        auto resultsCase = largeIdx.search(q);
+        CHECK(resultsCase.empty(),
+              "Case-sensitive uppercase query should not match lowercased blob");
+
+        // Remove and verify
+        largeIdx.removeFile("/gallery/img_42.raw");
+        CHECK(largeIdx.size() == 4999, "Size should be 4999 after removeFile");
+        q.caseSensitive = false;
+        auto resultsAfterRemove = largeIdx.search(q);
+        CHECK(resultsAfterRemove.empty(), "Removed file should no longer be found");
+    }
+
     std::fprintf(stderr, "%s: %d failures\n", g_fail == 0 ? "All tests passed" : "Tests failed",
                  g_fail);
     return g_fail == 0 ? 0 : 1;

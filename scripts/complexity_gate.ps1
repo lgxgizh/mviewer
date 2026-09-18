@@ -97,7 +97,6 @@ $knownFunctionDebt = @{
     'src/mainwindow_export.cpp::startReportExport'                  = 'span 139'
     'src/core/metadata/MetadataIndexer.cpp::index'                  = 'span 136'
     'src/core/image/decoder/QtDecoder.cpp::decodeTiffWic'           = 'span 133 / cc 32'
-    'src/core/batch/BatchProcessor.cpp::processFile'                = 'span 130'
     'src/core/image/ImageRepository_async.cpp::loadAsyncCancellable' = 'span 127'
     'src/core/metadata/MetadataIndexer.cpp::indexBatched'           = 'span 122'
     'src/core/image/FrameSequence.cpp::selectFrame'                 = 'span 121'

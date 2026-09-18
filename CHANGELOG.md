@@ -17,6 +17,20 @@
   - Optimized `Aligner::shift` by hoisting row pointer offsets and using linear pointer increments.
 - **SSE2 Vectorized Difference Statistics in `DifferenceEngine` (`core/compare/DifferenceEngine.cpp`)**:
   - Vectorized difference accumulation, threshold count, and peak diff calculation in `DifferenceEngine::computeStats` using SSE2 intrinsics (`_mm_sad_epu8`, `_mm_subs_epu8`, `_mm_max_epu8`), providing a ~4.0x speedup for Grayscale8 diff maps across both whole images and arbitrary ROI row slices.
+- **AVX2 & SSSE3 Vectorized Pixel Format Conversions (`core/image/QtConvert.cpp`)**:
+  - **SIMD Channel Swizzling**: Accelerated `RGBA32` to `Format_ARGB32` with AVX2 (`_mm256_shuffle_epi8`, 8 pixels/iter) and SSSE3 (`_mm_shuffle_epi8`, 4 pixels/iter) kernels, bypassing scalar byte arithmetic.
+  - **Zero-Copy & Direct Buffer Extraction**: Direct row memcpy for `BGRA32` (which natively matches little-endian `Format_ARGB32` representation) and contiguous buffer bulk copy when strides align. Direct SIMD RGB extraction from `Format_ARGB32` and `Format_RGB32` in `fromQImage`, eliminating temporary `QImage` allocations and Qt's generic `convertToFormat`.
+- **$O(1)$ Hash Indexing & Case-Fold Search Optimization (`core/search/SearchEngine.cpp`, `core/search/SearchEngine.h`)**:
+  - **$O(1)$ Hash Map Lookup**: Replaced $O(N)$ linear scans in `SearchIndex::indexBlob`, `indexFile`, and `removeFile` with an `unordered_map` index table, avoiding $O(N^2)$ overhead when indexing large directories. Added `reserve()` for bulk preallocation.
+  - **Single-Pass Case Folding**: Hoisted query lowercasing outside the entry search loop and leveraged pre-lowercased searchable blobs, eliminating millions of redundant heap string allocations during search queries.
+
+### Correctness, Hardening & ADR-014 Compliance
+
+- **BatchProcessor Function Debt Elimination (`core/batch/BatchProcessor.cpp`)**:
+  - Decomposed 130-line `processFile` orchestrator into static, single-responsibility step helpers (`applyAnalyzeOp`, `applyCropOp`, `applyResizeOp`, `applyWatermarkOp`, `applyExportOp`). Reduced function span to 42 lines, strictly complying with the 120-line ceiling and removing `BatchProcessor.cpp::processFile` from `$knownFunctionDebt` in `scripts/complexity_gate.ps1`.
+- **Unit Test Coverage (`core/test_qtconvert.cpp`, `test_search.cpp`)**:
+  - Added comprehensive test suite `test_qtconvert` covering null buffers, `Grayscale8`, `RGB24`, `RGBA32` with odd/unaligned dimensions, `BGR24`, `Format_ARGB32` extraction, non-owning reference semantics, and full round-trip parity.
+  - Added large-scale 5,000-file indexing and case-insensitive query benchmarks in `test_search.cpp`.
 
 ## [1.0.54] - 2026-09-17
 
