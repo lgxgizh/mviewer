@@ -80,6 +80,32 @@
 - **Comprehensive Analyzer Extension Test Suite (`core/test_analyzer_ext.cpp`)**:
   - Added unit test suites verifying SIMD Grayscale8 and RGB24 paths, statistical bounds, degenerate/inverted ROI rejection, and edge response metrics across all 13 core analyzers, achieving 81 passing assertions (110 assertions across all analyzer test suites).
 
+### Performance & Cache Architecture
+
+- **$O(1)$ Constant-Time LRU Cache Splice (`ImageCache`, `core/image/ImageCache.cpp`, `core/image/ImageCache.h`)**:
+  - Replaced $O(N)$ linear `std::list::remove(key)` operations across `touch()`, `put()`, and `remove()` with strictly $O(1)$ list iterator splicing (`std::list::splice`) and node erasure (`std::list::erase`), eliminating linear string scanning bottlenecks during high-throughput thumbnail and full-image cache queries.
+  - Added early refusal for entries whose `byteSize` exceeds the pool capacity (`bytes > pool.maxBytes`) *before* invoking `evictIfNeeded()`, fixing a critical cache bug where an oversized decode candidate would evict all existing cached items before being rejected.
+  - Added empty key and null image guards across all cache manipulation entry points.
+
+- **$O(1)$ Constant-Time Metadata & Raw16 LRU Management (`CacheManager`, `core/cache/CacheManager.cpp`, `core/cache/CacheManager.h`)**:
+  - Upgraded `m_metaStore` and `m_raw16Store` to retain list iterators (`orderIt`) within entry structures, converting LRU reordering and victim eviction into strictly $O(1)$ operations across up to 50,000 cached metadata entries.
+  - Guarded `putMetadata`, `getMetadata`, and `putRaw16` against empty keys and invalid buffers.
+
+- **DiskCache Memory Bounds Hardening (`DiskCache`, `core/image/DiskCache.cpp`)**:
+  - Enforced a 256-Megapixel allocation budget limit (`kMaxCachedPixels = 256M`) in `DiskCache::get()` and `DiskCache::put()`, preventing corrupted or malicious SQLite rows with extreme dimensions from triggering `std::bad_alloc` or integer overflow.
+  - Guarded `DiskCache::put()` and `DiskCache::remove()` against empty keys.
+
+- **Direct-Buffer Raw16 Sample Extraction (`ImageRepository`, `core/image/ImageRepository_load.cpp`)**:
+  - Optimized `captureRaw16()` to pre-allocate exact sample capacity and write directly into buffer memory via scanline pointer arithmetic and `std::memcpy` for Grayscale16, eliminating millions of individual `push_back()` calls and dynamic reallocations.
+  - Removed redundant `putMemory()` call in `loadMemoryHit()` when the cache hit already retrieved and touched the entry.
+
+- **Unit Test Harness Expansion (`core/test_cache.cpp`)**:
+  - Expanded `test_cache` with 26 new assertions (77 total passing, 0 failed), asserting:
+    - Protection against cache blowout when inserting oversized entries (`testOversizedItemDoesNotFlushCache`).
+    - Scalability and strict LRU order preservation over 500 items with eviction verification (`testO1LruScalability`).
+    - Metadata $O(1)$ LRU touch, invalidation, and empty key resilience (`testMetadataLruAndHardening`).
+    - DiskCache pathological dimension rejection and key boundary safety (`testDiskCacheBoundsHardening`).
+
 ## [1.0.56] - 2026-09-18
 
 ### Reliability, Decoder Bounds & Stream Hardening
