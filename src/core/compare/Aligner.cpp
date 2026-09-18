@@ -5,20 +5,31 @@
 #include <cstring>
 #include <limits>
 
+#if defined(_MSC_VER)
+#include <immintrin.h>
+#elif defined(__GNUC__) || defined(__clang__)
+#include <immintrin.h>
+#endif
+
 namespace mviewer
 {
 namespace
 {
 
-// Convert any RGB/RGBA image to an 8-bit luminance gray image.
+// Convert any RGB/RGBA/BGR/BGRA image to an 8-bit luminance gray image.
 ImageData toGray(const ImageData &src)
 {
     if (src.isNull())
         return ImageData{};
+    if (src.format == PixelFormat::Grayscale8)
+        return src;
     ImageData g = makeImageData(src.width, src.height, PixelFormat::Grayscale8);
     const ImageBuffer v = src.view();
     const ImageBuffer gv = g.view();
     const int cpp = src.channelsPerPixel();
+    const bool isBgr = (src.format == PixelFormat::BGR24 || src.format == PixelFormat::BGRA32);
+    const int rOffset = isBgr ? 2 : 0;
+    const int bOffset = isBgr ? 0 : 2;
     for (int y = 0; y < src.height; ++y)
     {
         const uint8_t *row = v.data + static_cast<size_t>(y) * v.stride();
@@ -29,10 +40,10 @@ ImageData toGray(const ImageData &src)
         }
         else
         {
-            for (int x = 0; x < src.width; ++x)
+            const uint8_t *p = row;
+            for (int x = 0; x < src.width; ++x, p += cpp)
             {
-                const uint8_t *p = row + static_cast<size_t>(x) * cpp;
-                grow[x] = static_cast<uint8_t>(std::clamp(luminance(p[0], p[1], p[2]), 0, 255));
+                grow[x] = static_cast<uint8_t>(luminance(p[rOffset], p[1], p[bOffset]));
             }
         }
     }
@@ -42,13 +53,16 @@ ImageData toGray(const ImageData &src)
 // Box-average downscale to a gray image sampled every `scale` pixels.
 ImageData downscaleBy(const ImageData &src, int scale)
 {
-    if (src.isNull() || scale <= 1)
-        return toGray(src);
-    const int w = src.width, h = src.height;
+    if (src.isNull())
+        return ImageData{};
+    ImageData gray = (src.format == PixelFormat::Grayscale8) ? src : toGray(src);
+    if (gray.isNull() || scale <= 1)
+        return gray;
+    const int w = gray.width, h = gray.height;
     const int dw = std::max(1, w / scale);
     const int dh = std::max(1, h / scale);
     ImageData d = makeImageData(dw, dh, PixelFormat::Grayscale8);
-    const ImageBuffer v = src.view();
+    const ImageBuffer v = gray.view();
     const ImageBuffer dv = d.view();
     for (int y = 0; y < dh; ++y)
     {
@@ -115,15 +129,29 @@ AlignOffset Aligner::estimate(const ImageData &ref, const ImageData &moving, int
                 continue;
             long long sad = 0;
             const int overlap = (colHi - colLo) * (rowHi - rowLo);
+            const int len = colHi - colLo;
             for (int y = rowLo; y < rowHi; ++y)
             {
                 const uint8_t *rp = rv.data + static_cast<size_t>(y) * rv.stride() + colLo;
                 const uint8_t *mp =
                     mv.data + static_cast<size_t>(y - dy) * mv.stride() + (colLo - dx);
-                for (int x = colLo; x < colHi; ++x)
+                int x = 0;
+#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+                __m128i vsum = _mm_setzero_si128();
+                for (; x + 16 <= len; x += 16)
                 {
-                    const int d = static_cast<int>(rp[x - colLo]) - static_cast<int>(mp[x - colLo]);
-                    sad += d < 0 ? -d : d;
+                    const __m128i vr = _mm_loadu_si128(reinterpret_cast<const __m128i *>(rp + x));
+                    const __m128i vm = _mm_loadu_si128(reinterpret_cast<const __m128i *>(mp + x));
+                    vsum = _mm_add_epi64(vsum, _mm_sad_epu8(vr, vm));
+                }
+                alignas(16) uint64_t sums[2];
+                _mm_store_si128(reinterpret_cast<__m128i *>(sums), vsum);
+                sad += static_cast<long long>(sums[0] + sums[1]);
+#endif
+                for (; x < len; ++x)
+                {
+                    const int d = static_cast<int>(rp[x]) - static_cast<int>(mp[x]);
+                    sad += (d < 0 ? -d : d);
                 }
             }
             const long long avg = sad / overlap;
@@ -150,16 +178,17 @@ ImageData Aligner::shift(const ImageData &src, int dx, int dy, uint8_t fill)
     const int cpp = src.channelsPerPixel();
     for (int y = 0; y < h; ++y)
     {
-        for (int x = 0; x < w; ++x)
+        uint8_t *dst = ov.data + static_cast<size_t>(y) * ov.stride();
+        const int sy = y - dy;
+        const bool yInBounds = (sy >= 0 && sy < h);
+        const uint8_t *srcRow =
+            yInBounds ? (v.data + static_cast<size_t>(sy) * v.stride()) : nullptr;
+        for (int x = 0; x < w; ++x, dst += cpp)
         {
             const int sx = x - dx;
-            const int sy = y - dy;
-            uint8_t *dst =
-                ov.data + static_cast<size_t>(y) * ov.stride() + static_cast<size_t>(x) * cpp;
-            if (sx >= 0 && sx < w && sy >= 0 && sy < h)
+            if (yInBounds && sx >= 0 && sx < w)
             {
-                const uint8_t *p =
-                    v.data + static_cast<size_t>(sy) * v.stride() + static_cast<size_t>(sx) * cpp;
+                const uint8_t *p = srcRow + static_cast<size_t>(sx) * cpp;
                 for (int c = 0; c < cpp; ++c)
                     dst[c] = p[c];
             }

@@ -102,10 +102,15 @@ static void testViewportVisibleRect()
     CHECK(x == 100 && y == 100, "visible rect origin clamped to image bounds");
     CHECK(w == 800 && h == 800, "visible rect size = widget / scale");
 
-    // Fully off-image: offset far away -> empty
+    // Fully off-image: offset far positive -> empty
     Viewport vp2(800, 800, 1.0, 5000.0, 5000.0);
     vp2.visibleImageRect(1000, 1000, x, y, w, h);
-    CHECK(w == 0 && h == 0, "off-image viewport reports empty visible rect");
+    CHECK(w == 0 && h == 0, "off-image viewport (far positive) reports empty visible rect");
+
+    // Fully off-image: offset far negative -> empty (prevents negative width/height)
+    Viewport vp3(800, 800, 1.0, -5000.0, -5000.0);
+    vp3.visibleImageRect(1000, 1000, x, y, w, h);
+    CHECK(w == 0 && h == 0, "off-image viewport (far negative) reports empty visible rect");
 }
 
 static void testTileGrid()

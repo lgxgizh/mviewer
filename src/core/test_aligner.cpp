@@ -118,6 +118,82 @@ int main()
         return 1;
     }
 
+    // Test case 2: scale > 1 (e.g. 600x450 image has scale = 600 / 256 = 2).
+    // Previously downscaleBy treated multi-channel rows as raw bytes without
+    // stride / channel indexing, causing auto-align to fail on >256px images.
+    {
+        const int W2 = 600, H2 = 450;
+        QImage img2(W2, H2, QImage::Format_RGB32);
+        img2.fill(qRgb(20, 20, 20));
+        for (int y = 150; y < 300; ++y)
+            for (int x = 200; x < 400; ++x)
+                img2.setPixel(x, y, qRgb(230, 230, 230));
+
+        ImageData a2 = mvcore::fromQImage(img2);
+        const int truthDx2 = 8, truthDy2 = 6;
+        ImageData moving2 = mviewer::Aligner::shift(a2, truthDx2, truthDy2);
+
+        mviewer::AlignOffset off2 = mviewer::Aligner::estimate(a2, moving2, 32);
+        printf("scale>1 estimated offset dx=%d dy=%d (expect ~ %d,%d)\n", off2.x, off2.y, -truthDx2,
+               -truthDy2);
+        if (std::abs(off2.x + truthDx2) > 2 || std::abs(off2.y + truthDy2) > 2)
+        {
+            printf("FAIL: scale>1 estimated offset out of expected range\n");
+            return 1;
+        }
+    }
+
+    // Test case 3: BGR24 format alignment.
+    {
+        const int W3 = 100, H3 = 80;
+        ImageData a3 = makeImageData(W3, H3, PixelFormat::BGR24);
+        std::fill(a3.buffer->begin(), a3.buffer->end(), uint8_t(30));
+        for (int y = 20; y < 60; ++y)
+            for (int x = 25; x < 75; ++x)
+            {
+                const size_t idx =
+                    static_cast<size_t>(y) * a3.stride() + static_cast<size_t>(x) * 3;
+                (*a3.buffer)[idx + 0] = 50;  // B
+                (*a3.buffer)[idx + 1] = 200; // G
+                (*a3.buffer)[idx + 2] = 220; // R
+            }
+
+        const int truthDx3 = 4, truthDy3 = -3;
+        ImageData moving3 = mviewer::Aligner::shift(a3, truthDx3, truthDy3);
+        mviewer::AlignOffset off3 = mviewer::Aligner::estimate(a3, moving3, 16);
+        printf("BGR24 estimated offset dx=%d dy=%d (expect ~ %d,%d)\n", off3.x, off3.y, -truthDx3,
+               -truthDy3);
+        if (std::abs(off3.x + truthDx3) > 1 || std::abs(off3.y + truthDy3) > 1)
+        {
+            printf("FAIL: BGR24 estimated offset out of expected range\n");
+            return 1;
+        }
+    }
+
+    // Test case 4: Grayscale8 format alignment.
+    {
+        const int W4 = 120, H4 = 90;
+        ImageData a4 = makeImageData(W4, H4, PixelFormat::Grayscale8);
+        std::fill(a4.buffer->begin(), a4.buffer->end(), uint8_t(25));
+        for (int y = 30; y < 60; ++y)
+            for (int x = 40; x < 80; ++x)
+            {
+                const size_t idx = static_cast<size_t>(y) * a4.stride() + x;
+                (*a4.buffer)[idx] = 210;
+            }
+
+        const int truthDx4 = -5, truthDy4 = 4;
+        ImageData moving4 = mviewer::Aligner::shift(a4, truthDx4, truthDy4);
+        mviewer::AlignOffset off4 = mviewer::Aligner::estimate(a4, moving4, 16);
+        printf("Grayscale8 estimated offset dx=%d dy=%d (expect ~ %d,%d)\n", off4.x, off4.y,
+               -truthDx4, -truthDy4);
+        if (std::abs(off4.x + truthDx4) > 1 || std::abs(off4.y + truthDy4) > 1)
+        {
+            printf("FAIL: Grayscale8 estimated offset out of expected range\n");
+            return 1;
+        }
+    }
+
     printf("PASS\n");
     return 0;
 }

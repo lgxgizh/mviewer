@@ -187,9 +187,11 @@ int main(int argc, char **argv)
         auto hlGray = DifferenceEngine::highlightMap(diffGray, baseGray, 10);
         CHECK(!hlGray.isNull() && hlGray.format == PixelFormat::RGB24,
               "highlightMap Grayscale8 base non-null");
-        CHECK((*hlGray.buffer)[0] > (*hlGray.buffer)[1] && (*hlGray.buffer)[0] > (*hlGray.buffer)[2],
+        CHECK((*hlGray.buffer)[0] > (*hlGray.buffer)[1] &&
+                  (*hlGray.buffer)[0] > (*hlGray.buffer)[2],
               "highlightMap Grayscale8 diff pixel is red");
-        CHECK((*hlGray.buffer)[3] == 180 && (*hlGray.buffer)[4] == 180 && (*hlGray.buffer)[5] == 180,
+        CHECK((*hlGray.buffer)[3] == 180 && (*hlGray.buffer)[4] == 180 &&
+                  (*hlGray.buffer)[5] == 180,
               "highlightMap similar pixel equals Grayscale8 base");
     }
 
@@ -275,6 +277,24 @@ int main(int argc, char **argv)
         CHECK(stats.totalPixels == w * h, "contiguous computeStats total matches");
         CHECK(stats.diffPixels == 3, "contiguous computeStats diff count matches");
         CHECK(stats.maxDiff == 50, "contiguous computeStats maxDiff is 50");
+
+        // ROI row-by-row vectorized computeStats
+        const int roiX = 5, roiY = 1, roiW = 36, roiH = 2;
+        const auto roiStats = DifferenceEngine::computeStats(diff, 25, roiX, roiY, roiW, roiH);
+        CHECK(roiStats.totalPixels == static_cast<long long>(roiW) * roiH,
+              "ROI computeStats totalPixels matches");
+        // Diff at 33 is on row 0 (x=33). Diff at 47 is on row 0 (x=47).
+        // For y=1..2 (rows 1 and 2), diff pixels are all 0.
+        CHECK(roiStats.diffPixels == 0, "ROI computeStats thresholded diffPixels correct");
+        CHECK(roiStats.maxDiff == 0, "ROI computeStats maxDiff correct");
+
+        // ROI covering row 0 where diffs reside
+        const auto roiStatsRow0 = DifferenceEngine::computeStats(diff, 25, 0, 0, 48, 1);
+        CHECK(roiStatsRow0.totalPixels == 48, "row0 ROI totalPixels = 48");
+        // Row 0 has diffs at x=0 (50), x=33 (20), x=47 (30).
+        // With threshold=25: x=0 (50 >= 25) and x=47 (30 >= 25) qualify. x=33 (20 < 25) does not.
+        CHECK(roiStatsRow0.diffPixels == 2, "row0 ROI diffPixels with threshold=25 equals 2");
+        CHECK(roiStatsRow0.maxDiff == 50, "row0 ROI maxDiff is 50");
     }
 
     std::cout << "\nDifferenceEngine: " << (g_fail == 0 ? "ALL PASSED" : "FAILURES") << "\n";
