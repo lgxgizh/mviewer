@@ -7,6 +7,11 @@
 #include <iomanip>
 #include <sstream>
 
+#if defined(__SSE2__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 2)
+#include <emmintrin.h>
+#define MV_RGB_SSE2 1
+#endif
+
 namespace
 {
 bool computeRGB(const ImageData &img, const mviewer::domain::Selection &region,
@@ -29,8 +34,8 @@ bool computeRGB(const ImageData &img, const mviewer::domain::Selection &region,
     if (x1 <= x0 || y1 <= y0)
         return false;
 
-    long double sumR = 0.0L, sumG = 0.0L, sumB = 0.0L;
-    long double sumR2 = 0.0L, sumG2 = 0.0L, sumB2 = 0.0L;
+    uint64_t sumR = 0, sumG = 0, sumB = 0;
+    uint64_t sumR2 = 0, sumG2 = 0, sumB2 = 0;
     int64_t pixelCount = 0;
     const ImageBuffer view = img.view();
     const int cpp = view.channelsPerPixel();
@@ -42,29 +47,56 @@ bool computeRGB(const ImageData &img, const mviewer::domain::Selection &region,
         const uint8_t *row = view.data + static_cast<size_t>(y) * view.stride();
         if (isGray)
         {
-            for (int x = x0; x < x1; ++x)
+            int x = x0;
+#if defined(MV_RGB_SSE2)
+            __m128i vzero = _mm_setzero_si128();
+            __m128i vsum = _mm_setzero_si128();
+            __m128i vsum2 = _mm_setzero_si128();
+            for (; x + 16 <= x1; x += 16)
+            {
+                __m128i v = _mm_loadu_si128(reinterpret_cast<const __m128i *>(row + x));
+                vsum = _mm_add_epi64(vsum, _mm_sad_epu8(v, vzero));
+                __m128i vlo = _mm_unpacklo_epi8(v, vzero);
+                __m128i vhi = _mm_unpackhi_epi8(v, vzero);
+                __m128i sqlo = _mm_madd_epi16(vlo, vlo);
+                __m128i sqhi = _mm_madd_epi16(vhi, vhi);
+                __m128i sqlo_0 = _mm_unpacklo_epi32(sqlo, vzero);
+                __m128i sqlo_1 = _mm_unpackhi_epi32(sqlo, vzero);
+                __m128i sqhi_0 = _mm_unpacklo_epi32(sqhi, vzero);
+                __m128i sqhi_1 = _mm_unpackhi_epi32(sqhi, vzero);
+                vsum2 = _mm_add_epi64(vsum2, _mm_add_epi64(sqlo_0, sqlo_1));
+                vsum2 = _mm_add_epi64(vsum2, _mm_add_epi64(sqhi_0, sqhi_1));
+            }
+            alignas(16) uint64_t sBuf[2];
+            alignas(16) uint64_t s2Buf[2];
+            _mm_storeu_si128(reinterpret_cast<__m128i *>(sBuf), vsum);
+            _mm_storeu_si128(reinterpret_cast<__m128i *>(s2Buf), vsum2);
+            sumR += sBuf[0] + sBuf[1];
+            sumR2 += s2Buf[0] + s2Buf[1];
+            pixelCount += (x - x0);
+#endif
+            for (; x < x1; ++x)
             {
                 const uint8_t v = row[x];
-                const auto vL = static_cast<long double>(v);
-                sumR += vL;
-                sumR2 += vL * v;
+                sumR += v;
+                sumR2 += static_cast<uint64_t>(v) * v;
                 ++pixelCount;
             }
         }
         else
         {
-            for (int x = x0; x < x1; ++x)
+            const uint8_t *p = row + static_cast<size_t>(x0) * cpp;
+            for (int x = x0; x < x1; ++x, p += cpp)
             {
-                const uint8_t *p = row + static_cast<size_t>(x) * cpp;
                 const uint8_t r = isBGR ? p[2] : p[0];
                 const uint8_t g = p[1];
                 const uint8_t b = isBGR ? p[0] : p[2];
                 sumR += r;
                 sumG += g;
                 sumB += b;
-                sumR2 += static_cast<long double>(r) * r;
-                sumG2 += static_cast<long double>(g) * g;
-                sumB2 += static_cast<long double>(b) * b;
+                sumR2 += static_cast<uint64_t>(r) * r;
+                sumG2 += static_cast<uint64_t>(g) * g;
+                sumB2 += static_cast<uint64_t>(b) * b;
                 ++pixelCount;
             }
         }
@@ -79,20 +111,17 @@ bool computeRGB(const ImageData &img, const mviewer::domain::Selection &region,
         sumG2 = sumB2 = sumR2;
     }
 
-    const long double count = static_cast<long double>(pixelCount);
-    out.rMean = static_cast<double>(sumR / count);
-    out.gMean = static_cast<double>(sumG / count);
-    out.bMean = static_cast<double>(sumB / count);
-    out.rStd = std::sqrt(
-        std::max(0.0, static_cast<double>(sumR2 / count) - out.rMean * out.rMean));
-    out.gStd = std::sqrt(
-        std::max(0.0, static_cast<double>(sumG2 / count) - out.gMean * out.gMean));
-    out.bStd = std::sqrt(
-        std::max(0.0, static_cast<double>(sumB2 / count) - out.bMean * out.bMean));
-    if (sumG != 0.0L)
+    const double count = static_cast<double>(pixelCount);
+    out.rMean = static_cast<double>(sumR) / count;
+    out.gMean = static_cast<double>(sumG) / count;
+    out.bMean = static_cast<double>(sumB) / count;
+    out.rStd = std::sqrt(std::max(0.0, static_cast<double>(sumR2) / count - out.rMean * out.rMean));
+    out.gStd = std::sqrt(std::max(0.0, static_cast<double>(sumG2) / count - out.gMean * out.gMean));
+    out.bStd = std::sqrt(std::max(0.0, static_cast<double>(sumB2) / count - out.bMean * out.bMean));
+    if (sumG != 0)
     {
-        out.rOverG = static_cast<double>(sumR / sumG);
-        out.bOverG = static_cast<double>(sumB / sumG);
+        out.rOverG = static_cast<double>(sumR) / static_cast<double>(sumG);
+        out.bOverG = static_cast<double>(sumB) / static_cast<double>(sumG);
         out.ratiosValid = true;
     }
     out.pixelCount = pixelCount;
