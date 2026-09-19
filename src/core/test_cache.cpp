@@ -9,6 +9,7 @@
 #include <QColor>
 #include <QCoreApplication>
 #include <QImage>
+#include <QSet>
 #include <QSqlDatabase>
 #include <atomic>
 #include <barrier>
@@ -141,9 +142,18 @@ static void testDiskCacheThreadAffinityAndStress()
     constexpr int workerCount = 8;
     constexpr int rounds = 160;
     std::barrier start(workerCount);
-    // Second barrier: every worker stays alive (keeping its own connection open)
-    // until the main thread has verified the per-thread connections exist.
-    std::barrier alive(workerCount + 1);
+    // Two-phase rendezvous (a single barrier is not enough):
+    //   workDone — every worker has finished put/get (connections exist).
+    //   release  — main has finished inspecting the process-wide Qt SQL
+    //              registry, so workers may exit and ThreadConnectionGuard may
+    //              removeDatabase().
+    // With only one barrier, arrive_and_wait() releases main *and* every worker
+    // together; under parallel ctest load workers often tear down their
+    // connections before main's connectionNames() poll, which flakes as
+    // "observed 0/8 worker connection(s); registry holds 1: mviewer_disk_cache"
+    // even though the put/get stress below still passes.
+    std::barrier workDone(workerCount + 1);
+    std::barrier release(workerCount + 1);
     std::atomic<int> failures{0};
     std::vector<std::thread> workers;
     workers.reserve(workerCount);
@@ -166,14 +176,17 @@ static void testDiskCacheThreadAffinityAndStress()
                         out.height != image.height())
                         failures.fetch_add(1, std::memory_order_relaxed);
                 }
-                alive.arrive_and_wait();
+                workDone.arrive_and_wait();
+                // Stay alive (connection still registered) until main finishes
+                // the distinct-connection ownership check below.
+                release.arrive_and_wait();
             });
     }
 
-    // Checked while the workers are still running: each of them owns its own
-    // connection (they must not share one QSqlDatabase across threads). The
-    // rendezvous below holds every worker alive until this check has run.
-    alive.arrive_and_wait();
+    // Wait until every worker has opened its thread-affine connection and
+    // finished its put/get rounds, then inspect the registry *before* releasing
+    // them. Workers must not share one QSqlDatabase across threads.
+    workDone.arrive_and_wait();
     QSet<QString> workerConnections;
     const auto connectionDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (std::chrono::steady_clock::now() < connectionDeadline)
@@ -204,6 +217,8 @@ static void testDiskCacheThreadAffinityAndStress()
     CHECK(workerConnections.size() >= workerCount,
           "each worker owns a distinct process-wide Qt SQL connection");
 
+    // Allow workers to exit so ThreadConnectionGuard can release each connection.
+    release.arrive_and_wait();
     for (auto &worker : workers)
         worker.join();
 

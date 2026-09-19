@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- **cache_tests DiskCache thread-affinity flake**: `testDiskCacheThreadAffinityAndStress` used a single `std::barrier` that released workers together with main, so under parallel ctest load `ThreadConnectionGuard` could `removeDatabase()` before the main-thread `connectionNames()` poll (`observed 0/8 … registry holds 1: mviewer_disk_cache` while put/get still passed). Split into `workDone` + `release` barriers so workers stay alive for the distinct-connection check.
+
 ## [1.0.62] - 2026-09-19
 
 ### Release
