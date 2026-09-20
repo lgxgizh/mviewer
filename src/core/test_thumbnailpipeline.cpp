@@ -327,6 +327,7 @@ int main()
                 delivered.push_back(path);
             });
         std::vector<std::string> src;
+        src.reserve(200);
         for (int i = 0; i < 200; ++i)
             src.push_back("net/" + std::to_string(i) + ".jpg");
         slow.setSources(src);
