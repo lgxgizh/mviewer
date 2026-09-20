@@ -3,7 +3,6 @@
 // refcount and the deterministic scan-iteration probe live here so the core
 // thumbnailpanel.cpp stays under the 800-line guard while the cooperative
 // supersession/cancellation machinery stays cohesive.
-#include "thumbnailcache.h"
 #include "thumbnailpanel_p.h"
 
 #include <QtConcurrent/QtConcurrent>
@@ -214,18 +213,20 @@ void ThumbnailPanel::setDirectory(const QString &path)
     m_directoryUnavailable = false;
     m_filterText.clear();
     m_filterRecursive = false;
-    m_highLatencyDir = isHighLatencyBrowsePath(path);
-    ThumbnailCache::instance().clearSourceIdentityHints();
 
     // P0-1 (perf): a new directory generation. Any in-flight background
     // dimension resolve or directory scan from the previous folder is
     // invalidated by the bump. M46: the shared generation token additionally
     // makes in-flight workers STOP cooperatively (they re-check it every
     // iteration), instead of running to completion and being discarded later.
+    // Bump generation BEFORE any path probing / cache work so a slow
+    // isHighLatencyBrowsePath() cannot extend superseded scan iterations.
     ++m_dirGen;
     const int gen = m_dirGen;
     m_scanGenToken->store(static_cast<uint64_t>(gen), std::memory_order_release);
     m_dimsResolved = false;
+    m_highLatencyDir = isHighLatencyBrowsePath(path);
+    ThumbnailCache::instance().clearSourceIdentityHints();
     m_scanComplete = false;
     m_scanProgressive = m_sortMode == SortName && m_sortAscending && m_typeFilter.isEmpty();
 
