@@ -1,20 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.63] - 2026-09-20
 
-### Added
+### Release
 
-- **Details view resizable columns**: Browse Details header (名称 / 分辨率 / …) supports Explorer-style drag-resize; header and row cells stay aligned, long names elide within the column width, and widths persist via QSettings.
-
-### Performance
-
-- **Network / UNC browse thumbnails**: High-latency paths (UNC, mapped SMB, nfs/cifs/fuse) use a tight predictive window so off-screen decode cannot starve the viewport; local SSD keeps the existing large-directory prefetch. Thumbnail/LargeIcon no longer launch a full-directory header probe—Details and SortResolution still do, viewport-first with incremental publish into both source and display entries. Disk-cache identity hints reuse scan mtime/size to avoid a per-thumb source stat on warm cache hits; EXIF embedded-thumb path skips a second MetadataReader open.
-
-### Fixed
-
-- **Image rotate end-to-end**: Browse/Viewer 顺时针/逆时针 90° now persist via `mviewer::core::rotateImageFile` (exact 90°-step pixel rewrite, atomic `QSaveFile`, clear errors for non-writable formats), with toolbar buttons (`rotateCWAction` / `rotateCCWAction`), Chinese tooltips, enablement tied to current image, and thumbnail/preview/metadata refresh after rotate. Covered by `imagerotate_tests` (pixel ±90/180 + PNG/JPEG file round-trip).
-
-- **cache_tests DiskCache thread-affinity flake**: `testDiskCacheThreadAffinityAndStress` used a single `std::barrier` that released workers together with main, so under parallel ctest load `ThreadConnectionGuard` could `removeDatabase()` before the main-thread `connectionNames()` poll (`observed 0/8 … registry holds 1: mviewer_disk_cache` while put/get still passed). Split into `workDone` + `release` barriers so workers stay alive for the distinct-connection check.
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.63**.
+- **Image rotate harden (#29)**: Browse/Viewer 顺时针/逆时针 90° persist via `rotateImageFile` (exact 90°-step rewrite, atomic `QSaveFile`), toolbar actions, and `imagerotate_tests` coverage.
+- **Details column resize (#30)**: Explorer-style drag-resize for Browse Details headers; aligned cells, elided names, widths persisted via QSettings.
+- **Network browse opt (#31)**: Tight predictive thumbnail window on high-latency UNC/SMB/nfs paths; skip full-directory header probe for Thumbnail/LargeIcon; disk-cache identity hints and EXIF thumb open skip.
+- **cache_tests DiskCache flake (#28)**: Split `workDone` + `release` barriers in `testDiskCacheThreadAffinityAndStress` so workers stay alive for the distinct-connection check under parallel ctest.
 
 ## [1.0.62] - 2026-09-19
 
