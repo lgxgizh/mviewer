@@ -467,9 +467,9 @@ using DimBatchPublish = std::function<void(const QVector<int> &, const QVector<Q
 void runDimensionProbeLoop(const std::shared_ptr<std::atomic<bool>> &alive, int gen,
                            const std::shared_ptr<std::atomic<uint64_t>> &genToken,
                            const QStringList &paths, const QVector<int> &order,
+                           const std::shared_ptr<const std::function<void()>> &probe,
                            const DimBatchPublish &publish)
 {
-    const auto probe = ThumbnailPanel::scanIterationProbeSnapshot();
     QVector<QSize> sizes(paths.size());
     QVector<int> frameCounts(paths.size(), 1);
     QVector<bool> animatedFlags(paths.size(), false);
@@ -629,8 +629,9 @@ void ThumbnailPanel::dimensionProbeTask(const QPointer<ThumbnailPanel> &self,
                                         const QStringList &paths, const QVector<int> &order,
                                         bool resortWhenDone)
 {
+    const auto probe = ThumbnailPanel::scanIterationProbeSnapshot();
     runDimensionProbeLoop(
-        alive, gen, genToken, paths, order,
+        alive, gen, genToken, paths, order, probe,
         [self, alive, gen, resortWhenDone](const QVector<int> &idx, const QVector<QSize> &sizes,
                                            const QVector<int> &frames,
                                            const QVector<bool> &animated, bool finalBatch)
