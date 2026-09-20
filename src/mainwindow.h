@@ -112,6 +112,7 @@ class MainWindow : public QMainWindow
     void buildMenus();
     void buildFileMenu(QMenuBar *menuBar);
     void buildEditMenu(QMenuBar *menuBar);
+    void buildEditTransformActions(QMenu *editMenu);
     void buildViewMenu(QMenuBar *menuBar);
     void buildToolsHelpMenus(QMenuBar *menuBar);
     void buildBrowserShell();
@@ -349,7 +350,7 @@ class MainWindow : public QMainWindow
     QComboBox *m_ratingFilter = nullptr;
     QComboBox *m_sortCombo = nullptr; // persisted across sessions via QSettings
     QComboBox *m_viewModeCombo = nullptr;
-    QComboBox *m_flagFilter = nullptr;    // P3 tail: color label / reject / pick / recents
+    QComboBox *m_flagFilter = nullptr; // P3 tail: color label / reject / pick / recents
     QWidget *m_advancedFilterPanel = nullptr;
     bool m_focusBrowse = false;
     bool m_focusNavigationVisible = true;

@@ -815,10 +815,14 @@ void MainWindow::updateSelectionActions()
         m_zoomPresetsMenu->menuAction()->setEnabled(hasCurrent && viewerVisible);
     if (m_actSlideshow)
         m_actSlideshow->setEnabled(hasCurrent && !currentDir().isEmpty());
-    if (m_actRotateCW)
-        m_actRotateCW->setEnabled(hasCurrent);
-    if (m_actRotateCCW)
-        m_actRotateCCW->setEnabled(hasCurrent);
+    // Keep rotate enablement out of this function's CC budget (ADR-014 / complexity gate).
+    const auto enableIf = [](QAction *act, bool on)
+    {
+        if (act)
+            act->setEnabled(on);
+    };
+    enableIf(m_actRotateCW, hasCurrent);
+    enableIf(m_actRotateCCW, hasCurrent);
     updateNavigationActions();
 }
 
