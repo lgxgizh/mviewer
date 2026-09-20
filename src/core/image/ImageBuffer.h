@@ -336,6 +336,64 @@ inline ImageData rotate90CW(const ImageData &src)
     return dst;
 }
 
+// Rotate 90 degrees counter-clockwise (one pass; equivalent to three CW steps).
+inline ImageData rotate90CCW(const ImageData &src)
+{
+    if (src.isNull())
+        return ImageData{};
+    const int cpp = src.channelsPerPixel();
+    const int w = src.width;
+    const int h = src.height;
+    ImageData dst = makeImageData(h, w, src.format);
+    const ImageBuffer v = src.view();
+    const ImageBuffer dv = dst.view();
+    for (int y = 0; y < h; ++y)
+    {
+        for (int x = 0; x < w; ++x)
+        {
+            const uint8_t *sp =
+                v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
+            // 90 CCW: x' = y, y' = w-1-x.
+            const int dx = y;
+            const int dy = w - 1 - x;
+            uint8_t *dp =
+                dv.data + static_cast<size_t>(dy) * dv.stride() + static_cast<size_t>(dx) * cpp;
+            for (int c = 0; c < cpp; ++c)
+                dp[c] = sp[c];
+        }
+    }
+    return dst;
+}
+
+// Rotate 180 degrees (one pass).
+inline ImageData rotate180(const ImageData &src)
+{
+    if (src.isNull())
+        return ImageData{};
+    const int cpp = src.channelsPerPixel();
+    const int w = src.width;
+    const int h = src.height;
+    ImageData dst = makeImageData(w, h, src.format);
+    const ImageBuffer v = src.view();
+    const ImageBuffer dv = dst.view();
+    for (int y = 0; y < h; ++y)
+    {
+        for (int x = 0; x < w; ++x)
+        {
+            const uint8_t *sp =
+                v.data + static_cast<size_t>(y) * v.stride() + static_cast<size_t>(x) * cpp;
+            const int dx = w - 1 - x;
+            const int dy = h - 1 - y;
+            uint8_t *dp =
+                dv.data + static_cast<size_t>(dy) * dv.stride() + static_cast<size_t>(dx) * cpp;
+            for (int c = 0; c < cpp; ++c)
+                dp[c] = sp[c];
+        }
+    }
+    return dst;
+}
+
+
 // Flip an image horizontally (left-right mirror). Pure std implementation.
 inline ImageData flipHorizontal(const ImageData &src)
 {

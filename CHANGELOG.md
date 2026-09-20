@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- **Image rotate end-to-end**: Browse/Viewer 顺时针/逆时针 90° now persist via `mviewer::core::rotateImageFile` (exact 90°-step pixel rewrite, atomic `QSaveFile`, clear errors for non-writable formats), with toolbar buttons (`rotateCWAction` / `rotateCCWAction`), Chinese tooltips, enablement tied to current image, and thumbnail/preview/metadata refresh after rotate. Covered by `imagerotate_tests` (pixel ±90/180 + PNG/JPEG file round-trip).
+
 - **cache_tests DiskCache thread-affinity flake**: `testDiskCacheThreadAffinityAndStress` used a single `std::barrier` that released workers together with main, so under parallel ctest load `ThreadConnectionGuard` could `removeDatabase()` before the main-thread `connectionNames()` poll (`observed 0/8 … registry holds 1: mviewer_disk_cache` while put/get still passed). Split into `workDone` + `release` barriers so workers stay alive for the distinct-connection check.
 
 ## [1.0.62] - 2026-09-19

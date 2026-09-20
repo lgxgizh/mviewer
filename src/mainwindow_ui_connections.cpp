@@ -369,6 +369,8 @@ void MainWindow::connectViewerSignals()
     connect(m_imageViewer, &ImageViewer::fileRotated, this,
             [this](const QString &path)
             {
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->invalidateSourceImage(path);
                 if (path == currentImagePath())
                 {
                     if (m_previewPanel)

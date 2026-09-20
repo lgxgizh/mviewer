@@ -818,6 +818,10 @@ void MainWindow::updateSelectionActions()
         m_zoomPresetsMenu->menuAction()->setEnabled(hasCurrent && viewerVisible);
     if (m_actSlideshow)
         m_actSlideshow->setEnabled(hasCurrent && !currentDir().isEmpty());
+    if (m_actRotateCW)
+        m_actRotateCW->setEnabled(hasCurrent);
+    if (m_actRotateCCW)
+        m_actRotateCCW->setEnabled(hasCurrent);
     updateNavigationActions();
 }
 

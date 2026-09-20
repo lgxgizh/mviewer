@@ -36,6 +36,7 @@ add_library(mviewer_core SHARED
     core/image/FrameSequence.cpp
     core/image/FramePlaybackController.cpp
     core/image/ImageTransform.cpp
+    core/image/ImageFileRotate.cpp
     core/image/QtConvert.cpp
     core/image/ImageStats.cpp
     core/filesystem/FileSystem.cpp
@@ -424,7 +425,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository)
+foreach(_t decoder cache repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -1328,6 +1329,7 @@ add_test(NAME raw_metadata_tests COMMAND test_raw_metadata)
 add_test(NAME crashhandler_tests COMMAND test_crashhandler)
 add_test(NAME encoder_tests COMMAND test_encoder)
 add_test(NAME imagetransform_tests COMMAND test_imagetransform)
+add_test(NAME imagerotate_tests COMMAND test_imagerotate)
 add_test(NAME differenceengine_tests COMMAND test_differenceengine)
 add_test(NAME blinkcontroller_tests COMMAND test_blinkcontroller)
 add_test(NAME aligner_tests COMMAND test_aligner)

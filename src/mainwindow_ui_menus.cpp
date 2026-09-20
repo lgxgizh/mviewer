@@ -107,9 +107,13 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
     m_actRotateCW = new QAction(tr("顺时针旋转 90°(&R)"), this);
     m_actRotateCW->setObjectName("rotateCWAction");
     m_actRotateCW->setShortcut(QKeySequence("Ctrl+R"));
+    m_actRotateCW->setToolTip(tr("顺时针旋转 90° (Ctrl+R)"));
+    m_actRotateCW->setEnabled(false);
     m_actRotateCCW = new QAction(tr("逆时针旋转 90°(&L)"), this);
     m_actRotateCCW->setObjectName("rotateCCWAction");
     m_actRotateCCW->setShortcut(QKeySequence("Ctrl+Shift+R"));
+    m_actRotateCCW->setToolTip(tr("逆时针旋转 90° (Ctrl+Shift+R)"));
+    m_actRotateCCW->setEnabled(false);
     editMenu->addAction(m_actRotateCW);
     editMenu->addAction(m_actRotateCCW);
     connect(m_actRotateCW, &QAction::triggered, this,

@@ -3,6 +3,8 @@
 
 #include <QIcon>
 #include <QSignalBlocker>
+#include <QPainter>
+#include <QPolygonF>
 #include <QToolBar>
 
 
@@ -44,6 +46,51 @@ void MainWindow::buildBrowserShell()
     addBrowserAction(m_actToggleSearch, "search");
     browserToolBar->addSeparator();
     addBrowserAction(m_actBrowseWorkspace, "browse");
+    browserToolBar->addSeparator();
+    // Rotate actions share the Edit-menu QActions (stable objectNames for tests).
+    {
+        auto makeRotateIcon = [](bool clockwise) {
+            QPixmap pm(18, 18);
+            pm.fill(Qt::transparent);
+            QPainter p(&pm);
+            p.setRenderHint(QPainter::Antialiasing, true);
+            p.setPen(QPen(QColor(220, 220, 220), 1.6));
+            p.setBrush(Qt::NoBrush);
+            const QRectF arc(3.5, 3.5, 11.0, 11.0);
+            if (clockwise)
+                p.drawArc(arc, 40 * 16, -270 * 16);
+            else
+                p.drawArc(arc, 140 * 16, 270 * 16);
+            p.setBrush(QColor(220, 220, 220));
+            p.setPen(Qt::NoPen);
+            if (clockwise)
+            {
+                QPolygonF head;
+                head << QPointF(14.5, 5.5) << QPointF(11.5, 4.0) << QPointF(12.8, 7.2);
+                p.drawPolygon(head);
+            }
+            else
+            {
+                QPolygonF head;
+                head << QPointF(3.5, 5.5) << QPointF(6.5, 4.0) << QPointF(5.2, 7.2);
+                p.drawPolygon(head);
+            }
+            return QIcon(pm);
+        };
+        if (m_actRotateCCW)
+        {
+            m_actRotateCCW->setIcon(makeRotateIcon(false));
+            m_actRotateCCW->setToolTip(tr("逆时针旋转 90° (Ctrl+Shift+R)"));
+            browserToolBar->addAction(m_actRotateCCW);
+        }
+        if (m_actRotateCW)
+        {
+            m_actRotateCW->setIcon(makeRotateIcon(true));
+            m_actRotateCW->setToolTip(tr("顺时针旋转 90° (Ctrl+R)"));
+            browserToolBar->addAction(m_actRotateCW);
+        }
+    }
+
 
     // ----- Breadcrumb navigation bar (M15 Product Shell P0) -----
     m_breadcrumb = new BreadcrumbBar(this);

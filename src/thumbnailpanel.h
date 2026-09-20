@@ -340,6 +340,9 @@ class ThumbnailPanel : public QListView
 
     // P1: repaint the gallery to reflect a rating change made elsewhere.
     void invalidateRatings();
+    // Drop decoded thumbnails for one source path after an in-place file edit
+    // (rotate/flip) and schedule a visible-range reload so the gallery updates.
+    void invalidateSourceImage(const QString &path);
 
   signals:
     void itemClicked(const QString &path);
