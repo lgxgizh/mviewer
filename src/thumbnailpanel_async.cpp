@@ -424,6 +424,10 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries)
         ThumbnailCache::instance().hintSourceIdentity(
             e.path, e.date.isValid() ? e.date.toMSecsSinceEpoch() : 0, e.size);
     applyFilter();
+    // Progressive batches used replaceSources for convergence; later filter /
+    // sort rebuilds must not keep that mode or every keystroke cancels
+    // in-flight thumbnail handles (m46 B2 paint-cache flake after clear).
+    m_scanProgressive = false;
     // Details (resolution column) and SortResolution need header probes.
     // Thumbnail/LargeIcon intentionally skip the full-directory probe so the
     // first viewport decode owns the link on high-latency folders.

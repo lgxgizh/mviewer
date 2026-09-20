@@ -46,6 +46,16 @@ void ThumbnailPanel::setFilter(const QString &text, bool recursive)
 {
     m_filterText = text;
     m_filterRecursive = recursive;
+    const bool tinyDir = m_allEntries.size() <= 256;
+    const QString trimmed = m_filterText.trimmed();
+    // Clearing the filter on a tiny directory must restore rows in this call.
+    // Debouncing only the clear path raced short event pumps (m46 B2) under
+    // load: the model stayed empty past pump(50) while the 25ms timer lagged.
+    if (tinyDir && trimmed.isEmpty())
+    {
+        scheduleFilter(false);
+        return;
+    }
     scheduleFilter(true);
     // Reflect a pending non-empty query immediately so a stale directory
     // result is never presented as the answer to the new filter. The actual
@@ -54,7 +64,7 @@ void ThumbnailPanel::setFilter(const QString &text, bool recursive)
     // creating a meaningful UI slice; the actual query still runs on the
     // debounce timer. Large directories keep the previous model until the
     // guarded worker result arrives, avoiding a 50K-row synchronous reset.
-    if (!m_filterText.trimmed().isEmpty() && m_allEntries.size() <= 256)
+    if (!trimmed.isEmpty() && tinyDir)
     {
         QStringList previousSelection = selectedPaths();
         QString previousCurrent =
