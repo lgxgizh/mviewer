@@ -20,6 +20,7 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
     m_liveDirectoryMonitoring = false;
     m_scanGenToken = std::make_shared<std::atomic<uint64_t>>(0);
     m_busyCursorRefs = std::make_shared<std::atomic<int>>(0);
+    initDetailColumnWidths();
     // M24: bounded background workers (directory scan + dimension resolve).
     // Two threads keep first-screen scans fast without unbounded growth when
     // the user switches folders rapidly.
@@ -85,6 +86,13 @@ ThumbnailPanel::ThumbnailPanel(QWidget *parent) : QListView(parent)
             &ThumbnailPanel::updateVisibleRange);
     connect(horizontalScrollBar(), &QScrollBar::valueChanged, this,
             &ThumbnailPanel::updateVisibleRange);
+    // Keep Details header columns aligned with cells while scrolling horizontally.
+    connect(horizontalScrollBar(), &QScrollBar::valueChanged, this,
+            [this](int)
+            {
+                if (m_detailsHeader && m_viewMode == Details)
+                    m_detailsHeader->update();
+            });
 
     // Restore path-based navigation signals (used by MainWindow to open images
     // and refresh the metadata panel) from the view's built-in index signals.

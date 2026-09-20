@@ -85,6 +85,23 @@ class ThumbnailPanel : public QListView
         List           // Windows-Explorer-style icon+name wrapping list (P0)
     };
 
+    // Details-view columns (shared by header + DetailsDelegate layout).
+    enum DetailColumn
+    {
+        DetailColThumb = 0,
+        DetailColName,
+        DetailColRes,
+        DetailColSize,
+        DetailColDate,
+        DetailColFmt,
+        DetailColRate,
+        DetailColLabel,
+        DetailColCamera,
+        DetailColLens,
+        DetailColIso,
+        DetailColCount
+    };
+
     explicit ThumbnailPanel(QWidget *parent = nullptr);
     ~ThumbnailPanel() override;
 
@@ -136,6 +153,17 @@ class ThumbnailPanel : public QListView
     {
         return m_viewMode;
     }
+
+    // Details column widths (Explorer-style resize). Clamped to per-column mins;
+    // persists via QSettings when changed from the header drag gesture.
+    void setDetailColumnWidth(DetailColumn column, int width);
+    int detailColumnWidth(DetailColumn column) const;
+    int detailContentWidth() const;
+    const int *detailColWidths() const
+    {
+        return m_detailColW;
+    }
+    void persistDetailColumnWidths() const;
 
     // M15: dynamic thumbnail size (slider-controlled).
     void setThumbSize(int size);
@@ -610,6 +638,9 @@ class ThumbnailPanel : public QListView
     // the reserved viewport top margin so it lines up with the delegate columns.
     QWidget *m_detailsHeader = nullptr;
     void positionDetailsHeader();
+    void initDetailColumnWidths();
+    void notifyDetailColumnsChanged();
+    int m_detailColW[DetailColCount] = {};
 
     // Guards against the shared pipeline's worker thread calling back into a
     // destroyed panel after the destructor runs.

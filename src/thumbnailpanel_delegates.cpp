@@ -2,6 +2,7 @@
 #include "thumbnailpanel_p.h"
 
 #include <QDir>
+#include <QFontMetrics>
 #include <QHelpEvent>
 #include <QToolTip>
 
@@ -611,7 +612,8 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
 
     painter->save();
     const QRect r = option.rect.adjusted(4, 2, -4, -2);
-    const DetailLayout L = detailLayout(option.rect.adjusted(0, 2, 0, -2));
+    const DetailLayout L =
+        detailLayout(option.rect.adjusted(0, 2, 0, -2), m_panel->detailColWidths());
 
     // Column 1: small thumbnail (48×48)
     const QRect thumbR(L.thumb.x(), r.y() + (r.height() - 48) / 2, 48, 48);
@@ -625,8 +627,10 @@ void ThumbnailPanel::DetailsDelegate::paint(QPainter *painter, const QStyleOptio
     nameFont.setBold(true);
     painter->setFont(nameFont);
 
-    // Column 2: filename
-    painter->drawText(L.name, Qt::AlignVCenter | Qt::TextSingleLine, name);
+    // Column 2: filename (elide within the current column width)
+    const QString elidedName =
+        QFontMetrics(nameFont).elidedText(name, Qt::ElideMiddle, L.name.width());
+    painter->drawText(L.name, Qt::AlignVCenter | Qt::TextSingleLine, elidedName);
 
     // Column 3: resolution — resolve by source path because index.row() belongs
     // to the filtered model and cannot index m_allEntries.
@@ -668,7 +672,7 @@ QSize ThumbnailPanel::DetailsDelegate::sizeHint(const QStyleOptionViewItem &,
 {
     // Wide enough to show every column without overlap; the Details view scrolls
     // horizontally when the viewport is narrower (see setViewMode Details branch).
-    const int w = qMax(detailTotalWidth(), m_panel->viewport()->width());
+    const int w = qMax(detailTotalWidth(m_panel->detailColWidths()), m_panel->viewport()->width());
     return QSize(w, kDetailsItemHeight);
 }
 

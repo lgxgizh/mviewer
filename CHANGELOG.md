@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Details view resizable columns**: Browse Details header (名称 / 分辨率 / …) supports Explorer-style drag-resize; header and row cells stay aligned, long names elide within the column width, and widths persist via QSettings.
+
 ### Fixed
 
 - **cache_tests DiskCache thread-affinity flake**: `testDiskCacheThreadAffinityAndStress` used a single `std::barrier` that released workers together with main, so under parallel ctest load `ThreadConnectionGuard` could `removeDatabase()` before the main-thread `connectionNames()` poll (`observed 0/8 … registry holds 1: mviewer_disk_cache` while put/get still passed). Split into `workDone` + `release` barriers so workers stay alive for the distinct-connection check.
