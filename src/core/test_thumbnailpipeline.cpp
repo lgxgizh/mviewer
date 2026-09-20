@@ -319,6 +319,7 @@ int main()
             });
         std::mutex deliveredMtx;
         std::vector<std::string> delivered;
+        delivered.reserve(64);
         slow.setResultFn(
             [&](const std::string &path, int, const ImageData &)
             {
