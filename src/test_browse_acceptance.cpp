@@ -504,22 +504,17 @@ void testDetailsColumnResize()
     pump(30);
     CHECK(panel.viewMode() == ThumbnailPanel::Details, "Details: view mode engages");
 
-    // DetailsHeader is a plain QWidget subclass (no Q_OBJECT); find it by role.
-    QWidget *header = nullptr;
-    for (QObject *child : panel.children())
-    {
-        auto *w = qobject_cast<QWidget *>(child);
-        if (!w || w == panel.viewport() || !w->isVisible())
-            continue;
-        if (w->height() == 24) // kDetailsHeaderH
-        {
-            header = w;
-            break;
-        }
-    }
+    // DetailsHeader is a plain QWidget subclass (no Q_OBJECT). The panel is not
+    // shown in this offscreen test, so children report !isVisible(); look up by
+    // objectName instead.
+    panel.resize(900, 400);
+    panel.show();
+    pump(30);
+    QWidget *header = panel.findChild<QWidget *>(QStringLiteral("detailsHeader"));
     CHECK(header != nullptr, "Details: column header widget is present");
     if (header)
     {
+        CHECK(header->height() == 24, "Details: header uses the reserved strip height");
         CHECK(header->testAttribute(Qt::WA_TransparentForMouseEvents) == false,
               "Details: header accepts mouse events for resize");
     }

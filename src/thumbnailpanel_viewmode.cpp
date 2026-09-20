@@ -252,6 +252,7 @@ void ThumbnailPanel::notifyDetailColumnsChanged()
 
 DetailsHeader::DetailsHeader(ThumbnailPanel *panel) : QWidget(panel), m_panel(panel)
 {
+    setObjectName(QStringLiteral("detailsHeader"));
     setMouseTracking(true);
     setCursor(Qt::ArrowCursor);
 }
