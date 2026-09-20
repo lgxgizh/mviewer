@@ -124,9 +124,8 @@ void testViewModeAndSelection(const QString &dirPath)
 
     // Selection must survive every view-mode switch.
     const QList<ThumbnailPanel::ViewMode> modes = {
-        ThumbnailPanel::List,        ThumbnailPanel::Details,
-        ThumbnailPanel::Filmstrip,   ThumbnailPanel::Compact,
-        ThumbnailPanel::LargeIcon,   ThumbnailPanel::SmallIcon,
+        ThumbnailPanel::List,      ThumbnailPanel::Details,   ThumbnailPanel::Filmstrip,
+        ThumbnailPanel::Compact,   ThumbnailPanel::LargeIcon, ThumbnailPanel::SmallIcon,
         ThumbnailPanel::Thumbnail,
     };
     bool selSurvives = true;
@@ -294,7 +293,8 @@ void testFileOpsUndo(const QString &dirPath)
     const QString renamed = dirPath + "/ba_op1_renamed.png";
     QTimer renamePoller;
     renamePoller.setInterval(10);
-    QObject::connect(&renamePoller, &QTimer::timeout, [&]()
+    QObject::connect(&renamePoller, &QTimer::timeout,
+                     [&]()
                      {
                          for (QWidget *top : QApplication::topLevelWidgets())
                          {
@@ -311,8 +311,7 @@ void testFileOpsUndo(const QString &dirPath)
     panel.renameSelected();
     renamePoller.stop();
     pump(500);
-    CHECK(QFile::exists(renamed) && !QFile::exists(p1),
-          "A#8: panel rename reaches the disk");
+    CHECK(QFile::exists(renamed) && !QFile::exists(p1), "A#8: panel rename reaches the disk");
     bool hasNew = false, hasOld = false;
     for (const auto &e : panel.entries())
     {
@@ -336,8 +335,8 @@ void testFileOpsUndo(const QString &dirPath)
     // leave the model and the selection must not dangle.
     panel.selectPath(p2);
     const QString trash = dirPath + "/.mviewer_trash";
-    CHECK(stack.execute(std::make_unique<FileDeleteCommand>(std::vector<std::string>{p2.toStdString()},
-                                                            trash.toStdString())),
+    CHECK(stack.execute(std::make_unique<FileDeleteCommand>(
+              std::vector<std::string>{p2.toStdString()}, trash.toStdString())),
           "A#8: delete command executes");
     panel.refresh();
     pump(500);
@@ -399,8 +398,7 @@ void testDegradedInputs(QTemporaryDir &tmp)
         while (t.elapsed() < 3000)
             pump(50);
         CHECK(panel.thumbFailed(bad), "A#9: corrupt file recorded as failed (placeholder)");
-        CHECK(!panel.thumbFailed(good),
-              "A#9: healthy file unaffected by corrupt sibling");
+        CHECK(!panel.thumbFailed(good), "A#9: healthy file unaffected by corrupt sibling");
     }
 
     // Missing directory: no crash, empty gallery.
@@ -472,6 +470,69 @@ void testMetadataOverlayCurrent(const QString &dirPath, const QStringList &paths
     (void)first;
 }
 
+// ─── Details column resize: layout respects custom widths ────────────────────
+void testDetailsColumnResize()
+{
+    std::cout << "── Browse: Details column resize ──\n";
+    // Ensure a clean slate (prior runs / other tests may have written widths).
+    QSettings().remove(QStringLiteral("ui/detailsColumnWidths"));
+
+    ThumbnailPanel panel;
+    const int defaultName = panel.detailColumnWidth(ThumbnailPanel::DetailColName);
+    const int defaultRes = panel.detailColumnWidth(ThumbnailPanel::DetailColRes);
+    const int defaultTotal = panel.detailContentWidth();
+    CHECK(defaultName == 140, "Details: default name column width is 140");
+    CHECK(defaultRes == 120, "Details: default resolution column width is 120");
+    CHECK(defaultTotal > defaultName, "Details: content width includes all columns");
+
+    panel.setDetailColumnWidth(ThumbnailPanel::DetailColName, 420);
+    CHECK(panel.detailColumnWidth(ThumbnailPanel::DetailColName) == 420,
+          "Details: setDetailColumnWidth updates name column");
+    CHECK(panel.detailContentWidth() == defaultTotal + (420 - defaultName),
+          "Details: content width tracks custom name width");
+
+    // Minimum clamp (see kDetailMinW[DetailColName] == 80).
+    panel.setDetailColumnWidth(ThumbnailPanel::DetailColName, 10);
+    CHECK(panel.detailColumnWidth(ThumbnailPanel::DetailColName) == 80,
+          "Details: name column respects minimum width");
+
+    panel.setDetailColumnWidth(ThumbnailPanel::DetailColRes, 200);
+    CHECK(panel.detailColumnWidth(ThumbnailPanel::DetailColRes) == 200,
+          "Details: resolution column is independently resizable");
+
+    panel.setViewMode(ThumbnailPanel::Details);
+    pump(30);
+    CHECK(panel.viewMode() == ThumbnailPanel::Details, "Details: view mode engages");
+
+    // DetailsHeader is a plain QWidget subclass (no Q_OBJECT); find it by role.
+    QWidget *header = nullptr;
+    for (QObject *child : panel.children())
+    {
+        auto *w = qobject_cast<QWidget *>(child);
+        if (!w || w == panel.viewport() || !w->isVisible())
+            continue;
+        if (w->height() == 24) // kDetailsHeaderH
+        {
+            header = w;
+            break;
+        }
+    }
+    CHECK(header != nullptr, "Details: column header widget is present");
+    if (header)
+    {
+        CHECK(header->testAttribute(Qt::WA_TransparentForMouseEvents) == false,
+              "Details: header accepts mouse events for resize");
+    }
+
+    // Persistence round-trip via QSettings.
+    panel.setDetailColumnWidth(ThumbnailPanel::DetailColName, 333);
+    panel.persistDetailColumnWidths();
+    ThumbnailPanel panel2;
+    CHECK(panel2.detailColumnWidth(ThumbnailPanel::DetailColName) == 333,
+          "Details: column widths persist across sessions (QSettings)");
+    QSettings().remove(QStringLiteral("ui/detailsColumnWidths"));
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -496,6 +557,7 @@ int main(int argc, char **argv)
     const QString dirPath = dir.absolutePath();
 
     testViewModeAndSelection(dirPath);
+    testDetailsColumnResize();
     testCompareSelectionAffordance(tmp.filePath("compare_selection"));
     testFileOpsUndo(dirPath);
     testDegradedInputs(tmp);

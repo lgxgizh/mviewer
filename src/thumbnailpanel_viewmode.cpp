@@ -4,6 +4,8 @@
 // delegates (all visible via thumbnailpanel_p.h), so it is safe to define here.
 #include "thumbnailpanel_p.h"
 
+#include <QSettings>
+
 void ThumbnailPanel::replaceDelegate(QStyledItemDelegate *delegate)
 {
     QStyledItemDelegate *previous = m_delegate;
@@ -176,4 +178,186 @@ void ThumbnailPanel::setViewMode(ViewMode mode)
     if (mode == Thumbnail)
         setThumbSize(m_gridThumbSize);
     emit viewModeChanged(m_viewMode);
+}
+
+// ---- Details column widths + interactive header ------------------------------
+
+namespace
+{
+constexpr char kDetailWidthsKey[] = "ui/detailsColumnWidths";
+}
+
+void ThumbnailPanel::initDetailColumnWidths()
+{
+    for (int i = 0; i < DetailColCount; ++i)
+        m_detailColW[i] = kDetailDefaultW[i];
+
+    const QVariantList saved = QSettings().value(QLatin1String(kDetailWidthsKey)).toList();
+    if (saved.size() != DetailColCount)
+        return;
+    for (int i = 0; i < DetailColCount; ++i)
+    {
+        bool ok = false;
+        const int w = saved.at(i).toInt(&ok);
+        if (ok)
+            m_detailColW[i] = qMax(kDetailMinW[i], w);
+    }
+}
+
+void ThumbnailPanel::persistDetailColumnWidths() const
+{
+    QVariantList list;
+    list.reserve(DetailColCount);
+    for (int i = 0; i < DetailColCount; ++i)
+        list.append(m_detailColW[i]);
+    QSettings().setValue(QLatin1String(kDetailWidthsKey), list);
+}
+
+void ThumbnailPanel::setDetailColumnWidth(DetailColumn column, int width)
+{
+    const int idx = static_cast<int>(column);
+    if (idx < 0 || idx >= DetailColCount)
+        return;
+    const int clamped = qMax(kDetailMinW[idx], width);
+    if (m_detailColW[idx] == clamped)
+        return;
+    m_detailColW[idx] = clamped;
+    notifyDetailColumnsChanged();
+}
+
+int ThumbnailPanel::detailColumnWidth(DetailColumn column) const
+{
+    const int idx = static_cast<int>(column);
+    if (idx < 0 || idx >= DetailColCount)
+        return 0;
+    return m_detailColW[idx];
+}
+
+int ThumbnailPanel::detailContentWidth() const
+{
+    return detailTotalWidth(m_detailColW);
+}
+
+void ThumbnailPanel::notifyDetailColumnsChanged()
+{
+    if (m_detailsHeader)
+        m_detailsHeader->update();
+    if (m_viewMode == Details)
+    {
+        scheduleDelayedItemsLayout();
+        if (viewport())
+            viewport()->update();
+    }
+}
+
+DetailsHeader::DetailsHeader(ThumbnailPanel *panel) : QWidget(panel), m_panel(panel)
+{
+    setMouseTracking(true);
+    setCursor(Qt::ArrowCursor);
+}
+
+QRect DetailsHeader::contentRect() const
+{
+    const int contentW = qMax(m_panel->detailContentWidth(), width());
+    return QRect(0, 0, contentW, height());
+}
+
+int DetailsHeader::separatorAt(int x) const
+{
+    // x is in header widget coords; convert to content coords via h-scroll.
+    const int contentX = x + m_panel->horizontalScrollBar()->value();
+    const DetailLayout L = detailLayout(contentRect(), m_panel->detailColWidths());
+    const QRect cols[] = {L.thumb, L.name,  L.res,    L.size, L.date, L.fmt,
+                          L.rate,  L.label, L.camera, L.lens, L.iso};
+    for (int i = 0; i < ThumbnailPanel::DetailColCount; ++i)
+    {
+        const int edge = cols[i].right() + 1;
+        if (qAbs(contentX - edge) <= kDetailSepHitSlop)
+            return i;
+    }
+    return -1;
+}
+
+void DetailsHeader::paintEvent(QPaintEvent *)
+{
+    QPainter p(this);
+    const QRect full(0, 0, width(), height());
+    p.fillRect(full, palette().color(QPalette::Button));
+    p.setPen(palette().color(QPalette::Mid));
+    p.drawLine(full.bottomLeft(), full.bottomRight());
+
+    const int xOff = -m_panel->horizontalScrollBar()->value();
+    p.translate(xOff, 0);
+    const DetailLayout L = detailLayout(contentRect(), m_panel->detailColWidths());
+    p.setPen(palette().color(QPalette::ButtonText));
+    QFont f = p.font();
+    f.setBold(true);
+    p.setFont(f);
+    const int flags = Qt::AlignVCenter | Qt::TextSingleLine;
+    p.drawText(L.name, flags, QStringLiteral("名称"));
+    p.drawText(L.res, flags, QStringLiteral("分辨率"));
+    p.drawText(L.size, flags, QStringLiteral("大小"));
+    p.drawText(L.date, flags, QStringLiteral("修改日期"));
+    p.drawText(L.fmt, flags, QStringLiteral("格式"));
+    p.drawText(L.rate, flags, QStringLiteral("评分"));
+    p.drawText(L.label, flags, QStringLiteral("标签"));
+    p.drawText(L.camera, flags, QStringLiteral("相机"));
+    p.drawText(L.lens, flags, QStringLiteral("镜头"));
+    p.drawText(L.iso, flags, QStringLiteral("ISO"));
+}
+
+void DetailsHeader::mousePressEvent(QMouseEvent *event)
+{
+    if (event->button() != Qt::LeftButton)
+    {
+        QWidget::mousePressEvent(event);
+        return;
+    }
+    const int col = separatorAt(event->position().toPoint().x());
+    if (col < 0)
+    {
+        QWidget::mousePressEvent(event);
+        return;
+    }
+    m_dragCol = col;
+    m_dragOriginX = event->position().toPoint().x();
+    m_dragOriginW = m_panel->detailColumnWidth(static_cast<ThumbnailPanel::DetailColumn>(col));
+    setCursor(Qt::SplitHCursor);
+    event->accept();
+}
+
+void DetailsHeader::mouseMoveEvent(QMouseEvent *event)
+{
+    const int x = event->position().toPoint().x();
+    if (m_dragCol >= 0)
+    {
+        const int delta = x - m_dragOriginX;
+        m_panel->setDetailColumnWidth(static_cast<ThumbnailPanel::DetailColumn>(m_dragCol),
+                                      m_dragOriginW + delta);
+        event->accept();
+        return;
+    }
+    setCursor(separatorAt(x) >= 0 ? Qt::SplitHCursor : Qt::ArrowCursor);
+    QWidget::mouseMoveEvent(event);
+}
+
+void DetailsHeader::mouseReleaseEvent(QMouseEvent *event)
+{
+    if (m_dragCol >= 0 && event->button() == Qt::LeftButton)
+    {
+        m_dragCol = -1;
+        m_panel->persistDetailColumnWidths();
+        setCursor(separatorAt(event->position().toPoint().x()) >= 0 ? Qt::SplitHCursor
+                                                                    : Qt::ArrowCursor);
+        event->accept();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+
+void DetailsHeader::leaveEvent(QEvent *event)
+{
+    if (m_dragCol < 0)
+        setCursor(Qt::ArrowCursor);
+    QWidget::leaveEvent(event);
 }
