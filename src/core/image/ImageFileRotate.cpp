@@ -86,6 +86,63 @@ bool atomicWriteBytes(const QString &path, const std::vector<uint8_t> &bytes, st
     return true;
 }
 
+// Load with auto-orientation, then destroy the reader before any overwrite so
+// Windows releases the share lock (QImageReader can keep the file open).
+bool loadOrientedImage(const QString &path, QImage *outImage, std::string *formatOut,
+                       std::string *err)
+{
+    QImageReader reader(path);
+    reader.setAutoTransform(true);
+    QImage image = reader.read();
+    if (image.isNull())
+    {
+        if (err)
+            *err = "cannot read image: " + reader.errorString().toStdString();
+        return false;
+    }
+    if (formatOut)
+    {
+        QByteArray fmt = reader.format();
+        *formatOut = fmt.isEmpty() ? std::string() : lowerAscii(fmt.toStdString());
+    }
+    *outImage = std::move(image);
+    return true;
+}
+
+std::string resolveEncodeFormat(const std::string &readerFormat, const std::string &suffix)
+{
+    std::string format = readerFormat;
+    if (format.empty())
+        format = Encoder::formatForExtension(suffix);
+    if (format == "jpg")
+        format = "jpeg";
+    return format;
+}
+
+bool encodeRotated(const ImageData &rotated, const std::string &format, std::vector<uint8_t> *out,
+                   std::string *err)
+{
+    Encoder::Params params;
+    params.quality = 95;
+    if (format == "png" || format == "bmp")
+        params.quality = -1;
+    *out = Encoder::encodeToBuffer(rotated, format, params);
+    if (out->empty())
+    {
+        if (err)
+            *err = "encode failed for format " + format;
+        return false;
+    }
+    return true;
+}
+
+ImageFileRotateResult failResult(std::string error)
+{
+    ImageFileRotateResult r;
+    r.error = std::move(error);
+    return r;
+}
+
 } // namespace
 
 bool isWritableRotateFormat(const std::string &suffixOrFormat)
@@ -101,20 +158,15 @@ bool isWritableRotateFormat(const std::string &suffixOrFormat)
 
 ImageFileRotateResult rotateImageFile(const std::string &utf8Path, int degreesCw)
 {
-    ImageFileRotateResult r;
     if (utf8Path.empty())
-    {
-        r.error = "empty path";
-        return r;
-    }
+        return failResult("empty path");
+
     const int norm = normalizeDegreesCw(degreesCw);
     if (norm < 0)
-    {
-        r.error = "angle must be a multiple of 90";
-        return r;
-    }
+        return failResult("angle must be a multiple of 90");
     if (norm == 0)
     {
+        ImageFileRotateResult r;
         r.ok = true;
         r.method = ImageRotateMethod::None;
         return r;
@@ -123,70 +175,37 @@ ImageFileRotateResult rotateImageFile(const std::string &utf8Path, int degreesCw
     const QString qPath = QString::fromUtf8(utf8Path.data(), static_cast<int>(utf8Path.size()));
     const QFileInfo fi(qPath);
     if (!fi.exists() || !fi.isFile())
-    {
-        r.error = "file not found";
-        return r;
-    }
+        return failResult("file not found");
     if (!fi.isWritable())
-    {
-        r.error = "file not writable";
-        return r;
-    }
+        return failResult("file not writable");
 
     const std::string suffix = fileSuffixOf(utf8Path);
     if (!isWritableRotateFormat(suffix))
-    {
-        r.error = "unsupported format for rotate: " + (suffix.empty() ? "(none)" : suffix);
-        return r;
-    }
+        return failResult("unsupported format for rotate: " + (suffix.empty() ? "(none)" : suffix));
 
-    QImageReader reader(qPath);
-    reader.setAutoTransform(true);
-    const QImage original = reader.read();
-    if (original.isNull())
-    {
-        r.error = "cannot read image: " + reader.errorString().toStdString();
-        return r;
-    }
+    QImage original;
+    std::string readerFormat;
+    std::string err;
+    if (!loadOrientedImage(qPath, &original, &readerFormat, &err))
+        return failResult(err);
 
     const ImageData src = mvcore::fromQImage(original);
     if (src.isNull())
-    {
-        r.error = "pixel convert failed";
-        return r;
-    }
+        return failResult("pixel convert failed");
+
     const ImageData rotated = rotatePixelsExact(src, norm);
     if (rotated.isNull())
-    {
-        r.error = "rotate failed";
-        return r;
-    }
+        return failResult("rotate failed");
 
-    std::string format = Encoder::formatForExtension(suffix);
-    if (format.empty())
-        format = suffix;
-    if (format == "jpg")
-        format = "jpeg";
+    const std::string format = resolveEncodeFormat(readerFormat, suffix);
+    std::vector<uint8_t> encoded;
+    if (!encodeRotated(rotated, format, &encoded, &err))
+        return failResult(err);
 
-    Encoder::Params params;
-    params.quality = 95;
-    if (format == "png" || format == "bmp")
-        params.quality = -1;
-
-    const std::vector<uint8_t> encoded = Encoder::encodeToBuffer(rotated, format, params);
-    if (encoded.empty())
-    {
-        r.error = "encode failed for format " + format;
-        return r;
-    }
-
-    std::string err;
     if (!atomicWriteBytes(qPath, encoded, &err))
-    {
-        r.error = err.empty() ? "write failed" : err;
-        return r;
-    }
+        return failResult(err.empty() ? "write failed" : err);
 
+    ImageFileRotateResult r;
     r.ok = true;
     r.method = ImageRotateMethod::PixelRewrite;
     r.width = rotated.width;

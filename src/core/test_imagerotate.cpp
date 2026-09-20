@@ -8,6 +8,7 @@
 #include <QImage>
 #include <QImageReader>
 
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
 #include <iostream>
@@ -96,7 +97,12 @@ static void testFileRoundtrip(const std::string &ext)
     namespace fs = std::filesystem;
     const fs::path dir = fs::temp_directory_path() / "mviewer_imagerotate_test";
     fs::create_directories(dir);
-    const fs::path path = dir / ("fixture." + ext);
+    // Unique per-run file so Windows share locks / leftover handles cannot
+    // poison the next rotateImageFile overwrite.
+    const fs::path path = dir / ("fixture_" + ext + "_" +
+                                 std::to_string(static_cast<long long>(
+                                     std::chrono::steady_clock::now().time_since_epoch().count())) +
+                                 "." + ext);
     const std::string utf8 = path.string();
 
     ImageData src = makeMarker(6, 4);
@@ -108,19 +114,22 @@ static void testFileRoundtrip(const std::string &ext)
     CHECK(r1.ok, "CW90 ok ." + ext + " err=" + r1.error);
     CHECK(r1.width == 4 && r1.height == 6, "CW90 dims swapped ." + ext);
 
-    // Reload and verify corner mapping under auto-transform.
-    QImageReader reader(QString::fromStdString(utf8));
-    reader.setAutoTransform(true);
-    QImage img = reader.read();
-    CHECK(!img.isNull(), "reload after CW90 ." + ext);
-    CHECK(img.width() == 4 && img.height() == 6, "reloaded dims ." + ext);
+    // Reload and verify corner mapping under auto-transform. Scope the
+    // QImageReader so Windows releases the share lock before the next overwrite.
+    {
+        QImageReader reader(QString::fromStdString(utf8));
+        reader.setAutoTransform(true);
+        QImage img = reader.read();
+        CHECK(!img.isNull(), "reload after CW90 ." + ext);
+        CHECK(img.width() == 4 && img.height() == 6, "reloaded dims ." + ext);
 
-    ImageData after = mvcore::fromQImage(img);
-    uint8_t r, g, b;
-    // Original (0,0) after CW90 -> (h-1, 0) = (3, 0) in 4x6? wait src was 6x4,
-    // CW: dst w=h_src=4, h=w_src=6; (0,0)->(4-1-0, 0)=(3,0)
-    sample(after, 3, 0, r, g, b);
-    CHECK(r == 0 && g == 0 && b == 128, "reloaded CW90 corner ." + ext);
+        ImageData after = mvcore::fromQImage(img);
+        uint8_t r, g, b;
+        // Original (0,0) after CW90 -> (h-1, 0) = (3, 0); src was 6x4,
+        // CW: dst w=h_src=4, h=w_src=6; (0,0)->(4-1-0, 0)=(3,0)
+        sample(after, 3, 0, r, g, b);
+        CHECK(r == 0 && g == 0 && b == 128, "reloaded CW90 corner ." + ext);
+    }
 
     auto r2 = mviewer::core::rotateImageFile(utf8, -90); // back
     CHECK(r2.ok, "CCW90 ok ." + ext + " err=" + r2.error);
