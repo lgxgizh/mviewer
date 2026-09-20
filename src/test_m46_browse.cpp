@@ -277,16 +277,14 @@ void testPaintNeverStats()
         CHECK(panel.pathList().isEmpty(), "B2: no-match filter clears the visible rows");
         panel.setFilter({});
         pump(50);
-        CHECK(panel.pathList().size() == 60,
-              "B2: clearing the no-match filter restores all rows");
+        CHECK(panel.pathList().size() == 60, "B2: clearing the no-match filter restores all rows");
         CHECK(!panel.thumbReady(firstPath).isNull(),
               "B2: no-match filter rebuild preserves an already-decoded thumbnail");
         const QImage before = panel.grab().toImage();
         QDir(dir).removeRecursively();
         pump(500);
         const QImage after = panel.grab().toImage();
-        CHECK(before == after,
-              "B2: thumbnail-grid render is pixel-identical after file deletion");
+        CHECK(before == after, "B2: thumbnail-grid render is pixel-identical after file deletion");
         panel.hide();
     }
     pump(500);
@@ -317,13 +315,13 @@ void testScanSupersessionBounded()
         ps->token = panel.scanGenTokenForTest();
         ps->genA = 1; // first setDirectory bumps m_dirGen 0 -> 1
 
-        ThumbnailPanel::setScanIterationProbe([ps]()
-                                              {
-                                                  ps->anyCall.store(true, std::memory_order_release);
-                                                  std::lock_guard<std::mutex> lk(ps->mtx);
-                                                  ps->seen.push_back(
-                                                      ps->token->load(std::memory_order_acquire));
-                                              });
+        ThumbnailPanel::setScanIterationProbe(
+            [ps]()
+            {
+                ps->anyCall.store(true, std::memory_order_release);
+                std::lock_guard<std::mutex> lk(ps->mtx);
+                ps->seen.push_back(ps->token->load(std::memory_order_acquire));
+            });
         panel.setDirectory(dirA);
         CHECK(waitTrue([&] { return ps->anyCall.load(); }, 15000),
               "B3: scan A started (probe observed)");
@@ -358,6 +356,17 @@ void testScanSupersessionBounded()
 }
 
 // ─── B4: superseded dimension probe stops cooperatively ─────────────────────
+
+void testHighLatencyBrowsePathHeuristic()
+{
+    printf("\n[network path heuristic]\n");
+    CHECK(ThumbnailPanel::isHighLatencyBrowsePath(QStringLiteral("\\\\server\\share\\album")),
+          "UNC backslash path is high-latency");
+    CHECK(ThumbnailPanel::isHighLatencyBrowsePath(QStringLiteral("//server/share/album")),
+          "UNC forward-slash path is high-latency");
+    CHECK(!ThumbnailPanel::isHighLatencyBrowsePath(QString()), "empty path is not high-latency");
+}
+
 void testDimensionSupersessionBounded()
 {
     printf("\n[B4. superseded dimension probe stops cooperatively]\n");
@@ -386,15 +395,14 @@ void testDimensionSupersessionBounded()
         // switch deterministically lands mid-probe. The assertion is on CALL
         // COUNTS, not timing: after the switch, the superseded pass may finish
         // only the iteration that was already running.
-        ThumbnailPanel::setScanIterationProbe([ps]()
-                                              {
-                                                  if (ps->armBlock.load(std::memory_order_acquire))
-                                                      std::this_thread::sleep_for(
-                                                          std::chrono::milliseconds(2));
-                                                  std::lock_guard<std::mutex> lk(ps->mtx);
-                                                  ps->seen.push_back(
-                                                      ps->token->load(std::memory_order_acquire));
-                                              });
+        ThumbnailPanel::setScanIterationProbe(
+            [ps]()
+            {
+                if (ps->armBlock.load(std::memory_order_acquire))
+                    std::this_thread::sleep_for(std::chrono::milliseconds(2));
+                std::lock_guard<std::mutex> lk(ps->mtx);
+                ps->seen.push_back(ps->token->load(std::memory_order_acquire));
+            });
         ps->armBlock.store(true, std::memory_order_release);
         panel.setDirectory(dirA);
         CHECK(waitEntryCount(panel, 1500, 60000), "B4: scan A completed (dimension pass running)");
@@ -434,17 +442,16 @@ void testBusyCursorOwnership()
         std::atomic<int> blockedCalls{0};
     };
     auto ps = std::make_shared<ProbeState>();
-    ThumbnailPanel::setScanIterationProbe([ps]()
-                                          {
-                                              if (ps->armBlock.load(std::memory_order_acquire))
-                                              {
-                                                  ps->blockedCalls.fetch_add(1);
-                                                  while (!ps->releaseBlock.load(
-                                                      std::memory_order_acquire))
-                                                      std::this_thread::sleep_for(
-                                                          std::chrono::milliseconds(1));
-                                              }
-                                          });
+    ThumbnailPanel::setScanIterationProbe(
+        [ps]()
+        {
+            if (ps->armBlock.load(std::memory_order_acquire))
+            {
+                ps->blockedCalls.fetch_add(1);
+                while (!ps->releaseBlock.load(std::memory_order_acquire))
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+        });
     const QString dirA = makeImageDir("cursor_a", 800);
     const QString dirB = makeImageDir("cursor_b", 800);
     const QString dirC = makeImageDir("cursor_c", 800);
@@ -507,8 +514,7 @@ void testViewerDestroyMidDecode()
         // cancelled while the decode is still in flight.
     }
     ctl->release.store(true, std::memory_order_release);
-    CHECK(waitTrue(poolsConverged, 15000),
-          "B6: pools converge after viewer destroyed mid-decode");
+    CHECK(waitTrue(poolsConverged, 15000), "B6: pools converge after viewer destroyed mid-decode");
     CHECK(ctl->calls.load() == 1, "B6: decode ran exactly once");
     CHECK(sched.drain(PoolType::DecodePool, std::chrono::seconds(5)), "B6: DecodePool drains");
 
@@ -540,8 +546,7 @@ void testViewerABA()
         ImageViewer viewer;
         viewer.resize(400, 300);
         viewer.setImage(pathA); // decode A1 starts, blocks on the gate
-        CHECK(waitTrue([&] { return ctl->calls.load() >= 1; }, 5000),
-              "B7: decode A1 running");
+        CHECK(waitTrue([&] { return ctl->calls.load() >= 1; }, 5000), "B7: decode A1 running");
         viewer.setImage(pathB); // supersedes A1 (cancel), B queued behind A1
         viewer.setImage(pathA); // supersedes B, A2 queued last — newest wins
 
@@ -549,12 +554,13 @@ void testViewerABA()
         // (cancelled -> dropped), A2 (current generation) delivers. The
         // single-threaded DecodePool serializes all three decodes.
         ctl->release.store(true, std::memory_order_release);
-        CHECK(waitTrue([&]
-                       {
-                           auto f = viewer.frame();
-                           return f && !f->metadata().filePath.empty();
-                       },
-                       10000),
+        CHECK(waitTrue(
+                  [&]
+                  {
+                      auto f = viewer.frame();
+                      return f && !f->metadata().filePath.empty();
+                  },
+                  10000),
               "B7: viewer delivered a frame");
         const auto f = viewer.frame();
         CHECK(f && f->metadata().filePath == pathA.toStdString(),
@@ -566,8 +572,7 @@ void testViewerABA()
         CHECK(ctl->calls.load() == 1,
               "B7: exactly one decode ran (A1); B was cancelled-queued, A2 was cache-served");
         CHECK(waitTrue(poolsConverged, 15000), "B7: pools converge after A->B->A");
-        CHECK(sched.drain(PoolType::DecodePool, std::chrono::seconds(5)),
-              "B7: DecodePool drains");
+        CHECK(sched.drain(PoolType::DecodePool, std::chrono::seconds(5)), "B7: DecodePool drains");
     }
     DecoderRegistry::instance().unregister("BlockingCountingTestDecoder");
     cleanupDir(tmp.path());
@@ -609,8 +614,7 @@ void testCompareSwapThenDestroy()
         // both batches.
     }
     ctl->release.store(true, std::memory_order_release);
-    CHECK(waitTrue(poolsConverged, 15000),
-          "B8: pools converge after compare swap-then-destroy");
+    CHECK(waitTrue(poolsConverged, 15000), "B8: pools converge after compare swap-then-destroy");
     CHECK(ctl->calls.load() == 1,
           "B8: only the in-flight first decode actually ran; every superseded/"
           "cancelled submission stopped before decoding");
@@ -776,6 +780,7 @@ int main(int argc, char **argv)
 
     testPaintNeverStats();
     testScanSupersessionBounded();
+    testHighLatencyBrowsePathHeuristic();
     testDimensionSupersessionBounded();
     testBusyCursorOwnership();
     testViewerDestroyMidDecode();

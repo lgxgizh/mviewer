@@ -45,25 +45,62 @@ QString ThumbnailCache::cacheDir() const
     return QDir().mkpath(dir) ? dir : QString();
 }
 
+QString ThumbnailCache::keyForIdentity(const QString &path, int size, qint64 mtimeMs,
+                                       qint64 fileSize)
+{
+    if (path.isEmpty() || size <= 0)
+        return QString();
+    const QString pathPrefix =
+        QCryptographicHash::hash(path.toUtf8(), QCryptographicHash::Sha1).toHex();
+    return pathPrefix + "_" + QString::number(mtimeMs) + "_" + QString::number(fileSize) + "_" +
+           QString::number(size) + "_v" + QString::number(kSchemaVersion);
+}
+
 QString ThumbnailCache::keyFor(const QString &path, int size)
 {
     if (path.isEmpty() || size <= 0)
         return QString();
+    {
+        QMutexLocker lock(&instance().m_hintMutex);
+        const auto it = instance().m_identityHints.constFind(path);
+        if (it != instance().m_identityHints.cend())
+            return keyForIdentity(path, size, it->mtimeMs, it->fileSize);
+    }
     const QFileInfo fi(path);
     // Keep a path-derived prefix so invalidatePath() can remove all historical
     // revisions for one source. The remainder uses millisecond precision plus
     // size and requested size, so normal overwrites also miss old payloads.
-    const QString pathPrefix =
-        QCryptographicHash::hash(path.toUtf8(), QCryptographicHash::Sha1).toHex();
-    return pathPrefix + "_" + QString::number(fi.lastModified().toMSecsSinceEpoch()) + "_" +
-           QString::number(fi.size()) + "_" + QString::number(size) + "_v" +
-           QString::number(kSchemaVersion);
+    return keyForIdentity(path, size, fi.lastModified().toMSecsSinceEpoch(), fi.size());
+}
+
+void ThumbnailCache::hintSourceIdentity(const QString &path, qint64 mtimeMs, qint64 fileSize)
+{
+    if (path.isEmpty() || fileSize < 0)
+        return;
+    QMutexLocker lock(&m_hintMutex);
+    m_identityHints.insert(path, IdentityHint{mtimeMs, fileSize});
+}
+
+void ThumbnailCache::clearSourceIdentityHints()
+{
+    QMutexLocker lock(&m_hintMutex);
+    m_identityHints.clear();
+}
+
+bool ThumbnailCache::hasSourceIdentityHint(const QString &path) const
+{
+    QMutexLocker lock(&m_hintMutex);
+    return m_identityHints.contains(path);
 }
 
 void ThumbnailCache::invalidatePath(const QString &path)
 {
     if (path.isEmpty())
         return;
+    {
+        QMutexLocker lock(&m_hintMutex);
+        m_identityHints.remove(path);
+    }
     quint64 revision = 0;
     {
         QMutexLocker lock(&m_mutex);
@@ -445,6 +482,7 @@ void ThumbnailCache::setMaxBytes(quint64 n)
 
 void ThumbnailCache::clear()
 {
+    clearSourceIdentityHints();
     QMutexLocker lock(&m_mutex);
     m_pathInvalidations.clear();
     ensureIndexed();

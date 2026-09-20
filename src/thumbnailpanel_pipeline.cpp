@@ -147,12 +147,14 @@ void ThumbnailPanel::updateVisibleRange()
     // single authoritative disk-cache path: warm folders paint as soon as the
     // worker's cache load lands (async, no UI-thread I/O).
 
-    // P0 #鈶?/ A-2.5: visible range at Thumbnail priority, then predictive
-    // neighbors. Scale the predictive window with directory size so 10k-image
-    // folders still feel snappy when scrolling, without over-scheduling tiny
-    // folders.
-    const int predictive = n > 2000 ? 96 : (n > 500 ? 64 : 48);
-    ThumbnailPipeline::instance().setPredictiveCount(static_cast<size_t>(predictive));
+    // Visible range at Thumbnail priority, then predictive neighbors.
+    // Local SSD keeps the established large-directory scroll window; high-
+    // latency UNC/SMB paths use a tight forward window so off-screen work
+    // cannot starve first paint of the viewport.
+    const size_t predictive =
+        ThumbnailPipeline::recommendedPredictiveCount(static_cast<size_t>(n), m_highLatencyDir);
+    ThumbnailPipeline::instance().setPredictiveCount(predictive);
+
     ThumbnailPipeline::instance().setVisibleRange(static_cast<size_t>(first),
                                                   last >= 0 ? static_cast<size_t>(last) + 1 : 0);
 }

@@ -5,11 +5,13 @@
 #include "core/scheduler/TaskScheduler.h"
 #include "core/thumbnail/ThumbnailPipeline.h"
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <cstdio>
 #include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -282,6 +284,83 @@ int main()
         CHECK(negativeSize.isNull(), "request with negative size returns null ImageData");
         ImageData zeroSize = guardPipe.request("t1.png", 0);
         CHECK(zeroSize.isNull(), "request with zero size returns null ImageData");
+    }
+
+    // Network-browse scheduling: high-latency predictive stays tight; scroll
+    // cancels obsolete demand so slow IO cannot clog the queue with offscreen work.
+    {
+        printf("\n[network-browse predictive + cancel]\n");
+        fflush(stdout);
+        CHECK(ThumbnailPipeline::recommendedPredictiveCount(100, false) == 48,
+              "local small-dir predictive is 48");
+        CHECK(ThumbnailPipeline::recommendedPredictiveCount(800, false) == 64,
+              "local mid-dir predictive is 64");
+        CHECK(ThumbnailPipeline::recommendedPredictiveCount(5000, false) == 96,
+              "local large-dir predictive is 96");
+        CHECK(ThumbnailPipeline::recommendedPredictiveCount(100, true) == 8,
+              "high-latency small-dir predictive is 8");
+        CHECK(ThumbnailPipeline::recommendedPredictiveCount(800, true) == 12,
+              "high-latency mid-dir predictive is 12");
+        CHECK(ThumbnailPipeline::recommendedPredictiveCount(5000, true) == 12,
+              "high-latency large-dir predictive stays 12");
+
+        TaskScheduler::instance().setPoolMaxThreads(TaskScheduler::ThumbnailPool, 1);
+        ThumbnailPipeline slow;
+        slow.setThumbSize(64);
+        std::atomic<int> started{0};
+        std::atomic<int> finished{0};
+        slow.setDecodeFn(
+            [&](const std::string &, int size)
+            {
+                started.fetch_add(1);
+                std::this_thread::sleep_for(std::chrono::milliseconds(30));
+                finished.fetch_add(1);
+                return fakeThumb(size);
+            });
+        std::mutex deliveredMtx;
+        std::vector<std::string> delivered;
+        slow.setResultFn(
+            [&](const std::string &path, int, const ImageData &)
+            {
+                std::lock_guard<std::mutex> lk(deliveredMtx);
+                delivered.push_back(path);
+            });
+        std::vector<std::string> src;
+        for (int i = 0; i < 200; ++i)
+            src.push_back("net/" + std::to_string(i) + ".jpg");
+        slow.setSources(src);
+        const size_t pred = ThumbnailPipeline::recommendedPredictiveCount(src.size(), true);
+        slow.setPredictiveCount(pred);
+        slow.setVisibleRange(0, 10);
+        // Allow a couple of tasks to start, then jump far ahead.
+        std::this_thread::sleep_for(std::chrono::milliseconds(40));
+        slow.setVisibleRange(150, 160);
+        const size_t peak = slow.pendingCount();
+        TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool,
+                                        std::chrono::milliseconds(10000));
+        CHECK(peak <= 10 + pred + 2,
+              "high-latency pending stays near visible+predictive after scroll");
+        {
+            std::lock_guard<std::mutex> lk(deliveredMtx);
+            int viewportHits = 0;
+            for (int i = 150; i < 160; ++i)
+                for (const auto &p : delivered)
+                    if (p == src[static_cast<size_t>(i)])
+                        ++viewportHits;
+            CHECK(viewportHits == 10, "post-scroll viewport thumbnails all delivered");
+            int farOffscreen = 0;
+            for (const auto &p : delivered)
+            {
+                // Indices 80..120 were never in either demand window.
+                for (int i = 80; i <= 120; ++i)
+                    if (p == src[static_cast<size_t>(i)])
+                        ++farOffscreen;
+            }
+            CHECK(farOffscreen == 0, "paths outside both demand windows were never decoded");
+        }
+        slow.clear();
+        TaskScheduler::instance().drain(TaskScheduler::ThumbnailPool,
+                                        std::chrono::milliseconds(2000));
     }
 
     printf("\n=== Results: %d passed, %d failed ===\n", g_pass, g_fail);

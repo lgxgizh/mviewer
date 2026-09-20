@@ -717,6 +717,24 @@ static void testThumbnailCacheCapacity()
     CHECK(cache.totalBytes() == 0, "cache left clean after capacity tests");
 }
 
+static void testThumbnailCacheIdentityHints()
+{
+    std::printf("\n── ThumbnailCache identity hints (network browse) ──\n");
+    auto &cache = ThumbnailCache::instance();
+    cache.clear();
+    const QString path = QStringLiteral("/net/share/photo.jpg");
+    CHECK(!cache.hasSourceIdentityHint(path), "hint absent before seed");
+    cache.hintSourceIdentity(path, 1700000000000LL, 4096);
+    CHECK(cache.hasSourceIdentityHint(path), "hint recorded from scan metadata");
+    const QString keyed = ThumbnailCache::keyFor(path, 128);
+    CHECK(!keyed.isEmpty(), "keyFor uses hint without requiring a live file");
+    CHECK(keyed.contains(QStringLiteral("_4096_128_v")),
+          "hinted key embeds scan size and requested thumb size");
+    cache.invalidatePath(path);
+    CHECK(!cache.hasSourceIdentityHint(path), "invalidatePath drops the hint");
+    cache.clear();
+}
+
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
@@ -734,6 +752,7 @@ int main(int argc, char **argv)
     CHECK(QDir().mkpath(filterDir), "filter fixture dir created");
 
     testThumbnailCacheIdentity();
+    testThumbnailCacheIdentityHints();
     testPipelineSizeAndGeneration();
     testPanelSizeSwitch(sizeDir);
     testPanelMixedFormatListing(mixedDir);

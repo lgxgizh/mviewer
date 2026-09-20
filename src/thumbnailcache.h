@@ -69,7 +69,17 @@ class ThumbnailCache
     void invalidatePath(const QString &path);
 
     // The identity key used for `path` at `size` (public for tests).
+    // Uses a session identity hint when present so warm-cache hits on network
+    // folders avoid a per-request QFileInfo stat of the source (scan already
+    // paid that cost). Falls back to a live stat when no hint is recorded.
     static QString keyFor(const QString &path, int size);
+
+    // Record source identity from a directory scan (mtime ms + size). Cleared
+    // on invalidatePath/clear and when the browse folder changes.
+    void hintSourceIdentity(const QString &path, qint64 mtimeMs, qint64 fileSize);
+    void clearSourceIdentityHints();
+    // Test/observability: true when a hint is recorded for `path`.
+    bool hasSourceIdentityHint(const QString &path) const;
 
     // Current byte budget for the on-disk thumbnail folder.
     quint64 maxBytes() const;
@@ -125,4 +135,16 @@ class ThumbnailCache
     std::thread m_invalidationThread;
     bool m_invalidationStop = false;
     QHash<QString, quint64> m_pathInvalidations;
+
+    struct IdentityHint
+    {
+        qint64 mtimeMs = 0;
+        qint64 fileSize = 0;
+    };
+    // Separate from m_mutex: keyFor() is called outside the index lock on the
+    // get()/put() hot path and must not re-enter m_mutex.
+    mutable QMutex m_hintMutex;
+    QHash<QString, IdentityHint> m_identityHints;
+
+    static QString keyForIdentity(const QString &path, int size, qint64 mtimeMs, qint64 fileSize);
 };
