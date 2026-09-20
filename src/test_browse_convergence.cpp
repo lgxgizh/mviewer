@@ -735,6 +735,16 @@ static void testThumbnailCacheIdentityHints()
     cache.clear();
 }
 
+static void testHighLatencyBrowsePathHeuristic()
+{
+    std::printf("\n── High-latency browse path heuristic ──\n");
+    CHECK(ThumbnailPanel::isHighLatencyBrowsePath(QStringLiteral("\\\\server\\share\\album")),
+          "UNC backslash path is high-latency");
+    CHECK(ThumbnailPanel::isHighLatencyBrowsePath(QStringLiteral("//server/share/album")),
+          "UNC forward-slash path is high-latency");
+    CHECK(!ThumbnailPanel::isHighLatencyBrowsePath(QString()), "empty path is not high-latency");
+}
+
 int main(int argc, char **argv)
 {
     QApplication app(argc, argv);
@@ -753,6 +763,7 @@ int main(int argc, char **argv)
 
     testThumbnailCacheIdentity();
     testThumbnailCacheIdentityHints();
+    testHighLatencyBrowsePathHeuristic();
     testPipelineSizeAndGeneration();
     testPanelSizeSwitch(sizeDir);
     testPanelMixedFormatListing(mixedDir);

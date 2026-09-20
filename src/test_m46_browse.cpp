@@ -356,17 +356,6 @@ void testScanSupersessionBounded()
 }
 
 // ─── B4: superseded dimension probe stops cooperatively ─────────────────────
-
-void testHighLatencyBrowsePathHeuristic()
-{
-    printf("\n[network path heuristic]\n");
-    CHECK(ThumbnailPanel::isHighLatencyBrowsePath(QStringLiteral("\\\\server\\share\\album")),
-          "UNC backslash path is high-latency");
-    CHECK(ThumbnailPanel::isHighLatencyBrowsePath(QStringLiteral("//server/share/album")),
-          "UNC forward-slash path is high-latency");
-    CHECK(!ThumbnailPanel::isHighLatencyBrowsePath(QString()), "empty path is not high-latency");
-}
-
 void testDimensionSupersessionBounded()
 {
     printf("\n[B4. superseded dimension probe stops cooperatively]\n");
@@ -780,7 +769,6 @@ int main(int argc, char **argv)
 
     testPaintNeverStats();
     testScanSupersessionBounded();
-    testHighLatencyBrowsePathHeuristic();
     testDimensionSupersessionBounded();
     testBusyCursorOwnership();
     testViewerDestroyMidDecode();
