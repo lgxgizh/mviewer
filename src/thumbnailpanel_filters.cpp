@@ -10,14 +10,16 @@
 
 #include <QtConcurrent/QtConcurrent>
 
-#include <algorithm>
 #include <QSet>
+#include <algorithm>
 
 void ThumbnailPanel::setSortMode(SortMode mode)
 {
     if (m_sortMode == mode)
         return;
     m_sortMode = mode;
+    if (mode == SortResolution && !m_allEntries.isEmpty())
+        ensureDimensions();
     if (!m_currentDir.isEmpty())
         scheduleFilter(false);
 }

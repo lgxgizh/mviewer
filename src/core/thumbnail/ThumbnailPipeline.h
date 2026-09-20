@@ -190,6 +190,21 @@ struct ThumbnailPipeline
         m_predictive = n;
     }
 
+    // Recommended predictive window. High-latency (UNC/SMB/mapped) paths keep
+    // a tight forward window so off-screen decode does not saturate the link
+    // ahead of the viewport; local SSD keeps the established large-directory
+    // snappy-scroll window from M54/M55.
+    static size_t recommendedPredictiveCount(size_t directorySize, bool highLatencyIo)
+    {
+        if (highLatencyIo)
+            return directorySize > 500 ? 12 : 8;
+        if (directorySize > 2000)
+            return 96;
+        if (directorySize > 500)
+            return 64;
+        return 48;
+    }
+
     // M46: thumbnail-size change is a REAL supersession boundary. In-flight
     // decodes at the old size are cancelled (their handles are dropped and the
     // generation is bumped, so a late old-size result is neither cached nor

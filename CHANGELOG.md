@@ -6,6 +6,10 @@
 
 - **Details view resizable columns**: Browse Details header (名称 / 分辨率 / …) supports Explorer-style drag-resize; header and row cells stay aligned, long names elide within the column width, and widths persist via QSettings.
 
+### Performance
+
+- **Network / UNC browse thumbnails**: High-latency paths (UNC, mapped SMB, nfs/cifs/fuse) use a tight predictive window so off-screen decode cannot starve the viewport; local SSD keeps the existing large-directory prefetch. Thumbnail/LargeIcon no longer launch a full-directory header probe—Details and SortResolution still do, viewport-first with incremental publish into both source and display entries. Disk-cache identity hints reuse scan mtime/size to avoid a per-thumb source stat on warm cache hits; EXIF embedded-thumb path skips a second MetadataReader open.
+
 ### Fixed
 
 - **Image rotate end-to-end**: Browse/Viewer 顺时针/逆时针 90° now persist via `mviewer::core::rotateImageFile` (exact 90°-step pixel rewrite, atomic `QSaveFile`, clear errors for non-writable formats), with toolbar buttons (`rotateCWAction` / `rotateCCWAction`), Chinese tooltips, enablement tied to current image, and thumbnail/preview/metadata refresh after rotate. Covered by `imagerotate_tests` (pixel ±90/180 + PNG/JPEG file round-trip).

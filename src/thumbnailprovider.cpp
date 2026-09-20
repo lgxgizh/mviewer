@@ -55,7 +55,11 @@ ImageData ThumbnailProvider::produce(const std::string &path, int size)
         {
             if (thumb.width() >= 64 && thumb.height() >= 64)
             {
-                mviewer::domain::ImageMetadata meta = mviewer::core::MetadataReader::read(path);
+                // Avoid a second source open for orientation/ICC on the EXIF
+                // thumb path: MetadataReader::read() re-stats and re-reads the
+                // file, which dominates on high-latency UNC/SMB folders. The
+                // embedded JPEG thumb is already display-oriented for browse.
+                mviewer::domain::ImageMetadata meta;
                 const QImage q = mvcore::toDisplayQImage(mvcore::fromQImage(thumb), meta);
                 const QImage fitted = squareFitImage(q.isNull() ? thumb : q, size);
                 if (!fitted.isNull())

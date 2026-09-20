@@ -7,8 +7,17 @@
 
 #include <QtConcurrent/QtConcurrent>
 
-#include <functional>
+#include <QStorageInfo>
+
+#if defined(Q_OS_WIN)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #include <QSet>
+#include <functional>
 namespace
 {
 // M46/M55 test instrumentation storage (empty in production). The immutable
@@ -109,13 +118,13 @@ bool passesTypeFilter(const QString &typeFilter, const QString &suffixRaw)
     return false;
 }
 
-void scanProgressiveDirectory(const QString &path,
-                              const std::shared_ptr<std::atomic<bool>> &alive,
-                              const std::shared_ptr<std::atomic<uint64_t>> &genToken, int gen,
-                              QList<ThumbnailPanel::Entry> &entries,
-                              const std::shared_ptr<const std::function<void()>> &probe,
-                              const std::function<void(const QList<ThumbnailPanel::Entry> &)> &publishBatch,
-                              const std::function<void()> &onAbort)
+void scanProgressiveDirectory(
+    const QString &path, const std::shared_ptr<std::atomic<bool>> &alive,
+    const std::shared_ptr<std::atomic<uint64_t>> &genToken, int gen,
+    QList<ThumbnailPanel::Entry> &entries,
+    const std::shared_ptr<const std::function<void()>> &probe,
+    const std::function<void(const QList<ThumbnailPanel::Entry> &)> &publishBatch,
+    const std::function<void()> &onAbort)
 {
     QList<ThumbnailPanel::Entry> batch;
     const auto supportedVec = mviewer::core::ImageFormats::supportedSuffixes();
@@ -151,8 +160,8 @@ void scanProgressiveDirectory(const QString &path,
         const QString suffix = fi.suffix().toLower();
         if (suffix.isEmpty() || !supportedExts.contains(suffix))
             continue;
-        const ThumbnailPanel::Entry entry{
-            fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()};
+        const ThumbnailPanel::Entry entry{fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0,
+                                          fi.lastModified()};
         entries.append(entry);
         batch.append(entry);
         if (batch.size() >= 128)
@@ -169,6 +178,34 @@ void scanProgressiveDirectory(const QString &path,
 }
 } // namespace
 
+bool ThumbnailPanel::isHighLatencyBrowsePath(const QString &path)
+{
+    if (path.isEmpty())
+        return false;
+    // UNC: \\server\share or //server/share (Qt often normalizes to the latter).
+    if (path.startsWith(QLatin1String("\\\\")) || path.startsWith(QLatin1String("//")))
+        return true;
+#if defined(Q_OS_WIN)
+    if (path.size() >= 2 && path.at(1) == QLatin1Char(':'))
+    {
+        wchar_t root[4] = {static_cast<wchar_t>(path.at(0).unicode()), L':', L'\\', L'\0'};
+        const UINT type = GetDriveTypeW(root);
+        if (type == DRIVE_REMOTE)
+            return true;
+    }
+#endif
+    const QStorageInfo info(path);
+    if (info.isValid())
+    {
+        const QString fs = QString::fromLatin1(info.fileSystemType()).toLower();
+        if (fs.contains(QLatin1String("nfs")) || fs.contains(QLatin1String("cifs")) ||
+            fs.contains(QLatin1String("smb")) || fs.contains(QLatin1String("sshfs")) ||
+            fs.contains(QLatin1String("fuse")))
+            return true;
+    }
+    return false;
+}
+
 void ThumbnailPanel::setDirectory(const QString &path)
 {
     m_currentDir = path;
@@ -182,10 +219,14 @@ void ThumbnailPanel::setDirectory(const QString &path)
     // invalidated by the bump. M46: the shared generation token additionally
     // makes in-flight workers STOP cooperatively (they re-check it every
     // iteration), instead of running to completion and being discarded later.
+    // Bump generation BEFORE any path probing / cache work so a slow
+    // isHighLatencyBrowsePath() cannot extend superseded scan iterations.
     ++m_dirGen;
     const int gen = m_dirGen;
     m_scanGenToken->store(static_cast<uint64_t>(gen), std::memory_order_release);
     m_dimsResolved = false;
+    m_highLatencyDir = isHighLatencyBrowsePath(path);
+    ThumbnailCache::instance().clearSourceIdentityHints();
     m_scanComplete = false;
     m_scanProgressive = m_sortMode == SortName && m_sortAscending && m_typeFilter.isEmpty();
 
@@ -228,11 +269,12 @@ void ThumbnailPanel::setDirectory(const QString &path)
                        self);
 }
 
-void ThumbnailPanel::startDirectoryScan(
-    const QString &path, int gen, const QString &typeFilter, SortMode sortMode,
-    bool sortAscending, const std::shared_ptr<std::atomic<bool>> &alive,
-    const std::shared_ptr<std::atomic<uint64_t>> &genToken,
-    const std::shared_ptr<std::atomic<int>> &busyRefs, const QPointer<ThumbnailPanel> &self)
+void ThumbnailPanel::startDirectoryScan(const QString &path, int gen, const QString &typeFilter,
+                                        SortMode sortMode, bool sortAscending,
+                                        const std::shared_ptr<std::atomic<bool>> &alive,
+                                        const std::shared_ptr<std::atomic<uint64_t>> &genToken,
+                                        const std::shared_ptr<std::atomic<int>> &busyRefs,
+                                        const QPointer<ThumbnailPanel> &self)
 {
     (void)QtConcurrent::run(
         &m_scanPool,
@@ -243,21 +285,21 @@ void ThumbnailPanel::startDirectoryScan(
             const auto probe = ThumbnailPanel::scanIterationProbeSnapshot();
             if (dir.exists())
             {
-                const bool progressive = sortMode == SortName && sortAscending &&
-                                         typeFilter.isEmpty();
+                const bool progressive =
+                    sortMode == SortName && sortAscending && typeFilter.isEmpty();
                 if (progressive)
                 {
                     scanProgressiveDirectory(
                         path, alive, genToken, gen, entries, probe,
                         [self, alive, gen](const QList<Entry> &batch)
                         {
-                            QMetaObject::invokeMethod(
-                                qApp,
-                                [self, alive, gen, batch]()
-                                {
-                                    if (alive->load() && self && self->m_dirGen == gen)
-                                        self->applyScanBatch(gen, batch);
-                                });
+                            QMetaObject::invokeMethod(qApp,
+                                                      [self, alive, gen, batch]()
+                                                      {
+                                                          if (alive->load() && self &&
+                                                              self->m_dirGen == gen)
+                                                              self->applyScanBatch(gen, batch);
+                                                      });
                         },
                         [busyRefs] { ThumbnailPanel::marshalBusyRestore(busyRefs); });
                 }
@@ -289,21 +331,21 @@ void ThumbnailPanel::startDirectoryScan(
                         const QFileInfo &fi = list.at(i);
                         if (fi.suffix().isEmpty())
                             continue;
-                        entries.append(
-                            {fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0, fi.lastModified()});
+                        entries.append({fi.absoluteFilePath(), fi.fileName(), fi.size(), 0, 0,
+                                        fi.lastModified()});
                     }
                 }
             }
-            QMetaObject::invokeMethod(
-                qApp,
-                [self, alive, gen, busyRefs, entries]() mutable
-                {
-                    // Always drop the busy cursor, even if superseded/destroyed.
-                    restoreBusyCursorOnce(busyRefs);
-                    if (!alive->load() || !self)
-                        return;
-                    self.data()->applyScanResult(gen, entries);
-                });
+            QMetaObject::invokeMethod(qApp,
+                                      [self, alive, gen, busyRefs, entries]() mutable
+                                      {
+                                          // Always drop the busy cursor, even if
+                                          // superseded/destroyed.
+                                          restoreBusyCursorOnce(busyRefs);
+                                          if (!alive->load() || !self)
+                                              return;
+                                          self.data()->applyScanResult(gen, entries);
+                                      });
         });
 }
 
@@ -315,7 +357,12 @@ void ThumbnailPanel::applyScanBatch(int gen, const QList<Entry> &batch)
     const int sourceRow = m_allEntries.size();
     m_allEntries.append(batch);
     for (int i = 0; i < batch.size(); ++i)
-        m_sourceRowByPath.insert(batch.at(i).path, sourceRow + i);
+    {
+        const Entry &e = batch.at(i);
+        m_sourceRowByPath.insert(e.path, sourceRow + i);
+        ThumbnailCache::instance().hintSourceIdentity(
+            e.path, e.date.isValid() ? e.date.toMSecsSinceEpoch() : 0, e.size);
+    }
     if (!m_scanProgressive)
         return;
 
@@ -371,29 +418,230 @@ void ThumbnailPanel::applyScanResult(int gen, const QList<Entry> &entries)
     for (int i = 0; i < m_allEntries.size(); ++i)
         m_sourceRowByPath.insert(m_allEntries.at(i).path, i);
     m_metaIndex.clear();
+    // Seed disk-cache identity from the scan so thumbnail get()/put() reuse
+    // listing mtime/size instead of re-statting every source on network paths.
+    for (const Entry &e : m_allEntries)
+        ThumbnailCache::instance().hintSourceIdentity(
+            e.path, e.date.isValid() ? e.date.toMSecsSinceEpoch() : 0, e.size);
     applyFilter();
-    // Only pay the header-read cost when the Details view actually shows the
-    // resolution column.
-    if (m_viewMode == Details)
+    // Details (resolution column) and SortResolution need header probes.
+    // Thumbnail/LargeIcon intentionally skip the full-directory probe so the
+    // first viewport decode owns the link on high-latency folders.
+    if (m_viewMode == Details || m_sortMode == SortResolution)
         ensureDimensions();
-    else if (m_viewMode == Thumbnail || m_viewMode == LargeIcon)
+}
+
+// ---- M46: cooperative dimension probe (viewport-first) ----------------------
+namespace
+{
+struct DimProbeResult
+{
+    QSize size;
+    int frameCount = 1;
+    bool animated = false;
+};
+
+DimProbeResult probeEntryDimensions(const QString &path)
+{
+    DimProbeResult out;
+    const auto sequence = mviewer::core::FrameSequenceReader::probe(path.toUtf8().toStdString());
+    if (sequence.valid)
     {
-        // Keep the first thumbnail burst ahead of metadata reads. The
-        // generation guard also makes a delayed callback harmless when the
-        // user changes folders.
-        const int dimensionGen = m_dirGen;
-        QTimer::singleShot(350, this,
-                           [this, dimensionGen]
-                           {
-                               if (dimensionGen != m_dirGen)
-                                   return;
-                               if (m_viewMode == Thumbnail || m_viewMode == LargeIcon)
-                                   ensureDimensions();
-                           });
+        const auto frame = mviewer::core::FrameSequenceReader::frameInfo(
+            path.toUtf8().toStdString(), sequence.defaultFrame);
+        out.size = QSize(frame.width, frame.height);
+        out.frameCount = qMax(1, sequence.frameCount);
+        out.animated = sequence.animated;
+    }
+    if (!out.size.isValid())
+    {
+        QImageReader reader(path);
+        reader.setAutoTransform(true);
+        out.size = reader.size();
+    }
+    return out;
+}
+
+using DimBatchPublish = std::function<void(const QVector<int> &, const QVector<QSize> &,
+                                           const QVector<int> &, const QVector<bool> &, bool)>;
+
+void runDimensionProbeLoop(const std::shared_ptr<std::atomic<bool>> &alive, int gen,
+                           const std::shared_ptr<std::atomic<uint64_t>> &genToken,
+                           const QStringList &paths, const QVector<int> &order,
+                           const std::shared_ptr<const std::function<void()>> &probe,
+                           const DimBatchPublish &publish)
+{
+    QVector<QSize> sizes(paths.size());
+    QVector<int> frameCounts(paths.size(), 1);
+    QVector<bool> animatedFlags(paths.size(), false);
+    QVector<int> batchIdx;
+    batchIdx.reserve(32);
+
+    auto flush = [&](bool finalBatch)
+    {
+        if (batchIdx.isEmpty() && !finalBatch)
+            return;
+        QVector<QSize> sizeCopy;
+        QVector<int> frameCopy;
+        QVector<bool> animCopy;
+        sizeCopy.reserve(batchIdx.size());
+        frameCopy.reserve(batchIdx.size());
+        animCopy.reserve(batchIdx.size());
+        for (int i : batchIdx)
+        {
+            sizeCopy.append(sizes.at(i));
+            frameCopy.append(frameCounts.at(i));
+            animCopy.append(animatedFlags.at(i));
+        }
+        publish(batchIdx, sizeCopy, frameCopy, animCopy, finalBatch);
+        batchIdx.clear();
+    };
+
+    for (int oi = 0; oi < order.size(); ++oi)
+    {
+        if (!alive->load() ||
+            genToken->load(std::memory_order_acquire) != static_cast<uint64_t>(gen))
+            return;
+        if (probe)
+        {
+            try
+            {
+                (*probe)();
+            }
+            catch (...)
+            {
+            }
+        }
+        const int i = order.at(oi);
+        if (i < 0 || i >= paths.size())
+            continue;
+        const DimProbeResult probed = probeEntryDimensions(paths.at(i));
+        sizes[i] = probed.size;
+        frameCounts[i] = probed.frameCount;
+        animatedFlags[i] = probed.animated;
+        batchIdx.append(i);
+        if (batchIdx.size() >= ((oi < 64) ? 16 : 48))
+            flush(false);
+    }
+    flush(true);
+}
+} // namespace
+
+QVector<int> ThumbnailPanel::dimensionProbeOrder() const
+{
+    QVector<int> order;
+    order.reserve(m_allEntries.size());
+    QSet<int> seen;
+    const int visibleRows = m_paths.size();
+    if (visibleRows > 0 && viewport()->height() >= 10)
+    {
+        int first = 0;
+        int last = 0;
+        if (m_viewMode == ViewMode::Details)
+        {
+            const int offset = qMax(0, verticalScrollBar()->value());
+            const int visible = qMax(
+                1, (offset % kDetailsItemHeight + viewport()->height() + kDetailsItemHeight - 1) /
+                       kDetailsItemHeight);
+            first = offset / kDetailsItemHeight;
+            last = first + visible - 1;
+        }
+        else
+        {
+            const QSize cell = gridSize();
+            const int cellW = qMax(1, cell.width());
+            const int cellH = qMax(1, cell.height());
+            const int cols = qMax(1, viewport()->width() / cellW);
+            const int firstRow = verticalScrollBar()->value() / cellH;
+            first = firstRow * cols;
+            last = first + cols * qMax(1, viewport()->height() / cellH);
+        }
+        first = qBound(0, first, visibleRows - 1);
+        last = qBound(first, last, visibleRows - 1);
+        for (int row = first; row <= last; ++row)
+        {
+            const int src = m_sourceRowByPath.value(m_paths.at(row), -1);
+            if (src >= 0 && !seen.contains(src))
+            {
+                order.append(src);
+                seen.insert(src);
+            }
+        }
+    }
+    for (int i = 0; i < m_allEntries.size(); ++i)
+    {
+        if (!seen.contains(i))
+            order.append(i);
+    }
+    return order;
+}
+
+void ThumbnailPanel::applyDimensionBatch(const QVector<int> &idx, const QVector<QSize> &sizes,
+                                         const QVector<int> &frames, const QVector<bool> &animated)
+{
+    for (int b = 0; b < idx.size(); ++b)
+    {
+        const int i = idx.at(b);
+        if (i < 0 || i >= m_allEntries.size())
+            continue;
+        m_allEntries[i].width = sizes.at(b).width();
+        m_allEntries[i].height = sizes.at(b).height();
+        m_allEntries[i].frameCount = frames.at(b);
+        m_allEntries[i].animated = animated.at(b);
+        const QString &path = m_allEntries.at(i).path;
+        const int drow = m_displayEntryRow.value(path, -1);
+        if (drow >= 0 && drow < m_displayEntries.size())
+        {
+            m_displayEntries[drow].width = sizes.at(b).width();
+            m_displayEntries[drow].height = sizes.at(b).height();
+            m_displayEntries[drow].frameCount = frames.at(b);
+            m_displayEntries[drow].animated = animated.at(b);
+        }
     }
 }
 
-// ---- M46: cooperative dimension probe ---------------------------------------
+void ThumbnailPanel::publishDimensionBatch(const QPointer<ThumbnailPanel> &self,
+                                           const std::shared_ptr<std::atomic<bool>> &alive, int gen,
+                                           const QVector<int> &idx, const QVector<QSize> &sizes,
+                                           const QVector<int> &frames,
+                                           const QVector<bool> &animated, bool finalBatch,
+                                           bool resortWhenDone)
+{
+    QMetaObject::invokeMethod(
+        qApp,
+        [self, alive, gen, idx, sizes, frames, animated, finalBatch, resortWhenDone]()
+        {
+            if (!alive->load() || !self)
+                return;
+            ThumbnailPanel *panel = self.data();
+            if (gen != panel->m_dirGen)
+                return;
+            panel->applyDimensionBatch(idx, sizes, frames, animated);
+            if (finalBatch && resortWhenDone)
+                panel->scheduleFilter(false);
+            else
+                panel->viewport()->update();
+        });
+}
+
+void ThumbnailPanel::dimensionProbeTask(const QPointer<ThumbnailPanel> &self,
+                                        const std::shared_ptr<std::atomic<bool>> &alive, int gen,
+                                        const std::shared_ptr<std::atomic<uint64_t>> &genToken,
+                                        const QStringList &paths, const QVector<int> &order,
+                                        bool resortWhenDone)
+{
+    const auto probe = ThumbnailPanel::scanIterationProbeSnapshot();
+    runDimensionProbeLoop(
+        alive, gen, genToken, paths, order, probe,
+        [self, alive, gen, resortWhenDone](const QVector<int> &idx, const QVector<QSize> &sizes,
+                                           const QVector<int> &frames,
+                                           const QVector<bool> &animated, bool finalBatch)
+        {
+            ThumbnailPanel::publishDimensionBatch(self, alive, gen, idx, sizes, frames, animated,
+                                                  finalBatch, resortWhenDone);
+        });
+}
+
 void ThumbnailPanel::ensureDimensions()
 {
     if (m_dimsResolved || m_allEntries.isEmpty())
@@ -405,78 +653,15 @@ void ThumbnailPanel::ensureDimensions()
     paths.reserve(m_allEntries.size());
     for (const Entry &e : m_allEntries)
         paths.append(e.path);
-
+    const QVector<int> order = dimensionProbeOrder();
     auto alive = m_alive;
     auto genToken = m_scanGenToken;
     const QPointer<ThumbnailPanel> self(this);
-    (void)QtConcurrent::run(
-        &m_scanPool,
-        [self, alive, gen, genToken, paths]()
-        {
-            const auto probe = ThumbnailPanel::scanIterationProbeSnapshot();
-            QVector<QSize> sizes;
-            QVector<int> frameCounts;
-            QVector<bool> animated;
-            sizes.reserve(paths.size());
-            frameCounts.reserve(paths.size());
-            animated.reserve(paths.size());
-            for (int i = 0; i < paths.size(); ++i)
-            {
-                // M46: cooperative stop — the panel died or the directory
-                // generation was superseded. Header probing is the most
-                // expensive per-file background step (a 10k-folder Details
-                // view would otherwise keep probing every superseded file).
-                if (!alive->load() ||
-                    genToken->load(std::memory_order_acquire) != static_cast<uint64_t>(gen))
-                    return; // panel destroyed / folder superseded - abort fast
-                if (probe)
-                {
-                    try
-                    {
-                        (*probe)();
-                    }
-                    catch (...)
-                    {
-                    }
-                }
-                const auto sequence = mviewer::core::FrameSequenceReader::probe(
-                    paths.at(i).toUtf8().toStdString());
-                QSize size;
-                if (sequence.valid)
-                {
-                    const auto frame = mviewer::core::FrameSequenceReader::frameInfo(
-                        paths.at(i).toUtf8().toStdString(), sequence.defaultFrame);
-                    size = QSize(frame.width, frame.height);
-                }
-                if (!size.isValid())
-                {
-                    QImageReader reader(paths.at(i));
-                    reader.setAutoTransform(true);
-                    size = reader.size();
-                }
-                sizes.append(size);
-                frameCounts.append(sequence.valid ? qMax(1, sequence.frameCount) : 1);
-                animated.append(sequence.valid && sequence.animated);
-            }
-            QMetaObject::invokeMethod(
-                qApp,
-                [self, alive, gen, sizes, frameCounts, animated]()
-                {
-                    if (!alive->load() || !self)
-                        return;
-                    ThumbnailPanel *panel = self.data();
-                    if (gen != panel->m_dirGen) // folder changed while resolving
-                        return;
-                    for (int i = 0; i < sizes.size() && i < panel->m_allEntries.size(); ++i)
-                    {
-                        panel->m_allEntries[i].width = sizes[i].width();
-                        panel->m_allEntries[i].height = sizes[i].height();
-                        if (i < frameCounts.size())
-                            panel->m_allEntries[i].frameCount = frameCounts[i];
-                        if (i < animated.size())
-                            panel->m_allEntries[i].animated = animated[i];
-                    }
-                    panel->viewport()->update();
-                });
-        });
+    const bool resortWhenDone = (m_sortMode == SortResolution);
+    (void)QtConcurrent::run(&m_scanPool,
+                            [self, alive, gen, genToken, paths, order, resortWhenDone]()
+                            {
+                                ThumbnailPanel::dimensionProbeTask(self, alive, gen, genToken,
+                                                                   paths, order, resortWhenDone);
+                            });
 }

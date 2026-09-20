@@ -15,6 +15,7 @@
 #include <QMouseEvent>
 #include <QMutex>
 #include <QPixmap>
+#include <QPointer>
 #include <QSet>
 #include <QShowEvent>
 #include <QSize>
@@ -371,6 +372,8 @@ class ThumbnailPanel : public QListView
     // Drop decoded thumbnails for one source path after an in-place file edit
     // (rotate/flip) and schedule a visible-range reload so the gallery updates.
     void invalidateSourceImage(const QString &path);
+    // UNC / mapped-drive / SMB-style paths where per-file RTT dominates browse.
+    static bool isHighLatencyBrowsePath(const QString &path);
 
   signals:
     void itemClicked(const QString &path);
@@ -606,10 +609,25 @@ class ThumbnailPanel : public QListView
     // P0-1 (perf): resolve pixel dimensions off the UI thread. setDirectory no
     // longer reads image headers eagerly (that blocked folder switching on large
     // directories); dimensions are filled in the background only when the
-    // Details view needs them. m_dirGen invalidates stale background results.
+    // Details view (or SortResolution) needs them. Viewport rows are probed
+    // first; m_dirGen invalidates stale background results.
     void ensureDimensions();
+    QVector<int> dimensionProbeOrder() const;
+    void applyDimensionBatch(const QVector<int> &idx, const QVector<QSize> &sizes,
+                             const QVector<int> &frames, const QVector<bool> &animated);
+    static void dimensionProbeTask(const QPointer<ThumbnailPanel> &self,
+                                   const std::shared_ptr<std::atomic<bool>> &alive, int gen,
+                                   const std::shared_ptr<std::atomic<uint64_t>> &genToken,
+                                   const QStringList &paths, const QVector<int> &order,
+                                   bool resortWhenDone);
+    static void publishDimensionBatch(const QPointer<ThumbnailPanel> &self,
+                                      const std::shared_ptr<std::atomic<bool>> &alive, int gen,
+                                      const QVector<int> &idx, const QVector<QSize> &sizes,
+                                      const QVector<int> &frames, const QVector<bool> &animated,
+                                      bool finalBatch, bool resortWhenDone);
     int m_dirGen = 0;
     bool m_dimsResolved = false;
+    bool m_highLatencyDir = false;
     // M54: default name-ascending scans can publish rows while enumeration is
     // still running. A filter/sort requested mid-scan disables provisional UI.
     bool m_scanProgressive = false;
