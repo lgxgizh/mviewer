@@ -282,21 +282,36 @@ static void updateViewerPixelStatus(QStatusBar *sb, int x, int y, int r, int g, 
                             .arg(b, 2, 16, QChar('0'))
                             .toUpper();
     if (rawKind == 2)
-        sb->showMessage(
-            QString("像素 [%1,%2]  RGB(%3,%4,%5)  16bit(%6,%7,%8)  %9")
-                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(r16).arg(g16).arg(b16).arg(hex));
+        sb->showMessage(QString("像素 [%1,%2]  RGB(%3,%4,%5)  16bit(%6,%7,%8)  %9")
+                            .arg(x)
+                            .arg(y)
+                            .arg(r)
+                            .arg(g)
+                            .arg(b)
+                            .arg(r16)
+                            .arg(g16)
+                            .arg(b16)
+                            .arg(hex));
     else if (rawKind == 1)
-        sb->showMessage(
-            QString("像素 [%1,%2]  RGB(%3,%4,%5)  (RAW)  %6")
-                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(hex));
+        sb->showMessage(QString("像素 [%1,%2]  RGB(%3,%4,%5)  (RAW)  %6")
+                            .arg(x)
+                            .arg(y)
+                            .arg(r)
+                            .arg(g)
+                            .arg(b)
+                            .arg(hex));
     else if (a < 255)
-        sb->showMessage(
-            QString("像素 [%1,%2]  RGBA(%3,%4,%5,%6)  %7")
-                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(a).arg(hex));
+        sb->showMessage(QString("像素 [%1,%2]  RGBA(%3,%4,%5,%6)  %7")
+                            .arg(x)
+                            .arg(y)
+                            .arg(r)
+                            .arg(g)
+                            .arg(b)
+                            .arg(a)
+                            .arg(hex));
     else
         sb->showMessage(
-            QString("像素 [%1,%2]  RGB(%3,%4,%5)  %6")
-                .arg(x).arg(y).arg(r).arg(g).arg(b).arg(hex));
+            QString("像素 [%1,%2]  RGB(%3,%4,%5)  %6").arg(x).arg(y).arg(r).arg(g).arg(b).arg(hex));
 }
 
 void MainWindow::connectViewerSignals()
@@ -369,6 +384,8 @@ void MainWindow::connectViewerSignals()
     connect(m_imageViewer, &ImageViewer::fileRotated, this,
             [this](const QString &path)
             {
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->invalidateSourceImage(path);
                 if (path == currentImagePath())
                 {
                     if (m_previewPanel)
@@ -381,7 +398,8 @@ void MainWindow::connectViewerSignals()
             [this](int x, int y, int r, int g, int b, int a, int r16, int g16, int b16, int rawKind,
                    bool valid)
             {
-                updateViewerPixelStatus(statusBar(), x, y, r, g, b, a, r16, g16, b16, rawKind, valid);
+                updateViewerPixelStatus(statusBar(), x, y, r, g, b, a, r16, g16, b16, rawKind,
+                                        valid);
                 m_analysisPanel->showPixel(x, y, r, g, b, a, r16, g16, b16, rawKind, valid);
             });
     if (m_lblZoom)
@@ -518,9 +536,7 @@ void MainWindow::connectMenuSignals()
             });
     connect(m_imageViewer, &ImageViewer::statusMessageRequested, this,
             [this](const QString &msg, int timeoutMs)
-            {
-                statusBar()->showMessage(msg, timeoutMs);
-            });
+            { statusBar()->showMessage(msg, timeoutMs); });
     connect(m_actSaveWorkspace, &QAction::triggered, this, &MainWindow::saveWorkspace);
     connect(m_actOpenWorkspace, &QAction::triggered, this, &MainWindow::openWorkspace);
     connect(m_actSaveProject, &QAction::triggered, this, &MainWindow::saveProject);

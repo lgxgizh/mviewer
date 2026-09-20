@@ -103,13 +103,54 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
             });
     m_cmdStack.setChangeCallback([this]() { updateUndoRedoActions(); });
 
+    buildEditTransformActions(editMenu);
+
+    editMenu->addSeparator();
+    m_actSelectAll = new QAction(tr("全选(&A)"), this);
+    m_actSelectAll->setObjectName("selectAllAction");
+    m_actSelectAll->setShortcut(QKeySequence::SelectAll);
+    m_actDeselectAll = new QAction(tr("取消选择(&D)"), this);
+    m_actDeselectAll->setObjectName("deselectAllAction");
+    m_actDeselectAll->setShortcut(QKeySequence("Ctrl+Shift+A"));
+    m_actInvertSelection = new QAction(tr("反向选择(&I)"), this);
+    m_actInvertSelection->setObjectName("invertSelectionAction");
+    m_actInvertSelection->setShortcut(QKeySequence("Ctrl+Shift+I"));
+    editMenu->addAction(m_actSelectAll);
+    editMenu->addAction(m_actDeselectAll);
+    editMenu->addAction(m_actInvertSelection);
+    connect(m_actSelectAll, &QAction::triggered, this,
+            [this]()
+            {
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->selectAll();
+            });
+    connect(m_actDeselectAll, &QAction::triggered, this,
+            [this]()
+            {
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->clearSelection();
+            });
+    connect(m_actInvertSelection, &QAction::triggered, this,
+            [this]()
+            {
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->invertSelection();
+            });
+}
+
+void MainWindow::buildEditTransformActions(QMenu *editMenu)
+{
     editMenu->addSeparator();
     m_actRotateCW = new QAction(tr("顺时针旋转 90°(&R)"), this);
     m_actRotateCW->setObjectName("rotateCWAction");
     m_actRotateCW->setShortcut(QKeySequence("Ctrl+R"));
+    m_actRotateCW->setToolTip(tr("顺时针旋转 90° (Ctrl+R)"));
+    m_actRotateCW->setEnabled(false);
     m_actRotateCCW = new QAction(tr("逆时针旋转 90°(&L)"), this);
     m_actRotateCCW->setObjectName("rotateCCWAction");
     m_actRotateCCW->setShortcut(QKeySequence("Ctrl+Shift+R"));
+    m_actRotateCCW->setToolTip(tr("逆时针旋转 90° (Ctrl+Shift+R)"));
+    m_actRotateCCW->setEnabled(false);
     editMenu->addAction(m_actRotateCW);
     editMenu->addAction(m_actRotateCCW);
     connect(m_actRotateCW, &QAction::triggered, this,
@@ -152,26 +193,6 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
                 else if (m_imageViewer)
                     m_imageViewer->flipVertical();
             });
-
-    editMenu->addSeparator();
-    m_actSelectAll = new QAction(tr("全选(&A)"), this);
-    m_actSelectAll->setObjectName("selectAllAction");
-    m_actSelectAll->setShortcut(QKeySequence::SelectAll);
-    m_actDeselectAll = new QAction(tr("取消选择(&D)"), this);
-    m_actDeselectAll->setObjectName("deselectAllAction");
-    m_actDeselectAll->setShortcut(QKeySequence("Ctrl+Shift+A"));
-    m_actInvertSelection = new QAction(tr("反向选择(&I)"), this);
-    m_actInvertSelection->setObjectName("invertSelectionAction");
-    m_actInvertSelection->setShortcut(QKeySequence("Ctrl+Shift+I"));
-    editMenu->addAction(m_actSelectAll);
-    editMenu->addAction(m_actDeselectAll);
-    editMenu->addAction(m_actInvertSelection);
-    connect(m_actSelectAll, &QAction::triggered, this,
-            [this]() { if (m_thumbnailPanel) m_thumbnailPanel->selectAll(); });
-    connect(m_actDeselectAll, &QAction::triggered, this,
-            [this]() { if (m_thumbnailPanel) m_thumbnailPanel->clearSelection(); });
-    connect(m_actInvertSelection, &QAction::triggered, this,
-            [this]() { if (m_thumbnailPanel) m_thumbnailPanel->invertSelection(); });
 }
 
 void MainWindow::buildViewMenu(QMenuBar *menuBar)

@@ -574,22 +574,19 @@ void MainWindow::onCurrentImageChanged(const QString &path)
                         const QString sizeStr = MainWindow::formatBytes(meta.fileSize);
                         if (!meta.format.empty())
                         {
-                            const QString fmt =
-                                QString::fromStdString(meta.format).toUpper();
-                            guard->m_lblImage->setText(
-                                QString("%1x%2 · %3 · %4")
-                                    .arg(meta.width)
-                                    .arg(meta.height)
-                                    .arg(fmt)
-                                    .arg(sizeStr));
+                            const QString fmt = QString::fromStdString(meta.format).toUpper();
+                            guard->m_lblImage->setText(QString("%1x%2 · %3 · %4")
+                                                           .arg(meta.width)
+                                                           .arg(meta.height)
+                                                           .arg(fmt)
+                                                           .arg(sizeStr));
                         }
                         else
                         {
-                            guard->m_lblImage->setText(
-                                QString("%1x%2 · %3")
-                                    .arg(meta.width)
-                                    .arg(meta.height)
-                                    .arg(sizeStr));
+                            guard->m_lblImage->setText(QString("%1x%2 · %3")
+                                                           .arg(meta.width)
+                                                           .arg(meta.height)
+                                                           .arg(sizeStr));
                         }
                     }
                 },
@@ -818,6 +815,14 @@ void MainWindow::updateSelectionActions()
         m_zoomPresetsMenu->menuAction()->setEnabled(hasCurrent && viewerVisible);
     if (m_actSlideshow)
         m_actSlideshow->setEnabled(hasCurrent && !currentDir().isEmpty());
+    // Keep rotate enablement out of this function's CC budget (ADR-014 / complexity gate).
+    const auto enableIf = [](QAction *act, bool on)
+    {
+        if (act)
+            act->setEnabled(on);
+    };
+    enableIf(m_actRotateCW, hasCurrent);
+    enableIf(m_actRotateCCW, hasCurrent);
     updateNavigationActions();
 }
 

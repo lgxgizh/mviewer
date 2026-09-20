@@ -1,4 +1,5 @@
 #include "thumbnailpanel_p.h"
+#include "thumbnailprovider.h"
 
 void ThumbnailPanel::pruneThumbnailState()
 {
@@ -39,6 +40,27 @@ void ThumbnailPanel::invalidateThumbnailCacheFor(const QString &path)
         it = it->startsWith(prefix) ? m_thumbPending.erase(it) : ++it;
     for (auto it = m_thumbFailed.begin(); it != m_thumbFailed.end();)
         it = it->startsWith(prefix) ? m_thumbFailed.erase(it) : ++it;
+}
+
+void ThumbnailPanel::invalidateSourceImage(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+    ThumbnailProvider::invalidateSource(path.toUtf8().toStdString());
+    invalidateThumbnailCacheFor(path);
+    // Force a re-request for visible cells that reference this path.
+    const int row = m_rowByPath.value(path, -1);
+    if (row >= 0)
+    {
+        const QModelIndex idx = model()->index(row, 0);
+        if (idx.isValid())
+            update(visualRect(idx));
+    }
+    else
+    {
+        viewport()->update();
+    }
+    updateVisibleRange();
 }
 
 void ThumbnailPanel::enforceThumbPixmapBudgetLocked()

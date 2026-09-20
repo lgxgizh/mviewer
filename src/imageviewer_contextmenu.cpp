@@ -3,6 +3,7 @@
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/PixelInspector.h"
 #include "core/analyzer/Analyzer.h"
+#include "core/image/ImageFileRotate.h"
 #include "core/image/ImageLoadingFacade.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
@@ -224,8 +225,8 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aCopyRgb = nullptr;
     QAction *aCopyFloat = nullptr;
     QAction *aCopyHsv = nullptr;
-    addCopyContextActions(menu, aCopy, aCopyPath, aReveal, mCopyColor, aCopyHex, aCopyRgb, aCopyFloat,
-                          aCopyHsv);
+    addCopyContextActions(menu, aCopy, aCopyPath, aReveal, mCopyColor, aCopyHex, aCopyRgb,
+                          aCopyFloat, aCopyHsv);
     menu.addSeparator();
     QAction *aSaveAs = menu.addAction("另存为...");
     QAction *aRotateCW = menu.addAction("顺时针旋转 90° (Ctrl+R)");
@@ -261,10 +262,10 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
     QAction *aSelectRegion = menu.addAction("框选区域 (R)");
     aSelectRegion->setCheckable(true);
     aSelectRegion->setChecked(m_selectMode);
-    setContextImageActionAvailability(
-        aCopy, aCopyPath, aReveal, mCopyColor, aSaveAs, aZoomIn, aZoomOut, aZoomFit, aZoomActual,
-        mZoomPresets, aSelectRegion, !m_currentPath.isEmpty(), m_frame && m_frame->isValid(),
-        hasDisplayImage());
+    setContextImageActionAvailability(aCopy, aCopyPath, aReveal, mCopyColor, aSaveAs, aZoomIn,
+                                      aZoomOut, aZoomFit, aZoomActual, mZoomPresets, aSelectRegion,
+                                      !m_currentPath.isEmpty(), m_frame && m_frame->isValid(),
+                                      hasDisplayImage());
     menu.addSeparator();
     QAction *aOvNone = nullptr, *aOvZebra = nullptr, *aOvFalse = nullptr;
     QAction *aOvR = nullptr, *aOvG = nullptr, *aOvB = nullptr, *aOvY = nullptr, *aOvV = nullptr;
@@ -552,41 +553,14 @@ bool ImageViewer::rotateImage(int angle)
     if (normAngle == 0)
         return true;
 
-    QImageReader reader(m_currentPath);
-    reader.setAutoTransform(true);
-    const QImage original = reader.read();
-    if (original.isNull())
+    const auto result =
+        mviewer::core::rotateImageFile(m_currentPath.toUtf8().toStdString(), normAngle);
+    if (!result.ok)
     {
-        QMessageBox::warning(this, tr("旋转失败"), tr("无法读取图片：%1").arg(m_currentPath));
-        return false;
-    }
-
-    QTransform transform;
-    transform.rotate(normAngle);
-    const QImage rotated = original.transformed(transform, Qt::SmoothTransformation);
-    if (rotated.isNull())
-        return false;
-
-    QByteArray format = reader.format();
-    if (format.isEmpty())
-        format = QFileInfo(m_currentPath).suffix().toLatin1();
-
-    QSaveFile saveFile(m_currentPath);
-    if (!saveFile.open(QIODevice::WriteOnly))
-    {
-        QMessageBox::warning(this, tr("旋转失败"), tr("无法写入文件：%1").arg(saveFile.errorString()));
-        return false;
-    }
-
-    int quality = 95;
-    const QString fmtLower = QString::fromLatin1(format).toLower();
-    if (fmtLower == "png" || fmtLower == "bmp")
-        quality = -1;
-
-    if (!rotated.save(&saveFile, format.constData(), quality) || !saveFile.commit())
-    {
-        saveFile.cancelWriting();
-        QMessageBox::warning(this, tr("旋转失败"), tr("保存文件失败：%1").arg(m_currentPath));
+        const QString detail =
+            result.error.empty() ? tr("未知错误") : QString::fromStdString(result.error);
+        QMessageBox::warning(this, tr("旋转失败"),
+                             tr("无法旋转图片：%1\n%2").arg(m_currentPath, detail));
         return false;
     }
 
@@ -635,7 +609,8 @@ bool ImageViewer::flipImage(bool horizontal)
     QSaveFile saveFile(m_currentPath);
     if (!saveFile.open(QIODevice::WriteOnly))
     {
-        QMessageBox::warning(this, tr("翻转失败"), tr("无法写入文件：%1").arg(saveFile.errorString()));
+        QMessageBox::warning(this, tr("翻转失败"),
+                             tr("无法写入文件：%1").arg(saveFile.errorString()));
         return false;
     }
 
