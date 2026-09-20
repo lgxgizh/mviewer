@@ -19,12 +19,12 @@ static int g_fail = 0;
     {                                                                                              \
         if (!(cond))                                                                               \
         {                                                                                          \
-            std::cerr << "FAIL: " << msg << "\n";                                                  \
+            std::cerr << "FAIL: " << (msg) << "\n";                                                \
             ++g_fail;                                                                              \
         }                                                                                          \
         else                                                                                       \
         {                                                                                          \
-            std::cout << "PASS: " << msg << "\n";                                                  \
+            std::cout << "PASS: " << (msg) << "\n";                                                \
         }                                                                                          \
     } while (0)
 
@@ -36,9 +36,9 @@ static ImageData makeMarker(int w, int h)
     {
         for (int x = 0; x < w; ++x)
         {
-            uint8_t *p = d.buffer->data() + (static_cast<size_t>(y) * static_cast<size_t>(w) +
-                                             static_cast<size_t>(x)) *
-                                                3;
+            uint8_t *p =
+                d.buffer->data() +
+                (static_cast<size_t>(y) * static_cast<size_t>(w) + static_cast<size_t>(x)) * 3;
             p[0] = static_cast<uint8_t>(x & 0xFF);
             p[1] = static_cast<uint8_t>(y & 0xFF);
             p[2] = 128;
@@ -49,10 +49,9 @@ static ImageData makeMarker(int w, int h)
 
 static void sample(const ImageData &img, int x, int y, uint8_t &r, uint8_t &g, uint8_t &b)
 {
-    const uint8_t *p = img.buffer->data() +
-                       (static_cast<size_t>(y) * static_cast<size_t>(img.width) +
-                        static_cast<size_t>(x)) *
-                           3;
+    const uint8_t *p =
+        img.buffer->data() +
+        (static_cast<size_t>(y) * static_cast<size_t>(img.width) + static_cast<size_t>(x)) * 3;
     r = p[0];
     g = p[1];
     b = p[2];

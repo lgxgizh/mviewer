@@ -5,9 +5,9 @@
 #include "core/image/QtConvert.h"
 
 #include <QFileInfo>
+#include <QIODevice>
 #include <QImage>
 #include <QImageReader>
-#include <QIODevice>
 #include <QSaveFile>
 #include <QString>
 

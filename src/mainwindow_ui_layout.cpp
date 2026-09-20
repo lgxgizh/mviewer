@@ -2,11 +2,10 @@
 #include "mainwindow_p.h"
 
 #include <QIcon>
-#include <QSignalBlocker>
 #include <QPainter>
 #include <QPolygonF>
+#include <QSignalBlocker>
 #include <QToolBar>
-
 
 void MainWindow::buildBrowserShell()
 {
@@ -49,7 +48,8 @@ void MainWindow::buildBrowserShell()
     browserToolBar->addSeparator();
     // Rotate actions share the Edit-menu QActions (stable objectNames for tests).
     {
-        auto makeRotateIcon = [](bool clockwise) {
+        auto makeRotateIcon = [](bool clockwise)
+        {
             QPixmap pm(18, 18);
             pm.fill(Qt::transparent);
             QPainter p(&pm);
@@ -91,7 +91,6 @@ void MainWindow::buildBrowserShell()
         }
     }
 
-
     // ----- Breadcrumb navigation bar (M15 Product Shell P0) -----
     m_breadcrumb = new BreadcrumbBar(this);
     // Keep the signal path for breadcrumb navigation, but do not spend a full
@@ -103,7 +102,8 @@ void MainWindow::buildBrowserShell()
     m_pathEdit = new QLineEdit(this);
     m_pathEdit->setObjectName("pathEdit");
     m_pathEdit->setPlaceholderText("输入目录路径并按 Enter 切换...");
-    m_pathEdit->setToolTip("输入或粘贴目录路径，按 Enter 键进入该目录（快捷键: Ctrl+L / Alt+D 聚焦）。");
+    m_pathEdit->setToolTip(
+        "输入或粘贴目录路径，按 Enter 键进入该目录（快捷键: Ctrl+L / Alt+D 聚焦）。");
     m_pathEdit->setClearButtonEnabled(true);
     auto *actFocusPath = new QAction(this);
     actFocusPath->setObjectName("focusPathAction");

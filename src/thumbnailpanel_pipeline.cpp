@@ -63,7 +63,6 @@ void ThumbnailPanel::invalidateSourceImage(const QString &path)
     updateVisibleRange();
 }
 
-
 void ThumbnailPanel::enforceThumbPixmapBudgetLocked()
 {
     while (!m_thumbReadyLru.empty() && (m_thumbReady.size() > kThumbPixmapCacheMaxEntries ||

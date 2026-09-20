@@ -3,12 +3,13 @@
 // File-backed image rotate for Browse/Viewer (±90° / 180°).
 // Qt-free header; .cpp may use Qt (QImageReader / QSaveFile).
 
+#include <cstdint>
 #include <string>
 
 namespace mviewer::core
 {
 
-enum class ImageRotateMethod
+enum class ImageRotateMethod : std::uint8_t
 {
     None = 0,
     ExifOrientation, // reserved: JPEG orientation-tag rewrite

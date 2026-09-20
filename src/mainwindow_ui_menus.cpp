@@ -171,11 +171,23 @@ void MainWindow::buildEditMenu(QMenuBar *menuBar)
     editMenu->addAction(m_actDeselectAll);
     editMenu->addAction(m_actInvertSelection);
     connect(m_actSelectAll, &QAction::triggered, this,
-            [this]() { if (m_thumbnailPanel) m_thumbnailPanel->selectAll(); });
+            [this]()
+            {
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->selectAll();
+            });
     connect(m_actDeselectAll, &QAction::triggered, this,
-            [this]() { if (m_thumbnailPanel) m_thumbnailPanel->clearSelection(); });
+            [this]()
+            {
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->clearSelection();
+            });
     connect(m_actInvertSelection, &QAction::triggered, this,
-            [this]() { if (m_thumbnailPanel) m_thumbnailPanel->invertSelection(); });
+            [this]()
+            {
+                if (m_thumbnailPanel)
+                    m_thumbnailPanel->invertSelection();
+            });
 }
 
 void MainWindow::buildViewMenu(QMenuBar *menuBar)

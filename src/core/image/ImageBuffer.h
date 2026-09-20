@@ -393,7 +393,6 @@ inline ImageData rotate180(const ImageData &src)
     return dst;
 }
 
-
 // Flip an image horizontally (left-right mirror). Pure std implementation.
 inline ImageData flipHorizontal(const ImageData &src)
 {
