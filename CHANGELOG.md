@@ -7,6 +7,7 @@
 - **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.63**.
 - **Image rotate harden (#29)**: Browse/Viewer 顺时针/逆时针 90° persist via `rotateImageFile` (exact 90°-step rewrite, atomic `QSaveFile`), toolbar actions, and `imagerotate_tests` coverage.
 - **Details column resize (#30)**: Explorer-style drag-resize for Browse Details headers; aligned cells, elided names, widths persisted via QSettings.
+- **m46 B2 filter/model rebuild**: Clearing the text filter on tiny directories evaluates immediately (no debounce race); progressive scan mode drops after convergence so filter rebuilds use `updateSources` and keep paint-cache thumbs (fixes post-merge `m46_browse_tests` B2).
 - **Network browse opt (#31)**: Tight predictive thumbnail window on high-latency UNC/SMB/nfs paths; skip full-directory header probe for Thumbnail/LargeIcon; disk-cache identity hints and EXIF thumb open skip.
 - **cache_tests DiskCache flake (#28)**: Split `workDone` + `release` barriers in `testDiskCacheThreadAffinityAndStress` so workers stay alive for the distinct-connection check under parallel ctest.
 

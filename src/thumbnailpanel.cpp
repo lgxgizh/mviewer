@@ -450,8 +450,13 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
         m_selection->setSelection({}, {});
 
     pruneThumbnailState();
+    // Progressive mid-scan: replaceSources keeps generation stable.
+    // After scanComplete: updateSources preserves ready thumbs across filter
+    // rebuilds (setSources would bump gen and force avoidable re-decodes).
     if (m_scanProgressive)
         ThumbnailPipeline::instance().replaceSources(toStdPaths(m_paths));
+    else if (m_scanComplete)
+        ThumbnailPipeline::instance().updateSources(toStdPaths(m_paths));
     else
         ThumbnailPipeline::instance().setSources(toStdPaths(m_paths));
     // M37: publish the exact order displayed by the gallery. Sort/filter

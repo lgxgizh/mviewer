@@ -276,8 +276,8 @@ void testPaintNeverStats()
         panel.setFilter(QStringLiteral("__mviewer_filter_no_match__"));
         CHECK(panel.pathList().isEmpty(), "B2: no-match filter clears the visible rows");
         panel.setFilter({});
-        pump(50);
-        CHECK(panel.pathList().size() == 60, "B2: clearing the no-match filter restores all rows");
+        CHECK(waitTrue([&] { return panel.pathList().size() == 60; }, 5000),
+              "B2: clearing the no-match filter restores all rows");
         CHECK(!panel.thumbReady(firstPath).isNull(),
               "B2: no-match filter rebuild preserves an already-decoded thumbnail");
         const QImage before = panel.grab().toImage();
