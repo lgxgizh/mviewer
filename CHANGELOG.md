@@ -1,11 +1,12 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.64] - 2026-09-21
 
-### Fixed
+### Release
 
-- **Rotate follows gallery selection**: Browse menu/toolbar/`Ctrl+R` now rotate `SelectionModel::currentImage()` (ADR-012), including when the Viewer is closed. Viewer `closeEvent` clears the stale open path so enablement and the write target cannot diverge.
-- **Rotate overwrite**: cancel in-flight Viewer/preview readers before replacing the file; `QSaveFile` retries access-denied / sharing-violation a few times; failure dialogs map permission, in-use, and unsupported-format cases to Chinese.
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.64**.
+- **Rotate selection sync (#34)**: Browse menu/toolbar/`Ctrl+R` rotate `SelectionModel::currentImage()` (ADR-012), including when Viewer is closed; `closeEvent` clears stale `m_currentPath`.
+- **Rotate overwrite harden (#34)**: cancel in-flight readers before replace; `QSaveFile` retries access-denied / sharing-violation; Chinese failure dialogs for permission / in-use / unsupported format.
 
 ## [1.0.63] - 2026-09-20
 
