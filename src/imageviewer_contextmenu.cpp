@@ -452,6 +452,69 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
     return false;
 }
 
+void ImageViewer::keyPressEvent(QKeyEvent *event)
+{
+    const int key = event->key();
+    const auto mods = event->modifiers();
+    if (handleFrameKey(key, mods) || handleNavigationKey(key) || handleZoomKey(key, mods) ||
+        handleModeKey(key, mods))
+        return;
+    QWidget::keyPressEvent(event);
+}
+
+bool ImageViewer::handleNavigationKey(int key)
+{
+    if (key == Qt::Key_Left || key == Qt::Key_PageUp || key == Qt::Key_Backspace)
+        emit requestPrev();
+    else if (key == Qt::Key_Right || key == Qt::Key_PageDown || key == Qt::Key_Space)
+        emit requestNext();
+    else
+        return false;
+    return true;
+}
+
+bool ImageViewer::handleZoomKey(int key, Qt::KeyboardModifiers modifiers)
+{
+    if (key == Qt::Key_Plus || key == Qt::Key_Equal)
+        zoomIn();
+    else if (key == Qt::Key_Minus || key == Qt::Key_Underscore)
+        zoomOut();
+    else if (key == Qt::Key_0 || key == Qt::Key_F)
+        zoomFit();
+    else if (key == Qt::Key_1)
+        zoomActual();
+    else if (key == Qt::Key_2)
+        zoomTo(2.0);
+    else
+        return false;
+    Q_UNUSED(modifiers); // Ctrl+0/Ctrl+1 intentionally share the same zoom action.
+    return true;
+}
+
+bool ImageViewer::handleModeKey(int key, Qt::KeyboardModifiers modifiers)
+{
+    if (modifiers == Qt::ShiftModifier && key >= Qt::Key_1 && key <= Qt::Key_6)
+    {
+        static const mviewer::OverlayMode kChannelKeys[] = {
+            mviewer::OverlayMode::None,     mviewer::OverlayMode::ChannelR,
+            mviewer::OverlayMode::ChannelG, mviewer::OverlayMode::ChannelB,
+            mviewer::OverlayMode::ChannelY, mviewer::OverlayMode::ChannelV};
+        setOverlayMode(kChannelKeys[key - Qt::Key_1]);
+        return true;
+    }
+    if (handleTransformKey(key, modifiers))
+        return true;
+    if (key == Qt::Key_R && !modifiers)
+        setSelectMode(!m_selectMode);
+    else if ((key == Qt::Key_F && !modifiers) || key == Qt::Key_F11)
+        toggleFullscreen();
+    else if (key == Qt::Key_Escape)
+        close();
+    else
+        return false;
+    return true;
+}
+
 void ImageViewer::revealInExplorer()
 {
     if (m_currentPath.isEmpty())
@@ -531,6 +594,24 @@ bool ImageViewer::handleContextNavigationAction(QAction *chosen, QAction *next, 
     else
         return false;
     return true;
+}
+
+void ImageViewer::releaseSourceHandles(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+    const bool current = (m_currentPath == path || m_provisionalPath == path);
+    if (current)
+    {
+        ++m_requestGen;
+        beginImageGeneration();
+        cancelCurrentLoad();
+        cancelDisplayRequest();
+        cancelRoiStats();
+    }
+    // Neighbor preloads may still hold `path` even when it is not current.
+    cancelPreloads();
+    cancelDisplayRasterPreloads();
 }
 
 bool ImageViewer::rotateCW()
