@@ -80,13 +80,13 @@ void MainWindow::buildBrowserShell()
         if (m_actRotateCCW)
         {
             m_actRotateCCW->setIcon(makeRotateIcon(false));
-            m_actRotateCCW->setToolTip(tr("逆时针旋转 90° (Ctrl+Shift+R)"));
+            m_actRotateCCW->setToolTip(tr("逆时针旋转 90° 并覆盖原文件 (Ctrl+Shift+R)"));
             browserToolBar->addAction(m_actRotateCCW);
         }
         if (m_actRotateCW)
         {
             m_actRotateCW->setIcon(makeRotateIcon(true));
-            m_actRotateCW->setToolTip(tr("顺时针旋转 90° (Ctrl+R)"));
+            m_actRotateCW->setToolTip(tr("顺时针旋转 90° 并覆盖原文件 (Ctrl+R)"));
             browserToolBar->addAction(m_actRotateCW);
         }
     }

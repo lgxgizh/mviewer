@@ -150,12 +150,12 @@ void MainWindow::buildEditTransformActions(QMenu *editMenu)
     m_actRotateCW = new QAction(tr("顺时针旋转 90°(&R)"), this);
     m_actRotateCW->setObjectName("rotateCWAction");
     m_actRotateCW->setShortcut(QKeySequence("Ctrl+R"));
-    m_actRotateCW->setToolTip(tr("顺时针旋转 90° (Ctrl+R)"));
+    m_actRotateCW->setToolTip(tr("顺时针旋转 90° 并覆盖原文件 (Ctrl+R)"));
     m_actRotateCW->setEnabled(false);
     m_actRotateCCW = new QAction(tr("逆时针旋转 90°(&L)"), this);
     m_actRotateCCW->setObjectName("rotateCCWAction");
     m_actRotateCCW->setShortcut(QKeySequence("Ctrl+Shift+R"));
-    m_actRotateCCW->setToolTip(tr("逆时针旋转 90° (Ctrl+Shift+R)"));
+    m_actRotateCCW->setToolTip(tr("逆时针旋转 90° 并覆盖原文件 (Ctrl+Shift+R)"));
     m_actRotateCCW->setEnabled(false);
     editMenu->addAction(m_actRotateCW);
     editMenu->addAction(m_actRotateCCW);
@@ -164,27 +164,17 @@ void MainWindow::buildEditTransformActions(QMenu *editMenu)
     m_actFlipH = new QAction(tr("水平翻转(&H)"), this);
     m_actFlipH->setObjectName("flipHAction");
     m_actFlipH->setShortcut(QKeySequence("Ctrl+Shift+H"));
+    m_actFlipH->setToolTip(tr("水平翻转并覆盖原文件 (Ctrl+Shift+H)"));
+    m_actFlipH->setEnabled(false);
     m_actFlipV = new QAction(tr("垂直翻转(&V)"), this);
     m_actFlipV->setObjectName("flipVAction");
     m_actFlipV->setShortcut(QKeySequence("Ctrl+Shift+V"));
+    m_actFlipV->setToolTip(tr("垂直翻转并覆盖原文件 (Ctrl+Shift+V)"));
+    m_actFlipV->setEnabled(false);
     editMenu->addAction(m_actFlipH);
     editMenu->addAction(m_actFlipV);
-    connect(m_actFlipH, &QAction::triggered, this,
-            [this]()
-            {
-                if (m_compareView && m_compareView->isVisible())
-                    m_compareView->flipCurrentCell(true);
-                else if (m_imageViewer)
-                    m_imageViewer->flipHorizontal();
-            });
-    connect(m_actFlipV, &QAction::triggered, this,
-            [this]()
-            {
-                if (m_compareView && m_compareView->isVisible())
-                    m_compareView->flipCurrentCell(false);
-                else if (m_imageViewer)
-                    m_imageViewer->flipVertical();
-            });
+    connect(m_actFlipH, &QAction::triggered, this, [this]() { flipCurrentImage(true); });
+    connect(m_actFlipV, &QAction::triggered, this, [this]() { flipCurrentImage(false); });
 }
 
 void MainWindow::rotateCurrentImage(int degrees)
@@ -235,7 +225,56 @@ void MainWindow::rotateCurrentImage(int degrees)
     if (norm < 0)
         norm += 360;
     if (auto *bar = statusBar())
-        bar->showMessage(tr("已旋转图片 (%1°)").arg(norm), 2000);
+        bar->showMessage(tr("已旋转并覆盖原文件 (%1°)").arg(norm), 2000);
+}
+
+void MainWindow::flipCurrentImage(bool horizontal)
+{
+    if (m_compareView && m_compareView->isVisible())
+    {
+        m_compareView->flipCurrentCell(horizontal);
+        return;
+    }
+
+    const QString path = currentImagePath();
+    if (path.isEmpty())
+    {
+        if (auto *bar = statusBar())
+            bar->showMessage(tr("没有可翻转的图片"), 2000);
+        return;
+    }
+
+    if (m_imageViewer)
+        m_imageViewer->releaseSourceHandles(path);
+    if (m_previewPanel)
+        m_previewPanel->releaseSourceHandles(path);
+    const std::string utf8 = path.toUtf8().toStdString();
+    mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
+    ThumbnailProvider::invalidateSource(utf8);
+
+    const auto result = mviewer::core::flipImageFile(utf8, horizontal);
+    if (!result.ok)
+    {
+        QMessageBox::warning(
+            this, tr("翻转失败"),
+            tr("无法翻转图片：%1\n%2").arg(path, ImageViewer::rotateFailureUserMessage(result)));
+        return;
+    }
+
+    mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
+    ThumbnailProvider::invalidateSource(utf8);
+    if (m_thumbnailPanel)
+        m_thumbnailPanel->invalidateSourceImage(path);
+    if (m_previewPanel)
+        m_previewPanel->setImage(path);
+    if (m_metadataPanel)
+        m_metadataPanel->setImage(path);
+    if (m_imageViewer && !m_imageViewer->isHidden() && m_imageViewer->currentPath() == path)
+        m_imageViewer->refreshSource(path);
+
+    if (auto *bar = statusBar())
+        bar->showMessage(horizontal ? tr("已水平翻转并覆盖原文件") : tr("已垂直翻转并覆盖原文件"),
+                         2000);
 }
 
 void MainWindow::buildViewMenu(QMenuBar *menuBar)

@@ -1,7 +1,9 @@
-// Browse rotate must follow SelectionModel (ADR-012), not a stale Viewer path.
+// Browse rotate/flip must follow SelectionModel (ADR-012), not a stale Viewer path.
 //
-// Viewer closed → gallery selects B → rotate QAction must rewrite B, not A.
+// Viewer closed → gallery selects B → rotate/flip QAction must rewrite B, not A.
+// Compare rotate with no panes must not invent cell 0.
 
+#include "compareworkspace.h"
 #include "imageviewer.h"
 #include "mainwindow.h"
 #include "runtime_storage.h"
@@ -80,6 +82,19 @@ QString writeSizedPng(const QDir &dir, const QString &name, int w, int h, const 
     const QString path = dir.filePath(name);
     QImage image(w, h, QImage::Format_RGB32);
     image.fill(color);
+    image.save(path, "PNG");
+    return path;
+}
+
+QString writeSplitPng(const QDir &dir, const QString &name, int w, int h)
+{
+    const QString path = dir.filePath(name);
+    QImage image(w, h, QImage::Format_RGB32);
+    for (int y = 0; y < h; ++y)
+    {
+        for (int x = 0; x < w; ++x)
+            image.setPixelColor(x, y, x < w / 2 ? QColor(200, 0, 0) : QColor(0, 0, 200));
+    }
     image.save(path, "PNG");
     return path;
 }
@@ -199,6 +214,41 @@ int main(int argc, char **argv)
     CHECK(!afterA.isNull() && afterA.width() == 8 && afterA.height() == 4, "stale A is untouched");
     CHECK(!afterB.isNull() && afterB.width() == 10 && afterB.height() == 6,
           "rotate action rewrote gallery current B (6x10 -> 10x6)");
+
+    {
+        CompareWorkspace compare;
+        CHECK(compare.editCellIndex() < 0, "empty Compare has no edit cell");
+        compare.rotateCurrentCell(90);
+        compare.flipCurrentCell(true);
+        CHECK(compare.editCellIndex() < 0,
+              "Compare transform without panes does not invent cell 0");
+    }
+
+    const QString pathC = writeSplitPng(directory, "c_flip.png", 8, 4);
+    panel->setDirectory(directory.absolutePath());
+    CHECK(waitFor([&] { return panel->pathList().contains(pathC); }),
+          "gallery published flip fixture");
+    panel->selectPath(pathC);
+    CHECK(waitFor([&] { return selection->currentImage() == pathC; }),
+          "SSOT current is C for flip");
+
+    auto *flipH = window.findChild<QAction *>(QStringLiteral("flipHAction"));
+    CHECK(flipH && flipH->isEnabled(), "flip action enabled for gallery current");
+    if (flipH)
+    {
+        dismiss.start();
+        flipH->trigger();
+        pump(50);
+        dismiss.stop();
+        dismissMessageBoxes();
+    }
+
+    QImage afterC(pathC);
+    CHECK(!afterC.isNull() && afterC.width() == 8 && afterC.height() == 4, "flip keeps C dims");
+    CHECK(afterC.pixelColor(0, 0) == QColor(0, 0, 200), "H-flip writes left-from-right on C");
+    CHECK(afterC.pixelColor(7, 0) == QColor(200, 0, 0), "H-flip writes right-from-left on C");
+    QImage stillA(pathA);
+    CHECK(stillA.width() == 8 && stillA.height() == 4, "flip leaves stale A untouched");
 
     if (g_failures)
     {

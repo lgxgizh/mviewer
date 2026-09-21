@@ -73,6 +73,27 @@ ImageData rotatePixelsExact(const ImageData &src, int degreesCw)
     }
 }
 
+enum class FilePixelOp : std::uint8_t
+{
+    Rotate = 0,
+    FlipH,
+    FlipV
+};
+
+ImageData applyFilePixelOp(const ImageData &src, FilePixelOp op, int degreesCw)
+{
+    switch (op)
+    {
+    case FilePixelOp::Rotate:
+        return rotatePixelsExact(src, degreesCw);
+    case FilePixelOp::FlipH:
+        return flipHorizontal(src);
+    case FilePixelOp::FlipV:
+        return flipVertical(src);
+    }
+    return ImageData{};
+}
+
 bool looksLikeSharing(const QString &lower)
 {
     return lower.contains(QLatin1String("sharing")) ||
@@ -212,33 +233,24 @@ ImageFileRotateResult failResult(std::string error, ImageRotateError code)
     return r;
 }
 
-} // namespace
-
-bool isWritableRotateFormat(const std::string &suffixOrFormat)
-{
-    std::string s = lowerAscii(suffixOrFormat);
-    if (!s.empty() && s.front() == '.')
-        s.erase(s.begin());
-    if (s == "jpeg")
-        s = "jpg";
-    const auto supported = Encoder::supportedOutputFormats();
-    return std::find(supported.begin(), supported.end(), s) != supported.end();
-}
-
-ImageFileRotateResult rotateImageFile(const std::string &utf8Path, int degreesCw)
+ImageFileRotateResult rewriteImagePixels(const std::string &utf8Path, FilePixelOp op, int degreesCw)
 {
     if (utf8Path.empty())
         return failResult("empty path", ImageRotateError::EmptyPath);
 
-    const int norm = normalizeDegreesCw(degreesCw);
-    if (norm < 0)
-        return failResult("angle must be a multiple of 90", ImageRotateError::InvalidAngle);
-    if (norm == 0)
+    int norm = 0;
+    if (op == FilePixelOp::Rotate)
     {
-        ImageFileRotateResult r;
-        r.ok = true;
-        r.method = ImageRotateMethod::None;
-        return r;
+        norm = normalizeDegreesCw(degreesCw);
+        if (norm < 0)
+            return failResult("angle must be a multiple of 90", ImageRotateError::InvalidAngle);
+        if (norm == 0)
+        {
+            ImageFileRotateResult r;
+            r.ok = true;
+            r.method = ImageRotateMethod::None;
+            return r;
+        }
     }
 
     const QString qPath = QString::fromUtf8(utf8Path.data(), static_cast<int>(utf8Path.size()));
@@ -266,13 +278,13 @@ ImageFileRotateResult rotateImageFile(const std::string &utf8Path, int degreesCw
     if (src.isNull())
         return failResult("pixel convert failed", ImageRotateError::ConvertFailed);
 
-    const ImageData rotated = rotatePixelsExact(src, norm);
-    if (rotated.isNull())
+    const ImageData transformed = applyFilePixelOp(src, op, norm);
+    if (transformed.isNull())
         return failResult("rotate failed", ImageRotateError::RotateFailed);
 
     const std::string format = resolveEncodeFormat(readerFormat, suffix);
     std::vector<uint8_t> encoded;
-    if (!encodeRotated(rotated, format, &encoded, &err))
+    if (!encodeRotated(transformed, format, &encoded, &err))
         return failResult(err, ImageRotateError::EncodeFailed);
 
     ImageRotateError writeCode = ImageRotateError::WriteFailed;
@@ -282,9 +294,32 @@ ImageFileRotateResult rotateImageFile(const std::string &utf8Path, int degreesCw
     ImageFileRotateResult r;
     r.ok = true;
     r.method = ImageRotateMethod::PixelRewrite;
-    r.width = rotated.width;
-    r.height = rotated.height;
+    r.width = transformed.width;
+    r.height = transformed.height;
     return r;
+}
+
+} // namespace
+
+bool isWritableRotateFormat(const std::string &suffixOrFormat)
+{
+    std::string s = lowerAscii(suffixOrFormat);
+    if (!s.empty() && s.front() == '.')
+        s.erase(s.begin());
+    if (s == "jpeg")
+        s = "jpg";
+    const auto supported = Encoder::supportedOutputFormats();
+    return std::find(supported.begin(), supported.end(), s) != supported.end();
+}
+
+ImageFileRotateResult rotateImageFile(const std::string &utf8Path, int degreesCw)
+{
+    return rewriteImagePixels(utf8Path, FilePixelOp::Rotate, degreesCw);
+}
+
+ImageFileRotateResult flipImageFile(const std::string &utf8Path, bool horizontal)
+{
+    return rewriteImagePixels(utf8Path, horizontal ? FilePixelOp::FlipH : FilePixelOp::FlipV, 0);
 }
 
 } // namespace mviewer::core

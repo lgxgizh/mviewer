@@ -41,6 +41,11 @@ void CompareWorkspace::buildEditPanel(QVBoxLayout *sideLayout)
     m_editLabel = new QLabel(tr("— 选中窗格后可编辑 —"), m_editPanel);
     m_editLabel->setStyleSheet("font-weight:bold;color:#ccc;");
     editLay->addWidget(m_editLabel);
+    auto *previewHint = new QLabel(tr("旋转/翻转仅预览，不覆盖原文件"), m_editPanel);
+    previewHint->setObjectName("previewOnlyHint");
+    previewHint->setStyleSheet("color:#f0c060;font-size:11px;");
+    previewHint->setWordWrap(true);
+    editLay->addWidget(previewHint);
 
     // Brightness slider [-255, 255]; 0=identity
     {
@@ -142,10 +147,10 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
         row->addWidget(new QLabel(tr("旋转"), m_editPanel));
         auto *btnCCW = new QPushButton(tr("↺ 逆时针"), m_editPanel);
         btnCCW->setObjectName("rotateCCWButton");
-        btnCCW->setToolTip(tr("逆时针旋转 90° (临时预览，不修改原文件)"));
+        btnCCW->setToolTip(tr("逆时针旋转当前窗格 90°（仅预览，不修改原文件）"));
         auto *btnCW = new QPushButton(tr("↻ 顺时针"), m_editPanel);
         btnCW->setObjectName("rotateCWButton");
-        btnCW->setToolTip(tr("顺时针旋转 90° (临时预览，不修改原文件)"));
+        btnCW->setToolTip(tr("顺时针旋转当前窗格 90°（仅预览，不修改原文件）"));
         m_rotVal = new QLabel("0°", m_editPanel);
         m_rotVal->setMinimumWidth(30);
         row->addWidget(btnCCW);
@@ -160,10 +165,10 @@ void CompareWorkspace::buildSecondaryEditControls(QVBoxLayout *editLay)
         row->addWidget(new QLabel(tr("翻转"), m_editPanel));
         auto *btnFlipH = new QPushButton(tr("⇄ 水平"), m_editPanel);
         btnFlipH->setObjectName("flipHButton");
-        btnFlipH->setToolTip(tr("水平翻转 (Ctrl+Shift+H，临时预览，不修改原文件)"));
+        btnFlipH->setToolTip(tr("水平翻转当前窗格 (Ctrl+Shift+H，仅预览，不修改原文件)"));
         auto *btnFlipV = new QPushButton(tr("⇅ 垂直"), m_editPanel);
         btnFlipV->setObjectName("flipVButton");
-        btnFlipV->setToolTip(tr("垂直翻转 (Ctrl+Shift+V，临时预览，不修改原文件)"));
+        btnFlipV->setToolTip(tr("垂直翻转当前窗格 (Ctrl+Shift+V，仅预览，不修改原文件)"));
         row->addWidget(btnFlipH);
         row->addWidget(btnFlipV);
         editLay->addLayout(row);
@@ -275,83 +280,6 @@ void CompareWorkspace::onResetAdj()
     onEditCellSelected(m_editIdx); // resync sliders
 
     onAdjChanged();
-}
-
-void CompareWorkspace::rotateCurrentCell(int degrees)
-{
-    const int count = static_cast<int>(m_cellViews.size());
-    if (count <= 0)
-        return;
-    const int idx = (m_editIdx >= 0 && m_editIdx < count) ? m_editIdx : 0;
-    const int needed = idx + 1;
-    if (static_cast<int>(m_cellAdjusts.size()) < needed)
-        m_cellAdjusts.resize(static_cast<size_t>(needed));
-
-    int rot = (m_cellAdjusts[static_cast<size_t>(idx)].rotation + degrees) % 360;
-    if (rot < 0)
-        rot += 360;
-    m_cellAdjusts[static_cast<size_t>(idx)].rotation = rot;
-    m_editIdx = idx;
-    if (m_rotVal)
-        m_rotVal->setText(QString::number(rot) + "°");
-    applyAdjToCell(idx);
-    onAdjEditFinished();
-    update();
-}
-
-void CompareWorkspace::flipCurrentCell(bool horizontal)
-{
-    const int count = static_cast<int>(m_cellViews.size());
-    if (count <= 0)
-        return;
-    const int idx = (m_editIdx >= 0 && m_editIdx < count) ? m_editIdx : 0;
-    const int needed = idx + 1;
-    if (static_cast<int>(m_cellAdjusts.size()) < needed)
-        m_cellAdjusts.resize(static_cast<size_t>(needed));
-
-    if (horizontal)
-        m_cellAdjusts[static_cast<size_t>(idx)].flipH =
-            !m_cellAdjusts[static_cast<size_t>(idx)].flipH;
-    else
-        m_cellAdjusts[static_cast<size_t>(idx)].flipV =
-            !m_cellAdjusts[static_cast<size_t>(idx)].flipV;
-    m_editIdx = idx;
-    applyAdjToCell(idx);
-    onAdjEditFinished();
-    update();
-}
-
-bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)
-{
-    const int key = event->key();
-    const auto mods = event->modifiers();
-    const bool ctrl = (mods == Qt::ControlModifier);
-    const bool shiftCtrl = (mods == (Qt::ControlModifier | Qt::ShiftModifier));
-    if (ctrl && key == Qt::Key_R)
-    {
-        rotateCurrentCell(90);
-        event->accept();
-        return true;
-    }
-    if (shiftCtrl && key == Qt::Key_R)
-    {
-        rotateCurrentCell(-90);
-        event->accept();
-        return true;
-    }
-    if (shiftCtrl && key == Qt::Key_H)
-    {
-        flipCurrentCell(true);
-        event->accept();
-        return true;
-    }
-    if (shiftCtrl && key == Qt::Key_V)
-    {
-        flipCurrentCell(false);
-        event->accept();
-        return true;
-    }
-    return false;
 }
 
 void CompareWorkspace::applyAdjToCell(int cellIdx)

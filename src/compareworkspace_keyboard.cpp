@@ -239,14 +239,16 @@ bool CompareWorkspace::handleSyncCompareKey(QKeyEvent *event)
     if (plain && key == Qt::Key_R && m_crosshairChk)
     {
         m_crosshairChk->setChecked(!m_crosshairChk->isChecked());
-        showCompareStatus(m_crosshairChk->isChecked() ? tr("十字光标: 开启") : tr("十字光标: 关闭"));
+        showCompareStatus(m_crosshairChk->isChecked() ? tr("十字光标: 开启")
+                                                      : tr("十字光标: 关闭"));
         event->accept();
         return true;
     }
     if (plain && key == Qt::Key_L && m_pixelLinkChk)
     {
         m_pixelLinkChk->setChecked(!m_pixelLinkChk->isChecked());
-        showCompareStatus(m_pixelLinkChk->isChecked() ? tr("像素审查联动: 开启") : tr("像素审查联动: 关闭"));
+        showCompareStatus(m_pixelLinkChk->isChecked() ? tr("像素审查联动: 开启")
+                                                      : tr("像素审查联动: 关闭"));
         event->accept();
         return true;
     }
@@ -383,4 +385,122 @@ void CompareWorkspace::keyReleaseEvent(QKeyEvent *event)
         return;
     }
     QWidget::keyReleaseEvent(event);
+}
+
+int CompareWorkspace::resolveEditCell() const
+{
+    const int count = static_cast<int>(m_cellViews.size());
+    if (count <= 0)
+        return -1;
+    if (m_editIdx >= 0 && m_editIdx < count)
+        return m_editIdx;
+    if (m_hoverIdx >= 0 && m_hoverIdx < count)
+        return m_hoverIdx;
+    if (m_focusIndex >= 0 && m_focusIndex < count)
+        return m_focusIndex;
+    return -1;
+}
+
+void CompareWorkspace::syncEditCellAfterLoad()
+{
+    const int count = static_cast<int>(m_cellViews.size());
+    m_editIdx = -1;
+    if (count <= 0)
+        return;
+    int idx = -1;
+    if (m_selection)
+        idx = comparedImages().indexOf(m_selection->currentImage());
+    if (idx < 0 && m_focusIndex >= 0 && m_focusIndex < count)
+        idx = m_focusIndex;
+    onEditCellSelected(idx >= 0 ? idx : 0);
+}
+
+void CompareWorkspace::rotateCurrentCell(int degrees)
+{
+    const int idx = resolveEditCell();
+    if (idx < 0)
+    {
+        showCompareStatus(tr("请先点击要旋转的窗格（仅预览，不修改原文件）"));
+        return;
+    }
+    const int needed = idx + 1;
+    if (static_cast<int>(m_cellAdjusts.size()) < needed)
+        m_cellAdjusts.resize(static_cast<size_t>(needed));
+
+    int rot = (m_cellAdjusts[static_cast<size_t>(idx)].rotation + degrees) % 360;
+    if (rot < 0)
+        rot += 360;
+    m_cellAdjusts[static_cast<size_t>(idx)].rotation = rot;
+    m_editIdx = idx;
+    if (m_rotVal)
+        m_rotVal->setText(QString::number(rot) + "°");
+    applyAdjToCell(idx);
+    onAdjEditFinished();
+    update();
+    const ImageFrame *img = m_engine.imageAt(idx);
+    const QString name =
+        img ? QString::fromStdString(img->metadata().fileName) : tr("窗格 %1").arg(idx + 1);
+    showCompareStatus(tr("已预览旋转 %1（未写入文件）").arg(name));
+}
+
+void CompareWorkspace::flipCurrentCell(bool horizontal)
+{
+    const int idx = resolveEditCell();
+    if (idx < 0)
+    {
+        showCompareStatus(tr("请先点击要翻转的窗格（仅预览，不修改原文件）"));
+        return;
+    }
+    const int needed = idx + 1;
+    if (static_cast<int>(m_cellAdjusts.size()) < needed)
+        m_cellAdjusts.resize(static_cast<size_t>(needed));
+
+    if (horizontal)
+        m_cellAdjusts[static_cast<size_t>(idx)].flipH =
+            !m_cellAdjusts[static_cast<size_t>(idx)].flipH;
+    else
+        m_cellAdjusts[static_cast<size_t>(idx)].flipV =
+            !m_cellAdjusts[static_cast<size_t>(idx)].flipV;
+    m_editIdx = idx;
+    applyAdjToCell(idx);
+    onAdjEditFinished();
+    update();
+    const ImageFrame *img = m_engine.imageAt(idx);
+    const QString name =
+        img ? QString::fromStdString(img->metadata().fileName) : tr("窗格 %1").arg(idx + 1);
+    showCompareStatus(horizontal ? tr("已预览水平翻转 %1（未写入文件）").arg(name)
+                                 : tr("已预览垂直翻转 %1（未写入文件）").arg(name));
+}
+
+bool CompareWorkspace::handleTransformCompareKey(QKeyEvent *event)
+{
+    const int key = event->key();
+    const auto mods = event->modifiers();
+    const bool ctrl = (mods == Qt::ControlModifier);
+    const bool shiftCtrl = (mods == (Qt::ControlModifier | Qt::ShiftModifier));
+    if (ctrl && key == Qt::Key_R)
+    {
+        rotateCurrentCell(90);
+        event->accept();
+        return true;
+    }
+    if (shiftCtrl && key == Qt::Key_R)
+    {
+        rotateCurrentCell(-90);
+        event->accept();
+        return true;
+    }
+    if (shiftCtrl && key == Qt::Key_H)
+    {
+        flipCurrentCell(true);
+        event->accept();
+        return true;
+    }
+    if (shiftCtrl && key == Qt::Key_V)
+    {
+        flipCurrentCell(false);
+        event->accept();
+        return true;
+    }
+    return false;
 }

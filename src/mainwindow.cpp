@@ -823,6 +823,8 @@ void MainWindow::updateSelectionActions()
     };
     enableIf(m_actRotateCW, hasCurrent);
     enableIf(m_actRotateCCW, hasCurrent);
+    enableIf(m_actFlipH, hasCurrent);
+    enableIf(m_actFlipV, hasCurrent);
     updateNavigationActions();
 }
 

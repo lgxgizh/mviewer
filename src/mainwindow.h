@@ -434,9 +434,10 @@ class MainWindow : public QMainWindow
     QStringList resolveSelectedPaths(bool preferMulti = true) const;
     // A-3.4: enable/disable selection-dependent actions (Compare/Export/Batch).
     void updateSelectionActions();
-    // Browse rotate: SelectionModel::currentImage() is the only write target
-    // (ADR-012). Compare still uses in-memory cell preview when that view is up.
+    // Browse rotate/flip: SelectionModel::currentImage() is the only write
+    // target (ADR-012). Compare still uses in-memory cell preview when up.
     void rotateCurrentImage(int degrees);
+    void flipCurrentImage(bool horizontal);
     // Keep directory/image history and folder command boundaries in sync.
     void updateNavigationActions();
     // M19: ensure ImageListModel is populated for the current directory.

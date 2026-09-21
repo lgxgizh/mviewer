@@ -95,6 +95,27 @@ static void testPixelRotates()
     CHECK(r == 0 && g == 0 && b == 128, "4x CW restores (0,0)");
 }
 
+static void testPixelFlips()
+{
+    std::cout << "\n[ImageBuffer flipHorizontal/flipVertical]\n";
+    ImageData src = makeMarker(4, 2);
+    uint8_t r, g, b;
+
+    ImageData fh = flipHorizontal(src);
+    CHECK(fh.width == 4 && fh.height == 2, "H-flip keeps 4x2");
+    sample(fh, 3, 0, r, g, b);
+    CHECK(r == 0 && g == 0 && b == 128, "H-flip maps (0,0) -> (3,0)");
+    sample(fh, 0, 1, r, g, b);
+    CHECK(r == 3 && g == 1 && b == 128, "H-flip maps (3,1) -> (0,1)");
+
+    ImageData fv = flipVertical(src);
+    CHECK(fv.width == 4 && fv.height == 2, "V-flip keeps 4x2");
+    sample(fv, 0, 1, r, g, b);
+    CHECK(r == 0 && g == 0 && b == 128, "V-flip maps (0,0) -> (0,1)");
+    sample(fv, 3, 0, r, g, b);
+    CHECK(r == 3 && g == 1 && b == 128, "V-flip maps (3,1) -> (3,0)");
+}
+
 static void testFileRoundtrip(const std::string &ext)
 {
     std::cout << "\n[rotateImageFile ." << ext << "]\n";
@@ -229,15 +250,72 @@ static void testErrorCodes()
     fs::remove_all(dir, ec);
 }
 
+static void testFileFlipRoundtrip()
+{
+    std::cout << "\n[flipImageFile .png]\n";
+    namespace fs = std::filesystem;
+    const fs::path dir = fs::temp_directory_path() / "mviewer_imageflip_test";
+    fs::create_directories(dir);
+    const fs::path path = dir / ("fixture_png_" +
+                                 std::to_string(static_cast<long long>(
+                                     std::chrono::steady_clock::now().time_since_epoch().count())) +
+                                 ".png");
+    const std::string utf8 = path.string();
+
+    ImageData src = makeMarker(6, 4);
+    Encoder::Params params;
+    params.quality = 95;
+    CHECK(Encoder::encode(src, utf8, params), "encode flip fixture");
+
+    auto h = mviewer::core::flipImageFile(utf8, true);
+    CHECK(h.ok, "H-flip ok err=" + h.error);
+    CHECK(h.width == 6 && h.height == 4, "H-flip keeps dims");
+    {
+        QImageReader reader(QString::fromStdString(utf8));
+        reader.setAutoTransform(true);
+        QImage img = reader.read();
+        CHECK(!img.isNull(), "reload after H-flip");
+        ImageData after = mvcore::fromQImage(img);
+        uint8_t r, g, b;
+        sample(after, 5, 0, r, g, b);
+        CHECK(r == 0 && g == 0 && b == 128, "H-flip corner (0,0)->(5,0)");
+    }
+
+    auto h2 = mviewer::core::flipImageFile(utf8, true);
+    CHECK(h2.ok, "second H-flip restores");
+    {
+        QImageReader reader(QString::fromStdString(utf8));
+        reader.setAutoTransform(true);
+        QImage img = reader.read();
+        ImageData after = mvcore::fromQImage(img);
+        uint8_t r, g, b;
+        sample(after, 0, 0, r, g, b);
+        CHECK(r == 0 && g == 0 && b == 128, "double H-flip restores (0,0)");
+    }
+
+    auto v = mviewer::core::flipImageFile(utf8, false);
+    CHECK(v.ok, "V-flip ok err=" + v.error);
+    CHECK(v.width == 6 && v.height == 4, "V-flip keeps dims");
+
+    auto empty = mviewer::core::flipImageFile("", true);
+    CHECK(!empty.ok && empty.errorCode == mviewer::core::ImageRotateError::EmptyPath,
+          "flip empty path");
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
 int main(int argc, char **argv)
 {
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QGuiApplication app(argc, argv);
 
     testPixelRotates();
+    testPixelFlips();
     testFileRoundtrip("png");
     testFileRoundtrip("jpg");
     testErrorCodes();
+    testFileFlipRoundtrip();
 
     if (g_fail)
     {
