@@ -133,11 +133,11 @@ above is the main window only.
 | ROI select mode | `R` (viewer) | Toggle the viewer's ROI selection mode |
 | Colour label | `0`–`6` | Assign a colour label to the selection |
 
-> The original spec listed `R` / `Shift+R` / `H` / `V` as rotate and flip
-> bindings. No rotate or flip shortcut is bound in the shipped build: rotation and
-> flips are command-stack entries (`RotateCommand` / `CropCommand`) driven from the
-> toolbar, which is what makes them undoable. The viewer's `R` toggles ROI
-> selection mode instead (`src/imageviewer.cpp`).
+> Browse/Viewer persist geometry with **overwrite**: `Ctrl+R` / `Ctrl+Shift+R`
+> rotate 90°, `Ctrl+Shift+H` / `Ctrl+Shift+V` flip. Compare uses the same keys as
+> **preview-only** cell adjustments (side-panel hint + status). Plain `H` / `V` do
+> **not** flip — in Compare, `H` is difference highlight. The viewer's `R` still
+> toggles ROI selection mode (`src/imageviewer.cpp`).
 
 ### Slideshow
 
@@ -185,6 +185,8 @@ above is the main window only.
 | `F2` | Rename |
 | `F5` | Refresh the directory |
 | `Delete` | Move to MViewer staging |
+| `Ctrl+R` / `Ctrl+Shift+R` | Rotate 90° CW / CCW (overwrites the file) |
+| `Ctrl+Shift+H` / `Ctrl+Shift+V` | Flip horizontal / vertical (overwrites the file) |
 | `Ctrl+Shift+B` / `Ctrl+Shift+A` | Batch / batch analyze |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
 | `Ctrl+Shift+F` | Search |
@@ -199,6 +201,8 @@ above is the main window only.
 | `+` / `-` | Zoom in / out |
 | `F` or `F11` | Fullscreen |
 | `R` | Toggle ROI selection mode |
+| `Ctrl+R` / `Ctrl+Shift+R` | Rotate 90° CW / CCW (overwrites the open file) |
+| `Ctrl+Shift+H` / `Ctrl+Shift+V` | Flip horizontal / vertical (overwrites the open file) |
 | `Esc` | Close the viewer |
 | `,` / `.` | Previous / next frame (animated / multi-page sources) |
 | `Space` | Play / pause animation (animated sources only) |
@@ -214,6 +218,8 @@ above is the main window only.
 | `R` / `L` | Sync crosshair / pixel link |
 | `X` | Swap A/B |
 | `F` | Fit all panes |
+| `Ctrl+R` / `Ctrl+Shift+R` | Preview-rotate the edit/hover/focus pane (does not write files) |
+| `Ctrl+Shift+H` / `Ctrl+Shift+V` | Preview-flip the edit/hover/focus pane (does not write files) |
 | `PageUp` / `PageDown` | Previous / next pair |
 | `Shift+1`…`Shift+5` | Channel: RGB / R / G / B / Y |
 | `?` | Shortcut hints |

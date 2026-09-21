@@ -488,6 +488,7 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     // the previous session; applySession will repopulate persisted values.
     m_cellAdjusts.clear();
     rebuildCells();
+    syncEditCellAfterLoad();
     schedulePostLayoutFit();
     update();
     if (m_sidePanel && m_sidePanel->isVisible())

@@ -150,6 +150,10 @@ class CompareWorkspace : public QWidget
     void prevPair();
     void rotateCurrentCell(int degrees);
     void flipCurrentCell(bool horizontal);
+    int editCellIndex() const
+    {
+        return m_editIdx;
+    }
 
   signals:
     void syncToggled(bool on);
@@ -190,6 +194,8 @@ class CompareWorkspace : public QWidget
     bool handleModeCompareKey(QKeyEvent *event);
     bool handleChannelCompareKey(QKeyEvent *event);
     bool handleTransformCompareKey(QKeyEvent *event);
+    int resolveEditCell() const;
+    void syncEditCellAfterLoad();
     bool handleSyncCompareKey(QKeyEvent *event);
     bool handleZoomCompareKey(QKeyEvent *event);
     bool handleAdvancedCompareKey(QKeyEvent *event);

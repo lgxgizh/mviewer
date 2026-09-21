@@ -1,6 +1,6 @@
 #pragma once
 
-// File-backed image rotate for Browse/Viewer (±90° / 180°).
+// File-backed image rotate/flip for Browse/Viewer (±90° / 180° / mirror).
 // Qt-free header; .cpp may use Qt (QImageReader / QSaveFile).
 
 #include <cstdint>
@@ -52,5 +52,9 @@ bool isWritableRotateFormat(const std::string &suffixOrFormat);
 // modulo 360 (negative = CCW). Non-zero angles never silently no-op: unsupported
 // formats and I/O failures return ok=false with a clear error.
 ImageFileRotateResult rotateImageFile(const std::string &utf8Path, int degreesCw);
+
+// Flip the image file in place. Same writable formats, atomic overwrite, and
+// sharing-violation retry as rotateImageFile.
+ImageFileRotateResult flipImageFile(const std::string &utf8Path, bool horizontal);
 
 } // namespace mviewer::core

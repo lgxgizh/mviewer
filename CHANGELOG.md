@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### UX
+
+- **Browse flip follows SelectionModel**: `Ctrl+Shift+H` / `Ctrl+Shift+V` rewrite the gallery current image (ADR-012) even when Viewer is closed; actions disable with no selection instead of silently doing nothing.
+- **Overwrite is explicit**: Browse rotate/flip tooltips, F1, and the status bar say the original file is overwritten; Compare side panel shows “仅预览，不覆盖原文件”.
+- **Compare transform target**: rotate/flip no longer default to pane 0. They use the clicked edit pane, else hover/focus; after load the pane matching the current image is selected. No target → status prompt, no silent no-op.
+- **Viewer shortcuts match labels**: context menu and keys use `Ctrl+Shift+H` / `Ctrl+Shift+V` (plain `H`/`V` no longer overwrite the file). Flip uses the same retrying file rewrite path as rotate.
+
 ## [1.0.64] - 2026-09-21
 
 ### Release

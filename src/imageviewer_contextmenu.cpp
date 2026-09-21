@@ -18,7 +18,6 @@
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
-#include <QImageReader>
 #include <QKeyEvent>
 #include <QMatrix4x4>
 #include <QMenu>
@@ -32,7 +31,6 @@
 #include <QProcess>
 #include <QRect>
 #include <QResizeEvent>
-#include <QSaveFile>
 #include <QSettings>
 #include <QTimer>
 #include <QTransform>
@@ -230,10 +228,10 @@ void ImageViewer::contextMenuEvent(QContextMenuEvent *event)
                           aCopyFloat, aCopyHsv);
     menu.addSeparator();
     QAction *aSaveAs = menu.addAction("另存为...");
-    QAction *aRotateCW = menu.addAction("顺时针旋转 90° (Ctrl+R)");
-    QAction *aRotateCCW = menu.addAction("逆时针旋转 90° (Ctrl+Shift+R)");
-    QAction *aFlipH = menu.addAction("水平翻转 (H)");
-    QAction *aFlipV = menu.addAction("垂直翻转 (V)");
+    QAction *aRotateCW = menu.addAction("顺时针旋转 90° 并覆盖原文件 (Ctrl+R)");
+    QAction *aRotateCCW = menu.addAction("逆时针旋转 90° 并覆盖原文件 (Ctrl+Shift+R)");
+    QAction *aFlipH = menu.addAction("水平翻转并覆盖原文件 (Ctrl+Shift+H)");
+    QAction *aFlipV = menu.addAction("垂直翻转并覆盖原文件 (Ctrl+Shift+V)");
     aRotateCW->setEnabled(!m_currentPath.isEmpty());
     aRotateCCW->setEnabled(!m_currentPath.isEmpty());
     aFlipH->setEnabled(!m_currentPath.isEmpty());
@@ -398,7 +396,6 @@ bool ImageViewer::handleContextTransformAction(QAction *chosen, QAction *rotateC
 
 bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
 {
-    const bool plain = (modifiers == Qt::NoModifier);
     const bool ctrl = (modifiers == Qt::ControlModifier);
     const bool shift = (modifiers == Qt::ShiftModifier);
     const bool shiftCtrl = (modifiers == (Qt::ControlModifier | Qt::ShiftModifier));
@@ -406,9 +403,9 @@ bool ImageViewer::handleTransformKey(int key, Qt::KeyboardModifiers modifiers)
         return rotateCW();
     if (shiftCtrl && key == Qt::Key_R)
         return rotateCCW();
-    if ((plain || shiftCtrl) && key == Qt::Key_H)
+    if (shiftCtrl && key == Qt::Key_H)
         return flipHorizontal();
-    if ((plain || shiftCtrl) && key == Qt::Key_V)
+    if (shiftCtrl && key == Qt::Key_V)
         return flipVertical();
     if (shift && key == Qt::Key_C)
     {
@@ -642,7 +639,7 @@ QString ImageViewer::rotateFailureUserMessage(const mviewer::core::ImageFileRota
             suffix = suffix.substr(pos + 2);
         if (suffix.empty() || suffix == "(none)")
             suffix = "?";
-        return tr("暂不支持旋转 .%1（当前仅 PNG/JPEG/BMP/WebP）")
+        return tr("暂不支持改写 .%1（当前仅 PNG/JPEG/BMP/WebP）")
             .arg(QString::fromStdString(suffix));
     }
     case ImageRotateError::NotFound:
@@ -690,7 +687,7 @@ bool ImageViewer::rotateImage(int angle)
     ThumbnailProvider::invalidateSource(path.toUtf8().toStdString());
 
     emit fileRotated(path);
-    emit statusMessageRequested(tr("已旋转图片 (%1°)").arg(normAngle));
+    emit statusMessageRequested(tr("已旋转并覆盖原文件 (%1°)").arg(normAngle));
     refreshSource(path);
     return true;
 }
@@ -710,50 +707,25 @@ bool ImageViewer::flipImage(bool horizontal)
     if (m_currentPath.isEmpty())
         return false;
 
-    QImageReader reader(m_currentPath);
-    reader.setAutoTransform(true);
-    const QImage original = reader.read();
-    if (original.isNull())
+    const QString path = m_currentPath;
+    releaseSourceHandles(path);
+
+    const auto result = mviewer::core::flipImageFile(path.toUtf8().toStdString(), horizontal);
+    if (!result.ok)
     {
-        QMessageBox::warning(this, tr("翻转失败"), tr("无法读取图片：%1").arg(m_currentPath));
+        QMessageBox::warning(
+            this, tr("翻转失败"),
+            tr("无法翻转图片：%1\n%2").arg(path, rotateFailureUserMessage(result)));
         return false;
     }
 
-    const QImage flipped = original.mirrored(horizontal, !horizontal);
-    if (flipped.isNull())
-        return false;
+    mviewer::core::ImageLoadingFacade::instance().invalidateSource(path.toUtf8().toStdString());
+    ThumbnailProvider::invalidateSource(path.toUtf8().toStdString());
 
-    QByteArray format = reader.format();
-    if (format.isEmpty())
-        format = QFileInfo(m_currentPath).suffix().toLatin1();
-
-    QSaveFile saveFile(m_currentPath);
-    if (!saveFile.open(QIODevice::WriteOnly))
-    {
-        QMessageBox::warning(this, tr("翻转失败"),
-                             tr("无法写入文件：%1").arg(saveFile.errorString()));
-        return false;
-    }
-
-    int quality = 95;
-    const QString fmtLower = QString::fromLatin1(format).toLower();
-    if (fmtLower == "png" || fmtLower == "bmp")
-        quality = -1;
-
-    if (!flipped.save(&saveFile, format.constData(), quality) || !saveFile.commit())
-    {
-        saveFile.cancelWriting();
-        QMessageBox::warning(this, tr("翻转失败"), tr("保存文件失败：%1").arg(m_currentPath));
-        return false;
-    }
-
-    mviewer::core::ImageLoadingFacade::instance().invalidateSource(
-        m_currentPath.toUtf8().toStdString());
-    ThumbnailProvider::invalidateSource(m_currentPath.toUtf8().toStdString());
-
-    emit fileRotated(m_currentPath);
-    emit statusMessageRequested(horizontal ? tr("已水平翻转图片") : tr("已垂直翻转图片"));
-    refreshSource(m_currentPath);
+    emit fileRotated(path);
+    emit statusMessageRequested(horizontal ? tr("已水平翻转并覆盖原文件")
+                                           : tr("已垂直翻转并覆盖原文件"));
+    refreshSource(path);
     return true;
 }
 
