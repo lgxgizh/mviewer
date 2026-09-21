@@ -4,6 +4,7 @@
 #include "core/image/ImageBuffer.h"
 #include "core/image/QtConvert.h"
 
+#include <QFileDevice>
 #include <QFileInfo>
 #include <QIODevice>
 #include <QImage>
@@ -11,14 +12,26 @@
 #include <QSaveFile>
 #include <QString>
 
+#ifdef Q_OS_WIN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#endif
+
 #include <algorithm>
 #include <cctype>
+#include <chrono>
+#include <thread>
 #include <vector>
 
 namespace mviewer::core
 {
 namespace
 {
+
+constexpr int kWriteAttempts = 3;
+constexpr auto kRetryDelay = std::chrono::milliseconds(80);
 
 std::string lowerAscii(std::string s)
 {
@@ -60,30 +73,85 @@ ImageData rotatePixelsExact(const ImageData &src, int degreesCw)
     }
 }
 
-bool atomicWriteBytes(const QString &path, const std::vector<uint8_t> &bytes, std::string *err)
+bool looksLikeSharing(const QString &lower)
 {
-    QSaveFile out(path);
-    if (!out.open(QIODevice::WriteOnly))
+    return lower.contains(QLatin1String("sharing")) ||
+           lower.contains(QLatin1String("being used")) ||
+           lower.contains(QLatin1String("used by another")) ||
+           lower.contains(QString::fromUtf8("正在使用")) ||
+           lower.contains(QString::fromUtf8("已锁定"));
+}
+
+bool looksLikeAccessDenied(const QString &lower)
+{
+    return lower.contains(QLatin1String("denied")) || lower.contains(QLatin1String("permission")) ||
+           lower.contains(QString::fromUtf8("拒绝访问"));
+}
+
+ImageRotateError classifySaveError(const QSaveFile &file, bool duringCommit)
+{
+    const QString lower = file.errorString().toLower();
+    if (looksLikeSharing(lower))
+        return ImageRotateError::SharingViolation;
+    if (looksLikeAccessDenied(lower) || file.error() == QFileDevice::PermissionsError)
+        return duringCommit ? ImageRotateError::SharingViolation : ImageRotateError::AccessDenied;
+#ifdef Q_OS_WIN
+    const DWORD native = GetLastError();
+    if (native == ERROR_SHARING_VIOLATION || native == ERROR_LOCK_VIOLATION)
+        return ImageRotateError::SharingViolation;
+    if (native == ERROR_ACCESS_DENIED)
+        return duringCommit ? ImageRotateError::SharingViolation : ImageRotateError::AccessDenied;
+#endif
+    return ImageRotateError::WriteFailed;
+}
+
+bool isRetryableWrite(ImageRotateError code)
+{
+    return code == ImageRotateError::AccessDenied || code == ImageRotateError::SharingViolation;
+}
+
+bool atomicWriteBytes(const QString &path, const std::vector<uint8_t> &bytes, std::string *err,
+                      ImageRotateError *code)
+{
+    std::string lastErr = "write failed";
+    ImageRotateError lastCode = ImageRotateError::WriteFailed;
+    for (int attempt = 0; attempt < kWriteAttempts; ++attempt)
     {
-        if (err)
-            *err = out.errorString().toStdString();
-        return false;
+        if (attempt > 0)
+            std::this_thread::sleep_for(kRetryDelay);
+
+        QSaveFile out(path);
+        if (!out.open(QIODevice::WriteOnly))
+        {
+            lastErr = out.errorString().toStdString();
+            lastCode = classifySaveError(out, false);
+            if (!isRetryableWrite(lastCode))
+                break;
+            continue;
+        }
+        const qint64 n = static_cast<qint64>(bytes.size());
+        if (out.write(reinterpret_cast<const char *>(bytes.data()), n) != n)
+        {
+            out.cancelWriting();
+            lastErr = "short write";
+            lastCode = ImageRotateError::ShortWrite;
+            break;
+        }
+        if (!out.commit())
+        {
+            lastErr = out.errorString().toStdString();
+            lastCode = classifySaveError(out, true);
+            if (!isRetryableWrite(lastCode))
+                break;
+            continue;
+        }
+        return true;
     }
-    const qint64 n = static_cast<qint64>(bytes.size());
-    if (out.write(reinterpret_cast<const char *>(bytes.data()), n) != n)
-    {
-        out.cancelWriting();
-        if (err)
-            *err = "short write";
-        return false;
-    }
-    if (!out.commit())
-    {
-        if (err)
-            *err = out.errorString().toStdString();
-        return false;
-    }
-    return true;
+    if (err)
+        *err = lastErr.empty() ? "write failed" : lastErr;
+    if (code)
+        *code = lastCode;
+    return false;
 }
 
 // Load with auto-orientation, then destroy the reader before any overwrite so
@@ -136,10 +204,11 @@ bool encodeRotated(const ImageData &rotated, const std::string &format, std::vec
     return true;
 }
 
-ImageFileRotateResult failResult(std::string error)
+ImageFileRotateResult failResult(std::string error, ImageRotateError code)
 {
     ImageFileRotateResult r;
     r.error = std::move(error);
+    r.errorCode = code;
     return r;
 }
 
@@ -159,11 +228,11 @@ bool isWritableRotateFormat(const std::string &suffixOrFormat)
 ImageFileRotateResult rotateImageFile(const std::string &utf8Path, int degreesCw)
 {
     if (utf8Path.empty())
-        return failResult("empty path");
+        return failResult("empty path", ImageRotateError::EmptyPath);
 
     const int norm = normalizeDegreesCw(degreesCw);
     if (norm < 0)
-        return failResult("angle must be a multiple of 90");
+        return failResult("angle must be a multiple of 90", ImageRotateError::InvalidAngle);
     if (norm == 0)
     {
         ImageFileRotateResult r;
@@ -175,35 +244,40 @@ ImageFileRotateResult rotateImageFile(const std::string &utf8Path, int degreesCw
     const QString qPath = QString::fromUtf8(utf8Path.data(), static_cast<int>(utf8Path.size()));
     const QFileInfo fi(qPath);
     if (!fi.exists() || !fi.isFile())
-        return failResult("file not found");
+        return failResult("file not found", ImageRotateError::NotFound);
     if (!fi.isWritable())
-        return failResult("file not writable");
+        return failResult("file not writable", ImageRotateError::NotWritable);
 
     const std::string suffix = fileSuffixOf(utf8Path);
     if (!isWritableRotateFormat(suffix))
-        return failResult("unsupported format for rotate: " + (suffix.empty() ? "(none)" : suffix));
+    {
+        const std::string label = suffix.empty() ? std::string("(none)") : suffix;
+        return failResult("unsupported format for rotate: " + label,
+                          ImageRotateError::UnsupportedFormat);
+    }
 
     QImage original;
     std::string readerFormat;
     std::string err;
     if (!loadOrientedImage(qPath, &original, &readerFormat, &err))
-        return failResult(err);
+        return failResult(err, ImageRotateError::ReadFailed);
 
     const ImageData src = mvcore::fromQImage(original);
     if (src.isNull())
-        return failResult("pixel convert failed");
+        return failResult("pixel convert failed", ImageRotateError::ConvertFailed);
 
     const ImageData rotated = rotatePixelsExact(src, norm);
     if (rotated.isNull())
-        return failResult("rotate failed");
+        return failResult("rotate failed", ImageRotateError::RotateFailed);
 
     const std::string format = resolveEncodeFormat(readerFormat, suffix);
     std::vector<uint8_t> encoded;
     if (!encodeRotated(rotated, format, &encoded, &err))
-        return failResult(err);
+        return failResult(err, ImageRotateError::EncodeFailed);
 
-    if (!atomicWriteBytes(qPath, encoded, &err))
-        return failResult(err.empty() ? "write failed" : err);
+    ImageRotateError writeCode = ImageRotateError::WriteFailed;
+    if (!atomicWriteBytes(qPath, encoded, &err, &writeCode))
+        return failResult(err.empty() ? "write failed" : err, writeCode);
 
     ImageFileRotateResult r;
     r.ok = true;

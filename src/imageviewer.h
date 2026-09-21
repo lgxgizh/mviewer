@@ -33,6 +33,11 @@ class QContextMenuEvent;
 class QPainter;
 class QTimer;
 
+namespace mviewer::core
+{
+struct ImageFileRotateResult;
+}
+
 // Full-image zoomable viewer. Shown in its own window when the user
 // double-clicks a thumbnail (or single-clicks the bottom-left preview).
 // Supports wheel zoom, left-drag pan, brightness histogram overlay, and
@@ -203,6 +208,10 @@ class ImageViewer : public QOpenGLWidget
     bool rotateCW();
     bool rotateCCW();
     bool rotateImage(int angle);
+    // Drop in-flight decodes/preloads that may still hold `path` so a
+    // same-path overwrite (rotate) can replace the file on Windows.
+    void releaseSourceHandles(const QString &path);
+    static QString rotateFailureUserMessage(const mviewer::core::ImageFileRotateResult &result);
     bool flipHorizontal();
     bool flipVertical();
     bool flipImage(bool horizontal);

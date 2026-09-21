@@ -1,10 +1,16 @@
 // MainWindow menu construction (M20 P0#1).
 #include "mainwindow_p.h"
 
+#include "core/image/ImageFileRotate.h"
+#include "core/image/ImageLoadingFacade.h"
 #include "display/DisplayColorContextProvider.h"
+#include "thumbnailprovider.h"
 
 #include <QIcon>
 #include <QMenuBar>
+#include <QStatusBar>
+
+#include <string>
 
 void MainWindow::buildMenus()
 {
@@ -153,22 +159,8 @@ void MainWindow::buildEditTransformActions(QMenu *editMenu)
     m_actRotateCCW->setEnabled(false);
     editMenu->addAction(m_actRotateCW);
     editMenu->addAction(m_actRotateCCW);
-    connect(m_actRotateCW, &QAction::triggered, this,
-            [this]()
-            {
-                if (m_compareView && m_compareView->isVisible())
-                    m_compareView->rotateCurrentCell(90);
-                else if (m_imageViewer)
-                    m_imageViewer->rotateCW();
-            });
-    connect(m_actRotateCCW, &QAction::triggered, this,
-            [this]()
-            {
-                if (m_compareView && m_compareView->isVisible())
-                    m_compareView->rotateCurrentCell(-90);
-                else if (m_imageViewer)
-                    m_imageViewer->rotateCCW();
-            });
+    connect(m_actRotateCW, &QAction::triggered, this, [this]() { rotateCurrentImage(90); });
+    connect(m_actRotateCCW, &QAction::triggered, this, [this]() { rotateCurrentImage(-90); });
     m_actFlipH = new QAction(tr("水平翻转(&H)"), this);
     m_actFlipH->setObjectName("flipHAction");
     m_actFlipH->setShortcut(QKeySequence("Ctrl+Shift+H"));
@@ -193,6 +185,57 @@ void MainWindow::buildEditTransformActions(QMenu *editMenu)
                 else if (m_imageViewer)
                     m_imageViewer->flipVertical();
             });
+}
+
+void MainWindow::rotateCurrentImage(int degrees)
+{
+    if (m_compareView && m_compareView->isVisible())
+    {
+        m_compareView->rotateCurrentCell(degrees);
+        return;
+    }
+
+    const QString path = currentImagePath();
+    if (path.isEmpty())
+    {
+        if (auto *bar = statusBar())
+            bar->showMessage(tr("没有可旋转的图片"), 2000);
+        return;
+    }
+
+    if (m_imageViewer)
+        m_imageViewer->releaseSourceHandles(path);
+    if (m_previewPanel)
+        m_previewPanel->releaseSourceHandles(path);
+    const std::string utf8 = path.toUtf8().toStdString();
+    mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
+    ThumbnailProvider::invalidateSource(utf8);
+
+    const auto result = mviewer::core::rotateImageFile(utf8, degrees);
+    if (!result.ok)
+    {
+        QMessageBox::warning(
+            this, tr("旋转失败"),
+            tr("无法旋转图片：%1\n%2").arg(path, ImageViewer::rotateFailureUserMessage(result)));
+        return;
+    }
+
+    mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
+    ThumbnailProvider::invalidateSource(utf8);
+    if (m_thumbnailPanel)
+        m_thumbnailPanel->invalidateSourceImage(path);
+    if (m_previewPanel)
+        m_previewPanel->setImage(path);
+    if (m_metadataPanel)
+        m_metadataPanel->setImage(path);
+    if (m_imageViewer && !m_imageViewer->isHidden() && m_imageViewer->currentPath() == path)
+        m_imageViewer->refreshSource(path);
+
+    int norm = degrees % 360;
+    if (norm < 0)
+        norm += 360;
+    if (auto *bar = statusBar())
+        bar->showMessage(tr("已旋转图片 (%1°)").arg(norm), 2000);
 }
 
 void MainWindow::buildViewMenu(QMenuBar *menuBar)
