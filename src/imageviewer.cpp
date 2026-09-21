@@ -170,10 +170,33 @@ void ImageViewer::closeEvent(QCloseEvent *event)
     cancelDisplayRasterPreloads();
     cancelDisplayRequest();
     cancelExportJob();
+    // Browse rotate uses SelectionModel, but a leftover path here used to make
+    // a closed Viewer the write target. "No open file" after close.
+    m_currentPath.clear();
+    m_currentIndex = -1;
+    m_provisionalPath.clear();
     QSettings settings;
     settings.setValue("viewerGeometry", saveGeometry());
     event->accept();
     emit viewerClosed();
+}
+
+void ImageViewer::releaseSourceHandles(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+    const bool current = (m_currentPath == path || m_provisionalPath == path);
+    if (current)
+    {
+        ++m_requestGen;
+        beginImageGeneration();
+        cancelCurrentLoad();
+        cancelDisplayRequest();
+        cancelRoiStats();
+    }
+    // Neighbor preloads may still hold `path` even when it is not current.
+    cancelPreloads();
+    cancelDisplayRasterPreloads();
 }
 
 void ImageViewer::leaveEvent(QEvent *event)

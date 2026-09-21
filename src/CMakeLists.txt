@@ -694,6 +694,25 @@ target_include_directories(mainwindow_commandstack_acceptance PRIVATE ${CMAKE_CU
 add_test(NAME mainwindow_commandstack_acceptance COMMAND mainwindow_commandstack_acceptance)
 set_tests_properties(mainwindow_commandstack_acceptance PROPERTIES RUN_SERIAL TRUE TIMEOUT 12)
 
+# Browse rotate follows SelectionModel after Viewer close (not stale m_currentPath).
+add_executable(rotate_selection_tests
+    test_rotate_selection.cpp
+)
+
+target_link_libraries(rotate_selection_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+
+target_compile_features(rotate_selection_tests PRIVATE cxx_std_20)
+target_include_directories(rotate_selection_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME rotate_selection_tests COMMAND rotate_selection_tests)
+set_tests_properties(rotate_selection_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
+
 # ─── M24: Compare workflow acceptance (multi-image entry, mode-preserved
 # state, continuous pair navigation, degraded images) ────────────────────────
 add_executable(compare_acceptance_tests

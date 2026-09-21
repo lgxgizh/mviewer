@@ -4,6 +4,9 @@
 #include "core/image/ImageFileRotate.h"
 #include "core/image/QtConvert.h"
 
+#include <QFile>
+#include <QFileDevice>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QImage>
 #include <QImageReader>
@@ -11,6 +14,7 @@
 #include <chrono>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 
@@ -146,6 +150,80 @@ static void testFileRoundtrip(const std::string &ext)
 
     auto bad = mviewer::core::rotateImageFile(utf8, 45);
     CHECK(!bad.ok, "non-90 angle rejected");
+    CHECK(bad.errorCode == mviewer::core::ImageRotateError::InvalidAngle, "non-90 angle errorCode");
+
+    std::error_code ec;
+    fs::remove_all(dir, ec);
+}
+
+static std::filesystem::path uniqueRotateDir()
+{
+    const std::filesystem::path dir =
+        std::filesystem::temp_directory_path() / "mviewer_imagerotate_errors";
+    std::filesystem::create_directories(dir);
+    return dir;
+}
+
+static std::string uniquePath(const std::filesystem::path &dir, const std::string &name)
+{
+    return (dir / (name + "_" +
+                   std::to_string(static_cast<long long>(
+                       std::chrono::steady_clock::now().time_since_epoch().count()))))
+        .string();
+}
+
+static void testErrorCodes()
+{
+    std::cout << "\n[rotateImageFile error codes]\n";
+    namespace fs = std::filesystem;
+    using mviewer::core::ImageRotateError;
+    using mviewer::core::rotateImageFile;
+
+    auto empty = rotateImageFile("", 90);
+    CHECK(!empty.ok && empty.errorCode == ImageRotateError::EmptyPath, "empty path code");
+    CHECK(empty.error == "empty path", "empty path English");
+
+    auto missing = rotateImageFile(uniquePath(uniqueRotateDir(), "missing") + ".png", 90);
+    CHECK(!missing.ok && missing.errorCode == ImageRotateError::NotFound, "missing file code");
+    CHECK(missing.error == "file not found", "missing file English");
+
+    const fs::path dir = uniqueRotateDir();
+    const std::string tif = uniquePath(dir, "not_a_tiff") + ".tif";
+    {
+        std::ofstream out(tif);
+        out << "not a tiff";
+    }
+    auto unsupported = rotateImageFile(tif, 90);
+    CHECK(!unsupported.ok && unsupported.errorCode == ImageRotateError::UnsupportedFormat,
+          "tif rejected as unsupported");
+    CHECK(unsupported.error.find("unsupported format") != std::string::npos,
+          "tif English mentions unsupported format");
+    CHECK(fs::file_size(tif) > 0, "unsupported format leaves source in place");
+
+    const std::string png = uniquePath(dir, "readonly") + ".png";
+    ImageData src = makeMarker(6, 4);
+    Encoder::Params params;
+    params.quality = 95;
+    CHECK(Encoder::encode(src, png, params), "encode readonly fixture");
+    const auto bytesBefore = fs::file_size(png);
+    QFile qf(QString::fromStdString(png));
+    const auto readOnlyPerms =
+        QFileDevice::ReadOwner | QFileDevice::ReadUser | QFileDevice::ReadGroup;
+    CHECK(qf.setPermissions(readOnlyPerms), "chmod readonly");
+    auto readonly = rotateImageFile(png, 90);
+    if (QFileInfo(QString::fromStdString(png)).isWritable())
+    {
+        std::cout << "SKIP: readonly check (process can still write)\n";
+        qf.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    }
+    else
+    {
+        CHECK(!readonly.ok && readonly.errorCode == ImageRotateError::NotWritable,
+              "readonly file not writable");
+        CHECK(readonly.error == "file not writable", "readonly English");
+        CHECK(fs::file_size(png) == bytesBefore, "readonly leaves bytes unchanged");
+        qf.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
+    }
 
     std::error_code ec;
     fs::remove_all(dir, ec);
@@ -159,6 +237,7 @@ int main(int argc, char **argv)
     testPixelRotates();
     testFileRoundtrip("png");
     testFileRoundtrip("jpg");
+    testErrorCodes();
 
     if (g_fail)
     {

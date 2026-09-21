@@ -88,6 +88,9 @@ class PreviewPanel : public QWidget
     // edge, so a scaled preview is never confused with a FullImage decode.
     static std::string previewCacheKey(const std::string &path);
 
+    // Cancel an in-flight scaled decode that still holds `path`.
+    void releaseSourceHandles(const QString &path);
+
   protected:
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;

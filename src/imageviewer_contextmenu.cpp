@@ -39,6 +39,7 @@
 #include <QWheelEvent>
 #include <cmath>
 #include <cstring>
+#include <string>
 
 namespace
 {
@@ -542,6 +543,45 @@ bool ImageViewer::rotateCCW()
     return rotateImage(-90);
 }
 
+QString ImageViewer::rotateFailureUserMessage(const mviewer::core::ImageFileRotateResult &result)
+{
+    using mviewer::core::ImageRotateError;
+    switch (result.errorCode)
+    {
+    case ImageRotateError::NotWritable:
+    case ImageRotateError::AccessDenied:
+        return tr("文件或所在文件夹没有写入权限");
+    case ImageRotateError::SharingViolation:
+        return tr("文件正在被使用（含本程序解码），无法覆盖");
+    case ImageRotateError::UnsupportedFormat:
+    {
+        std::string suffix = result.error;
+        const auto pos = suffix.rfind(": ");
+        if (pos != std::string::npos)
+            suffix = suffix.substr(pos + 2);
+        if (suffix.empty() || suffix == "(none)")
+            suffix = "?";
+        return tr("暂不支持旋转 .%1（当前仅 PNG/JPEG/BMP/WebP）")
+            .arg(QString::fromStdString(suffix));
+    }
+    case ImageRotateError::NotFound:
+    case ImageRotateError::EmptyPath:
+        return tr("找不到文件");
+    case ImageRotateError::None:
+    case ImageRotateError::InvalidAngle:
+    case ImageRotateError::ReadFailed:
+    case ImageRotateError::ConvertFailed:
+    case ImageRotateError::RotateFailed:
+    case ImageRotateError::EncodeFailed:
+    case ImageRotateError::ShortWrite:
+    case ImageRotateError::WriteFailed:
+        if (result.error.empty())
+            return tr("未知错误");
+        return QString::fromStdString(result.error);
+    }
+    return tr("未知错误");
+}
+
 bool ImageViewer::rotateImage(int angle)
 {
     if (m_currentPath.isEmpty())
@@ -553,24 +593,24 @@ bool ImageViewer::rotateImage(int angle)
     if (normAngle == 0)
         return true;
 
-    const auto result =
-        mviewer::core::rotateImageFile(m_currentPath.toUtf8().toStdString(), normAngle);
+    const QString path = m_currentPath;
+    releaseSourceHandles(path);
+
+    const auto result = mviewer::core::rotateImageFile(path.toUtf8().toStdString(), normAngle);
     if (!result.ok)
     {
-        const QString detail =
-            result.error.empty() ? tr("未知错误") : QString::fromStdString(result.error);
-        QMessageBox::warning(this, tr("旋转失败"),
-                             tr("无法旋转图片：%1\n%2").arg(m_currentPath, detail));
+        QMessageBox::warning(
+            this, tr("旋转失败"),
+            tr("无法旋转图片：%1\n%2").arg(path, rotateFailureUserMessage(result)));
         return false;
     }
 
-    mviewer::core::ImageLoadingFacade::instance().invalidateSource(
-        m_currentPath.toUtf8().toStdString());
-    ThumbnailProvider::invalidateSource(m_currentPath.toUtf8().toStdString());
+    mviewer::core::ImageLoadingFacade::instance().invalidateSource(path.toUtf8().toStdString());
+    ThumbnailProvider::invalidateSource(path.toUtf8().toStdString());
 
-    emit fileRotated(m_currentPath);
+    emit fileRotated(path);
     emit statusMessageRequested(tr("已旋转图片 (%1°)").arg(normAngle));
-    refreshSource(m_currentPath);
+    refreshSource(path);
     return true;
 }
 

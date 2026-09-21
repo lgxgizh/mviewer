@@ -374,6 +374,14 @@ void PreviewPanel::cancelPending()
     m_task.reset();
 }
 
+void PreviewPanel::releaseSourceHandles(const QString &path)
+{
+    if (path.isEmpty())
+        return;
+    if (m_requestedPath == path || m_presentedPath == path)
+        cancelPending();
+}
+
 void PreviewPanel::resetMatchingHandle(uint64_t gen)
 {
     // Only release the handle that delivered this result — a newer setImage()

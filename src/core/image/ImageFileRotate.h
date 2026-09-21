@@ -16,10 +16,31 @@ enum class ImageRotateMethod : std::uint8_t
     PixelRewrite     // decode → exact 90°-step rotate → re-encode
 };
 
+// Stable English failure class for tests / UI mapping. `error` keeps a
+// diagnostic string (English code or Qt/OS detail).
+enum class ImageRotateError : std::uint8_t
+{
+    None = 0,
+    EmptyPath,
+    InvalidAngle,
+    NotFound,
+    NotWritable,
+    UnsupportedFormat,
+    ReadFailed,
+    ConvertFailed,
+    RotateFailed,
+    EncodeFailed,
+    ShortWrite,
+    AccessDenied,
+    SharingViolation,
+    WriteFailed
+};
+
 struct ImageFileRotateResult
 {
     bool ok = false;
     ImageRotateMethod method = ImageRotateMethod::None;
+    ImageRotateError errorCode = ImageRotateError::None;
     int width = 0;
     int height = 0;
     std::string error; // stable English diagnostic for tests / logs
