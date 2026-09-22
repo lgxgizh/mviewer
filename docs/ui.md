@@ -102,7 +102,8 @@ above is the main window only.
 | Metadata panel | `Ctrl+I` | Toggle the metadata panel |
 | Search | `Ctrl+Shift+F` | Focus the search field |
 | Batch | `Ctrl+Shift+B` | Batch operations dialog |
-| Batch analyze | `Ctrl+Shift+A` | Batch analysis over the selection |
+| Deselect all | `Ctrl+Shift+A` | Deselect the gallery selection |
+| Batch analyze | `Ctrl+Alt+A` | Batch analysis over the selection |
 | History back / forward | `Alt+Left` / `Alt+Right` | Browse history |
 | Directory back / forward | `Ctrl+Alt+Left` / `Ctrl+Alt+Right` | Directory navigation |
 | Undo / Redo | `Ctrl+Z` / `Ctrl+Y` | Command stack |
@@ -187,7 +188,9 @@ above is the main window only.
 | `Delete` | Move to MViewer staging |
 | `Ctrl+R` / `Ctrl+Shift+R` | Rotate 90° CW / CCW (overwrites the file) |
 | `Ctrl+Shift+H` / `Ctrl+Shift+V` | Flip horizontal / vertical (overwrites the file) |
-| `Ctrl+Shift+B` / `Ctrl+Shift+A` | Batch / batch analyze |
+| `Ctrl+Shift+B` | Batch processing |
+| `Ctrl+Shift+A` | Deselect all |
+| `Ctrl+Alt+A` | Batch analysis export |
 | `Ctrl+Z` / `Ctrl+Y` | Undo / redo |
 | `Ctrl+Shift+F` | Search |
 | `0`–`6` | Colour label |
@@ -220,7 +223,8 @@ above is the main window only.
 | `F` | Fit all panes |
 | `Ctrl+R` / `Ctrl+Shift+R` | Preview-rotate the edit/hover/focus pane (does not write files) |
 | `Ctrl+Shift+H` / `Ctrl+Shift+V` | Preview-flip the edit/hover/focus pane (does not write files) |
-| `PageUp` / `PageDown` | Previous / next pair |
+| `P` / `PageUp` / `Left` | Previous pair |
+| `N` / `PageDown` / `Right` | Next pair |
 | `Shift+1`…`Shift+5` | Channel: RGB / R / G / B / Y |
 | `?` | Shortcut hints |
 | `Esc` | Clear the ROI, then exit Compare |

@@ -17,6 +17,7 @@
 
 #include "imageviewer.h"
 #include "previewpanel.h"
+#include "thumbnailpanel.h"
 
 #include "core/cache/CacheManager.h"
 #include "core/image/ImageRepository.h"
@@ -27,7 +28,9 @@
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QImage>
+#include <QPainter>
 #include <QProcess>
+#include <QStyleOptionViewItem>
 #include <QThread>
 #include <QWidget>
 
@@ -268,6 +271,143 @@ void testViewerABA()
 // A paused DecodePool rejects preview submissions; a paused DecodePool
 // rejects viewer submissions. The panel/viewer must NOT sit in an eternal
 // loading state: the panel shows no-image, the viewer shows the failure title.
+QImage wideLetterboxedThumb()
+{
+    QImage square(160, 160, QImage::Format_RGB32);
+    square.fill(qRgb(0, 0, 0));
+    for (int y = 40; y < 120; ++y)
+    {
+        QRgb *row = reinterpret_cast<QRgb *>(square.scanLine(y));
+        for (int x = 0; x < 160; ++x)
+            row[x] = qRgb(180, 40, 40);
+    }
+    return square;
+}
+
+QRect redPhotoBounds(const QImage &painted)
+{
+    QRect bounds;
+    for (int y = 0; y < painted.height(); ++y)
+    {
+        const QRgb *row = reinterpret_cast<const QRgb *>(painted.constScanLine(y));
+        for (int x = 0; x < painted.width(); ++x)
+        {
+            if (qRed(row[x]) > 140 && qGreen(row[x]) < 90 && qBlue(row[x]) < 90)
+                bounds = bounds.isNull() ? QRect(x, y, 1, 1) : bounds.united(QRect(x, y, 1, 1));
+        }
+    }
+    return bounds;
+}
+
+int blackMatPixels(const QImage &painted, const QRect &slot)
+{
+    int black = 0;
+    for (int y = slot.top(); y <= slot.bottom(); ++y)
+    {
+        const QRgb *row = reinterpret_cast<const QRgb *>(painted.constScanLine(y));
+        for (int x = slot.left(); x <= slot.right(); ++x)
+        {
+            if (qRed(row[x]) < 8 && qGreen(row[x]) < 8 && qBlue(row[x]) < 8)
+                ++black;
+        }
+    }
+    return black;
+}
+
+// Distant gallery thumbs are square RGB letterboxes before the source size
+// is probed. The cell, selection preview, and viewer must fit the photo.
+void testDistantPreviewLetterboxDoesNotJump()
+{
+    printf("\n[4b. photo aspect in cell, preview, and viewer]\n");
+    fflush(stdout);
+    auto &sched = TaskScheduler::instance();
+    sched.pause(PoolType::DecodePool);
+
+    const QImage square = wideLetterboxedThumb();
+    QImage preview(320, 160, QImage::Format_RGB32);
+    preview.fill(qRgb(180, 40, 40));
+    const QString path = QStringLiteral("C:/definitely/missing/distant-preview.jpg");
+
+    ThumbnailPanel gallery;
+    gallery.setViewMode(ThumbnailPanel::Thumbnail);
+    QStyleOptionViewItem option;
+    const QSize gridBefore = gallery.itemDelegate()->sizeHint(option, QModelIndex());
+    gallery.seedDisplayThumbForTest(path, QPixmap::fromImage(square));
+    const QSize gridAfter = gallery.itemDelegate()->sizeHint(option, QModelIndex());
+    const QSize uniform(gallery.thumbSize() + 24, gallery.thumbSize() + 62);
+    CHECK(gridBefore == gridAfter && gridBefore == uniform,
+          "PASS gallery cell stays the uniform grid size");
+    option.initFrom(&gallery);
+    option.rect = QRect(QPoint(0, 0), gridAfter);
+    QImage cell(option.rect.size(), QImage::Format_ARGB32);
+    cell.fill(Qt::white);
+    {
+        QPainter painter(&cell);
+        gallery.itemDelegate()->paint(&painter, option, gallery.model()->index(0, 0));
+    }
+    const QRect photo = redPhotoBounds(cell);
+    const int imageSlot = gallery.thumbSize();
+    CHECK(!photo.isNull() && photo.width() + 2 >= imageSlot && photo.width() > photo.height() * 3 / 2,
+          "PASS gallery cell paints the wide photo across the slot");
+    const QRect slot(photo.center().x() - imageSlot / 2,
+                     photo.top() - (imageSlot - photo.height()) / 2, imageSlot, imageSlot);
+    const int matPixels = blackMatPixels(cell, slot.intersected(cell.rect()));
+    CHECK(slot.contains(photo) && matPixels == 0,
+          "PASS gallery cell does not paint the black mat as the photo");
+    const int hitsBefore = ThumbnailPanel::scaleCacheHitsForTest();
+    {
+        QPainter again(&cell);
+        gallery.itemDelegate()->paint(&again, option, gallery.model()->index(0, 0));
+    }
+    CHECK(ThumbnailPanel::scaleCacheHitsForTest() == hitsBefore + 1,
+          "PASS second paint of the same thumb reuses the scaled pixmap");
+    QImage solid(160, 160, QImage::Format_RGB32);
+    solid.fill(qRgb(20, 140, 60));
+    gallery.seedDisplayThumbForTest(path, QPixmap::fromImage(solid));
+    const int plainBefore = ThumbnailPanel::scaleCacheHitsForTest();
+    {
+        QPainter first(&cell);
+        gallery.itemDelegate()->paint(&first, option, gallery.model()->index(0, 0));
+    }
+    {
+        QPainter second(&cell);
+        gallery.itemDelegate()->paint(&second, option, gallery.model()->index(0, 0));
+    }
+    CHECK(ThumbnailPanel::scaleCacheHitsForTest() == plainBefore + 1,
+          "PASS second paint of a thumb without letterbox reuses the scaled pixmap");
+
+    PreviewPanel panel;
+    panel.resize(320, 280);
+    panel.setImage(path, QPixmap::fromImage(square));
+    const QSize thumbFit = panel.fittedPreviewSize();
+    panel.setImage(path, QPixmap::fromImage(preview));
+    const QSize previewFit = panel.fittedPreviewSize();
+    const int availW = 320 - 20;
+    CHECK(thumbFit == QSize(availW, availW / 2),
+          "PASS letterboxed square thumb fits the photo aspect, not the square");
+    CHECK(thumbFit == previewFit,
+          "PASS fitted preview size stays put when the scaled preview replaces the thumb");
+    panel.setImage(path, QPixmap::fromImage(square), QSize(1600, 800));
+    CHECK(panel.fittedPreviewSize() == thumbFit,
+          "PASS known source size still crops the preview to that aspect");
+
+    ImageViewer viewer;
+    viewer.resize(640, 480);
+    viewer.show();
+    pump(30);
+    viewer.setProvisionalImage(path, square, QSize(0, 0));
+    const QRect fromSquare = viewer.provisionalScreenRect();
+    viewer.setProvisionalImage(path, preview, QSize());
+    const QRect fromPhoto = viewer.provisionalScreenRect();
+    CHECK(fromSquare.width() > fromSquare.height() && fromSquare.width() > 0,
+          "PASS viewer provisional fits the photo aspect, not the square bitmap");
+    CHECK(qAbs(fromSquare.width() - fromPhoto.width()) <= 1 &&
+              qAbs(fromSquare.height() - fromPhoto.height()) <= 1,
+          "PASS viewer provisional rect matches the true-aspect photo");
+
+    sched.resume(PoolType::DecodePool);
+}
+
 void testRejectionReachesTerminalState()
 {
     printf("\n[4. rejected requests reach a terminal UI state]\n");
@@ -469,6 +609,7 @@ int main(int argc, char **argv)
     testDestroyMidDecodeChildren(app);
     testPreviewABA();
     testViewerABA();
+    testDistantPreviewLetterboxDoesNotJump();
     testRejectionReachesTerminalState();
     testPreviewUILatency24MP();
     testViewerUILatency24MP();

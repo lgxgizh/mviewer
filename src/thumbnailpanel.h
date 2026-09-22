@@ -231,6 +231,11 @@ class ThumbnailPanel : public QListView
     {
         return m_scanGenToken;
     }
+    // Paint-test seam: one gallery row whose bitmap is already in the cache
+    // the cell painter reads. Width and height stay unknown.
+    void seedDisplayThumbForTest(const QString &path, const QPixmap &pixmap);
+    // Times the cell painter reused a scaled pixmap instead of scaling again.
+    static int scaleCacheHitsForTest();
 
     // Paths of the currently selected gallery rows (in model order). Public:
     // MainWindow and acceptance tests consume the selection.

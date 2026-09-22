@@ -1,6 +1,13 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.66] - 2026-09-22
+
+### Bug Fixes
+
+- **Shortcut guidance matches the shipped controls**: F1, the in-app 使用说明, the Compare ? status tip, pair-button tooltips, and the user guide state that P, PageUp, and Left step to the previous pair and N, PageDown, and Right step to the next pair. Deselect-all is Ctrl+Shift+A and batch analysis export is Ctrl+Alt+A. Alignment is described as an integer-pixel translation.
+- **Compare mode keys on the F1 sheet**: F1 lists K with B/S/W/O as checkerboard, ] / [ as diff-threshold +5 / -5, and . / , as overlay-opacity +5 / -5.
+- **Gallery Shift-click range**: A plain Shift-click selects only the inclusive range from the anchor. A shorter second Shift-click drops images that are no longer inside that range. Ctrl+Shift-click still adds the range and keeps images already selected outside it.
+- **Stable distant preview size**: Clicking an image whose pixel size is not probed yet no longer shows the square gallery thumbnail small and then snaps it larger. The gallery cell, selection preview, and viewer fit the photo instead of the black letterbox mat, and the preview keeps that size when the sharper frame arrives.
 
 ## [1.0.65] - 2026-09-22
 

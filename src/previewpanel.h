@@ -84,6 +84,13 @@ class PreviewPanel : public QWidget
         return QSize(m_previewW, m_previewH);
     }
 
+    // On-screen size after fitting the current pixmap into the panel. Stage-1
+    // gallery thumbs and the later scaled preview must agree, or the photo jumps.
+    QSize fittedPreviewSize() const
+    {
+        return m_scaled.size();
+    }
+
     // Preview-cache key: ImageRepository::makeKey(path) plus the preview max
     // edge, so a scaled preview is never confused with a FullImage decode.
     static std::string previewCacheKey(const std::string &path);

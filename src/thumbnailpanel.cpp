@@ -651,8 +651,12 @@ void ThumbnailPanel::mousePressEvent(QMouseEvent *event)
                 const int last = qMax(anchorRow, idx.row());
                 const QModelIndex firstIndex = m_model->index(first, 0);
                 const QModelIndex lastIndex = m_model->index(last, 0);
-                selectionModel()->select(QItemSelection(firstIndex, lastIndex),
-                                         QItemSelectionModel::Select);
+                // Plain Shift replaces the selection with the anchor range.
+                // Ctrl+Shift adds that range and keeps images outside it.
+                const auto flags = (mods & Qt::ControlModifier)
+                                       ? QItemSelectionModel::Select
+                                       : QItemSelectionModel::ClearAndSelect;
+                selectionModel()->select(QItemSelection(firstIndex, lastIndex), flags);
                 selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
             }
             else if (mods & Qt::ControlModifier)
@@ -721,6 +725,29 @@ void ThumbnailPanel::mouseDoubleClickEvent(QMouseEvent *event)
         }
     }
     QListView::mouseDoubleClickEvent(event);
+}
+
+void ThumbnailPanel::seedDisplayThumbForTest(const QString &path, const QPixmap &pixmap)
+{
+    Entry entry;
+    entry.path = path;
+    entry.name = QStringLiteral("wide.jpg");
+    entry.width = 0;
+    entry.height = 0;
+    buildModel({entry});
+    QMutexLocker lk(&m_thumbMtx);
+    ReadyPixmap ready;
+    ready.pixmap = pixmap;
+    const int edgeW = qMax(1, pixmap.width());
+    const int edgeH = qMax(1, pixmap.height());
+    ready.bytes = static_cast<qint64>(edgeW) * edgeH * 4;
+    ready.lastUse = ++m_thumbReadyClock;
+    const QString key = thumbCacheKey(path, m_thumbSize);
+    auto old = m_thumbReady.find(key);
+    if (old != m_thumbReady.end())
+        m_thumbReadyBytes = qMax<qint64>(0, m_thumbReadyBytes - old->bytes);
+    m_thumbReady.insert(key, std::move(ready));
+    m_thumbReadyBytes += m_thumbReady.find(key)->bytes;
 }
 
 void ThumbnailPanel::stopThumbnailWorker()

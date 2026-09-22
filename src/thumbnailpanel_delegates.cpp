@@ -1,6 +1,8 @@
 // ThumbnailPanel item delegates: thumbnail grid, details row, list row (M20 P0#3).
 #include "thumbnailpanel_p.h"
 
+#include "SquareLetterbox.h"
+
 #include <QDir>
 #include <QFontMetrics>
 #include <QHelpEvent>
@@ -11,6 +13,66 @@
 
 namespace
 {
+struct ScaledCacheEntry
+{
+    qint64 pixmapKey = 0;
+    int targetW = 0;
+    int targetH = 0;
+    QPixmap scaled;
+    uint64_t clock = 0;
+};
+
+constexpr size_t kMaxScaledCache = 256;
+std::vector<ScaledCacheEntry> g_scaledCache;
+uint64_t g_scaledClock = 0;
+int g_scaledCacheHits = 0;
+
+struct PhotoCacheEntry
+{
+    qint64 sourceKey = 0;
+    QPixmap photo;
+    uint64_t clock = 0;
+};
+
+constexpr size_t kMaxPhotoCache = 256;
+std::vector<PhotoCacheEntry> g_photoCache;
+uint64_t g_photoClock = 0;
+
+// Crop a square letterbox once. Later paints reuse that pixmap, so its
+// cacheKey stays stable and the scale cache below can hit.
+QPixmap displayPhoto(const QPixmap &pm)
+{
+    if (pm.isNull() || pm.width() != pm.height())
+        return pm;
+
+    const qint64 key = pm.cacheKey();
+    ++g_photoClock;
+    for (size_t i = 0; i < g_photoCache.size(); ++i)
+    {
+        auto &entry = g_photoCache[i];
+        if (entry.sourceKey != key)
+            continue;
+        entry.clock = g_photoClock;
+        if (i > 0)
+            std::swap(g_photoCache[i], g_photoCache[i - 1]);
+        return (i > 0) ? g_photoCache[i - 1].photo : entry.photo;
+    }
+
+    const QImage cropped = mviewer::ui::cropSquareLetterbox(pm.toImage());
+    const QPixmap photo =
+        (!cropped.isNull() && cropped.size() != pm.size()) ? QPixmap::fromImage(cropped) : pm;
+    if (g_photoCache.size() < kMaxPhotoCache)
+        g_photoCache.push_back({key, photo, g_photoClock});
+    else
+    {
+        auto oldest = std::min_element(g_photoCache.begin(), g_photoCache.end(),
+                                       [](const PhotoCacheEntry &a, const PhotoCacheEntry &b)
+                                       { return a.clock < b.clock; });
+        *oldest = {key, photo, g_photoClock};
+    }
+    return photo;
+}
+
 QPixmap cachedScaledPixmap(const QPixmap &pm, const QSize &targetSize)
 {
     if (pm.isNull() || targetSize.isEmpty())
@@ -18,46 +80,33 @@ QPixmap cachedScaledPixmap(const QPixmap &pm, const QSize &targetSize)
     if (pm.size() == targetSize)
         return pm;
 
-    struct CacheEntry
-    {
-        qint64 pixmapKey = 0;
-        int targetW = 0;
-        int targetH = 0;
-        QPixmap scaled;
-        uint64_t clock = 0;
-    };
-    static constexpr size_t kMaxScaledCache = 256;
-    static std::vector<CacheEntry> s_scaledCache;
-    static uint64_t s_clock = 0;
-
     const qint64 key = pm.cacheKey();
     const int tw = targetSize.width();
     const int th = targetSize.height();
-    ++s_clock;
+    ++g_scaledClock;
 
-    for (size_t i = 0; i < s_scaledCache.size(); ++i)
+    for (size_t i = 0; i < g_scaledCache.size(); ++i)
     {
-        auto &entry = s_scaledCache[i];
+        auto &entry = g_scaledCache[i];
         if (entry.pixmapKey == key && entry.targetW == tw && entry.targetH == th)
         {
-            entry.clock = s_clock;
+            ++g_scaledCacheHits;
+            entry.clock = g_scaledClock;
             if (i > 0)
-                std::swap(s_scaledCache[i], s_scaledCache[i - 1]);
-            return (i > 0) ? s_scaledCache[i - 1].scaled : entry.scaled;
+                std::swap(g_scaledCache[i], g_scaledCache[i - 1]);
+            return (i > 0) ? g_scaledCache[i - 1].scaled : entry.scaled;
         }
     }
 
     QPixmap scaled = pm.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
-    if (s_scaledCache.size() < kMaxScaledCache)
-    {
-        s_scaledCache.push_back({key, tw, th, scaled, s_clock});
-    }
+    if (g_scaledCache.size() < kMaxScaledCache)
+        g_scaledCache.push_back({key, tw, th, scaled, g_scaledClock});
     else
     {
-        auto oldest = std::min_element(s_scaledCache.begin(), s_scaledCache.end(),
-                                       [](const CacheEntry &a, const CacheEntry &b)
+        auto oldest = std::min_element(g_scaledCache.begin(), g_scaledCache.end(),
+                                       [](const ScaledCacheEntry &a, const ScaledCacheEntry &b)
                                        { return a.clock < b.clock; });
-        *oldest = {key, tw, th, scaled, s_clock};
+        *oldest = {key, tw, th, scaled, g_scaledClock};
     }
     return scaled;
 }
@@ -143,7 +192,7 @@ void drawThumbImage(QPainter *painter, const QRect &thumbRect, const QString &pa
     const QPixmap pm = panel->thumbReady(path);
     if (!pm.isNull())
     {
-        const QPixmap scaled = cachedScaledPixmap(pm, thumbRect.size());
+        const QPixmap scaled = cachedScaledPixmap(displayPhoto(pm), thumbRect.size());
         painter->drawPixmap(thumbRect.x() + (thumbRect.width() - scaled.width()) / 2,
                             thumbRect.y() + (thumbRect.height() - scaled.height()) / 2, scaled);
         painter->setPen(option.palette.color(QPalette::Mid));
@@ -489,6 +538,11 @@ bool showThumbnailTooltip(QHelpEvent *event, QAbstractItemView *view,
     return true;
 }
 } // namespace
+
+int ThumbnailPanel::scaleCacheHitsForTest()
+{
+    return g_scaledCacheHits;
+}
 
 void ThumbnailPanel::ThumbDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option,
                                           const QModelIndex &index) const

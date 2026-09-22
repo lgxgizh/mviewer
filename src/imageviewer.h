@@ -72,6 +72,19 @@ class ImageViewer : public QOpenGLWidget
     // tiles arrive. It is never used as an analysis/ROI source.
     void setProvisionalImage(const QString &path, const QImage &image,
                              const QSize &sourceSize = QSize());
+    // Widget rect of the provisional photo after setProvisionalImage().
+    QRect provisionalScreenRect() const
+    {
+        if (m_provisionalSourceSize.width() <= 0 || m_provisionalSourceSize.height() <= 0)
+            return {};
+        int sx = 0;
+        int sy = 0;
+        int sw = 0;
+        int sh = 0;
+        m_view.imageRectToScreen(0, 0, m_provisionalSourceSize.width(),
+                                 m_provisionalSourceSize.height(), sx, sy, sw, sh);
+        return QRect(sx, sy, sw, sh);
+    }
     void setImage(const QString &path);
     // Presentation target snapshot.  Source/analysis pixels remain unchanged;
     // changing this context invalidates only display rasters/tiles.

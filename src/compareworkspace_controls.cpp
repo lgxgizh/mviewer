@@ -154,13 +154,15 @@ void CompareWorkspace::buildModeControls(QHBoxLayout *modeLayout, QHBoxLayout *v
 
     // A-4.5: continuous compare — walk consecutive pairs without reopening.
     m_prevPairBtn = new QPushButton("◀ 上一对", this);
-    m_prevPairBtn->setToolTip(tr("比较上一对图片 (PageUp)"));
+    m_prevPairBtn->setToolTip(
+        tr("P 上一对（PgUp、← 同样是上一对）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A 批量分析导出。"));
     m_prevPairBtn->setEnabled(false);
     connect(m_prevPairBtn, &QPushButton::clicked, this, &CompareWorkspace::prevPair);
     modeLayout->addWidget(m_prevPairBtn);
 
     m_nextPairBtn = new QPushButton("下一对 ▶", this);
-    m_nextPairBtn->setToolTip(tr("比较下一对图片 (PageDown)"));
+    m_nextPairBtn->setToolTip(
+        tr("N 下一对（PgDn、→ 同样是下一对）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A 批量分析导出。"));
     m_nextPairBtn->setEnabled(false);
     connect(m_nextPairBtn, &QPushButton::clicked, this, &CompareWorkspace::nextPair);
     modeLayout->addWidget(m_nextPairBtn);
@@ -535,7 +537,8 @@ QWidget *CompareWorkspace::buildStatusStrip()
     m_autoAlignChk = new QCheckBox(tr("对齐"), strip);
     m_autoAlignChk->setObjectName("autoAlignBeforeDiffToggle");
     m_autoAlignChk->setStyleSheet("color:#ffffff;");
-    m_autoAlignChk->setToolTip(tr("对比前自动对齐，消除平移错位后再算 PSNR/SSIM"));
+    m_autoAlignChk->setToolTip(
+        tr("对比前按整数像素平移自动对齐，消除平移错位后再算 PSNR/SSIM"));
     m_autoAlignChk->setChecked(QSettings().value("autoAlignBeforeDiff", false).toBool());
     connect(m_autoAlignChk, &QCheckBox::toggled, this,
             [this](bool on)

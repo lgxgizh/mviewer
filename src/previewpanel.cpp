@@ -1,5 +1,6 @@
 #include "previewpanel.h"
 
+#include "SquareLetterbox.h"
 #include "core/image/Decoder.h"
 #include "core/image/FrameSequence.h"
 #include "core/image/ImageStats.h"
@@ -7,6 +8,7 @@
 
 #include <QApplication>
 #include <QFileInfo>
+#include <QImage>
 #include <QImageIOHandler>
 #include <QImageReader>
 #include <QMetaObject>
@@ -56,7 +58,7 @@ QPixmap unpadSquareThumbnail(const QPixmap &pm, const QSize &knownSourceSize)
             const int y = (s - ch) / 2;
             return pm.copy(0, y, s, ch);
         }
-        else if (aspect < 0.999)
+        if (aspect < 0.999)
         {
             const int cw = qMax(1, qRound(static_cast<double>(s) * aspect));
             const int x = (s - cw) / 2;
@@ -65,48 +67,10 @@ QPixmap unpadSquareThumbnail(const QPixmap &pm, const QSize &knownSourceSize)
         return pm;
     }
 
-    if (pm.hasAlpha())
-    {
-        const QImage img = pm.toImage();
-        const int w = img.width();
-        const int h = img.height();
-        const int cx = w / 2;
-        const int cy = h / 2;
-        const bool hasTopBottomPadding =
-            (qAlpha(img.pixel(cx, 0)) == 0) || (qAlpha(img.pixel(cx, h - 1)) == 0);
-        const bool hasLeftRightPadding =
-            (qAlpha(img.pixel(0, cy)) == 0) || (qAlpha(img.pixel(w - 1, cy)) == 0);
-
-        if (hasTopBottomPadding && !hasLeftRightPadding)
-        {
-            int top = 0;
-            while (top < h / 2 && qAlpha(img.pixel(cx, top)) == 0)
-                ++top;
-            int bottom = h - 1;
-            while (bottom > h / 2 && qAlpha(img.pixel(cx, bottom)) == 0)
-                --bottom;
-            if (top > 0 || bottom < h - 1)
-            {
-                const int ch = qMax(1, bottom - top + 1);
-                return pm.copy(0, top, w, ch);
-            }
-        }
-        else if (hasLeftRightPadding && !hasTopBottomPadding)
-        {
-            int left = 0;
-            while (left < w / 2 && qAlpha(img.pixel(left, cy)) == 0)
-                ++left;
-            int right = w - 1;
-            while (right > w / 2 && qAlpha(img.pixel(right, cy)) == 0)
-                --right;
-            if (left > 0 || right < w - 1)
-            {
-                const int cw = qMax(1, right - left + 1);
-                return pm.copy(left, 0, cw, h);
-            }
-        }
-    }
-    return pm;
+    const QImage cropped = mviewer::ui::cropSquareLetterbox(pm.toImage());
+    if (cropped.isNull() || cropped.size() == pm.size())
+        return pm;
+    return QPixmap::fromImage(cropped);
 }
 
 struct PreviewDecodeResult

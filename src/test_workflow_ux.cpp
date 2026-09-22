@@ -41,6 +41,7 @@
 #include "imageviewer.h"
 #include "mainwindow.h"
 #include "metadataoverlay.h"
+#include "preferencesdialog.h"
 #include "previewpanel.h"
 #include "runtime_storage.h"
 #include "searchpanel.h"

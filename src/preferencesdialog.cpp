@@ -90,7 +90,7 @@ PreferencesDialog::PreferencesDialog(QWidget *parent) : QDialog(parent)
     // --- 对比 ---
     QWidget *compare = new QWidget;
     auto *cl = new QFormLayout(compare);
-    m_autoAlign = new QCheckBox(tr("对比前自动对齐（消除平移错位）"));
+    m_autoAlign = new QCheckBox(tr("对比前按整数像素平移自动对齐（消除平移错位）"));
     m_autoAlign->setChecked(s.value("autoAlignBeforeDiff", false).toBool());
     cl->addRow(m_autoAlign);
 

@@ -1,3 +1,263 @@
+QString guidancePlain(const QString &text)
+{
+    QString out;
+    out.reserve(text.size());
+    bool inTag = false;
+    for (const QChar ch : text)
+    {
+        if (ch == QLatin1Char('<'))
+        {
+            inTag = true;
+            continue;
+        }
+        if (inTag)
+        {
+            if (ch == QLatin1Char('>'))
+                inTag = false;
+            continue;
+        }
+        if (ch == QLatin1Char('*') || ch == QLatin1Char('`'))
+            continue;
+        out.append(ch);
+    }
+    return out;
+}
+
+QString shortcutSpan(const QString &plain, int at, int shortcutLen)
+{
+    const int size = static_cast<int>(plain.size());
+    int end = static_cast<int>(plain.indexOf(QStringLiteral("Ctrl+"), at + shortcutLen));
+    if (end < 0)
+        end = size;
+    const int cap = at + shortcutLen + 80;
+    if (end > cap)
+        end = cap;
+    return plain.mid(at, end - at);
+}
+
+int firstNeedle(const QString &span, const QString &lower, const QString &needle,
+                const QString &needleLower)
+{
+    const int direct = static_cast<int>(span.indexOf(needle));
+    const int folded = static_cast<int>(lower.indexOf(needleLower));
+    if (direct < 0)
+        return folded;
+    if (folded < 0)
+        return direct;
+    return std::min(direct, folded);
+}
+
+bool shortcutSpanHas(const QString &plain, const QString &shortcut, const QString &needle,
+                     const QString &needleLower)
+{
+    int from = 0;
+    bool found = false;
+    while (from < plain.size())
+    {
+        const int at = static_cast<int>(plain.indexOf(shortcut, from));
+        if (at < 0)
+            break;
+        const QString span = shortcutSpan(plain, at, static_cast<int>(shortcut.size()));
+        if (firstNeedle(span, span.toLower(), needle, needleLower) >= 0)
+            found = true;
+        from = at + static_cast<int>(shortcut.size());
+    }
+    return found;
+}
+
+// A Ctrl+Shift+A span that reaches batch-analysis wording before deselect
+// is the stale instruction. Deselect may share a window with the next row's
+// batch label when that label comes later.
+bool shortcutMisbindsBatch(const QString &plain, const QString &shortcut)
+{
+    int from = 0;
+    while (from < plain.size())
+    {
+        const int at = static_cast<int>(plain.indexOf(shortcut, from));
+        if (at < 0)
+            return false;
+        const QString span = shortcutSpan(plain, at, static_cast<int>(shortcut.size()));
+        const QString lower = span.toLower();
+        const int batch =
+            firstNeedle(span, lower, QStringLiteral("批量"), QStringLiteral("batch analy"));
+        const int deselect =
+            firstNeedle(span, lower, QStringLiteral("取消"), QStringLiteral("deselect"));
+        if (batch >= 0 && (deselect < 0 || batch < deselect))
+            return true;
+        from = at + static_cast<int>(shortcut.size());
+    }
+    return false;
+}
+
+void reportGuidance(bool ok, const char *surface, const char *what)
+{
+    if (ok)
+        std::cout << "[ok] PASS " << surface << ": " << what << "\n";
+    else
+    {
+        std::cout << "[FAIL] " << surface << ": " << what << "\n";
+        ++g_failures;
+    }
+}
+
+void checkChinesePairGuidance(const char *surface, const QString &text, bool wantP, bool wantN)
+{
+    const QString plain = guidancePlain(text);
+    if (wantP)
+    {
+        reportGuidance(plain.contains(QStringLiteral("P 上一对")) &&
+                           !plain.contains(QStringLiteral("P 下一对")),
+                       surface, "P is the previous pair");
+    }
+    if (wantN)
+    {
+        reportGuidance(plain.contains(QStringLiteral("N 下一对")) &&
+                           !plain.contains(QStringLiteral("N 上一对")),
+                       surface, "N is the next pair");
+    }
+    reportGuidance(!plain.contains(QStringLiteral("比较下一对 / 上一对")) &&
+                       !plain.contains(QStringLiteral("比较下一对/上一对")) &&
+                       !plain.contains(QStringLiteral("不作为翻页")) &&
+                       !plain.contains(QStringLiteral("P 不作为")),
+                   surface, "does not invert P/N or deny that P steps pairs");
+    reportGuidance(!plain.contains(QStringLiteral("亚像素")), surface,
+                   "alignment is not described as sub-pixel");
+    if (plain.contains(QStringLiteral("对齐")))
+    {
+        reportGuidance(plain.contains(QStringLiteral("整数像素")), surface,
+                       "alignment is an integer-pixel translation");
+    }
+    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Shift+A"), QStringLiteral("取消"),
+                                   QStringLiteral("deselect")) &&
+                       !shortcutMisbindsBatch(plain, QStringLiteral("Ctrl+Shift+A")),
+                   surface, "Ctrl+Shift+A deselects and is not batch analysis");
+    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Alt+A"), QStringLiteral("批量分析"),
+                                   QStringLiteral("batch analy")),
+                   surface, "Ctrl+Alt+A is batch analysis export");
+}
+
+void checkEnglishShortcutMirror(const char *surface, const QString &text)
+{
+    const QString plain = guidancePlain(text);
+    const int pAt = static_cast<int>(plain.indexOf(QStringLiteral("P / PageUp / Left")));
+    const int nAt = static_cast<int>(plain.indexOf(QStringLiteral("N / PageDown / Right")));
+    const int prevAfterP =
+        pAt < 0 ? -1 : static_cast<int>(plain.indexOf(QStringLiteral("Previous pair"), pAt));
+    const int nextAfterP =
+        pAt < 0 ? -1 : static_cast<int>(plain.indexOf(QStringLiteral("Next pair"), pAt));
+    const int nextAfterN =
+        nAt < 0 ? -1 : static_cast<int>(plain.indexOf(QStringLiteral("Next pair"), nAt));
+    const int prevAfterN =
+        nAt < 0 ? -1 : static_cast<int>(plain.indexOf(QStringLiteral("Previous pair"), nAt));
+    reportGuidance(pAt >= 0 && prevAfterP >= 0 && (nextAfterP < 0 || prevAfterP < nextAfterP),
+                   surface, "P PageUp Left are the previous pair");
+    reportGuidance(nAt >= 0 && nextAfterN >= 0 && (prevAfterN < 0 || nextAfterN < prevAfterN),
+                   surface, "N PageDown Right are the next pair");
+    const QString lower = plain.toLower();
+    reportGuidance(!plain.contains(QStringLiteral("亚像素")) &&
+                       !lower.contains(QStringLiteral("sub-pixel")) &&
+                       !lower.contains(QStringLiteral("subpixel")),
+                   surface, "alignment is not described as sub-pixel");
+    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Shift+A"), QStringLiteral("取消"),
+                                   QStringLiteral("deselect")) &&
+                       !shortcutMisbindsBatch(plain, QStringLiteral("Ctrl+Shift+A")),
+                   surface, "Ctrl+Shift+A deselects and is not batch analysis");
+    reportGuidance(shortcutSpanHas(plain, QStringLiteral("Ctrl+Alt+A"), QStringLiteral("批量分析"),
+                                   QStringLiteral("batch analy")),
+                   surface, "Ctrl+Alt+A is batch analysis export");
+}
+
+QString readRepoText(const char *relative)
+{
+    QFile file(QDir(QStringLiteral(MVIEWER_SOURCE_DIR)).filePath(QString::fromUtf8(relative)));
+    if (!file.open(QIODevice::ReadOnly))
+        return {};
+    return QString::fromUtf8(file.readAll());
+}
+
+void checkShippedGuidanceDocuments(const QString &helpHtml, const QString &guideHtml)
+{
+    checkChinesePairGuidance("F1 cheat sheet", helpHtml, true, true);
+    checkChinesePairGuidance("in-app user guide", guideHtml, true, true);
+    const QString userGuide = readRepoText("docs/USER_GUIDE.md");
+    reportGuidance(!userGuide.isEmpty(), "docs/USER_GUIDE.md", "is readable");
+    checkChinesePairGuidance("docs/USER_GUIDE.md", userGuide, true, true);
+    const QString uiDoc = readRepoText("docs/ui.md");
+    reportGuidance(!uiDoc.isEmpty(), "docs/ui.md", "is readable");
+    checkEnglishShortcutMirror("docs/ui.md", uiDoc);
+}
+
+bool statesOppositeSliderDirection(const QString &plain)
+{
+    return plain.contains(QStringLiteral("] 差异阈值 -5")) ||
+           plain.contains(QStringLiteral("[ 差异阈值 +5")) ||
+           plain.contains(QStringLiteral(". 叠加透明度 -5")) ||
+           plain.contains(QStringLiteral(", 叠加透明度 +5")) ||
+           plain.contains(QStringLiteral("] 降低")) || plain.contains(QStringLiteral("[ 提高")) ||
+           plain.contains(QStringLiteral(", 提高")) || plain.contains(QStringLiteral(". 降低"));
+}
+
+void checkCompareModeKeyGuidance(const QString &helpHtml, const QString &guideHtml)
+{
+    const QString help = guidancePlain(helpHtml);
+    reportGuidance(help.contains(QStringLiteral("B / S / W / O / K")) &&
+                       help.contains(QStringLiteral("棋盘")),
+                   "F1 cheat sheet", "names K as checkerboard with B/S/W/O");
+    reportGuidance(help.contains(QStringLiteral("] 差异阈值 +5")) &&
+                       help.contains(QStringLiteral("[ 差异阈值 -5")),
+                   "F1 cheat sheet", "] raises and [ lowers the diff threshold by 5");
+    reportGuidance(help.contains(QStringLiteral(". 叠加透明度 +5")) &&
+                       help.contains(QStringLiteral(", 叠加透明度 -5")),
+                   "F1 cheat sheet", ". raises and , lowers overlay opacity by 5");
+    reportGuidance(!statesOppositeSliderDirection(help), "F1 cheat sheet",
+                   "does not reverse slider direction");
+
+    const QString guide = guidancePlain(guideHtml);
+    reportGuidance(guide.contains(QStringLiteral("K 棋盘")), "in-app user guide",
+                   "names K as checkerboard");
+    reportGuidance(!statesOppositeSliderDirection(guide), "in-app user guide",
+                   "does not reverse slider direction");
+
+    const QString userGuide = guidancePlain(readRepoText("docs/USER_GUIDE.md"));
+    reportGuidance(userGuide.contains(QStringLiteral("K 棋盘")), "docs/USER_GUIDE.md",
+                   "names K as checkerboard");
+    reportGuidance(!statesOppositeSliderDirection(userGuide), "docs/USER_GUIDE.md",
+                   "does not reverse slider direction");
+}
+
+void checkLiveSelectionShortcuts(MainWindow &window)
+{
+    QAction *deselect = window.findChild<QAction *>(QStringLiteral("deselectAllAction"));
+    const QString deselectKeys =
+        deselect ? deselect->shortcut().toString(QKeySequence::PortableText) : QString();
+    reportGuidance(deselectKeys == QStringLiteral("Ctrl+Shift+A"), "deselect-all menu action",
+                   "stays Ctrl+Shift+A");
+    int batchActions = 0;
+    bool batchOk = true;
+    for (QAction *action : window.findChildren<QAction *>())
+    {
+        if (!action || !action->text().contains(QStringLiteral("批量分析导出")))
+            continue;
+        ++batchActions;
+        const QString keys = action->shortcut().toString(QKeySequence::PortableText);
+        if (keys != QStringLiteral("Ctrl+Alt+A"))
+            batchOk = false;
+    }
+    reportGuidance(batchActions > 0 && batchOk, "batch analysis menu action", "stays Ctrl+Alt+A");
+
+    PreferencesDialog prefs;
+    QCheckBox *align = nullptr;
+    for (QCheckBox *box : prefs.findChildren<QCheckBox *>())
+    {
+        if (box && box->text().contains(QStringLiteral("对齐")))
+            align = box;
+    }
+    const QString alignText = align ? align->text() : QString();
+    reportGuidance(align && alignText.contains(QStringLiteral("整数像素")) &&
+                       !alignText.contains(QStringLiteral("亚像素")),
+                   "preferences align checkbox", "describes an integer-pixel translation");
+}
+
 void workflow1_browse(const QString &dirPath, const QStringList &paths)
 {
     // Reproduce the real upgrade path: the former sidebar persisted a splitter
@@ -468,6 +728,9 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     const QString guideHtml = MainWindow::userGuideHtml();
     CHECK(guideHtml.contains("<kbd>P</kbd>") && guideHtml.contains(QStringLiteral("比较")),
           "user guide documents P to open Compare");
+    checkShippedGuidanceDocuments(helpHtml, guideHtml);
+    checkCompareModeKeyGuidance(helpHtml, guideHtml);
+    checkLiveSelectionShortcuts(w);
     if (viewer)
     {
         // 首屏：异步解码必须在 5 秒内交付（评审"有没有等待"硬上限）。
@@ -614,13 +877,17 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
             compareFromP->close();
         pump(50);
         galleryClick(4, Qt::ShiftModifier);
-        CHECK(thumbnailPanel->selectedPaths().size() >= 4 && sel->selection().size() >= 4 &&
+        CHECK(thumbnailPanel->selectedPaths().size() == 3 && sel->selection().size() == 3 &&
+                  thumbnailPanel->selectedPaths().contains(paths[2]) &&
                   thumbnailPanel->selectedPaths().contains(paths[3]) &&
-                  thumbnailPanel->selectedPaths().contains(paths[4]),
-              "M49: Shift+click selects the native contiguous range");
+                  thumbnailPanel->selectedPaths().contains(paths[4]) &&
+                  !thumbnailPanel->selectedPaths().contains(paths[0]),
+              "M49: Shift+click selects the anchor range and drops images outside it");
         galleryClick(2, Qt::ControlModifier);
         CHECK(!thumbnailPanel->selectedPaths().contains(paths[2]) &&
-                  !sel->selection().contains(paths[2]) && sel->selection().size() >= 3,
+                  !sel->selection().contains(paths[2]) &&
+                  thumbnailPanel->selectedPaths().contains(paths[3]) &&
+                  thumbnailPanel->selectedPaths().contains(paths[4]) && sel->selection().size() == 2,
               "M49: Ctrl+click removes one item without collapsing the range");
     }
 
@@ -1392,6 +1659,11 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
         pump(20);
         CHECK(host->windowTitle() == titleBefore,
               "shortcut help does not overwrite the Compare window title");
+        QLabel *status = ws->findChild<QLabel *>(QStringLiteral("compareStatusLabel"));
+        if (status)
+            checkChinesePairGuidance("Compare ? status tip", status->text(), true, true);
+        else
+            reportGuidance(false, "Compare ? status tip", "is shown on the compare status label");
     }
 
     QLabel *hudMetrics = ws->findChild<QLabel *>(QStringLiteral("diffMetricsLabel"));
@@ -1411,6 +1683,9 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
           "exit compare is visible on the status strip");
     CHECK(autoAlignChk && autoAlignChk->isVisible(),
           "auto-align lives on the compare chrome, not only in Preferences");
+    reportGuidance(autoAlignChk && autoAlignChk->toolTip().contains(QStringLiteral("整数像素")) &&
+                       !autoAlignChk->toolTip().contains(QStringLiteral("亚像素")),
+                   "auto-align tooltip", "describes an integer-pixel translation");
 
     // 闪烁（B）开 → 关。
     sendKey(ws, Qt::Key_B);
@@ -1426,13 +1701,14 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     CHECK(!split->isChecked(), "overlay auto-unchecks split (no stale mode state)");
 
     // 棋盘格（K）→ 叠加自动关闭。
+    CHECK(checker && checker->isEnabled(), "PASS K reaches an enabled checkerboard control");
     if (checker && checker->isEnabled())
     {
         sendKey(ws, Qt::Key_K);
-        CHECK(checker->isChecked(), "key K turns checkerboard compare ON");
+        CHECK(checker->isChecked(), "PASS K on the live Compare widget turns checkerboard on");
         CHECK(!overlay->isChecked(), "checkerboard auto-unchecks overlay");
         sendKey(ws, Qt::Key_K);
-        CHECK(!checker->isChecked(), "key K turns checkerboard OFF");
+        CHECK(!checker->isChecked(), "PASS K on the live Compare widget turns checkerboard off");
     }
     else
     {
@@ -1442,6 +1718,31 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     }
     CHECK(!split->isChecked() && !overlay->isChecked() && !blink->isChecked(),
           "all exclusive modes are OFF after the round-trip (grid restored)");
+
+    QSlider *keyThreshold = ws->findChild<QSlider *>(QStringLiteral("diffThresholdSlider"));
+    QSlider *keyOpacity = ws->findChild<QSlider *>(QStringLiteral("overlayAlphaSlider"));
+    CHECK(keyThreshold && keyOpacity,
+          "PASS compare exposes the diff threshold and overlay opacity sliders");
+    if (keyThreshold)
+    {
+        const int before = keyThreshold->value();
+        sendKey(ws, Qt::Key_BracketRight);
+        CHECK(keyThreshold->value() == before + 5,
+              "PASS ] on the live Compare widget raises the diff threshold by 5");
+        sendKey(ws, Qt::Key_BracketLeft);
+        CHECK(keyThreshold->value() == before,
+              "PASS [ on the live Compare widget lowers the diff threshold by 5");
+    }
+    if (keyOpacity)
+    {
+        const int before = keyOpacity->value();
+        sendKey(ws, Qt::Key_Period);
+        CHECK(keyOpacity->value() == before + 5,
+              "PASS . on the live Compare widget raises overlay opacity by 5");
+        sendKey(ws, Qt::Key_Comma);
+        CHECK(keyOpacity->value() == before,
+              "PASS , on the live Compare widget lowers overlay opacity by 5");
+    }
 
     auto *channelCombo = ws->findChild<QComboBox *>(QStringLiteral("compareChannelCombo"));
     CHECK(channelCombo && channelCombo->count() == 6,
@@ -2763,6 +3064,38 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
     QCheckBox *overlay = compare ? findChk(compare, QStringLiteral("叠加对比")) : nullptr;
     CHECK(previous && next && previous->isEnabled() && next->isEnabled(),
           "non-first navigation enables both real pair buttons at C/D");
+    if (previous)
+        checkChinesePairGuidance("previous-pair tooltip", previous->toolTip(), true, false);
+    else
+        reportGuidance(false, "previous-pair tooltip", "P is the previous pair");
+    if (next)
+        checkChinesePairGuidance("next-pair tooltip", next->toolTip(), false, true);
+    else
+        reportGuidance(false, "next-pair tooltip", "N is the next pair");
+    if (compare)
+    {
+        compare->setFocus();
+        sendKey(compare, Qt::Key_N);
+        CHECK(waitForPair(nextPair), "PASS N on the live Compare widget steps to the next pair");
+        CHECK(sel && sel->selection() == nextPair,
+              "PASS N makes the next pair the current selection");
+        sendKey(compare, Qt::Key_P);
+        CHECK(waitForPair(firstPair),
+              "PASS P on the live Compare widget steps to the previous pair");
+        CHECK(sel && sel->selection() == firstPair,
+              "PASS P makes the previous pair the current selection");
+        sendKey(compare, Qt::Key_PageDown);
+        CHECK(waitForPair(nextPair),
+              "PASS PageDown on the live Compare widget steps to the next pair");
+        sendKey(compare, Qt::Key_PageUp);
+        CHECK(waitForPair(firstPair),
+              "PASS PageUp on the live Compare widget steps to the previous pair");
+        sendKey(compare, Qt::Key_Right);
+        CHECK(waitForPair(nextPair), "PASS Right on the live Compare widget steps to the next pair");
+        sendKey(compare, Qt::Key_Left);
+        CHECK(waitForPair(firstPair),
+              "PASS Left on the live Compare widget steps to the previous pair");
+    }
     CHECK(overlay != nullptr, "non-first navigation exposes the real overlay mode");
     if (overlay)
     {

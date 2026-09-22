@@ -1,5 +1,7 @@
 #include "imageviewer.h"
 
+#include "SquareLetterbox.h"
+
 #include "application/ImageLoadingService.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/Analyzer.h"
@@ -125,8 +127,10 @@ void ImageViewer::setProvisionalImage(const QString &path, const QImage &image,
         beginImageGeneration();
     m_currentPath = path;
     m_provisionalPath = path;
-    m_provisionalImage = image;
-    m_provisionalSourceSize = sourceSize.isValid() ? sourceSize : image.size();
+    const QImage shown = mviewer::ui::photoFromSquareThumb(image);
+    m_provisionalImage = shown;
+    const bool known = sourceSize.width() > 0 && sourceSize.height() > 0;
+    m_provisionalSourceSize = known ? sourceSize : shown.size();
     m_view.screenW = width();
     m_view.screenH = height();
     const FitPolicy fitPolicy = property("mviewerFullscreenRequested").toBool()
