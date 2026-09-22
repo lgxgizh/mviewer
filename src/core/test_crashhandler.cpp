@@ -71,10 +71,20 @@ int main(int argc, char **argv)
     CHECK(path.find("crash-reports") != std::string::npos,
           "crashReportPath() under crash-reports dir");
 
-    // Installing the handler must be safe to call repeatedly (idempotent).
+    // Installing the handler must be safe to call repeatedly. crashReportPath()
+    // embeds the current second, and pruning the report folder can cross that
+    // boundary, so the stable contract is the directory and the dump name shape.
+    const std::string dirBefore = mviewer::core::crashReportDirectory();
     mviewer::core::installCrashHandler("MViewer");
     mviewer::core::installCrashHandler("MViewer");
-    CHECK(mviewer::core::crashReportPath() == path,
+    const std::string after = mviewer::core::crashReportPath();
+    const bool sameDir = !dirBefore.empty() &&
+                         mviewer::core::crashReportDirectory() == dirBefore;
+    const bool namedDump = after.find("crash-reports") != std::string::npos &&
+                           after.find("MViewer-") != std::string::npos &&
+                           after.size() >= 4 &&
+                           after.compare(after.size() - 4, 4, ".dmp") == 0;
+    CHECK(sameDir && namedDump,
           "installCrashHandler() is idempotent and preserves the crash path contract");
 
     const QString reportDir = QString::fromStdString(mviewer::core::crashReportDirectory());

@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.67] - 2026-09-22
+
+### Bug Fixes
+
+- **Release gate**: installing the crash handler no longer fails the crash-path check when that install crosses a one-second boundary. The report directory and `MViewer-*.dmp` name stay the contract.
+
 ## [1.0.66] - 2026-09-22
 
 ### Bug Fixes
