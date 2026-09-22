@@ -736,18 +736,24 @@ void ThumbnailPanel::seedDisplayThumbForTest(const QString &path, const QPixmap 
     entry.height = 0;
     buildModel({entry});
     QMutexLocker lk(&m_thumbMtx);
+    const QString key = thumbCacheKey(path, m_thumbSize);
+    auto old = m_thumbReady.find(key);
+    if (old != m_thumbReady.end())
+    {
+        m_thumbReadyBytes = qMax<qint64>(0, m_thumbReadyBytes - old->bytes);
+        m_thumbReadyLru.erase(old->lruIt);
+        m_thumbReady.erase(old);
+    }
+    m_thumbReadyLru.push_front(key);
     ReadyPixmap ready;
     ready.pixmap = pixmap;
     const int edgeW = qMax(1, pixmap.width());
     const int edgeH = qMax(1, pixmap.height());
     ready.bytes = static_cast<qint64>(edgeW) * edgeH * 4;
     ready.lastUse = ++m_thumbReadyClock;
-    const QString key = thumbCacheKey(path, m_thumbSize);
-    auto old = m_thumbReady.find(key);
-    if (old != m_thumbReady.end())
-        m_thumbReadyBytes = qMax<qint64>(0, m_thumbReadyBytes - old->bytes);
+    ready.lruIt = m_thumbReadyLru.begin();
+    m_thumbReadyBytes += ready.bytes;
     m_thumbReady.insert(key, std::move(ready));
-    m_thumbReadyBytes += m_thumbReady.find(key)->bytes;
 }
 
 void ThumbnailPanel::stopThumbnailWorker()
