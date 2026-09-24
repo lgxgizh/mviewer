@@ -2,17 +2,14 @@
 
 ## [Unreleased]
 
-### Added
+## [1.0.68] - 2026-09-24
 
-- **Browse Details 表头点击排序 (Details header click-to-sort)**: 在浏览模式的“详细信息”视图中，点击排序列表头（名称、分辨率、大小、修改日期、类型、评分、相机、镜头）即可按该列排序；再次点击相同列切换升序/降序；工具栏排序下拉框与升降序按钮实时双向联动；排序模式与方向通过 QSettings 记忆持久化；表头绘制当前排序列的升序/降序指示箭头（▲/▼）。
+### Release
 
-### Bug Fixes
-
-- **缩略图切换与刷新平稳防抖 (Stable thumbnail navigation & layout)**: 修复在浏览模式切换当前图片或选择时缩略图列表/胶卷/预览区出现果冻般跳动或弹回的问题；在目标项已完全位于可视视口内时跳过冗余 `scrollTo`；在模型数据重建（`buildModel`）过程中完整保留并恢复垂直与水平滚动条位置，杜绝不必要的滚动重置与信号反馈循环。
-- **旋转/翻转支持多选批量处理与对比工作区悬停窗格定位 (Batch rotate & Compare hover targeting)**:
-  - 浏览模式：当选中多张图片时，旋转与翻转操作将批量作用于所有选中项（遵循 ADR-012 SelectionModel SSOT），逐文件聚合处理结果并提示，旋转后自动刷新对应缩略图与缓存；
-  - 对比工作区：旋转与翻转操作优先作用于当前鼠标悬停的窗格（或明确点击聚焦的窗格），未选中或未悬停窗格时不再默认作用于窗格 0 并提供状态栏提示；
-  - 查看器（全屏单图）：继续精确旋转当前打开的图片。
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.68**.
+- **Browse Details header click-to-sort (#38)**: Details view column headers (name / resolution / size / date / type / rating / camera / lens) sort on click; second click toggles direction; toolbar combo and direction button stay in sync; mode/direction persist in QSettings; header paints ▲/▼ on the active column.
+- **Stable thumbnail navigation (#38)**: Skip redundant `scrollTo` when the target is already fully visible; preserve scroll bars across `buildModel` resets; break selection feedback loops that caused jelly jumps.
+- **Batch rotate/flip + Compare targeting (#38)**: Browse rotate/flip apply to all `SelectionModel` paths with aggregated failures; Compare prefers hover/focus/explicit pane and no longer defaults to pane 0 when none is active (status-bar prompt instead). Viewer still rotates the open image.
 
 ## [1.0.67] - 2026-09-22
 
