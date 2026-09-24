@@ -2,15 +2,13 @@
 
 ## [Unreleased]
 
-### Changed
+## [1.0.69] - 2026-09-24
 
-- **Browse address bar**: moved onto the gallery toolbar strip above 「排序」「高级筛选」, so path entry sits with those controls instead of spanning the whole window top.
-- **Removed left-tree 「搜索目录」**: the directory-tree filter input is hidden; use the address bar (Ctrl+L / Alt+D / Ctrl+F) to jump folders.
-- **Address bar select-all on activate**: clicking or focusing the path field selects all text (Ctrl+A look) for immediate replace/copy.
+### Release
 
-### Fixed
-
-- **Multi-select survives Browse rotate**: restoring current after a model rebuild no longer `ClearAndSelect`s a single item, so rotating multiple selected images keeps the same paths selected.
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.69**.
+- **Browse address bar (#40)**: pathEdit moved onto the gallery toolbar strip above 「排序」「高级筛选」; left-tree 「搜索目录」 hidden as redundant; click/focus selects all for replace/copy; Ctrl+F focuses the address bar.
+- **Multi-select survives Browse rotate (#40)**: model rebuild uses `NoUpdate` when restoring current so batch rotate/flip keeps the same selected paths.
 
 ## [1.0.68] - 2026-09-24
 
