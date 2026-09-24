@@ -11,9 +11,10 @@
 #include <QDir>
 #include <QFile>
 #include <QImage>
+#include <QTemporaryDir>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
-#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <thread>
@@ -41,7 +42,17 @@ using namespace mviewer::core;
 int main()
 {
     auto &s = RatingStore::instance();
-    s.setFilePath("test_ratings_tmp.txt");
+
+    // Keep every ratings/flags pair under unique temp dirs so parallel ctest
+    // (-jN) cannot clobber a shared ./flags.txt next to relative paths.
+    QTemporaryDir suiteTmp;
+    if (!suiteTmp.isValid())
+    {
+        printf("FAIL: suite temp dir\n");
+        return 1;
+    }
+    const std::string suiteDir = suiteTmp.path().toUtf8().toStdString();
+    s.setFilePath(suiteDir + "/test_ratings_tmp.txt");
 
     // Regression: recents are worker-debounced and must persist even when no
     // later setFilePath()/destructor flush is available to hide a broken timer.
@@ -80,27 +91,26 @@ int main()
     CHECK(!s.hasRating("a.jpg"), "hasRating false after clear");
 
     // Persistence: save to file A, then reload from A after pointing elsewhere.
-    s.setFilePath("test_ratings_a.txt");
+    s.setFilePath(suiteDir + "/test_ratings_a.txt");
     s.setRating("persist.png", 4);
     CHECK(s.save(), "save() returns true");
 
     // Simulate losing in-memory state by pointing at a different (empty) file,
     // then reloading from the original file that holds the persisted rating.
-    s.setFilePath("test_ratings_b.txt");
+    s.setFilePath(suiteDir + "/test_ratings_b.txt");
     CHECK(!s.load(), "load() of a missing file returns false");
     CHECK(s.rating("persist.png") == 0, "rating absent from empty file B");
-    s.setFilePath("test_ratings_a.txt");
+    s.setFilePath(suiteDir + "/test_ratings_a.txt");
     CHECK(s.load(), "load() returns true");
     CHECK(s.rating("persist.png") == 4, "persisted rating reloaded from disk");
 
     // M49 Windows contract: a user path is UTF-8 at the core boundary and is
     // converted to native filesystem paths only at the I/O edge. Include
     // spaces, CJK, and an emoji in both directory and filename.
-    const QString unicodeDir = QDir(QDir::tempPath()).filePath(
-        QStringLiteral("mviewer_路径 closure 😀/嵌套 目录"));
+    const QString unicodeDir =
+        QDir(QDir::tempPath()).filePath(QStringLiteral("mviewer_路径 closure 😀/嵌套 目录"));
     QDir().mkpath(unicodeDir);
-    const QString unicodeImage = QDir(unicodeDir).filePath(
-        QStringLiteral("测试 image 😀.png"));
+    const QString unicodeImage = QDir(unicodeDir).filePath(QStringLiteral("测试 image 😀.png"));
     QImage unicodeFixture(8, 8, QImage::Format_RGB32);
     unicodeFixture.fill(Qt::blue);
     CHECK(unicodeFixture.save(unicodeImage, "PNG"), "Unicode fixture is written");
@@ -116,29 +126,23 @@ int main()
     const std::string unicodeSidecar = SidecarStore::sidecarPath(unicodePath);
     CHECK(unicodeSidecar.find("测试 image") != std::string::npos,
           "sidecar identity keeps the Unicode filename");
-    CHECK(SidecarStore::instance().writeSidecar(unicodePath),
-          "Unicode sidecar write succeeds");
-    const QString sidecarPath = QString::fromUtf8(unicodeSidecar.data(),
-                                                  static_cast<int>(unicodeSidecar.size()));
+    CHECK(SidecarStore::instance().writeSidecar(unicodePath), "Unicode sidecar write succeeds");
+    const QString sidecarPath =
+        QString::fromUtf8(unicodeSidecar.data(), static_cast<int>(unicodeSidecar.size()));
     CHECK(QFileInfo::exists(sidecarPath), "Unicode sidecar exists at the native path");
     s.clearRating(unicodePath);
     s.clearColorLabel(unicodePath);
     s.setPicked(unicodePath, false);
-    CHECK(SidecarStore::instance().readSidecar(unicodePath),
-          "Unicode sidecar read succeeds");
+    CHECK(SidecarStore::instance().readSidecar(unicodePath), "Unicode sidecar read succeeds");
     CHECK(s.rating(unicodePath) == 5 && s.colorLabel(unicodePath) == 4 && s.picked(unicodePath),
           "Unicode sidecar restores RatingStore identity");
-    CHECK(SidecarStore::instance().removeSidecar(unicodePath),
-          "Unicode sidecar remove succeeds");
+    CHECK(SidecarStore::instance().removeSidecar(unicodePath), "Unicode sidecar remove succeeds");
     CHECK(!QFileInfo::exists(sidecarPath), "Unicode sidecar removal reaches the native file");
     CHECK(!SidecarStore::instance().readSidecar(unicodePath + ".missing"),
           "missing Unicode sidecar is a handled failure");
     QDir(QDir(QDir::tempPath()).filePath(QStringLiteral("mviewer_路径 closure 😀")))
         .removeRecursively();
 
-    std::remove("test_ratings_a.txt");
-    std::remove("test_ratings_b.txt");
-    std::remove("test_ratings_tmp.txt");
     std::filesystem::remove(recentRatings, recentEc);
     std::filesystem::remove(recentFlags, recentEc);
     printf("\nratingstore_tests: %d passed, %d failed\n", g_pass, g_fail);

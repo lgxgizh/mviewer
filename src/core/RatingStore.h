@@ -82,11 +82,12 @@ class RatingStore
 
     // Persistence. M46: user edits are coalesced on an owned worker thread
     // (reads stay immediate); save() is the explicit flush boundary — it
-    // drains pending work and writes the LATEST snapshot synchronously, so a
-    // caller (tests, setFilePath, shutdown) can rely on the complete current
-    // state being on disk when it returns. Every file write goes through the
-    // crash-safe atomic replace helper: a failed write leaves the previous
-    // official file intact.
+    // cancels pending debounce, waits out any in-flight worker write, and
+    // always writes the LATEST snapshot synchronously, so a caller (tests,
+    // setFilePath, shutdown) can rely on the complete current state being on
+    // disk when it returns. Every file write goes through the crash-safe
+    // atomic replace helper: a failed write leaves the previous official
+    // file intact.
     bool save();
     void flushSave();
     bool load();

@@ -2,6 +2,8 @@
 #include "core/RatingStore.h"
 
 #include <QCoreApplication>
+#include <QDir>
+#include <QTemporaryDir>
 
 #include <cstdio>
 #include <string>
@@ -31,8 +33,15 @@ int main(int argc, char **argv)
     QCoreApplication app(argc, argv);
     printf("\n[P3 flags]\n");
 
+    // Isolate ratings/flags under a unique temp dir. Relative paths share
+    // ./flags.txt with parallel ratingstore_tests under ctest -j and race.
+    QTemporaryDir tmp;
+    CHECK(tmp.isValid(), "temp dir for flags persistence");
+    const std::string ratingsPath =
+        QDir(tmp.path()).filePath(QStringLiteral("ratings.txt")).toUtf8().toStdString();
+
     RatingStore &s = RatingStore::instance();
-    s.setFilePath("test_flags_a.txt");
+    s.setFilePath(ratingsPath);
 
     s.setColorLabel("a.png", 2);
     s.setRejected("a.png", true);
@@ -40,8 +49,9 @@ int main(int argc, char **argv)
     s.addRecent("c.png");
     s.addRecent("d.png");
 
-    // Reload from the persisted file to verify save/load round-trip.
-    s.setFilePath("test_flags_a.txt");
+    // Explicit flush, then reload from the same isolated path.
+    CHECK(s.save(), "explicit flush before reload");
+    s.setFilePath(ratingsPath);
 
     CHECK(s.colorLabel("a.png") == 2, "colorLabel persisted (2)");
     CHECK(s.rejected("a.png") == true, "rejected persisted");
