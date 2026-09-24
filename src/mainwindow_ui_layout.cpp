@@ -10,16 +10,17 @@
 #include <QTimer>
 #include <QToolBar>
 
-namespace {
+namespace
+{
 // Address bar: first click / focus selects all (Ctrl+A look) so the user can
 // immediately type a new path or copy. Later clicks while focused keep the
 // caret so partial edits still work.
 class SelectAllOnActivateLineEdit : public QLineEdit
 {
-public:
+  public:
     using QLineEdit::QLineEdit;
 
-protected:
+  protected:
     void focusInEvent(QFocusEvent *event) override
     {
         QLineEdit::focusInEvent(event);

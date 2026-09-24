@@ -288,8 +288,7 @@ void MainWindow::rotateCurrentImage(int degrees)
     // Keep the pre-rotate multi-selection after thumbnail invalidate / rebuild.
     if (m_thumbnailPanel && paths.size() > 1)
     {
-        const QString focus =
-            (!cur.isEmpty() && paths.contains(cur)) ? cur : paths.first();
+        const QString focus = (!cur.isEmpty() && paths.contains(cur)) ? cur : paths.first();
         m_thumbnailPanel->selectPaths(paths, focus);
         if (m_selection)
             m_selection->setSelection(paths, focus);
@@ -404,8 +403,7 @@ void MainWindow::flipCurrentImage(bool horizontal)
 
     if (m_thumbnailPanel && paths.size() > 1)
     {
-        const QString focus =
-            (!cur.isEmpty() && paths.contains(cur)) ? cur : paths.first();
+        const QString focus = (!cur.isEmpty() && paths.contains(cur)) ? cur : paths.first();
         m_thumbnailPanel->selectPaths(paths, focus);
         if (m_selection)
             m_selection->setSelection(paths, focus);

@@ -389,8 +389,7 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
           "legacy navigation sidebar layout is migrated exactly once");
     CHECK(foldersSection && previewSection && foldersSection->height() > previewSection->height(),
           "migrated sidebar gives the folder section the larger 60/40 share");
-    CHECK(directoryTree && directoryTree->filterEdit() &&
-              !directoryTree->filterEdit()->isVisible(),
+    CHECK(directoryTree && directoryTree->filterEdit() && !directoryTree->filterEdit()->isVisible(),
           "directory filter edit stays hidden (redundant with address bar)");
     CHECK(directoryTree && directoryTree->isVisible() && directoryTree->height() >= 40,
           "directory tree remains visible with usable height");
