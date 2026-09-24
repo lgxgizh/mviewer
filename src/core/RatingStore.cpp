@@ -280,14 +280,15 @@ void RatingStore::setFilePath(const std::string &path)
 
 bool RatingStore::save()
 {
-    // M46: explicit flush boundary. Drains any pending worker write and
-    // writes the LATEST snapshot synchronously — the caller can rely on the
-    // complete current state being on disk when this returns.
-    bool shouldWrite = false;
+    // M46: explicit flush boundary. Cancel any pending worker debounce and
+    // wait for an in-flight worker write (writeLock), then ALWAYS persist the
+    // latest snapshot. Skipping the write when m_flagsDirty is already false
+    // is unsafe: the worker may have cleared the dirty bit but not yet
+    // acquired writeLock / called saveSnapshot(), so flush would return
+    // "success" with nothing on disk (parallel ctest flake in flags_tests).
     {
         std::lock_guard<std::mutex> lk(m_flagsWorkerMutex);
-        shouldWrite = m_flagsDirty;
-        if (shouldWrite)
+        if (m_flagsDirty)
         {
             m_flagsDirty = false;
             // Wake a worker that is inside the quiet period so it cannot
@@ -295,12 +296,8 @@ bool RatingStore::save()
             m_flagsWorkerCv.notify_all();
         }
     }
-    // Also wait for a worker write already in progress. This makes the flush
-    // boundary a real boundary, not just a dirty-bit test.
     std::lock_guard<std::mutex> writeLock(m_flagsWriteMutex);
-    if (shouldWrite)
-        return saveSnapshot();
-    return true;
+    return saveSnapshot();
 }
 
 void RatingStore::flushSave()

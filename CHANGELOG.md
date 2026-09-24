@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- **RatingStore flush barrier**: `save()` / `flushSave()` always write the latest snapshot after waiting out an in-flight worker write, closing the race where the worker cleared `m_flagsDirty` before acquiring the write lock and flush returned success with nothing on disk.
+- **flags_tests / ratingstore_tests isolation**: persist under unique temp directories so parallel `ctest -j` cannot clobber a shared cwd `flags.txt` (root cause of the v1.0.69 Full UI regression failure).
+
 ## [1.0.69] - 2026-09-24
 
 ### Release

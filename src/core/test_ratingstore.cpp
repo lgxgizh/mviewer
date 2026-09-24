@@ -9,6 +9,7 @@
 #include "core/filesystem/Utf8Path.h"
 
 #include <QDir>
+#include <QTemporaryDir>
 #include <QFile>
 #include <QImage>
 #include <cstdio>
@@ -41,7 +42,17 @@ using namespace mviewer::core;
 int main()
 {
     auto &s = RatingStore::instance();
-    s.setFilePath("test_ratings_tmp.txt");
+
+    // Keep every ratings/flags pair under unique temp dirs so parallel ctest
+    // (-jN) cannot clobber a shared ./flags.txt next to relative paths.
+    QTemporaryDir suiteTmp;
+    if (!suiteTmp.isValid())
+    {
+        printf("FAIL: suite temp dir\n");
+        return 1;
+    }
+    const std::string suiteDir = suiteTmp.path().toUtf8().toStdString();
+    s.setFilePath(suiteDir + "/test_ratings_tmp.txt");
 
     // Regression: recents are worker-debounced and must persist even when no
     // later setFilePath()/destructor flush is available to hide a broken timer.
@@ -80,16 +91,16 @@ int main()
     CHECK(!s.hasRating("a.jpg"), "hasRating false after clear");
 
     // Persistence: save to file A, then reload from A after pointing elsewhere.
-    s.setFilePath("test_ratings_a.txt");
+    s.setFilePath(suiteDir + "/test_ratings_a.txt");
     s.setRating("persist.png", 4);
     CHECK(s.save(), "save() returns true");
 
     // Simulate losing in-memory state by pointing at a different (empty) file,
     // then reloading from the original file that holds the persisted rating.
-    s.setFilePath("test_ratings_b.txt");
+    s.setFilePath(suiteDir + "/test_ratings_b.txt");
     CHECK(!s.load(), "load() of a missing file returns false");
     CHECK(s.rating("persist.png") == 0, "rating absent from empty file B");
-    s.setFilePath("test_ratings_a.txt");
+    s.setFilePath(suiteDir + "/test_ratings_a.txt");
     CHECK(s.load(), "load() returns true");
     CHECK(s.rating("persist.png") == 4, "persisted rating reloaded from disk");
 
@@ -136,9 +147,6 @@ int main()
     QDir(QDir(QDir::tempPath()).filePath(QStringLiteral("mviewer_路径 closure 😀")))
         .removeRecursively();
 
-    std::remove("test_ratings_a.txt");
-    std::remove("test_ratings_b.txt");
-    std::remove("test_ratings_tmp.txt");
     std::filesystem::remove(recentRatings, recentEc);
     std::filesystem::remove(recentFlags, recentEc);
     printf("\nratingstore_tests: %d passed, %d failed\n", g_pass, g_fail);
