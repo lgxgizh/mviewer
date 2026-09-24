@@ -49,6 +49,7 @@ class QLabel;
 class QHBoxLayout;
 class QTimer;
 class QComboBox;
+class QPushButton;
 class QSplitter;
 class QSlider;
 class QToolBar;
