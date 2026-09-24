@@ -381,12 +381,8 @@ void RatingStore::flagsWorkerLoop()
         while (!write && m_flagsDirty)
         {
             const bool woke = m_flagsWorkerCv.wait_for(
-                lk, std::chrono::milliseconds(100),
-                [this, observed]
-                {
-                    return m_flagsWorkerStop || !m_flagsDirty ||
-                           m_flagsChangeSerial != observed;
-                });
+                lk, std::chrono::milliseconds(100), [this, observed]
+                { return m_flagsWorkerStop || !m_flagsDirty || m_flagsChangeSerial != observed; });
             if (!woke)
             {
                 write = true; // quiet period completed
@@ -398,7 +394,7 @@ void RatingStore::flagsWorkerLoop()
                 break;
             }
             if (!m_flagsDirty)
-                break; // flushSave() owns the write
+                break;                      // flushSave() owns the write
             observed = m_flagsChangeSerial; // restart the quiet period
         }
         if (!write)
