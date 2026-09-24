@@ -420,9 +420,12 @@ int CompareWorkspace::resolveEditCell() const
     // 2. Explicitly focused compare cell
     if (m_focusIndex >= 0 && m_focusIndex < count)
         return m_focusIndex;
-    // 3. Explicitly selected edit cell
+    // 3. Explicitly selected edit cell (click / prior transform)
     if (m_explicitEditIdx >= 0 && m_explicitEditIdx < count)
         return m_explicitEditIdx;
+    // 4. Sticky edit index from a prior selection (never invent pane 0 here)
+    if (m_editIdx >= 0 && m_editIdx < count)
+        return m_editIdx;
     return -1;
 }
 
@@ -438,8 +441,13 @@ void CompareWorkspace::syncEditCellAfterLoad()
         idx = comparedImages().indexOf(m_selection->currentImage());
     if (idx < 0 && m_focusIndex >= 0 && m_focusIndex < count)
         idx = m_focusIndex;
-    onEditCellSelected(idx >= 0 ? idx : 0);
-    m_explicitEditIdx = -1;
+    // Do not default to pane 0: with no selection/focus match, leave unset so
+    // rotate/flip prompt the user instead of silently targeting cell 0.
+    if (idx >= 0)
+    {
+        onEditCellSelected(idx);
+        m_explicitEditIdx = idx;
+    }
 }
 
 void CompareWorkspace::rotateCurrentCell(int degrees)

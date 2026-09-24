@@ -104,6 +104,10 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
             m_lastMouse = me->pos();
             m_dragStartPos = me->pos();
             m_dragIdx = idx;
+            // Select the pressed pane immediately so rotate/flip resolve even when
+            // a synthetic press/release pair fails to synthesize a "click".
+            m_explicitEditIdx = idx;
+            onEditCellSelected(idx);
         }
         return false;
     }

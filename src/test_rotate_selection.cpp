@@ -317,11 +317,12 @@ int main(int argc, char **argv)
         if (v0)
         {
             const QPoint clickPos(10, 10);
-            QMouseEvent press(QEvent::MouseButtonPress, QPointF(clickPos), Qt::LeftButton,
-                              Qt::LeftButton, Qt::NoModifier);
+            const QPointF globalPos(v0->mapToGlobal(clickPos));
+            QMouseEvent press(QEvent::MouseButtonPress, QPointF(clickPos), globalPos,
+                              Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
             QApplication::sendEvent(v0, &press);
-            QMouseEvent release(QEvent::MouseButtonRelease, QPointF(clickPos), Qt::LeftButton,
-                                Qt::NoButton, Qt::NoModifier);
+            QMouseEvent release(QEvent::MouseButtonRelease, QPointF(clickPos), globalPos,
+                                Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
             QApplication::sendEvent(v0, &release);
             pump(20);
             compare.rotateCurrentCell(90);
