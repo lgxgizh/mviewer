@@ -162,15 +162,27 @@ void MainWindow::restoreNavigationSettings(const QSettings &settings)
     if (m_thumbnailPanel && settings.contains("thumbViewMode"))
         m_thumbnailPanel->setViewMode(
             static_cast<ThumbnailPanel::ViewMode>(settings.value("thumbViewMode").toInt()));
-    if (!m_sortCombo || !settings.contains("thumbSortMode"))
-        return;
-    const int sortMode = settings.value("thumbSortMode").toInt();
-    for (int i = 0; i < m_sortCombo->count(); ++i)
+    if (m_sortCombo && settings.contains("thumbSortMode"))
     {
-        if (m_sortCombo->itemData(i).toInt() == sortMode)
+        const int sortMode = settings.value("thumbSortMode").toInt();
+        for (int i = 0; i < m_sortCombo->count(); ++i)
         {
-            m_sortCombo->setCurrentIndex(i);
-            break;
+            if (m_sortCombo->itemData(i).toInt() == sortMode)
+            {
+                m_sortCombo->setCurrentIndex(i);
+                break;
+            }
+        }
+    }
+    if (settings.contains("thumbSortAscending"))
+    {
+        const bool ascending = settings.value("thumbSortAscending", true).toBool();
+        if (m_thumbnailPanel)
+            m_thumbnailPanel->setSortAscending(ascending);
+        if (m_sortDirBtn)
+        {
+            m_sortDirBtn->setChecked(!ascending);
+            m_sortDirBtn->setText(ascending ? "↑" : "↓");
         }
     }
 }
@@ -821,10 +833,11 @@ void MainWindow::updateSelectionActions()
         if (act)
             act->setEnabled(on);
     };
-    enableIf(m_actRotateCW, hasCurrent);
-    enableIf(m_actRotateCCW, hasCurrent);
-    enableIf(m_actFlipH, hasCurrent);
-    enableIf(m_actFlipV, hasCurrent);
+    const bool canTransform = hasCurrent || (n > 0);
+    enableIf(m_actRotateCW, canTransform);
+    enableIf(m_actRotateCCW, canTransform);
+    enableIf(m_actFlipH, canTransform);
+    enableIf(m_actFlipV, canTransform);
     updateNavigationActions();
 }
 
@@ -865,7 +878,17 @@ void MainWindow::syncGalleryFromSelection()
     {
         // Selection set matches — only move focus if needed (preserve multi).
         if (!cur.isEmpty())
-            m_thumbnailPanel->selectPath(cur);
+        {
+            const QModelIndex curIdx = m_thumbnailPanel->currentIndex();
+            const QString curPath =
+                curIdx.isValid() ? m_thumbnailPanel->pathList().value(curIdx.row()) : QString();
+            if (curPath != cur)
+            {
+                m_syncingSelection = true;
+                m_thumbnailPanel->selectPath(cur);
+                m_syncingSelection = false;
+            }
+        }
         return;
     }
     m_syncingSelection = true;

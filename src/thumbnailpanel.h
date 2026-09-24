@@ -136,6 +136,11 @@ class ThumbnailPanel : public QListView
     // P0-2: inject the app-wide SelectionModel so hover events publish `hovered`.
     void setSelectionModel(SelectionModel *sel);
     void setSortMode(SortMode mode);
+    SortMode sortMode() const
+    {
+        return m_sortMode;
+    }
+    void setSort(SortMode mode, bool ascending);
     // A-2.2: toggle ascending/descending sort order.
     void setSortAscending(bool ascending);
     bool sortAscending() const
@@ -269,6 +274,8 @@ class ThumbnailPanel : public QListView
     // Scroll the grid so the item for `path` is visible and select it. Used by
     // browse-position restore (reopen last image after launch).
     void scrollToPath(const QString &path);
+    bool isItemFullyVisible(const QModelIndex &idx) const;
+    void scrollTo(const QModelIndex &index, ScrollHint hint = EnsureVisible) override;
     // Current vertical scroll offset of the thumbnail grid (for persistence).
     int scrollOffset() const;
 
@@ -384,6 +391,7 @@ class ThumbnailPanel : public QListView
     void itemClicked(const QString &path);
     void itemDoubleClicked(const QString &path);
     void viewModeChanged(ThumbnailPanel::ViewMode mode);
+    void sortChanged(ThumbnailPanel::SortMode mode, bool ascending);
     void thumbSizeChanged(int size);
     void compareRequested(const QStringList &paths);
     // External files/folders dropped onto the gallery (forwarded to MainWindow).

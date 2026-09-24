@@ -83,6 +83,36 @@
 
 #include <thread>
 
+struct ScrollPos
+{
+    int v = 0;
+    int h = 0;
+};
+
+inline ScrollPos captureScroll(const QAbstractItemView *view)
+{
+    ScrollPos s;
+    if (auto *vb = view ? view->verticalScrollBar() : nullptr)
+        s.v = vb->value();
+    if (auto *hb = view ? view->horizontalScrollBar() : nullptr)
+        s.h = hb->value();
+    return s;
+}
+
+inline void restoreScroll(QAbstractItemView *view, const ScrollPos &s)
+{
+    if (auto *vb = view ? view->verticalScrollBar() : nullptr)
+    {
+        if (vb->maximum() >= s.v)
+            vb->setValue(s.v);
+    }
+    if (auto *hb = view ? view->horizontalScrollBar() : nullptr)
+    {
+        if (hb->maximum() >= s.h)
+            hb->setValue(s.h);
+    }
+}
+
 // M25: the shipped-format SSOT (decoder registry) decides what is an image —
 // RAW/WebP/GIF are listed exactly like the historical six formats.
 inline bool isImageSuffix(const QString &suffix)
@@ -191,10 +221,12 @@ class DetailsHeader : public QWidget
 
   private:
     int separatorAt(int x) const;
+    int columnAt(int x) const;
     QRect contentRect() const;
 
     ThumbnailPanel *m_panel = nullptr;
     int m_dragCol = -1;
+    int m_pressedCol = -1;
     int m_dragOriginX = 0;
     int m_dragOriginW = 0;
 };

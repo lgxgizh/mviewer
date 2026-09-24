@@ -192,6 +192,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
             settings.setValue("thumbSize", m_thumbnailPanel->thumbSize());
         if (m_sortCombo)
             settings.setValue("thumbSortMode", m_sortCombo->currentData().toInt());
+        if (m_thumbnailPanel)
+            settings.setValue("thumbSortAscending", m_thumbnailPanel->sortAscending());
         if (m_mainSplitter)
             settings.setValue("splitterState", m_mainSplitter->saveState());
         if (m_searchPanel && m_actToggleSearch)

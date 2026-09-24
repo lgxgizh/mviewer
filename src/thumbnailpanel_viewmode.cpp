@@ -5,6 +5,7 @@
 #include "thumbnailpanel_p.h"
 
 #include <QSettings>
+#include <optional>
 
 void ThumbnailPanel::replaceDelegate(QStyledItemDelegate *delegate)
 {
@@ -250,6 +251,34 @@ void ThumbnailPanel::notifyDetailColumnsChanged()
     }
 }
 
+namespace
+{
+std::optional<ThumbnailPanel::SortMode> sortModeForDetailColumn(ThumbnailPanel::DetailColumn col)
+{
+    switch (col)
+    {
+    case ThumbnailPanel::DetailColName:
+        return ThumbnailPanel::SortName;
+    case ThumbnailPanel::DetailColRes:
+        return ThumbnailPanel::SortResolution;
+    case ThumbnailPanel::DetailColSize:
+        return ThumbnailPanel::SortSize;
+    case ThumbnailPanel::DetailColDate:
+        return ThumbnailPanel::SortDate;
+    case ThumbnailPanel::DetailColFmt:
+        return ThumbnailPanel::SortType;
+    case ThumbnailPanel::DetailColRate:
+        return ThumbnailPanel::SortRating;
+    case ThumbnailPanel::DetailColCamera:
+        return ThumbnailPanel::SortCamera;
+    case ThumbnailPanel::DetailColLens:
+        return ThumbnailPanel::SortLens;
+    default:
+        return std::nullopt;
+    }
+}
+} // namespace
+
 DetailsHeader::DetailsHeader(ThumbnailPanel *panel) : QWidget(panel), m_panel(panel)
 {
     setObjectName(QStringLiteral("detailsHeader"));
@@ -279,6 +308,20 @@ int DetailsHeader::separatorAt(int x) const
     return -1;
 }
 
+int DetailsHeader::columnAt(int x) const
+{
+    const int contentX = x + m_panel->horizontalScrollBar()->value();
+    const DetailLayout L = detailLayout(contentRect(), m_panel->detailColWidths());
+    const QRect cols[] = {L.thumb, L.name,  L.res,    L.size, L.date, L.fmt,
+                          L.rate,  L.label, L.camera, L.lens, L.iso};
+    for (int i = 0; i < ThumbnailPanel::DetailColCount; ++i)
+    {
+        if (contentX >= cols[i].left() && contentX <= cols[i].right())
+            return i;
+    }
+    return -1;
+}
+
 void DetailsHeader::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
@@ -295,15 +338,28 @@ void DetailsHeader::paintEvent(QPaintEvent *)
     f.setBold(true);
     p.setFont(f);
     const int flags = Qt::AlignVCenter | Qt::TextSingleLine;
-    p.drawText(L.name, flags, QStringLiteral("名称"));
-    p.drawText(L.res, flags, QStringLiteral("分辨率"));
-    p.drawText(L.size, flags, QStringLiteral("大小"));
-    p.drawText(L.date, flags, QStringLiteral("修改日期"));
-    p.drawText(L.fmt, flags, QStringLiteral("格式"));
-    p.drawText(L.rate, flags, QStringLiteral("评分"));
+
+    const auto activeSortMode = m_panel->sortMode();
+    const bool ascending = m_panel->sortAscending();
+    const QString arrow = ascending ? QStringLiteral(" ▲") : QStringLiteral(" ▼");
+
+    auto drawCol = [&](const QRect &rect, const QString &text, ThumbnailPanel::SortMode mode)
+    {
+        if (activeSortMode == mode)
+            p.drawText(rect, flags, text + arrow);
+        else
+            p.drawText(rect, flags, text);
+    };
+
+    drawCol(L.name, QStringLiteral("名称"), ThumbnailPanel::SortName);
+    drawCol(L.res, QStringLiteral("分辨率"), ThumbnailPanel::SortResolution);
+    drawCol(L.size, QStringLiteral("大小"), ThumbnailPanel::SortSize);
+    drawCol(L.date, QStringLiteral("修改日期"), ThumbnailPanel::SortDate);
+    drawCol(L.fmt, QStringLiteral("格式"), ThumbnailPanel::SortType);
+    drawCol(L.rate, QStringLiteral("评分"), ThumbnailPanel::SortRating);
     p.drawText(L.label, flags, QStringLiteral("标签"));
-    p.drawText(L.camera, flags, QStringLiteral("相机"));
-    p.drawText(L.lens, flags, QStringLiteral("镜头"));
+    drawCol(L.camera, QStringLiteral("相机"), ThumbnailPanel::SortCamera);
+    drawCol(L.lens, QStringLiteral("镜头"), ThumbnailPanel::SortLens);
     p.drawText(L.iso, flags, QStringLiteral("ISO"));
 }
 
@@ -314,16 +370,18 @@ void DetailsHeader::mousePressEvent(QMouseEvent *event)
         QWidget::mousePressEvent(event);
         return;
     }
-    const int col = separatorAt(event->position().toPoint().x());
-    if (col < 0)
+    const int x = event->position().toPoint().x();
+    const int col = separatorAt(x);
+    if (col >= 0)
     {
-        QWidget::mousePressEvent(event);
+        m_dragCol = col;
+        m_dragOriginX = x;
+        m_dragOriginW = m_panel->detailColumnWidth(static_cast<ThumbnailPanel::DetailColumn>(col));
+        setCursor(Qt::SplitHCursor);
+        event->accept();
         return;
     }
-    m_dragCol = col;
-    m_dragOriginX = event->position().toPoint().x();
-    m_dragOriginW = m_panel->detailColumnWidth(static_cast<ThumbnailPanel::DetailColumn>(col));
-    setCursor(Qt::SplitHCursor);
+    m_pressedCol = columnAt(x);
     event->accept();
 }
 
@@ -344,14 +402,38 @@ void DetailsHeader::mouseMoveEvent(QMouseEvent *event)
 
 void DetailsHeader::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (m_dragCol >= 0 && event->button() == Qt::LeftButton)
+    if (event->button() == Qt::LeftButton)
     {
-        m_dragCol = -1;
-        m_panel->persistDetailColumnWidths();
-        setCursor(separatorAt(event->position().toPoint().x()) >= 0 ? Qt::SplitHCursor
-                                                                    : Qt::ArrowCursor);
-        event->accept();
-        return;
+        if (m_dragCol >= 0)
+        {
+            m_dragCol = -1;
+            m_panel->persistDetailColumnWidths();
+            setCursor(separatorAt(event->position().toPoint().x()) >= 0 ? Qt::SplitHCursor
+                                                                        : Qt::ArrowCursor);
+            event->accept();
+            return;
+        }
+        if (m_pressedCol >= 0)
+        {
+            const int releasedCol = columnAt(event->position().toPoint().x());
+            if (releasedCol == m_pressedCol)
+            {
+                auto modeOpt = sortModeForDetailColumn(
+                    static_cast<ThumbnailPanel::DetailColumn>(m_pressedCol));
+                if (modeOpt.has_value())
+                {
+                    const ThumbnailPanel::SortMode targetMode = *modeOpt;
+                    if (m_panel->sortMode() == targetMode)
+                        m_panel->setSortAscending(!m_panel->sortAscending());
+                    else
+                        m_panel->setSort(targetMode, true);
+                    update();
+                }
+            }
+            m_pressedCol = -1;
+            event->accept();
+            return;
+        }
     }
     QWidget::mouseReleaseEvent(event);
 }
@@ -359,6 +441,9 @@ void DetailsHeader::mouseReleaseEvent(QMouseEvent *event)
 void DetailsHeader::leaveEvent(QEvent *event)
 {
     if (m_dragCol < 0)
+    {
         setCursor(Qt::ArrowCursor);
+        m_pressedCol = -1;
+    }
     QWidget::leaveEvent(event);
 }

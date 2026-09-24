@@ -13,24 +13,31 @@
 #include <QSet>
 #include <algorithm>
 
-void ThumbnailPanel::setSortMode(SortMode mode)
+void ThumbnailPanel::setSort(SortMode mode, bool ascending)
 {
-    if (m_sortMode == mode)
+    const bool modeChanged = (m_sortMode != mode);
+    const bool ascChanged = (m_sortAscending != ascending);
+    if (!modeChanged && !ascChanged)
         return;
     m_sortMode = mode;
-    if (mode == SortResolution && !m_allEntries.isEmpty())
+    m_sortAscending = ascending;
+    if (modeChanged && mode == SortResolution && !m_allEntries.isEmpty())
         ensureDimensions();
     if (!m_currentDir.isEmpty())
         scheduleFilter(false);
+    if (m_detailsHeader)
+        m_detailsHeader->update();
+    emit sortChanged(m_sortMode, m_sortAscending);
+}
+
+void ThumbnailPanel::setSortMode(SortMode mode)
+{
+    setSort(mode, m_sortAscending);
 }
 
 void ThumbnailPanel::setSortAscending(bool ascending)
 {
-    if (m_sortAscending == ascending)
-        return;
-    m_sortAscending = ascending;
-    if (!m_currentDir.isEmpty())
-        scheduleFilter(false);
+    setSort(m_sortMode, ascending);
 }
 
 void ThumbnailPanel::setTypeFilter(const QString &types)

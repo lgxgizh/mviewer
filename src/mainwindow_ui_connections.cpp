@@ -425,6 +425,30 @@ void MainWindow::connectFilterSignals()
                     static_cast<ThumbnailPanel::SortMode>(m_sortCombo->currentData().toInt()));
             });
 
+    connect(m_thumbnailPanel, &ThumbnailPanel::sortChanged, this,
+            [this](ThumbnailPanel::SortMode mode, bool ascending)
+            {
+                if (m_sortCombo)
+                {
+                    const int idx = m_sortCombo->findData(mode);
+                    if (idx >= 0 && m_sortCombo->currentIndex() != idx)
+                    {
+                        QSignalBlocker b(m_sortCombo);
+                        m_sortCombo->setCurrentIndex(idx);
+                    }
+                }
+                if (m_sortDirBtn)
+                {
+                    const bool descending = !ascending;
+                    if (m_sortDirBtn->isChecked() != descending)
+                    {
+                        QSignalBlocker b(m_sortDirBtn);
+                        m_sortDirBtn->setChecked(descending);
+                        m_sortDirBtn->setText(descending ? "↓" : "↑");
+                    }
+                }
+            });
+
     // M18: live search → gallery filter (debounced via textChanged; recursive
     // checkbox re-applies immediately).
     connect(m_searchEdit, &QLineEdit::textChanged, this, [this](const QString &)

@@ -6,6 +6,7 @@
 #include "display/DisplayColorContextProvider.h"
 #include "thumbnailprovider.h"
 
+#include <QFileInfo>
 #include <QIcon>
 #include <QMenuBar>
 #include <QStatusBar>
@@ -185,47 +186,104 @@ void MainWindow::rotateCurrentImage(int degrees)
         return;
     }
 
-    const QString path = currentImagePath();
-    if (path.isEmpty())
+    QStringList paths;
+    if (m_selection && !m_selection->selection().isEmpty())
+        paths = m_selection->selection();
+    else if (m_thumbnailPanel && !m_thumbnailPanel->selectedPaths().isEmpty())
+        paths = m_thumbnailPanel->selectedPaths();
+    else if (!currentImagePath().isEmpty())
+        paths.append(currentImagePath());
+
+    if (paths.isEmpty())
     {
         if (auto *bar = statusBar())
             bar->showMessage(tr("没有可旋转的图片"), 2000);
         return;
     }
 
-    if (m_imageViewer)
-        m_imageViewer->releaseSourceHandles(path);
-    if (m_previewPanel)
-        m_previewPanel->releaseSourceHandles(path);
-    const std::string utf8 = path.toUtf8().toStdString();
-    mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
-    ThumbnailProvider::invalidateSource(utf8);
+    int successCount = 0;
+    QStringList failedPaths;
+    QStringList failedErrors;
 
-    const auto result = mviewer::core::rotateImageFile(utf8, degrees);
-    if (!result.ok)
+    for (const QString &path : paths)
     {
-        QMessageBox::warning(
-            this, tr("旋转失败"),
-            tr("无法旋转图片：%1\n%2").arg(path, ImageViewer::rotateFailureUserMessage(result)));
-        return;
+        if (m_imageViewer)
+            m_imageViewer->releaseSourceHandles(path);
+        if (m_previewPanel)
+            m_previewPanel->releaseSourceHandles(path);
+        const std::string utf8 = path.toUtf8().toStdString();
+        mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
+        ThumbnailProvider::invalidateSource(utf8);
+
+        const auto result = mviewer::core::rotateImageFile(utf8, degrees);
+        if (!result.ok)
+        {
+            failedPaths.append(path);
+            failedErrors.append(ImageViewer::rotateFailureUserMessage(result));
+        }
+        else
+        {
+            mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
+            ThumbnailProvider::invalidateSource(utf8);
+            if (m_thumbnailPanel)
+                m_thumbnailPanel->invalidateSourceImage(path);
+            ++successCount;
+        }
     }
 
-    mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
-    ThumbnailProvider::invalidateSource(utf8);
-    if (m_thumbnailPanel)
-        m_thumbnailPanel->invalidateSourceImage(path);
-    if (m_previewPanel)
-        m_previewPanel->setImage(path);
-    if (m_metadataPanel)
-        m_metadataPanel->setImage(path);
-    if (m_imageViewer && !m_imageViewer->isHidden() && m_imageViewer->currentPath() == path)
-        m_imageViewer->refreshSource(path);
+    const QString cur = currentImagePath();
+    if (!cur.isEmpty() && paths.contains(cur))
+    {
+        if (m_previewPanel)
+            m_previewPanel->setImage(cur);
+        if (m_metadataPanel)
+            m_metadataPanel->setImage(cur);
+        if (m_imageViewer && !m_imageViewer->isHidden() && m_imageViewer->currentPath() == cur)
+            m_imageViewer->refreshSource(cur);
+    }
 
     int norm = degrees % 360;
     if (norm < 0)
         norm += 360;
-    if (auto *bar = statusBar())
-        bar->showMessage(tr("已旋转并覆盖原文件 (%1°)").arg(norm), 2000);
+
+    auto *bar = statusBar();
+    if (failedPaths.isEmpty())
+    {
+        if (bar)
+        {
+            if (paths.size() == 1)
+                bar->showMessage(tr("已旋转并覆盖原文件 (%1°)").arg(norm), 2000);
+            else
+                bar->showMessage(
+                    tr("已旋转 %1 张图片并覆盖原文件 (%2°)").arg(paths.size()).arg(norm), 3000);
+        }
+    }
+    else
+    {
+        QStringList failureLines;
+        for (int i = 0; i < failedPaths.size(); ++i)
+        {
+            failureLines.append(
+                QString("%1: %2").arg(QFileInfo(failedPaths[i]).fileName(), failedErrors[i]));
+        }
+        if (paths.size() == 1)
+        {
+            QMessageBox::warning(
+                this, tr("旋转失败"),
+                tr("无法旋转图片：%1\n%2").arg(failedPaths.first(), failedErrors.first()));
+        }
+        else
+        {
+            const QString msg = tr("成功旋转 %1 张图片，%2 张失败：\n%3")
+                                    .arg(successCount)
+                                    .arg(failedPaths.size())
+                                    .arg(failureLines.join("\n"));
+            QMessageBox::warning(this, tr("批量旋转完成（含失败）"), msg);
+        }
+        if (bar)
+            bar->showMessage(
+                tr("旋转完成：%1 成功，%2 失败").arg(successCount).arg(failedPaths.size()), 3000);
+    }
 }
 
 void MainWindow::flipCurrentImage(bool horizontal)
@@ -236,45 +294,103 @@ void MainWindow::flipCurrentImage(bool horizontal)
         return;
     }
 
-    const QString path = currentImagePath();
-    if (path.isEmpty())
+    QStringList paths;
+    if (m_selection && !m_selection->selection().isEmpty())
+        paths = m_selection->selection();
+    else if (m_thumbnailPanel && !m_thumbnailPanel->selectedPaths().isEmpty())
+        paths = m_thumbnailPanel->selectedPaths();
+    else if (!currentImagePath().isEmpty())
+        paths.append(currentImagePath());
+
+    if (paths.isEmpty())
     {
         if (auto *bar = statusBar())
             bar->showMessage(tr("没有可翻转的图片"), 2000);
         return;
     }
 
-    if (m_imageViewer)
-        m_imageViewer->releaseSourceHandles(path);
-    if (m_previewPanel)
-        m_previewPanel->releaseSourceHandles(path);
-    const std::string utf8 = path.toUtf8().toStdString();
-    mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
-    ThumbnailProvider::invalidateSource(utf8);
+    int successCount = 0;
+    QStringList failedPaths;
+    QStringList failedErrors;
 
-    const auto result = mviewer::core::flipImageFile(utf8, horizontal);
-    if (!result.ok)
+    for (const QString &path : paths)
     {
-        QMessageBox::warning(
-            this, tr("翻转失败"),
-            tr("无法翻转图片：%1\n%2").arg(path, ImageViewer::rotateFailureUserMessage(result)));
-        return;
+        if (m_imageViewer)
+            m_imageViewer->releaseSourceHandles(path);
+        if (m_previewPanel)
+            m_previewPanel->releaseSourceHandles(path);
+        const std::string utf8 = path.toUtf8().toStdString();
+        mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
+        ThumbnailProvider::invalidateSource(utf8);
+
+        const auto result = mviewer::core::flipImageFile(utf8, horizontal);
+        if (!result.ok)
+        {
+            failedPaths.append(path);
+            failedErrors.append(ImageViewer::rotateFailureUserMessage(result));
+        }
+        else
+        {
+            mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
+            ThumbnailProvider::invalidateSource(utf8);
+            if (m_thumbnailPanel)
+                m_thumbnailPanel->invalidateSourceImage(path);
+            ++successCount;
+        }
     }
 
-    mviewer::core::ImageLoadingFacade::instance().invalidateSource(utf8);
-    ThumbnailProvider::invalidateSource(utf8);
-    if (m_thumbnailPanel)
-        m_thumbnailPanel->invalidateSourceImage(path);
-    if (m_previewPanel)
-        m_previewPanel->setImage(path);
-    if (m_metadataPanel)
-        m_metadataPanel->setImage(path);
-    if (m_imageViewer && !m_imageViewer->isHidden() && m_imageViewer->currentPath() == path)
-        m_imageViewer->refreshSource(path);
+    const QString cur = currentImagePath();
+    if (!cur.isEmpty() && paths.contains(cur))
+    {
+        if (m_previewPanel)
+            m_previewPanel->setImage(cur);
+        if (m_metadataPanel)
+            m_metadataPanel->setImage(cur);
+        if (m_imageViewer && !m_imageViewer->isHidden() && m_imageViewer->currentPath() == cur)
+            m_imageViewer->refreshSource(cur);
+    }
 
-    if (auto *bar = statusBar())
-        bar->showMessage(horizontal ? tr("已水平翻转并覆盖原文件") : tr("已垂直翻转并覆盖原文件"),
-                         2000);
+    auto *bar = statusBar();
+    if (failedPaths.isEmpty())
+    {
+        if (bar)
+        {
+            if (paths.size() == 1)
+                bar->showMessage(
+                    horizontal ? tr("已水平翻转并覆盖原文件") : tr("已垂直翻转并覆盖原文件"), 2000);
+            else
+                bar->showMessage(horizontal
+                                     ? tr("已水平翻转 %1 张图片并覆盖原文件").arg(paths.size())
+                                     : tr("已垂直翻转 %1 张图片并覆盖原文件").arg(paths.size()),
+                                 3000);
+        }
+    }
+    else
+    {
+        QStringList failureLines;
+        for (int i = 0; i < failedPaths.size(); ++i)
+        {
+            failureLines.append(
+                QString("%1: %2").arg(QFileInfo(failedPaths[i]).fileName(), failedErrors[i]));
+        }
+        if (paths.size() == 1)
+        {
+            QMessageBox::warning(
+                this, tr("翻转失败"),
+                tr("无法翻转图片：%1\n%2").arg(failedPaths.first(), failedErrors.first()));
+        }
+        else
+        {
+            const QString msg = tr("成功翻转 %1 张图片，%2 张失败：\n%3")
+                                    .arg(successCount)
+                                    .arg(failedPaths.size())
+                                    .arg(failureLines.join("\n"));
+            QMessageBox::warning(this, tr("批量翻转完成（含失败）"), msg);
+        }
+        if (bar)
+            bar->showMessage(
+                tr("翻转完成：%1 成功，%2 失败").arg(successCount).arg(failedPaths.size()), 3000);
+    }
 }
 
 void MainWindow::buildViewMenu(QMenuBar *menuBar)

@@ -349,6 +349,7 @@ class MainWindow : public QMainWindow
     QCheckBox *m_searchMeta = nullptr;
     QComboBox *m_ratingFilter = nullptr;
     QComboBox *m_sortCombo = nullptr; // persisted across sessions via QSettings
+    QPushButton *m_sortDirBtn = nullptr;
     QComboBox *m_viewModeCombo = nullptr;
     QComboBox *m_flagFilter = nullptr; // P3 tail: color label / reject / pick / recents
     QWidget *m_advancedFilterPanel = nullptr;

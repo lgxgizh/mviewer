@@ -57,6 +57,30 @@ void ThumbnailPanel::onSelectionChanged()
     emit statsChanged(m_paths.size(), m_totalBytes, n, selBytes);
 }
 
+bool ThumbnailPanel::isItemFullyVisible(const QModelIndex &idx) const
+{
+    if (!idx.isValid())
+        return false;
+    const QRect r = visualRect(idx);
+    if (!r.isValid())
+        return false;
+    const QRect vp = viewport()->rect();
+    if (m_viewMode == Filmstrip)
+        return r.left() >= 0 && r.right() <= vp.width();
+    if (m_viewMode == Details && horizontalScrollBar() && horizontalScrollBar()->isVisible())
+        return r.top() >= 0 && r.bottom() <= vp.height() && r.left() >= 0;
+    return r.top() >= 0 && r.bottom() <= vp.height();
+}
+
+void ThumbnailPanel::scrollTo(const QModelIndex &index, ScrollHint hint)
+{
+    if (!index.isValid())
+        return;
+    if (hint == EnsureVisible && isItemFullyVisible(index))
+        return;
+    QListView::scrollTo(index, hint);
+}
+
 void ThumbnailPanel::scrollToPath(const QString &path)
 {
     const int row = m_rowByPath.value(path, -1);
@@ -88,7 +112,8 @@ void ThumbnailPanel::selectPath(const QString &path)
     if (selectionModel() && selectionModel()->isSelected(idx))
     {
         selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
-        scrollTo(idx);
+        if (!isItemFullyVisible(idx))
+            scrollTo(idx);
         onSelectionChanged();
         return;
     }
@@ -97,7 +122,8 @@ void ThumbnailPanel::selectPath(const QString &path)
         selectionModel()->setCurrentIndex(idx, QItemSelectionModel::ClearAndSelect);
     else
         setCurrentIndex(idx);
-    scrollTo(idx); // default EnsureVisible: only scrolls when off-screen
+    if (!isItemFullyVisible(idx))
+        scrollTo(idx); // default EnsureVisible: only scrolls when off-screen
     // A programmatic jump may update the scroll bar after this stack frame.
     // Schedule one range refresh so the newly selected distant item is promoted
     // to visible priority instead of waiting for a later repaint/scroll event.
@@ -117,7 +143,7 @@ void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &curren
         const QModelIndex idx = m_model->index(row, 0);
         sel.select(idx, idx);
     }
-    // Block currentChanged 鈫?itemClicked while we rebuild multi-select, so the
+    // Block currentChanged -> itemClicked while we rebuild multi-select, so the
     // focus move cannot collapse SelectionModel via setCurrentImage.
     const bool wasBlocked = selectionModel()->blockSignals(true);
     selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect);
@@ -130,7 +156,8 @@ void ThumbnailPanel::selectPaths(const QStringList &paths, const QString &curren
         {
             const QModelIndex idx = m_model->index(row, 0);
             selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
-            scrollTo(idx);
+            if (!isItemFullyVisible(idx))
+                scrollTo(idx);
             m_selectionAnchorPath = focus;
         }
     }

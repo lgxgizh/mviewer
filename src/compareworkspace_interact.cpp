@@ -49,6 +49,23 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
     if (idx < 0 || idx >= m_cellViews.size())
         return QWidget::eventFilter(obj, event);
 
+    return handleCellEvent(view, idx, event);
+}
+
+bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *event)
+{
+    if (event->type() == QEvent::Enter)
+    {
+        m_hoverIdx = idx;
+        return false;
+    }
+    if (event->type() == QEvent::Leave)
+    {
+        if (m_hoverIdx == idx)
+            m_hoverIdx = -1;
+        return false;
+    }
+
     if (event->type() == QEvent::Wheel)
     {
         auto *we = static_cast<QWheelEvent *>(event);
@@ -75,10 +92,6 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
                 idx < m_cellViews.size() && m_cellViews[idx])
             {
                 const QPointF imgPt = m_cellViews[idx]->widgetToImage(me->pos());
-                // widgetToImage is an unclipped affine map, so a click in the
-                // letterbox around a fitted image lands outside the source. Those
-                // clicks used to count as markers that are drawn off-image: the
-                // counter/HUD went up while nothing appeared.
                 const QSize source = m_cellViews[idx]->sourceSize();
                 if (source.isValid() && imgPt.x() >= 0 && imgPt.y() >= 0 &&
                     imgPt.x() < source.width() && imgPt.y() < source.height())
@@ -124,13 +137,11 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
         {
             m_dragging = false;
             // Click (no significant drag): select cell for editing & per-pane histogram.
-            // m_dragIdx is -1 until a plain pane press sets it (pixel-link mode
-            // consumes the press without setting it), so it must be validated:
-            // passing -1 on subscripted m_cellAdjusts[SIZE_MAX] was a wild read.
             const QPoint delta = me->pos() - m_dragStartPos;
             if (delta.manhattanLength() < 4 && m_dragIdx >= 0 &&
                 m_dragIdx < static_cast<int>(m_cellViews.size()))
             {
+                m_explicitEditIdx = m_dragIdx;
                 onEditCellSelected(m_dragIdx);
                 refreshHistograms();
             }
@@ -138,7 +149,7 @@ bool CompareWorkspace::eventFilter(QObject *obj, QEvent *event)
         return false;
     }
 
-    return QWidget::eventFilter(obj, event);
+    return QWidget::eventFilter(view, event);
 }
 
 void CompareWorkspace::beginTemporaryCompare()
