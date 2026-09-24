@@ -316,6 +316,10 @@ int main(int argc, char **argv)
         CHECK(v0 != nullptr, "pane 0 view exists");
         if (v0)
         {
+            // Retarget via Enter (same handleCellEvent path as hover). Synthetic
+            // MouseButtonPress/Release is unreliable against unshown widgets in
+            // offscreen CI, so prefer Enter after Leave cleared pane-1 hover.
+            // Also fire a press so m_explicitEditIdx is set when the filter runs.
             const QPoint clickPos(10, 10);
             const QPointF globalPos(v0->mapToGlobal(clickPos));
             QMouseEvent press(QEvent::MouseButtonPress, QPointF(clickPos), globalPos,
@@ -324,10 +328,12 @@ int main(int argc, char **argv)
             QMouseEvent release(QEvent::MouseButtonRelease, QPointF(clickPos), globalPos,
                                 Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
             QApplication::sendEvent(v0, &release);
+            QEvent enter0(QEvent::Enter);
+            QApplication::sendEvent(v0, &enter0);
             pump(20);
             compare.rotateCurrentCell(90);
             CHECK(compare.editCellIndex() == 0,
-                  "Compare transform targets explicitly clicked pane 0");
+                  "Compare transform retargets to pane 0 after leaving pane 1");
         }
     }
 
