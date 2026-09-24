@@ -66,15 +66,16 @@ void MainWindow::setupCommands()
         "file_reveal", "在资源管理器中显示 (Ctrl+E)",
         [this]() { m_thumbnailPanel->revealSelected(); },
         std::vector<CommandShortcut>{{Qt::Key_E, Qt::ControlModifier}}));
-    // P0: Ctrl+F focuses the directory-tree filter for quick folder search.
+    // Ctrl+F focuses the gallery address bar (pathEdit). The left-tree
+    // 「搜索目录」 field was removed as redundant with path navigation.
     reg.registerCommand(std::make_unique<CallbackCommand>(
-        "dir_filter", "搜索目录 (Ctrl+F)",
+        "dir_filter", "地址栏 (Ctrl+F)",
         [this]()
         {
-            if (m_directoryTree->filterEdit())
+            if (m_pathEdit)
             {
-                m_directoryTree->filterEdit()->setFocus();
-                m_directoryTree->filterEdit()->selectAll();
+                m_pathEdit->setFocus();
+                m_pathEdit->selectAll();
             }
         },
         std::vector<CommandShortcut>{{Qt::Key_F, Qt::ControlModifier}}));

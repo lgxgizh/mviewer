@@ -284,6 +284,16 @@ void MainWindow::rotateCurrentImage(int degrees)
             bar->showMessage(
                 tr("旋转完成：%1 成功，%2 失败").arg(successCount).arg(failedPaths.size()), 3000);
     }
+
+    // Keep the pre-rotate multi-selection after thumbnail invalidate / rebuild.
+    if (m_thumbnailPanel && paths.size() > 1)
+    {
+        const QString focus =
+            (!cur.isEmpty() && paths.contains(cur)) ? cur : paths.first();
+        m_thumbnailPanel->selectPaths(paths, focus);
+        if (m_selection)
+            m_selection->setSelection(paths, focus);
+    }
 }
 
 void MainWindow::flipCurrentImage(bool horizontal)
@@ -390,6 +400,15 @@ void MainWindow::flipCurrentImage(bool horizontal)
         if (bar)
             bar->showMessage(
                 tr("翻转完成：%1 成功，%2 失败").arg(successCount).arg(failedPaths.size()), 3000);
+    }
+
+    if (m_thumbnailPanel && paths.size() > 1)
+    {
+        const QString focus =
+            (!cur.isEmpty() && paths.contains(cur)) ? cur : paths.first();
+        m_thumbnailPanel->selectPaths(paths, focus);
+        if (m_selection)
+            m_selection->setSelection(paths, focus);
     }
 }
 

@@ -286,6 +286,20 @@ int main(int argc, char **argv)
     CHECK(!afterD2.isNull() && afterD2.width() == 8 && afterD2.height() == 16,
           "batch rotate rotated D2 (16x8 -> 8x16)");
 
+    // Allow directory-monitor / model rebuild to settle; selection must not
+    // collapse as a side effect of invalidate + delta apply after overwrite.
+    pump(200);
+    CHECK(waitFor(
+              [&]
+              {
+                  const QStringList ssot = selection->selection();
+                  const QStringList gallery = panel->selectedPaths();
+                  return ssot.size() == 2 && gallery.size() == 2 && ssot.contains(pathD1) &&
+                         ssot.contains(pathD2) && gallery.contains(pathD1) &&
+                         gallery.contains(pathD2);
+              }),
+          "multi-select persists in SelectionModel and gallery after batch rotate");
+
     // Compare hover and explicit targeting
     {
         CompareWorkspace compare;

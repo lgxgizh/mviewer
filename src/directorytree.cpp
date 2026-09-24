@@ -156,11 +156,15 @@ DirectoryTree::DirectoryTree(QWidget *parent) : QTreeView(parent)
     m_loadingLabel->setStyleSheet("color: #888; font-style: italic; padding: 4px;");
     m_loadingLabel->hide();
 
-    // P0: Directory name filter (placed above tree by caller via filterEdit()).
+    // Directory name filter kept for programmatic clear-on-navigate / tests, but
+    // hidden — the visible 「搜索目录」 field was removed as redundant with the
+    // gallery address bar (pathEdit).
     m_filterEdit = new QLineEdit(this);
+    m_filterEdit->setObjectName(QStringLiteral("directoryFilterEdit"));
     m_filterEdit->setPlaceholderText("搜索目录...");
     m_filterEdit->setClearButtonEnabled(true);
     m_filterEdit->setTextMargins(6, 4, 6, 4);
+    m_filterEdit->hide();
     connect(m_filterEdit, &QLineEdit::textChanged, m_proxy, &DirectoryProxyModel::setFilterText);
 
     m_navigationRetryTimer = new QTimer(this);

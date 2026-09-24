@@ -390,8 +390,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(foldersSection && previewSection && foldersSection->height() > previewSection->height(),
           "migrated sidebar gives the folder section the larger 60/40 share");
     CHECK(directoryTree && directoryTree->filterEdit() &&
-              directoryTree->filterEdit()->height() <= 40,
-          "directory filter keeps a normal editor height after layout restore");
+              !directoryTree->filterEdit()->isVisible(),
+          "directory filter edit stays hidden (redundant with address bar)");
     CHECK(directoryTree && directoryTree->isVisible() && directoryTree->height() >= 40,
           "directory tree remains visible with usable height");
     CHECK(previewPanel && previewPanel->isVisible() && previewPanel->height() >= 80,
@@ -429,6 +429,13 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
     CHECK(viewModeCombo && thumbnailPanel,
           "thumbnail view controls expose a stable panel and combo");
     CHECK(pathEdit != nullptr, "directory path input is discoverable");
+    if (pathEdit && gallerySearchEdit)
+    {
+        const int pathBottom = pathEdit->mapTo(&w, pathEdit->rect().bottomLeft()).y();
+        const int searchTop = gallerySearchEdit->mapTo(&w, QPoint(0, 0)).y();
+        CHECK(pathBottom <= searchTop + 2,
+              "address bar sits on the gallery toolbar strip above sort/search controls");
+    }
     auto *emptyState = w.findChild<QLabel *>("emptyStateLabel");
     auto *emptyFolder = w.findChild<QLabel *>("emptyFolderLabel");
     CHECK(emptyState != nullptr, "empty-state hint has a stable object name");
