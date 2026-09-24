@@ -1,11 +1,53 @@
 // MainWindow layout construction and command surfaces.
 #include "mainwindow_p.h"
 
+#include <QFocusEvent>
 #include <QIcon>
+#include <QMouseEvent>
 #include <QPainter>
 #include <QPolygonF>
 #include <QSignalBlocker>
+#include <QTimer>
 #include <QToolBar>
+
+namespace
+{
+// Address bar: first click / focus selects all (Ctrl+A look) so the user can
+// immediately type a new path or copy. Later clicks while focused keep the
+// caret so partial edits still work.
+class SelectAllOnActivateLineEdit : public QLineEdit
+{
+  public:
+    using QLineEdit::QLineEdit;
+
+  protected:
+    void focusInEvent(QFocusEvent *event) override
+    {
+        QLineEdit::focusInEvent(event);
+        if (event->reason() == Qt::MouseFocusReason || event->reason() == Qt::TabFocusReason ||
+            event->reason() == Qt::BacktabFocusReason ||
+            event->reason() == Qt::ShortcutFocusReason || event->reason() == Qt::OtherFocusReason)
+        {
+            // Defer past the activating mouse press, which would otherwise place
+            // a caret and clear the selection we want.
+            QTimer::singleShot(0, this,
+                               [this]()
+                               {
+                                   if (hasFocus())
+                                       selectAll();
+                               });
+        }
+    }
+
+    void mousePressEvent(QMouseEvent *event) override
+    {
+        const bool gainingFocus = !hasFocus();
+        QLineEdit::mousePressEvent(event);
+        if (gainingFocus)
+            selectAll();
+    }
+};
+} // namespace
 
 void MainWindow::buildBrowserShell()
 {
@@ -99,7 +141,7 @@ void MainWindow::buildBrowserShell()
     m_breadcrumb->hide();
 
     // ----- Path input bar (UX: type a path to jump to a directory) -----
-    m_pathEdit = new QLineEdit(this);
+    m_pathEdit = new SelectAllOnActivateLineEdit(this);
     m_pathEdit->setObjectName("pathEdit");
     m_pathEdit->setPlaceholderText("输入目录路径并按 Enter 切换...");
     m_pathEdit->setToolTip(
@@ -122,7 +164,7 @@ void MainWindow::buildBrowserShell()
 
 QWidget *MainWindow::buildNavigationPanel()
 {
-    // ----- Left column: favorites + filter + directory tree + preview -----
+    // ----- Left column: favorites + directory tree + preview -----
     auto *leftWidget = new QSplitter(Qt::Vertical, this);
     m_leftSplitter = leftWidget;
     m_navigationWidget = leftWidget;
@@ -176,12 +218,10 @@ QWidget *MainWindow::buildNavigationPanel()
     foldersLabel->setFixedHeight(24);
     foldersLayout->addWidget(foldersLabel);
 
-    // P0: Directory name filter (placed between the section label and tree).
+    // Directory tree only — the old 「搜索目录」 filter is removed; path jumps
+    // go through the gallery address bar (pathEdit) above the sort strip.
     m_directoryTree = new DirectoryTree(foldersSection);
     m_directoryTree->installEventFilter(this);
-    m_directoryTree->filterEdit()->setMinimumHeight(26);
-    m_directoryTree->filterEdit()->setMaximumHeight(34);
-    foldersLayout->addWidget(m_directoryTree->filterEdit());
     foldersLayout->addWidget(m_directoryTree, 1);
     leftWidget->addWidget(foldersSection);
 
@@ -241,6 +281,12 @@ QWidget *MainWindow::buildSortBar(QWidget *parent)
     auto *sortRootLayout = new QVBoxLayout(sortBar);
     sortRootLayout->setContentsMargins(0, 0, 0, 0);
     sortRootLayout->setSpacing(2);
+    // Address bar sits on the gallery toolbar strip, above 排序 / 高级筛选.
+    if (m_pathEdit)
+    {
+        m_pathEdit->setParent(sortBar);
+        sortRootLayout->addWidget(m_pathEdit);
+    }
     auto *sortLayout = new QHBoxLayout;
     sortLayout->setContentsMargins(6, 4, 6, 4);
     sortRootLayout->addLayout(sortLayout);
@@ -579,7 +625,7 @@ void MainWindow::buildCentralContainer(QWidget *leftWidget, QWidget *rightWidget
     mainLayout->setContentsMargins(0, 0, 0, 0);
     mainLayout->setSpacing(0);
     mainLayout->addWidget(m_breadcrumb);
-    mainLayout->addWidget(m_pathEdit);
+    // pathEdit lives in the gallery sort/toolbar strip (buildSortBar).
     mainLayout->addWidget(centralSplitter, 1);
     setCentralWidget(mainContainer);
 }

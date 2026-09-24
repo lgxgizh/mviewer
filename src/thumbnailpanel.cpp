@@ -440,7 +440,13 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
     {
         auto it = m_rowByPath.constFind(prevCurrent);
         if (it != m_rowByPath.constEnd())
-            setCurrentIndex(m_model->index(it.value(), 0));
+        {
+            // NoUpdate: QAbstractItemView::setCurrentIndex would ClearAndSelect
+            // and collapse a restored multi-selection down to one item (e.g. after
+            // rotate → directory-monitor rebuild).
+            const QModelIndex idx = m_model->index(it.value(), 0);
+            selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
+        }
     }
     restoreScroll(this, savedScroll);
 

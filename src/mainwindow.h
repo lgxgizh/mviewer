@@ -236,7 +236,7 @@ class MainWindow : public QMainWindow
     DirectoryTree *m_directoryTree = nullptr;
     DirectoryMonitor *m_directoryMonitor = nullptr;
     BreadcrumbBar *m_breadcrumb = nullptr;
-    QLineEdit *m_pathEdit = nullptr;              // Path input bar above the gallery area
+    QLineEdit *m_pathEdit = nullptr;              // Address bar above sort/filter on gallery strip
     QSplitter *m_mainSplitter = nullptr;          // P1-3: central layout splitter
     QSplitter *m_leftSplitter = nullptr;          // A-6.4: nav | tree | preview heights
     QWidget *m_navigationWidget = nullptr;        // whole browse navigation column

@@ -61,6 +61,7 @@ class DirectoryTree : public QTreeView
     QString currentPath() const;
 
     // Access the filter line-edit so callers can place it in a layout.
+    /// Hidden; retained for clear-on-navigate and tests. Prefer pathEdit.
     QLineEdit *filterEdit() const
     {
         return m_filterEdit;

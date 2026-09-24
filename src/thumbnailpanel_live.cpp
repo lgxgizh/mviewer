@@ -459,9 +459,16 @@ void ThumbnailPanel::applyDisplayedEntriesIncremental(const QList<Entry> &entrie
         }
     }
     if (!nextCurrent.isEmpty() && m_rowByPath.contains(nextCurrent))
-        setCurrentIndex(m_model->index(m_rowByPath.value(nextCurrent), 0));
+    {
+        // NoUpdate preserves multi-select restored above; plain setCurrentIndex
+        // would ClearAndSelect and leave only the current path selected.
+        const QModelIndex idx = m_model->index(m_rowByPath.value(nextCurrent), 0);
+        selectionModel()->setCurrentIndex(idx, QItemSelectionModel::NoUpdate);
+    }
     else
-        setCurrentIndex(QModelIndex());
+    {
+        selectionModel()->setCurrentIndex(QModelIndex(), QItemSelectionModel::NoUpdate);
+    }
 
     pruneThumbnailState();
     ThumbnailPipeline::instance().updateSources(toStdPaths(m_paths));
