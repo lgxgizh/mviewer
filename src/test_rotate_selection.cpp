@@ -9,6 +9,7 @@
 #include "runtime_storage.h"
 #include "selectionmodel.h"
 #include "thumbnailpanel.h"
+#include "widgets/rawimageview.h"
 
 #include <QAction>
 #include <QApplication>
@@ -19,6 +20,7 @@
 #include <QFile>
 #include <QImage>
 #include <QMessageBox>
+#include <QMouseEvent>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -105,6 +107,16 @@ ImageViewer *findViewer()
     {
         if (auto *viewer = qobject_cast<ImageViewer *>(w))
             return viewer;
+    }
+    return nullptr;
+}
+
+RawImageView *paneView(CompareWorkspace *ws, int index)
+{
+    for (RawImageView *v : ws->findChildren<RawImageView *>())
+    {
+        if (v && v->cellIndex() == index)
+            return v;
     }
     return nullptr;
 }
@@ -249,6 +261,81 @@ int main(int argc, char **argv)
     CHECK(afterC.pixelColor(7, 0) == QColor(200, 0, 0), "H-flip writes right-from-left on C");
     QImage stillA(pathA);
     CHECK(stillA.width() == 8 && stillA.height() == 4, "flip leaves stale A untouched");
+
+    // Multi-select batch rotate
+    const QString pathD1 = writeSizedPng(directory, "d1_multi.png", 12, 6, QColor(50, 100, 150));
+    const QString pathD2 = writeSizedPng(directory, "d2_multi.png", 16, 8, QColor(150, 100, 50));
+    panel->setDirectory(directory.absolutePath());
+    CHECK(waitFor(
+              [&]
+              { return panel->pathList().contains(pathD1) && panel->pathList().contains(pathD2); }),
+          "gallery published multi-select fixtures");
+    panel->selectPaths({pathD1, pathD2});
+    CHECK(waitFor([&] { return selection->selection().size() == 2 && rotateCw->isEnabled(); }),
+          "SelectionModel has 2 paths and rotate is enabled");
+    dismiss.start();
+    rotateCw->trigger();
+    pump(50);
+    dismiss.stop();
+    dismissMessageBoxes();
+
+    QImage afterD1(pathD1);
+    QImage afterD2(pathD2);
+    CHECK(!afterD1.isNull() && afterD1.width() == 6 && afterD1.height() == 12,
+          "batch rotate rotated D1 (12x6 -> 6x12)");
+    CHECK(!afterD2.isNull() && afterD2.width() == 8 && afterD2.height() == 16,
+          "batch rotate rotated D2 (16x8 -> 8x16)");
+
+    // Compare hover and explicit targeting
+    {
+        CompareWorkspace compare;
+        compare.resize(600, 400);
+        compare.setImages({pathD1, pathD2});
+        CHECK(waitFor([&] { return compare.comparedImageCount() == 2; }),
+              "Compare loaded two panes");
+        pump(50);
+
+        CHECK(compare.editCellIndex() < 0, "uninteracted Compare has no edit cell");
+        compare.rotateCurrentCell(90);
+        CHECK(compare.editCellIndex() < 0,
+              "Compare transform without active pane does not invent cell 0");
+
+        RawImageView *v1 = paneView(&compare, 1);
+        CHECK(v1 != nullptr, "pane 1 view exists");
+        if (v1)
+        {
+            QEvent enter(QEvent::Enter);
+            QApplication::sendEvent(v1, &enter);
+            compare.rotateCurrentCell(90);
+            CHECK(compare.editCellIndex() == 1, "Compare transform targets hovered pane 1");
+            QEvent leave(QEvent::Leave);
+            QApplication::sendEvent(v1, &leave);
+        }
+
+        RawImageView *v0 = paneView(&compare, 0);
+        CHECK(v0 != nullptr, "pane 0 view exists");
+        if (v0)
+        {
+            // Retarget via Enter (same handleCellEvent path as hover). Synthetic
+            // MouseButtonPress/Release is unreliable against unshown widgets in
+            // offscreen CI, so prefer Enter after Leave cleared pane-1 hover.
+            // Also fire a press so m_explicitEditIdx is set when the filter runs.
+            const QPoint clickPos(10, 10);
+            const QPointF globalPos(v0->mapToGlobal(clickPos));
+            QMouseEvent press(QEvent::MouseButtonPress, QPointF(clickPos), globalPos,
+                              Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QApplication::sendEvent(v0, &press);
+            QMouseEvent release(QEvent::MouseButtonRelease, QPointF(clickPos), globalPos,
+                                Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QApplication::sendEvent(v0, &release);
+            QEvent enter0(QEvent::Enter);
+            QApplication::sendEvent(v0, &enter0);
+            pump(20);
+            compare.rotateCurrentCell(90);
+            CHECK(compare.editCellIndex() == 0,
+                  "Compare transform retargets to pane 0 after leaving pane 1");
+        }
+    }
 
     if (g_failures)
     {

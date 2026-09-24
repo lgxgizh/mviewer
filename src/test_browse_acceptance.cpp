@@ -34,6 +34,7 @@
 #include <QHelpEvent>
 #include <QImage>
 #include <QInputDialog>
+#include <QMouseEvent>
 #include <QPushButton>
 #include <QSettings>
 #include <QStandardPaths>
@@ -517,6 +518,31 @@ void testDetailsColumnResize()
         CHECK(header->height() == 24, "Details: header uses the reserved strip height");
         CHECK(header->testAttribute(Qt::WA_TransparentForMouseEvents) == false,
               "Details: header accepts mouse events for resize");
+
+        const QPoint clickName(80, 10);
+        QMouseEvent press1(QEvent::MouseButtonPress, QPointF(clickName), Qt::LeftButton,
+                           Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(header, &press1);
+        QMouseEvent release1(QEvent::MouseButtonRelease, QPointF(clickName), Qt::LeftButton,
+                             Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(header, &release1);
+        pump(20);
+
+        CHECK(panel.sortMode() == ThumbnailPanel::SortName, "Details header click: sets SortName");
+        const bool asc1 = panel.sortAscending();
+
+        QMouseEvent press2(QEvent::MouseButtonPress, QPointF(clickName), Qt::LeftButton,
+                           Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(header, &press2);
+        QMouseEvent release2(QEvent::MouseButtonRelease, QPointF(clickName), Qt::LeftButton,
+                             Qt::NoButton, Qt::NoModifier);
+        QApplication::sendEvent(header, &release2);
+        pump(20);
+
+        CHECK(panel.sortMode() == ThumbnailPanel::SortName,
+              "Details header repeat click: keeps SortName");
+        CHECK(panel.sortAscending() == !asc1,
+              "Details header repeat click: toggles ascending/descending");
     }
 
     // Persistence round-trip via QSettings.

@@ -172,6 +172,7 @@ class CompareWorkspace : public QWidget
     bool event(QEvent *) override;
     void paintEvent(QPaintEvent *) override;
     bool eventFilter(QObject *, QEvent *) override;
+    bool handleCellEvent(RawImageView *view, int idx, QEvent *event);
     void resizeEvent(QResizeEvent *) override;
     void keyPressEvent(QKeyEvent *) override;
     void keyReleaseEvent(QKeyEvent *) override;
@@ -674,9 +675,7 @@ class CompareWorkspace : public QWidget
         float rGain = 1.0f;    // WB red gain [0.01, 5.0]
         float bGain = 1.0f;    // WB blue gain [0.01, 5.0]
         int rotation = 0;      // 0, 90, 180, 270
-        bool flipH = false;
-        bool flipV = false;
-        bool hasCrop = false;
+        bool flipH = false, flipV = false, hasCrop = false;
         int cropX = 0, cropY = 0, cropW = 0, cropH = 0;
 
         bool isIdentity() const
@@ -687,7 +686,7 @@ class CompareWorkspace : public QWidget
         }
     };
     std::vector<CellAdjust> m_cellAdjusts; // per-cell adjustment state
-    int m_editIdx = -1;                    // currently selected cell for editing
+    int m_editIdx = -1, m_explicitEditIdx = -1; // currently selected cell for editing
     static mviewer::core::CompareAdjustmentState reportAdjustment(const CellAdjust &adjust);
     static ImageData applyAdjusts(const ImageData &src, const CellAdjust &a);
 

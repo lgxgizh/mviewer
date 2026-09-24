@@ -423,6 +423,7 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
         total += entries.at(i).size;
     }
     m_totalBytes = total;
+    const ScrollPos savedScroll = captureScroll(this);
     m_model->setStringList(names);
 
     // Restore selection and current index.
@@ -441,6 +442,7 @@ void ThumbnailPanel::buildModel(const QList<Entry> &entries)
         if (it != m_rowByPath.constEnd())
             setCurrentIndex(m_model->index(it.value(), 0));
     }
+    restoreScroll(this, savedScroll);
 
     // A completed filter rebuild with no visible rows must clear the shared
     // selection as well as the gallery. This drives the existing preview and

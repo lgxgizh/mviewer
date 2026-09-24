@@ -387,17 +387,45 @@ void CompareWorkspace::keyReleaseEvent(QKeyEvent *event)
     QWidget::keyReleaseEvent(event);
 }
 
+namespace
+{
+int findCellUnderMouse(const QVector<RawImageView *> &cellViews)
+{
+    const QPoint globalPos = QCursor::pos();
+    for (int i = 0; i < cellViews.size(); ++i)
+    {
+        RawImageView *v = cellViews.at(i);
+        if (v && v->isVisible())
+        {
+            const QPoint localPos = v->mapFromGlobal(globalPos);
+            if (v->rect().contains(localPos))
+                return i;
+        }
+    }
+    return -1;
+}
+} // namespace
+
 int CompareWorkspace::resolveEditCell() const
 {
     const int count = static_cast<int>(m_cellViews.size());
     if (count <= 0)
         return -1;
-    if (m_editIdx >= 0 && m_editIdx < count)
-        return m_editIdx;
+    // 1. Pane under the mouse has top priority
+    const int under = findCellUnderMouse(m_cellViews);
+    if (under >= 0 && under < count)
+        return under;
     if (m_hoverIdx >= 0 && m_hoverIdx < count)
         return m_hoverIdx;
+    // 2. Explicitly focused compare cell
     if (m_focusIndex >= 0 && m_focusIndex < count)
         return m_focusIndex;
+    // 3. Explicitly selected edit cell (click / prior transform)
+    if (m_explicitEditIdx >= 0 && m_explicitEditIdx < count)
+        return m_explicitEditIdx;
+    // 4. Sticky edit index from a prior selection (never invent pane 0 here)
+    if (m_editIdx >= 0 && m_editIdx < count)
+        return m_editIdx;
     return -1;
 }
 
@@ -405,6 +433,7 @@ void CompareWorkspace::syncEditCellAfterLoad()
 {
     const int count = static_cast<int>(m_cellViews.size());
     m_editIdx = -1;
+    m_explicitEditIdx = -1;
     if (count <= 0)
         return;
     int idx = -1;
@@ -412,7 +441,13 @@ void CompareWorkspace::syncEditCellAfterLoad()
         idx = comparedImages().indexOf(m_selection->currentImage());
     if (idx < 0 && m_focusIndex >= 0 && m_focusIndex < count)
         idx = m_focusIndex;
-    onEditCellSelected(idx >= 0 ? idx : 0);
+    // Do not default to pane 0: with no selection/focus match, leave unset so
+    // rotate/flip prompt the user instead of silently targeting cell 0.
+    if (idx >= 0)
+    {
+        onEditCellSelected(idx);
+        m_explicitEditIdx = idx;
+    }
 }
 
 void CompareWorkspace::rotateCurrentCell(int degrees)
@@ -432,6 +467,7 @@ void CompareWorkspace::rotateCurrentCell(int degrees)
         rot += 360;
     m_cellAdjusts[static_cast<size_t>(idx)].rotation = rot;
     m_editIdx = idx;
+    m_explicitEditIdx = idx;
     if (m_rotVal)
         m_rotVal->setText(QString::number(rot) + "°");
     applyAdjToCell(idx);
@@ -462,6 +498,7 @@ void CompareWorkspace::flipCurrentCell(bool horizontal)
         m_cellAdjusts[static_cast<size_t>(idx)].flipV =
             !m_cellAdjusts[static_cast<size_t>(idx)].flipV;
     m_editIdx = idx;
+    m_explicitEditIdx = idx;
     applyAdjToCell(idx);
     onAdjEditFinished();
     update();

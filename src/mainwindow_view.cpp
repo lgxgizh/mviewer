@@ -393,6 +393,17 @@ void MainWindow::applyPreferences()
             }
         }
     }
+    if (s.contains("thumbSortAscending"))
+    {
+        const bool ascending = s.value("thumbSortAscending", true).toBool();
+        if (m_thumbnailPanel)
+            m_thumbnailPanel->setSortAscending(ascending);
+        if (m_sortDirBtn)
+        {
+            m_sortDirBtn->setChecked(!ascending);
+            m_sortDirBtn->setText(ascending ? "↑" : "↓");
+        }
+    }
     if (m_thumbnailPanel)
         m_thumbnailPanel->setThumbSize(s.value("thumbSize", 160).toInt());
     if (m_slideshowTimer)
