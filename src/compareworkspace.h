@@ -319,24 +319,27 @@ class CompareWorkspace : public QWidget
     mviewer::ui::ROIMeasurementState m_roiState = mviewer::ui::ROIMeasurementState::Idle;
     QString m_roiStateDetail;
     std::optional<ROIStatsBatchResult> m_roiResult;
-    // M14-3 / P0-4: blink (flicker) compare
     QCheckBox *m_blinkChk = nullptr;
     QTimer *m_blinkTimer = nullptr;
     bool m_blinkState = false;
     QPushButton *m_temporaryCompareButton = nullptr;
     bool m_temporaryCompareActive = false;
+    int m_temporaryTargetPane = -1;
+    int m_temporaryDigit = 0;
     void toggleBlink();
     void applyBlink(bool state);
     void startBlink(int intervalMs);
     void stopBlink();
-    // Disarms every two-image mode (split / swipe / overlay / checkerboard /
-    // blink) when the loaded set is not exactly two images.
     void disarmSingleImageModes();
     void beginTemporaryCompare();
+    void beginDigitTemporaryCompare(int digit);
     void endTemporaryCompare();
     void updateTemporaryCompareAvailability();
-    // M24: mirror the blink target into the engine's BlinkController so the
-    // captured CompareSession carries the blink state (round-trip persistence).
+    void refreshCompareControlTooltips();
+    int paneIndexAtGlobalPos(const QPoint &globalPos) const;
+    void updatePaneIndexBadges();
+    bool temporaryHoldBlocked() const;
+    void applyTemporaryDisplay(int targetPane, int sourcePane);
     void syncEngineBlink();
     bool isSplitOrSwipe() const;
 
@@ -372,7 +375,6 @@ class CompareWorkspace : public QWidget
     mviewer::domain::SelectionHandle m_canvasSelectionHandle =
         mviewer::domain::SelectionHandle::None;
     int m_canvasSelectionPane = 0;
-    // A-4.1: Overlay compare mode — semi-transparent blend of the two images.
     QCheckBox *m_overlayChk = nullptr;
     QSlider *m_overlayAlphaSlider = nullptr; // 0–100 → opacity of top image
     QLabel *m_overlayAlphaLabel = nullptr;

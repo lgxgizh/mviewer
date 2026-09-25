@@ -1,6 +1,8 @@
 // CompareWorkspace keyboard-first interaction (M20 P0#4).
 #include "compareworkspace_p.h"
+#include "compareworkspace_temporary.h"
 
+#include <QCursor>
 #include <QKeyEvent>
 #include <QTimer>
 
@@ -24,10 +26,7 @@ bool CompareWorkspace::handleBasicCompareSpace(QKeyEvent *event)
 {
     if (event->key() != Qt::Key_Space || event->isAutoRepeat())
         return false;
-    if (m_temporaryCompareButton && m_temporaryCompareButton->isEnabled())
-    {
-        beginTemporaryCompare();
-    }
+    beginTemporaryCompare();
     event->accept();
     return true;
 }
@@ -56,6 +55,12 @@ bool CompareWorkspace::handleBasicCompareEscape(QKeyEvent *event)
     if (event->key() != Qt::Key_Escape)
         return false;
     event->accept();
+    if (m_temporaryCompareActive)
+    {
+        endTemporaryCompare();
+        showCompareStatus(tr("已恢复临时切换前的图像"));
+        return true;
+    }
     if (!m_lastSelection.isEmpty())
     {
         clearROI();
@@ -358,10 +363,31 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
         event->accept();
         return true;
     }
-    // Plain 1–8 → N-up compare presets (M16): key N compares N images.
+    // Plain 1–8: with more than two images and the pointer on a pane, hold the
+    // digit to preview that image. Otherwise keep the N-up layout preset.
     if (plain && (key >= Qt::Key_1 && key <= Qt::Key_8))
     {
-        const int n = key - Qt::Key_0; // '1'..'8' → 1..8
+        const int n = key - Qt::Key_0;
+        if (event->isAutoRepeat())
+        {
+            event->accept();
+            return true;
+        }
+        const int hovered = paneIndexAtGlobalPos(QCursor::pos());
+        const auto decision = mviewer::ui::decideDigitHold(m_engine.imageCount(), hovered, n);
+        if (decision.action == mviewer::ui::TemporaryAction::ShowDigit)
+        {
+            beginDigitTemporaryCompare(n);
+            event->accept();
+            return true;
+        }
+        if (decision.action == mviewer::ui::TemporaryAction::HintUseDigits)
+        {
+            showCompareStatus(tr("移到窗格上按 1–%1 临时换图；布局请用 Ctrl+2/4/8")
+                                  .arg(m_engine.imageCount()));
+            event->accept();
+            return true;
+        }
         applyLayoutPreset(n);
         event->accept();
         return true;
@@ -378,7 +404,19 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
 
 void CompareWorkspace::keyReleaseEvent(QKeyEvent *event)
 {
-    if (event->key() == Qt::Key_Space && !event->isAutoRepeat())
+    if (event->isAutoRepeat())
+    {
+        QWidget::keyReleaseEvent(event);
+        return;
+    }
+    if (event->key() == Qt::Key_Space && m_temporaryDigit == 0)
+    {
+        endTemporaryCompare();
+        event->accept();
+        return;
+    }
+    if (event->key() >= Qt::Key_1 && event->key() <= Qt::Key_8 &&
+        m_temporaryDigit == event->key() - Qt::Key_0)
     {
         endTemporaryCompare();
         event->accept();

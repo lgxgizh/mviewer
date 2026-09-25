@@ -190,6 +190,7 @@ void CompareWorkspace::updateActionAvailability()
     enableWidget(m_exportReportBtn, hasSet);
     enableWidget(m_swapBtn, hasSet);
     enableWidget(m_autoAlignChk, hasSet);
+    refreshCompareControlTooltips();
 }
 
 CompareWorkspace::NavState CompareWorkspace::captureNavState() const
@@ -342,6 +343,7 @@ void CompareWorkspace::updatePairButtons()
         m_nextPairBtn->setEnabled(hasNextPair());
     if (m_prevPairBtn)
         m_prevPairBtn->setEnabled(hasPrevPair());
+    refreshCompareControlTooltips();
 }
 
 void CompareWorkspace::applyLayoutPreset(int n)
