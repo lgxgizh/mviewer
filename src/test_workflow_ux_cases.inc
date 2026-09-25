@@ -2055,6 +2055,9 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     for (RawImageView *view : ws->findChildren<RawImageView *>())
         if (view && view->cellIndex() == 0)
             temporaryView0 = view;
+    // Move cursor off panes so Space uses classic A<-B (matches toolbar / no-hover).
+    if (temporaryCompare)
+        QCursor::setPos(temporaryCompare->mapToGlobal(temporaryCompare->rect().center()));
     sendKeyPressOnly(ws, Qt::Key_Space);
     CHECK(temporaryCompare && temporaryCompare->isDown() && temporaryView0 &&
               temporaryView0->hasTransientDisplay() && !blink->isChecked(),

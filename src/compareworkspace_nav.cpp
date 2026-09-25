@@ -180,10 +180,9 @@ void CompareWorkspace::updateActionAvailability()
     enableWidget(m_overlayChk, hasPair);
     enableWidget(m_checkerChk, hasPair);
     enableWidget(m_overlayAlphaSlider, overlayOn);
-    enableWidget(m_thresholdSlider, hasSet);
+    // Threshold / gain stay gated by syncContextualCompareControls (diff overlay on).
     enableWidget(m_diffOverlayChk, hasSet);
     enableWidget(m_diffHighlightChk, hasSet);
-    enableWidget(m_diffGainCombo, hasSet);
     enableWidget(m_pixelLinkChk, hasPair);
     enableWidget(m_clearLinksBtn, linksOn);
     enableWidget(m_analyzeBtn, hasImage);
@@ -191,6 +190,7 @@ void CompareWorkspace::updateActionAvailability()
     enableWidget(m_swapBtn, hasSet);
     enableWidget(m_autoAlignChk, hasSet);
     refreshCompareControlTooltips();
+    syncContextualCompareControls();
 }
 
 CompareWorkspace::NavState CompareWorkspace::captureNavState() const

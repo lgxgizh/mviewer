@@ -332,6 +332,7 @@ class CompareWorkspace : public QWidget
     void stopBlink();
     void disarmSingleImageModes();
     void beginTemporaryCompare();
+    void beginClassicTemporaryCompare();
     void beginDigitTemporaryCompare(int digit);
     void endTemporaryCompare();
     void updateTemporaryCompareAvailability();

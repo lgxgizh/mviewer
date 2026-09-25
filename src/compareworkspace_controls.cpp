@@ -488,7 +488,7 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
            "超过两张：改用数字键 1–N。"));
     m_temporaryCompareButton->setEnabled(false);
     connect(m_temporaryCompareButton, &QPushButton::pressed, this,
-            &CompareWorkspace::beginTemporaryCompare);
+            &CompareWorkspace::beginClassicTemporaryCompare);
     connect(m_temporaryCompareButton, &QPushButton::released, this,
             &CompareWorkspace::endTemporaryCompare);
     m_temporaryCompareButton->installEventFilter(this);

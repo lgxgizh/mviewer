@@ -50,6 +50,18 @@ void CompareWorkspace::applyTemporaryDisplay(int targetPane, int sourcePane)
     update();
 }
 
+void CompareWorkspace::beginClassicTemporaryCompare()
+{
+    // Toolbar button: always classic A<-B regardless of cursor position.
+    if (m_engine.imageCount() != 2 || temporaryHoldBlocked())
+    {
+        beginTemporaryCompare();
+        return;
+    }
+    m_temporaryDigit = 0;
+    applyTemporaryDisplay(0, 1);
+}
+
 void CompareWorkspace::beginTemporaryCompare()
 {
     const int hovered = paneIndexAtGlobalPos(QCursor::pos());
