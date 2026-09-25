@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.71] - 2026-09-26
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.71**.
+- **Compare UX (#44)**: stabilized the compare toolbar, added ROI statistics overlays, and reworked temporary image switching.
+
 ### 比较
 
 - 顶栏的阈值、增益、叠加透明度、棋盘大小和自定义列数改为始终占位，只用启用/禁用来切换，勾选差异或叠加时主按钮不再被挤开。
