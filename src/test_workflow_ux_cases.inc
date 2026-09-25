@@ -2055,7 +2055,10 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     for (RawImageView *view : ws->findChildren<RawImageView *>())
         if (view && view->cellIndex() == 0)
             temporaryView0 = view;
-    // Move cursor off panes so Space uses classic A<-B (matches toolbar / no-hover).
+    // Pin cursor to the temporary button (off panes) so Space uses classic A<-B,
+    // then restore — later Browse filter cases in this process must not inherit
+    // a Compare-local cursor position.
+    const QPoint cursorBefore = QCursor::pos();
     if (temporaryCompare)
         QCursor::setPos(temporaryCompare->mapToGlobal(temporaryCompare->rect().center()));
     sendKeyPressOnly(ws, Qt::Key_Space);
@@ -2065,6 +2068,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     sendKeyReleaseOnly(ws, Qt::Key_Space);
     CHECK(temporaryView0 && !temporaryView0->hasTransientDisplay() && !temporaryCompare->isDown(),
           "releasing Space stops momentary Compare (no stuck state)");
+    QCursor::setPos(cursorBefore);
 
     // Compare 会话可快照（供退出→重进恢复；round-trip 细节由 compare_session_tests 覆盖）。
     const auto session = ws->compareSession();
