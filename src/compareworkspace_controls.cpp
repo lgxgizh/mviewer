@@ -36,6 +36,7 @@ QWidget *CompareWorkspace::buildToolbarContainer(QHBoxLayout *&modeLayout, QHBox
                                                  QHBoxLayout *&toolActionsLayout)
 {
     auto *toolbarContainer = new QWidget(this);
+    toolbarContainer->setAttribute(Qt::WA_AlwaysShowToolTips, true);
     auto *toolbarLayout = new QVBoxLayout(toolbarContainer);
     toolbarLayout->setContentsMargins(0, 0, 0, 0);
     toolbarLayout->setSpacing(4);
@@ -482,10 +483,12 @@ void CompareWorkspace::buildToolbarActions(QHBoxLayout *toolLayout)
 
     m_temporaryCompareButton = new QPushButton(tr("临时切换"), this);
     m_temporaryCompareButton->setObjectName("temporaryCompareButton");
-    m_temporaryCompareButton->setToolTip(tr("按住时在 A 窗格显示 B；松开恢复 A（快捷键: Space）"));
+    m_temporaryCompareButton->setToolTip(
+        tr("两张图：按住 Space 或此按钮，鼠标所在一侧不动，另一侧临时显示这一侧。"
+           "超过两张：改用数字键 1–N。"));
     m_temporaryCompareButton->setEnabled(false);
     connect(m_temporaryCompareButton, &QPushButton::pressed, this,
-            &CompareWorkspace::beginTemporaryCompare);
+            &CompareWorkspace::beginClassicTemporaryCompare);
     connect(m_temporaryCompareButton, &QPushButton::released, this,
             &CompareWorkspace::endTemporaryCompare);
     m_temporaryCompareButton->installEventFilter(this);
@@ -537,8 +540,7 @@ QWidget *CompareWorkspace::buildStatusStrip()
     m_autoAlignChk = new QCheckBox(tr("对齐"), strip);
     m_autoAlignChk->setObjectName("autoAlignBeforeDiffToggle");
     m_autoAlignChk->setStyleSheet("color:#ffffff;");
-    m_autoAlignChk->setToolTip(
-        tr("对比前按整数像素平移自动对齐，消除平移错位后再算 PSNR/SSIM"));
+    m_autoAlignChk->setToolTip(tr("对比前按整数像素平移自动对齐，消除平移错位后再算 PSNR/SSIM"));
     m_autoAlignChk->setChecked(QSettings().value("autoAlignBeforeDiff", false).toBool());
     connect(m_autoAlignChk, &QCheckBox::toggled, this,
             [this](bool on)
@@ -563,30 +565,28 @@ QWidget *CompareWorkspace::buildStatusStrip()
 
 void CompareWorkspace::syncContextualCompareControls()
 {
+    // Accessory sliders stay in the layout so toggling a mode does not shove
+    // the primary buttons. Enabled state follows the mode; visibility does not.
     const bool overlayOn = m_overlayChk && m_overlayChk->isChecked();
     const bool checkerOn = m_checkerChk && m_checkerChk->isChecked();
     const bool diffOn = m_diffOverlayChk && m_diffOverlayChk->isChecked();
     const bool customGrid = m_layoutCombo && m_layoutCombo->currentIndex() == 6;
-    if (m_overlayAlphaSlider)
-        m_overlayAlphaSlider->setVisible(overlayOn);
-    if (m_overlayAlphaLabel)
-        m_overlayAlphaLabel->setVisible(overlayOn);
-    if (m_checkerSizeSlider)
-        m_checkerSizeSlider->setVisible(checkerOn);
-    if (m_checkerSizeLabel)
-        m_checkerSizeLabel->setVisible(checkerOn);
-    if (m_thresholdSlider)
-        m_thresholdSlider->setVisible(diffOn);
-    if (m_thresholdLabel)
-        m_thresholdLabel->setVisible(diffOn);
-    if (auto *caption = findChild<QLabel *>(QStringLiteral("diffThresholdCaption")))
-        caption->setVisible(diffOn);
-    if (m_diffGainCombo)
-        m_diffGainCombo->setVisible(diffOn);
-    if (auto *gainCaption = findChild<QLabel *>(QStringLiteral("diffGainCaption")))
-        gainCaption->setVisible(diffOn);
-    if (m_gridColsSpin)
-        m_gridColsSpin->setVisible(customGrid);
-    if (auto *columns = findChild<QLabel *>(QStringLiteral("compareColumnsCaption")))
-        columns->setVisible(customGrid);
+    auto keep = [](QWidget *widget, bool enabled)
+    {
+        if (!widget)
+            return;
+        widget->setVisible(true);
+        widget->setEnabled(enabled);
+    };
+    keep(m_overlayAlphaSlider, overlayOn);
+    keep(m_overlayAlphaLabel, overlayOn);
+    keep(m_checkerSizeSlider, checkerOn);
+    keep(m_checkerSizeLabel, checkerOn);
+    keep(m_thresholdSlider, diffOn);
+    keep(m_thresholdLabel, diffOn);
+    keep(findChild<QLabel *>(QStringLiteral("diffThresholdCaption")), diffOn);
+    keep(m_diffGainCombo, diffOn);
+    keep(findChild<QLabel *>(QStringLiteral("diffGainCaption")), diffOn);
+    keep(m_gridColsSpin, customGrid);
+    keep(findChild<QLabel *>(QStringLiteral("compareColumnsCaption")), customGrid);
 }

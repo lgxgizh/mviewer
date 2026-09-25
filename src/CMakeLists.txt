@@ -187,6 +187,8 @@ add_library(mviewer_ui STATIC
     compareworkspace_render_diff.cpp
     compareworkspace_render_canvas.cpp
     compareworkspace_roi.cpp
+    compareworkspace_roi_overlay.cpp
+    compareworkspace_temporary.cpp
     compareworkspace_analysis.cpp
     compareworkspace_editpanel.cpp
     compareworkspace_interact.cpp
@@ -1741,6 +1743,12 @@ set_tests_properties(m47_compare_lod_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 60
 add_executable(compare_display_planner_tests
     test_compare_display_planner.cpp
 )
+add_executable(compare_temporary_tests
+    test_compare_temporary.cpp
+)
+target_compile_features(compare_temporary_tests PRIVATE cxx_std_20)
+target_include_directories(compare_temporary_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_temporary_tests COMMAND compare_temporary_tests)
 target_link_libraries(compare_display_planner_tests
     PRIVATE
         Qt6::Widgets

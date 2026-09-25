@@ -893,7 +893,8 @@ void workflow1_browse(const QString &dirPath, const QStringList &paths)
         CHECK(!thumbnailPanel->selectedPaths().contains(paths[2]) &&
                   !sel->selection().contains(paths[2]) &&
                   thumbnailPanel->selectedPaths().contains(paths[3]) &&
-                  thumbnailPanel->selectedPaths().contains(paths[4]) && sel->selection().size() == 2,
+                  thumbnailPanel->selectedPaths().contains(paths[4]) &&
+                  sel->selection().size() == 2,
               "M49: Ctrl+click removes one item without collapsing the range");
     }
 
@@ -1623,30 +1624,35 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     QSlider *overlayAlphaSlider = ws->findChild<QSlider *>(QStringLiteral("overlayAlphaSlider"));
     QSlider *checkerSizeSlider = ws->findChild<QSlider *>(QStringLiteral("checkerSizeSlider"));
     QSlider *diffThresholdEarly = ws->findChild<QSlider *>(QStringLiteral("diffThresholdSlider"));
-    CHECK(overlayAlphaSlider && !overlayAlphaSlider->isVisible(),
-          "overlay opacity slider stays hidden until overlay mode is on");
-    CHECK(checkerSizeSlider && !checkerSizeSlider->isVisible(),
-          "checker size slider stays hidden until checkerboard mode is on");
-    CHECK(diffThresholdEarly && !diffThresholdEarly->isVisible(),
-          "diff threshold slider stays hidden until the diff overlay is on");
+    // Contextual helpers stay in-layout (no setVisible jump); availability is enablement.
+    CHECK(overlayAlphaSlider && overlayAlphaSlider->isVisible() && !overlayAlphaSlider->isEnabled(),
+          "overlay opacity slider stays disabled until overlay mode is on");
+    CHECK(checkerSizeSlider && checkerSizeSlider->isVisible() && !checkerSizeSlider->isEnabled(),
+          "checker size slider stays disabled until checkerboard mode is on");
+    CHECK(diffThresholdEarly && diffThresholdEarly->isVisible() && !diffThresholdEarly->isEnabled(),
+          "diff threshold slider stays disabled until the diff overlay is on");
     if (overlay && overlayAlphaSlider)
     {
         overlay->setChecked(true);
         pump(20);
-        CHECK(overlayAlphaSlider->isVisible(), "overlay opacity slider appears in overlay mode");
+        CHECK(overlayAlphaSlider->isVisible() && overlayAlphaSlider->isEnabled(),
+              "overlay opacity slider enables in overlay mode");
         overlay->setChecked(false);
         pump(20);
-        CHECK(!overlayAlphaSlider->isVisible(), "overlay opacity slider hides when overlay is off");
+        CHECK(overlayAlphaSlider->isVisible() && !overlayAlphaSlider->isEnabled(),
+              "overlay opacity slider disables when overlay is off");
     }
     QCheckBox *diffOverlayChk = ws->findChild<QCheckBox *>(QStringLiteral("diffOverlayToggle"));
     if (diffOverlayChk && diffThresholdEarly)
     {
         diffOverlayChk->setChecked(true);
         pump(20);
-        CHECK(diffThresholdEarly->isVisible(), "diff threshold slider appears with the overlay");
+        CHECK(diffThresholdEarly->isVisible() && diffThresholdEarly->isEnabled(),
+              "diff threshold slider enables with the overlay");
         diffOverlayChk->setChecked(false);
         pump(20);
-        CHECK(!diffThresholdEarly->isVisible(), "diff threshold slider hides with the overlay");
+        CHECK(diffThresholdEarly->isVisible() && !diffThresholdEarly->isEnabled(),
+              "diff threshold slider disables with the overlay");
     }
     QCheckBox *inspectorToggle = ws->findChild<QCheckBox *>(QStringLiteral("analysisPanelToggle"));
     if (analyzeButton && inspectorToggle)
@@ -2049,6 +2055,12 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     for (RawImageView *view : ws->findChildren<RawImageView *>())
         if (view && view->cellIndex() == 0)
             temporaryView0 = view;
+    // Pin cursor to the temporary button (off panes) so Space uses classic A<-B,
+    // then restore — later Browse filter cases in this process must not inherit
+    // a Compare-local cursor position.
+    const QPoint cursorBefore = QCursor::pos();
+    if (temporaryCompare)
+        QCursor::setPos(temporaryCompare->mapToGlobal(temporaryCompare->rect().center()));
     sendKeyPressOnly(ws, Qt::Key_Space);
     CHECK(temporaryCompare && temporaryCompare->isDown() && temporaryView0 &&
               temporaryView0->hasTransientDisplay() && !blink->isChecked(),
@@ -2056,6 +2068,7 @@ void workflow2_compare(const QString &pathA, const QString &pathB)
     sendKeyReleaseOnly(ws, Qt::Key_Space);
     CHECK(temporaryView0 && !temporaryView0->hasTransientDisplay() && !temporaryCompare->isDown(),
           "releasing Space stops momentary Compare (no stuck state)");
+    QCursor::setPos(cursorBefore);
 
     // Compare 会话可快照（供退出→重进恢复；round-trip 细节由 compare_session_tests 覆盖）。
     const auto session = ws->compareSession();
@@ -3097,7 +3110,8 @@ void workflow15_compare_nonfirst_pair_navigation(const QString &rootDir)
         CHECK(waitForPair(firstPair),
               "PASS PageUp on the live Compare widget steps to the previous pair");
         sendKey(compare, Qt::Key_Right);
-        CHECK(waitForPair(nextPair), "PASS Right on the live Compare widget steps to the next pair");
+        CHECK(waitForPair(nextPair),
+              "PASS Right on the live Compare widget steps to the next pair");
         sendKey(compare, Qt::Key_Left);
         CHECK(waitForPair(firstPair),
               "PASS Left on the live Compare widget steps to the previous pair");
