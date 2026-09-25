@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.71] - 2026-09-26
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.71**.
+- **Compare UX (#44)**: stabilized the compare toolbar, added ROI statistics overlays, and reworked temporary image switching.
+
 ## [1.0.70] - 2026-09-24
 
 ### Release
