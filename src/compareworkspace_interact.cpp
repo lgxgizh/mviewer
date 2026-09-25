@@ -401,7 +401,8 @@ bool CompareWorkspace::handleCanvasDoubleClick(QEvent *event)
     {
         const double factor = std::abs(fitScale - 1.0) < 0.005 ? 2.0 : (1.0 / currentScale);
         applyAnchorZoom(refCell, anchorX, anchorY, factor);
-        showCompareStatus(std::abs(factor - 2.0) < 0.001 ? tr("视图缩放: 200%") : tr("视图缩放: 100%"));
+        showCompareStatus(std::abs(factor - 2.0) < 0.001 ? tr("视图缩放: 200%")
+                                                         : tr("视图缩放: 100%"));
     }
     else
     {
@@ -740,4 +741,3 @@ void CompareWorkspace::drawPixelLinkLines(QPainter &p)
         p.drawLine(a, b);
     }
 }
-

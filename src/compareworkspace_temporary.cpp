@@ -1,5 +1,5 @@
-#include "compareworkspace_p.h"
 #include "compareworkspace_temporary.h"
+#include "compareworkspace_p.h"
 
 #include <QCursor>
 
@@ -201,8 +201,7 @@ void CompareWorkspace::refreshCompareControlTooltips()
     setTip(m_analyzeBtn, tr("打开比较检视面板"),
            loading ? tr("图片还在加载，暂时不能分析") : tr("当前没有可分析的图像"));
     setTip(m_exportReportBtn, tr("将对比结果导出为 HTML/Markdown/JSON 报告"),
-           count < 2 ? tr("至少需要 2 张图片才能导出报告")
-                     : tr("图片还在加载，暂时不能导出报告"));
+           count < 2 ? tr("至少需要 2 张图片才能导出报告") : tr("图片还在加载，暂时不能导出报告"));
     if (m_clearLinksBtn)
     {
         const bool linkOn = m_pixelLinkChk && m_pixelLinkChk->isChecked();

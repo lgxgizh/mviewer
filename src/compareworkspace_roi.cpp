@@ -104,10 +104,10 @@ void CompareWorkspace::buildROIMeasurementPanel(QVBoxLayout *sideLay)
     m_roiTable = new QTableWidget(this);
     m_roiTable->setObjectName("roiMeasurementTable");
     m_roiTable->setColumnCount(9);
-    m_roiTable->setHorizontalHeaderLabels(
-        {tr("Image"), QStringLiteral("V Mean"), QStringLiteral("R Mean"), QStringLiteral("G Mean"),
-         QStringLiteral("B Mean"), QStringLiteral("R/G"), QStringLiteral("B/G"), tr("Pixels"),
-         tr("Status")});
+    m_roiTable->setHorizontalHeaderLabels({tr("Image"), QStringLiteral("V Mean"),
+                                           QStringLiteral("R Mean"), QStringLiteral("G Mean"),
+                                           QStringLiteral("B Mean"), QStringLiteral("R/G"),
+                                           QStringLiteral("B/G"), tr("Pixels"), tr("Status")});
     m_roiTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_roiTable->setSelectionMode(QAbstractItemView::NoSelection);
     m_roiTable->setTextElideMode(Qt::ElideMiddle);

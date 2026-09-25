@@ -73,21 +73,20 @@ void CompareWorkspace::positionROIHud()
         if (canvas)
         {
             const int geomPane = split ? index : 0;
-            const QRectF destination =
-                cellFullDestRect(geomPane, canvasPaneGeometry(geomPane));
-            QRectF mapped = mviewer::ui::roiPresentationRect(m_lastSelection, view->sourceSize(),
-                                                             destination);
+            const QRectF destination = cellFullDestRect(geomPane, canvasPaneGeometry(geomPane));
+            QRectF mapped =
+                mviewer::ui::roiPresentationRect(m_lastSelection, view->sourceSize(), destination);
             const QPoint origin = m_compareCanvas->mapTo(this, QPoint(0, 0));
             roi = mapped.translated(origin).toAlignedRect();
             bounds = QRect(origin, m_compareCanvas->size());
         }
         else
         {
-            const QPointF a = view->sourcePointToWidget(
-                QPointF(m_lastSelection.x, m_lastSelection.y));
-            const QPointF b = view->sourcePointToWidget(
-                QPointF(m_lastSelection.x + m_lastSelection.width,
-                        m_lastSelection.y + m_lastSelection.height));
+            const QPointF a =
+                view->sourcePointToWidget(QPointF(m_lastSelection.x, m_lastSelection.y));
+            const QPointF b =
+                view->sourcePointToWidget(QPointF(m_lastSelection.x + m_lastSelection.width,
+                                                  m_lastSelection.y + m_lastSelection.height));
             if (!std::isfinite(a.x()) || !std::isfinite(b.x()))
             {
                 chip->hide();
@@ -108,8 +107,10 @@ void CompareWorkspace::positionROIHud()
             x = roi.left() + 4;
             y = roi.top() + 4;
         }
-        x = std::clamp(x, bounds.left() + 2, std::max(bounds.left() + 2, bounds.right() - size.width()));
-        y = std::clamp(y, bounds.top() + 2, std::max(bounds.top() + 2, bounds.bottom() - size.height()));
+        x = std::clamp(x, bounds.left() + 2,
+                       std::max(bounds.left() + 2, bounds.right() - size.width()));
+        y = std::clamp(y, bounds.top() + 2,
+                       std::max(bounds.top() + 2, bounds.bottom() - size.height()));
         chip->setGeometry(x, y, size.width(), size.height());
         chip->show();
         chip->raise();

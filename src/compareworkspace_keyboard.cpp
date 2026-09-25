@@ -383,8 +383,8 @@ bool CompareWorkspace::handleAdvancedCompareKey(QKeyEvent *event)
         }
         if (decision.action == mviewer::ui::TemporaryAction::HintUseDigits)
         {
-            showCompareStatus(tr("移到窗格上按 1–%1 临时换图；布局请用 Ctrl+2/4/8")
-                                  .arg(m_engine.imageCount()));
+            showCompareStatus(
+                tr("移到窗格上按 1–%1 临时换图；布局请用 Ctrl+2/4/8").arg(m_engine.imageCount()));
             event->accept();
             return true;
         }

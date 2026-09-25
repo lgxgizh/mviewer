@@ -687,7 +687,7 @@ class CompareWorkspace : public QWidget
                    std::abs(bGain - 1.0f) < 1e-6f && rotation == 0 && !flipH && !flipV && !hasCrop;
         }
     };
-    std::vector<CellAdjust> m_cellAdjusts; // per-cell adjustment state
+    std::vector<CellAdjust> m_cellAdjusts;      // per-cell adjustment state
     int m_editIdx = -1, m_explicitEditIdx = -1; // currently selected cell for editing
     static mviewer::core::CompareAdjustmentState reportAdjustment(const CellAdjust &adjust);
     static ImageData applyAdjusts(const ImageData &src, const CellAdjust &a);

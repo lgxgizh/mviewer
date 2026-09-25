@@ -4,9 +4,9 @@
 
 namespace
 {
-using mviewer::ui::TemporaryAction;
 using mviewer::ui::decideDigitHold;
 using mviewer::ui::decidePairHold;
+using mviewer::ui::TemporaryAction;
 
 int g_failed = 0;
 
@@ -23,8 +23,7 @@ void expect(bool cond, const char *message)
 int main()
 {
     const auto left = decidePairHold(2, 0);
-    expect(left.action == TemporaryAction::ShowPair && left.targetPane == 1 &&
-               left.sourcePane == 0,
+    expect(left.action == TemporaryAction::ShowPair && left.targetPane == 1 && left.sourcePane == 0,
            "hover left shows left image on the right");
     const auto right = decidePairHold(2, 1);
     expect(right.action == TemporaryAction::ShowPair && right.targetPane == 0 &&

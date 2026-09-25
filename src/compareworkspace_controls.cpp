@@ -540,8 +540,7 @@ QWidget *CompareWorkspace::buildStatusStrip()
     m_autoAlignChk = new QCheckBox(tr("对齐"), strip);
     m_autoAlignChk->setObjectName("autoAlignBeforeDiffToggle");
     m_autoAlignChk->setStyleSheet("color:#ffffff;");
-    m_autoAlignChk->setToolTip(
-        tr("对比前按整数像素平移自动对齐，消除平移错位后再算 PSNR/SSIM"));
+    m_autoAlignChk->setToolTip(tr("对比前按整数像素平移自动对齐，消除平移错位后再算 PSNR/SSIM"));
     m_autoAlignChk->setChecked(QSettings().value("autoAlignBeforeDiff", false).toBool());
     connect(m_autoAlignChk, &QCheckBox::toggled, this,
             [this](bool on)
