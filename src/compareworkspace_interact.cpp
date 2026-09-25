@@ -9,11 +9,12 @@ void CompareWorkspace::showShortcutHelp()
     // Lightweight status-bar style tip via window title flash — no modal dialog
     // so day-long keyboard work is not interrupted.
     const QString tip =
-        tr("比较窗口快捷键: B 闪烁 · Space 临时切换 · S 分割 · W 滑动 · O 叠加 · "
-           "K 棋盘 · H Diff高亮 · Shift+1…5 通道 · Z/D 同步缩放/拖动 · R 准星 · "
-           "L 像素连线 · 1~8 布局 · P 上一对 · N 下一对 · PgUp 上一对 · ← 上一对 · "
-           "PgDn 下一对 · → 下一对 · F/Ctrl+0 Fit · Ctrl+1 100% · +/- 缩放 · X 交换 A/B · "
-           "Alt/Shift+方向键 微调ROI · ? 帮助 · Esc 有选区则清除，否则退出 · "
+        tr("比较窗口快捷键: B 闪烁 · Space 两图按住临时切换（鼠标一侧不动） · "
+           "超过 2 张时按住 1–N 在鼠标窗格临时换图 · Ctrl+2/4/8 布局 · S 分割 · W 滑动 · "
+           "O 叠加 · K 棋盘 · H Diff高亮 · Shift+1…5 通道 · Z/D 同步缩放/拖动 · R 准星 · "
+           "L 像素连线 · P 上一对 · N 下一对 · PgUp 上一对 · ← 上一对 · "
+           "PgDn 下一对 · → 下一对 · F/Ctrl+0 Fit · Ctrl+1 100% · +/- 缩放 · X 交换 · "
+           "Alt/Shift+方向键 微调ROI · ? 帮助 · Esc 先结束临时切换或清除选区，否则退出 · "
            "Ctrl+Shift+A 取消选择 · Ctrl+Alt+A 批量分析导出");
     showCompareStatus(tip, 8000);
 }
@@ -154,47 +155,6 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
     }
 
     return QWidget::eventFilter(view, event);
-}
-
-void CompareWorkspace::beginTemporaryCompare()
-{
-    if (m_temporaryCompareActive || m_engine.imageCount() != 2 || m_cellViews.size() < 2 ||
-        anyCanvasCompareMode() || (m_blinkChk && m_blinkChk->isChecked()))
-        return;
-    RawImageView *a = m_cellViews[0];
-    RawImageView *b = m_cellViews[1];
-    if (!a || !b || b->displayImage().isNull() || !b->sourceSize().isValid())
-        return;
-
-    a->setTransientDisplay(b->displayImage(), b->sourceSize(), b->sourceRect());
-    m_temporaryCompareActive = true;
-    if (m_temporaryCompareButton)
-        m_temporaryCompareButton->setDown(true);
-    update();
-}
-
-void CompareWorkspace::endTemporaryCompare()
-{
-    if (!m_temporaryCompareActive)
-        return;
-    if (!m_cellViews.isEmpty() && m_cellViews[0])
-        m_cellViews[0]->clearTransientDisplay();
-    m_temporaryCompareActive = false;
-    if (m_temporaryCompareButton)
-        m_temporaryCompareButton->setDown(false);
-    update();
-}
-
-void CompareWorkspace::updateTemporaryCompareAvailability()
-{
-    const bool available =
-        m_engine.imageCount() == 2 && m_cellViews.size() >= 2 && m_cellViews[0] && m_cellViews[1] &&
-        !m_cellViews[1]->displayImage().isNull() && m_cellViews[1]->sourceSize().isValid() &&
-        !anyCanvasCompareMode() && !(m_blinkChk && m_blinkChk->isChecked());
-    if (m_temporaryCompareButton)
-        m_temporaryCompareButton->setEnabled(available);
-    if (!available)
-        endTemporaryCompare();
 }
 
 // M34: wheel + mouse input for the dedicated compareCanvas page. All canvas
@@ -441,7 +401,8 @@ bool CompareWorkspace::handleCanvasDoubleClick(QEvent *event)
     {
         const double factor = std::abs(fitScale - 1.0) < 0.005 ? 2.0 : (1.0 / currentScale);
         applyAnchorZoom(refCell, anchorX, anchorY, factor);
-        showCompareStatus(std::abs(factor - 2.0) < 0.001 ? tr("视图缩放: 200%") : tr("视图缩放: 100%"));
+        showCompareStatus(std::abs(factor - 2.0) < 0.001 ? tr("视图缩放: 200%")
+                                                         : tr("视图缩放: 100%"));
     }
     else
     {
@@ -780,4 +741,3 @@ void CompareWorkspace::drawPixelLinkLines(QPainter &p)
         p.drawLine(a, b);
     }
 }
-

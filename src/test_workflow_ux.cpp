@@ -58,6 +58,7 @@
 #include <QClipboard>
 #include <QComboBox>
 #include <QContextMenuEvent>
+#include <QCursor>
 #include <QDialog>
 #include <QDir>
 #include <QElapsedTimer>
