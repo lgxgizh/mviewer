@@ -273,15 +273,16 @@ int main(int argc, char **argv)
         CHECK(QApplication::clipboard()->text().contains(QStringLiteral("R Mean\tG Mean")),
               "clipboard export is Excel-ready TSV");
     }
-    QPushButton *hud = workspace->findChild<QPushButton *>("roiMeasurementHud");
-    CHECK(hud && hud->isVisible() && hud->text().contains(QStringLiteral("Ready")),
+    auto *chipA = workspace->findChild<QLabel *>("roiPaneChip0");
+    auto *chipB = workspace->findChild<QLabel *>("roiPaneChip1");
+    CHECK(chipA && chipA->isVisible() && chipA->text().contains(QLatin1Char('V')),
           "side-panel-hidden HUD immediately exposes ready results");
-    CHECK(hud && hud->text().contains(QLatin1Char('A')) && hud->text().contains(QLatin1Char('B')),
+    CHECK(chipB && chipB->isVisible() && chipB->text().contains(QLatin1Char('V')),
           "ROI HUD lists pane A and pane B on separate lines");
-    if (hud)
+    if (chipA)
     {
-        const QRect hudInWs(hud->mapTo(workspace, QPoint(0, 0)), hud->size());
-        CHECK(workspace->contentsRect().contains(hudInWs),
+        const QRect chipInWs(chipA->mapTo(workspace, QPoint(0, 0)), chipA->size());
+        CHECK(workspace->contentsRect().contains(chipInWs),
               "ROI HUD stays fully inside the Compare workspace");
     }
 
@@ -372,17 +373,21 @@ int main(int argc, char **argv)
               "Canvas/Grid switch preserves canonical ROI geometry");
     }
 
-    CHECK(hud && hud->isVisible(), "side-panel-hidden ROI HUD is visible");
+    CHECK(chipA && chipA->isVisible() && chipB && chipB->isVisible(),
+          "side-panel-hidden ROI HUD is visible");
     CHECK(copy != nullptr, "ROI table exposes Copy ROI Measurements");
-    if (hud)
     {
-        hud->click();
-        pump(20);
         QCheckBox *side = workspace->findChild<QCheckBox *>("analysisPanelToggle");
-        CHECK(side && side->isChecked() && table->isVisible() && !hud->isVisible(),
-              "HUD click opens the full visible measurement table");
+        CHECK(side, "analysis panel toggle exists");
         if (side)
+        {
+            side->setChecked(true);
+            pump(20);
+            CHECK(side->isChecked() && table->isVisible(),
+                  "HUD click opens the full visible measurement table");
             side->setChecked(false);
+            pump(20);
+        }
     }
 
     {

@@ -190,11 +190,13 @@ void CompareWorkspace::refreshCompareControlTooltips()
         widget->setToolTip(widget->isEnabled() ? enabledTip : disabledTip);
     };
     setTip(m_prevPairBtn,
-           tr("上一对（P、PgUp、←）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A 批量分析导出。"),
-           tr("已经是第一对，没有上一对（P、PgUp、←）"));
+           tr("P 上一对（PgUp、← 同样是上一对）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A 批量分析导出。"),
+           tr("已经是第一对，没有上一对（P、PgUp、←）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A "
+              "批量分析导出。"));
     setTip(m_nextPairBtn,
-           tr("下一对（N、PgDn、→）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A 批量分析导出。"),
-           tr("已经是最后一对，没有下一对（N、PgDn、→）"));
+           tr("N 下一对（PgDn、→ 同样是下一对）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A 批量分析导出。"),
+           tr("已经是最后一对，没有下一对（N、PgDn、→）。Ctrl+Shift+A 取消选择。Ctrl+Alt+A "
+              "批量分析导出。"));
     setTip(m_swapBtn, tr("交换窗格顺序（快捷键 X）"),
            loading ? tr("图片还在加载，暂时不能交换")
                    : tr("至少需要 2 张图片才能交换（快捷键 X）"));

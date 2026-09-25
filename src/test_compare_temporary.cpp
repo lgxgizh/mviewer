@@ -29,7 +29,10 @@ int main()
     expect(right.action == TemporaryAction::ShowPair && right.targetPane == 0 &&
                right.sourcePane == 1,
            "hover right shows right image on the left");
-    expect(decidePairHold(2, -1).action == TemporaryAction::HintMoveMouse, "pair needs a pane");
+    const auto noHover = decidePairHold(2, -1);
+    expect(noHover.action == TemporaryAction::ShowPair && noHover.targetPane == 0 &&
+               noHover.sourcePane == 1,
+           "no hover keeps classic A<-B");
     expect(decidePairHold(3, 0).action == TemporaryAction::HintUseDigits, "space unused above 2");
     expect(decidePairHold(1, 0).action == TemporaryAction::None, "single image has no hold");
 

@@ -31,14 +31,12 @@ inline TemporaryKeyDecision decidePairHold(int imageCount, int hoveredPane)
     }
     if (imageCount != 2)
         return decision;
-    if (hoveredPane != 0 && hoveredPane != 1)
-    {
-        decision.action = TemporaryAction::HintMoveMouse;
-        return decision;
-    }
+    // No hover: keep classic A<-B so Space/button still work without pointing.
+    // Hovered side stays; the other side shows the hovered image.
+    const int source = (hoveredPane == 0 || hoveredPane == 1) ? hoveredPane : 0;
     decision.action = TemporaryAction::ShowPair;
-    decision.sourcePane = hoveredPane;
-    decision.targetPane = 1 - hoveredPane;
+    decision.sourcePane = source;
+    decision.targetPane = 1 - source;
     return decision;
 }
 
