@@ -9,7 +9,7 @@ namespace
 {
 void rememberPyramidDelivery(mviewer::ui::CompareSessionRuntime *session, int pane,
                              const std::string &path, const QImage &image, const QSize &sourceSize,
-                             const CompareWorkspace::DisplayRequest &req, bool full)
+                             const mviewer::ui::CompareDisplayRequest &req, bool full)
 {
     if (!session || pane < 0)
         return;
@@ -22,7 +22,6 @@ void rememberPyramidDelivery(mviewer::ui::CompareSessionRuntime *session, int pa
         slot.path = path;
     }
     slot.sourceSize = sourceSize;
-    // Replace same-edge entry; otherwise append (bounded).
     const int edge = std::max(req.target.width(), req.target.height());
     for (size_t i = 0; i < slot.levels.size(); ++i)
     {
@@ -48,14 +47,14 @@ void rememberPyramidDelivery(mviewer::ui::CompareSessionRuntime *session, int pa
         slot.haveFull = true;
 }
 
-bool tryPaintFromPyramid(CompareWorkspace *ws, int pane,
-                         const CompareWorkspace::DisplayRequest &desired)
+bool tryPaintFromPyramid(mviewer::ui::CompareSessionRuntime *session,
+                         const QList<RawImageView *> &cellViews, int pane,
+                         const mviewer::ui::CompareDisplayRequest &desired)
 {
-    if (!ws || !ws->m_session || pane < 0 ||
-        pane >= static_cast<int>(ws->m_session->panePyramids.size()))
+    if (!session || pane < 0 || pane >= static_cast<int>(session->panePyramids.size()))
         return false;
-    auto &slot = ws->m_session->panePyramids[static_cast<size_t>(pane)];
-    if (slot.images.empty() || pane >= ws->m_cellViews.size() || !ws->m_cellViews[pane])
+    auto &slot = session->panePyramids[static_cast<size_t>(pane)];
+    if (slot.images.empty() || pane >= cellViews.size() || !cellViews[pane])
         return false;
 
     std::vector<mviewer::ui::CompareDisplayPlan> have;
@@ -82,7 +81,7 @@ bool tryPaintFromPyramid(CompareWorkspace *ws, int pane,
         slot.images[static_cast<size_t>(idx)].isNull())
         return false;
 
-    RawImageView *view = ws->m_cellViews[pane];
+    RawImageView *view = cellViews[pane];
     const double oldScale = view->scale();
     const QPointF oldOffset = view->offset();
     const QSize oldSource = view->sourceSize();
@@ -196,7 +195,7 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
             desired = buildPaneDisplayRequest(idx, false);
         }
         if (desired.target.isValid())
-            tryPaintFromPyramid(this, idx, desired);
+            tryPaintFromPyramid(m_session.get(), m_cellViews, idx, desired);
     }
 
     std::vector<ImageData> pixels;
