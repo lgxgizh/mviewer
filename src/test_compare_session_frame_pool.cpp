@@ -74,16 +74,21 @@ int main()
     else
         std::printf("PASS: a/c/d retained\n");
 
-    // Frame index keying
-    auto a1 = makeFrame("/a.png", 80, 80);
-    pool.put("/a.png", 1, a1);
-    if (!pool.tryGet("/a.png", 1) || !pool.tryGet("/a.png", 0))
+    // Frame index keying (fresh pool so eviction cannot drop frame 0).
     {
-        std::printf("FAIL: path+frameIndex keying\n");
-        ++failures;
+        CompareSessionFramePool keyed(/*maxEntries=*/4, /*maxBytes=*/1024ull * 1024ull);
+        auto a0 = makeFrame("/a.png", 100, 100);
+        auto a1 = makeFrame("/a.png", 80, 80);
+        keyed.put("/a.png", 0, a0);
+        keyed.put("/a.png", 1, a1);
+        if (!keyed.tryGet("/a.png", 1) || !keyed.tryGet("/a.png", 0))
+        {
+            std::printf("FAIL: path+frameIndex keying\n");
+            ++failures;
+        }
+        else
+            std::printf("PASS: path+frameIndex keying\n");
     }
-    else
-        std::printf("PASS: path+frameIndex keying\n");
 
     // Null pixels ignored
     mviewer::domain::ImageMetadata meta;
