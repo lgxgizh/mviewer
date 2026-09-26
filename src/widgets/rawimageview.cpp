@@ -426,7 +426,9 @@ void RawImageView::drawBaseLayer(QPainter &p)
     const QImage &image = presentationImage();
     const QSize sourceSize = renderSourceSize();
     const QRect sourceRect = renderSourceRect();
-    p.setRenderHint(QPainter::SmoothPixmapTransform, m_scale < 4.0);
+    // Skip smooth filtering while the user is actively dragging — nearest is
+    // cheaper and the final release paint restores smooth when needed.
+    p.setRenderHint(QPainter::SmoothPixmapTransform, !m_dragging && m_scale < 4.0);
 
     // Center in widget, then apply pan offset, then scale.
     const double cx = width() / 2.0 + m_offset.x();
@@ -582,6 +584,7 @@ void RawImageView::mouseReleaseEvent(QMouseEvent *ev)
     {
         m_dragging = false;
         setCursor(Qt::OpenHandCursor);
+        update(); // restore SmoothPixmapTransform after nearest-during-drag
     }
 }
 

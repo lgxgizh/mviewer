@@ -189,6 +189,7 @@ add_library(mviewer_ui STATIC
     compareworkspace_roi.cpp
     compareworkspace_roi_overlay.cpp
     compareworkspace_temporary.cpp
+    compareworkspace_prefetch.cpp
     compareworkspace_analysis.cpp
     compareworkspace_editpanel.cpp
     compareworkspace_interact.cpp
@@ -1749,6 +1750,12 @@ add_executable(compare_temporary_tests
 target_compile_features(compare_temporary_tests PRIVATE cxx_std_20)
 target_include_directories(compare_temporary_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME compare_temporary_tests COMMAND compare_temporary_tests)
+add_executable(compare_neighbor_paths_tests
+    test_compare_neighbor_paths.cpp
+)
+target_compile_features(compare_neighbor_paths_tests PRIVATE cxx_std_20)
+target_include_directories(compare_neighbor_paths_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_neighbor_paths_tests COMMAND compare_neighbor_paths_tests)
 target_link_libraries(compare_display_planner_tests
     PRIVATE
         Qt6::Widgets

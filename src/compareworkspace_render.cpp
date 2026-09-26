@@ -81,7 +81,9 @@ void CompareWorkspace::updateCanvasModeVisibility()
     endTemporaryCompare();
     if (!m_pageStack || !m_compareCanvas || !m_compareGridPage || !m_compareLoadingPage)
         return;
-    if (m_loadInFlight)
+    // Soft keep-grid: only blank to the loading page when there is no prior
+    // pair to keep on screen. Pair navigation keeps the grid/canvas visible.
+    if (m_loadInFlight && m_engine.imageCount() == 0)
     {
         m_pageStack->setCurrentWidget(m_compareLoadingPage);
         update();
