@@ -115,6 +115,7 @@ CompareWorkspace::~CompareWorkspace()
     // The batch cancellation below then also waits for any delivery that
     // already started, closing the decode-done vs destruction race.
     m_lifetime->invalidate();
+    cancelPairPrefetch();
     // A batch completion is bookkeeping, not cancellation. Every request is
     // accounted exactly once when a batch is superseded so a cancelled queued
     // decode cannot leave `remaining` permanently non-zero. The generation
@@ -200,6 +201,7 @@ void CompareWorkspace::setImages(const QStringList &paths)
 void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &frameIndices)
 {
     endTemporaryCompare();
+    cancelPairPrefetch();
     // A new compare set supersedes any in-flight ROI calculation immediately;
     // preserving only the geometry for a possible same-dimension navigation
     // restore prevents stale source statistics from crossing image pairs.
@@ -241,17 +243,26 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
     const int requested = static_cast<int>(paths.size());
     if (requested > 0)
     {
-        // Publish loading state before queueing any probe. The page is
-        // non-modal and remains current for the whole latest-wins batch.
+        // Publish loading state before queueing any probe. Soft keep-grid:
+        // when panes already show a prior pair, keep them visible (stale-
+        // while-revalidate) instead of blanking to the full-page spinner.
         if (m_compareLoadingLabel)
             m_compareLoadingLabel->setText(tr("正在加载 %1 张图片…").arg(requested));
-        if (m_compareLoadingProgress)
+        const bool softKeepGrid = m_engine.imageCount() > 0;
+        if (softKeepGrid)
         {
-            m_compareLoadingProgress->setRange(0, 0);
-            m_compareLoadingProgress->setVisible(true);
+            showCompareStatus(tr("正在加载下一组…"), 2500);
         }
-        if (m_pageStack && m_compareLoadingPage)
-            m_pageStack->setCurrentWidget(m_compareLoadingPage);
+        else
+        {
+            if (m_compareLoadingProgress)
+            {
+                m_compareLoadingProgress->setRange(0, 0);
+                m_compareLoadingProgress->setVisible(true);
+            }
+            if (m_pageStack && m_compareLoadingPage)
+                m_pageStack->setCurrentWidget(m_compareLoadingPage);
+        }
         update();
     }
     if (requested == 0)
@@ -504,6 +515,7 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     updateTemporaryCompareAvailability();
     updateLayoutStatus();
     updateROIAvailabilityStatus();
+    prefetchNeighborPairs();
     setFocus();
     // P0-2: publish the compare set + reference to the app-wide SelectionModel so
     // Metadata/Analysis/Export stay in sync with what is being compared.

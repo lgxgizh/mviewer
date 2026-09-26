@@ -212,13 +212,8 @@ class CompareWorkspace : public QWidget
 
     CompareEngine m_engine;
 
-    // M28 P1-01: async image loading (decode happens on the DecodePool, never
-    // on the UI thread). m_loadGen supersedes stale batches; a session applied
-    // while a load is in flight is deferred until finishLoad(). M46: loading
-    // goes through the Application-layer ImageLoadingService and every request
-    // carries this workspace's lifetime token, invalidated in the destructor —
-    // a batch completion that races workspace destruction is suppressed before
-    // its client callback starts.
+    // Async Compare load (DecodePool). m_loadGen supersedes stale batches;
+    // m_lifetime (invalidated in dtor) suppresses late deliveries (M28/M46).
     uint64_t m_loadGen = 0;
     bool m_loadInFlight = false;
     std::shared_ptr<mviewer::core::AsyncLifetimeToken> m_lifetime;
@@ -226,10 +221,7 @@ class CompareWorkspace : public QWidget
     struct LoadRequest
     {
         std::atomic<bool> accounted{false};
-        // Capability probing is asynchronous too. The probe handle and
-        // the subsequent foreground load handle share the batch lock so a
-        // superseding setImages() cannot race a probe into starting a decode
-        // after its handle was cancelled.
+        // Probe + foreground load share handlesMutex with cancelLoadBatch.
         TaskScheduler::TaskHandle probeHandle;
         mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
     };
@@ -247,21 +239,20 @@ class CompareWorkspace : public QWidget
     static bool accountLoadRequest(const std::shared_ptr<LoadBatch> &batch, size_t index,
                                    const mviewer::application::ImageLoadingService::Result *result,
                                    bool countAsFailure = true);
-    // M47: paths of the current load batch (parallel to pane indices) — the
-    // display materialization uses them for the source-backed LOD fallback.
+    // Pane-index-parallel paths for source-backed LOD (M47).
     std::vector<std::string> m_comparePaths;
-    // M47: count of load requests skipped as infeasible (full-frame
-    // materialization > the 256 MB allocation limit). Their panes display via
-    // the source-backed LOD path and must not count as load failures. A
-    // counter (not a set) so a duplicated path in one compare set still
-    // accounts exactly once per request.
+    // Infeasible full-frame loads kept as metadata placeholders (M47).
     int m_infeasibleCount = 0;
+    // Background preload handles for the previous/next nav window.
+    std::vector<mviewer::application::ImageLoadingService::AsyncRequestHandle> m_pairPrefetch;
     void queueLoadRequests(const std::shared_ptr<LoadBatch> &batch,
                            const std::vector<std::string> &paths,
                            const std::vector<int> &frameIndices);
     void cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch);
     void finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames, int failedCount,
                     int infeasibleCount = 0);
+    void cancelPairPrefetch();
+    void prefetchNeighborPairs();
     QCheckBox *m_syncZoomChk = nullptr;
     QCheckBox *m_syncDragChk = nullptr;
     QCheckBox *m_uniformScaleChk = nullptr; // H5: 统一像素倍率
