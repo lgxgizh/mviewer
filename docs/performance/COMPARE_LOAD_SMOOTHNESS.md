@@ -39,7 +39,6 @@
 | Browse→Compare blank first frames | `seedWarmDisplay` + `m_pendingWarmSeeds` reuse Viewer displayRaster |
 | Canvas filter during gesture | SmoothPixmapTransform off while dragging / interactionBusy |
 
-
 ## 极致快速 Tier-1+2 (beyond #49)
 
 | Issue | Change |

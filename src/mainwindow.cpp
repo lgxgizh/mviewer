@@ -47,11 +47,12 @@ void seedCompareFromViewer(CompareWorkspace *compare, ImageViewer *viewer, const
     {
         if (path.isEmpty() || path == viewerPath)
             continue;
-        auto warm = viewer->takeWarmDisplayRaster(path);
-        if (!warm || warm->image.isNull())
+        QImage image;
+        QSize srcSize;
+        QRect srcRect;
+        if (!viewer->takeWarmDisplayForCompare(path, &image, &srcSize, &srcRect))
             continue;
-        QSize srcSize = warm->sourceSize.isValid() ? warm->sourceSize : warm->image.size();
-        compare->seedWarmDisplay(path, warm->image, srcSize, warm->sourceRect);
+        compare->seedWarmDisplay(path, image, srcSize, srcRect);
     }
 }
 } // namespace

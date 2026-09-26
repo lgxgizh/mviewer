@@ -624,6 +624,22 @@ ImageViewer::takeWarmDisplayRaster(const QString &path)
     return warm;
 }
 
+bool ImageViewer::takeWarmDisplayForCompare(const QString &path, QImage *image, QSize *sourceSize,
+                                            QRect *sourceRect)
+{
+    auto warm = takeWarmDisplayRaster(path);
+    if (!warm || warm->image.isNull())
+        return false;
+    const QSize size = warm->sourceSize.isValid() ? warm->sourceSize : warm->image.size();
+    if (image)
+        *image = warm->image;
+    if (sourceSize)
+        *sourceSize = size;
+    if (sourceRect)
+        *sourceRect = warm->sourceRect.isValid() ? warm->sourceRect : QRect(QPoint(0, 0), size);
+    return true;
+}
+
 void ImageViewer::enforceDisplayRasterWarmBudget()
 {
     while (m_displayRasterWarm.size() > kDisplayWarmMaxEntries ||
