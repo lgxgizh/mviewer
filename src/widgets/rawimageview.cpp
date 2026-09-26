@@ -236,7 +236,6 @@ void RawImageView::computeFit()
     m_offset = {};
 }
 
-
 void RawImageView::drawCornerBadge(QPainter &p, const QString &txt, const QColor &bg, bool right)
 {
     QFont bf = p.font();

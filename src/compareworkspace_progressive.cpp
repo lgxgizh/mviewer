@@ -80,8 +80,8 @@ void CompareWorkspace::applySoftReloadPlaceholders(const std::vector<std::string
             continue;
 
         const std::string &path = paths[static_cast<size_t>(i)];
-        const bool samePath =
-            i < static_cast<int>(m_comparePaths.size()) && m_comparePaths[static_cast<size_t>(i)] == path;
+        const bool samePath = i < static_cast<int>(m_comparePaths.size()) &&
+                              m_comparePaths[static_cast<size_t>(i)] == path;
 
         if (i < m_cellLabels.size())
             setComparePaneCaptionText(m_cellLabels[i], basenameOfPath(path));

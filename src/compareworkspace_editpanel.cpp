@@ -1,6 +1,6 @@
 // CompareWorkspace edit panel: adjustments, metrics, per-pane histograms, presets (M20 P0#2).
-#include "compareworkspace_p.h"
 #include "compareworkspace_caption.h"
+#include "compareworkspace_p.h"
 #include <QFontMetrics>
 
 #include "runtime_storage.h"

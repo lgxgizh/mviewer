@@ -12,11 +12,12 @@ using FinishFn = std::function<void()>;
 using AccountFn = std::function<void(bool failed)>;
 using ResultFn = std::function<void(const mviewer::application::ImageLoadingService::Result &)>;
 
-void runCompareCapabilityProbe(
-    const std::shared_ptr<CompareLoadBatch> &batch, size_t i, CompareLoadRequest *request,
-    const std::string &path, int frameIndex, const ImageLoadOptions &opts,
-    const std::weak_ptr<mviewer::core::AsyncLifetimeToken> &lifetime, const FinishFn &finish,
-    const AccountFn &account, const ResultFn &onResult, const TaskScheduler::TaskContext &ctx)
+void runCompareCapabilityProbe(const std::shared_ptr<CompareLoadBatch> &batch, size_t i,
+                               CompareLoadRequest *request, const std::string &path, int frameIndex,
+                               const ImageLoadOptions &opts,
+                               const std::weak_ptr<mviewer::core::AsyncLifetimeToken> &lifetime,
+                               const FinishFn &finish, const AccountFn &account,
+                               const ResultFn &onResult, const TaskScheduler::TaskContext &ctx)
 {
     if (ctx.isCancelled())
         return;
@@ -118,8 +119,8 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
                     handle =
                         mviewer::application::ImageLoadingService::instance().promotePreloadAsync(
                             prefetch,
-                            [batch, i, finish](
-                                const mviewer::application::ImageLoadingService::Result &res)
+                            [batch, i,
+                             finish](const mviewer::application::ImageLoadingService::Result &res)
                             {
                                 if (CompareWorkspace::accountLoadRequest(batch, i, &res))
                                     finish();

@@ -251,7 +251,7 @@ bool CompareWorkspace::handleCanvasPress(QEvent *event)
             return true;
         }
         m_dragging = true;
-            noteCompareInteraction();
+        noteCompareInteraction();
         m_lastMouse = me->pos();
         m_dragStartPos = me->pos();
         m_dragIdx = canvasRefCellAt(me->pos());

@@ -34,7 +34,7 @@ HistogramWidget *createPaneHistogramOverlay(QWidget *cellWidget, int index, bool
 }
 
 ComparePaneCaption *createPaneCaption(QWidget *cellWidget, int index, const ImageFrame *img,
-                                 bool filenameOverlay)
+                                      bool filenameOverlay)
 {
     auto *caption = new ComparePaneCaption(cellWidget);
     caption->setObjectName(QString("paneCaption%1").arg(index));
@@ -569,8 +569,8 @@ CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
         DisplayBatchResult::CellImage cell;
         cell.index = idx;
         cell.image = mvcore::toDisplayQImage(adjusted, convMeta, target);
-        const bool transformed =
-            displayAdjust.hasCrop || displayAdjust.rotation != 0 || displayAdjust.flipH || displayAdjust.flipV;
+        const bool transformed = displayAdjust.hasCrop || displayAdjust.rotation != 0 ||
+                                 displayAdjust.flipH || displayAdjust.flipV;
         cell.sourceSize = transformed ? QSize(adjusted.width, adjusted.height) : sourceDims;
         cell.sourceRect = transformed ? QRect(QPoint(0, 0), cell.sourceSize) : coveredRect;
         if (context.isCancelled())

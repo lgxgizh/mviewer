@@ -10,7 +10,9 @@
 class ComparePaneCaption final : public QLabel
 {
   public:
-    explicit ComparePaneCaption(QWidget *parent) : QLabel(parent) {}
+    explicit ComparePaneCaption(QWidget *parent) : QLabel(parent)
+    {
+    }
 
     void setFullText(const QString &text)
     {
@@ -19,7 +21,10 @@ class ComparePaneCaption final : public QLabel
         updateText();
     }
 
-    QString fullText() const { return m_fullText; }
+    QString fullText() const
+    {
+        return m_fullText;
+    }
 
   protected:
     void resizeEvent(QResizeEvent *event) override
