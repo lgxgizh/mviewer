@@ -1,5 +1,5 @@
-#include "compareworkspace_p.h"
 #include "compareworkspace_prefetch.h"
+#include "compareworkspace_p.h"
 
 #include "application/ImageLoadingService.h"
 
@@ -22,7 +22,8 @@ void CompareWorkspace::prefetchNeighborPairs()
     for (const QString &p : m_imagePool)
         pool.push_back(p.toUtf8().toStdString());
 
-    std::vector<std::string> paths = mviewer::ui::neighborPairPaths(pool, m_pairIndex, m_navWindow, +1);
+    std::vector<std::string> paths =
+        mviewer::ui::neighborPairPaths(pool, m_pairIndex, m_navWindow, +1);
     const auto prev = mviewer::ui::neighborPairPaths(pool, m_pairIndex, m_navWindow, -1);
     paths.insert(paths.end(), prev.begin(), prev.end());
     if (paths.empty())

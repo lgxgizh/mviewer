@@ -1,6 +1,6 @@
 // CompareWorkspace edit panel: adjustments, metrics, per-pane histograms, presets (M20 P0#2).
-#include <QFontMetrics>
 #include "compareworkspace_p.h"
+#include <QFontMetrics>
 
 #include "runtime_storage.h"
 #include "widgets/infooverlay.h"
@@ -736,7 +736,8 @@ void CompareWorkspace::onSwapPanes()
     {
         const ImageFrame *fa = m_engine.imageAt(a);
         const ImageFrame *fb = m_engine.imageAt(b);
-        auto nameOf = [](const ImageFrame *img) -> QString {
+        auto nameOf = [](const ImageFrame *img) -> QString
+        {
             if (!img)
                 return {};
             return QString::fromUtf8(img->metadata().fileName.data(),
