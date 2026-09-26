@@ -73,6 +73,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
         const int wheelDelta = we->angleDelta().y();
         if (wheelDelta == 0)
             return true; // horizontal-only wheel: consume without zooming
+        noteCompareInteraction();
         const double factor = wheelDelta > 0 ? 1.15 : 1.0 / 1.15;
         // The transform anchors in CENTER-RELATIVE coordinates (RawImageView
         // stores offset as a pan delta from the pane center), so convert the

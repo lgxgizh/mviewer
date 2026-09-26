@@ -219,7 +219,7 @@ TaskScheduler::TaskHandle CompareWorkspace::startDiffBatch(
 
 void CompareWorkspace::refreshAllDiffOverlays()
 {
-    if (shouldDeferHeavyCompareWork())
+    if (!m_rebuildingCells && shouldDeferHeavyCompareWork())
     {
         m_deferredDiffRefresh = true;
         return;
