@@ -409,6 +409,8 @@ void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
 {
     // Keep the latest pane request while the debounce timer is pending. This
     // matters when independent-pane zoom switches panes faster than the timer.
+    // Do NOT mark interaction-busy here: setImage/resetFit emits scaleChanged
+    // during materialization and would defer hist/diff after rebuildCells.
     m_displayLodRefreshPane = idx;
     if (m_displayLodRefreshPending)
         return;

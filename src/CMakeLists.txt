@@ -190,6 +190,9 @@ add_library(mviewer_ui STATIC
     compareworkspace_roi_overlay.cpp
     compareworkspace_temporary.cpp
     compareworkspace_prefetch.cpp
+    compareworkspace_load.cpp
+    compareworkspace_layout.cpp
+    compareworkspace_progressive.cpp
     compareworkspace_analysis.cpp
     compareworkspace_editpanel.cpp
     compareworkspace_interact.cpp

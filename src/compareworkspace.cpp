@@ -12,7 +12,6 @@
 // RGB materialization fits comfortably under Qt's 256 MB allocation limit
 // (60 MP * 3 B = 180 MB, leaving headroom for QImage copies). Infeasible
 // sources display through the source-backed LOD path only.
-constexpr qint64 kCompareAnalysisFeasiblePixels = 60 * 1000 * 1000; // 60 MP
 
 CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 {
@@ -201,7 +200,8 @@ void CompareWorkspace::setImages(const QStringList &paths)
 void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &frameIndices)
 {
     endTemporaryCompare();
-    cancelPairPrefetch();
+    // Neighbor preloads are consumed via promote in queueLoadRequests; leftovers
+    // are cancelled at the end of that queue so next/prev can hit a warm decode.
     // A new compare set supersedes any in-flight ROI calculation immediately;
     // preserving only the geometry for a possible same-dimension navigation
     // restore prevents stale source statistics from crossing image pairs.
@@ -249,9 +249,11 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
         if (m_compareLoadingLabel)
             m_compareLoadingLabel->setText(tr("正在加载 %1 张图片…").arg(requested));
         const bool softKeepGrid = m_engine.imageCount() > 0;
+        m_softPairReload = softKeepGrid;
         if (softKeepGrid)
         {
             showCompareStatus(tr("正在加载下一组…"), 2500);
+            applySoftReloadPlaceholders(stdPaths);
         }
         else
         {
@@ -267,6 +269,8 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
     }
     if (requested == 0)
     {
+        cancelPairPrefetch();
+        m_softPairReload = false;
         finishLoad({}, 0);
         return;
     }
@@ -282,185 +286,6 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
         batch->requests.push_back(std::make_unique<LoadRequest>());
     m_loadBatch = batch;
     queueLoadRequests(batch, stdPaths, stdFrameIndices);
-}
-
-void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch,
-                                         const std::vector<std::string> &paths,
-                                         const std::vector<int> &frameIndices)
-{
-    auto self = std::make_shared<QPointer<CompareWorkspace>>(this);
-    auto lifetime = m_lifetime;
-    const ImageLoadOptions opts{true, false, 256};
-    const auto queueBatchFinish = [self, batch]()
-    {
-        if (!qApp)
-            return;
-        QMetaObject::invokeMethod(
-            qApp,
-            [self, batch]()
-            {
-                CompareWorkspace *ws = self->data();
-                if (!ws || batch->generation != ws->m_loadGen)
-                    return;
-                ws->finishLoad(*batch->frames, batch->failed->load(std::memory_order_relaxed),
-                               batch->infeasible->load(std::memory_order_relaxed));
-            },
-            Qt::QueuedConnection);
-    };
-    // M47: the pane display no longer depends on the full frame. Sources
-    // whose full-resolution materialization is infeasible (RGB > Qt's 256 MB
-    // allocation limit) skip the full load entirely — their panes display
-    // through the source-backed LOD path, and they must not count as load
-    // failures. The capability probe runs on the foreground DecodePool, never
-    // on the UI thread; the worker starts a foreground decode only after the
-    // probe without yielding priority to background metadata work.
-    m_comparePaths = paths;
-    for (size_t i = 0; i < paths.size(); ++i)
-    {
-        auto *request = batch->requests[i].get();
-        const std::string path = paths[i];
-        const int frameIndex = i < frameIndices.size() ? std::max(0, frameIndices[i]) : 0;
-        auto probe = TaskScheduler::instance().submit(
-            TaskScheduler::Priority::Decode,
-            [batch, i, request, path, frameIndex, opts, lifetime,
-             queueBatchFinish](const TaskScheduler::TaskContext &ctx)
-            {
-                const auto account = [batch, i, queueBatchFinish](bool failed)
-                {
-                    if (CompareWorkspace::accountLoadRequest(batch, i, nullptr, failed))
-                        queueBatchFinish();
-                };
-
-                if (ctx.isCancelled())
-                    return;
-                try
-                {
-                    std::shared_ptr<mviewer::core::SourceImage> source;
-                    try
-                    {
-                        source = mviewer::core::SourceImage::open(path);
-                    }
-                    catch (...)
-                    {
-                        // A capability probe may throw from a plugin decoder.
-                        // This is a terminal load failure, matching the old
-                        // synchronous probe contract.
-                        if (!ctx.isCancelled())
-                            account(true);
-                        return;
-                    }
-
-                    // Serialize the probe -> foreground-load transition with
-                    // cancelLoadBatch(). The second cancellation check must be
-                    // under this lock: cancelling a probe handle outside the
-                    // lock cannot otherwise prevent a worker that already
-                    // passed its first check from submitting a decode.
-                    std::unique_lock<std::mutex> lk(batch->handlesMutex);
-                    if (ctx.isCancelled())
-                        return;
-
-                    const qint64 pixels = source ? static_cast<qint64>(source->metadata().width) *
-                                                       source->metadata().height
-                                                 : 0;
-                    if (source && pixels > kCompareAnalysisFeasiblePixels)
-                    {
-                        batch->infeasible->fetch_add(1, std::memory_order_relaxed);
-                        // Keep the pane: a metadata-only placeholder preserves
-                        // the requested pane index, so source-backed LOD and
-                        // exact-source consumers remain aligned.
-                        (*batch->frames)[i] =
-                            std::make_shared<ImageFrame>(source->metadata(), ImageData());
-                        lk.unlock();
-                        account(false);
-                        return;
-                    }
-
-                    mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
-                    bool rejected = false;
-                    try
-                    {
-                        handle =
-                            mviewer::application::ImageLoadingService::instance().loadFrameAsync(
-                                path, frameIndex,
-                                [batch, i, queueBatchFinish](
-                                    const mviewer::application::ImageLoadingService::Result &res)
-                                {
-                                    if (CompareWorkspace::accountLoadRequest(batch, i, &res))
-                                        queueBatchFinish();
-                                },
-                                opts, lifetime);
-                    }
-                    catch (...)
-                    {
-                        rejected = true;
-                    }
-                    request->handle = std::move(handle);
-                    lk.unlock();
-                    if (rejected)
-                        account(true);
-                }
-                catch (...)
-                {
-                    // Keep a scheduler/decoder exception from stranding the
-                    // batch. Cancellation remains bookkeeping-only; the
-                    // superseding batch already accounts the request locally.
-                    if (!ctx.isCancelled())
-                        account(true);
-                }
-            });
-
-        {
-            std::lock_guard<std::mutex> lk(batch->handlesMutex);
-            request->probeHandle = probe;
-        }
-        if (!probe)
-        {
-            if (accountLoadRequest(batch, i, nullptr, true))
-                queueBatchFinish();
-        }
-    }
-}
-
-bool CompareWorkspace::accountLoadRequest(
-    const std::shared_ptr<LoadBatch> &batch, size_t index,
-    const mviewer::application::ImageLoadingService::Result *result, bool countAsFailure)
-{
-    if (!batch || index >= batch->requests.size())
-        return false;
-    auto &request = *batch->requests[index];
-    if (request.accounted.exchange(true, std::memory_order_acq_rel))
-        return false;
-
-    if (result && result->success() && result->frame)
-        (*batch->frames)[index] = result->frame;
-    else if (countAsFailure)
-        batch->failed->fetch_add(1, std::memory_order_relaxed);
-
-    return batch->remaining->fetch_sub(1, std::memory_order_acq_rel) == 1;
-}
-
-void CompareWorkspace::cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch)
-{
-    if (!batch)
-        return;
-    for (size_t i = 0; i < batch->requests.size(); ++i)
-    {
-        mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
-        {
-            std::lock_guard<std::mutex> lk(batch->handlesMutex);
-            // Mark the probe cancelled while holding the same lock used by the
-            // probe worker for its probe -> decode transition. This closes the
-            // window where cancellation could move the probe handle and the
-            // worker could submit a new foreground load before seeing cancel.
-            TaskScheduler::cancel(batch->requests[i]->probeHandle);
-            handle = std::move(batch->requests[i]->handle);
-        }
-        mviewer::application::ImageLoadingService::instance().cancelAsync(handle);
-        // ImageRepository deliberately suppresses callbacks after cancel. Do
-        // the batch's exactly-once accounting locally so cancellation cannot
-        // strand the terminal completion on a queued request.
-        accountLoadRequest(batch, i, nullptr);
-    }
 }
 
 void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames,
@@ -498,7 +323,12 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     // A-4: loading a fresh comparison set should not inherit adjustments from
     // the previous session; applySession will repopulate persisted values.
     m_cellAdjusts.clear();
-    rebuildCells();
+    m_softPairReload = false;
+    if (!finishLoadInPlaceIfPossible(frames))
+    {
+        clearSoftLoadingIndicators();
+        rebuildCells();
+    }
     syncEditCellAfterLoad();
     schedulePostLayoutFit();
     update();
@@ -611,7 +441,10 @@ void CompareWorkspace::onLayoutChanged()
         break; // 自动
     }
     m_engine.setColumns(cols);
-    rebuildCells();
+    if (!m_cellViews.isEmpty() && m_cellViews.size() == m_engine.imageCount())
+        relayoutGridKeepingPanes();
+    else
+        rebuildCells();
     updateLayoutStatus();
     schedulePostLayoutFit();
     refreshLinkMarkers();
@@ -627,7 +460,10 @@ void CompareWorkspace::onCustomGridChanged()
     // Re-apply custom columns; rows are informational (engine packs by cols).
     const int cols = m_gridColsSpin ? m_gridColsSpin->value() : 2;
     m_engine.setColumns(cols);
-    rebuildCells();
+    if (!m_cellViews.isEmpty() && m_cellViews.size() == m_engine.imageCount())
+        relayoutGridKeepingPanes();
+    else
+        rebuildCells();
     updateLayoutStatus();
     schedulePostLayoutFit();
     refreshLinkMarkers();

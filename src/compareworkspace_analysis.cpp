@@ -636,6 +636,14 @@ void CompareWorkspace::computeHistogramBatch(
 void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
                                                 const std::vector<int> &paneIndices)
 {
+    // rebuildCells must always submit its terminal hist batch; deferral is only
+    // for user zoom/pan/soft-load, not structural rebuilds.
+    if (!m_rebuildingCells && shouldDeferHeavyCompareWork())
+    {
+        m_deferredHistRefresh = true;
+        return;
+    }
+
     // Latest-wins: cancel any in-flight batch and start a fresh generation.
     if (m_histTask)
         TaskScheduler::cancel(m_histTask);

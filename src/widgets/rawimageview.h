@@ -4,6 +4,7 @@
 #include "domain/Selection.h"
 #include "domain/SelectionInteraction.h"
 
+#include <QColor>
 #include <QImage>
 #include <QPointF>
 #include <QRect>
@@ -208,6 +209,18 @@ class RawImageView : public QWidget
         m_sizeMismatch = on;
         update();
     }
+    // Soft pair-reload busy hint (corner badge). Does not clear the raster.
+    void setSoftLoading(bool on)
+    {
+        if (m_softLoading == on)
+            return;
+        m_softLoading = on;
+        update();
+    }
+    bool softLoading() const
+    {
+        return m_softLoading;
+    }
     const QVector<QPointF> &linkMarkers() const
     {
         return m_linkMarkers;
@@ -263,6 +276,7 @@ class RawImageView : public QWidget
     // cached surface and by the direct-draw fallback (allocation failure or
     // pathological geometry).
     void drawBaseLayer(QPainter &p);
+    void drawCornerBadge(QPainter &p, const QString &txt, const QColor &bg, bool right);
     void releaseBaseSurface();
     QSize renderSourceSize() const;
     QRect renderSourceRect() const;
@@ -324,4 +338,5 @@ class RawImageView : public QWidget
 
     // H1: size-mismatch badge flag (set by CompareWorkspace::refreshCellDiff).
     bool m_sizeMismatch = false;
+    bool m_softLoading = false;
 };

@@ -2,6 +2,8 @@
 
 #include "application/ImageLoadingService.h"
 #include "compareworkspace_display_planner.h"
+#include "compareworkspace_load_types.h"
+#include "compareworkspace_prefetch.h"
 #include "compareworkspace_roi_types.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/ExportReport.h"
@@ -218,23 +220,8 @@ class CompareWorkspace : public QWidget
     bool m_loadInFlight = false;
     std::shared_ptr<mviewer::core::AsyncLifetimeToken> m_lifetime;
     std::optional<mviewer::domain::CompareSession> m_pendingSession;
-    struct LoadRequest
-    {
-        std::atomic<bool> accounted{false};
-        // Probe + foreground load share handlesMutex with cancelLoadBatch.
-        TaskScheduler::TaskHandle probeHandle;
-        mviewer::application::ImageLoadingService::AsyncRequestHandle handle;
-    };
-    struct LoadBatch
-    {
-        uint64_t generation = 0;
-        std::shared_ptr<std::vector<std::shared_ptr<ImageFrame>>> frames;
-        std::shared_ptr<std::atomic<int>> remaining;
-        std::shared_ptr<std::atomic<int>> failed;
-        std::shared_ptr<std::atomic<int>> infeasible;
-        std::vector<std::unique_ptr<LoadRequest>> requests;
-        std::mutex handlesMutex;
-    };
+    using LoadRequest = CompareLoadRequest;
+    using LoadBatch = CompareLoadBatch;
     std::shared_ptr<LoadBatch> m_loadBatch;
     static bool accountLoadRequest(const std::shared_ptr<LoadBatch> &batch, size_t index,
                                    const mviewer::application::ImageLoadingService::Result *result,
@@ -243,16 +230,33 @@ class CompareWorkspace : public QWidget
     std::vector<std::string> m_comparePaths;
     // Infeasible full-frame loads kept as metadata placeholders (M47).
     int m_infeasibleCount = 0;
+    // Soft pair reload: keep grid visible; progressive placeholders / captions.
+    bool m_softPairReload = false;
+    // Interaction settle: defer hist/diff while zoom/pan/slider is hot.
+    bool m_interactionBusy = false;
+    uint64_t m_interactionGen = 0;
+    bool m_deferredDiffRefresh = false;
+    bool m_deferredHistRefresh = false;
     // Background preload handles for the previous/next nav window.
-    std::vector<mviewer::application::ImageLoadingService::AsyncRequestHandle> m_pairPrefetch;
+    std::vector<mviewer::ui::PairPrefetchEntry> m_pairPrefetch;
     void queueLoadRequests(const std::shared_ptr<LoadBatch> &batch,
                            const std::vector<std::string> &paths,
                            const std::vector<int> &frameIndices);
     void cancelLoadBatch(const std::shared_ptr<LoadBatch> &batch);
     void finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames, int failedCount,
                     int infeasibleCount = 0);
+    bool finishLoadInPlaceIfPossible(const std::vector<std::shared_ptr<ImageFrame>> &frames);
+    void applyFramesToExistingPanes();
+    void applySoftReloadPlaceholders(const std::vector<std::string> &paths);
+    void clearSoftLoadingIndicators();
+    void relayoutGridKeepingPanes();
+    void noteCompareInteraction();
+    void flushDeferredCompareAnalysis();
+    bool shouldDeferHeavyCompareWork() const;
     void cancelPairPrefetch();
     void prefetchNeighborPairs();
+    mviewer::application::ImageLoadingService::AsyncRequestHandle
+    takePrefetchHandle(const std::string &path);
     QCheckBox *m_syncZoomChk = nullptr;
     QCheckBox *m_syncDragChk = nullptr;
     QCheckBox *m_uniformScaleChk = nullptr; // H5: 统一像素倍率

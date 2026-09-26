@@ -73,6 +73,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
         const int wheelDelta = we->angleDelta().y();
         if (wheelDelta == 0)
             return true; // horizontal-only wheel: consume without zooming
+        noteCompareInteraction();
         const double factor = wheelDelta > 0 ? 1.15 : 1.0 / 1.15;
         // The transform anchors in CENTER-RELATIVE coordinates (RawImageView
         // stores offset as a pan delta from the pane center), so convert the
@@ -102,6 +103,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
                 return true; // consume — do not start pan drag
             }
             m_dragging = true;
+            noteCompareInteraction();
             m_lastMouse = me->pos();
             m_dragStartPos = me->pos();
             m_dragIdx = idx;
@@ -250,6 +252,7 @@ bool CompareWorkspace::handleCanvasPress(QEvent *event)
             return true;
         }
         m_dragging = true;
+        noteCompareInteraction();
         m_lastMouse = me->pos();
         m_dragStartPos = me->pos();
         m_dragIdx = canvasRefCellAt(me->pos());

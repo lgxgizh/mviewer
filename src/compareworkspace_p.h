@@ -61,3 +61,6 @@
 #include <QWheelEvent>
 #include <algorithm>
 #include <vector>
+
+// RGB materialization under Qt's ~256 MB limit (see setImages probe).
+constexpr qint64 kCompareAnalysisFeasiblePixels = 60 * 1000 * 1000; // 60 MP

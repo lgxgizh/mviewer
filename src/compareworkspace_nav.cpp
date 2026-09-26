@@ -369,20 +369,19 @@ void CompareWorkspace::applyLayoutPreset(int n)
         win << src[m_pairIndex + i];
     if (win.isEmpty())
         return;
-    const NavState saved = captureNavState();
-    setImages(win);
-    // Choose a near-square column count per preset:
-    // 1 → 1, 2 → 2, 3 → 3, 4 → 2 (2×2), 5/6 → 3, 7/8 → 4.
+    // Columns before setImages so finishLoad (in-place or rebuild) sees the
+    // preset grid; avoid a redundant rebuildCells on the still-old frames.
     const int cols = (n <= 1) ? 1 : (n == 2) ? 2 : (n == 3) ? 3 : (n == 4) ? 2 : (n <= 6) ? 3 : 4;
     m_engine.setColumns(cols);
     if (m_layoutCombo)
     {
         // Combo indices: 单列=1, 2列=2, 3列=3, 4列=4.
+        const QSignalBlocker block(m_layoutCombo);
         if (cols < m_layoutCombo->count())
             m_layoutCombo->setCurrentIndex(cols);
     }
-    rebuildCells();
-    schedulePostLayoutFit();
+    const NavState saved = captureNavState();
+    setImages(win);
     restoreNavState(saved);
     updatePairButtons();
     showCompareStatus(tr("已切换至 %1 窗格对比布局").arg(n));
