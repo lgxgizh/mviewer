@@ -209,6 +209,9 @@ void CompareWorkspace::applyPendingWarmSeeds()
             const double oldScale = view->scale();
             const QPointF oldOffset = view->offset();
             const QSize oldSource = view->sourceSize();
+            // QImage is implicit-shared — no forced deep copy. Keep softLoading
+            // so cheap→full / pyramid upgrade still runs after the warm paint.
+            view->setSoftLoading(true);
             view->setImage(seed.image, seed.sourceSize, seed.sourceRect);
             if (oldSource.isValid() && oldSource == seed.sourceSize)
                 view->setTransform(oldScale, oldOffset);

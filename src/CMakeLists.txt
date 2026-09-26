@@ -181,9 +181,12 @@ add_library(mviewer_ui STATIC
     thumbnailcache.cpp
     compareworkspace.cpp
     compareworkspace_display_planner.cpp
+    compareworkspace_display_pyramid.cpp
+    compare_session_frame_pool.cpp
     compareworkspace_controls.cpp
     compareworkspace_render.cpp
     compareworkspace_render_materialization.cpp
+    compareworkspace_pyramid_wire.cpp
     compareworkspace_render_diff.cpp
     compareworkspace_render_canvas.cpp
     compareworkspace_roi.cpp
@@ -1771,6 +1774,40 @@ target_compile_features(compare_display_planner_tests PRIVATE cxx_std_20)
 target_include_directories(compare_display_planner_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_test(NAME compare_display_planner_tests COMMAND compare_display_planner_tests)
 set_tests_properties(compare_display_planner_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
+# Multi-LOD pyramid + display delivery/priority helpers (pure planning).
+add_executable(compare_display_pyramid_tests
+    test_compare_display_pyramid.cpp
+)
+target_link_libraries(compare_display_pyramid_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_display_pyramid_tests PRIVATE cxx_std_20)
+target_include_directories(compare_display_pyramid_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_display_pyramid_tests COMMAND compare_display_pyramid_tests)
+set_tests_properties(compare_display_pyramid_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
+# Compare in-session decoded frame LRU pool (path+frameIndex).
+add_executable(compare_session_frame_pool_tests
+    test_compare_session_frame_pool.cpp
+)
+target_link_libraries(compare_session_frame_pool_tests
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Gui
+        Qt6::Core
+        mviewer_core
+        mviewer_ui
+)
+target_compile_features(compare_session_frame_pool_tests PRIVATE cxx_std_20)
+target_include_directories(compare_session_frame_pool_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+add_test(NAME compare_session_frame_pool_tests COMMAND compare_session_frame_pool_tests)
+set_tests_properties(compare_session_frame_pool_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
 # ─── M47 Phase 4: exact-source consumers with source-backed panes ────────────
 # Inspector / diff / PSNR / SSIM / export keep full-resolution correctness when

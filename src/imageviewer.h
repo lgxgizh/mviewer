@@ -133,6 +133,11 @@ class ImageViewer : public QOpenGLWidget
         return m_displayRasterWarmHits;
     }
 
+    // Compare handoff: copy-on-write QImage + geometry for a warm path.
+    // Returns false when no warm entry exists.
+    bool takeWarmDisplayForCompare(const QString &path, QImage *image, QSize *sourceSize,
+                                   QRect *sourceRect);
+
     // P1-7: serialize/restore the current view transform (scale + pan). Used to
     // restore the viewer's zoom level and pan position across sessions. Viewport
     // is domain-free (core/render), so it carries no Qt types.
@@ -429,9 +434,9 @@ class ImageViewer : public QOpenGLWidget
     bool handleZoomKey(int key, Qt::KeyboardModifiers modifiers);
     bool handleTransformKey(int key, Qt::KeyboardModifiers modifiers);
     bool handleModeKey(int key, Qt::KeyboardModifiers modifiers);
-    bool handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath,
-                                 QAction *reveal, QAction *copyHex, QAction *copyRgb,
-                                 QAction *copyFloat, QAction *copyHsv, QContextMenuEvent *event);
+    bool handleContextCopyAction(QAction *chosen, QAction *copy, QAction *copyPath, QAction *reveal,
+                                 QAction *copyHex, QAction *copyRgb, QAction *copyFloat,
+                                 QAction *copyHsv, QContextMenuEvent *event);
     bool handleContextTransformAction(QAction *chosen, QAction *rotateCWAct, QAction *rotateCCWAct,
                                       QAction *flipHAct, QAction *flipVAct);
     bool handleContextImageAction(QAction *chosen, QAction *saveAs, QAction *zoomInAction,

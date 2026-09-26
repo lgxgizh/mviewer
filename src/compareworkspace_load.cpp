@@ -106,6 +106,20 @@ void CompareWorkspace::queueLoadRequests(const std::shared_ptr<LoadBatch> &batch
         const std::string path = paths[i];
         const int frameIndex = i < frameIndices.size() ? std::max(0, frameIndices[i]) : 0;
 
+        // Session RAM pool hit: skip probe/decode for this pane.
+        if (m_session)
+        {
+            if (auto pooled = m_session->framePool.tryGet(path, frameIndex))
+            {
+                mviewer::application::ImageLoadingService::Result hit;
+                hit.frame = pooled;
+                hit.fromCache = true;
+                if (accountLoadRequest(batch, i, &hit))
+                    finish();
+                continue;
+            }
+        }
+
         // Promote warm neighbor preload into this batch when available.
         if (frameIndex == 0)
         {

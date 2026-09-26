@@ -4,6 +4,14 @@
 
 ### 比较
 
+- 多级显示金字塔：保留 ~1/4、1/2、1× 等就绪 LOD，缩放/平移可立刻画出较粗层级再细化（扩展 display_planner / materialization）。
+- 硬解码优先级：可见比较窗格物化走 Decode；邻对 preload 仍 Background；hist/diff/ROI 仍 Analysis；换对时取消 display/hist/diff/roi，避免后台饿死前台。
+- 比较会话帧池：按 path+frameIndex 在会话内 LRU 保留已解码帧（有条目/字节预算），下一对/上一对更常命中内存。
+- 手势预测 LOD：滚轮缩放时强制 Decode 优先级，便于 settle 前爬升预测档。
+- 交互期仍推迟全精度 hist/diff，松手后刷新（懒叠加）。
+- 多窗格物化优先焦点/编辑窗格；金字塔缓存命中时先铺底。
+- Browse→Compare：当前显示栅格 + Viewer warm 邻帧交接（QImage 隐式共享，保留 softLoading 以便升级）。
+
 - 极致快速：空白窗格先以廉价 LOD（~640 边）上屏，再异步升级到视口质量；廉价首帧物化走 Decode 优先级，质量升级/实时调整仍走 Analysis。
 - Browse→Compare 交接：若 Viewer 已有同路径显示栅格，进入比较时立即铺底，再升级。
 - 画布手势（拖动/交互忙碌）期间关闭 SmoothPixmapTransform，松手恢复。
