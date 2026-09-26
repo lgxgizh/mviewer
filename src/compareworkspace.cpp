@@ -286,6 +286,8 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
         batch->requests.push_back(std::make_unique<LoadRequest>());
     m_loadBatch = batch;
     queueLoadRequests(batch, stdPaths, stdFrameIndices);
+    // Paths are published; apply any Browse→Compare warm bitmaps now.
+    applyPendingWarmSeeds();
 }
 
 void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>> &frames,

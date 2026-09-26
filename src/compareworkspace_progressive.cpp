@@ -167,3 +167,109 @@ bool CompareWorkspace::finishLoadInPlaceIfPossible(
     applyFramesToExistingPanes();
     return true;
 }
+
+void CompareWorkspace::seedWarmDisplay(const QString &path, const QImage &image,
+                                       const QSize &sourceSize, const QRect &sourceRect)
+{
+    if (path.isEmpty() || image.isNull() || !sourceSize.isValid() || sourceSize.width() <= 0 ||
+        sourceSize.height() <= 0)
+        return;
+    mviewer::ui::CompareWarmSeed seed;
+    seed.path = path.toUtf8().toStdString();
+    seed.image = image;
+    seed.sourceSize = sourceSize;
+    seed.sourceRect = sourceRect.isValid() ? sourceRect : QRect(QPoint(0, 0), sourceSize);
+    // Latest seed for a path wins.
+    for (auto &existing : m_pendingWarmSeeds)
+    {
+        if (existing.path == seed.path)
+        {
+            existing = std::move(seed);
+            applyPendingWarmSeeds();
+            return;
+        }
+    }
+    m_pendingWarmSeeds.push_back(std::move(seed));
+    applyPendingWarmSeeds();
+}
+
+void CompareWorkspace::applyPendingWarmSeeds()
+{
+    if (m_pendingWarmSeeds.empty() || m_cellViews.isEmpty())
+        return;
+    for (const auto &seed : m_pendingWarmSeeds)
+    {
+        for (int i = 0; i < static_cast<int>(m_comparePaths.size()) && i < m_cellViews.size(); ++i)
+        {
+            if (m_comparePaths[static_cast<size_t>(i)] != seed.path)
+                continue;
+            RawImageView *view = m_cellViews[i];
+            if (!view)
+                continue;
+            const double oldScale = view->scale();
+            const QPointF oldOffset = view->offset();
+            const QSize oldSource = view->sourceSize();
+            view->setImage(seed.image, seed.sourceSize, seed.sourceRect);
+            if (oldSource.isValid() && oldSource == seed.sourceSize)
+                view->setTransform(oldScale, oldOffset);
+        }
+    }
+    // Consumed once panes matched; keep unmatched for a later layout.
+    std::vector<mviewer::ui::CompareWarmSeed> leftover;
+    leftover.reserve(m_pendingWarmSeeds.size());
+    for (const auto &seed : m_pendingWarmSeeds)
+    {
+        bool matched = false;
+        for (const auto &path : m_comparePaths)
+        {
+            if (path == seed.path)
+            {
+                matched = true;
+                break;
+            }
+        }
+        if (!matched)
+            leftover.push_back(seed);
+    }
+    m_pendingWarmSeeds = std::move(leftover);
+    update();
+}
+
+CompareWorkspace::DisplayRequest CompareWorkspace::buildPaneDisplayRequest(int pane,
+                                                                           bool preferCheap) const
+{
+    if (!preferCheap)
+        return sourceDisplayRequest(pane);
+    if (pane < 0 || pane >= m_cellViews.size() || !m_cellViews[pane])
+        return sourceDisplayRequest(pane);
+    RawImageView *view = m_cellViews[pane];
+    const ImageFrame *img = pane < m_engine.imageCount() ? m_engine.imageAt(pane) : nullptr;
+    mviewer::ui::CompareDisplayPlanningInput input;
+    input.pane = pane;
+    QSize sourceSize = view->sourceSize();
+    if (!sourceSize.isValid() && img)
+        sourceSize = QSize(img->metadata().width, img->metadata().height);
+    if (!sourceSize.isValid() && pane < static_cast<int>(m_comparePaths.size()))
+    {
+        // Still unknown — fall back to full planner via sourceDisplayRequest.
+        return sourceDisplayRequest(pane);
+    }
+    input.sourceWidth = sourceSize.width();
+    input.sourceHeight = sourceSize.height();
+    input.viewportWidth = view->width();
+    input.viewportHeight = view->height();
+    input.devicePixelRatio = view->devicePixelRatioF();
+    input.hasWidgetSourceSize = view->sourceSize().isValid();
+    input.currentScale = view->scale();
+    input.paneScale = input.currentScale;
+    const auto cheap = mviewer::ui::planCompareDisplayCheap(input);
+    if (!cheap.isValid())
+        return sourceDisplayRequest(pane);
+    DisplayRequest req;
+    req.target = QSize(cheap.targetWidth, cheap.targetHeight);
+    req.sourceRect = QRect(cheap.sourceRect.x, cheap.sourceRect.y, cheap.sourceRect.width,
+                           cheap.sourceRect.height);
+    req.region = cheap.region;
+    req.provisional = true;
+    return req;
+}

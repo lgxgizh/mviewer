@@ -12,7 +12,10 @@ struct CompareDisplayRect
     int width = 0;
     int height = 0;
 
-    bool isValid() const { return width > 0 && height > 0; }
+    bool isValid() const
+    {
+        return width > 0 && height > 0;
+    }
 };
 
 // Snapshot of the state needed to choose a source-backed display request.
@@ -49,5 +52,15 @@ struct CompareDisplayPlan
 };
 
 CompareDisplayPlan planCompareDisplay(const CompareDisplayPlanningInput &input);
+
+// Cheap full-frame LOD for cold/first paint (small edge, then upgrade).
+CompareDisplayPlan planCompareDisplayCheap(const CompareDisplayPlanningInput &input);
+
+// True when `desired` is meaningfully sharper / better-covered than `have`.
+bool shouldUpgradeCompareDisplay(const CompareDisplayPlan &have, const CompareDisplayPlan &desired);
+
+// Optional predictive target for the next zoom-in bucket (pure planning).
+CompareDisplayPlan planCompareDisplayPredictive(const CompareDisplayPlanningInput &input,
+                                                double zoomDirection);
 
 } // namespace mviewer::ui

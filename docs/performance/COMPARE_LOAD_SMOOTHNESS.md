@@ -29,12 +29,28 @@
 | Smooth pixmap filter while dragging | Disabled during `m_dragging` |
 | Hist/diff during zoom/pan | Deferred until interaction settle |
 
+## 极致快速 (beyond #47)
+
+| Issue | Change |
+| --- | --- |
+| Zoom/first paint waits on full-edge LOD | `planCompareDisplayCheap` → provisional materialize (~640) then upgrade |
+| Cold path without PreviewPanel cache | Blank panes still get cheap SourceImage::decodeLod ASAP |
+| Display vs hist/diff pool contention | Provisional cheap display at `Priority::Decode`; full/adjust stay Analysis; hist/diff deferred |
+| Browse→Compare blank first frames | `seedWarmDisplay` + `m_pendingWarmSeeds` reuse Viewer displayRaster |
+| Canvas filter during gesture | SmoothPixmapTransform off while dragging / interactionBusy |
+
 ## Deferred
 
-- Progressive mipmap / new display pyramid (larger architecture).
+- Full multi-level mipmap cache / tile pyramid beyond cheap→full.
 - CacheManager / DecoderRegistry rewrites.
 
 ## Expectation
+
+Opening Compare or switching pairs should show a usable raster sooner (warm Viewer
+bitmap, preview cache, or cheap LOD), then sharpen without blanking. Zoom/pan
+stays nearest-neighbor while the gesture is active.
+
+## Expectation (#46/#47)
 
 Pair navigation should keep prior rasters (or preview placeholders) visible until the
 new batch materializes; after one visit, stepping to the adjacent pair should more often

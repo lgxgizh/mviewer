@@ -610,10 +610,11 @@ void testDegradedImages(const QDir &dir)
 //   * frames arrive asynchronously and the engine ends up fully populated.
 //
 // Contract: the panes themselves materialize asynchronously too.
-// rebuildCells() submits ONE AnalysisPool display-materialization batch per
-// load generation, alongside the existing diff-analysis batch. While Analysis
-// work is deliberately blocked the decoded panes stay blank, and each load
-// generation submits exactly those two Analysis batches.
+// Progressive LOD: blank panes may submit a Decode-priority cheap first paint
+// so cold open is not gated on Analysis; viewport-quality upgrade and the
+// diff-analysis batch stay on Analysis. While Analysis is blocked, Decode may
+// already deliver a provisional raster — panes are therefore not required to
+// stay blank. Each load still submits at least the diff Analysis batch.
 void testCompareLoadIsAsync(const QDir &dir)
 {
     std::cout << "-- Compare M28 P1-01: async load (no UI-thread decode) --\n";
@@ -694,9 +695,10 @@ void testCompareLoadIsAsync(const QDir &dir)
     CHECK(ws->comparedImageCount() == 2, "async compare load delivers all frames");
 
     // Decode has reached the UI (finishLoad -> rebuildCells ran on the UI
-    // thread) but the Analysis worker is still gate-blocked: both panes must
-    // be blank, because their materialization is an Analysis batch, never a
-    // synchronous ImageData -> QImage conversion inside rebuildCells().
+    // thread). Progressive LOD may already be painting a Decode-priority cheap
+    // first frame while Analysis stays gate-blocked — that is intentional and
+    // must not be a sync ImageData -> QImage conversion inside rebuildCells()
+    // (covered by the setImages timing / count checks above).
     RawImageView *view0 = nullptr;
     RawImageView *view1 = nullptr;
     for (RawImageView *v : ws->findChildren<RawImageView *>())
@@ -709,25 +711,33 @@ void testCompareLoadIsAsync(const QDir &dir)
             view1 = v;
     }
     CHECK(view0 && view1, "P1-01: two decoded panes exist after the async load");
-    if (view0 && view1)
-    {
-        CHECK(view0->image().isNull() && view1->image().isNull(),
-              "P1-01: decoded panes stay blank while Analysis materialization is blocked");
-    }
 
-    // Exactly two Analysis submissions for this load generation: the future
-    // display-materialization batch plus the existing diff-analysis batch.
+    // Diff (and any non-provisional / upgrade display) still enqueue on Analysis.
+    // Cheap provisional first paint races Decode and is not counted here.
     const uint64_t submittedAfter =
         sched.metrics(TaskScheduler::PoolType::AnalysisPool).submitted;
-    CHECK(submittedAfter == submittedBefore + 2,
-          "P1-01: load generation submits one display batch + one diff batch");
+    CHECK(submittedAfter >= submittedBefore + 1,
+          "P1-01: load generation submits at least the diff Analysis batch");
 
-    // Release the gate and drain: both panes must materialize.
+    // Give Decode a short window to deliver cheap provisional paint while
+    // Analysis remains blocked. Small LOD targets may skip provisional and
+    // stay blank until the Analysis display batch runs — both are valid.
+    if (view0 && view1)
+    {
+        QElapsedTimer cheapWait;
+        cheapWait.start();
+        while ((view0->image().isNull() || view1->image().isNull()) && cheapWait.elapsed() < 2000)
+            pump(25);
+    }
+
+    // Release the gate and drain both pools: both panes must materialize.
     {
         std::lock_guard<std::mutex> lk(gateMtx);
         gateReleased = true;
     }
     gateCv.notify_all();
+    CHECK(sched.drain(TaskScheduler::PoolType::DecodePool, std::chrono::seconds(15)),
+          "P1-01: Decode pool drains after the gate release");
     CHECK(sched.drain(TaskScheduler::PoolType::AnalysisPool, std::chrono::seconds(15)),
           "P1-01: Analysis pool drains after the gate release");
     {
@@ -738,7 +748,7 @@ void testCompareLoadIsAsync(const QDir &dir)
             pump(25);
     }
     CHECK(view0 && view1 && !view0->image().isNull() && !view1->image().isNull(),
-          "P1-01: panes materialize once Analysis work drains");
+          "P1-01: panes materialize once Decode and Analysis drain");
     dlg.close();
 }
 

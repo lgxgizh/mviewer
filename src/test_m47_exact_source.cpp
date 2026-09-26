@@ -265,6 +265,34 @@ int main(int argc, char **argv)
         ws.show();
         ws.setImages({jpeg100, jpeg100});
         CHECK(waitForLoadedPanes(&ws, 2, {0, 1}), "E2: both LOD panes display");
+        // Progressive LOD: cheap Decode paint can satisfy waitForLoadedPanes
+        // before the viewport-quality upgrade finishes. Settle Decode+Analysis
+        // and stabilize nativeLod before the diff-batch decode accounting.
+        CHECK(waitTrue(
+                  [&]
+                  {
+                      auto &s = TaskScheduler::instance();
+                      const auto dec = s.metrics(TaskScheduler::PoolType::DecodePool);
+                      const auto ana = s.metrics(TaskScheduler::PoolType::AnalysisPool);
+                      return dec.pending == 0 && dec.active_tasks == 0 && ana.pending == 0 &&
+                             ana.active_tasks == 0;
+                  },
+                  15000),
+              "E2: display pyramid settles before diff");
+        {
+            uint64_t last = SourceDecodeStats::instance().counters().nativeLod.load();
+            auto stableSince = std::chrono::steady_clock::now();
+            while (std::chrono::steady_clock::now() - stableSince < std::chrono::milliseconds(200))
+            {
+                pump(25);
+                const uint64_t now = SourceDecodeStats::instance().counters().nativeLod.load();
+                if (now != last)
+                {
+                    last = now;
+                    stableSince = std::chrono::steady_clock::now();
+                }
+            }
+        }
         const uint64_t nativeLodAfterDisplay =
             SourceDecodeStats::instance().counters().nativeLod.load();
         CHECK(nativeLodAfterDisplay >= 2, "E2: display used native LOD only");

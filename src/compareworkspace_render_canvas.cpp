@@ -221,7 +221,7 @@ void CompareWorkspace::drawCellCompare(QPainter &p, int idx, const QRect &clipRe
     // exactly like RawImageView stores it for a cell widget.
     p.save();
     p.setClipRect(clipRect);
-    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, !(m_dragging || m_interactionBusy));
     p.drawImage(dr, img);
 
     // Diff/heatmap overlay (set per cell by the async batch result). Only the
@@ -310,7 +310,7 @@ void CompareWorkspace::drawOverlayCompare(QPainter &p)
 
     p.save();
     p.setClipRect(r);
-    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, !(m_dragging || m_interactionBusy));
     // Blend the second image on top with user-controlled opacity (A-4.1 slider).
     p.setOpacity(std::clamp(m_overlayAlpha / 100.0, 0.0, 1.0));
     p.drawImage(dr, img1);
@@ -437,7 +437,7 @@ void CompareWorkspace::drawCheckerboardCompare(QPainter &p)
 
     p.save();
     p.setClipRegion(region);
-    p.setRenderHint(QPainter::SmoothPixmapTransform);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, !(m_dragging || m_interactionBusy));
     p.drawImage(dr, img1);
     // Keep the diff overlay visible inside the B blocks.
     const QImage &ov = m_cellViews[1]->overlay();
