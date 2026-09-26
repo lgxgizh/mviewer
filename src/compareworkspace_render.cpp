@@ -409,6 +409,7 @@ void CompareWorkspace::scheduleDisplayLodRefresh(int idx)
 {
     // Keep the latest pane request while the debounce timer is pending. This
     // matters when independent-pane zoom switches panes faster than the timer.
+    noteCompareInteraction();
     m_displayLodRefreshPane = idx;
     if (m_displayLodRefreshPending)
         return;

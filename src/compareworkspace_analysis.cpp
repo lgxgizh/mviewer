@@ -636,6 +636,12 @@ void CompareWorkspace::computeHistogramBatch(
 void CompareWorkspace::scheduleHistogramRefresh(bool includeMain,
                                                 const std::vector<int> &paneIndices)
 {
+    if (shouldDeferHeavyCompareWork())
+    {
+        m_deferredHistRefresh = true;
+        return;
+    }
+
     // Latest-wins: cancel any in-flight batch and start a fresh generation.
     if (m_histTask)
         TaskScheduler::cancel(m_histTask);

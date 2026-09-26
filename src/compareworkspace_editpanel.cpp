@@ -1,5 +1,6 @@
 // CompareWorkspace edit panel: adjustments, metrics, per-pane histograms, presets (M20 P0#2).
 #include "compareworkspace_p.h"
+#include "compareworkspace_caption.h"
 #include <QFontMetrics>
 
 #include "runtime_storage.h"
@@ -703,14 +704,6 @@ void CompareWorkspace::onSwapPanes()
 
     RawImageView *va = m_cellViews[a];
     RawImageView *vb = m_cellViews[b];
-    auto setCaption = [](QLabel *caption, const QString &fullText)
-    {
-        if (!caption)
-            return;
-        caption->setToolTip(fullText);
-        const QFontMetrics fm(caption->font());
-        caption->setText(fm.elidedText(fullText, Qt::ElideMiddle, 320));
-    };
     if (va && vb)
     {
         const QImage ia = va->displayImage();
@@ -743,8 +736,8 @@ void CompareWorkspace::onSwapPanes()
             return QString::fromUtf8(img->metadata().fileName.data(),
                                      static_cast<int>(img->metadata().fileName.size()));
         };
-        setCaption(m_cellLabels[a], nameOf(fa));
-        setCaption(m_cellLabels[b], nameOf(fb));
+        setComparePaneCaptionText(m_cellLabels[a], nameOf(fa));
+        setComparePaneCaptionText(m_cellLabels[b], nameOf(fb));
         if (va)
             va->setFilenameOverlay(m_cellLabels[a] ? m_cellLabels[a]->toolTip() : QString(),
                                    m_filenameOverlay);

@@ -219,6 +219,11 @@ TaskScheduler::TaskHandle CompareWorkspace::startDiffBatch(
 
 void CompareWorkspace::refreshAllDiffOverlays()
 {
+    if (shouldDeferHeavyCompareWork())
+    {
+        m_deferredDiffRefresh = true;
+        return;
+    }
     const int paneCount = m_cellViews.size();
 
     // Latest-wins: cancel any in-flight batch and start a fresh generation.

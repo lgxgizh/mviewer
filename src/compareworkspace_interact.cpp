@@ -102,6 +102,7 @@ bool CompareWorkspace::handleCellEvent(RawImageView *view, int idx, QEvent *even
                 return true; // consume — do not start pan drag
             }
             m_dragging = true;
+            noteCompareInteraction();
             m_lastMouse = me->pos();
             m_dragStartPos = me->pos();
             m_dragIdx = idx;
@@ -250,6 +251,7 @@ bool CompareWorkspace::handleCanvasPress(QEvent *event)
             return true;
         }
         m_dragging = true;
+            noteCompareInteraction();
         m_lastMouse = me->pos();
         m_dragStartPos = me->pos();
         m_dragIdx = canvasRefCellAt(me->pos());

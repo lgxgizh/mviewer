@@ -12,44 +12,10 @@
 #include <algorithm>
 #include <cmath>
 
+#include "compareworkspace_caption.h"
+
 namespace
 {
-class ElidedCaption final : public QLabel
-{
-  public:
-    explicit ElidedCaption(QWidget *parent) : QLabel(parent)
-    {
-    }
-
-    void setFullText(const QString &text)
-    {
-        m_fullText = text;
-        setToolTip(text);
-        updateText();
-    }
-
-  protected:
-    void resizeEvent(QResizeEvent *event) override
-    {
-        QLabel::resizeEvent(event);
-        updateText();
-    }
-
-  private:
-    void updateText()
-    {
-        // Keep captions compact even when a wide compare pane could fit an
-        // unusually long filename. The full name remains available via the
-        // tooltip, while a bounded label leaves the image and ROI overlay
-        // visually dominant.
-        constexpr int kMaxCaptionPixels = 320;
-        const int available = std::min(kMaxCaptionPixels, std::max(0, contentsRect().width() - 8));
-        QLabel::setText(fontMetrics().elidedText(m_fullText, Qt::ElideMiddle, available));
-    }
-
-    QString m_fullText;
-};
-
 HistogramWidget *createPaneHistogramOverlay(QWidget *cellWidget, int index, bool visible)
 {
     auto *hframe = new QFrame(cellWidget);
@@ -67,10 +33,10 @@ HistogramWidget *createPaneHistogramOverlay(QWidget *cellWidget, int index, bool
     return histogram;
 }
 
-ElidedCaption *createPaneCaption(QWidget *cellWidget, int index, const ImageFrame *img,
+ComparePaneCaption *createPaneCaption(QWidget *cellWidget, int index, const ImageFrame *img,
                                  bool filenameOverlay)
 {
-    auto *caption = new ElidedCaption(cellWidget);
+    auto *caption = new ComparePaneCaption(cellWidget);
     caption->setObjectName(QString("paneCaption%1").arg(index));
     caption->setAlignment(Qt::AlignCenter);
     QFont capFont = caption->font();
@@ -767,6 +733,7 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
         const QSize oldSourceSize = view->sourceSize();
         const double oldScale = view->scale();
         const QPointF oldOffset = view->offset();
+        view->setSoftLoading(false);
         view->setImage(cell.image, cell.sourceSize, cell.sourceRect);
         // M15/M48: the transform lives in full source coordinates. Preserve it
         // across both ordinary LOD replacement and covered-region updates; a

@@ -236,6 +236,24 @@ void RawImageView::computeFit()
     m_offset = {};
 }
 
+
+void RawImageView::drawCornerBadge(QPainter &p, const QString &txt, const QColor &bg, bool right)
+{
+    QFont bf = p.font();
+    bf.setBold(true);
+    bf.setPointSize(9);
+    p.setFont(bf);
+    const int ts = p.fontMetrics().horizontalAdvance(txt);
+    const int bw = ts + 12, bh = 18;
+    const int x = right ? width() - bw - 6 : 6;
+    const int y = 6;
+    p.setPen(Qt::NoPen);
+    p.setBrush(bg);
+    p.drawRoundedRect(x, y, bw, bh, 3, 3);
+    p.setPen(Qt::white);
+    p.drawText(QRect(x, y, bw, bh), Qt::AlignCenter, txt);
+}
+
 void RawImageView::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
@@ -325,18 +343,17 @@ void RawImageView::paintEvent(QPaintEvent *)
     if (m_sizeMismatch)
     {
         p.save();
-        QFont bf = p.font();
-        bf.setBold(true);
-        bf.setPointSize(9);
-        p.setFont(bf);
-        const QString txt = tr("尺寸不匹配");
-        const int ts = p.fontMetrics().horizontalAdvance(txt);
-        const int bw = ts + 12, bh = 18;
+        drawCornerBadge(p, tr("尺寸不匹配"), QColor(200, 40, 40, 235), false);
+        p.restore();
+    }
+
+    if (m_softLoading)
+    {
+        p.save();
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(200, 40, 40, 235));
-        p.drawRoundedRect(6, 6, bw, bh, 3, 3);
-        p.setPen(Qt::white);
-        p.drawText(QRect(6, 6, bw, bh), Qt::AlignCenter, txt);
+        p.setBrush(QColor(0, 0, 0, 28));
+        p.drawRect(rect());
+        drawCornerBadge(p, tr("加载中"), QColor(30, 90, 180, 210), true);
         p.restore();
     }
 

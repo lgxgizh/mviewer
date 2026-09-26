@@ -3,12 +3,28 @@
 
 #include "application/ImageLoadingService.h"
 
+#include <utility>
+
 void CompareWorkspace::cancelPairPrefetch()
 {
     auto &svc = mviewer::application::ImageLoadingService::instance();
-    for (auto &handle : m_pairPrefetch)
-        svc.cancelAsync(handle);
+    for (auto &entry : m_pairPrefetch)
+        svc.cancelAsync(entry.handle);
     m_pairPrefetch.clear();
+}
+
+mviewer::application::ImageLoadingService::AsyncRequestHandle
+CompareWorkspace::takePrefetchHandle(const std::string &path)
+{
+    for (auto it = m_pairPrefetch.begin(); it != m_pairPrefetch.end(); ++it)
+    {
+        if (it->path != path)
+            continue;
+        auto handle = std::move(it->handle);
+        m_pairPrefetch.erase(it);
+        return handle;
+    }
+    return {};
 }
 
 void CompareWorkspace::prefetchNeighborPairs()
@@ -37,6 +53,6 @@ void CompareWorkspace::prefetchNeighborPairs()
             continue;
         auto handle = svc.preloadAsync(path, m_lifetime);
         if (handle)
-            m_pairPrefetch.push_back(std::move(handle));
+            m_pairPrefetch.push_back(mviewer::ui::PairPrefetchEntry{path, std::move(handle)});
     }
 }
