@@ -8,6 +8,7 @@
 
 #include <QDataStream>
 #include <QResizeEvent>
+#include <QTimer>
 #include <QVariant>
 #include <algorithm>
 #include <cmath>
@@ -121,7 +122,7 @@ void CompareWorkspace::paintCompareCanvas()
         m_canvasBaseSurface.setDevicePixelRatio(dpr);
         m_canvasBaseSurface.fill(palette().color(QPalette::Dark));
         QPainter base(&m_canvasBaseSurface);
-        base.setRenderHint(QPainter::SmoothPixmapTransform);
+        base.setRenderHint(QPainter::SmoothPixmapTransform, !(m_dragging || m_interactionBusy));
         if (m_splitChk && m_splitChk->isChecked())
             drawSplitCompare(base);
         else if (m_swipeChk && m_swipeChk->isChecked())
@@ -294,6 +295,9 @@ void CompareWorkspace::rebuildCells()
         syncEngineBlink();
         applyBlink(m_blinkState);
     }
+
+    // Browse→Compare handoff may already have seeded pane bitmaps.
+    applyPendingWarmSeeds();
 
     // M28 P1-01: every pane was recreated, so materialize all pane images in ONE
     // async display batch (latest-wins generation). This is independent of the
@@ -594,17 +598,25 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
     const QPointer<CompareWorkspace> &guard)
 {
     return TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Analysis,
+        TaskScheduler::Priority::Decode,
         [pixels, metadata, displayRequests, adjusts, panes, paneCount, gen, paths, target,
          guard](const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
                 return;
-            const DisplayBatchResult result =
+            DisplayBatchResult result =
                 materializeDisplayBatch(pixels, metadata, displayRequests, adjusts, panes,
                                         paneCount, gen, paths, target, ctx);
             if (ctx.isCancelled())
                 return;
+            for (const DisplayRequest &req : displayRequests)
+            {
+                if (req.provisional)
+                {
+                    result.provisional = true;
+                    break;
+                }
+            }
             QMetaObject::invokeMethod(
                 qApp,
                 [guard, result]()
@@ -663,16 +675,29 @@ void CompareWorkspace::scheduleDisplayMaterialization(const std::vector<int> &di
         const ImageFrame *img = m_engine.imageAt(i);
         pixels.push_back(img ? img->pixels() : ImageData());
         metadata.push_back(img ? img->metadata() : mviewer::domain::ImageMetadata{});
+        RawImageView *view = (i < m_cellViews.size()) ? m_cellViews[i] : nullptr;
+        const bool blankPane = !view || view->image().isNull();
         if (img && !img->pixels().isNull())
         {
-            displayRequests.push_back(
-                {displayLodTarget(i, img->pixels()),
-                 QRect(QPoint(0, 0), QSize(img->pixels().width, img->pixels().height)), false});
+            DisplayRequest req{
+                displayLodTarget(i, img->pixels()),
+                QRect(QPoint(0, 0), QSize(img->pixels().width, img->pixels().height)), false,
+                false};
+            if (blankPane)
+            {
+                const int edge = std::min(640, std::max(req.target.width(), req.target.height()));
+                if (edge > 0 && edge < std::max(req.target.width(), req.target.height()))
+                {
+                    req.target = QSize(edge, edge);
+                    req.provisional = true;
+                }
+            }
+            displayRequests.push_back(req);
         }
         else if (i < static_cast<int>(m_comparePaths.size()) &&
                  !m_comparePaths[static_cast<size_t>(i)].empty())
         {
-            displayRequests.push_back(sourceDisplayRequest(i));
+            displayRequests.push_back(buildPaneDisplayRequest(i, blankPane));
         }
         else
         {
@@ -753,4 +778,29 @@ void CompareWorkspace::applyDisplayBatchResult(const DisplayBatchResult &r)
 
     updateTemporaryCompareAvailability();
     update();
+
+    // Progressive pyramid: after a cheap first paint, upgrade to viewport LOD.
+    if (r.provisional && r.generation == m_displayGen)
+    {
+        std::vector<int> upgrade;
+        upgrade.reserve(r.cells.size());
+        for (const auto &cell : r.cells)
+        {
+            if (cell.index >= 0 && cell.errorText.isEmpty())
+                upgrade.push_back(cell.index);
+        }
+        if (!upgrade.empty())
+        {
+            const uint64_t gen = m_displayGen;
+            QPointer<CompareWorkspace> guard(this);
+            QTimer::singleShot(0, this,
+                               [guard, upgrade, gen]()
+                               {
+                                   CompareWorkspace *ws = guard.data();
+                                   if (!ws || ws->m_displayGen != gen)
+                                       return;
+                                   ws->scheduleDisplayMaterialization(upgrade);
+                               });
+        }
+    }
 }

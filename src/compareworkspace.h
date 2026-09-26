@@ -5,6 +5,7 @@
 #include "compareworkspace_load_types.h"
 #include "compareworkspace_prefetch.h"
 #include "compareworkspace_roi_types.h"
+#include "compareworkspace_warm_seed.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/ExportReport.h"
 #include "core/analysis/ImageOverlay.h"
@@ -77,6 +78,10 @@ class CompareWorkspace : public QWidget
     // session may provide one explicit frame index per pane.
     void setImages(const QStringList &paths);
     void setImages(const QStringList &paths, const QVector<int> &frameIndices);
+
+    // Browse→Compare: queue an in-memory display bitmap (applied when panes exist).
+    void seedWarmDisplay(const QString &path, const QImage &image, const QSize &sourceSize,
+                         const QRect &sourceRect = QRect());
 
     // A target change re-materializes presentation rasters only.
     void setDisplayColorContext(const mviewer::core::DisplayColorContext &target);
@@ -226,19 +231,15 @@ class CompareWorkspace : public QWidget
     static bool accountLoadRequest(const std::shared_ptr<LoadBatch> &batch, size_t index,
                                    const mviewer::application::ImageLoadingService::Result *result,
                                    bool countAsFailure = true);
-    // Pane-index-parallel paths for source-backed LOD (M47).
     std::vector<std::string> m_comparePaths;
-    // Infeasible full-frame loads kept as metadata placeholders (M47).
     int m_infeasibleCount = 0;
-    // Soft pair reload: keep grid visible; progressive placeholders / captions.
-    bool m_softPairReload = false;
-    // Interaction settle: defer hist/diff while zoom/pan/slider is hot.
+    bool m_softPairReload = false; // keep grid visible across pair reload
     bool m_interactionBusy = false;
     uint64_t m_interactionGen = 0;
     bool m_deferredDiffRefresh = false;
     bool m_deferredHistRefresh = false;
-    // Background preload handles for the previous/next nav window.
     std::vector<mviewer::ui::PairPrefetchEntry> m_pairPrefetch;
+    std::vector<mviewer::ui::CompareWarmSeed> m_pendingWarmSeeds;
     void queueLoadRequests(const std::shared_ptr<LoadBatch> &batch,
                            const std::vector<std::string> &paths,
                            const std::vector<int> &frameIndices);
@@ -248,6 +249,7 @@ class CompareWorkspace : public QWidget
     bool finishLoadInPlaceIfPossible(const std::vector<std::shared_ptr<ImageFrame>> &frames);
     void applyFramesToExistingPanes();
     void applySoftReloadPlaceholders(const std::vector<std::string> &paths);
+    void applyPendingWarmSeeds();
     void clearSoftLoadingIndicators();
     void relayoutGridKeepingPanes();
     void noteCompareInteraction();
@@ -605,12 +607,14 @@ class CompareWorkspace : public QWidget
         // full-frame LOD uses the complete source geometry.
         QRect sourceRect;
         bool region = false;
+        bool provisional = false; // cheap first paint; upgrade after delivery
     };
 
     struct DisplayBatchResult
     {
         uint64_t generation = 0;
         int paneCount = 0;
+        bool provisional = false;
 
         struct CellImage
         {
@@ -645,6 +649,7 @@ class CompareWorkspace : public QWidget
     QSize displayLodTarget(int idx, const ImageData &source) const;
     QRect sourceVisibleRect(int pane) const;
     DisplayRequest sourceDisplayRequest(int pane) const;
+    DisplayRequest buildPaneDisplayRequest(int pane, bool preferCheap) const;
     void scheduleDisplayLodRefresh(int idx = -1);
     void scheduleDisplayMaterialization(const std::vector<int> &dirtyPanes);
     // M47: bounded per-pane display-target edge for a source-backed pane (no

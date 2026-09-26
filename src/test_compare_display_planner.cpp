@@ -55,16 +55,14 @@ int main()
     std::vector<Case> cases;
     auto placeholder = input(12000, 8333, 1000, 600, 1.0);
     placeholder.hasWidgetSourceSize = false;
-    cases.push_back({"initial placeholder", placeholder, false, 1250, 1250,
-                     {0, 0, 12000, 8333}});
+    cases.push_back({"initial placeholder", placeholder, false, 1250, 1250, {0, 0, 12000, 8333}});
     cases.push_back({"normal Fit", fit, false, 1250, 1250, {0, 0, 4000, 3000}});
 
     auto independent = input(2000, 1000, 1000, 600, 0.5);
     independent.pane = 1;
     independent.fitScales = {0.25, 0.5};
     independent.visibleSourceRect = {0, 0, 2000, 1000};
-    cases.push_back({"independent pane Fit", independent, false, 1250, 1250,
-                     {0, 0, 2000, 1000}});
+    cases.push_back({"independent pane Fit", independent, false, 1250, 1250, {0, 0, 2000, 1000}});
 
     auto uniform = independent;
     uniform.uniformScale = true;
@@ -75,8 +73,7 @@ int main()
     auto firstWheel = fit;
     firstWheel.currentScale = 0.23;
     firstWheel.paneScale = firstWheel.currentScale;
-    cases.push_back({"first wheel zoom", firstWheel, false, 1438, 1438,
-                     {0, 0, 4000, 3000}});
+    cases.push_back({"first wheel zoom", firstWheel, false, 1438, 1438, {0, 0, 4000, 3000}});
 
     auto moderate = fit;
     moderate.currentScale = 0.40;
@@ -96,8 +93,8 @@ int main()
 
     auto nearFull = input(1000, 1000, 500, 500, 2.0);
     nearFull.visibleSourceRect = {0, 0, 900, 900};
-    cases.push_back({"near-full coverage boundary", nearFull, false, 2500, 2500,
-                     {0, 0, 1000, 1000}});
+    cases.push_back(
+        {"near-full coverage boundary", nearFull, false, 2500, 2500, {0, 0, 1000, 1000}});
 
     for (const double dpr : {1.0, 1.25, 1.5, 2.0})
     {
@@ -111,8 +108,7 @@ int main()
     staleFit.uniformScale = true;
     staleFit.fitScales = {0.0, std::numeric_limits<double>::infinity()};
     staleFit.visibleSourceRect = {1000, 800, 500, 400};
-    cases.push_back({"invalid stale fit scale", staleFit, false, 2500, 2500,
-                     {0, 0, 4000, 3000}});
+    cases.push_back({"invalid stale fit scale", staleFit, false, 2500, 2500, {0, 0, 4000, 3000}});
 
     auto crop = moderate;
     crop.hasCropOrRotation = true;
@@ -127,20 +123,19 @@ int main()
 
     auto largeJpeg = input(12000, 8333, 1200, 800, 0.20);
     largeJpeg.visibleSourceRect = {3000, 2000, 2000, 1500};
-    cases.push_back({"large JPEG source-backed pane", largeJpeg, true, 4096, 4096,
-                     {2750, 1813, 2500, 1874}});
+    cases.push_back(
+        {"large JPEG source-backed pane", largeJpeg, true, 4096, 4096, {2750, 1813, 2500, 1874}});
 
     int failures = 0;
     for (const auto &test : cases)
     {
         const CompareDisplayPlan plan = mviewer::ui::planCompareDisplay(test.input);
-        const bool ok = plan.isValid() && plan.region == test.region &&
-                        plan.targetWidth == test.targetWidth &&
-                        plan.targetHeight == test.targetHeight &&
-                        plan.sourceRect.x == test.sourceRect.x &&
-                        plan.sourceRect.y == test.sourceRect.y &&
-                        plan.sourceRect.width == test.sourceRect.width &&
-                        plan.sourceRect.height == test.sourceRect.height;
+        const bool ok =
+            plan.isValid() && plan.region == test.region && plan.targetWidth == test.targetWidth &&
+            plan.targetHeight == test.targetHeight && plan.sourceRect.x == test.sourceRect.x &&
+            plan.sourceRect.y == test.sourceRect.y &&
+            plan.sourceRect.width == test.sourceRect.width &&
+            plan.sourceRect.height == test.sourceRect.height;
         std::printf("%s: %s\n", ok ? "PASS" : "FAIL", test.name);
         if (!ok)
         {
@@ -175,6 +170,44 @@ int main()
     }
     else
         std::printf("PASS: A->B->A replacement keeps value-plan isolation\n");
+
+    // Progressive pyramid: cheap first paint then upgrade.
+    {
+        auto cold = input(12000, 8333, 1200, 800, 0.1);
+        cold.hasWidgetSourceSize = false;
+        const auto cheap = mviewer::ui::planCompareDisplayCheap(cold);
+        const auto full = mviewer::ui::planCompareDisplay(cold);
+        const bool cheapOk = cheap.isValid() && !cheap.region &&
+                             std::max(cheap.targetWidth, cheap.targetHeight) <= 640 &&
+                             std::max(cheap.targetWidth, cheap.targetHeight) <
+                                 std::max(full.targetWidth, full.targetHeight);
+        std::printf("%s: cheap cold edge smaller than full\n", cheapOk ? "PASS" : "FAIL");
+        if (!cheapOk)
+            ++failures;
+
+        const bool upgrade = mviewer::ui::shouldUpgradeCompareDisplay(cheap, full);
+        std::printf("%s: should upgrade cheap -> full\n", upgrade ? "PASS" : "FAIL");
+        if (!upgrade)
+            ++failures;
+
+        const bool noUpgrade = !mviewer::ui::shouldUpgradeCompareDisplay(full, cheap);
+        std::printf("%s: should not downgrade full -> cheap\n", noUpgrade ? "PASS" : "FAIL");
+        if (!noUpgrade)
+            ++failures;
+
+        auto zoomed = fit;
+        zoomed.currentScale = 0.8;
+        zoomed.paneScale = 0.8;
+        zoomed.visibleSourceRect = {500, 400, 800, 600};
+        const auto now = mviewer::ui::planCompareDisplay(zoomed);
+        const auto pred = mviewer::ui::planCompareDisplayPredictive(zoomed, 0.25);
+        const bool predOk =
+            pred.isValid() && (pred.region || std::max(pred.targetWidth, pred.targetHeight) >=
+                                                  std::max(now.targetWidth, now.targetHeight));
+        std::printf("%s: predictive zoom-in plan not smaller\n", predOk ? "PASS" : "FAIL");
+        if (!predOk)
+            ++failures;
+    }
 
     std::printf("=== Compare display planner tests: %s ===\n", failures == 0 ? "PASS" : "FAIL");
     return failures == 0 ? 0 : 1;

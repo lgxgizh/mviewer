@@ -23,6 +23,24 @@ QDialog *createFullscreenCompareHost(QWidget *parent, CompareWorkspace **viewOut
     *viewOut = view;
     return dlg;
 }
+
+void seedCompareFromViewer(CompareWorkspace *compare, ImageViewer *viewer, const QStringList &imgs)
+{
+    if (!compare || !viewer)
+        return;
+    const QString viewerPath = viewer->currentPath();
+    if (viewerPath.isEmpty() || !imgs.contains(viewerPath) || !viewer->isLodDisplay())
+        return;
+    const QImage warm = viewer->displayRaster();
+    if (warm.isNull())
+        return;
+    QSize srcSize;
+    if (const auto frame = viewer->frame())
+        srcSize = QSize(frame->metadata().width, frame->metadata().height);
+    if (!srcSize.isValid())
+        srcSize = warm.size();
+    compare->seedWarmDisplay(viewerPath, warm, srcSize);
+}
 } // namespace
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent)
@@ -742,6 +760,8 @@ void MainWindow::showCompareDialog(const QStringList &imgs, const QString &sessi
             });
 
     dlg->showFullScreen();
+
+    seedCompareFromViewer(m_compareView, m_imageViewer, imgs);
 
     // Load images *after* the dialog has been shown AND the event loop has
     // processed the layout pass, so that cell widgets have valid geometry when

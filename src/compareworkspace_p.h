@@ -6,7 +6,7 @@
 //   compareworkspace.cpp                     core (cells, layout, session, load) 770
 //   compareworkspace_analysis.cpp            histograms / metrics panels      642
 //   compareworkspace_controls.cpp            toolbar + mode controls          565
-//   compareworkspace_display_planner.cpp     fit/LOD planning (free functions) 110
+//   compareworkspace_display_planner.cpp     fit/LOD planning (free functions) 174
 //   compareworkspace_editpanel.cpp           edit panel, adjustments, presets 650
 //   compareworkspace_interact.cpp            canvas mouse / pixel-link        704
 //   compareworkspace_keyboard.cpp            keyboard-first compare controls  245
@@ -14,7 +14,7 @@
 //   compareworkspace_render.cpp              paint modes, canvas host         484
 //   compareworkspace_render_canvas.cpp       blink controller, canvas paint   449
 //   compareworkspace_render_diff.cpp         diff overlay batch + metrics     353
-//   compareworkspace_render_materialization.cpp cell raster materialization   794
+//   compareworkspace_render_materialization.cpp cell raster materialization   805
 //   compareworkspace_roi.cpp                 ROI box, HUD, measurement export 589
 // Only CompareWorkspace TUs may include this header.
 #pragma once
