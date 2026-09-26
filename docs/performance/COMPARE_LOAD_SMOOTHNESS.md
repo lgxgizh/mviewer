@@ -35,7 +35,7 @@
 | --- | --- |
 | Zoom/first paint waits on full-edge LOD | `planCompareDisplayCheap` → provisional materialize (~640) then upgrade |
 | Cold path without PreviewPanel cache | Blank panes still get cheap SourceImage::decodeLod ASAP |
-| Display vs hist/diff pool contention | Visible display batch at `Priority::Decode`; hist/diff stay Analysis + deferred |
+| Display vs hist/diff pool contention | Provisional cheap display at `Priority::Decode`; full/adjust stay Analysis; hist/diff deferred |
 | Browse→Compare blank first frames | `seedWarmDisplay` + `m_pendingWarmSeeds` reuse Viewer displayRaster |
 | Canvas filter during gesture | SmoothPixmapTransform off while dragging / interactionBusy |
 

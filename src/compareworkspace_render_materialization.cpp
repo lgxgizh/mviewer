@@ -597,10 +597,23 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
     const std::vector<std::string> &paths, const mviewer::core::DisplayColorContext &target,
     const QPointer<CompareWorkspace> &guard)
 {
+    bool provisional = false;
+    for (const DisplayRequest &req : displayRequests)
+    {
+        if (req.provisional)
+        {
+            provisional = true;
+            break;
+        }
+    }
+    // Cheap first-paint races Decode; quality upgrades and live adjusts stay on
+    // Analysis so hist/diff and workflow display-gate semantics remain stable.
+    const auto priority =
+        provisional ? TaskScheduler::Priority::Decode : TaskScheduler::Priority::Analysis;
     return TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Decode,
-        [pixels, metadata, displayRequests, adjusts, panes, paneCount, gen, paths, target,
-         guard](const TaskScheduler::TaskContext &ctx)
+        priority,
+        [pixels, metadata, displayRequests, adjusts, panes, paneCount, gen, paths, target, guard,
+         provisional](const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled())
                 return;
@@ -609,14 +622,7 @@ TaskScheduler::TaskHandle CompareWorkspace::startDisplayMaterialization(
                                         paneCount, gen, paths, target, ctx);
             if (ctx.isCancelled())
                 return;
-            for (const DisplayRequest &req : displayRequests)
-            {
-                if (req.provisional)
-                {
-                    result.provisional = true;
-                    break;
-                }
-            }
+            result.provisional = provisional;
             QMetaObject::invokeMethod(
                 qApp,
                 [guard, result]()
