@@ -71,7 +71,7 @@ bool CompareWorkspace::shouldDeferHeavyCompareWork() const
 
 void CompareWorkspace::applySoftReloadPlaceholders(const std::vector<std::string> &paths)
 {
-    const int n = std::min(static_cast<int>(paths.size()), m_cellViews.size());
+    const int n = std::min(static_cast<int>(paths.size()), static_cast<int>(m_cellViews.size()));
     auto &svc = mviewer::application::ImageLoadingService::instance();
     for (int i = 0; i < n; ++i)
     {
