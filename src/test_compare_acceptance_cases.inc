@@ -726,8 +726,7 @@ void testCompareLoadIsAsync(const QDir &dir)
     {
         QElapsedTimer cheapWait;
         cheapWait.start();
-        while ((view0->image().isNull() || view1->image().isNull()) &&
-               cheapWait.elapsed() < 2000)
+        while ((view0->image().isNull() || view1->image().isNull()) && cheapWait.elapsed() < 2000)
             pump(25);
     }
 
