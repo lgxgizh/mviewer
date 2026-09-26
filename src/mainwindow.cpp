@@ -29,17 +29,30 @@ void seedCompareFromViewer(CompareWorkspace *compare, ImageViewer *viewer, const
     if (!compare || !viewer)
         return;
     const QString viewerPath = viewer->currentPath();
-    if (viewerPath.isEmpty() || !imgs.contains(viewerPath) || !viewer->isLodDisplay())
-        return;
-    const QImage warm = viewer->displayRaster();
-    if (warm.isNull())
-        return;
-    QSize srcSize;
-    if (const auto frame = viewer->frame())
-        srcSize = QSize(frame->metadata().width, frame->metadata().height);
-    if (!srcSize.isValid())
-        srcSize = warm.size();
-    compare->seedWarmDisplay(viewerPath, warm, srcSize);
+    if (!viewerPath.isEmpty() && imgs.contains(viewerPath) && viewer->isLodDisplay())
+    {
+        const QImage warm = viewer->displayRaster(); // shared bits; no deep copy
+        if (!warm.isNull())
+        {
+            QSize srcSize;
+            if (const auto frame = viewer->frame())
+                srcSize = QSize(frame->metadata().width, frame->metadata().height);
+            if (!srcSize.isValid())
+                srcSize = warm.size();
+            compare->seedWarmDisplay(viewerPath, warm, srcSize);
+        }
+    }
+    // Neighbor warm rasters: move ownership into Compare to avoid re-decode.
+    for (const QString &path : imgs)
+    {
+        if (path.isEmpty() || path == viewerPath)
+            continue;
+        auto warm = viewer->takeWarmDisplayRaster(path);
+        if (!warm || warm->image.isNull())
+            continue;
+        QSize srcSize = warm->sourceSize.isValid() ? warm->sourceSize : warm->image.size();
+        compare->seedWarmDisplay(path, warm->image, srcSize, warm->sourceRect);
+    }
 }
 } // namespace
 

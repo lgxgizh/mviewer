@@ -39,10 +39,23 @@
 | Browse→Compare blank first frames | `seedWarmDisplay` + `m_pendingWarmSeeds` reuse Viewer displayRaster |
 | Canvas filter during gesture | SmoothPixmapTransform off while dragging / interactionBusy |
 
+
+## 极致快速 Tier-1+2 (beyond #49)
+
+| Issue | Change |
+| --- | --- |
+| Single cheap→full only | Multi-level display pyramid (~1/4, 1/2, 1×) + per-pane ready-level paint-through |
+| Display starved by hist/diff/preload | Visible materialize at `Priority::Decode`; cancel display/hist/diff/roi on `setImages` |
+| Pair switch re-decodes warm frames | `CompareSessionFramePool` LRU (path+frameIndex) beside ImageRepository |
+| Zoom settle waits on Analysis | Gesture sets `forceDecodePriority`; predictive planner remains available |
+| Multi-pane first paint jitter | Focus/edit pane scheduled first; pyramid cache paints immediately when covering |
+| Browse handoff re-decode | `seedWarmDisplay` + `takeWarmDisplayRaster` for neighbor warms; softLoading kept |
+
 ## Deferred
 
-- Full multi-level mipmap cache / tile pyramid beyond cheap→full.
-- CacheManager / DecoderRegistry rewrites.
+- True mipmap/tile pyramid inside CacheManager / DecoderRegistry.
+- Viewport-tiled region decode beyond existing region LOD.
+- Low-precision live diff raster (currently defer-only until settle).
 
 ## Expectation
 

@@ -2,9 +2,11 @@
 
 #include "application/ImageLoadingService.h"
 #include "compareworkspace_display_planner.h"
+#include "compareworkspace_display_types.h"
 #include "compareworkspace_load_types.h"
 #include "compareworkspace_prefetch.h"
 #include "compareworkspace_roi_types.h"
+#include "compareworkspace_session_runtime.h"
 #include "compareworkspace_warm_seed.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analysis/ExportReport.h"
@@ -240,6 +242,7 @@ class CompareWorkspace : public QWidget
     bool m_deferredHistRefresh = false;
     std::vector<mviewer::ui::PairPrefetchEntry> m_pairPrefetch;
     std::vector<mviewer::ui::CompareWarmSeed> m_pendingWarmSeeds;
+    std::unique_ptr<mviewer::ui::CompareSessionRuntime> m_session;
     void queueLoadRequests(const std::shared_ptr<LoadBatch> &batch,
                            const std::vector<std::string> &paths,
                            const std::vector<int> &frameIndices);
@@ -599,44 +602,10 @@ class CompareWorkspace : public QWidget
     // window (avoids a duplicate batch submission).
     bool m_rebuildingCells = false;
 
-    // M28 P1-01: async pane materialization, latest-wins and value-only delivery.
-    struct DisplayRequest
-    {
-        QSize target;
-        // Displayed/oriented source rectangle covered by this request. A
-        // full-frame LOD uses the complete source geometry.
-        QRect sourceRect;
-        bool region = false;
-        bool provisional = false; // cheap first paint; upgrade after delivery
-    };
-
-    struct DisplayBatchResult
-    {
-        uint64_t generation = 0;
-        int paneCount = 0;
-        bool provisional = false;
-
-        struct CellImage
-        {
-            int index = -1;
-            QImage image;
-            QSize sourceSize;
-            QRect sourceRect;
-            // Terminal bounded-display failure. The last valid image remains
-            // intact when one exists; an initial failure is surfaced in the
-            // pane caption instead of leaving an unexplained blank cell.
-            QString errorText;
-        };
-        std::vector<CellImage> cells;
-    };
-    struct SourceDisplayResult
-    {
-        ImageData pixels;
-        mviewer::domain::ImageMetadata metadata;
-        QSize sourceSize;
-        QRect coveredRect;
-        QString errorText;
-    };
+    // M28 P1-01: async pane materialization (types in compareworkspace_display_types.h).
+    using DisplayRequest = mviewer::ui::CompareDisplayRequest;
+    using DisplayBatchResult = mviewer::ui::CompareDisplayBatchResult;
+    using SourceDisplayResult = mviewer::ui::CompareSourceDisplayResult;
     static SourceDisplayResult materializeSourceDisplay(const std::string &path,
                                                         const DisplayRequest &request);
     static DisplayBatchResult materializeDisplayBatch(

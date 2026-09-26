@@ -531,6 +531,11 @@ void CompareWorkspace::applyAnchorZoom(int refIdx, double anchorX, double anchor
         m_engine.setCellOffset(refIdx, zoomedOffset(anchorX, o.x), zoomedOffset(anchorY, o.y));
     }
     scheduleDisplayLodRefresh(refIdx);
+    // Predictive gesture LOD: while zooming in/out, mark Decode priority so the
+    // debounced refresh climbs toward the predictive bucket without waiting on Analysis.
+    if (m_session)
+        m_session->forceDecodePriority = true;
+    noteCompareInteraction();
 }
 
 QRectF CompareWorkspace::canvasPaneGeometry(int pane) const

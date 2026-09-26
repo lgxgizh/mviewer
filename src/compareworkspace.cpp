@@ -16,6 +16,7 @@
 CompareWorkspace::CompareWorkspace(QWidget *parent) : QWidget(parent)
 {
     m_lifetime = mviewer::core::AsyncLifetimeToken::create();
+    m_session = std::make_unique<mviewer::ui::CompareSessionRuntime>();
     setMouseTracking(true);
     setFocusPolicy(Qt::StrongFocus);
 
@@ -209,6 +210,22 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
         TaskScheduler::cancel(m_roiTask);
     m_roiTask.reset();
     ++m_roiGen;
+    // Hard cancel: pair change must never leave hist/diff/display starving the
+    // new visible decode. Generation bumps reject any already-queued delivery.
+    if (m_displayTask)
+        TaskScheduler::cancel(m_displayTask);
+    m_displayTask.reset();
+    ++m_displayGen;
+    if (m_histTask)
+        TaskScheduler::cancel(m_histTask);
+    m_histTask.reset();
+    ++m_histGen;
+    if (m_diffTask)
+        TaskScheduler::cancel(m_diffTask);
+    m_diffTask.reset();
+    ++m_diffGen;
+    if (m_session)
+        m_session->forceDecodePriority = true;
     clearROIStatsDisplay();
     setROIMeasurementState(mviewer::ui::ROIMeasurementState::Idle);
     if (!m_roiLinked)
@@ -240,6 +257,8 @@ void CompareWorkspace::setImages(const QStringList &paths, const QVector<int> &f
         stdPaths.push_back(p.toUtf8().toStdString());
         stdFrameIndices.push_back(i < frameIndices.size() ? std::max(0, frameIndices.at(i)) : 0);
     }
+    if (m_session)
+        m_session->frameIndices = stdFrameIndices;
     const int requested = static_cast<int>(paths.size());
     if (requested > 0)
     {
@@ -297,6 +316,22 @@ void CompareWorkspace::finishLoad(const std::vector<std::shared_ptr<ImageFrame>>
     m_loadBatch.reset();
     m_infeasibleCount = infeasibleCount;
     m_engine.setFrames(frames);
+    if (m_session)
+    {
+        for (size_t i = 0; i < frames.size(); ++i)
+        {
+            if (!frames[i])
+                continue;
+            const std::string path =
+                i < m_comparePaths.size() ? m_comparePaths[i] : frames[i]->metadata().filePath;
+            const int frameIndex =
+                (m_session && i < m_session->frameIndices.size()) ? m_session->frameIndices[i] : 0;
+            m_session->framePool.put(path, frameIndex, frames[i]);
+        }
+        m_session->panePyramids.clear();
+        m_session->panePyramids.resize(static_cast<size_t>(m_engine.imageCount()));
+        m_session->forceDecodePriority = true;
+    }
     if (m_compareLoadingProgress)
         m_compareLoadingProgress->setVisible(false);
     if (m_engine.imageCount() == 0 && m_compareLoadingLabel)
