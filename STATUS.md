@@ -1,6 +1,6 @@
 # STATUS — MViewer
 
-> Snapshot: 2026-09-26 · Version: **1.0.73** · Release tag: **v1.0.73**
+> Snapshot: 2026-09-26 · Version: **1.0.74** · Release tag: **v1.0.74**
 > Single source of truth for "what the product is right now". For plans, see
 > `docs/roadmap.md` (engineering) and `docs/ROADMAP_PUBLIC.md` (public).
 > Evidence for the claims below: `docs/review/M24_BASELINE_2026-08-05.md`,
