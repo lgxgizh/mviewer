@@ -143,7 +143,6 @@ int main(int argc, char **argv)
     ImageData truncatedImage = DecoderRegistry::instance().decodeFull(truncatedPath);
     CHECK(truncatedImage.isNull(), "truncated embedded JPEG is rejected without a partial image");
 
-
     // Native LOD via ISourceImageCapabilities: embedded preview is NativeLod.
     {
         auto src = mviewer::core::SourceImage::open(rawPath);

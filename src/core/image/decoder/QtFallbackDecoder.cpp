@@ -163,8 +163,7 @@ bool QtFallbackDecoder::probeMetadata(const std::string &path,
         return false;
     if (meta.filePath.empty())
         meta.filePath = path;
-    meta.fileSize =
-        QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).size();
+    meta.fileSize = QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).size();
     meta.width = full.width();
     meta.height = full.height();
     const auto transform = reader.transformation();
@@ -206,4 +205,3 @@ ImageData QtFallbackDecoder::decodeLod(const std::string &path, int maxEdge,
     // FullDecodeScaled because canNativeLod is false).
     return decodeScaled(path, maxEdge, meta);
 }
-

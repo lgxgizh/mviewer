@@ -373,7 +373,6 @@ static void testAsyncTileManagerEvictionAndBounds()
     CHECK(manager.pendingCount() == 0, "pending count cleared after reset");
 }
 
-
 static void testPreferReducedMip()
 {
     printf("\n[TileSourceDecode prefer mip]\n");

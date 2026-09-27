@@ -4,10 +4,10 @@
 #include "Viewport.h"
 #include "core/image/ImageBuffer.h"
 
-#include <cstdint>
 #include <cmath>
-#include <limits>
+#include <cstdint>
 #include <functional>
+#include <limits>
 #include <list>
 #include <mutex>
 #include <string>
@@ -135,8 +135,7 @@ struct TileCache
         const int64_t numerator = static_cast<int64_t>(sourceExtent) * scale;
         const int64_t denominator = static_cast<int64_t>(reduction) * 100;
         const int64_t pixels = (numerator + denominator - 1) / denominator;
-        return static_cast<int>(std::clamp<int64_t>(
-            pixels, 1, std::numeric_limits<int>::max()));
+        return static_cast<int>(std::clamp<int64_t>(pixels, 1, std::numeric_limits<int>::max()));
     }
 
     // Returns the tile for (imageId, col, row, lod) if cached, else null.
@@ -246,18 +245,17 @@ struct TileCache
         auto tiles = lodGrid.visibleTiles(vp);
         for (const auto &t : tiles)
         {
-            TileKey k{imageId, t.coord.col, t.coord.row, lod,
-                      std::max(1, renderScalePercent)};
+            TileKey k{imageId, t.coord.col, t.coord.row, lod, std::max(1, renderScalePercent)};
             ImageData cached = get(k);
             if (!cached.isNull())
             {
                 out.push_back({k, cached});
                 continue;
             }
-            const int targetW = canonicalTilePixels(t.srcW, grid.tileSize, lod,
-                                                    k.renderScalePercent);
-            const int targetH = canonicalTilePixels(t.srcH, grid.tileSize, lod,
-                                                    k.renderScalePercent);
+            const int targetW =
+                canonicalTilePixels(t.srcW, grid.tileSize, lod, k.renderScalePercent);
+            const int targetH =
+                canonicalTilePixels(t.srcH, grid.tileSize, lod, k.renderScalePercent);
             ImageData decoded = decode(imageId, t.srcX, t.srcY, t.srcW, t.srcH, targetW, targetH);
             if (decoded.isNull())
                 continue;

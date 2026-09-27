@@ -428,7 +428,6 @@ ImageData RawDecoder::decodeFull(const std::string &path,
     return d;
 }
 
-
 bool RawDecoder::probePreviewSize(const std::string &path, int &outW, int &outH) const
 {
     outW = 0;

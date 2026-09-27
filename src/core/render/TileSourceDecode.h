@@ -45,9 +45,8 @@ inline ImageData decodeTilePreferReduced(const std::string &path, const ImageDat
         rh = std::min(rh, src.height - ry);
         if (rw <= 0 || rh <= 0)
             return ImageData{};
-        return RenderEngine::scaleRegionStatic(src, RenderRect{rx, ry, rw, rh},
-                                               RenderSize{targetW, targetH},
-                                               RenderInterp::Bilinear);
+        return RenderEngine::scaleRegionStatic(
+            src, RenderRect{rx, ry, rw, rh}, RenderSize{targetW, targetH}, RenderInterp::Bilinear);
     };
 
     int baseEdge = std::max(fullW, fullH);
@@ -90,9 +89,8 @@ inline ImageData decodeTilePreferReduced(const std::string &path, const ImageDat
         auto lod = source->decodeLod(wantEdge);
         if (lod.ok && !lod.pixels.isNull())
         {
-            ImageData fromLod =
-                scaleFrom(lod.pixels, srcFullW > 0 ? srcFullW : lod.pixels.width,
-                          srcFullH > 0 ? srcFullH : lod.pixels.height);
+            ImageData fromLod = scaleFrom(lod.pixels, srcFullW > 0 ? srcFullW : lod.pixels.width,
+                                          srcFullH > 0 ? srcFullH : lod.pixels.height);
             if (!fromLod.isNull())
                 return fromLod;
         }

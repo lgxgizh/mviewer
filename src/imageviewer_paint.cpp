@@ -190,8 +190,7 @@ void ImageViewer::drawProvisional(QPainter &painter) const
         const double scaleY = static_cast<double>(m_provisionalImage.height()) / sh;
         const QRectF sourceSubRect((visibleTarget.left() - sx) * scaleX,
                                    (visibleTarget.top() - sy) * scaleY,
-                                   visibleTarget.width() * scaleX,
-                                   visibleTarget.height() * scaleY);
+                                   visibleTarget.width() * scaleX, visibleTarget.height() * scaleY);
         painter.drawImage(visibleTarget, m_provisionalImage, sourceSubRect);
     }
     painter.restore();
@@ -208,9 +207,8 @@ AsyncTileRequestManager::VisibleTiles ImageViewer::requestVisibleTiles()
     const ImageData source = m_frame->pixels();
     const auto metadata = m_frame->metadata();
     const auto displayTarget = m_displayColorTarget;
-    const std::string path = !metadata.filePath.empty()
-                                 ? metadata.filePath
-                                 : m_currentPath.toUtf8().toStdString();
+    const std::string path =
+        !metadata.filePath.empty() ? metadata.filePath : m_currentPath.toUtf8().toStdString();
     QPointer<ImageViewer> guard(this);
     const auto decode = [source, metadata, displayTarget, path](const std::string &, int sx, int sy,
                                                                 int sw, int sh, int tw,
@@ -218,7 +216,8 @@ AsyncTileRequestManager::VisibleTiles ImageViewer::requestVisibleTiles()
     {
         // Coarse tiles: prefer in-memory mip / decodeLod / decodeRegion before
         // scaling the full decoded frame.
-        ImageData raw = mviewer::core::decodeTilePreferReduced(path, source, sx, sy, sw, sh, tw, th);
+        ImageData raw =
+            mviewer::core::decodeTilePreferReduced(path, source, sx, sy, sw, sh, tw, th);
         if (raw.isNull())
         {
             raw = RenderEngine::scaleRegionStatic(source, RenderRect{sx, sy, sw, sh},
