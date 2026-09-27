@@ -71,9 +71,10 @@ bool CompareWorkspace::shouldDeferHeavyCompareWork() const
 
 TaskScheduler::Priority CompareWorkspace::deferredAnalysisPriority() const
 {
-    if (m_loadInFlight || m_displayTask)
-        return TaskScheduler::Priority::Background;
-    if (m_session && m_session->forceDecodePriority)
+    // Soft-load of the next pair still owns Decode. Primary diff on this load
+    // generation and threshold gates stay Analysis (m_loadInFlight is already
+    // clear, and forceDecode / display tasks must not retag them).
+    if (m_loadInFlight && m_softPairReload)
         return TaskScheduler::Priority::Background;
     return TaskScheduler::Priority::Analysis;
 }

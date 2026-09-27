@@ -258,8 +258,8 @@ class CompareWorkspace : public QWidget
     void noteCompareInteraction();
     void flushDeferredCompareAnalysis();
     bool shouldDeferHeavyCompareWork() const;
-    // Analysis when the display is idle; Background while a pair load or
-    // pane materialization still needs the higher pools.
+    // Analysis for load-generation and threshold diff/histogram batches.
+    // Background only while the next pair is still soft-loading.
     TaskScheduler::Priority deferredAnalysisPriority() const;
     void releaseSessionMemory();
     void cancelPairPrefetch();

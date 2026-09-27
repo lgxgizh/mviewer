@@ -36,4 +36,14 @@ ImageData ensureAndBestMip(const std::string &path, const ImageData &full, int m
     return tryBestMip(path, maxEdge);
 }
 
+void dropMips(const std::string &baseKey)
+{
+    CacheManager::instance().dropMips(baseKey);
+}
+
+size_t trimMipsToBudget(size_t maxBytes, const std::vector<std::string> &keepBaseKeys)
+{
+    return CacheManager::instance().trimMipsToBudget(maxBytes, keepBaseKeys);
+}
+
 } // namespace mviewer::core

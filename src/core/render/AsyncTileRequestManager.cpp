@@ -280,7 +280,8 @@ void evictNonVisible(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
 void scheduleRingPrefetch(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
                           const std::string &imageId, const Viewport &viewport,
                           const TileGrid &grid, int renderScalePercent, uint64_t generation,
-                          TileDecodeFn decode, AsyncTileRequestManager::ReadyCallback onReady)
+                          const TileDecodeFn &decode,
+                          const AsyncTileRequestManager::ReadyCallback &onReady)
 {
     if (!decode)
         return;
@@ -444,8 +445,8 @@ void AsyncTileRequestManager::reset(uint64_t generation)
 
 AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisible(
     const std::string &imageId, const Viewport &viewport, const TileGrid &grid,
-    int renderScalePercent, uint64_t generation, TileDecodeFn decode, ReadyCallback onReady,
-    TaskScheduler::Priority priority)
+    int renderScalePercent, uint64_t generation, const TileDecodeFn &decode,
+    const ReadyCallback &onReady, TaskScheduler::Priority priority)
 {
     VisibleTiles result;
     if (!decode)
@@ -534,18 +535,18 @@ AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisible(
     return result;
 }
 
-AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisibleRegion(
-    const std::string &imageId, const Viewport &viewport, const TileGrid &grid,
-    int renderScalePercent, uint64_t generation, TileDecodeFn decode, ReadyCallback onReady)
+AsyncTileRequestManager::VisibleTiles
+AsyncTileRequestManager::requestVisibleRegion(const std::string &imageId, const Viewport &viewport,
+                                              const TileGrid &grid, int renderScalePercent,
+                                              uint64_t generation, const TileDecodeFn &decode,
+                                              const ReadyCallback &onReady)
 {
-    ReadyCallback ringReady = onReady;
-    VisibleTiles visible =
-        requestVisible(imageId, viewport, grid, renderScalePercent, generation, decode,
-                       std::move(onReady), TaskScheduler::Priority::Decode);
+    VisibleTiles visible = requestVisible(imageId, viewport, grid, renderScalePercent, generation,
+                                          decode, onReady, TaskScheduler::Priority::Decode);
     const bool zoomedIn = viewport.scale >= 1.0 && std::isfinite(viewport.scale);
     if (zoomedIn)
         scheduleRingPrefetch(m_impl, imageId, viewport, grid, renderScalePercent, generation,
-                             std::move(decode), std::move(ringReady));
+                             decode, onReady);
     return visible;
 }
 

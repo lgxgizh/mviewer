@@ -5,7 +5,7 @@
 #include "application/ImageLoadingService.h"
 #include "core/analysis/AnalysisEngine.h"
 #include "core/analyzer/Analyzer.h"
-#include "core/cache/CacheManager.h"
+#include "core/image/DisplayMip.h"
 #include "core/image/ImageStats.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
@@ -81,12 +81,11 @@ void ImageViewer::releaseColdMips(const QString &previousPath)
 {
     if (previousPath.isEmpty() || previousPath == m_currentPath)
         return;
-    auto &cache = CacheManager::instance();
-    cache.dropMips(previousPath.toUtf8().toStdString());
+    mviewer::core::dropMips(previousPath.toUtf8().toStdString());
     std::vector<std::string> keep;
     if (!m_currentPath.isEmpty())
         keep.push_back(m_currentPath.toUtf8().toStdString());
-    cache.trimMipsToBudget(96ull * 1024ull * 1024ull, keep);
+    mviewer::core::trimMipsToBudget(96ull * 1024ull * 1024ull, keep);
 }
 
 ImageViewer::~ImageViewer()

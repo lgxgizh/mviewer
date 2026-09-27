@@ -56,7 +56,7 @@ class AsyncTileRequestManager
     // must be pure CPU/value work.
     VisibleTiles requestVisible(const std::string &imageId, const Viewport &viewport,
                                 const TileGrid &grid, int renderScalePercent, uint64_t generation,
-                                TileDecodeFn decode, ReadyCallback onReady,
+                                const TileDecodeFn &decode, const ReadyCallback &onReady,
                                 TaskScheduler::Priority priority = TaskScheduler::Priority::Decode);
 
     // Zoomed-in pans (scale >= 1) schedule visible tiles at Decode, then a
@@ -65,8 +65,8 @@ class AsyncTileRequestManager
     // not blocked on the ring. Ring keys match a later pan.
     VisibleTiles requestVisibleRegion(const std::string &imageId, const Viewport &viewport,
                                       const TileGrid &grid, int renderScalePercent,
-                                      uint64_t generation, TileDecodeFn decode,
-                                      ReadyCallback onReady);
+                                      uint64_t generation, const TileDecodeFn &decode,
+                                      const ReadyCallback &onReady);
 
     // Schedule a derived value (for example an overlay tile) without doing
     // the materialization in a GUI paint callback. The source is a cheap

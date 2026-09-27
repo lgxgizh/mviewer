@@ -332,8 +332,7 @@ static void testVisibleBeforeRingAndShutdown()
     std::atomic<int> lateReady{0};
     manager.reset(2);
     scheduler.pause(TaskScheduler::DecodePool);
-    manager.requestVisible("late", vp, grid, 100, 2, decode,
-                           [&](const TileKey &) { ++lateReady; });
+    manager.requestVisible("late", vp, grid, 100, 2, decode, [&](const TileKey &) { ++lateReady; });
     manager.shutdown();
     CHECK(manager.pendingCount() == 0, "shutdown drops pending tiles");
     scheduler.resume(TaskScheduler::DecodePool);

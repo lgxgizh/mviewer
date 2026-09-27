@@ -1,6 +1,6 @@
 #include "compareworkspace_p.h"
 
-#include "core/cache/CacheManager.h"
+#include "core/image/DisplayMip.h"
 #include "core/image/ImageFrame.h"
 #include "core/image/SourceImage.h"
 
@@ -128,9 +128,9 @@ void CompareWorkspace::releaseSessionMemory()
     for (const std::string &key : mipKeys)
     {
         if (!key.empty())
-            CacheManager::instance().dropMips(key);
+            mviewer::core::dropMips(key);
     }
-    CacheManager::instance().trimMipsToBudget(96ull * 1024ull * 1024ull, {});
+    mviewer::core::trimMipsToBudget(96ull * 1024ull * 1024ull, {});
 }
 
 CompareWorkspace::~CompareWorkspace()

@@ -176,8 +176,7 @@ void CacheManager::dropMips(const std::string &baseKey)
     eraseMips(baseKey);
 }
 
-size_t CacheManager::trimMipsToBudget(size_t maxBytes,
-                                      const std::vector<std::string> &keepBaseKeys)
+size_t CacheManager::trimMipsToBudget(size_t maxBytes, const std::vector<std::string> &keepBaseKeys)
 {
     std::unordered_set<std::string> keep(keepBaseKeys.begin(), keepBaseKeys.end());
     struct Cold
