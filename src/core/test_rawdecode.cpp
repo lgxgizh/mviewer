@@ -1,3 +1,4 @@
+#include "core/image/SourceImage.h"
 #include "core/image/decoder/DecoderRegistry.h"
 #include "core/image/decoder/RawDecoder.h"
 
@@ -141,6 +142,33 @@ int main(int argc, char **argv)
     writeFile(truncatedPath, truncated);
     ImageData truncatedImage = DecoderRegistry::instance().decodeFull(truncatedPath);
     CHECK(truncatedImage.isNull(), "truncated embedded JPEG is rejected without a partial image");
+
+    // Native LOD via ISourceImageCapabilities: embedded preview is NativeLod.
+    {
+        auto src = mviewer::core::SourceImage::open(rawPath);
+        CHECK(src && src->isValid(), "SourceImage opens synthetic RAW");
+        CHECK(src->hasNativeLod(), "RAW advertises native LOD (embedded JPEG)");
+        auto lod = src->decodeLod(16);
+        CHECK(lod.ok && !lod.pixels.isNull(), "RAW decodeLod returns pixels");
+        CHECK(lod.pixels.width <= 16 && lod.pixels.height <= 16, "RAW decodeLod respects maxEdge");
+        CHECK(lod.decodePath == mviewer::core::SourceDecodePath::NativeLod,
+              "RAW decodeLod classified NativeLod (not libraw half demosaic)");
+    }
+    {
+        // Preview-less RAW: canNativeLod is extension-true but decodeLod empty.
+        auto src = mviewer::core::SourceImage::open(brokenPath);
+        // open may fail if probe cannot size — either nullptr or failed lod is OK.
+        if (src && src->isValid())
+        {
+            auto lod = src->decodeLod(32);
+            CHECK(!lod.ok || lod.pixels.isNull(),
+                  "preview-less RAW decodeLod does not invent pixels");
+        }
+        else
+        {
+            CHECK(true, "preview-less RAW SourceImage::open fails gracefully");
+        }
+    }
 
     // Normal JPEG flow still works (RawDecoder must not steal non-RAW).
     const std::string jpgPath = tmp.path().toStdString() + "/normal.jpg";

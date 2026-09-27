@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/image/ISourceImageCapabilities.h"
 #include "core/image/decoder/IDecoder.h"
 
 #include <cstddef>
@@ -19,7 +20,10 @@
 // crashing. The full demosaic pipeline (Stage B) is explicitly deferred.
 //
 // Header is Qt-free; the .cpp may use Qt internally.
-class RawDecoder : public IDecoder
+// Implements ISourceImageCapabilities so SourceImage::decodeLod can classify
+// embedded-JPEG preview reads as NativeLod (QImageReader::setScaledSize / DCT).
+// We do NOT claim libraw half-size demosaic — that remains deferred.
+class RawDecoder : public IDecoder, public mviewer::core::ISourceImageCapabilities
 {
   public:
     // M42 diagnostic seam retained for compatibility: bytes copied into a
@@ -46,8 +50,20 @@ class RawDecoder : public IDecoder
         return "RawDecoder";
     }
 
+    // ── Source-backed capabilities (embedded JPEG preview as native LOD) ────
+    bool canProbe(const std::string &path) const override;
+    bool probeMetadata(const std::string &path,
+                       mviewer::domain::ImageMetadata &meta) const override;
+    // True for RAW extensions we own: embedded JPEG + setScaledSize (not libraw half).
+    bool canNativeLod(const std::string &path) const override;
+    bool canNativeRegion(const std::string &path) const override;
+    ImageData decodeLod(const std::string &path, int maxEdge,
+                        mviewer::domain::ImageMetadata &meta) const override;
+
   private:
     // Extract the largest embedded JPEG preview from a RAW container and decode
     // it. Returns an empty ImageData when no usable preview is present.
     ImageData extractPreview(const std::string &path, int maxEdge) const;
+    // Header-only probe of the largest embedded JPEG (no pixel materialization).
+    bool probePreviewSize(const std::string &path, int &outW, int &outH) const;
 };

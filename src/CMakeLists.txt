@@ -190,6 +190,7 @@ add_library(mviewer_ui STATIC
     compareworkspace_render_materialization.cpp
     compareworkspace_pyramid_wire.cpp
     compareworkspace_render_diff.cpp
+    compareworkspace_live_diff.cpp
     compareworkspace_render_canvas.cpp
     compareworkspace_roi.cpp
     compareworkspace_roi_overlay.cpp

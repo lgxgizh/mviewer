@@ -1,7 +1,9 @@
 // DifferenceEngine unit tests — pixel diff / heatmap / threshold.
+#include "compare_live_diff.h"
 #include "core/compare/DifferenceEngine.h"
 #include "core/image/ImageBuffer.h"
 #include <QApplication>
+#include <algorithm>
 #include <iostream>
 #include <vector>
 
@@ -362,6 +364,24 @@ int main(int argc, char **argv)
         auto diff = DifferenceEngine::differenceMap(a, b);
         CHECK(!diff.isNull(), "cross-format RGB vs BGR non-null");
         CHECK(isAllBlack(diff), "cross-format identical colors yield zero diff");
+    }
+
+    // Live-diff downscale helper (cheap provisional overlay input).
+    {
+        ImageData big = makeSolidRgb(800, 600, 10, 20, 30);
+        ImageData small = mviewer::ui::downscaleForLiveDiff(big, 384);
+        CHECK(!small.isNull(), "live downscale non-null");
+        CHECK(std::max(small.width, small.height) <= 384, "live downscale respects maxEdge");
+        ImageData tiny = makeSolidRgb(64, 48, 1, 2, 3);
+        ImageData passthrough = mviewer::ui::downscaleForLiveDiff(tiny, 384);
+        CHECK(passthrough.width == 64 && passthrough.height == 48,
+              "live downscale passes through when already small");
+        ImageData a = makeSolidRgb(100, 100, 0, 0, 0);
+        ImageData b = makeSolidRgb(100, 100, 255, 0, 0);
+        ImageData al = mviewer::ui::downscaleForLiveDiff(a, 64);
+        ImageData bl = mviewer::ui::downscaleForLiveDiff(b, 64);
+        ImageData liveDiff = DifferenceEngine::differenceMap(al, bl);
+        CHECK(!liveDiff.isNull(), "DifferenceEngine works on live-scaled inputs");
     }
 
     std::cout << "\nDifferenceEngine: " << (g_fail == 0 ? "ALL PASSED" : "FAILURES") << "\n";

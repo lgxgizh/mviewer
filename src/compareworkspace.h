@@ -531,6 +531,8 @@ class CompareWorkspace : public QWidget
 
     // Repaints every diff overlay after a user-visible compare state change.
     void refreshAllDiffOverlays();
+    // Cheap provisional overlay while interacting; full precision on settle.
+    void scheduleLiveDiffPreview();
 
     // M29: async batch diff result — computed by a single Analysis-pool task
     // and delivered to the UI thread via qApp. Value/POD data only (QImage is
@@ -552,6 +554,7 @@ class CompareWorkspace : public QWidget
         bool hasRoiStats = false;
         DifferenceEngine::DiffStats roiStats;
         double diffGain = 1.0;
+        bool provisional = false; // live low-precision; metrics skipped
 
         struct CellOverlay
         {

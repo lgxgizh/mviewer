@@ -144,3 +144,64 @@ std::vector<std::string> QtFallbackDecoder::extensions() const
 {
     return {}; // matches everything via canDecode() == true
 }
+
+bool QtFallbackDecoder::canProbe(const std::string &path) const
+{
+    QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
+    reader.setAutoTransform(true);
+    const QSize full = reader.size();
+    return full.isValid() && !full.isEmpty();
+}
+
+bool QtFallbackDecoder::probeMetadata(const std::string &path,
+                                      mviewer::domain::ImageMetadata &meta) const
+{
+    QImageReader reader(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
+    reader.setAutoTransform(true);
+    const QSize full = reader.size();
+    if (!full.isValid() || full.isEmpty())
+        return false;
+    if (meta.filePath.empty())
+        meta.filePath = path;
+    meta.fileSize = QFileInfo(QString::fromUtf8(path.data(), static_cast<int>(path.size()))).size();
+    meta.width = full.width();
+    meta.height = full.height();
+    const auto transform = reader.transformation();
+    if (mviewer::core::qtmetadata::transformSwapsDimensions(transform))
+        std::swap(meta.width, meta.height);
+    meta.orientation = mviewer::core::qtmetadata::orientationFromTransform(transform);
+    const QByteArray fmt = reader.format();
+    if (!fmt.isEmpty())
+        meta.format = QString::fromLatin1(fmt).toUpper().toStdString();
+    else
+    {
+        const QString ext = QFileInfo(reader.fileName()).suffix().toLower();
+        if (!ext.isEmpty())
+            meta.format = ext.toUpper().toStdString();
+    }
+    meta.channels = 3;
+    return true;
+}
+
+bool QtFallbackDecoder::canNativeLod(const std::string &path) const
+{
+    (void)path;
+    // Plugin formats (WEBP/GIF/XPM/…) have no evidence-backed claim that
+    // setScaledSize avoids a full raster allocation. Stay honest.
+    return false;
+}
+
+bool QtFallbackDecoder::canNativeRegion(const std::string &path) const
+{
+    (void)path;
+    return false;
+}
+
+ImageData QtFallbackDecoder::decodeLod(const std::string &path, int maxEdge,
+                                       mviewer::domain::ImageMetadata &meta) const
+{
+    // Same scaled-reader path as decodeScaled: still useful so SourceImage
+    // does not always full-decode then downscale in UI (classified
+    // FullDecodeScaled because canNativeLod is false).
+    return decodeScaled(path, maxEdge, meta);
+}

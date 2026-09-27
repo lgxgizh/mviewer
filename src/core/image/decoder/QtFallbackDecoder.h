@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/image/ISourceImageCapabilities.h"
 #include "core/image/decoder/IDecoder.h"
 
 #include <string>
@@ -10,7 +11,12 @@
 // generic QImageReader decode; if that fails the decode returns an empty
 // ImageData (graceful failure, no crash). Used for formats Qt can read but we
 // have no dedicated decoder for (e.g. WEBP, GIF, XPM).
-class QtFallbackDecoder : public IDecoder
+//
+// Implements ISourceImageCapabilities with an honest canNativeLod=false: plugin
+// handlers may allocate a full raster before honoring setScaledSize. decodeLod
+// still uses the scaled-reader path so SourceImage can classify FullDecodeScaled
+// without a second full-then-downscale in the UI.
+class QtFallbackDecoder : public IDecoder, public mviewer::core::ISourceImageCapabilities
 {
   public:
     bool canDecode(const std::string &path) const override;
@@ -25,4 +31,13 @@ class QtFallbackDecoder : public IDecoder
     {
         return "QtFallbackDecoder";
     }
+
+    bool canProbe(const std::string &path) const override;
+    bool probeMetadata(const std::string &path,
+                       mviewer::domain::ImageMetadata &meta) const override;
+    // Always false: fallback/plugin formats lack a proven native reduced decode.
+    bool canNativeLod(const std::string &path) const override;
+    bool canNativeRegion(const std::string &path) const override;
+    ImageData decodeLod(const std::string &path, int maxEdge,
+                        mviewer::domain::ImageMetadata &meta) const override;
 };
