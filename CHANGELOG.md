@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.76] - 2026-09-27
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.76**.
+- **Remaining deferred Compare/cache perf (#56)**: decoder-native disk-LOD (RAW embedded JPEG DCT), interactive low-prec live diff, TileCache prefer mip/`decodeLod`.
+
 ### 性能
 
 - **解码器原生 disk-LOD**：`RawDecoder` 实现 `ISourceImageCapabilities`，嵌入 JPEG 预览经 `QImageReader::setScaledSize`（DCT）作为 NativeLod；`canNativeLod` 如实声明（非 libraw half demosaic）。`QtFallbackDecoder` 提供 `decodeLod` 缩放路径但不声称 native（插件格式无证据）。
