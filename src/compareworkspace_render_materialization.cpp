@@ -30,13 +30,9 @@ ImageData tryCacheBestMip(const std::string &path, int maxEdge)
     ImageData out;
     if (cm.getBestMip(path, maxEdge, out) && !out.isNull())
         return out;
-    auto &repo = ImageRepository::instance();
-    const std::string cached = repo.cachedKeyForPath(path);
-    if (!cached.empty() && cached != path && cm.getBestMip(cached, maxEdge, out) && !out.isNull())
-        return out;
-    const std::string keyed = repo.makeKey(path);
-    if (!keyed.empty() && keyed != path && keyed != cached && cm.getBestMip(keyed, maxEdge, out) &&
-        !out.isNull())
+    // Repository FullImage keys are path|size|mtime (public makeKey).
+    const std::string keyed = ImageRepository::instance().makeKey(path);
+    if (!keyed.empty() && keyed != path && cm.getBestMip(keyed, maxEdge, out) && !out.isNull())
         return out;
     return ImageData{};
 }
