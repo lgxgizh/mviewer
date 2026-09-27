@@ -65,8 +65,14 @@
   full precision on settle. Hist remains defer-until-settle.
 - ~~TileCache/viewer coarse tiles prefer mip + decodeLod.~~
   **Landed**: `TileSourceDecode::decodeTilePreferReduced` (mip → decodeLod/region →
-  scale-from-frame). **Still deferred**: GPU tile-upload rewrite / compositor overhaul.
-- Viewport-tiled region decode beyond existing region LOD (incremental only).
+  scale-from-frame).
+- ~~Viewport-tiled region decode beyond existing region LOD.~~
+  **Landed**: zoomed-in LOD pans schedule a one-tile ring through
+  `AsyncTileRequestManager::requestVisibleRegion`. Fill order is native
+  `decodeRegion` when `canNativeRegion`, otherwise a bounded crop. A resident
+  1:1 frame is still scaled in place. **Still deferred**: Stage B GPU
+  `scaleRegion` / compositor rewrite. Stage A upload (pin + byte budget) is
+  separate; see `docs/rfc/M13_GPU_ROADMAP.md`.
 
 ## Expectation
 

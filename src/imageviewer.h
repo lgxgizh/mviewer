@@ -423,6 +423,10 @@ class ImageViewer : public QOpenGLWidget
     void drawOverlayBadge(QPainter &painter);
     void drawProvisional(QPainter &painter) const;
     AsyncTileRequestManager::VisibleTiles requestVisibleTiles();
+    // Large-source zoomed-in pans: per-tile decodeRegion, no full frame.
+    bool lodRegionTilesActive() const;
+    void ensureLodTileGrid();
+    AsyncTileRequestManager::VisibleTiles requestLodRegionTiles();
     void scheduleOverlayTiles(std::vector<TileCache::ReadyTile> &ready);
     void drawGpuTiles(QPainter &painter, const std::vector<TileCache::ReadyTile> &ready,
                       const Viewport &tileView);

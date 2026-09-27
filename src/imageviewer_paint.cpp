@@ -52,7 +52,18 @@ void ImageViewer::paintEvent(QPaintEvent *event)
         m_view.screenW = width();
         m_view.screenH = height();
         drawDisplayRaster(painter);
-        if (displayNeedsUpgrade() && !m_displayUpgradeScheduled)
+        if (lodRegionTilesActive())
+        {
+            // Underlay stays the coarse raster. Missing cells come from
+            // decodeRegion (native or bounded) and land in TileCache.
+            ensureLodTileGrid();
+            const auto regionTiles = requestLodRegionTiles();
+            const Viewport tileView = m_view;
+            auto ready = regionTiles.ready;
+            drawGpuTiles(painter, ready, tileView);
+            drawCpuTiles(painter, ready, tileView);
+        }
+        else if (displayNeedsUpgrade() && !m_displayUpgradeScheduled)
             scheduleDisplayUpgrade();
     }
     else if (m_frame && m_frame->isValid())
@@ -225,7 +236,7 @@ AsyncTileRequestManager::VisibleTiles ImageViewer::requestVisibleTiles()
         }
         return mvcore::toDisplayImageData(raw, metadata, displayTarget);
     };
-    return m_tileRequests.requestVisible(
+    return m_tileRequests.requestVisibleRegion(
         id, m_view, m_tiles, renderScalePercent, generation, decode,
         [guard, generation](const TileKey &)
         {

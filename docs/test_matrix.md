@@ -210,6 +210,7 @@ Legend: a number = count of test sources covering that feature in that test type
 | eventbus_tests | `test_eventbus)` | - | - |
 | render_pipeline_tests | `test_render_pipeline)` | - | - |
 | tilecache_tests | `test_tilecache)` | - | - |
+| region_tiles_tests | `test_region_tiles)` | - | - |
 | gputile_tests | `test_gputile)` | - | - |
 | rawdecode_tests | `test_rawdecode)` | - | - |
 | pixelcontroller_tests | `test_pixelcontroller)` | - | - |
