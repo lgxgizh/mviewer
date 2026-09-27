@@ -814,8 +814,9 @@ environment blockers, is recorded in `docs/review/M38_VIEWER_RENDER_CONVERGENCE_
 
 - **Decode**: `DecoderRegistry` dispatches to `QtDecoder` (JPEG/PNG/BMP/TIFF/…),
   `RawDecoder` (embedded-JPEG preview for CR2/CR3/NEF/ARW/DNG/ORF/RW2/PEF/RAF/…,
-  graceful fallthrough), and `QtFallbackDecoder`. RAW = **preview-only**, no
-  demosaic (libraw deferred — M18).
+  graceful fallthrough), and `QtFallbackDecoder`. RAW display prefers the
+  embedded JPEG; LibRaw 0.21.4 (LGPL-2.1 / CDDL-1.0) supplies half-size demosaic
+  when the preview is short, and full demosaic only when no preview exists.
 - **Cache**: 5-level (disk/memory/…) + predictive preload.
 - **Scheduler**: `TaskScheduler` + `DecodePool`; background async decode, UI never blocks.
 - **Compare**: 2–8 images, synchronized zoom/pan/selection, blink, swipe, split,
@@ -860,8 +861,8 @@ environment blockers, is recorded in `docs/review/M38_VIEWER_RENDER_CONVERGENCE_
 
 ## Deferred / future (not shipping now)
 
-- Full RAW demosaic (libraw) — M18.
-- GPU Stage C/D: custom shaders, multi-pass, D3D11/Vulkan direct compositing
+- GPU Stage B (`scaleRegion` on the GPU) and Stage C/D: custom shaders,
+  multi-pass, D3D11/Vulkan direct compositing
   (UI boundary frozen).
 - Linux/macOS native installers (Linux CI artifacts build; only Windows ships
   an installer).
@@ -869,9 +870,11 @@ environment blockers, is recorded in `docs/review/M38_VIEWER_RENDER_CONVERGENCE_
 
 ## Known gaps (honest, not hidden)
 
-- RAW = preview-only (no demosaic); some large/edge RAW containers fall
-  through to the fallback decoder.
-- GPU Stage A is opt-in (`MVIEWER_GPU=1`); default is the CPU tile path.
+- RAW without a usable preview and without a LibRaw open (or a build with
+  `MVIEWER_WITH_LIBRAW=OFF`) still falls through. LibRaw here has no external
+  libjpeg/zlib, so some DNG deflate/lossy files still fail open.
+- GPU Stage A is opt-in (`MVIEWER_GPU=1` or the `gpuAcceleration` setting);
+  default is the CPU tile path. Stage B is not implemented.
 - 100 MP first-viewport fill measured 1480 ms on a 2-core Xeon VM (vs 392.8 ms
   on the 2026-07-24 baseline box) — B10 is report-only by design
   (`performance_budget.json`); regression axis is `--regression`.

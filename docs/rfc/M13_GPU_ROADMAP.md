@@ -115,6 +115,19 @@ contracts, (c) keep a software fallback so headless/CI still works.
 - [x] UI-boundary / freeze risk called out explicitly (Stage C deferred).
 - [ ] RFC approved by commander (no implementation until then).
 
+## 6b. Stage A follow-up (2026-09, still not Stage B)
+
+`GpuTileUploader` remains the Stage A tier (upload of already-cached tiles,
+CPU fallback when no context or `MVIEWER_GPU=0`). The uploader now:
+
+- skips re-upload when the tile key, size, and a pixel sample match
+- replaces same-size texture contents with `glTexSubImage2D` instead of a new id
+- evicts by texture count **and** a byte budget (`gpuTileBudgetMb` /
+  `MVIEWER_GPU_BUDGET_MB`, default 256 MiB)
+- `pinVisible` keeps the tiles on screen resident across a pan
+
+Stage B (`scaleRegion` on the GPU, compositor rewrite) is **not** implemented.
+
 ## 7. Out of scope (explicit)
 
 - Any `RenderEngine` GPU backend code.

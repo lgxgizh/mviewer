@@ -11,11 +11,13 @@
 
 #include "core/render/TileCache.h"
 
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <list>
-#include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 // Uploads decoded tiles to GPU textures and tracks residency.
 // When no GL context is available (or MVIEWER_GPU is unset), ensure() is a
@@ -37,6 +39,11 @@ class GpuTileUploader
 
     // Soft budget: max resident textures before LRU eviction.
     int maxResident = 256;
+
+    // Byte budget for resident textures (default 256 MiB). Eviction prefers
+    // tiles that were not pinned by the current frame, so a pan of ready
+    // tiles does not drop the ones still on screen and re-upload them.
+    size_t maxBytes = 256ull * 1024ull * 1024ull;
 
     // True when a real GL context is currently available (or a test injects
     // upload callbacks). Safe to call headless — never throws.
@@ -63,6 +70,21 @@ class GpuTileUploader
         return static_cast<int>(m_map.size());
     }
 
+    size_t residentBytes() const
+    {
+        return m_bytes;
+    }
+
+    // How many times pixels were actually uploaded (cache hits do not count).
+    int uploadCount() const
+    {
+        return m_uploads;
+    }
+
+    // Mark these keys as still on screen before uploading newcomers. Eviction
+    // drops unpinned textures first, so already-cached visible tiles stay put.
+    void pinVisible(const TileKey *keys, size_t count);
+
     // Drop all resident textures (calls free for each).
     void clear();
 
@@ -71,15 +93,27 @@ class GpuTileUploader
     {
         uintptr_t handle = 0;
         std::list<TileKey>::iterator lruIt;
+        int w = 0;
+        int h = 0;
+        int channels = 0;
+        size_t bytes = 0;
+        uint64_t fingerprint = 0;
     };
 
     void touch(const TileKey &key);
     void evictIfNeeded();
+    void ensureBudgetLoaded();
     uintptr_t doUpload(const TileKey &key, const uint8_t *pixels, int w, int h, int channels);
+    bool doReplace(uintptr_t handle, const uint8_t *pixels, int w, int h, int channels);
     void doFree(uintptr_t handle);
+    void eraseEntry(std::unordered_map<TileKey, Entry, TileKeyHash>::iterator it);
 
     UploadFn m_upload;
     FreeFn m_free;
     std::unordered_map<TileKey, Entry, TileKeyHash> m_map;
     std::list<TileKey> m_lru; // front = oldest
+    std::unordered_set<TileKey, TileKeyHash> m_pinned;
+    size_t m_bytes = 0;
+    int m_uploads = 0;
+    bool m_budgetLoaded = false;
 };

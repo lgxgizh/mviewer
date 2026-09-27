@@ -11,18 +11,17 @@
 //
 // Most camera RAW containers (CR2/CR3/NEF/NRW/ARW/DNG/ORF/RW2/PEF/RAF/SRW and
 // friends) embed a full or large JPEG preview inside the file. We extract that
-// preview and decode it, yielding a real, displayable image WITHOUT pulling in
-// a heavy external RAW library (libraw / RawSpeed) — license + build-complexity
-// risk avoided per the M14 RFC Phase A ("best-effort display").
+// preview and decode it. When the preview is missing or smaller than the
+// requested edge, LibRaw (LGPL-2.1 / CDDL-1.0, optional) supplies a half-size
+// demosaic, or a full demosaic if a true full decode was asked for.
 //
-// Graceful by design: if no usable preview is found, decode*() returns an empty
-// ImageData so the registry falls through to the next decoder instead of
-// crashing. The full demosaic pipeline (Stage B) is explicitly deferred.
+// Graceful by design: if no usable preview is found and LibRaw cannot open the
+// file, decode*() returns an empty ImageData so the registry falls through.
 //
 // Header is Qt-free; the .cpp may use Qt internally.
 // Implements ISourceImageCapabilities so SourceImage::decodeLod can classify
-// embedded-JPEG preview reads as NativeLod (QImageReader::setScaledSize / DCT).
-// We do NOT claim libraw half-size demosaic — that remains deferred.
+// embedded-JPEG preview reads as NativeLod (QImageReader::setScaledSize / DCT)
+// and LibRaw half-size as a reduced demosaic. Native region is NOT claimed.
 class RawDecoder : public IDecoder, public mviewer::core::ISourceImageCapabilities
 {
   public:
@@ -54,9 +53,14 @@ class RawDecoder : public IDecoder, public mviewer::core::ISourceImageCapabiliti
     bool canProbe(const std::string &path) const override;
     bool probeMetadata(const std::string &path,
                        mviewer::domain::ImageMetadata &meta) const override;
-    // True for RAW extensions we own: embedded JPEG + setScaledSize (not libraw half).
+    // True when a reduced path exists (embedded JPEG DCT and/or LibRaw half-size).
+    // Full demosaic is not claimed as native LOD: decodeLod returns empty rather
+    // than materializing the full sensor when neither reduced path applies.
     bool canNativeLod(const std::string &path) const override;
+    // LibRaw half-size is a full-frame LOD, not random-access tiles.
     bool canNativeRegion(const std::string &path) const override;
+    // Linked LibRaw (LGPL-2.1 / CDDL-1.0). False in builds configured without it.
+    static bool librawAvailable();
     ImageData decodeLod(const std::string &path, int maxEdge,
                         mviewer::domain::ImageMetadata &meta) const override;
 
@@ -66,4 +70,8 @@ class RawDecoder : public IDecoder, public mviewer::core::ISourceImageCapabiliti
     ImageData extractPreview(const std::string &path, int maxEdge) const;
     // Header-only probe of the largest embedded JPEG (no pixel materialization).
     bool probePreviewSize(const std::string &path, int &outW, int &outH) const;
+    // Preview when adequate; LibRaw half-size when the preview is short of the
+    // request; full demosaic only when `allowFull` and no usable preview.
+    ImageData decodeRawPixels(const std::string &path, int maxEdge, bool allowFull) const;
+    ImageData demosaicWithLibraw(const std::string &path, bool halfSize, int maxEdge) const;
 };

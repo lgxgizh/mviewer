@@ -75,6 +75,16 @@ explicit, not silent.
 
 ---
 
+## 4b. Viewport region tiles (2026-09)
+
+Zoomed-in pans of a large source (no resident full frame) go through
+`chooseTileFill` → `decodeRegion` (native when `canNativeRegion`, otherwise
+bounded crop). `requestVisibleRegion` asks for the visible tiles plus a
+one-tile ring; TileCache keys are unchanged
+`(imageId, col, row, lod, renderScalePercent)`. A format that would
+full-decode to answer a region is skipped (`TileFillPath::Skip`) so the pan
+does not materialize the whole raster per tile.
+
 ## 5. Subtraction check (RFC §1 of M13_PRODUCT_BETA)
 
 This RFC adds **documentation + one optional future extraction**, no new core

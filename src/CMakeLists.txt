@@ -1,3 +1,5 @@
+include(${CMAKE_SOURCE_DIR}/cmake/LibRaw.cmake)
+
 # ─── M13 Phase 5: optional Perfetto-style trace instrumentation ────────────
 # OFF by default: the MV_TRACE_* macros compile to no-ops and the green build
 # gains no dependency. When ON, hot-path spans are recorded and can be flushed
@@ -17,6 +19,7 @@ add_library(mviewer_core SHARED
     core/image/decoder/QtFallbackDecoder.cpp
     core/image/decoder/DecoderRegistry.cpp
     core/image/decoder/RawDecoder.cpp
+    core/image/decoder/RawDecoder_libraw.cpp
     core/image/ImageObject.cpp
     core/image/ImageFrame.cpp
     core/image/ImageRepository.cpp
@@ -128,6 +131,10 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql OpenGL OpenGLWidgets)
 # OS working-set (RSS) sample. Windows-only; harmless on other platforms.
 target_link_libraries(mviewer_core PRIVATE Qt6::Widgets Qt6::Sql
     $<$<PLATFORM_ID:Windows>:psapi;windowscodecs;ole32>)
+if(MVIEWER_HAS_LIBRAW)
+    target_link_libraries(mviewer_core PRIVATE mviewer_libraw)
+    target_compile_definitions(mviewer_core PRIVATE MVIEWER_HAS_LIBRAW=1)
+endif()
 
 target_compile_features(mviewer_core PUBLIC cxx_std_20)
 
@@ -163,6 +170,7 @@ add_library(mviewer_ui STATIC
     imageviewer_multiframe.cpp
     imageviewer_lod.cpp
     imageviewer_paint.cpp
+    imageviewer_region_tiles.cpp
     imageviewer_contextmenu.cpp
     directorytree.cpp
     directorymonitor.cpp
@@ -437,7 +445,7 @@ target_compile_features(test_m3m4m5 PRIVATE cxx_std_20)
 target_include_directories(test_m3m4m5 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 # ─── M6 split test suites (per-module) ────────────────────────────────────
-foreach(_t decoder cache mipmap_pyramid repository scheduler metadata filesystem eventbus render_pipeline tilecache pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository)
+foreach(_t decoder cache mipmap_pyramid repository scheduler metadata filesystem eventbus render_pipeline tilecache region_tiles pixelcontroller thumbnailpipeline commandstack crop job datamodel pluginregistry pluginregistryrunner m3acceptance analyzer_ext analyzer_batch raw_metadata rawdecode crashhandler pluginabi pluginexamples encoder imagetransform imagerotate differenceengine blinkcontroller aligner imageoverlay browse_convergence analysisengine m26_scheduler m26_metadata m26_thumbnail m26_repository m26_stats m27_thumbnail m27_eventbus m27_scheduler m27_repository)
     add_executable(test_${_t}
         core/test_${_t}.cpp
     )
@@ -1285,6 +1293,7 @@ add_test(NAME filesystem_tests COMMAND test_filesystem)
 add_test(NAME eventbus_tests   COMMAND test_eventbus)
 add_test(NAME render_pipeline_tests COMMAND test_render_pipeline)
 add_test(NAME tilecache_tests COMMAND test_tilecache)
+add_test(NAME region_tiles_tests COMMAND test_region_tiles)
 add_test(NAME gputile_tests  COMMAND test_gputile)
 add_test(NAME rawdecode_tests COMMAND test_rawdecode)
 add_test(NAME pixelcontroller_tests COMMAND test_pixelcontroller)

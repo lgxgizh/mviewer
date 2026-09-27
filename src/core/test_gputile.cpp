@@ -73,6 +73,30 @@ int main()
     up.ensure({"img", 3, 0, 0}, nullptr, 256, 256, 3); // new -> evict
     CHECK(freed.size() >= 1, "eviction frees on new-over-budget upload");
 
+    // Byte budget evicts even when the texture count would allow more.
+    GpuTileUploader bytes([](const TileKey &, const uint8_t *, int, int, int) -> uintptr_t
+                          { return 1; });
+    bytes.maxResident = 8;
+    bytes.maxBytes = 256ull * 256ull * 3ull;
+    CHECK(bytes.ensure(k0, nullptr, 256, 256, 3), "byte-budget tile uploaded");
+    CHECK(bytes.ensure(k1, nullptr, 256, 256, 3), "second tile uploaded under byte budget");
+    CHECK(bytes.residentCount() == 1, "byte budget keeps a single tile");
+    CHECK(!bytes.isResident(k0) && bytes.isResident(k1), "byte budget evicts the oldest tile");
+
+    // pinVisible protects on-screen tiles; the unpinned one is the victim.
+    GpuTileUploader pinned([](const TileKey &, const uint8_t *, int, int, int) -> uintptr_t
+                           { return 7; });
+    pinned.maxResident = 2;
+    pinned.ensure(k0, nullptr, 32, 32, 3);
+    pinned.ensure(k1, nullptr, 32, 32, 3);
+    const TileKey pinKeys[] = {k1};
+    pinned.pinVisible(pinKeys, 1);
+    pinned.ensure(k2, nullptr, 32, 32, 3);
+    CHECK(pinned.isResident(k1), "pinned visible tile stays resident");
+    CHECK(pinned.isResident(k2), "new tile uploaded beside the pin");
+    CHECK(!pinned.isResident(k0), "unpinned tile is the eviction victim");
+    CHECK(pinned.uploadCount() == 3, "pinned re-touch did not re-upload");
+
     // clear() releases everything.
     up.clear();
     CHECK(up.residentCount() == 0, "clear() drops all resident textures");
