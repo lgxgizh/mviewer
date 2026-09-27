@@ -403,7 +403,7 @@ ImageData RawDecoder::decodeScaled(const std::string &path, int maxEdge,
         const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
         outMeta.filePath = path;
         outMeta.fileName = fi.fileName().toUtf8().toStdString();
-        outMeta.fileSize = static_cast<uint64_t>(qMax<qint64>(0, fi.size()));
+        outMeta.fileSize = std::max<int64_t>(0, static_cast<int64_t>(fi.size()));
         outMeta.width = d.width;
         outMeta.height = d.height;
         outMeta.format = "RAW";
@@ -469,7 +469,7 @@ bool RawDecoder::probeMetadata(const std::string &path,
     const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
     outMeta.filePath = path;
     outMeta.fileName = fi.fileName().toUtf8().toStdString();
-    outMeta.fileSize = static_cast<uint64_t>(qMax<qint64>(0, fi.size()));
+    outMeta.fileSize = std::max<int64_t>(0, static_cast<int64_t>(fi.size()));
     outMeta.width = w;
     outMeta.height = h;
     outMeta.format = "RAW";
@@ -506,7 +506,7 @@ ImageData RawDecoder::decodeLod(const std::string &path, int maxEdge,
         outMeta.filePath = path;
     if (outMeta.fileName.empty())
         outMeta.fileName = fi.fileName().toUtf8().toStdString();
-    outMeta.fileSize = static_cast<uint64_t>(qMax<qint64>(0, fi.size()));
+    outMeta.fileSize = std::max<int64_t>(0, static_cast<int64_t>(fi.size()));
     // Preserve source (preview) geometry in metadata when probe already filled it;
     // otherwise report the decoded raster dims (preview is our display full-res).
     if (outMeta.width <= 0 || outMeta.height <= 0)
