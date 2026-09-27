@@ -1,3 +1,5 @@
+include(${CMAKE_SOURCE_DIR}/cmake/LibRaw.cmake)
+
 # ─── M13 Phase 5: optional Perfetto-style trace instrumentation ────────────
 # OFF by default: the MV_TRACE_* macros compile to no-ops and the green build
 # gains no dependency. When ON, hot-path spans are recorded and can be flushed
@@ -17,6 +19,7 @@ add_library(mviewer_core SHARED
     core/image/decoder/QtFallbackDecoder.cpp
     core/image/decoder/DecoderRegistry.cpp
     core/image/decoder/RawDecoder.cpp
+    core/image/decoder/RawDecoder_libraw.cpp
     core/image/ImageObject.cpp
     core/image/ImageFrame.cpp
     core/image/ImageRepository.cpp
@@ -128,6 +131,10 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql OpenGL OpenGLWidgets)
 # OS working-set (RSS) sample. Windows-only; harmless on other platforms.
 target_link_libraries(mviewer_core PRIVATE Qt6::Widgets Qt6::Sql
     $<$<PLATFORM_ID:Windows>:psapi;windowscodecs;ole32>)
+if(MVIEWER_HAS_LIBRAW)
+    target_link_libraries(mviewer_core PRIVATE mviewer_libraw)
+    target_compile_definitions(mviewer_core PRIVATE MVIEWER_HAS_LIBRAW=1)
+endif()
 
 target_compile_features(mviewer_core PUBLIC cxx_std_20)
 

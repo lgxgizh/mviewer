@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### 性能
+
+- **视口区域瓦片**：放大（无全帧）时按可见区域调度 `decodeRegion`（`canNativeRegion` 优先，否则有界裁剪），并预取一圈邻瓦；TileCache 键不变。已在内存中的 1:1 全帧仍直接缩放，不按瓦片重开文件。
+- **GPU Stage A**：`GpuTileUploader` 对已缓存瓦片跳过重复上传，同尺寸用 `glTexSubImage2D` 替换；按张数和字节预算淘汰（默认 256 MiB，`gpuTileBudgetMb` / `MVIEWER_GPU_BUDGET_MB`），`pinVisible` 保护当前画面。未实现 Stage B GPU 缩放。CPU 路径仍是默认。
+- **LibRaw（LGPL-2.1 / CDDL-1.0）**：嵌入 JPEG 仍是够用时的快路径；预览短于请求且 `maxEdge` 不超过传感器一半时走 half-size demosaic；仅在全尺寸解码且没有可用预览时做 full demosaic。不把 RAW 声称为 native region，LOD 也不会先全图 demosaic 再缩小。
+
 ## [1.0.76] - 2026-09-27
 
 ### Release

@@ -391,13 +391,13 @@ ImageData RawDecoder::decodeFull(const std::string &path) const
 
 ImageData RawDecoder::decodeScaled(const std::string &path, int maxEdge) const
 {
-    return extractPreview(path, maxEdge);
+    return decodeRawPixels(path, maxEdge, false);
 }
 
 ImageData RawDecoder::decodeScaled(const std::string &path, int maxEdge,
                                    mviewer::domain::ImageMetadata &outMeta) const
 {
-    ImageData d = extractPreview(path, maxEdge);
+    ImageData d = decodeRawPixels(path, maxEdge, false);
     if (!d.isNull())
     {
         const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
@@ -415,7 +415,7 @@ ImageData RawDecoder::decodeScaled(const std::string &path, int maxEdge,
 ImageData RawDecoder::decodeFull(const std::string &path,
                                  mviewer::domain::ImageMetadata &outMeta) const
 {
-    ImageData d = extractPreview(path, 0);
+    ImageData d = decodeRawPixels(path, 0, true);
     if (!d.isNull())
     {
         outMeta.width = d.width;
@@ -480,25 +480,26 @@ bool RawDecoder::probeMetadata(const std::string &path,
 
 bool RawDecoder::canNativeLod(const std::string &path) const
 {
-    // Honest claim for RAW extensions we own: decodeLod extracts the embedded
-    // JPEG preview and uses QImageReader::setScaledSize (JPEG DCT). This is
-    // NOT libraw half-size demosaic. Preview-less files still return empty
-    // ImageData from decodeLod (SourceImage records a failed NativeLod).
-    // Extension-gated (no container scan) so hasNativeLod() stays cheap.
+    // Extension-gated so hasNativeLod() stays cheap (no container scan).
+    // decodeLod itself is honest: embedded JPEG when the preview edge covers
+    // the request, LibRaw half-size when the preview is short and the request
+    // is at most half the sensor, otherwise empty. It does not full-demosaic
+    // and then downscale, so a reduced request is not a silent full decode.
     return canDecode(path);
 }
 
 bool RawDecoder::canNativeRegion(const std::string &path) const
 {
     (void)path;
-    // Embedded JPEG has no true strip/tile random-access claim.
+    // Neither the embedded JPEG nor LibRaw half/full demosaic is random-access
+    // tile decode. Region tiles must not claim NativeRegion for RAW.
     return false;
 }
 
 ImageData RawDecoder::decodeLod(const std::string &path, int maxEdge,
                                 mviewer::domain::ImageMetadata &outMeta) const
 {
-    ImageData d = extractPreview(path, maxEdge);
+    ImageData d = decodeRawPixels(path, maxEdge, false);
     if (d.isNull())
         return ImageData();
     const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
