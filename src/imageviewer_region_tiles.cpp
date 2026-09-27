@@ -6,8 +6,6 @@
 #include "imageviewer.h"
 
 #include "core/image/QtConvert.h"
-#include "core/image/SourceImage.h"
-#include "core/render/RenderEngine.h"
 #include "core/render/TileSourceDecode.h"
 
 #include <QApplication>

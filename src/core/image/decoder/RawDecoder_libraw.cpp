@@ -104,26 +104,33 @@ ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize,
         const size_t srcChannels = static_cast<size_t>(image->colors < 1 ? 1 : image->colors);
         auto *dst = out.buffer->data();
         const auto *src = image->data;
-        const int width = static_cast<int>(image->width);
-        const int height = static_cast<int>(image->height);
+        const size_t pixels =
+            static_cast<size_t>(image->width) * static_cast<size_t>(image->height);
+        const size_t need = pixels * srcChannels;
+        if (image->data_size < need)
+        {
+            LibRaw::dcraw_clear_mem(image);
+            raw.recycle();
+            return {};
+        }
         if (srcChannels == static_cast<size_t>(channels))
         {
             std::memcpy(dst, src, out.byteSize());
         }
         else
         {
-            for (int i = 0; i < width * height; ++i)
+            for (size_t i = 0; i < pixels; ++i)
             {
-                dst[static_cast<size_t>(i) * 3] = src[static_cast<size_t>(i) * srcChannels];
-                dst[static_cast<size_t>(i) * 3 + 1] = src[static_cast<size_t>(i) * srcChannels + 1];
-                dst[static_cast<size_t>(i) * 3 + 2] = src[static_cast<size_t>(i) * srcChannels + 2];
+                dst[i * 3] = src[i * srcChannels];
+                dst[i * 3 + 1] = src[i * srcChannels + 1];
+                dst[i * 3 + 2] = src[i * srcChannels + 2];
             }
         }
         LibRaw::dcraw_clear_mem(image);
         raw.recycle();
         return scaleToEdge(std::move(out), maxEdge);
     }
-    catch (const std::exception &)
+    catch (...)
     {
         return {};
     }
