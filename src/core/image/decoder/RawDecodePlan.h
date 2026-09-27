@@ -6,10 +6,12 @@
 // half the sensor edge. Full demosaic is never selected here — decodeLod must
 // not silently materialize the full raster.
 
+#include <cstdint>
+
 namespace mviewer::core
 {
 
-enum class RawLodIntent
+enum class RawLodIntent : std::uint8_t
 {
     Preview, // embedded JPEG is adequate (edge >= request, or any preview for a full ask)
     TryHalf, // preview is short; caller may half-size demosaic, else fall back
@@ -41,7 +43,7 @@ inline bool rawHalfCoversRequest(int sensorEdge, int requestedEdge)
     return requestedEdge * 2 <= sensorEdge;
 }
 
-enum class RawFullIntent
+enum class RawFullIntent : std::uint8_t
 {
     Preview,
     FullDemosaic,

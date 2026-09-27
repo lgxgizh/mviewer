@@ -42,7 +42,7 @@ AsyncTileRequestManager::VisibleTiles ImageViewer::requestLodRegionTiles()
     const std::string path = m_currentPath.toUtf8().toStdString();
     const qreal dpr = devicePixelRatioF();
     const int renderScalePercent =
-        std::max(100, static_cast<int>(std::lround(std::max<qreal>(1.0, dpr) * 100.0)));
+        (std::max)(100, static_cast<int>(std::lround(std::max<qreal>(1.0, dpr) * 100.0)));
     const uint64_t generation = m_imageGeneration;
     const auto metadata =
         m_sourceImage ? m_sourceImage->metadata() : mviewer::domain::ImageMetadata{};

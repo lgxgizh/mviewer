@@ -31,7 +31,7 @@ inline ImageData decodeTileFromSource(SourceImage &source, const ImageData &full
     const int srcFullH = source.metadata().height;
     const bool nearlyFull = srcFullW > 0 && srcFullH > 0 && srcX <= 1 && srcY <= 1 &&
                             srcW >= srcFullW - 2 && srcH >= srcFullH - 2;
-    const bool coarse = std::max(srcW, srcH) >= 2 * std::max(targetW, targetH);
+    const bool coarse = (std::max)(srcW, srcH) >= 2 * (std::max)(targetW, targetH);
     const auto regionPath = source.regionDecodePath();
     const bool native = regionPath == SourceDecodePath::NativeRegion;
     const bool bounded = regionPath == SourceDecodePath::BoundedRasterRegion;
@@ -51,13 +51,13 @@ inline ImageData decodeTileFromSource(SourceImage &source, const ImageData &full
     {
         const int fullW = !fullFrame.isNull() ? fullFrame.width : srcFullW;
         const int fullH = !fullFrame.isNull() ? fullFrame.height : srcFullH;
-        int baseEdge = std::max(fullW, fullH);
+        int baseEdge = (std::max)(fullW, fullH);
         if (baseEdge <= 0)
-            baseEdge = std::max(srcW, srcH);
-        const double dens = static_cast<double>(std::max(targetW, targetH)) /
-                            static_cast<double>(std::max(1, std::max(srcW, srcH)));
+            baseEdge = (std::max)(srcW, srcH);
+        const double dens = static_cast<double>((std::max)(targetW, targetH)) /
+                            static_cast<double>((std::max)(1, (std::max)(srcW, srcH)));
         const int wantEdge =
-            std::max(1, static_cast<int>(std::ceil(static_cast<double>(baseEdge) * dens)));
+            (std::max)(1, static_cast<int>(std::ceil(static_cast<double>(baseEdge) * dens)));
         auto lod = source.decodeLod(wantEdge);
         if (!lod.ok || lod.pixels.isNull())
             return {};
@@ -67,14 +67,14 @@ inline ImageData decodeTileFromSource(SourceImage &source, const ImageData &full
             return {};
         const double sx = static_cast<double>(lod.pixels.width) / static_cast<double>(bw);
         const double sy = static_cast<double>(lod.pixels.height) / static_cast<double>(bh);
-        const int rx = std::max(0, static_cast<int>(std::floor(srcX * sx)));
-        const int ry = std::max(0, static_cast<int>(std::floor(srcY * sy)));
-        int rw = std::max(1, static_cast<int>(std::ceil(srcW * sx)));
-        int rh = std::max(1, static_cast<int>(std::ceil(srcH * sy)));
+        const int rx = (std::max)(0, static_cast<int>(std::floor(srcX * sx)));
+        const int ry = (std::max)(0, static_cast<int>(std::floor(srcY * sy)));
+        int rw = (std::max)(1, static_cast<int>(std::ceil(srcW * sx)));
+        int rh = (std::max)(1, static_cast<int>(std::ceil(srcH * sy)));
         if (rx >= lod.pixels.width || ry >= lod.pixels.height)
             return {};
-        rw = std::min(rw, lod.pixels.width - rx);
-        rh = std::min(rh, lod.pixels.height - ry);
+        rw = (std::min)(rw, lod.pixels.width - rx);
+        rh = (std::min)(rh, lod.pixels.height - ry);
         return RenderEngine::scaleRegionStatic(lod.pixels, RenderRect{rx, ry, rw, rh},
                                                RenderSize{targetW, targetH},
                                                RenderInterp::Bilinear);
@@ -113,27 +113,27 @@ inline ImageData decodeTilePreferReduced(const std::string &path, const ImageDat
             return ImageData{};
         const double sx = static_cast<double>(src.width) / static_cast<double>(baseW);
         const double sy = static_cast<double>(src.height) / static_cast<double>(baseH);
-        const int rx = std::max(0, static_cast<int>(std::floor(srcX * sx)));
-        const int ry = std::max(0, static_cast<int>(std::floor(srcY * sy)));
-        int rw = std::max(1, static_cast<int>(std::ceil(srcW * sx)));
-        int rh = std::max(1, static_cast<int>(std::ceil(srcH * sy)));
+        const int rx = (std::max)(0, static_cast<int>(std::floor(srcX * sx)));
+        const int ry = (std::max)(0, static_cast<int>(std::floor(srcY * sy)));
+        int rw = (std::max)(1, static_cast<int>(std::ceil(srcW * sx)));
+        int rh = (std::max)(1, static_cast<int>(std::ceil(srcH * sy)));
         if (rx >= src.width || ry >= src.height)
             return ImageData{};
-        rw = std::min(rw, src.width - rx);
-        rh = std::min(rh, src.height - ry);
+        rw = (std::min)(rw, src.width - rx);
+        rh = (std::min)(rh, src.height - ry);
         if (rw <= 0 || rh <= 0)
             return ImageData{};
         return RenderEngine::scaleRegionStatic(
             src, RenderRect{rx, ry, rw, rh}, RenderSize{targetW, targetH}, RenderInterp::Bilinear);
     };
 
-    int baseEdge = std::max(fullW, fullH);
+    int baseEdge = (std::max)(fullW, fullH);
     if (baseEdge <= 0)
-        baseEdge = std::max(srcW, srcH);
-    const double dens =
-        static_cast<double>(std::max(targetW, targetH)) / static_cast<double>(std::max(srcW, srcH));
+        baseEdge = (std::max)(srcW, srcH);
+    const double dens = static_cast<double>((std::max)(targetW, targetH)) /
+                        static_cast<double>((std::max)(srcW, srcH));
     const int wantEdge =
-        std::max(1, static_cast<int>(std::ceil(static_cast<double>(baseEdge) * dens)));
+        (std::max)(1, static_cast<int>(std::ceil(static_cast<double>(baseEdge) * dens)));
 
     // 1) In-memory mip chain (cheap).
     if (!path.empty() && wantEdge > 0)
@@ -152,7 +152,7 @@ inline ImageData decodeTilePreferReduced(const std::string &path, const ImageDat
     // 2) Zoomed-in tiles with no resident frame, and coarse tiles: native
     //    region, else bounded crop, else decodeLod. A resident 1:1 frame is
     //    scaled by the caller — don't open the file per tile.
-    const bool coarse = std::max(srcW, srcH) >= 2 * std::max(targetW, targetH);
+    const bool coarse = (std::max)(srcW, srcH) >= 2 * (std::max)(targetW, targetH);
     if (path.empty() || (!fullFrame.isNull() && !coarse))
         return ImageData{};
     auto source = SourceImage::open(path);

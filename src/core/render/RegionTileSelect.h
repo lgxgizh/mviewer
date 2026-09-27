@@ -10,13 +10,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <vector>
 
 namespace mviewer::core
 {
 
-enum class TileFillPath
+enum class TileFillPath : std::uint8_t
 {
     NativeRegion,   // canNativeRegion: decodeRegion, no full-frame materialize
     BoundedCrop,    // bounded source pixels (clip/scan), not a full raster
@@ -126,10 +127,10 @@ inline std::vector<PlannedTile> planViewportTiles(int c0, int r0, int c1, int r1
     if (ring <= 0 || maxExtra <= 0)
         return out;
 
-    const int ec0 = std::max(0, c0 - ring);
-    const int er0 = std::max(0, r0 - ring);
-    const int ec1 = std::min(cols - 1, c1 + ring);
-    const int er1 = std::min(rows - 1, r1 + ring);
+    const int ec0 = (std::max)(0, c0 - ring);
+    const int er0 = (std::max)(0, r0 - ring);
+    const int ec1 = (std::min)(cols - 1, c1 + ring);
+    const int er1 = (std::min)(rows - 1, r1 + ring);
     int extra = 0;
     for (int r = er0; r <= er1 && extra < maxExtra; ++r)
     {

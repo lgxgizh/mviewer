@@ -22,12 +22,12 @@ ImageData scaleToEdge(ImageData image, int maxEdge)
 {
     if (image.isNull() || maxEdge <= 0)
         return image;
-    const int edge = std::max(image.width, image.height);
+    const int edge = (std::max)(image.width, image.height);
     if (edge <= maxEdge)
         return image;
     const double ratio = static_cast<double>(maxEdge) / static_cast<double>(edge);
-    const int tw = std::max(1, static_cast<int>(std::lround(image.width * ratio)));
-    const int th = std::max(1, static_cast<int>(std::lround(image.height * ratio)));
+    const int tw = (std::max)(1, static_cast<int>(std::lround(image.width * ratio)));
+    const int th = (std::max)(1, static_cast<int>(std::lround(image.height * ratio)));
     return RenderEngine::scaleBoundedStatic(image, RenderSize{tw, th});
 }
 } // namespace
@@ -61,9 +61,9 @@ ImageData RawDecoder::demosaicWithLibraw(const std::string &path, bool halfSize,
         if (opened != LIBRAW_SUCCESS)
             return {};
 
-        const int sensorW = std::max(raw.imgdata.sizes.raw_width, raw.imgdata.sizes.width);
-        const int sensorH = std::max(raw.imgdata.sizes.raw_height, raw.imgdata.sizes.height);
-        const int sensorEdge = std::max(sensorW, sensorH);
+        const int sensorW = (std::max)(raw.imgdata.sizes.raw_width, raw.imgdata.sizes.width);
+        const int sensorH = (std::max)(raw.imgdata.sizes.raw_height, raw.imgdata.sizes.height);
+        const int sensorEdge = (std::max)(sensorW, sensorH);
         if (halfSize && !mviewer::core::rawHalfCoversRequest(sensorEdge, maxEdge))
         {
             raw.recycle();
@@ -143,7 +143,7 @@ ImageData RawDecoder::decodeRawPixels(const std::string &path, int maxEdge, bool
     // linked) this is the whole path — the historical embedded-JPEG fast path.
     const int previewEdgeRequest = maxEdge > 0 ? maxEdge : 0;
     ImageData preview = extractPreview(path, previewEdgeRequest);
-    const int previewEdge = preview.isNull() ? 0 : std::max(preview.width, preview.height);
+    const int previewEdge = preview.isNull() ? 0 : (std::max)(preview.width, preview.height);
     if (!librawAvailable())
         return preview;
 
