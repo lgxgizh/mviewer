@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.75] - 2026-09-27
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.75**.
+- **True in-memory mipmap (#54)**: CacheManager power-of-two mip chain; Compare prefers cached mips; B6 peak_cache_bytes 512→896 MiB.
+
 ### 性能 / 缓存
 
 - CacheManager 真 in-memory mipmap 链：`FullImage` put 或懒 `getBestMip` 生成 power-of-two 层级（lod0=全分辨率，越大越粗）；Compare 物化优先取 mip，减少反复从全图缩放/解码。
