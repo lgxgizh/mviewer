@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-- (none yet)
+### 性能 / 缓存
+
+- CacheManager 真 in-memory mipmap 链：`FullImage` put 或懒 `getBestMip` 生成 power-of-two 层级（lod0=全分辨率，越大越粗）；Compare 物化优先取 mip，减少反复从全图缩放/解码。
 
 ## [1.0.74] - 2026-09-26
 

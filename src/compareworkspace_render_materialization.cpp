@@ -2,6 +2,8 @@
 #include "compareworkspace_p.h"
 
 #include "core/image/SourceImage.h"
+#include "core/cache/CacheManager.h"
+#include "core/image/ImageRepository.h"
 #include "display/DisplayColorContextProvider.h"
 #include "widgets/infooverlay.h"
 #include "widgets/pixelgrid.h"
@@ -18,6 +20,53 @@
 
 namespace
 {
+// Prefer CacheManager mip chain (path or repository makeKey) before re-decode /
+// re-scale from full. Returns null ImageData on miss.
+ImageData tryCacheBestMip(const std::string &path, int maxEdge)
+{
+    if (path.empty() || maxEdge <= 0)
+        return ImageData{};
+    auto &cm = CacheManager::instance();
+    ImageData out;
+    if (cm.getBestMip(path, maxEdge, out) && !out.isNull())
+        return out;
+    auto &repo = ImageRepository::instance();
+    const std::string cached = repo.cachedKeyForPath(path);
+    if (!cached.empty() && cached != path && cm.getBestMip(cached, maxEdge, out) && !out.isNull())
+        return out;
+    const std::string keyed = repo.makeKey(path);
+    if (!keyed.empty() && keyed != path && keyed != cached &&
+        cm.getBestMip(keyed, maxEdge, out) && !out.isNull())
+        return out;
+    return ImageData{};
+}
+
+
+ImageData resolveLodFromCachedFull(const ImageData &src,
+                                   const mviewer::ui::CompareDisplayRequest &request,
+                                   const std::string &pathKey)
+{
+    if (!request.target.isValid())
+        return ImageData{};
+    const int wantEdge = std::max(request.target.width(), request.target.height());
+    if (!pathKey.empty())
+    {
+        CacheManager::instance().ensureMips(pathKey, src);
+        ImageData best = tryCacheBestMip(pathKey, wantEdge);
+        if (!best.isNull())
+        {
+            if (best.width > request.target.width() || best.height > request.target.height())
+            {
+                return RenderEngine::scaleBoundedStatic(
+                    best, RenderSize{request.target.width(), request.target.height()});
+            }
+            return best;
+        }
+    }
+    return RenderEngine::scaleBoundedStatic(
+        src, RenderSize{request.target.width(), request.target.height()});
+}
+
 HistogramWidget *createPaneHistogramOverlay(QWidget *cellWidget, int index, bool visible)
 {
     auto *hframe = new QFrame(cellWidget);
@@ -463,8 +512,28 @@ CompareWorkspace::materializeSourceDisplay(const std::string &path, const Displa
     }
 
     const int edge = std::max(request.target.width(), request.target.height());
-    const auto decoded = source->decodeLod(edge > 0 ? edge : 1024);
+    const int wantEdge = edge > 0 ? edge : 1024;
     result.coveredRect = QRect(QPoint(0, 0), result.sourceSize);
+
+    // Prefer in-memory CacheManager mip before SourceImage::decodeLod.
+    ImageData mip = tryCacheBestMip(path, wantEdge);
+    if (!mip.isNull())
+    {
+        if (request.target.isValid() &&
+            (mip.width > request.target.width() || mip.height > request.target.height()))
+        {
+            mip = RenderEngine::scaleBoundedStatic(
+                mip, RenderSize{request.target.width(), request.target.height()});
+        }
+        if (!mip.isNull())
+        {
+            result.pixels = std::move(mip);
+            result.metadata = source->metadata();
+            return result;
+        }
+    }
+
+    const auto decoded = source->decodeLod(wantEdge);
     if (!decoded.ok)
     {
         result.errorText = QStringLiteral("有界显示解码不可用");
@@ -516,11 +585,11 @@ CompareWorkspace::DisplayBatchResult CompareWorkspace::materializeDisplayBatch(
         {
             sourceDims = QSize(src.width, src.height);
             convMeta = metadata[static_cast<size_t>(idx)];
-            lod = request.target.isValid()
-                      ? RenderEngine::scaleBoundedStatic(
-                            src, RenderSize{request.target.width(), request.target.height()})
-                      : ImageData();
             coveredRect = QRect(QPoint(0, 0), sourceDims);
+            const std::string pathKey = (idx < static_cast<int>(paths.size()))
+                                            ? paths[static_cast<size_t>(idx)]
+                                            : std::string();
+            lod = resolveLodFromCachedFull(src, request, pathKey);
         }
         else
         {

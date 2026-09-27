@@ -19,6 +19,11 @@
 // （每级独立容量/淘汰/生命周期/互斥）；磁盘级委托给既有 DiskCache（SQLite）。
 // CacheManager 不自己持有存储，而是负责：路由、跨级回退、淘汰预算、预取协调、
 // 以及逐层统计。所有对外接口只暴露 std 类型。
+//
+// 真 mipmap（in-memory）：FullImage put 后可生成/懒填充 power-of-two 链。
+// 键方案：baseKey + "#mip:" + lod（lod≥1）；lod 0 即 FullImage 本体。
+// lod 约定与 TileCache 一致：0=最细，越大越粗。mip 像素住在 Preview 池，
+// 受 Preview 字节预算约束（与其它 Preview 条目共享淘汰）。
 enum class CacheLevel : uint8_t
 {
     Metadata,
@@ -91,11 +96,29 @@ class CacheManager
     bool getRaw16(const std::string &key, std::shared_ptr<std::vector<uint16_t>> &out,
                   int &channels, uint16_t &maxSample) const;
 
+    // ─── True in-memory mipmap ───────────────────────────────────────────────
+    // Stable key for lod≥1 entries: baseKey + "#mip:" + lod.
+    static std::string mipKey(const std::string &baseKey, int lod);
+
+    // Store one mip level (lod≥1 → Preview pool; lod 0 → FullImage under baseKey).
+    void putMip(const std::string &baseKey, int lod, const ImageData &img);
+    bool getMip(const std::string &baseKey, int lod, ImageData &out);
+
+    // Largest stored level with max(w,h) ≤ maxEdge; if none, the next larger
+    // (finest available that still exceeds maxEdge). Lazy-builds from FullImage
+    // when baseKey has a FullImage hit but no mips yet.
+    bool getBestMip(const std::string &baseKey, int maxEdge, ImageData &out);
+
+    // Build + store lod≥1 from an already-known full raster (no FullImage put).
+    // Idempotent when mips for baseKey already tracked. Returns level count
+    // including lod 0 (1 = full only / too small to pyramid).
+    int ensureMips(const std::string &baseKey, const ImageData &full, int minEdge = 256);
+
     // 管理
     void clear();
     void clearMemory();
     void clearDisk();
-    // 移除某 key 在全部层级（内存像素池 + 元数据对象 + 磁盘）的缓存。
+    // 移除某 key 在全部层级（内存像素池 + 元数据对象 + 磁盘 + mips）的缓存。
     void invalidate(const std::string &key);
     size_t memoryUsageBytes() const;
     size_t raw16UsageBytes() const;
@@ -118,6 +141,10 @@ class CacheManager
     {
         m_misses[static_cast<int>(level)].fetch_add(1);
     }
+
+    void eraseMips(const std::string &baseKey);
+    void storeMipChain(const std::string &baseKey, const std::vector<ImageData> &levels);
+    bool getBestMipExisting(const std::string &baseKey, int maxEdge, ImageData &out);
 
     CacheConfig m_config;
     mutable std::atomic<uint64_t> m_hits[5] = {};
@@ -147,6 +174,11 @@ class CacheManager
     mutable std::list<std::string> m_raw16Order;
     size_t m_raw16Bytes = 0;
     size_t m_raw16BudgetBytes = 256 * 1024 * 1024;
+
+    // Tracks highest lod≥1 stored per baseKey so erase/invalidate can wipe the
+    // whole chain without scanning ImageCache (no prefix API).
+    mutable std::mutex m_mipMutex;
+    std::unordered_map<std::string, int> m_mipMaxLod;
 
     void eraseRaw16Locked(const std::string &key);
     void trimRaw16Locked();
