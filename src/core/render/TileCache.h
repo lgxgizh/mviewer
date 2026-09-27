@@ -23,9 +23,10 @@
 //
 // LOD: when zoomed out, one coarse tile covers a larger source region, so fit-
 // to-window on a 100 MP / RAW image decodes a few coarse tiles instead of the
-// full bitmap. (Direct disk-LOD decode — i.e. the Decoder emitting a reduced
-// resolution bitmap — is a later milestone; this cache tiles the already-
-// decoded ImageFrame. The LOD *selection* math is real and exercised here.)
+// full bitmap. Viewers now prefer CacheManager in-memory mips and
+// SourceImage::decodeLod / decodeRegion (native when available) before scaling
+// from the full frame (see TileSourceDecode.h). Libraw half-size demosaic and a
+// GPU tile-upload rewrite remain deferred. LOD *selection* math is exercised here.
 //
 // Decode is injected as a callback so the cache is unit-testable without a
 // display and without coupling to RenderEngine in tests.

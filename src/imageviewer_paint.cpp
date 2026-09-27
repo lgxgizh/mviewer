@@ -6,6 +6,7 @@
 #include "core/analyzer/Analyzer.h"
 #include "core/image/QtConvert.h"
 #include "core/render/RenderEngine.h"
+#include "core/render/TileSourceDecode.h"
 #include "core/trace/Trace.h"
 #include "gpu/GpuTileUploader.h"
 #include "widgets/pixelgrid.h"
@@ -207,13 +208,22 @@ AsyncTileRequestManager::VisibleTiles ImageViewer::requestVisibleTiles()
     const ImageData source = m_frame->pixels();
     const auto metadata = m_frame->metadata();
     const auto displayTarget = m_displayColorTarget;
+    const std::string path = !metadata.filePath.empty()
+                                 ? metadata.filePath
+                                 : m_currentPath.toUtf8().toStdString();
     QPointer<ImageViewer> guard(this);
-    const auto decode = [source, metadata, displayTarget](const std::string &, int sx, int sy,
-                                                          int sw, int sh, int tw,
-                                                          int th) -> ImageData
+    const auto decode = [source, metadata, displayTarget, path](const std::string &, int sx, int sy,
+                                                                int sw, int sh, int tw,
+                                                                int th) -> ImageData
     {
-        const ImageData raw = RenderEngine::scaleRegionStatic(
-            source, RenderRect{sx, sy, sw, sh}, RenderSize{tw, th}, RenderInterp::Bilinear);
+        // Coarse tiles: prefer in-memory mip / decodeLod / decodeRegion before
+        // scaling the full decoded frame.
+        ImageData raw = mviewer::core::decodeTilePreferReduced(path, source, sx, sy, sw, sh, tw, th);
+        if (raw.isNull())
+        {
+            raw = RenderEngine::scaleRegionStatic(source, RenderRect{sx, sy, sw, sh},
+                                                  RenderSize{tw, th}, RenderInterp::Bilinear);
+        }
         return mvcore::toDisplayImageData(raw, metadata, displayTarget);
     };
     return m_tileRequests.requestVisible(

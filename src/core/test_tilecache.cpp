@@ -1,8 +1,10 @@
 // M7 ① Tile cache + LOD: TileCache put/get/eviction, LOD selection math, and
 // request() cache-hit behavior (decode called once, then served from cache).
+#include "core/cache/CacheManager.h"
 #include "core/render/AsyncTileRequestManager.h"
 #include "core/render/TileCache.h"
 #include "core/render/TileGrid.h"
+#include "core/render/TileSourceDecode.h"
 #include "core/render/Viewport.h"
 #include "core/scheduler/TaskScheduler.h"
 
@@ -371,11 +373,32 @@ static void testAsyncTileManagerEvictionAndBounds()
     CHECK(manager.pendingCount() == 0, "pending count cleared after reset");
 }
 
+
+static void testPreferReducedMip()
+{
+    printf("\n[TileSourceDecode prefer mip]\n");
+    fflush(stdout);
+    // Build a synthetic full frame + mip chain under a fake path key.
+    const std::string key = "tile-prefer-test://synthetic";
+    ImageData full = makeImageData(256, 256, PixelFormat::RGB24);
+    for (size_t i = 0; i < full.byteSize(); ++i)
+        (*full.buffer)[i] = static_cast<uint8_t>(i & 0xff);
+    CacheManager::instance().putMip(key, 0, full);
+    CacheManager::instance().ensureMips(key, full);
+    ImageData tile = mviewer::core::decodeTilePreferReduced(key, full, 0, 0, 256, 256, 32, 32);
+    CHECK(!tile.isNull(), "preferReduced returns tile from mip path");
+    CHECK(tile.width == 32 && tile.height == 32, "preferReduced target size honored");
+    // Empty path + no coarse → empty (caller scales full frame).
+    ImageData miss = mviewer::core::decodeTilePreferReduced("", full, 0, 0, 64, 64, 64, 64);
+    CHECK(miss.isNull(), "non-coarse without path returns empty for caller fallback");
+}
+
 int main()
 {
     printf("=== TileCache + LOD tests (M7 ①) ===\n");
     fflush(stdout);
     testLodSelection();
+    testPreferReducedMip();
     testLruEviction();
     testRequestCacheHit();
     testByteBudget();
