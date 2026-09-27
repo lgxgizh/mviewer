@@ -3,6 +3,8 @@
 #include "core/cache/MipmapPyramid.h"
 #include "core/image/ImageBuffer.h"
 
+#include <QCoreApplication>
+
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -163,8 +165,9 @@ static void testEnsureMipsIdempotent()
     CHECK(mgr.getMip(key, 1, lod1) && !lod1.isNull(), "ensureMips stored lod1");
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    QCoreApplication app(argc, argv);
     printf("=== test_mipmap_pyramid ===\n");
     testBuildChainSizes();
     testCacheManagerMips();

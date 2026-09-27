@@ -1,8 +1,7 @@
 #include "compareworkspace_display_pyramid.h"
 #include "compareworkspace_p.h"
 
-#include "core/cache/CacheManager.h"
-#include "core/image/ImageRepository.h"
+#include "core/image/DisplayMip.h"
 #include "core/image/SourceImage.h"
 #include "display/DisplayColorContextProvider.h"
 #include "widgets/infooverlay.h"
@@ -24,17 +23,7 @@ namespace
 // re-scale from full. Returns null ImageData on miss.
 ImageData tryCacheBestMip(const std::string &path, int maxEdge)
 {
-    if (path.empty() || maxEdge <= 0)
-        return ImageData{};
-    auto &cm = CacheManager::instance();
-    ImageData out;
-    if (cm.getBestMip(path, maxEdge, out) && !out.isNull())
-        return out;
-    // Repository FullImage keys are path|size|mtime (public makeKey).
-    const std::string keyed = ImageRepository::instance().makeKey(path);
-    if (!keyed.empty() && keyed != path && cm.getBestMip(keyed, maxEdge, out) && !out.isNull())
-        return out;
-    return ImageData{};
+    return mviewer::core::tryBestMip(path, maxEdge);
 }
 
 ImageData resolveLodFromCachedFull(const ImageData &src,
@@ -46,8 +35,7 @@ ImageData resolveLodFromCachedFull(const ImageData &src,
     const int wantEdge = std::max(request.target.width(), request.target.height());
     if (!pathKey.empty())
     {
-        CacheManager::instance().ensureMips(pathKey, src);
-        ImageData best = tryCacheBestMip(pathKey, wantEdge);
+        ImageData best = mviewer::core::ensureAndBestMip(pathKey, src, wantEdge);
         if (!best.isNull())
         {
             if (best.width > request.target.width() || best.height > request.target.height())

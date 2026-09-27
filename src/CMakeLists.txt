@@ -25,6 +25,7 @@ add_library(mviewer_core SHARED
     core/image/ImageRepository_load.cpp
     core/image/ImageRepository_frames.cpp
     core/image/SourceImage.cpp
+    core/image/DisplayMip.cpp
     core/image/IccProfile.cpp
     core/image/MetadataReader.cpp
     core/image/RawMetadata.cpp
