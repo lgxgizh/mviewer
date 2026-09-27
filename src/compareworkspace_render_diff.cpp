@@ -222,6 +222,10 @@ void CompareWorkspace::refreshAllDiffOverlays()
     if (!m_rebuildingCells && shouldDeferHeavyCompareWork())
     {
         m_deferredDiffRefresh = true;
+        // Keep a cheap provisional overlay responsive during zoom/pan; full
+        // precision still runs in flushDeferredCompareAnalysis on settle.
+        if (m_diffOverlayVisible)
+            scheduleLiveDiffPreview();
         return;
     }
     const int paneCount = m_cellViews.size();
@@ -323,6 +327,14 @@ void CompareWorkspace::applyDiffBatchResult(const DiffBatchResult &r)
             continue;
         view->setSizeMismatch(ov.sizeMismatch);
         view->setOverlay(ov.overlay, ov.opacity);
+    }
+
+    // Provisional live diff only updates the overlay; keep prior metrics until
+    // the full-precision settle batch arrives.
+    if (r.provisional)
+    {
+        update();
+        return;
     }
 
     if (m_metricLabel)
