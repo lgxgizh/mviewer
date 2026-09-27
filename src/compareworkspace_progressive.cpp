@@ -69,6 +69,15 @@ bool CompareWorkspace::shouldDeferHeavyCompareWork() const
     return m_interactionBusy || (m_loadInFlight && m_softPairReload);
 }
 
+TaskScheduler::Priority CompareWorkspace::deferredAnalysisPriority() const
+{
+    if (m_loadInFlight || m_displayTask)
+        return TaskScheduler::Priority::Background;
+    if (m_session && m_session->forceDecodePriority)
+        return TaskScheduler::Priority::Background;
+    return TaskScheduler::Priority::Analysis;
+}
+
 void CompareWorkspace::applySoftReloadPlaceholders(const std::vector<std::string> &paths)
 {
     const int n = std::min(static_cast<int>(paths.size()), static_cast<int>(m_cellViews.size()));

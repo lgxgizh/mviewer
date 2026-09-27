@@ -59,7 +59,8 @@
 - ~~Decoder-native disk-LOD gaps (RAW embedded preview / honest canNativeLod).~~
   **Landed**: `RawDecoder` implements `ISourceImageCapabilities` — embedded JPEG +
   `setScaledSize` as NativeLod; `QtFallbackDecoder` offers scaled `decodeLod` without
-  claiming native. **Still deferred**: libraw half-size demosaic / full RAW demosaic.
+  claiming native. LibRaw half-size and full demosaic landed in 1.0.77 when the
+  embedded preview is short of the request.
 - ~~Low-precision live diff during interaction.~~
   **Landed**: provisional ~384-edge `DifferenceEngine` overlay while interacting;
   full precision on settle. Hist remains defer-until-settle.
@@ -70,9 +71,20 @@
   **Landed**: zoomed-in LOD pans schedule a one-tile ring through
   `AsyncTileRequestManager::requestVisibleRegion`. Fill order is native
   `decodeRegion` when `canNativeRegion`, otherwise a bounded crop. A resident
-  1:1 frame is still scaled in place. **Still deferred**: Stage B GPU
-  `scaleRegion` / compositor rewrite. Stage A upload (pin + byte budget) is
-  separate; see `docs/rfc/M13_GPU_ROADMAP.md`.
+  1:1 frame is still scaled in place. On-screen tiles are scheduled at Decode
+  before a capped Background ring (`kMaxRingPending`). **Still deferred**:
+  Stage B GPU `scaleRegion` / compositor rewrite. Stage A upload (pin + byte
+  budget, `m_gpu.clear()` on replace/destroy) stays CPU-composited; see
+  `docs/rfc/M13_GPU_ROADMAP.md`.
+
+## Memory release (session + mips)
+
+- `~CompareWorkspace` clears `CompareSessionFramePool` and pane pyramids
+  before `cancelAsync` waits, then clears again after the wait. The 384 MiB
+  session cap is not retained once the dialog is gone.
+- `CacheManager::dropMips` / `trimMipsToBudget` remove Preview-pool lod≥1
+  entries only. Thumbnail, Metadata, FullImage lod 0, and non-mip Preview
+  keys stay. Viewer image replace and Compare close call them for cold keys.
 
 ## Expectation
 

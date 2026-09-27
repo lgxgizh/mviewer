@@ -258,8 +258,15 @@ class CompareWorkspace : public QWidget
     void noteCompareInteraction();
     void flushDeferredCompareAnalysis();
     bool shouldDeferHeavyCompareWork() const;
+    // Analysis when the display is idle; Background while a pair load or
+    // pane materialization still needs the higher pools.
+    TaskScheduler::Priority deferredAnalysisPriority() const;
+    void releaseSessionMemory();
     void cancelPairPrefetch();
     void prefetchNeighborPairs();
+    void claimPromotedPrefetch(
+        const std::vector<std::string> &paths, const std::vector<int> &frameIndices,
+        std::vector<mviewer::application::ImageLoadingService::AsyncRequestHandle> &out);
     mviewer::application::ImageLoadingService::AsyncRequestHandle
     takePrefetchHandle(const std::string &path);
     QCheckBox *m_syncZoomChk = nullptr;

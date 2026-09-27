@@ -41,31 +41,32 @@ class AsyncTileRequestManager
 
     // Starts a new image/view lifetime. All requests from older generations
     // are soft-cancelled and their results are discarded even if the worker
-    // was already inside a non-interruptible decode.
+    // was already inside a non-interruptible decode. Accepts new work for
+    // `generation` (unlike shutdown).
     void reset(uint64_t generation);
 
+    // Stop accepting work and cancel pending tiles. Used when the viewer is
+    // going away so a late worker cannot deliver into a destroyed widget.
+    // `reset` re-opens acceptance for a new generation.
+    void shutdown();
+
     // Returns Ready tiles immediately and schedules every Missing tile. A
-    // repeated call for a Pending canonical key is de-duplicated. `decode`
-    // runs on TaskScheduler::DecodePool and must be pure CPU/value work.
+    // repeated call for a Pending canonical key is de-duplicated. On-screen
+    // tiles use Decode; a lower priority is for ring prefetch only. `decode`
+    // must be pure CPU/value work.
     VisibleTiles requestVisible(const std::string &imageId, const Viewport &viewport,
                                 const TileGrid &grid, int renderScalePercent, uint64_t generation,
-                                TileDecodeFn decode, ReadyCallback onReady);
+                                TileDecodeFn decode, ReadyCallback onReady,
+                                TaskScheduler::Priority priority = TaskScheduler::Priority::Decode);
 
-    // Zoomed-in pans (scale >= 1) schedule the visible tiles plus a one-tile
-    // ring. Keys match a later pan, so ready tiles are not decoded again.
-    // Zoomed-out views keep the exact visible set (coarse LOD already covers
-    // a wide region). The ring is part of the same requestVisible generation.
+    // Zoomed-in pans (scale >= 1) schedule visible tiles at Decode, then a
+    // capped one-tile ring at Background. Zoomed-out views keep the exact
+    // visible set. Returned counts cover the on-screen set only, so a pan is
+    // not blocked on the ring. Ring keys match a later pan.
     VisibleTiles requestVisibleRegion(const std::string &imageId, const Viewport &viewport,
                                       const TileGrid &grid, int renderScalePercent,
                                       uint64_t generation, TileDecodeFn decode,
-                                      ReadyCallback onReady)
-    {
-        const int ring = (viewport.scale >= 1.0 && std::isfinite(viewport.scale)) ? 1 : 0;
-        const Viewport wide =
-            mviewer::core::inflateViewportForTileRing(viewport, grid.tileSize, ring);
-        return requestVisible(imageId, wide, grid, renderScalePercent, generation,
-                              std::move(decode), std::move(onReady));
-    }
+                                      ReadyCallback onReady);
 
     // Schedule a derived value (for example an overlay tile) without doing
     // the materialization in a GUI paint callback. The source is a cheap

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <condition_variable>
 #include <cstddef>
 #include <thread>
@@ -26,6 +27,7 @@ struct PendingTile
     ImageData source;
     AsyncTileRequestManager::DerivedDecodeFn derivedDecode;
     AsyncTileRequestManager::ReadyCallback onReady;
+    TaskScheduler::Priority priority = TaskScheduler::Priority::Decode;
     std::atomic<bool> cancelled{false};
     std::mutex resultMtx;
     ImageData result;
@@ -56,6 +58,7 @@ struct AsyncTileRequestManager::Impl
 namespace
 {
 constexpr size_t kMaxPendingTiles = 256;
+constexpr size_t kMaxRingPending = 8;
 
 void finishPending(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
                    const std::shared_ptr<PendingTile> &pending);
@@ -88,7 +91,7 @@ bool submitPending(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
     }
 
     auto handle = TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Decode,
+        pending->priority,
         [pending](const TaskScheduler::TaskContext &ctx)
         {
             if (ctx.isCancelled() || pending->cancelled.load(std::memory_order_acquire))
@@ -221,10 +224,151 @@ void finishPending(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
         }
     }
 
-    // Never invoke a client callback while holding the manager mutex. The UI
-    // adapter normally turns this into one coalesced queued repaint.
+    // Never invoke a client callback while holding the manager mutex. Re-check
+    // the generation after the unlock: reset/shutdown can land in that window,
+    // and a late paint must not run against the new image.
     if (deliver && callback)
-        callback(pending->key);
+    {
+        bool current = false;
+        {
+            std::lock_guard<std::mutex> lk(impl->mtx);
+            current = impl->accepting && pending->generation == impl->generation &&
+                      !pending->cancelled.load(std::memory_order_acquire);
+        }
+        if (current)
+            callback(pending->key);
+    }
+}
+
+void evictNonVisible(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
+                     const std::unordered_set<TileKey, TileKeyHash> &visibleKeys,
+                     std::vector<TaskScheduler::TaskHandle> &evicted)
+{
+    std::lock_guard<std::mutex> lk(impl->mtx);
+    if (impl->pending.size() <= kMaxPendingTiles)
+        return;
+    struct Candidate
+    {
+        TileKey key;
+        uint64_t serial = 0;
+        std::shared_ptr<PendingTile> pending;
+    };
+    std::vector<Candidate> nonVisible;
+    nonVisible.reserve(impl->pending.size());
+    for (const auto &[k, p] : impl->pending)
+    {
+        if (visibleKeys.find(k) == visibleKeys.end())
+            nonVisible.push_back({k, p->serial, p});
+    }
+    const size_t excess = impl->pending.size() - kMaxPendingTiles;
+    const size_t evictCount = (std::min)(excess, nonVisible.size());
+    if (evictCount == 0)
+        return;
+    const auto mid = nonVisible.begin() + static_cast<std::ptrdiff_t>(evictCount);
+    std::partial_sort(nonVisible.begin(), mid, nonVisible.end(),
+                      [](const Candidate &a, const Candidate &b) { return a.serial < b.serial; });
+    for (size_t i = 0; i < evictCount; ++i)
+    {
+        const auto &c = nonVisible[i];
+        c.pending->cancelled.store(true, std::memory_order_release);
+        if (c.pending->handle)
+            evicted.push_back(std::move(c.pending->handle));
+        impl->pending.erase(c.key);
+    }
+}
+
+void scheduleRingPrefetch(const std::shared_ptr<AsyncTileRequestManager::Impl> &impl,
+                          const std::string &imageId, const Viewport &viewport,
+                          const TileGrid &grid, int renderScalePercent, uint64_t generation,
+                          TileDecodeFn decode, AsyncTileRequestManager::ReadyCallback onReady)
+{
+    if (!decode)
+        return;
+    {
+        std::lock_guard<std::mutex> lk(impl->mtx);
+        if (!impl->accepting || impl->generation != generation)
+            return;
+    }
+
+    const int lod = TileCache::chooseLod(viewport.scale);
+    const int lodSize = TileCache::lodTileSize(grid.tileSize, lod);
+    const TileGrid lodGrid(grid.imageW, grid.imageH, lodSize);
+    const int policy = (std::max)(1, renderScalePercent);
+    const Viewport wide = mviewer::core::inflateViewportForTileRing(viewport, grid.tileSize, 1);
+
+    std::unordered_set<TileKey, TileKeyHash> visibleKeys;
+    for (const auto &tile : lodGrid.visibleTiles(viewport))
+        visibleKeys.insert(TileKey{imageId, tile.coord.col, tile.coord.row, lod, policy});
+
+    const auto wideTiles = lodGrid.visibleTiles(wide);
+    std::unordered_set<TileKey, TileKeyHash> wideKeys;
+    wideKeys.reserve(wideTiles.size());
+    for (const auto &tile : wideTiles)
+        wideKeys.insert(TileKey{imageId, tile.coord.col, tile.coord.row, lod, policy});
+
+    std::vector<TaskScheduler::TaskHandle> stale;
+    size_t ringLive = 0;
+    {
+        std::lock_guard<std::mutex> lk(impl->mtx);
+        for (auto it = impl->pending.begin(); it != impl->pending.end();)
+        {
+            const bool background = it->second->priority == TaskScheduler::Priority::Background;
+            if (background && wideKeys.find(it->first) == wideKeys.end())
+            {
+                it->second->cancelled.store(true, std::memory_order_release);
+                if (it->second->handle)
+                    stale.push_back(std::move(it->second->handle));
+                it = impl->pending.erase(it);
+                continue;
+            }
+            if (background)
+                ++ringLive;
+            ++it;
+        }
+    }
+    for (auto &handle : stale)
+        TaskScheduler::cancel(handle);
+
+    for (const auto &tile : wideTiles)
+    {
+        if (ringLive >= kMaxRingPending)
+            break;
+        const TileKey key{imageId, tile.coord.col, tile.coord.row, lod, policy};
+        if (visibleKeys.find(key) != visibleKeys.end())
+            continue;
+        if (!impl->cache->get(key).isNull())
+            continue;
+
+        auto pending = std::make_shared<PendingTile>();
+        pending->key = key;
+        pending->generation = generation;
+        pending->srcX = tile.srcX;
+        pending->srcY = tile.srcY;
+        pending->srcW = tile.srcW;
+        pending->srcH = tile.srcH;
+        pending->targetW = TileCache::canonicalTilePixels(tile.srcW, grid.tileSize, lod, policy);
+        pending->targetH = TileCache::canonicalTilePixels(tile.srcH, grid.tileSize, lod, policy);
+        pending->decode = decode;
+        pending->onReady = onReady;
+        pending->priority = TaskScheduler::Priority::Background;
+
+        bool inserted = false;
+        {
+            std::lock_guard<std::mutex> lk(impl->mtx);
+            if (!impl->accepting || impl->generation != generation)
+                return;
+            if (ringLive >= kMaxRingPending)
+                break;
+            const auto [it, ok] = impl->pending.emplace(key, pending);
+            if (!ok)
+                continue;
+            pending->serial = ++impl->nextSerial;
+            inserted = true;
+            ++ringLive;
+        }
+        if (inserted && !submitPending(impl, pending))
+            scheduleRetry(impl);
+    }
 }
 } // namespace
 
@@ -238,13 +382,27 @@ AsyncTileRequestManager::AsyncTileRequestManager(TileCache &cache)
 
 AsyncTileRequestManager::~AsyncTileRequestManager()
 {
+    shutdown();
+    const auto impl = m_impl;
+    {
+        std::lock_guard<std::mutex> lk(impl->mtx);
+        impl->retryStop = true;
+        impl->retryScheduled = false;
+    }
+    impl->retryWorker.request_stop();
+    impl->retryCv.notify_all();
+    if (impl->retryWorker.joinable())
+        impl->retryWorker.join();
+}
+
+void AsyncTileRequestManager::shutdown()
+{
     const auto impl = m_impl;
     std::vector<TaskScheduler::TaskHandle> stale;
     {
         std::lock_guard<std::mutex> lk(impl->mtx);
         impl->accepting = false;
         impl->retryScheduled = false;
-        impl->retryStop = true;
         for (auto &[key, request] : impl->pending)
         {
             (void)key;
@@ -254,14 +412,9 @@ AsyncTileRequestManager::~AsyncTileRequestManager()
         }
         impl->pending.clear();
     }
-    impl->retryWorker.request_stop();
     impl->retryCv.notify_all();
-    if (impl->retryWorker.joinable())
-        impl->retryWorker.join();
     for (auto &handle : stale)
-    {
         TaskScheduler::cancel(handle);
-    }
 }
 
 void AsyncTileRequestManager::reset(uint64_t generation)
@@ -270,6 +423,7 @@ void AsyncTileRequestManager::reset(uint64_t generation)
     std::vector<TaskScheduler::TaskHandle> stale;
     {
         std::lock_guard<std::mutex> lk(impl->mtx);
+        impl->accepting = true;
         impl->generation = generation;
         impl->retryScheduled = false;
         for (auto &[key, request] : impl->pending)
@@ -290,7 +444,8 @@ void AsyncTileRequestManager::reset(uint64_t generation)
 
 AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisible(
     const std::string &imageId, const Viewport &viewport, const TileGrid &grid,
-    int renderScalePercent, uint64_t generation, TileDecodeFn decode, ReadyCallback onReady)
+    int renderScalePercent, uint64_t generation, TileDecodeFn decode, ReadyCallback onReady,
+    TaskScheduler::Priority priority)
 {
     VisibleTiles result;
     if (!decode)
@@ -306,7 +461,7 @@ AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisible(
     const int lod = TileCache::chooseLod(viewport.scale);
     const int lodSize = TileCache::lodTileSize(grid.tileSize, lod);
     const TileGrid lodGrid(grid.imageW, grid.imageH, lodSize);
-    const int policy = std::max(1, renderScalePercent);
+    const int policy = (std::max)(1, renderScalePercent);
     const auto visible = lodGrid.visibleTiles(viewport);
 
     std::unordered_set<TileKey, TileKeyHash> visibleKeys;
@@ -337,6 +492,7 @@ AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisible(
         pending->targetH = TileCache::canonicalTilePixels(tile.srcH, grid.tileSize, lod, policy);
         pending->decode = decode;
         pending->onReady = onReady;
+        pending->priority = priority;
         {
             std::lock_guard<std::mutex> lk(impl->mtx);
             if (impl->generation != generation || !impl->accepting)
@@ -344,8 +500,13 @@ AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisible(
             const auto [it, inserted] = impl->pending.emplace(key, pending);
             if (!inserted)
             {
-                (void)it;
                 alreadyPending = true;
+                // Not-yet-submitted ring work can still be raised to Decode.
+                // An in-flight Background task is left alone: cancelling it races
+                // finishPending, which would drop the tile.
+                if (static_cast<int>(priority) > static_cast<int>(it->second->priority) &&
+                    !it->second->handle)
+                    it->second->priority = priority;
             }
             else
             {
@@ -367,45 +528,25 @@ AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisible(
     // bounded. Only the oldest non-visible requests are cancelled; visible
     // requests and recently-created work remain eligible for reuse.
     std::vector<TaskScheduler::TaskHandle> evicted;
-    {
-        std::lock_guard<std::mutex> lk(impl->mtx);
-        if (impl->pending.size() > kMaxPendingTiles)
-        {
-            struct Candidate
-            {
-                TileKey key;
-                uint64_t serial = 0;
-                std::shared_ptr<PendingTile> pending;
-            };
-            std::vector<Candidate> nonVisible;
-            nonVisible.reserve(impl->pending.size());
-            for (const auto &[k, p] : impl->pending)
-            {
-                if (visibleKeys.find(k) == visibleKeys.end())
-                    nonVisible.push_back({k, p->serial, p});
-            }
-            const size_t excess = impl->pending.size() - kMaxPendingTiles;
-            const size_t evictCount = std::min(excess, nonVisible.size());
-            if (evictCount > 0)
-            {
-                std::partial_sort(nonVisible.begin(),
-                                  nonVisible.begin() + static_cast<std::ptrdiff_t>(evictCount),
-                                  nonVisible.end(), [](const Candidate &a, const Candidate &b)
-                                  { return a.serial < b.serial; });
-                for (size_t i = 0; i < evictCount; ++i)
-                {
-                    const auto &c = nonVisible[i];
-                    c.pending->cancelled.store(true, std::memory_order_release);
-                    if (c.pending->handle)
-                        evicted.push_back(std::move(c.pending->handle));
-                    impl->pending.erase(c.key);
-                }
-            }
-        }
-    }
+    evictNonVisible(impl, visibleKeys, evicted);
     for (auto &handle : evicted)
         TaskScheduler::cancel(handle);
     return result;
+}
+
+AsyncTileRequestManager::VisibleTiles AsyncTileRequestManager::requestVisibleRegion(
+    const std::string &imageId, const Viewport &viewport, const TileGrid &grid,
+    int renderScalePercent, uint64_t generation, TileDecodeFn decode, ReadyCallback onReady)
+{
+    ReadyCallback ringReady = onReady;
+    VisibleTiles visible =
+        requestVisible(imageId, viewport, grid, renderScalePercent, generation, decode,
+                       std::move(onReady), TaskScheduler::Priority::Decode);
+    const bool zoomedIn = viewport.scale >= 1.0 && std::isfinite(viewport.scale);
+    if (zoomedIn)
+        scheduleRingPrefetch(m_impl, imageId, viewport, grid, renderScalePercent, generation,
+                             std::move(decode), std::move(ringReady));
+    return visible;
 }
 
 ImageData AsyncTileRequestManager::requestDerived(const TileKey &key, const ImageData &source,

@@ -1,7 +1,9 @@
 #include "core/cache/CacheManager.h"
 #include "core/cache/MipmapPyramid.h"
 
+#include <algorithm>
 #include <limits>
+#include <unordered_set>
 #include <utility>
 
 CacheManager &CacheManager::instance()
@@ -159,14 +161,56 @@ void CacheManager::eraseMips(const std::string &baseKey)
     int maxLod = 0;
     {
         std::lock_guard<std::mutex> lock(m_mipMutex);
-        const auto it = m_mipMaxLod.find(baseKey);
-        if (it == m_mipMaxLod.end())
+        const auto it = m_mipChains.find(baseKey);
+        if (it == m_mipChains.end())
             return;
-        maxLod = it->second;
-        m_mipMaxLod.erase(it);
+        maxLod = it->second.maxLod;
+        m_mipChains.erase(it);
     }
     for (int lod = 1; lod <= maxLod; ++lod)
         ImageCache::instance().remove(ImageCache::Preview, mipKey(baseKey, lod));
+}
+
+void CacheManager::dropMips(const std::string &baseKey)
+{
+    eraseMips(baseKey);
+}
+
+size_t CacheManager::trimMipsToBudget(size_t maxBytes,
+                                      const std::vector<std::string> &keepBaseKeys)
+{
+    std::unordered_set<std::string> keep(keepBaseKeys.begin(), keepBaseKeys.end());
+    struct Cold
+    {
+        std::string key;
+        size_t bytes = 0;
+    };
+    std::vector<Cold> cold;
+    size_t total = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_mipMutex);
+        cold.reserve(m_mipChains.size());
+        for (const auto &entry : m_mipChains)
+        {
+            total += entry.second.bytes;
+            if (keep.count(entry.first) != 0)
+                continue;
+            cold.push_back(Cold{entry.first, entry.second.bytes});
+        }
+    }
+    std::sort(cold.begin(), cold.end(),
+              [](const Cold &a, const Cold &b) { return a.bytes > b.bytes; });
+    size_t released = 0;
+    for (const Cold &entry : cold)
+    {
+        if (total <= maxBytes)
+            break;
+        dropMips(entry.key);
+        const size_t drop = entry.bytes > total ? total : entry.bytes;
+        total -= drop;
+        released += drop;
+    }
+    return released;
 }
 
 void CacheManager::storeMipChain(const std::string &baseKey, const std::vector<ImageData> &levels)
@@ -174,16 +218,18 @@ void CacheManager::storeMipChain(const std::string &baseKey, const std::vector<I
     if (baseKey.empty() || levels.size() <= 1)
         return;
     const int maxLod = static_cast<int>(levels.size()) - 1;
+    size_t bytes = 0;
     for (int lod = 1; lod <= maxLod; ++lod)
     {
         const ImageData &img = levels[static_cast<size_t>(lod)];
         if (img.isNull())
             continue;
         ImageCache::instance().put(ImageCache::Preview, mipKey(baseKey, lod), img);
+        bytes += img.byteSize();
     }
     {
         std::lock_guard<std::mutex> lock(m_mipMutex);
-        m_mipMaxLod[baseKey] = maxLod;
+        m_mipChains[baseKey] = MipChainInfo{maxLod, bytes};
     }
 }
 
@@ -193,10 +239,10 @@ int CacheManager::ensureMips(const std::string &baseKey, const ImageData &full, 
         return 0;
     {
         std::lock_guard<std::mutex> lock(m_mipMutex);
-        if (m_mipMaxLod.count(baseKey) != 0)
+        if (m_mipChains.count(baseKey) != 0)
         {
             // Already tracked — still count levels as 1 + maxLod.
-            return 1 + m_mipMaxLod[baseKey];
+            return 1 + m_mipChains[baseKey].maxLod;
         }
     }
     auto levels = mviewer::cache::buildMipChain(full, minEdge);
@@ -218,9 +264,10 @@ void CacheManager::putMip(const std::string &baseKey, int lod, const ImageData &
     ImageCache::instance().put(ImageCache::Preview, mipKey(baseKey, lod), img);
     {
         std::lock_guard<std::mutex> lock(m_mipMutex);
-        const auto it = m_mipMaxLod.find(baseKey);
-        if (it == m_mipMaxLod.end() || lod > it->second)
-            m_mipMaxLod[baseKey] = lod;
+        MipChainInfo &info = m_mipChains[baseKey];
+        if (lod > info.maxLod)
+            info.maxLod = lod;
+        info.bytes += img.byteSize();
     }
 }
 
@@ -241,9 +288,9 @@ bool CacheManager::getBestMipExisting(const std::string &baseKey, int maxEdge, I
     int trackedMax = 0;
     {
         std::lock_guard<std::mutex> lock(m_mipMutex);
-        const auto it = m_mipMaxLod.find(baseKey);
-        if (it != m_mipMaxLod.end())
-            trackedMax = it->second;
+        const auto it = m_mipChains.find(baseKey);
+        if (it != m_mipChains.end())
+            trackedMax = it->second.maxLod;
     }
 
     // Prefer the largest level whose max edge ≤ maxEdge (coarse enough).
@@ -304,9 +351,9 @@ bool CacheManager::getBestMip(const std::string &baseKey, int maxEdge, ImageData
     int trackedMax = 0;
     {
         std::lock_guard<std::mutex> lock(m_mipMutex);
-        const auto it = m_mipMaxLod.find(baseKey);
-        if (it != m_mipMaxLod.end())
-            trackedMax = it->second;
+        const auto it = m_mipChains.find(baseKey);
+        if (it != m_mipChains.end())
+            trackedMax = it->second.maxLod;
     }
 
     ImageData full;
@@ -376,7 +423,7 @@ void CacheManager::clearMemory()
     }
     {
         std::lock_guard<std::mutex> lock(m_mipMutex);
-        m_mipMaxLod.clear();
+        m_mipChains.clear();
     }
 }
 

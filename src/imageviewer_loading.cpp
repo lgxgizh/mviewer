@@ -187,11 +187,13 @@ void ImageViewer::setImageImpl(const QString &path)
     // the previous image's sample never lingers while the next decode runs —
     // including for empty/failing requests that never deliver a frame.
     clearPixelInfo();
+    const QString previousPath = m_currentPath;
     const std::optional<Viewport> reloadView =
         m_preserveViewOnReload ? std::optional<Viewport>(m_view) : std::nullopt;
     const bool keepProvisional =
         !path.isEmpty() && path == m_provisionalPath && !m_provisionalImage.isNull();
     m_currentPath = path;
+    releaseColdMips(previousPath);
     m_currentIndex = m_fileList.indexOf(path);
     // M29: drop the prior foreground decode BEFORE scheduling the new load, and
     // consume any neighbor preload that already targets `path` so it can be

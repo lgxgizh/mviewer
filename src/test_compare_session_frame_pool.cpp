@@ -7,6 +7,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <string>
 
 using mviewer::ui::CompareSessionFramePool;
@@ -112,6 +113,25 @@ int main()
     }
     else
         std::printf("PASS: clear\n");
+
+    {
+        CompareSessionFramePool held;
+        auto only = makeFrame("/only.png", 32, 32);
+        std::weak_ptr<ImageFrame> weak = only;
+        held.put("/only.png", 0, only);
+        only.reset();
+        const bool retained = !weak.expired() && held.size() == 1 && held.bytes() > 0;
+        held.clear();
+        const bool released = held.size() == 0 && held.bytes() == 0 && weak.expired();
+        if (!retained || !released)
+        {
+            std::printf("FAIL: clear drops the last session frame (retained=%d released=%d)\n",
+                        retained ? 1 : 0, released ? 1 : 0);
+            ++failures;
+        }
+        else
+            std::printf("PASS: clear drops the last session frame\n");
+    }
 
     std::printf("=== Compare session frame pool tests: %s ===\n", failures == 0 ? "PASS" : "FAIL");
     return failures == 0 ? 0 : 1;

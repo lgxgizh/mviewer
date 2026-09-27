@@ -332,6 +332,8 @@ class ImageViewer : public QOpenGLWidget
     void applyLoadedImage(const QString &path, const ImageLoadResult &result);
     void applyPendingView();
     void clearLoadedGpu();
+    // Drop lod≥1 mips for an image that is no longer the open viewer file.
+    void releaseColdMips(const QString &previousPath);
     void applyLoadedFrame(const ImageLoadResult &result, int requestedFrame, uint64_t generation);
     void requestFrame(int index);
     void onPlaybackTick();

@@ -279,7 +279,16 @@ void MainWindow::scheduleReindex()
         connect(m_reindexTimer, &QTimer::timeout, this, &MainWindow::reindexSearch);
     }
     // Restart the countdown on every folder change so rapid browsing does not
-    // trigger repeated (expensive) index rebuilds.
+    // trigger repeated (expensive) index rebuilds. Cancel the previous
+    // folder's search request now; the gallery filter keeps its own id.
+    ++m_reindexGen;
+    if (m_reindexAlive)
+        m_reindexAlive->store(false, std::memory_order_release);
+    if (m_reindexRequestId != 0)
+    {
+        mviewer::core::MetadataIndexer::instance().cancelRequest(m_reindexRequestId);
+        m_reindexRequestId = 0;
+    }
     m_reindexTimer->start();
 }
 

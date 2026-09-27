@@ -194,7 +194,7 @@ TaskScheduler::TaskHandle CompareWorkspace::startDiffBatch(
     int paneCount, uint64_t generation, const QPointer<CompareWorkspace> &guard)
 {
     return TaskScheduler::instance().submit(
-        TaskScheduler::Priority::Analysis,
+        deferredAnalysisPriority(),
         [pixels, displayTargets, adjusts, baseIndex, threshold, gain, highlight, visualize,
          autoAlign, roi, paneCount, generation, guard](const TaskScheduler::TaskContext &context)
         {
