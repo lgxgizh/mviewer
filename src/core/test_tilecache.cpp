@@ -8,6 +8,8 @@
 #include "core/render/Viewport.h"
 #include "core/scheduler/TaskScheduler.h"
 
+#include <QCoreApplication>
+
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -380,8 +382,11 @@ static void testPreferReducedMip()
     // Build a synthetic full frame + mip chain under a fake path key.
     const std::string key = "tile-prefer-test://synthetic";
     ImageData full = makeImageData(256, 256, PixelFormat::RGB24);
-    for (size_t i = 0; i < full.byteSize(); ++i)
-        (*full.buffer)[i] = static_cast<uint8_t>(i & 0xff);
+    {
+        const ImageBuffer v = full.view();
+        for (size_t i = 0; i < full.byteSize(); ++i)
+            v.data[i] = static_cast<uint8_t>(i & 0xff);
+    }
     CacheManager::instance().putMip(key, 0, full);
     CacheManager::instance().ensureMips(key, full);
     ImageData tile = mviewer::core::decodeTilePreferReduced(key, full, 0, 0, 256, 256, 32, 32);
@@ -392,8 +397,9 @@ static void testPreferReducedMip()
     CHECK(miss.isNull(), "non-coarse without path returns empty for caller fallback");
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    QCoreApplication app(argc, argv);
     printf("=== TileCache + LOD tests (M7 ①) ===\n");
     fflush(stdout);
     testLodSelection();
