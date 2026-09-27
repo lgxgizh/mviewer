@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [1.0.77] - 2026-09-27
+
+### Release
+
+- **Version bump**: `project(MViewer VERSION)` / STATUS release tag → **1.0.77**.
+- **Viewport region-tile + GPU Stage A + LibRaw (#58)**: zoomed-in viewport tile schedule, resident Stage A GPU uploads across pan, LibRaw half/full demosaic when embedded preview is short.
+
 ### 性能
 
 - **视口区域瓦片**：放大（无全帧）时按可见区域调度 `decodeRegion`（`canNativeRegion` 优先，否则有界裁剪），并预取一圈邻瓦；TileCache 键不变。已在内存中的 1:1 全帧仍直接缩放，不按瓦片重开文件。
