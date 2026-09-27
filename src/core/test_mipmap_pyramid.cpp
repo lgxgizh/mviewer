@@ -49,6 +49,8 @@ static void testBuildChainSizes()
     ImageData full = makeRgbRamp(1024, 768);
     auto levels = mviewer::cache::buildMipChain(full, /*minEdge=*/256);
     CHECK(!levels.empty(), "chain non-empty");
+    if (levels.empty())
+        return;
     CHECK(levels[0].width == 1024 && levels[0].height == 768, "lod0 is full");
     CHECK(levels.size() >= 3, "at least full + two halves for 1024");
 
@@ -113,8 +115,8 @@ static void testLazyBuildAndEviction()
 
     // Configure a tiny Preview budget so mip store can evict without crashing.
     CacheConfig cfg = mgr.config();
-    cfg.previewCacheSize = 64 * 1024; // 64KB
-    cfg.viewerCacheSize = 8 * 1024 * 1024;
+    cfg.previewCacheSize = static_cast<size_t>(64) * 1024; // 64KB
+    cfg.viewerCacheSize = static_cast<size_t>(8) * 1024 * 1024;
     mgr.configure(cfg);
 
     const std::string key = "mip_lazy_key";

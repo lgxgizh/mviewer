@@ -1,9 +1,9 @@
 #include "compareworkspace_display_pyramid.h"
 #include "compareworkspace_p.h"
 
-#include "core/image/SourceImage.h"
 #include "core/cache/CacheManager.h"
 #include "core/image/ImageRepository.h"
+#include "core/image/SourceImage.h"
 #include "display/DisplayColorContextProvider.h"
 #include "widgets/infooverlay.h"
 #include "widgets/pixelgrid.h"
@@ -35,12 +35,11 @@ ImageData tryCacheBestMip(const std::string &path, int maxEdge)
     if (!cached.empty() && cached != path && cm.getBestMip(cached, maxEdge, out) && !out.isNull())
         return out;
     const std::string keyed = repo.makeKey(path);
-    if (!keyed.empty() && keyed != path && keyed != cached &&
-        cm.getBestMip(keyed, maxEdge, out) && !out.isNull())
+    if (!keyed.empty() && keyed != path && keyed != cached && cm.getBestMip(keyed, maxEdge, out) &&
+        !out.isNull())
         return out;
     return ImageData{};
 }
-
 
 ImageData resolveLodFromCachedFull(const ImageData &src,
                                    const mviewer::ui::CompareDisplayRequest &request,

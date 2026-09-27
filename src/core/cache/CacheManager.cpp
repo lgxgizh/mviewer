@@ -252,7 +252,8 @@ bool CacheManager::getBestMipExisting(const std::string &baseKey, int maxEdge, I
     ImageData nextLarger;
     int nextLargerEdge = std::numeric_limits<int>::max();
 
-    auto consider = [&](const ImageData &img) {
+    auto consider = [&](const ImageData &img)
+    {
         if (img.isNull())
             return;
         const int edge = mviewer::cache::imageMaxEdge(img);
@@ -309,7 +310,8 @@ bool CacheManager::getBestMip(const std::string &baseKey, int maxEdge, ImageData
     }
 
     ImageData full;
-    const bool haveFull = ImageCache::instance().get(ImageCache::Viewer, baseKey, full) && !full.isNull();
+    const bool haveFull =
+        ImageCache::instance().get(ImageCache::Viewer, baseKey, full) && !full.isNull();
 
     // Lazy fill when we only have a too-large FullImage (no smaller mips yet).
     if (trackedMax == 0 && haveFull && mviewer::cache::imageMaxEdge(full) > maxEdge)
