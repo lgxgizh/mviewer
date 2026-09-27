@@ -102,6 +102,7 @@ decoder-native disk-LOD remains a later milestone.
 - ✅ Invalidation stays coherent with path-keyed FullImage
 - ❌ Decoder-native disk-LOD and TileCache paint rewrite still deferred
 - ❌ Eager FullImage put pays a small CPU cost to build the chain
+- ❌ B6 `peak_cache_bytes` hard gate raised to 896 MiB (Viewer+Preview)
 
 ### Related
 

@@ -87,7 +87,7 @@ struct Budget
     std::unordered_map<std::string, double> limits = {
         {"qt_event_loop_probe_ms", 50.0},  {"first_thumbnail_ms", 100.0},
         {"decode_p50_ms_jpeg", 100.0},     {"thumbnails_per_sec", 30.0},
-        {"cache_hit_ratio", 0.10},         {"peak_cache_bytes", 536870912.0}, // 512 MiB
+        {"cache_hit_ratio", 0.10},         {"peak_cache_bytes", 939524096.0}, // 896 MiB (Viewer+Preview mip)
         {"switch_warm_p50_ms", 50.0},      {"image_switch_ms", 16.0},
         {"baseline_return_ok", 1.0},       {"decode_4k_jpeg_ms", 400.0},
         {"decode_8k_ms", 2000.0},          {"cache_hit_rate", 0.10},
