@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### 性能
+
+- **解码器原生 disk-LOD**：`RawDecoder` 实现 `ISourceImageCapabilities`，嵌入 JPEG 预览经 `QImageReader::setScaledSize`（DCT）作为 NativeLod；`canNativeLod` 如实声明（非 libraw half demosaic）。`QtFallbackDecoder` 提供 `decodeLod` 缩放路径但不声称 native（插件格式无证据）。
+- **交互期低精度 live diff**：缩放/平移时若差异叠加开启，先对 ~384 边廉价栅格跑 `DifferenceEngine` 显示临时 overlay；松手/`flushDeferredCompareAnalysis` 再全精度替换。直方图仍推迟到 settle。
+- **TileCache/Viewer 粗瓦片**：`decodeTilePreferReduced` 优先 `getBestMip` → `SourceImage::decodeLod`/`decodeRegion`，再回退从全帧 `scaleRegion`。
+
 ## [1.0.75] - 2026-09-27
 
 ### Release

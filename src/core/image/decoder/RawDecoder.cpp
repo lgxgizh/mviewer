@@ -428,6 +428,98 @@ ImageData RawDecoder::decodeFull(const std::string &path,
     return d;
 }
 
+
+bool RawDecoder::probePreviewSize(const std::string &path, int &outW, int &outH) const
+{
+    outW = 0;
+    outH = 0;
+    g_lastPreviewFullFileCopyBytes.store(0, std::memory_order_relaxed);
+    g_lastPreviewPeakBufferedBytes.store(0, std::memory_order_relaxed);
+    const QString nativePath = QString::fromUtf8(path.data(), static_cast<int>(path.size()));
+    QFile scanFile(nativePath);
+    QFile dataFile(nativePath);
+    if (!scanFile.open(QIODevice::ReadOnly) || !dataFile.open(QIODevice::ReadOnly))
+        return false;
+    const QByteArray jpeg = extractLargestJpeg(scanFile, dataFile);
+    if (jpeg.isEmpty())
+        return false;
+    QBuffer buf(const_cast<QByteArray *>(&jpeg));
+    buf.open(QIODevice::ReadOnly);
+    QImageReader reader(&buf, "JPEG");
+    reader.setAutoTransform(true);
+    const QSize fullSize = reader.size();
+    if (!fullSize.isValid() || fullSize.isEmpty())
+        return false;
+    outW = fullSize.width();
+    outH = fullSize.height();
+    return true;
+}
+
+bool RawDecoder::canProbe(const std::string &path) const
+{
+    return canDecode(path);
+}
+
+bool RawDecoder::probeMetadata(const std::string &path,
+                               mviewer::domain::ImageMetadata &outMeta) const
+{
+    int w = 0;
+    int h = 0;
+    if (!probePreviewSize(path, w, h))
+        return false;
+    const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
+    outMeta.filePath = path;
+    outMeta.fileName = fi.fileName().toUtf8().toStdString();
+    outMeta.fileSize = static_cast<uint64_t>(qMax<qint64>(0, fi.size()));
+    outMeta.width = w;
+    outMeta.height = h;
+    outMeta.format = "RAW";
+    outMeta.channels = 3;
+    outMeta.orientation = 1;
+    return true;
+}
+
+bool RawDecoder::canNativeLod(const std::string &path) const
+{
+    // Honest claim for RAW extensions we own: decodeLod extracts the embedded
+    // JPEG preview and uses QImageReader::setScaledSize (JPEG DCT). This is
+    // NOT libraw half-size demosaic. Preview-less files still return empty
+    // ImageData from decodeLod (SourceImage records a failed NativeLod).
+    // Extension-gated (no container scan) so hasNativeLod() stays cheap.
+    return canDecode(path);
+}
+
+bool RawDecoder::canNativeRegion(const std::string &path) const
+{
+    (void)path;
+    // Embedded JPEG has no true strip/tile random-access claim.
+    return false;
+}
+
+ImageData RawDecoder::decodeLod(const std::string &path, int maxEdge,
+                                mviewer::domain::ImageMetadata &outMeta) const
+{
+    ImageData d = extractPreview(path, maxEdge);
+    if (d.isNull())
+        return ImageData();
+    const QFileInfo fi(QString::fromUtf8(path.data(), static_cast<int>(path.size())));
+    if (outMeta.filePath.empty())
+        outMeta.filePath = path;
+    if (outMeta.fileName.empty())
+        outMeta.fileName = fi.fileName().toUtf8().toStdString();
+    outMeta.fileSize = static_cast<uint64_t>(qMax<qint64>(0, fi.size()));
+    // Preserve source (preview) geometry in metadata when probe already filled it;
+    // otherwise report the decoded raster dims (preview is our display full-res).
+    if (outMeta.width <= 0 || outMeta.height <= 0)
+    {
+        outMeta.width = d.width;
+        outMeta.height = d.height;
+    }
+    outMeta.format = "RAW";
+    outMeta.channels = 3;
+    return d;
+}
+
 std::vector<std::string> RawDecoder::extensions() const
 {
     std::vector<std::string> v;

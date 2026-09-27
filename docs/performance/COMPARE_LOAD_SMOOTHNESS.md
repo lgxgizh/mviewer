@@ -13,8 +13,9 @@
 4. Pair nav (`nextPair`/`prevPair`) re-enters `setImages` for the pool window.
 5. Column-only layout / custom grid uses `relayoutGridKeepingPanes` (no pane destroy).
 6. Temporary hold uses `setTransientDisplay` (no reload).
-7. Zoom/pan LOD refresh is debounced (~70 ms); hist/diff deferred while interacting or
-   soft-loading, flushed on settle.
+7. Zoom/pan LOD refresh is debounced (~70 ms); hist deferred while interacting or
+   soft-loading; diff shows a low-precision live overlay during gestures and full
+   precision on settle.
 
 ## Bottlenecks addressed
 
@@ -27,7 +28,8 @@
 | finishLoad always rebuilt panes | In-place apply when pane count unchanged |
 | Layout preset / column change rebuilt | `relayoutGridKeepingPanes` |
 | Smooth pixmap filter while dragging | Disabled during `m_dragging` |
-| Hist/diff during zoom/pan | Deferred until interaction settle |
+| Hist during zoom/pan | Deferred until interaction settle |
+| Diff during zoom/pan | Live low-precision overlay; full on settle |
 
 ## 极致快速 (beyond #47)
 
@@ -53,13 +55,18 @@
 ## Deferred
 
 - ~~True mipmap/tile pyramid inside CacheManager / DecoderRegistry.~~
-  **Landed (in-memory)**: `MipmapPyramid` + `CacheManager::{putMip,getMip,getBestMip,ensureMips}` —
-  FullImage put (or lazy getBestMip) builds a power-of-two chain (lod0=full, higher=coarser);
-  Compare materialization prefers `getBestMip` before re-scale / `decodeLod`.
-  Still deferred: decoder-native disk-LOD (JPEG progressive / RAW multi-size / libraw half)
-  and a full TileCache↔viewer paint rewrite that consumes decoder-emitted reduced bitmaps.
-- Viewport-tiled region decode beyond existing region LOD.
-- Low-precision live diff raster (currently defer-only until settle).
+  **Landed (in-memory)**: `MipmapPyramid` + `CacheManager::{putMip,getMip,getBestMip,ensureMips}`.
+- ~~Decoder-native disk-LOD gaps (RAW embedded preview / honest canNativeLod).~~
+  **Landed**: `RawDecoder` implements `ISourceImageCapabilities` — embedded JPEG +
+  `setScaledSize` as NativeLod; `QtFallbackDecoder` offers scaled `decodeLod` without
+  claiming native. **Still deferred**: libraw half-size demosaic / full RAW demosaic.
+- ~~Low-precision live diff during interaction.~~
+  **Landed**: provisional ~384-edge `DifferenceEngine` overlay while interacting;
+  full precision on settle. Hist remains defer-until-settle.
+- ~~TileCache/viewer coarse tiles prefer mip + decodeLod.~~
+  **Landed**: `TileSourceDecode::decodeTilePreferReduced` (mip → decodeLod/region →
+  scale-from-frame). **Still deferred**: GPU tile-upload rewrite / compositor overhaul.
+- Viewport-tiled region decode beyond existing region LOD (incremental only).
 
 ## Expectation
 
